@@ -1,0 +1,23 @@
+info:
+  name: Register
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3001/api/auth/register
+  body:
+    type: json
+    data: |-
+      {
+        "email": "gm@enclume.com",
+        "password": "motdepasse123",
+        "username": "GameMaster"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

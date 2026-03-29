@@ -1,0 +1,15 @@
+info:
+  name: Détail campagne
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: http://localhost:3001/api/campaigns/7997c6ce-37d9-4e6a-a96a-e199c3b524c0
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
