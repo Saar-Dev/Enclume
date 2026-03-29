@@ -15,13 +15,13 @@ const app = express()
 const httpServer = createServer(app)
 const io = new Server(httpServer, {
   cors: {
-    origin: 'http://localhost:3000',
+    origin: process.env.CLIENT_URL,
     credentials: true,
   }
 })
 
 // Middlewares de base
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }))
+app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }))
 app.use(express.json())
 app.use(cookieParser())
 

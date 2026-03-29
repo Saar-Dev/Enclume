@@ -91,3 +91,10 @@ nom d'utilisateur. Pas d'upload en Phase 1.
 **Plusieurs GMs** possibles sur une même campagne.
 **Vue joueur pour le GM :** toggle côté interface en Phase 3 —
 le GM reste GM en base, l'interface simule la vue joueur.
+
+## Statuts d'une campagne
+- `draft` — brouillon
+- `active` — en cours (défaut à la création)
+- `completed` — terminée
+- `archived` — archivée
+Validés côté serveur dans les routes PUT /campaigns/:id.

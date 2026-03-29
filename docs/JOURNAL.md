@@ -30,3 +30,8 @@
 ### Prochaines étapes (Phase 0 — reste à faire)
 - Connecter `db` au serveur Express avec vérification au démarrage
 - Initialiser le client React avec Vite
+
+### Décisions prises (ajout)
+- Remote GitHub configuré : https://github.com/Saar-Dev/Enclume.git
+- Branche principale : master
+- Commande push : `git push origin master`
