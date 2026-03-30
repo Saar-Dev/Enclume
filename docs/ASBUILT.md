@@ -122,3 +122,22 @@ Ports : 5432 / 6379 / 9000 / 9001.
 - POST `/api/campaigns/join` — rejoindre via invite_code
 - GET `/api/campaigns/:id/members` — liste des membres (GM uniquement)
 - Toutes testées et stables via Bruno
+
+### Pages React (`client/src/pages/`)
+- `LoginPage.jsx` — formulaire login, gestion erreurs, redirection
+- `RegisterPage.jsx` — formulaire register, validation mot de passe
+- `DashboardPage.jsx` — liste campagnes, créer, rejoindre, logout
+- Toutes testées et stables
+
+### Store auth (`client/src/stores/authStore.js`)
+- Zustand — état global utilisateur connecté
+- `user`, `isLoading`, `setUser`, `clearUser`
+
+### Client HTTP (`client/src/lib/api.js`)
+- Axios configuré sur `http://localhost:3001/api`
+- `withCredentials: true` — envoie les cookies automatiquement
+
+### Routage (`client/src/App.jsx`)
+- `ProtectedRoute` — redirige vers /login si non connecté
+- `PublicRoute` — redirige vers /dashboard si déjà connecté
+- Vérifie `/auth/me` au démarrage pour restaurer la session

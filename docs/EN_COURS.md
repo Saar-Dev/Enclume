@@ -35,3 +35,23 @@ Installer les dépendances de base. Vérifier qu'elle démarre et
 communique avec le serveur.
 
 **Dossier concerné :** `client/`
+
+MISE AJOUR 22h58 29/03/2026
+# EN COURS — Travail en cours / incomplet
+
+## Phase 0 — ✅ Complète
+## Phase 1 — ✅ Complète
+
+## Phase 2 — Battlemap + dés
+### Prochaines étapes
+- Routes serveur : battlemaps, tokens
+- Intégration Konva.js côté client
+- Drag & drop tokens + synchronisation Socket.io
+- Lanceur de dés (grille NdX + parser formule)
+- Animation dés (seed partagé)
+- Log partagé des jets
+
+## Points de vigilance
+- CLIENT_URL dans .env à configurer sur Raspberry Pi
+- Bouton "Launch" sur les cards campagne — non fonctionnel (Phase 2)
+- Pas de vérification email à l'inscription (décision validée)

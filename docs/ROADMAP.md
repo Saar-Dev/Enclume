@@ -35,15 +35,15 @@
 
 | Tâche | État |
 |---|---|
-| Middleware requireAuth (JWT) | 🔲 À faire |
-| Middleware requireGM | 🔲 À faire |
-| POST /auth/register | 🔲 À faire |
-| POST /auth/login | 🔲 À faire |
-| POST /auth/logout | 🔲 À faire |
-| GET /auth/me | 🔲 À faire |
-| CRUD campagnes | 🔲 À faire |
-| Rejoindre via invite_code | 🔲 À faire |
-| Dashboard GM | 🔲 À faire |
+| Middleware requireAuth (JWT) | ✅ Stable |
+| Middleware requireGM | ✅ Stable |
+| POST /auth/register | ✅ Stable |
+| POST /auth/login | ✅ Stable |
+| POST /auth/logout | ✅ Stable |
+| GET /auth/me | ✅ Stable |
+| CRUD campagnes | ✅ Stable |
+| Rejoindre via invite_code | ✅ Stable |
+| Dashboard GM | ✅ Stable |
 
 ## Phase 2 — Battlemap + dés
 **Objectif :** canvas Konva.js, tokens, Socket.io, lanceur de dés.
@@ -70,3 +70,31 @@
 | Point intégration fiches perso (API REST) | 🔲 À faire |
 | Reconnexion WebSocket automatique | 🔲 À faire |
 | Persistance viewport | 🔲 À faire |
+
+## Phase 2 — Battlemap + dés
+**Objectif :** canvas Konva.js, tokens, Socket.io, lanceur de dés.
+
+| Tâche | État |
+|---|---|
+| Configuration MinIO (bucket + credentials) | 🔲 À faire |
+| Migrations Phase 2 (nouveaux champs + tables) | 🔲 À faire |
+| Routes serveur : battlemaps | 🔲 À faire |
+| Routes serveur : tokens | 🔲 À faire |
+| Routes serveur : walls + zones | 🔲 À faire |
+| Routes serveur : player_locations | 🔲 À faire |
+| Socket.io — authentification WS | 🔲 À faire |
+| Socket.io — events tokens, viewport, map:switch | 🔲 À faire |
+| Page Session — layout (toolbar + canvas + sidebar) | 🔲 À faire |
+| Konva.js — affichage carte + grille + navigation | 🔲 À faire |
+| Konva.js — calques (background / gm / token) | 🔲 À faire |
+| Tokens — affichage + drag & drop | 🔲 À faire |
+| Tokens — synchronisation Socket.io | 🔲 À faire |
+| Zones Avantage/Neutre/Désavantage | 🔲 À faire |
+| Murs — tracé + stockage | 🔲 À faire |
+| Outil règle / mesure | 🔲 À faire |
+| Viewport — libre + Snap GM + Verrouiller | 🔲 À faire |
+| Déplacement joueurs entre battlemaps | 🔲 À faire |
+| Dés — grille NdX + parser formule | 🔲 À faire |
+| Dés — animation client (seed partagé) | 🔲 À faire |
+| Dés — critiques (animation + son) | 🔲 À faire |
+| Log partagé des jets | 🔲 À faire |
