@@ -20,28 +20,44 @@ router.get('/', requireAuth, async (req, res) => {
       'campaigns.created_at',
       'campaign_members.role'
     )
-
   res.json({ campaigns })
 })
 
 // POST /api/campaigns — créer une campagne
 router.post('/', requireAuth, async (req, res) => {
   const { name } = req.body
-
-  if (!name) {
-    throw new AppError(400, 'Campaign name is required')
-  }
+  if (!name) throw new AppError(400, 'Campaign name is required')
 
   const invite_code = randomUUID().split('-')[0]
 
-  const [campaign] = await db('campaigns')
-    .insert({ name, gm_id: req.user.id, invite_code })
-    .returning(['id', 'name', 'status', 'invite_code', 'created_at'])
+  // Transaction : campagne + battlemap vide + default_battlemap_id en une seule opération
+  const campaign = await db.transaction(async (trx) => {
+    // 1. Créer la campagne
+    const [newCampaign] = await trx('campaigns')
+      .insert({ name, gm_id: req.user.id, invite_code })
+      .returning(['id', 'name', 'status', 'invite_code', 'created_at'])
 
-  await db('campaign_members').insert({
-    campaign_id: campaign.id,
-    user_id: req.user.id,
-    role: 'gm',
+    // 2. Créer le membre GM
+    await trx('campaign_members').insert({
+      campaign_id: newCampaign.id,
+      user_id: req.user.id,
+      role: 'gm',
+    })
+
+    // 3. Créer la battlemap d'accueil par défaut
+    const [defaultMap] = await trx('battlemaps')
+      .insert({
+        campaign_id: newCampaign.id,
+        name: "Carte d'accueil",
+      })
+      .returning(['id'])
+
+    // 4. Définir cette battlemap comme carte d'accueil de la campagne
+    await trx('campaigns')
+      .where({ id: newCampaign.id })
+      .update({ default_battlemap_id: defaultMap.id })
+
+    return { ...newCampaign, default_battlemap_id: defaultMap.id }
   })
 
   res.status(201).json({ campaign })
@@ -52,10 +68,7 @@ router.get('/:id', requireAuth, requireRole('gm'), async (req, res) => {
   const campaign = await db('campaigns')
     .where({ 'campaigns.id': req.params.id })
     .first()
-
-  if (!campaign) {
-    throw new AppError(404, 'Campaign not found')
-  }
+  if (!campaign) throw new AppError(404, 'Campaign not found')
 
   const members = await db('campaign_members')
     .join('users', 'campaign_members.user_id', 'users.id')
@@ -67,41 +80,35 @@ router.get('/:id', requireAuth, requireRole('gm'), async (req, res) => {
       'campaign_members.character_name'
     )
 
-  res.json({ campaign, members })
+  const battlemaps = await db('battlemaps')
+    .where({ campaign_id: req.params.id })
+    .select('id', 'name', 'folder', 'created_at')
+
+  res.json({ campaign, members, battlemaps })
 })
 
 // PUT /api/campaigns/:id — modifier une campagne
 router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
   const { name, status } = req.body
-
   const [campaign] = await db('campaigns')
     .where({ id: req.params.id })
     .update({ name, status })
     .returning(['id', 'name', 'status', 'invite_code', 'created_at'])
-
   res.json({ campaign })
 })
 
 // POST /api/campaigns/join — rejoindre via invite_code
 router.post('/join', requireAuth, async (req, res) => {
   const { invite_code } = req.body
-
-  if (!invite_code) {
-    throw new AppError(400, 'Invite code is required')
-  }
+  if (!invite_code) throw new AppError(400, 'Invite code is required')
 
   const campaign = await db('campaigns').where({ invite_code }).first()
-  if (!campaign) {
-    throw new AppError(404, 'Campaign not found')
-  }
+  if (!campaign) throw new AppError(404, 'Campaign not found')
 
   const existing = await db('campaign_members')
     .where({ campaign_id: campaign.id, user_id: req.user.id })
     .first()
-
-  if (existing) {
-    throw new AppError(409, 'You are already a member of this campaign')
-  }
+  if (existing) throw new AppError(409, 'You are already a member of this campaign')
 
   await db('campaign_members').insert({
     campaign_id: campaign.id,
@@ -123,7 +130,6 @@ router.get('/:id/members', requireAuth, requireRole('gm'), async (req, res) => {
       'campaign_members.role',
       'campaign_members.character_name'
     )
-
   res.json({ members })
 })
 

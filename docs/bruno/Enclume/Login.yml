@@ -6,6 +6,13 @@ info:
 http:
   method: POST
   url: http://localhost:3001/api/auth/login
+  body:
+    type: json
+    data: |-
+      {
+        "email": "gm@enclume.com",
+        "password": "motdepasse123"
+      }
   auth: inherit
 
 settings:

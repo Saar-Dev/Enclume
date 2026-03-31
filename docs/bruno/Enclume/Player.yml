@@ -4,8 +4,16 @@ info:
   seq: 8
 
 http:
-  method: GET
+  method: POST
   url: http://localhost:3001/api/auth/register
+  body:
+    type: json
+    data: |-
+      {
+        "email": "joueur@enclume.com",
+        "password": "motdepasse123",
+        "username": "Joueur1"
+      }
   auth: inherit
 
 settings:

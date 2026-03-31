@@ -6,6 +6,12 @@ info:
 http:
   method: POST
   url: http://localhost:3001/api/campaigns
+  body:
+    type: json
+    data: |-
+      {
+        "name": "La Forêt Maudite"
+      }
   auth: inherit
 
 settings:

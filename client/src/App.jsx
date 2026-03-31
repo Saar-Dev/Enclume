@@ -5,6 +5,7 @@ import api from './lib/api'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
+import SessionPage from './pages/SessionPage'
 
 function ProtectedRoute({ children }) {
   const { user, isLoading } = useAuthStore()
@@ -41,6 +42,9 @@ export default function App() {
         } />
         <Route path="/dashboard" element={
           <ProtectedRoute><DashboardPage /></ProtectedRoute>
+        } />
+        <Route path="/session/:campaignId" element={
+        <ProtectedRoute><SessionPage /></ProtectedRoute>
         } />
       </Routes>
     </BrowserRouter>

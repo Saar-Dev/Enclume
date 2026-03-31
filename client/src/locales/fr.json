@@ -1,0 +1,76 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "error": "Une erreur est survenue",
+    "confirm": "Confirmer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "close": "Fermer"
+  },
+  "auth": {
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "register": "Créer un compte",
+    "email": "Email",
+    "password": "Mot de passe",
+    "username": "Nom d'utilisateur",
+    "loginError": "Email ou mot de passe incorrect",
+    "registerError": "Impossible de créer le compte"
+  },
+  "dashboard": {
+    "title": "Mes campagnes",
+    "createCampaign": "Nouvelle campagne",
+    "joinCampaign": "Rejoindre",
+    "campaignName": "Nom de la campagne",
+    "inviteCode": "Code d'invitation",
+    "launch": "Lancer",
+    "noCampaigns": "Aucune campagne pour l'instant"
+  },
+  "session": {
+    "loading": "Connexion à la session...",
+    "connectionError": "Impossible de rejoindre la session",
+    "modePlay": "Mode jeu",
+    "modeEdit": "Mode édition",
+    "layerToken": "Calque tokens",
+    "layerGM": "Calque GM",
+    "centerView": "Centrer la vue des joueurs",
+    "lockView": "Verrouiller la vue",
+    "freeView": "Libérer la vue",
+    "sendToMap": "Envoyer vers cette carte",
+    "battlemaps": "Cartes",
+    "players": "Joueurs",
+    "online": "en ligne"
+  },
+  "dice": {
+    "roll": "Lancer",
+    "result": "Résultat",
+    "formula": "Formule (ex: 2d6+3)",
+    "history": "Historique"
+  },
+  "chat": {
+    "placeholder": "Message...",
+    "send": "Envoyer"
+  },
+  "token": {
+    "move": "Déplacer",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "hide": "Cacher aux joueurs",
+    "show": "Révéler aux joueurs",
+    "layerGM": "Déplacer vers calque GM",
+    "layerToken": "Déplacer vers calque token"
+  },
+  "battlemap": {
+    "create": "Nouvelle carte",
+    "rename": "Renommer",
+    "delete": "Supprimer la carte",
+    "setDefault": "Définir comme carte d'accueil",
+    "assignPlayers": "Affecter les joueurs"
+  },
+  "errors": {
+    "notFound": "Page introuvable",
+    "accessDenied": "Accès refusé",
+    "sessionExpired": "Session expirée, reconnectez-vous"
+  }
+}

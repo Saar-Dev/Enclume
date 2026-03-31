@@ -1,17 +1,14 @@
 info:
-  name: Join Campagne
+  name: Créer battlemap
   type: http
-  seq: 9
+  seq: 13
 
 http:
   method: POST
-  url: http://localhost:3001/api/campaigns/join
+  url: http://localhost:3001/api/campaigns/0010b982-cba6-458b-88ae-6c07a1a726c2/battlemaps
   body:
     type: json
-    data: |-
-      {
-        "invite_code": "a55a145b"
-      }
+    data: '{ "name": "La Taverne" }'
   auth: inherit
 
 settings:

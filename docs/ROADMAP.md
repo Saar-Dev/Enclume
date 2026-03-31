@@ -1,4 +1,7 @@
 # ROADMAP — Projet Enclume
+> Dernière mise à jour : 2026-03-31 Session 3
+
+---
 
 ## Méthodologie de travail
 - Une étape stable et certaine avant de passer à la suivante
@@ -15,86 +18,123 @@
 
 ---
 
-## Phase 0 — Socle technique
-**Objectif :** tout ce dont on a besoin pour commencer à coder le vrai projet.
+## Phase 0 — Socle technique ✅
 
 | Tâche | État |
 |---|---|
-| Structure monorepo (client, server, shared, docs) | ✅ Stable |
-| Git initialisé | ✅ Stable |
-| Docker : PostgreSQL + Redis + MinIO | ✅ Stable |
-| Serveur Express + Socket.io minimal | ✅ Stable |
-| Route /api/health | ✅ Stable |
-| Migrations Knex (6 tables) | ✅ Stable |
-| Connexion DB vérifiée au démarrage serveur | ✅ Stable |
-| shared/events.js | ✅ Stable |
-| Client React initialisé (Vite) | ✅ Stable |
+| Structure monorepo (client, server, shared, docs) | ✅ |
+| Git + remote GitHub | ✅ |
+| Docker : PostgreSQL + Redis + MinIO | ✅ |
+| Serveur Express + Socket.io minimal | ✅ |
+| Route /api/health | ✅ |
+| Migrations Knex (6 tables de base) | ✅ |
+| Connexion DB vérifiée au démarrage | ✅ |
+| shared/events.js | ✅ |
+| Client React initialisé (Vite) | ✅ |
 
-## Phase 1 — Auth + campagnes
-**Objectif :** register, login, logout, CRUD campagnes, invite code.
+---
 
-| Tâche | État |
-|---|---|
-| Middleware requireAuth (JWT) | ✅ Stable |
-| Middleware requireGM | ✅ Stable |
-| POST /auth/register | ✅ Stable |
-| POST /auth/login | ✅ Stable |
-| POST /auth/logout | ✅ Stable |
-| GET /auth/me | ✅ Stable |
-| CRUD campagnes | ✅ Stable |
-| Rejoindre via invite_code | ✅ Stable |
-| Dashboard GM | ✅ Stable |
-
-## Phase 2 — Battlemap + dés
-**Objectif :** canvas Konva.js, tokens, Socket.io, lanceur de dés.
+## Phase 1 — Auth + campagnes ✅
 
 | Tâche | État |
 |---|---|
-| Upload image de fond | 🔲 À faire |
-| Affichage Konva.js | 🔲 À faire |
-| Création / placement / drag & drop tokens | 🔲 À faire |
-| Synchronisation tokens via Socket.io | 🔲 À faire |
-| Grille optionnelle | 🔲 À faire |
-| Lanceur de dés (grille NdX + parser formule) | 🔲 À faire |
-| Animation dés (seed partagé) | 🔲 À faire |
-| Log partagé des jets | 🔲 À faire |
+| Middleware requireAuth (JWT) | ✅ |
+| Middleware requireRole | ✅ |
+| Gestion d'erreurs centralisée (AppError + errorHandler) | ✅ |
+| POST /auth/register | ✅ |
+| POST /auth/login | ✅ |
+| POST /auth/logout | ✅ |
+| GET /auth/me | ✅ |
+| CRUD campagnes + invite_code | ✅ |
+| Rejoindre via invite_code | ✅ |
+| Dashboard GM (pages React) | ✅ |
 
-## Phase 3 — Bibliothèque + polish
-**Objectif :** documents, chat, intégration fiches perso, optimisations.
+---
+
+## Phase 2 — Battlemap 3D + dés 🔲
+
+### Serveur — infrastructure ✅
+| Tâche | État |
+|---|---|
+| Migrations Phase 2 (13 au total) | ✅ |
+| MinIO configuré (bucket + middleware upload) | ✅ |
+| Routes battlemaps (CRUD + upload image) | ✅ |
+| Route PUT /battlemaps/:id/voxels (sauvegarde voxel_data) | ✅ |
+| Routes tokens (CRUD + upload .glb) | ✅ |
+| Route /api/textures (proxy packs depuis MinIO) | ✅ |
+| Script start.ps1 | ✅ |
+
+### Serveur — temps réel ✅
+| Tâche | État |
+|---|---|
+| Socket.io — authentification WebSocket (JWT) | ✅ |
+| Socket.io — session:join / session:joined | ✅ |
+| Socket.io — token:move / token:moved | ✅ |
+| Socket.io — voxel:add / voxel:remove | ✅ |
+| Socket.io — map:switch | ✅ |
+| Socket.io — map:viewport (Snap GM, verrouillage) | ✅ |
+| Socket.io — chat:message | ✅ |
+| Socket.io — dice:roll / dice:result | 🔲 TODO |
+| Routes dés (calcul serveur + seed) | 🔲 |
+
+### Client — Page Session 🔲
+| Tâche | État |
+|---|---|
+| Layout page Session (canvas + sidebar) | ✅ |
+| Intégration Three.js / R3F dans React | ✅ |
+| Système de packs de textures voxel | ✅ |
+| Éditeur voxel 3D (mode édition GM) | ✅ |
+| Palette de matières dans Sidebar | ✅ |
+| Sauvegarde voxel auto + à la fermeture | ✅ |
+| Tokens 3D — fallback sphère + label | 🔲 |
+| Tokens 3D — chargement .glb | 🔲 |
+| Tokens — placement par le GM | 🔲 |
+| Tokens — drag & drop 3D | 🔲 |
+| Tokens — synchronisation Socket.io | 🔲 |
+| Calque GM — visibilité (visible/caché) | 🔲 |
+| X-Ray — transparence blocs devant tokens | 🔲 |
+| Viewport — Snap GM + Verrouiller | 🔲 |
+| Déplacement joueurs entre battlemaps | 🔲 |
+| Barre GM supérieure (battlemaps + affectation joueurs) | 🔲 |
+| Menu contextuel clic droit canvas | 🔲 |
+| Outil règle/mesure 3D (distance euclidienne) | 🔲 |
+| Murs invisibles (tracé + stockage) | 🔲 |
+| Matière eau (shader animé) | 🔲 Phase 3 |
+
+### Client — Sidebar 🔲
+| Tâche | État |
+|---|---|
+| Chat branché sur Socket.io | 🔲 |
+| Onglet Joueurs — liste + statut en ligne | 🔲 |
+| Onglet Dés — grille NdX + jet avancé | 🔲 |
+| Dés — animation client (seed partagé) | 🔲 |
+| Dés — critiques (animation + son) | 🔲 |
+| Log partagé des jets | 🔲 |
+
+---
+
+## Phase 3 — Bibliothèque + polish 🔲
 
 | Tâche | État |
 |---|---|
-| Upload documents vers MinIO | 🔲 À faire |
-| Bibliothèque avec gestion visibilité | 🔲 À faire |
-| Chat textuel sidebar | 🔲 À faire |
-| Point intégration fiches perso (API REST) | 🔲 À faire |
-| Reconnexion WebSocket automatique | 🔲 À faire |
-| Persistance viewport | 🔲 À faire |
+| Upload documents vers MinIO | 🔲 |
+| Bibliothèque avec gestion visibilité | 🔲 |
+| Point intégration fiches perso (API REST) | 🔲 |
+| Reconnexion WebSocket automatique | 🔲 |
+| Persistance viewport | 🔲 |
+| Avatars utilisateur (upload MinIO) | 🔲 |
+| Vue joueur pour le GM (toggle) | 🔲 |
+| Table zones — usage à définir (effets, Polaris) | 🔲 |
+| Optimisation voxel (> 3000 cubes) | 🔲 |
+| Matière eau (shader animé) | 🔲 |
+| Upload/gestion packs de textures via interface | 🔲 |
 
-## Phase 2 — Battlemap + dés
-**Objectif :** canvas Konva.js, tokens, Socket.io, lanceur de dés.
+---
 
-| Tâche | État |
-|---|---|
-| Configuration MinIO (bucket + credentials) | 🔲 À faire |
-| Migrations Phase 2 (nouveaux champs + tables) | 🔲 À faire |
-| Routes serveur : battlemaps | 🔲 À faire |
-| Routes serveur : tokens | 🔲 À faire |
-| Routes serveur : walls + zones | 🔲 À faire |
-| Routes serveur : player_locations | 🔲 À faire |
-| Socket.io — authentification WS | 🔲 À faire |
-| Socket.io — events tokens, viewport, map:switch | 🔲 À faire |
-| Page Session — layout (toolbar + canvas + sidebar) | 🔲 À faire |
-| Konva.js — affichage carte + grille + navigation | 🔲 À faire |
-| Konva.js — calques (background / gm / token) | 🔲 À faire |
-| Tokens — affichage + drag & drop | 🔲 À faire |
-| Tokens — synchronisation Socket.io | 🔲 À faire |
-| Zones Avantage/Neutre/Désavantage | 🔲 À faire |
-| Murs — tracé + stockage | 🔲 À faire |
-| Outil règle / mesure | 🔲 À faire |
-| Viewport — libre + Snap GM + Verrouiller | 🔲 À faire |
-| Déplacement joueurs entre battlemaps | 🔲 À faire |
-| Dés — grille NdX + parser formule | 🔲 À faire |
-| Dés — animation client (seed partagé) | 🔲 À faire |
-| Dés — critiques (animation + son) | 🔲 À faire |
-| Log partagé des jets | 🔲 À faire |
+## Hors scope V1 (prévu V2+)
+
+- Fog of war / raycast
+- Webcam / audio / vidéo
+- Fiches de personnage intégrées (module externe)
+- Destruction de décor par action joueur
+- Formes voxel non-cubiques (slope, escalier) — pertinence à réévaluer

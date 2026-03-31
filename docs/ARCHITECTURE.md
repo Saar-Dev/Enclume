@@ -1,4 +1,5 @@
 # ARCHITECTURE — Décisions techniques et justifications
+> Dernière mise à jour : 2026-03-31 Session 3
 
 ## Principes généraux
 - Une décision prise = documentée ici
@@ -9,185 +10,251 @@
 
 ## Structure : Monorepo
 **Décision :** un seul dépôt Git contenant `client/`, `server/`, `shared/`.
-**Pourquoi :** simplifie le partage de code (events.js), cohérence des
-versions, déploiement unique sur Raspberry Pi.
-**Alternative écartée :** trois dépôts séparés — trop de complexité
-pour un projet privé 4-8 joueurs.
+**Pourquoi :** simplifie le partage de code (events.js), cohérence des versions,
+déploiement unique sur Raspberry Pi.
+**Alternative écartée :** trois dépôts séparés — trop de complexité pour un projet privé 4-8 joueurs.
 
 ---
 
 ## `.env` unique à la racine
 **Décision :** un seul fichier `.env` à la racine du monorepo.
-**Pourquoi :** évite la duplication de configuration entre client et
-serveur. Source de vérité unique.
-**Impact :** tous les fichiers qui lisent le `.env` doivent spécifier
-le chemin explicitement : `dotenv.config({ path: '../.env' })`.
+**Pourquoi :** évite la duplication de configuration entre client et serveur. Source de vérité unique.
+**Impact serveur :** `dotenv.config({ path: '../.env' })`.
+**Impact client :** `vite.config.js` configuré avec `envDir` pointant vers la racine.
+Variables Vite préfixées `VITE_` (ex: `VITE_API_URL`), accessibles via `import.meta.env`.
+**Non négociable :** pas de `client/.env` séparé.
 
 ---
 
 ## ES Modules dans server/
-**Décision :** `"type": "module"` dans `server/package.json`.
-Syntaxe `import/export` partout dans `server/src/`.
-**Pourquoi :** syntaxe moderne, cohérence avec le client React qui
-utilise aussi les ES Modules.
-**Exception :** `knexfile.cjs` reste en CommonJS — la CLI Knex ne
-supporte pas les ES Modules nativement.
-
----
-
-## Knexfile en CommonJS
-**Décision :** `knexfile.cjs` (extension `.cjs`, syntaxe `require/module.exports`).
-**Pourquoi :** la CLI Knex (`knex migrate:latest`) ne supporte pas
-les ES Modules. Le reste du serveur reste en ES Modules.
+**Décision :** `"type": "module"` dans `server/package.json`. Syntaxe `import/export` partout.
+**Exception :** `knexfile.cjs` reste en CommonJS — la CLI Knex ne supporte pas les ES Modules.
 **Commande Windows :** `node_modules\.bin\knex.cmd migrate:latest --knexfile knexfile.cjs`
 
 ---
 
 ## Base de données : PostgreSQL 16
 **Décision :** PostgreSQL via Docker, géré par Knex.
-**Pourquoi :** robuste, supporte JSONB (utile pour viewport_state,
-results des dés, sheet_data), compatible ARM64 pour Raspberry Pi.
+**Pourquoi :** robuste, supporte JSONB (voxel_data, viewport_state, résultats dés),
+compatible ARM64 pour Raspberry Pi.
 
 ---
 
 ## Ports
-| Service | Port | Raison |
-|---|---|---|
-| Client React | 3000 | Convention Vite |
-| Serveur Express | 3001 | Convention, évite conflit avec client |
-| PostgreSQL | 5432 | Port officiel |
-| Redis | 6379 | Port officiel |
-| MinIO API | 9000 | Port officiel |
-| MinIO Console | 9001 | Port officiel |
+| Service | Port |
+|---|---|
+| Client React (Vite) | 5173 |
+| Serveur Express | 3001 |
+| PostgreSQL | 5432 |
+| Redis | 6379 |
+| MinIO API | 9000 |
+| MinIO Console | 9001 |
 
 ---
 
 ## Auth : JWT en cookie httpOnly
 **Décision :** JWT stocké dans un cookie httpOnly, pas dans localStorage.
-**Pourquoi :** sécurité — un cookie httpOnly n'est pas accessible
-depuis JavaScript, ce qui protège contre les attaques XSS.
-**Non négociable** (défini dans PROJET.md section 8).
+**Pourquoi :** protège contre les attaques XSS.
+**Non négociable.**
 
 ---
 
 ## Calcul des dés : serveur uniquement
 **Décision :** les résultats des dés sont toujours calculés côté serveur.
-**Pourquoi :** empêche la triche. Le client reçoit un `seed` pour
-reproduire la même animation, mais ne calcule jamais le résultat.
-**Non négociable** (défini dans PROJET.md section 8).
+Le client reçoit un `seed` pour reproduire la même animation.
+**Non négociable.**
+
+---
 
 ## Sécurité des mots de passe
 **Décision :** bcrypt, saltRounds = 12, minimum 8 caractères.
-**Pourquoi :** robuste sans être trop lent. Pas de contraintes
-de complexité — contre-productif en pratique.
+Pas de contraintes de complexité — contre-productif en pratique.
+
+---
 
 ## Avatars
-**Décision :** avatars générés automatiquement basés sur le
-nom d'utilisateur. Pas d'upload en Phase 1.
+Générés automatiquement basés sur le nom d'utilisateur. Pas d'upload en Phase 1.
 **Prévu Phase 3 :** option upload image via MinIO.
 
+---
+
 ## Rôles dans une campagne
-**Décision :** un seul rôle par utilisateur par campagne (GM ou player).
-**Plusieurs GMs** possibles sur une même campagne.
+Un seul rôle par utilisateur par campagne (GM ou player).
+Plusieurs GMs possibles sur une même campagne.
 **Vue joueur pour le GM :** toggle côté interface en Phase 3 —
 le GM reste GM en base, l'interface simule la vue joueur.
 
+---
+
 ## Statuts d'une campagne
-- `draft` — brouillon
-- `active` — en cours (défaut à la création)
-- `completed` — terminée
-- `archived` — archivée
+`draft` / `active` (défaut) / `completed` / `archived`
 Validés côté serveur dans les routes PUT /campaigns/:id.
-## Organisation MinIO (buckets)
-**Décision :** un seul bucket `enclume-assets` avec sous-dossiers :
+
+---
+
+## Organisation MinIO
+Un seul bucket `enclume-assets` avec sous-dossiers :
 - `campaigns/` — illustrations de campagne
-- `battlemaps/` — images de fond des cartes
-- `tokens/` — images des tokens
+- `battlemaps/` — images de fond des cartes (optionnel en 3D)
+- `tokens/` — fichiers .glb des tokens
+- `textures/` — packs de textures voxel (voir section dédiée)
 - `documents/` — PDF et fichiers partagés (Phase 3)
 - `audio/` — sons critiques, ambiance (Phase 3)
 
+Le bucket reste en mode **PRIVATE**. Le serveur Express proxifie tous les accès
+— le client ne touche jamais MinIO directement.
+
+---
+
+## Système de textures voxel — packs
+**Décision :** textures organisées en packs thématiques dans MinIO.
+**Structure :** `textures/<pack-name>/manifest.json` + PNGs dans sous-dossiers libres.
+**Format manifest.json :**
+```json
+{
+  "name": "hard-sf",
+  "label": "Hard SF",
+  "tileSize": 128,
+  "materials": [
+    { "id": 1, "name": "...", "label": "...", "top": "floor/xxx.png", "side": "floor/xxx.png" }
+  ]
+}
+```
+- `id` : entier stocké dans `voxel_data` en base — compact et stable
+- `top` / `side` : chemins relatifs dans le pack
+- `tileSize` : résolution des textures (128×128px actuellement)
+- Le code charge le premier pack disponible par défaut
+- Route proxy : `GET /api/textures/:pack/*filePath` — pas de CORS possible
+
+---
+
+## Moteur de rendu : Three.js / R3F
+**Décision :** Three.js via @react-three/fiber (R3F) v9 + @react-three/drei v10.
+Konva.js abandonné définitivement — jamais installé dans le projet.
+**Pourquoi :** démo technique voxel 3D validée — le projet est orienté SF,
+la 3D résout nativement altitude, portée et ligne de vue.
+**Non négociable.**
+
+---
+
+## Système de carte : Voxel 3D
+**Décision :** les cartes sont des données voxel stockées en JSONB.
+**Format :** tableau d'objets `{ x, y, z, mat }` — mat = id matière du pack actif.
+**Stockage :** champ `voxel_data` JSONB sur la table `battlemaps`.
+**Taille max :** grille 50×50, hauteur max 8 niveaux.
+Au-delà de ~3000 cubes visibles, optimisation nécessaire (faces visibles uniquement).
+
+---
+
+## Séparation routes battlemaps
+`PUT /battlemaps/:id` — métadonnées + image optionnelle (avec multer).
+`PUT /battlemaps/:id/voxels` — voxel_data JSON pur (sans multer).
+**Pourquoi :** une route = une responsabilité. Multer et JSON pur sont incompatibles.
+
+---
+
+## Coordonnées des tokens
+Les tokens ont des coordonnées `(x, y, z)` dans l'espace 3D.
+Champ `pos_z FLOAT` sur la table `tokens` (migration 12).
+
+---
+
+## Calques — flag de visibilité
+Le calque n'est pas un calque de rendu — c'est un flag :
+- `token` : visible par tous
+- `gm` : invisible aux joueurs (embuscades, PNJ non révélés)
+- `background` : éléments de décor non interactifs
+Le GM bascule les tokens entre calques à tout moment.
+
+---
+
 ## Tokens — définition élargie
-Un token = tout élément placé sur la carte : PJ, PNJ, monstre,
-élément de décor (baril, ordinateur, etc). Pas de distinction de type
-en base — c'est le GM qui organise via label et calque.
-Image par défaut générique unique — fournie par le GM du projet.
+Un token = tout élément placé sur la carte : PJ, PNJ, monstre, décor interactif.
+Pas de distinction de type en base — le GM organise via label et calque.
 
-## Calques (layers)
-Trois calques par battlemap, dans l'ordre d'affichage :
-1. `background` — image de fond + éléments de décor fixes
-2. `gm` — invisible pour les joueurs, dessins libres, notes visuelles
-3. `token` — PJ, PNJ, éléments interactifs (toujours au dessus)
-Z-index gérable au sein de chaque calque.
+## Tokens 3D — spécifications
+**Format :** `.glb` uniquement (tout-en-un).
+**Boîte englobante :** 1×1×2 unités (1 case largeur, 2 cases hauteur).
+**Origine :** centre de la base (les pieds).
+**Polygones :** maximum 2 000 triangles.
+**Matériaux :** PBR standard Metallic/Roughness.
+**Texture :** atlas unique, 512×512px ou 1024×1024px max.
+**Animations (optionnelles) :** `idle` / `move` / `attack`.
+**Fallback :** sphère colorée avec label si pas de .glb assigné.
 
-## Zones de niveau
-Trois niveaux de zone dessinables par le GM :
-- `advantage` — niveau supérieur / étage +1
-- `neutral` — niveau du sol (défaut)
-- `disadvantage` — niveau inférieur / étage -1
-Implémentation : polygones Konva.js avec opacité, sur le calque GM.
-Basé sur le système Polaris (avantage/désavantage).
+---
 
-## Murs et couvertures
-- Murs : segments tracés par le GM, bloquent les lignes de vue (V2 raycast)
-- Couverture : champ `cover_percent` sur les tokens (0-100%)
-- Dessins libres sur le calque GM (murets, poteaux, etc)
+## Modes GM pendant la session
+Pas de séparation éditeur/session — une toolbar qui switche entre modes :
+- **Mode jeu** : déplacement tokens, dés, chat
+- **Mode édition** : pose/suppression voxels, déplacement décor
+Les modifications voxel sont broadcastées via Socket.io en temps réel.
+
+---
+
+## Éditeur voxel
+Clic gauche : pose un voxel de la matière active.
+Clic droit : efface le voxel ciblé.
+Raycasting sur le plan de sol Y=0 et sur les voxels existants.
+Pose sur face d'un voxel : position = voxel + normale de la face.
+Sauvegarde automatique toutes les 60s si dirty + à la fermeture de l'éditeur.
+
+---
+
+## Murs invisibles
+Table `walls` conservée — murs logiques invisibles (vitres, fenêtres, cloisons).
+Bloquent la ligne de vue sans être des voxels visibles.
+
+---
+
+## Zones
+Table `zones` conservée pour Phase 3 (effets de sorts, zones de danger, Polaris).
+L'altitude Z gère nativement avantage/désavantage — pas de zones dédiées à ça.
+
+---
+
+## Matière eau
+Faisable avec Three.js : plan animé, shader de distorsion, transparence.
+Pertinent pour Polaris (JDR sous-marin).
+Un voxel de type "eau" affiche ce matériau animé au lieu d'un cube solide.
+**Prévu Phase 3.**
+
+---
+
+## X-Ray (occlusion)
+Quand un voxel se trouve entre la caméra et un token,
+il est rendu transparent automatiquement.
+Implémentation : raycasting caméra → token, transparence sur les hits.
+
+---
+
+## Viewport — comportement
+- Par défaut : chaque joueur navigue librement
+- "Snap GM" : le viewport du joueur suit celui du GM (persistant)
+- "Verrouiller vue" : le GM bloque tous les joueurs sur sa position
+
+---
+
+## Outil règle/mesure
+Distance euclidienne 3D entre deux points.
+Affichage en cases × `scale_label` de la carte.
+
+---
+
+## Dés — système
+Tous les dés : D4, D6, D8, D10, D12, D20, D100.
+Calcul toujours côté serveur (non négociable).
+Critiques configurables par campagne, par dé (seuil haut / seuil bas).
+
+---
 
 ## Battlemaps — organisation
 - Organisation en dossiers par campagne (ex: Ville/, Donjon/)
 - Chaque battlemap a ses propres paramètres de grille
-- Une battlemap vide créée automatiquement à la création de campagne
-  (point de départ — le GM la renomme et décore comme il veut)
-- Le GM peut basculer chaque joueur vers n'importe quelle battlemap,
-  individuellement ou en groupe (cases à cocher + "Envoyer vers...")
+- Une battlemap créée automatiquement à la création de campagne
+- Le GM peut basculer chaque joueur vers n'importe quelle battlemap
 
-## Viewport — comportement
-- Par défaut : chaque joueur navigue librement
-- "Snap GM" : le viewport du joueur suit celui du GM (persistant jusqu'à annulation)
-- "Verrouiller vue" : le GM bloque tous les joueurs sur sa position
+---
 
-## Dés — système
-- Tous les dés disponibles : D4, D6, D8, D10, D12, D20, D100
-- Calcul toujours côté serveur (non négociable)
-- Critiques configurables par campagne, par dé, optionnel :
-  - Seuil haut = réussite critique (animation + son court)
-  - Seuil bas = échec critique (animation + son court)
-
-## Toolbar GM (session active)
-Outils disponibles en V1 :
-1. Sélection / déplacement
-2. Dessin de mur
-3. Dessin de zone (Avantage/Neutre/Désavantage)
-4. Règle / mesure (en cases × échelle de la carte)
-5. Paramètres de la carte
-
-## Échelle par carte
-Chaque battlemap a un champ `scale_label` (ex: "1,5m" ou "5ft").
-Utilisé par l'outil règle pour convertir cases → unité réelle.
-Taille de case par défaut : 64px.
-Le GM peut modifier la grille à la volée en cours de session.
-
-## Schéma DB — modifications Phase 2
-Par rapport aux migrations Phase 0, les ajouts suivants sont nécessaires :
-
-**`campaigns`** — nouveaux champs :
-- `cover_image_url TEXT` — illustration de la campagne
-- `critical_success JSONB` — seuils par dé (optionnel)
-- `critical_fail JSONB` — seuils par dé (optionnel)
-
-**`battlemaps`** — nouveaux champs :
-- `folder TEXT` — organisation en dossiers
-- `scale_label TEXT` — ex: "1,5m" (défaut null)
-- `grid_opacity FLOAT` — opacité de la grille (0-1, défaut 0.5)
-- `grid_size INT` — déjà présent, défaut passe à 64px
-
-**`tokens`** — nouveaux champs :
-- `layer TEXT` — 'background' | 'gm' | 'token' (défaut 'token')
-- `cover_percent INT` — 0 à 100 (défaut 0)
-- `notes TEXT` — notes visibles par le propriétaire
-- `gm_notes TEXT` — notes visibles GM uniquement
-
-**Nouvelles tables :**
-- `walls` — segments de murs (battlemap_id, x1, y1, x2, y2)
-- `zones` — zones de niveau (battlemap_id, level, points JSONB)
-- `player_locations` — quelle battlemap chaque joueur voit
-  (campaign_id, user_id, battlemap_id)
+## Dessin libre — abandonné
+Hors scope définitivement.

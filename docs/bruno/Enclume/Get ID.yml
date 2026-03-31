@@ -1,0 +1,19 @@
+info:
+  name: Get ID
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: http://localhost:3001/api/campaigns/:id
+  params:
+    - name: id
+      value: ""
+      type: path
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

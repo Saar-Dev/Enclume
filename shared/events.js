@@ -12,6 +12,12 @@ export const WS = {
   TOKEN_DELETED: 'token:deleted',
   TOKEN_UPDATED: 'token:updated',
 
+  // Voxels (carte 3D)
+  VOXEL_ADD:     'voxel:add',
+  VOXEL_ADDED:   'voxel:added',
+  VOXEL_REMOVE:  'voxel:remove',
+  VOXEL_REMOVED: 'voxel:removed',
+
   // Dés
   DICE_ROLL:   'dice:roll',
   DICE_RESULT: 'dice:result',

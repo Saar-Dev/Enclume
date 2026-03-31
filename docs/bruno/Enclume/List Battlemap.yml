@@ -1,0 +1,15 @@
+info:
+  name: List Battlemap
+  type: http
+  seq: 14
+
+http:
+  method: GET
+  url: http://localhost:3001/api/campaigns/0010b982-cba6-458b-88ae-6c07a1a726c2/battlemaps
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

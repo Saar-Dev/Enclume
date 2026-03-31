@@ -129,7 +129,9 @@ export default function DashboardPage() {
                 </div>
                 <div style={styles.cardFooter}>
                   <span style={styles.inviteCode}>#{campaign.invite_code}</span>
-                  <button style={styles.btnPrimary}>Launch</button>
+                  <button style={styles.btnPrimary} onClick={() => navigate(`/session/${campaign.id}`)}>
+  Launch
+</button>
                 </div>
               </div>
             ))}
