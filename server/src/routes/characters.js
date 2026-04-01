@@ -9,7 +9,8 @@ const router = Router({ mergeParams: true })
 // GET /api/campaigns/:campaignId/characters
 // Accessible à tous les membres de la campagne.
 // Les joueurs ne voient que les personnages avec visible = true.
-// Le GM voit tout.
+// Le GM voit tout, y compris gm_notes.
+// Les joueurs ne reçoivent jamais gm_notes — filtrage dans le select.
 router.get('/', requireAuth, async (req, res) => {
   const { campaignId } = req.params
 
@@ -21,20 +22,27 @@ router.get('/', requireAuth, async (req, res) => {
 
   const isGm = member.role === 'gm'
 
+  // Colonnes communes à tous les rôles
+  const columns = [
+    'characters.id',
+    'characters.name',
+    'characters.color',
+    'characters.visible',
+    'characters.glb_url',
+    'characters.portrait_url',
+    'characters.user_id',
+    'characters.description',
+    'characters.created_at',
+    'users.username as owner_username',
+  ]
+
+  // gm_notes jamais envoyé aux joueurs
+  if (isGm) columns.push('characters.gm_notes')
+
   const query = db('characters')
-    .where({ campaign_id: campaignId })
+    .where({ 'characters.campaign_id': campaignId })
     .leftJoin('users', 'characters.user_id', 'users.id')
-    .select(
-      'characters.id',
-      'characters.name',
-      'characters.color',
-      'characters.visible',
-      'characters.glb_url',
-      'characters.portrait_url',
-      'characters.user_id',
-      'characters.created_at',
-      'users.username as owner_username'
-    )
+    .select(columns)
     .orderBy('characters.created_at', 'asc')
 
   // Les joueurs ne voient pas les personnages masqués
@@ -71,7 +79,8 @@ router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
     .insert({ campaign_id: campaignId, user_id: user_id || null, name, color, visible })
     .returning([
       'id', 'campaign_id', 'user_id', 'name', 'color',
-      'visible', 'glb_url', 'portrait_url', 'created_at'
+      'visible', 'glb_url', 'portrait_url',
+      'description', 'gm_notes', 'created_at',
     ])
 
   res.status(201).json({ character })
@@ -79,7 +88,8 @@ router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
 
 // PUT /api/characters/:id
 // GM ou propriétaire du personnage (user_id).
-// Le GM peut tout modifier. Le propriétaire peut modifier name et visible uniquement.
+// GM : peut modifier tous les champs dont description et gm_notes.
+// Owner : peut modifier name, visible et description uniquement. Jamais gm_notes.
 router.put('/:id', requireAuth, async (req, res) => {
   const character = await db('characters').where({ id: req.params.id }).first()
   if (!character) throw new AppError(404, 'Character not found')
@@ -97,13 +107,12 @@ router.put('/:id', requireAuth, async (req, res) => {
     throw new AppError(403, 'You do not have permission to modify this character')
   }
 
-  // Le propriétaire ne peut modifier que name et visible
-  // Le GM peut modifier tous les champs
-  const { name, visible, color, glb_url, portrait_url, user_id } = req.body
+  const { name, visible, color, glb_url, portrait_url, user_id, description, gm_notes } = req.body
 
+  // Champs autorisés selon le rôle
   const updates = isGm
-    ? { name, visible, color, glb_url, portrait_url, user_id }
-    : { name, visible }
+    ? { name, visible, color, glb_url, portrait_url, user_id, description, gm_notes }
+    : { name, visible, description }
 
   // Retirer les champs undefined pour ne pas écraser avec null
   Object.keys(updates).forEach((k) => updates[k] === undefined && delete updates[k])
@@ -117,7 +126,8 @@ router.put('/:id', requireAuth, async (req, res) => {
     .update(updates)
     .returning([
       'id', 'campaign_id', 'user_id', 'name', 'color',
-      'visible', 'glb_url', 'portrait_url', 'created_at'
+      'visible', 'glb_url', 'portrait_url',
+      'description', 'gm_notes', 'created_at',
     ])
 
   res.json({ character: updated })
