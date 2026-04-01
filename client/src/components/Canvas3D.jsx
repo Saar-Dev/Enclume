@@ -1,12 +1,34 @@
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { OrbitControls, Grid } from '@react-three/drei'
+import { OrbitControls, Grid, Text } from '@react-three/drei'
+import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
+import { SkeletonUtils } from 'three-stdlib'
 import api from '../lib/api.js'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const VOXEL_SIZE = 1
 const GRID_SIZE = 50
+const DEFAULT_TOKEN_URL = `${import.meta.env.VITE_API_URL}/api/assets/tokens/default.glb`
+const FONT_URL = '/fonts/inter.woff'
+
+// Seuil en pixels pour distinguer clic court (sélection) de drag
+const DRAG_THRESHOLD = 4
+
+// Offset visuel du token au-dessus du sol pendant le drag
+const DRAG_HOVER = 0.5
+
+// Amplitude max de l'inclinaison pendant le drag (radians)
+const DRAG_TILT_MAX = 0.3
+
+// ─── Utilitaire coordonnées ───────────────────────────────────────────────────
+// Convertit une position Three.js en champs base de données.
+// Three.js : X = droite, Y = haut, Z = profondeur
+// Base      : pos_x = X, pos_y = Z Three.js, pos_z = Y Three.js (altitude)
+// NE PAS FAIRE CE MAPPING INLINE — toujours passer par cette fonction.
+function threeToDb(tx, ty, tz) {
+  return { pos_x: tx, pos_y: tz, pos_z: ty }
+}
 
 // ─── Chargement des textures ──────────────────────────────────────────────────
 const textureCache = {}
@@ -31,7 +53,6 @@ async function loadPackTextures(pack) {
     const top = await loadTex(mat.top)
     const side = mat.side !== mat.top ? await loadTex(mat.side) : top
 
-    // 6 faces : right, left, top, bottom, front, back
     textures[mat.id] = [side, side, top, top, side, side].map(tex =>
       new THREE.MeshLambertMaterial({ map: tex, color: tex ? 0xffffff : 0x888888 })
     )
@@ -52,18 +73,289 @@ function Voxel({ position, materialId, materials }) {
   )
 }
 
+// ─── Anneau de base du token ──────────────────────────────────────────────────
+// Toujours visible, ancré aux pieds du token (Y=0.1 local, indépendant de l'altitude).
+// État normal : statique, opacité faible.
+// État sélectionné : oscille en hauteur et en diamètre via useFrame.
+// Logique : le group du token est positionné à son altitude en Y monde.
+// L'anneau à position Y=0.1 local est donc toujours à "pied du token + 0.1" — correct.
+function TokenRing({ color, isSelected, isDragging }) {
+  const ringRef = useRef()
+  const t = useRef(0)
+
+  // Au repos/sélection : anneau à 0.6 (au-dessus des pieds du modèle, Y_OFFSET=0.5)
+  // Pendant le drag : anneau à 0.1 (au ras du sol, aide à viser la case cible)
+  const baseY = isDragging ? 0.1 : 0.6
+
+  useFrame((_, delta) => {
+    if (!ringRef.current) return
+    if (!isSelected) {
+      ringRef.current.position.y = baseY
+      ringRef.current.scale.setScalar(1)
+      ringRef.current.material.opacity = 0.5
+      return
+    }
+    t.current += delta
+    const time = t.current
+    ringRef.current.position.y = baseY + Math.sin(time * 3) * 0.05
+    const s = 1 + Math.sin(time * 2.5) * 0.08
+    ringRef.current.scale.set(s, 1, s)
+    ringRef.current.material.opacity = 0.7 + Math.sin(time * 4) * 0.25
+  })
+
+  return (
+    <mesh ref={ringRef} position={[0, baseY, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0.5, 0.58, 48]} />
+      <meshBasicMaterial color={color} transparent opacity={0.5} depthWrite={false} />
+    </mesh>
+  )
+}
+
+// ─── Token individuel ─────────────────────────────────────────────────────────
+// Pendant le drag : XZ depuis dragState (plan Y=0), Y = columnY + DRAG_HOVER.
+// TokenRing : anneau toujours visible, animé à la sélection.
+const Y_OFFSET = 0.5
+
+function TokenMesh({ token, gltfScene, isSelected, onDragStart, dragState }) {
+  const color = token.color || '#4A90D9'
+  const label = token.label || '?'
+
+  const baseX = token.pos_x ?? 0
+  const baseY = token.pos_z ?? 0   // pos_z base = altitude Y Three.js
+  const baseZ = token.pos_y ?? 0   // pos_y base = axe Z Three.js
+
+  const isDragging = dragState !== null
+  const x = isDragging ? dragState.x : baseX
+  const y = isDragging ? dragState.y : baseY
+  const z = isDragging ? dragState.z : baseZ
+
+  const tiltX = isDragging ? dragState.tiltX : 0
+  const tiltZ = isDragging ? dragState.tiltZ : 0
+
+  const clonedScene = useMemo(() => {
+    if (!gltfScene) return null
+    const clone = SkeletonUtils.clone(gltfScene)
+    clone.traverse((child) => {
+      if (child.isMesh && child.material) {
+        const mats = Array.isArray(child.material) ? child.material : [child.material]
+        mats.forEach(mat => {
+          if (mat.map) {
+            mat.map.colorSpace = THREE.SRGBColorSpace
+            mat.map.needsUpdate = true
+          }
+          mat.needsUpdate = true
+        })
+      }
+    })
+    return clone
+  }, [gltfScene])
+
+  if (!clonedScene) return null
+
+  return (
+    <group
+      position={[x, y, z]}
+      userData={{ isToken: true, tokenId: token.id }}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        onDragStart(e, token)
+      }}
+    >
+      {/* Anneau toujours visible — animé si sélectionné, bas si drag */}
+      <TokenRing color={color} isSelected={isSelected} isDragging={isDragging} />
+
+      {/* Modèle 3D — incliné pendant le drag */}
+      <primitive
+        object={clonedScene}
+        position={[0, Y_OFFSET, 0]}
+        scale={[1, 1, 1]}
+        rotation={[tiltX, 0, tiltZ]}
+      />
+
+      {/* Label flottant */}
+      <Text
+        position={[0, 2.5, 0]}
+        font={FONT_URL}
+        fontSize={0.3}
+        color={color}
+        anchorX="center"
+        anchorY="bottom"
+        outlineWidth={0.04}
+        outlineColor="#000000"
+      >
+        {label}
+      </Text>
+    </group>
+  )
+}
+
 // ─── Scène principale ─────────────────────────────────────────────────────────
 function Scene({
   voxels, setVoxels, mode, activeMaterial,
-  materials, onDirty, socket, battlemapId
+  materials, onDirty, socket, battlemapId,
+  tokens, selectedTokenId, onTokenSelect,
+  gltfScene, onTokenMove, isGm, justSelectedRef,
 }) {
   const { camera, gl, scene } = useThree()
   const orbitRef = useRef()
   const raycaster = new THREE.Raycaster()
   const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
 
+  // dragState : { tokenId, x, y, z, tiltX, tiltZ }
+  // y = columnTopY + DRAG_HOVER — altitude dynamique pendant le drag
+  const [dragState, setDragState] = useState(null)
+
+  const dragRef = useRef({
+    active: false,
+    tokenId: null,
+    token: null,
+    startX: 0,
+    startY: 0,
+    hasMoved: false,
+    prevWorldX: null,
+    prevWorldZ: null,
+  })
+
   const getVoxelKey = (x, y, z) => `${x},${y},${z}`
 
+  // ─── Raycasting sur plan Y=0 ───────────────────────────────────────────────
+  // Toujours sur le sol — précis, simple, approche Foundry VTT.
+  const raycastGround = useCallback((clientX, clientY) => {
+    const rect = gl.domElement.getBoundingClientRect()
+    const mouse = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    )
+    raycaster.setFromCamera(mouse, camera)
+    const target = new THREE.Vector3()
+    const hit = raycaster.ray.intersectPlane(groundPlane, target)
+    return hit ? target : null
+  }, [camera, gl])
+
+  // Trouve le Y le plus haut dans la colonne de voxels à (x, z).
+  // Retourne 0 si pas de voxel. Retourne maxVoxelY si voxel trouvé.
+  const getColumnTopY = useCallback((x, z) => {
+    let maxY = -1
+    for (const v of Object.values(voxels)) {
+      if (v.x === x && v.z === z) maxY = Math.max(maxY, v.y)
+    }
+    return maxY === -1 ? 0 : maxY
+  }, [voxels])
+
+  // ─── Début du drag ─────────────────────────────────────────────────────────
+  const handleDragStart = useCallback((e, token) => {
+    e.stopPropagation()
+    dragRef.current = {
+      active: true,
+      tokenId: token.id,
+      token,
+      startX: e.clientX,
+      startY: e.clientY,
+      hasMoved: false,
+      prevWorldX: null,
+      prevWorldZ: null,
+    }
+    if (orbitRef.current) orbitRef.current.enabled = false
+  }, [])
+
+  // ─── Déplacement souris ────────────────────────────────────────────────────
+  const handlePointerMove = useCallback((e) => {
+    if (!dragRef.current.active) return
+
+    const dx = e.clientX - dragRef.current.startX
+    const dy = e.clientY - dragRef.current.startY
+
+    if (!dragRef.current.hasMoved) {
+      if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return
+      dragRef.current.hasMoved = true
+    }
+
+    // Raycasting sur plan Y=0 — précis quelle que soit l'angle caméra
+    const worldPos = raycastGround(e.clientX, e.clientY)
+    if (!worldPos) return
+
+    // Altitude dynamique : le token flotte au-dessus du sol local
+    const snappedX = Math.round(worldPos.x)
+    const snappedZ = Math.round(worldPos.z)
+    const columnY = getColumnTopY(snappedX, snappedZ)
+
+    // Calcul inclinaison
+    let tiltX = 0
+    let tiltZ = 0
+    if (dragRef.current.prevWorldX !== null) {
+      const deltaX = worldPos.x - dragRef.current.prevWorldX
+      const deltaZ = worldPos.z - dragRef.current.prevWorldZ
+      tiltX = Math.max(-DRAG_TILT_MAX, Math.min(DRAG_TILT_MAX, -deltaZ * 2))
+      tiltZ = Math.max(-DRAG_TILT_MAX, Math.min(DRAG_TILT_MAX, deltaX * 2))
+    }
+    dragRef.current.prevWorldX = worldPos.x
+    dragRef.current.prevWorldZ = worldPos.z
+
+    setDragState({
+      tokenId: dragRef.current.tokenId,
+      x: worldPos.x,
+      y: columnY + DRAG_HOVER,
+      z: worldPos.z,
+      tiltX,
+      tiltZ,
+    })
+  }, [raycastGround, getColumnTopY])
+
+  // ─── Fin du drag ───────────────────────────────────────────────────────────
+  const handlePointerUp = useCallback(async (e) => {
+    if (!dragRef.current.active) return
+
+    const wasMoving = dragRef.current.hasMoved
+    const token = dragRef.current.token
+
+    if (orbitRef.current) orbitRef.current.enabled = true
+    dragRef.current.active = false
+    dragRef.current.hasMoved = false
+    setDragState(null)
+
+    if (!wasMoving) {
+      // Clic court → sélection
+      // justSelectedRef empêche handleCanvasClick d'effacer immédiatement la sélection
+      justSelectedRef.current = true
+      onTokenSelect(token.id)
+      return
+    }
+
+    const worldPos = raycastGround(e.clientX, e.clientY)
+    if (!worldPos) return
+
+    const snappedX = Math.round(worldPos.x)
+    const snappedZ = Math.round(worldPos.z)
+    const snappedY = getColumnTopY(snappedX, snappedZ)
+
+    // Validation : GM Y 0-8, Joueur Y 1-7
+    const minY = isGm ? 0 : 1
+    const maxY = isGm ? 8 : 7
+    if (snappedY < minY || snappedY > maxY) return
+    if (Math.abs(snappedX) > GRID_SIZE / 2 || Math.abs(snappedZ) > GRID_SIZE / 2) return
+
+    const dbPos = threeToDb(snappedX, snappedY, snappedZ)
+
+    try {
+      const res = await api.put(`/tokens/${token.id}`, dbPos)
+      onTokenMove(res.data.token)
+    } catch (err) {
+      console.error('Erreur déplacement token :', err)
+    }
+  }, [raycastGround, getColumnTopY, onTokenSelect, onTokenMove, isGm, justSelectedRef])
+
+  // ─── Listeners DOM ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const canvas = gl.domElement
+    canvas.addEventListener('pointermove', handlePointerMove)
+    canvas.addEventListener('pointerup', handlePointerUp)
+    return () => {
+      canvas.removeEventListener('pointermove', handlePointerMove)
+      canvas.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [handlePointerMove, handlePointerUp, gl])
+
+  // ─── Gestion des clics voxel ───────────────────────────────────────────────
   const handleClick = useCallback((e) => {
     if (mode !== 'edit') return
     e.preventDefault()
@@ -73,31 +365,22 @@ function Scene({
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
       -((e.clientY - rect.top) / rect.height) * 2 + 1
     )
-
     raycaster.setFromCamera(mouse, camera)
 
-    // Clic droit — effacer
     if (e.button === 2) {
       const meshes = []
       scene.traverse(obj => { if (obj.userData.isVoxel) meshes.push(obj) })
       const hits = raycaster.intersectObjects(meshes)
       if (hits.length === 0) return
-
       const hit = hits[0].object
       const [x, y, z] = hit.userData.position
       const key = getVoxelKey(x, y, z)
-
-      setVoxels(prev => {
-        const next = { ...prev }
-        delete next[key]
-        return next
-      })
+      setVoxels(prev => { const next = { ...prev }; delete next[key]; return next })
       onDirty()
       socket?.emit('voxel:remove', { battlemapId, x, y, z })
       return
     }
 
-    // Clic gauche — poser
     if (e.button !== 0) return
 
     const meshes = []
@@ -105,9 +388,7 @@ function Scene({
     const hits = raycaster.intersectObjects(meshes)
 
     let x, y, z
-
     if (hits.length > 0) {
-      // Poser sur la face d'un voxel existant
       const hit = hits[0]
       const normal = hit.face.normal.clone().round()
       const [vx, vy, vz] = hit.object.userData.position
@@ -115,7 +396,6 @@ function Scene({
       y = vy + normal.y
       z = vz + normal.z
     } else {
-      // Poser sur le plan de sol
       const target = new THREE.Vector3()
       raycaster.ray.intersectPlane(groundPlane, target)
       if (!target) return
@@ -124,15 +404,12 @@ function Scene({
       z = Math.round(target.z)
     }
 
-    // Vérifications limites
     if (Math.abs(x) > GRID_SIZE / 2 || Math.abs(z) > GRID_SIZE / 2 || y < 0 || y > 7) return
 
     const key = getVoxelKey(x, y, z)
-    const voxel = { x, y, z, mat: activeMaterial }
-
-    setVoxels(prev => ({ ...prev, [key]: voxel }))
+    setVoxels(prev => ({ ...prev, [key]: { x, y, z, mat: activeMaterial } }))
     onDirty()
-    socket?.emit('voxel:add', { battlemapId, ...voxel })
+    socket?.emit('voxel:add', { battlemapId, x, y, z, mat: activeMaterial })
   }, [mode, activeMaterial, camera, gl, scene, socket, battlemapId])
 
   useEffect(() => {
@@ -141,7 +418,6 @@ function Scene({
     return () => canvas.removeEventListener('mousedown', handleClick)
   }, [handleClick])
 
-  // Désactiver clic droit navigateur sur le canvas en mode édition
   useEffect(() => {
     const canvas = gl.domElement
     const prevent = (e) => { if (mode === 'edit') e.preventDefault() }
@@ -149,25 +425,27 @@ function Scene({
     return () => canvas.removeEventListener('contextmenu', prevent)
   }, [mode, gl])
 
-  // OrbitControls — désactiver clic droit en mode édition
   useEffect(() => {
     if (!orbitRef.current) return
-    orbitRef.current.mouseButtons = mode === 'edit'
-      ? { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }
-      : { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }
+    orbitRef.current.mouseButtons = {
+      LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN,
+    }
   }, [mode])
 
   return (
     <>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[10, 20, 10]} intensity={1.2} castShadow />
-      <directionalLight position={[-10, 5, -10]} intensity={0.3} />
+      <ambientLight intensity={0.8} />
+      <hemisphereLight args={['#ffffff', '#334155', 0.6]} />
+      <directionalLight position={[10, 20, 10]} intensity={1.5} castShadow />
+      <directionalLight position={[-10, 10, -10]} intensity={0.6} />
+      <pointLight position={[0, 8, 0]} intensity={1.0} distance={40} />
 
       <OrbitControls
         ref={orbitRef}
         mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }}
         enableDamping
         dampingFactor={0.05}
+        maxPolarAngle={Math.PI / 2}
       />
 
       <Grid
@@ -186,34 +464,46 @@ function Scene({
           materials={materials}
         />
       ))}
+
+      {gltfScene && tokens.map(token => (
+        <TokenMesh
+          key={token.id}
+          token={token}
+          gltfScene={gltfScene}
+          isSelected={selectedTokenId === token.id}
+          onDragStart={handleDragStart}
+          dragState={dragState?.tokenId === token.id ? dragState : null}
+        />
+      ))}
     </>
   )
 }
 
 // ─── Composant principal exporté ──────────────────────────────────────────────
 export default function Canvas3D({
-  battlemap, mode, activeMaterial, onVoxelDataChange, onPackLoaded, socket
+  battlemap, tokens = [], mode, activeMaterial,
+  onVoxelDataChange, onPackLoaded, onTokenMove, isGm, socket
 }) {
   const [voxels, setVoxels] = useState({})
   const [materials, setMaterials] = useState({})
   const [packsLoaded, setPacksLoaded] = useState(false)
+  const [gltfScene, setGltfScene] = useState(null)
+  const [selectedTokenId, setSelectedTokenId] = useState(null)
   const isDirty = useRef(false)
   const saveTimer = useRef(null)
 
-  // Charger les voxels depuis la battlemap
+  // Empêche handleCanvasClick d'effacer une sélection posée dans le même cycle
+  const justSelectedRef = useRef(false)
+
   useEffect(() => {
     if (!battlemap?.voxel_data) return
     const map = {}
-    for (const v of battlemap.voxel_data) {
-      map[`${v.x},${v.y},${v.z}`] = v
-    }
+    for (const v of battlemap.voxel_data) map[`${v.x},${v.y},${v.z}`] = v
     setVoxels(map)
   }, [battlemap?.id])
 
-// Charger les textures
   useEffect(() => {
     api.get('/textures').then(async ({ data }) => {
-      //console.log('Packs reçus:', JSON.stringify(data))
       if (!data.packs?.length) return
       const pack = data.packs[0]
       const loaded = await loadPackTextures(pack)
@@ -223,17 +513,19 @@ export default function Canvas3D({
     }).catch(console.error)
   }, [])
 
-  // Marquer comme modifié
-  const handleDirty = useCallback(() => {
-    isDirty.current = true
-  }, [])
+  const GltfLoader = () => {
+    const { scene } = useGLTF(DEFAULT_TOKEN_URL)
+    useEffect(() => { if (scene) setGltfScene(scene) }, [scene])
+    return null
+  }
 
-  // Sauvegarde
+  const handleDirty = useCallback(() => { isDirty.current = true }, [])
+
   const save = useCallback(async (currentVoxels) => {
     if (!isDirty.current || !battlemap?.id) return
     const voxelArray = Object.values(currentVoxels)
     try {
-await api.put(`/battlemaps/${battlemap.id}/voxels`, { voxel_data: voxelArray })
+      await api.put(`/battlemaps/${battlemap.id}/voxels`, { voxel_data: voxelArray })
       isDirty.current = false
       onVoxelDataChange?.(voxelArray)
     } catch (err) {
@@ -241,31 +533,32 @@ await api.put(`/battlemaps/${battlemap.id}/voxels`, { voxel_data: voxelArray })
     }
   }, [battlemap?.id])
 
-  // Sauvegarde automatique toutes les 60s
   useEffect(() => {
-    saveTimer.current = setInterval(() => {
-      if (isDirty.current) save(voxels)
-    }, 60000)
+    saveTimer.current = setInterval(() => { if (isDirty.current) save(voxels) }, 60000)
     return () => clearInterval(saveTimer.current)
   }, [save, voxels])
 
-  // Sauvegarde à la fermeture de l'éditeur (mode edit → play)
   const prevMode = useRef(mode)
   useEffect(() => {
-    if (prevMode.current === 'edit' && mode === 'play') {
-      save(voxels)
-    }
+    if (prevMode.current === 'edit' && mode === 'play') save(voxels)
     prevMode.current = mode
   }, [mode, save, voxels])
+
+  // Désélectionner en cliquant sur le vide
+  // justSelectedRef évite d'écraser une sélection posée dans le même event cycle
+  const handleCanvasClick = useCallback(() => {
+    if (justSelectedRef.current) { justSelectedRef.current = false; return }
+    setSelectedTokenId(null)
+  }, [])
 
   return (
     <Canvas
       camera={{ position: [15, 15, 15], fov: 60 }}
       style={{ background: '#0f172a' }}
-      onCreated={({ gl }) => {
-        gl.shadowMap.enabled = true
-      }}
+      onClick={handleCanvasClick}
+      onCreated={({ gl }) => { gl.shadowMap.enabled = true }}
     >
+      <GltfLoader />
       {packsLoaded && (
         <Scene
           voxels={voxels}
@@ -276,6 +569,13 @@ await api.put(`/battlemaps/${battlemap.id}/voxels`, { voxel_data: voxelArray })
           onDirty={handleDirty}
           socket={socket}
           battlemapId={battlemap?.id}
+          tokens={tokens}
+          selectedTokenId={selectedTokenId}
+          onTokenSelect={setSelectedTokenId}
+          gltfScene={gltfScene}
+          onTokenMove={onTokenMove}
+          isGm={isGm}
+          justSelectedRef={justSelectedRef}
         />
       )}
     </Canvas>

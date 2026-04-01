@@ -15,6 +15,8 @@ import battlemapsRouter from './routes/battlemaps.js'
 import tokensRouter from './routes/tokens.js'
 import initSocket from './socket/index.js'
 import texturesRouter from './routes/textures.js'
+import charactersRouter from './routes/characters.js'
+import assetsRouter from './routes/assets.js'
 
 
 const app = express()
@@ -31,6 +33,7 @@ app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }))
 app.use(express.json())
 app.use(cookieParser())
 app.use('/api/textures', texturesRouter)
+app.use('/api/assets', assetsRouter)
 
 // Routes
 app.get('/api/health', (req, res) => {
@@ -38,6 +41,7 @@ app.get('/api/health', (req, res) => {
 })
 app.use('/api/auth', authRouter)
 app.use('/api/campaigns', campaignsRouter)
+app.use('/api/campaigns/:campaignId/characters', charactersRouter)
 app.use('/api/campaigns/:id/battlemaps', battlemapsRouter)
 app.use('/api/battlemaps', battlemapsRouter)
 app.use('/api/battlemaps/:id/tokens', tokensRouter)
@@ -68,7 +72,7 @@ const startServer = async () => {
       console.log(`Serveur Enclume démarré sur le port ${PORT}`)
     })
   } catch (err) {
-    console.error('Erreur au démarrage :', err.message)
+    console.error('Erreur au démarrage :', err)
     process.exit(1)
   }
 }

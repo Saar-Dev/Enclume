@@ -14,6 +14,25 @@ const COOKIE_OPTIONS = {
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 jours
 }
 
+// Palette de 12 couleurs distinctes et lisibles sur fond sombre.
+// Suffisamment espacées pour qu'aucune session ne confonde deux joueurs.
+const PLAYER_COLORS = [
+  '#E05252', // rouge
+  '#E0A052', // orange
+  '#D4E052', // jaune-vert
+  '#52E07A', // vert
+  '#52D4E0', // cyan
+  '#527AE0', // bleu
+  '#8A52E0', // violet
+  '#E052C8', // rose
+  '#E05290', // framboise
+  '#52E0C8', // turquoise
+  '#A0E052', // chartreuse
+  '#E07A52', // corail
+]
+
+const randomColor = () => PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS.length)]
+
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   const { email, password, username } = req.body
@@ -32,9 +51,11 @@ router.post('/register', async (req, res) => {
   }
 
   const password_hash = await bcrypt.hash(password, SALT_ROUNDS)
+  const color = randomColor()
+
   const [user] = await db('users')
-    .insert({ email, password_hash, username })
-    .returning(['id', 'email', 'username'])
+    .insert({ email, password_hash, username, color })
+    .returning(['id', 'email', 'username', 'color'])
 
   const token = jwt.sign(
     { id: user.id, email: user.email, username: user.username },
@@ -71,7 +92,7 @@ router.post('/login', async (req, res) => {
   )
 
   res.cookie('token', token, COOKIE_OPTIONS)
-  res.json({ user: { id: user.id, email: user.email, username: user.username } })
+  res.json({ user: { id: user.id, email: user.email, username: user.username, color: user.color } })
 })
 
 // POST /api/auth/logout
@@ -84,7 +105,7 @@ router.post('/logout', (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   const user = await db('users')
     .where({ id: req.user.id })
-    .select(['id', 'email', 'username'])
+    .select(['id', 'email', 'username', 'color'])
     .first()
 
   if (!user) {

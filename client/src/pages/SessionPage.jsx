@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
@@ -14,6 +14,9 @@ export default function SessionPage() {
 
   const [campaign, setCampaign] = useState(null)
   const [battlemap, setBattlemap] = useState(null)
+  const [tokens, setTokens] = useState([])
+  const [characters, setCharacters] = useState([])
+  const [isGm, setIsGm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -27,13 +30,28 @@ export default function SessionPage() {
   useEffect(() => {
     const load = async () => {
       try {
+        // Chargement campagne + membres
         const res = await api.get(`/campaigns/${campaignId}`)
-        setCampaign(res.data.campaign)
-        const mapId = res.data.campaign.default_battlemap_id
+        const campaignData = res.data.campaign
+        const members = res.data.members || []
+        setCampaign(campaignData)
+
+        // Calcul isGm depuis les membres
+        const me = members.find(m => m.id === user?.id)
+        setIsGm(me?.role === 'gm')
+
+        // Chargement battlemap par défaut + ses tokens
+        const mapId = campaignData.default_battlemap_id
         if (mapId) {
           const mapRes = await api.get(`/battlemaps/${mapId}`)
           setBattlemap(mapRes.data.battlemap)
+          setTokens(mapRes.data.tokens || [])
         }
+
+        // Chargement des personnages de la campagne
+        const charsRes = await api.get(`/campaigns/${campaignId}/characters`)
+        setCharacters(charsRes.data.characters || [])
+
       } catch (err) {
         setError(t('session.connectionError'))
       } finally {
@@ -41,7 +59,36 @@ export default function SessionPage() {
       }
     }
     load()
-  }, [campaignId])
+  }, [campaignId, user?.id])
+
+  // Drop depuis la Sidebar — crée un token au centre de la carte
+  const handleCharacterDrop = useCallback(async (characterId) => {
+    if (!battlemap?.id) return
+
+    const character = characters.find(c => c.id === characterId)
+    if (!character) return
+
+    try {
+      const res = await api.post(`/battlemaps/${battlemap.id}/tokens`, {
+        character_id: characterId,
+        label: character.name,
+        pos_x: 0,
+        pos_y: 0,
+        pos_z: 0,
+        color: character.color,
+        layer: 'token',
+      })
+      setTokens(prev => [...prev, res.data.token])
+    } catch (err) {
+      console.error('Erreur création token :', err)
+    }
+  }, [battlemap?.id, characters])
+
+  // Déplacement d'un token sur la carte — met à jour l'état local
+  // après confirmation serveur (PUT /tokens/:id)
+  const handleTokenMove = useCallback((updatedToken) => {
+    setTokens(prev => prev.map(t => t.id === updatedToken.id ? updatedToken : t))
+  }, [])
 
   if (loading) return (
     <div style={styles.loading}>
@@ -58,19 +105,31 @@ export default function SessionPage() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.canvas}>
+      <div
+        style={styles.canvas}
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => {
+          e.preventDefault()
+          const characterId = e.dataTransfer.getData('characterId')
+          if (characterId) handleCharacterDrop(characterId)
+        }}
+      >
         <Canvas3D
           battlemap={battlemap}
+          tokens={tokens}
           mode={mode}
           activeMaterial={activeMaterial}
           onVoxelDataChange={(data) => setBattlemap(prev => ({ ...prev, voxel_data: data }))}
           onPackLoaded={setAvailableMaterials}
+          onTokenMove={handleTokenMove}
+          isGm={isGm}
           socket={null}
         />
       </div>
 
       {sidebarVisible && (
         <Sidebar
+          isGm={isGm}
           mode={mode}
           onModeChange={setMode}
           layer={layer}
@@ -81,6 +140,9 @@ export default function SessionPage() {
           activeMaterial={activeMaterial}
           onMaterialChange={setActiveMaterial}
           availableMaterials={availableMaterials}
+          characters={characters}
+          onCharactersChange={setCharacters}
+          campaignId={campaignId}
         />
       )}
 

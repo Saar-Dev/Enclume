@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
+import api from '../lib/api.js'
 
 const SIDEBAR_MIN = 220
 const SIDEBAR_MAX = 500
@@ -38,22 +39,35 @@ const IconRuler = () => (
     <line x1="13.5" y1="4.5" x2="16" y2="7"/>
   </svg>
 )
+const IconPlus = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="12" y1="5" x2="12" y2="19"/>
+    <line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+)
 
 export default function Sidebar({
+  isGm,
   mode, onModeChange,
   layer, onLayerChange,
   width, onWidthChange,
   onClose,
   activeMaterial, onMaterialChange, availableMaterials = [],
+  characters = [], onCharactersChange,
+  campaignId,
 }) {
   const { t } = useTranslation()
   const { user } = useAuthStore()
-  const isGM = true
 
   const [activeTab, setActiveTab] = useState('chat')
   const [toolsOpen, setToolsOpen] = useState(false)
   const [messages, setMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
+
+  // Formulaire de création de personnage
+  const [showNewChar, setShowNewChar] = useState(false)
+  const [newCharName, setNewCharName] = useState('')
+  const [creating, setCreating] = useState(false)
 
   const isDragging = useRef(false)
   const startX = useRef(0)
@@ -68,7 +82,6 @@ export default function Sidebar({
   }
 
   useEffect(() => {
-    //console.log('VITE_API_URL:', import.meta.env.VITE_API_URL)
     const onMouseMove = (e) => {
       if (!isDragging.current) return
       const delta = startX.current - e.clientX
@@ -102,6 +115,31 @@ export default function Sidebar({
     setChatInput('')
   }
 
+  // ─── CRÉER UN PERSONNAGE ─────────────────────────────────────────────────
+  const handleCreateCharacter = async (e) => {
+    e.preventDefault()
+    if (!newCharName.trim()) return
+    setCreating(true)
+    try {
+      const res = await api.post(`/campaigns/${campaignId}/characters`, {
+        name: newCharName.trim(),
+      })
+      onCharactersChange(prev => [...prev, res.data.character])
+      setNewCharName('')
+      setShowNewChar(false)
+    } catch (err) {
+      console.error('Erreur création personnage :', err)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  // ─── DRAG CHARACTER ──────────────────────────────────────────────────────
+  const handleDragStart = (e, character) => {
+    e.dataTransfer.setData('characterId', character.id)
+    e.dataTransfer.effectAllowed = 'copy'
+  }
+
   return (
     <div style={{ ...styles.sidebar, width }}>
 
@@ -113,7 +151,7 @@ export default function Sidebar({
 
       {/* ─── OUTILS ─────────────────────────────────────────────────────── */}
       <div style={styles.toolsRow}>
-        {isGM && (
+        {isGm && (
           <button
             style={{ ...styles.toolBtn, ...(mode === 'edit' ? styles.toolBtnActive : {}) }}
             onClick={() => onModeChange(mode === 'edit' ? 'play' : 'edit')}
@@ -124,7 +162,7 @@ export default function Sidebar({
           </button>
         )}
 
-        {isGM && (
+        {isGm && (
           <button
             style={{ ...styles.toolBtn, ...(layer === 'gm' ? styles.toolBtnActive : {}) }}
             onClick={() => onLayerChange(layer === 'gm' ? 'token' : 'gm')}
@@ -181,21 +219,23 @@ export default function Sidebar({
 
       {/* ─── ONGLETS ─────────────────────────────────────────────────────── */}
       <div style={styles.tabs}>
-        {['chat', 'biblio', 'params'].map(tab => (
+        {['chat', 'persos', 'biblio'].map(tab => (
           <button
             key={tab}
             style={{ ...styles.tab, ...(activeTab === tab ? styles.tabActive : {}) }}
             onClick={() => setActiveTab(tab)}
           >
             {tab === 'chat' && 'Chat'}
+            {tab === 'persos' && 'Persos'}
             {tab === 'biblio' && 'Biblio'}
-            {tab === 'params' && 'Params'}
           </button>
         ))}
       </div>
 
       {/* ─── CONTENU ─────────────────────────────────────────────────────── */}
       <div style={styles.tabContent}>
+
+        {/* ── Chat ── */}
         {activeTab === 'chat' && (
           <>
             <div style={styles.messages}>
@@ -221,8 +261,80 @@ export default function Sidebar({
             </form>
           </>
         )}
-        {activeTab === 'biblio' && <p style={styles.emptyMsg}>Bibliothèque — Phase 3</p>}
-        {activeTab === 'params' && <p style={styles.emptyMsg}>Paramètres — à venir</p>}
+
+        {/* ── Persos ── */}
+        {activeTab === 'persos' && (
+          <div style={styles.persosList}>
+
+            {/* Bouton créer — GM uniquement */}
+            {isGm && (
+              <div style={styles.persosHeader}>
+                <button
+                  style={styles.newCharBtn}
+                  onClick={() => setShowNewChar(v => !v)}
+                >
+                  <IconPlus /> Nouveau personnage
+                </button>
+              </div>
+            )}
+
+            {/* Formulaire création */}
+            {isGm && showNewChar && (
+              <form onSubmit={handleCreateCharacter} style={styles.newCharForm}>
+                <input
+                  style={styles.chatInput}
+                  placeholder="Nom du personnage"
+                  value={newCharName}
+                  onChange={e => setNewCharName(e.target.value)}
+                  autoFocus
+                />
+                <button
+                  style={styles.sendBtn}
+                  type="submit"
+                  disabled={creating || !newCharName.trim()}
+                >
+                  {creating ? '…' : '✓'}
+                </button>
+              </form>
+            )}
+
+            {/* Liste des personnages */}
+            {characters.length === 0 && (
+              <p style={styles.emptyMsg}>Aucun personnage dans cette campagne.</p>
+            )}
+
+            {characters.map(char => (
+              <div
+                key={char.id}
+                draggable
+                onDragStart={e => handleDragStart(e, char)}
+                style={styles.charCard}
+                title="Glisser sur la carte pour placer"
+              >
+                {/* Pastille couleur */}
+                <div style={{ ...styles.charColor, background: char.color }} />
+                <div style={styles.charInfo}>
+                  <span style={styles.charName}>{char.name}</span>
+                  {char.owner_username && (
+                    <span style={styles.charOwner}>{char.owner_username}</span>
+                  )}
+                </div>
+                {/* Indicateur visibilité */}
+                {!char.visible && (
+                  <span style={styles.charHidden} title="Masqué aux joueurs">
+                    <IconEyeOff />
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Biblio ── */}
+        {activeTab === 'biblio' && (
+          <p style={styles.emptyMsg}>Bibliothèque — Phase 3</p>
+        )}
+
       </div>
     </div>
   )
@@ -420,5 +532,75 @@ const styles = {
     cursor: 'pointer',
     padding: '8px 12px',
     fontSize: '12px',
+  },
+  // ── Persos ──
+  persosList: {
+    flex: 1,
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    padding: '8px',
+  },
+  persosHeader: {
+    padding: '4px 0 8px',
+  },
+  newCharBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    width: '100%',
+    padding: '8px 10px',
+    background: 'rgba(91,141,238,0.1)',
+    border: '1px dashed #5b8dee',
+    borderRadius: '6px',
+    color: '#5b8dee',
+    cursor: 'pointer',
+    fontSize: '12px',
+  },
+  newCharForm: {
+    display: 'flex',
+    gap: '6px',
+    marginBottom: '8px',
+  },
+  charCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 10px',
+    background: '#16162a',
+    border: '1px solid #1e1e2e',
+    borderRadius: '6px',
+    cursor: 'grab',
+    transition: 'border-color 0.15s',
+  },
+  charColor: {
+    width: '12px',
+    height: '12px',
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  charInfo: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    minWidth: 0,
+  },
+  charName: {
+    color: '#c0c0d0',
+    fontSize: '12px',
+    fontWeight: '500',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  charOwner: {
+    color: '#4a4a60',
+    fontSize: '10px',
+  },
+  charHidden: {
+    color: '#4a4a60',
+    flexShrink: 0,
   },
 }

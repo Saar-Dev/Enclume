@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-03-31 Session 3
+> Dernière mise à jour : 2026-03-31 Session 4
 
 ---
 
@@ -7,52 +7,56 @@
 ## Phase 1 — ✅ Complète
 ## Phase 2 — En cours
 
-### Fait en session 2
-- ✅ Migrations Phase 2 (13 migrations, base stable)
-- ✅ MinIO configuré (bucket enclume-assets, middleware upload)
-- ✅ Routes battlemaps + tokens
-- ✅ Pivot 3D — Three.js / R3F remplace Konva.js
-- ✅ Script start.ps1
-- ✅ Socket.io — auth WebSocket + tous les événements
-- ✅ i18next configuré (fr.json, client/src/i18n.js)
-- ✅ SessionPage.jsx — navigation et chargement fonctionnels
-- ✅ Canvas3D.jsx — R3F opérationnel, caméra orbitale
-- ✅ Sidebar.jsx — redimensionnable, cachable, outils GM, chat local, onglets
-- ✅ Layout SessionPage — canvas flex + sidebar contrôlée
+### Fait en session 4
+- ✅ Migration 14 — color sur users
+- ✅ Migration 15 — table characters (uuid, user_id nullable, visible, glb_url, portrait_url)
+- ✅ Migration 16 — character_id sur tokens
+- ✅ Migration 17 — color sur tokens
+- ✅ Convention UUID documentée dans CONVENTIONS.md (non négociable)
+- ✅ auth.js — génération couleur aléatoire à l'inscription (palette 12 teintes)
+- ✅ characters.js — routes CRUD complètes avec droits GM/owner
+- ✅ assets.js — route proxy générale MinIO /api/assets/:folder/*filePath
+- ✅ tokens.js — réécrit (JSON pur, character_id, pos_z, color)
+- ✅ index.js — characters + assets branchés
+- ✅ SessionPage.jsx — isGm calculé, tokens + characters chargés, drop géré
+- ✅ Canvas3D.jsx — tokens 3D (GltfLoader, SkeletonUtils.clone, halo, label Inter)
+- ✅ Sidebar.jsx — isGm prop, onglet Persos, drag characters
+- ✅ client/public/fonts/inter.woff — police locale pour labels 3D
+- ✅ OrbitControls maxPolarAngle — caméra bloquée au-dessus de Y=0
+- ✅ Drag & drop Sidebar → canvas fonctionnel (token créé en base + affiché)
 
-### Fait en session 3
-- ✅ Système de packs de textures — format manifest.json validé et documenté
-- ✅ Route /api/textures — liste packs + proxy PNG depuis MinIO (sans CORS)
-- ✅ Route PUT /battlemaps/:id/voxels — sauvegarde voxel_data séparée (JSON pur, sans multer)
-- ✅ Canvas3D — éditeur voxel fonctionnel (pose/efface, raycasting, textures)
-- ✅ Canvas3D — sauvegarde auto 60s + sauvegarde à la fermeture de l'éditeur
-- ✅ Sidebar — palette de matières fonctionnelle en mode édition
-- ✅ SessionPage — chef d'orchestre activeMaterial + availableMaterials
-- ✅ vite.config.js — envDir racine monorepo (VITE_API_URL dans .env racine)
-- ✅ Premier pack hard-sf uploadé dans MinIO (9 matières)
+### Prochaine étape immédiate — session 5
+**1. Nouveau modèle default.glb**
+Le modèle actuel (généré par trimesh/IA) a des textures défaillantes.
+Fournir un .glb propre exporté depuis Blender ou source fiable.
+Uploader dans MinIO sous tokens/default.glb (remplacer l'existant).
+Recalibrer Y_OFFSET et position du cercle dans Canvas3D.jsx selon le nouveau modèle.
 
-### Prochaine étape immédiate
-**Tokens 3D — fallback sphère colorée + label**
-Un token = une sphère colorée avec label flottant au-dessus.
-Placé sur la carte par le GM en mode jeu.
-Socket.io token:move déjà implémenté côté serveur — à brancher côté client.
+**2. Drag & drop token sur la carte**
+Déplacer un token déjà posé par drag manuel sur la grille.
+Snap à la case la plus proche (Math.round).
+OrbitControls désactivé pendant le drag.
+PUT /tokens/:id pour persister la nouvelle position.
+
+**3. Socket.io token:move côté client**
+Brancher l'événement token:moved — mettre à jour l'état local tokens quand un autre client déplace.
 
 ### Suite dans l'ordre
-1. Tokens 3D — fallback sphère + label
-2. Placement token par le GM (clic sur la carte)
-3. Drag & drop tokens + Socket.io token:move branché
 4. Brancher chat sur Socket.io (remplacer le chat local)
 5. Barre GM supérieure (battlemaps + affectation joueurs)
-6. Menu contextuel clic droit canvas
+6. Menu contextuel clic droit canvas (token sélectionné)
 7. X-Ray (occlusion blocs → transparence)
 8. Viewport Snap GM + verrouillage
 9. Dés — parser formule + animation seed partagé
 10. Outils mesure (règle, portée, visée)
 
 ### Points de vigilance
-- isGM hardcodé à true dans Sidebar — à brancher sur le vrai rôle
+- default.glb à remplacer — modèle actuel sans textures (problème asset, pas code)
+- Y_OFFSET = 0.5 et position cercle à recalibrer avec le nouveau modèle
+- Chaînes UI onglet Persos pas encore passées par i18next
 - "La Forêt Maudite" sans battlemap (créée avant la transaction auto)
-- Token générique .glb à fournir plus tard (specs dans ARCHITECTURE.md)
-- Table zones conservée pour Phase 3
+- isGm branché mais pas encore testé avec un vrai compte joueur
+- Socket.io token:move non branché côté client
+- Upload illustration 2D et token .glb par joueur — Phase 3
+- Scènes 2D ambiance — Phase 3 (voir ROADMAP.md)
 - CLIENT_URL + VITE_API_URL dans .env à reconfigurer sur Raspberry Pi
-- console.log debug retiré de Canvas3D et textures.js ✅
