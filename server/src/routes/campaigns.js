@@ -64,7 +64,13 @@ router.post('/', requireAuth, async (req, res) => {
 })
 
 // GET /api/campaigns/:id — détail d'une campagne
-router.get('/:id', requireAuth, requireRole('gm'), async (req, res) => {
+// Accessible à tous les membres (GM et joueurs)
+router.get('/:id', requireAuth, async (req, res) => {
+  const member = await db('campaign_members')
+    .where({ campaign_id: req.params.id, user_id: req.user.id })
+    .first()
+  if (!member) throw new AppError(403, 'You are not a member of this campaign')
+
   const campaign = await db('campaigns')
     .where({ 'campaigns.id': req.params.id })
     .first()
@@ -89,11 +95,19 @@ router.get('/:id', requireAuth, requireRole('gm'), async (req, res) => {
 
 // PUT /api/campaigns/:id — modifier une campagne
 router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
-  const { name, status } = req.body
+  const { name, status, default_battlemap_id } = req.body
+  const updates = {}
+  if (name !== undefined) updates.name = name
+  if (status !== undefined) updates.status = status
+  if (default_battlemap_id !== undefined) updates.default_battlemap_id = default_battlemap_id
+
+  // updated_at systématique sur tout PUT
+  updates.updated_at = db.fn.now()
+
   const [campaign] = await db('campaigns')
     .where({ id: req.params.id })
-    .update({ name, status })
-    .returning(['id', 'name', 'status', 'invite_code', 'created_at'])
+    .update(updates)
+    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'created_at', 'updated_at'])
   res.json({ campaign })
 })
 

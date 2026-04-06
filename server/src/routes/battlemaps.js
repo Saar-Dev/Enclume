@@ -96,6 +96,9 @@ router.put('/:id',
     if (viewport_state !== undefined) updates.viewport_state = viewport_state
     if (req.file) updates.image_url = req.file.url
 
+    // updated_at systématique sur tout PUT
+    updates.updated_at = db.fn.now()
+
     const [updated] = await db('battlemaps')
       .where({ id: req.params.id })
       .update(updates)
@@ -136,7 +139,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
 router.put('/:id/voxels', requireAuth, async (req, res, next) => {
   try {
     const { voxel_data } = req.body
-    if (!Array.isArray(voxel_data)) throw new AppError(400, 'voxel_data must be an array')
+    if (!voxel_data || typeof voxel_data !== 'object' || Array.isArray(voxel_data)) {
+      throw new AppError(400, 'voxel_data must be an object')
+    }
 
     const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
     if (!battlemap) throw new AppError(404, 'Battlemap not found')
@@ -148,11 +153,39 @@ router.put('/:id/voxels', requireAuth, async (req, res, next) => {
 
     await db('battlemaps')
       .where({ id: req.params.id })
-      .update({ voxel_data: JSON.stringify(voxel_data) })
+      .update({ voxel_data: JSON.stringify(voxel_data), updated_at: db.fn.now() })
 
     res.json({ ok: true })
   } catch (err) {
     next(err)
   }
 })
+
+// POST /api/battlemaps/:id/duplicate — dupliquer une carte
+router.post('/:id/duplicate', requireAuth, async (req, res) => {
+  const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
+  if (!battlemap) throw new AppError(404, 'Battlemap not found')
+
+  const member = await db('campaign_members')
+    .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id, role: 'gm' })
+    .first()
+  if (!member) throw new AppError(403, 'GM only')
+
+  const [duplicated] = await db('battlemaps')
+    .insert({
+      campaign_id: battlemap.campaign_id,
+      name: `${battlemap.name} (copie)`,
+      folder: battlemap.folder,
+      scale_label: battlemap.scale_label,
+      grid_size: battlemap.grid_size,
+      grid_enabled: battlemap.grid_enabled,
+      grid_opacity: battlemap.grid_opacity,
+      voxel_data: battlemap.voxel_data ? JSON.stringify(battlemap.voxel_data) : null,
+      // image_url et cover_image_url non copiés — la carte est nouvelle
+    })
+    .returning('*')
+
+  res.status(201).json({ battlemap: duplicated })
+})
+
 export default router

@@ -1,0 +1,932 @@
+# MISSION — Chantier 1 : Serveur seul émetteur WS
+> Rédigé session 10 — 2026-04-05
+> Document autonome — peut être lu sans autre contexte.
+> Niveau de priorité : CRITIQUE — tout le reste dépend de ce chantier.
+
+---
+
+## Contexte et pourquoi c'est urgent
+
+### Le bug actuel
+
+Le client émet lui-même les événements socket après chaque appel REST.
+
+```javascript
+// Pattern actuel — FAUX
+await api.put('/tokens/:id', data)        // 1. client écrit en base
+socket?.emit(WS.TOKEN_MOVE, { tokenId }) // 2. client informe les autres
+```
+
+Si l'étape 2 échoue silencieusement (réseau instable, socket momentanément
+déconnecté), la base est à jour mais les autres clients ne le savent pas.
+Leurs états locaux divergent. Le bug est silencieux — aucune erreur visible.
+
+### Le pattern cible
+
+```javascript
+// Pattern cible — CORRECT
+await api.put('/tokens/:id', data)
+// silence côté client — le serveur a broadcasté dans la route REST
+```
+
+Le serveur émet après chaque écriture en base. Le client ne broadcast jamais
+suite à un appel REST. Un seul émetteur = une seule source de vérité.
+
+---
+
+## Décision architecturale préalable — comment passer `io` aux routes
+
+### Le problème
+`io` (instance Socket.io) est créé dans `server/src/socket/index.js`.
+Les routes Express (`tokens.js`, `characters.js`, etc.) n'y ont pas accès.
+
+### Solution retenue : `app.set('io', io)` + `req.app.get('io')`
+
+Dans `server/src/index.js`, après création du serveur HTTP et de `io` :
+```javascript
+app.set('io', io)
+```
+
+Dans chaque route qui doit broadcaster :
+```javascript
+const io = req.app.get('io')
+io.to(campaignId).emit(WS.TOKEN_MOVED, { ... })
+```
+
+### Pourquoi cette solution et pas une autre
+- Pas d'import circulaire (routes → socket → routes)
+- Pattern Express standard et documenté
+- Zéro nouvelle dépendance
+- Réversible si on change d'approche
+
+### Ce qu'il faut vérifier avant de coder
+Lire `server/src/index.js` pour confirmer l'ordre de création :
+1. `const app = express()`
+2. `const httpServer = createServer(app)`
+3. `const io = new Server(httpServer, ...)`
+4. `app.set('io', io)` ← à ajouter ici
+5. Montage des routes ← io est disponible dans les routes via req.app.get('io')
+
+---
+
+## Inventaire complet des socket.emit à supprimer côté client
+
+### SessionPage.jsx
+Chercher et supprimer tous les blocs du pattern :
+```javascript
+socket?.emit(WS.XXX, { ... })
+```
+qui apparaissent APRÈS un appel `await api.xxx(...)`.
+
+Zones identifiées (à vérifier dans le fichier réel) :
+- `handleCharacterDrop` — émet TOKEN_CREATED après POST /tokens
+- `handleContextMenuDelete` — émet TOKEN_DELETED après DELETE /tokens
+- `handleMapSwitch` — émet MAP_SWITCH après GET /battlemaps (cas particulier — voir note)
+
+**Note MAP_SWITCH :** MAP_SWITCH est émis par le GM pour déplacer les joueurs.
+Ce n'est pas un broadcast post-écriture, c'est une commande volontaire du GM.
+Il reste côté client. À NE PAS supprimer.
+
+### Canvas3D.jsx
+Zones à identifier dans le fichier réel :
+- handler keydown Suppr — émet TOKEN_DELETED après DELETE /tokens
+- handler drag pointerUp — émet TOKEN_MOVE après PUT /tokens
+
+### Sidebar.jsx
+Zones à identifier dans le fichier réel :
+- handleToggleVisible — émet CHARACTER_UPDATED après PUT /characters
+- handleAssignUser — émet CHARACTER_UPDATED après PUT /characters
+
+---
+
+## Inventaire des broadcasts à ajouter côté serveur
+
+### tokens.js
+- **POST /** — après insertion réussie : broadcaster TOKEN_CREATED avec le token complet.
+  Le campaign_id est accessible via la battlemap déjà chargée dans la route.
+- **PUT /:id** — après update réussi : broadcaster TOKEN_MOVED avec les nouvelles coordonnées.
+  La battlemap est déjà chargée dans la route — pas de requête supplémentaire.
+- **DELETE /:id** — après suppression réussie : broadcaster TOKEN_DELETED avec le tokenId.
+
+### characters.js
+- **PUT /:id** — après le SELECT avec LEFT JOIN (character complet) :
+  broadcaster CHARACTER_UPDATED avec le character sans gm_notes.
+  Le campaign_id vient du character retourné par le SELECT.
+  **Attention critique : ne jamais inclure gm_notes dans le broadcast.**
+
+### battlemaps.js
+- **PUT /:id/voxels** — NE PAS ajouter de broadcast.
+  Les voxels sont déjà synchronisés en temps réel via VOXEL_ADD/VOXEL_REMOVE socket.
+  Cette route sauvegarde en base, elle ne synchronise pas.
+
+---
+
+## Ce qui reste dans socket/index.js
+
+Les handlers socket existants (TOKEN_MOVE, VOXEL_ADD, VOXEL_REMOVE, MAP_SWITCH,
+CHAT_MESSAGE, CHARACTER_UPDATED, SESSION_JOIN, etc.) restent en place.
+
+**Exception — TOKEN_MOVE :**
+Aujourd'hui le handler socket TOKEN_MOVE fait : vérifie ownership → UPDATE DB
+→ broadcast TOKEN_MOVED.
+Après ce chantier, la route REST PUT /tokens/:id fait la même chose ET broadcast.
+Le handler socket TOKEN_MOVE devient redondant.
+
+**Décision :** conserver le handler socket TOKEN_MOVE pour l'instant.
+Le supprimer dans un chantier dédié après validation que le broadcast REST suffit.
+Raison : double broadcast bénin (même valeur), mais suppression risquée sans test.
+
+---
+
+## Ordre d'exécution dans la session
+
+1. Lire `server/src/index.js` — vérifier l'ordre de création app/httpServer/io
+2. Lire `server/src/socket/index.js` — confirmer les handlers existants
+3. Lire `server/src/routes/tokens.js` — déjà lu session 10, mais re-lire si modifié
+4. Lire `client/src/pages/SessionPage.jsx` — déjà lu session 10, confirmer les emit
+5. Lire `client/src/components/Canvas3D.jsx` — identifier les emit post-REST
+6. Lire `client/src/components/Sidebar.jsx` — identifier les emit post-REST
+7. Modifier `server/src/index.js` — ajouter `app.set('io', io)`
+8. Modifier `server/src/routes/tokens.js` — broadcasts POST + PUT + DELETE
+9. Modifier `server/src/routes/characters.js` — broadcast PUT
+10. Modifier `client/src/pages/SessionPage.jsx` — supprimer emit post-REST
+11. Modifier `client/src/components/Canvas3D.jsx` — supprimer emit post-REST
+12. Modifier `client/src/components/Sidebar.jsx` — supprimer emit post-REST
+13. Tester : GM déplace token → joueur voit en temps réel (sans emit client)
+14. Tester : GM supprime token → joueur voit disparaître (sans emit client)
+15. Tester : GM toggle visible character → joueur voit apparaître (sans emit client)
+
+---
+
+## Critères de validation
+
+- [ ] Déplacement token GM → joueur voit en temps réel ✓
+- [ ] Déplacement token joueur → GM voit en temps réel ✓
+- [ ] Création token → tous voient apparaître ✓
+- [ ] Suppression token → tous voient disparaître ✓
+- [ ] Toggle visible character → joueur voit apparaître/disparaître ✓
+- [ ] Aucun socket.emit post-REST ne subsiste côté client (grep: socket?.emit) ✓
+- [ ] gm_notes absentes du broadcast CHARACTER_UPDATED ✓
+
+---
+
+## Pièges à ne pas reproduire
+
+- Ne pas supprimer MAP_SWITCH côté client — c'est une commande GM, pas un broadcast post-REST
+- Ne pas oublier le filtre gm_notes dans CHARACTER_UPDATED
+- Ne pas ajouter de broadcast dans PUT /battlemaps/:id/voxels (déjà géré par socket)
+- campaign_id accessible via battlemap.campaign_id — pas besoin de requête supplémentaire
+- Toujours relire le fichier avant de modifier — jamais de mémoire
+----------------------------------------------
+# MISSION — Chantier 2 : Timestamps + updated_at dans les payloads
+> Rédigé session 10 — 2026-04-05
+> Document autonome — peut être lu sans autre contexte.
+> Dépendance stricte : Chantier 1 terminé et validé.
+
+---
+
+## Contexte et pourquoi
+
+Sans notion de fraîcheur des données, impossible de savoir si un événement WS
+est plus récent que l'état local du client.
+
+Race condition possible aujourd'hui :
+- T0 — joueur A déplace un token (PUT REST en cours)
+- T1 — GM supprime ce token (DELETE REST)
+- T2 — client reçoit TOKEN_DELETED → retire le token
+- T3 — client reçoit TOKEN_MOVED (en retard) → remet le token
+- Résultat : token fantôme réapparu, state incohérent
+
+Avec updated_at dans les payloads, le client peut ignorer les événements
+plus anciens que son état local. Ça résout 80% des désynchronisations.
+
+---
+
+## Périmètre — trois parties distinctes
+
+### Partie A — Migration 19 (nouvelle migration serveur)
+
+Une seule migration, toutes les tables actives.
+Pattern de référence : migration 18 (`alterTable` + colonnes nullable).
+
+Tables et colonnes à ajouter :
+
+| Table | created_at | updated_at |
+|---|---|---|
+| tokens | ✅ | ✅ |
+| battlemaps | ✅ | ✅ |
+| characters | ✅ | ✅ |
+| campaigns | ✅ | ✅ |
+| users | ✅ | ✅ |
+| campaign_members | ✅ | ❌ |
+| dice_rolls | ✅ | ❌ |
+| player_locations | ❌ | ✅ |
+| walls | ✅ | ✅ |
+| zones | ✅ | ✅ |
+| documents | ✅ | ✅ |
+
+### Partie B — Routes serveur (5 fichiers)
+
+Dans chaque route qui fait un UPDATE en base, ajouter `updated_at = db.fn.now()`
+dans l'objet updates avant l'appel `.update()`.
+
+Fichiers concernés : `tokens.js`, `characters.js`, `campaigns.js`,
+`battlemaps.js` (deux routes : metadata et voxels), `users.js`.
+
+### Partie C — Guards côté client (SessionPage.jsx)
+
+Dans les handlers WS qui mettent à jour des entités, ajouter un guard :
+si l'événement entrant a un `updatedAt` plus ancien que l'état local → ignorer.
+
+Handlers prioritaires : TOKEN_MOVED, CHARACTER_UPDATED.
+Handlers non concernés : TOKEN_CREATED, TOKEN_DELETED (idempotents par nature).
+
+---
+
+## Fichiers à uploader avant de coder
+
+- `server/src/db/migrations/20260401_18_characters_text_fields.js` — pattern de référence
+- `server/src/routes/tokens.js`
+- `server/src/routes/characters.js`
+- `server/src/routes/campaigns.js`
+- `server/src/routes/battlemaps.js`
+- `server/src/routes/users.js`
+- `client/src/pages/SessionPage.jsx`
+
+---
+
+## Ordre d'exécution dans la session
+
+1. Relire MISSION_chantier1.md — confirmer que les broadcasts serveur sont en place
+2. Lire migration 18 — confirmer le pattern alterTable
+3. Vérifier que toutes les tables de la liste existent en base avant de créer la migration
+   (lancer `\dt` dans psql ou inspecter les migrations existantes)
+4. Créer migration 19 — toutes les tables en un fichier
+5. Appliquer la migration — vérifier SR sans erreur
+6. Modifier les 5 routes serveur — updated_at dans chaque UPDATE
+7. Vérifier que les broadcasts (ajoutés au Chantier 1) incluent updated_at dans leurs payloads
+8. Modifier SessionPage.jsx — guards TOKEN_MOVED et CHARACTER_UPDATED
+9. Tester : PUT /tokens/:id → réponse contient updated_at
+10. Tester : payload TOKEN_MOVED reçu côté client contient updatedAt
+
+---
+
+## Critères de validation
+
+- [ ] Migration appliquée sans erreur
+- [ ] GET /battlemaps/:id retourne des tokens avec created_at et updated_at
+- [ ] PUT /tokens/:id retourne un token avec updated_at mis à jour
+- [ ] Payload TOKEN_MOVED inclut updatedAt
+- [ ] Guard en place dans handler TOKEN_MOVED côté client
+- [ ] Guard en place dans handler CHARACTER_UPDATED côté client
+
+---
+
+## Pièges
+
+- `db.fn.now()` et non `new Date()` — laisser PostgreSQL gérer le timestamp
+- `.returning('*')` retourne automatiquement les nouveaux champs après migration — pas besoin de modifier les SELECT
+- Le guard updated_at compare des strings ISO — s'assurer que le format est cohérent entre DB et payload
+- Ne pas oublier battlemaps.js a deux routes PUT distinctes (metadata et voxels)
+- campaign_members : created_at uniquement, pas updated_at — ne pas dévier
+- Vérifier que toutes les tables existent avant d'appliquer la migration — `alterTable` sur une table absente fait planter toute la migration
+--------------------------------------------
+# MISSION — Chantier 3 : Format voxel optimisé
+> Rédigé session 10 — 2026-04-05
+> Document autonome — peut être lu sans autre contexte.
+> Dépendance : indépendant en termes d'ordre.
+> Mais si Chantier 1 a déjà été exécuté, vérifier l'état de socket/index.js
+> avant de modifier — des changements sur VOXEL_ADD/VOXEL_REMOVE ont peut-être
+> déjà été faits et ne doivent pas être écrasés.
+
+---
+
+## Contexte et pourquoi maintenant
+
+Le format actuel stocke les voxels comme un tableau d'objets en JSONB :
+`[{ x, y, z, mat }, { x, y, z, mat }, ...]`
+
+Trois problèmes concrets :
+- **Sauvegarde** : chaque modification réécrit le tableau complet en base
+- **Lookup** : trouver un voxel à une position donnée = parcourir tout le tableau (O(n))
+- **Diff** : impossible de savoir ce qui a changé sans comparer deux tableaux complets
+
+Le format cible règle les trois :
+`{ "x:y:z": mat, "x:y:z": mat, ... }`
+- Lookup O(1) par clé
+- Ajout = une clé, suppression = delete une clé
+- Payload réseau minimal
+
+**Pourquoi maintenant et pas plus tard :**
+Aucune carte réelle n'existe en base à ce stade — c'est le seul moment où
+ce changement de format ne nécessite pas de migration de données réelles.
+Attendre = devoir convertir les cartes des joueurs, risque de corruption.
+
+---
+
+## Ce qui change et ce qui ne change pas
+
+**Ce qui change :**
+- Format de stockage en base (voxel_data JSONB)
+- Lecture/écriture dans battlemaps.js
+- Handlers VOXEL_ADD / VOXEL_REMOVE dans socket/index.js
+- Lecture et itération des voxels dans Canvas3D.jsx
+
+**Ce qui ne change pas :**
+- Les événements socket gardent leur payload `{ x, y, z, mat }` — format humain lisible
+- La colonne voxel_data reste JSONB — seul son contenu change
+- La grille 50×50, hauteur max 8 — inchangées
+- Le raycasting, l'éditeur voxel, les textures — logique inchangée, seule l'itération change
+
+---
+
+## Règles du nouveau format
+
+- Clé : `"x:y:z"` — trois entiers séparés par `:`
+- Valeur : entier `mat` (id de matière, toujours ≥ 1)
+- Absence de clé = pas de voxel (jamais de valeur 0 ou null)
+- Suppression = supprimer la clé, pas mettre une valeur sentinelle
+
+---
+
+## Fichiers à uploader avant de coder
+
+- `server/src/routes/battlemaps.js`
+- `server/src/socket/index.js`
+- `client/src/components/Canvas3D.jsx`
+
+---
+
+## Ordre d'exécution dans la session
+
+1. Lire battlemaps.js — identifier toutes les lectures et écritures de voxel_data
+2. Lire socket/index.js — identifier les handlers VOXEL_ADD et VOXEL_REMOVE
+3. Lire Canvas3D.jsx — identifier tous les endroits où voxels est itéré ou consulté
+4. Modifier battlemaps.js — adapter lecture/écriture au nouveau format
+5. Modifier socket/index.js — adapter VOXEL_ADD et VOXEL_REMOVE
+6. Modifier Canvas3D.jsx — adapter l'itération et les lookups
+7. Tester : poser un voxel → vérifier le format en base (psql ou log serveur)
+8. Tester : recharger la page → voxels s'affichent correctement
+9. Tester : supprimer un voxel → disparaît visuellement et en base
+10. Tester : joueur voit les modifications voxel en temps réel
+
+---
+
+## Critères de validation
+
+- [ ] Format en base confirmé `{"x:y:z": mat}` après ajout d'un voxel
+- [ ] Rechargement de page — voxels s'affichent identiquement
+- [ ] Ajout voxel → visible par tous les clients en temps réel
+- [ ] Suppression voxel → visible par tous les clients en temps réel
+- [ ] Éditeur voxel fonctionnel (pose + suppression)
+- [ ] Raycasting correct — on peut poser sur la face d'un voxel existant
+
+---
+
+## Pièges
+
+- Canvas3D itère probablement avec `Object.values(voxels)` — avec le nouveau
+  format il faut `Object.entries(voxels)` pour récupérer x, y, z depuis la clé
+- La clé est une string — toujours parser avec `split(':').map(Number)` avant usage
+- JSON.stringify obligatoire avant INSERT/UPDATE en base — Knex ne sérialise pas
+  automatiquement un objet JS lu depuis JSONB (piège déjà documenté session 9)
+- Vérifier TOUS les endroits où voxel_data est lu dans battlemaps.js —
+  il peut y en avoir plusieurs (GET, PUT metadata, PUT voxels, duplicate)
+- La route POST duplicate copie voxel_data — vérifier qu'elle fonctionne
+  avec le nouveau format sans conversion supplémentaire
+- Avant de démarrer : vérifier en base que toutes les battlemaps existantes
+  ont un voxel_data initialisé à `{}` et non `[]` ou `null`.
+  Si ce n'est pas le cas, faire une passe de nettoyage :
+  `UPDATE battlemaps SET voxel_data = '{}' WHERE voxel_data IS NULL OR voxel_data = '[]'`
+  --------------------------------------
+  # MISSION — Chantier 4 : Reconnexion full reload
+> Rédigé session 10 — 2026-04-05
+> Document autonome — peut être lu sans autre contexte.
+> Dépendance : Chantier 1 terminé et validé (le serveur est la source fiable).
+
+---
+
+## Contexte et pourquoi
+
+Si un joueur perd la connexion socket pendant 5 secondes, les événements WS
+manqués ne sont pas rejoués. Son state local peut être faux :
+tokens déplacés qu'il n'a pas vus, token supprimé qui existe encore chez lui,
+map changée qu'il n'a pas chargée.
+
+Aujourd'hui ce cas n'est pas géré — la reconnexion socket.io-client est
+automatique mais le state local n'est pas resynchronisé.
+
+Solution retenue : full reload à la reconnexion.
+À la reconnexion socket, rejouer exactement le même chargement qu'au montage
+de la page. Simple, robuste, cohérent avec 4-8 joueurs sur LAN.
+
+---
+
+## Ce qui change
+
+Un seul fichier : `client/src/pages/SessionPage.jsx`.
+
+Deux modifications :
+1. Extraire la fonction `load()` (actuellement locale au premier useEffect)
+   en `useCallback` nommé `loadSession`, accessible depuis le useEffect socket.
+2. Dans le useEffect socket, brancher `loadSession` sur l'événement `reconnect`
+   natif de socket.io-client.
+
+---
+
+## Ce qui ne change pas
+
+- Le pattern `reconnectTrigger` existant reste en place — c'est une reconnexion
+  volontaire depuis l'onglet Config, différente de la reconnexion automatique.
+- Aucun fichier serveur n'est modifié.
+- La logique de chargement elle-même est identique — on ne change pas ce qui
+  est chargé, seulement quand ça se déclenche.
+
+---
+
+## Point d'attention — dépendances de loadSession
+
+`loadSession` sera un `useCallback`. Ses dépendances sont `campaignId`,
+`user?.id`, et `t`. Toutes stables — pas de risque de boucle infinie.
+`loadSession` devra être ajouté au dependency array du useEffect socket.
+
+---
+
+## Fichiers à uploader avant de coder
+
+- `client/src/pages/SessionPage.jsx`
+
+---
+
+## Ordre d'exécution dans la session
+
+1. Lire SessionPage.jsx — identifier la fonction `load()` et le useEffect socket
+2. Extraire `load()` en `useCallback loadSession` avant le useEffect socket
+3. Ajouter `loadSession` au dependency array du useEffect socket
+4. Brancher `s.on('reconnect', () => loadSession())` dans le useEffect socket
+5. Tester : couper et rétablir la connexion réseau pendant une session active
+6. Vérifier que l'état est resynchronisé après reconnexion
+
+---
+
+## Critères de validation
+
+- [ ] Reconnexion socket automatique → state rechargé depuis le serveur
+- [ ] Tokens déplacés pendant la déconnexion → visibles après reconnexion
+- [ ] Map changée pendant la déconnexion → chargée après reconnexion
+- [ ] Le pattern reconnectTrigger (onglet Config) fonctionne toujours
+
+---
+
+## Pièges
+
+- Ne pas confondre l'événement `reconnect` natif socket.io-client avec le
+  pattern `reconnectTrigger` manuel — deux mécanismes distincts qui coexistent
+- `loadSession` dans le dependency array du useEffect socket — obligatoire,
+  sinon closure stale (piège documenté sessions précédentes)
+- L'ordre de déclaration React : `loadSession` doit être déclaré AVANT
+  le useEffect socket qui l'utilise
+  -------------------------------------
+# MISSION — Chantier 5 : Refactor SessionPage → stores Zustand
+> Rédigé session 10 — 2026-04-05
+> Document autonome — peut être lu sans autre contexte.
+> Dépendance : Chantiers 1 et 2 terminés et validés.
+> Avertissement : chantier le plus risqué en termes de régression.
+
+---
+
+## Contexte et pourquoi
+
+SessionPage concentre aujourd'hui : 13+ états, gestion du socket, logique
+métier, permissions, props drilling vers Canvas3D et Sidebar.
+L'ordre de déclaration React est déjà une contrainte documentée — symptôme
+que la structure lutte contre son propre framework.
+
+Conséquence concrète : chaque nouvelle feature augmente la surface de bugs,
+et chaque modification de SessionPage peut casser quelque chose d'autre.
+
+Solution : déplacer les états par domaine dans des stores Zustand.
+SessionPage devient un orchestrateur léger.
+Canvas3D et Sidebar lisent les stores directement — moins de props drilling.
+
+---
+
+## Architecture cible
+
+Quatre stores à créer dans `client/src/stores/` :
+
+- `sessionStore.js` — socket, onlineUsers, reconnectTrigger, messages
+- `mapStore.js` — battlemap, battlemaps, voxels
+- `tokenStore.js` — tokens
+- `characterStore.js` — characters, members, isGm
+
+SessionPage conserve : le montage du socket, l'écoute des événements WS,
+les appels REST initiaux, le rendu de Canvas3D et Sidebar.
+Il ne distribue plus de props de données — les composants lisent les stores.
+
+---
+
+## Stratégie — migration progressive obligatoire
+
+**Ne pas tout migrer en une seule session. Sans exception.**
+
+Ordre recommandé :
+1. `tokenStore` en premier — domaine le plus isolé, le plus testé
+2. `characterStore` — dépend de tokenStore (ownership)
+3. `mapStore` — dépend de tokenStore (tokens sur la carte)
+4. `sessionStore` — le plus complexe, en dernier
+
+Après chaque store migré : valider fonctionnellement avant de continuer.
+Un store cassé = rollback sur ce store uniquement, pas sur tout le chantier.
+
+---
+
+## Fichiers à uploader avant de coder
+
+- `client/src/pages/SessionPage.jsx`
+- `client/src/components/Canvas3D.jsx`
+- `client/src/components/Sidebar.jsx`
+- `client/src/stores/authStore.js` — pattern de référence Zustand existant
+
+---
+
+## Ordre d'exécution dans la session
+
+1. Lire authStore.js — confirmer le pattern Zustand du projet
+2. Lire SessionPage.jsx — cartographier tous les états et leurs usages
+3. Lire Canvas3D.jsx — identifier toutes les props reçues depuis SessionPage
+4. Lire Sidebar.jsx — identifier toutes les props reçues depuis SessionPage
+5. Créer tokenStore.js — migrer l'état tokens
+6. Adapter SessionPage — utiliser tokenStore au lieu de useState tokens
+7. Adapter Canvas3D — lire tokenStore directement
+8. Valider : tokens fonctionnels (drag, création, suppression, sync WS)
+9. Continuer avec characterStore, puis mapStore, puis sessionStore
+10. Valider l'ensemble fonctionnel après chaque store
+
+---
+
+## Critères de validation globaux
+
+- [ ] Drag token fonctionne toujours
+- [ ] Création token depuis Sidebar fonctionne
+- [ ] Suppression token fonctionne
+- [ ] Synchronisation WS tokens en temps réel fonctionne
+- [ ] Chat fonctionne
+- [ ] Onglet Joueurs — présence en ligne fonctionne
+- [ ] Barre GM — switch de carte fonctionne
+- [ ] Aucune prop de données ne transite plus par SessionPage vers Canvas3D ou Sidebar
+
+---
+
+## Pièges
+
+- Ne pas migrer plusieurs stores en même temps — un seul à la fois
+- Les handlers WS dans SessionPage appellent les setters des stores —
+  ils restent dans SessionPage, seul le setState change de destination
+- `socket` reste dans SessionPage (ou sessionStore en dernier) —
+  ne pas le déplacer avant d'avoir migré tous les autres stores
+- Vérifier les dependency arrays de tous les useCallback après migration —
+  les références aux setters de stores sont stables, pas besoin de les inclure
+- L'ordre de déclaration React reste critique pendant la migration —
+  ne pas supposer qu'il disparaît avant que sessionStore soit en place
+
+  # MISSION chantier 5 — Addendum session 12
+
+## Ajout au périmètre : Reconnexion robuste post-redémarrage serveur
+
+### Contexte
+Le Chantier 4 (session 12) a extrait `loadSession` en useCallback et posé les bases.
+Mais la reconnexion automatique post-redémarrage serveur reste non fonctionnelle.
+
+Symptôme actuel :
+- Serveur redémarre → socket se reconnecte (transport OK)
+- SESSION_JOIN n'est pas ré-émis → socket hors room → broadcasts perdus
+- F5 résout le problème
+
+Tentative session 12 : handler `reconnect` — non fonctionnel.
+Décision : solution robuste uniquement, traitée dans le Chantier 5.
+
+---
+
+### Solution cible — à implémenter dans le Chantier 5
+
+**Côté serveur (socket/index.js) — SESSION_STATE**
+
+À l'émission de SESSION_JOINED, envoyer également l'état complet de session :
+```javascript
+socket.emit(WS.SESSION_JOINED, {
+  campaignId,
+  userId: socket.user.id,
+  username: socket.user.username,
+  role: member.role,
+  onlineUserIds,
+})
+
+// État courant pour hydratation initiale et reconnexion
+const [tokens, characters, battlemap] = await Promise.all([...])
+socket.emit(WS.SESSION_STATE, { tokens, characters, battlemap })
+```
+
+Ajouter WS.SESSION_STATE dans shared/events.js.
+
+**Côté client (sessionStore.js) — handler connect**
+
+Dans le store Zustand, brancher sur l'événement `connect` (v4) :
+```javascript
+socket.on('connect', () => {
+  socket.emit(WS.SESSION_JOIN, { campaignId })
+  // SESSION_STATE arrivera en réponse et hydratera le store
+})
+```
+
+`connect` se déclenche à la connexion initiale ET à chaque reconnexion automatique.
+Plus de dépendance à `reconnect` (v3) ou à un nom d'événement versionsensible.
+
+**Avantage architectural**
+Le store Zustand gère le cycle de vie socket — SessionPage n'en est plus responsable.
+loadSession REST devient optionnel pour la reconnexion (SESSION_STATE suffit).
+
+---
+
+### Dépendances
+- Chantier 5 store Zustand doit être en place avant d'implémenter cette solution
+- WS.SESSION_STATE à ajouter dans shared/events.js
+- shared/events.js : vérifier la version de socket.io-client dans package.json client avant de coder
+
+### Points de vigilance
+- `connect` se déclenche aussi à la connexion initiale → ne pas doubler le chargement REST
+- SESSION_STATE payload doit filtrer les tokens selon le rôle (GM vs joueur) — même logique que GET /battlemaps/:id
+- gm_notes jamais dans SESSION_STATE pour les joueurs
+-------------------------------------------
+# MISSION — Chantier 6 : Dés
+> Rédigé session 10 — 2026-04-05
+> Document autonome — peut être lu sans autre contexte.
+> Dépendances : Chantiers 1, 2 et 4 terminés et validés.
+
+---
+
+## Contexte et pourquoi après les chantiers de stabilisation
+
+Les dés sont une fonctionnalité cœur pour un JDR — pas une feature secondaire.
+Ils ont été volontairement repoussés pour être construits sur une base stable :
+- Chantier 1 : le serveur est seul émetteur WS — les résultats de dés
+  broadcastés par le serveur s'inscrivent naturellement dans ce pattern
+- Chantier 2 : updated_at dans les payloads — un résultat de dé a un timestamp
+- Chantier 4 : reconnexion full reload — un joueur reconnecté ne rate pas
+  un résultat critique
+
+---
+
+## Spec de référence
+
+La spec complète est dans `docs/EN_COURS.md`, section "Priorité 1 — Dés".
+Cinq étapes dans l'ordre strict :
+
+- **Étape A** — Fenêtre Paramètres campagne (seuils critiques par dé)
+- **Étape B** — Interface dés flottante au-dessus du canvas
+- **Étape C** — Parser formule + calcul serveur (`diceParser.js`)
+- **Étape E** — Broadcast résultat + animation (seed partagé) — broadcast à tous
+
+Ne pas sauter d'étape. Ne pas faire B avant A.
+
+**Étape D (jet privé GM / whisper) — mise en attente.**
+Le whisper est un cas particulier de message privé entre joueurs.
+Implémenter les deux séparément créerait deux solutions pour le même besoin.
+À implémenter en même temps qu'un système de MP — chantier futur non encore planifié.
+
+---
+
+## Contraintes non négociables
+
+- Calcul des dés côté serveur UNIQUEMENT — jamais côté client
+- Le client reçoit un `seed` pour reproduire la même animation
+- Les résultats sont broadcastés par le serveur (pattern Chantier 1)
+- Les résultats apparaissent dans le fil de messages (fusionné avec le chat)
+
+---
+
+## Nouveaux fichiers à créer
+
+- `server/src/lib/diceParser.js` — parser de formules (`NdX`, `NdX+M`, `NdX-M`)
+- `server/src/routes/dice.js` — route POST /api/dice/roll
+- `client/src/components/DicePanel.jsx` — interface flottante (Étape B)
+
+---
+
+## Fichiers existants à modifier
+
+- `server/src/routes/campaigns.js` — Étape A : seuils critiques dans PUT /:id
+- `server/src/index.js` — montage route dice
+- `server/src/socket/index.js` — handler DICE_ROLL + broadcast DICE_RESULT
+- `client/src/pages/SessionPage.jsx` — intégration DicePanel + handler DICE_RESULT
+- `client/src/locales/fr.json` — namespace `dice` (existe déjà, à compléter)
+- `shared/events.js` — DICE_ROLL et DICE_RESULT existent déjà
+
+---
+
+## Fichiers à uploader avant de coder
+
+- `docs/EN_COURS.md` — spec complète étapes A→E
+- `server/src/routes/campaigns.js` — vérifier l'état actuel de PUT /:id
+- `server/src/socket/index.js` — vérifier les handlers DICE_ROLL existants
+- `client/src/pages/SessionPage.jsx` — état actuel après Chantiers 1→5
+- `client/src/locales/fr.json` — vérifier le namespace dice existant
+
+---
+
+## Critères de validation
+
+- [ ] Seuils critiques configurables par campagne et par type de dé
+- [ ] Interface flottante — grille 1-4 dés × D4/D6/D8/D10/D12/D20/D100
+- [ ] Jet simple → résultat affiché dans le fil de messages pour tous
+- [ ] Jet privé GM → visible uniquement par l'émetteur et les GMs
+- [ ] Résultat critique (haut ou bas) → affiché différemment dans le fil
+- [ ] Formule libre (ex: 2d6+3) → résultat correct
+- [ ] Joueur reconnecté — ne voit pas les jets passés (pas d'historique)
+
+---
+
+## Pièges
+
+- Le namespace `dice` existe déjà dans fr.json — compléter, ne pas recréer
+- DICE_ROLL et DICE_RESULT existent dans shared/events.js — ne pas en créer de nouveaux
+- L'interface dés est flottante au-dessus du canvas — pas dans la Sidebar
+- i18n obligatoire sur toute chaîne visible — sans exception
+-------------------------------------------
+# MISSION — Chantier 7 : Tests routes critiques serveur
+> Rédigé session 10 — 2026-04-05
+> Document autonome — peut être lu sans autre contexte.
+> Dépendance : Chantier 5 terminé et validé (architecture stable avant de tester).
+
+---
+
+## Contexte et pourquoi
+
+Sans tests, chaque refactor est dangereux. Les routes critiques du projet
+touchent des règles métier qui ne doivent jamais régresser :
+ownership, permissions, droits GM/joueur.
+
+Ces règles sont aujourd'hui vérifiées manuellement à chaque session.
+Un test automatisé les vérifie une fois pour toutes — et détecte immédiatement
+toute régression introduite par un refactor futur.
+
+**Ce qu'on ne teste pas ici :**
+- L'interface visuelle (Three.js, React)
+- Les animations
+- Le rendu 3D
+
+**Ce qu'on teste :**
+Les règles métier côté serveur — là où une erreur a des conséquences réelles.
+
+---
+
+## Outil recommandé
+
+Vitest + supertest.
+Vitest est déjà dans l'écosystème Vite du projet — cohérent.
+Supertest permet de tester les routes Express sans démarrer le serveur réel.
+
+---
+
+## Périmètre — 5 domaines à couvrir
+
+### 1. Ownership token
+- Un joueur peut déplacer son propre token
+- Un joueur ne peut pas déplacer le token d'un autre joueur
+- Un GM peut déplacer n'importe quel token
+
+### 2. Permissions GM / joueur
+- Un joueur ne peut pas créer un token sans character_id
+- Un joueur ne peut pas créer deux tokens pour le même character sur la même map
+- Un GM peut créer autant de tokens qu'il veut
+
+### 3. Droits sur les characters
+- gm_notes n'est jamais retourné à un joueur dans GET /characters
+- Un joueur ne peut pas modifier visible sur un character
+- Un GM peut modifier tous les champs
+
+### 4. Suppressions en cascade
+- Suppression d'un character → token retiré de la carte
+- Suppression d'une battlemap → tokens supprimés
+
+### 5. Accès aux routes
+- Un non-membre ne peut pas accéder aux ressources d'une campagne
+- Un joueur ne peut pas accéder aux routes GM
+
+---
+
+## Fichiers à uploader avant de coder
+
+- `server/src/routes/tokens.js`
+- `server/src/routes/characters.js`
+- `server/src/routes/campaigns.js`
+- `server/package.json` — vérifier si Vitest est déjà installé
+
+---
+
+## Ordre d'exécution dans la session
+
+1. Vérifier que Vitest et supertest sont installés — sinon installer
+2. Créer `server/src/tests/` — dossier dédié
+3. Écrire les tests ownership token (domaine 1)
+4. Valider — tous passent
+5. Écrire les tests permissions GM/joueur (domaine 2)
+6. Valider
+7. Continuer domaine par domaine jusqu'à 5
+8. Intégrer dans un script npm run test
+
+---
+
+## Critères de validation
+
+- [ ] Tous les tests passent en vert
+- [ ] Aucun test ne dépend d'un état global partagé entre tests
+- [ ] Les tests couvrent les 5 domaines listés
+- [ ] `npm run test` fonctionne depuis `server/`
+
+---
+
+## Pièges
+
+- Chaque test doit être isolé — créer et nettoyer ses propres données en base
+- Ne pas tester contre la base de production — utiliser une base de test dédiée
+  ou mocker les appels Knex
+- Ne pas écrire des tests qui testent le framework (Express, Knex) —
+  tester uniquement la logique métier propre au projet
+- gm_notes : vérifier l'absence dans la réponse, pas juste la présence d'autres champs
+--------------------------------------
+# MISSION — Chantier 8 : Features Phase 2 restantes
+> Rédigé session 10 — 2026-04-05
+> Document autonome — peut être lu sans autre contexte.
+> Dépendance : Chantiers 1 à 6 terminés et validés.
+> Nature : index de features — chaque feature est une session autonome.
+
+---
+
+## Contexte
+
+Les chantiers 1 à 7 ont stabilisé le noyau technique.
+Le Chantier 8 est la reprise du développement normal de Phase 2.
+Chaque feature listée ici fait l'objet d'une session dédiée.
+La spec de référence pour chaque feature est dans `docs/ROADMAP.md`.
+
+---
+
+## Features dans l'ordre de priorité
+
+### 1. Calque GM
+Tokens avec `layer='gm'` invisibles pour les joueurs côté client.
+Filtrage côté client uniquement — les données existent déjà en base.
+Priorité haute — déjà dans les points de vigilance permanents depuis session 9.
+
+### 2. X-Ray
+Voxels transparents quand ils se trouvent entre la caméra et un token.
+Implémentation : raycasting caméra → token, transparence sur les hits.
+Dépend du calque GM (les tokens GM invisibles ne déclenchent pas de X-Ray).
+
+### 3. Viewport Snap GM + verrouillage
+Deux modes : "Snap GM" (joueur suit le viewport du GM) et "Verrouiller vue".
+Handler WS.MAP_VIEWPORT déjà en place côté serveur — brancher côté client.
+
+### 4. Outil règle / mesure 3D
+Distance euclidienne 3D entre deux points.
+Affichage en cases × scale_label de la carte.
+Interface flottante au-dessus du canvas (même pattern que DicePanel).
+
+### 5. Upload illustration 2D character
+Portrait du character uploadé par le propriétaire.
+Stocké dans MinIO sous `tokens/`.
+Fallback cascade : glb → portrait → default.glb (déjà documenté).
+
+### 6. Upload token .glb character
+Modèle 3D custom uploadé par le propriétaire.
+Même pattern que l'upload portrait — route POST /api/characters/:id/upload.
+
+### 7. Cartes 2D (battlemap type 'scene')
+Nouveau type de battlemap : image plein écran + tokens 2D.
+Tokens 2D = illustration dans cercle, cliquable.
+Décision reportée de session 4 — spec dans JOURNAL.md session 4.
+
+---
+
+## Référence
+
+Détail complet de chaque feature : `docs/ROADMAP.md`, section Phase 2.
+Spec tokens 2D : `docs/JOURNAL.md` session 4.
+Spec calque GM : `docs/ARCHITECTURE.md` section "Calques — flag de visibilité".
+
+---
+
+## Critères de validation globaux
+
+Chaque feature validée = cochée dans `docs/ROADMAP.md`.
+Aucune feature ne démarre sans que la précédente soit validée fonctionnellement.
+
+---
+
+## Pièges généraux
+
+- Le calque GM est prioritaire — ne pas commencer X-Ray avant
+- Chaque feature doit respecter les conventions i18n sans exception
+- Les uploads (portrait, glb) passent toujours par Express — jamais directement vers MinIO
+- Le pattern reconnectTrigger reste valide pour toute la Phase 2

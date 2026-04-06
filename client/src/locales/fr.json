@@ -21,11 +21,18 @@
   "dashboard": {
     "title": "Mes campagnes",
     "createCampaign": "Nouvelle campagne",
-    "joinCampaign": "Rejoindre",
+    "joinWithCode": "Rejoindre avec un code",
     "campaignName": "Nom de la campagne",
     "inviteCode": "Code d'invitation",
+    "create": "Créer",
+    "join": "Rejoindre",
     "launch": "Lancer",
-    "noCampaigns": "Aucune campagne pour l'instant"
+    "noCampaigns": "Aucune campagne. Créez-en une ou rejoignez avec un code.",
+    "roleGM": "MJ",
+    "rolePlayer": "Joueur",
+    "errorLoad": "Impossible de charger les campagnes",
+    "errorCreate": "Erreur lors de la création",
+    "errorJoin": "Erreur lors de la connexion"
   },
   "session": {
     "loading": "Connexion à la session...",
@@ -39,6 +46,14 @@
     "freeView": "Libérer la vue",
     "sendToMap": "Envoyer vers cette carte",
     "battlemaps": "Cartes",
+    "mapRename": "Renommer",
+    "mapSetDefault": "Définir comme page d'accueil",
+    "mapMoveGroup": "Déplacer le groupe ici",
+    "mapDuplicate": "Dupliquer",
+    "mapDelete": "Supprimer la carte",
+    "deleteMapConfirm": "Supprimer la carte \"{{name}}\" définitivement ?",
+    "mapCreate": "Nouvelle carte",
+    "mapNamePlaceholder": "Nom de la carte",
     "players": "Joueurs",
     "online": "en ligne"
   },
@@ -59,7 +74,11 @@
     "hide": "Cacher aux joueurs",
     "show": "Révéler aux joueurs",
     "layerGM": "Déplacer vers calque GM",
-    "layerToken": "Déplacer vers calque token"
+    "layerToken": "Déplacer vers calque token",
+    "removeFromMap": "Retirer du plateau",
+    "measure": "Mesure",
+    "lineOfSight": "Ligne de vue",
+    "range": "Portée"
   },
   "battlemap": {
     "create": "Nouvelle carte",
@@ -72,5 +91,59 @@
     "notFound": "Page introuvable",
     "accessDenied": "Accès refusé",
     "sessionExpired": "Session expirée, reconnectez-vous"
+  },
+  "sidebar": {
+    "chat": "Chat",
+    "characters": "Persos",
+    "players": "Joueurs",
+    "library": "Biblio",
+    "libraryPlaceholder": "Bibliothèque — Phase 3",
+    "noCharacters": "Aucun personnage dans cette campagne.",
+    "noPlayers": "Aucun membre dans cette campagne.",
+    "newCharacter": "Nouveau personnage",
+    "characterNamePlaceholder": "Nom du personnage",
+    "dragToMap": "Glisser sur la carte pour placer",
+    "hiddenFromPlayers": "Masqué aux joueurs",
+    "measureRule": "Règle / distance",
+    "measureRange": "Portée / aura",
+    "measureSight": "Ligne de visée",
+    "roleGM": "MJ",
+    "rolePlayer": "Joueur",
+    "online": "en ligne",
+    "offline": "hors ligne",
+    "config": "Config",
+    "configTitle": "Paramètres du compte",
+    "configUsername": "Nom d'affichage",
+    "configColor": "Couleur",
+    "configSaved": "Modifications enregistrées"
+  },
+  "character": {
+    "tabSheet": "Fiche",
+    "tabNotes": "Notes",
+    "tabSettings": "Paramètres",
+    "sheetPlaceholder": "Fiche personnage — Phase 3",
+    "illustrationPlaceholder": "Illustration — Phase 3",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Visible par tous les joueurs...",
+    "gmNotesLabel": "Notes MJ",
+    "gmNotesPlaceholder": "Visible uniquement par le MJ...",
+    "toggleVisible": "Montrer aux joueurs",
+    "toggleHidden": "Masquer aux joueurs",
+    "deleteCharacter": "Supprimer ce personnage",
+    "deleteConfirm": "Supprimer ce personnage définitivement ?",
+    "ownerLabel": "Propriétaire",
+    "noOwner": "Entité MJ"
+  },
+  "profile": {
+    "title": "Mon profil",
+    "username": "Nom d'affichage",
+    "email": "Email",
+    "color": "Couleur",
+    "password": "Nouveau mot de passe",
+    "currentPassword": "Mot de passe actuel",
+    "currentPasswordHint": "Requis pour changer de mot de passe",
+    "save": "Enregistrer",
+    "saved": "Modifications enregistrées",
+    "errorSave": "Erreur lors de la sauvegarde"
   }
 }

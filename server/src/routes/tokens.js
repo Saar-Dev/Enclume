@@ -2,20 +2,24 @@ import { Router } from 'express'
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
+import { WS } from '../../../shared/events.js'
 
 const router = Router({ mergeParams: true })
 
-// POST /api/battlemaps/:id/tokens — créer un token (GM uniquement)
-// Reçoit du JSON pur — pas d'upload image sur cette route.
-// L'upload d'image token est prévu sur POST /api/tokens/:id/upload (Phase suivante).
+// POST /api/battlemaps/:id/tokens — créer un token
+// GM : toujours autorisé, peut créer autant de tokens qu'il veut.
+// Joueur : autorisé uniquement si character.user_id === req.user.id
+//          et si aucun token avec ce character_id n'existe déjà sur cette battlemap.
 router.post('/', requireAuth, async (req, res) => {
   const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
   if (!battlemap) throw new AppError(404, 'Battlemap not found')
 
   const member = await db('campaign_members')
-    .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id, role: 'gm' })
+    .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id })
     .first()
-  if (!member) throw new AppError(403, 'GM only')
+  if (!member) throw new AppError(403, 'Access denied')
+
+  const isGm = member.role === 'gm'
 
   const {
     character_id,
@@ -32,6 +36,22 @@ router.post('/', requireAuth, async (req, res) => {
     cover_percent = 0,
     color,
   } = req.body
+
+  if (!isGm) {
+    // Joueur : character_id obligatoire
+    if (!character_id) throw new AppError(403, 'Players must provide a character_id')
+
+    // Vérifier que le joueur est propriétaire du character
+    const character = await db('characters').where({ id: character_id }).first()
+    if (!character) throw new AppError(404, 'Character not found')
+    if (character.user_id !== req.user.id) throw new AppError(403, 'You do not own this character')
+
+    // Vérifier qu'aucun token de ce character n'existe déjà sur cette battlemap
+    const existing = await db('tokens')
+      .where({ battlemap_id: req.params.id, character_id })
+      .first()
+    if (existing) throw new AppError(409, 'A token for this character already exists on this battlemap')
+  }
 
   const [token] = await db('tokens')
     .insert({
@@ -53,6 +73,11 @@ router.post('/', requireAuth, async (req, res) => {
     })
     .returning('*')
 
+  // Broadcaster TOKEN_CREATED à toute la room — le serveur est seul émetteur
+  // updated_at inclus via returning('*') — cohérence avec TOKEN_MOVED
+  const io = req.app.get('io')
+  io.to(battlemap.campaign_id).emit(WS.TOKEN_CREATED, { token })
+
   res.status(201).json({ token })
 })
 
@@ -68,7 +93,13 @@ router.put('/:id', requireAuth, async (req, res) => {
   if (!member) throw new AppError(403, 'Access denied')
 
   const isGm = member.role === 'gm'
-  const isOwner = token.owner_id === req.user.id
+
+  // Ownership : GM ou propriétaire du character lié au token
+  let isOwner = false
+  if (token.character_id) {
+    const character = await db('characters').where({ id: token.character_id }).first()
+    isOwner = character?.user_id === req.user.id
+  }
   if (!isGm && !isOwner) throw new AppError(403, 'You can only move your own token')
 
   const {
@@ -102,26 +133,55 @@ router.put('/:id', requireAuth, async (req, res) => {
 
   if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
 
+  // updated_at systématique sur tout PUT
+  updates.updated_at = db.fn.now()
+
   const [updated] = await db('tokens')
     .where({ id: req.params.id })
     .update(updates)
     .returning('*')
 
+  // Broadcaster TOKEN_MOVED à toute la room — le serveur est seul émetteur
+  // updated_at inclus — permet au client d'ignorer les events obsolètes
+  const io = req.app.get('io')
+  io.to(battlemap.campaign_id).emit(WS.TOKEN_MOVED, {
+    tokenId: updated.id,
+    pos_x: updated.pos_x,
+    pos_y: updated.pos_y,
+    pos_z: updated.pos_z,
+    updated_at: updated.updated_at,
+  })
+
   res.json({ token: updated })
 })
 
-// DELETE /api/tokens/:id — supprimer un token (GM uniquement)
+// DELETE /api/tokens/:id — supprimer un token (GM ou propriétaire du character)
 router.delete('/:id', requireAuth, async (req, res) => {
   const token = await db('tokens').where({ id: req.params.id }).first()
   if (!token) throw new AppError(404, 'Token not found')
 
   const battlemap = await db('battlemaps').where({ id: token.battlemap_id }).first()
   const member = await db('campaign_members')
-    .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id, role: 'gm' })
+    .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id })
     .first()
-  if (!member) throw new AppError(403, 'GM only')
+  if (!member) throw new AppError(403, 'Access denied')
+
+  const isGm = member.role === 'gm'
+
+  // Ownership : GM ou propriétaire du character lié au token
+  let isOwner = false
+  if (token.character_id) {
+    const character = await db('characters').where({ id: token.character_id }).first()
+    isOwner = character?.user_id === req.user.id
+  }
+  if (!isGm && !isOwner) throw new AppError(403, 'You can only delete your own token')
 
   await db('tokens').where({ id: req.params.id }).delete()
+
+  // Broadcaster TOKEN_DELETED à toute la room — le serveur est seul émetteur
+  const io = req.app.get('io')
+  io.to(battlemap.campaign_id).emit(WS.TOKEN_DELETED, { tokenId: token.id })
+
   res.json({ success: true })
 })
 

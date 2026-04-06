@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import api from '../lib/api'
 
 export default function DashboardPage() {
-  const { user, clearUser } = useAuthStore()
+  const { user, clearUser, setUser } = useAuthStore()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [campaigns, setCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -13,11 +15,16 @@ export default function DashboardPage() {
   const [newCampaignName, setNewCampaignName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState(null)
+  const [showProfile, setShowProfile] = useState(false)
+  const [profileForm, setProfileForm] = useState({ username: '', email: '', color: '', password: '', current_password: '' })
+  const [profileError, setProfileError] = useState(null)
+  const [profileSuccess, setProfileSuccess] = useState(false)
+  const [profileLoading, setProfileLoading] = useState(false)
 
   useEffect(() => {
     api.get('/campaigns')
       .then(res => setCampaigns(res.data.campaigns))
-      .catch(() => setError('Failed to load campaigns'))
+      .catch(() => setError(t('dashboard.errorLoad')))
       .finally(() => setLoading(false))
   }, [])
 
@@ -35,7 +42,48 @@ export default function DashboardPage() {
       setNewCampaignName('')
       setShowCreate(false)
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Error creating campaign')
+      setError(err.response?.data?.error?.message || t('dashboard.errorCreate'))
+    }
+  }
+
+  const handleOpenProfile = () => {
+    setProfileForm({ username: user?.username || '', email: user?.email || '', color: user?.color || '', password: '', current_password: '' })
+    setProfileError(null)
+    setProfileSuccess(false)
+    setShowProfile(true)
+  }
+
+  const handleProfileSave = async (e) => {
+    e.preventDefault()
+    setProfileError(null)
+    setProfileSuccess(false)
+    setProfileLoading(true)
+
+    // Construire le body — seulement les champs modifiés
+    const body = {}
+    if (profileForm.username && profileForm.username !== user?.username) body.username = profileForm.username
+    if (profileForm.email && profileForm.email !== user?.email) body.email = profileForm.email
+    if (profileForm.color && profileForm.color !== user?.color) body.color = profileForm.color
+    if (profileForm.password) {
+      body.password = profileForm.password
+      body.current_password = profileForm.current_password
+    }
+
+    if (Object.keys(body).length === 0) {
+      setProfileLoading(false)
+      setShowProfile(false)
+      return
+    }
+
+    try {
+      const res = await api.put('/users/me', body)
+      setUser(res.data.user)
+      setProfileSuccess(true)
+      setProfileForm(prev => ({ ...prev, password: '', current_password: '' }))
+    } catch (err) {
+      setProfileError(err.response?.data?.error?.message || t('profile.errorSave'))
+    } finally {
+      setProfileLoading(false)
     }
   }
 
@@ -47,7 +95,7 @@ export default function DashboardPage() {
       setInviteCode('')
       setShowJoin(false)
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Error joining campaign')
+      setError(err.response?.data?.error?.message || t('dashboard.errorJoin'))
     }
   }
 
@@ -57,9 +105,11 @@ export default function DashboardPage() {
       <div style={styles.header}>
         <span style={styles.logo}>Enclume</span>
         <div style={styles.headerRight}>
-          <span style={styles.username}>{user?.username}</span>
+          <button style={styles.usernameBtn} onClick={handleOpenProfile}>
+            {user?.username}
+          </button>
           <button style={styles.logoutBtn} onClick={handleLogout}>
-            Sign out
+            {t('auth.logout')}
           </button>
         </div>
       </div>
@@ -67,13 +117,13 @@ export default function DashboardPage() {
       {/* Contenu */}
       <div style={styles.content}>
         <div style={styles.titleRow}>
-          <h2 style={styles.pageTitle}>My Campaigns</h2>
+          <h2 style={styles.pageTitle}>{t('dashboard.title')}</h2>
           <div style={styles.actions}>
             <button style={styles.btnSecondary} onClick={() => { setShowJoin(true); setShowCreate(false) }}>
-              Join with code
+              {t('dashboard.joinWithCode')}
             </button>
             <button style={styles.btnPrimary} onClick={() => { setShowCreate(true); setShowJoin(false) }}>
-              New campaign
+              {t('dashboard.createCampaign')}
             </button>
           </div>
         </div>
@@ -85,14 +135,14 @@ export default function DashboardPage() {
           <form onSubmit={handleCreate} style={styles.inlineForm}>
             <input
               style={styles.input}
-              placeholder="Campaign name"
+              placeholder={t('dashboard.campaignName')}
               value={newCampaignName}
               onChange={e => setNewCampaignName(e.target.value)}
               required
               autoFocus
             />
-            <button style={styles.btnPrimary} type="submit">Create</button>
-            <button style={styles.btnGhost} type="button" onClick={() => setShowCreate(false)}>Cancel</button>
+            <button style={styles.btnPrimary} type="submit">{t('dashboard.create')}</button>
+            <button style={styles.btnGhost} type="button" onClick={() => setShowCreate(false)}>{t('common.cancel')}</button>
           </form>
         )}
 
@@ -101,22 +151,22 @@ export default function DashboardPage() {
           <form onSubmit={handleJoin} style={styles.inlineForm}>
             <input
               style={styles.input}
-              placeholder="Invite code"
+              placeholder={t('dashboard.inviteCode')}
               value={inviteCode}
               onChange={e => setInviteCode(e.target.value)}
               required
               autoFocus
             />
-            <button style={styles.btnPrimary} type="submit">Join</button>
-            <button style={styles.btnGhost} type="button" onClick={() => setShowJoin(false)}>Cancel</button>
+            <button style={styles.btnPrimary} type="submit">{t('dashboard.join')}</button>
+            <button style={styles.btnGhost} type="button" onClick={() => setShowJoin(false)}>{t('common.cancel')}</button>
           </form>
         )}
 
         {/* Liste campagnes */}
         {loading ? (
-          <p style={styles.muted}>Loading...</p>
+          <p style={styles.muted}>{t('common.loading')}</p>
         ) : campaigns.length === 0 ? (
-          <p style={styles.muted}>No campaigns yet. Create one or join with a code.</p>
+          <p style={styles.muted}>{t('dashboard.noCampaigns')}</p>
         ) : (
           <div style={styles.grid}>
             {campaigns.map(campaign => (
@@ -124,20 +174,96 @@ export default function DashboardPage() {
                 <div style={styles.cardHeader}>
                   <span style={styles.cardTitle}>{campaign.name}</span>
                   <span style={campaign.role === 'gm' ? styles.badgeGM : styles.badgePlayer}>
-                    {campaign.role === 'gm' ? 'GM' : 'Player'}
+                  {campaign.role === 'gm' ? t('dashboard.roleGM') : t('dashboard.rolePlayer')}
                   </span>
                 </div>
                 <div style={styles.cardFooter}>
                   <span style={styles.inviteCode}>#{campaign.invite_code}</span>
                   <button style={styles.btnPrimary} onClick={() => navigate(`/session/${campaign.id}`)}>
-  Launch
-</button>
+                    {t('dashboard.launch')}
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Modale profil */}
+      {showProfile && (
+        <div style={styles.profileOverlay} onMouseDown={() => setShowProfile(false)}>
+          <div style={styles.profileModal} onMouseDown={e => e.stopPropagation()}>
+            <h3 style={styles.profileTitle}>{t('profile.title')}</h3>
+
+            {profileError && <div style={styles.error}>{profileError}</div>}
+            {profileSuccess && <div style={styles.profileSuccessMsg}>{t('profile.saved')}</div>}
+
+            <form onSubmit={handleProfileSave}>
+              <div style={styles.profileField}>
+                <label style={styles.profileLabel}>{t('profile.username')}</label>
+                <input
+                  style={styles.profileInput}
+                  value={profileForm.username}
+                  onChange={e => setProfileForm(prev => ({ ...prev, username: e.target.value }))}
+                />
+              </div>
+
+              <div style={styles.profileField}>
+                <label style={styles.profileLabel}>{t('profile.email')}</label>
+                <input
+                  style={styles.profileInput}
+                  type="email"
+                  value={profileForm.email}
+                  onChange={e => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+
+              <div style={styles.profileField}>
+                <label style={styles.profileLabel}>{t('profile.color')}</label>
+                <div style={styles.profileColorRow}>
+                  <input
+                    type="color"
+                    value={profileForm.color}
+                    onChange={e => setProfileForm(prev => ({ ...prev, color: e.target.value }))}
+                    style={styles.colorPicker}
+                  />
+                  <span style={{ ...styles.profileLabel, color: profileForm.color }}>{profileForm.color}</span>
+                </div>
+              </div>
+
+              <div style={styles.profileField}>
+                <label style={styles.profileLabel}>{t('profile.currentPassword')}</label>
+                <input
+                  style={styles.profileInput}
+                  type="password"
+                  placeholder={t('profile.currentPasswordHint')}
+                  value={profileForm.current_password}
+                  onChange={e => setProfileForm(prev => ({ ...prev, current_password: e.target.value }))}
+                />
+              </div>
+
+              <div style={styles.profileField}>
+                <label style={styles.profileLabel}>{t('profile.password')}</label>
+                <input
+                  style={styles.profileInput}
+                  type="password"
+                  value={profileForm.password}
+                  onChange={e => setProfileForm(prev => ({ ...prev, password: e.target.value }))}
+                />
+              </div>
+
+              <div style={styles.profileActions}>
+                <button style={styles.btnGhost} type="button" onClick={() => setShowProfile(false)}>
+                  {t('common.cancel')}
+                </button>
+                <button style={styles.btnPrimary} type="submit" disabled={profileLoading}>
+                  {profileLoading ? t('common.loading') : t('profile.save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -166,9 +292,14 @@ const styles = {
     alignItems: 'center',
     gap: '16px',
   },
-  username: {
+  usernameBtn: {
+    background: 'none',
+    border: 'none',
     fontSize: '14px',
     color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    padding: '4px 8px',
+    borderRadius: '4px',
   },
   logoutBtn: {
     background: 'none',
@@ -300,5 +431,76 @@ const styles = {
   muted: {
     color: 'var(--text-muted)',
     fontSize: '14px',
+  },
+  profileOverlay: {
+    position: 'fixed',
+    inset: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  profileModal: {
+    backgroundColor: 'var(--bg-panel)',
+    border: '1px solid var(--border-normal)',
+    borderRadius: '12px',
+    padding: '28px 32px',
+    width: '380px',
+    maxWidth: '90vw',
+  },
+  profileTitle: {
+    fontSize: '16px',
+    fontWeight: '500',
+    color: 'var(--text-primary)',
+    marginBottom: '20px',
+  },
+  profileField: {
+    marginBottom: '16px',
+  },
+  profileLabel: {
+    display: 'block',
+    fontSize: '12px',
+    color: 'var(--text-secondary)',
+    marginBottom: '6px',
+  },
+  profileInput: {
+    width: '100%',
+    backgroundColor: 'var(--bg-card)',
+    border: '1px solid var(--border-normal)',
+    borderRadius: '8px',
+    padding: '9px 14px',
+    color: 'var(--text-primary)',
+    fontSize: '14px',
+    boxSizing: 'border-box',
+  },
+  profileColorRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  colorPicker: {
+    width: '40px',
+    height: '36px',
+    border: '1px solid var(--border-normal)',
+    borderRadius: '6px',
+    padding: '2px',
+    backgroundColor: 'var(--bg-card)',
+    cursor: 'pointer',
+  },
+  profileActions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '10px',
+    marginTop: '24px',
+  },
+  profileSuccessMsg: {
+    backgroundColor: 'rgba(76,175,119,0.12)',
+    border: '1px solid #4caf77',
+    borderRadius: '6px',
+    padding: '10px 14px',
+    color: '#4caf77',
+    fontSize: '13px',
+    marginBottom: '16px',
   },
 }

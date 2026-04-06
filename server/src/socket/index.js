@@ -29,13 +29,22 @@ const initSocket = (io) => {
         socket.join(campaignId)
         socket.campaignId = campaignId
         socket.role = member.role
+        // Stocker userId dans socket.data — accessible via fetchSockets() contrairement à socket.user
+        socket.data.userId = socket.user.id
 
-        // Confirmer au client qu'il a rejoint
+        // Récupérer les utilisateurs déjà dans la room (avant le join du nouvel arrivant)
+        const existingSockets = await io.in(campaignId).fetchSockets()
+        const onlineUserIds = existingSockets
+          .map(s => s.data.userId)
+          .filter(id => id && id !== socket.user.id)
+
+        // Confirmer au client qu'il a rejoint — inclut la liste des connectés
         socket.emit(WS.SESSION_JOINED, {
           campaignId,
           userId: socket.user.id,
           username: socket.user.username,
           role: member.role,
+          onlineUserIds,
         })
 
         // Annoncer aux autres membres que quelqu'un a rejoint
@@ -60,26 +69,63 @@ const initSocket = (io) => {
         const token = await db('tokens').where({ id: tokenId }).first()
         if (!token) return
 
-        // Vérifier les droits : owner ou GM
-        const isOwner = token.owner_id === socket.user.id
+        // Vérifier les droits : GM ou propriétaire du character lié au token
         const isGm = socket.role === 'gm'
+        let isOwner = false
+        if (token.character_id) {
+          const character = await db('characters').where({ id: token.character_id }).first()
+          isOwner = character?.user_id === socket.user.id
+        }
         if (!isOwner && !isGm) {
           socket.emit('error', { message: 'Access denied' })
           return
         }
 
-        // Mettre à jour en base
-        await db('tokens').where({ id: tokenId }).update({ pos_x, pos_y, pos_z })
+        // Mettre à jour en base — updated_at inclus pour cohérence avec les routes REST
+        const [updated] = await db('tokens')
+          .where({ id: tokenId })
+          .update({ pos_x, pos_y, pos_z, updated_at: db.fn.now() })
+          .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'updated_at'])
 
         // Broadcaster à tous les membres de la campagne (y compris l'émetteur)
+        // updated_at inclus — permet au client d'ignorer les events obsolètes
         io.to(socket.campaignId).emit(WS.TOKEN_MOVED, {
-          tokenId,
-          pos_x,
-          pos_y,
-          pos_z,
+          tokenId: updated.id,
+          pos_x: updated.pos_x,
+          pos_y: updated.pos_y,
+          pos_z: updated.pos_z,
+          updated_at: updated.updated_at,
         })
       } catch (err) {
         console.error('[WS] token:move error:', err.message)
+      }
+    })
+
+    // ─── TOKEN:CREATED ─────────────────────────────────────────────────────
+    // Conservé temporairement — relique Chantier 1, à nettoyer chantier dédié.
+    // GM a placé un token sur la carte
+    // Payload : { tokenId }
+    socket.on(WS.TOKEN_CREATED, async ({ tokenId }) => {
+      try {
+        const token = await db('tokens').where({ id: tokenId }).first()
+        if (!token) return
+        // Broadcast à toute la room — le joueur voit apparaître le token
+        io.to(socket.campaignId).emit(WS.TOKEN_CREATED, { token })
+      } catch (err) {
+        console.error('[WS] token:created error:', err.message)
+      }
+    })
+
+    // ─── TOKEN:DELETED ─────────────────────────────────────────────────────
+    // Conservé temporairement — relique Chantier 1, à nettoyer chantier dédié.
+    // Un token a été supprimé
+    // Payload : { tokenId }
+    socket.on(WS.TOKEN_DELETED, async ({ tokenId }) => {
+      try {
+        // Broadcast à toute la room
+        io.to(socket.campaignId).emit(WS.TOKEN_DELETED, { tokenId })
+      } catch (err) {
+        console.error('[WS] token:deleted error:', err.message)
       }
     })
 
@@ -93,19 +139,22 @@ const initSocket = (io) => {
           return
         }
 
+        // Guard Bug B — battlemapId undefined si battlemap null entre deux chargements
+        if (!battlemapId) return
+
         // Récupérer les données voxel actuelles
         const battlemap = await db('battlemaps').where({ id: battlemapId }).first()
         if (!battlemap) return
 
-        const voxels = battlemap.voxel_data || []
+        const voxels = battlemap.voxel_data || {}
 
-        // Éviter les doublons sur la même position
-        const filtered = voxels.filter(v => !(v.x === x && v.y === y && v.z === z))
-        filtered.push({ x, y, z, mat })
+        // Ajout ou remplacement — la clé "x:y:z" garantit l'unicité par position
+        const key = `${x}:${y}:${z}`
+        const next = { ...voxels, [key]: mat }
 
         await db('battlemaps')
           .where({ id: battlemapId })
-          .update({ voxel_data: JSON.stringify(filtered) })
+          .update({ voxel_data: JSON.stringify(next) })
 
         // Broadcaster à tous
         io.to(socket.campaignId).emit(WS.VOXEL_ADDED, { battlemapId, x, y, z, mat })
@@ -127,12 +176,14 @@ const initSocket = (io) => {
         const battlemap = await db('battlemaps').where({ id: battlemapId }).first()
         if (!battlemap) return
 
-        const voxels = battlemap.voxel_data || []
-        const filtered = voxels.filter(v => !(v.x === x && v.y === y && v.z === z))
+        const voxels = battlemap.voxel_data || {}
+        const key = `${x}:${y}:${z}`
+        const next = { ...voxels }
+        delete next[key]
 
         await db('battlemaps')
           .where({ id: battlemapId })
-          .update({ voxel_data: JSON.stringify(filtered) })
+          .update({ voxel_data: JSON.stringify(next) })
 
         io.to(socket.campaignId).emit(WS.VOXEL_REMOVED, { battlemapId, x, y, z })
       } catch (err) {
@@ -201,14 +252,61 @@ const initSocket = (io) => {
 
     // ─── CHAT:MESSAGE ──────────────────────────────────────────────────────
     // Payload : { text }
-    socket.on(WS.CHAT_MESSAGE, ({ text }) => {
+    socket.on(WS.CHAT_MESSAGE, async ({ text }) => {
       if (!text || !socket.campaignId) return
+      // Lire la couleur depuis la DB — pas dans le JWT
+      let color = '#5b8dee'
+      try {
+        const userRow = await db('users').where({ id: socket.user.id }).select('color').first()
+        if (userRow?.color) color = userRow.color
+      } catch (_) {}
       io.to(socket.campaignId).emit(WS.CHAT_MESSAGE, {
         userId: socket.user.id,
         username: socket.user.username,
+        color,
         text,
         timestamp: new Date().toISOString(),
       })
+    })
+
+    // ─── CHARACTER:UPDATED ─────────────────────────────────────────────────
+    // Conservé temporairement — relique Chantier 1, à nettoyer chantier dédié.
+    // Le GM a modifié un character (visible, assignation, etc.)
+    // Payload : { characterId }
+    socket.on(WS.CHARACTER_UPDATED, async ({ characterId }) => {
+      try {
+        if (socket.role !== 'gm') {
+          socket.emit('error', { message: 'GM only' })
+          return
+        }
+
+        const character = await db('characters')
+          .where({ 'characters.id': characterId })
+          .leftJoin('users', 'characters.user_id', 'users.id')
+          .select(
+            'characters.id',
+            'characters.campaign_id',
+            'characters.user_id',
+            'characters.name',
+            'characters.color',
+            'characters.visible',
+            'characters.glb_url',
+            'characters.portrait_url',
+            'characters.description',
+            'characters.gm_notes',
+            'characters.created_at',
+            'characters.updated_at',
+            'users.username as owner_username'
+          )
+          .first()
+
+        if (!character) return
+
+        const { gm_notes, ...characterPublic } = character
+        io.to(socket.campaignId).emit(WS.CHARACTER_UPDATED, characterPublic)
+      } catch (err) {
+        console.error('[WS] character:updated error:', err.message)
+      }
     })
 
     // ─── DÉCONNEXION ───────────────────────────────────────────────────────

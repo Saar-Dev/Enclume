@@ -1,10 +1,11 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { OrbitControls, Grid, Text } from '@react-three/drei'
+import { MapControls, Grid, Text } from '@react-three/drei'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
 import api from '../lib/api.js'
+import { WS } from '../../../shared/events.js'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const VOXEL_SIZE = 1
@@ -66,7 +67,7 @@ function Voxel({ position, materialId, materials }) {
   const mats = materials[materialId]
   if (!mats) return null
   return (
-    <mesh position={position} userData={{ isVoxel: true, position }}>
+    <mesh position={[position[0] + 0.5, position[1] + 0.5, position[2] + 0.5]} userData={{ isVoxel: true, position }}>
       <boxGeometry args={[VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE]} />
       {mats.map((mat, i) => <meshLambertMaterial key={i} attach={`material-${i}`} {...mat} />)}
     </mesh>
@@ -116,7 +117,7 @@ function TokenRing({ color, isSelected, isDragging }) {
 // TokenRing : anneau toujours visible, animé à la sélection.
 const Y_OFFSET = 0.5
 
-function TokenMesh({ token, gltfScene, isSelected, onDragStart, dragState }) {
+function TokenMesh({ token, gltfScene, isSelected, onDragStart, onTokenDoubleClick, dragState }) {
   const color = token.color || '#4A90D9'
   const label = token.label || '?'
 
@@ -125,9 +126,9 @@ function TokenMesh({ token, gltfScene, isSelected, onDragStart, dragState }) {
   const baseZ = token.pos_y ?? 0   // pos_y base = axe Z Three.js
 
   const isDragging = dragState !== null
-  const x = isDragging ? dragState.x : baseX
-  const y = isDragging ? dragState.y : baseY
-  const z = isDragging ? dragState.z : baseZ
+  const x = isDragging ? dragState.x + 0.5 : baseX + 0.5
+  const y = isDragging ? dragState.y : baseY + 0.5
+  const z = isDragging ? dragState.z + 0.5 : baseZ + 0.5
 
   const tiltX = isDragging ? dragState.tiltX : 0
   const tiltZ = isDragging ? dragState.tiltZ : 0
@@ -159,6 +160,10 @@ function TokenMesh({ token, gltfScene, isSelected, onDragStart, dragState }) {
       onPointerDown={(e) => {
         e.stopPropagation()
         onDragStart(e, token)
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        onTokenDoubleClick?.(token, e.clientX, e.clientY)
       }}
     >
       {/* Anneau toujours visible — animé si sélectionné, bas si drag */}
@@ -194,7 +199,8 @@ function Scene({
   voxels, setVoxels, mode, activeMaterial,
   materials, onDirty, socket, battlemapId,
   tokens, selectedTokenId, onTokenSelect,
-  gltfScene, onTokenMove, isGm, justSelectedRef,
+  gltfScene, onTokenMove, onTokenDelete, onTokenDoubleClick, isGm, justSelectedRef,
+  user, characters,
 }) {
   const { camera, gl, scene } = useThree()
   const orbitRef = useRef()
@@ -216,7 +222,26 @@ function Scene({
     prevWorldZ: null,
   })
 
-  const getVoxelKey = (x, y, z) => `${x},${y},${z}`
+  const getVoxelKey = (x, y, z) => `${x}:${y}:${z}`
+
+  // ─── Écoute voxels temps réel ──────────────────────────────────────────
+  useEffect(() => {
+    if (!socket) return
+    const handleVoxelAdded = ({ x, y, z, mat }) => {
+      const key = getVoxelKey(x, y, z)
+      setVoxels(prev => ({ ...prev, [key]: { x, y, z, mat } }))
+    }
+    const handleVoxelRemoved = ({ x, y, z }) => {
+      const key = getVoxelKey(x, y, z)
+      setVoxels(prev => { const next = { ...prev }; delete next[key]; return next })
+    }
+    socket.on(WS.VOXEL_ADDED, handleVoxelAdded)
+    socket.on(WS.VOXEL_REMOVED, handleVoxelRemoved)
+    return () => {
+      socket.off(WS.VOXEL_ADDED, handleVoxelAdded)
+      socket.off(WS.VOXEL_REMOVED, handleVoxelRemoved)
+    }
+  }, [socket])
 
   // ─── Raycasting sur plan Y=0 ───────────────────────────────────────────────
   // Toujours sur le sol — précis, simple, approche Foundry VTT.
@@ -233,18 +258,28 @@ function Scene({
   }, [camera, gl])
 
   // Trouve le Y le plus haut dans la colonne de voxels à (x, z).
-  // Retourne 0 si pas de voxel. Retourne maxVoxelY si voxel trouvé.
+  // Retourne -1 si colonne vide, ≥0 si voxel trouvé (Y brut en base).
   const getColumnTopY = useCallback((x, z) => {
     let maxY = -1
     for (const v of Object.values(voxels)) {
       if (v.x === x && v.z === z) maxY = Math.max(maxY, v.y)
     }
-    return maxY === -1 ? 0 : maxY
+    return maxY
   }, [voxels])
 
   // ─── Début du drag ─────────────────────────────────────────────────────────
+  // Clic gauche uniquement. Le clic droit est géré par MapControls (rotation).
+  // Le double clic est géré séparément via onDoubleClick sur TokenMesh.
   const handleDragStart = useCallback((e, token) => {
     e.stopPropagation()
+    if (e.nativeEvent.button !== 0) return // ignorer tout sauf clic gauche
+
+    // Vérifier ownership : GM ou propriétaire du character lié au token
+    if (!isGm) {
+      const character = characters.find(c => c.id === token.character_id)
+      if (!character || character.user_id !== user?.id) return
+    }
+
     dragRef.current = {
       active: true,
       tokenId: token.id,
@@ -256,7 +291,7 @@ function Scene({
       prevWorldZ: null,
     }
     if (orbitRef.current) orbitRef.current.enabled = false
-  }, [])
+  }, [isGm, user, characters])
 
   // ─── Déplacement souris ────────────────────────────────────────────────────
   const handlePointerMove = useCallback((e) => {
@@ -294,7 +329,7 @@ function Scene({
     setDragState({
       tokenId: dragRef.current.tokenId,
       x: worldPos.x,
-      y: columnY + DRAG_HOVER,
+      y: Math.max(0, columnY) + 0.5 + DRAG_HOVER,
       z: worldPos.z,
       tiltX,
       tiltZ,
@@ -302,6 +337,7 @@ function Scene({
   }, [raycastGround, getColumnTopY])
 
   // ─── Fin du drag ───────────────────────────────────────────────────────────
+  // Le serveur broadcastera TOKEN_MOVED à toute la room — pas d'emit client.
   const handlePointerUp = useCallback(async (e) => {
     if (!dragRef.current.active) return
 
@@ -328,8 +364,9 @@ function Scene({
     const snappedZ = Math.round(worldPos.z)
     const snappedY = getColumnTopY(snappedX, snappedZ)
 
-    // Validation : GM Y 0-8, Joueur Y 1-7
-    const minY = isGm ? 0 : 1
+    // Validation : GM peut poser dans le vide (minY=-1) jusqu'au plafond (8).
+    // Joueur : voxel obligatoire sous les pieds (minY=0) jusqu'à 7.
+    const minY = isGm ? -1 : 0
     const maxY = isGm ? 8 : 7
     if (snappedY < minY || snappedY > maxY) return
     if (Math.abs(snappedX) > GRID_SIZE / 2 || Math.abs(snappedZ) > GRID_SIZE / 2) return
@@ -355,6 +392,25 @@ function Scene({
     }
   }, [handlePointerMove, handlePointerUp, gl])
 
+  // ─── Suppression token (touche Suppr) — GM uniquement ─────────────────────
+  // Écoute sur document (pas sur le canvas) pour capter la touche même sans focus 3D.
+  // Le serveur broadcastera TOKEN_DELETED à toute la room — pas d'emit client.
+  useEffect(() => {
+    const handleKeyDown = async (e) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      if (!isGm) return
+      if (!selectedTokenId) return
+      try {
+        await api.delete(`/tokens/${selectedTokenId}`)
+        onTokenDelete(selectedTokenId)
+      } catch (err) {
+        console.error('Erreur suppression token :', err)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isGm, selectedTokenId, onTokenDelete])
+
   // ─── Gestion des clics voxel ───────────────────────────────────────────────
   const handleClick = useCallback((e) => {
     if (mode !== 'edit') return
@@ -377,7 +433,7 @@ function Scene({
       const key = getVoxelKey(x, y, z)
       setVoxels(prev => { const next = { ...prev }; delete next[key]; return next })
       onDirty()
-      socket?.emit('voxel:remove', { battlemapId, x, y, z })
+      socket?.emit(WS.VOXEL_REMOVE, { battlemapId, x, y, z })
       return
     }
 
@@ -409,7 +465,7 @@ function Scene({
     const key = getVoxelKey(x, y, z)
     setVoxels(prev => ({ ...prev, [key]: { x, y, z, mat: activeMaterial } }))
     onDirty()
-    socket?.emit('voxel:add', { battlemapId, x, y, z, mat: activeMaterial })
+    socket?.emit(WS.VOXEL_ADD, { battlemapId, x, y, z, mat: activeMaterial })
   }, [mode, activeMaterial, camera, gl, scene, socket, battlemapId])
 
   useEffect(() => {
@@ -427,9 +483,18 @@ function Scene({
 
   useEffect(() => {
     if (!orbitRef.current) return
+    // Clic gauche : rien (tokens gèrent leurs propres events)
+    // Molette enfoncée : pan
+    // Clic droit : rotation orbitale (libéré pour le menu contextuel token)
     orbitRef.current.mouseButtons = {
-      LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN,
+      LEFT: null,
+      MIDDLE: THREE.MOUSE.PAN,
+      RIGHT: THREE.MOUSE.ROTATE,
     }
+    // Pan clavier natif MapControls — touches directionnelles
+    // Garde : ne pas bouger la caméra si un input/textarea est focus
+    orbitRef.current.listenToKeyEvents(window)
+    orbitRef.current.keyPanSpeed = 20
   }, [mode])
 
   return (
@@ -438,11 +503,10 @@ function Scene({
       <hemisphereLight args={['#ffffff', '#334155', 0.6]} />
       <directionalLight position={[10, 20, 10]} intensity={1.5} castShadow />
       <directionalLight position={[-10, 10, -10]} intensity={0.6} />
-      <pointLight position={[0, 8, 0]} intensity={1.0} distance={40} />
 
-      <OrbitControls
+      <MapControls
         ref={orbitRef}
-        mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }}
+        mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE }}
         enableDamping
         dampingFactor={0.05}
         maxPolarAngle={Math.PI / 2}
@@ -450,7 +514,7 @@ function Scene({
 
       <Grid
         args={[GRID_SIZE, GRID_SIZE]}
-        position={[0, -0.01, 0]}
+        position={[0, 0, 0]}
         cellColor="#334155"
         sectionColor="#475569"
         fadeDistance={80}
@@ -472,6 +536,7 @@ function Scene({
           gltfScene={gltfScene}
           isSelected={selectedTokenId === token.id}
           onDragStart={handleDragStart}
+          onTokenDoubleClick={onTokenDoubleClick}
           dragState={dragState?.tokenId === token.id ? dragState : null}
         />
       ))}
@@ -482,7 +547,8 @@ function Scene({
 // ─── Composant principal exporté ──────────────────────────────────────────────
 export default function Canvas3D({
   battlemap, tokens = [], mode, activeMaterial,
-  onVoxelDataChange, onPackLoaded, onTokenMove, isGm, socket
+  onVoxelDataChange, onPackLoaded, onTokenMove, onTokenDelete, onTokenDoubleClick,
+  isGm, socket, user, characters = [],
 }) {
   const [voxels, setVoxels] = useState({})
   const [materials, setMaterials] = useState({})
@@ -498,7 +564,10 @@ export default function Canvas3D({
   useEffect(() => {
     if (!battlemap?.voxel_data) return
     const map = {}
-    for (const v of battlemap.voxel_data) map[`${v.x},${v.y},${v.z}`] = v
+    for (const [key, mat] of Object.entries(battlemap.voxel_data)) {
+      const [x, y, z] = key.split(':').map(Number)
+      map[key] = { x, y, z, mat }
+    }
     setVoxels(map)
   }, [battlemap?.id])
 
@@ -523,11 +592,13 @@ export default function Canvas3D({
 
   const save = useCallback(async (currentVoxels) => {
     if (!isDirty.current || !battlemap?.id) return
-    const voxelArray = Object.values(currentVoxels)
     try {
-      await api.put(`/battlemaps/${battlemap.id}/voxels`, { voxel_data: voxelArray })
+      // Convertir { "x:y:z": { x, y, z, mat } } → { "x:y:z": mat } avant persistance
+      const payload = {}
+      for (const [key, v] of Object.entries(currentVoxels)) payload[key] = v.mat
+      await api.put(`/battlemaps/${battlemap.id}/voxels`, { voxel_data: payload })
       isDirty.current = false
-      onVoxelDataChange?.(voxelArray)
+      onVoxelDataChange?.(payload)
     } catch (err) {
       console.error('Erreur sauvegarde voxels :', err)
     }
@@ -574,8 +645,12 @@ export default function Canvas3D({
           onTokenSelect={setSelectedTokenId}
           gltfScene={gltfScene}
           onTokenMove={onTokenMove}
+          onTokenDelete={onTokenDelete}
+          onTokenDoubleClick={onTokenDoubleClick}
           isGm={isGm}
           justSelectedRef={justSelectedRef}
+          user={user}
+          characters={characters}
         />
       )}
     </Canvas>

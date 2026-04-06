@@ -29,6 +29,9 @@ export const WS = {
   // Documents
   DOC_SHARED: 'doc:shared',
 
+  // Characters
+  CHARACTER_UPDATED: 'character:updated',
+
   // Chat
   CHAT_MESSAGE: 'chat:message',
 }
