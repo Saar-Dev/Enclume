@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <title>Polaris — Home</title>
+  <style>
+    body{font:14px system-ui; margin:20px;}
+    input{width:520px; padding:10px; font-size:14px;}
+    button{padding:10px 14px; font-size:14px; cursor:pointer;}
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    .links a{display:inline-block; margin-right:12px; margin-top:10px;}
+    code{background:#f4f4f4; padding:2px 6px; border-radius:6px;}
+  </style>
+</head>
+<body>
+  <h2>Polaris WebApp</h2>
+  <div class="row">
+    <input id="fid" placeholder="Colle ici le FID (id du Google Sheet joueur)" value="<?= fid || '' ?>">
+    <button onclick="go('competences')">Ouvrir</button>
+  </div>
+
+  <div class="links" id="links"></div>
+
+  <p style="margin-top:18px;">
+    Param attendu : <code>?page=...&fid=...</code>
+  </p>
+
+<script>
+(function(){
+  const fidInput = document.getElementById('fid');
+  const links = document.getElementById('links');
+
+  function baseUrl(){
+    const u = new URL(window.location.href);
+    u.search = "";
+    return u.toString();
+  }
+
+  window.go = function(page){
+    const fid = (fidInput.value || "").trim();
+    if(!fid){ alert("FID manquant"); return; }
+    const u = new URL(baseUrl());
+    u.searchParams.set("page", page);
+    u.searchParams.set("fid", fid);
+    window.location.href = u.toString();
+  }
+
+  function renderLinks(){
+    const fid = (fidInput.value || "").trim();
+    const u0 = baseUrl();
+    const pages = ["competences","bourse","initiative","combat"];
+    links.innerHTML = pages.map(p=>{
+      const u = new URL(u0);
+      u.searchParams.set("page", p);
+      if(fid) u.searchParams.set("fid", fid);
+      return `<a href="${u.toString()}">${p}</a>`;
+    }).join("");
+  }
+
+  fidInput.addEventListener("input", renderLinks);
+  renderLinks();
+})();
+</script>
+</body>
+</html>

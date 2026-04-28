@@ -5,9 +5,18 @@ import { io } from 'socket.io-client'
 import { WS } from '../../../shared/events.js'
 import { useAuthStore } from '../stores/authStore'
 import { useTokenStore } from '../stores/tokenStore'
+import { useCharacterStore } from '../stores/characterStore'
+import { useMapStore } from '../stores/mapStore'
+import { useSessionStore } from '../stores/sessionStore'
+import { useEntityStore } from '../stores/entityStore'
 import api from '../lib/api'
 import Canvas3D from '../components/Canvas3D'
+import Editor3D from '../components/Editor3D'
 import Sidebar from '../components/Sidebar'
+import DicePanel from '../components/DicePanel'
+import CharacterWindow from '../character/CharacterWindow'
+import RadialMenu from '../components/RadialMenu'
+import EntityInstancePanel from '../components/EntityInstancePanel'
 
 export default function SessionPage() {
   const { campaignId } = useParams()
@@ -16,24 +25,55 @@ export default function SessionPage() {
   const navigate = useNavigate()
 
   const { tokens, setTokens, addToken, removeToken, updateToken } = useTokenStore()
+  const { characters, isGm, setCharacters, setMembers, upsertCharacter } = useCharacterStore()
+  const {
+    battlemap, battlemaps,
+    setBattlemap, setBattlemaps,
+    renameBattlemap, addBattlemap, removeBattlemap,
+  } = useMapStore()
+  const {
+    setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage,
+  } = useSessionStore()
+  const { setEntities, fetchBlueprints } = useEntityStore()
 
   const [campaign, setCampaign] = useState(null)
-  const [battlemap, setBattlemap] = useState(null)
-  const [characters, setCharacters] = useState([])
-  const [members, setMembers] = useState([])
-  const [isGm, setIsGm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const [messages, setMessages] = useState([])
-
   const [mode, setMode] = useState('play')
   const [layer, setLayer] = useState('token')
+  const [activeEditorTab, setActiveEditorTab] = useState('voxel') // 'voxel' | 'entity'
+  // canvasVisible : false pendant la transition play↔edit — force le démontage
+  // complet du Canvas actif avant que le suivant monte (évite le double contexte WebGL)
+  const [canvasVisible, setCanvasVisible] = useState(true)
+
+  const handleModeChange = useCallback((newMode) => {
+    if (newMode === mode) return
+    setCanvasVisible(false)
+    setTimeout(() => {
+      setMode(newMode)
+      setCanvasVisible(true)
+    }, 300)
+  }, [mode])
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [sidebarWidth, setSidebarWidth] = useState(300)
-  const [activeMaterial, setActiveMaterial] = useState(1)
-  const [availableMaterials, setAvailableMaterials] = useState([])
-  const [battlemaps, setBattlemaps] = useState([])
+  const [activeMaterial, setActiveMaterial] = useState(null)
+  const [activeBlueprint, setActiveBlueprint] = useState(null)
+  const [availableBlocks, setAvailableBlocks] = useState([])
+
+  // ─── Radial menu entité ───────────────────────────────────────────────────
+  // Ouvert au clic sur l'icône ⚙ d'une entité dans Canvas3D.
+  // null = fermé, sinon { entity, x, y }
+  const [radialMenu, setRadialMenu] = useState(null)
+  // ─── Panneau config instance GM ───────────────────────────────────────────
+  const [instancePanel, setInstancePanel] = useState(null)
+
+  // Fenêtre character flottante — null = fermée, sinon id du character ouvert
+  // Le character est dérivé du store pour se mettre à jour automatiquement via WS
+  const [selectedCharacterId, setSelectedCharacterId] = useState(null)
+  const selectedCharacter = selectedCharacterId
+    ? characters.find(c => c.id === selectedCharacterId) ?? null
+    : null
 
   // Menu contextuel barre GM — clic droit sur un bouton de carte
   const [mapContextMenu, setMapContextMenu] = useState(null) // { bm, x, y }
@@ -53,18 +93,23 @@ export default function SessionPage() {
       const campaignData = res.data.campaign
       const members = res.data.members || []
       setCampaign(campaignData)
-      setMembers(members)
+      // setMembers calcule isGm en interne à partir de userId
+      setMembers(members, user?.id)
 
-      // Calcul isGm depuis les membres
-      const me = members.find(m => m.id === user?.id)
-      setIsGm(me?.role === 'gm')
-
-      // Chargement battlemap par défaut + ses tokens
+      // Chargement battlemap par défaut + ses tokens + ses entités
       const mapId = campaignData.default_battlemap_id
       if (mapId) {
         const mapRes = await api.get(`/battlemaps/${mapId}`)
         setBattlemap(mapRes.data.battlemap)
         setTokens(mapRes.data.tokens || [])
+        // Chargement entités — route séparée (instances + blueprints embarqués)
+        try {
+          const entitiesRes = await api.get(`/battlemaps/${mapId}/entities`)
+          setEntities(entitiesRes.data.entities || [])
+        } catch (err) {
+          console.error('Erreur chargement entités :', err)
+          setEntities([])
+        }
       }
 
       // Chargement des personnages de la campagne
@@ -86,9 +131,16 @@ export default function SessionPage() {
     loadSession()
   }, [loadSession])
 
+  // ─── Chargement initial des blueprints ────────────────────────────────────
+  // Indépendant des entités posées sur la carte — charge tous les blueprints
+  // non-deprecated au montage pour que la palette Entités soit immédiatement
+  // utilisable, même si aucune entité n'est encore posée.
+  useEffect(() => {
+    fetchBlueprints()
+  }, [])
+
   // ─── Socket.io ────────────────────────────────────────────────────────────────
   const [socket, setSocket] = useState(null)
-  const [onlineUsers, setOnlineUsers] = useState(new Set())
   const [reconnectTrigger, setReconnectTrigger] = useState(0)
 
   // Chargement local d'une carte — GM uniquement, sans déplacer les joueurs
@@ -99,6 +151,14 @@ export default function SessionPage() {
       const mapRes = await api.get(`/battlemaps/${battlemapId}`)
       setBattlemap(mapRes.data.battlemap)
       setTokens(mapRes.data.tokens || [])
+      // Charger les entités de la nouvelle carte
+      try {
+        const entitiesRes = await api.get(`/battlemaps/${battlemapId}/entities`)
+        setEntities(entitiesRes.data.entities || [])
+      } catch (err) {
+        console.error('Erreur chargement entités :', err)
+        setEntities([])
+      }
     } catch (err) {
       console.error('Erreur chargement carte :', err)
     }
@@ -128,18 +188,13 @@ export default function SessionPage() {
     if (!renameTarget || !renameValue.trim()) return
     try {
       await api.put(`/battlemaps/${renameTarget.id}`, { name: renameValue.trim() })
-      setBattlemaps(prev => prev.map(bm =>
-        bm.id === renameTarget.id ? { ...bm, name: renameValue.trim() } : bm
-      ))
-      if (battlemap?.id === renameTarget.id) {
-        setBattlemap(prev => ({ ...prev, name: renameValue.trim() }))
-      }
+      renameBattlemap(renameTarget.id, renameValue.trim())
       setShowRenameModal(false)
       setRenameTarget(null)
     } catch (err) {
       console.error('Erreur renommage carte :', err)
     }
-  }, [renameTarget, renameValue, battlemap?.id])
+  }, [renameTarget, renameValue])
 
   // Définir comme page d'accueil
   const handleSetDefault = useCallback(async (bm) => {
@@ -163,7 +218,7 @@ export default function SessionPage() {
     setMapContextMenu(null)
     try {
       const res = await api.post(`/battlemaps/${bm.id}/duplicate`)
-      setBattlemaps(prev => [...prev, res.data.battlemap])
+      addBattlemap(res.data.battlemap)
     } catch (err) {
       console.error('Erreur duplication carte :', err)
     }
@@ -175,10 +230,11 @@ export default function SessionPage() {
     if (!window.confirm(t('session.deleteMapConfirm', { name: bm.name }))) return
     try {
       await api.delete(`/battlemaps/${bm.id}`)
-      setBattlemaps(prev => prev.filter(m => m.id !== bm.id))
+      // Calculer remaining AVANT de muter le store — valeur actuelle avant suppression
+      const remaining = battlemaps.filter(m => m.id !== bm.id)
+      removeBattlemap(bm.id)
       // Si c'était la carte active, charger la première restante
       if (battlemap?.id === bm.id) {
-        const remaining = battlemaps.filter(m => m.id !== bm.id)
         if (remaining.length > 0) {
           await loadMap(remaining[0].id)
         } else {
@@ -196,7 +252,7 @@ export default function SessionPage() {
     if (!createMapName.trim()) return
     try {
       const res = await api.post(`/campaigns/${campaignId}/battlemaps`, { name: createMapName.trim() })
-      setBattlemaps(prev => [...prev, res.data.battlemap])
+      addBattlemap(res.data.battlemap)
       setCreateMapName('')
       setShowCreateModal(false)
     } catch (err) {
@@ -220,47 +276,38 @@ export default function SessionPage() {
         pos_y: 0,
         pos_z: 0,
         color: character.color,
-        layer: 'token',
+        layer,
       })
       addToken(res.data.token)
     } catch (err) {
       console.error('Erreur création token :', err)
     }
-  }, [battlemap?.id, characters])
-
-  // Déplacement d'un token — met à jour l'état local après confirmation serveur
-  const handleTokenMove = useCallback((updatedToken) => {
-    updateToken(updatedToken)
-  }, [])
-
-  // Suppression d'un token — retiré du tableau local
-  const handleTokenDelete = useCallback((tokenId) => {
-    removeToken(tokenId)
-  }, [])
+  }, [battlemap?.id, characters, layer])
 
   useEffect(() => {
     const s = io(import.meta.env.VITE_API_URL, { withCredentials: true })
     s.emit(WS.SESSION_JOIN, { campaignId })
+
     s.on(WS.SESSION_JOINED, ({ userId, onlineUserIds = [] }) => {
       setOnlineUsers(new Set([userId, ...onlineUserIds]))
     })
     s.on(WS.SESSION_USER_JOINED, ({ userId, username }) => {
-      setOnlineUsers(prev => new Set([...prev, userId]))
-      setMessages(prev => [...prev, {
+      addOnlineUser(userId)
+      addMessage({
         id: `sys-join-${userId}-${Date.now()}`,
         system: true,
         text: `${username} a rejoint la session`,
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      }])
+      })
     })
     s.on(WS.SESSION_USER_LEFT, ({ userId, username }) => {
-      setOnlineUsers(prev => { const next = new Set(prev); next.delete(userId); return next })
-      setMessages(prev => [...prev, {
+      removeOnlineUser(userId)
+      addMessage({
         id: `sys-left-${userId}-${Date.now()}`,
         system: true,
         text: `${username} a quitté la session`,
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      }])
+      })
     })
     s.on(WS.TOKEN_MOVED, ({ tokenId, pos_x, pos_y, pos_z, updated_at }) => {
       updateToken({ id: tokenId, pos_x, pos_y, pos_z, updated_at })
@@ -272,45 +319,97 @@ export default function SessionPage() {
       removeToken(tokenId)
     })
     s.on(WS.CHAT_MESSAGE, ({ userId, username, color, text, timestamp }) => {
-      setMessages(prev => [...prev, {
+      addMessage({
         id: `${userId}-${timestamp}`,
         user: username,
         color,
         text,
         time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      }])
+      })
     })
     s.on(WS.CHARACTER_UPDATED, (updatedCharacter) => {
-      setCharacters(prev => {
-        const exists = prev.find(c => c.id === updatedCharacter.id)
-        if (!exists) {
-          // Character nouvellement visible pour un joueur
-          return [...prev, updatedCharacter]
-        }
-        return prev.map(c => c.id === updatedCharacter.id ? updatedCharacter : c)
+      upsertCharacter(updatedCharacter)
+    })
+    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp }) => {
+      addMessage({
+        id: `dice-${userId}-${timestamp}`,
+        type: 'dice',
+        user: username,
+        color,
+        formula,
+        rolls,
+        total,
+        isCriticalSuccess,
+        isCriticalFail,
+        time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     })
     s.on(WS.MAP_SWITCH, ({ battlemapId, userIds }) => {
-      // Le GM charge la carte qu'il switche.
-      // Les joueurs chargent si ils sont dans userIds (vide = tous).
       const concerned = userIds.length === 0 || userIds.includes(user?.id)
       if (!concerned) return
       api.get(`/battlemaps/${battlemapId}`)
         .then(res => {
           setBattlemap(res.data.battlemap)
           setTokens(res.data.tokens || [])
+          // Charger les entités de la nouvelle carte
+          return api.get(`/battlemaps/${battlemapId}/entities`)
         })
+        .then(res => setEntities(res.data.entities || []))
         .catch(err => console.error('Erreur chargement carte MAP_SWITCH :', err))
     })
-    // Chantier 4 — loadSession disponible pour la reconnexion
-    // La reconnexion automatique post-redémarrage serveur est traitée au Chantier 5
-    // (nécessite SESSION_STATE côté serveur + store Zustand côté client)
+
+    // ─── Handlers entités ────────────────────────────────────────────────
+    // ENTITY_ACTION_PENDING — demande d'un joueur, reçue par le GM uniquement
+    // Ajoutée dans le fil chat avec type 'entity_action' — visible GM uniquement
+    s.on(WS.ENTITY_ACTION_PENDING, (pending) => {
+      addMessage({
+        id: `entity-action-${pending.requestId}`,
+        type: 'entity_action',
+        gmOnly: true,
+        requestId: pending.requestId,
+        playerName: pending.playerName,
+        interactionLabel: pending.interactionLabel,
+        entityLabel: pending.entityLabel,
+        skillId: pending.skillId,
+        skillTotal: pending.skillTotal,
+        defaultDifficulty: pending.defaultDifficulty,
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      })
+    })
+    // ENTITY_ACTION_RESULT — résultat reçu par le joueur (refus, timeout, no_gm)
+    s.on(WS.ENTITY_ACTION_RESULT, ({ requestId, isApproved, reason }) => {
+      // Informer le joueur via un message système dans le chat
+      if (!isApproved) {
+        const reasonText = reason === 'timeout'
+          ? 'Action expirée (pas de réponse du MJ)'
+          : reason === 'no_gm'
+            ? 'Aucun MJ connecté'
+            : 'Action refusée par le MJ'
+        addMessage({
+          id: `entity-result-${requestId}`,
+          system: true,
+          text: reasonText,
+          time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        })
+      }
+      // Fermer le radial menu si ouvert
+      setRadialMenu(null)
+    })
+
+    // ─── Reconnexion robuste — Bug C ────────────────────────────────────────
+    // socket.io.on('reconnect') se déclenche UNIQUEMENT lors d'une reconnexion
+    // automatique (pas à la connexion initiale) — disponible depuis socket.io v3.
+    // Incrémente reconnectTrigger → useEffect se ré-exécute → nouvelle instance
+    // socket créée, SESSION_JOIN ré-émis, loadSession rechargé.
+    s.io.on('reconnect', () => {
+      setReconnectTrigger(n => n + 1)
+    })
+
     setSocket(s)
     return () => s.disconnect()
   }, [campaignId, reconnectTrigger, loadSession])
 
   // ─── Menu contextuel clic droit token ────────────────────────────────────────
-  // { token, x, y } ou null. x/y = coordonnées souris au moment du clic droit.
   const [contextMenu, setContextMenu] = useState(null)
   const contextMenuRef = useRef(null)
 
@@ -322,7 +421,7 @@ export default function SessionPage() {
     setContextMenu({ token, x, y })
   }, [characters, user?.id, isGm])
 
-  // Fermeture sur clic ailleurs — cleanup à chaque changement de contextMenu
+  // Fermeture sur clic ailleurs
   useEffect(() => {
     if (!contextMenu) return
     const handleMouseDown = (e) => {
@@ -335,18 +434,78 @@ export default function SessionPage() {
   }, [contextMenu])
 
   // Suppression depuis le menu contextuel
-  // Le serveur broadcastera TOKEN_DELETED à toute la room — pas d'emit client.
   const handleContextMenuDelete = useCallback(async () => {
     if (!contextMenu) return
     const tokenId = contextMenu.token.id
     setContextMenu(null)
     try {
       await api.delete(`/tokens/${tokenId}`)
-      handleTokenDelete(tokenId)
+      removeToken(tokenId)
     } catch (err) {
       console.error('Erreur suppression token (menu) :', err)
     }
-  }, [contextMenu, handleTokenDelete])
+  }, [contextMenu])
+
+  // ─── Émission ENTITY_ACTION_REQUEST (joueur → serveur) ───────────────────
+  // GM : action directe via ENTITY_ACTION_GM_DIRECT — sans arbitrage ni traçage.
+  // Joueur : flux d'arbitrage normal via ENTITY_ACTION_REQUEST.
+  const handleEntityAction = useCallback((entity, interaction) => {
+    if (!socket) return
+
+    // GM — action directe, pas de file d'arbitrage
+    if (isGm) {
+      socket.emit(WS.ENTITY_ACTION_GM_DIRECT, {
+        entityId: entity.id,
+        interactionId: interaction.id,
+      })
+      return
+    }
+
+    // TODO chantier /sc : résoudre le character actif du joueur
+    // Priorité : character appartenant au joueur → premier character de la campagne en fallback
+    const playerChar = characters.find(c => c.user_id === user?.id)
+      ?? characters.find(c => c.visible !== false)
+    if (!playerChar) {
+      console.warn('[EntityAction] Aucun personnage disponible pour cette action')
+      return
+    }
+    const requestId = `${entity.id}-${interaction.id}-${Date.now()}`
+    socket.emit(WS.ENTITY_ACTION_REQUEST, {
+      requestId,
+      characterId: playerChar.id,
+      entityId: entity.id,
+      interactionId: interaction.id,
+      skillId: interaction.skill_id || null,
+      attributeId: interaction.attribute_id || null,
+      // skillTotal supprimé — le serveur calcule via charStats.js (9F-0)
+    })
+  }, [socket, characters, user?.id, isGm])
+
+  // ─── Clic entité — ouvre le radial menu ──────────────────────────────────
+  // Si 1 seule interaction disponible → action directe sans radial.
+  // Si 2-6 interactions (+ tranche GM) → radial menu.
+  // Déclaré APRÈS handleEntityAction — convention P4 (ordre de déclaration React).
+  const handleEntityClick = useCallback((entity, clientX, clientY) => {
+    const blueprint = entity.blueprint
+    const stateList = blueprint?.states || []
+    const currentStateId = entity.current_state_id ?? 0
+    const availableInteractions = (blueprint?.interactions || []).filter(i =>
+      i.required_state_ids.includes(currentStateId) &&
+      !(entity.disabled_interactions || []).includes(i.id)
+    )
+    // 1 seule interaction et pas GM → action directe
+    if (availableInteractions.length === 1 && !isGm) {
+      handleEntityAction(entity, availableInteractions[0])
+      return
+    }
+    setRadialMenu({ entity, x: clientX, y: clientY })
+  }, [isGm, handleEntityAction])
+
+  // ─── Résolution action entité (GM → serveur) ──────────────────────────────
+  const handleEntityActionResolve = useCallback((requestId, isApproved, autoSuccess, gmModifier) => {
+    socket?.emit(WS.ENTITY_ACTION_RESOLVE, { requestId, isApproved, autoSuccess, gmModifier })
+    setEntityActionQueue(prev => prev.filter(a => a.requestId !== requestId))
+  }, [socket])
 
   if (loading) return (
     <div style={styles.loading}>
@@ -399,28 +558,59 @@ export default function SessionPage() {
           if (characterId) handleCharacterDrop(characterId)
         }}
       >
-        <Canvas3D
-          battlemap={battlemap}
-          tokens={tokens}
-          mode={mode}
-          activeMaterial={activeMaterial}
-          onVoxelDataChange={(data) => setBattlemap(prev => ({ ...prev, voxel_data: data }))}
-          onPackLoaded={setAvailableMaterials}
-          onTokenMove={handleTokenMove}
-          onTokenDelete={handleTokenDelete}
-          onTokenDoubleClick={handleTokenDoubleClick}
-          isGm={isGm}
-          socket={socket}
-          user={user}
-          characters={characters}
-        />
+        {canvasVisible && (mode === 'edit'
+          ? <Editor3D
+              socket={socket}
+              activeMaterial={activeMaterial}
+              onActiveMaterialChange={setActiveMaterial}
+              availableBlocks={availableBlocks}
+              onBlocksLoaded={setAvailableBlocks}
+              activeEditorTab={activeEditorTab}
+              activeBlueprint={activeBlueprint}
+            />
+          : <Canvas3D
+              onTokenDoubleClick={handleTokenDoubleClick}
+              socket={socket}
+              onEntityClick={handleEntityClick}
+            />
+        )}
+        {!canvasVisible && (
+          <div style={styles.canvasTransition}>
+            <style>{`
+              @keyframes enclumePulse {
+                0%, 100% { opacity: 0.18; transform: scale(1); }
+                50%       { opacity: 0.28; transform: scale(1.04); }
+              }
+              .canvas-transition-watermark {
+                position: absolute;
+                inset: 0;
+                background: url('/logo.svg') no-repeat center center;
+                background-size: 600px;
+                opacity: 0.06;
+                filter: invert(1);
+                pointer-events: none;
+              }
+              .canvas-transition-logo {
+                animation: enclumePulse 1s ease-in-out infinite;
+              }
+            `}</style>
+            <div className="canvas-transition-watermark" />
+            <img
+              src="/logo.svg"
+              alt="Enclume"
+              className="canvas-transition-logo"
+              style={styles.transitionLogo}
+            />
+          </div>
+        )}
       </div>
 
       {sidebarVisible && (
         <Sidebar
-          isGm={isGm}
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={handleModeChange}
+          activeEditorTab={activeEditorTab}
+          onEditorTabChange={setActiveEditorTab}
           layer={layer}
           onLayerChange={setLayer}
           width={sidebarWidth}
@@ -428,15 +618,14 @@ export default function SessionPage() {
           onClose={() => setSidebarVisible(false)}
           activeMaterial={activeMaterial}
           onMaterialChange={setActiveMaterial}
-          availableMaterials={availableMaterials}
-          characters={characters}
-          onCharactersChange={setCharacters}
+          availableBlocks={availableBlocks}
+          activeBlueprint={activeBlueprint}
+          onBlueprintSelect={setActiveBlueprint}
           campaignId={campaignId}
-          messages={messages}
           socket={socket}
-          campaignMembers={members}
-          onlineUsers={onlineUsers}
           onReconnectSocket={() => setReconnectTrigger(n => n + 1)}
+          onOpenCharacter={(char) => setSelectedCharacterId(char.id)}
+          onEntityActionResolve={handleEntityActionResolve}
         />
       )}
 
@@ -452,8 +641,6 @@ export default function SessionPage() {
       </div>
 
       {/* ─── Menu contextuel clic droit token ─────────────────────────────── */}
-      {/* Rendu HORS du Canvas R3F — position fixed par-dessus tout.          */}
-      {/* S'ouvre du bon côté selon la position du curseur dans la fenêtre.   */}
       {contextMenu && (() => {
         const MENU_W = 180
         const MENU_H = 136
@@ -573,6 +760,57 @@ export default function SessionPage() {
           </div>
         </div>
       )}
+
+      {/* ─── CharacterWindow — flottante, déplaçable, redimensionnable ──────── */}
+      {selectedCharacter && (
+        <CharacterWindow
+          character={{ ...selectedCharacter, _currentUserId: user?.id }}
+          isGm={isGm}
+          onClose={() => setSelectedCharacterId(null)}
+        />
+      )}
+
+      {/* ─── Radial menu entité ─────────────────────────────────────────────── */}
+      {radialMenu && (() => {
+        const entity = radialMenu.entity
+        const blueprint = entity.blueprint
+        const currentStateId = entity.current_state_id ?? 0
+        const availableInteractions = (blueprint?.interactions || []).filter(i =>
+          i.required_state_ids.includes(currentStateId) &&
+          !(entity.disabled_interactions || []).includes(i.id)
+        )
+        return (
+          <RadialMenu
+            x={radialMenu.x}
+            y={radialMenu.y}
+            interactions={availableInteractions}
+            isGm={isGm}
+            onAction={(interaction) => {
+              setRadialMenu(null)
+              handleEntityAction(entity, interaction)
+            }}
+            onGmConfig={() => {
+              setRadialMenu(null)
+              setInstancePanel({ entity, x: radialMenu.x, y: radialMenu.y })
+            }}
+            onClose={() => setRadialMenu(null)}
+          />
+        )
+      })()}
+
+      {/* ─── Panneau config instance GM ──────────────────────────────────────── */}
+      {instancePanel && (
+        <EntityInstancePanel
+          entity={instancePanel.entity}
+          x={instancePanel.x}
+          y={instancePanel.y}
+          onClose={() => setInstancePanel(null)}
+        />
+      )}
+
+      {/* ─── DicePanel — flottant, hors canvas, hors Sidebar ─────────────── */}
+      <DicePanel socket={socket} mode={mode} sidebarVisible={sidebarVisible} sidebarWidth={sidebarWidth} />
+
     </div>
   )
 }
@@ -631,6 +869,22 @@ const styles = {
     display: 'flex',
     flex: 1,
     minHeight: 0,
+  },
+  canvasTransition: {
+    flex: 1,
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'radial-gradient(circle at 20% 20%, #1a2340 0%, transparent 40%), radial-gradient(circle at 80% 80%, #0b0e14 0%, transparent 50%), #0f1115',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  transitionLogo: {
+    width: '120px',
+    opacity: 0.18,
+    filter: 'invert(1)',
+    animation: 'none',
   },
   canvas: {
     flex: 1,

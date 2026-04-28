@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Compétences et Attributs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f1115;
+  --panel:#151923;
+  --panel2:#10131b;
+  --border:#252b3a;
+  --muted:#9aa4b2;
+  --text:#e8eef7;
+  --good:#1dd1a1;
+  --good2:#143126;
+  --bad:#ff6b6b;
+  --bad2:#2a1012;
+  --primary:#1a2340;
+  --primary-border:#2a3b70;
+  --chip:#1b2232;
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+  --radius:14px;
+  --top-offset:16px;
+  }
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:16px;
+  font-family:"Nunito",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+.card{
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:12px;
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  box-shadow:var(--shadow);
+}
+.topbar{
+  position:sticky;
+  top:var(--top-offset);
+  z-index:70;
+  display:grid;
+  gap:12px;
+  margin-bottom:12px;
+}
+.topbar-main{
+  display:grid;
+  grid-template-columns:minmax(220px,auto) minmax(280px,1fr) auto;
+  align-items:end;
+  gap:12px;
+}
+@media (max-width:1220px){
+  .topbar-main{grid-template-columns:1fr}
+}
+.identity{font-size:18px;font-weight:900;line-height:1.15}
+.sub{margin-top:4px;font-size:12px;color:var(--muted);font-weight:800;letter-spacing:.02em}
+.topbar-search{min-width:280px;max-width:640px}
+.topbar-actions{
+  display:grid;
+  gap:10px;
+  justify-items:end;
+}
+@media (max-width:1220px){
+  .topbar-actions{justify-items:stretch}
+}
+.topbar-points{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+}
+.topbar-buttons{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+}
+label{display:block;margin-bottom:6px;font-size:12px;color:var(--muted);font-weight:700}
+input,button{
+  font-family:"Nunito",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+}
+input{
+  width:100%;
+  background:#0c0f16;
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:10px 12px;
+  outline:none;
+}
+input:focus{border-color:#3b82f6}
+.mainSplit{
+  display:grid;
+  grid-template-columns:minmax(250px,300px) minmax(0,1fr);
+  gap:12px;
+  align-items:start;
+}
+@media (max-width:1080px){
+  .mainSplit{grid-template-columns:1fr}
+}
+.leftSticky{
+  position:sticky;
+  top:116px;
+}
+.sectionList{
+  display:grid;
+  gap:6px;
+}
+.sectionItem{
+  width:100%;
+  text-align:left;
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:9px 11px;
+  background:linear-gradient(180deg,#0d111a,#0a0d13);
+  color:var(--text);
+  cursor:pointer;
+  display:grid;
+  gap:8px;
+  transition:border-color .12s ease, box-shadow .12s ease, background .12s ease, transform .08s ease;
+}
+.sectionItem:hover{filter:brightness(1.05)}
+.sectionItem.active{
+  border-color:#3b82f6 !important;
+  box-shadow:0 0 0 1px rgba(59,130,246,.35) inset, 0 10px 30px rgba(0,0,0,.35) !important;
+  background:linear-gradient(180deg,rgba(59,130,246,.12),rgba(10,13,19,.98)) !important;
+}
+.sectionItem.search-active{
+  border-color:#3b82f6 !important;
+  box-shadow:0 0 0 1px rgba(59,130,246,.35) inset, 0 10px 30px rgba(0,0,0,.35) !important;
+  background:linear-gradient(180deg,rgba(59,130,246,.12),rgba(10,13,19,.98)) !important;
+}
+.sectionHead{display:flex;align-items:center;justify-content:flex-start;gap:8px}
+.sectionTitle{font-weight:900;font-size:14px;line-height:1.15}
+.sectionItem.dimmed{opacity:.42;filter:saturate(.65)}
+.sectionItem.dimmed:hover{filter:saturate(.7) brightness(1.02)}
+.sectionEmpty{color:var(--muted);border:1px dashed #2a3346;border-radius:12px;padding:12px;background:#0b0e14}
+.contentHeader{display:grid;gap:8px;margin-bottom:12px}
+.contentTitle{font-size:20px;font-weight:900;line-height:1.15}
+.contentMeta{font-size:13px;font-weight:800;color:var(--muted)}
+.contentGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}
+@media (max-width:1260px){
+  .contentGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:920px){
+  .contentGrid{grid-template-columns:1fr}
+}
+.skillBlock{
+  border:1px solid var(--border);
+  border-radius:14px;
+  overflow:hidden;
+  background:linear-gradient(180deg,#0d111a,#0a0d13);
+  display:grid;
+}
+.skillRows{display:grid}
+.skill-row{
+  display:grid;
+  grid-template-columns:34px minmax(0,1fr) 54px auto;
+  align-items:center;
+  gap:10px;
+  min-height:54px;
+  padding:10px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.skill-row:last-child{border-bottom:none}
+.skill-row.disabled{color:var(--muted);opacity:.58}
+.skill-row.sub .skill-main{padding-left:12px}
+.skill-row.expandable{cursor:pointer}
+.skill-row.expandable:hover{background:rgba(255,255,255,.03)}
+.skillGroup{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:linear-gradient(180deg,#0d111a,#0a0d13);display:grid}
+.toggle-indicator{display:inline-flex;align-items:center;justify-content:center;width:22px;min-width:22px;height:22px;border-radius:999px;border:1px solid var(--border);background:#0c0f16;color:var(--muted);font-size:12px;font-weight:900}
+.linked-attr-line{font-size:11px;color:var(--muted);line-height:1.2}
+.skill-name-wrap{display:flex;align-items:center;justify-content:flex-start;min-width:0;height:100%}
+.skill-main{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:4px;min-width:0;text-align:left;width:100%;height:100%}
+.skill-name{min-width:0;font-size:13px;line-height:1.2;font-weight:800;word-break:break-word;text-align:left;width:100%}
+.skill-meta-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-start}
+.skill-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:2px 8px;
+  border-radius:999px;
+  background:var(--chip);
+  border:1px solid var(--border);
+  font-size:11px;
+  color:var(--muted);
+  white-space:nowrap;
+}
+.skill-value{text-align:center;font-size:13px;font-weight:900}
+.skill-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.skill-actions button{
+  border:none;
+  border-radius:10px;
+  color:#fff;
+  cursor:pointer;
+  padding:0;
+  transition:filter .08s ease, transform .08s ease, opacity .08s ease;
+}
+.skill-actions button:hover{filter:brightness(1.08)}
+.skill-actions button:active{transform:scale(.98)}
+.info-btn{
+  width:28px;
+  height:28px;
+  background:#121826;
+  border:1px solid #2a3b70 !important;
+  color:#dbeafe !important;
+  font-size:14px;
+  font-weight:900;
+  flex:0 0 auto;
+}
+.pm-group{display:flex;gap:6px}
+.pm-btn{
+  width:38px;
+  height:34px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  box-shadow:0 6px 20px rgba(0,0,0,.22);
+}
+.pm-btn.plus-btn{background:linear-gradient(180deg,#1da86e,#118256)}
+.pm-btn.minus-btn{background:linear-gradient(180deg,#f87171,#d85b5b)}
+.pm-btn.disabled-btn,
+.pm-btn:disabled,
+.info-btn:disabled{
+  background:#526070 !important;
+  border-color:#526070 !important;
+  cursor:default;
+  opacity:.65;
+  box-shadow:none;
+}
+.pm-btn div:first-child{font-size:16px;line-height:1}
+.pm-btn div:last-child{font-size:10px;line-height:1;opacity:.95}
+.pbox{background:#0c0f16;padding:8px 12px;border-radius:12px;border:1px solid var(--border);color:var(--text);min-width:180px;text-align:center}
+.points-good{color:var(--good);font-weight:900}
+.btn{
+  padding:10px 16px;
+  border:none;
+  border-radius:12px;
+  color:#fff;
+  font-weight:900;
+  cursor:pointer;
+  font-size:14px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  transition:filter .08s ease, transform .08s ease, opacity .08s ease;
+}
+.btn:hover{filter:brightness(1.08)}
+.btn:active{transform:scale(.98)}
+.btn[disabled]{opacity:.6;cursor:default;pointer-events:none}
+.btn-validate{background:linear-gradient(180deg,#1da86e,#118256)}
+.btn-cancel{background:linear-gradient(180deg,#ee6c6c,#cb5454)}
+.btn .spinner{
+  width:16px;height:16px;border:2px solid rgba(255,255,255,0.25);border-top-color:rgba(255,255,255,0.95);border-radius:50%;display:inline-block;animation:spin .9s linear infinite;vertical-align:middle;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loadingOverlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.55);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:15000;
+  padding:16px;
+}
+.loadingOverlay.open{display:flex}
+.loadingBox{
+  min-width:220px;
+  max-width:min(92vw, 360px);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:18px 20px;
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  box-shadow:0 18px 48px rgba(0,0,0,.45);
+  display:grid;
+  gap:12px;
+  justify-items:center;
+  text-align:center;
+}
+.loadingSpinner{
+  width:46px;
+  height:46px;
+  border-radius:999px;
+  border:4px solid rgba(255,255,255,.12);
+  border-top-color:#3b82f6;
+  animation:skillsSpin .9s linear infinite;
+}
+.loadingText{font-weight:900;font-size:14px;line-height:1.2}
+@keyframes skillsSpin{to{transform:rotate(360deg)}}
+
+#popup-overlay,#desc-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;justify-content:center;align-items:center;z-index:120;padding:16px;
+}
+#popup,#desc-popup{
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--border);
+  border-radius:16px;
+  box-shadow:var(--shadow);
+  width:min(1100px,100%);
+  max-height:88vh;
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:16px;
+}
+#desc-popup{width:min(760px,100%)}
+.popup-buttons{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.modal-title{font-size:20px;font-weight:900;line-height:1.15}
+.modal-sub{font-size:12px;color:var(--muted);font-weight:800}
+.modal-section{display:grid;gap:6px;border:1px solid var(--border);border-radius:12px;padding:12px;background:#0c0f16}
+.modal-section-title{font-size:13px;font-weight:900}
+.modal-section-text{font-size:13px;line-height:1.45;color:var(--text)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid rgba(255,255,255,.08);padding:8px 10px;text-align:center}
+th{text-align:left;background:#0c0f16;color:var(--text);font-weight:900}
+.empty-state,.status-card{color:var(--muted);border:1px dashed #2a3346;border-radius:12px;padding:12px;background:#0b0e14}
+#statusBox{display:none;margin-bottom:12px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="card topbar-main">
+    <div>
+      <div class="identity" id="identityLabel">…</div>
+      <div class="sub">Compétences &amp; Attributs</div>
+    </div>
+    <div class="topbar-search">
+      <label for="searchInput">Recherche</label>
+      <input id="searchInput" type="text" placeholder="Catégorie, compétence, attribut lié, prérequis, description…">
+    </div>
+    <div class="topbar-actions">
+      <div class="topbar-points">
+        <div class="pbox">Points à distribuer : <span id="points-available" class="points-good">0</span></div>
+        <div class="pbox">Points utilisés : <span id="points-used-session">0</span></div>
+      </div>
+      <div class="topbar-buttons">
+        <button class="btn btn-validate" id="openRecapBtn" onclick="openRecap()"><span id="openRecapLabel">Valider</span></button>
+        <button class="btn btn-cancel" onclick="cancel()">Annuler</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="statusBox" class="card"></div>
+
+<div class="mainSplit">
+  <aside class="card leftSticky">
+    <div class="contentHeader" style="margin-bottom:10px">
+      <div class="contentTitle" style="font-size:16px">Catégories</div>
+      <div class="contentMeta" id="sectionCountMeta">—</div>
+    </div>
+    <div id="sectionList" class="sectionList"></div>
+  </aside>
+
+  <section class="card">
+    <div id="detailHost"></div>
+  </section>
+</div>
+
+<div id="popup-overlay">
+  <div id="popup">
+    <div id="recap-content"></div>
+    <div class="popup-buttons">
+      <button class="btn btn-validate" id="confirmBtn" onclick="confirmChanges()"><span id="confirmLabel">Confirmer</span></button>
+      <button class="btn btn-cancel" onclick="closePopup()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div id="desc-overlay">
+  <div id="desc-popup">
+    <div class="modal-title" id="descTitle">Description</div>
+    <div class="modal-sub" id="descSub">—</div>
+    <div id="descBody"></div>
+    <div class="popup-buttons">
+      <button class="btn btn-cancel" onclick="closeDescPopup()">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div id="loadingOverlay" class="loadingOverlay" aria-hidden="true">
+  <div class="loadingBox" role="status" aria-live="polite" aria-busy="true">
+    <div class="loadingSpinner"></div>
+    <div id="loadingText" class="loadingText">Chargement…</div>
+  </div>
+</div>
+
+<script>
+const TEMPLATE_FID = "<?= fid ?>";
+const ATTR_SECTION_ID = "__attributes__";
+
+let FID = "";
+let identity = { joueur:"", perso:"", label:"" };
+let skillCategories = [];
+let attributesState = [];
+let pointsAvailable = 0;
+let pointsUsedSession = 0;
+const MAX_ATTR = 5;
+const COST_ATTR = 5;
+let avantagesSet = new Set();
+let isSubmitting = false;
+let selectedSectionId = ATTR_SECTION_ID;
+let searchQuery = "";
+let searchCategoryFilterId = "";
+let loadingDepth = 0;
+
+function setStatus(msg, isError = false){
+  const box = document.getElementById("statusBox");
+  if(!box) return;
+  if(!msg){
+    box.style.display = "none";
+    box.textContent = "";
+    return;
+  }
+  box.style.display = "block";
+  box.textContent = String(msg || "");
+  box.style.color = isError ? "#ffd7d7" : "#9aa4b2";
+  box.style.borderColor = isError ? "#5a1f26" : "#252b3a";
+  box.style.background = isError ? "#2a1012" : "#151923";
+}
+
+function setDebugInfo(msg){ return; }
+
+function showLoading(text){
+  const overlay = document.getElementById('loadingOverlay');
+  const label = document.getElementById('loadingText');
+  if(!overlay || !label) return;
+  loadingDepth += 1;
+  label.textContent = String(text || 'Chargement…');
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function hideLoading(){
+  const overlay = document.getElementById('loadingOverlay');
+  if(!overlay) return;
+  loadingDepth = Math.max(0, loadingDepth - 1);
+  if(loadingDepth > 0) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function serverCall(fn, ...args){
+  return new Promise((resolve, reject) => {
+    try{
+      const runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+      if(!runner || typeof runner[fn] !== "function"){
+        reject(new Error(`Fonction serveur introuvable : ${fn}`));
+        return;
+      }
+      runner[fn](...args);
+    }catch(err){ reject(err); }
+  });
+}
+
+function resolveFid(){
+  const tpl = String(TEMPLATE_FID || "").trim();
+  if(tpl && tpl !== "<?= fid ?>") return Promise.resolve(tpl);
+  return new Promise(resolve => {
+    try{
+      if(google && google.script && google.script.url && typeof google.script.url.getLocation === "function"){
+        google.script.url.getLocation(loc => {
+          const fid = String(loc && loc.parameter && loc.parameter.fid || "").trim();
+          if(fid) return resolve(fid);
+          try{
+            const qs = new URLSearchParams(window.location.search);
+            resolve(String(qs.get("fid") || "").trim());
+          }catch(e){ resolve(""); }
+        });
+        return;
+      }
+    }catch(e){}
+    try{
+      const qs = new URLSearchParams(window.location.search);
+      resolve(String(qs.get("fid") || "").trim());
+    }catch(e){ resolve(""); }
+  });
+}
+
+async function loadIdentity(){
+  if(!FID) return;
+  try{
+    const info = await serverCall("getIdentity", FID);
+    identity = info || identity;
+    document.getElementById('identityLabel').textContent = identity.label || '—';
+  }catch(err){
+    setStatus("Erreur chargement identité : " + (err && err.message ? err.message : err), true);
+  }
+}
+
+function getCoutAugmentation(level) {
+  const target = Number(level) + 1;
+  if (target <= 5) return 1;
+  if (target <= 10) return 2;
+  if (target === 11) return 3;
+  return 3 + (target - 11) * 2;
+}
+
+function _cleanSkillName_(s){
+  return String(s || "")
+    .replace(/[†*]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeText(s){
+  return String(s || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function initSkillState(res){
+  skillCategories = (res && Array.isArray(res.categories) ? res.categories : []).map(cat => ({
+    id: `cat::${String(cat.name || '(Sans catégorie)')}`,
+    name: String(cat.name || '(Sans catégorie)'),
+    skills: (cat.skills || []).map(skill => ({
+      name: String(skill.name || ''),
+      currentLevel: Number(skill.value || 0),
+      originalLevel: Number(skill.value || 0),
+      attributs: String(skill.attributs || ''),
+      prerequis: String(skill.prerequis || ''),
+      description: String(skill.description || ''),
+      disabled: false,
+      mBlocked: false,
+      subs: (skill.subs || []).map(sub => ({
+        name: String(sub.name || ''),
+        currentLevel: Number(sub.value || 0),
+        originalLevel: Number(sub.value || 0),
+        attributs: String(sub.attributs || ''),
+        prerequis: String(sub.prerequis || ''),
+        description: String(sub.description || ''),
+        disabled: false,
+        mBlocked: false
+      }))
+    }))
+  }));
+}
+
+function initAttributesState(attrObj){
+  attributesState = Object.keys(attrObj || {}).map(name => ({
+    name: String(name || ''),
+    currentLevel: Number(attrObj[name] || 0),
+    originalLevel: Number(attrObj[name] || 0)
+  }));
+}
+
+function buildSkillLevelMaps_(){
+  const subMap = new Map();
+  const mainMap = new Map();
+  skillCategories.forEach(cat => {
+    (cat.skills || []).forEach(skill => {
+      const mainName = _cleanSkillName_(skill.name);
+      if(mainName) mainMap.set(mainName, Math.max(mainMap.get(mainName) || 0, Number(skill.currentLevel || 0)));
+      (skill.subs || []).forEach(sub => {
+        const subName = _cleanSkillName_(sub.name);
+        if(subName) subMap.set(subName, Math.max(subMap.get(subName) || 0, Number(sub.currentLevel || 0)));
+      });
+    });
+  });
+  return { subMap, mainMap };
+}
+
+function getReqLevel_(reqName, maps){
+  const key = _cleanSkillName_(reqName);
+  if (maps.subMap.has(key)) return maps.subMap.get(key);
+  if (maps.mainMap.has(key)) return maps.mainMap.get(key);
+  for (const [n, lvl] of maps.subMap) if (n.includes(key) || key.includes(n)) return lvl;
+  for (const [n, lvl] of maps.mainMap) if (n.includes(key) || key.includes(n)) return lvl;
+  return 0;
+}
+
+function updatePrerequisState(){
+  const maps = buildSkillLevelMaps_();
+  skillCategories.forEach(cat => {
+    (cat.skills || []).forEach(skill => {
+      applyPrereqToNode_(skill, maps);
+      (skill.subs || []).forEach(sub => applyPrereqToNode_(sub, maps));
+    });
+  });
+}
+
+function applyPrereqToNode_(node, maps){
+  const prereqRaw = String(node.prerequis || '').trim();
+  if(!prereqRaw){
+    node.disabled = false;
+    node.mBlocked = false;
+    return;
+  }
+  const rules = prereqRaw.split(',').map(x => x.trim()).filter(Boolean);
+  let ok = true;
+  let mBlocked = false;
+  for(const rule of rules){
+    const aOrMReq = rule.match(/^\(([MA])\)\s*(.+)$/i);
+    if(aOrMReq){
+      const avantageName = _cleanSkillName_(aOrMReq[2]);
+      const hasAvantage = avantagesSet.has(avantageName);
+      if(!hasAvantage){ ok = false; mBlocked = true; break; }
+      continue;
+    }
+    const m = rule.match(/^(.+?)\s+(\d+)\s*$/);
+    if(!m) continue;
+    const reqName = m[1];
+    const reqLevel = parseInt(m[2], 10);
+    if(getReqLevel_(reqName, maps) < reqLevel){ ok = false; break; }
+  }
+  node.disabled = !ok;
+  node.mBlocked = mBlocked;
+}
+
+function isNodeAvailable_(node){
+  return !node.disabled || Number(node && node.currentLevel || 0) > 0;
+}
+
+function isGroupEffectivelyEnabled_(skill){
+  if(!skill) return false;
+  if(isNodeAvailable_(skill)) return true;
+  const subs = Array.isArray(skill.subs) ? skill.subs : [];
+  return subs.some(sub => isNodeAvailable_(sub));
+}
+
+function updatePointsCounters(){
+  let totalUsed = 0;
+  skillCategories.forEach(cat => {
+    (cat.skills || []).forEach(skill => {
+      for(let i = Number(skill.originalLevel || 0); i < Number(skill.currentLevel || 0); i++) totalUsed += getCoutAugmentation(i);
+      (skill.subs || []).forEach(sub => {
+        for(let i = Number(sub.originalLevel || 0); i < Number(sub.currentLevel || 0); i++) totalUsed += getCoutAugmentation(i);
+      });
+    });
+  });
+  attributesState.forEach(attr => {
+    totalUsed += (Number(attr.currentLevel || 0) - Number(attr.originalLevel || 0)) * COST_ATTR;
+  });
+  pointsUsedSession = totalUsed;
+  document.getElementById('points-used-session').textContent = pointsUsedSession;
+  document.getElementById('points-available').textContent = pointsAvailable - pointsUsedSession;
+}
+
+function canIncreaseSkill(node){
+  if(isSubmitting) return false;
+  if(node.disabled) return false;
+  const remaining = pointsAvailable - pointsUsedSession;
+  return getCoutAugmentation(Number(node.currentLevel || 0)) <= remaining;
+}
+function canDecreaseSkill(node){
+  if(isSubmitting) return false;
+  if(node.disabled) return false;
+  return Number(node.currentLevel || 0) > Number(node.originalLevel || 0);
+}
+function canIncreaseAttr(node){
+  if(isSubmitting) return false;
+  const remaining = pointsAvailable - pointsUsedSession;
+  return Number(node.currentLevel || 0) < MAX_ATTR && COST_ATTR <= remaining;
+}
+function canDecreaseAttr(node){
+  if(isSubmitting) return false;
+  return Number(node.currentLevel || 0) > Number(node.originalLevel || 0);
+}
+
+function countVisibleRowsInCategory(cat){
+  return (cat.skills || []).reduce((sum, skill) => sum + ((skill.subs && skill.subs.length) ? skill.subs.length : 1), 0);
+}
+
+function sectionMatchesText(sectionName, q){
+  return normalizeText(sectionName).includes(q);
+}
+
+function nodeMatchesText(node, q){
+  return [node.name, node.description, node.prerequis, node.attributs].some(v => normalizeText(v).includes(q));
+}
+
+function filterCategoryForSearch(cat, q){
+  if(!q) return cat;
+  const catMatch = sectionMatchesText(cat.name, q);
+  const skills = [];
+  (cat.skills || []).forEach(skill => {
+    const ownMatch = nodeMatchesText(skill, q);
+    if(catMatch || ownMatch){
+      skills.push(skill);
+      return;
+    }
+    const matchedSubs = (skill.subs || []).filter(sub => nodeMatchesText(sub, q));
+    if(matchedSubs.length){
+      skills.push({ ...skill, subs: matchedSubs });
+    }
+  });
+  return { ...cat, skills };
+}
+
+
+function getAllSections(){
+  const sections = [];
+  sections.push({ id: ATTR_SECTION_ID, type: 'attributes', name: 'Attributs', payload: attributesState.slice() });
+  skillCategories.forEach(cat => {
+    sections.push({ id: cat.id, type: 'skills', name: cat.name, payload: cat });
+  });
+  return sections;
+}
+
+function getSectionMatchMap(){
+  const q = normalizeText(searchQuery || '');
+  const matchMap = new Map();
+  const allSections = getAllSections();
+
+  allSections.forEach(section => {
+    if(section.type === 'attributes'){
+      const matches = !q ? (section.payload || []).slice() : (section.payload || []).filter(attr => normalizeText(attr.name).includes(q));
+      matchMap.set(section.id, { ...section, count: matches.length, payload: matches });
+      return;
+    }
+    const filtered = !q ? section.payload : filterCategoryForSearch(section.payload, q);
+    matchMap.set(section.id, { ...section, count: countVisibleRowsInCategory(filtered), payload: filtered });
+  });
+
+  return matchMap;
+}
+
+function getFilteredSections(){
+  const allSections = getAllSections();
+  const matchMap = getSectionMatchMap();
+  return allSections.map(section => matchMap.get(section.id) || { ...section, count: 0, payload: section.type === 'attributes' ? [] : { ...section.payload, skills: [] } });
+}
+
+function getSearchResultEntries(){
+  const q = normalizeText(searchQuery || '');
+  if(!q) return [];
+  const entries = [];
+  const filteredSectionId = String(searchCategoryFilterId || '').trim();
+
+  if(!filteredSectionId || filteredSectionId === ATTR_SECTION_ID){
+    const attrMatches = attributesState
+      .filter(attr => normalizeText(attr.name).includes(q))
+      .sort((a,b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr', { sensitivity:'base' }))
+      .map(attr => ({ type:'attr', category:'Attributs', sortName:String(attr.name || ''), node:attr }));
+    entries.push(...attrMatches);
+  }
+
+  skillCategories.forEach(cat => {
+    const catId = `cat::${String(cat.name || '(Sans catégorie)')}`;
+    if(filteredSectionId && filteredSectionId !== catId) return;
+
+    (cat.skills || []).forEach(skill => {
+      const filteredSkill = filterCategoryForSearch({ name: cat.name, skills:[skill] }, q).skills[0];
+      if(filteredSkill){
+        entries.push({
+          type:'skill',
+          category:cat.name,
+          sortName:String(filteredSkill.name || ''),
+          node:filteredSkill,
+          sourceNode:skill
+        });
+      }
+    });
+  });
+
+  entries.sort((a,b) => {
+    const cmp = String(a.sortName || '').localeCompare(String(b.sortName || ''), 'fr', { sensitivity:'base' });
+    if(cmp) return cmp;
+    return String(a.category || '').localeCompare(String(b.category || ''), 'fr', { sensitivity:'base' });
+  });
+  return entries;
+}
+
+function ensureSelectedSection(sections){
+  if(searchQuery && String(searchQuery).trim()){
+    if(searchCategoryFilterId && !sections.some(s => s.id === searchCategoryFilterId && Number(s.count || 0) > 0)){
+      searchCategoryFilterId = '';
+    }
+    selectedSectionId = '';
+    return;
+  }
+  searchCategoryFilterId = '';
+  const available = sections.filter(s => Number(s.count || 0) > 0);
+  if(!available.length){ selectedSectionId = ''; return; }
+  if(!available.some(s => s.id === selectedSectionId)){
+    selectedSectionId = available[0].id;
+  }
+}
+
+
+
+function renderSectionList(sections){
+  const host = document.getElementById('sectionList');
+  host.innerHTML = '';
+  const searching = !!String(searchQuery || '').trim();
+  const visibleCount = sections.filter(s => Number(s.count || 0) > 0).length;
+  document.getElementById('sectionCountMeta').textContent = searching
+    ? `${visibleCount} catégorie(s) concernée(s)`
+    : `${sections.length} catégorie(s)`;
+
+  if(!sections.length){
+    host.innerHTML = `<div class="sectionEmpty">Aucune catégorie disponible.</div>`;
+    return;
+  }
+
+  sections.forEach(section => {
+    const hasMatch = Number(section.count || 0) > 0;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sectionItem'
+      + (!searching && section.id === selectedSectionId ? ' active' : '')
+      + (searching && !hasMatch ? ' dimmed' : '')
+      + (searching && hasMatch && section.id === searchCategoryFilterId ? ' search-active' : '');
+    btn.innerHTML = `
+      <div class="sectionHead">
+        <div class="sectionTitle">${escapeHtml(section.name)}</div>
+      </div>
+    `;
+    btn.addEventListener('click', () => {
+      if(searching){
+        if(hasMatch){
+          searchCategoryFilterId = (section.id === searchCategoryFilterId) ? '' : section.id;
+          renderAll();
+          return;
+        }
+        searchQuery = '';
+        searchCategoryFilterId = '';
+        const input = document.getElementById('searchInput');
+        if(input) input.value = '';
+        selectedSectionId = section.id;
+        renderAll();
+        return;
+      }
+      selectedSectionId = section.id;
+      renderAll();
+    });
+    host.appendChild(btn);
+  });
+}
+
+
+function splitIntoColumns(items, count){
+  const cols = Array.from({ length: Math.max(1, Number(count || 1)) }, () => []);
+  items.forEach((item, idx) => cols[idx % cols.length].push(item));
+  return cols;
+}
+
+function escapeHtml(s){
+  return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function createInfoButton(node, categoryName, fallbackType){
+  const hasText = String(node.description || '').trim() || String(node.prerequis || '').trim() || String(node.attributs || '').trim();
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'info-btn';
+  btn.textContent = '🛈';
+  if(!hasText){
+    btn.disabled = true;
+    btn.title = 'Aucune description';
+    return btn;
+  }
+  btn.title = 'Voir la description';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openDescPopup({
+      title: node.name || fallbackType || 'Description',
+      subtitle: categoryName || '—',
+      description: node.description || '',
+      attributs: node.attributs || '',
+      prerequis: node.prerequis || '',
+      disabled: !!node.disabled
+    });
+  });
+  return btn;
+}
+
+
+
+function buildNodeMetaChips(node, kind, categoryName){
+  const chips = [];
+  if(kind === 'attr') chips.push('<span class="skill-chip">Attribut</span>');
+  if(kind === 'skill' && categoryName) chips.push(`<span class="skill-chip">${escapeHtml(categoryName)}</span>`);
+  return chips.join('');
+}
+
+
+
+function createSkillRowNode(node, options){
+  const { isSub, hasButtons, categoryName, categoryLabel, onPlus, onMinus, expandable, expanded, onToggle } = options;
+  const row = document.createElement('div');
+  row.className = 'skill-row' + (isSub ? ' sub' : '') + (node.disabled ? ' disabled' : '') + (expandable ? ' expandable' : '');
+
+  row.appendChild(createInfoButton(node, categoryName, isSub ? 'Sous-compétence' : 'Compétence'));
+
+  const nameWrap = document.createElement('div');
+  nameWrap.className = 'skill-name-wrap';
+
+  const main = document.createElement('div');
+  main.className = 'skill-main';
+
+  const name = document.createElement('div');
+  name.className = 'skill-name';
+  name.textContent = node.name || '';
+  main.appendChild(name);
+
+  const attrs = String(node && node.attributs || '').trim();
+  if(attrs){
+    const attrLine = document.createElement('div');
+    attrLine.className = 'linked-attr-line';
+    attrLine.textContent = attrs;
+    main.appendChild(attrLine);
+  }
+
+  const metaHtml = buildNodeMetaChips(node, 'skill', categoryLabel);
+  if(metaHtml){
+    const meta = document.createElement('div');
+    meta.className = 'skill-meta-row';
+    meta.innerHTML = metaHtml;
+    main.appendChild(meta);
+  }
+
+  nameWrap.appendChild(main);
+  row.appendChild(nameWrap);
+
+  const value = document.createElement('div');
+  value.className = 'skill-value';
+  value.textContent = hasButtons ? Number(node.currentLevel || 0) : '';
+  row.appendChild(value);
+
+  const actions = document.createElement('div');
+  actions.className = 'skill-actions';
+
+  if(expandable){
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'toggle-indicator';
+    toggle.textContent = expanded ? '▾' : '▸';
+    toggle.title = expanded ? 'Réduire' : 'Développer';
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if(typeof onToggle === 'function') onToggle();
+    });
+    actions.appendChild(toggle);
+    row.addEventListener('click', () => {
+      if(typeof onToggle === 'function') onToggle();
+    });
+  }
+
+  if(hasButtons){
+    const group = document.createElement('div');
+    group.className = 'pm-group';
+
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'pm-btn plus-btn' + (canIncreaseSkill(node) ? '' : ' disabled-btn');
+    plus.disabled = !canIncreaseSkill(node);
+    plus.innerHTML = `<div>+</div><div>${getCoutAugmentation(Number(node.currentLevel || 0))}</div>`;
+    plus.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onPlus(e);
+    });
+
+    const minus = document.createElement('button');
+    minus.type = 'button';
+    minus.className = 'pm-btn minus-btn' + (canDecreaseSkill(node) ? '' : ' disabled-btn');
+    minus.disabled = !canDecreaseSkill(node);
+    minus.innerHTML = `<div>–</div><div></div>`;
+    minus.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onMinus(e);
+    });
+
+    group.appendChild(plus);
+    group.appendChild(minus);
+    actions.appendChild(group);
+  }
+  row.appendChild(actions);
+  return row;
+}
+
+
+
+function createAttrRowNode(node, categoryLabel){
+  const row = document.createElement('div');
+  row.className = 'skill-row';
+
+  row.appendChild(createInfoButton(node, categoryLabel, 'Attribut'));
+
+  const nameWrap = document.createElement('div');
+  nameWrap.className = 'skill-name-wrap';
+
+  const main = document.createElement('div');
+  main.className = 'skill-main';
+  const name = document.createElement('div');
+  name.className = 'skill-name';
+  name.textContent = node.name || '';
+  main.appendChild(name);
+  const meta = document.createElement('div');
+  meta.className = 'skill-meta-row';
+  meta.innerHTML = buildNodeMetaChips(node, 'attr', categoryLabel);
+  main.appendChild(meta);
+  nameWrap.appendChild(main);
+  row.appendChild(nameWrap);
+
+  const value = document.createElement('div');
+  value.className = 'skill-value';
+  value.textContent = Number(node.currentLevel || 0);
+  row.appendChild(value);
+
+  const actions = document.createElement('div');
+  actions.className = 'skill-actions';
+  const group = document.createElement('div');
+  group.className = 'pm-group';
+
+  const plus = document.createElement('button');
+  plus.type = 'button';
+  plus.className = 'pm-btn plus-btn' + (canIncreaseAttr(node) ? '' : ' disabled-btn');
+  plus.disabled = !canIncreaseAttr(node);
+  plus.innerHTML = `<div>+</div><div>${COST_ATTR}</div>`;
+  plus.addEventListener('click', () => {
+    if(!canIncreaseAttr(node)) return;
+    node.currentLevel = Number(node.currentLevel || 0) + 1;
+    updatePointsCounters();
+    renderDetail();
+  });
+
+  const minus = document.createElement('button');
+  minus.type = 'button';
+  minus.className = 'pm-btn minus-btn' + (canDecreaseAttr(node) ? '' : ' disabled-btn');
+  minus.disabled = !canDecreaseAttr(node);
+  minus.innerHTML = `<div>–</div><div></div>`;
+  minus.addEventListener('click', () => {
+    if(!canDecreaseAttr(node)) return;
+    node.currentLevel = Number(node.currentLevel || 0) - 1;
+    updatePointsCounters();
+    renderDetail();
+  });
+
+  group.appendChild(plus);
+  group.appendChild(minus);
+  actions.appendChild(group);
+  row.appendChild(actions);
+  return row;
+}
+
+
+function createSkillEntry(skill, categoryName, categoryLabel, sourceSkillRef){
+  const sourceSkill = sourceSkillRef || skill;
+  if(skill.subs && skill.subs.length){
+    const expanded = !!sourceSkill.expanded;
+    const block = document.createElement('div');
+    block.className = 'skillGroup';
+    const groupRowNode = { ...skill, disabled: !isGroupEffectivelyEnabled_(skill) };
+
+    block.appendChild(createSkillRowNode(groupRowNode, {
+      isSub: false,
+      hasButtons: false,
+      categoryName,
+      categoryLabel,
+      expandable: true,
+      expanded,
+      onToggle: () => {
+        sourceSkill.expanded = !sourceSkill.expanded;
+        renderDetail();
+      },
+      onPlus: () => {},
+      onMinus: () => {}
+    }));
+
+    if(expanded){
+      (skill.subs || []).forEach(sub => {
+        block.appendChild(createSkillRowNode(sub, {
+          isSub: true,
+          hasButtons: true,
+          categoryName,
+          categoryLabel,
+          expandable: false,
+          expanded: false,
+          onToggle: null,
+          onPlus: () => {
+            if(!canIncreaseSkill(sub)) return;
+            sub.currentLevel = Number(sub.currentLevel || 0) + 1;
+            updatePrerequisState();
+            updatePointsCounters();
+            renderDetail();
+          },
+          onMinus: () => {
+            if(!canDecreaseSkill(sub)) return;
+            sub.currentLevel = Number(sub.currentLevel || 0) - 1;
+            updatePrerequisState();
+            updatePointsCounters();
+            renderDetail();
+          }
+        }));
+      });
+    }
+    return block;
+  }
+
+  return createSkillRowNode(skill, {
+    isSub: false,
+    hasButtons: true,
+    categoryName,
+    categoryLabel,
+    expandable: false,
+    expanded: false,
+    onToggle: null,
+    onPlus: () => {
+      if(!canIncreaseSkill(skill)) return;
+      skill.currentLevel = Number(skill.currentLevel || 0) + 1;
+      updatePrerequisState();
+      updatePointsCounters();
+      renderDetail();
+    },
+    onMinus: () => {
+      if(!canDecreaseSkill(skill)) return;
+      skill.currentLevel = Number(skill.currentLevel || 0) - 1;
+      updatePrerequisState();
+      updatePointsCounters();
+      renderDetail();
+    }
+  });
+}
+
+function createAttrEntry(attr, categoryLabel){
+  return createAttrRowNode(attr, categoryLabel);
+}
+
+
+function renderDetail(){
+  const host = document.getElementById('detailHost');
+  const sections = getFilteredSections();
+  const searching = !!String(searchQuery || '').trim();
+
+  if(searching){
+    const results = getSearchResultEntries();
+    if(!results.length){
+      host.innerHTML = `<div class="empty-state">Aucun résultat pour cette recherche.</div>`;
+      return;
+    }
+
+    const blocks = results.map(entry => entry.type === 'attr'
+      ? createAttrEntry(entry.node, entry.category)
+      : createSkillEntry(entry.node, entry.category, entry.category, entry.sourceNode || entry.node)
+    );
+
+    const columns = splitIntoColumns(blocks, 3);
+    const grid = document.createElement('div');
+    grid.className = 'contentGrid';
+    columns.forEach(colItems => {
+      const col = document.createElement('div');
+      col.style.display = 'grid';
+      col.style.gap = '12px';
+      colItems.forEach(node => col.appendChild(node));
+      grid.appendChild(col);
+    });
+
+    const searchLabel = searchCategoryFilterId
+      ? ((getAllSections().find(s => s.id === searchCategoryFilterId) || {}).name || '')
+      : '';
+    host.innerHTML = `
+      <div class="contentHeader">
+        <div class="contentTitle">Résultats de recherche${searchLabel ? ' — ' + escapeHtml(searchLabel) : ''}</div>
+        <div class="contentMeta">${results.length} ligne(s) triée(s) par ordre alphabétique</div>
+      </div>
+    `;
+    host.appendChild(grid);
+    return;
+  }
+
+  const section = sections.find(s => s.id === selectedSectionId && Number(s.count || 0) > 0) || null;
+  if(!section){
+    host.innerHTML = `<div class="empty-state">Aucune catégorie à afficher.</div>`;
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'contentGrid';
+
+  let blocks = [];
+  let metaText = '';
+
+  if(section.type === 'attributes'){
+    blocks = (section.payload || []).map(attr => createAttrEntry(attr, 'Attributs'));
+    metaText = `${section.count} attribut(s)`;
+  } else {
+    blocks = (section.payload.skills || []).map(skill => createSkillEntry(skill, section.name, ''));
+    metaText = `${section.count} ligne(s) affichée(s)`;
+  }
+
+  const columns = splitIntoColumns(blocks, 3);
+  columns.forEach(colItems => {
+    const col = document.createElement('div');
+    col.style.display = 'grid';
+    col.style.gap = '12px';
+    colItems.forEach(node => col.appendChild(node));
+    grid.appendChild(col);
+  });
+
+  host.innerHTML = `
+    <div class="contentHeader">
+      <div class="contentTitle">${escapeHtml(section.name)}</div>
+      <div class="contentMeta">${escapeHtml(metaText)}</div>
+    </div>
+  `;
+  host.appendChild(grid);
+}
+
+function renderAll(){
+  const sections = getFilteredSections();
+  ensureSelectedSection(sections);
+  renderSectionList(sections);
+  renderDetail();
+}
+
+function setSubmitting(flag){
+  isSubmitting = !!flag;
+  const openBtn = document.getElementById('openRecapBtn');
+  const confirmBtn = document.getElementById('confirmBtn');
+
+  if(isSubmitting){
+    openBtn.disabled = true;
+    openBtn.innerHTML = '<span class="spinner"></span><span id="openRecapLabel">Envoi...</span>';
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<span class="spinner"></span><span id="confirmLabel">Envoi...</span>';
+  } else {
+    openBtn.disabled = false;
+    openBtn.innerHTML = '<span id="openRecapLabel">Valider</span>';
+    confirmBtn.disabled = false;
+    confirmBtn.innerHTML = '<span id="confirmLabel">Confirmer</span>';
+  }
+  renderDetail();
+}
+
+function getAllChangedEntries(){
+  const rows = [];
+  skillCategories.forEach(cat => {
+    (cat.skills || []).forEach(skill => {
+      if(Number(skill.currentLevel || 0) > Number(skill.originalLevel || 0)){
+        rows.push({ category: cat.name, name: skill.name, old: skill.originalLevel, neu: skill.currentLevel, kind: 'skill' });
+      }
+      (skill.subs || []).forEach(sub => {
+        if(Number(sub.currentLevel || 0) > Number(sub.originalLevel || 0)){
+          rows.push({ category: cat.name, name: sub.name, old: sub.originalLevel, neu: sub.currentLevel, kind: 'skill' });
+        }
+      });
+    });
+  });
+  attributesState.forEach(attr => {
+    if(Number(attr.currentLevel || 0) > Number(attr.originalLevel || 0)){
+      rows.push({ category: 'Attributs', name: attr.name, old: attr.originalLevel, neu: attr.currentLevel, kind: 'attr' });
+    }
+  });
+  return rows;
+}
+
+function openRecap(){
+  if(isSubmitting) return;
+  const recapContent = document.getElementById('recap-content');
+  recapContent.innerHTML = '';
+  const recap = getAllChangedEntries();
+  if(!recap.length){
+    recapContent.innerHTML = '<div class="empty-state">Aucune compétence ou attribut modifié.</div>';
+    document.getElementById('popup-overlay').style.display = 'flex';
+    document.getElementById('openRecapBtn').disabled = true;
+    return;
+  }
+
+  const table = document.createElement('table');
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Catégorie</th>
+        <th>Nom</th>
+        <th style="text-align:center">Ancien</th>
+        <th style="text-align:center">Nouveau</th>
+        <th style="text-align:center">Coût</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+  const tbody = table.querySelector('tbody');
+  let totalCost = 0;
+  recap.forEach(row => {
+    let cost = 0;
+    if(row.kind === 'attr'){
+      cost = (Number(row.neu || 0) - Number(row.old || 0)) * COST_ATTR;
+    } else {
+      for(let i = Number(row.old || 0); i < Number(row.neu || 0); i++) cost += getCoutAugmentation(i);
+    }
+    totalCost += cost;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="text-align:left">${escapeHtml(row.category)}</td>
+      <td style="text-align:left">${escapeHtml(row.name)}</td>
+      <td>${escapeHtml(String(row.old))}</td>
+      <td>${escapeHtml(String(row.neu))}</td>
+      <td>${escapeHtml(String(cost))}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  const trTotal = document.createElement('tr');
+  trTotal.innerHTML = `
+    <td colspan="4" style="text-align:right;font-weight:900">Total :</td>
+    <td style="font-weight:900">${escapeHtml(String(totalCost))}</td>
+  `;
+  tbody.appendChild(trTotal);
+
+  recapContent.innerHTML = `<div class="modal-title">Récapitulatif</div><div class="modal-sub">Modifications prêtes à être appliquées</div>`;
+  recapContent.appendChild(table);
+  document.getElementById('popup-overlay').style.display = 'flex';
+  document.getElementById('openRecapBtn').disabled = true;
+}
+
+function getExportData(){
+  return skillCategories.map(cat => ({
+    name: cat.name,
+    skills: (cat.skills || []).map(skill => ({
+      name: skill.name,
+      level: Number(skill.currentLevel || 0),
+      disabled: !!skill.disabled,
+      mBlocked: !!skill.mBlocked,
+      subs: (skill.subs || []).map(sub => ({
+        name: sub.name,
+        level: Number(sub.currentLevel || 0),
+        disabled: !!sub.disabled,
+        mBlocked: !!sub.mBlocked
+      }))
+    }))
+  }));
+}
+
+function confirmChanges(){
+  if(isSubmitting) return;
+  if(pointsUsedSession > pointsAvailable){
+    alert('Attention : vous utilisez plus de points que disponible.');
+    return;
+  }
+
+  setSubmitting(true);
+  showLoading('Enregistrement…');
+  const exportData = getExportData();
+  const attrExport = {};
+  attributesState.forEach(attr => { attrExport[attr.name] = Number(attr.currentLevel || 0); });
+
+  google.script.run
+    .withSuccessHandler(async (res) => {
+      const recapContent = document.getElementById('recap-content');
+      recapContent.innerHTML = `
+        <div class="modal-title">✅ Modifications enregistrées</div>
+        <div class="modal-sub">Points utilisés cette session : ${escapeHtml(String(pointsUsedSession))} • Total cumulé : ${escapeHtml(String(res && res.newUsedTotal != null ? res.newUsedTotal : '—'))}</div>
+      `;
+
+      skillCategories.forEach(cat => {
+        (cat.skills || []).forEach(skill => {
+          skill.originalLevel = skill.currentLevel;
+          (skill.subs || []).forEach(sub => { sub.originalLevel = sub.currentLevel; });
+        });
+      });
+      attributesState.forEach(attr => { attr.originalLevel = attr.currentLevel; });
+
+      try{
+        const p = await serverCall('getPoints', FID);
+        pointsAvailable = Number(p && p.available || 0);
+      }catch(e){}
+
+      updatePrerequisState();
+      updatePointsCounters();
+      renderAll();
+      hideLoading();
+      setSubmitting(false);
+
+      setTimeout(() => {
+        document.getElementById('popup-overlay').style.display = 'none';
+      }, 300);
+    })
+    .withFailureHandler(err => {
+      hideLoading();
+      alert('Erreur serveur : ' + (err && err.message ? err.message : err));
+      setSubmitting(false);
+    })
+    .applyAll(FID, exportData, attrExport, pointsUsedSession);
+}
+
+function openDescPopup(data){
+  const overlay = document.getElementById('desc-overlay');
+  const title = document.getElementById('descTitle');
+  const sub = document.getElementById('descSub');
+  const body = document.getElementById('descBody');
+  title.textContent = data && data.title ? data.title : 'Description';
+  sub.textContent = data && data.subtitle ? data.subtitle : '—';
+  const desc = String(data && data.description || '').trim();
+  const attributs = String(data && data.attributs || '').trim();
+  const prereq = String(data && data.prerequis || '').trim();
+  const sections = [];
+  if(desc){
+    sections.push(`
+      <div class="modal-section">
+        <div class="modal-section-title">Description</div>
+        <div class="modal-section-text">${escapeHtml(desc).replace(/\n/g,'<br>')}</div>
+      </div>
+    `);
+  }
+  if(attributs){
+    sections.push(`
+      <div class="modal-section">
+        <div class="modal-section-title">Attributs liés</div>
+        <div class="modal-section-text">${escapeHtml(attributs).replace(/\n/g,'<br>')}</div>
+      </div>
+    `);
+  }
+  if(prereq){
+    sections.push(`
+      <div class="modal-section">
+        <div class="modal-section-title">Prérequis</div>
+        <div class="modal-section-text">${escapeHtml(prereq).replace(/\n/g,'<br>')}</div>
+      </div>
+    `);
+  }
+  if(data && data.disabled){
+    sections.push(`
+      <div class="modal-section">
+        <div class="modal-section-title">État</div>
+        <div class="modal-section-text">Cette entrée est actuellement bloquée par ses prérequis.</div>
+      </div>
+    `);
+  }
+  body.innerHTML = sections.length ? sections.join('') : '<div class="empty-state">Aucune description disponible.</div>';
+  overlay.style.display = 'flex';
+}
+
+function closeDescPopup(){
+  document.getElementById('desc-overlay').style.display = 'none';
+}
+
+function closePopup(){
+  document.getElementById('popup-overlay').style.display = 'none';
+  if(!isSubmitting) document.getElementById('openRecapBtn').disabled = false;
+}
+
+function cancel(){ redirectHome(); }
+
+function redirectHome(){
+  try{
+    const u = new URL(window.location.href);
+    u.searchParams.set('page','home');
+    if(FID) u.searchParams.set('fid', FID);
+    window.location.href = u.toString();
+  }catch(e){ history.back(); }
+}
+
+async function initAll(){
+  showLoading('Chargement des compétences…');
+  try{
+    setStatus('Chargement des compétences…');
+    FID = await resolveFid();
+    if(!FID){
+      setStatus('FID manquant. Ajoute ?fid=... à l’URL ou passe-le via le template.', true);
+      return;
+    }
+    await loadIdentity();
+
+    const res = await serverCall('getCompetencesAvecValeurs', FID);
+    if(!res || !Array.isArray(res.categories)) throw new Error('Aucune catégorie renvoyée par le serveur.');
+    initSkillState(res);
+
+    const avantages = await serverCall('getAvantages', FID);
+    avantagesSet = new Set((avantages || []).map(v => _cleanSkillName_(v)).filter(Boolean));
+
+    const p = await serverCall('getPoints', FID);
+    pointsAvailable = Number(p && p.available || 0);
+
+    const attrs = await serverCall('getAttributs', FID);
+    initAttributesState(attrs || {});
+
+    updatePrerequisState();
+    updatePointsCounters();
+    renderAll();
+
+    setStatus('');
+  }catch(err){
+    setStatus('Erreur chargement compétences : ' + (err && err.message ? err.message : err), true);
+    console.error(err);
+  }finally{
+    hideLoading();
+  }
+}
+
+function bindEvents(){
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    searchQuery = String(e.target.value || '');
+    if(!String(searchQuery || '').trim()) searchCategoryFilterId = '';
+    renderAll();
+  });
+  document.getElementById('desc-overlay').addEventListener('click', (e) => {
+    if(e.target && e.target.id === 'desc-overlay') closeDescPopup();
+  });
+  document.getElementById('popup-overlay').addEventListener('click', (e) => {
+    if(e.target && e.target.id === 'popup-overlay') closePopup();
+  });
+}
+
+bindEvents();
+initAll();
+</script>
+</body>
+</html>

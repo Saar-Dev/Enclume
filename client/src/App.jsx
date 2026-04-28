@@ -6,6 +6,8 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import SessionPage from './pages/SessionPage'
+import CampaignSettingsPage from './pages/CampaignSettingsPage'
+import WorkshopPage from './pages/WorkshopPage'
 
 function ProtectedRoute({ children }) {
   const { user, isLoading } = useAuthStore()
@@ -44,8 +46,16 @@ export default function App() {
           <ProtectedRoute><DashboardPage /></ProtectedRoute>
         } />
         <Route path="/session/:campaignId" element={
-        <ProtectedRoute><SessionPage /></ProtectedRoute>
+          <ProtectedRoute><SessionPage /></ProtectedRoute>
         } />
+        <Route path="/campaigns/:campaignId/settings" element={
+          <ProtectedRoute><CampaignSettingsPage /></ProtectedRoute>
+        } />
+        <Route path="/workshop" element={
+          <ProtectedRoute><WorkshopPage /></ProtectedRoute>
+        } />
+        {/* Redirect legacy — bookmarks /texture-packs restent fonctionnels */}
+        <Route path="/texture-packs" element={<Navigate to="/workshop" replace />} />
       </Routes>
     </BrowserRouter>
   )

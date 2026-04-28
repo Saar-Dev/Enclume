@@ -155,6 +155,20 @@ router.put('/:id/voxels', requireAuth, async (req, res, next) => {
       .where({ id: req.params.id })
       .update({ voxel_data: JSON.stringify(voxel_data), updated_at: db.fn.now() })
 
+    // Recalcul battlemap_texture_usage — index des textures utilisées (O(1) pour DELETE /voxel-textures/:id)
+    const usedTexIds = [...new Set(Object.values(voxel_data).map(v => v.tex))]
+    await db('battlemap_texture_usage')
+      .where({ battlemap_id: req.params.id })
+      .delete()
+    if (usedTexIds.length > 0) {
+      await db('battlemap_texture_usage').insert(
+        usedTexIds.map(texId => ({
+          battlemap_id: req.params.id,
+          voxel_texture_id: texId,
+        }))
+      )
+    }
+
     res.json({ ok: true })
   } catch (err) {
     next(err)
@@ -186,6 +200,72 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
     .returning('*')
 
   res.status(201).json({ battlemap: duplicated })
+})
+
+// POST /api/battlemaps/:id/editor-lock — acquérir le lock éditeur (GM uniquement)
+router.post('/:id/editor-lock', requireAuth, async (req, res, next) => {
+  try {
+    const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
+    if (!battlemap) throw new AppError(404, 'Battlemap not found')
+
+    const member = await db('campaign_members')
+      .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id, role: 'gm' })
+      .first()
+    if (!member) throw new AppError(403, 'GM only')
+
+    // Vérifier si le lock est actif par quelqu'un d'autre
+    const isLocked = battlemap.editor_locked_by
+      && battlemap.editor_locked_by !== req.user.id
+      && battlemap.editor_locked_until > new Date()
+    if (isLocked) {
+      return res.status(423).json({ lockedBy: battlemap.editor_locked_by })
+    }
+
+    const lockedUntil = new Date(Date.now() + 60 * 1000)
+    await db('battlemaps').where({ id: req.params.id }).update({
+      editor_locked_by: req.user.id,
+      editor_locked_until: lockedUntil,
+    })
+    res.json({ ok: true, lockedUntil })
+  } catch (err) { next(err) }
+})
+
+// DELETE /api/battlemaps/:id/editor-lock — libérer le lock
+router.delete('/:id/editor-lock', requireAuth, async (req, res, next) => {
+  try {
+    const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
+    if (!battlemap) throw new AppError(404, 'Battlemap not found')
+
+    // Seul le titulaire du lock peut le libérer
+    if (battlemap.editor_locked_by !== req.user.id) {
+      throw new AppError(403, 'Not lock owner')
+    }
+
+    await db('battlemaps').where({ id: req.params.id }).update({
+      editor_locked_by: null,
+      editor_locked_until: null,
+    })
+    res.json({ ok: true })
+  } catch (err) { next(err) }
+})
+
+// POST /api/battlemaps/:id/editor-heartbeat — renouveler le lock (toutes les 30s)
+router.post('/:id/editor-heartbeat', requireAuth, async (req, res, next) => {
+  try {
+    const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
+    if (!battlemap) throw new AppError(404, 'Battlemap not found')
+
+    // Seul le titulaire peut renouveler
+    if (battlemap.editor_locked_by !== req.user.id) {
+      throw new AppError(403, 'Not lock owner')
+    }
+
+    const lockedUntil = new Date(Date.now() + 60 * 1000)
+    await db('battlemaps').where({ id: req.params.id }).update({
+      editor_locked_until: lockedUntil,
+    })
+    res.json({ ok: true, lockedUntil })
+  } catch (err) { next(err) }
 })
 
 export default router

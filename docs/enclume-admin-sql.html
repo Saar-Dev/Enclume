@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enclume — Administration SQL</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700&display=swap');
+
+  :root {
+    --bg: #0d0f12;
+    --bg2: #13161b;
+    --bg3: #1a1e25;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #e8e6e0;
+    --muted: #6b7280;
+    --accent: #c8a96e;
+    --accent2: #4a7fa5;
+    --accent3: #5a9e6f;
+    --accent4: #9b6bb5;
+    --danger: #c25a5a;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Syne', sans-serif;
+    --r: 4px;
+    --r2: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--mono);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ---- HEADER ---- */
+  header {
+    border-bottom: 1px solid var(--border2);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: var(--bg2);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--sans);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+  }
+
+  .logo span { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 8px; }
+
+  .badge-count {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .badge-count strong { color: var(--text); }
+
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .domain-pill {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    font-family: var(--sans);
+  }
+
+  .pill-all { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .pill-vtt { background: transparent; color: var(--accent2); border-color: var(--accent2); }
+  .pill-vtt:hover { background: rgba(74,127,165,0.15); }
+  .pill-char { background: transparent; color: var(--accent4); border-color: var(--accent4); }
+  .pill-char:hover { background: rgba(155,107,181,0.15); }
+  .pill-ref { background: transparent; color: var(--accent3); border-color: var(--accent3); }
+  .pill-ref:hover { background: rgba(90,158,111,0.15); }
+
+  /* ---- LAYOUT ---- */
+  .container {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: calc(100vh - 65px);
+  }
+
+  /* ---- SIDEBAR NAV ---- */
+  nav {
+    border-right: 1px solid var(--border);
+    background: var(--bg2);
+    padding: 16px 0;
+    overflow-y: auto;
+    position: sticky;
+    top: 65px;
+    height: calc(100vh - 65px);
+  }
+
+  .nav-section-label {
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 12px 16px 6px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-left: 2px solid transparent;
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { border-left-color: var(--accent); color: var(--text); background: rgba(200,169,110,0.07); }
+
+  .nav-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot-vtt { background: var(--accent2); }
+  .dot-char { background: var(--accent4); }
+  .dot-ref { background: var(--accent3); }
+
+  .row-count {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--muted);
+    background: var(--bg3);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+
+  /* ---- MAIN CONTENT ---- */
+  main {
+    padding: 28px 32px;
+    overflow-y: auto;
+  }
+
+  /* ---- DOMAIN SECTION ---- */
+  .domain-section {
+    margin-bottom: 48px;
+  }
+
+  .domain-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border2);
+  }
+
+  .domain-title {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .domain-tag {
+    padding: 3px 10px;
+    border-radius: var(--r);
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--sans);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .tag-vtt { background: rgba(74,127,165,0.15); color: var(--accent2); border: 1px solid rgba(74,127,165,0.3); }
+  .tag-char { background: rgba(155,107,181,0.15); color: var(--accent4); border: 1px solid rgba(155,107,181,0.3); }
+  .tag-ref { background: rgba(90,158,111,0.15); color: var(--accent3); border: 1px solid rgba(90,158,111,0.3); }
+
+  .domain-desc {
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  /* ---- TABLE GRID ---- */
+  .table-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  /* ---- TABLE CARD ---- */
+  .table-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+
+  .table-card:hover { border-color: var(--border2); }
+
+  .table-card-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg3);
+    cursor: pointer;
+  }
+
+  .table-name {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.2px;
+  }
+
+  .table-comment {
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: auto;
+    font-family: var(--mono);
+  }
+
+  .chevron {
+    width: 14px; height: 14px;
+    margin-left: 4px;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+
+  .chevron.open { transform: rotate(90deg); }
+
+  .col-list {
+    padding: 8px 0;
+    display: none;
+  }
+
+  .col-list.open { display: block; }
+
+  .col-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 8px;
+    padding: 5px 16px;
+    align-items: baseline;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .col-row:last-child { border-bottom: none; }
+
+  .col-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .col-name.pk::before {
+    content: '🔑 ';
+    font-size: 10px;
+  }
+
+  .col-name.fk::before {
+    content: '🔗 ';
+    font-size: 10px;
+  }
+
+  .col-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .type-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+
+  .t-uuid { background: rgba(200,169,110,0.12); color: var(--accent); }
+  .t-text { background: rgba(74,127,165,0.12); color: #6baed6; }
+  .t-int  { background: rgba(90,158,111,0.12); color: var(--accent3); }
+  .t-bool { background: rgba(155,107,181,0.12); color: var(--accent4); }
+  .t-num  { background: rgba(194,90,90,0.12); color: #e07070; }
+  .t-ts   { background: rgba(107,114,128,0.12); color: #9ca3af; }
+
+  .col-note {
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .mig-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--muted);
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    margin-left: auto;
+  }
+
+  /* ---- SUMMARY BAR ---- */
+  .summary-bar {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 28px;
+    padding: 16px 20px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-val {
+    font-family: var(--sans);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .sep { width: 1px; background: var(--border2); align-self: stretch; }
+
+  .migrations-note {
+    margin-left: auto;
+    align-self: center;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.8;
+  }
+
+  .migrations-note strong { color: var(--accent); }
+
+  /* ---- SEARCH ---- */
+  .search-bar {
+    margin-bottom: 24px;
+  }
+
+  .search-input {
+    width: 100%;
+    max-width: 400px;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .search-input::placeholder { color: var(--muted); }
+  .search-input:focus { border-color: var(--accent); }
+
+  /* ---- FILTER STATE ---- */
+  .hidden-domain { display: none; }
+  .hidden-table { display: none; }
+
+  /* ---- FOOTER ---- */
+  footer {
+    padding: 20px 32px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    gap: 16px;
+  }
+
+  footer strong { color: var(--text); }
+
+  .legend-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Enclume <span>/ SQL Admin</span></div>
+  <div class="badge-count"><strong>18</strong> tables · <strong>39</strong> migrations</div>
+  <div class="header-right">
+    <button class="domain-pill pill-all" onclick="filterDomain('all')">Toutes</button>
+    <button class="domain-pill pill-vtt" onclick="filterDomain('vtt')">VTT</button>
+    <button class="domain-pill pill-char" onclick="filterDomain('char')">Character</button>
+    <button class="domain-pill pill-ref" onclick="filterDomain('ref')">Référence</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <nav id="nav-sidebar">
+    <div class="nav-section-label">VTT</div>
+    <div class="nav-item dot-vtt active" onclick="scrollTo('users')"><span class="nav-dot dot-vtt"></span>users</div>
+    <div class="nav-item" onclick="scrollTo('campaigns')"><span class="nav-dot dot-vtt"></span>campaigns</div>
+    <div class="nav-item" onclick="scrollTo('campaign_members')"><span class="nav-dot dot-vtt"></span>campaign_members</div>
+    <div class="nav-item" onclick="scrollTo('battlemaps')"><span class="nav-dot dot-vtt"></span>battlemaps</div>
+    <div class="nav-item" onclick="scrollTo('tokens')"><span class="nav-dot dot-vtt"></span>tokens</div>
+    <div class="nav-item" onclick="scrollTo('characters')"><span class="nav-dot dot-vtt"></span>characters</div>
+    <div class="nav-item" onclick="scrollTo('dice_rolls')"><span class="nav-dot dot-vtt"></span>dice_rolls</div>
+    <div class="nav-item" onclick="scrollTo('player_locations')"><span class="nav-dot dot-vtt"></span>player_locations</div>
+    <div class="nav-item" onclick="scrollTo('texture_packs')"><span class="nav-dot dot-vtt"></span>texture_packs</div>
+    <div class="nav-item" onclick="scrollTo('voxel_textures')"><span class="nav-dot dot-vtt"></span>voxel_textures</div>
+    <div class="nav-item" onclick="scrollTo('battlemap_texture_usage')"><span class="nav-dot dot-vtt"></span>battlemap_texture_usage</div>
+    <div class="nav-section-label">Référence Polaris</div>
+    <div class="nav-item" onclick="scrollTo('ref_genotypes')"><span class="nav-dot dot-ref"></span>ref_genotypes <span class="row-count">4</span></div>
+    <div class="nav-item" onclick="scrollTo('ref_skills')"><span class="nav-dot dot-ref"></span>ref_skills <span class="row-count">231</span></div>
+    <div class="nav-item" onclick="scrollTo('ref_skill_requirements')"><span class="nav-dot dot-ref"></span>ref_skill_requirements</div>
+    <div class="nav-section-label">Character</div>
+    <div class="nav-item" onclick="scrollTo('char_sheet')"><span class="nav-dot dot-char"></span>char_sheet</div>
+    <div class="nav-item" onclick="scrollTo('char_identity')"><span class="nav-dot dot-char"></span>char_identity</div>
+    <div class="nav-item" onclick="scrollTo('char_archetype')"><span class="nav-dot dot-char"></span>char_archetype</div>
+    <div class="nav-item" onclick="scrollTo('char_attributes')"><span class="nav-dot dot-char"></span>char_attributes</div>
+    <div class="nav-item" onclick="scrollTo('char_skills')"><span class="nav-dot dot-char"></span>char_skills</div>
+  </nav>
+
+  <main>
+    <div class="summary-bar">
+      <div class="stat"><span class="stat-val">18</span><span class="stat-label">tables</span></div>
+      <div class="sep"></div>
+      <div class="stat"><span class="stat-val">11</span><span class="stat-label">VTT</span></div>
+      <div class="sep"></div>
+      <div class="stat"><span class="stat-val" style="color:var(--accent3)">3</span><span class="stat-label">Référence</span></div>
+      <div class="sep"></div>
+      <div class="stat"><span class="stat-val" style="color:var(--accent4)">5</span><span class="stat-label">Character</span></div>
+      <div class="migrations-note">
+        Migrations <strong>001 → 039</strong><br>
+        Format <strong>.js</strong> · Knex · PostgreSQL<br>
+        Domaine Character : <strong>033 → 039</strong>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <input class="search-input" type="text" placeholder="Filtrer une table ou une colonne..." id="search" oninput="filterSearch(this.value)" />
+    </div>
+
+    <!-- ====== VTT DOMAIN ====== -->
+    <div class="domain-section" id="domain-vtt" data-domain="vtt">
+      <div class="domain-header">
+        <span class="domain-title">VTT</span>
+        <span class="domain-tag tag-vtt">Domaine principal</span>
+        <span class="domain-desc">cartes · voxels · tokens · sessions · temps réel</span>
+      </div>
+      <div class="table-grid">
+
+        <!-- users -->
+        <div class="table-card" id="users" data-domain="vtt">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">users</span>
+            <span class="table-comment">mig 01</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk">id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK</span><span class="col-note">gen_random_uuid()</span></div></div>
+            <div class="col-row"><span class="col-name">username</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">UNIQUE NOT NULL</span></div></div>
+            <div class="col-row"><span class="col-name">email</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">UNIQUE NOT NULL</span></div></div>
+            <div class="col-row"><span class="col-name">password_hash</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">bcrypt</span></div></div>
+            <div class="col-row"><span class="col-name">role</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">'gm' | 'player' | 'admin'</span></div></div>
+            <div class="col-row"><span class="col-name">created_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span></div></div>
+            <div class="col-row"><span class="col-name">updated_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span><span class="col-note">mig 19</span></div></div>
+          </div>
+        </div>
+
+        <!-- campaigns -->
+        <div class="table-card" id="campaigns" data-domain="vtt">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">campaigns</span>
+            <span class="table-comment">mig 02</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk">id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK</span></div></div>
+            <div class="col-row"><span class="col-name fk">gm_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID FK</span><span class="col-note">→ users.id</span></div></div>
+            <div class="col-row"><span class="col-name">name</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">NOT NULL</span></div></div>
+            <div class="col-row"><span class="col-name">description</span><div class="col-meta"><span class="type-badge t-text">TEXT</span></div></div>
+            <div class="col-row"><span class="col-name">invite_code</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">UNIQUE</span></div></div>
+            <div class="col-row"><span class="col-name">created_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span></div></div>
+            <div class="col-row"><span class="col-name">updated_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span><span class="col-note">mig 19</span></div></div>
+          </div>
+        </div>
+
+        <!-- campaign_members -->
+        <div class="table-card" id="campaign_members" data-domain="vtt">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">campaign_members</span>
+            <span class="table-comment">mig 03</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk fk">campaign_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK FK</span><span class="col-note">→ campaigns.id</span></div></div>
+            <div class="col-row"><span class="col-name pk fk">user_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK FK</span><span class="col-note">→ users.id</span></div></div>
+            <div class="col-row"><span class="col-name">role</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">'gm' | 'player'</span></div></div>
+            <div class="col-row"><span class="col-name">joined_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span><span class="col-note">mig 19 — pas d'updated_at</span></div></div>
+          </div>
+        </div>
+
+        <!-- battlemaps -->
+        <div class="table-card" id="battlemaps" data-domain="vtt">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">battlemaps</span>
+            <span class="table-comment">mig 04</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk">id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK</span></div></div>
+            <div class="col-row"><span class="col-name fk">campaign_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID FK</span><span class="col-note">→ campaigns.id CASCADE</span></div></div>
+            <div class="col-row"><span class="col-name">name</span><div class="col-meta"><span class="type-badge t-text">TEXT</span></div></div>
+            <div class="col-row"><span class="col-name">voxel_data</span><div class="col-meta"><span class="type-badge t-text">JSONB</span><span class="col-note">{ "x:y:z": { tex,geo,r } }</span></div></div>
+            <div class="col-row"><span class="col-name">width</span><div class="col-meta"><span class="type-badge t-int">INT</span></div></div>
+            <div class="col-row"><span class="col-name">height</span><div class="col-meta"><span class="type-badge t-int">INT</span></div></div>
+            <div class="col-row"><span class="col-name">editor_locked_by</span><div class="col-meta"><span class="type-badge t-uuid">UUID</span><span class="col-note">mig 22 — nullable</span></div></div>
+            <div class="col-row"><span class="col-name">editor_locked_until</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span><span class="col-note">mig 22 — 60s TTL</span></div></div>
+            <div class="col-row"><span class="col-name">created_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span></div></div>
+            <div class="col-row"><span class="col-name">updated_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span><span class="col-note">mig 19</span></div></div>
+          </div>
+        </div>
+
+        <!-- tokens -->
+        <div class="table-card" id="tokens" data-domain="vtt">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">tokens</span>
+            <span class="table-comment">mig 05</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk">id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK</span></div></div>
+            <div class="col-row"><span class="col-name fk">battlemap_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID FK</span><span class="col-note">→ battlemaps.id CASCADE</span></div></div>
+            <div class="col-row"><span class="col-name fk">character_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID FK</span><span class="col-note">→ characters.id SET NULL</span></div></div>
+            <div class="col-row"><span class="col-name">pos_x</span><div class="col-meta"><span class="type-badge t-num">NUMERIC</span><span class="col-note">coordonnée X brute</span></div></div>
+            <div class="col-row"><span class="col-name">pos_y</span><div class="col-meta"><span class="type-badge t-num">NUMERIC</span><span class="col-note">axe Z Three.js</span></div></div>
+            <div class="col-row"><span class="col-name">pos_z</span><div class="col-meta"><span class="type-badge t-num">NUMERIC</span><span class="col-note">altitude Y Three.js</span></div></div>
+            <div class="col-row"><span class="col-name">visible</span><div class="col-meta"><span class="type-badge t-bool">BOOLEAN</span><span class="col-note">DEFAULT TRUE</span></div></div>
+            <div class="col-row"><span class="col-name">label</span><div class="col-meta"><span class="type-badge t-text">TEXT</span></div></div>
+            <div class="col-row"><span class="col-name">created_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span></div></div>
+            <div class="col-row"><span class="col-name">updated_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span><span class="col-note">mig 19</span></div></div>
+          </div>
+        </div>
+
+        <!-- characters -->
+        <div class="table-card" id="characters" data-domain="vtt">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">characters</span>
+            <span class="table-comment">mig 06</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk">id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK</span></div></div>
+            <div class="col-row"><span class="col-name fk">campaign_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID FK</span><span class="col-note">→ campaigns.id CASCADE</span></div></div>
+            <div class="col-row"><span class="col-name fk">user_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID FK</span><span class="col-note">→ users.id</span></div></div>
+            <div class="col-row"><span class="col-name">name</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">nom court token — ≠ char_name</span></div></div>
+            <div class="col-row"><span class="col-name">portrait_url</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">chemin MinIO — pas URL complète (P18)</span></div></div>
+            <div class="col-row"><span class="col-name">glb_url</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">chemin MinIO + ?v=timestamp (P19)</span></div></div>
+            <div class="col-row"><span class="col-name">gm_notes</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">visible GM uniquement</span></div></div>
+            <div class="col-row"><span class="col-name">created_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span></div></div>
+            <div class="col-row"><span class="col-name">updated_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span><span class="col-note">mig 19</span></div></div>
+          </div>
+        </div>
+
+        <!-- dice_rolls -->
+        <div class="table-card" id="dice_rolls" data-domain="vtt">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">dice_rolls</span>
+            <span class="table-comment">mig 11</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk">id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK</span></div></div>
+            <div class="col-row"><span class="col-name fk">campaign_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID FK</span><span class="col-note">→ campaigns.id</span></div></div>
+            <div class="col-row"><span class="col-name fk">user_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID FK</span><span class="col-note">→ users.id</span></div></div>
+            <div class="col-row"><span class="col-name">expression</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">ex: "2d6+3"</span></div></div>
+            <div class="col-row"><span class="col-name">result</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">calculé côté serveur (P11)</span></div></div>
+            <div class="col-row"><span class="col-name">detail</span><div class="col-meta"><span class="type-badge t-text">JSONB</span><span class="col-note">détail par dé</span></div></div>
+            <div class="col-row"><span class="col-name">created_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span><span class="col-note">pas d'updated_at</span></div></div>
+          </div>
+        </div>
+
+        <!-- player_locations -->
+        <div class="table-card" id="player_locations" data-domain="vtt">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">player_locations</span>
+            <span class="table-comment">mig 10</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk fk">user_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK FK</span><span class="col-note">→ users.id</span></div></div>
+            <div class="col-row"><span class="col-name pk fk">campaign_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK FK</span><span class="col-note">→ campaigns.id</span></div></div>
+            <div class="col-row"><span class="col-name">x</span><div class="col-meta"><span class="type-badge t-num">NUMERIC</span></div></div>
+            <div class="col-row"><span class="col-name">z</span><div class="col-meta"><span class="type-badge t-num">NUMERIC</span></div></div>
+            <div class="col-row"><span class="col-name">updated_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span><span class="col-note">pas de created_at (mig 19)</span></div></div>
+          </div>
+        </div>
+
+        <!-- texture_packs -->
+        <div class="table-card" id="texture_packs" data-domain="vtt">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">texture_packs</span>
+            <span class="table-comment">mig 21</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk">id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK</span></div></div>
+            <div class="col-row"><span class="col-name">name</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">UNIQUE — immuable après création (P44)</span></div></div>
+            <div class="col-row"><span class="col-name">label</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">modifiable via PUT</span></div></div>
+            <div class="col-row"><span class="col-name">description</span><div class="col-meta"><span class="type-badge t-text">TEXT</span></div></div>
+            <div class="col-row"><span class="col-name">tile_size</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 64</span></div></div>
+            <div class="col-row"><span class="col-name fk">created_by</span><div class="col-meta"><span class="type-badge t-uuid">UUID FK</span><span class="col-note">→ users.id — ownership (P43)</span></div></div>
+            <div class="col-row"><span class="col-name">created_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span></div></div>
+          </div>
+        </div>
+
+        <!-- voxel_textures -->
+        <div class="table-card" id="voxel_textures" data-domain="vtt">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">voxel_textures</span>
+            <span class="table-comment">mig 28</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk">id</span><div class="col-meta"><span class="type-badge t-int">INT PK</span><span class="col-note">INTEGER — exception UUID (P22)</span></div></div>
+            <div class="col-row"><span class="col-name fk">pack_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID FK</span><span class="col-note">→ texture_packs.id</span></div></div>
+            <div class="col-row"><span class="col-name">name</span><div class="col-meta"><span class="type-badge t-text">TEXT</span></div></div>
+            <div class="col-row"><span class="col-name">faces</span><div class="col-meta"><span class="type-badge t-text">JSONB</span><span class="col-note">chemins relatifs à UUID pack (P43)</span></div></div>
+            <div class="col-row"><span class="col-name">allowed_geometries</span><div class="col-meta"><span class="type-badge t-text">JSONB</span><span class="col-note">null = toutes (P34)</span></div></div>
+            <div class="col-row"><span class="col-name">deprecated</span><div class="col-meta"><span class="type-badge t-bool">BOOLEAN</span><span class="col-note">DEFAULT FALSE</span></div></div>
+          </div>
+        </div>
+
+        <!-- battlemap_texture_usage -->
+        <div class="table-card" id="battlemap_texture_usage" data-domain="vtt">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">battlemap_texture_usage</span>
+            <span class="table-comment">mig 26</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk fk">battlemap_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK FK</span><span class="col-note">→ battlemaps.id CASCADE</span></div></div>
+            <div class="col-row"><span class="col-name pk fk">texture_id</span><div class="col-meta"><span class="type-badge t-int">INT PK FK</span><span class="col-note">→ voxel_textures.id</span></div></div>
+            <div class="col-row"><span class="col-name col-note" style="grid-column:1/-1;color:var(--muted);font-size:11px;">PK composite — recalculée après chaque save() voxels</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ====== RÉFÉRENCE DOMAIN ====== -->
+    <div class="domain-section" id="domain-ref" data-domain="ref">
+      <div class="domain-header">
+        <span class="domain-title">Référence Polaris</span>
+        <span class="domain-tag tag-ref">Statique</span>
+        <span class="domain-desc">données de jeu — seedées en migration — jamais modifiées par le jeu</span>
+      </div>
+      <div class="table-grid">
+
+        <!-- ref_genotypes -->
+        <div class="table-card" id="ref_genotypes" data-domain="ref">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">ref_genotypes</span>
+            <span class="table-comment">mig 33 · 4 lignes</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk">id</span><div class="col-meta"><span class="type-badge t-text">TEXT PK</span><span class="col-note">'HUMAIN' | 'HYB_NAT' | 'TEC_HYB' | 'GEN_HYB'</span></div></div>
+            <div class="col-row"><span class="col-name">label</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">nom affiché</span></div></div>
+            <div class="col-row"><span class="col-name">mod_for</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 0</span></div></div>
+            <div class="col-row"><span class="col-name">mod_con</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 0</span></div></div>
+            <div class="col-row"><span class="col-name">mod_coo</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 0</span></div></div>
+            <div class="col-row"><span class="col-name">mod_ada</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 0</span></div></div>
+            <div class="col-row"><span class="col-name">mod_per</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 0</span></div></div>
+            <div class="col-row"><span class="col-name">mod_int</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 0</span></div></div>
+            <div class="col-row"><span class="col-name">mod_vol</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 0</span></div></div>
+            <div class="col-row"><span class="col-name">mod_pre</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 0</span></div></div>
+          </div>
+        </div>
+
+        <!-- ref_skills -->
+        <div class="table-card" id="ref_skills" data-domain="ref">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">ref_skills</span>
+            <span class="table-comment">mig 34+37 · 231 lignes</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk">id</span><div class="col-meta"><span class="type-badge t-text">TEXT PK</span><span class="col-note">ex: 'ACROBATIE' — jamais de _ final (PC7)</span></div></div>
+            <div class="col-row"><span class="col-name">family</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">'Physique' | 'Combat' | 'Mental'…</span></div></div>
+            <div class="col-row"><span class="col-name">label</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">nom affiché — valeurs officielles livre (PC8)</span></div></div>
+            <div class="col-row"><span class="col-name">parent</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">NULL si racine — ex: 'ARTS_MARTIAUX'</span></div></div>
+            <div class="col-row"><span class="col-name">attr_1</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">'FOR'|'CON'|'COO'|'ADA'|'PER'|'INT'|'VOL'|'PRE'</span></div></div>
+            <div class="col-row"><span class="col-name">attr_2</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">NULL → attr_1 × 2 pour calcul Base (PC4)</span></div></div>
+            <div class="col-row"><span class="col-name">marker</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">NULL | '(-3)' | '(X)' | 'PN' | 'S'</span></div></div>
+            <div class="col-row"><span class="col-name">description</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">tooltip fiche</span></div></div>
+          </div>
+        </div>
+
+        <!-- ref_skill_requirements -->
+        <div class="table-card" id="ref_skill_requirements" data-domain="ref">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">ref_skill_requirements</span>
+            <span class="table-comment">mig 35+38</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk fk">skill_id</span><div class="col-meta"><span class="type-badge t-text">TEXT PK FK</span><span class="col-note">→ ref_skills.id</span></div></div>
+            <div class="col-row"><span class="col-name pk">type</span><div class="col-meta"><span class="type-badge t-text">TEXT PK</span><span class="col-note">'SKILL_MIN' | 'MUTATION' | 'GENOTYPE'</span></div></div>
+            <div class="col-row"><span class="col-name pk">value</span><div class="col-meta"><span class="type-badge t-text">TEXT PK</span><span class="col-note">ex: 'INFORMATIQUE' ou 'MUT_QUEUE'</span></div></div>
+            <div class="col-row"><span class="col-name">threshold</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">valeur minimale requise</span></div></div>
+            <div class="col-row"><span class="col-name col-note" style="grid-column:1/-1;color:var(--muted);font-size:11px;">PK composite (skill_id, type, value) · MUTATION → masqué en V1 (PC9)</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ====== CHARACTER DOMAIN ====== -->
+    <div class="domain-section" id="domain-char" data-domain="char">
+      <div class="domain-header">
+        <span class="domain-title">Character</span>
+        <span class="domain-tag tag-char">Domaine fiche Polaris</span>
+        <span class="domain-desc">fiche personnage par campaign · lien via char_sheet.character_id → characters.id</span>
+      </div>
+      <div class="table-grid">
+
+        <!-- char_sheet -->
+        <div class="table-card" id="char_sheet" data-domain="char">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">char_sheet</span>
+            <span class="table-comment">mig 36 · table pivot</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk">id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK</span><span class="col-note">gen_random_uuid()</span></div></div>
+            <div class="col-row"><span class="col-name fk">character_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID FK</span><span class="col-note">→ characters.id CASCADE · seul lien VTT↔Character</span></div></div>
+            <div class="col-row"><span class="col-name">chc</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 11 · Chance 1-20 · aucun calcul</span></div></div>
+            <div class="col-row"><span class="col-name">created_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span></div></div>
+            <div class="col-row"><span class="col-name">updated_at</span><div class="col-meta"><span class="type-badge t-ts">TIMESTAMPTZ</span></div></div>
+          </div>
+        </div>
+
+        <!-- char_identity -->
+        <div class="table-card" id="char_identity" data-domain="char">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">char_identity</span>
+            <span class="table-comment">mig 36 · Module 1</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk fk">char_sheet_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK FK</span><span class="col-note">→ char_sheet.id CASCADE</span></div></div>
+            <div class="col-row"><span class="col-name">player_name</span><div class="col-meta"><span class="type-badge t-text">TEXT</span></div></div>
+            <div class="col-row"><span class="col-name">char_name</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">nom officiel complet — ≠ characters.name (PC1)</span></div></div>
+            <div class="col-row"><span class="col-name">height</span><div class="col-meta"><span class="type-badge t-num">NUMERIC(4,1)</span><span class="col-note">en mètres</span></div></div>
+            <div class="col-row"><span class="col-name">weight</span><div class="col-meta"><span class="type-badge t-num">NUMERIC(5,1)</span><span class="col-note">en kg</span></div></div>
+            <div class="col-row"><span class="col-name">skin</span><div class="col-meta"><span class="type-badge t-text">TEXT</span></div></div>
+            <div class="col-row"><span class="col-name">eyes</span><div class="col-meta"><span class="type-badge t-text">TEXT</span></div></div>
+            <div class="col-row"><span class="col-name">hair</span><div class="col-meta"><span class="type-badge t-text">TEXT</span></div></div>
+            <div class="col-row"><span class="col-name">build</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">corpulence</span></div></div>
+            <div class="col-row"><span class="col-name">distinctive_signs</span><div class="col-meta"><span class="type-badge t-text">TEXT</span></div></div>
+            <div class="col-row"><span class="col-name">hand_pref</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">'R' | 'L' | 'A'</span></div></div>
+          </div>
+        </div>
+
+        <!-- char_archetype -->
+        <div class="table-card" id="char_archetype" data-domain="char">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">char_archetype</span>
+            <span class="table-comment">mig 36 · Module 2</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk fk">char_sheet_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK FK</span><span class="col-note">→ char_sheet.id CASCADE</span></div></div>
+            <div class="col-row"><span class="col-name fk">genotype_id</span><div class="col-meta"><span class="type-badge t-text">TEXT FK</span><span class="col-note">→ ref_genotypes.id</span></div></div>
+            <div class="col-row"><span class="col-name">age</span><div class="col-meta"><span class="type-badge t-int">INT</span></div></div>
+            <div class="col-row"><span class="col-name">sex</span><div class="col-meta"><span class="type-badge t-text">TEXT</span></div></div>
+            <div class="col-row"><span class="col-name">is_fertile</span><div class="col-meta"><span class="type-badge t-bool">BOOLEAN</span><span class="col-note">DEFAULT FALSE</span></div></div>
+            <div class="col-row"><span class="col-name">origin_geo</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">origine géographique</span></div></div>
+            <div class="col-row"><span class="col-name">origin_soc</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">origine sociale</span></div></div>
+            <div class="col-row"><span class="col-name">training_base</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">formation de base</span></div></div>
+            <div class="col-row"><span class="col-name">higher_ed</span><div class="col-meta"><span class="type-badge t-text">TEXT</span><span class="col-note">études supérieures</span></div></div>
+          </div>
+        </div>
+
+        <!-- char_attributes -->
+        <div class="table-card" id="char_attributes" data-domain="char">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">char_attributes</span>
+            <span class="table-comment">mig 36 · Module 3</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk fk">char_sheet_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK FK</span><span class="col-note">→ char_sheet.id CASCADE</span></div></div>
+            <div class="col-row"><span class="col-name pk">attr_id</span><div class="col-meta"><span class="type-badge t-text">TEXT PK</span><span class="col-note">'FOR'|'CON'|'COO'|'ADA'|'PER'|'INT'|'VOL'|'PRE'</span></div></div>
+            <div class="col-row"><span class="col-name">base_level</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">NOT NULL DEFAULT 7</span></div></div>
+            <div class="col-row"><span class="col-name">pc_modifier</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 0 — agrégé V1</span></div></div>
+            <div class="col-row"><span class="col-name col-note" style="grid-column:1/-1;color:var(--muted);font-size:11px;">PK composite — na / AN / attrs secondaires calculés JS uniquement (PC2, PC3)</span></div>
+          </div>
+        </div>
+
+        <!-- char_skills -->
+        <div class="table-card" id="char_skills" data-domain="char">
+          <div class="table-card-header" onclick="toggle(this)">
+            <span class="table-name">char_skills</span>
+            <span class="table-comment">mig 36 · Module 5</span>
+            <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="col-list">
+            <div class="col-row"><span class="col-name pk fk">char_sheet_id</span><div class="col-meta"><span class="type-badge t-uuid">UUID PK FK</span><span class="col-note">→ char_sheet.id CASCADE</span></div></div>
+            <div class="col-row"><span class="col-name pk fk">skill_id</span><div class="col-meta"><span class="type-badge t-text">TEXT PK FK</span><span class="col-note">→ ref_skills.id</span></div></div>
+            <div class="col-row"><span class="col-name">mastery</span><div class="col-meta"><span class="type-badge t-int">INT</span><span class="col-note">DEFAULT 0 · toujours ≥ 0 (PC11)</span></div></div>
+            <div class="col-row"><span class="col-name">is_learned</span><div class="col-meta"><span class="type-badge t-bool">BOOLEAN</span><span class="col-note">DEFAULT FALSE · débloque RES_X</span></div></div>
+            <div class="col-row"><span class="col-name col-note" style="grid-column:1/-1;color:var(--muted);font-size:11px;">PK composite · Total = Base + mastery — Total peut être négatif (PC11)</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<footer>
+  <span><span class="legend-dot" style="background:var(--accent2)"></span><strong>VTT</strong> — cartes · voxels · tokens · sessions</span>
+  <span><span class="legend-dot" style="background:var(--accent3)"></span><strong>Référence</strong> — données Polaris statiques</span>
+  <span><span class="legend-dot" style="background:var(--accent4)"></span><strong>Character</strong> — fiche personnage Polaris V1</span>
+  <span style="margin-left:auto">🔑 PK &nbsp; 🔗 FK</span>
+</footer>
+
+<script>
+  function toggle(header) {
+    const list = header.nextElementSibling;
+    const ch = header.querySelector('.chevron');
+    const open = list.classList.toggle('open');
+    ch.classList.toggle('open', open);
+  }
+
+  function filterDomain(domain) {
+    const sections = document.querySelectorAll('.domain-section');
+    sections.forEach(s => {
+      if (domain === 'all' || s.dataset.domain === domain) {
+        s.classList.remove('hidden-domain');
+      } else {
+        s.classList.add('hidden-domain');
+      }
+    });
+  }
+
+  function scrollTo(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const header = el.querySelector('.table-card-header');
+    const list = el.querySelector('.col-list');
+    if (!list.classList.contains('open')) {
+      list.classList.add('open');
+      header.querySelector('.chevron').classList.add('open');
+    }
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => {
+      if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'"+id+"'")) {
+        n.classList.add('active');
+      }
+    });
+  }
+
+  function filterSearch(q) {
+    q = q.toLowerCase().trim();
+    document.querySelectorAll('.table-card').forEach(card => {
+      if (!q) {
+        card.classList.remove('hidden-table');
+        return;
+      }
+      const name = card.querySelector('.table-name').textContent.toLowerCase();
+      const cols = Array.from(card.querySelectorAll('.col-name')).map(c => c.textContent.toLowerCase());
+      const notes = Array.from(card.querySelectorAll('.col-note')).map(c => c.textContent.toLowerCase());
+      const match = name.includes(q) || cols.some(c => c.includes(q)) || notes.some(n => n.includes(q));
+      card.classList.toggle('hidden-table', !match);
+    });
+  }
+
+  document.querySelectorAll('.table-card-header').forEach(h => {
+    const list = h.nextElementSibling;
+    list.classList.add('open');
+    h.querySelector('.chevron').classList.add('open');
+  });
+</script>
+</body>
+</html>

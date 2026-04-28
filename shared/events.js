@@ -17,6 +17,8 @@ export const WS = {
   VOXEL_ADDED:   'voxel:added',
   VOXEL_REMOVE:  'voxel:remove',
   VOXEL_REMOVED: 'voxel:removed',
+  VOXEL_UPDATE:  'voxel:update',
+  VOXEL_UPDATED: 'voxel:updated',
 
   // Dés
   DICE_ROLL:   'dice:roll',
@@ -34,4 +36,15 @@ export const WS = {
 
   // Chat
   CHAT_MESSAGE: 'chat:message',
+
+  // Entités interactables
+  ENTITY_ACTION_REQUEST:    'entity:action_request',    // joueur → serveur : demande d'interaction
+  ENTITY_ACTION_PENDING:    'entity:action_pending',     // serveur → GM : demande en attente d'arbitrage
+  ENTITY_ACTION_RESOLVE:    'entity:action_resolve',     // GM → serveur : décision d'arbitrage
+  ENTITY_ACTION_RESULT:     'entity:action_result',      // serveur → joueur : résultat (refus ou timeout)
+  ENTITY_ACTION_GM_DIRECT:  'entity:action_gm_direct',   // GM → serveur : action directe sans arbitrage
+  ENTITY_UPDATED:           'entity:updated',            // serveur → room : état entité mis à jour
+  ENTITY_CREATED:           'entity:created',            // serveur → room : entité posée sur la carte
+  ENTITY_DELETED:           'entity:deleted',            // serveur → room : entité retirée de la carte
+  ENTITY_MOVED:             'entity:moved',              // serveur → room : entité déplacée (éditeur GM)
 }

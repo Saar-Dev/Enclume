@@ -1,0 +1,3154 @@
+
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Inventaire</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0f1115;
+      --panel:#151923;
+      --panel2:#10131b;
+      --border:#252b3a;
+      --muted:#9aa4b2;
+      --text:#e8eef7;
+      --good:#1dd1a1;
+      --bad:#ff6b6b;
+      --chip:#1b2232;
+      --shadow:0 10px 30px rgba(0,0,0,.35);
+      --radius:14px;
+      --sticky-top-offset:16px;
+      --sticky-right-top:116px;
+    }
+
+    *{box-sizing:border-box}
+
+    body{
+      margin:16px;
+      font-family:"Nunito",system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:var(--bg);
+      color:var(--text);
+    }
+
+    .card{
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      padding:12px;
+      background:linear-gradient(180deg,var(--panel),var(--panel2));
+      box-shadow:var(--shadow);
+    }
+
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .small{font-size:12px}
+    .muted{color:var(--muted)}
+    .strong{font-weight:900}
+    .hidden{display:none !important}
+
+    label{
+      font-size:12px;
+      color:var(--muted);
+      display:block;
+      margin-bottom:6px;
+    }
+
+    select,input,button,textarea{
+      font-family:"Nunito",system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:#0c0f16;
+      color:var(--text);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:8px 10px;
+      outline:none;
+    }
+
+    textarea{
+      resize:vertical;
+      min-height:130px;
+    }
+
+    button{
+      cursor:pointer;
+      font-weight:900;
+      background:#121826;
+      transition:filter .08s ease, transform .08s ease;
+    }
+
+    button:hover{filter:brightness(1.08)}
+    button:active{transform:scale(.98)}
+    button.primary{background:#1a2340;border-color:#2a3b70}
+    button.good{background:#143126;border-color:#24553f}
+    button.bad{background:#2a1012;border-color:#5a1f26}
+    button[disabled]{opacity:.5;cursor:not-allowed}
+
+    .topGrid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:12px;
+      position:sticky;
+      top:var(--sticky-top-offset);
+      z-index:70;
+    }
+
+    .mainSplit{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 560px;
+      gap:12px;
+      margin-top:12px;
+      align-items:start;
+    }
+
+    @media (max-width:1400px){
+      .mainSplit{grid-template-columns:minmax(0,1fr) 500px}
+    }
+
+    @media (max-width:1180px){
+      .mainSplit{grid-template-columns:1fr}
+      .stickyRight{
+        position:static !important;
+        top:auto !important;
+        max-height:none !important;
+        overflow:visible !important;
+      }
+    }
+
+    .stickyRight{
+      position:sticky;
+      top:var(--sticky-right-top);
+      z-index:40;
+      max-height:calc(100vh - var(--sticky-right-top) - 16px);
+      overflow:auto;
+      transition:border-color .12s ease, box-shadow .12s ease, background .12s ease;
+    }
+
+    .tree{
+      display:grid;
+      gap:12px;
+    }
+
+    .familySelectorLayout{
+      display:grid;
+      grid-template-columns:minmax(240px,.55fr) minmax(0,1.45fr);
+      gap:12px;
+      align-items:start;
+    }
+
+    .familySelectorList,
+    .familySelectorContent{
+      display:grid;
+      gap:12px;
+      align-items:start;
+    }
+
+    .familySelectItem{
+      width:100%;
+      text-align:left;
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:linear-gradient(180deg,#0d111a,#0a0d13);
+      display:grid;
+      gap:8px;
+      transition:border-color .12s ease, box-shadow .12s ease, background .12s ease, transform .08s ease;
+    }
+
+    .familySelectItem.active{
+      transform:none;
+      border-color:#3b82f6 !important;
+      box-shadow:0 0 0 1px rgba(59,130,246,.35) inset, 0 10px 30px rgba(0,0,0,.35) !important;
+      background:linear-gradient(180deg,rgba(59,130,246,.12),rgba(10,13,19,.98)) !important;
+    }
+
+    .transferFidInput{
+      width:100%;
+    }
+
+    .familySelectHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      width:100%;
+    }
+
+    .familySelectTitle{
+      font-weight:900;
+      font-size:14px;
+      line-height:1.15;
+    }
+
+    .familySelectMeta{
+      font-size:12px;
+      font-weight:800;
+      color:var(--muted);
+      white-space:nowrap;
+      flex:0 0 auto;
+    }
+
+    .familySelectedHero{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:linear-gradient(180deg,#0d111a,#0a0d13);
+      display:grid;
+      gap:8px;
+    }
+
+    .familySelectedHeroTitle{
+      font-size:18px;
+      font-weight:900;
+      line-height:1.15;
+    }
+
+    .familySelectedHeroMeta{
+      font-size:13px;
+      font-weight:800;
+      color:var(--muted);
+    }
+
+    .detailManageGrid{
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0,1fr));
+      gap:10px;
+      align-items:start;
+    }
+
+    .detailManageCol{
+      display:grid;
+      gap:8px;
+      align-content:start;
+    }
+
+    @media (max-width:1100px){
+      .familySelectorLayout{grid-template-columns:1fr}
+      .detailManageGrid{grid-template-columns:1fr}
+    }
+
+    .familyBoard{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:12px;
+      align-items:start;
+    }
+
+    .familyBoard.focusMode{
+      grid-template-columns:minmax(250px,.68fr) minmax(0,1.52fr);
+      align-items:start;
+    }
+
+    .familyBoard.focusMode > details.node{
+      grid-column:1;
+      min-width:0;
+    }
+
+    .familyBoard.focusMode > details.node.familyFocused{
+      grid-column:2;
+      grid-row:1 / span 999;
+    }
+
+    .familyBoard.focusMode > details.node:not(.familyFocused) .nodeContent{
+      display:none;
+    }
+
+    .familyBoard.focusMode > details.node:not(.familyFocused) > summary .nodeSummary{
+      opacity:.94;
+    }
+
+    @media (max-width:1100px){
+      .familyBoard,
+      .familyBoard.focusMode{grid-template-columns:1fr}
+
+      .familyBoard.focusMode > details.node,
+      .familyBoard.focusMode > details.node.familyFocused{
+        grid-column:auto;
+        grid-row:auto;
+      }
+
+      .familyBoard.focusMode > details.node:not(.familyFocused) .nodeContent{
+        display:block;
+      }
+    }
+
+    details.node{
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      overflow:hidden;
+      background:#0c0f16;
+      transition:border-color .12s ease, box-shadow .12s ease, background .12s ease;
+    }
+
+    details.node > summary{
+      list-style:none;
+    }
+
+    details.node > summary::-webkit-details-marker{
+      display:none;
+    }
+
+    .nodeSummary{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px;
+      user-select:none;
+      background:#0c0f16;
+      cursor:pointer;
+      transition:background .12s ease;
+      width:100%;
+    }
+
+    .nodeSummary:hover{filter:brightness(1.05)}
+
+    .nodeTitle{font-weight:900}
+
+    .nodeTools{
+      margin-left:auto;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    .nodeContent{
+      padding:10px;
+      background:#0b0e14;
+      transition:background .12s ease;
+    }
+
+    .twisty{
+      width:24px;
+      min-width:24px;
+      text-align:center;
+      font-weight:900;
+      color:var(--muted);
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:2px 8px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      font-size:12px;
+      background:var(--chip);
+      color:var(--muted);
+      white-space:nowrap;
+    }
+
+    .categoryStack{
+      display:grid;
+      gap:10px;
+    }
+
+    .itemGrid{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:10px;
+    }
+
+    @media (max-width:1500px){
+      .itemGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+
+    @media (max-width:560px){
+      .itemGrid{grid-template-columns:1fr}
+    }
+
+    .itemCard{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:10px;
+      background:linear-gradient(180deg,#0d111a,#0a0d13);
+      display:grid;
+      gap:8px;
+      cursor:pointer;
+      transition:filter .08s ease, border-color .08s ease, background .12s ease, box-shadow .12s ease;
+      min-height:148px;
+      align-content:start;
+    }
+
+    .itemCard:hover{filter:brightness(1.05)}
+
+    .itemCard.active{
+      border-color:#2a3b70 !important;
+      box-shadow:0 0 0 1px rgba(42,59,112,.35) inset !important;
+    }
+
+    .itemName{
+      font-weight:900;
+      font-size:14px;
+      line-height:1.15;
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+      min-height:32px;
+    }
+
+    .chips{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      padding:2px 8px;
+      border-radius:999px;
+      background:var(--chip);
+      border:1px solid var(--border);
+      font-size:12px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+
+    .metaGrid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:6px 8px;
+    }
+
+    .metaLine{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.2;
+    }
+
+    .metaLine b{
+      color:var(--text);
+      font-weight:800;
+    }
+
+    .detailsGrid{
+      display:grid;
+      gap:10px;
+      margin-top:0;
+    }
+
+    .detailBox{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#0c0f16;
+      display:grid;
+      gap:8px;
+      font-size:13px;
+    }
+
+    .detailBox label{
+      font-size:12px;
+    }
+
+    .detailTitle{
+      font-size:18px;
+      font-weight:900;
+      line-height:1.2;
+    }
+
+    .detailTwoCols{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px 14px;
+    }
+
+    @media (max-width:700px){
+      .detailTwoCols{grid-template-columns:1fr}
+    }
+
+    #detailPanel textarea,
+    #detailPanel select,
+    #detailPanel input{
+      font-size:13px;
+    }
+
+    .detailNoteInline{
+      width:100%;
+      margin-top:2px;
+    }
+
+    .empty{
+      border:1px dashed #2a3346;
+      border-radius:12px;
+      padding:10px;
+      color:var(--muted);
+      background:#0b0e14;
+    }
+
+    .categoryLoading{
+      margin-bottom:8px;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    .modalBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.7);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:9999;
+      padding:16px;
+    }
+
+    .modalBackdrop.open{display:flex}
+
+    .modalBox{
+      width:min(1080px, 100%);
+      max-height:min(90vh, 980px);
+      overflow:auto;
+      display:grid;
+      gap:12px;
+    }
+
+    .formGrid{
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:10px;
+      margin-top:12px;
+    }
+
+    @media (max-width:980px){
+      .formGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+
+    @media (max-width:640px){
+      .formGrid{grid-template-columns:1fr}
+    }
+
+    .full{grid-column:1 / -1}
+
+    .errorBox{
+      color:#ffd7d7;
+      white-space:pre-wrap;
+    }
+
+    .autocompleteWrap{
+      position:relative;
+    }
+
+    .suggestList{
+      position:absolute;
+      left:0;
+      right:0;
+      top:calc(100% + 6px);
+      display:none;
+      z-index:12000;
+      max-height:240px;
+      overflow:auto;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:#0b0f18;
+      box-shadow:0 16px 40px rgba(0,0,0,.45);
+    }
+
+    .suggestList.open{display:block}
+
+    .suggestItem{
+      padding:9px 10px;
+      border-bottom:1px solid rgba(255,255,255,.05);
+      cursor:pointer;
+      display:grid;
+      gap:3px;
+    }
+
+    .suggestItem:last-child{border-bottom:none}
+    .suggestItem:hover{background:#12192a}
+    .suggestName{font-weight:900}
+
+    .formSection{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#0b0f18;
+      display:grid;
+      gap:10px;
+    }
+
+    .formSectionTitle{
+      font-weight:900;
+      font-size:14px;
+    }
+
+    .checkRow{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      align-items:center;
+      min-height:38px;
+    }
+
+    .checkRow label{
+      margin:0;
+      display:flex;
+      gap:6px;
+      align-items:center;
+      color:var(--text);
+      font-size:13px;
+    }
+
+    .checkRow input[type="checkbox"]{
+      width:16px;
+      height:16px;
+      padding:0;
+    }
+
+    .detailActionButtons{
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:10px;
+    }
+
+    @media (max-width:760px){
+      .detailActionButtons{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+      }
+    }
+
+
+    .loadingOverlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:15000;
+      padding:16px;
+    }
+
+    .loadingOverlay.open{display:flex}
+
+    .loadingBox{
+      min-width:220px;
+      max-width:min(92vw, 360px);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:18px 20px;
+      background:linear-gradient(180deg,var(--panel),var(--panel2));
+      box-shadow:0 18px 48px rgba(0,0,0,.45);
+      display:grid;
+      gap:12px;
+      justify-items:center;
+      text-align:center;
+    }
+
+    .loadingSpinner{
+      width:46px;
+      height:46px;
+      border-radius:999px;
+      border:4px solid rgba(255,255,255,.12);
+      border-top-color:#3b82f6;
+      animation:inventorySpin .9s linear infinite;
+    }
+
+    .loadingText{
+      font-weight:900;
+      font-size:14px;
+      line-height:1.2;
+    }
+
+    @keyframes inventorySpin{
+      to{transform:rotate(360deg)}
+    }
+
+    .miniModalBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.72);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:10020;
+      padding:16px;
+    }
+
+    .miniModalBackdrop.open{display:flex}
+
+    .miniModal{
+      width:min(420px,100%);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px;
+      background:linear-gradient(180deg,var(--panel),var(--panel2));
+      box-shadow:var(--shadow);
+      display:grid;
+      gap:12px;
+    }
+
+    .miniModalTitle{
+      font-size:18px;
+      font-weight:900;
+      line-height:1.15;
+    }
+
+    .miniModalText{
+      font-size:13px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+
+    .miniModalFields{
+      display:grid;
+      gap:10px;
+    }
+
+    .miniModalActions{
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="topGrid">
+    <div class="card">
+      <div class="row">
+        <div style="min-width:240px;flex:1">
+          <label>Recherche</label>
+          <input id="searchInput" style="width:100%" placeholder="Nom, famille, catégorie, notes, description...">
+        </div>
+
+        <div style="min-width:170px">
+          <label>Affichage</label>
+          <select id="groupModeSel" style="width:100%">
+            <option value="family">Par famille</option>
+            <option value="container">Par container</option>
+          </select>
+        </div>
+
+        <div style="min-width:170px">
+          <label>Trier par</label>
+          <select id="sortSel" style="width:100%">
+            <option value="name_asc">Nom A → Z</option>
+            <option value="name_desc">Nom Z → A</option>
+            <option value="qty_desc">Quantité décroissante</option>
+            <option value="qty_asc">Quantité croissante</option>
+            <option value="weight_desc">Poids décroissant</option>
+            <option value="weight_asc">Poids croissant</option>
+            <option value="container_asc">Container A → Z</option>
+            <option value="family_asc">Famille A → Z</option>
+          </select>
+        </div>
+
+        <div class="row" style="align-self:end">
+          <button onclick="bootInventory()">Refresh</button>
+          <button class="good" onclick="openAddModal()">Ajouter un objet</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mainSplit">
+    <div class="card">
+      <div id="results" class="tree"></div>
+    </div>
+
+    <div id="detailPanel" class="card stickyRight">
+      <div id="detailHost" class="detailsGrid">
+        <div class="empty">Sélectionne un objet pour voir ses détails.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="addModal" class="modalBackdrop" aria-hidden="true">
+    <div class="modalBox">
+      <div class="card">
+        <div class="strong">Ajouter un objet manuellement</div>
+        <div class="small muted" style="margin-top:6px">
+          Tu tapes un nom, le catalogue propose, et les bons blocs apparaissent.
+        </div>
+
+        <div class="formGrid">
+          <div>
+            <label>Nom</label>
+            <div class="autocompleteWrap">
+              <input id="add_name" autocomplete="off" style="width:100%" placeholder="Ex: FAV 34">
+              <div id="equipSuggest" class="suggestList"></div>
+            </div>
+          </div>
+
+          <div>
+            <label>Notes</label>
+            <input id="add_notes" style="width:100%" placeholder="Ex: de Jack">
+          </div>
+
+          <div>
+            <label>Famille</label>
+            <input id="add_family" style="width:100%">
+          </div>
+
+          <div>
+            <label>Catégorie</label>
+            <input id="add_category" style="width:100%">
+          </div>
+
+          <div>
+            <label>Container</label>
+            <select id="add_emplacement" style="width:100%"></select>
+          </div>
+
+          <div>
+            <label>Qté</label>
+            <input id="add_quantity" type="number" min="1" step="1" value="1" style="width:100%">
+          </div>
+
+          <div>
+            <label>Poids</label>
+            <input id="add_weight" type="number" min="0" step="0.01" value="0" style="width:100%">
+          </div>
+
+          <div>
+            <label>NT</label>
+            <input id="add_nt" style="width:100%">
+          </div>
+
+          <div>
+            <label>Fabricant</label>
+            <input id="add_fabricant" style="width:100%">
+          </div>
+
+          <div>
+            <label>Nation</label>
+            <input id="add_nation" style="width:100%">
+          </div>
+
+          <div>
+            <label>Disponibilité</label>
+            <input id="add_dispo" style="width:100%" placeholder="Ex: 15 (20)">
+          </div>
+        </div>
+
+        <div id="weaponFields" class="formSection hidden" style="margin-top:12px">
+          <div class="formSectionTitle">Stats arme</div>
+          <div class="formGrid" style="margin-top:0">
+            <div><label>Dégâts</label><input id="add_dom" style="width:100%"></div>
+            <div><label>Choc</label><input id="add_choc" style="width:100%"></div>
+            <div><label>Portée</label><input id="add_portee" style="width:100%"></div>
+            <div><label>FOR</label><input id="add_for" style="width:100%"></div>
+            <div><label>Init</label><input id="add_init" style="width:100%"></div>
+            <div><label>Calibre</label><select id="add_cal" style="width:100%"></select></div>
+
+            <div class="full">
+              <label>Mode de tir</label>
+              <div class="checkRow">
+                <label><input type="checkbox" id="add_mode_cc"> CC</label>
+                <label><input type="checkbox" id="add_mode_rc"> RC</label>
+                <label><input type="checkbox" id="add_mode_rl"> RL</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="armorFields" class="formSection hidden" style="margin-top:12px">
+          <div class="formSectionTitle">Stats protection</div>
+          <div class="formGrid" style="margin-top:0">
+            <div><label>Protection</label><input id="add_prot" style="width:100%"></div>
+            <div><label>Protection choc</label><input id="add_protChoc" style="width:100%"></div>
+            <div>
+              <label>Malus armure</label>
+              <select id="add_armureMalus" style="width:100%">
+                <option value=""></option>
+                <option value="S">S</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+              </select>
+            </div>
+
+            <div class="full">
+              <label>Localisations</label>
+              <div class="checkRow">
+                <label><input type="checkbox" id="add_loc_tete"> Tête</label>
+                <label><input type="checkbox" id="add_loc_corps"> Corps</label>
+                <label><input type="checkbox" id="add_loc_bras_g"> Bras gauche</label>
+                <label><input type="checkbox" id="add_loc_bras_d"> Bras droit</label>
+                <label><input type="checkbox" id="add_loc_jambe_g"> Jambe gauche</label>
+                <label><input type="checkbox" id="add_loc_jambe_d"> Jambe droite</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="portableFields" class="formSection hidden" style="margin-top:12px">
+          <div class="formSectionTitle">Contenant portable</div>
+          <div class="formGrid" style="margin-top:0">
+            <div><label>Contenance</label><input id="add_contenance" style="width:100%"></div>
+            <div><label>Étanchéité</label><input id="add_etancheite" style="width:100%"></div>
+            <div>
+              <label>Malus armure</label>
+              <select id="add_portable_armureMalus" style="width:100%">
+                <option value=""></option>
+                <option value="S">S</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+              </select>
+            </div>
+
+            <div class="full">
+              <label>Localisations</label>
+              <div class="checkRow">
+                <label><input type="checkbox" id="add_portable_dos"> Dos</label>
+                <label><input type="checkbox" id="add_portable_ceinture"> Ceinture</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <label>Description</label>
+          <textarea id="add_description" style="width:100%" placeholder="Description..."></textarea>
+        </div>
+
+        <div id="addError" class="small" style="color:#ffd7d7;margin-top:10px"></div>
+
+        <div class="row" style="justify-content:flex-end;margin-top:12px">
+          <button onclick="closeAddModal()">Annuler</button>
+          <button id="addSubmitBtn" class="good" onclick="submitAddItem()">Ajouter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="miniActionModal" class="miniModalBackdrop" aria-hidden="true">
+    <div class="miniModal">
+      <div id="miniActionTitle" class="miniModalTitle">Action</div>
+      <div id="miniActionText" class="miniModalText"></div>
+      <div id="miniActionFields" class="miniModalFields"></div>
+      <div class="miniModalActions">
+        <button type="button" onclick="closeMiniActionModal()">Annuler</button>
+        <button id="miniActionConfirmBtn" type="button" class="primary">Valider</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="loadingOverlay" class="loadingOverlay" aria-hidden="true">
+    <div class="loadingBox" role="status" aria-live="polite" aria-busy="true">
+      <div class="loadingSpinner"></div>
+      <div id="loadingText" class="loadingText">Chargement…</div>
+    </div>
+  </div>
+
+  <div id="msg" class="hidden"></div>
+  <div id="dbg" class="hidden"></div>
+
+  <script>
+    let FID = "";
+    let INV_STATE = {
+      items: [],
+      containers: [],
+      selectedItemId: 0,
+      calibers: [],
+      transferTargets: []
+    };
+
+    let EQUIP_CATALOG = [];
+    let FAMILY_VIEW_SELECTED = "";
+    let CONTAINER_VIEW_SELECTED = "";
+
+    const ITEM_BY_ID = new Map();
+    const OPEN_FAMILY_BY_SCOPE = new Map();
+    const OPEN_CONTAINER = new Set();
+    const OPEN_CAT_BY_SCOPE = new Map();
+    const CATEGORY_RENDER_JOBS = new Map();
+
+    let stickyRaf = 0;
+    let suggestHideTimer = null;
+    let renderTimer = null;
+
+    let MINI_ACTION_STATE = null;
+    let actionBusy = false;
+    let loadingDepth = 0;
+
+    let detailAutosaveTimer = null;
+    let detailAutosavePayload = null;
+    let detailAutosaveSeq = 0;
+    let detailAutosaveLastAck = 0;
+
+    const FAMILY_HUE_MAP = {
+      "ARMES": 3,
+      "MUNITIONS": 24,
+      "PROTECTIONS": 210,
+      "DRONES": 265,
+      "EQUIPEMENTS": 170,
+      "OUTILS": 88,
+      "IMPLANTS": 320,
+      "DIVERS": 230
+    };
+
+    const DEFAULT_FAMILY_HUE = 215;
+
+    const CATEGORY_KEYWORD_HUE_SHIFT = {
+      "POING": -20,
+      "PISTOLET": -26,
+      "REVOLVER": -12,
+      "EPAULE": 18,
+      "ÉPAULE": 18,
+      "FUSIL": 26,
+      "CARABINE": 34,
+      "LANCE": 48,
+      "MITRAILLE": 56,
+      "SNIPER": 42,
+      "PRECISION": 38,
+      "PRÉCISION": 38,
+      "BLANCHE": -34,
+      "MELEE": -28,
+      "MÊLÉE": -28,
+      "MELÉE": -28,
+      "EXPLOSIF": 62,
+      "GRENADE": 72,
+      "ENERG": 24,
+      "ÉNERG": 24,
+      "LASER": 30,
+      "PLASMA": 44,
+      "BALLES": 8,
+      "OBUS": 20,
+      "FLECHETTES": 34,
+      "FLECHES": 28,
+      "FLÈCHES": 28,
+      "CASQUE": -18,
+      "GILET": 10,
+      "COMBINAISON": 26,
+      "BOUCLIER": 36,
+      "IMPLANT": -12,
+      "MEDICAL": 18,
+      "MÉDICAL": 18,
+      "OUTIL": -8,
+      "KIT": 14,
+      "ORDINATEUR": 34,
+      "CEINTURE": 12,
+      "BRACELET": -20
+    };
+
+    function setMsg(s){
+      const el = document.getElementById("msg");
+      if (el) el.textContent = s || "";
+    }
+
+    function setDbg(s){
+      const el = document.getElementById("dbg");
+      if (!el) return;
+      el.textContent = s || "";
+      el.classList.toggle("errorBox", !!s);
+    }
+
+
+    function callServer(fn, ...args){
+      return new Promise((resolve, reject) => {
+        try {
+          const runner = google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject);
+          if (!runner || typeof runner[fn] !== "function") {
+            reject(new Error(`Fonction serveur introuvable : ${fn}`));
+            return;
+          }
+          runner[fn](...args);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    function showLoading(text){
+      const overlay = document.getElementById("loadingOverlay");
+      const label = document.getElementById("loadingText");
+      if (!overlay || !label) return;
+      loadingDepth += 1;
+      label.textContent = String(text || "Chargement…");
+      overlay.classList.add("open");
+      overlay.setAttribute("aria-hidden", "false");
+    }
+
+    function hideLoading(){
+      const overlay = document.getElementById("loadingOverlay");
+      if (!overlay) return;
+      loadingDepth = Math.max(0, loadingDepth - 1);
+      if (loadingDepth > 0) return;
+      overlay.classList.remove("open");
+      overlay.setAttribute("aria-hidden", "true");
+    }
+
+    async function withLoading(text, fn){
+      showLoading(text);
+      try {
+        return await fn();
+      } finally {
+        hideLoading();
+      }
+    }
+
+    window.onerror = function(message, source, lineno, colno){
+      const msg = String(message || "");
+      if (msg.indexOf("ResizeObserver") !== -1) return;
+      setDbg(`JS ERROR: ${message} (${lineno}:${colno})`);
+    };
+
+    window.onunhandledrejection = function(e){
+      const msg = e && e.reason && e.reason.message ? e.reason.message : String(e.reason || e);
+      if (String(msg).indexOf("ResizeObserver") !== -1) return;
+      setDbg(`PROMISE ERROR: ${msg}`);
+    };
+
+    function escapeHtml(s){
+      return String(s || "").replace(/[&<>"']/g, m => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[m]));
+    }
+
+    function normalizeText(s){
+      return String(s || "")
+        .trim()
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function safeFamily(v){ return String(v || "").trim() || "Sans famille"; }
+    function safeCategory(v){ return String(v || "").trim() || "Sans catégorie"; }
+    function safeContainer(v){ return String(v || "").trim() || "Sans container"; }
+
+    function extractSpreadsheetId(raw){
+      const txt = String(raw || "").trim();
+      if (!txt) return "";
+      const m = txt.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
+      if (m && m[1]) return m[1].trim();
+      return txt;
+    }
+
+
+    function uniqueSorted(arr){
+      return Array.from(new Set(arr.map(v => String(v || "").trim()).filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
+    }
+
+    function hashString(str){
+      const s = String(str || "");
+      let h = 0;
+      for (let i = 0; i < s.length; i++) {
+        h = ((h << 5) - h) + s.charCodeAt(i);
+        h |= 0;
+      }
+      return Math.abs(h);
+    }
+
+    function wrapHue(h){
+      let x = Number(h || 0) % 360;
+      if (x < 0) x += 360;
+      return x;
+    }
+
+    function getFamilyHue(family){
+      const key = normalizeText(family || "");
+      return FAMILY_HUE_MAP[key] !== undefined ? FAMILY_HUE_MAP[key] : DEFAULT_FAMILY_HUE;
+    }
+
+    function getKeywordHueShift(category){
+      const key = normalizeText(category || "");
+      let shift = 0;
+      Object.keys(CATEGORY_KEYWORD_HUE_SHIFT).forEach(word => {
+        if (key.indexOf(word) !== -1) shift += CATEGORY_KEYWORD_HUE_SHIFT[word];
+      });
+      if (shift > 70) shift = 70;
+      if (shift < -70) shift = -70;
+      return shift;
+    }
+
+    function getFamilyStyle(family){
+      return {
+        bg: `rgba(255,255,255,.04)`,
+        border: `rgba(255,255,255,.12)`,
+        text: `var(--text)`
+      };
+    }
+
+    function getCategoryStyle(category, family){
+      return {
+        bg: `rgba(255,255,255,.04)`,
+        border: `rgba(255,255,255,.12)`,
+        text: `var(--text)`
+      };
+    }
+
+    function getFamilyPanelStyle(){
+      return {
+        borderColor: "var(--border)",
+        summaryBg: "#0c0f16",
+        contentBg: "#0b0e14",
+        glow: "none"
+      };
+    }
+
+    function getCategoryPanelStyle(){
+      return {
+        borderColor: "var(--border)",
+        summaryBg: "#0c0f16",
+        contentBg: "#0b0e14",
+        glow: "none"
+      };
+    }
+
+    function getContainerPanelStyle(container){
+      const hue = wrapHue(200 + (hashString(container) % 90));
+      return {
+        borderColor: `hsla(${hue}, 68%, 50%, .24)`,
+        summaryBg: `linear-gradient(180deg, hsla(${hue}, 64%, 28%, .14), rgba(12,15,22,.96))`,
+        contentBg: `linear-gradient(180deg, hsla(${hue}, 60%, 18%, .08), rgba(11,14,20,.98))`,
+        glow: `0 0 0 1px hsla(${hue}, 64%, 50%, .06) inset`
+      };
+    }
+
+    function makeFamilyChip(label, family){
+      return makeNeutralChip(label);
+    }
+
+    function makeCategoryChip(label, family){
+      return makeNeutralChip(label);
+    }
+
+    function makeNeutralChip(label){
+      return `<span class="chip">${escapeHtml(label || "")}</span>`;
+    }
+
+    function parseLeadingInt(s){
+      const txt = String(s || "").trim();
+      const m = txt.match(/-?\d+/);
+      return m ? Number(m[0]) : null;
+    }
+
+    function getAvailabilityInfo(rawDispo){
+      const raw = String(rawDispo || "").trim();
+      const n = parseLeadingInt(raw);
+
+      if (!raw || n === null || n >= 20) {
+        return {
+          score: n, raw, label: "Très commun",
+          color: "#b8bec8",
+          bg: "rgba(184,190,200,.12)",
+          border: "rgba(184,190,200,.36)",
+          tintTop: "rgba(184,190,200,.09)",
+          tintBottom: "rgba(184,190,200,.03)",
+          glow: "none"
+        };
+      }
+      if (n >= 15) {
+        return {
+          score: n, raw, label: "Commun",
+          color: "#f3f6fb",
+          bg: "rgba(243,246,251,.10)",
+          border: "rgba(243,246,251,.32)",
+          tintTop: "rgba(243,246,251,.07)",
+          tintBottom: "rgba(243,246,251,.02)",
+          glow: "none"
+        };
+      }
+      if (n >= 10) {
+        return {
+          score: n, raw, label: "Peu commun",
+          color: "#7ee0a2",
+          bg: "rgba(126,224,162,.12)",
+          border: "rgba(126,224,162,.36)",
+          tintTop: "rgba(70,180,110,.11)",
+          tintBottom: "rgba(70,180,110,.03)",
+          glow: "0 0 0 1px rgba(70,180,110,.10) inset"
+        };
+      }
+      if (n >= 5) {
+        return {
+          score: n, raw, label: "Rare",
+          color: "#8ab8ff",
+          bg: "rgba(138,184,255,.12)",
+          border: "rgba(138,184,255,.36)",
+          tintTop: "rgba(90,130,230,.11)",
+          tintBottom: "rgba(90,130,230,.03)",
+          glow: "0 0 0 1px rgba(90,130,230,.10) inset"
+        };
+      }
+      if (n >= 1) {
+        return {
+          score: n, raw, label: "Très rare",
+          color: "#ffd95e",
+          bg: "rgba(255,217,94,.12)",
+          border: "rgba(255,217,94,.36)",
+          tintTop: "rgba(235,195,60,.11)",
+          tintBottom: "rgba(235,195,60,.03)",
+          glow: "0 0 0 1px rgba(235,195,60,.12) inset, 0 0 14px rgba(235,195,60,.10)"
+        };
+      }
+      if (n >= -5) {
+        return {
+          score: n, raw, label: "Extrêmement rare",
+          color: "#ff9a3d",
+          bg: "rgba(255,154,61,.16)",
+          border: "rgba(255,140,40,.60)",
+          tintTop: "rgba(255,132,35,.22)",
+          tintBottom: "rgba(255,90,0,.06)",
+          glow: "0 0 0 1px rgba(255,145,45,.20) inset, 0 0 18px rgba(255,120,25,.16)"
+        };
+      }
+
+      return {
+        score: n, raw, label: (n <= -15 ? "Faut pas rêver" : "Introuvable"),
+        color: "#ff5f5f",
+        bg: "rgba(255,95,95,.18)",
+        border: "rgba(255,70,70,.68)",
+        tintTop: "rgba(255,78,78,.26)",
+        tintBottom: "rgba(160,10,10,.08)",
+        glow: "0 0 0 1px rgba(255,90,90,.24) inset, 0 0 22px rgba(255,60,60,.18)"
+      };
+    }
+
+    function colorizeNameHtml(name, rawDispo){
+      const info = getAvailabilityInfo(rawDispo);
+      return `<span style="color:${info.color};font-weight:900">${escapeHtml(name || "")}</span>`;
+    }
+
+    function getCardStyle(rawDispo){
+      const info = getAvailabilityInfo(rawDispo);
+      return {
+        background: [
+          `radial-gradient(circle at 18% 14%, rgba(255,255,255,.07), rgba(255,255,255,0) 34%)`,
+          `linear-gradient(180deg, ${info.tintTop}, ${info.tintBottom})`,
+          `linear-gradient(180deg,#0d111a,#0a0d13)`
+        ].join(", "),
+        borderColor: info.border,
+        boxShadow: info.glow
+      };
+    }
+
+    function applyDetailPanelStyle(item){
+      const panel = document.getElementById("detailPanel");
+      if (!panel) return;
+
+      if (!item) {
+        panel.style.borderColor = "";
+        panel.style.boxShadow = "";
+        panel.style.background = "";
+        return;
+      }
+
+      const info = getAvailabilityInfo(item.dispo);
+      panel.style.borderColor = info.border;
+      panel.style.boxShadow = info.glow && info.glow !== "none"
+        ? `${info.glow}, 0 10px 30px rgba(0,0,0,.35)`
+        : `0 10px 30px rgba(0,0,0,.35)`;
+
+      panel.style.background = [
+        `linear-gradient(180deg, ${info.tintTop}, ${info.tintBottom})`,
+        `linear-gradient(180deg, var(--panel), var(--panel2))`
+      ].join(", ");
+    }
+
+    function updateStickyLayout(){
+      const topGrid = document.querySelector(".topGrid");
+      if (!topGrid) return;
+
+      const height = topGrid.offsetHeight || 0;
+      const root = document.documentElement;
+      const topOffset = 16;
+      root.style.setProperty("--sticky-top-offset", topOffset + "px");
+      root.style.setProperty("--sticky-right-top", (topOffset + height + 12) + "px");
+    }
+
+    function scheduleStickyLayoutUpdate(){
+      if (stickyRaf) cancelAnimationFrame(stickyRaf);
+      stickyRaf = requestAnimationFrame(() => {
+        stickyRaf = 0;
+        updateStickyLayout();
+      });
+    }
+
+    function getSelectedItem(){
+      return ITEM_BY_ID.get(Number(INV_STATE.selectedItemId || 0)) || null;
+    }
+
+    function findItemById(id){
+      return ITEM_BY_ID.get(Number(id || 0)) || null;
+    }
+
+    function formatWeight(v){
+      const n = Number(v || 0);
+      if (!Number.isFinite(n)) return "0 kg";
+      let s = String(Math.round(n * 100) / 100);
+      s = s.replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1").replace(".", ",");
+      return s + " kg";
+    }
+
+    function getItemTotalWeight(item){
+      const unit = Number(item && item.weight || 0);
+      const qty = Number(item && item.quantity || 0);
+      const safeUnit = Number.isFinite(unit) ? unit : 0;
+      const safeQty = Number.isFinite(qty) && qty > 0 ? qty : 0;
+      return safeUnit * safeQty;
+    }
+
+    function getItemsTotalWeight(items){
+      return (items || []).reduce((sum, item) => sum + getItemTotalWeight(item), 0);
+    }
+
+    function getCategoryMapTotalWeight(catMap){
+      let total = 0;
+      if (!catMap || typeof catMap.forEach !== "function") return total;
+      catMap.forEach(items => { total += getItemsTotalWeight(items); });
+      return total;
+    }
+
+    function getFamilyMapTotalWeight(famMap){
+      let total = 0;
+      if (!famMap || typeof famMap.forEach !== "function") return total;
+      famMap.forEach(catMap => { total += getCategoryMapTotalWeight(catMap); });
+      return total;
+    }
+
+    function buildSearchKey(item){
+      return normalizeText([
+        item.displayName,
+        item.name,
+        item.family,
+        item.category,
+        item.emplacement,
+        item.description,
+        item.notes,
+        item.catalogFabricant,
+        item.catalogNation,
+        item.catalogNT,
+        item.catalogArmeDom,
+        item.catalogArmeChoc,
+        item.catalogArmePortee,
+        item.catalogArmeFOR,
+        item.catalogArmeInit,
+        item.catalogArmeCAL,
+        item.catalogArmeModeTir,
+        item.catalogArmureProt,
+        item.catalogArmureChoc,
+        item.catalogArmureLoc,
+        item.catalogArmureMal,
+        item.catalogContenance,
+        item.catalogEtancheite,
+        item.dispo
+      ].join(" "));
+    }
+
+    function applyContext(data){
+      INV_STATE.items = Array.isArray(data.items) ? data.items : [];
+      INV_STATE.containers = Array.isArray(data.containers) ? data.containers : [];
+      INV_STATE.calibers = Array.isArray(data.calibers) ? data.calibers : [];
+      INV_STATE.transferTargets = Array.isArray(data.transferTargets) ? data.transferTargets : [];
+      EQUIP_CATALOG = Array.isArray(data.equipCatalog) ? data.equipCatalog : [];
+
+      ITEM_BY_ID.clear();
+      INV_STATE.items.forEach(item => {
+        item._searchKey = buildSearchKey(item);
+        ITEM_BY_ID.set(Number(item.id || 0), item);
+      });
+
+      if (data && data.selectedItemId) {
+        INV_STATE.selectedItemId = Number(data.selectedItemId || 0);
+      }
+
+      const availableFamilies = new Set(INV_STATE.items.map(x => safeFamily(x.family)));
+      if (FAMILY_VIEW_SELECTED && !availableFamilies.has(FAMILY_VIEW_SELECTED)) {
+        FAMILY_VIEW_SELECTED = "";
+      }
+
+      const availableContainers = new Set(INV_STATE.items.map(x => safeContainer(x.emplacement)));
+      if (CONTAINER_VIEW_SELECTED && !availableContainers.has(CONTAINER_VIEW_SELECTED)) {
+        CONTAINER_VIEW_SELECTED = "";
+      }
+
+      const exists = INV_STATE.items.some(x => Number(x.id || 0) === Number(INV_STATE.selectedItemId || 0));
+      if (!exists) {
+        INV_STATE.selectedItemId = 0;
+      }
+
+      buildFilterSelects();
+      buildAddContainerSelect();
+      buildCaliberSelect();
+
+      const itemCountEl = document.getElementById("itemCount");
+      if (itemCountEl) itemCountEl.textContent = String((data.counts && data.counts.items) || INV_STATE.items.length || 0);
+      const containerCountEl = document.getElementById("containerCount");
+      if (containerCountEl) containerCountEl.textContent = String((data.counts && data.counts.containers) || INV_STATE.containers.length || 0);
+
+      renderInventory();
+      scheduleStickyLayoutUpdate();
+    }
+
+    function buildFilterSelects(){
+      return;
+    }
+
+    function buildAddContainerSelect(){
+      const sel = document.getElementById("add_emplacement");
+      if (!sel) return;
+      sel.innerHTML = "";
+      const containers = uniqueSorted((INV_STATE.containers || []).filter(Boolean));
+      if (!containers.length) containers.push("Coffre");
+      containers.forEach(v => {
+        const o = document.createElement("option");
+        o.value = v;
+        o.textContent = v;
+        sel.appendChild(o);
+      });
+    }
+
+    function buildCaliberSelect(currentValue){
+      const sel = document.getElementById("add_cal");
+      if (!sel) return;
+      const current = currentValue || sel.value || "";
+      sel.innerHTML = "";
+
+      const options = uniqueSorted((INV_STATE.calibers || []).concat(current ? [current] : []));
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "";
+      sel.appendChild(empty);
+
+      options.forEach(v => {
+        const o = document.createElement("option");
+        o.value = v;
+        o.textContent = v;
+        sel.appendChild(o);
+      });
+
+      if ([...sel.options].some(o => o.value === current)) {
+        sel.value = current;
+      }
+    }
+
+    function fillSelect(id, values, keepFirstAsAll){
+      const sel = document.getElementById(id);
+      const current = sel.value;
+      sel.innerHTML = "";
+
+      values.forEach((v, idx) => {
+        const o = document.createElement("option");
+        o.value = (keepFirstAsAll && idx === 0) ? "" : v;
+        o.textContent = v;
+        sel.appendChild(o);
+      });
+
+      if ([...sel.options].some(o => o.value === current)) {
+        sel.value = current;
+      }
+    }
+
+    function getFilteredItems(){
+      const q = normalizeText(document.getElementById("searchInput").value || "");
+      const sort = String(document.getElementById("sortSel").value || "name_asc");
+
+      let items = INV_STATE.items.filter(item => {
+        if (q && item._searchKey.indexOf(q) === -1) return false;
+        return true;
+      });
+
+      items.sort((a, b) => {
+        if (sort === "name_desc") return b.displayName.localeCompare(a.displayName, "fr", { sensitivity: "base" });
+        if (sort === "qty_desc") return Number(b.quantity || 0) - Number(a.quantity || 0) || a.displayName.localeCompare(b.displayName, "fr", { sensitivity: "base" });
+        if (sort === "qty_asc") return Number(a.quantity || 0) - Number(b.quantity || 0) || a.displayName.localeCompare(b.displayName, "fr", { sensitivity: "base" });
+        if (sort === "weight_desc") return Number(b.weight || 0) - Number(a.weight || 0) || a.displayName.localeCompare(b.displayName, "fr", { sensitivity: "base" });
+        if (sort === "weight_asc") return Number(a.weight || 0) - Number(b.weight || 0) || a.displayName.localeCompare(b.displayName, "fr", { sensitivity: "base" });
+        if (sort === "container_asc") return String(a.emplacement || "").localeCompare(String(b.emplacement || ""), "fr", { sensitivity: "base" }) || a.displayName.localeCompare(b.displayName, "fr", { sensitivity: "base" });
+        if (sort === "family_asc") {
+          return safeFamily(a.family).localeCompare(safeFamily(b.family), "fr", { sensitivity: "base" })
+            || safeCategory(a.category).localeCompare(safeCategory(b.category), "fr", { sensitivity: "base" })
+            || a.displayName.localeCompare(b.displayName, "fr", { sensitivity: "base" });
+        }
+        return a.displayName.localeCompare(b.displayName, "fr", { sensitivity: "base" });
+      });
+
+      return items;
+    }
+
+    function groupItemsByFamily(items){
+      const famMap = new Map();
+      items.forEach(item => {
+        const fam = safeFamily(item.family);
+        const cat = safeCategory(item.category);
+        if (!famMap.has(fam)) famMap.set(fam, new Map());
+        const catMap = famMap.get(fam);
+        if (!catMap.has(cat)) catMap.set(cat, []);
+        catMap.get(cat).push(item);
+      });
+      return famMap;
+    }
+
+    function groupItemsByContainer(items){
+      const containerMap = new Map();
+      items.forEach(item => {
+        const cont = safeContainer(item.emplacement);
+        const fam = safeFamily(item.family);
+        const cat = safeCategory(item.category);
+
+        if (!containerMap.has(cont)) containerMap.set(cont, new Map());
+        const famMap = containerMap.get(cont);
+
+        if (!famMap.has(fam)) famMap.set(fam, new Map());
+        const catMap = famMap.get(fam);
+
+        if (!catMap.has(cat)) catMap.set(cat, []);
+        catMap.get(cat).push(item);
+      });
+      return containerMap;
+    }
+
+    function makeSummaryLine(titleText, pillsHtml){
+      const line = document.createElement("div");
+      line.className = "nodeSummary";
+
+      const twisty = document.createElement("div");
+      twisty.className = "twisty";
+      twisty.textContent = "▸";
+
+      const title = document.createElement("div");
+      title.className = "nodeTitle";
+      title.textContent = titleText;
+
+      const tools = document.createElement("div");
+      tools.className = "nodeTools";
+      tools.innerHTML = pillsHtml || "";
+
+      line.appendChild(twisty);
+      line.appendChild(title);
+      line.appendChild(tools);
+
+      return { line, twisty };
+    }
+
+    function bindDetailsTwisty(details, twisty){
+      const sync = () => { twisty.textContent = details.open ? "▾" : "▸"; };
+      details.addEventListener("toggle", sync);
+      sync();
+    }
+
+    function refreshFamilyBoardFocus(board){
+      if (!board) return;
+
+      const families = Array.from(board.children).filter(el =>
+        el && el.tagName === "DETAILS" && el.classList && el.classList.contains("node")
+      );
+
+      const focused = families.find(el => el.open) || null;
+      board.classList.toggle("focusMode", !!focused);
+
+      families.forEach(el => {
+        el.classList.toggle("familyFocused", el === focused);
+      });
+    }
+
+    function familyScopeKey(scopeKey, fam){
+      return String(scopeKey || "_root_") + "§" + String(fam || "");
+    }
+
+    function categoryScopeKey(scopeKey, fam){
+      return "cat::" + familyScopeKey(scopeKey, fam);
+    }
+
+    function cancelCategoryRender(jobKey){
+      const job = CATEGORY_RENDER_JOBS.get(jobKey);
+      if (!job) return;
+      job.cancelled = true;
+      CATEGORY_RENDER_JOBS.delete(jobKey);
+    }
+
+    function createItemCardNode(item){
+      const active = Number(item.id || 0) === Number(INV_STATE.selectedItemId || 0);
+      const cardStyle = getCardStyle(item.dispo);
+      const avInfo = getAvailabilityInfo(item.dispo);
+
+      const card = document.createElement("div");
+      card.className = "itemCard" + (active ? " active" : "");
+      card.setAttribute("data-item-id", String(item.id || ""));
+      card.style.background = cardStyle.background;
+      card.style.borderColor = cardStyle.borderColor;
+      if (!active && cardStyle.boxShadow && cardStyle.boxShadow !== "none") {
+        card.style.boxShadow = cardStyle.boxShadow;
+      }
+
+      card.innerHTML = `
+        <div class="itemName"><span style="color:${avInfo.color};font-weight:900">${escapeHtml(item.displayName || item.name || "")}</span></div>
+        <div class="chips">
+          <span class="chip">${escapeHtml(safeFamily(item.family))}</span>
+          <span class="chip">${escapeHtml(safeCategory(item.category))}</span>
+        </div>
+        <div class="metaGrid">
+          <div class="metaLine">Poids : <b>${escapeHtml(formatWeight(item.weight))}</b></div>
+          <div class="metaLine">Qté : <b>${escapeHtml(String(item.quantity || 0))}</b></div>
+          <div class="metaLine" style="grid-column:1 / -1">Empl. : <b>${escapeHtml(item.emplacement || "—")}</b></div>
+        </div>
+      `;
+
+      return card;
+    }
+
+    function renderCategoryItemsChunked(content, items, jobKey){
+      cancelCategoryRender(jobKey);
+
+      content.innerHTML = "";
+
+      const loading = document.createElement("div");
+      loading.className = "categoryLoading";
+      loading.textContent = `Chargement de ${items.length} objet(s)…`;
+      content.appendChild(loading);
+
+      const grid = document.createElement("div");
+      grid.className = "itemGrid";
+      content.appendChild(grid);
+
+      const job = {
+        cancelled: false,
+        index: 0
+      };
+      CATEGORY_RENDER_JOBS.set(jobKey, job);
+
+      const chunkSize = items.length > 600 ? 24 : items.length > 250 ? 40 : 80;
+
+      const step = () => {
+        if (job.cancelled) return;
+
+        const frag = document.createDocumentFragment();
+        const max = Math.min(job.index + chunkSize, items.length);
+
+        for (; job.index < max; job.index++) {
+          frag.appendChild(createItemCardNode(items[job.index]));
+        }
+
+        grid.appendChild(frag);
+
+        if (job.index < items.length) {
+          loading.textContent = `Chargement de ${job.index}/${items.length} objet(s)…`;
+          requestAnimationFrame(step);
+        } else {
+          loading.remove();
+          CATEGORY_RENDER_JOBS.delete(jobKey);
+          scheduleStickyLayoutUpdate();
+        }
+      };
+
+      requestAnimationFrame(step);
+    }
+
+    function makeCategoryNode(scopeKey, fam, cat, items){
+      const familyKey = categoryScopeKey(scopeKey, fam);
+      const jobKey = familyKey + "§" + cat;
+
+      const details = document.createElement("details");
+      details.className = "node categoryNode";
+      details.open = OPEN_CAT_BY_SCOPE.get(familyKey) === cat;
+
+      const style = getCategoryPanelStyle(cat, fam);
+      details.style.borderColor = style.borderColor;
+      details.style.boxShadow = style.glow;
+
+      const summary = document.createElement("summary");
+      const totalWeight = getItemsTotalWeight(items);
+      const parts = makeSummaryLine(cat, `<span class="pill">${items.length} objet(s)</span><span class="pill">${escapeHtml(formatWeight(totalWeight))}</span>`);
+      parts.line.style.background = style.summaryBg;
+      bindDetailsTwisty(details, parts.twisty);
+      summary.appendChild(parts.line);
+
+      const content = document.createElement("div");
+      content.className = "nodeContent";
+      content.style.background = style.contentBg;
+
+      if (details.open) {
+        renderCategoryItemsChunked(content, items, jobKey);
+      }
+
+      details.addEventListener("toggle", () => {
+        if (details.open) {
+          OPEN_CAT_BY_SCOPE.set(familyKey, cat);
+
+          const siblings = Array.from(details.parentElement.children).filter(el =>
+            el !== details &&
+            el.classList &&
+            el.classList.contains("categoryNode")
+          );
+
+          siblings.forEach(sib => {
+            if (sib.open) sib.open = false;
+          });
+
+          renderCategoryItemsChunked(content, items, jobKey);
+        } else {
+          if (OPEN_CAT_BY_SCOPE.get(familyKey) === cat) {
+            OPEN_CAT_BY_SCOPE.delete(familyKey);
+          }
+          cancelCategoryRender(jobKey);
+          content.innerHTML = "";
+          scheduleStickyLayoutUpdate();
+        }
+      });
+
+      details.appendChild(summary);
+      details.appendChild(content);
+
+      return details;
+    }
+
+    function makeFamilyNode(scopeKey, fam, catMap){
+      const details = document.createElement("details");
+      details.className = "node familyNode";
+      details.dataset.family = fam;
+      details.open = OPEN_FAMILY_BY_SCOPE.get(scopeKey) === fam;
+
+      details.addEventListener("toggle", () => {
+        const board = details.parentElement;
+
+        if (details.open) {
+          OPEN_FAMILY_BY_SCOPE.set(scopeKey, fam);
+
+          const siblings = Array.from(board.children).filter(el =>
+            el !== details &&
+            el.tagName === "DETAILS"
+          );
+
+          siblings.forEach(sib => {
+            if (sib.open) sib.open = false;
+          });
+        } else if (OPEN_FAMILY_BY_SCOPE.get(scopeKey) === fam) {
+          OPEN_FAMILY_BY_SCOPE.delete(scopeKey);
+        }
+
+        refreshFamilyBoardFocus(board);
+        scheduleStickyLayoutUpdate();
+      });
+
+      let total = 0;
+      catMap.forEach(items => total += items.length);
+
+      const style = getFamilyPanelStyle(fam);
+      details.style.borderColor = style.borderColor;
+      details.style.boxShadow = style.glow;
+
+      const summary = document.createElement("summary");
+      const parts = makeSummaryLine(
+        fam,
+        `<span class="pill">${catMap.size} catégorie(s)</span><span class="pill">${total} objet(s)</span>`
+      );
+      parts.line.style.background = style.summaryBg;
+      bindDetailsTwisty(details, parts.twisty);
+      summary.appendChild(parts.line);
+
+      const content = document.createElement("div");
+      content.className = "nodeContent";
+      content.style.background = style.contentBg;
+
+      const stack = document.createElement("div");
+      stack.className = "categoryStack";
+
+      const cats = Array.from(catMap.keys()).sort((a,b)=>a.localeCompare(b, "fr", { sensitivity:"base" }));
+      cats.forEach(cat => {
+        stack.appendChild(makeCategoryNode(scopeKey, fam, cat, catMap.get(cat)));
+      });
+
+      content.appendChild(stack);
+      details.appendChild(summary);
+      details.appendChild(content);
+
+      return details;
+    }
+
+    function renderFamilyBoard(scopeKey, famMap){
+      const board = document.createElement("div");
+      board.className = "familyBoard";
+
+      const fams = Array.from(famMap.keys()).sort((a,b)=>a.localeCompare(b, "fr", { sensitivity:"base" }));
+      fams.forEach(fam => board.appendChild(makeFamilyNode(scopeKey, fam, famMap.get(fam))));
+
+      refreshFamilyBoardFocus(board);
+      return board;
+    }
+
+    function buildFamilySelectButton(fam, catMap){
+      let total = 0;
+      catMap.forEach(items => total += items.length);
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "familySelectItem" + (FAMILY_VIEW_SELECTED === fam ? " active" : "");
+      btn.dataset.familySelect = fam;
+
+      btn.innerHTML = `
+        <div class="familySelectHead">
+          <div class="familySelectTitle">${escapeHtml(fam)}</div>
+        </div>
+      `;
+
+      return btn;
+    }
+
+    function applyFamilySelection(fam, famMap, scopeKey){
+      FAMILY_VIEW_SELECTED = String(fam || "").trim();
+      INV_STATE.selectedItemId = 0;
+
+      const scopedKey = String(scopeKey || "_root_");
+      if (!FAMILY_VIEW_SELECTED || !famMap || !famMap.has(FAMILY_VIEW_SELECTED)) return;
+
+      const familyKey = categoryScopeKey(scopedKey, FAMILY_VIEW_SELECTED);
+      const catMap = famMap.get(FAMILY_VIEW_SELECTED);
+      const cats = Array.from(catMap.keys()).sort((a,b)=>a.localeCompare(b, "fr", { sensitivity:"base" }));
+
+      if (cats.length === 1) OPEN_CAT_BY_SCOPE.set(familyKey, cats[0]);
+      else OPEN_CAT_BY_SCOPE.delete(familyKey);
+    }
+
+    function renderFamilySelectorLayout(scopeKey, famMap){
+      const wrap = document.createElement("div");
+      wrap.className = "familySelectorLayout";
+
+      const left = document.createElement("div");
+      left.className = "familySelectorList";
+
+      const right = document.createElement("div");
+      right.className = "familySelectorContent";
+
+      const fams = Array.from(famMap.keys()).sort((a,b)=>a.localeCompare(b, "fr", { sensitivity:"base" }));
+      fams.forEach(fam => left.appendChild(buildFamilySelectButton(fam, famMap.get(fam))));
+
+      const selectedFam = famMap.has(FAMILY_VIEW_SELECTED) ? FAMILY_VIEW_SELECTED : "";
+      if (!selectedFam) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Sélectionne une famille pour afficher ses catégories.";
+        right.appendChild(empty);
+      } else {
+        const catMap = famMap.get(selectedFam);
+
+        const familyKey = categoryScopeKey(scopeKey, selectedFam);
+        const cats = Array.from(catMap.keys()).sort((a,b)=>a.localeCompare(b, "fr", { sensitivity:"base" }));
+        if (cats.length === 1) {
+          OPEN_CAT_BY_SCOPE.set(familyKey, cats[0]);
+        }
+
+        const hero = document.createElement("div");
+        hero.className = "familySelectedHero";
+        hero.innerHTML = `
+          <div class="familySelectedHeroTitle">${escapeHtml(selectedFam)}</div>
+        `;
+        right.appendChild(hero);
+
+        const stack = document.createElement("div");
+        stack.className = "categoryStack";
+        cats.forEach(cat => stack.appendChild(makeCategoryNode(scopeKey, selectedFam, cat, catMap.get(cat))));
+        right.appendChild(stack);
+      }
+
+      wrap.appendChild(left);
+      wrap.appendChild(right);
+      return wrap;
+    }
+
+    function buildContainerSelectButton(container, famMap){
+      const totalWeight = getFamilyMapTotalWeight(famMap);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "familySelectItem" + (CONTAINER_VIEW_SELECTED === container ? " active" : "");
+      btn.dataset.containerSelect = container;
+      btn.innerHTML = `
+        <div class="familySelectHead">
+          <div class="familySelectTitle">${escapeHtml(container)}</div>
+          <div class="familySelectMeta">${escapeHtml(formatWeight(totalWeight))}</div>
+        </div>
+      `;
+      return btn;
+    }
+
+    function applyContainerSelection(container, containerMap, scopeKey){
+      CONTAINER_VIEW_SELECTED = String(container || "").trim();
+      INV_STATE.selectedItemId = 0;
+      if (!CONTAINER_VIEW_SELECTED || !containerMap || !containerMap.has(CONTAINER_VIEW_SELECTED)) return;
+
+      const famMap = containerMap.get(CONTAINER_VIEW_SELECTED);
+      Array.from(famMap.keys()).forEach(fam => {
+        const familyKey = categoryScopeKey(String(scopeKey || "_root_") + "::" + CONTAINER_VIEW_SELECTED, fam);
+        const catMap = famMap.get(fam);
+        const cats = Array.from(catMap.keys()).sort((a,b)=>a.localeCompare(b, "fr", { sensitivity:"base" }));
+        if (cats.length === 1) OPEN_CAT_BY_SCOPE.set(familyKey, cats[0]);
+      });
+    }
+
+    function renderContainerSelectorLayout(scopeKey, containerMap){
+      const wrap = document.createElement("div");
+      wrap.className = "familySelectorLayout";
+
+      const left = document.createElement("div");
+      left.className = "familySelectorList";
+
+      const right = document.createElement("div");
+      right.className = "familySelectorContent";
+
+      const containers = Array.from(containerMap.keys()).sort((a,b)=>a.localeCompare(b, "fr", { sensitivity:"base" }));
+      containers.forEach(container => left.appendChild(buildContainerSelectButton(container, containerMap.get(container))));
+
+      const selectedContainer = containerMap.has(CONTAINER_VIEW_SELECTED) ? CONTAINER_VIEW_SELECTED : "";
+      if (!selectedContainer) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Sélectionne un container pour afficher son contenu.";
+        right.appendChild(empty);
+      } else {
+        const famMap = containerMap.get(selectedContainer);
+
+        const hero = document.createElement("div");
+        hero.className = "familySelectedHero";
+        hero.innerHTML = `
+          <div class="familySelectedHeroTitle">${escapeHtml(selectedContainer)}</div>
+          <div class="familySelectedHeroMeta">${escapeHtml(formatWeight(getFamilyMapTotalWeight(famMap)))}</div>
+        `;
+        right.appendChild(hero);
+
+        const fams = Array.from(famMap.keys()).sort((a,b)=>a.localeCompare(b, "fr", { sensitivity:"base" }));
+        fams.forEach(fam => {
+          const block = document.createElement("div");
+          block.className = "detailBox";
+
+          const title = document.createElement("div");
+          title.className = "strong";
+          title.style.display = "flex";
+          title.style.justifyContent = "space-between";
+          title.style.gap = "8px";
+          title.innerHTML = `<span>${escapeHtml(fam)}</span><span class="muted">${escapeHtml(formatWeight(getCategoryMapTotalWeight(famMap.get(fam))))}</span>`;
+          block.appendChild(title);
+
+          const stack = document.createElement("div");
+          stack.className = "categoryStack";
+
+          const scopedContainerKey = String(scopeKey || "_root_") + "::" + selectedContainer;
+          const familyKey = categoryScopeKey(scopedContainerKey, fam);
+          const catMap = famMap.get(fam);
+          const cats = Array.from(catMap.keys()).sort((a,b)=>a.localeCompare(b, "fr", { sensitivity:"base" }));
+          if (cats.length === 1) OPEN_CAT_BY_SCOPE.set(familyKey, cats[0]);
+          cats.forEach(cat => stack.appendChild(makeCategoryNode(scopedContainerKey, fam, cat, catMap.get(cat))));
+
+          block.appendChild(stack);
+          right.appendChild(block);
+        });
+      }
+
+      wrap.appendChild(left);
+      wrap.appendChild(right);
+      return wrap;
+    }
+
+    function makeContainerNode(container, famMap){
+      const details = document.createElement("details");
+      details.className = "node";
+      details.open = OPEN_CONTAINER.has(container);
+
+      details.addEventListener("toggle", () => {
+        if (details.open) OPEN_CONTAINER.add(container);
+        else OPEN_CONTAINER.delete(container);
+        scheduleStickyLayoutUpdate();
+      });
+
+      let total = 0;
+      famMap.forEach(catMap => {
+        catMap.forEach(items => total += items.length);
+      });
+
+      const style = getContainerPanelStyle(container);
+      details.style.borderColor = style.borderColor;
+      details.style.boxShadow = style.glow;
+
+      const summary = document.createElement("summary");
+      const parts = makeSummaryLine(
+        container,
+        `<span class="pill">${famMap.size} famille(s)</span><span class="pill">${total} objet(s)</span>`
+      );
+      parts.line.style.background = style.summaryBg;
+      bindDetailsTwisty(details, parts.twisty);
+      summary.appendChild(parts.line);
+
+      const content = document.createElement("div");
+      content.className = "nodeContent";
+      content.style.background = style.contentBg;
+      content.appendChild(renderFamilyBoard("container::" + container, famMap));
+
+      details.appendChild(summary);
+      details.appendChild(content);
+      return details;
+    }
+
+    function renderInventory(){
+      const host = document.getElementById("results");
+      const filtered = getFilteredItems();
+      const groupMode = String(document.getElementById("groupModeSel").value || "family");
+
+      CATEGORY_RENDER_JOBS.forEach((job, key) => { job.cancelled = true; });
+      CATEGORY_RENDER_JOBS.clear();
+
+      const frag = document.createDocumentFragment();
+      let detailItem = null;
+
+      if (!filtered.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Aucun objet ne correspond aux filtres.";
+        frag.appendChild(empty);
+        host.innerHTML = "";
+        host.appendChild(frag);
+        renderDetail(null);
+        scheduleStickyLayoutUpdate();
+        return;
+      }
+
+      if (groupMode === "container") {
+        const grouped = groupItemsByContainer(filtered);
+        if (CONTAINER_VIEW_SELECTED && !grouped.has(CONTAINER_VIEW_SELECTED)) {
+          CONTAINER_VIEW_SELECTED = "";
+        }
+
+        frag.appendChild(renderContainerSelectorLayout("_root_", grouped));
+
+        if (CONTAINER_VIEW_SELECTED && grouped.has(CONTAINER_VIEW_SELECTED)) {
+          const containerItems = [];
+          grouped.get(CONTAINER_VIEW_SELECTED).forEach(catMap => {
+            catMap.forEach(items => containerItems.push(...items));
+          });
+          detailItem = containerItems.find(x => Number(x.id || 0) === Number(INV_STATE.selectedItemId || 0)) || null;
+        } else {
+          detailItem = null;
+        }
+      } else {
+        const grouped = groupItemsByFamily(filtered);
+        if (FAMILY_VIEW_SELECTED && !grouped.has(FAMILY_VIEW_SELECTED)) {
+          FAMILY_VIEW_SELECTED = "";
+        }
+
+        frag.appendChild(renderFamilySelectorLayout("_root_", grouped));
+
+        if (FAMILY_VIEW_SELECTED && grouped.has(FAMILY_VIEW_SELECTED)) {
+          const familyItems = [];
+          grouped.get(FAMILY_VIEW_SELECTED).forEach(items => familyItems.push(...items));
+          detailItem = familyItems.find(x => Number(x.id || 0) === Number(INV_STATE.selectedItemId || 0)) || null;
+
+        } else {
+          detailItem = null;
+        }
+      }
+
+      host.innerHTML = "";
+      host.appendChild(frag);
+
+      renderDetail(detailItem);
+      scheduleStickyLayoutUpdate();
+    }
+
+    function flushPendingDetailAutosave(){
+      if (!detailAutosavePayload) return;
+      if (detailAutosaveTimer) {
+        clearTimeout(detailAutosaveTimer);
+        detailAutosaveTimer = null;
+      }
+      sendDetailAutosave(detailAutosavePayload);
+      detailAutosavePayload = null;
+    }
+
+    function queueDetailAutosave(itemId, notes, description){
+      detailAutosavePayload = {
+        itemId: Number(itemId || 0),
+        notes: String(notes || ""),
+        description: String(description || "")
+      };
+
+      if (detailAutosaveTimer) clearTimeout(detailAutosaveTimer);
+      detailAutosaveTimer = setTimeout(() => {
+        const payload = detailAutosavePayload;
+        detailAutosavePayload = null;
+        detailAutosaveTimer = null;
+        sendDetailAutosave(payload);
+      }, 650);
+    }
+
+    function sendDetailAutosave(payload){
+      if (!payload || !payload.itemId) return;
+
+      const seq = ++detailAutosaveSeq;
+      const oldCount = INV_STATE.items.length;
+      setMsg("Enregistrement auto…");
+
+      showLoading("Ajout de l'objet…");
+      google.script.run
+        .withSuccessHandler(res => {
+          hideLoading();
+          if (seq < detailAutosaveLastAck) return;
+          detailAutosaveLastAck = seq;
+
+          if (!res || res.ok === false) {
+            setMsg("Erreur: " + ((res && res.error) || "enregistrement impossible"));
+            return;
+          }
+
+          const newSelected = Number(res.selectedItemId || payload.itemId);
+          const didSelectChange = newSelected !== Number(payload.itemId);
+          const didCountChange = Array.isArray(res.items) && res.items.length !== oldCount;
+
+          if (didSelectChange || didCountChange) {
+            applyContext(res);
+            setMsg(res.message || "Enregistré.");
+            return;
+          }
+
+          mergeSelectedFromResponse(res, payload.itemId);
+          setMsg(res.message || "Enregistré.");
+        })
+        .withFailureHandler(err => {
+          setMsg("Erreur: " + (err && err.message ? err.message : String(err)));
+        })
+        .inventory_updateItemText(FID, payload.itemId, {
+          notes: payload.notes,
+          description: payload.description
+        });
+    }
+
+    function mergeSelectedFromResponse(res, itemId){
+      if (!res || !Array.isArray(res.items)) return;
+
+      const idNum = Number(itemId || 0);
+      const newItem = res.items.find(x => Number(x.id || 0) === idNum);
+      if (!newItem) return;
+
+      newItem._searchKey = buildSearchKey(newItem);
+      ITEM_BY_ID.set(idNum, newItem);
+
+      const idx = INV_STATE.items.findIndex(x => Number(x.id || 0) === idNum);
+      if (idx !== -1) {
+        INV_STATE.items[idx] = newItem;
+      }
+
+      INV_STATE.selectedItemId = idNum;
+      updateSelectedVisuals();
+    }
+
+    function updateSelectedVisuals(){
+      const item = getSelectedItem();
+      if (!item) return;
+
+      const nameEl = document.getElementById("detailMainName");
+      if (nameEl) nameEl.innerHTML = colorizeNameHtml(item.name || "", item.dispo);
+
+      const noteEl = document.getElementById("detailNotesInline");
+      if (noteEl && document.activeElement !== noteEl) noteEl.value = item.notes || "";
+
+      const descEl = document.getElementById("detailDescription");
+      if (descEl && document.activeElement !== descEl) descEl.value = item.description || "";
+
+      document.querySelectorAll("#results .itemCard.active").forEach(el => el.classList.remove("active"));
+      const currentCard = document.querySelector(`#results .itemCard[data-item-id="${String(item.id || "")}"]`);
+      if (currentCard) {
+        currentCard.classList.add("active");
+        const nameBox = currentCard.querySelector(".itemName");
+        if (nameBox) nameBox.innerHTML = colorizeNameHtml(item.displayName || item.name || "", item.dispo);
+      }
+
+      applyDetailPanelStyle(item);
+    }
+
+    function attachDetailAutosave(item){
+      const notesEl = document.getElementById("detailNotesInline");
+      const descEl = document.getElementById("detailDescription");
+      if (!item || !notesEl || !descEl) return;
+
+      const onInput = () => {
+        const current = findItemById(item.id);
+        if (current) {
+          current.notes = notesEl.value;
+          current.description = descEl.value;
+          current.displayName = (String(current.name || "").trim() + (String(current.notes || "").trim() ? " " + String(current.notes || "").trim() : "")).trim();
+          current._searchKey = buildSearchKey(current);
+          updateSelectedVisuals();
+        }
+        queueDetailAutosave(item.id, notesEl.value, descEl.value);
+      };
+
+      notesEl.addEventListener("input", onInput);
+      descEl.addEventListener("input", onInput);
+    }
+
+    function renderDetail(item){
+      const host = document.getElementById("detailHost");
+
+      if (!item) {
+        applyDetailPanelStyle(null);
+        host.innerHTML = `<div class="empty">Sélectionne un objet pour voir ses détails.</div>`;
+        return;
+      }
+
+      applyDetailPanelStyle(item);
+
+      const avail = getAvailabilityInfo(item.dispo);
+
+      const isArmorItem = isArmorLikeEntry(item);
+      const isWeaponItem = isWeaponLikeEntry(item) && !isArmorItem;
+
+      const hasWeaponStats = isWeaponItem && !!(
+        String(item.catalogArmeDom || "").trim() ||
+        String(item.catalogArmeChoc || "").trim() ||
+        String(item.catalogArmePortee || "").trim() ||
+        String(item.catalogArmeFOR || "").trim() ||
+        String(item.catalogArmeInit || "").trim() ||
+        String(item.catalogArmeCAL || "").trim() ||
+        String(item.catalogArmeModeTir || "").trim()
+      );
+
+      const hasArmorStats = isArmorItem && !!(
+        String(item.catalogArmureProt || "").trim() ||
+        String(item.catalogArmureChoc || "").trim() ||
+        String(item.catalogArmureLoc || "").trim() ||
+        String(item.catalogArmureMal || "").trim() ||
+        String(item.catalogArmeFOR || "").trim()
+      );
+
+      const hasObjectStats = !!(
+        String(item.catalogContenance || "").trim() ||
+        String(item.catalogEtancheite || "").trim()
+      );
+
+      host.innerHTML = `
+        <div class="detailBox">
+          <div id="detailMainName" class="detailTitle">${colorizeNameHtml(item.name || "", item.dispo)}</div>
+          <input id="detailNotesInline" class="detailNoteInline" type="text" value="${escapeHtml(item.notes || "")}" placeholder="Note...">
+          <div class="chips">
+            ${makeFamilyChip(safeFamily(item.family), item.family)}
+            ${makeCategoryChip(safeCategory(item.category), item.family)}
+            ${makeNeutralChip(item.emplacement || "—")}
+          </div>
+        </div>
+
+        <div class="detailBox">
+          <div class="detailTwoCols">
+            <div><span class="muted">Container :</span> <span class="strong">${escapeHtml(item.emplacement || "—")}</span></div>
+            <div><span class="muted">Quantité :</span> <span class="strong">${escapeHtml(String(item.quantity || 0))}</span></div>
+            <div><span class="muted">Poids :</span> <span class="strong">${escapeHtml(formatWeight(item.weight))}</span></div>
+            <div><span class="muted">NT :</span> <span class="strong">${escapeHtml(item.catalogNT || "—")}</span></div>
+            <div><span class="muted">Fabricant :</span> <span class="strong">${escapeHtml(item.catalogFabricant || "—")}</span></div>
+            <div><span class="muted">Nation :</span> <span class="strong">${escapeHtml(item.catalogNation || "—")}</span></div>
+            <div style="grid-column:1 / -1"><span class="muted">Disponibilité :</span> <span class="strong" style="color:${avail.color}">${escapeHtml(avail.label)}${item.dispo ? " • " + escapeHtml(item.dispo) : ""}</span></div>
+          </div>
+        </div>
+
+        ${hasWeaponStats ? `
+          <div class="detailBox">
+            <div class="strong">Stats arme</div>
+            <div class="detailTwoCols">
+              <div><span class="muted">Dégâts :</span> <span class="strong">${escapeHtml(item.catalogArmeDom || "—")}</span></div>
+              <div><span class="muted">Choc :</span> <span class="strong">${escapeHtml(item.catalogArmeChoc || "—")}</span></div>
+              <div><span class="muted">Portée :</span> <span class="strong">${escapeHtml(item.catalogArmePortee || "—")}</span></div>
+              <div><span class="muted">FOR :</span> <span class="strong">${escapeHtml(item.catalogArmeFOR || "—")}</span></div>
+              <div><span class="muted">Init :</span> <span class="strong">${escapeHtml(item.catalogArmeInit || "—")}</span></div>
+              <div><span class="muted">Calibre :</span> <span class="strong">${escapeHtml(item.catalogArmeCAL || "—")}</span></div>
+              <div><span class="muted">Mode de tir :</span> <span class="strong">${escapeHtml(item.catalogArmeModeTir || "—")}</span></div>
+            </div>
+          </div>
+        ` : ""}
+
+        ${hasArmorStats ? `
+          <div class="detailBox">
+            <div class="strong">Stats protection</div>
+            <div class="detailTwoCols">
+              <div><span class="muted">Protection :</span> <span class="strong">${escapeHtml(item.catalogArmureProt || "—")}</span></div>
+              <div><span class="muted">Protection choc :</span> <span class="strong">${escapeHtml(item.catalogArmureChoc || "—")}</span></div>
+              <div><span class="muted">Localisation :</span> <span class="strong">${escapeHtml(item.catalogArmureLoc || "—")}</span></div>
+              <div><span class="muted">Malus armure :</span> <span class="strong">${escapeHtml(item.catalogArmureMal || "—")}</span></div>
+              <div><span class="muted">FOR :</span> <span class="strong">${escapeHtml(item.catalogArmeFOR || "—")}</span></div>
+            </div>
+          </div>
+        ` : ""}
+
+        ${hasObjectStats ? `
+          <div class="detailBox">
+            <div class="strong">Stats objet</div>
+            <div class="detailTwoCols">
+              <div><span class="muted">Contenance :</span> <span class="strong">${escapeHtml(item.catalogContenance || "—")}</span></div>
+              <div><span class="muted">Étanchéité :</span> <span class="strong">${escapeHtml(item.catalogEtancheite || "—")}</span></div>
+            </div>
+          </div>
+        ` : ""}
+
+        <div class="detailBox">
+          <label>Description</label>
+          <textarea id="detailDescription" style="width:100%">${escapeHtml(item.description || "")}</textarea>
+        </div>
+
+        <div class="detailBox">
+          <div class="detailActionButtons">
+            <button class="primary" type="button" data-detail-action="move">Déplacer</button>
+            <button class="primary" type="button" data-detail-action="split" ${Number(item.quantity || 0) > 1 ? "" : "disabled"}>Séparer</button>
+            <button class="primary" type="button" data-detail-action="transfer">Transférer</button>
+            <button class="bad" type="button" data-detail-action="delete">Jeter</button>
+          </div>
+        </div>
+      `;
+
+      attachDetailAutosave(item);
+    }
+
+    function rebuildLocalCollections(){
+      ITEM_BY_ID.clear();
+      INV_STATE.items.forEach(item => {
+        item.displayName = (String(item.name || "").trim() + (String(item.notes || "").trim() ? " " + String(item.notes || "").trim() : "")).trim();
+        item._searchKey = buildSearchKey(item);
+        ITEM_BY_ID.set(Number(item.id || 0), item);
+      });
+      INV_STATE.containers = uniqueSorted(["Coffre"].concat(INV_STATE.items.map(x => String(x.emplacement || "").trim()).filter(Boolean)));
+      const itemCountEl = document.getElementById("itemCount");
+      if (itemCountEl) itemCountEl.textContent = String(INV_STATE.items.length || 0);
+      const containerCountEl = document.getElementById("containerCount");
+      if (containerCountEl) containerCountEl.textContent = String(INV_STATE.containers.length || 0);
+      buildFilterSelects();
+      buildAddContainerSelect();
+    }
+
+    function upsertLocalItem(item){
+      if (!item) return;
+      const idNum = Number(item.id || 0);
+      if (!idNum) return;
+      item.displayName = (String(item.name || "").trim() + (String(item.notes || "").trim() ? " " + String(item.notes || "").trim() : "")).trim();
+      item._searchKey = buildSearchKey(item);
+      const idx = INV_STATE.items.findIndex(x => Number(x.id || 0) === idNum);
+      if (idx === -1) INV_STATE.items.push(item);
+      else INV_STATE.items[idx] = item;
+      ITEM_BY_ID.set(idNum, item);
+    }
+
+    function removeLocalItem(itemId){
+      const idNum = Number(itemId || 0);
+      INV_STATE.items = INV_STATE.items.filter(x => Number(x.id || 0) !== idNum);
+      ITEM_BY_ID.delete(idNum);
+      if (Number(INV_STATE.selectedItemId || 0) === idNum) INV_STATE.selectedItemId = 0;
+    }
+
+    function refreshAfterFastAction(){
+      rebuildLocalCollections();
+      renderInventory();
+    }
+
+    function openMiniActionModal(cfg){
+      const modal = document.getElementById("miniActionModal");
+      const title = document.getElementById("miniActionTitle");
+      const text = document.getElementById("miniActionText");
+      const fields = document.getElementById("miniActionFields");
+      const confirmBtn = document.getElementById("miniActionConfirmBtn");
+      MINI_ACTION_STATE = cfg || null;
+      title.textContent = String(cfg && cfg.title || "Action");
+      text.textContent = String(cfg && cfg.text || "");
+      fields.innerHTML = String(cfg && cfg.fieldsHtml || "");
+      confirmBtn.textContent = String(cfg && cfg.confirmText || "Valider");
+      confirmBtn.className = `btnAction ${((cfg && cfg.confirmClass) ? cfg.confirmClass : "primary")}`;
+      confirmBtn.onclick = async () => {
+        if (actionBusy || !MINI_ACTION_STATE || typeof MINI_ACTION_STATE.onConfirm !== "function") return;
+        actionBusy = true;
+        confirmBtn.disabled = true;
+        try {
+          await MINI_ACTION_STATE.onConfirm();
+        } finally {
+          actionBusy = false;
+          confirmBtn.disabled = false;
+        }
+      };
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(() => {
+        const firstField = fields.querySelector("input, select, textarea, button");
+        if (firstField) firstField.focus();
+      });
+    }
+
+    function closeMiniActionModal(){
+      const modal = document.getElementById("miniActionModal");
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+      MINI_ACTION_STATE = null;
+    }
+
+    function openMoveAction(){
+      flushPendingDetailAutosave();
+      const item = getSelectedItem();
+      if (!item) return setMsg("Aucun objet sélectionné.");
+
+      const allContainers = uniqueSorted(["Coffre"].concat((INV_STATE.containers || []).filter(Boolean)));
+      const currentContainer = String(item.emplacement || "").trim();
+      const targetOptions = allContainers
+        .filter(v => String(v || "").trim() !== currentContainer)
+        .map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`)
+        .join("");
+
+      openMiniActionModal({
+        title: "Déplacer l'objet",
+        text: `Choisis le container de destination pour "${item.displayName || item.name || "cet objet"}".`,
+        fieldsHtml:
+          `<div><label>Container</label><select id="miniMoveTargetSel" style="width:100%">${targetOptions || `<option value="">—</option>`}</select></div>` +
+          `<div><label>Ou saisir un nouveau container</label><input id="miniMoveTargetInput" type="text" placeholder="Nom du container" style="width:100%"></div>`,
+        confirmText: "Déplacer",
+        confirmClass: "primary",
+        onConfirm: async () => {
+          const sel = document.getElementById("miniMoveTargetSel");
+          const inp = document.getElementById("miniMoveTargetInput");
+          const target = String((inp && inp.value) || (sel && sel.value) || "").trim();
+          if (!target) return setMsg("Choisis ou saisis un container cible.");
+          if (target === currentContainer) return setMsg("L'objet est déjà dans ce container.");
+          try {
+            setMsg("Déplacement...");
+            const res = await withLoading("Déplacement en cours…", () => callServer("inventory_moveItemFast", FID, item.id, target));
+            if (!res || res.ok === false) {
+              setMsg("Erreur: " + ((res && res.error) || "déplacement impossible"));
+              return;
+            }
+            const src = findItemById(item.id);
+            if (src) src.emplacement = target;
+            INV_STATE.selectedItemId = Number(item.id || 0);
+            closeMiniActionModal();
+            refreshAfterFastAction();
+            setMsg(res.message || "Objet déplacé.");
+          } catch (err) {
+            setMsg("Erreur: " + (err && err.message ? err.message : String(err)));
+          }
+        }
+      });
+    }
+
+    function openSplitAction(){
+      flushPendingDetailAutosave();
+      const item = getSelectedItem();
+      if (!item) return setMsg("Aucun objet sélectionné.");
+      const maxQty = Math.max(1, Number(item.quantity || 0) - 1);
+      if (maxQty < 1) return setMsg("Cette pile ne peut pas être séparée.");
+      openMiniActionModal({
+        title: "Séparer la pile",
+        text: `Choisis combien d'objets séparer de "${item.displayName || item.name || "cet objet"}".`,
+        fieldsHtml: `<div><label>Quantité</label><input id="miniSplitQty" type="number" min="1" max="${maxQty}" value="1" style="width:100%"></div>`,
+        confirmText: "Séparer",
+        confirmClass: "primary",
+        onConfirm: async () => {
+          const qty = parseInt(String(document.getElementById("miniSplitQty").value || "1"), 10);
+          if (!Number.isFinite(qty) || qty <= 0 || qty > maxQty) {
+            setMsg("Quantité à séparer invalide.");
+            return;
+          }
+          try {
+            setMsg("Séparation...");
+            const res = await withLoading("Séparation en cours…", () => callServer("inventory_splitStackFast", FID, item.id, qty));
+            if (!res || res.ok === false) {
+              setMsg("Erreur: " + ((res && res.error) || "séparation impossible"));
+              return;
+            }
+            const src = findItemById(item.id);
+            if (src) src.quantity = Math.max(0, Number(src.quantity || 0) - qty);
+            if (src && src.quantity <= 0) removeLocalItem(item.id);
+            if (res.newItem) upsertLocalItem(res.newItem);
+            INV_STATE.selectedItemId = Number(res.selectedItemId || 0);
+            closeMiniActionModal();
+            refreshAfterFastAction();
+            setMsg(res.message || "Pile séparée.");
+          } catch (err) {
+            setMsg("Erreur: " + (err && err.message ? err.message : String(err)));
+          }
+        }
+      });
+    }
+
+    function openTransferAction(){
+      flushPendingDetailAutosave();
+      const item = getSelectedItem();
+      if (!item) return setMsg("Aucun objet sélectionné.");
+      const transferTargets = Array.isArray(INV_STATE.transferTargets) ? INV_STATE.transferTargets : [];
+      const qtyHtml = Number(item.quantity || 0) > 1
+        ? `<div><label>Quantité</label><input id="miniTransferQty" type="number" min="1" max="${Math.max(1, Number(item.quantity || 0))}" value="1" style="width:100%"></div>`
+        : "";
+      const targetHtml = transferTargets.length
+        ? `<div><label>Destination</label><select id="miniTransferTargetSel" style="width:100%">${transferTargets.map(t => `<option value="${escapeHtml(String(t.fid || ''))}">${escapeHtml(String(t.label || t.fid || ''))}</option>`).join('')}</select></div><div><label>Ou coller un FID / URL Google Sheets</label><input id="miniTransferTargetInput" type="text" placeholder="FID cible ou URL Google Sheets" style="width:100%"></div>`
+        : `<div><label>FID cible ou URL Google Sheets</label><input id="miniTransferTargetInput" type="text" placeholder="FID cible ou URL Google Sheets" style="width:100%"></div>`;
+      openMiniActionModal({
+        title: "Transférer l'objet",
+        text: `Choisis la destination pour "${item.displayName || item.name || "cet objet"}".`,
+        fieldsHtml: targetHtml + qtyHtml,
+        confirmText: "Transférer",
+        confirmClass: "primary",
+        onConfirm: async () => {
+          const sel = document.getElementById("miniTransferTargetSel");
+          const inp = document.getElementById("miniTransferTargetInput");
+          const qtyInput = document.getElementById("miniTransferQty");
+          const targetRaw = String((inp && inp.value) || (sel && sel.value) || "").trim();
+          const targetFid = extractSpreadsheetId(targetRaw);
+          const qty = qtyInput ? parseInt(String(qtyInput.value || "1"), 10) : 1;
+          const maxQty = Math.max(1, Number(item.quantity || 0));
+          if (!targetFid) return setMsg("Choisis une destination ou colle un FID / une URL Google Sheets.");
+          if (targetFid === FID) return setMsg("Tu ne peux pas transférer vers la même fiche.");
+          if (!Number.isFinite(qty) || qty <= 0 || qty > maxQty) return setMsg("Quantité à transférer invalide.");
+          try {
+            setMsg("Transfert...");
+            const res = await withLoading("Transfert en cours…", () => callServer("inventory_transferItemFast", FID, item.id, targetFid, qty));
+            if (!res || res.ok === false) {
+              setMsg("Erreur: " + ((res && res.error) || "transfert impossible"));
+              return;
+            }
+            const src = findItemById(item.id);
+            if (src) src.quantity = Math.max(0, Number(src.quantity || 0) - qty);
+            if (src && src.quantity <= 0) removeLocalItem(item.id);
+            INV_STATE.selectedItemId = res.removed ? 0 : Number(item.id || 0);
+            closeMiniActionModal();
+            refreshAfterFastAction();
+            setMsg(res.message || "Objet transféré.");
+          } catch (err) {
+            setMsg("Erreur: " + (err && err.message ? err.message : String(err)));
+          }
+        }
+      });
+    }
+
+    function openDeleteAction(){
+      flushPendingDetailAutosave();
+      const item = getSelectedItem();
+      if (!item) return setMsg("Aucun objet sélectionné.");
+      const maxQty = Math.max(1, Number(item.quantity || 0));
+      if (maxQty <= 1) {
+        if (!window.confirm(`Jeter "${item.displayName || item.name || "cet objet"}" ?`)) return;
+        return runDeleteAction(item, 1);
+      }
+      openMiniActionModal({
+        title: "Jeter l'objet",
+        text: `Choisis combien d'objets jeter de "${item.displayName || item.name || "cet objet"}".`,
+        fieldsHtml: `<div><label>Quantité</label><input id="miniDeleteQty" type="number" min="1" max="${maxQty}" value="1" style="width:100%"></div>`,
+        confirmText: "Jeter",
+        confirmClass: "bad",
+        onConfirm: async () => {
+          const qty = parseInt(String(document.getElementById("miniDeleteQty").value || "1"), 10);
+          if (!Number.isFinite(qty) || qty <= 0 || qty > maxQty) return setMsg("Quantité à jeter invalide.");
+          await runDeleteAction(item, qty, true);
+        }
+      });
+    }
+
+    async function runDeleteAction(item, qty, shouldCloseModal){
+      try {
+        setMsg("Suppression...");
+        const res = await withLoading("Suppression en cours…", () => callServer("inventory_deleteItemFast", FID, item.id, qty));
+        if (!res || res.ok === false) {
+          setMsg("Erreur: " + ((res && res.error) || "suppression impossible"));
+          return;
+        }
+        const src = findItemById(item.id);
+        if (src) src.quantity = Math.max(0, Number(src.quantity || 0) - qty);
+        if (src && src.quantity <= 0) removeLocalItem(item.id);
+        INV_STATE.selectedItemId = res.removed ? 0 : Number(item.id || 0);
+        if (shouldCloseModal) closeMiniActionModal();
+        refreshAfterFastAction();
+        setMsg(res.message || "Objet supprimé.");
+      } catch (err) {
+        setMsg("Erreur: " + (err && err.message ? err.message : String(err)));
+      }
+    }
+
+    function splitSelectedStack(){ openSplitAction(); }
+
+    function transferSelectedItem(){ openTransferAction(); }
+
+    function deleteSelectedItem(){ openDeleteAction(); }
+
+    function clearFilters(){
+      document.getElementById("searchInput").value = "";
+      document.getElementById("sortSel").value = "name_asc";
+      document.getElementById("groupModeSel").value = "family";
+      FAMILY_VIEW_SELECTED = "";
+      CONTAINER_VIEW_SELECTED = "";
+      INV_STATE.selectedItemId = 0;
+      renderInventory();
+    }
+
+    function isWeaponLikeEntry(entry){
+      const fam = normalizeText(entry && entry.family || document.getElementById("add_family").value || "");
+      const cat = normalizeText(entry && entry.category || document.getElementById("add_category").value || "");
+      return (
+        fam.indexOf("ARME") !== -1 ||
+        ["PISTOLET","REVOLVER","FUSIL","CARABINE","LANCE","EPAULE","ÉPAULE","MELEE","MÊLÉE","MELÉE","POING"].some(k => cat.indexOf(k) !== -1) ||
+        !!(entry && (
+          entry.catalogArmeDom || entry.catalogArmeChoc || entry.catalogArmePortee ||
+          entry.catalogArmeCAL || entry.catalogArmeModeTir || entry.catalogArmeFOR || entry.catalogArmeInit
+        ))
+      );
+    }
+
+    function isArmorLikeEntry(entry){
+      const fam = normalizeText(entry && entry.family || document.getElementById("add_family").value || "");
+      const cat = normalizeText(entry && entry.category || document.getElementById("add_category").value || "");
+      return (
+        fam.indexOf("PROTECTION") !== -1 ||
+        ["ARMURE","CASQUE","GILET","COMBINAISON","BOUCLIER"].some(k => cat.indexOf(k) !== -1) ||
+        !!(entry && (entry.catalogArmureProt || entry.catalogArmureChoc || entry.catalogArmureLoc || entry.catalogArmureMal))
+      );
+    }
+
+    function isPortableContainerEntry(entry){
+      const cat = normalizeText(entry && entry.category || document.getElementById("add_category").value || "");
+      return cat === normalizeText("Contenants portables");
+    }
+
+    function updateAddConditionalSections(entry){
+      document.getElementById("weaponFields").classList.toggle("hidden", !isWeaponLikeEntry(entry));
+      document.getElementById("armorFields").classList.toggle("hidden", !isArmorLikeEntry(entry));
+      document.getElementById("portableFields").classList.toggle("hidden", !isPortableContainerEntry(entry));
+    }
+
+    function getCheckedValues(ids){
+      return ids.filter(id => {
+        const el = document.getElementById(id);
+        return el && el.checked;
+      }).map(id => {
+        const map = {
+          add_mode_cc: "CC",
+          add_mode_rc: "RC",
+          add_mode_rl: "RL",
+          add_loc_tete: "Tête",
+          add_loc_corps: "Corps",
+          add_loc_bras_g: "Bras gauche",
+          add_loc_bras_d: "Bras droit",
+          add_loc_jambe_g: "Jambe gauche",
+          add_loc_jambe_d: "Jambe droite",
+          add_portable_dos: "Dos",
+          add_portable_ceinture: "Ceinture"
+        };
+        return map[id] || "";
+      }).filter(Boolean);
+    }
+
+    function setCheckedValues(ids, raw){
+      const normalized = String(raw || "");
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const tokenMap = {
+          add_mode_cc: "CC",
+          add_mode_rc: "RC",
+          add_mode_rl: "RL",
+          add_loc_tete: "Tête",
+          add_loc_corps: "Corps",
+          add_loc_bras_g: "Bras gauche",
+          add_loc_bras_d: "Bras droit",
+          add_loc_jambe_g: "Jambe gauche",
+          add_loc_jambe_d: "Jambe droite",
+          add_portable_dos: "Dos",
+          add_portable_ceinture: "Ceinture"
+        };
+        const token = tokenMap[id] || "";
+        el.checked = token ? normalizeText(normalized).indexOf(normalizeText(token)) !== -1 : false;
+      });
+    }
+
+    function openAddModal(){
+      document.getElementById("addError").textContent = "";
+      buildAddContainerSelect();
+      buildCaliberSelect();
+      updateAddConditionalSections(null);
+      document.getElementById("addModal").classList.add("open");
+      document.getElementById("addModal").setAttribute("aria-hidden", "false");
+      hideEquipSuggestions();
+    }
+
+    function closeAddModal(){
+      document.getElementById("addModal").classList.remove("open");
+      document.getElementById("addModal").setAttribute("aria-hidden", "true");
+      document.getElementById("addError").textContent = "";
+      hideEquipSuggestions();
+    }
+
+    function readAddForm(){
+      const armorVisible = !document.getElementById("armorFields").classList.contains("hidden");
+      const portableVisible = !document.getElementById("portableFields").classList.contains("hidden");
+
+      let loc = "";
+      let armureMalus = "";
+
+      if (portableVisible) {
+        loc = getCheckedValues(["add_portable_dos","add_portable_ceinture"]).join(" | ");
+        armureMalus = document.getElementById("add_portable_armureMalus").value || "";
+      } else if (armorVisible) {
+        loc = getCheckedValues([
+          "add_loc_tete","add_loc_corps","add_loc_bras_g",
+          "add_loc_bras_d","add_loc_jambe_g","add_loc_jambe_d"
+        ]).join(" | ");
+        armureMalus = document.getElementById("add_armureMalus").value || "";
+      }
+
+      const modeTir = getCheckedValues(["add_mode_cc","add_mode_rc","add_mode_rl"]).join("/");
+
+      return {
+        name: document.getElementById("add_name").value || "",
+        notes: document.getElementById("add_notes").value || "",
+        family: document.getElementById("add_family").value || "",
+        category: document.getElementById("add_category").value || "",
+        emplacement: document.getElementById("add_emplacement").value || "",
+        quantity: document.getElementById("add_quantity").value || "1",
+        weight: document.getElementById("add_weight").value || "0",
+        description: document.getElementById("add_description").value || "",
+
+        nt: document.getElementById("add_nt").value || "",
+        fabricant: document.getElementById("add_fabricant").value || "",
+        nation: document.getElementById("add_nation").value || "",
+        dispo: document.getElementById("add_dispo").value || "",
+
+        dom: document.getElementById("add_dom").value || "",
+        choc: document.getElementById("add_choc").value || "",
+        portee: document.getElementById("add_portee").value || "",
+        for: document.getElementById("add_for").value || "",
+        init: document.getElementById("add_init").value || "",
+        modeTir: modeTir,
+        cal: document.getElementById("add_cal").value || "",
+
+        prot: document.getElementById("add_prot").value || "",
+        protChoc: document.getElementById("add_protChoc").value || "",
+        loc: loc,
+        armureMalus: armureMalus,
+
+        contenance: document.getElementById("add_contenance").value || "",
+        etancheite: document.getElementById("add_etancheite").value || ""
+      };
+    }
+
+    function resetAddForm(){
+      [
+        "add_name","add_notes","add_family","add_category","add_weight","add_dispo",
+        "add_nt","add_fabricant","add_nation","add_contenance","add_etancheite",
+        "add_dom","add_choc","add_portee","add_for","add_init",
+        "add_prot","add_protChoc","add_description"
+      ].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+      });
+
+      document.getElementById("add_quantity").value = "1";
+      document.getElementById("add_armureMalus").value = "";
+      document.getElementById("add_portable_armureMalus").value = "";
+      buildAddContainerSelect();
+      buildCaliberSelect("");
+      hideEquipSuggestions();
+      updateAddConditionalSections(null);
+
+      setCheckedValues(["add_mode_cc","add_mode_rc","add_mode_rl"], "");
+      setCheckedValues(["add_loc_tete","add_loc_corps","add_loc_bras_g","add_loc_bras_d","add_loc_jambe_g","add_loc_jambe_d"], "");
+      setCheckedValues(["add_portable_dos","add_portable_ceinture"], "");
+    }
+
+    function submitAddItem(){
+      const payload = readAddForm();
+      const btn = document.getElementById("addSubmitBtn");
+      const err = document.getElementById("addError");
+
+      err.textContent = "";
+      btn.disabled = true;
+      setMsg("Ajout de l'objet...");
+
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.disabled = false;
+
+          if (!res || res.ok === false) {
+            err.textContent = (res && res.error) || "Ajout impossible.";
+            setMsg("Erreur: " + ((res && res.error) || "ajout impossible"));
+            return;
+          }
+
+          applyContext(res);
+          if (res.selectedItemId) INV_STATE.selectedItemId = Number(res.selectedItemId || 0);
+          closeAddModal();
+          resetAddForm();
+          renderInventory();
+          setMsg(res.message || "Objet ajouté.");
+        })
+        .withFailureHandler(error => {
+          hideLoading();
+          btn.disabled = false;
+          const msg = error && error.message ? error.message : String(error);
+          err.textContent = msg;
+          setMsg("Erreur: " + msg);
+        })
+        .inventory_addManualItem(FID, payload);
+    }
+
+    function searchEquipCatalog(query){
+      const q = normalizeText(query || "");
+      if (!q) return [];
+      return EQUIP_CATALOG.filter(e => normalizeText(e.name).indexOf(q) !== -1).slice(0, 8);
+    }
+
+    function findExactEquipByName(name){
+      const key = normalizeText(name || "");
+      if (!key) return null;
+      return EQUIP_CATALOG.find(e => normalizeText(e.name) === key) || null;
+    }
+
+    function fillAddFormFromEquip(entry){
+      if (!entry) return;
+
+      document.getElementById("add_name").value = entry.name || "";
+      document.getElementById("add_family").value = entry.family || "";
+      document.getElementById("add_category").value = entry.category || "";
+      document.getElementById("add_description").value = entry.description || "";
+      document.getElementById("add_dispo").value = entry.dispo || "";
+
+      const w = Number(entry.weight || 0);
+      if (Number.isFinite(w)) {
+        document.getElementById("add_weight").value = String(w).replace(",", ".");
+      }
+
+      document.getElementById("add_nt").value = entry.catalogNT || "";
+      document.getElementById("add_fabricant").value = entry.catalogFabricant || "";
+      document.getElementById("add_nation").value = entry.catalogNation || "";
+
+      document.getElementById("add_dom").value = entry.catalogArmeDom || "";
+      document.getElementById("add_choc").value = entry.catalogArmeChoc || "";
+      document.getElementById("add_portee").value = entry.catalogArmePortee || "";
+      document.getElementById("add_for").value = entry.catalogArmeFOR || "";
+      document.getElementById("add_init").value = entry.catalogArmeInit || "";
+      buildCaliberSelect(entry.catalogArmeCAL || "");
+      document.getElementById("add_cal").value = entry.catalogArmeCAL || "";
+
+      document.getElementById("add_prot").value = entry.catalogArmureProt || "";
+      document.getElementById("add_protChoc").value = entry.catalogArmureChoc || "";
+      document.getElementById("add_armureMalus").value = entry.catalogArmureMal || "";
+
+      document.getElementById("add_contenance").value = entry.catalogContenance || "";
+      document.getElementById("add_etancheite").value = entry.catalogEtancheite || "";
+      document.getElementById("add_portable_armureMalus").value = entry.catalogArmureMal || "";
+
+      setCheckedValues(["add_mode_cc","add_mode_rc","add_mode_rl"], entry.catalogArmeModeTir || "");
+      setCheckedValues(["add_loc_tete","add_loc_corps","add_loc_bras_g","add_loc_bras_d","add_loc_jambe_g","add_loc_jambe_d"], entry.catalogArmureLoc || "");
+      setCheckedValues(["add_portable_dos","add_portable_ceinture"], entry.catalogArmureLoc || "");
+
+      updateAddConditionalSections(entry);
+      hideEquipSuggestions();
+    }
+
+    function renderEquipSuggestions(list){
+      const box = document.getElementById("equipSuggest");
+      if (!box) return;
+
+      if (!list.length) {
+        hideEquipSuggestions();
+        return;
+      }
+
+      box.innerHTML = list.map((e, idx) => `
+        <div class="suggestItem" data-suggest-idx="${idx}">
+          <div class="suggestName">${escapeHtml(e.name || "")}</div>
+          <div class="small muted">${escapeHtml(e.family || "—")} • ${escapeHtml(e.category || "—")}</div>
+        </div>
+      `).join("");
+
+      box.classList.add("open");
+
+      box.querySelectorAll("[data-suggest-idx]").forEach(el => {
+        el.addEventListener("mousedown", (ev) => {
+          ev.preventDefault();
+          const i = Number(el.getAttribute("data-suggest-idx") || 0);
+          fillAddFormFromEquip(list[i]);
+        });
+      });
+    }
+
+    function hideEquipSuggestions(){
+      const box = document.getElementById("equipSuggest");
+      if (!box) return;
+      box.classList.remove("open");
+      box.innerHTML = "";
+    }
+
+    function handleAddNameInput(){
+      const input = document.getElementById("add_name");
+      if (!input) return;
+      const q = String(input.value || "");
+      renderEquipSuggestions(searchEquipCatalog(q));
+      updateAddConditionalSections(null);
+    }
+
+    function tryAutoFillExactEquip(){
+      const input = document.getElementById("add_name");
+      if (!input) return;
+      const exact = findExactEquipByName(input.value || "");
+      if (exact) fillAddFormFromEquip(exact);
+    }
+
+    function initAutocomplete(){
+      const input = document.getElementById("add_name");
+      if (!input) return;
+
+      input.addEventListener("input", handleAddNameInput);
+      input.addEventListener("blur", () => {
+        if (suggestHideTimer) clearTimeout(suggestHideTimer);
+        suggestHideTimer = setTimeout(() => {
+          tryAutoFillExactEquip();
+          hideEquipSuggestions();
+        }, 120);
+      });
+
+      document.addEventListener("click", (e) => {
+        const wrap = document.querySelector(".autocompleteWrap");
+        if (!wrap) return;
+        if (!wrap.contains(e.target)) hideEquipSuggestions();
+      });
+
+      document.getElementById("add_family").addEventListener("input", () => updateAddConditionalSections(null));
+      document.getElementById("add_category").addEventListener("input", () => updateAddConditionalSections(null));
+    }
+
+    function bootInventory(){
+      if (!FID){
+        setMsg("FID manquant.");
+        return;
+      }
+
+      showLoading("Chargement de l'inventaire…");
+      google.script.run
+        .withSuccessHandler(res => {
+          hideLoading();
+          if (!res || res.ok === false) {
+            setMsg("Erreur: " + ((res && res.error) || "chargement impossible"));
+            return;
+          }
+
+          applyContext(res);
+          setDbg(`FID=${FID} — objets=${(res.items || []).length} — containers=${(res.containers || []).length}`);
+          setMsg("OK.");
+        })
+        .withFailureHandler(err => {
+          hideLoading();
+          setMsg("Erreur: " + (err && err.message ? err.message : String(err)));
+        })
+        .inventory_getContext(FID);
+    }
+
+    function initAutoFilters(){
+      document.getElementById("searchInput").addEventListener("input", () => {
+        if (renderTimer) clearTimeout(renderTimer);
+        renderTimer = setTimeout(renderInventory, 140);
+      });
+
+      document.getElementById("sortSel").addEventListener("change", renderInventory);
+      document.getElementById("groupModeSel").addEventListener("change", () => {
+        INV_STATE.selectedItemId = 0;
+        renderInventory();
+      });
+
+      document.getElementById("results").addEventListener("click", (e) => {
+        const familyBtn = e.target.closest("[data-family-select]");
+        if (familyBtn) {
+          const fam = String(familyBtn.getAttribute("data-family-select") || "").trim();
+          if (fam !== FAMILY_VIEW_SELECTED) {
+            flushPendingDetailAutosave();
+            const groupedFamilies = groupItemsByFamily(getFilteredItems());
+            applyFamilySelection(fam, groupedFamilies, "_root_");
+            renderInventory();
+          }
+          return;
+        }
+
+        const containerBtn = e.target.closest("[data-container-select]");
+        if (containerBtn) {
+          const container = String(containerBtn.getAttribute("data-container-select") || "").trim();
+          if (container !== CONTAINER_VIEW_SELECTED) {
+            flushPendingDetailAutosave();
+            const groupedContainers = groupItemsByContainer(getFilteredItems());
+            applyContainerSelection(container, groupedContainers, "_root_");
+            renderInventory();
+          }
+          return;
+        }
+
+        const card = e.target.closest(".itemCard");
+        if (!card) return;
+
+        const itemId = Number(card.getAttribute("data-item-id") || 0);
+        if (!itemId) return;
+
+        if (Number(INV_STATE.selectedItemId || 0) === itemId) return;
+
+        flushPendingDetailAutosave();
+        INV_STATE.selectedItemId = itemId;
+
+        document.querySelectorAll("#results .itemCard.active").forEach(el => el.classList.remove("active"));
+        card.classList.add("active");
+
+        const item = findItemById(itemId);
+        renderDetail(item);
+      });
+
+      document.getElementById("detailHost").addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-detail-action]");
+        if (!btn || btn.disabled) return;
+
+        const action = String(btn.getAttribute("data-detail-action") || "").trim();
+        if (action === "move") {
+          openMoveAction();
+          return;
+        }
+        if (action === "split") {
+          openSplitAction();
+          return;
+        }
+        if (action === "transfer") {
+          openTransferAction();
+          return;
+        }
+        if (action === "delete") {
+          openDeleteAction();
+        }
+      });
+    }
+
+    function initIds(){
+      FID = String("<?= fid ?>" || "").trim();
+
+      if (!FID && window.google && google.script && google.script.url && google.script.url.getLocation){
+        google.script.url.getLocation(loc => {
+          FID = FID || String(loc && loc.parameter && loc.parameter.fid || "").trim();
+          if (!FID){
+            setMsg("Paramètres manquants (?fid=...)");
+            return;
+          }
+          bootInventory();
+        });
+        return;
+      }
+
+      if (!FID){
+        const qs = new URLSearchParams(window.location.search);
+        FID = FID || String(qs.get("fid") || "").trim();
+      }
+
+      if (!FID){
+        setMsg("Paramètres manquants (?fid=...)");
+        return;
+      }
+
+      bootInventory();
+    }
+
+    document.getElementById("miniActionModal").addEventListener("click", (e) => { if (e.target && e.target.id === "miniActionModal") closeMiniActionModal(); });
+    document.getElementById("miniActionModal").addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeMiniActionModal();
+      if (e.key === "Enter") {
+        const confirmBtn = document.getElementById("miniActionConfirmBtn");
+        if (confirmBtn && !confirmBtn.disabled) confirmBtn.click();
+      }
+    });
+
+    initAutoFilters();
+    initAutocomplete();
+    initIds();
+    window.addEventListener("resize", scheduleStickyLayoutUpdate);
+  </script>
+</body>
+</html>

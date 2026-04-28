@@ -1,73 +1,497 @@
-@import '@fontsource/inter/400.css';
-@import '@fontsource/inter/500.css';
+/* =========================
 
+1. FONTS
+   ========================= */
+   @import '@fontsource/inter/400.css';
+   @import '@fontsource/inter/500.css';
+
+/* =========================
+2. RESET
+========================= */
 *, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+box-sizing: border-box;
+margin: 0;
+padding: 0;
 }
 
+/* =========================
+3. DESIGN TOKENS
+========================= */
 :root {
-  /* Backgrounds */
-  --bg-app:     #12121e;
-  --bg-surface: #16162a;
-  --bg-panel:   #0e0e1a;
-  --bg-card:    #1c1c2e;
-  --bg-hover:   rgba(255,255,255,0.04);
+/* === COLORS === */
+--bg-app: #0f1115;
+--bg-surface: #151923;
+--bg-panel: #10131b;
+--bg-elevated: #1b2232;
 
-  /* Primaire */
-  --color-primary:       #5b8dee;
-  --color-primary-muted: rgba(91,141,238,0.18);
+--bg-input: #0c0f16;
+--bg-button: #121826;
+--bg-button-primary: #1a2340;
 
-  /* Sémantiques */
-  --color-success: #4caf77;
-  --color-danger:  #e05c5c;
-  --color-warning: #f0a04b;
+--color-primary: #5b8dee;
+--color-primary-muted: rgba(91,141,238,0.18);
 
-  /* Texte */
-  --text-primary:   #e8e8f0;
-  --text-secondary: #9090a8;
-  --text-muted:     #6b6b80;
-  --text-faint:     #4a4a60;
+--color-success: #1dd1a1;
+--color-danger: #ff6b6b;
+--color-warning: #f0a04b;
 
-  /* Bordures */
-  --border-subtle: rgba(255,255,255,0.06);
-  --border-normal: rgba(255,255,255,0.10);
+--text-primary: #e8eef7;
+--text-secondary: #9aa4b2;
+--text-muted: #6b7280;
 
-  /* Typographie */
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.5;
-  color: var(--text-primary);
-  background-color: var(--bg-app);
+--border-subtle: #252b3a;
+--border-strong: #2f374a;
+
+/* === ELEVATION === */
+--shadow-sm: 0 2px 8px rgba(0,0,0,.2);
+--shadow-md: 0 10px 30px rgba(0,0,0,.35);
+
+/* === RADIUS === */
+--radius-sm: 8px;
+--radius-md: 12px;
+--radius-lg: 14px;
+
+/* === SPACING === */
+--space-xs: 4px;
+--space-sm: 8px;
+--space-md: 12px;
+--space-lg: 16px;
+--space-xl: 24px;
+
+/* === TYPO === */
+font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.5;
+@font-face {
+  font-family: 'Venus Rising';
+  src: url('/fonts/venus-rising.woff2') format('woff2'),
+       url('/fonts/venus-rising.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
 }
 
+/* === GLOBAL === */
+color: var(--text-primary);
+background: var(--bg-app);
+}
+
+/* =========================
+4. BASE
+========================= */
 body {
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
+min-height: 100vh;
+-webkit-font-smoothing: antialiased;
 }
 
 #root {
-  min-height: 100vh;
+min-height: 100vh;
 }
 
 a {
-  color: var(--color-primary);
-  text-decoration: none;
+color: var(--color-primary);
+text-decoration: none;
 }
 
 a:hover {
-  text-decoration: underline;
+text-decoration: underline;
 }
 
+/* =========================
+5. TYPOGRAPHY UTILITIES
+========================= */
+.text-sm { font-size: 12px; }
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+.text-strong { font-weight: 600; }
+
+/* =========================
+6. LAYOUT
+========================= */
+.row {
+display: flex;
+gap: var(--space-md);
+flex-wrap: wrap;
+align-items: center;
+}
+
+.grid {
+display: grid;
+gap: var(--space-md);
+}
+
+/* =========================
+7. COMPONENTS
+========================= */
+
+/* CARD */
+.card {
+background: linear-gradient(180deg, var(--bg-surface), var(--bg-panel));
+border: 1px solid var(--border-subtle);
+border-radius: var(--radius-lg);
+padding: var(--space-md);
+box-shadow: var(--shadow-md);
+}
+
+/* INPUTS */
+input,
+select,
+textarea {
+font-family: inherit;
+font-size: 14px;
+background: var(--bg-input);
+color: var(--text-primary);
+border: 1px solid var(--border-subtle);
+border-radius: var(--radius-md);
+padding: 8px 10px;
+outline: none;
+}
+
+textarea {
+resize: vertical;
+min-height: 120px;
+}
+
+/* LABEL */
+label {
+font-size: 12px;
+color: var(--text-secondary);
+display: block;
+margin-bottom: var(--space-xs);
+}
+
+/* BUTTON */
 button {
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 14px;
+cursor: pointer;
+font-family: inherit;
+font-size: 14px;
+font-weight: 600;
+background: var(--bg-button);
+color: var(--text-primary);
+border: 1px solid var(--border-subtle);
+border-radius: var(--radius-md);
+padding: 8px 12px;
+transition: transform .08s ease, filter .08s ease;
 }
 
-input {
-  font-family: inherit;
-  font-size: 14px;
+button:hover {
+filter: brightness(1.08);
+}
+
+button:active {
+transform: scale(.98);
+}
+
+button.primary {
+background: var(--bg-button-primary);
+border-color: var(--border-strong);
+}
+
+button.success {
+background: rgba(29,209,161,0.15);
+border-color: rgba(29,209,161,0.35);
+}
+
+button.danger {
+background: rgba(255,107,107,0.15);
+border-color: rgba(255,107,107,0.35);
+}
+
+button:disabled {
+opacity: .5;
+cursor: not-allowed;
+}
+
+/* =========================
+8. UTILITIES
+========================= */
+.hidden { display: none !important; }
+
+/* SPACING */
+.mt-sm { margin-top: var(--space-sm); }
+.mt-md { margin-top: var(--space-md); }
+.mt-lg { margin-top: var(--space-lg); }
+
+/* =========================
+9. ADVANCED LAYOUT
+========================= */
+
+.main-split {
+display: grid;
+grid-template-columns: minmax(0,1fr) 560px;
+gap: var(--space-md);
+margin-top: var(--space-md);
+align-items: start;
+}
+
+@media (max-width: 1200px) {
+.main-split {
+grid-template-columns: 1fr;
+}
+}
+
+/* STICKY PANEL */
+.sticky {
+position: sticky;
+top: 16px;
+max-height: calc(100vh - 32px);
+overflow: auto;
+}
+
+/* =========================
+END
+========================= */
+/* =========================
+LOGIN — VISUAL UPGRADE
+========================= */
+
+/* PAGE */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+
+  /* FOND AVEC PROFONDEUR */
+  background:
+    radial-gradient(circle at 20% 20%, #1a2340 0%, transparent 40%),
+    radial-gradient(circle at 80% 80%, #0b0e14 0%, transparent 50%),
+    var(--bg-app);
+}
+
+/* LOGO EN BACKGROUND (clé) */
+.login-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background: url('/logo.svg') no-repeat;
+  background-size: 700px;
+
+  background-position: 50px 40%; /* clé ici */
+
+  opacity: 0.12;
+  filter: invert(1);
+
+  pointer-events: none;
+}
+
+/* CARD PLUS COMPACTE */
+.login-card {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+
+  background: linear-gradient(180deg, var(--bg-surface), var(--bg-panel));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-md);
+}
+
+/* HEADER */
+.login-header {
+  text-align: center;
+  margin-bottom: var(--space-lg);
+}
+
+/* TITRE — IDENTITÉ */
+.login-title {
+  font-family: 'Venus Rising', var(--font-family, sans-serif);
+}
+
+/* Sous-titre */
+.login-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* FORM */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* ALIGNEMENT PARFAIT */
+.login-field input {
+  width: 100%;
+  display: block;
+}
+
+/* BOUTON */
+.login-form button {
+  width: 100%;
+  margin-top: var(--space-sm);
+  background: var(--color-primary);
+  border: none;
+  color: white;
+}
+
+/* FOOTER */
+.login-footer {
+  text-align: center;
+  margin-top: var(--space-md);
+}
+/* =========================
+DASHBOARD EXTENSION
+========================= */
+
+.dashboard {
+  position: relative;
+}
+
+/* GRID */
+.campaign-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-md);
+}
+
+/* CARD */
+.campaign-card {
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+
+.campaign-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* COVER */
+.campaign-cover {
+  width: 100%;
+  height: 110px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.campaign-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.campaign-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #1a2340, #0b0e14);
+  opacity: 0.6;
+}
+
+/* HEADER */
+.card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* FOOTER */
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* INVITE */
+.invite-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.invite-code {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* COPY */
+.copy-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.copy-btn:hover {
+  color: var(--text-primary);
+}
+
+/* CREATE CARD */
+.campaign-create {
+  position: relative;
+  overflow: hidden;
+}
+
+/* FILIGRANE */
+.campaign-create::before {
+  content: "+";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 120px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.05);
+
+  pointer-events: none;
+}
+
+/* CONTENU AU DESSUS */
+.create-plus,
+.create-label {
+  position: relative;
+  z-index: 1;
+}
+
+.campaign-create:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.create-plus {
+  font-size: 32px;
+  color: var(--text-muted);
+}
+
+.create-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+/* SYMBOL */
+.campaign-symbol {
+  font-size: 48px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  opacity: 0.4;
+}
+
+/* INVITE */
+.invite-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.invite-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* CREATE */
+.campaign-create::before {
+  font-size: 160px;
+  color: rgba(255,255,255,0.04);
 }

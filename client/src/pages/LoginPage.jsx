@@ -1,13 +1,17 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
 
 export default function LoginPage() {
+  const { t } = useTranslation()
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+
   const { setUser } = useAuthStore()
   const navigate = useNavigate()
 
@@ -15,138 +19,53 @@ export default function LoginPage() {
     e.preventDefault()
     setError(null)
     setLoading(true)
+
     try {
       const res = await api.post('/auth/login', { email, password })
       setUser(res.data.user)
       navigate('/dashboard')
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Connection error')
+      setError(
+        err.response?.data?.error?.message || t('auth.loginError')
+      )
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>Enclume</h1>
-        <p style={styles.subtitle}>Sign in to your account</p>
+    <div className="login-page">
 
-        {error && <div style={styles.error}>{error}</div>}
+  <div className="login-card">
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.field}>
-            <label style={styles.label}>Email</label>
-            <input
-              style={styles.input}
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-            />
-          </div>
-
-          <div style={styles.field}>
-            <label style={styles.label}>Password</label>
-            <input
-              style={styles.input}
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
-          </div>
-
-          <button style={styles.button} type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
-
-        <p style={styles.footer}>
-          No account yet?{' '}
-          <Link to="/register">Create one</Link>
-        </p>
-      </div>
+    <div className="login-header">
+      <h1 className="login-title">Enclume</h1>
+      <p className="login-subtitle">Virtual Tabletop</p>
     </div>
-  )
-}
 
-const styles = {
-  container: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'var(--bg-app)',
-  },
-  card: {
-    width: '100%',
-    maxWidth: '400px',
-    backgroundColor: 'var(--bg-surface)',
-    border: '1px solid var(--border-normal)',
-    borderRadius: '12px',
-    padding: '40px',
-  },
-  title: {
-    fontSize: '22px',
-    fontWeight: '500',
-    color: 'var(--text-primary)',
-    marginBottom: '8px',
-  },
-  subtitle: {
-    fontSize: '14px',
-    color: 'var(--text-secondary)',
-    marginBottom: '32px',
-  },
-  error: {
-    backgroundColor: 'rgba(224,92,92,0.12)',
-    border: '1px solid var(--color-danger)',
-    borderRadius: '6px',
-    padding: '10px 14px',
-    color: 'var(--color-danger)',
-    fontSize: '13px',
-    marginBottom: '20px',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '20px',
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-  },
-  label: {
-    fontSize: '12px',
-    fontWeight: '500',
-    color: 'var(--text-secondary)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-  },
-  input: {
-    backgroundColor: 'var(--bg-card)',
-    border: '1px solid var(--border-normal)',
-    borderRadius: '8px',
-    padding: '10px 14px',
-    color: 'var(--text-primary)',
-    outline: 'none',
-  },
-  button: {
-    backgroundColor: 'var(--color-primary)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    padding: '11px',
-    fontWeight: '500',
-    marginTop: '4px',
-  },
-  footer: {
-    textAlign: 'center',
-    fontSize: '13px',
-    color: 'var(--text-secondary)',
-    marginTop: '24px',
-  },
+    {error && <div className="login-error">{error}</div>}
+
+    <form onSubmit={handleSubmit} className="login-form">
+      <div className="login-field">
+        <label>Email</label>
+        <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+      </div>
+
+      <div className="login-field">
+        <label>Password</label>
+        <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+      </div>
+
+      <button type="submit" disabled={loading}>
+        {loading ? t('common.loading') : t('auth.login')}
+      </button>
+    </form>
+
+    <p className="login-footer">
+      <Link to="/register">{t('auth.register')}</Link>
+    </p>
+
+  </div>
+</div>
+  )
 }

@@ -18,7 +18,13 @@ import texturesRouter from './routes/textures.js'
 import charactersRouter, { actionsRouter as charactersActionsRouter } from './routes/characters.js'
 import assetsRouter from './routes/assets.js'
 import usersRouter from './routes/users.js'
-
+import diceRouter from './routes/dice.js'
+import voxelTexturesRouter from './routes/voxel-textures.js'
+import texturePacksRouter from './routes/texture-packs.js'
+import charSheetRouter from './routes/character/char-sheet.js'
+import charRefRouter from './routes/character/ref.js'
+import entityBlueprintsRouter from './routes/entity-blueprints.js'
+import entitiesRouter from './routes/entities.js'
 
 const app = express()
 const httpServer = createServer(app)
@@ -53,6 +59,14 @@ app.use('/api/battlemaps', battlemapsRouter)
 app.use('/api/battlemaps/:id/tokens', tokensRouter)
 app.use('/api/tokens', tokensRouter)
 app.use('/api/users', usersRouter)
+app.use('/api/dice', diceRouter)
+app.use('/api/voxel-textures', voxelTexturesRouter)
+app.use('/api/texture-packs', texturePacksRouter)
+app.use('/api/char-sheet', charSheetRouter)
+app.use('/api/char-ref', charRefRouter)
+app.use('/api/entity-blueprints', entityBlueprintsRouter)
+app.use('/api/battlemaps/:id/entities', entitiesRouter)
+app.use('/api/entities', entitiesRouter)
 
 // Socket.io
 initSocket(io)

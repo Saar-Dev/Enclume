@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Initiative — Joueur</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f7f9fc;
+    --card:#fff;
+    --line:#e5e7eb;
+    --text:#111827;
+    --muted:#6b7280;
+    --ok:#16a34a;
+    --bad:#dc2626;
+    font-family:'Nunito',sans-serif;
+  }
+
+  *{box-sizing:border-box}
+
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    padding-bottom:92px;
+  }
+
+  .topbar{
+    position:sticky;
+    top:0;
+    z-index:50;
+    background:var(--bg);
+    padding:14px 16px 8px;
+    border-bottom:1px solid rgba(0,0,0,0.05);
+  }
+
+  .identity{font-size:16px;font-weight:900}
+  .sub{margin-top:2px;color:var(--muted);font-size:12px;font-weight:700}
+
+  .pillRow{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .pill{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:6px 10px;
+    font-size:12px;
+  }
+  .pill strong{font-size:13px}
+
+  .wrap{padding:14px 16px}
+
+  .category{margin:12px 0}
+
+  .catHead{
+    background:#1f2937;
+    color:#fff;
+    padding:10px 12px;
+    border-radius:10px 10px 0 0;
+    font-weight:900;
+    display:flex;
+    justify-content:space-between;
+    cursor:pointer;
+    user-select:none;
+  }
+
+  /* ✅ FIX TOOLTIP (pas de z-index qui crée un stacking context) */
+  .catBody{
+    background:#fff;
+    border:1px solid var(--line);
+    border-top:0;
+    border-radius:0 0 10px 10px;
+    overflow:visible;       /* important pour le tooltip */
+    position:relative;      /* ok */
+    /* ⚠️ PAS de z-index ici */
+  }
+
+  .row{
+    display:grid;
+    grid-template-columns:26px 1fr 170px;
+    gap:10px;
+    align-items:start;
+    padding:8px 10px;
+    border-bottom:1px solid rgba(0,0,0,0.06);
+    position:relative;      /* ok */
+    /* ⚠️ PAS de z-index ici */
+  }
+  .row:last-child{border-bottom:0}
+
+  /* ✅ la row survolée passe au-dessus (tooltip inclus) */
+  /* Avant: z-index:999999; => faisait passer le "i" au-dessus de tout (moche) */
+  .row:hover{z-index:5;}
+
+  .name{font-size:13px;line-height:1.15}
+
+  .val{
+    display:flex;
+    justify-content:flex-end;
+    align-items:center;
+    gap:8px;
+    font-weight:800;
+  }
+  .val.green{color:var(--ok)}
+  .val.red{color:var(--bad)}
+
+  .slider{display:flex;gap:8px;align-items:center;width:100%}
+  .slider input{flex:1;min-width:0}
+
+  .muted{color:var(--muted);font-size:12px}
+
+  .bottom{
+    position:fixed;
+    left:0;right:0;bottom:0;
+    z-index:60;
+    background:var(--bg);
+    border-top:1px solid rgba(0,0,0,0.06);
+    padding:10px 16px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+  }
+
+  .btn{
+    border:0;
+    border-radius:10px;
+    padding:10px 14px;
+    font-weight:900;
+    cursor:pointer;
+    font-family:inherit;
+    color:#fff;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+  }
+  .btn.ok{background:var(--ok)}
+  .btn.gray{background:#6b7280}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+
+  .msg{font-weight:900;color:var(--muted);font-size:12px}
+
+  .toast{
+    position:fixed;
+    left:50%;
+    bottom:92px;
+    transform:translateX(-50%);
+    background:rgba(17,24,39,0.95);
+    color:#fff;
+    border:1px solid rgba(255,255,255,0.12);
+    padding:10px 14px;
+    border-radius:12px;
+    display:none;
+    z-index:999999;
+    font-weight:900;
+  }
+  .toast.show{display:block}
+
+  .spinner{
+    width:16px;height:16px;
+    border:2px solid rgba(255,255,255,0.35);
+    border-top-color: rgba(255,255,255,0.95);
+    border-radius:50%;
+    display:inline-block;
+    animation:spin .9s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* --- Tooltip actions (hover desktop) --- */
+  .nameLine{
+    display:flex;
+    gap:8px;
+    align-items:flex-start;
+  }
+
+  .info{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:18px;height:18px;
+    border-radius:999px;
+    border:1px solid rgba(0,0,0,0.12);
+    background:rgba(255,255,255,0.7);
+    color:var(--muted);
+    font-weight:900;
+    font-size:12px;
+    cursor:help;
+    user-select:none;
+    flex:0 0 auto;
+    margin-top:1px;
+    /* Avant: z-index:999999; => faisait passer l'icône au-dessus de tout */
+    /* pas de z-index ici: l'icône reste "dans" sa ligne */
+  }
+
+  .info .tipBox{
+    position:absolute;
+    left:0;
+    top:100%;
+    margin-top:8px;
+    width:min(520px, 62vw);
+    max-height:260px;
+    overflow:auto;
+    padding:10px 12px;
+    border-radius:12px;
+    background:rgba(17,24,39,0.98);
+    color:#fff;
+    border:1px solid rgba(255,255,255,0.12);
+    box-shadow:0 14px 30px rgba(0,0,0,0.18);
+    opacity:0;
+    transform:translateY(6px);
+    pointer-events:none;
+    transition:opacity .12s ease, transform .12s ease;
+    /* ✅ le tooltip doit passer devant, pas le "i" */
+    z-index:200;
+    white-space:pre-line;
+    font-size:12px;
+    line-height:1.35;
+  }
+
+  .info:hover .tipBox{
+    opacity:1;
+    transform:translateY(0);
+  }
+</style>
+
+</head>
+
+<body>
+  <div class="topbar">
+    <div class="identity" id="identityLabel">…</div>
+    <div class="sub">Initiative — Tour <span id="round">?</span></div>
+    <div class="pillRow">
+      <div class="pill">Base <strong id="baseInit">0</strong></div>
+      <div class="pill">Action <strong id="actionMod">0</strong></div>
+      <div class="pill">Score <strong id="finalScore">0</strong></div>
+      <div class="pill">Statut <strong id="status">—</strong></div>
+    </div>
+  </div>
+
+  <div class="wrap" id="content"></div>
+
+  <div class="bottom">
+    <div class="msg" id="statusLine">Chargement…</div>
+    <div style="display:flex;gap:10px">
+      <button class="btn gray" id="resetBtn">Reset</button>
+      <button class="btn ok" id="submitBtn" disabled>Valider (envoyer au MJ)</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+const FID = "<?= fid ?>";
+
+const initiativeData = [
+  {cat:"PRÉCIPITATION", items:[
+    { name:"Se précipiter", type:"fixed", value:3, actionMalus:-5,
+      tip:`Le joueur peut ajouter un bonus de +3 à l’Initiative de son personnage, mais subit un malus de -5 à son Action.` }
+  ]},
+  {cat:"PRÉPARATION_", items:[
+    {name:"Dégainer une arme (prêt à dégainer)", type:"fixed", value:-3},
+    {name:"Dégainer une arme", type:"fixed", value:-5},
+    {name:"Saisir un objet à portée de main", type:"fixed", value:-3},
+    {name:"Saisir un objet à quelques pas de là", type:"range", min:-10, max:-5, step:1,
+      tip:"De -5 à -10, en fonction de la distance à parcourir."},
+    {name:"Observer le combat", type:"range", min:-20, max:-5, step:5,
+      tip:"on considère qu’un combattant n’est conscient que de son ou de ses adversaires les plus proches, situés dans son champ de vision. Pour chaque tranche de 5 points d’Initiative sacrifiée, le personnage peut obtenir une (et une seule) information précise sur son environnement, par exemple la configuration générale des lieux (issues les plus proches, objet ou mobilier pouvant servir de couverture, etc.), le nombre exact d’adversaires visibles, leur équipement, leur tactique (s’ils en ont une), leurs renforts éventuels, etc."},
+    {name:"Tenter de repérer un objet, une arme, une personne, un endroit, etc.", type:"range", min:-20, max:-5, step:5,
+      tip:"Pour chaque tranche de 5 points d’Initiative sacrifiée, le personnage a droit à un Test d’Observation pour repérer ce qu’il cherche."},
+    {name:"Utiliser un mécanisme simple", type:"range", min:-5, max:-3, step:1,
+      tip:"Par exemple actionner un interrupteur, ouvrir une porte."},
+    {name:"Changer le mode de tir d’une arme à feu", type:"fixed", value:-3},
+    {name:"Prononcer une phrase courte, donner des ordres brefs", type:"fixed", value:-3},
+    {name:"Retarder son action", type:"special", flag:"DELAY_ACTION",
+      tip:"Un joueur peut retarder l’Action de son personnage. Celui-ci n’agira pas à la phase d’action qui correspond à son score d’Initiative, mais plus tard dans le Tour. Cela peut être très utile, pour voir comment évoluent les choses au cours du Tour de combat, attendre un événement particulier ou encore en savoir plus sur les intentions d’un autre combattant, de manière à pouvoir réagir en conséquence. De même, tenir un adversaire en joue avec une arme à feu peut être considéré comme une Action retardée. Le personnage peut alors agir à n’importe quelle phase d’Action. S’il décide d’agir à la même phase d’action qu’un autre personnage qui agit, lui, normalement, son Action est considérée comme prioritaire, et est résolue en premier. En revanche, si deux personnages ayant retardé leurs Actions décident d’agir à la même phase, ils sont soumis tous deux à la règle normale des Initiatives équivalentes. Un personnage peut retarder son Action d’un Tour à l’autre. Dans ce cas, il peut agir dès la première phase d’action du Tour suivant, quelle que soit son Initiative."}
+  ]},
+  {cat:"DÉPLACEMENT_", items:[
+    {name:"S’accroupir/Se redresser", type:"fixed", value:-3},
+    {name:"Déplacement court", type:"fixed", value:-3},
+    {name:"Se jeter à terre, plonger", type:"fixed", value:-5},
+    {name:"Se relever", type:"fixed", value:-10},
+    {name:"Se découvrir/Se mettre à couvert", type:"fixed", value:-3}
+  ]},
+  {cat:"COMBAT_", items:[
+    {name:"Attaque multiple", type:"special", flag:"MULTI_ATTACK",
+      tip:`Un joueur désirant que son personnage effectue plus d’une Attaque par Tour de combat doit le déclarer dès l’étape de déclaration d’intention. Un personnage peut effectuer jusqu’à trois Attaques par Tour de combat (c’est le maximum autorisé). Il subit toutefois un malus pour toutes les Attaques du Tour : -5 s’il veut effectuer 2 Attaques, ou -7 pour 3 Attaques. Dans le cas d’Attaques multiples, la première Attaque est effectuée normalement à la phase d’action équivalente au
+      score d’Initiative de base du personnage. Ensuite, les autres Attaques prennent place à intervalles réguliers, tous les 5 points d’Initiative.`},
+    {name:"Venir au corps à corps pour saisir son adversaire", type:"fixed", value:-3},
+    {name:"Changer le mode de tir d’une arme à feu", type:"fixed", value:-3},
+    {name:"Tirer depuis une couverture", type:"range", min:-5, max:-3, step:1,
+      tip:"un personnage à couvert bénéficie d’un abri plus ou moins important (ses adversaires ont des malus pour l’attaquer). En revanche, cela ne facilite pas ses propres tirs : il subit un malus à l’Initiative de -3 à -5, selon sa position."}
+  ]}
+];
+
+const content = document.getElementById("content");
+const statusLine = document.getElementById("statusLine");
+const toast = document.getElementById("toast");
+const submitBtn = document.getElementById("submitBtn");
+
+let baseInit = 0;
+let isSubmitting = false;
+let submitBtnLabel = "Valider (envoyer au MJ)";
+
+function showToast(t){
+  toast.textContent = t;
+  toast.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=>toast.classList.remove("show"), 2200);
+}
+function esc(s){
+  return String(s||"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[c]));
+}
+function setSubmitting(flag){
+  isSubmitting = !!flag;
+  if(isSubmitting){
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span class="spinner"></span> Envoi…`;
+  }else{
+    submitBtn.disabled = false;
+    submitBtn.textContent = submitBtnLabel;
+  }
+}
+function tipHtml(tip){
+  if(!tip) return "";
+  return `<span class="info">i<span class="tipBox">${esc(tip)}</span></span>`;
+}
+
+function computeTotal(){
+  let initTotal = 0;          // ✅ total initiative (ce qui affecte le score)
+  let actionMalusTotal = 0;   // ✅ total malus d’action (ce qui doit aller dans le header "Action")
+
+  const options = [];
+  const choices = [];
+
+  content.querySelectorAll(".row").forEach(row=>{
+    const chk = row.querySelector('input[type="checkbox"]');
+    if(!chk || !chk.checked) return;
+
+    const type = chk.dataset.type;
+    const name = chk.dataset.name || "—";
+    const cat  = chk.dataset.cat  || "—";
+
+    let mod = 0;              // mod d’initiative
+    const meta = {};
+
+    if(type === "fixed"){
+      mod = Number(chk.dataset.val||0)||0;
+
+      const am = Number(chk.dataset.actionmalus);
+      if(!Number.isNaN(am)){
+        meta.actionMalus = am;
+      }
+
+    } else if(type === "range") {
+      const max = Number(chk.dataset.max||0)||0;
+      const slider = row.querySelector('input[type="range"]');
+      mod = max - Number(slider.value||0);
+
+    } else if(type === "special") {
+      mod = 0;
+      const flag = String(chk.dataset.flag || "").trim();
+      if(flag) meta.flag = flag;
+
+      // ✅ Attaque multiple (2/3) => actionMalus -5/-7 + count
+      if (String(flag).trim().toUpperCase() === "MULTI_ATTACK"){
+        const sel = row.querySelector("select.multiSel");
+        const count = Number(sel?.value || 2);
+        meta.count = (count === 3) ? 3 : 2;
+        meta.actionMalus = (meta.count === 3) ? -7 : -5;
+      }
+    }
+
+    // ✅ cumuls
+    initTotal += mod;
+    if (meta.actionMalus != null){
+      actionMalusTotal += Number(meta.actionMalus) || 0;
+    }
+
+    // affichage "options"
+    let shownName = name;
+    if (String(meta.flag || "").toUpperCase() === "MULTI_ATTACK"){
+      shownName = "Attaque multiple (" + (meta.count || 2) + " attaques)";
+    }
+
+    const optExtra =
+      (meta.actionMalus != null ? `, Action ${meta.actionMalus}` : "") +
+      (meta.flag ? `, ${meta.flag}` : "") +
+      (meta.count ? ` x${meta.count}` : "");
+
+    options.push(`${shownName} (${mod>=0?'+':''}${mod}${optExtra})`);
+    choices.push({ cat, name, mod, ...meta });
+  });
+
+  // ✅ IMPORTANT: on garde "total" pour la compat serveur (c'est l'initiative)
+  return { total: initTotal, initTotal, actionMalusTotal, options, choices };
+}
+
+function updateHeader(){
+  const { total, actionMalusTotal } = computeTotal();
+  const finalScore = baseInit + total;
+
+  document.getElementById("baseInit").textContent = String(baseInit);
+
+  // ✅ "Action" = malus d'action total (et PAS le total initiative)
+  document.getElementById("actionMod").textContent = String(actionMalusTotal);
+
+  // ✅ "Score" = baseInit + total initiative
+  document.getElementById("finalScore").textContent = String(finalScore);
+}
+
+
+function buildRow(item, catName){
+  const row = document.createElement("div");
+  row.className = "row";
+
+  if(item.type === "special"){
+    const flag = String(item.flag || "").trim().toUpperCase();
+    const isMulti = (flag === "MULTI_ATTACK");
+
+    if (isMulti){
+      row.innerHTML = `
+        <input type="checkbox"
+          data-type="special"
+          data-cat="${esc(catName)}"
+          data-name="${esc(item.name)}"
+          data-flag="${esc(item.flag || "")}">
+        <div class="name">
+          <div class="nameLine">
+            <span class="label">${esc(item.name)}</span>
+            ${tipHtml(item.tip)}
+          </div>
+          <div class="muted" style="margin-top:6px">
+            Nombre d’attaques :
+            <select class="multiSel" disabled style="margin-left:6px;padding:6px 8px;border-radius:10px;border:1px solid rgba(0,0,0,.12);font-weight:900;font-family:inherit">
+              <option value="2">2</option>
+              <option value="3">3</option>
+            </select>
+          </div>
+        </div>
+        <div class="val red"><strong class="multiAM">-5</strong></div>
+      `;
+
+      const chk = row.querySelector('input[type="checkbox"]');
+      const sel = row.querySelector('select.multiSel');
+      const am  = row.querySelector('.multiAM');
+
+      function sync(){
+        const n = Number(sel.value || 2);
+        const mal = (n === 3) ? -7 : -5;
+        am.textContent = String(mal);
+      }
+
+      chk.addEventListener("change", ()=>{
+        sel.disabled = !chk.checked;
+        sync();
+        updateHeader();
+        applyMutualExclusion();
+      });
+
+      sel.addEventListener("change", ()=>{
+        sync();
+        updateHeader();
+      });
+
+      sync();
+      return row;
+    }
+
+    row.innerHTML = `
+      <input type="checkbox"
+        data-type="special"
+        data-cat="${esc(catName)}"
+        data-name="${esc(item.name)}"
+        data-flag="${esc(item.flag || "")}">
+      <div class="name">
+        <div class="nameLine">
+          <span class="label">${esc(item.name)}</span>
+          ${tipHtml(item.tip)}
+        </div>
+      </div>
+      <div class="val muted">Spécial</div>
+    `;
+    row.querySelector("input").addEventListener("change", ()=>{
+      updateHeader();
+      applyMutualExclusion();
+    });
+    return row;
+  }
+
+  if(item.type === "fixed"){
+    row.innerHTML = `
+      <input type="checkbox"
+        data-type="fixed"
+        data-cat="${esc(catName)}"
+        data-name="${esc(item.name)}"
+        data-val="${item.value}"
+        data-actionmalus="${item.actionMalus ?? ""}">
+      <div class="name">
+        <div class="nameLine">
+          <span class="label">${esc(item.name)}</span>
+          ${tipHtml(item.tip)}
+        </div>
+      </div>
+      <div class="val ${item.value>=0?'green':'red'}">${item.value>=0?'+':''}${item.value}</div>
+    `;
+
+    row.querySelector("input").addEventListener("change", ()=>{
+      updateHeader();
+      applyMutualExclusion(); // ✅ pour gérer "Se précipiter" ↔ "Retarder son action"
+    });
+
+    return row;
+  }
+
+
+  if(item.type === "range"){
+    const min = item.min, max = item.max, step = item.step || 1;
+    row.innerHTML = `
+      <input type="checkbox"
+        data-type="range"
+        data-cat="${esc(catName)}"
+        data-name="${esc(item.name)}"
+        data-min="${min}"
+        data-max="${max}">
+      <div class="name">
+        <div class="nameLine">
+          <span class="label">${esc(item.name)}</span>
+          ${tipHtml(item.tip)}
+        </div>
+      </div>
+      <div class="val red">
+        <div class="slider">
+          <span class="muted">${max}</span>
+          <input type="range" min="0" max="${max-min}" value="0" step="${step}" disabled>
+          <span class="muted">${min}</span>
+          <strong class="out">${max}</strong>
+        </div>
+      </div>
+    `;
+
+    const chk = row.querySelector('input[type="checkbox"]');
+    const slider = row.querySelector('input[type="range"]');
+    const out = row.querySelector(".out");
+
+    chk.addEventListener("change", ()=>{
+      slider.disabled = !chk.checked;
+      updateHeader();
+    });
+
+    slider.addEventListener("input", ()=>{
+      out.textContent = String(max - Number(slider.value||0));
+      updateHeader();
+    });
+
+    return row;
+  }
+
+  return row;
+}
+
+function buildUI(){
+  content.innerHTML = "";
+  initiativeData.forEach(cat=>{
+    const catWrap = document.createElement("div");
+    catWrap.className = "category";
+
+    const head = document.createElement("div");
+    head.className = "catHead";
+    head.innerHTML = `<span>${esc(cat.cat)}</span><span>▼</span>`;
+
+    const body = document.createElement("div");
+    body.className = "catBody";
+    cat.items.forEach(it => body.appendChild(buildRow(it, cat.cat)));
+
+    head.addEventListener("click", ()=>{
+      const hidden = body.style.display === "none";
+      body.style.display = hidden ? "block" : "none";
+    });
+
+    catWrap.appendChild(head);
+    catWrap.appendChild(body);
+    content.appendChild(catWrap);
+  });
+
+  updateHeader();
+  applyMutualExclusion();
+}
+
+function applyMutualExclusion(){
+  const delayChk  = content.querySelector('input[type="checkbox"][data-flag="DELAY_ACTION"]');
+  const multiChk  = content.querySelector('input[type="checkbox"][data-flag="MULTI_ATTACK"]');
+  const precipChk = content.querySelector('input[type="checkbox"][data-name="Se précipiter"]');
+
+  if (!delayChk) return;
+
+  // multi select (si présent)
+  let multiSel = null;
+  if (multiChk){
+    const multiRow = multiChk.closest(".row");
+    multiSel = multiRow ? multiRow.querySelector("select.multiSel") : null;
+  }
+
+  // 1) Si "Retarder son action" est coché => on interdit Multi + Se précipiter
+  if (delayChk.checked){
+    if (multiChk){
+      multiChk.checked = false;
+      multiChk.disabled = true;
+    }
+    if (multiSel) multiSel.disabled = true;
+
+    if (precipChk){
+      precipChk.checked = false;
+      precipChk.disabled = true;
+    }
+
+    updateHeader();
+    return;
+  }
+
+  // 2) Sinon, on ré-autorise Multi + Se précipiter
+  if (multiChk) multiChk.disabled = false;
+  if (precipChk) precipChk.disabled = false;
+
+  // 3) Si Multi OU Se précipiter est coché => on interdit "Retarder son action"
+  const blockDelay = (multiChk && multiChk.checked) || (precipChk && precipChk.checked);
+  delayChk.disabled = !!blockDelay;
+  if (blockDelay) delayChk.checked = false;
+
+  // 4) Multi select activé uniquement si Multi est coché
+  if (multiSel){
+    multiSel.disabled = !(multiChk && multiChk.checked && !multiChk.disabled);
+  }
+
+  updateHeader();
+}
+
+
+function resetAll(){
+  // clear checks
+  content.querySelectorAll('input[type="checkbox"]').forEach(c=>{
+    c.checked = false;
+    c.disabled = false;
+  });
+
+  // reset sliders
+  content.querySelectorAll('input[type="range"]').forEach(r=>{
+    r.value = 0;
+    r.disabled = true;
+  });
+
+  // reset displayed output for range
+  content.querySelectorAll(".out").forEach((o)=>{
+    const row = o.closest(".row");
+    const chk = row?.querySelector('input[type="checkbox"]');
+    const max = Number(chk?.dataset?.max);
+    if(!Number.isNaN(max)) o.textContent = String(max);
+  });
+
+  // reset multi select (if present)
+  content.querySelectorAll("select.multiSel").forEach(sel=>{
+    sel.value = "2";
+    sel.disabled = true;
+  });
+  content.querySelectorAll(".multiAM").forEach(am=>{
+    am.textContent = "-5";
+  });
+
+  applyMutualExclusion();
+  updateHeader();
+}
+
+document.getElementById("resetBtn").addEventListener("click", ()=>{
+  if(isSubmitting) return;
+  resetAll();
+  showToast("Reset OK.");
+});
+
+submitBtn.addEventListener("click", ()=>{
+  if(isSubmitting) return;
+
+  const payload = computeTotal();
+  if(!payload.options.length) showToast("Tu n’as rien coché — j’envoie quand même.");
+
+  statusLine.textContent = "Envoi au MJ…";
+  setSubmitting(true);
+
+  google.script.run
+    .withSuccessHandler((res)=>{
+      document.getElementById("status").textContent = "Envoyé ✅";
+      statusLine.textContent =
+        `Envoyé (base ${res.baseInit}, init ${payload.total}, action ${payload.actionMalusTotal}, score ${res.final}).`;
+      showToast("✅ Initiative envoyée au MJ.");
+      submitBtnLabel = "Renvoyer (mettre à jour)";
+      setSubmitting(false);
+    })
+    .withFailureHandler((err)=>{
+      statusLine.textContent = "Erreur envoi.";
+      alert("Erreur: " + (err?.message || err));
+      setSubmitting(false);
+    })
+    .combat_init_player_submit(FID, payload);
+});
+
+google.script.run
+  .withSuccessHandler((st)=>{
+    buildUI();
+
+    if (st && st.identity){
+      document.getElementById("identityLabel").textContent = st.identity?.label || "—";
+      baseInit = Number(st.identity?.baseInit || 0) || 0;
+      updateHeader();
+    }
+
+    document.getElementById("round").textContent = String(st?.round || 1);
+
+    if(!st?.active){
+      document.getElementById("status").textContent = "Aucun combat";
+      statusLine.textContent = "Aucun combat actif. (Attends que le MJ lance le combat.)";
+      submitBtn.disabled = true;
+      return;
+    }
+
+    const phase = String(st.phase || "COLLECT").toUpperCase();
+    const alreadySubmitted = !!st.alreadySubmitted;
+
+    if (phase !== "COLLECT"){
+      document.getElementById("status").textContent = "Tour validé";
+      statusLine.textContent = "Le MJ a déjà validé le tour (phase PLAY). Soumission verrouillée.";
+      submitBtn.disabled = true;
+      return;
+    }
+
+    document.getElementById("status").textContent = alreadySubmitted ? "Envoyé ✅" : "À faire";
+    submitBtnLabel = alreadySubmitted ? "Renvoyer (mettre à jour)" : "Valider (envoyer au MJ)";
+    submitBtn.textContent = submitBtnLabel;
+    submitBtn.disabled = false;
+
+    statusLine.textContent = "Prêt.";
+  })
+  .withFailureHandler((err)=>{
+    buildUI();
+    alert("Erreur chargement état: " + (err?.message || err));
+  })
+  .combat_init_player_getState(FID);
+</script>
+</body>
+</html>

@@ -1,0 +1,865 @@
+"Aptitudes physiques_";"Accrobatie/Équilibre *";;"(-3)";"COO/PER";;"Compétence limitative pour : toute action physique comportant une manœuvre acrobatique ou demandant de garder son équilibre.
+
+Cette Compétence permet d’effectuer des figures acrobatiques ou des mouvements de gymnastique (hors du milieu aquatique). On peut ainsi l’utiliser pour passer au travers d’un quadrillage laser, pour se désengager d’un combat, pour effectuer une attaque acrobatique, etc. La Difficulté du mouvement dépend de sa complexité et des risques qu’il fait prendre au personnage. Acrobatie/Équilibre peut également être utilisée lorsque le personnage doit garder son équilibre (ou, en tant que Compétence limitative, lorsqu’il doit agir en équilibre précaire). Enfin, cette Compétence est utile en cas de chute, permettant d’une part d’effectuer des roulades (et de se relever dans le même mouvement) et d’autre part de contrôler une chute et de réduire les dommages infligés par celle-ci (voir le chapitre État de santé, section Autres sources de dommages, page 242). Pour toutes ces actions, l’encombrement dû à l’équipement porté est une difficulté qu’il ne faut pas négliger (voir le chapitre Équipement, section Encombrement, page 312).
+
+Note : dans le milieu sous-marin ou en apesanteur, Acrobatie/ Équilibre est remplacée soit par Manœuvre sous-marine ou Manœuvres 0G, soit par la Compétence de Manœuvre d’armure appropriée, dans le cas où une armure mécanisée est utilisée (voir la description de ces Compétences plus bas)."
+"Aptitudes physiques_";"Athlétisme";;;"FOR/COO";;"Cette Compétence regroupe toutes les actions physiques : la course, le saut, la natation… Elle permet de connaître la distance moyenne parcourue par un personnage qui se déplace à sa vitesse maximale, au sol et dans l’eau (voir le chapitre Combat, section Déplacements et mouvements, page 220). Si un joueur veut que son personnage tente de dépasser sa vitesse de déplacement moyenne, il peut effectuer un Test aléatoire d’Athlétisme : le modificateur de réussite ou d’échec indique alors le nombre de mètres que le personnage gagne (ou perd), par rapport à sa valeur moyenne. La Difficulté du Test peut être modifiée par les conditions du terrain ou les conditions naturelles (par exemple l’intensité des courants, dans le cas de la natation). Une Catastrophe peut indiquer que le personnage risque de se blesser (en chutant, notamment : voir État de santé, section Autres sources de dommages, page 242) ou s’est effectivement blessé (un claquage musculaire par exemple, qui inflige automatiquement une Blessure moyenne)."
+"Aptitudes physiques_";"Endurance *";;;"FOR/COO";;"Compétence limitative pour : toute action fatigante destinée à durer dans le temps. Il peut aussi bien s’agir d’efforts physiques que mentaux. Si le MJ utilise les règles avancées de Fatigue (voir État de santé, page 234), le caractère limitatif de cette Compétence n’est plus utile (Endurance est directement utilisée dans ces règles).
+
+Cette Compétence représente la résistance du personnage à l’effort et à la Fatigue, tant physique que mentale."
+"Aptitudes physiques_";"Escalade";;;"FOR/COO";;"Cette Compétence permet d’escalader parois et murs. Elle permet également de savoir utiliser le matériel d’escalade, de descendre en rappel, etc. Sur une Catastrophe, le personnage tombe…"
+"Aptitudes physiques_";"Manoeuvres 0G *";;;"COO/ADA";;"Compétence limitative pour : toutes les actions physiques nécessitant une certaine coordination physique effectuées en apesanteur.
+
+Cette Compétence permet d’évoluer en apesanteur : se retourner rapidement, effectuer un mouvement difficile, atteindre l’endroit où on veut aller, se déplacer dans un milieu complexe (dédale, épave, etc.). Elle remplace complètement la Compétence Acrobatie/Équilibre en milieu spatial et limite également le niveau des Compétences nécessitant une certaine coordination physique (les Compétences de combat, notamment).
+
+Note : les personnages utilisant une armure mécanisée doivent employer la Compétence de Manœuvre d’armure spatiale (voir description plus bas), au lieu de celle-ci."
+"Aptitudes physiques_";"Manoeuvres sous-marines *";;;"FOR/COO";;"Compétence limitative pour : certaines actions physiques sous l’eau.
+
+Cette Compétence permet d’évoluer sous l’eau : se retourner rapidement, effectuer un mouvement difficile, atteindre l’endroit où l’on veut aller, se déplacer dans un milieu complexe (dédale, épave, etc.). Elle remplace complètement la Compétence Acrobatie/Équilibre en milieu sous-marin et limite également le niveau des Compétences nécessitant une certaine coordination physique (les Compétences de combat, notamment). Le caractère limitatif de cette Compétence ne s’applique ni aux créatures sous-marines, ni aux hybrides, parfaitement adaptés au milieu aquatique.
+
+Note : les personnages utilisant une armure mécanisée doivent employer la Compétence de Manœuvre d’armure sous-marine (voir description plus bas), au lieu de celle-ci."
+"Aptitudes physiques_";"Respiration FOE";;"(-3)";"CON/VOL";;"Cette Compétence permet de maîtriser les techniques de respiration de fluide ou de toute autre substance organique ou artificielle. Chaque fois qu’un PJ respire du fluide, il doit effectuer un Test de Respiration FOE, dont la Difficulté dépend du produit utilisé (le néo-fluide, par exemple, est plus difficile à respirer que l’hyperfluide, voir le chapitre Équipement, page 272). S’il échoue, il panique et ne peut rien faire d’autre que tenter de retirer son casque. Si on l’en empêche, il peut recommencer ce Test à chaque Tour de combat, avec un bonus de +1 (cumulatif) à chaque tentative, jusqu’à ce qu’il réussisse à respirer calmement.
+
+Respirer un fluide n’est pas une chose naturelle et l’organisme a besoin de temps pour s’y habituer. C’est pour cette raison que de nombreux plongeurs qui ne sont pas habitués au fluide ont besoin d’un temps d’adaptation et attendent un bon moment avant de plonger. Ainsi, tout personnage respirant un hyper-fluide ou un néo-fluide subit une pénalité de -4 ou -10 respectivement à tous ses Tests pendant 2D6 minutes. Ce malus peut être réduit par le modificateur de réussite obtenu lors du Test grâce auquel le personnage a réussi à respirer sans paniquer.
+
+La fatigue est enfin un effet commun à tous les fluides, car ils demandent plus d’énergie lors de la respiration. L’organisme se fatigue donc très vite sous l’effet des fluides. Toutes les heures, en cas d’activité normale, le personnage doit donc effectuer un Test de résistance à la Fatigue, en utilisant Respiration FOE, limité par le niveau de la Compétence Endurance. Lors des activités intenses (le combat par exemple), les Tests de Fatigue doivent être effectués tous les 3 Tours de combat. Note : si le MJ n’utilise pas les règles avancées de Fatigue, considérer que le personnage souffre d’un malus cumulatif de -1 à tous ses Tests d’action physique, pour chaque demi-heure qui passe ou tous les 2 Tours de combat en cas d’activité intense, jusqu’à ce qu’il puisse se reposer.
+
+Même en utilisant du fluide, l’organisme humain n’est pas conçu pour résister aux pressions incroyables des profondeurs. Un plongeur est donc limité aux profondeurs suivantes :
+• Néo-fluide : (niveau global de Respiration FOE) x 500 m.
+• Hyper-fluide : (niveau global de Respiration FOE) x 1000 m. De plus, rester dans un milieu liquide trop longtemps est dangereux. La peau risque de se desquamer et le système nerveux peut être attaqué. Un plongeur utilisant du fluide est donc limité aux temps de plongée suivants :
+• Néo-fluide : (niveau global de Respiration FOE/2) + 8 heures.
+• Hyper-fluide : niveau global de Respiration FOE + 12 heures."
+"Combat (contact)_";"Armes Lourdes (contact)";;;"FOR/FOR";;"Cette Compétence couvre l’usage des armes lourdes comme les découpe-carlingues, les perceuses de combat, etc. Si le personnage n’est pas stable (appuyé sur quelque chose, équipé d’un harnais spécial, etc.), le niveau de la Compétence doit être divisé par deux."
+"Combat (contact)_";"Armes Spéciales (contact)";"Force/Coordination";"(X)";"FOR/COO";;"Cette Compétence permet d’utiliser une arme au maniement bien spécifique, comme les fouets, les chaînes, les lassos, les filets, les grappins, etc. Chaque arme spéciale fait l’objet d’une Compétence spécifique. En fonction de la rareté de l’arme ou de son côté exotique, cette Compétence peut être considérée comme réservée (niveau de maîtrise de départ : X)."
+"Combat (contact)_";"Armes Spéciales (contact)";"Coordination/Coordination";"(X)";"COO/COO";;"Cette Compétence permet d’utiliser une arme au maniement bien spécifique, comme les fouets, les chaînes, les lassos, les filets, les grappins, etc. Chaque arme spéciale fait l’objet d’une Compétence spécifique. En fonction de la rareté de l’arme ou de son côté exotique, cette Compétence peut être considérée comme réservée (niveau de maîtrise de départ : X)."
+"Combat (contact)_";"Arts martiaux";"Lutte";"(-3)";"COO/ADA";;"Compétence limitative pour : les autres Compétences de combat au contact.
+
+Cette Compétence recouvre toutes les techniques spéciales de combat, liées à un entraînement et des manœuvres particulières. Chaque technique fait l’objet d’une Compétence :
+• Lutte (-3) : combat au corps à corps, à base de clés, d’immobilisations, d’étranglements, de projections, etc. Cette forme de combat est très utile lorsque les deux adversaires sont amenés à combattre au sol ou… sous l’eau."
+"Combat (contact)_";"Arts martiaux";"Techniques défensives";"(-3)";"COO/ADA";;"Compétence limitative pour : les autres Compétences de combat au contact.
+
+Cette Compétence recouvre toutes les techniques spéciales de combat, liées à un entraînement et des manœuvres particulières. Chaque technique fait l’objet d’une Compétence :
+• Techniques défensives (-3) : utilisation des techniques spécifiques à la défense, ainsi que de toutes les manœuvres de self-défense (par exemple les dégagements contre les saisies ou les étranglements)."
+"Combat (contact)_";"Arts martiaux";"Techniques offensives";"(-3)";"COO/ADA";;"Compétence limitative pour : les autres Compétences de combat au contact.
+
+Cette Compétence recouvre toutes les techniques spéciales de combat, liées à un entraînement et des manœuvres particulières. Chaque technique fait l’objet d’une Compétence :
+• Techniques offensives (-3) : techniques d’attaque, et notamment frappes (avec toutes les parties du corps : mains, coudes, pieds, genoux, tibias, tête…). L’utilisation réussie de cette Compétence permet d’augmenter ses dégâts ou de délivrer des coups spéciaux : étourdir, assommer…"
+"Combat (contact)_";"Combat armé";;;"FOR/COO";;"Cette Compétence permet d’utiliser des armes simples, maniées à une ou deux mains, telle que les couteaux et les dagues, les matraques et les bâtons de combat, les sabres et les épées, etc. L’utilisation d’armes plus exotiques est couverte par la Compétence Armes spéciales (contact)."
+"Combat (contact)_";"Combat à mains nues";;;"FOR/COO";;"Cette Compétence permet de se battre et de lutter à mains nues. Elle ne couvre que les techniques d’attaque et de défense de base, les techniques plus complexes étant gérées par la Compétence Arts martiaux."
+"Combat (tir)_";"Armes de Jet";;"(-3)";"COO/PER";;"Cette Compétence permet d’utiliser les armes de jet, comme les couteaux de lancer, les lances, etc."
+"Combat (tir)_";"Armes Lourdes";;"(-3)";"COO/PER";;"Cette Compétence couvre l’usage de l’artillerie légère portative : lance-roquettes, lance-grenades, mortiers, lance-torpilles individuels… Si le personnage n’est pas stable, le niveau de la Compétence doit être divisé par deux."
+"Combat (tir)_";"Armes de poing";;;"COO/PER";;"Cette Compétence permet d’utiliser les pistolets, revolvers ou même pistolets-mitrailleurs, utilisés en mode coup par coup (le mode automatique est couvert par la Compétence Tir automatique)."
+"Combat (tir)_";"Armes sous-marines";;;"COO/PER";;"Cette Compétence permet d’utiliser les armes spécialement destinées à être utilisées sous l’eau, telles que les lance-harpons."
+"Combat (tir)_";"Armes Spéciales (distance)";"Force/Coordination";"(X)";"FOR/COO";;"Cette Compétence permet d’utiliser une arme au maniement bien spécifique, un lance-flamme par exemple. Chaque arme spéciale fait l’objet d’une Compétence spécifique, souvent réservée d’ailleurs."
+"Combat (tir)_";"Armes Spéciales (distance)";"Coordination/Perception";"(X)";"COO/PER";;"Cette Compétence permet d’utiliser une arme au maniement bien spécifique, un lance-flamme par exemple. Chaque arme spéciale fait l’objet d’une Compétence spécifique, souvent réservée d’ailleurs."
+"Combat (tir)_";"Armes de Trait";;"(-3)";"COO/PER";;"Cette Compétence permet d’utiliser les armes de trait, telles que les arcs ou les arbalètes."
+"Combat (tir)_";"Fusil/Armes d'épaules";;;"COO/PER";;"Cette Compétence permet d’utiliser les armes telles que fusils, fusils à pompe, fusils d’assaut (en mode coup par coup seulement). Les armes utilisées en mode automatique sont couvertes par la Compétence Tir automatique, tandis que le tir de précision est couvert par la Compétence Tir de précision."
+"Combat (tir)_";"Tir automatiques *";;;"FOR/PER";;"Compétence limitative pour : toutes les Compétences d’armes à feu utilisées pour tirer en mode automatique.
+
+Cette Compétence permet d’utiliser les mitrailleuses lourdes, ainsi que les autres armes à feu en mode automatique (fusils d’assaut, pistolets-mitrailleurs…). Le mode coup par coup est couvert par les Compétences Armes de poing et Fusils/Armes d’épaule. Si le personnage utilise une mitrailleuse lourde sans que l’arme soit stable (harnais spécial, trépied…), le niveau de la Compétence est divisé par deux."
+"Combat (tir)_";"Tir de précision *";;"(-3)";"PER/VOL";;"Compétence limitative pour : Fusils/Armes d’épaule, pour un tir de précision avec lunette de visée.
+
+Cette Compétence permet d’utiliser un fusil de précision à grande distance, ce qui nécessite l’usage d’une lunette de visée et des connaissances précises en tir de précision. L’utilisation d’une telle arme sans recourir aux appareils de visée est couverte par la Compétence Fusils/Armes d’épaule."
+"Communication / Relations sociales_";"Analyse empathique";;"(-3)";"INT/PRE";;"Cette Compétence permet de comprendre les sentiments ou les émotions d’une personne, en étudiant par exemple son comportement, ses gestes et sa posture, ses tics de langage ou ses hésitations… Un personnage peut ainsi déceler un état d’esprit particulier, à un moment donné, et déterminer notamment si son interlocuteur lui ment, lui cache des informations ou est soumis à une quelconque contrainte. La Difficulté du Test dépend de l’intensité des sentiments ou des émotions de la cible, ainsi que de son état d’esprit (calme et sereine ou au contraire troublée, stressée, voire apeurée). Notez qu’il s’agit là d’une perception émotionnelle de surface, immédiate et superficielle : les émotions perçues seront assez imprécises et tiendront plus de l’impression générale et de l’intuition que d’un véritable profil psychologique complet…
+
+Les animaux et les créatures non humaines mais douées d’intelligence peuvent aussi être les cibles d’une analyse empathique. Dans la plupart des cas cependant, les informations obtenues seront sans doute encore plus vagues, car elles concernent des émotions basiques - la peur, l’instinct de survie… -, chez les animaux notamment (on peut déceler des émotions plus complexes chez les créatures douées de raison). D’autre part, dans l’univers de Polaris, certaines créatures sont capables de transmettre des émotions par télépathie : c’est le cas des mammifères marins ou de certains coraux. Analyse empathique permet alors de percevoir ces émissions émotionnelles de manière plus efficaces (et d’en tirer ici aussi des informations extrêmement nébuleuses).
+
+Puisqu’elle permet une meilleure compréhension des émotions humaines, l’Analyse empathique peut enfin être utilisée de manière plus active, au cours d’une discussion, d’un interrogatoire ou même d’une tentative d’escroquerie. Pour cela, le personnage peut guetter les réactions émotionnelles de son interlocuteur, pour tenter de trouver la meilleure approche et les arguments qui auront le plus d’effet : calmer une personne stressée, parler d’un sujet délicat avec tact et diplomatie, trouver un point faible chez l’interlocuteur (pour l’énerver, le charmer, le faire craquer ou le pousser à se trahir). Analyse empathique doit alors être utilisée en soutien pour les Compétences Éloquence/ Persuasion, Entregent/Séduction ou Intimidation (voir les règles sur les Compétences utilisées en soutien, dans le chapitre Tests et actions, section Interactions entre Compétences, page 208). Tout cela ne fonctionne bien entendu qu’avec des êtres humains (ou des êtres doués de raison et dont on maîtrise le langage).
+
+Note : la mutation Empathie se révèle beaucoup plus puissante que cette Compétence (et peut donc la remplacer totalement, si elle est maîtrisée correctement), car elle permet au personnage de sonder plus profondément l’esprit de sa cible et de percevoir plus efficacement les émotions de celle-ci. La communication avec les créatures empathiques est également largement améliorée. Voir la description de cette mutation dans la chapitre Création des personnages, page 126."
+"Communication / Relations sociales_";"Commandement";;;"VOL/PRE";;"Cette Compétence représente l’autorité et le leadership d’un personnage. Il ne s’agit pas seulement de sa capacité à commander et à imposer sa volonté aux individus placés sous ses ordres, mais aussi, plus largement, de son aptitude à prendre la tête d’un groupe et à se conduire en véritable chef. D’une manière plus générale, cette Compétence peut aussi être utilisée pour organiser un groupe, pour en orienter les décisions, pour en garantir la cohésion ou la motivation, ou pour éviter les dissensions internes.
+
+Note : en combat naval, le niveau de Commandement du capitaine détermine aussi l’Initiative du navire."
+"Communication / Relations sociales_";"Éloquence/Persuasion †";;;"INT/PRE";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10, s’il s’agit d’un discours formel (politique, diplomatique, etc.).
+
+Cette Compétence représente les capacités d’expression, de communication et de persuasion d’un personnage. Elle peut donc selon les cas servir à prononcer un discours, à participer à un débat ou à une joute oratoire, à convaincre (lors d’une vente ou d’un achat - pour obtenir le meilleur prix -, d’une négociation diplomatique, etc.) ou même à manipuler et tromper son ou ses interlocuteur(s), lorsque le personnage est en train de mentir… Une tentative de persuasion se règlera toujours par un Test d’opposition, entre la Compétence du personnage et la Volonté ou l’Intelligence de la cible, selon la situation et le type d’argument utilisé. Un simple discours en direction d’un individu ou d’un groupe passif se règlera par un Test normal, dont la Difficulté dépend de l’état d’esprit de la cible et/ou du message que le personnage veut faire passer.
+
+Note : en fonction du thème du discours ou selon la nature des personnes auxquelles le personnage s’adresse, Éloquence/Persuasion peut éventuellement être limitée par diverses Compétences de connaissance, par exemple Bureaucratie (« Bien sûr que cette autorisation est en règle… »), Commerce/Trafic (« C’est exactement le genre de matériel qu’il vous faut ! »), Connaissance des nations/organisations (pour un discours ciblé vers un groupe particulier), ou Sciences/Connaissance spécialisée (pour un débat de spécialistes). Bien entendu, si le personnage s’exprime dans une langue étrangère, il sera également limité par le niveau acquis dans cette langue."
+"Communication / Relations sociales_";"Entregent/Séduction";;;"PRE/PRE";;"Cette Compétence permet de séduire, au sens large : il ne s’agit pas seulement de jouer les tombeurs, mais aussi de l’art de se faire bien voir par quelqu’un et de nouer des relations dans une communauté ou un groupe, afin de gagner la confiance de ses membres. Si la cible n’a aucune raison de se méfier du personnage, vous pouvez résoudre la tentative de séduction par un Test normal. Si la cible est méfiante ou rétive, il faut procéder à un Test d’opposition entre la Compétence du personnage et la Volonté de la cible. Le personnage peut d’autre part subir un malus ou bénéficier d’un bonus à son Test, en fonction de la nature plus ou moins honnête de ses propositions…"
+"Communication / Relations sociales_";"Expression artistique";"Chant";"(-3)";"INT/PRE";;"Ce talent permet de connaître les différentes techniques de conte, de danse, de comédie (dans le domaine du spectacle), de chant, etc. La Difficulté du Test peut être déterminée par le nombre de personnes dans l’auditoire, le contexte de la représentation, etc. Chaque spécialité artistique fait l’objet d’une Compétence particulière."
+"Communication / Relations sociales_";"Expression artistique";"Comédie/Conte";"(-3)";"ADA/PRE";;"Ce talent permet de connaître les différentes techniques de conte, de danse, de comédie (dans le domaine du spectacle), de chant, etc. La Difficulté du Test peut être déterminée par le nombre de personnes dans l’auditoire, le contexte de la représentation, etc. Chaque spécialité artistique fait l’objet d’une Compétence particulière."
+"Communication / Relations sociales_";"Expression artistique";"Danse";"(-3)";"COO/PRE";;"Ce talent permet de connaître les différentes techniques de conte, de danse, de comédie (dans le domaine du spectacle), de chant, etc. La Difficulté du Test peut être déterminée par le nombre de personnes dans l’auditoire, le contexte de la représentation, etc. Chaque spécialité artistique fait l’objet d’une Compétence particulière."
+"Communication / Relations sociales_";"Expression artistique";"Instrument de musique";"(X)";"COO/PER";;"Ce talent permet de connaître les différentes techniques de conte, de danse, de comédie (dans le domaine du spectacle), de chant, etc. La Difficulté du Test peut être déterminée par le nombre de personnes dans l’auditoire, le contexte de la représentation, etc. Chaque spécialité artistique fait l’objet d’une Compétence particulière."
+"Communication / Relations sociales_";"Intimidation";;;"VOL/PRE";;"ur intimider, en se montrant sûr de soi et/ou menaçant. Contrairement à la Compétence Éloquence/Persuasion, qui permet de convaincre par la parole et des arguments sensés (au moins en apparence), il s’agit surtout ici de contraindre, en suscitant l’inquiétude voire la peur chez ses interlocuteurs, qui seront ainsi plus enclins à prendre le personnage au sérieux… Cette Compétence peut aussi être utilisée de manière indirecte, pour déstabiliser un personnage lors d’une négociation par exemple (utilisez dans ce cas les règles sur les Compétences utilisées en soutien, dans le chapitre Tests et actions, section Interactions entre Compétences, page 208). Pour l’utilisation de l’Intimidation en combat, voyez également le chapitre Combat, section Combat au contact, page 222."
+"Connaissances_";"Bureaucratie †";;;"INT/INT";"Éducation/Culture générale 5";"Pré-requis nécessaires : Éducation/Culture générale 5.
+
+Cette Compétence permet de connaître l’organisation administrative et les règlementations courantes, de savoir où demander telle ou telle autorisation, comment obtenir tel ou tel permis ou document officiel, voire même d’accélérer certaines procédures (soit par des astuces légales, soit par de judicieux pots-de-vin…). La Difficulté du Test dépend de la nature et du niveau de sensibilité de la demande. Si celleci concerne une procédure vraiment spécifique à une communauté, une nation ou une organisation, Bureaucratie peut être limitée par la Compétence de Connaissance des nations/organisations appropriée."
+"Connaissances_";"Cartographie †";;;"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Cette Compétence permet d’établir des relevés topographiques, des cartes de régions et de savoir où on se trouve par rapport à une carte. L’utilisation de cette Compétence nécessite un matériel de base (de quoi tracer la carte, au moins, mais aussi divers appareils de mesure, ou même un système de positionnement par satellite, si le PJ peut y avoir accès !). La Difficulté du Test dépend de la complexité et/ou de l’étendue de la zone à cartographier et des outils utilisés par le PJ. Celui-ci peut d’autre part choisir le niveau de précision souhaité (une carte très précise sera plus difficile à réaliser qu’un simple plan dessiné à la main). Le temps nécessaire pour établir la cartographie d’une région dépend du terrain et de son étendue. Il faut généralement considérer qu’une telle action prend des heures, parfois des jours, voire des semaines si le secteur est difficile d’accès. La marge de réussite (ou d’échec) détermine généralement la précision (ou les erreurs) de la carte : s’il le souhaite, le MJ peut utiliser la moitié du bonus/malus de réussite/d’échec comme modificateur aux Tests de Navigation ou d’Orientation d’un personnage utilisant la carte. La Compétence Cartographie peut également être employée pour corriger ou améliorer une carte."
+"Connaissances_";"Commerce/Trafic †";"Armes";"(X)";"INT/PRE";"Éducation/Culture générale 5";"Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière. La Difficulté du Test dépend de la rareté et de la disponibilité du produit (c’est un désavantage quand on cherche à acheter, mais un avantage quand on cherche à vendre !). La marge de réussite peut servir à réduire le temps d’acquisition ou à trouver des produits, des services ou des informations de meilleure qualité."
+"Connaissances_";"Commerce/Trafic †";"Denrées alimentaires";"(-3)";"INT/PRE";"Éducation/Culture générale 5";"Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière.
+
+La Difficulté du Test dépend de la rareté et de la disponibilité du produit (c’est un désavantage quand on cherche à acheter, mais un avantage quand on cherche à vendre !). La marge de réussite peut servir à réduire le temps d’acquisition ou à trouver des produits, des services ou des informations de meilleure qualité."
+"Connaissances_";"Commerce/Trafic †";"Drogues";"(X)";"INT/PRE";"Éducation/Culture générale 5";"Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière.
+
+La Difficulté du Test dépend de la rareté et de la disponibilité du produit (c’est un désavantage quand on cherche à acheter, mais un avantage quand on cherche à vendre !). La marge de réussite peut servir à réduire le temps d’acquisition ou à trouver des produits, des services ou des informations de meilleure qualité."
+"Connaissances_";"Commerce/Trafic †";"Informations";"(-3)";"INT/PRE";"Éducation/Culture générale 5";"Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière.
+
+La Difficulté du Test dépend de la rareté et de la disponibilité du produit (c’est un désavantage quand on cherche à acheter, mais un avantage quand on cherche à vendre !). La marge de réussite peut servir à réduire le temps d’acquisition ou à trouver des produits, des services ou des informations de meilleure qualité."
+"Connaissances_";"Commerce/Trafic †";"Matériel médical";"(-3)";"INT/PRE";"Éducation/Culture générale 5";"Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière.
+
+La Difficulté du Test dépend de la rareté et de la disponibilité du produit (c’est un désavantage quand on cherche à acheter, mais un avantage quand on cherche à vendre !). La marge de réussite peut servir à réduire le temps d’acquisition ou à trouver des produits, des services ou des informations de meilleure qualité."
+"Connaissances_";"Commerce/Trafic †";"Matières premières";"(-3)";"INT/PRE";"Éducation/Culture générale 5";"Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière.
+
+La Difficulté du Test dépend de la rareté et de la disponibilité du produit (c’est un désavantage quand on cherche à acheter, mais un avantage quand on cherche à vendre !). La marge de réussite peut servir à réduire le temps d’acquisition ou à trouver des produits, des services ou des informations de meilleure qualité."
+"Connaissances_";"Commerce/Trafic †";"Véhicules";"(-3)";"INT/PRE";"Éducation/Culture générale 5";"Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière.
+
+La Difficulté du Test dépend de la rareté et de la disponibilité du produit (c’est un désavantage quand on cherche à acheter, mais un avantage quand on cherche à vendre !). La marge de réussite peut servir à réduire le temps d’acquisition ou à trouver des produits, des services ou des informations de meilleure qualité."
+"Connaissances_";"Éducation/Culture générale";;"(-3)";"INT/INT";;"Cette Compétence représente le niveau d’éducation générale du personnage. À très bas niveau (niveau global inférieur à 3), le personnage ne sait ni lire, ni écrire et aura sans doute de grandes difficultés à s’exprimer correctement. À bas niveau (niveau 3 à 5), elle concerne les acquis et les savoirs essentiels : lire, écrire, compter… À niveau moyen (6 à 10), elle représente les connaissances élémentaires en expression écrite, en histoire, en Géographie, en mathématiques, en sciences, etc. Enfin, à plus haut niveau (11 et plus), elle correspond à tout ce qui peut entrer dans le domaine de la « culture générale », de la connaissance du monde. Certaines Compétences (de connaissances, en général) nécessitent un niveau d’éducation minimum pour pouvoir être développées. Leur description indique alors le niveau requis en Éducation/Culture générale. Celle-ci peut d’autre part tout à fait être utilisée directement lors d’un Test, pour savoir si un personnage connaît ou se souvient d’un élément de connaissance générale, comme une date historique connue, le nom de la capitale de tel ou tel État, etc. (si le sujet devient vraiment précis, il faut utiliser la Compétence de Sciences/Connaissances spécialisées correspondante)."
+"Connaissances_";"Jeu";;;"INT/VOL";;"Cette Compétence représente la connaissance de la plupart des jeux (hors jeux de hasard) et permet également d’y tricher. Tous les joueurs doivent participer à un Test d’opposition, le vainqueur étant celui qui obtient la plus haute marge de réussite. Si un personnage décide de tricher, il bénéficie d’un bonus à son Test (qu’il peut fixer lui-même). Toutefois, ses adversaires peuvent avoir droit à un Test de Perception, avec un bonus équivalent à celui du tricheur : plus leur marge de réussite sera élevée et plus ils se douteront de quelque chose. Avec une marge supérieure ou égale à 15 (« Réussite parfaite »), le tricheur est surpris en train de tricher. Certaines circonstances peuvent grandement compliquer la tâche du tricheur, par exemple un système vidéo qui surveille les joueurs.
+
+Note : si la triche implique une manipulation (de cartes, de jetons, de dés, etc.) en cours de partie, par exemple en remplaçant les accessoires par du matériel truqué ou en procédant à de fausses distributions de cartes, vous pouvez utiliser la Compétence Dissimulation comme Compétence limitative, lors du Test de Jeu."
+"Connaissances_";"Connaissance des nations/organisations";;"PN";"INT/INT";;"Compétence limitative pour : toutes les actions demandant une connaissance précise de telle ou telle communauté, faction ou nation.
+
+Cette Compétence regroupe toutes les connaissances générales qu’un personnage peut avoir sur une nation, une communauté, une faction ou une organisation donnée (histoire, Géographie, société, politique, législation, politique, armée, dirigeants, organisation interne, coutumes et mode de vie, etc.). Il existe une Compétence spécifique pour chaque type d’organisation. Il peut s’agir :
+• D’une nation majeure ou mineure (exemples : Hégémonie, Ligue rouge, République du Corail, Équinoxe, États du Rift, etc.).
+• D’une faction (exemples : Confrérie des Veilleurs, Mercenaires, Pirates, etc.). • D’une organisation religieuse (exemples : Culte du Trident, Confrérie du Soleil noir, etc.).
+• D’un groupe criminel (exemples : Contrebandiers, Crime organisé, etc.). • Ou même d’une faction ancienne, comme les Généticiens ou l’Alliance Azur, pour un personnage qui s’intéresse aux secrets du passé…
+
+Seule la Compétence correspondant à la communauté d’origine du personnage démarre à un niveau de base de +3. Les autres Compétences subissent un malus au niveau de base, en fonction de leur nature : +0 pour une communauté connue, importante et/ou proche géographiquement, -3 pour une communauté moins connue, mineure ou plus lointaine, X pour une communauté inconnue, une organisation secrète (la Confrérie du Soleil noir par exemple) ou une ancienne puissance (les Généticiens).
+
+Ces Compétences peuvent être considérées comme limitatives, dès que l’action tentée suppose une connaissance précise d’une communauté en particulier. Les Compétences les plus souvent limitées sont Éloquence/Persuasion (pour un discours basé sur les idées ou les coutumes de telle ou telle communauté), Bureaucratie (pour les procédures administratives spécifiques), Éducation/Culture générale (pour des faits vraiment précis concernant telle ou telle communauté)."
+"Connaissances_";"Cryptographie †";;"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Cette Compétence permet de coder et de décoder des documents et des messages. Pour coder, en règle générale, le joueur peut choisir lui-même le malus à appliquer au Test. Le modificateur de Difficulté du personnage qui tentera de décoder le message sera égal à ce malus, augmenté du modificateur de réussite obtenu par le cryptographe à l’issue de son Test. Si celui-ci utilise un ordinateur pour coder son message, le décrypteur devra obligatoirement faire de même. En revanche, si le code a été réalisé sans l’aide de l’informatique, on peut le décoder de la même façon (et dans ce cas, recourir à un ordinateur et des logiciels adéquats permet de bénéficier d’un bonus de +7…). Plus le code est complexe, plus le temps nécessaire à son décryptage est long (il faut compter en heures, voire en jours…)."
+"Connaissances_";"Navigation †";;"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Cette Compétence, indispensable pour diriger un navire sans visibilité, permet de déterminer sa position de manière précise et de calculer un itinéraire. La marge de réussite (ou d’échec) indique la précision (ou les erreurs) du navigateur. Notez que Navigation concer- ne en priorité les déplacements sur de grandes distances, à l’échelle d’une zone géographique vaste : entre deux stations par exemple, ou entre deux points de navigation relativement éloignés l’un de l’autre (disons plus de quelques kilomètres). Une bonne marge de réussite permet d’arriver plus vite à destination, en profitant par exemple des bons courants marins ou d’éviter de faire des mauvaises rencontres (en traversant des eaux contrôlées par une force armée hostile ou infestées de pirates). En cas d’échec, le navire peut se perdre (ou être confronté à un événement fâcheux : attaque de pirates, phénomène sous-marin, etc.). Pour un long voyage (traverser une mer, un océan, contourner un continent ou le territoire d’une nation majeure), le MJ peut parfaitement demander plusieurs Tests de Navigation.
+
+Note : sur des distances courtes (moins de quelques kilomètres), seules les Compétences de pilotage et d’Orientation sont utiles (voir les descriptions de ces dernières)."
+"Connaissances_";"Recherche d'informations †";;"(-3)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Cette Compétence est utile pour rechercher une information précise dans les bases de données ou pour faire une recherche sur un sujet donné. La Difficulté du Test dépend de la rareté ou de la sensibilité de l’information recherchée."
+"Connaissances_";"Sciences/connaisances spécialisées";"Administration/Gestion";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Connaissance de la gestion des comptes et des ressources d’une société (ou d’une quelconque organisation), mais aussi des techniques de fraudes commerciales…"
+"Connaissances_";"Sciences/connaisances spécialisées";"Armes/Systèmes d’armement";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Connaissance des armes, des munitions, des systèmes d’armement (montés sur des véhicules), des technologies employées, etc."
+"Connaissances_";"Sciences/connaisances spécialisées";"Astrophysique/Astronomie";"(X)";"INT/INT";"Physique/Chimie 10, Éducation/Culture générale 10";"Pré-requis nécessaires : Physique/Chimie 10.
+
+Connaissances concernant l’espace et la physique spatiale."
+"Connaissances_";"Sciences/connaisances spécialisées";"Biologie/Physiologie";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Connaissance de la biologie des organismes vivants."
+"Connaissances_";"Sciences/connaisances spécialisées";"Botanique";"(X)";"INT/INT";"Biologie/Physiologie 7, Éducation/Culture générale 10";"Pré-requis nécessaires : Biologie/Physiologie 7.
+
+Connaissance des végétaux et de leur écosystème. Cette Compétence permet aussi de diagnostiquer les maladies affectant la flore et de connaître le remède approprié."
+"Connaissances_";"Sciences/connaisances spécialisées";"Criminalistique";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : selon la technique employée.
+
+Connaissance des techniques d’analyse des scènes de crime (balistique, empreintes et traces, microfibres, etc.)."
+"Connaissances_";"Sciences/connaisances spécialisées";"Droit/Législations";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Connaissance du droit, des lois et du fonctionnement de la justice."
+"Connaissances_";"Sciences/connaisances spécialisées";"Finances";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Connaissance des rouages des systèmes financiers et bancaires et capacité à effectuer de bonnes opérations boursières ou des placements financiers judicieux"
+"Connaissances_";"Sciences/connaisances spécialisées";"Économie";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Connaissance des sciences et théories économiques."
+"Connaissances_";"Sciences/connaisances spécialisées";"Géologie";"(X)";"INT/INT";"Physique/Chimie 5, Éducation/Culture générale 10";"Pré-requis nécessaires : Physique/Chimie 5.
+
+Connaissance concernant la Géographie physique de la planète, la constitution de l’écorce terrestre, les minerais ou l’activité volcanique."
+"Connaissances_";"Sciences/connaisances spécialisées";"Géographie";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Etude de la Géographie des nations (société, économie, etc.)"
+"Connaissances_";"Sciences/connaisances spécialisées";"Histoire/Archéologie";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Connaissance de l’histoire des nations, étude des vestiges archéologiques."
+"Connaissances_";"Sciences/connaisances spécialisées";"Médecine";"(X)";"INT/INT";"Biologie/Physiologie 7, Éducation/Culture générale 10";"Prérequis nécessaires : Biologie/Physiologie 7.
+
+Connaissance des maladies et des troubles pouvant affecter les êtres humains, quelle que soit leur nature, et des traitements qu’il convient de leur appliquer."
+"Connaissances_";"Sciences/connaisances spécialisées";"Pharmacologie";"(X)";"INT/INT";"Biologie/Physiologie 5, Physique/Chimie 5, Éducation/Culture générale 10";"Pré-requis nécessaire : Biologie/Physiologie 5, Physique/Chimie 5.
+
+Connaissance des médicaments, mais aussi des drogues et des poisons.  Des versions plus restreintes de cette Compétence, appelées simplement Connaissance des poisons (X) et Connaissance des drogues (X), et limitées à la connaissance pratique de ces produits spécifiques, existent aussi. Ces Compétences n’ont pas de pré-requis."
+"Connaissances_";"Sciences/connaisances spécialisées";"Physique/Chimie";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Etude des propriétés physiques de la matière."
+"Connaissances_";"Sciences/connaisances spécialisées";"Psychologie";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Etude de l’esprit et du comportement humain."
+"Connaissances_";"Sciences/connaisances spécialisées";"Sciences politiques";"(X)";"INT/INT";"Géographie 7, Histoire/Archéologie 5, Éducation/Culture générale 10";"Prérequis nécessaires : Géographie 7, Histoire/Archéologie 5.
+
+Connaissances des nations et de leur systèmes politiques, de la géopolitique mondiale…"
+"Connaissances_";"Sciences/connaisances spécialisées";"Sociologie";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Etude des sociétés humaines."
+"Connaissances_";"Sciences/connaisances spécialisées";"Zoologie";"(X)";"INT/INT";"Biologie/Physiologie 7, Éducation/Culture générale 10";"Pré-requis nécessaires : Biologie/Physiologie 7.
+
+Connaissance des animaux et de leur écosystème. Cette Compétence permet aussi de diagnostiquer les maladies affectant la faune et de connaître le remède approprié."
+"Connaissances_";"Stratégie †";;"(-3)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Cette Compétence permet de diriger le déroulement d’un conflit dans sa globalité : il s’agit ici de gérer l’ensemble des ressources militaires, économiques, politiques, psychologiques et humaines d’une nation ou d’une organisation, dans le but de gagner une guerre (contrairement à la tactique, qui permet de gagner un combat, une bataille…). Cette Compétence peut également être utilisée pour gérer des crises majeures ou des conflits géopolitiques."
+"Connaissances_";"Tactique";"Combat naval";"(-3)";"INT/ADA";;"Cette Compétence permet de diriger des unités de combat (ou assimilées) engagées dans une opération militaire et de leur donner des plans d’action efficaces, de manière à prendre l’avantage sur les forces adverses (déplacements, manœuvres et positionnement sur le champ de bataille, tactiques d’attaque et de défense particulières, ruses, etc.). Notez que cette Compétence ne concerne que des opérations ponctuelles (un combat, une bataille) et diffère en cela de la Stratégie, qui permet de gérer un conflit dans sa globalité. Il existe une Compétence par type d’opération tactique : concerne le combat entre navires submersibles (quelle que soit leur taille)."
+"Connaissances_";"Tactique";"Combat souterrain";;"INT/ADA";;"Cette Compétence permet de diriger des unités de combat (ou assimilées) engagées dans une opération militaire et de leur donner des plans d’action efficaces, de manière à prendre l’avantage sur les forces adverses (déplacements, manœuvres et positionnement sur le champ de bataille, tactiques d’attaque et de défense particulières, ruses, etc.). Notez que cette Compétence ne concerne que des opérations ponctuelles (un combat, une bataille) et diffère en cela de la Stratégie, qui permet de gérer un conflit dans sa globalité. Il existe une Compétence par type d’opération tactique : concerne les opérations militaires menées en milieu souterrain."
+"Connaissances_";"Tactique";"Combat terrestre";;"INT/ADA";;"Cette Compétence permet de diriger des unités de combat (ou assimilées) engagées dans une opération militaire et de leur donner des plans d’action efficaces, de manière à prendre l’avantage sur les forces adverses (déplacements, manœuvres et positionnement sur le champ de bataille, tactiques d’attaque et de défense particulières, ruses, etc.). Notez que cette Compétence ne concerne que des opérations ponctuelles (un combat, une bataille) et diffère en cela de la Stratégie, qui permet de gérer un conflit dans sa globalité. Il existe une Compétence par type d’opération tactique : concerne les opérations militaires menées à la Surface.
+
+ARMES SATELLITES
+La Compétence Tactique [Combat terrestre] permet également l’utilisation des armes satellites contrôlées par les stations orbitales. Pour commander un tir d’armes satellites, il faut entrer en contact avec une station orbitale et préciser les coordonnées du tir. Les armes ne sont pas disponibles à tout moment, cela dépend de la position du satellite dans le ciel. La Difficulté de ce Test dépend généralement des conditions météo de la Surface. Cette Compétence permet en effet, grâce à une bonne connaissance de ces armes, d’essayer de calculer le plus précisément possible l’endroit où elles doivent s’abattre sans être prises dans la tourmente. Notez que savoir utiliser ces armes ne suffit pas, il faut aussi en avoir l’autorisation…"
+"Connaissances_";"Tactique";"Opérations commando";;"INT/ADA";;"Cette Compétence permet de diriger des unités de combat (ou assimilées) engagées dans une opération militaire et de leur donner des plans d’action efficaces, de manière à prendre l’avantage sur les forces adverses (déplacements, manœuvres et positionnement sur le champ de bataille, tactiques d’attaque et de défense particulières, ruses, etc.). Notez que cette Compétence ne concerne que des opérations ponctuelles (un combat, une bataille) et diffère en cela de la Stratégie, qui permet de gérer un conflit dans sa globalité. Il existe une Compétence par type d’opération tactique : concerne les opérations sub-tactiques menées par un petit groupe, avec un objectif spécifique (infiltration ou extraction, sabotage ou assassinat, prise de contrôle d’une petite station ou d’un navire, neutralisation de terroristes ou de preneurs d’otages, etc.), ou pour un combat en environnement difficile (le combat « urbain » par exemple, dans les grandes villes ou les grandes stations sous-marines)."
+"Furtivité / Subterfuge_";"Camouflage/Dissimulation";;"(-3)";"ADA/PER";;"Cette Compétence permet de se dissimuler en se servant de l’environnement naturel, en utilisant les recoins ou les anfractuosités, l’obscurité, la végétation (y compris végétation sous-marine). La plupart du temps, Camoufl age/Dissimulation suppose l’utilisation de techniques et de subterfuges particuliers ou d’un matériel adapté : combinaison de camouflage, abri camouflé de manière à se fondre dans le paysage, maquillage et déguisement mimétique, etc. Lors d’un déplacement, Camoufl age/Dissimulation permet aussi de dissimuler ses propres traces. Cette Compétence peut également être utilisée pour un navire, lorsqu’il s’agit de le dissimuler par des moyens physiques par exemple en le cachant dans une fosse sousmarine ou en le maquillant pour le faire passer pour un rocher ou une épave). Camoufl age/Dissimulation est souvent employé dans un Test d’opposition, contre l’Observation de l’adversaire. La Difficulté du Test dépend la plupart du temps de l’environnement et des possibilités de dissimulation offertes par celui-ci. Enfin, cette Compétence permet de cacher un objet sur soi, dans ses bagages ou dans un lieu. La Difficulté du Test dépend de la taille de l’objet et de la vigilance des personnes que l’on cherche à tromper."
+"Furtivité / Subterfuge_";"Déguisement/Imitation";;"(-3)";"ADA/PER";;"Cette Compétence permet à un personnage de changer d’apparence et même de se faire passer pour quelqu’un d’autre. La Difficulté du Test dépend des objectifs visés : modifier légèrement son apparence est relativement simple, mais adopter une apparence et un comportement à l’opposé de celles du personnage est beaucoup plus difficile. Déguisement/Imitation est la plupart du temps utilisée dans un Test d’opposition contre l’Intelligence (ou l’Observation, selon les cas) de l’adversaire. L’emploi d’un matériel adapté (déguisement, maquillage, etc.) est souvent nécessaire. De même, la connaissance de certaines Compétences peut être indispensable si le personnage doit s’exprimer et dialoguer avec les gens qu’il essaie de tromper.
+
+Dans le cas de l’usurpation de l’identité d’une personne réelle, le MJ peut accorder un bonus à l’adversaire, si ce dernier connaît plus ou moins la personne imitée. Il est bien entendu extrêmement difficile de tromper un proche, qui connaît bien la personne (il faut dans ce cas disposer d’un masque de la personne ainsi que d’un maquillage parfait, et avoir étudié les gestes et le comportement de sa victime avec attention pendant de longues heures)."
+"Furtivité / Subterfuge_";"Discrétion/Filature";;;"ADA/PER";;"Cette Compétence permet de passer inaperçu dans un lieu public, d’éviter de se faire remarquer et de suivre une personne sans être repéré."
+"Furtivité / Subterfuge_";"Evasion";;;"COO/VOL";;"Cette Compétence permet de se défaire des liens, comme des cordes, des menottes mécaniques ou des filets. La Difficulté du Test dépend de la complexité des liens. Dans certains cas, le MJ peut imposer l’utilisation de matériel (comme une épingle pour crocheter des menottes ou un objet capable de couper ou d’user la corde). Si le PJ n’en a pas, soit l’évasion est impossible, soit la Difficulté est encore augmentée."
+"Furtivité / Subterfuge_";"Furtivité/Déplacement silencieux *";;;"ADA/PER";;"Compétence limitative pour : toute action devant être réalisée sans bruit.
+
+Cette Compétence permet de se déplacer sans bruit et sans se faire repérer. Utilisée comme une Compétence limitative, elle permet aussi d’effectuer une action discrète en silence : se débarrasser d’une sentinelle, crocheter une porte, désactiver un système de sécurité, saboter une installation… Cette Compétence est souvent utilisée dans un Test d’opposition contre la Perception du personnage à tromper."
+"Furtivité / Subterfuge_";"Pickpocket";;"(-3)";"COO/ADA";;"Cette Compétence permet de dérober discrètement des objets dans les poches d’autres personnages ou même sur les étalages des marchands. La Difficulté du Test dépend de la taille de l’objet à voler et de son emplacement. Une cible qui se méfie a droit à un Test de Perception, en opposition contre le Test de Pickpocket."
+"Langues / langages_";"Langue étrangère";"Amanéun";"(X)";"INT/INT";;"Langue d’Amazonia (racine(s) : inconnue)"
+"Langues / langages_";"Langue étrangère";"Azran";"(X)";"INT/INT";;"Langue très rare (racine(s) : dialecte azuran)"
+"Langues / langages_";"Langue étrangère";"Gashklar";"(X)";"INT/INT";;"Ancienne langue encore parlée sur Nova (racine(s) : langues de l’ancien temps)"
+"Langues / langages_";"Langue étrangère";"Isitac";"(X)";"INT/INT";;"Langue de la République du Corail (racine(s) : azuran)"
+"Langues / langages_";"Langue étrangère";"Lesarach";"(X)";"INT/INT";;"Langage de la communauté du Léviathan, mêlant sifflements et petits cris aux paroles (racine(s) : inconnue)"
+"Langues / langages_";"Langue étrangère";"Léxzion";"(X)";"INT/INT";;"Langue parlée sur Pull (racine(s) : arkonien)"
+"Langues / langages_";"Langue étrangère";"Néo-azuran";"(X)";"INT/INT";;"Langue la plus répandue au fond des mers (racine(s) : azuran)"
+"Langues / langages_";"Langue étrangère";"Nezraïs";"(X)";"INT/INT";;"Langue du Culte du Prophète de Syrte (racine(s) : langue de l’ancien temps)"
+"Langues / langages_";"Langue étrangère";"Océane";"(X)";"INT/INT";;"Langue de l’Union méditerranéenne (racine(s) : azuran)"
+"Langues / langages_";"Langue étrangère";"Olakar";"(X)";"INT/INT";;"Langue de la Ligue rouge (racine(s) : azuran)"
+"Langues / langages_";"Langue étrangère";"Olosak";"(X)";"INT/INT";;"Langue d’Hégémonie (racine(s) : azuran)"
+"Langues / langages_";"Langue étrangère";"Ossyrien";"(X)";"INT/INT";;"Langue des États du Rift (racine(s) : azuran)"
+"Langues / langages_";"Langue étrangère";"Rénaréan";"(X)";"INT/INT";;"Langue de l’Alliance polaire (racine(s) : azuran)"
+"Langues / langages_";"Langue étrangère";"Ternaset";"(X)";"INT/INT";;"Langue des Ternasets ; certains affirment que c’est la plus ancienne au monde (racine(s) : inconnue)"
+"Langues / langages_";"Langue étrangère";"Trashan";"(X)";"INT/INT";;"Langue parlée à Kryss, Pushkar et Suvadi (racine(s) : arkonien et langages de l’ancien temps)"
+"Langues / langages_";"Langue ancienne";"Arkonien";"(X)";"INT/INT";;"Langue des Généticiens (racine(s) : inconnue)"
+"Langues / langages_";"Langue ancienne";"Azuran";"(X)";"INT/INT";;"Ancienne langue officielle de l’Alliance Azur (racine(s) : azuréen)"
+"Langues / langages_";"Langue ancienne";"Azuréen";"(X)";"INT/INT";;"Azuran noble (racine(s) : langues de l’ancien temps)"
+"Langues / langages_";"Langue ancienne";"Gatéen";"(X)";"INT/INT";;"Ancienne langue parlée à Gatéo (racine(s) : latin)"
+"Langues / langages_";"Langages Spécifiques";"Absolan";"(X)";"INT/INT";;"Langue des diplomates (racine(s) : néoazuran)"
+"Langues / langages_";"Langages Spécifiques";"Énéfid";"(X)";"INT/INT";;"Jargon des espions ; ce langage est plus proche d’un code (racine(s) : aucune)"
+"Langues / langages_";"Langages Spécifiques";"Exon";"(X)";"INT/INT";;"Langue des dauphins, pas de forme écrite (racine(s) : aucune)"
+"Langues / langages_";"Langages Spécifiques";"Foreur";"(X)";"INT/INT";;"Langue des Foreurs. La forme écrite utilise à la fois gravures et son et ne peut être lue qu’avec un appareil spécial ou mutation spécifique ; la forme orale nécessite un appareil radio (racine(s) : aucune)"
+"Langues / langages_";"Langages Spécifiques";"Inésis";"(X)";"INT/INT";;"Langue des prêtres du Trident (racine(s) : azuran)"
+"Langues / langages_";"Langages Spécifiques";"Ithraxien";"(X)";"INT/INT";;"Langue des pirates (racine(s) : néo-azuran)"
+"Langues / langages_";"Langages Spécifiques";"Klan";"(X)";"INT/INT";;"Langue des mineurs (racine(s) : néo-azuran)"
+"Langues / langages_";"Langages Spécifiques";"Langage des signes";"(X)";"INT/INT";;"Permet de dialoguer par signes (racine(s) : aucune)"
+"Langues / langages_";"Langages Spécifiques";"Lévéan";"(X)";"INT/INT";;"Langue des Léviathans et de la plupart des mammifères, nécessite un appareil radio, pas de forme écrite (racine(s) : aucune)"
+"Langues / langages_";"Langages Spécifiques";"Métalan";"(X)";"INT/INT";;"Langue des érudits (racine(s) : mélange d’isitac et d’azuréen)"
+"Langues / langages_";"Langages Spécifiques";"Néolan";"(X)";"INT/INT";;"Langue des ingénieurs (racine(s) : azuran)"
+"Langues / langages_";"Langages Spécifiques";"Sirs";"(X)";"INT/INT";;"Jargon des bas-fonds, des voleurs et des mendiants (racine(s) : néo-azuran)"
+"Langues / langages_";"Langages Spécifiques";"Soléen";"(X)";"INT/INT";;"Langue du commerce, très répandue (racine(s) : azuran)"
+"Pilotage_";"Manoeuvre d'armure *";"Armures atmosphériques";"(X)";"COO/ADA";;"Compétence limitative pour : toutes les actions physiques en armure, notamment Acrobatie/Équilibre, Athlétisme, Escalade ou les Compétences de combat au contact. Les Compétences de combat à distance ne sont, elles, pas limitées.
+
+Cette Compétence permet d’utiliser les armures mécanisées, que l’on pourrait facilement assimiler à des véhicules et dont la manœuvre demande un certain entraînement. Certaines Compétences, qui requièrent une grande précision, ne peuvent être utilisées en armure (Chirurgie ou Premiers soins, par exemple).
+
+De nombreuses armures - appelées « armures hybrides » - peuvent être utilisées dans plusieurs milieux différents. Le personnage doit donc développer la Compétence qui correspond à chaque milieu. Ainsi, un personnage en armure sous-marine hybride qui se retrouve à la surface utilisera sa Compétence Armure externe. Un individu doté d’une armure amphibie capable de voler doit même connaître trois Compétences : Armure sous-marine, Armure externe, Armure atmosphérique…
+
+Ce talent permet à un pilote de manœuvrer une armure dotée de propulseurs atmosphériques qui lui permettent de voler."
+"Pilotage_";"Manoeuvre d'armure *";"Armures externes";;"COO/ADA";;"Compétence limitative pour : toutes les actions physiques en armure, notamment Acrobatie/Équilibre, Athlétisme, Escalade ou les Compétences de combat au contact. Les Compétences de combat à distance ne sont, elles, pas limitées.
+
+Cette Compétence permet d’utiliser les armures mécanisées, que l’on pourrait facilement assimiler à des véhicules et dont la manœuvre demande un certain entraînement. Certaines Compétences, qui requièrent une grande précision, ne peuvent être utilisées en armure (Chirurgie ou Premiers soins, par exemple).
+
+De nombreuses armures - appelées « armures hybrides » - peuvent être utilisées dans plusieurs milieux différents. Le personnage doit donc développer la Compétence qui correspond à chaque milieu. Ainsi, un personnage en armure sous-marine hybride qui se retrouve à la surface utilisera sa Compétence Armure externe. Un individu doté d’une armure amphibie capable de voler doit même connaître trois Compétences : Armure sous-marine, Armure externe, Armure atmosphérique…"
+"Pilotage_";"Manoeuvre d'armure *";"Armures sous-marines";;"COO/ADA";;"Compétence limitative pour : toutes les actions physiques en armure, notamment Acrobatie/Équilibre, Athlétisme, Escalade ou les Compétences de combat au contact. Les Compétences de combat à distance ne sont, elles, pas limitées.
+
+Cette Compétence permet d’utiliser les armures mécanisées, que l’on pourrait facilement assimiler à des véhicules et dont la manœuvre demande un certain entraînement. Certaines Compétences, qui requièrent une grande précision, ne peuvent être utilisées en armure (Chirurgie ou Premiers soins, par exemple).
+
+De nombreuses armures - appelées « armures hybrides » - peuvent être utilisées dans plusieurs milieux différents. Le personnage doit donc développer la Compétence qui correspond à chaque milieu. Ainsi, un personnage en armure sous-marine hybride qui se retrouve à la surface utilisera sa Compétence Armure externe. Un individu doté d’une armure amphibie capable de voler doit même connaître trois Compétences : Armure sous-marine, Armure externe, Armure atmosphérique…"
+"Pilotage_";"Manoeuvre d'armure *";"Armures spatiales";"(-3)";"COO/ADA";;"Compétence limitative pour : toutes les actions physiques en armure, notamment Acrobatie/Équilibre, Athlétisme, Escalade ou les Compétences de combat au contact. Les Compétences de combat à distance ne sont, elles, pas limitées.
+
+Cette Compétence permet d’utiliser les armures mécanisées, que l’on pourrait facilement assimiler à des véhicules et dont la manœuvre demande un certain entraînement. Certaines Compétences, qui requièrent une grande précision, ne peuvent être utilisées en armure (Chirurgie ou Premiers soins, par exemple).
+
+De nombreuses armures - appelées « armures hybrides » - peuvent être utilisées dans plusieurs milieux différents. Le personnage doit donc développer la Compétence qui correspond à chaque milieu. Ainsi, un personnage en armure sous-marine hybride qui se retrouve à la surface utilisera sa Compétence Armure externe. Un individu doté d’une armure amphibie capable de voler doit même connaître trois Compétences : Armure sous-marine, Armure externe, Armure atmosphérique…
+
+Ce talent permet de savoir utiliser les armures spatiales. Il est aussi utilisé pour les procédures d’entrée dans l’atmosphère."
+"Pilotage_";"Pilotage †";"Chasseurs sous-marins";"(X)";"INT/ADA";"Athlétisme 10, Éducation/Culture générale 10, Navires légers 10";"Pré-requis nécessaires : Athlétisme 10, Éducation culture générale 10, Navires légers 10.
+
+Permet de piloter un chasseur sous-marin."
+"Pilotage_";"Pilotage †";"Chasseurs atmosphériques";"(X)";"INT/ADA";"Athlétisme 10, Éducation/Culture générale 10";"Pré-requis nécessai- res : Athlétisme 10, Éducation culture générale 10.
+
+Permet de piloter un chasseur en Surface."
+"Pilotage_";"Pilotage †";"Navires légers";"(X)";"INT/INT";"Éducation/Culture générale 7";"Pré-requis nécessaires : Éducation culture générale 7.
+
+Le personnage possédant cette Compétence est familier avec toutes les procédures de pilotage d’un navire léger, tels qu’un petit transporteur civil ou un navire patrouilleur. "
+"Pilotage_";"Pilotage †";"Navires lourds";"(X)";"INT/INT";"Navires légers 10";"Pré-requis nécessaires : Navires légers 10.
+
+Cette Compétence permet de piloter un navire lourd, comme un navire cargo civil ou un navire militaire de gros tonnage (frégates, croiseurs ou destroyers…)."
+"Pilotage_";"Pilotage †";"Engins spatiaux";"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation culture générale 10.
+
+Permet de savoir piloter des navettes et autres véhicules spatiaux. "
+"Pilotage_";"Pilotage †";"Véhicules souterrains";"(X)";"INT/ADA";;"Permet de savoir piloter les vedettes et les foreuses souterraines."
+"Pilotage_";"Pilotage †";"Véhicules de sol";;"PER/ADA";;"Permet de piloter tout type de véhicule se déplaçant sur roues, sur chenilles, sur glisseur ou à l’aide de pattes mécaniques, qu’ils soient capables d’évoluer sous l’eau ou à la surface."
+"Pilotage_";"Pilotage †";"Scooters sous-marins";;"PER/ADA";;"Permet de savoir utiliser les scooters sous-marins."
+"Pilotage_";"Télépilotage";;"(-3)";"ADA/INT";;"Cette Compétence couvre l’usage des armes et des équipements contrôlés par une interface électronique ou mécanique. Il sert aussi bien à piloter un drone à distance qu’à contrôler une torpille filo-guidée."
+"Survie / Extérieur_";"Chasse/Pistage";;"(X)";"PER/ADA";;"Cette Compétence couvre toutes les techniques de chasse, de pêche ou de pistage. La Difficulté dépend du terrain, des conditions naturelles, de la visibilité, etc. Cette Compétence est la plupart du temps limitée par la Connaissance d’un milieu naturel spécifi que (voir plus bas), car les animaux chassés et les techniques de traque sont spécifiques à chaque environnement (il n’y a pas de limitation quand cette Compétence est utilisée en milieu urbain)."
+"Survie / Extérieur_";"Connaissance milieu naturel";"Océans";"(-3)";"ADA/INT";;"Compétences limitatives pour : toutes les actions requérant une certaine connaissance d’un milieu naturel donné, par exemple Chasse/Pistage, Orientation, Survie, voire même Observation.
+
+Cette Compétence permet de connaître les spécificités d’un milieu naturel : dangers, phénomènes, connaissance générale de la faune et de la flore, etc."
+"Survie / Extérieur_";"Connaissance milieu naturel";"Souterrains";"(-3)";"ADA/INT";;"Compétences limitatives pour : toutes les actions requérant une certaine connaissance d’un milieu naturel donné, par exemple Chasse/Pistage, Orientation, Survie, voire même Observation.
+
+Cette Compétence permet de connaître les spécificités d’un milieu naturel : dangers, phénomènes, connaissance générale de la faune et de la flore, etc."
+"Survie / Extérieur_";"Connaissance milieu naturel";"Surface";"(X)";"ADA/INT";;"Compétences limitatives pour : toutes les actions requérant une certaine connaissance d’un milieu naturel donné, par exemple Chasse/Pistage, Orientation, Survie, voire même Observation.
+
+Cette Compétence permet de connaître les spécificités d’un milieu naturel : dangers, phénomènes, connaissance générale de la faune et de la flore, etc."
+"Survie / Extérieur_";"Observation";;;"PER/VOL";;"Cette Compétence permet d’analyser avec attention son environnement, pour tenter de repérer des petits détails, des indices, des anomalies, un visage familier ou le comportement particulier d’un individu dans une foule, etc. Il s’agit d’une véritable recherche active, pas d’une simple perception instinctive des alentours (qui dépend plus de l’Attribut Perception). Cette Compétence mesure aussi la vigilance d’un personnage, sa capacité à remarquer naturellement des éléments inhabituels ou suspects.
+
+Cette Compétence peut être limitée par la Connaissance d’un milieu naturel spécifi que (voir plus haut), si le personnage agit dans un environnement spécifique (il pourra ainsi identifier un élément inhabituel). Il n’y a pas de limitation quand cette Compétence est utilisée en milieu urbain."
+"Survie / Extérieur_";"Orientation";;;"PER/ADA";;"Cette Compétence permet de s’orienter et de se diriger dans son environnement, d’éviter de se perdre, de retrouver son chemin, de garder une idée de sa position et de ses déplacements, voire d’éviter les zones dangereuses et les mauvaises rencontres. Cette Compétence est la plupart du temps limitée par la Connaissance d’un milieu naturel spécifi que (voir plus haut), car le personnage doit connaître les spécificités de chaque environnement pour pouvoir s’y orienter efficacement (il n’y a pas de limitation quand cette Compétence est utilisée en milieu urbain).
+
+Cette Compétence permet également de s’orienter sur une carte (à pied, en armure de plongée ou dans un véhicule), dans un territoire inconnu ou dans un milieu complexe (les ruines abandonnées d’une grande station, l’épave d’un gros navire, un dédale souterrain ou des montagnes sous-marines, etc.). La fréquence et la Difficulté des Tests dépendent surtout de la complexité du lieu et du fait de pouvoir compter ou non sur une carte des environs. Les réussites permettent de se déplacer rapidement et efficacement, les échecs font perdre énormément de temps. Sur une Catastrophe, les personnages sont complètement perdus ou subissent un événement désagréable (leur navire peut percuter une falaise par exemple).
+
+Note : Orientation ne concerne que des déplacements localisés. Pour calculer un trajet entre deux stations, à l’échelle d’une mer ou d’un océan, il faut employer la Compétence Navigation."
+"Survie / Extérieur_";"Survie";;"(X)";"ADA/VOL";;"Cette Compétence permet de survivre dans un environnement hostile, de trouver de l’eau et de la nourriture, de faire du feu, de fabriquer un abri, de se protéger du froid, de fabriquer des outils improvisés, etc. Cette Compétence est la plupart du temps limitée par la Connaissance d’un milieu naturel spécifi que (voir plus haut), car le personnage doit connaître les spécificités de chaque environnement pour pouvoir y survivre (il n’y a pas de limitation si cette Compétence est éventuellement utilisée en milieu urbain)."
+"Techniques_";"Analyses sonscans";;"(X)";"ADA/INT";;"Cette Compétence permet d’interpréter les informations transmises par un appareil de détection de type radar, sonar ou scanner."
+"Techniques_";"Armes embarquées/Artillerie";;"(X)";"INT/INT";;"Cette Compétence couvre l’usage des systèmes d’armement utilisés à bord des véhicules (canons, lance-torpilles, lance-roquette, etc.)."
+"Techniques_";"Armurerie";;"(X)";"INT/INT";;"Cette Compétence permet d’entretenir et de réparer les armes à feu."
+"Techniques_";"Aquaculture/Elevage";;"(X)";"INT/INT";;"Cette Compétence permet d’utiliser les techniques d’élevage, d’aquaculture et de culture hydroponique en usage dans le monde sous-marin."
+"Techniques_";"Art/Artisanat";;"(X)";"INT/INT";;"Cette Compétence permet à un personnage de fabriquer des objets divers qu’il pourra vendre. Il existe une Compétence par catégorie générale de produits, à définir avec le maître de jeu (Cuisine, Peinture, Sculpture, Armes blanches, Instruments de musique, etc.). Ces objets doivent être simples et ne peuvent en aucun cas nécessiter des procédés technologiques pour leur assemblage. Ainsi, l’artisan peut fabriquer des armes blanches ou des armures simples, mais en aucun cas des équipements électroniques ou mécaniques (il faut pour cela utiliser la Compétence Génie technique)."
+"Techniques_";"Chirurgie †";;"(X)";"INT/INT";"Médecine 10";"Pré-requis nécessaires : Médecine 10, voire Bionique/Cybertechnologie 5 (pour les implantations de matériel cybernétique).
+
+Cette Compétence permet d’effectuer des interventions chirurgicales. La Difficulté de l’action dépend du niveau technique de l’opération."
+"Techniques_";"Dressage";;"(-3)";"VOL/PRE";;"Cette Compétence peut être utilisée pour dresser des animaux domestiques ou dompter des créatures sauvages."
+"Techniques_";"Électronique †";;"(X)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation/Culture générale 10.
+
+Cette Compétence permet d’installer, de réparer ou de modifier des équipements électroniques ou électriques."
+"Techniques_";"Espionnage/Surveillance";;"(X)";"INT/INT";"Éducation/Culture générale 10, Électronique 3";"Pré-requis nécessaires : Éducation/Culture générale 10, Électronique 3.
+
+Cette Compétence recouvre l’ensemble des techniques d’espionnage ou de contre-epsionnage reposant sur l’installation et l’utilisation de matériel spécifique (micros, caméras de surveillance, systèmes d’écoute, brouilleurs de communication, etc.). Elle permet également de détecter, de neutraliser ou de tromper de tels systèmes."
+"Techniques_";"Explosifs";;"(X)";"INT/VOL";;"Cette Compétence permet d’utiliser et de désamorcer des explosifs, de connaître les techniques de démolition et d’assembler des charges explosives, voire de concevoir de nouveaux procédés."
+"Techniques_";"Falsification †";;"(X)";"INT/PER";;"Pré-requis nécessaires : la Compétence nécessaire dépend du faux à créer, souvent Art/Artisanat, Informatique, Bureaucratie, Électronique, etc., au niveau 7 ou plus.
+
+Cette Compétence permet à un personnage de créer des faux documents, de fausses accréditations, etc. etc. Le joueur peut donner un malus à son personnage. Ce malus, augmenté du modificateur de réussite obtenu à l’issue du Test, détermine la Difficulté du Test d’Intelligence de l’individu contrôlant le document. La Difficulté de base dépend de la complexité du document à fabriquer (falsifier une simple autorisation est plutôt simple, mais créer une fausse carte d’identité sera plus difficile). Notez que pour créer de faux papiers, le faussaire doit souvent se procurer des codes ou détourner des informations diverses."
+"Techniques_";"Génie technique";"Architecture/Génie civil";"(X)";"INT/INT";"Éducation/Culture générale 10";"Ces Compétences permettent de concevoir toute sortes de produits ou d’équipements de haute technologie. Voici quelques exemples : conception de stations ou de cités sous-marines.
+
+Note : les opérations de réparation et de maintenance simples peuvent être réalisées avec les Compétences Électronique, Informatique, Mécanique, etc."
+"Techniques_";"Génie technique";"Architecture navale";"(X)";"INT/INT";"Éducation/Culture générale 10";"Ces Compétences permettent de concevoir toute sortes de produits ou d’équipements de haute technologie. Voici quelques exemples : conception de navires.
+
+Note : les opérations de réparation et de maintenance simples peuvent être réalisées avec les Compétences Électronique, Informatique, Mécanique, etc."
+"Techniques_";"Génie technique";"Bionique/Cybertechnologie";"(X)";"INT/INT";"Éducation/Culture générale 10, Biologie/Physiologie 10";"Pré-requis nécessaire : Biologie/Physiologie 10.
+
+Ces Compétences permettent de concevoir toute sortes de produits ou d’équipements de haute technologie. Voici quelques exemples : étude des mécanismes biologiques et des applications industrielles qui peuvent en découler, des interfaces homme-machine, des remplacements corporels cybernétiques… 
+
+Note : les opérations de réparation et de maintenance simples peuvent être réalisées avec les Compétences Électronique, Informatique, Mécanique, etc."
+"Techniques_";"Génie technique";"Biotechnologie/Génie génétique";"(X)";"INT/INT";"Éducation/Culture générale 10, Biologie/Physiologie 10";"Prérequis nécessaire : Biologie/Physiologie 10. 
+
+Ces Compétences permettent de concevoir toute sortes de produits ou d’équipements de haute technologie. Voici quelques exemples : connaissance des procédés technologiques pouvant être appliqués aux organismes vivants, les manipulations génétiques notamment.
+
+Note : les opérations de réparation et de maintenance simples peuvent être réalisées avec les Compétences Électronique, Informatique, Mécanique, etc."
+"Techniques_";"Génie technique";"Électronique/Informatique";"(X)";"INT/INT";"Éducation/Culture générale 10, Électronique 10, Informatique 10";"Pré-requis nécessaire : Électronique 10, Informatique 10.
+
+Ces Compétences permettent de concevoir toute sortes de produits ou d’équipements de haute technologie. Voici quelques exemples : conception d’équipement électronique et de matériel informatique.
+
+Note : les opérations de réparation et de maintenance simples peuvent être réalisées avec les Compétences Électronique, Informatique, Mécanique, etc."
+"Techniques_";"Génie technique";"Logiciels";"(X)";"INT/INT";"Éducation/Culture générale 10, Informatique 10";"Pré-requis nécessaire : Informatique 10.
+
+Ces Compétences permettent de concevoir toute sortes de produits ou d’équipements de haute technologie. Voici quelques exemples : conception de logiciels informatiques.
+
+Note : les opérations de réparation et de maintenance simples peuvent être réalisées avec les Compétences Électronique, Informatique, Mécanique, etc."
+"Techniques_";"Génie technique";"Nanotechnologie";"(X)";"INT/INT";"Éducation/Culture générale 10, Physique/Chimie 10";"Pré-requis nécessaire : Physique/Chimie 10.
+
+Ces Compétences permettent de concevoir toute sortes de produits ou d’équipements de haute technologie. Voici quelques exemples : connaissance de la nanotechnologie et de ses applications dans la vie quotidienne.
+
+Note : les opérations de réparation et de maintenance simples peuvent être réalisées avec les Compétences Électronique, Informatique, Mécanique, etc."
+"Techniques_";"Génie technique";"Robotique";"(X)";"INT/INT";"Éducation/Culture générale 10, Électronique 10, Informatique 10";"Pré-requis nécessaire : Électronique 10, Informatique 10.
+
+Ces Compétences permettent de concevoir toute sortes de produits ou d’équipements de haute technologie. Voici quelques exemples : connaissances concernant la robotique.
+
+Note : les opérations de réparation et de maintenance simples peuvent être réalisées avec les Compétences Électronique, Informatique, Mécanique, etc."
+"Techniques_";"Génie technique";"Télécommunications";"(X)";"INT/INT";"Éducation/Culture générale 10, Électronique 10, Informatique 10";"Pré-requis nécessaire : Électronique 10, Informatique 10.
+
+Ces Compétences permettent de concevoir toute sortes de produits ou d’équipements de haute technologie. Voici quelques exemples : conception de systèmes de communications.
+
+Note : les opérations de réparation et de maintenance simples peuvent être réalisées avec les Compétences Électronique, Informatique, Mécanique, etc."
+"Techniques_";"Informatique †";;"(-3)";"INT/INT";"Éducation/Culture générale 10";"Pré-requis nécessaires : Éducation culture générale 10.
+
+Cette Compétence regroupe toutes les opérations réalisées à l’aide de matériel informatique."
+"Techniques_";"Mécanique †";;"(-3)";"INT/INT";"Électronique 5";"Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples).
+
+Cette Compétence permet de réparer et d’entretenir véhicules et machineries. Chaque type de véhicule fait l’objet d’une Compétence particulière :
+• Exo-armures
+• Navires/Chasseurs sous-marins
+• Chasseurs atmosphériques
+• Véhicules souterrains
+• Véhicules de sol, etc.
+
+Sans oublier une autre Compétence, Générateurs/Système de survie, qui concerne la réparation et l’entretien des équipements nécessaires à la vie dans les structures sous-marines, les stations notamments (générateurs d’énergie, recycleurs d’atmosphère, systèmes de chauffage, etc.)."
+"Techniques_";"Mécanique †";"Exo-armures";"(-3)";"INT/INT";"Électronique 5";"Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples).
+
+Cette Compétence permet de réparer et d’entretenir véhicules et machineries. Chaque type de véhicule fait l’objet d’une Compétence particulière :
+• Exo-armures
+• Navires/Chasseurs sous-marins
+• Chasseurs atmosphériques
+• Véhicules souterrains
+• Véhicules de sol, etc.
+
+Sans oublier une autre Compétence, Générateurs/Système de survie, qui concerne la réparation et l’entretien des équipements nécessaires à la vie dans les structures sous-marines, les stations notamments (générateurs d’énergie, recycleurs d’atmosphère, systèmes de chauffage, etc.)."
+"Techniques_";"Mécanique †";"Navires/Chasseurs sous-marins";"(-3)";"INT/INT";"Électronique 5";"Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples).
+
+Cette Compétence permet de réparer et d’entretenir véhicules et machineries. Chaque type de véhicule fait l’objet d’une Compétence particulière :
+• Exo-armures
+• Navires/Chasseurs sous-marins
+• Chasseurs atmosphériques
+• Véhicules souterrains
+• Véhicules de sol, etc.
+
+Sans oublier une autre Compétence, Générateurs/Système de survie, qui concerne la réparation et l’entretien des équipements nécessaires à la vie dans les structures sous-marines, les stations notamments (générateurs d’énergie, recycleurs d’atmosphère, systèmes de chauffage, etc.)."
+"Techniques_";"Mécanique †";"Chasseurs atmosphériques";"(-3)";"INT/INT";"Électronique 5";"Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples).
+
+Cette Compétence permet de réparer et d’entretenir véhicules et machineries. Chaque type de véhicule fait l’objet d’une Compétence particulière :
+• Exo-armures
+• Navires/Chasseurs sous-marins
+• Chasseurs atmosphériques
+• Véhicules souterrains
+• Véhicules de sol, etc.
+
+Sans oublier une autre Compétence, Générateurs/Système de survie, qui concerne la réparation et l’entretien des équipements nécessaires à la vie dans les structures sous-marines, les stations notamments (générateurs d’énergie, recycleurs d’atmosphère, systèmes de chauffage, etc.)."
+"Techniques_";"Mécanique †";"Véhicules souterrains";"(-3)";"INT/INT";"Électronique 5";"Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples).
+
+Cette Compétence permet de réparer et d’entretenir véhicules et machineries. Chaque type de véhicule fait l’objet d’une Compétence particulière :
+• Exo-armures
+• Navires/Chasseurs sous-marins
+• Chasseurs atmosphériques
+• Véhicules souterrains
+• Véhicules de sol, etc.
+
+Sans oublier une autre Compétence, Générateurs/Système de survie, qui concerne la réparation et l’entretien des équipements nécessaires à la vie dans les structures sous-marines, les stations notamments (générateurs d’énergie, recycleurs d’atmosphère, systèmes de chauffage, etc.)."
+"Techniques_";"Mécanique †";"Véhicules de sol";"(-3)";"INT/INT";"Électronique 5";"Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples).
+
+Cette Compétence permet de réparer et d’entretenir véhicules et machineries. Chaque type de véhicule fait l’objet d’une Compétence particulière :
+• Exo-armures
+• Navires/Chasseurs sous-marins
+• Chasseurs atmosphériques
+• Véhicules souterrains
+• Véhicules de sol, etc.
+
+Sans oublier une autre Compétence, Générateurs/Système de survie, qui concerne la réparation et l’entretien des équipements nécessaires à la vie dans les structures sous-marines, les stations notamments (générateurs d’énergie, recycleurs d’atmosphère, systèmes de chauffage, etc.)."
+"Techniques_";"Mécanique †";"Générateurs/Système de survie";"(-3)";"INT/INT";"Électronique 5";"Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples).
+
+Cette Compétence permet de réparer et d’entretenir véhicules et machineries. Chaque type de véhicule fait l’objet d’une Compétence particulière :
+• Exo-armures
+• Navires/Chasseurs sous-marins
+• Chasseurs atmosphériques
+• Véhicules souterrains
+• Véhicules de sol, etc.
+
+Sans oublier une autre Compétence, Générateurs/Système de survie, qui concerne la réparation et l’entretien des équipements nécessaires à la vie dans les structures sous-marines, les stations notamments (générateurs d’énergie, recycleurs d’atmosphère, systèmes de chauffage, etc.)."
+"Techniques_";"Pièges";;"(-3)";"INT/PER";;"Cette Compétence permet de créer et de poser des pièges (de tout type : mécaniques, explosifs, etc.), mais aussi de les détecter et de les désamorcer. La marge de réussite peut permettre d’augmenter l’efficacité du piège, mais aussi de mieux le dissimuler, imposant alors un malus au Test de détection."
+"Techniques_";"Piratage informatique  †";;"(X)";"INT/INT";"Informatique 10";"Pré-requis nécessaire : Informatique 10.
+
+Cette Compétence permet d’entrer illégalement dans les systèmes informatiques et les bases de données. La Difficulté dépend du niveau de protection du système."
+"Techniques_";"Premier soins";;"(-3)";"ADA/INT";;"Cette Compétence indispensable permet de traiter les petites blessures, mais surtout de stabiliser les blessures les plus graves. Le champs d’action de cette Compétence ne se limite donc pas aux simples « premiers secours », mais déborde aussi un tout petit peu sur la médecine d’urgence, et c’est ce qui la rend si importante. Voir le chapitre consacré à l’état de santé pour plus d’informations."
+"Techniques_";"Systèmes de sécurité";;"(X)";"INT/INT";"Électronique 5";"Pré-requis nécessaire : Électronique 5, la plupart du temps, sinon le personnage sera incapable de traiter avec les systèmes les plus complexes.
+
+Cette Compétence permet d’installer, de détecter et de neutraliser les systèmes de sécurité de tout type. Elle permet aussi de crocheter les serrures simples ou de forcer les serrures électroniques. La Difficulté dépend de la complexité du système. Dans l’immense majorité des cas, le personnage a besoin d’un matériel adapté (outils de crochetage, crocheteur électronique ou brise-codes pour des serrures électroniques, etc.)."
+"Compétences Spéciales_";"Absence";;"(X)";"ADA/VOL";;"Cette Compétence permet à un personnage de ne plus être remarqué, de passer inaperçu dans une foule, etc. Le modificateur de réussite agit comme un malus à appliquer au Test de Perception ou d’Observation des individus auxquels le personnage tente d’échapper. Ce malus agit aussi sur le Test de Réaction effectué par une éventuelle victime. Tant que le personnage reste concentré, la Compétence fait effet. S’il fait autre chose, il devra refaire le Test."
+"Compétences Spéciales_";"Bouclier mental";;"(X)";"VOL/VOL";;"Cette Compétence permet de renforcer un de ses attributs mentaux (Volonté, Intelligence, Adaptation) contre toute agression pouvant les affecter (attaques mentales, hypnose, images subliminales, interrogatoires ou toute autre action affectant directement l’esprit d’un individu). Le modificateur de réussite indique le bonus dont bénéficie l’Attribut visé. L’effet dure un nombre de minutes égal au niveau de maîtrise du personnage. Celui-ci doit néanmoins attendre au moins une heure pour utiliser la Compétence de nouveau, sous peine de devoir effectuer un Test de résistance à la Fatigue. Note : les bonus aux Attributs ne s’appliquent pas aux niveaux de base des Compétences."
+"Compétences Spéciales_";"Contrôle corporel";;"(X)";"CON/VOL";;"Cette Compétence permet à un personnage d’abaisser la température de son corps et son rythme respiratoire pendant un nombre d’heures égal au modificateur de réussite. Il peut ainsi consommer beaucoup moins d’oxygène (sa réserve d’air est augmentée de 10% par point de modificateur de réussite), simuler la mort, mieux supporter le froid, etc. Pendant l’utilisation de cette Compétence, le personnage ne peut toutefois tenter aucune autre action, et doit rester calme et immobile."
+"Compétences Spéciales_";"Contrôle des mutations";;"(X)";;;"Certaines mutations donnent accès à des Compétences spécifiques. Leur utilisation, les Attributs associés, les éventuels malus au niveau de base et le coût d’apprentissage sont détaillés dans le chapitre Création de personnage, section 3. Capacités spéciales, page 123."
+"Compétences Spéciales_";"Hybride";;"(X)";"CON/COO";;"Seuls les hybrides naturels, les géno-hybrides, les techno-hybrides et les personnage dotés de la mutation Amphibie peuvent développer cette Compétence, qui représente leur affinité avec le milieu aquatique et la maîtrise de leur mutation ou de leurs modifications. Pour plus de détails, voir le chapitre Création de personnage, sections 2. Type génétique du personnage, page 119 et section 3. Capacités spéciales, page 123."
+"Compétences Spéciales_";"Hypnose";;"(X)";"VOL/PRE";;"Cette Compétence permet de plonger un individu en état d’hypnose (c’est toutefois impossible à utiliser sur un animal ou en plein combat). Un personnage hypnotisé le reste tant que l’hypnotiseur se concentre sur lui, ou pendant un nombre de minutes égal au modificateur de réussite. Pour implanter une suggestion hypnotique, il faut réussir un Test d’opposition contre la Volonté de la cible. On ne peut implanter qu’une suggestion hypnotique. L’hypnose peut également servir à plonger dans l’inconscient d’un personnage, pour faire resurgir des événements oubliés."
+"Compétences Spéciales_";"Maîtrise de l'Echo Polaris";;"(X)";"INT/VOL";;"C’est l’une des rares Compétences qu’un personnage peut utiliser dans le Flux Polaris. Elle définit aussi bien les connaissances qu’a un personnage de cette mystérieuse dimension, que sa capacité à y survivre. Elle peut par exemple être utilisée pour s’orienter dans l’univers du Flux, à y trouver des phares psychiques ou des régions précises, mais aussi à échapper à un éventuel poursuivant. Enfin, la Maîtrise de l’écho Polaris permet aussi de s’échapper du Flux Polaris. Voir Le Flux Polaris, dans le chapitre La Force Polaris, pour plus d’informations."
+"Compétences Spéciales_";"Maîtrise de la Force Polaris";;"(X)";"VOL/VOL";;"Cette Compétence permet au personnage de libérer volontairement l’énergie de la Force Polaris et de la contrôler, afin d’en utiliser les pouvoirs. Elle permet aussi d’éviter les libérations accidentelles. Reportez-vous au chapitre consacré à la Force Polaris pour plus d’information. Note : pour développer cette Compétence, vous devez acheter l’Avantage Force Polaris."
+"Compétences Spéciales_";"Méditation";;"(X)";"VOL/VOL";;"Cette Compétence permet de faire le vide, de se concentrer ou se reposer. Un personnage qui utilise la méditation avec succès devient imperméable aux influences extérieures (le bruit, la pression mentale, etc.). Il peut récupérer des effets de la Fatigue en deux fois moins de temps que d’habitude. Enfin, il peut aussi méditer pour réfléchir à un problème. La Difficulté dépend de la complexité de ce dernier et le temps nécessaire se compte généralement en heures. À la fin de la méditation, en fonction de la marge de réussite obtenue, le MJ pourra donner des indices au joueur pour l’aider sur un problème particulier (nouvelles idées, indices sur la solution, rappel ou nouvel éclairage sur des détails ou des événements oubliés, etc.)."
+"Compétences Spéciales_";"Mutation";"Agilité caudale";;"COO/COO";"(M)Queue";"Le personnage est doté d’une queue. Un personnage peut apprendre à manipuler des objets avec sa queue et même à attaquer avec ou à s’en servir comme d’un membre normal. Il peut donc développer la Compétence Agilité caudale (COO/COO), à un coût normal. Cette Compétence permet de manipuler des objets avec sa queue et agit comme une Compétence limitative pour les Compétences suivantes :
+• Acrobatie/Équilibre : pour effectuer des manœuvres acrobatiques en utilisant sa queue.
+• Armes de poing : permet d’utiliser des petites armes de poing.
+• Combat armé : permet de combattre avec des petites armes blanches (le modificateur de dommages au corps à corps ne s’applique pas).
+• Combat à mains nues : permet d’attaquer avec sa queue (dommages de base 1D10/2, plus modificateur de dommages au corps à corps)"
+"Compétences Spéciales_";"Mutation";"Contagion";"(X)";"CON/VOL";"(M)Contagion";"Le personnage est nourri des bactéries qui vivent en symbiose avec lui. Ces maladies sont extrêmement contagieuses en permanence. Le personnage est totalement immunisé contre les maladies et, surtout, le fait qu’il soit contagieux ne se voit pas (à la différence de Purulence). Si la mutation n’est pas contrôlée, tout contact avec la peau de l’individu transmet une maladie comparable à la Grippe bleue (voir Maladies et poisons, dans le chapitre État de santé, page 244). Le mutant peut tenter de maîtriser sa contagion. Cela devient alors une Compétence spéciale (Contagion, CON/VOL, X), qui peut être développée à un coût doublé. S’il réussit son Test de Compétence, le personnage peut choisir ou non de contaminer une personne qu’il touche. Une éventuelle victime peut développer une maladie en 2D6 heures (moins le modifica?teur de réussite), la Difficulté du Test en indiquant la virulence :
+DIFFICULTÉ DU TEST_ Virulence
++0 1D6
+-3 2D6
+-5 3D6
+-7 4D6
+-10 5D6"
+"Compétences Spéciales_";"Mutation";"Contrôle moléculaire";"(X)";"CON/VOL";"(M)Instabilité moléculaire";"Cette mutation donne accès à la Compétence spéciale Contrôle moléculaire (CON/VOL), qui peut être développée à un coût doublé. La structure moléculaire d’un individu ayant ce pouvoir peut être modifiée, à la suite d’un déclenchement volontaire ou involontaire de cette mutation. Sur un déclenchement volontaire, grâce à un Test de Compétence, le personnage peut se transformer en magma de matière informe (d’une masse équivalente à celle de son corps d’origine), qu’il empêche de se dissocier. Notez le modificateur de réussite obtenu. Chaque transformation prend 2D10 Tours de combat. Le personnage peut alors se déplacer (très lentement), glisser sous des portes et être conscient de son environnement, mais uniquement grâce au toucher. Il peut toutefois tenter de garder un contrôle limité sur sa forme et créer certains organes grâce à un nouveau Test 
+de Contrôle moléculaire, avec les Difficultés suivantes :
+• Organe auditif : -3
+• Organe visuel : -5
+• Tentacule : -7 (cet organe, qui a une Force de 3, ne peut servir qu’à manipuler des objets légers et ne peut être utilisé en combat). Sous l’eau, un personnage sous sa forme de magma ne subit pas les effets de la pression et peut évoluer comme une amibe. Pour reprendre sa forme, le PJ doit réussir un autre Test mais plus il aura attendu, plus cela sera difficile :
+• Jusqu’à 10 minutes : -3.
+• Jusqu’à 1 heure : -7.
+• Par heure supplémentaire : -1.
+Le modificateur de réussite obtenu lors du Test de transformation permet néanmoins de réduire ces malus. Chaque fois que le personnage rate son Test pour reprendre sa forme, la difficulté augmente d’1 point. S’il n’est plus possible pour lui de réussir, il perd de la substance. Sa Force ou sa Constitution (au choix du joueur) est réduit définitivement de 1 point. Mais il peut de nouveau tenter de reprendre sa forme comme s’il avait attendu moins de 10 minutes. En cas de stress important, le personnage risque une transformation involontaire (s’il reçoit une blessure grave, s’il a peur, s’il se noie, etc.), et doit réussir un Test de Contrôle moléculaire. S’il rate, il perd sa cohérence moléculaire et sa transformation commence."
+"Compétences Spéciales_";"Mutation";"Empathie";"(-3)";"VOL/PRE";"(M)Empathie";"Cette mutation donne accès à la Compétence spéciale Empathie (VOL/PRE, -3), qui peut être développée à un coût doublé. Elle permet de communiquer avec des créatures empathiques comme le corail (action Très difficile, -7) et de ressentir les émotions des animaux (action Assez difficile, -3). Pour ressentir les émotions des individus, il faut réussir le Test avec un malus égal à la Volonté de la cible divisée par deux. Un empathe peut également tenter de modifier les émotions d’un individu, grâce à un Test d’opposition contre la Volonté de ce dernier. La Marge de réussite de l’empathe indique le nombre de Tours de combat pendant lesquels les émotions de la cible sont altérées. En cas d’échec critique, le personnage visé se rend compte qu’il subit une tentative d’intrusion mentale (même s’il sera sans doute incapable d’en définir la provenance). Les sentiments d’un individu ne peuvent être modifiés qu’étape par étape. Par exemple, un personnage éprouvant de la haine ne peut pas tout de suite ressentir une joie folle ou un amour fou. L’empathe peut alors effectuer plusieurs jets sur le même individu, mais il ne doit pas y avoir d’interruption sinon il doit tout recommencer. Enfin, certains empathes sont même capables de ressentir les émotions fortes qui imprègnent un endroit (action Presque impossible, -13).
+
+Note : ne pas confondre cette mutation avec la Compétence Analyse empathique, qui peut être développée par tout le monde."
+"Compétences Spéciales_";"Mutation";"Métamorphose";"(-3)";"CON/VOL";"(M)Métamorphe";"Cette mutation donne accès à la Compétence spéciale Métamorphose (CON/VOL, -3), qui peut être développée à un coût doublé. Elle permet de prendre l’apparence physique d’un individu (et l’apparence physique seulement). Si le métamorphe veut pousser l’imitation jusqu’à reproduire les manières (démarche, gestes, timbre de voix, etc.) de l’individu copié, il doit passer par un Test de Déguisement/Imitation (il bénéficie toutefois du Bonus de réussite obtenu lors du Test de Métamorphose).
+
+Note : le personnage ne peut en aucun cas prendre une forme autre que celle d’un humanoïde. De plus, ses Attributs et Compétences restent inchangés (il ne peut pas s’approprier ceux du personnage imité, à la manière d’un Protéus par exemple)."
+"Compétences Spéciales_";"Mutation";"Purulence";"(X)";"CON/VOL";"(M)Purulence";"La peau de l’individu est couverte de pustules. Il est en permanence rongé par des maladies et des parasites qu’il nourrit. Les individus ayant une telle mutation sont presque toujours masqués de la tête aux pieds. La Présence du personnage est réduite de 2 points (minimum 3), et tous ses Tests d’interactions sociales destinés à plaire, à convaincre, etc., subissent un malus de -5 si on peut voir son apparence. L’Attribut Résistance aux maladies est en revanche augmenté de 3 points. Si le personnage subit une nouvelle fois la mutation Purulence, sa Présence est réduite d’1 point et sa Résistance aux maladies augmentée de 2 points supplémentaires. Le personnage est contagieux uniquement pendant certaines périodes de l’année (en général une semaine tous les trois mois). Les maladies qu’il transmet sont comparables à la Grippe bleue (voir Maladies et poisons, dans le chapitre État de santé, page 244). Le personnage peut tenter de maîtriser sa Purulence pour pouvoir contrôler ses périodes de contamination. Purulence devient alors une Compétence (Purulence, CON/VOL, X), qui peut être développée à un coût normal. À chaque période de contamination, le PJ peut tenter de juguler ses maladies, en effectuant une fois par jour un Test de Compétence. Il subit toutefois un malus cumulatif de -1 chaque jour, tant qu’il n’a pas été contagieux pendant une semaine. La Purulence peut aussi être utilisée comme une arme. La peau de la cible et celle du mutant doivent être en contact. Le mutant effectue alors un Test de Purulence en opposition à la Constitution de sa cible. Si ce Test est réussi, la peau de la victime est rongée par les maladies à une vitesse incroyable, et subit des Dommages physiques égaux à 3D10 (plus le modificateur de réussite). S’il survit, il risque encore de contracter la Grippe bleue (voir Maladies et poisons, dans le chapitre État de santé, page 244). S’il meurt, son cadavre reste terriblement contagieux. Selon certaines rumeurs, il existerait certains produits permettant de neutraliser temporairement cette mutation mais ces produits seraient des drogues puissantes. On raconte aussi que les mutants purulents peuvent vivre en symbiose avec des parasites de la surface."
+"Compétences Spéciales_";"Mutation";"Radiations";"(-3)";"CON/VOL";"(M)Radiation";"Cette mutation donne accès à la Compétence spéciale Radiations (CON/VOL, -3), qui peut être développée à un coût doublé, et qui lui permet de libérer un flot de radiations dans l’organisme d’une victime par simple contact. L’intensité du rayonnement inflige 2D6 points d’irradiation (plus le modificateur de réussite). Chaque fois que le personnage subit de nouveau cette mutation, cette intensité augmente de 3 points. Enfin, le personnage bénéficie gratuitement de la mutation Résistance aux radiations."
+"Compétences Spéciales_";"Mutation";"Sonar";;"PER/PER";"(M)Sonar";"Le personnage est doté d’une sorte de sonar qui lui permet de repérer des obstacles sous l’eau ou dans le noir. Cette mutation donne accès à la Compétence spéciale Sonar (PER/PER), qui peut être développée à un coût normal. La portée du sonar est égale à l’Intelligence du personnage, en mètres. Cette Compétence permet aussi de libérer une onde sonique, que l’on peut utiliser comme arme, aussi bien sous l’eau qu’à l’air libre. Il faut alors réussir un Test de So- nar, avec les mêmes modificateurs que ceux qui s’appliquent normalement au combat à distance, pour des dommages de base de 2D10."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Altération Temporelle";"(X)";"INT/VOL";;"Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+Altération temporelle : 2D6 Tours de combat +/- modif. de réussite.
+Portée max. du centre de la zone d’effet : 15 m +/- modif. de réussite.
+
+Le personnage et toutes les créatures vivantes (ainsi que l’équipement qu’elles portent) se situant dans la zone d’effet sont transportés dans le futur ou le passé. Ceux qui subissent cet effet réapparaissent à l’endroit exact où ils étaient auparavant. Si, par exemple, ils étaient dans un croiseur, ils réapparaîtront dans le croiseur, même si celui-ci s’est déplacé.
+Quand il s’effectue dans le futur, le déplacement temporel ne pose pas de problème majeur. Le personnage (et ce qui se trouve dans la sphère) cesse d’exister pendant quelques Tours avant de réapparaître. En revanche, il lui est impossible de faire ultérieurement un saut dans le passé dans la période de temps où il « n’existait pas ». Il réapparaîtra automatiquement juste avant son saut dans le futur.
+Pour un déplacement dans le passé, les choses sont un peu plus complexes. Le personnage annule en fait purement simplement ce qui s’est passé entre le moment où il active son pouvoir et le moment où il réapparaît dans le passé. Deux même corps ne pouvant cohabiter dans le même espace-temps, le personnage se retrouve donc dans son propre corps, à l’endroit qu’il occupait dans le passé. S’il est accompagné par d’autres personnages, ils se retrouvent également dans leur corps à l’endroit où ils se trouvaient dans le passé. Les objets transportés regagnent leur place initiale. Si un personnage est transporté mort à un moment où il ne l’était pas, il ne se souviendra de rien. Le personnage se souviendra de ce qui s’est passé dans le futur, mais les choses ne se passeront pas forcément exactement de la même façon, car rien n’est écrit… Le MJ est encouragé à faire en sorte que se reproduisent les mêmes événements, mis à part quelques légers détails.
+
+La manipulation du temps est dangereuse, et chaque saut peut créer une « chimère temporelle ». Après chaque saut, il faut lancer 1D100 dans la table ci-dessous :
+• 01-60. R.A.S. : tout se passe bien.
+• 61-90. Échos du passé : le personnage réussit son saut temporel, mais les échos de ce qui a été et de ce qui aurait dû être persistent. S’il a fait un saut vers le passé, il verra un vague spectre de lui-même agir comme il l’a fait avant de faire son saut. Cette chimère n’a aucun impact sur la nouvelle réalité, mais elle peut s’avérer extrêmement perturbante. Ce phénomène est visible de tous.
+• 91-92. Phénomène exceptionnel : effectuez un jet sur la table des phénomènes exceptionnels.
+• 93-94. Autre dimension : le personnage (et tout ce qu’il transporte) se retrouve dans une dimension parallèle qui est, le plus souvent, une réalité horriblement déformée et cauchemardesque (mais cela peut aussi être une réalité entièrement différente et paisible). Il va falloir survivre tant que la chimère fait effet. Après cela, tout redevient normal.
+• 95-96. Déphasage temporel : pendant tout le temps que dure cette chimère, le temps est déphasé. Il s’écoule différemment pour chaque chose. Certains personnages seront accélérés, d’autres ralentis, une goutte d’eau pourra mettre un temps infini à tomber tandis qu’une autre goutte tombera normalement. Pour chaque chose (importante pour l’action en cours) ou personnage, et à chaque Tour de combat, il faut lancer un dé. Un résultat pair indique une accélération (on double la vitesse et les actions d’un personnage), un résultat impair indique une décélération (on réduit de moitié). Le chaos engendré par ce phénomène impose un malus de -5 aux Tests de chaque personnage.
+• 97-98. Décalage dans le Flux : le personnage réussit son saut mais réapparaît à la frontière du Flux.
+• 99-100. Lacération du temps : chaque personnage transporté dans le passé ou dans le futur rajeunit (1-5) ou vieillit (6-10) de 1 an. Pour un saut dans le passé, une chimère temporelle dure le temps qui sépare l’arrivée dans le passé du départ dans le futur. Pour saut dans le futur, la chimère dure un temps égal au saut temporel séparant le passé du futur."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Attaque psychique";"(X)";"INT/VOL";;"Malus au Test de Résistance au Choc : +0 +/- modif. de réussite.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+Portée max. du centre de la zone d’effet : 15 m +/- modif. de réussite.
+
+Force polaris Force polaris 256 Ce phénomène force les êtres vivants présents dans la zone d’effet à effectuer un Test de Résistance au Choc. La marge de réussite augmente le malus au Test de Résistance au Choc. Les victimes peuvent être étourdies pendant 1D6 Tours de combat, ou inconscientes pendant 1D6 minutes. Si ce pouvoir est libéré accidentellement, le personnage à l’origine de l’incident Polaris n’est pas affecté."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Barrière de Force";"(X)";"INT/VOL";;"Protection : 5 +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+Zone d’effet : 5 m² +/- modif. de réussite. Portée max. du centre de la zone d’effet : 10 m +/- modif. de réussite.
+
+Cet effet crée une barrière de force, capable d’absorber un certain nombre de points de dommages. Le personnage qui contrôle le phénomène peut choisir de placer la barrière où il veut, dans la limite de la portée de son pouvoir. Si le pouvoir n’est pas contrôlé, la barrière peut apparaître n’importe où (jet sur la table des erreurs de tir pour les grenades), à 1D10 mètres. Si elle apparaît sur un individu, ce dernier est poussé hors de la zone d’effet. Si elle apparaît dans une structure, même en partie, elle peut toutefois l’endommager.
+
+Note : un personnage en armure sera repoussé tandis qu’un drone, un véhicule ou un robot subiront (1D10 + niveau de protection) points de dommages."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Barrière moléculaire";"(X)";"INT/VOL";;"Protection : 10 +/- modif. de réussite.
+Durée : 7 Tours de combat +/- modif. de réussite. Zone d’effet : 5 m² +/- modif. de réussite.
+Portée max. du centre de la zone d’effet : 10 m +/- modif. de réussite.
+
+Cet effet crée une barrière moléculaire, capable d’absorber un certain nombre de points de dommages. À la différence de la Barrière de force, la Barrière moléculaire peut être endommagée : sa valeur de protection est réduite d’1 point pour chaque tranche de 5 points de dommages. Le personnage qui contrôle le phénomène peut choisir de placer la barrière où il veut, dans la limite de la portée de son pouvoir. Le fait qu’elle apparaisse sur un individu ou sur une structure n’a aucune conséquence. Si le pouvoir n’est pas contrôlé, la barrière peut apparaître n’importe où (jet sur la table des erreurs de tir pour les grenades), à 1D10 m."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Barrière psychique";"(X)";"INT/VOL";;"Bonus au Test de Résistance au Choc : +1 +/- modif. de réussite.
+Bonus en Volonté contre les attaques mentales : +0 +/- modif. de réussite.
+Zone d’effet : 5 m² +/- modif. de réussite.
+Portée max. du centre de la zone d’effet : 10 m +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Cet effet crée une barrière psychique. Le personnage qui contrôle le phénomène peut choisir de placer la barrière où il veut, dans la limite de la portée de son pouvoir. La barrière psychique offre un bonus contre les attaques psychiques de Choc (de type Attaque psychique, Dague psychique, Lames psychiques…) et augmente la Volonté de ceux qui se trouvent derrière contre toute attaque mentale (de type Contrôle mental). Si le pouvoir n’est pas contrôlé, la barrière peut apparaître n’importe où (jet sur la table des erreurs de tir pour les grenades) à 1D10 mètres. Le fait qu’elle apparaisse sur un individu ou sur une structure n’a aucune incidence."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Bête du Flux";"(X)";"INT/VOL";;"Distance max. d’apparition de la créature : 5 mètres +/- modif. de réussite.
+Puissance de la créature : 12 +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce terrifiant pouvoir permet de créer un passage entre notre monde et celui du flux Polaris (pour certains, il permet en fait de matérialiser l’imaginaire d’un individu). Il existe une grande variété de bêtes du flux, mais elles ont toutes une apparence démoniaque. Ces créatures ont une caractéristique unique (sauf si le MJ choisit d’utiliser une créature du Flux plus détaillée) : la Puissance. Tous leurs Attributs et Compétences sont égaux à leur Puissance. Elles infligeront 2D10 points de dégât, plus leur Modificateur de dommages en corps à corps. Le personnage qui contrôle ce pouvoir peut donner des ordres à la créature. Si ce pouvoir n’est pas contrôlé, la créature apparaît à 1D10 mètres et s’attaque à tout ce qui bouge…"
+"Compétences Spéciales_";"Pouvoirs Polaris";"Brouillage";"(X)";"INT/VOL";;"Malus : -3 +/- modif. de réussite.
+Zone d’effet : 50 mètres de diamètre +/- (10 m x modif. de réussite).
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce pouvoir crée des perturbations qui brouillent tous les appareils de détection et de transmission dans une sphère centrée autour du personnage, leur infligeant un malus."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Cauchemar";"(X)";"INT/VOL";;"Puissance du phénomène : 12 +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+Zone d’effet : 10 mètres de diamètre +/- (2 m x modif. de réussite).
+Portée max. du centre de la zone d’effet : 50 mètres +/- (10 m x modif. de réussite).
+
+Ce pouvoir inflige de terribles visions de cauchemar à tout individu se trouvant dans la zone d’effet du phénomène. La victime doit effectuer un Test de Volonté, en opposition à la puissance du phénomène. En cas d’échec, elle est terrorisée par ces visions pendant la durée du pouvoir et subit un malus de -10 à toutes ses actions (sur une Catastrophe, elle peut même gagner une phobie définitive, à déterminer aléatoirement). Le personnage contrôlant ce pouvoir peut déplacer la zone d’effet."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Champ de Force";"(X)";"INT/VOL";;"Protection : 5 +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+
+Cet effet entoure un personnage et tout ce qui se trouve autour de lui d’un champ de force sphérique, capable d’absorber un certain nombre de points de dommages. La sphère de protection se déplace avec le personnage."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Champ moléculaire";"(X)";"INT/VOL";;"Protection : 10 +/- modif. de réussite.
+Durée : 7 Tours de combat +/- modif. de réussite.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+
+Cet effet crée un champ moléculaire de forme sphérique, capable d’absorber un certain nombre de points de dommages. À la différence du Champ de force, le Champ moléculaire peut être endommagé : sa valeur de protection est réduit d’1 point pour chaque tranche de 5 points de dommages. La sphère de protection se déplace avec le personnage."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Champ psychique";"(X)";"INT/VOL";;"Bonus au Test de Résistance au Choc : +1 +/- modif. de réussite.
+Bonus en Volonté contre les attaques mentales : +0 +/- modif. de réussite.
+Zone d’effet : 5 m² +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Cet effet entoure un personnage, et tout ce qui se trouve autour de lui, d’un champ psychique sphérique qui offre un bonus contre les attaques psychiques de Choc (de type Attaque psychique, Dague psychique, Lames psychiques…), et qui augmente la Volonté de ceux qui se trouvent derrière contre toute attaque mentale (de type Contrôle mental). La sphère de protection se déplace avec le personnage."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Contrôle mental";"(X)";"INT/VOL";;"Puissance du phénomène : 10 +/- modif. de réussite.
+Portée max. : 50 mètres + (10 m x modif. de réussite).
+Zone d’effet (libération accidentelle) : 1 m par niveau de puissance du phénomène (utiliser le modificateur d’échec).
+
+Ce pouvoir complexe, qui agit sur l’esprit de la victime, peut avoir trois utilisations différentes : la neutralisation mentale, le contrôle mental et l’emprise mentale. Dans tous les cas, la Volonté de la victime s’oppose à la puissance du phénomène. L’utilisation de ce pouvoir demande une concentration totale.
+
+Neutralisation mentale : le personnage utilisant le pouvoir tente tout simplement de stopper l’activité mentale de sa victime. Celle-ci doit réussir un Test de Volonté, en opposition à la puissance de l’effet Polaris. En cas de réussite, la victime diminue la puissance du phénomène d’un nombre de points égal à son modificateur de réussite. Le personnage utilisant le pouvoir peut continuer à l’attaquer s’il le souhaite, mais avec cette puissance réduite (sinon, il faudra activer de nouveau le pouvoir). En cas d’échec, la victime est neutralisée : elle reste debout, les bras ballants et totalement hébétée, sans rien faire et sans comprendre ce qui se passe autour d’elle. Le phénomène dure un nombre de Tours de combat égal au modificateur d’échec de la cible.
+
+Contrôle mental : pour contrôler une cible, il faut d’abord l’avoir neutralisée. Le personnage peut alors forcer la victime à refaire un Test de Volonté, en opposition à la puissance du pouvoir (notez qu’il est possible que celle-ci ait été réduite auparavant par la victime, lors de la phase de neutralisation). En cas de réussite, la victime diminue la puissance du phénomène d’un nombre de points égal à son modificateur de réussite (mais le personnage utilisant le pouvoir peut continuer à utiliser le pouvoir). Sur un échec, le personnage peut prendre le contrôle de l’esprit de la victime, pendant un nombre de Tours de combat égal à la marge d’échec de sa cible, et lui donner des ordres simples.
+
+Emprise mentale : cet effet est une manipulation lente, qui permet de contrôler un individu à plus long terme et, surtout, de modifier sa perception de la réalité. Elle ne peut s’effectuer que sur un sujet inconscient. Il faut se concentrer près de la victime pendant 2 heures pour 5 points de puissance du phénomène. La victime doit alors effectuer un Test de Volonté, en opposition à la puissance du pouvoir. Si elle réussit, elle est consciente de la tentative de manipulation et s’éveille immédiatement. Si, en revanche, c’est la tentative de contrôle qui est réussie, le joueur peut répartir son modificateur de réussite entre la durée de la domination (en jours), et une réduction temporaire de la Volonté de la victime. Tant que le niveau de cet Attribut est supérieur à 3, la victime pourra toujours effectuer un Test de Volonté (à son niveau temporaire) en opposition à la Volonté du personnage utilisant le pouvoir pour se libérer du Contrôle mental, à chaque fois qu’elle devra obéir à un ordre quelconque. Il lui suffit alors simplement de remporter l’opposition pour se libérer. Notez que la victime ne perd de la Volonté que contre le personnage utilisant le pouvoir, et uniquement pendant la période de contrôle ; cet Attribut reste intact face à tout autre adversaire.
+
+Si, lors d’un des Tests d’opposition ci-dessus, le personnage obtient une Catastrophe, il subit un malus équivalent à son modificateur d’échec à son Test de Résistance au Choc.
+La libération involontaire de ce pouvoir génère une sphère psychique d’un diamètre égal à la puissance du phénomène, en mètres. Tous ceux qui se trouvent dans cette zone (y compris l’utilisateur du pouvoir) subissent une attaque mentale dévastatrice, et doivent effectuer un Test de Volonté en opposition à la puissance du phénomène. Le modificateur de réussite de cette attaque indique le nombre de points de Volonté perdu par les victimes. Si leur Volonté tombe en dessous de 3, ils sont plongés dans un état cataleptique dont il est très difficile de sortir (traiter cela comme un coma profond, voir Choc, dans le chapitre État de santé, page 237). Si la Volonté reste égale à 3 ou plus, les points perdus se récupèrent au rythme de 1 point par heure."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Dague psychique";"(X)";"INT/VOL";;"Malus au Test de Résistance au Choc : - 3 +/- modif. de réussite.
+
+Ce pouvoir crée une dague psychique qui se matérialise au bout du poing de l’utilisateur. Le personnage doit alors utiliser sa Compétence de Combat à mains nues pour toucher sa victime et la forcer à effectuer un Test de Résistance au Choc. La marge de réussite augmente le malus au Test de Résistance au Choc. Les victimes peuvent être étourdies pendant 1D6 Tours de combat, ou inconscientes pendant 1D6 minutes. Si le pouvoir n’est pas contrôlé, il libère des Lames psychiques (voir page 259)."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Déchirure du Flux";"(X)";"INT/VOL";;"Puissance du phénomène : 15 +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+Portée max. : 15 m +/- modif. de réussite.
+
+Une déchirure du flux provoque une fissure dans la réalité, et ouvre un passage sur l’univers du Flux Polaris. Le problème est que, même contrôlé, on ne sait jamais ce qui va en résulter… La puissance du pouvoir détermine la puissance de l’effet libéré. Quand une déchirure de Flux apparaît, il faut lancer 2D10 :
+2-8 Bête du flux (voir description de l’effet ; si le pouvoir est contrôlé, le personnage peut donner des ordres à la créature).
+9-10 Onde Polaris (voir description de l’effet).
+11-16 Passage (voir description de l’effet).
+17 Tempête du flux (voir description de l’effet).
+18 Vortex physique (voir description de l’effet).
+19 Vortex psychique (voir description de l’effet).
+20 Deux effets simultanés. 
+Si le pouvoir n’est pas contrôlé, la déchirure a lieu dans un rayon de 1D100 mètres autour du personnage."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Désintégration moléculaire";"(X)";"INT/VOL";;"Dommages : 2D10 +/- modif. de réussite (1 Localisation touchée, déterminée au hasard sur la table de localisation des attaques à distance).
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+Portée max. du centre de la zone d’effet : 15 mètres +/- modif. de réussite.
+
+Ce pouvoir terrifiant permet de désintégrer la matière. Le phénomène inflige des Dommages physiques à toutes les créatures vivantes présentes dans la zone d’effet (de forme sphérique). Attention, les blessures infligées sont définitives ! Une victime subissant une Blessure grave, par exemple, voit une de ses cases de blessures graves cochée définitivement, et ne pourra pas se remettre de cette blessure ! Seul un restructurateur moléculaire (une machine généticienne), ou le pouvoir Régénération moléculaire (voir plus bas) peuvent le soigner. Les armures et les protections ne sont pas efficaces contre ce pouvoir. Si l’effet n’est pas contrôlé, le personnage libérant l’effet n’est pas affecté."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Déstructuration";"(X)";"INT/VOL";;"Puissance du phénomène : 12 +/- modif. de réussite.
+Zone d’effet : 5 mètres +/- modif. de réussite.
+Portée max. du centre de la zone d’effet : 15 mètres +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce pouvoir permet à un personnage de déstructurer temporairement la matière. Dans la zone d’effet, le personnage peut déstructurer les êtres vivants dont le niveau de Force est inférieur ou égal à la puissance du phénomène, ou les objets inanimés dont le poids en kilogrammes est inférieur ou égal à cinq fois la puissance du phénomène. Une chose déstructurée est encore visible mais elle n’est plus solide. La matière est immatérielle. On peut ainsi franchir n’importe quel obstacle (sauf les champs d’énergie). Aucune attaque ne peut l’affecter, sauf les armes énergétiques. Une créature déstructurée peut voler. Un restructurateur de matière (appareil généticien) permet de se restructurer instantanément. De plus, un personnage peut tenter d’utiliser ce pouvoir à son tour pour inverser automatiquement le processus.
+
+Si le pouvoir n’est pas contrôlé, tout ce qui se trouve dans la sphère d’effet (quels que soient sa taille ou son volume) est déstructuré (y compris le personnage libérant l’effet). Les créatures vivantes doivent réussir un Test de Volonté, en opposition à la puissance du phénomène, pour retrouver sa cohésion. Chaque victime a droit à un Test par Tour de combat, jusqu’à la fin de la durée de l’effet, jusqu’à ce qu’elle réussisse. Si elle rate tous ses Tests, elle a droit à un dernier Test de Chance, sinon sa cohésion moléculaire se désagrège. Elle est alors désintégrée. Pour du matériel (robots, machines et drones également), la restructuration se fait automatiquement au bout de 1D6 minutes."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Disruption moléculaire";"(X)";"INT/VOL";;"Dommages : 2D10 +/- modif. de réussite (2 Localisations touchées, déterminées au hasard sur la table de localisation des attaques à distance).
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+Portée max. du centre de la zone d’effet : 15 mètres +/- modif. de réussite.
+
+Ce phénomène inflige des Dommages physiques à tout ce qui se trouve dans la zone d’effet (de forme sphérique). Ces dommages peuvent être soignés normalement. Les armures et les protections ne sont pas efficaces contre ce pouvoir."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Foudre";"(X)";"INT/VOL";;"Dommages physiques : 2D10+3 +/- modif. de réussite (1 Localisation touchée, déterminée au hasard sur la table de localisation des attaques à distance).
+Attaque IEM : le malus au Test de panne est égal à -3, moins le modif. de réussite.
+Portée max. : 15 mètres +/- modif. de réussite.
+Zone d’effet (libération accidentelle) : 5 mètres de diamètre + modif. d’échec.
+
+Ce pouvoir permet de libérer un éclair infligeant des Dommages physiques à une cible. S’il s’agit d’un appareil électronique, celui-ci est soumis à une attaque IEM (« Impulsion électromagnétique »), qui impose un Test de panne (voir le chapitre Équipement, page 273). Les armures et les protections agissent normalement contre ce pouvoir. Si le pouvoir n’est pas contrôlé, l’attaque affecte tout ce qui se trouve dans la zone d’effet, y compris le personnage."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Guérison psychique";"(X)";"INT/VOL";;"Puissance du phénomène (élimination des suggestions hypnotiques) : 12 +/- modif. de réussite.
+Durée (annulation du stress) : 3 Tours de combat +/- modif. de réussite.
+
+Note : le personnage peut utiliser ce pouvoir sur lui-même.
+
+Grâce à ce pouvoir, le personnage peut annuler les effets de Choc (étourdissement et inconscience). Il est même possible de faire sortir quelqu’un du coma (voir « Choc », dans le chapitre « État de santé »), mais l’utilisateur du pouvoir subira alors un malus de -3 si la cible est plongée dans un coma léger, et de -5 en cas de coma profond. Cet effet est instantané.
+Une utilisation plus complexe de ce pouvoir permet de débarrasser l’esprit d’une cible de toute trace de suggestion hypnotique ou de domination mentale (imposé par exemple par le pouvoir Contrôle mental). Pour cela, il faut que la puissance du phénomène soit supérieure à la Volonté de l’individu ayant implanté la suggestion hypnotique (dans le cas de l’hypnose) ou à la puissance du Contrôle mental. Il faut également passer du temps avec le personnage ciblé : 1 heure pour 5 points de la puissance du pouvoir. Enfin, ce pouvoir peut également être utilisé pour annuler temporairement les effets du stress, de la peur, de la panique, etc.
+
+Si le pouvoir n’est pas contrôlé, il est l’équivalent d’une Attaque psychique."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Guérison moléculaire";"(X)";"INT/VOL";;"Note : le personnage peut utiliser ce pouvoir sur lui-même.
+
+Le personnage peut guérir des blessures physiques (Localisation par Localisation). Le Test de Guérison moléculaire subit les mêmes malus dus à la gravité de la blessure que les Tests de Premiers soins ou de Médecine (voir Soins et guérison, dans le chapitre État de santé, page 237). Si le Test est réussi, la Localisation soignée récupère immédiatement un nombre de cases de blessures équivalent au modificateur de réussite. Ce pouvoir peut aussi être utilisé pour stabiliser une blessure (les malus de stabilisation des blessures s’appliquant aussi). En cas de réussite, la blessure est stabilisée, mais il faudra tout de même la soigner ou réutiliser le pouvoir pour la guérir.
+
+Si le pouvoir n’est pas contrôlé, il est l’équivalent d’une Disruption moléculaire."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Lames d'énergie";"(X)";"INT/VOL";;"Nombre de lames d’énergie : 1 + modif. de réussite.
+Dommages : 2D10, +2 points par lame supplémentaire. Il est possible de répartir les lames d’énergie pour attaquer plusieurs adversaires.
+Portée : 15 mètres +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce pouvoir crée un certain nombre de lames d’énergie qui infligent des Dommages physiques. Si le pouvoir est contrôlé, le PJ choisit ses victimes tant qu’il peut les voir. Le Test d’attaque s’effectue avec la Compétence Lames d’énergie. Les armures et les protections agissent normalement contre ce pouvoir. Si le pouvoir n’est pas contrôlé, les lames attaquent 1D4 cible(s) au hasard à chaque Tour de combat. Il faut effectuer un Test d’attaque avec une « Compétence » de 10 + modif. de réussite."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Lames psychiques";"(X)";"INT/VOL";;"Nombre de lames psychiques : 1 + modif. de réussite.
+Malus au Test de Résistance au Choc : Test normal pour la première lame, puis -2 par lame supplémentaire. Il est possible de répartir les lames psychiques pour attaquer plusieurs adversaires.
+Portée : 15 mètres +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce pouvoir crée un certain nombre de lames d’énergie qui obligent les victimes à effectuer un Test de Résistance au Choc. Si le pouvoir est contrôlé, le PJ choisit ses victimes tant qu’il peut les voir. Le Test d’attaque s’effectue avec la Compétence Lames psychiques. Les armures et les protections sont inefficaces contre ce pouvoir.
+
+Si le pouvoir n’est pas contrôlé, les lames attaquent 1D4 cible(s) au hasard à chaque Tour de combat. Il faut effectuer un Test d’attaque avec une « Compétence » de 10 + modif. de réussite."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Mangeur d'esprit";"(X)";"INT/VOL";;"Distance max. d’apparition de la créature : 5 mètres +/- modif. de réussite.
+Puissance de la créature : 12 +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce pouvoir est semblable à Bête du flux, mais il permet d’appeler un mangeur d’esprit, une créature immatérielle cauchemardesque qui ne possède qu’un seuil de mort (30) et qu’un seul Attribut, la Volonté, dont le niveau est égal à la puissance du phénomène. Si le PJ contrôle le pouvoir, il peut donner des ordres à la créature. La créature n’est vulnérable qu’aux attaques énergétiques. Elle agit toujours en premier et n’attaque qu’une seule fois par Tour de combat. Elle se déplace à une vitesse égale à sa Volonté, en mètres. Quand elle attaque, elle tente de dévorer l’esprit de sa proie. Cette attaque doit être résolue par un Test de Volonté en opposition entre la créature et sa victime. Si la créature gagne, elle absorbe un nombre de points de Volonté égal à son modificateur de réussite. S’il y a égalité, ou si la victime l’emporte, il ne se passe rien. Si la Volonté de la victime tombe à 0, elle n’est plus qu’une enveloppe vide. Sinon, elle regagnera immédiatement tous ses points de Volonté une fois la créature partie ou détruite. Détruire un mangeur d’esprit libère un effet incontrôlé d’Attaque psychique, à une puissance égale à la Volonté de la créature.
+
+Si le PJ ne contrôle pas ce pouvoir, la créature apparaît à 1D10 mètres et s’attaque à tout ce qui bouge…"
+"Compétences Spéciales_";"Pouvoirs Polaris";"Masse de destruction";"(X)";"INT/VOL";;"Distance max. d’apparition de la créature : 5 mètres +/- modif. de réussite.
+Taille de la créature : 1 m² +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Cet épouvantable pouvoir permet de créer une déchirure de la réalité et de libérer une masse gélatineuse noire qui détruit tout ce qui vit. Si le PJ contrôle le pouvoir, il peut donner des ordres à la créature pendant la durée de l’effet. La masse de destruction est indestructible, et se déplace toujours à une vitesse d’1 mètre par Tour de combat. Tout ce qu’elle rencontre subit 3D10 points de Dommages physiques sur 1 Localisation déterminée au hasard sur la table de localisation des attaques à distance. Si la victime ne bouge pas, la masse gélatineuse touchera une Localisation supplémentaire à chaque Tour de combat. Les blessures qu’elle inflige sont définitives (voir Désintégration moléculaire). La taille de la créature dépend de la marge de réussite.
+
+Si le PJ ne contrôle pas ce pouvoir, la créature apparaît à 1D10 mètres et s’attaque à tout ce qui bouge pendant la durée de l’effet."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Modification de la masse";"(X)";"INT/VOL";;"Puissance du phénomène : marge de réussite du Test (ou marge d’échec en cas de libération accidentelle).
+Portée : 15 mètres +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce pouvoir permet d’augmenter ou de réduire la masse d’un individu ou d’un objet. Le poids de la cible peut ainsi être modifié d’une valeur maximale égale à (puissance du phénomène) x 10 kg. Physiquement, la cible ne change pas, et garde la même taille.
+Dans le cas d’une augmentation de masse, le MJ est libre de réduire les mouvements du personnage, en fonction du poids supplémentaire. Si la puissance du phénomène est supérieure à la Force de la cible, celle-ci est coulée au sol à cause de son propre poids et ne peut plus se déplacer. De plus, elle doit effectuer à chaque Tour de combat un Test de Résistance au Choc, avec un malus égal à la différence entre sa Force et la puissance de l’effet. Si la victime perd connaissance, elle subit à chaque Tour de combat des Dommages physiques équivalents à 1D10, plus la différence entre sa Force et la puissance de l’effet (localisé dans le Corps), à cause de l’écrasement des tissus vivants.
+Si on réduit la masse, le MJ est libre d’augmenter les capacités de déplacement de la cible. Notez que si son poids tombe à 0, le personnage peut flotter.
+
+Si le pouvoir n’est pas contrôlé, tout ce qui se trouve dans une sphère dont le diamètre est égal à la portée autour du personnage voit sa masse réduite ou augmentée par l’intensité du phénomène. À chaque Tour de combat, pendant toute la durée de l’effet, le MJ lance 1D10. La masse est augmentée sur un résultat pair, et réduite sur un résultat impair. Le personnage ayant libéré le phénomène subit également ses effets."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Modification de la pression";"(X)";"INT/VOL";;"Puissance du phénomène : 5 +/- modif. de réussite.
+Zone d’effet : 10 mètres de diamètre +/- (10 m x modif. de réussite).
+Portée : 15 mètres +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+La pression est augmentée ou diminuée de l’équivalent de 100 mètres de profondeur pour chaque point de puissance du phénomène, dans une zone d’effet de forme sphérique.
+
+Si le pouvoir n’est pas contrôlé, tout ce qui se trouve dans la sphère autour du personnage subit les effets de la pression. À chaque tour, pendant toute la durée de l’effet, le MJ lance 1D10. La pression est augmentée sur un résultat pair, et réduite sur un résultat impair. Le personnage ayant libéré le phénomène subit également ses effets."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Modification de la température";"(X)";"INT/VOL";;"Puissance du phénomène : marge de réussite du Test (ou marge d’échec en cas de libération accidentelle).
+Zone d’effet : 10 mètres de diamètre +/- (10 m x modif. de réussite).
+Portée : 15 mètres +/- modif. de réussite. Durée : 5 Tours de combat +/- modif. de réussite.
+
+La température est augmentée ou diminuée de 2 degrés pour chaque point de puissance du pouvoir, dans une zone d’effet de forme sphérique.
+
+Si le pouvoir n’est pas contrôlé, tout ce qui se trouve dans la sphère autour du personnage subit les effets de la température. À chaque tour, pendant toute la durée de l’effet, le MJ lance 1D10. La température est augmentée sur un résultat pair, et réduite sur un résultat impair. Le personnage ayant libéré le phénomène subit également ses effets."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Oblitération psychique";"(X)";"INT/VOL";;"Malus au Test de Résistance au Choc : +0 +/- modif. de réussite.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+Portée max. du centre de la zone d’effet : 15 m +/- modif. de réussite.
+
+Ce pouvoir vise à détruire la conscience d’une cible, et force les êtres vivants présents dans la zone d’effet à effectuer un Test de Résistance au Choc. La marge de réussite augmente le malus au Test de Résistance au Choc. Les victimes peuvent être étourdies pendant 2D6 Tours de combat, ou inconscientes pendant 2D6 minutes. Si elles tombent inconscientes, les victimes perdent un nombre de points de Volonté équivalent au modificateur d’échec obtenu lors du Test de Résistance au Choc. Si leur Volonté tombe à moins de 3, elles sont plongées dans un coma profond et quasi définitif. Seul un restructurateur moléculaire (machine généticienne), ou le pouvoir Régénération moléculaire (voir plus bas) peuvent le soigner.
+
+Si ce pouvoir est libéré accidentellement, le personnage à l’origine de l’incident Polaris n’est pas affecté."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Onde de choc";"(X)";"INT/VOL";;"Nombre d’ondes de choc : 1 + modif. de réussite.
+Dommages (par onde de choc) : 2D10 +/- modif. de réussite.
+
+Ce pouvoir libère des vagues de choc concentriques qui s’étendent autour du personnage. Ces vagues dévastent tout sur leur passage. Si l’effet est contrôlé, le personnage libère un certain nombre d’ondes de choc, chacune infligeant des Dommages physiques. Ces dommages sont toutefois réduits de 2 points par mètre d’éloignement par rapport au personnage. Les vagues se succèdent à un intervalle de 3 points d’Initiative. L’effet se déplace avec le personnage. Tant qu’il n’est pas détruit, un obstacle peut bloquer ces vagues.
+
+Si l’effet n’est pas contrôlé, le personnage doit reprendre le contrôle en réussissant un Test de Maîtrise de la Force Polaris, pour arrêter l’émission des ondes de choc. Il ne subit lui-même aucun dommage."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Onde de choc psychique";"(X)";"INT/VOL";;"Nombre d’ondes de choc psychiques : 1 + modif. de réussite.
+Dommages additionnels de Choc (par onde de choc) : 3D10 +/- modif. de réussite.
+
+Ce pouvoir est identique à Ondes de choc, mais il n’inflige que des Dommages additionnels de Choc. Aucun obstacle ne peut bloquer ces vagues."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Onde Polaris";"(X)";"INT/VOL";;"Puissance du phénomène : 1 +/- modif. de réussite.
+Dommages : voir Attaque psychique, Disruption moléculaire et Pulsion électromagnétique.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite. Portée max. du centre de la zone d’effet : 15 m +/- modif. de réussite.
+
+L’Onde Polaris est un des pouvoirs les plus puissants qui soient. Il cumule les effets des pouvoirs Attaque psychique, Disruption moléculaire et Pulsion électromagnétique. De plus, il projette dans le futur ou dans le passé tous ceux qui se trouvent dans la sphère d’effet. Le saut temporel est totalement aléatoire. Quand le pouvoir prend fin, l’onde réapparaît et renvoie les personnages à leur point de départ, au moment exact où ils ont disparu. Même contrôlé, celui qui libère cet effet ne peut le déplacer. Celui-ci est forcément centré autour du personnage, qui subit également le déplacement temporel (mais pas les autres effets). Les personnages sont transportés soit dans le futur (1-5 sur 1D10), soit dans le passé (6-10 sur 1D10). Pour déterminer l’importance du saut temporel, lancez 2D10 dans le tableau ci-dessous :
+1-5 Puissance du phénomène, en heures.
+6-10 Puissance du phénomène, en années.
+11-14 Puissance du phénomène, en dizaines d’années.
+15-17 Puissance du phénomène, en centaines d’années.
+18-19 Puissance du phénomène, en milliers d’années.
+20 Puissance du phénomène, en million d’années.
+
+Les personnages restent bloqués dans le futur ou le passé pendant un certain temps déterminé par le tableau ci-dessous (il s’agit de la période qui s’écoule lors du saut temporel, dans une époque passée ou future, et non du temps pendant lequel ils disparaissent). Lancez 2D10 pour déterminer la durée du séjour :
+1-5 Puissance du phénomène x 1D10 Tours de combat.
+6-10 Puissance du phénomène x 1D10 minutes.
+11-14 Puissance du phénomène x 1D10 heures.
+15-17 Puissance du phénomène x 1D10 jours.
+18-19 Puissance du phénomène x 1D10 semaines.
+20 Puissance du phénomène x 1D10 mois."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Pacification";"(X)";"INT/VOL";;"Puissance du phénomène : 12 +/- modif. de réussite.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+L’utilisateur de ce pouvoir peut modifier l’état d’esprit d’une cible, soit pour l’apaiser, soit pour la rendre folle furieuse (au choix). Tous ceux qui se trouvent dans la zone d’effet (sauf celui qui a libéré le pouvoir) doivent effectuer un Test de Volonté en opposition à la puissance du phénomène. En cas d’échec, l’utilisateur du pouvoir choisit l’effet qu’à le pouvoir sur eux. Ce pouvoir ne peut être déplacé et est toujours centré autour de celui qui l’a libéré (ce dernier n’est pas affecté). Une cible apaisée est incapable de combattre et se calme instantanément, même si on l’attaque (elle tente uniquement de se défendre). Une cible rendue folle furieuse attaque la cible la plus proche d’elle, même s’il s’agit d’un ami.
+
+Si le pouvoir n’est pas contrôlé, chaque cible potentielle est soit apaisée (1-5 sur 1D10), soit folle furieuse (6-10 sur 1D10)."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Passage";"(X)";"INT/VOL";;"Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce pouvoir crée une déchirure entre notre monde et celui du Flux Polaris. Il est possible d’emprunter ce passage pour se déplacer instantanément d’un point du globe à un autre. Le passage reste ouvert dans les deux sens pendant toute la durée de l’effet et accepte des êtres vivants de taille humaine. Si le pouvoir est contrôlé, le personnage choisit sa destination (il doit obligatoirement être allé dans cet endroit).
+Par un Passage, un individu voyage au travers du Flux pour se rendre d’un point à un autre, mais cela comporte certains dangers. Tout d’abord, quand un passage s’ouvre, il y a toujours un risque qu’il permette à une créature du Flux d’entrer dans notre monde. À chaque tour, le MJ lance 1D10. S’il obtient un 1, une créature apparaît. Lancez alors 2D10 sur la table suivante :
+1-15 Bête du flux.
+16-17 Mangeur d’esprit.
+18-19 Masse de destruction.
+20 Entité (voir Le Flux Polaris, page 265).
+
+La créature aura une puissance égale à 2D10 et restera pendant 1D10 Tours de combat.
+Enfin, chaque personnage qui utilise le Passage peut se perdre physiquement dans le Flux. Il faut effectuer un Test de Volonté pour éviter cela. Si le pouvoir est contrôlé, l’utilisateur gagne pour ce Test un bonus égal à son modificateur de réussite. Tout individu échouant à ce Test de Volonté se perd dans le Flux. Il faut alors lancer 2D10 pour savoir ce qui lui arrive :
+2-11 Réapparaît à l’endroit où s’est ouvert le passage 1D10 minutes plus tard.
+12-15 Possédé.
+16-17 Prisonnier de l’Autre (voir Prescience).
+18-19 Réapparaît n’importe où dans le monde.
+20 Perdu à jamais (il peut être récupéré par un personnage se plongeant délibérément dans le Flux).
+
+Un personnage possédé peut réapparaître tout à fait normalement comme si rien ne s’était passé (1-5 sur 1D10) ou 1D100 minutes plus tard (6-10 sur 1d10). Tout individu empruntant un Passage peut volontairement choisir de se plonger physiquement dans le Flux Polaris. La possession, la plongée dans le Flux et la récupération d’un personnage perdu dans le Flux sont détaillées dans la section Le Flux Polaris, page 265.
+
+Si le pouvoir n’est pas contrôlé, la destination est totalement inconnue (remarquez qu’il suffit de ne pas s’engouffrer dans le passage pour ne pas prendre de risques)."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Perception de la réalité";"(X)";"INT/VOL";;"Malus aux actions : -1 - modif. de réussite.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+Portée max. du centre de la zone d’effet : 15 m +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+La réalité semble distordue sous l’effet de cette perturbation. Les distances ne sont plus estimables, les sens sont perturbés, etc. Pendant toute la durée du pouvoir, toutes les actions effectuées dans la sphère d’effet subissent un malus."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Prescience";"(X)";"INT/VOL";;"Ce pouvoir permet d’entrevoir un avenir proche. En se concentrant sur une action, un individu, un événement, un lieu, etc., on peut percevoir une image très floue du futur (en cas de déclenchement involontaire, c’est au MJ de déterminer à quoi ou à qui se rapportera cette vision). Un personnage qui utilise ce pouvoir se retrouve plongé dans la Force Polaris, et son esprit ne fait plus qu’un avec l’océan et les mammifères marins. Ce phénomène est une expérience à la fois magnifique et terriblement inquiétante, dans un univers où la présence sinistre de « l’Autre », une entité mystérieuse qui hante le Polaris, est omniprésente.
+Avant de faire le Test, le joueur doit choisir une unité de temps, qui déterminera le modificateur de Difficulté :
+• Seconde : +0
+• Tour de combat : -3
+• Minute : -5
+• Heure : -7
+• Jours : -10
+À l’issue du Test, l’utilisateur du pouvoir peut entrevoir le futur, jusqu’à un nombre d’unités de temps équivalent à sa marge de réussite. Si ce pouvoir n’est pas contrôlé, lancez 1D10 dans la table suivante pour déterminer la portée de la vision :
+1-2 1D100 secondes.
+3-4 1D100 tours.
+5-6 1D100 minutes.
+7-8 1D100 heures.
+9-10 1D100 jours.
+
+Ce pouvoir dure un nombre de Tours de combat égal à la moitié du niveau de maîtrise du personnage dans la Compétence Prescience. L’utilisation du pouvoir permet surtout de ressentir des impressions, des sentiments ou des sensations, et non des images vraiment précises. Ainsi, on percevra plutôt une impression vague de danger, plutôt que la nature exacte du danger. Plus la période visée est lointaine, plus les visions seront floues. Néanmoins, le joueur peut sacrifier quelques points de sa marge de réussite pour obtenir plus de détails : son personnage verra donc moins loin dans le futur, mais sa vision sera plus précise. À titre indicatif, le meneur de jeu peut par exemple ajouter un détail - tout en restant relativement vague - pour chaque tranche de 2 points sacrifiée.
+Sur une Catastrophe (que le pouvoir soit déclenché volontairement ou non), il y a toujours 1 chance sur 20 (1 sur 1D20) d’embrasser le futur dans sa totalité. Cela est généralement terrible pour le malheureux qui doit effectuer un Test d’Intelligence. Le modificateur de réussite de ce jet déterminera le nombre de points de Volonté et d’Intelligence PERDUS par le personnage… En effet, il aura eu pleinement conscience des choses qu’il a vues, bien qu’il soit ensuite incapable de s’en souvenir. Si le Test d’Intelligence est raté, la victime perd connaissance pendant 1D10 heures. Son Intelligence et sa Volonté tombent à 1 et se régénéreront au rythme de 1 point toutes les heures.
+Enfin, une personne utilisant ce pouvoir peut avoir à affronter l’Autre (voir Les Entités, dans Le Flux Polaris, page 266). Ce dernier a une chance sur 20 d’intervenir (1 sur 1D20). Dans ce cas, l’utilisateur ressentira une présence terriblement angoissante. Il subira immédiatement une attaque psychique, et devra remporter un Test de Volonté en opposition à une Volonté de 20. Le modificateur de réussite du vainqueur réduit alors temporairement la Volonté de l’opposant. Si le personnage réussit le Test d’opposition, il peut alors se désengager et reprendre conscience sans autre effet secondaire. Sinon, le duel continue, par le biais d’autres Tests d’opposition. Si la Volonté du personnage tombe à moins de 3, celui-ci se retrouve prisonnier de l’Autre. Ce dernier peut choisir de le détruire (on refait un duel, la victime peut donc avoir une autre chance de reprendre conscience), de l’emprisonner (la victime est plongée dans le coma), ou de la manipuler (la victime est sous la domination de l’Autre. Elle peut, chaque jour, effectuer un Test de Volonté, avec un malus de -20, qui est toutefois réduit d’1 point par semaine. Une réussite permet de se libérer de la domination de l’Autre)."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Prison mentale";"(X)";"INT/VOL";;"Puissance du phénomène : 12 +/- modif. de réussite.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+
+L’effet de ce pouvoir s’attaque à l’esprit de tout ce qui se trouve dans une sphère autour du personnage. Le pouvoir se libère instantanément mais ses effets peuvent se prolonger dans le temps. La victime doit faire un Test de Volonté en opposition à la puissance du phénomène. Si elle obtient la meilleure marge de réussite (ou en cas d’égalité), rien ne se passe. Si elle échoue, son esprit est emprisonné dans le Flux pendant un nombre de Tours égal à la marge de réussite du phénomène. Pire, à la fin du temps d’emprisonnement, il faut refaire le Test d’opposition, mais la puissance du phénomène est réduite d’1 point. Quand un personnage est victime de ce pouvoir, son esprit est emprisonné dans son propre corps. Il ne perçoit plus son environnement et ne peut plus contrôler son organisme. Son corps est inerte tant qu’il est sous l’effet de sa prison mentale.
+
+Si ce pouvoir n’est pas contrôlé, il affecte également celui qui le libère."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Pulsion électromagnétique";"(X)";"INT/VOL";;"Attaque IEM : le malus au Test de panne est égal au modif. de réussite.
+Zone d’effet : 100 mètre de diamètre +/- (100 m x modif. de réussite).
+Portée : 100 mètres +/- (100 m x modif. de réussite).
+
+Ce pouvoir permet de libérer une onde électromagnétique dans la zone d’effet. Il faut effectuer un Test de panne pour tous les appareils électroniques (voir le chapitre Équipement, page 273)."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Régénération moléculaire";"(X)";"INT/VOL";;"Zone d’effet (libération accidentelle) : 5 mètres de diamètre +/- modif. d’échec.
+
+Ce pouvoir permet de régénérer des tissus endommagés. L’utilisation la plus commune de ce pouvoir est le soin des dégâts permanents (dus par exemple à une Désintégration moléculaire ou une Oblitération psychique). Dans ce cas, on utilise ce pouvoir comme un pouvoir de guérison normal, mais il ne peut être utilisé QUE pour soigner des dégâts permanents (voir Guérison moléculaire ou Guérison psychique).
+Ce pouvoir permet aussi de ralentir le vieillissement. Chaque année, l’utilisateur peut tenter de neutraliser le vieillissement de l’année écoulée. S’il réussit son Test de Régénération moléculaire, son corps n’a pas vieilli ; s’il échoue, il vieillit normalement ; s’il obtient un échec critique, il vieillit d’1 an supplémentaire. Le Test subit toutefois un malus d’une valeur égale à l’âge du personnage divisé par 5 (par exemple -7 à 35 ans).
+
+La libération incontrôlée de ce pouvoir peut avoir des effets dramatiques. En effet, les volutes d’énergie qui s’échappent de l’utilisateur peuvent être soit bleutées (tout va bien, les personnages bénéficient d’une régénération normale), soit rougeâtres (et là, il y a un problème). Dans ce dernier cas, toute personne et toute chose dans la zone d’effet subit l’équivalent d’une Désintégration moléculaire (le bonus aux dommages est égal au modificateur d’échec de l’individu à l’origine de l’incident Polaris), qui crée des blessures permanentes…"
+"Compétences Spéciales_";"Pouvoirs Polaris";"Sensibilité psychique";"(X)";"INT/VOL";;"Zone d’effet : 15 mètres de diamètre +/- (10 m x modif. de réussite).
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce pouvoir permet de localiser les êtres vivants dans un certain rayon. Le personnage peut effectuer un Test de Compétence pour savoir s’il détecte ou non un être vivant. Le Test est modifié par la différence entre l’Attribut Volonté de l’utilisateur et l’Attribut Volonté de la cible. De plus, l’utilisateur bénéficie d’un bonus à tous ses Tests de Perception, égal à son modificateur de réussite.
+
+Si le pouvoir n’est pas contrôlé, il parasite tous les modes de perception des individus situés dans la zone de détection (y compris le personnage), qui subissent une pénalité à toutes leurs actions, égale au modificateur d’échec."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Siphon d'énergie";"(X)";"INT/VOL";;"Zone d’effet : 15 mètres de diamètre +/- (10 m x modif. de réussite).
+Portée max. du centre de la zone d’effet : 15 m +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce pouvoir annule toute énergie dans la zone d’effet, pendant toute la durée du phénomène."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Sonscan";"(X)";"INT/VOL";;"Puissance du phénomène : 10 +/- modif. de réussite.
+Zone d’effet : 15 mètres de diamètre +/- (10 m x modif. de réussite).
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce pouvoir permet de localiser et d’analyser plusieurs cibles dans un certain périmètre. Le joueur peut effectuer un Test avec un niveau équivalent à la puissance du phénomène. En cas de réussite, il localise les cibles présentent dans le périmètre, sa marge de réussite indiquant la précision de son analyse.
+
+Si le pouvoir n’est pas contrôlé, il parasite tous les modes de perception des individus situés dans la zone de détection (y compris le personnage), qui subissent une pénalité à toutes leurs actions, égale au modificateur d’échec."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Sphère de gravité";"(X)";"INT/VOL";;"Puissance du phénomène : 12 +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+Zone d’effet : 15 mètres de diamètre +/- modif. de réussite.
+
+Ce pouvoir crée autour du personnage une sphère de gravité attirant vers elle tout ce qui se trouve dans la zone d’effet. Tout objet dont le poids est inférieur ou égal à (puissance du phénomène x 10 kg) se rapproche du personnage. Les êtres vivants peuvent résister à la force d’attraction en réussissant un Test de Force en opposition contre la puissance du phénomène. S’ils réussissent, ils peuvent s’éloigner d’une distance maximale égale à leur modificateur de réussite. Le Test doit être refait à chaque Tour de combat. Pour les objets, la vitesse d’attraction en mètres par Tour est égale à la différence entre le poids de l’objet et la puissance du phénomène (en dizaines de kg). Toute personne se trouvant sur la trajectoire d’un corps attiré risque de subir entre 1 et 3D10 points de Dommages physiques, selon la vitesse et le poids de l’objet (un Test de Coordination permet d’éviter ça). Le personnage utilisant le pouvoir peut annuler l’attraction sur tout ce qui se trouve à moins d’1 mètre de lui.
+
+Si le pouvoir n’est pas contrôlé, il n’arrête rien du tout et peut se retrouver écrasé par tout ce qui a été attiré. Dans ce cas, non seulement il subit les dommages des objets qui le heurtent mais en plus, à chaque Tour, la base des dommages est augmentée d’1 point à cause de l’écrasement."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Sphère de répulsion organique";"(X)";"INT/VOL";;"Puissance du phénomène : 12 +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+
+Ce pouvoir crée autour du personnage une sphère qui empêche tout élément organique d’approcher. Toute créature organique tentant d’y pénétrer doit réussir un Test de Force en opposition à la puissance du phénomène. Si elle réussit son jet, elle peut avancer d’une distance maximale égale à son modificateur de réussite. Toute créature organique se trouvant dans la sphère au moment où le pouvoir est utilisé n’est pas affectée.
+
+Si le pouvoir n‘est pas contrôlé, toute créature organique se trouvant entre le personnage et la limite du périmètre d’effet est violemment projetée hors de la sphère (à traiter comme une chute). Si une créature organique est coincée par un obstacle qui l’empêche de quitter la zone d’effet, elle subit 2D10 points de Dommages physiques dus à l’écrasement par Tour de combat."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Sphère temporelle";"(X)";"INT/VOL";;"Puissance du phénomène : 5 +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+
+Ce pouvoir crée une sphère isolant ce qui se trouve dedans de ce qui se trouve à l’extérieur. En fait, le temps s’écoule différemment à l’intérieur de la sphère et à l’extérieur, plus vite ou moins vite, au choix du personnage. Rien ne peut franchir la barrière de la sphère pendant que le pouvoir agit. Si le temps passe plus vite à l’intérieur, le nombre de Tours qui se seront écoulés dans la sphère sera égal à la puissance du phénomène pour chaque Tour écoulé à l’extérieur. Si le temps passe moins vite à l’intérieur, le nombre de tours qui se seront écoulés à l’extérieur sera égal à la puissance du phénomène pour chaque tour écoulé dans la sphère. La durée de l’effet est comptée en fonction du passage du temps le plus lent. Il est impossible de se déplacer avec la sphère."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Sphère de terreur";"(X)";"INT/VOL";;"Puissance du phénomène : 12 +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+
+Ce pouvoir crée autour du personnage une sphère qui oblige toute créature qui y entre (amie ou ennemie) à réussir un Test de Volonté en opposition à la puissance du phénomène. En cas d’échec, la victime est terrorisée pendant 1D10 Tours."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Télékinésie";"(X)";"INT/VOL";;"Puissance du phénomène : 12 +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+Zone d’effet (libération accidentelle) : 5 mètres de diamètre +/- modif. d’échec.
+
+Ce pouvoir permet de déplacer des objets par la pensée. La « Force télékinétique » du personnage est égale à la puissance du phénomène, et est comparable à l’Attribut Force d’un individu. Ce potentiel peut être utilisé pour déplacer ou soulever des objets, comme s’il s’agissait de l’Attribut Force de n’importe quel personnage. Pour effectuer une attaque avec un objet manipulé à distance, le personnage doit effectuer un nouveau Test de Télékinésie. Même chose pour des manipulations délicates, mais le MJ est libre de lui imposer des malus en fonction de la difficulté de sa tâche (notez qu’utiliser une arme à feu est une manipulation jugée délicate…). Tous les équipements des personnages qui ne sont pas bien accrochés peuvent être arrachés. On peut arracher un objet des mains d’un individu mais, dans ce cas, il faut effectuer un Test en opposition entre la puissance du phénomène et la Force du personnage tenant l’objet. Un personnage peut tenter de dépasser les limites de son potentiel télékinétique, mais il doit alors effectuer un Test de Résistance au Choc avec un malus égal au nombre de points supérieurs à son niveau de Force télékinétique.
+
+Si l’effet n’est pas contrôlé, ce pouvoir est dévastateur. Pendant toute la durée du phénomène, tous les objets qui se trouvent autour du personnage dans la zone d’effet et dont le poids peut être déplacé par le niveau de Force équivalent à la puissance du phénomène se mettent à voler dans tous les sens. Toute personne se trouvant dans la zone subit entre 1 et 3D10 points de Dommages physiques. Les victimes peuvent tenter d’esquiver les objet par des Tests de Coordination."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Téléportation";"(X)";"INT/VOL";;"Puissance du phénomène : 12 +/- modif. de réussite.
+Zone d’effet : 5 mètres de diamètre +/- modif. de réussite.
+Portée : 30 mètres +/- (10 m x modif. de réussite).
+
+Ce pouvoir permet de téléporter un personnage ou un objet d’un poids égal à (puissance du phénomène x 10 kg), et se trouvant dans la zone d’effet. Un personnage qui contrôle le phénomène peut choisir la direction. Un personnage téléporté dans un objet ou un mur réapparaît à côté. Par contre, on peut tout à fait téléporter quelqu’un sous l’eau.
+
+Si l’effet n’est pas contrôlé, la direction est déterminée aléatoirement par un jet d’1D10 (1 : haut, 2 : bas, 3 : est, 4 : ouest, 5 : nord, 6 : sud, 7 : nord-est, 8 : sud-est, 9 : sud-ouest, 10 : nordouest)."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Tempête du Flux";"(X)";"INT/VOL";;"Dommages physiques : 2D10 +/- modif. de réussite.
+Zone d’effet : 15 mètres +/- (10 m x modif. de réussite).
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Une tempête du Flux est généralement signe de désastre. Ce pouvoir crée de terribles perturbations dans le Flux, qui se matérialisent dans la réalité par un maelström, aussi bien sous l’eau qu’à l’air libre. Autour du personnage libérant l’effet, le maelström s’étend sur un rayon dépendant de la puissance du phénomène. Le personnage est à l’abri (même si le pouvoir n’est pas contrôlé) ainsi que tous ceux qui se trouvent dans un rayon de 1 mètre autour de lui. L’effet commence par un tourbillon de vapeurs sombres qui se mettent à tourner tout autour du personnage, puis des éclairs frappent tout ce qui se trouve dans la zone d’effet. Chaque cible potentielle doit réussir à chaque Tour un Test de Chance. Si ce Test est raté, un éclair la frappe de plein fouet en infligeant des Dommages physiques. De plus, l’éclair inflige des dommages à tout ce qui se trouve autour du point d’impact. Les dégâts sont réduits de 2 points par mètre d’éloignement."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Tourbillon";"(X)";"INT/VOL";;"Puissance du phénomène : 10 +/- modif. de réussite.
+Portée : 100 mètres +/- (100 m x modif. de réussite).
+
+Ce pouvoir crée un siphon (voir le chapitre L’univers sousmarin, page 69) de taille égale à la puissance du phénomène, en mètres. Il n’est pas centré autour du personnage et apparaît dans les mêmes conditions qu’un siphon normal. Un personnage qui le contrôle peut déplacer le centre du phénomène.
+Attention ! Ce pouvoir ne permet pas de contrôler un siphon formé naturellement."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Tourbillon de la mort";"(X)";"INT/VOL";;"Dommages physiques : 2D10 +/- modif. de réussite.
+Zone d’effet : 5 mètres +/- modif. de réussite.
+Déplacement : 5 mètres +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Ce pouvoir crée un tourbillon d’énergie crépitante noire, qui se déplace plus ou moins rapidement. Tout ce qui entre en contact avec ce phénomène subit des Dommages physiques. Aucune armure ne protège contre cet effet. Si l’effet n’est pas contrôlé, la direction est déterminée aléatoirement par un jet d’1D10 (1-2 : ne bouge pas, 3 : est, 4 : ouest, 5 : nord, 6 : sud, 7 : nord-est, 8 : sud-est, 9 : sud-ouest, 10 : nord-ouest)."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Vortex psychique";"(X)";"INT/VOL";;"Puissance du phénomène : 12 +/- modif. de réussite.
+Zone d’effet : 5 mètres +/- modif. de réussite.
+Portée max. du centre de la zone d’effet : 15 m +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Un Vortex est une déchirure dans la réalité, donnant directement sur l’univers du Flux. Quand il se crée, toutes les créatures vivantes se trouvant dans la zone d’effet du Vortex doivent effectuer un Test de Volonté en opposition à la puissance du phénomène. Si la victime obtient la plus haute marge de réussite, elle peut tenter de fuir le périmètre dangereux. Dans le cas contraire, elle perd autant de points de Volonté que le modificateur de réussite obtenu par le phénomène. Elle peut toutefois encore tenter de quitter le périmètre dangereux si sa Volonté n’est pas tombée à 3 ou moins. Si elle y parvient, elle récupère tous ses points de Volonté. Si la Volonté d’un personnage tombe à 3 ou moins, son esprit est aspiré dans le Flux. L’esprit est perdu à jamais, sauf si d’autres tentent de le récupérer (voir Le Flux Polaris, page 265).
+
+Si l’effet n’est pas contrôlé, le vortex apparaît à 1D10 mètres du personnage dans une direction aléatoire."
+"Compétences Spéciales_";"Pouvoirs Polaris";"Vortex physique";"(X)";"INT/VOL";;"Puissance du phénomène : 10 +/- modif. de réussite.
+Zone d’effet : 5 mètres +/- modif. de réussite.
+Portée max. du centre de la zone d’effet : 15 m +/- modif. de réussite.
+Durée : 5 Tours de combat +/- modif. de réussite.
+
+Le Vortex physique est identique au Vortex psychique, mais il aspire la matière. Les êtres vivants peuvent tenter de résister, en effectuant un Test de Force en opposition à la puissance du phénomène. Si une victime potentielle obtient la meilleure marge de réussite, elle peut avancer d’un nombre de mètres équivalent à son modificateur de réussite. Si c’est le Vortex qui obtient la plus haute marge, la victime est attirée vers la déchirure, d’un nombre de mètres égal au modificateur de réussite du phénomène. Si une victime s’accroche à quelque chose, on soustrait la Force du personnage à la puissance du phénomène avant d’effectuer le Test décrit ci-dessus. Mais si la victime remporte le duel, elle ne peut se déplacer qu’en s’accrochant à autre chose, et donc mètre par mètre. Pour les objets et les créatures inconscientes, le Vortex est capable de déplacer 10 kg par point de puissance."

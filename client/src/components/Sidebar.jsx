@@ -1,8 +1,12 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
+import { useCharacterStore } from '../stores/characterStore'
+import { useSessionStore } from '../stores/sessionStore'
+import { useEntityStore } from '../stores/entityStore'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
+import GeometryIcon from './GeometryIcon.jsx'
 
 const SIDEBAR_MIN = 220
 const SIDEBAR_MAX = 500
@@ -53,13 +57,31 @@ const IconX = () => (
     <line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 )
+const IconDice = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="2" y="2" width="20" height="20" rx="4" ry="4"/>
+    <circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"/>
+    <circle cx="16" cy="8" r="1.2" fill="currentColor" stroke="none"/>
+    <circle cx="8" cy="16" r="1.2" fill="currentColor" stroke="none"/>
+    <circle cx="16" cy="16" r="1.2" fill="currentColor" stroke="none"/>
+    <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+  </svg>
+)
+const IconPen = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M12 20h9"/>
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+  </svg>
+)
 
 // ─── Modale fiche personnage ──────────────────────────────────────────────────
 // Accessible à tous les membres. visible=false → le joueur ne voit pas le character
 // dans la liste → ne peut pas ouvrir la modale. Le filtrage est fait côté liste.
 // gm_notes : reçu uniquement si isGm (filtré côté serveur).
-function CharacterModal({ character, isGm, isOwner, onClose, onCharactersChange, onCharacterUpdate, socket, campaignMembers = [] }) {
+// Lit useCharacterStore directement — pas de onCharactersChange en prop.
+function CharacterModal({ character, isGm, isOwner, onClose, onCharacterUpdate }) {
   const { t } = useTranslation()
+  const { members, updateCharacter, removeCharacter } = useCharacterStore()
   const [activeTab, setActiveTab] = useState('sheet')
   const [description, setDescription] = useState(character.description || '')
   const [gmNotes, setGmNotes] = useState(character.gm_notes || '')
@@ -67,6 +89,78 @@ function CharacterModal({ character, isGm, isOwner, onClose, onCharactersChange,
 
   const canEditDescription = isGm || isOwner
   const canEditGmNotes = isGm
+  const canUploadPortrait = isGm || isOwner
+  const canEditName = isGm || isOwner
+
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState(character.name)
+
+  const handleNameSave = useCallback(async () => {
+    const trimmed = nameInput.trim()
+    setEditingName(false)
+    if (!trimmed || trimmed === character.name) {
+      setNameInput(character.name)
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await api.put(`/characters/${character.id}`, { name: trimmed })
+      const updated = res.data.character
+      updateCharacter(updated)
+      onCharacterUpdate(updated)
+    } catch (err) {
+      console.error('Erreur renommage character :', err)
+      setNameInput(character.name)
+    } finally {
+      setSaving(false)
+    }
+  }, [nameInput, character.id, character.name, updateCharacter, onCharacterUpdate])
+
+  const handleNameKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') { e.preventDefault(); handleNameSave() }
+    if (e.key === 'Escape') { setEditingName(false); setNameInput(character.name) }
+  }, [handleNameSave, character.name])
+  const [portraitUploading, setPortraitUploading] = useState(false)
+  const [glbUploading, setGlbUploading] = useState(false)
+
+  const handlePortraitUpload = useCallback(async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPortraitUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('portrait', file)
+      const res = await api.post(`/characters/${character.id}/portrait`, formData)
+      const updated = res.data.character
+      updateCharacter(updated)
+      onCharacterUpdate(updated)
+    } catch (err) {
+      console.error('Erreur upload portrait :', err)
+    } finally {
+      setPortraitUploading(false)
+      // Réinitialiser l'input pour permettre de re-sélectionner le même fichier
+      e.target.value = ''
+    }
+  }, [character.id, updateCharacter, onCharacterUpdate])
+
+  const handleGlbUpload = useCallback(async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setGlbUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('glb', file)
+      const res = await api.post(`/characters/${character.id}/glb`, formData)
+      const updated = res.data.character
+      updateCharacter(updated)
+      onCharacterUpdate(updated)
+    } catch (err) {
+      console.error('Erreur upload GLB :', err)
+    } finally {
+      setGlbUploading(false)
+      e.target.value = ''
+    }
+  }, [character.id, updateCharacter, onCharacterUpdate])
 
   // Sauvegarde au blur — évite une sauvegarde à chaque frappe
   const handleDescriptionBlur = useCallback(async () => {
@@ -74,53 +168,52 @@ function CharacterModal({ character, isGm, isOwner, onClose, onCharactersChange,
     setSaving(true)
     try {
       const res = await api.put(`/characters/${character.id}`, { description })
-      onCharactersChange(prev => prev.map(c => c.id === character.id ? { ...c, description: res.data.character.description } : c))
+      updateCharacter({ id: character.id, description: res.data.character.description })
     } catch (err) {
       console.error('Erreur sauvegarde description :', err)
     } finally {
       setSaving(false)
     }
-  }, [description, character.id, character.description, onCharactersChange])
+  }, [description, character.id, character.description, updateCharacter])
 
   const handleGmNotesBlur = useCallback(async () => {
     if (gmNotes === (character.gm_notes || '')) return
     setSaving(true)
     try {
       const res = await api.put(`/characters/${character.id}`, { gm_notes: gmNotes })
-      onCharactersChange(prev => prev.map(c => c.id === character.id ? { ...c, gm_notes: res.data.character.gm_notes } : c))
+      updateCharacter({ id: character.id, gm_notes: res.data.character.gm_notes })
     } catch (err) {
       console.error('Erreur sauvegarde notes MJ :', err)
     } finally {
       setSaving(false)
     }
-  }, [gmNotes, character.id, character.gm_notes, onCharactersChange])
+  }, [gmNotes, character.id, character.gm_notes, updateCharacter])
 
   // Toggle visibilité — GM uniquement
-  // onCharacterUpdate reçoit le character complet depuis la réponse serveur
-  // et met à jour selectedCharacter dans Sidebar sans dépendre du tableau stale.
+  // onCharacterUpdate met à jour selectedCharacter dans Sidebar (état UI local).
   // Le serveur broadcastera CHARACTER_UPDATED à toute la room — pas d'emit client.
   const handleToggleVisible = useCallback(async () => {
     try {
       const res = await api.put(`/characters/${character.id}`, { visible: !character.visible })
       const updated = res.data.character
-      onCharactersChange(prev => prev.map(c => c.id === updated.id ? { ...c, visible: updated.visible } : c))
+      updateCharacter({ id: updated.id, visible: updated.visible })
       onCharacterUpdate(updated)
     } catch (err) {
       console.error('Erreur toggle visible :', err)
     }
-  }, [character.id, character.visible, onCharactersChange, onCharacterUpdate])
+  }, [character.id, character.visible, updateCharacter, onCharacterUpdate])
 
   // Suppression — GM uniquement
   const handleDelete = useCallback(async () => {
     if (!window.confirm(t('character.deleteConfirm'))) return
     try {
       await api.delete(`/characters/${character.id}`)
-      onCharactersChange(prev => prev.filter(c => c.id !== character.id))
+      removeCharacter(character.id)
       onClose()
     } catch (err) {
       console.error('Erreur suppression character :', err)
     }
-  }, [character.id, onCharactersChange, onClose, t])
+  }, [character.id, removeCharacter, onClose, t])
 
   return (
     <div style={styles.modalOverlay} onClick={onClose}>
@@ -130,7 +223,30 @@ function CharacterModal({ character, isGm, isOwner, onClose, onCharactersChange,
         <div style={styles.modalHeader}>
           <div style={styles.modalTitleRow}>
             <div style={{ ...styles.charColor, background: character.color, width: '14px', height: '14px' }} />
-            <span style={styles.modalTitle}>{character.name}</span>
+            {editingName ? (
+              <input
+                style={styles.nameInput}
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onBlur={handleNameSave}
+                onKeyDown={handleNameKeyDown}
+                autoFocus
+                maxLength={64}
+              />
+            ) : (
+              <>
+                <span style={styles.modalTitle}>{character.name}</span>
+                {canEditName && (
+                  <button
+                    style={styles.namePenBtn}
+                    onClick={() => { setNameInput(character.name); setEditingName(true) }}
+                    title={t('character.rename')}
+                  >
+                    <IconPen />
+                  </button>
+                )}
+              </>
+            )}
             {saving && <span style={styles.savingIndicator}>…</span>}
           </div>
           <div style={styles.modalHeaderActions}>
@@ -150,9 +266,32 @@ function CharacterModal({ character, isGm, isOwner, onClose, onCharactersChange,
           </div>
         </div>
 
-        {/* ── Placeholder illustration ── */}
+        {/* ── Illustration ── */}
         <div style={styles.illustrationPlaceholder}>
-          <span style={styles.illustrationText}>{t('character.illustrationPlaceholder')}</span>
+          {character.portrait_url ? (
+            <img
+              src={`${import.meta.env.VITE_API_URL}/api/assets/${character.portrait_url}`}
+              alt={t('character.portraitAlt')}
+              style={styles.portraitImg}
+            />
+          ) : (
+            <span style={styles.illustrationText}>{t('character.illustrationPlaceholder')}</span>
+          )}
+          {canUploadPortrait && (
+            <label style={{
+              ...styles.uploadBtn,
+              opacity: portraitUploading ? 0.5 : 1,
+              pointerEvents: portraitUploading ? 'none' : 'auto',
+            }}>
+              {portraitUploading ? t('character.portraitUploading') : t('character.portraitUpload')}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={handlePortraitUpload}
+              />
+            </label>
+          )}
         </div>
 
         {/* ── Onglets ── */}
@@ -222,7 +361,7 @@ function CharacterModal({ character, isGm, isOwner, onClose, onCharactersChange,
                       try {
                         const res = await api.put(`/characters/${character.id}`, { user_id })
                         const updated = res.data.character
-                        onCharactersChange(prev => prev.map(c => c.id === updated.id ? updated : c))
+                        updateCharacter(updated)
                         onCharacterUpdate(updated)
                         // Le serveur broadcastera CHARACTER_UPDATED à toute la room — pas d'emit client.
                       } catch (err) {
@@ -231,7 +370,7 @@ function CharacterModal({ character, isGm, isOwner, onClose, onCharactersChange,
                     }}
                   >
                     <option value="">{t('character.noOwner')}</option>
-                    {campaignMembers
+                    {members
                       .filter(m => m.role === 'player')
                       .map(m => (
                         <option key={m.id} value={m.id}>{m.username}</option>
@@ -249,6 +388,21 @@ function CharacterModal({ character, isGm, isOwner, onClose, onCharactersChange,
                   {t('character.deleteCharacter')}
                 </button>
               )}
+              {isGm && (
+                <label style={{
+                  ...styles.uploadBtn,
+                  opacity: glbUploading ? 0.5 : 1,
+                  pointerEvents: glbUploading ? 'none' : 'auto',
+                }}>
+                  {glbUploading ? t('character.glbUploading') : t('character.glbUpload')}
+                  <input
+                    type="file"
+                    accept=".glb"
+                    style={{ display: 'none' }}
+                    onChange={handleGlbUpload}
+                  />
+                </label>
+              )}
             </div>
           )}
 
@@ -260,34 +414,36 @@ function CharacterModal({ character, isGm, isOwner, onClose, onCharactersChange,
 
 // ─── Sidebar principale ───────────────────────────────────────────────────────
 export default function Sidebar({
-  isGm,
   mode, onModeChange,
+  activeEditorTab, onEditorTabChange,
   layer, onLayerChange,
   width, onWidthChange,
   onClose,
-  activeMaterial, onMaterialChange, availableMaterials = [],
-  characters = [], onCharactersChange,
+  activeMaterial, onMaterialChange, availableBlocks = [],
+  activeBlueprint, onBlueprintSelect,
   campaignId,
-  messages = [],
   socket,
-  campaignMembers = [],
-  onlineUsers = new Set(),
   onReconnectSocket,
+  onOpenCharacter,
+  onEntityActionResolve,
 }) {
   const { t } = useTranslation()
   const { user, setUser } = useAuthStore()
+  const { characters, members, isGm, addCharacter } = useCharacterStore()
+  const { messages, onlineUsers } = useSessionStore()
+  const { blueprints } = useEntityStore()
 
   const [activeTab, setActiveTab] = useState('chat')
   const [toolsOpen, setToolsOpen] = useState(false)
   const [chatInput, setChatInput] = useState('')
+  const [showHelp, setShowHelp] = useState(false)
 
   // Formulaire de création de personnage
   const [showNewChar, setShowNewChar] = useState(false)
   const [newCharName, setNewCharName] = useState('')
   const [creating, setCreating] = useState(false)
 
-  // Modale character — null = fermée, sinon objet character sélectionné
-  const [selectedCharacter, setSelectedCharacter] = useState(null)
+  // Modale character — déléguée à SessionPage via onOpenCharacter
 
   // Onglet Config — profil utilisateur
   const [configUsername, setConfigUsername] = useState('')
@@ -298,6 +454,13 @@ export default function Sidebar({
   const isDragging = useRef(false)
   const startX = useRef(0)
   const startWidth = useRef(0)
+
+  // Réf pour l'auto-scroll — pointe sur un div vide en fin de liste de messages
+  const messagesEndRef = useRef(null)
+
+  // Animation dé — id du dernier message dé reçu, nettoyé après 800ms
+  // Utilise useState (pas useRef) car doit déclencher un re-render pour l'animation CSS
+  const [animatingDiceId, setAnimatingDiceId] = useState(null)
 
   // Initialiser les champs config quand on ouvre l'onglet
   useEffect(() => {
@@ -365,11 +528,44 @@ export default function Sidebar({
     }
   }, [onClose, onWidthChange])
 
+  // ─── AUTO-SCROLL messages ────────────────────────────────────────────────
+  // Se déclenche à chaque nouveau message — scroll vers le bas
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  // ─── ANIMATION dé — Option B ─────────────────────────────────────────────
+  // Détecte le dernier message de type 'dice', stocke son id pendant 800ms,
+  // puis le remet à null pour retirer l'animation CSS.
+  // useRef lastDiceId évite de relancer le timer si un non-dé arrive entre temps.
+  const lastDiceIdRef = useRef(null)
+  useEffect(() => {
+    const lastDice = [...messages].reverse().find(m => m.type === 'dice')
+    if (!lastDice || lastDice.id === lastDiceIdRef.current) return
+    lastDiceIdRef.current = lastDice.id
+    setAnimatingDiceId(lastDice.id)
+    const timer = setTimeout(() => setAnimatingDiceId(null), 800)
+    return () => clearTimeout(timer)
+  }, [messages])
+
   // ─── CHAT ────────────────────────────────────────────────────────────────
   const sendMessage = (e) => {
     e.preventDefault()
-    if (!chatInput.trim()) return
-    socket?.emit(WS.CHAT_MESSAGE, { text: chatInput.trim() })
+    const text = chatInput.trim()
+    if (!text) return
+
+    // Commandes dés : /r <formule> ou /roll <formule>
+    // Le client émet DICE_ROLL — le serveur calcule et broadcaste DICE_RESULT.
+    // Le message ne part PAS dans le chat.
+    const diceMatch = text.match(/^\/r(?:oll)?\s+(.+)$/i)
+    if (diceMatch) {
+      const formula = diceMatch[1].trim()
+      if (formula) socket?.emit(WS.DICE_ROLL, { formula })
+      setChatInput('')
+      return
+    }
+
+    socket?.emit(WS.CHAT_MESSAGE, { text })
     setChatInput('')
   }
 
@@ -382,7 +578,7 @@ export default function Sidebar({
       const res = await api.post(`/campaigns/${campaignId}/characters`, {
         name: newCharName.trim(),
       })
-      onCharactersChange(prev => [...prev, res.data.character])
+      addCharacter(res.data.character)
       setNewCharName('')
       setShowNewChar(false)
     } catch (err) {
@@ -413,31 +609,37 @@ export default function Sidebar({
     const dy = Math.abs(e.clientY - dragStartPos.current.y)
     // Si la souris a bougé de plus de 4px, c'est un drag — pas un clic
     if (dx > 4 || dy > 4) return
-    setSelectedCharacter(character)
+    onOpenCharacter?.(character)
   }
 
   return (
     <div style={{ ...styles.sidebar, width }}>
 
-      {/* Modale character — rendue dans la sidebar, position fixed donc par-dessus tout */}
-      {selectedCharacter && (
-        <CharacterModal
-          character={selectedCharacter}
-          isGm={isGm}
-          isOwner={selectedCharacter.user_id === user?.id}
-          onClose={() => setSelectedCharacter(null)}
-          onCharactersChange={onCharactersChange}
-          onCharacterUpdate={setSelectedCharacter}
-          socket={socket}
-          campaignMembers={campaignMembers}
-        />
-      )}
+      {/* Keyframes animation dé — toujours dans le DOM, indépendant de l'onglet actif */}
+      <style>{`
+        @keyframes diceRoll {
+          0%   { transform: rotate(0deg) scale(1); }
+          25%  { transform: rotate(120deg) scale(1.25); }
+          60%  { transform: rotate(300deg) scale(0.9); }
+          100% { transform: rotate(360deg) scale(1); }
+        }
+        .dice-icon-animating {
+          animation: diceRoll 0.8s ease-out;
+        }
+      `}</style>
 
       {/* Poignée de redimensionnement */}
       <div style={styles.resizeHandle} onMouseDown={onMouseDown} />
 
       {/* Bouton fermeture */}
       <button style={styles.closeBtn} onClick={onClose} title={t('common.close')}>›</button>
+
+      {/* Bouton aide raccourcis */}
+      <button
+        style={styles.helpBtn}
+        onClick={() => setShowHelp(v => !v)}
+        title={t('sidebar.helpTitle')}
+      >?</button>
 
       {/* ─── OUTILS ─────────────────────────────────────────────────────── */}
       <div style={styles.toolsRow}>
@@ -465,49 +667,143 @@ export default function Sidebar({
 
         <div style={{ position: 'relative' }}>
           <button
-            style={{ ...styles.toolBtn, ...(toolsOpen ? styles.toolBtnActive : {}) }}
-            onClick={() => setToolsOpen(o => !o)}
-            title={t('sidebar.measureRule')}
+            style={styles.toolBtn}
+            onClick={() => setToolsOpen(v => !v)}
+            title={t('session.tools')}
           >
             <IconRuler />
-            <span style={styles.toolLabel}>Mesure</span>
+            <span style={styles.toolLabel}>{t('session.tools')}</span>
           </button>
           {toolsOpen && (
             <div style={styles.toolsDropdown}>
-              <button style={styles.dropdownItem} onClick={() => setToolsOpen(false)}>📏 {t('sidebar.measureRule')}</button>
-              <button style={styles.dropdownItem} onClick={() => setToolsOpen(false)}>⭕ {t('sidebar.measureRange')}</button>
-              <button style={styles.dropdownItem} onClick={() => setToolsOpen(false)}>👁 {t('sidebar.measureSight')}</button>
+              <button style={styles.toolsDropdownItem} disabled>
+                {t('session.toolRuler')}
+              </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* ─── PALETTE MATIÈRES (mode édition) ─────────────────────────────── */}
-      {mode === 'edit' && availableMaterials.length > 0 && (
+      {/* ─── PALETTE TEXTURES (mode édition) ─────────────────────────────── */}
+      {mode === 'edit' && (
         <div style={styles.palette}>
-          <div style={styles.paletteTitle}>Matière</div>
-          <div style={styles.paletteGrid}>
-            {availableMaterials.map(mat => (
-              <button
-                key={mat.id}
-                onClick={() => onMaterialChange(mat.id)}
-                title={mat.label}
-                style={{
-                  ...styles.matBtn,
-                  backgroundImage: `url(${import.meta.env.VITE_API_URL}/api/textures/hard-sf/${mat.top})`,
-                  borderWidth: '2px',
-                  borderStyle: 'solid',
-                  borderColor: activeMaterial === mat.id ? '#3b82f6' : 'transparent',
-                }}
-              />
-            ))}
+          {/* ── Onglets éditeur : Voxels / Entités ── */}
+          <div style={styles.editorTabs}>
+            <button
+              style={{ ...styles.editorTab, ...(activeEditorTab === 'voxel' ? styles.editorTabActive : {}) }}
+              onClick={() => onEditorTabChange?.('voxel')}
+            >
+              Voxels
+            </button>
+            <button
+              style={{ ...styles.editorTab, ...(activeEditorTab === 'entity' ? styles.editorTabActive : {}) }}
+              onClick={() => onEditorTabChange?.('entity')}
+            >
+              Entités
+            </button>
           </div>
+
+          {/* ── Palette voxels — visible uniquement en onglet Voxels ── */}
+          {activeEditorTab === 'voxel' && (
+            <>
+              <div style={{ ...styles.paletteTitle, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+                <span>Textures</span>
+                {activeMaterial?.geo && (
+                  <span style={{ color: '#5b8dee', lineHeight: 0 }}>
+                    <GeometryIcon geometry={activeMaterial.geo} size={12} />
+                  </span>
+                )}
+              </div>
+              {availableBlocks.length === 0 && (
+                <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>Chargement…</p>
+              )}
+              {(() => {
+                const groups = {}
+                for (const block of availableBlocks) {
+                  if (block.deprecated) continue
+                  const key = block.category_id || '__divers__'
+                  if (!groups[key]) groups[key] = { label: block.category_label || 'Divers', blocks: [] }
+                  groups[key].blocks.push(block)
+                }
+                return Object.entries(groups).map(([catKey, group]) => (
+                  <div key={catKey} style={styles.paletteGroup}>
+                    <div style={styles.paletteGroupLabel}>{group.label}</div>
+                    <div style={styles.paletteGrid}>
+                      {group.blocks.map(block => {
+                        const texPath = block.faces?.top || block.faces?.all || null
+                        const texUrl = texPath
+                          ? `${import.meta.env.VITE_API_URL}/api/textures/${block.pack_id}/${texPath}`
+                          : null
+                        const isActive = activeMaterial?.texId === block.id
+                        return (
+                          <button
+                            key={block.id}
+                            onClick={() => onMaterialChange({ texId: block.id, geo: 'cube', r: 0 })}
+                            title={block.label}
+                            style={{
+                              ...styles.matBtn,
+                              backgroundImage: texUrl ? `url(${texUrl})` : 'none',
+                              backgroundColor: texUrl ? 'transparent' : '#1e1e2e',
+                              borderWidth: '2px',
+                              borderStyle: 'solid',
+                              borderColor: isActive ? '#5b8dee' : 'transparent',
+                            }}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))
+              })()}
+            </>
+          )}
+
+          {/* ── Onglet Entités — palette blueprints ── */}
+          {activeEditorTab === 'entity' && (() => {
+            const bpList = Object.values(blueprints).filter(bp => !bp.deprecated)
+            return (
+              <div style={{ marginTop: '6px' }}>
+                <div style={styles.paletteTitle}>Éléments interactifs</div>
+                {bpList.length === 0 && (
+                  <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>
+                    Aucun blueprint disponible.
+                  </p>
+                )}
+                {bpList.map(bp => {
+                  const isActive = activeBlueprint?.id === bp.id
+                  return (
+                    <button
+                      key={bp.id}
+                      onClick={() => onBlueprintSelect?.(isActive ? null : bp)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: '7px 10px',
+                        background: isActive ? 'rgba(91,141,238,0.18)' : 'none',
+                        border: 'none',
+                        borderBottom: '1px solid #1a1a2e',
+                        borderLeft: isActive ? '2px solid #5b8dee' : '2px solid transparent',
+                        color: isActive ? '#5b8dee' : '#c0c0d0',
+                        fontSize: '12px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        transition: 'background 0.1s',
+                      }}
+                    >
+                      {bp.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
       )}
 
       <div style={styles.separator} />
 
-      {/* ─── ONGLETS ─────────────────────────────────────────────────────── */}
+      {/* ─── ONGLETS — masqués en mode édition ───────────────────────────── */}
+      {mode !== 'edit' && (
       <div style={styles.tabs}>
         <button
           style={{ ...styles.tab, ...(activeTab === 'chat' ? styles.tabActive : {}) }}
@@ -540,8 +836,10 @@ export default function Sidebar({
           {t('sidebar.config')}
         </button>
       </div>
+      )}
 
-      {/* ─── CONTENU ─────────────────────────────────────────────────────── */}
+      {/* ─── CONTENU — masqué en mode édition ───────────────────────────── */}
+      {mode !== 'edit' && (
       <div style={styles.tabContent}>
 
         {/* ── Chat ── */}
@@ -551,20 +849,102 @@ export default function Sidebar({
               {messages.length === 0 && (
                 <p style={styles.emptyMsg}>{t('chat.placeholder')}</p>
               )}
-              {messages.map(msg => (
-                msg.system ? (
-                  <div key={msg.id} style={styles.messageSystem}>
-                    <span style={styles.msgSystemText}>{msg.text}</span>
-                    <span style={styles.msgTime}>{msg.time}</span>
-                  </div>
-                ) : (
+              {messages.map(msg => {
+                if (msg.system) {
+                  return (
+                    <div key={msg.id} style={styles.messageSystem}>
+                      <span style={styles.msgSystemText}>{msg.text}</span>
+                      <span style={styles.msgTime}>{msg.time}</span>
+                    </div>
+                  )
+                }
+                if (msg.type === 'entity_action') {
+                  // Visible uniquement par le GM
+                  if (!isGm) return null
+                  return (
+                    <div key={msg.id} style={styles.messageAction}>
+                      <div style={styles.actionHeader}>
+                        <span style={styles.actionIcon}>⚔</span>
+                        <span style={styles.actionTitle}>
+                          {t('sidebar.actionPending', { playerName: msg.playerName, interactionLabel: msg.interactionLabel })}
+                        </span>
+                        <span style={styles.msgTime}>{msg.time}</span>
+                      </div>
+                      <span style={styles.actionSub}>{t('sidebar.actionOn', { entityLabel: msg.entityLabel })}</span>
+                      {msg.skillId && (
+                        <div style={styles.actionMeta}>
+                          <span>{t('sidebar.actionSkill')} : <strong>{msg.skillId}</strong></span>
+                          <span>{t('sidebar.actionScore')} : <strong>{msg.skillTotal ?? '—'}</strong></span>
+                          <span>{t('sidebar.actionDC')} : <strong>{msg.defaultDifficulty}</strong></span>
+                        </div>
+                      )}
+                      <div style={styles.actionBtns}>
+                        <button style={styles.btnAccept} onClick={() => onEntityActionResolve?.(msg.requestId, true, false, 0)}>
+                          {t('sidebar.actionAccept')}
+                        </button>
+                        <button style={styles.btnAuto} onClick={() => onEntityActionResolve?.(msg.requestId, true, true, 0)}>
+                          {t('sidebar.actionAuto')}
+                        </button>
+                        <button style={styles.btnRefuse} onClick={() => onEntityActionResolve?.(msg.requestId, false, false, 0)}>
+                          {t('sidebar.actionRefuse')}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                }
+                if (msg.type === 'dice') {
+                  const isAnimating = animatingDiceId === msg.id
+                  const critStyle = msg.isCriticalSuccess
+                    ? styles.diceCritSuccess
+                    : msg.isCriticalFail
+                      ? styles.diceCritFail
+                      : null
+                  return (
+                    <div key={msg.id} style={{ ...styles.messageDice, ...(critStyle || {}) }}>
+                      {/* En-tête : icône animée + nom + heure */}
+                      <div style={styles.diceHeader}>
+                        <span
+                          className={isAnimating ? 'dice-icon-animating' : undefined}
+                          style={{
+                            ...styles.diceIcon,
+                            color: msg.color || '#5b8dee',
+                          }}
+                        >
+                          <IconDice />
+                        </span>
+                        <span style={{ ...styles.msgUser, color: msg.color || '#5b8dee' }}>{msg.user}</span>
+                        <span style={styles.msgTime}> · {msg.time}</span>
+                        {/* Badge critique — affiché uniquement si configuré */}
+                        {msg.isCriticalSuccess && (
+                          <span style={styles.badgeCritSuccess}>{t('dice.criticalSuccess')}</span>
+                        )}
+                        {msg.isCriticalFail && (
+                          <span style={styles.badgeCritFail}>{t('dice.criticalFail')}</span>
+                        )}
+                      </div>
+                      {/* Corps : formule + rolls individuels + total */}
+                      <div style={styles.diceBody}>
+                        <span style={styles.diceFormula}>{msg.formula}</span>
+                        <span style={styles.diceRolls}>
+                          {'['}{msg.rolls.join(', ')}{']'}
+                        </span>
+                        <span style={styles.diceEquals}>=</span>
+                        <span style={styles.diceTotal}>{msg.total}</span>
+                      </div>
+                    </div>
+                  )
+                }
+                // Message chat standard
+                return (
                   <div key={msg.id} style={styles.message}>
                     <span style={{ ...styles.msgUser, color: msg.color || '#5b8dee' }}>{msg.user}</span>
                     <span style={styles.msgTime}> · {msg.time}</span>
                     <p style={styles.msgText}>{msg.text}</p>
                   </div>
                 )
-              ))}
+              })}
+              {/* Ancre auto-scroll — div vide en fin de liste */}
+              <div ref={messagesEndRef} />
             </div>
             <form onSubmit={sendMessage} style={styles.chatForm}>
               <input
@@ -651,10 +1031,10 @@ export default function Sidebar({
         {/* ── Joueurs ── */}
         {activeTab === 'joueurs' && (
           <div style={styles.playersList}>
-            {campaignMembers.length === 0 && (
+            {members.length === 0 && (
               <p style={styles.emptyMsg}>{t('sidebar.noPlayers')}</p>
             )}
-            {campaignMembers.map(member => {
+            {members.map(member => {
               const isOnline = onlineUsers.has(member.id)
               const character = characters.find(c => c.user_id === member.id)
               return (
@@ -731,11 +1111,49 @@ export default function Sidebar({
         )}
 
       </div>
+      )}
+
+      {/* ─── Modale aide raccourcis ───────────────────────────────────────── */}
+      {showHelp && (
+        <div style={styles.helpOverlay} onClick={() => setShowHelp(false)}>
+          <div style={styles.helpModal} onClick={e => e.stopPropagation()}>
+            <div style={styles.helpHeader}>
+              <span style={styles.helpTitle}>{t('sidebar.helpTitle')}</span>
+              <button style={styles.helpCloseBtn} onClick={() => setShowHelp(false)}>×</button>
+            </div>
+
+            {mode !== 'edit' && (
+              <>
+                <div style={styles.helpSection}>{t('sidebar.helpSectionPlay')}</div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>Alt</kbd><span>{t('sidebar.helpAlt')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>/r formule</kbd><span>{t('sidebar.helpDiceRoll')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>Drag</kbd><span>{t('sidebar.helpDrag')}</span></div>
+              </>
+            )}
+
+            {mode === 'edit' && (
+              <>
+                <div style={styles.helpSection}>{t('sidebar.helpSectionEdit')}</div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>Clic gauche</kbd><span>{t('sidebar.helpVoxelPlace')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>Clic droit</kbd><span>{t('sidebar.helpVoxelErase')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>R</kbd><span>{t('sidebar.helpVoxelRotate')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>1</kbd><span>{t('sidebar.helpGeoCube')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>2</kbd><span>{t('sidebar.helpGeoDalleB')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>3</kbd><span>{t('sidebar.helpGeoDalleH')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>4</kbd><span>{t('sidebar.helpGeoSlope')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>5</kbd><span>{t('sidebar.helpGeoWedge')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>Ctrl+Z</kbd><span>{t('sidebar.helpUndo')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>Ctrl+Y</kbd><span>{t('sidebar.helpRedo')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>Suppr</kbd><span>{t('sidebar.helpDelete')}</span></div>
+                <div style={styles.helpRow}><kbd style={styles.kbd}>Alt</kbd><span>{t('sidebar.helpEntitiesHighlight')}</span></div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = {
   sidebar: {
     position: 'relative',
@@ -798,77 +1216,84 @@ const styles = {
   toolLabel: {
     fontSize: '9px',
     letterSpacing: '0.5px',
+    textTransform: 'uppercase',
   },
   toolsDropdown: {
     position: 'absolute',
-    top: 'calc(100% + 4px)',
+    top: '100%',
     left: 0,
     background: '#16162a',
     border: '1px solid #1e1e2e',
     borderRadius: '6px',
-    minWidth: '160px',
-    zIndex: 50,
-    overflow: 'hidden',
+    zIndex: 100,
+    minWidth: '140px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
   },
-  dropdownItem: {
+  toolsDropdownItem: {
     display: 'block',
     width: '100%',
-    padding: '9px 14px',
+    padding: '8px 12px',
     background: 'none',
     border: 'none',
-    borderBottom: '1px solid #1e1e2e',
-    color: '#9090a8',
-    cursor: 'pointer',
+    color: '#4a4a60',
     fontSize: '12px',
     textAlign: 'left',
+    cursor: 'default',
   },
   palette: {
-    padding: '10px 12px',
-    borderBottom: '1px solid #1e1e2e',
+    padding: '4px 12px 8px',
   },
   paletteTitle: {
-    fontSize: '11px',
-    color: '#64748b',
+    fontSize: '10px',
+    color: '#4a4a60',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
-    marginBottom: '8px',
+    marginBottom: '6px',
   },
   paletteGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    display: 'flex',
+    flexWrap: 'wrap',
     gap: '4px',
   },
+  paletteGroup: {
+    marginBottom: '8px',
+  },
+  paletteGroupLabel: {
+    fontSize: '10px',
+    color: '#4a4a60',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    marginBottom: '4px',
+  },
   matBtn: {
-    width: '100%',
-    aspectRatio: '1',
+    width: '32px',
+    height: '32px',
     borderRadius: '4px',
     cursor: 'pointer',
-    background: '#1e293b',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
-    padding: 0,
   },
   separator: {
     height: '1px',
     background: '#1e1e2e',
-    margin: '0 12px',
+    margin: '0',
   },
   tabs: {
     display: 'flex',
     borderBottom: '1px solid #1e1e2e',
+    flexShrink: 0,
   },
   tab: {
     flex: 1,
-    padding: '10px 0',
+    padding: '8px 0',
     background: 'none',
     border: 'none',
     borderBottom: '2px solid transparent',
     color: '#4a4a60',
     cursor: 'pointer',
-    fontSize: '11px',
-    letterSpacing: '1px',
+    fontSize: '10px',
+    letterSpacing: '0.5px',
     textTransform: 'uppercase',
-    transition: 'color 0.15s',
   },
   tabActive: {
     color: '#9090a8',
@@ -876,21 +1301,22 @@ const styles = {
   },
   tabContent: {
     flex: 1,
+    overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
-    overflow: 'hidden',
   },
   messages: {
     flex: 1,
     overflowY: 'auto',
-    padding: '12px',
+    padding: '8px 12px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '10px',
+    gap: '6px',
   },
   emptyMsg: {
     color: '#4a4a60',
     fontSize: '12px',
+    fontStyle: 'italic',
     textAlign: 'center',
     padding: '24px 12px',
     margin: 0,
@@ -898,58 +1324,132 @@ const styles = {
   message: {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '4px',
     alignItems: 'baseline',
+    gap: '2px',
   },
-  msgUser: { fontSize: '11px', fontWeight: '600' },
-  msgTime: { color: '#4a4a60', fontSize: '10px' },
-  msgText: { width: '100%', color: '#c0c0d0', fontSize: '12px', lineHeight: '1.5', margin: 0 },
   messageSystem: {
     display: 'flex',
+    justifyContent: 'center',
+    gap: '6px',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '8px',
-    padding: '2px 0',
   },
   msgSystemText: {
-    color: '#4a4a60',
     fontSize: '11px',
+    color: '#4a4a60',
     fontStyle: 'italic',
-    flex: 1,
+  },
+  msgUser: {
+    fontSize: '12px',
+    fontWeight: '500',
+  },
+  msgTime: {
+    fontSize: '10px',
+    color: '#4a4a60',
+  },
+  msgText: {
+    width: '100%',
+    margin: '2px 0 0',
+    fontSize: '13px',
+    color: '#c0c0d0',
+    lineHeight: '1.4',
+    wordBreak: 'break-word',
   },
   chatForm: {
     display: 'flex',
     gap: '6px',
-    padding: '10px 12px',
+    padding: '8px 12px',
     borderTop: '1px solid #1e1e2e',
+    flexShrink: 0,
   },
   chatInput: {
     flex: 1,
     background: '#16162a',
     border: '1px solid #1e1e2e',
     borderRadius: '6px',
-    padding: '8px 10px',
+    padding: '6px 10px',
     color: '#c0c0d0',
     fontSize: '12px',
     outline: 'none',
   },
   sendBtn: {
-    background: 'rgba(91,141,238,0.15)',
-    border: '1px solid #5b8dee',
-    borderRadius: '6px',
+    background: 'none',
+    border: 'none',
     color: '#5b8dee',
     cursor: 'pointer',
-    padding: '8px 12px',
-    fontSize: '12px',
+    fontSize: '14px',
+    padding: '4px 6px',
   },
-  // ── Joueurs ──
-  playersList: {
-    flex: 1,
-    overflowY: 'auto',
+  persosList: {
     display: 'flex',
     flexDirection: 'column',
     gap: '4px',
-    padding: '8px',
+    padding: '8px 12px',
+  },
+  persosHeader: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    marginBottom: '4px',
+  },
+  newCharBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    background: 'rgba(91,141,238,0.1)',
+    border: '1px solid rgba(91,141,238,0.3)',
+    borderRadius: '6px',
+    color: '#5b8dee',
+    fontSize: '11px',
+    padding: '5px 10px',
+    cursor: 'pointer',
+  },
+  newCharForm: {
+    display: 'flex',
+    gap: '6px',
+    marginBottom: '4px',
+  },
+  charCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 10px',
+    background: '#16162a',
+    border: '1px solid #1e1e2e',
+    borderRadius: '6px',
+    cursor: 'grab',
+  },
+  charColor: {
+    width: '10px',
+    height: '10px',
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  charInfo: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    minWidth: 0,
+  },
+  charName: {
+    fontSize: '13px',
+    color: '#c0c0d0',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  charOwner: {
+    fontSize: '10px',
+    color: '#4a4a60',
+  },
+  charHidden: {
+    color: '#4a4a60',
+    flexShrink: 0,
+  },
+  playersList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    padding: '8px 12px',
   },
   playerCard: {
     display: 'flex',
@@ -979,110 +1479,38 @@ const styles = {
     gap: '6px',
   },
   playerName: {
+    fontSize: '13px',
     color: '#c0c0d0',
-    fontSize: '12px',
-    fontWeight: '500',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  playerCharacter: {
-    color: '#4a4a60',
-    fontSize: '10px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
   },
   badgeGM: {
     fontSize: '9px',
-    fontWeight: '600',
-    padding: '2px 6px',
-    borderRadius: '4px',
-    backgroundColor: 'rgba(91,141,238,0.2)',
     color: '#5b8dee',
-    flexShrink: 0,
+    background: 'rgba(91,141,238,0.15)',
+    border: '1px solid rgba(91,141,238,0.3)',
+    borderRadius: '3px',
+    padding: '1px 4px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
   },
   badgePlayer: {
     fontSize: '9px',
-    fontWeight: '600',
-    padding: '2px 6px',
-    borderRadius: '4px',
-    backgroundColor: 'rgba(76,175,119,0.2)',
-    color: '#4caf77',
-    flexShrink: 0,
+    color: '#4a4a60',
+    background: 'rgba(74,74,96,0.2)',
+    border: '1px solid rgba(74,74,96,0.3)',
+    borderRadius: '3px',
+    padding: '1px 4px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
   },
-  onlineLabel: {
-    fontSize: '9px',
-    flexShrink: 0,
-  },
-  // ── Persos ──
-  persosList: {
-    flex: 1,
-    overflowY: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    padding: '8px',
-  },
-  persosHeader: {
-    padding: '4px 0 8px',
-  },
-  newCharBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    width: '100%',
-    padding: '8px 10px',
-    background: 'rgba(91,141,238,0.1)',
-    border: '1px dashed #5b8dee',
-    borderRadius: '6px',
-    color: '#5b8dee',
-    cursor: 'pointer',
-    fontSize: '12px',
-  },
-  newCharForm: {
-    display: 'flex',
-    gap: '6px',
-    marginBottom: '8px',
-  },
-  charCard: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 10px',
-    background: '#16162a',
-    border: '1px solid #1e1e2e',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    transition: 'border-color 0.15s',
-  },
-  charColor: {
-    width: '12px',
-    height: '12px',
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
-  charInfo: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2px',
-    minWidth: 0,
-  },
-  charName: {
-    color: '#c0c0d0',
-    fontSize: '12px',
-    fontWeight: '500',
+  playerCharacter: {
+    fontSize: '11px',
+    color: '#4a4a60',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  charOwner: {
-    color: '#4a4a60',
+  onlineLabel: {
     fontSize: '10px',
-  },
-  charHidden: {
-    color: '#4a4a60',
     flexShrink: 0,
   },
   // ── Modale character ──
@@ -1127,6 +1555,29 @@ const styles = {
     fontSize: '12px',
     color: '#4a4a60',
   },
+  nameInput: {
+    background: 'transparent',
+    border: 'none',
+    borderBottom: '1px solid #5b8dee',
+    color: '#c0c0d0',
+    fontSize: '15px',
+    fontWeight: '500',
+    outline: 'none',
+    padding: '1px 4px',
+    minWidth: 0,
+    width: '160px',
+    fontFamily: 'inherit',
+  },
+  namePenBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#4a4a60',
+    cursor: 'pointer',
+    padding: '2px',
+    display: 'flex',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
   modalHeaderActions: {
     display: 'flex',
     alignItems: 'center',
@@ -1152,17 +1603,185 @@ const styles = {
     alignItems: 'center',
   },
   illustrationPlaceholder: {
-    height: '100px',
+    minHeight: '100px',
     background: '#16162a',
     borderBottom: '1px solid #1e1e2e',
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: '8px',
+    padding: '8px',
   },
   illustrationText: {
     fontSize: '11px',
     color: '#4a4a60',
     fontStyle: 'italic',
+  },
+  portraitImg: {
+    maxHeight: '180px',
+    maxWidth: '100%',
+    borderRadius: '6px',
+    objectFit: 'contain',
+  },
+  uploadBtn: {
+    display: 'inline-block',
+    padding: '5px 12px',
+    background: 'rgba(91,141,238,0.1)',
+    border: '1px solid rgba(91,141,238,0.3)',
+    borderRadius: '6px',
+    color: '#5b8dee',
+    fontSize: '11px',
+    cursor: 'pointer',
+    userSelect: 'none',
+  },
+  // ─── Onglets éditeur (Voxels / Entités) ──
+  editorTabs: {
+    display: 'flex',
+    gap: '4px',
+    marginBottom: '2px',
+  },
+  editorTab: {
+    flex: 1,
+    padding: '5px 0',
+    background: 'none',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    color: '#4a4a60',
+    cursor: 'pointer',
+    fontSize: '10px',
+    letterSpacing: '0.5px',
+    textTransform: 'uppercase',
+  },
+  editorTabActive: {
+    color: '#9090a8',
+    borderColor: '#5b8dee',
+    backgroundColor: 'rgba(91,141,238,0.08)',
+  },
+  // ─── Badge onglet Actions ──
+  actionsBadge: {
+    position: 'absolute',
+    top: '3px',
+    right: '3px',
+    background: '#e05c5c',
+    color: 'white',
+    borderRadius: '8px',
+    fontSize: '9px',
+    fontWeight: '700',
+    padding: '0 4px',
+    minWidth: '14px',
+    textAlign: 'center',
+    lineHeight: '14px',
+  },
+  // ─── Onglet Actions — contenu ──
+  actionsContent: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  actionsNav: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+  },
+  actionsNavBtn: {
+    background: 'none',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    color: '#9090a8',
+    cursor: 'pointer',
+    padding: '2px 8px',
+    fontSize: '14px',
+  },
+  actionsNavCount: {
+    fontSize: '11px',
+    color: '#4a4a60',
+  },
+  arbitrageCard: {
+    background: '#16162a',
+    border: '1px solid #2a2a3e',
+    borderRadius: '8px',
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  arbitrageTitle: {
+    fontSize: '12px',
+    color: '#c0c0d0',
+    margin: 0,
+  },
+  arbitrageEntity: {
+    fontSize: '11px',
+    color: '#5b8dee',
+    margin: '0 0 4px',
+  },
+  arbitrageRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+  },
+  arbitrageLabel: {
+    fontSize: '11px',
+    color: '#64748b',
+  },
+  arbitrageValue: {
+    fontSize: '12px',
+    color: '#c0c0d0',
+    fontFamily: 'monospace',
+  },
+  arbitrageInput: {
+    background: '#0e0e1a',
+    border: '1px solid #2a2a3e',
+    borderRadius: '4px',
+    color: '#c0c0d0',
+    fontSize: '12px',
+    padding: '3px 8px',
+    width: '64px',
+    textAlign: 'center',
+  },
+  arbitrageActions: {
+    display: 'flex',
+    gap: '6px',
+    marginTop: '4px',
+  },
+  btnAccept: {
+    flex: 1,
+    padding: '7px 0',
+    background: 'rgba(76,175,119,0.12)',
+    border: '1px solid rgba(76,175,119,0.4)',
+    borderRadius: '6px',
+    color: '#4caf77',
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontWeight: '500',
+  },
+  btnAuto: {
+    flex: 1,
+    padding: '7px 0',
+    background: 'rgba(91,141,238,0.12)',
+    border: '1px solid rgba(91,141,238,0.4)',
+    borderRadius: '6px',
+    color: '#5b8dee',
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontWeight: '500',
+  },
+  btnRefuse: {
+    flex: 1,
+    padding: '7px 0',
+    background: 'rgba(224,92,92,0.12)',
+    border: '1px solid rgba(224,92,92,0.4)',
+    borderRadius: '6px',
+    color: '#e05c5c',
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontWeight: '500',
   },
   modalTabs: {
     display: 'flex',
@@ -1330,5 +1949,223 @@ const styles = {
     fontSize: '12px',
     fontWeight: '500',
     cursor: 'pointer',
+  },
+  // ── Messages dés ──
+  messageDice: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '3px',
+    padding: '6px 8px',
+    borderRadius: '6px',
+    background: 'rgba(91,141,238,0.07)',
+    border: '1px solid rgba(91,141,238,0.15)',
+  },
+  diceCritSuccess: {
+    background: 'rgba(76,175,119,0.1)',
+    border: '1px solid rgba(76,175,119,0.3)',
+  },
+  diceCritFail: {
+    background: 'rgba(224,92,92,0.1)',
+    border: '1px solid rgba(224,92,92,0.3)',
+  },
+  diceHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    flexWrap: 'wrap',
+  },
+  diceIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  // diceIconAnimating est appliqué inline via style spread — animation CSS via keyframes
+  // injectés dans un tag <style> dans le composant Sidebar (une seule fois, hors du map)
+  diceIconAnimating: {
+    animation: 'diceRoll 0.8s ease-out',
+  },
+  diceBody: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '5px',
+    paddingLeft: '2px',
+  },
+  diceFormula: {
+    fontSize: '12px',
+    color: '#8888a8',
+    fontFamily: 'monospace',
+  },
+  diceRolls: {
+    fontSize: '11px',
+    color: '#64748b',
+    fontFamily: 'monospace',
+  },
+  diceEquals: {
+    fontSize: '11px',
+    color: '#4a4a60',
+  },
+  diceTotal: {
+    fontSize: '15px',
+    fontWeight: '700',
+    color: '#c0c0d0',
+    fontFamily: 'monospace',
+  },
+  badgeCritSuccess: {
+    fontSize: '10px',
+    fontWeight: '600',
+    color: '#4caf77',
+    background: 'rgba(76,175,119,0.15)',
+    border: '1px solid rgba(76,175,119,0.4)',
+    borderRadius: '4px',
+    padding: '1px 5px',
+    letterSpacing: '0.03em',
+    textTransform: 'uppercase',
+  },
+  badgeCritFail: {
+    fontSize: '10px',
+    fontWeight: '600',
+    color: '#e05c5c',
+    background: 'rgba(224,92,92,0.15)',
+    border: '1px solid rgba(224,92,92,0.4)',
+    borderRadius: '4px',
+    padding: '1px 5px',
+    letterSpacing: '0.03em',
+    textTransform: 'uppercase',
+  },
+  // ── Bouton aide ──
+  helpBtn: {
+    position: 'absolute',
+    top: '8px',
+    right: '34px',
+    background: 'none',
+    border: '1px solid #2a2a3e',
+    borderRadius: '50%',
+    color: '#4a4a60',
+    cursor: 'pointer',
+    width: '20px',
+    height: '20px',
+    fontSize: '11px',
+    fontWeight: '700',
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  // ── Modale aide ──
+  helpOverlay: {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 200,
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingTop: '40px',
+    background: 'rgba(0,0,0,0.5)',
+  },
+  helpModal: {
+    background: '#16162a',
+    border: '1px solid #2a2a3e',
+    borderRadius: '10px',
+    padding: '16px',
+    width: 'calc(100% - 32px)',
+    maxHeight: 'calc(100% - 80px)',
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+  },
+  helpHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '8px',
+  },
+  helpTitle: {
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#5b8dee',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  helpCloseBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#4a4a60',
+    cursor: 'pointer',
+    fontSize: '18px',
+    lineHeight: 1,
+    padding: '0 2px',
+  },
+  helpSection: {
+    fontSize: '10px',
+    color: '#4a4a60',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    marginTop: '8px',
+    marginBottom: '4px',
+  },
+  helpRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '11px',
+    color: '#9090a8',
+    padding: '3px 0',
+  },
+  kbd: {
+    background: '#1e1e2e',
+    border: '1px solid #2a2a3e',
+    borderRadius: '4px',
+    padding: '2px 6px',
+    fontSize: '10px',
+    color: '#c0c0d0',
+    fontFamily: 'monospace',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
+  // ── Message action entité (GM) ──
+  messageAction: {
+    padding: '8px 10px',
+    borderRadius: '6px',
+    background: 'rgba(168,85,247,0.07)',
+    border: '1px solid rgba(168,85,247,0.25)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  actionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    flexWrap: 'wrap',
+  },
+  actionIcon: {
+    fontSize: '11px',
+    flexShrink: 0,
+  },
+  actionTitle: {
+    fontSize: '12px',
+    color: '#c0c0d0',
+    flex: 1,
+  },
+  actionSub: {
+    fontSize: '11px',
+    color: '#64748b',
+    paddingLeft: '2px',
+  },
+  actionMeta: {
+    display: 'flex',
+    gap: '10px',
+    fontSize: '11px',
+    color: '#8888a8',
+    flexWrap: 'wrap',
+    paddingLeft: '2px',
+  },
+  actionBtns: {
+    display: 'flex',
+    gap: '6px',
+    marginTop: '2px',
   },
 }

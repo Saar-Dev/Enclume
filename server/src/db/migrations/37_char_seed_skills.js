@@ -1,0 +1,2345 @@
+/**
+ * Migration 37 — char : seed ref_skills
+ *
+ * Insère les 231 compétences du catalogue Polaris dans ref_skills.
+ * Données issues de ref_skills_data.js (v4 — encodage corrigé, IDs propres).
+ *
+ * Corrections v4 par rapport à v3 :
+ *   - 16 IDs corrompus corrigés (suppression _ final, ex: BUREAUCRATIE_ → BUREAUCRATIE)
+ *   - 6 IDs enfants double underscore corrigés (ex: MECANIQUE__EXO_ARMURES → MECANIQUE_EXO_ARMURES)
+ *   - 3 parents virtuels corrompus corrigés (COMMERCE_TRAFIC, MANOEUVRE_DARMURE, PILOTAGE)
+ *   - 1 apostrophe typographique corrigée (U+2019 → U+0027)
+ *   - Labels : suppression caractère U+FFFD résiduel
+ *
+ * uid du fichier source non inséré en base (numéro de référence interne).
+ *
+ * Marqueurs officiels du livre de base conservés tels quels :
+ *   null    = Standard
+ *   "(-3)"  = Difficile
+ *   "(X)"   = Réservée
+ *   "PN"    = Progression Naturelle
+ *   "S"     = Spécialisation
+ *
+ * down : supprime toutes les lignes de ref_skills (pas la table — créée en 34).
+ */
+
+const SKILLS = [
+  {
+    "id": "ATHLETISME",
+    "family": "Aptitudes physiques",
+    "label": "Athlétisme",
+    "parent": null,
+    "attr_1": "FOR",
+    "attr_2": "COO",
+    "marker": null,
+    "description": "Cette Compétence regroupe toutes les actions physiques : la course, le saut, la natation… Elle permet de connaître la distance moyenne parcourue par un personnage qui se déplace à sa vitesse maximale, au sol et dans l’eau (voir le chapitre Combat, section Déplacements et mouvements, page 220). Si un joueur veut que son personnage tente de dépasser sa vitesse de déplacement moyenne, il peut effectuer un Test aléatoire d’Athlétisme : le modificateur de réussite ou d’échec indique alors le nombre de mètres que le personnage gagne (ou perd), par rapport à sa valeur moyenne. La Difficulté du Test peut être modifiée par les conditions du terrain ou les conditions naturelles (par exemple l’intensité des courants, dans le cas de la natation). Une Catastrophe peut indiquer que le personnage risque de se blesser (en chutant, notamment : voir État de santé, section Autres sources de dommages, page 242) ou s’est effectivement blessé (un claquage musculaire par exemple, qui inflige automatiquement une Blessure moyenne)."
+  },
+  {
+    "id": "ENDURANCE",
+    "family": "Aptitudes physiques",
+    "label": "Endurance",
+    "parent": null,
+    "attr_1": "FOR",
+    "attr_2": "COO",
+    "marker": null,
+    "description": "Compétence limitative pour : toute action fatigante destinée à durer dans le temps. Il peut aussi bien s’agir d’efforts physiques que mentaux. Si le MJ utilise les règles avancées de Fatigue (voir État de santé, page 234), le caractère limitatif de cette Compétence n’est plus utile (Endurance est directement utilisée dans ces règles)."
+  },
+  {
+    "id": "ESCALADE",
+    "family": "Aptitudes physiques",
+    "label": "Escalade",
+    "parent": null,
+    "attr_1": "FOR",
+    "attr_2": "COO",
+    "marker": null,
+    "description": "Cette Compétence permet d’escalader parois et murs. Elle permet également de savoir utiliser le matériel d’escalade, de descendre en rappel, etc. Sur une Catastrophe, le personnage tombe…"
+  },
+  {
+    "id": "MANOEUVRES_0G",
+    "family": "Aptitudes physiques",
+    "label": "Manoeuvres 0G",
+    "parent": null,
+    "attr_1": "COO",
+    "attr_2": "ADA",
+    "marker": null,
+    "description": "Compétence limitative pour : toutes les actions physiques nécessitant une certaine coordination physique effectuées en apesanteur."
+  },
+  {
+    "id": "MANOEUVRES_SOUS_MARINES",
+    "family": "Aptitudes physiques",
+    "label": "Manoeuvres sous-marines",
+    "parent": null,
+    "attr_1": "FOR",
+    "attr_2": "COO",
+    "marker": null,
+    "description": "Compétence limitative pour : certaines actions physiques sous l’eau."
+  },
+  {
+    "id": "RESPIRATION_FOE",
+    "family": "Aptitudes physiques",
+    "label": "Respiration FOE",
+    "parent": null,
+    "attr_1": "CON",
+    "attr_2": "VOL",
+    "marker": "(-3)",
+    "description": "Cette Compétence permet de maîtriser les techniques de respiration de fluide ou de toute autre substance organique ou artificielle. Chaque fois qu’un PJ respire du fluide, il doit effectuer un Test de Respiration FOE, dont la Difficulté dépend du produit utilisé (le néo-fluide, par exemple, est plus difficile à respirer que l’hyperfluide, voir le chapitre Équipement, page 272). S’il échoue, il panique et ne peut rien faire d’autre que tenter de retirer son casque. Si on l’en empêche, il peut recommencer ce Test à chaque Tour de combat, avec un bonus de +1 (cumulatif) à chaque tentative, jusqu’à ce qu’il réussisse à respirer calmement."
+  },
+  {
+    "id": "ARMES_LOURDES_CONTACT",
+    "family": "Combat (contact)",
+    "label": "Armes Lourdes (contact)",
+    "parent": null,
+    "attr_1": "FOR",
+    "attr_2": null,
+    "marker": null,
+    "description": "Cette Compétence couvre l’usage des armes lourdes comme les découpe-carlingues, les perceuses de combat, etc. Si le personnage n’est pas stable (appuyé sur quelque chose, équipé d’un harnais spécial, etc.), le niveau de la Compétence doit être divisé par deux."
+  },
+  {
+    "id": "ARMES_SPECIALES_CONTACT_FORCE_COORDINATION",
+    "family": "Combat (contact)",
+    "label": "Force/Coordination",
+    "parent": "ARMES_SPECIALES_CONTACT",
+    "attr_1": "FOR",
+    "attr_2": "COO",
+    "marker": "S",
+    "description": "Cette Compétence permet d’utiliser une arme au maniement bien spécifique, comme les fouets, les chaînes, les lassos, les filets, les grappins, etc. Chaque arme spéciale fait l’objet d’une Compétence spécifique. En fonction de la rareté de l’arme ou de son côté exotique, cette Compétence peut être considérée comme réservée (niveau de maîtrise de départ : X)."
+  },
+  {
+    "id": "ARMES_SPECIALES_CONTACT_COORDINATION_COORDINATION",
+    "family": "Combat (contact)",
+    "label": "Coordination/Coordination",
+    "parent": "ARMES_SPECIALES_CONTACT",
+    "attr_1": "COO",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Cette Compétence permet d’utiliser une arme au maniement bien spécifique, comme les fouets, les chaînes, les lassos, les filets, les grappins, etc. Chaque arme spéciale fait l’objet d’une Compétence spécifique. En fonction de la rareté de l’arme ou de son côté exotique, cette Compétence peut être considérée comme réservée (niveau de maîtrise de départ : X)."
+  },
+  {
+    "id": "ARTS_MARTIAUX_LUTTE",
+    "family": "Combat (contact)",
+    "label": "Lutte",
+    "parent": "ARTS_MARTIAUX",
+    "attr_1": "COO",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Compétence limitative pour : les autres Compétences de combat au contact."
+  },
+  {
+    "id": "ARTS_MARTIAUX_TECHNIQUES_DEFENSIVES",
+    "family": "Combat (contact)",
+    "label": "Techniques défensives",
+    "parent": "ARTS_MARTIAUX",
+    "attr_1": "COO",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Compétence limitative pour : les autres Compétences de combat au contact."
+  },
+  {
+    "id": "ARTS_MARTIAUX_TECHNIQUES_OFFENSIVES",
+    "family": "Combat (contact)",
+    "label": "Techniques offensives",
+    "parent": "ARTS_MARTIAUX",
+    "attr_1": "COO",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Compétence limitative pour : les autres Compétences de combat au contact."
+  },
+  {
+    "id": "COMBAT_ARME",
+    "family": "Combat (contact)",
+    "label": "Combat armé",
+    "parent": null,
+    "attr_1": "FOR",
+    "attr_2": "COO",
+    "marker": null,
+    "description": "Cette Compétence permet d’utiliser des armes simples, maniées à une ou deux mains, telle que les couteaux et les dagues, les matraques et les bâtons de combat, les sabres et les épées, etc. L’utilisation d’armes plus exotiques est couverte par la Compétence Armes spéciales (contact)."
+  },
+  {
+    "id": "COMBAT_A_MAINS_NUES",
+    "family": "Combat (contact)",
+    "label": "Combat à mains nues",
+    "parent": null,
+    "attr_1": "FOR",
+    "attr_2": "COO",
+    "marker": null,
+    "description": "Cette Compétence permet de se battre et de lutter à mains nues. Elle ne couvre que les techniques d’attaque et de défense de base, les techniques plus complexes étant gérées par la Compétence Arts martiaux."
+  },
+  {
+    "id": "ARMES_DE_JET",
+    "family": "Combat (tir)",
+    "label": "Armes de Jet",
+    "parent": null,
+    "attr_1": "COO",
+    "attr_2": "PER",
+    "marker": "(-3)",
+    "description": "Cette Compétence permet d’utiliser les armes de jet, comme les couteaux de lancer, les lances, etc."
+  },
+  {
+    "id": "ARMES_LOURDES",
+    "family": "Combat (tir)",
+    "label": "Armes Lourdes",
+    "parent": null,
+    "attr_1": "COO",
+    "attr_2": "PER",
+    "marker": "(-3)",
+    "description": "Cette Compétence couvre l’usage de l’artillerie légère portative : lance-roquettes, lance-grenades, mortiers, lance-torpilles individuels… Si le personnage n’est pas stable, le niveau de la Compétence doit être divisé par deux."
+  },
+  {
+    "id": "ARMES_DE_POING",
+    "family": "Combat (tir)",
+    "label": "Armes de poing",
+    "parent": null,
+    "attr_1": "COO",
+    "attr_2": "PER",
+    "marker": null,
+    "description": "Cette Compétence permet d’utiliser les pistolets, revolvers ou même pistolets-mitrailleurs, utilisés en mode coup par coup (le mode automatique est couvert par la Compétence Tir automatique)."
+  },
+  {
+    "id": "ARMES_SOUS_MARINES",
+    "family": "Combat (tir)",
+    "label": "Armes sous-marines",
+    "parent": null,
+    "attr_1": "COO",
+    "attr_2": "PER",
+    "marker": null,
+    "description": "Cette Compétence permet d’utiliser les armes spécialement destinées à être utilisées sous l’eau, telles que les lance-harpons."
+  },
+  {
+    "id": "ARMES_SPECIALES_DISTANCE_FORCE_COORDINATION",
+    "family": "Combat (tir)",
+    "label": "Force/Coordination",
+    "parent": "ARMES_SPECIALES_DISTANCE",
+    "attr_1": "FOR",
+    "attr_2": "COO",
+    "marker": "S",
+    "description": "Cette Compétence permet d’utiliser une arme au maniement bien spécifique, un lance-flamme par exemple. Chaque arme spéciale fait l’objet d’une Compétence spécifique, souvent réservée d’ailleurs."
+  },
+  {
+    "id": "ARMES_SPECIALES_DISTANCE_COORDINATION_PERCEPTION",
+    "family": "Combat (tir)",
+    "label": "Coordination/Perception",
+    "parent": "ARMES_SPECIALES_DISTANCE",
+    "attr_1": "COO",
+    "attr_2": "PER",
+    "marker": "S",
+    "description": "Cette Compétence permet d’utiliser une arme au maniement bien spécifique, un lance-flamme par exemple. Chaque arme spéciale fait l’objet d’une Compétence spécifique, souvent réservée d’ailleurs."
+  },
+  {
+    "id": "ARMES_DE_TRAIT",
+    "family": "Combat (tir)",
+    "label": "Armes de Trait",
+    "parent": null,
+    "attr_1": "COO",
+    "attr_2": "PER",
+    "marker": "(-3)",
+    "description": "Cette Compétence permet d’utiliser les armes de trait, telles que les arcs ou les arbalètes."
+  },
+  {
+    "id": "FUSIL_ARMES_DEPAULES",
+    "family": "Combat (tir)",
+    "label": "Fusil/Armes d'épaules",
+    "parent": null,
+    "attr_1": "COO",
+    "attr_2": "PER",
+    "marker": null,
+    "description": "Cette Compétence permet d’utiliser les armes telles que fusils, fusils à pompe, fusils d’assaut (en mode coup par coup seulement). Les armes utilisées en mode automatique sont couvertes par la Compétence Tir automatique, tandis que le tir de précision est couvert par la Compétence Tir de précision."
+  },
+  {
+    "id": "TIR_AUTOMATIQUES",
+    "family": "Combat (tir)",
+    "label": "Tir automatiques",
+    "parent": null,
+    "attr_1": "FOR",
+    "attr_2": "PER",
+    "marker": null,
+    "description": "Compétence limitative pour : toutes les Compétences d’armes à feu utilisées pour tirer en mode automatique."
+  },
+  {
+    "id": "TIR_DE_PRECISION",
+    "family": "Combat (tir)",
+    "label": "Tir de précision",
+    "parent": null,
+    "attr_1": "PER",
+    "attr_2": "VOL",
+    "marker": "(-3)",
+    "description": "Compétence limitative pour : Fusils/Armes d’épaule, pour un tir de précision avec lunette de visée."
+  },
+  {
+    "id": "ANALYSE_EMPATHIQUE",
+    "family": "Communication / Relations sociales",
+    "label": "Analyse empathique",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": "PRE",
+    "marker": "(-3)",
+    "description": "Cette Compétence permet de comprendre les sentiments ou les émotions d’une personne, en étudiant par exemple son comportement, ses gestes et sa posture, ses tics de langage ou ses hésitations… Un personnage peut ainsi déceler un état d’esprit particulier, à un moment donné, et déterminer notamment si son interlocuteur lui ment, lui cache des informations ou est soumis à une quelconque contrainte. La Difficulté du Test dépend de l’intensité des sentiments ou des émotions de la cible, ainsi que de son état d’esprit (calme et sereine ou au contraire troublée, stressée, voire apeurée). Notez qu’il s’agit là d’une perception émotionnelle de surface, immédiate et superficielle : les émotions perçues seront assez imprécises et tiendront plus de l’impression générale et de l’intuition que d’un véritable profil psychologique complet…"
+  },
+  {
+    "id": "COMMANDEMENT",
+    "family": "Communication / Relations sociales",
+    "label": "Commandement",
+    "parent": null,
+    "attr_1": "VOL",
+    "attr_2": "PRE",
+    "marker": null,
+    "description": "Cette Compétence représente l’autorité et le leadership d’un personnage. Il ne s’agit pas seulement de sa capacité à commander et à imposer sa volonté aux individus placés sous ses ordres, mais aussi, plus largement, de son aptitude à prendre la tête d’un groupe et à se conduire en véritable chef. D’une manière plus générale, cette Compétence peut aussi être utilisée pour organiser un groupe, pour en orienter les décisions, pour en garantir la cohésion ou la motivation, ou pour éviter les dissensions internes."
+  },
+  {
+    "id": "ELOQUENCE_PERSUASION",
+    "family": "Communication / Relations sociales",
+    "label": "Éloquence/Persuasion",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": "PRE",
+    "marker": null,
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10, s’il s’agit d’un discours formel (politique, diplomatique, etc.)."
+  },
+  {
+    "id": "ENTREGENT_SEDUCTION",
+    "family": "Communication / Relations sociales",
+    "label": "Entregent/Séduction",
+    "parent": null,
+    "attr_1": "PRE",
+    "attr_2": null,
+    "marker": null,
+    "description": "Cette Compétence permet de séduire, au sens large : il ne s’agit pas seulement de jouer les tombeurs, mais aussi de l’art de se faire bien voir par quelqu’un et de nouer des relations dans une communauté ou un groupe, afin de gagner la confiance de ses membres. Si la cible n’a aucune raison de se méfier du personnage, vous pouvez résoudre la tentative de séduction par un Test normal. Si la cible est méfiante ou rétive, il faut procéder à un Test d’opposition entre la Compétence du personnage et la Volonté de la cible. Le personnage peut d’autre part subir un malus ou bénéficier d’un bonus à son Test, en fonction de la nature plus ou moins honnête de ses propositions…"
+  },
+  {
+    "id": "EXPRESSION_ARTISTIQUE_CHANT",
+    "family": "Communication / Relations sociales",
+    "label": "Chant",
+    "parent": "EXPRESSION_ARTISTIQUE",
+    "attr_1": "INT",
+    "attr_2": "PRE",
+    "marker": "S",
+    "description": "Ce talent permet de connaître les différentes techniques de conte, de danse, de comédie (dans le domaine du spectacle), de chant, etc. La Difficulté du Test peut être déterminée par le nombre de personnes dans l’auditoire, le contexte de la représentation, etc. Chaque spécialité artistique fait l’objet d’une Compétence particulière."
+  },
+  {
+    "id": "EXPRESSION_ARTISTIQUE_COMEDIE_CONTE",
+    "family": "Communication / Relations sociales",
+    "label": "Comédie/Conte",
+    "parent": "EXPRESSION_ARTISTIQUE",
+    "attr_1": "ADA",
+    "attr_2": "PRE",
+    "marker": "S",
+    "description": "Ce talent permet de connaître les différentes techniques de conte, de danse, de comédie (dans le domaine du spectacle), de chant, etc. La Difficulté du Test peut être déterminée par le nombre de personnes dans l’auditoire, le contexte de la représentation, etc. Chaque spécialité artistique fait l’objet d’une Compétence particulière."
+  },
+  {
+    "id": "EXPRESSION_ARTISTIQUE_DANSE",
+    "family": "Communication / Relations sociales",
+    "label": "Danse",
+    "parent": "EXPRESSION_ARTISTIQUE",
+    "attr_1": "COO",
+    "attr_2": "PRE",
+    "marker": "S",
+    "description": "Ce talent permet de connaître les différentes techniques de conte, de danse, de comédie (dans le domaine du spectacle), de chant, etc. La Difficulté du Test peut être déterminée par le nombre de personnes dans l’auditoire, le contexte de la représentation, etc. Chaque spécialité artistique fait l’objet d’une Compétence particulière."
+  },
+  {
+    "id": "EXPRESSION_ARTISTIQUE_INSTRUMENT_DE_MUSIQUE",
+    "family": "Communication / Relations sociales",
+    "label": "Instrument de musique",
+    "parent": "EXPRESSION_ARTISTIQUE",
+    "attr_1": "COO",
+    "attr_2": "PER",
+    "marker": "S",
+    "description": "Ce talent permet de connaître les différentes techniques de conte, de danse, de comédie (dans le domaine du spectacle), de chant, etc. La Difficulté du Test peut être déterminée par le nombre de personnes dans l’auditoire, le contexte de la représentation, etc. Chaque spécialité artistique fait l’objet d’une Compétence particulière."
+  },
+  {
+    "id": "INTIMIDATION",
+    "family": "Communication / Relations sociales",
+    "label": "Intimidation",
+    "parent": null,
+    "attr_1": "VOL",
+    "attr_2": "PRE",
+    "marker": null,
+    "description": "ur intimider, en se montrant sûr de soi et/ou menaçant. Contrairement à la Compétence Éloquence/Persuasion, qui permet de convaincre par la parole et des arguments sensés (au moins en apparence), il s’agit surtout ici de contraindre, en suscitant l’inquiétude voire la peur chez ses interlocuteurs, qui seront ainsi plus enclins à prendre le personnage au sérieux… Cette Compétence peut aussi être utilisée de manière indirecte, pour déstabiliser un personnage lors d’une négociation par exemple (utilisez dans ce cas les règles sur les Compétences utilisées en soutien, dans le chapitre Tests et actions, section Interactions entre Compétences, page 208). Pour l’utilisation de l’Intimidation en combat, voyez également le chapitre Combat, section Combat au contact, page 222."
+  },
+  {
+    "id": "BUREAUCRATIE",
+    "family": "Connaissances",
+    "label": "Bureaucratie",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": null,
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 5."
+  },
+  {
+    "id": "CARTOGRAPHIE",
+    "family": "Connaissances",
+    "label": "Cartographie",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": null,
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "COMMERCE_TRAFIC__ARMES",
+    "family": "Connaissances",
+    "label": "Armes",
+    "parent": "COMMERCE_TRAFIC",
+    "attr_1": "INT",
+    "attr_2": "PRE",
+    "marker": "S",
+    "description": "Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière. La Difficulté du Test dépend de la rareté et de la disponibilité du produit (c’est un désavantage quand on cherche à acheter, mais un avantage quand on cherche à vendre !). La marge de réussite peut servir à réduire le temps d’acquisition ou à trouver des produits, des services ou des informations de meilleure qualité."
+  },
+  {
+    "id": "COMMERCE_TRAFIC__DENREES_ALIMENTAIRES",
+    "family": "Connaissances",
+    "label": "Denrées alimentaires",
+    "parent": "COMMERCE_TRAFIC",
+    "attr_1": "INT",
+    "attr_2": "PRE",
+    "marker": "S",
+    "description": "Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière."
+  },
+  {
+    "id": "COMMERCE_TRAFIC__DROGUES",
+    "family": "Connaissances",
+    "label": "Drogues",
+    "parent": "COMMERCE_TRAFIC",
+    "attr_1": "INT",
+    "attr_2": "PRE",
+    "marker": "S",
+    "description": "Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière."
+  },
+  {
+    "id": "COMMERCE_TRAFIC__INFORMATIONS",
+    "family": "Connaissances",
+    "label": "Informations",
+    "parent": "COMMERCE_TRAFIC",
+    "attr_1": "INT",
+    "attr_2": "PRE",
+    "marker": "S",
+    "description": "Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière."
+  },
+  {
+    "id": "COMMERCE_TRAFIC__MATERIEL_MEDICAL",
+    "family": "Connaissances",
+    "label": "Matériel médical",
+    "parent": "COMMERCE_TRAFIC",
+    "attr_1": "INT",
+    "attr_2": "PRE",
+    "marker": "S",
+    "description": "Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière."
+  },
+  {
+    "id": "COMMERCE_TRAFIC__MATIERES_PREMIERES",
+    "family": "Connaissances",
+    "label": "Matières premières",
+    "parent": "COMMERCE_TRAFIC",
+    "attr_1": "INT",
+    "attr_2": "PRE",
+    "marker": "S",
+    "description": "Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière."
+  },
+  {
+    "id": "COMMERCE_TRAFIC__VEHICULES",
+    "family": "Connaissances",
+    "label": "Véhicules",
+    "parent": "COMMERCE_TRAFIC",
+    "attr_1": "INT",
+    "attr_2": "PRE",
+    "marker": "S",
+    "description": "Cette Compétence permet à un personnage d’acquérir (ou de revendre !) du matériel, des biens, des services ou des informations. Elle représente aussi bien son sens commercial que sa connaissance d’un marché particulier (producteurs et produits, vendeurs et acheteurs, réseaux et lieux d’échanges, etc.). Chaque type de produits fait l’objet d’une Compétence particulière."
+  },
+  {
+    "id": "EDUCATION_CULTURE_GENERALE",
+    "family": "Connaissances",
+    "label": "Éducation/Culture générale",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(-3)",
+    "description": "Cette Compétence représente le niveau d’éducation générale du personnage. À très bas niveau (niveau global inférieur à 3), le personnage ne sait ni lire, ni écrire et aura sans doute de grandes difficultés à s’exprimer correctement. À bas niveau (niveau 3 à 5), elle concerne les acquis et les savoirs essentiels : lire, écrire, compter… À niveau moyen (6 à 10), elle représente les connaissances élémentaires en expression écrite, en histoire, en Géographie, en mathématiques, en sciences, etc. Enfin, à plus haut niveau (11 et plus), elle correspond à tout ce qui peut entrer dans le domaine de la « culture générale », de la connaissance du monde. Certaines Compétences (de connaissances, en général) nécessitent un niveau d’éducation minimum pour pouvoir être développées. Leur description indique alors le niveau requis en Éducation/Culture générale. Celle-ci peut d’autre part tout à fait être utilisée directement lors d’un Test, pour savoir si un personnage connaît ou se souvient d’un élément de connaissance générale, comme une date historique connue, le nom de la capitale de tel ou tel État, etc. (si le sujet devient vraiment précis, il faut utiliser la Compétence de Sciences/Connaissances spécialisées correspondante)."
+  },
+  {
+    "id": "JEU",
+    "family": "Connaissances",
+    "label": "Jeu",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": null,
+    "description": "Cette Compétence représente la connaissance de la plupart des jeux (hors jeux de hasard) et permet également d’y tricher. Tous les joueurs doivent participer à un Test d’opposition, le vainqueur étant celui qui obtient la plus haute marge de réussite. Si un personnage décide de tricher, il bénéficie d’un bonus à son Test (qu’il peut fixer lui-même). Toutefois, ses adversaires peuvent avoir droit à un Test de Perception, avec un bonus équivalent à celui du tricheur : plus leur marge de réussite sera élevée et plus ils se douteront de quelque chose. Avec une marge supérieure ou égale à 15 (« Réussite parfaite »), le tricheur est surpris en train de tricher. Certaines circonstances peuvent grandement compliquer la tâche du tricheur, par exemple un système vidéo qui surveille les joueurs."
+  },
+  {
+    "id": "CONNAISSANCE_DES_NATIONS_ORGANISATIONS",
+    "family": "Connaissances",
+    "label": "Connaissance des nations/organisations",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "PN",
+    "description": "Compétence limitative pour : toutes les actions demandant une connaissance précise de telle ou telle communauté, faction ou nation."
+  },
+  {
+    "id": "CRYPTOGRAPHIE",
+    "family": "Connaissances",
+    "label": "Cryptographie",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "NAVIGATION",
+    "family": "Connaissances",
+    "label": "Navigation",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "RECHERCHE_DINFORMATIONS",
+    "family": "Connaissances",
+    "label": "Recherche d'informations",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(-3)",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_ADMINISTRATION_GESTION",
+    "family": "Connaissances",
+    "label": "Administration/Gestion",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_ARMES_SYSTEMES_DARMEMENT",
+    "family": "Connaissances",
+    "label": "Armes/Systèmes d'armement",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_ASTROPHYSIQUE_ASTRONOMIE",
+    "family": "Connaissances",
+    "label": "Astrophysique/Astronomie",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Physique/Chimie 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_BIOLOGIE_PHYSIOLOGIE",
+    "family": "Connaissances",
+    "label": "Biologie/Physiologie",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_BOTANIQUE",
+    "family": "Connaissances",
+    "label": "Botanique",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Biologie/Physiologie 7."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_CRIMINALISTIQUE",
+    "family": "Connaissances",
+    "label": "Criminalistique",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : selon la technique employée."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_DROIT_LEGISLATIONS",
+    "family": "Connaissances",
+    "label": "Droit/Législations",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_FINANCES",
+    "family": "Connaissances",
+    "label": "Finances",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_ECONOMIE",
+    "family": "Connaissances",
+    "label": "Économie",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_GEOLOGIE",
+    "family": "Connaissances",
+    "label": "Géologie",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Physique/Chimie 5."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_GEOGRAPHIE",
+    "family": "Connaissances",
+    "label": "Géographie",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_HISTOIRE_ARCHEOLOGIE",
+    "family": "Connaissances",
+    "label": "Histoire/Archéologie",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_MEDECINE",
+    "family": "Connaissances",
+    "label": "Médecine",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Prérequis nécessaires : Biologie/Physiologie 7."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_PHARMACOLOGIE",
+    "family": "Connaissances",
+    "label": "Pharmacologie",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaire : Biologie/Physiologie 5, Physique/Chimie 5."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_PHYSIQUE_CHIMIE",
+    "family": "Connaissances",
+    "label": "Physique/Chimie",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_PSYCHOLOGIE",
+    "family": "Connaissances",
+    "label": "Psychologie",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_SCIENCES_POLITIQUES",
+    "family": "Connaissances",
+    "label": "Sciences politiques",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Prérequis nécessaires : Géographie 7, Histoire/Archéologie 5."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_SOCIOLOGIE",
+    "family": "Connaissances",
+    "label": "Sociologie",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "SCIENCES_CONNAISANCES_SPECIALISEES_ZOOLOGIE",
+    "family": "Connaissances",
+    "label": "Zoologie",
+    "parent": "SCIENCES_CONNAISANCES_SPECIALISEES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Biologie/Physiologie 7."
+  },
+  {
+    "id": "STRATEGIE",
+    "family": "Connaissances",
+    "label": "Stratégie",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(-3)",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "TACTIQUE_COMBAT_NAVAL",
+    "family": "Connaissances",
+    "label": "Combat naval",
+    "parent": "TACTIQUE",
+    "attr_1": "INT",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Cette Compétence permet de diriger des unités de combat (ou assimilées) engagées dans une opération militaire et de leur donner des plans d’action efficaces, de manière à prendre l’avantage sur les forces adverses (déplacements, manœuvres et positionnement sur le champ de bataille, tactiques d’attaque et de défense particulières, ruses, etc.). Notez que cette Compétence ne concerne que des opérations ponctuelles (un combat, une bataille) et diffère en cela de la Stratégie, qui permet de gérer un conflit dans sa globalité. Il existe une Compétence par type d’opération tactique : concerne le combat entre navires submersibles (quelle que soit leur taille)."
+  },
+  {
+    "id": "TACTIQUE_COMBAT_SOUTERRAIN",
+    "family": "Connaissances",
+    "label": "Combat souterrain",
+    "parent": "TACTIQUE",
+    "attr_1": "INT",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Cette Compétence permet de diriger des unités de combat (ou assimilées) engagées dans une opération militaire et de leur donner des plans d’action efficaces, de manière à prendre l’avantage sur les forces adverses (déplacements, manœuvres et positionnement sur le champ de bataille, tactiques d’attaque et de défense particulières, ruses, etc.). Notez que cette Compétence ne concerne que des opérations ponctuelles (un combat, une bataille) et diffère en cela de la Stratégie, qui permet de gérer un conflit dans sa globalité. Il existe une Compétence par type d’opération tactique : concerne les opérations militaires menées en milieu souterrain."
+  },
+  {
+    "id": "TACTIQUE_COMBAT_TERRESTRE",
+    "family": "Connaissances",
+    "label": "Combat terrestre",
+    "parent": "TACTIQUE",
+    "attr_1": "INT",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Cette Compétence permet de diriger des unités de combat (ou assimilées) engagées dans une opération militaire et de leur donner des plans d’action efficaces, de manière à prendre l’avantage sur les forces adverses (déplacements, manœuvres et positionnement sur le champ de bataille, tactiques d’attaque et de défense particulières, ruses, etc.). Notez que cette Compétence ne concerne que des opérations ponctuelles (un combat, une bataille) et diffère en cela de la Stratégie, qui permet de gérer un conflit dans sa globalité. Il existe une Compétence par type d’opération tactique : concerne les opérations militaires menées à la Surface."
+  },
+  {
+    "id": "TACTIQUE_OPERATIONS_COMMANDO",
+    "family": "Connaissances",
+    "label": "Opérations commando",
+    "parent": "TACTIQUE",
+    "attr_1": "INT",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Cette Compétence permet de diriger des unités de combat (ou assimilées) engagées dans une opération militaire et de leur donner des plans d’action efficaces, de manière à prendre l’avantage sur les forces adverses (déplacements, manœuvres et positionnement sur le champ de bataille, tactiques d’attaque et de défense particulières, ruses, etc.). Notez que cette Compétence ne concerne que des opérations ponctuelles (un combat, une bataille) et diffère en cela de la Stratégie, qui permet de gérer un conflit dans sa globalité. Il existe une Compétence par type d’opération tactique : concerne les opérations sub-tactiques menées par un petit groupe, avec un objectif spécifique (infiltration ou extraction, sabotage ou assassinat, prise de contrôle d’une petite station ou d’un navire, neutralisation de terroristes ou de preneurs d’otages, etc.), ou pour un combat en environnement difficile (le combat « urbain » par exemple, dans les grandes villes ou les grandes stations sous-marines)."
+  },
+  {
+    "id": "CAMOUFLAGE_DISSIMULATION",
+    "family": "Furtivité / Subterfuge",
+    "label": "Camouflage/Dissimulation",
+    "parent": null,
+    "attr_1": "ADA",
+    "attr_2": "PER",
+    "marker": "(-3)",
+    "description": "Cette Compétence permet de se dissimuler en se servant de l’environnement naturel, en utilisant les recoins ou les anfractuosités, l’obscurité, la végétation (y compris végétation sous-marine). La plupart du temps, Camoufl age/Dissimulation suppose l’utilisation de techniques et de subterfuges particuliers ou d’un matériel adapté : combinaison de camouflage, abri camouflé de manière à se fondre dans le paysage, maquillage et déguisement mimétique, etc. Lors d’un déplacement, Camoufl age/Dissimulation permet aussi de dissimuler ses propres traces. Cette Compétence peut également être utilisée pour un navire, lorsqu’il s’agit de le dissimuler par des moyens physiques par exemple en le cachant dans une fosse sousmarine ou en le maquillant pour le faire passer pour un rocher ou une épave). Camoufl age/Dissimulation est souvent employé dans un Test d’opposition, contre l’Observation de l’adversaire. La Difficulté du Test dépend la plupart du temps de l’environnement et des possibilités de dissimulation offertes par celui-ci. Enfin, cette Compétence permet de cacher un objet sur soi, dans ses bagages ou dans un lieu. La Difficulté du Test dépend de la taille de l’objet et de la vigilance des personnes que l’on cherche à tromper."
+  },
+  {
+    "id": "DEGUISEMENT_IMITATION",
+    "family": "Furtivité / Subterfuge",
+    "label": "Déguisement/Imitation",
+    "parent": null,
+    "attr_1": "ADA",
+    "attr_2": "PER",
+    "marker": "(-3)",
+    "description": "Cette Compétence permet à un personnage de changer d’apparence et même de se faire passer pour quelqu’un d’autre. La Difficulté du Test dépend des objectifs visés : modifier légèrement son apparence est relativement simple, mais adopter une apparence et un comportement à l’opposé de celles du personnage est beaucoup plus difficile. Déguisement/Imitation est la plupart du temps utilisée dans un Test d’opposition contre l’Intelligence (ou l’Observation, selon les cas) de l’adversaire. L’emploi d’un matériel adapté (déguisement, maquillage, etc.) est souvent nécessaire. De même, la connaissance de certaines Compétences peut être indispensable si le personnage doit s’exprimer et dialoguer avec les gens qu’il essaie de tromper."
+  },
+  {
+    "id": "DISCRETION_FILATURE",
+    "family": "Furtivité / Subterfuge",
+    "label": "Discrétion/Filature",
+    "parent": null,
+    "attr_1": "ADA",
+    "attr_2": "PER",
+    "marker": null,
+    "description": "Cette Compétence permet de passer inaperçu dans un lieu public, d’éviter de se faire remarquer et de suivre une personne sans être repéré."
+  },
+  {
+    "id": "EVASION",
+    "family": "Furtivité / Subterfuge",
+    "label": "Evasion",
+    "parent": null,
+    "attr_1": "COO",
+    "attr_2": "VOL",
+    "marker": null,
+    "description": "Cette Compétence permet de se défaire des liens, comme des cordes, des menottes mécaniques ou des filets. La Difficulté du Test dépend de la complexité des liens. Dans certains cas, le MJ peut imposer l’utilisation de matériel (comme une épingle pour crocheter des menottes ou un objet capable de couper ou d’user la corde). Si le PJ n’en a pas, soit l’évasion est impossible, soit la Difficulté est encore augmentée."
+  },
+  {
+    "id": "FURTIVITE_DEPLACEMENT_SILENCIEUX",
+    "family": "Furtivité / Subterfuge",
+    "label": "Furtivité/Déplacement silencieux",
+    "parent": null,
+    "attr_1": "ADA",
+    "attr_2": "PER",
+    "marker": null,
+    "description": "Compétence limitative pour : toute action devant être réalisée sans bruit."
+  },
+  {
+    "id": "PICKPOCKET",
+    "family": "Furtivité / Subterfuge",
+    "label": "Pickpocket",
+    "parent": null,
+    "attr_1": "COO",
+    "attr_2": "ADA",
+    "marker": "(-3)",
+    "description": "Cette Compétence permet de dérober discrètement des objets dans les poches d’autres personnages ou même sur les étalages des marchands. La Difficulté du Test dépend de la taille de l’objet à voler et de son emplacement. Une cible qui se méfie a droit à un Test de Perception, en opposition contre le Test de Pickpocket."
+  },
+  {
+    "id": "LANGUE_ETRANGERE_AMANEUN",
+    "family": "Langues / langages",
+    "label": "Amanéun",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue d’Amazonia (racine(s) : inconnue)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_AZRAN",
+    "family": "Langues / langages",
+    "label": "Azran",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue très rare (racine(s) : dialecte azuran)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_GASHKLAR",
+    "family": "Langues / langages",
+    "label": "Gashklar",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Ancienne langue encore parlée sur Nova (racine(s) : langues de l’ancien temps)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_ISITAC",
+    "family": "Langues / langages",
+    "label": "Isitac",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue de la République du Corail (racine(s) : azuran)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_LESARACH",
+    "family": "Langues / langages",
+    "label": "Lesarach",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langage de la communauté du Léviathan, mêlant sifflements et petits cris aux paroles (racine(s) : inconnue)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_LEXZION",
+    "family": "Langues / langages",
+    "label": "Léxzion",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue parlée sur Pull (racine(s) : arkonien)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_NEO_AZURAN",
+    "family": "Langues / langages",
+    "label": "Néo-azuran",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue la plus répandue au fond des mers (racine(s) : azuran)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_NEZRAIS",
+    "family": "Langues / langages",
+    "label": "Nezraïs",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue du Culte du Prophète de Syrte (racine(s) : langue de l’ancien temps)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_OCEANE",
+    "family": "Langues / langages",
+    "label": "Océane",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue de l’Union méditerranéenne (racine(s) : azuran)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_OLAKAR",
+    "family": "Langues / langages",
+    "label": "Olakar",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue de la Ligue rouge (racine(s) : azuran)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_OLOSAK",
+    "family": "Langues / langages",
+    "label": "Olosak",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue d’Hégémonie (racine(s) : azuran)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_OSSYRIEN",
+    "family": "Langues / langages",
+    "label": "Ossyrien",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des États du Rift (racine(s) : azuran)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_RENAREAN",
+    "family": "Langues / langages",
+    "label": "Rénaréan",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue de l’Alliance polaire (racine(s) : azuran)"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_TERNASET",
+    "family": "Langues / langages",
+    "label": "Ternaset",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des Ternasets"
+  },
+  {
+    "id": "LANGUE_ETRANGERE_TRASHAN",
+    "family": "Langues / langages",
+    "label": "Trashan",
+    "parent": "LANGUE_ETRANGERE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue parlée à Kryss, Pushkar et Suvadi (racine(s) : arkonien et langages de l’ancien temps)"
+  },
+  {
+    "id": "LANGUE_ANCIENNE_ARKONIEN",
+    "family": "Langues / langages",
+    "label": "Arkonien",
+    "parent": "LANGUE_ANCIENNE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des Généticiens (racine(s) : inconnue)"
+  },
+  {
+    "id": "LANGUE_ANCIENNE_AZURAN",
+    "family": "Langues / langages",
+    "label": "Azuran",
+    "parent": "LANGUE_ANCIENNE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Ancienne langue officielle de l’Alliance Azur (racine(s) : azuréen)"
+  },
+  {
+    "id": "LANGUE_ANCIENNE_AZUREEN",
+    "family": "Langues / langages",
+    "label": "Azuréen",
+    "parent": "LANGUE_ANCIENNE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Azuran noble (racine(s) : langues de l’ancien temps)"
+  },
+  {
+    "id": "LANGUE_ANCIENNE_GATEEN",
+    "family": "Langues / langages",
+    "label": "Gatéen",
+    "parent": "LANGUE_ANCIENNE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Ancienne langue parlée à Gatéo (racine(s) : latin)"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_ABSOLAN",
+    "family": "Langues / langages",
+    "label": "Absolan",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des diplomates (racine(s) : néoazuran)"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_ENEFID",
+    "family": "Langues / langages",
+    "label": "Énéfid",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Jargon des espions"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_EXON",
+    "family": "Langues / langages",
+    "label": "Exon",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des dauphins, pas de forme écrite (racine(s) : aucune)"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_FOREUR",
+    "family": "Langues / langages",
+    "label": "Foreur",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des Foreurs. La forme écrite utilise à la fois gravures et son et ne peut être lue qu’avec un appareil spécial ou mutation spécifique"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_INESIS",
+    "family": "Langues / langages",
+    "label": "Inésis",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des prêtres du Trident (racine(s) : azuran)"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_ITHRAXIEN",
+    "family": "Langues / langages",
+    "label": "Ithraxien",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des pirates (racine(s) : néo-azuran)"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_KLAN",
+    "family": "Langues / langages",
+    "label": "Klan",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des mineurs (racine(s) : néo-azuran)"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_LANGAGE_DES_SIGNES",
+    "family": "Langues / langages",
+    "label": "Langage des signes",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Permet de dialoguer par signes (racine(s) : aucune)"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_LEVEAN",
+    "family": "Langues / langages",
+    "label": "Lévéan",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des Léviathans et de la plupart des mammifères, nécessite un appareil radio, pas de forme écrite (racine(s) : aucune)"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_METALAN",
+    "family": "Langues / langages",
+    "label": "Métalan",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des érudits (racine(s) : mélange d’isitac et d’azuréen)"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_NEOLAN",
+    "family": "Langues / langages",
+    "label": "Néolan",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue des ingénieurs (racine(s) : azuran)"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_SIRS",
+    "family": "Langues / langages",
+    "label": "Sirs",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Jargon des bas-fonds, des voleurs et des mendiants (racine(s) : néo-azuran)"
+  },
+  {
+    "id": "LANGAGES_SPECIFIQUES_SOLEEN",
+    "family": "Langues / langages",
+    "label": "Soléen",
+    "parent": "LANGAGES_SPECIFIQUES",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Langue du commerce, très répandue (racine(s) : azuran)"
+  },
+  {
+    "id": "MANOEUVRE_DARMURE__ARMURES_ATMOSPHERIQUES",
+    "family": "Pilotage",
+    "label": "Armures atmosphériques",
+    "parent": "MANOEUVRE_DARMURE",
+    "attr_1": "COO",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Compétence limitative pour : toutes les actions physiques en armure, notamment Acrobatie/Équilibre, Athlétisme, Escalade ou les Compétences de combat au contact. Les Compétences de combat à distance ne sont, elles, pas limitées."
+  },
+  {
+    "id": "MANOEUVRE_DARMURE__ARMURES_EXTERNES",
+    "family": "Pilotage",
+    "label": "Armures externes",
+    "parent": "MANOEUVRE_DARMURE",
+    "attr_1": "COO",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Compétence limitative pour : toutes les actions physiques en armure, notamment Acrobatie/Équilibre, Athlétisme, Escalade ou les Compétences de combat au contact. Les Compétences de combat à distance ne sont, elles, pas limitées."
+  },
+  {
+    "id": "MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES",
+    "family": "Pilotage",
+    "label": "Armures sous-marines",
+    "parent": "MANOEUVRE_DARMURE",
+    "attr_1": "COO",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Compétence limitative pour : toutes les actions physiques en armure, notamment Acrobatie/Équilibre, Athlétisme, Escalade ou les Compétences de combat au contact. Les Compétences de combat à distance ne sont, elles, pas limitées."
+  },
+  {
+    "id": "MANOEUVRE_DARMURE__ARMURES_SPATIALES",
+    "family": "Pilotage",
+    "label": "Armures spatiales",
+    "parent": "MANOEUVRE_DARMURE",
+    "attr_1": "COO",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Compétence limitative pour : toutes les actions physiques en armure, notamment Acrobatie/Équilibre, Athlétisme, Escalade ou les Compétences de combat au contact. Les Compétences de combat à distance ne sont, elles, pas limitées."
+  },
+  {
+    "id": "PILOTAGE__CHASSEURS_SOUS_MARINS",
+    "family": "Pilotage",
+    "label": "Chasseurs sous-marins",
+    "parent": "PILOTAGE",
+    "attr_1": "INT",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Athlétisme 10, Éducation culture générale 10, Navires légers 10."
+  },
+  {
+    "id": "PILOTAGE__CHASSEURS_ATMOSPHERIQUES",
+    "family": "Pilotage",
+    "label": "Chasseurs atmosphériques",
+    "parent": "PILOTAGE",
+    "attr_1": "INT",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Pré-requis nécessai- res : Athlétisme 10, Éducation culture générale 10."
+  },
+  {
+    "id": "PILOTAGE__NAVIRES_LEGERS",
+    "family": "Pilotage",
+    "label": "Navires légers",
+    "parent": "PILOTAGE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation culture générale 7."
+  },
+  {
+    "id": "PILOTAGE__NAVIRES_LOURDS",
+    "family": "Pilotage",
+    "label": "Navires lourds",
+    "parent": "PILOTAGE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Navires légers 10."
+  },
+  {
+    "id": "PILOTAGE__ENGINS_SPATIAUX",
+    "family": "Pilotage",
+    "label": "Engins spatiaux",
+    "parent": "PILOTAGE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Éducation culture générale 10."
+  },
+  {
+    "id": "PILOTAGE__VEHICULES_SOUTERRAINS",
+    "family": "Pilotage",
+    "label": "Véhicules souterrains",
+    "parent": "PILOTAGE",
+    "attr_1": "INT",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Permet de savoir piloter les vedettes et les foreuses souterraines."
+  },
+  {
+    "id": "PILOTAGE__VEHICULES_DE_SOL",
+    "family": "Pilotage",
+    "label": "Véhicules de sol",
+    "parent": "PILOTAGE",
+    "attr_1": "PER",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Permet de piloter tout type de véhicule se déplaçant sur roues, sur chenilles, sur glisseur ou à l’aide de pattes mécaniques, qu’ils soient capables d’évoluer sous l’eau ou à la surface."
+  },
+  {
+    "id": "PILOTAGE__SCOOTERS_SOUS_MARINS",
+    "family": "Pilotage",
+    "label": "Scooters sous-marins",
+    "parent": "PILOTAGE",
+    "attr_1": "PER",
+    "attr_2": "ADA",
+    "marker": "S",
+    "description": "Permet de savoir utiliser les scooters sous-marins."
+  },
+  {
+    "id": "TELEPILOTAGE",
+    "family": "Pilotage",
+    "label": "Télépilotage",
+    "parent": null,
+    "attr_1": "ADA",
+    "attr_2": "INT",
+    "marker": "(-3)",
+    "description": "Cette Compétence couvre l’usage des armes et des équipements contrôlés par une interface électronique ou mécanique. Il sert aussi bien à piloter un drone à distance qu’à contrôler une torpille filo-guidée."
+  },
+  {
+    "id": "CHASSE_PISTAGE",
+    "family": "Survie / Extérieur",
+    "label": "Chasse/Pistage",
+    "parent": null,
+    "attr_1": "PER",
+    "attr_2": "ADA",
+    "marker": "(X)",
+    "description": "Cette Compétence couvre toutes les techniques de chasse, de pêche ou de pistage. La Difficulté dépend du terrain, des conditions naturelles, de la visibilité, etc. Cette Compétence est la plupart du temps limitée par la Connaissance d’un milieu naturel spécifi que (voir plus bas), car les animaux chassés et les techniques de traque sont spécifiques à chaque environnement (il n’y a pas de limitation quand cette Compétence est utilisée en milieu urbain)."
+  },
+  {
+    "id": "CONNAISSANCE_MILIEU_NATUREL_OCEANS",
+    "family": "Survie / Extérieur",
+    "label": "Océans",
+    "parent": "CONNAISSANCE_MILIEU_NATUREL",
+    "attr_1": "ADA",
+    "attr_2": "INT",
+    "marker": "S",
+    "description": "Compétences limitatives pour : toutes les actions requérant une certaine connaissance d’un milieu naturel donné, par exemple Chasse/Pistage, Orientation, Survie, voire même Observation."
+  },
+  {
+    "id": "CONNAISSANCE_MILIEU_NATUREL_SOUTERRAINS",
+    "family": "Survie / Extérieur",
+    "label": "Souterrains",
+    "parent": "CONNAISSANCE_MILIEU_NATUREL",
+    "attr_1": "ADA",
+    "attr_2": "INT",
+    "marker": "S",
+    "description": "Compétences limitatives pour : toutes les actions requérant une certaine connaissance d’un milieu naturel donné, par exemple Chasse/Pistage, Orientation, Survie, voire même Observation."
+  },
+  {
+    "id": "CONNAISSANCE_MILIEU_NATUREL_SURFACE",
+    "family": "Survie / Extérieur",
+    "label": "Surface",
+    "parent": "CONNAISSANCE_MILIEU_NATUREL",
+    "attr_1": "ADA",
+    "attr_2": "INT",
+    "marker": "S",
+    "description": "Compétences limitatives pour : toutes les actions requérant une certaine connaissance d’un milieu naturel donné, par exemple Chasse/Pistage, Orientation, Survie, voire même Observation."
+  },
+  {
+    "id": "OBSERVATION",
+    "family": "Survie / Extérieur",
+    "label": "Observation",
+    "parent": null,
+    "attr_1": "PER",
+    "attr_2": "VOL",
+    "marker": null,
+    "description": "Cette Compétence permet d’analyser avec attention son environnement, pour tenter de repérer des petits détails, des indices, des anomalies, un visage familier ou le comportement particulier d’un individu dans une foule, etc. Il s’agit d’une véritable recherche active, pas d’une simple perception instinctive des alentours (qui dépend plus de l’Attribut Perception). Cette Compétence mesure aussi la vigilance d’un personnage, sa capacité à remarquer naturellement des éléments inhabituels ou suspects."
+  },
+  {
+    "id": "ORIENTATION",
+    "family": "Survie / Extérieur",
+    "label": "Orientation",
+    "parent": null,
+    "attr_1": "PER",
+    "attr_2": "ADA",
+    "marker": null,
+    "description": "Cette Compétence permet de s’orienter et de se diriger dans son environnement, d’éviter de se perdre, de retrouver son chemin, de garder une idée de sa position et de ses déplacements, voire d’éviter les zones dangereuses et les mauvaises rencontres. Cette Compétence est la plupart du temps limitée par la Connaissance d’un milieu naturel spécifi que (voir plus haut), car le personnage doit connaître les spécificités de chaque environnement pour pouvoir s’y orienter efficacement (il n’y a pas de limitation quand cette Compétence est utilisée en milieu urbain)."
+  },
+  {
+    "id": "SURVIE",
+    "family": "Survie / Extérieur",
+    "label": "Survie",
+    "parent": null,
+    "attr_1": "ADA",
+    "attr_2": "VOL",
+    "marker": "(X)",
+    "description": "Cette Compétence permet de survivre dans un environnement hostile, de trouver de l’eau et de la nourriture, de faire du feu, de fabriquer un abri, de se protéger du froid, de fabriquer des outils improvisés, etc. Cette Compétence est la plupart du temps limitée par la Connaissance d’un milieu naturel spécifi que (voir plus haut), car le personnage doit connaître les spécificités de chaque environnement pour pouvoir y survivre (il n’y a pas de limitation si cette Compétence est éventuellement utilisée en milieu urbain)."
+  },
+  {
+    "id": "ANALYSES_SONSCANS",
+    "family": "Techniques",
+    "label": "Analyses sonscans",
+    "parent": null,
+    "attr_1": "ADA",
+    "attr_2": "INT",
+    "marker": "(X)",
+    "description": "Cette Compétence permet d’interpréter les informations transmises par un appareil de détection de type radar, sonar ou scanner."
+  },
+  {
+    "id": "ARMES_EMBARQUEES_ARTILLERIE",
+    "family": "Techniques",
+    "label": "Armes embarquées/Artillerie",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Cette Compétence couvre l’usage des systèmes d’armement utilisés à bord des véhicules (canons, lance-torpilles, lance-roquette, etc.)."
+  },
+  {
+    "id": "ARMURERIE",
+    "family": "Techniques",
+    "label": "Armurerie",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Cette Compétence permet d’entretenir et de réparer les armes à feu."
+  },
+  {
+    "id": "AQUACULTURE_ELEVAGE",
+    "family": "Techniques",
+    "label": "Aquaculture/Elevage",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Cette Compétence permet d’utiliser les techniques d’élevage, d’aquaculture et de culture hydroponique en usage dans le monde sous-marin."
+  },
+  {
+    "id": "ART_ARTISANAT",
+    "family": "Techniques",
+    "label": "Art/Artisanat",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Cette Compétence permet à un personnage de fabriquer des objets divers qu’il pourra vendre. Il existe une Compétence par catégorie générale de produits, à définir avec le maître de jeu (Cuisine, Peinture, Sculpture, Armes blanches, Instruments de musique, etc.). Ces objets doivent être simples et ne peuvent en aucun cas nécessiter des procédés technologiques pour leur assemblage. Ainsi, l’artisan peut fabriquer des armes blanches ou des armures simples, mais en aucun cas des équipements électroniques ou mécaniques (il faut pour cela utiliser la Compétence Génie technique)."
+  },
+  {
+    "id": "CHIRURGIE",
+    "family": "Techniques",
+    "label": "Chirurgie",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Pré-requis nécessaires : Médecine 10, voire Bionique/Cybertechnologie 5 (pour les implantations de matériel cybernétique)."
+  },
+  {
+    "id": "DRESSAGE",
+    "family": "Techniques",
+    "label": "Dressage",
+    "parent": null,
+    "attr_1": "VOL",
+    "attr_2": "PRE",
+    "marker": "(-3)",
+    "description": "Cette Compétence peut être utilisée pour dresser des animaux domestiques ou dompter des créatures sauvages."
+  },
+  {
+    "id": "ELECTRONIQUE",
+    "family": "Techniques",
+    "label": "Électronique",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10."
+  },
+  {
+    "id": "ESPIONNAGE_SURVEILLANCE",
+    "family": "Techniques",
+    "label": "Espionnage/Surveillance",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Pré-requis nécessaires : Éducation/Culture générale 10, Électronique 3."
+  },
+  {
+    "id": "EXPLOSIFS",
+    "family": "Techniques",
+    "label": "Explosifs",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "(X)",
+    "description": "Cette Compétence permet d’utiliser et de désamorcer des explosifs, de connaître les techniques de démolition et d’assembler des charges explosives, voire de concevoir de nouveaux procédés."
+  },
+  {
+    "id": "FALSIFICATION",
+    "family": "Techniques",
+    "label": "Falsification",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": "PER",
+    "marker": "(X)",
+    "description": "Pré-requis nécessaires : la Compétence nécessaire dépend du faux à créer, souvent Art/Artisanat, Informatique, Bureaucratie, Électronique, etc., au niveau 7 ou plus."
+  },
+  {
+    "id": "GENIE_TECHNIQUE_ARCHITECTURE_GENIE_CIVIL",
+    "family": "Techniques",
+    "label": "Architecture/Génie civil",
+    "parent": "GENIE_TECHNIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Ces Compétences permettent de concevoir toute sortes de produits ou d’équipements de haute technologie. Voici quelques exemples : conception de stations ou de cités sous-marines."
+  },
+  {
+    "id": "GENIE_TECHNIQUE_ARCHITECTURE_NAVALE",
+    "family": "Techniques",
+    "label": "Architecture navale",
+    "parent": "GENIE_TECHNIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Ces Compétences permettent de concevoir toute sortes de produits ou d’équipements de haute technologie. Voici quelques exemples : conception de navires."
+  },
+  {
+    "id": "GENIE_TECHNIQUE_BIONIQUE_CYBERTECHNOLOGIE",
+    "family": "Techniques",
+    "label": "Bionique/Cybertechnologie",
+    "parent": "GENIE_TECHNIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaire : Biologie/Physiologie 10."
+  },
+  {
+    "id": "GENIE_TECHNIQUE_BIOTECHNOLOGIE_GENIE_GENETIQUE",
+    "family": "Techniques",
+    "label": "Biotechnologie/Génie génétique",
+    "parent": "GENIE_TECHNIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Prérequis nécessaire : Biologie/Physiologie 10."
+  },
+  {
+    "id": "GENIE_TECHNIQUE_ELECTRONIQUE_INFORMATIQUE",
+    "family": "Techniques",
+    "label": "Électronique/Informatique",
+    "parent": "GENIE_TECHNIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaire : Électronique 10, Informatique 10."
+  },
+  {
+    "id": "GENIE_TECHNIQUE_LOGICIELS",
+    "family": "Techniques",
+    "label": "Logiciels",
+    "parent": "GENIE_TECHNIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaire : Informatique 10."
+  },
+  {
+    "id": "GENIE_TECHNIQUE_NANOTECHNOLOGIE",
+    "family": "Techniques",
+    "label": "Nanotechnologie",
+    "parent": "GENIE_TECHNIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaire : Physique/Chimie 10."
+  },
+  {
+    "id": "GENIE_TECHNIQUE_ROBOTIQUE",
+    "family": "Techniques",
+    "label": "Robotique",
+    "parent": "GENIE_TECHNIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaire : Électronique 10, Informatique 10."
+  },
+  {
+    "id": "GENIE_TECHNIQUE_TELECOMMUNICATIONS",
+    "family": "Techniques",
+    "label": "Télécommunications",
+    "parent": "GENIE_TECHNIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaire : Électronique 10, Informatique 10."
+  },
+  {
+    "id": "INFORMATIQUE",
+    "family": "Techniques",
+    "label": "Informatique",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(-3)",
+    "description": "Pré-requis nécessaires : Éducation culture générale 10."
+  },
+  {
+    "id": "MECANIQUE",
+    "family": "Techniques",
+    "label": "Mécanique",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(-3)",
+    "description": "Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples)."
+  },
+  {
+    "id": "MECANIQUE_EXO_ARMURES",
+    "family": "Techniques",
+    "label": "Exo-armures",
+    "parent": "MECANIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples)."
+  },
+  {
+    "id": "MECANIQUE_NAVIRES_CHASSEURS_SOUS_MARINS",
+    "family": "Techniques",
+    "label": "Navires/Chasseurs sous-marins",
+    "parent": "MECANIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples)."
+  },
+  {
+    "id": "MECANIQUE_CHASSEURS_ATMOSPHERIQUES",
+    "family": "Techniques",
+    "label": "Chasseurs atmosphériques",
+    "parent": "MECANIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples)."
+  },
+  {
+    "id": "MECANIQUE_VEHICULES_SOUTERRAINS",
+    "family": "Techniques",
+    "label": "Véhicules souterrains",
+    "parent": "MECANIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples)."
+  },
+  {
+    "id": "MECANIQUE_VEHICULES_DE_SOL",
+    "family": "Techniques",
+    "label": "Véhicules de sol",
+    "parent": "MECANIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples)."
+  },
+  {
+    "id": "MECANIQUE_GENERATEURS_SYSTEME_DE_SURVIE",
+    "family": "Techniques",
+    "label": "Générateurs/Système de survie",
+    "parent": "MECANIQUE",
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Pré-requis nécessaires : Électronique 5, la plupart du temps (sinon le personnage sera incapable de réparer ou d’améliorer des systèmes automatisés complexes et l’électronique embarquée, il sera juste capable d’intervenir sur les systèmes les plus simples)."
+  },
+  {
+    "id": "PIEGES",
+    "family": "Techniques",
+    "label": "Pièges",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": "PER",
+    "marker": "(-3)",
+    "description": "Cette Compétence permet de créer et de poser des pièges (de tout type : mécaniques, explosifs, etc.), mais aussi de les détecter et de les désamorcer. La marge de réussite peut permettre d’augmenter l’efficacité du piège, mais aussi de mieux le dissimuler, imposant alors un malus au Test de détection."
+  },
+  {
+    "id": "PIRATAGE_INFORMATIQUE",
+    "family": "Techniques",
+    "label": "Piratage informatique",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Pré-requis nécessaire : Informatique 10."
+  },
+  {
+    "id": "PREMIER_SOINS",
+    "family": "Techniques",
+    "label": "Premier soins",
+    "parent": null,
+    "attr_1": "ADA",
+    "attr_2": "INT",
+    "marker": "(-3)",
+    "description": "Cette Compétence indispensable permet de traiter les petites blessures, mais surtout de stabiliser les blessures les plus graves. Le champs d’action de cette Compétence ne se limite donc pas aux simples « premiers secours », mais déborde aussi un tout petit peu sur la médecine d’urgence, et c’est ce qui la rend si importante. Voir le chapitre consacré à l’état de santé pour plus d’informations."
+  },
+  {
+    "id": "SYSTEMES_DE_SECURITE",
+    "family": "Techniques",
+    "label": "Systèmes de sécurité",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Pré-requis nécessaire : Électronique 5, la plupart du temps, sinon le personnage sera incapable de traiter avec les systèmes les plus complexes."
+  },
+  {
+    "id": "ABSENCE",
+    "family": "Compétences Spéciales",
+    "label": "Absence",
+    "parent": null,
+    "attr_1": "ADA",
+    "attr_2": "VOL",
+    "marker": "(X)",
+    "description": "Cette Compétence permet à un personnage de ne plus être remarqué, de passer inaperçu dans une foule, etc. Le modificateur de réussite agit comme un malus à appliquer au Test de Perception ou d’Observation des individus auxquels le personnage tente d’échapper. Ce malus agit aussi sur le Test de Réaction effectué par une éventuelle victime. Tant que le personnage reste concentré, la Compétence fait effet. S’il fait autre chose, il devra refaire le Test."
+  },
+  {
+    "id": "BOUCLIER_MENTAL",
+    "family": "Compétences Spéciales",
+    "label": "Bouclier mental",
+    "parent": null,
+    "attr_1": "VOL",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Cette Compétence permet de renforcer un de ses attributs mentaux (Volonté, Intelligence, Adaptation) contre toute agression pouvant les affecter (attaques mentales, hypnose, images subliminales, interrogatoires ou toute autre action affectant directement l’esprit d’un individu). Le modificateur de réussite indique le bonus dont bénéficie l’Attribut visé. L’effet dure un nombre de minutes égal au niveau de maîtrise du personnage. Celui-ci doit néanmoins attendre au moins une heure pour utiliser la Compétence de nouveau, sous peine de devoir effectuer un Test de résistance à la Fatigue. Note : les bonus aux Attributs ne s’appliquent pas aux niveaux de base des Compétences."
+  },
+  {
+    "id": "CONTROLE_CORPOREL",
+    "family": "Compétences Spéciales",
+    "label": "Contrôle corporel",
+    "parent": null,
+    "attr_1": "CON",
+    "attr_2": "VOL",
+    "marker": "(X)",
+    "description": "Cette Compétence permet à un personnage d’abaisser la température de son corps et son rythme respiratoire pendant un nombre d’heures égal au modificateur de réussite. Il peut ainsi consommer beaucoup moins d’oxygène (sa réserve d’air est augmentée de 10% par point de modificateur de réussite), simuler la mort, mieux supporter le froid, etc. Pendant l’utilisation de cette Compétence, le personnage ne peut toutefois tenter aucune autre action, et doit rester calme et immobile."
+  },
+  {
+    "id": "ACCROBATIE_EQUILIBRE",
+    "family": "Aptitudes physiques",
+    "label": "Acrobatie/Équilibre",
+    "parent": null,
+    "attr_1": "COO",
+    "attr_2": "PER",
+    "marker": "(-3)",
+    "description": "Compétence limitative pour : toute action physique comportant une manœuvre acrobatique ou demandant de garder son équilibre. Cette Compétence permet d’effectuer des figures acrobatiques ou des mouvements de gymnastique (hors du milieu aquatique). On peut ainsi l’utiliser pour passer au travers d’un quadrillage laser, pour se désengager d’un combat, pour effectuer une attaque acrobatique, etc. La Difficulté du mouvement dépend de sa complexité et des risques qu’il fait prendre au personnage. Acrobatie/Équilibre peut également être utilisée lorsque le personnage doit garder son équilibre (ou, en tant que Compétence limitative, lorsqu’il doit agir en équilibre précaire). Enfin, cette Compétence est utile en cas de chute, permettant d’une part d’effectuer des roulades (et de se relever dans le même mouvement) et d’autre part de contrôler une chute et de réduire les dommages infligés par celle-ci (voir le chapitre État de santé, section Autres sources de dommages, page 242). Pour toutes ces actions, l’encombrement dû à l’équipement porté est une difficulté qu’il ne faut pas négliger (voir le chapitre Équipement, section Encombrement, page 312). Note : dans le milieu sous-marin ou en apesanteur, Acrobatie/ Équilibre est remplacée soit par Manœuvre sous-marine ou Manœuvres 0G, soit par la Compétence de Manœuvre d’armure appropriée, dans le cas où une armure mécanisée est utilisée (voir la description de ces Compétences plus bas)."
+  },
+  {
+    "id": "HYBRIDE",
+    "family": "Compétences Spéciales",
+    "label": "Hybride",
+    "parent": null,
+    "attr_1": "CON",
+    "attr_2": "COO",
+    "marker": "(X)",
+    "description": "Seuls les hybrides naturels, les géno-hybrides, les techno-hybrides et les personnage dotés de la mutation Amphibie peuvent développer cette Compétence, qui représente leur affinité avec le milieu aquatique et la maîtrise de leur mutation ou de leurs modifications. Pour plus de détails, voir le chapitre Création de personnage, sections 2. Type génétique du personnage, page 119 et section 3. Capacités spéciales, page 123."
+  },
+  {
+    "id": "HYPNOSE",
+    "family": "Compétences Spéciales",
+    "label": "Hypnose",
+    "parent": null,
+    "attr_1": "VOL",
+    "attr_2": "PRE",
+    "marker": "(X)",
+    "description": "Cette Compétence permet de plonger un individu en état d’hypnose (c’est toutefois impossible à utiliser sur un animal ou en plein combat). Un personnage hypnotisé le reste tant que l’hypnotiseur se concentre sur lui, ou pendant un nombre de minutes égal au modificateur de réussite. Pour implanter une suggestion hypnotique, il faut réussir un Test d’opposition contre la Volonté de la cible. On ne peut implanter qu’une suggestion hypnotique. L’hypnose peut également servir à plonger dans l’inconscient d’un personnage, pour faire resurgir des événements oubliés."
+  },
+  {
+    "id": "MAITRISE_DE_LECHO_POLARIS",
+    "family": "Compétences Spéciales",
+    "label": "Maîtrise de l'Echo Polaris",
+    "parent": null,
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "(X)",
+    "description": "C’est l’une des rares Compétences qu’un personnage peut utiliser dans le Flux Polaris. Elle définit aussi bien les connaissances qu’a un personnage de cette mystérieuse dimension, que sa capacité à y survivre. Elle peut par exemple être utilisée pour s’orienter dans l’univers du Flux, à y trouver des phares psychiques ou des régions précises, mais aussi à échapper à un éventuel poursuivant. Enfin, la Maîtrise de l’écho Polaris permet aussi de s’échapper du Flux Polaris. Voir Le Flux Polaris, dans le chapitre La Force Polaris, pour plus d’informations."
+  },
+  {
+    "id": "MAITRISE_DE_LA_FORCE_POLARIS",
+    "family": "Compétences Spéciales",
+    "label": "Maîtrise de la Force Polaris",
+    "parent": null,
+    "attr_1": "VOL",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Cette Compétence permet au personnage de libérer volontairement l’énergie de la Force Polaris et de la contrôler, afin d’en utiliser les pouvoirs. Elle permet aussi d’éviter les libérations accidentelles. Reportez-vous au chapitre consacré à la Force Polaris pour plus d’information. Note : pour développer cette Compétence, vous devez acheter l’Avantage Force Polaris."
+  },
+  {
+    "id": "MEDITATION",
+    "family": "Compétences Spéciales",
+    "label": "Méditation",
+    "parent": null,
+    "attr_1": "VOL",
+    "attr_2": null,
+    "marker": "(X)",
+    "description": "Cette Compétence permet de faire le vide, de se concentrer ou se reposer. Un personnage qui utilise la méditation avec succès devient imperméable aux influences extérieures (le bruit, la pression mentale, etc.). Il peut récupérer des effets de la Fatigue en deux fois moins de temps que d’habitude. Enfin, il peut aussi méditer pour réfléchir à un problème. La Difficulté dépend de la complexité de ce dernier et le temps nécessaire se compte généralement en heures. À la fin de la méditation, en fonction de la marge de réussite obtenue, le MJ pourra donner des indices au joueur pour l’aider sur un problème particulier (nouvelles idées, indices sur la solution, rappel ou nouvel éclairage sur des détails ou des événements oubliés, etc.)."
+  },
+  {
+    "id": "MUTATION_AGILITE_CAUDALE",
+    "family": "Compétences Spéciales",
+    "label": "Agilité caudale",
+    "parent": "MUTATION",
+    "attr_1": "COO",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Le personnage est doté d’une queue. Un personnage peut apprendre à manipuler des objets avec sa queue et même à attaquer avec ou à s’en servir comme d’un membre normal. Il peut donc développer la Compétence Agilité caudale (COO/COO), à un coût normal. Cette Compétence permet de manipuler des objets avec sa queue et agit comme une Compétence limitative pour les Compétences suivantes :"
+  },
+  {
+    "id": "MUTATION_CONTAGION",
+    "family": "Compétences Spéciales",
+    "label": "Contagion",
+    "parent": "MUTATION",
+    "attr_1": "CON",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Le personnage est nourri des bactéries qui vivent en symbiose avec lui. Ces maladies sont extrêmement contagieuses en permanence. Le personnage est totalement immunisé contre les maladies et, surtout, le fait qu’il soit contagieux ne se voit pas (à la différence de Purulence). Si la mutation n’est pas contrôlée, tout contact avec la peau de l’individu transmet une maladie comparable à la Grippe bleue (voir Maladies et poisons, dans le chapitre État de santé, page 244). Le mutant peut tenter de maîtriser sa contagion. Cela devient alors une Compétence spéciale (Contagion, CON/VOL, X), qui peut être développée à un coût doublé. S’il réussit son Test de Compétence, le personnage peut choisir ou non de contaminer une personne qu’il touche. Une éventuelle victime peut développer une maladie en 2D6 heures (moins le modifica￾teur de réussite), la Difficulté du Test en indiquant la virulence :"
+  },
+  {
+    "id": "MUTATION_CONTROLE_MOLECULAIRE",
+    "family": "Compétences Spéciales",
+    "label": "Contrôle moléculaire",
+    "parent": "MUTATION",
+    "attr_1": "CON",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Cette mutation donne accès à la Compétence spéciale Contrôle moléculaire (CON/VOL), qui peut être développée à un coût doublé. La structure moléculaire d’un individu ayant ce pouvoir peut être modifiée, à la suite d’un déclenchement volontaire ou involontaire de cette mutation. Sur un déclenchement volontaire, grâce à un Test de Compétence, le personnage peut se transformer en magma de matière informe (d’une masse équivalente à celle de son corps d’origine), qu’il empêche de se dissocier. Notez le modificateur de réussite obtenu. Chaque transformation prend 2D10 Tours de combat. Le personnage peut alors se déplacer (très lentement), glisser sous des portes et être conscient de son environnement, mais uniquement grâce au toucher. Il peut toutefois tenter de garder un contrôle limité sur sa forme et créer certains organes grâce à un nouveau Test"
+  },
+  {
+    "id": "MUTATION_EMPATHIE",
+    "family": "Compétences Spéciales",
+    "label": "Empathie",
+    "parent": "MUTATION",
+    "attr_1": "VOL",
+    "attr_2": "PRE",
+    "marker": "S",
+    "description": "Cette mutation donne accès à la Compétence spéciale Empathie (VOL/PRE, -3), qui peut être développée à un coût doublé. Elle permet de communiquer avec des créatures empathiques comme le corail (action Très difficile, -7) et de ressentir les émotions des animaux (action Assez difficile, -3). Pour ressentir les émotions des individus, il faut réussir le Test avec un malus égal à la Volonté de la cible divisée par deux. Un empathe peut également tenter de modifier les émotions d’un individu, grâce à un Test d’opposition contre la Volonté de ce dernier. La Marge de réussite de l’empathe indique le nombre de Tours de combat pendant lesquels les émotions de la cible sont altérées. En cas d’échec critique, le personnage visé se rend compte qu’il subit une tentative d’intrusion mentale (même s’il sera sans doute incapable d’en définir la provenance). Les sentiments d’un individu ne peuvent être modifiés qu’étape par étape. Par exemple, un personnage éprouvant de la haine ne peut pas tout de suite ressentir une joie folle ou un amour fou. L’empathe peut alors effectuer plusieurs jets sur le même individu, mais il ne doit pas y avoir d’interruption sinon il doit tout recommencer. Enfin, certains empathes sont même capables de ressentir les émotions fortes qui imprègnent un endroit (action Presque impossible, -13)."
+  },
+  {
+    "id": "MUTATION_METAMORPHOSE",
+    "family": "Compétences Spéciales",
+    "label": "Métamorphose",
+    "parent": "MUTATION",
+    "attr_1": "CON",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Cette mutation donne accès à la Compétence spéciale Métamorphose (CON/VOL, -3), qui peut être développée à un coût doublé. Elle permet de prendre l’apparence physique d’un individu (et l’apparence physique seulement). Si le métamorphe veut pousser l’imitation jusqu’à reproduire les manières (démarche, gestes, timbre de voix, etc.) de l’individu copié, il doit passer par un Test de Déguisement/Imitation (il bénéficie toutefois du Bonus de réussite obtenu lors du Test de Métamorphose)."
+  },
+  {
+    "id": "MUTATION_PURULENCE",
+    "family": "Compétences Spéciales",
+    "label": "Purulence",
+    "parent": "MUTATION",
+    "attr_1": "CON",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "La peau de l’individu est couverte de pustules. Il est en permanence rongé par des maladies et des parasites qu’il nourrit. Les individus ayant une telle mutation sont presque toujours masqués de la tête aux pieds. La Présence du personnage est réduite de 2 points (minimum 3), et tous ses Tests d’interactions sociales destinés à plaire, à convaincre, etc., subissent un malus de -5 si on peut voir son apparence. L’Attribut Résistance aux maladies est en revanche augmenté de 3 points. Si le personnage subit une nouvelle fois la mutation Purulence, sa Présence est réduite d’1 point et sa Résistance aux maladies augmentée de 2 points supplémentaires. Le personnage est contagieux uniquement pendant certaines périodes de l’année (en général une semaine tous les trois mois). Les maladies qu’il transmet sont comparables à la Grippe bleue (voir Maladies et poisons, dans le chapitre État de santé, page 244). Le personnage peut tenter de maîtriser sa Purulence pour pouvoir contrôler ses périodes de contamination. Purulence devient alors une Compétence (Purulence, CON/VOL, X), qui peut être développée à un coût normal. À chaque période de contamination, le PJ peut tenter de juguler ses maladies, en effectuant une fois par jour un Test de Compétence. Il subit toutefois un malus cumulatif de -1 chaque jour, tant qu’il n’a pas été contagieux pendant une semaine. La Purulence peut aussi être utilisée comme une arme. La peau de la cible et celle du mutant doivent être en contact. Le mutant effectue alors un Test de Purulence en opposition à la Constitution de sa cible. Si ce Test est réussi, la peau de la victime est rongée par les maladies à une vitesse incroyable, et subit des Dommages physiques égaux à 3D10 (plus le modificateur de réussite). S’il survit, il risque encore de contracter la Grippe bleue (voir Maladies et poisons, dans le chapitre État de santé, page 244). S’il meurt, son cadavre reste terriblement contagieux. Selon certaines rumeurs, il existerait certains produits permettant de neutraliser temporairement cette mutation mais ces produits seraient des drogues puissantes. On raconte aussi que les mutants purulents peuvent vivre en symbiose avec des parasites de la surface."
+  },
+  {
+    "id": "MUTATION_RADIATIONS",
+    "family": "Compétences Spéciales",
+    "label": "Radiations",
+    "parent": "MUTATION",
+    "attr_1": "CON",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Cette mutation donne accès à la Compétence spéciale Radiations (CON/VOL, -3), qui peut être développée à un coût doublé, et qui lui permet de libérer un flot de radiations dans l’organisme d’une victime par simple contact. L’intensité du rayonnement inflige 2D6 points d’irradiation (plus le modificateur de réussite). Chaque fois que le personnage subit de nouveau cette mutation, cette intensité augmente de 3 points. Enfin, le personnage bénéficie gratuitement de la mutation Résistance aux radiations."
+  },
+  {
+    "id": "MUTATION_SONAR",
+    "family": "Compétences Spéciales",
+    "label": "Sonar",
+    "parent": "MUTATION",
+    "attr_1": "PER",
+    "attr_2": null,
+    "marker": "S",
+    "description": "Le personnage est doté d’une sorte de sonar qui lui permet de repérer des obstacles sous l’eau ou dans le noir. Cette mutation donne accès à la Compétence spéciale Sonar (PER/PER), qui peut être développée à un coût normal. La portée du sonar est égale à l’Intelligence du personnage, en mètres. Cette Compétence permet aussi de libérer une onde sonique, que l’on peut utiliser comme arme, aussi bien sous l’eau qu’à l’air libre. Il faut alors réussir un Test de So- nar, avec les mêmes modificateurs que ceux qui s’appliquent normalement au combat à distance, pour des dommages de base de 2D10."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_ALTERATION_TEMPORELLE",
+    "family": "Compétences Spéciales",
+    "label": "Altération Temporelle",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Zone d’effet : 5 mètres de diamètre +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_ATTAQUE_PSYCHIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Attaque psychique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Malus au Test de Résistance au Choc : +0 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_BARRIERE_DE_FORCE",
+    "family": "Compétences Spéciales",
+    "label": "Barrière de Force",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Protection : 5 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_BARRIERE_MOLECULAIRE",
+    "family": "Compétences Spéciales",
+    "label": "Barrière moléculaire",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Protection : 10 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_BARRIERE_PSYCHIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Barrière psychique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Bonus au Test de Résistance au Choc : +1 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_BETE_DU_FLUX",
+    "family": "Compétences Spéciales",
+    "label": "Bête du Flux",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Distance max. d’apparition de la créature : 5 mètres +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_BROUILLAGE",
+    "family": "Compétences Spéciales",
+    "label": "Brouillage",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Malus : -3 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_CAUCHEMAR",
+    "family": "Compétences Spéciales",
+    "label": "Cauchemar",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 12 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_CHAMP_DE_FORCE",
+    "family": "Compétences Spéciales",
+    "label": "Champ de Force",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Protection : 5 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_CHAMP_MOLECULAIRE",
+    "family": "Compétences Spéciales",
+    "label": "Champ moléculaire",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Protection : 10 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_CHAMP_PSYCHIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Champ psychique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Bonus au Test de Résistance au Choc : +1 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_CONTROLE_MENTAL",
+    "family": "Compétences Spéciales",
+    "label": "Contrôle mental",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 10 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_DAGUE_PSYCHIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Dague psychique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Malus au Test de Résistance au Choc : - 3 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_DECHIRURE_DU_FLUX",
+    "family": "Compétences Spéciales",
+    "label": "Déchirure du Flux",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 15 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_DESINTEGRATION_MOLECULAIRE",
+    "family": "Compétences Spéciales",
+    "label": "Désintégration moléculaire",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Dommages : 2D10 +/- modif. de réussite (1 Localisation touchée, déterminée au hasard sur la table de localisation des attaques à distance)."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_DESTRUCTURATION",
+    "family": "Compétences Spéciales",
+    "label": "Déstructuration",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 12 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_DISRUPTION_MOLECULAIRE",
+    "family": "Compétences Spéciales",
+    "label": "Disruption moléculaire",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Dommages : 2D10 +/- modif. de réussite (2 Localisations touchées, déterminées au hasard sur la table de localisation des attaques à distance)."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_FOUDRE",
+    "family": "Compétences Spéciales",
+    "label": "Foudre",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Dommages physiques : 2D10+3 +/- modif. de réussite (1 Localisation touchée, déterminée au hasard sur la table de localisation des attaques à distance)."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_GUERISON_PSYCHIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Guérison psychique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène (élimination des suggestions hypnotiques) : 12 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_GUERISON_MOLECULAIRE",
+    "family": "Compétences Spéciales",
+    "label": "Guérison moléculaire",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Note : le personnage peut utiliser ce pouvoir sur lui-même."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_LAMES_DENERGIE",
+    "family": "Compétences Spéciales",
+    "label": "Lames d'énergie",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Nombre de lames d’énergie : 1 + modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_LAMES_PSYCHIQUES",
+    "family": "Compétences Spéciales",
+    "label": "Lames psychiques",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Nombre de lames psychiques : 1 + modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_MANGEUR_DESPRIT",
+    "family": "Compétences Spéciales",
+    "label": "Mangeur d'esprit",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Distance max. d’apparition de la créature : 5 mètres +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_MASSE_DE_DESTRUCTION",
+    "family": "Compétences Spéciales",
+    "label": "Masse de destruction",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Distance max. d’apparition de la créature : 5 mètres +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_MODIFICATION_DE_LA_MASSE",
+    "family": "Compétences Spéciales",
+    "label": "Modification de la masse",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : marge de réussite du Test (ou marge d’échec en cas de libération accidentelle)."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_MODIFICATION_DE_LA_PRESSION",
+    "family": "Compétences Spéciales",
+    "label": "Modification de la pression",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 5 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_MODIFICATION_DE_LA_TEMPERATURE",
+    "family": "Compétences Spéciales",
+    "label": "Modification de la température",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : marge de réussite du Test (ou marge d’échec en cas de libération accidentelle)."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_OBLITERATION_PSYCHIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Oblitération psychique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Malus au Test de Résistance au Choc : +0 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_ONDE_DE_CHOC",
+    "family": "Compétences Spéciales",
+    "label": "Onde de choc",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Nombre d’ondes de choc : 1 + modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_ONDE_DE_CHOC_PSYCHIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Onde de choc psychique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Nombre d’ondes de choc psychiques : 1 + modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_ONDE_POLARIS",
+    "family": "Compétences Spéciales",
+    "label": "Onde Polaris",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 1 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_PACIFICATION",
+    "family": "Compétences Spéciales",
+    "label": "Pacification",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 12 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_PASSAGE",
+    "family": "Compétences Spéciales",
+    "label": "Passage",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Durée : 5 Tours de combat +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_PERCEPTION_DE_LA_REALITE",
+    "family": "Compétences Spéciales",
+    "label": "Perception de la réalité",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Malus aux actions : -1 - modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_PRESCIENCE",
+    "family": "Compétences Spéciales",
+    "label": "Prescience",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Ce pouvoir permet d’entrevoir un avenir proche. En se concentrant sur une action, un individu, un événement, un lieu, etc., on peut percevoir une image très floue du futur (en cas de déclenchement involontaire, c’est au MJ de déterminer à quoi ou à qui se rapportera cette vision). Un personnage qui utilise ce pouvoir se retrouve plongé dans la Force Polaris, et son esprit ne fait plus qu’un avec l’océan et les mammifères marins. Ce phénomène est une expérience à la fois magnifique et terriblement inquiétante, dans un univers où la présence sinistre de « l’Autre », une entité mystérieuse qui hante le Polaris, est omniprésente."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_PRISON_MENTALE",
+    "family": "Compétences Spéciales",
+    "label": "Prison mentale",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 12 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_PULSION_ELECTROMAGNETIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Pulsion électromagnétique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Attaque IEM : le malus au Test de panne est égal au modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_REGENERATION_MOLECULAIRE",
+    "family": "Compétences Spéciales",
+    "label": "Régénération moléculaire",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Zone d’effet (libération accidentelle) : 5 mètres de diamètre +/- modif. d’échec."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_SENSIBILITE_PSYCHIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Sensibilité psychique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Zone d’effet : 15 mètres de diamètre +/- (10 m x modif. de réussite)."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_SIPHON_DENERGIE",
+    "family": "Compétences Spéciales",
+    "label": "Siphon d'énergie",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Zone d’effet : 15 mètres de diamètre +/- (10 m x modif. de réussite)."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_SONSCAN",
+    "family": "Compétences Spéciales",
+    "label": "Sonscan",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 10 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_SPHERE_DE_GRAVITE",
+    "family": "Compétences Spéciales",
+    "label": "Sphère de gravité",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 12 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_SPHERE_DE_REPULSION_ORGANIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Sphère de répulsion organique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 12 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_SPHERE_TEMPORELLE",
+    "family": "Compétences Spéciales",
+    "label": "Sphère temporelle",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 5 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_SPHERE_DE_TERREUR",
+    "family": "Compétences Spéciales",
+    "label": "Sphère de terreur",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 12 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_TELEKINESIE",
+    "family": "Compétences Spéciales",
+    "label": "Télékinésie",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 12 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_TELEPORTATION",
+    "family": "Compétences Spéciales",
+    "label": "Téléportation",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 12 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_TEMPETE_DU_FLUX",
+    "family": "Compétences Spéciales",
+    "label": "Tempête du Flux",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Dommages physiques : 2D10 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_TOURBILLON",
+    "family": "Compétences Spéciales",
+    "label": "Tourbillon",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 10 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_TOURBILLON_DE_LA_MORT",
+    "family": "Compétences Spéciales",
+    "label": "Tourbillon de la mort",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Dommages physiques : 2D10 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_VORTEX_PSYCHIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Vortex psychique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 12 +/- modif. de réussite."
+  },
+  {
+    "id": "POUVOIRS_POLARIS_VORTEX_PHYSIQUE",
+    "family": "Compétences Spéciales",
+    "label": "Vortex physique",
+    "parent": "POUVOIRS_POLARIS",
+    "attr_1": "INT",
+    "attr_2": "VOL",
+    "marker": "S",
+    "description": "Puissance du phénomène : 10 +/- modif. de réussite."
+  }
+];
+
+export const up = async (knex) => {
+  await knex('ref_skills').insert(SKILLS)
+}
+
+export const down = async (knex) => {
+  await knex('ref_skills').del()
+}

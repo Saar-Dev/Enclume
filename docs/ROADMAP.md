@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-04-06 Session 14
+> Dernière mise à jour : 2026-04-22 Session 34
 
 ---
 
@@ -10,172 +10,109 @@
 - Runs à vide réguliers pour vérifier l'alignement
 - Priorité : CODE (mémoire externe) > conversation en cours
 
-## Structure des sessions
-1. Lire JOURNAL.md + ASBUILT.md + EN_COURS.md
-2. Identifier où on en est
-3. Travailler par étapes stables
-4. Mettre à jour la doc avant de terminer la session
-
 ---
 
 ## Phase 0 — Socle technique ✅
-
-| Tâche | État |
-|---|---|
-| Structure monorepo (client, server, shared, docs) | ✅ |
-| Git + remote GitHub | ✅ |
-| Docker : PostgreSQL + Redis + MinIO | ✅ |
-| Serveur Express + Socket.io minimal | ✅ |
-| Route /api/health | ✅ |
-| Migrations Knex (19 au total) | ✅ |
-| Connexion DB vérifiée au démarrage | ✅ |
-| shared/events.js | ✅ |
-| Client React initialisé (Vite) | ✅ |
-
----
-
 ## Phase 1 — Auth + campagnes ✅
-
-| Tâche | État |
-|---|---|
-| Middleware requireAuth (JWT) | ✅ |
-| Middleware requireRole | ✅ |
-| Gestion d'erreurs centralisée (AppError + errorHandler) | ✅ |
-| POST /auth/register | ✅ |
-| POST /auth/login | ✅ |
-| POST /auth/logout | ✅ |
-| GET /auth/me | ✅ |
-| CRUD campagnes + invite_code | ✅ |
-| Rejoindre via invite_code | ✅ |
-| Dashboard — liste campagnes, créer, rejoindre | ✅ |
 
 ---
 
 ## Phase 2 — Battlemap 3D + session de jeu 🔲
 
-### Serveur — infrastructure ✅
-| Tâche | État |
-|---|---|
-| MinIO configuré (bucket + middleware upload) | ✅ |
-| Routes battlemaps (CRUD + voxel_data) | ✅ |
-| Routes tokens (CRUD JSON pur) | ✅ |
-| Routes characters (CRUD + description + gm_notes) | ✅ |
-| Route /api/textures (proxy packs MinIO) | ✅ |
-| Route /api/assets/:folder/*filePath (proxy général MinIO) | ✅ |
-| Route /api/characters standalone (PUT/:id, DELETE/:id) | ✅ |
-| errorHandler amélioré (route + méthode + stack) | ✅ |
-| Script start.ps1 | ✅ |
-| Route PUT /api/users/me (username, email, color, password) | ✅ |
+### Chantier 9A — Refonte voxel ✅
+### Chantier 9B — Interface CRUD texture packs ✅
+### Chantier 9C — Système entités interactables ✅
+### Chantier 9D — Atelier du GM ✅
+### Chantier 9E — Entités en session 🔲
 
-### Serveur — temps réel
-| Tâche | État |
+| Tâche 9E | État |
 |---|---|
-| Socket.io — authentification WebSocket (JWT) | ✅ |
-| Socket.io — session:join / session:joined | ✅ |
-| Socket.io — token:move / token:moved | ✅ |
-| Socket.io — token:created / token:deleted | ✅ |
-| Socket.io — character:updated | ✅ |
-| Socket.io — voxel:add / voxel:remove | ✅ |
-| Socket.io — map:switch | ✅ |
-| Socket.io — map:viewport (Snap GM, verrouillage) | ✅ |
-| Socket.io — chat:message | ✅ |
-| Socket.io — dice:roll / dice:result | 🔲 |
-| Routes dés (calcul serveur + seed) | 🔲 |
+| Bug 9D — blueprints visibles dans palette éditeur | ✅ session 34 |
+| Textures entités — pack_id dans JOIN serveur | ✅ session 34 |
+| RadialMenu — menu interactions joueur | ✅ session 34 |
+| EntityInstancePanel — config instance GM | ✅ session 34 |
+| Flux interaction joueur → arbitrage GM → changement état | ✅ partiel (S34-1) |
+| Bug S34-1 — Changement d'état visible sans F5 | 🔲 priorité 1 |
+| Bug S34-2 — Jet sans compétence → guard skill_id | 🔲 priorité 2 |
+| Bug S34-3 — Formule 1d20 au lieu de 2d10 | 🔲 priorité 2 |
+| Bug S34-4 — GM auto-approve | 🔲 priorité 3 |
+| Bug S34-5 — Notifications dans chat + couleur onglet | 🔲 priorité 4 |
+| Bug S34-6 — Détection ⚙ robuste | 🔲 priorité 5 |
+| Géométries entités : door + trapdoor dans l'Atelier | 🔲 |
+| Interactions — déplacement/rotation entité | 🔲 |
+| SkillCheck WS — jet côté serveur, résolution | 🔲 |
+| Favicon client/public/favicon.svg | 🔲 |
 
-### Serveur — battlemaps étendues
+### Chantier 9F-0 — Module `polaris.js` — Calcul serveur (PRÉREQUIS 9F-B) 🔲
+
+**Contexte :** PE1 ("skillTotal calculé client") était une rustine documentée. Le serveur ne doit pas
+dépendre du client pour les valeurs mécaniques. Un joueur peut envoyer `skillTotal: 999` sans détection.
+
+**Périmètre :** aucune migration SQL. Uniquement :
+- `server/src/lib/polaris.js` — table AN, `calcNA()`, `calcSkillTotal()`, `calcAttributeTotal()`
+- `socket/index.js` — `ENTITY_ACTION_RESOLVE` reçoit `skillId` (pas `skillTotal`) → serveur recalcule
+- `SessionPage.jsx` — payload `ENTITY_ACTION_REQUEST` n'envoie plus `skillTotal`
+- PE1 supprimé comme convention
+
 | Tâche | État |
 |---|---|
-| Route POST /battlemaps/:id/duplicate — dupliquer une carte | ✅ |
-| Route PUT /campaigns/:id — accepter default_battlemap_id | ✅ |
-| Migration — bg_color VARCHAR sur battlemaps | ⚠️ à clarifier |
-| Upload screenshot sortie éditeur → MinIO (cover_image_url) | 🔲 |
+| `server/src/lib/polaris.js` — table AN + calcNA + calcSkillTotal + calcAttributeTotal | 🔲 |
+| `socket/index.js` — calcul serveur dans ENTITY_ACTION_RESOLVE | 🔲 |
+| `SessionPage.jsx` — retirer skillTotal du payload | 🔲 |
+| Tests console F12 | 🔲 |
+
+### Chantiers 9F-A/B/C — Mouvement entités 🔲
+
+**Prérequis : 9F-0 terminé et validé.**
+
+| Chantier | Contenu | État |
+|---|---|---|
+| 9F-A | Rotation tokens + migration `r` + table `polaris_mr` + collision map Redis | 🔲 |
+| 9F-B | Interaction déplacement entité (orthogonal 4 axes) + UX ghost client | 🔲 |
+| 9F-C | Diagonal 45° + animation Lerp 300ms + Tchebychev | 🔲 |
+
+Voir `docs/PLAN_ENTITY.md` pour la spécification complète.
+| Tâche | État |
+|---|---|
+| Routes battlemaps CRUD + voxels | ✅ |
+| Routes tokens | ✅ |
+| Routes characters | ✅ |
+| Lock éditeur + heartbeat | ✅ |
+| Upload screenshot sortie éditeur → MinIO | 🔲 |
 
 ### Client — Canvas 3D
 | Tâche | État |
 |---|---|
-| Intégration Three.js / R3F | ✅ |
-| Système de packs de textures voxel | ✅ |
-| Éditeur voxel 3D (mode édition GM) | ✅ |
-| Sauvegarde voxel auto + à la fermeture | ✅ |
-| Alignement voxel/grille (+0.5 visuel, bug corrigé session 8) | ✅ |
-| Tokens 3D — chargement .glb + label + halo sélection | ✅ |
-| Tokens — placement par drag depuis Sidebar | ✅ |
-| Tokens — drag & drop déplacement sur la carte | ✅ |
-| Tokens — snap à la grille | ✅ |
-| Tokens — suppression touche Suppr (GM) | ✅ |
-| Tokens — menu contextuel double clic | ✅ |
-| Tokens — synchronisation Socket.io (MOVED / CREATED / DELETED) | ✅ |
-| Tokens — ownership drag (joueur bloqué sur tokens d'autrui) | ✅ |
-| Tokens — validation drop joueur (voxel obligatoire, Y=0 corrigé session 9) | ✅ |
-| Calque GM — tokens invisibles pour les joueurs | 🔲 |
-| X-Ray — transparence voxels devant tokens | 🔲 |
-| Viewport — Snap GM + Verrouiller vue joueurs | 🔲 |
-| Outil règle/mesure 3D (distance euclidienne) | 🔲 |
-| Screenshot canvas à la sortie de l'éditeur → upload MinIO | 🔲 |
-| Canvas — couleur de fond depuis battlemap.bg_color | 🔲 |
-| Canvas — opacité grille depuis battlemap.grid_opacity | 🔲 |
-| Murs invisibles — à réévaluer (sans fog of war, utilité limitée) | ⚠️ |
+| Voxels { tex, geo, r } | ✅ |
+| Tokens 3D | ✅ |
+| Éditeur voxel (Editor3D) | ✅ |
+| Entités interactables (EntityMesh + EntityEditorScene) | ✅ |
+| Palette blueprints dans éditeur | ✅ session 34 |
+| X-Ray voxels devant tokens | 🔲 |
+| Outil règle/mesure 3D | 🔲 |
 
 ### Client — Sidebar
 | Tâche | État |
 |---|---|
-| Layout sidebar (redimensionnable, fermeture) | ✅ |
-| Mode jeu / mode édition (GM) | ✅ |
-| Toggle calque token/GM (GM) | ✅ |
-| Palette de matières (mode édition) | ✅ |
-| **Onglet Chat** | |
-| Chat branché Socket.io — fil messages | ✅ |
-| Log jets de dés fusionné avec chat | 🔲 |
-| **Onglet Persos** | |
-| Liste characters + drag vers canvas | ✅ |
-| Formulaire création character (GM) | ✅ |
-| Modale fiche character (3 onglets) | ✅ |
-| Toggle visible/invisible (GM) | ✅ |
-| Assignation character → joueur (GM) | ✅ |
-| **Onglet Joueurs** | |
-| Liste membres de la campagne | ✅ |
-| Indicateur en ligne / hors ligne (Socket.io présence) | ✅ |
-| Badge GM / Joueur | ✅ |
-| Nom du personnage associé au joueur | ✅ |
-| **Onglet Dés** | |
-| Grille nombre × type (1-4 dés, D4/D6/D8/D10/D12/D20/D100) | 🔲 |
-| Lien "Jet avancé" (formule libre ex: 2d6+3) | 🔲 |
-| Animation client (seed partagé) | 🔲 |
-| Critiques (seuil haut/bas configurables par campagne) | 🔲 |
-| Log partagé des jets (fusionné avec chat) | 🔲 |
-| **Onglet Bibliothèque** | |
-| Upload documents vers MinIO | 🔲 |
-| Liste documents avec visibilité GM/joueurs | 🔲 |
-| **Onglet Config** | |
-| Changement couleur utilisateur | ✅ |
-| Changement nom d'affichage | ✅ |
+| Chat + dés + persos + joueurs | ✅ |
+| Palette textures voxel | ✅ |
+| Onglets Voxels/Entités en mode édition | ✅ |
+| Onglet Actions GM (arbitrage entités) | ✅ — à remplacer par notifications chat (S34-5) |
+| Toggle visible character temps réel (Bug A) | 🔲 |
+| Bibliothèque documents | 🔲 |
 
-### Client — Barre GM supérieure
-| Tâche | État |
-|---|---|
-| Liste des battlemaps de la campagne | ✅ |
-| Clic simple — GM prévisualise la carte (sans déplacer les joueurs) | ✅ corrigé session 14 |
-| Écoute MAP_SWITCH côté client (joueurs + GM chargent la nouvelle carte) | ✅ |
-| Menu clic droit sur bouton carte | ✅ |
-| → Renommer la carte (modale + PUT /battlemaps/:id) | ✅ |
-| → Définir comme page d'accueil (PUT /campaigns/:id default_battlemap_id) | ✅ |
-| → Déplacer le groupe — MAP_SWITCH tous joueurs + GM | ✅ |
-| → Dupliquer la carte (POST /battlemaps/:id/duplicate) | ✅ |
-| → Supprimer la carte (DELETE + confirmation) | ✅ |
-| → Détails de la carte (modale) | 🔲 |
-| Détails carte — nom modifiable | 🔲 |
-| Détails carte — taille grille (affichée, grisée — non modifiable V1) | 🔲 |
-| Détails carte — couleur de fond (color picker → bg_color) | 🔲 |
-| Détails carte — échelle (scale_label, déjà en base) | 🔲 |
-| Détails carte — opacité grille (slider → grid_opacity, déjà en base) | 🔲 |
-| Arborescence / dossiers battlemaps (champ folder déjà en base) | 🔲 |
-| Affecter un joueur spécifique vers une battlemap | 🔲 |
-
-### Client — Dashboard
-| Tâche | État |
-|---|---|
-| i18n — remplacer toutes les chaînes en dur | ✅ |
-| Menu profil utilisateur (modal dans header) | ✅ |
+### Corrections en attente
+| Bug | Description | État |
+|---|---|---|
+| S34-1 | Changement d'état entité non visible sans F5 | 🔲 priorité 1 |
+| S34-2 | Jet de dés lancé sans compétence | 🔲 priorité 2 |
+| S34-3 | Formule de jet 2d10 → 1d20 | 🔲 priorité 2 |
+| S34-4 | GM auto-approve interactions | 🔲 priorité 3 |
+| S34-5 | Notifications interactions → chat + couleur onglet | 🔲 priorité 4 |
+| S34-6 | Détection ⚙ difficile à angle rasant + intermittente | 🔲 priorité 5 |
+| Bug A | Toggle visible character non répercuté en temps réel | 🔲 |
+| Bug B | Modification faces voxel existant non exposée dans UI | 🔲 |
+| Bug WebGL | Context Lost au switch play/edit — non bloquant | documenté |
 
 ---
 
@@ -183,35 +120,62 @@
 
 | Tâche | État |
 |---|---|
-| Scènes 2D ambiance — battlemap type 'scene' avec image plein écran | 🔲 |
-| Tokens 2D sur scènes ambiance — illustration dans cercle, cliquable | 🔲 |
-| Upload illustration 2D par propriétaire du character | 🔲 |
-| Upload token .glb par propriétaire du character | 🔲 |
-| Cascade fallback tokens (glb → portrait → default.glb) | 🔲 |
-| Avatars utilisateur (upload MinIO) | 🔲 |
-| Vue joueur pour le GM (toggle interface) | 🔲 |
-| Upload/gestion packs de textures via interface | 🔲 |
-| Optimisation voxel (> 3000 cubes — face culling) | 🔲 |
-| Matière eau (shader animé) | 🔲 |
-| Persistance viewport (position caméra sauvegardée) | 🔲 |
-| Reconnexion WebSocket — tester comportement natif socket.io-client | 🔲 |
-| Table zones — effets de sorts, zones de danger (Polaris) | 🔲 |
-| Point intégration fiches perso externes (API REST) | 🔲 |
-| Preview carte — screenshot automatique (Option B, Phase 3) | 🔲 |
+| Scènes 2D ambiance | 🔲 |
+| Avatars utilisateur | 🔲 |
+| Optimisation voxel face culling | 🔲 |
+| Persistance viewport caméra | 🔲 |
+| Reconnexion WebSocket | 🔲 |
+| Favicon application | 🔲 |
+
+---
+
+## Idées documentées — à planifier
+
+### Mode spectateur
+Rôle `spectator` dans `campaign_members.role`.
+Accès lecture identique à `player` — aucune émission WS.
+Complexité estimée : faible à moyenne.
+
+### Fiche personnage auto-calculatrice
+Débutée en parallèle (format HTML + SQL + CSS).
+À valider en session dédiée.
+
+### Géométrie slope et wedge custom
+BufferGeometry custom Three.js — aucun changement modèle de données.
+Complexité estimée : faible.
+
+### Export ZIP pack complet
+Actuellement : textures + voxels.
+À ajouter : blueprints JSON dans `entites/`, GLB dans `glb/`.
+Structure cible :
+```
+PACK/
+  textures/   — PNG
+  glb/        — modèles 3D
+  entites/    — JSON comportement blueprints
+  manifest.json
+```
+
+### Chat MP
+Messagerie privée entre joueurs/GM.
+
+### Animation dé 3D
+Rendu Three.js du lancer.
+
+### Sauvegarde/export carte 3D
+Export battlemap complète (voxels + entités + tokens).
+
+### Interactions entités — déplacement/rotation
+Action → déplacement pos ou rotation r de l'entité.
+Permet : ouverture porte coulissante, déplacement décor par joueur.
+Dépendances : nouvelle mécanique WS, animation côté client.
 
 ---
 
 ## Hors scope V1
-
-- Fog of war / champ de vision des tokens
+- Fog of war
 - Webcam / audio / vidéo
-- Fiches de personnage intégrées (module externe — hors scope définitif)
-- Destruction de décor par action joueur
-- Formes voxel non-cubiques (slope, escalier)
-- Sources lumineuses placées par le GM (dépend changement MeshStandardMaterial)
-- Portes ouverte/fermée (bloquant/non bloquant) — reporté V2
-- Conditions/effets sur tokens (empoisonné, étourdi, etc.) — reporté V2
-- Musique d'ambiance
-- Macros / automation
-- Initiative / ordre de combat automatisé
-- Taille de case en px/case — non pertinent en contexte 3D voxel
+- Sources lumineuses dynamiques
+- Chat MP (V2)
+- Animation dé 3D (V2)
+- Sauvegarde/export carte 3D (V2)

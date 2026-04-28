@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Registry — MJ</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    :root { --bg:#f7f9fc; font-family:'Nunito',sans-serif; }
+    *{ box-sizing:border-box; }
+    body{ margin:0; background:var(--bg); color:#111827; font-family:'Nunito',sans-serif; }
+
+    .wrap{ padding:14px; }
+    h1{ margin:0 0 10px 0; font-size:20px; font-weight:900; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:14px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .panel{
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:14px;
+      overflow:hidden;
+    }
+    .head{
+      background:#1f2937;
+      color:#fff;
+      padding:10px 12px;
+      font-weight:900;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .small{ font-size:12px; color:#6b7280; font-weight:800; }
+    .head .small{ color: rgba(255,255,255,.75); font-weight:800; }
+
+    .body{ padding:12px; }
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .sp{ height:10px; }
+
+    input[type="text"], input[type="url"], input[type="number"]{
+      width:100%;
+      padding:10px 12px;
+      border-radius:10px;
+      border:1px solid #e5e7eb;
+      font-family:inherit;
+      font-weight:800;
+      outline:none;
+    }
+
+    .btn{
+      padding:8px 12px;
+      border:none;
+      border-radius:10px;
+      font-weight:900;
+      cursor:pointer;
+      font-family:inherit;
+      white-space:nowrap;
+    }
+    .btn:disabled{ opacity:.55; cursor:not-allowed; }
+    .btnBlue{ background:#2563eb; color:#fff; }
+    .btnGray{ background:#6b7280; color:#fff; }
+    .btnRed{ background:#dc2626; color:#fff; }
+
+    .list{ display:flex; flex-direction:column; gap:8px; }
+
+    .item{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      padding:10px 12px;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      background:#f9fafb;
+    }
+    .left{ min-width:0; flex:1; }
+    .name{
+      font-weight:900;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .sub{
+      margin-top:2px;
+      font-size:12px;
+      color:#6b7280;
+      font-weight:800;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      line-height:1.15;
+    }
+
+    .pill{
+      display:flex; gap:8px; align-items:center;
+      font-weight:900; font-size:12px;
+      background:#fff;
+      border:1px solid #e5e7eb;
+      padding:6px 10px;
+      border-radius:999px;
+      user-select:none;
+      white-space:nowrap;
+    }
+
+    .snack{
+      position:fixed;
+      right:14px;
+      bottom:14px;
+      background:#111827;
+      color:#fff;
+      padding:10px 12px;
+      border-radius:12px;
+      font-weight:900;
+      font-size:12px;
+      opacity:0;
+      transform: translateY(8px);
+      transition: opacity .18s ease, transform .18s ease;
+      z-index:99999;
+      pointer-events:none;
+    }
+    .snack.show{ opacity:1; transform: translateY(0); }
+
+    /* PNJ catalogue + roster */
+    .split{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:12px;
+    }
+
+    .box{
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      overflow:hidden;
+      background:#fff;
+    }
+    .boxHead{
+      padding:8px 10px;
+      background:#f9fafb;
+      border-bottom:1px solid #e5e7eb;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      font-weight:900;
+      font-size:12px;
+    }
+    .boxBody{ padding:10px; }
+
+    .search{
+      width:100%;
+      padding:9px 10px;
+      border-radius:10px;
+      border:1px solid #e5e7eb;
+      font-family:inherit;
+      font-weight:900;
+      outline:none;
+      margin-bottom:10px;
+    }
+
+    .catGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .catGrid{ grid-template-columns: 1fr; }
+    }
+
+    .catColTitle{
+      font-weight:900;
+      font-size:12px;
+      color:#111827;
+      margin:0 0 8px 0;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+
+    .catItem{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:8px;
+      align-items:center;
+      padding:8px 10px;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      background:#fff;
+      margin-bottom:8px;
+    }
+    .catItem .n{ font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .catItem .m{ margin-top:2px; font-size:12px; font-weight:800; color:#6b7280; }
+
+    .btnMini{
+      padding:6px 10px;
+      border-radius:10px;
+      border:none;
+      font-weight:900;
+      cursor:pointer;
+      background:#2563eb;
+      color:#fff;
+      font-family:inherit;
+      margin-left:6px;
+      white-space:nowrap;
+      font-size:12px;
+    }
+    .btnMini.gray{ background:#6b7280; }
+    .btnMini.red{ background:#dc2626; }
+
+    /* mini champs occurrences bestiaire */
+    .qty{
+      width:76px !important;
+      padding:6px 8px !important;
+      border-radius:10px !important;
+      border:1px solid #e5e7eb !important;
+      font-weight:900 !important;
+      font-family:inherit !important;
+    }
+
+    /* Roster cards */
+    .rosterRow{
+      display:grid;
+      grid-template-columns: 1fr 94px 80px;
+      gap:8px;
+      align-items:center;
+      padding:8px 10px;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      background:#fff;
+      margin-bottom:8px;
+      position:relative;
+      overflow:hidden;
+    }
+    .rosterRow .rname{
+      font-weight:900;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .rosterRow select{
+      width:100%;
+      padding:7px 8px;
+      border-radius:10px;
+      border:1px solid #e5e7eb;
+      font-weight:900;
+      font-family:inherit;
+      background:#fff;
+    }
+    .rosterRow .del{
+      background:#fee2e2;
+      color:#991b1b;
+      border:none;
+      border-radius:10px;
+      padding:7px 8px;
+      font-weight:900;
+      cursor:pointer;
+    }
+
+    /* ✅ coloration Ally/Enemy */
+    .rosterRow.ally{
+      border-color:#bbf7d0;
+      background:#f0fdf4;
+    }
+    .rosterRow.enemy{
+      border-color:#fecaca;
+      background:#fef2f2;
+    }
+    /* petit liseré à gauche (lisible même si on change le background plus tard) */
+    .rosterRow.ally::before,
+    .rosterRow.enemy::before{
+      content:"";
+      position:absolute;
+      left:0; top:0; bottom:0;
+      width:6px;
+    }
+    .rosterRow.ally::before{ background:#16a34a; }
+    .rosterRow.enemy::before{ background:#dc2626; }
+
+    /* ✅ bouton ajouter désactivé visuel */
+    .btnMini:disabled{
+      opacity:.55;
+      cursor:not-allowed;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <h1>🗂️ Registry — MJ</h1>
+
+    <div class="grid">
+      <!-- PJ -->
+      <div class="panel">
+        <div class="head">
+          <div>Fiches PJ enregistrées</div>
+          <div class="small" id="countPj">—</div>
+        </div>
+
+        <div class="body">
+          <div class="row">
+            <button class="btn btnGray" id="btnReloadPj">Refresh</button>
+            <div class="small" id="statusPj">Prêt.</div>
+          </div>
+
+          <div class="sp"></div>
+
+          <div class="small">Ajouter une fiche PJ (lien ou ID Google Sheets)</div>
+          <div class="row" style="margin-top:6px">
+            <input id="linkPj" type="url" placeholder="https://docs.google.com/spreadsheets/d/..." />
+            <button class="btn btnBlue" id="btnAddPj">Ajouter</button>
+          </div>
+
+          <div class="sp"></div>
+
+          <div id="listPj" class="list"></div>
+        </div>
+      </div>
+
+      <!-- PNJ -->
+      <div class="panel">
+        <div class="head">
+          <div>PNJ / Bestiaire</div>
+          <div class="small" id="countNpc">—</div>
+        </div>
+
+        <div class="body">
+          <div class="row">
+            <button class="btn btnGray" id="btnReloadNpc">Refresh (purge cache)</button>
+            <div class="small" id="statusNpc">Prêt.</div>
+          </div>
+
+          <div class="sp"></div>
+
+          <div class="split">
+            <!-- Catalogue -->
+            <div class="box">
+              <div class="boxHead">
+                <div>Catalogue (Actif)</div>
+                <div class="small" id="catMeta">—</div>
+              </div>
+              <div class="boxBody">
+                <input id="catSearch" class="search" type="text" placeholder="Rechercher (PNJ ou Bestiaire)..." />
+
+                <div class="catGrid">
+                  <div>
+                    <div class="catColTitle">
+                      <span>PNJs</span>
+                      <span class="small" id="pnjCount">—</span>
+                    </div>
+                    <div id="catListPnj"></div>
+                  </div>
+
+                  <div>
+                    <div class="catColTitle">
+                      <span>Bestiaire</span>
+                      <span class="small" id="bestCount">—</span>
+                    </div>
+                    <div id="catListBest"></div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Roster -->
+            <div class="box">
+              <div class="boxHead">
+                <div>Roster actif (source unique)</div>
+                <div class="small" id="rosterMeta">—</div>
+              </div>
+              <div class="boxBody">
+                <div id="rosterList"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="snack" id="snack"></div>
+
+<script>
+  const MID = <?= JSON.stringify(typeof mid !== "undefined" ? String(mid).trim() : "") ?>;
+
+  // PJ DOM
+  const listPjEl   = document.getElementById("listPj");
+  const countPjEl  = document.getElementById("countPj");
+  const statusPjEl = document.getElementById("statusPj");
+  const linkPjEl   = document.getElementById("linkPj");
+  const btnReloadPj = document.getElementById("btnReloadPj");
+  const btnAddPj    = document.getElementById("btnAddPj");
+
+  // NPC DOM
+  const countNpcEl = document.getElementById("countNpc");
+  const statusNpcEl = document.getElementById("statusNpc");
+  const btnReloadNpc = document.getElementById("btnReloadNpc");
+  const catMetaEl = document.getElementById("catMeta");
+  const rosterMetaEl = document.getElementById("rosterMeta");
+  const catSearchEl = document.getElementById("catSearch");
+
+  const pnjCountEl = document.getElementById("pnjCount");
+  const bestCountEl = document.getElementById("bestCount");
+  const catListPnjEl = document.getElementById("catListPnj");
+  const catListBestEl = document.getElementById("catListBest");
+
+  const rosterListEl = document.getElementById("rosterList");
+  const snackEl  = document.getElementById("snack");
+
+  let PLAYERS = [];
+  let CAT_PNJS = [];
+  let CAT_BEST = [];
+  let ROSTER = [];
+
+  function esc(s){
+    return String(s||"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[c]));
+  }
+  function norm(s){
+    return String(s||"")
+      .trim().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  }
+
+  function snack(msg){
+    snackEl.textContent = msg || "";
+    snackEl.classList.add("show");
+    clearTimeout(snackEl._t);
+    snackEl._t = setTimeout(() => snackEl.classList.remove("show"), 1600);
+  }
+
+  // RPC safe
+  function callServer(fn, ...args){
+    fn = String(fn || "").trim();
+    return new Promise((resolve, reject) => {
+      const runner = google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject);
+
+      const f = runner[fn];
+      if (typeof f !== "function"){
+        reject(new Error("RPC inconnue: " + fn));
+        return;
+      }
+      f.apply(runner, args);
+    });
+  }
+
+  function clearEl(el){ while (el.firstChild) el.removeChild(el.firstChild); }
+
+  // ---------------- PJ ----------------
+  function renderPj(){
+    clearEl(listPjEl);
+    countPjEl.textContent = `${PLAYERS.length} fiche(s)`;
+
+    if (!PLAYERS.length){
+      const empty = document.createElement("div");
+      empty.className = "small";
+      empty.textContent = "Aucune fiche PJ pour le moment.";
+      listPjEl.appendChild(empty);
+      return;
+    }
+
+    PLAYERS.forEach((p, idx) => {
+      const item = document.createElement("div");
+      item.className = "item";
+
+      const left = document.createElement("div");
+      left.className = "left";
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = p.label || p.fid || "(Sans nom)";
+
+      const sub = document.createElement("div");
+      sub.className = "sub";
+      sub.textContent = (p.fid ? `ID: ${p.fid}` : "");
+
+      left.appendChild(name);
+      left.appendChild(sub);
+
+      const right = document.createElement("div");
+      right.className = "row";
+
+      const pill = document.createElement("div");
+      pill.className = "pill";
+      pill.textContent = "PJ";
+
+      const btnDel = document.createElement("button");
+      btnDel.className = "btn btnRed";
+      btnDel.textContent = "Suppr.";
+      btnDel.onclick = async () => {
+        btnDel.disabled = true;
+        try{
+          statusPjEl.textContent = "Suppression…";
+          await callServer("reg_removePlayer", MID, idx);
+          await loadPj();
+          snack("Supprimé.");
+        }catch(e){
+          console.error(e);
+          alert("Erreur suppression PJ:\n" + (e && e.message ? e.message : e));
+        }finally{
+          statusPjEl.textContent = "Prêt.";
+          btnDel.disabled = false;
+        }
+      };
+
+      right.appendChild(pill);
+      right.appendChild(btnDel);
+
+      item.appendChild(left);
+      item.appendChild(right);
+
+      listPjEl.appendChild(item);
+    });
+  }
+
+  async function loadPj(){
+    if (!MID){ statusPjEl.textContent = "MID manquant"; return; }
+    btnReloadPj.disabled = true;
+    try{
+      statusPjEl.textContent = "Chargement…";
+      const res = await callServer("reg_getPlayers", MID);
+      PLAYERS = (res && res.players) ? res.players : [];
+      renderPj();
+      statusPjEl.textContent = "Prêt.";
+    }catch(e){
+      console.error(e);
+      statusPjEl.textContent = "Erreur.";
+      alert("Erreur chargement PJ:\n" + (e && e.message ? e.message : e));
+    }finally{
+      btnReloadPj.disabled = false;
+    }
+  }
+
+  async function addPj(){
+    const v = (linkPjEl.value || "").trim();
+    if (!v) { snack("Colle un lien/ID."); return; }
+    if (!MID) { alert("MID manquant."); return; }
+
+    btnAddPj.disabled = true;
+    try{
+      statusPjEl.textContent = "Ajout…";
+      const out = await callServer("reg_addPlayer", MID, v);
+      if (out && out.ok === false){
+        snack(out.message || "Refus.");
+      }else{
+        linkPjEl.value = "";
+        snack("Ajouté.");
+      }
+      await loadPj();
+    }catch(e){
+      console.error(e);
+      alert("Erreur ajout PJ:\n" + (e && e.message ? e.message : e));
+    }finally{
+      statusPjEl.textContent = "Prêt.";
+      btnAddPj.disabled = false;
+    }
+  }
+
+  // ---------------- NPC ----------------
+  function renderCatalog(){
+    const q = norm(catSearchEl.value);
+    const match = (x) => !q || norm(x.name).includes(q);
+
+    const pnjs = (CAT_PNJS||[]).filter(match);
+    const best = (CAT_BEST||[]).filter(match);
+
+    catMetaEl.textContent = `${(CAT_PNJS||[]).length} PNJ • ${(CAT_BEST||[]).length} Best`;
+    pnjCountEl.textContent = `${pnjs.length}`;
+    bestCountEl.textContent = `${best.length}`;
+
+    // PNJ
+    clearEl(catListPnjEl);
+    if (!pnjs.length){
+      const d = document.createElement("div");
+      d.className = "small";
+      d.textContent = "Aucun PNJ.";
+      catListPnjEl.appendChild(d);
+    } else {
+      pnjs.forEach(x=>{
+        const row = document.createElement("div");
+        row.className = "catItem";
+        row.innerHTML = `
+          <div style="min-width:0">
+            <div class="n">${esc(x.name)}</div>
+            <div class="m">Camp: ${esc(x.camp)}</div>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:flex-end">
+            <button class="btnMini" data-add="1">Ajouter</button>
+          </div>
+        `;
+        row.querySelector('button[data-add]').addEventListener("click", async ()=>{
+          await addFromCatalog("PNJ", x.key, 1);
+        });
+        catListPnjEl.appendChild(row);
+      });
+    }
+
+    // Bestiaire (qty + bouton disabled si qty invalide)
+    clearEl(catListBestEl);
+    if (!best.length){
+      const d = document.createElement("div");
+      d.className = "small";
+      d.textContent = "Aucune créature.";
+      catListBestEl.appendChild(d);
+    } else {
+      best.forEach(x=>{
+        const row = document.createElement("div");
+        row.className = "catItem";
+        row.innerHTML = `
+          <div style="min-width:0">
+            <div class="n">${esc(x.name)}</div>
+            <div class="m">Camp: ${esc(x.camp)}</div>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px">
+            <input class="qty" type="number" min="1" max="20" step="1" placeholder="1" value="1" />
+            <button class="btnMini" data-add="1">Ajouter</button>
+          </div>
+        `;
+
+        const inp = row.querySelector('input.qty');
+        const btn = row.querySelector('button[data-add]');
+
+        function sanitizeQty(){
+          const raw = String(inp.value || "").trim();
+          if (!raw){
+            btn.disabled = true;
+            return null;
+          }
+          let v = Number(raw);
+          if (!Number.isFinite(v)){
+            btn.disabled = true;
+            return null;
+          }
+          v = Math.floor(v);
+          if (v < 1 || v > 20){
+            btn.disabled = true;
+            return null;
+          }
+          btn.disabled = false;
+          return v;
+        }
+
+        // init
+        sanitizeQty();
+
+        inp.addEventListener("input", sanitizeQty);
+        inp.addEventListener("blur", ()=>{
+          // si vide => reste vide (et bouton disabled)
+          const v = sanitizeQty();
+          if (v == null) return;
+          inp.value = String(v); // normalise
+        });
+
+        btn.addEventListener("click", async ()=>{
+          const n = sanitizeQty();
+          if (n == null) return;
+          await addFromCatalog("BEST", x.key, n);
+        });
+
+        catListBestEl.appendChild(row);
+      });
+    }
+  }
+
+  function renderRoster(){
+    clearEl(rosterListEl);
+
+    rosterMetaEl.textContent = `${(ROSTER||[]).length} instance(s)`;
+    countNpcEl.textContent = `${(ROSTER||[]).length}`;
+
+    if (!ROSTER.length){
+      const d = document.createElement("div");
+      d.className = "small";
+      d.textContent = "Roster vide. Ajoute depuis le catalogue.";
+      rosterListEl.appendChild(d);
+      return;
+    }
+
+    // numérotation BEST
+    const counters = {};
+    const view = ROSTER.map(r=>{
+      const k = (r.source === "BEST") ? (r.templateKey || r.name) : r.id;
+      counters[k] = (counters[k] || 0) + 1;
+      const idx = counters[k];
+      const display = (r.source === "BEST") ? `${r.name} #${idx}` : r.name;
+      return {...r, _display: display};
+    });
+
+    view.forEach(r=>{
+      const isAlly = String(r.camp || "").toLowerCase().includes("alli");
+      const row = document.createElement("div");
+      row.className = "rosterRow " + (isAlly ? "ally" : "enemy");
+
+      row.innerHTML = `
+        <div style="min-width:0">
+          <div class="rname" title="${esc(r._display)}">${esc(r._display)}</div>
+          <div class="small">${esc(r.source || "PNJ")} • ${esc(r.camp)} • template: ${esc(r.templateKey || "—")}</div>
+        </div>
+
+        <select data-camp="${esc(r.id)}" title="Camp">
+          <option value="Allié" ${String(r.camp||"")==="Allié" ? "selected" : ""}>Allié</option>
+          <option value="Ennemi" ${String(r.camp||"")!=="Allié" ? "selected" : ""}>Ennemi</option>
+        </select>
+
+        <button class="del" data-del="${esc(r.id)}">Suppr</button>
+      `;
+
+      const sel = row.querySelector('select[data-camp]');
+      const del = row.querySelector('button[data-del]');
+
+      sel.addEventListener("change", async ()=>{
+        const id = sel.getAttribute("data-camp");
+        await updateNpc(id, { camp: sel.value });
+      });
+
+      del.addEventListener("click", async ()=>{
+        const id = del.getAttribute("data-del");
+        await removeNpc(id);
+      });
+
+      rosterListEl.appendChild(row);
+    });
+  }
+
+  async function loadNpcAll(usePurge){
+    if (!MID){ statusNpcEl.textContent = "MID manquant"; return; }
+
+    btnReloadNpc.disabled = true;
+    try{
+      statusNpcEl.textContent = usePurge ? "Purge cache + chargement…" : "Chargement…";
+
+      if (usePurge) await callServer("reg_purgeNpcCache", MID);
+
+      const cat = await callServer("reg_getNpcCatalog", MID);
+      if (cat && cat.ok === false) throw new Error(cat.message || "reg_getNpcCatalog: ok=false");
+
+      CAT_PNJS = (cat && Array.isArray(cat.pnjs)) ? cat.pnjs : [];
+      CAT_BEST = (cat && Array.isArray(cat.best)) ? cat.best : [];
+
+      const ro = await callServer("reg_getNpcRoster", MID);
+      if (ro && ro.ok === false) throw new Error(ro.message || "reg_getNpcRoster: ok=false");
+
+      ROSTER = (ro && Array.isArray(ro.roster)) ? ro.roster : [];
+
+      renderCatalog();
+      renderRoster();
+
+      statusNpcEl.textContent = "Prêt.";
+    }catch(e){
+      console.error(e);
+      statusNpcEl.textContent = "Erreur.";
+      alert("Erreur PNJ:\n" + (e && e.message ? e.message : e));
+    }finally{
+      btnReloadNpc.disabled = false;
+    }
+  }
+
+  async function addFromCatalog(tag, key, n){
+    try{
+      statusNpcEl.textContent = "Ajout…";
+      const out = await callServer("reg_addNpcFromCatalog", MID, tag, key, n);
+      if (out && out.ok === false){
+        snack(out.message || "Refus.");
+      }else{
+        snack("Ajouté.");
+      }
+      await loadNpcAll(false);
+    }catch(e){
+      console.error(e);
+      alert("Erreur ajout PNJ:\n" + (e && e.message ? e.message : e));
+    }finally{
+      statusNpcEl.textContent = "Prêt.";
+    }
+  }
+
+  async function removeNpc(id){
+    try{
+      statusNpcEl.textContent = "Suppression…";
+      await callServer("reg_removeNpc", MID, id);
+      snack("Supprimé.");
+      await loadNpcAll(false);
+    }catch(e){
+      console.error(e);
+      alert("Erreur suppression PNJ:\n" + (e && e.message ? e.message : e));
+    }finally{
+      statusNpcEl.textContent = "Prêt.";
+    }
+  }
+
+  let _updT = null;
+  async function updateNpc(id, patch){
+    clearTimeout(_updT);
+    _updT = setTimeout(async ()=>{
+      try{
+        statusNpcEl.textContent = "Sync…";
+        await callServer("reg_updateNpc", MID, id, patch);
+        await loadNpcAll(false);
+      }catch(e){
+        console.warn(e);
+      }finally{
+        statusNpcEl.textContent = "Prêt.";
+      }
+    }, 150);
+  }
+
+  // bindings
+  btnReloadPj.addEventListener("click", loadPj);
+  btnAddPj.addEventListener("click", addPj);
+  linkPjEl.addEventListener("keydown", (ev)=>{ if(ev.key==="Enter") addPj(); });
+
+  btnReloadNpc.addEventListener("click", ()=> loadNpcAll(true));
+  catSearchEl.addEventListener("input", ()=> renderCatalog());
+
+  // init
+  loadPj();
+  loadNpcAll(false);
+</script>
+</body>
+</html>

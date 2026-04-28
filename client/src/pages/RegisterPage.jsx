@@ -34,7 +34,10 @@ export default function RegisterPage() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1 style={styles.title}>Enclume</h1>
+        <div style={styles.logoRow}>
+          <img src="/logo.svg" alt="Enclume" style={styles.logoImg} />
+          <h1 style={styles.title}>Enclume</h1>
+        </div>
         <p style={styles.subtitle}>Create your account</p>
 
         {error && <div style={styles.error}>{error}</div>}
@@ -106,11 +109,22 @@ const styles = {
     borderRadius: '12px',
     padding: '40px',
   },
+  logoRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '8px',
+  },
+  logoImg: {
+    width: '40px',
+    height: 'auto',
+    color: 'var(--text-primary)',
+  },
   title: {
     fontSize: '22px',
     fontWeight: '500',
     color: 'var(--text-primary)',
-    marginBottom: '8px',
+    marginBottom: '0',
   },
   subtitle: {
     fontSize: '14px',

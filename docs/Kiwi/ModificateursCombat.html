@@ -1,0 +1,2245 @@
+<!-- =========================
+     ModificateursCombat.html — FULL WEBAPP
+     - FID injecté par doGet (template)
+     - Tous les appels GAS -> (FID, ...)
+     - Identité: Perso - Joueur (getIdentity(fid) si dispo)
+     - Ammo: getAmmoStatus(fid) + applyBulletsToSelectedWeapon(fid, used)
+     - Reload: reload_weapon(fid) / reload_drone(fid) selon sélection
+     - Drone: skills AP..AU via getDroneSkillsForNames(fid, names)
+     - Close(): modal si dispo, sinon redirect home
+     ========================= -->
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <title>Modificateurs de combat</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0f1115;
+      --panel:#151923;
+      --panel2:#10131b;
+      --border:#252b3a;
+      --muted:#9aa4b2;
+      --text:#e8eef7;
+      --good:#1dd1a1;
+      --bad:#ff6b6b;
+      --chip:#1b2232;
+      --shadow:0 10px 30px rgba(0,0,0,.35);
+      --radius:14px;
+      --sticky-top-offset:16px;
+      --sticky-sidebar-top:112px;
+      --sticky-right-top:112px;
+      --accent:#3b82f6;
+      --pos:#1dd1a1;
+      --neg:#ff6b6b;
+      --soft-contrast:#202832;
+      --line:rgba(255,255,255,.08);
+    }
+
+    *{box-sizing:border-box}
+
+    html,body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font:14px/1.35 "Nunito",system-ui,-apple-system,Segoe UI,Roboto,Arial;
+    }
+
+    body{padding:16px}
+
+    .wrap{
+      max-width:1900px;
+      margin:0 auto;
+      display:grid;
+      gap:12px;
+    }
+
+    .card{
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      padding:12px;
+      background:linear-gradient(180deg,var(--panel),var(--panel2));
+      box-shadow:var(--shadow);
+    }
+
+    .topGrid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:12px;
+      position:sticky;
+      top:var(--sticky-top-offset);
+      z-index:70;
+    }
+
+    .headerCard{padding:12px}
+
+    .headerMainRow{
+      display:grid;
+      grid-template-columns:minmax(240px,1.05fr) minmax(320px,1.45fr) minmax(360px,.9fr);
+      gap:12px;
+      align-items:start;
+    }
+
+    @media (max-width:1280px){
+      .headerMainRow{grid-template-columns:1fr}
+    }
+    .bar{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+
+    .barMain{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width:260px;
+      flex:1;
+    }
+
+    .headerSkillsWrap{
+      min-width:0;
+      align-self:center;
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+      gap:8px;
+    }
+
+    .headerSkillsWrap:empty{display:none}
+
+    .identityLine{
+      margin:0 0 2px 2px;
+      color:var(--muted);
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:.2px;
+    }
+
+    .weaponTitle{
+      margin:0 0 2px 2px;
+      font-size:20px;
+      font-weight:900;
+      letter-spacing:.3px;
+      color:var(--text);
+      line-height:1.15;
+    }
+
+    .tally{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(180px,1fr));
+      gap:10px;
+      min-width:360px;
+      margin-left:auto;
+      align-self:center;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      font-size:12px;
+      background:var(--chip);
+      color:var(--muted);
+      white-space:nowrap;
+    }
+
+    .pill.big{
+      font-size:14px;
+      font-weight:900;
+      padding:9px 12px;
+      color:var(--text);
+      background:#0d111a;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      width:100%;
+    }
+
+    .pill b{color:var(--text)}
+
+    .mainSplit{
+      display:grid;
+      grid-template-columns:360px minmax(0,1fr);
+      gap:12px;
+      align-items:start;
+    }
+
+    .topCatsRow{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px;
+      margin-bottom:12px;
+    }
+
+    @media (max-width:900px){
+      .topCatsRow{grid-template-columns:1fr}
+    }
+
+    @media (max-width:1180px){
+      .mainSplit{grid-template-columns:1fr}
+      .sidebarCard{position:static !important; top:auto !important}
+      .footer{position:static !important; bottom:auto !important}
+    }
+
+    .sidebarCard{
+      position:sticky;
+      top:var(--sticky-sidebar-top);
+      display:grid;
+      gap:12px;
+    }
+
+    .sidebarTitle{
+      font-size:18px;
+      font-weight:900;
+      line-height:1.15;
+    }
+
+    .sidebarSub{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+
+    .topGridNav{
+      display:grid;
+      gap:10px;
+    }
+
+    .navTree{
+      display:grid;
+      gap:12px;
+    }
+
+    .navGroup{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:linear-gradient(180deg,#0d111a,#0a0d13);
+      overflow:hidden;
+    }
+
+    .navGroupHead{
+      width:100%;
+      text-align:left;
+      border:0;
+      border-bottom:1px solid rgba(255,255,255,.05);
+      border-radius:0;
+      background:transparent;
+      padding:12px;
+      font-size:14px;
+      font-weight:900;
+      color:var(--text);
+      cursor:pointer;
+    }
+
+    .navChildren{
+      display:grid;
+      gap:6px;
+      padding:10px;
+      background:rgba(255,255,255,.015);
+    }
+
+    .navGroupHead.active{
+      color:var(--text);
+      background:linear-gradient(180deg,rgba(59,130,246,.12),rgba(12,15,22,.96));
+    }
+
+    .navItem{
+      width:100%;
+      text-align:left;
+      border:1px solid rgba(255,255,255,.06);
+      border-radius:12px;
+      background:#0c0f16;
+      padding:10px 12px;
+      color:var(--muted);
+      font-size:13px;
+      font-weight:800;
+      cursor:pointer;
+      transition:border-color .12s ease, background .12s ease, color .12s ease, filter .08s ease;
+    }
+
+    .navItem:hover{filter:brightness(1.05)}
+    .navItem.active{
+      border-color:var(--accent);
+      color:var(--text);
+      background:linear-gradient(180deg,rgba(59,130,246,.12),rgba(12,15,22,.96));
+      box-shadow:0 0 0 1px rgba(59,130,246,.24) inset;
+    }
+
+    .topCard{
+      width:100%;
+      text-align:left;
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:linear-gradient(180deg,#0d111a,#0a0d13);
+      display:grid;
+      gap:8px;
+      transition:border-color .12s ease, box-shadow .12s ease, background .12s ease, transform .08s ease, filter .08s ease;
+      cursor:pointer;
+    }
+
+    .topCard:hover{filter:brightness(1.05)}
+    .topCard.active{
+      border-color:var(--accent) !important;
+      box-shadow:0 0 0 1px rgba(59,130,246,.35) inset, 0 10px 30px rgba(0,0,0,.35) !important;
+      background:linear-gradient(180deg,rgba(59,130,246,.12),rgba(10,13,19,.98)) !important;
+    }
+    .topCard.locked{
+      opacity:.7;
+      filter:saturate(.75);
+    }
+
+    .topTitle{
+      font-size:15px;
+      font-weight:900;
+      line-height:1.15;
+    }
+
+    .topSub{
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.3;
+    }
+
+    .contentStack{display:grid; gap:12px}
+
+    .midSep{height:1px;background:var(--line);margin:8px 0 12px}
+    .skillsGrid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+      gap:8px;
+    }
+
+    .headerSkillsWrap .skillsGrid{display:contents}
+
+    .skillTile{
+      background:linear-gradient(180deg,#0d111a,#0a0d13);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:9px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      min-height:56px;
+    }
+
+    .skillTile.drone{
+      background:linear-gradient(180deg,rgba(95,120,255,.16),rgba(10,13,19,.96));
+      border-color:rgba(130,150,255,.45);
+    }
+
+    .skillMain{display:flex;flex-direction:column;gap:3px;min-width:0}
+    .skillName{color:#cbd3da;font-size:12px;line-height:1.15}
+    .skillVal{font-weight:900;font-size:16px;white-space:nowrap}
+    .skillBadge{
+      display:inline-flex;
+      align-items:center;
+      align-self:flex-start;
+      padding:1px 7px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.06);
+      color:var(--muted);
+      font-size:10px;
+      font-weight:900;
+      text-transform:uppercase;
+      letter-spacing:.18px;
+    }
+
+    .cols{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:12px;
+      align-items:start;
+    }
+
+    @media (max-width:1300px){
+      .cols{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+
+    @media (max-width:880px){
+      .cols{grid-template-columns:1fr}
+    }
+
+    .col{display:flex;flex-direction:column;gap:12px;min-height:320px}
+
+    .grp,
+    .type{
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      overflow:hidden;
+      background:#0c0f16;
+      transition:border-color .12s ease, box-shadow .12s ease, background .12s ease;
+    }
+
+    .grp > summary,
+    .type > summary{
+      list-style:none;
+      cursor:pointer;
+      padding:10px 12px;
+      font-weight:900;
+      background:#0c0f16;
+      user-select:none;
+    }
+
+    .grp > summary::-webkit-details-marker,
+    .type > summary::-webkit-details-marker{display:none}
+
+    .grp .inner{padding:0 10px 10px 10px;color:var(--text);background:#0b0e14}
+    .type{margin:8px 0 0}
+    .type.soft{background:#0d111a}
+    .type.soft[open] .block{
+      background:#0b0e14;
+      border:1px solid rgba(255,255,255,.04);
+      border-radius:12px;
+      margin:4px 6px 8px 6px;
+      padding:8px 10px;
+    }
+
+    .block{padding:6px 10px 8px 10px}
+
+    .navSectionMarker{
+      font-weight:900;
+      font-size:13px;
+      color:var(--text);
+      margin:10px 0 6px;
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.05);
+      border-radius:10px;
+      background:linear-gradient(180deg,#121826,#0d111a);
+    }
+
+    .row{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:8px 0;
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    .row:last-child{border-bottom:0}
+
+    .stack{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+    .label{font-weight:700}
+    .note,.info{color:#cbd3da;font-style:italic;font-size:12px}
+    .val{min-width:54px;text-align:right;font-weight:800}
+
+    input[type="radio"], input[type="checkbox"]{transform:scale(1.05)}
+    input[type="range"]{flex:1}
+    .row input[type="radio"]{margin-left:auto}
+
+    input, select, button, textarea{
+      font-family:"Nunito",system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:#0c0f16;
+      color:var(--text);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:8px 10px;
+      outline:none;
+    }
+
+    button{
+      cursor:pointer;
+      font-weight:900;
+      background:#121826;
+      transition:filter .08s ease, transform .08s ease, border-color .12s ease;
+    }
+
+    button:hover{filter:brightness(1.08)}
+    button:active{transform:scale(.98)}
+    button[disabled]{opacity:.5;cursor:not-allowed}
+
+    .btn{
+      background:#121826;
+      color:var(--text);
+      border:1px solid var(--border);
+      padding:8px 10px;
+      border-radius:12px;
+      cursor:pointer;
+    }
+
+    .btnOk{background:#143126;border-color:#24553f}
+    .btnReload{background:#1a2340;border-color:#2a3b70}
+
+    .footer{
+      position:sticky;
+      bottom:0;
+      z-index:60;
+      background:linear-gradient(180deg,rgba(15,17,21,0),var(--bg) 22px);
+      padding-top:10px;
+      margin-top:2px;
+    }
+
+    .subrow{display:flex;align-items:center;gap:12px;margin:8px 0 0 0;flex-wrap:wrap}
+    .opt{display:flex;align-items:center;gap:8px}
+    .miniVal{font-style:italic;font-size:12px;margin-left:8px;min-width:36px;text-align:right}
+    .disabledUI{opacity:.35;filter: grayscale(1);pointer-events: none;}
+
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom:22px;
+      transform:translateX(-50%);
+      background:rgba(15,20,27,.95);
+      border:1px solid rgba(255,255,255,.12);
+      color:var(--text);
+      padding:10px 14px;
+      border-radius:12px;
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      z-index:9999;
+      display:none;
+      align-items:center;
+      gap:10px;
+      font-weight:800;
+    }
+    .toast.show{display:flex}
+    .toast .small{font-weight:650;color:var(--muted);margin-left:10px}
+
+    .loadingOverlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:15000;
+      padding:16px;
+    }
+    .loadingOverlay.open{display:flex}
+
+    .loadingBox{
+      min-width:220px;
+      max-width:min(92vw, 360px);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:18px 20px;
+      background:linear-gradient(180deg,var(--panel),var(--panel2));
+      box-shadow:0 18px 48px rgba(0,0,0,.45);
+      display:grid;
+      gap:12px;
+      justify-items:center;
+      text-align:center;
+    }
+
+    .loadingSpinner{
+      width:46px;
+      height:46px;
+      border-radius:999px;
+      border:4px solid rgba(255,255,255,.12);
+      border-top-color:#3b82f6;
+      animation:combatSpin .9s linear infinite;
+    }
+
+    .loadingText{
+      font-weight:900;
+      font-size:14px;
+      line-height:1.2;
+    }
+
+    @keyframes combatSpin{
+      to{transform:rotate(360deg)}
+    }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <div id="toast" class="toast"></div>
+
+  <div id="loadingOverlay" class="loadingOverlay" aria-hidden="true">
+    <div class="loadingBox" role="status" aria-live="polite" aria-busy="true">
+      <div class="loadingSpinner"></div>
+      <div id="loadingText" class="loadingText">Chargement…</div>
+    </div>
+  </div>
+
+  <div class="topGrid">
+    <div class="card headerCard">
+      <div class="headerMainRow">
+        <div class="barMain">
+          <div id="identityLabel" class="identityLine">…</div>
+          <h2 id="weaponTitle" class="weaponTitle">—</h2>
+          <div id="droneTitle" class="identityLine" style="display:none"></div>
+        </div>
+
+        <div id="skillsWrap" class="headerSkillsWrap" style="display:none"></div>
+
+        <div class="tally">
+          <span class="pill big">Bonus aux tests : <b id="total">+0</b></span>
+          <span class="pill big">Bonus aux dégâts : <b id="dmg">+0</b></span>
+          <span class="pill big">Balles consommées : <b id="bulletsConsumed">0</b></span>
+          <span class="pill big">Balles restantes : <b id="bulletsRemaining">—</b></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mainSplit">
+    <aside class="card sidebarCard">
+      <div id="navTree" class="navTree"></div>
+    </aside>
+
+    <div class="contentStack">
+      <div class="card">
+        <div id="topCats" class="topCatsRow"></div>
+        <div class="midSep"></div>
+        <div id="cols" class="cols"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="card">
+      <div class="bar">
+        <div><span class="pill">Sélections (catégorie) : <span id="count">0</span></span></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span id="ammoWarn" class="pill" style="display:none"></span>
+
+          <button class="btn" id="btnReset">Tout réinitialiser</button>
+          <button class="btn btnReload" id="btnReload" style="display:none">Recharger</button>
+          <button class="btn btnOk" id="btnValidate" style="display:none">Valider</button>
+          <button class="btn" id="btnClose">Fermer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ==========
+   FULL WEBAPP: FID injecté par template
+   ========== */
+const FID = "<?= fid ?>";
+
+window.onerror = function (msg, src, line, col, err) {
+  alert('Erreur JS : ' + msg + ' @ ' + (src||'') + ':' + line);
+  if (err) console.error(err);
+};
+
+if (!Object.values) Object.values = function(o){ return Object.keys(o).map(function(k){ return o[k]; }); };
+if (!Object.entries) Object.entries = function(o){ return Object.keys(o).map(function(k){ return [k, o[k]]; }); };
+
+function clone(obj){
+  var out = {};
+  if (obj) for (var k in obj) if (Object.prototype.hasOwnProperty.call(obj,k)) out[k]=obj[k];
+  return out;
+}
+
+function safeNormalize(str){
+  if (str == null) return '';
+  var s = String(str);
+  if (typeof s.normalize === 'function') {
+    s = s.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  }
+  return s.toUpperCase().trim();
+}
+
+function escapeHtml(s){
+  return String(s ?? '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
+/* ==========
+   Toast
+   ========== */
+function showToast(msg, sub){
+  var el = document.getElementById('toast');
+  if (!el) return;
+  el.innerHTML =
+    '<div>✅ ' + escapeHtml(msg) + '</div>' +
+    (sub ? '<div class="small">' + escapeHtml(sub) + '</div>' : '');
+  el.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(function(){ el.classList.remove('show'); }, 2200);
+}
+
+let loadingDepth = 0;
+
+function showLoading(text){
+  var overlay = document.getElementById('loadingOverlay');
+  var label = document.getElementById('loadingText');
+  if (!overlay || !label) return;
+  loadingDepth += 1;
+  label.textContent = String(text || 'Chargement…');
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function hideLoading(){
+  var overlay = document.getElementById('loadingOverlay');
+  if (!overlay) return;
+  loadingDepth = Math.max(0, loadingDepth - 1);
+  if (loadingDepth > 0) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+/* ==========
+   Identité (Perso - Joueur)
+   ========== */
+function loadIdentity(){
+  // Si getIdentity(fid) n'existe pas dans ton projet, ça tombera dans failureHandler et on s'en fout.
+  google.script.run
+    .withSuccessHandler(function(info){
+      var label = (info && info.label) ? info.label : '—';
+      document.getElementById('identityLabel').textContent = label;
+    })
+    .withFailureHandler(function(err){
+      document.getElementById('identityLabel').textContent = '—';
+      console.error(err);
+    })
+    .getIdentity(FID);
+}
+
+/* ==========
+   Close / Redirect
+   ========== */
+function redirectHome(){
+  try{
+    var u = new URL(window.location.href);
+    u.searchParams.set("page","home");
+    if (FID) u.searchParams.set("fid", FID);
+    window.location.replace(u.toString());
+  }catch(e){
+    window.location.href = "?page=home&fid=" + encodeURIComponent(FID || "");
+  }
+}
+
+function safeCloseOrRedirect(){
+  var inIframe = false;
+  try { inIframe = (window.top !== window.self); } catch(e) { inIframe = true; }
+
+  if (!inIframe) {
+    redirectHome();
+    return;
+  }
+
+  try{
+    if (google && google.script && google.script.host && typeof google.script.host.close === "function") {
+      google.script.host.close();
+      return;
+    }
+  }catch(e){}
+
+  redirectHome();
+}
+
+document.getElementById('btnClose').onclick = safeCloseOrRedirect;
+</script>
+
+<script>
+/* =========================
+   Données en dur (TREE/TOPS)
+   ========================= */
+const TREE = {
+  'COMBATS A DISTANCE_': {
+    'Cible': {
+      'Distance': [
+        {kind:'fixed', label:'Bout portant', value:+5},
+        {kind:'fixed', label:'Courte portée', value:+0},
+        {kind:'fixed', label:'Moyenne portée', value:-5},
+        {kind:'fixed', label:'Longue portée', value:-10},
+        {kind:'fixed', label:'Portée extrême', value:-15},
+      ],
+      'Taille de la cible': [
+        {kind:'fixed', label:'Minuscule (environ 30 cm)', value:-10},
+        {kind:'fixed', label:'Très petite (environ 50 cm)', value:-5},
+        {kind:'fixed', label:'Petite (environ 1 m)', value:-3},
+        {kind:'fixed', label:'Moyenne (taille humaine)', value:+0},
+        {kind:'fixed', label:'Grande (environ 3 m)', value:+3},
+        {kind:'fixed', label:'Très grande (environ 5 m)', value:+5},
+        {kind:'fixed', label:'Énorme (environ 7 m)', value:+10},
+        {kind:'fixed', label:'Gigantesque (10 m et +)', value:+15},
+      ],
+    },
+    'Situation': {
+      'Cible en déplacement': [
+        {kind:'fixed', label:'Statique', value:+0},
+        {kind:'fixed', label:'à l’Allure moyenne', value:-3},
+        {kind:'fixed', label:'à l’Allure rapide', value:-5},
+        {kind:'fixed', label:'à l’Allure maximale', value:-7},
+      ],
+      'Tireur en déplacement': [
+        {kind:'fixed', label:'Statique', value:+0},
+        {kind:'fixed', label:'à l’Allure lente', value:-3},
+        {kind:'fixed', label:'à l’Allure moyenne', value:-5},
+        {kind:'fixed', label:'à l’Allure rapide', value:-7},
+        {kind:'text',  label:'à l’Allure maximale', note:'Tir impossible'},
+      ],
+      'Cible bénéficiant d’une couverture': [
+        {kind:'fixed', label:'Aucune', value:+0},
+        {kind:'fixed', label:'Partielle (50% du corps)', value:-3},
+        {kind:'fixed', label:'Importante (75% du corps)', value:-5},
+      ],
+      'Obscurité (ou vision obscurcie par de la fumée, des gazs, etc.)': [
+        {kind:'fixed', label:'Aucune', value:+0},
+        {kind:'fixed', label:'Légère', value:-3},
+        {kind:'fixed', label:'Importante', value:-5},
+        {kind:'text',  label:'Totale', note:'Tir impossible*'},
+      ],
+      'Viser une localisation précise': [
+        {kind:'fixed', label:'Aucune', value:+0},
+        {kind:'fixed', label:'Corps', value:-3},
+        {kind:'fixed', label:'Jambe', value:-5},
+        {kind:'fixed', label:'Tête/Bras', value:-7},
+        {kind:'radio_range', label:'Un endroit spécifique du corps (épaule, ventre, mains, genou, etc.)', min:-10, max:-7, step:1}
+      ],
+    },
+    'Modes de Tir': {
+      'Coup par coup': [
+        {kind:'single', label:'Tir simple', note:'1 balle : +0'},
+        {
+          kind:'repeat',
+          label:'Tir à répétition',
+          defIdx:0,
+          options:[
+            {count:2,  bonus:+1, text:'2 balles tirées : +1 au test de tir'},
+            {count:3,  bonus:+2, text:'3 balles tirées : +2 au test de tir'},
+            {count:4,  bonus:+3, text:'4 balles tirées : +3 au test de tir'},
+            {count:7,  bonus:+4, text:'7 balles tirées : +4 au test de tir (ou options spéciales en courte portée/bout portant)'},
+            {count:10, bonus:+5, text:'10 balles tirées : +5 au test de tir (ou options spéciales en courte portée/bout portant)'},
+          ]
+        }
+      ],
+      'Tir auto': [
+        {kind:'auto_short', label:'Rafale courte', note:'3 balles tirées : +3 au test (et +5 aux dommages à courte portée/bout portant)'},
+        {kind:'auto_long',  label:'Rafale longue', note:'5 à 20 balles : chaque tranche de 5 donne +2 au test (+2 dégâts à courte portée/bout portant)', min:5, max:20, step:5},
+        {kind:'auto_multi', label:'Rafale longue (sur plusieurs adversaires)', note:'5 à 20 balles : bonus particuliers de répartition (sans effet test/dégâts ici)'},
+      ],
+    }
+  },
+
+  'COMBAT AU CONTACT_': {
+    'Situation': {
+      'Position / Avantage': [
+        {kind:'fixed', label:'Être attaqué par le côté (ou par-dessus/dessous, sous-marin, etc.)', value:-3},
+        {kind:'fixed', label:'Être attaqué alors qu’on est au sol', value:-5},
+        {kind:'range', label:'Être attaqué dans une position désavantageuse (peu d’espace, arme trop grande, etc.)', min:-5, max:-3, step:1},
+        {kind:'fixed', label:'Attaque depuis une position avantageuse (surélevée, protection, etc.)', value:+3},
+        {kind:'fixed', label:'Utiliser sa main non directrice', value:-5},
+        {kind:'text',  label:'Combattre sur un terrain instable ou en équilibre', note:'Les actions limitées par niveau en Acrobatie/Équilibre'},
+        {kind:'range', label:'Combattre avec une mauvaise luminosité', min:-5, max:-3, step:1},
+      ],
+      'Combattre plusieurs adversaires': [
+        {kind:'fixed', label:'2 adversaires', value:-5},
+        {kind:'fixed', label:'3 adversaires', value:-7},
+        {kind:'fixed', label:'4 adversaires', value:-10},
+      ],
+    }
+  }
+};
+
+const TOPS = Object.keys(TREE);
+
+/* ====================
+   État & utilitaires
+   ==================== */
+let combatCtx = null;    // serveur
+let lockType  = null;    // 'DISTANCE'|'CONTACT'|null
+
+const skillsCache = {
+  DISTANCE: { loaded:false, base: null, error:null },
+  CONTACT:  { loaded:false, base: null, error:null }
+};
+const droneSkillsCache = { loaded:false, base:null, error:null };
+
+function skillCatKey(){
+  if (!combatCtx || !combatCtx.type) return null;
+  return combatCtx.type === 'DISTANCE' ? 'DISTANCE' : 'CONTACT';
+}
+
+let ammoCache = { ok:false, ammo:0, row:null, reason:null, kind:null };
+let ammoDisplayValue = null;
+let ammoCheckTimer = null;
+
+function renderAmmoDisplay(){
+  var el = document.getElementById('bulletsRemaining');
+  if (!el) return;
+  el.textContent = (ammoDisplayValue == null || ammoDisplayValue === '') ? '—' : String(ammoDisplayValue);
+}
+
+let nextId = 1;
+assignIds(TREE);
+
+const state = new Map();
+let activeCat = pickDefaultCat(TOPS);
+let activeNavKey = '';
+
+function assignIds(tree){
+  Object.values(tree).forEach(function(groups){
+    Object.values(groups).forEach(function(types){
+      Object.values(types).forEach(function(items){
+        items.forEach(function(it){
+          if (!it.id) it.id = nextId++;
+        });
+      });
+    });
+  });
+}
+
+function pickDefaultCat(arr){
+  if (!arr || !arr.length) return '';
+  const pref = ['COMBATS A DISTANCE_', 'COMBATS À DISTANCE_', 'COMBAT AU CONTACT_'];
+  for (var i=0;i<pref.length;i++){ if (arr.indexOf(pref[i])>=0) return pref[i]; }
+  return arr[0];
+}
+
+const norm = function(s){ return safeNormalize(s); };
+const fmt  = function(n){ const v=Number(n); if(!Number.isFinite(v))return String(n||''); return v>=0?('+'+v):String(v); };
+const cssEscape = function(s){ return s.replace(/[^a-z0-9_\-]/gi, function(m){ return '\\' + m; }); };
+
+function applySignColor(el, n){
+  const v = Number(n);
+  if (!el) return;
+  if (v>0) el.style.color = getCss('--pos');
+  else if (v<0) el.style.color = getCss('--neg');
+  else el.style.color = getCss('--text');
+}
+function getCss(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#e9edf1';
+}
+function testBonusColor(v){
+  var min=-20,max=20;
+  if (v<min) v=min; if (v>max) v=max;
+  var t=(v-min)/(max-min);
+  var hue = 0 + t*120;
+  return 'hsl(' + hue + ',70%,60%)';
+}
+
+function clearRadioGroup(name, keepId){
+  const sel = document.querySelectorAll('input[type="radio"][name="'+cssEscape(name)+'"]');
+  sel.forEach(function(el){
+    const id = Number(el.value);
+    if (id !== keepId) state.delete(id);
+  });
+}
+
+function isShortOrPoint(){
+  if (!/DISTANCE/.test(norm(activeCat))) return false;
+  const key = activeCat + '|Cible|Distance';
+  const sel = document.querySelector('input[type="radio"][name="'+cssEscape(key)+'"]:checked');
+  if (!sel) return false;
+  const row = sel.closest('.row');
+  const labelEl = row ? row.querySelector('.label') : null;
+  const txt = norm((labelEl && labelEl.textContent) || '');
+  return txt.indexOf('BOUT PORTANT')>=0 || txt.indexOf('COURTE PORTEE')>=0 || txt.indexOf('COURTE PORTÉE')>=0;
+}
+
+function resetCategory(catId){
+  const ids = [];
+  state.forEach(function(v, k){
+    if (v.meta && v.meta.cat === catId) ids.push(k);
+  });
+  ids.forEach(function(id){ state.delete(id); });
+}
+
+function makeAnchorSlug(parts){
+  return parts
+    .filter(Boolean)
+    .map(function(p){
+      return safeNormalize(String(p || ''))
+        .replace(/[^A-Z0-9]+/g,'-')
+        .replace(/^-+|-+$/g,'');
+    })
+    .filter(Boolean)
+    .join('__');
+}
+
+function makeGroupAnchorId(cat, group){
+  return 'grp__' + makeAnchorSlug([cat, group]);
+}
+
+function makeTypeAnchorId(cat, group, type){
+  return 'type__' + makeAnchorSlug([cat, group, type]);
+}
+
+function getDefaultNavKey(){
+  var cat = TREE[activeCat] || {};
+  var groups = Object.keys(cat);
+  if (!groups.length) return '';
+  var firstGroup = groups[0];
+  var types = Object.keys(cat[firstGroup] || {});
+  if (types.length) return firstGroup + '||' + types[0];
+  return firstGroup + '||';
+}
+
+function parseActiveNavKey(){
+  var raw = String(activeNavKey || '').trim();
+  if (!raw || raw.indexOf('||') === -1) return { group:'', type:'' };
+  var parts = raw.split('||');
+  return { group: parts[0] || '', type: parts[1] || '' };
+}
+
+function ensureActiveNavKey(){
+  var cat = TREE[activeCat] || {};
+  var parsed = parseActiveNavKey();
+  if (parsed.group && cat[parsed.group]) {
+    if (!parsed.type || (cat[parsed.group] && cat[parsed.group][parsed.type])) return;
+  }
+  activeNavKey = getDefaultNavKey();
+}
+
+function renderNavTree(){
+  var host = document.getElementById('navTree');
+  if (!host) return;
+  host.innerHTML = '';
+
+  ensureActiveNavKey();
+  var parsed = parseActiveNavKey();
+  var cat = TREE[activeCat] || {};
+
+  Object.keys(cat).forEach(function(groupName){
+    var wrap = document.createElement('div');
+    wrap.className = 'navGroup';
+
+    var head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'navGroupHead' + (parsed.group === groupName && !parsed.type ? ' active' : '');
+    head.textContent = groupName;
+    head.onclick = function(){
+      activeNavKey = groupName + '||';
+      renderNavTree();
+      renderBottom();
+    };
+    wrap.appendChild(head);
+
+    var children = document.createElement('div');
+    children.className = 'navChildren';
+
+    Object.keys(cat[groupName]).forEach(function(typeName){
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'navItem' + (parsed.group === groupName && parsed.type === typeName ? ' active' : '');
+      btn.textContent = typeName;
+      btn.onclick = function(){
+        activeNavKey = groupName + '||' + typeName;
+        renderNavTree();
+        renderBottom();
+      };
+      children.appendChild(btn);
+    });
+
+    wrap.appendChild(children);
+    host.appendChild(wrap);
+  });
+}
+
+/* ====================
+   TOP
+   ==================== */
+function renderTop() {
+  const host = document.getElementById('topCats');
+  host.innerHTML = '';
+
+  TOPS.forEach(function(id){
+    const label = String(id||'').replace(/_+$/,'').replace(/_/g,' ').trim();
+    const sub = norm(id).indexOf('DISTANCE')>=0 ? 'Tir, distance, taille de cible, modes de tir…'
+             : norm(id).indexOf('CONTACT')>=0   ? 'Mêlée, positions, luminosité, adversaires…'
+             : 'Sous-catégories et options';
+
+    const isDistance = norm(id).indexOf('DISTANCE') >= 0;
+    const isContact  = norm(id).indexOf('CONTACT')  >= 0;
+
+    let locked = false;
+    if (lockType === 'DISTANCE' && isContact) locked = true;
+    if (lockType === 'CONTACT'  && isDistance) locked = true;
+
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'topCard' + (id === activeCat ? ' active' : '') + (locked ? ' locked' : '');
+
+    card.innerHTML =
+      '<div class="topTitle">'+escapeHtml(label)+'</div>' +
+      '<div class="topSub">'+escapeHtml(sub)+'</div>';
+
+    card.onclick = function(){
+      resetCategory(id);
+      activeCat = id;
+      activeNavKey = '';
+      renderTop();
+      renderBottom();
+      showSkillsIfNeeded();
+      setButtonsVisible();
+      scheduleAmmoCheck();
+    };
+    host.appendChild(card);
+  });
+
+  renderNavTree();
+}
+
+function setTitles(primaryName, droneName, isDronePrimary){
+  const wEl = document.getElementById('weaponTitle');
+  const dEl = document.getElementById('droneTitle');
+
+  const droneLabel = droneName ? ('Drone - ' + droneName) : '';
+
+  if (isDronePrimary) {
+    if (wEl) wEl.textContent = droneLabel || 'Drone - —';
+    if (dEl) { dEl.style.display = 'none'; dEl.textContent = ''; }
+    return;
+  }
+
+  if (wEl) wEl.textContent = primaryName || '—';
+
+  if (dEl) {
+    if (droneName) {
+      dEl.textContent = droneLabel;
+      dEl.style.display = 'block';
+    } else {
+      dEl.textContent = '';
+      dEl.style.display = 'none';
+    }
+  }
+}
+
+function getCurrentTestBonus(){
+  const a = computeAgg();
+  return Number(a.total || 0);
+}
+
+/* =========================
+   Skills (filtrées serveur)
+   ========================= */
+function showSkillsIfNeeded(){
+  const wrap = document.getElementById('skillsWrap');
+  if (!wrap) return;
+
+  if (!combatCtx || !combatCtx.type) {
+    wrap.style.display = 'none';
+    wrap.innerHTML = '';
+    return;
+  }
+
+  const key = skillCatKey();
+  const hasWeaponSkills = !!(Array.isArray(combatCtx.skillsWanted) && combatCtx.skillsWanted.length);
+  const hasDrone = !!(combatCtx && combatCtx.hasDrone && combatCtx.drone && combatCtx.drone.active);
+  const droneWanted = hasDrone ? (combatCtx.drone.skillsWanted || []) : [];
+  const hasDroneSkills = !!(Array.isArray(droneWanted) && droneWanted.length);
+
+  if (!hasWeaponSkills && !hasDroneSkills) {
+    wrap.style.display = 'none';
+    wrap.innerHTML = '';
+    return;
+  }
+
+  renderSkills();
+
+  // Weapon skills (C..T)
+  if (hasWeaponSkills && key && !skillsCache[key].loaded && skillsCache[key].base == null) {
+    skillsCache[key].loaded = false;
+    skillsCache[key].base = null;
+    skillsCache[key].error = null;
+
+    google.script.run
+      .withSuccessHandler(function(list){
+        skillsCache[key].base = list || [];
+        skillsCache[key].loaded = true;
+        renderSkills();
+      })
+      .withFailureHandler(function(err){
+        skillsCache[key].base = [];
+        skillsCache[key].loaded = true;
+        skillsCache[key].error = err;
+        renderSkills();
+      })
+      .getSkillsForNames(FID, combatCtx.skillsWanted || []);
+  }
+
+  // Drone skills (AP..AU)
+  if (hasDroneSkills && !droneSkillsCache.loaded && droneSkillsCache.base == null) {
+    droneSkillsCache.loaded = false;
+    droneSkillsCache.base = null;
+    droneSkillsCache.error = null;
+
+    google.script.run
+      .withSuccessHandler(function(list){
+        droneSkillsCache.base = list || [];
+        droneSkillsCache.loaded = true;
+        renderSkills();
+      })
+      .withFailureHandler(function(err){
+        droneSkillsCache.base = [];
+        droneSkillsCache.loaded = true;
+        droneSkillsCache.error = err;
+        renderSkills();
+      })
+      .getDroneSkillsForNames(FID, droneWanted);
+  }
+}
+
+function renderSkills(){
+  const wrap = document.getElementById('skillsWrap');
+  if (!wrap) return;
+
+  if (!combatCtx || !combatCtx.type) {
+    wrap.style.display = 'none';
+    wrap.innerHTML = '';
+    return;
+  }
+
+  const key = skillCatKey();
+  const bonus = getCurrentTestBonus();
+
+  const hasWeaponSkills = !!(Array.isArray(combatCtx.skillsWanted) && combatCtx.skillsWanted.length);
+  const hasDrone = !!(combatCtx && combatCtx.hasDrone && combatCtx.drone && combatCtx.drone.active);
+  const droneWanted = hasDrone ? (combatCtx.drone.skillsWanted || []) : [];
+  const hasDroneSkills = !!(Array.isArray(droneWanted) && droneWanted.length);
+
+  if (!hasWeaponSkills && !hasDroneSkills) {
+    wrap.style.display = 'none';
+    wrap.innerHTML = '';
+    return;
+  }
+
+  wrap.style.display = 'grid';
+
+  function tilesFrom(list, source){
+    const baseList = Array.isArray(list) ? list : [];
+    if (!baseList.length) return '';
+
+    return baseList.map(function(it){
+      const name = (it && it.name != null) ? String(it.name) : '';
+      const sub  = (it && it.sub  != null) ? String(it.sub).trim() : '';
+      const baseRaw = (it && it.value != null) ? String(it.value).trim() : '';
+      const baseNum = (baseRaw === '' || isNaN(Number(baseRaw))) ? null : Number(baseRaw);
+      const shown   = (baseNum === null) ? baseRaw : String(baseNum + bonus);
+      const isDrone = source === 'drone';
+
+      return (
+        '<div class="skillTile' + (isDrone ? ' drone' : '') + '">' +
+          '<div class="skillMain">' +
+            (isDrone ? '<span class="skillBadge">Drone</span>' : '') +
+            '<div class="skillName">' +
+              escapeHtml(name) +
+              (sub ? ' <span class="note">[' + escapeHtml(sub) + ']</span>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="skillVal">' + escapeHtml(shown || '—') + '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  let html = '';
+
+  if (hasWeaponSkills) {
+    const cache = (key && skillsCache[key]) ? skillsCache[key] : { loaded:true, base:[], error:null };
+    if (!cache.loaded && cache.base == null) {
+      html += '<div class="skillTile"><div class="skillMain"><div class="skillName">Chargement…</div></div><div class="skillVal">…</div></div>';
+    } else if (cache.error) {
+      html += '<div class="skillTile"><div class="skillMain"><div class="skillName">Erreur</div></div><div class="skillVal">—</div></div>';
+    } else {
+      html += tilesFrom(cache.base, 'weapon');
+    }
+  }
+
+  if (hasDroneSkills) {
+    if (!droneSkillsCache.loaded && droneSkillsCache.base == null) {
+      html += '<div class="skillTile drone"><div class="skillMain"><span class="skillBadge">Drone</span><div class="skillName">Chargement…</div></div><div class="skillVal">…</div></div>';
+    } else if (droneSkillsCache.error) {
+      html += '<div class="skillTile drone"><div class="skillMain"><span class="skillBadge">Drone</span><div class="skillName">Erreur</div></div><div class="skillVal">—</div></div>';
+    } else {
+      html += tilesFrom(droneSkillsCache.base, 'drone');
+    }
+  }
+
+  wrap.innerHTML = '<div class="skillsGrid">' + html + '</div>';
+}
+
+/* ====================
+   Ammo + buttons
+   ==================== */
+function isDistanceCat(){
+  return /DISTANCE/.test(norm(activeCat));
+}
+
+function setAmmoWarning(show, text){
+  const warn = document.getElementById('ammoWarn');
+  if (!warn) return;
+  if (!show) {
+    warn.style.display = 'none';
+    warn.textContent = '';
+    return;
+  }
+  warn.style.display = 'inline-flex';
+  warn.textContent = text;
+}
+
+function getBulletsUsedNow(){
+  const a = computeAgg();
+  return Number(a.bullets || 0);
+}
+
+function setButtonsVisible(){
+  const btnV = document.getElementById('btnValidate');
+  const btnR = document.getElementById('btnReload');
+  if (btnV) btnV.style.display = isDistanceCat() ? 'inline-block' : 'none';
+  if (btnR) btnR.style.display = isDistanceCat() ? 'inline-block' : 'none';
+}
+
+function validateAmmoNow(){
+  const btn = document.getElementById('btnValidate');
+  if (!btn) return;
+
+  if (!isDistanceCat()) {
+    setAmmoWarning(false);
+    btn.disabled = true;
+    return;
+  }
+
+  const used = getBulletsUsedNow();
+  if (used <= 0) {
+    setAmmoWarning(true, 'ℹ️ Choisis un mode de tir (balle = 0)');
+    btn.disabled = true;
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      ammoCache = res || { ok:false, reason:'UNKNOWN' };
+
+      if (!ammoCache.ok) {
+        ammoDisplayValue = null;
+        renderAmmoDisplay();
+        if (ammoCache.reason === 'NO_SELECTION') setAmmoWarning(true, '⚠️ Choisis une arme à distance (ou un drone actif)');
+        else setAmmoWarning(true, '⚠️ Munitions: état inconnu');
+        btn.disabled = true;
+        return;
+      }
+
+      const ammo = Number(ammoCache.ammo || 0);
+      ammoDisplayValue = Number.isFinite(ammo) ? ammo : 0;
+      renderAmmoDisplay();
+      if (ammo < used) {
+        setAmmoWarning(true, '⚠️ Pas assez de balles (' + ammo + ' dispo / ' + used + ' requises)');
+        btn.disabled = true;
+      } else {
+        setAmmoWarning(false);
+        btn.disabled = false;
+      }
+    })
+    .withFailureHandler(function(){
+      ammoDisplayValue = null;
+      renderAmmoDisplay();
+      setAmmoWarning(true, '⚠️ Impossible de vérifier les balles');
+      btn.disabled = true;
+    })
+    .getAmmoStatus(FID);
+}
+
+function scheduleAmmoCheck(){
+  if (!isDistanceCat()) return;
+  if (ammoCheckTimer) clearTimeout(ammoCheckTimer);
+  ammoCheckTimer = setTimeout(validateAmmoNow, 180);
+}
+
+/* ====================
+   Bottom render
+   ==================== */
+function renderBottom() {
+  const container = document.getElementById('cols');
+  container.innerHTML = '';
+  container.style.gridTemplateColumns = '1fr';
+
+  ensureActiveNavKey();
+  const nav = parseActiveNavKey();
+  const cat = TREE[activeCat] || {};
+  const selectedGroup = nav.group && cat[nav.group] ? nav.group : (Object.keys(cat)[0] || '');
+  const selectedType = selectedGroup && nav.type && cat[selectedGroup] && cat[selectedGroup][nav.type] ? nav.type : '';
+
+  const cols = [0].map(function(){
+    const c=document.createElement('div');
+    c.className='col';
+    container.appendChild(c);
+    return c;
+  });
+
+  // CONTACT special render
+  if (/CONTACT/.test(norm(activeCat))) {
+    const contactGroupLabel = selectedGroup || 'Situation';
+    const det = document.createElement('details'); det.className='grp'; det.open=true; det.id = makeGroupAnchorId(activeCat, contactGroupLabel);
+    const sum = document.createElement('summary'); sum.textContent = contactGroupLabel; det.appendChild(sum);
+    const inner = document.createElement('div'); inner.className='inner';
+
+    const block = document.createElement('div'); block.className='block type soft';
+
+    var contactGroups = selectedGroup ? [selectedGroup] : Object.keys(cat);
+    contactGroups.forEach(function(gName){
+      var typesObj = cat[gName] || {};
+      var contactTypes = selectedType && gName === selectedGroup ? [selectedType] : Object.keys(typesObj);
+
+      contactTypes.forEach(function(typeName){
+        var items = typesObj[typeName] || [];
+
+        var marker = document.createElement('div');
+        marker.className = 'navSectionMarker';
+        marker.id = makeTypeAnchorId(activeCat, gName, typeName);
+        marker.textContent = typeName;
+        block.appendChild(marker);
+
+        if (typeName === 'Combattre plusieurs adversaires') {
+          const row = document.createElement('div'); row.className='row';
+          const stack = document.createElement('div'); stack.className='stack';
+          const label = document.createElement('div'); label.className='label'; label.textContent = typeName;
+          stack.appendChild(label);
+
+          const chk = document.createElement('input'); chk.type='checkbox';
+          const slider = document.createElement('input'); slider.type='range';
+          slider.min=0; slider.max=2; slider.step=1; slider.value=0; slider.disabled=true;
+
+          const mini = document.createElement('span'); mini.className='miniVal'; mini.textContent = '';
+          const adversairesMap = [2,3,4];
+          const malusMap = [-5,-7,-10];
+          const useId = items[0].id;
+
+          chk.onchange = function(){
+            slider.disabled = !chk.checked;
+            if (chk.checked) {
+              const idx = Number(slider.value);
+              state.set(useId, {kind:'multi_chk', value:malusMap[idx], checked:true, bullets:0, dmg:0,
+                                meta:{cat:activeCat, group:'Contact', type:'Plusieurs adversaires', label:typeName}});
+              mini.textContent = String(adversairesMap[idx]) + ' adversaires';
+            } else {
+              state.delete(useId);
+              mini.textContent = '';
+            }
+            updateTotals();
+          };
+
+          slider.oninput = function(){
+            const idx = Number(slider.value);
+            if (chk.checked) {
+              state.set(useId, {kind:'multi_chk', value:malusMap[idx], checked:true, bullets:0, dmg:0,
+                                meta:{cat:activeCat, group:'Contact', type:'Plusieurs adversaires', label:typeName}});
+              mini.textContent = String(adversairesMap[idx]) + ' adversaires';
+              updateTotals();
+            }
+          };
+
+          row.appendChild(stack);
+          row.appendChild(slider);
+          row.appendChild(mini);
+          row.appendChild(chk);
+          block.appendChild(row);
+          return;
+        }
+
+        items.forEach(function(item){
+          const row = document.createElement('div'); row.className='row';
+          const stack = document.createElement('div'); stack.className='stack';
+          const label = document.createElement('div'); label.className='label'; label.textContent = item.label;
+          stack.appendChild(label);
+
+          if (item.kind === 'fixed') {
+            const note = document.createElement('div'); note.className='note'; note.textContent = '';
+            stack.appendChild(note);
+
+            const val = document.createElement('div'); val.className='val'; val.textContent = fmt(item.value);
+            applySignColor(val, item.value);
+
+            const chk = document.createElement('input'); chk.type='checkbox';
+            chk.onchange = function(){
+              if (chk.checked) {
+                state.set(item.id, {kind:'fixed_chk', value:Number(item.value), checked:true, bullets:0, dmg:0,
+                                    meta:{cat:activeCat, group:'Contact', type:'Global', label:item.label}});
+              } else {
+                state.delete(item.id);
+              }
+              updateTotals();
+            };
+
+            row.appendChild(stack); row.appendChild(val); row.appendChild(chk);
+
+          } else if (item.kind === 'range') {
+            const note = document.createElement('div'); note.className='note'; note.textContent = '';
+            stack.appendChild(note);
+
+            const chk = document.createElement('input'); chk.type='checkbox';
+            const steps = Math.round((item.max - item.min) / (item.step||1));
+            const slider = document.createElement('input'); slider.type='range';
+            slider.min=0; slider.max=Math.abs(steps); slider.step=1; slider.value=0; slider.disabled=true;
+
+            const mini = document.createElement('span'); mini.className='miniVal'; mini.textContent = '';
+
+            function mappedVal(){
+              const step = item.step||1;
+              return item.max - (Number(slider.value) * step);
+            }
+
+            chk.onchange = function(){
+              slider.disabled = !chk.checked;
+              if (chk.checked) {
+                const v = mappedVal();
+                state.set(item.id, {kind:'range_chk', value:Number(v), checked:true, bullets:0, dmg:0,
+                                    meta:{cat:activeCat, group:'Contact', type:'Global', label:item.label}});
+                mini.textContent = fmt(v);
+                applySignColor(mini, v);
+              } else {
+                state.delete(item.id);
+                mini.textContent = '';
+              }
+              updateTotals();
+            };
+
+            slider.oninput = function(){
+              const v = mappedVal();
+              if (chk.checked) {
+                state.set(item.id, {kind:'range_chk', value:Number(v), checked:true, bullets:0, dmg:0,
+                                    meta:{cat:activeCat, group:'Contact', type:'Global', label:item.label}});
+                mini.textContent = fmt(v);
+                applySignColor(mini, v);
+                updateTotals();
+              }
+            };
+
+            row.appendChild(stack);
+            row.appendChild(slider);
+            row.appendChild(mini);
+            row.appendChild(chk);
+
+          } else if (item.kind === 'text') {
+            const note2 = document.createElement('div'); note2.className='note'; note2.textContent = item.note || '';
+            stack.appendChild(note2);
+            row.appendChild(stack);
+          }
+
+          block.appendChild(row);
+        });
+      });
+    });
+
+    inner.appendChild(block);
+    det.appendChild(inner);
+    cols[0].appendChild(det);
+
+  } else {
+    // DISTANCE default render
+    const distanceGroups = selectedGroup ? [selectedGroup] : Object.keys(cat);
+    distanceGroups.forEach(function(gName){
+      const det = document.createElement('details'); det.className='grp'; det.open=true; det.id = makeGroupAnchorId(activeCat, gName);
+      const sum = document.createElement('summary'); sum.textContent = gName; det.appendChild(sum);
+      const inner = document.createElement('div'); inner.className='inner';
+
+      const typeNames = selectedType && gName === selectedGroup ? [selectedType] : Object.keys(cat[gName]);
+      typeNames.forEach(function(typeName){
+        const items = cat[gName][typeName];
+        const detType = document.createElement('details'); detType.className='type soft'; detType.open=true; detType.id = makeTypeAnchorId(activeCat, gName, typeName);
+        const sumType = document.createElement('summary'); sumType.textContent = typeName; detType.appendChild(sumType);
+        const block = document.createElement('div'); block.className='block';
+
+        if (/modes/i.test(gName)) {
+          buildModesBlock(typeName, items, activeCat + '|' + gName + '|' + typeName, block);
+          detType.appendChild(block); inner.appendChild(detType); return;
+        }
+
+        const radioName = activeCat + '|' + gName + '|' + typeName;
+
+        items.forEach(function(item){
+          const row = document.createElement('div'); row.className='row';
+          const stack = document.createElement('div'); stack.className='stack';
+          const label = document.createElement('div'); label.className='label'; label.textContent = item.label;
+          stack.appendChild(label);
+
+          if (item.kind === 'fixed') {
+            const note = document.createElement('div'); note.className='note'; note.textContent = '';
+            stack.appendChild(note);
+
+            const val = document.createElement('div'); val.className='val'; val.textContent = fmt(item.value);
+            applySignColor(val, item.value);
+
+            const radio = makeRadio(radioName, item.id, false, function(checked){
+              if (checked) {
+                clearRadioGroup(radioName, item.id);
+                state.set(item.id, {kind:'fixed', value:Number(item.value), checked:true, bullets:0, dmg:0,
+                                    meta:{cat:activeCat, group:gName, type:typeName, label:item.label}});
+                if (gName === 'Cible' && typeName === 'Distance') {
+                  if (buildModesBlock._refreshRepeatUI) buildModesBlock._refreshRepeatUI(true);
+                  if (buildModesBlock._refreshAutoLongUI) buildModesBlock._refreshAutoLongUI();
+                }
+                updateTotals();
+              }
+            });
+
+            row.appendChild(stack); row.appendChild(val); row.appendChild(radio);
+
+          } else if (item.kind === 'radio_range') {
+            const mini = document.createElement('span'); mini.className='miniVal'; mini.textContent = '';
+            const slider = document.createElement('input');
+            slider.type='range'; slider.min=item.min; slider.max=item.max; slider.step=item.step||1;
+            slider.value=item.min; slider.disabled=true;
+
+            const radio = makeRadio(radioName, item.id, false, function(checked){
+              slider.disabled = !checked;
+              if (checked) {
+                clearRadioGroup(radioName, item.id);
+                const v = Number(slider.value);
+                state.set(item.id, {kind:'radio_range', value:v, checked:true, bullets:0, dmg:0,
+                                    meta:{cat:activeCat, group:gName, type:typeName, label:item.label}});
+                mini.textContent = fmt(v);
+                applySignColor(mini, v);
+                updateTotals();
+              } else {
+                state.delete(item.id);
+                mini.textContent = '';
+                updateTotals();
+              }
+            });
+
+            slider.oninput = function(){
+              const v = Number(slider.value);
+              if (radio.checked) {
+                state.set(item.id, {kind:'radio_range', value:v, checked:true, bullets:0, dmg:0,
+                                    meta:{cat:activeCat, group:gName, type:typeName, label:item.label}});
+                mini.textContent = fmt(v);
+                applySignColor(mini, v);
+                updateTotals();
+              }
+            };
+
+            row.appendChild(stack);
+            row.appendChild(slider);
+            row.appendChild(mini);
+            row.appendChild(radio);
+
+          } else {
+            const note = document.createElement('div'); note.className='note'; note.textContent = item.note || '';
+            stack.appendChild(note);
+            row.appendChild(stack);
+          }
+
+          block.appendChild(row);
+        });
+
+        detType.appendChild(block);
+        inner.appendChild(detType);
+      });
+
+      det.appendChild(inner);
+      cols[0].appendChild(det);
+    });
+  }
+
+  updateTotals();
+}
+
+function makeRadio(name, id, checked, onChange){
+  const r = document.createElement('input');
+  r.type = 'radio'; r.name = name; r.value = String(id);
+  if (checked) r.checked = true;
+  r.onchange = function(){ if (onChange) onChange(r.checked); };
+  return r;
+}
+
+/* ===========================
+   Modes de Tir (verrou CC/Auto)
+   =========================== */
+function buildModesBlock(typeName, items, groupKey, block){
+  const allowCC = !!(combatCtx && combatCtx.type === 'DISTANCE' && combatCtx.allowCC);
+  const allowAuto = !!(combatCtx && combatCtx.type === 'DISTANCE' && combatCtx.allowAuto);
+
+  const isCCBlock = safeNormalize(typeName).indexOf('COUP PAR COUP') >= 0;
+  const isAutoBlock = safeNormalize(typeName).indexOf('TIR AUTO') >= 0;
+
+  if (isCCBlock && !allowCC) block.classList.add('disabledUI');
+  if (isAutoBlock && !allowAuto) block.classList.add('disabledUI');
+
+  const modeGlobal = activeCat + '|Modes de Tir|MODE_GLOBAL';
+  const single = items.find(function(it){return it.kind==='single';});
+  const repeat = items.find(function(it){return it.kind==='repeat';});
+  const autoS  = items.find(function(it){return it.kind==='auto_short';});
+  const autoL  = items.find(function(it){return it.kind==='auto_long';});
+  const autoM  = items.find(function(it){return it.kind==='auto_multi';});
+
+  if (single) {
+    const row = document.createElement('div'); row.className='row';
+    const stack = document.createElement('div'); stack.className='stack';
+    const label = document.createElement('div'); label.className='label'; label.textContent = single.label;
+    const note  = document.createElement('div'); note.className='note';  note.textContent = single.note || '';
+    stack.appendChild(label); stack.appendChild(note);
+
+    const radio = makeRadio(modeGlobal, single.id, false, function(checked){
+      if (checked) {
+        clearRadioGroup(modeGlobal, single.id);
+        state.set(single.id, {kind:'single', value:0, checked:true, bullets:1, dmg:0,
+                              meta:{cat:activeCat, group:'Modes de Tir', type:typeName, label:single.label}});
+        if (repeat) state.delete(repeat.id);
+        if (autoS)  state.delete(autoS.id);
+        if (autoL)  state.delete(autoL.id);
+        if (autoM)  state.delete(autoM.id);
+        if (buildModesBlock._refreshRepeatUI) buildModesBlock._refreshRepeatUI(true);
+        if (buildModesBlock._refreshAutoLongUI) buildModesBlock._refreshAutoLongUI();
+        updateTotals();
+      }
+    });
+
+    row.appendChild(stack);
+    row.appendChild(radio);
+    block.appendChild(row);
+  }
+
+  // Tir à répétition
+  let repeatOptsWrap, repeatSlider, repeatInfo;
+  if (repeat) {
+    const repeatWrap = document.createElement('div');
+
+    const row0 = document.createElement('div'); row0.className='row';
+    const label0 = document.createElement('div'); label0.className='label'; label0.textContent = repeat.label;
+
+    const radio0 = makeRadio(modeGlobal, repeat.id, false, function(checked){
+      if (checked) {
+        clearRadioGroup(modeGlobal, repeat.id);
+        repeatSlider.disabled = false;
+        applyRepeatSelection(Number(repeatSlider.value), true);
+        refreshRepeatOptions();
+        if (single) state.delete(single.id);
+        if (autoS)  state.delete(autoS.id);
+        if (autoL)  state.delete(autoL.id);
+        if (autoM)  state.delete(autoM.id);
+        updateTotals();
+      } else {
+        repeatSlider.disabled = true;
+        const st = state.get(repeat.id);
+        if (st) {
+          var st2 = clone(st);
+          st2.value = 0; st2.dmg = 0; st2.checked = false;
+          state.set(repeat.id, st2);
+        }
+        repeatOptsWrap.innerHTML = '';
+        updateTotals();
+      }
+    });
+
+    row0.appendChild(label0); row0.appendChild(radio0);
+    repeatWrap.appendChild(row0);
+
+    const row1 = document.createElement('div'); row1.className='row';
+    repeatSlider = document.createElement('input');
+    repeatSlider.type='range';
+    repeatSlider.min = 0;
+    repeatSlider.max = repeat.options.length - 1;
+    repeatSlider.step = 1;
+    repeatSlider.value = repeat.defIdx || 0;
+    repeatSlider.disabled = true;
+
+    repeatSlider.oninput = function(){
+      applyRepeatSelection(Number(repeatSlider.value), true);
+      refreshRepeatOptions();
+      updateTotals();
+    };
+
+    row1.appendChild(repeatSlider);
+    repeatWrap.appendChild(row1);
+
+    repeatInfo = document.createElement('div'); repeatInfo.className='info';
+    repeatInfo.textContent = repeat.options[repeatSlider.value] ? (repeat.options[repeatSlider.value].text || '') : '';
+    repeatWrap.appendChild(repeatInfo);
+
+    repeatOptsWrap = document.createElement('div'); repeatOptsWrap.className='subrow';
+    repeatWrap.appendChild(repeatOptsWrap);
+
+    block.appendChild(repeatWrap);
+
+    function applyRepeatSelection(idx, preserveChoice){
+      const opt = repeat.options[idx]; if (!opt) return;
+      const el = document.querySelector('input[type="radio"][name="'+cssEscape(modeGlobal)+'"][value="'+repeat.id+'"]');
+      const active = !!(el && el.checked);
+      const prev = state.get(repeat.id) || {};
+      const keepChoice = preserveChoice ? ((prev.extra && prev.extra.choice) || null) : null;
+      repeatInfo.textContent = opt.text || '';
+
+      var valBase = (prev.value !== undefined && prev.value !== null) ? prev.value : (opt.bonus || 0);
+      state.set(repeat.id, {
+        kind:'repeat',
+        value: active ? Number(valBase) : 0,
+        checked: !!active,
+        bullets: opt.count || 0,
+        dmg: prev.dmg || 0,
+        extra:{ choice: keepChoice },
+        meta:{cat:activeCat, group:'Modes de Tir', type:typeName, label:repeat.label},
+        idx: idx
+      });
+    }
+
+    function refreshRepeatOptions(){
+      repeatOptsWrap.innerHTML = '';
+      const el = document.querySelector('input[type="radio"][name="'+cssEscape(modeGlobal)+'"][value="'+repeat.id+'"]');
+      const active = !!(el && el.checked);
+      const opt = repeat.options[ Number(repeatSlider.value) ];
+      if (!active || !opt) return;
+
+      const short = isShortOrPoint();
+      const bullets = opt.count||0;
+
+      let choices = [];
+      if (short && bullets >= 7) {
+        if (bullets === 7) {
+          choices = [
+            {key:'A', label:'+4 au test de tir',       vTest:+4, vDmg:0},
+            {key:'B', label:'+3 au test et +3 dégâts', vTest:+3, vDmg:+3}
+          ];
+        } else if (bullets === 10) {
+          choices = [
+            {key:'A', label:'+5 au test de tir',       vTest:+5, vDmg:0},
+            {key:'B', label:'+4 au test et +3 dégâts', vTest:+4, vDmg:+3},
+            {key:'C', label:'+3 au test et +6 dégâts', vTest:+3, vDmg:+6}
+          ];
+        }
+      }
+
+      const st = state.get(repeat.id) || {};
+      if (!choices.length) {
+        var stNo = clone(st);
+        stNo.value = Number(opt.bonus||0);
+        stNo.dmg = 0;
+        stNo.extra = {choice:null};
+        state.set(repeat.id, stNo);
+        return;
+      }
+
+      const name = modeGlobal + '|REPEAT_CHOICE';
+      const current = (st.extra && st.extra.choice) || 'A';
+
+      choices.forEach(function(ch){
+        const holder = document.createElement('label'); holder.className='opt';
+        const rd = makeRadio(name, ch.key, current===ch.key, function(checked){
+          if (checked) {
+            const st0 = state.get(repeat.id) || {};
+            var st1 = clone(st0);
+            st1.value = ch.vTest; st1.dmg = ch.vDmg; st1.extra = {choice:ch.key};
+            state.set(repeat.id, st1);
+            updateTotals();
+          }
+        });
+        const txt = document.createElement('span'); txt.textContent = ch.label;
+        holder.appendChild(rd); holder.appendChild(txt);
+        repeatOptsWrap.appendChild(holder);
+      });
+
+      const cur = (function(){ for (var i=0;i<choices.length;i++){ if (choices[i].key===current) return choices[i]; } return choices[0]; })();
+      if (cur) {
+        const st1b = state.get(repeat.id) || {};
+        var st2b = clone(st1b);
+        st2b.value = cur.vTest; st2b.dmg = cur.vDmg; st2b.extra = {choice:cur.key};
+        state.set(repeat.id, st2b);
+      }
+    }
+
+    buildModesBlock._refreshRepeatUI = function(){
+      const el = document.querySelector('input[type="radio"][name="'+cssEscape(modeGlobal)+'"][value="'+repeat.id+'"]');
+      const isRepeat = !!(el && el.checked);
+      repeatSlider.disabled = !isRepeat;
+      if (isRepeat) {
+        applyRepeatSelection(Number(repeatSlider.value), true);
+        refreshRepeatOptions();
+      } else {
+        repeatOptsWrap.innerHTML = '';
+      }
+    };
+  }
+
+  // Auto — courte
+  if (autoS) {
+    const row = document.createElement('div'); row.className='row';
+    const stack = document.createElement('div'); stack.className='stack';
+    const label = document.createElement('div'); label.className='label'; label.textContent = autoS.label;
+    const note  = document.createElement('div'); note.className='note';  note.textContent = autoS.note || '';
+    stack.appendChild(label); stack.appendChild(note);
+
+    const radio = makeRadio(modeGlobal, autoS.id, false, function(checked){
+      if (checked) {
+        clearRadioGroup(modeGlobal, autoS.id);
+        const short = isShortOrPoint();
+        state.set(autoS.id, {kind:'auto_short', value:+3, checked:true, bullets:3, dmg:(short ? +5 : 0),
+                             meta:{cat:activeCat, group:'Modes de Tir', type:typeName, label:autoS.label}});
+        if (single) state.delete(single.id);
+        if (repeat) state.delete(repeat.id);
+        if (autoL)  state.delete(autoL.id);
+        if (autoM)  state.delete(autoM.id);
+        if (buildModesBlock._refreshRepeatUI) buildModesBlock._refreshRepeatUI(true);
+        if (buildModesBlock._refreshAutoLongUI) buildModesBlock._refreshAutoLongUI();
+        updateTotals();
+      }
+    });
+
+    row.appendChild(stack); row.appendChild(radio);
+    block.appendChild(row);
+  }
+
+  // Auto — longue
+  if (autoL) {
+    const row0 = document.createElement('div'); row0.className='row';
+    const stack0 = document.createElement('div'); stack0.className='stack';
+    const label0 = document.createElement('div'); label0.className='label'; label0.textContent = autoL.label;
+    const note0  = document.createElement('div'); note0.className='note';  note0.textContent = autoL.note || '';
+    stack0.appendChild(label0); stack0.appendChild(note0);
+
+    const slider = document.createElement('input');
+    slider.type='range'; slider.min=autoL.min; slider.max=autoL.max; slider.step=autoL.step||5; slider.value=autoL.min; slider.disabled=true;
+
+    const radio0 = makeRadio(modeGlobal, autoL.id, false, function(checked){
+      if (checked) {
+        clearRadioGroup(modeGlobal, autoL.id);
+        slider.disabled = false;
+        applyAutoLongSelection(Number(slider.value));
+        if (single) state.delete(single.id);
+        if (repeat) state.delete(repeat.id);
+        if (autoS)  state.delete(autoS.id);
+        if (autoM)  state.delete(autoM.id);
+        if (buildModesBlock._refreshRepeatUI) buildModesBlock._refreshRepeatUI(true);
+        updateTotals();
+      } else {
+        slider.disabled = true;
+        const st = state.get(autoL.id);
+        if (st) {
+          var st2 = clone(st);
+          st2.value = 0; st2.dmg = 0; st2.checked = false;
+          state.set(autoL.id, st2);
+        }
+        updateTotals();
+      }
+    });
+
+    row0.appendChild(stack0); row0.appendChild(radio0);
+    block.appendChild(row0);
+
+    const row1 = document.createElement('div'); row1.className='row';
+    const mini = document.createElement('span'); mini.className='miniVal'; mini.textContent = '+2';
+    applySignColor(mini, +2);
+
+    slider.oninput = function(){
+      applyAutoLongSelection(Number(slider.value));
+      const v = (Math.max(1, Math.round(slider.value/5)))*2;
+      mini.textContent = fmt(v);
+      applySignColor(mini, v);
+      updateTotals();
+    };
+
+    row1.appendChild(slider); row1.appendChild(mini);
+    block.appendChild(row1);
+
+    function applyAutoLongSelection(bul){
+      const el = document.querySelector('input[type="radio"][name="'+cssEscape(modeGlobal)+'"][value="'+autoL.id+'"]');
+      const active = !!(el && el.checked);
+      const tranches = Math.max(1, Math.round(bul/5));
+      const short = isShortOrPoint();
+      const test = 2 * tranches;
+      const dmg  = short ? 2 * tranches : 0;
+      state.set(autoL.id, {
+        kind:'auto_long', value: active? test:0, checked:!!active, bullets:bul, dmg:dmg,
+        meta:{cat:activeCat, group:'Modes de Tir', type:typeName, label:autoL.label}
+      });
+    }
+
+    buildModesBlock._refreshAutoLongUI = function(){
+      const el = document.querySelector('input[type="radio"][name="'+cssEscape(modeGlobal)+'"][value="'+autoL.id+'"]');
+      const isActive = !!(el && el.checked);
+      slider.disabled = !isActive;
+      if (isActive) applyAutoLongSelection(Number(slider.value));
+    };
+  }
+
+  // Auto — multi
+  if (autoM) {
+    const row = document.createElement('div'); row.className='row';
+    const stack = document.createElement('div'); stack.className='stack';
+    const label = document.createElement('div'); label.className='label'; label.textContent = autoM.label;
+    const note  = document.createElement('div'); note.className='note';  note.textContent = autoM.note || '';
+    stack.appendChild(label); stack.appendChild(note);
+
+    const radio = makeRadio(modeGlobal, autoM.id, false, function(checked){
+      if (checked) {
+        clearRadioGroup(modeGlobal, autoM.id);
+        state.set(autoM.id, {kind:'auto_multi', value:0, checked:true, bullets:0, dmg:0,
+                             meta:{cat:activeCat, group:'Modes de Tir', type:typeName, label:autoM.label}});
+        if (single) state.delete(single.id);
+        if (repeat) state.delete(repeat.id);
+        if (autoS)  state.delete(autoS.id);
+        if (autoL)  state.delete(autoL.id);
+        if (buildModesBlock._refreshRepeatUI) buildModesBlock._refreshRepeatUI(true);
+        if (buildModesBlock._refreshAutoLongUI) buildModesBlock._refreshAutoLongUI();
+        updateTotals();
+      }
+    });
+
+    row.appendChild(stack); row.appendChild(radio);
+    block.appendChild(row);
+  }
+}
+
+/* ===========
+   Agrégations
+   =========== */
+function computeAgg(){
+  const cat = TREE[activeCat] || {};
+  const idsVisible = new Set();
+  Object.values(cat).forEach(function(types){
+    Object.values(types).forEach(function(items){
+      items.forEach(function(it){ idsVisible.add(it.id); });
+    });
+  });
+
+  let total=0, count=0, bullets=0, dmg=0;
+
+  const modeGlobal = activeCat + '|Modes de Tir|MODE_GLOBAL';
+  const modeSel = document.querySelector('input[type="radio"][name="'+cssEscape(modeGlobal)+'"]:checked');
+  const modeId = modeSel ? Number(modeSel.value) : null;
+
+  state.forEach(function(v, id){
+    if (!idsVisible.has(id)) return;
+
+    if ((v.kind==='fixed' || v.kind==='fixed_chk' || v.kind==='range_chk' || v.kind==='multi_chk' || v.kind==='radio_range') && Number.isFinite(v.value)) {
+      total += v.value; count++;
+    }
+
+    if (v.meta && v.meta.group === 'Modes de Tir') {
+      if (id !== modeId) return;
+      total  += Number(v.value||0);
+      bullets += Number(v.bullets||0);
+      dmg    += Number(v.dmg||0);
+      count++;
+    }
+  });
+
+  return { total:total, count:count, bullets:bullets, dmg:dmg };
+}
+
+function updateTotals(){
+  if (buildModesBlock._refreshAutoLongUI) buildModesBlock._refreshAutoLongUI();
+  if (buildModesBlock._refreshRepeatUI) buildModesBlock._refreshRepeatUI(true);
+
+  const a = computeAgg();
+  var totalEl = document.getElementById('total');
+  totalEl.textContent = fmt(a.total);
+  totalEl.style.color = testBonusColor(a.total);
+
+  document.getElementById('count').textContent   = a.count;
+  var usedEl = document.getElementById('bulletsConsumed');
+  if (usedEl) usedEl.textContent = String(a.bullets || 0);
+  renderAmmoDisplay();
+  document.getElementById('dmg').textContent     = fmt(a.dmg);
+
+  renderSkills();
+  setButtonsVisible();
+  scheduleAmmoCheck();
+}
+
+function resetAll(){
+  resetCategory(activeCat);
+  renderBottom();
+}
+
+/* =========
+   Boutons
+   ========= */
+document.getElementById('btnReset').onclick = resetAll;
+
+/* ---- Recharger (reload_weapon / reload_drone) ---- */
+document.getElementById('btnReload').onclick = function(){
+  if (!isDistanceCat()) return;
+
+  const btn = document.getElementById('btnReload');
+  btn.disabled = true;
+  showLoading('Rechargement en cours…');
+
+  google.script.run
+    .withSuccessHandler(function(sel){
+      if (!sel || !sel.ok) {
+        hideLoading();
+        alert('Rechargement impossible : aucune arme à distance cochée et aucun drone actif.');
+        btn.disabled = false;
+        return;
+      }
+
+      if (sel.kind === 'WEAPON') {
+        google.script.run
+          .withSuccessHandler(function(res){
+            if (!res || !res.ok) {
+              hideLoading();
+              alert('Rechargement arme refusé.\n' + (res && res.error ? res.error : 'Réponse vide'));
+              btn.disabled = false;
+              scheduleAmmoCheck();
+              return;
+            }
+            hideLoading();
+            showToast('Arme rechargée', (res.weaponName ? res.weaponName + ' — ' : '') + 'Stock consommé: ' + (res.usedFromStock||0));
+            setAmmoWarning(true, '🔄 Rechargé (arme) : +' + (res.usedFromStock||0) + ' depuis stock');
+            btn.disabled = false;
+            scheduleAmmoCheck();
+          })
+          .withFailureHandler(function(err){
+            hideLoading();
+            alert('Erreur Apps Script (reload_weapon) : ' + ((err && err.message) ? err.message : String(err)));
+            btn.disabled = false;
+            scheduleAmmoCheck();
+          })
+          .reload_weapon(FID);
+
+      } else if (sel.kind === 'DRONE') {
+        google.script.run
+          .withSuccessHandler(function(res){
+            if (!res || !res.ok) {
+              hideLoading();
+              alert('Rechargement drone refusé.\n' + (res && res.error ? res.error : 'Réponse vide'));
+              btn.disabled = false;
+              scheduleAmmoCheck();
+              return;
+            }
+            hideLoading();
+            showToast('Drone rechargé', 'Stock consommé: ' + (res.usedFromStock||0));
+            setAmmoWarning(true, '🔄 Rechargé (drone) : +' + (res.usedFromStock||0) + ' depuis stock');
+            btn.disabled = false;
+            scheduleAmmoCheck();
+          })
+          .withFailureHandler(function(err){
+            hideLoading();
+            alert('Erreur Apps Script (reload_drone) : ' + ((err && err.message) ? err.message : String(err)));
+            btn.disabled = false;
+            scheduleAmmoCheck();
+          })
+          .reload_drone(FID);
+
+      } else {
+        hideLoading();
+        alert('Rechargement: kind inconnu.');
+        btn.disabled = false;
+      }
+    })
+    .withFailureHandler(function(err){
+      hideLoading();
+      alert('Erreur Apps Script (getAmmoStatus) : ' + ((err && err.message) ? err.message : String(err)));
+      btn.disabled = false;
+    })
+    .getAmmoStatus(FID);
+};
+
+/* ---- Valider tir (applyBulletsToSelectedWeapon) ---- */
+document.getElementById('btnValidate').onclick = function () {
+  if (!isDistanceCat()) return;
+
+  const used = getBulletsUsedNow();
+  if (!Number.isFinite(used) || used <= 0) {
+    alert('Aucune balle à dépenser (mode de tir non sélectionné ?)');
+    return;
+  }
+
+  const btn = document.getElementById('btnValidate');
+  btn.disabled = true;
+  showLoading('Validation du tir…');
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res) {
+        hideLoading();
+        alert('Validation: réponse vide (res=null/undefined)');
+        btn.disabled = false;
+        scheduleAmmoCheck();
+        return;
+      }
+
+      if (!res.ok) {
+        const reason = res.reason || 'UNKNOWN';
+        if (reason === 'NO_SELECTION') {
+          hideLoading();
+          alert('Choisis une arme à distance (ou un drone actif).');
+        } else if (reason === 'NOT_ENOUGH_AMMO') {
+          hideLoading();
+          alert('Pas assez de balles : ' + res.ammo + ' dispo / ' + res.need + ' requises.');
+        } else if (reason === 'INVALID_BULLETS') {
+          hideLoading();
+          alert('Balles invalides : ' + res.bulletsUsed);
+        } else if (reason === 'EXCEPTION') {
+          hideLoading();
+          alert('Erreur serveur: ' + (res.message || 'EXCEPTION') + '\n' + (res.stack || ''));
+        } else {
+          hideLoading();
+          alert('Validation refusée.\nReason: ' + reason + '\nDétails: ' + JSON.stringify(res, null, 2));
+        }
+        btn.disabled = false;
+        scheduleAmmoCheck();
+        return;
+      }
+
+      ammoDisplayValue = res.ammoAfter;
+      renderAmmoDisplay();
+
+      hideLoading();
+      showToast('Tir effectué, ' + res.used + ' balle(s) tirée(s)', 'Reste ' + res.ammoAfter + ' balle(s)');
+      setAmmoWarning(true, '✅ Tir effectué : ' + res.used + ' balle(s) (reste ' + res.ammoAfter + ')');
+
+      resetCategory(activeCat);
+      renderBottom();
+
+      scheduleAmmoCheck();
+      btn.disabled = false;
+    })
+    .withFailureHandler(function (err) {
+      hideLoading();
+      alert('Erreur Apps Script (failureHandler) : ' + ((err && err.message) ? err.message : String(err)));
+      btn.disabled = false;
+      scheduleAmmoCheck();
+    })
+    .applyBulletsToSelectedWeapon(FID, used);
+};
+
+/* =========
+   BOOT
+   ========= */
+showLoading('Chargement du combat…');
+loadIdentity();
+
+google.script.run
+  .withSuccessHandler(function(ctx){
+    hideLoading();
+    combatCtx = ctx || { ok:true, type:null, skillsWanted:[] };
+
+    if (combatCtx.type === 'DISTANCE') {
+      lockType = 'DISTANCE';
+      activeCat = 'COMBATS A DISTANCE_';
+    } else if (combatCtx.type === 'CONTACT') {
+      lockType = 'CONTACT';
+      activeCat = 'COMBAT AU CONTACT_';
+    } else {
+      lockType = null;
+      activeCat = pickDefaultCat(TOPS);
+    }
+
+    const hasDrone = !!(combatCtx && combatCtx.hasDrone && combatCtx.drone && combatCtx.drone.active);
+    const droneName = hasDrone ? (combatCtx.drone.weaponName || '') : '';
+    setTitles(combatCtx.weaponName || '—', droneName, !!combatCtx.isDronePrimary);
+
+    renderTop();
+    renderBottom();
+    showSkillsIfNeeded();
+    setButtonsVisible();
+    scheduleAmmoCheck();
+  })
+  .withFailureHandler(function(err){
+    hideLoading();
+    alert('Erreur contexte : ' + ((err && err.message) ? err.message : String(err)));
+    renderTop();
+    renderBottom();
+    setButtonsVisible();
+  })
+  .getCombatContext(FID);
+</script>
+</body>
+</html>

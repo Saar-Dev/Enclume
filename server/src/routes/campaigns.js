@@ -7,6 +7,75 @@ import { requireRole } from '../middleware/role.js'
 
 const router = Router()
 
+// ─── Constantes dés ────────────────────────────────────────────────────────────
+const VALID_DICE = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100']
+const DICE_FACES = { d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20, d100: 100 }
+
+/**
+ * Valide la structure dice_config avant toute écriture en base.
+ *
+ * Structure attendue :
+ * {
+ *   "d20": { "success": { "min": 18, "max": 20 }, "fail": { "min": 1, "max": 1 } },
+ *   "d6":  { "success": { "min": 6,  "max": 6  }, "fail": null },
+ *   "d100":{ "success": null, "fail": { "min": 1, "max": 5 } }
+ * }
+ *
+ * Règles :
+ * - null accepté (désactive tous les critiques)
+ * - objet : seules les clés VALID_DICE sont acceptées
+ * - success et fail : null ou { min, max } avec 1 <= min <= max <= faces du dé
+ *
+ * @param {any} config
+ * @throws {AppError} si la structure est invalide
+ */
+function validateDiceConfig(config) {
+  if (config === null || config === undefined) return
+
+  if (typeof config !== 'object' || Array.isArray(config)) {
+    throw new AppError(400, 'dice_config must be an object or null')
+  }
+
+  for (const [die, value] of Object.entries(config)) {
+    if (!VALID_DICE.includes(die)) {
+      throw new AppError(400, `dice_config: unknown die type "${die}". Valid types: ${VALID_DICE.join(', ')}`)
+    }
+
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      throw new AppError(400, `dice_config.${die} must be an object`)
+    }
+
+    const faces = DICE_FACES[die]
+
+    for (const critType of ['success', 'fail']) {
+      const crit = value[critType]
+      if (crit === null || crit === undefined) continue
+
+      if (typeof crit !== 'object' || Array.isArray(crit)) {
+        throw new AppError(400, `dice_config.${die}.${critType} must be an object or null`)
+      }
+
+      const { min, max } = crit
+
+      if (!Number.isInteger(min) || !Number.isInteger(max)) {
+        throw new AppError(400, `dice_config.${die}.${critType}: min and max must be integers`)
+      }
+
+      if (min < 1) {
+        throw new AppError(400, `dice_config.${die}.${critType}.min must be >= 1`)
+      }
+
+      if (max > faces) {
+        throw new AppError(400, `dice_config.${die}.${critType}.max must be <= ${faces} (faces of ${die})`)
+      }
+
+      if (min > max) {
+        throw new AppError(400, `dice_config.${die}.${critType}: min (${min}) must be <= max (${max})`)
+      }
+    }
+  }
+}
+
 // GET /api/campaigns — liste des campagnes de l'utilisateur
 router.get('/', requireAuth, async (req, res) => {
   const campaigns = await db('campaigns')
@@ -95,11 +164,17 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // PUT /api/campaigns/:id — modifier une campagne
 router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
-  const { name, status, default_battlemap_id } = req.body
+  const { name, status, default_battlemap_id, dice_config } = req.body
   const updates = {}
   if (name !== undefined) updates.name = name
   if (status !== undefined) updates.status = status
   if (default_battlemap_id !== undefined) updates.default_battlemap_id = default_battlemap_id
+
+  // dice_config — validation avant écriture
+  if (dice_config !== undefined) {
+    validateDiceConfig(dice_config)
+    updates.dice_config = dice_config === null ? null : JSON.stringify(dice_config)
+  }
 
   // updated_at systématique sur tout PUT
   updates.updated_at = db.fn.now()
@@ -107,7 +182,7 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
   const [campaign] = await db('campaigns')
     .where({ id: req.params.id })
     .update(updates)
-    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'created_at', 'updated_at'])
+    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'created_at', 'updated_at'])
   res.json({ campaign })
 })
 
@@ -147,4 +222,4 @@ router.get('/:id/members', requireAuth, requireRole('gm'), async (req, res) => {
   res.json({ members })
 })
 
-export default router
+export default router 

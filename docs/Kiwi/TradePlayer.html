@@ -1,0 +1,1941 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Marchands (Joueur)</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0f1115;
+      --panel:#151923;
+      --panel2:#10131b;
+      --border:#252b3a;
+      --muted:#9aa4b2;
+      --text:#e8eef7;
+      --good:#1dd1a1;
+      --bad:#ff6b6b;
+      --chip:#1b2232;
+      --shadow:0 10px 30px rgba(0,0,0,.35);
+      --radius:14px;
+      --sticky-top-offset:16px;
+      --sticky-right-top:116px;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      margin:16px;
+      font-family:"Nunito",system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:var(--bg);
+      color:var(--text);
+    }
+
+    .card{
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      padding:12px;
+      background:linear-gradient(180deg,var(--panel),var(--panel2));
+      box-shadow:var(--shadow);
+    }
+
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .small{font-size:12px}
+    .muted{color:var(--muted)}
+    .strong{font-weight:900}
+    .hidden{display:none !important}
+
+    label{
+      font-size:12px;
+      color:var(--muted);
+      display:block;
+      margin-bottom:6px;
+    }
+
+    select,input,button{
+      font-family:"Nunito",system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:#0c0f16;
+      color:var(--text);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:8px 10px;
+      outline:none;
+    }
+
+    button{
+      cursor:pointer;
+      font-weight:900;
+      background:#121826;
+      transition:filter .08s ease, transform .08s ease;
+    }
+    button:hover{filter:brightness(1.08)}
+    button:active{transform:scale(.98)}
+    button.primary{background:#1a2340;border-color:#2a3b70}
+    button.good{background:#143126;border-color:#24553f}
+    button.bad{background:#2a1012;border-color:#5a1f26}
+    button[disabled]{opacity:.5;cursor:not-allowed}
+
+    /* layout global 2 colonnes : gauche = controls+catalogue, droite = panier+détail */
+    .pageLayout{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 420px;
+      gap:12px;
+      align-items:start;
+    }
+
+    .pageLeft{
+      display:grid;
+      gap:12px;
+      min-width:0;
+    }
+
+    .topGrid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:12px;
+      position:sticky;
+      top:var(--sticky-top-offset);
+      z-index:70;
+    }
+
+    .mainSplit{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:12px;
+      align-items:start;
+    }
+
+    .stickyRight{
+      position:sticky;
+      top:var(--sticky-top-offset);
+      z-index:40;
+      max-height:calc(100vh - var(--sticky-top-offset) - 16px);
+      overflow:auto;
+      display:grid;
+      gap:12px;
+      align-content:start;
+    }
+
+    @media (max-width:1260px){
+      .pageLayout{grid-template-columns:1fr}
+      .stickyRight{
+        position:static !important;
+        top:auto !important;
+        max-height:none !important;
+        overflow:visible !important;
+      }
+    }
+
+    .tree{display:grid;gap:12px}
+
+    .familySelectorLayout{
+      display:grid;
+      grid-template-columns:minmax(240px,.56fr) minmax(0,1.44fr);
+      gap:12px;
+      align-items:start;
+    }
+    .familySelectorList{
+      display:grid;gap:12px;align-items:start;
+      position:sticky;
+      top:var(--sticky-right-top);
+      max-height:calc(100vh - var(--sticky-right-top) - 16px);
+      overflow-y:auto;
+    }
+    .familySelectorContent{display:grid;gap:12px;align-items:start}
+    @media (max-width:1100px){
+      .familySelectorLayout{grid-template-columns:1fr}
+      .familySelectorList{position:static;top:auto;max-height:none;overflow:visible}
+    }
+
+    #itemPreviewPanel.hidden{display:none !important}
+    .detailTitle{font-size:18px;font-weight:900;line-height:1.2}
+    .detailBox{
+      border:1px solid var(--border);border-radius:12px;padding:10px;
+      background:#0c0f16;display:grid;gap:8px;font-size:13px;
+    }
+    .detailBox label{font-size:12px}
+    .detailTwoCols{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+    @media (max-width:700px){.detailTwoCols{grid-template-columns:1fr}}
+    .detailNoteInline{width:100%;margin-top:2px}
+
+    .familySelectItem{
+      width:100%;
+      text-align:left;
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:linear-gradient(180deg,#0d111a,#0a0d13);
+      display:grid;
+      gap:8px;
+      transition:border-color .12s ease, box-shadow .12s ease, background .12s ease, transform .08s ease;
+    }
+    .familySelectItem.active{
+      border-color:#3b82f6 !important;
+      box-shadow:0 0 0 1px rgba(59,130,246,.35) inset, 0 10px 30px rgba(0,0,0,.35) !important;
+      background:linear-gradient(180deg,rgba(59,130,246,.12),rgba(10,13,19,.98)) !important;
+    }
+    .familySelectHead{
+      display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;
+    }
+    .familySelectTitle{font-weight:900;font-size:14px;line-height:1.15}
+    .familySelectMeta{font-size:12px;font-weight:800;color:var(--muted);white-space:nowrap;flex:0 0 auto}
+
+    .familySelectedHero{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:linear-gradient(180deg,#0d111a,#0a0d13);
+      display:grid;
+      gap:8px;
+    }
+    .familySelectedHeroTitle{font-size:18px;font-weight:900;line-height:1.15}
+    .familySelectedHeroMeta{font-size:13px;font-weight:800;color:var(--muted)}
+
+    .categoryStack{display:grid;gap:10px}
+    .detailBox{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#0c0f16;
+      display:grid;
+      gap:10px;
+      font-size:13px;
+    }
+
+    .catSelectItem{
+      width:100%;
+      text-align:left;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#0b0f18;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+    }
+    .catSelectItem.active{
+      border-color:#3b82f6 !important;
+      box-shadow:0 0 0 1px rgba(59,130,246,.35) inset !important;
+      background:linear-gradient(180deg,rgba(59,130,246,.12),rgba(11,15,24,.98)) !important;
+    }
+
+    .itemGrid,.flatGrid{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px;
+    }
+    @media (max-width:760px){
+      .itemGrid,.flatGrid{grid-template-columns:1fr}
+    }
+
+    .itemCard{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:10px;
+      background:linear-gradient(180deg,#0d111a,#0a0d13);
+      display:grid;
+      gap:10px;
+      min-height:200px;
+      align-content:start;
+    }
+    .itemCard{cursor:pointer}
+    .itemCard:hover{filter:brightness(1.04)}
+    .itemName{font-weight:900;font-size:15px;line-height:1.15}
+
+    .chips{display:flex;gap:6px;flex-wrap:wrap}
+    .chip,.pill{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:2px 8px;border-radius:999px;
+      background:var(--chip);border:1px solid var(--border);
+      font-size:12px;color:var(--muted);white-space:nowrap;
+    }
+
+    .catalogMeta{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:6px 8px;
+    }
+    .metaLine{font-size:12px;color:var(--muted);line-height:1.2}
+    .metaLine b{color:var(--text);font-weight:800}
+
+    .optionGrid{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:8px;
+    }
+    @media (max-width:560px){ .optionGrid{grid-template-columns:1fr} }
+
+    .itemActions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+    .desc{
+      display:none;
+      white-space:pre-wrap;
+      border:1px dashed #2a3346;
+      border-radius:12px;
+      padding:8px;
+      color:var(--muted);
+      background:#0b0e14;
+    }
+    .desc.open{display:block}
+
+    .cartList{display:grid;gap:8px;margin-top:10px}
+    .cartRow{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#0c0f16;
+      display:grid;
+      gap:8px;
+    }
+    .cartTop{display:flex;gap:8px;justify-content:space-between;align-items:flex-start}
+    .qtyControls{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .qtyControls button{padding:4px 8px;border-radius:10px}
+    .cartTotals{
+      margin-top:12px;
+      border-top:1px solid var(--border);
+      padding-top:12px;
+      display:grid;
+      gap:8px;
+    }
+    .cartRemainBad{color:var(--bad)}
+    .cartRemainGood{color:var(--good)}
+
+    .empty{
+      border:1px dashed #2a3346;
+      border-radius:12px;
+      padding:10px;
+      color:var(--muted);
+      background:#0b0e14;
+    }
+    .errorBox{color:#ffd7d7;white-space:pre-wrap}
+
+    .modalBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.7);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:9999;
+      padding:16px;
+    }
+    .modalBackdrop.open{display:flex}
+    .modalBox{
+      width:min(760px, 100%);
+      max-height:min(85vh, 900px);
+      overflow:auto;
+      display:grid;
+      gap:12px;
+    }
+    .storageGrid{display:grid;gap:10px;margin-top:12px}
+    .storageRow{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#0c0f16;
+      display:grid;
+      gap:8px;
+    }
+
+    .loadingOverlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:15000;
+      padding:16px;
+    }
+    .loadingOverlay.open{display:flex}
+    .loadingBox{
+      min-width:220px;
+      max-width:min(92vw, 360px);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:18px 20px;
+      background:linear-gradient(180deg,var(--panel),var(--panel2));
+      box-shadow:0 18px 48px rgba(0,0,0,.45);
+      display:grid;
+      gap:12px;
+      justify-items:center;
+      text-align:center;
+    }
+    .loadingSpinner{
+      width:46px;height:46px;border-radius:999px;
+      border:4px solid rgba(255,255,255,.12);
+      border-top-color:#3b82f6;
+      animation:merchantSpin .9s linear infinite;
+    }
+    .loadingText{font-weight:900;font-size:14px;line-height:1.2}
+    @keyframes merchantSpin{ to{transform:rotate(360deg)} }
+  </style>
+</head>
+<body>
+  <div class="pageLayout">
+    <div class="pageLeft">
+      <div class="topGrid">
+        <div class="card">
+          <div class="row">
+            <div style="min-width:260px;flex:1">
+              <label>Marchand</label>
+              <select id="merchantSel" style="width:100%"></select>
+            </div>
+
+            <div>
+              <label>Argent disponible</label>
+              <div id="balance" class="strong">-</div>
+            </div>
+
+            <div>
+              <label>Panier</label>
+              <div id="cartTotalTop" class="strong">0 sols</div>
+            </div>
+
+            <div id="msg" class="hidden"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <div style="min-width:280px;flex:1">
+              <label>Recherche</label>
+              <input id="searchInput" style="width:100%" placeholder="Nom, famille, catégorie...">
+            </div>
+
+            <div style="min-width:170px">
+              <label>Affichage</label>
+              <select id="groupModeSel" style="width:100%">
+                <option value="family">Par famille</option>
+                <option value="flat">Liste simple</option>
+              </select>
+            </div>
+
+            <div style="min-width:170px">
+              <label>Trier par</label>
+              <select id="sortSel" style="width:100%">
+                <option value="name_asc">Nom A → Z</option>
+                <option value="name_desc">Nom Z → A</option>
+                <option value="price_desc">Prix décroissant</option>
+                <option value="price_asc">Prix croissant</option>
+              </select>
+            </div>
+
+            <div class="row" style="align-self:end">
+              <button onclick="refreshTree()">Refresh</button>
+              <button onclick="clearSearch()">Effacer</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mainSplit">
+        <div class="card">
+          <div class="strong">Catalogue</div>
+          <div class="small muted" id="catalogInfo" style="margin-top:4px">Choisis un marchand.</div>
+          <div id="results" class="tree" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stickyRight" id="rightCol">
+      <div class="card" id="cartPanel">
+        <div class="row" style="justify-content:space-between">
+          <div class="strong">Panier</div>
+          <span class="pill" id="cartCount">0 ligne(s)</span>
+        </div>
+
+        <div id="cartList" class="cartList"></div>
+
+        <div class="cartTotals">
+          <div class="row" style="justify-content:space-between">
+            <span>Total</span>
+            <span id="cartTotal" class="strong">0 sols</span>
+          </div>
+          <div class="row" style="justify-content:space-between">
+            <span>Après achat</span>
+            <span id="remaining" class="strong">-</span>
+          </div>
+          <button id="checkoutBtn" class="good" onclick="checkoutCart()">Valider l'achat</button>
+        </div>
+      </div>
+
+      <div id="itemPreviewPanel" class="card hidden">
+        <div id="itemPreviewHost" style="display:grid;gap:10px">
+          <div class="empty muted" style="font-size:13px">Clique sur un objet pour voir ses détails.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="storageModal" class="modalBackdrop" aria-hidden="true">
+    <div class="modalBox">
+      <div class="card">
+        <div class="strong">Choisir les emplacements</div>
+        <div id="storageModalInfo" class="small muted" style="margin-top:6px"></div>
+
+        <div id="storageGrid" class="storageGrid"></div>
+
+        <div id="storageModalError" class="small" style="color:#ffd7d7;margin-top:8px"></div>
+
+        <div class="row" style="justify-content:flex-end;margin-top:12px">
+          <button onclick="closeStorageModal()">Annuler</button>
+          <button id="storageModalBtn" class="good" onclick="confirmStorageChoices()">Valider le rangement</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadingOverlay" class="loadingOverlay" aria-hidden="true">
+    <div class="loadingBox" role="status" aria-live="polite" aria-busy="true">
+      <div class="loadingSpinner"></div>
+      <div id="loadingText" class="loadingText">Chargement…</div>
+    </div>
+  </div>
+
+<script>
+  let MID = "";
+  let FID = "";
+
+  let contextData = null;
+  let balance = 0;
+  let currentMerchantId = "";
+  let cart = [];
+
+  let storageOptions = ["Coffre"];
+  let activeCheckoutDraftToken = "";
+  let activePendingStorage = [];
+  let checkoutInProgress = false;
+
+  let searchTimer = null;
+  let loadingDepth = 0;
+  let stickyRaf = 0;
+
+  let CATALOG_TREE = [];
+  let CURRENT_ITEMS = [];
+  let CURRENT_FAMILY = "";
+  let CURRENT_CATEGORY = "";
+  const CATEGORY_CACHE = new Map();
+
+  function setMsg(s){
+    const el = document.getElementById('msg');
+    if (el) el.textContent = s || "";
+  }
+
+  function setDbg(s){
+    const el = document.getElementById('dbg');
+    if (!el) return;
+    el.textContent = s || "";
+    el.classList.toggle("errorBox", !!s);
+  }
+
+  function showLoading(text){
+    const overlay = document.getElementById("loadingOverlay");
+    const label = document.getElementById("loadingText");
+    if (!overlay || !label) return;
+    loadingDepth += 1;
+    label.textContent = String(text || "Chargement…");
+    overlay.classList.add("open");
+    overlay.setAttribute("aria-hidden", "false");
+  }
+
+  function hideLoading(){
+    const overlay = document.getElementById("loadingOverlay");
+    if (!overlay) return;
+    loadingDepth = Math.max(0, loadingDepth - 1);
+    if (loadingDepth > 0) return;
+    overlay.classList.remove("open");
+    overlay.setAttribute("aria-hidden", "true");
+  }
+
+  window.onerror = function(message, source, lineno, colno){
+    const msg = String(message || "");
+    if (msg.indexOf("ResizeObserver") !== -1) return;
+    setDbg(`JS ERROR: ${message} (ligne ${lineno}, col ${colno})`);
+  };
+
+  window.onunhandledrejection = function(e){
+    const msg = e && e.reason && e.reason.message ? e.reason.message : String(e.reason || e);
+    if (String(msg).indexOf("ResizeObserver") !== -1) return;
+    setDbg(`PROMISE ERROR: ${msg}`);
+  };
+
+  function callServer(fn, ...args){
+    return new Promise((resolve, reject) => {
+      try{
+        const runner = google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject);
+        if (!runner || typeof runner[fn] !== "function"){
+          reject(new Error(`Fonction serveur introuvable : ${fn}`));
+          return;
+        }
+        runner[fn](...args);
+      }catch(err){
+        reject(err);
+      }
+    });
+  }
+
+  function scheduleStickyLayoutUpdate(){
+    if (stickyRaf) cancelAnimationFrame(stickyRaf);
+    stickyRaf = requestAnimationFrame(() => {
+      stickyRaf = 0;
+      updateStickyLayout();
+    });
+  }
+
+  function updateStickyLayout(){
+    const topGrid = document.querySelector(".topGrid");
+    if (!topGrid) return;
+    const height = topGrid.offsetHeight || 0;
+    const root = document.documentElement;
+    const topOffset = 16;
+    root.style.setProperty("--sticky-top-offset", topOffset + "px");
+    // familySelectorList sticky : juste en dessous du topGrid
+    root.style.setProperty("--sticky-right-top", (topOffset + height + 12) + "px");
+  }
+
+  function escapeHtml(s){
+    return String(s || "").replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  function fmtSols(x){
+    const n = Number(x || 0);
+    const r = Math.round(n * 2) / 2;
+    let s = String(r);
+    if (s.endsWith(".5")) s = s.replace(".", ",");
+    if (s.endsWith(".0")) s = s.slice(0, -2);
+    return `${s} sols`;
+  }
+
+  function fmtKg(x){
+    const n = Number(x || 0);
+    if (!Number.isFinite(n)) return "-";
+    let s = String(Math.round(n * 100) / 100);
+    s = s.replace(/\.0+$/,"").replace(/(\.\d*[1-9])0+$/,"$1");
+    s = s.replace(".", ",");
+    return `${s} kg`;
+  }
+
+  function uniqueSorted(arr){
+    return Array.from(new Set((arr || []).map(v => String(v || "").trim()).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, "fr", { sensitivity:"base" }));
+  }
+
+  function parseLeadingInt(s){
+    const txt = String(s || "").trim();
+    const m = txt.match(/-?\d+/);
+    return m ? Number(m[0]) : null;
+  }
+
+  function getAvailabilityInfo(rawDispo){
+    const raw = String(rawDispo || "").trim();
+    const n = parseLeadingInt(raw);
+
+    if (!raw || n === null || n >= 20) {
+      return {
+        score: n, raw, label: "Très commun",
+        color: "#b8bec8",
+        bg: "rgba(184,190,200,.12)",
+        border: "rgba(184,190,200,.36)",
+        tintTop: "rgba(184,190,200,.09)",
+        tintBottom: "rgba(184,190,200,.03)",
+        glow: "none"
+      };
+    }
+    if (n >= 15) {
+      return {
+        score: n, raw, label: "Commun",
+        color: "#f3f6fb",
+        bg: "rgba(243,246,251,.10)",
+        border: "rgba(243,246,251,.32)",
+        tintTop: "rgba(243,246,251,.07)",
+        tintBottom: "rgba(243,246,251,.02)",
+        glow: "none"
+      };
+    }
+    if (n >= 10) {
+      return {
+        score: n, raw, label: "Peu commun",
+        color: "#7ee0a2",
+        bg: "rgba(126,224,162,.12)",
+        border: "rgba(126,224,162,.36)",
+        tintTop: "rgba(70,180,110,.11)",
+        tintBottom: "rgba(70,180,110,.03)",
+        glow: "0 0 0 1px rgba(70,180,110,.10) inset"
+      };
+    }
+    if (n >= 5) {
+      return {
+        score: n, raw, label: "Rare",
+        color: "#8ab8ff",
+        bg: "rgba(138,184,255,.12)",
+        border: "rgba(138,184,255,.36)",
+        tintTop: "rgba(90,130,230,.11)",
+        tintBottom: "rgba(90,130,230,.03)",
+        glow: "0 0 0 1px rgba(90,130,230,.10) inset"
+      };
+    }
+    if (n >= 1) {
+      return {
+        score: n, raw, label: "Très rare",
+        color: "#ffd95e",
+        bg: "rgba(255,217,94,.12)",
+        border: "rgba(255,217,94,.36)",
+        tintTop: "rgba(235,195,60,.11)",
+        tintBottom: "rgba(235,195,60,.03)",
+        glow: "0 0 0 1px rgba(235,195,60,.12) inset, 0 0 14px rgba(235,195,60,.10)"
+      };
+    }
+    if (n >= -5) {
+      return {
+        score: n, raw, label: "Extrêmement rare",
+        color: "#ff9a3d",
+        bg: "rgba(255,154,61,.16)",
+        border: "rgba(255,140,40,.60)",
+        tintTop: "rgba(255,132,35,.22)",
+        tintBottom: "rgba(255,90,0,.06)",
+        glow: "0 0 0 1px rgba(255,145,45,.20) inset, 0 0 18px rgba(255,120,25,.16)"
+      };
+    }
+
+    return {
+      score: n, raw, label: (n <= -15 ? "Faut pas rêver" : "Introuvable"),
+      color: "#ff5f5f",
+      bg: "rgba(255,95,95,.18)",
+      border: "rgba(255,70,70,.68)",
+      tintTop: "rgba(255,78,78,.26)",
+      tintBottom: "rgba(160,10,10,.08)",
+      glow: "0 0 0 1px rgba(255,90,90,.24) inset, 0 0 22px rgba(255,60,60,.18)"
+    };
+  }
+
+  function getCardStyle(rawDispo){
+    const info = getAvailabilityInfo(rawDispo);
+    return {
+      background: [
+        `radial-gradient(circle at 18% 14%, rgba(255,255,255,.07), rgba(255,255,255,0) 34%)`,
+        `linear-gradient(180deg, ${info.tintTop}, ${info.tintBottom})`,
+        `linear-gradient(180deg,#0d111a,#0a0d13)`
+      ].join(", "),
+      borderColor: info.border,
+      boxShadow: info.glow
+    };
+  }
+
+  function currentQuery(){
+    return String(document.getElementById("searchInput").value || "").trim();
+  }
+
+  function cartKeyOf(line){
+    const c = line.chosen || {};
+    return [
+      String(line.key || ""),
+      Number(c.NT || 0),
+      Number(c.niv || 1),
+      Number(c.gen || 1),
+      Number(c.loc || 1)
+    ].join("§");
+  }
+
+  function updateTotals(){
+    const total = cart.reduce((s, x) => s + Number(x.total || 0), 0);
+    const remain = balance - total;
+
+    document.getElementById('cartCount').textContent = `${cart.length} ligne(s)`;
+    document.getElementById('cartTotal').textContent = fmtSols(total);
+    document.getElementById('cartTotalTop').textContent = fmtSols(total);
+    document.getElementById('balance').textContent = fmtSols(balance);
+
+    const remainingEl = document.getElementById('remaining');
+    remainingEl.textContent = fmtSols(remain);
+    remainingEl.classList.toggle("cartRemainBad", remain < 0);
+    remainingEl.classList.toggle("cartRemainGood", remain >= 0);
+
+    const btn = document.getElementById('checkoutBtn');
+    btn.disabled = !currentMerchantId || !cart.length || remain < 0 || checkoutInProgress || !!activeCheckoutDraftToken;
+  }
+
+  function renderCart(){
+    const host = document.getElementById('cartList');
+    host.innerHTML = "";
+
+    if (!cart.length){
+      host.innerHTML = `<div class="empty small">Panier vide.</div>`;
+      updateTotals();
+      return;
+    }
+
+    cart.forEach((line, idx) => {
+      const row = document.createElement('div');
+      row.className = "cartRow";
+
+      const top = document.createElement('div');
+      top.className = "cartTop";
+
+      const left = document.createElement('div');
+      left.innerHTML = `
+        <div class="strong">${escapeHtml(line.displayName || line.name || "")}</div>
+        <div class="small muted">${escapeHtml(line.cat || "")}</div>
+      `;
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = "bad";
+      removeBtn.textContent = "Retirer";
+      removeBtn.onclick = () => {
+        cart.splice(idx, 1);
+        renderCart();
+      };
+
+      top.appendChild(left);
+      top.appendChild(removeBtn);
+
+      const qty = document.createElement('div');
+      qty.className = "qtyControls";
+
+      const minus = document.createElement('button');
+      minus.textContent = "−";
+      minus.onclick = () => changeCartQty(idx, -1);
+
+      const qtyVal = document.createElement('span');
+      qtyVal.textContent = `Qté : ${line.qty}`;
+
+      const plus = document.createElement('button');
+      plus.textContent = "+";
+      plus.onclick = () => changeCartQty(idx, +1);
+
+      qty.appendChild(minus);
+      qty.appendChild(qtyVal);
+      qty.appendChild(plus);
+
+      const meta = document.createElement('div');
+      meta.className = "small muted";
+      meta.innerHTML = `
+        <div>PU : <b>${escapeHtml(fmtSols(line.unitFinal || 0))}</b></div>
+        <div>Poids total : <b>${escapeHtml(fmtKg(line.totalWeight || 0))}</b></div>
+        <div>Total ligne : <b>${escapeHtml(fmtSols(line.total || 0))}</b></div>
+      `;
+
+      row.appendChild(top);
+      row.appendChild(qty);
+      row.appendChild(meta);
+      host.appendChild(row);
+    });
+
+    updateTotals();
+    scheduleStickyLayoutUpdate();
+  }
+
+  function changeCartQty(idx, delta){
+    const line = cart[idx];
+    if (!line) return;
+
+    const nextQty = Math.max(1, Number(line.qty || 1) + delta);
+    line.qty = nextQty;
+    line.total = Math.round((Number(line.unitFinal || 0) * nextQty) * 2) / 2;
+    line.totalWeight = Math.round((Number(line.unitWeight || 0) * nextQty) * 100) / 100;
+    renderCart();
+  }
+
+  function buildMerchantList(list){
+    const sel = document.getElementById('merchantSel');
+    sel.innerHTML = "";
+
+    const empty = document.createElement('option');
+    empty.value = "";
+    empty.textContent = list.length ? "Choisir un marchand..." : "Aucun marchand disponible";
+    sel.appendChild(empty);
+
+    list.forEach(m => {
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = m.name;
+      sel.appendChild(o);
+    });
+
+    sel.value = currentMerchantId || "";
+    sel.onchange = async () => {
+      currentMerchantId = sel.value || "";
+      cart = [];
+      CATALOG_TREE = [];
+      CURRENT_ITEMS = [];
+      CURRENT_FAMILY = "";
+      CURRENT_CATEGORY = "";
+      CATEGORY_CACHE.clear();
+      activeCheckoutDraftToken = "";
+      activePendingStorage = [];
+      renderCart();
+
+      if (!currentMerchantId){
+        document.getElementById("catalogInfo").textContent = "Choisis un marchand.";
+        document.getElementById("results").innerHTML = `<div class="empty">Choisis un marchand.</div>`;
+        return;
+      }
+
+      await refreshTree();
+    };
+  }
+
+  async function bootPlayer(){
+    if (!MID || !FID){
+      setMsg("Paramètres manquants (?mid=...&fid=...)");
+      return;
+    }
+
+    showLoading("Chargement du contexte…");
+    setMsg("Chargement...");
+
+    try{
+      const res = await callServer("trade_api_player_getContext", FID, MID);
+      hideLoading();
+
+      if (!res){
+        setMsg("Réponse serveur vide.");
+        return;
+      }
+      if (res.ok === false){
+        setMsg("Erreur: " + (res.error || "contexte invalide"));
+        return;
+      }
+
+      contextData = res;
+      balance = Number(res.balance || 0);
+      storageOptions = Array.isArray(res.storageOptions) && res.storageOptions.length ? res.storageOptions.slice() : ["Coffre"];
+      buildMerchantList(Array.isArray(res.merchants) ? res.merchants : []);
+      updateTotals();
+
+      if (!(res.merchants || []).length){
+        document.getElementById('catalogInfo').textContent = "Aucun marchand ouvert et autorisé.";
+        document.getElementById('results').innerHTML = `<div class="empty">Aucun marchand disponible.</div>`;
+      } else {
+        document.getElementById('catalogInfo').textContent = "Choisis un marchand.";
+        document.getElementById('results').innerHTML = `<div class="empty">Choisis un marchand.</div>`;
+      }
+
+      setMsg("OK.");
+      scheduleStickyLayoutUpdate();
+    } catch(err){
+      hideLoading();
+      setMsg("Erreur: " + (err && err.message ? err.message : String(err)));
+    }
+  }
+
+  async function refreshTree(){
+    if (!currentMerchantId){
+      setMsg("Choisis un marchand.");
+      return;
+    }
+
+    showLoading("Chargement des familles…");
+    setMsg("Chargement...");
+    try{
+      const res = await callServer("trade_api_player_getCatalogTree", FID, MID, currentMerchantId, currentQuery());
+      hideLoading();
+
+      if (!res || res.ok === false){
+        setMsg("Erreur: " + ((res && res.error) || "chargement impossible"));
+        return;
+      }
+
+      CATALOG_TREE = Array.isArray(res.tree) ? res.tree : [];
+      CATEGORY_CACHE.clear();
+
+      const fams = CATALOG_TREE.map(f => String(f.fam || "").trim()).filter(Boolean);
+      if (!CURRENT_FAMILY || fams.indexOf(CURRENT_FAMILY) === -1){
+        CURRENT_FAMILY = fams[0] || "";
+      }
+
+      const famNode = CATALOG_TREE.find(f => String(f.fam || "").trim() === CURRENT_FAMILY) || null;
+      const cats = famNode ? (famNode.categories || []).map(c => String(c.cat || "").trim()).filter(Boolean) : [];
+      if (!CURRENT_CATEGORY || cats.indexOf(CURRENT_CATEGORY) === -1){
+        CURRENT_CATEGORY = cats[0] || "";
+      }
+
+      CURRENT_ITEMS = [];
+      renderCatalogShell();
+
+      if (CURRENT_FAMILY && CURRENT_CATEGORY){
+        await loadCategoryItems(CURRENT_FAMILY, CURRENT_CATEGORY, false);
+      } else {
+        renderCatalogShell();
+      }
+
+      const familyCount = CATALOG_TREE.length;
+      const itemCount = CATALOG_TREE.reduce((sum, f) => sum + Number(f.count || 0), 0);
+      document.getElementById("catalogInfo").textContent = `${itemCount} objet(s) • ${familyCount} famille(s)`;
+      setMsg("OK.");
+    } catch(err){
+      hideLoading();
+      setMsg("Erreur: " + (err && err.message ? err.message : String(err)));
+    }
+  }
+
+  function cacheKeyOf(fam, cat){
+    return [currentMerchantId, currentQuery(), fam, cat].join("§");
+  }
+
+  async function loadCategoryItems(fam, cat, showSpinner){
+    fam = String(fam || "").trim();
+    cat = String(cat || "").trim();
+    if (!fam || !cat || !currentMerchantId) return;
+
+    CURRENT_FAMILY = fam;
+    CURRENT_CATEGORY = cat;
+
+    const key = cacheKeyOf(fam, cat);
+    if (CATEGORY_CACHE.has(key)){
+      CURRENT_ITEMS = CATEGORY_CACHE.get(key).slice();
+      renderCatalogShell();
+      return;
+    }
+
+    if (showSpinner !== false){
+      showLoading("Chargement des objets…");
+      setMsg("Chargement...");
+    }
+
+    try{
+      const res = await callServer("trade_api_player_getCategoryItems", FID, MID, currentMerchantId, fam, cat, currentQuery(), 300);
+      if (showSpinner !== false) hideLoading();
+
+      if (!res || res.ok === false){
+        setMsg("Erreur: " + ((res && res.error) || "chargement impossible"));
+        return;
+      }
+
+      const items = Array.isArray(res.items) ? res.items : [];
+      CATEGORY_CACHE.set(key, items.slice());
+      CURRENT_ITEMS = items.slice();
+      renderCatalogShell();
+      setMsg("OK.");
+    } catch(err){
+      if (showSpinner !== false) hideLoading();
+      setMsg("Erreur: " + (err && err.message ? err.message : String(err)));
+    }
+  }
+
+  function clearSearch(){
+    document.getElementById('searchInput').value = "";
+    CURRENT_FAMILY = "";
+    CURRENT_CATEGORY = "";
+    refreshTree();
+  }
+
+  let PREVIEW_ITEM = null;
+
+  function normalizeText(s){
+    return String(s || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  }
+
+  function isWeaponLike(item){
+    const fam = normalizeText(item.fam || "");
+    const cat = normalizeText(item.cat || "");
+    return fam.indexOf("ARME") !== -1 ||
+      ["PISTOLET","REVOLVER","FUSIL","CARABINE","LANCE","EPAULE","MELEE","POING"].some(k => cat.indexOf(k) !== -1) ||
+      !!(item.armeDom || item.armeChoc || item.armePortee || item.armeCAL || item.armeModeTir);
+  }
+
+  function isArmorLike(item){
+    const fam = normalizeText(item.fam || "");
+    const cat = normalizeText(item.cat || "");
+    return fam.indexOf("PROTECTION") !== -1 ||
+      ["ARMURE","CASQUE","GILET","COMBINAISON","BOUCLIER"].some(k => cat.indexOf(k) !== -1) ||
+      !!(item.armureProt || item.armureChoc || item.armureLoc || item.armureMal);
+  }
+
+  function isPortableLike(item){
+    return normalizeText(item.cat || "") === normalizeText("Contenants portables");
+  }
+
+  function applyPreviewPanelStyle(item){
+    const panel = document.getElementById("itemPreviewPanel");
+    if (!panel) return;
+    if (!item){ panel.style.borderColor=""; panel.style.boxShadow=""; panel.style.background=""; return; }
+    const info = getAvailabilityInfo(item.dispo);
+    panel.style.borderColor = info.border;
+    panel.style.boxShadow = info.glow && info.glow !== "none"
+      ? `${info.glow}, 0 10px 30px rgba(0,0,0,.35)`
+      : `0 10px 30px rgba(0,0,0,.35)`;
+    panel.style.background = [
+      `linear-gradient(180deg, ${info.tintTop}, ${info.tintBottom})`,
+      `linear-gradient(180deg, var(--panel), var(--panel2))`
+    ].join(", ");
+  }
+
+  function renderItemDetail(item){
+    const host = document.getElementById("itemPreviewHost");
+    const panel = document.getElementById("itemPreviewPanel");
+    PREVIEW_ITEM = item;
+
+    if (!item){
+      applyPreviewPanelStyle(null);
+      panel.classList.add("hidden");
+      scheduleStickyLayoutUpdate();
+      return;
+    }
+
+    applyPreviewPanelStyle(item);
+    panel.classList.remove("hidden");
+
+    const avail = getAvailabilityInfo(item.dispo);
+    const isWeap = isWeaponLike(item) && !isArmorLike(item);
+    const isArm  = isArmorLike(item);
+    const isPort = isPortableLike(item);
+
+    const hasWeaponStats = isWeap && !!(item.armeDom||item.armeChoc||item.armePortee||item.armeFOR||item.armeINI||item.armeCAL||item.armeModeTir);
+    const hasArmorStats  = isArm  && !!(item.armureProt||item.armureChoc||item.armureLoc||item.armureMal);
+    const hasObjectStats = !!(item.objCont||item.objEtanche);
+
+    const ntLabel = item.ntRaw ? ` (${escapeHtml(item.ntRaw)})` : "";
+
+    host.innerHTML = `
+      <div class="detailBox">
+        <div class="detailTitle"><span style="color:${avail.color}">${escapeHtml(item.name || "")}</span></div>
+        <div class="chips">
+          <span class="chip">${escapeHtml(item.fam || "")}</span>
+          <span class="chip">${escapeHtml(item.cat || "")}</span>
+        </div>
+      </div>
+
+      <div class="detailBox">
+        <div class="detailTwoCols">
+          <div><span class="muted">Prix aperçu :</span> <span class="strong">${escapeHtml(fmtSols(item.pricePreview || 0))}</span></div>
+          <div><span class="muted">NT :</span> <span class="strong">${escapeHtml(item.ntRaw || "—")}</span></div>
+          <div><span class="muted">Fabricant :</span> <span class="strong">${escapeHtml(item.fabricant || "—")}</span></div>
+          <div><span class="muted">Nation :</span> <span class="strong">${escapeHtml(item.nation || "—")}</span></div>
+          <div style="grid-column:1 / -1"><span class="muted">Disponibilité :</span> <span class="strong" style="color:${avail.color}">${escapeHtml(avail.label)}${item.dispo ? " • " + escapeHtml(item.dispo) : ""}</span></div>
+        </div>
+      </div>
+
+      ${hasWeaponStats ? `
+      <div class="detailBox">
+        <div class="strong">Stats arme</div>
+        <div class="detailTwoCols">
+          <div><span class="muted">Dégâts :</span> <span class="strong">${escapeHtml(item.armeDom||"—")}</span></div>
+          <div><span class="muted">Choc :</span> <span class="strong">${escapeHtml(item.armeChoc||"—")}</span></div>
+          <div><span class="muted">Portée :</span> <span class="strong">${escapeHtml(item.armePortee||"—")}</span></div>
+          <div><span class="muted">FOR :</span> <span class="strong">${escapeHtml(item.armeFOR||"—")}</span></div>
+          <div><span class="muted">Init :</span> <span class="strong">${escapeHtml(item.armeINI||"—")}</span></div>
+          <div><span class="muted">Calibre :</span> <span class="strong">${escapeHtml(item.armeCAL||"—")}</span></div>
+          ${item.armeMun ? `<div><span class="muted">Munition :</span> <span class="strong">${escapeHtml(item.armeMun)}</span></div>` : ""}
+          <div style="grid-column:1 / -1"><span class="muted">Mode de tir :</span> <span class="strong">${escapeHtml(item.armeModeTir||"—")}</span></div>
+        </div>
+      </div>` : ""}
+
+      ${hasArmorStats ? `
+      <div class="detailBox">
+        <div class="strong">Stats protection</div>
+        <div class="detailTwoCols">
+          <div><span class="muted">Protection :</span> <span class="strong">${escapeHtml(item.armureProt||"—")}</span></div>
+          <div><span class="muted">Prot. choc :</span> <span class="strong">${escapeHtml(item.armureChoc||"—")}</span></div>
+          <div><span class="muted">Localisation :</span> <span class="strong">${escapeHtml(item.armureLoc||"—")}</span></div>
+          <div><span class="muted">Malus armure :</span> <span class="strong">${escapeHtml(item.armureMal||"—")}</span></div>
+          ${item.armeFOR ? `<div><span class="muted">FOR :</span> <span class="strong">${escapeHtml(item.armeFOR)}</span></div>` : ""}
+        </div>
+      </div>` : ""}
+
+      ${hasObjectStats ? `
+      <div class="detailBox">
+        <div class="strong">Stats objet</div>
+        <div class="detailTwoCols">
+          <div><span class="muted">Contenance :</span> <span class="strong">${escapeHtml(item.objCont||"—")}</span></div>
+          <div><span class="muted">Étanchéité :</span> <span class="strong">${escapeHtml(item.objEtanche||"—")}</span></div>
+        </div>
+      </div>` : ""}
+
+      <div class="detailBox" id="previewDescBox">
+        <button id="previewDescBtn" style="text-align:left;font-size:12px;padding:4px 8px;border-radius:8px" onclick="togglePreviewDesc()">Description ▸</button>
+        <div id="previewDescText" class="desc small" data-key="${escapeHtml(item.key||"")}"></div>
+      </div>
+
+      <button class="good" style="width:100%" onclick="addPreviewItemToCart()">Ajouter au panier</button>
+    `;
+
+    scheduleStickyLayoutUpdate();
+  }
+
+  function togglePreviewDesc(){
+    const descEl = document.getElementById("previewDescText");
+    const btn = document.getElementById("previewDescBtn");
+    if (!descEl || !btn) return;
+    const isOpen = descEl.classList.contains("open");
+    if (isOpen){ descEl.classList.remove("open"); btn.textContent = "Description ▸"; return; }
+    descEl.classList.add("open");
+    btn.textContent = "Description ▾";
+    if (descEl.dataset.loaded) return;
+    const itemKey = descEl.dataset.key || "";
+    if (!itemKey){ descEl.textContent = "(Aucune description)"; descEl.dataset.loaded="1"; return; }
+    descEl.textContent = "Chargement...";
+    google.script.run
+      .withSuccessHandler(res => {
+        descEl.textContent = (res && res.desc) ? res.desc : "(Aucune description)";
+        descEl.dataset.loaded = "1";
+      })
+      .withFailureHandler(err => {
+        descEl.textContent = "Erreur: " + (err && err.message ? err.message : String(err));
+      })
+      .trade_api_player_getItemDetails(MID, itemKey);
+  }
+
+  function showItemPreview(item){ renderItemDetail(item); }
+  function clearItemPreview(){ renderItemDetail(null); }
+
+  function addPreviewItemToCart(){
+    if (!PREVIEW_ITEM) return;
+    const item = PREVIEW_ITEM;
+
+    // Trouver la carte dans le DOM pour récupérer les options choisies
+    const card = document.querySelector(`#results .itemCard[data-key="${CSS.escape(item.key || '')}"]`);
+    const opts = card ? getCardOpts(card) : { qty:1, NT:0, niv:1, gen:1, loc:1 };
+
+    const addBtn = card ? card.querySelector('[data-add="1"]') : null;
+    if (addBtn && addBtn.dataset.line){
+      try{ addLineToCart(JSON.parse(addBtn.dataset.line)); setMsg('Ajouté au panier.'); return; }catch(_){}
+    }
+
+    setMsg('Calcul du prix...');
+    google.script.run
+      .withSuccessHandler(res => {
+        if (!res || res.ok === false){ setMsg('Erreur: impossible de calculer cet objet.'); return; }
+        if (addBtn) addBtn.dataset.line = JSON.stringify(res);
+        addLineToCart(res);
+        setMsg('Ajouté au panier.');
+      })
+      .withFailureHandler(err => { setMsg('Erreur: ' + (err && err.message ? err.message : String(err))); })
+      .trade_api_player_getLine(MID, currentMerchantId, item.key, opts);
+  }
+
+  function scheduleSearch(){
+    if (!currentMerchantId) return;
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      CURRENT_FAMILY = "";
+      CURRENT_CATEGORY = "";
+      refreshTree();
+    }, 260);
+  }
+
+  function sortItems(items){
+    const sort = String(document.getElementById("sortSel").value || "name_asc");
+    items.sort((a, b) => {
+      if (sort === "name_desc"){
+        return String(b.name || "").localeCompare(String(a.name || ""), "fr", { sensitivity:"base" });
+      }
+      if (sort === "price_desc"){
+        return Number(b.pricePreview || 0) - Number(a.pricePreview || 0)
+          || String(a.name || "").localeCompare(String(b.name || ""), "fr", { sensitivity:"base" });
+      }
+      if (sort === "price_asc"){
+        return Number(a.pricePreview || 0) - Number(b.pricePreview || 0)
+          || String(a.name || "").localeCompare(String(b.name || ""), "fr", { sensitivity:"base" });
+      }
+      return String(a.name || "").localeCompare(String(b.name || ""), "fr", { sensitivity:"base" });
+    });
+    return items;
+  }
+
+  function buildSelect(options, value){
+    const sel = document.createElement('select');
+    options.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = String(opt.value);
+      o.textContent = opt.label;
+      sel.appendChild(o);
+    });
+    sel.value = String(value);
+    return sel;
+  }
+
+  function getCardOpts(card){
+    const qty = Math.max(1, parseInt(card.querySelector('[data-qty="1"]').value || "1", 10) || 1);
+    const ntEl  = card.querySelector('[data-nt="1"]');
+    const nivEl = card.querySelector('[data-niv="1"]');
+    const genEl = card.querySelector('[data-gen="1"]');
+    const locEl = card.querySelector('[data-loc="1"]');
+
+    return {
+      qty,
+      NT:  ntEl  ? Number(ntEl.value || 0)  : 0,
+      niv: nivEl ? Number(nivEl.value || 1) : 1,
+      gen: genEl ? Number(genEl.value || 1) : 1,
+      loc: locEl ? Number(locEl.value || 1) : 1
+    };
+  }
+
+  function refreshCardLine(card){
+    const itemKey = card.dataset.key;
+    const opts = getCardOpts(card);
+
+    const priceEl = card.querySelector('[data-price="1"]');
+    const weightEl = card.querySelector('[data-weight="1"]');
+    const addBtn = card.querySelector('[data-add="1"]');
+
+    priceEl.textContent = "…";
+    weightEl.textContent = "…";
+    addBtn.disabled = true;
+
+    google.script.run
+      .withSuccessHandler(res => {
+        if (!res || res.ok === false){
+          priceEl.textContent = "—";
+          weightEl.textContent = "—";
+          addBtn.disabled = true;
+          addBtn.dataset.line = "";
+          return;
+        }
+
+        priceEl.textContent = fmtSols(res.total || 0);
+        weightEl.textContent = fmtKg(res.totalWeight || 0);
+        addBtn.disabled = false;
+        addBtn.dataset.line = JSON.stringify(res);
+      })
+      .withFailureHandler(_ => {
+        priceEl.textContent = "—";
+        weightEl.textContent = "—";
+        addBtn.disabled = true;
+        addBtn.dataset.line = "";
+      })
+      .trade_api_player_getLine(MID, currentMerchantId, itemKey, opts);
+  }
+
+  function addLineToCart(line){
+    const key = cartKeyOf(line);
+    const idx = cart.findIndex(x => cartKeyOf(x) === key);
+
+    if (idx >= 0){
+      cart[idx].qty += Number(line.qty || 1);
+      cart[idx].total = Math.round((Number(cart[idx].unitFinal || 0) * cart[idx].qty) * 2) / 2;
+      cart[idx].totalWeight = Math.round((Number(cart[idx].unitWeight || 0) * cart[idx].qty) * 100) / 100;
+    } else {
+      cart.push({
+        key: line.key,
+        name: line.name,
+        displayName: line.displayName,
+        cat: line.cat,
+        qty: Number(line.qty || 1),
+        chosen: line.chosen || {},
+        unitFinal: Number(line.unitFinal || 0),
+        total: Number(line.total || 0),
+        unitWeight: Number(line.unitWeight || 0),
+        totalWeight: Number(line.totalWeight || 0)
+      });
+    }
+
+    renderCart();
+  }
+
+  function toggleDesc(descEl, itemKey){
+    descEl.classList.toggle("open");
+    if (!descEl.classList.contains("open")) return;
+    if (descEl.dataset.loaded) return;
+
+    descEl.textContent = "Chargement...";
+    google.script.run
+      .withSuccessHandler(res => {
+        const txt = (res && res.desc) ? res.desc : "(Aucune description)";
+        descEl.textContent = txt;
+        descEl.dataset.loaded = "1";
+      })
+      .withFailureHandler(err => {
+        descEl.textContent = "Erreur: " + (err && err.message ? err.message : String(err));
+      })
+      .trade_api_player_getItemDetails(MID, itemKey);
+  }
+
+  function buildCatalogCard(item){
+    const card = document.createElement('div');
+    card.className = "itemCard";
+    card.dataset.key = item.key;
+
+    const avInfo = getAvailabilityInfo(item.dispo);
+    const cardStyle = getCardStyle(item.dispo);
+    card.style.background = cardStyle.background;
+    card.style.borderColor = cardStyle.borderColor;
+    if (cardStyle.boxShadow && cardStyle.boxShadow !== "none") {
+      card.style.boxShadow = cardStyle.boxShadow;
+    }
+
+    const top = document.createElement('div');
+    top.innerHTML = `
+      <div class="itemName"><span style="color:${avInfo.color};font-weight:900">${escapeHtml(item.name || "")}</span></div>
+      <div class="chips">
+        <span class="chip">${escapeHtml(item.fam || "")}</span>
+        <span class="chip">${escapeHtml(item.cat || "")}</span>
+      </div>
+    `;
+
+    const meta = document.createElement("div");
+    meta.className = "catalogMeta";
+    meta.innerHTML = `
+      <div class="metaLine">Prix aperçu : <b>${escapeHtml(fmtSols(item.pricePreview || 0))}</b></div>
+      <div class="metaLine">Poids : <b data-weight="1">—</b></div>
+      <div class="metaLine" style="grid-column:1 / -1">Disponibilité : <b style="color:${avInfo.color}">${escapeHtml(avInfo.label)}${item.dispo ? ` • ${escapeHtml(item.dispo)}` : ""}</b></div>
+    `;
+
+    const grid = document.createElement('div');
+    grid.className = "optionGrid";
+
+    const qtyWrap = document.createElement('div');
+    qtyWrap.innerHTML = `<label>Qté</label>`;
+    const qtyInput = document.createElement('input');
+    qtyInput.type = "number";
+    qtyInput.min = "1";
+    qtyInput.value = "1";
+    qtyInput.setAttribute("data-qty", "1");
+    qtyWrap.appendChild(qtyInput);
+    grid.appendChild(qtyWrap);
+
+    if (item.ntMode === "range" && item.needs && item.needs.NT){
+      const ntWrap = document.createElement('div');
+      ntWrap.innerHTML = `<label>NT</label>`;
+      const ntSel = buildSelect(
+        (item.ntList || []).map(n => ({
+          value:n,
+          label:`NT ${["","I","II","III","IV","V","VI"][n] || n}`
+        })),
+        (item.ntList || [1]).slice(-1)[0] || 1
+      );
+      ntSel.setAttribute("data-nt", "1");
+      ntWrap.appendChild(ntSel);
+      grid.appendChild(ntWrap);
+    }
+
+    if (item.needs && item.needs.niv){
+      const nivWrap = document.createElement('div');
+      nivWrap.innerHTML = `<label>Niv</label>`;
+      const max = Math.max(1, Number(item.limits && item.limits.nivMax || 1));
+      const nivSel = buildSelect(
+        Array.from({length:max}, (_,i)=>({ value:i+1, label:`+${i+1}` })),
+        max
+      );
+      nivSel.setAttribute("data-niv", "1");
+      nivWrap.appendChild(nivSel);
+      grid.appendChild(nivWrap);
+    }
+
+    if (item.needs && item.needs.gen){
+      const genWrap = document.createElement('div');
+      genWrap.innerHTML = `<label>Gen</label>`;
+      const max = Math.max(1, Number(item.limits && item.limits.genMax || 1));
+      const genSel = buildSelect(
+        Array.from({length:max}, (_,i)=>({ value:i+1, label:`Gen ${i+1}` })),
+        max
+      );
+      genSel.setAttribute("data-gen", "1");
+      genWrap.appendChild(genSel);
+      grid.appendChild(genWrap);
+    }
+
+    if (item.needs && item.needs.loc){
+      const locWrap = document.createElement('div');
+      locWrap.innerHTML = `<label>Loc</label>`;
+      const max = Math.max(1, Number(item.limits && item.limits.locMax || 1));
+      const locSel = buildSelect(
+        Array.from({length:max}, (_,i)=>({ value:i+1, label:String(i+1) })),
+        1
+      );
+      locSel.setAttribute("data-loc", "1");
+      locWrap.appendChild(locSel);
+      grid.appendChild(locWrap);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = "itemActions";
+    actions.innerHTML = `
+      <span class="pill">Prix : <b data-price="1" style="margin-left:6px">${escapeHtml(fmtSols(item.pricePreview || 0))}</b></span>
+    `;
+
+    const addBtn = document.createElement('button');
+    addBtn.className = "primary";
+    addBtn.textContent = "Ajouter au panier";
+    addBtn.setAttribute("data-add", "1");
+    addBtn.onclick = () => {
+      const useLine = (line) => {
+        addLineToCart(line);
+        setMsg("Ajouté au panier.");
+      };
+
+      if (addBtn.dataset.line){
+        try{
+          useLine(JSON.parse(addBtn.dataset.line));
+          return;
+        }catch(_){}
+      }
+
+      addBtn.disabled = true;
+      const oldText = addBtn.textContent;
+      addBtn.textContent = "Calcul...";
+
+      google.script.run
+        .withSuccessHandler(res => {
+          addBtn.disabled = false;
+          addBtn.textContent = oldText;
+
+          if (!res || res.ok === false){
+            setMsg("Erreur: impossible de calculer cet objet.");
+            return;
+          }
+
+          addBtn.dataset.line = JSON.stringify(res);
+          const priceEl = card.querySelector('[data-price="1"]');
+          const weightEl = card.querySelector('[data-weight="1"]');
+          priceEl.textContent = fmtSols(res.total || 0);
+          weightEl.textContent = fmtKg(res.totalWeight || 0);
+          useLine(res);
+        })
+        .withFailureHandler(err => {
+          addBtn.disabled = false;
+          addBtn.textContent = oldText;
+          setMsg("Erreur: " + (err && err.message ? err.message : String(err)));
+        })
+        .trade_api_player_getLine(MID, currentMerchantId, item.key, getCardOpts(card));
+    };
+
+    const descBtn = document.createElement('button');
+    descBtn.textContent = "Description";
+
+    const desc = document.createElement('div');
+    desc.className = "desc small";
+
+    descBtn.onclick = () => toggleDesc(desc, item.key);
+
+    actions.appendChild(addBtn);
+    actions.appendChild(descBtn);
+
+    card.appendChild(top);
+    card.appendChild(meta);
+    card.appendChild(grid);
+    card.appendChild(actions);
+    card.appendChild(desc);
+
+    card.querySelectorAll('input,select').forEach(el => {
+      el.addEventListener('change', () => refreshCardLine(card));
+      el.addEventListener('input', () => refreshCardLine(card));
+    });
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('button') || e.target.closest('select') || e.target.closest('input')) return;
+      showItemPreview(item);
+    });
+
+    return card;
+  }
+
+  function renderItemsGrid(hostItems){
+    const items = sortItems((hostItems || []).slice());
+    if (!items.length){
+      return `<div class="empty">Aucun objet dans cette catégorie.</div>`;
+    }
+    const wrap = document.createElement("div");
+    wrap.className = String(document.getElementById("groupModeSel").value || "family") === "flat" ? "flatGrid" : "itemGrid";
+    items.forEach(item => wrap.appendChild(buildCatalogCard(item)));
+    return wrap;
+  }
+
+  function renderCatalogShell(){
+    const host = document.getElementById("results");
+    host.innerHTML = "";
+
+    if (!currentMerchantId){
+      host.innerHTML = `<div class="empty">Choisis un marchand.</div>`;
+      scheduleStickyLayoutUpdate();
+      return;
+    }
+
+    if (!CATALOG_TREE.length){
+      host.innerHTML = `<div class="empty">Aucun résultat.</div>`;
+      scheduleStickyLayoutUpdate();
+      return;
+    }
+
+    const mode = String(document.getElementById("groupModeSel").value || "family");
+    if (mode === "flat"){
+      const allCats = [];
+      CATALOG_TREE.forEach(f => {
+        (f.categories || []).forEach(c => {
+          const key = cacheKeyOf(f.fam, c.cat);
+          if (CATEGORY_CACHE.has(key)){
+            allCats.push(...CATEGORY_CACHE.get(key));
+          }
+        });
+      });
+
+      if (CURRENT_ITEMS.length && !allCats.length){
+        host.appendChild(renderItemsGrid(CURRENT_ITEMS));
+      } else if (allCats.length){
+        host.appendChild(renderItemsGrid(allCats));
+      } else {
+        host.innerHTML = `<div class="empty">Choisis une catégorie pour charger les objets, ou reste en affichage par famille.</div>`;
+      }
+      scheduleStickyLayoutUpdate();
+      return;
+    }
+
+    const layout = document.createElement("div");
+    layout.className = "familySelectorLayout";
+
+    const left = document.createElement("div");
+    left.className = "familySelectorList";
+
+    const right = document.createElement("div");
+    right.className = "familySelectorContent";
+
+    CATALOG_TREE.forEach(f => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "familySelectItem" + (CURRENT_FAMILY === String(f.fam || "").trim() ? " active" : "");
+      btn.dataset.familySelect = String(f.fam || "").trim();
+      btn.innerHTML = `
+        <div class="familySelectHead">
+          <div class="familySelectTitle">${escapeHtml(f.fam || "")}</div>
+          <div class="familySelectMeta">${Number(f.count || 0)} objet(s)</div>
+        </div>
+      `;
+      left.appendChild(btn);
+    });
+
+    const famNode = CATALOG_TREE.find(f => String(f.fam || "").trim() === CURRENT_FAMILY) || null;
+    if (!famNode){
+      right.innerHTML = `<div class="empty">Sélectionne une famille.</div>`;
+    } else {
+      const hero = document.createElement("div");
+      hero.className = "familySelectedHero";
+      hero.innerHTML = `
+        <div class="familySelectedHeroTitle">${escapeHtml(famNode.fam || "")}</div>
+        <div class="familySelectedHeroMeta">${Number(famNode.count || 0)} objet(s) • ${(famNode.categories || []).length} catégorie(s)</div>
+      `;
+      right.appendChild(hero);
+
+      const catStack = document.createElement("div");
+      catStack.className = "categoryStack";
+
+      (famNode.categories || []).forEach(c => {
+        const box = document.createElement("div");
+        box.className = "detailBox";
+
+        const catBtn = document.createElement("button");
+        catBtn.type = "button";
+        catBtn.className = "catSelectItem" + (CURRENT_CATEGORY === String(c.cat || "").trim() ? " active" : "");
+        catBtn.dataset.categorySelect = String(c.cat || "").trim();
+        catBtn.innerHTML = `<span class="strong">${escapeHtml(c.cat || "")}</span><span class="muted">${Number(c.count || 0)} objet(s)</span>`;
+        box.appendChild(catBtn);
+
+        if (CURRENT_CATEGORY === String(c.cat || "").trim()){
+          const grid = renderItemsGrid(CURRENT_ITEMS);
+          if (typeof grid === "string"){
+            const div = document.createElement("div");
+            div.innerHTML = grid;
+            box.appendChild(div.firstChild);
+          } else {
+            box.appendChild(grid);
+          }
+        }
+
+        catStack.appendChild(box);
+      });
+
+      right.appendChild(catStack);
+    }
+
+    layout.appendChild(left);
+    layout.appendChild(right);
+    host.appendChild(layout);
+
+    scheduleStickyLayoutUpdate();
+  }
+
+  function openStorageModal(){
+    const backdrop = document.getElementById('storageModal');
+    backdrop.classList.add('open');
+    backdrop.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeStorageModal(){
+    const backdrop = document.getElementById('storageModal');
+    backdrop.classList.remove('open');
+    backdrop.setAttribute('aria-hidden', 'true');
+    document.getElementById('storageModalError').textContent = "";
+    document.getElementById('storageGrid').innerHTML = "";
+  }
+
+  function renderStorageBatchModal(items, options){
+    activePendingStorage = Array.isArray(items) ? items.slice() : [];
+    storageOptions = Array.isArray(options) && options.length ? options.slice() : ["Coffre"];
+
+    const info = document.getElementById('storageModalInfo');
+    const grid = document.getElementById('storageGrid');
+    const err = document.getElementById('storageModalError');
+    const btn = document.getElementById('storageModalBtn');
+
+    err.textContent = "";
+    btn.disabled = false;
+    grid.innerHTML = "";
+
+    info.textContent = `Choisis l'emplacement pour ${activePendingStorage.length} achat(s) qui n'en ont pas encore.`;
+
+    activePendingStorage.forEach(item => {
+      const row = document.createElement('div');
+      row.className = "storageRow";
+
+      const top = document.createElement('div');
+      top.innerHTML = `
+        <div class="strong">${escapeHtml(item.name || "")}</div>
+        <div class="small muted">${escapeHtml(item.cat || "")} • Qté : ${escapeHtml(String(item.qty || 0))}</div>
+      `;
+
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `<label>Stocker dans</label>`;
+
+      const sel = document.createElement('select');
+      sel.setAttribute('data-storage-pending-id', String(item.pendingId || ""));
+      storageOptions.forEach(v => {
+        const o = document.createElement('option');
+        o.value = String(v);
+        o.textContent = String(v);
+        sel.appendChild(o);
+      });
+
+      wrap.appendChild(sel);
+      row.appendChild(top);
+      row.appendChild(wrap);
+      grid.appendChild(row);
+    });
+
+    openStorageModal();
+    scheduleStickyLayoutUpdate();
+  }
+
+  function collectStorageAssignments(){
+    const out = {};
+    document.querySelectorAll('[data-storage-pending-id]').forEach(el => {
+      out[String(el.getAttribute('data-storage-pending-id') || "")] = String(el.value || "").trim();
+    });
+    return out;
+  }
+
+  async function commitPreparedCheckout(storageAssignments){
+    if (!activeCheckoutDraftToken){
+      setMsg("Aucun achat préparé à valider.");
+      return;
+    }
+
+    checkoutInProgress = true;
+    updateTotals();
+    showLoading("Validation de l’achat…");
+
+    try{
+      const res = await callServer("trade_api_player_commitCheckout", FID, activeCheckoutDraftToken, storageAssignments || {});
+      hideLoading();
+      checkoutInProgress = false;
+      updateTotals();
+
+      if (!res){
+        document.getElementById('storageModalError').textContent = "Réponse serveur vide.";
+        setMsg("Réponse serveur vide.");
+        return;
+      }
+      if (res.ok === false){
+        document.getElementById('storageModalError').textContent = res.error || "Validation impossible.";
+        setMsg("Erreur: " + (res.error || "validation impossible"));
+        return;
+      }
+
+      activeCheckoutDraftToken = "";
+      activePendingStorage = [];
+      closeStorageModal();
+
+      cart = [];
+      renderCart();
+      balance = Number(res.balanceAfter || 0);
+      updateTotals();
+      setMsg(`Achat validé (${fmtSols(res.total || 0)}).`);
+
+      const ctx = await callServer("trade_api_player_getContext", FID, MID);
+      if (ctx && ctx.ok !== false && Number.isFinite(Number(ctx.balance))){
+        balance = Number(ctx.balance || 0);
+        updateTotals();
+      }
+
+      await refreshTree();
+    } catch(err){
+      hideLoading();
+      checkoutInProgress = false;
+      updateTotals();
+      const msg = err && err.message ? err.message : String(err);
+      document.getElementById('storageModalError').textContent = msg;
+      setMsg("Erreur: " + msg);
+    }
+  }
+
+  function confirmStorageChoices(){
+    const assignments = collectStorageAssignments();
+    commitPreparedCheckout(assignments);
+  }
+
+  async function checkoutCart(){
+    if (!currentMerchantId){
+      setMsg("Choisis un marchand.");
+      return;
+    }
+    if (!cart.length){
+      setMsg("Panier vide.");
+      return;
+    }
+    if (activeCheckoutDraftToken){
+      setMsg("Termine d'abord le choix d'emplacement en cours.");
+      return;
+    }
+
+    const total = cart.reduce((s, x) => s + Number(x.total || 0), 0);
+    if (total > balance){
+      setMsg("Fonds insuffisants.");
+      return;
+    }
+
+    const payload = cart.map(line => ({
+      key: line.key,
+      opts: {
+        qty: line.qty,
+        NT: Number(line.chosen && line.chosen.NT || 0),
+        niv: Number(line.chosen && line.chosen.niv || 1),
+        gen: Number(line.chosen && line.chosen.gen || 1),
+        loc: Number(line.chosen && line.chosen.loc || 1)
+      }
+    }));
+
+    checkoutInProgress = true;
+    updateTotals();
+    setMsg("Préparation de l'achat...");
+    showLoading("Préparation de l’achat…");
+
+    try{
+      const res = await callServer("trade_api_player_prepareCheckout", FID, MID, currentMerchantId, payload);
+      hideLoading();
+      checkoutInProgress = false;
+      updateTotals();
+
+      if (!res){
+        setMsg("Réponse serveur vide.");
+        return;
+      }
+      if (res.ok === false){
+        setMsg("Erreur: " + (res.error || "achat impossible"));
+        return;
+      }
+
+      activeCheckoutDraftToken = String(res.draftToken || "").trim();
+      storageOptions = Array.isArray(res.storageOptions) ? res.storageOptions : storageOptions;
+
+      if (!activeCheckoutDraftToken){
+        setMsg("Réponse invalide : draft manquant.");
+        return;
+      }
+
+      const pending = Array.isArray(res.pendingStorage) ? res.pendingStorage : [];
+      if (pending.length){
+        setMsg(`Achat prêt (${fmtSols(res.total || 0)}). Choisis maintenant les emplacements.`);
+        renderStorageBatchModal(pending, storageOptions);
+      } else {
+        setMsg("Achat prêt. Finalisation...");
+        commitPreparedCheckout({});
+      }
+    } catch(err){
+      hideLoading();
+      checkoutInProgress = false;
+      updateTotals();
+      setMsg("Erreur: " + (err && err.message ? err.message : String(err)));
+    }
+  }
+
+  function initIds(){
+    MID = String("<?= mid ?>" || "").trim();
+    FID = String("<?= fid ?>" || "").trim();
+
+    if ((!MID || !FID) && window.google && google.script && google.script.url && google.script.url.getLocation){
+      google.script.url.getLocation(loc => {
+        MID = MID || String(loc && loc.parameter && loc.parameter.mid || "").trim();
+        FID = FID || String(loc && loc.parameter && loc.parameter.fid || "").trim();
+
+        if (!MID || !FID){
+          setMsg("Paramètres manquants (?mid=...&fid=...)");
+          return;
+        }
+        bootPlayer();
+      });
+      return;
+    }
+
+    if (!MID || !FID){
+      const qs = new URLSearchParams(window.location.search);
+      MID = MID || String(qs.get("mid") || "").trim();
+      FID = FID || String(qs.get("fid") || "").trim();
+    }
+
+    if (!MID || !FID){
+      setMsg("Paramètres manquants (?mid=...&fid=...)");
+      return;
+    }
+
+    bootPlayer();
+  }
+
+  document.getElementById('searchInput').addEventListener('input', scheduleSearch);
+  document.getElementById('searchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter'){
+      if (searchTimer) clearTimeout(searchTimer);
+      CURRENT_FAMILY = "";
+      CURRENT_CATEGORY = "";
+      refreshTree();
+    }
+  });
+
+  document.getElementById('sortSel').addEventListener('change', renderCatalogShell);
+  document.getElementById('groupModeSel').addEventListener('change', renderCatalogShell);
+
+  document.getElementById('results').addEventListener('click', async (e) => {
+    const familyBtn = e.target.closest('[data-family-select]');
+    if (familyBtn){
+      CURRENT_FAMILY = String(familyBtn.getAttribute('data-family-select') || "").trim();
+      const famNode = CATALOG_TREE.find(f => String(f.fam || "").trim() === CURRENT_FAMILY) || null;
+      CURRENT_CATEGORY = famNode && famNode.categories && famNode.categories.length
+        ? String(famNode.categories[0].cat || "").trim()
+        : "";
+      CURRENT_ITEMS = [];
+      renderCatalogShell();
+      if (CURRENT_FAMILY && CURRENT_CATEGORY){
+        await loadCategoryItems(CURRENT_FAMILY, CURRENT_CATEGORY, true);
+      }
+      return;
+    }
+
+    const categoryBtn = e.target.closest('[data-category-select]');
+    if (categoryBtn){
+      const cat = String(categoryBtn.getAttribute('data-category-select') || "").trim();
+      if (!CURRENT_FAMILY || !cat) return;
+      if (CURRENT_CATEGORY === cat){
+        CURRENT_CATEGORY = "";
+        renderCatalogShell();
+        return;
+      }
+      await loadCategoryItems(CURRENT_FAMILY, cat, true);
+    }
+  });
+
+  document.getElementById('storageModal').addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'storageModal') closeStorageModal();
+  });
+
+  window.addEventListener("resize", scheduleStickyLayoutUpdate);
+
+  initIds();
+  scheduleStickyLayoutUpdate();
+</script>
+</body>
+</html>

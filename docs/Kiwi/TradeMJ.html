@@ -1,0 +1,1496 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Marchands (MJ)</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0f1115;
+      --panel:#151923;
+      --panel2:#10131b;
+      --border:#252b3a;
+      --muted:#9aa4b2;
+      --text:#e8eef7;
+      --good:#1dd1a1;
+      --bad:#ff6b6b;
+      --chip:#1b2232;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:16px;
+      font-family:"Nunito", system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:var(--bg);
+      color:var(--text);
+    }
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+    .small{font-size:12px}
+    .muted{color:var(--muted)}
+    .pill{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:2px 8px;border:1px solid var(--border);
+      border-radius:999px;font-size:12px;background:var(--chip);color:var(--muted);
+      white-space:nowrap;
+    }
+    .card{
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      padding:12px;
+      background:linear-gradient(180deg,var(--panel),var(--panel2));
+      box-shadow:var(--shadow);
+    }
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px;}
+    select,input,button{
+      font-family:"Nunito", system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:#0c0f16;
+      color:var(--text);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:8px 10px;
+      outline:none;
+    }
+    select{cursor:pointer}
+    button{
+      cursor:pointer;
+      transition:transform .08s ease, filter .08s ease;
+      background:#121826;
+      font-weight:800;
+    }
+    button:hover{filter:brightness(1.1)}
+    button:active{transform:scale(.98)}
+    button.primary{background:#1a2340;border-color:#2a3b70}
+    button.bad{background:#2a1012;border-color:#5a1f26;color:#ffd7d7}
+
+    .topGrid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px;}
+    .mainSplit{
+      display:grid;
+      grid-template-columns: 360px 1fr;
+      gap:12px;
+      align-items:start;
+      margin-top:12px;
+    }
+    @media (max-width: 1040px){ .mainSplit{grid-template-columns:1fr} }
+
+    .list{display:grid;gap:8px;margin-top:10px}
+    .playerRow{
+      display:flex;gap:10px;align-items:center;
+      padding:10px;border:1px solid var(--border);
+      border-radius:12px;background:#0c0f16;
+    }
+    .playerRow input{width:18px;height:18px}
+
+    .tree{display:grid;gap:10px}
+
+    details.node{
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      overflow:hidden;
+      background:#0c0f16;
+    }
+    details.node > summary{list-style:none;}
+    details.node > summary::-webkit-details-marker{display:none;}
+
+    .nodeSummary{
+      display:flex;align-items:center;gap:10px;
+      padding:10px 10px;
+      user-select:none;
+      background:#0c0f16;
+      cursor:pointer;
+    }
+    .nodeSummary:hover{background:#101522}
+
+    .nodeTitle{font-weight:900}
+    .nodeTools{
+      margin-left:auto;
+      display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+    }
+    .nodeTools select{padding:6px 8px;border-radius:10px}
+    .nodeContent{padding:10px;background:#0b0e14;}
+    .indent{padding-left:10px;border-left:2px solid #1d2434;margin-left:8px}
+
+    .twisty{width:24px;min-width:24px;text-align:center;font-weight:900;color:var(--muted);}
+
+    .itemGrid{
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0, 1fr));
+      gap:10px;
+    }
+    @media (max-width: 1150px){ .itemGrid{grid-template-columns:repeat(2, minmax(0,1fr))} }
+    @media (max-width: 720px){ .itemGrid{grid-template-columns:1fr} }
+
+    .itemCard{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:10px;
+      background:linear-gradient(180deg,#0d111a,#0a0d13);
+      display:grid;
+      gap:8px;
+      min-height:120px;
+      transition:opacity .12s ease, filter .12s ease, border-color .12s ease, background .12s ease, box-shadow .12s ease;
+    }
+    .itemCard.blockedNt{opacity:.5;filter:saturate(.7);border-color:#5a4b2a;}
+    .itemTop{display:flex;gap:10px;align-items:flex-start;}
+    .itemTop input{width:18px;height:18px;margin-top:2px}
+    .itemName{font-weight:900;line-height:1.1}
+    .kv{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+    .kv b{font-weight:900}
+    .itemTools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+    .itemTools select{padding:6px 8px;border-radius:10px}
+    .infoBtn{padding:6px 10px;border-radius:10px;border:1px solid var(--border);background:#0c0f16;}
+    .itemDesc{
+      display:none;padding:8px 10px;border:1px dashed #2a3346;
+      border-radius:12px;color:var(--muted);background:#0b0e14;white-space:pre-wrap;
+    }
+    .itemDesc.open{display:block}
+    .itemState{min-height:18px;font-weight:700;}
+
+    .statusWrap{display:flex;gap:10px;align-items:center}
+    .statusBtn{border:1px solid var(--border);padding:10px 14px;border-radius:14px;font-weight:900;cursor:pointer;background:#0c0f16;}
+    .statusBtn.selected{border-color:#3b4a70;box-shadow:0 0 0 3px rgba(122,162,255,.18);background:#121a2b;}
+    .openBtn{color:var(--good)}
+    .closedBtn{color:var(--bad)}
+
+    .errorBox{color:#ffd7d7;white-space:pre-wrap;}
+
+    /* Loading overlay */
+    .loadingOverlay{
+      position:fixed;inset:0;background:rgba(0,0,0,.55);
+      display:none;align-items:center;justify-content:center;
+      z-index:15000;padding:16px;
+    }
+    .loadingOverlay.open{display:flex}
+    .loadingBox{
+      min-width:220px;max-width:min(92vw,360px);
+      border:1px solid var(--border);border-radius:16px;padding:18px 20px;
+      background:linear-gradient(180deg,var(--panel),var(--panel2));
+      box-shadow:0 18px 48px rgba(0,0,0,.45);
+      display:grid;gap:12px;justify-items:center;text-align:center;
+    }
+    .loadingSpinner{
+      width:46px;height:46px;border-radius:999px;
+      border:4px solid rgba(255,255,255,.12);border-top-color:#3b82f6;
+      animation:mjSpin .9s linear infinite;
+    }
+    .loadingText{font-weight:900;font-size:14px;line-height:1.2}
+    @keyframes mjSpin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <div class="row">
+      <div style="min-width:320px;flex:1">
+        <label>Marchand</label>
+        <select id="mSel" style="width:100%"></select>
+      </div>
+
+      <div class="row" style="gap:10px">
+        <button class="primary" onclick="createMerchant()">+ Nouveau</button>
+        <button class="bad" onclick="deleteMerchant()">Supprimer</button>
+        <button class="primary" onclick="saveAll()">💾 Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="topGrid">
+    <div class="card">
+      <div style="font-weight:900;margin-bottom:10px">Paramètres (marchand)</div>
+
+      <div class="row">
+        <div style="min-width:260px">
+          <label>Nom</label>
+          <input id="mName" style="width:260px">
+        </div>
+
+        <div>
+          <label>Statut</label>
+          <div class="statusWrap">
+            <button id="btnOpen" class="statusBtn openBtn" type="button" onclick="setStatus('OPEN')">Ouvert</button>
+            <button id="btnClosed" class="statusBtn closedBtn" type="button" onclick="setStatus('CLOSED')">Fermé</button>
+            <input id="mStatus" type="hidden" value="CLOSED">
+          </div>
+        </div>
+
+        <div>
+          <label>Variation prix (global)</label>
+          <select id="mMod" style="width:170px"></select>
+        </div>
+
+        <div>
+          <label>Rareté (NT max global)</label>
+          <select id="mNT" style="width:170px"></select>
+        </div>
+
+        <div>
+          <label>Niv max global</label>
+          <select id="mNiv" style="width:170px"></select>
+        </div>
+
+        <div>
+          <label>Gen max global</label>
+          <select id="mGen" style="width:170px"></select>
+        </div>
+
+        <div>
+          <label>Filtre dispo global</label>
+          <select id="mDispo" style="width:190px"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="mainSplit">
+      <div class="card">
+        <div style="font-weight:900;margin-bottom:8px">Joueurs autorisés</div>
+        <div class="small muted">Coche = autorisé (FID non affiché).</div>
+        <div id="players" class="list"></div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div style="font-weight:900">Catalogue vendu</div>
+            <div class="small muted">Checkbox tri-state : "-" = partiel, clic dessus = coche tout.</div>
+          </div>
+          <div class="row" style="gap:8px">
+            <span class="pill" id="statRules">0 règle(s)</span>
+          </div>
+        </div>
+
+        <div id="catalog" class="tree" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadingOverlay" class="loadingOverlay" aria-hidden="true">
+    <div class="loadingBox" role="status" aria-live="polite" aria-busy="true">
+      <div class="loadingSpinner"></div>
+      <div id="loadingText" class="loadingText">Chargement…</div>
+    </div>
+  </div>
+
+<script>
+  let MID = "";
+  const PC_CAT_NAME = "Ordinateur";
+
+  let boot = null;
+  let players = [];
+  let equipRef = [];
+
+  let famTree = new Map();
+  let catMeta = new Map();
+  let famMeta = new Map();
+
+  let currentMerchant = null;
+  let currentRules = [];
+  let allowedSet = new Set();
+  let dirty = false;
+  let lastSelectedMerchantId = "";
+  let loadingDepth = 0;
+
+  const itemDetailsCache = new Map();
+  const openFam = new Set();
+  const openCat = new Set();
+
+  const PC_WEIGHT_TABLE = {
+    1: {1:2, 2:1.5, 3:1, 4:0.5, 5:0.2, 6:0.2},
+    2: {1:4, 2:3,   3:2, 4:1,   5:0.5, 6:0.3},
+    3: {1:6, 2:5,   3:4, 4:3,   5:2,   6:0.5},
+    4: {1:8, 2:7,   3:6, 4:4,   5:3,   6:0.7},
+    5: {1:10,2:8,   3:7, 4:5,   5:3,   6:1},
+    6: {1:12,2:10,  3:8, 4:6,   5:3,   6:1.5},
+    7: {1:14,2:11,  3:9, 4:7,   5:4,   6:2},
+    8: {1:16,2:12,  3:10,4:8,   5:4,   6:2.5},
+    9: {1:18,2:14,  3:12,4:10,  5:6,   6:3},
+    10:{1:20,2:16,  3:12,4:10,  5:6,   6:4}
+  };
+
+  /* ===================== LOADING ===================== */
+  function showLoading(text){
+    const overlay = document.getElementById("loadingOverlay");
+    const label = document.getElementById("loadingText");
+    if (!overlay || !label) return;
+    loadingDepth += 1;
+    label.textContent = String(text || "Chargement…");
+    overlay.classList.add("open");
+    overlay.setAttribute("aria-hidden","false");
+  }
+  function hideLoading(){
+    const overlay = document.getElementById("loadingOverlay");
+    if (!overlay) return;
+    loadingDepth = Math.max(0, loadingDepth - 1);
+    if (loadingDepth > 0) return;
+    overlay.classList.remove("open");
+    overlay.setAttribute("aria-hidden","true");
+  }
+
+  /* ===================== DISPO ===================== */
+  function parseLeadingInt(s){
+    const txt = String(s || "").trim();
+    const m = txt.match(/-?\d+/);
+    return m ? Number(m[0]) : null;
+  }
+
+  function getAvailabilityInfo(rawDispo){
+    const raw = String(rawDispo || "").trim();
+    const n = parseLeadingInt(raw);
+    if (!raw || n === null || n >= 20) return {
+      score:n, raw, label:"Très commun", color:"#b8bec8",
+      bg:"rgba(184,190,200,.12)", border:"rgba(184,190,200,.36)",
+      tintTop:"rgba(184,190,200,.09)", tintBottom:"rgba(184,190,200,.03)", glow:"none"
+    };
+    if (n >= 15) return {
+      score:n, raw, label:"Commun", color:"#f3f6fb",
+      bg:"rgba(243,246,251,.10)", border:"rgba(243,246,251,.32)",
+      tintTop:"rgba(243,246,251,.07)", tintBottom:"rgba(243,246,251,.02)", glow:"none"
+    };
+    if (n >= 10) return {
+      score:n, raw, label:"Peu commun", color:"#7ee0a2",
+      bg:"rgba(126,224,162,.12)", border:"rgba(126,224,162,.36)",
+      tintTop:"rgba(70,180,110,.11)", tintBottom:"rgba(70,180,110,.03)",
+      glow:"0 0 0 1px rgba(70,180,110,.10) inset"
+    };
+    if (n >= 5) return {
+      score:n, raw, label:"Rare", color:"#8ab8ff",
+      bg:"rgba(138,184,255,.12)", border:"rgba(138,184,255,.36)",
+      tintTop:"rgba(90,130,230,.11)", tintBottom:"rgba(90,130,230,.03)",
+      glow:"0 0 0 1px rgba(90,130,230,.10) inset"
+    };
+    if (n >= 1) return {
+      score:n, raw, label:"Très rare", color:"#ffd95e",
+      bg:"rgba(255,217,94,.12)", border:"rgba(255,217,94,.36)",
+      tintTop:"rgba(235,195,60,.11)", tintBottom:"rgba(235,195,60,.03)",
+      glow:"0 0 0 1px rgba(235,195,60,.12) inset, 0 0 14px rgba(235,195,60,.10)"
+    };
+    if (n >= -5) return {
+      score:n, raw, label:"Extrêmement rare", color:"#ff9a3d",
+      bg:"rgba(255,154,61,.16)", border:"rgba(255,140,40,.60)",
+      tintTop:"rgba(255,132,35,.22)", tintBottom:"rgba(255,90,0,.06)",
+      glow:"0 0 0 1px rgba(255,145,45,.20) inset, 0 0 18px rgba(255,120,25,.16)"
+    };
+    return {
+      score:n, raw, label:(n <= -15 ? "Faut pas rêver" : "Introuvable"), color:"#ff5f5f",
+      bg:"rgba(255,95,95,.18)", border:"rgba(255,70,70,.68)",
+      tintTop:"rgba(255,78,78,.26)", tintBottom:"rgba(160,10,10,.08)",
+      glow:"0 0 0 1px rgba(255,90,90,.24) inset, 0 0 22px rgba(255,60,60,.18)"
+    };
+  }
+
+  function applyCardDispoStyle(card, rawDispo){
+    const info = getAvailabilityInfo(rawDispo);
+    card.style.background = [
+      `radial-gradient(circle at 18% 14%, rgba(255,255,255,.07), rgba(255,255,255,0) 34%)`,
+      `linear-gradient(180deg, ${info.tintTop}, ${info.tintBottom})`,
+      `linear-gradient(180deg,#0d111a,#0a0d13)`
+    ].join(", ");
+    card.style.borderColor = info.border;
+    if (info.glow && info.glow !== "none") card.style.boxShadow = info.glow;
+  }
+
+
+  /* ===================== MSG ===================== */
+  function setMsg(s){ /* silencieux — les erreurs passent par le loading ou console */ }
+  function setDbg(s){ if (s) console.warn("[TradeMJ]", s); }
+
+  window.onerror = function(message, source, lineno, colno){
+    console.error(`JS ERROR: ${message} (${lineno}:${colno})`);
+  };
+  window.onunhandledrejection = function(e){
+    const msg = e && e.reason && e.reason.message ? e.reason.message : String(e.reason || e);
+    console.error("PROMISE ERROR:", msg);
+  };
+
+  function markDirty(on=true){
+    dirty = !!on;
+  }
+
+  function romanNT(n){ return ({1:"I",2:"II",3:"III",4:"IV",5:"V",6:"VI"}[n] || String(n)); }
+  function romanGen(n){ return ({1:"I",2:"II",3:"III",4:"IV",5:"V",6:"VI",7:"VII",8:"VIII",9:"IX",10:"X"}[n] || String(n)); }
+
+  function escapeHtml(s){
+    return String(s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  function splitCSV(s){
+    s = String(s||"").trim();
+    if (!s) return [];
+    return s.split(/[,;\n]+/g).map(x => x.trim()).filter(Boolean);
+  }
+
+  function selectedMerchantId(){
+    return document.getElementById('mSel').value;
+  }
+
+  function setStatus(val, silent=false){
+    document.getElementById('mStatus').value = val;
+    document.getElementById('btnOpen').classList.toggle("selected", val === "OPEN");
+    document.getElementById('btnClosed').classList.toggle("selected", val === "CLOSED");
+    if (!silent) markDirty(true);
+  }
+
+  function norm(s){
+    return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
+  }
+
+  function isComputerCat_(cat){
+    return norm(cat) === norm(PC_CAT_NAME);
+  }
+
+  function apiErrMsg_(res, fallback){
+    if (res && res.error) return String(res.error);
+    return fallback || "Erreur API.";
+  }
+
+  function merchantExistsInList_(list, merchantId){
+    merchantId = String(merchantId || "").trim();
+    if (!merchantId) return false;
+    return Array.isArray(list) && list.some(m => String(m.id || "").trim() === merchantId);
+  }
+
+  function chooseMerchantId_(list, preferredId){
+    preferredId = String(preferredId || "").trim();
+    if (merchantExistsInList_(list, preferredId)) return preferredId;
+    if (merchantExistsInList_(list, lastSelectedMerchantId)) return lastSelectedMerchantId;
+    if (Array.isArray(list) && list.length) return String(list[0].id || "").trim();
+    return "";
+  }
+
+  function computeDeleteFallbackId_(currentId){
+    const values = Array.from(document.getElementById('mSel').options).map(o => o.value);
+    const idx = values.indexOf(currentId);
+    if (idx < 0) return "";
+    return values[idx + 1] || values[idx - 1] || "";
+  }
+
+  function clearMerchantUi(msg){
+    currentMerchant = null;
+    currentRules = [];
+    allowedSet = new Set();
+    dirty = false;
+    lastSelectedMerchantId = "";
+
+    document.getElementById('mName').value = "";
+    document.getElementById('mStatus').value = "CLOSED";
+    setStatus("CLOSED", true);
+    document.getElementById('mMod').value = "0";
+    document.getElementById('mNT').value = "6";
+    document.getElementById('mNiv').value = "5";
+    document.getElementById('mGen').value = "10";
+    document.getElementById('mDispo').value = "";
+    document.getElementById('statRules').textContent = "0 règle(s)";
+
+    openFam.clear();
+    openCat.clear();
+
+    renderPlayers();
+    renderCatalog();
+
+    if (msg) console.info("[TradeMJ]", msg);
+  }
+
+  function modeOf(r){ return String(r.mode||"INCLUDE").toUpperCase(); }
+  function levOf(r){ return String(r.level||"FAM").toUpperCase(); }
+
+  function findRule(mode, level, fam, cat, name){
+    mode = String(mode||"INCLUDE").toUpperCase();
+    level = String(level||"").toUpperCase();
+    return currentRules.find(r =>
+      modeOf(r) === mode && levOf(r) === level &&
+      String(r.fam||"") === String(fam||"") &&
+      String(r.cat||"") === String(cat||"") &&
+      String(r.name||"") === String(name||"")
+    ) || null;
+  }
+
+  function hasRule(mode, level, fam, cat, name){ return !!findRule(mode, level, fam, cat, name); }
+
+  function upsertRule(mode, level, fam, cat, name, patch){
+    mode = String(mode||"INCLUDE").toUpperCase();
+    level = String(level||"FAM").toUpperCase();
+
+    const idx = currentRules.findIndex(r =>
+      modeOf(r) === mode && levOf(r) === level &&
+      String(r.fam||"") === String(fam||"") &&
+      String(r.cat||"") === String(cat||"") &&
+      String(r.name||"") === String(name||"")
+    );
+
+    const base = {
+      mode, level, fam:fam||"", cat:cat||"", name:name||"",
+      modPct:"", ntMax:"", nivMax:"", genMax:"", dispoMin:"",
+      sellNT:"", sellNiv:"", sellGen:"", sellLoc:""
+    };
+
+    const merged = Object.assign({}, base, (idx>=0 ? currentRules[idx] : {}), patch || {});
+    if (idx>=0) currentRules[idx] = merged;
+    else currentRules.push(merged);
+
+    document.getElementById('statRules').textContent = `${currentRules.length} règle(s)`;
+    markDirty(true);
+    refreshVisibleEffectiveValues();
+    refreshVisibleCards();
+    return merged;
+  }
+
+  function removeRule(mode, level, fam, cat, name){
+    mode = String(mode||"INCLUDE").toUpperCase();
+    level = String(level||"").toUpperCase();
+    const before = currentRules.length;
+    currentRules = currentRules.filter(r => !(
+      modeOf(r) === mode && levOf(r) === level &&
+      String(r.fam||"") === String(fam||"") &&
+      String(r.cat||"") === String(cat||"") &&
+      String(r.name||"") === String(name||"")
+    ));
+    if (currentRules.length !== before){
+      document.getElementById('statRules').textContent = `${currentRules.length} règle(s)`;
+      markDirty(true);
+      refreshVisibleEffectiveValues();
+      refreshVisibleCards();
+    }
+  }
+
+  function removeRulesWhere_(pred){
+    const before = currentRules.length;
+    currentRules = currentRules.filter(r => !pred(r));
+    if (currentRules.length !== before){
+      document.getElementById('statRules').textContent = `${currentRules.length} règle(s)`;
+      markDirty(true);
+      refreshVisibleEffectiveValues();
+      refreshVisibleCards();
+    }
+  }
+
+  function hasIncludeItem_(fam,cat,name){ return hasRule("INCLUDE","ITEM",fam,cat,name); }
+  function hasIncludeCat_(fam,cat){ return hasRule("INCLUDE","CAT",fam,cat,""); }
+  function hasIncludeFam_(fam){ return hasRule("INCLUDE","FAM",fam,"",""); }
+  function hasExcludeItem_(fam,cat,name){ return hasRule("EXCLUDE","ITEM",fam,cat,name); }
+  function hasExcludeCat_(fam,cat){ return hasRule("EXCLUDE","CAT",fam,cat,""); }
+  function hasExcludeFam_(fam){ return hasRule("EXCLUDE","FAM",fam,"",""); }
+
+  function itemIncluded_(fam,cat,name){
+    return hasIncludeFam_(fam) || hasIncludeCat_(fam,cat) || hasIncludeItem_(fam,cat,name);
+  }
+
+  function itemExcluded_(fam,cat,name){
+    if (hasExcludeItem_(fam,cat,name)) return true;
+    const exCat = hasExcludeCat_(fam,cat);
+    if (exCat && !hasIncludeItem_(fam,cat,name)) return true;
+    const exFam = hasExcludeFam_(fam);
+    if (exFam && !(hasIncludeCat_(fam,cat) || hasIncludeItem_(fam,cat,name))) return true;
+    return false;
+  }
+
+  function parseDispoN(raw){
+    const m = String(raw||'').trim().match(/-?\d+/);
+    return m ? Number(m[0]) : null;
+  }
+
+  function itemDispoValue_(raw){
+    const d = parseDispoN(raw);
+    return (d !== null) ? d : 999;
+  }
+
+  function itemMatchesDispoFilter_(fam, cat, itemOrName, rawDispo){
+    const itemName = (itemOrName && typeof itemOrName === "object")
+      ? String(itemOrName.name || "")
+      : String(itemOrName || "");
+    const itemDispoRaw = (itemOrName && typeof itemOrName === "object")
+      ? String(itemOrName.dispo || "")
+      : String(rawDispo || "");
+
+    const eff = effectiveFor(fam, cat, itemName);
+    if (eff.dispoMin === null || !Number.isFinite(eff.dispoMin)) return true;
+    return itemDispoValue_(itemDispoRaw) >= eff.dispoMin;
+  }
+
+  function getVisibleCategoryItems_(fam, cat){
+    const items = famTree.get(fam)?.get(cat) || [];
+    return items.filter(it => itemMatchesDispoFilter_(fam, cat, it));
+  }
+
+  function itemSold_(fam,cat,name){
+    if (!itemIncluded_(fam,cat,name) || itemExcluded_(fam,cat,name)) return false;
+    const items = famTree.get(fam)?.get(cat) || [];
+    const entry = items.find(x => x.name === name);
+    if (!entry) return false;
+    return itemMatchesDispoFilter_(fam, cat, entry);
+  }
+
+  function setFamilyAll_(fam, on){
+    fam = String(fam||"");
+    if (on){
+      removeRulesWhere_(r => String(r.fam||"")===fam && modeOf(r)==="EXCLUDE");
+      upsertRule("INCLUDE","FAM",fam,"","",{});
+    }else{
+      removeRulesWhere_(r => String(r.fam||"")===fam && (modeOf(r)==="INCLUDE" || modeOf(r)==="EXCLUDE"));
+      upsertRule("EXCLUDE","FAM",fam,"","",{});
+    }
+  }
+
+  function setCatAll_(fam, cat, on){
+    fam = String(fam||""); cat = String(cat||"");
+    if (on){
+      removeRulesWhere_(r =>
+        String(r.fam||"")===fam && modeOf(r)==="EXCLUDE" &&
+        ((levOf(r)==="CAT" && String(r.cat||"")===cat) || (levOf(r)==="ITEM" && String(r.cat||"")===cat))
+      );
+      upsertRule("INCLUDE","CAT",fam,cat,"",{});
+    }else{
+      removeRulesWhere_(r =>
+        String(r.fam||"")===fam && String(r.cat||"")===cat &&
+        (modeOf(r)==="INCLUDE" || modeOf(r)==="EXCLUDE")
+      );
+      upsertRule("EXCLUDE","CAT",fam,cat,"",{});
+    }
+  }
+
+  function setItem_(fam,cat,name,on){
+    fam=String(fam||""); cat=String(cat||""); name=String(name||"");
+    if (on){ removeRule("EXCLUDE","ITEM",fam,cat,name); upsertRule("INCLUDE","ITEM",fam,cat,name,{}); }
+    else { removeRule("INCLUDE","ITEM",fam,cat,name); upsertRule("EXCLUDE","ITEM",fam,cat,name,{}); }
+  }
+
+  function merchantDefaults(){
+    return {
+      modPct: Number(document.getElementById('mMod').value || 0),
+      ntMax:  Number(document.getElementById('mNT').value || 6),
+      nivMax: Number(document.getElementById('mNiv').value || 5),
+      genMax: Number(document.getElementById('mGen').value || 10),
+      dispoMin: document.getElementById('mDispo').value !== "" ? Number(document.getElementById('mDispo').value) : null
+    };
+  }
+
+  function ruleConfigKeys_(){
+    return ["modPct", "ntMax", "nivMax", "genMax", "dispoMin", "sellNT", "sellNiv", "sellGen", "sellLoc"];
+  }
+
+  function ruleHasConfig_(r){
+    return ruleConfigKeys_().some(k => r && r[k] !== "" && r[k] != null);
+  }
+
+  function clearParamField_(level, fam, cat, name, field){
+    level = String(level || "").toUpperCase();
+    const idx = currentRules.findIndex(r =>
+      modeOf(r) === "PARAM" && levOf(r) === level &&
+      String(r.fam||"") === String(fam||"") &&
+      String(r.cat||"") === String(cat||"") &&
+      String(r.name||"") === String(name||"")
+    );
+    if (idx < 0) return;
+
+    const next = Object.assign({}, currentRules[idx], { [field]: "" });
+    if (ruleHasConfig_(next)) currentRules[idx] = next;
+    else currentRules.splice(idx, 1);
+
+    document.getElementById('statRules').textContent = `${currentRules.length} règle(s)`;
+    markDirty(true);
+    refreshVisibleEffectiveValues();
+    renderCatalog();
+  }
+
+  function sanitizeRulesForUi_(rules){
+    return (Array.isArray(rules) ? rules : [])
+      .map(r => Object.assign({}, r))
+      .map(r => {
+        if (levOf(r) === "ITEM") r.dispoMin = "";
+        return r;
+      })
+      .filter(r => !(modeOf(r) === "PARAM" && !ruleHasConfig_(r)));
+  }
+
+  function mergeRuleFields_(paramRule, includeRule){
+    const out = { modPct:"", ntMax:"", nivMax:"", genMax:"", dispoMin:"" };
+    const apply = (r) => {
+      if (!r) return;
+      Object.keys(out).forEach(k => { if (r[k] !== "" && r[k] != null) out[k] = r[k]; });
+    };
+    apply(paramRule); apply(includeRule);
+    return out;
+  }
+
+  function findMergedRuleAtLevel_(level, fam, cat, name){
+    const match = (r) => {
+      const L = levOf(r); const M = modeOf(r);
+      if (!(M === "INCLUDE" || M === "PARAM")) return false;
+      if (L !== level) return false;
+      if (level === "FAM") return String(r.fam||"") === String(fam||"");
+      if (level === "CAT") return String(r.fam||"") === String(fam||"") && String(r.cat||"") === String(cat||"");
+      return String(r.fam||"") === String(fam||"") && String(r.cat||"") === String(cat||"") && String(r.name||"") === String(name||"");
+    };
+    const rules = currentRules.filter(match);
+    const paramRule = rules.find(r => modeOf(r) === "PARAM") || null;
+    const includeRule = rules.find(r => modeOf(r) === "INCLUDE") || null;
+    return mergeRuleFields_(paramRule, includeRule);
+  }
+
+  function effectiveFor(fam, cat, name){
+    const def = merchantDefaults();
+    const rf = findMergedRuleAtLevel_("FAM", fam, "", "");
+    const rc = cat ? findMergedRuleAtLevel_("CAT", fam, cat, "") : null;
+    const ri = name ? findMergedRuleAtLevel_("ITEM", fam, cat, name) : null;
+    const pick = (field) => {
+      if (ri && ri[field] !== "" && ri[field] != null) return ri[field];
+      if (rc && rc[field] !== "" && rc[field] != null) return rc[field];
+      if (rf && rf[field] !== "" && rf[field] != null) return rf[field];
+      return def[field];
+    };
+    const dispoCandidates = [];
+    if (def.dispoMin !== null && Number.isFinite(def.dispoMin)) dispoCandidates.push(Number(def.dispoMin));
+    if (rf && rf.dispoMin !== "" && rf.dispoMin != null && Number.isFinite(Number(rf.dispoMin))) dispoCandidates.push(Number(rf.dispoMin));
+    if (rc && rc.dispoMin !== "" && rc.dispoMin != null && Number.isFinite(Number(rc.dispoMin))) dispoCandidates.push(Number(rc.dispoMin));
+    if (ri && ri.dispoMin !== "" && ri.dispoMin != null && Number.isFinite(Number(ri.dispoMin))) dispoCandidates.push(Number(ri.dispoMin));
+    return {
+      modPct:  Number(pick("modPct")),
+      ntMax:   Number(pick("ntMax")),
+      nivMax:  Number(pick("nivMax")),
+      genMax:  Number(pick("genMax")),
+      dispoMin: dispoCandidates.length ? Math.max(...dispoCandidates) : null
+    };
+  }
+
+  function buildDispoMinSelect(sel, withBlank=false){
+    sel.innerHTML = '';
+    if (withBlank){ const o=document.createElement('option'); o.value=''; o.textContent='Dispo min'; sel.appendChild(o); }
+    const opts = [
+      {v:'20', l:'Très commun (≥20)'},
+      {v:'15', l:'Commun (≥15)'},
+      {v:'10', l:'Peu commun (≥10)'},
+      {v:'5',  l:'Rare (≥5)'},
+      {v:'1',  l:'Très rare (≥1)'},
+      {v:'-5', l:'Extr. rare (≥-5)'},
+      {v:'-99',l:'Introuvable'},
+    ];
+    opts.forEach(({v,l}) => { const o=document.createElement('option'); o.value=v; o.textContent=l; sel.appendChild(o); });
+  }
+
+  function buildPctSelect(sel){
+    sel.innerHTML = "";
+    for (let p=-50; p<=50; p+=5){
+      const o = document.createElement("option");
+      o.value = String(p);
+      o.textContent = (p>0 ? `+${p}%` : `${p}%`);
+      sel.appendChild(o);
+    }
+  }
+
+  function buildNtMaxSelect(sel, withBlank=false){
+    sel.innerHTML = "";
+    if (withBlank){ const o0=document.createElement("option"); o0.value=""; o0.textContent="NT max"; sel.appendChild(o0); }
+    for (let n=1; n<=6; n++){ const o=document.createElement("option"); o.value=String(n); o.textContent=`NT ${romanNT(n)}`; sel.appendChild(o); }
+  }
+
+  function buildNivMaxSelect(sel, withBlank=false){
+    sel.innerHTML = "";
+    if (withBlank){ const o0=document.createElement("option"); o0.value=""; o0.textContent="Niv max"; sel.appendChild(o0); }
+    for (let n=1; n<=20; n++){ const o=document.createElement("option"); o.value=String(n); o.textContent=`Niv +${n}`; sel.appendChild(o); }
+  }
+
+  function buildGenMaxSelect(sel, withBlank=false){
+    sel.innerHTML = "";
+    if (withBlank){ const o0=document.createElement("option"); o0.value=""; o0.textContent="Gen max"; sel.appendChild(o0); }
+    for (let n=1; n<=10; n++){ const o=document.createElement("option"); o.value=String(n); o.textContent=`GEN ${romanGen(n)}`; sel.appendChild(o); }
+  }
+
+  function refreshVisibleEffectiveValues(){
+    document.querySelectorAll('[data-ef]').forEach(el => {
+      if (document.activeElement === el) return;
+      const fam=el.dataset.fam||"", cat=el.dataset.cat||"", name=el.dataset.name||"", field=el.dataset.field||"";
+      const eff = effectiveFor(fam, cat, name);
+      const setSel = (v) => { v=String(v); if (el.querySelector(`option[value="${v}"]`) && el.value !== v) el.value = v; };
+      if (field === "modPct")  setSel(Number.isFinite(eff.modPct)  ? eff.modPct  : 0);
+      if (field === "ntMax")   setSel(Number.isFinite(eff.ntMax)   ? eff.ntMax   : 6);
+      if (field === "nivMax")  setSel(Number.isFinite(eff.nivMax)  ? eff.nivMax  : 5);
+      if (field === "genMax")  setSel(Number.isFinite(eff.genMax)  ? eff.genMax  : 10);
+      if (field === "dispoMin") {
+        if (eff.dispoMin !== null) setSel(eff.dispoMin);
+        else if (el.querySelector('option[value=""]') && el.value !== "") el.value = "";
+      }
+    });
+  }
+
+  function buildTree(){
+    famTree.clear(); famMeta.clear(); catMeta.clear();
+    for (const r of equipRef){
+      const fam=String(r.fam||"").trim(), cat=String(r.cat||"").trim();
+      if (!fam || !cat) continue;
+      if (!famTree.has(fam)) famTree.set(fam, new Map());
+      const cats = famTree.get(fam);
+      if (!cats.has(cat)) cats.set(cat, []);
+      cats.get(cat).push(r);
+      const ck = fam+"§"+cat;
+      if (!catMeta.has(ck)) catMeta.set(ck, {hasNT:false,hasNiv:false,hasGen:false});
+      const cm = catMeta.get(ck);
+      const isComp = !!r.isComputer || isComputerCat_(cat);
+      const ntRelevant = (String(r.ntKind||"") === "range") && (r.needsNT || isComp);
+      if (ntRelevant) cm.hasNT = true;
+      if (r.needsNiv) cm.hasNiv = true;
+      if (r.needsGen || isComp) cm.hasGen = true;
+      if (!famMeta.has(fam)) famMeta.set(fam, {hasNT:false,hasNiv:false,hasGen:false});
+      const fm = famMeta.get(fam);
+      if (cm.hasNT) fm.hasNT = true;
+      if (cm.hasNiv) fm.hasNiv = true;
+      if (cm.hasGen) fm.hasGen = true;
+    }
+    for (const [fam, cats] of famTree.entries()){
+      for (const [cat, items] of cats.entries()){
+        items.sort((a,b)=> String(a.name).localeCompare(String(b.name)));
+      }
+    }
+  }
+
+  function catCounts_(fam, cat){
+    const items = getVisibleCategoryItems_(fam, cat);
+    let sold=0;
+    for (const it of items){ if (itemSold_(fam,cat,it.name)) sold++; }
+    return { total:items.length, sold };
+  }
+
+  function famCounts_(fam){
+    const cats = famTree.get(fam);
+    if (!cats) return { total:0, sold:0 };
+    let total=0, sold=0;
+    for (const [cat] of cats.entries()){
+      const items = getVisibleCategoryItems_(fam, cat);
+      total += items.length;
+      for (const it of items){ if (itemSold_(fam,cat,it.name)) sold++; }
+    }
+    return { total, sold };
+  }
+
+  function bootLoad(preferredMerchantId="", successMsg=""){
+    if (!MID){ console.warn("URL incomplète: ?mid=..."); return; }
+
+    showLoading("Chargement…");
+
+    google.script.run
+      .withSuccessHandler(res => {
+        hideLoading();
+        if (!res){ clearMerchantUi("Réponse serveur vide."); return; }
+        if (res.ok === false){ clearMerchantUi("Erreur: " + apiErrMsg_(res, "boot invalide")); return; }
+
+        boot = res || {};
+        players = Array.isArray(boot.players) ? boot.players : [];
+        equipRef = Array.isArray(boot.equipRef) ? boot.equipRef : [];
+
+        buildTree();
+
+        const merchants = Array.isArray(boot.merchants) ? boot.merchants : [];
+        renderMerchantList(merchants);
+
+        const idToLoad = chooseMerchantId_(merchants, preferredMerchantId);
+        if (!idToLoad){ clearMerchantUi(successMsg || "OK (aucun marchand)."); return; }
+
+        document.getElementById('mSel').value = idToLoad;
+        lastSelectedMerchantId = idToLoad;
+        loadMerchant(idToLoad, successMsg);
+      })
+      .withFailureHandler(err => {
+        hideLoading();
+        clearMerchantUi("Erreur: " + (err && err.message ? err.message : String(err)));
+      })
+      .trade_api_mj_boot(MID);
+  }
+
+  function renderMerchantList(list){
+    const sel = document.getElementById('mSel');
+    sel.innerHTML = "";
+    for (const m of list){
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = `${m.name} (${m.status})`;
+      sel.appendChild(o);
+    }
+    sel.onchange = () => {
+      const next = sel.value;
+      if (dirty){
+        const ok = confirm("Modifs non enregistrées. Changer de marchand et perdre ces modifs ?");
+        if (!ok){ sel.value = lastSelectedMerchantId || (sel.options[0] ? sel.options[0].value : ""); return; }
+      }
+      lastSelectedMerchantId = next;
+      loadMerchant(next);
+    };
+  }
+
+  function createMerchant(){
+    if (dirty){ if (!confirm("Modifs non enregistrées. Créer un nouveau marchand et perdre ces modifs ?")) return; }
+    const name = prompt("Nom du marchand ?") || "Nouveau marchand";
+    showLoading("Création…");
+    google.script.run
+      .withSuccessHandler(res => {
+        hideLoading();
+        if (!res || res.ok === false){ console.error("Erreur:", apiErrMsg_(res, "création impossible")); return; }
+        const newId = String(res.id || (res.merchant && res.merchant.id) || "").trim();
+        bootLoad(newId, "Marchand créé.");
+      })
+      .withFailureHandler(err => { hideLoading(); console.error(err); })
+      .trade_api_mj_createMerchant(MID, name);
+  }
+
+  function deleteMerchant(){
+    const id = selectedMerchantId();
+    if (!id) return;
+    if (dirty){ if (!confirm("Modifs non enregistrées. Supprimer ce marchand et perdre ces modifs ?")) return; }
+    if (!confirm("Supprimer ce marchand ?")) return;
+    const fallbackId = computeDeleteFallbackId_(id);
+    showLoading("Suppression…");
+    google.script.run
+      .withSuccessHandler(res => {
+        hideLoading();
+        if (!res || res.ok === false){ console.error("Erreur:", apiErrMsg_(res, "suppression impossible")); return; }
+        bootLoad(fallbackId, "Marchand supprimé.");
+      })
+      .withFailureHandler(err => { hideLoading(); console.error(err); })
+      .trade_api_mj_deleteMerchant(MID, id);
+  }
+
+  function fillMerchantForm(m){
+    document.getElementById('mName').value = m.name || "";
+    setStatus((m.status || "CLOSED").toUpperCase(), true);
+    buildPctSelect(document.getElementById('mMod'));
+    document.getElementById('mMod').value = Number.isFinite(Number(m.modGlobal)) ? String(Number(m.modGlobal)) : "0";
+    buildNtMaxSelect(document.getElementById('mNT'), false);
+    document.getElementById('mNT').value = Number.isFinite(Number(m.ntMax)) ? String(Number(m.ntMax)) : "6";
+    buildNivMaxSelect(document.getElementById('mNiv'), false);
+    document.getElementById('mNiv').value = Number.isFinite(Number(m.nivMax)) ? String(Number(m.nivMax)) : "5";
+    buildGenMaxSelect(document.getElementById('mGen'), false);
+    document.getElementById('mGen').value = Number.isFinite(Number(m.genMax)) ? String(Number(m.genMax)) : "10";
+    buildDispoMinSelect(document.getElementById('mDispo'), true);
+    document.getElementById('mDispo').value = (m.dispoMin !== "" && m.dispoMin != null && Number.isFinite(Number(m.dispoMin))) ? String(Number(m.dispoMin)) : "";
+    ["mName","mMod","mNT","mNiv","mGen","mDispo"].forEach(id => {
+      const el = document.getElementById(id);
+      const onUiChange = () => {
+        markDirty(true);
+        refreshVisibleEffectiveValues();
+        if (id === "mDispo") renderCatalog();
+        else refreshVisibleCards();
+      };
+      el.oninput = onUiChange;
+      el.onchange = onUiChange;
+    });
+  }
+
+  function loadMerchant(id=selectedMerchantId(), successMsg=""){
+    id = String(id || "").trim();
+    if (!id) return;
+    showLoading("Chargement marchand…");
+    google.script.run
+      .withSuccessHandler(res => {
+        hideLoading();
+        if (!res || res.ok === false || !res.merchant){ console.error("loadMerchant:", res); return; }
+        currentMerchant = res.merchant;
+        currentRules = sanitizeRulesForUi_(res.rules);
+        allowedSet = new Set(splitCSV(currentMerchant.allowed || ""));
+        fillMerchantForm(currentMerchant);
+        renderPlayers();
+        renderCatalog();
+        document.getElementById('statRules').textContent = `${currentRules.length} règle(s)`;
+        lastSelectedMerchantId = String(currentMerchant.id || id).trim();
+        markDirty(false);
+      })
+      .withFailureHandler(err => { hideLoading(); console.error("loadMerchant FAIL:", err); })
+      .trade_api_mj_loadMerchant(MID, id);
+  }
+
+  function saveAll(){
+    if (!currentMerchant) return;
+    const id = selectedMerchantId();
+    if (!id) return;
+    const allowed = Array.from(allowedSet.values()).join(",");
+    const payload = {
+      merchant: {
+        id, name: document.getElementById('mName').value,
+        status: document.getElementById('mStatus').value, allowed,
+        modGlobal: document.getElementById('mMod').value,
+        ntMax: document.getElementById('mNT').value,
+        nivMax: document.getElementById('mNiv').value,
+        genMax: document.getElementById('mGen').value,
+        dispoMin: document.getElementById('mDispo').value,
+        cDevice: 0
+      },
+      rules: currentRules
+    };
+    showLoading("Enregistrement…");
+    google.script.run
+      .withSuccessHandler(res => {
+        hideLoading();
+        if (!res || res.ok === false){ console.error("Erreur:", apiErrMsg_(res, "enregistrement impossible")); return; }
+        dirty = false;
+        bootLoad(id, "Enregistré.");
+      })
+      .withFailureHandler(err => { hideLoading(); console.error(err); })
+      .trade_api_mj_saveMerchant(MID, payload);
+  }
+
+  function renderPlayers(){
+    const wrap = document.getElementById('players');
+    wrap.innerHTML = "";
+    if (!currentMerchant){ wrap.innerHTML = `<div class="small muted">Charge un marchand.</div>`; return; }
+    if (!players.length){ wrap.innerHTML = `<div class="small muted">Aucun joueur.</div>`; return; }
+    for (const p of players){
+      const fid = String(p.fid||"").trim();
+      const label = String(p.label||fid).trim();
+      const row = document.createElement('div');
+      row.className = "playerRow"; row.title = fid;
+      const cb = document.createElement('input');
+      cb.type = "checkbox"; cb.checked = allowedSet.has(fid);
+      cb.onchange = () => { if (cb.checked) allowedSet.add(fid); else allowedSet.delete(fid); markDirty(true); };
+      const txt = document.createElement('div');
+      txt.innerHTML = `<div style="font-weight:800">${escapeHtml(label)}</div>`;
+      row.appendChild(cb); row.appendChild(txt); wrap.appendChild(row);
+    }
+  }
+
+  function renderCatalog(){
+    const host = document.getElementById('catalog');
+    host.innerHTML = "";
+    if (!currentMerchant){ host.innerHTML = `<div class="small muted">Charge un marchand.</div>`; return; }
+    if (!equipRef.length){ host.innerHTML = `<div class="small muted">Catalogue vide (equipRef).</div>`; return; }
+    try{
+      const fams = Array.from(famTree.keys()).sort((a,b)=>a.localeCompare(b));
+      for (const fam of fams) host.appendChild(makeFamNode(fam));
+      refreshVisibleEffectiveValues();
+      refreshVisibleCards();
+    }catch(e){
+      console.error("renderCatalog ERROR:", e);
+      host.innerHTML = `<div class="small muted">Erreur de rendu catalogue.</div>`;
+    }
+  }
+
+  function applyTriStateToCheckbox_(cb, sold, total){
+    cb.disabled = total <= 0;
+    cb.checked = sold > 0;
+    cb.indeterminate = (sold > 0 && sold < total);
+    cb.onclick = (e) => {
+      e.stopPropagation();
+      if (cb.disabled) return;
+      if (cb.indeterminate){ cb.indeterminate = false; cb.checked = true; }
+    };
+  }
+
+  function makeSummaryLine_(titleText, toolsBuilder){
+    const line = document.createElement('div');
+    line.className = "nodeSummary";
+    const twisty = document.createElement('div');
+    twisty.className = "twisty"; twisty.textContent = "▸";
+    const cbWrap = document.createElement('div');
+    cbWrap.style.display = "flex"; cbWrap.style.alignItems = "center";
+    const title = document.createElement('div');
+    title.className = "nodeTitle"; title.textContent = titleText;
+    const tools = document.createElement('div');
+    tools.className = "nodeTools";
+    if (typeof toolsBuilder === "function") toolsBuilder(tools);
+    line.appendChild(twisty); line.appendChild(cbWrap); line.appendChild(title); line.appendChild(tools);
+    return { line, twisty, cbWrap, tools };
+  }
+
+  function bindDetailsTwisty_(details, twisty){
+    const sync = () => { twisty.textContent = details.open ? "▾" : "▸"; };
+    details.addEventListener("toggle", sync); sync();
+  }
+
+  function makeFamNode(fam){
+    const details = document.createElement('details');
+    details.className = "node";
+    if (openFam.has(fam)) details.open = true;
+    details.addEventListener("toggle", () => {
+      if (details.open) openFam.add(fam); else openFam.delete(fam);
+      refreshVisibleEffectiveValues(); refreshVisibleCards();
+    });
+    const summary = document.createElement('summary');
+    const parts = makeSummaryLine_(fam, (tools) => {
+      const m = famMeta.get(fam) || {hasNT:false,hasNiv:false,hasGen:false};
+      const selMod = document.createElement('select');
+      buildPctSelect(selMod); selMod.style.width="120px";
+      selMod.dataset.ef="1"; selMod.dataset.field="modPct"; selMod.dataset.fam=fam; selMod.dataset.cat=""; selMod.dataset.name="";
+      selMod.onchange = ()=> upsertRule("PARAM","FAM", fam, "", "", { modPct: Number(selMod.value) });
+      tools.appendChild(selMod);
+      if (m.hasNT){
+        const selNT = document.createElement('select'); buildNtMaxSelect(selNT, true); selNT.style.width="130px";
+        selNT.dataset.ef="1"; selNT.dataset.field="ntMax"; selNT.dataset.fam=fam; selNT.dataset.cat=""; selNT.dataset.name="";
+        selNT.onchange = ()=> upsertRule("PARAM","FAM", fam, "", "", { ntMax: Number(selNT.value || 6) });
+        tools.appendChild(selNT);
+      }
+      if (m.hasNiv){
+        const selNiv = document.createElement('select'); buildNivMaxSelect(selNiv, true); selNiv.style.width="130px";
+        selNiv.dataset.ef="1"; selNiv.dataset.field="nivMax"; selNiv.dataset.fam=fam; selNiv.dataset.cat=""; selNiv.dataset.name="";
+        selNiv.onchange = ()=> upsertRule("PARAM","FAM", fam, "", "", { nivMax: Number(selNiv.value || 5) });
+        tools.appendChild(selNiv);
+      }
+      if (m.hasGen){
+        const selGen = document.createElement('select'); buildGenMaxSelect(selGen, true); selGen.style.width="130px";
+        selGen.dataset.ef="1"; selGen.dataset.field="genMax"; selGen.dataset.fam=fam; selGen.dataset.cat=""; selGen.dataset.name="";
+        selGen.onchange = ()=> upsertRule("PARAM","FAM", fam, "", "", { genMax: Number(selGen.value || 10) });
+        tools.appendChild(selGen);
+      }
+      {
+        const selDispo = document.createElement('select'); buildDispoMinSelect(selDispo, true); selDispo.style.width="160px";
+        selDispo.dataset.ef="1"; selDispo.dataset.field="dispoMin"; selDispo.dataset.fam=fam; selDispo.dataset.cat=""; selDispo.dataset.name="";
+        selDispo.onchange = ()=> {
+          if (selDispo.value === '') clearParamField_("FAM", fam, "", "", "dispoMin");
+          else { upsertRule("PARAM","FAM", fam, "", "", { dispoMin: Number(selDispo.value) }); renderCatalog(); }
+        };
+        tools.appendChild(selDispo);
+      }
+      tools.addEventListener("click", e => e.stopPropagation());
+    });
+    bindDetailsTwisty_(details, parts.twisty);
+    const fc = famCounts_(fam);
+    const cb = document.createElement('input'); cb.type = "checkbox";
+    applyTriStateToCheckbox_(cb, fc.sold, fc.total);
+    cb.onchange = ()=> { setFamilyAll_(fam, cb.checked === true); renderCatalog(); };
+    cb.addEventListener("click", e => e.stopPropagation());
+    parts.cbWrap.appendChild(cb);
+    summary.appendChild(parts.line);
+    const content = document.createElement('div'); content.className = "nodeContent";
+    const wrap = document.createElement('div'); wrap.className = "indent";
+    const cats = famTree.get(fam);
+    const catNames = Array.from(cats.keys()).sort((a,b)=>a.localeCompare(b));
+    for (const cat of catNames) wrap.appendChild(makeCatNode(fam, cat));
+    content.appendChild(wrap); details.appendChild(summary); details.appendChild(content);
+    return details;
+  }
+
+  function makeCatNode(fam, cat){
+    const catKey = fam+"§"+cat;
+    const details = document.createElement('details');
+    details.className = "node";
+    if (openCat.has(catKey)) details.open = true;
+    details.style.marginTop = "10px";
+    details.addEventListener("toggle", () => {
+      if (details.open) openCat.add(catKey); else openCat.delete(catKey);
+      refreshVisibleEffectiveValues(); refreshVisibleCards();
+    });
+    const summary = document.createElement('summary');
+    const parts = makeSummaryLine_(cat, (tools) => {
+      const cm = catMeta.get(catKey) || {hasNT:false,hasNiv:false,hasGen:false};
+      const selMod = document.createElement('select'); buildPctSelect(selMod); selMod.style.width="120px";
+      selMod.dataset.ef="1"; selMod.dataset.field="modPct"; selMod.dataset.fam=fam; selMod.dataset.cat=cat; selMod.dataset.name="";
+      selMod.onchange = ()=> upsertRule("PARAM","CAT", fam, cat, "", { modPct: Number(selMod.value) });
+      tools.appendChild(selMod);
+      if (cm.hasNT){
+        const selNT = document.createElement('select'); buildNtMaxSelect(selNT, true); selNT.style.width="130px";
+        selNT.dataset.ef="1"; selNT.dataset.field="ntMax"; selNT.dataset.fam=fam; selNT.dataset.cat=cat; selNT.dataset.name="";
+        selNT.onchange = ()=> upsertRule("PARAM","CAT", fam, cat, "", { ntMax: Number(selNT.value || 6) });
+        tools.appendChild(selNT);
+      }
+      if (cm.hasNiv){
+        const selNiv = document.createElement('select'); buildNivMaxSelect(selNiv, true); selNiv.style.width="130px";
+        selNiv.dataset.ef="1"; selNiv.dataset.field="nivMax"; selNiv.dataset.fam=fam; selNiv.dataset.cat=cat; selNiv.dataset.name="";
+        selNiv.onchange = ()=> upsertRule("PARAM","CAT", fam, cat, "", { nivMax: Number(selNiv.value || 5) });
+        tools.appendChild(selNiv);
+      }
+      if (cm.hasGen){
+        const selGen = document.createElement('select'); buildGenMaxSelect(selGen, true); selGen.style.width="130px";
+        selGen.dataset.ef="1"; selGen.dataset.field="genMax"; selGen.dataset.fam=fam; selGen.dataset.cat=cat; selGen.dataset.name="";
+        selGen.onchange = ()=> upsertRule("PARAM","CAT", fam, cat, "", { genMax: Number(selGen.value || 10) });
+        tools.appendChild(selGen);
+      }
+      {
+        const selDispo = document.createElement('select'); buildDispoMinSelect(selDispo, true); selDispo.style.width="160px";
+        selDispo.dataset.ef="1"; selDispo.dataset.field="dispoMin"; selDispo.dataset.fam=fam; selDispo.dataset.cat=cat; selDispo.dataset.name="";
+        selDispo.onchange = ()=> {
+          if (selDispo.value === '') clearParamField_("CAT", fam, cat, "", "dispoMin");
+          else { upsertRule("PARAM","CAT", fam, cat, "", { dispoMin: Number(selDispo.value) }); renderCatalog(); }
+        };
+        tools.appendChild(selDispo);
+      }
+      tools.addEventListener("click", e => e.stopPropagation());
+    });
+    bindDetailsTwisty_(details, parts.twisty);
+    const cc = catCounts_(fam, cat);
+    const cb = document.createElement('input'); cb.type = "checkbox";
+    applyTriStateToCheckbox_(cb, cc.sold, cc.total);
+    cb.onchange = ()=> { setCatAll_(fam, cat, cb.checked === true); renderCatalog(); };
+    cb.addEventListener("click", e => e.stopPropagation());
+    parts.cbWrap.appendChild(cb);
+    summary.appendChild(parts.line);
+    const content = document.createElement('div'); content.className = "nodeContent";
+    const wrap = document.createElement('div'); wrap.className = "indent";
+    const grid = document.createElement('div'); grid.className = "itemGrid";
+    const items = getVisibleCategoryItems_(fam, cat);
+    if (!items.length){
+      const empty = document.createElement('div');
+      empty.className = "small muted";
+      empty.textContent = "Aucun objet pour ce filtre de dispo.";
+      wrap.appendChild(empty);
+    } else {
+      for (const it of items) grid.appendChild(makeItemCard(fam, cat, it));
+      wrap.appendChild(grid);
+    }
+    content.appendChild(wrap); details.appendChild(summary); details.appendChild(content);
+    return details;
+  }
+
+  async function getItemDetails(key){
+    if (itemDetailsCache.has(key)) return itemDetailsCache.get(key);
+    return new Promise((resolve, reject)=>{
+      google.script.run
+        .withSuccessHandler(res=>{ itemDetailsCache.set(key, res || {}); resolve(res || {}); })
+        .withFailureHandler(err=> reject(err))
+        .trade_api_mj_getItemDetails(MID, key);
+    });
+  }
+
+  function parseNumberLoose(raw){
+    let s = String(raw||"").trim();
+    if (!s) return NaN;
+    s = s.replace(/\u00A0/g," ").replace(/(\d)\s+(\d)/g,"$1$2").replace(/,/g,".").replace(/\bsols?\b/ig,"").replace(/\bkg\b/ig,"").trim();
+    const n = Number(s.replace(/%/g,""));
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function parsePercentRatio(raw){
+    const s = String(raw||"").trim();
+    if (!s) return NaN;
+    const m = s.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
+    if (!m) return NaN;
+    const n = Number(m[1].replace(",","."));
+    return Number.isFinite(n) ? (n/100) : NaN;
+  }
+
+  function normalizeExpr(raw){
+    let s = String(raw||"").trim();
+    if (!s) return "";
+    if (/^[\u2014\u2013\u2012\u2015\u00ad-]+$/.test(s)) return "";
+    s = s.replace(/\u00A0/g," ").replace(/(\d)\s+(\d)/g,"$1$2").replace(/,/g,".").replace(/\bkg\b/ig,"").replace(/\bsols?\b/ig,"");
+    s = s.replace(/(\d+(?:\.\d+)?)\s*%\s*du\s*prix\s*de\s*l['']appareil/ig,"($1/100)*C");
+    s = s.replace(/prix\s*de\s*l['']appareil/ig,"C");
+    s = s.replace(/NT\s*[xX×]\s*NT/ig,"NT*NT").replace(/niv\s*[xX×]\s*niv/ig,"niv*niv");
+    s = s.replace(/gen\s*[xX×]\s*NT/ig,"gen*NT").replace(/NT\s*[xX×]\s*gen/ig,"NT*gen");
+    s = s.replace(/[×]/g,"*").replace(/([0-9A-Za-z)\]])\s*[xX]\s*([0-9A-Za-z(\[])/g,"$1*$2").replace(/\s+/g,"");
+    const stripped = s.replace(/NT|niv|gen|loc|C/ig,"");
+    if (/[^0-9.+\-*/()]/.test(stripped)) throw new Error("Expr invalide: " + raw);
+    return s;
+  }
+
+  function evalExpr(expr, vars){
+    if (!expr) return NaN;
+    const f = new Function("NT","niv","gen","loc","C", `"use strict"; return (${expr});`);
+    const v = Number(f(vars.NT, vars.niv, vars.gen, vars.loc, vars.C));
+    return Number.isFinite(v) ? v : NaN;
+  }
+
+  function roundToHalf(x){ return Number.isFinite(x) ? Math.round(x*2)/2 : NaN; }
+
+  function fmtSols(x){
+    if (!Number.isFinite(x)) return "-";
+    const s = (Math.round(x*2)/2).toString();
+    return s.endsWith(".5") ? s.replace(".",",") : s.replace(".0","");
+  }
+
+  function fmtKg(x){
+    if (!Number.isFinite(x)) return "-";
+    const v = Math.round(x*100)/100;
+    let s = String(v);
+    if (s.includes(".")) s = s.replace(/0+$/,"").replace(/\.$/,"");
+    return s.replace(".",",") + " kg";
+  }
+
+  function updateOneCard(card){
+    const fam=card.dataset.fam, cat=card.dataset.cat, name=card.dataset.name;
+    const priceRaw=card.dataset.price||"", weightRaw=card.dataset.weight||"";
+    const sold = itemSold_(fam,cat,name);
+    const stateEl = card.querySelector('[data-state="1"]');
+    const dispo = card.dataset.dispo || "";
+
+    // Appliquer le style dispo
+    if (!card.classList.contains("blockedNt")) applyCardDispoStyle(card, dispo);
+    if (stateEl) stateEl.textContent = "";
+
+    const eff = effectiveFor(fam, cat, name);
+    const C = 0;
+    const ntKind=card.dataset.ntkind||"none", ntFixed=Number(card.dataset.ntfixed||0)||0;
+    const ntMin=Number(card.dataset.ntmin||1)||1, ntMax0=Number(card.dataset.ntmax0||6)||6;
+    const needsNT=(card.dataset.needsnt==="1"), needsNiv=(card.dataset.needsniv==="1");
+    const needsGen=(card.dataset.needsgen==="1"), isComputer=(card.dataset.iscomputer==="1")||isComputerCat_(cat);
+    const maxItemNiv0=Number(card.dataset.nivmax0||0)||0;
+
+    let ntBlockedWhenUnsold=false, NT=0;
+    if (ntKind==="fixed"){
+      NT=ntFixed;
+      if (NT>=1 && Number.isFinite(eff.ntMax) && NT>eff.ntMax) ntBlockedWhenUnsold=true;
+    } else if (ntKind==="range"){
+      const maxAllowed=Math.min(ntMax0, Number.isFinite(eff.ntMax)?eff.ntMax:ntMax0);
+      if (maxAllowed<ntMin){ ntBlockedWhenUnsold=true; NT=ntMax0; } else { NT=maxAllowed; }
+    } else { NT=0; }
+
+    if (!sold){
+      card.querySelector('[data-price="1"]').textContent="-";
+      card.querySelector('[data-weight="1"]').textContent="-";
+      if (ntBlockedWhenUnsold){ card.classList.add("blockedNt"); if (stateEl) stateEl.textContent="NT insuffisant"; }
+      return;
+    }
+
+    if (needsNT && ntKind==="none"){
+      card.querySelector('[data-price="1"]').textContent="-";
+      card.querySelector('[data-weight="1"]').textContent="-";
+      if (stateEl) stateEl.textContent="NT manquant en base";
+      return;
+    }
+
+    let niv=1;
+    if (needsNiv){
+      let maxAllowed=Number.isFinite(eff.nivMax)?eff.nivMax:1;
+      if (maxItemNiv0>0) maxAllowed=Math.min(maxAllowed,maxItemNiv0);
+      maxAllowed=Math.max(1,Math.min(20,Math.floor(maxAllowed)));
+      niv=maxAllowed;
+    }
+
+    let gen=1;
+    if (needsGen||isComputer){
+      let maxAllowed=Number.isFinite(eff.genMax)?eff.genMax:10;
+      maxAllowed=Math.max(1,Math.min(10,Math.floor(maxAllowed)));
+      gen=maxAllowed;
+    }
+
+    let base=parseNumberLoose(priceRaw);
+    if (!Number.isFinite(base)){
+      try{ base=evalExpr(normalizeExpr(priceRaw),{NT,niv,gen,loc:1,C}); }catch(e){ base=NaN; }
+    }
+
+    if (!Number.isFinite(base)){
+      card.querySelector('[data-price="1"]').textContent="-";
+    } else {
+      const modPct=Number.isFinite(eff.modPct)?eff.modPct:0;
+      card.querySelector('[data-price="1"]').textContent=fmtSols(roundToHalf(base*(1+(modPct/100))));
+    }
+
+    let w=NaN;
+    if (isComputer){
+      if (NT>=1&&gen>=1&&PC_WEIGHT_TABLE[gen]&&PC_WEIGHT_TABLE[gen][NT]){
+        const pct=parsePercentRatio(weightRaw); w=PC_WEIGHT_TABLE[gen][NT]*(Number.isFinite(pct)?pct:1);
+      }
+    } else {
+      const wf=parseNumberLoose(weightRaw);
+      if (Number.isFinite(wf)) w=wf;
+    }
+    card.querySelector('[data-weight="1"]').textContent=Number.isFinite(w)?fmtKg(w):"-";
+  }
+
+  function refreshVisibleCards(){
+    document.querySelectorAll('[data-item-card="1"]').forEach(updateOneCard);
+  }
+
+  function makeItemCard(fam, cat, it){
+    const sold = itemSold_(fam, cat, it.name);
+    const dispo = String(it.dispo || "");
+    const avInfo = getAvailabilityInfo(dispo);
+
+    const card = document.createElement('div');
+    card.className = "itemCard";
+    card.dataset.itemCard = "1";
+    card.dataset.fam = fam; card.dataset.cat = cat; card.dataset.name = it.name;
+    card.dataset.price = it.priceRaw || ""; card.dataset.weight = it.weightRaw || "";
+    card.dataset.ntkind = it.ntKind || "none"; card.dataset.ntfixed = it.ntFixed || "";
+    card.dataset.ntmin = it.ntRangeMin || ""; card.dataset.ntmax0 = it.ntRangeMax || "";
+    card.dataset.needsnt = it.needsNT ? "1" : "0"; card.dataset.needsniv = it.needsNiv ? "1" : "0";
+    card.dataset.needsgen = it.needsGen ? "1" : "0"; card.dataset.iscomputer = it.isComputer ? "1" : "0";
+    card.dataset.dispo = dispo;
+    { const m=String(it.nivMaxRaw||"").match(/\d+/); card.dataset.nivmax0 = m ? String(parseInt(m[0],10)) : "0"; }
+
+    // Style dispo
+    applyCardDispoStyle(card, dispo);
+
+    const top = document.createElement('div'); top.className = "itemTop";
+    const cb = document.createElement('input'); cb.type="checkbox"; cb.checked=sold;
+    cb.onchange = ()=> { setItem_(fam, cat, it.name, cb.checked===true); renderCatalog(); };
+
+    const meta = document.createElement('div'); meta.style.flex="1";
+    const nameLine = document.createElement('div'); nameLine.className = "itemName";
+    nameLine.innerHTML = `<span style="color:${avInfo.color}">${escapeHtml(it.name)}</span>`;
+
+    const dispoLine = document.createElement('div');
+    dispoLine.className = "small";
+    dispoLine.style.color = avInfo.color;
+    dispoLine.style.opacity = "0.85";
+    dispoLine.textContent = dispo ? `${avInfo.label} • ${dispo}` : avInfo.label;
+
+    const kv = document.createElement('div'); kv.className = "kv small";
+    kv.innerHTML = `<div>Prix: <b data-price="1">-</b> <span class="muted">sols</span></div><div>Poids: <b data-weight="1">-</b></div>`;
+    meta.appendChild(nameLine); meta.appendChild(dispoLine); meta.appendChild(kv);
+    top.appendChild(cb); top.appendChild(meta);
+
+    const tools = document.createElement('div'); tools.className = "itemTools";
+    const selMod = document.createElement('select'); buildPctSelect(selMod); selMod.style.width="110px";
+    selMod.dataset.ef="1"; selMod.dataset.field="modPct"; selMod.dataset.fam=fam; selMod.dataset.cat=cat; selMod.dataset.name=it.name;
+    selMod.onchange = ()=> { if (!itemSold_(fam,cat,it.name)) return; upsertRule("INCLUDE","ITEM",fam,cat,it.name,{modPct:Number(selMod.value)}); };
+    tools.appendChild(selMod);
+
+    const isComp=(it.isComputer||isComputerCat_(cat));
+    const ntRelevant=(it.ntKind==="range")&&(it.needsNT||isComp);
+    if (ntRelevant){
+      const selNT=document.createElement('select'); selNT.style.width="120px";
+      const min=Number(it.ntRangeMin||1)||1, max=Number(it.ntRangeMax||6)||6;
+      for (let n=min;n<=max;n++){ const o=document.createElement("option"); o.value=String(n); o.textContent=`NT ${romanNT(n)}`; selNT.appendChild(o); }
+      selNT.dataset.ef="1"; selNT.dataset.field="ntMax"; selNT.dataset.fam=fam; selNT.dataset.cat=cat; selNT.dataset.name=it.name;
+      selNT.onchange=()=>{ if (!itemSold_(fam,cat,it.name)) return; upsertRule("INCLUDE","ITEM",fam,cat,it.name,{ntMax:Number(selNT.value)}); };
+      tools.appendChild(selNT);
+    }
+    if (it.needsNiv){
+      const selNiv=document.createElement('select'); selNiv.style.width="120px";
+      let maxAllowed=20; const m=String(it.nivMaxRaw||"").match(/\d+/);
+      if (m){ const im=parseInt(m[0],10); if (im>0) maxAllowed=Math.min(maxAllowed,im); }
+      for (let n=1;n<=maxAllowed;n++){ const o=document.createElement("option"); o.value=String(n); o.textContent=`Niv +${n}`; selNiv.appendChild(o); }
+      selNiv.dataset.ef="1"; selNiv.dataset.field="nivMax"; selNiv.dataset.fam=fam; selNiv.dataset.cat=cat; selNiv.dataset.name=it.name;
+      selNiv.onchange=()=>{ if (!itemSold_(fam,cat,it.name)) return; upsertRule("INCLUDE","ITEM",fam,cat,it.name,{nivMax:Number(selNiv.value)}); };
+      tools.appendChild(selNiv);
+    }
+    if (it.needsGen||isComp){
+      const selGen=document.createElement('select'); selGen.style.width="120px";
+      for (let n=1;n<=10;n++){ const o=document.createElement("option"); o.value=String(n); o.textContent=`GEN ${romanGen(n)}`; selGen.appendChild(o); }
+      selGen.dataset.ef="1"; selGen.dataset.field="genMax"; selGen.dataset.fam=fam; selGen.dataset.cat=cat; selGen.dataset.name=it.name;
+      selGen.onchange=()=>{ if (!itemSold_(fam,cat,it.name)) return; upsertRule("INCLUDE","ITEM",fam,cat,it.name,{genMax:Number(selGen.value)}); };
+      tools.appendChild(selGen);
+    }
+    const infoBtn=document.createElement('button'); infoBtn.type="button"; infoBtn.className="infoBtn"; infoBtn.textContent="Description";
+    const desc=document.createElement('div'); desc.className="itemDesc small"; desc.textContent="";
+    infoBtn.onclick=async(e)=>{
+      e.stopPropagation(); desc.classList.toggle("open");
+      if (desc.classList.contains("open")&&!desc.dataset.loaded){
+        desc.textContent="Chargement…";
+        try{ const d=await getItemDetails(it.key); desc.textContent=d&&d.desc?d.desc:"(Aucune description)"; desc.dataset.loaded="1"; }
+        catch(err){ desc.textContent="Erreur: "+(err&&err.message?err.message:String(err)); }
+      }
+    };
+
+    const state=document.createElement('div'); state.className="itemState small muted"; state.dataset.state="1";
+    tools.appendChild(infoBtn);
+    tools.querySelectorAll("select").forEach(x=> x.disabled=!itemSold_(fam,cat,it.name));
+
+    card.appendChild(top); card.appendChild(tools); card.appendChild(state); card.appendChild(desc);
+    setTimeout(()=>{ refreshVisibleEffectiveValues(); updateOneCard(card); }, 0);
+    return card;
+  }
+
+  buildPctSelect(document.getElementById('mMod'));
+  buildNtMaxSelect(document.getElementById('mNT'), false);
+  buildNivMaxSelect(document.getElementById('mNiv'), false);
+  buildGenMaxSelect(document.getElementById('mGen'), false);
+  buildDispoMinSelect(document.getElementById('mDispo'), true);
+
+  function initMid_(){
+    MID = String("<?= mid ?>" || "").trim();
+    if (!MID && window.google && google.script && google.script.url && google.script.url.getLocation){
+      google.script.url.getLocation(loc => {
+        MID = String((loc && loc.parameter && loc.parameter.mid) || "").trim();
+        if (!MID){ console.warn("URL incomplète: ?mid=..."); return; }
+        bootLoad();
+      });
+      return;
+    }
+    if (!MID){ const QS=new URLSearchParams(window.location.search); MID=String(QS.get("mid")||"").trim(); }
+    if (!MID){ console.warn("URL incomplète: ?mid=..."); return; }
+    bootLoad();
+  }
+
+  initMid_();
+</script>
+</body>
+</html>

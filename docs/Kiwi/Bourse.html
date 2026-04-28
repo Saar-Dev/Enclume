@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <base target="_top">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bourses</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#111827;
+      --panel2:#0f172a;
+      --card:#ffffff;
+      --line:#243041;
+      --text:#e5e7eb;
+      --muted:#94a3b8;
+      --accent:#3b82f6;
+      --ok:#16a34a;
+      --bad:#dc2626;
+      --warn:#f59e0b;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      background:linear-gradient(180deg,#0b1220 0%,#111827 100%);
+      color:var(--text);
+      font-family:'Nunito', Arial, sans-serif;
+      padding:18px;
+    }
+    .topbar{
+      position:sticky;
+      top:0;
+      z-index:20;
+      padding:8px 0 14px;
+      margin-bottom:14px;
+      backdrop-filter: blur(10px);
+    }
+    .identity{ font-size:18px; font-weight:900; }
+    .sub{ font-size:12px; color:var(--muted); font-weight:800; margin-top:2px; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap:14px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .grid{ grid-template-columns:1fr; }
+    }
+
+    .panel{
+      background:rgba(15,23,42,.86);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:16px;
+      box-shadow:0 12px 26px rgba(0,0,0,.25);
+    }
+
+    .balances{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:10px;
+      margin-bottom:14px;
+    }
+    @media (max-width: 760px){
+      .balances{ grid-template-columns:1fr; }
+    }
+    .balanceCard{
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:14px;
+      background:rgba(255,255,255,.03);
+    }
+    .balanceLabel{
+      font-size:12px;
+      color:var(--muted);
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.04em;
+    }
+    .balanceValue{
+      margin-top:6px;
+      font-size:24px;
+      font-weight:900;
+    }
+    .balanceValue.ok{ color:#86efac; }
+    .balanceValue.neutral{ color:#dbeafe; }
+
+    .sectionTitle{
+      font-size:14px;
+      font-weight:900;
+      margin:0 0 10px;
+    }
+    .hint{
+      font-size:12px;
+      color:var(--muted);
+      font-weight:700;
+      margin-top:2px;
+    }
+
+    .field{
+      margin-top:10px;
+    }
+    .field label{
+      display:block;
+      margin-bottom:6px;
+      font-size:13px;
+      font-weight:900;
+    }
+    input[type="number"], input[type="text"], select, textarea{
+      width:100%;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid #334155;
+      background:#0b1220;
+      color:#e5e7eb;
+      font:inherit;
+    }
+    textarea{
+      min-height:86px;
+      resize:vertical;
+    }
+    .row2{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width:680px){
+      .row2{ grid-template-columns:1fr; }
+    }
+    .btnRow{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:14px;
+    }
+    .btn{
+      border:none;
+      border-radius:12px;
+      padding:12px 14px;
+      font-weight:900;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      background:#fff;
+      color:#111827;
+    }
+    .btn.primary{
+      background:var(--accent);
+      color:#fff;
+      box-shadow:0 12px 24px rgba(59,130,246,.25);
+    }
+    .btn.secondary{
+      background:#1f2937;
+      color:#fff;
+      border:1px solid #334155;
+    }
+    .btn[disabled]{ opacity:.65; cursor:default; }
+
+    #message{
+      display:none;
+      margin-top:12px;
+      padding:10px 12px;
+      border-radius:12px;
+      font-weight:900;
+    }
+    #message.success{ background:rgba(22,163,74,.18); color:#bbf7d0; border:1px solid rgba(22,163,74,.35); display:block; }
+    #message.error{ background:rgba(220,38,38,.18); color:#fecaca; border:1px solid rgba(220,38,38,.35); display:block; }
+
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      max-height:560px;
+      overflow:auto;
+      padding-right:4px;
+    }
+    .tx{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px 12px;
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      background:rgba(255,255,255,.03);
+    }
+    .txLeft{
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .txTitle{
+      font-size:13px;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .txMeta{
+      font-size:12px;
+      color:var(--muted);
+      font-weight:800;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .txAmt{
+      font-size:14px;
+      font-weight:1000;
+      white-space:nowrap;
+      align-self:center;
+    }
+    .txAmt.pos{ color:#86efac; }
+    .txAmt.neg{ color:#fca5a5; }
+
+    .empty{
+      padding:12px 4px;
+      color:var(--muted);
+      font-size:13px;
+      font-weight:800;
+    }
+
+    .hidden{ display:none !important; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="identity" id="identityLabel">…</div>
+    <div class="sub">Journaux perso + groupe</div>
+  </div>
+
+  <div class="balances">
+    <div class="balanceCard">
+      <div class="balanceLabel">Perso sur soi</div>
+      <div class="balanceValue ok" id="balPerso">—</div>
+    </div>
+    <div class="balanceCard">
+      <div class="balanceLabel">Perso coffre</div>
+      <div class="balanceValue ok" id="balCoffre">—</div>
+    </div>
+    <div class="balanceCard">
+      <div class="balanceLabel">Groupe</div>
+      <div class="balanceValue neutral" id="balGroupe">—</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="sectionTitle">Nouvelle opération</div>
+      <div class="hint">Les achats marchands passent par le module marchand. Ici, on gère les gains, dépenses, transferts et corrections.</div>
+
+      <div class="field">
+        <label for="typeOp">Type</label>
+        <select id="typeOp">
+          <option value="gain">Gain</option>
+          <option value="depense">Dépense</option>
+          <option value="transfert">Transfert entre poches</option>
+          <option value="correction">Correction</option>
+        </select>
+      </div>
+
+      <div class="row2">
+        <div class="field" id="fieldPocket">
+          <label for="pocket">Poche</label>
+          <select id="pocket"></select>
+        </div>
+        <div class="field hidden" id="fieldSource">
+          <label for="sourcePocket">Poche source</label>
+          <select id="sourcePocket"></select>
+        </div>
+        <div class="field hidden" id="fieldDest">
+          <label for="destPocket">Poche destination</label>
+          <select id="destPocket"></select>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label for="amount" id="amountLabel">Montant</label>
+          <input type="number" id="amount" step="0.01" inputmode="decimal" />
+        </div>
+        <div class="field">
+          <label for="note">Note</label>
+          <input type="text" id="note" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="hint" id="typeHint">Les gains ajoutent de l'argent à une poche.</div>
+      </div>
+
+      <div class="btnRow">
+        <button class="btn primary" id="btnSave" onclick="submitOperation()">💾 Enregistrer</button>
+        <button class="btn secondary" onclick="refreshAll()">🔄 Rafraîchir</button>
+        <button class="btn secondary" onclick="openGroupBourse()">📄 Ouvrir la Bourse groupe</button>
+      </div>
+
+      <div id="message"></div>
+    </div>
+
+    <div class="panel">
+      <div class="sectionTitle">Dernières opérations perso</div>
+      <div class="hint">Journal local de la fiche</div>
+      <div class="list" id="localList"><div class="empty">Chargement…</div></div>
+
+      <div style="height:14px;"></div>
+
+      <div class="sectionTitle">Dernières opérations groupe</div>
+      <div class="hint">Journal central</div>
+      <div class="list" id="groupList"><div class="empty">Chargement…</div></div>
+    </div>
+  </div>
+
+<script>
+const FID = "<?= typeof fid !== 'undefined' ? fid : '' ?>";
+const MID = "<?= typeof mid !== 'undefined' ? mid : '' ?>";
+
+let contextData = null;
+
+function money(v){
+  const n = Number(v || 0);
+  return Number.isFinite(n) ? n.toFixed(2) : "0.00";
+}
+
+function escapeHtml(s){
+  return String(s ?? '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
+function showMessage(text, type){
+  const el = document.getElementById('message');
+  el.className = type || '';
+  el.textContent = text || '';
+  if (!text) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'block';
+  if (type === 'success') el.className = 'success';
+  else if (type === 'error') el.className = 'error';
+  clearTimeout(showMessage._t);
+  showMessage._t = setTimeout(() => { el.style.display = 'none'; }, 2800);
+}
+
+function fillPocketSelects(){
+  const pockets = (contextData && contextData.allowedPockets) ? contextData.allowedPockets : ['PERSO_SUR_SOI','PERSO_COFFRE','GROUPE'];
+  ['pocket','sourcePocket','destPocket'].forEach(id => {
+    const el = document.getElementById(id);
+    el.innerHTML = pockets.map(p => '<option value="'+escapeHtml(p)+'">'+escapeHtml(labelPocket(p))+'</option>').join('');
+  });
+  document.getElementById('destPocket').value = 'PERSO_COFFRE';
+  document.getElementById('sourcePocket').value = 'PERSO_SUR_SOI';
+}
+
+function labelPocket(p){
+  if (p === 'PERSO_SUR_SOI') return 'Perso sur soi';
+  if (p === 'PERSO_COFFRE') return 'Perso coffre';
+  if (p === 'GROUPE') return 'Groupe';
+  return p || '—';
+}
+
+function renderBalances(){
+  const b = (contextData && contextData.balances) ? contextData.balances : {};
+  document.getElementById('balPerso').textContent = money(b.persoSurSoi);
+  document.getElementById('balCoffre').textContent = money(b.persoCoffre);
+  document.getElementById('balGroupe').textContent = money(b.groupe);
+}
+
+function renderTxList(elId, items, kind){
+  const el = document.getElementById(elId);
+  if (!items || !items.length){
+    el.innerHTML = '<div class="empty">Aucune entrée.</div>';
+    return;
+  }
+
+  el.innerHTML = items.map(tx => {
+    const isGroup = kind === 'group';
+    const delta = isGroup ? Number(tx.deltaGroupe || 0) : (
+      Number(tx.deltaPersoSurSoi || 0) + Number(tx.deltaPersoCoffre || 0) + Number(tx.deltaGroupe || 0)
+    );
+    const cls = delta >= 0 ? 'pos' : 'neg';
+
+    let meta = '';
+    if (isGroup){
+      meta = [tx.sourceLabel || '', tx.destLabel || '', tx.marchandNom || '', tx.objetNom || ''].filter(Boolean).join(' • ');
+    } else {
+      meta = [tx.auteur || '', tx.destLabel || '', tx.objetNom || ''].filter(Boolean).join(' • ');
+    }
+
+    const title = tx.label || tx.typeOp || 'Opération';
+    return (
+      '<div class="tx">' +
+        '<div class="txLeft">' +
+          '<div class="txTitle" title="'+escapeHtml(title)+'">'+escapeHtml(title)+'</div>' +
+          '<div class="txMeta" title="'+escapeHtml(meta)+'">'+escapeHtml(meta || '—')+'</div>' +
+        '</div>' +
+        '<div class="txAmt '+cls+'">' + (delta >= 0 ? '+' : '') + escapeHtml(money(delta)) + '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function updateFormState(){
+  const type = document.getElementById('typeOp').value;
+  const fieldPocket = document.getElementById('fieldPocket');
+  const fieldSource = document.getElementById('fieldSource');
+  const fieldDest = document.getElementById('fieldDest');
+  const amountLabel = document.getElementById('amountLabel');
+  const typeHint = document.getElementById('typeHint');
+
+  fieldPocket.classList.add('hidden');
+  fieldSource.classList.add('hidden');
+  fieldDest.classList.add('hidden');
+
+  if (type === 'transfert'){
+    fieldSource.classList.remove('hidden');
+    fieldDest.classList.remove('hidden');
+    amountLabel.textContent = 'Montant à transférer';
+    typeHint.textContent = 'Le montant est retiré d’une poche puis ajouté à une autre.';
+  } else {
+    fieldPocket.classList.remove('hidden');
+    amountLabel.textContent = (type === 'correction') ? 'Montant signé (ex: -12.50 ou 20)' : 'Montant';
+    if (type === 'gain') typeHint.textContent = 'Les gains ajoutent de l’argent à une poche.';
+    if (type === 'depense') typeHint.textContent = 'Les dépenses retirent de l’argent d’une poche.';
+    if (type === 'correction') typeHint.textContent = 'La correction applique directement un delta signé à une poche.';
+  }
+}
+
+function collectPayload(){
+  const type = document.getElementById('typeOp').value;
+  const payload = {
+    type,
+    mid: MID,
+    note: (document.getElementById('note').value || '').trim(),
+    amount: parseFloat(document.getElementById('amount').value || '0')
+  };
+
+  if (type === 'transfert'){
+    payload.sourcePocket = document.getElementById('sourcePocket').value;
+    payload.destPocket = document.getElementById('destPocket').value;
+  } else {
+    payload.pocket = document.getElementById('pocket').value;
+  }
+  return payload;
+}
+
+function submitOperation(){
+  const btn = document.getElementById('btnSave');
+  btn.disabled = true;
+  showMessage('', '');
+
+  google.script.run
+    .withSuccessHandler(ctx => {
+      contextData = ctx || null;
+      renderContext();
+      document.getElementById('amount').value = '';
+      document.getElementById('note').value = '';
+      showMessage('✅ Opération enregistrée.', 'success');
+      btn.disabled = false;
+    })
+    .withFailureHandler(err => {
+      showMessage('❌ ' + ((err && err.message) ? err.message : String(err)), 'error');
+      btn.disabled = false;
+    })
+    .bourse_submitOperation(FID, collectPayload());
+}
+
+function renderContext(){
+  renderBalances();
+  fillPocketSelects();
+  updateFormState();
+  renderTxList('localList', (contextData && contextData.localRecent) || [], 'local');
+  renderTxList('groupList', (contextData && contextData.groupRecent) || [], 'group');
+
+  const idt = (contextData && contextData.identity) ? contextData.identity : {};
+  document.getElementById('identityLabel').textContent = idt.label || 'Bourses';
+}
+
+function refreshAll(){
+  google.script.run
+    .withSuccessHandler(ctx => {
+      contextData = ctx || null;
+      renderContext();
+    })
+    .withFailureHandler(err => {
+      showMessage('❌ ' + ((err && err.message) ? err.message : String(err)), 'error');
+    })
+    .bourse_getContext(FID, MID, 12);
+}
+
+function openGroupBourse(){
+  google.script.run
+    .withSuccessHandler(url => {
+      if (url) window.open(url, '_blank');
+    })
+    .getBourseUrl();
+}
+
+document.getElementById('typeOp').addEventListener('change', updateFormState);
+refreshAll();
+</script>
+</body>
+</html>

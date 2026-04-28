@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Crafting</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0f1115;
+      --panel:#151923;
+      --panel2:#10131b;
+      --border:#252b3a;
+      --muted:#9aa4b2;
+      --text:#e8eef7;
+      --good:#1dd1a1;
+      --bad:#ff6b6b;
+      --chip:#1b2232;
+      --shadow:0 10px 30px rgba(0,0,0,.35);
+      --radius:14px;
+    }
+
+    *{box-sizing:border-box}
+
+    body{
+      margin:16px;
+      font-family:"Nunito",system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:var(--bg);
+      color:var(--text);
+    }
+
+    .card{
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      padding:12px;
+      background:linear-gradient(180deg,var(--panel),var(--panel2));
+      box-shadow:var(--shadow);
+    }
+
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .small{font-size:12px}
+    .muted{color:var(--muted)}
+    .strong{font-weight:900}
+
+    label{
+      font-size:12px;
+      color:var(--muted);
+      display:block;
+      margin-bottom:6px;
+    }
+
+    select,input,button{
+      font-family:"Nunito",system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:#0c0f16;
+      color:var(--text);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:8px 10px;
+      outline:none;
+    }
+
+    button{
+      cursor:pointer;
+      font-weight:900;
+      background:#121826;
+      transition:filter .08s ease, transform .08s ease;
+    }
+    button:hover{filter:brightness(1.08)}
+    button:active{transform:scale(.98)}
+    button.primary{background:#1a2340;border-color:#2a3b70}
+    button.good{background:#143126;border-color:#24553f}
+    button.bad{background:#2a1012;border-color:#5a1f26}
+    button[disabled]{opacity:.5;cursor:not-allowed}
+
+    .topGrid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:12px;
+    }
+
+    .mainSplit{
+      display:grid;
+      grid-template-columns:minmax(280px,340px) minmax(0,1fr);
+      gap:12px;
+      margin-top:12px;
+      align-items:start;
+    }
+    @media (max-width:1100px){
+      .mainSplit{grid-template-columns:1fr}
+    }
+
+    .weaponList{
+      display:grid;
+      gap:8px;
+      margin-top:10px;
+      max-height:72vh;
+      overflow:auto;
+      padding-right:2px;
+    }
+
+    .weaponRow{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#0c0f16;
+      display:grid;
+      gap:6px;
+      cursor:pointer;
+      transition:filter .08s ease, transform .08s ease, border-color .08s ease;
+    }
+    .weaponRow:hover{
+      filter:brightness(1.05);
+      transform:translateY(-1px);
+    }
+    .weaponRow.active{
+      border-color:#2a3b70;
+      background:linear-gradient(180deg,#13192a,#0c0f16);
+      box-shadow:0 0 0 1px rgba(42,59,112,.35) inset;
+    }
+
+    .weaponName{font-weight:900;font-size:15px}
+    .weaponMeta{font-size:12px;color:var(--muted)}
+    .chips{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{
+      display:inline-flex;align-items:center;
+      padding:2px 8px;border-radius:999px;
+      background:var(--chip);border:1px solid var(--border);
+      font-size:12px;color:var(--muted);
+    }
+
+    .selectedHeader{
+      display:grid;
+      gap:8px;
+      margin-bottom:12px;
+    }
+
+    .selectedTitle{
+      font-size:18px;
+      font-weight:900;
+      line-height:1.2;
+    }
+
+    .columns{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+    @media (max-width:900px){
+      .columns{grid-template-columns:1fr}
+    }
+
+    .modList{
+      display:grid;
+      gap:8px;
+      margin-top:10px;
+    }
+
+    .modRow{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#0c0f16;
+      display:grid;
+      gap:8px;
+    }
+
+    .modTop{
+      display:flex;
+      gap:8px;
+      justify-content:space-between;
+      align-items:flex-start;
+    }
+
+    .modName{
+      font-weight:900;
+      font-size:14px;
+      line-height:1.2;
+    }
+
+    .modMeta{
+      font-size:12px;
+      color:var(--muted);
+      word-break:break-word;
+    }
+
+    .empty{
+      border:1px dashed #2a3346;
+      border-radius:12px;
+      padding:10px;
+      color:var(--muted);
+      background:#0b0e14;
+    }
+
+    .errorBox{
+      color:#ffd7d7;
+      white-space:pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="topGrid">
+    <div class="card">
+      <div class="row">
+        <div style="min-width:260px;flex:1">
+          <div class="strong" style="font-size:18px">Crafting</div>
+          <div class="small muted" style="margin-top:4px">
+            Sélectionne une arme, consulte ses mods installés et ajoute un mod depuis l’inventaire.
+          </div>
+        </div>
+
+        <div>
+          <label>Armes</label>
+          <div id="weaponCount" class="strong">-</div>
+        </div>
+
+        <div>
+          <label>Mods installables</label>
+          <div id="modCount" class="strong">-</div>
+        </div>
+
+        <div id="status" class="small muted" style="margin-left:auto"></div>
+      </div>
+
+      <div id="dbg" class="small muted" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div class="mainSplit">
+    <div class="card">
+      <div class="strong">Armes du personnage</div>
+      <div id="weaponsSubline" class="small muted" style="margin-top:4px">Chargement…</div>
+      <div id="weaponList" class="weaponList"></div>
+    </div>
+
+    <div class="card">
+      <div id="selectedWeaponBox" class="selectedHeader">
+        <div class="selectedTitle">Aucune arme sélectionnée</div>
+        <div class="small muted">Sélectionne une arme dans la liste.</div>
+      </div>
+
+      <div id="countsBox" class="row" style="margin-bottom:12px"></div>
+
+      <div class="columns">
+        <div>
+          <div class="strong">Mods installés</div>
+          <div id="installedList" class="modList"></div>
+        </div>
+
+        <div>
+          <div class="strong">Mods installables</div>
+          <div id="availableList" class="modList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let FID = "";
+  let CRAFTING_STATE = {
+    weapons: [],
+    installableMods: [],
+    selectedWeaponKey: ""
+  };
+
+  function setStatus(s){ document.getElementById("status").textContent = s || ""; }
+  function setDbg(s){
+    const el = document.getElementById("dbg");
+    el.textContent = s || "";
+    el.classList.toggle("errorBox", !!s);
+  }
+
+  window.onerror = function(message, source, lineno, colno){
+    setDbg(`JS ERROR: ${message} (ligne ${lineno}, col ${colno})`);
+  };
+  window.onunhandledrejection = function(e){
+    const msg = e && e.reason && e.reason.message ? e.reason.message : String(e.reason || e);
+    setDbg(`PROMISE ERROR: ${msg}`);
+  };
+
+  function escapeHtml(s){
+    return String(s || "").replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  function escapeJs(txt) {
+    return String(txt == null ? "" : txt)
+      .replace(/\\/g, "\\\\")
+      .replace(/'/g, "\\'");
+  }
+
+  function getSelectedWeapon(){
+    const key = CRAFTING_STATE.selectedWeaponKey;
+    return CRAFTING_STATE.weapons.find(w => w.key === key) || null;
+  }
+
+  function applyState(data){
+    CRAFTING_STATE.weapons = Array.isArray(data.weapons) ? data.weapons : [];
+    CRAFTING_STATE.installableMods = Array.isArray(data.installableMods) ? data.installableMods : [];
+
+    let wanted = "";
+    if (data && data.selectedWeaponKey) wanted = String(data.selectedWeaponKey);
+    else if (CRAFTING_STATE.selectedWeaponKey) wanted = CRAFTING_STATE.selectedWeaponKey;
+
+    const exists = CRAFTING_STATE.weapons.some(w => w.key === wanted);
+    CRAFTING_STATE.selectedWeaponKey = exists
+      ? wanted
+      : (CRAFTING_STATE.weapons[0] ? CRAFTING_STATE.weapons[0].key : "");
+
+    renderWeaponList(data.counts || {});
+    renderSelectedWeapon();
+    renderInstalledMods();
+    renderAvailableMods();
+  }
+
+  function renderEmptyAll(message){
+    document.getElementById("weaponCount").textContent = "-";
+    document.getElementById("modCount").textContent = "-";
+    document.getElementById("weaponsSubline").textContent = message || "";
+    document.getElementById("weaponList").innerHTML = `<div class="empty">${escapeHtml(message || "")}</div>`;
+    document.getElementById("selectedWeaponBox").innerHTML = `
+      <div class="selectedTitle">Aucune arme sélectionnée</div>
+      <div class="small muted">${escapeHtml(message || "")}</div>
+    `;
+    document.getElementById("countsBox").innerHTML = "";
+    document.getElementById("installedList").innerHTML = `<div class="empty">Rien à afficher.</div>`;
+    document.getElementById("availableList").innerHTML = `<div class="empty">Rien à afficher.</div>`;
+  }
+
+  function renderWeaponList(counts){
+    const totalWeapons = counts && counts.weapons !== undefined ? counts.weapons : CRAFTING_STATE.weapons.length;
+    const totalMods = counts && counts.installableMods !== undefined ? counts.installableMods : CRAFTING_STATE.installableMods.length;
+
+    document.getElementById("weaponCount").textContent = String(totalWeapons);
+    document.getElementById("modCount").textContent = String(totalMods);
+    document.getElementById("weaponsSubline").textContent = `${totalWeapons} arme(s) • ${totalMods} mod(s) installable(s)`;
+
+    const host = document.getElementById("weaponList");
+    host.innerHTML = "";
+
+    if (!CRAFTING_STATE.weapons.length){
+      host.innerHTML = `<div class="empty">Aucune arme trouvée dans l’inventaire.</div>`;
+      return;
+    }
+
+    CRAFTING_STATE.weapons.forEach(weapon => {
+      const row = document.createElement("div");
+      row.className = "weaponRow" + (weapon.key === CRAFTING_STATE.selectedWeaponKey ? " active" : "");
+      row.onclick = () => selectWeapon(weapon.key);
+
+      row.innerHTML = `
+        <div class="weaponName">${escapeHtml(weapon.name || "")}</div>
+        <div class="chips">
+          <span class="chip">ID ${escapeHtml(String(weapon.id || ""))}</span>
+          <span class="chip">${escapeHtml(weapon.family || "")}</span>
+          ${weapon.category ? `<span class="chip">${escapeHtml(weapon.category)}</span>` : ""}
+        </div>
+        <div class="weaponMeta">${weapon.installedMods ? weapon.installedMods.length : 0} mod(s) installé(s)</div>
+      `;
+
+      host.appendChild(row);
+    });
+  }
+
+  function renderSelectedWeapon(){
+    const box = document.getElementById("selectedWeaponBox");
+    const countsBox = document.getElementById("countsBox");
+    const weapon = getSelectedWeapon();
+
+    if (!weapon){
+      box.innerHTML = `
+        <div class="selectedTitle">Aucune arme sélectionnée</div>
+        <div class="small muted">Sélectionne une arme dans la liste.</div>
+      `;
+      countsBox.innerHTML = "";
+      return;
+    }
+
+    box.innerHTML = `
+      <div class="selectedTitle">${escapeHtml(weapon.name || "")}</div>
+      <div class="row">
+        <span class="chip">Clé : ${escapeHtml(weapon.key || "")}</span>
+        <span class="chip">ID ${escapeHtml(String(weapon.id || ""))}</span>
+      </div>
+    `;
+
+    countsBox.innerHTML = `
+      <span class="chip">${weapon.installedMods ? weapon.installedMods.length : 0} mod(s) installé(s)</span>
+      <span class="chip">${CRAFTING_STATE.installableMods.length} mod(s) disponible(s)</span>
+    `;
+  }
+
+  function renderInstalledMods(){
+    const host = document.getElementById("installedList");
+    const weapon = getSelectedWeapon();
+    host.innerHTML = "";
+
+    if (!weapon){
+      host.innerHTML = `<div class="empty">Sélectionne une arme pour voir ses mods installés.</div>`;
+      return;
+    }
+
+    if (!weapon.installedMods || !weapon.installedMods.length){
+      host.innerHTML = `<div class="empty">Aucun mod installé sur cette arme.</div>`;
+      return;
+    }
+
+    weapon.installedMods.forEach(mod => {
+      const row = document.createElement("div");
+      row.className = "modRow";
+      row.innerHTML = `
+        <div class="modTop">
+          <div>
+            <div class="modName">${escapeHtml(mod.name || "")}</div>
+            <div class="modMeta">${escapeHtml(mod.key || "")}</div>
+          </div>
+        </div>
+      `;
+      host.appendChild(row);
+    });
+  }
+
+  function renderAvailableMods(){
+    const host = document.getElementById("availableList");
+    const weapon = getSelectedWeapon();
+    host.innerHTML = "";
+
+    if (!weapon){
+      host.innerHTML = `<div class="empty">Sélectionne d’abord une arme.</div>`;
+      return;
+    }
+
+    if (!CRAFTING_STATE.installableMods.length){
+      host.innerHTML = `<div class="empty">Aucun mod installable dans l’inventaire.</div>`;
+      return;
+    }
+
+    const installedMap = {};
+    (weapon.installedMods || []).forEach(mod => installedMap[mod.key] = true);
+
+    const visibleMods = CRAFTING_STATE.installableMods.filter(mod => !installedMap[mod.key]);
+
+    if (!visibleMods.length){
+      host.innerHTML = `<div class="empty">Tous les mods disponibles sont déjà installés sur cette arme.</div>`;
+      return;
+    }
+
+    visibleMods.forEach(mod => {
+      const row = document.createElement("div");
+      row.className = "modRow";
+      row.innerHTML = `
+        <div class="modTop">
+          <div>
+            <div class="modName">${escapeHtml(mod.name || "")}</div>
+            <div class="modMeta">${escapeHtml(mod.key || "")}</div>
+          </div>
+          <button class="primary" onclick="installMod('${escapeJs(mod.key)}')">Installer</button>
+        </div>
+      `;
+      host.appendChild(row);
+    });
+  }
+
+  function selectWeapon(key){
+    CRAFTING_STATE.selectedWeaponKey = String(key || "");
+    renderWeaponList({
+      weapons: CRAFTING_STATE.weapons.length,
+      installableMods: CRAFTING_STATE.installableMods.length
+    });
+    renderSelectedWeapon();
+    renderInstalledMods();
+    renderAvailableMods();
+    setStatus("Arme sélectionnée.");
+  }
+
+  function disableAllButtons(disabled){
+    document.querySelectorAll("button").forEach(btn => {
+      btn.disabled = !!disabled;
+    });
+  }
+
+  function installMod(modKey){
+    const weapon = getSelectedWeapon();
+    if (!weapon){
+      setStatus("Aucune arme sélectionnée.");
+      return;
+    }
+
+    setStatus("Installation du mod...");
+    disableAllButtons(true);
+
+    google.script.run
+      .withSuccessHandler(data => {
+        disableAllButtons(false);
+
+        if (!data || data.ok !== true){
+          setStatus((data && data.error) ? data.error : "Installation refusée.");
+          return;
+        }
+
+        applyState(data);
+        setStatus(data.message || "Mod installé.");
+      })
+      .withFailureHandler(err => {
+        disableAllButtons(false);
+        setStatus("Erreur: " + (err && err.message ? err.message : String(err)));
+      })
+      .crafting_installMod(FID, weapon.key, modKey);
+  }
+
+  function bootCrafting(){
+    if (!FID){
+      setStatus("FID manquant.");
+      renderEmptyAll("Impossible de charger sans fid.");
+      return;
+    }
+
+    setStatus("Chargement...");
+    google.script.run
+      .withSuccessHandler(data => {
+        if (!data || data.ok !== true){
+          setStatus((data && data.error) ? data.error : "Chargement refusé.");
+          renderEmptyAll("Chargement impossible.");
+          return;
+        }
+
+        applyState(data);
+        setStatus("OK.");
+        setDbg(`FID=${FID} — armes=${(data.weapons || []).length} — mods=${(data.installableMods || []).length}`);
+      })
+      .withFailureHandler(err => {
+        setStatus("Erreur: " + (err && err.message ? err.message : String(err)));
+        renderEmptyAll("Chargement impossible.");
+      })
+      .crafting_getState(FID);
+  }
+
+  function initIds(){
+    FID = String("<?= fid ?>" || "").trim();
+
+    if (!FID && window.google && google.script && google.script.url && google.script.url.getLocation){
+      google.script.url.getLocation(loc => {
+        FID = FID || String(loc && loc.parameter && loc.parameter.fid || "").trim();
+
+        if (!FID){
+          setStatus("FID manquant (?fid=...)");
+          renderEmptyAll("Paramètre manquant.");
+          return;
+        }
+        bootCrafting();
+      });
+      return;
+    }
+
+    if (!FID){
+      const qs = new URLSearchParams(window.location.search);
+      FID = FID || String(qs.get("fid") || "").trim();
+    }
+
+    if (!FID){
+      setStatus("FID manquant (?fid=...)");
+      renderEmptyAll("Paramètre manquant.");
+      return;
+    }
+
+    bootCrafting();
+  }
+
+  initIds();
+</script>
+</body>
+</html>

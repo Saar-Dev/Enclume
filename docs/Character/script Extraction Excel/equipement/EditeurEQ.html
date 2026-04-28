@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Éditeur d'Équipement - FULL DECK</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .nav-bar { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; gap: 10px; width: 95%; position: sticky; top: 10px; z-index: 100; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 95%; max-width: 1200px; display: none; }
+        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+        .field { display: flex; flex-direction: column; }
+        label { font-weight: bold; font-size: 0.75em; color: #444; margin-bottom: 4px; text-transform: uppercase; background: #f8f9fa; padding: 2px 5px; border-radius: 3px; }
+        input, textarea { padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+        textarea { height: 80px; grid-column: span 4; }
+        .section-title { grid-column: span 4; border-left: 5px solid #007bff; background: #e7f1ff; padding: 8px 15px; margin-top: 20px; font-weight: bold; color: #0056b3; }
+        .btn { padding: 10px 15px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; }
+        .btn-load { background: #6f42c1; color: white; }
+        .btn-save { background: #28a745; color: white; width: 100%; margin-top: 30px; font-size: 1.2em; }
+        .warning { background: #fff5f5; border: 1px solid #ff4d4d !important; }
+        .full-width { grid-column: span 2; }
+        #counter { font-family: monospace; font-size: 1.2em; margin: 0 15px; align-self: center; }
+    </style>
+</head>
+<body>
+
+    <div class="nav-bar">
+        <input type="file" id="fileInput" style="display:none" onchange="handleFile(this)">
+        <button class="btn btn-load" onclick="document.getElementById('fileInput').click()">📂 Charger ref_equipments_data.js</button>
+        <button class="btn" onclick="changeIndex(-1)">⬅ Précédent</button>
+        <span id="counter">0 / 0</span>
+        <button class="btn" onclick="changeIndex(1)">Suivant ➡</button>
+        <input type="text" id="search" placeholder="Rechercher..." style="flex-grow: 1; border-radius: 20px; padding: 0 15px;">
+    </div>
+
+    <div class="card" id="editor">
+        <div class="grid">
+            <div class="section-title">📦 IDENTITÉ ET BASE</div>
+            <div class="field"><label>ID (UID)</label><input type="text" id="base_id" readonly></div>
+            <div class="field full-width"><label>Nom de l'objet</label><input type="text" id="base_name"></div>
+            <div class="field"><label>NT (Niveau Tech)</label><input type="text" id="base_nt"></div>
+            <div class="field"><label>Famille</label><input type="text" id="base_family"></div>
+            <div class="field"><label>Catégorie</label><input type="text" id="base_category"></div>
+            <div class="field"><label>Prix</label><input type="text" id="base_price"></div>
+            <div class="field"><label>Poids (kg)</label><input type="text" id="base_weight"></div>
+            <textarea id="base_description" placeholder="Description"></textarea>
+
+            <div class="section-title">🏢 ORIGINE ET PRÉ-REQUIS</div>
+            <div class="field"><label>Fabricant</label><input type="text" id="base_origin"></div>
+            <div class="field"><label>Nation</label><input type="text" id="req_nation"></div> <div class="field"><label>Rareté (DIS)</label><input type="text" id="base_rarity"></div>
+            <div class="field"><label>Niveau Max</label><input type="text" id="req_max_level"></div>
+            <div class="field full-width"><label>Compétences / Attributs requis</label><input type="text" id="req_skill_req"></div>
+            <div class="field"><label>Force Requise (FOR)</label><input type="text" id="req_min_str"></div>
+            <div class="field"><label>Bonus (Général)</label><input type="text" id="stat_bonus_val"></div>
+
+            <div class="section-title">⚔️ STATISTIQUES OFFENSIVES (COMBAT)</div>
+            <div class="field"><label>Dégâts (H)</label><input type="text" id="off_damage_h"></div>
+            <div class="field"><label>Dégâts (V-)</label><input type="text" id="off_damage_v_low"></div>
+            <div class="field"><label>Dégâts (V+)</label><input type="text" id="off_damage_v_high"></div>
+            <div class="field"><label>Choc</label><input type="text" id="off_shock"></div>
+            <div class="field"><label>Portée</label><input type="text" id="off_range"></div>
+            <div class="field"><label>Initiative</label><input type="text" id="stat_init_mod"></div>
+            <div class="field"><label>Mode de Tir</label><input type="text" id="off_fire_mode"></div>
+            <div class="field"><label>Munitions (Capacité)</label><input type="text" id="off_ammo_cap"></div>
+            <div class="field"><label>Coût Munitions</label><input type="text" id="off_ammo_cost"></div>
+            <div class="field"><label>Calibre (CAL)</label><input type="text" id="off_ammo_cal"></div>
+            <div class="field full-width"><label>Compétence Associée</label><input type="text" id="off_skill_assoc"></div>
+
+            <div class="section-title">🛡️ STATISTIQUES DÉFENSIVES & ACCESSOIRES</div>
+            <div class="field"><label>Protection</label><input type="text" id="def_protection"></div>
+            <div class="field"><label>Choc* (Modificateur)</label><input type="text" id="def_shock_mod"></div>
+            <div class="field"><label>Localisations</label><input type="text" id="def_locations"></div>
+            <div class="field"><label>Catégorie Malus</label><input type="text" id="def_malus_type"></div>
+            <div class="field"><label>Contenance</label><input type="text" id="stat_capacity"></div>
+            <div class="field"><label>Étanchéité</label><input type="text" id="stat_waterproof"></div>
+            <div class="field full-width"><label>Armes éligibles (Modules)</label><input type="text" id="mod_compat"></div>
+            <div class="field full-width"><label>Effets Munitions</label><input type="text" id="mod_ammo_eff"></div>
+        </div>
+        
+        <button class="btn btn-save" onclick="exportData()">💾 SAUVEGARDER ET EXPORTER LE FICHIER JS</button>
+    </div>
+
+    <script>
+        window.data = [];
+        window.currentIndex = 0;
+
+        function handleFile(input) {
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                let content = e.target.result;
+                try {
+                    const jsonString = content.substring(content.indexOf('['), content.lastIndexOf(']') + 1);
+                    window.data = JSON.parse(jsonString);
+                    document.getElementById('editor').style.display = 'block';
+                    renderItem();
+                } catch (err) { alert("Erreur de lecture. Vérifiez le format [ ... ]"); }
+            };
+            reader.readAsText(file);
+        }
+
+        function renderItem() {
+            const item = window.data[window.currentIndex];
+            document.getElementById('counter').innerText = `${window.currentIndex + 1} / ${window.data.length}`;
+            const inputs = document.querySelectorAll('#editor input, #editor textarea');
+            inputs.forEach(input => {
+                if(input.id && item.hasOwnProperty(input.id)) {
+                    input.value = item[input.id] || '';
+                    input.oninput = (e) => { window.data[window.currentIndex][input.id] = e.target.value; };
+                }
+            });
+        }
+
+        function changeIndex(step) {
+            window.currentIndex = Math.max(0, Math.min(window.data.length - 1, window.currentIndex + step));
+            renderItem();
+        }
+
+        function exportData() {
+            const finalContent = "export const equipmentData = " + JSON.stringify(window.data, null, 2) + ";";
+            const blob = new Blob([finalContent], {type: "application/javascript"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "ref_equipments_data_FIXED.js";
+            a.click();
+        }
+
+        document.getElementById('search').oninput = function(e) {
+            const q = e.target.value.toLowerCase();
+            const idx = window.data.findIndex(i => i.base_name && i.base_name.toLowerCase().includes(q));
+            if(idx !== -1) { window.currentIndex = idx; renderItem(); }
+        }
+    </script>
+</body>
+</html>
