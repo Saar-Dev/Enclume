@@ -335,11 +335,11 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     } catch (err) { console.error('Erreur save chc :', err) }
   }, [characterId, onSaved])
 
-  // Sauvegarde XP — GM uniquement, debounce 500ms
-  const saveXp = useCallback(async (total, available) => {
+  // Sauvegarde XP disponibles — GM uniquement, debounce 500ms
+  // xp_total est une valeur mémoire (XP dépensés cumulés) — jamais modifiée ici.
+  const saveXp = useCallback(async (available) => {
     try {
       await api.put(`/char-sheet/${characterId}/xp`, {
-        xp_total:     total,
         xp_available: available,
       })
       onSaved?.()
@@ -426,25 +426,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
         <div style={s.blockTitle}>{t('character.xp.title')}</div>
         <div style={s.xpBlock}>
 
-          {/* XP total reçus — éditable GM uniquement */}
+          {/* XP total reçus — lecture seule pour tous (valeur mémoire cumulée) */}
           <div style={s.xpField}>
             <span style={s.xpLabel}>{t('character.xp.total')}</span>
-            {isGm ? (
-              <input
-                style={s.xpInput}
-                type="number"
-                min="0"
-                value={xpTotal}
-                onChange={e => {
-                  const val = Math.max(0, parseInt(e.target.value) || 0)
-                  setXpTotal(val)
-                  if (xpDebounceTimer.current) clearTimeout(xpDebounceTimer.current)
-                  xpDebounceTimer.current = setTimeout(() => saveXp(val, xpAvailable), 500)
-                }}
-              />
-            ) : (
-              <span style={s.xpValue}>{xpTotal}</span>
-            )}
+            <span style={s.xpValue}>{xpTotal}</span>
           </div>
 
           {/* XP disponibles — éditable GM uniquement */}
@@ -460,7 +445,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
                   const val = Math.max(0, parseInt(e.target.value) || 0)
                   setXpAvailable(val)
                   if (xpDebounceTimer.current) clearTimeout(xpDebounceTimer.current)
-                  xpDebounceTimer.current = setTimeout(() => saveXp(xpTotal, val), 500)
+                  xpDebounceTimer.current = setTimeout(() => saveXp(val), 500)
                 }}
               />
             ) : (
@@ -751,6 +736,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
             charAdvantages={charAdvantages}
             anMap={anMap}
             characterId={characterId}
+            isGm={isGm}
             canEdit={canEdit}
             genotypeId={genotypeId}
             onSaved={onSaved}

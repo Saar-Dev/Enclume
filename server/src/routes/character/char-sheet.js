@@ -256,11 +256,12 @@ router.put('/:characterId/attributes', requireAuth, async (req, res, next) => {
 })
 
 // ─── PUT /api/char-sheet/:characterId/skills ─────────────────────────────────
-// Sauvegarde compétences en bulk (upsert) — usage direct GM ou debounce joueur.
-// Cette route reste disponible pour la saisie directe de maîtrise par le GM.
+// Sauvegarde compétences en bulk (upsert) — GM uniquement.
+// Les joueurs augmentent leur maîtrise exclusivement via POST /skills/buy.
 router.put('/:characterId/skills', requireAuth, async (req, res, next) => {
   try {
-    await assertOwnerOrGm(req.params.characterId, req.user.id)
+    const { isGm } = await assertOwnerOrGm(req.params.characterId, req.user.id)
+    if (!isGm) throw new AppError(403, 'Only the GM can modify skills directly')
 
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })

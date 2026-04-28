@@ -1,8 +1,7 @@
 # CHARACTER.md — Documentation technique du domaine Character
 > Domaine : Fiche personnage Polaris & modules joueur
-> Dernière mise à jour : 2026-04-27 — Session 4
-> Statut : Modules 1 à 6 stables — 44 migrations appliquées
-> Chantier 9F-0 planifié : `polaris.js` côté serveur — voir PLAN_ENTITY.md §6
+> Dernière mise à jour : 2026-04-28 — Session 37 (Chantier XP)
+> Statut : Modules 1 à 6 + Module XP stables — 45 migrations appliquées
 
 ---
 
@@ -67,6 +66,7 @@ server/src/db/migrations/
   39_char_fix_ids.js                — corrections IDs corrompus
   40_char_advantages.js             — char_advantages + linked_skill_id sur ref_mutations
   44_char_fix_encoding.js           — correction encodage UTF-8 ref_skills (12 lignes)
+  45_char_xp.js                     — xp_total + xp_available sur char_sheet
 
 scripts SQL correctifs (appliqués manuellement, hors migrations Knex) :
   fix_ref_skills.sql                — parents fantômes, markers, typos
@@ -182,6 +182,16 @@ muta_029 débloque aussi `MAITRISE_DE_LECHO_POLARIS` via `ref_skill_requirements
 ### Tables dynamiques (une entrée par personnage)
 
 #### `char_sheet` — table pivot
+
+| Colonne | Type | Contrainte | Notes |
+|---|---|---|---|
+| id | UUID | PK DEFAULT gen_random_uuid() | |
+| character_id | UUID | FK→characters.id ON DELETE CASCADE | |
+| chc | INT | DEFAULT 11 | Chance (1–20) |
+| xp_total | INT | NOT NULL DEFAULT 0 | XP reçus cumulés — lecture seule, jamais éditable directement |
+| xp_available | INT | NOT NULL DEFAULT 0 | XP disponibles à dépenser — éditable GM uniquement |
+| created_at | TIMESTAMPTZ | DEFAULT CURRENT_TIMESTAMP | |
+| updated_at | TIMESTAMPTZ | DEFAULT CURRENT_TIMESTAMP | |
 PK = `id UUID`. FK `character_id → characters.id ON DELETE CASCADE`.
 
 | Colonne | Type | Contrainte | Notes |
@@ -419,12 +429,18 @@ Groupes CHC : jamais dans isVisible — visibles si ≥ 1 enfant visible
 Fenêtre flottante drag+resize. Onglets : Fiche / Bio & Info / Paramètres. Feedback ✓ vert 1s après save.
 
 ### `CharacterSheet.jsx`
-Orchestrateur Modules 1–6. Charge tout au montage. Gère : genotypes, refSkills, tous les states fiche, charAdvantages. Passe anMap (mémoïsé) à SkillsPanel et charAdvantages aux deux panneaux. Debounce 500ms sur attributs et chc (PC12). Refs miroirs `attrsRef`, `chcRef` mis à jour synchroniquement dans onChange.
+Orchestrateur Modules 1–6 + Module XP. Charge tout au montage. Gère : genotypes, refSkills, tous les states fiche, charAdvantages, xpTotal, xpAvailable, progressionMode. Section Expérience entre en-tête et description : `xp_total` lecture seule pour tous, `xp_available` éditable GM uniquement, bouton toggle "Mode Progression". `handleSkillBought` met à jour `charSkills` et `xpAvailable` localement après achat (pas de rechargement réseau). Passe anMap (mémoïsé) à SkillsPanel et charAdvantages aux deux panneaux. Debounce 500ms sur attributs et chc (PC12). Refs miroirs `attrsRef`, `chcRef` mis à jour synchroniquement dans onChange.
 
 ### `SkillsPanel.jsx`
 Module 5 — Compétences. Groupement hiérarchique par famille (session 4) : groupes CHC affichés comme sous-en-têtes, enfants indentés. Accordéon par famille (Langues replié par défaut). State `localMastery` réactif pilote visibilité SKILL_MIN. Debounce 500ms par skill_id dans onChange (PC12). `Fragment` avec `key` utilisé pour les blocs groupe (PC19).
 
-**Props :** `refSkills`, `charSkills`, `charAdvantages`, `anMap`, `characterId`, `canEdit`, `genotypeId`, `onSaved`
+**Props :** `refSkills`, `charSkills`, `charAdvantages`, `anMap`, `characterId`, `isGm`, `canEdit`, `genotypeId`, `onSaved`, `progressionMode`, `xpAvailable`, `onSkillBought`
+
+**Comportement maîtrise selon rôle :**
+- GM : input numérique éditable (debounce 500ms → `PUT /skills` GM uniquement)
+- Joueur : `<span>` readonly avec signe explicite (`+N`)
+
+**Guard achat double-clic :** `isBuyingRef` (useRef synchrone) — jamais `buyingSkillId` state (asynchrone).
 
 ### `AdvantagesPanel.jsx`
 Module 6 — Avantages & Désavantages. Liste chronologique + bouton +. Modale 3 étapes :
@@ -493,3 +509,7 @@ Module 6 — Avantages & Désavantages. Liste chronologique + bouton +. Modale 3
 **PC18** — Encodage UTF-8 des seeds : toujours vérifier les labels accentués après migration avec `SELECT label FROM ref_skills WHERE label LIKE '%??%'`. Correction via migration UPDATE ciblés (migration 44).
 
 **PC19** — `Fragment` React sans `key` dans `.map()` génère un warning. Toujours utiliser `import { Fragment } from 'react'` et `<Fragment key={...}>` quand le fragment est racine d'un `.map()`. Jamais `<>` dans ce contexte.
+
+**PC20** — `charStats.js` existait avant le chantier XP. Contenait `calcSkillTotal`, `calcAttributeAN`, `getGenotypeModForAttr`, `ATTR_LABELS` utilisés par `socket/index.js`. Ne jamais produire ce fichier comme "nouveau" sans l'avoir lu. Toujours demander le fichier existant et fusionner.
+
+**PC21** — Guard synchrone sur achat XP. `setBuyingSkillId` est asynchrone (React batch) — ne jamais l'utiliser comme guard contre les double-clics. Pattern correct : `const isBuyingRef = useRef(false)` + `isBuyingRef.current = true` avant le try, `false` dans le finally. `buyingSkillId` reste uniquement pour l'affichage UI (bouton `…` + disabled).

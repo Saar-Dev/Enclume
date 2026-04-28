@@ -29,12 +29,20 @@ SQL, routes API, CharacterWindow, CharacterSheet Modules 1-4. Aucun code client 
 - Migration 44 : correction encodage UTF-8 sur 12 lignes `ref_skills` (labels et familles corrompus)
 - `SkillsPanel.jsx` : arborescence CHC — groupes structurels affichés comme sous-en-têtes visuels non-jouables dans le tableau, enfants indentés dessous
 
+## Session 37 (VTT) ✅ — Chantier XP
+- Migration 45 : `xp_total` + `xp_available` sur `char_sheet`
+- `charStats.js` : fonctions XP ajoutées (`getCoutAugmentation`, `getCoutDeblocageX`, `getCoutTotal`)
+- `char-sheet.js` : `assertOwnerOrGm` retourne `{ character, isGm }` ; routes `PUT /xp` (GM) + `POST /skills/buy`
+- `CharacterSheet.jsx` : section Expérience, `xp_total` lecture seule, `xp_available` éditable GM, toggle Mode Progression
+- `SkillsPanel.jsx` : mode Progression avec bouton `+{cout} PE` par compétence, achat immédiat
+- `fr.json` : clés `character.xp.*`
+
 ---
 
 ## Session 5 — Corrections restantes + intégration dev externe
 
 ### Prérequis
-- [x] Sessions 1, 2, 3 et 4 validées
+- [x] Sessions 1, 2, 3, 4 et Chantier XP (session 37) validés
 
 ### Fichiers à uploader
 - `journalChantier_FichePerso.md`
@@ -82,7 +90,7 @@ Voir section dédiée ci-dessous.
 ## Session future — Interface admin ref_skills / ref_genotypes
 
 BDD master partagée — modifiable admin uniquement. Interface Dashboard à créer.
-Numérotation migrations à partir de 45+.
+Numérotation migrations à partir de 46+.
 
 ---
 
@@ -103,7 +111,7 @@ fetch(`${API_URL}/api/char-sheet/${characterId}/inventory`, {
 })
 ```
 
-### Modules à intégrer (tables à créer, numérotation à partir de 45)
+### Modules à intégrer (tables à créer, numérotation à partir de 46)
 - Inventaire → `char_inventory`
 - Bourse/Transactions → `char_transactions`
 - Historique XP → `char_xp_log`
@@ -130,3 +138,4 @@ fetch(`${API_URL}/api/char-sheet/${characterId}/inventory`, {
 | UX8 | Prérequis OU (Cryptographie : Informatique OU Maths) | Moyenne | future |
 | UX9 | Mémorisation accordéon compétences (localStorage) | Faible | 5 |
 | UX10 | Fix toggle Force Polaris (mise à jour immédiate sans F5) | Faible | 5 |
+| UX11 | Mise à jour temps réel compétences entre GM et joueur (WS CHAR_SKILLS_UPDATED) | Moyenne | future |

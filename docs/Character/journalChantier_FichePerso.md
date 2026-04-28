@@ -516,3 +516,113 @@ Règle 3 MUTATION active — compétences débloquées par mutations correctemen
 2. Mémorisation accordéon
 3. Intégration développeur externe (Session 4 renommée)
 Voir ROADMAP_CHARACTER.md pour le détail.
+
+---
+
+## Session 4 — 2026-04-27
+
+### Contexte de démarrage
+Session 3 stable confirmée (Modules 1-6). Objectif : correction encodage UTF-8 ref_skills + remise à plat arborescence CHC dans SkillsPanel.
+
+### Migrations produites et appliquées ✅
+- `44_char_fix_encoding.js` — correction encodage UTF-8 sur 12 lignes `ref_skills` (labels et familles corrompus avec `??`)
+
+### Composants produits et validés ✅
+- `SkillsPanel.jsx` — arborescence CHC : groupes structurels affichés comme sous-en-têtes `<tr>` non-jouables dans le tableau, enfants indentés (`paddingLeft: 14px`). Fragment React avec key sur chaque bloc groupe (PC19).
+
+### État en fin de session
+Modules 1 à 6 stables. 44 migrations appliquées.
+Arborescence compétences corrigée visuellement. Labels UTF-8 propres.
+
+---
+
+## Session 37 (VTT) — 2026-04-28 — Chantier XP
+
+### Contexte
+Chantier XP inséré avant la Session 5 Character planifiée. Implémentation du module Expérience (XP) — dépense de compétences et distribution GM.
+
+### Décisions d'architecture
+
+**Stockage XP — Option A (colonnes sur char_sheet)**
+`xp_total INT DEFAULT 0` — cumul mémoire des XP reçus (lecture seule, jamais éditable directement).
+`xp_available INT DEFAULT 0` — XP disponibles à dépenser (éditable GM uniquement).
+Pas de table `char_xp_log` en V1 — backlog UX1.
+
+**Déblocage compétence (X)**
+Coût fixe 3 PE (niveaux -3→0). `mastery` reste 0 après déblocage — jamais de valeur négative en base. `is_learned` passe à `true`. PC11 inchangé.
+
+**Calcul côté serveur**
+Fonctions XP ajoutées dans `charStats.js` (existant). Serveur = source de vérité. Client = miroir pour affichage uniquement.
+
+**Mode Progression**
+Toggle dans la section Expérience de `CharacterSheet`. Active une colonne `+` avec coût en PE dans `SkillsPanel`. Achat immédiat (pas de panier). Mise à jour locale après achat (pas de rechargement réseau).
+
+**Droits**
+- Distribution XP : GM uniquement (`PUT /xp`)
+- Dépense XP : owner ou GM (`POST /skills/buy`)
+- `xp_total` : lecture seule pour tous (valeur mémoire)
+- `xp_available` : éditable GM uniquement, lecture seule joueur
+
+### Migrations produites et appliquées ✅
+- `45_char_xp.js` — `xp_total` + `xp_available` sur `char_sheet`
+
+### Fichiers serveur modifiés ✅
+- `charStats.js` — ajout `getCoutAugmentation()`, `getCoutDeblocageX()`, `getCoutTotal()` (fusionné sur l'existant)
+- `char-sheet.js` — `assertOwnerOrGm` retourne `{ character, isGm }` ; nouvelle route `PUT /:characterId/xp` (GM) ; nouvelle route `POST /:characterId/skills/buy`
+
+### Fichiers client modifiés ✅
+- `CharacterSheet.jsx` — states `xpTotal`, `xpAvailable`, `progressionMode` ; section Expérience entre en-tête et description ; `handleSkillBought` pour mise à jour locale ; `xp_total` lecture seule pour tous
+- `SkillsPanel.jsx` — props `progressionMode`, `xpAvailable`, `onSkillBought` ; colonne achat avec bouton `+{cout} PE` ; `handleBuy` async
+- `fr.json` — clés `character.xp.*`
+
+### Barème XP compétences (source : Livre de Base Polaris)
+| Niveau visé | Coût |
+|---|---|
+| -3 à +5 | 1 PE |
+| +6 à +10 | 2 PE |
+| +11 | 3 PE |
+| +12 | 5 PE |
+| +13 | 7 PE |
+| +14 | 9 PE |
+| +15 | 11 PE |
+| Déblocage (X) | 3 PE (fixe) |
+
+### Pièges découverts cette session
+
+**PC20 — charStats.js existait déjà**
+`charStats.js` existait avec `calcSkillTotal`, `calcAttributeAN`, `getGenotypeModForAttr`, `ATTR_LABELS` utilisés par `socket/index.js`. Ne jamais produire ce fichier comme "nouveau" sans l'avoir lu. Les fonctions XP ont été ajoutées à la fin du fichier existant.
+
+### Risque documenté
+`charStats.js` reconstruit depuis une archive de conversation (pas dans Git). Faible risque d'écart avec la version réelle si des modifications avaient été faites entre la sauvegarde et aujourd'hui. À surveiller sur les calculs mécaniques existants (jets d'entités).
+
+### État en fin de session
+Module XP stable et validé fonctionnellement.
+45 migrations appliquées. SR clean. Tests visuels OK.
+
+### Prochaine étape
+Session 5 Character : UX9 (mémorisation accordéon), UX10 (fix toggle Force Polaris), puis intégration dev externe.
+
+### Corrections post-validation session 37
+
+**Bugs identifiés après confirmation fonctionnelle initiale :**
+
+1. **Sauvegarde XP non testée** — `xp_available` se sauvegarde correctement via debounce 500ms + `PUT /xp`. Confirmé fonctionnel après investigation.
+
+2. **Joueurs pouvaient modifier la maîtrise librement** — `PUT /skills` accessible à owner ET GM. Corrigé : `PUT /skills` restreint GM uniquement. Input maîtrise dans `SkillsPanel` conditionné par `isGm` (prop ajoutée). Joueur voit la valeur en `<span>` readonly.
+
+3. **Double-clic sur bouton achat** — guard `if (buyingSkillId) return` inefficace car `setBuyingSkillId` est asynchrone (React batch). Corrigé : `isBuyingRef` ref synchrone — `isBuyingRef.current = true` avant le try, `false` dans le finally. `buyingSkillId` retiré des deps de `handleBuy`.
+
+4. **Colonne Maîtrise — deux aspects** — GM : input numérique. Joueur : `<span style={s.readonly}>` avec signe explicite (`+N`). Visuellement distinct, cohérent avec le modèle de droits.
+
+**Pièges découverts :**
+
+**PC21 — guard synchrone sur achat XP**
+`setBuyingSkillId` est asynchrone — ne pas l'utiliser comme guard contre les double-clics.
+Pattern correct : `const isBuyingRef = useRef(false)` + `isBuyingRef.current = true` synchrone avant le try.
+
+**Fichiers modifiés (corrections) :**
+- `char-sheet.js` — `PUT /skills` GM uniquement + `assertOwnerOrGm` retourne `{ character, isGm }` partout
+- `CharacterSheet.jsx` — `isGm={isGm}` passé à SkillsPanel
+- `SkillsPanel.jsx` — prop `isGm`, input maîtrise conditionnel, `isBuyingRef`, colonne maîtrise GM/joueur
+
+**État final session 37 :** Chantier XP complet et stable. 6 fichiers modifiés/créés.

@@ -70,6 +70,7 @@ export default function SkillsPanel({
   charAdvantages,
   anMap,
   characterId,
+  isGm,
   canEdit,
   genotypeId,
   onSaved,
@@ -86,6 +87,9 @@ export default function SkillsPanel({
 
   // ─── State achat en cours (pour désactiver le bouton pendant la requête) ──
   const [buyingSkillId, setBuyingSkillId] = useState(null)
+  // Ref miroir — guard synchrone contre les double-clics rapides.
+  // setBuyingSkillId est asynchrone (React batch) — isBuyingRef.current est synchrone.
+  const isBuyingRef = useRef(false)
 
   useEffect(() => {
     const init = {}
@@ -205,9 +209,10 @@ export default function SkillsPanel({
   }, [])
 
   // ─── Achat compétence en mode Progression ─────────────────────────────────
-  // P3 : onSkillBought dans les deps car utilisé dans le callback
+  // isBuyingRef : guard synchrone contre les double-clics rapides.
+  // buyingSkillId reste pour l'affichage UI (bouton '…' + disabled).
   const handleBuy = useCallback(async (skill) => {
-    if (buyingSkillId) return  // achat déjà en cours
+    if (isBuyingRef.current) return  // guard synchrone
 
     const isX      = skill.marker === '(X)'
     const learned  = learnedSet.has(skill.id)
@@ -216,6 +221,7 @@ export default function SkillsPanel({
 
     if (xpAvailable < cout) return  // guard client (le serveur revérifie)
 
+    isBuyingRef.current = true
     setBuyingSkillId(skill.id)
     try {
       const res = await api.post(`/char-sheet/${characterId}/skills/buy`, {
@@ -225,9 +231,10 @@ export default function SkillsPanel({
     } catch (err) {
       console.error('Erreur achat compétence :', err)
     } finally {
+      isBuyingRef.current = false
       setBuyingSkillId(null)
     }
-  }, [buyingSkillId, learnedSet, localMastery, xpAvailable, characterId, onSkillBought])
+  }, [learnedSet, localMastery, xpAvailable, characterId, onSkillBought])
 
   // ─── Rendu d'une ligne compétence jouable ─────────────────────────────────
   // P3 : toutes les deps utilisées dans le callback sont listées
@@ -274,29 +281,31 @@ export default function SkillsPanel({
           <span style={s.readonly}>{base >= 0 ? `+${base}` : base}</span>
         </td>
 
-        {/* Maîtrise — input éditable en mode normal, readonly en mode Progression */}
+        {/* Maîtrise — GM : input numérique. Joueur : valeur en lecture seule (achat via Mode Progression). */}
         <td style={s.td}>
-          <input
-            style={s.masteryInput}
-            type="number"
-            value={mastery}
-            readOnly={!canEdit || progressionMode}
-            onChange={e => {
-              if (progressionMode) return
-              const val = Math.max(0, parseInt(e.target.value) || 0)
-              const next = { ...localMasteryRef.current, [skill.id]: val }
-              localMasteryRef.current = next
-              setLocalMastery(next)
-              if (debounceTimers.current[skill.id]) clearTimeout(debounceTimers.current[skill.id])
-              debounceTimers.current[skill.id] = setTimeout(() => {
-                api.put(`/char-sheet/${characterId}/skills`, {
-                  skills: [{ skill_id: skill.id, mastery: localMasteryRef.current[skill.id] ?? 0 }],
-                })
-                  .then(() => onSaved?.())
-                  .catch(err => console.error('Erreur save skill mastery :', err))
-              }, 500)
-            }}
-          />
+          {isGm ? (
+            <input
+              style={s.masteryInput}
+              type="number"
+              value={mastery}
+              onChange={e => {
+                const val = Math.max(0, parseInt(e.target.value) || 0)
+                const next = { ...localMasteryRef.current, [skill.id]: val }
+                localMasteryRef.current = next
+                setLocalMastery(next)
+                if (debounceTimers.current[skill.id]) clearTimeout(debounceTimers.current[skill.id])
+                debounceTimers.current[skill.id] = setTimeout(() => {
+                  api.put(`/char-sheet/${characterId}/skills`, {
+                    skills: [{ skill_id: skill.id, mastery: localMasteryRef.current[skill.id] ?? 0 }],
+                  })
+                    .then(() => onSaved?.())
+                    .catch(err => console.error('Erreur save skill mastery :', err))
+                }, 500)
+              }}
+            />
+          ) : (
+            <span style={s.readonly}>{mastery >= 0 ? `+${mastery}` : mastery}</span>
+          )}
         </td>
 
         {/* Total */}
@@ -333,7 +342,7 @@ export default function SkillsPanel({
       </tr>
     )
   }, [
-    calcBase, localMastery, learnedSet, canEdit, progressionMode,
+    calcBase, localMastery, learnedSet, isGm, progressionMode,
     xpAvailable, buyingSkillId, characterId, onSaved, handleBuy, t,
   ])
 
