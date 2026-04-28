@@ -11,6 +11,7 @@ export const WS = {
   TOKEN_CREATED: 'token:created',
   TOKEN_DELETED: 'token:deleted',
   TOKEN_UPDATED: 'token:updated',
+  TOKEN_ROTATE:  'token:rotate',   // joueur/GM → serveur : rotation 45° (9F-A)
 
   // Voxels (carte 3D)
   VOXEL_ADD:     'voxel:add',

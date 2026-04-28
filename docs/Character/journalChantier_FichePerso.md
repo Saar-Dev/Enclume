@@ -602,6 +602,39 @@ Module XP stable et validé fonctionnellement.
 ### Prochaine étape
 Session 5 Character : UX9 (mémorisation accordéon), UX10 (fix toggle Force Polaris), puis intégration dev externe.
 
+---
+
+## Session 38 — 2026-04-28 — Correction visibilité compétences (X) en mode Progression
+
+### Contexte
+Tests des interactions entités (jet Piratage informatique) bloqués : la compétence `PIRATAGE_INFORMATIQUE` n'apparaissait pas sur la fiche, empêchant d'y investir des points de maîtrise.
+
+### Diagnostic
+`PIRATAGE_INFORMATIQUE` a `marker = '(X)'` dans `ref_skills`. La Règle 1 de `isVisible` masquait toute compétence `(X)` non apprise (`is_learned = false`) indépendamment du mode actif. Le prérequis SKILL_MIN (INFORMATIQUE ≥ 10) était correct en base. Le serveur (`POST /skills/buy`) gérait déjà correctement le déblocage `(X)` — coût 3 PE, `is_learned → true`, `mastery` reste 0.
+
+93 compétences ont le marker `(X)`. Parmi elles :
+- Mutations : filtrées par prérequis MUTATION → resteront invisibles sans la mutation (comportement inchangé)
+- Pouvoirs Polaris : même logique via prérequis MUTATION
+- Compétences "profession/formation" (Piratage, Électronique, Chirurgie, Langue étrangère…) : aucun mécanisme de déblocage prévu → impasse UX
+
+### Décision de design
+Les compétences `(X)` non apprises restent invisibles hors mode Progression.
+En mode Progression uniquement, elles deviennent visibles si leurs prérequis SKILL_MIN sont satisfaits — permettant au joueur de les débloquer (3 PE, accord GM implicite via distribution XP).
+Les compétences `(X)` sans prérequis (Langue étrangère, Survie, etc.) sont également révélées en mode Progression — cohérent avec la fiction (le GM distribue les XP = accord du MJ).
+
+### Modification produite ✅
+`client/src/character/SkillsPanel.jsx` — deux changements dans `isVisible` :
+1. Règle 1 : `return false` → `if (!progressionMode) return false`
+2. `progressionMode` ajouté dans les deps du `useCallback`
+
+Aucune modification serveur. Aucune migration.
+
+### État en fin de session
+Compétences `(X)` visibles en mode Progression si prérequis satisfaits.
+`PIRATAGE_INFORMATIQUE` visible dès INFORMATIQUE ≥ 10 en mode Progression.
+
+---
+
 ### Corrections post-validation session 37
 
 **Bugs identifiés après confirmation fonctionnelle initiale :**

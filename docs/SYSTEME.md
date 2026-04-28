@@ -1,7 +1,7 @@
 # SYSTEME.md — Flux, règles et pièges du projet Enclume
-> Dernière mise à jour : 2026-04-21 Session 33
+> Dernière mise à jour : 2026-04-28 Session 39
 > Ce document répond à "qui fait quoi, qui parle à qui, pourquoi" — pas à "qu'est-ce qui existe".
-> Pour la liste des fichiers : voir ASBUILT.md. Pour l'historique : voir JOURNAL.md.
+> Pour la liste des fichiers : voir ASBUILT.md. Pour l'historique : voir JOURNAL2.md.
 
 ---
 
@@ -16,7 +16,6 @@ Le JWT est signé avec `{ id, email, username }` — **pas `color`**.
 Au montage de l'app (`App.jsx`), `GET /auth/me` est appelé.
 La réponse retourne `{ id, email, username, color }` — depuis la DB, pas le JWT.
 `authStore.user` contient donc toujours : `{ id, email, username, color }`.
-C'est la seule source de vérité pour l'identité de l'utilisateur côté client.
 
 **Piège :** ne jamais supposer que `user.color` vient du JWT — il vient de GET /auth/me.
 **Piège :** `isLoading: true` par défaut dans authStore — les routes protégées attendent ce flag avant de rendre.
@@ -86,9 +85,13 @@ updateEntity(partial)                // WS ENTITY_UPDATED / ENTITY_MOVED — gua
 upsertBlueprint(blueprint)           // futur
 ```
 
-**⚠ Bug connu session 33** : blueprints créés depuis WorkshopPage n'apparaissent pas dans entityStore
-car le store est chargé au SESSION_JOIN depuis la session active — pas depuis l'Atelier.
-Fix : recharger entityStore ou rafraîchir la session après création blueprint.
+### tokenStore — updateToken
+```javascript
+// Merge partiel avec guard obsolescence
+updateToken(partial)  // partial = { id, ...champs modifiés }
+// Guard : si partial.updated_at < t.updated_at → ignoré silencieusement
+// Utilisé par : TOKEN_MOVED (tokenId→id), TOKEN_UPDATED (token complet avec id)
+```
 
 ---
 
@@ -111,8 +114,10 @@ socket.data.role   = member.role      // fetchSockets → ciblage GM (PE2)
 | SESSION_JOIN | client | serveur | Rejoindre une room campagne |
 | SESSION_JOINED | serveur | client | Confirmation + liste onlineUserIds |
 | SESSION_USER_JOINED/LEFT | serveur | room | Présence |
-| TOKEN_MOVE | client | serveur | Déplacer un token |
+| TOKEN_MOVE | client | serveur | Déplacer un token (drag canvas) |
 | TOKEN_MOVED | serveur | room | Position mise à jour |
+| TOKEN_ROTATE | client | serveur | Rotation +45° (clic court token propriétaire) |
+| TOKEN_UPDATED | serveur | room | Token mis à jour (r, ou autres champs) |
 | TOKEN_CREATED | serveur | room | Token apparu |
 | TOKEN_DELETED | serveur | room | Token supprimé |
 | VOXEL_ADD/REMOVE/UPDATE | client (GM) | serveur | Édition voxel |
@@ -170,7 +175,7 @@ POST /api/entity-blueprints/:id/upload-glb
 
 ## 6. Format faces entités — chemins PNG (session 33)
 
-### Format geometry.faces — NOUVEAU depuis session 33
+### Format geometry.faces
 ```json
 {
   "width": 1, "height": 2, "depth": 1,
@@ -186,25 +191,16 @@ POST /api/entity-blueprints/:id/upload-glb
 ```
 - Chemins PNG relatifs au pack — `pack_id` obligatoire sur le blueprint (PEF1)
 - `null` = face invisible (PE4)
-- **PAS d'integers voxel_texture_id** — format cassé avant session 33
 
-### Format states.visual_override.face_overrides — NOUVEAU
+### Format states.visual_override.face_overrides
 ```json
 { "north": "uuid3.png", "top": null }
 ```
-Même format chemins PNG. `null` = invisible dans cet état.
 
 ### Chargement Canvas3D — entityTextureMaterials
 ```javascript
-// Pour chaque blueprint présent sur la carte :
-fakeTexObjs.push({
-  id: `${bp.id}__base`,
-  pack_id: bp.pack_id,
-  faces: bp.geometry.faces,
-})
-// + un fakeTexObj par état avec face_overrides (fusionnés avec base)
-
-// loadVoxelTextures(fakeTexObjs) → flat { ["uuid__base"]: { faceMaterials } }
+fakeTexObjs.push({ id: `${bp.id}__base`, pack_id: bp.pack_id, faces: bp.geometry.faces })
+// + un fakeTexObj par état avec face_overrides fusionnés
 
 // Restructuration :
 entityTextureMaterials = {
@@ -213,15 +209,6 @@ entityTextureMaterials = {
     states: { [stateId]: { faceMaterials: [...6 mats...] } }
   }
 }
-```
-
-### Accès dans EntityMeshVoxel
-```javascript
-const buckets = entityTextureMaterials?.[blueprint.id]
-const mats = currentState
-  ? (buckets?.states?.[currentState.id] ?? buckets?.base)
-  : buckets?.base
-const mat = mats?.faceMaterials?.[i]
 ```
 
 ### Pièges format faces
@@ -255,16 +242,6 @@ const mat = mats?.faceMaterials?.[i]
 
 // save() payload — jamais l'objet mémoire entier (P16) :
 payload[key] = { tex: v.tex, geo: v.geo, r: v.r }
-```
-
-### Chargement textureMaterials (voxels uniquement)
-```javascript
-// Canvas3D
-const voxelTexIds = [...new Set(Object.values(battlemap.voxel_data).map(v => v.tex))]
-const { data } = await api.get(`/voxel-textures?ids=${voxelTexIds.join(',')}`)
-const loaded = await loadVoxelTextures(data.textures)
-setTextureMaterials(loaded)
-// textureMaterials = { [voxel_textures.id integer]: { faceMaterials } }
 ```
 
 ---
@@ -323,7 +300,82 @@ DELETE /battlemaps/:id/editor-lock    → libère au démontage
 
 ---
 
-## 12. Règles dependency arrays useCallback/useEffect
+## 12. Collision map Redis — session 39
+
+### Architecture (cache-aside)
+```
+DB PostgreSQL = source de vérité
+Redis Hash    = cache O(1) par case — reconstruit depuis DB au SESSION_JOIN
+
+Clé Redis  : "collision:{battlemap_id}"
+Champ Hash : "x:y:z"   (séparateur ":" — P17, coordonnées base)
+Valeur     : JSON { type: 'token'|'entity'|'voxel', id: string }
+TTL        : 24h — reconstruite au prochain SESSION_JOIN (PE23)
+```
+
+### Filtres
+- Tokens `layer = 'gm'` : **exclus** — invisibles aux joueurs, pas bloquants
+- Entités : incluses **uniquement** si `is_blocking = true` dans l'état courant (JOIN blueprint)
+- Voxels : tous inclus
+
+### buildCollisionMap
+```javascript
+// server/src/lib/redis.js
+// Appelée au SESSION_JOIN depuis player_locations
+// Non bloquante si joueur sans player_location (première connexion)
+// Pipeline Redis — O(1) réseau
+await buildCollisionMap(playerLocation.battlemap_id)
+```
+
+### isCaseOccupied
+```javascript
+// O(1) — utilisé dans step-by-step 9F-B
+// excludeIds = [tokenId, entityId] — tunnel de swap (PE22)
+await isCaseOccupied(battlemapId, x, y, z, excludeIds)
+```
+
+### Maintenance — règle fondamentale (PE25)
+**La maintenance Redis est dans les routes REST, pas dans les handlers WS reliques.**
+`TOKEN_CREATED` / `TOKEN_DELETED` WS sont des reliques — ne pas y toucher Redis.
+`ENTITY_CREATED` / `ENTITY_DELETED` / `ENTITY_MOVED` WS : idem.
+
+| Mutation | Où | Helper |
+|---|---|---|
+| Token créé | `POST /tokens` | `collisionAddToken` |
+| Token déplacé (REST) | `PUT /tokens/:id` | `collisionMoveToken` |
+| Token déplacé (WS drag) | `TOKEN_MOVE` handler | `collisionMoveToken` |
+| Token supprimé | `DELETE /tokens/:id` AVANT delete | `collisionRemoveToken` |
+| Token rotate | `TOKEN_ROTATE` handler | aucune (position inchangée) |
+| Entité créée | `POST /entities` | `collisionAddEntity` |
+| Entité pos/état changé | `PUT /entities/:id` | `collisionMoveEntity` ou `collisionUpdateEntityState` |
+| Entité supprimée | `DELETE /entities/:id` AVANT delete | `collisionRemoveEntity` |
+| Entité état (interaction) | `resolveEntityState` | `collisionUpdateEntityState` |
+| Voxel ajouté | `VOXEL_ADD` | `collisionAddVoxel` |
+| Voxel supprimé | `VOXEL_REMOVE` | `collisionRemoveVoxel` |
+| Voxel tourné | `VOXEL_UPDATE` | aucune (position inchangée) |
+
+---
+
+## 13. Rotation tokens — session 39 (PE21)
+
+```javascript
+// tokens.r = 0-7 — 8 orientations, incréments 45°
+// rotation.y = r * Math.PI / 4 (côté client, sur le <group> parent)
+
+// Flux TOKEN_ROTATE :
+// 1. Clic court sur token propriétaire → Canvas3D → onTokenRotate(tokenId)
+// 2. SessionPage → socket.emit(WS.TOKEN_ROTATE, { tokenId })
+// 3. Serveur : ownership check → r = (r+1) % 8 → update DB → broadcast TOKEN_UPDATED
+// 4. SessionPage handler TOKEN_UPDATED → updateToken(token) → store merge
+// 5. Canvas3D TokenMesh → rotation.y recalculé
+
+// Ownership TOKEN_ROTATE : character.user_id === socket.data.userId OU role === 'gm'
+// token.character_id null → seul le GM peut rotate
+```
+
+---
+
+## 14. Règles dependency arrays useCallback/useEffect
 
 | Callback | Variable à inclure | Symptôme si absente |
 |---|---|---|
@@ -333,6 +385,8 @@ DELETE /battlemaps/:id/editor-lock    → libère au démontage
 | `handleDragStart` (Canvas3D) | `isGm`, `user`, `characters` | ownership check stale |
 | raccourcis Digit1-5 (Editor3D) | `activeMaterial` | guard allowed_geometries stale |
 | `handleEntityActionResolve` (SessionPage) | `socket` | ENTITY_ACTION_RESOLVE silencieux |
+| `handleTokenRotate` (SessionPage) | `socket` | TOKEN_ROTATE silencieux |
+| `handlePointerUp` (Canvas3D) | `onTokenRotate`, `characters`, `user` | rotation impossible |
 
 **Exception — actions Zustand :** stables par construction, pas besoin dans les deps.
 
@@ -344,7 +398,7 @@ useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 
 ---
 
-## 13. Conventions non-négociables
+## 15. Conventions non-négociables
 
 - **UUID partout** — jamais `increments()` (sauf voxel_textures.id — P22)
 - **threeToDb(tx, ty, tz)** → `{ pos_x: tx, pos_y: tz, pos_z: ty }` — jamais inline
@@ -359,12 +413,17 @@ useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 - **glb_url avec ?v=timestamp** (P19)
 - **mat.clone() avant mutation Three.js** (P20)
 - **fetch() console F12 : URL absolue + credentials**
-- **skillTotal calculé client** — serveur ne recalcule jamais (PE1)
+- **Calculs Polaris** — serveur calcule via `charStats.js` (PE1 supprimé session 36)
+- **difficulty_dc** — modificateur signé (-20 à +10, LdB p.404) — jamais une valeur absolue
+- **isSuccess Polaris** — `diceRoll <= chancesDeReussite` — jamais >=
+- **charStats.js** — fonctions pures, aucun accès DB — le caller fournit les données
 - **pendingEntityActions Map hors initSocket** — une seule instance
+- **Collision map Redis** — maintenance dans REST, pas dans handlers WS reliques (PE25)
+- **resolveEntityState returning** — doit inclure `battlemap_id` (PE26)
 
 ---
 
-## 14. Pièges actifs — référence rapide
+## 16. Pièges actifs — référence rapide
 
 | Code | Description |
 |---|---|
@@ -382,7 +441,7 @@ useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 | P43 | MinIO : `textures/<pack_uuid>/` jamais par pack_name |
 | P44 | name du pack immuable |
 | P46 | Route spécifique avant paramétrique |
-| PE1 | skillTotal calculé client |
+| PE1 | SUPPRIMÉ session 36 — serveur calcule via charStats.js |
 | PE2 | socket.data.role pour fetchSockets() |
 | PE4 | face null = invisible |
 | PE11 | fallback states[0] si current_state_id invalide |
@@ -392,6 +451,12 @@ useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 | PE16 | e.code pour Alt |
 | PE17 | usage_hint = hint de tri, jamais exclusif |
 | PE18 | blueprint.pack_id nullable — guard obligatoire |
+| PE21 | r tokens = 0-7 — `rotation.y = r * Math.PI / 4` |
+| PE22 | tunnel de swap `excludeIds = [tokenId, entityId]` dans `isCaseOccupied` |
+| PE23 | `buildCollisionMap` au SESSION_JOIN — pas au démarrage serveur |
+| PE24 | `collisionMoveToken` : hdel systématique ancienne case, hset conditionnel si layer != 'gm' |
+| PE25 | maintenance Redis dans REST — jamais dans handlers WS reliques (TOKEN_CREATED/DELETED, ENTITY_*) |
+| PE26 | `resolveEntityState` : `.returning()` doit inclure `battlemap_id` |
 | PEF1 | pack_id obligatoire sur blueprint |
 | PEF2 | fakeTexObj : { id, pack_id, faces } |
 | PEF3 | entityTextureMaterials indexé par blueprint.id UUID |

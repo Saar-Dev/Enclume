@@ -1,6 +1,6 @@
 # CHARACTER.md — Documentation technique du domaine Character
 > Domaine : Fiche personnage Polaris & modules joueur
-> Dernière mise à jour : 2026-04-28 — Session 37 (Chantier XP)
+> Dernière mise à jour : 2026-04-28 — Session 38 (visibilité compétences (X) mode Progression)
 > Statut : Modules 1 à 6 + Module XP stables — 45 migrations appliquées
 
 ---
@@ -398,13 +398,17 @@ Total = Base + mastery              — jamais clampé, peut être négatif (PC1
 2. Pré-calcul mutationsSatisfied :
    mutationReqs = requirements.filter(MUTATION)
    mutationsSatisfied = length > 0 AND every(r => activeMutations.has(r.value))
-3. marker === '(X)' AND NOT learnedSet AND NOT mutationsSatisfied → false (PC15)
+3. marker === '(X)' AND NOT learnedSet AND NOT mutationsSatisfied :
+   - si !progressionMode → false (PC15)
+   - si progressionMode  → continue (prérequis SKILL_MIN évalués normalement)
 4. Pour chaque prérequis :
    SKILL_MIN  → calcTotal(prereq) < threshold  → false
    MUTATION   → !activeMutations.has(value)    → false
    GENOTYPE   → genotypeId !== value           → false
 5. → true (visible)
 ```
+
+**Comportement mode Progression :** les compétences `(X)` non apprises deviennent visibles si leurs prérequis SKILL_MIN sont satisfaits — permettant le déblocage via achat XP (3 PE). Les compétences `(X)` à prérequis MUTATION restent masquées (filtrées à l'étape 4). Les `(X)` sans prérequis (Langue étrangère, Survie…) deviennent visibles — cohérent avec la fiction (accord MJ implicite via distribution XP).
 
 `activeMutations` = Set des `muta_numero` présents dans `charAdvantages` (type=MUTATION).
 
@@ -440,7 +444,7 @@ Module 5 — Compétences. Groupement hiérarchique par famille (session 4) : gr
 - GM : input numérique éditable (debounce 500ms → `PUT /skills` GM uniquement)
 - Joueur : `<span>` readonly avec signe explicite (`+N`)
 
-**Guard achat double-clic :** `isBuyingRef` (useRef synchrone) — jamais `buyingSkillId` state (asynchrone).
+**Comportement visibilité `(X)` :** hors mode Progression, toute compétence `(X)` non apprise est masquée. En mode Progression, elle est révélée si ses prérequis SKILL_MIN sont satisfaits — permettant le déblocage (3 PE). Les `(X)` à prérequis MUTATION restent masquées sans la mutation active.
 
 ### `AdvantagesPanel.jsx`
 Module 6 — Avantages & Désavantages. Liste chronologique + bouton +. Modale 3 étapes :

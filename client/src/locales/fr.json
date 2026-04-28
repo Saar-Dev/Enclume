@@ -152,7 +152,10 @@
     "configTitle": "Paramètres du compte",
     "configUsername": "Nom d'affichage",
     "configColor": "Couleur",
-    "configSaved": "Modifications enregistrées"
+    "configSaved": "Modifications enregistrées",
+    "entityActionDetail": "Compétence : {{skill}} · Dif.{{dif}} · Seuil : {{seuil}}",
+    "entityActionSuccess": "SUCCÈS",
+    "entityActionFail": "ÉCHEC"
   },
   "character": {
     "tabSheet": "Fiche",

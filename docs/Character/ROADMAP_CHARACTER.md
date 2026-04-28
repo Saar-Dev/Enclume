@@ -1,5 +1,5 @@
 # ROADMAP — Domaine Character (sessions futures)
-> Dernière mise à jour : 2026-04-27 — Session 4
+> Dernière mise à jour : 2026-04-28 — Session 38
 
 ---
 
@@ -38,6 +38,9 @@ SQL, routes API, CharacterWindow, CharacterSheet Modules 1-4. Aucun code client 
 - `fr.json` : clés `character.xp.*`
 
 ---
+
+## Session 38 ✅ — Correction visibilité compétences (X) en mode Progression
+- `SkillsPanel.jsx` : compétences `(X)` non apprises visibles en mode Progression si prérequis SKILL_MIN satisfaits — déblocage via achat XP (3 PE). `progressionMode` ajouté dans deps `isVisible`.
 
 ## Session 5 — Corrections restantes + intégration dev externe
 

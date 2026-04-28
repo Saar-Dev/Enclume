@@ -38,11 +38,6 @@ function threeToDb(tx, ty, tz) {
   return { pos_x: tx, pos_y: tz, pos_z: ty }
 }
 
-// loadVoxelTextures importé depuis ../lib/voxelTextures.js
-// — partagé avec Editor3D pour éviter la duplication et garantir la cohérence.
-
-// Voxel importé depuis ./Voxel.jsx — partagé avec Editor3D.
-
 // ─── Anneau de base du token ──────────────────────────────────────────────────
 function TokenRing({ color, isSelected, isDragging, opacity }) {
   const ringRef = useRef()
@@ -98,8 +93,11 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick,
   const tiltX = isDragging ? dragState.tiltX : 0
   const tiltZ = isDragging ? dragState.tiltZ : 0
 
+  // PE21 : rotation.y = r * Math.PI / 4 — 8 orientations, incréments 45°
+  // Appliqué sur le <group> parent — indépendant du tilt de drag (sur le <primitive>)
+  const rotationY = (token.r ?? 0) * Math.PI / 4
+
   // useGLTF suspend le composant le temps du chargement (géré nativement par Canvas R3F).
-  // La référence gltf est stable entre les renders pour une même URL (cache suspend-react).
   const { scene: gltfScene } = useGLTF(glbUrl)
 
   const clonedScene = useMemo(() => {
@@ -136,8 +134,11 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick,
   if (!clonedScene) return null
 
   return (
+    // rotation.y permanent sur le group — PE21
+    // Le tilt de drag reste sur le <primitive> — indépendant
     <group
       position={[x, y, z]}
+      rotation={[0, rotationY, 0]}
       userData={{ isToken: true, tokenId: token.id }}
       onPointerDown={(e) => {
         e.stopPropagation()
@@ -191,7 +192,7 @@ function Scene({
   voxels, setVoxels, textureMaterials, entityTextureMaterials, socket, battlemapId,
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
-  altPressed, onEntityClick,
+  altPressed, onEntityClick, onTokenRotate,
 }) {
   const { camera, gl } = useThree()
   const orbitRef = useRef()
@@ -220,8 +221,6 @@ function Scene({
   const getVoxelKey = (x, y, z) => `${x}:${y}:${z}`
 
   // ─── Écoute voxels temps réel ──────────────────────────────────────────────
-  // battlemapId en dépendance — les handlers capturent battlemapId en closure.
-  // Sans battlemapId dans les deps, handleVoxelUpdated garderait l'ancien ID après MAP_SWITCH.
   useEffect(() => {
     if (!socket) return
 
@@ -236,7 +235,6 @@ function Scene({
     }
 
     const handleVoxelUpdated = ({ battlemapId: incomingId, x, y, z, r }) => {
-      // Filtrer les events d'autres battlemaps — guard race condition MAP_SWITCH
       if (incomingId !== battlemapId) return
       const key = getVoxelKey(x, y, z)
       setVoxels(prev => {
@@ -357,7 +355,6 @@ function Scene({
   }, [raycastGround, getColumnTopY])
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
-  // updateToken appelé directement depuis le store — pas de callback onTokenMove.
   const handlePointerUp = useCallback(async (e) => {
     if (!dragRef.current.active) return
 
@@ -370,6 +367,14 @@ function Scene({
     setDragState(null)
 
     if (!wasMoving) {
+      // Clic court sans déplacement — sélection du token
+      // Si le token appartient au joueur ou est GM → émettre TOKEN_ROTATE via callback
+      // Propriétaire = character.user_id === user.id OU isGm
+      const character = characters.find(c => c.id === token.character_id)
+      const isOwner = character?.user_id === user?.id
+      if (isOwner || isGm) {
+        onTokenRotate?.(token.id)
+      }
       justSelectedRef.current = true
       onTokenSelect(token.id)
       return
@@ -395,7 +400,7 @@ function Scene({
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [raycastGround, getColumnTopY, onTokenSelect, updateToken, isGm, justSelectedRef])
+  }, [raycastGround, getColumnTopY, onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenRotate])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -408,7 +413,6 @@ function Scene({
   }, [handlePointerMove, handlePointerUp, gl])
 
   // ─── Suppression token (touche Suppr) — GM uniquement ─────────────────────
-  // removeToken appelé directement depuis le store — pas de callback onTokenDelete.
   useEffect(() => {
     const handleKeyDown = async (e) => {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
@@ -487,10 +491,6 @@ function Scene({
       })}
 
       {tokens.filter(token => isGm || token.layer !== 'gm').map(token => {
-        // Résolution de l'URL GLB depuis le character associé.
-        // Si le character a un glb_url (chemin MinIO), on construit l'URL proxy.
-        // Sinon fallback sur default.glb.
-        // Le ?v= éventuel dans glb_url assure le cache busting de useGLTF.
         const character = characters.find(c => c.id === token.character_id)
         const glbUrl = character?.glb_url
           ? `${import.meta.env.VITE_API_URL}/api/assets/${character.glb_url}`
@@ -514,17 +514,15 @@ function Scene({
 
 // ─── Composant principal exporté ──────────────────────────────────────────────
 // Canvas3D — lecture seule (mode jeu).
-// La logique d'édition est dans Editor3D (session 9A-3).
-// Props supprimées en 9A-2 : mode, activeMaterial, onPackLoaded
-// Props conservées : onTokenDoubleClick, socket
-// Props ajoutées : onEntityClick
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick }) {
+// Props : onTokenDoubleClick, socket, onEntityClick, onTokenRotate
+// onTokenRotate : callback → SessionPage émet WS.TOKEN_ROTATE
+export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
 
   const [voxels, setVoxels] = useState({})
-  const [textureMaterials, setTextureMaterials] = useState({})  // { [texId]: { faceMaterials } } — voxels uniquement
-  const [entityTextureMaterials, setEntityTextureMaterials] = useState({})  // { [bp.id]: { base, states } }
+  const [textureMaterials, setTextureMaterials] = useState({})
+  const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
   const [blocksReady, setBlocksReady] = useState(false)
   const [selectedTokenId, setSelectedTokenId] = useState(null)
 
@@ -548,15 +546,9 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick }) 
 
   const justSelectedRef = useRef(false)
 
-  // blueprintIds — chaîne stable des IDs de blueprints uniques présents sur la carte.
-  // Utilisée comme dépendance du useEffect de chargement des textures entités pour éviter
-  // un rechargement à chaque mise à jour WS (ENTITY_MOVED, etc.) qui recrée le tableau
-  // entities sans changer les blueprints nécessaires.
   const blueprintIds = [...new Set(entities.map(e => e.blueprint_id))].sort().join(',')
 
   // ─── Initialisation voxels depuis battlemap.voxel_data ────────────────────
-  // Format base après migration 30 : { "x:y:z": { tex, geo, r } }
-  // Format mémoire React : { "x:y:z": { x, y, z, tex, geo, r } }
   useEffect(() => {
     if (!battlemap?.voxel_data) return
     const map = {}
@@ -568,13 +560,10 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick }) 
   }, [battlemap?.id, battlemap?.voxel_data])
 
   // ─── Chargement des voxel_textures nécessaires ───────────────────────────
-  // Charge les IDs présents dans voxel_data — séparé du chargement entités (PEF6).
-  // Guard P26 : si 0 textures → setBlocksReady(true) immédiatement (carte vide).
   useEffect(() => {
     const loadBlocks = async () => {
       setBlocksReady(false)
 
-      // ── Voxels ────────────────────────────────────────────────────────────
       const voxelTexIds = battlemap?.voxel_data
         ? [...new Set(Object.values(battlemap.voxel_data).map(v => v.tex))]
         : []
@@ -591,23 +580,18 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick }) 
         }
       }
 
-      // ── Entités — fakeTexObjs depuis geometry.faces (chemins PNG) ─────────
-      // PEF5 : skip les blueprints sans pack_id
-      // PEF6 : chargement séparé — n'utilise pas /voxel-textures?ids=
       const fakeTexObjs = []
       for (const entity of entities) {
         const bp = entity.blueprint
-        if (!bp?.pack_id) continue               // PEF5
+        if (!bp?.pack_id) continue
         if (!bp.geometry?.faces) continue
 
-        // Jeu de base
         fakeTexObjs.push({
           id: `${bp.id}__base`,
           pack_id: bp.pack_id,
           faces: bp.geometry.faces,
         })
 
-        // Un jeu par état avec face_overrides fusionnés
         for (const state of bp.states || []) {
           const overrides = state.visual_override?.face_overrides || {}
           if (Object.keys(overrides).length === 0) continue
@@ -622,12 +606,11 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick }) 
       if (fakeTexObjs.length > 0) {
         try {
           const flat = await loadVoxelTextures(fakeTexObjs)
-          // Restructurer en { [bp.id]: { base, states: { [stateId]: ... } } }
           const structured = {}
           for (const entity of entities) {
             const bp = entity.blueprint
-            if (!bp?.pack_id) continue                    // PEF5
-            if (structured[bp.id]) continue               // déjà traité (plusieurs instances du même blueprint)
+            if (!bp?.pack_id) continue
+            if (structured[bp.id]) continue
             structured[bp.id] = { base: null, states: {} }
             structured[bp.id].base = flat[`${bp.id}__base`] || null
             for (const state of bp.states || []) {
@@ -677,6 +660,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick }) 
           justSelectedRef={justSelectedRef}
           altPressed={altPressed}
           onEntityClick={onEntityClick}
+          onTokenRotate={onTokenRotate}
         />
       )}
     </Canvas>

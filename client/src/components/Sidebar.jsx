@@ -874,7 +874,6 @@ export default function Sidebar({
                       {msg.skillId && (
                         <div style={styles.actionMeta}>
                           <span>{t('sidebar.actionSkill')} : <strong>{msg.skillId}</strong></span>
-                          <span>{t('sidebar.actionScore')} : <strong>{msg.skillTotal ?? '—'}</strong></span>
                           <span>{t('sidebar.actionDC')} : <strong>{msg.defaultDifficulty}</strong></span>
                         </div>
                       )}
@@ -894,6 +893,46 @@ export default function Sidebar({
                 }
                 if (msg.type === 'dice') {
                   const isAnimating = animatingDiceId === msg.id
+
+                  // ── Jet d'interaction entité — affichage structuré ──────────
+                  if (msg.skillLabel !== undefined) {
+                    const successStyle = msg.isSuccess
+                      ? { background: 'rgba(76,175,119,0.07)', border: '1px solid rgba(76,175,119,0.2)' }
+                      : { background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }
+                    return (
+                      <div key={msg.id} style={{ ...styles.messageDice, ...successStyle }}>
+                        {/* En-tête : icône + nom + heure */}
+                        <div style={styles.diceHeader}>
+                          <span style={{ ...styles.diceIcon, color: msg.color || '#5b8dee' }}>
+                            <IconDice />
+                          </span>
+                          <span style={{ ...styles.msgUser, color: msg.color || '#5b8dee' }}>{msg.user}</span>
+                          <span style={styles.msgTime}> · {msg.time}</span>
+                        </div>
+                        {/* Corps : nom compétence + résultat du dé en grand */}
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', paddingLeft: '2px' }}>
+                          <span style={styles.diceFormula}>{msg.skillLabel}</span>
+                          <span style={{ ...styles.diceTotal, fontSize: '20px' }}>{msg.total}</span>
+                        </div>
+                        {/* Détail : compétence · difficulté · seuil */}
+                        <div style={{ paddingLeft: '2px', fontSize: '11px', color: '#64748b' }}>
+                          {t('sidebar.entityActionDetail', {
+                            skill: msg.mechanicalTotal,
+                            dif: msg.diffLabel,
+                            seuil: msg.chancesDeReussite,
+                          })}
+                        </div>
+                        {/* Badge résultat */}
+                        <div style={{ paddingLeft: '2px' }}>
+                          <span style={msg.isSuccess ? styles.badgeCritSuccess : styles.badgeCritFail}>
+                            {msg.isSuccess ? t('sidebar.entityActionSuccess') : t('sidebar.entityActionFail')}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  // ── Jet normal (/r formule) ─────────────────────────────────
                   const critStyle = msg.isCriticalSuccess
                     ? styles.diceCritSuccess
                     : msg.isCriticalFail

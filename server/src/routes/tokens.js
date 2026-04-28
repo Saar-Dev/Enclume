@@ -3,6 +3,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { WS } from '../../../shared/events.js'
+import { collisionAddToken, collisionRemoveToken, collisionMoveToken } from '../lib/redis.js'
 
 const router = Router({ mergeParams: true })
 
@@ -73,8 +74,10 @@ router.post('/', requireAuth, async (req, res) => {
     })
     .returning('*')
 
+  // Maintenance collision map Redis — ignoré si layer 'gm'
+  await collisionAddToken(req.params.id, token)
+
   // Broadcaster TOKEN_CREATED à toute la room — le serveur est seul émetteur
-  // updated_at inclus via returning('*') — cohérence avec TOKEN_MOVED
   const io = req.app.get('io')
   io.to(battlemap.campaign_id).emit(WS.TOKEN_CREATED, { token })
 
@@ -133,7 +136,7 @@ router.put('/:id', requireAuth, async (req, res) => {
 
   if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
 
-  // updated_at systématique sur tout PUT
+  // updated_at systématique sur tout PUT — P13 : après le guard Object.keys
   updates.updated_at = db.fn.now()
 
   const [updated] = await db('tokens')
@@ -141,8 +144,14 @@ router.put('/:id', requireAuth, async (req, res) => {
     .update(updates)
     .returning('*')
 
+  // Maintenance collision map Redis si la position a changé
+  // token = ancienne position, updated = nouvelle position
+  const positionChanged = pos_x !== undefined || pos_y !== undefined || pos_z !== undefined
+  if (positionChanged) {
+    await collisionMoveToken(token.battlemap_id, token, updated)
+  }
+
   // Broadcaster TOKEN_MOVED à toute la room — le serveur est seul émetteur
-  // updated_at inclus — permet au client d'ignorer les events obsolètes
   const io = req.app.get('io')
   io.to(battlemap.campaign_id).emit(WS.TOKEN_MOVED, {
     tokenId: updated.id,
@@ -175,6 +184,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
     isOwner = character?.user_id === req.user.id
   }
   if (!isGm && !isOwner) throw new AppError(403, 'You can only delete your own token')
+
+  // Maintenance collision map Redis AVANT suppression — position encore disponible
+  await collisionRemoveToken(token.battlemap_id, token)
 
   await db('tokens').where({ id: req.params.id }).delete()
 

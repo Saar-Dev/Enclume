@@ -8,6 +8,18 @@ import {
   getGenotypeModForAttr,
   ATTR_LABELS,
 } from '../lib/charStats.js'
+import {
+  buildCollisionMap,
+  collisionAddToken,
+  collisionRemoveToken,
+  collisionMoveToken,
+  collisionAddEntity,
+  collisionRemoveEntity,
+  collisionMoveEntity,
+  collisionUpdateEntityState,
+  collisionAddVoxel,
+  collisionRemoveVoxel,
+} from '../lib/redis.js'
 
 // Map des timers de timeout actifs — { requestId: { timeoutHandle, ...pendingData } }
 // Déclarée hors de initSocket — une seule instance, partagée entre toutes les connexions.
@@ -43,7 +55,7 @@ const initSocket = (io) => {
         socket.role = member.role
         // Stocker userId dans socket.data — accessible via fetchSockets() contrairement à socket.user
         socket.data.userId = socket.user.id
-        // Stocker role dans socket.data — nécessaire pour ciblage GM via fetchSockets() (P2)
+        // Stocker role dans socket.data — nécessaire pour ciblage GM via fetchSockets() (PE2)
         socket.data.role = member.role
 
         // Récupérer les utilisateurs déjà dans la room (avant le join du nouvel arrivant)
@@ -67,6 +79,22 @@ const initSocket = (io) => {
           username: socket.user.username,
           role: member.role,
         })
+
+        // ── Collision map Redis — reconstruction (PE23) ───────────────────
+        // Reconstruite à chaque SESSION_JOIN, pas au démarrage serveur.
+        // Nécessite la battlemap courante du joueur via player_locations.
+        // Si pas de player_location → joueur sans carte, skip (normal à la première connexion).
+        try {
+          const playerLocation = await db('player_locations')
+            .where({ campaign_id: campaignId, user_id: socket.user.id })
+            .first()
+          if (playerLocation?.battlemap_id) {
+            await buildCollisionMap(playerLocation.battlemap_id)
+          }
+        } catch (err) {
+          // Non bloquant — la collision map sera reconstruite au prochain SESSION_JOIN
+          console.warn('[WS] session:join — buildCollisionMap error (non bloquant):', err.message)
+        }
 
         console.log(`[WS] ${socket.user.username} a rejoint la campagne ${campaignId}`)
       } catch (err) {
@@ -99,10 +127,12 @@ const initSocket = (io) => {
         const [updated] = await db('tokens')
           .where({ id: tokenId })
           .update({ pos_x, pos_y, pos_z, updated_at: db.fn.now() })
-          .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'updated_at'])
+          .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'layer', 'updated_at'])
+
+        // Maintenance collision map Redis — hdel ancienne case + hset nouvelle
+        await collisionMoveToken(token.battlemap_id, token, updated)
 
         // Broadcaster à tous les membres de la campagne (y compris l'émetteur)
-        // updated_at inclus — permet au client d'ignorer les events obsolètes
         io.to(socket.campaignId).emit(WS.TOKEN_MOVED, {
           tokenId: updated.id,
           pos_x: updated.pos_x,
@@ -115,9 +145,44 @@ const initSocket = (io) => {
       }
     })
 
+    // ─── TOKEN:ROTATE ──────────────────────────────────────────────────────
+    // Joueur ou GM fait pivoter son token de 45° (incrément r = (r+1) % 8)
+    // Payload : { tokenId }
+    // Le serveur est source de vérité pour l'incrément — le client n'envoie pas r.
+    // PE21 : rotation.y = r * Math.PI / 4 côté client
+    socket.on(WS.TOKEN_ROTATE, async ({ tokenId }) => {
+      try {
+        const token = await db('tokens').where({ id: tokenId }).first()
+        if (!token) return
+
+        // Ownership : GM ou propriétaire du character lié au token
+        const isGm = socket.role === 'gm'
+        let isOwner = false
+        if (token.character_id) {
+          const character = await db('characters').where({ id: token.character_id }).first()
+          isOwner = character?.user_id === socket.data.userId
+        }
+        if (!isOwner && !isGm) return
+
+        // Incrément 45° modulo 8 — r = 0..7
+        const newR = ((token.r ?? 0) + 1) % 8
+
+        const [updated] = await db('tokens')
+          .where({ id: tokenId })
+          .update({ r: newR, updated_at: db.fn.now() })
+          .returning('*')
+
+        // Broadcast TOKEN_UPDATED — réutilise l'event existant
+        io.to(socket.campaignId).emit(WS.TOKEN_UPDATED, { token: updated })
+      } catch (err) {
+        console.error('[WS] token:rotate error:', err.message)
+      }
+    })
+
     // ─── TOKEN:CREATED ─────────────────────────────────────────────────────
     // Conservé temporairement — relique Chantier 1, à nettoyer chantier dédié.
-    // GM a placé un token sur la carte
+    // La création REST (POST /tokens) gère déjà le broadcast ET la collision map.
+    // Ce handler ne touche pas Redis — évite le double-traitement.
     // Payload : { tokenId }
     socket.on(WS.TOKEN_CREATED, async ({ tokenId }) => {
       try {
@@ -132,7 +197,8 @@ const initSocket = (io) => {
 
     // ─── TOKEN:DELETED ─────────────────────────────────────────────────────
     // Conservé temporairement — relique Chantier 1, à nettoyer chantier dédié.
-    // Un token a été supprimé
+    // La suppression REST (DELETE /tokens/:id) gère déjà la collision map.
+    // Ce handler ne touche pas Redis.
     // Payload : { tokenId }
     socket.on(WS.TOKEN_DELETED, async ({ tokenId }) => {
       try {
@@ -170,6 +236,9 @@ const initSocket = (io) => {
           .where({ id: battlemapId })
           .update({ voxel_data: JSON.stringify(next) })
 
+        // Maintenance collision map Redis
+        await collisionAddVoxel(battlemapId, x, y, z)
+
         // Broadcaster à tous
         io.to(socket.campaignId).emit(WS.VOXEL_ADDED, { battlemapId, x, y, z, tex, geo, r })
       } catch (err) {
@@ -199,6 +268,9 @@ const initSocket = (io) => {
           .where({ id: battlemapId })
           .update({ voxel_data: JSON.stringify(next) })
 
+        // Maintenance collision map Redis
+        await collisionRemoveVoxel(battlemapId, x, y, z)
+
         io.to(socket.campaignId).emit(WS.VOXEL_REMOVED, { battlemapId, x, y, z })
       } catch (err) {
         console.error('[WS] voxel:remove error:', err.message)
@@ -208,6 +280,7 @@ const initSocket = (io) => {
     // ─── VOXEL:UPDATE ─────────────────────────────────────────────────────
     // Le GM tourne un voxel déjà posé (touche R sur un bloc existant)
     // Payload : { battlemapId, x, y, z, r }
+    // Pas de maintenance Redis — la position ne change pas, seule la rotation change.
     socket.on(WS.VOXEL_UPDATE, async ({ battlemapId, x, y, z, r }) => {
       try {
         if (socket.role !== 'gm') {
@@ -297,20 +370,14 @@ const initSocket = (io) => {
       if (!socket.campaignId) return
 
       try {
-        // ── 1. Parser et calculer le jet ──────────────────────────────────
-        // parseDice lève une Error si la formule est invalide → catch silencieux
         const { rolls, total, formula: normalizedFormula, dieType, seed } = await parseDice(formula)
 
-        // ── 2. Lire la couleur du lanceur depuis la DB ────────────────────
-        // Même pattern que CHAT_MESSAGE — color n'est jamais dans le JWT.
         let color = '#5b8dee'
         try {
           const userRow = await db('users').where({ id: socket.user.id }).select('color').first()
           if (userRow?.color) color = userRow.color
         } catch (_) {}
 
-        // ── 3. Lire dice_config de la campagne pour évaluation des critiques ─
-        // dice_config peut être null (critiques désactivés) ou absent du dé.
         let isCriticalSuccess = false
         let isCriticalFail = false
 
@@ -318,12 +385,8 @@ const initSocket = (io) => {
           const campaign = await db('campaigns').where({ id: socket.campaignId }).select('dice_config').first()
           const diceConfig = campaign?.dice_config
 
-          // diceConfig null = critiques désactivés pour toute la campagne
-          // dieType null = formule mixte, pas de lookup possible (non applicable ici car
-          //   notre parseDice retourne toujours un dieType pour formule simple)
           if (diceConfig && dieType) {
             const dieCfg = diceConfig[dieType]
-
             if (dieCfg?.success) {
               isCriticalSuccess = total >= dieCfg.success.min && total <= dieCfg.success.max
             }
@@ -331,11 +394,8 @@ const initSocket = (io) => {
               isCriticalFail = total >= dieCfg.fail.min && total <= dieCfg.fail.max
             }
           }
-        } catch (_) {
-          // Erreur lecture dice_config — on continue sans critiques plutôt que de bloquer
-        }
+        } catch (_) {}
 
-        // ── 4. Broadcast DICE_RESULT à toute la room ─────────────────────
         const timestamp = new Date().toISOString()
         io.to(socket.campaignId).emit(WS.DICE_RESULT, {
           userId: socket.user.id,
@@ -352,7 +412,6 @@ const initSocket = (io) => {
 
         console.log(`[WS] dice:roll — ${socket.user.username} : ${normalizedFormula} = ${total}`)
       } catch (err) {
-        // Formule invalide ou erreur inattendue — log silencieux, pas de broadcast
         console.error(`[WS] dice:roll error (${socket.user.username}) : ${err.message}`)
       }
     })
@@ -361,7 +420,6 @@ const initSocket = (io) => {
     // Payload : { text }
     socket.on(WS.CHAT_MESSAGE, async ({ text }) => {
       if (!text || !socket.campaignId) return
-      // Lire la couleur depuis la DB — pas dans le JWT
       let color = '#5b8dee'
       try {
         const userRow = await db('users').where({ id: socket.user.id }).select('color').first()
@@ -378,8 +436,6 @@ const initSocket = (io) => {
 
     // ─── CHARACTER:UPDATED ─────────────────────────────────────────────────
     // Conservé temporairement — relique Chantier 1, à nettoyer chantier dédié.
-    // Le GM a modifié un character (visible, assignation, etc.)
-    // Payload : { characterId }
     socket.on(WS.CHARACTER_UPDATED, async ({ characterId }) => {
       try {
         if (socket.role !== 'gm') {
@@ -399,25 +455,18 @@ const initSocket = (io) => {
             'characters.visible',
             'characters.glb_url',
             'characters.portrait_url',
-            'characters.description',
-            'characters.gm_notes',
-            'characters.created_at',
-            'characters.updated_at',
-            'users.username as owner_username'
+            'users.username',
           )
           .first()
 
         if (!character) return
-
-        const { gm_notes, ...characterPublic } = character
-        io.to(socket.campaignId).emit(WS.CHARACTER_UPDATED, characterPublic)
+        io.to(socket.campaignId).emit(WS.CHARACTER_UPDATED, character)
       } catch (err) {
         console.error('[WS] character:updated error:', err.message)
       }
     })
 
     // ─── ENTITY:ACTION_REQUEST ─────────────────────────────────────────────
-    // Un joueur demande à interagir avec une entité.
     // Payload : { requestId, characterId, entityId, interactionId, skillId }
     // skillTotal N'EST PAS reçu du client — le serveur calcule via charStats.js.
     // Timeout 60s — si le GM ne répond pas, refus automatique (PE12).
@@ -458,12 +507,18 @@ const initSocket = (io) => {
         const overrides = entity.interaction_overrides?.[interactionId] || {}
         const defaultDifficulty = overrides.difficulty_dc ?? interaction.difficulty_dc
 
+        // Guard — pas de mécanique (skill_id ni attribute_id) → résolution directe sans GM
+        if (!interaction.skill_id && !interaction.attribute_id) {
+          await resolveEntityState(entityId, interactionId, socket.campaignId, io)
+          console.log(`[WS] entity:action_request direct (no skill) — ${socket.user.username} → ${interaction.action_label}`)
+          return
+        }
+
         // Trouver le socket GM via socket.data.role (PE2 — fetchSockets expose socket.data)
         const roomSockets = await io.in(socket.campaignId).fetchSockets()
         const gmSocket = roomSockets.find(s => s.data.role === 'gm')
 
         if (!gmSocket) {
-          // Aucun GM connecté — refus immédiat
           socket.emit(WS.ENTITY_ACTION_RESULT, {
             requestId, isApproved: false, reason: 'no_gm',
           })
@@ -484,19 +539,18 @@ const initSocket = (io) => {
           playerSocketId: socket.id,
           playerUserId: socket.user.id,
           playerName: socket.user.username,
-          characterId,                                      // nécessaire pour calcul serveur charStats
+          characterId,
           characterName: character.name,
           entityId,
           entityLabel: entity.label_override || blueprint.label,
           interactionId,
           interactionLabel: interaction.action_label,
           skillId,
-          attributeId: interaction.attribute_id || null,   // branche attribut (ex: 'FOR') — 9F-B
+          attributeId: interaction.attribute_id || null,
           defaultDifficulty,
           campaignId: socket.campaignId,
         })
 
-        // Notifier le GM
         gmSocket.emit(WS.ENTITY_ACTION_PENDING, {
           requestId,
           playerName: socket.user.username,
@@ -522,13 +576,12 @@ const initSocket = (io) => {
         if (!requestId) return
 
         const pending = pendingEntityActions.get(requestId)
-        if (!pending) return  // Déjà résolu ou expiré
+        if (!pending) return
 
-        // Nettoyer le timer et la Map
+        // Nettoyer le timer et la Map (PE12)
         clearTimeout(pending.timeoutHandle)
         pendingEntityActions.delete(requestId)
 
-        // Retrouver le socket joueur dans la room
         const roomSockets = await io.in(pending.campaignId).fetchSockets()
         const playerSocket = roomSockets.find(s => s.id === pending.playerSocketId)
 
@@ -561,9 +614,7 @@ const initSocket = (io) => {
           return
         }
 
-        // ── Skill absent → succès automatique sans jet (S34-2) ───────────
-        // Si l'interaction n'a pas de compétence associée, l'action réussit
-        // directement sans jet de dés.
+        // ── Skill absent → succès automatique sans jet (S34-2) ────────────
         if (!pending.skillId) {
           await resolveEntityState(pending.entityId, pending.interactionId, pending.campaignId, io)
           return
@@ -573,8 +624,6 @@ const initSocket = (io) => {
         try {
           const { rolls, total: diceRoll, formula: normalizedFormula, seed } = await parseDice('1d20')
 
-          // ── Charger les données personnage pour calcul serveur ────────────
-          // charStats.js — fonctions pures, le caller fournit les données DB.
           let mechanicalTotal = 0
           let formulaLabel = pending.skillId || pending.attributeId || '?'
 
@@ -599,37 +648,27 @@ const initSocket = (io) => {
               : null
 
             if (pending.skillId && refSkill) {
-              // Branche compétence : Base + mastery
               mechanicalTotal = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)
               formulaLabel = refSkill.label || pending.skillId
             } else if (pending.attributeId) {
-              // Branche attribut : AN de l'attribut (ex: Force → 'FOR')
               mechanicalTotal = calcAttributeAN(attrs, pending.attributeId, genotypeRow)
               formulaLabel = ATTR_LABELS[pending.attributeId] || pending.attributeId
             }
           } else {
-            // Fiche absente — fallback 0, log warning
             console.warn(`[WS] entity:action_resolve — char_sheet introuvable pour character ${pending.characterId}, fallback total=0`)
             if (pending.skillId) formulaLabel = pending.skillId
             else if (pending.attributeId) formulaLabel = ATTR_LABELS[pending.attributeId] || pending.attributeId
           }
 
-          // ── Lire la couleur du joueur ─────────────────────────────────────
           let color = '#5b8dee'
           try {
             const userRow = await db('users').where({ id: pending.playerUserId }).select('color').first()
             if (userRow?.color) color = userRow.color
           } catch (_) {}
 
-          // Résolution Polaris (LdB p.404)
-          // chancesDeReussite = total_mécanique + modificateur_difficulté + ajustement_GM
-          // Succès : diceRoll <= chancesDeReussite
-          // Échec  : diceRoll >  chancesDeReussite
           const totalDiffMod = pending.defaultDifficulty + gmModifier
           const chancesDeReussite = mechanicalTotal + totalDiffMod
           const isSuccess = diceRoll <= chancesDeReussite
-
-          // Format modificateur de difficulté avec signe explicite
           const diffLabel = totalDiffMod >= 0 ? `+${totalDiffMod}` : `${totalDiffMod}`
 
           const timestamp = new Date().toISOString()
@@ -637,8 +676,7 @@ const initSocket = (io) => {
             userId: pending.playerUserId,
             username: pending.playerName,
             color,
-            // "Crochetage [8] — Chances : 3 (Dif.-5)" ou "Force [3] — Chances : 13 (Dif.+10)"
-            formula: `${formulaLabel} [${mechanicalTotal}] — Chances : ${chancesDeReussite} (Dif.${diffLabel})`,
+            formula: formulaLabel,
             rolls,
             total: diceRoll,
             type: 'entity_action',
@@ -646,9 +684,13 @@ const initSocket = (io) => {
             isCriticalFail: false,
             seed,
             timestamp,
+            skillLabel: formulaLabel,
+            mechanicalTotal,
+            chancesDeReussite,
+            diffLabel,
+            isSuccess,
           })
 
-          // Mettre à jour l'état de l'entité uniquement en cas de succès
           if (isSuccess) {
             await resolveEntityState(pending.entityId, pending.interactionId, pending.campaignId, io)
           }
@@ -677,8 +719,8 @@ const initSocket = (io) => {
     // ─── ENTITY:CREATED ────────────────────────────────────────────────────
     // Le GM vient de poser une entité (après POST REST réussi).
     // Payload : { entityId }
-    // Le serveur relit l'entité + blueprint pour le broadcast complet.
-    // Respect du flag gm_only — les joueurs ne reçoivent pas les entités cachées.
+    // La maintenance Redis collision est faite dans POST /entities (REST).
+    // Ce handler gère uniquement le broadcast ciblé (gm_only).
     socket.on(WS.ENTITY_CREATED, async ({ entityId }) => {
       try {
         if (socket.role !== 'gm') return
@@ -731,6 +773,8 @@ const initSocket = (io) => {
 
     // ─── ENTITY:DELETED ────────────────────────────────────────────────────
     // Le GM a supprimé une entité (après DELETE REST réussi).
+    // La maintenance Redis collision est faite dans DELETE /entities/:id (REST).
+    // Ce handler gère uniquement le broadcast.
     // Payload : { entityId }
     socket.on(WS.ENTITY_DELETED, async ({ entityId }) => {
       try {
@@ -743,6 +787,8 @@ const initSocket = (io) => {
 
     // ─── ENTITY:MOVED ──────────────────────────────────────────────────────
     // Le GM a déplacé une entité dans l'éditeur (après PUT REST réussi).
+    // La maintenance Redis collision est faite dans PUT /entities/:id (REST).
+    // Ce handler gère uniquement le broadcast.
     // Payload : { entityId, pos_x, pos_y, pos_z, r }
     socket.on(WS.ENTITY_MOVED, async ({ entityId, pos_x, pos_y, pos_z, r }) => {
       try {
@@ -770,7 +816,8 @@ export default initSocket
 
 // ─── Helper — résolution état entité après succès ─────────────────────────────
 // Lit target_state_id de l'interaction, met à jour current_state_id en base,
-// et broadcaster ENTITY_UPDATED à toute la room.
+// broadcaster ENTITY_UPDATED à toute la room,
+// et maintient la collision map Redis selon is_blocking du nouvel état.
 async function resolveEntityState(entityId, interactionId, campaignId, io) {
   try {
     const entity = await db('entities').where({ id: entityId }).first()
@@ -788,7 +835,10 @@ async function resolveEntityState(entityId, interactionId, campaignId, io) {
         current_state_id: interaction.target_state_id,
         updated_at: db.fn.now(),
       })
-      .returning(['id', 'current_state_id', 'state', 'updated_at'])
+      .returning(['id', 'current_state_id', 'state', 'updated_at', 'pos_x', 'pos_y', 'pos_z', 'battlemap_id'])
+
+    // Maintenance collision map Redis — is_blocking peut changer selon le nouvel état
+    await collisionUpdateEntityState(updated.battlemap_id, entity, blueprint, updated.current_state_id)
 
     io.to(campaignId).emit(WS.ENTITY_UPDATED, {
       entityId: updated.id,

@@ -144,7 +144,8 @@ export default function SkillsPanel({
       && mutationReqs.every(r => activeMutations.has(r.value))
 
     if (skill.marker === '(X)' && !learnedSet.has(skill.id) && !mutationsSatisfied) {
-      return false
+      if (!progressionMode) return false
+      // En mode Progression : on continue — les prérequis SKILL_MIN s'appliquent toujours
     }
 
     for (const req of skill.requirements) {
@@ -162,7 +163,7 @@ export default function SkillsPanel({
     }
 
     return true
-  }, [refSkills, learnedSet, calcTotal, genotypeId, activeMutations])
+  }, [refSkills, learnedSet, calcTotal, genotypeId, activeMutations, progressionMode])
 
   // ─── Groupement hiérarchique par famille ──────────────────────────────────
   const families = useMemo(() => {

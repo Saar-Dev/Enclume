@@ -318,6 +318,11 @@ export default function SessionPage() {
     s.on(WS.TOKEN_DELETED, ({ tokenId }) => {
       removeToken(tokenId)
     })
+    s.on(WS.TOKEN_UPDATED, ({ token }) => {
+      // Mise à jour partielle — token contient id + tous les champs modifiés (ex: r après TOKEN_ROTATE)
+      // Guard updated_at géré dans le store — événements obsolètes ignorés silencieusement
+      updateToken(token)
+    })
     s.on(WS.CHAT_MESSAGE, ({ userId, username, color, text, timestamp }) => {
       addMessage({
         id: `${userId}-${timestamp}`,
@@ -330,7 +335,7 @@ export default function SessionPage() {
     s.on(WS.CHARACTER_UPDATED, (updatedCharacter) => {
       upsertCharacter(updatedCharacter)
     })
-    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp }) => {
+    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess }) => {
       addMessage({
         id: `dice-${userId}-${timestamp}`,
         type: 'dice',
@@ -342,6 +347,12 @@ export default function SessionPage() {
         isCriticalSuccess,
         isCriticalFail,
         time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        // Champs structurés — jets entity_action uniquement (undefined pour jets normaux)
+        skillLabel,
+        mechanicalTotal,
+        chancesDeReussite,
+        diffLabel,
+        isSuccess,
       })
     })
     s.on(WS.MAP_SWITCH, ({ battlemapId, userIds }) => {
@@ -504,7 +515,13 @@ export default function SessionPage() {
   // ─── Résolution action entité (GM → serveur) ──────────────────────────────
   const handleEntityActionResolve = useCallback((requestId, isApproved, autoSuccess, gmModifier) => {
     socket?.emit(WS.ENTITY_ACTION_RESOLVE, { requestId, isApproved, autoSuccess, gmModifier })
-    setEntityActionQueue(prev => prev.filter(a => a.requestId !== requestId))
+  }, [socket])
+
+  // ─── Rotation token (joueur/GM → serveur) ─────────────────────────────────
+  // Appelé par Canvas3D au clic court sur un token propriétaire.
+  // Le serveur incrémente r et broadcast TOKEN_UPDATED — PE21.
+  const handleTokenRotate = useCallback((tokenId) => {
+    socket?.emit(WS.TOKEN_ROTATE, { tokenId })
   }, [socket])
 
   if (loading) return (
@@ -572,6 +589,7 @@ export default function SessionPage() {
               onTokenDoubleClick={handleTokenDoubleClick}
               socket={socket}
               onEntityClick={handleEntityClick}
+              onTokenRotate={handleTokenRotate}
             />
         )}
         {!canvasVisible && (

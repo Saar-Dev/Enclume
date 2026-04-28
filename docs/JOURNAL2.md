@@ -783,3 +783,205 @@ Ordre obligatoire : `handleEntityAction` → `handleEntityClick`.
 - ❌ GM auto-approve (Bug S34-4)
 - ❌ Notifications chat + couleur onglet (Bug S34-5)
 - ❌ Détection ⚙ robuste (Bug S34-6)
+---
+
+## Session 36 — 2026-04-28
+
+### Contexte
+Reprise après session 34. Chantier 9F-0 + corrections flux interactions entités.
+
+### Travail effectué
+
+**`server/src/lib/charStats.js` — NOUVEAU ✅**
+Bibliothèque de calcul pure (aucun accès DB) — source de vérité mécanique serveur.
+- Tables : AN_TABLE (LdB p.114), MOD_DOM_TABLE (p.113), RD_TABLE (p.114), RES_NAT_TABLE (p.114), DIFFICULTY_MOD_TABLE (p.404)
+- Tables qualitatives documentées non utilisées en V1 : ATTR_LEVEL_LABELS, MASTERY_LEVEL_LABELS, SKILL_LEVEL_LABELS
+- ATTR_LABELS : labels complets attributs (LdB p.112-113)
+- ATTR_DESCRIPTIONS : descriptions complètes pour tooltips futurs
+- Fonctions : calcNA, calcAN, calcAttributeAN, calcAttributeNA, getGenotypeModForAttr
+- calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow) — Base + mastery (PC4 attr_2=null)
+- getModDom, calcREA, calcSeuils, calcVitesses, calcResistanceDommages, calcResistanceNaturelle, calcResistanceDroguesInput, calcSouffle
+- Coût XP : getCoutAugmentation, getCoutDeblocageX, getCoutTotal (ajoutés par chantier Character parallèle)
+
+**`server/src/socket/index.js` — MODIFIÉ ✅**
+- Import charStats.js (calcSkillTotal, calcAttributeAN, getGenotypeModForAttr, ATTR_LABELS)
+- PE1 supprimé — commentaire mis à jour
+- ENTITY_ACTION_REQUEST : characterId et attributeId ajoutés dans pendingEntityActions Map
+- ENTITY_ACTION_REQUEST : guard résolution directe sans GM si !skill_id && !attribute_id → resolveEntityState direct
+- ENTITY_ACTION_RESOLVE : 4 requêtes DB en Promise.all (char_attributes, char_archetype, char_skills, ref_skills) + ref_genotypes séquentiel après archetype
+- ENTITY_ACTION_RESOLVE : calcSkillTotal ou calcAttributeAN selon branche skillId/attributeId
+- Formule Polaris correcte : chancesDeReussite = mechanicalTotal + difficulty_dc + gmModifier / isSuccess = diceRoll <= chancesDeReussite (LdB p.404)
+- Label chat : `"${formulaLabel} [${mechanicalTotal}] — Chances : ${chancesDeReussite} (Dif.${diffLabel})"`
+- DICE_RESULT : champs structurés ajoutés (skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess)
+- Fallback mechanicalTotal=0 si char_sheet introuvable — log warning
+
+**`client/src/pages/SessionPage.jsx` — MODIFIÉ ✅**
+- skillTotal retiré du payload ENTITY_ACTION_REQUEST (serveur calcule)
+- attributeId: interaction.attribute_id || null ajouté au payload
+- Handler DICE_RESULT : champs structurés ajoutés au destructuring + transmis à addMessage
+- handleEntityActionResolve : setEntityActionQueue supprimé (ReferenceError — variable inexistante)
+
+**`client/src/components/Sidebar.jsx` — MODIFIÉ ✅**
+- Panel GM : skillTotal retiré (non disponible avant arbitrage)
+- Rendu dice : branche entity_action séparée si msg.skillLabel !== undefined
+  - Format : nom compétence + résultat dé en grand + détail (compétence/dif/seuil) + badge SUCCÈS/ÉCHEC
+  - Fond coloré vert (succès) ou rouge (échec)
+- Jets normaux inchangés
+
+**`client/src/components/EntityInstancePanel.jsx` — MODIFIÉ ✅**
+- Sélecteur "État actuel" ajouté (select depuis blueprint.states)
+- Guard : affiché uniquement si blueprint.states.length > 1
+- current_state_id envoyé dans PUT /entities/:id + updateEntity store
+- PANEL_H_EST : 360 → 420
+
+**`client/src/character/EntityBuilderTab.jsx` — MODIFIÉ ✅**
+- Label "Difficulté (DC)" → "Modificateur de difficulté"
+- Hint ajouté : "+5 Facile · 0 Moyen · -5 Difficile"
+- Valeur par défaut difficulty_dc : 10 → 0
+
+**`client/src/locales/fr/translation.json` — MODIFIÉ ✅**
+- entityActionDetail, entityActionSuccess, entityActionFail ajoutés dans section sidebar
+
+### Règles mécaniques Polaris confirmées (LdB p.404)
+```
+Chances de réussite = skillTotal + difficulty_dc + gmModifier
+Jet 1d20 ≤ chances → SUCCÈS
+Jet 1d20 > chances → ÉCHEC
+difficulty_dc = modificateur signé (-20 à +10)
+gmModifier = ajustement GM au moment arbitrage, défaut 0
+```
+
+### Pièges documentés
+
+**PE1 — SUPPRIMÉ**
+Le serveur calcule via charStats.js. Client calcule pour affichage uniquement.
+
+### Validation fonctionnelle
+- ✅ charStats.js — calculs Polaris serveur corrects
+- ✅ Formule jet correcte (dé ≤ seuil)
+- ✅ Affichage structuré jet entity_action dans chat
+- ✅ Sélecteur état actuel EntityInstancePanel
+- ✅ Guard résolution directe sans compétence (sans notif GM)
+- ✅ crash setEntityActionQueue corrigé
+- ✅ EntityBuilderTab — label difficulté + valeur par défaut
+- ✅ Jets normaux inchangés
+
+### Fichiers modifiés cette session
+| Fichier | Modifications |
+|---|---|
+| `server/src/lib/charStats.js` | NOUVEAU — calculs Polaris purs |
+| `server/src/socket/index.js` | charStats import, calcul serveur, formule Polaris, champs structurés DICE_RESULT |
+| `client/src/pages/SessionPage.jsx` | payload corrigé, DICE_RESULT structuré, crash setEntityActionQueue |
+| `client/src/components/Sidebar.jsx` | rendu entity_action structuré, panel GM nettoyé |
+| `client/src/components/EntityInstancePanel.jsx` | sélecteur état actuel |
+| `client/src/character/EntityBuilderTab.jsx` | label difficulté, valeur défaut |
+| `client/src/locales/fr/translation.json` | 3 clés entity_action |
+---
+
+## Session 39 — 2026-04-28
+
+### Contexte
+Chantier 9F-A — Fondations mouvement. Prérequis : 9F-0 validé session 36.
+
+### Travail préparatoire (long — intentionnel)
+Analyse exhaustive avant tout code : inventaire complet des mutations de position, décisions d'architecture collision map Redis, identification de tous les cas edge (token layer GM, entités is_blocking, SESSION_JOIN sans player_location, changement layer token, resolveEntityState).
+
+Décisions d'architecture actées :
+- Cache-aside Redis (pattern pro) — DB source de vérité, Redis accélérateur O(1)
+- Pas de dénormalisation `is_blocking` sur `entities` — JOIN blueprint au SESSION_JOIN (O(n) acceptable, appel rare)
+- Pipeline Redis dans `buildCollisionMap` — O(1) réseau au lieu de O(n)
+- Maintenance Redis dans les routes REST (DELETE tokens/entities) — position disponible avant suppression
+- Handlers WS TOKEN_DELETED / ENTITY_DELETED ne touchent pas Redis — évite double-traitement
+- `collisionMoveToken` : hdel systématique sur ancienne case, hset conditionnel (layer != 'gm')
+
+### Travail effectué
+
+**`shared/events.js` — MODIFIÉ ✅**
+- `TOKEN_ROTATE: 'token:rotate'` ajouté
+
+**`server/src/lib/redis.js` — NOUVEAU ✅**
+- Client ioredis singleton — `REDIS_URL` depuis `.env`
+- `buildCollisionMap(battlemapId)` — pipeline Redis, filtre layer 'gm', JOIN blueprint pour is_blocking (PE11)
+- `isCaseOccupied(battlemapId, x, y, z, excludeIds)` — O(1), tunnel de swap PE22
+- Helpers maintenance : `collisionAddToken`, `collisionRemoveToken`, `collisionMoveToken`
+- Helpers maintenance : `collisionAddEntity`, `collisionRemoveEntity`, `collisionMoveEntity`, `collisionUpdateEntityState`
+- Helpers maintenance : `collisionAddVoxel`, `collisionRemoveVoxel`
+
+**`server/src/db/migrations/44_tokens_rotation.js` — NOUVEAU ✅**
+- Colonne `r INTEGER NOT NULL DEFAULT 0` sur `tokens`
+
+**`server/src/db/migrations/45_polaris_mr_table.js` — NOUVEAU ✅**
+- Table `polaris_mr` (mr_min PK, mr_max nullable, dmax) + seed 6 lignes
+
+**`server/src/routes/tokens.js` — MODIFIÉ ✅**
+- Import helpers redis.js
+- `POST /` : `collisionAddToken` après INSERT
+- `PUT /:id` : `collisionMoveToken` si position change
+- `DELETE /:id` : `collisionRemoveToken` AVANT suppression
+
+**`server/src/routes/entities.js` — MODIFIÉ ✅**
+- Import helpers redis.js
+- `POST /` : `collisionAddEntity` après INSERT (blueprint déjà chargé)
+- `PUT /:entityId` : `collisionMoveEntity` si position change, `collisionUpdateEntityState` si état change
+- `DELETE /:entityId` : `collisionRemoveEntity` AVANT suppression
+
+**`server/src/socket/index.js` — MODIFIÉ ✅**
+- Import helpers redis.js
+- `SESSION_JOIN` : `buildCollisionMap` via `player_locations` — non bloquant si absent
+- `TOKEN_MOVE` : `collisionMoveToken` après update DB
+- `VOXEL_ADD` : `collisionAddVoxel`
+- `VOXEL_REMOVE` : `collisionRemoveVoxel`
+- `VOXEL_UPDATE` : pas de maintenance (position inchangée, seule rotation change)
+- `TOKEN_CREATED` / `TOKEN_DELETED` : commentaires clarifiés — maintenance dans REST, pas ici
+- `ENTITY_CREATED` / `ENTITY_DELETED` / `ENTITY_MOVED` : idem — maintenance dans REST
+- Nouveau handler `TOKEN_ROTATE` : ownership check, `r = (r+1) % 8`, broadcast `TOKEN_UPDATED`
+- `resolveEntityState` : `collisionUpdateEntityState` après update + `returning` étendu avec `battlemap_id`
+
+**`client/src/components/Canvas3D.jsx` — MODIFIÉ ✅**
+- Prop `onTokenRotate` ajoutée (Canvas3D + Scene)
+- `rotation.y = (token.r ?? 0) * Math.PI / 4` sur `<group>` parent du TokenMesh (PE21)
+- Tilt drag conservé sur `<primitive>` — indépendant de la rotation permanente
+- `handlePointerUp` : clic court sur token propriétaire → `onTokenRotate?.(token.id)`
+- `onTokenRotate` dans les deps de `handlePointerUp` (P3)
+
+**`client/src/pages/SessionPage.jsx` — MODIFIÉ ✅**
+- Handler `TOKEN_UPDATED` : `updateToken(token)` — merge partiel via store
+- Callback `handleTokenRotate` : `socket?.emit(WS.TOKEN_ROTATE, { tokenId })` — `socket` dans deps (P3)
+- Prop `onTokenRotate={handleTokenRotate}` sur `<Canvas3D>`
+
+### Pièges documentés (nouveaux)
+
+**PE24 — `collisionMoveToken` : hdel systématique sur ancienne case**
+Si un token change de layer (ex: 'token' → 'gm'), il faut quand même retirer l'ancienne case Redis.
+`hdel` systématique sur `oldToken` si `oldToken.layer !== 'gm'`.
+`hset` conditionnel sur `newToken` si `newToken.layer !== 'gm'`.
+
+**PE25 — maintenance Redis dans REST, pas dans les handlers WS reliques**
+`TOKEN_CREATED` et `TOKEN_DELETED` WS sont des reliques — la maintenance collision map est dans les routes REST correspondantes. Ne pas doubler.
+Même règle pour `ENTITY_CREATED`, `ENTITY_DELETED`, `ENTITY_MOVED`.
+
+**PE26 — `resolveEntityState` : `returning` doit inclure `battlemap_id`**
+`collisionUpdateEntityState` a besoin de `battlemap_id`. Le `.returning([...])` de `resolveEntityState` doit l'inclure explicitement — Knex ne retourne pas toutes les colonnes par défaut avec une liste.
+
+### Dépendances installées
+- `server/` : `ioredis` (9 packages, 0 vulnerabilities après `npm audit fix`)
+
+### Validation fonctionnelle
+- ✅ SR sans erreur
+- ✅ `[Redis] Connecté` au démarrage
+- ✅ `[Redis] Collision map reconstruite` au SESSION_JOIN
+- ✅ Migrations 44 + 45 appliquées
+- ✅ TOKEN_ROTATE fonctionnel — rotation token visible côté client
+
+### Fichiers modifiés cette session
+| Fichier | Modifications |
+|---|---|
+| `shared/events.js` | TOKEN_ROTATE ajouté |
+| `server/src/lib/redis.js` | NOUVEAU — client + helpers collision map |
+| `server/src/db/migrations/44_tokens_rotation.js` | NOUVEAU — colonne r tokens |
+| `server/src/db/migrations/45_polaris_mr_table.js` | NOUVEAU — table polaris_mr + seed |
+| `server/src/routes/tokens.js` | maintenance Redis POST/PUT/DELETE |
+| `server/src/routes/entities.js` | maintenance Redis POST/PUT/DELETE |
+| `server/src/socket/index.js` | buildCollisionMap SESSION_JOIN, TOKEN_ROTATE handler, maintenance voxels, resolveEntityState étendu |
+| `client/src/components/Canvas3D.jsx` | rotation.y token r, onTokenRotate callback, prop |
+| `client/src/pages/SessionPage.jsx` | TOKEN_UPDATED handler, handleTokenRotate, prop Canvas3D |
