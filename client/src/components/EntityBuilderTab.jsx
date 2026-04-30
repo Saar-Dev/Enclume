@@ -22,7 +22,7 @@ const EMPTY_FORM = {
   depth: 1,
   faces: {},             // { faceName: "uuid.png" } — chemins PNG relatifs au pack
   states: [],            // [{ id, name, opacity, face_overrides: { faceName: "uuid.png"|null } }]
-  interactions: [],      // [{ id, action_label, skill_id, difficulty_dc, required_state_ids[], target_state_id, range }]
+  interactions: [],      // [{ id, type, ...champs selon type }] — type: 'skillcheck'|'displacement'
 }
 
 // ─── Aperçu 3D ────────────────────────────────────────────────────────────────
@@ -162,7 +162,34 @@ export default function EntityBuilderTab({
         opacity:      s.visual_override?.opacity ?? 1.0,
         face_overrides: { ...(s.visual_override?.face_overrides || {}) },
       })),
-      interactions: (bp.interactions || []).map(i => ({ ...i })),
+      // Normalisation interactions : déduire `type` depuis `move_type` legacy,
+      // corriger les nullables qui feraient crasher les selects React (value={null} interdit)
+      interactions: (bp.interactions || []).map(i => {
+        const isDisplacement = i.type === 'displacement' || i.move_type === 'displacement'
+        if (isDisplacement) {
+          return {
+            id:               i.id            || `inter_${Date.now()}`,
+            type:             'displacement',
+            attribute_id:     i.attribute_id  || 'FOR',
+            difficulty_dc:    i.difficulty_dc ?? 0,
+            dmax_override:    i.dmax_override ?? null,
+            range:            i.range         ?? 1,
+            required_state_ids: i.required_state_ids || [],
+          }
+        }
+        // SkillCheck — legacy ou explicite
+        return {
+          id:                 i.id            || `inter_${Date.now()}`,
+          type:               'skillcheck',
+          action_label:       i.action_label  || '',
+          skill_id:           i.skill_id      || '',   // '' plutôt que null — évite value={null}
+          attribute_id:       i.attribute_id  || '',   // '' plutôt que null
+          difficulty_dc:      i.difficulty_dc ?? 0,
+          target_state_id:    i.target_state_id ?? 0,
+          range:              i.range         ?? 1.5,
+          required_state_ids: i.required_state_ids || [],
+        }
+      }),
     })
     setBpError(null)
     setEditingBp(bp)
@@ -233,10 +260,16 @@ export default function EntityBuilderTab({
     setForm(prev => ({
       ...prev,
       interactions: [...prev.interactions, {
-        id: `inter_${Date.now()}`,
-        action_label: '', skill_id: '',
-        difficulty_dc: 0, required_state_ids: [],
-        target_state_id: 0, range: 1.5,
+        id:                 `inter_${Date.now()}`,
+        type:               'skillcheck',   // défaut — le GM peut changer vers 'displacement'
+        action_label:       '',
+        skill_id:           '',
+        attribute_id:       '',
+        difficulty_dc:      0,
+        target_state_id:    0,
+        range:              1.5,
+        required_state_ids: [],
+        dmax_override:      null,
       }],
     }))
   }, [])
@@ -282,13 +315,38 @@ export default function EntityBuilderTab({
         is_blocking: false, is_transparent: false,
         visual_override: { opacity: Number(s.opacity), face_overrides: s.face_overrides },
       }))
-      const interactions = form.interactions.map(inter => ({
-        id: inter.id, action_label: inter.action_label, skill_id: inter.skill_id,
-        difficulty_dc: Number(inter.difficulty_dc),
-        required_state_ids: inter.required_state_ids,
-        target_state_id: inter.target_state_id,
-        range: Number(inter.range),
-      }))
+      const interactions = form.interactions.map(inter => {
+        if (inter.type === 'displacement') {
+          return {
+            id:                 inter.id,
+            type:               'displacement',
+            action_label:       'Déplacer',           // fixe — jamais configurable
+            move_type:          'displacement',        // rétrocompatibilité handler serveur
+            attribute_id:       inter.attribute_id || 'FOR',
+            skill_id:           null,
+            difficulty_dc:      Number(inter.difficulty_dc),
+            target_state_id:    null,                  // déplacement = pas de changement d'état
+            range:              Number(inter.range),
+            required_state_ids: inter.required_state_ids,
+            dmax_override:      (inter.dmax_override !== null && inter.dmax_override !== '')
+              ? Number(inter.dmax_override) : null,
+          }
+        }
+        // SkillCheck
+        return {
+          id:                 inter.id,
+          type:               'skillcheck',
+          action_label:       inter.action_label,
+          skill_id:           inter.skill_id   || null,
+          attribute_id:       inter.attribute_id || null,
+          difficulty_dc:      Number(inter.difficulty_dc),
+          target_state_id:    inter.target_state_id,
+          range:              Number(inter.range),
+          required_state_ids: inter.required_state_ids,
+          move_type:          null,
+          dmax_override:      null,
+        }
+      })
       const body = {
         label:   form.label.trim(),
         glb_url: form.appearance === 'glb' ? (form.glb_url || null) : null,
@@ -608,64 +666,175 @@ export default function EntityBuilderTab({
               )}
               {form.interactions.map((inter, idx) => (
                 <div key={idx} style={S.stateBlock}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ ...S.fieldLabel, fontSize: '11px' }}>Interaction {idx + 1}</span>
+                  {/* ── En-tête : type + supprimer ───────────────────────── */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ ...S.fieldLabel, fontSize: '11px' }}>Interaction {idx + 1}</span>
+                      <select
+                        style={{ ...S.input, fontSize: '11px', width: 'auto' }}
+                        value={inter.type || 'skillcheck'}
+                        onChange={e => {
+                          const newType = e.target.value
+                          setForm(prev => ({
+                            ...prev,
+                            interactions: prev.interactions.map((it, i) => {
+                              if (i !== idx) return it
+                              if (newType === 'displacement') {
+                                return {
+                                  id:                 it.id,
+                                  type:               'displacement',
+                                  attribute_id:       it.attribute_id || 'FOR',
+                                  difficulty_dc:      it.difficulty_dc ?? 0,
+                                  dmax_override:      null,
+                                  range:              1,
+                                  required_state_ids: it.required_state_ids || [],
+                                }
+                              }
+                              return {
+                                id:                 it.id,
+                                type:               'skillcheck',
+                                action_label:       it.action_label || '',
+                                skill_id:           '',
+                                attribute_id:       '',
+                                difficulty_dc:      it.difficulty_dc ?? 0,
+                                target_state_id:    0,
+                                range:              1.5,
+                                required_state_ids: it.required_state_ids || [],
+                                dmax_override:      null,
+                              }
+                            }),
+                          }))
+                        }}
+                        disabled={!isOwner}>
+                        <option value="skillcheck">SkillCheck</option>
+                        <option value="displacement">Déplacement</option>
+                      </select>
+                    </div>
                     {isOwner && (
                       <button style={{ ...S.btnGhost, color: 'var(--color-danger)', fontSize: '11px' }}
                         onClick={() => removeInteraction(idx)}>Supprimer</button>
                     )}
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <div style={S.fieldGroup}>
-                      <label style={S.fieldHint}>Identifiant (unique)</label>
-                      <input style={{ ...S.input, fontSize: '11px' }} value={inter.id}
-                        onChange={e => updateInteraction(idx, 'id', e.target.value)}
-                        placeholder="ex: forcer" disabled={!isOwner} />
+
+                  {/* ── Champs SkillCheck ─────────────────────────────────── */}
+                  {(inter.type === 'skillcheck' || !inter.type) && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <div style={{ ...S.fieldGroup, gridColumn: '1 / -1' }}>
+                        <label style={S.fieldHint}>Label (affiché au joueur)</label>
+                        <input style={{ ...S.input, fontSize: '11px' }}
+                          value={inter.action_label || ''}
+                          onChange={e => updateInteraction(idx, 'action_label', e.target.value)}
+                          placeholder="ex: Forcer la porte, Examiner, Pirater…"
+                          disabled={!isOwner} />
+                      </div>
+                      <div style={S.fieldGroup}>
+                        <label style={S.fieldHint}>Compétence requise</label>
+                        <select style={{ ...S.input, fontSize: '11px' }}
+                          value={inter.skill_id || ''}
+                          onChange={e => updateInteraction(idx, 'skill_id', e.target.value)}
+                          disabled={!isOwner}>
+                          <option value="">— Aucune —</option>
+                          {skills.map(s => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={S.fieldGroup}>
+                        <label style={S.fieldHint}>Attribut requis</label>
+                        <p style={{ ...S.fieldHint, color: 'var(--text-muted)', marginBottom: '2px' }}>Prioritaire sur la compétence</p>
+                        <select style={{ ...S.input, fontSize: '11px' }}
+                          value={inter.attribute_id || ''}
+                          onChange={e => updateInteraction(idx, 'attribute_id', e.target.value)}
+                          disabled={!isOwner}>
+                          <option value="">— Aucun —</option>
+                          <option value="FOR">Force (FOR)</option>
+                          <option value="CON">Constitution (CON)</option>
+                          <option value="COO">Coordination (COO)</option>
+                          <option value="ADA">Adaptation (ADA)</option>
+                          <option value="PER">Perception (PER)</option>
+                          <option value="INT">Intelligence (INT)</option>
+                          <option value="VOL">Volonté (VOL)</option>
+                          <option value="PRE">Présence (PRE)</option>
+                        </select>
+                      </div>
+                      <div style={S.fieldGroup}>
+                        <label style={S.fieldHint}>Difficulté</label>
+                        <input type="number" style={{ ...S.input, fontSize: '11px' }}
+                          value={inter.difficulty_dc ?? 0}
+                          onChange={e => updateInteraction(idx, 'difficulty_dc', Number(e.target.value))}
+                          disabled={!isOwner} />
+                      </div>
+                      <div style={S.fieldGroup}>
+                        <label style={S.fieldHint}>Portée (cases)</label>
+                        <input type="number" step="0.5" style={{ ...S.input, fontSize: '11px' }}
+                          value={inter.range ?? 1.5}
+                          onChange={e => updateInteraction(idx, 'range', Number(e.target.value))}
+                          disabled={!isOwner} />
+                      </div>
+                      <div style={S.fieldGroup}>
+                        <label style={S.fieldHint}>État cible (succès)</label>
+                        <select style={{ ...S.input, fontSize: '11px' }}
+                          value={inter.target_state_id ?? 0}
+                          onChange={e => updateInteraction(idx, 'target_state_id', Number(e.target.value))}
+                          disabled={!isOwner}>
+                          {form.states.map(s => (
+                            <option key={s.id} value={s.id}>{s.name || `État ${s.id}`}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                    <div style={S.fieldGroup}>
-                      <label style={S.fieldHint}>Label affiché au joueur</label>
-                      <input style={{ ...S.input, fontSize: '11px' }} value={inter.action_label}
-                        onChange={e => updateInteraction(idx, 'action_label', e.target.value)}
-                        placeholder="ex: Forcer la porte" disabled={!isOwner} />
+                  )}
+
+                  {/* ── Champs Déplacement ────────────────────────────────── */}
+                  {inter.type === 'displacement' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <div style={S.fieldGroup}>
+                        <label style={S.fieldHint}>Attribut lié</label>
+                        <select style={{ ...S.input, fontSize: '11px' }}
+                          value={inter.attribute_id || 'FOR'}
+                          onChange={e => updateInteraction(idx, 'attribute_id', e.target.value)}
+                          disabled={!isOwner}>
+                          <option value="FOR">Force (FOR)</option>
+                          <option value="CON">Constitution (CON)</option>
+                          <option value="COO">Coordination (COO)</option>
+                          <option value="ADA">Adaptation (ADA)</option>
+                          <option value="PER">Perception (PER)</option>
+                          <option value="INT">Intelligence (INT)</option>
+                          <option value="VOL">Volonté (VOL)</option>
+                          <option value="PRE">Présence (PRE)</option>
+                        </select>
+                      </div>
+                      <div style={S.fieldGroup}>
+                        <label style={S.fieldHint}>Difficulté</label>
+                        <input type="number" style={{ ...S.input, fontSize: '11px' }}
+                          value={inter.difficulty_dc ?? 0}
+                          onChange={e => updateInteraction(idx, 'difficulty_dc', Number(e.target.value))}
+                          disabled={!isOwner} />
+                      </div>
+                      <div style={S.fieldGroup}>
+                        <label style={S.fieldHint}>Déplacement max (cases)</label>
+                        <input type="number" min="1" max="5" step="1"
+                          style={{ ...S.input, fontSize: '11px' }}
+                          value={inter.dmax_override ?? ''}
+                          onChange={e => updateInteraction(idx, 'dmax_override',
+                            e.target.value === '' ? null : Number(e.target.value))}
+                          placeholder="Illimité"
+                          disabled={!isOwner} />
+                      </div>
+                      <div style={S.fieldGroup}>
+                        <label style={S.fieldHint}>Portée (cases)</label>
+                        <input type="number" step="0.5" style={{ ...S.input, fontSize: '11px' }}
+                          value={inter.range ?? 1}
+                          onChange={e => updateInteraction(idx, 'range', Number(e.target.value))}
+                          disabled={!isOwner} />
+                      </div>
                     </div>
-                    <div style={S.fieldGroup}>
-                      <label style={S.fieldHint}>Compétence requise</label>
-                      <select style={{ ...S.input, fontSize: '11px' }} value={inter.skill_id}
-                        onChange={e => updateInteraction(idx, 'skill_id', e.target.value)}
-                        disabled={!isOwner}>
-                        <option value="">— Aucune —</option>
-                        {skills.map(s => (
-                          <option key={s.id} value={s.id}>{s.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div style={S.fieldGroup}>
-                      <label style={S.fieldHint}>Modificateur de difficulté</label>
-                      <p style={{ ...S.fieldHint, color: 'var(--text-muted)', marginBottom: '2px' }}>+5 Facile · 0 Moyen · -5 Difficile</p>
-                      <input type="number" style={{ ...S.input, fontSize: '11px' }} value={inter.difficulty_dc}
-                        onChange={e => updateInteraction(idx, 'difficulty_dc', Number(e.target.value))}
-                        disabled={!isOwner} />
-                    </div>
-                    <div style={S.fieldGroup}>
-                      <label style={S.fieldHint}>État cible (succès)</label>
-                      <select style={{ ...S.input, fontSize: '11px' }} value={inter.target_state_id}
-                        onChange={e => updateInteraction(idx, 'target_state_id', Number(e.target.value))}
-                        disabled={!isOwner}>
-                        {form.states.map(s => (
-                          <option key={s.id} value={s.id}>{s.name || `État ${s.id}`}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div style={S.fieldGroup}>
-                      <label style={S.fieldHint}>Portée (unités voxel)</label>
-                      <input type="number" step="0.5" style={{ ...S.input, fontSize: '11px' }} value={inter.range}
-                        onChange={e => updateInteraction(idx, 'range', Number(e.target.value))}
-                        disabled={!isOwner} />
-                    </div>
-                  </div>
+                  )}
+
+                  {/* ── États disponibles — commun aux deux types ─────────── */}
                   {form.states.length > 0 && (
-                    <div style={{ marginTop: '8px' }}>
-                      <p style={S.fieldHint}>États depuis lesquels cette interaction est disponible</p>
+                    <div style={{ marginTop: '10px' }}>
+                      <p style={S.fieldHint}>États depuis lesquels disponible</p>
                       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '4px' }}>
                         {form.states.map(s => (
                           <label key={s.id} style={{ ...S.geoRow, marginBottom: 0 }}>
@@ -679,6 +848,11 @@ export default function EntityBuilderTab({
                       </div>
                     </div>
                   )}
+
+                  {/* ── Identifiant technique — visible en bas, non modifiable ── */}
+                  <p style={{ ...S.fieldHint, color: 'var(--text-muted)', marginTop: '8px', fontFamily: 'monospace', fontSize: '10px' }}>
+                    id : {inter.id}
+                  </p>
                 </div>
               ))}
             </div>

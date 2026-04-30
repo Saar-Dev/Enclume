@@ -31,8 +31,11 @@ export default function RadialMenu({
   interactions = [],
   isGm = false,
   onAction,
+  onMove,
   onGmConfig,
   onClose,
+  actorToken = null,
+  entity = null,
 }) {
   const menuRef = useRef(null)
   const [hoveredIdx, setHoveredIdx] = useState(null)
@@ -41,6 +44,18 @@ export default function RadialMenu({
   // Construire la liste des tranches
   const slices = [...interactions]
   if (isGm) slices.push(GM_SLICE)
+
+  // Distance Tchebychev 2D acteur ↔ entité — pour grisage tranche displacement
+  // pos_y base = profondeur (Z Three.js) — PE14
+  const isOutOfRange = (slice) => {
+    if (slice.move_type !== 'displacement') return false
+    if (!actorToken || !entity) return false
+    const dist = Math.max(
+      Math.abs(entity.pos_x - actorToken.pos_x),
+      Math.abs(entity.pos_y - actorToken.pos_y)
+    )
+    return dist > (slice.range ?? 1.5)
+  }
 
   // Fermeture animée
   const close = () => {
@@ -119,9 +134,13 @@ export default function RadialMenu({
   const truncate = (s, n = 10) => s.length > n ? s.slice(0, n - 1) + '…' : s
 
   const handleSliceClick = (slice) => {
+    if (isOutOfRange(slice)) return
     if (slice.id === GM_SLICE.id) {
       close()
       onGmConfig?.()
+    } else if (slice.move_type === 'displacement') {
+      close()
+      onMove?.(slice)
     } else {
       close()
       onAction?.(slice)
@@ -176,11 +195,14 @@ export default function RadialMenu({
           {slices.map((slice, i) => {
             const isGmSlice = slice.id === GM_SLICE.id
             const isHovered = hoveredIdx === i
-            const baseColor = isGmSlice ? '#2a1a3e' : '#0e0e1a'
-            const hoverColor = isGmSlice ? '#4a2060' : '#1a2040'
+            const outOfRange = isOutOfRange(slice)
+            const baseColor = isGmSlice ? '#2a1a3e' : outOfRange ? '#111118' : '#0e0e1a'
+            const hoverColor = isGmSlice ? '#4a2060' : outOfRange ? '#111118' : '#1a2040'
             const strokeColor = isGmSlice
               ? (isHovered ? '#a855f7' : '#5a3a7a')
-              : (isHovered ? '#5b8dee' : '#1e2a3e')
+              : outOfRange
+                ? '#1e1e28'
+                : (isHovered ? '#5b8dee' : '#1e2a3e')
 
             return (
               <path
@@ -190,9 +212,9 @@ export default function RadialMenu({
                 stroke={strokeColor}
                 strokeWidth={isHovered ? '1.5' : '1'}
                 style={{
-                  cursor: 'pointer',
+                  cursor: outOfRange ? 'not-allowed' : 'pointer',
                   transition: 'fill 0.12s, stroke 0.12s',
-                  filter: isHovered ? 'url(#radial-glow)' : 'none',
+                  filter: isHovered && !outOfRange ? 'url(#radial-glow)' : 'none',
                 }}
                 onMouseEnter={() => setHoveredIdx(i)}
                 onMouseLeave={() => setHoveredIdx(null)}
@@ -206,10 +228,13 @@ export default function RadialMenu({
         {slices.map((slice, i) => {
           const isGmSlice = slice.id === GM_SLICE.id
           const isHovered = hoveredIdx === i
+          const outOfRange = isOutOfRange(slice)
           const pos = labelPos(i)
           const color = isGmSlice
             ? (isHovered ? '#c084fc' : '#a855f7')
-            : (isHovered ? '#93b4f5' : '#8898b8')
+            : outOfRange
+              ? '#2a2a3a'
+              : (isHovered ? '#93b4f5' : '#8898b8')
 
           return (
             <text

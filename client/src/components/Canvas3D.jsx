@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { MapControls, Grid, Text } from '@react-three/drei'
 import { useGLTF } from '@react-three/drei'
+import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
 import api from '../lib/api.js'
@@ -193,6 +194,7 @@ function Scene({
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
   altPressed, onEntityClick, onTokenRotate,
+  moveTarget, onMoveCancel, moveLabels,
 }) {
   const { camera, gl } = useThree()
   const orbitRef = useRef()
@@ -206,6 +208,16 @@ function Scene({
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
 
   const [dragState, setDragState] = useState(null)
+
+  // ─── Mode visée déplacement — states + refs ───────────────────────────────
+  // ghostPos/dotResult : states pour le rendu JSX du ghost
+  // ghostRef : ref miroir pour lecture stable dans handlePointerUp (pattern P40)
+  // tokensRef : ref miroir de tokens pour handlePointerMove stable (pattern P40)
+  const [ghostPos, setGhostPos] = useState(null)   // null | { x, z } — coords base (PE14)
+  const [dotResult, setDotResult] = useState(0)    // >0 push, <0 pull, =0 impossible
+  const ghostRef = useRef({ ghostPos: null, dotResult: 0 })
+  const tokensRef = useRef(tokens)
+  tokensRef.current = tokens
 
   const dragRef = useRef({
     active: false,
@@ -316,6 +328,41 @@ function Scene({
   }, [isGm, user, characters])
 
   const handlePointerMove = useCallback((e) => {
+    // ─── Mode visée déplacement — prioritaire sur le drag token ──────────────
+    if (moveTarget) {
+      const worldPos = raycastGround(e.clientX, e.clientY)
+      if (!worldPos) return
+
+      // Snap 4 axes orthogonaux depuis la position de l'entité
+      const dPosX = worldPos.x - moveTarget.entity.pos_x
+      const dPosZ = worldPos.z - moveTarget.entity.pos_y  // pos_y base = Z Three.js (PE14)
+
+      let snapX, snapZ
+      if (Math.abs(dPosX) >= Math.abs(dPosZ)) {
+        snapX = Math.round(worldPos.x)
+        snapZ = moveTarget.entity.pos_y   // fixé sur l'axe Z de l'entité
+      } else {
+        snapX = moveTarget.entity.pos_x   // fixé sur l'axe X de l'entité
+        snapZ = Math.round(worldPos.z)
+      }
+
+      // dot(AE, AD) — PE27
+      // A = acteur (token), E = entité, D = destination (snap)
+      const actorToken = tokensRef.current.find(t => t.id === moveTarget.tokenId)
+      if (!actorToken) return
+
+      const AE = { x: moveTarget.entity.pos_x - actorToken.pos_x, y: moveTarget.entity.pos_y - actorToken.pos_y }
+      const AD = { x: snapX - actorToken.pos_x,                   y: snapZ - actorToken.pos_y }
+      const dot = AE.x * AD.x + AE.y * AD.y
+
+      const newGhostPos = { x: snapX, z: snapZ }
+      setGhostPos(newGhostPos)
+      setDotResult(dot)
+      // Ref miroir — lecture stable dans handlePointerUp
+      ghostRef.current = { ghostPos: newGhostPos, dotResult: dot }
+      return  // ne pas tomber dans la logique drag token
+    }
+
     if (!dragRef.current.active) return
 
     const dx = e.clientX - dragRef.current.startX
@@ -352,10 +399,30 @@ function Scene({
       tiltX,
       tiltZ,
     })
-  }, [raycastGround, getColumnTopY])
+  }, [raycastGround, getColumnTopY, moveTarget])
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(async (e) => {
+    // ─── Mode visée déplacement — prioritaire sur le drag token ──────────────
+    if (moveTarget) {
+      const { ghostPos: gp, dotResult: dr } = ghostRef.current
+      if (dr !== 0 && gp) {
+        socket.emit(WS.ENTITY_MOVE_REQUEST, {
+          entityId: moveTarget.entity.id,
+          tokenId: moveTarget.tokenId,
+          interactionId: moveTarget.interaction.id,
+          moveType: dr > 0 ? 'push' : 'pull',
+          destX: gp.x,
+          destZ: gp.z,  // = pos_y base (PE14 — malgré le nom destZ)
+        })
+      }
+      onMoveCancel?.()
+      setGhostPos(null)
+      setDotResult(0)
+      ghostRef.current = { ghostPos: null, dotResult: 0 }
+      return
+    }
+
     if (!dragRef.current.active) return
 
     const wasMoving = dragRef.current.hasMoved
@@ -400,7 +467,7 @@ function Scene({
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [raycastGround, getColumnTopY, onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenRotate])
+  }, [raycastGround, getColumnTopY, onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenRotate, socket, moveTarget, onMoveCancel])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -490,6 +557,24 @@ function Scene({
         )
       })}
 
+      {/* ── Ghost mode visée déplacement (9F-B2) ─────────────────────────── */}
+      {/* Plan semi-transparent au sol sur la case destination snappée.        */}
+      {/* Couleur = feedback dot(AE,AD) : bleu=push, orange=pull, rouge=impos. */}
+      {/* PE14 : ghostPos.x = pos_x base, ghostPos.z = pos_y base (profondeur) */}
+      {moveTarget && ghostPos && (() => {
+        // Vert = case atteignable (push ou pull), Rouge = impossible (dot=0)
+        const color = dotResult !== 0 ? '#22c55e' : '#ef4444'
+        const y = getColumnTopY(ghostPos.x, ghostPos.z) + 1 + 0.05
+        return (
+          <group position={[ghostPos.x + 0.5, y, ghostPos.z + 0.5]}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[1, 1]} />
+              <meshBasicMaterial color={color} wireframe />
+            </mesh>
+          </group>
+        )
+      })()}
+
       {tokens.filter(token => isGm || token.layer !== 'gm').map(token => {
         const character = characters.find(c => c.id === token.character_id)
         const glbUrl = character?.glb_url
@@ -514,11 +599,21 @@ function Scene({
 
 // ─── Composant principal exporté ──────────────────────────────────────────────
 // Canvas3D — lecture seule (mode jeu).
-// Props : onTokenDoubleClick, socket, onEntityClick, onTokenRotate
+// Props : onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel
 // onTokenRotate : callback → SessionPage émet WS.TOKEN_ROTATE
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate }) {
+// moveTarget    : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
+// onMoveCancel  : callback stable (useCallback deps []) — annule le mode visée
+export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel }) {
+  const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
+
+  // Labels i18n pour le ghost — calculés ici où t() est accessible, passés en prop à Scene
+  const moveLabels = {
+    push:       t('entity.movePush'),
+    pull:       t('entity.movePull'),
+    impossible: t('entity.moveImpossible'),
+  }
 
   const [voxels, setVoxels] = useState({})
   const [textureMaterials, setTextureMaterials] = useState({})
@@ -543,6 +638,18 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
       document.removeEventListener('keyup', onKeyUp)
     }
   }, [])
+
+  // ─── Annulation mode visée sur Échap ─────────────────────────────────────
+  // useEffect séparé du Alt — deps distinctes, pas de re-attachement inutile.
+  // Attaché uniquement quand moveTarget est actif.
+  useEffect(() => {
+    if (!moveTarget) return
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onMoveCancel?.()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [moveTarget, onMoveCancel])
 
   const justSelectedRef = useRef(false)
 
@@ -661,6 +768,9 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           altPressed={altPressed}
           onEntityClick={onEntityClick}
           onTokenRotate={onTokenRotate}
+          moveTarget={moveTarget}
+          onMoveCancel={onMoveCancel}
+          moveLabels={moveLabels}
         />
       )}
     </Canvas>

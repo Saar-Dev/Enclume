@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-04-28 Session 39
+> Dernière mise à jour : 2026-04-30 Session 41
 
 ---
 
@@ -14,31 +14,35 @@
 ### Chantier 9E — Entités en session ✅ (session 36)
 ### Chantier 9F-0 — Calcul serveur Polaris ✅ (session 36)
 ### Chantier 9F-A — Fondations mouvement ✅ (session 39)
+### Chantier 9F-B1 — Déplacement entités serveur + atelier ✅ (session 40)
+### Chantier 9F-B2 — Mode visée client ✅ (session 41)
 
-Travaux effectués en session 39 :
-- Migration 44 : colonne `r` sur `tokens` ✅
-- Migration 45 : table `polaris_mr` + seed ✅
-- `server/src/lib/redis.js` : client ioredis + helpers collision map ✅
-- Collision map Redis : construction + maintenance complète ✅
-- `TOKEN_ROTATE` : event + handler serveur + clic client ✅
-- Affichage rotation token : `rotation.y = r * Math.PI / 4` ✅
+Travaux effectués en session 41 :
+- Retrait guard GM dans ENTITY_MOVE_REQUEST — GM passe par le flux jet d'attribut ✅
+- fr.json — section entity (5 clés i18n) ✅
+- RadialMenu.jsx — tranche displacement, grisage portée, prop onMove ✅
+- SessionPage.jsx — moveTarget state, handleEntityMove, handleMoveCancel, guard Q4, listener ENTITY_MOVE_RESULT ✅
+- Canvas3D.jsx — mode visée complet : tokensRef/ghostRef, snap 4 axes, dot(AE,AD), ghost wireframe, Échap ✅
 
 ---
 
 ## Prochaines tâches
 
-### Chantier 9F-B — Déplacement entités (orthogonal)
-Prérequis : 9F-A ✅
-- `ENTITY_MOVE_REQUEST` + `ENTITY_MOVE_RESULT` dans `events.js`
-- Handler serveur : validation, jet d'attribut via charStats.js, MR depuis polaris_mr, step-by-step, broadcast
-- Atelier : champs `move_type` + `attribute_id` dans le formulaire interaction
-- Client RadialMenu : tranche Déplacement (grisée si hors portée)
-- Client mode visée : ghost entité, snap 4 axes, clic destination
-Voir PLAN_ENTITY.md §8
-
-### Chantier 9F-C — Diagonal + animation
-Prérequis : 9F-B
+### Chantier 9F-C — Diagonal 45° + animation Lerp
+Prérequis : 9F-B2 ✅
 Voir PLAN_ENTITY.md §9
+
+---
+
+## Chantier reporté — Paramètre campagne GM entity move mode
+
+Décision session 41 : reporté en chantier dédié.
+3 options prévues :
+- Option réaliste : tous les tokens GM font des jets
+- Option à la carte : case à cocher par token non attribué à un joueur
+- Option divine : GM ne fait jamais de jet
+
+Implique : nouvelle colonne `campaigns.gm_entity_move_mode`, option par token `tokens.bypass_entity_move_roll`, interface paramètres campagne.
 
 ---
 
@@ -48,23 +52,25 @@ Voir PLAN_ENTITY.md §9
 Cause : Three.js r160+ + drivers GPU Windows. Non bloquant. Statut : documenté, abandonné.
 
 ### Bug A — Toggle visible character non répercuté en temps réel
-Statut : 🔲 correction prévue session dédiée.
+Statut : correction prévue session dédiée.
 
 ### Bug B — Modification faces voxel existant non exposée dans l'UI
-Statut : 🔲 correction prévue si besoin.
+Statut : correction prévue si besoin.
 
 ---
 
 ## Points de vigilance permanents
 
-- **"La Forêt Maudite"** — pas de `default_battlemap_id` → ne jamais utiliser pour les tests
-- **token.owner_id** — mort → toujours `character_id → characters.user_id`
-- **socket dans dependency arrays** — tout useCallback qui émet doit inclure socket (P3)
-- **ordre déclaration React** — callback A qui appelle B doit être déclaré APRÈS B (P4, P48)
-- **coordonnées voxel** — données brutes en base, +0.5 uniquement dans le rendu visuel
-- **reconnectTrigger** — ne jamais appeler socket.disconnect/connect depuis Sidebar
-- **PE14 pos_y/pos_z** — pos_y base = Z Three.js, pos_z base = Y Three.js
-- **charStats.js** — fonctions pures, jamais d'accès DB dans ce fichier
-- **redis.js** — maintenance Redis dans REST (POST/DELETE), pas dans handlers WS reliques (PE25)
-- **resolveEntityState** — returning doit inclure battlemap_id (PE26)
-- **collisionMoveToken** — hdel systématique ancienne case, hset conditionnel layer (PE24)
+- "La Forêt Maudite" — pas de default_battlemap_id → ne jamais utiliser pour les tests
+- token.owner_id — mort → toujours character_id → characters.user_id
+- socket dans dependency arrays — tout useCallback qui émet doit inclure socket (P3)
+- ordre déclaration React — callback A qui appelle B doit être déclaré APRÈS B (P4, P48)
+- coordonnées voxel — données brutes en base, +0.5 uniquement dans le rendu visuel
+- reconnectTrigger — ne jamais appeler socket.disconnect/connect depuis Sidebar
+- PE14 pos_y/pos_z — pos_y base = Z Three.js, pos_z base = Y Three.js
+- charStats.js — fonctions pures, jamais d'accès DB dans ce fichier
+- redis.js — maintenance Redis dans REST (POST/DELETE), pas dans handlers WS reliques (PE25)
+- resolveEntityState — returning doit inclure battlemap_id (PE26)
+- collisionMoveToken — hdel systématique ancienne case, hset conditionnel layer (PE24)
+- PE27 moveType — calculé client (feedback) ET recalculé serveur (validation). Si discordance → refus silencieux
+- Token GM sans char_sheet → ENTITY_MOVE_REQUEST ignoré silencieusement — comportement documenté V1

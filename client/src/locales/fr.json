@@ -202,6 +202,13 @@
     "saved": "Modifications enregistrées",
     "errorSave": "Erreur lors de la sauvegarde"
   },
+  "entity": {
+    "movePush": "Pousser",
+    "movePull": "Tirer",
+    "moveImpossible": "Impossible",
+    "moveSuccess": "Déplacement réussi (MR {{mr}}, {{dmax}} case(s))",
+    "moveFail": "Déplacement échoué (MR {{mr}})"
+  },
   "settings": {
     "pageTitle": "Configuration de la campagne",
     "back": "← Retour",

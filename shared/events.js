@@ -48,4 +48,6 @@ export const WS = {
   ENTITY_CREATED:           'entity:created',            // serveur → room : entité posée sur la carte
   ENTITY_DELETED:           'entity:deleted',            // serveur → room : entité retirée de la carte
   ENTITY_MOVED:             'entity:moved',              // serveur → room : entité déplacée (éditeur GM)
+  ENTITY_MOVE_REQUEST:      'entity:move_request',       // joueur → serveur : demande de déplacement entité (9F-B)
+  ENTITY_MOVE_RESULT:       'entity:move_result',        // serveur → joueur : résultat jet + positions finales (9F-B)
 }

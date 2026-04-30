@@ -167,15 +167,15 @@ Jamais inline — toujours via `threeToDb()`.
     "range": 1.5
   },
   {
-    "id": "pousser",
-    "action_label": "Pousser",
+    "id": "deplacer",
+    "action_label": "Déplacer",
     "required_state_ids": [0, 1],
     "target_state_id": null,
     "attribute_id": "FOR",
     "difficulty_dc": 12,
     "range": 1.5,
-    "move_type": "push",
-    "pull_dmax_override": null
+    "move_type": "displacement",
+    "dmax_override": null
   }
 ]
 ```
@@ -186,8 +186,10 @@ Jamais inline — toujours via `threeToDb()`.
 |---|---|---|
 | `attribute_id` | TEXT \| null | `'FOR'` — référence `char_attributes.attr_id`. Prioritaire sur `skill_id` si présent |
 | `target_state_id` | INT \| null | `null` = interaction de déplacement (pas de changement d'état) |
-| `move_type` | TEXT \| null | `'push'` \| `'pull'` \| null (null = interaction d'état classique) |
-| `pull_dmax_override` | INT \| null | Si défini, force Dmax à cette valeur (ex: `1` pour Pull limité) |
+| `move_type` | TEXT \| null | `'displacement'` = interaction de déplacement \| null = interaction d'état classique. Push/Pull déterminé à l'exécution par vecteurs — jamais configuré dans le blueprint |
+| `dmax_override` | INT \| null | Si défini, plafonne le Dmax (push ET pull) — ex: `1` pour déplacement max 1 case |
+
+**Décision UX figée (session 40) :** une seule interaction "Déplacer" par entité. Le client détermine push/pull en temps réel par dot(AE, AD) et affiche un feedback couleur (bleu=pousser, orange=tirer). Le serveur recalcule indépendamment et valide la cohérence (PE27).
 
 **Règle de résolution du test :**
 - Si `attribute_id` présent → jet d'attribut : `na(attribute_id) + 1d20 vs difficulty_dc`
@@ -257,14 +259,17 @@ Joueur clique ⚙ → RadialMenu → handleEntityAction
 
 ```
 Joueur clique ⚙ → RadialMenu
-  → vérif distance token ↔ entité < interaction.range
-  → si ok : tranche "Déplacement" active → clic
-  → curseur devient ghost entité (mode visée)
-  → joueur déplace souris → ghost snapé sur 4 axes orthogonaux (9F-B) ou 8 axes (9F-C)
-  → clic destination → client détermine Push/Pull par vecteur
-  → client émet ENTITY_MOVE_REQUEST { entityId, interactionId, attributeTotal, destinationX, destinationZ }
-  → serveur valide, calcule MR, détermine Dmax, exécute steps
-  → serveur émet ENTITY_MOVED + TOKEN_MOVED (positions finales)
+  → tranche "Déplacer" visible si interaction move_type='displacement' dans l'état courant
+  → distance token ↔ entité ≤ interaction.range → tranche grisée si hors portée
+  → clic "Déplacer" → mode visée activé (curseur main)
+  → ghost semi-transparent de l'entité snapé sur 4 axes orthogonaux (9F-B) ou 8 axes (9F-C)
+  → feedback temps réel pendant déplacement souris :
+      A = pos token acteur, E = pos entité, D = pos ghost (destination)
+      dot(AE, AD) > 0 → ghost BLEU   + label "Pousser" (entité s'éloigne de l'acteur)
+      dot(AE, AD) < 0 → ghost ORANGE + label "Tirer"   (entité se rapproche de l'acteur)
+      dot(AE, AD) = 0 → ghost ROUGE  + label "Impossible" — clic bloqué côté client
+  → clic confirmation → client émet ENTITY_MOVE_REQUEST
+  → serveur valide, recalcule moveType par vecteurs (PE27), calcule MR, step-by-step, broadcast
   → client anime Lerp 300ms (9F-C)
 ```
 
@@ -669,9 +674,9 @@ const row = await db('polaris_mr')
   .first()
 const dmax = row?.dmax ?? 0
 
-// Override Pull
-if (moveType === 'pull' && interaction.pull_dmax_override !== null) {
-  dmax = Math.min(dmax, interaction.pull_dmax_override)
+// Override déplacement — dmax_override plafonne push ET pull
+if (interaction.dmax_override !== null && interaction.dmax_override !== undefined) {
+  dmax = Math.min(dmax, interaction.dmax_override)
 }
 ```
 
@@ -695,14 +700,20 @@ Résultat : positions finales entityPos + (k-1)*direction, actorPos + (k-1)*dire
 ```js
 socket.emit(WS.ENTITY_MOVE_REQUEST, {
   entityId,
+  tokenId,       // ajouté session 40 — ownership + position acteur
   interactionId,
-  attributeTotal,    // na(FOR) calculé client — PE1 étendu
-  destX,             // case destination (coordonnées base — entières)
-  destZ,             // pos_y base (profondeur) — PE14
+  moveType,      // 'push' | 'pull' — calculé client par dot(AE, AD)
+  destX,         // pos_x base (= Three.js X)
+  destZ,         // pos_y base (profondeur — Three.js Z — PE14)
+  // attributeTotal supprimé — le serveur recalcule indépendamment (source de vérité)
 })
 ```
 
-**⚠ Le client envoie `destX` et `destZ` (coordonnées base, entières).** Le serveur recalcule la direction et valide la cohérence (orthogonalité, distance ≤ Dmax).
+**Convention coordonnées payload :** `destX` = Three.js X = `pos_x` base. `destZ` = Three.js Z = `pos_y` base (PE14 — malgré le nom "Z").
+
+**Push/Pull — double calcul obligatoire (PE27) :**
+- Client calcule `moveType` par dot(AE, AD) → feedback visuel temps réel + envoyé dans le payload
+- Serveur recalcule indépendamment → validation. Si discordance client/serveur → refus silencieux.
 
 ### Payload serveur → clients
 
@@ -832,7 +843,7 @@ MR      Dmax
 25+      5 cases
 ```
 
-**Exception Pull :** si `interaction.pull_dmax_override` défini → `dmax = min(dmax_table, pull_dmax_override)`.
+**Exception déplacement :** si `interaction.dmax_override` défini → `dmax = min(dmax_table, dmax_override)`. S'applique push ET pull.
 
 **Stockée en SQL** (`polaris_mr`) — seed dans la migration 45.
 **Lue en mémoire** au démarrage du serveur ou à la première requête — pas de requête SQL par jet.
@@ -873,6 +884,7 @@ function getDmax(mr) {
 | PE21 | `r` tokens = 0-7 (45° incréments) — `rotation.y = r * Math.PI / 4` |
 | PE22 | Tunnel de swap : `excludeIds = [tokenId, entityId]` dans `isCaseOccupied` pendant step-by-step |
 | PE23 | Collision map Redis reconstruite au SESSION_JOIN — pas au démarrage serveur |
+| PE27 | `moveType` calculé client (feedback) ET recalculé serveur (validation). Si discordance → refus silencieux. Jamais faire confiance au `moveType` client seul. |
 | PEF1 | `pack_id` obligatoire sur blueprint — guard si null |
 | PEF2 | `fakeTexObj` conforme : `{ id, pack_id, faces }` |
 | PEF3 | `entityTextureMaterials` indexé par `blueprint.id` UUID |
@@ -917,11 +929,11 @@ function getDmax(mr) {
 5. Affichage rotation token dans le composant token 3D
 
 ### 9F-B — Déplacement orthogonal (1-2 sessions) — APRÈS 9F-A validé
-1. `ENTITY_MOVE_REQUEST` + `ENTITY_MOVE_RESULT` dans `events.js`
-2. Handler serveur : validation, jet d'attribut via `polaris.js`, MR, step-by-step, broadcast
-3. Atelier : champs `move_type` + `attribute_id` dans le formulaire interaction
-4. Client RadialMenu : tranche Déplacement (grisée si hors portée)
-5. Client mode visée : ghost entité, snap 4 axes, clic destination
+1. `ENTITY_MOVE_REQUEST` + `ENTITY_MOVE_RESULT` dans `events.js` ✅ session 40
+2. Handler serveur : validation, jet d'attribut via `charStats.js`, MR, step-by-step, broadcast ✅ session 40
+3. Atelier : champ `move_type: 'displacement'` + `attribute_id` + `dmax_override` dans le formulaire interaction ✅ session 40
+4. Client RadialMenu : tranche "Déplacer" (grisée si hors portée)
+5. Client mode visée : ghost entité, snap 4 axes, feedback couleur dot(AE,AD), clic destination
 
 ### 9F-C — Diagonal + polish (1-2 sessions) — APRÈS 9F-B validé
 1. Snap 8 axes + validation diagonale serveur

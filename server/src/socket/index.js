@@ -5,11 +5,13 @@ import { parseDice } from '../lib/diceParser.js'
 import {
   calcSkillTotal,
   calcAttributeAN,
+  calcAttributeNA,
   getGenotypeModForAttr,
   ATTR_LABELS,
 } from '../lib/charStats.js'
 import {
   buildCollisionMap,
+  isCaseOccupied,
   collisionAddToken,
   collisionRemoveToken,
   collisionMoveToken,
@@ -25,6 +27,24 @@ import {
 // Déclarée hors de initSocket — une seule instance, partagée entre toutes les connexions.
 // Nettoyée à chaque résolution (ENTITY_ACTION_RESOLVE) ou expiration (timeout 60s — PE12).
 const pendingEntityActions = new Map()
+
+// Cache table marges de réussite Polaris — chargée une seule fois depuis DB au premier appel.
+// Évite une requête SQL par jet de déplacement.
+// Format : [{ mr_min, mr_max, dmax }] — seed dans migration 45.
+let MR_TABLE = null
+async function getMrTable() {
+  if (!MR_TABLE) MR_TABLE = await db('polaris_mr').orderBy('mr_min')
+  return MR_TABLE
+}
+
+// Retourne le Dmax depuis la table MR chargée en mémoire.
+// MR < 0 → dmax 0 (ligne mr_min:-999, mr_max:-1 dans la seed).
+function getDmax(mrTable, mr) {
+  const row = mrTable.find(r =>
+    mr >= r.mr_min && (r.mr_max === null || mr <= r.mr_max)
+  )
+  return row?.dmax ?? 0
+}
 
 const initSocket = (io) => {
 
@@ -796,6 +816,295 @@ const initSocket = (io) => {
         io.to(socket.campaignId).emit(WS.ENTITY_MOVED, { entityId, pos_x, pos_y, pos_z, r })
       } catch (err) {
         console.error('[WS] entity:moved error:', err.message)
+      }
+    })
+
+    // ─── ENTITY:MOVE_REQUEST ───────────────────────────────────────────────
+    // Un joueur demande à déplacer une entité (push/pull orthogonal — 9F-B).
+    // Le serveur est source de vérité : il recalcule l'attribut, le jet, le Dmax,
+    // et exécute le step-by-step en consultant la collision map Redis.
+    //
+    // Payload : { entityId, tokenId, interactionId, moveType, destX, destZ }
+    //   moveType = 'push'|'pull' — calculé client par dot(AE,AD), revalidé serveur (PE27)
+    //   destX    = pos_x base (= Three.js X, identiques)
+    //   destZ    = pos_y base (profondeur — Three.js Z — PE14)
+    //
+    // Broadcasts : ENTITY_MOVED + TOKEN_MOVED → room
+    // Résultat   : ENTITY_MOVE_RESULT → socket.id uniquement
+    socket.on(WS.ENTITY_MOVE_REQUEST, async ({ entityId, tokenId, interactionId, moveType, destX, destZ }) => {
+      try {
+        // ── Guards entrée ────────────────────────────────────────────────
+        if (!socket.campaignId) return
+        if (!entityId || !tokenId || !interactionId) return
+        if (destX === undefined || destZ === undefined) return
+
+        // Guard double-soumission — même entité déjà en attente (pendingEntityActions)
+        const alreadyPending = [...pendingEntityActions.values()]
+          .some(p => p.entityId === entityId)
+        if (alreadyPending) return
+
+        // ── Charger entité ───────────────────────────────────────────────
+        const entity = await db('entities').where({ id: entityId }).first()
+        if (!entity) return
+
+        // ── Charger blueprint + interaction ──────────────────────────────
+        const blueprint = await db('entity_blueprints')
+          .where({ id: entity.blueprint_id }).first()
+        if (!blueprint) return
+
+        const interaction = (blueprint.interactions || []).find(i => i.id === interactionId)
+        if (!interaction) return
+
+        // Vérifier que c'est bien une interaction de déplacement
+        if (!interaction.move_type) return
+
+        // Vérifier que l'interaction n'est pas désactivée sur cette instance
+        if ((entity.disabled_interactions || []).includes(interactionId)) return
+
+        // ── Charger token acteur + vérifier ownership ─────────────────
+        const token = await db('tokens').where({ id: tokenId }).first()
+        if (!token) return
+
+        // Ownership : le character lié au token doit appartenir au joueur émetteur
+        if (token.character_id) {
+          const character = await db('characters')
+            .where({ id: token.character_id }).first()
+          if (!character || character.user_id !== socket.user.id) return
+        } else {
+          // Token sans character → seul le GM peut interagir
+          return
+        }
+
+        // ── Valider la portée — distance Tchebychev 3D ─────────────────
+        // Inclut pos_z (altitude) pour éviter les interactions cross-étages.
+        const rangeDist = Math.max(
+          Math.abs(entity.pos_x - token.pos_x),
+          Math.abs(entity.pos_y - token.pos_y),   // profondeur (PE14)
+          Math.abs(entity.pos_z - token.pos_z),   // altitude   (PE14)
+        )
+        // Résolution override instance si présent
+        const overrides = entity.interaction_overrides?.[interactionId] || {}
+        const effectiveRange    = overrides.range         ?? interaction.range         ?? 1.5
+        const effectiveDifficulty = overrides.difficulty_dc ?? interaction.difficulty_dc ?? 0
+        if (rangeDist > effectiveRange) return
+
+        // ── Valider direction destination ────────────────────────────────
+        const dPosX = destX - entity.pos_x   // déplacement axe pos_x
+        const dPosY = destZ - entity.pos_y   // déplacement axe pos_y (profondeur — destZ = pos_y base, PE14)
+
+        // Guard : destination = position actuelle
+        if (dPosX === 0 && dPosY === 0) return
+
+        // Guard orthogonalité : exactement un des deux axes doit être nul
+        if (dPosX !== 0 && dPosY !== 0) {
+          socket.emit('error', { message: 'Destination non orthogonale' })
+          return
+        }
+
+        // Direction normalisée (−1 ou +1)
+        const dirPosX = Math.sign(dPosX)
+        const dirPosY = Math.sign(dPosY)
+
+        // ── Détermination et validation moveType par vecteur dot(AE, AD) — PE27 ──
+        // A = acteur, E = entité, D = destination
+        // dot > 0 → push (entité s'éloigne de l'acteur)
+        // dot < 0 → pull (entité se rapproche de l'acteur)
+        // dot = 0 → cas ambigu (normalement bloqué côté client) → refus silencieux
+        const AE = { x: entity.pos_x - token.pos_x, y: entity.pos_y - token.pos_y }
+        const AD = { x: destX - token.pos_x,         y: destZ - token.pos_y }
+        const dot = AE.x * AD.x + AE.y * AD.y
+        if (dot === 0) return
+        const actualMoveType = dot > 0 ? 'push' : 'pull'
+        // Cohérence client/serveur — si le client a envoyé moveType, il doit concorder
+        if (moveType && moveType !== actualMoveType) return
+
+        // ── Charger stats character pour le jet d'attribut ───────────────
+        const sheet = await db('char_sheet')
+          .where({ character_id: token.character_id }).first()
+        if (!sheet) return
+
+        const [attrs, archetype] = await Promise.all([
+          db('char_attributes').where({ char_sheet_id: sheet.id }),
+          db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+        ])
+        const genotypeRow = archetype?.genotype_id
+          ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
+          : null
+
+        // attribute_id depuis l'interaction (configurable — ex: 'FOR')
+        const attributeId = interaction.attribute_id || 'FOR'
+        const attributeNA = calcAttributeNA(attrs, attributeId, genotypeRow)
+
+        // ── Jet 1d20 ────────────────────────────────────────────────────
+        const { rolls, total: diceRoll, seed } = await parseDice('1d20')
+
+        // ── Calcul MR et Dmax ────────────────────────────────────────────
+        const mr = attributeNA + diceRoll - effectiveDifficulty
+        const mrTable = await getMrTable()
+        let dmax = getDmax(mrTable, mr)
+
+        // Override déplacement — dmax_override plafonne push ET pull (session 40)
+        if (interaction.dmax_override !== null && interaction.dmax_override !== undefined) {
+          dmax = Math.min(dmax, interaction.dmax_override)
+        }
+
+        // ── Couleur joueur pour DICE_RESULT ──────────────────────────────
+        let color = '#5b8dee'
+        try {
+          const userRow = await db('users')
+            .where({ id: socket.user.id }).select('color').first()
+          if (userRow?.color) color = userRow.color
+        } catch (_) {}
+
+        const chancesDeReussite = attributeNA + effectiveDifficulty
+        const isSuccess = dmax > 0
+        const diffLabel = effectiveDifficulty >= 0
+          ? `+${effectiveDifficulty}` : `${effectiveDifficulty}`
+        const timestamp = new Date().toISOString()
+
+        // Broadcast DICE_RESULT — visible dans le chat pour joueur et GM
+        io.to(socket.campaignId).emit(WS.DICE_RESULT, {
+          userId: socket.user.id,
+          username: socket.user.username,
+          color,
+          formula: ATTR_LABELS[attributeId] || attributeId,
+          rolls,
+          total: diceRoll,
+          type: 'entity_action',
+          isCriticalSuccess: false,
+          isCriticalFail: false,
+          seed,
+          timestamp,
+          skillLabel: ATTR_LABELS[attributeId] || attributeId,
+          mechanicalTotal: attributeNA,
+          chancesDeReussite,
+          diffLabel,
+          isSuccess,
+        })
+
+        // ── Échec (Dmax = 0) → résultat immédiat, pas de mouvement ───────
+        if (dmax === 0) {
+          socket.emit(WS.ENTITY_MOVE_RESULT, {
+            requestId: `${entityId}-${interactionId}-${Date.now()}`,
+            diceResult: diceRoll,
+            mr,
+            dmax: 0,
+            finalEntityPos: { pos_x: entity.pos_x, pos_y: entity.pos_y, pos_z: entity.pos_z },
+            finalActorPos:  { pos_x: token.pos_x,  pos_y: token.pos_y,  pos_z: token.pos_z },
+            success: false,
+          })
+          return
+        }
+
+        // ── Step-by-step orthogonal ─────────────────────────────────────
+        // excludeIds : token et entité s'excluent mutuellement (tunnel de swap — PE22)
+        const excludeIds = [tokenId, entityId]
+
+        let stepsCompleted = 0
+        for (let k = 1; k <= dmax; k++) {
+          const nextEntityPosX = entity.pos_x + dirPosX * k
+          const nextEntityPosY = entity.pos_y + dirPosY * k   // pos_y = profondeur (PE14)
+          const nextActorPosX  = token.pos_x  + dirPosX * k
+          const nextActorPosY  = token.pos_y  + dirPosY * k
+
+          // Vérifier collision entité (altitude pos_z inchangée — déplacement horizontal)
+          const entityBlocked = await isCaseOccupied(
+            entity.battlemap_id,
+            nextEntityPosX, nextEntityPosY, entity.pos_z,
+            excludeIds
+          )
+          if (entityBlocked) break
+
+          // Vérifier collision acteur
+          const actorBlocked = await isCaseOccupied(
+            entity.battlemap_id,
+            nextActorPosX, nextActorPosY, token.pos_z,
+            excludeIds
+          )
+          if (actorBlocked) break
+
+          stepsCompleted = k
+        }
+
+        // Positions finales (si 0 pas → positions initiales)
+        const finalEntityPosX = entity.pos_x + dirPosX * stepsCompleted
+        const finalEntityPosY = entity.pos_y + dirPosY * stepsCompleted
+        const finalActorPosX  = token.pos_x  + dirPosX * stepsCompleted
+        const finalActorPosY  = token.pos_y  + dirPosY * stepsCompleted
+
+        // ── Update DB ────────────────────────────────────────────────────
+        const [updatedEntity] = await db('entities')
+          .where({ id: entityId })
+          .update({
+            pos_x: finalEntityPosX,
+            pos_y: finalEntityPosY,
+            // pos_z inchangé — déplacement horizontal uniquement
+            updated_at: db.fn.now(),
+          })
+          .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'battlemap_id', 'current_state_id', 'updated_at'])
+
+        const [updatedToken] = await db('tokens')
+          .where({ id: tokenId })
+          .update({
+            pos_x: finalActorPosX,
+            pos_y: finalActorPosY,
+            // pos_z inchangé
+            updated_at: db.fn.now(),
+          })
+          .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'layer', 'updated_at'])
+
+        // ── Maintenance collision map Redis ──────────────────────────────
+        await collisionMoveEntity(
+          entity.battlemap_id,
+          entity,        // oldEntity — positions de départ
+          updatedEntity, // newEntity — positions finales + current_state_id inchangé
+          blueprint
+        )
+        await collisionMoveToken(
+          entity.battlemap_id,
+          token,        // oldToken — positions de départ + layer original
+          updatedToken  // newToken — positions finales + layer original (retourné par returning)
+        )
+
+        // ── Broadcasts room ──────────────────────────────────────────────
+        io.to(socket.campaignId).emit(WS.ENTITY_MOVED, {
+          entityId: updatedEntity.id,
+          pos_x: updatedEntity.pos_x,
+          pos_y: updatedEntity.pos_y,
+          pos_z: updatedEntity.pos_z,
+          updated_at: updatedEntity.updated_at,
+        })
+
+        io.to(socket.campaignId).emit(WS.TOKEN_MOVED, {
+          tokenId: updatedToken.id,
+          pos_x: updatedToken.pos_x,
+          pos_y: updatedToken.pos_y,
+          pos_z: updatedToken.pos_z,
+          updated_at: updatedToken.updated_at,
+        })
+
+        // ── Résultat vers joueur uniquement ──────────────────────────────
+        socket.emit(WS.ENTITY_MOVE_RESULT, {
+          requestId: `${entityId}-${interactionId}-${Date.now()}`,
+          diceResult: diceRoll,
+          mr,
+          dmax,
+          finalEntityPos: {
+            pos_x: updatedEntity.pos_x,
+            pos_y: updatedEntity.pos_y,
+            pos_z: updatedEntity.pos_z,
+          },
+          finalActorPos: {
+            pos_x: updatedToken.pos_x,
+            pos_y: updatedToken.pos_y,
+            pos_z: updatedToken.pos_z,
+          },
+          success: stepsCompleted > 0,
+        })
+
+        console.log(`[WS] entity:move_request — ${socket.user.username} → ${actualMoveType} entité ${entityId} (MR:${mr} Dmax:${dmax} steps:${stepsCompleted})`)
+      } catch (err) {
+        console.error('[WS] entity:move_request error:', err.message)
       }
     })
 

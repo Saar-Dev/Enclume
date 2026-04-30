@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-04-28 Session 39
+> Dernière mise à jour : 2026-04-30 Session 41
 
 ---
 
@@ -60,14 +60,18 @@
 | `TOKEN_ROTATE` — event + handler serveur + clic client | ✅ |
 | Affichage rotation token — `rotation.y = r * Math.PI / 4` | ✅ |
 
-### Chantiers 9F-B/C — Mouvement entités 🔲
+### Chantiers 9F-B/C — Mouvement entités
 
 | Chantier | Contenu | État |
 |---|---|---|
-| 9F-B | Interaction déplacement entité (orthogonal 4 axes) + UX ghost client | 🔲 |
+| 9F-B1 | events.js + handler serveur ENTITY_MOVE_REQUEST + EntityBuilderTab refonte | ✅ session 40 |
+| 9F-B2 | RadialMenu tranche Déplacer + SessionPage handleEntityMove + Canvas3D mode visée ghost | ✅ session 41 |
 | 9F-C | Diagonal 45° + animation Lerp 300ms + Tchebychev | 🔲 |
 
 Voir `docs/PLAN_ENTITY.md` pour la spécification complète.
+
+### Chantier reporté — Paramètre campagne GM entity move mode 🔲
+3 options : réaliste / à la carte / divine. Voir EN_COURS.md.
 
 ### Serveur — Routes
 | Tâche | État |
@@ -86,6 +90,8 @@ Voir `docs/PLAN_ENTITY.md` pour la spécification complète.
 | Éditeur voxel (Editor3D) | ✅ |
 | Entités interactables (EntityMesh + EntityEditorScene) | ✅ |
 | Palette blueprints dans éditeur | ✅ session 34 |
+| EntityBuilderTab — formulaire interactions SkillCheck/Déplacement | ✅ session 40 |
+| Mode visée déplacement entités — ghost wireframe + snap + dot(AE,AD) | ✅ session 41 |
 | X-Ray voxels devant tokens | 🔲 |
 | Outil règle/mesure 3D | 🔲 |
 
@@ -121,6 +127,9 @@ Voir `docs/PLAN_ENTITY.md` pour la spécification complète.
 ---
 
 ## Idées documentées — à planifier
+
+### Paramètre campagne GM entity move mode
+Voir EN_COURS.md — chantier reporté.
 
 ### Mode spectateur
 Rôle `spectator` dans `campaign_members.role`.

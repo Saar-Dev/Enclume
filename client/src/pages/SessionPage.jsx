@@ -68,6 +68,10 @@ export default function SessionPage() {
   // ─── Panneau config instance GM ───────────────────────────────────────────
   const [instancePanel, setInstancePanel] = useState(null)
 
+  // ─── Mode visée déplacement entité ───────────────────────────────────────
+  // null = inactif, sinon { entity, interaction, tokenId }
+  const [moveTarget, setMoveTarget] = useState(null)
+
   // Fenêtre character flottante — null = fermée, sinon id du character ouvert
   // Le character est dérivé du store pour se mettre à jour automatiquement via WS
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
@@ -407,6 +411,20 @@ export default function SessionPage() {
       setRadialMenu(null)
     })
 
+    // ENTITY_MOVE_RESULT — résultat jet + positions finales (9F-B2)
+    // Reçu uniquement par le joueur émetteur (socket.id ciblé côté serveur)
+    s.on(WS.ENTITY_MOVE_RESULT, ({ mr, dmax, success }) => {
+      setMoveTarget(null)
+      addMessage({
+        id: `move-result-${Date.now()}`,
+        system: true,
+        text: success
+          ? t('entity.moveSuccess', { mr, dmax })
+          : t('entity.moveFail', { mr }),
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      })
+    })
+
     // ─── Reconnexion robuste — Bug C ────────────────────────────────────────
     // socket.io.on('reconnect') se déclenche UNIQUEMENT lors d'une reconnexion
     // automatique (pas à la connexion initiale) — disponible depuis socket.io v3.
@@ -492,25 +510,49 @@ export default function SessionPage() {
     })
   }, [socket, characters, user?.id, isGm])
 
+  // ─── Émission ENTITY_MOVE_REQUEST (joueur/GM → serveur) — 9F-B2 ─────────
+  // Active le mode visée dans Canvas3D — le joueur choisit la destination.
+  // Déclaré AVANT handleEntityClick — P4/P48 (handleEntityClick l'appelle).
+  const handleEntityMove = useCallback((entity, interaction) => {
+    const actorToken = tokens.find(t =>
+      characters.find(c => c.id === t.character_id && c.user_id === user?.id)
+    )
+    if (!actorToken) {
+      console.warn('[EntityMove] Aucun token acteur trouvé pour cet utilisateur')
+      return
+    }
+    setMoveTarget({ entity, interaction, tokenId: actorToken.id })
+    setRadialMenu(null)
+  }, [tokens, characters, user?.id])
+
   // ─── Clic entité — ouvre le radial menu ──────────────────────────────────
   // Si 1 seule interaction disponible → action directe sans radial.
   // Si 2-6 interactions (+ tranche GM) → radial menu.
-  // Déclaré APRÈS handleEntityAction — convention P4 (ordre de déclaration React).
+  // Déclaré APRÈS handleEntityAction et handleEntityMove — P4/P48.
   const handleEntityClick = useCallback((entity, clientX, clientY) => {
+    // Guard Q4 — mode visée actif : annuler silencieusement, ne pas ouvrir de radial
+    if (moveTarget) {
+      setMoveTarget(null)
+      return
+    }
     const blueprint = entity.blueprint
-    const stateList = blueprint?.states || []
     const currentStateId = entity.current_state_id ?? 0
     const availableInteractions = (blueprint?.interactions || []).filter(i =>
       i.required_state_ids.includes(currentStateId) &&
       !(entity.disabled_interactions || []).includes(i.id)
     )
-    // 1 seule interaction et pas GM → action directe
+    // 1 seule interaction et pas GM → action directe (skillcheck) ou mode visée (displacement)
     if (availableInteractions.length === 1 && !isGm) {
-      handleEntityAction(entity, availableInteractions[0])
+      const i = availableInteractions[0]
+      if (i.move_type === 'displacement') {
+        handleEntityMove(entity, i)
+      } else {
+        handleEntityAction(entity, i)
+      }
       return
     }
     setRadialMenu({ entity, x: clientX, y: clientY })
-  }, [isGm, handleEntityAction])
+  }, [isGm, handleEntityAction, handleEntityMove, moveTarget])
 
   // ─── Résolution action entité (GM → serveur) ──────────────────────────────
   const handleEntityActionResolve = useCallback((requestId, isApproved, autoSuccess, gmModifier) => {
@@ -523,6 +565,12 @@ export default function SessionPage() {
   const handleTokenRotate = useCallback((tokenId) => {
     socket?.emit(WS.TOKEN_ROTATE, { tokenId })
   }, [socket])
+
+  // ─── Annulation mode visée — stable (deps []) ─────────────────────────────
+  // useCallback stable pour ne pas recréer les listeners useEffect dans Canvas3D.
+  const handleMoveCancel = useCallback(() => {
+    setMoveTarget(null)
+  }, [])
 
   if (loading) return (
     <div style={styles.loading}>
@@ -590,6 +638,8 @@ export default function SessionPage() {
               socket={socket}
               onEntityClick={handleEntityClick}
               onTokenRotate={handleTokenRotate}
+              moveTarget={moveTarget}
+              onMoveCancel={handleMoveCancel}
             />
         )}
         {!canvasVisible && (
@@ -797,6 +847,11 @@ export default function SessionPage() {
           i.required_state_ids.includes(currentStateId) &&
           !(entity.disabled_interactions || []).includes(i.id)
         )
+        // Calculé ici — tokens et characters disponibles dans SessionPage
+        // null si le joueur n'a pas de token sur la carte (GM sans token)
+        const actorToken = tokens.find(t =>
+          characters.find(c => c.id === t.character_id && c.user_id === user?.id)
+        ) ?? null
         return (
           <RadialMenu
             x={radialMenu.x}
@@ -807,11 +862,17 @@ export default function SessionPage() {
               setRadialMenu(null)
               handleEntityAction(entity, interaction)
             }}
+            onMove={(interaction) => {
+              setRadialMenu(null)
+              handleEntityMove(entity, interaction)
+            }}
             onGmConfig={() => {
               setRadialMenu(null)
               setInstancePanel({ entity, x: radialMenu.x, y: radialMenu.y })
             }}
             onClose={() => setRadialMenu(null)}
+            actorToken={actorToken}
+            entity={entity}
           />
         )
       })()}
