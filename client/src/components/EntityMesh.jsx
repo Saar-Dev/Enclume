@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
+import { useFrame } from '@react-three/fiber'
 import { useGLTF, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
@@ -116,6 +117,21 @@ function EntityMeshVoxel({
   }
   useEffect(() => () => { if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current) }, [])
 
+  // ── Lerp 300ms — P40 : position via ref, jamais via state dans useFrame ──
+  const groupRef = useRef()
+  const lerpPos  = useRef({ x: posX, y: posY, z: posZ })
+  const targetRef = useRef({ x: posX, y: posY, z: posZ })
+  targetRef.current = { x: posX, y: posY, z: posZ }
+
+  useFrame((_, delta) => {
+    if (!groupRef.current) return
+    const alpha = 1 - Math.exp(-delta / 0.1)
+    lerpPos.current.x += (targetRef.current.x - lerpPos.current.x) * alpha
+    lerpPos.current.y += (targetRef.current.y - lerpPos.current.y) * alpha
+    lerpPos.current.z += (targetRef.current.z - lerpPos.current.z) * alpha
+    groupRef.current.position.set(lerpPos.current.x, lerpPos.current.y, lerpPos.current.z)
+  })
+
   // Résolution du jeu de matériaux selon l'état courant
   // Fallback sur base si l'état n'a pas de face_overrides chargés (PE11)
   const buckets = entityTextureMaterials?.[blueprint.id]
@@ -127,8 +143,9 @@ function EntityMeshVoxel({
   const faceOrder = ['east', 'west', 'top', 'bottom', 'south', 'north']
 
   return (
+    // position pilotée par useFrame (Lerp) — jamais via prop JSX (P40)
     <group
-      position={[posX, posY, posZ]}
+      ref={groupRef}
       rotation={[0, rot, 0]}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
@@ -268,11 +285,27 @@ function EntityMeshGlb({
     return clone
   }, [gltfScene, isGmOnly, stateOpacity])
 
+  // ── Lerp 300ms — P40 : position via ref, jamais via state dans useFrame ──
+  const groupRef = useRef()
+  const lerpPos  = useRef({ x: posX, y: posY, z: posZ })
+  const targetRef = useRef({ x: posX, y: posY, z: posZ })
+  targetRef.current = { x: posX, y: posY, z: posZ }
+
+  useFrame((_, delta) => {
+    if (!groupRef.current) return
+    const alpha = 1 - Math.exp(-delta / 0.1)
+    lerpPos.current.x += (targetRef.current.x - lerpPos.current.x) * alpha
+    lerpPos.current.y += (targetRef.current.y - lerpPos.current.y) * alpha
+    lerpPos.current.z += (targetRef.current.z - lerpPos.current.z) * alpha
+    groupRef.current.position.set(lerpPos.current.x, lerpPos.current.y, lerpPos.current.z)
+  })
+
   if (!clonedScene) return null
 
   return (
+    // position pilotée par useFrame (Lerp) — jamais via prop JSX (P40)
     <group
-      position={[posX, posY, posZ]}
+      ref={groupRef}
       rotation={[0, rot, 0]}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}

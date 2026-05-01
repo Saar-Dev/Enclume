@@ -37,13 +37,14 @@ async function getMrTable() {
   return MR_TABLE
 }
 
-// Retourne le Dmax depuis la table MR chargée en mémoire.
-// MR < 0 → dmax 0 (ligne mr_min:-999, mr_max:-1 dans la seed).
-function getDmax(mrTable, mr) {
+// Retourne le modificateur LdB depuis la table MR chargée en mémoire.
+// Source de vérité : LdB Polaris p.209 — migration 46.
+// dmax = isSuccess ? modifier + 1 : 0  (calculé dans le handler, pas ici)
+function getModifier(mrTable, mr) {
   const row = mrTable.find(r =>
     mr >= r.mr_min && (r.mr_max === null || mr <= r.mr_max)
   )
-  return row?.dmax ?? 0
+  return row?.modifier ?? 0
 }
 
 const initSocket = (io) => {
@@ -833,90 +834,87 @@ const initSocket = (io) => {
     // Résultat   : ENTITY_MOVE_RESULT → socket.id uniquement
     socket.on(WS.ENTITY_MOVE_REQUEST, async ({ entityId, tokenId, interactionId, moveType, destX, destZ }) => {
       try {
+        console.log(`[DBG] ENTITY_MOVE_REQUEST reçu — entity:${entityId} token:${tokenId} destX:${destX} destZ:${destZ} moveType:${moveType}`)
+
         // ── Guards entrée ────────────────────────────────────────────────
-        if (!socket.campaignId) return
-        if (!entityId || !tokenId || !interactionId) return
-        if (destX === undefined || destZ === undefined) return
+        if (!socket.campaignId) { console.log('[DBG] RETURN — pas de campaignId'); return }
+        if (!entityId || !tokenId || !interactionId) { console.log('[DBG] RETURN — IDs manquants'); return }
+        if (destX === undefined || destZ === undefined) { console.log('[DBG] RETURN — dest manquant'); return }
 
         // Guard double-soumission — même entité déjà en attente (pendingEntityActions)
         const alreadyPending = [...pendingEntityActions.values()]
           .some(p => p.entityId === entityId)
-        if (alreadyPending) return
+        if (alreadyPending) { console.log('[DBG] RETURN — déjà en attente'); return }
 
         // ── Charger entité ───────────────────────────────────────────────
         const entity = await db('entities').where({ id: entityId }).first()
-        if (!entity) return
+        if (!entity) { console.log('[DBG] RETURN — entité introuvable'); return }
+        console.log(`[DBG] entité chargée — pos:(${entity.pos_x},${entity.pos_y},${entity.pos_z})`)
 
         // ── Charger blueprint + interaction ──────────────────────────────
         const blueprint = await db('entity_blueprints')
           .where({ id: entity.blueprint_id }).first()
-        if (!blueprint) return
+        if (!blueprint) { console.log('[DBG] RETURN — blueprint introuvable'); return }
 
         const interaction = (blueprint.interactions || []).find(i => i.id === interactionId)
-        if (!interaction) return
+        if (!interaction) { console.log('[DBG] RETURN — interaction introuvable'); return }
 
         // Vérifier que c'est bien une interaction de déplacement
-        if (!interaction.move_type) return
+        if (!interaction.move_type) { console.log('[DBG] RETURN — interaction sans move_type'); return }
 
         // Vérifier que l'interaction n'est pas désactivée sur cette instance
-        if ((entity.disabled_interactions || []).includes(interactionId)) return
+        if ((entity.disabled_interactions || []).includes(interactionId)) { console.log('[DBG] RETURN — interaction désactivée'); return }
 
         // ── Charger token acteur + vérifier ownership ─────────────────
         const token = await db('tokens').where({ id: tokenId }).first()
-        if (!token) return
+        if (!token) { console.log('[DBG] RETURN — token introuvable'); return }
+        console.log(`[DBG] token chargé — pos:(${token.pos_x},${token.pos_y},${token.pos_z})`)
 
         // Ownership : le character lié au token doit appartenir au joueur émetteur
         if (token.character_id) {
           const character = await db('characters')
             .where({ id: token.character_id }).first()
-          if (!character || character.user_id !== socket.user.id) return
+          if (!character || character.user_id !== socket.user.id) { console.log('[DBG] RETURN — ownership refusé'); return }
         } else {
           // Token sans character → seul le GM peut interagir
+          console.log('[DBG] RETURN — token sans character')
           return
         }
 
         // ── Valider la portée — distance Tchebychev 3D ─────────────────
-        // Inclut pos_z (altitude) pour éviter les interactions cross-étages.
         const rangeDist = Math.max(
           Math.abs(entity.pos_x - token.pos_x),
-          Math.abs(entity.pos_y - token.pos_y),   // profondeur (PE14)
-          Math.abs(entity.pos_z - token.pos_z),   // altitude   (PE14)
+          Math.abs(entity.pos_y - token.pos_y),
+          Math.abs(entity.pos_z - token.pos_z),
         )
-        // Résolution override instance si présent
         const overrides = entity.interaction_overrides?.[interactionId] || {}
         const effectiveRange    = overrides.range         ?? interaction.range         ?? 1.5
         const effectiveDifficulty = overrides.difficulty_dc ?? interaction.difficulty_dc ?? 0
-        if (rangeDist > effectiveRange) return
+        console.log(`[DBG] portée — rangeDist:${rangeDist} effectiveRange:${effectiveRange}`)
+        if (rangeDist > effectiveRange) { console.log('[DBG] RETURN — hors portée'); return }
 
         // ── Valider direction destination ────────────────────────────────
-        const dPosX = destX - entity.pos_x   // déplacement axe pos_x
-        const dPosY = destZ - entity.pos_y   // déplacement axe pos_y (profondeur — destZ = pos_y base, PE14)
+        const dPosX = destX - entity.pos_x
+        const dPosY = destZ - entity.pos_y
+        console.log(`[DBG] direction — dPosX:${dPosX} dPosY:${dPosY}`)
 
-        // Guard : destination = position actuelle
-        if (dPosX === 0 && dPosY === 0) return
+        if (dPosX === 0 && dPosY === 0) { console.log('[DBG] RETURN — destination = position actuelle'); return }
 
-        // Guard orthogonalité : exactement un des deux axes doit être nul
-        if (dPosX !== 0 && dPosY !== 0) {
-          socket.emit('error', { message: 'Destination non orthogonale' })
-          return
-        }
+        const isDiagonal = dPosX !== 0 && dPosY !== 0
+        if (isDiagonal && Math.abs(dPosX) !== Math.abs(dPosY)) { console.log(`[DBG] RETURN — diagonal invalide |dPosX|:${Math.abs(dPosX)} |dPosY|:${Math.abs(dPosY)}`); return }
 
-        // Direction normalisée (−1 ou +1)
         const dirPosX = Math.sign(dPosX)
         const dirPosY = Math.sign(dPosY)
 
         // ── Détermination et validation moveType par vecteur dot(AE, AD) — PE27 ──
-        // A = acteur, E = entité, D = destination
-        // dot > 0 → push (entité s'éloigne de l'acteur)
-        // dot < 0 → pull (entité se rapproche de l'acteur)
-        // dot = 0 → cas ambigu (normalement bloqué côté client) → refus silencieux
         const AE = { x: entity.pos_x - token.pos_x, y: entity.pos_y - token.pos_y }
         const AD = { x: destX - token.pos_x,         y: destZ - token.pos_y }
         const dot = AE.x * AD.x + AE.y * AD.y
-        if (dot === 0) return
+        console.log(`[DBG] dot — AE:(${AE.x},${AE.y}) AD:(${AD.x},${AD.y}) dot:${dot}`)
+        if (dot === 0) { console.log('[DBG] RETURN — dot=0 ambigu'); return }
         const actualMoveType = dot > 0 ? 'push' : 'pull'
-        // Cohérence client/serveur — si le client a envoyé moveType, il doit concorder
-        if (moveType && moveType !== actualMoveType) return
+        console.log(`[DBG] moveType — client:${moveType} serveur:${actualMoveType}`)
+        if (moveType && moveType !== actualMoveType) { console.log('[DBG] RETURN — moveType discordant'); return }
 
         // ── Charger stats character pour le jet d'attribut ───────────────
         const sheet = await db('char_sheet')
@@ -938,10 +936,18 @@ const initSocket = (io) => {
         // ── Jet 1d20 ────────────────────────────────────────────────────
         const { rolls, total: diceRoll, seed } = await parseDice('1d20')
 
-        // ── Calcul MR et Dmax ────────────────────────────────────────────
-        const mr = attributeNA + diceRoll - effectiveDifficulty
+        // ── Calcul seuil, réussite, MR et Dmax ──────────────────────────
+        // Formule Polaris : chancesDeReussite = attributeNA + effectiveDifficulty (signé)
+        // Réussite si diceRoll <= chancesDeReussite.
+        // MR = chancesDeReussite - diceRoll (positif si réussite, négatif si échec).
+        // modifier = getModifier(mrTable, mr) — LdB p.209, migration 46.
+        // dmax = modifier + 1 si réussite (toute réussite = au moins 1 case), 0 si échec.
+        const chancesDeReussite = attributeNA + effectiveDifficulty
+        const isSuccess = diceRoll <= chancesDeReussite
+        const mr = chancesDeReussite - diceRoll
         const mrTable = await getMrTable()
-        let dmax = getDmax(mrTable, mr)
+        const modifier = isSuccess ? getModifier(mrTable, mr) : 0
+        let dmax = isSuccess ? modifier + 1 : 0
 
         // Override déplacement — dmax_override plafonne push ET pull (session 40)
         if (interaction.dmax_override !== null && interaction.dmax_override !== undefined) {
@@ -956,8 +962,6 @@ const initSocket = (io) => {
           if (userRow?.color) color = userRow.color
         } catch (_) {}
 
-        const chancesDeReussite = attributeNA + effectiveDifficulty
-        const isSuccess = dmax > 0
         const diffLabel = effectiveDifficulty >= 0
           ? `+${effectiveDifficulty}` : `${effectiveDifficulty}`
         const timestamp = new Date().toISOString()
@@ -971,6 +975,7 @@ const initSocket = (io) => {
           rolls,
           total: diceRoll,
           type: 'entity_action',
+          interactionType: 'displacement',
           isCriticalSuccess: false,
           isCriticalFail: false,
           seed,
@@ -980,6 +985,7 @@ const initSocket = (io) => {
           chancesDeReussite,
           diffLabel,
           isSuccess,
+          mr,
         })
 
         // ── Échec (Dmax = 0) → résultat immédiat, pas de mouvement ───────
@@ -996,16 +1002,28 @@ const initSocket = (io) => {
           return
         }
 
-        // ── Step-by-step orthogonal ─────────────────────────────────────
+        // ── Step-by-step ────────────────────────────────────────────────
         // excludeIds : token et entité s'excluent mutuellement (tunnel de swap — PE22)
         const excludeIds = [tokenId, entityId]
 
+        // Distance Tchebychev jusqu'à la destination choisie par le joueur.
+        // Le joueur clique sur une case précise — l'entité s'arrête là si possible.
+        // dmax = plafond MR, stepsTarget = intention du joueur.
+        // On prend le minimum des deux — Option A (design session 43).
+        const stepsTarget = Math.max(
+          Math.abs(destX - entity.pos_x),
+          Math.abs(destZ - entity.pos_y)   // destZ = pos_y base (PE14)
+        )
+        const stepsMax = Math.min(dmax, stepsTarget)
+
         let stepsCompleted = 0
-        for (let k = 1; k <= dmax; k++) {
+        for (let k = 1; k <= stepsMax; k++) {
           const nextEntityPosX = entity.pos_x + dirPosX * k
           const nextEntityPosY = entity.pos_y + dirPosY * k   // pos_y = profondeur (PE14)
           const nextActorPosX  = token.pos_x  + dirPosX * k
           const nextActorPosY  = token.pos_y  + dirPosY * k
+
+          console.log(`[DBG] step k=${k} entité-next:(${nextEntityPosX},${nextEntityPosY},${entity.pos_z}) acteur-next:(${nextActorPosX},${nextActorPosY},${token.pos_z})`)
 
           // Vérifier collision entité (altitude pos_z inchangée — déplacement horizontal)
           const entityBlocked = await isCaseOccupied(
@@ -1013,20 +1031,55 @@ const initSocket = (io) => {
             nextEntityPosX, nextEntityPosY, entity.pos_z,
             excludeIds
           )
-          if (entityBlocked) break
+          if (entityBlocked) { console.log(`[DBG] entityBlocked à (${nextEntityPosX},${nextEntityPosY},${entity.pos_z})`); break }
 
           // Vérifier collision acteur
+          // token.pos_z = altitude des pieds (même niveau que le sol).
+          // On vérifie pos_z+1 = espace de marche — standard industrie VTT.
+          // Évite le faux blocage avec les voxels sol (pos_z=0).
           const actorBlocked = await isCaseOccupied(
             entity.battlemap_id,
-            nextActorPosX, nextActorPosY, token.pos_z,
+            nextActorPosX, nextActorPosY, token.pos_z + 1,
             excludeIds
           )
-          if (actorBlocked) break
+          if (actorBlocked) { console.log(`[DBG] actorBlocked à (${nextActorPosX},${nextActorPosY},${token.pos_z + 1})`); break }
+
+          // Validation diagonale — règle D&D (PLAN_ENTITY.md §9)
+          // Les deux cases adjacentes au coin diagonal sont vérifiées.
+          // BLOQUÉ seulement si les DEUX sont occupées — libre si au moins UNE est libre.
+          if (isDiagonal) {
+            const cornerA = await isCaseOccupied(
+              entity.battlemap_id,
+              nextEntityPosX, entity.pos_y + dirPosY * (k - 1), entity.pos_z,
+              excludeIds
+            )
+            const cornerB = await isCaseOccupied(
+              entity.battlemap_id,
+              entity.pos_x + dirPosX * (k - 1), nextEntityPosY, entity.pos_z,
+              excludeIds
+            )
+            if (cornerA && cornerB) break
+          }
 
           stepsCompleted = k
         }
 
-        // Positions finales (si 0 pas → positions initiales)
+        // Guard : 0 pas complétés = entité bloquée dès le premier pas (collision)
+        // Malgré un Dmax > 0, la case (k=1) est occupée — pas de mouvement.
+        if (stepsCompleted === 0) {
+          socket.emit(WS.ENTITY_MOVE_RESULT, {
+            requestId: `${entityId}-${interactionId}-${Date.now()}`,
+            diceResult: diceRoll,
+            mr,
+            dmax,
+            finalEntityPos: { pos_x: entity.pos_x, pos_y: entity.pos_y, pos_z: entity.pos_z },
+            finalActorPos:  { pos_x: token.pos_x,  pos_y: token.pos_y,  pos_z: token.pos_z },
+            success: false,
+          })
+          return
+        }
+
+        // Positions finales (stepsCompleted ≥ 1)
         const finalEntityPosX = entity.pos_x + dirPosX * stepsCompleted
         const finalEntityPosY = entity.pos_y + dirPosY * stepsCompleted
         const finalActorPosX  = token.pos_x  + dirPosX * stepsCompleted

@@ -4256,3 +4256,99 @@ Le useEffect Échap a `if (!moveTarget) return` — s'attache uniquement si néc
 ### Prochaine étape : 9F-C
 Diagonal 45° + animation Lerp 300ms.
 Voir `docs/PLAN_ENTITY.md` §9.
+---
+
+## Session 43 — 2026-05-01 — Chantier 9F-C : Diagonal + Lerp + débuggage
+
+### Contexte de reprise
+Session 42 = échec (protocole non suivi). Session 43 repart de zéro sur 9F-C.
+Fichiers relus intégralement : index.js, Canvas3D.jsx, Sidebar.jsx, SessionPage.jsx, fr.json, EntityMesh.jsx, EntityEditor.jsx, redis.js, migration 30.
+
+### Décisions prises
+
+**Logs debug conservés dans index.js**
+Décision dev : les logs `[DBG]` step-by-step sont utiles pour le diagnostic. Conservés volontairement. À retirer avant production.
+
+**Couleurs ghost**
+Retour à la spec session 40 : bleu=push (#2563eb), orange=pull (#f97316), rouge=impossible (#ef4444).
+La spec session 41 (vert/rouge) était une simplification abandonnée.
+
+**Lerp exponentiel tau=0.1**
+95% de la distance en ~300ms. Pas de dépendance au framerate (utilise `delta` de useFrame).
+Pattern P40 : position via ref uniquement, jamais via prop JSX ni state React.
+
+### Travail effectué
+
+**`server/src/socket/index.js` — MODIFIÉ ✅**
+- Suppression bloc Tchebychev (l.1047-1053) — cause du bug blocage systématique
+- `mr` ajouté dans le broadcast `DICE_RESULT`
+- Logs debug `[DBG]` ajoutés à chaque return silencieux du handler ENTITY_MOVE_REQUEST
+- Logs debug `[DBG]` ajoutés dans la boucle step-by-step (entityBlocked/actorBlocked)
+
+**`client/src/pages/SessionPage.jsx` — MODIFIÉ ✅**
+- `mr` ajouté dans la destructuration du handler DICE_RESULT
+- `mr` ajouté dans `addMessage`
+
+**`client/src/locales/fr/translation.json` — MODIFIÉ ✅**
+- `sidebar.displacementSuccess` : `"RÉUSSITE — Marge : {{mr}}"`
+- `sidebar.displacementFail` : `"ÉCHEC — Marge : {{mr}}"`
+
+**`client/src/components/Sidebar.jsx` — MODIFIÉ ✅**
+- Badge displacement remplacé par badge avec MR : "RÉUSSITE — MARGE : X" / "ÉCHEC — MARGE : X"
+- Branche skillcheck inchangée (`entityActionSuccess`/`entityActionFail`)
+
+**`client/src/components/Canvas3D.jsx` — MODIFIÉ ✅**
+- Snap 8 axes contraint depuis l'entité (ratio 2:1) — `entity.pos_x + Math.round(dPosX)` etc.
+- Diagonal : `dist = Math.round((|dPosX| + |dPosZ|) / 2)`
+- Couleurs ghost : `dotResult > 0 → bleu`, `dotResult < 0 → orange`, `= 0 → rouge`
+- Lerp 300ms TokenMesh : groupRef + lerpPos + targetRef + isDraggingRef + useFrame
+- Position `<group>` TokenMesh pilotée par useFrame — prop `position` retirée
+
+**`client/src/components/EntityMesh.jsx` — MODIFIÉ ✅**
+- Import `useFrame` depuis `@react-three/fiber`
+- Lerp 300ms dans `EntityMeshVoxel` — après useEffect, avant JSX
+- Lerp 300ms dans `EntityMeshGlb` — après useMemo, avant guard `if (!clonedScene) return null`
+- Position `<group>` pilotée par useFrame dans les deux sous-composants
+
+**`client/src/components/EntityEditor.jsx` — MODIFIÉ ✅**
+- Correction bug préexistant : `textureMaterials` → `entityTextureMaterials` (prop incorrecte)
+
+### Investigation bugs (session)
+
+**Bug 1 — stepsCompleted=0 sur réussite**
+Cause identifiée : bloc Tchebychev. Supprimé. Résolu.
+
+**Bug 2 — "Déplacement échoué" avec MR positive**
+Cause : `success` dans ENTITY_MOVE_RESULT = `stepsCompleted > 0` (déplacement physique),
+pas `isSuccess` du jet. Comportement correct — le message système reflète le déplacement réel.
+Le badge dans Sidebar reflète le jet (MR). Les deux sont corrects et indépendants.
+
+**Bug 3 — ghost s'affichait sur cases hors-axe**
+Cause : snap ne contraignait pas depuis l'entité (`Math.round(worldPos.x)` libre).
+Corrigé : `entity.pos_x + Math.round(dPosX)`.
+
+**Collision map voxels — investigation**
+Case (13,0,1) bloquait step-by-step. Vérification Redis + PostgreSQL : voxel réel confirmé en base.
+y=0 dans voxel_data = sol réel sur cette carte. Pas de bug. Comportement attendu.
+
+### Validation fonctionnelle
+- ✅ Déplacement orthogonal est/ouest + nord/sud fonctionnel
+- ✅ Badge MR : "RÉUSSITE — MARGE : 13" / "ÉCHEC — MARGE : -5"
+- ✅ Ghost sur 8 axes exacts depuis l'entité
+- ✅ Couleurs bleu/orange/rouge correctes
+- ✅ Animation Lerp TokenMesh ~300ms
+- ✅ Animation Lerp EntityMesh ~300ms
+
+### Fichiers modifiés cette session
+| Fichier | Modifications |
+|---|---|
+| `server/src/socket/index.js` | Fix Tchebychev, mr dans DICE_RESULT, logs debug |
+| `client/src/pages/SessionPage.jsx` | mr dans destructuration + addMessage |
+| `client/src/locales/fr/translation.json` | displacementSuccess + displacementFail |
+| `client/src/components/Sidebar.jsx` | Badge displacement avec MR |
+| `client/src/components/Canvas3D.jsx` | Snap 8 axes contraint, couleurs ghost, Lerp TokenMesh |
+| `client/src/components/EntityMesh.jsx` | Lerp 300ms EntityMeshVoxel + EntityMeshGlb |
+| `client/src/components/EntityEditor.jsx` | Correction prop entityTextureMaterials |
+
+### Prochaine étape
+Chantier suivant à définir. Voir ROADMAP.md.

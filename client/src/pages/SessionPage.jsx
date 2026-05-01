@@ -339,7 +339,7 @@ export default function SessionPage() {
     s.on(WS.CHARACTER_UPDATED, (updatedCharacter) => {
       upsertCharacter(updatedCharacter)
     })
-    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess }) => {
+    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess, interactionType, mr }) => {
       addMessage({
         id: `dice-${userId}-${timestamp}`,
         type: 'dice',
@@ -357,6 +357,8 @@ export default function SessionPage() {
         chancesDeReussite,
         diffLabel,
         isSuccess,
+        interactionType,
+        mr,
       })
     })
     s.on(WS.MAP_SWITCH, ({ battlemapId, userIds }) => {

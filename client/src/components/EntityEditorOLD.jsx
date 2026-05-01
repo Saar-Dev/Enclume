@@ -211,7 +211,7 @@ function EntityEditorScene({
             key={entity.id}
             entity={entity}
             blueprint={blueprint}
-            entityTextureMaterials={textureMaterials}
+            textureMaterials={textureMaterials}
             altPressed={false}
             isGmOnly={entity.gm_only}
           />

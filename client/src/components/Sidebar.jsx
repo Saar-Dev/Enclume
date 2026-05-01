@@ -899,6 +899,45 @@ export default function Sidebar({
                     const successStyle = msg.isSuccess
                       ? { background: 'rgba(76,175,119,0.07)', border: '1px solid rgba(76,175,119,0.2)' }
                       : { background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }
+
+                    // ── Déplacement d'entité ────────────────────────────────
+                    if (msg.interactionType === 'displacement') {
+                      return (
+                        <div key={msg.id} style={{ ...styles.messageDice, ...successStyle }}>
+                          {/* En-tête : icône + nom + heure */}
+                          <div style={styles.diceHeader}>
+                            <span style={{ ...styles.diceIcon, color: msg.color || '#5b8dee' }}>
+                              <IconDice />
+                            </span>
+                            <span style={{ ...styles.msgUser, color: msg.color || '#5b8dee' }}>{msg.user}</span>
+                            <span style={styles.msgTime}> · {msg.time}</span>
+                          </div>
+                          {/* Corps : "Jet de Force" + résultat du dé en grand */}
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', paddingLeft: '2px' }}>
+                            <span style={styles.diceFormula}>{t('sidebar.displacementJet', { attr: msg.skillLabel })}</span>
+                            <span style={{ ...styles.diceTotal, fontSize: '20px', fontWeight: '700' }}>{msg.total}</span>
+                          </div>
+                          {/* Détail : difficulté · seuil */}
+                          <div style={{ paddingLeft: '2px', fontSize: '11px', color: '#64748b' }}>
+                            {t('sidebar.displacementDetail', {
+                              dif: msg.diffLabel,
+                              seuil: msg.chancesDeReussite,
+                            })}
+                          </div>
+                          {/* Badge résultat avec marge de réussite */}
+                          <div style={{ paddingLeft: '2px' }}>
+                            <span style={msg.isSuccess ? styles.badgeCritSuccess : styles.badgeCritFail}>
+                              {msg.isSuccess
+                                ? t('sidebar.displacementSuccess', { mr: msg.mr })
+                                : t('sidebar.displacementFail', { mr: msg.mr })
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    // ── Skillcheck ──────────────────────────────────────────
                     return (
                       <div key={msg.id} style={{ ...styles.messageDice, ...successStyle }}>
                         {/* En-tête : icône + nom + heure */}

@@ -75,8 +75,12 @@ export async function buildCollisionMap(battlemapId) {
   const bm = await db('battlemaps').where({ id: battlemapId }).first()
   const voxels = bm?.voxel_data ?? {}
   for (const [voxelKey] of Object.entries(voxels)) {
-    // voxelKey = "x:y:z" — séparateur conforme P17
-    pipeline.hset(key, voxelKey, JSON.stringify({ type: 'voxel', id: voxelKey }))
+    // voxelKey depuis voxel_data = "x:y_altitude:z_profondeur" (convention Three.js brute)
+    // Conversion PE14 : pos_x=x, pos_y=z_profondeur, pos_z=y_altitude
+    // Clé Redis stockée en PE14 = "x:z_profondeur:y_altitude"
+    const [vx, vy, vz] = voxelKey.split(':').map(Number)
+    const pe14Key = `${vx}:${vz}:${vy}`
+    pipeline.hset(key, pe14Key, JSON.stringify({ type: 'voxel', id: voxelKey }))
   }
 
   // TTL 24h — reconstruite au prochain SESSION_JOIN
@@ -195,17 +199,20 @@ export async function collisionMoveEntity(battlemapId, oldEntity, newEntity, blu
 
 // ─── Helpers maintenance voxel ─────────────────────────────────────────────────
 
-// Ajouter un voxel (x:y:z en coordonnées base — P17)
+// Ajouter un voxel à la collision map
+// x, y, z reçus en convention Three.js brute (depuis VOXEL_ADD payload)
+// y = altitude Three.js = pos_z base, z = profondeur Three.js = pos_y base
+// Clé Redis stockée en PE14 = "x:z_profondeur:y_altitude"
 export function collisionAddVoxel(battlemapId, x, y, z) {
-  const caseKey = `${x}:${y}:${z}`
+  const pe14Key = `${x}:${z}:${y}`
   return redis.hset(
     collisionKey(battlemapId),
-    caseKey,
-    JSON.stringify({ type: 'voxel', id: caseKey })
+    pe14Key,
+    JSON.stringify({ type: 'voxel', id: `${x}:${y}:${z}` })
   )
 }
 
-// Retirer un voxel
+// Retirer un voxel — même conversion PE14 que collisionAddVoxel
 export function collisionRemoveVoxel(battlemapId, x, y, z) {
-  return redis.hdel(collisionKey(battlemapId), `${x}:${y}:${z}`)
+  return redis.hdel(collisionKey(battlemapId), `${x}:${z}:${y}`)
 }

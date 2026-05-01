@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-04-30 Session 41
+> Dernière mise à jour : 2026-05-01 Session 43
 
 ---
 
@@ -16,21 +16,24 @@
 ### Chantier 9F-A — Fondations mouvement ✅ (session 39)
 ### Chantier 9F-B1 — Déplacement entités serveur + atelier ✅ (session 40)
 ### Chantier 9F-B2 — Mode visée client ✅ (session 41)
+### Chantier 9F-C — Diagonal 45° + animation Lerp ✅ (session 43)
 
-Travaux effectués en session 41 :
-- Retrait guard GM dans ENTITY_MOVE_REQUEST — GM passe par le flux jet d'attribut ✅
-- fr.json — section entity (5 clés i18n) ✅
-- RadialMenu.jsx — tranche displacement, grisage portée, prop onMove ✅
-- SessionPage.jsx — moveTarget state, handleEntityMove, handleMoveCancel, guard Q4, listener ENTITY_MOVE_RESULT ✅
-- Canvas3D.jsx — mode visée complet : tokensRef/ghostRef, snap 4 axes, dot(AE,AD), ghost wireframe, Échap ✅
+Travaux effectués en session 43 :
+- Fix Tchebychev dans index.js — suppression bloc Tchebychev (déplacement débloqué) ✅
+- Badge MR displacement — index.js + SessionPage.jsx + fr.json + Sidebar.jsx ✅
+- Snap 8 axes contraint depuis l'entité — Canvas3D.jsx ✅
+- Couleurs ghost bleu=push / orange=pull / rouge=impossible — Canvas3D.jsx ✅
+- Lerp 300ms TokenMesh — Canvas3D.jsx ✅
+- Lerp 300ms EntityMesh (voxel + GLB) — EntityMesh.jsx ✅
+- Correction prop entityTextureMaterials — EntityEditor.jsx ✅
+- Logs debug step-by-step conservés dans index.js (décision dev) ✅
 
 ---
 
 ## Prochaines tâches
 
-### Chantier 9F-C — Diagonal 45° + animation Lerp
-Prérequis : 9F-B2 ✅
-Voir PLAN_ENTITY.md §9
+### Chantier suivant — à définir
+Voir ROADMAP.md pour les options.
 
 ---
 
@@ -64,7 +67,7 @@ Statut : correction prévue si besoin.
 - "La Forêt Maudite" — pas de default_battlemap_id → ne jamais utiliser pour les tests
 - token.owner_id — mort → toujours character_id → characters.user_id
 - socket dans dependency arrays — tout useCallback qui émet doit inclure socket (P3)
-- ordre déclaration React — callback A qui appelle B doit être déclaré APRÈS B (P4, P48)
+- ordre déclaration React — callback A qui appelle B doit être déclaré APRÈS B (P4)
 - coordonnées voxel — données brutes en base, +0.5 uniquement dans le rendu visuel
 - reconnectTrigger — ne jamais appeler socket.disconnect/connect depuis Sidebar
 - PE14 pos_y/pos_z — pos_y base = Z Three.js, pos_z base = Y Three.js
@@ -74,3 +77,5 @@ Statut : correction prévue si besoin.
 - collisionMoveToken — hdel systématique ancienne case, hset conditionnel layer (PE24)
 - PE27 moveType — calculé client (feedback) ET recalculé serveur (validation). Si discordance → refus silencieux
 - Token GM sans char_sheet → ENTITY_MOVE_REQUEST ignoré silencieusement — comportement documenté V1
+- Lerp EntityMesh — useFrame dans sous-composants (pas EntityMesh parent) — règle des hooks
+- Logs debug index.js — conservés volontairement, à retirer avant production

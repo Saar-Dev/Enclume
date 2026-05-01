@@ -98,6 +98,33 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick,
   // Appliqué sur le <group> parent — indépendant du tilt de drag (sur le <primitive>)
   const rotationY = (token.r ?? 0) * Math.PI / 4
 
+  // ── Lerp 300ms — P40 : position via ref, jamais via state dans useFrame ──
+  const groupRef = useRef()
+  const lerpPos = useRef({ x: baseX + 0.5, y: baseY + 0.5, z: baseZ + 0.5 })
+  // targetRef et isDraggingRef évitent les closures stales dans useFrame
+  const targetRef = useRef({ x, y, z })
+  targetRef.current = { x, y, z }
+  const isDraggingRef = useRef(isDragging)
+  isDraggingRef.current = isDragging
+
+  useFrame((_, delta) => {
+    if (!groupRef.current) return
+    if (isDraggingRef.current) {
+      // Drag : snap immédiat — pas de Lerp
+      groupRef.current.position.set(targetRef.current.x, targetRef.current.y, targetRef.current.z)
+      lerpPos.current.x = targetRef.current.x
+      lerpPos.current.y = targetRef.current.y
+      lerpPos.current.z = targetRef.current.z
+    } else {
+      // Lerp exponentiel — tau=0.1 → 95% en ~300ms
+      const alpha = 1 - Math.exp(-delta / 0.1)
+      lerpPos.current.x += (targetRef.current.x - lerpPos.current.x) * alpha
+      lerpPos.current.y += (targetRef.current.y - lerpPos.current.y) * alpha
+      lerpPos.current.z += (targetRef.current.z - lerpPos.current.z) * alpha
+      groupRef.current.position.set(lerpPos.current.x, lerpPos.current.y, lerpPos.current.z)
+    }
+  })
+
   // useGLTF suspend le composant le temps du chargement (géré nativement par Canvas R3F).
   const { scene: gltfScene } = useGLTF(glbUrl)
 
@@ -137,8 +164,9 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick,
   return (
     // rotation.y permanent sur le group — PE21
     // Le tilt de drag reste sur le <primitive> — indépendant
+    // position pilotée par useFrame (Lerp) — jamais via prop JSX
     <group
-      position={[x, y, z]}
+      ref={groupRef}
       rotation={[0, rotationY, 0]}
       userData={{ isToken: true, tokenId: token.id }}
       onPointerDown={(e) => {
@@ -333,17 +361,24 @@ function Scene({
       const worldPos = raycastGround(e.clientX, e.clientY)
       if (!worldPos) return
 
-      // Snap 4 axes orthogonaux depuis la position de l'entité
+      // Snap 8 axes depuis la position de l'entité — contraint sur les axes exacts
       const dPosX = worldPos.x - moveTarget.entity.pos_x
       const dPosZ = worldPos.z - moveTarget.entity.pos_y  // pos_y base = Z Three.js (PE14)
 
       let snapX, snapZ
-      if (Math.abs(dPosX) >= Math.abs(dPosZ)) {
-        snapX = Math.round(worldPos.x)
-        snapZ = moveTarget.entity.pos_y   // fixé sur l'axe Z de l'entité
+      if (Math.abs(dPosX) > 2 * Math.abs(dPosZ)) {
+        // Axe X pur (orthogonal) — snapX contraint depuis entity.pos_x
+        snapX = moveTarget.entity.pos_x + Math.round(dPosX)
+        snapZ = moveTarget.entity.pos_y
+      } else if (Math.abs(dPosZ) > 2 * Math.abs(dPosX)) {
+        // Axe Z pur (orthogonal) — snapZ contraint depuis entity.pos_y
+        snapX = moveTarget.entity.pos_x
+        snapZ = moveTarget.entity.pos_y + Math.round(dPosZ)
       } else {
-        snapX = moveTarget.entity.pos_x   // fixé sur l'axe X de l'entité
-        snapZ = Math.round(worldPos.z)
+        // Diagonal 45° — distance = moyenne arrondie des deux deltas
+        const dist = Math.round((Math.abs(dPosX) + Math.abs(dPosZ)) / 2)
+        snapX = moveTarget.entity.pos_x + Math.sign(dPosX) * dist
+        snapZ = moveTarget.entity.pos_y + Math.sign(dPosZ) * dist
       }
 
       // dot(AE, AD) — PE27
@@ -558,12 +593,11 @@ function Scene({
       })}
 
       {/* ── Ghost mode visée déplacement (9F-B2) ─────────────────────────── */}
-      {/* Plan semi-transparent au sol sur la case destination snappée.        */}
-      {/* Couleur = feedback dot(AE,AD) : bleu=push, orange=pull, rouge=impos. */}
-      {/* PE14 : ghostPos.x = pos_x base, ghostPos.z = pos_y base (profondeur) */}
+      {/* Plan semi-transparent au sol sur la case destination snappée.          */}
+      {/* Couleur = feedback dot(AE,AD) : bleu=push, orange=pull, rouge=impos.   */}
+      {/* PE14 : ghostPos.x = pos_x base, ghostPos.z = pos_y base (profondeur)  */}
       {moveTarget && ghostPos && (() => {
-        // Vert = case atteignable (push ou pull), Rouge = impossible (dot=0)
-        const color = dotResult !== 0 ? '#22c55e' : '#ef4444'
+        const color = dotResult > 0 ? '#2563eb' : dotResult < 0 ? '#f97316' : '#ef4444'
         const y = getColumnTopY(ghostPos.x, ghostPos.z) + 1 + 0.05
         return (
           <group position={[ghostPos.x + 0.5, y, ghostPos.z + 0.5]}>
