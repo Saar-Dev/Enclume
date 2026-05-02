@@ -1,5 +1,5 @@
 # SYSTEME.md — Flux, règles et pièges du projet Enclume
-> Dernière mise à jour : 2026-04-28 Session 39
+> Dernière mise à jour : 2026-05-01 Session 43
 > Ce document répond à "qui fait quoi, qui parle à qui, pourquoi" — pas à "qu'est-ce qui existe".
 > Pour la liste des fichiers : voir ASBUILT.md. Pour l'historique : voir JOURNAL2.md.
 
@@ -136,6 +136,8 @@ socket.data.role   = member.role      // fetchSockets → ciblage GM (PE2)
 | ENTITY_DELETED | client (GM) | serveur → room | Entité supprimée |
 | ENTITY_UPDATED | serveur | room | État entité changé |
 | ENTITY_MOVED | client (GM) | serveur → room | Entité déplacée |
+| ENTITY_MOVE_REQUEST | client (joueur/GM) | serveur | Demande déplacement entité push/pull |
+| ENTITY_MOVE_RESULT | serveur | joueur socket | Résultat jet + positions finales |
 
 ---
 
@@ -236,6 +238,7 @@ entityTextureMaterials = {
 ```javascript
 // Base (migration 30) :
 { "x:y:z": { "tex": N, "geo": "cube", "r": 0 } }
+// Clé "x:y:z" = convention Three.js brute (y=altitude, z=profondeur)
 
 // Mémoire React :
 { "x:y:z": { x, y, z, tex, geo, r } }
@@ -243,6 +246,16 @@ entityTextureMaterials = {
 // save() payload — jamais l'objet mémoire entier (P16) :
 payload[key] = { tex: v.tex, geo: v.geo, r: v.r }
 ```
+
+### Convention clés collision map Redis — voxels (session 43)
+```
+voxel_data stocke : "x:y_altitude:z_profondeur" (Three.js brut)
+Redis collision map : "x:z_profondeur:y_altitude" (PE14 base)
+Conversion dans buildCollisionMap/collisionAddVoxel/collisionRemoveVoxel :
+  const [vx, vy, vz] = voxelKey.split(':').map(Number)
+  const pe14Key = `${vx}:${vz}:${vy}`
+```
+**Convention Redis = PE14 partout (tokens, entités, voxels). Three.js = rendu uniquement.**
 
 ---
 
@@ -300,7 +313,7 @@ DELETE /battlemaps/:id/editor-lock    → libère au démontage
 
 ---
 
-## 12. Collision map Redis — session 39
+## 12. Collision map Redis — sessions 39 + 43
 
 ### Architecture (cache-aside)
 ```
@@ -308,10 +321,19 @@ DB PostgreSQL = source de vérité
 Redis Hash    = cache O(1) par case — reconstruit depuis DB au SESSION_JOIN
 
 Clé Redis  : "collision:{battlemap_id}"
-Champ Hash : "x:y:z"   (séparateur ":" — P17, coordonnées base)
+Champ Hash : "x:pos_y:pos_z"  (convention PE14 base — NON Three.js)
 Valeur     : JSON { type: 'token'|'entity'|'voxel', id: string }
 TTL        : 24h — reconstruite au prochain SESSION_JOIN (PE23)
 ```
+
+### Convention PE14 dans Redis — NON NÉGOCIABLE (session 43)
+Tous les champs Hash utilisent `"pos_x:pos_y:pos_z"` en convention base (PE14) :
+- `pos_x` = axe X (identique Three.js)
+- `pos_y` = profondeur (axe Z Three.js)
+- `pos_z` = altitude (axe Y Three.js)
+
+**Les voxels sont stockés dans voxel_data en Three.js brut (`"x:y_altitude:z_profondeur"`)
+mais convertis en PE14 avant stockage Redis. Voir §7 pour la conversion.**
 
 ### Filtres
 - Tokens `layer = 'gm'` : **exclus** — invisibles aux joueurs, pas bloquants
@@ -329,9 +351,18 @@ await buildCollisionMap(playerLocation.battlemap_id)
 
 ### isCaseOccupied
 ```javascript
-// O(1) — utilisé dans step-by-step 9F-B
+// O(1) — utilisé dans step-by-step 9F-B/C
 // excludeIds = [tokenId, entityId] — tunnel de swap (PE22)
 await isCaseOccupied(battlemapId, x, y, z, excludeIds)
+// x, y, z = coordonnées PE14 (pos_x, pos_y, pos_z)
+```
+
+### Altitude token acteur dans step-by-step (session 43)
+```javascript
+// Token pos_z = altitude des pieds (même niveau que voxels sol pos_z=0)
+// Vérifier pos_z+1 = espace de marche — évite faux blocage sur sol
+await isCaseOccupied(battlemapId, nextActorPosX, nextActorPosY, token.pos_z + 1, excludeIds)
+// Standard industrie VTT — Foundry VTT approach
 ```
 
 ### Maintenance — règle fondamentale (PE25)
@@ -350,8 +381,8 @@ await isCaseOccupied(battlemapId, x, y, z, excludeIds)
 | Entité pos/état changé | `PUT /entities/:id` | `collisionMoveEntity` ou `collisionUpdateEntityState` |
 | Entité supprimée | `DELETE /entities/:id` AVANT delete | `collisionRemoveEntity` |
 | Entité état (interaction) | `resolveEntityState` | `collisionUpdateEntityState` |
-| Voxel ajouté | `VOXEL_ADD` | `collisionAddVoxel` |
-| Voxel supprimé | `VOXEL_REMOVE` | `collisionRemoveVoxel` |
+| Voxel ajouté | `VOXEL_ADD` | `collisionAddVoxel` (converti PE14) |
+| Voxel supprimé | `VOXEL_REMOVE` | `collisionRemoveVoxel` (converti PE14) |
 | Voxel tourné | `VOXEL_UPDATE` | aucune (position inchangée) |
 
 ---
@@ -398,7 +429,78 @@ useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 
 ---
 
-## 15. Conventions non-négociables
+## 15. Déplacement entités — flux complet (sessions 40-43)
+
+### Flux
+```
+Joueur clique ⚙ → RadialMenu → handleEntityMove → setMoveTarget → mode visée Canvas3D
+Canvas3D : ghost wireframe snapé 8 axes depuis entité, couleur bleu=push/orange=pull/rouge=impossible
+Joueur clique destination (dot≠0) → ENTITY_MOVE_REQUEST émis
+Serveur → jet attribut via charStats.js → calcul MR → getModifier(mrTable,mr) → dmax=modifier+1
+  → step-by-step : min(dmax, stepsTarget) pas max — destination joueur respectée
+  → collision entité à pos_z, acteur à pos_z+1 (espace de marche)
+  → ENTITY_MOVED + TOKEN_MOVED broadcast → ENTITY_MOVE_RESULT → joueur
+SessionPage → setMoveTarget(null) + badge MR dans chat
+Canvas3D/EntityMesh → Lerp 300ms vers position finale
+```
+
+### Polaris MR — table officielle (migration 46)
+```
+modifier = getModifier(mrTable, mr)   // LdB p.209 — 20 paliers réussite + échec
+dmax = isSuccess ? modifier + 1 : 0   // toute réussite = au moins 1 case
+stepsMax = Math.min(dmax, stepsTarget) // destination joueur respectée
+```
+
+### Table polaris_mr (migration 46)
+```
+mr_min | mr_max | modifier
+0      | 2      | 0    De justesse
+3      | 4      | 1    Correct
+5      | 6      | 2    Assez bon
+7      | 9      | 3    Bon
+10     | 12     | 4    Très bon
+13     | 14     | 5    Excellent
+15     | 19     | 6    Parfait
+20     | 24     | 7    Extraordinaire
+25     | 34     | 8    Héroïque
+35     | null   | 9    Légendaire
+-2     | -1     | 0    De justesse (échec)
+-4     | -3     | -1   Médiocre
+...
+-999   | -35    | -9   Légendaire (échec)
+```
+
+### Ghost mode visée
+```
+Snap : 8 axes depuis entité (ratio 2:1)
+  if dx > 2*dz → axe X pur : entity.pos_x + round(dPosX)
+  if dz > 2*dx → axe Z pur : entity.pos_y + round(dPosZ)
+  else → diagonal : dist = round((|dPosX|+|dPosZ|)/2)
+Couleurs : dot>0→bleu(#2563eb) dot<0→orange(#f97316) dot=0→rouge(#ef4444)
+```
+
+### Lerp 300ms — pattern R3F (session 43)
+```javascript
+// Dans EntityMeshVoxel, EntityMeshGlb, TokenMesh
+const groupRef = useRef()
+const lerpPos  = useRef({ x: posX, y: posY, z: posZ })
+const targetRef = useRef({ x: posX, y: posY, z: posZ })
+targetRef.current = { x: posX, y: posY, z: posZ }  // mis à jour à chaque render
+
+useFrame((_, delta) => {
+  if (!groupRef.current) return
+  const alpha = 1 - Math.exp(-delta / 0.1)  // tau=0.1 → 95% en ~300ms
+  lerpPos.current.x += (targetRef.current.x - lerpPos.current.x) * alpha
+  lerpPos.current.y += (targetRef.current.y - lerpPos.current.y) * alpha
+  lerpPos.current.z += (targetRef.current.z - lerpPos.current.z) * alpha
+  groupRef.current.position.set(lerpPos.current.x, lerpPos.current.y, lerpPos.current.z)
+})
+// <group ref={groupRef}> — position retirée du JSX (P40)
+```
+
+---
+
+## 16. Conventions non-négociables
 
 - **UUID partout** — jamais `increments()` (sauf voxel_textures.id — P22)
 - **threeToDb(tx, ty, tz)** → `{ pos_x: tx, pos_y: tz, pos_z: ty }` — jamais inline
@@ -413,17 +515,22 @@ useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 - **glb_url avec ?v=timestamp** (P19)
 - **mat.clone() avant mutation Three.js** (P20)
 - **fetch() console F12 : URL absolue + credentials**
-- **Calculs Polaris** — serveur calcule via `charStats.js` (PE1 supprimé session 36)
+- **Calculs Polaris** — serveur calcule via `charStats.js`
 - **difficulty_dc** — modificateur signé (-20 à +10, LdB p.404) — jamais une valeur absolue
 - **isSuccess Polaris** — `diceRoll <= chancesDeReussite` — jamais >=
 - **charStats.js** — fonctions pures, aucun accès DB — le caller fournit les données
 - **pendingEntityActions Map hors initSocket** — une seule instance
-- **Collision map Redis** — maintenance dans REST, pas dans handlers WS reliques (PE25)
+- **Collision map Redis** — convention PE14 partout (tokens, entités, voxels convertis)
+- **Voxels Redis** — convertis Three.js→PE14 dans buildCollisionMap/add/remove
+- **Acteur step-by-step** — collision à pos_z+1 (espace de marche, pas sol)
+- **stepsMax** — Math.min(dmax, stepsTarget) — destination joueur respectée
 - **resolveEntityState returning** — doit inclure `battlemap_id` (PE26)
+- **Lerp EntityMesh** — useFrame dans sous-composants (règle des hooks)
+- **Logs debug index.js** — conservés volontairement, à retirer avant production
 
 ---
 
-## 16. Pièges actifs — référence rapide
+## 17. Pièges actifs — référence rapide
 
 | Code | Description |
 |---|---|
@@ -438,10 +545,10 @@ useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 | P32 | Ordre faces BoxGeometry : east(0), west(1), top(2), bottom(3), south(4), north(5) |
 | P33 | `side` = alias lecture seule — jamais écrire |
 | P38 | Raccourcis : `e.code` obligatoire |
+| P40 | battlemapRef pattern — ref miroir pour callbacks stables dans useFrame |
 | P43 | MinIO : `textures/<pack_uuid>/` jamais par pack_name |
 | P44 | name du pack immuable |
 | P46 | Route spécifique avant paramétrique |
-| PE1 | SUPPRIMÉ session 36 — serveur calcule via charStats.js |
 | PE2 | socket.data.role pour fetchSockets() |
 | PE4 | face null = invisible |
 | PE11 | fallback states[0] si current_state_id invalide |
@@ -455,8 +562,9 @@ useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
 | PE22 | tunnel de swap `excludeIds = [tokenId, entityId]` dans `isCaseOccupied` |
 | PE23 | `buildCollisionMap` au SESSION_JOIN — pas au démarrage serveur |
 | PE24 | `collisionMoveToken` : hdel systématique ancienne case, hset conditionnel si layer != 'gm' |
-| PE25 | maintenance Redis dans REST — jamais dans handlers WS reliques (TOKEN_CREATED/DELETED, ENTITY_*) |
+| PE25 | maintenance Redis dans REST — jamais dans handlers WS reliques |
 | PE26 | `resolveEntityState` : `.returning()` doit inclure `battlemap_id` |
+| PE27 | moveType calculé client (feedback) ET recalculé serveur (validation) |
 | PEF1 | pack_id obligatoire sur blueprint |
 | PEF2 | fakeTexObj : { id, pack_id, faces } |
 | PEF3 | entityTextureMaterials indexé par blueprint.id UUID |

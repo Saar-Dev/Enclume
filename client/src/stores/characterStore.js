@@ -34,9 +34,13 @@ export const useCharacterStore = create((set) => ({
   })),
 
   // Ajout ou remplacement — handler WS CHARACTER_UPDATED
+  // Si visible:false et non-GM → retirer du store (le joueur ne doit plus voir ce character)
   // Si le character existe déjà → remplace (mise à jour)
   // Si le character n'existe pas → ajoute (nouvellement visible pour un joueur)
   upsertCharacter: (character) => set((state) => {
+    if (!character.visible && !state.isGm) {
+      return { characters: state.characters.filter(c => c.id !== character.id) }
+    }
     const exists = state.characters.find(c => c.id === character.id)
     if (exists) {
       return {

@@ -10,6 +10,7 @@ import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import Voxel from './Voxel.jsx'
 import EntityMesh from './EntityMesh.jsx'
+import DiceRoller from './DiceRoller.jsx'
 import { useTokenStore } from '../stores/tokenStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { useAuthStore } from '../stores/authStore'
@@ -223,6 +224,7 @@ function Scene({
   onTokenDoubleClick, justSelectedRef,
   altPressed, onEntityClick, onTokenRotate,
   moveTarget, onMoveCancel, moveLabels,
+  dicePayload, onDiceDone,
 }) {
   const { camera, gl } = useThree()
   const orbitRef = useRef()
@@ -627,6 +629,9 @@ function Scene({
           />
         )
       })}
+
+      {/* ── DiceRoller — animation dés (Dice Rework) */}
+      {dicePayload && <DiceRoller payload={dicePayload} onDone={onDiceDone} />}
     </>
   )
 }
@@ -637,7 +642,7 @@ function Scene({
 // onTokenRotate : callback → SessionPage émet WS.TOKEN_ROTATE
 // moveTarget    : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel  : callback stable (useCallback deps []) — annule le mode visée
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel }) {
+export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
@@ -805,6 +810,8 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           moveTarget={moveTarget}
           onMoveCancel={onMoveCancel}
           moveLabels={moveLabels}
+          dicePayload={dicePayload}
+          onDiceDone={onDiceDone}
         />
       )}
     </Canvas>

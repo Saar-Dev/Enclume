@@ -674,3 +674,83 @@ Cause probable : dot(AE, AD) = 0 côté client pour des positions où AE ⊥ AD.
 | `client/src/components/EntityMesh.jsx` | Lerp 300ms EntityMeshVoxel + EntityMeshGlb |
 | `client/src/components/EntityEditor.jsx` | Correction prop entityTextureMaterials |
 
+
+---
+
+## Investigation altitude tokens vs voxels — collision map actorBlocked
+
+### Symptôme
+`actorBlocked` à k=1 pour toutes les directions de déplacement.
+Token acteur pos_z=0 (altitude base).
+Case Redis `"x:pos_y:0"` contient un voxel sol.
+
+### Ce qu'on sait
+- Token log : `pos:(16,4,0)` → pos_z=0 en base = altitude Y Three.js = 0
+- Voxel sol : stocké à clé Redis `"16:3:0"` = pos_x=16, pos_y=3, pos_z=0
+- Les deux partagent pos_z=0 → collision systématique sur tout déplacement horizontal
+
+### Ce qu'on ne sait pas encore
+- Quelle est l'altitude "normale" d'un token posé sur le sol en base ?
+- Convention actuelle : `baseY + 0.5` au rendu → mais qu'est-ce qui est stocké en DB ?
+- Différence GM vs joueur : GM peut déplacer tokens "dans le vide" → les joueurs non
+  → Le drag token joueur vérifie-t-il la collision ? Ou c'est uniquement le step-by-step entité ?
+  → La collision actorBlocked dans ENTITY_MOVE_REQUEST utilise token.pos_z tel quel depuis DB
+
+### Questions ouvertes
+1. Quelle valeur pos_z ont les tokens en DB sur cette carte ?
+2. Les voxels sol sont à y=0 (altitude Three.js) = pos_z=0 en base après conversion PE14.
+   Si tokens pos_z=0 aussi → ils sont "dans" le sol visuellement ou juste à la surface ?
+3. La convention `baseY + 0.5` du rendu est-elle reflétée en DB ou seulement au rendu ?
+
+### Piste clé
+GM peut déplacer tokens dans le vide (pas de collision check côté serveur pour drag GM).
+Joueurs ne peuvent pas (collision check dans ENTITY_MOVE_REQUEST step-by-step).
+→ Le step-by-step vérifie `isCaseOccupied(battlemapId, nextActorPosX, nextActorPosY, token.pos_z)`
+→ Si token.pos_z=0 ET voxels sol à pos_z=0 → actorBlocked systématique
+→ Solution probable : vérifier collision acteur à `token.pos_z + 1` (au-dessus du sol) ?
+  OU : les tokens devraient être stockés à pos_z=1 (posés SUR le voxel sol, pas DANS)
+
+
+---
+
+## Corrections post-9F-C — confirmées fonctionnelles
+
+### ✅ Migration 46 — polaris_mr refonte (LdB officiel)
+- Colonne `dmax` → `modifier` (modificateur LdB p.209)
+- 20 lignes officielles (réussite + échec)
+- Formule : `dmax = isSuccess ? modifier + 1 : 0`
+- Toute réussite = au moins 1 case (MR 0-2 → modifier=0 → dmax=1)
+- Modifier négatif sur échec = informatif uniquement, dmax=0
+- `getDmax()` → `getModifier()` dans index.js
+
+### ✅ redis.js — correction convention voxels PE14
+- `buildCollisionMap` : voxelKey "x:y_altitude:z_profondeur" → converti PE14 "x:z:y"
+- `collisionAddVoxel` : même conversion PE14
+- `collisionRemoveVoxel` : même conversion PE14
+- Cause : voxels stockés en convention Three.js brute, cherchés en PE14 → désalignement
+- Standard retenu : PE14 partout côté serveur (Three.js = convention rendu uniquement)
+
+### ✅ index.js — actorBlocked pos_z+1
+- `isCaseOccupied` acteur vérifie `token.pos_z + 1` au lieu de `token.pos_z`
+- Token pos_z=0 = altitude pieds = même niveau voxels sol → faux blocage systématique
+- pos_z+1 = espace de marche = standard industrie VTT (Foundry VTT approach)
+- L'entité utilise entity.pos_z directement (pos_z=1) — déjà correct
+
+### ✅ index.js — stepsMax = Math.min(dmax, stepsTarget)
+- Option A : joueur clique destination précise → entité s'arrête là si dans le dmax
+- `stepsTarget` = distance Tchebychev destination (Math.max des deux axes)
+- `stepsMax = Math.min(dmax, stepsTarget)` — dmax = plafond MR, stepsTarget = intention joueur
+- Validé : pull 3 cases avec dmax=6 → steps:3 ✅
+
+### Convention altitude tokens — documentée
+- Tokens en DB : pos_z = altitude des pieds (peut être 0 sur sol plat)
+- Rendu Three.js : baseY + 0.5 (rendu uniquement, non stocké)
+- Collision acteur : vérifier pos_z+1 (espace de marche)
+- Voxels sol : y=0 en Three.js = pos_z=0 en PE14 après conversion
+
+### Fichiers modifiés (corrections post-9F-C)
+| Fichier | Modification |
+|---|---|
+| `server/src/db/migrations/46_polaris_mr_refonte.js` | Nouveau — LdB officiel |
+| `server/src/socket/index.js` | getModifier, stepsMax, actorBlocked pos_z+1 |
+| `server/src/lib/redis.js` | Convention PE14 pour voxels |

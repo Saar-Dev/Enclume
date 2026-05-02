@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-04-30 Session 41
+> Dernière mise à jour : 2026-05-01 Session 43
 
 ---
 
@@ -60,15 +60,22 @@
 | `TOKEN_ROTATE` — event + handler serveur + clic client | ✅ |
 | Affichage rotation token — `rotation.y = r * Math.PI / 4` | ✅ |
 
-### Chantiers 9F-B/C — Mouvement entités
+### Chantiers 9F-B/C — Mouvement entités ✅
 
 | Chantier | Contenu | État |
 |---|---|---|
 | 9F-B1 | events.js + handler serveur ENTITY_MOVE_REQUEST + EntityBuilderTab refonte | ✅ session 40 |
 | 9F-B2 | RadialMenu tranche Déplacer + SessionPage handleEntityMove + Canvas3D mode visée ghost | ✅ session 41 |
-| 9F-C | Diagonal 45° + animation Lerp 300ms + Tchebychev | 🔲 |
+| 9F-C | Diagonal 45° + animation Lerp 300ms + corrections collision + polaris_mr LdB | ✅ session 43 |
 
-Voir `docs/PLAN_ENTITY.md` pour la spécification complète.
+### Corrections post-9F-C ✅ (session 43)
+
+| Tâche | État |
+|---|---|
+| Migration 46 — polaris_mr refonte LdB officiel p.209 | ✅ |
+| redis.js — convention PE14 pour voxels (buildCollisionMap + add/remove) | ✅ |
+| index.js — actorBlocked à pos_z+1 (espace de marche) | ✅ |
+| index.js — stepsMax = min(dmax, stepsTarget) — destination joueur respectée | ✅ |
 
 ### Chantier reporté — Paramètre campagne GM entity move mode 🔲
 3 options : réaliste / à la carte / divine. Voir EN_COURS.md.
@@ -91,7 +98,7 @@ Voir `docs/PLAN_ENTITY.md` pour la spécification complète.
 | Entités interactables (EntityMesh + EntityEditorScene) | ✅ |
 | Palette blueprints dans éditeur | ✅ session 34 |
 | EntityBuilderTab — formulaire interactions SkillCheck/Déplacement | ✅ session 40 |
-| Mode visée déplacement entités — ghost wireframe + snap + dot(AE,AD) | ✅ session 41 |
+| Mode visée déplacement entités — ghost wireframe + snap 8 axes + couleurs + Lerp | ✅ session 43 |
 | X-Ray voxels devant tokens | 🔲 |
 | Outil règle/mesure 3D | 🔲 |
 
@@ -101,6 +108,7 @@ Voir `docs/PLAN_ENTITY.md` pour la spécification complète.
 | Chat + dés + persos + joueurs | ✅ |
 | Palette textures voxel | ✅ |
 | Onglets Voxels/Entités en mode édition | ✅ |
+| Badge MR displacement dans chat | ✅ session 43 |
 | Toggle visible character temps réel (Bug A) | 🔲 |
 | Bibliothèque documents | 🔲 |
 
@@ -110,6 +118,8 @@ Voir `docs/PLAN_ENTITY.md` pour la spécification complète.
 | Bug A | Toggle visible character non répercuté en temps réel | 🔲 |
 | Bug B | Modification faces voxel existant non exposée dans UI | 🔲 |
 | Bug WebGL | Context Lost au switch play/edit — non bloquant | documenté |
+| Dette | EntityEditorOLD.jsx commité par erreur — à supprimer | 🔲 |
+| Dette | .gitattributes:3 attribut invalide — à corriger | 🔲 |
 
 ---
 

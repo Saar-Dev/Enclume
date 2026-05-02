@@ -72,6 +72,12 @@ export default function SessionPage() {
   // null = inactif, sinon { entity, interaction, tokenId }
   const [moveTarget, setMoveTarget] = useState(null)
 
+  // ─── Animation dés (Dice Rework) ────────────────────────────────────────────
+  // null = pas d'animation, sinon payload DICE_RESULT du dernier jet normal.
+  // Jets d'entité (skillLabel défini) → exclus, pas d'animation.
+  const [lastDiceRoll, setLastDiceRoll] = useState(null)
+  const handleDiceDone = useCallback(() => setLastDiceRoll(null), [])
+
   // Fenêtre character flottante — null = fermée, sinon id du character ouvert
   // Le character est dérivé du store pour se mettre à jour automatiquement via WS
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
@@ -360,6 +366,11 @@ export default function SessionPage() {
         interactionType,
         mr,
       })
+      // Animation dés — jets normaux uniquement (skillLabel absent)
+      // Jets d'entité (skillcheck, displacement) → pas d'animation en V1
+      if (skillLabel === undefined) {
+        setLastDiceRoll({ rolls, dieType: formula.replace(/^\d+/, '').split('+')[0].split('-')[0], seed, timestamp, color })
+      }
     })
     s.on(WS.MAP_SWITCH, ({ battlemapId, userIds }) => {
       const concerned = userIds.length === 0 || userIds.includes(user?.id)
@@ -642,6 +653,8 @@ export default function SessionPage() {
               onTokenRotate={handleTokenRotate}
               moveTarget={moveTarget}
               onMoveCancel={handleMoveCancel}
+              dicePayload={lastDiceRoll}
+              onDiceDone={handleDiceDone}
             />
         )}
         {!canvasVisible && (
