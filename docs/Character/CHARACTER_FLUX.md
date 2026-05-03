@@ -1,6 +1,6 @@
 # CHARACTER_FLUX.md — Flux de données du domaine Character
 > Complément technique de CHARACTER.md
-> Dernière mise à jour : 2026-04-16 — Session 3
+> Dernière mise à jour : 2026-05-02 — Session 45
 
 Ce document décrit les flux de données, les dépendances entre composants, et les chaînes de chargement. À lire quand on modifie un composant Character.
 
@@ -74,14 +74,39 @@ onChange(attrId, val)
        → onSaved?.()  → ✓ dans CharacterWindow header
 ```
 
-### Maîtrise compétence (SkillsPanel)
+### Maîtrise compétence (SkillsPanel — GM uniquement)
 ```
 onChange(skillId, val)
   → localMasteryRef.current[skillId] = val  (synchrone)
   → setLocalMastery(...)
   → clearTimeout + setTimeout 500ms  (timer par skillId)
-       PUT /skills { skills: [{ skill_id, mastery }] }
+       PUT /skills { skills: [{ skill_id, mastery }] }   ← is_learned non envoyé = conservé
        → onSaved?.()
+```
+
+### Distribution XP (CharacterSheet — GM uniquement)
+```
+onChange(xpAvailable, val)
+  → setXpAvailable(val)
+  → clearTimeout + setTimeout 500ms (xpDebounceTimer)
+       PUT /xp { xp_available: val }   ← jamais xp_total depuis le client
+       → onSaved?.()
+```
+
+### Achat compétence (SkillsPanel — owner ou GM)
+```
+handleBuy(skill)
+  → if (isBuyingRef.current) return    ← guard synchrone (PC21)
+  → if (xpAvailable < cout) return     ← guard client
+  → isBuyingRef.current = true
+  → setBuyingSkillId(skill.id)         ← UI bouton '…'
+  → POST /skills/buy { skill_id }
+       → onSkillBought({ skill_id, mastery, is_learned, xp_available, cout })
+            → CharacterSheet.handleSkillBought
+                 → setCharSkills : map si existant, push si nouvelle entrée
+                 → setXpAvailable(xp_available)
+                 → onSaved?.()
+  finally: isBuyingRef.current = false, setBuyingSkillId(null)
 ```
 
 ### Ajout mutation (AdvantagesPanel)
@@ -89,8 +114,8 @@ onChange(skillId, val)
 handleAddMutation(muta_numero)
   → POST /advantages { type:'MUTATION', muta_numero }
   → enrichit réponse avec refMutations local (mutation_nom, linked_skill_id)
-  → onAdvantagesChange(newList)
-       → CharacterSheet.setCharAdvantages(newList)
+  → onAdvantagesChange(prev => updater)  ← updater function (pattern React fonctionnel)
+       → CharacterSheet.setCharAdvantages(updated)
             → prop charAdvantages descendante vers SkillsPanel
                  → activeMutations recalculé (useMemo)
                       → isVisible() réévalue toutes les compétences
@@ -102,8 +127,8 @@ handleTogglePolaris(skillId)
   → PUT /skills { skills: [{ skill_id, is_learned: !current }] }
   → setCharSkillsPolaris(updated)  ← state LOCAL à AdvantagesPanel
   ⚠️ NE remonte PAS vers CharacterSheet.charSkills
-     → SkillsPanel ne voit pas le changement immédiatement
-     → Fix prévu Session 4 (UX10)
+  ⚠️ BUG PC22 : PUT /skills = GM uniquement → joueur reçoit 403
+     Fix prévu session 5
 ```
 
 ---
@@ -129,7 +154,7 @@ learnedSet      = useMemo([charSkills])
 activeMutations = useMemo([charAdvantages])  ← Set des muta_numero actifs
 calcBase        = useCallback([anMap])
 calcTotal       = useCallback([calcBase, localMastery])
-isVisible       = useCallback([refSkills, learnedSet, calcTotal, genotypeId, activeMutations])
+isVisible       = useCallback([refSkills, learnedSet, calcTotal, genotypeId, activeMutations, progressionMode])
 families        = useMemo([refSkills])
 ```
 
@@ -170,7 +195,7 @@ async function assertOwnerOrGm(characterId, userId) {
   const isOwner = character.user_id === userId
   const isGm = member.role === 'gm'
   if (!isOwner && !isGm) throw new AppError(403, 'Forbidden')
-  return character
+  return { character, isGm }
 }
 ```
 
@@ -202,7 +227,7 @@ characters (VTT)
 
 ### Modifier SkillsPanel
 - `charAdvantages` est une prop requise (peut être `[]` mais pas undefined)
-- `isVisible` dépend de 5 valeurs mémoïsées — vérifier les deps si on ajoute une règle
+- `isVisible` dépend de 6 valeurs mémoïsées — vérifier les deps si on ajoute une règle
 - Guard CHC en tête de `isVisible` : ne jamais supprimer
 
 ### Modifier AdvantagesPanel

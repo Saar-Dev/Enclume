@@ -1,6 +1,6 @@
 # CHARACTER.md — Documentation technique du domaine Character
 > Domaine : Fiche personnage Polaris & modules joueur
-> Dernière mise à jour : 2026-04-28 — Session 38 (visibilité compétences (X) mode Progression)
+> Dernière mise à jour : 2026-05-02 — Session 45 (documentation exhaustive)
 > Statut : Modules 1 à 6 + Module XP stables — 45 migrations appliquées
 
 ---
@@ -47,7 +47,7 @@ Supprimer un `character` VTT supprime automatiquement toute sa fiche Polaris.
 
 ```
 server/src/routes/character/
-  char-sheet.js       — 10 routes fiche personnage
+  char-sheet.js       — 12 routes fiche personnage
   ref.js              — 3 routes données de référence
 
 client/src/character/
@@ -192,15 +192,6 @@ muta_029 débloque aussi `MAITRISE_DE_LECHO_POLARIS` via `ref_skill_requirements
 | xp_available | INT | NOT NULL DEFAULT 0 | XP disponibles à dépenser — éditable GM uniquement |
 | created_at | TIMESTAMPTZ | DEFAULT CURRENT_TIMESTAMP | |
 | updated_at | TIMESTAMPTZ | DEFAULT CURRENT_TIMESTAMP | |
-PK = `id UUID`. FK `character_id → characters.id ON DELETE CASCADE`.
-
-| Colonne | Type | Contrainte | Notes |
-|---|---|---|---|
-| id | UUID | PK DEFAULT gen_random_uuid() | |
-| character_id | UUID | FK NOT NULL CASCADE | Lien vers le character VTT |
-| chc | INT | DEFAULT 11 | Score de Chance 1–20 — aucun calcul |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 
 ---
 
@@ -283,7 +274,9 @@ PK = `id UUID`. FK `char_sheet_id → char_sheet.id CASCADE`.
 | PUT | `/:characterId/archetype` | Sauvegarder archétype (patch partiel) |
 | PUT | `/:characterId/attributes` | Sauvegarder attributs (bulk UPSERT) |
 | PUT | `/:characterId/chc` | Sauvegarder score de chance |
-| PUT | `/:characterId/skills` | Sauvegarder maîtrises (bulk UPSERT) |
+| PUT | `/:characterId/skills` | Sauvegarder maîtrises (bulk UPSERT) — **GM uniquement** |
+| PUT | `/:characterId/xp` | Modifier `xp_total` et/ou `xp_available` — **GM uniquement** |
+| POST | `/:characterId/skills/buy` | Dépenser XP pour augmenter une compétence — owner ou GM |
 | GET | `/:characterId/advantages` | Liste avantages/désavantages |
 | POST | `/:characterId/advantages` | Ajouter mutation ou texte libre |
 | DELETE | `/:characterId/advantages/:id` | Supprimer ou décrémenter level |
@@ -310,9 +303,10 @@ useEffect([characterId]) → Promise.all([
 CharacterSheet
   ├── SkillsPanel
   │     props: refSkills, charSkills, charAdvantages, anMap,
-  │            characterId, canEdit, genotypeId, onSaved
+  │            characterId, isGm, canEdit, genotypeId, onSaved,
+  │            progressionMode, xpAvailable, onSkillBought
   │     state local: localMastery, collapsedFamilies
-  │     sauvegarde: PUT /skills (debounce 500ms par skill_id)
+  │     sauvegarde: PUT /skills (debounce 500ms par skill_id) — GM uniquement
   │
   └── AdvantagesPanel
         props: characterId, charAdvantages, onAdvantagesChange,
@@ -339,10 +333,38 @@ AdvantagesPanel.handleAddMutation(muta_numero)
 ```
 AdvantagesPanel.handleTogglePolaris(skillId)
   → PUT /skills { skill_id: skillId, is_learned: !current }
-  → setCharSkillsPolaris(updated)  ← state local AdvantagesPanel
-  NB: ne remonte PAS vers CharacterSheet — SkillsPanel recharge charSkills
-      au prochain montage seulement. Pour un affichage immédiat, F5 nécessaire.
-      → À corriger en session future (charSkills devrait aussi être mis à jour).
+  → setCharSkillsPolaris(updated)  ← state LOCAL à AdvantagesPanel
+  ⚠️ NE remonte PAS vers CharacterSheet.charSkills
+     → SkillsPanel ne voit pas le changement immédiatement
+  ⚠️ BUG PC22 : PUT /skills est GM uniquement — joueur reçoit 403
+     → Fix prévu session 5
+```
+
+### Distribution XP — GM (CharacterSheet)
+
+```
+onChange(xpAvailable, val)
+  → setXpAvailable(val)
+  → clearTimeout + setTimeout 500ms (xpDebounceTimer)
+       PUT /xp { xp_available: val }   ← jamais xp_total depuis le client
+       → onSaved?.()
+```
+
+### Achat compétence — Mode Progression (SkillsPanel)
+
+```
+SkillsPanel.handleBuy(skill)
+  → if (isBuyingRef.current) return     ← guard synchrone (PC21)
+  → if (xpAvailable < cout) return      ← guard client
+  → isBuyingRef.current = true
+  → setBuyingSkillId(skill.id)          ← affichage UI bouton '…'
+  → POST /char-sheet/:characterId/skills/buy { skill_id }
+       → onSkillBought?.(res.data)
+            → CharacterSheet.handleSkillBought({ skill_id, mastery, is_learned, xp_available })
+                 → setCharSkills (map si existant, push si nouvelle entrée)
+                 → setXpAvailable(xp_available)
+                 → onSaved?.()
+  finally: isBuyingRef.current = false, setBuyingSkillId(null)
 ```
 
 ---
@@ -391,6 +413,23 @@ Base  = AN(attr_1) + AN(attr_2)    — si attr_2 null : AN(attr_1) × 2 (PC4)
 Total = Base + mastery              — jamais clampé, peut être négatif (PC11)
 ```
 
+### Barème XP — dépense de compétences (LdB)
+
+Utilisé par `charStats.js` côté serveur (source de vérité) et en miroir dans `SkillsPanel.jsx` côté client (affichage uniquement).
+
+| Niveau visé (mastery + 1) | Coût en PE |
+|---|---|
+| 1 à 5 | 1 |
+| 6 à 10 | 2 |
+| 11 | 3 |
+| 12 | 5 |
+| 13 | 7 |
+| 14 | 9 |
+| 15 | 11 |
+| > 15 | 11 (dernier palier LdB) |
+
+Déblocage compétence `(X)` : coût fixe **3 PE** — `mastery` reste 0, `is_learned → true`.
+
 ### Algorithme de visibilité (SkillsPanel.isVisible)
 
 ```
@@ -430,7 +469,18 @@ Groupes CHC : jamais dans isVisible — visibles si ≥ 1 enfant visible
 ## 7. Composants React
 
 ### `CharacterWindow.jsx`
-Fenêtre flottante drag+resize. Onglets : Fiche / Bio & Info / Paramètres. Feedback ✓ vert 1s après save.
+Fenêtre flottante drag+resize. Dimensions : 720×600 init, 500×400 min. Centrée au montage, clampée dans le viewport. Onglets : Fiche / Bio & Info / Paramètres. Feedback ✓ vert 1s après save.
+
+**Props :** `{ character, isGm, onClose }`
+**isOwner :** `character.user_id != null && character.user_id === character._currentUserId` (PC6)
+
+**Routes VTT utilisées (domaine VTT — pas des routes Character) :**
+- `PUT /characters/:id` — renommer, toggle visible (GM), description, gmNotes, assignation propriétaire
+- `POST /characters/:id/portrait` — upload portrait (isGm || isOwner)
+- `POST /characters/:id/glb` — upload GLB (GM uniquement)
+- `DELETE /characters/:id` — suppression (GM uniquement)
+
+**Sync WS :** useEffect sur `character.name`, `character.description`, `character.gm_notes` — mise à jour automatique si CHARACTER_UPDATED reçu depuis le store.
 
 ### `CharacterSheet.jsx`
 Orchestrateur Modules 1–6 + Module XP. Charge tout au montage. Gère : genotypes, refSkills, tous les states fiche, charAdvantages, xpTotal, xpAvailable, progressionMode. Section Expérience entre en-tête et description : `xp_total` lecture seule pour tous, `xp_available` éditable GM uniquement, bouton toggle "Mode Progression". `handleSkillBought` met à jour `charSkills` et `xpAvailable` localement après achat (pas de rechargement réseau). Passe anMap (mémoïsé) à SkillsPanel et charAdvantages aux deux panneaux. Debounce 500ms sur attributs et chc (PC12). Refs miroirs `attrsRef`, `chcRef` mis à jour synchroniquement dans onChange.
@@ -449,11 +499,13 @@ Module 5 — Compétences. Groupement hiérarchique par famille (session 4) : gr
 ### `AdvantagesPanel.jsx`
 Module 6 — Avantages & Désavantages. Liste chronologique + bouton +. Modale 3 étapes :
 - Étape 1 : choix type [Mutations] [Force Polaris*] [Autres] (*grisé si muta_029 absente)
-- Étape 2A : liste ref_mutations scrollable (mutations déjà présentes = orange, re-sélectionnable pour incrément level)
-- Étape 2B : liste POUVOIRS_POLARIS — toggle is_learned dans char_skills
+- Étape 2A : liste ref_mutations scrollable (mutations existantes = orange, re-sélectionnable pour incrément level)
+- Étape 2B : liste POUVOIRS_POLARIS — toggle is_learned dans char_skills (⚠️ PC22 : 403 pour joueur)
 - Étape 2C : textarea 255 chars
 
-`refMutations` chargé au montage (PC16). `refSkillsPolaris` + `charSkillsPolaris` chargés à l'ouverture de la modale.
+**Liste affichée :** badge `MUT` (orange) pour les mutations | badge `ATR` (gris) pour les textes libres. Les pouvoirs Polaris sont dans `char_skills` (is_learned=true), **pas** dans `char_advantages` — ils n'apparaissent pas dans cette liste.
+
+`refMutations` chargé au montage (PC16). `refSkillsPolaris` + `charSkillsPolaris` chargés à l'ouverture de la modale (guard : chargé une seule fois).
 
 ---
 
@@ -474,7 +526,7 @@ Module 6 — Avantages & Désavantages. Liste chronologique + bouton +. Modale 3
 
 ---
 
-## 9. Pièges PC1–PC19
+## 9. Pièges PC1–PC22
 
 **PC1** — `char_name` ≠ `characters.name`. Ne jamais synchroniser.
 
@@ -517,3 +569,5 @@ Module 6 — Avantages & Désavantages. Liste chronologique + bouton +. Modale 3
 **PC20** — `charStats.js` existait avant le chantier XP. Contenait `calcSkillTotal`, `calcAttributeAN`, `getGenotypeModForAttr`, `ATTR_LABELS` utilisés par `socket/index.js`. Ne jamais produire ce fichier comme "nouveau" sans l'avoir lu. Toujours demander le fichier existant et fusionner.
 
 **PC21** — Guard synchrone sur achat XP. `setBuyingSkillId` est asynchrone (React batch) — ne jamais l'utiliser comme guard contre les double-clics. Pattern correct : `const isBuyingRef = useRef(false)` + `isBuyingRef.current = true` avant le try, `false` dans le finally. `buyingSkillId` reste uniquement pour l'affichage UI (bouton `…` + disabled).
+
+**PC22** — Bug Force Polaris : `handleTogglePolaris` appelle `PUT /skills` qui est **GM uniquement**. Un joueur possédant muta_029 peut voir les pouvoirs Polaris dans la modale mais reçoit 403 en tentant de les activer. Fix prévu session 5 : créer une route dédiée owner+GM pour toggler `is_learned` sur les pouvoirs Polaris uniquement.

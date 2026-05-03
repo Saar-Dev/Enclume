@@ -1,5 +1,5 @@
 # SYSTEME.md — Flux, règles et pièges du projet Enclume
-> Dernière mise à jour : 2026-05-01 Session 43
+> Dernière mise à jour : 2026-05-03 Session 45
 > Ce document répond à "qui fait quoi, qui parle à qui, pourquoi" — pas à "qu'est-ce qui existe".
 > Pour la liste des fichiers : voir ASBUILT.md. Pour l'historique : voir JOURNAL2.md.
 
@@ -91,6 +91,22 @@ upsertBlueprint(blueprint)           // futur
 updateToken(partial)  // partial = { id, ...champs modifiés }
 // Guard : si partial.updated_at < t.updated_at → ignoré silencieusement
 // Utilisé par : TOKEN_MOVED (tokenId→id), TOKEN_UPDATED (token complet avec id)
+```
+
+### characterStore — upsertCharacter (session 44)
+```javascript
+// Handler WS CHARACTER_UPDATED
+// Si visible:false et !state.isGm → retire le character du store (joueur ne doit plus le voir)
+// Si visible:true → comportement normal (upsert)
+// Raison : le GET /characters filtre visible=true pour les joueurs,
+//          mais le broadcast CHARACTER_UPDATED envoie l'objet complet.
+//          Le store doit reproduire ce filtre côté client.
+upsertCharacter: (character) => set((state) => {
+  if (!character.visible && !state.isGm) {
+    return { characters: state.characters.filter(c => c.id !== character.id) }
+  }
+  // ... upsert normal
+})
 ```
 
 ---
@@ -282,13 +298,28 @@ GET /api/assets/:folder/*filePath
   → Content-Type = stat.metaData['content-type'] || getContentType(filePath)
   → stream.pipe(res)
 
-portrait_url    = "characters/<id>/illustration"
-glb_url char    = "characters/<id>/model3D?v=<timestamp>"
-glb_url blueprint = "glb/<blueprint_id>.glb?v=<timestamp>"
-textures pack   = "textures/<pack_uuid>/<fichier>.png"
-URL client      : ${VITE_API_URL}/api/assets/${glb_url}
-URL textures    : ${VITE_API_URL}/api/textures/${pack_id}/${path}
+cover_url campaign = "campaigns/<campaign_id>/cover"
+portrait_url char  = "characters/<id>/illustration"
+glb_url char       = "characters/<id>/model3D?v=<timestamp>"
+glb_url blueprint  = "glb/<blueprint_id>.glb?v=<timestamp>"
+textures pack      = "textures/<pack_uuid>/<fichier>.png"
+URL client         : ${VITE_API_URL}/api/assets/${cover_url}
+URL client         : ${VITE_API_URL}/api/assets/${glb_url}
+URL textures       : ${VITE_API_URL}/api/textures/${pack_id}/${path}
 ```
+
+### Convention arborescence campagne (actée session 45)
+Tous les assets d'une campagne ont `campaigns/<campaign_id>/` comme racine MinIO :
+- `campaigns/<campaign_id>/cover` — illustration de la campagne (Dashboard)
+- `campaigns/<campaign_id>/characters/<character_id>/illustration` — **(cible future migration)**
+- `campaigns/<campaign_id>/maps/`, `campaigns/<campaign_id>/tokens/` — (réservé)
+
+**Migration future (non codée) :** `characters/<id>/illustration` → `campaigns/<campaign_id>/characters/<id>`
+Raison : les characters existants ont été créés hors campagne. Migration complexe, chantier dédié.
+
+### Règle P18 — chemins MinIO en base
+`cover_url`, `portrait_url`, `glb_url` stockent le chemin MinIO relatif (pas une URL complète).
+Le client reconstruit : `${VITE_API_URL}/api/assets/${url}`
 
 ---
 
@@ -297,8 +328,37 @@ URL textures    : ${VITE_API_URL}/api/textures/${pack_id}/${path}
 ```
 DicePanel ou Sidebar (/r) → socket.emit(DICE_ROLL, { formula })
 Serveur : parseDice(formula) → lookup dice_config → isCriticalSuccess/Fail
-  → io.to(campaignId).emit(DICE_RESULT, { userId, username, color, formula, rolls, total, ... })
-SessionPage handler → addMessage({ type: 'dice', ... })
+  → io.to(campaignId).emit(DICE_RESULT, { userId, username, color, formula, rolls, total, seed, ... })
+SessionPage handler DICE_RESULT → double consommation (session 44) :
+  1. addMessage({ type: 'dice', ... })         → chat Sidebar (tous les jets)
+  2. if (!skillLabel) setLastDiceRoll(payload) → animation 3D (jets normaux uniquement)
+```
+
+### Dice Rework — Animation 3D (session 44)
+```
+lastDiceRoll state (SessionPage) → prop dicePayload → Canvas3D → DiceRoller (R3F)
+DiceRoller : decomposeDice(rolls, dieType, seed) → N DiceMesh dans N lanes
+DiceMesh : animation SLERP quaternion 1.8-2.5s → face résultat vers caméra → figé
+Clic n'importe où → onDiceDone() → lastDiceRoll = null → DiceRoller démonté
+
+Filtrage : jets d'entité (skillLabel défini) → pas d'animation
+Couleur : color du payload DICE_RESULT → matériau/texture du dé
+
+Dés V1 avec face texturée : D6, D4, D8, D20, D12 (atlas)
+Dés V1 Html overlay : D10, D10_tens, D10_units (UV kite = V2 Blender)
+```
+
+### Payload DICE_RESULT
+```javascript
+{
+  userId, username, color,
+  formula, rolls, total,
+  isCriticalSuccess, isCriticalFail,
+  seed,       // XOR rolls — initialisé PRNG animation
+  timestamp,
+  skillLabel, // défini pour jets entité uniquement
+  // + champs entity action si applicable
+}
 ```
 
 ---
@@ -527,6 +587,9 @@ useFrame((_, delta) => {
 - **resolveEntityState returning** — doit inclure `battlemap_id` (PE26)
 - **Lerp EntityMesh** — useFrame dans sous-composants (règle des hooks)
 - **Logs debug index.js** — conservés volontairement, à retirer avant production
+- **Dice Rework** — DiceRoller monté dans Canvas3D (pas en overlay HTML séparé) — un seul contexte WebGL
+- **DiceMesh material useMemo** — deps `[geoDef.type, color, dieType]` — dieType requis pour D10 (3 types)
+- **DICE_RESULT double consommation** — chat + animation parallèles, animation filtrée sur `!skillLabel`
 
 ---
 

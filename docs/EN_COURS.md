@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-01 Session 43
+> Dernière mise à jour : 2026-05-02 Session 45
 
 ---
 
@@ -17,16 +17,20 @@
 ### Chantier 9F-B1 — Déplacement entités serveur + atelier ✅ (session 40)
 ### Chantier 9F-B2 — Mode visée client ✅ (session 41)
 ### Chantier 9F-C — Diagonal 45° + animation Lerp ✅ (session 43)
+### Chantier Dice Rework ✅ (session 44)
 
-Travaux effectués en session 43 :
-- Fix Tchebychev dans index.js — suppression bloc Tchebychev (déplacement débloqué) ✅
-- Badge MR displacement — index.js + SessionPage.jsx + fr.json + Sidebar.jsx ✅
-- Snap 8 axes contraint depuis l'entité — Canvas3D.jsx ✅
-- Couleurs ghost bleu=push / orange=pull / rouge=impossible — Canvas3D.jsx ✅
-- Lerp 300ms TokenMesh — Canvas3D.jsx ✅
-- Lerp 300ms EntityMesh (voxel + GLB) — EntityMesh.jsx ✅
-- Correction prop entityTextureMaterials — EntityEditor.jsx ✅
-- Logs debug step-by-step conservés dans index.js (décision dev) ✅
+Travaux effectués en session 44 :
+- EntityEditorOLD.jsx supprimé ✅
+- Bug A — toggle visible character temps réel — characterStore.js ✅
+- diceMath.js — PRNG, mappings, normales tous dés ✅
+- DiceMesh.jsx — D6, D4, D8, D20, D12 texture par face + D10 Html overlay V1 ✅
+- DiceRoller.jsx — orchestrateur R3F dans Canvas3D ✅
+- Canvas3D.jsx — props dicePayload/onDiceDone ✅
+- SessionPage.jsx — state lastDiceRoll, filtrage skillLabel ✅
+
+Dettes Dice Rework :
+- D10 UV texturing V2 — modèle Blender (.glb) avec UVs kite pré-calculés (PE33)
+- Audio — `useDiceAudio.js` — sons d'impact au rebond
 
 ---
 
@@ -54,9 +58,6 @@ Implique : nouvelle colonne `campaigns.gm_entity_move_mode`, option par token `t
 ### Bug WebGL — Context Lost au switch play/edit
 Cause : Three.js r160+ + drivers GPU Windows. Non bloquant. Statut : documenté, abandonné.
 
-### Bug A — Toggle visible character non répercuté en temps réel
-Statut : correction prévue session dédiée.
-
 ### Bug B — Modification faces voxel existant non exposée dans l'UI
 Statut : correction prévue si besoin.
 
@@ -79,3 +80,5 @@ Statut : correction prévue si besoin.
 - Token GM sans char_sheet → ENTITY_MOVE_REQUEST ignoré silencieusement — comportement documenté V1
 - Lerp EntityMesh — useFrame dans sous-composants (pas EntityMesh parent) — règle des hooks
 - Logs debug index.js — conservés volontairement, à retirer avant production
+- DiceMesh useMemo — deps [geoDef.type, color, dieType] — dieType obligatoire pour D10 (PE32)
+- D10 Html overlay — position=[0,0,0] — ne pas déplacer (PE33)

@@ -4,6 +4,8 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { requireRole } from '../middleware/role.js'
+import { multerUpload } from '../middleware/upload.js'
+import getMinioClient, { BUCKET } from '../lib/minio.js'
 
 const router = Router()
 
@@ -86,6 +88,7 @@ router.get('/', requireAuth, async (req, res) => {
       'campaigns.name',
       'campaigns.status',
       'campaigns.invite_code',
+      'campaigns.cover_url',
       'campaigns.created_at',
       'campaign_members.role'
     )
@@ -206,6 +209,32 @@ router.post('/join', requireAuth, async (req, res) => {
   })
 
   res.status(201).json({ campaign: { id: campaign.id, name: campaign.name } })
+})
+
+// POST /api/campaigns/:id/cover — upload illustration de campagne (GM uniquement)
+// Chemin MinIO : campaigns/<id>/cover — nom fixe, écrasement automatique, Content-Type via metadata
+// cover_url en base = chemin MinIO relatif (P18) — pas une URL complète
+router.post('/:id/cover', requireAuth, requireRole('gm'), multerUpload.single('cover'), async (req, res) => {
+  if (!req.file) throw new AppError(400, 'No file uploaded')
+
+  const objectName = `campaigns/${req.params.id}/cover`
+  const minio = getMinioClient()
+
+  // MinIO avant base — P25
+  await minio.putObject(
+    BUCKET(),
+    objectName,
+    req.file.buffer,
+    req.file.size,
+    { 'Content-Type': req.file.mimetype }
+  )
+
+  const [campaign] = await db('campaigns')
+    .where({ id: req.params.id })
+    .update({ cover_url: objectName, updated_at: db.fn.now() })
+    .returning(['id', 'name', 'cover_url'])
+
+  res.json({ campaign })
 })
 
 // GET /api/campaigns/:id/members — liste des membres

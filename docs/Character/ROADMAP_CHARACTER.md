@@ -1,5 +1,5 @@
 # ROADMAP — Domaine Character (sessions futures)
-> Dernière mise à jour : 2026-04-28 — Session 38
+> Dernière mise à jour : 2026-05-02 — Session 45
 
 ---
 
@@ -41,6 +41,11 @@ SQL, routes API, CharacterWindow, CharacterSheet Modules 1-4. Aucun code client 
 
 ## Session 38 ✅ — Correction visibilité compétences (X) en mode Progression
 - `SkillsPanel.jsx` : compétences `(X)` non apprises visibles en mode Progression si prérequis SKILL_MIN satisfaits — déblocage via achat XP (3 PE). `progressionMode` ajouté dans deps `isVisible`.
+
+## Session 45 ✅ — Documentation exhaustive domaine Character
+- `CHARACTER.md` : §2 (12 routes), §3 (doublon supprimé), §4 (PUT /xp + POST /skills/buy), §5 (props SkillsPanel complètes, flux XP ajoutés), §6 (barème XP), §7 (CharacterWindow routes VTT, AdvantagesPanel badge list), §9 (PC22)
+- `CHARACTER_FLUX.md` : assertOwnerOrGm retour corrigé, isVisible deps (progressionMode), flux XP ajoutés, onAdvantagesChange updater function, bug PC22 documenté
+- `ROADMAP_CHARACTER.md` : UX10 libellé corrigé, PC22 ajouté
 
 ## Session 5 — Corrections restantes + intégration dev externe
 
@@ -140,5 +145,5 @@ fetch(`${API_URL}/api/char-sheet/${characterId}/inventory`, {
 | UX7 | Plusieurs fiches par character | Haute | future |
 | UX8 | Prérequis OU (Cryptographie : Informatique OU Maths) | Moyenne | future |
 | UX9 | Mémorisation accordéon compétences (localStorage) | Faible | 5 |
-| UX10 | Fix toggle Force Polaris (mise à jour immédiate sans F5) | Faible | 5 |
+| UX10 | Fix toggle Force Polaris — **PC22** : joueur reçoit 403 (PUT /skills GM uniquement). Fix : route dédiée owner+GM pour toggler is_learned sur pouvoirs Polaris | Faible | 5 |
 | UX11 | Mise à jour temps réel compétences entre GM et joueur (WS CHAR_SKILLS_UPDATED) | Moyenne | future |

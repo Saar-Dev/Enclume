@@ -43,26 +43,30 @@ const getVal = (row, techKey, frPatterns) => {
     return foundKey ? fixText(row[foundKey]) : null;
 };
 
-// 4. Parser de dégâts non-destructif
+// 4. Parser de dégâts non-destructif aligné sur EQUIPMENT_SPEC.md
 const parseDmg = (row) => {
-    const raw = getVal(row, 'off_damage_h', ['Dommage', 'Dégâts', 'dmg']);
-    if (!raw) return { h: null, v_low: null, v_high: null };
+    const raw = getVal(row, 'damage_h', ['Dommage', 'Dégâts', 'dmg']);
+    if (!raw) return { h: null, v_minus: null, v_plus: null };
     
     // Si c'est déjà structuré, on garde
-    if (row.off_damage_h && (row.off_damage_v_low || row.off_damage_v_high)) {
-        return { h: fixText(row.off_damage_h), v_low: fixText(row.off_damage_v_low), v_high: fixText(row.off_damage_v_high) };
+    if (row.damage_h && (row.damage_v_minus || row.damage_v_plus)) {
+        return { 
+            h: fixText(row.damage_h), 
+            v_minus: fixText(row.damage_v_minus), 
+            v_plus: fixText(row.damage_v_plus) 
+        };
     }
 
-    let h = raw, vl = null, vh = null;
+    let h = raw, v_minus = null, v_plus = null;
     if (raw.includes('/')) {
         const parts = raw.split('/');
         parts.forEach(p => {
-            if (p.includes('(V-)')) vl = p.replace('(V-)', '').trim();
-            else if (p.includes('(V+)')) vh = p.replace('(V+)', '').trim();
+            if (p.includes('(V-)')) v_minus = p.replace('(V-)', '').trim();
+            else if (p.includes('(V+)')) v_plus = p.replace('(V+)', '').trim();
             else if (p.includes('(H)')) h = p.replace('(H)', '').trim();
         });
     }
-    return { h, v_low: vl, v_high: vh };
+    return { h, v_minus, v_plus };
 };
 
 // 5. Traitement
@@ -85,9 +89,9 @@ const cleanedData = rawData.map((row, i) => {
         "req_skill_req": getVal(row, 'req_skill_req', ['Compétence']),
         "stat_bonus_val": getVal(row, 'stat_bonus_val', ['Bonus']),
         "req_min_str": getVal(row, 'req_min_str', ['FOR']),
-        "off_damage_h": dmg.h,
-        "off_damage_v_low": dmg.v_low,
-        "off_damage_v_high": dmg.v_high,
+        "damage_h": dmg.h,
+        "damage_v_minus": dmg.v_minus,
+        "damage_v_plus": dmg.v_plus,
         "off_shock": getVal(row, 'off_shock', ['Choc']),
         "off_range": getVal(row, 'off_range', ['Portée']),
         "stat_init_mod": getVal(row, 'stat_init_mod', ['Init']),

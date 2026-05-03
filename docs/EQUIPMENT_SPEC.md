@@ -7,6 +7,7 @@
 1. Modèle de Données (Polymorphisme & Séparation des préoccupations)
 
 Pour éviter de saturer la RAM du client avec des tables SQL creuses de 30 colonnes, le domaine Équipement sépare strictement le Catalogue (la théorie) de l'Inventaire (l'instance).
+
 1.1. Base de Référence (ref_equipment)
 
 La base SQL reste plate pour faciliter l'import CSV, mais le backend (ou l'ORM) doit la distribuer sous forme d'interfaces typées :
@@ -27,13 +28,17 @@ La base SQL reste plate pour faciliter l'import CSV, mais le backend (ou l'ORM) 
 
     Extension Arme (WeaponEquipment) :
 
-        damage_base (String) : ex: 1D6+2.
+        damage_h (String) : Dégâts à l'échelle humaine (H) (ex: 1D6+2).
+        
+        damage_v_minus (String) : Dégâts contre les blindages légers (V-).
+        
+        damage_v_plus (String) : Dégâts contre les blindages lourds (V+).
 
         choc_base (String).
 
         range, fire_mode, ammo_type, caliber.
 
-        effects (String) : Le DSL brut (ex: DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE).
+        effects (String) : Le DSL brut (ex: DMG_H=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE).
 
 1.2. Données d'Instance (char_inventory)
 
@@ -54,10 +59,12 @@ C'est la table liée au personnage (char_sheet_id). Elle ne duplique AUCUNE donn
 2. Moteur de Résolution des Protections (Le "Mille-feuille")
 
 Cette logique remplace les formules Excel MAX(...) et SOMME(...). Elle doit s'exécuter dans un useMemo côté React, recalculé uniquement si char_inventory ou les char_attributes changent.
+
 2.1. Traitement par Zone Corporelle (x6)
 
 Le système boucle sur 6 zones strictes : Tête, Corps, Bras Gauche, Bras Droit, Jambe Gauche, Jambe Droite.
 Pour CHAQUE zone, le système identifie toutes les instances d'équipement équipées (jusqu'à 3 objets par zone, ex: Obj1, Obj2, Obj3).
+
 2.2. Calcul de l'Armure Physique (Par zone)
 
     Extraire la valeur protection_phys des couches équipées sur la zone.
@@ -73,13 +80,16 @@ Pour CHAQUE zone, le système identifie toutes les instances d'équipement équi
 2.3. Calcul de l'Armure de Choc (Par zone)
 
 La logique est identique, mais elle ne s'applique qu'en utilisant la propriété protection_choc des objets. (Si une armure n'a pas de valeur de choc, elle vaut 0 dans ce calcul).
+
 3. Moteur d'Encombrement et de Malus (Le Goulot d'Étranglement)
 
 C'est la partie la plus sensible, traduisant la mécanique Excel =LET(forV; SIERREUR(1*ATTNaFor; 0)...) en code. Ce module évalue à quel point le personnage est gêné par son équipement.
+
 3.1. Dictionnaire des Catégories de Malus
 
 Le code doit mapper les catégories textuelles en valeurs numériques pures :
 const malusMap = { 'S': 0, 'A': -2, 'B': -3, 'C': -4, 'C**': -5, 'D': -6 };
+
 3.2. Évaluation de la Zone (La Règle du Pire)
 
 Pour chaque localisation (y compris les conteneurs spéciaux Dos et Ceinture qui ont leurs propres prérequis) :
@@ -131,7 +141,8 @@ Bien que faisant partie du système de santé, le Choc est intimement lié à l'
 Pour gérer la colonne "Effets" des munitions et des armes, nous devons implémenter un parseur d'AST (Abstract Syntax Tree) très léger.
 
 Syntaxe Cible : TYPE=ACTION(VALEUR) séparé par des ;.
-Exemple : DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE
+Exemple : DMG_H=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE
+
 5.1. Mécanique de Surcharge (Override)
 
 Lorsqu'une munition est liée à une instance d'arme, le parseur lit le DSL de la munition :

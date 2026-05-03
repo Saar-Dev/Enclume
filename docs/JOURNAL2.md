@@ -4352,3 +4352,117 @@ y=0 dans voxel_data = sol réel sur cette carte. Pas de bug. Comportement attend
 
 ### Prochaine étape
 Chantier suivant à définir. Voir ROADMAP.md.
+## Session 44 — 2026-05-01 — Bug A + Dice Rework
+
+### Contexte de reprise
+Session 43 terminée : 9F-C ✅ complet et stable.
+EntityEditorOLD.jsx supprimé en début de session.
+
+### Bug A — Toggle visible character — Résolu ✅
+
+**Diagnostic :** toute la chaîne était correcte sur le papier (PUT /characters/:id → broadcast CHARACTER_UPDATED → upsertCharacter → store → re-render). Le bug était dans `characterStore.upsertCharacter` : aucun guard sur `visible` — un character invisible broadcasté à un joueur était ajouté/conservé dans son store au lieu d'être retiré.
+
+**Correction `client/src/stores/characterStore.js` :**
+- `upsertCharacter` : guard `if (!character.visible && !state.isGm)` → filter le character du store
+- Le broadcast CHARACTER_UPDATED envoie l'objet complet — le store reproduit le filtre serveur côté client
+
+**Piège documenté PE31 :** guard visible+isGm dans upsertCharacter.
+
+### Dice Rework — Complet V1 ✅
+
+**Architecture retenue (aménagement spec Dice_rework.md) :**
+- DiceRoller monté dans Canvas3D — un seul contexte WebGL. Pas de DiceOverlay HTML séparé.
+- DICE_RESULT consommé deux fois en parallèle : chat + animation
+- Animation déclenchée uniquement si `!skillLabel`
+- `seed` du payload initialise le PRNG déterministe
+
+**Dés validés :**
+| Dé | Géométrie | Chiffre | Statut |
+|---|---|---|---|
+| D6 | BoxGeometry | CanvasTexture par face | ✅ |
+| D4 | TetrahedronGeometry | CanvasTexture par face | ✅ |
+| D8 | OctahedronGeometry | CanvasTexture par face | ✅ |
+| D20 | IcosahedronGeometry | CanvasTexture par face | ✅ |
+| D12 | DodecahedronGeometry | Atlas 12 cases (centroïde 0.397) | ✅ |
+| D10/D100 | Trapezohedron custom | Html overlay V1 position=[0,0,0] | ✅ V1 |
+
+**D10 — décision V1/V2 :**
+UV mapping d'un kite = problème de projection géométrique non trivial.
+V1 : Html overlay centré — lisible, acceptable.
+V2 : modèle Blender (.glb) avec UVs pré-calculés — chantier futur (PE33).
+
+**Pièges documentés :**
+- PE31 — upsertCharacter : guard visible+isGm
+- PE32 — DiceMesh useMemo deps [geoDef.type, color, dieType]
+- PE33 — D10 Html overlay position=[0,0,0]
+
+### Fichiers modifiés cette session
+| Fichier | Modifications |
+|---|---|
+| `client/src/stores/characterStore.js` | upsertCharacter — guard visible+isGm (Bug A) |
+| `client/src/lib/diceMath.js` | NOUVEAU — PRNG, mappings, normales D4/D6/D8/D12/D20/D10 |
+| `client/src/components/DiceMesh.jsx` | NOUVEAU — géométries, matériaux, animation, Html overlay |
+| `client/src/components/DiceRoller.jsx` | NOUVEAU — orchestrateur R3F dans Canvas |
+| `client/src/components/Canvas3D.jsx` | +2 props dicePayload/onDiceDone |
+| `client/src/pages/SessionPage.jsx` | lastDiceRoll state, filtrage skillLabel, color dans payload |
+
+### Validation fonctionnelle
+- ✅ Bug A — toggle visible character répercuté en temps réel
+- ✅ D6/D4/D8/D20/D12 — face correcte + chiffre + couleur lanceur
+- ✅ D10/D100 — géométrie trapezohedron + Html overlay lisible
+- ✅ Animation déclenchée sur jets normaux, absente sur jets entité
+
+### Dettes session 44
+- D10 UV texturing V2 (Blender) — PE33
+- useDiceAudio.js — sons d'impact — todo
+- .gitattributes:3 attribut invalide — dette ancienne
+- Logs [DBG] index.js — conservés volontairement
+
+---
+
+## Session 45 — 2026-05-02 — Documentation
+
+### Travail effectué
+- Vérification archivabilité Dice Rework à partir de JOURNAL44.md ✅
+- Mise à jour ROADMAP.md : chantier Dice Rework ✅ + D10 V2 todo + audio todo + nettoyage "Animation dé 3D" des idées/hors scope
+- Mise à jour EN_COURS.md : Dice Rework ✅ + dettes documentées
+- Mise à jour ASBUILT.md : section Dice Rework + PE31/32/33 + migration 46
+- Append JOURNAL2.md : sessions 44 + 45
+
+### Décisions documentées
+- Dice Rework archivé comme ✅ V1 complète — D10 V2 et audio explicitement en todo
+- DiceOverlay HTML séparé : remplacé par DiceRoller dans Canvas3D — décision session 44 définitive
+
+---
+
+## Session 45 (suite) — 2026-05-03 — Upload illustration campagne
+
+### Chantier — Campaign cover upload
+
+**Fonctionnalité :** les GM peuvent uploader une illustration par campagne depuis la page Dashboard (clic sur la zone cover → file picker → upload → affichage immédiat).
+
+**MinIO — arborescence campagne actée**
+- Chemin cover : `campaigns/<campaign_id>/cover` — nom fixe, sans extension, Content-Type en metadata (conforme P18)
+- Convention générale établie : tous les assets d'une campagne sous `campaigns/<campaign_id>/`
+  - Cover campagne : `campaigns/<campaign_id>/cover`
+  - (futur) Cartes 2D, tokens 2D, bibliothèque : même racine
+- Migration future documentée (non codée) : `characters/<id>/illustration` → `campaigns/<campaign_id>/characters/<id>`
+  Raison : characters peuvent exister sans campagne — migration complexe, chantier dédié ultérieur.
+
+**Fichiers produits :**
+| Fichier | Modification |
+|---|---|
+| `server/src/db/migrations/47_campaigns_cover_url.js` | NOUVEAU — `campaigns.cover_url TEXT nullable` |
+| `server/src/routes/campaigns.js` | POST `/:id/cover` + `cover_url` dans SELECT GET / |
+| `client/src/locales/fr.json` | +3 clés dashboard : coverUpload, coverUploading, coverErrorUpload |
+| `client/src/pages/DashboardPage.jsx` | Zone cover interactive (pendingCoverIdRef pattern) |
+
+**Pattern pendingCoverIdRef :**
+Un seul `<input type="file" hidden>` partagé pour toutes les campagnes.
+`pendingCoverIdRef.current = campaignId` avant `.click()` — évite la stale closure qui surviendrait avec useState.
+
+### Validation fonctionnelle
+- ✅ Upload cover campagne depuis Dashboard
+- ✅ Affichage immédiat après upload (mise à jour locale du state)
+- ✅ Curseur `wait` pendant l'upload
+- ✅ Erreur affichée si upload échoue

@@ -33,7 +33,10 @@
     "rolePlayer": "Joueur",
     "errorLoad": "Impossible de charger les campagnes",
     "errorCreate": "Erreur lors de la création",
-    "errorJoin": "Erreur lors de la connexion"
+    "errorJoin": "Erreur lors de la connexion",
+    "coverUpload": "Changer l'illustration",
+    "coverUploading": "Envoi...",
+    "coverErrorUpload": "Erreur lors de l'upload de l'illustration"
   },
   "session": {
     "loading": "Connexion à la session...",

@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-04-30 Session 41
+> Dernière mise à jour : 2026-05-03 Session 45
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -16,9 +16,9 @@ Enclume/
 │   │   └── favicon.svg                 # ⚠ présent mais non référencé — à brancher
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Canvas3D.jsx            # Modifié 41 — mode visée déplacement 9F-B2
+│   │   │   ├── Canvas3D.jsx            # Modifié 44 — props dicePayload/onDiceDone
 │   │   │   ├── Editor3D.jsx            # Modifié 9C — EntityEditorScene, activeEditorTab
-│   │   │   ├── EntityMesh.jsx          # Modifié 34 — timer 400ms, hitbox ×1.4, pointerEvents HoverIcon
+│   │   │   ├── EntityMesh.jsx          # Modifié 43 — Lerp 300ms EntityMeshVoxel + EntityMeshGlb
 │   │   │   ├── EntityBuilderTab.jsx    # Modifié 40 — refonte formulaire interactions SkillCheck/Déplacement
 │   │   │   ├── VoxelBuilderTab.jsx     # Stable 33
 │   │   │   ├── RadialMenu.jsx          # Modifié 41 — tranche displacement, grisage portée, onMove
@@ -26,27 +26,30 @@ Enclume/
 │   │   │   ├── Voxel.jsx               # Stable 9A-5
 │   │   │   ├── Sidebar.jsx             # Modifié 36 — rendu entity_action structuré, panel GM nettoyé
 │   │   │   ├── GeometryIcon.jsx        # Stable 9A-3
-│   │   │   └── DicePanel.jsx           # Stable session 18
+│   │   │   ├── DicePanel.jsx           # Stable session 18
+│   │   │   ├── DiceMesh.jsx            # NOUVEAU 44 — géométries, matériaux, animation, Html overlay D10
+│   │   │   └── DiceRoller.jsx          # NOUVEAU 44 — orchestrateur R3F dans Canvas3D
 │   │   ├── pages/
 │   │   │   ├── LoginPage.jsx
 │   │   │   ├── RegisterPage.jsx
-│   │   │   ├── DashboardPage.jsx       # Modifié 33 — lien Atelier du GM → /workshop
-│   │   │   ├── SessionPage.jsx         # Modifié 41 — moveTarget, handleEntityMove, ENTITY_MOVE_RESULT
+│   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern)
+│   │   │   ├── SessionPage.jsx         # Modifié 44 — lastDiceRoll state, filtrage skillLabel, color dans payload
 │   │   │   ├── CampaignSettingsPage.jsx
 │   │   │   ├── WorkshopPage.jsx        # Stable 33
 │   │   │   └── TexturePacksPage.jsx    # CONSERVÉ mais remplacé par WorkshopPage
 │   │   ├── stores/
 │   │   │   ├── authStore.js
 │   │   │   ├── tokenStore.js
-│   │   │   ├── characterStore.js
+│   │   │   ├── characterStore.js       # Modifié 44 — upsertCharacter guard visible+isGm (Bug A)
 │   │   │   ├── mapStore.js
 │   │   │   ├── sessionStore.js
 │   │   │   └── entityStore.js          # Modifié 34 — fetchBlueprints() ajouté
 │   │   ├── locales/
-│   │   │   └── fr.json                 # Modifié 41 — section entity (5 clés)
+│   │   │   └── fr.json                 # Modifié 45 — +3 clés dashboard cover + entity/displacement (43)
 │   │   ├── lib/
 │   │   │   ├── api.js
-│   │   │   └── voxelTextures.js
+│   │   │   ├── voxelTextures.js
+│   │   │   └── diceMath.js             # NOUVEAU 44 — PRNG, mappings, normales D4/D6/D8/D12/D20/D10
 │   │   ├── i18n.js
 │   │   ├── App.jsx                     # Modifié 33 — route /workshop + redirect /texture-packs
 │   │   └── main.jsx
@@ -54,14 +57,14 @@ Enclume/
 ├── server/
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # 45 migrations appliquées (batch 17) — inchangé session 41
+│   │   │   ├── migrations/             # 46 migrations appliquées
 │   │   │   └── knex.js
 │   │   ├── routes/
 │   │   │   ├── auth.js
-│   │   │   ├── campaigns.js
+│   │   │   ├── campaigns.js            # Modifié 45 — POST /:id/cover + cover_url dans GET /
 │   │   │   ├── battlemaps.js
 │   │   │   ├── tokens.js               # Modifié 39 — maintenance Redis collision map
-│   │   │   ├── characters.js
+│   │   │   ├── characters.js           # Broadcast CHARACTER_UPDATED avec visible
 │   │   │   ├── textures.js
 │   │   │   ├── assets.js
 │   │   │   ├── users.js
@@ -77,13 +80,13 @@ Enclume/
 │   │   │   └── errorHandler.js
 │   │   ├── socket/
 │   │   │   ├── auth.js
-│   │   │   └── index.js                # Modifié 41 — retrait guard GM dans ENTITY_MOVE_REQUEST
+│   │   │   └── index.js                # Modifié 43 — Fix Tchebychev, getModifier, stepsMax, actorBlocked pos_z+1, logs debug
 │   │   ├── lib/
 │   │   │   ├── AppError.js
 │   │   │   ├── minio.js
 │   │   │   ├── diceParser.js
 │   │   │   ├── charStats.js            # NOUVEAU 36 — calculs Polaris purs
-│   │   │   └── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map
+│   │   │   └── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
 │   │   └── index.js
 ├── shared/
 │   └── events.js                       # Modifié 40 — ENTITY_MOVE_REQUEST + ENTITY_MOVE_RESULT ajoutés
@@ -151,6 +154,8 @@ Enclume/
 | 43_entity_pack_hint | entity_blueprints.pack_id UUID nullable FK → texture_packs.id + voxel_textures.usage_hint TEXT nullable |
 | 44_tokens_rotation | tokens.r INTEGER NOT NULL DEFAULT 0 — 8 orientations 45° (PE21) |
 | 45_polaris_mr_table | polaris_mr (mr_min PK, mr_max nullable, dmax) + seed 6 lignes |
+| 46_polaris_mr_refonte | polaris_mr — colonne dmax → modifier (LdB p.209) — 20 lignes officielles |
+| 47_campaigns_cover_url | campaigns.cover_url TEXT nullable — illustration campagne |
 
 ---
 
@@ -159,7 +164,7 @@ Enclume/
 ### Architecture
 ```
 Redis Hash : "collision:{battlemap_id}"
-  champ : "x:y:z"   (séparateur ":" — P17, coordonnées base)
+  champ : "x:y:z"   (séparateur ":" — P17, coordonnées PE14 base)
   valeur : JSON { type: 'token'|'entity'|'voxel', id: string }
 TTL : 24h — reconstruite à chaque SESSION_JOIN (PE23)
 ```
@@ -167,7 +172,7 @@ TTL : 24h — reconstruite à chaque SESSION_JOIN (PE23)
 ### Filtres
 - Tokens `layer = 'gm'` : exclus (invisibles aux joueurs)
 - Entités : incluses uniquement si `is_blocking = true` dans l'état courant
-- Voxels : tous inclus
+- Voxels : tous inclus — convertis Three.js→PE14 dans buildCollisionMap/add/remove (PE28)
 
 ### Reconstruction
 `buildCollisionMap(battlemapId)` — pipeline Redis, appelée au SESSION_JOIN depuis `player_locations`.
@@ -190,80 +195,72 @@ Non bloquante si joueur sans `player_location` (première connexion).
 
 ---
 
-## Déplacement entités — sessions 40-41 (9F-B1 + 9F-B2)
+## Déplacement entités — sessions 40-43 (9F-B1/B2/C)
 
 ### Events WS
 - `ENTITY_MOVE_REQUEST` — joueur/GM → serveur : demande de déplacement
 - `ENTITY_MOVE_RESULT` — serveur → joueur : résultat jet + positions finales
 
-### Handler `ENTITY_MOVE_REQUEST` (socket/index.js) — session 40
+### Handler `ENTITY_MOVE_REQUEST` (socket/index.js)
 - Guards : campaignId, double-soumission via pendingEntityActions
 - Guard GM retiré en session 41 — GM passe par le même flux jet d'attribut
 - Ownership : token.character_id → characters.user_id === socket.user.id
 - Distance Tchebychev 3D acteur ↔ entité (inclut altitude pos_z)
 - actualMoveType calculé par dot(AE, AD) — PE27
 - Jet attribut via calcAttributeNA(attrs, attributeId, genotypeRow)
-- MR = attributeNA + 1d20 - effectiveDifficulty → getDmax(mrTable, mr)
+- MR = attributeNA + 1d20 - effectiveDifficulty → getModifier(mrTable, mr)
+- dmax = isSuccess ? modifier + 1 : 0 — toute réussite = au moins 1 case
+- stepsMax = Math.min(dmax, stepsTarget) — destination joueur respectée (PE30)
 - dmax_override si défini dans l'interaction (plafonne push ET pull)
-- Step-by-step : isCaseOccupied entity + acteur, excludeIds=[tokenId,entityId] (PE22)
+- Step-by-step : isCaseOccupied entity à pos_z, acteur à pos_z+1 (PE29), excludeIds=[tokenId,entityId] (PE22)
 - Update DB + collisionMoveEntity + collisionMoveToken Redis
 - Broadcast ENTITY_MOVED + TOKEN_MOVED → room
 - ENTITY_MOVE_RESULT → socket.id uniquement
 
 ### Cache MR_TABLE
-`let MR_TABLE = null` + `getMrTable()` + `getDmax(mrTable, mr)` — hors `initSocket`.
+`let MR_TABLE = null` + `getMrTable()` + `getModifier(mrTable, mr)` — hors `initSocket`.
 Chargée une seule fois depuis DB au premier jet.
 
-### Mode visée client — session 41 (9F-B2)
-
-#### SessionPage.jsx
-- `moveTarget` state : `null | { entity, interaction, tokenId }`
-- `handleEntityMove(entity, interaction)` : trouve le token acteur, active le mode visée
-- `handleMoveCancel` : useCallback stable deps `[]` — passé à Canvas3D
-- `handleEntityClick` : guard Q4 (mode visée actif → annulation silencieuse) + bifurcation displacement
-- Listener `ENTITY_MOVE_RESULT` : `setMoveTarget(null)` + message chat i18n
-- Ordre déclaration : `handleEntityMove` avant `handleEntityClick` — P4/P48
-
-#### RadialMenu.jsx
-- Nouvelles props : `onMove`, `actorToken`, `entity`
-- `isOutOfRange(slice)` : distance Tchebychev 2D acteur ↔ entité > `slice.range`
-- Tranche `displacement` → `onMove(slice)` au lieu de `onAction(slice)`
-- Grisage visuel + curseur `not-allowed` + clic bloqué si hors portée
+### Mode visée client — session 41/43
 
 #### Canvas3D.jsx
-- Nouvelles props export : `moveTarget`, `onMoveCancel`
-- `useTranslation` importé — `moveLabels` calculés dans Canvas3D export, passés en prop à Scene
-- `useEffect` Échap séparé (deps `[moveTarget, onMoveCancel]`) — s'attache uniquement si mode visée actif
-- `tokensRef` + `ghostRef` : refs miroirs pour callbacks stables (pattern P40)
-- `ghostPos` + `dotResult` : states pour le rendu JSX
-- `handlePointerMove` : snap 4 axes orthogonaux + dot(AE,AD) en mode visée
-- `handlePointerUp` : émission `ENTITY_MOVE_REQUEST` si dot≠0, annulation sinon
-- Ghost JSX : carré wireframe `PlaneGeometry(1,1)` au sommet de la colonne (`getColumnTopY + 1 + 0.05`)
-  - Vert (`#22c55e`) si atteignable (push ou pull)
-  - Rouge (`#ef4444`) si impossible (dot=0)
+- Ghost : `PlaneGeometry(1,1)` wireframe au sommet de la colonne (`getColumnTopY + 1 + 0.05`)
+- Snap 8 axes depuis l'entité (ratio 2:1) — session 43
+- Couleurs : bleu=push (#2563eb), orange=pull (#f97316), rouge=impossible (#ef4444)
+- Lerp 300ms TokenMesh — groupRef + lerpPos + targetRef + useFrame
 
-### Décisions de conception session 41
-- GM-A : GM passe par le même flux jet d'attribut que les joueurs (guard retiré)
-- Token GM sans `char_sheet` → ENTITY_MOVE_REQUEST ignoré silencieusement — comportement documenté
-- Feature "paramètre campagne GM entity move mode" (3 options) → reportée en chantier dédié
-- Ghost = carré wireframe au sol (pas losange, pas plan plein, pas label texte)
-- Couleur : vert/rouge uniquement (pas bleu/orange push/pull — information inutile pour le joueur)
+#### EntityMesh.jsx
+- Lerp 300ms dans `EntityMeshVoxel` et `EntityMeshGlb` — useFrame dans sous-composants
+- tau=0.1 → 95% en ~300ms
 
-### Format interaction déplacement dans blueprint
-```json
-{
-  "id": "deplacer",
-  "type": "displacement",
-  "action_label": "Déplacer",
-  "move_type": "displacement",
-  "attribute_id": "FOR",
-  "difficulty_dc": 0,
-  "range": 1,
-  "target_state_id": null,
-  "dmax_override": null,
-  "required_state_ids": [0, 1]
-}
-```
+---
+
+## Dice Rework — session 44
+
+### Architecture
+- DiceRoller monté dans Canvas3D — un seul contexte WebGL (pas d'overlay HTML séparé)
+- DICE_RESULT consommé deux fois en parallèle : chat + animation
+- Animation déclenchée uniquement si `!skillLabel` (jets normaux, pas jets entité)
+- `seed` du payload initialise le PRNG déterministe de l'animation
+
+### Dés supportés
+| Dé | Géométrie | Chiffre | Statut |
+|---|---|---|---|
+| D6 | BoxGeometry | Texture CanvasTexture par face | ✅ stable |
+| D4 | TetrahedronGeometry | Texture CanvasTexture par face | ✅ stable |
+| D8 | OctahedronGeometry | Texture CanvasTexture par face | ✅ stable |
+| D20 | IcosahedronGeometry | Texture CanvasTexture par face | ✅ stable |
+| D12 | DodecahedronGeometry | Atlas 12 cases (fillText centroïde 0.397) | ✅ stable |
+| D10/D100 | Trapezohedron custom | Html overlay V1 `position=[0,0,0]` | ✅ V1 stable |
+
+### Pièges actifs Dice Rework
+- `DiceMesh.useMemo` deps `[geoDef.type, color, dieType]` — dieType obligatoire (PE32)
+- D10 Html overlay `position=[0,0,0]` — ne pas déplacer (PE33)
+- D12 atlas `fillText` à `atlasSize * 0.397` — centroïde calculé, ne pas modifier
+
+### V2 / todo
+- D10 UV texturing — modèle Blender (.glb) avec UVs kite pré-calculés
+- Audio — `useDiceAudio.js` — sons d'impact au rebond
 
 ---
 
@@ -311,21 +308,22 @@ GM arbitre → socket.emit(WS.ENTITY_ACTION_RESOLVE)
 Serveur → resolveEntityState → update current_state_id → collisionUpdateEntityState → ENTITY_UPDATED broadcast
 ```
 
-### Flux joueur déplacement ✅ (9F-B2)
+### Flux joueur déplacement ✅
 ```
 Joueur clique ⚙ → handleEntityClick
   → si 1 seule interaction displacement : handleEntityMove direct
   → si 2+ interactions : RadialMenu → tranche Déplacer → handleEntityMove
 handleEntityMove → trouve token acteur → setMoveTarget → mode visée Canvas3D
-Canvas3D : ghost wireframe snapé 4 axes, couleur vert/rouge selon dot(AE,AD)
+Canvas3D : ghost wireframe snapé 8 axes, couleur bleu/orange/rouge selon dot(AE,AD)
 Joueur clique destination (dot≠0) → ENTITY_MOVE_REQUEST émis
 Serveur → jet attribut → ENTITY_MOVED + TOKEN_MOVED broadcast → ENTITY_MOVE_RESULT → joueur
-SessionPage listener → setMoveTarget(null) + message chat
+SessionPage listener → setMoveTarget(null) + badge MR dans chat
+Canvas3D/EntityMesh → Lerp 300ms vers position finale
 ```
 
 ### Flux GM ✅
 Action directe via ENTITY_ACTION_GM_DIRECT — sans arbitrage ni traçage.
-GM peut aussi utiliser le flux déplacement (9F-B2) — même flux jet attribut que joueur.
+GM peut aussi utiliser le flux déplacement — même flux jet attribut que joueur.
 
 ### Flux sans compétence ✅
 skill_id et attribute_id null → resolveEntityState direct, sans notifier le GM, sans jet.
@@ -355,7 +353,6 @@ difficulty_dc = modificateur signé (-20 à +10)
 | P46 | Route spécifique avant paramétrique |
 | P47 | pack_id doit être dans le SELECT JOIN entities GET + ENTITY_CREATED socket |
 | P48 | handleEntityMove déclaré avant handleEntityClick (session 41) |
-| PE1 | SUPPRIMÉ — serveur calcule via charStats.js |
 | PE2 | socket.data.role pour fetchSockets() |
 | PE4 | face null = invisible |
 | PE11 | fallback states[0] |
@@ -371,4 +368,10 @@ difficulty_dc = modificateur signé (-20 à +10)
 | PE25 | maintenance Redis dans REST, pas dans handlers WS reliques |
 | PE26 | resolveEntityState : returning doit inclure battlemap_id |
 | PE27 | moveType calculé client (feedback) ET recalculé serveur (validation). Si discordance → refus silencieux |
+| PE28 | Voxels Redis : convertis Three.js→PE14 dans buildCollisionMap/add/remove |
+| PE29 | Acteur step-by-step vérifié à pos_z+1 — espace de marche |
+| PE30 | stepsMax = Math.min(dmax, stepsTarget) |
+| PE31 | upsertCharacter : guard visible+isGm |
+| PE32 | DiceMesh useMemo deps [geoDef.type, color, dieType] |
+| PE33 | D10 Html overlay position=[0,0,0] — ne pas déplacer |
 | PEF1-PEF6 | voir SYSTEME.md section 6 |

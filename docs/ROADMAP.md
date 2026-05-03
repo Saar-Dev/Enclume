@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-05-01 Session 43
+> Dernière mise à jour : 2026-05-02 Session 45
 
 ---
 
@@ -77,6 +77,27 @@
 | index.js — actorBlocked à pos_z+1 (espace de marche) | ✅ |
 | index.js — stepsMax = min(dmax, stepsTarget) — destination joueur respectée | ✅ |
 
+### Chantier Dice Rework ✅ (session 44)
+
+Architecture retenue : DiceRoller monté dans Canvas3D (un seul contexte WebGL).
+Pas de DiceOverlay HTML séparé — décision session 44.
+
+| Tâche | État |
+|---|---|
+| `client/src/lib/diceMath.js` — PRNG, mappings, normales D4/D6/D8/D12/D20/D10 | ✅ |
+| `client/src/components/DiceMesh.jsx` — géométries, matériaux, animation | ✅ |
+| `client/src/components/DiceRoller.jsx` — orchestrateur R3F, plan cliquable | ✅ |
+| `client/src/components/Canvas3D.jsx` — props dicePayload/onDiceDone | ✅ |
+| `client/src/pages/SessionPage.jsx` — state lastDiceRoll, filtrage skillLabel | ✅ |
+| D6 — BoxGeometry, texture par face, couleur lanceur | ✅ |
+| D4 — TetrahedronGeometry, texture par face | ✅ |
+| D8 — OctahedronGeometry, texture par face | ✅ |
+| D20 — IcosahedronGeometry, texture par face | ✅ |
+| D12 — DodecahedronGeometry, atlas 12 cases | ✅ |
+| D10/D100 — Trapezohedron custom, Html overlay V1 | ✅ V1 |
+| D10 UV texturing — modèle Blender (.glb) avec UVs kite pré-calculés | 🔲 V2 |
+| Audio — `useDiceAudio.js` — sons d'impact au rebond | 🔲 |
+
 ### Chantier reporté — Paramètre campagne GM entity move mode 🔲
 3 options : réaliste / à la carte / divine. Voir EN_COURS.md.
 
@@ -99,6 +120,7 @@
 | Palette blueprints dans éditeur | ✅ session 34 |
 | EntityBuilderTab — formulaire interactions SkillCheck/Déplacement | ✅ session 40 |
 | Mode visée déplacement entités — ghost wireframe + snap 8 axes + couleurs + Lerp | ✅ session 43 |
+| Animation dés 3D (DiceRoller dans Canvas3D) | ✅ session 44 |
 | X-Ray voxels devant tokens | 🔲 |
 | Outil règle/mesure 3D | 🔲 |
 
@@ -109,16 +131,16 @@
 | Palette textures voxel | ✅ |
 | Onglets Voxels/Entités en mode édition | ✅ |
 | Badge MR displacement dans chat | ✅ session 43 |
-| Toggle visible character temps réel (Bug A) | 🔲 |
+| Toggle visible character temps réel (Bug A) | ✅ session 44 |
 | Bibliothèque documents | 🔲 |
 
 ### Corrections en attente
 | Bug | Description | État |
 |---|---|---|
-| Bug A | Toggle visible character non répercuté en temps réel | 🔲 |
+| Bug A | Toggle visible character non répercuté en temps réel | ✅ session 44 |
 | Bug B | Modification faces voxel existant non exposée dans UI | 🔲 |
 | Bug WebGL | Context Lost au switch play/edit — non bloquant | documenté |
-| Dette | EntityEditorOLD.jsx commité par erreur — à supprimer | 🔲 |
+| Dette | EntityEditorOLD.jsx commité par erreur — à supprimer | ✅ session 44 |
 | Dette | .gitattributes:3 attribut invalide — à corriger | 🔲 |
 
 ---
@@ -156,9 +178,6 @@ Complexité estimée : faible.
 ### Chat MP
 Messagerie privée entre joueurs/GM.
 
-### Animation dé 3D
-Rendu Three.js du lancer.
-
 ### Sauvegarde/export carte 3D
 Export battlemap complète (voxels + entités + tokens).
 
@@ -169,5 +188,4 @@ Export battlemap complète (voxels + entités + tokens).
 - Webcam / audio / vidéo
 - Sources lumineuses dynamiques
 - Chat MP (V2)
-- Animation dé 3D (V2)
 - Sauvegarde/export carte 3D (V2)

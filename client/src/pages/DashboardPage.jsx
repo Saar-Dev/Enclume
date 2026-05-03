@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
@@ -18,6 +18,9 @@ export default function DashboardPage() {
   const [error, setError] = useState(null)
 
   const [copiedId, setCopiedId] = useState(null)
+  const [uploadingCoverId, setUploadingCoverId] = useState(null)
+  const coverInputRef = useRef(null)
+  const pendingCoverIdRef = useRef(null)
 
   useEffect(() => {
     api.get('/campaigns')
@@ -59,6 +62,31 @@ export default function DashboardPage() {
     }
   }
 
+  const handleCoverClick = (campaignId) => {
+    pendingCoverIdRef.current = campaignId
+    coverInputRef.current.click()
+  }
+
+  const handleCoverChange = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const campaignId = pendingCoverIdRef.current
+    setUploadingCoverId(campaignId)
+    try {
+      const formData = new FormData()
+      formData.append('cover', file)
+      const res = await api.post(`/campaigns/${campaignId}/cover`, formData)
+      setCampaigns(prev => prev.map(c =>
+        c.id === campaignId ? { ...c, cover_url: res.data.campaign.cover_url } : c
+      ))
+    } catch (err) {
+      setError(err.response?.data?.error?.message || t('dashboard.coverErrorUpload'))
+    } finally {
+      setUploadingCoverId(null)
+      e.target.value = ''
+    }
+  }
+
   const handleCopy = async (e, code, id) => {
     e.stopPropagation()
     try {
@@ -70,6 +98,14 @@ export default function DashboardPage() {
 
   return (
     <div style={styles.container}>
+
+      <input
+        ref={coverInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        style={{ display: 'none' }}
+        onChange={handleCoverChange}
+      />
 
       {/* HEADER */}
       <div style={styles.header}>
@@ -122,7 +158,19 @@ export default function DashboardPage() {
               <div key={campaign.id} className="card campaign-card">
 
                 {/* COVER */}
-                <div className="campaign-cover" />
+                <div
+                  className="campaign-cover"
+                  onClick={campaign.role === 'gm' ? () => handleCoverClick(campaign.id) : undefined}
+                  style={campaign.role === 'gm' ? { cursor: uploadingCoverId === campaign.id ? 'wait' : 'pointer' } : undefined}
+                  title={campaign.role === 'gm'
+                    ? (uploadingCoverId === campaign.id ? t('dashboard.coverUploading') : t('dashboard.coverUpload'))
+                    : undefined}
+                >
+                  {campaign.cover_url
+                    ? <img src={`${import.meta.env.VITE_API_URL}/api/assets/${campaign.cover_url}`} alt={campaign.name} />
+                    : <div className="campaign-cover-placeholder" />
+                  }
+                </div>
 
                 {/* HEADER */}
                 <div style={styles.cardHeader}>
