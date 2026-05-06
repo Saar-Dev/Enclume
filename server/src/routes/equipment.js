@@ -9,6 +9,7 @@
  *   GET  /api/equipment/ref/skills — liste ref_skills pour dropdowns
  *   GET  /api/equipment/:id        — item complet + junction data
  *   POST /api/equipment            — crée un item + lignes junction
+ *   PUT  /api/equipment/:id        — remplace un item + junction tables (remplacement total)
  *   DELETE /api/equipment/:id      — supprime (cascade FK sur junction tables)
  */
 
@@ -118,6 +119,61 @@ router.post('/', requireAuth, async (req, res, next) => {
     })
 
     res.status(201).json({ item })
+  } catch (err) { next(err) }
+})
+
+// ─── PUT /api/equipment/:id ───────────────────────────────────────────────────
+router.put('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const { skills = [], skill_assoc = [], ammo_compat = [], ...rawFields } = req.body
+    const fields = sanitize(rawFields)
+
+    if (!fields.family || !fields.category || !fields.name) {
+      return res.status(400).json({ error: { message: 'family, category et name sont requis' } })
+    }
+    if (fields.tech_level === null) {
+      return res.status(400).json({ error: { message: 'tech_level est requis (1–7)' } })
+    }
+
+    const existing = await db('ref_equipment').where({ id }).first()
+    if (!existing) return res.status(404).json({ error: { message: 'Item introuvable' } })
+
+    fields.updated_at = db.fn.now()
+
+    const [row] = await db.transaction(async trx => {
+      const updated = await trx('ref_equipment').where({ id }).update(fields).returning('*')
+
+      await trx('ref_equipment_skills').where({ item_id: id }).delete()
+      await trx('ref_equipment_skill_assoc').where({ item_id: id }).delete()
+      await trx('ref_equipment_ammo_compat').where({ ammo_id: id }).delete()
+
+      if (skills.length) {
+        await trx('ref_equipment_skills').insert(
+          skills.map(sid => ({ item_id: id, skill_id: sid }))
+        )
+      }
+      if (skill_assoc.length) {
+        await trx('ref_equipment_skill_assoc').insert(
+          skill_assoc.map(sid => ({ item_id: id, skill_id: sid }))
+        )
+      }
+      if (ammo_compat.length) {
+        await trx('ref_equipment_ammo_compat').insert(
+          ammo_compat.map(wid => ({ ammo_id: id, weapon_id: wid }))
+        )
+      }
+
+      return updated
+    })
+
+    const [skillIds, skillAssocIds, ammoCompatIds] = await Promise.all([
+      db('ref_equipment_skills').where({ item_id: id }).pluck('skill_id'),
+      db('ref_equipment_skill_assoc').where({ item_id: id }).pluck('skill_id'),
+      db('ref_equipment_ammo_compat').where({ ammo_id: id }).pluck('weapon_id'),
+    ])
+
+    res.json({ item: { ...row, skills: skillIds, skill_assoc: skillAssocIds, ammo_compat: ammoCompatIds } })
   } catch (err) { next(err) }
 })
 

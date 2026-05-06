@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — Équipements Polaris</title>
-  <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; background: #f0f2f5; color: #222; }
@@ -101,6 +100,22 @@
       padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;
     }
     .btn-del:hover { background: #d9534f; color: #fff; }
+    .btn-edit {
+      background: #eef3ff; color: #2563eb; border: 1px solid #bfcfff;
+      padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 4px;
+    }
+    .btn-edit:hover { background: #2563eb; color: #fff; }
+
+    .edit-banner {
+      background: #ede9ff; border: 1px solid #6b5ce7; border-radius: 6px;
+      padding: 9px 14px; font-size: 13px; color: #3b2fa0;
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+    }
+    .edit-banner button {
+      background: none; border: 1px solid #6b5ce7; color: #6b5ce7;
+      border-radius: 4px; padding: 3px 10px; cursor: pointer; font-size: 12px;
+    }
+    .edit-banner button:hover { background: #6b5ce7; color: #fff; }
 
     .empty-row td { text-align: center; color: #bbb; padding: 24px; font-size: 13px; }
 
@@ -122,12 +137,8 @@
     /* Quick entry */
     #quickEntry { border-color: #6b5ce7; background: #f8f7ff; }
     #quickEntry legend { color: #5a4cd4; }
-    #yamlInput { font-family: 'Courier New', monospace; font-size: 13px; resize: vertical; min-height: 60px; }
-    #yamlFeedback { font-size: 12px; min-height: 18px; }
-    details summary { font-size: 11px; color: #888; cursor: pointer; margin-top: 8px; user-select: none; }
-    details summary:hover { color: #555; }
-    .alias-grid { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 11px; color: #666; line-height: 1.9; }
-    .alias-grid code { background: #ede9ff; border-radius: 3px; padding: 0 4px; font-size: 11px; color: #4a3ab8; }
+    #tsvInput { font-family: 'Courier New', monospace; font-size: 12px; resize: vertical; min-height: 70px; transition: border-color .2s; }
+    #tsvFeedback { font-size: 12px; min-height: 18px; }
   </style>
 </head>
 <body>
@@ -163,58 +174,21 @@
     </select>
   </div>
 
+  <div id="editBanner"></div>
+
   <form id="equipForm">
 
-    <!-- ── SAISIE RAPIDE YAML ─────────────────────────────────── -->
+    <!-- ── COLLER DEPUIS EXCEL ───────────────────────────────── -->
     <fieldset id="quickEntry">
-      <legend>Saisie rapide</legend>
+      <legend>Coller depuis Excel</legend>
       <div class="field">
-        <textarea id="yamlInput" rows="3"
-          placeholder="{fam: Armes, cat: &quot;Armes légères&quot;, nom: &quot;Pistolet 9mm&quot;, nt: 3, prix: 1200, poids: 0.8, dis: &quot;20(20)&quot;, mode: RC, dmg: 2D6, choc: 1D6, portee: &quot;10/30/50/80&quot;, mun: 15, cout_mun: 400, cal: &quot;9mm Para&quot;}"></textarea>
+        <textarea id="tsvInput" rows="4"
+          placeholder="Copier une ligne dans Excel (Ctrl+C), coller ici (Ctrl+V), puis cliquer Parser →"></textarea>
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
-        <div id="yamlFeedback"></div>
-        <button type="button" class="btn-primary" style="white-space:nowrap; padding:7px 18px;" onclick="parseYaml()">Parser →</button>
+        <div id="tsvFeedback"></div>
+        <button type="button" class="btn-primary" style="white-space:nowrap; padding:7px 18px;" onclick="parseTSV()">Parser →</button>
       </div>
-      <details>
-        <summary>Aide — Toutes les clés disponibles</summary>
-        <div class="alias-grid">
-          <span><code>fam</code> famille</span>
-          <span><code>cat</code> catégorie</span>
-          <span><code>nom</code> nom</span>
-          <span><code>desc</code> description</span>
-          <span><code>nt</code> NT (1–7)</span>
-          <span><code>prix</code> prix</span>
-          <span><code>prix_mod</code> modif.prix</span>
-          <span><code>poids</code> poids (kg)</span>
-          <span><code>dis</code> rareté</span>
-          <span><code>fab</code> fabricant</span>
-          <span><code>nation</code> nation</span>
-          <span><code>niv_max</code> niv.max</span>
-          <span><code>bonus</code> bonus</span>
-          <span><code>dmg</code> dommage (H)</span>
-          <span><code>dmg_v-</code> dommage (V−)</span>
-          <span><code>dmg_v+</code> dommage (V+)</span>
-          <span><code>choc</code> choc</span>
-          <span><code>portee</code> portée</span>
-          <span><code>for_min</code> FOR min</span>
-          <span><code>init</code> init mod</span>
-          <span><code>mode</code> mode de tir</span>
-          <span><code>mun</code> mun. quantité</span>
-          <span><code>cout_mun</code> mun. coût</span>
-          <span><code>cal</code> calibre</span>
-          <span><code>attr</code> attribut lié</span>
-          <span><code>prot</code> protection</span>
-          <span><code>prot_mod</code> prot. modif</span>
-          <span><code>prot_choc</code> prot. choc</span>
-          <span><code>loc</code> localisation</span>
-          <span><code>malus</code> cat. malus</span>
-          <span><code>capa</code> contenance</span>
-          <span><code>etanche</code> étanche (true/false)</span>
-          <span><code>effets</code> effets munitions</span>
-          <span style="color:#aaa; font-style:italic">Les noms de champs DB complets sont aussi acceptés.</span>
-        </div>
-      </details>
     </fieldset>
 
     <!-- ── IDENTITÉ ─────────────────────────────────────────── -->
@@ -484,7 +458,7 @@
 
     <div class="form-actions">
       <button type="button" class="btn-secondary" id="btnReset">Réinitialiser</button>
-      <button type="submit" class="btn-primary">✚ Créer l'item</button>
+      <button type="submit" class="btn-primary" id="btnSubmit">✚ Créer l'item</button>
     </div>
 
   </form>
@@ -502,7 +476,7 @@
           <th>Nom</th>
           <th>NT</th>
           <th>Rareté</th>
-          <th style="width:60px"></th>
+          <th style="width:90px"></th>
         </tr>
       </thead>
       <tbody id="itemsBody">
@@ -534,42 +508,178 @@ function applyPreset(val) {
   preset.dim.forEach(id => document.getElementById(id).classList.add('fs-dim'))
 }
 
-// ── Saisie rapide YAML ────────────────────────────────────────────────────────
+// ── Parseur TSV (coller depuis Excel) ────────────────────────────────────────
 
-const ALIASES = {
-  fam:       'family',
-  cat:       'category',
-  nom:       'name',
-  desc:      'description',
-  nt:        'tech_level',
-  prix:      'price',
-  prix_mod:  'price_modifier',
-  poids:     'weight',
-  dis:       'rarity',
-  fab:       'manufacturer',
-  niv_max:   'max_level',
-  bonus:     'bonus',
-  nation:    'nation',
-  dmg:       'damage_h',
-  'dmg_v-':  'damage_v_low',
-  'dmg_v+':  'damage_v_high',
-  choc:      'shock',
-  portee:    'range',
-  for_min:   'min_str',
-  init:      'init_mod',
-  mode:      'fire_mode',
-  mun:       'ammo_count',
-  cout_mun:  'ammo_cost',
-  cal:       'caliber',
-  attr:      'linked_attr',
-  prot:      'protection',
-  prot_mod:  'protection_modifier',
-  prot_choc: 'protection_shock',
-  loc:       'location',
-  malus:     'malus_cat',
-  capa:      'capacity',
-  etanche:   'waterproof',
-  effets:    'ammo_effects',
+// Mapping colonnes Excel → champs DB (0-indexé)
+// Champs préfixés _ = traitement spécial
+const COLUMN_MAP = [
+  { col: 0,  field: 'family',        conv: cvStr  },
+  { col: 1,  field: 'category',      conv: cvStr  },
+  { col: 2,  field: 'name',          conv: cvStr  },
+  { col: 3,  field: 'description',   conv: cvStr  },
+  { col: 4,  field: 'price',         conv: cvInt  },
+  { col: 5,  field: 'weight',        conv: cvWeight },
+  { col: 6,  field: 'tech_level',    conv: cvRoman },
+  { col: 7,  field: 'manufacturer',  conv: cvStr  },
+  { col: 8,  field: '_skills',       conv: cvStr  }, // junction — orange si non vide
+  { col: 9,  field: 'bonus',         conv: cvStr  },
+  { col: 10, field: 'max_level',     conv: cvInt  },
+  { col: 11, field: 'nation',        conv: cvStr  },
+  { col: 12, field: '_damage',       conv: cvDamage }, // multi-champs
+  { col: 13, field: 'shock',         conv: cvStr  },
+  { col: 14, field: 'range',         conv: cvStr  },
+  { col: 15, field: 'min_str',       conv: cvInt  },
+  { col: 16, field: 'init_mod',      conv: cvInt  },
+  { col: 17, field: 'fire_mode',     conv: cvStr  },
+  { col: 18, field: 'ammo_count',    conv: cvStr  },
+  { col: 19, field: 'ammo_cost',     conv: cvStr  },
+  { col: 20, field: 'rarity',        conv: cvStr  },
+  { col: 21, field: '_skill_assoc',  conv: cvStr  }, // lookup label → id
+]
+
+const NULL_VALUES = new Set(['-', '—', ''])
+
+function cvStr(s) {
+  if (NULL_VALUES.has(s)) return { value: null, orange: false }
+  return { value: s, orange: false }
+}
+
+function cvInt(s) {
+  if (NULL_VALUES.has(s)) return { value: null, orange: false }
+  const n = parseInt(s.replace(/\s/g, ''), 10)
+  if (isNaN(n)) return { value: s, orange: true }
+  return { value: n, orange: false }
+}
+
+function cvWeight(s) {
+  if (NULL_VALUES.has(s)) return { value: null, orange: false }
+  const cleaned = s.replace(/\s*kg$/i, '').replace(',', '.').trim()
+  const n = parseFloat(cleaned)
+  if (isNaN(n)) return { value: s, orange: true }
+  return { value: n, orange: false }
+}
+
+const ROMAN = { 'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6, 'VII': 7 }
+function cvRoman(s) {
+  if (NULL_VALUES.has(s)) return { value: null, orange: false }
+  const n = ROMAN[s.trim().toUpperCase()]
+  if (!n) return { value: s, orange: true }
+  return { value: n, orange: false }
+}
+
+function cvDamage(s) {
+  if (NULL_VALUES.has(s)) return { value: {}, orange: false }
+  const result = {}
+  for (const part of s.split(/\s*\/\s*/)) {
+    const t = part.trim()
+    if (/\(V\+\)/i.test(t))      result.damage_v_high = t.replace(/\s*\(V\+\)/i, '').trim()
+    else if (/\(V-\)/i.test(t))  result.damage_v_low  = t.replace(/\s*\(V-\)/i, '').trim()
+    else                          result.damage_h      = t.replace(/\s*\(H\)/i,  '').trim()
+  }
+  return { value: result, orange: false }
+}
+
+// Parseur TSV propre : gère les champs quotés avec retours à la ligne (format Excel)
+function parseTSVRow(text) {
+  const fields = []
+  let i = 0
+  const len = text.length
+  while (i < len) {
+    if (text[i] === '"') {
+      i++
+      let field = ''
+      while (i < len) {
+        if (text[i] === '"') {
+          if (i + 1 < len && text[i + 1] === '"') { field += '"'; i += 2 }
+          else { i++; break }
+        } else { field += text[i++] }
+      }
+      if (i < len && text[i] === '\t') i++
+      fields.push(field.trim())
+    } else {
+      const start = i
+      while (i < len && text[i] !== '\t') i++
+      fields.push(text.slice(start, i).trim())
+      if (i < len) i++
+    }
+  }
+  return fields
+}
+
+function normalizeLabel(s) {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+}
+
+function findSkillByLabel(label, selId) {
+  const target = normalizeLabel(label)
+  const sel = document.getElementById(selId)
+  // 1re passe : correspondance exacte sur le label affiché
+  for (const opt of sel.options) {
+    if (normalizeLabel(opt.textContent) === target) return opt.value
+  }
+  // 2e passe : correspondance sur l'ID normalisé (ARMES_LOURDES → "armes lourdes")
+  for (const opt of sel.options) {
+    if (opt.value.toLowerCase().replace(/_/g, ' ').trim() === target) return opt.value
+  }
+  return null
+}
+
+function parseTSV() {
+  const raw = document.getElementById('tsvInput').value
+  if (!raw.trim()) return
+
+  const fields = parseTSVRow(raw)
+  const toFill = {}
+  const orangeList = []
+
+  // Vider les multi-selects avant remplissage
+  setSelectedOptions('skillsSelect', [])
+  setSelectedOptions('skillAssocSelect', [])
+
+  for (const { col, field, conv } of COLUMN_MAP) {
+    const rawVal = (fields[col] || '').trim()
+
+    if (field === '_damage') {
+      const { value, orange } = conv(rawVal)
+      Object.assign(toFill, value)
+      if (orange) orangeList.push('dommages')
+      continue
+    }
+
+    if (field === '_skills') {
+      if (rawVal && !NULL_VALUES.has(rawVal)) {
+        orangeList.push(`compétences requises col.9 "${rawVal}" — sélection manuelle`)
+      }
+      continue
+    }
+
+    if (field === '_skill_assoc') {
+      if (rawVal && !NULL_VALUES.has(rawVal)) {
+        const id = findSkillByLabel(rawVal, 'skillAssocSelect')
+        if (id) { setSelectedOptions('skillAssocSelect', [id]) }
+        else    { orangeList.push(`compétence associée "${rawVal}" — non trouvée`) }
+      }
+      continue
+    }
+
+    const { value, orange } = conv(rawVal)
+    if (orange) orangeList.push(`${field} ("${rawVal}")`)
+    if (value !== null && value !== undefined) toFill[field] = value
+  }
+
+  fillForm(toFill)
+
+  const input = document.getElementById('tsvInput')
+  const fb    = document.getElementById('tsvFeedback')
+  if (orangeList.length === 0) {
+    input.style.borderColor = '#5cb85c'
+    fb.style.color = '#1a6b1a'
+    fb.textContent = '✔ Parsing OK — vérifier le formulaire avant de soumettre'
+  } else {
+    input.style.borderColor = '#f0ad4e'
+    fb.style.color = '#7a5800'
+    fb.textContent = '⚠ ' + orangeList.join(' · ') + ' — vérification manuelle requise'
+  }
 }
 
 function fillForm(raw) {
@@ -577,8 +687,7 @@ function fillForm(raw) {
   let filled = 0
 
   for (const [rawKey, val] of Object.entries(raw)) {
-    const fieldName = ALIASES[rawKey] ?? rawKey
-    const el = form.elements[fieldName]
+    const el = form.elements[rawKey]
     if (!el) continue
 
     if (el.type === 'checkbox') {
@@ -591,31 +700,6 @@ function fillForm(raw) {
   return filled
 }
 
-function parseYaml() {
-  const input = document.getElementById('yamlInput').value.trim()
-  const fb = document.getElementById('yamlFeedback')
-
-  if (!input) { fb.textContent = ''; return }
-
-  let data
-  try {
-    data = jsyaml.load(input)
-  } catch (e) {
-    fb.style.color = '#9b1c1c'
-    fb.textContent = '⚠ Erreur YAML : ' + e.message
-    return
-  }
-
-  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-    fb.style.color = '#9b1c1c'
-    fb.textContent = '⚠ Format invalide — attendu : {clé: valeur, …}'
-    return
-  }
-
-  const filled = fillForm(data)
-  fb.style.color = '#1a6b1a'
-  fb.textContent = `✔ ${filled} champ(s) rempli(s)`
-}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -689,7 +773,10 @@ async function loadItems() {
           <td><strong>${esc(it.name)}</strong></td>
           <td><span class="nt-badge">${NT[it.tech_level] || it.tech_level}</span></td>
           <td>${esc(it.rarity)}</td>
-          <td><button class="btn-del" data-id="${it.id}" data-name="${esc(it.name)}">✕</button></td>
+          <td>
+            <button class="btn-edit" data-id="${it.id}" title="Éditer">✎</button>
+            <button class="btn-del" data-id="${it.id}" data-name="${esc(it.name)}" title="Supprimer">✕</button>
+          </td>
         </tr>
       `).join('')
     }
@@ -724,6 +811,70 @@ async function deleteItem(id, name) {
   }
 }
 
+// ── État édition ─────────────────────────────────────────────────────────────
+
+let editingId   = null
+let editingName = ''
+
+function setSelectedOptions(selId, selectedIds) {
+  const sel = document.getElementById(selId)
+  for (const opt of sel.options) {
+    opt.selected = selectedIds.includes(opt.value)
+  }
+}
+
+function resetForm() {
+  const form = document.getElementById('equipForm')
+  form.reset()
+  form.rarity.value = '20(20)'
+  ;['skillsSelect', 'skillAssocSelect', 'ammoCompatSelect'].forEach(id => {
+    ;[...document.getElementById(id).options].forEach(o => o.selected = false)
+  })
+  const tsvInput = document.getElementById('tsvInput')
+  tsvInput.value = ''
+  tsvInput.style.borderColor = ''
+  document.getElementById('tsvFeedback').textContent = ''
+}
+
+function updateEditMode() {
+  const banner  = document.getElementById('editBanner')
+  const btnSubmit = document.getElementById('btnSubmit')
+  if (editingId) {
+    banner.innerHTML = `<div class="edit-banner">✏ Édition : <strong>${esc(editingName)}</strong><button type="button" onclick="cancelEdit()">✕ Annuler</button></div>`
+    btnSubmit.textContent = '💾 Enregistrer les modifications'
+  } else {
+    banner.innerHTML = ''
+    btnSubmit.textContent = '✚ Créer l\'item'
+  }
+}
+
+function cancelEdit() {
+  editingId   = null
+  editingName = ''
+  resetForm()
+  updateEditMode()
+}
+
+async function startEdit(id) {
+  try {
+    const data = await apiFetch('/api/equipment/' + id)
+    const item = data.item
+    editingId   = id
+    editingName = item.name
+
+    resetForm()
+    fillForm(item)
+    setSelectedOptions('skillsSelect',    item.skills      || [])
+    setSelectedOptions('skillAssocSelect', item.skill_assoc || [])
+    setSelectedOptions('ammoCompatSelect', item.ammo_compat || [])
+
+    updateEditMode()
+    document.getElementById('editBanner').scrollIntoView({ behavior: 'smooth', block: 'start' })
+  } catch (e) {
+    feedback('Erreur chargement item : ' + e.message, true)
+  }
+}
+
 // ── Soumission formulaire ────────────────────────────────────────────────────
 
 document.getElementById('equipForm').addEventListener('submit', async (e) => {
@@ -751,38 +902,40 @@ document.getElementById('equipForm').addEventListener('submit', async (e) => {
   }
 
   try {
-    const data = await apiFetch('/api/equipment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    feedback(`✔ Item créé : "<strong>${esc(data.item.name)}</strong>" — ID: <code>${data.item.id}</code>`)
-    form.reset()
-    // Restaurer la valeur par défaut du champ rarity après reset
-    form.rarity.value = '20(20)'
+    if (editingId) {
+      const data = await apiFetch('/api/equipment/' + editingId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      feedback(`✔ Item modifié : "<strong>${esc(data.item.name)}</strong>"`)
+      cancelEdit()
+    } else {
+      const data = await apiFetch('/api/equipment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      feedback(`✔ Item créé : "<strong>${esc(data.item.name)}</strong>" — ID: <code>${data.item.id}</code>`)
+      resetForm()
+    }
     loadItems()
   } catch (e) {
-    feedback('Erreur création : ' + e.message, true)
+    feedback((editingId ? 'Erreur modification : ' : 'Erreur création : ') + e.message, true)
   }
 })
 
-document.getElementById('btnReset').addEventListener('click', () => {
-  document.getElementById('equipForm').reset()
-  document.getElementById('equipForm').rarity.value = '20(20)'
-  ;[...document.getElementById('skillsSelect').options].forEach(o => o.selected = false)
-  ;[...document.getElementById('skillAssocSelect').options].forEach(o => o.selected = false)
-  ;[...document.getElementById('ammoCompatSelect').options].forEach(o => o.selected = false)
-  document.getElementById('yamlInput').value = ''
-  document.getElementById('yamlFeedback').textContent = ''
-})
+document.getElementById('btnReset').addEventListener('click', cancelEdit)
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 // Bug A fix — délégation sur tbody : résiste aux remplacements innerHTML de loadItems()
 document.getElementById('itemsBody').addEventListener('click', e => {
-  const btn = e.target.closest('.btn-del')
-  if (!btn) return
-  deleteItem(btn.dataset.id, btn.dataset.name)
+  const editBtn = e.target.closest('.btn-edit')
+  if (editBtn) { startEdit(editBtn.dataset.id); return }
+
+  const delBtn = e.target.closest('.btn-del')
+  if (delBtn) { deleteItem(delBtn.dataset.id, delBtn.dataset.name) }
 })
 
 loadSkills()

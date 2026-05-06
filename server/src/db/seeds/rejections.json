@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Oxyma",
+    "errors": [
+      {
+        "field": "stat_init_mod",
+        "raw": "var.",
+        "reason": "doit être < 0"
+      }
+    ]
+  },
+  {
+    "name": "Poing Kryss",
+    "errors": [
+      {
+        "field": "stat_init_mod",
+        "raw": "1",
+        "reason": "doit être < 0"
+      }
+    ]
+  }
+]
