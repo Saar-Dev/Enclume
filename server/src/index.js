@@ -6,6 +6,8 @@ import { createServer } from 'http'
 import { Server } from 'socket.io'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import db from './db/knex.js'
 import getMinioClient, { BUCKET } from './lib/minio.js'
 import { errorHandler } from './middleware/errorHandler.js'
@@ -25,6 +27,9 @@ import charSheetRouter from './routes/character/char-sheet.js'
 import charRefRouter from './routes/character/ref.js'
 import entityBlueprintsRouter from './routes/entity-blueprints.js'
 import entitiesRouter from './routes/entities.js'
+import equipmentRouter from './routes/equipment.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const app = express()
 const httpServer = createServer(app)
@@ -43,6 +48,7 @@ app.set('io', io)
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }))
 app.use(express.json())
 app.use(cookieParser())
+app.use(express.static(path.join(__dirname, '..', 'public')))
 app.use('/api/textures', texturesRouter)
 app.use('/api/assets', assetsRouter)
 
@@ -67,6 +73,7 @@ app.use('/api/char-ref', charRefRouter)
 app.use('/api/entity-blueprints', entityBlueprintsRouter)
 app.use('/api/battlemaps/:id/entities', entitiesRouter)
 app.use('/api/entities', entitiesRouter)
+app.use('/api/equipment', equipmentRouter)
 
 // Socket.io
 initSocket(io)

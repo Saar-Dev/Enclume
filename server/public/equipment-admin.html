@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Équipements Polaris</title>
+  <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; background: #f0f2f5; color: #222; }
+
+    header { background: #1a1a2e; color: #d0c8ff; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 17px; font-weight: 600; }
+    header .sub { font-size: 12px; color: #9890cc; margin-left: auto; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+    #feedback { min-height: 36px; margin-bottom: 12px; }
+    .msg-ok  { background: #d4f7dc; border: 1px solid #5cb85c; padding: 10px 14px; border-radius: 6px; color: #1a6b1a; font-size: 13px; }
+    .msg-err { background: #fde8e8; border: 1px solid #d9534f; padding: 10px 14px; border-radius: 6px; color: #9b1c1c; font-size: 13px; }
+
+    /* Form */
+    form { display: flex; flex-direction: column; gap: 14px; }
+
+    fieldset {
+      border: 1px solid #ddd; border-radius: 8px; padding: 14px 16px 16px;
+      background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.06);
+    }
+    legend {
+      font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .8px;
+      padding: 0 8px; color: #6b5ce7;
+    }
+
+    .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin-top: 10px; }
+    .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 16px; margin-top: 10px; }
+    .g4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px 16px; margin-top: 10px; }
+    .span2 { grid-column: span 2; }
+    .span3 { grid-column: 1 / -1; }
+
+    .field { display: flex; flex-direction: column; gap: 3px; }
+    .field label { font-size: 12px; font-weight: 600; color: #444; user-select: none; }
+    .field label .req { color: #d9534f; font-weight: 700; }
+    .field .hint { font-size: 11px; color: #999; line-height: 1.3; }
+
+    input[type=text],
+    input[type=number],
+    select,
+    textarea {
+      width: 100%; padding: 5px 9px; border: 1px solid #ccc; border-radius: 4px;
+      font-size: 13px; font-family: inherit; background: #fff; color: #222;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: #6b5ce7; box-shadow: 0 0 0 2px rgba(107,92,231,.12);
+    }
+    input[type=text]:disabled, input[type=number]:disabled, select:disabled { background: #f8f8f8; color: #999; }
+    textarea { resize: vertical; min-height: 56px; }
+    select[multiple] { height: 110px; }
+
+    .cb-wrap { display: flex; align-items: center; gap: 7px; padding-top: 18px; }
+    .cb-wrap input[type=checkbox] { width: 15px; height: 15px; accent-color: #6b5ce7; cursor: pointer; }
+    .cb-wrap label { font-size: 13px; font-weight: 500; cursor: pointer; }
+
+    .form-actions { display: flex; gap: 10px; justify-content: flex-end; padding-top: 4px; }
+    .btn-primary {
+      background: #6b5ce7; color: #fff; border: none; padding: 9px 22px;
+      border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .btn-primary:hover { background: #5a4cd4; }
+    .btn-secondary {
+      background: #fff; color: #555; border: 1px solid #ccc; padding: 9px 18px;
+      border-radius: 6px; font-size: 14px; cursor: pointer;
+    }
+    .btn-secondary:hover { background: #f5f5f5; }
+
+    /* Separator + info band */
+    .info-band {
+      background: #fffbe6; border: 1px solid #ffe58f; border-radius: 6px;
+      padding: 8px 14px; font-size: 12px; color: #7a6500; line-height: 1.6;
+    }
+
+    /* Items table */
+    .section-title { font-size: 15px; font-weight: 600; margin: 28px 0 10px; color: #1a1a2e; }
+    .section-title span { font-size: 12px; font-weight: 400; color: #888; margin-left: 8px; }
+
+    .table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      background: #2d2d4e; color: #d0c8ff; font-size: 11px; text-transform: uppercase;
+      letter-spacing: .5px; padding: 9px 12px; text-align: left; white-space: nowrap;
+    }
+    td { padding: 7px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8f7ff; }
+    .nt-badge {
+      display: inline-block; background: #eee; border-radius: 3px;
+      padding: 1px 6px; font-size: 11px; font-weight: 600; color: #555;
+    }
+    .btn-del {
+      background: #fee; color: #c0392b; border: 1px solid #f5c6c6;
+      padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;
+    }
+    .btn-del:hover { background: #d9534f; color: #fff; }
+
+    .empty-row td { text-align: center; color: #bbb; padding: 24px; font-size: 13px; }
+
+    /* Preset catégories */
+    .preset-bar {
+      display: flex; align-items: center; gap: 10px;
+      background: #fff; border: 1px solid #ddd; border-radius: 8px;
+      padding: 10px 16px; margin-bottom: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,.06);
+    }
+    .preset-bar .preset-label { font-size: 12px; font-weight: 600; color: #444; white-space: nowrap; }
+    .preset-bar select { max-width: 320px; }
+
+    .fs-dim { opacity: 0.3; transition: opacity .2s; }
+    .fs-dim * { pointer-events: none; }
+    .fs-highlight { border: 2px solid #6b5ce7; }
+    .fs-highlight legend { color: #5a4cd4; }
+
+    /* Quick entry */
+    #quickEntry { border-color: #6b5ce7; background: #f8f7ff; }
+    #quickEntry legend { color: #5a4cd4; }
+    #yamlInput { font-family: 'Courier New', monospace; font-size: 13px; resize: vertical; min-height: 60px; }
+    #yamlFeedback { font-size: 12px; min-height: 18px; }
+    details summary { font-size: 11px; color: #888; cursor: pointer; margin-top: 8px; user-select: none; }
+    details summary:hover { color: #555; }
+    .alias-grid { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 11px; color: #666; line-height: 1.9; }
+    .alias-grid code { background: #ede9ff; border-radius: 3px; padding: 0 4px; font-size: 11px; color: #4a3ab8; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⚙ Admin Équipements Polaris</h1>
+  <span class="sub">Saisie manuelle V1 — Catalogue ref_equipment</span>
+</header>
+
+<main>
+  <div id="feedback"></div>
+
+  <div class="info-band">
+    <strong>Contraintes actives :</strong>
+    tech_level 1–7 &nbsp;·&nbsp;
+    min_str 3–20 ou vide &nbsp;·&nbsp;
+    init_mod &lt; 0 ou vide &nbsp;·&nbsp;
+    fire_mode : CC / RC / RL / CC/RC / CC/RL / RC/RL / CC/RC/RL / - &nbsp;·&nbsp;
+    linked_attr : FOR CON COO ADA PER INT VOL PRE &nbsp;·&nbsp;
+    malus_cat : S A B C D &nbsp;·&nbsp;
+    Attribut lié <em>exclusif</em> avec Compétences boostées
+  </div>
+
+  <div class="preset-bar">
+    <span class="preset-label">Type d'item :</span>
+    <select id="categoryPreset" onchange="applyPreset(this.value)">
+      <option value="">— Sélectionner pour guider la saisie (optionnel) —</option>
+      <option value="arme">Arme</option>
+      <option value="protection">Protection / Armure</option>
+      <option value="munition">Munition</option>
+      <option value="conteneur">Conteneur / Sac</option>
+      <option value="divers">Divers / Équipement</option>
+    </select>
+  </div>
+
+  <form id="equipForm">
+
+    <!-- ── SAISIE RAPIDE YAML ─────────────────────────────────── -->
+    <fieldset id="quickEntry">
+      <legend>Saisie rapide</legend>
+      <div class="field">
+        <textarea id="yamlInput" rows="3"
+          placeholder="{fam: Armes, cat: &quot;Armes légères&quot;, nom: &quot;Pistolet 9mm&quot;, nt: 3, prix: 1200, poids: 0.8, dis: &quot;20(20)&quot;, mode: RC, dmg: 2D6, choc: 1D6, portee: &quot;10/30/50/80&quot;, mun: 15, cout_mun: 400, cal: &quot;9mm Para&quot;}"></textarea>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
+        <div id="yamlFeedback"></div>
+        <button type="button" class="btn-primary" style="white-space:nowrap; padding:7px 18px;" onclick="parseYaml()">Parser →</button>
+      </div>
+      <details>
+        <summary>Aide — Toutes les clés disponibles</summary>
+        <div class="alias-grid">
+          <span><code>fam</code> famille</span>
+          <span><code>cat</code> catégorie</span>
+          <span><code>nom</code> nom</span>
+          <span><code>desc</code> description</span>
+          <span><code>nt</code> NT (1–7)</span>
+          <span><code>prix</code> prix</span>
+          <span><code>prix_mod</code> modif.prix</span>
+          <span><code>poids</code> poids (kg)</span>
+          <span><code>dis</code> rareté</span>
+          <span><code>fab</code> fabricant</span>
+          <span><code>nation</code> nation</span>
+          <span><code>niv_max</code> niv.max</span>
+          <span><code>bonus</code> bonus</span>
+          <span><code>dmg</code> dommage (H)</span>
+          <span><code>dmg_v-</code> dommage (V−)</span>
+          <span><code>dmg_v+</code> dommage (V+)</span>
+          <span><code>choc</code> choc</span>
+          <span><code>portee</code> portée</span>
+          <span><code>for_min</code> FOR min</span>
+          <span><code>init</code> init mod</span>
+          <span><code>mode</code> mode de tir</span>
+          <span><code>mun</code> mun. quantité</span>
+          <span><code>cout_mun</code> mun. coût</span>
+          <span><code>cal</code> calibre</span>
+          <span><code>attr</code> attribut lié</span>
+          <span><code>prot</code> protection</span>
+          <span><code>prot_mod</code> prot. modif</span>
+          <span><code>prot_choc</code> prot. choc</span>
+          <span><code>loc</code> localisation</span>
+          <span><code>malus</code> cat. malus</span>
+          <span><code>capa</code> contenance</span>
+          <span><code>etanche</code> étanche (true/false)</span>
+          <span><code>effets</code> effets munitions</span>
+          <span style="color:#aaa; font-style:italic">Les noms de champs DB complets sont aussi acceptés.</span>
+        </div>
+      </details>
+    </fieldset>
+
+    <!-- ── IDENTITÉ ─────────────────────────────────────────── -->
+    <fieldset>
+      <legend>Identité</legend>
+      <div class="g2">
+        <div class="field">
+          <label>Famille <span class="req">*</span></label>
+          <input type="text" name="family" required placeholder="ex: Armes, Protections, Munitions, Divers…">
+        </div>
+        <div class="field">
+          <label>Catégorie <span class="req">*</span></label>
+          <input type="text" name="category" required placeholder="ex: Armes légères, Armures lourdes…">
+        </div>
+        <div class="field">
+          <label>Nom <span class="req">*</span></label>
+          <input type="text" name="name" required placeholder="ex: Pistolet 9mm Kronfeld">
+        </div>
+        <div class="field">
+          <label>NT (Niveau Technologique) <span class="req">*</span></label>
+          <select name="tech_level" required>
+            <option value="">— choisir —</option>
+            <option value="1">I</option>
+            <option value="2">II</option>
+            <option value="3">III</option>
+            <option value="4">IV</option>
+            <option value="5">V</option>
+            <option value="6">VI</option>
+            <option value="7">VII</option>
+          </select>
+        </div>
+        <div class="field span2">
+          <label>Description</label>
+          <textarea name="description" rows="3" placeholder="Description complète (optionnel)"></textarea>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- ── PRIX & DISPONIBILITÉ ──────────────────────────────── -->
+    <fieldset>
+      <legend>Prix &amp; Disponibilité</legend>
+      <div class="g3">
+        <div class="field">
+          <label>Prix (créd.)</label>
+          <input type="number" name="price" min="0" placeholder="ex: 1200">
+          <span class="hint">Entier. Vide si prix uniquement formulaire.</span>
+        </div>
+        <div class="field">
+          <label>Modificateur prix</label>
+          <input type="text" name="price_modifier" placeholder="ex: x niv, x (gen x NT) x 2">
+          <span class="hint">Formule si prix variable. Max 50 car.</span>
+        </div>
+        <div class="field">
+          <label>Rareté <span class="req">*</span></label>
+          <input type="text" name="rarity" value="20(20)" required placeholder="ex: 20(20)">
+          <span class="hint">DIS(M.Noir). Négatif = rare/interdit. "Introuvable" valide.</span>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- ── GÉNÉRAL ───────────────────────────────────────────── -->
+    <fieldset>
+      <legend>Général</legend>
+      <div class="g4">
+        <div class="field">
+          <label>Poids (kg)</label>
+          <input type="number" name="weight" step="0.001" min="0" placeholder="ex: 0.800">
+          <span class="hint">Décimal, en kg</span>
+        </div>
+        <div class="field">
+          <label>Fabricant</label>
+          <input type="text" name="manufacturer" placeholder="ex: Kronfeld">
+          <span class="hint">Max 50 car.</span>
+        </div>
+        <div class="field">
+          <label>Nation / Faction</label>
+          <input type="text" name="nation" placeholder="ex: Veilleurs, Ligue rouge">
+          <span class="hint">Max 50 car.</span>
+        </div>
+        <div class="field">
+          <label>Niveau max</label>
+          <input type="number" name="max_level" min="1" placeholder="ex: 3">
+          <span class="hint">Pour items à niveaux. Vide sinon.</span>
+        </div>
+        <div class="field span2">
+          <label>Bonus</label>
+          <input type="text" name="bonus" placeholder="ex: +1 Perception (sur jets de surveillance)">
+          <span class="hint">Description courte du bonus conféré. Max 50 car.</span>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- ── OFFENSIF ───────────────────────────────────────────── -->
+    <fieldset id="fs-offensive">
+      <legend>Offensif</legend>
+      <div class="g4">
+        <div class="field">
+          <label>Dommage (H)</label>
+          <input type="text" name="damage_h" placeholder="ex: 2D6+2">
+        </div>
+        <div class="field">
+          <label>Dommage (V-)</label>
+          <input type="text" name="damage_v_low" placeholder="ex: 1D6">
+          <span class="hint">Zone blast basse</span>
+        </div>
+        <div class="field">
+          <label>Dommage (V+)</label>
+          <input type="text" name="damage_v_high" placeholder="ex: 3D6+4">
+          <span class="hint">Zone blast haute</span>
+        </div>
+        <div class="field">
+          <label>Choc</label>
+          <input type="text" name="shock" placeholder="ex: 1D6">
+        </div>
+        <div class="field span2">
+          <label>Portée</label>
+          <input type="text" name="range" placeholder="ex: 10/30/50/80 (100)">
+        </div>
+        <div class="field">
+          <label>FOR min requise</label>
+          <input type="number" name="min_str" min="3" max="20" placeholder="ex: 8">
+          <span class="hint">3 – 20. Vide si aucune.</span>
+        </div>
+        <div class="field">
+          <label>Modif. Initiative</label>
+          <input type="number" name="init_mod" max="-1" placeholder="ex: -2">
+          <span class="hint">Valeur négative uniquement.</span>
+        </div>
+        <div class="field">
+          <label>Mode de tir</label>
+          <select name="fire_mode">
+            <option value="">— aucun —</option>
+            <option value="CC">CC</option>
+            <option value="RC">RC</option>
+            <option value="RL">RL</option>
+            <option value="CC/RC">CC/RC</option>
+            <option value="CC/RL">CC/RL</option>
+            <option value="RC/RL">RC/RL</option>
+            <option value="CC/RC/RL">CC/RC/RL</option>
+            <option value="-">- (mêlée pure)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Mun. — Quantité chargeur</label>
+          <input type="text" name="ammo_count" placeholder="ex: 15, 30, 1">
+        </div>
+        <div class="field">
+          <label>Mun. — Coût ravitaillement</label>
+          <input type="text" name="ammo_cost" placeholder="ex: 400">
+        </div>
+        <div class="field">
+          <label>Calibre</label>
+          <input type="text" name="caliber" placeholder="ex: 9mm Para, 5.56 OTAN">
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- ── COMPÉTENCES & ATTRIBUT ─────────────────────────────── -->
+    <fieldset>
+      <legend>Compétences &amp; Attribut lié</legend>
+      <div class="g2">
+        <div class="field">
+          <label>Attribut lié</label>
+          <select name="linked_attr">
+            <option value="">— aucun —</option>
+            <option value="FOR">FOR — Force</option>
+            <option value="CON">CON — Constitution</option>
+            <option value="COO">COO — Coordination</option>
+            <option value="ADA">ADA — Adaptation</option>
+            <option value="PER">PER — Perception</option>
+            <option value="INT">INT — Intelligence</option>
+            <option value="VOL">VOL — Volonté</option>
+            <option value="PRE">PRE — Présence</option>
+          </select>
+          <span class="hint">⚠ Exclusif avec "Compétences boostées" — ne remplir que l'un ou l'autre.</span>
+        </div>
+        <div class="field" style="visibility:hidden"></div>
+        <div class="field">
+          <label>Compétences boostées / requises</label>
+          <select id="skillsSelect" multiple>
+            <option value="" disabled>Chargement…</option>
+          </select>
+          <span class="hint">Ctrl+clic pour sélection multiple. Exclusif avec Attribut lié.</span>
+        </div>
+        <div class="field">
+          <label>Compétence d'utilisation (skill_assoc)</label>
+          <select id="skillAssocSelect" multiple>
+            <option value="" disabled>Chargement…</option>
+          </select>
+          <span class="hint">Ctrl+clic pour sélection multiple. Compatible avec Attribut lié.</span>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- ── DÉFENSIF ───────────────────────────────────────────── -->
+    <fieldset id="fs-defensive">
+      <legend>Défensif</legend>
+      <div class="g4">
+        <div class="field">
+          <label>Protection</label>
+          <input type="number" name="protection" min="0" placeholder="ex: 3">
+        </div>
+        <div class="field">
+          <label>Modif. Protection</label>
+          <input type="text" name="protection_modifier" placeholder="ex: niv, +1/niv">
+          <span class="hint">Pour armures à niveaux. Max 50 car.</span>
+        </div>
+        <div class="field">
+          <label>Protection Choc</label>
+          <input type="number" name="protection_shock" min="0" placeholder="ex: 2">
+        </div>
+        <div class="field">
+          <label>Localisation</label>
+          <input type="text" name="location" placeholder="ex: T/C/B/J">
+          <span class="hint">T=Tête C=Corps B=Bras J=Jambes</span>
+        </div>
+        <div class="field">
+          <label>Catégorie de malus</label>
+          <select name="malus_cat">
+            <option value="">— aucune —</option>
+            <option value="S">S (0)</option>
+            <option value="A">A (−2)</option>
+            <option value="B">B (−3)</option>
+            <option value="C">C (−4)</option>
+            <option value="D">D (−6)</option>
+          </select>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- ── CONTENEUR ─────────────────────────────────────────── -->
+    <fieldset id="fs-container">
+      <legend>Conteneur</legend>
+      <div class="g4">
+        <div class="field">
+          <label>Contenance (unités)</label>
+          <input type="number" name="capacity" step="0.1" min="0" placeholder="ex: 10">
+          <span class="hint">Capacité en unités de charge</span>
+        </div>
+        <div class="field">
+          <div class="cb-wrap">
+            <input type="checkbox" name="waterproof" id="waterproof">
+            <label for="waterproof">Étanche (waterproof)</label>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- ── MUNITIONS ─────────────────────────────────────────── -->
+    <fieldset id="fs-ammo">
+      <legend>Munitions (remplir seulement si cet item EST une munition)</legend>
+      <div class="g2">
+        <div class="field span2">
+          <label>Effets spéciaux munitions</label>
+          <textarea name="ammo_effects" rows="3"
+            placeholder="ex: DMG=BASE+2D6;CHOC=SET(4D6)&#10;Laisser vide si munition standard."></textarea>
+        </div>
+        <div class="field span2">
+          <label>Armes compatibles</label>
+          <select id="ammoCompatSelect" multiple>
+            <option value="" disabled>Chargement des armes existantes…</option>
+          </select>
+          <span class="hint">Sélectionner les armes de la DB qui peuvent utiliser cette munition (Ctrl+clic). Laisser vide si aucune arme en DB encore.</span>
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="form-actions">
+      <button type="button" class="btn-secondary" id="btnReset">Réinitialiser</button>
+      <button type="submit" class="btn-primary">✚ Créer l'item</button>
+    </div>
+
+  </form>
+
+  <!-- ── LISTE ────────────────────────────────────────────────── -->
+  <div class="section-title">
+    Items existants <span id="countBadge">0 items</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Famille</th>
+          <th>Catégorie</th>
+          <th>Nom</th>
+          <th>NT</th>
+          <th>Rareté</th>
+          <th style="width:60px"></th>
+        </tr>
+      </thead>
+      <tbody id="itemsBody">
+        <tr class="empty-row"><td colspan="6">Aucun item en base.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const NT = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
+
+// ── Presets catégories ────────────────────────────────────────────────────────
+
+const PRESETS = {
+  arme:       { highlight: ['fs-offensive'], dim: ['fs-defensive', 'fs-container', 'fs-ammo'] },
+  protection: { highlight: ['fs-defensive'], dim: ['fs-offensive', 'fs-container', 'fs-ammo'] },
+  munition:   { highlight: ['fs-ammo'],      dim: ['fs-defensive', 'fs-container'] },
+  conteneur:  { highlight: ['fs-container'], dim: ['fs-offensive', 'fs-defensive', 'fs-ammo'] },
+  divers:     { highlight: [],               dim: [] },
+}
+const FS_ALL = ['fs-offensive', 'fs-defensive', 'fs-container', 'fs-ammo']
+
+function applyPreset(val) {
+  FS_ALL.forEach(id => document.getElementById(id).classList.remove('fs-dim', 'fs-highlight'))
+  const preset = PRESETS[val]
+  if (!preset) return
+  preset.highlight.forEach(id => document.getElementById(id).classList.add('fs-highlight'))
+  preset.dim.forEach(id => document.getElementById(id).classList.add('fs-dim'))
+}
+
+// ── Saisie rapide YAML ────────────────────────────────────────────────────────
+
+const ALIASES = {
+  fam:       'family',
+  cat:       'category',
+  nom:       'name',
+  desc:      'description',
+  nt:        'tech_level',
+  prix:      'price',
+  prix_mod:  'price_modifier',
+  poids:     'weight',
+  dis:       'rarity',
+  fab:       'manufacturer',
+  niv_max:   'max_level',
+  bonus:     'bonus',
+  nation:    'nation',
+  dmg:       'damage_h',
+  'dmg_v-':  'damage_v_low',
+  'dmg_v+':  'damage_v_high',
+  choc:      'shock',
+  portee:    'range',
+  for_min:   'min_str',
+  init:      'init_mod',
+  mode:      'fire_mode',
+  mun:       'ammo_count',
+  cout_mun:  'ammo_cost',
+  cal:       'caliber',
+  attr:      'linked_attr',
+  prot:      'protection',
+  prot_mod:  'protection_modifier',
+  prot_choc: 'protection_shock',
+  loc:       'location',
+  malus:     'malus_cat',
+  capa:      'capacity',
+  etanche:   'waterproof',
+  effets:    'ammo_effects',
+}
+
+function fillForm(raw) {
+  const form = document.getElementById('equipForm')
+  let filled = 0
+
+  for (const [rawKey, val] of Object.entries(raw)) {
+    const fieldName = ALIASES[rawKey] ?? rawKey
+    const el = form.elements[fieldName]
+    if (!el) continue
+
+    if (el.type === 'checkbox') {
+      el.checked = val === true || val === 'true'
+    } else {
+      el.value = (val === null || val === undefined) ? '' : String(val)
+    }
+    filled++
+  }
+  return filled
+}
+
+function parseYaml() {
+  const input = document.getElementById('yamlInput').value.trim()
+  const fb = document.getElementById('yamlFeedback')
+
+  if (!input) { fb.textContent = ''; return }
+
+  let data
+  try {
+    data = jsyaml.load(input)
+  } catch (e) {
+    fb.style.color = '#9b1c1c'
+    fb.textContent = '⚠ Erreur YAML : ' + e.message
+    return
+  }
+
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    fb.style.color = '#9b1c1c'
+    fb.textContent = '⚠ Format invalide — attendu : {clé: valeur, …}'
+    return
+  }
+
+  const filled = fillForm(data)
+  fb.style.color = '#1a6b1a'
+  fb.textContent = `✔ ${filled} champ(s) rempli(s)`
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+async function apiFetch(url, options = {}) {
+  const r = await fetch(url, { credentials: 'include', ...options })
+  if (r.status === 204) return null
+  const json = await r.json().catch(() => ({ error: { message: r.statusText } }))
+  if (!r.ok) throw new Error(json.error?.message || 'Erreur serveur ' + r.status)
+  return json
+}
+
+function feedback(msg, isErr = false) {
+  const el = document.getElementById('feedback')
+  el.innerHTML = `<div class="${isErr ? 'msg-err' : 'msg-ok'}">${msg}</div>`
+  clearTimeout(feedback._t)
+  feedback._t = setTimeout(() => { el.innerHTML = '' }, isErr ? 8000 : 5000)
+}
+
+// ── Chargement compétences ───────────────────────────────────────────────────
+
+async function loadSkills() {
+  try {
+    const data = await apiFetch('/api/equipment/ref/skills')
+    const grouped = {}
+    for (const s of data.skills) {
+      if (!grouped[s.family]) grouped[s.family] = []
+      grouped[s.family].push(s)
+    }
+
+    function populate(selId) {
+      const sel = document.getElementById(selId)
+      sel.innerHTML = ''
+      for (const [fam, items] of Object.entries(grouped)) {
+        const grp = document.createElement('optgroup')
+        grp.label = fam
+        for (const s of items) {
+          const o = document.createElement('option')
+          o.value = s.id
+          o.textContent = s.label || s.id
+          grp.appendChild(o)
+        }
+        sel.appendChild(grp)
+      }
+    }
+
+    populate('skillsSelect')
+    populate('skillAssocSelect')
+  } catch (e) {
+    console.warn('[Skills] Non chargées :', e.message)
+    document.getElementById('skillsSelect').innerHTML = '<option disabled>Erreur chargement — êtes-vous connecté(e) ?</option>'
+    document.getElementById('skillAssocSelect').innerHTML = '<option disabled>Erreur chargement</option>'
+  }
+}
+
+// ── Chargement liste items ───────────────────────────────────────────────────
+
+async function loadItems() {
+  try {
+    const data = await apiFetch('/api/equipment')
+    const items = data.items
+    document.getElementById('countBadge').textContent = items.length + ' item' + (items.length !== 1 ? 's' : '')
+
+    const tbody = document.getElementById('itemsBody')
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Aucun item en base.</td></tr>'
+    } else {
+      tbody.innerHTML = items.map(it => `
+        <tr>
+          <td>${esc(it.family)}</td>
+          <td>${esc(it.category)}</td>
+          <td><strong>${esc(it.name)}</strong></td>
+          <td><span class="nt-badge">${NT[it.tech_level] || it.tech_level}</span></td>
+          <td>${esc(it.rarity)}</td>
+          <td><button class="btn-del" data-id="${it.id}" data-name="${esc(it.name)}">✕</button></td>
+        </tr>
+      `).join('')
+    }
+
+    // Mise à jour du select armes compatibles
+    const ammoSel = document.getElementById('ammoCompatSelect')
+    ammoSel.innerHTML = items.length === 0
+      ? '<option disabled>Aucune arme en base pour l\'instant</option>'
+      : items.map(it =>
+          `<option value="${it.id}">[NT${NT[it.tech_level] || it.tech_level}] ${esc(it.name)} — ${esc(it.family)}</option>`
+        ).join('')
+  } catch (e) {
+    feedback('Erreur chargement liste : ' + e.message, true)
+  }
+}
+
+function esc(s) {
+  if (!s) return ''
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
+// ── Suppression ──────────────────────────────────────────────────────────────
+
+async function deleteItem(id, name) {
+  if (!confirm(`Supprimer "${name}" ?\n(Les données de junction cascaderont.)`) ) return
+  try {
+    await apiFetch('/api/equipment/' + id, { method: 'DELETE' })
+    feedback(`"${name}" supprimé.`)
+    loadItems()
+  } catch (e) {
+    feedback('Erreur suppression : ' + e.message, true)
+  }
+}
+
+// ── Soumission formulaire ────────────────────────────────────────────────────
+
+document.getElementById('equipForm').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const form = e.target
+  const fd = new FormData(form)
+  const body = {}
+
+  for (const [k, v] of fd.entries()) {
+    body[k] = v.trim() === '' ? null : v.trim()
+  }
+
+  // Champs multi-select (non capturés par FormData)
+  body.skills     = [...document.getElementById('skillsSelect').selectedOptions].map(o => o.value)
+  body.skill_assoc = [...document.getElementById('skillAssocSelect').selectedOptions].map(o => o.value)
+  body.ammo_compat = [...document.getElementById('ammoCompatSelect').selectedOptions].map(o => o.value)
+
+  // Checkbox waterproof — null si non coché (non-conteneur), true si coché
+  body.waterproof = form.waterproof.checked ? true : null
+
+  // Validation côté client : exclusivité attribut / compétences
+  if (body.linked_attr && body.skills.length > 0) {
+    feedback('⚠ Attribut lié ET Compétences boostées sont renseignés — choisir l\'un ou l\'autre.', true)
+    return
+  }
+
+  try {
+    const data = await apiFetch('/api/equipment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    feedback(`✔ Item créé : "<strong>${esc(data.item.name)}</strong>" — ID: <code>${data.item.id}</code>`)
+    form.reset()
+    // Restaurer la valeur par défaut du champ rarity après reset
+    form.rarity.value = '20(20)'
+    loadItems()
+  } catch (e) {
+    feedback('Erreur création : ' + e.message, true)
+  }
+})
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  document.getElementById('equipForm').reset()
+  document.getElementById('equipForm').rarity.value = '20(20)'
+  ;[...document.getElementById('skillsSelect').options].forEach(o => o.selected = false)
+  ;[...document.getElementById('skillAssocSelect').options].forEach(o => o.selected = false)
+  ;[...document.getElementById('ammoCompatSelect').options].forEach(o => o.selected = false)
+  document.getElementById('yamlInput').value = ''
+  document.getElementById('yamlFeedback').textContent = ''
+})
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+
+// Bug A fix — délégation sur tbody : résiste aux remplacements innerHTML de loadItems()
+document.getElementById('itemsBody').addEventListener('click', e => {
+  const btn = e.target.closest('.btn-del')
+  if (!btn) return
+  deleteItem(btn.dataset.id, btn.dataset.name)
+})
+
+loadSkills()
+loadItems()
+</script>
+</body>
+</html>
