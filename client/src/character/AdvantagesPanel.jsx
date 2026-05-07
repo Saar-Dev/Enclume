@@ -4,30 +4,32 @@
  * Monté dans CharacterSheet.jsx en Bloc 6, après les compétences.
  *
  * Props :
- *   characterId        — UUID du character Enclume
- *   charAdvantages     — lignes char_advantages (état géré par CharacterSheet)
- *   onAdvantagesChange — callback(newList) — met à jour l'état dans CharacterSheet
- *                        → déclenche aussi le recalcul de visibilité dans SkillsPanel
- *   canEdit            — booléen (isGm || isOwner)
- *   onSaved            — callback après opération réussie (feedback ✓ CharacterWindow)
+ *   characterId          — UUID du character Enclume
+ *   charAdvantages       — lignes char_advantages (état géré par CharacterSheet)
+ *   onAdvantagesChange   — callback(newList) — met à jour l'état dans CharacterSheet
+ *                          → déclenche aussi le recalcul de visibilité dans SkillsPanel
+ *   canEdit              — booléen (isGm || isOwner)
+ *   onSaved              — callback après opération réussie (feedback ✓ CharacterWindow)
+ *   charSkills           — lignes char_skills (source de vérité — géré par CharacterSheet)
+ *   refSkillsPolaris     — compétences Polaris de référence (filtré depuis CharacterSheet.refSkills)
+ *   onSkillLearnedChange — callback(skill_id, is_learned) après toggle pouvoir Polaris
  *
  * Flux modale :
  *   Étape 1 : choix du type → [Mutations] [Force Polaris*] [Autres]
  *             * grisé si muta_029 absente de charAdvantages
  *   Étape 2A (Mutations)     : liste ref_mutations scrollable
- *   Étape 2B (Force Polaris) : liste POUVOIRS_POLARIS depuis refSkillsPolaris
+ *   Étape 2B (Force Polaris) : liste POUVOIRS_POLARIS depuis refSkillsPolaris (prop)
  *   Étape 2C (Autres)        : textarea 255 chars
  *
  * Affichage liste :
- *   Badge MUT (orange) | POL (bleu) | ATR (gris) + nom + level si >1 + bouton ×
+ *   Badge MUT (orange) | ATR (gris) + nom + level si >1 + bouton ×
  *   Ordre chronologique (created_at asc — garanti par l'API)
  *
  * Force Polaris :
- *   Sélectionner un pouvoir Polaris → upsert dans char_skills (is_learned=true)
+ *   Sélectionner un pouvoir Polaris → PUT /skills/toggle-learned (is_learned=true)
  *   Re-sélectionner un pouvoir déjà appris → is_learned=false (masquage)
- *   Stocké dans char_skills, pas dans char_advantages.
- *   Les entrées Force Polaris dans la liste UI sont construites depuis refSkillsPolaris
- *   filtrées sur les char_skills avec is_learned=true.
+ *   Stocké dans char_skills (source de vérité : CharacterSheet.charSkills).
+ *   refSkillsPolaris et charSkills reçus en props — aucun état local char_skills ici.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -44,13 +46,13 @@ export default function AdvantagesPanel({
   onAdvantagesChange,
   canEdit,
   onSaved,
+  charSkills,
+  refSkillsPolaris,
+  onSkillLearnedChange,
 }) {
 
   // ─── Données de référence ─────────────────────────────────────────────────
-  const [refMutations,     setRefMutations]     = useState([])
-  const [refSkillsPolaris, setRefSkillsPolaris] = useState([])
-  const [charSkillsPolaris, setCharSkillsPolaris] = useState([])
-  const [loadingRef, setLoadingRef] = useState(false)
+  const [refMutations, setRefMutations] = useState([])
 
   // ─── État modale ──────────────────────────────────────────────────────────
   const [modalOpen, setModalOpen] = useState(false)
@@ -77,37 +79,12 @@ export default function AdvantagesPanel({
     return () => { cancelled = true }
   }, [])
 
-  // ─── Charger skills Polaris + char_skills à l'ouverture de la modale ─────
-  // Chargé à la demande — uniquement quand la modale s'ouvre.
-  useEffect(() => {
-    if (!modalOpen) return
-    if (refSkillsPolaris.length > 0) return // déjà chargé
-
-    setLoadingRef(true)
-    Promise.all([
-      api.get('/char-ref/skills'),
-      api.get(`/char-sheet/${characterId}`),
-    ])
-      .then(([skillsRes, sheetRes]) => {
-        const polaris = (skillsRes.data.skills || []).filter(
-          s => s.parent === 'POUVOIRS_POLARIS'
-        )
-        setRefSkillsPolaris(polaris)
-        setCharSkillsPolaris(sheetRes.data.skills || [])
-      })
-      .catch(err => {
-        console.error('Erreur chargement ref modale :', err)
-        setError('Impossible de charger les données')
-      })
-      .finally(() => setLoadingRef(false))
-  }, [modalOpen, characterId, refSkillsPolaris.length])
-
-  // ─── Set des pouvoirs Polaris appris ──────────────────────────────────────
+  // ─── Set des pouvoirs Polaris appris (dérivé de charSkills prop) ─────────
   const learnedPolarisSet = useMemo(() => {
     const s = new Set()
-    charSkillsPolaris.forEach(cs => { if (cs.is_learned) s.add(cs.skill_id) })
+    charSkills.forEach(cs => { if (cs.is_learned) s.add(cs.skill_id) })
     return s
-  }, [charSkillsPolaris])
+  }, [charSkills])
 
   // ─── Ouvrir / fermer modale ───────────────────────────────────────────────
   const openModal = () => {
@@ -168,20 +145,11 @@ export default function AdvantagesPanel({
     setError(null)
     const isCurrentlyLearned = learnedPolarisSet.has(skillId)
     try {
-      await api.put(`/char-sheet/${characterId}/skills`, {
-        skills: [{ skill_id: skillId, is_learned: !isCurrentlyLearned }],
+      await api.put(`/char-sheet/${characterId}/skills/toggle-learned`, {
+        skill_id: skillId,
+        is_learned: !isCurrentlyLearned,
       })
-      // Mettre à jour le state local charSkillsPolaris
-      setCharSkillsPolaris(prev => {
-        const idx = prev.findIndex(cs => cs.skill_id === skillId)
-        if (idx >= 0) {
-          const next = [...prev]
-          next[idx] = { ...next[idx], is_learned: !isCurrentlyLearned }
-          return next
-        }
-        // Pas encore dans char_skills — ajouter
-        return [...prev, { skill_id: skillId, mastery: 0, is_learned: true }]
-      })
+      onSkillLearnedChange?.(skillId, !isCurrentlyLearned)
       onSaved?.()
     } catch (err) {
       setError('Erreur lors de la mise à jour')
@@ -189,7 +157,7 @@ export default function AdvantagesPanel({
     } finally {
       setSaving(false)
     }
-  }, [characterId, learnedPolarisSet, onSaved])
+  }, [characterId, learnedPolarisSet, onSaved, onSkillLearnedChange])
 
   // ─── Ajouter un texte libre ───────────────────────────────────────────────
   const handleAddOther = useCallback(async () => {
@@ -332,7 +300,7 @@ export default function AdvantagesPanel({
             {/* ── Étape 2A : liste mutations ───────────────────────────── */}
             {step === 'mutations' && (
               <div style={s.listStep}>
-                {loadingRef
+                {refMutations.length === 0
                   ? <div style={s.loadingMsg}>Chargement…</div>
                   : refMutations.map(mut => {
                       const existing = charAdvantages.find(
@@ -360,7 +328,7 @@ export default function AdvantagesPanel({
             {/* ── Étape 2B : pouvoirs Polaris ──────────────────────────── */}
             {step === 'polaris' && (
               <div style={s.listStep}>
-                {loadingRef
+                {refSkillsPolaris.length === 0
                   ? <div style={s.loadingMsg}>Chargement…</div>
                   : refSkillsPolaris.map(skill => {
                       const isLearned = learnedPolarisSet.has(skill.id)

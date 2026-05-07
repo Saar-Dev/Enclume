@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-07 Session 49
+> Dernière mise à jour : 2026-05-07 Session 50
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -45,7 +45,9 @@ Enclume/
 │   │   │   ├── sessionStore.js
 │   │   │   └── entityStore.js          # Modifié 34 — fetchBlueprints() ajouté
 │   │   ├── character/
-│   │   │   └── WoundManager.jsx        # NOUVEAU 49 — grille blessures autonome (POST/PUT/DELETE, promotion P49)
+│   │   │   ├── WoundManager.jsx        # NOUVEAU 49 — grille blessures autonome (POST/PUT/DELETE, promotion P49)
+│   │   │   ├── AdvantagesPanel.jsx     # Modifié 50 — rework lift-state-up, props charSkills/refSkillsPolaris/onSkillLearnedChange
+│   │   │   └── CharacterSheet.jsx      # Modifié 50 — refSkillsPolaris useMemo + handlePolarisToggled + 3 props AdvantagesPanel
 │   │   ├── locales/
 │   │   │   └── fr.json                 # Modifié 49 — +tabMateriel
 │   │   ├── lib/
@@ -168,6 +170,7 @@ Enclume/
 | 47_campaigns_cover_url | campaigns.cover_url TEXT nullable — illustration campagne |
 | 48_ref_equipment | ref_equipment (35 colonnes, 6 CHECK) + ref_equipment_skills + ref_equipment_skill_assoc + ref_equipment_ammo_compat |
 | 49_character_wounds | character_wounds (UUID PK, char_sheet_id FK CASCADE, location/severity CHECK, is_stabilized, idx) |
+| 50 | (pas de migration — PC22 fix pur client+serveur) |
 
 ---
 
@@ -390,4 +393,5 @@ difficulty_dc = modificateur signé (-20 à +10)
 | PE32 | DiceMesh useMemo deps [geoDef.type, color, dieType] |
 | PE33 | D10 Html overlay position=[0,0,0] — ne pas déplacer |
 | P49 | Promotion blessures : si promoted===true → GET /wounds complet — ne jamais ajouter localement |
+| P50 | toggle Polaris : ne jamais dupliquer charSkills dans un sous-composant — lift state up obligatoire |
 | PEF1-PEF6 | voir SYSTEME.md section 6 |

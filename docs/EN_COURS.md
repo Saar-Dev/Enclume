@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-07 Session 49
+> Dernière mise à jour : 2026-05-07 Session 50
 
 ---
 
@@ -36,6 +36,7 @@ Travaux effectués en session 48 :
 - Junction tables skills : enrichissement manuel en cours
 
 ### Chantier 11 sprint 1 — Module Blessures ✅ (session 49)
+### PC22 — Fix 403 toggle is_learned MUTATION/POLARIS ✅ (session 50)
 
 Travaux effectués en session 49 :
 - `shared/woundConstants.js` — source de vérité partagée (LOCATIONS, SEVERITIES, MAX_COUNTS, PENALTIES) ✅
@@ -48,10 +49,6 @@ Travaux effectués en session 49 :
 ---
 
 ## Prochaines tâches
-
-### PC22 — Fix 403 toggle is_learned (MUTATION/POLARIS)
-Fichiers : `server/src/routes/character/char-sheet.js`, `AdvantagesPanel.jsx`.
-Fix : route dédiée owner+GM pour `is_learned` sur compétences MUTATION/POLARIS.
 
 ### Chantier 10 sprint 2 — char_inventory (à planifier)
 Voir PLAN_chantier10.md pour la spécification complète.

@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-05-07 Session 49
+> Dernière mise à jour : 2026-05-07 Session 50
 
 ---
 
@@ -73,21 +73,18 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 49 (2026-05-07)
+## État actuel — Session 50 (2026-05-07)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **49 migrations stables** — prochaine : **50**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1 ✅ / Chantier 11 sprint 1 ✅
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1 ✅ / Chantier 11 sprint 1 ✅ / PC22 ✅
 
-**Chantier 11 sprint 1 livré (session 49) :**
-- Migration 49 : `character_wounds` (UUID PK, FK CASCADE, CHECK constraints, index)
-- `shared/woundConstants.js` — source de vérité partagée (LOCATIONS, SEVERITIES, MAX_COUNTS, PENALTIES)
-- `char-sheet.js` — refactorisé avec `router.param` + 4 routes blessures + broadcasts WS
-- `WoundManager.jsx` — grille fixe, promotion automatique transparente, badge `!`, malus
-- Onglet "Matériel" dans CharacterWindow
+**PC22 livré (session 50) :**
+- `char-sheet.js` — route `PUT /:characterId/skills/toggle-learned` (owner+GM, guard `parent !== 'POUVOIRS_POLARIS'`, UPSERT préserve mastery)
+- `AdvantagesPanel.jsx` — rework lift-state-up : suppression états locaux charSkillsPolaris/refSkillsPolaris/loadingRef + useEffect redondant, ajout props charSkills/refSkillsPolaris/onSkillLearnedChange
+- `CharacterSheet.jsx` — propriétaire unique charSkills, refSkillsPolaris useMemo, handlePolarisToggled, 3 props vers AdvantagesPanel
 
 **Prochains chantiers (à décider avec Saar) :**
-- PC22 — Fix 403 toggle is_learned MUTATION/POLARIS (`char-sheet.js`, `AdvantagesPanel.jsx`)
 - Chantier 10 sprint 2 — `char_inventory` (prérequis : ref_equipment peuplée ✅)
 - Chantier 11 suite — intégration `calcWoundPenalty` dans les jets Polaris
 
@@ -153,6 +150,10 @@ Ne pas tenter de calculer les UVs kite en code pur. V1 = Html overlay `position=
 **P49 — Promotion blessures : rechargement complet obligatoire**
 Si `res.data.promoted === true`, le serveur a supprimé toute la ligne source.
 Toujours `GET /wounds` complet — jamais `setWounds(prev => [...prev, wound])` sur une promotion.
+
+**P50 — toggle Polaris : ne jamais dupliquer charSkills dans un sous-composant**
+Tout sous-composant qui lit ET modifie `charSkills` doit recevoir la liste en props et émettre via callback.
+Stocker une copie locale → changements non propagés → SkillsPanel jamais mis à jour.
 
 **"La Forêt Maudite"**
 Pas de `default_battlemap_id` → ne jamais utiliser pour les tests.

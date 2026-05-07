@@ -4699,5 +4699,65 @@ Toujours recharger via GET /wounds si `promoted === true`.
 - Clic blessure → stabilisée (checkmark vert)
 - Clic stabilisée → guérison (suppression)
 - 3ème clic légère tête → promotion automatique transparente (2 légères → 1 moyenne)
+
+---
+
+## Session 50 — 2026-05-07
+
+### Contexte
+Reprise après session 49. Objectif : corriger PC22 (bug 403 toggle `is_learned` compétences MUTATION/POLARIS).
+
+### Problème initial — PC22
+`handleTogglePolaris` dans `AdvantagesPanel.jsx` appelait `PUT /char-sheet/:id/skills` (route GM-only) → 403 pour les joueurs possédant leur propre fiche.
+
+### Travail effectué
+
+**`server/src/routes/character/char-sheet.js` — route dédiée ajoutée (P46)**
+- Nouvelle route `PUT /:characterId/skills/toggle-learned` déclarée AVANT `PUT /:characterId/skills` (P46 — spécifique avant paramétrique)
+- Pas de guard `isGm` — `router.param` injecte déjà owner+GM
+- Guard métier : `refSkill.parent !== 'POUVOIRS_POLARIS'` → 400 (restreint aux pouvoirs Polaris uniquement)
+- UPSERT : `insert { mastery: 0, is_learned }` + `.onConflict().merge(['is_learned'])` — préserve la maîtrise existante
+- Retourne `{ skill }` depuis un SELECT post-upsert
+
+**`client/src/character/AdvantagesPanel.jsx` — rework architectural (lift state up)**
+Raison : le composant maintenait sa propre copie de `charSkillsPolaris` en état local, sans jamais remonter les changements vers `CharacterSheet`. Résultat : toggle visible dans le modal mais invisible dans SkillsPanel.
+
+- Supprimé : états locaux `refSkillsPolaris`, `charSkillsPolaris`, `loadingRef`
+- Supprimé : `useEffect` lazy-load qui faisait un `GET /char-sheet/:id` redondant
+- Ajouté en props : `charSkills`, `refSkillsPolaris`, `onSkillLearnedChange`
+- `learnedPolarisSet` useMemo — source : `charSkills` prop (plus `charSkillsPolaris` local)
+- `handleTogglePolaris` : appelle `onSkillLearnedChange?.(skillId, !isCurrentlyLearned)` au lieu de `setCharSkillsPolaris`
+- Render : `loadingRef` → checks `.length === 0` sur les props
+
+**`client/src/character/CharacterSheet.jsx` — propriétaire unique des données**
+- `refSkillsPolaris` useMemo filtré depuis `refSkills` existant (aucun appel réseau supplémentaire)
+- `handlePolarisToggled` useCallback (deps vides — utilise uniquement `setCharSkills` stable) :
+  - met à jour `charSkills` par merge si skill existante, sinon push `{ skill_id, mastery: 0, is_learned }`
+- 3 nouvelles props passées à `<AdvantagesPanel>` : `charSkills`, `refSkillsPolaris={refSkillsPolaris}`, `onSkillLearnedChange={handlePolarisToggled}`
+
+### Décision architecturale
+
+Problème racine : duplication de données — `AdvantagesPanel` avait sa propre copie de `charSkills` isolée du reste de la fiche.
+Solution : lift state up — `CharacterSheet` est le seul propriétaire de `charSkills`. `AdvantagesPanel` lit et émet, ne stocke pas.
+Bénéfice collatéral : suppression d'un appel réseau redondant `GET /char-sheet/:id`.
+
+### Piège documenté
+
+**P50 — toggle Polaris : ne jamais dupliquer charSkills dans un sous-composant**
+Tout sous-composant de la fiche qui lit ET modifie `charSkills` doit recevoir les données en props et émettre les changements via callback.
+Stocker une copie locale → changements non propagés vers SkillsPanel (learnedSet jamais mis à jour).
+
+### Fichiers modifiés
+| Fichier | Modification |
+|---|---|
+| `server/src/routes/character/char-sheet.js` | +route `PUT /:characterId/skills/toggle-learned` (avant PUT /:id/skills) |
+| `client/src/character/AdvantagesPanel.jsx` | rework — suppression états locaux, props charSkills/refSkillsPolaris/onSkillLearnedChange |
+| `client/src/character/CharacterSheet.jsx` | +refSkillsPolaris useMemo, +handlePolarisToggled, +3 props AdvantagesPanel |
+
+### Validation fonctionnelle ✅
+- SR sans erreur
+- Joueur : toggle pouvoir Polaris → plus de 403
+- Pouvoir togglé ON → apparaît dans SkillsPanel immédiatement
+- Pouvoir togglé OFF → disparaît de SkillsPanel immédiatement
 - Onglet "Matériel" visible et fonctionnel dans la fenêtre personnage
 - ⏳ Chantier 10 sprint 2 (`char_inventory`) — prérequis : ref_equipment peuplée ✅

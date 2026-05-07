@@ -13,7 +13,8 @@
  *   PUT    /api/char-sheet/:characterId/identity     — sauvegarde identité
  *   PUT    /api/char-sheet/:characterId/archetype    — sauvegarde archétype
  *   PUT    /api/char-sheet/:characterId/attributes   — sauvegarde attributs (bulk upsert)
- *   PUT    /api/char-sheet/:characterId/skills       — sauvegarde compétences (bulk upsert)
+ *   PUT    /api/char-sheet/:characterId/skills                      — sauvegarde compétences (bulk upsert)
+ *   PUT    /api/char-sheet/:characterId/skills/toggle-learned      — toggle is_learned pouvoir Polaris (owner ou GM)
  *   PUT    /api/char-sheet/:characterId/chc          — sauvegarde Chance
  *   PUT    /api/char-sheet/:characterId/xp           — modifie solde XP (GM uniquement)
  *   POST   /api/char-sheet/:characterId/skills/buy   — dépense XP pour augmenter une compétence
@@ -252,6 +253,46 @@ router.put('/:characterId/attributes', async (req, res, next) => {
       .select('*')
 
     res.json({ attributes: updated })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── PUT /api/char-sheet/:characterId/skills/toggle-learned ──────────────────
+// Toggle is_learned sur un pouvoir Polaris — owner ou GM.
+// Restreint aux compétences parent='POUVOIRS_POLARIS' pour ne pas contourner
+// le gate XP des compétences (X) ordinaires (qui passent par POST /skills/buy).
+router.put('/:characterId/skills/toggle-learned', async (req, res, next) => {
+  try {
+    const { skill_id, is_learned } = req.body
+    if (!skill_id || typeof skill_id !== 'string') {
+      throw new AppError(400, 'skill_id est requis')
+    }
+    if (typeof is_learned !== 'boolean') {
+      throw new AppError(400, 'is_learned doit être un booléen')
+    }
+
+    const refSkill = await db('ref_skills').where({ id: skill_id }).first()
+    if (!refSkill) throw new AppError(404, `Compétence introuvable : ${skill_id}`)
+    if (refSkill.parent !== 'POUVOIRS_POLARIS') {
+      throw new AppError(400, 'Cette route est réservée aux pouvoirs Polaris')
+    }
+
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId })
+      .first()
+    if (!sheet) throw new AppError(404, 'Sheet not found — create it first')
+
+    await db('char_skills')
+      .insert({ char_sheet_id: sheet.id, skill_id, mastery: 0, is_learned })
+      .onConflict(['char_sheet_id', 'skill_id'])
+      .merge(['is_learned'])
+
+    const skill = await db('char_skills')
+      .where({ char_sheet_id: sheet.id, skill_id })
+      .first()
+
+    res.json({ skill })
   } catch (err) {
     next(err)
   }

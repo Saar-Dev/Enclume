@@ -200,6 +200,11 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
   const secondary = useMemo(() => calcSecondary(naMap), [naMap])
 
+  const refSkillsPolaris = useMemo(
+    () => refSkills.filter(s => s.parent === 'POUVOIRS_POLARIS'),
+    [refSkills]
+  )
+
   // Cleanup timers debounce au démontage
   useEffect(() => {
     return () => {
@@ -363,6 +368,16 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     setXpAvailable(xp_available)
     onSaved?.()
   }, [onSaved])
+
+  const handlePolarisToggled = useCallback((skill_id, is_learned) => {
+    setCharSkills(prev => {
+      const existing = prev.find(s => s.skill_id === skill_id)
+      if (existing) {
+        return prev.map(s => s.skill_id === skill_id ? { ...s, is_learned } : s)
+      }
+      return [...prev, { skill_id, mastery: 0, is_learned }]
+    })
+  }, [])
 
   const canEdit = isGm || isOwner
 
@@ -757,6 +772,9 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           onAdvantagesChange={setCharAdvantages}
           canEdit={canEdit}
           onSaved={onSaved}
+          charSkills={charSkills}
+          refSkillsPolaris={refSkillsPolaris}
+          onSkillLearnedChange={handlePolarisToggled}
         />
       </div>
 
