@@ -7,6 +7,8 @@ import {
   calcAttributeAN,
   calcAttributeNA,
   getGenotypeModForAttr,
+  calcWoundPenalty,
+  calcEncumbrancePenalty,
   ATTR_LABELS,
 } from '../lib/charStats.js'
 import {
@@ -646,6 +648,7 @@ const initSocket = (io) => {
           const { rolls, total: diceRoll, formula: normalizedFormula, seed } = await parseDice('1d20')
 
           let mechanicalTotal = 0
+          let effectiveMalus = 0
           let formulaLabel = pending.skillId || pending.attributeId || '?'
 
           const sheet = pending.characterId
@@ -675,6 +678,34 @@ const initSocket = (io) => {
               mechanicalTotal = calcAttributeAN(attrs, pending.attributeId, genotypeRow)
               formulaLabel = ATTR_LABELS[pending.attributeId] || pending.attributeId
             }
+
+            // ── Malus effectif (blessures + encombrement) ──────────────────────
+            try {
+              const wounds = await db('character_wounds').where({ char_sheet_id: sheet.id })
+              const woundPenalty = calcWoundPenalty(wounds)
+
+              const forAttr = attrs.find(a => a.attr_id === 'FOR')
+              const forValue = (forAttr?.base_level ?? 7) + (forAttr?.pc_modifier ?? 0)
+
+              const invItems = await db('char_inventory')
+                .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+                .where({ 'char_inventory.character_id': pending.characterId })
+                .select('char_inventory.container', 'ref_equipment.weight as ref_weight', 'char_inventory.quantity')
+
+              const totalWeight = invItems.reduce((sum, item) => {
+                if (item.container === 'Coffre') return sum
+                if (item.ref_weight == null) return sum
+                return sum + item.ref_weight * item.quantity
+              }, 0)
+
+              const encumbrancePenalty = calcEncumbrancePenalty(totalWeight, forValue)
+              effectiveMalus = woundPenalty - encumbrancePenalty
+
+              if (effectiveMalus < 0) console.log(`[DBG] entity:action_resolve — malus actif ${effectiveMalus} pour character ${pending.characterId}`)
+            } catch (malusErr) {
+              console.warn('[WS] entity:action_resolve — calcul malus échoué, fallback 0:', malusErr.message)
+            }
+
           } else {
             console.warn(`[WS] entity:action_resolve — char_sheet introuvable pour character ${pending.characterId}, fallback total=0`)
             if (pending.skillId) formulaLabel = pending.skillId
@@ -688,7 +719,7 @@ const initSocket = (io) => {
           } catch (_) {}
 
           const totalDiffMod = pending.defaultDifficulty + gmModifier
-          const chancesDeReussite = mechanicalTotal + totalDiffMod
+          const chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
           const isSuccess = diceRoll <= chancesDeReussite
           const diffLabel = totalDiffMod >= 0 ? `+${totalDiffMod}` : `${totalDiffMod}`
 
@@ -708,6 +739,7 @@ const initSocket = (io) => {
             skillLabel: formulaLabel,
             mechanicalTotal,
             chancesDeReussite,
+            effectiveMalus,
             diffLabel,
             isSuccess,
           })

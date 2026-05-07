@@ -172,6 +172,8 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   const [xpAvailable, setXpAvailable] = useState(0)
   // Mode Progression — toggle activé par le joueur ou le GM
   const [progressionMode, setProgressionMode] = useState(false)
+  const [woundPenalty,       setWoundPenalty]       = useState(0)
+  const [encumbrancePenalty, setEncumbrancePenalty] = useState(0)
   // Debounce pour la saisie XP par le GM
   const xpDebounceTimer = useRef(null)
 
@@ -199,6 +201,23 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   )
 
   const secondary = useMemo(() => calcSecondary(naMap), [naMap])
+
+  const effectiveMalus = woundPenalty - encumbrancePenalty
+
+  const iniTooltip = useMemo(() => {
+    const malus = woundPenalty - encumbrancePenalty
+    const ini   = secondary.rea + malus
+    if (malus === 0) {
+      return `En terme de jeu, le score d'Initiative de base d'un personnage est tout simplement égal à son niveau de Réaction. Toutefois, divers éléments peuvent affecter ce score de base, et principalement les malus dus à un mauvais état de santé (Blessures, Fatigue, maladies) : ces modificateurs affectent le niveau de Réaction du personnage et donc son Initiative de base. (LdB p.213)`
+    }
+    const lines = [`REA base : ${secondary.rea}`]
+    if (woundPenalty < 0)       lines.push(`Malus blessures : ${woundPenalty}`)
+    if (encumbrancePenalty > 0) lines.push(`Malus encombrement : −${encumbrancePenalty}`)
+    lines.push(`Initiative effective : ${ini}`)
+    return lines.join('\n')
+  }, [woundPenalty, encumbrancePenalty, secondary.rea])
+
+  const iniValue = secondary.rea + effectiveMalus
 
   const refSkillsPolaris = useMemo(
     () => refSkills.filter(s => s.parent === 'POUVOIRS_POLARIS'),
@@ -292,6 +311,18 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           console.error('Erreur chargement advantages :', advErr)
         }
 
+        try {
+          const [woundsRes, invRes] = await Promise.all([
+            api.get(`/char-sheet/${characterId}/wounds`),
+            api.get(`/char-sheet/${characterId}/inventory`),
+          ])
+          if (!cancelled) {
+            setWoundPenalty(woundsRes.data.wound_penalty ?? 0)
+            setEncumbrancePenalty(invRes.data.ini_penalty ?? 0)
+          }
+        } catch (penaltyErr) {
+          console.error('Erreur fetch pénalités INI :', penaltyErr)
+        }
 
       } catch (err) {
         if (!cancelled) setError('Impossible de charger la fiche')
@@ -730,7 +761,12 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
         <div style={s.blockTitle}>Attributs Secondaires</div>
         <div style={s.secondaryGrid}>
           <SecondaryField label="Réaction"             value={secondary.rea} />
-          <SecondaryField label="Initiative"           value={secondary.initiative} />
+          <SecondaryField
+            label="Initiative"
+            value={iniValue}
+            tooltip={iniTooltip}
+            valueStyle={effectiveMalus < 0 ? { color: '#e05c5c' } : undefined}
+          />
           <SecondaryField label="Seuil Étourdissement" value={secondary.seuilEtour} />
           <SecondaryField label="Seuil Inconscience"   value={secondary.seuilIncons} />
           <SecondaryField label="Vitesse (marche)"     value={`${secondary.vitesseMarche} m/t`} />
@@ -794,11 +830,35 @@ function Field({ label, children, style }) {
   )
 }
 
-function SecondaryField({ label, value }) {
+function SecondaryField({ label, value, tooltip, valueStyle }) {
+  const ref = useRef(null)
+  const [tipPos, setTipPos] = useState(null)
+
+  const handleMouseEnter = () => {
+    if (!tooltip || !ref.current) return
+    const rect = ref.current.getBoundingClientRect()
+    setTipPos({ top: rect.top, left: rect.left + rect.width / 2 })
+  }
+
   return (
-    <div style={s.secondaryItem}>
-      <span style={s.secondaryValue}>{value}</span>
+    <div
+      ref={ref}
+      style={{ ...s.secondaryItem, cursor: tooltip ? 'help' : 'default' }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={() => setTipPos(null)}
+    >
+      <span style={{ ...s.secondaryValue, ...valueStyle }}>{value}</span>
       <span style={s.secondaryLabel}>{label}</span>
+      {tipPos && (
+        <div style={{
+          ...s.tooltip,
+          top: tipPos.top,
+          left: tipPos.left,
+          transform: 'translate(-50%, calc(-100% - 8px))',
+        }}>
+          {tooltip}
+        </div>
+      )}
     </div>
   )
 }
@@ -1072,5 +1132,20 @@ const s = {
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
     textAlign: 'center',
+  },
+  tooltip: {
+    position: 'fixed',
+    backgroundColor: '#0a0a14',
+    border: '1px solid #2a2a4e',
+    borderRadius: '4px',
+    padding: '8px 10px',
+    fontSize: '10px',
+    color: '#b0b0c8',
+    whiteSpace: 'pre-line',
+    width: '240px',
+    zIndex: 1000,
+    lineHeight: '1.6',
+    pointerEvents: 'none',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
   },
 }

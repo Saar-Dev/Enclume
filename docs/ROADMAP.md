@@ -117,6 +117,15 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 - `InventoryPanel.jsx` — affichage par container, encombrement, édition GM (catalogue 636 items), équipement slots
 - Reporté sprint 2 → chantiers futurs : transfert entre persos, WS listeners client, restriction sols→GM, split pile, UI armure
 
+| Sprint | Contenu | État |
+|---|---|---|
+| Sprint 3 | Intégration malus INI encombrement dans jets + affichage tooltip fiche | 🔲 session 51 |
+| Sprint 4 | Interface armure (grille zones T/C/B/J) + malus_cat dans jets Polaris | 🔲 |
+| Sprint 5 | Interface arme (stats dommages/portée sur item équipé) | 🔲 |
+| Sprint 6 | Mille-feuille protection (calcul par zone, résolution dommages) | 🔲 |
+| Sprint 7 | Transfert items + échange sols (WS bidirectionnel, double validation) | 🔲 |
+| — | Split pile, capacity sac, custom_props UI | 🔲 selon besoin |
+
 ### Chantier 11 — Module Blessures (Fiche personnage)
 
 **Architecture actée (session 49) :**

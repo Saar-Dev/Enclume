@@ -31,7 +31,7 @@ import { Router } from 'express'
 import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
-import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty } from '../../lib/charStats.js'
+import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty } from '../../lib/charStats.js'
 import { WS } from '../../../../shared/events.js'
 import {
   WOUND_LOCATIONS, WOUND_SEVERITIES, WOUND_MAX_COUNTS,
@@ -666,12 +666,12 @@ router.get('/:characterId/wounds', async (req, res, next) => {
   try {
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId }).first()
-    if (!sheet) return res.json({ wounds: [] })
+    if (!sheet) return res.json({ wounds: [], wound_penalty: 0 })
 
     const wounds = await db('character_wounds')
       .where({ char_sheet_id: sheet.id })
       .orderBy('created_at', 'asc')
-    res.json({ wounds })
+    res.json({ wounds, wound_penalty: calcWoundPenalty(wounds) })
   } catch (err) { next(err) }
 })
 

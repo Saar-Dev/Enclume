@@ -21,7 +21,10 @@
       "Bash(node --input-type=module -e \"import\\('./src/index.js'\\).then\\(\\(\\)=>setTimeout\\(\\(\\)=>process.exit\\(0\\),2000\\)\\)\")",
       "Bash(curl -s http://localhost:3001/api/health)",
       "Bash(node --input-type=module -e ' *)",
-      "Bash(powershell -Command \"Get-Content docs/JOURNAL2.md | Measure-Object -Line\")"
+      "Bash(powershell -Command \"Get-Content docs/JOURNAL2.md | Measure-Object -Line\")",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
