@@ -1,5 +1,5 @@
 # PLAN — Chantier 11 : Module Blessures
-**Version** : 2.3 — Bug promotion état client corrigé (2026-05-07)
+**Version** : 2.4 — Correction promotion serveur + architecture WoundManager autonome (2026-05-07)
 **Périmètre de cette session** : Étape 1 uniquement (blessures). Étapes 2–4 planifiées, non codées.
 
 ---
@@ -15,7 +15,7 @@
 | Calculs malus | Serveur uniquement — `charStats.js` fonctions pures |
 | Malus global blessures | **Pire blessure toutes localisations confondues** (pas de cumul, confirmé LdB) |
 | Constantes blessures | `shared/woundConstants.js` — importé serveur ET client (source unique de vérité) |
-| State client | Local dans `CharacterSheet.jsx` — pattern identique à `charAdvantages` |
+| State client | **Interne à `WoundManager.jsx`** — state + useEffect fetch autonomes (pas de props wounds/onWoundsChange) |
 | Store Zustand | **Aucun** — pas de store dédié blessures |
 | CSS | **Inline styles** — cohérent avec toute la fiche |
 | WS room | `campaignId` via `req.character.campaign_id` — room existante |
@@ -114,7 +114,7 @@ Dé-stabilisation : impossible en un clic. Le GM clique stabilisée → guérie 
 | `server/src/routes/character/char-sheet.js` | Refactor ownership → `router.param` + ajout `router.use(requireAuth)` + 4 routes wounds |
 | `server/src/lib/charStats.js` | +`calcWoundPenalty(wounds)` (importe les constantes depuis `shared/`) |
 | `shared/events.js` | +`WOUND_ADDED`, `WOUND_UPDATED`, `WOUND_REMOVED` dans l'objet `WS` |
-| `client/src/character/CharacterSheet.jsx` | +state `wounds`, +chargement initial, +import WoundManager, +bloc UI |
+| `client/src/character/CharacterWindow.jsx` | +onglet "Matériel" + montage `WoundManager` dans ce tab |
 
 ---
 
@@ -287,21 +287,28 @@ async function resolveWoundInsertion(trx, char_sheet_id, location, severity) {
     .count('* as count')
     .first()
 
-  if (parseInt(count) < maxCount) {
-    const [wound] = await trx('character_wounds')
-      .insert({ char_sheet_id, location, severity, is_stabilized: false })
-      .returning('*')
-    return { wound, promoted: false }
+  const currentCount = parseInt(count)
+  const next = nextSeverity(severity)
+
+  // Promotion automatique : ajouter cette blessure REMPLIRAIT la ligne ET une gravité supérieure existe.
+  // Déclenché au Nème clic (celui qui remplirait) — jamais après une ligne déjà pleine.
+  // Correction v2.4 : l'ancienne logique (promote si ligne pleine) était impossible à déclencher
+  // car une ligne pleine n'a plus de case vide à cliquer.
+  if (next && currentCount >= maxCount - 1) {
+    await trx('character_wounds').where({ char_sheet_id, location, severity }).del()
+    const result = await resolveWoundInsertion(trx, char_sheet_id, location, next)
+    return { ...result, promoted: true }
   }
 
-  const next = nextSeverity(severity)
-  if (!next) throw new AppError(400, 'Ligne mortelle pleine — gestion manuelle requise')
+  // Ligne mortelle pleine — refus explicite
+  if (currentCount >= maxCount) {
+    throw new AppError(400, 'Ligne pleine — gravité maximale atteinte pour cette localisation')
+  }
 
-  // Supprimer toutes (y compris stabilisées — comportement LdB confirmé)
-  await trx('character_wounds').where({ char_sheet_id, location, severity }).del()
-
-  const result = await resolveWoundInsertion(trx, char_sheet_id, location, next)
-  return { ...result, promoted: true }
+  const [wound] = await trx('character_wounds')
+    .insert({ char_sheet_id, location, severity, is_stabilized: false })
+    .returning('*')
+  return { wound, promoted: false }
 }
 ```
 
@@ -426,73 +433,79 @@ export function calcWoundPenalty(wounds) {
 
 ---
 
-### 6. `CharacterSheet.jsx` — modifications
+### 6. `CharacterWindow.jsx` — modifications
 
-#### Imports à ajouter
+WoundManager n'est PAS dans `CharacterSheet.jsx`. Il est monté dans un onglet dédié de `CharacterWindow.jsx`.
 
-```javascript
-import WoundManager from './WoundManager.jsx'
-```
-
-#### State + chargement (dans `useEffect load()`)
+#### Onglet ajouté
 
 ```javascript
-const [wounds, setWounds] = useState([])
-
-// Dans useEffect, après le chargement des advantages :
-try {
-  const woundsRes = await api.get(`/char-sheet/${characterId}/wounds`)
-  if (!cancelled) setWounds(woundsRes.data.wounds || [])
-} catch (wErr) {
-  console.error('Erreur chargement wounds :', wErr)
-}
+// Tableau des onglets : ['sheet', 'materiel', 'bio', 'settings']
+// Label : {tab === 'materiel' && t('character.tabMateriel')}
 ```
 
-#### Bloc JSX (après Bloc 6 Avantages)
+#### Bloc JSX dans le contenu de l'onglet
 
 ```jsx
-{/* ══ BLOC 7 — BLESSURES ═══════════════════════════════════════════ */}
-<div style={s.block}>
-  <div style={s.blockTitle}>Blessures</div>
-  <WoundManager
-    wounds={wounds}
-    onWoundsChange={setWounds}
-    characterId={characterId}
-    canEdit={canEdit}
-  />
-</div>
+{activeTab === 'materiel' && (
+  <WoundManager characterId={character.id} canEdit={isGm || isOwner} />
+)}
 ```
+
+`WoundManager` gère son propre state (`useState([])`) et fetch (`useEffect` GET /wounds au montage). Aucun state blessures dans `CharacterWindow` ni dans `CharacterSheet`.
 
 ---
 
 ### 7. `WoundManager.jsx`
 
-Props : `{ wounds, onWoundsChange, characterId, canEdit }`
+Props : `{ characterId, canEdit }` — **autonome, aucun prop wounds ni onWoundsChange**
+
+```javascript
+const [wounds,          setWounds]          = useState([])
+const [lastAddedWoundId, setLastAddedWoundId] = useState(null)
+const [loading,         setLoading]         = useState(true)
+
+useEffect(() => {
+  let cancelled = false
+  setLoading(true)
+  api.get(`/char-sheet/${characterId}/wounds`)
+    .then(res => { if (!cancelled) { setWounds(res.data.wounds || []); setLoading(false) } })
+    .catch(err => { console.error('Erreur chargement wounds :', err); if (!cancelled) setLoading(false) })
+  return () => { cancelled = true }
+}, [characterId])
+```
 
 Imports nécessaires :
 ```javascript
 import { WOUND_LOCATIONS, WOUND_SEVERITIES, WOUND_MAX_COUNTS, WOUND_PENALTIES } from '../../../shared/woundConstants.js'
-// Confirmé : même pattern que client/src/components/ → ../../../shared/events.js (Vite OK)
 import api from '../lib/api.js'
 ```
 
 **Logique handleBoxClick :**
 ```
 case vide           → POST /char-sheet/:characterId/wounds { location, severity }
-                        si response.data.promoted === true :
-                          // Promotion : des blessures ont été supprimées côté serveur.
-                          // onWoundsChange([...wounds, wound]) serait incohérent.
-                          GET /char-sheet/:characterId/wounds → onWoundsChange(fresh)
+                        si response.data.promoted === true (P49) :
+                          // Le serveur a supprimé des blessures. Rechargement complet obligatoire.
+                          GET /char-sheet/:characterId/wounds → setWounds(fresh)
                         sinon :
-                          onWoundsChange([...wounds, response.data.wound])
+                          setWounds(prev => [...prev, response.data.wound])
                         dans tous les cas, si response.data.shock_test_required :
                           setLastAddedWoundId(response.data.wound.id)
+                        sinon :
+                          setLastAddedWoundId(null)
 
 blessure normale    → PUT  /char-sheet/:characterId/wounds/:id/stabilize
-                      → onWoundsChange(wounds.map(w => w.id === id ? response.data.wound : w))
+                      → setWounds(prev => prev.map(w => w.id === id ? response.data.wound : w))
 
 blessure stabilisée → DELETE /char-sheet/:characterId/wounds/:id
-                      → onWoundsChange(wounds.filter(w => w.id !== id))
+                      → setWounds(prev => prev.filter(w => w.id !== id))
+```
+
+**Cases fixes — jamais de slot supplémentaire :**
+```javascript
+// Toujours exactement maxCount cases. La promotion est transparente côté serveur.
+{Array.from({ length: maxCount }).map((_, i) => { ... })}
+// Aucun slot overflow. Aucune case ajoutée dynamiquement.
 ```
 
 **Malus affiché (client, affichage uniquement) :**
@@ -550,7 +563,7 @@ Même architecture. Protection par localisation — interaction future avec seui
 | Code | Description |
 |---|---|
 | P46 | Route `stabilize` déclarée AVANT `DELETE /:woundId` (spécifique avant paramétrique) |
-| P47 | Promotion côté client : si `response.data.promoted === true`, rechargement complet (`GET /wounds`) obligatoire. Sinon l'état client contient des blessures supprimées côté serveur. |
+| P49 | Promotion côté client : si `response.data.promoted === true`, rechargement complet (`GET /wounds`) obligatoire. Ne jamais `setWounds(prev => [...prev, wound])` sur une promotion — des blessures supprimées côté serveur resteraient en state. |
 | P13 | `updated_at = db.fn.now()` dans PUT stabilize ✅ présent |
 | — | `router.param` + `router.use(requireAuth)` : l'ordre déclaratif importe. `router.use(requireAuth)` EN PREMIER, puis `router.param`. |
 | — | Lire migration 48 avant de coder migration 49 — vérifier syntaxe CHECK exacte |
