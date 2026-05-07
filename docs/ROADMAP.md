@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-05-02 Session 45
+> Dernière mise à jour : 2026-05-07 Session 49
 
 ---
 
@@ -97,6 +97,61 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 | D10/D100 — Trapezohedron custom, Html overlay V1 | ✅ V1 |
 | D10 UV texturing — modèle Blender (.glb) avec UVs kite pré-calculés | 🔲 V2 |
 | Audio — `useDiceAudio.js` — sons d'impact au rebond | 🔲 |
+
+### Chantier 10 — Module Équipement (Inventaire + Catalogue)
+
+| Sprint | Contenu | État |
+|---|---|---|
+| Sprint 1 | Schéma DB + migration 48 + page admin saisie manuelle | ✅ session 46-47 |
+| Sprint 2 | `char_inventory` (table instance) + UI inventaire joueur | 🔲 |
+| Sprint 3 | Calcul armures mille-feuille + malus encombrement | 🔲 |
+
+**Sprint 1 livré :**
+- Migration 48 : `ref_equipment` (35 colonnes, 6 CHECK) + 3 junction tables
+- Route `/api/equipment` CRUD + transaction
+- Page admin `localhost:3001/equipment-admin.html` (YAML rapide + presets + multi-select compétences)
+
+**Dépendance sprint 2 :** ref_equipment peuplée ✅ — 636 items injectés session 48 (`2_seed_equipment.js`).
+
+### Chantier 11 — Module Blessures (Fiche personnage)
+
+**Architecture actée (session 49) :**
+- Migration 49 : `character_wounds` — cases par localisation/gravité, stabilisation
+- Calculs malus : serveur via `charStats.js` (fonctions pures)
+- WS : room `campaignId` existante — client filtre par `char_sheet_id`
+- Étapes 2/3 (armes, armures) bloquées par Chantier 10 sprint 2 (`char_inventory`)
+
+**Dépendance architecturale :**
+```
+ref_equipment (catalogue) ← ✅ 636 items
+    ↓
+char_inventory (possessions joueur) ← 🔲 Chantier 10 sprint 2
+    ↓
+Module Armes / Module Armures (équipé depuis inventaire)
+```
+
+| Étape | Contenu | Prérequis | État |
+|---|---|---|---|
+| Étape 1 | `character_wounds` DB + routes + `WoundManager` UI + intégration `charStats.js` | — | 🔲 session 49 |
+| Étape 2 | Module Armes — liste armes équipées depuis `char_inventory` → `ref_equipment` | Chantier 10 sprint 2 | 🔲 |
+| Étape 3 | Module Armures — même architecture + calcul protection par localisation | Chantier 10 sprint 2 | 🔲 |
+| Étape 4 | Polish — animations Tests de Choc, états santé (Étourdi/Inconscient/Coma) | Étapes 1-3 | 🔲 |
+
+**Mécanique Polaris (rappel LdB) :**
+
+| Localisation | Légères | Moyennes | Graves | Critiques | Mortelles |
+|---|---|---|---|---|---|
+| Tête | 3 | 3 | 2 | 2 | 1 |
+| Corps | 4 | 3 | 3 | 2 | 2 |
+| Bras D/G | 3 | 3 | 2 | 2 | 1 |
+| Jambe D/G | 3 | 3 | 2 | 2 | 1 |
+
+Promotion : ligne pleine → ligne vidée + 1 case gravité supérieure cochée.
+Malus par gravité : Légère −1 / Moyenne −3 / Grave −5 / Critique −10 / Mortelle −20.
+Tests de Choc : Grave (tête/corps) + Critique + Mortelle (toutes localisations).
+
+### PC22 — Fix 403 toggle is_learned MUTATION/POLARIS 🔲
+Fichiers : `char-sheet.js`, `AdvantagesPanel.jsx`. Route dédiée owner+GM pour `is_learned` sur compétences MUTATION/POLARIS. Chantier mini-session dédié.
 
 ### Chantier reporté — Paramètre campagne GM entity move mode 🔲
 3 options : réaliste / à la carte / divine. Voir EN_COURS.md.

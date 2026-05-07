@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next'
 import { useCharacterStore } from '../stores/characterStore'
 import api from '../lib/api.js'
 import CharacterSheet from './CharacterSheet.jsx'
+import WoundManager from './WoundManager.jsx'
 
 // ─── Constantes fenêtre ───────────────────────────────────────────────────────
 const WIN_INIT_W = 720
@@ -327,13 +328,14 @@ export default function CharacterWindow({ character, isGm, onClose }) {
 
       {/* ── Onglets ────────────────────────────────────────────────────── */}
       <div style={s.tabs}>
-        {['sheet', 'bio', 'settings'].map(tab => (
+        {['sheet', 'materiel', 'bio', 'settings'].map(tab => (
           <button
             key={tab}
             style={{ ...s.tab, ...(activeTab === tab ? s.tabActive : {}) }}
             onClick={() => setActiveTab(tab)}
           >
             {tab === 'sheet'    && t('character.tabSheet')}
+            {tab === 'materiel' && t('character.tabMateriel')}
             {tab === 'bio'      && t('character.tabBio')}
             {tab === 'settings' && t('character.tabSettings')}
           </button>
@@ -350,6 +352,14 @@ export default function CharacterWindow({ character, isGm, onClose }) {
             isGm={isGm}
             isOwner={isOwner}
             onSaved={handleSaved}
+          />
+        )}
+
+        {/* Onglet Matériel — blessures (Étape 1) */}
+        {activeTab === 'materiel' && (
+          <WoundManager
+            characterId={character.id}
+            canEdit={isGm || isOwner}
           />
         )}
 

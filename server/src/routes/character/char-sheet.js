@@ -3,8 +3,9 @@
  *
  * Monté sous /api/char-sheet dans index.js.
  *
- * Ownership : joueur propriétaire (characters.user_id === req.user.id) OU rôle GM.
- * Toutes les routes vérifient l'ownership avant toute opération.
+ * Ownership : router.use(requireAuth) + router.param('characterId', ...) assurent
+ * auth + ownership (owner OU GM) avant chaque handler. req.character et req.isGm
+ * sont disponibles dans toutes les routes /:characterId.
  *
  * Routes :
  *   GET    /api/char-sheet/:characterId              — fiche complète (toutes tables)
@@ -19,6 +20,10 @@
  *   GET    /api/char-sheet/:characterId/advantages   — liste avantages/désavantages
  *   POST   /api/char-sheet/:characterId/advantages   — ajoute un avantage/désavantage
  *   DELETE /api/char-sheet/:characterId/advantages/:id — supprime un avantage/désavantage
+ *   GET    /api/char-sheet/:characterId/wounds       — liste blessures du personnage
+ *   POST   /api/char-sheet/:characterId/wounds       — ajoute une blessure (+ promotion auto)
+ *   PUT    /api/char-sheet/:characterId/wounds/:woundId/stabilize — stabilise une blessure
+ *   DELETE /api/char-sheet/:characterId/wounds/:woundId — supprime une blessure (guérison)
  */
 
 import { Router } from 'express'
@@ -26,37 +31,42 @@ import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { getCoutAugmentation, getCoutDeblocageX } from '../../lib/charStats.js'
+import { WS } from '../../../../shared/events.js'
+import {
+  WOUND_LOCATIONS, WOUND_SEVERITIES, WOUND_MAX_COUNTS,
+} from '../../../../shared/woundConstants.js'
 
 const router = Router()
 
-// ─── Helper ownership ─────────────────────────────────────────────────────────
-// Vérifie que req.user est propriétaire du character OU GM de la campagne.
-// Retourne { character, isGm } si autorisé, lève AppError sinon.
-async function assertOwnerOrGm(characterId, userId) {
-  const character = await db('characters').where({ id: characterId }).first()
-  if (!character) throw new AppError(404, 'Character not found')
+// ─── Auth + Ownership automatique sur toutes les routes /:characterId ──────────
+router.use(requireAuth)
 
-  const member = await db('campaign_members')
-    .where({ campaign_id: character.campaign_id, user_id: userId })
-    .first()
-  if (!member) throw new AppError(403, 'You are not a member of this campaign')
+router.param('characterId', async (req, res, next, characterId) => {
+  try {
+    const character = await db('characters').where({ id: characterId }).first()
+    if (!character) return next(new AppError(404, 'Character not found'))
 
-  const isOwner = character.user_id && character.user_id === userId
-  const isGm = member.role === 'gm'
+    const member = await db('campaign_members')
+      .where({ campaign_id: character.campaign_id, user_id: req.user.id })
+      .first()
+    if (!member) return next(new AppError(403, 'You are not a member of this campaign'))
 
-  if (!isOwner && !isGm) throw new AppError(403, 'You do not have permission to access this sheet')
+    req.character = character
+    req.isGm     = member.role === 'gm'
 
-  return { character, isGm }
-}
+    const isOwner = character.user_id === req.user.id
+    if (!isOwner && !req.isGm) return next(new AppError(403, 'You do not have permission to access this sheet'))
+
+    next()
+  } catch (err) { next(err) }
+})
 
 // ─── GET /api/char-sheet/:characterId ────────────────────────────────────────
 // Retourne la fiche complète en une seule réponse :
 // sheet (inclut xp_total, xp_available) + identity + archetype + attributes + skills
 // Retourne null pour chaque section manquante — le client crée ce qui manque.
-router.get('/:characterId', requireAuth, async (req, res, next) => {
+router.get('/:characterId', async (req, res, next) => {
   try {
-    await assertOwnerOrGm(req.params.characterId, req.user.id)
-
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -88,10 +98,8 @@ router.get('/:characterId', requireAuth, async (req, res, next) => {
 // Crée une fiche vide pour un character existant.
 // Initialise aussi char_identity, char_archetype, et les 8 lignes char_attributes.
 // 409 si une fiche existe déjà pour ce character.
-router.post('/:characterId', requireAuth, async (req, res, next) => {
+router.post('/:characterId', async (req, res, next) => {
   try {
-    await assertOwnerOrGm(req.params.characterId, req.user.id)
-
     const existing = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -125,10 +133,8 @@ router.post('/:characterId', requireAuth, async (req, res, next) => {
 })
 
 // ─── PUT /api/char-sheet/:characterId/identity ───────────────────────────────
-router.put('/:characterId/identity', requireAuth, async (req, res, next) => {
+router.put('/:characterId/identity', async (req, res, next) => {
   try {
-    await assertOwnerOrGm(req.params.characterId, req.user.id)
-
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -167,10 +173,8 @@ router.put('/:characterId/identity', requireAuth, async (req, res, next) => {
 })
 
 // ─── PUT /api/char-sheet/:characterId/archetype ──────────────────────────────
-router.put('/:characterId/archetype', requireAuth, async (req, res, next) => {
+router.put('/:characterId/archetype', async (req, res, next) => {
   try {
-    await assertOwnerOrGm(req.params.characterId, req.user.id)
-
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -205,10 +209,8 @@ router.put('/:characterId/archetype', requireAuth, async (req, res, next) => {
 })
 
 // ─── PUT /api/char-sheet/:characterId/attributes ─────────────────────────────
-router.put('/:characterId/attributes', requireAuth, async (req, res, next) => {
+router.put('/:characterId/attributes', async (req, res, next) => {
   try {
-    await assertOwnerOrGm(req.params.characterId, req.user.id)
-
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -258,10 +260,9 @@ router.put('/:characterId/attributes', requireAuth, async (req, res, next) => {
 // ─── PUT /api/char-sheet/:characterId/skills ─────────────────────────────────
 // Sauvegarde compétences en bulk (upsert) — GM uniquement.
 // Les joueurs augmentent leur maîtrise exclusivement via POST /skills/buy.
-router.put('/:characterId/skills', requireAuth, async (req, res, next) => {
+router.put('/:characterId/skills', async (req, res, next) => {
   try {
-    const { isGm } = await assertOwnerOrGm(req.params.characterId, req.user.id)
-    if (!isGm) throw new AppError(403, 'Only the GM can modify skills directly')
+    if (!req.isGm) throw new AppError(403, 'Only the GM can modify skills directly')
 
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
@@ -304,10 +305,8 @@ router.put('/:characterId/skills', requireAuth, async (req, res, next) => {
 })
 
 // ─── PUT /api/char-sheet/:characterId/chc ────────────────────────────────────
-router.put('/:characterId/chc', requireAuth, async (req, res, next) => {
+router.put('/:characterId/chc', async (req, res, next) => {
   try {
-    await assertOwnerOrGm(req.params.characterId, req.user.id)
-
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -333,10 +332,9 @@ router.put('/:characterId/chc', requireAuth, async (req, res, next) => {
 // Modifie le solde XP du personnage. Réservé au GM.
 // Body : { xp_total?, xp_available? } — au moins un des deux requis.
 // Le GM peut ajuster indépendamment le total reçu et le disponible.
-router.put('/:characterId/xp', requireAuth, async (req, res, next) => {
+router.put('/:characterId/xp', async (req, res, next) => {
   try {
-    const { isGm } = await assertOwnerOrGm(req.params.characterId, req.user.id)
-    if (!isGm) throw new AppError(403, 'Only the GM can modify XP')
+    if (!req.isGm) throw new AppError(403, 'Only the GM can modify XP')
 
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
@@ -392,10 +390,8 @@ router.put('/:characterId/xp', requireAuth, async (req, res, next) => {
 //   7. Retourner { skill_id, mastery, is_learned, xp_available }
 //
 // Note P46 : déclarée AVANT POST /:characterId/advantages (route spécifique avant paramétrique).
-router.post('/:characterId/skills/buy', requireAuth, async (req, res, next) => {
+router.post('/:characterId/skills/buy', async (req, res, next) => {
   try {
-    await assertOwnerOrGm(req.params.characterId, req.user.id)
-
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -406,11 +402,9 @@ router.post('/:characterId/skills/buy', requireAuth, async (req, res, next) => {
       throw new AppError(400, 'skill_id is required')
     }
 
-    // Vérifier que la compétence existe
     const refSkill = await db('ref_skills').where({ id: skill_id }).first()
     if (!refSkill) throw new AppError(404, `Skill not found: ${skill_id}`)
 
-    // Charger l'état actuel de la compétence pour ce personnage
     const charSkill = await db('char_skills')
       .where({ char_sheet_id: sheet.id, skill_id })
       .first()
@@ -419,27 +413,22 @@ router.post('/:characterId/skills/buy', requireAuth, async (req, res, next) => {
     const currentLearned  = charSkill?.is_learned  ?? false
     const isXReserved     = refSkill.marker === '(X)'
 
-    // Calculer le coût et les nouvelles valeurs
     let cout
     let newMastery   = currentMastery
     let newIsLearned = currentLearned
 
     if (isXReserved && !currentLearned) {
-      // Déblocage (X) — coût fixe 3 PE, mastery reste 0, is_learned → true
       cout         = getCoutDeblocageX()
       newIsLearned = true
     } else {
-      // Progression normale — +1 mastery
       cout       = getCoutAugmentation(currentMastery)
       newMastery = currentMastery + 1
     }
 
-    // Vérifier que le personnage a assez d'XP
     if (sheet.xp_available < cout) {
       throw new AppError(400, `XP insuffisants : ${sheet.xp_available} disponibles, ${cout} requis`)
     }
 
-    // Transaction : UPSERT char_skills + décrémenter xp_available
     await db.transaction(async (trx) => {
       await trx('char_skills')
         .insert({
@@ -472,10 +461,8 @@ router.post('/:characterId/skills/buy', requireAuth, async (req, res, next) => {
 })
 
 // ─── GET /api/char-sheet/:characterId/advantages ─────────────────────────────
-router.get('/:characterId/advantages', requireAuth, async (req, res, next) => {
+router.get('/:characterId/advantages', async (req, res, next) => {
   try {
-    await assertOwnerOrGm(req.params.characterId, req.user.id)
-
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -503,10 +490,8 @@ router.get('/:characterId/advantages', requireAuth, async (req, res, next) => {
 })
 
 // ─── POST /api/char-sheet/:characterId/advantages ────────────────────────────
-router.post('/:characterId/advantages', requireAuth, async (req, res, next) => {
+router.post('/:characterId/advantages', async (req, res, next) => {
   try {
-    await assertOwnerOrGm(req.params.characterId, req.user.id)
-
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -560,10 +545,8 @@ router.post('/:characterId/advantages', requireAuth, async (req, res, next) => {
 })
 
 // ─── DELETE /api/char-sheet/:characterId/advantages/:id ──────────────────────
-router.delete('/:characterId/advantages/:id', requireAuth, async (req, res, next) => {
+router.delete('/:characterId/advantages/:id', async (req, res, next) => {
   try {
-    await assertOwnerOrGm(req.params.characterId, req.user.id)
-
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -587,6 +570,144 @@ router.delete('/:characterId/advantages/:id', requireAuth, async (req, res, next
   } catch (err) {
     next(err)
   }
+})
+
+// ─── Helpers blessures ────────────────────────────────────────────────────────
+
+function isShockTestRequired(severity, location) {
+  if (severity === 'critique' || severity === 'mortelle') return true
+  if (severity === 'grave' && (location === 'tete' || location === 'corps')) return true
+  return false
+}
+
+function nextSeverity(severity) {
+  const idx = WOUND_SEVERITIES.indexOf(severity)
+  return idx < WOUND_SEVERITIES.length - 1 ? WOUND_SEVERITIES[idx + 1] : null
+}
+
+// Récursif — résout la promotion en cascade dans une transaction knex.
+// Promotion automatique : dès que le clic remplirait la ligne (count >= maxCount-1),
+// on promeut immédiatement — le joueur ne voit jamais une ligne pleine (LdB).
+// Exception : ligne mortelle (pas de gravité supérieure) — insertion normale jusqu'au max, AppError au-delà.
+async function resolveWoundInsertion(trx, char_sheet_id, location, severity) {
+  const maxCount = WOUND_MAX_COUNTS[location]?.[severity]
+  if (!maxCount) throw new AppError(400, `Gravité "${severity}" invalide pour "${location}"`)
+
+  const { count } = await trx('character_wounds')
+    .where({ char_sheet_id, location, severity })
+    .count('* as count')
+    .first()
+
+  const currentCount = parseInt(count)
+  const next = nextSeverity(severity)
+
+  // Promotion automatique : ajouter cette blessure remplirait la ligne ET il existe une gravité supérieure
+  if (next && currentCount >= maxCount - 1) {
+    // Supprimer toutes (y compris stabilisées — comportement LdB confirmé)
+    await trx('character_wounds').where({ char_sheet_id, location, severity }).del()
+    const result = await resolveWoundInsertion(trx, char_sheet_id, location, next)
+    return { ...result, promoted: true }
+  }
+
+  // Ligne mortelle pleine (pas de gravité supérieure) — refus explicite
+  if (currentCount >= maxCount) {
+    throw new AppError(400, 'Ligne pleine — gravité maximale atteinte pour cette localisation')
+  }
+
+  const [wound] = await trx('character_wounds')
+    .insert({ char_sheet_id, location, severity, is_stabilized: false })
+    .returning('*')
+  return { wound, promoted: false }
+}
+
+// ─── GET /api/char-sheet/:characterId/wounds ─────────────────────────────────
+router.get('/:characterId/wounds', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId }).first()
+    if (!sheet) return res.json({ wounds: [] })
+
+    const wounds = await db('character_wounds')
+      .where({ char_sheet_id: sheet.id })
+      .orderBy('created_at', 'asc')
+    res.json({ wounds })
+  } catch (err) { next(err) }
+})
+
+// ─── POST /api/char-sheet/:characterId/wounds ────────────────────────────────
+router.post('/:characterId/wounds', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId }).first()
+    if (!sheet) throw new AppError(404, 'Sheet not found')
+
+    const { location, severity } = req.body
+    if (!WOUND_LOCATIONS.includes(location)) throw new AppError(400, `Localisation invalide : ${location}`)
+    if (!WOUND_SEVERITIES.includes(severity)) throw new AppError(400, `Gravité invalide : ${severity}`)
+
+    const result = await db.transaction(trx =>
+      resolveWoundInsertion(trx, sheet.id, location, severity)
+    )
+
+    const shock_test_required = isShockTestRequired(result.wound.severity, result.wound.location)
+
+    req.app.get('io').to(req.character.campaign_id).emit(WS.WOUND_ADDED, {
+      characterId: req.params.characterId,
+      wound:       result.wound,
+      promoted:    result.promoted,
+      shock_test_required,
+    })
+
+    res.status(201).json({ wound: result.wound, promoted: result.promoted, shock_test_required })
+  } catch (err) { next(err) }
+})
+
+// ─── PUT /api/char-sheet/:characterId/wounds/:woundId/stabilize ──────────────
+// Note P46 : déclarée AVANT DELETE /:characterId/wounds/:woundId
+router.put('/:characterId/wounds/:woundId/stabilize', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId }).first()
+    if (!sheet) throw new AppError(404, 'Sheet not found')
+
+    const wound = await db('character_wounds')
+      .where({ id: req.params.woundId, char_sheet_id: sheet.id }).first()
+    if (!wound) throw new AppError(404, 'Wound not found')
+
+    const [updated] = await db('character_wounds')
+      .where({ id: req.params.woundId })
+      .update({ is_stabilized: true, updated_at: db.fn.now() })
+      .returning('*')
+
+    req.app.get('io').to(req.character.campaign_id).emit(WS.WOUND_UPDATED, {
+      characterId: req.params.characterId,
+      wound: updated,
+    })
+
+    res.json({ wound: updated })
+  } catch (err) { next(err) }
+})
+
+// ─── DELETE /api/char-sheet/:characterId/wounds/:woundId ─────────────────────
+router.delete('/:characterId/wounds/:woundId', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId }).first()
+    if (!sheet) throw new AppError(404, 'Sheet not found')
+
+    const wound = await db('character_wounds')
+      .where({ id: req.params.woundId, char_sheet_id: sheet.id }).first()
+    if (!wound) throw new AppError(404, 'Wound not found')
+
+    await db('character_wounds').where({ id: req.params.woundId }).del()
+
+    req.app.get('io').to(req.character.campaign_id).emit(WS.WOUND_REMOVED, {
+      characterId: req.params.characterId,
+      woundId: req.params.woundId,
+    })
+
+    res.json({ deleted: true, woundId: req.params.woundId })
+  } catch (err) { next(err) }
 })
 
 export default router

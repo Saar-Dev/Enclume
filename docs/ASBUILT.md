@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-03 Session 45
+> Dernière mise à jour : 2026-05-07 Session 49
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -44,8 +44,10 @@ Enclume/
 │   │   │   ├── mapStore.js
 │   │   │   ├── sessionStore.js
 │   │   │   └── entityStore.js          # Modifié 34 — fetchBlueprints() ajouté
+│   │   ├── character/
+│   │   │   └── WoundManager.jsx        # NOUVEAU 49 — grille blessures autonome (POST/PUT/DELETE, promotion P49)
 │   │   ├── locales/
-│   │   │   └── fr.json                 # Modifié 45 — +3 clés dashboard cover + entity/displacement (43)
+│   │   │   └── fr.json                 # Modifié 49 — +tabMateriel
 │   │   ├── lib/
 │   │   │   ├── api.js
 │   │   │   ├── voxelTextures.js
@@ -55,9 +57,14 @@ Enclume/
 │   │   └── main.jsx
 │   └── vite.config.js
 ├── server/
+│   ├── public/
+│   │   └── equipment-admin.html        # NOUVEAU 47 — page admin saisie équipements (servie via express.static)
+│   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # 46 migrations appliquées
+│   │   │   ├── migrations/             # 48 migrations appliquées
+│   │   │   ├── seeds/
+│   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
 │   │   ├── routes/
 │   │   │   ├── auth.js
@@ -72,7 +79,8 @@ Enclume/
 │   │   │   ├── voxel-textures.js       # Modifié 33 — usage_hint exposé GET+PUT
 │   │   │   ├── texture-packs.js
 │   │   │   ├── entity-blueprints.js    # Modifié 33 — POST /:id/upload-glb
-│   │   │   └── entities.js             # Modifié 39 — maintenance Redis collision map
+│   │   │   ├── entities.js             # Modifié 39 — maintenance Redis collision map
+│   │   │   └── equipment.js            # NOUVEAU 47 — CRUD ref_equipment + junction tables
 │   │   ├── middleware/
 │   │   │   ├── auth.js
 │   │   │   ├── role.js
@@ -85,11 +93,12 @@ Enclume/
 │   │   │   ├── AppError.js
 │   │   │   ├── minio.js
 │   │   │   ├── diceParser.js
-│   │   │   ├── charStats.js            # NOUVEAU 36 — calculs Polaris purs
+│   │   │   ├── charStats.js            # Modifié 49 — +calcWoundPenalty
 │   │   │   └── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
-│   │   └── index.js
+│   │   └── index.js                    # Modifié 47 — express.static public/ + route /api/equipment
 ├── shared/
-│   └── events.js                       # Modifié 40 — ENTITY_MOVE_REQUEST + ENTITY_MOVE_RESULT ajoutés
+│   ├── events.js                       # Modifié 49 — +WOUND_ADDED/UPDATED/REMOVED
+│   └── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES
 └── docs/
 ```
 
@@ -132,6 +141,7 @@ Enclume/
 /api/entities
 /api/char-sheet
 /api/char-ref
+/api/equipment                           ← CRUD ref_equipment + junction tables (session 47)
 ```
 
 ### Routes REST — Entities (/api/battlemaps/:id/entities + /api/entities)
@@ -156,6 +166,8 @@ Enclume/
 | 45_polaris_mr_table | polaris_mr (mr_min PK, mr_max nullable, dmax) + seed 6 lignes |
 | 46_polaris_mr_refonte | polaris_mr — colonne dmax → modifier (LdB p.209) — 20 lignes officielles |
 | 47_campaigns_cover_url | campaigns.cover_url TEXT nullable — illustration campagne |
+| 48_ref_equipment | ref_equipment (35 colonnes, 6 CHECK) + ref_equipment_skills + ref_equipment_skill_assoc + ref_equipment_ammo_compat |
+| 49_character_wounds | character_wounds (UUID PK, char_sheet_id FK CASCADE, location/severity CHECK, is_stabilized, idx) |
 
 ---
 
@@ -355,12 +367,15 @@ difficulty_dc = modificateur signé (-20 à +10)
 | P48 | handleEntityMove déclaré avant handleEntityClick (session 41) |
 | PE2 | socket.data.role pour fetchSockets() |
 | PE4 | face null = invisible |
+| PE7 | current_state_id = index entier dans states[] — jamais UUID |
 | PE11 | fallback states[0] |
 | PE12 | clearTimeout pendingEntityActions |
 | PE14 | pos_y/pos_z inversés Three.js ↔ base |
 | PE16 | e.code pour Alt |
 | PE17 | usage_hint hint de tri, jamais exclusif |
 | PE18 | blueprint.pack_id nullable — guard |
+| PE19 | transparent={true} obligatoire sur meshLambertMaterial — opacity=0 ineffectif sans ça |
+| PE20 | HoverIcon : toujours monté si hasInteractions, jamais conditionnel à hovered — visibilité CSS uniquement |
 | PE21 | r tokens = 0-7 — rotation.y = r * Math.PI / 4 |
 | PE22 | tunnel de swap excludeIds dans isCaseOccupied |
 | PE23 | buildCollisionMap au SESSION_JOIN — pas au démarrage serveur |
@@ -374,4 +389,5 @@ difficulty_dc = modificateur signé (-20 à +10)
 | PE31 | upsertCharacter : guard visible+isGm |
 | PE32 | DiceMesh useMemo deps [geoDef.type, color, dieType] |
 | PE33 | D10 Html overlay position=[0,0,0] — ne pas déplacer |
+| P49 | Promotion blessures : si promoted===true → GET /wounds complet — ne jamais ajouter localement |
 | PEF1-PEF6 | voir SYSTEME.md section 6 |

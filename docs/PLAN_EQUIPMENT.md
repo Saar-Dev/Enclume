@@ -1,3 +1,15 @@
+---
+> **SPRINT 1 LIVRÉ — Session 47 (2026-05-06)**
+> Migration 48 déployée (`ref_equipment` + 3 junction tables). Schéma réel : voir `docs/Character/JOURNALBDD.md` Session 8.
+> Note : `malus_cat` accepte 5 valeurs exactes : S, A, B, C, D.
+> Page admin : `localhost:3001/equipment-admin.html`
+>
+> **DONNÉES PEUPLÉES — Session 48 (2026-05-06)**
+> 636 items injectés via `server/src/db/seeds/2_seed_equipment.js` (KO-par-défaut, idempotent par name).
+> Outil de vérification : `server/diff_equip.mjs` — diff BDD vs STEP1 champ par champ, réutilisable.
+> 23 divergences acceptées (corrections intentionnelles vs livre de règles). Junction tables : enrichissement manuel en cours.
+---
+
 📖 EQUIPMENT_SPEC.md — Architecture & Mécaniques (Module Équipement)
 
     Domaine : Fiche de Personnage Polaris V1 — Module Équipement, Armure et Encombrement
@@ -22,7 +34,7 @@ La base SQL reste plate pour faciliter l'import CSV, mais le backend (ou l'ORM) 
 
         locations (String) : Chaîne de caractères (ex: T/C/B/JD). Nécessite une fonction de parsing (split('/')) pour générer un tableau de tags ['Tete', 'Corps', 'Bras', 'JambeD'].
 
-        malus_category (String) : S, A, B, C, C**, D.
+        malus_category (String) : S, A, B, C, D.
 
         req_for (Int) : Force minimale requise (souvent extrait de la colonne avec parenthèses 5 (10) dans le CSV).
 
@@ -88,7 +100,7 @@ C'est la partie la plus sensible, traduisant la mécanique Excel =LET(forV; SIER
 3.1. Dictionnaire des Catégories de Malus
 
 Le code doit mapper les catégories textuelles en valeurs numériques pures :
-const malusMap = { 'S': 0, 'A': -2, 'B': -3, 'C': -4, 'C**': -5, 'D': -6 };
+const malusMap = { 'S': 0, 'A': -2, 'B': -3, 'C': -4, 'D': -6 };
 
 3.2. Évaluation de la Zone (La Règle du Pire)
 

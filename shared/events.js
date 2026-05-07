@@ -50,4 +50,9 @@ export const WS = {
   ENTITY_MOVED:             'entity:moved',              // serveur → room : entité déplacée (éditeur GM)
   ENTITY_MOVE_REQUEST:      'entity:move_request',       // joueur → serveur : demande de déplacement entité (9F-B)
   ENTITY_MOVE_RESULT:       'entity:move_result',        // serveur → joueur : résultat jet + positions finales (9F-B)
+
+  // Blessures (Chantier 11)
+  WOUND_ADDED:   'wound:added',    // serveur → room : blessure ajoutée (+ promoted, shock_test_required)
+  WOUND_UPDATED: 'wound:updated',  // serveur → room : blessure stabilisée
+  WOUND_REMOVED: 'wound:removed',  // serveur → room : blessure supprimée (guérison)
 }

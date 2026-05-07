@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(psql \"postgresql://vtt:vttpass@localhost:5432/vtt\" -c \"SELECT COUNT\\(*\\), family FROM ref_equipment GROUP BY family ORDER BY family;\")"
+    ]
+  }
+}

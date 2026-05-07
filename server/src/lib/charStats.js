@@ -11,6 +11,8 @@
  * Références : Livre de Base Polaris (LdB)
  */
 
+import { WOUND_PENALTIES } from '../../../shared/woundConstants.js'
+
 // ─── Constante V1 ─────────────────────────────────────────────────────────────
 // TOTAL_MALUS = 0 en V1 — le système d'historique XP n'est pas implémenté.
 // PC2 : toujours passer cette constante explicitement dans calcNA.
@@ -323,4 +325,20 @@ export function getCoutTotal(from, to) {
     total += getCoutAugmentation(i)
   }
   return total
+}
+
+/**
+ * Malus global blessures — pire blessure toutes localisations confondues.
+ * Règle LdB : les autres blessures sont ignorées.
+ * @param {Array} wounds — [{ severity, ... }]
+ * @returns {number} malus (≤ 0)
+ */
+export function calcWoundPenalty(wounds) {
+  if (!wounds || wounds.length === 0) return 0
+  let worst = 0
+  for (const w of wounds) {
+    const p = WOUND_PENALTIES[w.severity] ?? 0
+    if (p < worst) worst = p
+  }
+  return worst
 }

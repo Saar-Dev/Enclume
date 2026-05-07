@@ -4466,3 +4466,238 @@ Un seul `<input type="file" hidden>` partagé pour toutes les campagnes.
 - ✅ Affichage immédiat après upload (mise à jour locale du state)
 - ✅ Curseur `wait` pendant l'upload
 - ✅ Erreur affichée si upload échoue
+
+---
+
+## Session 46 — 2026-05-05 — Chantier 10 sprint 1 : Schéma ref_equipment
+
+### Chantier — Définition schéma ref_equipment
+
+**Objectif :** Définir champ par champ le schéma SQL de `ref_equipment` avant de coder.
+
+**Analyse pipeline extraction (clarification) :**
+- Source réelle : `ExtractEQUIP.xlsx` (fichier maître Excel)
+- `0_extractor.js` lit le XLSX via lib `xlsx` → produit `STEP1_cleaned_data.js` (33 champs, propre)
+- `1_convert_equip.js` (STALE) avait 7 champs manquants + bug nommage damage → corrigé
+- Le CSV n'entre pas dans le pipeline Node.js — export humain uniquement
+
+**Schéma retenu — 35 colonnes :**
+Tronc commun + extensions Arme / Protection / Munition / Conteneur.
+Tous les champs valeur "texte riche" (formule prix, localisations armure, effets munitions DSL) stockés en TEXT pour flexibilité maximale.
+
+**Décisions architecturales :**
+- `malus_cat` : CHECK déployé = `S, A, B, C, D` uniquement (5 valeurs). C** éliminé — absent des données et rejeté par la contrainte. *(Note session 47 : noms de colonnes définitifs dans migration 48, pas dans cette entrée)*
+- `price` : TEXT (peut contenir "1000 x niv", formules)
+- `def_protection` : TEXT (peut contenir "niv" pour objets levelables)
+- `rarity` : TEXT (peut contenir "Introuvable", valeurs négatives "-20 (-15)")
+- 3 junction tables : `ref_equipment_skills`, `ref_equipment_skill_assoc`, `ref_equipment_ammo_compat`
+- 6 CHECK constraints sur les catégories critiques (family, def_malus_type, fire_mode...)
+
+---
+
+## Session 47 — 2026-05-06 — Chantier 10 sprint 1 : Migration + Route + Page admin
+
+### Chantier — Implémentation complète sprint 1
+
+**Migration 48 déployée :**
+- Table `ref_equipment` (35 colonnes, 6 CHECK constraints)
+- Table `ref_equipment_skills` (junction : item ↔ compétences requises)
+- Table `ref_equipment_skill_assoc` (junction : item ↔ compétence associée au jet)
+- Table `ref_equipment_ammo_compat` (junction : munition ↔ armes compatibles)
+
+**Route `/api/equipment` (CRUD complet) :**
+- `GET /` — liste tous les items
+- `GET /ref/skills` — liste compétences (pour multi-select) — AVANT `/:id` (P46)
+- `GET /:id` — item par id
+- `POST /` — création avec transaction (item + 3 junction tables)
+- `DELETE /:id` — suppression
+- Sanitize : champs vides → `null`, bool `waterproof` → `true | null` (pas `false` pour items sans waterproof)
+
+**Page admin standalone `server/public/equipment-admin.html` :**
+- Servie par `express.static` — auth via JWT cookie httpOnly (même domaine `localhost`)
+- Saisie YAML flow style compact (js-yaml@4.1.0 CDN) — 33 alias courts
+- Presets catégories (Arme / Protection / Munition / Conteneur / Divers) — fieldsets dim/highlight
+- Multi-select compétences groupées par famille (avec Ctrl+clic)
+- CRUD complet : liste items, suppression, formulaire complet
+
+**Bugs corrigés lors de la run à vide :**
+- Bug A : apostrophes dans les noms français cassaient les inline `onclick` → event delegation sur `tbody` + `data-id`/`data-name` attributes
+- Bug B : `waterproof` unchecked = `false` au lieu de `null` → `form.waterproof.checked ? true : null`
+
+**Fichiers produits :**
+| Fichier | Modification |
+|---|---|
+| `server/src/db/migrations/48_ref_equipment.js` | NOUVEAU — ref_equipment + 3 junction tables |
+| `server/src/routes/equipment.js` | NOUVEAU — CRUD complet + transaction |
+| `server/public/equipment-admin.html` | NOUVEAU — page admin standalone ~750 lignes |
+| `server/src/index.js` | +express.static public/ + route /api/equipment |
+
+### Validation fonctionnelle
+- ✅ Migration 48 déployée
+- ✅ API CRUD fonctionnelle
+- ✅ Page admin accessible `localhost:3001/equipment-admin.html`
+- ✅ Saisie YAML rapide opérationnelle
+- ✅ Presets catégories visuels
+- ✅ Multi-select compétences
+
+### Décisions documentées
+- Architecture page admin : standalone HTML V1 (React V2 plus tard dans DashboardPage — GM only)
+- YAML flow style choisi sur JSON (trop verbeux) et pipe-séparé (trop fragile)
+- Preset selector HORS du `<form>` pour persister entre items (GM saisit 20 armes sans re-sélectionner)
+
+---
+
+## Session 48 — 2026-05-06 — Chantier 10 : Injection ref_equipment + Vérification
+
+### Contexte
+Suite directe de la session 47 (sprint 1 livré). Objectif : peupler `ref_equipment` depuis `STEP1_cleaned_data.js` et vérifier l'intégrité des données injectées.
+
+### Seed script — `server/src/db/seeds/2_seed_equipment.js`
+
+Script créé avec philosophie **KO par défaut** : tout champ ambigu → rejet avec rapport, pas de conversion silencieuse.
+
+**Architecture :**
+- Mode simulation par défaut (`node 2_seed_equipment.js`) — aucun INSERT
+- Mode insert opt-in (`--insert` flag requis)
+- Guard name : items déjà en base (même `name`) → skippés → script re-runnable N fois
+- 3 niveaux de validation :
+  - Niveau 1 — Ancres NOT NULL (`base_family`, `base_category`, `base_name`) + NT (I–VII) + rarity (regex `XX(YY)`)
+  - Niveau 2 — Contraintes DB (`fire_mode` IN liste 8 valeurs, `malus_cat` IN {S,A,B,C,D}, `min_str` 3–20, `init_mod < 0`)
+  - Niveau 3 — Parsing typé (`price`, `protection`, `capacity`, `waterproof`)
+- Rapport rejections → `server/src/db/seeds/rejections.json`
+- INSERT en batch de 100 via knex
+
+**Itérations de dry-run :**
+| Run | Corrections apportées |
+|---|---|
+| Run 1 | NT "I à VI" → borne basse ; prix formule ("1500 x niv") → price+modifier ; "étanche" → WP_TRUE |
+| Run 2 | "pression" → WP_TRUE ; NT "null" (string) → tech_level=1 par défaut (flagué, pas rejeté) |
+| Run 3 | 2 rejections restantes : Oxyma (init_mod="var.") et Poing Kryss (init_mod="1" > 0) — intentionnels |
+
+**Résultat insert :** 715 valides, 2 rejetés, 636 items en BDD après nettoyage des doublons STEP1 (82 noms dupliqués dans l'Excel → 1 seule ligne en BDD par nom). Oxyma et Poing Kryss ajoutés manuellement.
+
+### Vérification — `server/diff_equip.mjs`
+
+Script de comparaison STEP1 vs BDD (copie exacte des parsers du seed). Identifie les items dont les valeurs BDD divergent de STEP1 → révèle les items saisis manuellement avant le seed.
+
+**25 divergences initiales, triées en 3 catégories :**
+
+| Catégorie | Nature | Action |
+|---|---|---|
+| 1 — Enrichissements intentionnels | 13 armes à énergie (coût piles GP-xx ajouté), rarités illégaux, localisations | Conservés |
+| 2 — Erreurs confirmées vs livre de règles | damage_h Cougar/Nérid 650/Sniper AV, price_modifier Silencieux/Lunette, NT Harnais/Trépied | Corrigés manuellement |
+| 3 — Compromis acceptés | Poing Kryss init_mod=null (+1 impossible en BDD, CHECK < 0), typo Oxyma "Variable" | Acceptés |
+
+**État final :** 23 divergences toutes confirmées comme intentionnelles ou acceptées. BDD cohérente.
+
+### Décisions actées
+
+- **Source de vérité** : Livre de règles > ExtractEQUIP.xlsx/STEP1 > BDD. STEP1 a quelques erreurs vs livre (damage_h notamment).
+- **Junction tables skills** (`ref_equipment_skill_assoc`, `ref_equipment_skills`) : non peuplées par le seed — enrichissement manuel au gré des items consultés, en cours.
+- **`diff_equip.mjs`** : outil de vérification pérenne conservé dans `server/` — utilisable pour toute future vérification batch.
+- Fichiers temporaires de vérification (`check_equip*.mjs`) supprimés.
+
+### Fichiers produits / modifiés
+| Fichier | Modification |
+|---|---|
+| `server/src/db/seeds/2_seed_equipment.js` | NOUVEAU — seed KO-par-défaut, dry-run, guard name, batch 100 |
+| `server/diff_equip.mjs` | NOUVEAU — diff STEP1 vs BDD, réutilisable |
+
+### État fonctionnel
+- ✅ 636 items en `ref_equipment` — données vérifiées et cohérentes
+- ✅ 2 items manuels (Oxyma, Poing Kryss) présents
+- ✅ Aucune anomalie structurelle — doublons nettoyés
+- ⏳ Junction tables skills — enrichissement manuel en cours
+
+---
+
+## Session 49 — 2026-05-07 — Chantier 11 Étape 1 : Module Blessures
+
+### Contexte
+Suite de la session 48. Chantier 11 Étape 1 : système de blessures Polaris complet (character_wounds) — DB, serveur, client, UI.
+
+### Travail effectué
+
+**Migration 49 — `character_wounds`**
+- Table `character_wounds` : id UUID PK gen_random_uuid(), char_sheet_id UUID FK CASCADE, location TEXT, severity TEXT, is_stabilized BOOLEAN DEFAULT false, timestamps
+- CHECK constraints SQL natifs : location IN ('tete','corps','bras_droit','bras_gauche','jambe_droite','jambe_gauche'), severity IN ('legere','moyenne','grave','critique','mortelle')
+- Index `idx_wounds_char_sheet_id`
+- Batch 22 appliqué — SR OK
+
+**`shared/woundConstants.js` — NOUVEAU**
+Source de vérité partagée server + client.
+- `WOUND_LOCATIONS` — 6 localisations
+- `WOUND_SEVERITIES` — 5 gravités
+- `WOUND_MAX_COUNTS` — maxCount par (localisation, gravité) selon LdB Polaris
+- `WOUND_PENALTIES` — malus par gravité : légère -1 / moyenne -3 / grave -5 / critique -10 / mortelle -20
+
+**`shared/events.js` — modifié**
+3 événements WS ajoutés : `WOUND_ADDED`, `WOUND_UPDATED`, `WOUND_REMOVED`.
+
+**`server/src/routes/character/char-sheet.js` — refactorisé + extension**
+- Pattern `router.param('characterId', ...)` remplace le helper `assertOwnerOrGm` — pattern Express officiel
+- `router.use(requireAuth)` unique avant le param — plus de `requireAuth` par route
+- `req.character` et `req.isGm` injectés par le param, disponibles dans toutes les routes
+- Helper `isShockTestRequired(severity, location)` — retourne true si critique, mortelle, ou grave + tête/corps
+- Helper `nextSeverity(severity)` — retourne la prochaine gravité dans WOUND_SEVERITIES, ou null
+- `resolveWoundInsertion(trx, char_sheet_id, location, severity)` — récursive dans une transaction knex, gère la promotion automatique
+- 4 routes blessures : GET /wounds, POST /wounds, PUT /wounds/:woundId/stabilize, DELETE /wounds/:woundId
+- Broadcasts WS : WOUND_ADDED (POST), WOUND_UPDATED (stabilize), WOUND_REMOVED (DELETE)
+
+**`server/src/lib/charStats.js` — modifié**
+- `calcWoundPenalty(wounds)` ajoutée — retourne le malus de la blessure la plus grave (pas la somme)
+
+**`client/src/character/WoundManager.jsx` — NOUVEAU**
+Composant autonome : state interne `wounds[]` + useEffect fetch GET /wounds au montage.
+- Grille : WOUND_LOCATIONS (lignes) × WOUND_SEVERITIES (colonnes)
+- Cases fixes : `Array.from({ length: maxCount })` — jamais plus de cases que maxCount
+- Clic case vide → POST (ajouter blessure)
+- Clic blessure non stabilisée → PUT stabilize (checkmark vert)
+- Clic blessure stabilisée → DELETE (guérison)
+- Promotion transparente : si `res.data.promoted === true` → rechargement complet GET /wounds (P49)
+- Badge `!` orange sur blessure nécessitant un jet de choc (`shock_test_required`)
+- Malus blessures affiché si `woundPenalty < 0`
+- Props : `{ characterId, canEdit }`
+
+**`client/src/character/CharacterWindow.jsx` — modifié**
+- Onglet "Matériel" ajouté entre "Fiche" et "Bio & info"
+- WoundManager monté dans l'onglet Matériel
+
+**`client/src/locales/fr.json` — modifié**
+- `"tabMateriel": "Matériel"` ajouté dans namespace `character`
+
+### Décision d'architecture : promotion automatique
+
+La promotion se déclenche côté serveur quand `currentCount >= maxCount - 1` ET qu'une gravité supérieure existe.
+Le Nème clic (qui remplirait la ligne) déclenche la promotion au lieu d'insérer : le serveur supprime toutes les blessures de la ligne source et en insère une dans la gravité suivante.
+L'utilisateur ne voit jamais une ligne pleine — le passage est transparent.
+Lignes mortelles (pas de gravité suivante) : insertion normale jusqu'à maxCount, puis AppError 400.
+
+### Piège documenté
+
+**P49 — Promotion blessures : rechargement complet obligatoire**
+Quand `res.data.promoted === true`, le serveur a supprimé des blessures existantes (toute la ligne source).
+Ne jamais `setWounds(prev => [...prev, wound])` sur une promotion — des wounds supprimées resteraient en state.
+Toujours recharger via GET /wounds si `promoted === true`.
+
+### Fichiers produits / modifiés
+| Fichier | Modification |
+|---|---|
+| `shared/woundConstants.js` | NOUVEAU — source de vérité blessures |
+| `shared/events.js` | +3 événements WS blessures |
+| `server/src/db/migrations/49_character_wounds.js` | NOUVEAU — table character_wounds |
+| `server/src/routes/character/char-sheet.js` | router.param + 4 routes blessures |
+| `server/src/lib/charStats.js` | calcWoundPenalty |
+| `client/src/character/WoundManager.jsx` | NOUVEAU — composant grille blessures |
+| `client/src/character/CharacterWindow.jsx` | onglet Matériel |
+| `client/src/locales/fr.json` | tabMateriel |
+
+### Validation fonctionnelle ✅
+- Migration 49 appliquée — Batch 22 — SR OK
+- GET /wounds → 200 OK
+- POST /wounds (légère, tête) → blessure créée, badge `!` visible
+- Clic blessure → stabilisée (checkmark vert)
+- Clic stabilisée → guérison (suppression)
+- 3ème clic légère tête → promotion automatique transparente (2 légères → 1 moyenne)
+- Onglet "Matériel" visible et fonctionnel dans la fenêtre personnage
+- ⏳ Chantier 10 sprint 2 (`char_inventory`) — prérequis : ref_equipment peuplée ✅

@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-02 Session 45
+> Dernière mise à jour : 2026-05-07 Session 49
 
 ---
 
@@ -18,26 +18,47 @@
 ### Chantier 9F-B2 — Mode visée client ✅ (session 41)
 ### Chantier 9F-C — Diagonal 45° + animation Lerp ✅ (session 43)
 ### Chantier Dice Rework ✅ (session 44)
+### Chantier 10 sprint 1 — ref_equipment ✅ (sessions 46-47)
 
-Travaux effectués en session 44 :
-- EntityEditorOLD.jsx supprimé ✅
-- Bug A — toggle visible character temps réel — characterStore.js ✅
-- diceMath.js — PRNG, mappings, normales tous dés ✅
-- DiceMesh.jsx — D6, D4, D8, D20, D12 texture par face + D10 Html overlay V1 ✅
-- DiceRoller.jsx — orchestrateur R3F dans Canvas3D ✅
-- Canvas3D.jsx — props dicePayload/onDiceDone ✅
-- SessionPage.jsx — state lastDiceRoll, filtrage skillLabel ✅
+Travaux effectués en sessions 46-47 :
+- Schéma `ref_equipment` défini champ par champ avec Saar ✅
+- Migration 48 : `ref_equipment` + 3 junction tables + 6 CHECK constraints ✅
+- Route API `/api/equipment` (CRUD complet + transaction) ✅
+- Page admin standalone `localhost:3001/equipment-admin.html` ✅
+  - Saisie rapide YAML (33 alias courts, js-yaml CDN)
+  - Presets catégories (Arme / Protection / Munition / Conteneur / Divers)
+  - Multi-select compétences groupées par famille
 
-Dettes Dice Rework :
-- D10 UV texturing V2 — modèle Blender (.glb) avec UVs kite pré-calculés (PE33)
-- Audio — `useDiceAudio.js` — sons d'impact au rebond
+Travaux effectués en session 48 :
+- Seed `2_seed_equipment.js` — 636 items injectés (KO-par-défaut, garde name idempotent) ✅
+- `diff_equip.mjs` — outil diff BDD vs STEP1, réutilisable ✅
+- Vérification post-seed : 23 divergences acceptées (corrections intentionnelles vs livre de règles) ✅
+- Junction tables skills : enrichissement manuel en cours
+
+### Chantier 11 sprint 1 — Module Blessures ✅ (session 49)
+
+Travaux effectués en session 49 :
+- `shared/woundConstants.js` — source de vérité partagée (LOCATIONS, SEVERITIES, MAX_COUNTS, PENALTIES) ✅
+- Migration 49 : `character_wounds` (UUID PK, FK char_sheet CASCADE, CHECK constraints SQL) ✅
+- `char-sheet.js` — refactorisé avec `router.param` + 4 routes blessures + broadcasts WS ✅
+- `charStats.js` — `calcWoundPenalty()` ajoutée ✅
+- `WoundManager.jsx` — composant autonome (grille fixe, clic POST/PUT/DELETE, promotion transparente) ✅
+- Onglet "Matériel" dans CharacterWindow ✅
 
 ---
 
 ## Prochaines tâches
 
-### Chantier suivant — à définir
-Voir ROADMAP.md pour les options.
+### PC22 — Fix 403 toggle is_learned (MUTATION/POLARIS)
+Fichiers : `server/src/routes/character/char-sheet.js`, `AdvantagesPanel.jsx`.
+Fix : route dédiée owner+GM pour `is_learned` sur compétences MUTATION/POLARIS.
+
+### Chantier 10 sprint 2 — char_inventory (à planifier)
+Voir PLAN_chantier10.md pour la spécification complète.
+Prérequis : ref_equipment ✅ peuplée — 636 items (session 48). Junction tables enrichies manuellement en cours.
+
+### Chantier 11 suite — Intégration malus blessures dans calculs Polaris
+`calcWoundPenalty()` existe dans charStats.js. À intégrer dans les jets de compétence/attribut.
 
 ---
 
@@ -82,3 +103,4 @@ Statut : correction prévue si besoin.
 - Logs debug index.js — conservés volontairement, à retirer avant production
 - DiceMesh useMemo — deps [geoDef.type, color, dieType] — dieType obligatoire pour D10 (PE32)
 - D10 Html overlay — position=[0,0,0] — ne pas déplacer (PE33)
+- P49 — promotion blessures : always GET /wounds si promoted === true (ne pas ajouter wound localement)

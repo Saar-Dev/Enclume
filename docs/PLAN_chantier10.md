@@ -1,3 +1,9 @@
+---
+> **SPRINT 1 LIVRÉ — Session 47 (2026-05-06)**
+> Migration 48 (`ref_equipment` + 3 junction tables) déployée. Route `/api/equipment` CRUD. Page admin standalone.
+> Ce document couvre le **sprint 2** (char_inventory — inventaire joueur). Prérequis : ref_equipment peuplée par Saar.
+---
+
 CHAPITRE 1 : Architecture de la Base de Données (Data Layer)
 
 Ce chapitre définit la structure exacte pour la persistance de l'inventaire d'un personnage. Il sert de base pour la création de la migration Knex.js et du modèle de données associé.

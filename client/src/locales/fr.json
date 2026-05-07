@@ -166,6 +166,7 @@
   },
   "character": {
     "tabSheet": "Fiche",
+    "tabMateriel": "Matériel",
     "tabBio": "Bio & Info",
     "tabSettings": "Paramètres",
     "sheetPlaceholder": "Fiche personnage — Phase 3",

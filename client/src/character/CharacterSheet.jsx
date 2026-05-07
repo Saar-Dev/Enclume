@@ -287,6 +287,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           console.error('Erreur chargement advantages :', advErr)
         }
 
+
       } catch (err) {
         if (!cancelled) setError('Impossible de charger la fiche')
         console.error('Erreur chargement CharacterSheet :', err)
@@ -758,6 +759,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           onSaved={onSaved}
         />
       </div>
+
 
     </div>
   )

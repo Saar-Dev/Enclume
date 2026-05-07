@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\Kiwi\\\\\" -Recurse -File | Select-Object Name, @{Name=\"Size\";Expression={$_.Length}}, FullName | Sort-Object Name | Format-Table -AutoSize)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\JOURNAL2.md\"\\).Count)",
+      "Bash(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\JOURNAL2.md\" -Tail 100)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\" -Recurse)",
+      "Bash(Select-Object FullName)",
+      "WebSearch"
+    ]
+  }
+}
