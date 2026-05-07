@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-07 Session 50
+> Dernière mise à jour : 2026-05-07 Session 51
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -46,8 +46,10 @@ Enclume/
 │   │   │   └── entityStore.js          # Modifié 34 — fetchBlueprints() ajouté
 │   │   ├── character/
 │   │   │   ├── WoundManager.jsx        # NOUVEAU 49 — grille blessures autonome (POST/PUT/DELETE, promotion P49)
+│   │   │   ├── InventoryPanel.jsx      # NOUVEAU 51 — inventaire joueur + bloc ajout GM (catalogue lazy, stacking, slots)
 │   │   │   ├── AdvantagesPanel.jsx     # Modifié 50 — rework lift-state-up, props charSkills/refSkillsPolaris/onSkillLearnedChange
-│   │   │   └── CharacterSheet.jsx      # Modifié 50 — refSkillsPolaris useMemo + handlePolarisToggled + 3 props AdvantagesPanel
+│   │   │   ├── CharacterSheet.jsx      # Modifié 50 — refSkillsPolaris useMemo + handlePolarisToggled + 3 props AdvantagesPanel
+│   │   │   └── CharacterWindow.jsx     # Modifié 51 — import InventoryPanel, montage onglet Matériel (isGm prop)
 │   │   ├── locales/
 │   │   │   └── fr.json                 # Modifié 49 — +tabMateriel
 │   │   ├── lib/
@@ -95,11 +97,11 @@ Enclume/
 │   │   │   ├── AppError.js
 │   │   │   ├── minio.js
 │   │   │   ├── diceParser.js
-│   │   │   ├── charStats.js            # Modifié 49 — +calcWoundPenalty
+│   │   │   ├── charStats.js            # Modifié 51 — +calcEncumbrancePenalty
 │   │   │   └── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
 │   │   └── index.js                    # Modifié 47 — express.static public/ + route /api/equipment
 ├── shared/
-│   ├── events.js                       # Modifié 49 — +WOUND_ADDED/UPDATED/REMOVED
+│   ├── events.js                       # Modifié 51 — +INVENTORY_ADDED/UPDATED/REMOVED/SOLS_UPDATED
 │   └── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES
 └── docs/
 ```
@@ -170,7 +172,7 @@ Enclume/
 | 47_campaigns_cover_url | campaigns.cover_url TEXT nullable — illustration campagne |
 | 48_ref_equipment | ref_equipment (35 colonnes, 6 CHECK) + ref_equipment_skills + ref_equipment_skill_assoc + ref_equipment_ammo_compat |
 | 49_character_wounds | character_wounds (UUID PK, char_sheet_id FK CASCADE, location/severity CHECK, is_stabilized, idx) |
-| 50 | (pas de migration — PC22 fix pur client+serveur) |
+| 50_char_inventory | char_inventory (UUID PK, FK characters CASCADE, FK ref_equipment SET NULL, container/slot/quantity/custom_props JSONB) + char_sheet.sols INTEGER |
 
 ---
 

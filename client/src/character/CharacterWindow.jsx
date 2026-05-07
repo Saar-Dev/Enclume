@@ -20,6 +20,7 @@ import { useCharacterStore } from '../stores/characterStore'
 import api from '../lib/api.js'
 import CharacterSheet from './CharacterSheet.jsx'
 import WoundManager from './WoundManager.jsx'
+import InventoryPanel from './InventoryPanel.jsx'
 
 // ─── Constantes fenêtre ───────────────────────────────────────────────────────
 const WIN_INIT_W = 720
@@ -355,12 +356,19 @@ export default function CharacterWindow({ character, isGm, onClose }) {
           />
         )}
 
-        {/* Onglet Matériel — blessures (Étape 1) */}
+        {/* Onglet Matériel */}
         {activeTab === 'materiel' && (
-          <WoundManager
-            characterId={character.id}
-            canEdit={isGm || isOwner}
-          />
+          <>
+            <WoundManager
+              characterId={character.id}
+              canEdit={isGm || isOwner}
+            />
+            <InventoryPanel
+              characterId={character.id}
+              canEdit={isGm || isOwner}
+              isGm={isGm}
+            />
+          </>
         )}
 
         {/* Onglet Bio & Info */}

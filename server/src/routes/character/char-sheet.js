@@ -31,7 +31,7 @@ import { Router } from 'express'
 import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
-import { getCoutAugmentation, getCoutDeblocageX } from '../../lib/charStats.js'
+import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty } from '../../lib/charStats.js'
 import { WS } from '../../../../shared/events.js'
 import {
   WOUND_LOCATIONS, WOUND_SEVERITIES, WOUND_MAX_COUNTS,
@@ -748,6 +748,330 @@ router.delete('/:characterId/wounds/:woundId', async (req, res, next) => {
     })
 
     res.json({ deleted: true, woundId: req.params.woundId })
+  } catch (err) { next(err) }
+})
+
+// ─── Helpers inventaire ───────────────────────────────────────────────────────
+
+const VALID_CONTAINERS = ['Coffre', 'Sac', 'Ceinture']
+const VALID_SLOTS      = ['T', 'C', 'B', 'J', 'C/B/J', 'T/C/B/J']
+
+async function isContainerAvailable(characterId, container) {
+  if (container === 'Coffre') return true
+  const locationNeeded = container === 'Sac' ? 'D' : container === 'Ceinture' ? 'Ce' : null
+  if (!locationNeeded) return false
+  const row = await db('char_inventory')
+    .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+    .where({ 'char_inventory.character_id': characterId })
+    .where('ref_equipment.location', locationNeeded)
+    .first()
+  return !!row
+}
+
+async function getDefaultContainer(characterId) {
+  const hasSac = await db('char_inventory')
+    .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+    .where({ 'char_inventory.character_id': characterId })
+    .where('ref_equipment.location', 'D')
+    .first()
+  return hasSac ? 'Sac' : 'Coffre'
+}
+
+async function getItemWithRef(itemId) {
+  return db('char_inventory')
+    .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+    .where({ 'char_inventory.id': itemId })
+    .select(
+      'char_inventory.id',
+      'char_inventory.equipment_id',
+      'char_inventory.container',
+      'char_inventory.slot',
+      'char_inventory.quantity',
+      'char_inventory.custom_name',
+      'char_inventory.custom_desc',
+      'char_inventory.notes',
+      'char_inventory.custom_props',
+      'ref_equipment.name as ref_name',
+      'ref_equipment.family as ref_family',
+      'ref_equipment.category as ref_category',
+      'ref_equipment.weight as ref_weight',
+      'ref_equipment.location as ref_location',
+      'ref_equipment.protection as ref_protection',
+      'ref_equipment.protection_shock as ref_protection_shock',
+      'ref_equipment.malus_cat as ref_malus_cat',
+      'ref_equipment.capacity as ref_capacity',
+    )
+    .first()
+}
+
+// ─── GET /api/char-sheet/:characterId/inventory ───────────────────────────────
+router.get('/:characterId/inventory', async (req, res, next) => {
+  try {
+    const characterId = req.params.characterId
+
+    const sheet = await db('char_sheet').where({ character_id: characterId }).first()
+    if (!sheet) return res.json({ items: [], sols: 0, total_weight: 0, ini_penalty: 0, threshold: 0 })
+
+    const forAttr = await db('char_attributes')
+      .where({ char_sheet_id: sheet.id, attr_id: 'FOR' })
+      .first()
+    const forValue = (forAttr?.base_level ?? 7) + (forAttr?.pc_modifier ?? 0)
+
+    const items = await db('char_inventory')
+      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .where({ 'char_inventory.character_id': characterId })
+      .select(
+        'char_inventory.id',
+        'char_inventory.equipment_id',
+        'char_inventory.container',
+        'char_inventory.slot',
+        'char_inventory.quantity',
+        'char_inventory.custom_name',
+        'char_inventory.custom_desc',
+        'char_inventory.notes',
+        'char_inventory.custom_props',
+        'ref_equipment.name as ref_name',
+        'ref_equipment.family as ref_family',
+        'ref_equipment.category as ref_category',
+        'ref_equipment.weight as ref_weight',
+        'ref_equipment.location as ref_location',
+        'ref_equipment.protection as ref_protection',
+        'ref_equipment.protection_shock as ref_protection_shock',
+        'ref_equipment.malus_cat as ref_malus_cat',
+        'ref_equipment.capacity as ref_capacity',
+      )
+      .orderBy('char_inventory.created_at', 'asc')
+
+    const totalWeight = items.reduce((sum, item) => {
+      if (item.container === 'Coffre') return sum
+      if (item.ref_weight == null) return sum
+      return sum + item.ref_weight * item.quantity
+    }, 0)
+
+    const threshold  = forValue * 3
+    const iniPenalty = calcEncumbrancePenalty(totalWeight, forValue)
+
+    res.json({
+      items,
+      sols:         sheet.sols,
+      total_weight: totalWeight,
+      ini_penalty:  iniPenalty,
+      threshold,
+    })
+  } catch (err) { next(err) }
+})
+
+// ─── PUT /api/char-sheet/:characterId/sols ────────────────────────────────────
+// P46 : déclarée AVANT PUT /:characterId/inventory/:itemId
+router.put('/:characterId/sols', async (req, res, next) => {
+  try {
+    const { sols } = req.body
+    if (!Number.isInteger(sols) || sols < 0) {
+      throw new AppError(400, 'sols doit être un entier non négatif')
+    }
+
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId }).first()
+    if (!sheet) throw new AppError(404, 'Sheet not found')
+
+    const [updated] = await db('char_sheet')
+      .where({ id: sheet.id })
+      .update({ sols, updated_at: db.fn.now() })
+      .returning('*')
+
+    req.app.get('io').to(req.character.campaign_id).emit(WS.SOLS_UPDATED, {
+      characterId: req.params.characterId,
+      sols: updated.sols,
+    })
+
+    res.json({ sols: updated.sols })
+  } catch (err) { next(err) }
+})
+
+// ─── POST /api/char-sheet/:characterId/inventory ──────────────────────────────
+router.post('/:characterId/inventory', async (req, res, next) => {
+  try {
+    const characterId = req.params.characterId
+    const {
+      equipment_id,
+      container: containerIn,
+      slot,
+      quantity = 1,
+      custom_name, custom_desc, notes,
+    } = req.body
+
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw new AppError(400, 'quantity doit être un entier positif')
+    }
+
+    let container
+    if (containerIn !== undefined) {
+      if (!VALID_CONTAINERS.includes(containerIn)) {
+        throw new AppError(400, `container invalide : ${containerIn}`)
+      }
+      if (!(await isContainerAvailable(characterId, containerIn))) {
+        throw new AppError(400, `Container "${containerIn}" non disponible`)
+      }
+      container = containerIn
+    } else {
+      container = await getDefaultContainer(characterId)
+    }
+
+    let resolvedSlot = slot ?? null
+    if (resolvedSlot !== null) {
+      if (!VALID_SLOTS.includes(resolvedSlot)) {
+        throw new AppError(400, `slot invalide : ${resolvedSlot}`)
+      }
+      if (!(await isContainerAvailable(characterId, 'Sac'))) {
+        throw new AppError(400, 'Sac non disponible — impossible d\'équiper un item')
+      }
+      const conflict = await db('char_inventory')
+        .where({ character_id: characterId, slot: resolvedSlot })
+        .first()
+      if (conflict) throw new AppError(409, 'Slot déjà occupé')
+      container = 'Sac'
+    }
+
+    // Stacking : même equipment_id + même container + slot IS NULL
+    if (equipment_id && resolvedSlot === null) {
+      const existing = await db('char_inventory')
+        .where({ character_id: characterId, equipment_id, container })
+        .whereNull('slot')
+        .first()
+      if (existing) {
+        const [updated] = await db('char_inventory')
+          .where({ id: existing.id })
+          .update({ quantity: existing.quantity + quantity, updated_at: db.fn.now() })
+          .returning('*')
+        const item = await getItemWithRef(updated.id)
+        req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, { characterId, item })
+        return res.json({ item })
+      }
+    }
+
+    const insertData = {
+      character_id: characterId,
+      equipment_id: equipment_id ?? null,
+      container,
+      slot: resolvedSlot,
+      quantity,
+    }
+    if (custom_name !== undefined) insertData.custom_name = custom_name
+    if (custom_desc !== undefined) insertData.custom_desc = custom_desc
+    if (notes      !== undefined) insertData.notes       = notes
+
+    const [inserted] = await db('char_inventory').insert(insertData).returning('*')
+    const item = await getItemWithRef(inserted.id)
+
+    req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_ADDED, { characterId, item })
+
+    res.status(201).json({ item })
+  } catch (err) { next(err) }
+})
+
+// ─── PUT /api/char-sheet/:characterId/inventory/:itemId ───────────────────────
+router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
+  try {
+    const { characterId, itemId } = req.params
+
+    const existing = await db('char_inventory')
+      .where({ id: itemId, character_id: characterId }).first()
+    if (!existing) throw new AppError(404, 'Item not found')
+
+    const { container, slot, quantity, custom_name, custom_desc, notes, custom_props } = req.body
+    const updates = {}
+
+    if (container    !== undefined) updates.container    = container
+    if (slot         !== undefined) updates.slot         = slot
+    if (quantity     !== undefined) updates.quantity     = quantity
+    if (custom_name  !== undefined) updates.custom_name  = custom_name
+    if (custom_desc  !== undefined) updates.custom_desc  = custom_desc
+    if (notes        !== undefined) updates.notes        = notes
+    if (custom_props !== undefined) updates.custom_props = custom_props
+
+    // P13 — guard avant updated_at
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+
+    // Validation slot
+    if (updates.slot !== undefined && updates.slot !== null) {
+      if (!VALID_SLOTS.includes(updates.slot)) {
+        throw new AppError(400, `slot invalide : ${updates.slot}`)
+      }
+      const conflict = await db('char_inventory')
+        .where({ character_id: characterId, slot: updates.slot })
+        .whereNot({ id: itemId })
+        .first()
+      if (conflict) throw new AppError(409, 'Slot déjà occupé')
+      // PI2 : Sac obligatoire pour équiper — si indisponible → 400
+      if (!(await isContainerAvailable(characterId, 'Sac'))) {
+        throw new AppError(400, 'Sac non disponible — impossible d\'équiper un item')
+      }
+      updates.container = 'Sac'
+    }
+
+    // Validation container (si fourni explicitement et pas déjà forcé à 'Sac' par slot)
+    if (updates.container !== undefined) {
+      if (!VALID_CONTAINERS.includes(updates.container)) {
+        throw new AppError(400, `container invalide : ${updates.container}`)
+      }
+      if (!(await isContainerAvailable(characterId, updates.container))) {
+        throw new AppError(400, `Container "${updates.container}" non disponible`)
+      }
+    }
+
+    if (updates.quantity !== undefined) {
+      if (!Number.isInteger(updates.quantity) || updates.quantity < 1) {
+        throw new AppError(400, 'quantity doit être un entier positif')
+      }
+    }
+
+    // P13 — updated_at APRÈS le guard
+    updates.updated_at = db.fn.now()
+
+    await db('char_inventory').where({ id: itemId }).update(updates)
+    const item = await getItemWithRef(itemId)
+
+    req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, { characterId, item })
+
+    res.json({ item })
+  } catch (err) { next(err) }
+})
+
+// ─── DELETE /api/char-sheet/:characterId/inventory/:itemId ────────────────────
+router.delete('/:characterId/inventory/:itemId', async (req, res, next) => {
+  try {
+    const { characterId, itemId } = req.params
+
+    const existing = await db('char_inventory')
+      .where({ id: itemId, character_id: characterId }).first()
+    if (!existing) throw new AppError(404, 'Item not found')
+
+    const { quantity: qtyToRemove } = req.body || {}
+
+    if (qtyToRemove !== undefined) {
+      if (!Number.isInteger(qtyToRemove) || qtyToRemove < 1) {
+        throw new AppError(400, 'quantity doit être un entier positif')
+      }
+      const newQty = existing.quantity - qtyToRemove
+      if (newQty > 0) {
+        const [updated] = await db('char_inventory')
+          .where({ id: itemId })
+          .update({ quantity: newQty, updated_at: db.fn.now() })
+          .returning('*')
+        req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, {
+          characterId, item: updated,
+        })
+        return res.json({ item: updated })
+      }
+    }
+
+    await db('char_inventory').where({ id: itemId }).del()
+
+    req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_REMOVED, {
+      characterId, itemId,
+    })
+
+    res.json({ deleted: true, itemId })
   } catch (err) { next(err) }
 })
 

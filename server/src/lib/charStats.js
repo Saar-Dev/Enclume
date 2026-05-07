@@ -342,3 +342,17 @@ export function calcWoundPenalty(wounds) {
   }
   return worst
 }
+
+// ─── Encombrement (Chantier 10) ───────────────────────────────────────────────
+
+/**
+ * Malus INI encombrement — chaque kg au-dessus du seuil réduit l'initiative de 1.
+ * Seuil = FOR × 3. Items dans 'Coffre' exclus du calcul.
+ * @param {number} totalWeight — poids total porté (kg)
+ * @param {number} forValue    — valeur FOR nette (base_level + pc_modifier)
+ * @returns {number} malus positif (à soustraire de l'INI)
+ */
+export function calcEncumbrancePenalty(totalWeight, forValue) {
+  const threshold = forValue * 3
+  return Math.max(0, Math.ceil(totalWeight - threshold))
+}

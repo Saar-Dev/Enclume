@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-05-07 Session 50
+> Dernière mise à jour : 2026-05-07 Session 51
 
 ---
 
@@ -73,20 +73,22 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 50 (2026-05-07)
+## État actuel — Session 51 (2026-05-07)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **49 migrations stables** — prochaine : **50**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1 ✅ / Chantier 11 sprint 1 ✅ / PC22 ✅
+- **50 migrations stables** — prochaine : **51**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2 ✅ / Chantier 11 sprint 1 ✅ / PC22 ✅
 
-**PC22 livré (session 50) :**
-- `char-sheet.js` — route `PUT /:characterId/skills/toggle-learned` (owner+GM, guard `parent !== 'POUVOIRS_POLARIS'`, UPSERT préserve mastery)
-- `AdvantagesPanel.jsx` — rework lift-state-up : suppression états locaux charSkillsPolaris/refSkillsPolaris/loadingRef + useEffect redondant, ajout props charSkills/refSkillsPolaris/onSkillLearnedChange
-- `CharacterSheet.jsx` — propriétaire unique charSkills, refSkillsPolaris useMemo, handlePolarisToggled, 3 props vers AdvantagesPanel
+**Chantier 10 sprint 2 livré (session 51) :**
+- Migration 50 : `char_inventory` + `char_sheet.sols`
+- `calcEncumbrancePenalty()` dans `charStats.js`
+- 5 routes inventaire + route sols dans `char-sheet.js` (helpers `isContainerAvailable`, `getDefaultContainer`, `getItemWithRef`)
+- `InventoryPanel.jsx` — state interne, fetch propre, bloc ajout GM (catalogue lazy), équipement slots
+- `CharacterWindow.jsx` — montage onglet Matériel, prop `isGm` sur InventoryPanel
 
 **Prochains chantiers (à décider avec Saar) :**
-- Chantier 10 sprint 2 — `char_inventory` (prérequis : ref_equipment peuplée ✅)
 - Chantier 11 suite — intégration `calcWoundPenalty` dans les jets Polaris
+- Chantier 10 sprint 3 — armures mille-feuille + malus encombrement (prérequis : char_inventory ✅)
 
 **Dettes actives :**
 - D10 UV texturing V2 — modèle Blender .glb (PE33)
@@ -146,6 +148,21 @@ Si `!character.visible && !state.isGm` → retirer du store. Le broadcast envoie
 
 **PE33 — D10 UV kite = V2 Blender uniquement**
 Ne pas tenter de calculer les UVs kite en code pur. V1 = Html overlay `position={[0,0,0]}` — ne pas déplacer.
+
+**PI1 — Container 'Sac' conditionnel**
+Disponible seulement si le character possède ≥1 item `ref_equipment.location='D'` dans son inventaire. Idem 'Ceinture' → `location='Ce'`. 'Coffre' toujours disponible. Vérifier avec `isContainerAvailable()` avant tout POST/PUT.
+
+**PI2 — Équipement (slot ≠ null) → container forcé 'Sac'**
+Si `slot` demandé et 'Sac' indisponible → 400. Ne jamais silencieusement forcer 'Coffre'. Pattern : slot prend la priorité sur container dans le même PUT.
+
+**PI3 — Items équipés comptés dans le poids**
+`slot IS NOT NULL` ne signifie pas "hors du sac". Container reste 'Sac', poids toujours compté. Le filtre `container != 'Coffre'` est la seule exclusion de poids.
+
+**PI4 — FOR nette pour l'encombrement**
+`calcEncumbrancePenalty` requiert `base_level + pc_modifier` de `char_attributes WHERE attr_id='FOR'`, pas seulement `base_level`.
+
+**PI5 — Items manuels (equipment_id null) exclus du poids**
+`ref_weight` est null → `item.ref_weight == null` → skip dans la réduction poids.
 
 **P49 — Promotion blessures : rechargement complet obligatoire**
 Si `res.data.promoted === true`, le serveur a supprimé toute la ligne source.

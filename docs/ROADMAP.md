@@ -103,7 +103,7 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 | Sprint | Contenu | État |
 |---|---|---|
 | Sprint 1 | Schéma DB + migration 48 + page admin saisie manuelle | ✅ session 46-47 |
-| Sprint 2 | `char_inventory` (table instance) + UI inventaire joueur | 🔲 |
+| Sprint 2 | `char_inventory` (table instance) + UI inventaire joueur | ✅ session 51 |
 | Sprint 3 | Calcul armures mille-feuille + malus encombrement | 🔲 |
 
 **Sprint 1 livré :**
@@ -111,7 +111,11 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 - Route `/api/equipment` CRUD + transaction
 - Page admin `localhost:3001/equipment-admin.html` (YAML rapide + presets + multi-select compétences)
 
-**Dépendance sprint 2 :** ref_equipment peuplée ✅ — 636 items injectés session 48 (`2_seed_equipment.js`).
+**Sprint 2 livré (session 51) :**
+- Migration 50 : `char_inventory` + `char_sheet.sols`
+- 5 routes REST inventaire + route sols dans `char-sheet.js`
+- `InventoryPanel.jsx` — affichage par container, encombrement, édition GM (catalogue 636 items), équipement slots
+- Reporté sprint 2 → chantiers futurs : transfert entre persos, WS listeners client, restriction sols→GM, split pile, UI armure
 
 ### Chantier 11 — Module Blessures (Fiche personnage)
 
@@ -132,7 +136,7 @@ Module Armes / Module Armures (équipé depuis inventaire)
 
 | Étape | Contenu | Prérequis | État |
 |---|---|---|---|
-| Étape 1 | `character_wounds` DB + routes + `WoundManager` UI + intégration `charStats.js` | — | 🔲 session 49 |
+| Étape 1 | `character_wounds` DB + routes + `WoundManager` UI + intégration `charStats.js` | — | ✅ session 49 |
 | Étape 2 | Module Armes — liste armes équipées depuis `char_inventory` → `ref_equipment` | Chantier 10 sprint 2 | 🔲 |
 | Étape 3 | Module Armures — même architecture + calcul protection par localisation | Chantier 10 sprint 2 | 🔲 |
 | Étape 4 | Polish — animations Tests de Choc, états santé (Étourdi/Inconscient/Coma) | Étapes 1-3 | 🔲 |
@@ -150,8 +154,7 @@ Promotion : ligne pleine → ligne vidée + 1 case gravité supérieure cochée.
 Malus par gravité : Légère −1 / Moyenne −3 / Grave −5 / Critique −10 / Mortelle −20.
 Tests de Choc : Grave (tête/corps) + Critique + Mortelle (toutes localisations).
 
-### PC22 — Fix 403 toggle is_learned MUTATION/POLARIS 🔲
-Fichiers : `char-sheet.js`, `AdvantagesPanel.jsx`. Route dédiée owner+GM pour `is_learned` sur compétences MUTATION/POLARIS. Chantier mini-session dédié.
+### PC22 — Fix 403 toggle is_learned MUTATION/POLARIS ✅ (session 50)
 
 ### Chantier reporté — Paramètre campagne GM entity move mode 🔲
 3 options : réaliste / à la carte / divine. Voir EN_COURS.md.

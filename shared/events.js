@@ -55,4 +55,10 @@ export const WS = {
   WOUND_ADDED:   'wound:added',    // serveur → room : blessure ajoutée (+ promoted, shock_test_required)
   WOUND_UPDATED: 'wound:updated',  // serveur → room : blessure stabilisée
   WOUND_REMOVED: 'wound:removed',  // serveur → room : blessure supprimée (guérison)
+
+  // Inventaire (Chantier 10)
+  INVENTORY_ADDED:   'inventory:added',    // serveur → room : item ajouté
+  INVENTORY_UPDATED: 'inventory:updated',  // serveur → room : item modifié
+  INVENTORY_REMOVED: 'inventory:removed',  // serveur → room : item supprimé
+  SOLS_UPDATED:      'sols:updated',       // serveur → room : solde sols modifié
 }

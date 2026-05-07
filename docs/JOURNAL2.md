@@ -4761,3 +4761,72 @@ Stocker une copie locale → changements non propagés vers SkillsPanel (learned
 - Pouvoir togglé OFF → disparaît de SkillsPanel immédiatement
 - Onglet "Matériel" visible et fonctionnel dans la fenêtre personnage
 - ⏳ Chantier 10 sprint 2 (`char_inventory`) — prérequis : ref_equipment peuplée ✅
+---
+
+## Session 51 — 2026-05-07
+
+### Chantier 10 sprint 2 — Module Inventaire (`char_inventory`)
+
+**Contexte**
+Planification complète en début de session : analyse critique du PLAN_INVENTORY.md produit en amont, correction de 7 erreurs (URL routes, nom colonne `location` vs `locations`, conflit onglet WoundManager, naming WS, modèle slots T/C/B/J vs BG/BD/JG/JD). Décision : Modèle A (slot = valeurs `ref_equipment.location`). Plan validé pour implémentation.
+
+**Migration 50 — `50_char_inventory.js` ✅**
+- `CREATE TABLE char_inventory` : UUID PK, FK `characters` CASCADE, FK `ref_equipment` SET NULL, `container VARCHAR(20)` DEFAULT 'Coffre', `slot VARCHAR(20)` nullable, `quantity INTEGER` CHECK > 0, `custom_name/custom_desc/notes/custom_props JSONB`, timestamps
+- `ALTER TABLE char_sheet ADD COLUMN sols INTEGER NOT NULL DEFAULT 0`
+- 3 index partiels : `character_id`, `equipment_id WHERE NOT NULL`, `slot WHERE NOT NULL`
+- Constraint `chk_inventory_quantity` via raw SQL
+
+**`server/src/lib/charStats.js` ✅**
+- Ajout `calcEncumbrancePenalty(totalWeight, forValue)` : `MAX(0, CEIL(totalWeight - forValue*3))`
+- Fonction pure, cohérente avec la convention du fichier
+
+**`shared/events.js` ✅**
+- Ajout `INVENTORY_ADDED / INVENTORY_UPDATED / INVENTORY_REMOVED / SOLS_UPDATED`
+
+**`server/src/routes/character/char-sheet.js` ✅**
+- Import `calcEncumbrancePenalty` ajouté
+- 3 helpers privés : `isContainerAvailable`, `getDefaultContainer`, `getItemWithRef` (JOIN avec ref_equipment)
+- 5 routes ajoutées en fin de fichier :
+  - `GET /:characterId/inventory` — items + sols + total_weight + ini_penalty + threshold
+  - `PUT /:characterId/sols` — P46 : déclarée AVANT `/:itemId`
+  - `POST /:characterId/inventory` — stacking + validation container/slot + default container
+  - `PUT /:characterId/inventory/:itemId` — P13 + slot force Sac + conflit slot (PI2)
+  - `DELETE /:characterId/inventory/:itemId` — décrément ou DELETE complet
+- Logique container : Sac disponible si ≥1 item `ref_equipment.location='D'`, Ceinture si `location='Ce'`, Coffre toujours
+- Encombrement : items `container='Coffre'` exclus du calcul poids
+- FOR = `base_level + pc_modifier` depuis `char_attributes WHERE attr_id='FOR'`
+
+**`client/src/character/InventoryPanel.jsx` ✅ (NOUVEAU)**
+- Pattern WoundManager : state interne, fetch propre (pas de WS listeners — socket non disponible dans CharacterWindow V1)
+- Header : poids total / seuil / malus INI si > 0 / sols (cliquable si canEdit)
+- Items groupés par container (Sac → Ceinture → Coffre)
+- Par item : nom (custom_name || ref_name), quantité ×N, slot [T] si équipé, poids
+- Actions canEdit : select container (availableContainers calculé depuis items), select slot (container='Sac' uniquement), bouton ✕ delete
+- Edge case : container actuel toujours dans les options même si devenu indisponible
+- Bloc "Ajouter" visible uniquement si `isGm` :
+  - Chargement lazy `GET /api/equipment` (636 items) au premier clic
+  - Filtre client-side nom/category/family — 50 résultats max affichés
+  - Confirmation : quantité + container (availableContainers uniquement) → POST
+  - Stacking auto géré côté serveur
+
+**`client/src/character/CharacterWindow.jsx` ✅**
+- Import InventoryPanel
+- Onglet 'materiel' : WoundManager + InventoryPanel (canEdit + isGm props)
+- Commentaire "Étape 1" retiré
+
+**Pièges documentés dans PLAN_INVENTORY.md**
+- PI1 : container 'Sac' non disponible si pas d'item location='D' → default 'Coffre'
+- PI2 : équipement (slot ≠ null) → container forcé 'Sac' ; si indisponible → 400 (jamais silencieux)
+- PI3 : items équipés (slot ≠ null) toujours comptés dans l'encombrement (container='Sac')
+- PI4 : FOR nette = base_level + pc_modifier (pas seulement base_level)
+- PI5 : items manuels (equipment_id null) : ref_weight null → exclus du calcul poids
+
+**Bug diagnostiqué en test**
+Migration 50 appliquée avec succès mais serveur démarré avant appliquation → "relation char_inventory does not exist". Fix : rollback + migrate:latest → table confirmée dans `public`. À retenir : toujours SR après migration.
+
+**Décisions**
+- Transfert entre personnages : reporté chantier dédié (WS bidirectionnel, validation double MMO-style)
+- WS listeners InventoryPanel V1 : non implémentés (socket non threaded dans CharacterWindow) — serveur broadcast les events pour future intégration
+- Édition sols côté owner : possible actuellement (canEdit), restriction GM-only reportée chantier futur
+- Slot = valeurs `ref_equipment.location` (Modèle A) : T/C/B/J/C/B/J/T/C/B/J
+

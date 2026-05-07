@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-07 Session 50
+> Dernière mise à jour : 2026-05-07 Session 51
 
 ---
 
@@ -50,9 +50,14 @@ Travaux effectués en session 49 :
 
 ## Prochaines tâches
 
-### Chantier 10 sprint 2 — char_inventory (à planifier)
-Voir PLAN_chantier10.md pour la spécification complète.
-Prérequis : ref_equipment ✅ peuplée — 636 items (session 48). Junction tables enrichies manuellement en cours.
+### Chantier 10 sprint 2 — char_inventory ✅ (session 51)
+
+Travaux effectués en session 51 :
+- Migration 50 : `char_inventory` + `char_sheet.sols` ✅
+- `calcEncumbrancePenalty()` dans `charStats.js` ✅
+- 5 routes inventaire + route sols dans `char-sheet.js` ✅
+- `InventoryPanel.jsx` — affichage + edit GM (ajout depuis catalogue, équipement, suppression) ✅
+- Montage dans `CharacterWindow.jsx` onglet Matériel sous WoundManager ✅
 
 ### Chantier 11 suite — Intégration malus blessures dans calculs Polaris
 `calcWoundPenalty()` existe dans charStats.js. À intégrer dans les jets de compétence/attribut.

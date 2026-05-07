@@ -1,339 +1,351 @@
-.)
-markdown
-Copier
-
-# Étape 1 : Design — Module Inventaire (Migration 50)
-> **Source de vérité** : Aligné sur `SCHEMA_EQUIPMENT.md`, `PLAN_EQUIPMENT.md`, et discussions avec Saar (2026-05-07).
-> **Statut** : Validé pour passage à l'Étape 2 (Planification de la conception).
-> **Dernière mise à jour** : 2026-05-07 (Session 49).
+# PLAN_INVENTORY.md — Chantier 10 Sprint 2 : Module Inventaire
+> Rédigé session 51 — 2026-05-07
+> Remplace intégralement la version précédente (erronée).
+> Statut : **validé pour implémentation**
 
 ---
 
 ## 1. Contexte
-### 1.1 Objectif
-Implémenter un **système d'inventaire** pour les personnages du VTT Enclume, inspiré de `50_Inventory_WebApp.txt` (Google Apps Script + Sheets), mais **adapté à la stack Enclume** :
-- **Backend** : PostgreSQL (tables SQL) + Node.js/Express.
-- **Frontend** : React 19 + Zustand.
-- **Synchronisation** : WebSocket (Socket.io) pour les mises à jour temps réel.
 
-### 1.2 Périmètre
-- **Création de la table `char_inventory`** : Lier les items (`ref_equipment`) aux personnages (`characters`), avec gestion des **conteneurs** et **slots d'équipement**.
-- **Intégration avec les règles Polaris** :
-  - Calcul des **protections par zone** (moteur "Mille-feuille").
-  - Gestion de l'**encombrement** (malus global basé sur le poids).
-- **Pas de modification** de `ref_equipment` (déjà déployée et seedée en Migration 48).
+Implémenter le système d'inventaire des personnages Polaris (`char_inventory`) et la monnaie (`sols`).
 
----
+**Prérequis satisfaits :**
+- `ref_equipment` : 636 items seedés (migration 48) ✅
+- `char_sheet` : table pivot stable (migration 36) ✅
+- `router.param('characterId', ...)` dans `char-sheet.js` : ownership automatique ✅
 
-## 2. Architecture Actuelle (À Connaître)
-### 2.1 Tables Existantes
-   Table | Rôle | Statut |
- |-------|------|--------|
- | `ref_equipment` | Catalogue statique des équipements (armes, armures, etc.). **636 items seedés**. | ✅ Déployée (Migration 48) |
- | `ref_equipment_skills` | Junction : `ref_equipment` ↔ compétences boostées/requises. | ✅ Déployée |
- | `ref_equipment_skill_assoc` | Junction : `ref_equipment` ↔ compétences d'utilisation. | ✅ Déployée |
- | `ref_equipment_ammo_compat` | Junction : compatibilité munitions/armes. | ✅ Déployée |
- | `characters` | Fiches personnages. | ✅ Existante |
+**Périmètre sprint 2 :**
+- Migration 50 (char_inventory + sols)
+- CRUD inventaire (ajouter, déplacer, équiper, supprimer)
+- Calcul encombrement
+- Broadcast WS
+- Composant `InventoryPanel.jsx`
 
-**Source** : `SCHEMA_EQUIPMENT.md`, `JOURNALBDD.md` (Session 8).
+**Hors périmètre (chantiers futurs) :**
+- Transfert entre personnages (chantier dédié — WS bidirectionnel + validation double)
+- UI armure (masquage des items équipés dans la vue Sac)
+- Split de pile
+- custom_props UI (champ présent en DB, non exposé en UI sprint 2)
 
 ---
 
-## 3. Design Proposé pour `char_inventory`
-### 3.1 Table SQL
+## 2. Tables existantes impliquées
+
+| Table | Rôle | Colonnes clés |
+|---|---|---|
+| `ref_equipment` | Catalogue statique | `id UUID`, `weight FLOAT`, `location VARCHAR(50)`, `protection INT`, `protection_shock INT`, `malus_cat TEXT` |
+| `char_sheet` | Table pivot personnage | `id UUID`, `character_id UUID FK` |
+| `char_attributes` | Attributs primaires | `char_sheet_id`, `attr_id TEXT`, `base_level INT`, `pc_modifier INT` |
+| `characters` | Lien user/campagne | `id UUID` |
+
+**Valeurs `ref_equipment.location` en base (vérifiées) :**
+```
+T        → Tête
+C        → Corps
+B        → Bras (les deux)
+J        → Jambes (les deux)
+Ce       → Contenants portables ceinture/poche/sac ventral
+D        → Contenants portables sac/sac à dos
+C/B/J    → Corps + Bras + Jambes
+T/C/B/J  → Tête + Corps + Bras + Jambes
+null     → Armes, munitions, divers
+```
+
+---
+
+## 3. Migration 50
+
+Deux opérations dans le même fichier `50_char_inventory.js`.
+
+### 3.1 CREATE TABLE char_inventory
+
 ```sql
 CREATE TABLE char_inventory (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    character_id UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
-    equipment_id UUID REFERENCES ref_equipment(id) ON DELETE SET NULL,
-    container VARCHAR(50) NOT NULL DEFAULT 'Coffre',
-    slot VARCHAR(50) NULL,
-    quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
-    custom_name VARCHAR(255) NULL,
-    custom_desc TEXT NULL,
-    notes TEXT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    character_id  UUID        NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    equipment_id  UUID        REFERENCES ref_equipment(id) ON DELETE SET NULL,
+    container     VARCHAR(20) NOT NULL DEFAULT 'Coffre',
+    slot          VARCHAR(20) NULL,
+    quantity      INTEGER     NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    custom_name   VARCHAR(255) NULL,
+    custom_desc   TEXT         NULL,
+    notes         TEXT         NULL,
+    custom_props  JSONB        NULL,
+    created_at    TIMESTAMP   NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMP   NOT NULL DEFAULT NOW()
 );
 
--- Index pour les requêtes fréquentes
 CREATE INDEX idx_char_inventory_character_id ON char_inventory(character_id);
-CREATE INDEX idx_char_inventory_equipment_id ON char_inventory(equipment_id);
-CREATE INDEX idx_char_inventory_slot ON char_inventory(slot) WHERE slot IS NOT NULL;
-
-
-
-3.2 Colonnes : Définitions et Règles
-
-
-  
-    
-      Colonne
-      Type
-      Description
-      Contraintes
-    
-  
-  
-    
-      id
-      UUID
-      Clé primaire.
-      DEFAULT gen_random_uuid()
-    
-    
-      character_id
-      UUID
-      FK vers characters.id.
-      NOT NULL, ON DELETE CASCADE
-    
-    
-      equipment_id
-      UUID
-      FK vers ref_equipment.id.
-      NULL si objet manuel (non catalogué). ON DELETE SET NULL
-    
-    
-      container
-      VARCHAR(50)
-      Conteneur où l'objet est stocké.
-      NOT NULL, DEFAULT 'Coffre'. Valeurs autorisées : ['Sac', 'Ceinture', 'Coffre', 'Main droite', 'Main gauche', 'Poche'] (enum côté code).
-    
-    
-      slot
-      VARCHAR(50)
-      Slot d'équipement (ex: Torse, Main droite).
-      NULL = objet non équipé. slot IS NOT NULL ≡ équipé.
-    
-    
-      quantity
-      INTEGER
-      Quantité (pour les stacks).
-      NOT NULL, DEFAULT 1, CHECK (quantity > 0)
-    
-    
-      custom_name
-      VARCHAR(255)
-      Nom personnalisé (si différent du catalogue).
-      NULL
-    
-    
-      custom_desc
-      TEXT
-      Description personnalisée.
-      NULL
-    
-    
-      notes
-      TEXT
-      Notes du joueur.
-      NULL
-    
-    
-      created_at
-      TIMESTAMP
-      Date de création.
-      NOT NULL, DEFAULT NOW()
-    
-    
-      updated_at
-      TIMESTAMP
-      Date de dernière modification.
-      NOT NULL, DEFAULT NOW()
-    
-  
+CREATE INDEX idx_char_inventory_equipment_id ON char_inventory(equipment_id)
+    WHERE equipment_id IS NOT NULL;
+CREATE INDEX idx_char_inventory_slot ON char_inventory(slot)
+    WHERE slot IS NOT NULL;
+```
 
+### 3.2 ALTER TABLE char_sheet
 
-3.3 Règles Métier
-3.3.1 Conteneurs (container)
+```sql
+ALTER TABLE char_sheet ADD COLUMN sols INTEGER NOT NULL DEFAULT 0;
+```
 
-Valeurs statiques : Gérées via un enum côté code (pas de table dédiée).
-
-Exemple (JavaScript) :
-javascript
-Copier
-
-const ALLOWED_CONTAINERS = ['Sac', 'Ceinture', 'Coffre', 'Main droite', 'Main gauche', 'Poche'];
-
-
-
-
-
-Validation :
+---
 
-Côté serveur : Vérifier que container ∈ ALLOWED_CONTAINERS.
-Côté client : <select> limité aux valeurs autorisées.
+## 4. Colonnes — règles et contraintes
 
-3.3.2 Slots (slot)
+### 4.1 container
 
-Valeurs dynamiques : Dépendent de ref_equipment.locations.
+| Valeur | Disponibilité | Condition |
+|---|---|---|
+| `'Sac'` | Conditionnelle | character possède ≥1 item avec `ref_equipment.location = 'D'` |
+| `'Ceinture'` | Conditionnelle | character possède ≥1 item avec `ref_equipment.location = 'Ce'` |
+| `'Coffre'` | Toujours disponible | — |
 
-Exemple : Si ref_equipment.locations = "T/C" (Torse/Corps), alors slot ne peut être que Torse ou Corps.
+**Validation côté serveur** (pas de CHECK SQL — dynamique) :
+```js
+const CONTAINERS_ALWAYS = ['Coffre']
+const CONTAINERS_D  = ['Sac']      // requiert item location='D'
+const CONTAINERS_CE = ['Ceinture'] // requiert item location='Ce'
+```
 
-Validation :
+Vérification disponibilité au POST et PUT :
+```js
+// Sac disponible ?
+const hasSac = await db('char_inventory')
+  .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+  .where({ 'char_inventory.character_id': characterId })
+  .where('ref_equipment.location', 'D')
+  .first()
+```
 
-Côté serveur : Vérifier que slot est dans la liste des localisations autorisées pour equipment_id.
-Côté client : Filtrer les slots proposés en fonction de ref_equipment.locations.
+### 4.2 slot
 
-Équipement :
+Valeurs autorisées : `T / C / B / J / C/B/J / T/C/B/J` — identique à `ref_equipment.location`.
+`null` = item non équipé.
 
-slot IS NOT NULL = objet équipé.
-slot = NULL = objet en inventaire (non équipé).
+**Règle d'équipement :**
+```
+slot IS NOT NULL → container DOIT être 'Sac'
+```
+Si le PUT demande un slot et que container != 'Sac' → déplacer vers 'Sac' dans la même opération (atomique). Si 'Sac' n'est pas disponible → 400.
 
-3.3.3 Stackabilité
+**Conflit de slot :** un seul item par slot. Vérifier avant équipement :
+```js
+const conflict = await db('char_inventory')
+  .where({ character_id: characterId, slot: newSlot })
+  .whereNot({ id: itemId })
+  .first()
+if (conflict) throw new AppError(409, 'Slot already occupied')
+```
 
-Les objets identiques (equipment_id) dans le même container peuvent être fusionnés (mise à jour de quantity).
-Exception : Les objets équipés (slot IS NOT NULL) ne peuvent pas être stackés.
-3.3.4 Poids et Encombrement
+**Armure équipée et poids :** `container` reste `'Sac'` même si `slot IS NOT NULL`. Le poids est toujours compté. Future UI armure = filtre visuel côté client uniquement (`WHERE slot IS NULL` pour la vue Sac).
 
-Poids total :
-sql
-Copier
+### 4.3 Stackabilité
 
-SELECT SUM(e.weight * i.quantity)
-FROM char_inventory i
-JOIN ref_equipment e ON i.equipment_id = e.id
-WHERE i.character_id = '...';
+Items empilables si même `equipment_id` + même `container` + `slot IS NULL`.
+Items avec `slot IS NOT NULL` : jamais stackés.
 
+Au POST, si item empilable déjà présent → `UPDATE quantity = quantity + newQty` au lieu d'INSERT.
 
+### 4.4 custom_props (structure — UI hors sprint 2)
 
+```js
+// Exemples de structures attendues
+{ "charges": 3, "charges_max": 10 }           // batterie, chargeur
+{ "modules": ["Visée laser", "Silencieux"] }   // arme modifiée
+{ "programmes": ["ICE Noire V2"] }             // cyberdeck
+{ "level": 2 }                                 // item à niveaux
+```
 
-Malus d'encombrement :
+Champ libre JSONB. Aucun schéma imposé en DB. Validation métier à implémenter lors des UI dédiées.
 
-Utiliser ref_equipment.malus_cat (S, A, B, C, D) pour appliquer un malus global (ex: -1 à toutes les compétences).
-À intégrer avec le système de malus existant (cf. shared/woundConstants.js).
+---
 
-3.3.5 Protection "Mille-feuille"
+## 5. Calcul encombrement
 
-Pour chaque zone du corps (ex: Torse), sommer les protection et protection_shock des armures équipées dans cette zone.
-Requête exemple :
-sql
-Copier
+### 5.1 Formule
 
-SELECT
-    i.slot,
-    SUM(e.protection) AS total_protection,
-    SUM(e.protection_shock) AS total_protection_shock
-FROM char_inventory i
-JOIN ref_equipment e ON i.equipment_id = e.id
-WHERE i.character_id = '...' AND i.slot IS NOT NULL
-GROUP BY i.slot;
+```
+total_weight  = SUM(ref_equipment.weight * char_inventory.quantity)
+                WHERE char_inventory.character_id = :id
+                  AND char_inventory.container != 'Coffre'
+                  AND ref_equipment.weight IS NOT NULL
+
+threshold     = FOR_value × 3          (FOR = attribut base_level + pc_modifier)
 
+ini_penalty   = MAX(0, CEIL(total_weight - threshold))
+```
+
+### 5.2 Implémentation
+
+Fonction pure dans `server/src/lib/charStats.js` :
+```js
+export function calcEncumbrancePenalty(totalWeight, forValue) {
+  const threshold = forValue * 3
+  return Math.max(0, Math.ceil(totalWeight - threshold))
+}
+```
+
+Le GET /inventory calcule et retourne `total_weight` et `ini_penalty` dans la réponse (nécessite JOIN ref_equipment + lecture de l'attribut FOR depuis char_attributes).
+
+### 5.3 malus_cat — système distinct
+
+`ref_equipment.malus_cat` ∈ `S / A / B / C / D` = pénalité intrinsèque de l'item (armure lourde → malus compétences). **Indépendant de l'encombrement poids.** Implémentation lors du chantier malus armure.
+
+---
 
+## 6. Monnaie — sols
+
+Colonne `sols INTEGER NOT NULL DEFAULT 0` sur `char_sheet`.
+
+Route dédiée :
+```
+PUT /api/char-sheet/:characterId/sols   { sols: N }
+```
+
+Guard : owner ou GM. Le GM peut modifier sans restriction. Le joueur peut seulement modifier sa propre fiche.
+
+Broadcast `SOLS_UPDATED` après chaque modification.
+
+---
 
+## 7. API REST
 
+Toutes les routes sont montées dans `server/src/routes/character/char-sheet.js`.
+Le `router.param('characterId', ...)` existant gère l'auth + ownership automatiquement.
 
-4. Intégration avec Enclume
-4.1 Lien avec char_sheet
+**Attention P46 :** déclarer les routes spécifiques AVANT les routes paramétriques.
 
-Onglet "Matériel" :
+| Méthode | Route | Description |
+|---|---|---|
+| GET | `/:characterId/inventory` | Liste inventaire + total_weight + ini_penalty + sols |
+| POST | `/:characterId/inventory` | Ajouter item (stack si possible) |
+| PUT | `/:characterId/inventory/:itemId` | Modifier container/slot/quantity/custom fields |
+| DELETE | `/:characterId/inventory/:itemId` | Supprimer item (ou décrémenter quantity) |
+| PUT | `/:characterId/sols` | Modifier solde sols |
 
-Déjà mentionné comme livré en sprint 1 du Chantier 11 (EN_COURS.md).
-Composant React : InventoryPanel.jsx (à créer).
+### GET /:characterId/inventory — payload retourné
 
-Synchronisation :
+```js
+{
+  items: [
+    {
+      id, equipment_id, container, slot, quantity,
+      custom_name, custom_desc, notes, custom_props,
+      // dénormalisé depuis ref_equipment :
+      ref_name, ref_family, ref_category, ref_weight,
+      ref_location, ref_protection, ref_protection_shock,
+      ref_malus_cat, ref_capacity
+    }
+  ],
+  sols,
+  total_weight,   // float
+  ini_penalty,    // int
+  threshold       // float = FOR * 3
+}
+```
 
-Les malus d'encombrement (malus_cat) doivent être intégrés dans les jets Polaris (via calcWoundPenalty ou équivalent).
+### POST /:characterId/inventory — payload entrant
 
-4.2 API REST
+```js
+{
+  equipment_id,   // UUID ref_equipment (null si item manuel)
+  container,      // 'Sac' | 'Ceinture' | 'Coffre' (défaut calculé si absent)
+  slot,           // null par défaut
+  quantity,       // défaut 1
+  custom_name, custom_desc, notes   // optionnels
+}
+```
 
+**Logique default container :**
+1. Si `container` fourni → valider disponibilité → utiliser
+2. Si absent : vérifier si character a un sac (`location='D'`) → 'Sac', sinon → 'Coffre'
 
-  
-    
-      Endpoint
-      Méthode
-      Description
-      Payload
-    
-  
-  
-    
-      /api/characters/:id/inventory
-      GET
-      Liste l'inventaire d'un personnage.
-      { items: [...] }
-    
-    
-      /api/characters/:id/inventory
-      POST
-      Ajoute un objet à l'inventaire.
-      { equipment_id, container, slot, quantity, ... }
-    
-    
-      /api/characters/:id/inventory/:itemId
-      PUT
-      Met à jour un objet.
-      { container, slot, quantity, ... }
-    
-    
-      /api/characters/:id/inventory/:itemId
-      DELETE
-      Supprime un objet.
-      —
-    
-    
-      /api/characters/:id/inventory/transfer
-      POST
-      Transfère un objet vers un autre personnage.
-      { itemId, target_character_id, quantity }
-    
-  
+### PUT /:characterId/inventory/:itemId — payload entrant
 
+```js
+{
+  container,      // optionnel
+  slot,           // optionnel — null pour déséquiper
+  quantity,       // optionnel
+  custom_name, custom_desc, notes, custom_props   // optionnels
+}
+```
 
-4.3 WebSocket
+**Ordre de traitement serveur (P13 — updated_at après le guard) :**
+1. Guard `Object.keys(updates).length === 0` → 400
+2. Si `slot` fourni et non null :
+   a. Vérifier conflit de slot
+   b. Forcer `container = 'Sac'`
+   c. Vérifier disponibilité 'Sac'
+3. Si `container` fourni : vérifier disponibilité
+4. `updates.updated_at = db.fn.now()` ← APRÈS le guard
+5. UPDATE + SELECT + broadcast
 
-Événements :
+### DELETE /:characterId/inventory/:itemId
 
-inventory:add : Nouvel objet ajouté.
-inventory:update : Objet modifié (ex: changement de slot).
-inventory:remove : Objet supprimé.
-inventory:transfer : Objet transféré.
+- Optionnel : `{ quantity: N }` → décrémente. Si quantité résultante ≤ 0 → DELETE.
+- Par défaut : DELETE complet.
 
-Broadcast :
+---
 
-Envoyer aux joueurs concernés (ex: GM + propriétaire de l'objet).
+## 8. WebSocket
 
+Événements à ajouter dans `shared/events.js` :
 
-5. Pièges et Contraintes
-5.1 Pièges Critiques (cf. SYSTEME.md)
+```js
+INVENTORY_ADDED:   'inventory:added',    // serveur → room : item ajouté
+INVENTORY_UPDATED: 'inventory:updated',  // serveur → room : item modifié
+INVENTORY_REMOVED: 'inventory:removed',  // serveur → room : item supprimé
+SOLS_UPDATED:      'sols:updated',       // serveur → room : solde sols modifié
+```
 
-P1 : Ne jamais utiliser token.owner_id. Toujours : token.character_id → characters.user_id.
+**Scope broadcast :** room campagne entière (même pattern que `WOUND_ADDED`).
+Payload minimal : `{ characterId, item }` / `{ characterId, itemId }` / `{ characterId, sols }`.
 
-Applicable ici : Toujours lier char_inventory à characters.id (pas à users.id).
+---
 
-P13 : updated_at doit être mis à jour après le guard Object.keys(updates).length === 0.
-P49 : Pour les promotions de blessures, rechargement complet obligatoire.
+## 9. Composant React — InventoryPanel.jsx
 
-Analogie : Si un objet est transféré, toujours recharger l'inventaire complet côté client.
+**Fichier :** `client/src/character/InventoryPanel.jsx`
 
-5.2 Contraintes Techniques
+**Montage :** dans `CharacterWindow.jsx`, onglet `'materiel'`, **en dessous de `<WoundManager>`**.
 
-UUID : Toutes les clés primaires en UUID v4.
-Transactions :
+**Props :** `{ characterId, canEdit }`
 
-Les opérations de transfert (inventory_transferItem) doivent être atomiques (ex: débiter l'inventaire source avant de créditer la cible).
+**State interne :** `items[]`, `sols`, `totalWeight`, `iniPenalty`, `threshold`
 
-Validation :
+**Fetch :** `GET /api/char-sheet/:characterId/inventory` au montage.
 
-Toujours valider container et slot côté serveur (même si le frontend le fait).
+**Affichage minimal :**
+- En-tête : poids total, seuil (FOR×3), malus INI si > 0, solde sols
+- Items groupés par container (Sac / Ceinture / Coffre)
+- Par item : nom (custom_name || ref_name), quantité, slot si équipé
+- Actions (si canEdit) : déplacer container, équiper/déséquiper, supprimer
 
+**WS listeners :** écouter `INVENTORY_ADDED/UPDATED/REMOVED` → recharger via GET (pattern simple, pas d'update local partiel pour l'instant).
 
-6. Questions Ouvertes (À Valider en Étape 2)
+---
 
-Gestion des objets manuels (equipment_id = NULL) :
+## 10. Pièges
 
-Faut-il autoriser la création d'objets non catalogués (ex: "Objet personnel") ?
-Si oui, comment gérer leurs poids/protection (champs manuels) ?
+| Code | Description |
+|---|---|
+| P13 | `updated_at = db.fn.now()` APRÈS le guard `Object.keys(updates).length === 0` |
+| P46 | Route spécifique (`/sols`) déclarée AVANT route paramétrique (`/:itemId`) |
+| P50 (analogie) | `InventoryPanel` ne stocke pas de copie locale de `charSkills` — pattern WoundManager : state interne, fetch propre |
+| **PI1** | Container 'Sac' non disponible si character n'a pas d'item location='D' en inventaire → default 'Coffre' |
+| **PI2** | Équipement (slot != null) → container forcé 'Sac'. Si 'Sac' indisponible → 400, ne pas silencieusement forcer 'Coffre' |
+| **PI3** | Poids des items équipés (slot != null) EST compté dans l'encombrement — container reste 'Sac' |
+| **PI4** | `calcEncumbrancePenalty` requiert la valeur FOR nette = `base_level + pc_modifier`. Lire depuis `char_attributes` WHERE `attr_id = 'FOR'` |
+| **PI5** | Items manuels (`equipment_id = null`) : `ref_weight` null → exclus du calcul de poids. `custom_props` peut stocker un poids manuel si besoin futur |
 
-Limite de quantité par stack :
+---
 
-Faut-il une limite maximale (ex: 99) pour quantity ?
+## 11. Todo list — fonctionnalités reportées
 
-Historique des modifications :
-
-Faut-il une table char_inventory_history pour tracer les changements (ex: pour le GM) ?
-
-Permissions :
-
-Qui peut transférer des objets entre personnages ? (GM seulement ? Ou joueurs entre eux ?)
-
+- [ ] Split de pile (`POST /:characterId/inventory/:itemId/split`) — sprint 3
+- [ ] Transfert entre personnages — chantier dédié (WS bidirectionnel, validation double, argent)
+- [ ] UI custom_props — par type d'item (chargeur, batterie, programmes)
+- [ ] Interface armure — masquage visuel items équipés (slot != null) dans la vue Sac
+- [ ] Calcul malus_cat armure équipée — intégration dans jets Polaris
+- [ ] Mille-feuille protection — calcul par zone (T/C/B/J) depuis items équipés
