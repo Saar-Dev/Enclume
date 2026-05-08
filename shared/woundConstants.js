@@ -16,3 +16,7 @@ export const WOUND_MAX_COUNTS = {
 export const WOUND_PENALTIES = {
   legere: -1, moyenne: -3, grave: -5, critique: -10, mortelle: -20,
 }
+
+export const SEVERITY_COLORS = {
+  legere: '#FFD700', moyenne: '#FFA500', grave: '#FF6B6B', critique: '#FF0000', mortelle: '#8B0000',
+}

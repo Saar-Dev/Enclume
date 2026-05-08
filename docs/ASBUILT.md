@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-07 Session 51
+> Dernière mise à jour : 2026-05-08 Session 54
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -47,9 +47,13 @@ Enclume/
 │   │   ├── character/
 │   │   │   ├── WoundManager.jsx        # NOUVEAU 49 — grille blessures autonome (POST/PUT/DELETE, promotion P49)
 │   │   │   ├── InventoryPanel.jsx      # NOUVEAU 51 — inventaire joueur + bloc ajout GM (catalogue lazy, stacking, slots)
+│   │   │   ├── ArmorWoundPanel.jsx     # NOUVEAU 53 — layout 3 colonnes : localisations armure + silhouette + conteneurs
+│   │   │   ├── LocationPanel.jsx       # NOUVEAU 53 — une localisation (Tête/Corps/Bras/Jambe) — multi-couches + poids
+│   │   │   ├── ContainerPanel.jsx      # NOUVEAU 53 — Sac/Ceinture/Coffre — équipement conteneur
+│   │   │   ├── SilhouettePanel.jsx     # NOUVEAU 53 — SVG silhouette colorée par blessures, 50% width
 │   │   │   ├── AdvantagesPanel.jsx     # Modifié 50 — rework lift-state-up, props charSkills/refSkillsPolaris/onSkillLearnedChange
-│   │   │   ├── CharacterSheet.jsx      # Modifié 50 — refSkillsPolaris useMemo + handlePolarisToggled + 3 props AdvantagesPanel
-│   │   │   └── CharacterWindow.jsx     # Modifié 51 — import InventoryPanel, montage onglet Matériel (isGm prop)
+│   │   │   ├── CharacterSheet.jsx      # Modifié 52 — effectiveMalus + iniValue + tooltip Initiative position:fixed
+│   │   │   └── CharacterWindow.jsx     # Modifié 51 — import InventoryPanel + ArmorWoundPanel, onglets Matériel
 │   │   ├── locales/
 │   │   │   └── fr.json                 # Modifié 49 — +tabMateriel
 │   │   ├── lib/
@@ -92,17 +96,18 @@ Enclume/
 │   │   │   └── errorHandler.js
 │   │   ├── socket/
 │   │   │   ├── auth.js
-│   │   │   └── index.js                # Modifié 43 — Fix Tchebychev, getModifier, stepsMax, actorBlocked pos_z+1, logs debug
+│   │   │   └── index.js                # Modifié 52 — effectiveMalus dans chancesDeReussite (blessures + encombrement)
 │   │   ├── lib/
 │   │   │   ├── AppError.js
 │   │   │   ├── minio.js
 │   │   │   ├── diceParser.js
-│   │   │   ├── charStats.js            # Modifié 51 — +calcEncumbrancePenalty
+│   │   │   ├── charStats.js            # Modifié 52 — +calcEncumbrancePenalty (51) +calcWoundPenalty (49) — fonctions pures
 │   │   │   └── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
 │   │   └── index.js                    # Modifié 47 — express.static public/ + route /api/equipment
 ├── shared/
 │   ├── events.js                       # Modifié 51 — +INVENTORY_ADDED/UPDATED/REMOVED/SOLS_UPDATED
-│   └── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES
+│   ├── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES
+│   └── armorConstants.js               # NOUVEAU 54 — LOCATION_TO_SLOT/SLOT_TO_REF_LOCATION/LOCATION_LABELS/ARMOR_CATEGORY_MALUS
 └── docs/
 ```
 
@@ -173,6 +178,7 @@ Enclume/
 | 48_ref_equipment | ref_equipment (35 colonnes, 6 CHECK) + ref_equipment_skills + ref_equipment_skill_assoc + ref_equipment_ammo_compat |
 | 49_character_wounds | character_wounds (UUID PK, char_sheet_id FK CASCADE, location/severity CHECK, is_stabilized, idx) |
 | 50_char_inventory | char_inventory (UUID PK, FK characters CASCADE, FK ref_equipment SET NULL, container/slot/quantity/custom_props JSONB) + char_sheet.sols INTEGER |
+| 51_inventory_slot_codes | Nullifie slots stales B/J via regex `(^|/)(B|J)(/|$)` — passage codes T/C → BG/BD/JG/JD |
 
 ---
 
@@ -345,12 +351,15 @@ GM peut aussi utiliser le flux déplacement — même flux jet attribut que joue
 ### Flux sans compétence ✅
 skill_id et attribute_id null → resolveEntityState direct, sans notifier le GM, sans jet.
 
-### Règles mécaniques Polaris (LdB p.404)
+### Règles mécaniques Polaris (LdB p.404 + p.236)
 ```
-chancesDeReussite = skillTotal + difficulty_dc + gmModifier
-isSuccess = diceRoll <= chancesDeReussite
-difficulty_dc = modificateur signé (-20 à +10)
+effectiveMalus    = calcWoundPenalty(wounds) − calcEncumbrancePenalty(weight, FOR)
+chancesDeReussite = skillTotal + difficulty_dc + gmModifier + effectiveMalus
+isSuccess         = diceRoll <= chancesDeReussite
+difficulty_dc     = modificateur signé (-20 à +10)
 ```
+Malus santé (blessures) : non-cumulatif — pire blessure seule retenue (LdB p.236).
+Malus encombrement : règle maison, s'additionne au malus santé.
 
 ---
 
@@ -396,4 +405,5 @@ difficulty_dc = modificateur signé (-20 à +10)
 | PE33 | D10 Html overlay position=[0,0,0] — ne pas déplacer |
 | P49 | Promotion blessures : si promoted===true → GET /wounds complet — ne jamais ajouter localement |
 | P50 | toggle Polaris : ne jamais dupliquer charSkills dans un sous-composant — lift state up obligatoire |
+| P51 | Malus non-cumulatifs santé : pire seul (LdB p.236). Encombrement (maison) : cumulatif. effectiveMalus = woundPenalty − encumbrancePenalty |
 | PEF1-PEF6 | voir SYSTEME.md section 6 |

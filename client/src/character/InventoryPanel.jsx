@@ -4,7 +4,7 @@ import api from '../lib/api.js'
 const CONTAINER_ORDER = ['Sac', 'Ceinture', 'Coffre']
 const VALID_SLOTS     = ['T', 'C', 'B', 'J', 'C/B/J', 'T/C/B/J']
 
-export default function InventoryPanel({ characterId, canEdit, isGm }) {
+export default function InventoryPanel({ characterId, canEdit, isGm, onInventoryMutated = () => {} }) {
   const [items,       setItems]       = useState([])
   const [sols,        setSols]        = useState(0)
   const [totalWeight, setTotalWeight] = useState(0)
@@ -59,29 +59,32 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
       const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { container: newContainer })
       const updated = res.data.item
       setItems(prev => prev.map(i => i.id === itemId ? { ...i, container: updated.container } : i))
+      onInventoryMutated()
     } catch (err) {
       console.error('Erreur déplacement container :', err)
     }
-  }, [characterId])
+  }, [characterId, onInventoryMutated])
 
   const handleEquip = useCallback(async (itemId, newSlot) => {
     try {
       const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: newSlot })
       const updated = res.data.item
       setItems(prev => prev.map(i => i.id === itemId ? { ...i, slot: updated.slot, container: updated.container } : i))
+      onInventoryMutated()
     } catch (err) {
       console.error('Erreur équipement :', err)
     }
-  }, [characterId])
+  }, [characterId, onInventoryMutated])
 
   const handleDelete = useCallback(async (itemId) => {
     try {
       await api.delete(`/char-sheet/${characterId}/inventory/${itemId}`)
       setItems(prev => prev.filter(i => i.id !== itemId))
+      onInventoryMutated()
     } catch (err) {
       console.error('Erreur suppression item :', err)
     }
-  }, [characterId])
+  }, [characterId, onInventoryMutated])
 
   const handleSolsSave = useCallback(async () => {
     setEditingSols(false)
@@ -144,12 +147,13 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
       setThreshold(inv.data.threshold)
       setSelectedRef(null)
       setSearchQuery('')
+      onInventoryMutated()
     } catch (err) {
       console.error('Erreur ajout item :', err)
     } finally {
       setAdding(false)
     }
-  }, [characterId, selectedRef, addContainer, addQty])
+  }, [characterId, selectedRef, addContainer, addQty, onInventoryMutated])
 
   // ── Filtre catalogue ──────────────────────────────────────────────────────
 

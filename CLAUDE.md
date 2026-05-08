@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-05-07 Session 51
+> Dernière mise à jour : 2026-05-08 Session 54
 
 ---
 
@@ -73,22 +73,23 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 51 (2026-05-07)
+## État actuel — Session 54 (2026-05-08)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **50 migrations stables** — prochaine : **51**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2 ✅ / Chantier 11 sprint 1 ✅ / PC22 ✅
+- **51 migrations stables** — prochaine : **52**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3 ✅ / Chantier 11 sprint 1+suite ✅ / PC22 ✅
 
-**Chantier 10 sprint 2 livré (session 51) :**
-- Migration 50 : `char_inventory` + `char_sheet.sols`
-- `calcEncumbrancePenalty()` dans `charStats.js`
-- 5 routes inventaire + route sols dans `char-sheet.js` (helpers `isContainerAvailable`, `getDefaultContainer`, `getItemWithRef`)
-- `InventoryPanel.jsx` — state interne, fetch propre, bloc ajout GM (catalogue lazy), équipement slots
-- `CharacterWindow.jsx` — montage onglet Matériel, prop `isGm` sur InventoryPanel
+**Chantier 10 sprint 3 livré (session 54) :**
+- LOCATION_TO_SLOT : codes distincts BG/BD/JG/JD (indépendance bras/jambes)
+- SLOT_TO_REF_LOCATION : mapping compat ref_equipment.location (B/J persistent, client gère)
+- LocationPanel : `refCode` pour lookup `ref_location`, équip/unequip par slotCode individuel
+- Migration 51 : nullifie slots stales B/J via regex `(^|/)(B|J)(/|$)`
+- ArmorWoundPanel : layout 3 colonnes + silhouette 50% + poids brut / max avec couleur (gris/orange/rouge)
+- Multi-couches : functional sur toutes les localisations (Tête/Corps/Bras/Jambes)
 
 **Prochains chantiers (à décider avec Saar) :**
-- Chantier 11 suite — intégration `calcWoundPenalty` dans les jets Polaris
-- Chantier 10 sprint 3 — armures mille-feuille + malus encombrement (prérequis : char_inventory ✅)
+- Chantier 10 sprint 4 — Module Armes équipées (prérequis : char_inventory ✅)
+- Chantier 11 étape 2 — Module Armes complet (prérequis : char_inventory ✅)
 
 **Dettes actives :**
 - D10 UV texturing V2 — modèle Blender .glb (PE33)
@@ -171,6 +172,29 @@ Toujours `GET /wounds` complet — jamais `setWounds(prev => [...prev, wound])` 
 **P50 — toggle Polaris : ne jamais dupliquer charSkills dans un sous-composant**
 Tout sous-composant qui lit ET modifie `charSkills` doit recevoir la liste en props et émettre via callback.
 Stocker une copie locale → changements non propagés → SkillsPanel jamais mis à jour.
+
+**P51 — Malus Polaris : non-cumulatif santé, cumulatif encombrement**
+Malus état de santé (blessures, fatigue, maladies) : pire seul retenu — `calcWoundPenalty` retourne déjà le minimum.
+Malus encombrement (règle maison) : s'additionne.
+```js
+effectiveMalus = calcWoundPenalty(wounds) - calcEncumbrancePenalty(weight, FOR)  // ≤ 0
+chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
+```
+Ne jamais cumuler deux sources de malus santé. Ne jamais appliquer le malus sur un attribut — toujours sur le total du jet.
+
+**PI6 — LOCATION_TO_SLOT : codes indépendants par localisation**
+`bras_gauche:'BG'`, `bras_droit:'BD'`, `jambe_gauche:'JG'`, `jambe_droite:'JD'` — pas de partage B/J.
+Équiper à une localisation n'équipe que celle-ci. `availableItems` utilise `refCode` (SLOT_TO_REF_LOCATION) pour compat ref_location.
+La Pagan `ref_location='B'` est disponible dans TOUS les panels (BG et BD), mais s'équipe per-location.
+
+**PI7 — refCode vs slotCode dans LocationPanel**
+`slotCode` : code unique de la localisation (BG/BD/JG/JD) — utilisé pour `equippedItems` et `handleEquip/Unequip`.
+`refCode` : code compat pour `ref_location` lookup (B/J) — utilisé uniquement pour `availableItems` filter.
+Confusion → items non disponibles ou multi-location mal géré.
+
+**PI8 — POST handler : LIKE query pour multi-slot**
+Serveur POST `/inventory` : WHERE clause doit utiliser LIKE `'/' || COALESCE(slot,'') || '/' LIKE '%/CODE/%'`.
+Ancien `WHERE slot = code` ne trouve pas items multi-slot → 1+S+S check silencieusement broken pour multi-couches.
 
 **"La Forêt Maudite"**
 Pas de `default_battlemap_id` → ne jamais utiliser pour les tests.

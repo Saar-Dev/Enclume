@@ -754,7 +754,7 @@ router.delete('/:characterId/wounds/:woundId', async (req, res, next) => {
 // ─── Helpers inventaire ───────────────────────────────────────────────────────
 
 const VALID_CONTAINERS = ['Coffre', 'Sac', 'Ceinture']
-const VALID_SLOTS      = ['T', 'C', 'B', 'J', 'C/B/J', 'T/C/B/J']
+const VALID_SLOTS      = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'D', 'Ce']
 
 async function isContainerAvailable(characterId, container) {
   if (container === 'Coffre') return true
@@ -800,6 +800,7 @@ async function getItemWithRef(itemId) {
       'ref_equipment.protection_shock as ref_protection_shock',
       'ref_equipment.malus_cat as ref_malus_cat',
       'ref_equipment.capacity as ref_capacity',
+      'ref_equipment.waterproof as ref_waterproof',
     )
     .first()
 }
@@ -839,6 +840,7 @@ router.get('/:characterId/inventory', async (req, res, next) => {
         'ref_equipment.protection_shock as ref_protection_shock',
         'ref_equipment.malus_cat as ref_malus_cat',
         'ref_equipment.capacity as ref_capacity',
+        'ref_equipment.waterproof as ref_waterproof',
       )
       .orderBy('char_inventory.created_at', 'asc')
 
@@ -922,14 +924,32 @@ router.post('/:characterId/inventory', async (req, res, next) => {
       if (!VALID_SLOTS.includes(resolvedSlot)) {
         throw new AppError(400, `slot invalide : ${resolvedSlot}`)
       }
-      if (!(await isContainerAvailable(characterId, 'Sac'))) {
-        throw new AppError(400, 'Sac non disponible — impossible d\'équiper un item')
+      const isContainerSlotPost = resolvedSlot === 'D' || resolvedSlot === 'Ce'
+      if (isContainerSlotPost) {
+        const conflict = await db('char_inventory')
+          .where({ character_id: characterId, slot: resolvedSlot })
+          .first()
+        if (conflict) throw new AppError(409, 'Slot déjà occupé')
+      } else {
+        if (!(await isContainerAvailable(characterId, 'Sac'))) {
+          throw new AppError(400, 'Sac non disponible — impossible d\'équiper un item')
+        }
+        const existingAtSlot = await db('char_inventory')
+          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+          .where('char_inventory.character_id', characterId)
+          .whereRaw("'/' || COALESCE(char_inventory.slot, '') || '/' LIKE ?", [`%/${resolvedSlot}/%`])
+          .select('char_inventory.id as id', 'ref_equipment.malus_cat as malus_cat')
+        if (existingAtSlot.length >= 3) throw new AppError(409, 'Slot complet — maximum 3 couches')
+        const newItemRef = equipment_id
+          ? await db('ref_equipment').where({ id: equipment_id }).select('malus_cat').first()
+          : null
+        const newItemCat = newItemRef?.malus_cat ?? null
+        const existingNonS = existingAtSlot.filter(i => i.malus_cat && i.malus_cat !== 'S')
+        if (newItemCat && newItemCat !== 'S' && existingNonS.length >= 1) {
+          throw new AppError(409, 'Slot déjà occupé par une armure principale (règle 1+S+S)')
+        }
+        container = 'Sac'
       }
-      const conflict = await db('char_inventory')
-        .where({ character_id: characterId, slot: resolvedSlot })
-        .first()
-      if (conflict) throw new AppError(409, 'Slot déjà occupé')
-      container = 'Sac'
     }
 
     // Stacking : même equipment_id + même container + slot IS NULL
@@ -994,19 +1014,49 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
 
     // Validation slot
     if (updates.slot !== undefined && updates.slot !== null) {
-      if (!VALID_SLOTS.includes(updates.slot)) {
-        throw new AppError(400, `slot invalide : ${updates.slot}`)
+      const isContainerSlotPut = updates.slot === 'D' || updates.slot === 'Ce'
+      if (isContainerSlotPut) {
+        const conflict = await db('char_inventory')
+          .where({ character_id: characterId, slot: updates.slot })
+          .whereNot({ id: itemId })
+          .first()
+        if (conflict) throw new AppError(409, 'Slot déjà occupé')
+      } else {
+        // Valider que chaque partie est un code armor valide
+        const BASE_ARMOR = new Set(['T', 'C', 'BG', 'BD', 'JG', 'JD'])
+        const newParts = updates.slot.split('/')
+        if (!newParts.every(p => BASE_ARMOR.has(p))) {
+          throw new AppError(400, `slot invalide : ${updates.slot}`)
+        }
+        // Codes nouvellement ajoutés (absents du slot actuel de l'item)
+        const existingParts = new Set(existing.slot ? existing.slot.split('/') : [])
+        const addedCodes = newParts.filter(c => !existingParts.has(c))
+        // malus_cat de l'item (commun à tous les slots)
+        const newItemCat = existing.equipment_id
+          ? (await db('ref_equipment').where({ id: existing.equipment_id }).select('malus_cat').first())?.malus_cat ?? null
+          : null
+        // 1+S+S : vérifier chaque code nouvellement ajouté
+        for (const code of addedCodes) {
+          const existingAtSlot = await db('char_inventory')
+            .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+            .where('char_inventory.character_id', characterId)
+            .whereRaw("'/' || COALESCE(char_inventory.slot, '') || '/' LIKE ?", [`%/${code}/%`])
+            .whereNot('char_inventory.id', itemId)
+            .select('char_inventory.id as id', 'ref_equipment.malus_cat as malus_cat')
+          if (existingAtSlot.length >= 3) {
+            throw new AppError(409, `Slot ${code} complet — maximum 3 couches`)
+          }
+          const existingNonS = existingAtSlot.filter(i => i.malus_cat && i.malus_cat !== 'S')
+          if (newItemCat && newItemCat !== 'S' && existingNonS.length >= 1) {
+            throw new AppError(409, `Slot ${code} déjà occupé par une armure principale (règle 1+S+S)`)
+          }
+        }
+        // PI2 : Sac obligatoire pour équiper
+        if (addedCodes.length > 0 && !(await isContainerAvailable(characterId, 'Sac'))) {
+          throw new AppError(400, 'Sac non disponible — impossible d\'équiper un item')
+        }
+        updates.container = 'Sac'
       }
-      const conflict = await db('char_inventory')
-        .where({ character_id: characterId, slot: updates.slot })
-        .whereNot({ id: itemId })
-        .first()
-      if (conflict) throw new AppError(409, 'Slot déjà occupé')
-      // PI2 : Sac obligatoire pour équiper — si indisponible → 400
-      if (!(await isContainerAvailable(characterId, 'Sac'))) {
-        throw new AppError(400, 'Sac non disponible — impossible d\'équiper un item')
-      }
-      updates.container = 'Sac'
     }
 
     // Validation container (si fourni explicitement et pas déjà forcé à 'Sac' par slot)

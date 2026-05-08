@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-07 Session 51
+> Dernière mise à jour : 2026-05-08 Session 54
 
 ---
 
@@ -59,8 +59,25 @@ Travaux effectués en session 51 :
 - `InventoryPanel.jsx` — affichage + edit GM (ajout depuis catalogue, équipement, suppression) ✅
 - Montage dans `CharacterWindow.jsx` onglet Matériel sous WoundManager ✅
 
-### Chantier 11 suite — Intégration malus blessures dans calculs Polaris
-`calcWoundPenalty()` existe dans charStats.js. À intégrer dans les jets de compétence/attribut.
+### Chantier 11 suite — Intégration malus blessures dans calculs Polaris ✅ (session 52)
+
+Travaux effectués en session 52 :
+- `GET /wounds` enrichi avec `wound_penalty` calculé côté serveur ✅
+- `CharacterSheet.jsx` — Initiative effective avec tooltip `position:fixed` ✅
+- `socket/index.js` — `effectiveMalus` dans `chancesDeReussite` (jets réels) ✅
+- Règle documentée : malus santé non-cumulatif (pire seul) + encombrement cumulatif (règle maison)
+
+### Chantier 10 sprint 3 — Armures multi-couches + codes slots indépendants ✅ (session 54)
+
+Travaux effectués en session 54 :
+- Problème : `LOCATION_TO_SLOT` mappait bras_gauche + bras_droit → 'B', jambe_gauche + jambe_droite → 'J' → équiper à l'un affichait partout
+- Solution : codes distincts BG/BD/JG/JD (localisation indépendante)
+- `shared/armorConstants.js` — LOCATION_TO_SLOT + nouveau SLOT_TO_REF_LOCATION (mapping compat ref_equipment) ✅
+- `LocationPanel.jsx` — `refCode` pour lookup ref_location, equip/unequip indépendant par slotCode ✅
+- `char-sheet.js` — VALID_SLOTS + BASE_ARMOR + POST/PUT LIKE queries (multi-slot) ✅
+- Migration 51 — nullifie slots B/J stales via regex `(^|/)(B|J)(/|$)` ✅
+- ref_equipment.location intouché — mapping client gère la compat
+- Test : Pagan équipée indépendamment à Tête+Bras+Jambes ✅
 
 ---
 

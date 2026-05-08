@@ -19,7 +19,7 @@ import { useTranslation } from 'react-i18next'
 import { useCharacterStore } from '../stores/characterStore'
 import api from '../lib/api.js'
 import CharacterSheet from './CharacterSheet.jsx'
-import WoundManager from './WoundManager.jsx'
+import ArmorWoundPanel from './ArmorWoundPanel.jsx'
 import InventoryPanel from './InventoryPanel.jsx'
 
 // ─── Constantes fenêtre ───────────────────────────────────────────────────────
@@ -164,6 +164,9 @@ export default function CharacterWindow({ character, isGm, onClose }) {
   }, [])
 
   // ─── État UI ───────────────────────────────────────────────────────────────
+  const [inventoryVersion, setInventoryVersion] = useState(0)
+  const bumpInventoryVersion = useCallback(() => setInventoryVersion(v => v + 1), [])
+
   const [activeTab,   setActiveTab]   = useState('sheet')
   const [saving,      setSaving]      = useState(false)
   const [editingName, setEditingName] = useState(false)
@@ -359,14 +362,16 @@ export default function CharacterWindow({ character, isGm, onClose }) {
         {/* Onglet Matériel */}
         {activeTab === 'materiel' && (
           <>
-            <WoundManager
+            <ArmorWoundPanel
               characterId={character.id}
               canEdit={isGm || isOwner}
+              reloadKey={inventoryVersion}
             />
             <InventoryPanel
               characterId={character.id}
               canEdit={isGm || isOwner}
               isGm={isGm}
+              onInventoryMutated={bumpInventoryVersion}
             />
           </>
         )}

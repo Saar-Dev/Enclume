@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-05-07 Session 49
+> Dernière mise à jour : 2026-05-08 Session 54
 
 ---
 
@@ -104,7 +104,7 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 |---|---|---|
 | Sprint 1 | Schéma DB + migration 48 + page admin saisie manuelle | ✅ session 46-47 |
 | Sprint 2 | `char_inventory` (table instance) + UI inventaire joueur | ✅ session 51 |
-| Sprint 3 | Calcul armures mille-feuille + malus encombrement | 🔲 |
+| Sprint 3 | Codes slots indépendants (BG/BD/JG/JD) + armures multi-couches + poids | ✅ session 54 |
 
 **Sprint 1 livré :**
 - Migration 48 : `ref_equipment` (35 colonnes, 6 CHECK) + 3 junction tables
@@ -146,6 +146,7 @@ Module Armes / Module Armures (équipé depuis inventaire)
 | Étape | Contenu | Prérequis | État |
 |---|---|---|---|
 | Étape 1 | `character_wounds` DB + routes + `WoundManager` UI + intégration `charStats.js` | — | ✅ session 49 |
+| Étape 1b | Intégration `effectiveMalus` dans jets (socket) + Initiative fiche | — | ✅ session 52 |
 | Étape 2 | Module Armes — liste armes équipées depuis `char_inventory` → `ref_equipment` | Chantier 10 sprint 2 | 🔲 |
 | Étape 3 | Module Armures — même architecture + calcul protection par localisation | Chantier 10 sprint 2 | 🔲 |
 | Étape 4 | Polish — animations Tests de Choc, états santé (Étourdi/Inconscient/Coma) | Étapes 1-3 | 🔲 |
