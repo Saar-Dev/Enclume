@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-05-08 Session 54
+> Dernière mise à jour : 2026-05-19 Session 56
 
 ---
 
@@ -106,6 +106,9 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 | Sprint 2 | `char_inventory` (table instance) + UI inventaire joueur | ✅ session 51 |
 | Sprint 3 | Codes slots indépendants (BG/BD/JG/JD) + armures multi-couches + poids | ✅ session 54 |
 | Sprint 4 | Module Armes équipées (WeaponPanel, current_ammo, nettoyage nomenclature munitions) | ✅ session 55 |
+| Sprint 5 | Mille-feuille protection serveur + polarisRound unifié + ref_min_str exposé | ✅ session 56 |
+| Sprint 6 | Transfert items + échange sols (WS bidirectionnel, double validation) | 🔲 |
+| — | Split pile, capacity sac, custom_props UI, malus_cat dans jets Polaris | 🔲 selon besoin |
 
 **Sprint 1 livré :**
 - Migration 48 : `ref_equipment` (35 colonnes, 6 CHECK) + 3 junction tables
@@ -118,12 +121,6 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 - `InventoryPanel.jsx` — affichage par container, encombrement, édition GM (catalogue 636 items), équipement slots
 - Reporté sprint 2 → chantiers futurs : transfert entre persos, WS listeners client, restriction sols→GM, split pile
 
-| Sprint | Contenu | État |
-|---|---|---|
-| Sprint 5 | Mille-feuille protection serveur + résolution dommages par localisation + req_for armor malus | 🔲 |
-| Sprint 6 | Transfert items + échange sols (WS bidirectionnel, double validation) | 🔲 |
-| — | Split pile, capacity sac, custom_props UI, malus_cat dans jets Polaris | 🔲 selon besoin |
-
 **Sprint 4 livré (session 55) :**
 - Migration 52 : `char_inventory.current_ammo` FK — munition chargée par arme
 - Migration 53 : nettoyage nomenclature — 11 fusions doublons, 89 renommages (`Balle`→`Munition`, suppression qualificatif arme type)
@@ -131,13 +128,19 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 - Tri munitions : "standard" en premier + alphabétique fr
 - Décision : armes 2M/Tr hors scope v1 (ignorées en WeaponPanel)
 
+**Sprint 5 livré (session 56) :**
+- `shared/polarisUtils.js` (NOUVEAU) — source unique `polarisRound` — règle PI11
+- `charStats.js` — import depuis shared, + `calcResistanceArmure(equippedItems)` + `calcCarenceArmure(equippedItems, forNA)`
+- `CharacterSheet.jsx` + `LocationPanel.jsx` — import depuis shared, copies locales supprimées
+- `char-sheet.js` — `ref_min_str` dans les 2 SELECT GET /inventory
+- Affichage carence FOR (rouge si FOR < min_str) reporté → Chantier 11 sprint 3 (nécessite forNA dans ArmorWoundPanel)
+
 ### Chantier 11 — Module Blessures (Fiche personnage)
 
 **Architecture actée (session 49) :**
 - Migration 49 : `character_wounds` — cases par localisation/gravité, stabilisation
 - Calculs malus : serveur via `charStats.js` (fonctions pures)
 - WS : room `campaignId` existante — client filtre par `char_sheet_id`
-- Étape 2 (armes) bloquée par Chantier 10 sprint 2 (`char_inventory`) — sprint 2 ✅, Étape 3 ✅
 
 **Dépendance architecturale :**
 ```
@@ -173,13 +176,15 @@ Tests de Choc : Grave (tête/corps) + Critique + Mortelle (toutes localisations)
 **WoundManager.jsx — SUPPRIMÉ session 55.**
 Remplacé par `LocationPanel` (grille de blessures intégrée par localisation dans `ArmorWoundPanel`). Archivé dans `docs/Old/WoundManager.jsx`.
 
-**Mécaniques armure non implémentées — à traiter lors de sprint 4/5 :**
+**Mécaniques armure — implémentées ou reportées :**
 
-- **Arbitrage math.ceil (à décider avec Saar)** — LdB : `FinalProt = max + reste/2`. Code actuel = sans arrondi. Les plans originaux spécifiaient `Math.ceil(max + reste/2)`. Vérifier le Livre de Base avant de trancher.
+- **Arrondi mille-feuille** — Résolu session 56 : `polarisRound(rest / 2)`. `calcResistanceArmure` dans `charStats.js`. `calcMillefeuille` client synchronisé.
 
-- **Malus armure req_for (sprint 5 ou + tard)** — Non implémenté. Chaque armure a un prérequis FOR. Si FOR_perso < req_for_armure → carence = req_for − FOR_actuelle → s'ajoute au malus de catégorie. Formule : `malusZone = ARMOR_CATEGORY_MALUS[cat] − carenceFOR`. Le "pire malus" de zone est ensuite retenu pour les jets. À intégrer dans `LocationPanel` / `charStats.js`.
+- **Carence FOR côté serveur** — Résolu session 56 : `calcCarenceArmure(equippedItems, forNA)` dans `charStats.js`. Malus = −1 par point de FOR manquant, appliqué à tous les jets (LdB).
 
-- **DSL effets armes/munitions (sprint 4 Module Armes)** — `ref_equipment.effects` contient un DSL type `DMG_H=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Syntaxe : `TYPE=ACTION(VALEUR)` séparés par `;`. Actions : `SET` (écrase), `ADD` (ajoute), `TXT=FX=` (tag qualitatif). Chargement d'une munition → override des stats de l'arme via ce parseur. Fail-safe : si DSL malformé → console.warn + stats de base de l'arme.
+- **Affichage carence FOR (fiche perso)** — Reporté Chantier 11 sprint 3. `ref_min_str` disponible dans le SELECT GET /inventory. L'affichage rouge (FOR < min_str) nécessite `forNA` dans `ArmorWoundPanel` — logiquement groupé avec la résolution dommages en combat.
+
+- **DSL effets armes/munitions (Étape 2 Module Armes)** — `ref_equipment.effects` contient un DSL type `DMG_H=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Syntaxe : `TYPE=ACTION(VALEUR)` séparés par `;`. Actions : `SET` (écrase), `ADD` (ajoute), `TXT=FX=` (tag qualitatif). Chargement d'une munition → override des stats de l'arme via ce parseur. Fail-safe : si DSL malformé → console.warn + stats de base de l'arme.
 
 ### PC22 — Fix 403 toggle is_learned MUTATION/POLARIS ✅ (session 50)
 
@@ -274,93 +279,3 @@ Export battlemap complète (voxels + entités + tokens).
 - Sources lumineuses dynamiques
 - Chat MP (V2)
 - Sauvegarde/export carte 3D (V2)
-
-1. Chemin Critique (Priorités de Développement)
-L'ordre de développement suit la logique du "Flux de Données" : Base de données > Logique
-Serveur > Interface Client.
-Priorité Chantier Objectif Clé
-
-P0 Sprint 4 — Armes &
-
-Munitions
-
-Équipement, gestion du
-calibre et poids brut.
-P1 Moteur d'Initiative Polaris Séquenceur Annonce
-(Lents) / Résolution
-(Rapides).
-
-P2 HUD de Combat & Ciblage Fenêtre de modificateurs
-contextuels et modes de tir.
-
-P3 Outils Playground
-(Auras/LOS)
-
-Raycast de portée et ligne
-de vue dynamique.
-P4 Social & Économie Système d'échanges et
-bourse commune.
-
-P5 World-Building avancé Catalogue de PNJ (Roster)
-et Boutiques GM.
-2. Domaine A — Cœur Tactique (Playground 3D)
-Ce domaine regroupe les fonctionnalités liées à l'interaction directe sur la battlemap.
-● A1 — Séquenceur d'Initiative : Implémentation de la règle Polaris (Annonce des scores
-
-faibles en premier, résolution des scores élevés en premier). Nécessite un état "Lock" sur
-les actions joueurs.
-● A2 — HUD de Combat Contextuel : Ouverture d'une fenêtre de tir lors du ciblage d'un
-adversaire. Sélection automatique des malus de portée via Raycast.
-● A3 — Auras & Visualisation : Affichage de cercles de portée autour du token actif.
-Calcul de visibilité "Raycast LOS" entre l'attaquant et la cible.
-● A4 — Roster & Bestiaire : Interface GM pour glisser-déposer des PNJ pré-configurés
-sur la carte.
-3. Domaine B — Économie & Inventaire
-Évolution du système de gestion des ressources des personnages.
-● B1 — Registre des Transactions (Sol) : Passage d'un champ simple à une table
-char_transactions pour historiser et valider les mouvements de monnaie.
-● B2 — Finance de Groupe : Création d'une bourse commune paramétrable par le GM
-dans les réglages de campagne.
-● B3 — Module de Commerce : Interface de vente permettant au GM de définir des
-stocks et des multiplicateurs de prix locaux.
-● B4 — Modding d'Équipement : Système d'accessoires (parent/child) pour ajouter des
-lunettes de visée ou des extensions de chargeur.
-4. Domaine C — Moteur & Rendu
-Optimisation technique et support matériel (Raspberry Pi 4).
-● C1 — Optimisation Voxel (Face Culling) : Algorithme visant à ne rendre que les faces
-visibles des voxels pour économiser les ressources GPU.
-● C2 — Bridge Voxel 3D : Import/Export de structures de cartes au format JSON.
-● C3 — Couche 2D Legacy : Mode d'affichage alternatif utilisant des images PNG sur une
-grille plane pour les configurations légères.
-5. Backlog UX & Dettes Techniques
-ID Description Statut
-
-UX1 Export PDF de la fiche
-
-personnage
-
-À planifier
-
-ID Description Statut
-
-UX8 Prérequis complexes (OU)
-pour compétences
-
-À planifier
-
-PE33 Correction UV Texturing D10
-
-(V2 Blender)
-
-Actif
-
-Dette Normalisation fins de ligne
-
-(.gitattributes)
-
-Bloqué (Lecture attendue)
-
-Ajout de l'user :
-- Bug graphique avec les demi-dalles et les tokends 3D car l'altitude de ceux-ci n'est pas fait pour des hauteur de 0.5. A corriger.
-- Ajouter des blocs d'eau (texture et aspect) et ce sera l'occasion de discuter d'animation de certaines textures/blocs voxel.
-- Les tokens3D apparaissent très sombre, les textures ne correspondent pas vraiment, comme s'il y avait un gros filtre noir.

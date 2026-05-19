@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-19 Session 55
+> Dernière mise à jour : 2026-05-19 Session 56
 
 ---
 
@@ -89,6 +89,27 @@ Travaux effectués en session 55 :
 - `WeaponPanel` monté dans `CharacterWindow` entre ArmorWoundPanel et InventoryPanel ✅
 - Tri munitions "standard" en premier dans availableAmmoFor ✅
 
+### Chantier 10 sprint 5 — Mille-feuille serveur + polarisRound unifié + ref_min_str ✅ (session 56)
+
+Travaux effectués en session 56 :
+- `shared/polarisUtils.js` (NOUVEAU) — source unique `polarisRound(x) = Math.floor(x + 0.4)` ✅
+- `server/src/lib/charStats.js` — import depuis shared, def locale supprimée, + `calcResistanceArmure` + `calcCarenceArmure` ✅
+- `client/src/character/CharacterSheet.jsx` — import depuis shared, const locale supprimée ✅
+- `client/src/character/LocationPanel.jsx` — import depuis shared, `calcMillefeuille` utilise polarisRound ✅
+- `server/src/routes/character/char-sheet.js` — `ref_min_str` dans les 2 SELECT GET /inventory ✅
+- Affichage carence FOR (rouge si FOR < min_str) reporté Chantier 11 sprint 3 (nécessite forNA dans ArmorWoundPanel)
+
+---
+
+## Prochain chantier — Chantier 11 étape 2 — Module Armes complet
+
+DSL effets/munitions, parseur, résolution dommages par localisation.
+Prérequis : Chantier 10 sprint 4 ✅
+
+Fonctions serveur prêtes (charStats.js) :
+- `calcResistanceArmure(equippedItems)` — mille-feuille par slot ✅
+- `calcCarenceArmure(equippedItems, forNA)` — carence FOR tous jets ✅
+
 ---
 
 ## Chantier reporté — Paramètre campagne GM entity move mode
@@ -133,3 +154,4 @@ Statut : correction prévue si besoin.
 - DiceMesh useMemo — deps [geoDef.type, color, dieType] — dieType obligatoire pour D10 (PE32)
 - D10 Html overlay — position=[0,0,0] — ne pas déplacer (PE33)
 - P49 — promotion blessures : always GET /wounds si promoted === true (ne pas ajouter wound localement)
+- PI11 — polarisRound : source unique `shared/polarisUtils.js` — jamais redéfini localement

@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-19 Session 55
+> Dernière mise à jour : 2026-05-19 Session 56
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -48,11 +48,11 @@ Enclume/
 │   │   │   ├── WeaponPanel.jsx         # NOUVEAU 55 — armes équipées MG/MD, stats, munitions chargées, rechargement, équipement
 │   │   │   ├── InventoryPanel.jsx      # Modifié 55 — VALID_SLOTS corrigé (migration 51 → codes BG/BD/JG/JD/MG/MD/2M/Tr)
 │   │   │   ├── ArmorWoundPanel.jsx     # NOUVEAU 54 — layout 3 colonnes : localisations armure + silhouette + conteneurs
-│   │   │   ├── LocationPanel.jsx       # NOUVEAU 54 — une localisation (Tête/Corps/Bras/Jambe) — multi-couches + poids
+│   │   │   ├── LocationPanel.jsx       # Modifié 56 — import polarisRound shared, calcMillefeuille utilise polarisRound
 │   │   │   ├── ContainerPanel.jsx      # NOUVEAU 54 — Sac/Ceinture/Coffre — équipement conteneur
 │   │   │   ├── SilhouettePanel.jsx     # NOUVEAU 54 — SVG silhouette colorée par blessures, 50% width
 │   │   │   ├── AdvantagesPanel.jsx     # Modifié 50 — rework lift-state-up, props charSkills/refSkillsPolaris/onSkillLearnedChange
-│   │   │   ├── CharacterSheet.jsx      # Modifié 52 — effectiveMalus + iniValue + tooltip Initiative position:fixed
+│   │   │   ├── CharacterSheet.jsx      # Modifié 56 — import polarisRound shared, const locale supprimée
 │   │   │   └── CharacterWindow.jsx     # Modifié 55 — WeaponPanel monté entre ArmorWoundPanel et InventoryPanel
 │   │   ├── locales/
 │   │   │   └── fr.json                 # Modifié 49 — +tabMateriel
@@ -88,7 +88,9 @@ Enclume/
 │   │   │   ├── texture-packs.js
 │   │   │   ├── entity-blueprints.js    # Modifié 33 — POST /:id/upload-glb
 │   │   │   ├── entities.js             # Modifié 39 — maintenance Redis collision map
-│   │   │   └── equipment.js            # NOUVEAU 47 — CRUD ref_equipment + junction tables
+│   │   │   ├── equipment.js            # NOUVEAU 47 — CRUD ref_equipment + junction tables
+│   │   │   └── character/
+│   │   │       └── char-sheet.js       # Modifié 56 — ref_min_str dans les 2 SELECT GET /inventory
 │   │   ├── middleware/
 │   │   │   ├── auth.js
 │   │   │   ├── role.js
@@ -101,10 +103,11 @@ Enclume/
 │   │   │   ├── AppError.js
 │   │   │   ├── minio.js
 │   │   │   ├── diceParser.js
-│   │   │   ├── charStats.js            # Modifié 52 — +calcEncumbrancePenalty (51) +calcWoundPenalty (49) — fonctions pures
+│   │   │   ├── charStats.js            # Modifié 56 — import polarisRound shared, +calcResistanceArmure +calcCarenceArmure
 │   │   │   └── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
 │   │   └── index.js                    # Modifié 47 — express.static public/ + route /api/equipment
 ├── shared/
+│   ├── polarisUtils.js                 # NOUVEAU 56 — polarisRound(x) source unique — jamais redéfini localement (PI11)
 │   ├── events.js                       # Modifié 51 — +INVENTORY_ADDED/UPDATED/REMOVED/SOLS_UPDATED
 │   ├── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES/SEVERITY_COLORS
 │   └── armorConstants.js               # NOUVEAU 54 — ARMOR_CATEGORY_MALUS/LOCATION_TO_SLOT/SLOT_TO_REF_LOCATION/LOCATION_TO_SVG/LOCATION_LABELS
@@ -181,6 +184,29 @@ Enclume/
 | 51_inventory_slot_codes | Nullifie slots stales B/J via regex `(^|/)(B|J)(/|$)` — passage codes T/C → BG/BD/JG/JD |
 | 52_add_current_ammo_to_inventory | char_inventory.current_ammo UUID nullable FK ref_equipment.id SET NULL — munition chargée dans une arme |
 | 53_rename_ammo_unified | Phase 1 : 11 fusions doublons munitions (UPDATE FK + DELETE). Phase 2 : 89 renommages — "Balle"→"Munition", suppression qualificatif arme. Carreaux/Flèches/Darts : "Projectile" conservé. |
+
+---
+
+## charStats.js — Fonctions pures (server/src/lib/charStats.js)
+
+| Fonction | Description |
+|---|---|
+| `calcNA` | Niveau Attribut net (base + pc + modGen, plancher 3) |
+| `calcAN` | Aptitude Naturelle depuis table LdB |
+| `calcAttributeAN/NA` | AN/NA pour un attr_id donné |
+| `calcSkillTotal` | Total compétence (AN1+AN2+maîtrise) |
+| `getModDom` | Modificateur de Dommages (FOR_na) |
+| `calcREA` | Réactivité = polarisRound((ADA+PER)/2) |
+| `calcSeuils` | Étourdissement + Inconscience |
+| `calcVitesses` | Marche + Course |
+| `calcResistanceDommages` | RD depuis table FOR+CON |
+| `calcResistanceNaturelle` | RésNat depuis table |
+| `calcResistanceDroguesInput` | (CON+VOL)/2 |
+| `calcSouffle` | (CON+VOL)/2 |
+| `calcWoundPenalty` | Malus blessures — pire gravité seule |
+| `calcEncumbrancePenalty` | Malus encombrement kg > FOR×3 |
+| `calcResistanceArmure` | Mille-feuille ETQ/PRT par slot (session 56) |
+| `calcCarenceArmure` | Carence FOR = pire min_str − forNA (session 56) |
 
 ---
 
@@ -408,4 +434,5 @@ Malus encombrement : règle maison, s'additionne au malus santé.
 | P49 | Promotion blessures : si promoted===true → GET /wounds complet — ne jamais ajouter localement |
 | P50 | toggle Polaris : ne jamais dupliquer charSkills dans un sous-composant — lift state up obligatoire |
 | P51 | Malus non-cumulatifs santé : pire seul (LdB p.236). Encombrement (maison) : cumulatif. effectiveMalus = woundPenalty − encumbrancePenalty |
+| PI11 | polarisRound source unique shared/polarisUtils.js — jamais redéfini localement |
 | PEF1-PEF6 | voir SYSTEME.md section 6 |

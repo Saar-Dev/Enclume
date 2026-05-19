@@ -12,6 +12,7 @@
  */
 
 import { WOUND_PENALTIES } from '../../../shared/woundConstants.js'
+import { polarisRound } from '../../../shared/polarisUtils.js'
 
 // ─── Constante V1 ─────────────────────────────────────────────────────────────
 // TOTAL_MALUS = 0 en V1 — le système d'historique XP n'est pas implémenté.
@@ -165,14 +166,6 @@ export const SKILL_LEVEL_LABELS = [
 function lookupTable(table, value, prop) {
   const row = table.find(r => value >= r.min && value <= r.max)
   return row ? row[prop] : null
-}
-
-/**
- * Arrondi Polaris : Math.floor(x + 0.4)
- * 0.5 arrondit vers le bas — différent de Math.round. (PC3)
- */
-export function polarisRound(x) {
-  return Math.floor(x + 0.4)
 }
 
 // ─── Calculs attributs ────────────────────────────────────────────────────────
@@ -355,4 +348,34 @@ export function calcWoundPenalty(wounds) {
 export function calcEncumbrancePenalty(totalWeight, forValue) {
   const threshold = forValue * 3
   return Math.max(0, Math.ceil(totalWeight - threshold))
+}
+
+// ─── Résistance armure (mille-feuille, LdB p.312) ────────────────────────────
+
+/**
+ * Calcule la protection effective par mille-feuille pour un slot donné.
+ * @param {Array} equippedItems — items filtrés par slot (ref_protection, ref_protection_shock)
+ * @returns {{ etq: number|null, prt: number|null }}
+ */
+export function calcResistanceArmure(equippedItems) {
+  const compute = (field) => {
+    const vals = equippedItems.map(i => i[field] ?? 0).filter(v => v > 0)
+    if (!vals.length) return null
+    const max  = Math.max(...vals)
+    const rest = vals.reduce((s, v) => s + v, 0) - max
+    return max + polarisRound(rest / 2)
+  }
+  return { etq: compute('ref_protection'), prt: compute('ref_protection_shock') }
+}
+
+/**
+ * Calcule la carence de Force pour l'ensemble des armures équipées.
+ * Malus = -1 par point de FOR manquant, appliqué à tous les jets.
+ * @param {Array} equippedItems — tous les items équipés (slot non null)
+ * @param {number} forNA — valeur nette FOR du personnage
+ * @returns {number} carence (≥ 0)
+ */
+export function calcCarenceArmure(equippedItems, forNA) {
+  const worstMinStr = equippedItems.reduce((acc, i) => Math.max(acc, i.ref_min_str ?? 0), 0)
+  return Math.max(0, worstMinStr - forNA)
 }

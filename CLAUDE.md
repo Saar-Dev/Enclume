@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-05-19 Session 55
+> Dernière mise à jour : 2026-05-19 Session 56
 
 ---
 
@@ -73,23 +73,21 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 55 (2026-05-19)
+## État actuel — Session 56 (2026-05-19)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **53 migrations stables** — prochaine : **54**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4 ✅ / Chantier 11 sprint 1+suite ✅ / PC22 ✅
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+suite ✅ / PC22 ✅
 
-**Chantier 10 sprint 4 livré (session 55) :**
-- Migration 52 : `char_inventory.current_ammo UUID FK ref_equipment.id SET NULL`
-- Migration 53 : fusion des doublons munitions (11 groupes) + renommage 89 entrées (`Balle` → `Munition`, suppression qualificatif arme)
-- `WeaponPanel.jsx` (NEW) : armes 1M équipées, stats, munitions, rechargement, équipement depuis stock
-- `char-sheet.js` : WEAPON_SLOTS, SELECT +6 champs arme+munition, branch POST/PUT armes + validation caliber
-- `InventoryPanel.jsx` : VALID_SLOTS corrigé (bug dormant migration 51)
-- Tri munitions : "standard" en premier, puis alphabétique fr
+**Chantier 10 sprint 5 livré (session 56) :**
+- `shared/polarisUtils.js` (NOUVEAU) — source unique `polarisRound` — règle absolue, jamais redéfini localement
+- `charStats.js` — import depuis shared, + `calcResistanceArmure(equippedItems)` + `calcCarenceArmure(equippedItems, forNA)`
+- `CharacterSheet.jsx` + `LocationPanel.jsx` — import depuis shared, copies locales supprimées
+- `char-sheet.js` — `ref_min_str` dans les 2 SELECT GET /inventory
+- Affichage carence FOR reporté → Chantier 11 sprint 3 (forNA non disponible dans ArmorWoundPanel)
 
-**Prochains chantiers (à décider avec Saar) :**
+**Prochain chantier :**
 - Chantier 11 étape 2 — Module Armes complet (DSL effets/munitions, parseur, résolution dommages)
-- Chantier 10 sprint 5 — Mille-feuille protection serveur + req_for armor malus
 
 **Dettes actives :**
 - D10 UV texturing V2 — modèle Blender .glb (PE33)
@@ -206,6 +204,10 @@ Toujours finir par `.message` quand on extrait le message d'erreur.
 
 **PI10 — seed 2_seed_equipment.js après migration 53**
 Ne jamais rejouer `2_seed_equipment.js` après la migration 53 — réinsérerait les 636 anciens noms sans erreur (pas de UNIQUE sur `ref_equipment.name`). Doublons silencieux.
+
+**PI11 — polarisRound : source unique shared/polarisUtils.js**
+Ne jamais redéfinir `polarisRound` localement. Import obligatoire : `'../../../shared/polarisUtils.js'`.
+Toute copie locale (const, function) est interdite — erreur de code si trouvée lors d'une review.
 
 **"La Forêt Maudite"**
 Pas de `default_battlemap_id` → ne jamais utiliser pour les tests.

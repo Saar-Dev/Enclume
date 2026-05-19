@@ -32,6 +32,7 @@ import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import SkillsPanel from './SkillsPanel.jsx'
 import AdvantagesPanel from './AdvantagesPanel.jsx'
+import { polarisRound } from '../../../shared/polarisUtils.js'
 
 // ─── Constantes métier ────────────────────────────────────────────────────────
 
@@ -73,9 +74,6 @@ const MOD_DOM_TABLE = [
 ]
 
 // ─── Fonctions de calcul ──────────────────────────────────────────────────────
-
-// Arrondi Polaris : 0.5 → bas (ex: 16.5 → 16)
-const polarisRound = (x) => Math.floor(x + 0.4)
 
 const calcNA = (base, pc, modGen) => Math.max(3, (base || 0) + (pc || 0) + (modGen || 0))
 

@@ -5,6 +5,7 @@ import {
 import {
   ARMOR_CATEGORY_MALUS, LOCATION_TO_SLOT, LOCATION_LABELS, SLOT_TO_REF_LOCATION,
 } from '../../../shared/armorConstants.js'
+import { polarisRound } from '../../../shared/polarisUtils.js'
 import api from '../lib/api.js'
 
 const SEVERITY_LABELS = {
@@ -16,7 +17,7 @@ function calcMillefeuille(items, field) {
   if (!vals.length) return null
   const max  = Math.max(...vals)
   const rest = vals.reduce((s, v) => s + v, 0) - max
-  return max + rest / 2
+  return max + polarisRound(rest / 2)
 }
 
 function fmt(n) {

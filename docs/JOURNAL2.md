@@ -5040,3 +5040,30 @@ Affecte aussi `handleReload` qui prend `compatAmmos[0]`.
 
 **Piège découvert (PI10)**
 `2_seed_equipment.js` NE PAS rejouer après migration 53 — réinsérerait 636 items aux anciens noms sans erreur (pas de UNIQUE sur `name`).
+
+---
+
+## Session 56 — 2026-05-19
+
+### Chantier 10 sprint 5 — Mille-feuille serveur + polarisRound unifié + ref_min_str
+
+**Décisions préalables**
+- `polarisRound` déclaré règle unique d'arrondi — source unique dans `shared/polarisUtils.js`, jamais redéfini localement.
+- Rounding mille-feuille : `polarisRound(rest / 2)` confirmé (LdB p.312 : pas d'arrondi explicite → standard Polaris appliqué).
+- Carence FOR : `−1 par point de FOR manquant`, appliqué à tous les jets (LdB).
+- Affichage carence FOR (rouge si FOR < min_str) reporté à Chantier 11 sprint 3 — nécessite fetch attributs dans ArmorWoundPanel, logiquement groupé avec la résolution dommages en combat.
+
+**Livré**
+- `shared/polarisUtils.js` (NOUVEAU) — `polarisRound(x) = Math.floor(x + 0.4)` — source unique
+- `server/src/lib/charStats.js` :
+  - Import `polarisRound` depuis shared — définition locale supprimée
+  - `calcResistanceArmure(equippedItems)` → `{ etq, prt }` — mille-feuille avec polarisRound (par slot)
+  - `calcCarenceArmure(equippedItems, forNA)` → carence ≥ 0 (pire min_str − forNA, tous jets)
+- `client/src/character/CharacterSheet.jsx` : import depuis shared — `const polarisRound` locale supprimée
+- `client/src/character/LocationPanel.jsx` : import depuis shared — `calcMillefeuille` utilise `polarisRound`
+- `server/src/routes/character/char-sheet.js` : `ref_equipment.min_str as ref_min_str` ajouté dans les 2 SELECT GET /inventory
+
+**Aucune migration** — `min_str` existait déjà en base (migration 48).
+
+**Piège documenté (PI11)**
+`polarisRound` = source unique `shared/polarisUtils.js`. Jamais redéfini localement. Import : `'../../../shared/polarisUtils.js'`.

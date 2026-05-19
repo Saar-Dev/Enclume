@@ -34,7 +34,9 @@
       "Bash(node_modules\\\\.bin\\\\knex.cmd --knexfile knexfile.cjs seed:list)",
       "Bash(Get-Content docs/../docs/JOURNAL2.md)",
       "Bash(Measure-Object -Line)",
-      "Bash(Select-Object -ExpandProperty Lines)"
+      "Bash(Select-Object -ExpandProperty Lines)",
+      "Bash(Select-Object -Last 100)",
+      "Bash(Select-Object -Last 60)"
     ]
   }
 }
