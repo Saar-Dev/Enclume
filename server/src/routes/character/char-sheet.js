@@ -754,7 +754,9 @@ router.delete('/:characterId/wounds/:woundId', async (req, res, next) => {
 // ─── Helpers inventaire ───────────────────────────────────────────────────────
 
 const VALID_CONTAINERS = ['Coffre', 'Sac', 'Ceinture']
-const VALID_SLOTS      = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'D', 'Ce']
+const VALID_SLOTS      = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'D', 'Ce', 'MG', 'MD', '2M', 'Tr']
+const ARMOR_SLOTS      = new Set(['T', 'C', 'BG', 'BD', 'JG', 'JD'])
+const WEAPON_SLOTS     = new Set(['MG', 'MD', '2M', 'Tr'])
 
 async function isContainerAvailable(characterId, container) {
   if (container === 'Coffre') return true
@@ -801,6 +803,13 @@ async function getItemWithRef(itemId) {
       'ref_equipment.malus_cat as ref_malus_cat',
       'ref_equipment.capacity as ref_capacity',
       'ref_equipment.waterproof as ref_waterproof',
+      'char_inventory.current_ammo',
+      'ref_equipment.caliber as ref_caliber',
+      'ref_equipment.damage_h as ref_damage_h',
+      'ref_equipment.shock as ref_shock',
+      'ref_equipment.range as ref_range',
+      'ref_equipment.fire_mode as ref_fire_mode',
+      'ref_equipment.ammo_count as ref_ammo_count',
     )
     .first()
 }
@@ -841,6 +850,13 @@ router.get('/:characterId/inventory', async (req, res, next) => {
         'ref_equipment.malus_cat as ref_malus_cat',
         'ref_equipment.capacity as ref_capacity',
         'ref_equipment.waterproof as ref_waterproof',
+        'char_inventory.current_ammo',
+        'ref_equipment.caliber as ref_caliber',
+        'ref_equipment.damage_h as ref_damage_h',
+        'ref_equipment.shock as ref_shock',
+        'ref_equipment.range as ref_range',
+        'ref_equipment.fire_mode as ref_fire_mode',
+        'ref_equipment.ammo_count as ref_ammo_count',
       )
       .orderBy('char_inventory.created_at', 'asc')
 
@@ -930,6 +946,29 @@ router.post('/:characterId/inventory', async (req, res, next) => {
           .where({ character_id: characterId, slot: resolvedSlot })
           .first()
         if (conflict) throw new AppError(409, 'Slot déjà occupé')
+      } else if (WEAPON_SLOTS.has(resolvedSlot)) {
+        if (!(await isContainerAvailable(characterId, 'Sac'))) {
+          throw new AppError(400, 'Sac non disponible — impossible d\'équiper une arme')
+        }
+        const isTwoHand = resolvedSlot === '2M' || resolvedSlot === 'Tr'
+        if (isTwoHand) {
+          const conflict = await db('char_inventory')
+            .where({ character_id: characterId })
+            .whereIn('slot', ['MG', 'MD', '2M', 'Tr'])
+            .first()
+          if (conflict) throw new AppError(409, 'Mains déjà occupées — impossible d\'équiper une arme à 2 mains')
+        } else {
+          const conflictTwoHand = await db('char_inventory')
+            .where({ character_id: characterId })
+            .whereIn('slot', ['2M', 'Tr'])
+            .first()
+          if (conflictTwoHand) throw new AppError(409, 'Arme à 2 mains déjà équipée — choisissez une seule main')
+          const conflict = await db('char_inventory')
+            .where({ character_id: characterId, slot: resolvedSlot })
+            .first()
+          if (conflict) throw new AppError(409, `Slot ${resolvedSlot} déjà occupé`)
+        }
+        container = 'Sac'
       } else {
         if (!(await isContainerAvailable(characterId, 'Sac'))) {
           throw new AppError(400, 'Sac non disponible — impossible d\'équiper un item')
@@ -998,7 +1037,7 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
       .where({ id: itemId, character_id: characterId }).first()
     if (!existing) throw new AppError(404, 'Item not found')
 
-    const { container, slot, quantity, custom_name, custom_desc, notes, custom_props } = req.body
+    const { container, slot, quantity, custom_name, custom_desc, notes, custom_props, current_ammo } = req.body
     const updates = {}
 
     if (container    !== undefined) updates.container    = container
@@ -1008,6 +1047,7 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
     if (custom_desc  !== undefined) updates.custom_desc  = custom_desc
     if (notes        !== undefined) updates.notes        = notes
     if (custom_props !== undefined) updates.custom_props = custom_props
+    if (current_ammo !== undefined) updates.current_ammo = current_ammo
 
     // P13 — guard avant updated_at
     if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
@@ -1021,11 +1061,36 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
           .whereNot({ id: itemId })
           .first()
         if (conflict) throw new AppError(409, 'Slot déjà occupé')
+      } else if (WEAPON_SLOTS.has(updates.slot)) {
+        if (!(await isContainerAvailable(characterId, 'Sac'))) {
+          throw new AppError(400, 'Sac non disponible — impossible d\'équiper une arme')
+        }
+        const isTwoHand = updates.slot === '2M' || updates.slot === 'Tr'
+        if (isTwoHand) {
+          const conflict = await db('char_inventory')
+            .where({ character_id: characterId })
+            .whereIn('slot', ['MG', 'MD', '2M', 'Tr'])
+            .whereNot({ id: itemId })
+            .first()
+          if (conflict) throw new AppError(409, 'Mains déjà occupées — impossible d\'équiper une arme à 2 mains')
+        } else {
+          const conflictTwoHand = await db('char_inventory')
+            .where({ character_id: characterId })
+            .whereIn('slot', ['2M', 'Tr'])
+            .whereNot({ id: itemId })
+            .first()
+          if (conflictTwoHand) throw new AppError(409, 'Arme à 2 mains déjà équipée — choisissez une seule main')
+          const conflict = await db('char_inventory')
+            .where({ character_id: characterId, slot: updates.slot })
+            .whereNot({ id: itemId })
+            .first()
+          if (conflict) throw new AppError(409, `Slot ${updates.slot} déjà occupé`)
+        }
+        updates.container = 'Sac'
       } else {
         // Valider que chaque partie est un code armor valide
-        const BASE_ARMOR = new Set(['T', 'C', 'BG', 'BD', 'JG', 'JD'])
         const newParts = updates.slot.split('/')
-        if (!newParts.every(p => BASE_ARMOR.has(p))) {
+        if (!newParts.every(p => ARMOR_SLOTS.has(p))) {
           throw new AppError(400, `slot invalide : ${updates.slot}`)
         }
         // Codes nouvellement ajoutés (absents du slot actuel de l'item)
@@ -1073,6 +1138,18 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
       if (!Number.isInteger(updates.quantity) || updates.quantity < 1) {
         throw new AppError(400, 'quantity doit être un entier positif')
       }
+    }
+
+    if (updates.current_ammo != null) {
+      const ammo = await db('ref_equipment').where({ id: updates.current_ammo }).first()
+      if (!ammo) throw new AppError(404, 'Munition introuvable')
+      const weaponRef = existing.equipment_id
+        ? await db('ref_equipment').where({ id: existing.equipment_id }).select('caliber', 'family').first()
+        : null
+      if (!weaponRef || weaponRef.family !== 'Armes')
+        throw new AppError(400, 'current_ammo ne peut être défini que sur une arme')
+      if (weaponRef.caliber !== ammo.caliber)
+        throw new AppError(400, `Munition incompatible — caliber attendu : ${weaponRef.caliber}`)
     }
 
     // P13 — updated_at APRÈS le guard

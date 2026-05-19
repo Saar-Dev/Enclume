@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-05-08 Session 54
+> Dernière mise à jour : 2026-05-19 Session 55
 
 ---
 
@@ -73,23 +73,23 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 54 (2026-05-08)
+## État actuel — Session 55 (2026-05-19)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **51 migrations stables** — prochaine : **52**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3 ✅ / Chantier 11 sprint 1+suite ✅ / PC22 ✅
+- **53 migrations stables** — prochaine : **54**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4 ✅ / Chantier 11 sprint 1+suite ✅ / PC22 ✅
 
-**Chantier 10 sprint 3 livré (session 54) :**
-- LOCATION_TO_SLOT : codes distincts BG/BD/JG/JD (indépendance bras/jambes)
-- SLOT_TO_REF_LOCATION : mapping compat ref_equipment.location (B/J persistent, client gère)
-- LocationPanel : `refCode` pour lookup `ref_location`, équip/unequip par slotCode individuel
-- Migration 51 : nullifie slots stales B/J via regex `(^|/)(B|J)(/|$)`
-- ArmorWoundPanel : layout 3 colonnes + silhouette 50% + poids brut / max avec couleur (gris/orange/rouge)
-- Multi-couches : functional sur toutes les localisations (Tête/Corps/Bras/Jambes)
+**Chantier 10 sprint 4 livré (session 55) :**
+- Migration 52 : `char_inventory.current_ammo UUID FK ref_equipment.id SET NULL`
+- Migration 53 : fusion des doublons munitions (11 groupes) + renommage 89 entrées (`Balle` → `Munition`, suppression qualificatif arme)
+- `WeaponPanel.jsx` (NEW) : armes 1M équipées, stats, munitions, rechargement, équipement depuis stock
+- `char-sheet.js` : WEAPON_SLOTS, SELECT +6 champs arme+munition, branch POST/PUT armes + validation caliber
+- `InventoryPanel.jsx` : VALID_SLOTS corrigé (bug dormant migration 51)
+- Tri munitions : "standard" en premier, puis alphabétique fr
 
 **Prochains chantiers (à décider avec Saar) :**
-- Chantier 10 sprint 4 — Module Armes équipées (prérequis : char_inventory ✅)
-- Chantier 11 étape 2 — Module Armes complet (prérequis : char_inventory ✅)
+- Chantier 11 étape 2 — Module Armes complet (DSL effets/munitions, parseur, résolution dommages)
+- Chantier 10 sprint 5 — Mille-feuille protection serveur + req_for armor malus
 
 **Dettes actives :**
 - D10 UV texturing V2 — modèle Blender .glb (PE33)
@@ -195,6 +195,17 @@ Confusion → items non disponibles ou multi-location mal géré.
 **PI8 — POST handler : LIKE query pour multi-slot**
 Serveur POST `/inventory` : WHERE clause doit utiliser LIKE `'/' || COALESCE(slot,'') || '/' LIKE '%/CODE/%'`.
 Ancien `WHERE slot = code` ne trouve pas items multi-slot → 1+S+S check silencieusement broken pour multi-couches.
+
+**PI9 — Format erreur serveur : objet imbriqué**
+`errorHandler.js` envoie `{ error: { status, message } }`. Dans les catch Axios :
+```js
+err.response?.data?.error?.message  // ✓ string
+err.response?.data?.error           // ✗ objet → crash React si rendu en JSX
+```
+Toujours finir par `.message` quand on extrait le message d'erreur.
+
+**PI10 — seed 2_seed_equipment.js après migration 53**
+Ne jamais rejouer `2_seed_equipment.js` après la migration 53 — réinsérerait les 636 anciens noms sans erreur (pas de UNIQUE sur `ref_equipment.name`). Doublons silencieux.
 
 **"La Forêt Maudite"**
 Pas de `default_battlemap_id` → ne jamais utiliser pour les tests.

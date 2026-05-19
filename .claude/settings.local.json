@@ -24,7 +24,17 @@
       "Bash(powershell -Command \"Get-Content docs/JOURNAL2.md | Measure-Object -Line\")",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(powershell -Command \"\\(Get-ChildItem 'c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\server\\\\src\\\\db\\\\migrations\\\\' -File\\).Count\")",
+      "Bash(powershell -Command \"Get-ChildItem 'c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\server\\\\src\\\\db\\\\migrations\\\\' -File | Select-Object -ExpandProperty Name | Sort-Object\")",
+      "Bash(powershell -Command \"Copy-Item 'c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\client\\\\src\\\\character\\\\WoundManager.jsx' 'c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\Old\\\\WoundManager.jsx'\")",
+      "Bash(powershell -Command \"Remove-Item 'c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\client\\\\src\\\\character\\\\WoundManager.jsx' -Force\")",
+      "Bash(powershell -Command \"Test-Path 'c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\client\\\\src\\\\character\\\\WoundManager.jsx'; Test-Path 'c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\Old\\\\WoundManager.jsx'\")",
+      "Bash(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\JOURNAL2.md\" -Tail 150)",
+      "Bash(node_modules\\\\.bin\\\\knex.cmd --knexfile knexfile.cjs seed:list)",
+      "Bash(Get-Content docs/../docs/JOURNAL2.md)",
+      "Bash(Measure-Object -Line)",
+      "Bash(Select-Object -ExpandProperty Lines)"
     ]
   }
 }

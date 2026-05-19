@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-08 Session 54
+> Dernière mise à jour : 2026-05-19 Session 55
 
 ---
 
@@ -68,6 +68,7 @@ Travaux effectués en session 52 :
 - Règle documentée : malus santé non-cumulatif (pire seul) + encombrement cumulatif (règle maison)
 
 ### Chantier 10 sprint 3 — Armures multi-couches + codes slots indépendants ✅ (session 54)
+### Chantier 10 sprint 4 — Module Armes équipées ✅ (session 55)
 
 Travaux effectués en session 54 :
 - Problème : `LOCATION_TO_SLOT` mappait bras_gauche + bras_droit → 'B', jambe_gauche + jambe_droite → 'J' → équiper à l'un affichait partout
@@ -78,6 +79,15 @@ Travaux effectués en session 54 :
 - Migration 51 — nullifie slots B/J stales via regex `(^|/)(B|J)(/|$)` ✅
 - ref_equipment.location intouché — mapping client gère la compat
 - Test : Pagan équipée indépendamment à Tête+Bras+Jambes ✅
+
+Travaux effectués en session 55 :
+- Migration 52 : `char_inventory.current_ammo UUID FK ref_equipment.id SET NULL` ✅
+- Migration 53 : fusions doublons munitions (11 groupes) + renommages 89 entrées ✅
+- `WeaponPanel.jsx` (NEW) : armes 1M équipées, stats DMG/CHC/PTÉ/TIR/CAL, munitions, rechargement, équipement ✅
+- `char-sheet.js` : WEAPON_SLOTS, +6 SELECT champs arme/munition, POST/PUT weapon branch + current_ammo caliber validation ✅
+- `InventoryPanel.jsx` : VALID_SLOTS bug fix (codes BG/BD/JG/JD/MG/MD/2M/Tr) ✅
+- `WeaponPanel` monté dans `CharacterWindow` entre ArmorWoundPanel et InventoryPanel ✅
+- Tri munitions "standard" en premier dans availableAmmoFor ✅
 
 ---
 

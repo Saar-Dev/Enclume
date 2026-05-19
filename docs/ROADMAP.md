@@ -105,6 +105,7 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 | Sprint 1 | Schéma DB + migration 48 + page admin saisie manuelle | ✅ session 46-47 |
 | Sprint 2 | `char_inventory` (table instance) + UI inventaire joueur | ✅ session 51 |
 | Sprint 3 | Codes slots indépendants (BG/BD/JG/JD) + armures multi-couches + poids | ✅ session 54 |
+| Sprint 4 | Module Armes équipées (WeaponPanel, current_ammo, nettoyage nomenclature munitions) | ✅ session 55 |
 
 **Sprint 1 livré :**
 - Migration 48 : `ref_equipment` (35 colonnes, 6 CHECK) + 3 junction tables
@@ -115,16 +116,20 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 - Migration 50 : `char_inventory` + `char_sheet.sols`
 - 5 routes REST inventaire + route sols dans `char-sheet.js`
 - `InventoryPanel.jsx` — affichage par container, encombrement, édition GM (catalogue 636 items), équipement slots
-- Reporté sprint 2 → chantiers futurs : transfert entre persos, WS listeners client, restriction sols→GM, split pile, UI armure
+- Reporté sprint 2 → chantiers futurs : transfert entre persos, WS listeners client, restriction sols→GM, split pile
 
 | Sprint | Contenu | État |
 |---|---|---|
-| Sprint 3 | Intégration malus INI encombrement dans jets + affichage tooltip fiche | 🔲 session 51 |
-| Sprint 4 | Interface armure (grille zones T/C/B/J) + malus_cat dans jets Polaris | 🔲 |
-| Sprint 5 | Interface arme (stats dommages/portée sur item équipé) | 🔲 |
-| Sprint 6 | Mille-feuille protection (calcul par zone, résolution dommages) | 🔲 |
-| Sprint 7 | Transfert items + échange sols (WS bidirectionnel, double validation) | 🔲 |
-| — | Split pile, capacity sac, custom_props UI | 🔲 selon besoin |
+| Sprint 5 | Mille-feuille protection serveur + résolution dommages par localisation + req_for armor malus | 🔲 |
+| Sprint 6 | Transfert items + échange sols (WS bidirectionnel, double validation) | 🔲 |
+| — | Split pile, capacity sac, custom_props UI, malus_cat dans jets Polaris | 🔲 selon besoin |
+
+**Sprint 4 livré (session 55) :**
+- Migration 52 : `char_inventory.current_ammo` FK — munition chargée par arme
+- Migration 53 : nettoyage nomenclature — 11 fusions doublons, 89 renommages (`Balle`→`Munition`, suppression qualificatif arme type)
+- `WeaponPanel.jsx` : armes 1M équipées (MG/MD), stats, CAL, munition chargée, rechargement automatique, équipement/déséquipement
+- Tri munitions : "standard" en premier + alphabétique fr
+- Décision : armes 2M/Tr hors scope v1 (ignorées en WeaponPanel)
 
 ### Chantier 11 — Module Blessures (Fiche personnage)
 
@@ -132,23 +137,24 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 - Migration 49 : `character_wounds` — cases par localisation/gravité, stabilisation
 - Calculs malus : serveur via `charStats.js` (fonctions pures)
 - WS : room `campaignId` existante — client filtre par `char_sheet_id`
-- Étapes 2/3 (armes, armures) bloquées par Chantier 10 sprint 2 (`char_inventory`)
+- Étape 2 (armes) bloquée par Chantier 10 sprint 2 (`char_inventory`) — sprint 2 ✅, Étape 3 ✅
 
 **Dépendance architecturale :**
 ```
 ref_equipment (catalogue) ← ✅ 636 items
     ↓
-char_inventory (possessions joueur) ← 🔲 Chantier 10 sprint 2
+char_inventory (possessions joueur) ← ✅ Chantier 10 sprint 2 (session 51)
     ↓
-Module Armes / Module Armures (équipé depuis inventaire)
+Module Armures (UI + mille-feuille) ← ✅ Chantier 10 sprint 3 (session 53-54)
+Module Armes ← 🔲 Chantier 11 Étape 2
 ```
 
 | Étape | Contenu | Prérequis | État |
 |---|---|---|---|
-| Étape 1 | `character_wounds` DB + routes + `WoundManager` UI + intégration `charStats.js` | — | ✅ session 49 |
+| Étape 1 | `character_wounds` DB + routes + WoundManager UI + intégration `charStats.js` | — | ✅ session 49 |
 | Étape 1b | Intégration `effectiveMalus` dans jets (socket) + Initiative fiche | — | ✅ session 52 |
-| Étape 2 | Module Armes — liste armes équipées depuis `char_inventory` → `ref_equipment` | Chantier 10 sprint 2 | 🔲 |
-| Étape 3 | Module Armures — même architecture + calcul protection par localisation | Chantier 10 sprint 2 | 🔲 |
+| Étape 2 | Module Armes — DSL effets/munitions, parseur, résolution dommages par localisation | Chantier 10 sprint 4 | 🔲 |
+| Étape 3 | Module Armures — ArmorWoundPanel + LocationPanel mille-feuille + SilhouettePanel | Chantier 10 sprint 2 | ✅ session 53-54 |
 | Étape 4 | Polish — animations Tests de Choc, états santé (Étourdi/Inconscient/Coma) | Étapes 1-3 | 🔲 |
 
 **Mécanique Polaris (rappel LdB) :**
@@ -163,6 +169,17 @@ Module Armes / Module Armures (équipé depuis inventaire)
 Promotion : ligne pleine → ligne vidée + 1 case gravité supérieure cochée.
 Malus par gravité : Légère −1 / Moyenne −3 / Grave −5 / Critique −10 / Mortelle −20.
 Tests de Choc : Grave (tête/corps) + Critique + Mortelle (toutes localisations).
+
+**WoundManager.jsx — SUPPRIMÉ session 55.**
+Remplacé par `LocationPanel` (grille de blessures intégrée par localisation dans `ArmorWoundPanel`). Archivé dans `docs/Old/WoundManager.jsx`.
+
+**Mécaniques armure non implémentées — à traiter lors de sprint 4/5 :**
+
+- **Arbitrage math.ceil (à décider avec Saar)** — LdB : `FinalProt = max + reste/2`. Code actuel = sans arrondi. Les plans originaux spécifiaient `Math.ceil(max + reste/2)`. Vérifier le Livre de Base avant de trancher.
+
+- **Malus armure req_for (sprint 5 ou + tard)** — Non implémenté. Chaque armure a un prérequis FOR. Si FOR_perso < req_for_armure → carence = req_for − FOR_actuelle → s'ajoute au malus de catégorie. Formule : `malusZone = ARMOR_CATEGORY_MALUS[cat] − carenceFOR`. Le "pire malus" de zone est ensuite retenu pour les jets. À intégrer dans `LocationPanel` / `charStats.js`.
+
+- **DSL effets armes/munitions (sprint 4 Module Armes)** — `ref_equipment.effects` contient un DSL type `DMG_H=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Syntaxe : `TYPE=ACTION(VALEUR)` séparés par `;`. Actions : `SET` (écrase), `ADD` (ajoute), `TXT=FX=` (tag qualitatif). Chargement d'une munition → override des stats de l'arme via ce parseur. Fail-safe : si DSL malformé → console.warn + stats de base de l'arme.
 
 ### PC22 — Fix 403 toggle is_learned MUTATION/POLARIS ✅ (session 50)
 
@@ -257,3 +274,93 @@ Export battlemap complète (voxels + entités + tokens).
 - Sources lumineuses dynamiques
 - Chat MP (V2)
 - Sauvegarde/export carte 3D (V2)
+
+1. Chemin Critique (Priorités de Développement)
+L'ordre de développement suit la logique du "Flux de Données" : Base de données > Logique
+Serveur > Interface Client.
+Priorité Chantier Objectif Clé
+
+P0 Sprint 4 — Armes &
+
+Munitions
+
+Équipement, gestion du
+calibre et poids brut.
+P1 Moteur d'Initiative Polaris Séquenceur Annonce
+(Lents) / Résolution
+(Rapides).
+
+P2 HUD de Combat & Ciblage Fenêtre de modificateurs
+contextuels et modes de tir.
+
+P3 Outils Playground
+(Auras/LOS)
+
+Raycast de portée et ligne
+de vue dynamique.
+P4 Social & Économie Système d'échanges et
+bourse commune.
+
+P5 World-Building avancé Catalogue de PNJ (Roster)
+et Boutiques GM.
+2. Domaine A — Cœur Tactique (Playground 3D)
+Ce domaine regroupe les fonctionnalités liées à l'interaction directe sur la battlemap.
+● A1 — Séquenceur d'Initiative : Implémentation de la règle Polaris (Annonce des scores
+
+faibles en premier, résolution des scores élevés en premier). Nécessite un état "Lock" sur
+les actions joueurs.
+● A2 — HUD de Combat Contextuel : Ouverture d'une fenêtre de tir lors du ciblage d'un
+adversaire. Sélection automatique des malus de portée via Raycast.
+● A3 — Auras & Visualisation : Affichage de cercles de portée autour du token actif.
+Calcul de visibilité "Raycast LOS" entre l'attaquant et la cible.
+● A4 — Roster & Bestiaire : Interface GM pour glisser-déposer des PNJ pré-configurés
+sur la carte.
+3. Domaine B — Économie & Inventaire
+Évolution du système de gestion des ressources des personnages.
+● B1 — Registre des Transactions (Sol) : Passage d'un champ simple à une table
+char_transactions pour historiser et valider les mouvements de monnaie.
+● B2 — Finance de Groupe : Création d'une bourse commune paramétrable par le GM
+dans les réglages de campagne.
+● B3 — Module de Commerce : Interface de vente permettant au GM de définir des
+stocks et des multiplicateurs de prix locaux.
+● B4 — Modding d'Équipement : Système d'accessoires (parent/child) pour ajouter des
+lunettes de visée ou des extensions de chargeur.
+4. Domaine C — Moteur & Rendu
+Optimisation technique et support matériel (Raspberry Pi 4).
+● C1 — Optimisation Voxel (Face Culling) : Algorithme visant à ne rendre que les faces
+visibles des voxels pour économiser les ressources GPU.
+● C2 — Bridge Voxel 3D : Import/Export de structures de cartes au format JSON.
+● C3 — Couche 2D Legacy : Mode d'affichage alternatif utilisant des images PNG sur une
+grille plane pour les configurations légères.
+5. Backlog UX & Dettes Techniques
+ID Description Statut
+
+UX1 Export PDF de la fiche
+
+personnage
+
+À planifier
+
+ID Description Statut
+
+UX8 Prérequis complexes (OU)
+pour compétences
+
+À planifier
+
+PE33 Correction UV Texturing D10
+
+(V2 Blender)
+
+Actif
+
+Dette Normalisation fins de ligne
+
+(.gitattributes)
+
+Bloqué (Lecture attendue)
+
+Ajout de l'user :
+- Bug graphique avec les demi-dalles et les tokends 3D car l'altitude de ceux-ci n'est pas fait pour des hauteur de 0.5. A corriger.
+- Ajouter des blocs d'eau (texture et aspect) et ce sera l'occasion de discuter d'animation de certaines textures/blocs voxel.
+- Les tokens3D apparaissent très sombre, les textures ne correspondent pas vraiment, comme s'il y avait un gros filtre noir.

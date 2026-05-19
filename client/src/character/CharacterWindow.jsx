@@ -20,6 +20,7 @@ import { useCharacterStore } from '../stores/characterStore'
 import api from '../lib/api.js'
 import CharacterSheet from './CharacterSheet.jsx'
 import ArmorWoundPanel from './ArmorWoundPanel.jsx'
+import WeaponPanel from './WeaponPanel.jsx'
 import InventoryPanel from './InventoryPanel.jsx'
 
 // ─── Constantes fenêtre ───────────────────────────────────────────────────────
@@ -366,6 +367,12 @@ export default function CharacterWindow({ character, isGm, onClose }) {
               characterId={character.id}
               canEdit={isGm || isOwner}
               reloadKey={inventoryVersion}
+            />
+            <WeaponPanel
+              characterId={character.id}
+              canEdit={isGm || isOwner}
+              reloadKey={inventoryVersion}
+              onInventoryMutated={bumpInventoryVersion}
             />
             <InventoryPanel
               characterId={character.id}

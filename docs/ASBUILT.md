@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-08 Session 54
+> Dernière mise à jour : 2026-05-19 Session 55
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -45,15 +45,15 @@ Enclume/
 │   │   │   ├── sessionStore.js
 │   │   │   └── entityStore.js          # Modifié 34 — fetchBlueprints() ajouté
 │   │   ├── character/
-│   │   │   ├── WoundManager.jsx        # NOUVEAU 49 — grille blessures autonome (POST/PUT/DELETE, promotion P49)
-│   │   │   ├── InventoryPanel.jsx      # NOUVEAU 51 — inventaire joueur + bloc ajout GM (catalogue lazy, stacking, slots)
-│   │   │   ├── ArmorWoundPanel.jsx     # NOUVEAU 53 — layout 3 colonnes : localisations armure + silhouette + conteneurs
-│   │   │   ├── LocationPanel.jsx       # NOUVEAU 53 — une localisation (Tête/Corps/Bras/Jambe) — multi-couches + poids
-│   │   │   ├── ContainerPanel.jsx      # NOUVEAU 53 — Sac/Ceinture/Coffre — équipement conteneur
-│   │   │   ├── SilhouettePanel.jsx     # NOUVEAU 53 — SVG silhouette colorée par blessures, 50% width
+│   │   │   ├── WeaponPanel.jsx         # NOUVEAU 55 — armes équipées MG/MD, stats, munitions chargées, rechargement, équipement
+│   │   │   ├── InventoryPanel.jsx      # Modifié 55 — VALID_SLOTS corrigé (migration 51 → codes BG/BD/JG/JD/MG/MD/2M/Tr)
+│   │   │   ├── ArmorWoundPanel.jsx     # NOUVEAU 54 — layout 3 colonnes : localisations armure + silhouette + conteneurs
+│   │   │   ├── LocationPanel.jsx       # NOUVEAU 54 — une localisation (Tête/Corps/Bras/Jambe) — multi-couches + poids
+│   │   │   ├── ContainerPanel.jsx      # NOUVEAU 54 — Sac/Ceinture/Coffre — équipement conteneur
+│   │   │   ├── SilhouettePanel.jsx     # NOUVEAU 54 — SVG silhouette colorée par blessures, 50% width
 │   │   │   ├── AdvantagesPanel.jsx     # Modifié 50 — rework lift-state-up, props charSkills/refSkillsPolaris/onSkillLearnedChange
 │   │   │   ├── CharacterSheet.jsx      # Modifié 52 — effectiveMalus + iniValue + tooltip Initiative position:fixed
-│   │   │   └── CharacterWindow.jsx     # Modifié 51 — import InventoryPanel + ArmorWoundPanel, onglets Matériel
+│   │   │   └── CharacterWindow.jsx     # Modifié 55 — WeaponPanel monté entre ArmorWoundPanel et InventoryPanel
 │   │   ├── locales/
 │   │   │   └── fr.json                 # Modifié 49 — +tabMateriel
 │   │   ├── lib/
@@ -70,7 +70,7 @@ Enclume/
 │   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # 48 migrations appliquées
+│   │   │   ├── migrations/             # 55 fichiers — migrations jusqu'à 53
 │   │   │   ├── seeds/
 │   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
@@ -106,8 +106,8 @@ Enclume/
 │   │   └── index.js                    # Modifié 47 — express.static public/ + route /api/equipment
 ├── shared/
 │   ├── events.js                       # Modifié 51 — +INVENTORY_ADDED/UPDATED/REMOVED/SOLS_UPDATED
-│   ├── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES
-│   └── armorConstants.js               # NOUVEAU 54 — LOCATION_TO_SLOT/SLOT_TO_REF_LOCATION/LOCATION_LABELS/ARMOR_CATEGORY_MALUS
+│   ├── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES/SEVERITY_COLORS
+│   └── armorConstants.js               # NOUVEAU 54 — ARMOR_CATEGORY_MALUS/LOCATION_TO_SLOT/SLOT_TO_REF_LOCATION/LOCATION_TO_SVG/LOCATION_LABELS
 └── docs/
 ```
 
@@ -179,6 +179,8 @@ Enclume/
 | 49_character_wounds | character_wounds (UUID PK, char_sheet_id FK CASCADE, location/severity CHECK, is_stabilized, idx) |
 | 50_char_inventory | char_inventory (UUID PK, FK characters CASCADE, FK ref_equipment SET NULL, container/slot/quantity/custom_props JSONB) + char_sheet.sols INTEGER |
 | 51_inventory_slot_codes | Nullifie slots stales B/J via regex `(^|/)(B|J)(/|$)` — passage codes T/C → BG/BD/JG/JD |
+| 52_add_current_ammo_to_inventory | char_inventory.current_ammo UUID nullable FK ref_equipment.id SET NULL — munition chargée dans une arme |
+| 53_rename_ammo_unified | Phase 1 : 11 fusions doublons munitions (UPDATE FK + DELETE). Phase 2 : 89 renommages — "Balle"→"Munition", suppression qualificatif arme. Carreaux/Flèches/Darts : "Projectile" conservé. |
 
 ---
 

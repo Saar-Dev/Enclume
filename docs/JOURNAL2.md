@@ -4923,3 +4923,120 @@ Session 53 livrait ArmorWoundPanel multi-couches + poids brut. Utilisateur signa
 - Poids max : FOR × 3 (serveur retourne `threshold` dans GET /inventory)
 - UI : ArmorWoundPanel colonnes adaptées, silhouette 50% centré
 - Multi-couche : fonctionne sur toutes les localisations
+### **2026-05-09 — Session 54 (Localisation des Armes)**
+
+**Tâche** : Assigner une `location` à toutes les armes (`M`, `2M`, `2M/Tr`, `Tr`, `NULL`).  
+**Statut** : ✅ **Terminé**.
+
+---
+
+#### **Actions Exécutées**
+
+
+| **Catégorie**           | **Localisation** | **Nombre de Lignes** | **Requête SQL**                                                                                                                                                                                       | **Statut** |
+| ----------------------- | ---------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| Accessoires pour armes  | `NULL`           | 16                   | `UPDATE ref_equipment SET location = NULL WHERE family = 'Armes' AND category = 'Accessoires pour armes';`                                                                                            | ✅          |
+| Armes de poing          | `M`              | 19                   | `UPDATE ref_equipment SET location = 'M' WHERE family = 'Armes' AND category = 'Armes de poing';`                                                                                                     | ✅          |
+| Armes d'épaule          | `2M`             | 20                   | `UPDATE ref_equipment SET location = '2M' WHERE family = 'Armes' AND category = 'Arme d''épaule';`                                                                                                    | ✅          |
+| Armes lourdes           | `2M/Tr`          | 10                   | `UPDATE ref_equipment SET location = '2M/Tr' WHERE family = 'Armes' AND category = 'Arme lourde';`                                                                                                    | ✅          |
+| Armes de contact        | `M`/`2M`         | 39                   | `UPDATE ref_equipment SET location = CASE WHEN name LIKE '%2M%' OR name LIKE '%2 mains%' OR name LIKE '%deux mains%' THEN '2M' ELSE 'M' END WHERE family = 'Armes' AND category = 'Arme de contact';` | ✅          |
+| Armes de trait          | `2M`             | 6                    | `UPDATE ref_equipment SET location = '2M' WHERE family = 'Armes' AND category = 'Arme de trait';`                                                                                                     | ✅          |
+| Armes de jet            | `M`              | 15                   | `UPDATE ref_equipment SET location = 'M' WHERE family = 'Armes' AND category = 'Armes de jet';`                                                                                                       | ✅          |
+| Lanceurs                | `2M`             | 6                    | `UPDATE ref_equipment SET location = '2M' WHERE family = 'Armes' AND category = 'Lanceur';`                                                                                                           | ✅          |
+| Armes sous-marines      | `2M`             | 10                   | `UPDATE ref_equipment SET location = '2M' WHERE family = 'Armes' AND category = 'Armes sous-marines à projectiles';`                                                                                  | ✅          |
+| Armes à supercavitation | `2M`             | 6                    | `UPDATE ref_equipment SET location = '2M' WHERE family = 'Armes' AND category = 'Armes à supercavitation';`                                                                                           | ✅          |
+| Armes étourdissantes    | `2M`/`M`         | 11                   | `UPDATE ref_equipment SET location = CASE WHEN name LIKE '%Pistolet%' THEN 'M' ELSE '2M' END WHERE family = 'Armes' AND category = 'Armes étourdissantes et soniques';`                               | ✅          |
+| Grenades                | `M`              | 15                   | `UPDATE ref_equipment SET location = 'M' WHERE family = 'Armes' AND category = 'Grenade';`                                                                                                            | ✅          |
+| Armes à énergie         | `2M`/`M`/`Tr`    | 13                   | Traité manuellement par Saar.                                                                                                                                                                         | ✅          |
+| Armes massives          | `Tr`             | 8                    | `UPDATE ref_equipment SET location = 'Tr' WHERE family = 'Armes' AND (category = 'Arme à énergie' AND name LIKE '%Canon%' OR category = 'Armes à supercavitation') AND location != '2M/Tr';`          | ✅          |
+
+
+---
+
+#### **Résultats Finaux**
+
+
+| **Localisation** | **Nombre d'Armes** | **Exemples**                                           |
+| ---------------- | ------------------ | ------------------------------------------------------ |
+| `NULL`           | 16                 | Silencieux, Trépied, Système de tir assisté, etc.      |
+| `M`              | 87                 | Couteau Congre, ANG 200, Grenade à fragmentation, etc. |
+| `2M`             | 60                 | AX 56, FAV 76, Arbalète Leysur IV, etc.                |
+| `2M/Tr`          | 11                 | Gatling micro Cyclone, Fusil Gauss, etc.               |
+| `Tr`             | 12                 | Faisceau Pulsar, Désintégrateur, etc.                  |
+
+
+---
+
+#### **Points à Valider**
+
+1. **Armes en `Tr**` : Confirmer que ces armes (ex: Faisceau Pulsar) sont bien **non portables** sans trépied.
+2. **Armes en `2M/Tr**` : Confirmer que ces armes (ex: Gatling micro Cyclone) peuvent être **portées en `2M` mais nécessitent un `Tr` pour une utilisation optimale.
+3. **Intégration Frontend** :
+  - `M` → Choix entre `MG`/`MD` côté client.
+  - `2M/Tr` → Gestion des slots `2M` + `Tr`.
+  - `Tr` → Slot dédié pour les armes massives.
+
+---
+
+#### **Prochaines Étapes Proposées**
+
+1. **Mettre à jour `armorConstants.js**` pour inclure `M`, `Tr`, et `2M/Tr`.
+2. **Vérifier l'impact sur le frontend** (affichage des slots, équipement).
+3. **Passer à la mise à jour des munitions** (ex: `caliber`, `current_ammo`).
+
+---
+
+**Fin de la tâche "Localisation des Armes".**
+Session 55 — 2026-05-10
+
+    Roadmap : Restructuration complète de ROADMAP.md par domaines fonctionnels (Tactique, Économie, Moteur). Intégration du système d'initiative Polaris et du HUD de combat contextuel.
+
+    Dette Technique : Correction de .gitattributes. Normalisation globale en eol=lf. Nettoyage des lignes de commande parasites dans le fichier. Commit 264281f effectué.
+---
+
+## Session 55 — 2026-05-19
+
+### Chantier 10 sprint 4 — Module Armes équipées
+
+**Périmètre livré**
+- Armes 1 main (slots MG/MD) uniquement en v1. Armes 2M/Tr ignorées (décision Saar).
+- Migration 52 : colonne `char_inventory.current_ammo UUID FK ref_equipment.id SET NULL`
+- `shared/armorConstants.js` : ajout MG/MD/2M/Tr dans LOCATION_TO_SLOT + SLOT_TO_REF_LOCATION
+- `char-sheet.js` : WEAPON_SLOTS constant, SELECT +6 champs arme+munition, branch POST/PUT armes (exclusivité 2M↔MG/MD, PI2 Sac, current_ammo validation caliber)
+- `InventoryPanel.jsx` : VALID_SLOTS corrigé (bug dormant depuis migration 51 — codes B/J stales)
+- `WeaponPanel.jsx` (NEW) : liste armes équipées, stats DMG/CHC/PTÉ/TIR/CAL, munition chargée, rechargement automatique (silence si aucune ammo compatible), équipement depuis stock, déséquipement
+- `CharacterWindow.jsx` : WeaponPanel monté entre ArmorWoundPanel et InventoryPanel
+
+**Bugs détectés et corrigés en session**
+- **Crash React 409** : `errorHandler.js` envoie `{ error: { status, message } }` — objet imbriqué. WeaponPanel lisait `?.error` (objet) et le rendait en JSX. Corrigé → `?.error?.message` sur les 3 handlers (unequip, reload, equip). Voir PI9.
+- **Calibre manquant** : `ref_caliber` non affiché dans la statsRow. Ajout de la ligne `CAL xxx`.
+
+---
+
+### Chantier données — Nettoyage nomenclature munitions
+
+**Problème identifié**
+Les noms de munitions contenaient un qualificatif d'arme redondant (`- Arme de poing`, `- Fusil de précision`…) alors que `caliber` est le seul lien de compatibilité (règle JARMES.md). Résultat : 9mm avait 9 entrées pour 5 types réels.
+
+**Décisions (Saar)**
+- Périmètre : tous les calibres
+- Format retenu : `{calibre} - Munition {type}` pour balles balistiques (ex: `9 mm - Munition HP`)
+- Carreaux/Flèches/Darts : `{famille} - Projectile {type}` (conservent "Projectile")
+- Capsules / GPs / Pénétrants : inchangés
+- "Standard" en premier dans les listes (tri WeaponPanel)
+
+**Migration 53 — Deux phases**
+- Phase 1 — Fusions (11 groupes) : UPDATE char_inventory.current_ammo vers l'entrée gardée + DELETE doublons
+  - 9mm : HP×2, IEM×2, assommante×2, standard×2 → 4 fusions
+  - 5.45mm : standard×2 → 1 fusion
+  - 7.62mm : standard×5→1 (4 supprimées), SAP×2→1 → 5 fusions
+  - 12.7mm : standard×2→1 → 1 fusion
+- Phase 2 — Renommages : 89 entrées, nom explicite par-nom (`where({ name: from })`), sans regex
+- `down()` : inverse les renommages — fusions irréversibles (documenté)
+
+**WeaponPanel — tri munitions**
+`availableAmmoFor` : `.sort()` ajouté — "standard" en premier (includes), puis `localeCompare('fr')`.
+Affecte aussi `handleReload` qui prend `compatAmmos[0]`.
+
+**Piège découvert (PI10)**
+`2_seed_equipment.js` NE PAS rejouer après migration 53 — réinsérerait 636 items aux anciens noms sans erreur (pas de UNIQUE sur `name`).

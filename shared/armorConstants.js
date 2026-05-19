@@ -4,12 +4,16 @@ export const LOCATION_TO_SLOT = {
   tete: 'T', corps: 'C',
   bras_gauche: 'BG', bras_droit: 'BD',
   jambe_gauche: 'JG', jambe_droite: 'JD',
+  main_gauche: 'MG', main_droite: 'MD',
+  deux_mains: '2M', tripode: 'Tr',
 }
 
 export const SLOT_TO_REF_LOCATION = {
   T: 'T', C: 'C',
   BG: 'B', BD: 'B',
   JG: 'J', JD: 'J',
+  MG: 'M', MD: 'M',
+  '2M': 'M', Tr: 'M',
 }
 
 export const LOCATION_TO_SVG = {

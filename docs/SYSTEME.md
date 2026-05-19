@@ -1,5 +1,5 @@
 # SYSTEME.md — Flux, règles et pièges du projet Enclume
-> Dernière mise à jour : 2026-05-03 Session 45
+> Dernière mise à jour : 2026-05-08 Session 54
 > Ce document répond à "qui fait quoi, qui parle à qui, pourquoi" — pas à "qu'est-ce qui existe".
 > Pour la liste des fichiers : voir ASBUILT.md. Pour l'historique : voir JOURNAL2.md.
 
@@ -154,6 +154,13 @@ socket.data.role   = member.role      // fetchSockets → ciblage GM (PE2)
 | ENTITY_MOVED | client (GM) | serveur → room | Entité déplacée |
 | ENTITY_MOVE_REQUEST | client (joueur/GM) | serveur | Demande déplacement entité push/pull |
 | ENTITY_MOVE_RESULT | serveur | joueur socket | Résultat jet + positions finales |
+| WOUND_ADDED | serveur | room | Blessure ajoutée (+ promoted, shock_test_required) |
+| WOUND_UPDATED | serveur | room | Blessure stabilisée |
+| WOUND_REMOVED | serveur | room | Blessure supprimée (guérison) |
+| INVENTORY_ADDED | serveur | room | Item ajouté à l'inventaire |
+| INVENTORY_UPDATED | serveur | room | Item modifié (slot, container, quantité) |
+| INVENTORY_REMOVED | serveur | room | Item supprimé de l'inventaire |
+| SOLS_UPDATED | serveur | room | Solde sols modifié |
 
 ---
 
@@ -354,9 +361,10 @@ Dés V1 Html overlay : D10, D10_tens, D10_units (UV kite = V2 Blender)
   userId, username, color,
   formula, rolls, total,
   isCriticalSuccess, isCriticalFail,
-  seed,       // XOR rolls — initialisé PRNG animation
+  seed,          // XOR rolls — initialisé PRNG animation
   timestamp,
-  skillLabel, // défini pour jets entité uniquement
+  skillLabel,    // défini pour jets entité uniquement
+  effectiveMalus, // malus effectif appliqué (woundPenalty − encumbrancePenalty) — session 52
   // + champs entity action si applicable
 }
 ```
@@ -560,7 +568,78 @@ useFrame((_, delta) => {
 
 ---
 
-## 16. Conventions non-négociables
+## 16. Système blessures + armures — sessions 49–54
+
+### Architecture générale
+```
+shared/woundConstants.js  — WOUND_LOCATIONS / SEVERITIES / MAX_COUNTS / PENALTIES / SEVERITY_COLORS
+shared/armorConstants.js  — ARMOR_CATEGORY_MALUS / LOCATION_TO_SLOT / SLOT_TO_REF_LOCATION / LOCATION_TO_SVG / LOCATION_LABELS
+server/lib/charStats.js   — calcWoundPenalty(wounds) / calcEncumbrancePenalty(totalWeight, forValue)
+```
+
+### Composants client — onglet Matériel (CharacterWindow)
+```
+CharacterWindow
+└── ArmorWoundPanel          — orchestrateur : charge wounds + inventory, layout 3 colonnes
+    ├── LocationPanel × 6    — une localisation (Tête/Corps/Bras G/D/Jambe G/D)
+    │   ├── armures équipées (multi-couches, mille-feuille ETQ/PRT/malus_cat)
+    │   ├── select ajout couche (filtré par refCode + container='Sac')
+    │   └── grille blessures (WOUND_SEVERITIES × MAX_COUNTS — clic POST/PUT/DELETE)
+    ├── ContainerPanel (D)   — Sac à dos : équipement conteneur
+    ├── ContainerPanel (Ce)  — Ceinture : équipement conteneur
+    └── SilhouettePanel      — SVG silhouette 50%, colorée par pire blessure par localisation
+```
+
+### Mille-feuille (calcMillefeuille — client uniquement)
+```javascript
+// Couches sur une localisation → max + reste/2
+const max  = Math.max(...vals)
+const rest = vals.reduce((s, v) => s + v, 0) - max
+return max + rest / 2
+// Affiché ETQ/PRT dans LocationPanel — non encore intégré côté serveur (résolution dommages future)
+```
+
+### Codes slots — règle PI6/PI7
+```javascript
+// LOCATION_TO_SLOT : localisation → slotCode individuel
+{ tete:'T', corps:'C', bras_gauche:'BG', bras_droit:'BD', jambe_gauche:'JG', jambe_droite:'JD' }
+
+// SLOT_TO_REF_LOCATION : slotCode → ref_location compat (pour lookup catalogue)
+{ T:'T', C:'C', BG:'B', BD:'B', JG:'J', JD:'J' }
+
+// Dans LocationPanel :
+const slotCode = LOCATION_TO_SLOT[location]           // 'BG'
+const refCode  = SLOT_TO_REF_LOCATION[slotCode]       // 'B'
+equippedItems  = items.filter(i => i.slot?.split('/').includes(slotCode))  // utilise 'BG'
+availableItems = items.filter(i => i.ref_location?.split('/').includes(refCode))  // utilise 'B'
+```
+
+### Routes REST armures/blessures
+```
+GET    /char-sheet/:id/wounds                      → { wounds, wound_penalty }
+POST   /char-sheet/:id/wounds                      → ajoute (+ promotion auto)
+PUT    /char-sheet/:id/wounds/:wid/stabilize       → stabilise
+DELETE /char-sheet/:id/wounds/:wid                 → guérison
+
+GET    /char-sheet/:id/inventory                   → { items, sols, total_weight, threshold }
+POST   /char-sheet/:id/inventory                   → ajoute item
+PUT    /char-sheet/:id/inventory/:itemId           → modifie (slot, container, quantité)
+DELETE /char-sheet/:id/inventory/:itemId           → supprime
+PUT    /char-sheet/:id/sols                        → modifie solde sols (GM ou owner)
+```
+
+### Règle P51 — effectiveMalus dans les jets
+```javascript
+// socket/index.js — chancesDeReussite
+const woundPenalty       = calcWoundPenalty(wounds)         // ≤ 0, pire blessure seule
+const encumbrancePenalty = calcEncumbrancePenalty(weight, FOR)  // ≥ 0, règle maison
+effectiveMalus = woundPenalty - encumbrancePenalty           // ≤ 0
+chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
+```
+
+---
+
+## 17. Conventions non-négociables
 
 - **UUID partout** — jamais `increments()` (sauf voxel_textures.id — P22)
 - **threeToDb(tx, ty, tz)** → `{ pos_x: tx, pos_y: tz, pos_z: ty }` — jamais inline
@@ -579,6 +658,8 @@ useFrame((_, delta) => {
 - **difficulty_dc** — modificateur signé (-20 à +10, LdB p.404) — jamais une valeur absolue
 - **isSuccess Polaris** — `diceRoll <= chancesDeReussite` — jamais >=
 - **charStats.js** — fonctions pures, aucun accès DB — le caller fournit les données
+- **effectiveMalus** — `calcWoundPenalty(wounds) − calcEncumbrancePenalty(weight, FOR)` — toujours ≤ 0. Appliqué sur le total du jet, jamais sur un attribut (P51)
+- **LOCATION_TO_SLOT vs SLOT_TO_REF_LOCATION** — slotCode (BG/BD/JG/JD) pour les slots individuels, refCode (B/J) pour le lookup ref_location compat (PI7)
 - **pendingEntityActions Map hors initSocket** — une seule instance
 - **Collision map Redis** — convention PE14 partout (tokens, entités, voxels convertis)
 - **Voxels Redis** — convertis Three.js→PE14 dans buildCollisionMap/add/remove
@@ -593,7 +674,7 @@ useFrame((_, delta) => {
 
 ---
 
-## 17. Pièges actifs — référence rapide
+## 18. Pièges actifs — référence rapide
 
 | Code | Description |
 |---|---|
@@ -634,3 +715,14 @@ useFrame((_, delta) => {
 | PEF4 | face_overrides = chemins PNG |
 | PEF5 | blueprint sans pack_id → skip + magenta |
 | PEF6 | Canvas3D : chargements voxels et entités séparés |
+| P49 | Promotion blessures : si promoted===true → GET /wounds complet — ne jamais ajouter localement |
+| P50 | toggle Polaris : ne jamais dupliquer charSkills — lift state up obligatoire |
+| P51 | Malus santé non-cumulatif (pire seul, LdB p.236), encombrement cumulatif (règle maison). effectiveMalus = woundPenalty − encumbrancePenalty |
+| PI1 | Container 'Sac' : dispo seulement si ≥1 item ref_location='D' dans inventaire — isContainerAvailable() avant POST/PUT |
+| PI2 | Équipement slot≠null → container 'Sac' obligatoire — 400 si indispo, jamais Coffre silencieux |
+| PI3 | Items équipés (slot IS NOT NULL) comptés dans poids — seul container='Coffre' exclut |
+| PI4 | calcEncumbrancePenalty requiert FOR nette = base_level + pc_modifier, pas seulement base_level |
+| PI5 | Items manuels (equipment_id null) → ref_weight null → exclus du calcul poids |
+| PI6 | LOCATION_TO_SLOT : BG/BD/JG/JD indépendants — availableItems filtre via refCode (SLOT_TO_REF_LOCATION) |
+| PI7 | refCode (B/J) pour lookup ref_location — slotCode (BG/BD) pour equip/unequip — ne pas confondre |
+| PI8 | POST /inventory : LIKE query pour multi-slot — WHERE slot = code casse les multi-couches |

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import api from '../lib/api.js'
 
 const CONTAINER_ORDER = ['Sac', 'Ceinture', 'Coffre']
-const VALID_SLOTS     = ['T', 'C', 'B', 'J', 'C/B/J', 'T/C/B/J']
+const VALID_SLOTS     = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'MG', 'MD', '2M', 'Tr']
 
 export default function InventoryPanel({ characterId, canEdit, isGm, onInventoryMutated = () => {} }) {
   const [items,       setItems]       = useState([])

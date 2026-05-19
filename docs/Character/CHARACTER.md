@@ -1,7 +1,7 @@
 # CHARACTER.md — Documentation technique du domaine Character
 > Domaine : Fiche personnage Polaris & modules joueur
-> Dernière mise à jour : 2026-05-02 — Session 45 (documentation exhaustive)
-> Statut : Modules 1 à 6 + Module XP stables — 45 migrations appliquées
+> Dernière mise à jour : 2026-05-09 — Session 55 (mise à jour complète)
+> Statut : Modules 1–6 + Module XP + Blessures + Armures + Inventaire — 51 migrations appliquées
 
 ---
 
@@ -47,26 +47,38 @@ Supprimer un `character` VTT supprime automatiquement toute sa fiche Polaris.
 
 ```
 server/src/routes/character/
-  char-sheet.js       — 12 routes fiche personnage
+  char-sheet.js       — routes fiche personnage (22 routes : fiche + blessures + inventaire + sols)
   ref.js              — 3 routes données de référence
 
 client/src/character/
-  CharacterWindow.jsx — fenêtre flottante déplaçable/redimensionnable
-  CharacterSheet.jsx  — orchestrateur Modules 1-6
-  SkillsPanel.jsx     — Module 5 Compétences (arborescence CHC session 4)
-  AdvantagesPanel.jsx — Module 6 Avantages & Désavantages
+  CharacterWindow.jsx  — fenêtre flottante drag+resize — 4 onglets : Fiche/Bio/Matériel/Paramètres
+  CharacterSheet.jsx   — orchestrateur Modules 1–6 + effectiveMalus + Initiative (session 52)
+  SkillsPanel.jsx      — Module 5 Compétences (arborescence CHC session 4)
+  AdvantagesPanel.jsx  — Module 6 Avantages & Désavantages (lift-state-up session 50)
+  InventoryPanel.jsx   — NOUVEAU session 51 — inventaire joueur + bloc ajout GM (catalogue 636 items)
+  ArmorWoundPanel.jsx  — NOUVEAU session 53 — orchestrateur onglet Matériel : wounds+inventory, 3 colonnes
+  LocationPanel.jsx    — NOUVEAU session 53 — une localisation (Tête/Corps/Bras/Jambe) : multi-couches + grille blessures
+  ContainerPanel.jsx   — NOUVEAU session 53 — Sac/Ceinture/Coffre : équipement conteneur
+  SilhouettePanel.jsx  — NOUVEAU session 53 — SVG silhouette 50%, colorée par pire blessure par localisation
+
+shared/
+  woundConstants.js    — WOUND_LOCATIONS / SEVERITIES / MAX_COUNTS / PENALTIES / SEVERITY_COLORS
+  armorConstants.js    — ARMOR_CATEGORY_MALUS / LOCATION_TO_SLOT / SLOT_TO_REF_LOCATION / LOCATION_TO_SVG / LOCATION_LABELS
 
 server/src/db/migrations/
-  33_char_ref_genotypes.js          — ref_genotypes + seed 4 génotypes
-  34_char_ref_skills.js             — ref_skills (structure)
-  35_char_ref_skill_requirements.js — ref_skill_requirements (structure)
-  36_char_sheet.js                  — 5 tables dynamiques
-  37_char_seed_skills.js            — seed ref_skills (247+ entrées)
+  33_char_ref_genotypes.js           — ref_genotypes + seed 4 génotypes
+  34_char_ref_skills.js              — ref_skills (structure)
+  35_char_ref_skill_requirements.js  — ref_skill_requirements (structure)
+  36_char_sheet.js                   — 5 tables dynamiques (char_sheet, char_identity, char_archetype, char_attributes, char_skills)
+  37_char_seed_skills.js             — seed ref_skills (247+ entrées)
   38_char_seed_skill_requirements.js — seed prérequis
-  39_char_fix_ids.js                — corrections IDs corrompus
-  40_char_advantages.js             — char_advantages + linked_skill_id sur ref_mutations
-  44_char_fix_encoding.js           — correction encodage UTF-8 ref_skills (12 lignes)
-  45_char_xp.js                     — xp_total + xp_available sur char_sheet
+  39_char_fix_ids.js                 — corrections IDs corrompus
+  40_char_advantages.js              — char_advantages + linked_skill_id sur ref_mutations
+  44_char_fix_encoding.js            — correction encodage UTF-8 ref_skills (12 lignes)
+  45_char_xp.js                      — xp_total + xp_available sur char_sheet
+  49_character_wounds.js             — character_wounds (UUID PK, FK char_sheet CASCADE, location/severity/is_stabilized/idx)
+  50_char_inventory.js               — char_inventory (possessions joueur) + char_sheet.sols INTEGER DEFAULT 0
+  51_inventory_slot_codes.js         — nullifie slots stales B/J (regex) → passage vers codes BG/BD/JG/JD
 
 scripts SQL correctifs (appliqués manuellement, hors migrations Knex) :
   fix_ref_skills.sql                — parents fantômes, markers, typos
@@ -190,6 +202,7 @@ muta_029 débloque aussi `MAITRISE_DE_LECHO_POLARIS` via `ref_skill_requirements
 | chc | INT | DEFAULT 11 | Chance (1–20) |
 | xp_total | INT | NOT NULL DEFAULT 0 | XP reçus cumulés — lecture seule, jamais éditable directement |
 | xp_available | INT | NOT NULL DEFAULT 0 | XP disponibles à dépenser — éditable GM uniquement |
+| sols | INT | NOT NULL DEFAULT 0 | Solde en sols — éditable GM ou owner via PUT /sols |
 | created_at | TIMESTAMPTZ | DEFAULT CURRENT_TIMESTAMP | |
 | updated_at | TIMESTAMPTZ | DEFAULT CURRENT_TIMESTAMP | |
 
@@ -239,6 +252,42 @@ PK composite `(char_sheet_id, skill_id)`. FK `char_sheet_id → char_sheet.id CA
 
 ---
 
+#### `character_wounds`
+PK = `id UUID`. FK `char_sheet_id → char_sheet.id ON DELETE CASCADE`. Migration 49.
+
+| Colonne | Type | Contrainte | Notes |
+|---|---|---|---|
+| id | UUID | PK DEFAULT gen_random_uuid() | |
+| char_sheet_id | UUID | FK NOT NULL | cascade delete |
+| location | TEXT | NOT NULL CHECK | valeurs : `WOUND_LOCATIONS` de woundConstants.js |
+| severity | TEXT | NOT NULL CHECK | `'legere'`, `'moyenne'`, `'grave'`, `'critique'`, `'mortelle'` |
+| is_stabilized | BOOLEAN | NOT NULL DEFAULT false | |
+| idx | INTEGER | NOT NULL | position dans la ligne (0-based) |
+| created_at | TIMESTAMPTZ | DEFAULT now() | |
+
+Règle de promotion : si une ligne de sévérité se remplit → `resolveWoundInsertion()` supprime la ligne entière et insère 1 case à la sévérité suivante (récursif).
+
+---
+
+#### `char_inventory`
+PK = `id UUID`. FK `character_id → characters.id ON DELETE CASCADE`. FK `equipment_id → ref_equipment.id ON DELETE SET NULL`. Migration 50.
+
+| Colonne | Type | Contrainte | Notes |
+|---|---|---|---|
+| id | UUID | PK DEFAULT gen_random_uuid() | |
+| character_id | UUID | FK NOT NULL | vers `characters`, pas `char_sheet` |
+| equipment_id | UUID | FK nullable | null pour items saisis manuellement |
+| container | TEXT | NOT NULL | `'Coffre'`, `'Sac'`, `'Ceinture'` |
+| slot | TEXT | nullable | localisation équipée — mono : `'T'`/`'C'`/`'BG'`/`'BD'`/`'JG'`/`'JD'`/`'D'`/`'Ce'` — multi : `'BG/BD'` |
+| quantity | INTEGER | NOT NULL DEFAULT 1 | |
+| custom_props | JSONB | nullable | propriétés libres (items manuels) |
+| created_at | TIMESTAMPTZ | DEFAULT now() | |
+| updated_at | TIMESTAMPTZ | DEFAULT now() | |
+
+> **Règle PI8 :** le serveur utilise `LIKE '%/CODE/%'` pour les queries multi-slot, jamais `WHERE slot = code`.
+
+---
+
 #### `char_advantages`
 PK = `id UUID`. FK `char_sheet_id → char_sheet.id CASCADE`.
 
@@ -266,6 +315,8 @@ PK = `id UUID`. FK `char_sheet_id → char_sheet.id CASCADE`.
 
 ### `/api/char-sheet/`
 
+#### Fiche de base
+
 | Méthode | Route | Description |
 |---|---|---|
 | POST | `/:characterId` | Créer une fiche vierge |
@@ -275,11 +326,33 @@ PK = `id UUID`. FK `char_sheet_id → char_sheet.id CASCADE`.
 | PUT | `/:characterId/attributes` | Sauvegarder attributs (bulk UPSERT) |
 | PUT | `/:characterId/chc` | Sauvegarder score de chance |
 | PUT | `/:characterId/skills` | Sauvegarder maîtrises (bulk UPSERT) — **GM uniquement** |
+| PUT | `/:characterId/skills/toggle-learned` | Toggler `is_learned` (owner ou GM) — **Fix PC22 session 50** |
 | PUT | `/:characterId/xp` | Modifier `xp_total` et/ou `xp_available` — **GM uniquement** |
 | POST | `/:characterId/skills/buy` | Dépenser XP pour augmenter une compétence — owner ou GM |
 | GET | `/:characterId/advantages` | Liste avantages/désavantages |
 | POST | `/:characterId/advantages` | Ajouter mutation ou texte libre |
 | DELETE | `/:characterId/advantages/:id` | Supprimer ou décrémenter level |
+
+#### Blessures (session 49)
+
+Ownership : owner ou GM. `router.param('characterId')` pré-charge le character.
+
+| Méthode | Route | Description |
+|---|---|---|
+| GET | `/:characterId/wounds` | `{ wounds[], wound_penalty }` — wound_penalty calculé serveur via `calcWoundPenalty` |
+| POST | `/:characterId/wounds` | Ajoute une blessure — `resolveWoundInsertion()` gère la promotion, broadcast WOUND_ADDED |
+| PUT | `/:characterId/wounds/:woundId/stabilize` | Stabilise une blessure active, broadcast WOUND_UPDATED |
+| DELETE | `/:characterId/wounds/:woundId` | Guérison (suppression), broadcast WOUND_REMOVED |
+
+#### Inventaire (session 51)
+
+| Méthode | Route | Description |
+|---|---|---|
+| GET | `/:characterId/inventory` | `{ items[], sols, total_weight, threshold }` |
+| POST | `/:characterId/inventory` | Ajoute item — vérifie `isContainerAvailable()` pour Sac/Ceinture (PI1/PI2), broadcast INVENTORY_ADDED |
+| PUT | `/:characterId/inventory/:itemId` | Modifie slot/container/quantité — LIKE query multi-slot (PI8), broadcast INVENTORY_UPDATED |
+| DELETE | `/:characterId/inventory/:itemId` | Supprime item, broadcast INVENTORY_REMOVED |
+| PUT | `/:characterId/sols` | Modifie solde sols (GM ou owner), broadcast SOLS_UPDATED |
 
 ---
 
@@ -338,6 +411,20 @@ AdvantagesPanel.handleTogglePolaris(skillId)
      → SkillsPanel ne voit pas le changement immédiatement
   ⚠️ BUG PC22 : PUT /skills est GM uniquement — joueur reçoit 403
      → Fix prévu session 5
+```
+
+### Chargement onglet Matériel (ArmorWoundPanel)
+
+```
+ArmorWoundPanel.useEffect([load, reloadKey])
+  → Promise.all([
+      GET /:id/wounds   → { wounds, wound_penalty }
+      GET /:id/inventory → { items, sols, total_weight, threshold }
+    ])
+  → setWounds + setItems (états locaux ArmorWoundPanel)
+
+Resync : CharacterWindow.inventoryVersion (state) bumped par InventoryPanel.onInventoryMutated
+  → passé comme reloadKey à ArmorWoundPanel → déclenche useEffect → rechargement complet
 ```
 
 ### Distribution XP — GM (CharacterSheet)
@@ -413,6 +500,26 @@ Base  = AN(attr_1) + AN(attr_2)    — si attr_2 null : AN(attr_1) × 2 (PC4)
 Total = Base + mastery              — jamais clampé, peut être négatif (PC11)
 ```
 
+### Mille-feuille armure (calcMillefeuille — client uniquement)
+
+```javascript
+// LocationPanel.jsx — multi-couches sur une localisation
+const vals = equippedItems.map(i => i.protection)
+const max  = Math.max(...vals)
+const rest = vals.reduce((s, v) => s + v, 0) - max
+return max + rest / 2
+// ⚠️ Arbitrage Math.ceil en attente de vérification LdB — actuel = sans arrondi
+```
+
+### Malus blessures + encombrement (charStats.js)
+
+```javascript
+// calcWoundPenalty(wounds) → entier ≤ 0 — pire blessure seule (LdB p.236, non-cumulatif)
+// calcEncumbrancePenalty(totalWeight, forValue) → entier ≥ 0 — règle maison, cumulatif
+effectiveMalus = calcWoundPenalty(wounds) - calcEncumbrancePenalty(weight, FOR)
+chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
+```
+
 ### Barème XP — dépense de compétences (LdB)
 
 Utilisé par `charStats.js` côté serveur (source de vérité) et en miroir dans `SkillsPanel.jsx` côté client (affichage uniquement).
@@ -469,7 +576,9 @@ Groupes CHC : jamais dans isVisible — visibles si ≥ 1 enfant visible
 ## 7. Composants React
 
 ### `CharacterWindow.jsx`
-Fenêtre flottante drag+resize. Dimensions : 720×600 init, 500×400 min. Centrée au montage, clampée dans le viewport. Onglets : Fiche / Bio & Info / Paramètres. Feedback ✓ vert 1s après save.
+Fenêtre flottante drag+resize. Dimensions : 720×600 init, 500×400 min. Centrée au montage, clampée dans le viewport. Onglets : **Fiche / Bio & Info / Matériel / Paramètres**. Feedback ✓ vert 1s après save.
+
+State `inventoryVersion` (entier) + callback `bumpInventoryVersion` — bridge de resync entre InventoryPanel (qui mute) et ArmorWoundPanel (qui charge). Passé comme `reloadKey` à ArmorWoundPanel.
 
 **Props :** `{ character, isGm, onClose }`
 **isOwner :** `character.user_id != null && character.user_id === character._currentUserId` (PC6)
