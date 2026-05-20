@@ -4,6 +4,7 @@ import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { requireRole } from '../middleware/role.js'
 import { multerUpload, uploadToMinio } from '../middleware/upload.js'
+import { calcAttributeNA, calcREA } from '../lib/charStats.js'
 
 const router = Router({ mergeParams: true })
 
@@ -46,6 +47,42 @@ router.post('/',
     res.status(201).json({ battlemap })
   }
 )
+
+// GET /api/battlemaps/:id/combat-ini — INI (REA) preview pour CombatRosterWindow
+// Calcule base_ini de chaque token sans toucher à la DB combat — lecture seule.
+router.get('/:id/combat-ini', requireAuth, async (req, res) => {
+  const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
+  if (!battlemap) throw new AppError(404, 'Battlemap not found')
+
+  const member = await db('campaign_members')
+    .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id })
+    .first()
+  if (!member) throw new AppError(403, 'Access denied')
+
+  const tokens = await db('tokens').where({ battlemap_id: req.params.id })
+  const iniPreview = []
+  for (const token of tokens) {
+    let base_ini = 0
+    try {
+      const cs = await db('char_sheet').where({ character_id: token.character_id }).first()
+      if (cs) {
+        const [attrs, archetype] = await Promise.all([
+          db('char_attributes').where({ char_sheet_id: cs.id }),
+          db('char_archetype').where({ char_sheet_id: cs.id }).first(),
+        ])
+        const genotypeRow = archetype?.genotype_id
+          ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
+          : null
+        base_ini = calcREA(
+          calcAttributeNA(attrs, 'ADA', genotypeRow),
+          calcAttributeNA(attrs, 'PER', genotypeRow)
+        )
+      }
+    } catch (_) {}
+    iniPreview.push({ token_id: token.id, base_ini })
+  }
+  res.json({ iniPreview })
+})
 
 // GET /api/battlemaps/:id — carte complète avec tokens
 router.get('/:id', requireAuth, async (req, res) => {

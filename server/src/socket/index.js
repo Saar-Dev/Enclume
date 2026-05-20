@@ -6,6 +6,7 @@ import {
   calcSkillTotal,
   calcAttributeAN,
   calcAttributeNA,
+  calcREA,
   getGenotypeModForAttr,
   calcWoundPenalty,
   calcEncumbrancePenalty,
@@ -29,6 +30,11 @@ import {
 // Déclarée hors de initSocket — une seule instance, partagée entre toutes les connexions.
 // Nettoyée à chaque résolution (ENTITY_ACTION_RESOLVE) ou expiration (timeout 60s — PE12).
 const pendingEntityActions = new Map()
+
+// Map des timers combat actifs — Map<campaignId, Map<tokenId, timeoutId>>
+// Déclarée hors de initSocket — singleton, PC16.
+// Sprint 1 : déclarée uniquement. Logique timer démarrée en Sprint 2.
+const combatTimers = new Map()
 
 // Cache table marges de réussite Polaris — chargée une seule fois depuis DB au premier appel.
 // Évite une requête SQL par jet de déplacement.
@@ -117,6 +123,20 @@ const initSocket = (io) => {
         } catch (err) {
           // Non bloquant — la collision map sera reconstruite au prochain SESSION_JOIN
           console.warn('[WS] session:join — buildCollisionMap error (non bloquant):', err.message)
+        }
+
+        // ── Combat state sync — reconnexion en cours de combat (PC14) ────────
+        try {
+          const activeCombat = await db('combat_state').where({ campaign_id: campaignId }).first()
+          if (activeCombat) {
+            const [roster, actions] = await Promise.all([
+              db('combat_roster').where({ campaign_id: campaignId }),
+              db('combat_actions').where({ campaign_id: campaignId }),
+            ])
+            socket.emit(WS.COMBAT_STATE_SYNC, { combatState: activeCombat, roster, actions })
+          }
+        } catch (err) {
+          console.warn('[WS] session:join — combat state sync error (non bloquant):', err.message)
         }
 
         console.log(`[WS] ${socket.user.username} a rejoint la campagne ${campaignId}`)
@@ -1190,6 +1210,150 @@ const initSocket = (io) => {
         console.log(`[WS] entity:move_request — ${socket.user.username} → ${actualMoveType} entité ${entityId} (MR:${mr} Dmax:${dmax} steps:${stepsCompleted})`)
       } catch (err) {
         console.error('[WS] entity:move_request error:', err.message)
+      }
+    })
+
+    // ─── COMBAT:START ─────────────────────────────────────────────────────
+    // GM démarre un combat. Calcule le roster d'initiative depuis les tokens
+    // présents sur la battlemap, insère combat_state + combat_roster en DB,
+    // puis broadcast COMBAT_STARTED à toute la room.
+    // Payload : { battlemap_id, surprisedTokenIds: UUID[] }
+    socket.on(WS.COMBAT_START, async ({ battlemap_id, surprisedTokenIds = [], excludedTokenIds = [] }) => {
+      if (socket.role !== 'gm') return
+      const campaignId = socket.campaignId
+      try {
+        // Guard — combat déjà en cours
+        const existing = await db('combat_state').where({ campaign_id: campaignId }).first()
+        if (existing) {
+          socket.emit('error', { message: 'Combat déjà en cours pour cette campagne' })
+          return
+        }
+
+        // Guard — tokens présents sur la carte (hors exclus GM)
+        const allTokens = await db('tokens').where({ battlemap_id })
+        const tokens = allTokens.filter(t => !excludedTokenIds.includes(t.id))
+        if (tokens.length === 0) {
+          socket.emit('error', { message: 'Aucun personnage sur la carte' })
+          return
+        }
+
+        // Calcul base_ini (REA) pour chaque token via char_sheet
+        const rosterData = []
+        for (const token of tokens) {
+          let base_ini = 0
+          let character = null
+          try {
+            const cs = await db('char_sheet').where({ character_id: token.character_id }).first()
+            if (!cs) {
+              console.warn(`[COMBAT_START] char_sheet introuvable pour token ${token.id}`)
+            } else {
+              const [attrs, archetype] = await Promise.all([
+                db('char_attributes').where({ char_sheet_id: cs.id }),
+                db('char_archetype').where({ char_sheet_id: cs.id }).first(),
+              ])
+              const genotypeRow = archetype?.genotype_id
+                ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
+                : null
+              const ada_na = calcAttributeNA(attrs, 'ADA', genotypeRow)
+              const per_na = calcAttributeNA(attrs, 'PER', genotypeRow)
+              base_ini = calcREA(ada_na, per_na)
+            }
+            character = await db('characters').where({ id: token.character_id }).first()
+          } catch (err) {
+            console.warn(`[COMBAT_START] Erreur calcul INI token ${token.id}:`, err.message)
+          }
+          const is_pnj = character?.user_id === socket.user.id
+          rosterData.push({ token, base_ini, character, is_pnj })
+        }
+
+        // Tri DESC initiative — égalités résolues par Math.random() (LdB : simultanéité)
+        rosterData.sort((a, b) => b.base_ini - a.base_ini || Math.random() - 0.5)
+
+        // Construction des lignes roster
+        const rosterRows = rosterData.map(({ token, base_ini, is_pnj }) => {
+          const is_surprised = surprisedTokenIds.includes(token.id)
+          let surprise_roll = null
+          let initiative = base_ini
+          // PNJ surpris : jet auto côté serveur
+          if (is_surprised && is_pnj) {
+            surprise_roll = Math.ceil(Math.random() * 20)
+            initiative = base_ini + surprise_roll
+          }
+          return {
+            campaign_id: campaignId,
+            token_id: token.id,
+            is_surprised,
+            surprise_roll,
+            base_ini,
+            initiative,
+            status: 'active',
+            has_announced: false,
+            has_resolved: false,
+          }
+        })
+
+        // Insertion DB
+        await db('combat_state').insert({
+          campaign_id: campaignId,
+          battlemap_id,
+          phase: 'ROSTER',
+          current_turn: 1,
+          active_slot_idx: 0,
+          action_timer_sec: 0,
+        })
+        const insertedRoster = await db('combat_roster').insert(rosterRows).returning('*')
+
+        // Joueurs surpris (non-PNJ) : émettre COMBAT_SURPRISE_ROLL via fetchSockets
+        const surprisedPlayers = rosterData.filter(({ token, is_pnj }) =>
+          surprisedTokenIds.includes(token.id) && !is_pnj
+        )
+        if (surprisedPlayers.length > 0) {
+          const roomSockets = await io.in(campaignId).fetchSockets()
+          for (const { token, character } of surprisedPlayers) {
+            const targetSocket = roomSockets.find(s => s.data.userId === character?.user_id)
+            if (targetSocket) {
+              targetSocket.emit(WS.COMBAT_SURPRISE_ROLL, { tokenId: token.id })
+            }
+          }
+        }
+
+        // Broadcast COMBAT_STARTED — sans surprise_roll (PC25)
+        const broadcastRoster = insertedRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
+        io.to(campaignId).emit(WS.COMBAT_STARTED, { roster: broadcastRoster, phase: 'ROSTER' })
+
+        console.log(`[WS] combat:start — ${socket.user.username} → ${tokens.length} participants (campagne ${campaignId})`)
+      } catch (err) {
+        console.error('[WS] combat:start error:', err.message)
+        socket.emit('error', { message: 'Erreur lors du démarrage du combat' })
+      }
+    })
+
+    // ─── COMBAT:END ───────────────────────────────────────────────────────
+    // GM termine le combat. Nettoie tous les timers (PC19), supprime les 3
+    // tables combat dans l'ordre des FK, puis broadcast COMBAT_ENDED.
+    socket.on(WS.COMBAT_END, async () => {
+      if (socket.role !== 'gm') return
+      const campaignId = socket.campaignId
+      try {
+        // PC19 — clearTimeout AVANT delete
+        const timers = combatTimers.get(campaignId)
+        if (timers) {
+          for (const timeoutId of timers.values()) {
+            clearTimeout(timeoutId)
+          }
+          combatTimers.delete(campaignId)
+        }
+
+        await db('combat_actions').where({ campaign_id: campaignId }).delete()
+        await db('combat_roster').where({ campaign_id: campaignId }).delete()
+        await db('combat_state').where({ campaign_id: campaignId }).delete()
+
+        io.to(campaignId).emit(WS.COMBAT_ENDED)
+
+        console.log(`[WS] combat:end — ${socket.user.username} (campagne ${campaignId})`)
+      } catch (err) {
+        console.error('[WS] combat:end error:', err.message)
+        socket.emit('error', { message: 'Erreur lors de la fin du combat' })
       }
     })
 
