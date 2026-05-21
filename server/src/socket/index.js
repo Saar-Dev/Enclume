@@ -1357,6 +1357,242 @@ const initSocket = (io) => {
       }
     })
 
+    // ─── COMBAT:ANNOUNCE_START ────────────────────────────────────────────
+    // GM passe de la phase ROSTER à ANNOUNCEMENT.
+    // Démarre les timers auto-skip pour les joueurs (PC17 : skip si action_timer_sec > 0).
+    socket.on(WS.COMBAT_ANNOUNCE_START, async () => {
+      if (socket.role !== 'gm') return
+      const campaignId = socket.campaignId
+      try {
+        // Guard phase — doit être en ROSTER
+        const existing = await db('combat_state').where({ campaign_id: campaignId }).first()
+        if (!existing || existing.phase !== 'ROSTER') return
+
+        const [updated] = await db('combat_state')
+          .where({ campaign_id: campaignId })
+          .update({ phase: 'ANNOUNCEMENT', updated_at: db.fn.now() })
+          .returning('action_timer_sec')
+        if (!updated) return
+
+        io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT' })
+
+        // PC17 — timers auto-skip uniquement si action_timer_sec > 0
+        if (updated.action_timer_sec > 0) {
+          const rosterEntries = await db('combat_roster')
+            .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
+          const gmUserId = socket.user.id
+          if (!combatTimers.has(campaignId)) combatTimers.set(campaignId, new Map())
+          const campaignTimersMap = combatTimers.get(campaignId)
+          for (const entry of rosterEntries) {
+            const token = await db('tokens').where({ id: entry.token_id }).first()
+            if (!token?.character_id) continue
+            const character = await db('characters').where({ id: token.character_id }).first()
+            if (!character || character.user_id === gmUserId) continue  // PNJ → pas de timer
+            const timeoutId = setTimeout(async () => {
+              await skipPlayer(io, campaignId, entry.token_id)
+            }, updated.action_timer_sec * 1000)
+            campaignTimersMap.set(entry.token_id, timeoutId)
+          }
+        }
+
+        console.log(`[WS] combat:announce_start — ${socket.user.username} (campagne ${campaignId})`)
+      } catch (err) {
+        console.error('[WS] combat:announce_start error:', err.message)
+      }
+    })
+
+    // ─── COMBAT:SURPRISE_RESULT ───────────────────────────────────────────
+    // Joueur surpris déclenche son jet 1d20 — le serveur génère le dé côté serveur.
+    // Payload : { tokenId }
+    socket.on(WS.COMBAT_SURPRISE_RESULT, async ({ tokenId }) => {
+      const campaignId = socket.campaignId
+      try {
+        // Validation ownership
+        const token = await db('tokens').where({ id: tokenId }).first()
+        if (!token) return
+        const character = await db('characters').where({ id: token.character_id }).first()
+        if (!character || character.user_id !== socket.user.id) return
+
+        const entry = await db('combat_roster')
+          .where({ campaign_id: campaignId, token_id: tokenId })
+          .first()
+        if (!entry || !entry.is_surprised) return
+
+        // Génération serveur du d20 — résultat non manipulable par le client
+        const { rolls, total: diceRoll, seed } = await parseDice('1d20')
+        // Test de Réaction : roll ≤ base_ini → succès (LdB Polaris p.213-214)
+        const isSuccess = diceRoll <= entry.base_ini
+        const timestamp = new Date().toISOString()
+
+        // Couleur joueur pour DICE_RESULT
+        let color = '#5b8dee'
+        try {
+          const userRow = await db('users').where({ id: socket.user.id }).select('color').first()
+          if (userRow?.color) color = userRow.color
+        } catch (_) {}
+
+        // Broadcast DICE_RESULT — chat + animation dés (pas de skillLabel → animation active)
+        io.to(campaignId).emit(WS.DICE_RESULT, {
+          userId: socket.user.id,
+          username: socket.user.username,
+          color,
+          formula: '1d20',
+          rolls,
+          total: diceRoll,
+          isCriticalSuccess: false,
+          isCriticalFail: false,
+          seed,
+          timestamp,
+        })
+
+        if (isSuccess) {
+          // Succès : initiative = résultat du dé (marge de réussite = le score du dé)
+          console.log(`[DBG] surprise_result: SUCCÈS roll:${diceRoll} ≤ base_ini:${entry.base_ini} → ini:${diceRoll}`)
+          const rowsUpdated = await db('combat_roster')
+            .where({ campaign_id: campaignId, token_id: tokenId })
+            .update({ surprise_roll: diceRoll, initiative: diceRoll, updated_at: db.fn.now() })
+          console.log(`[DBG] surprise_result: rows updated=${rowsUpdated}`)
+        } else {
+          // Échec : initiative = 0, auto-skip, ne peut pas agir ce tour
+          console.log(`[DBG] surprise_result: ÉCHEC roll:${diceRoll} > base_ini:${entry.base_ini} → ini:0`)
+          const rowsUpdated = await db('combat_roster')
+            .where({ campaign_id: campaignId, token_id: tokenId })
+            .update({ surprise_roll: diceRoll, initiative: 0, has_announced: true, updated_at: db.fn.now() })
+          console.log(`[DBG] surprise_result: rows updated=${rowsUpdated}`)
+          await db('combat_actions').insert({
+            campaign_id: campaignId,
+            token_id: tokenId,
+            type: 'skip',
+            is_micro: false,
+            initiative_score: 0,
+            status: 'pending',
+            weapon_inv_id: null,
+          })
+          // PC13 — tous annoncés → phase Résolution
+          const [{ count }] = await db('combat_roster')
+            .where({ campaign_id: campaignId, has_announced: false })
+            .count('* as count')
+          if (parseInt(count) === 0) {
+            await startResolutionPhase(io, campaignId)
+          }
+        }
+
+        // Broadcast roster mis à jour — sans surprise_roll (PC25)
+        const updatedRoster = await db('combat_roster').where({ campaign_id: campaignId })
+        console.log(`[DBG] surprise_result: roster fetched count=${updatedRoster.length} initiatives=${JSON.stringify(updatedRoster.map(r => ({ t: r.token_id.slice(-6), ini: r.initiative })))}`)
+        const broadcastRoster = updatedRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
+        io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: broadcastRoster })
+
+        console.log(`[WS] combat:surprise_result — ${socket.user.username} token:${tokenId} roll:${diceRoll} success:${isSuccess} ini:${isSuccess ? diceRoll : 0}`)
+      } catch (err) {
+        console.error('[WS] combat:surprise_result error:', err.message)
+      }
+    })
+
+    // ─── COMBAT:ACTION_DECLARE ────────────────────────────────────────────
+    // Joueur (ou GM pour un PNJ) déclare son action pendant la phase ANNOUNCEMENT.
+    // Payload : { tokenId, actionType, weaponInvId?, isRushed }
+    // is_rushed → +3 à l'initiative avant calcul initiative_score (LdB Polaris).
+    // ini_mod : move_short = -3, micro = -3, autres = 0.
+    socket.on(WS.COMBAT_ACTION_DECLARE, async ({ tokenId, actionType, weaponInvId, isRushed }) => {
+      const campaignId = socket.campaignId
+      try {
+        // Guard type — 'skip' réservé à COMBAT_SKIP_PLAYER
+        if (!['assault', 'move_short', 'move_long', 'micro'].includes(actionType)) return
+
+        // Validation ownership (joueur pour PJ, GM pour PNJ)
+        const token = await db('tokens').where({ id: tokenId }).first()
+        if (!token) return
+        const character = await db('characters').where({ id: token.character_id }).first()
+        if (!character || character.user_id !== socket.user.id) return
+
+        const entry = await db('combat_roster')
+          .where({ campaign_id: campaignId, token_id: tokenId })
+          .first()
+        if (!entry || entry.has_announced) return
+
+        // PC22 — guard arme uniquement si weaponInvId fourni
+        if (weaponInvId) {
+          const weapon = await db('char_inventory')
+            .where({ id: weaponInvId, character_id: character.id })
+            .first()
+          if (!weapon) {
+            socket.emit('error', { message: 'Arme introuvable dans l\'inventaire' })
+            return
+          }
+        }
+
+        // Calcul des modificateurs — tous appliqués en UN seul UPDATE (PC26)
+        const ini_mod = (actionType === 'move_short' || actionType === 'micro') ? -3 : 0
+        const mod_rushed = isRushed ? 3 : 0
+        const total_mod = mod_rushed + ini_mod
+
+        const [updated] = await db('combat_roster')
+          .where({ campaign_id: campaignId, token_id: tokenId })
+          .update({
+            initiative: db.raw('initiative + ?', [total_mod]),
+            has_announced: true,
+            updated_at: db.fn.now(),
+          })
+          .returning(['initiative'])
+
+        const updatedInitiative = updated.initiative
+        const initiative_score = updatedInitiative
+
+        await db('combat_actions').insert({
+          campaign_id: campaignId,
+          token_id: tokenId,
+          type: actionType,
+          is_micro: actionType === 'micro',
+          initiative_score,
+          status: 'pending',
+          weapon_inv_id: weaponInvId ?? null,
+        })
+
+        // Bug 1 fix : émettre COMBAT_ACTION_DECLARED AVANT de vérifier PC13
+        // updatedInitiative inclus pour sync affichage INI côté client (précipité +3)
+        io.to(campaignId).emit(WS.COMBAT_ACTION_DECLARED, { tokenId, actionType, initiative_score, initiative: updatedInitiative })
+
+        // Nettoyer le timer auto-skip si actif
+        const campaignTimersMap = combatTimers.get(campaignId)
+        if (campaignTimersMap?.has(tokenId)) {
+          clearTimeout(campaignTimersMap.get(tokenId))
+          campaignTimersMap.delete(tokenId)
+        }
+
+        // PC13 — tous annoncés → phase Résolution
+        const [{ count }] = await db('combat_roster')
+          .where({ campaign_id: campaignId, has_announced: false })
+          .count('* as count')
+        if (parseInt(count) === 0) {
+          await startResolutionPhase(io, campaignId)
+        }
+
+        console.log(`[WS] combat:action_declare — ${socket.user.username} type:${actionType} ini_score:${initiative_score}`)
+      } catch (err) {
+        console.error('[WS] combat:action_declare error:', err.message)
+      }
+    })
+
+    // ─── COMBAT:SKIP_PLAYER ───────────────────────────────────────────────
+    // GM passe le tour d'un joueur pendant la phase ANNOUNCEMENT.
+    // Payload : { tokenId }
+    socket.on(WS.COMBAT_SKIP_PLAYER, async ({ tokenId }) => {
+      if (socket.role !== 'gm') return
+      const campaignId = socket.campaignId
+      try {
+        // Nettoyer le timer auto-skip si actif
+        const campaignTimersMap = combatTimers.get(campaignId)
+        if (campaignTimersMap?.has(tokenId)) {
+          clearTimeout(campaignTimersMap.get(tokenId))
+          campaignTimersMap.delete(tokenId)
+        }
+        await skipPlayer(io, campaignId, tokenId)
+      } catch (err) {
+        console.error('[WS] combat:skip_player error:', err.message)
+      }
+    })
+
     // ─── DÉCONNEXION ───────────────────────────────────────────────────────
     socket.on('disconnect', () => {
       console.log(`[WS] Déconnecté : ${socket.user.username} (${socket.id})`)
@@ -1406,5 +1642,76 @@ async function resolveEntityState(entityId, interactionId, campaignId, io) {
     })
   } catch (err) {
     console.error('[WS] resolveEntityState error:', err.message)
+  }
+}
+
+// ─── Helper — skip d'un participant pendant la phase ANNONCE ──────────────────
+// Appelé par COMBAT_SKIP_PLAYER (GM) et par le timer auto-skip (PC17).
+// Race condition guard : re-vérifie has_announced avant d'agir.
+async function skipPlayer(io, campaignId, tokenId) {
+  try {
+    const entry = await db('combat_roster')
+      .where({ campaign_id: campaignId, token_id: tokenId })
+      .first()
+    if (!entry || entry.has_announced) return
+
+    await db('combat_roster')
+      .where({ campaign_id: campaignId, token_id: tokenId })
+      .update({ has_announced: true, updated_at: db.fn.now() })
+
+    // Insérer action 'skip' en base
+    await db('combat_actions').insert({
+      campaign_id: campaignId,
+      token_id: tokenId,
+      type: 'skip',
+      initiative_score: entry.initiative,
+      status: 'skipped',
+    })
+
+    // Bug 2 fix : tokenLabel dans le payload — évite stale closure client
+    const token = await db('tokens').where({ id: tokenId }).first()
+    const tokenLabel = token?.label ?? 'Inconnu'
+
+    // Bug 1 fix : émettre COMBAT_TURN_SKIPPED AVANT de vérifier PC13
+    io.to(campaignId).emit(WS.COMBAT_TURN_SKIPPED, { tokenId, tokenLabel })
+
+    // PC13 — tous annoncés → phase Résolution
+    const [{ count }] = await db('combat_roster')
+      .where({ campaign_id: campaignId, has_announced: false })
+      .count('* as count')
+    if (parseInt(count) === 0) {
+      await startResolutionPhase(io, campaignId)
+    }
+  } catch (err) {
+    console.error('[WS] skipPlayer error:', err.message)
+  }
+}
+
+// ─── Helper — transition vers la phase RÉSOLUTION ─────────────────────────────
+// Appelé automatiquement quand tous les participants ont annoncé (PC13).
+// Sprint 2 : stub — met à jour la phase et broadcast COMBAT_PHASE_CHANGED.
+// Sprint 3/4 : résolution pas-à-pas par initiative_score DESC.
+async function startResolutionPhase(io, campaignId) {
+  try {
+    await db('combat_state')
+      .where({ campaign_id: campaignId })
+      .update({ phase: 'RESOLUTION', updated_at: db.fn.now() })
+
+    const [roster, actions] = await Promise.all([
+      db('combat_roster').where({ campaign_id: campaignId }).orderBy('initiative', 'desc'),
+      db('combat_actions').where({ campaign_id: campaignId }).orderBy('initiative_score', 'desc'),
+    ])
+
+    const broadcastRoster = roster.map(({ surprise_roll: _sr, ...rest }) => rest)
+
+    io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, {
+      phase: 'RESOLUTION',
+      roster: broadcastRoster,
+      actions,
+    })
+
+    console.log(`[WS] startResolutionPhase — campagne ${campaignId}`)
+  } catch (err) {
+    console.error('[WS] startResolutionPhase error:', err.message)
   }
 }
