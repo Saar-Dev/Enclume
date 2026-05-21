@@ -31,6 +31,7 @@ router.get('/', requireAuth, async (req, res) => {
   const columns = [
     'characters.id',
     'characters.name',
+    'characters.type',
     'characters.color',
     'characters.visible',
     'characters.glb_url',
@@ -80,10 +81,12 @@ router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
     if (!ownerMember) throw new AppError(400, 'This user is not a member of this campaign')
   }
 
+  const type = user_id ? 'pj' : 'pnj'
+
   const [character] = await db('characters')
-    .insert({ campaign_id: campaignId, user_id: user_id || null, name, color, visible })
+    .insert({ campaign_id: campaignId, user_id: user_id || null, name, color, visible, type })
     .returning([
-      'id', 'campaign_id', 'user_id', 'name', 'color',
+      'id', 'campaign_id', 'user_id', 'type', 'name', 'color',
       'visible', 'glb_url', 'portrait_url',
       'description', 'gm_notes', 'created_at', 'updated_at',
     ])
@@ -139,10 +142,12 @@ actionsRouter.put('/:id', requireAuth, async (req, res) => {
   if ('user_id' in updates) {
     if (updates.user_id === null) {
       updates.color = '#4A90D9'
+      updates.type = 'pnj'
     } else {
       const owner = await db('users').where({ id: updates.user_id }).select('color').first()
       if (!owner) throw new AppError(404, 'User not found')
       updates.color = owner.color
+      updates.type = 'pj'
     }
   }
 
@@ -161,6 +166,7 @@ actionsRouter.put('/:id', requireAuth, async (req, res) => {
       'characters.id',
       'characters.campaign_id',
       'characters.user_id',
+      'characters.type',
       'characters.name',
       'characters.color',
       'characters.visible',
@@ -213,6 +219,7 @@ async function broadcastCharacterUpdate(characterId, app) {
       'characters.id',
       'characters.campaign_id',
       'characters.user_id',
+      'characters.type',
       'characters.name',
       'characters.color',
       'characters.visible',

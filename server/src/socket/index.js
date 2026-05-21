@@ -1240,6 +1240,11 @@ const initSocket = (io) => {
         // Calcul base_ini (REA) pour chaque token via char_sheet
         const rosterData = []
         for (const token of tokens) {
+          // Entité de décor (porte, console) — pas un personnage, ignorée en combat
+          if (!token.character_id) {
+            console.warn(`[COMBAT_START] Token ${token.id} sans character_id (Entité) — ignoré`)
+            continue
+          }
           let base_ini = 0
           let character = null
           try {
@@ -1262,7 +1267,7 @@ const initSocket = (io) => {
           } catch (err) {
             console.warn(`[COMBAT_START] Erreur calcul INI token ${token.id}:`, err.message)
           }
-          const is_pnj = character?.user_id === socket.user.id
+          const is_pnj = character?.type === 'pnj'
           rosterData.push({ token, base_ini, character, is_pnj })
         }
 
@@ -1491,20 +1496,30 @@ const initSocket = (io) => {
 
     // ─── COMBAT:ACTION_DECLARE ────────────────────────────────────────────
     // Joueur (ou GM pour un PNJ) déclare son action pendant la phase ANNOUNCEMENT.
-    // Payload : { tokenId, actionType, weaponInvId?, isRushed }
-    // is_rushed → +3 à l'initiative avant calcul initiative_score (LdB Polaris).
-    // ini_mod : move_short = -3, micro = -3, autres = 0.
-    socket.on(WS.COMBAT_ACTION_DECLARE, async ({ tokenId, actionType, weaponInvId, isRushed }) => {
+    // Payload : { tokenId, selectedKeys: string[], weaponInvId? }
+    // selectedKeys : tableau de clés d'action — ini_mod = somme des KEY_MOD de chaque clé.
+    socket.on(WS.COMBAT_ACTION_DECLARE, async ({ tokenId, selectedKeys: rawKeys, weaponInvId }) => {
       const campaignId = socket.campaignId
       try {
-        // Guard type — 'skip' réservé à COMBAT_SKIP_PLAYER
-        if (!['assault', 'move_short', 'move_long', 'micro'].includes(actionType)) return
+        // Validation selectedKeys
+        const KEY_MOD = { rushed: 3, assault: 0, move_short: -3, move_long: 0, micro: -3, micro_draw_ready: -3, micro_draw: -5, micro_grab_close: -3, micro_phrase: -3 }
+        if (!Array.isArray(rawKeys) || rawKeys.length === 0) return
+        const selectedKeys = rawKeys.filter(k => k in KEY_MOD)
+        if (selectedKeys.length === 0) return
 
         // Validation ownership (joueur pour PJ, GM pour PNJ)
         const token = await db('tokens').where({ id: tokenId }).first()
         if (!token) return
+        // Entité de décor — ne déclare pas d'action en combat
+        if (!token.character_id) return
         const character = await db('characters').where({ id: token.character_id }).first()
-        if (!character || character.user_id !== socket.user.id) return
+        if (!character) return
+        if (character.type === 'pnj') {
+          if (socket.role !== 'gm') return
+        } else {
+          // PJ — vérification ownership (P1)
+          if (character.user_id !== socket.user.id) return
+        }
 
         const entry = await db('combat_roster')
           .where({ campaign_id: campaignId, token_id: tokenId })
@@ -1522,10 +1537,14 @@ const initSocket = (io) => {
           }
         }
 
-        // Calcul des modificateurs — tous appliqués en UN seul UPDATE (PC26)
-        const ini_mod = (actionType === 'move_short' || actionType === 'micro') ? -3 : 0
-        const mod_rushed = isRushed ? 3 : 0
-        const total_mod = mod_rushed + ini_mod
+        // Calcul ini_mod — somme de tous les mods des clés sélectionnées (PC26)
+        const total_mod = selectedKeys.reduce((sum, k) => sum + KEY_MOD[k], 0)
+
+        // Type primaire pour combat_actions.type
+        let primaryType = 'micro'
+        if (selectedKeys.includes('assault')) primaryType = 'assault'
+        else if (selectedKeys.includes('move_long')) primaryType = 'move_long'
+        else if (selectedKeys.includes('move_short')) primaryType = 'move_short'
 
         const [updated] = await db('combat_roster')
           .where({ campaign_id: campaignId, token_id: tokenId })
@@ -1542,16 +1561,17 @@ const initSocket = (io) => {
         await db('combat_actions').insert({
           campaign_id: campaignId,
           token_id: tokenId,
-          type: actionType,
-          is_micro: actionType === 'micro',
+          type: primaryType,
+          is_micro: primaryType === 'micro',
           initiative_score,
           status: 'pending',
           weapon_inv_id: weaponInvId ?? null,
+          modifiers: JSON.stringify({ selectedKeys }),
         })
 
         // Bug 1 fix : émettre COMBAT_ACTION_DECLARED AVANT de vérifier PC13
         // updatedInitiative inclus pour sync affichage INI côté client (précipité +3)
-        io.to(campaignId).emit(WS.COMBAT_ACTION_DECLARED, { tokenId, actionType, initiative_score, initiative: updatedInitiative })
+        io.to(campaignId).emit(WS.COMBAT_ACTION_DECLARED, { tokenId, actionType: primaryType, initiative_score, initiative: updatedInitiative })
 
         // Nettoyer le timer auto-skip si actif
         const campaignTimersMap = combatTimers.get(campaignId)
@@ -1568,7 +1588,7 @@ const initSocket = (io) => {
           await startResolutionPhase(io, campaignId)
         }
 
-        console.log(`[WS] combat:action_declare — ${socket.user.username} type:${actionType} ini_score:${initiative_score}`)
+        console.log(`[WS] combat:action_declare — ${socket.user.username} keys:${selectedKeys.join(',')} ini_score:${initiative_score}`)
       } catch (err) {
         console.error('[WS] combat:action_declare error:', err.message)
       }
