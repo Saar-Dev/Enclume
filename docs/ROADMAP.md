@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-05-23 Session 60
+> Dernière mise à jour : 2026-05-23 Session 62
 
 ---
 
@@ -166,8 +166,13 @@ Module Armes ← 🔲 Chantier 11 Étape 2
 |---|---|---|
 | Sprint 1 | Fondations : migration 54, events, combatStore, CombatOverlay, COMBAT_START/END, SESSION_JOIN sync | ✅ session 57 |
 | Sprint 2 | Surprise + Phase Annonce : CombatTimeline, CombatActionWindow, CombatPnjPanel, CombatGmDeclareWindow, COMBAT_SURPRISE_RESULT/ACTION_DECLARE/SKIP_PLAYER + migration 55 characters.type + rework UI actions (4 sections, selectedKeys[], accordion GM) | ✅ sessions 58-59 |
-| Sprint 3 | Phase Résolution : startResolutionPhase(), COMBAT_ACTION_CONFIRM, endTurn(), timer auto-skip | 🔲 |
-| Sprint 4 | Jets d'attaque + Dégâts + Blessures + Carence FOR : branche assault complète | 🔲 |
+| Sprint 2.5 | Centrage caméra combat (combatCameraCenter prop Canvas3D + useEffect orbitRef) | ✅ session 61 |
+| Sprint 3 | Migration 56 : action_key/sequence/target_pos_x/y/z + state_position/state_weapon + voxel_scale | ✅ session 61 |
+| Sprint 4 | UI Déplacement Combat : anneaux 4 zones PE34, légende allures, Valider/Changer/Annuler, combatMoveMode dans Canvas3D | ✅ session 61 |
+| Sprint 4.1 | calcAllures LdB p.221 corrigé (4 allures, COO+Athlétisme, lookup table) | ✅ session 60 |
+| Sprint 5 | Serveur COMBAT_ACTION_DECLARE : moveAction, actionRows bulk (1 ligne/action), KEY_MOD nettoyé, PC33, modifiers:{ini_mod} JSONB + fix SURPRISE_RESULT/skipPlayer/startResolutionPhase (migration 56) | ✅ session 62 |
+| Sprint 6 | Phase Résolution : startResolutionPhase complet, COMBAT_ACTION_CONFIRM (déplacement Redis + boucle slots), advanceSlot, endTurn → retour ANNOUNCEMENT, UI joueur (recap + Agir) + panneau GM slot actif | ✅ session 62 |
+| Sprint 7 | Jets d'attaque + Dégâts + Blessures + Carence FOR : branche assault complète | 🔲 |
 
 **Mécanique Polaris (rappel LdB) :**
 

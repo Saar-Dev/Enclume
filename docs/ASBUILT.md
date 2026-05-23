@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-23 Session 61
+> Dernière mise à jour : 2026-05-23 Session 62
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -16,10 +16,10 @@ Enclume/
 │   │   └── favicon.svg                 # ⚠ présent mais non référencé — à brancher
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── CombatOverlay.jsx        # Modifié 61 — légende allures ZONE_DEFS, pendingMoveSelection, Valider/Changer/Annuler
+│   │   │   ├── CombatOverlay.jsx        # Modifié 62 — légende allures ZONE_DEFS, pendingMoveSelection, Valider/Changer/Annuler + phase RÉSOLUTION joueur + panneau GM slot actif (Agir)
 │   │   │   ├── CombatRosterWindow.jsx  # NOUVEAU 57 — roster GM, INI preview, surpris, exclusion, bouton Démarrer
-│   │   │   ├── CombatTimeline.jsx      # NOUVEAU 58 — timeline INI, portraits cliquables GM, topOffset
-│   │   │   ├── CombatActionWindow.jsx  # Modifié 61 — fetch allures, inMoveMode, moveSelection, handleMoveClick, isMove renderer
+│   │   │   ├── CombatTimeline.jsx      # Modifié 62 — timeline INI, portraits cliquables GM, topOffset + curseur slot actif RÉSOLUTION (slotActive, activeSlotIdx)
+│   │   │   ├── CombatActionWindow.jsx  # Modifié 62 — fetch allures, inMoveMode, moveSelection, handleMoveClick, isMove renderer + isMyTurnInResolution, recap actions déclarées, bouton Agir (COMBAT_ACTION_CONFIRM)
 │   │   │   ├── CombatPnjPanel.jsx      # NOUVEAU 58 — modal GM PJs/PNJs read-only, isPnj via character.type
 │   │   │   ├── CombatGmDeclareWindow.jsx # Modifié 59s — accordion always-one-open, auto-progression, liste complète
 │   │   │   ├── combatSections.js       # Modifié 61 — move_short/move_long → isMove item unique
@@ -40,7 +40,7 @@ Enclume/
 │   │   │   ├── LoginPage.jsx
 │   │   │   ├── RegisterPage.jsx
 │   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern)
-│   │   │   ├── SessionPage.jsx         # Modifié 61 — combatMoveMode + pendingMoveSelection + handleEnterMoveMode + combatCameraCenter
+│   │   │   ├── SessionPage.jsx         # Modifié 62 — combatMoveMode + pendingMoveSelection + handleEnterMoveMode + combatCameraCenter + COMBAT_SLOT_ADVANCED handler + setActions dans COMBAT_PHASE_CHANGED
 │   │   │   ├── CampaignSettingsPage.jsx
 │   │   │   ├── WorkshopPage.jsx        # Stable 33
 │   │   │   └── TexturePacksPage.jsx    # CONSERVÉ mais remplacé par WorkshopPage
@@ -48,7 +48,7 @@ Enclume/
 │   │   │   ├── authStore.js
 │   │   │   ├── tokenStore.js
 │   │   │   ├── characterStore.js       # Modifié 44 — upsertCharacter guard visible+isGm (Bug A)
-│   │   │   ├── combatStore.js          # NOUVEAU 57 — phase/roster/actions/currentTurn/activeSlotIdx/markTokenAnnounced
+│   │   │   ├── combatStore.js          # Modifié 62 — phase/roster/actions/currentTurn/activeSlotIdx/markTokenAnnounced + setActions + advanceSlot
 │   │   │   ├── mapStore.js
 │   │   │   ├── sessionStore.js
 │   │   │   └── entityStore.js          # Modifié 34 — fetchBlueprints() ajouté
@@ -106,7 +106,7 @@ Enclume/
 │   │   │   └── errorHandler.js
 │   │   ├── socket/
 │   │   │   ├── auth.js
-│   │   │   └── index.js                # Modifié 59s — COMBAT_ACTION_DECLARE : selectedKeys[], KEY_MOD dict, primaryType, modifiers JSONB
+│   │   │   └── index.js                # Modifié 62 — COMBAT_ACTION_DECLARE rewrite (moveAction, actionRows bulk, KEY_MOD, PC33, modifiers JSONB) + COMBAT_ACTION_CONFIRM + advanceSlot + endTurn + fix SURPRISE_RESULT/skipPlayer (migration 56)
 │   │   ├── lib/
 │   │   │   ├── AppError.js
 │   │   │   ├── minio.js
