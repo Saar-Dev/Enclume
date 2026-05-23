@@ -6,12 +6,6 @@ import CombatActionWindow from './CombatActionWindow'
 import CombatPnjPanel from './CombatPnjPanel'
 import CombatGmDeclareWindow from './CombatGmDeclareWindow'
 
-const ZONE_DEFS = [
-  { color: '#3b82f6', label: 'Lente',   iniMod: -3, allureKey: 'lente'   },
-  { color: '#22c55e', label: 'Moyenne',  iniMod: -5, allureKey: 'moyenne' },
-  { color: '#f97316', label: 'Rapide',   iniMod: -7, allureKey: 'rapide'  },
-  { color: '#ef4444', label: 'Max',      iniMod:  0, allureKey: 'max'     },
-]
 
 export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove }) {
   const phase = useCombatStore(s => s.phase)
@@ -72,14 +66,13 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         <div style={styles.moveLegend}>
           <div style={styles.moveLegendTitle}>Déplacement</div>
 
-          {ZONE_DEFS.map(zone => {
-            const dist = combatMoveMode.allures[zone.allureKey]
-            const iniStr = zone.iniMod > 0 ? `+${zone.iniMod}` : zone.iniMod === 0 ? '±0' : `${zone.iniMod}`
+          {combatMoveMode.zones.map((zone, i) => {
+            const iniStr = zone.ini_mod > 0 ? `+${zone.ini_mod}` : zone.ini_mod === 0 ? '±0' : `${zone.ini_mod}`
             return (
-              <div key={zone.label} style={styles.moveLegendRow}>
+              <div key={zone.action_key + i} style={styles.moveLegendRow}>
                 <span style={{ ...styles.moveLegendDot, background: zone.color }} />
                 <span style={styles.moveLegendLabel}>{zone.label}</span>
-                <span style={styles.moveLegendDist}>≤ {dist} m</span>
+                <span style={styles.moveLegendDist}>≤ {zone.radius} m</span>
                 <span style={styles.moveLegendIni}>{iniStr}</span>
               </div>
             )

@@ -157,30 +157,28 @@ Travaux effectués en session 61 :
 
 ---
 
-## Prochain chantier — Sprint 4.1 — Généralisation zones déplacement
+### Chantier 11 Sprint 4.1 — Généralisation zones[] + micro_grab ✅ (session 61 suite)
 
-**Objectif :** remplacer le système allures fixe (4 zones hardcodées) par un tableau `zones[]` générique (1-N zones). Permet : grab_close, grab_far, et flux GM PNJ.
+Travaux effectués :
+- `combatSections.js` : MOVE_ZONE_DEFS export, micro_grab_close+micro_grab_far fusionnés en micro_grab (3 zones statiques), isZoneSelect, KEY_MOD nettoyé ✅
+- `CombatActionWindow.jsx` : handleZoneSelectClick(item), toggle-deselect, moveSelection.sourceKey ✅
+- `SessionPage.jsx` : zones[] dans handleEnterMoveMode + combatMoveMode ✅
+- `Canvas3D.jsx` : rings zones.map, zone-click zones.find, cursor altitude PE34 corrigée ✅
+- `CombatOverlay.jsx` : ZONE_DEFS supprimé, iterate zones directement ✅
 
-**Architecture cible :**
-```js
-// zones = [{ radius, action_key, ini_mod, color, label }]
-// Déplacement : 4 zones (lente/moyenne/rapide/max depuis allures)
-// Grab close   : 1 zone (radius=3, grab_close, −3)
-// Grab far     : 1 zone dynamique (radius depuis slider, grab_far, −5 ou −10)
-```
-
-**Fichiers à modifier :** Canvas3D, CombatActionWindow, CombatOverlay, combatSections.js
-**Déclenche aussi :** GM/PNJ peut utiliser le même mode avec les zones du PNJ
+**Limitations acceptées v1 :**
+- Zones euclidiennes (pas de pathfinding) — inexact en terrain obstrué, acceptable en zone dégagée
+- GM/PNJ déplacement non implémenté (CombatGmDeclareWindow sans onEnterMoveMode)
 
 ---
 
-## Prochain chantier — Chantier 11 Sprint 5 — Serveur COMBAT_ACTION_DECLARE
+### Chantier 11 Sprint 5 — Serveur COMBAT_ACTION_DECLARE ✅ (session 62)
 
-Objectif : aligner le handler serveur COMBAT_ACTION_DECLARE sur migration 56.
-- `target_pos_x/y/z` depuis payload `moveAction`
-- `action_key` stocké dans `combat_actions`
-- Fix : COMBAT_SURPRISE_RESULT + skipPlayer (INSERT sur colonnes droppées)
-- `startResolutionPhase()` : orderBy `initiative` (pas `initiative_score` supprimé)
+Travaux effectués :
+- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE rewrite — moveAction destructuré, KEY_MOD nettoyé, guard PC33, `getSequence`/`getType`, `actionRows[]` bulk insert (1 ligne/action), `modifiers:{ini_mod}` par ligne ✅
+- `server/src/socket/index.js` : COMBAT_SURPRISE_RESULT fix — `is_micro`/`initiative_score` → `action_key:'skip', sequence:99` ✅
+- `server/src/socket/index.js` : `skipPlayer()` fix — `initiative_score` → `action_key:'skip', sequence:99` ✅
+- `server/src/socket/index.js` : `startResolutionPhase()` fix — `orderBy('initiative_score','desc')` → `orderBy('sequence','asc')` ✅
 
 ---
 

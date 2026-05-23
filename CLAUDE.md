@@ -73,25 +73,19 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 61 (2026-05-23)
+## État actuel — Session 62 (2026-05-23)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **56 migrations stables** — prochaine : **57**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅
 
-**Session 61 — Sprint 4 : UI Déplacement Combat :**
-- `shared/polarisUtils.js` : +calcAN, calcAllureMoy, calcAllures (PI11)
-- `combatSections.js` : move_short/move_long → isMove item unique
-- `CombatActionWindow.jsx` : fetch allures + mode déplacement + moveSelection
-- `Canvas3D.jsx` : anneaux 4 zones (PE34 altitude) + cursor + combatMoveModeRef + onPendingMove
-- `SessionPage.jsx` : combatMoveMode + pendingMoveSelection + handleEnterMoveMode + handleValidate/Cancel
-- `CombatOverlay.jsx` : légende allures + ZONE_DEFS + Valider/Changer/Annuler
-- PE34 documenté : pieds token = `pos_z + 1.0` (pas `pos_z + 0.5` centre voxel)
-- Validé joueur ✅ — GM/PNJ reporté Sprint 4.1
+**Session 62 — Sprint 5 : Serveur COMBAT_ACTION_DECLARE :**
+- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE rewrite — moveAction, KEY_MOD nettoyé, PC33, actionRows bulk (1 ligne/action, getSequence/getType), modifiers:{ini_mod} par ligne
+- `server/src/socket/index.js` : COMBAT_SURPRISE_RESULT + skipPlayer + startResolutionPhase — fix INSERTs colonnes droppées (migration 56)
+- Validé ✅
 
 **Prochain chantier :**
-- Sprint 4.1 — Généralisation `zones[]` (grab_close + grab_far + PNJ)
-- Sprint 5 — Serveur COMBAT_ACTION_DECLARE (migration 56 + action_key + target_pos)
+- Sprint 6 — Phase Résolution (startResolutionPhase complet + COMBAT_ACTION_CONFIRM + endTurn)
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser : ordre tri INI vs sémantique roll surpris.

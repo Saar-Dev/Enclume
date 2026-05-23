@@ -181,7 +181,7 @@ export default function SessionPage() {
   const [combatCameraCenter, setCombatCameraCenter] = useState(null)
 
   // ─── Mode sélection déplacement combat (Sprint 4) ─────────────────────────
-  // null = inactif, sinon { tokenId, allures, onMoveSelected, onCancel, onPendingMove }
+  // null = inactif, sinon { tokenId, zones, onMoveSelected, onCancel, onPendingMove }
   const [combatMoveMode, setCombatMoveMode] = useState(null)
   // null = inactif, sinon sélection en attente de validation { action_key, ini_mod, targetPosX, targetPosY, targetPosZ }
   const [pendingMoveSelection, setPendingMoveSelection] = useState(null)
@@ -669,10 +669,10 @@ export default function SessionPage() {
   }, [socket, pendingSurpriseRoll])
 
   // ─── Mode déplacement combat : entrée, sélection, annulation ───────────────
-  // allures : { lente, moyenne, rapide, max } calculées dans CombatActionWindow
+  // zones : [{ radius, action_key, ini_mod, color, label }] — calculé dans CombatActionWindow
   // tokenPos : { x, z } coords DB (PE14) du token joueur (pour centrage caméra)
   // onMoveSelected/onCancel : closures CombatActionWindow qui mettent à jour son état
-  const handleEnterMoveMode = useCallback((allures, tokenId, tokenPos, onMoveSelected, onCancel) => {
+  const handleEnterMoveMode = useCallback((zones, tokenId, tokenPos, onMoveSelected, onCancel) => {
     const wrappedSelected = (sel) => {
       onMoveSelected(sel)
       setPendingMoveSelection(null)
@@ -684,7 +684,7 @@ export default function SessionPage() {
       setCombatMoveMode(null)
     }
     setCombatMoveMode({
-      tokenId, allures,
+      tokenId, zones,
       onMoveSelected: wrappedSelected,
       onCancel: wrappedCancel,
       onPendingMove: (sel) => setPendingMoveSelection(sel),

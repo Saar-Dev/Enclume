@@ -5584,3 +5584,106 @@ Le mode déplacement n'est accessible qu'aux joueurs (CombatActionWindow). La Co
 | `client/src/pages/SessionPage.jsx` | combatMoveMode, pendingMoveSelection, handleEnterMoveMode, handleValidate/CancelPendingMove, combatCameraCenter |
 | `docs/SYSTEME.md` | PE34 — altitude pieds token Three.js (§8 + table §18) |
 | `CLAUDE.md` | PE34 dans pièges fréquemment oubliés |
+
+---
+
+## Session 61 — Suite — Sprint 4.1 : Généralisation zones[] + micro_grab
+
+### Objectif
+
+Remplacer le système allures fixe (4 zones hardcodées) par un tableau `zones[]` générique, et implanter `micro_grab` (saisir un objet) avec zones statiques.
+
+### Travail effectué
+
+**Architecture zones[] — généralisation complète**
+
+Remplacement de `allures {}` par `zones = [{ radius, action_key, ini_mod, color, label }]` dans toute la chaîne.
+
+- `combatSections.js` : export `MOVE_ZONE_DEFS` (4 def avec allureKey pour calcul dynamique). `micro_grab_close` + `micro_grab_far` fusionnés en `micro_grab` (1 item, 3 zones statiques : ≤3m/-3, ≤5m/-5, ≤10m/-10). `isMove: true` → `isZoneSelect: true, staticZones: null`. `KEY_MOD` : suppression `micro_grab_close/-3`, `micro_grab_far_5/-5`, `micro_grab_far_10/-10`.
+- `CombatActionWindow.jsx` : import `MOVE_ZONE_DEFS`. `handleMoveClick` → `handleZoneSelectClick(item)`. Toggle-deselect si `moveSelection?.sourceKey === item.key`. `staticZones !== null` → zones fixes ; `null` → zones calculées depuis allures. `isMove` renderer → `isZoneSelect` renderer (span 2, canActivate check). `moveSelection` gagne `sourceKey`.
+- `SessionPage.jsx` : signature `handleEnterMoveMode(allures,...)` → `(zones,...)`. `combatMoveMode` stocke `zones` au lieu de `allures`.
+- `Canvas3D.jsx` : rings = `zones.map((zone, i) => i===0 ? circleGeometry : ringGeometry)`. Zone-click = `zones.find(z => dist <= z.radius)` au lieu de 4 if-else hardcodés. Curseur wireframe altitude corrigée : `y=0.1` → `curToken.pos_z + 1.0 + 0.05` (même formule PE34 que les anneaux).
+- `CombatOverlay.jsx` : `ZONE_DEFS` constant supprimée. Itère `combatMoveMode.zones` directement. `zone.radius` et `zone.ini_mod` (snake_case) au lieu de `allureKey`/`iniMod`.
+
+### Corrections post-test
+
+- **Couleurs micro_grab** : purple/pink/indigo → même palette que déplacement (bleu/vert/orange) pour cohérence visuelle.
+- **Fusion items** : `micro_grab_close` + `micro_grab_far` → `micro_grab` unique (instruction initiale non respectée dans le premier jet).
+- **Curseur altitude** : `y=0.1` absolu → `pos_z+1.0+0.05` (invisible sous les voxels sinon).
+
+### Décisions prises
+
+**Pathfinding — v1 euclidien acceptable**
+Le cercle euclidien est inexact en terrain obstrué. Décision : acceptable pour v1 (zones dégagées = cas majoritaire). Pathfinding A* client-side (hover = chemin uniquement, pas flood-fill) = Sprint 7+ une fois le tour de combat stabilisé.
+
+**Priorité chantiers**
+Sprint 5 (serveur COMBAT_ACTION_DECLARE) → Sprint 6 (phase résolution) avant pathfinding.
+
+### Validation fonctionnelle
+
+- ✅ Déplacement : 4 anneaux colorés, sélection, Valider/Annuler inchangés
+- ✅ Saisir un objet (micro_grab) : 3 anneaux bleu/vert/orange, ≤3m/-3 / ≤5m/-5 / ≤10m/-10
+- ✅ Toggle deselect : clic sur item déjà sélectionné → déselectionne
+- ✅ Curseur wireframe visible à la bonne altitude
+- ✅ `move` désactivé si allures=null (avant fetch) ; `micro_grab` toujours actif
+- ❌ GM/PNJ déplacement : reporté (CombatGmDeclareWindow sans onEnterMoveMode)
+- ❌ Pathfinding : euclidien uniquement, zones incorrectes en terrain obstrué (acceptable v1)
+
+### Fichiers modifiés
+
+| Fichier | Modifications |
+|---|---|
+| `client/src/components/combatSections.js` | MOVE_ZONE_DEFS export, micro_grab (fusion 3 zones), isZoneSelect, KEY_MOD nettoyé |
+| `client/src/components/CombatActionWindow.jsx` | handleZoneSelectClick, isZoneSelect renderer, moveSelection.sourceKey |
+| `client/src/pages/SessionPage.jsx` | zones[] dans handleEnterMoveMode + combatMoveMode |
+| `client/src/components/Canvas3D.jsx` | rings zones.map, zone-click zones.find, cursor altitude PE34 |
+| `client/src/components/CombatOverlay.jsx` | ZONE_DEFS supprimé, iterate zones directement |
+
+---
+
+## Session 62 � Chantier 11 Sprint 5 : Serveur COMBAT_ACTION_DECLARE
+
+### Objectif
+
+Aligner le handler serveur `COMBAT_ACTION_DECLARE` sur le sch�ma migration 56 (action_key, sequence, target_pos_x/y/z). Corriger les 3 autres endroits qui �crivaient dans `combat_actions` avec des colonnes dropp�es.
+
+### Travail effectu�
+
+**Fichier modifi� : `server/src/socket/index.js` � 4 zones**
+
+**Zone A � Handler `COMBAT_ACTION_DECLARE` (r��criture)**
+- Destructure `moveAction` du payload : `{ action_key, ini_mod, targetPosX, targetPosY, targetPosZ }` � coords DB PE14 d�j� converties par Canvas3D
+- KEY_MOD nettoy� : suppression `micro_grab_close`, `micro_grab_far_5/10`, `move_short`, `move_long` (cl�s obsol�tes supprim�es en S61 c�t� client)
+- Guard canDeclare : `selectedKeys.length === 0 && !moveAction ? return` (permet d�claration moveAction seul)
+- Guard PC33 : `parseInt(targetPosX/Y/Z)` � retour erreur explicite si NaN
+- `getSequence(key)` : `move_* ? 1`, `assault/close_combat ? 3`, reste ? 2 (PC32)
+- `getType(key)` : d�rive le `type` legacy pour CHECK constraint SQL migration 54 � `move_lente ? 'move_short'`, `move_* ? 'move_long'`, `assault ? 'assault'`, reste ? `'micro'`
+- Build `actionRows[]` : 1 ligne par selectedKey + 1 ligne pour moveAction si pr�sent
+- `modifiers: { ini_mod }` par ligne (remplace `{ selectedKeys }` global)
+- `ini_mod_total` inclut `moveAction.ini_mod` � UPDATE relatif `initiative + ini_mod_total` (compat joueurs surpris)
+- INSERT bulk `db('combat_actions').insert(actionRows)`
+
+**Zone B � `COMBAT_SURPRISE_RESULT` INSERT**
+- Supprim� : `is_micro: false, initiative_score: 0` (colonnes dropp�es migration 56)
+- Ajout� : `action_key: 'skip', sequence: 99, status: 'skipped'`
+
+**Zone C � `skipPlayer()` INSERT**
+- Supprim� : `initiative_score: entry.initiative` (colonne dropp�e)
+- Ajout� : `action_key: 'skip', sequence: 99`
+
+**Zone D � `startResolutionPhase()` orderBy**
+- `orderBy('initiative_score', 'desc')` ? `orderBy('sequence', 'asc')` (PC27 � tri roster par initiative, actions par s�quence)
+
+### Validation fonctionnelle
+
+- ? SR sans erreur
+- ? D�claration action avec moveAction ? combat_actions : N lignes avec action_key, sequence, target_pos_x/y/z corrects
+- ? GM skip joueur ? pas d'erreur serveur
+- ? Joueur surpris �chec ? pas d'erreur serveur
+- ? startResolutionPhase ? pas de crash orderBy initiative_score
+
+### Fichiers modifi�s
+
+| Fichier | Modifications |
+|---|---|
+| `server/src/socket/index.js` | COMBAT_ACTION_DECLARE rewrite (moveAction, KEY_MOD, PC33, actionRows bulk) + SURPRISE_RESULT fix + skipPlayer fix + startResolutionPhase fix |

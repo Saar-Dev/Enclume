@@ -113,7 +113,7 @@ Enclume/
 │   │   │   ├── diceParser.js
 │   │   │   ├── charStats.js            # Modifié 60 — calcVitesses→calcAllures (4 allures LdB p.221, lookup COO+Athlétisme)
 │   │   │   └── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
-│   │   └── index.js                    # Modifié 59 — COMBAT_SURPRISE_RESULT + COMBAT_ACTION_DECLARE (type-based) + COMBAT_START (Entités filtrées)
+│   │   └── index.js                    # Modifié 62 — COMBAT_ACTION_DECLARE (moveAction, actionRows bulk, PC33) + SURPRISE_RESULT/skipPlayer/startResolutionPhase fix (migration 56)
 ├── shared/
 │   ├── polarisUtils.js                 # Modifié 61 — +calcAN, calcAllureMoy, calcAllures (exports partagés PI11)
 │   ├── events.js                       # Modifié 51 — +INVENTORY_ADDED/UPDATED/REMOVED/SOLS_UPDATED

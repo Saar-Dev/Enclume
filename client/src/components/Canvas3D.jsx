@@ -478,16 +478,12 @@ function Scene({
         const dx = vx - playerToken.pos_x
         const dz = vz - playerToken.pos_y
         const dist = Math.sqrt(dx * dx + dz * dz)
-        const { allures } = mode
-        let action_key, ini_mod
-        if (dist <= allures.lente)          { action_key = 'move_short'; ini_mod = -3 }
-        else if (dist <= allures.moyenne)   { action_key = 'move_long';  ini_mod = -5 }
-        else if (dist <= allures.rapide)    { action_key = 'move_long';  ini_mod = -7 }
-        else if (dist <= allures.max)       { action_key = 'move_long';  ini_mod =  0 }
-        else return  // hors portée max — ignorer
+        const { zones } = mode
+        const matchedZone = zones.find(z => dist <= z.radius)
+        if (!matchedZone) return  // hors portée max — ignorer
 
         // Conversion PE14 : vx = pos_x, vz = pos_y (profondeur = Z Three.js), altitude = 0
-        mode.onPendingMove({ action_key, ini_mod, targetPosX: vx, targetPosY: vz, targetPosZ: 0 })
+        mode.onPendingMove({ action_key: matchedZone.action_key, ini_mod: matchedZone.ini_mod, targetPosX: vx, targetPosY: vz, targetPosZ: 0 })
       }
       return
     }
@@ -692,47 +688,43 @@ function Scene({
       })}
 
       {/* ── Anneaux déplacement combat (Sprint 4) ────────────────────────── */}
-      {/* 4 zones concentriques centrées sur le token joueur actif.             */}
-      {/* Lente=bleu, Moyenne=vert, Rapide=orange, Max=rouge — opacité 0.25    */}
-      {/* PE14 : pos_y du token = Z Three.js (profondeur)                      */}
+      {/* Zones concentriques centrées sur le token joueur actif.              */}
+      {/* Générique : 1 zone (grab_close), 2 zones (grab_far), 4 zones (move) */}
+      {/* PE14 : pos_y du token = Z Three.js (profondeur) — PE34 : pieds = pos_z+1.0 */}
       {combatMoveMode && (() => {
-        const { allures, tokenId } = combatMoveMode
+        const { zones, tokenId } = combatMoveMode
         const myToken = tokensRef.current.find(t => t.id === tokenId)
         if (!myToken) return null
         const cx = myToken.pos_x + 0.5
         const cz = myToken.pos_y + 0.5  // PE14
         return (
           <group position={[cx, myToken.pos_z + 1.0 + 0.05, cz]} rotation={[-Math.PI / 2, 0, 0]}>
-            <mesh>
-              <circleGeometry args={[allures.lente, 64]} />
-              <meshBasicMaterial color="#3b82f6" transparent opacity={0.25} depthWrite={false} />
-            </mesh>
-            <mesh>
-              <ringGeometry args={[allures.lente, allures.moyenne, 64]} />
-              <meshBasicMaterial color="#22c55e" transparent opacity={0.25} depthWrite={false} />
-            </mesh>
-            <mesh>
-              <ringGeometry args={[allures.moyenne, allures.rapide, 64]} />
-              <meshBasicMaterial color="#f97316" transparent opacity={0.25} depthWrite={false} />
-            </mesh>
-            <mesh>
-              <ringGeometry args={[allures.rapide, allures.max, 64]} />
-              <meshBasicMaterial color="#ef4444" transparent opacity={0.25} depthWrite={false} />
-            </mesh>
+            {zones.map((zone, i) => (
+              <mesh key={zone.action_key + i}>
+                {i === 0
+                  ? <circleGeometry args={[zone.radius, 64]} />
+                  : <ringGeometry args={[zones[i - 1].radius, zone.radius, 64]} />}
+                <meshBasicMaterial color={zone.color} transparent opacity={0.25} depthWrite={false} />
+              </mesh>
+            ))}
           </group>
         )
       })()}
 
       {/* ── Cursor wireframe case survolée en mode déplacement combat ────── */}
-      {combatMoveMode && combatCursorPos && (
-        <mesh
-          position={[combatCursorPos.x + 0.5, 0.1, combatCursorPos.z + 0.5]}
-          rotation={[-Math.PI / 2, 0, 0]}
-        >
-          <planeGeometry args={[1, 1]} />
-          <meshBasicMaterial color="#ffffff" wireframe />
-        </mesh>
-      )}
+      {combatMoveMode && combatCursorPos && (() => {
+        const curToken = tokensRef.current.find(t => t.id === combatMoveMode.tokenId)
+        const cursorY = curToken ? curToken.pos_z + 1.0 + 0.05 : 0.1
+        return (
+          <mesh
+            position={[combatCursorPos.x + 0.5, cursorY, combatCursorPos.z + 0.5]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <planeGeometry args={[1, 1]} />
+            <meshBasicMaterial color="#ffffff" wireframe />
+          </mesh>
+        )
+      })()}
 
       {/* ── DiceRoller — animation dés (Dice Rework) */}
       {dicePayload && <DiceRoller payload={dicePayload} onDone={onDiceDone} />}
@@ -746,7 +738,7 @@ function Scene({
 // onTokenRotate  : callback → SessionPage émet WS.TOKEN_ROTATE
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
-// combatMoveMode : { tokenId, allures, onMoveSelected, onCancel } | null — sélection destination combat
+// combatMoveMode : { tokenId, zones, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat
 export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()

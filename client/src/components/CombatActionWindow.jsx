@@ -4,7 +4,7 @@ import { calcAN, calcAllures } from '../../../shared/polarisUtils.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
-import { KEY_MOD, SECTIONS, formatMod } from './combatSections.js'
+import { KEY_MOD, SECTIONS, MOVE_ZONE_DEFS, formatMod } from './combatSections.js'
 
 export default function CombatActionWindow({ socket, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode }) {
   const { roster } = useCombatStore()
@@ -68,24 +68,22 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
     })
   }
 
-  const handleMoveClick = () => {
-    if (!allures || !playerToken) return
-    const onSelected = (sel) => {
-      setMoveSelection(sel)
-      setInMoveMode(false)
-    }
-    const onCancel = () => {
-      setInMoveMode(false)
-    }
+  const handleZoneSelectClick = (item) => {
+    if (moveSelection?.sourceKey === item.key) { setMoveSelection(null); return }
+    const zones = item.staticZones !== null
+      ? item.staticZones
+      : MOVE_ZONE_DEFS.map(def => ({
+          radius: allures[def.allureKey],
+          action_key: def.action_key,
+          ini_mod: def.ini_mod,
+          color: def.color,
+          label: def.label,
+        }))
+    const onSelected = (sel) => { setMoveSelection({ ...sel, sourceKey: item.key }); setInMoveMode(false) }
+    const onCancel = () => { setInMoveMode(false) }
     setInMoveMode(true)
     setMoveSelection(null)
-    onEnterMoveMode(
-      allures,
-      playerToken.id,
-      { x: playerToken.pos_x, z: playerToken.pos_y },  // PE14 : pos_y = Z Three.js
-      onSelected,
-      onCancel
-    )
+    onEnterMoveMode(zones, playerToken.id, { x: playerToken.pos_x, z: playerToken.pos_y }, onSelected, onCancel)
   }
 
   const totalMod = [...selectedKeys].reduce((sum, k) => sum + (KEY_MOD[k] ?? 0), 0)
@@ -162,18 +160,20 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
                   )
                 }
 
-                // Item déplacement (isMove)
-                if (item.isMove) {
-                  const isSelected = moveSelection !== null
+                // Item zone-select (déplacement, grab_close, grab_far)
+                if (item.isZoneSelect) {
+                  const isSelected = moveSelection?.sourceKey === item.key
+                  const canActivate = item.staticZones !== null || allures !== null
                   return (
                     <div
                       key={item.key}
                       style={{
                         ...styles.item,
                         ...(isSelected ? styles.itemSelected : {}),
-                        ...(allures ? {} : { opacity: 0.5, cursor: 'not-allowed' }),
+                        gridColumn: 'span 2',
+                        ...(!canActivate ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
                       }}
-                      onClick={allures ? handleMoveClick : undefined}
+                      onClick={canActivate ? () => handleZoneSelectClick(item) : undefined}
                     >
                       <span style={styles.itemLabel}>{item.label}</span>
                       <span style={{ ...styles.itemMod, ...(isSelected ? styles.itemModSelected : {}) }}>
