@@ -5409,3 +5409,46 @@ Le schéma actuel (migration 54) ne correspond plus au PLAN_11 : `is_micro`, `in
 4. CombatActionWindow : mode déplacement + Canvas3D integration (combatMoveMode)
 5. server/socket/index.js : COMBAT_ACTION_DECLARE — capter target_pos_x/y/z depuis payload
 6. startResolutionPhase() + COMBAT_ACTION_CONFIRM + endTurn()
+
+---
+
+### Session 61 — 2026-05-23 — Chantier 11 Sprint 3 : Migration 56
+
+**Objectif :** Aligner le schéma combat sur le plan validé (PLAN_11_SYSCOMBAT.md § Sprint 3). Migration seule, aucun code serveur/client modifié.
+
+**Fichier créé :**
+- `server/src/db/migrations/56_combat_v2.js` — migration DB seule
+
+**`combat_actions` — passage au command queue :**
+- ADD `action_key TEXT NOT NULL` (backfill depuis `type`, puis NOT NULL)
+- ADD `sequence SMALLINT DEFAULT 0`
+- ADD `target_pos_x INT`, `target_pos_y INT`, `target_pos_z INT` (nullable — coords DB PE14)
+- DROP `is_micro BOOLEAN`
+- DROP `initiative_score INT`
+- DROP `target_pos JSONB`
+- CREATE INDEX `idx_actions_token (campaign_id, token_id)`
+- CREATE INDEX `idx_actions_key (campaign_id, action_key)`
+- `type` conservé — supprimé en Sprint 5 avec refonte handler
+
+**`combat_roster` — états personnage persistants :**
+- ADD `state_position TEXT NOT NULL DEFAULT 'standing'` + CHECK (standing/crouching/prone)
+- ADD `state_weapon TEXT NOT NULL DEFAULT 'holstered'` + CHECK (holstered/ready/drawn)
+
+**`battlemaps` — échelle numérique :**
+- ADD `voxel_scale FLOAT NOT NULL DEFAULT 1.0` (UI GM reportée sprint ScaleMap)
+
+**Validation :**
+- Migration batch 28 appliquée sans erreur
+- Schéma vérifié via psql Docker : toutes colonnes/contraintes/indexes conformes
+- SR sans erreur — health 200
+
+**Impact connu (accepté — PC34) :**
+- `COMBAT_SURPRISE_RESULT`, `COMBAT_ACTION_DECLARE`, `skipPlayer` échouent à l'exécution (INSERT sur colonnes droppées)
+- `startResolutionPhase` échoue (orderBy `initiative_score` disparu)
+- Ces 4 points seront corrigés en Sprint 5 (refonte handler COMBAT_ACTION_DECLARE)
+
+**Prochaines étapes :**
+- Sprint 2.5 — Centrage caméra automatique (Canvas3D.jsx + SessionPage.jsx)
+- Sprint 4 — UI déclaration déplacement (combatSections.js + CombatActionWindow + Canvas3D anneaux)
+- Sprint 5 — Serveur COMBAT_ACTION_DECLARE (target_pos_x/y/z + action_key + sequence)
+- Sprint 6 — Phase Résolution (startResolutionPhase complet + COMBAT_ACTION_CONFIRM + endTurn)
