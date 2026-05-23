@@ -1,6 +1,6 @@
 # Chantier 11 — Système de Combat Polaris
-> Document de planification — Session 51 / Mis à jour Session 61
-> Statut : Sprints 1+2 ✅ — Prochain : Sprint 2.5 (centrage caméra)
+> Document de planification — Session 51 / Mis à jour Session 62
+> Statut : Sprints 1–6 ✅ — Prochain : Sprint 7 (Jets d'attaque + Dégâts + Blessures + Carence FOR)
 > Dépendances : Chantier 10 sprints 1–5 ✅ (WeaponPanel, char_inventory slots MG/MD, calcResistanceArmure)
 
 ---
@@ -585,7 +585,50 @@ const slots = await db('combat_roster')
 - `server/src/socket/index.js` — `COMBAT_ACTION_CONFIRM` branche assault, calcul dégâts complet
 - `client/src/components/CombatActionWindow.jsx` — bouton Assaut actif + CombatModifiersWindow
 
-**Handler `COMBAT_ACTION_CONFIRM` — Sprint 4 (assault) :**
+**⚠️ Prérequis Sprint 7 — Déclaration Assaut (non implémentée en Sprint 6)**
+
+La déclaration d'un Assaut en phase Annonce nécessite :
+- Sélection cible (`target_token_id`) — liste des tokens en combat
+- Sélection arme (`weapon_inv_id`) — MG ou MD équipée (guard PC22)
+
+Actuellement `CombatActionWindow.jsx` affiche "Assaut" comme item mais sans UI de sélection.
+Sans `target_token_id` et `weapon_inv_id` en DB, COMBAT_ACTION_CONFIRM n'a rien à résoudre.
+
+**Sprint 7 = 3 sous-tâches séquentielles :**
+1. Déclaration Assaut (UI Annonce) → target + weapon
+2. CombatModifiersWindow (UI Résolution) → modificateurs GM
+3. Résolution Assaut (serveur) → jet + dégâts + blessures + Test de Choc
+
+---
+
+**Table Tests de Choc — LdB p.235-236 et p.239**
+
+Test = 1D20 vs `calcSeuils()` (déjà dans `charStats.js`) :
+- ≤ Seuil Étourdissement → réussi (pas d'effet)
+- > Seuil Étour. ET ≤ Seuil Inconscience → Étourdi (−5 actions, allure moyenne max, ne peut pas attaquer)
+- > Seuil Inconscience → Inconscient (aucune action possible)
+
+| Gravité | Localisation | Test de Choc ? | Malus au test |
+|---|---|---|---|
+| Grave | Corps | oui | 0 |
+| Grave | Tête | oui | −5 |
+| Critique | Bras | oui | 0 |
+| Critique | Jambes | oui | 0 |
+| Critique | Corps | oui | −5 |
+| Critique | Tête | oui | −10 |
+| Mortelle | Bras | oui | −5 |
+| Mortelle | Jambes | oui | −5 |
+| Mortelle | Corps | oui | −10 |
+| Mortelle | Tête | oui | −15 |
+| Membre détruit | Bras | oui | −10 |
+| Membre détruit | Jambes | oui | −10 |
+| Légère / Moyenne | toutes | non | — |
+
+Le malus s'applique au jet 1D20 (ajouté côté défavorable — le personnage doit faire plus bas que son seuil).
+
+---
+
+**Handler `COMBAT_ACTION_CONFIRM` — Sprint 7 (assault) :**
 - Guard : action.weapon_inv_id non null (PC22) — si null → skip avec log
 - Guard : slot de l'arme = 'MG' ou 'MD'
 - Fetch tireur : char_sheet → char_attributes → char_inventory (arme + armures équipées) + char_archetype → genotype
@@ -712,9 +755,9 @@ const slots = await db('combat_roster')
 
 | # | Question | Sprint | Statut |
 |---|---|---|---|
-| PO1 | `WOUND_PENALTIES` — valeurs exactes dans `woundConstants.js` ? | 4 | À vérifier avant Sprint 4 |
-| PO2 | Colonnes portées exactes dans `ref_equipment` | 4 | À confirmer BDD avant Sprint 4 |
-| PO3 | Seuil jet de Choc tête — valeur LdB exacte ? | 4 | À confirmer LdB avant Sprint 4 |
+| PO1 | `WOUND_PENALTIES` — valeurs exactes dans `woundConstants.js` ? | 7 | À vérifier avant Sprint 7 |
+| PO2 | Colonnes portées exactes dans `ref_equipment` | 7 | `\d ref_equipment` en psql avant Sprint 7 |
+| PO3 | Seuil jet de Choc + malus par gravité/localisation | 7 | ✅ Résolu LdB p.239 — voir table ci-dessous |
 | PO4 | Re-tri roster si `is_rushed` ? | 2 | ✅ Résolu : oui, re-tri + COMBAT_ROSTER_UPDATED |
 | ~~PO5~~ | ~~weapon_inv_id V1~~ | — | ✅ Clôturé : Option B — ID char_inventory réel (MG ou MD) |
 | PO6 | combatStore init reconnect mid-combat | 1 | ✅ Résolu : SESSION_JOIN → COMBAT_STATE_SYNC |
@@ -894,36 +937,55 @@ const slots = await db('combat_roster')
 
 ---
 
-### Sprint 4 — Jets d'attaque + Dégâts + Blessures
+### Sprint 7 — Jets d'attaque + Dégâts + Blessures + Carence FOR
 
-**Avant de coder :**
-- [ ] Lire `charStats.js` entier (calcResistanceArmure, calcCarenceArmure, etc.)
-- [ ] Lire `woundConstants.js` — WOUND_PENALTIES exact
-- [ ] Lire `armorConstants.js` — LOCATION_TO_SLOT
-- [ ] Confirmer LdB seuil jet de Choc (PO3)
-- [ ] Vérifier colonnes portées ref_equipment en BDD (PO2)
-- [ ] Lire `socket/index.js` post-Sprint 3
+**Avant de coder (lire en entier) :**
+- [ ] `server/src/socket/index.js` — état après Sprint 6
+- [ ] `server/src/lib/charStats.js` — calcResistanceArmure, calcCarenceArmure, calcResistanceDommages, calcWoundPenalty, calcSeuils
+- [ ] `shared/woundConstants.js` — WOUND_PENALTIES exact (PO1)
+- [ ] `shared/armorConstants.js` — LOCATION_TO_SLOT
+- [ ] `server/src/routes/character/char-sheet.js` — route POST /wounds
+- [ ] PO2 : `\d ref_equipment` en psql — confirmer colonnes portées avant de coder
 
-**Serveur :**
-- [ ] COMBAT_ACTION_CONFIRM branche assault (PC22 guard weapon_inv_id)
-- [ ] Fetch complet tireur + cible (attrs, armor, wounds)
-- [ ] Calcul chancesDeReussite (compétence + mods + carence + effectiveMalus)
-- [ ] Jet 1d20 attaque (parseDice)
-- [ ] Localisation 1d20 → table V1 → slotCode via LOCATION_TO_SLOT
-- [ ] calcResistanceArmure slot localisation (PC29 : déjà dispo)
-- [ ] Dégâts nets (bruts - ETQ - RD)
-- [ ] Blessures : Math.floor(nets / 5) → INSERT character_wounds
-- [ ] Jet de Choc si tête (PO3)
-- [ ] COMBAT_ATTACK_RESULT broadcast
-- [ ] RC/RL check Tir Automatique (PC23)
+**Sous-tâche 1 — Déclaration Assaut (UI Annonce)**
+- [ ] `CombatActionWindow.jsx` — sélection cible (liste tokens roster) + sélection arme (MG/MD fetch char_inventory)
+- [ ] `server/src/socket/index.js` — COMBAT_ACTION_DECLARE : guard PC22 (weapon_inv_id slot MG ou MD) + guard target_token_id non-null si assault
+- [ ] Vérifier DB : combat_actions.target_token_id + weapon_inv_id non-null pour assault déclaré
+
+**Sous-tâche 2 — CombatModifiersWindow.jsx (NOUVEAU)**
+- [ ] Créer `client/src/components/CombatModifiersWindow.jsx`
+- [ ] Section joueur : is_rushed (lecture seule), checkbox Tir instinctif, Mode RC/RL (si arme compatible PC23)
+- [ ] Section GM : Portée (select 5 paliers), Situation (multi-select), Taille cible (select)
+- [ ] Monter dans CombatOverlay quand phase=RÉSOLUTION + assault déclaré dans myActions
+- [ ] GM émet `COMBAT_ACTION_CONFIRM { tokenId, confirmedModifiers: { portee, situation, taille, tirInstinctif, fireMode } }`
+
+**Sous-tâche 3 — Résolution Assaut (serveur)**
+- [ ] `COMBAT_ACTION_CONFIRM` branche assault — guard weapon_inv_id (PC22)
+- [ ] Fetch tireur : char_sheet → char_attributes + char_archetype → genotype + char_inventory (arme + armures) + character_wounds
+- [ ] Fetch cible (`target_token_id`) : char_sheet → char_attributes + char_inventory (armures équipées)
+- [ ] `calcSkillTotal` tireur + `calcCarenceArmure` + `calcWoundPenalty` + `calcEncumbrancePenalty` → effectiveMalus
+- [ ] Modificateurs de Compétence : portée + situation + taille + is_rushed(−5) + tirInstinctif(−5) − carence (PC26)
+- [ ] Jet 1D20 attaque via `parseDice('1d20')` côté serveur
+- [ ] `chancesDeReussite = skillTotal + totalModComp + effectiveMalus`
+- [ ] Si succès : jet 1D20 localisation → table distance V1 → slotCode via LOCATION_TO_SLOT
+- [ ] `calcResistanceArmure(armures cible slot localisation)` → ETQ + PRT (PC29)
+- [ ] MR = `roll − chancesDeReussite` → `getModifier(mrTable, mr)` → modDomAttaque
+- [ ] Dégâts bruts = `ref_degats + modDomAttaque`
+- [ ] `calcResistanceDommages(for_na_cible, con_na_cible)` → RD
+- [ ] Dégâts nets = `max(0, bruts − ETQ − RD)`
+- [ ] Blessures = `Math.floor(nets / 5)` → INSERT character_wounds (P49 : check promoted)
+- [ ] Test de Choc si gravité+localisation dans la table (LdB p.235) : jet 1D20 vs `calcSeuils()` + malus de la table
+- [ ] Broadcast `WS.COMBAT_ATTACK_RESULT { tireurId, cibleId, localisation, degautsBruts, degatsNets, nbrBlessures, isSuccess, roll, chancesDeReussite }`
+- [ ] RC/RL : check compétence "Tir Automatique" côté serveur uniquement (PC23)
 
 **Client :**
-- [ ] CombatModifiersWindow.jsx (Portée + Situation + Taille + RC/RL)
-- [ ] CombatActionWindow bouton Assaut actif → ouvre CombatModifiersWindow
-- [ ] Affichage COMBAT_ATTACK_RESULT dans CombatOverlay
+- [ ] Affichage `COMBAT_ATTACK_RESULT` dans `CombatOverlay` (résumé texte : qui a touché qui, localisation, dégâts nets)
 
 **Checkpoints :**
-- [ ] Attaque bout-en-bout (jet → localisation → dégâts → blessure)
-- [ ] COMBAT_ATTACK_RESULT visible room
-- [ ] Carence FOR > 0 → malus appliqué
-- [ ] Blessure en DB + WOUND_ADDED broadcast
+- [ ] SR sans erreur
+- [ ] Joueur déclare Assaut : cible + arme sélectionnables, DB target_token_id + weapon_inv_id non-null
+- [ ] Résolution : jet attack affiché, localisation tirée, dégâts nets calculés
+- [ ] Blessure enregistrée en DB si dégâts nets ≥ 5
+- [ ] COMBAT_ATTACK_RESULT visible toute la room
+- [ ] Carence FOR > 0 → malus appliqué sur jet
+- [ ] Test de Choc déclenché si Grave Corps/Tête ou Critique/Mortelle
