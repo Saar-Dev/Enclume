@@ -36,7 +36,12 @@
       "Bash(Measure-Object -Line)",
       "Bash(Select-Object -ExpandProperty Lines)",
       "Bash(Select-Object -Last 100)",
-      "Bash(Select-Object -Last 60)"
+      "Bash(Select-Object -Last 60)",
+      "Bash(node -e \"import\\('./src/socket/index.js'\\).then\\(\\(\\) => console.log\\('IMPORT OK'\\)\\).catch\\(e => console.error\\('ERREUR:', e.message\\)\\)\")",
+      "Bash(Select-String -Pattern \"IMPORT OK|ERREUR|SyntaxError|ReferenceError\")",
+      "Bash(Select-Object -First 5)",
+      "Bash(Select-Object -Last 120)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\JOURNAL2.md\" | Measure-Object -Line\\).Lines)"
     ]
   }
 }

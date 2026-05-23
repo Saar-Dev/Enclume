@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-19 Session 56
+> Dernière mise à jour : 2026-05-23 Session 60
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -16,6 +16,13 @@ Enclume/
 │   │   └── favicon.svg                 # ⚠ présent mais non référencé — à brancher
 │   ├── src/
 │   │   ├── components/
+│   │   │   ├── CombatOverlay.jsx        # Modifié 59 — user retiré de CombatPnjPanel/CombatGmDeclareWindow calls
+│   │   │   ├── CombatRosterWindow.jsx  # NOUVEAU 57 — roster GM, INI preview, surpris, exclusion, bouton Démarrer
+│   │   │   ├── CombatTimeline.jsx      # NOUVEAU 58 — timeline INI, portraits cliquables GM, topOffset
+│   │   │   ├── CombatActionWindow.jsx  # Modifié 59s — 4 sections, multi-select, selectedKeys[], INI total, items grisés
+│   │   │   ├── CombatPnjPanel.jsx      # NOUVEAU 58 — modal GM PJs/PNJs read-only, isPnj via character.type
+│   │   │   ├── CombatGmDeclareWindow.jsx # Modifié 59s — accordion always-one-open, auto-progression, liste complète
+│   │   │   ├── combatSections.js       # NOUVEAU 59s — SECTIONS + KEY_MOD + formatMod (source unique partagée)
 │   │   │   ├── Canvas3D.jsx            # Modifié 44 — props dicePayload/onDiceDone
 │   │   │   ├── Editor3D.jsx            # Modifié 9C — EntityEditorScene, activeEditorTab
 │   │   │   ├── EntityMesh.jsx          # Modifié 43 — Lerp 300ms EntityMeshVoxel + EntityMeshGlb
@@ -33,7 +40,7 @@ Enclume/
 │   │   │   ├── LoginPage.jsx
 │   │   │   ├── RegisterPage.jsx
 │   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern)
-│   │   │   ├── SessionPage.jsx         # Modifié 44 — lastDiceRoll state, filtrage skillLabel, color dans payload
+│   │   │   ├── SessionPage.jsx         # Modifié 57 — mode combat, PC15 bypass, handleCombatToggle, bouton ⚔ gmBar, CombatOverlay
 │   │   │   ├── CampaignSettingsPage.jsx
 │   │   │   ├── WorkshopPage.jsx        # Stable 33
 │   │   │   └── TexturePacksPage.jsx    # CONSERVÉ mais remplacé par WorkshopPage
@@ -41,6 +48,7 @@ Enclume/
 │   │   │   ├── authStore.js
 │   │   │   ├── tokenStore.js
 │   │   │   ├── characterStore.js       # Modifié 44 — upsertCharacter guard visible+isGm (Bug A)
+│   │   │   ├── combatStore.js          # NOUVEAU 57 — phase/roster/actions/currentTurn/activeSlotIdx/markTokenAnnounced
 │   │   │   ├── mapStore.js
 │   │   │   ├── sessionStore.js
 │   │   │   └── entityStore.js          # Modifié 34 — fetchBlueprints() ajouté
@@ -52,7 +60,7 @@ Enclume/
 │   │   │   ├── ContainerPanel.jsx      # NOUVEAU 54 — Sac/Ceinture/Coffre — équipement conteneur
 │   │   │   ├── SilhouettePanel.jsx     # NOUVEAU 54 — SVG silhouette colorée par blessures, 50% width
 │   │   │   ├── AdvantagesPanel.jsx     # Modifié 50 — rework lift-state-up, props charSkills/refSkillsPolaris/onSkillLearnedChange
-│   │   │   ├── CharacterSheet.jsx      # Modifié 56 — import polarisRound shared, const locale supprimée
+│   │   │   ├── CharacterSheet.jsx      # Modifié 60 — 4 allures LdB p.221 (calcAllures+tooltips), calcSecondary épuré
 │   │   │   └── CharacterWindow.jsx     # Modifié 55 — WeaponPanel monté entre ArmorWoundPanel et InventoryPanel
 │   │   ├── locales/
 │   │   │   └── fr.json                 # Modifié 49 — +tabMateriel
@@ -70,7 +78,7 @@ Enclume/
 │   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # 55 fichiers — migrations jusqu'à 53
+│   │   │   ├── migrations/             # 57 fichiers — migrations jusqu'à 55
 │   │   │   ├── seeds/
 │   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
@@ -79,7 +87,7 @@ Enclume/
 │   │   │   ├── campaigns.js            # Modifié 45 — POST /:id/cover + cover_url dans GET /
 │   │   │   ├── battlemaps.js
 │   │   │   ├── tokens.js               # Modifié 39 — maintenance Redis collision map
-│   │   │   ├── characters.js           # Broadcast CHARACTER_UPDATED avec visible
+│   │   │   ├── characters.js           # Modifié 59 — type dans GET/POST/PUT/broadcastCharacterUpdate
 │   │   │   ├── textures.js
 │   │   │   ├── assets.js
 │   │   │   ├── users.js
@@ -98,14 +106,14 @@ Enclume/
 │   │   │   └── errorHandler.js
 │   │   ├── socket/
 │   │   │   ├── auth.js
-│   │   │   └── index.js                # Modifié 52 — effectiveMalus dans chancesDeReussite (blessures + encombrement)
+│   │   │   └── index.js                # Modifié 59s — COMBAT_ACTION_DECLARE : selectedKeys[], KEY_MOD dict, primaryType, modifiers JSONB
 │   │   ├── lib/
 │   │   │   ├── AppError.js
 │   │   │   ├── minio.js
 │   │   │   ├── diceParser.js
-│   │   │   ├── charStats.js            # Modifié 56 — import polarisRound shared, +calcResistanceArmure +calcCarenceArmure
+│   │   │   ├── charStats.js            # Modifié 60 — calcVitesses→calcAllures (4 allures LdB p.221, lookup COO+Athlétisme)
 │   │   │   └── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
-│   │   └── index.js                    # Modifié 47 — express.static public/ + route /api/equipment
+│   │   └── index.js                    # Modifié 59 — COMBAT_SURPRISE_RESULT + COMBAT_ACTION_DECLARE (type-based) + COMBAT_START (Entités filtrées)
 ├── shared/
 │   ├── polarisUtils.js                 # NOUVEAU 56 — polarisRound(x) source unique — jamais redéfini localement (PI11)
 │   ├── events.js                       # Modifié 51 — +INVENTORY_ADDED/UPDATED/REMOVED/SOLS_UPDATED
@@ -184,6 +192,8 @@ Enclume/
 | 51_inventory_slot_codes | Nullifie slots stales B/J via regex `(^|/)(B|J)(/|$)` — passage codes T/C → BG/BD/JG/JD |
 | 52_add_current_ammo_to_inventory | char_inventory.current_ammo UUID nullable FK ref_equipment.id SET NULL — munition chargée dans une arme |
 | 53_rename_ammo_unified | Phase 1 : 11 fusions doublons munitions (UPDATE FK + DELETE). Phase 2 : 89 renommages — "Balle"→"Munition", suppression qualificatif arme. Carreaux/Flèches/Darts : "Projectile" conservé. |
+| 54_combat | combat_state + combat_roster + combat_actions — 3 tables, FK CASCADE, CHECK contraints |
+| 55_character_type | characters.type TEXT NOT NULL DEFAULT 'pnj' CHECK ('pj','pnj') + backfill user_id IS NOT NULL → 'pj' |
 
 ---
 
@@ -198,7 +208,7 @@ Enclume/
 | `getModDom` | Modificateur de Dommages (FOR_na) |
 | `calcREA` | Réactivité = polarisRound((ADA+PER)/2) |
 | `calcSeuils` | Étourdissement + Inconscience |
-| `calcVitesses` | Marche + Course |
+| `calcAllures` | 4 allures LdB p.221 : lente/moyenne/rapide (COO_na) + max (Athlétisme total) |
 | `calcResistanceDommages` | RD depuis table FOR+CON |
 | `calcResistanceNaturelle` | RésNat depuis table |
 | `calcResistanceDroguesInput` | (CON+VOL)/2 |
@@ -435,4 +445,5 @@ Malus encombrement : règle maison, s'additionne au malus santé.
 | P50 | toggle Polaris : ne jamais dupliquer charSkills dans un sous-composant — lift state up obligatoire |
 | P51 | Malus non-cumulatifs santé : pire seul (LdB p.236). Encombrement (maison) : cumulatif. effectiveMalus = woundPenalty − encumbrancePenalty |
 | PI11 | polarisRound source unique shared/polarisUtils.js — jamais redéfini localement |
+| PC27 | `!token.character_id` = Entité de décor, jamais PNJ. PNJ = `character.type === 'pnj'`. Entité exclue du combat. |
 | PEF1-PEF6 | voir SYSTEME.md section 6 |

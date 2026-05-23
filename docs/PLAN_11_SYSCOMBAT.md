@@ -1,7 +1,7 @@
 # Chantier 11 — Système de Combat Polaris
-> Document de planification — Session 51
-> Statut : Planification — aucun code produit
-> Dépendances : Chantier 10 sprint 4 (char_weapon) — non encore implanté
+> Document de planification — Session 51 / Mis à jour Session 56
+> Statut : Prêt à coder — Sprint 1
+> Dépendances : Chantier 10 sprints 1–5 ✅ (WeaponPanel, char_inventory slots MG/MD, calcResistanceArmure)
 
 ---
 
@@ -43,14 +43,18 @@
 | surprise_roll | Stocké dans `combat_roster` — visible GM uniquement |
 | Reset combat | `COMBAT_END` = seul mécanisme. Crash serveur → GM relance, INSERT écrase l'orphelin |
 | State combat client | `combatStore` Zustand dédié — pas de props drilling depuis `SessionPage` |
-| Calculs serveur | `parseDice`, `calcREA`, `calcWoundPenalty`, `calcEncumbrancePenalty`, `calcResistanceDommages` — tous disponibles dans `charStats.js` |
+| Calculs serveur | `parseDice`, `calcREA`, `calcWoundPenalty`, `calcEncumbrancePenalty`, `calcResistanceDommages`, `calcResistanceArmure` ✅, `calcCarenceArmure` ✅ — tous dans `charStats.js` |
 | **Architecture réseau** | **WS pur — pas de REST pour le combat. Pattern identique aux entités interactables** |
-| **Actions déclarées** | **Table `combat_actions` séparée — pas de JSONB dans `combat_roster`. Permet ORDER BY initiative_score et extensibilité V2** |
-| **Exclusivité actions** | **Aucune validation en phase Annonce — le GM arbitre en Résolution. Cohérent avec règle LdB p.218** |
+| **Actions déclarées** | **Table `combat_actions` séparée — une ligne par `action_key` sélectionnée** |
+| **Exclusivité actions** | **Aucune validation en phase Annonce — cibles et positions mémorisées, GM arbitre en Résolution (LdB p.218)** |
+| **États personnage** | **`state_position` + `state_weapon` dans `combat_roster` — persistants entre les tours. action_key = déclencheur, pas stockage.** |
+| **target_pos** | **Colonnes INT séparées (target_pos_x/y/z) — type-safe, coords DB PE14. Client convertit avant envoi.** |
+| **sequence intra-slot** | **SMALLINT dans combat_actions — ordre garanti : move_* → micro → assault** |
+| **weapon_inv_id** | **ID char_inventory réel — arme équipée slot MG ou MD. Guard serveur : slot doit être MG ou MD** |
 
 ---
 
-## 3. Schéma SQL (migration 52)
+## 3. Schéma SQL (migration 54)
 
 ```sql
 -- État global du combat — 1 ligne max par campagne
@@ -70,66 +74,66 @@ combat_roster
   campaign_id      UUID  FK → campaigns.id ON DELETE CASCADE
   token_id         UUID  FK → tokens.id ON DELETE CASCADE
   is_surprised     BOOLEAN DEFAULT false
-  surprise_roll    INT    NULLABLE  -- résultat dé surprise, visible GM uniquement
-  base_ini         INT        -- REA calculé au COMBAT_START, figé
-  initiative       INT        -- base_ini ± modificateurs déclarés
+  surprise_roll    INT    NULLABLE  -- résultat dé, visible GM uniquement (PC25)
+  base_ini         INT              -- REA calculé au COMBAT_START, figé
+  initiative       INT              -- base_ini ± modificateurs déclarés
   status           TEXT  CHECK IN ('active','done')  -- 'delayed' reporté V2
-  has_announced    BOOLEAN DEFAULT false  -- dérivé : true si ≥1 action dans combat_actions
+  has_announced    BOOLEAN DEFAULT false
   has_resolved     BOOLEAN DEFAULT false
+  state_position   TEXT    NOT NULL DEFAULT 'standing'
+                     CHECK (state_position IN ('standing','crouching','prone'))
+  state_weapon     TEXT    NOT NULL DEFAULT 'holstered'
+                     CHECK (state_weapon IN ('holstered','ready','drawn'))
   created_at       TIMESTAMPTZ
   updated_at       TIMESTAMPTZ
 
--- Actions déclarées — une ligne par action (principale ou micro)
--- Remplace declared_action JSONB — permet ORDER BY initiative_score et extensibilité V2
+-- Actions déclarées — une ligne par action_key sélectionnée
 combat_actions
-  id               UUID  PK DEFAULT gen_random_uuid()
-  campaign_id      UUID  FK → campaigns.id ON DELETE CASCADE
-  token_id         UUID  FK → tokens.id ON DELETE CASCADE
-  type             TEXT  CHECK IN ('assault','move_short','move_long','micro','skip')
-  is_micro         BOOLEAN DEFAULT false
-  initiative_score INT        -- base_ini + Modificateurs d'Initiative, calculé à la déclaration
-  target_token_id  UUID  NULLABLE
-  target_pos       JSONB NULLABLE  -- { x, y, z }
-  weapon_inv_id    UUID  NULLABLE  -- null en V1 (sprint 4 non livré)
-  modifiers        JSONB  -- { is_rushed, fire_mode, bullet_count, ini_mod }
-  status           TEXT  CHECK IN ('pending','resolved','skipped') DEFAULT 'pending'
+  id               UUID      PK DEFAULT gen_random_uuid()
+  campaign_id      UUID      FK → campaigns.id ON DELETE CASCADE
+  token_id         UUID      FK → tokens.id ON DELETE CASCADE
+  type             TEXT      CHECK IN ('assault','move_short','move_long','micro','skip')  -- catégorie pour branchement handler
+  action_key       TEXT      NOT NULL  -- clé exacte : 'rushed', 'micro_draw', 'move_short', 'assault', etc.
+  sequence         SMALLINT  NOT NULL  -- ordre d'exécution intra-slot (1, 2, 3…)
+  target_token_id  UUID      NULLABLE  -- assault uniquement
+  target_pos_x     INT       NULLABLE  -- move_short/move_long — coords DB (PE14)
+  target_pos_y     INT       NULLABLE  -- coords DB (PE14) : profondeur (= Z Three.js)
+  target_pos_z     INT       NULLABLE  -- coords DB (PE14) : altitude  (= Y Three.js)
+  weapon_inv_id    UUID      NULLABLE  -- FK → char_inventory.id SET NULL (assault)
+  modifiers        JSONB     NOT NULL DEFAULT '{}'  -- { ini_mod: int } V1 — fire_mode/bullet_count Sprint 4
+  status           TEXT      CHECK IN ('pending','resolved','skipped') DEFAULT 'pending'
   created_at       TIMESTAMPTZ
   updated_at       TIMESTAMPTZ
 ```
+
+⚠️ `weapon_inv_id` : `ON DELETE SET NULL` — si item supprimé en cours de combat, action reste sans arme. Guard serveur obligatoire avant calcul dégâts.
 
 ---
 
 ## 4. Schéma des actions déclarées (`combat_actions`)
 
-Les actions sont stockées dans la table `combat_actions` — une ligne par action, principale ou micro. La phase Résolution lit cette table avec `ORDER BY initiative_score DESC`.
-
 **Types d'actions :**
 | Type | Description | Exclusif | Modificateur d'Initiative |
 |---|---|---|---|
-| `assault` | Attaque sur une cible | Non | 0 (ou +3 si `is_rushed`) |
-| `move_short` | Déplacement ≤3m | Non | -3 |
-| `move_long` | Déplacement >3m | Oui (GM arbitre) | 0 |
-| `micro` | Action secondaire (Dégainer, Saisir, Parler) | Non | -3 (typique) |
+| `assault` | Attaque sur une cible (`target_token_id` + `weapon_inv_id`) | Non | 0 |
+| `move_short` | Déplacement ≤3m (`target_pos_x/y/z`) | Non | -3 |
+| `move_long` | Déplacement >3m (`target_pos_x/y/z`) | Oui (GM arbitre) | 0 |
+| `micro` | Toute action sans effet résolution V1 — inclut `rushed` | Non | variable (KEY_MOD) |
 | `skip` | Tour passé par GM | — | — |
 
-**Champ `modifiers` JSONB :**
+**Champ `modifiers` JSONB (V1) :**
 ```json
-{
-  "is_rushed": false,
-  "fire_mode": "RC | RL | null",
-  "bullet_count": null,
-  "ini_mod": -3
-}
+{ "ini_mod": -3 }
 ```
+Sprint 4 : `fire_mode` et `bullet_count` ajoutés sur la ligne assault uniquement.
 
 **Règles :**
-- `weapon_inv_id` : null en V1 tant que sprint 4 non livré — guard explicite côté serveur
-- `is_rushed` : Modificateur d'Initiative +3, Modificateur de Compétence -5 — les deux lus depuis `modifiers`, jamais recalculés
-- Modificateurs GM (portée, taille, obscurité, couverture) : arrivent en phase Résolution via `COMBAT_ACTION_CONFIRM`, jamais dans `combat_actions`
-- Aucune validation portée/ligne de vue en Annonce — affichage uniquement, GM arbitre en Résolution
-- Exclusivité `move_long` : pas de validation technique — le GM invalide en Résolution si irréaliste (LdB p.218)
+- `is_rushed` : ligne distincte (`action_key='rushed'`, `type='micro'`) — +3 INI à l'annonce, -5 Mod Compétence à la résolution assault. Détection : `SELECT 1 FROM combat_actions WHERE token_id=X AND action_key='rushed'`
+- `sequence` : détermine l'ordre d'exécution intra-slot. Attribué côté serveur à l'INSERT : move_* en premier, micro ensuite, assault en dernier
+- Modificateurs GM (portée, taille, obscurité, couverture) : arrivent en phase Résolution via `COMBAT_ACTION_CONFIRM`
+- Aucune validation en Annonce — cibles et positions mémorisées, GM arbitre en Résolution
 
-**Micro-actions documentées (aide à la décision joueur, pas contrainte technique) :**
+**Micro-actions (aide décision joueur, pas contrainte technique) :**
 | Action | Modificateur d'Initiative |
 |---|---|
 | Dégainer une arme | -3 |
@@ -141,42 +145,40 @@ Les actions sont stockées dans la table `combat_actions` — une ligne par acti
 
 ## 5. Events WS — famille COMBAT_* (shared/events.js)
 
-Pour chaque event : mode d'émission documenté.
-
 ```js
 // Démarrage / arrêt
-COMBAT_START:         'combat:start'          // joueur → serveur (GM only)
-COMBAT_STARTED:       'combat:started'        // io.to(room) — roster complet + phase
-COMBAT_END:           'combat:end'            // joueur → serveur (GM only)
-COMBAT_ENDED:         'combat:ended'          // io.to(room) — reset client
+COMBAT_START:          'combat:start'           // joueur → serveur (GM only)
+COMBAT_STARTED:        'combat:started'         // io.to(room) — roster complet + phase
+COMBAT_END:            'combat:end'             // joueur → serveur (GM only)
+COMBAT_ENDED:          'combat:ended'           // io.to(room) — reset client
 
 // Sync reconnexion
-COMBAT_STATE_SYNC:    'combat:state_sync'     // socket.emit — joueur qui rejoint en cours de combat
+COMBAT_STATE_SYNC:     'combat:state_sync'      // socket.emit — joueur qui rejoint en cours
 
 // Roster
-COMBAT_ROSTER_UPDATED:'combat:roster_updated' // io.to(room)
+COMBAT_ROSTER_UPDATED: 'combat:roster_updated'  // io.to(room)
 
 // Phases
-COMBAT_PHASE_CHANGED: 'combat:phase_changed'  // io.to(room) — nouvelle phase + données
-COMBAT_SLOT_ADVANCED: 'combat:slot_advanced'  // io.to(room) — index slot courant + tokenId actif
+COMBAT_PHASE_CHANGED:  'combat:phase_changed'   // io.to(room) — nouvelle phase + données
+COMBAT_SLOT_ADVANCED:  'combat:slot_advanced'   // io.to(room) — index slot courant + tokenId actif
 
 // Surprise
-COMBAT_SURPRISE_ROLL: 'combat:surprise_roll'  // socket.emit → joueur surpris uniquement
-COMBAT_SURPRISE_RESULT:'combat:surprise_result'// joueur → serveur
+COMBAT_SURPRISE_ROLL:  'combat:surprise_roll'   // socket.emit → joueur surpris uniquement
+COMBAT_SURPRISE_RESULT:'combat:surprise_result' // joueur → serveur
 
 // Annonce
-COMBAT_ACTION_DECLARE:'combat:action_declare' // joueur → serveur
-COMBAT_ACTION_DECLARED:'combat:action_declared'// io.to(room) — mise à jour roster
-COMBAT_SKIP_PLAYER:   'combat:skip_player'    // GM → serveur — force has_announced=true
-COMBAT_TURN_SKIPPED:  'combat:turn_skipped'   // io.to(room) — notification chat "tour de X passé"
+COMBAT_ACTION_DECLARE: 'combat:action_declare'  // joueur → serveur
+COMBAT_ACTION_DECLARED:'combat:action_declared' // io.to(room)
+COMBAT_SKIP_PLAYER:    'combat:skip_player'     // GM → serveur
+COMBAT_TURN_SKIPPED:   'combat:turn_skipped'    // io.to(room) — chat "tour de X passé"
 
 // Résolution
-COMBAT_ACTION_WINDOW: 'combat:action_window'  // socket.emit → joueur actif uniquement
-COMBAT_ACTION_CONFIRM:'combat:action_confirm' // joueur + GM → serveur — modificateurs finaux
-COMBAT_ATTACK_RESULT: 'combat:attack_result'  // io.to(room) — résumé localisation + dégâts
+COMBAT_ACTION_WINDOW:  'combat:action_window'   // socket.emit → joueur actif uniquement
+COMBAT_ACTION_CONFIRM: 'combat:action_confirm'  // joueur + GM → serveur
+COMBAT_ATTACK_RESULT:  'combat:attack_result'   // io.to(room) — résumé dégâts
 
-// Retard — V2/V3
-// COMBAT_ACTION_DELAY et COMBAT_ACTION_ACTIVATE réservés V2
+// V2/V3 réservés :
+// COMBAT_ACTION_DELAY, COMBAT_ACTION_ACTIVATE
 ```
 
 ---
@@ -185,303 +187,70 @@ COMBAT_ATTACK_RESULT: 'combat:attack_result'  // io.to(room) — résumé locali
 
 ---
 
-### Sprint 1 — Infrastructure & Roster
+### Sprint 1 — Fondations + COMBAT_START/END
 
-**Objectif :** le GM peut démarrer un combat, constituer le roster, gérer la surprise. Fondations uniquement — rien de jouable encore.
+**Objectif :** GM peut démarrer un combat, roster constitué en DB, GM peut terminer le combat. CombatOverlay visible mais vide. Aucune phase jouable.
+
+**Fichiers à lire AVANT de toucher quoi que ce soit :**
+- `server/src/socket/index.js` — structure complète, pendingEntityActions pattern, imports
+- `shared/events.js` — état actuel (aucun COMBAT_* existant)
+- `server/src/lib/charStats.js` — calcREA, calcAttributeNA
+- `client/src/pages/SessionPage.jsx` — handleModeChange, canvasVisible, mode state
+- Un store Zustand existant (`client/src/stores/tokenStore.js`) — pattern
 
 **Fichiers créés :**
-- Migration `52_combat.js` — tables `combat_state` + `combat_roster` + `combat_actions`
-- `shared/events.js` — ajout famille `COMBAT_*`
-- `client/src/stores/combatStore.js` — state Zustand dédié
-- `client/src/components/CombatOverlay.jsx` — conteneur fixed z-index
-- `client/src/components/CombatRosterWindow.jsx` — fenêtre roster GM
+- `server/src/db/migrations/54_combat.js` — tables combat_state + combat_roster + combat_actions
+- `shared/events.js` additions — 19 constantes COMBAT_*
+- `client/src/stores/combatStore.js`
+- `client/src/components/CombatOverlay.jsx` — shell position:fixed
+- `client/src/components/CombatRosterWindow.jsx` — liste tokens GM
 
 **Fichiers modifiés :**
-- `server/src/socket/index.js` — handlers `COMBAT_START`, `COMBAT_END`, `COMBAT_SKIP_PLAYER`, `COMBAT_SURPRISE_RESULT` + `SESSION_JOIN` (emit `COMBAT_STATE_SYNC` si combat actif)
-- `client/src/pages/SessionPage.jsx` — `mode = 'combat'`, bypass démontage Canvas, handlers WS `COMBAT_*`
+- `server/src/socket/index.js` — combatTimers Map + handlers COMBAT_START, COMBAT_END + SESSION_JOIN update
+- `client/src/pages/SessionPage.jsx` — mode 'combat', bypass canvasVisible, COMBAT_STARTED/ENDED
 
-**Handlers serveur — détail :**
+**Handler `COMBAT_START` (GM only) :**
+- Guard : `socket.data.role !== 'gm'` → ignore silencieux
+- Guard : SELECT tokens WHERE battlemap_id → si 0 → `socket.emit('error', { message: 'Aucun personnage sur la carte' })`
+- Guard : SELECT combat_state WHERE campaign_id → si existant → message "Combat déjà en cours"
+- Pour chaque token : SELECT char_attributes + char_archetype (via char_sheet) → `calcAttributeNA(attrs, 'ADA', geno)` + `calcAttributeNA(attrs, 'PER', geno)` → `calcREA(ada_na, per_na)`
+- Fallback `base_ini = 0` si char_sheet introuvable — log warning (PC21)
+- Tri JS : `roster.sort((a,b) => b.base_ini - a.base_ini || Math.random() - 0.5)`
+- Tokens surpris depuis payload `surprisedTokenIds[]` — GM les coche dans CombatRosterWindow avant démarrage
+- INSERT `combat_state` (phase:'ROSTER', current_turn:1, active_slot_idx:0, action_timer_sec:0)
+- INSERT bulk `combat_roster`
+- PNJ surpris → jet auto 1d20, `surprise_roll` enregistré, initiative calculée directement
+- Joueurs surpris → `socket.emit(WS.COMBAT_SURPRISE_ROLL)` via fetchSockets (PC12)
+- `io.to(room).emit(WS.COMBAT_STARTED, { roster, phase: 'ROSTER' })`
+- ⚠️ (PC25) : `surprise_roll` ABSENT du payload COMBAT_STARTED
 
-`COMBAT_START` (GM only) :
-- Guard : `socket.role !== 'gm'`
-- Guard : tokens présents sur battlemap → si 0, `socket.emit('error', { message: 'Aucun personnage sur la carte' })`
-- Guard : `combat_state` existant → message explicite
-- Calcul `base_ini` pour chaque token : chaîne `token.character_id → char_sheet → char_attributes → calcREA(ada_na, per_na)`
-- Fallback `base_ini = 0` si `char_sheet` introuvable (PNJ sans fiche)
-- Tri roster : `initiative DESC`, égalité → `Math.random()`
-- INSERT `combat_state` + INSERT `combat_roster` (bulk)
-- `io.to(room).emit(COMBAT_STARTED, { roster, phase: 'ROSTER' })`
-
-`COMBAT_END` (GM only) :
+**Handler `COMBAT_END` (GM only) :**
+- Guard : `socket.data.role !== 'gm'`
+- (PC19) `clearTimeout` tous timers `combatTimers.get(campaignId)` AVANT delete
+- DELETE `combat_actions WHERE campaign_id`
 - DELETE `combat_roster WHERE campaign_id`
 - DELETE `combat_state WHERE campaign_id`
-- Cleanup timers actifs (Map `combatTimers`)
-- `io.to(room).emit(COMBAT_ENDED)`
+- `io.to(room).emit(WS.COMBAT_ENDED)`
 
-`SESSION_JOIN` (ajout) :
-- Après join existant : `SELECT combat_state WHERE campaign_id`
-- Si combat actif : `socket.emit(COMBAT_STATE_SYNC, { combatState, roster })`
+**SESSION_JOIN (ajout) :**
+- Après join existant : SELECT combat_state WHERE campaign_id
+- Si actif : SELECT combat_roster + combat_actions → `socket.emit(WS.COMBAT_STATE_SYNC, { combatState, roster, actions })`
+- (PC14) : si combat_state null → ne pas émettre
 
-Surprise :
-- Tokens `is_surprised = true` → `socket.emit(COMBAT_SURPRISE_ROLL)` vers chaque joueur concerné
-- PNJ surpris → jet automatique calculé serveur directement
-- `COMBAT_SURPRISE_RESULT` reçu → calcul `initiative` → UPDATE `combat_roster` → `io.to(room).emit(COMBAT_ROSTER_UPDATED)`
-- `COMBAT_SKIP_PLAYER` (GM) → force `has_announced = true` sur le joueur ciblé
+**`combatTimers` Map :**
+- Déclarée hors `initSocket` — singleton (PC16)
+- `const combatTimers = new Map()` // clé = campaignId, valeur = Map(tokenId → timeoutId)
+- Sprint 1 : déclarée uniquement, logique timer en Sprint 2
 
-**Timer d'action :**
-- Map `combatTimers` déclarée hors `initSocket` — pattern identique à `pendingEntityActions`
-- Si `action_timer_sec > 0` : `setTimeout` par joueur en attente, stocké dans la Map
-- Expiration → `has_announced = true`, `declared_action = { type: 'delayed' }`, avance au joueur suivant
-- `COMBAT_END` → `clearTimeout` sur tous les timers actifs de la campagne
-
-**Client — SessionPage :**
-- `handleModeChange` : si `newMode === 'combat'` ou `mode === 'combat'` → skip `setCanvasVisible(false)`
-- Handlers : `COMBAT_STARTED` → `setMode('combat')` + store, `COMBAT_ENDED` → `setMode('play')` + reset store + fermeture overlay
-
-**Client — combatStore :**
-```js
-{
-  phase: null,            // 'ROSTER'|'ANNOUNCEMENT'|'RESOLUTION'|null
-  roster: [],             // [{tokenId, initiative, status, has_announced, ...}]
-  currentTurn: 1,
-  activeSlotIdx: 0,
-  // Actions
-  setCombatState, updateRoster, resetCombat
-}
-```
-
----
-
-### Sprint 2 — Tour de jeu & Timeline
-
-**Objectif :** un tour complet fonctionne de bout en bout — annonce puis résolution — sans jets d'attaque.
-
-**Fichiers créés :**
-- `client/src/components/CombatTimeline.jsx`
-- `client/src/components/CombatActionWindow.jsx` — fenêtre joueur phase Annonce
-- `client/src/components/CombatPnjPanel.jsx` — tableau GM PNJ
-
-**Fichiers modifiés :**
-- `server/src/socket/index.js` — handlers phase Annonce + Résolution
-- `client/src/pages/SessionPage.jsx` — handlers `COMBAT_PHASE_CHANGED`, `COMBAT_SLOT_ADVANCED`
-
-**Phase Annonce — ordre initiative croissante :**
-- `COMBAT_PHASE_CHANGED { phase: 'ANNOUNCEMENT' }` → io.to(room)
-- Serveur envoie `COMBAT_ACTION_WINDOW` → socket du joueur le plus lent
-- `CombatActionWindow` — actions disponibles :
-  - "Assaut" (guard : sprint 4 requis, sinon grisé avec message)
-  - "Déplacement court ≤3m" (Modificateur d'Initiative -3, non exclusif)
-  - "Déplacement long >3m" (aucun Modificateur d'Initiative, exclusif selon LdB — GM arbitre en Résolution)
-  - "Action précipitée" — cochable en complément (+3 Modificateur d'Initiative, -5 Modificateur de Compétence en Résolution)
-  - Micro-actions : Dégainer (-3 INI), Saisir à portée (-3 INI), Parler (-3 INI) — toujours disponibles
-  - "Retarder son action" → grisé, tooltip "Disponible V2"
-- Aucune validation exclusivité côté client ni serveur — le GM arbitre en Résolution (LdB p.218)
-- Aucune validation portée/ligne de vue en Annonce — affichage aura seulement
-- Sélection déplacement → coloration cases portée Canvas3D (réutilise logique ghost existante)
-- `COMBAT_ACTION_DECLARE` → serveur : INSERT dans `combat_actions` + UPDATE `has_announced = true` sur `combat_roster`
-- Si `is_rushed` : UPDATE `initiative = initiative + 3` sur `combat_roster`, re-tri, `COMBAT_ROSTER_UPDATED`
-- Miroir GM : élément visible par joueur en attente + bouton "Passer le tour" (`COMBAT_SKIP_PLAYER`)
-- `COMBAT_SKIP_PLAYER` → INSERT `combat_actions { type: 'skip' }`, UPDATE `has_announced = true`, broadcast `COMBAT_TURN_SKIPPED` → message chat
-- PNJ : `CombatPnjPanel` — tableau, une ligne par PNJ, colonnes = actions, GM déclare librement sans contrainte de temps
-- Détection "tous announced" : serveur vérifie `has_announced` de tous les participants après chaque `COMBAT_ACTION_DECLARE` / `COMBAT_SKIP_PLAYER` → auto-transition RESOLUTION
-
-**Phase Résolution — ordre initiative décroissante :**
-- `COMBAT_PHASE_CHANGED { phase: 'RESOLUTION' }` → io.to(room)
-- Défilement slots : `COMBAT_SLOT_ADVANCED { activeSlotIdx, tokenId }` → io.to(room)
-- `CombatActionWindow` récapitulatif : action déclarée + bouton "Agir"
-- Déplacement : `isCaseOccupied` Redis + premier arrivé bloque
-- Slot `delayed` : bouton "Activer" visible pendant toute la phase → insertion au slot courant
-- Fin de tour : UPDATE bulk `has_announced = false`, `has_resolved = false`, `current_turn + 1` → retour ANNOUNCEMENT
-- UPDATE en une seule requête — pas de boucle (risque race condition)
-
-**CombatTimeline :**
-- Composant séparé, monté au-dessus du Canvas (dans `CombatOverlay`)
-- Tokens dans l'ordre d'initiative, illustration 2D (`portrait_url` → fallback initiales)
-- Curseur sur slot actif (`activeSlotIdx`)
-- Token `delayed` : grisé
-- Tooltip au survol : Nom / Initiative / Modificateurs
-
----
-
-### Sprint 3 — Résolution & Dégâts
-
-**Objectif :** jets d'attaque, dégâts et blessures résolus.
-
-**Fichiers créés :**
-- `client/src/components/CombatModifiersWindow.jsx` — fenêtre bonus/malus GM+joueur
-
-**Fichiers modifiés :**
-- `server/src/socket/index.js` — handlers `COMBAT_ACTION_CONFIRM`, calcul dégâts
-- `shared/events.js` — aucun ajout (déjà prévu)
-
-**Skillcheck attaque :**
-- Pattern identique à `ENTITY_ACTION_RESOLVE` dans `socket/index.js`
-- `COMBAT_ACTION_WINDOW` → joueur actif : récapitulatif declared_action
-- `CombatModifiersWindow` affiché joueur + GM simultanément :
-
-  **Modificateurs de Portée** (sous-catégorie Modificateur de Compétence — LdB p.228) :
-  | Palier | Modificateur Compétence |
-  |---|---|
-  | Bout portant | +5 |
-  | Courte portée | +0 |
-  | Moyenne portée | -5 |
-  | Longue portée | -10 |
-  | Portée extrême | -15 |
-
-  **Modificateurs de Situation** (GM uniquement — LdB p.228) :
-  | Situation | Modificateur Compétence |
-  |---|---|
-  | Cible immobile | +3 |
-  | Cible à l'allure moyenne | -3 |
-  | Cible à l'allure rapide | -5 |
-  | Cible à l'allure maximale | -7 |
-  | Tireur à l'allure lente | -3 |
-  | Tireur à l'allure moyenne | -5 |
-  | Tireur à l'allure rapide | -7 |
-  | Tireur à l'allure maximale | Tir impossible |
-  | Couverture partielle (50%) | -3 |
-  | Couverture importante (75%) | -5 |
-  | Obscurité légère | -3 |
-  | Obscurité importante | -5 |
-  | Obscurité totale | Tir impossible |
-
-  **Modificateurs de Taille** (GM uniquement — LdB p.228) :
-  | Taille cible | Modificateur Compétence |
-  |---|---|
-  | Minuscule (~30 cm) | -10 |
-  | Très petite (~50 cm) | -5 |
-  | Petite (~1 m) | -3 |
-  | Moyenne (humaine) | +0 |
-  | Grande (~3 m) | +3 |
-  | Très grande (~5 m) | +5 |
-  | Énorme (~7 m) | +10 |
-  | Gigantesque (10 m+) | +15 |
-
-  **Modificateurs d'Action** (joueur, modifiables GM) :
-  - Action précipitée : -5 Modificateur de Compétence (déclaré en Annonce via `is_rushed`)
-  - Tir instinctif : -5 Modificateur de Compétence
-  - Mode RC : +3 Modificateur de Compétence OU +5 Modificateur de Dégâts (portée courte/bout portant)
-  - Mode RL : +2 Modificateur de Compétence ET +2 Modificateur de Dégâts par groupe de 5 balles (portée courte uniquement)
-  - Guard rafale : RC/RL limités par compétence "Tir Automatique" (vérification côté serveur)
-
-- GM valide en dernier → `COMBAT_ACTION_CONFIRM { modifiers }`
-- Jet 1d20 côté serveur via `parseDice`
-
-**Terminologie stricte — règle absolue :**
-| Terme | Définition |
-|---|---|
-| **Modificateur d'Initiative** | Affecte l'ordre des actions dans la timeline (ex: +3 Se précipiter, -3 Déplacement court) |
-| **Modificateur de Compétence** | Affecte le jet de réussite (ex: -5 Action précipitée, -5 Moyenne portée) |
-| **Modificateur de Portée** | Sous-catégorie de Modificateur de Compétence liée à la distance |
-| **Modificateur de Dégâts** | Affecte les dégâts infligés (ex: +5 RC portée courte, +2/5 balles RL) |
-> ⚠️ Ne jamais utiliser "Modificateur" seul — toujours préciser le type.
-
-**Calcul dégâts :**
-```
-Dégâts nets = (dégâts arme + modificateur MR) - (armure localisation + ResDom cible)
-```
-- Modificateur MR : `getModifier(mrTable, mr)` — table `polaris_mr` déjà en base (migration 46)
-- Armure localisation : `char_inventory` JOIN `ref_equipment` sur slot équipé + localisation touchée
-- `ResDom` : `calcResistanceDommages(for_na, con_na)` — exporté dans `charStats.js` ✅
-
-**Localisation V1 — distance uniquement (LdB p.228) :**
-```
-Jet 1D20 :
-1-2   → Tête
-3-8   → Corps
-9-11  → Bras Droit
-12-14 → Bras Gauche
-15-17 → Jambe Droite
-18-20 → Jambe Gauche
-```
-
-**Localisation V2 — contact (LdB p.228, table séparée) :**
-```
-Jet 1D20 :
-1-4   → Tête
-5-10  → Corps
-11-13 → Bras Droit
-14-16 → Bras Gauche
-17-18 → Jambe Droite
-19-20 → Jambe Gauche
-```
-
-- Visée précise (optionnelle) : malus Modificateur de Compétence (Tête -7, Corps -3, Bras -7, Jambes -5)
-
-**Blessures :**
-- 1 blessure par tranche de 5 dégâts nets
-- Réutilise `character_wounds` (migration 49) + `WOUND_ADDED` (déjà dans `shared/events.js`)
-- `calcWoundPenalty` depuis `charStats.js` — impacte immédiatement l'initiative du blessé
-- Jet de Choc si dégâts tête : seuil = `seuilEtourdissement` du personnage touché (⚠ valeur à confirmer LdB)
-
-**Broadcast résultats :**
-- `COMBAT_ATTACK_RESULT` → io.to(room) : résumé localisation + dégâts bruts + dégâts nets + blessure
-- Cible : fenêtre "Dégâts subis" dans `CombatOverlay`
-
----
-
-## 7. Points ouverts — à résoudre avant le sprint concerné
-
-| # | Question | Sprint | Impact |
-|---|---|---|---|
-| PO1 | `shared/woundConstants.js` — valeurs exactes `WOUND_PENALTIES` ? | 1 | `calcWoundPenalty` dans handler |
-| PO2 | `char_weapon` / portées — schéma exact ? | 2 | Phase Annonce assaut + Modificateurs de Portée |
-| PO3 | Seuil jet de Choc tête — valeur LdB exacte ? | 3 | Blessures tête |
-| PO4 | `is_rushed` et initiative : retri roster et rebroadcast après chaque déclaration ? | 2 | Timeline phase Annonce |
-| PO5 | `weaponInventoryId` en V1 : slot `HAND_MAIN` implicite ou ID obligatoire ? | 2 | `combat_actions.weapon_inv_id` |
-| PO6 | `combatStore` : où est-il initialisé si le joueur rejoint en cours de combat ? | 1 | `COMBAT_STATE_SYNC` handler |
-| ~~PO7~~ | ~~REST vs WS~~ | — | ✅ Clôturé : WS pur |
-| ~~PO8~~ | ~~JSONB vs table~~ | — | ✅ Clôturé : table `combat_actions` |
-| ~~PO9~~ | ~~Exclusivité micro-actions~~ | — | ✅ Clôturé : arbitrage GM en Résolution |
-
----
-
-## 8. Pièges anticipés
-
-| Code | Description |
-|---|---|
-| PC11 | `campaign_id` PK sur `combat_state` — un seul INSERT possible, doublon → erreur SQL explicite |
-| PC12 | `socket.data.role` pour cibler GM via `fetchSockets()` — pattern PE2 |
-| PC13 | `has_announced` détection "tous announced" : inclure les joueurs skippés (type `skip` dans `combat_actions`) |
-| PC14 | Reconnexion en cours de combat : `COMBAT_STATE_SYNC` émis dans `SESSION_JOIN` si `combat_state` existe |
-| PC15 | `handleModeChange` : bypass `setCanvasVisible(false)` si `newMode === 'combat'` ou `mode === 'combat'` |
-| PC16 | `combatTimers` Map déclarée hors `initSocket` — même pattern que `pendingEntityActions` |
-| PC17 | Timer 0 = infini : guard `if (action_timer_sec === 0) return` — ne jamais appeler `setTimeout(fn, 0)` |
-| PC18 | Fin de tour reset bulk : une seule requête UPDATE sur `combat_roster`, pas de boucle — risque race condition |
-| PC19 | `COMBAT_END` : `clearTimeout` sur tous les timers actifs de la campagne avant DELETE |
-| PC20 | `portrait_url` nullable : fallback initiales côté client dans `CombatTimeline` |
-| PC21 | `calcREA` nécessite `ada_na` + `per_na` — toujours via `calcAttributeNA(attrs, 'ADA', genotypeRow)` et idem PER |
-| PC22 | Guard `weapon_inv_id` null : action Assaut grisée en V1 si sprint 4 absent — message explicite |
-| PC23 | Modificateurs de Compétence rafale (RC/RL) : vérification compétence "Tir Automatique" côté serveur uniquement |
-| PC24 | Terminologie : ne jamais écrire "Modificateur" seul — toujours préciser Initiative / Compétence / Portée / Dégâts |
-| PC25 | `surprise_roll` : visible GM uniquement — ne jamais broadcaster à toute la room |
-| PC26 | Modificateurs de Portée appliqués uniquement au Modificateur de Compétence — jamais aux dégâts (sauf règle RC/RL explicite) |
-| PC27 | Phase Résolution : tri `combat_actions ORDER BY initiative_score DESC` — jamais en mémoire client |
-| PC28 | `combat_actions` nettoyées en fin de tour (DELETE ou status reset) — sinon accumulation entre tours |
-
----
-
-## 9. Composants React — liste complète chantier 11
-
-| Composant | Rôle | Sprint |
-|---|---|---|
-| `CombatOverlay.jsx` | Conteneur fixed z-index, parent de toutes les fenêtres combat | 1 |
-| `CombatRosterWindow.jsx` | Fenêtre roster GM : liste tokens, cases Participe/Surpris | 1 |
-| `CombatTimeline.jsx` | Barre tokens ordonnés par initiative, curseur slot actif | 2 |
-| `CombatActionWindow.jsx` | Fenêtre joueur : Annonce + Résolution | 2 |
-| `CombatPnjPanel.jsx` | Tableau GM PNJ : une ligne/PNJ, colonnes actions | 2 |
-| `CombatModifiersWindow.jsx` | Fenêtre bonus/malus GM+joueur avant jet d'attaque | 3 |
-
-**`combatStore` — shape complète :**
+**combatStore.js :**
 ```js
 {
   phase: null,         // 'ROSTER'|'ANNOUNCEMENT'|'RESOLUTION'|null
   roster: [],          // [{ tokenId, baseIni, initiative, status, hasAnnounced, hasResolved, isSurprised }]
-  actions: [],         // [{ id, tokenId, type, initiativeScore, status, ... }] — depuis combat_actions
+  actions: [],         // [{ id, tokenId, type, initiativeScore, status, ... }]
   currentTurn: 1,
   activeSlotIdx: 0,
-  // Actions Zustand
-  setCombatState,      // init depuis COMBAT_STARTED ou COMBAT_STATE_SYNC
+  setCombatState,      // depuis COMBAT_STARTED ou COMBAT_STATE_SYNC
   updateRoster,        // depuis COMBAT_ROSTER_UPDATED
   addAction,           // depuis COMBAT_ACTION_DECLARED
   advanceSlot,         // depuis COMBAT_SLOT_ADVANCED
@@ -489,19 +258,528 @@ Jet 1D20 :
 }
 ```
 
+**CombatOverlay.jsx :**
+- `position:fixed, inset:0, pointerEvents:'none'` sauf enfants avec `pointerEvents:'auto'`
+- z-index > Canvas3D (ex: 1000), < modales erreur
+- Visible uniquement si `combatStore.phase !== null`
+
+**CombatRosterWindow.jsx :**
+- Fenêtre flottante GM (pattern existant)
+- Affiche : nom token, base_ini, is_surprised checkbox
+- Bouton "Démarrer le combat" → `socket.emit(WS.COMBAT_START, { battlemap_id, surprisedTokenIds })`
+- Sprint 1 : pas encore de bouton "Phase Annonce" (Sprint 2)
+
+**SessionPage.jsx — modifications :**
+- `handleModeChange` : si `newMode === 'combat'` ou `mode === 'combat'` → skip `setCanvasVisible(false)` (PC15)
+- Handler `COMBAT_STARTED` → `setMode('combat')` + `combatStore.setCombatState(payload)`
+- Handler `COMBAT_ENDED` → `setMode('play')` + `combatStore.resetCombat()`
+
+**Validation Sprint 1 :**
+- ✅ Migration 54 appliquée sans erreur
+- ✅ `shared/events.js` compile client + serveur
+- ✅ GM clique "⚔ Combat" → mode combat → CombatOverlay visible
+- ✅ DB : `combat_state` + `combat_roster` insérés, base_ini correct
+- ✅ GM "Terminer" → tables nettoyées → mode play
+- ✅ Joueur rejoint mid-combat → COMBAT_STATE_SYNC → store initialisé
+
+---
+
+### Sprint 2 — Surprise + Phase Annonce
+
+**Objectif :** Joueurs déclarent leurs actions. Surprise gérée. CombatTimeline visible. Auto-transition vers Résolution.
+
+**Fichiers à lire AVANT :**
+- `server/src/socket/index.js` — état après Sprint 1
+- `client/src/stores/combatStore.js` — état après Sprint 1
+- `client/src/pages/SessionPage.jsx` — état après Sprint 1
+
+**Fichiers créés :**
+- `client/src/components/CombatTimeline.jsx`
+- `client/src/components/CombatActionWindow.jsx` — mode Annonce
+- `client/src/components/CombatPnjPanel.jsx`
+
+**Fichiers modifiés :**
+- `server/src/socket/index.js` — COMBAT_SURPRISE_RESULT, COMBAT_ACTION_DECLARE, COMBAT_SKIP_PLAYER, timer, `startResolutionPhase()` stub
+- `client/src/pages/SessionPage.jsx` — COMBAT_PHASE_CHANGED, COMBAT_ROSTER_UPDATED, COMBAT_SURPRISE_ROLL, COMBAT_ACTION_DECLARED, COMBAT_TURN_SKIPPED
+
+**Handler `COMBAT_SURPRISE_RESULT` :**
+- Payload : `{ tokenId, roll }` (1d20 lancé côté client)
+- Guard : rosterEntry.is_surprised = true
+- `initiative = roll + base_ini`
+- UPDATE combat_roster SET initiative, surprise_roll
+- (PC25) Broadcast `COMBAT_ROSTER_UPDATED` → roster SANS champ `surprise_roll` pour non-GM
+  - Pattern : SELECT roster → mapper, retirer `surprise_roll` du payload broadcast sauf si socket.data.role === 'gm'
+
+**Handler `COMBAT_ACTION_DECLARE` :**
+- Payload : `{ tokenId, actions: [{ type, action_key, sequence, modifiers: { ini_mod }, targetTokenId, targetPosX, targetPosY, targetPosZ, weaponInvId }] }`
+- Guard ownership : `token.character_id → characters.user_id === socket.user.id`
+- Guard : phase === 'ANNOUNCEMENT'
+- Guard weapon_inv_id : si type === 'assault' et weaponInvId → vérifier slot = 'MG' ou 'MD' (PC22)
+- Guard target_pos : si type IN ('move_short','move_long') → target_pos_x/y/z NOT NULL, parseInt obligatoire (PC33)
+- Si `actions.some(a => a.action_key === 'rushed')` : UPDATE `combat_roster SET initiative = initiative + 3` → re-tri → `COMBAT_ROSTER_UPDATED`
+- INSERT bulk `combat_actions`
+- UPDATE `combat_roster SET has_announced = true`
+- (PC13) Détection "tous announced" : `COUNT(*) FROM combat_roster WHERE campaign_id AND has_announced = false AND status = 'active'` — si 0 → `startResolutionPhase()`
+- Sinon : `io.to(room).emit(WS.COMBAT_ACTION_DECLARED, { tokenId, actions })`
+- Timer : si action_timer_sec > 0 → clearTimeout du joueur suivant dans la liste + nouveau setTimeout
+
+**Handler `COMBAT_SKIP_PLAYER` (GM) :**
+- Guard : `socket.data.role !== 'gm'`
+- INSERT `combat_actions { type: 'skip', initiative_score: rosterEntry.initiative }`
+- UPDATE `combat_roster SET has_announced = true`
+- Même check "tous announced"
+- `io.to(room).emit(WS.COMBAT_TURN_SKIPPED, { tokenId })` → message chat
+
+**Timer auto-skip :**
+- (PC17) Guard : `if (action_timer_sec === 0) return` — jamais setTimeout(fn, 0)
+- Map : `combatTimers.get(campaignId)?.set(tokenId, setTimeout(autoSkip, ms))`
+- `clearTimeout` sur `COMBAT_ACTION_DECLARE` reçu pour ce joueur
+
+**`startResolutionPhase()` (helper, appelé quand tous announced) :**
+- SELECT `combat_actions WHERE campaign_id AND status = 'pending' ORDER BY initiative_score DESC`
+- UPDATE `combat_state SET phase = 'RESOLUTION', active_slot_idx = 0`
+- `io.to(room).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'RESOLUTION', orderedSlots: [...tokenIds] })`
+- emit `WS.COMBAT_ACTION_WINDOW` → socket du joueur au slot 0 (via fetchSockets, PC12)
+- Sprint 2 : stub seulement — logique complète en Sprint 3
+
+**CombatTimeline.jsx :**
+- Lecture depuis combatStore.roster (trié par initiative DESC)
+- Portrait : `portrait_url` → fallback initiales `name[0]` (PC20)
+- Token delayed : grisé (V1 = grisé uniquement)
+- Tooltip survol : Nom / Initiative / hasAnnounced
+- Curseur `activeSlotIdx` : Sprint 3
+
+**CombatActionWindow.jsx — mode Annonce :**
+- Affiché si c'est le tour d'annonce du joueur (myTurn = roster[currentIdx].tokenId === myTokenId)
+- Actions disponibles :
+  - "Assaut" — actif si arme MG ou MD équipée dans char_inventory
+  - "Déplacement court ≤3m" — Modificateur d'Initiative -3
+  - "Déplacement long >3m" — Modificateur d'Initiative 0
+  - Checkbox "Action précipitée" — +3 Modificateur d'Initiative, -5 Modificateur de Compétence en Résolution
+  - Micro-actions : Dégainer (-3), Saisir (-3), Parler (-3)
+  - "Retarder" — grisé, tooltip "V2"
+- Émet `WS.COMBAT_ACTION_DECLARE` à validation
+
+**CombatPnjPanel.jsx :**
+- Tableau PNJ (tokens dont characters.user_id = GM)
+- Colonnes : Nom | Initiative | Action (select) | Micro-actions | "Déclarer"
+- GM pas de contrainte de temps
+
+**Validation Sprint 2 :**
+- ✅ Joueur surpris reçoit prompt, lance dé, initiative calculée
+- ✅ Joueur déclare → COMBAT_ACTION_DECLARED → roster mis à jour
+- ✅ is_rushed → +3 initiative → roster re-trié
+- ✅ GM skip → message chat
+- ✅ Tous announced → auto-transition RESOLUTION (stub OK pour Sprint 2)
+- ✅ CombatPnjPanel : GM déclare PNJ
+- ✅ Timer auto-skip si action_timer_sec > 0
+
+---
+
+### Sprint 3 — Phase Résolution + Déplacement
+
+**Objectif :** Actions exécutées dans l'ordre d'initiative. Déplacement résolu via Redis. Tour boucle.
+
+**Fichiers à lire AVANT :**
+- `server/src/socket/index.js` — état après Sprint 2
+- `server/src/lib/redis.js` — isCaseOccupied, collisionMoveToken
+- `client/src/stores/combatStore.js` — état après Sprint 2
+
+**Fichiers créés :** aucun
+
+**Fichiers modifiés :**
+- `server/src/socket/index.js` — `startResolutionPhase()` complet, `COMBAT_ACTION_CONFIRM` (déplacement), `endTurn()`
+- `client/src/pages/SessionPage.jsx` — COMBAT_SLOT_ADVANCED handler
+- `client/src/components/CombatActionWindow.jsx` — mode Résolution
+- `client/src/components/CombatTimeline.jsx` — curseur activeSlotIdx
+
+**`startResolutionPhase()` — version complète :**
+- SELECT `combat_actions ORDER BY initiative_score DESC` → orderedSlots
+- UPDATE `combat_state SET phase = 'RESOLUTION', active_slot_idx = 0`
+- Broadcast `COMBAT_PHASE_CHANGED { phase: 'RESOLUTION', orderedSlots }`
+- Emit `COMBAT_ACTION_WINDOW { action }` → socket du joueur au slot 0
+
+**Handler `COMBAT_ACTION_CONFIRM` — Sprint 3 (déplacement + micro) :**
+- Payload : `{ actionId, confirmedModifiers: {} }`
+- Guard : action.type === 'assault' → traitement Sprint 4 (skip silencieux en Sprint 3 — répondre avec skip ou log)
+- Type `move_short` / `move_long` : step-by-step Redis
+  - Lire `target_pos_x/y/z INT` depuis `combat_actions` (coords DB PE14, déjà convertis à l'annonce)
+  - (PE22) excludeIds = [tokenId]
+  - (PE29) isCaseOccupied à pos_z + 1 (espace de marche)
+  - UPDATE tokens pos + collisionMoveToken
+  - Broadcast TOKEN_MOVED
+- Type `micro` : résolution directe (action cosmétique en V1)
+- UPDATE `combat_actions SET status = 'resolved'`
+- UPDATE `combat_roster SET has_resolved = true`
+- `advanceSlot()` : active_slot_idx + 1
+  - Si slot suivant existe → `COMBAT_SLOT_ADVANCED { activeSlotIdx, tokenId }` + `COMBAT_ACTION_WINDOW` → joueur suivant
+  - Si plus de slots → `endTurn()`
+
+**`endTurn()` :**
+- (PC18) **UNE SEULE requête** : `UPDATE combat_roster SET has_announced=false, has_resolved=false WHERE campaign_id AND status='active'`
+- (PC28) `DELETE FROM combat_actions WHERE campaign_id`
+- UPDATE `combat_state SET current_turn = current_turn + 1, active_slot_idx = 0, phase = 'ANNOUNCEMENT'`
+- `io.to(room).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT', turn: newTurn })`
+- Envoyer `COMBAT_ACTION_WINDOW` au premier joueur (ordre initiative croissante = dernier à agir)
+
+**CombatActionWindow.jsx — mode Résolution :**
+- Affiche récapitulatif de l'action déclarée
+- Bouton "Agir" → émet `WS.COMBAT_ACTION_CONFIRM { actionId, confirmedModifiers: {} }`
+- Assaut en Sprint 3 : bouton grisé "Sprint 4 requis" (comportement explicite)
+
+**CombatTimeline.jsx — Sprint 3 :**
+- Ajout curseur sur `combatStore.activeSlotIdx`
+- Slot résolu : token grisé
+
+**Validation Sprint 3 :**
+- ✅ Phase RESOLUTION : slots défilent ORDER BY initiative_score DESC
+- ✅ Curseur timeline suit activeSlotIdx
+- ✅ Déplacement résolu via Redis (collision testée)
+- ✅ Fin de tour → turn + 1 → retour ANNOUNCEMENT
+- ✅ PC18 : bulk UPDATE en 1 requête (vérifier avec EXPLAIN si besoin)
+- ✅ PC28 : combat_actions DELETE fin de tour (vérifier count avant/après)
+
+---
+
+### Sprint 4 — Jets d'attaque + Dégâts + Blessures + Carence FOR
+
+**Objectif :** Attaques complètes. Blessures enregistrées. Carence FOR appliquée.
+
+**Fichiers à lire AVANT :**
+- `server/src/socket/index.js` — état après Sprint 3
+- `server/src/lib/charStats.js` — calcResistanceArmure, calcCarenceArmure, calcResistanceDommages, calcWoundPenalty
+- `shared/woundConstants.js` — WOUND_PENALTIES exact (PO1)
+- `shared/armorConstants.js` — LOCATION_TO_SLOT (mapping localisation touchée → slotCode)
+- `server/src/routes/character/char-sheet.js` — route POST /wounds (pour injection blessure)
+- Confirmer LdB seuil jet de Choc tête (PO3) avant de coder cette branche
+- Vérifier colonnes portées dans ref_equipment (PO2)
+
+**Fichiers créés :**
+- `client/src/components/CombatModifiersWindow.jsx`
+
+**Fichiers modifiés :**
+- `server/src/socket/index.js` — `COMBAT_ACTION_CONFIRM` branche assault, calcul dégâts complet
+- `client/src/components/CombatActionWindow.jsx` — bouton Assaut actif + CombatModifiersWindow
+
+**Handler `COMBAT_ACTION_CONFIRM` — Sprint 4 (assault) :**
+- Guard : action.weapon_inv_id non null (PC22) — si null → skip avec log
+- Guard : slot de l'arme = 'MG' ou 'MD'
+- Fetch tireur : char_sheet → char_attributes → char_inventory (arme + armures équipées) + char_archetype → genotype
+- Fetch cible (target_token_id) : char_sheet → char_attributes → char_inventory (armures équipées)
+- Calcul compétence tireur : `calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)`
+- Carence : `calcCarenceArmure(tireurEquippedArmor, forNA_tireur)` — appliquée sur le jet du tireur
+- Malus état : `calcWoundPenalty(wounds_tireur)` + `calcEncumbrancePenalty(weight, FOR)` → effectiveMalus
+- Modificateurs totaux Compétence : portée + situation + taille + is_rushed(-5) + tir_instinctif(-5) + RC/RL − carence
+- (PC24) chaque modificateur nommé explicitement dans les logs/résultats
+- Jet 1d20 via `parseDice('1d20')` côté serveur
+- `chancesDeReussite = skillTotal + totalModComp + effectiveMalus`
+- `isSuccess = roll <= chancesDeReussite`
+- Si succès :
+  - Localisation : jet 1d20 serveur → table distance V1 (section ci-dessous)
+  - `calcResistanceArmure(cibleEquippedArmor.filter(slot === locationSlot))` → ETQ / PRT (PC29 : déjà dispo)
+  - MR = `roll - chancesDeReussite` → `getModifier(mrTable, mr)` → modDomAttaque (LdB p.209)
+  - Dégâts bruts = `ref_degats + modDomAttaque + modDegatsRC_RL`
+  - `calcResistanceDommages(for_na_cible, con_na_cible)` → RD
+  - Dégâts nets = max(0, dégâts bruts - ETQ - RD)
+  - Blessures = `Math.floor(dégâts_nets / 5)`
+  - Si blessures > 0 : INSERT dans `character_wounds` via db direct (pattern char-sheet.js)
+  - Si localisation tête et dégâts nets > 0 : jet de Choc (seuil PO3 — à confirmer LdB)
+  - (P49) promoted check sur chaque blessure créée
+- Broadcast `WS.COMBAT_ATTACK_RESULT { tireurId, cibleId, localisation, degautsBruts, degatsNets, blessures, isSuccess, roll, chancesDeReussite }`
+- (PC23) RC/RL : vérification compétence "Tir Automatique" côté serveur uniquement
+
+**Localisation V1 — distance (LdB p.228) :**
+| Jet | Localisation | slotCode (LOCATION_TO_SLOT) |
+|---|---|---|
+| 1-2 | Tête | T |
+| 3-8 | Corps | C |
+| 9-11 | Bras Droit | BD |
+| 12-14 | Bras Gauche | BG |
+| 15-17 | Jambe Droite | JD |
+| 18-20 | Jambe Gauche | JG |
+
+**Terminologie stricte — règle absolue (PC24) :**
+| Terme | Définition |
+|---|---|
+| Modificateur d'Initiative | Affecte l'ordre dans la timeline |
+| Modificateur de Compétence | Affecte le jet de réussite |
+| Modificateur de Portée | Sous-catégorie de Modificateur de Compétence |
+| Modificateur de Dégâts | Affecte les dégâts infligés |
+
+**Modificateurs de Portée (LdB p.228) :**
+| Palier | Modificateur de Compétence |
+|---|---|
+| Bout portant | +5 |
+| Courte portée | +0 |
+| Moyenne portée | -5 |
+| Longue portée | -10 |
+| Portée extrême | -15 |
+
+**Modificateurs de Situation GM (LdB p.228) :**
+| Situation | Mod. Compétence |
+|---|---|
+| Cible immobile | +3 |
+| Cible allure moyenne | -3 |
+| Cible allure rapide | -5 |
+| Cible allure maximale | -7 |
+| Tireur allure lente | -3 |
+| Tireur allure moyenne | -5 |
+| Tireur allure rapide | -7 |
+| Tireur allure maximale | Tir impossible |
+| Couverture partielle (50%) | -3 |
+| Couverture importante (75%) | -5 |
+| Obscurité légère | -3 |
+| Obscurité importante | -5 |
+| Obscurité totale | Tir impossible |
+
+**Modificateurs de Taille GM (LdB p.228) :**
+| Taille | Mod. Compétence |
+|---|---|
+| Minuscule (~30 cm) | -10 |
+| Très petite (~50 cm) | -5 |
+| Petite (~1 m) | -3 |
+| Moyenne (humaine) | +0 |
+| Grande (~3 m) | +3 |
+| Très grande (~5 m) | +5 |
+| Énorme (~7 m) | +10 |
+| Gigantesque (10 m+) | +15 |
+
+**CombatModifiersWindow.jsx :**
+- Affiché simultanément joueur actif + GM
+- Section joueur : récapitulatif is_rushed (lecture), checkbox Tir instinctif, Mode RC/RL (si arme compatible)
+- Section GM : Modificateur de Portée (select paliers), Situation (multi-select), Taille cible (select)
+- Bouton "Valider" côté GM → émet `WS.COMBAT_ACTION_CONFIRM { actionId, confirmedModifiers: { portee, situation, taille, tirInstinctif, fireMode } }`
+
+**Affichage carence FOR :**
+- Dans `CombatModifiersWindow` : afficher carence tireur si > 0 (rouge)
+- forNA disponible dans ce contexte (char_attributes chargés pour le jet)
+- Distinct de l'affichage dans ArmorWoundPanel (reporté Chantier 11 sprint 3 = ce sprint 4)
+
+**Validation Sprint 4 :**
+- ✅ Jet d'attaque résolu (succès/échec, roll affiché)
+- ✅ Localisation tirée au sort côté serveur
+- ✅ Dégâts nets calculés (mille-feuille + RD)
+- ✅ Blessure enregistrée en DB si dégâts nets ≥ 5
+- ✅ COMBAT_ATTACK_RESULT broadcast → résumé visible dans CombatOverlay
+- ✅ Carence FOR > 0 → malus appliqué sur jet
+- ✅ RC/RL modificateurs appliqués + Tir Automatique vérifié serveur (PC23)
+- ✅ Tête : jet de Choc si seuil dépassé (PO3 confirmé LdB)
+
+---
+
+## 7. Points ouverts — à résoudre avant le sprint concerné
+
+| # | Question | Sprint | Statut |
+|---|---|---|---|
+| PO1 | `WOUND_PENALTIES` — valeurs exactes dans `woundConstants.js` ? | 4 | À vérifier avant Sprint 4 |
+| PO2 | Colonnes portées exactes dans `ref_equipment` | 4 | À confirmer BDD avant Sprint 4 |
+| PO3 | Seuil jet de Choc tête — valeur LdB exacte ? | 4 | À confirmer LdB avant Sprint 4 |
+| PO4 | Re-tri roster si `is_rushed` ? | 2 | ✅ Résolu : oui, re-tri + COMBAT_ROSTER_UPDATED |
+| ~~PO5~~ | ~~weapon_inv_id V1~~ | — | ✅ Clôturé : Option B — ID char_inventory réel (MG ou MD) |
+| PO6 | combatStore init reconnect mid-combat | 1 | ✅ Résolu : SESSION_JOIN → COMBAT_STATE_SYNC |
+| ~~PO7~~ | ~~REST vs WS~~ | — | ✅ Clôturé : WS pur |
+| ~~PO8~~ | ~~JSONB vs table~~ | — | ✅ Clôturé : table `combat_actions` |
+| ~~PO9~~ | ~~Exclusivité micro-actions~~ | — | ✅ Clôturé : arbitrage GM Résolution |
+
+---
+
+## 8. Pièges anticipés
+
+| Code | Description |
+|---|---|
+| PC11 | `campaign_id` PK sur `combat_state` — doublon → erreur SQL explicite |
+| PC12 | `socket.data.role` pour cibler GM via `fetchSockets()` — pattern PE2 |
+| PC13 | "Tous announced" : COUNT WHERE has_announced=false AND status='active' — inclure skippés |
+| PC14 | Reconnexion mid-combat : COMBAT_STATE_SYNC dans SESSION_JOIN si combat_state existe |
+| PC15 | `handleModeChange` : bypass `setCanvasVisible(false)` si mode combat |
+| PC16 | `combatTimers` Map déclarée hors `initSocket` — singleton pattern pendingEntityActions |
+| PC17 | Timer 0 = infini : guard `if (action_timer_sec === 0) return` — jamais setTimeout(fn, 0) |
+| PC18 | Fin de tour : UNE SEULE requête UPDATE combat_roster — pas de boucle (race condition) |
+| PC19 | COMBAT_END : clearTimeout AVANT DELETE |
+| PC20 | `portrait_url` nullable : fallback initiales dans CombatTimeline |
+| PC21 | calcREA : always via calcAttributeNA(attrs, 'ADA', geno) + idem PER |
+| PC22 | weapon_inv_id assault : slot doit être 'MG' ou 'MD' — bouton grisé si aucune arme en main |
+| PC23 | RC/RL : check compétence "Tir Automatique" côté serveur uniquement |
+| PC24 | Terminologie : jamais "Modificateur" seul — toujours préciser Initiative / Compétence / Portée / Dégâts |
+| PC25 | `surprise_roll` : jamais dans un broadcast room — GM uniquement |
+| PC26 | Modificateurs de Portée → Modificateur de Compétence uniquement (pas dégâts, sauf RC/RL explicite) |
+| PC27 | Phase Résolution : ORDER BY combat_roster.initiative DESC — jamais tri client, jamais initiative_score dénormalisé dans combat_actions |
+| PC28 | combat_actions : DELETE WHERE campaign_id en fin de tour — jamais accumulation |
+| PC29 | calcResistanceArmure + calcCarenceArmure : déjà dans charStats.js (session 56) — ne pas recréer |
+| PC30 | Armure localisation : LOCATION_TO_SLOT depuis armorConstants.js — mapping localisation → slotCode (BG/BD/etc.) |
+| PC31 | États personnage (state_position, state_weapon) dans combat_roster — jamais dérivés de combat_actions (table vidée fin de tour). action_key = déclencheur du changement d'état, pas l'état lui-même. |
+| PC32 | sequence SMALLINT dans combat_actions — ORDER BY sequence ASC pour exécution intra-slot. Jamais supposer l'ordre d'insertion SQL. Ordre attribué serveur : move_* → micro → assault. |
+| PC33 | target_pos_x/y/z : colonnes INT séparées (coords DB PE14). Client convertit Three.js → DB avant envoi. parseInt obligatoire côté serveur au guard. |
+
+---
+
+## 9. Composants React — liste complète
+
+| Composant | Rôle | Sprint |
+|---|---|---|
+| `CombatOverlay.jsx` | Conteneur fixed z-index, parent de tout | 1 |
+| `CombatRosterWindow.jsx` | Fenêtre roster GM, gestion surpris, bouton start | 1 |
+| `CombatTimeline.jsx` | Barre tokens par initiative, curseur slot actif | 2 (update Sprint 3) |
+| `CombatActionWindow.jsx` | Fenêtre joueur : Annonce + Résolution | 2 (update Sprint 4) |
+| `CombatPnjPanel.jsx` | Tableau GM PNJ | 2 |
+| `CombatModifiersWindow.jsx` | Bonus/malus GM+joueur avant jet | 4 |
+
+**combatStore — shape complète :**
+```js
+{
+  phase: null,         // 'ROSTER'|'ANNOUNCEMENT'|'RESOLUTION'|null
+  roster: [],          // [{ tokenId, baseIni, initiative, status, hasAnnounced, hasResolved, isSurprised }]
+  actions: [],         // [{ id, tokenId, type, initiativeScore, status, modifiers, weaponInvId }]
+  currentTurn: 1,
+  activeSlotIdx: 0,
+  setCombatState,
+  updateRoster,
+  addAction,
+  advanceSlot,
+  resetCombat,
+}
+```
+
 ---
 
 ## 10. Références
 
-| Source | Contenu utilisé |
+| Source | Contenu |
 |---|---|
 | LdB Polaris p.213-214 | Séquence tour de combat, initiative, surprise |
 | LdB Polaris p.209 | Table MR → modificateur (migration 46) |
-| LdB Polaris p.218-220 | Actions simples, actions complexes, combinaison d'actions, micro-actions |
-| LdB Polaris p.228 | Modificateurs de Portée, Situation, Taille, tables localisation distance et contact |
+| LdB Polaris p.218-220 | Actions simples, complexes, micro-actions |
+| LdB Polaris p.228 | Modificateurs Portée/Situation/Taille, tables localisation |
 | LdB Polaris p.404 | Formule jet, difficulty_dc |
-| `charStats.js` | `calcREA`, `calcResistanceDommages`, `calcWoundPenalty`, `calcEncumbrancePenalty` |
-| Migration 46 | Table `polaris_mr` en base |
-| Migration 49 | Table `character_wounds` |
-| `shared/events.js` session 51 | Events existants — base pour la famille COMBAT_* |
-| `socket/index.js` session 51 | Pattern handlers, pendingEntityActions, parseDice |
+| `charStats.js` | calcREA, calcResistanceDommages, calcWoundPenalty, calcEncumbrancePenalty, calcResistanceArmure ✅, calcCarenceArmure ✅ |
+| Migration 46 | `polaris_mr` en base |
+| Migration 49 | `character_wounds` |
+| `shared/events.js` | Events existants — base pour COMBAT_* |
+| `socket/index.js` | Pattern handlers, pendingEntityActions, parseDice |
+| `shared/armorConstants.js` | LOCATION_TO_SLOT (session 54) |
+
+---
+
+## 11. Todo liste — par sprint
+
+### Sprint 1 — Fondations + COMBAT_START/END
+
+**Avant de coder (lire en entier) :**
+- [ ] `server/src/socket/index.js` — structure, patterns, imports existants
+- [ ] `shared/events.js` — état actuel
+- [ ] `server/src/lib/charStats.js` — calcREA, calcAttributeNA
+- [ ] `client/src/pages/SessionPage.jsx` — handleModeChange, canvasVisible
+- [ ] `client/src/stores/tokenStore.js` — pattern Zustand de référence
+
+**Serveur :**
+- [ ] Créer `server/src/db/migrations/54_combat.js` — 3 tables (vérifier FK + CHECK)
+- [ ] Appliquer migration : `node_modules\.bin\knex.cmd migrate:latest --knexfile knexfile.cjs`
+- [ ] Ajouter 19 constantes COMBAT_* dans `shared/events.js`
+- [ ] Déclarer `const combatTimers = new Map()` hors `initSocket` (PC16)
+- [ ] Implémenter COMBAT_START (tous guards + calcREA + INSERT + COMBAT_STARTED)
+- [ ] Implémenter COMBAT_END (PC19 clearTimeout + DELETE + COMBAT_ENDED)
+- [ ] Modifier SESSION_JOIN — COMBAT_STATE_SYNC si combat actif (PC14)
+
+**Client :**
+- [ ] Créer `client/src/stores/combatStore.js` (shape section 9)
+- [ ] Créer `client/src/components/CombatOverlay.jsx` — shell position:fixed
+- [ ] Créer `client/src/components/CombatRosterWindow.jsx` — liste + bouton start
+- [ ] Modifier `SessionPage.jsx` : mode 'combat' + bypass PC15
+- [ ] Handler COMBAT_STARTED → setMode + store
+- [ ] Handler COMBAT_ENDED → setMode + reset
+
+**Checkpoints :**
+- [ ] SR sans erreur — nodemon clean
+- [ ] Migration vérifiée (`\dt` en psql)
+- [ ] GM ⚔ → CombatOverlay visible
+- [ ] DB combat_state + combat_roster insérés, base_ini correct
+- [ ] COMBAT_END → tables vides → mode play
+- [ ] Joueur rejoint mid-combat → store initialisé via COMBAT_STATE_SYNC
+
+---
+
+### Sprint 2 — Surprise + Phase Annonce
+
+**Avant de coder :**
+- [ ] Lire `socket/index.js` + `combatStore.js` + `SessionPage.jsx` — état après Sprint 1
+
+**Serveur :**
+- [ ] COMBAT_SURPRISE_RESULT (PC25 : surprise_roll hors broadcast room)
+- [ ] COMBAT_ACTION_DECLARE (ownership + PC13 + PC22 weapon guard + PC33 target_pos parseInt)
+- [ ] COMBAT_SKIP_PLAYER (GM guard + INSERT skip + PC13)
+- [ ] Timer auto-skip (PC16/PC17)
+- [ ] `startResolutionPhase()` stub → COMBAT_PHASE_CHANGED + COMBAT_ACTION_WINDOW slot 0
+
+**Client :**
+- [ ] CombatTimeline.jsx (PC20 fallback portrait)
+- [ ] CombatActionWindow.jsx mode Annonce (actions + weaponInvId check)
+- [ ] CombatPnjPanel.jsx
+- [ ] Handlers SessionPage : COMBAT_SURPRISE_ROLL, COMBAT_PHASE_CHANGED, COMBAT_ROSTER_UPDATED, COMBAT_ACTION_DECLARED, COMBAT_TURN_SKIPPED
+
+**Checkpoints :**
+- [ ] Surprise : prompt joueur → initiative calculée
+- [ ] Déclaration action → timeline update
+- [ ] is_rushed → re-tri roster
+- [ ] GM skip → chat
+- [ ] Tous announced → COMBAT_PHASE_CHANGED RESOLUTION émis
+
+---
+
+### Sprint 3 — Phase Résolution + Déplacement
+
+**Avant de coder :**
+- [ ] Lire `socket/index.js` (post-S2) + `redis.js` — isCaseOccupied, collisionMoveToken
+
+**Serveur :**
+- [ ] `startResolutionPhase()` complet (SELECT ORDER BY initiative_score DESC)
+- [ ] COMBAT_ACTION_CONFIRM déplacement (PE22/PE29 Redis)
+- [ ] `advanceSlot()` → COMBAT_SLOT_ADVANCED + COMBAT_ACTION_WINDOW suivant
+- [ ] `endTurn()` (PC18 bulk, PC28 DELETE, retour ANNOUNCEMENT)
+
+**Client :**
+- [ ] CombatActionWindow mode Résolution (bouton "Agir", assaut grisé)
+- [ ] CombatTimeline curseur activeSlotIdx
+- [ ] Handler COMBAT_SLOT_ADVANCED
+
+**Checkpoints :**
+- [ ] Slots défilent ORDER BY initiative_score DESC
+- [ ] Déplacement résolu + collision Redis
+- [ ] Fin de tour → turn + 1 → ANNOUNCEMENT
+- [ ] PC18 vérifié (1 requête)
+- [ ] PC28 vérifié (actions DELETE)
+
+---
+
+### Sprint 4 — Jets d'attaque + Dégâts + Blessures
+
+**Avant de coder :**
+- [ ] Lire `charStats.js` entier (calcResistanceArmure, calcCarenceArmure, etc.)
+- [ ] Lire `woundConstants.js` — WOUND_PENALTIES exact
+- [ ] Lire `armorConstants.js` — LOCATION_TO_SLOT
+- [ ] Confirmer LdB seuil jet de Choc (PO3)
+- [ ] Vérifier colonnes portées ref_equipment en BDD (PO2)
+- [ ] Lire `socket/index.js` post-Sprint 3
+
+**Serveur :**
+- [ ] COMBAT_ACTION_CONFIRM branche assault (PC22 guard weapon_inv_id)
+- [ ] Fetch complet tireur + cible (attrs, armor, wounds)
+- [ ] Calcul chancesDeReussite (compétence + mods + carence + effectiveMalus)
+- [ ] Jet 1d20 attaque (parseDice)
+- [ ] Localisation 1d20 → table V1 → slotCode via LOCATION_TO_SLOT
+- [ ] calcResistanceArmure slot localisation (PC29 : déjà dispo)
+- [ ] Dégâts nets (bruts - ETQ - RD)
+- [ ] Blessures : Math.floor(nets / 5) → INSERT character_wounds
+- [ ] Jet de Choc si tête (PO3)
+- [ ] COMBAT_ATTACK_RESULT broadcast
+- [ ] RC/RL check Tir Automatique (PC23)
+
+**Client :**
+- [ ] CombatModifiersWindow.jsx (Portée + Situation + Taille + RC/RL)
+- [ ] CombatActionWindow bouton Assaut actif → ouvre CombatModifiersWindow
+- [ ] Affichage COMBAT_ATTACK_RESULT dans CombatOverlay
+
+**Checkpoints :**
+- [ ] Attaque bout-en-bout (jet → localisation → dégâts → blessure)
+- [ ] COMBAT_ATTACK_RESULT visible room
+- [ ] Carence FOR > 0 → malus appliqué
+- [ ] Blessure en DB + WOUND_ADDED broadcast

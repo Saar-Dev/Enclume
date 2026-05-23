@@ -9,6 +9,7 @@ import { useCharacterStore } from '../stores/characterStore'
 import { useMapStore } from '../stores/mapStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useEntityStore } from '../stores/entityStore'
+import { useCombatStore } from '../stores/combatStore'
 import api from '../lib/api'
 import Canvas3D from '../components/Canvas3D'
 import Editor3D from '../components/Editor3D'
@@ -17,6 +18,7 @@ import DicePanel from '../components/DicePanel'
 import CharacterWindow from '../character/CharacterWindow'
 import RadialMenu from '../components/RadialMenu'
 import EntityInstancePanel from '../components/EntityInstancePanel'
+import CombatOverlay from '../components/CombatOverlay'
 
 export default function SessionPage() {
   const { campaignId } = useParams()
@@ -35,6 +37,7 @@ export default function SessionPage() {
     setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage,
   } = useSessionStore()
   const { setEntities, fetchBlueprints } = useEntityStore()
+  const { setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster, phase: combatPhase } = useCombatStore()
 
   const [campaign, setCampaign] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -49,6 +52,11 @@ export default function SessionPage() {
 
   const handleModeChange = useCallback((newMode) => {
     if (newMode === mode) return
+    // PC15 — mode 'combat' : pas de démontage canvas (bypass setTimeout/setCanvasVisible)
+    if (newMode === 'combat' || mode === 'combat') {
+      setMode(newMode)
+      return
+    }
     setCanvasVisible(false)
     setTimeout(() => {
       setMode(newMode)
@@ -152,6 +160,21 @@ export default function SessionPage() {
   // ─── Socket.io ────────────────────────────────────────────────────────────────
   const [socket, setSocket] = useState(null)
   const [reconnectTrigger, setReconnectTrigger] = useState(0)
+
+  // Bouton gmBar "⚔ Combat" — toggle mode combat (PC15) ou COMBAT_END si combat actif
+  const handleCombatToggle = useCallback(() => {
+    if (mode !== 'combat') {
+      handleModeChange('combat')
+    } else if (combatPhase !== null) {
+      socket?.emit(WS.COMBAT_END)
+    } else {
+      handleModeChange('play')
+    }
+  }, [mode, combatPhase, socket, handleModeChange])
+
+  // ─── Surprise initiative — joueur surpris en attente de jet ──────────────
+  // null = inactif, sinon { tokenId } du token surpris appartenant au joueur
+  const [pendingSurpriseRoll, setPendingSurpriseRoll] = useState(null)
 
   // Chargement local d'une carte — GM uniquement, sans déplacer les joueurs
   // Utilisé : clic barre GM, suppression carte active
@@ -438,6 +461,54 @@ export default function SessionPage() {
       })
     })
 
+    // ─── Handlers combat ─────────────────────────────────────────────────────
+    s.on(WS.COMBAT_STARTED, ({ roster, phase }) => {
+      setCombatState({ phase, roster, actions: [], currentTurn: 1, activeSlotIdx: 0 })
+      setMode('combat')
+    })
+    s.on(WS.COMBAT_ENDED, () => {
+      resetCombat()
+      setMode('play')
+    })
+    s.on(WS.COMBAT_STATE_SYNC, ({ combatState, roster, actions }) => {
+      setCombatState({
+        phase: combatState.phase,
+        roster,
+        actions,
+        currentTurn: combatState.current_turn,
+        activeSlotIdx: combatState.active_slot_idx,
+      })
+      if (combatState.phase) setMode('combat')
+    })
+
+    // Phase changée — ANNOUNCEMENT ou RESOLUTION (avec roster et actions pour RESOLUTION)
+    s.on(WS.COMBAT_PHASE_CHANGED, ({ phase, roster, actions: _actions }) => {
+      setPhase(phase)
+      if (roster) updateRoster(roster)
+    })
+    // Roster mis à jour — après jet de surprise (COMBAT_SURPRISE_RESULT)
+    s.on(WS.COMBAT_ROSTER_UPDATED, ({ roster }) => {
+      updateRoster(roster)
+    })
+    // Joueur surpris — afficher l'UI de jet d'initiative
+    s.on(WS.COMBAT_SURPRISE_ROLL, ({ tokenId }) => {
+      setPendingSurpriseRoll({ tokenId })
+    })
+    // Participant a déclaré son action — initiative inclus si précipité (+3)
+    s.on(WS.COMBAT_ACTION_DECLARED, ({ tokenId, initiative }) => {
+      markTokenAnnounced(tokenId, initiative)
+    })
+    // Participant passé par le GM ou timer auto-skip
+    s.on(WS.COMBAT_TURN_SKIPPED, ({ tokenId, tokenLabel }) => {
+      markTokenAnnounced(tokenId)
+      addMessage({
+        id: `combat-skip-${tokenId}-${Date.now()}`,
+        system: true,
+        text: `${tokenLabel} a été passé`,
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      })
+    })
+
     // ─── Reconnexion robuste — Bug C ────────────────────────────────────────
     // socket.io.on('reconnect') se déclenche UNIQUEMENT lors d'une reconnexion
     // automatique (pas à la connexion initiale) — disponible depuis socket.io v3.
@@ -579,6 +650,14 @@ export default function SessionPage() {
     socket?.emit(WS.TOKEN_ROTATE, { tokenId })
   }, [socket])
 
+  // ─── Jet de surprise — joueur surpris lance son 1d20 ─────────────────────
+  // P3 : socket dans les deps.
+  const handleSurpriseRolled = useCallback(() => {
+    if (!socket || !pendingSurpriseRoll) return
+    socket.emit(WS.COMBAT_SURPRISE_RESULT, { tokenId: pendingSurpriseRoll.tokenId })
+    setPendingSurpriseRoll(null)
+  }, [socket, pendingSurpriseRoll])
+
   // ─── Annulation mode visée — stable (deps []) ─────────────────────────────
   // useCallback stable pour ne pas recréer les listeners useEffect dans Canvas3D.
   const handleMoveCancel = useCallback(() => {
@@ -624,6 +703,20 @@ export default function SessionPage() {
               </button>
             ))}
           </div>
+          <button
+            onClick={handleCombatToggle}
+            style={{
+              ...styles.gmBarBtn,
+              ...(mode === 'combat' ? styles.gmBarBtnActive : {}),
+              borderColor: mode === 'combat' ? '#e05b5b' : '#2a2a3e',
+              color: mode === 'combat' ? '#e05b5b' : '#8888a8',
+              marginLeft: 'auto',
+              flexShrink: 0,
+            }}
+            title={mode === 'combat' && combatPhase !== null ? 'Terminer le combat' : 'Mode Combat'}
+          >
+            {mode === 'combat' && combatPhase !== null ? '✕ Combat' : '⚔ Combat'}
+          </button>
         </div>
       )}
       <div style={styles.mainArea}>
@@ -904,6 +997,20 @@ export default function SessionPage() {
 
       {/* ─── DicePanel — flottant, hors canvas, hors Sidebar ─────────────── */}
       <DicePanel socket={socket} mode={mode} sidebarVisible={sidebarVisible} sidebarWidth={sidebarWidth} />
+
+      {/* ─── CombatOverlay — position:fixed, z-index 1000, visible en mode combat ── */}
+      {mode === 'combat' && (
+        <CombatOverlay
+          socket={socket}
+          battlemap={battlemap}
+          isGm={isGm}
+          user={user}
+          characters={characters}
+          tokens={tokens}
+          pendingSurpriseRoll={pendingSurpriseRoll}
+          onSurpriseRolled={handleSurpriseRolled}
+        />
+      )}
 
     </div>
   )

@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-05-19 Session 56
+> Dernière mise à jour : 2026-05-23 Session 60
 
 ---
 
@@ -159,6 +159,15 @@ Module Armes ← 🔲 Chantier 11 Étape 2
 | Étape 2 | Module Armes — DSL effets/munitions, parseur, résolution dommages par localisation | Chantier 10 sprint 4 | 🔲 |
 | Étape 3 | Module Armures — ArmorWoundPanel + LocationPanel mille-feuille + SilhouettePanel | Chantier 10 sprint 2 | ✅ session 53-54 |
 | Étape 4 | Polish — animations Tests de Choc, états santé (Étourdi/Inconscient/Coma) | Étapes 1-3 | 🔲 |
+
+### Chantier 11 — Système de Combat Polaris
+
+| Sprint | Contenu | État |
+|---|---|---|
+| Sprint 1 | Fondations : migration 54, events, combatStore, CombatOverlay, COMBAT_START/END, SESSION_JOIN sync | ✅ session 57 |
+| Sprint 2 | Surprise + Phase Annonce : CombatTimeline, CombatActionWindow, CombatPnjPanel, CombatGmDeclareWindow, COMBAT_SURPRISE_RESULT/ACTION_DECLARE/SKIP_PLAYER + migration 55 characters.type + rework UI actions (4 sections, selectedKeys[], accordion GM) | ✅ sessions 58-59 |
+| Sprint 3 | Phase Résolution : startResolutionPhase(), COMBAT_ACTION_CONFIRM, endTurn(), timer auto-skip | 🔲 |
+| Sprint 4 | Jets d'attaque + Dégâts + Blessures + Carence FOR : branche assault complète | 🔲 |
 
 **Mécanique Polaris (rappel LdB) :**
 

@@ -242,11 +242,23 @@ export function calcSeuils(for_na, con_na, vol_na) {
   }
 }
 
-export function calcVitesses(for_na, coo_na, ada_na) {
-  const marche = polarisRound((for_na + coo_na + ada_na) / 3)
+function calcAllureMoy(val) {
+  if (val <= 5)  return 6
+  if (val <= 10) return 8
+  if (val <= 15) return 10
+  if (val <= 20) return 12
+  if (val <= 25) return 14
+  return 16 + 2 * Math.floor((val - 26) / 5)
+}
+
+export function calcAllures(coo_na, athletisme_total) {
+  const moy    = calcAllureMoy(coo_na)
+  const maxMoy = calcAllureMoy(athletisme_total ?? 2)
   return {
-    marche,
-    course: marche * 2,
+    lente:   moy / 2,
+    moyenne: moy,
+    rapide:  moy * 2,
+    max:     maxMoy * 4,
   }
 }
 

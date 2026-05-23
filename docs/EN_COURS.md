@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-19 Session 56
+> Dernière mise à jour : 2026-05-23 Session 60
 
 ---
 
@@ -90,6 +90,7 @@ Travaux effectués en session 55 :
 - Tri munitions "standard" en premier dans availableAmmoFor ✅
 
 ### Chantier 10 sprint 5 — Mille-feuille serveur + polarisRound unifié + ref_min_str ✅ (session 56)
+### Chantier 11 Sprint 1 — Fondations + COMBAT_START/END ✅ (session 57)
 
 Travaux effectués en session 56 :
 - `shared/polarisUtils.js` (NOUVEAU) — source unique `polarisRound(x) = Math.floor(x + 0.4)` ✅
@@ -99,16 +100,57 @@ Travaux effectués en session 56 :
 - `server/src/routes/character/char-sheet.js` — `ref_min_str` dans les 2 SELECT GET /inventory ✅
 - Affichage carence FOR (rouge si FOR < min_str) reporté Chantier 11 sprint 3 (nécessite forNA dans ArmorWoundPanel)
 
+Travaux effectués en session 57 :
+- Migration 54 : `combat_state` + `combat_roster` + `combat_actions` ✅
+- `shared/events.js` : +17 constantes COMBAT_* ✅
+- `client/src/stores/combatStore.js` (NOUVEAU) ✅
+- `client/src/components/CombatOverlay.jsx` (NOUVEAU) ✅
+- `client/src/components/CombatRosterWindow.jsx` (NOUVEAU) — INI preview + surpris + exclusion participants ✅
+- `server/src/routes/battlemaps.js` : `GET /:id/combat-ini` ✅
+- `server/src/socket/index.js` : combatTimers + calcREA import + COMBAT_START/END + SESSION_JOIN sync ✅
+- `client/src/pages/SessionPage.jsx` : PC15 bypass + handleCombatToggle + bouton ⚔ gmBar + handlers COMBAT_* + CombatOverlay ✅
+
 ---
 
-## Prochain chantier — Chantier 11 étape 2 — Module Armes complet
+### Chantier 11 Sprint 2 — Surprise + Phase Annonce ✅ (sessions 58-59)
 
-DSL effets/munitions, parseur, résolution dommages par localisation.
-Prérequis : Chantier 10 sprint 4 ✅
+Travaux effectués en session 58 :
+- `client/src/components/CombatTimeline.jsx` (NOUVEAU) — timeline INI, portraits cliquables GM, topOffset ✅
+- `client/src/components/CombatActionWindow.jsx` (NOUVEAU) — déclaration PJ (grille 4 actions, précipité), états surprise ✅
+- `client/src/components/CombatPnjPanel.jsx` (NOUVEAU) — modal GM PJs/PNJs read-only, bouton Passer ✅
+- `client/src/components/CombatGmDeclareWindow.jsx` (NOUVEAU) — fenêtre GM bottom-right déclaration PNJs ✅
+- `server/src/socket/index.js` : COMBAT_SURPRISE_RESULT + COMBAT_ACTION_DECLARE (PC26 ini_mod) + COMBAT_SKIP_PLAYER ✅
+- Fix formule surprise : `isSuccess = roll ≤ base_ini`, initiative = roll (succès) ou 0 (échec) ✅
 
-Fonctions serveur prêtes (charStats.js) :
-- `calcResistanceArmure(equippedItems)` — mille-feuille par slot ✅
-- `calcCarenceArmure(equippedItems, forNA)` — carence FOR tous jets ✅
+Travaux effectués en session 59 (architecture) :
+- Migration 55 : `characters.type TEXT NOT NULL DEFAULT 'pnj'` + backfill `user_id IS NOT NULL → 'pj'` ✅
+- `server/src/routes/characters.js` : `type` dans GET colonnes + POST insert/returning + PUT sync user_id + broadcastCharacterUpdate ✅
+- `server/src/socket/index.js` : COMBAT_START filtre Entités (`!character_id → continue`), `is_pnj = character?.type === 'pnj'` ✅
+- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE — `character.type` pour guard PJ/PNJ, Entité exclue ✅
+- `CombatGmDeclareWindow` + `CombatPnjPanel` : `isPnj` via `char?.type === 'pnj'`, props `user`/`gmUserId` supprimés ✅
+
+Travaux effectués en session 59 (suite) — Rework Phase Annonce :
+- `client/src/components/combatSections.js` (NOUVEAU) — source unique `SECTIONS` + `KEY_MOD` + `formatMod` partagés ✅
+- `client/src/components/CombatActionWindow.jsx` — refonte : 4 sections, 21 items (8 actifs/13 grisés), multi-select, INI total, `selectedKeys[]` payload ✅
+- `client/src/components/CombatGmDeclareWindow.jsx` — refonte : accordion always-one-open, auto-progression après déclaration, même liste complète que joueur ✅
+- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE — nouveau payload `selectedKeys[]`, `KEY_MOD` dict, `primaryType` dérivé, `modifiers JSONB` ✅
+
+**Bug ouvert (non bloquant) :**
+- Surprise critique (roll=1) → initiative=1 (agit en dernier). Sémantique roll surpris à revoir.
+
+---
+
+## Prochain chantier — Chantier 11 Sprint 3 — Phase Résolution
+
+Objectif : les joueurs agissent dans l'ordre d'initiative, chaque slot résolu par le GM, auto-fin de tour.
+
+Handlers serveur à implémenter :
+- `startResolutionPhase()` — transition ANNOUNCEMENT → RESOLUTION, tri INI DESC
+- `COMBAT_ACTION_CONFIRM` — GM confirme/résout une action déclarée
+- `endTurn()` — fin de tour : reset `has_announced`/`has_resolved`, incrément `current_turn`
+- Timer auto-skip si `action_timer_sec > 0` (reporté Sprint 2)
+
+Prérequis Sprint 3 : voir PLAN_11_SYSCOMBAT.md § Sprint 3
 
 ---
 

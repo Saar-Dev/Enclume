@@ -5067,3 +5067,217 @@ Affecte aussi `handleReload` qui prend `compatAmmos[0]`.
 
 **Piège documenté (PI11)**
 `polarisRound` = source unique `shared/polarisUtils.js`. Jamais redéfini localement. Import : `'../../../shared/polarisUtils.js'`.
+
+---
+
+## Session 57 — 2026-05-19
+
+### Chantier 11 Sprint 1 — Fondations + COMBAT_START/END
+
+**Décisions préalables (run à vide)**
+- Analyse complète de `socket/index.js` (1246 lignes), `SessionPage.jsx` (910 lignes), `charStats.js`, `tokenStore.js`, `events.js` AVANT tout code.
+- Migration : 54 (52 et 53 déjà utilisées).
+- `weapon_inv_id` Option B : ID `char_inventory` réel, slot MG ou MD — sprint 4 Chantier 10 livré.
+- `calcResistanceArmure` + `calcCarenceArmure` déjà disponibles (session 56) — PC29.
+- 17 constantes COMBAT_* à créer dans `shared/events.js` (aucune existante).
+- Architecture WS pur confirmée — pas de REST pour le combat.
+- `combatTimers` Map déclarée hors `initSocket` — pattern singleton pendingEntityActions (PC16).
+- PC15 : `handleModeChange` bypass `setCanvasVisible` si mode combat.
+- `token_id` FK dans combat_roster/combat_actions (pas char_sheet_id).
+
+**Livré (Sprint 1)**
+- `server/src/db/migrations/54_combat.js` (NOUVEAU) :
+  - `combat_state` (PK=campaign_id, battlemap_id FK, phase CHECK('ROSTER','ANNOUNCEMENT','RESOLUTION'), current_turn, active_slot_idx, action_timer_sec)
+  - `combat_roster` (id PK, campaign_id, token_id FK→tokens CASCADE, is_surprised, surprise_roll nullable, base_ini, initiative, status CHECK, has_announced, has_resolved)
+  - `combat_actions` (id PK, campaign_id, token_id FK→tokens CASCADE, type CHECK, is_micro, initiative_score, target_token_id, target_pos JSONB, weapon_inv_id FK SET NULL, modifiers JSONB, status CHECK)
+- `shared/events.js` : +17 constantes COMBAT_* (COMBAT_START/STARTED/END/ENDED/STATE_SYNC/ROSTER_UPDATED/PHASE_CHANGED/SLOT_ADVANCED/SURPRISE_ROLL/SURPRISE_RESULT/ACTION_DECLARE/ACTION_DECLARED/SKIP_PLAYER/TURN_SKIPPED/ACTION_WINDOW/ACTION_CONFIRM/ATTACK_RESULT)
+- `client/src/stores/combatStore.js` (NOUVEAU) : store Zustand `{ phase, roster, actions, currentTurn, activeSlotIdx, setCombatState, updateRoster, addAction, advanceSlot, resetCombat }`
+- `client/src/components/CombatOverlay.jsx` (NOUVEAU) : shell `position:fixed, inset:0, pointerEvents:none`, z-index 1000, visible si `mode === 'combat'`
+- `client/src/components/CombatRosterWindow.jsx` (NOUVEAU) :
+  - INI preview via `GET /battlemaps/:id/combat-ini` au montage (avant COMBAT_START)
+  - Checkbox "Surpris" par token
+  - Checkbox "Inclus" par token — exclus listés en bas avec bouton `+` pour remettre
+  - Bouton "Démarrer le combat (N)" → `COMBAT_START { battlemap_id, surprisedTokenIds, excludedTokenIds }`
+- `server/src/routes/battlemaps.js` : `GET /:id/combat-ini` (NOUVEAU) — calcule REA/base_ini par token sans toucher DB combat
+- `server/src/socket/index.js` :
+  - Import `calcREA` ajouté
+  - `const combatTimers = new Map()` déclarée hors `initSocket` (PC16)
+  - SESSION_JOIN : ajout `COMBAT_STATE_SYNC` si `combat_state` actif (PC14)
+  - Handler `COMBAT_START` : guards (GM/existant/0 tokens) + calcul REA per token + sort DESC + surprise PNJ auto + `COMBAT_SURPRISE_ROLL` vers joueurs surpris + INSERT bulk + broadcast sans surprise_roll (PC25) + filtre `excludedTokenIds`
+  - Handler `COMBAT_END` : clearTimeout tous timers (PC19) + DELETE 3 tables + broadcast
+- `client/src/pages/SessionPage.jsx` :
+  - Import `useCombatStore` + `CombatOverlay`
+  - `handleModeChange` : bypass PC15 si newMode ou mode === 'combat'
+  - `handleCombatToggle` : toggle mode combat / émet COMBAT_END si combat actif
+  - Bouton "⚔ Combat" dans gmBar (rouge si actif → "✕ Combat")
+  - Handlers COMBAT_STARTED / COMBAT_ENDED / COMBAT_STATE_SYNC dans useEffect WS
+  - `<CombatOverlay>` monté si `mode === 'combat'`
+
+**Pièges rencontrés**
+- `npx knex migrate:latest` refusé depuis `server/` — commande correcte : `npx knex --knexfile knexfile.cjs migrate:latest`
+- INI "-" au premier clic "⚔ Combat" → résolu via endpoint REST `GET /battlemaps/:id/combat-ini`
+- Bouton désélection participant (non-combattant) absent du plan initial → ajouté via `excludedIds` state + colonne "Inclus" + section "Exclus"
+
+**Validation Sprint 1**
+- Migration 54 appliquée ✅
+- GM clique "⚔ Combat" → mode combat → CombatOverlay + CombatRosterWindow + INI visibles ✅
+- GM coche Surpris + Exclus + "Démarrer" → DB insérée, base_ini correct ✅
+- GM "✕ Combat" → tables nettoyées → mode play ✅
+
+---
+
+## Session 58 — 2026-05-21
+
+### Chantier 11 Sprint 2 — Surprise + Phase Annonce
+
+**Décisions / compréhension Phase Annonce**
+
+Formule confirmée (source : docs/Character/Kiwi/14_WebApp_initiativeSimple.gs + discussion Saar) :
+- `base_ini = polarisRound((ADA+PER)/2)` — calculé avant le combat, stocké dans `combat_roster.base_ini`
+- `currentINI = base_ini + Σ(tous les modificateurs applicables)` — recalculé chaque tour, phase Annonce
+- V1 (implémentée) : deux modificateurs actifs
+  - `mod_action_type` : assault=0, move_short=−3, move_long=0, micro=−3
+  - `mod_rushed` (précipité) : +3 ou 0
+- Tous les modificateurs sont équivalents — pas de traitement spécial pour "précipité"
+- `roster.initiative` stocke la valeur courante après application de TOUS les mods du tour
+- `combat_actions.initiative_score` = copie de `roster.initiative` au moment de la déclaration
+
+**Livré (Sprint 2)**
+- `server/src/socket/index.js` :
+  - COMBAT_SURPRISE_RESULT : génération d20 côté serveur via `parseDice('1d20')`, emit DICE_RESULT (animation + chat) puis DB update + COMBAT_ROSTER_UPDATED
+  - COMBAT_ACTION_DECLARE : bug ini_mod corrigé — UN seul UPDATE applique `total_mod = mod_rushed + ini_mod` à `roster.initiative`
+    - Avant : `ini_mod` calculé pour `combat_actions.initiative_score` uniquement — `roster.initiative` ne recevait que `mod_rushed`
+    - Après : `roster.initiative += (mod_rushed + ini_mod)`, `initiative_score = updatedInitiative`
+    - Payload `initiative: updatedInitiative` contient désormais la valeur complète → timeline correcte
+- `client/src/components/CombatTimeline.jsx` :
+  - `onPortraitClick` prop ajoutée (GM uniquement, phase ANNOUNCEMENT)
+  - Fix React warning : `borderColor` → `border: '1px solid #50c878'`
+  - `topOffset` prop pour éviter le recouvrement de la gmBar
+- `client/src/components/CombatActionWindow.jsx` : header "Phase Annonce" → "Phase 1 - Déclaration d'intention"
+- `client/src/components/CombatPnjPanel.jsx` (NOUVEAU) : fenêtre GM read-only (⚔ Phase Annonce), modal centré, PNJs read-only + PJs avec bouton Passer
+- `client/src/components/CombatGmDeclareWindow.jsx` (NOUVEAU) : fenêtre GM bottom-right, PNJs non-annoncés avec select action + checkbox précipité + bouton Déclarer
+- `client/src/components/CombatOverlay.jsx` : CombatPnjPanel + CombatGmDeclareWindow câblés
+- `client/src/stores/combatStore.js` : `markTokenAnnounced(tokenId, initiative?)` — initiative optionnel pour sync timeline
+
+**Bug corrigé : ini_mod non appliqué à roster.initiative**
+- Cause : if/else rush séparé — le else ne modifiait pas `initiative`, le if n'ajoutait que +3 (rush)
+- Fix : ONE DB update avec `db.raw('initiative + ?', [total_mod])` où `total_mod = mod_rushed + ini_mod`
+- Impact : `combat_actions.initiative_score` et payload `initiative` sont maintenant cohérents avec `roster.initiative`
+
+**Piège documenté (PC26)**
+Ne jamais séparer les modificateurs d'initiative en plusieurs UPDATE. Un seul `db.raw('initiative + ?', [total_mod])` pour garantir cohérence `roster.initiative` / `combat_actions.initiative_score` / payload client.
+
+---
+
+## Session 58 — suite / Session 59 (2026-05-21)
+
+**Analyse architecturale : is_pnj et détection PNJ**
+
+Après confirmation fonctionnelle de la séparation PJs/PNJs (session 58), analyse critique de l'architecture :
+- `if (!token.character_id) return true` dans isPnj était FAUX — Entité de décor ≠ PNJ
+- `combat_roster` n'avait pas de colonne `is_pnj` — les composants recalculaient inutilement
+- `characters.user_id = NULL` était la vraie sémantique PNJ, mais implicite et fragile
+- SQL `WHERE name = 'Thug'` retournait 0 rows en session 58 → mauvaise conclusion → fix incorrect
+  - Thug/Deep/Soleil ONT des fiches `characters` (user_id = NULL) — confirmé par JOIN en session 59
+
+**Décision architecturale : `characters.type`**
+- Ajout colonne `type TEXT NOT NULL DEFAULT 'pnj'` sur `characters`
+- Valeurs actuelles : `'pj'` | `'pnj'` — extensible : `'vehicle'`, `'drone'` prévu
+- Remplace `user_id IS NULL` comme marqueur PNJ — explicite, lisible, queryable
+- Distinction Entité (token sans character_id) vs PNJ (character.type = 'pnj') maintenant formelle
+
+**Migration 55 — characters.type**
+- `ALTER TABLE characters ADD COLUMN type TEXT NOT NULL DEFAULT 'pnj' CHECK (type IN ('pj', 'pnj'))`
+- Backfill : `UPDATE characters SET type = 'pj' WHERE user_id IS NOT NULL`
+
+**Livré (session 59)**
+- `server/src/db/migrations/55_character_type.js` (NOUVEAU) — migration + backfill
+- `server/src/routes/characters.js` :
+  - GET : ajout `'characters.type'` dans colonnes sélectionnées
+  - POST : `type` inféré depuis `user_id` (user_id ? 'pj' : 'pnj'), inclus dans insert + returning
+  - PUT : `type` synchronisé avec `user_id` dans le bloc recalcul couleur (désassignation → 'pnj', assignation → 'pj')
+  - `broadcastCharacterUpdate` + returning PUT : ajout `'characters.type'`
+- `server/src/socket/index.js` :
+  - COMBAT_START : skip tokens sans `character_id` (Entités, `continue`) — `is_pnj = character?.type === 'pnj'`
+  - COMBAT_ACTION_DECLARE : `!token.character_id → return` (Entité exclue) — `character.type === 'pnj'` → GM only — `character.type === 'pj'` → owner check — guard `weaponInvId && character` → `weaponInvId` (character toujours non-null désormais)
+- `client/src/components/CombatGmDeclareWindow.jsx` : `isPnj` via `char?.type === 'pnj'`, suppression `user` prop + `gmUserId`
+- `client/src/components/CombatPnjPanel.jsx` : idem
+- `client/src/components/CombatOverlay.jsx` : `user` retiré des calls CombatGmDeclareWindow + CombatPnjPanel
+
+**Piège documenté (PC27)**
+`!token.character_id` ne signifie pas PNJ — c'est une Entité de décor (porte, console).
+PNJ = `character.type === 'pnj'`. Entité = token sans character_id, exclue du combat.
+
+---
+
+## Session 59 (suite) — 2026-05-21
+
+### Chantier 11 Sprint 2 — Rework CombatActionWindow + payload COMBAT_ACTION_DECLARE
+
+**Objectif**
+Remplacer la grille 4 boutons + checkbox par une liste structurée en 4 sections (PRÉCIPITATION / PRÉPARATION / DÉPLACEMENT / COMBAT) avec multi-sélection et items grisés pour les actions non encore implémentées.
+
+**Décisions architecturales**
+- Payload `COMBAT_ACTION_DECLARE` : `{ actionType, isRushed }` → `{ selectedKeys: string[] }` — plus de traitement spécial de `rushed`, c'est un item comme les autres avec `mod: +3`
+- `KEY_MOD` dict côté client ET serveur — source de vérité pour les mods INI
+- `primaryType` dérivé côté serveur (assault > move_long > move_short > micro) pour `combat_actions.type`
+- `modifiers JSONB` (colonne existante) stocke `{ selectedKeys }` pour Sprint 3+
+- Pas de notion d'exclusivité par section — free multi-select partout (simplicité)
+- Pas de format legacy — `CombatGmDeclareWindow.handleDeclare` mis à jour en même temps (5 lignes)
+
+**Livré**
+
+`client/src/components/CombatActionWindow.jsx` — refonte complète :
+- `SECTIONS` constant : 4 sections, 21 items total (8 actifs, 13 grisés)
+- `KEY_MOD` : dict mods pour items actifs
+- `formatMod()` : affichage `+3` / `-3` / `—` / `modLabel` (ranges, 'Spécial')
+- State `selectedKeys: Set<string>` — `handleToggle` ajoute/retire une clé
+- `totalMod` calculé depuis `selectedKeys` (reduce KEY_MOD)
+- `canDeclare = selectedKeys.size > 0`
+- Émission : `{ tokenId, selectedKeys: Array.from(selectedKeys), weaponInvId: null }`
+- Items grisés : affichés, non cliquables, `opacity: 0.3`
+- Footer sticky : INI total + bouton Déclarer
+- États surprise inchangés (pending roll, échec, has_announced)
+
+`server/src/socket/index.js` — handler `COMBAT_ACTION_DECLARE` :
+- Destructure `{ tokenId, selectedKeys: rawKeys, weaponInvId }`
+- `KEY_MOD` dict inline, whitelist validation, filtre clés inconnues
+- `total_mod = reduce KEY_MOD` sur toutes les clés (rushed inclus)
+- `primaryType` dérivé pour `combat_actions.type`
+- INSERT `combat_actions` : ajout `modifiers: JSON.stringify({ selectedKeys })`
+- Broadcast `COMBAT_ACTION_DECLARED` : `actionType: primaryType` (inchangé côté consommateur)
+
+`client/src/components/CombatGmDeclareWindow.jsx` — `handleDeclare` minimal :
+- `selectedKeys = isRushed ? [actionType, 'rushed'] : [actionType]`
+- Émission `{ tokenId, selectedKeys, weaponInvId: null }` — UI GM inchangée (Étape 2)
+
+---
+
+## Session 60 — 2026-05-23
+
+### Correction allures de déplacement (char_sheets)
+
+**Problème constaté**
+`calcVitesses(for_na, coo_na, ada_na)` utilisait la formule `polarisRound((FOR + COO + ADA) / 3)` — introuvable dans le LdB. ADA n'intervient pas dans les déplacements. De plus, seules 2 allures (marche/course) étaient affichées au lieu des 4 allures définies par le LdB p.220-221.
+
+**Règle correcte (LdB p.221)**
+4 allures de déplacement au sol :
+- **Allure lente** = Allure moyenne / 2 — basée sur COO_na
+- **Allure moyenne** = lookup table COO_na (6, 8, 10, 12, 14, puis +2 par tranche de 5 niveaux au-delà de 25)
+- **Allure rapide** = Allure moyenne × 2 — basée sur COO_na
+- **Allure maximale** = lookup table Athlétisme total (FOR + COO + maîtrise) × 4
+
+**Livré**
+
+`server/src/lib/charStats.js` :
+- `calcVitesses` supprimée
+- `calcAllureMoy(val)` helper privé — lookup table LdB p.221 par tranches de COO
+- `calcAllures(coo_na, athletisme_total)` exportée — retourne `{ lente, moyenne, rapide, max }`
+
+`client/src/character/CharacterSheet.jsx` :
+- Mirror `calcAllureMoy` + `calcAllures` local (calcul client indépendant du serveur)
+- `ALLURES_TOOLTIPS` — 4 textes LdB p.220 complets, affichés au survol
+- `calcSecondary` — COO et vitesses retirés (non consommés)
+- `athletismeTotal` useMemo — AN(FOR) + AN(COO) + mastery ATHLETISME (skill_id='ATHLETISME', attr_1=FOR, attr_2=COO)
+- `allures` useMemo — `calcAllures(COO_na, athletismeTotal)`
+- Render : 2 SecondaryField (marche/course) → 4 SecondaryField (lente/moyenne/rapide/maximale) + tooltip LdB au survol de chacune

@@ -1502,7 +1502,23 @@ const initSocket = (io) => {
       const campaignId = socket.campaignId
       try {
         // Validation selectedKeys
-        const KEY_MOD = { rushed: 3, assault: 0, move_short: -3, move_long: 0, micro: -3, micro_draw_ready: -3, micro_draw: -5, micro_grab_close: -3, micro_phrase: -3 }
+        const KEY_MOD = {
+          // Précipitation
+          rushed: 3,
+          // Préparation — fixes
+          micro_draw_ready: -3, micro_draw: -5, micro_grab_close: -3, micro_phrase: -3, micro_fire_mode: -3,
+          // Préparation — variantes
+          micro_grab_far_5: -5, micro_grab_far_10: -10,
+          micro_observe_5: -5, micro_observe_10: -10, micro_observe_15: -15, micro_observe_20: -20,
+          micro_locate_5: -5, micro_locate_10: -10, micro_locate_15: -15, micro_locate_20: -20,
+          micro_mechanism_3: -3, micro_mechanism_5: -5,
+          // Déplacement
+          crouch: -3, move_short: -3, move_long: 0, dive: -5, stand_up: -10, take_cover: -3,
+          // Combat
+          assault: 0, close_combat: -3,
+          // Couverture variantes
+          cover_shot_3: -3, cover_shot_5: -5,
+        }
         if (!Array.isArray(rawKeys) || rawKeys.length === 0) return
         const selectedKeys = rawKeys.filter(k => k in KEY_MOD)
         if (selectedKeys.length === 0) return

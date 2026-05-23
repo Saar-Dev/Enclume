@@ -19,8 +19,7 @@
  *   REA = floor((ADA_na + PER_na) / 2 + 0.4)   — arrondi Polaris 0.5→bas
  *   Seuil_Étour = floor((FOR_na + CON_na + VOL_na) / 3 + 0.4)
  *   Seuil_Incons = Seuil_Étour + 10
- *   Marche = floor((FOR_na + COO_na + ADA_na) / 3 + 0.4)
- *   Course = Marche × 2
+ *   Allures (LdB p.221) : lookup table par COO_na (Lente/Moyenne/Rapide) et Athlétisme total (Max)
  *   Mod_Dom : table fixe si FOR_na ≤ 21, sinon 5 + floor((FOR_na - 21) / 2)
  *
  * Sauvegarde : au blur de chaque champ (pas à chaque frappe).
@@ -88,23 +87,42 @@ const calcModDom = (forNA) => {
   return entry ? entry.val : -6
 }
 
+const calcAllureMoy = (val) => {
+  if (val <= 5)  return 6
+  if (val <= 10) return 8
+  if (val <= 15) return 10
+  if (val <= 20) return 12
+  if (val <= 25) return 14
+  return 16 + 2 * Math.floor((val - 26) / 5)
+}
+
+const calcAllures = (coo_na, athletisme_total) => {
+  const moy    = calcAllureMoy(coo_na)
+  const maxMoy = calcAllureMoy(athletisme_total ?? 2)
+  return { lente: moy / 2, moyenne: moy, rapide: moy * 2, max: maxMoy * 4 }
+}
+
+const ALLURES_TOOLTIPS = {
+  lente:   `Allure lente : c'est l'Allure d'un personnage dont les mouvements sont ralentis par un terrain difficile (décombres, terrain glissant, boue épaisse, végétation dense, passage étroit, eau jusqu'à la taille, etc.). Le personnage peut aussi choisir de se déplacer prudemment, en raison d'un terrain dangereux (mines, pièges, équilibre instable, débris de tôle tranchante, etc.). L'Allure lente est également recommandée pour les personnages désirant se déplacer silencieusement (pas de malus au Test de Furtivité/Déplacement silencieux). (LdB p.220)`,
+  moyenne: `Allure moyenne : c'est la vitesse de déplacement normale d'un personnage en combat. L'Allure moyenne peut entraîner un malus à tous les Tests de Compétences réclamant un peu de précision et de stabilité : Furtivité/Déplacement silencieux, Acrobatie/Équilibre, Tests de tir, etc. (LdB p.220)`,
+  rapide:  `Allure rapide : cette Allure permet de parcourir une distance plus importante, au pas de course. Elle augmente encore les malus pour les Actions nécessitant précision ou vigilance. C'est aussi la vitesse d'un personnage qui tente de courir tout en étant chargé et/ou encombré (armure, sacs, armes militaires de type fusil d'assaut, matériel divers…). (LdB p.220)`,
+  max:     `Allure maximale : c'est l'Allure d'un personnage qui court le plus vite possible sur un terrain plat et dégagé, en ligne droite (ou presque) et sans être encombré d'aucune manière. Cette Allure n'est donnée qu'à titre indicatif. Le personnage ne peut rien faire d'autre que courir, tout en se trouvant bien plus exposé aux dangers du combat et aux accidents de toute sorte. Il ne peut pas non plus effectuer de brusques changements de direction. Distance basée sur la Compétence Athlétisme (FOR + COO). (LdB p.220)`,
+}
+
 const calcSecondary = (naMap) => {
   const FOR = naMap['FOR'] || 3
   const CON = naMap['CON'] || 3
-  const COO = naMap['COO'] || 3
   const ADA = naMap['ADA'] || 3
   const PER = naMap['PER'] || 3
   const VOL = naMap['VOL'] || 3
 
-  const rea           = polarisRound((ADA + PER) / 2)
-  const initiative    = rea
-  const seuilEtour    = polarisRound((FOR + CON + VOL) / 3)
-  const seuilIncons   = seuilEtour + 10
-  const vitesseMarche = polarisRound((FOR + COO + ADA) / 3)
-  const vitesseCourse = vitesseMarche * 2
-  const modDom        = calcModDom(FOR)
+  const rea         = polarisRound((ADA + PER) / 2)
+  const initiative  = rea
+  const seuilEtour  = polarisRound((FOR + CON + VOL) / 3)
+  const seuilIncons = seuilEtour + 10
+  const modDom      = calcModDom(FOR)
 
-  return { rea, initiative, seuilEtour, seuilIncons, vitesseMarche, vitesseCourse, modDom }
+  return { rea, initiative, seuilEtour, seuilIncons, modDom }
 }
 
 // ─── Composant principal ──────────────────────────────────────────────────────
@@ -220,6 +238,18 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   const refSkillsPolaris = useMemo(
     () => refSkills.filter(s => s.parent === 'POUVOIRS_POLARIS'),
     [refSkills]
+  )
+
+  const athletismeTotal = useMemo(() => {
+    const an1     = calcAN(naMap['FOR'])
+    const an2     = calcAN(naMap['COO'])
+    const mastery = charSkills.find(s => s.skill_id === 'ATHLETISME')?.mastery ?? 0
+    return an1 + an2 + mastery
+  }, [naMap, charSkills])
+
+  const allures = useMemo(
+    () => calcAllures(naMap['COO'] || 3, athletismeTotal),
+    [naMap, athletismeTotal]
   )
 
   // Cleanup timers debounce au démontage
@@ -767,8 +797,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           />
           <SecondaryField label="Seuil Étourdissement" value={secondary.seuilEtour} />
           <SecondaryField label="Seuil Inconscience"   value={secondary.seuilIncons} />
-          <SecondaryField label="Vitesse (marche)"     value={`${secondary.vitesseMarche} m/t`} />
-          <SecondaryField label="Vitesse (course)"     value={`${secondary.vitesseCourse} m/t`} />
+          <SecondaryField label="Allure lente"    value={`${allures.lente} m/t`}    tooltip={ALLURES_TOOLTIPS.lente} />
+          <SecondaryField label="Allure moyenne"  value={`${allures.moyenne} m/t`}  tooltip={ALLURES_TOOLTIPS.moyenne} />
+          <SecondaryField label="Allure rapide"   value={`${allures.rapide} m/t`}   tooltip={ALLURES_TOOLTIPS.rapide} />
+          <SecondaryField label="Allure maximale" value={`${allures.max} m/t`}      tooltip={ALLURES_TOOLTIPS.max} />
           <SecondaryField
             label="Mod. Dommages (contact)"
             value={secondary.modDom >= 0 ? `+${secondary.modDom}` : secondary.modDom}

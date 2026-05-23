@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-05-19 Session 56
+> Dernière mise à jour : 2026-05-23 Session 60
 
 ---
 
@@ -73,26 +73,39 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 56 (2026-05-19)
+## État actuel — Session 60 (2026-05-23)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **53 migrations stables** — prochaine : **54**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+suite ✅ / PC22 ✅
+- **55 migrations stables** — prochaine : **56**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1 ✅ / Chantier 11 sprint 2 ✅ / PC22 ✅
 
-**Chantier 10 sprint 5 livré (session 56) :**
-- `shared/polarisUtils.js` (NOUVEAU) — source unique `polarisRound` — règle absolue, jamais redéfini localement
-- `charStats.js` — import depuis shared, + `calcResistanceArmure(equippedItems)` + `calcCarenceArmure(equippedItems, forNA)`
-- `CharacterSheet.jsx` + `LocationPanel.jsx` — import depuis shared, copies locales supprimées
-- `char-sheet.js` — `ref_min_str` dans les 2 SELECT GET /inventory
-- Affichage carence FOR reporté → Chantier 11 sprint 3 (forNA non disponible dans ArmorWoundPanel)
+**Session 60 — Correction allures de déplacement :**
+- `charStats.js` : `calcVitesses` supprimée → `calcAllures(coo_na, athletisme_total)` (lookup LdB p.221)
+- `CharacterSheet.jsx` : 2 allures (marche/course) → 4 allures (lente/moyenne/rapide/maximale) + tooltips LdB
+
+**Chantier 11 Sprint 2 livré (sessions 58-59) :**
+- `client/src/components/CombatTimeline.jsx` (NOUVEAU) — timeline INI, portraits cliquables GM ✅
+- `client/src/components/CombatActionWindow.jsx` — 4 sections, 21 items (8 actifs/13 grisés), multi-select, INI total ✅
+- `client/src/components/CombatPnjPanel.jsx` (NOUVEAU) — overview GM PJs/PNJs, bouton Passer ✅
+- `client/src/components/CombatGmDeclareWindow.jsx` — accordion always-one-open, auto-progression, liste complète ✅
+- `client/src/components/combatSections.js` (NOUVEAU) — SECTIONS + KEY_MOD + formatMod (source unique partagée) ✅
+- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE payload `selectedKeys[]` + KEY_MOD + primaryType + modifiers JSONB ✅
+- Migration 55 : `characters.type TEXT NOT NULL DEFAULT 'pnj'` — PJ/PNJ explicite, extensible (vehicle, drone) ✅
+- `server/src/routes/characters.js` : `type` dans GET/POST/PUT/broadcast ✅
+- Détection PNJ : `character.type === 'pnj'` — remplace `user_id === null` implicite ✅
+- Distinction Entité (`!token.character_id`) vs PNJ (`character.type`) formalisée ✅
 
 **Prochain chantier :**
-- Chantier 11 étape 2 — Module Armes complet (DSL effets/munitions, parseur, résolution dommages)
+- Chantier 11 Sprint 3 — Phase Résolution + Déplacement : `startResolutionPhase()`, `COMBAT_ACTION_CONFIRM`, `endTurn()`
+
+**Bug ouvert :**
+- Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser : ordre tri INI vs sémantique roll surpris.
 
 **Dettes actives :**
 - D10 UV texturing V2 — modèle Blender .glb (PE33)
 - `useDiceAudio.js` — sons impact dés
 - `.gitattributes:3` — attribut invalide
+- Timer auto-skip (`action_timer_sec > 0`) — prévu Sprint 2, reporté Sprint 3
 
 ---
 
@@ -209,6 +222,11 @@ Ne jamais rejouer `2_seed_equipment.js` après la migration 53 — réinsérerai
 Ne jamais redéfinir `polarisRound` localement. Import obligatoire : `'../../../shared/polarisUtils.js'`.
 Toute copie locale (const, function) est interdite — erreur de code si trouvée lors d'une review.
 
+**PC27 — Entité ≠ PNJ**
+`!token.character_id` = Entité de décor (porte, console) — jamais un PNJ.
+PNJ = `character.type === 'pnj'`. Entité exclue du combat (`continue` dans COMBAT_START).
+`characters.type` enum `'pj'|'pnj'` — extensible (`'vehicle'`, `'drone'`). Source de vérité unique.
+
 **"La Forêt Maudite"**
 Pas de `default_battlemap_id` → ne jamais utiliser pour les tests.
 
@@ -221,3 +239,4 @@ Pas de `default_battlemap_id` → ne jamais utiliser pour les tests.
 - `JOURNAL2.md` en append. Tous les autres docs en remplacement complet.
 - Félicitations ≠ validation. Toujours vérifier le fonctionnel avant de documenter stable.
 - **Simuler la session avant de coder** — identifier les pièges, fichiers manquants, dépendances cachées.
+- **Pour tout composant UI : inventaire exhaustif avant "Je code ?"** — lister chaque élément interactif (bouton, checkbox, input) avec son handler. Chaque ligne sans handler = trou visible. Confirmation du plan = "cet inventaire est-il complet par rapport aux specs ?"
