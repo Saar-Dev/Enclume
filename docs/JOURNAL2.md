@@ -5281,3 +5281,131 @@ Remplacer la grille 4 boutons + checkbox par une liste structurée en 4 sections
 - `athletismeTotal` useMemo — AN(FOR) + AN(COO) + mastery ATHLETISME (skill_id='ATHLETISME', attr_1=FOR, attr_2=COO)
 - `allures` useMemo — `calcAllures(COO_na, athletismeTotal)`
 - Render : 2 SecondaryField (marche/course) → 4 SecondaryField (lente/moyenne/rapide/maximale) + tooltip LdB au survol de chacune
+
+---
+
+## Session 61 — 2026-05-23
+
+### Planification Sprint 3 — Phase Résolution + UI déplacement
+
+**Session 100% planification — aucun code écrit**
+
+---
+
+### Rework sliders Phase Annonce (livré sessions 60-61)
+
+**Problème constaté**
+`varOptions` (dropdown `<select>`) dans `combatSections.js` — approche retirée, remplacée par sliders.
+
+**Pattern slider validé**
+- `item.range: { min, max, step }` dans `SECTIONS` — 5 items concernés
+- Clé générée : `${item.key}_${Math.abs(currentMod)}` ex. `micro_grab_far_5`
+- `sliderPos = range.max - currentMod` (entier positif pour `<input type=range>`)
+- `newMod = range.max - sliderPos`
+- Sélection item range : clic sur la row pour activer/désactiver, slider pour régler la valeur
+- `stopPropagation` sur le slider quand isSelected — évite le toggle au clic du thumb
+- CSS grid `1fr 1fr`, `gridColumn: 'span 2'` pour les items range (occupent les 2 colonnes)
+
+**Fichiers modifiés**
+- `combatSections.js` — `varOptions[]` → `range: { min, max, step }` sur 5 items
+- `CombatActionWindow.jsx` — branch `if (item.range)` avec slider, grid 2 colonnes, styles slider
+- `CombatGmDeclareWindow.jsx` — même logique, tokenId-scoped, largeur 500px
+- `KEY_MOD` inchangé (clés `micro_grab_far_5`, etc. existaient déjà)
+
+---
+
+### Lecture code — découvertes importantes
+
+**Canvas3D.jsx — mode visée existant (9F-B2)**
+- Ghost rendu directement dans le JSX de `Scene`, à `getColumnTopY(x,z) + 1 + 0.05`
+- Pattern : `moveTarget` prop depuis `SessionPage` → `Canvas3D` → `Scene`
+- pointermove/pointerup enregistrés sur le DOM canvas (pas via R3F)
+- **Pas de centrage caméra** — aucun `camera.position.set()` dans le code. Caméra = usage uniquement par l'utilisateur via MapControls.
+- `orbitRef.current.target` accessible → centrage faisable mais non implémenté
+
+**Battlemap — `scale_label`**
+- Migration 8 : `battlemaps.scale_label TEXT DEFAULT '1,5m'` — label cosmétique uniquement
+- Jamais lu côté client dans aucun calcul
+- Pas de colonne numérique `voxel_scale`
+- Pour calculs allures, hardcoder `1.0` (1 voxel = 1m) jusqu'à migration 56
+
+**combat_actions — schéma actuel vs prévu**
+- Migration 54 a créé l'ancien schéma : `is_micro BOOLEAN`, `initiative_score INT`, `target_pos JSONB`
+- PLAN_11 prévoit : `action_key TEXT`, `sequence SMALLINT`, `target_pos_x/y/z INT`
+- Migration 56 doit aligner la DB sur le plan — liste complète ci-dessous
+
+---
+
+### Décisions architecture sprint 3
+
+**Migration 56 — ALTER combat_actions :**
+```sql
+-- Ajouter
+ADD COLUMN action_key TEXT NOT NULL DEFAULT 'skip'
+ADD COLUMN sequence    SMALLINT NOT NULL DEFAULT 0
+ADD COLUMN target_pos_x INT NULLABLE
+ADD COLUMN target_pos_y INT NULLABLE
+ADD COLUMN target_pos_z INT NULLABLE
+ADD COLUMN voxel_scale  FLOAT NOT NULL DEFAULT 1.0  -- sur battlemaps, pas combat_actions
+
+-- Supprimer
+DROP COLUMN is_micro
+DROP COLUMN initiative_score   -- PC27 : toujours depuis combat_roster
+DROP COLUMN target_pos         -- remplacé par x/y/z INT
+
+-- ALTER combat_roster : ajouter state_position + state_weapon
+```
+
+**UI déplacement — approche retenue**
+
+Analyse :
+- Allures Polaris : lente ≈ 5m, moyenne ≈ 10m, rapide ≈ 20m pour COO_NA=10
+- N cellules colorisées = jusqu'à 800+ cases → prohibitif avec N×PlaneGeometry
+- InstancedMesh = 1 draw call mais setup complexe
+- **Cercles concentriques RingGeometry = 4 meshes max, optimal pour ce cas**
+  - Même pattern que `TokenRing` déjà dans Canvas3D
+  - 1 anneau par allure accessible au personnage
+  - Couleurs distinctes avec opacité faible
+  - Cursor wireframe 1×1 qui suit la souris (identique au ghost existant)
+
+Intégration :
+- `combatMoveMode` state dans `SessionPage`, prop vers Canvas3D (parallèle à `moveTarget`)
+- CombatActionWindow : clic "Déplacement" → `onEnterMoveMode(allures)` callback → `opacity: 0`
+- Scene : affiche anneaux + cursor, click → `onMoveSelected({ allure, x, y, z })`
+- CombatActionWindow récupère la sélection et réapparaît (opacity: 1)
+
+**combatSections.js — V2 pour déplacement**
+- Remplacer `move_short`/`move_long` par un seul item "Déplacement" à selection spéciale
+- Les `action_key` générés = `move_lente` / `move_moyenne` / `move_rapide` / `move_max`
+- KEY_MOD : `move_lente: -3`, `move_moyenne: -5`, `move_rapide: -7`, `move_max: 0`
+- `move_max` = action exclusive (le joueur ne peut pas combiner avec une autre action majeure)
+
+**Battlemap scale (migration 56)**
+- `battlemaps.voxel_scale FLOAT NOT NULL DEFAULT 1.0`
+- `scale_label` conservé pour l'affichage cosmétique
+- Allures en mètres × voxel_scale = distance en voxels
+- UI GM scale = reporté après Sprint 3 (pas bloquant)
+
+---
+
+### Pièges nouveaux identifiés
+
+**PC34 — combat_actions : migration 56 obligatoire avant Sprint 3**
+Le schéma actuel (migration 54) ne correspond plus au PLAN_11 : `is_micro`, `initiative_score`, `target_pos JSONB` doivent être remplacés par `action_key`, `sequence`, `target_pos_x/y/z INT`. Ne pas coder Sprint 3 avant migration 56 appliquée.
+
+**PC35 — voxel_scale hardcodé à 1.0 en Sprint 3**
+`battlemaps.voxel_scale` ne sera ajouté qu'en migration 56. Les calculs allures utilisent `1.0` (1 voxel = 1m) jusqu'à ce que l'UI scale GM soit implémentée (post-Sprint 3).
+
+**PC36 — Canvas3D combatMoveMode : prop séparé de moveTarget**
+`moveTarget` est pour entity push/pull (9F-B2). Ne pas réutiliser pour le combat mouvement. Créer `combatMoveMode` prop distinct dans Canvas3D.
+
+---
+
+### Prochaines étapes Sprint 3
+
+1. Migration 56 : ALTER combat_actions + combat_roster + battlemaps.voxel_scale
+2. combatSections.js : remplacer move_short/move_long par allure-based keys
+3. KEY_MOD + serveur : aligner sur nouveaux action_keys
+4. CombatActionWindow : mode déplacement + Canvas3D integration (combatMoveMode)
+5. server/socket/index.js : COMBAT_ACTION_DECLARE — capter target_pos_x/y/z depuis payload
+6. startResolutionPhase() + COMBAT_ACTION_CONFIRM + endTurn()

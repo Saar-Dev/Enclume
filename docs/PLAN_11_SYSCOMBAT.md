@@ -1,6 +1,6 @@
 # Chantier 11 — Système de Combat Polaris
-> Document de planification — Session 51 / Mis à jour Session 56
-> Statut : Prêt à coder — Sprint 1
+> Document de planification — Session 51 / Mis à jour Session 61
+> Statut : Sprints 1+2 ✅ — Prochain : Sprint 2.5 (centrage caméra)
 > Dépendances : Chantier 10 sprints 1–5 ✅ (WeaponPanel, char_inventory slots MG/MD, calcResistanceArmure)
 
 ---
@@ -45,12 +45,15 @@
 | State combat client | `combatStore` Zustand dédié — pas de props drilling depuis `SessionPage` |
 | Calculs serveur | `parseDice`, `calcREA`, `calcWoundPenalty`, `calcEncumbrancePenalty`, `calcResistanceDommages`, `calcResistanceArmure` ✅, `calcCarenceArmure` ✅ — tous dans `charStats.js` |
 | **Architecture réseau** | **WS pur — pas de REST pour le combat. Pattern identique aux entités interactables** |
-| **Actions déclarées** | **Table `combat_actions` séparée — une ligne par `action_key` sélectionnée** |
+| **Actions déclarées** | **Table `combat_actions` — command queue. 1 ligne par `action_key` déclarée. Ex : move_short + micro_draw + assault = 3 lignes. Pattern professionnel tour-par-tour.** |
 | **Exclusivité actions** | **Aucune validation en phase Annonce — cibles et positions mémorisées, GM arbitre en Résolution (LdB p.218)** |
 | **États personnage** | **`state_position` + `state_weapon` dans `combat_roster` — persistants entre les tours. action_key = déclencheur, pas stockage.** |
 | **target_pos** | **Colonnes INT séparées (target_pos_x/y/z) — type-safe, coords DB PE14. Client convertit avant envoi.** |
-| **sequence intra-slot** | **SMALLINT dans combat_actions — ordre garanti : move_* → micro → assault** |
+| **sequence intra-slot** | **SMALLINT NOT NULL dans combat_actions — ordre garanti : move_* (1) → micro (2) → assault (3). Attribué serveur à l'INSERT. ORDER BY sequence ASC en résolution.** |
 | **weapon_inv_id** | **ID char_inventory réel — arme équipée slot MG ou MD. Guard serveur : slot doit être MG ou MD** |
+| **UI déplacement** | **1 item "Déplacement" dans SECTIONS (isMove:true). Canvas3D : 4 anneaux RingGeometry + cursor wireframe. Zone anneau → action_key (lente=move_short, autres=move_long) + ini_mod dans modifiers.** |
+| **Centrage caméra** | **Sprint 2.5 dédié. Prop combatCameraCenter:{x,z}|null dans Canvas3D. orbitRef.current.target.set() + update() dans useEffect.** |
+| **voxel_scale** | **Hardcodé 1.0 en Sprint 3. scale_label (TEXT) = cosmétique uniquement. Sprint ScaleMap dédié post-Sprint 4.** |
 
 ---
 
@@ -87,23 +90,24 @@ combat_roster
   created_at       TIMESTAMPTZ
   updated_at       TIMESTAMPTZ
 
--- Actions déclarées — une ligne par action_key sélectionnée
+-- Actions déclarées — command queue : 1 ligne par action_key déclarée
 combat_actions
   id               UUID      PK DEFAULT gen_random_uuid()
   campaign_id      UUID      FK → campaigns.id ON DELETE CASCADE
   token_id         UUID      FK → tokens.id ON DELETE CASCADE
-  type             TEXT      CHECK IN ('assault','move_short','move_long','micro','skip')  -- catégorie pour branchement handler
-  action_key       TEXT      NOT NULL  -- clé exacte : 'rushed', 'micro_draw', 'move_short', 'assault', etc.
-  sequence         SMALLINT  NOT NULL  -- ordre d'exécution intra-slot (1, 2, 3…)
+  action_key       TEXT      NOT NULL  -- clé exacte : 'rushed','micro_draw','move_short','assault', etc.
+  sequence         SMALLINT  NOT NULL  -- ordre exécution : move_*(1) → micro(2) → assault(3). Attribué serveur.
   target_token_id  UUID      NULLABLE  -- assault uniquement
   target_pos_x     INT       NULLABLE  -- move_short/move_long — coords DB (PE14)
   target_pos_y     INT       NULLABLE  -- coords DB (PE14) : profondeur (= Z Three.js)
   target_pos_z     INT       NULLABLE  -- coords DB (PE14) : altitude  (= Y Three.js)
   weapon_inv_id    UUID      NULLABLE  -- FK → char_inventory.id SET NULL (assault)
-  modifiers        JSONB     NOT NULL DEFAULT '{}'  -- { ini_mod: int } V1 — fire_mode/bullet_count Sprint 4
+  modifiers        JSONB     NOT NULL DEFAULT '{}'  -- { ini_mod: int } — variable selon l'action
   status           TEXT      CHECK IN ('pending','resolved','skipped') DEFAULT 'pending'
   created_at       TIMESTAMPTZ
   updated_at       TIMESTAMPTZ
+  -- INDEX: (campaign_id, token_id) pour résolution slot
+  -- INDEX: (campaign_id, action_key) pour requêtes "qui a déclaré rushed ?"
 ```
 
 ⚠️ `weapon_inv_id` : `ON DELETE SET NULL` — si item supprimé en cours de combat, action reste sans arme. Guard serveur obligatoire avant calcul dégâts.
@@ -116,8 +120,8 @@ combat_actions
 | Type | Description | Exclusif | Modificateur d'Initiative |
 |---|---|---|---|
 | `assault` | Attaque sur une cible (`target_token_id` + `weapon_inv_id`) | Non | 0 |
-| `move_short` | Déplacement ≤3m (`target_pos_x/y/z`) | Non | -3 |
-| `move_long` | Déplacement >3m (`target_pos_x/y/z`) | Oui (GM arbitre) | 0 |
+| `move_short` | Déplacement allure lente — zone 1 (`target_pos_x/y/z`) | Non | -3 (modifiers.ini_mod) |
+| `move_long` | Déplacement allures moyenne/rapide/max — zones 2-4 (`target_pos_x/y/z`) | Oui (GM arbitre) | -5 / -7 / 0 (modifiers.ini_mod) |
 | `micro` | Toute action sans effet résolution V1 — inclut `rushed` | Non | variable (KEY_MOD) |
 | `skip` | Tour passé par GM | — | — |
 
@@ -125,10 +129,12 @@ combat_actions
 ```json
 { "ini_mod": -3 }
 ```
-Sprint 4 : `fire_mode` et `bullet_count` ajoutés sur la ligne assault uniquement.
+Une ligne par action → `modifiers` ne contient que l'ini_mod de cette action spécifique.
+Sprint 7 : `fire_mode` et `bullet_count` ajoutés sur la ligne assault uniquement.
 
 **Règles :**
 - `is_rushed` : ligne distincte (`action_key='rushed'`, `type='micro'`) — +3 INI à l'annonce, -5 Mod Compétence à la résolution assault. Détection : `SELECT 1 FROM combat_actions WHERE token_id=X AND action_key='rushed'`
+- `move_short` / `move_long` : UI = 1 seul item "Déplacement" dans SECTIONS (`isMove: true`). La zone anneau (lente/moyenne/rapide/max) détermine l'`action_key` et l'`ini_mod` stocké dans `modifiers`. Zone 1 → move_short / -3. Zones 2-4 → move_long / -5, -7 ou 0 respectivement.
 - `sequence` : détermine l'ordre d'exécution intra-slot. Attribué côté serveur à l'INSERT : move_* en premier, micro ensuite, assault en dernier
 - Modificateurs GM (portée, taille, obscurité, couverture) : arrivent en phase Résolution via `COMBAT_ACTION_CONFIRM`
 - Aucune validation en Annonce — cibles et positions mémorisées, GM arbitre en Résolution
@@ -376,77 +382,195 @@ COMBAT_ATTACK_RESULT:  'combat:attack_result'   // io.to(room) — résumé dég
 
 ---
 
-### Sprint 3 — Phase Résolution + Déplacement
+### Sprint 2.5 — Centrage caméra automatique (combat)
+
+**Objectif :** Quand un joueur entre en mode sélection de destination (mouvement combat), la caméra se centre automatiquement sur son token.
+
+**Fichiers à lire AVANT :**
+- `client/src/components/Canvas3D.jsx` — `orbitRef`, `MapControls`, pattern `moveTarget`
+
+**Fichiers modifiés :**
+- `client/src/components/Canvas3D.jsx` — nouveau prop `combatCameraCenter: { x, z } | null` ; dans `Scene` : `useEffect` qui appelle `orbitRef.current.target.set(x+0.5, 0, z+0.5); orbitRef.current.update()` quand `combatCameraCenter` change et n'est pas null
+- `client/src/pages/SessionPage.jsx` — état `combatCameraCenter` (null par défaut) ; mis à null à l'annulation du mode mouvement
+
+**Validation Sprint 2.5 :**
+- ✅ Joueur clique "Déplacement" → caméra glisse vers son token (damping MapControls)
+- ✅ Annulation mode mouvement → caméra ne revient pas (reste là où elle est)
+- ✅ orbitRef.current null-checked avant appel
+
+---
+
+### Sprint 3 — Migration 56 (DB seul)
+
+**Objectif :** Aligner le schéma `combat_actions` / `combat_roster` / `battlemaps` sur le plan validé. Aucune logique serveur ni UI — juste la migration.
+
+**Fichiers à lire AVANT :**
+- `server/src/socket/index.js` — état après Sprint 2 (confirmer colonnes utilisées avant ALTER)
+- `server/src/db/migrations/54_combat.js` — schéma actuel exact
+
+**Fichiers créés :**
+- `server/src/db/migrations/56_combat_v2.js`
+
+**Contenu migration 56 :**
+```js
+// combat_actions — passage au command queue
+await knex.schema.alterTable('combat_actions', table => {
+  table.text('action_key')           // remplie par backfill avant NOT NULL
+  table.smallint('sequence').defaultTo(0)
+  table.integer('target_pos_x')
+  table.integer('target_pos_y')
+  table.integer('target_pos_z')
+})
+await knex.raw("UPDATE combat_actions SET action_key = type")
+await knex.raw("ALTER TABLE combat_actions ALTER COLUMN action_key SET NOT NULL")
+await knex.raw("ALTER TABLE combat_actions DROP COLUMN is_micro")
+await knex.raw("ALTER TABLE combat_actions DROP COLUMN initiative_score")
+await knex.raw("ALTER TABLE combat_actions DROP COLUMN target_pos")
+await knex.raw("CREATE INDEX idx_actions_token ON combat_actions(campaign_id, token_id)")
+await knex.raw("CREATE INDEX idx_actions_key   ON combat_actions(campaign_id, action_key)")
+
+// combat_roster — états personnage persistants
+await knex.schema.alterTable('combat_roster', table => {
+  table.text('state_position').notNullable().defaultTo('standing')
+  table.text('state_weapon').notNullable().defaultTo('holstered')
+})
+await knex.raw(`ALTER TABLE combat_roster
+  ADD CONSTRAINT chk_state_position CHECK (state_position IN ('standing','crouching','prone')),
+  ADD CONSTRAINT chk_state_weapon   CHECK (state_weapon IN ('holstered','ready','drawn'))`)
+
+// battlemaps — échelle numérique (voxel_scale_ui = sprint ScaleMap)
+await knex.schema.alterTable('battlemaps', table => {
+  table.float('voxel_scale').notNullable().defaultTo(1.0)
+})
+```
+
+**Validation Sprint 3 :**
+- ✅ Migration appliquée sans erreur (`migrate:latest`)
+- ✅ `\d combat_actions` : action_key NOT NULL, sequence SMALLINT, target_pos_x/y/z INT, indexes créés
+- ✅ `\d combat_roster` : state_position + state_weapon avec CHECK
+- ✅ `\d battlemaps` : voxel_scale FLOAT DEFAULT 1.0
+- ✅ SR sans erreur (aucun code serveur/client changé)
+
+---
+
+### Sprint 4 — UI déclaration déplacement (client)
+
+**Objectif :** Le joueur voit "Déplacement" dans CombatActionWindow, clique dessus, la fenêtre disparaît (opacity 0), la carte affiche 4 anneaux concentriques, il clique une destination, la fenêtre réapparaît avec la destination affichée.
+
+**Fichiers à lire AVANT :**
+- `client/src/components/Canvas3D.jsx` — orbitRef, moveTarget pattern, ghost rendering (déjà lu)
+- `client/src/components/CombatActionWindow.jsx` — état actuel post-Sprint 2
+- `client/src/components/combatSections.js` — état actuel
+- `server/src/lib/charStats.js` — signature `calcAllures(coo_na, athletisme_total)`
+
+**Fichiers modifiés :**
+- `client/src/components/combatSections.js` — remplacer les 2 items `move_short`/`move_long` par 1 item `{ key: 'move', label: 'Déplacement', active: true, isMove: true }` ; supprimer `move_short`/`move_long` de `KEY_MOD`
+- `client/src/components/CombatActionWindow.jsx` — état `moveSelection: { action_key, ini_mod, targetPosX, targetPosY, targetPosZ } | null` ; clic sur item `isMove` → `onEnterMoveMode(allures)` callback + `opacity: 0` ; réception `onMoveSelected` → `setMoveSelection` + `opacity: 1` ; `totalMod` = KEY_MOD réduction + `moveSelection?.ini_mod ?? 0` ; afficher destination sélectionnée dans le footer
+- `client/src/pages/SessionPage.jsx` — état `combatMoveMode: { tokenId, allures, onMoveSelected, onCancel } | null` ; callbacks `handleEnterMoveMode` + `handleMoveSelected` + `handleMoveCancel`
+- `client/src/components/Canvas3D.jsx` — prop `combatMoveMode` + passage à `Scene` ; dans Scene : 4 anneaux `RingGeometry` centrés sur le token actif (rayon = allure en voxels × voxel_scale) ; cursor wireframe 1×1 suit la souris ; clic → `combatMoveMode.onMoveSelected({ action_key, ini_mod, targetPosX, targetPosY, targetPosZ })` ; Échap → `combatMoveMode.onCancel()`
+
+**Mapping allure → action_key + ini_mod :**
+| Zone | Allure | action_key | ini_mod |
+|---|---|---|---|
+| 1 | Lente (≤ lente m) | move_short | -3 |
+| 2 | Moyenne (≤ moyenne m) | move_long | -5 |
+| 3 | Rapide (≤ rapide m) | move_long | -7 |
+| 4 | Max (≤ max m) | move_long | 0 |
+
+**Couleurs anneaux :** Lente=bleu, Moyenne=vert, Rapide=orange, Max=rouge (opacité 0.25)
+
+**Validation Sprint 4 :**
+- ✅ CombatActionWindow : item "Déplacement" visible, `move_short`/`move_long` disparus
+- ✅ Clic "Déplacement" → fenêtre disparaît (opacity 0) → 4 anneaux visibles sur la carte
+- ✅ Survol carte → cursor wireframe 1×1 sur la case
+- ✅ Clic dans zone 1 → fenêtre réapparaît, footer affiche "→ [X,Y]" + "INI -3"
+- ✅ Clic dans zone 3 → INI -7
+- ✅ Échap → mode annulé, fenêtre réapparaît sans sélection
+- ✅ SR sans erreur
+
+---
+
+### Sprint 5 — Serveur : COMBAT_ACTION_DECLARE (target_pos)
+
+**Objectif :** Le serveur reçoit `target_pos_x/y/z` et `ini_mod` dans le payload de déclaration et les stocke correctement dans `combat_actions`.
+
+**Fichiers à lire AVANT :**
+- `server/src/socket/index.js` — handler COMBAT_ACTION_DECLARE actuel (post-Sprint 2)
+
+**Fichiers modifiés :**
+- `server/src/socket/index.js` — handler `COMBAT_ACTION_DECLARE` :
+  - Nouveau payload : `{ tokenId, actions: [{ action_key, ini_mod, targetPosX, targetPosY, targetPosZ, weaponInvId }] }`
+  - Guard target_pos (PC33) : pour chaque action IN ('move_short','move_long') → parseInt(targetPos*) NOT NULL
+  - `sequence` attribué serveur selon catégorie de l'action_key : move_*=1, micro variants=2, assault=3
+  - INSERT bulk (transaction) : 1 row par action dans `actions[]`
+  - `ini_mod_total = actions.reduce((sum, a) => sum + a.ini_mod, 0)`
+  - UPDATE `combat_roster SET initiative = base_ini + ini_mod_total`
+  - Reste inchangé : ownership guard, has_announced, PC13
+
+**Validation Sprint 5 :**
+- ✅ SR sans erreur
+- ✅ Joueur déclare move_short + micro_draw + assault → DB : 3 lignes avec sequence 1/2/3
+- ✅ move_short : target_pos_x/y/z non-null
+- ✅ micro_draw : target_pos null, modifiers.ini_mod=-5
+- ✅ PC33 : target_pos null pour move_* → erreur explicite
+- ✅ initiative recalculée correctement dans combat_roster
+
+---
+
+### Sprint 6 — Phase Résolution
 
 **Objectif :** Actions exécutées dans l'ordre d'initiative. Déplacement résolu via Redis. Tour boucle.
 
 **Fichiers à lire AVANT :**
-- `server/src/socket/index.js` — état après Sprint 2
+- `server/src/socket/index.js` — état après Sprint 5
 - `server/src/lib/redis.js` — isCaseOccupied, collisionMoveToken
 - `client/src/stores/combatStore.js` — état après Sprint 2
 
-**Fichiers créés :** aucun
-
 **Fichiers modifiés :**
-- `server/src/socket/index.js` — `startResolutionPhase()` complet, `COMBAT_ACTION_CONFIRM` (déplacement), `endTurn()`
-- `client/src/pages/SessionPage.jsx` — COMBAT_SLOT_ADVANCED handler
-- `client/src/components/CombatActionWindow.jsx` — mode Résolution
+- `server/src/socket/index.js` — `startResolutionPhase()` complet, `COMBAT_ACTION_CONFIRM` (déplacement + micro), `advanceSlot()`, `endTurn()`
+- `client/src/pages/SessionPage.jsx` — handler COMBAT_SLOT_ADVANCED
+- `client/src/components/CombatActionWindow.jsx` — mode Résolution (récapitulatif + bouton "Agir", assaut grisé)
 - `client/src/components/CombatTimeline.jsx` — curseur activeSlotIdx
 
-**`startResolutionPhase()` — version complète :**
-- SELECT `combat_actions ORDER BY initiative_score DESC` → orderedSlots
-- UPDATE `combat_state SET phase = 'RESOLUTION', active_slot_idx = 0`
-- Broadcast `COMBAT_PHASE_CHANGED { phase: 'RESOLUTION', orderedSlots }`
-- Emit `COMBAT_ACTION_WINDOW { action }` → socket du joueur au slot 0
+**`startResolutionPhase()` :**
+```js
+// Tri par combat_roster.initiative — jamais initiative_score (PC27)
+const slots = await db('combat_roster')
+  .where({ campaign_id, status: 'active', has_announced: true })
+  .orderBy('initiative', 'desc')
+  .select('token_id', 'initiative')
+```
 
-**Handler `COMBAT_ACTION_CONFIRM` — Sprint 3 (déplacement + micro) :**
-- Payload : `{ actionId, confirmedModifiers: {} }`
-- Guard : action.type === 'assault' → traitement Sprint 4 (skip silencieux en Sprint 3 — répondre avec skip ou log)
-- Type `move_short` / `move_long` : step-by-step Redis
-  - Lire `target_pos_x/y/z INT` depuis `combat_actions` (coords DB PE14, déjà convertis à l'annonce)
-  - (PE22) excludeIds = [tokenId]
-  - (PE29) isCaseOccupied à pos_z + 1 (espace de marche)
-  - UPDATE tokens pos + collisionMoveToken
-  - Broadcast TOKEN_MOVED
-- Type `micro` : résolution directe (action cosmétique en V1)
-- UPDATE `combat_actions SET status = 'resolved'`
-- UPDATE `combat_roster SET has_resolved = true`
-- `advanceSlot()` : active_slot_idx + 1
-  - Si slot suivant existe → `COMBAT_SLOT_ADVANCED { activeSlotIdx, tokenId }` + `COMBAT_ACTION_WINDOW` → joueur suivant
-  - Si plus de slots → `endTurn()`
+**Handler `COMBAT_ACTION_CONFIRM` (déplacement + micro) :**
+- Lire `combat_actions WHERE token_id=X ORDER BY sequence ASC` — N lignes (command queue)
+- Pour chaque action dans l'ordre :
+  - `action_key IN ('move_short','move_long')` → step-by-step Redis (PE22, PE29)
+  - `action_key LIKE 'micro_%'` → cosmétique V1, resolved direct
+  - `action_key = 'assault'` → log "Sprint 7 requis", resolved sans effet
+- UPDATE status='resolved' pour chaque action traitée
 
 **`endTurn()` :**
-- (PC18) **UNE SEULE requête** : `UPDATE combat_roster SET has_announced=false, has_resolved=false WHERE campaign_id AND status='active'`
+- (PC18) `UPDATE combat_roster SET has_announced=false, has_resolved=false WHERE campaign_id AND status='active'`
 - (PC28) `DELETE FROM combat_actions WHERE campaign_id`
-- UPDATE `combat_state SET current_turn = current_turn + 1, active_slot_idx = 0, phase = 'ANNOUNCEMENT'`
-- `io.to(room).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT', turn: newTurn })`
-- Envoyer `COMBAT_ACTION_WINDOW` au premier joueur (ordre initiative croissante = dernier à agir)
+- `UPDATE combat_state SET current_turn+1, phase='ANNOUNCEMENT'`
+- Broadcast COMBAT_PHASE_CHANGED ANNOUNCEMENT
 
-**CombatActionWindow.jsx — mode Résolution :**
-- Affiche récapitulatif de l'action déclarée
-- Bouton "Agir" → émet `WS.COMBAT_ACTION_CONFIRM { actionId, confirmedModifiers: {} }`
-- Assaut en Sprint 3 : bouton grisé "Sprint 4 requis" (comportement explicite)
-
-**CombatTimeline.jsx — Sprint 3 :**
-- Ajout curseur sur `combatStore.activeSlotIdx`
-- Slot résolu : token grisé
-
-**Validation Sprint 3 :**
-- ✅ Phase RESOLUTION : slots défilent ORDER BY initiative_score DESC
+**Validation Sprint 6 :**
+- ✅ Phase RESOLUTION : slots défilent ORDER BY combat_roster.initiative DESC
 - ✅ Curseur timeline suit activeSlotIdx
-- ✅ Déplacement résolu via Redis (collision testée)
-- ✅ Fin de tour → turn + 1 → retour ANNOUNCEMENT
-- ✅ PC18 : bulk UPDATE en 1 requête (vérifier avec EXPLAIN si besoin)
-- ✅ PC28 : combat_actions DELETE fin de tour (vérifier count avant/après)
+- ✅ Déplacement résolu → token se déplace + collision Redis
+- ✅ Fin de tour → turn+1 → retour ANNOUNCEMENT
+- ✅ PC18 : 1 requête (vérifier)
+- ✅ PC28 : combat_actions vide après endTurn
 
 ---
 
-### Sprint 4 — Jets d'attaque + Dégâts + Blessures + Carence FOR
+### Sprint 7 — Jets d'attaque + Dégâts + Blessures + Carence FOR
 
 **Objectif :** Attaques complètes. Blessures enregistrées. Carence FOR appliquée.
 
 **Fichiers à lire AVANT :**
-- `server/src/socket/index.js` — état après Sprint 3
+- `server/src/socket/index.js` — état après Sprint 6
 - `server/src/lib/charStats.js` — calcResistanceArmure, calcCarenceArmure, calcResistanceDommages, calcWoundPenalty
 - `shared/woundConstants.js` — WOUND_PENALTIES exact (PO1)
 - `shared/armorConstants.js` — LOCATION_TO_SLOT (mapping localisation touchée → slotCode)
@@ -567,6 +691,23 @@ COMBAT_ATTACK_RESULT:  'combat:attack_result'   // io.to(room) — résumé dég
 
 ---
 
+### Sprint ScaleMap — Échelle battlemap (reporté post-Sprint 4)
+
+**Objectif :** Le GM peut définir l'échelle d'une carte (ex. 1 voxel = 1,5 m) — impacte les calculs de portée de déplacement combat.
+
+**Prérequis :** `battlemaps.voxel_scale FLOAT NOT NULL DEFAULT 1.0` déjà ajouté en migration 56. Ce sprint ajoute l'UI GM et la propagation dans les calculs.
+
+**Fichiers modifiés :**
+- Interface paramètres battlemap — champ numérique `voxel_scale`
+- `Canvas3D.jsx` — passer `battlemap.voxel_scale` à Scene → rayon des anneaux allures = `allure_m * voxel_scale`
+- Serveur `COMBAT_ACTION_DECLARE` — vérifier distance avec `voxel_scale` de la battlemap active
+
+**Validation :**
+- ✅ GM change scale 1.0 → 1.5 → anneaux allures se redimensionnent
+- ✅ Déclaration déplacement → distance voxels correcte avec scale
+
+---
+
 ## 7. Points ouverts — à résoudre avant le sprint concerné
 
 | # | Question | Sprint | Statut |
@@ -608,8 +749,11 @@ COMBAT_ATTACK_RESULT:  'combat:attack_result'   // io.to(room) — résumé dég
 | PC29 | calcResistanceArmure + calcCarenceArmure : déjà dans charStats.js (session 56) — ne pas recréer |
 | PC30 | Armure localisation : LOCATION_TO_SLOT depuis armorConstants.js — mapping localisation → slotCode (BG/BD/etc.) |
 | PC31 | États personnage (state_position, state_weapon) dans combat_roster — jamais dérivés de combat_actions (table vidée fin de tour). action_key = déclencheur du changement d'état, pas l'état lui-même. |
-| PC32 | sequence SMALLINT dans combat_actions — ORDER BY sequence ASC pour exécution intra-slot. Jamais supposer l'ordre d'insertion SQL. Ordre attribué serveur : move_* → micro → assault. |
+| PC32 | sequence SMALLINT dans combat_actions — ORDER BY sequence ASC pour exécution intra-slot. Jamais supposer l'ordre d'insertion SQL. Attribué serveur : move_*(1) → micro(2) → assault(3). |
 | PC33 | target_pos_x/y/z : colonnes INT séparées (coords DB PE14). Client convertit Three.js → DB avant envoi. parseInt obligatoire côté serveur au guard. |
+| PC34 | Sprint 3 = migration 56 seule. Ne pas toucher socket/index.js ni les composants avant que la migration soit appliquée et vérifiée en psql. |
+| PC35 | voxel_scale = 1.0 hardcodé en Sprint 3. L'UI ScaleMap est reportée (sprint dédié). Ne pas brancher voxel_scale sur battlemap.scale_label (TEXT cosmétique). |
+| PC36 | combatMoveMode prop distinct de moveTarget dans Canvas3D. moveTarget = entity push/pull (9F-B2). Ne pas réutiliser pour le combat mouvement. |
 
 ---
 
