@@ -225,6 +225,7 @@ function Scene({
   altPressed, onEntityClick, onTokenRotate,
   moveTarget, onMoveCancel, moveLabels,
   dicePayload, onDiceDone,
+  combatCameraCenter,
 }) {
   const { camera, gl } = useThree()
   const orbitRef = useRef()
@@ -544,6 +545,15 @@ function Scene({
     orbitRef.current.keyPanSpeed = 20
   }, [])
 
+  // Sprint 2.5 — centrage caméra sur le token actif en mode mouvement combat
+  // combatCameraCenter : { x, z } coords DB (PE14) | null
+  // Retour à null (annulation) → guard bloque → caméra reste où elle est (PC36)
+  useEffect(() => {
+    if (!combatCameraCenter || !orbitRef.current) return
+    orbitRef.current.target.set(combatCameraCenter.x + 0.5, 0, combatCameraCenter.z + 0.5)
+    orbitRef.current.update()
+  }, [combatCameraCenter])
+
   return (
     <>
       <ambientLight intensity={0.8} />
@@ -642,7 +652,7 @@ function Scene({
 // onTokenRotate : callback → SessionPage émet WS.TOKEN_ROTATE
 // moveTarget    : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel  : callback stable (useCallback deps []) — annule le mode visée
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone }) {
+export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
@@ -812,6 +822,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           moveLabels={moveLabels}
           dicePayload={dicePayload}
           onDiceDone={onDiceDone}
+          combatCameraCenter={combatCameraCenter}
         />
       )}
     </Canvas>

@@ -176,6 +176,11 @@ export default function SessionPage() {
   // null = inactif, sinon { tokenId } du token surpris appartenant au joueur
   const [pendingSurpriseRoll, setPendingSurpriseRoll] = useState(null)
 
+  // ─── Centrage caméra combat (Sprint 2.5) ──────────────────────────────────
+  // null = inactif, sinon { x, z } coords DB (PE14) du token à centrer.
+  // Branché sur handleEnterMoveMode en Sprint 4.
+  const [combatCameraCenter, setCombatCameraCenter] = useState(null)
+
   // Chargement local d'une carte — GM uniquement, sans déplacer les joueurs
   // Utilisé : clic barre GM, suppression carte active
   const loadMap = useCallback(async (battlemapId) => {
@@ -748,6 +753,7 @@ export default function SessionPage() {
               onMoveCancel={handleMoveCancel}
               dicePayload={lastDiceRoll}
               onDiceDone={handleDiceDone}
+              combatCameraCenter={combatCameraCenter}
             />
         )}
         {!canvasVisible && (
