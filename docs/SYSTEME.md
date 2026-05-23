@@ -1,5 +1,5 @@
 # SYSTEME.md — Flux, règles et pièges du projet Enclume
-> Dernière mise à jour : 2026-05-08 Session 54
+> Dernière mise à jour : 2026-05-23 Session 61
 > Ce document répond à "qui fait quoi, qui parle à qui, pourquoi" — pas à "qu'est-ce qui existe".
 > Pour la liste des fichiers : voir ASBUILT.md. Pour l'historique : voir JOURNAL2.md.
 
@@ -294,6 +294,23 @@ posZ = entity.pos_y + depth/2    // pos_y base = profondeur Z Three.js
 { pos_x: pos.x, pos_y: pos.z, pos_z: pos.y }
 // Identique à threeToDb() — jamais inline
 ```
+
+### PE34 — Altitude pieds token en Three.js (session 61)
+
+```javascript
+// Token group (lerpPos) centré à : Y = token.pos_z + 0.5 (centre du voxel)
+// Y_OFFSET = 0.5 (primitive au-dessus du centre) → pieds à : Y = token.pos_z + 1.0
+
+// Formule pieds token (Three.js Y) :
+const feetY = token.pos_z + 1.0
+
+// Pour un overlay au sol (anneau, cercle) — +0.05 évite le z-fighting :
+const overlayY = token.pos_z + 1.0 + 0.05
+
+// Cohérent avec §12 (step-by-step collision à pos_z+1 = espace de marche)
+```
+**Piège :** `token.pos_z + 0.5` = centre du voxel (intérieur) — les overlays sols sont cachés.
+`token.pos_z + 1.0` = surface du sol = pieds du token.
 
 ---
 
@@ -726,3 +743,4 @@ chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
 | PI6 | LOCATION_TO_SLOT : BG/BD/JG/JD indépendants — availableItems filtre via refCode (SLOT_TO_REF_LOCATION) |
 | PI7 | refCode (B/J) pour lookup ref_location — slotCode (BG/BD) pour equip/unequip — ne pas confondre |
 | PI8 | POST /inventory : LIKE query pour multi-slot — WHERE slot = code casse les multi-couches |
+| PE34 | Pieds token Three.js : `pos_z + 1.0` (top voxel) — pas `pos_z + 0.5` (centre voxel) |

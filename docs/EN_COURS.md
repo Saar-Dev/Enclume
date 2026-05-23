@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-23 Session 60
+> Dernière mise à jour : 2026-05-23 Session 61
 
 ---
 
@@ -140,7 +140,51 @@ Travaux effectués en session 59 (suite) — Rework Phase Annonce :
 
 ---
 
-## Prochain chantier — Chantier 11 Sprint 3 — Phase Résolution
+### Chantier 11 Sprint 2.5 — Centrage caméra combat ✅ (session 61)
+### Chantier 11 Sprint 4 — UI Déplacement combat ✅ (session 61)
+
+Travaux effectués en session 61 :
+- `shared/polarisUtils.js` : calcAN + calcAllureMoy + calcAllures (exports partagés PI11) ✅
+- `client/src/character/CharacterSheet.jsx` : import shared — déf locales supprimées ✅
+- `client/src/components/combatSections.js` : move_short/move_long → isMove item unique ✅
+- `client/src/components/CombatActionWindow.jsx` : fetch allures, mode déplacement, inMoveMode, moveSelection ✅
+- `client/src/components/CombatOverlay.jsx` : légende allures + ZONE_DEFS + Valider/Changer/Annuler ✅
+- `client/src/components/Canvas3D.jsx` : anneaux 4 zones PE34, cursor, combatMoveModeRef, onPendingMove ✅
+- `client/src/pages/SessionPage.jsx` : combatMoveMode + pendingMoveSelection + handlers ✅
+- Correction PE34 : altitude anneaux `pos_z + 1.0` (pieds token, pas centre voxel) ✅
+
+**Validé joueur ✅ — GM/PNJ déplacement reporté Sprint 4.1**
+
+---
+
+## Prochain chantier — Sprint 4.1 — Généralisation zones déplacement
+
+**Objectif :** remplacer le système allures fixe (4 zones hardcodées) par un tableau `zones[]` générique (1-N zones). Permet : grab_close, grab_far, et flux GM PNJ.
+
+**Architecture cible :**
+```js
+// zones = [{ radius, action_key, ini_mod, color, label }]
+// Déplacement : 4 zones (lente/moyenne/rapide/max depuis allures)
+// Grab close   : 1 zone (radius=3, grab_close, −3)
+// Grab far     : 1 zone dynamique (radius depuis slider, grab_far, −5 ou −10)
+```
+
+**Fichiers à modifier :** Canvas3D, CombatActionWindow, CombatOverlay, combatSections.js
+**Déclenche aussi :** GM/PNJ peut utiliser le même mode avec les zones du PNJ
+
+---
+
+## Prochain chantier — Chantier 11 Sprint 5 — Serveur COMBAT_ACTION_DECLARE
+
+Objectif : aligner le handler serveur COMBAT_ACTION_DECLARE sur migration 56.
+- `target_pos_x/y/z` depuis payload `moveAction`
+- `action_key` stocké dans `combat_actions`
+- Fix : COMBAT_SURPRISE_RESULT + skipPlayer (INSERT sur colonnes droppées)
+- `startResolutionPhase()` : orderBy `initiative` (pas `initiative_score` supprimé)
+
+---
+
+## Prochain chantier — Chantier 11 Sprint 6 — Phase Résolution
 
 Objectif : les joueurs agissent dans l'ordre d'initiative, chaque slot résolu par le GM, auto-fin de tour.
 
@@ -150,7 +194,7 @@ Handlers serveur à implémenter :
 - `endTurn()` — fin de tour : reset `has_announced`/`has_resolved`, incrément `current_turn`
 - Timer auto-skip si `action_timer_sec > 0` (reporté Sprint 2)
 
-Prérequis Sprint 3 : voir PLAN_11_SYSCOMBAT.md § Sprint 3
+Prérequis Sprint 6 : voir PLAN_11_SYSCOMBAT.md § Sprint 3
 
 ---
 

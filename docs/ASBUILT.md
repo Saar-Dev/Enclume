@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-23 Session 60
+> Dernière mise à jour : 2026-05-23 Session 61
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -16,14 +16,14 @@ Enclume/
 │   │   └── favicon.svg                 # ⚠ présent mais non référencé — à brancher
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── CombatOverlay.jsx        # Modifié 59 — user retiré de CombatPnjPanel/CombatGmDeclareWindow calls
+│   │   │   ├── CombatOverlay.jsx        # Modifié 61 — légende allures ZONE_DEFS, pendingMoveSelection, Valider/Changer/Annuler
 │   │   │   ├── CombatRosterWindow.jsx  # NOUVEAU 57 — roster GM, INI preview, surpris, exclusion, bouton Démarrer
 │   │   │   ├── CombatTimeline.jsx      # NOUVEAU 58 — timeline INI, portraits cliquables GM, topOffset
-│   │   │   ├── CombatActionWindow.jsx  # Modifié 59s — 4 sections, multi-select, selectedKeys[], INI total, items grisés
+│   │   │   ├── CombatActionWindow.jsx  # Modifié 61 — fetch allures, inMoveMode, moveSelection, handleMoveClick, isMove renderer
 │   │   │   ├── CombatPnjPanel.jsx      # NOUVEAU 58 — modal GM PJs/PNJs read-only, isPnj via character.type
 │   │   │   ├── CombatGmDeclareWindow.jsx # Modifié 59s — accordion always-one-open, auto-progression, liste complète
-│   │   │   ├── combatSections.js       # NOUVEAU 59s — SECTIONS + KEY_MOD + formatMod (source unique partagée)
-│   │   │   ├── Canvas3D.jsx            # Modifié 44 — props dicePayload/onDiceDone
+│   │   │   ├── combatSections.js       # Modifié 61 — move_short/move_long → isMove item unique
+│   │   │   ├── Canvas3D.jsx            # Modifié 61 — combatMoveMode prop, anneaux 4 zones PE34, cursor, onPendingMove
 │   │   │   ├── Editor3D.jsx            # Modifié 9C — EntityEditorScene, activeEditorTab
 │   │   │   ├── EntityMesh.jsx          # Modifié 43 — Lerp 300ms EntityMeshVoxel + EntityMeshGlb
 │   │   │   ├── EntityBuilderTab.jsx    # Modifié 40 — refonte formulaire interactions SkillCheck/Déplacement
@@ -40,7 +40,7 @@ Enclume/
 │   │   │   ├── LoginPage.jsx
 │   │   │   ├── RegisterPage.jsx
 │   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern)
-│   │   │   ├── SessionPage.jsx         # Modifié 57 — mode combat, PC15 bypass, handleCombatToggle, bouton ⚔ gmBar, CombatOverlay
+│   │   │   ├── SessionPage.jsx         # Modifié 61 — combatMoveMode + pendingMoveSelection + handleEnterMoveMode + combatCameraCenter
 │   │   │   ├── CampaignSettingsPage.jsx
 │   │   │   ├── WorkshopPage.jsx        # Stable 33
 │   │   │   └── TexturePacksPage.jsx    # CONSERVÉ mais remplacé par WorkshopPage
@@ -60,7 +60,7 @@ Enclume/
 │   │   │   ├── ContainerPanel.jsx      # NOUVEAU 54 — Sac/Ceinture/Coffre — équipement conteneur
 │   │   │   ├── SilhouettePanel.jsx     # NOUVEAU 54 — SVG silhouette colorée par blessures, 50% width
 │   │   │   ├── AdvantagesPanel.jsx     # Modifié 50 — rework lift-state-up, props charSkills/refSkillsPolaris/onSkillLearnedChange
-│   │   │   ├── CharacterSheet.jsx      # Modifié 60 — 4 allures LdB p.221 (calcAllures+tooltips), calcSecondary épuré
+│   │   │   ├── CharacterSheet.jsx      # Modifié 61 — import calcAN/calcAllureMoy/calcAllures shared, déf locales supprimées
 │   │   │   └── CharacterWindow.jsx     # Modifié 55 — WeaponPanel monté entre ArmorWoundPanel et InventoryPanel
 │   │   ├── locales/
 │   │   │   └── fr.json                 # Modifié 49 — +tabMateriel
@@ -78,7 +78,7 @@ Enclume/
 │   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # 57 fichiers — migrations jusqu'à 55
+│   │   │   ├── migrations/             # 58 fichiers — migrations jusqu'à 56
 │   │   │   ├── seeds/
 │   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
@@ -115,7 +115,7 @@ Enclume/
 │   │   │   └── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
 │   │   └── index.js                    # Modifié 59 — COMBAT_SURPRISE_RESULT + COMBAT_ACTION_DECLARE (type-based) + COMBAT_START (Entités filtrées)
 ├── shared/
-│   ├── polarisUtils.js                 # NOUVEAU 56 — polarisRound(x) source unique — jamais redéfini localement (PI11)
+│   ├── polarisUtils.js                 # Modifié 61 — +calcAN, calcAllureMoy, calcAllures (exports partagés PI11)
 │   ├── events.js                       # Modifié 51 — +INVENTORY_ADDED/UPDATED/REMOVED/SOLS_UPDATED
 │   ├── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES/SEVERITY_COLORS
 │   └── armorConstants.js               # NOUVEAU 54 — ARMOR_CATEGORY_MALUS/LOCATION_TO_SLOT/SLOT_TO_REF_LOCATION/LOCATION_TO_SVG/LOCATION_LABELS

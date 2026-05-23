@@ -1,17 +1,52 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { WS } from '../../../shared/events.js'
+import { calcAN, calcAllures } from '../../../shared/polarisUtils.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
+import api from '../lib/api.js'
 import { KEY_MOD, SECTIONS, formatMod } from './combatSections.js'
 
-export default function CombatActionWindow({ socket, user, characters, pendingSurpriseRoll, onSurpriseRolled }) {
+export default function CombatActionWindow({ socket, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode }) {
   const { roster } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [selectedKeys, setSelectedKeys] = useState(new Set())
+  const [allures, setAllures] = useState(null)
+  const [inMoveMode, setInMoveMode] = useState(false)
+  const [moveSelection, setMoveSelection] = useState(null)
 
   const playerChar = characters.find(c => c.user_id === user?.id)
   const playerToken = tokens.find(t => t.character_id === playerChar?.id)
   const rosterEntry = playerToken ? roster.find(r => r.token_id === playerToken.id) : null
+
+  // Fetch allures dès que playerChar est disponible
+  useEffect(() => {
+    if (!playerChar?.id) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const [sheetRes, genoRes] = await Promise.all([
+          api.get(`/char-sheet/${playerChar.id}`),
+          api.get('/char-ref/genotypes'),
+        ])
+        if (cancelled) return
+        const { archetype, attributes, skills } = sheetRes.data
+        const genotype = genoRes.data.genotypes?.find(g => g.id === archetype?.genotype_id) || {}
+        const findAttr = (id) => attributes?.find(a => a.attr_id === id) || {}
+        const calcNA = (id, modField) => Math.max(3,
+          (findAttr(id).base_level ?? 7) + (findAttr(id).pc_modifier ?? 0) + (genotype[modField] || 0)
+        )
+        const coo_na = calcNA('COO', 'mod_coo')
+        const for_na = calcNA('FOR', 'mod_for')
+        const mastery = skills?.find(s => s.skill_id === 'ATHLETISME')?.mastery ?? 0
+        const athletisme_total = calcAN(for_na) + calcAN(coo_na) + mastery
+        setAllures(calcAllures(coo_na, athletisme_total))
+      } catch (e) {
+        console.error('[CombatActionWindow] erreur fetch allures :', e)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [playerChar?.id])
 
   if (!playerToken || !rosterEntry) return null
 
@@ -33,14 +68,36 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
     })
   }
 
+  const handleMoveClick = () => {
+    if (!allures || !playerToken) return
+    const onSelected = (sel) => {
+      setMoveSelection(sel)
+      setInMoveMode(false)
+    }
+    const onCancel = () => {
+      setInMoveMode(false)
+    }
+    setInMoveMode(true)
+    setMoveSelection(null)
+    onEnterMoveMode(
+      allures,
+      playerToken.id,
+      { x: playerToken.pos_x, z: playerToken.pos_y },  // PE14 : pos_y = Z Three.js
+      onSelected,
+      onCancel
+    )
+  }
+
   const totalMod = [...selectedKeys].reduce((sum, k) => sum + (KEY_MOD[k] ?? 0), 0)
-  const canDeclare = selectedKeys.size > 0
+    + (moveSelection?.ini_mod ?? 0)
+  const canDeclare = selectedKeys.size > 0 || moveSelection !== null
 
   const handleDeclare = () => {
     if (!socket || !playerToken || !canDeclare) return
     socket.emit(WS.COMBAT_ACTION_DECLARE, {
       tokenId: playerToken.id,
       selectedKeys: Array.from(selectedKeys),
+      moveAction: moveSelection ?? undefined,
       weaponInvId: null,
     })
   }
@@ -85,7 +142,7 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
   }
 
   return (
-    <div style={styles.window}>
+    <div style={{ ...styles.window, opacity: inMoveMode ? 0 : 1, pointerEvents: inMoveMode ? 'none' : 'auto' }}>
       <div style={styles.header}>Phase 1 - Déclaration d'intention</div>
 
       <div style={styles.body}>
@@ -101,6 +158,27 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
                     <div key={item.key} style={styles.itemGreyed}>
                       <span style={styles.itemLabel}>{item.label}</span>
                       {modStr && <span style={styles.itemMod}>{modStr}</span>}
+                    </div>
+                  )
+                }
+
+                // Item déplacement (isMove)
+                if (item.isMove) {
+                  const isSelected = moveSelection !== null
+                  return (
+                    <div
+                      key={item.key}
+                      style={{
+                        ...styles.item,
+                        ...(isSelected ? styles.itemSelected : {}),
+                        ...(allures ? {} : { opacity: 0.5, cursor: 'not-allowed' }),
+                      }}
+                      onClick={allures ? handleMoveClick : undefined}
+                    >
+                      <span style={styles.itemLabel}>{item.label}</span>
+                      <span style={{ ...styles.itemMod, ...(isSelected ? styles.itemModSelected : {}) }}>
+                        {isSelected ? `${moveSelection.ini_mod}` : '→'}
+                      </span>
                     </div>
                   )
                 }
@@ -172,9 +250,16 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
       </div>
 
       <div style={styles.footer}>
-        <span style={styles.totalMod}>
-          INI total : {totalMod > 0 ? `+${totalMod}` : totalMod}
-        </span>
+        <div style={styles.footerLeft}>
+          <span style={styles.totalMod}>
+            INI total : {totalMod > 0 ? `+${totalMod}` : totalMod}
+          </span>
+          {moveSelection && (
+            <span style={styles.destination}>
+              → [{moveSelection.targetPosX}, {moveSelection.targetPosY}]
+            </span>
+          )}
+        </div>
         <button
           style={{ ...styles.btnDeclare, ...(!canDeclare ? styles.btnDeclareDisabled : {}) }}
           onClick={handleDeclare}
@@ -203,6 +288,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
+    transition: 'opacity 0.15s ease',
   },
   header: {
     padding: '10px 14px',
@@ -304,10 +390,22 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'space-between',
     flexShrink: 0,
+    gap: 8,
+  },
+  footerLeft: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    minWidth: 0,
   },
   totalMod: {
     fontSize: 12,
     color: '#8888a8',
+    fontWeight: 600,
+  },
+  destination: {
+    fontSize: 10,
+    color: '#5b8dee',
     fontWeight: 600,
   },
   btnDeclare: {
@@ -319,6 +417,7 @@ const styles = {
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
+    flexShrink: 0,
   },
   btnDeclareDisabled: {
     opacity: 0.4,
@@ -327,29 +426,27 @@ const styles = {
   surpriseText: {
     padding: '14px 14px 0',
     fontSize: 12,
-    color: '#e0a050',
+    color: '#c0c0d0',
+    lineHeight: '1.5',
     margin: 0,
-    lineHeight: 1.5,
   },
   waitText: {
     padding: '14px',
     fontSize: 12,
-    color: '#5b5b7a',
+    color: '#5a5a7a',
     margin: 0,
-    textAlign: 'center',
+    fontStyle: 'italic',
   },
   btnRoll: {
-    display: 'block',
-    width: '100%',
-    padding: '12px 14px',
-    marginTop: 12,
-    background: 'rgba(224,160,80,0.15)',
-    border: 'none',
-    borderTop: '1px solid #2a2a3e',
-    color: '#e0a050',
+    margin: '14px',
+    padding: '10px 20px',
+    background: 'rgba(91,141,238,0.15)',
+    border: '1px solid #5b8dee',
+    borderRadius: 4,
+    color: '#5b8dee',
     fontSize: 13,
     fontWeight: 600,
     cursor: 'pointer',
-    textAlign: 'center',
+    width: 'calc(100% - 28px)',
   },
 }

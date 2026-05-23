@@ -22,8 +22,6 @@ export const KEY_MOD = {
   micro_mechanism_5:  -5,
   // Déplacement
   crouch:             -3,
-  move_short:         -3,
-  move_long:           0,
   dive:               -5,
   stand_up:          -10,
   take_cover:         -3,
@@ -64,8 +62,7 @@ export const SECTIONS = [
     label: 'DÉPLACEMENT',
     items: [
       { key: 'crouch',     label: "S'accroupir / Se redresser",          mod: -3,  active: true  },
-      { key: 'move_short', label: 'Déplacement court',                   mod: -3,  active: true  },
-      { key: 'move_long',  label: 'Déplacement long',                    mod: 0,   active: true  },
+      { key: 'move',       label: 'Déplacement',                         active: true, isMove: true },
       { key: 'dive',       label: 'Se jeter à terre / Plonger',          mod: -5,  active: true  },
       { key: 'stand_up',   label: 'Se relever',                          mod: -10, active: true  },
       { key: 'take_cover', label: 'Se découvrir / Se mettre à couvert',  mod: -3,  active: true  },

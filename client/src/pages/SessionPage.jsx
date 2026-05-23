@@ -178,8 +178,13 @@ export default function SessionPage() {
 
   // ─── Centrage caméra combat (Sprint 2.5) ──────────────────────────────────
   // null = inactif, sinon { x, z } coords DB (PE14) du token à centrer.
-  // Branché sur handleEnterMoveMode en Sprint 4.
   const [combatCameraCenter, setCombatCameraCenter] = useState(null)
+
+  // ─── Mode sélection déplacement combat (Sprint 4) ─────────────────────────
+  // null = inactif, sinon { tokenId, allures, onMoveSelected, onCancel, onPendingMove }
+  const [combatMoveMode, setCombatMoveMode] = useState(null)
+  // null = inactif, sinon sélection en attente de validation { action_key, ini_mod, targetPosX, targetPosY, targetPosZ }
+  const [pendingMoveSelection, setPendingMoveSelection] = useState(null)
 
   // Chargement local d'une carte — GM uniquement, sans déplacer les joueurs
   // Utilisé : clic barre GM, suppression carte active
@@ -663,6 +668,39 @@ export default function SessionPage() {
     setPendingSurpriseRoll(null)
   }, [socket, pendingSurpriseRoll])
 
+  // ─── Mode déplacement combat : entrée, sélection, annulation ───────────────
+  // allures : { lente, moyenne, rapide, max } calculées dans CombatActionWindow
+  // tokenPos : { x, z } coords DB (PE14) du token joueur (pour centrage caméra)
+  // onMoveSelected/onCancel : closures CombatActionWindow qui mettent à jour son état
+  const handleEnterMoveMode = useCallback((allures, tokenId, tokenPos, onMoveSelected, onCancel) => {
+    const wrappedSelected = (sel) => {
+      onMoveSelected(sel)
+      setPendingMoveSelection(null)
+      setCombatMoveMode(null)
+    }
+    const wrappedCancel = () => {
+      onCancel()
+      setPendingMoveSelection(null)
+      setCombatMoveMode(null)
+    }
+    setCombatMoveMode({
+      tokenId, allures,
+      onMoveSelected: wrappedSelected,
+      onCancel: wrappedCancel,
+      onPendingMove: (sel) => setPendingMoveSelection(sel),
+    })
+    setCombatCameraCenter(tokenPos)
+  }, [])
+
+  const handleValidateMove = useCallback(() => {
+    if (!combatMoveMode || !pendingMoveSelection) return
+    combatMoveMode.onMoveSelected(pendingMoveSelection)
+  }, [combatMoveMode, pendingMoveSelection])
+
+  const handleCancelPendingMove = useCallback(() => {
+    setPendingMoveSelection(null)
+  }, [])
+
   // ─── Annulation mode visée — stable (deps []) ─────────────────────────────
   // useCallback stable pour ne pas recréer les listeners useEffect dans Canvas3D.
   const handleMoveCancel = useCallback(() => {
@@ -754,6 +792,7 @@ export default function SessionPage() {
               dicePayload={lastDiceRoll}
               onDiceDone={handleDiceDone}
               combatCameraCenter={combatCameraCenter}
+              combatMoveMode={combatMoveMode}
             />
         )}
         {!canvasVisible && (
@@ -1015,6 +1054,11 @@ export default function SessionPage() {
           tokens={tokens}
           pendingSurpriseRoll={pendingSurpriseRoll}
           onSurpriseRolled={handleSurpriseRolled}
+          onEnterMoveMode={handleEnterMoveMode}
+          combatMoveMode={combatMoveMode}
+          pendingMoveSelection={pendingMoveSelection}
+          onValidateMove={handleValidateMove}
+          onCancelPendingMove={handleCancelPendingMove}
         />
       )}
 

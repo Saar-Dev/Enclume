@@ -6,7 +6,14 @@ import CombatActionWindow from './CombatActionWindow'
 import CombatPnjPanel from './CombatPnjPanel'
 import CombatGmDeclareWindow from './CombatGmDeclareWindow'
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled }) {
+const ZONE_DEFS = [
+  { color: '#3b82f6', label: 'Lente',   iniMod: -3, allureKey: 'lente'   },
+  { color: '#22c55e', label: 'Moyenne',  iniMod: -5, allureKey: 'moyenne' },
+  { color: '#f97316', label: 'Rapide',   iniMod: -7, allureKey: 'rapide'  },
+  { color: '#ef4444', label: 'Max',      iniMod:  0, allureKey: 'max'     },
+]
+
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove }) {
   const phase = useCombatStore(s => s.phase)
   const [showGmPanel, setShowGmPanel] = useState(false)
 
@@ -56,7 +63,49 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           characters={characters}
           pendingSurpriseRoll={pendingSurpriseRoll}
           onSurpriseRolled={onSurpriseRolled}
+          onEnterMoveMode={onEnterMoveMode}
         />
+      )}
+
+      {/* Panneau légende déplacement — visible pendant le mode sélection destination */}
+      {combatMoveMode && (
+        <div style={styles.moveLegend}>
+          <div style={styles.moveLegendTitle}>Déplacement</div>
+
+          {ZONE_DEFS.map(zone => {
+            const dist = combatMoveMode.allures[zone.allureKey]
+            const iniStr = zone.iniMod > 0 ? `+${zone.iniMod}` : zone.iniMod === 0 ? '±0' : `${zone.iniMod}`
+            return (
+              <div key={zone.label} style={styles.moveLegendRow}>
+                <span style={{ ...styles.moveLegendDot, background: zone.color }} />
+                <span style={styles.moveLegendLabel}>{zone.label}</span>
+                <span style={styles.moveLegendDist}>≤ {dist} m</span>
+                <span style={styles.moveLegendIni}>{iniStr}</span>
+              </div>
+            )
+          })}
+
+          {pendingMoveSelection && (
+            <div style={styles.movePending}>
+              <div style={styles.movePendingInfo}>
+                <span style={styles.movePendingDest}>
+                  [{pendingMoveSelection.targetPosX}, {pendingMoveSelection.targetPosY}]
+                </span>
+                <span style={styles.movePendingIni}>
+                  INI {pendingMoveSelection.ini_mod > 0 ? `+${pendingMoveSelection.ini_mod}` : pendingMoveSelection.ini_mod}
+                </span>
+              </div>
+              <div style={styles.movePendingBtns}>
+                <button style={styles.btnValider} onClick={onValidateMove}>Valider</button>
+                <button style={styles.btnChanger} onClick={onCancelPendingMove}>Changer</button>
+              </div>
+            </div>
+          )}
+
+          <button style={styles.btnAnnulerMode} onClick={() => combatMoveMode.onCancel()}>
+            Annuler le déplacement
+          </button>
+        </div>
       )}
 
     </div>
@@ -69,5 +118,117 @@ const styles = {
     inset: 0,
     pointerEvents: 'none',
     zIndex: 1000,
+  },
+  moveLegend: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 220,
+    background: '#16162a',
+    border: '1px solid #2a2a3e',
+    borderRadius: 8,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+    pointerEvents: 'auto',
+    padding: '10px 12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  moveLegendTitle: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: '#5b5b7a',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    marginBottom: 4,
+  },
+  moveLegendRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '2px 0',
+  },
+  moveLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: '50%',
+    flexShrink: 0,
+    opacity: 0.85,
+  },
+  moveLegendLabel: {
+    fontSize: 11,
+    color: '#c0c0d0',
+    flex: 1,
+  },
+  moveLegendDist: {
+    fontSize: 10,
+    color: '#7070a0',
+    minWidth: 40,
+    textAlign: 'right',
+  },
+  moveLegendIni: {
+    fontSize: 10,
+    color: '#5b8dee',
+    minWidth: 28,
+    textAlign: 'right',
+    fontWeight: 600,
+  },
+  movePending: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTop: '1px solid #2a2a3e',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  movePendingInfo: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  movePendingDest: {
+    fontSize: 12,
+    color: '#5b8dee',
+    fontWeight: 600,
+  },
+  movePendingIni: {
+    fontSize: 11,
+    color: '#8888a8',
+  },
+  movePendingBtns: {
+    display: 'flex',
+    gap: 6,
+  },
+  btnValider: {
+    flex: 1,
+    padding: '6px 0',
+    background: 'rgba(91,141,238,0.15)',
+    border: '1px solid #5b8dee',
+    borderRadius: 4,
+    color: '#5b8dee',
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  btnChanger: {
+    flex: 1,
+    padding: '6px 0',
+    background: 'none',
+    border: '1px solid #3a3a5a',
+    borderRadius: 4,
+    color: '#7070a0',
+    fontSize: 12,
+    cursor: 'pointer',
+  },
+  btnAnnulerMode: {
+    marginTop: 8,
+    padding: '6px 0',
+    background: 'none',
+    border: '1px solid #3a3a5a',
+    borderRadius: 4,
+    color: '#5a5a7a',
+    fontSize: 11,
+    cursor: 'pointer',
+    width: '100%',
   },
 }

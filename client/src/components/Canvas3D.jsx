@@ -226,6 +226,7 @@ function Scene({
   moveTarget, onMoveCancel, moveLabels,
   dicePayload, onDiceDone,
   combatCameraCenter,
+  combatMoveMode,
 }) {
   const { camera, gl } = useThree()
   const orbitRef = useRef()
@@ -249,6 +250,18 @@ function Scene({
   const ghostRef = useRef({ ghostPos: null, dotResult: 0 })
   const tokensRef = useRef(tokens)
   tokensRef.current = tokens
+
+  // ─── Mode déplacement combat — P40 : ref miroir pour handlers stables ─────
+  const combatMoveModeRef = useRef(null)
+  combatMoveModeRef.current = combatMoveMode
+
+  // Position curseur snappé (Three.js floor coords) — visible uniquement en mode combat
+  const [combatCursorPos, setCombatCursorPos] = useState(null)
+
+  // Nettoyage curseur quand on quitte le mode (cancel ou sélection)
+  useEffect(() => {
+    if (!combatMoveMode) setCombatCursorPos(null)
+  }, [combatMoveMode])
 
   const dragRef = useRef({
     active: false,
@@ -339,6 +352,7 @@ function Scene({
   const handleDragStart = useCallback((e, token) => {
     e.stopPropagation()
     if (e.nativeEvent.button !== 0) return
+    if (combatMoveModeRef.current) return  // mode déplacement combat — pas de drag token
 
     if (!isGm) {
       const character = characters.find(c => c.id === token.character_id)
@@ -359,7 +373,15 @@ function Scene({
   }, [isGm, user, characters])
 
   const handlePointerMove = useCallback((e) => {
-    // ─── Mode visée déplacement — prioritaire sur le drag token ──────────────
+    // ─── Mode déplacement combat — prioritaire sur tout ───────────────────────
+    if (combatMoveModeRef.current) {
+      const worldPos = raycastGround(e.clientX, e.clientY)
+      if (!worldPos) return
+      setCombatCursorPos({ x: Math.floor(worldPos.x), z: Math.floor(worldPos.z) })
+      return
+    }
+
+    // ─── Mode visée entité — prioritaire sur le drag token ───────────────────
     if (moveTarget) {
       const worldPos = raycastGround(e.clientX, e.clientY)
       if (!worldPos) return
@@ -441,7 +463,36 @@ function Scene({
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(async (e) => {
-    // ─── Mode visée déplacement — prioritaire sur le drag token ──────────────
+    // ─── Mode déplacement combat — prioritaire sur tout ───────────────────────
+    if (combatMoveModeRef.current) {
+      const mode = combatMoveModeRef.current
+      const worldPos = raycastGround(e.clientX, e.clientY)
+      if (!worldPos) return
+      // Coords voxel cliqué (Three.js floor = indice de colonne)
+      const vx = Math.floor(worldPos.x)
+      const vz = Math.floor(worldPos.z)
+      // Token joueur pour calculer la distance
+      const playerToken = tokensRef.current.find(t => t.id === mode.tokenId)
+      if (playerToken) {
+        // Distance centre→centre (PE14 : pos_y = Z Three.js)
+        const dx = vx - playerToken.pos_x
+        const dz = vz - playerToken.pos_y
+        const dist = Math.sqrt(dx * dx + dz * dz)
+        const { allures } = mode
+        let action_key, ini_mod
+        if (dist <= allures.lente)          { action_key = 'move_short'; ini_mod = -3 }
+        else if (dist <= allures.moyenne)   { action_key = 'move_long';  ini_mod = -5 }
+        else if (dist <= allures.rapide)    { action_key = 'move_long';  ini_mod = -7 }
+        else if (dist <= allures.max)       { action_key = 'move_long';  ini_mod =  0 }
+        else return  // hors portée max — ignorer
+
+        // Conversion PE14 : vx = pos_x, vz = pos_y (profondeur = Z Three.js), altitude = 0
+        mode.onPendingMove({ action_key, ini_mod, targetPosX: vx, targetPosY: vz, targetPosZ: 0 })
+      }
+      return
+    }
+
+    // ─── Mode visée entité — prioritaire sur le drag token ───────────────────
     if (moveTarget) {
       const { ghostPos: gp, dotResult: dr } = ghostRef.current
       if (dr !== 0 && gp) {
@@ -640,6 +691,49 @@ function Scene({
         )
       })}
 
+      {/* ── Anneaux déplacement combat (Sprint 4) ────────────────────────── */}
+      {/* 4 zones concentriques centrées sur le token joueur actif.             */}
+      {/* Lente=bleu, Moyenne=vert, Rapide=orange, Max=rouge — opacité 0.25    */}
+      {/* PE14 : pos_y du token = Z Three.js (profondeur)                      */}
+      {combatMoveMode && (() => {
+        const { allures, tokenId } = combatMoveMode
+        const myToken = tokensRef.current.find(t => t.id === tokenId)
+        if (!myToken) return null
+        const cx = myToken.pos_x + 0.5
+        const cz = myToken.pos_y + 0.5  // PE14
+        return (
+          <group position={[cx, myToken.pos_z + 1.0 + 0.05, cz]} rotation={[-Math.PI / 2, 0, 0]}>
+            <mesh>
+              <circleGeometry args={[allures.lente, 64]} />
+              <meshBasicMaterial color="#3b82f6" transparent opacity={0.25} depthWrite={false} />
+            </mesh>
+            <mesh>
+              <ringGeometry args={[allures.lente, allures.moyenne, 64]} />
+              <meshBasicMaterial color="#22c55e" transparent opacity={0.25} depthWrite={false} />
+            </mesh>
+            <mesh>
+              <ringGeometry args={[allures.moyenne, allures.rapide, 64]} />
+              <meshBasicMaterial color="#f97316" transparent opacity={0.25} depthWrite={false} />
+            </mesh>
+            <mesh>
+              <ringGeometry args={[allures.rapide, allures.max, 64]} />
+              <meshBasicMaterial color="#ef4444" transparent opacity={0.25} depthWrite={false} />
+            </mesh>
+          </group>
+        )
+      })()}
+
+      {/* ── Cursor wireframe case survolée en mode déplacement combat ────── */}
+      {combatMoveMode && combatCursorPos && (
+        <mesh
+          position={[combatCursorPos.x + 0.5, 0.1, combatCursorPos.z + 0.5]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial color="#ffffff" wireframe />
+        </mesh>
+      )}
+
       {/* ── DiceRoller — animation dés (Dice Rework) */}
       {dicePayload && <DiceRoller payload={dicePayload} onDone={onDiceDone} />}
     </>
@@ -649,10 +743,11 @@ function Scene({
 // ─── Composant principal exporté ──────────────────────────────────────────────
 // Canvas3D — lecture seule (mode jeu).
 // Props : onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel
-// onTokenRotate : callback → SessionPage émet WS.TOKEN_ROTATE
-// moveTarget    : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
-// onMoveCancel  : callback stable (useCallback deps []) — annule le mode visée
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter }) {
+// onTokenRotate  : callback → SessionPage émet WS.TOKEN_ROTATE
+// moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
+// onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
+// combatMoveMode : { tokenId, allures, onMoveSelected, onCancel } | null — sélection destination combat
+export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
@@ -688,9 +783,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
     }
   }, [])
 
-  // ─── Annulation mode visée sur Échap ─────────────────────────────────────
-  // useEffect séparé du Alt — deps distinctes, pas de re-attachement inutile.
-  // Attaché uniquement quand moveTarget est actif.
+  // ─── Annulation mode visée entité sur Échap ──────────────────────────────
   useEffect(() => {
     if (!moveTarget) return
     const onKeyDown = (e) => {
@@ -699,6 +792,16 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [moveTarget, onMoveCancel])
+
+  // ─── Annulation mode déplacement combat sur Échap ─────────────────────────
+  useEffect(() => {
+    if (!combatMoveMode) return
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') combatMoveMode.onCancel()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [combatMoveMode])
 
   const justSelectedRef = useRef(false)
 
@@ -823,6 +926,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           dicePayload={dicePayload}
           onDiceDone={onDiceDone}
           combatCameraCenter={combatCameraCenter}
+          combatMoveMode={combatMoveMode}
         />
       )}
     </Canvas>

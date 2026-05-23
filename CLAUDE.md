@@ -73,30 +73,25 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 60 (2026-05-23)
+## État actuel — Session 61 (2026-05-23)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **55 migrations stables** — prochaine : **56**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1 ✅ / Chantier 11 sprint 2 ✅ / PC22 ✅
+- **56 migrations stables** — prochaine : **57**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅
 
-**Session 60 — Correction allures de déplacement :**
-- `charStats.js` : `calcVitesses` supprimée → `calcAllures(coo_na, athletisme_total)` (lookup LdB p.221)
-- `CharacterSheet.jsx` : 2 allures (marche/course) → 4 allures (lente/moyenne/rapide/maximale) + tooltips LdB
-
-**Chantier 11 Sprint 2 livré (sessions 58-59) :**
-- `client/src/components/CombatTimeline.jsx` (NOUVEAU) — timeline INI, portraits cliquables GM ✅
-- `client/src/components/CombatActionWindow.jsx` — 4 sections, 21 items (8 actifs/13 grisés), multi-select, INI total ✅
-- `client/src/components/CombatPnjPanel.jsx` (NOUVEAU) — overview GM PJs/PNJs, bouton Passer ✅
-- `client/src/components/CombatGmDeclareWindow.jsx` — accordion always-one-open, auto-progression, liste complète ✅
-- `client/src/components/combatSections.js` (NOUVEAU) — SECTIONS + KEY_MOD + formatMod (source unique partagée) ✅
-- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE payload `selectedKeys[]` + KEY_MOD + primaryType + modifiers JSONB ✅
-- Migration 55 : `characters.type TEXT NOT NULL DEFAULT 'pnj'` — PJ/PNJ explicite, extensible (vehicle, drone) ✅
-- `server/src/routes/characters.js` : `type` dans GET/POST/PUT/broadcast ✅
-- Détection PNJ : `character.type === 'pnj'` — remplace `user_id === null` implicite ✅
-- Distinction Entité (`!token.character_id`) vs PNJ (`character.type`) formalisée ✅
+**Session 61 — Sprint 4 : UI Déplacement Combat :**
+- `shared/polarisUtils.js` : +calcAN, calcAllureMoy, calcAllures (PI11)
+- `combatSections.js` : move_short/move_long → isMove item unique
+- `CombatActionWindow.jsx` : fetch allures + mode déplacement + moveSelection
+- `Canvas3D.jsx` : anneaux 4 zones (PE34 altitude) + cursor + combatMoveModeRef + onPendingMove
+- `SessionPage.jsx` : combatMoveMode + pendingMoveSelection + handleEnterMoveMode + handleValidate/Cancel
+- `CombatOverlay.jsx` : légende allures + ZONE_DEFS + Valider/Changer/Annuler
+- PE34 documenté : pieds token = `pos_z + 1.0` (pas `pos_z + 0.5` centre voxel)
+- Validé joueur ✅ — GM/PNJ reporté Sprint 4.1
 
 **Prochain chantier :**
-- Chantier 11 Sprint 3 — Phase Résolution + Déplacement : `startResolutionPhase()`, `COMBAT_ACTION_CONFIRM`, `endTurn()`
+- Sprint 4.1 — Généralisation `zones[]` (grab_close + grab_far + PNJ)
+- Sprint 5 — Serveur COMBAT_ACTION_DECLARE (migration 56 + action_key + target_pos)
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser : ordre tri INI vs sémantique roll surpris.
@@ -160,6 +155,10 @@ Si `!character.visible && !state.isGm` → retirer du store. Le broadcast envoie
 
 **PE33 — D10 UV kite = V2 Blender uniquement**
 Ne pas tenter de calculer les UVs kite en code pur. V1 = Html overlay `position={[0,0,0]}` — ne pas déplacer.
+
+**PE34 — Altitude pieds token en Three.js**
+`token.pos_z + 0.5` = centre du voxel (l'overlay serait à l'intérieur). `token.pos_z + 1.0` = surface sol = pieds.
+Pour un overlay au sol : `token.pos_z + 1.0 + 0.05` (évite z-fighting).
 
 **PI1 — Container 'Sac' conditionnel**
 Disponible seulement si le character possède ≥1 item `ref_equipment.location='D'` dans son inventaire. Idem 'Ceinture' → `location='Ce'`. 'Coffre' toujours disponible. Vérifier avec `isContainerAvailable()` avant tout POST/PUT.

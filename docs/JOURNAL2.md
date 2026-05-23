@@ -5452,3 +5452,135 @@ Le schéma actuel (migration 54) ne correspond plus au PLAN_11 : `is_micro`, `in
 - Sprint 4 — UI déclaration déplacement (combatSections.js + CombatActionWindow + Canvas3D anneaux)
 - Sprint 5 — Serveur COMBAT_ACTION_DECLARE (target_pos_x/y/z + action_key + sequence)
 - Sprint 6 — Phase Résolution (startResolutionPhase complet + COMBAT_ACTION_CONFIRM + endTurn)
+
+---
+
+## Session 61 suite — 2026-05-23 — Sprint 2.5 + Sprint 4 (UI Déplacement Combat)
+
+### Sprint 2.5 — Centrage caméra sur token joueur
+
+**Objectif :** quand le joueur entre en mode déplacement combat, centrer la caméra sur son token.
+
+**`client/src/pages/SessionPage.jsx`**
+- `combatCameraCenter` state `{ x, z }` (coords DB PE14) | null
+- `handleEnterMoveMode` : `setCombatCameraCenter(tokenPos)` après `setCombatMoveMode`
+- Annulation → state reste non-null → caméra garde sa position (PC36 : ne pas reset sur null)
+
+**`client/src/components/Canvas3D.jsx` (Scene)**
+- Prop `combatCameraCenter` transmise jusqu'à `Scene`
+- `useEffect([combatCameraCenter])` : `orbitRef.current.target.set(x+0.5, 0, z+0.5)` + `update()`
+
+**Validation :** caméra se centre sur le token joueur au clic "Déplacement" ✅
+
+---
+
+### Sprint 4 — UI déclaration déplacement combat
+
+**Objectif :** le joueur clique "Déplacement" → fenêtre disparaît → 4 cercles concentriques (zones allures) → clic destination → légende + Valider/Annuler → déclaration.
+
+#### shared/polarisUtils.js — extension
+
+Exports ajoutés (source unique, PI11) :
+- `calcAN(na)` — NA → AN via AN_TABLE
+- `calcAllureMoy(val)` — valeur → allure moyenne (LdB p.221)
+- `calcAllures(coo_na, athletisme_total)` → `{ lente, moyenne, rapide, max }`
+
+#### combatSections.js — rework déplacement
+
+Section DÉPLACEMENT : `move_short` + `move_long` remplacés par un seul item `{ key: 'move', label: 'Déplacement', active: true, isMove: true }`.
+`KEY_MOD` : `move_short`/`move_long` supprimés. Les ini_mods des zones (−3/−5/−7/0) sont calculés dans Canvas3D au moment du clic.
+
+#### CombatActionWindow.jsx — mode déplacement
+
+- Fetch allures au montage : `GET /char-sheet/:id` + `GET /char-ref/genotypes` → `calcAllures(coo_na, athletisme_total)`
+- State `inMoveMode` : fenêtre transparente + `pointerEvents: none`
+- State `moveSelection` : destination sélectionnée `{ action_key, ini_mod, targetPosX, targetPosY, targetPosZ }`
+- `handleMoveClick` : crée `onSelected`/`onCancel` closures → appelle `onEnterMoveMode(allures, tokenId, tokenPos, ...)`
+- Item `isMove` : affiché `→` avant sélection, `ini_mod` après
+- Footer : `totalMod` inclut `moveSelection.ini_mod` + destination `[x, y]` affichée
+
+#### SessionPage.jsx — pilotage mode
+
+- `combatMoveMode` state `{ tokenId, allures, onMoveSelected, onCancel, onPendingMove }` | null
+- `pendingMoveSelection` state `{ action_key, ini_mod, targetPosX, targetPosY, targetPosZ }` | null
+- `handleEnterMoveMode` : wrappe les callbacks + set les 2 states + centrage caméra
+- `handleValidateMove` : appelle `combatMoveMode.onMoveSelected(pendingMoveSelection)` → `wrappedSelected` → clear states
+- `handleCancelPendingMove` : efface `pendingMoveSelection` seulement (reste en mode sélection)
+- Props passées à `CombatOverlay` : `combatMoveMode`, `pendingMoveSelection`, `onValidateMove`, `onCancelPendingMove`
+
+#### Canvas3D.jsx — anneaux + curseur + interaction
+
+- `combatMoveMode` prop (outer → Scene)
+- `combatMoveModeRef` : ref miroir P40 pour handlers stables
+- Guard `handleDragStart` : retour immédiat si mode actif
+- `handlePointerMove` : prioritaire en mode combat → `setCombatCursorPos({x, z})`
+- `handlePointerUp` en mode combat : calcul distance + zone → `mode.onPendingMove({ action_key, ini_mod, targetPosX: vx, targetPosY: vz, targetPosZ: 0 })` (pas d'appel direct onMoveSelected)
+- Escape handler (outer) : `combatMoveMode.onCancel()`
+- Anneaux JSX : `group` à `[cx, myToken.pos_z + 1.0 + 0.05, cz]` (PE34) rotation `[-π/2, 0, 0]`
+  - Zone 1 lente : `circleGeometry(lente)` bleu
+  - Zone 2 moyenne : `ringGeometry(lente, moyenne)` vert
+  - Zone 3 rapide : `ringGeometry(moyenne, rapide)` orange
+  - Zone 4 max : `ringGeometry(rapide, max)` rouge
+- Curseur wireframe : case survolée en temps réel
+
+#### CombatOverlay.jsx — légende + confirmation
+
+Panneau bottom-right `220px` visible quand `combatMoveMode` actif :
+- 4 lignes : dot coloré + label allure + distance + ini_mod
+- Si `pendingMoveSelection` : destination `[x, y]` + ini + boutons [Valider] [Changer]
+- Bouton [Annuler le déplacement] toujours visible → `combatMoveMode.onCancel()`
+
+---
+
+### Bug découvert et corrigé — PE34 altitude anneaux
+
+**Symptôme :** anneaux cachés sous les voxels (altitude 0.05 au lieu des pieds du token).
+
+**Cause :** `token.pos_z + 0.5` = centre du voxel. Les anneaux étaient à mi-hauteur dans le voxel.
+
+**Formule correcte :** `token.pos_z + 1.0` = sommet du voxel = pieds du token.
+Détail : groupe token en Three.js à `pos_z + 0.5` (centre), primitive `Y_OFFSET = 0.5` au-dessus → pieds à `pos_z + 1.0`.
+
+**Correction :** `position={[cx, myToken.pos_z + 1.0 + 0.05, cz]}` — `+0.05` évite le z-fighting.
+
+**Documenté :** PE34 dans SYSTEME.md §8 + table §18 + CLAUDE.md pièges.
+
+---
+
+### Décisions prises
+
+**Flow pending (pas de commit direct)**
+Clic sur carte → `onPendingMove` → `pendingMoveSelection` intermédiaire. L'utilisateur voit destination + ini dans le panneau légende, puis valide ou change. Le commit dans CombatActionWindow n'a lieu qu'au [Valider].
+
+**Flux GM/PNJ déplacement — reporté Sprint 4.1**
+Le mode déplacement n'est accessible qu'aux joueurs (CombatActionWindow). La CombatGmDeclareWindow n'a pas de `onEnterMoveMode`. Décision : généraliser le système de zones en Sprint 4.1 (zones[], 1-N zones) qui permettra en même temps : grab_close, grab_far, et le flux GM PNJ.
+
+---
+
+### Validation fonctionnelle
+
+- ✅ Cercles concentriques visibles à la bonne altitude (PE34)
+- ✅ Fenêtre joueur disparaît en mode sélection, réapparaît après
+- ✅ Curseur wireframe suit la souris case par case
+- ✅ Clic hors portée max : ignoré (return silencieux)
+- ✅ Panneau légende bottom-right : 4 zones colorées + distances + ini
+- ✅ Sélection destination → [Valider] / [Changer] opérationnels
+- ✅ Centrage caméra sur token joueur à l'entrée en mode
+- ✅ Échap annule le mode, fenêtre réapparaît
+- ❌ GM/PNJ : pas de mode déplacement (reporté Sprint 4.1)
+
+---
+
+### Fichiers modifiés cette session (61 suite)
+
+| Fichier | Modifications |
+|---|---|
+| `shared/polarisUtils.js` | +calcAN, calcAllureMoy, calcAllures (exports partagés) |
+| `client/src/character/CharacterSheet.jsx` | Import shared calcAN/calcAllureMoy/calcAllures — déf locales supprimées |
+| `client/src/components/combatSections.js` | move_short/move_long → isMove item unique |
+| `client/src/components/CombatActionWindow.jsx` | Fetch allures, inMoveMode, moveSelection, handleMoveClick, isMove renderer |
+| `client/src/components/CombatOverlay.jsx` | Légende allures + ZONE_DEFS + pendingMoveSelection + Valider/Changer/Annuler |
+| `client/src/components/Canvas3D.jsx` | combatMoveMode prop, anneaux PE34, cursor, combatMoveModeRef, onPendingMove |
+| `client/src/pages/SessionPage.jsx` | combatMoveMode, pendingMoveSelection, handleEnterMoveMode, handleValidate/CancelPendingMove, combatCameraCenter |
+| `docs/SYSTEME.md` | PE34 — altitude pieds token Three.js (§8 + table §18) |
+| `CLAUDE.md` | PE34 dans pièges fréquemment oubliés |
