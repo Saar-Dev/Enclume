@@ -37,7 +37,7 @@ export default function SessionPage() {
     setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage,
   } = useSessionStore()
   const { setEntities, fetchBlueprints } = useEntityStore()
-  const { setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster, phase: combatPhase } = useCombatStore()
+  const { setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster, advanceSlot, setActions, phase: combatPhase } = useCombatStore()
 
   const [campaign, setCampaign] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -492,9 +492,10 @@ export default function SessionPage() {
     })
 
     // Phase changée — ANNOUNCEMENT ou RESOLUTION (avec roster et actions pour RESOLUTION)
-    s.on(WS.COMBAT_PHASE_CHANGED, ({ phase, roster, actions: _actions }) => {
+    s.on(WS.COMBAT_PHASE_CHANGED, ({ phase, roster, actions }) => {
       setPhase(phase)
       if (roster) updateRoster(roster)
+      if (actions) setActions(actions)
     })
     // Roster mis à jour — après jet de surprise (COMBAT_SURPRISE_RESULT)
     s.on(WS.COMBAT_ROSTER_UPDATED, ({ roster }) => {
@@ -507,6 +508,10 @@ export default function SessionPage() {
     // Participant a déclaré son action — initiative inclus si précipité (+3)
     s.on(WS.COMBAT_ACTION_DECLARED, ({ tokenId, initiative }) => {
       markTokenAnnounced(tokenId, initiative)
+    })
+    // Slot actif avancé pendant la phase RESOLUTION
+    s.on(WS.COMBAT_SLOT_ADVANCED, ({ activeSlotIdx }) => {
+      advanceSlot(activeSlotIdx)
     })
     // Participant passé par le GM ou timer auto-skip
     s.on(WS.COMBAT_TURN_SKIPPED, ({ tokenId, tokenLabel }) => {

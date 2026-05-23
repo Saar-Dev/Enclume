@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-05-23 Session 60
+> Dernière mise à jour : 2026-05-23 Session 62
 
 ---
 
@@ -77,15 +77,14 @@ Toute décision non documentée est considérée comme nulle.
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **56 migrations stables** — prochaine : **57**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅
 
-**Session 62 — Sprint 5 : Serveur COMBAT_ACTION_DECLARE :**
-- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE rewrite — moveAction, KEY_MOD nettoyé, PC33, actionRows bulk (1 ligne/action, getSequence/getType), modifiers:{ini_mod} par ligne
-- `server/src/socket/index.js` : COMBAT_SURPRISE_RESULT + skipPlayer + startResolutionPhase — fix INSERTs colonnes droppées (migration 56)
-- Validé ✅
+**Session 62 — Sprint 5 ✅ + Sprint 6 ✅ :**
+- Sprint 5 : COMBAT_ACTION_DECLARE rewrite + SURPRISE_RESULT/skipPlayer/startResolutionPhase fixes (colonnes migration 56)
+- Sprint 6 : startResolutionPhase complet + COMBAT_ACTION_CONFIRM + advanceSlot + endTurn + CombatTimeline curseur + CombatActionWindow mode Résolution + panneau GM résolution
 
 **Prochain chantier :**
-- Sprint 6 — Phase Résolution (startResolutionPhase complet + COMBAT_ACTION_CONFIRM + endTurn)
+- Sprint 7 — Jets d'attaque + Dégâts + Blessures + Carence FOR
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser : ordre tri INI vs sémantique roll surpris.

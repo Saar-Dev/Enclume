@@ -2,13 +2,15 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 
 export default function CombatTimeline({ characters, topOffset = 0, onPortraitClick }) {
-  const { roster, phase } = useCombatStore()
+  const { roster, phase, activeSlotIdx } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
   if (!phase || roster.length === 0) return null
 
   // Tri initiative DESC — ordre de résolution
   const sorted = [...roster].sort((a, b) => b.initiative - a.initiative)
+  // Curseur actif uniquement en phase RÉSOLUTION
+  const activeTokenId = phase === 'RESOLUTION' ? (sorted[activeSlotIdx]?.token_id ?? null) : null
 
   return (
     <div style={{ ...styles.bar, top: topOffset }}>
@@ -16,6 +18,7 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
         const token = tokens.find(t => t.id === entry.token_id)
         const char = token ? characters.find(c => c.id === token.character_id) : null
         const portraitUrl = char?.portrait_url ?? null  // PC20 : portrait_url nullable
+        const isActive = entry.token_id === activeTokenId
 
         return (
           <div
@@ -23,6 +26,7 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
             style={{
               ...styles.slot,
               ...(entry.has_announced ? styles.slotAnnounced : {}),
+              ...(isActive ? styles.slotActive : {}),
               ...(onPortraitClick ? { cursor: 'pointer' } : {}),
             }}
             onClick={onPortraitClick}
@@ -85,6 +89,10 @@ const styles = {
   slotAnnounced: {
     border: '1px solid #50c878',
     background: 'rgba(80,200,120,0.06)',
+  },
+  slotActive: {
+    border: '2px solid #f5c542',
+    background: 'rgba(245,197,66,0.10)',
   },
   portrait: {
     width: 28,

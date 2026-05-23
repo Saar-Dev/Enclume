@@ -7,7 +7,7 @@ import api from '../lib/api.js'
 import { KEY_MOD, SECTIONS, MOVE_ZONE_DEFS, formatMod } from './combatSections.js'
 
 export default function CombatActionWindow({ socket, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode }) {
-  const { roster } = useCombatStore()
+  const { roster, phase, activeSlotIdx, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [selectedKeys, setSelectedKeys] = useState(new Set())
   const [allures, setAllures] = useState(null)
@@ -49,6 +49,11 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
   }, [playerChar?.id])
 
   if (!playerToken || !rosterEntry) return null
+
+  // Phase Résolution — tri identique CombatTimeline (initiative DESC)
+  const sorted = [...roster].sort((a, b) => b.initiative - a.initiative)
+  const isMyTurnInResolution = phase === 'RESOLUTION' && sorted[activeSlotIdx]?.token_id === playerToken.id
+  const myActions = actions.filter(a => a.token_id === playerToken.id)
 
   const handleToggle = (key) => {
     setSelectedKeys(prev => {
@@ -127,7 +132,32 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
     )
   }
 
-  // Déjà déclaré
+  // Phase 2 — Résolution : slot actif = c'est mon tour d'agir
+  if (isMyTurnInResolution) {
+    return (
+      <div style={styles.window}>
+        <div style={styles.header}>Phase 2 - Résolution</div>
+        <div style={styles.body}>
+          {myActions.map(a => (
+            <div key={a.id} style={{ ...styles.section, padding: '6px 14px', display: 'flex', justifyContent: 'space-between' }}>
+              <span style={styles.itemLabel}>{a.action_key}</span>
+              <span style={styles.itemMod}>{a.modifiers?.ini_mod ?? ''}</span>
+            </div>
+          ))}
+        </div>
+        <div style={styles.footer}>
+          <button
+            style={styles.btnDeclare}
+            onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}
+          >
+            Agir
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Déjà déclaré (ANNOUNCEMENT) ou en attente de son slot (RESOLUTION)
   if (rosterEntry.has_announced) {
     return (
       <div style={styles.window}>

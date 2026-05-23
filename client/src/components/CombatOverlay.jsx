@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
+import { useTokenStore } from '../stores/tokenStore'
 import CombatRosterWindow from './CombatRosterWindow'
 import CombatTimeline from './CombatTimeline'
 import CombatActionWindow from './CombatActionWindow'
@@ -8,8 +10,14 @@ import CombatGmDeclareWindow from './CombatGmDeclareWindow'
 
 
 export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove }) {
-  const phase = useCombatStore(s => s.phase)
+  const { phase, roster, activeSlotIdx } = useCombatStore()
+  const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
+
+  // Slot actif en RÉSOLUTION — pour le panneau GM
+  const sortedRoster = [...roster].sort((a, b) => b.initiative - a.initiative)
+  const gmActiveEntry = sortedRoster[activeSlotIdx]
+  const gmActiveToken = gmActiveEntry ? tokens.find(t => t.id === gmActiveEntry.token_id) : null
 
   return (
     <div style={styles.overlay}>
@@ -49,8 +57,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Phase ANNOUNCEMENT — fenêtre d'action pour les joueurs */}
-      {!isGm && phase === 'ANNOUNCEMENT' && (
+      {/* ANNOUNCEMENT + RÉSOLUTION — fenêtre d'action pour les joueurs */}
+      {!isGm && (phase === 'ANNOUNCEMENT' || phase === 'RESOLUTION') && (
         <CombatActionWindow
           socket={socket}
           user={user}
@@ -59,6 +67,22 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           onSurpriseRolled={onSurpriseRolled}
           onEnterMoveMode={onEnterMoveMode}
         />
+      )}
+
+      {/* Phase RÉSOLUTION — panneau GM : confirmer le slot actif */}
+      {isGm && phase === 'RESOLUTION' && gmActiveEntry && (
+        <div style={styles.gmResolution}>
+          <div style={styles.gmResolutionLabel}>
+            Slot actif : <strong>{gmActiveToken?.label ?? '?'}</strong>
+            <span style={styles.gmResolutionIni}> INI {gmActiveEntry.initiative}</span>
+          </div>
+          <button
+            style={styles.gmResolutionBtn}
+            onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: gmActiveEntry.token_id })}
+          >
+            Agir
+          </button>
+        </div>
       )}
 
       {/* Panneau légende déplacement — visible pendant le mode sélection destination */}
@@ -111,6 +135,41 @@ const styles = {
     inset: 0,
     pointerEvents: 'none',
     zIndex: 1000,
+  },
+  gmResolution: {
+    position: 'absolute',
+    bottom: 24,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    background: '#16162a',
+    border: '1px solid #f5c542',
+    borderRadius: 8,
+    padding: '10px 16px',
+    pointerEvents: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+  },
+  gmResolutionLabel: {
+    fontSize: 13,
+    color: '#c0c0d0',
+  },
+  gmResolutionIni: {
+    fontSize: 11,
+    color: '#5b8dee',
+    marginLeft: 4,
+  },
+  gmResolutionBtn: {
+    padding: '6px 18px',
+    background: 'rgba(245,197,66,0.15)',
+    border: '1px solid #f5c542',
+    borderRadius: 4,
+    color: '#f5c542',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+    flexShrink: 0,
   },
   moveLegend: {
     position: 'absolute',

@@ -182,17 +182,32 @@ Travaux effectués :
 
 ---
 
-## Prochain chantier — Chantier 11 Sprint 6 — Phase Résolution
+### Chantier 11 Sprint 6 — Phase Résolution ✅ (session 62)
 
-Objectif : les joueurs agissent dans l'ordre d'initiative, chaque slot résolu par le GM, auto-fin de tour.
+Travaux effectués :
+- `server/src/socket/index.js` : `startResolutionPhase()` complet — `active_slot_idx:0` + emit `COMBAT_SLOT_ADVANCED` slot 0 ✅
+- `server/src/socket/index.js` : `COMBAT_ACTION_CONFIRM` — guards, move (PE29 Redis), assault stub Sprint 7, micro resolved direct ✅
+- `server/src/socket/index.js` : `advanceSlot(io, campaignId, slots, nextIdx)` — nextIdx≥length → endTurn, sinon COMBAT_SLOT_ADVANCED ✅
+- `server/src/socket/index.js` : `endTurn(io, campaignId)` — PC18 bulk UPDATE + PC28 DELETE + current_turn+1 + ANNOUNCEMENT ✅
+- `client/src/stores/combatStore.js` : `setActions` ✅
+- `client/src/pages/SessionPage.jsx` : COMBAT_SLOT_ADVANCED handler + COMBAT_PHASE_CHANGED stocke actions ✅
+- `client/src/components/CombatTimeline.jsx` : curseur jaune `activeSlotIdx` (RESOLUTION uniquement) ✅
+- `client/src/components/CombatActionWindow.jsx` : mode Résolution — recap + bouton Agir → COMBAT_ACTION_CONFIRM ✅
+- `client/src/components/CombatOverlay.jsx` : condition RESOLUTION joueur + panneau GM résolution (nom+INI+Agir jaune) ✅
 
-Handlers serveur à implémenter :
-- `startResolutionPhase()` — transition ANNOUNCEMENT → RESOLUTION, tri INI DESC
-- `COMBAT_ACTION_CONFIRM` — GM confirme/résout une action déclarée
-- `endTurn()` — fin de tour : reset `has_announced`/`has_resolved`, incrément `current_turn`
-- Timer auto-skip si `action_timer_sec > 0` (reporté Sprint 2)
+---
 
-Prérequis Sprint 6 : voir PLAN_11_SYSCOMBAT.md § Sprint 3
+## Prochain chantier — Chantier 11 Sprint 7 — Jets d'attaque + Dégâts + Blessures
+
+Objectif : Attaques complètes. Blessures enregistrées. Carence FOR appliquée.
+
+Voir PLAN_11_SYSCOMBAT.md § Sprint 7 pour le détail complet.
+
+À lire avant de coder :
+- `server/src/socket/index.js` — état après Sprint 6
+- `server/src/lib/charStats.js` — calcResistanceArmure, calcCarenceArmure, calcResistanceDommages
+- `shared/woundConstants.js`, `shared/armorConstants.js`
+- `server/src/routes/character/char-sheet.js` — route POST /wounds
 
 ---
 

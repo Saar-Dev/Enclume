@@ -1679,6 +1679,84 @@ const initSocket = (io) => {
       }
     })
 
+    // ─── COMBAT_ACTION_CONFIRM — Phase Résolution ─────────────────────────
+    // Joueur (ou GM pour PNJ) confirme l'exécution du slot actif.
+    // Résout les actions dans l'ordre sequence ASC, avance au slot suivant.
+    // Payload : { tokenId }
+    socket.on(WS.COMBAT_ACTION_CONFIRM, async ({ tokenId }) => {
+      const campaignId = socket.campaignId
+      try {
+        // Guard : phase = RESOLUTION
+        const state = await db('combat_state').where({ campaign_id: campaignId }).first()
+        if (!state || state.phase !== 'RESOLUTION') return
+
+        // Slots ordonnés par initiative DESC — source de vérité pour active_slot_idx
+        const slots = await db('combat_roster')
+          .where({ campaign_id: campaignId, status: 'active', has_announced: true })
+          .orderBy('initiative', 'desc')
+          .select('token_id', 'initiative')
+
+        const activeSlot = slots[state.active_slot_idx]
+        if (!activeSlot || activeSlot.token_id !== tokenId) return
+
+        // Guard ownership — PNJ : GM uniquement, PJ : propriétaire
+        const token = await db('tokens').where({ id: tokenId }).first()
+        if (!token) return
+        if (!token.character_id) return
+        const character = await db('characters').where({ id: token.character_id }).first()
+        if (!character) return
+        if (character.type === 'pnj') {
+          if (socket.role !== 'gm') return
+        } else {
+          if (character.user_id !== socket.user.id) return
+        }
+
+        // Lire les actions pendantes pour ce token, dans l'ordre d'exécution
+        const actions = await db('combat_actions')
+          .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending' })
+          .orderBy('sequence', 'asc')
+
+        // Résolution action par action
+        for (const action of actions) {
+          if (action.type === 'move_short' || action.type === 'move_long') {
+            const tx = action.target_pos_x
+            const ty = action.target_pos_y
+            const tz = action.target_pos_z ?? 0
+            // PE29 — vérifier l'espace de marche (pos_z + 1)
+            const occupied = await isCaseOccupied(token.battlemap_id, tx, ty, tz + 1, [tokenId])
+            if (!occupied) {
+              const [updated] = await db('tokens')
+                .where({ id: tokenId })
+                .update({ pos_x: tx, pos_y: ty, pos_z: tz, updated_at: db.fn.now() })
+                .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'layer'])
+              await collisionMoveToken(token.battlemap_id, token, updated)
+              io.to(campaignId).emit(WS.TOKEN_MOVED, {
+                tokenId: updated.id,
+                pos_x: updated.pos_x,
+                pos_y: updated.pos_y,
+                pos_z: updated.pos_z,
+              })
+              // Mettre à jour la ref locale pour les éventuelles actions suivantes
+              token.pos_x = tx; token.pos_y = ty; token.pos_z = tz
+            } else {
+              console.log(`[WS] COMBAT_ACTION_CONFIRM — déplacement bloqué (case occupée) token:${tokenId}`)
+            }
+          } else if (action.type === 'assault') {
+            // Sprint 7 requis — log sans effet
+            console.log(`[WS] COMBAT_ACTION_CONFIRM — assault : Sprint 7 requis. token:${tokenId}`)
+          }
+          // micro / skip : resolved direct, pas d'effet V1
+          await db('combat_actions')
+            .where({ id: action.id })
+            .update({ status: 'resolved', updated_at: db.fn.now() })
+        }
+
+        await advanceSlot(io, campaignId, slots, state.active_slot_idx + 1)
+      } catch (err) {
+        console.error('[WS] COMBAT_ACTION_CONFIRM error:', err.message)
+      }
+    })
+
     // ─── DÉCONNEXION ───────────────────────────────────────────────────────
     socket.on('disconnect', () => {
       console.log(`[WS] Déconnecté : ${socket.user.username} (${socket.id})`)
@@ -1782,7 +1860,7 @@ async function startResolutionPhase(io, campaignId) {
   try {
     await db('combat_state')
       .where({ campaign_id: campaignId })
-      .update({ phase: 'RESOLUTION', updated_at: db.fn.now() })
+      .update({ phase: 'RESOLUTION', active_slot_idx: 0, updated_at: db.fn.now() })
 
     const [roster, actions] = await Promise.all([
       db('combat_roster').where({ campaign_id: campaignId }).orderBy('initiative', 'desc'),
@@ -1797,8 +1875,69 @@ async function startResolutionPhase(io, campaignId) {
       actions,
     })
 
+    io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, {
+      activeSlotIdx: 0,
+      tokenId: broadcastRoster[0]?.token_id ?? null,
+    })
+
     console.log(`[WS] startResolutionPhase — campagne ${campaignId}`)
   } catch (err) {
     console.error('[WS] startResolutionPhase error:', err.message)
+  }
+}
+
+// ─── Helper — avancer au slot suivant pendant la phase RÉSOLUTION ─────────────
+// nextIdx >= slots.length → fin de tour (endTurn).
+// Sinon : met à jour active_slot_idx en DB + broadcast COMBAT_SLOT_ADVANCED.
+async function advanceSlot(io, campaignId, slots, nextIdx) {
+  try {
+    if (nextIdx >= slots.length) {
+      await endTurn(io, campaignId)
+      return
+    }
+    await db('combat_state')
+      .where({ campaign_id: campaignId })
+      .update({ active_slot_idx: nextIdx, updated_at: db.fn.now() })
+    io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, {
+      activeSlotIdx: nextIdx,
+      tokenId: slots[nextIdx].token_id,
+    })
+  } catch (err) {
+    console.error('[WS] advanceSlot error:', err.message)
+  }
+}
+
+// ─── Helper — fin de tour : reset roster + actions, retour ANNOUNCEMENT ──────
+// PC18 : 1 seul UPDATE bulk sur combat_roster.
+// PC28 : DELETE combat_actions — queue nettoyée entre chaque tour.
+async function endTurn(io, campaignId) {
+  try {
+    // PC18 — reset announced/resolved en 1 requête
+    await db('combat_roster')
+      .where({ campaign_id: campaignId, status: 'active' })
+      .update({ has_announced: false, has_resolved: false, updated_at: db.fn.now() })
+
+    // PC28 — vider la queue des actions
+    await db('combat_actions').where({ campaign_id: campaignId }).delete()
+
+    // Incrémenter le tour, retour à ANNOUNCEMENT
+    await db('combat_state')
+      .where({ campaign_id: campaignId })
+      .update({
+        phase: 'ANNOUNCEMENT',
+        current_turn: db.raw('current_turn + 1'),
+        active_slot_idx: 0,
+        updated_at: db.fn.now(),
+      })
+
+    const roster = await db('combat_roster')
+      .where({ campaign_id: campaignId })
+      .orderBy('initiative', 'desc')
+    const broadcastRoster = roster.map(({ surprise_roll: _sr, ...rest }) => rest)
+
+    io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT', roster: broadcastRoster })
+    console.log(`[WS] endTurn — campagne ${campaignId}`)
+  } catch (err) {
+    console.error('[WS] endTurn error:', err.message)
   }
 }

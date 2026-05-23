@@ -23,6 +23,8 @@ export const useCombatStore = create((set) => ({
 
   advanceSlot: (activeSlotIdx) => set({ activeSlotIdx }),
 
+  setActions: (actions) => set({ actions }),
+
   setPhase: (phase) => set({ phase }),
 
   markTokenAnnounced: (tokenId, initiative) => set((state) => ({
