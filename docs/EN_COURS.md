@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-24 Session 63
+> Dernière mise à jour : 2026-05-24 Session 63 (continuation)
 
 ---
 
@@ -219,6 +219,18 @@ Voir `SYSTEME.md §17` pour le pattern données personnage (calcul serveur comba
 - Sprint 7.5 ajouté : décompte munitions (sprint dédié)
 - "Validation Sprint 4" → "Validation Sprint 7" (corrigé)
 - `run à vide autocentré OBLIGATOIRE` ajouté dans CLAUDE.md (§ Pendant le développement)
+
+**Corrections session 63 continuation — architecture state_character + bugs résiduels :**
+- `combat_roster.state_character JSONB NOT NULL DEFAULT '{}'` ajouté au plan + SYSTEME.md (migration 57, bloc 2)
+- `is_rushed` = STATE (pas action distincte), implémentation deux temps : INSERT combat_actions + UPDATE state_character (PC39)
+- **BUG A résolu** : `ref_degats` → `parseDice(weapon.ref_damage_h)` — colonne réelle `damage_h`, alias `ref_damage_h` (PC40)
+- **BUG B résolu** : `is_rushed` lu depuis `state_character.is_rushed`, jamais `SELECT combat_actions` (PC28)
+- **BUG C résolu** : chaîne skill_id : `weapon_inv_id → item_id → ref_equipment_skill_assoc → skill_id`
+- **L9 résolu** : fetch `char_inventory WHERE container != 'Coffre'` pour `calcEncumbrancePenalty`
+- **L10 résolu** : `PORTEE_MOD_COMP = { bout_portant:5, courte:0, moyenne:-5, longue:-10, extreme:-15 }` documenté
+- PC39 + PC40 ajoutés dans section 8 pièges
+- Section 11 Sprint 3 endTurn : nettoyage state_character per-turn documenté
+- PO1/PO2/PO3 marqués ✅ dans section 6 ET section 11
 
 À lire avant de coder :
 - `server/src/socket/index.js` — état après Sprint 6

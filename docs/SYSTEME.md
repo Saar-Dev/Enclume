@@ -717,9 +717,14 @@ const skillTotal   = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)
 
 **Tireur :**
 - `char_attributes` + `char_archetype → ref_genotypes` → pour `calcSkillTotal` + `calcCarenceArmure`
-- `char_skills` (compétence arme) + `ref_skills` → pour `calcSkillTotal`
-- `char_inventory` (arme équipée snapshot + armures équipées) → pour dégâts + `calcCarenceArmure`
+- Compétence arme (chaîne complète — BUG C) :
+  `weapon_inv_id → char_inventory.item_id → ref_equipment_skill_assoc WHERE item_id = X → skill_id`
+  → `char_skills WHERE { char_sheet_id, skill_id }` + `ref_skills WHERE id = skill_id`
+- `char_inventory` :
+  - arme snapshot (pour `ref_damage_h`, `ref_range`) + armures équipées slot MG/MD → `calcCarenceArmure`
+  - **TOUS les items `container != 'Coffre'`** → `totalWeight` pour `calcEncumbrancePenalty` (L9 — fetch séparé)
 - `character_wounds` → pour `calcWoundPenalty`
+- `combat_roster.state_character` → `state_character.is_rushed` pour le malus −5 Compétence (lire le roster, jamais combat_actions — PC28)
 
 **Cible :**
 - `char_sheet WHERE character_id = X` → `char_sheet_id` (pour `resolveWoundInsertion`)
@@ -731,6 +736,32 @@ const skillTotal   = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)
 `LOCATION_TO_SLOT` (existant) : `'tete' → 'T'`, `'bras_droit' → 'BD'`, etc.
 `SLOT_TO_WOUND_LOCATION` (**à exporter Sprint 7.3**) : sens inverse — `'T' → 'tete'`, `'BD' → 'bras_droit'`, etc.
 Utilisé dans `COMBAT_ACTION_CONFIRM` pour convertir le slotCode issu du jet de localisation vers le format attendu par `resolveWoundInsertion` + `isShockTestRequired`.
+
+### state_character JSONB — combat_roster (migration 57)
+
+Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combinables.
+
+**Flags définis :**
+| Flag | Per-turn | Effet |
+|---|---|---|
+| `is_rushed` | oui (effacé à endTurn) | −5 Modificateur de Compétence au jet d'attaque |
+| `is_stunned` | non (persistant) | −5 actions, allure moyenne max, ne peut pas attaquer |
+| `is_rooted` | non | déplacement impossible |
+| `is_delayed` | oui | action retardée (V2) |
+
+**Règles obligatoires (PC39) :**
+- Clé absente = `false`. **Ne jamais stocker `false` explicitement.**
+- Merge : `db.raw('state_character || ?::jsonb', [JSON.stringify({ is_rushed: true })])`
+- Suppression flag : `db.raw("state_character - 'is_rushed'")`
+- **Jamais** `UPDATE SET state_character = '{"is_rushed":true}'` — écrase tous les autres flags.
+
+**Distinct de :** `state_position` (TEXT enum `standing/crouching/prone`) et `state_weapon` (TEXT enum `holstered/ready/drawn`) — ces deux colonnes sont exclusives, migration 56.
+
+**endTurn :** effacer uniquement les flags per-turn :
+```js
+await db('combat_roster').where({ campaign_id })
+  .update({ state_character: db.raw("state_character - 'is_rushed'") })
+```
 
 ### Vérification compétence limitative (PC23 — Tir Automatique)
 

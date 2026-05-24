@@ -5859,3 +5859,44 @@ Session documentation uniquement (pas de code). Corriger toutes les erreurs dans
 - Section "Mapping slotCode → wound_location" ajoutée
 
 
+
+### Corrections session 63 — continuation (après compaction contexte)
+
+**Décision architecture validée par Saar :**
+- `combat_roster.state_character JSONB NOT NULL DEFAULT '{}'` — flags booléens combinables
+- Distinct de `state_position` / `state_weapon` (TEXT enums exclusifs, migration 56)
+- `is_rushed` = STATE (pas action distincte), comme dégainer change `state_weapon`
+- Flags per-turn (`is_rushed`) effacés à `endTurn` via `db.raw("state_character - 'is_rushed'")`
+- Flags persistants (`is_stunned`, `is_rooted`) conservés entre tours
+
+**Bugs corrigés dans PLAN_11_SYSCOMBAT.md :**
+- BUG A : `ref_degats`/`ref_degats_total` → `parseDice(weapon.ref_damage_h)` (colonne réelle : `ref_equipment.damage_h`, aliasée `ref_damage_h` dans GET /inventory)
+- BUG B : `is_rushed` lu depuis `state_character.is_rushed` — jamais `SELECT FROM combat_actions WHERE action_key='rushed'` (table vidée en fin de tour, PC28)
+- BUG C : chaîne skill_id documentée : `weapon_inv_id → char_inventory.item_id → ref_equipment_skill_assoc WHERE item_id = X → skill_id`
+
+**Lacunes corrigées :**
+- L7 : section 6 "Fichiers à lire AVANT" — PO1/PO2/PO3 marqués ✅ résolus
+- L8 : section 11 "Avant de coder" Sprint 7 — PO1 et PO3 marqués ✅ résolus
+- L9 : fetch poids encombrement (`char_inventory` tous items `container != 'Coffre'`) documenté dans section 6 et SYSTEME.md §17
+- L10 : constante `PORTEE_MOD_COMP = { bout_portant:5, courte:0, ... }` ajoutée en section 6 et section 11 Sprint 7.3
+
+**Pièges ajoutés (section 8) :**
+- PC39 : JSONB merge `state_character` — jamais remplacement direct, toujours `state_character || ?::jsonb`
+- PC40 : colonne dégâts = `ref_equipment.damage_h`, alias `ref_damage_h` dans GET /inventory — jamais `ref_degats`
+
+**SYSTEME.md §17 mis à jour :**
+- Chaîne skill_id complète documentée (BUG C)
+- Fetch poids encombrement documenté (L9)
+- `state_character` dans "Données nécessaires tireur"
+- Nouvelle sous-section "state_character JSONB — combat_roster" avec flags, règles merge, endTurn pattern
+
+**Sections PLAN_11_SYSCOMBAT.md mises à jour :**
+- Section 3 : `state_character JSONB NOT NULL DEFAULT '{}'` dans combat_roster
+- Section 4 : `is_rushed` implémentation en deux temps (INSERT action + UPDATE state_character)
+- Section 6 : fetch tireur (BUG C + L9), `ref_damage_h` (BUG A), `state_character.is_rushed` (BUG B), `PORTEE_MOD_COMP` (L10)
+- Section 8 : PC39 + PC40 ajoutés
+- Section 11 Sprint 3 : endTurn nettoyage state_character per-turn
+- Section 11 Sprint 7 "Avant de coder" : PO1/PO3 résolus
+- Section 11 Sprint 7.1 : migration 57 = 2 blocs (combat_actions + combat_roster), handler 'rushed' → UPDATE state_character
+- Section 11 Sprint 7.2 : is_rushed source = state_character
+- Section 11 Sprint 7.3 : BUG A/B/C + L9/L10 intégrés dans les steps, PORTEE_MOD_COMP
