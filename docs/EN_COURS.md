@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-23 Session 62
+> Dernière mise à jour : 2026-05-24 Session 63
 
 ---
 
@@ -201,13 +201,30 @@ Travaux effectués :
 
 Objectif : Attaques complètes. Blessures enregistrées. Carence FOR appliquée.
 
-Voir PLAN_11_SYSCOMBAT.md § Sprint 7 pour le détail complet.
+**Plan finalisé (session 63) — prêt à coder. NE PAS MODIFIER sans relire le plan entier.**
+Voir `PLAN_11_SYSCOMBAT.md § Sprint 7` pour le détail complet.
+Voir `SYSTEME.md §17` pour le pattern données personnage (calcul serveur combat + jets).
+
+**Corrections et ajouts session 63 (ne pas réintroduire les erreurs) :**
+- Blessures : 1 par touche, gravité par seuils (≥5/10/15/20/25/30) — pas `Math.floor(nets/5)`
+- Mode de tir (RC/RL) : sélection en ST1 (Annonce), stocké `fire_mode`/`bullet_count`/`fire_mode_bonus_comp`/`fire_mode_bonus_dmg` dans `combat_actions` (4 colonnes — migration 57)
+- Tir instinctif : hors scope Sprint 7 (assaut classique uniquement)
+- `confirmedModifiers` : `{ portee, situation[], taille }` — sans tirInstinctif, sans fireMode
+- Broadcast : `severity + is_lethal` — pas `nbrBlessures`
+- `target_token_id` : colonne existe déjà (migration 54), juste à stocker dans le handler
+- `resolveWoundInsertion` + `isShockTestRequired` : locales dans `char-sheet.js`, à exporter (Sprint 7.3)
+- LOS + portée : vérification pré-jet serveur (COMBAT_ACTION_CONFIRM) — LOS binaire V1, portée extrême → −99
+- Portée auto-calc : parse `ref_equipment.range`, PC37 (espace millier), PC38 (arme contact), pré-remplissage CombatModifiersWindow
+- SYSTEME.md §17 ajouté : pattern données personnage serveur (chaîne calcul, charStats.js, données par rôle)
+- Sprint 7.5 ajouté : décompte munitions (sprint dédié)
+- "Validation Sprint 4" → "Validation Sprint 7" (corrigé)
+- `run à vide autocentré OBLIGATOIRE` ajouté dans CLAUDE.md (§ Pendant le développement)
 
 À lire avant de coder :
 - `server/src/socket/index.js` — état après Sprint 6
-- `server/src/lib/charStats.js` — calcResistanceArmure, calcCarenceArmure, calcResistanceDommages
+- `server/src/lib/charStats.js` — calcResistanceArmure, calcCarenceArmure, calcResistanceDommages, calcSeuils
 - `shared/woundConstants.js`, `shared/armorConstants.js`
-- `server/src/routes/character/char-sheet.js` — route POST /wounds
+- `server/src/routes/character/char-sheet.js` — resolveWoundInsertion, isShockTestRequired, POST /wounds
 
 ---
 

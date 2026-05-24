@@ -1,5 +1,5 @@
 # SYSTEME.md — Flux, règles et pièges du projet Enclume
-> Dernière mise à jour : 2026-05-23 Session 61
+> Dernière mise à jour : 2026-05-24 Session 63
 > Ce document répond à "qui fait quoi, qui parle à qui, pourquoi" — pas à "qu'est-ce qui existe".
 > Pour la liste des fichiers : voir ASBUILT.md. Pour l'historique : voir JOURNAL2.md.
 
@@ -656,7 +656,94 @@ chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
 
 ---
 
-## 17. Conventions non-négociables
+## 17. Données personnage — calcul serveur (combat + jets)
+
+### Tables impliquées
+
+| Table | Contenu clé | Lien |
+|---|---|---|
+| `char_sheet` | `id` UUID, `chc`, `xp_total`, `xp_available` | `character_id → characters.id` |
+| `char_attributes` | 8 lignes : `attr_id`, `base_level`, `pc_modifier` | `char_sheet_id` |
+| `char_archetype` | `genotype_id` TEXT | `char_sheet_id` |
+| `ref_genotypes` | `mod_for`, `mod_con`, `mod_coo`, `mod_ada`, `mod_per`, `mod_int`, `mod_vol`, `mod_pre` | `id` TEXT (ex. `'HUMAIN'`) |
+| `char_skills` | `skill_id`, `mastery` INT, `is_learned` BOOL | `char_sheet_id` |
+| `ref_skills` | `attr_1`, `attr_2` — attributs liés | `id` TEXT (ex. `'ARMES_POING'`) |
+
+`GET /api/char-sheet/:characterId` retourne `{ sheet, archetype, attributes, skills }` en une requête parallèle (`char-sheet.js` ~ligne 79). **Aucune valeur pré-calculée en DB.** Les totaux sont toujours dérivés à la volée.
+
+### Chaîne de calcul — skill total
+
+```
+naMap[attrId] = base_level + pc_modifier + ref_genotypes.mod_{attrId}   (plancher 3)
+anMap[attrId] = calcAN(naMap[attrId])
+
+skillTotal = calcAN(naMap[attr_1]) + calcAN(naMap[attr_2]) + charSkill.mastery
+           = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)
+```
+
+### Pattern de fetch — réutiliser sans réinventer
+
+Handler `DICE_ROLL` (`socket/index.js` ~lignes 680-695) implémente la chaîne complète. Tout nouveau handler nécessitant un skill total serveur doit **copier ce pattern** :
+
+```js
+const charSkillRow = await db('char_skills')
+  .where({ char_sheet_id: sheet.id, skill_id: skillId }).first()
+const refSkill     = await db('ref_skills').where({ id: skillId }).first()
+const archetype    = await db('char_archetype').where({ char_sheet_id: sheet.id }).first()
+const genotypeRow  = archetype?.genotype_id
+  ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
+  : null
+const skillTotal   = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)
+// attrs = résultat de db('char_attributes').where({ char_sheet_id: sheet.id })
+```
+
+### Fonctions charStats.js — référence combat
+
+| Fonction | Paramètres | Retour |
+|---|---|---|
+| `calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)` | données brutes | skill total (entier) |
+| `calcAttributeNA(attrs, attrId, genotypeRow)` | données brutes | niveau actuel (na) |
+| `calcResistanceArmure(equippedArmor)` | armures équipées filtrées par slot | `{ ETQ, PRT }` |
+| `calcCarenceArmure(equippedArmor, forNA)` | armures équipées + FOR_na | malus carence (≤ 0) |
+| `calcResistanceDommages(forNA, conNA)` | FOR_na + CON_na | RD (entier) |
+| `calcWoundPenalty(wounds)` | tableau `character_wounds` | malus santé (≤ 0, pire seul) |
+| `calcEncumbrancePenalty(weight, forNA)` | poids total + FOR_na | malus encombrement (≥ 0) |
+| `calcSeuils(forNA, conNA, volNA)` | FOR_na + CON_na + VOL_na | `{ etourdissement, inconscience }` |
+| `getShockMalus(severity, location, is_lethal)` | gravité + wound_location + flag léthal | malus Test de Choc (≤ 0) — **à créer Sprint 7.3** |
+
+**Règle immuable :** `charStats.js` = fonctions pures — aucun accès DB. Le caller fournit toutes les données.
+
+### Données nécessaires par rôle en combat
+
+**Tireur :**
+- `char_attributes` + `char_archetype → ref_genotypes` → pour `calcSkillTotal` + `calcCarenceArmure`
+- `char_skills` (compétence arme) + `ref_skills` → pour `calcSkillTotal`
+- `char_inventory` (arme équipée snapshot + armures équipées) → pour dégâts + `calcCarenceArmure`
+- `character_wounds` → pour `calcWoundPenalty`
+
+**Cible :**
+- `char_sheet WHERE character_id = X` → `char_sheet_id` (pour `resolveWoundInsertion`)
+- `char_attributes` + `char_archetype → ref_genotypes` → FOR_na, CON_na, **VOL_na** → `calcResistanceDommages` + `calcSeuils`
+- `char_inventory` (armures équipées, filtrées slot = localisation touchée) → pour `calcResistanceArmure`
+
+### Mapping slotCode → wound_location (armorConstants.js)
+
+`LOCATION_TO_SLOT` (existant) : `'tete' → 'T'`, `'bras_droit' → 'BD'`, etc.
+`SLOT_TO_WOUND_LOCATION` (**à exporter Sprint 7.3**) : sens inverse — `'T' → 'tete'`, `'BD' → 'bras_droit'`, etc.
+Utilisé dans `COMBAT_ACTION_CONFIRM` pour convertir le slotCode issu du jet de localisation vers le format attendu par `resolveWoundInsertion` + `isShockTestRequired`.
+
+### Vérification compétence limitative (PC23 — Tir Automatique)
+
+```js
+const tirAutoRow = await db('char_skills')
+  .where({ char_sheet_id: sheet.id, skill_id: 'TIR_AUTOMATIQUE' }).first()
+const hasTirAuto = tirAutoRow?.is_learned === true
+// Guard COMBAT_ACTION_DECLARE : si AUTO sélectionné ET !hasTirAuto → reject
+```
+
+---
+
+## 18. Conventions non-négociables
 
 - **UUID partout** — jamais `increments()` (sauf voxel_textures.id — P22)
 - **threeToDb(tx, ty, tz)** → `{ pos_x: tx, pos_y: tz, pos_z: ty }` — jamais inline
@@ -691,7 +778,7 @@ chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
 
 ---
 
-## 18. Pièges actifs — référence rapide
+## 19. Pièges actifs — référence rapide
 
 | Code | Description |
 |---|---|

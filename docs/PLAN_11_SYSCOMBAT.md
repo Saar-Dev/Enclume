@@ -130,7 +130,7 @@ combat_actions
 { "ini_mod": -3 }
 ```
 Une ligne par action → `modifiers` ne contient que l'ini_mod de cette action spécifique.
-Sprint 7 : `fire_mode` et `bullet_count` ajoutés sur la ligne assault uniquement.
+Sprint 7 → migration 57 : `target_token_id` déjà en DB (migration 54) mais jamais peuplé — le handler COMBAT_ACTION_DECLARE doit le stocker. Colonnes nouvelles à ajouter : `fire_mode` (TEXT), `bullet_count` (SMALLINT), `fire_mode_bonus_comp` (SMALLINT) sur la ligne assault uniquement.
 
 **Règles :**
 - `is_rushed` : ligne distincte (`action_key='rushed'`, `type='micro'`) — +3 INI à l'annonce, -5 Mod Compétence à la résolution assault. Détection : `SELECT 1 FROM combat_actions WHERE token_id=X AND action_key='rushed'`
@@ -578,26 +578,27 @@ const slots = await db('combat_roster')
 - Confirmer LdB seuil jet de Choc tête (PO3) avant de coder cette branche
 - Vérifier colonnes portées dans ref_equipment (PO2)
 
-**Fichiers créés :**
+**Fichiers à créer :**
 - `client/src/components/CombatModifiersWindow.jsx`
 
-**Fichiers modifiés :**
+**Fichiers à modifier :**
 - `server/src/socket/index.js` — `COMBAT_ACTION_CONFIRM` branche assault, calcul dégâts complet
 - `client/src/components/CombatActionWindow.jsx` — bouton Assaut actif + CombatModifiersWindow
 
-**⚠️ Prérequis Sprint 7 — Déclaration Assaut (non implémentée en Sprint 6)**
+**⚠️ Prérequis Sprint 7 — Déclaration Assaut (ST1 non implémentée en Sprint 6)**
 
 La déclaration d'un Assaut en phase Annonce nécessite :
-- Sélection cible (`target_token_id`) — liste des tokens en combat
-- Sélection arme (`weapon_inv_id`) — MG ou MD équipée (guard PC22)
+- Sélection cible (`target_token_id`) — liste des tokens actifs du roster. Colonne déjà en DB (migration 54) mais jamais peuplée par le handler.
+- Sélection arme (`weapon_inv_id`) — MG ou MD équipée (guard PC22). Côté serveur stocké, côté client envoyé `null`.
+- Sélection mode de tir RC/RL — déclarée à l'**ANNONCE** (phase ST1), jamais en Résolution. Fetch arme → `ref_equipment.fire_mode` → flags `allowCC` / `allowAuto` (pattern Kiwi `getCombatContext`).
+- Snapshot arme : `ref_degats` (formule dés), `range` (portée max), `fire_mode` — chargés au moment de la sélection de l'arme dans CombatActionWindow.
 
-Actuellement `CombatActionWindow.jsx` affiche "Assaut" comme item mais sans UI de sélection.
-Sans `target_token_id` et `weapon_inv_id` en DB, COMBAT_ACTION_CONFIRM n'a rien à résoudre.
+⚠️ RC/RL appartient à la phase ANNONCE (ST1). Les modificateurs GM (portée, situation, taille) appartiennent à la phase RÉSOLUTION (ST2). Ces deux choses ne doivent pas être mélangées.
 
-**Sprint 7 = 3 sous-tâches séquentielles :**
-1. Déclaration Assaut (UI Annonce) → target + weapon
-2. CombatModifiersWindow (UI Résolution) → modificateurs GM
-3. Résolution Assaut (serveur) → jet + dégâts + blessures + Test de Choc
+**Sprint 7 = 3 sprints séquentiels :**
+1. Sprint 7.1 — Déclaration Assaut (UI Annonce) → cible + arme + mode de tir RC/RL
+2. Sprint 7.2 — CombatModifiersWindow (UI Résolution) → modificateurs GM uniquement
+3. Sprint 7.3 — Résolution Assaut (serveur) → jet + dégâts + blessures + Test de Choc
 
 ---
 
@@ -631,39 +632,74 @@ Le malus s'applique au jet 1D20 (ajouté côté défavorable — le personnage d
 **Handler `COMBAT_ACTION_CONFIRM` — Sprint 7 (assault) :**
 - Guard : action.weapon_inv_id non null (PC22) — si null → skip avec log
 - Guard : slot de l'arme = 'MG' ou 'MD'
-- Fetch tireur : char_sheet → char_attributes → char_inventory (arme + armures équipées) + char_archetype → genotype
-- Fetch cible (target_token_id) : char_sheet → char_attributes → char_inventory (armures équipées)
+- **Vérification pré-jet — portée + LOS (avant le jet de dés) :**
+  - **(a) Portée extrême** : calculer distance tireur→cible `Math.sqrt(dx²+dy²+dz²) × voxel_scale`. ⚠️ Sprint 7 : `voxel_scale = 1.0` hardcodé (PC35 — Sprint ScaleMap non implémenté). Parser `ref_equipment.range` (PC37, PC38) → seuil extrême. Si `distance > extreme` → `{ label: 'hors_portee', value: -99 }` dans situation.
+  - **(b) LOS** : raycast 3D DDA via la collision map Redis (même map que `isCaseOccupied` déplacement), origine `pos_z+1` tireur, cible `pos_z+1` cible (PE29 — niveau des yeux). Si LOS bloquée → `{ label: 'los_bloquee', value: -99 }` dans situation. ⚠️ `isCaseOccupied` vérifie 1 voxel seulement — la traversée DDA multi-voxels est **un algorithme à écrire** (pas de fonction existante dans le projet).
+  - Si situation contient un modificateur −99 : jet automatique côté serveur (pas d'attente clic joueur), munitions consommées (Sprint 7.5), résultat diffusé dans le chat. Le processus normal s'exécute — rate garanti mathématiquement.
+  - ⚠️ V1 = LOS binaire (dégagée / bloquée). Détection couverture partielle (−3) / importante (−5) depuis les voxels adjacents = V2 sprint dédié futur.
+- Fetch tireur : pattern existant (`socket/index.js` ~lignes 680-695, cf. SYSTEME.md §17) — `attrs + archetype → genotypeRow + charSkillRow (compétence arme) + refSkill` + char_inventory (arme snapshot + armures équipées) + character_wounds
+- Fetch cible (`target_token_id`) : token roster → `character_id` → `char_sheet WHERE character_id = X` → **`char_sheet_id`** (nécessaire pour `resolveWoundInsertion`) + `char_attributes + char_archetype → genotypeRow` (pour `calcResistanceDommages` + `calcSeuils` : for_na, con_na, vol_na) + `char_inventory` (armures équipées filtrées slot = localisation)
 - Calcul compétence tireur : `calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)`
 - Carence : `calcCarenceArmure(tireurEquippedArmor, forNA_tireur)` — appliquée sur le jet du tireur
 - Malus état : `calcWoundPenalty(wounds_tireur)` + `calcEncumbrancePenalty(weight, FOR)` → effectiveMalus
-- Modificateurs totaux Compétence : portée + situation + taille + is_rushed(-5) + tir_instinctif(-5) + RC/RL − carence
+- Modificateurs totaux Compétence : portée + sum(situation[]) + taille + is_rushed(−5) + `combat_action.fire_mode_bonus_comp` − carence (PC26)
+  Note : `fire_mode_bonus_comp` vient de `combat_actions` (déclaré en Annonce), pas de `confirmedModifiers`. Pas de tir_instinctif pour un Assaut classique.
 - (PC24) chaque modificateur nommé explicitement dans les logs/résultats
 - Jet 1d20 via `parseDice('1d20')` côté serveur
 - `chancesDeReussite = skillTotal + totalModComp + effectiveMalus`
 - `isSuccess = roll <= chancesDeReussite`
 - Si succès :
   - Localisation : jet 1d20 serveur → table distance V1 (section ci-dessous)
-  - `calcResistanceArmure(cibleEquippedArmor.filter(slot === locationSlot))` → ETQ / PRT (PC29 : déjà dispo)
-  - MR = `roll - chancesDeReussite` → `getModifier(mrTable, mr)` → modDomAttaque (LdB p.209)
-  - Dégâts bruts = `ref_degats + modDomAttaque + modDegatsRC_RL`
+  - `calcResistanceArmure(cibleEquippedArmor.filter(item => item.slot === slotCode))` → ETQ / PRT (PC29 : déjà dispo)
+  - `mr = chancesDeReussite - roll` (positif sur succès) → `getModifier(mrTable, mr)` → `modDomAttaque` (LdB p.209)
+    ⚠️ `getMrTable()` + `getModifier()` **existent déjà** dans `socket/index.js` lignes 41-55 — réutiliser directement, ne pas recréer.
+  - `isShortRange` = (`confirmedModifiers.portee` ∈ `['bout_portant','courte']`)
+  - `modDegatsMode` = `isShortRange ? combat_action.fire_mode_bonus_dmg : 0`
+  - Dégâts bruts = `ref_degats_total + modDomAttaque + modDegatsMode`
   - `calcResistanceDommages(for_na_cible, con_na_cible)` → RD
-  - Dégâts nets = max(0, dégâts bruts - ETQ - RD)
-  - Blessures = `Math.floor(dégâts_nets / 5)`
-  - Si blessures > 0 : INSERT dans `character_wounds` via db direct (pattern char-sheet.js)
-  - Si localisation tête et dégâts nets > 0 : jet de Choc (seuil PO3 — à confirmer LdB)
+  - Dégâts nets = `max(0, dégâts bruts − ETQ − RD)`
+  - **1 seule blessure par touche — gravité par comparaison aux seuils :**
+    - nets ≥ 30 → `'mortelle'` + flag `is_lethal: true` (Mort / Membre détruit — signalé en broadcast, GM gère)
+    - nets ≥ 25 → `'mortelle'`
+    - nets ≥ 20 → `'critique'`
+    - nets ≥ 15 → `'grave'`
+    - nets ≥ 10 → `'moyenne'`
+    - nets ≥  5 → `'legere'`
+    - nets <  5 → aucune blessure
+  - Si severity non null : `resolveWoundInsertion(trx, char_sheet_id_cible, location, severity)` — (P49 : check promoted)
+    ⚠️ `resolveWoundInsertion` et `isShockTestRequired` sont locales dans `char-sheet.js` → **à exporter** avant ce sprint
+  - Test de Choc si `isShockTestRequired(severity, location)` :
+    - `calcSeuils(for_na_cible, con_na_cible, vol_na_cible)` → `{ etourdissement, inconscience }`
+    - Malus : `getShockMalus(severity, location, is_lethal)` — **fonction à écrire** dans `charStats.js` (Sprint 7.3). Règle : si `is_lethal=true` ET `location ∈ ['bras_droit','bras_gauche','jambe_droite','jambe_gauche']` → retourner `−10` (Membre détruit, pas −5 Mortelle Bras/Jambes). Sinon : lire table Tests de Choc ci-dessus.
+    - `if (roll1D20 <= etourdissement + shockMalus)` → aucun effet (succès)
+    - `else if (roll1D20 <= inconscience + shockMalus)` → Étourdi
+    - `else` → Inconscient
+    - Inclure `shockResult: { triggered, roll, outcome }` dans broadcast `COMBAT_ATTACK_RESULT`
   - (P49) promoted check sur chaque blessure créée
-- Broadcast `WS.COMBAT_ATTACK_RESULT { tireurId, cibleId, localisation, degautsBruts, degatsNets, blessures, isSuccess, roll, chancesDeReussite }`
-- (PC23) RC/RL : vérification compétence "Tir Automatique" côté serveur uniquement
+- Broadcast `WS.COMBAT_ATTACK_RESULT { tireurId, cibleId, localisation, degautsBruts, degatsNets, severity, is_lethal, isSuccess, roll, chancesDeReussite, shockResult }`
+  Note : `shockResult = null` si pas de Test de Choc ; `severity = null` si pas de blessure ; pas de `nbrBlessures` (toujours 1).
+- (PC23) RC/RL : vérification compétence "Tir Automatique" côté serveur à la déclaration (COMBAT_ACTION_DECLARE) uniquement
 
 **Localisation V1 — distance (LdB p.228) :**
-| Jet | Localisation | slotCode (LOCATION_TO_SLOT) |
-|---|---|---|
-| 1-2 | Tête | T |
-| 3-8 | Corps | C |
-| 9-11 | Bras Droit | BD |
-| 12-14 | Bras Gauche | BG |
-| 15-17 | Jambe Droite | JD |
-| 18-20 | Jambe Gauche | JG |
+| Jet | Localisation | slotCode | wound_location (WOUND_LOCATIONS) |
+|---|---|---|---|
+| 1-2 | Tête | T | `tete` |
+| 3-8 | Corps | C | `corps` |
+| 9-11 | Bras Droit | BD | `bras_droit` |
+| 12-14 | Bras Gauche | BG | `bras_gauche` |
+| 15-17 | Jambe Droite | JD | `jambe_droite` |
+| 18-20 | Jambe Gauche | JG | `jambe_gauche` |
+
+⚠️ `calcResistanceArmure` utilise **slotCode** (T/C/BD/etc.) pour filtrer les armures.
+⚠️ `resolveWoundInsertion` + `isShockTestRequired` attendent **wound_location** (`'tete'`, `'corps'`, etc.) — **jamais le slotCode**.
+Mapping inverse à exporter dans `shared/armorConstants.js` (Sprint 7.3) :
+```js
+export const SLOT_TO_WOUND_LOCATION = {
+  T: 'tete', C: 'corps',
+  BD: 'bras_droit', BG: 'bras_gauche',
+  JD: 'jambe_droite', JG: 'jambe_gauche',
+}
+```
 
 **Terminologie stricte — règle absolue (PC24) :**
 | Terme | Définition |
@@ -711,18 +747,37 @@ Le malus s'applique au jet 1D20 (ajouté côté défavorable — le personnage d
 | Énorme (~7 m) | +10 |
 | Gigantesque (10 m+) | +15 |
 
+**Portée — calcul automatique (pré-remplissage CombatModifiersWindow) :**
+- Source : `ref_equipment.range` au format `"bout_portant/courte/moyenne/longue (extreme)"` — exemples réels en DB : `"10/50/100/200 (300)"`, `"8/40/80/160 (240)"`, `"50/250/500/1 000 (1 500)"`. Arme de contact : valeur unique ex. `"1"` (pas de slash, pas de valeur extrême).
+- Parsing (côté client ET côté serveur — même logique) :
+  1. Extraire la valeur entre parenthèses → extrême (absent si arme contact)
+  2. Splitter sur `"/"` → [bp, courte, moyenne, longue]
+  3. ⚠️ PC37 : `parseInt(s.replace(/\s/g, ''), 10)` pour chaque valeur (espace millier possible)
+  4. PC38 : si valeur unique (arme contact) → seuil unique `bout_portant`
+- Calcul distance (coords DB PE14 → Three.js avant calcul) :
+  - `tireurPos` : `{ x: token.pos_x, y: token.pos_z, z: token.pos_y }` (PE14)
+  - `ciblePos` : idem depuis `combat_actions.target_token_id` → token roster
+  - `distance = Math.sqrt(dx² + dy² + dz²) × voxel_scale`
+- Sélection palier pré-rempli :
+  - `≤ bp` → `bout_portant` · `≤ courte` → `courte` · `≤ moyenne` → `moyenne` · `≤ longue` → `longue` · `≤ extreme` → `extreme` · `> extreme` → hors portée (cas serveur : −99)
+- Afficher la distance calculée (valeur numérique) à titre indicatif dans CombatModifiersWindow
+- GM peut toujours sélectionner un palier différent (radio non-locked)
+
 **CombatModifiersWindow.jsx :**
-- Affiché simultanément joueur actif + GM
-- Section joueur : récapitulatif is_rushed (lecture), checkbox Tir instinctif, Mode RC/RL (si arme compatible)
-- Section GM : Modificateur de Portée (select paliers), Situation (multi-select), Taille cible (select)
-- Bouton "Valider" côté GM → émet `WS.COMBAT_ACTION_CONFIRM { actionId, confirmedModifiers: { portee, situation, taille, tirInstinctif, fireMode } }`
+- Affiché simultanément joueur actif + GM en phase RÉSOLUTION dès que assault ∈ myActions du slot actif
+- Section joueur (lecture seule) : arme sélectionnée, mode de tir déclaré (RC/RL), cible, is_rushed
+  ⚠️ Pas de checkbox "Tir instinctif" — non applicable à un Assaut classique. RC/RL déjà déclaré en Annonce, pas resélectionné ici.
+- Section GM : Portée (radio 5 paliers — **pré-sélectionné** depuis calcul auto décrit ci-dessus ; GM peut changer), Situation (checkboxes multi-select), Taille cible (radio)
+- Header sticky : bonus test total + bonus dégâts total (style Kiwi `ModificateursCombat.html` : pills colorés fond sombre)
+- Bouton "Valider" côté GM (disabled si portée non choisie) → émet `COMBAT_ACTION_CONFIRM { tokenId, confirmedModifiers: { portee, situation[], taille } }`
+  ⚠️ Pas de `tirInstinctif` ni `fireMode` dans `confirmedModifiers` — le fire_mode est dans `combat_actions` (déclaré en Annonce)
 
 **Affichage carence FOR :**
 - Dans `CombatModifiersWindow` : afficher carence tireur si > 0 (rouge)
 - forNA disponible dans ce contexte (char_attributes chargés pour le jet)
 - Distinct de l'affichage dans ArmorWoundPanel (reporté Chantier 11 sprint 3 = ce sprint 4)
 
-**Validation Sprint 4 :**
+**Validation Sprint 7 :**
 - ✅ Jet d'attaque résolu (succès/échec, roll affiché)
 - ✅ Localisation tirée au sort côté serveur
 - ✅ Dégâts nets calculés (mille-feuille + RD)
@@ -755,8 +810,8 @@ Le malus s'applique au jet 1D20 (ajouté côté défavorable — le personnage d
 
 | # | Question | Sprint | Statut |
 |---|---|---|---|
-| PO1 | `WOUND_PENALTIES` — valeurs exactes dans `woundConstants.js` ? | 7 | À vérifier avant Sprint 7 |
-| PO2 | Colonnes portées exactes dans `ref_equipment` | 7 | `\d ref_equipment` en psql avant Sprint 7 |
+| PO1 | `WOUND_PENALTIES` — valeurs exactes dans `woundConstants.js` ? | 7 | ✅ Résolu : `{ legere:-1, moyenne:-3, grave:-5, critique:-10, mortelle:-20 }` |
+| PO2 | Colonnes portées exactes dans `ref_equipment` | 7 | ✅ Résolu : colonne `range TEXT`, format `"X/Y/Z/W (V)"` ex. `"10/50/100/200 (300)"`, contact: `"1"` |
 | PO3 | Seuil jet de Choc + malus par gravité/localisation | 7 | ✅ Résolu LdB p.239 — voir table ci-dessous |
 | PO4 | Re-tri roster si `is_rushed` ? | 2 | ✅ Résolu : oui, re-tri + COMBAT_ROSTER_UPDATED |
 | ~~PO5~~ | ~~weapon_inv_id V1~~ | — | ✅ Clôturé : Option B — ID char_inventory réel (MG ou MD) |
@@ -797,6 +852,8 @@ Le malus s'applique au jet 1D20 (ajouté côté défavorable — le personnage d
 | PC34 | Sprint 3 = migration 56 seule. Ne pas toucher socket/index.js ni les composants avant que la migration soit appliquée et vérifiée en psql. |
 | PC35 | voxel_scale = 1.0 hardcodé en Sprint 3. L'UI ScaleMap est reportée (sprint dédié). Ne pas brancher voxel_scale sur battlemap.scale_label (TEXT cosmétique). |
 | PC36 | combatMoveMode prop distinct de moveTarget dans Canvas3D. moveTarget = entity push/pull (9F-B2). Ne pas réutiliser pour le combat mouvement. |
+| PC37 | `ref_equipment.range` parsing : `parseInt("1 000")` = NaN. Toujours `parseInt(s.replace(/\s/g, ''), 10)` pour chaque valeur de portée (les armes longue portée utilisent l'espace comme séparateur millier). |
+| PC38 | Portée arme de contact : `range` = valeur unique (ex. `"1"`) — pas de slash. Pas de portée extrême. Parser → palier `bout_portant` uniquement, distance max = valeur. |
 
 ---
 
@@ -945,38 +1002,49 @@ Le malus s'applique au jet 1D20 (ajouté côté défavorable — le personnage d
 - [ ] `shared/woundConstants.js` — WOUND_PENALTIES exact (PO1)
 - [ ] `shared/armorConstants.js` — LOCATION_TO_SLOT
 - [ ] `server/src/routes/character/char-sheet.js` — route POST /wounds
-- [ ] PO2 : `\d ref_equipment` en psql — confirmer colonnes portées avant de coder
+- [x] PO2 résolu : colonne `range TEXT`, format `"X/Y/Z/W (V)"` (PC37/PC38 documentés)
 
-**Sous-tâche 1 — Déclaration Assaut (UI Annonce)**
+**Sprint 7.1 — Déclaration Assaut (UI Annonce)**
+- [ ] Migration 57 : ajouter colonnes `fire_mode TEXT`, `bullet_count SMALLINT`, `fire_mode_bonus_comp SMALLINT`, `fire_mode_bonus_dmg SMALLINT` sur `combat_actions`
 - [ ] `CombatActionWindow.jsx` — sélection cible (liste tokens roster) + sélection arme (MG/MD fetch char_inventory)
-- [ ] `server/src/socket/index.js` — COMBAT_ACTION_DECLARE : guard PC22 (weapon_inv_id slot MG ou MD) + guard target_token_id non-null si assault
-- [ ] Vérifier DB : combat_actions.target_token_id + weapon_inv_id non-null pour assault déclaré
+- [ ] `CombatActionWindow.jsx` — mode de tir : `allowCC`/`allowAuto` depuis `ref_equipment.fire_mode` ; CPC (simple / répétition + slider / sous-choix 7+10 balles courte portée) ou AUTO (rafale courte / longue + slider / multi-cibles) ; stocker `fire_mode`, `bullet_count`, `fire_mode_bonus_comp`, `fire_mode_bonus_dmg`
+- [ ] `server/src/socket/index.js` — COMBAT_ACTION_DECLARE : guard PC22 (weapon_inv_id slot MG ou MD) + guard target_token_id non-null si assault + guard PC23 (compétence "Tir Automatique") si AUTO
+- [ ] Stocker `target_token_id`, `fire_mode`, `bullet_count`, `fire_mode_bonus_comp`, `fire_mode_bonus_dmg` dans `combat_actions`
+- [ ] Vérifier DB : `target_token_id` + `weapon_inv_id` + `fire_mode` non-null pour assault déclaré
 
-**Sous-tâche 2 — CombatModifiersWindow.jsx (NOUVEAU)**
+**Sprint 7.2 — CombatModifiersWindow.jsx (NOUVEAU)**
 - [ ] Créer `client/src/components/CombatModifiersWindow.jsx`
-- [ ] Section joueur : is_rushed (lecture seule), checkbox Tir instinctif, Mode RC/RL (si arme compatible PC23)
+- [ ] Section joueur (lecture seule) : `is_rushed`, récap mode de tir (`fire_mode` + `bullet_count` + `fire_mode_bonus_comp` depuis `combat_actions`)
 - [ ] Section GM : Portée (select 5 paliers), Situation (multi-select), Taille cible (select)
 - [ ] Monter dans CombatOverlay quand phase=RÉSOLUTION + assault déclaré dans myActions
-- [ ] GM émet `COMBAT_ACTION_CONFIRM { tokenId, confirmedModifiers: { portee, situation, taille, tirInstinctif, fireMode } }`
+- [ ] GM émet `COMBAT_ACTION_CONFIRM { tokenId, confirmedModifiers: { portee, situation[], taille } }`
 
-**Sous-tâche 3 — Résolution Assaut (serveur)**
+**Sprint 7.3 — Résolution Assaut (serveur)**
 - [ ] `COMBAT_ACTION_CONFIRM` branche assault — guard weapon_inv_id (PC22)
-- [ ] Fetch tireur : char_sheet → char_attributes + char_archetype → genotype + char_inventory (arme + armures) + character_wounds
-- [ ] Fetch cible (`target_token_id`) : char_sheet → char_attributes + char_inventory (armures équipées)
+- [ ] Exporter `resolveWoundInsertion` + `isShockTestRequired` depuis `char-sheet.js` (actuellement fonctions locales)
+- [ ] Fetch tireur : pattern existant (cf. SYSTEME.md §17) — `attrs + genotypeRow + charSkillRow + refSkill` + char_inventory (arme snapshot + armures) + character_wounds
+- [ ] Fetch cible : `target_token_id` → token roster → `character_id` → `char_sheet WHERE character_id = X` → **`char_sheet_id_cible`** + `char_attributes + char_archetype → genotypeRow` + `char_inventory` (armures équipées) — garder `for_na_cible`, `con_na_cible`, `vol_na_cible` (pour `calcResistanceDommages` + `calcSeuils`)
 - [ ] `calcSkillTotal` tireur + `calcCarenceArmure` + `calcWoundPenalty` + `calcEncumbrancePenalty` → effectiveMalus
-- [ ] Modificateurs de Compétence : portée + situation + taille + is_rushed(−5) + tirInstinctif(−5) − carence (PC26)
+- [ ] Modificateurs de Compétence : portée + situation + taille + is_rushed(−5) + `fire_mode_bonus_comp` − carence (PC26)
 - [ ] Jet 1D20 attaque via `parseDice('1d20')` côté serveur
 - [ ] `chancesDeReussite = skillTotal + totalModComp + effectiveMalus`
-- [ ] Si succès : jet 1D20 localisation → table distance V1 → slotCode via LOCATION_TO_SLOT
-- [ ] `calcResistanceArmure(armures cible slot localisation)` → ETQ + PRT (PC29)
-- [ ] MR = `roll − chancesDeReussite` → `getModifier(mrTable, mr)` → modDomAttaque
-- [ ] Dégâts bruts = `ref_degats + modDomAttaque`
+- [ ] Si succès : jet 1D20 localisation → table distance V1 → `slotCode` (T/C/BD/BG/JD/JG) → `location = SLOT_TO_WOUND_LOCATION[slotCode]`
+- [ ] Exporter `SLOT_TO_WOUND_LOCATION` depuis `shared/armorConstants.js` (cf. mapping table V1 ci-dessus dans section 6)
+- [ ] `calcResistanceArmure(armures cible filtrées slot === slotCode)` → ETQ + PRT (PC29)
+- [ ] `mr = chancesDeReussite − roll` (positif sur succès — cf. `socket/index.js` ligne 999). `getMrTable()` + `getModifier()` **déjà définis** dans `socket/index.js` lignes 41-55, réutiliser directement.
+- [ ] `isShortRange = confirmedModifiers.portee ∈ ['bout_portant', 'courte']`
+- [ ] `modDegatsMode = isShortRange ? fire_mode_bonus_dmg : 0`
+- [ ] Dégâts bruts = `ref_degats + modDomAttaque + modDegatsMode`
 - [ ] `calcResistanceDommages(for_na_cible, con_na_cible)` → RD
 - [ ] Dégâts nets = `max(0, bruts − ETQ − RD)`
-- [ ] Blessures = `Math.floor(nets / 5)` → INSERT character_wounds (P49 : check promoted)
-- [ ] Test de Choc si gravité+localisation dans la table (LdB p.235) : jet 1D20 vs `calcSeuils()` + malus de la table
-- [ ] Broadcast `WS.COMBAT_ATTACK_RESULT { tireurId, cibleId, localisation, degautsBruts, degatsNets, nbrBlessures, isSuccess, roll, chancesDeReussite }`
-- [ ] RC/RL : check compétence "Tir Automatique" côté serveur uniquement (PC23)
+- [ ] Gravité : `nets ≥ 30 → mortelle (is_lethal=true) | ≥ 25 → mortelle | ≥ 20 → critique | ≥ 15 → grave | ≥ 10 → moyenne | ≥ 5 → légère | sinon → aucune`
+- [ ] Si gravité ≠ aucune : `resolveWoundInsertion(trx, char_sheet_id_cible, location, severity)` (P49 : réponse promoted → GET /wounds complet)
+- [ ] Test de Choc si `isShockTestRequired(severity, location)` :
+  - [ ] Écrire `getShockMalus(severity, location, is_lethal)` dans `charStats.js` — is_lethal + bras/jambes → −10 (Membre détruit), sinon table p.235
+  - [ ] `calcSeuils(for_na_cible, con_na_cible, vol_na_cible)` → seuils
+  - [ ] Comparer `roll1D20` à `etourdissement + shockMalus` et `inconscience + shockMalus`
+  - [ ] Inclure `shockResult: { triggered, roll, outcome }` dans broadcast
+- [ ] Broadcast `WS.COMBAT_ATTACK_RESULT { tireurId, cibleId, localisation, degautsBruts, degatsNets, severity, is_lethal, isSuccess, roll, chancesDeReussite, shockResult }`
 
 **Client :**
 - [ ] Affichage `COMBAT_ATTACK_RESULT` dans `CombatOverlay` (résumé texte : qui a touché qui, localisation, dégâts nets)
@@ -985,7 +1053,28 @@ Le malus s'applique au jet 1D20 (ajouté côté défavorable — le personnage d
 - [ ] SR sans erreur
 - [ ] Joueur déclare Assaut : cible + arme sélectionnables, DB target_token_id + weapon_inv_id non-null
 - [ ] Résolution : jet attack affiché, localisation tirée, dégâts nets calculés
-- [ ] Blessure enregistrée en DB si dégâts nets ≥ 5
+- [ ] 1 blessure avec gravité correcte enregistrée en DB si dégâts nets ≥ 5
 - [ ] COMBAT_ATTACK_RESULT visible toute la room
 - [ ] Carence FOR > 0 → malus appliqué sur jet
 - [ ] Test de Choc déclenché si Grave Corps/Tête ou Critique/Mortelle
+
+---
+
+### Sprint 7.5 — Décompte munitions
+
+**Objectif :** Décrémenter le stock de munitions/chargeur dans `char_inventory` après chaque tir.
+
+**Avant de coder :**
+- [ ] Lire `char_inventory` schema — colonnes quantity, item_id → ref_equipment
+- [ ] Identifier comment les munitions sont liées à l'arme (chargeur séparé ou item arme ?)
+- [ ] Confirmer la règle : si `quantity < bullet_count` → refus ou tir partiel ? (arbitrage GM)
+
+**Serveur :**
+- [ ] Au moment du `COMBAT_ACTION_CONFIRM` assault (après résolution, qu'il y ait succès ou non) : décrémenter `char_inventory.quantity` de `bullet_count` pour l'item munitions associé à l'arme
+- [ ] Guard : `quantity IS NULL` ou flag `is_infinite` → skip décompte (munitions illimitées)
+- [ ] Guard : `quantity < bullet_count` → comportement à définir (PO à ouvrir avant ce sprint)
+- [ ] Broadcast `INVENTORY_UPDATED` pour la room si stock modifié
+
+**Checkpoints :**
+- [ ] Tir de 3 balles (rafale courte) → stock chargeur −3 visible dans la fiche
+- [ ] Stock = 0 → arme indisponible pour prochain Assaut (guard COMBAT_ACTION_DECLARE)

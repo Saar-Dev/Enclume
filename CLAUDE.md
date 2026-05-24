@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-05-23 Session 62
+> Dernière mise à jour : 2026-05-24 Session 63
 
 ---
 
@@ -17,6 +17,9 @@ Ce n'est pas une liste de recommandations. Chaque point est le résultat d'une e
 - Poser **"Je code ?"** une seule fois quand le plan est complet — pas avant
 - Relire le fichier produit en entier avant de livrer
 - Attendre la confirmation fonctionnelle avant l'étape suivante
+
+### Pendant le développement
+- **Run à vide autocentré OBLIGATOIRE** à la fin de chaque étape (checkpoint) : s'arrêter, évaluer l'état réel du code, les risques, les dépendances cachées, avant de passer à l'étape suivante. Ne jamais enchaîner deux étapes sans cette pause.
 
 ### Après chaque tâche confirmée fonctionnelle
 - Appender `docs/JOURNAL2.md`
