@@ -47,7 +47,7 @@
 | **Architecture réseau** | **WS pur — pas de REST pour le combat. Pattern identique aux entités interactables** |
 | **Actions déclarées** | **Table `combat_actions` — command queue. 1 ligne par `action_key` déclarée. Ex : move_short + micro_draw + assault = 3 lignes. Pattern professionnel tour-par-tour.** |
 | **Exclusivité actions** | **Aucune validation en phase Annonce — cibles et positions mémorisées, GM arbitre en Résolution (LdB p.218)** |
-| **États personnage** | **`state_position` + `state_weapon` dans `combat_roster` — persistants entre les tours. action_key = déclencheur, pas stockage.** |
+| **États personnage** | **`state_position` + `state_weapon` + `state_character` dans `combat_roster` — persistants entre les tours (ou per-turn pour `state_character`). action_key = déclencheur du changement d'état, jamais stockage de l'état lui-même.** |
 | **target_pos** | **Colonnes INT séparées (target_pos_x/y/z) — type-safe, coords DB PE14. Client convertit avant envoi.** |
 | **sequence intra-slot** | **SMALLINT NOT NULL dans combat_actions — ordre garanti : move_* (1) → micro (2) → assault (3). Attribué serveur à l'INSERT. ORDER BY sequence ASC en résolution.** |
 | **weapon_inv_id** | **ID char_inventory réel — arme équipée slot MG ou MD. Guard serveur : slot doit être MG ou MD** |
@@ -899,8 +899,14 @@ const PORTEE_MOD_COMP = {
 ```js
 {
   phase: null,         // 'ROSTER'|'ANNOUNCEMENT'|'RESOLUTION'|null
-  roster: [],          // [{ tokenId, baseIni, initiative, status, hasAnnounced, hasResolved, isSurprised }]
-  actions: [],         // [{ id, tokenId, type, initiativeScore, status, modifiers, weaponInvId }]
+  roster: [],          // [{ tokenId, baseIni, initiative, status, hasAnnounced, hasResolved, isSurprised,
+                       //    statePosition, stateWeapon, stateCharacter }]
+                       // ⚠️ stateCharacter = objet JSONB — ex. { is_rushed: true }
+                       // Peuplé depuis COMBAT_STARTED + COMBAT_ROSTER_UPDATED broadcast
+  actions: [],         // [{ id, tokenId, actionKey, sequence, status, modifiers, weaponInvId,
+                       //    targetTokenId, fireMode, bulletCount, fireModeBonus Comp, fireModeBonusDmg }]
+                       // ⚠️ Colonnes fireMode/bulletCount/fireModeBonus* ajoutées migration 57
+                       // Inclure dans SELECT côté serveur pour COMBAT_PHASE_CHANGED + COMBAT_STATE_SYNC
   currentTurn: 1,
   activeSlotIdx: 0,
   setCombatState,
@@ -1052,6 +1058,13 @@ const PORTEE_MOD_COMP = {
     .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_rushed: true })]) })
   ```
   ⚠️ PC39 : merge JSONB, jamais remplacement direct.
+- [ ] **Mettre à jour `endTurn()` existant** (codé Sprint 6, `socket/index.js`) : ajouter la suppression du flag per-turn après le UPDATE `has_announced/has_resolved` :
+  ```js
+  await db('combat_roster').where({ campaign_id })
+    .update({ state_character: db.raw("state_character - 'is_rushed'") })
+  ```
+  ⚠️ Sprint 6 est ✅ mais ce code n'existait pas encore — obligatoire en Sprint 7.1 dès que la colonne est ajoutée.
+- [ ] Broadcast `COMBAT_ROSTER_UPDATED` : inclure `state_character` dans le SELECT `combat_roster` (pour que le client affiche `is_rushed` dans CombatModifiersWindow)
 - [ ] Stocker `target_token_id`, `fire_mode`, `bullet_count`, `fire_mode_bonus_comp`, `fire_mode_bonus_dmg` dans `combat_actions`
 - [ ] Vérifier DB : `target_token_id` + `weapon_inv_id` + `fire_mode` non-null pour assault déclaré ; `state_character = {"is_rushed":true}` si rushed déclaré
 
