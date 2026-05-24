@@ -46,7 +46,10 @@
       "PowerShell(Get-Command psql -ErrorAction SilentlyContinue)",
       "Read(//c//**)",
       "PowerShell(docker exec enclume-postgres-1 psql -U vtt -d vtt -c \"\\\\d combat_actions\" 2>&1)",
-      "Bash(Select-Object -Last 40)"
+      "Bash(Select-Object -Last 40)",
+      "Bash(tasklist /fi \"imagename eq node.exe\" /fo csv)",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
+      "Bash(node --input-type=module --env-file=../.env)"
     ]
   }
 }

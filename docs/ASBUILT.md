@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-23 Session 62
+> Dernière mise à jour : 2026-05-24 Session 64
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -16,14 +16,14 @@ Enclume/
 │   │   └── favicon.svg                 # ⚠ présent mais non référencé — à brancher
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── CombatOverlay.jsx        # Modifié 62 — légende allures ZONE_DEFS, pendingMoveSelection, Valider/Changer/Annuler + phase RÉSOLUTION joueur + panneau GM slot actif (Agir)
+│   │   │   ├── CombatOverlay.jsx        # Modifié 64 — +combatTargetMode bandeau "Assaut — Cliquez sur la cible" + Valider/Changer/Annuler la visée (en plus : légende allures, RÉSOLUTION joueur, panneau GM Agir)
 │   │   │   ├── CombatRosterWindow.jsx  # NOUVEAU 57 — roster GM, INI preview, surpris, exclusion, bouton Démarrer
 │   │   │   ├── CombatTimeline.jsx      # Modifié 62 — timeline INI, portraits cliquables GM, topOffset + curseur slot actif RÉSOLUTION (slotActive, activeSlotIdx)
-│   │   │   ├── CombatActionWindow.jsx  # Modifié 62 — fetch allures, inMoveMode, moveSelection, handleMoveClick, isMove renderer + isMyTurnInResolution, recap actions déclarées, bouton Agir (COMBAT_ACTION_CONFIRM)
+│   │   │   ├── CombatActionWindow.jsx  # Modifié 64 — Kiwi-style Assaut : fenêtre 360→720px, armes auto MG/MD, sélection cible canvas (onEnterTargetMode), FIRE_MODE_VARIANTS CC/RC/RL, cadence (radio+slider+A/B / auto / boutons), dual-wield, forceCC, assaultValid
 │   │   │   ├── CombatPnjPanel.jsx      # NOUVEAU 58 — modal GM PJs/PNJs read-only, isPnj via character.type
 │   │   │   ├── CombatGmDeclareWindow.jsx # Modifié 59s — accordion always-one-open, auto-progression, liste complète
 │   │   │   ├── combatSections.js       # Modifié 61 — move_short/move_long → isMove item unique
-│   │   │   ├── Canvas3D.jsx            # Modifié 61 — combatMoveMode prop, anneaux 4 zones PE34, cursor, onPendingMove
+│   │   │   ├── Canvas3D.jsx            # Modifié 64 — +combatTargetMode prop, combatTargetModeRef (P40), intercept drag→target, ligne R3F attaquant→cible (useMemo targetLinePoints)
 │   │   │   ├── Editor3D.jsx            # Modifié 9C — EntityEditorScene, activeEditorTab
 │   │   │   ├── EntityMesh.jsx          # Modifié 43 — Lerp 300ms EntityMeshVoxel + EntityMeshGlb
 │   │   │   ├── EntityBuilderTab.jsx    # Modifié 40 — refonte formulaire interactions SkillCheck/Déplacement
@@ -40,7 +40,7 @@ Enclume/
 │   │   │   ├── LoginPage.jsx
 │   │   │   ├── RegisterPage.jsx
 │   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern)
-│   │   │   ├── SessionPage.jsx         # Modifié 62 — combatMoveMode + pendingMoveSelection + handleEnterMoveMode + combatCameraCenter + COMBAT_SLOT_ADVANCED handler + setActions dans COMBAT_PHASE_CHANGED
+│   │   │   ├── SessionPage.jsx         # Modifié 64 — +combatTargetMode + handleEnterTargetMode + handleValidateTarget (en plus : combatMoveMode, combatCameraCenter, COMBAT_SLOT_ADVANCED)
 │   │   │   ├── CampaignSettingsPage.jsx
 │   │   │   ├── WorkshopPage.jsx        # Stable 33
 │   │   │   └── TexturePacksPage.jsx    # CONSERVÉ mais remplacé par WorkshopPage
@@ -78,7 +78,7 @@ Enclume/
 │   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # 58 fichiers — migrations jusqu'à 56
+│   │   │   ├── migrations/             # migrations jusqu'à 57 (batch 29)
 │   │   │   ├── seeds/
 │   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
@@ -106,7 +106,7 @@ Enclume/
 │   │   │   └── errorHandler.js
 │   │   ├── socket/
 │   │   │   ├── auth.js
-│   │   │   └── index.js                # Modifié 62 — COMBAT_ACTION_DECLARE rewrite (moveAction, actionRows bulk, KEY_MOD, PC33, modifiers JSONB) + COMBAT_ACTION_CONFIRM + advanceSlot + endTurn + fix SURPRISE_RESULT/skipPlayer (migration 56)
+│   │   │   └── index.js                # Modifié 64 — COMBAT_ACTION_DECLARE enrichi Sprint 7.1 (targetTokenId, fireMode, bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield) + endTurn nettoyage state_character per-turn (PC39)
 │   │   ├── lib/
 │   │   │   ├── AppError.js
 │   │   │   ├── minio.js
@@ -194,6 +194,8 @@ Enclume/
 | 53_rename_ammo_unified | Phase 1 : 11 fusions doublons munitions (UPDATE FK + DELETE). Phase 2 : 89 renommages — "Balle"→"Munition", suppression qualificatif arme. Carreaux/Flèches/Darts : "Projectile" conservé. |
 | 54_combat | combat_state + combat_roster + combat_actions — 3 tables, FK CASCADE, CHECK contraints |
 | 55_character_type | characters.type TEXT NOT NULL DEFAULT 'pnj' CHECK ('pj','pnj') + backfill user_id IS NOT NULL → 'pj' |
+| 56_combat_v2 | combat_actions : +action_key TEXT NOT NULL, +sequence SMALLINT, +target_pos_x/y/z INT, −is_micro, −initiative_score, −target_pos, +idx_actions_token/key. combat_roster : +state_position TEXT CHECK ('standing'/'crouching'/'prone'), +state_weapon TEXT CHECK ('holstered'/'ready'/'drawn'). battlemaps : +voxel_scale FLOAT DEFAULT 1.0 |
+| 57_combat_v3 | combat_actions : +fire_mode TEXT, +bullet_count SMALLINT, +fire_mode_bonus_comp SMALLINT, +fire_mode_bonus_dmg SMALLINT. combat_roster : +state_character JSONB NOT NULL DEFAULT '{}' (PC39 — merge obligatoire, jamais remplacement) |
 
 ---
 

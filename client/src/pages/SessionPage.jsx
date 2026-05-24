@@ -186,6 +186,9 @@ export default function SessionPage() {
   // null = inactif, sinon sélection en attente de validation { action_key, ini_mod, targetPosX, targetPosY, targetPosZ }
   const [pendingMoveSelection, setPendingMoveSelection] = useState(null)
 
+  // null = inactif, sinon { tokenId, pendingTargetId, onTargetSelected, onCancel, onPendingTarget }
+  const [combatTargetMode, setCombatTargetMode] = useState(null)
+
   // Chargement local d'une carte — GM uniquement, sans déplacer les joueurs
   // Utilisé : clic barre GM, suppression carte active
   const loadMap = useCallback(async (battlemapId) => {
@@ -706,6 +709,31 @@ export default function SessionPage() {
     setPendingMoveSelection(null)
   }, [])
 
+  // ─── Mode sélection cible combat (Sprint 7.1) ─────────────────────────────
+  const handleEnterTargetMode = useCallback((tokenId, tokenPos, onTargetSelected, onCancel) => {
+    const wrappedSelected = (targetTokenId) => {
+      onTargetSelected(targetTokenId)
+      setCombatTargetMode(null)
+    }
+    const wrappedCancel = () => {
+      onCancel()
+      setCombatTargetMode(null)
+    }
+    setCombatTargetMode({
+      tokenId,
+      pendingTargetId: null,
+      onTargetSelected: wrappedSelected,
+      onCancel: wrappedCancel,
+      onPendingTarget: (id) => setCombatTargetMode(prev => prev ? { ...prev, pendingTargetId: id } : null),
+    })
+    setCombatCameraCenter(tokenPos)
+  }, [])
+
+  const handleValidateTarget = useCallback(() => {
+    if (!combatTargetMode || !combatTargetMode.pendingTargetId) return
+    combatTargetMode.onTargetSelected(combatTargetMode.pendingTargetId)
+  }, [combatTargetMode])
+
   // ─── Annulation mode visée — stable (deps []) ─────────────────────────────
   // useCallback stable pour ne pas recréer les listeners useEffect dans Canvas3D.
   const handleMoveCancel = useCallback(() => {
@@ -798,6 +826,7 @@ export default function SessionPage() {
               onDiceDone={handleDiceDone}
               combatCameraCenter={combatCameraCenter}
               combatMoveMode={combatMoveMode}
+              combatTargetMode={combatTargetMode}
             />
         )}
         {!canvasVisible && (
@@ -1064,6 +1093,9 @@ export default function SessionPage() {
           pendingMoveSelection={pendingMoveSelection}
           onValidateMove={handleValidateMove}
           onCancelPendingMove={handleCancelPendingMove}
+          combatTargetMode={combatTargetMode}
+          onEnterTargetMode={handleEnterTargetMode}
+          onValidateTarget={handleValidateTarget}
         />
       )}
 

@@ -9,7 +9,7 @@ import CombatPnjPanel from './CombatPnjPanel'
 import CombatGmDeclareWindow from './CombatGmDeclareWindow'
 
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget }) {
   const { phase, roster, activeSlotIdx } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
@@ -66,6 +66,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           pendingSurpriseRoll={pendingSurpriseRoll}
           onSurpriseRolled={onSurpriseRolled}
           onEnterMoveMode={onEnterMoveMode}
+          onEnterTargetMode={onEnterTargetMode}
         />
       )}
 
@@ -81,6 +82,32 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
             onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: gmActiveEntry.token_id })}
           >
             Agir
+          </button>
+        </div>
+      )}
+
+      {/* Panneau visée assaut — visible pendant le mode sélection cible */}
+      {combatTargetMode && (
+        <div style={styles.moveLegend}>
+          <div style={styles.moveLegendTitle}>Assaut — Cliquez sur la cible</div>
+
+          {combatTargetMode.pendingTargetId && (() => {
+            const tgt = tokens.find(t => t.id === combatTargetMode.pendingTargetId)
+            return (
+              <div style={styles.movePending}>
+                <div style={styles.movePendingInfo}>
+                  <span style={styles.movePendingDest}>{tgt?.label ?? '?'}</span>
+                </div>
+                <div style={styles.movePendingBtns}>
+                  <button style={styles.btnValider} onClick={onValidateTarget}>Valider</button>
+                  <button style={styles.btnChanger} onClick={() => combatTargetMode.onPendingTarget(null)}>Changer</button>
+                </div>
+              </div>
+            )
+          })()}
+
+          <button style={styles.btnAnnulerMode} onClick={() => combatTargetMode.onCancel()}>
+            Annuler la visée
           </button>
         </div>
       )}

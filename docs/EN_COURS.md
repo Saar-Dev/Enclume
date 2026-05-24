@@ -197,6 +197,20 @@ Travaux effectués :
 
 ---
 
+## Chantier 11 Sprint 7.1 — Déclaration Assaut UI ✅ (session 64)
+
+Travaux effectués :
+- `server/src/db/migrations/57_combat_v3.js` : +`fire_mode`/`bullet_count`/`fire_mode_bonus_comp`/`fire_mode_bonus_dmg` sur `combat_actions` + `state_character JSONB NOT NULL DEFAULT '{}'` sur `combat_roster` (PC39). Bug corrigé : `target_token_id` dupliqué retiré (existait déjà uuid en migration 54).
+- `client/src/components/CombatActionWindow.jsx` : Kiwi-style Assaut — fenêtre 360→720px, armes auto MG/MD (PC22), sélection cible canvas (mode cible), FIRE_MODE_VARIANTS CC/RC/RL complet, cadence CC (radio tir simple/répétition + slider + A/B), RC (auto), RL (5 boutons), dual-wield toggle (+3/+5), forceCC, assaultValid
+- `client/src/pages/SessionPage.jsx` : combatTargetMode state + handleEnterTargetMode + handleValidateTarget
+- `client/src/components/Canvas3D.jsx` : combatTargetModeRef (P40), intercept drag pour target mode, ligne R3F native attaquant→cible (useMemo)
+- `client/src/components/CombatOverlay.jsx` : bandeau "Assaut — Cliquez sur la cible" + Valider/Changer/Annuler la visée
+- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE enrichi (targetTokenId, fireMode, bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp)
+
+**"Changer le mode de tir" — UI non implémentée.** L'action existe dans combatSections.js mais le sub-panel de sélection CC/RC/RL n'est pas codé. Sprint dédié futur.
+
+---
+
 ## Prochain chantier — Chantier 11 Sprint 7 — Jets d'attaque + Dégâts + Blessures
 
 Objectif : Attaques complètes. Blessures enregistrées. Carence FOR appliquée.

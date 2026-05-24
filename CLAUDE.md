@@ -76,18 +76,23 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 62 (2026-05-23)
+## État actuel — Session 64 (2026-05-24)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **56 migrations stables** — prochaine : **57**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅
+- **57 migrations stables** — prochaine : **58**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅
 
-**Session 62 — Sprint 5 ✅ + Sprint 6 ✅ :**
-- Sprint 5 : COMBAT_ACTION_DECLARE rewrite + SURPRISE_RESULT/skipPlayer/startResolutionPhase fixes (colonnes migration 56)
-- Sprint 6 : startResolutionPhase complet + COMBAT_ACTION_CONFIRM + advanceSlot + endTurn + CombatTimeline curseur + CombatActionWindow mode Résolution + panneau GM résolution
+**Session 64 — Sprint 7.1 ✅ :**
+- Migration 57 : +`fire_mode`/`bullet_count`/`fire_mode_bonus_comp`/`fire_mode_bonus_dmg` sur `combat_actions` + `state_character` JSONB sur `combat_roster`
+- Bug corrigé : `target_token_id` dupliqué en integer (existait déjà en uuid migration 54) — retiré de migration 57
+- CombatActionWindow.jsx refondu : Kiwi-style Assaut (fenêtre 360→720px, armes auto MG/MD, sélection cible canvas 3D, cadence CC/RC/RL, dual-wield, forceCC)
+- Canvas3D.jsx + SessionPage.jsx + CombatOverlay.jsx : combatTargetMode + ligne R3F + bandeau cible
+- socket/index.js : payload assaut enrichi (fireMode, bulletCount, bonusComp, bonusDmg, isDualWield)
 
 **Prochain chantier :**
-- Sprint 7 — Jets d'attaque + Dégâts + Blessures + Carence FOR
+- Sprint 7.2 — CombatModifiersWindow (portée, situation, taille cible)
+- Sprint 7.3 — Résolution assaut serveur (LOS, jets, dégâts, blessures)
+- "Changer le mode de tir" — UI sub-panel (sprint dédié, non planifié)
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser : ordre tri INI vs sémantique roll surpris.

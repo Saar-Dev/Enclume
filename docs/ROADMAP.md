@@ -172,7 +172,10 @@ Module Armes ← 🔲 Chantier 11 Étape 2
 | Sprint 4.1 | calcAllures LdB p.221 corrigé (4 allures, COO+Athlétisme, lookup table) | ✅ session 60 |
 | Sprint 5 | Serveur COMBAT_ACTION_DECLARE : moveAction, actionRows bulk (1 ligne/action), KEY_MOD nettoyé, PC33, modifiers:{ini_mod} JSONB + fix SURPRISE_RESULT/skipPlayer/startResolutionPhase (migration 56) | ✅ session 62 |
 | Sprint 6 | Phase Résolution : startResolutionPhase complet, COMBAT_ACTION_CONFIRM (déplacement Redis + boucle slots), advanceSlot, endTurn → retour ANNOUNCEMENT, UI joueur (recap + Agir) + panneau GM slot actif | ✅ session 62 |
-| Sprint 7 | Jets d'attaque + Dégâts + Blessures + Carence FOR : branche assault complète | 🔲 |
+| Sprint 7.1 | Déclaration Assaut UI : CombatActionWindow Kiwi-style (360→720px), armes auto MG/MD, sélection cible canvas, cadence CC/RC/RL, dual-wield, migration 57 | ✅ session 64 |
+| Sprint 7.2 | CombatModifiersWindow : portée, situation, taille cible | 🔲 |
+| Sprint 7.3 | Résolution assaut serveur : LOS, jets, dégâts, blessures, carence FOR | 🔲 |
+| Sprint 7.5 | Décompte munitions | 🔲 |
 
 **Mécanique Polaris (rappel LdB) :**
 

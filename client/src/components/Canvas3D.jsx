@@ -227,6 +227,7 @@ function Scene({
   dicePayload, onDiceDone,
   combatCameraCenter,
   combatMoveMode,
+  combatTargetMode,
 }) {
   const { camera, gl } = useThree()
   const orbitRef = useRef()
@@ -254,6 +255,10 @@ function Scene({
   // ─── Mode déplacement combat — P40 : ref miroir pour handlers stables ─────
   const combatMoveModeRef = useRef(null)
   combatMoveModeRef.current = combatMoveMode
+
+  // ─── Mode sélection cible combat — P40 : ref miroir ───────────────────────
+  const combatTargetModeRef = useRef(null)
+  combatTargetModeRef.current = combatTargetMode
 
   // Position curseur snappé (Three.js floor coords) — visible uniquement en mode combat
   const [combatCursorPos, setCombatCursorPos] = useState(null)
@@ -353,6 +358,10 @@ function Scene({
     e.stopPropagation()
     if (e.nativeEvent.button !== 0) return
     if (combatMoveModeRef.current) return  // mode déplacement combat — pas de drag token
+    if (combatTargetModeRef.current) {
+      combatTargetModeRef.current.onPendingTarget(token.id)
+      return
+    }
 
     if (!isGm) {
       const character = characters.find(c => c.id === token.character_id)
@@ -601,6 +610,19 @@ function Scene({
     orbitRef.current.update()
   }, [combatCameraCenter])
 
+  // ─── Ligne de visée assaut — segment joueur→cible en attente (Sprint 7.1) ──
+  const targetLinePoints = useMemo(() => {
+    if (!combatTargetMode?.pendingTargetId || !combatTargetMode?.tokenId) return null
+    const myToken = tokensRef.current.find(t => t.id === combatTargetMode.tokenId)
+    const tgtToken = tokensRef.current.find(t => t.id === combatTargetMode.pendingTargetId)
+    if (!myToken || !tgtToken) return null
+    // PE14 + PE34 : Three.js coords — pieds + 0.5 hauteur token
+    return new Float32Array([
+      myToken.pos_x + 0.5,  myToken.pos_z + 1.5,  myToken.pos_y + 0.5,
+      tgtToken.pos_x + 0.5, tgtToken.pos_z + 1.5, tgtToken.pos_y + 0.5,
+    ])
+  }, [combatTargetMode?.pendingTargetId])
+
   return (
     <>
       <ambientLight intensity={0.8} />
@@ -726,6 +748,21 @@ function Scene({
         )
       })()}
 
+      {/* ── Ligne de visée assaut — joueur→cible pending (Sprint 7.1) ─────── */}
+      {targetLinePoints && (
+        <line>
+          <bufferGeometry>
+            <bufferAttribute
+              attach="attributes-position"
+              count={2}
+              array={targetLinePoints}
+              itemSize={3}
+            />
+          </bufferGeometry>
+          <lineBasicMaterial color="#e07070" linewidth={2} />
+        </line>
+      )}
+
       {/* ── DiceRoller — animation dés (Dice Rework) */}
       {dicePayload && <DiceRoller payload={dicePayload} onDone={onDiceDone} />}
     </>
@@ -739,7 +776,7 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, zones, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode }) {
+export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, combatTargetMode }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
@@ -794,6 +831,16 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [combatMoveMode])
+
+  // ─── Annulation mode sélection cible sur Échap ────────────────────────────
+  useEffect(() => {
+    if (!combatTargetMode) return
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') combatTargetMode.onCancel()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [combatTargetMode])
 
   const justSelectedRef = useRef(false)
 
@@ -919,6 +966,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           onDiceDone={onDiceDone}
           combatCameraCenter={combatCameraCenter}
           combatMoveMode={combatMoveMode}
+          combatTargetMode={combatTargetMode}
         />
       )}
     </Canvas>

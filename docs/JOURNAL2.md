@@ -5900,3 +5900,47 @@ Session documentation uniquement (pas de code). Corriger toutes les erreurs dans
 - Section 11 Sprint 7.1 : migration 57 = 2 blocs (combat_actions + combat_roster), handler 'rushed' → UPDATE state_character
 - Section 11 Sprint 7.2 : is_rushed source = state_character
 - Section 11 Sprint 7.3 : BUG A/B/C + L9/L10 intégrés dans les steps, PORTEE_MOD_COMP
+
+---
+
+## Session 64 — 2026-05-24 — Sprint 7.1 : Déclaration Assaut UI
+
+### Sprint 7.1 implémenté
+
+**Migration 57 (`57_combat_v3.js`) appliquée (batch 29) :**
+- `combat_actions` : +`target_token_id` INTEGER REF tokens, +`fire_mode` TEXT, +`bullet_count` SMALLINT, +`fire_mode_bonus_comp` SMALLINT, +`fire_mode_bonus_dmg` SMALLINT
+- `combat_roster` : +`state_character` JSONB NOT NULL DEFAULT '{}'
+
+**`server/src/socket/index.js` :**
+- `endTurn()` : nettoyage per-tour `state_character - 'is_rushed'` dans le bulk UPDATE (PC39)
+- `COMBAT_ACTION_DECLARE` : nouveau payload `{ targetTokenId, fireMode, bulletCount, fireModeBonusComp, fireModeBonusDmg }`
+- PC22 upgradé : arme doit être en slot MG ou MD + JOIN ref_equipment pour récupérer `ref_range` et valider `ref_fire_mode`
+- PC23 ajouté : si `fireMode RC|RL` → vérifie `char_skills WHERE skill_id='TIR_AUTOMATIQUE'`
+- PC39 : si 'rushed' sélectionné → `state_character || '{"is_rushed":true}'::jsonb` (merge, jamais remplacement)
+- Boucle `actionRows` : cas assault distinct avec toutes les colonnes enrichies + `modifiers.ref_range`
+
+**`client/src/components/CombatActionWindow.jsx` :**
+- `FIRE_MODE_VARIANTS` : table complète CC (8 variants)/RC (1)/RL (5) avec bonusComp+bonusDmg Polaris
+- 5 états assaut : `assaultWeapons`, `assaultWeaponId`, `assaultTargetId`, `assaultFireMode`, `assaultVariant`
+- useEffect fetch armes équipées (slot MG/MD, ref_fire_mode non null) depuis `/char-sheet/:id/inventory`
+- useEffect reset fireMode/variant au changement d'arme ; useEffect reset variant au changement de mode
+- `handleToggle` : nettoie tous les états assaut si 'assault' décoché
+- `canDeclare` : bloqué si assaut sélectionné mais weapon/target/variant incomplets
+- `handleDeclare` : payload complet avec `weaponInvId`, `targetTokenId`, `fireMode`, `bulletCount`, `fireModeBonusComp`, `fireModeBonusDmg`
+- Sous-panneau assaut conditionnel : Arme (select MG/MD), Cible (select tokens roster), Mode (CC/RC/RL selon ref_fire_mode), Cadence (variants), Résumé bonus
+- Cibles filtrées : même battlemap, token_id dans roster, character_id non null, hors token joueur
+- Styles : `assaultPanel`, `assaultRow`, `assaultLabel`, `assaultSelect`, `modeBtn/Active`, `variantBtn/Active`, `assaultSummary`
+
+**État : Sprint 7.1 implémenté. En attente de confirmation fonctionnelle (SR + test UI joueur).**
+
+### Bug migration 57 — corrigé session 64
+
+**Bug :** `57_combat_v3.js` ajoutait `target_token_id` comme `integer` alors que la colonne existe déjà en `54_combat.js` (type `uuid`, FK tokens, ON DELETE SET NULL). Doublon de colonne → crash Postgres à l'exécution.
+**Cause racine :** migration 57 rédigée sans relire migration 54 — violation protocole.
+**Fix :** suppression de `table.integer('target_token_id')` dans `up()` et `table.dropColumn('target_token_id')` dans `down()`. Les 4 autres colonnes et `state_character` sur `combat_roster` sont correctes.
+
+### Sprint 7.1 — Confirmation fonctionnelle
+
+- **Assaut ✅** (Saar : "Assaut → parfait") — fenêtre 360→720px, armes auto MG/MD, sélection cible canvas, cadence Kiwi-style, dual-wield, forceCC
+- **Migration 57 corrigée ✅**
+- **"Changer le mode de tir"** → UI non implémentée (attendu — sprint dédié futur)

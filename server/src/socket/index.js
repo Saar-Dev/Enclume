@@ -1497,7 +1497,7 @@ const initSocket = (io) => {
     // Joueur (ou GM pour un PNJ) déclare son action pendant la phase ANNOUNCEMENT.
     // Payload : { tokenId, selectedKeys: string[], moveAction?, weaponInvId? }
     // moveAction : { action_key, ini_mod, targetPosX, targetPosY, targetPosZ } — coords DB PE14
-    socket.on(WS.COMBAT_ACTION_DECLARE, async ({ tokenId, selectedKeys: rawKeys, moveAction, weaponInvId }) => {
+    socket.on(WS.COMBAT_ACTION_DECLARE, async ({ tokenId, selectedKeys: rawKeys, moveAction, weaponInvId, targetTokenId, fireMode, bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp }) => {
       const campaignId = socket.campaignId
       try {
         // KEY_MOD — synchronisé avec combatSections.js côté client
@@ -1548,8 +1548,44 @@ const initSocket = (io) => {
           .first()
         if (!entry || entry.has_announced) return
 
-        // PC22 — guard arme uniquement si weaponInvId fourni
-        if (weaponInvId) {
+        // PC22 — guard arme (slot MG/MD obligatoire pour assaut) + PC23 (TIR_AUTOMATIQUE)
+        let assaultWeaponRefRange = null
+        if (selectedKeys.includes('assault')) {
+          if (!weaponInvId) {
+            socket.emit('error', { message: 'Arme requise pour un assaut (PC22)' })
+            return
+          }
+          const weapon = await db('char_inventory')
+            .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+            .where({ 'char_inventory.id': weaponInvId, 'char_inventory.character_id': character.id })
+            .select('char_inventory.slot', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
+            .first()
+          if (!weapon) {
+            socket.emit('error', { message: 'Arme introuvable dans l\'inventaire (PC22)' })
+            return
+          }
+          if (weapon.slot !== 'MG' && weapon.slot !== 'MD') {
+            socket.emit('error', { message: 'L\'arme doit être équipée (slot MG ou MD) (PC22)' })
+            return
+          }
+          if (fireMode && !weapon.ref_fire_mode?.includes(fireMode)) {
+            socket.emit('error', { message: `Mode de tir ${fireMode} non disponible pour cette arme` })
+            return
+          }
+          assaultWeaponRefRange = weapon.ref_range ?? null
+
+          // PC23 — TIR_AUTOMATIQUE requis pour RC/RL
+          if (fireMode === 'RC' || fireMode === 'RL') {
+            const sheet = await db('char_sheet').where({ character_id: character.id }).first()
+            const autoSkill = sheet
+              ? await db('char_skills').where({ char_sheet_id: sheet.id, skill_id: 'TIR_AUTOMATIQUE' }).first()
+              : null
+            if (!autoSkill) {
+              socket.emit('error', { message: 'Compétence Tir Automatique requise (PC23)' })
+              return
+            }
+          }
+        } else if (weaponInvId) {
           const weapon = await db('char_inventory')
             .where({ id: weaponInvId, character_id: character.id })
             .first()
@@ -1578,16 +1614,35 @@ const initSocket = (io) => {
         const actionRows = []
 
         for (const key of selectedKeys) {
-          actionRows.push({
-            campaign_id:   campaignId,
-            token_id:      tokenId,
-            action_key:    key,
-            type:          getType(key),
-            sequence:      getSequence(key),
-            weapon_inv_id: key === 'assault' ? (weaponInvId ?? null) : null,
-            modifiers:     JSON.stringify({ ini_mod: KEY_MOD[key] }),
-            status:        'pending',
-          })
+          if (key === 'assault') {
+            // Ligne enrichie avec toutes les données assaut (Sprint 7.1)
+            actionRows.push({
+              campaign_id:          campaignId,
+              token_id:             tokenId,
+              action_key:           'assault',
+              type:                 'assault',
+              sequence:             3,
+              weapon_inv_id:        weaponInvId ?? null,
+              target_token_id:      targetTokenId ?? null,
+              fire_mode:            fireMode ?? null,
+              bullet_count:         bulletCount ?? null,
+              fire_mode_bonus_comp: fireModeBonusComp ?? null,
+              fire_mode_bonus_dmg:  fireModeBonusDmg ?? null,
+              modifiers:            JSON.stringify({ ini_mod: 0, ref_range: assaultWeaponRefRange, dual_wield: isDualWield ?? false, dual_wield_bonus_comp: dualWieldBonusComp ?? 0 }),
+              status:               'pending',
+            })
+          } else {
+            actionRows.push({
+              campaign_id:   campaignId,
+              token_id:      tokenId,
+              action_key:    key,
+              type:          getType(key),
+              sequence:      getSequence(key),
+              weapon_inv_id: null,
+              modifiers:     JSON.stringify({ ini_mod: KEY_MOD[key] }),
+              status:        'pending',
+            })
+          }
         }
 
         if (moveAction) {
@@ -1612,13 +1667,19 @@ const initSocket = (io) => {
         const ini_mod_total = selectedKeys.reduce((sum, k) => sum + (KEY_MOD[k] ?? 0), 0)
           + (moveAction?.ini_mod ?? 0)
 
+        // PC39 — JSONB merge (jamais remplacement direct)
+        const rosterUpdate = {
+          initiative:    db.raw('initiative + ?', [ini_mod_total]),
+          has_announced: true,
+          updated_at:    db.fn.now(),
+        }
+        if (selectedKeys.includes('rushed')) {
+          rosterUpdate.state_character = db.raw('state_character || ?::jsonb', [JSON.stringify({ is_rushed: true })])
+        }
+
         const [updated] = await db('combat_roster')
           .where({ campaign_id: campaignId, token_id: tokenId })
-          .update({
-            initiative:    db.raw('initiative + ?', [ini_mod_total]),
-            has_announced: true,
-            updated_at:    db.fn.now(),
-          })
+          .update(rosterUpdate)
           .returning(['initiative'])
 
         const updatedInitiative = updated.initiative
@@ -1912,10 +1973,15 @@ async function advanceSlot(io, campaignId, slots, nextIdx) {
 // PC28 : DELETE combat_actions — queue nettoyée entre chaque tour.
 async function endTurn(io, campaignId) {
   try {
-    // PC18 — reset announced/resolved en 1 requête
+    // PC18 — reset announced/resolved + nettoyage flags per-tour state_character
     await db('combat_roster')
       .where({ campaign_id: campaignId, status: 'active' })
-      .update({ has_announced: false, has_resolved: false, updated_at: db.fn.now() })
+      .update({
+        has_announced:   false,
+        has_resolved:    false,
+        state_character: db.raw("state_character - 'is_rushed'"),
+        updated_at:      db.fn.now(),
+      })
 
     // PC28 — vider la queue des actions
     await db('combat_actions').where({ campaign_id: campaignId }).delete()
