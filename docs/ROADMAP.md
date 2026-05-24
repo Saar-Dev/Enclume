@@ -176,6 +176,7 @@ Module Armes ← 🔲 Chantier 11 Étape 2
 | Sprint 7.2 | CombatModifiersWindow : portée, situation, taille cible | 🔲 |
 | Sprint 7.3 | Résolution assaut serveur : LOS, jets, dégâts, blessures, carence FOR | 🔲 |
 | Sprint 7.5 | Décompte munitions | 🔲 |
+| Sprint 7.6 | Actions d'état dynamiques : state_weapon + state_position pilotent les actions visibles | 🔲 |
 
 **Mécanique Polaris (rappel LdB) :**
 

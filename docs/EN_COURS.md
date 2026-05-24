@@ -266,6 +266,30 @@ Implique : nouvelle colonne `campaigns.gm_entity_move_mode`, option par token `t
 
 ---
 
+## Sprint 7.6 — Actions d'état dynamiques (planifié, non daté)
+
+**Concept :** les actions visibles dans `CombatActionWindow` dépendent de `state_weapon` et `state_position` du roster. Une seule action visible par "axe" — l'action change selon l'état courant.
+
+**state_weapon** (`holstered` / `ready` / `drawn`) :
+- `holstered` → action "Dégainer" (−5 INI)
+- `ready` → action "Dégainer" (−3 INI) — arme en main, prête
+- `drawn` → action "Rengainer" (−5 INI)
+- Chaque action met à jour `state_weapon` dans `combat_roster` + insert dans `combat_actions`
+
+**state_position** (`standing` / `crouching` / `prone`) :
+- `standing` → actions "S'accroupir" (−X INI) / "Se jeter à terre" (−X INI)
+- `crouching` → actions "Se redresser" / "Se jeter à terre"
+- `prone` → action "Se relever" (−X INI)
+- **Contrainte** : si `state_position ≠ 'standing'` → action Déplacement grisée (bloquée côté client ET validée côté serveur)
+
+**Implémentation nécessaire :**
+1. `combatStore.js` : stocker `state_weapon` / `state_position` du roster joueur (via COMBAT_PHASE_CHANGED ou COMBAT_SLOT_ADVANCED)
+2. `combatSections.js` : rendre les items "dégainer"/"position" dynamiques selon l'état
+3. `CombatActionWindow.jsx` : lire l'état, griser Déplacement si position ≠ standing
+4. `server/socket/index.js` : COMBAT_ACTION_DECLARE handler — mettre à jour `state_weapon`/`state_position` dans `combat_roster` lors des actions d'état
+
+---
+
 ## Bugs connus toujours ouverts
 
 ### Bug WebGL — Context Lost au switch play/edit
