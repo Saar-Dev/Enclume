@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-24 Session 64
+> Dernière mise à jour : 2026-05-25 Session 64
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -16,10 +16,12 @@ Enclume/
 │   │   └── favicon.svg                 # ⚠ présent mais non référencé — à brancher
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── CombatOverlay.jsx        # Modifié 64 — +combatTargetMode bandeau "Assaut — Cliquez sur la cible" + Valider/Changer/Annuler la visée (en plus : légende allures, RÉSOLUTION joueur, panneau GM Agir)
+│   │   │   ├── CombatOverlay.jsx        # Modifié 64 — Sprint 7.1 : +combatTargetMode. Sprint 7.4bis : refactoring PJ vs GM (playerActiveAssaultAction, gmActiveCharacter), deux CombatModifiersWindow séparés, CombatActionWindow masqué pendant assaut PJ, +attackResult/onAttackConfirmed props
 │   │   │   ├── CombatRosterWindow.jsx  # NOUVEAU 57 — roster GM, INI preview, surpris, exclusion, bouton Démarrer
 │   │   │   ├── CombatTimeline.jsx      # Modifié 62 — timeline INI, portraits cliquables GM, topOffset + curseur slot actif RÉSOLUTION (slotActive, activeSlotIdx)
 │   │   │   ├── CombatActionWindow.jsx  # Modifié 64 — Kiwi-style Assaut : fenêtre 360→720px, armes auto MG/MD, sélection cible canvas (onEnterTargetMode), FIRE_MODE_VARIANTS CC/RC/RL, cadence (radio+slider+A/B / auto / boutons), dual-wield, forceCC, assaultValid
+│   │   │   ├── CombatDamageWindow.jsx  # NOUVEAU 64 Sprint 7.4 — fenêtre PJ lancer dés dégâts : Phase 1 dés vides / Phase 2 animation / Phase 3 résultats colorés
+│   │   │   ├── CombatModifiersWindow.jsx # NOUVEAU 64 Sprint 7.2 (modificateurs assaut). Modifié 64 Sprint 7.4bis — +attackResult/onAttackConfirmed, +isRolling, "Lancer les dés", banner résultat, body masqué post-roll, footer 3 états
 │   │   │   ├── CombatPnjPanel.jsx      # NOUVEAU 58 — modal GM PJs/PNJs read-only, isPnj via character.type
 │   │   │   ├── CombatGmDeclareWindow.jsx # Modifié 59s — accordion always-one-open, auto-progression, liste complète
 │   │   │   ├── combatSections.js       # Modifié 61 — move_short/move_long → isMove item unique
@@ -31,7 +33,7 @@ Enclume/
 │   │   │   ├── RadialMenu.jsx          # Modifié 41 — tranche displacement, grisage portée, onMove
 │   │   │   ├── EntityInstancePanel.jsx # Modifié 36 — sélecteur état actuel
 │   │   │   ├── Voxel.jsx               # Stable 9A-5
-│   │   │   ├── Sidebar.jsx             # Modifié 36 — rendu entity_action structuré, panel GM nettoyé
+│   │   │   ├── Sidebar.jsx             # Modifié 64 Sprint 7.4 — +rendu interactionType='combat_damage' (dégâts colorés par sévérité). Modifié 36 — entity_action structuré
 │   │   │   ├── GeometryIcon.jsx        # Stable 9A-3
 │   │   │   ├── DicePanel.jsx           # Stable session 18
 │   │   │   ├── DiceMesh.jsx            # NOUVEAU 44 — géométries, matériaux, animation, Html overlay D10
@@ -40,7 +42,7 @@ Enclume/
 │   │   │   ├── LoginPage.jsx
 │   │   │   ├── RegisterPage.jsx
 │   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern)
-│   │   │   ├── SessionPage.jsx         # Modifié 64 — +combatTargetMode + handleEnterTargetMode + handleValidateTarget (en plus : combatMoveMode, combatCameraCenter, COMBAT_SLOT_ADVANCED)
+│   │   │   ├── SessionPage.jsx         # Modifié 64 — Sprint 7.1 : combatTargetMode. Sprint 7.4 : damageResults + COMBAT_DAMAGE_RESULT. Sprint 7.4bis : +attackResult state + COMBAT_ATTACK_PLAYER_RESULT handler + onAttackConfirmed prop, onDamageConfirmed nettoie aussi attackResult
 │   │   │   ├── CampaignSettingsPage.jsx
 │   │   │   ├── WorkshopPage.jsx        # Stable 33
 │   │   │   └── TexturePacksPage.jsx    # CONSERVÉ mais remplacé par WorkshopPage
@@ -113,10 +115,10 @@ Enclume/
 │   │   │   ├── diceParser.js
 │   │   │   ├── charStats.js            # Modifié 60 — calcVitesses→calcAllures (4 allures LdB p.221, lookup COO+Athlétisme)
 │   │   │   └── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
-│   │   └── index.js                    # Modifié 62 — COMBAT_ACTION_DECLARE (moveAction, actionRows bulk, PC33) + SURPRISE_RESULT/skipPlayer/startResolutionPhase fix (migration 56)
+│   │   └── index.js                    # Modifié 64 Sprint 7.3/7.4/7.4bis — resolveAssaultAction (jet attaque + PJ/PNJ bifurcation + pendingDamageActions + COMBAT_ATTACK_PLAYER_RESULT hit/miss) + COMBAT_DAMAGE_CONFIRM handler + bug fix skillAssoc (weapon.equipment_id, non weapon_inv_id)
 ├── shared/
 │   ├── polarisUtils.js                 # Modifié 61 — +calcAN, calcAllureMoy, calcAllures (exports partagés PI11)
-│   ├── events.js                       # Modifié 51 — +INVENTORY_ADDED/UPDATED/REMOVED/SOLS_UPDATED
+│   ├── events.js                       # Modifié 64 Sprint 7.4/7.4bis — +COMBAT_DAMAGE_PROMPT/CONFIRM/RESULT + COMBAT_ATTACK_PLAYER_RESULT. Modifié 51 — +INVENTORY_ADDED/UPDATED/REMOVED/SOLS_UPDATED
 │   ├── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES/SEVERITY_COLORS
 │   └── armorConstants.js               # NOUVEAU 54 — ARMOR_CATEGORY_MALUS/LOCATION_TO_SLOT/SLOT_TO_REF_LOCATION/LOCATION_TO_SVG/LOCATION_LABELS
 └── docs/

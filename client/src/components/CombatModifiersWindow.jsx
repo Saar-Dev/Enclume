@@ -80,7 +80,7 @@ function calcPorteePalier(distance, rangeData) {
 function formatMod(n) { return n > 0 ? `+${n}` : `${n}` }
 function fmtOpt(n) { return n > 0 ? `+${n}` : n === 0 ? '±0' : n === -99 ? '✗' : `${n}` }
 
-export default function CombatModifiersWindow({ socket, assaultAction, activeRosterEntry }) {
+export default function CombatModifiersWindow({ socket, assaultAction, activeRosterEntry, attackResult, onAttackConfirmed }) {
   const { actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
@@ -91,9 +91,11 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   const [obscurites, setObscurites] = useState([])
   const [taille, setTaille] = useState('moyenne')
   const [weaponSkill, setWeaponSkill] = useState(null)
+  const [isRolling, setIsRolling] = useState(false)
 
-  const tireurToken = assaultAction ? tokens.find(t => t.id === assaultAction.token_id) : null
-  const cibleToken  = assaultAction ? tokens.find(t => t.id === assaultAction.target_token_id) : null
+  // Fallback tokens depuis attackResult si assaultAction est null (après avancement du slot)
+  const tireurToken = tokens.find(t => t.id === (assaultAction?.token_id ?? attackResult?.tireurTokenId))
+  const cibleToken  = tokens.find(t => t.id === (assaultAction?.target_token_id ?? attackResult?.cibleTokenId))
   const tireurCharId = tireurToken?.character_id ?? null
 
   // Reset quand un nouvel assaut passe en résolution
@@ -105,6 +107,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
     setObscurites([])
     setTaille('moyenne')
     setWeaponSkill(null)
+    setIsRolling(false)
   }, [assaultAction?.id])
 
   // Fetch compétence liée à l'arme (pour la pill)
@@ -175,8 +178,8 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
     setObscurites(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   }
 
-  const handleValider = () => {
-    if (!effectivePortee || hasTirImpossible) return
+  const handleLancer = () => {
+    if (!effectivePortee || hasTirImpossible || isRolling) return
     const tireurSitKey = tireurAllureDef?.sitKey
     const cibleSitKey  = cibleAllureDef?.sitKey
     const situation = [
@@ -185,6 +188,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
       ...couvertures,
       ...obscurites,
     ]
+    setIsRolling(true)
     socket?.emit(WS.COMBAT_ACTION_CONFIRM, {
       tokenId: activeRosterEntry.token_id,
       confirmedModifiers: { portee: effectivePortee, situation, taille },
@@ -220,146 +224,173 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
         </div>
       </div>
 
-      <div style={styles.body}>
-
-        {/* Récapitulatif (lecture seule) */}
-        <div style={styles.infoBlock}>
-          {assaultAction?.fire_mode && (
-            <div style={styles.infoRow}>
-              <span style={styles.infoLabel}>Mode de tir</span>
-              <span style={styles.infoValue}>
-                {FIRE_MODE_LABELS[assaultAction.fire_mode] ?? assaultAction.fire_mode}
-                {assaultAction.bullet_count > 1 ? ` — ${assaultAction.bullet_count}b` : ''}
-                {assaultAction.fire_mode_bonus_comp ? ` (+${assaultAction.fire_mode_bonus_comp} comp)` : ''}
-              </span>
-            </div>
-          )}
-          {isRushed && (
-            <div style={styles.infoRow}>
-              <span style={styles.infoLabel}>État</span>
-              <span style={{ ...styles.infoValue, color: '#e55' }}>⚠ Précipité (−5 comp)</span>
-            </div>
-          )}
-          {prefilledPortee?.distance !== undefined && (
-            <div style={styles.infoRow}>
-              <span style={styles.infoLabel}>Distance</span>
-              <span style={styles.infoValue}>{prefilledPortee.distance} m</span>
-            </div>
-          )}
+      {/* Banner résultat attaque — remplace le body après le lancer */}
+      {attackResult && (
+        <div style={{
+          ...styles.attackBanner,
+          background:   attackResult.hit ? 'rgba(91,141,238,0.12)' : 'rgba(200,60,60,0.12)',
+          borderColor:  attackResult.hit ? '#5b8dee' : '#c83c3c',
+          color:        attackResult.hit ? '#7ba8f0' : '#e06060',
+        }}>
+          <span style={styles.attackBannerResult}>
+            {attackResult.hit ? '✓ Touché !' : '✗ Raté'}
+          </span>
+          <span style={styles.attackBannerDetail}>
+            {attackResult.roll} / {attackResult.cdr} CDR
+          </span>
         </div>
+      )}
 
-        {/* Portée */}
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>Portée</div>
-          <select
-            value={effectivePortee ?? ''}
-            onChange={e => setPorteeOverride(e.target.value || null)}
-            style={styles.select}
-          >
-            {!effectivePortee && <option value="">— choisir —</option>}
-            {PORTEES.map(p => (
-              <option key={p.key} value={p.key}>{p.label} ({fmtOpt(p.mod)})</option>
-            ))}
-          </select>
-        </div>
+      {/* Body — masqué après le lancer */}
+      {!attackResult && (
+        <div style={styles.body}>
 
-        {/* Allure tireur */}
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>Allure tireur</div>
-          <select
-            value={tireurAllureVal}
-            onChange={e => setTireurAllureOverride(e.target.value)}
-            style={styles.select}
-          >
-            {TIREUR_ALLURES.map(a => (
-              <option key={a.val} value={a.val}>{a.label} ({fmtOpt(a.mod)})</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Allure cible */}
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>Allure cible</div>
-          <select
-            value={cibleAllureVal}
-            onChange={e => setCibleAllureOverride(e.target.value)}
-            style={styles.select}
-          >
-            {CIBLE_ALLURES.map(a => (
-              <option key={a.val} value={a.val}>{a.label} ({fmtOpt(a.mod)})</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Couverture */}
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>Couverture</div>
-          {COUVERTURES.map(c => (
-            <label key={c.key} style={styles.checkLabel}>
-              <input
-                type="checkbox"
-                checked={couvertures.includes(c.key)}
-                onChange={() => handleCouverture(c.key)}
-                style={styles.checkbox}
-              />
-              <span style={styles.checkText}>
-                {c.label}
-                <span style={{ ...styles.checkMod, color: '#ca6d6d' }}>{formatMod(c.mod)}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-
-        {/* Obscurité */}
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>Obscurité</div>
-          {OBSCURITES.map(o => (
-            <label key={o.key} style={styles.checkLabel}>
-              <input
-                type="checkbox"
-                checked={obscurites.includes(o.key)}
-                onChange={() => handleObscurite(o.key)}
-                style={styles.checkbox}
-              />
-              <span style={styles.checkText}>
-                {o.label}
-                <span style={{ ...styles.checkMod, color: '#ca6d6d' }}>
-                  {o.mod === -99 ? '✗' : formatMod(o.mod)}
+          {/* Récapitulatif (lecture seule) */}
+          <div style={styles.infoBlock}>
+            {assaultAction?.fire_mode && (
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>Mode de tir</span>
+                <span style={styles.infoValue}>
+                  {FIRE_MODE_LABELS[assaultAction.fire_mode] ?? assaultAction.fire_mode}
+                  {assaultAction.bullet_count > 1 ? ` — ${assaultAction.bullet_count}b` : ''}
+                  {assaultAction.fire_mode_bonus_comp ? ` (+${assaultAction.fire_mode_bonus_comp} comp)` : ''}
                 </span>
-              </span>
-            </label>
-          ))}
-        </div>
+              </div>
+            )}
+            {isRushed && (
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>État</span>
+                <span style={{ ...styles.infoValue, color: '#e55' }}>⚠ Précipité (−5 comp)</span>
+              </div>
+            )}
+            {prefilledPortee?.distance !== undefined && (
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>Distance</span>
+                <span style={styles.infoValue}>{prefilledPortee.distance} m</span>
+              </div>
+            )}
+          </div>
 
-        {/* Taille cible */}
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>Taille cible</div>
-          <select
-            value={taille}
-            onChange={e => setTaille(e.target.value)}
-            style={styles.select}
-          >
-            {TAILLES.map(t => (
-              <option key={t.key} value={t.key}>{t.label} ({fmtOpt(t.mod)})</option>
+          {/* Portée */}
+          <div style={styles.section}>
+            <div style={styles.sectionTitle}>Portée</div>
+            <select
+              value={effectivePortee ?? ''}
+              onChange={e => setPorteeOverride(e.target.value || null)}
+              style={styles.select}
+            >
+              {!effectivePortee && <option value="">— choisir —</option>}
+              {PORTEES.map(p => (
+                <option key={p.key} value={p.key}>{p.label} ({fmtOpt(p.mod)})</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Allure tireur */}
+          <div style={styles.section}>
+            <div style={styles.sectionTitle}>Allure tireur</div>
+            <select
+              value={tireurAllureVal}
+              onChange={e => setTireurAllureOverride(e.target.value)}
+              style={styles.select}
+            >
+              {TIREUR_ALLURES.map(a => (
+                <option key={a.val} value={a.val}>{a.label} ({fmtOpt(a.mod)})</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Allure cible */}
+          <div style={styles.section}>
+            <div style={styles.sectionTitle}>Allure cible</div>
+            <select
+              value={cibleAllureVal}
+              onChange={e => setCibleAllureOverride(e.target.value)}
+              style={styles.select}
+            >
+              {CIBLE_ALLURES.map(a => (
+                <option key={a.val} value={a.val}>{a.label} ({fmtOpt(a.mod)})</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Couverture */}
+          <div style={styles.section}>
+            <div style={styles.sectionTitle}>Couverture</div>
+            {COUVERTURES.map(c => (
+              <label key={c.key} style={styles.checkLabel}>
+                <input
+                  type="checkbox"
+                  checked={couvertures.includes(c.key)}
+                  onChange={() => handleCouverture(c.key)}
+                  style={styles.checkbox}
+                />
+                <span style={styles.checkText}>
+                  {c.label}
+                  <span style={{ ...styles.checkMod, color: '#ca6d6d' }}>{formatMod(c.mod)}</span>
+                </span>
+              </label>
             ))}
-          </select>
+          </div>
+
+          {/* Obscurité */}
+          <div style={styles.section}>
+            <div style={styles.sectionTitle}>Obscurité</div>
+            {OBSCURITES.map(o => (
+              <label key={o.key} style={styles.checkLabel}>
+                <input
+                  type="checkbox"
+                  checked={obscurites.includes(o.key)}
+                  onChange={() => handleObscurite(o.key)}
+                  style={styles.checkbox}
+                />
+                <span style={styles.checkText}>
+                  {o.label}
+                  <span style={{ ...styles.checkMod, color: '#ca6d6d' }}>
+                    {o.mod === -99 ? '✗' : formatMod(o.mod)}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+
+          {/* Taille cible */}
+          <div style={styles.section}>
+            <div style={styles.sectionTitle}>Taille cible</div>
+            <select
+              value={taille}
+              onChange={e => setTaille(e.target.value)}
+              style={styles.select}
+            >
+              {TAILLES.map(t => (
+                <option key={t.key} value={t.key}>{t.label} ({fmtOpt(t.mod)})</option>
+              ))}
+            </select>
+          </div>
+
         </div>
+      )}
 
-      </div>
-
-      {/* Footer — Valider */}
+      {/* Footer — 3 états : prêt / en cours / résultat */}
       <div style={styles.footer}>
-        <button
-          style={{
-            ...styles.btnValider,
-            opacity: (effectivePortee && !hasTirImpossible) ? 1 : 0.4,
-            cursor:  (effectivePortee && !hasTirImpossible) ? 'pointer' : 'not-allowed',
-          }}
-          onClick={handleValider}
-          disabled={!effectivePortee || hasTirImpossible}
-        >
-          Valider
-        </button>
+        {!attackResult && (
+          <button
+            style={{
+              ...styles.btnValider,
+              opacity: (effectivePortee && !hasTirImpossible && !isRolling) ? 1 : 0.4,
+              cursor:  (effectivePortee && !hasTirImpossible && !isRolling) ? 'pointer' : 'not-allowed',
+            }}
+            onClick={handleLancer}
+            disabled={!effectivePortee || hasTirImpossible || isRolling}
+          >
+            {isRolling ? 'En cours…' : 'Lancer les dés'}
+          </button>
+        )}
+        {attackResult && !attackResult.hit && (
+          <button style={styles.btnFermer} onClick={onAttackConfirmed}>
+            Fermer
+          </button>
+        )}
       </div>
 
     </div>
@@ -440,4 +471,26 @@ const styles = {
     fontWeight: 700,
     cursor: 'pointer',
   },
+  btnFermer: {
+    width: '100%',
+    padding: '8px 0',
+    background: 'none',
+    border: '1px solid #3a3a5a',
+    borderRadius: 4,
+    color: '#7070a0',
+    fontSize: 13,
+    cursor: 'pointer',
+  },
+  attackBanner: {
+    margin: '10px 14px',
+    padding: '10px 14px',
+    borderRadius: 6,
+    border: '1px solid',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  attackBannerResult: { fontSize: 14, fontWeight: 700 },
+  attackBannerDetail: { fontSize: 11, opacity: 0.75 },
 }

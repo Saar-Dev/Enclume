@@ -5972,3 +5972,157 @@ Session documentation uniquement (pas de code). Corriger toutes les erreurs dans
 - Haiku fix navigateur : Vite cache — hard refresh `Ctrl+Shift+R` requis si fenêtre inchangée visuellement
 
 **Validé Saar ✅ après hard refresh navigateur**
+
+---
+
+## Session 64 — Sprint 7.3 : Résolution assaut serveur
+
+### Implémenté (non confirmé — session interrompue avant test)
+
+**server/src/socket/index.js — resolveAssaultAction :**
+- Signature : sync function resolveAssaultAction(io, socket, campaignId, action, confirmedModifiers, character)
+- Fetch tireur : token → character → char_sheet → attrs → archetype → genotype
+- Fetch arme : ction.weapon_inv_id → char_inventory JOIN ref_equipment → weapon.ref_damage_h (BUG A)
+- Fetch compétence : ef_equipment_skill_assoc → ef_skills + char_skills → calcSkillTotal (BUG C)
+- is_rushed ← state_character.is_rushed (BUG B)
+- CDR = skillTotal + porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + effectiveMalus - carenceArmure
+- Jet attaque : parseDice('1d20') → DICE_RESULT broadcast sans skillLabel (animation D20 déclenchée)
+- Si touche : fetch cible (for_na/con_na/vol_na)
+  - PJ → pendingDamageActions.set(...) + COMBAT_DAMAGE_PROMPT { tokenId, formula, targetName }
+  - PNJ → calcul complet immédiat (loc + armures + dégâts + blessure) + COMBAT_ATTACK_RESULT
+
+**Ajouts module scope :**
+- const pendingDamageActions = new Map()
+- const LOC_TABLE = [{ max:2, slot:'T' }, { max:8, slot:'C' }, { max:11, slot:'BD' }, { max:14, slot:'BG' }, { max:17, slot:'JD' }, { max:20, slot:'JG' }]
+
+**Imports ajoutés :**
+- import { resolveWoundInsertion, isShockTestRequired } from '../lib/woundUtils.js'
+- import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS } from '../../../shared/armorConstants.js'
+- import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
+
+**shared/events.js :**
+- +COMBAT_DAMAGE_PROMPT : serveur → socket tireur PJ
+- +COMBAT_DAMAGE_CONFIRM : PJ → serveur
+- +COMBAT_DAMAGE_RESULT : serveur → socket tireur PJ
+
+**Statut : NON CONFIRMÉ FONCTIONNEL.**
+
+---
+
+## Session 64 — Sprint 7.4 : Fenêtre "Gestion des dégâts" PJ
+
+### Implémenté (non confirmé — session interrompue avant test)
+
+**Contexte :** Quand un PJ touche avec un assaut, le serveur stocke les paramètres de calcul dans pendingDamageActions et envoie COMBAT_DAMAGE_PROMPT au socket du tireur uniquement. Le joueur voit alors une fenêtre vide avec un bouton "Lancer les dés". Quand il clique, le serveur calcule tout et renvoie COMBAT_DAMAGE_RESULT uniquement au tireur. La fenêtre passe en Phase 3 avec les résultats.
+
+**server/src/socket/index.js — handler COMBAT_DAMAGE_CONFIRM :**
+- Récupère le pending depuis pendingDamageActions
+- parseDice('1d20') → rollLoc → LOC_TABLE → slotCode → SLOT_TO_WOUND_LOCATION → localisation
+- Fetch armures cible + filtre PI8 : ('/' + slot + '/').includes('/' + slotCode + '/')
+- calcResistanceArmure(armuresSlot).etq
+- getModifier(mrTable, mr) → modDomAttaque
+- modDegatsMode = isShortRange ? fire_mode_bonus_dmg : 0 (seulement courte/bout_portant portée)
+- parseDice(formula) → rawDice + dmgRolls
+- degautsBruts = rawDice + modDomAttaque + modDegatsMode
+- d = calcResistanceDommages(for_na_cible, con_na_cible)
+- degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
+- Sévérité : ≥5/10/15/20/25/30 → legere/moyenne/grave/critique/mortelle
+- esolveWoundInsertion(trx, char_sheet_id_cible, localisation, severity) → inalSeverity (P49)
+- Jet de choc si isShockTestRequired(finalSeverity, localisation) → shockResult
+- Émissions :
+  1. socket.emit(COMBAT_DAMAGE_RESULT, { rollLoc, locLabel, degautsBruts, degatsNets, dmgRolls, severity, severityColor })
+  2. io.to(campaignId).emit(DICE_RESULT, ...) × 2 (localisation + dégâts)
+  3. io.to(campaignId).emit(DICE_RESULT, { interactionType:'combat_damage', ... }) si finalSeverity
+  4. io.to(campaignId).emit(COMBAT_ATTACK_RESULT, { ..., shockResult })
+
+**client/src/components/CombatDamageWindow.jsx — réécriture complète :**
+- Props : { payload: {tokenId, formula, targetName}, results: null|{...}, socket, onConfirmed }
+- State local : isRolling (bool)
+- Phase 1 : dés vides "?" + bouton "Lancer les dés" (bleu)
+- Phase 2 : animation CSS .dice-rolling 0.35s + "Calcul en cours..."
+- Phase 3 (results non-null) : résultats colorés + banner sévérité + "Fermer"
+
+**client/src/pages/SessionPage.jsx :**
+- +const [damageResults, setDamageResults] = useState(null)
+- +s.on(WS.COMBAT_DAMAGE_RESULT, (data) => setDamageResults(data))
+- Fix DICE_RESULT : +	argetName, localisation, severity, severityColor dans destructuration + addMessage
+- Props CombatOverlay : damageResults={damageResults}, onDamageConfirmed nettoie les deux states
+
+**client/src/components/CombatOverlay.jsx :**
+- damageResults ajouté aux props + passé à CombatDamageWindow comme esults={damageResults}
+
+**client/src/components/Sidebar.jsx (session précédente) :**
+- Rendu interactionType === 'combat_damage' : affiche dégâts colorés dans le chat
+
+**Statut : NON CONFIRMÉ FONCTIONNEL.**
+Voir docs/JOURNAL_SESSION64_SPRINT74.md pour le détail exhaustif.
+
+
+---
+
+## Session 64 — Sprint 7.3/7.4 confirmés + Sprint 7.4bis : Fenêtre modificateurs côté joueur (jet de toucher interactif)
+
+### Contexte de reprise
+Session 64 continuation. Sprint 7.3 (resolveAssaultAction) et Sprint 7.4 (CombatDamageWindow) avaient été codés dans la session précédente sans test fonctionnel. Cette session a :
+1. Diagnostiqué et corrigé un bug critique sur la lookup compétence arme
+2. Corrigé l'architecture : la fenêtre modificateurs était montrée au GM au lieu du joueur
+3. Confirmé le tout fonctionnel
+
+### Bug corrigé — skillTotal = 0 (lookup item_id incorrect)
+
+**Cause :** `resolveAssaultAction` (server/src/socket/index.js) cherchait la compétence arme via :
+```js
+db('ref_equipment_skill_assoc').where({ item_id: action.weapon_inv_id }).first()
+```
+Mais `ref_equipment_skill_assoc.item_id` est FK → `ref_equipment.id`, alors que `action.weapon_inv_id` = `char_inventory.id`. Deux UUIDs de tables différentes → skillAssoc toujours null → skillTotal = 0 → CDR trop bas → attaques quasi-impossibles.
+
+**Correction :**
+- SELECT weapon enrichi : `.select('ref_equipment.damage_h as ref_damage_h', 'char_inventory.equipment_id')`
+- Lookup corrigé : `.where({ item_id: weapon.equipment_id })`
+
+### Correction architecturale — Résolution assaut côté joueur
+
+**Problème :** `CombatOverlay.jsx` conditionnait `CombatModifiersWindow` sur `isGm &&`. Le joueur ne voyait jamais la fenêtre de résolution de son propre assaut.
+
+**Flux correct Polaris :**
+- Phase Annonce : le joueur déclare l'assaut (cible + mode tir)
+- Phase Résolution : quand c'est son tour → une fenêtre s'ouvre AU JOUEUR avec les modificateurs (portée, allures, couverture, taille)
+- Le joueur clique "Lancer les dés" → jet d'attaque → résultat (touché ou raté)
+- Si touché → CombatDamageWindow pour les dés de dégâts
+- Le GM résout uniquement les assauts des PNJs
+
+**Nouveau flux implémenté :**
+
+**shared/events.js :**
+- +`COMBAT_ATTACK_PLAYER_RESULT: 'combat:attack_player_result'` — serveur → socket tireur PJ : résultat jet de toucher
+
+**server/src/socket/index.js (resolveAssaultAction) :**
+- PJ touche : `socket.emit(COMBAT_ATTACK_PLAYER_RESULT, { hit: true, roll, cdr, tireurTokenId, cibleTokenId })` AVANT pendingDamageActions.set
+- PJ rate : `else if (character.type === 'pj') { socket.emit(COMBAT_ATTACK_PLAYER_RESULT, { hit: false, ... }) }`
+
+**client/src/pages/SessionPage.jsx :**
+- +`const [attackResult, setAttackResult] = useState(null)`
+- +handler `s.on(WS.COMBAT_ATTACK_PLAYER_RESULT, (data) => setAttackResult(data))`
+- `COMBAT_ENDED` handler : +`setAttackResult(null)`
+- Props CombatOverlay : +`attackResult`, +`onAttackConfirmed={() => setAttackResult(null)}`
+- `onDamageConfirmed` : nettoie maintenant aussi `attackResult`
+
+**client/src/components/CombatOverlay.jsx :**
+- +dérivations `playerCharacter`, `playerToken`, `playerRosterEntry`, `playerActiveAssaultAction`
+- +dérivation `gmActiveCharacter` (pour filtrer PNJ uniquement côté GM)
+- `CombatActionWindow` : masqué pendant `phase=RESOLUTION && (playerActiveAssaultAction || attackResult)`
+- `CombatModifiersWindow` PJ : `!isGm && phase=RESOLUTION && (playerActiveAssaultAction || attackResult)` → props `attackResult`, `onAttackConfirmed`
+- `CombatModifiersWindow` GM : `isGm && phase=RESOLUTION && activeAssaultAction && gmActiveCharacter?.type === 'pnj'`
+
+**client/src/components/CombatModifiersWindow.jsx :**
+- Nouveau prop : `attackResult`, `onAttackConfirmed`
+- +`isRolling` state — bouton désactivé dès le clic (anti-double-envoi)
+- Tokens : fallback `attackResult.tireurTokenId/cibleTokenId` si `assaultAction` null (slot avancé)
+- `handleValider` → `handleLancer` + `setIsRolling(true)` avant emit
+- useEffect reset : +`setIsRolling(false)`
+- Body : masqué si `attackResult` (modifiés inutiles post-roll)
+- Banner résultat : `✓ Touché !` (bleu) ou `✗ Raté` (rouge) + roll / CDR
+- Footer : bouton "Lancer les dés" (prêt) / "En cours…" (isRolling) / bouton "Fermer" (miss)
+- Bouton "Valider" renommé "Lancer les dés" pour PNJ aussi
+
+### Statut : CONFIRMÉ FONCTIONNEL (SR + test session 64)

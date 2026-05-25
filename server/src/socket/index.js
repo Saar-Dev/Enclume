@@ -2206,7 +2206,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
       db('char_inventory')
         .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where({ 'char_inventory.id': action.weapon_inv_id })
-        .select('ref_equipment.damage_h as ref_damage_h')
+        .select('ref_equipment.damage_h as ref_damage_h', 'char_inventory.equipment_id')
         .first(),
       db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first(),
     ])
@@ -2230,7 +2230,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
       const [attrsTireur, archetypeTireur, skillAssoc, woundsTireur, invTireur] = await Promise.all([
         db('char_attributes').where({ char_sheet_id: sheetTireur.id }),
         db('char_archetype').where({ char_sheet_id: sheetTireur.id }).first(),
-        db('ref_equipment_skill_assoc').where({ item_id: action.weapon_inv_id }).first(),
+        db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first(),
         db('character_wounds').where({ char_sheet_id: sheetTireur.id }),
         db('char_inventory')
           .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
@@ -2324,6 +2324,13 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
 
       if (character.type === 'pj') {
         // PJ — stocker paramètres bruts, le joueur lance les dés via CombatDamageWindow
+        socket.emit(WS.COMBAT_ATTACK_PLAYER_RESULT, {
+          hit: true,
+          roll: rollAttaque,
+          cdr: chancesDeReussite,
+          tireurTokenId: action.token_id,
+          cibleTokenId: action.target_token_id,
+        })
         pendingDamageActions.set(action.token_id, {
           campaignId,
           targetTokenId: action.target_token_id,
@@ -2412,6 +2419,14 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
           shockResult: null,
         })
       }
+    } else if (character.type === 'pj') {
+      socket.emit(WS.COMBAT_ATTACK_PLAYER_RESULT, {
+        hit: false,
+        roll: rollAttaque,
+        cdr: chancesDeReussite,
+        tireurTokenId: action.token_id,
+        cibleTokenId: action.target_token_id,
+      })
     }
   } catch (err) {
     console.error('[WS] resolveAssaultAction error:', err.message)

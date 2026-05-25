@@ -96,6 +96,8 @@ export default function SessionPage() {
   // damageResults : reçu via COMBAT_DAMAGE_RESULT après que le PJ clique "Lancer les dés"
   const [damagePayload, setDamagePayload] = useState(null)
   const [damageResults, setDamageResults] = useState(null)
+  // attackResult : reçu via COMBAT_ATTACK_PLAYER_RESULT { hit, roll, cdr, tireurTokenId, cibleTokenId }
+  const [attackResult, setAttackResult] = useState(null)
 
   // Fenêtre character flottante — null = fermée, sinon id du character ouvert
   // Le character est dérivé du store pour se mettre à jour automatiquement via WS
@@ -433,6 +435,9 @@ export default function SessionPage() {
     s.on(WS.COMBAT_DAMAGE_RESULT, (data) => {
       setDamageResults(data)
     })
+    s.on(WS.COMBAT_ATTACK_PLAYER_RESULT, (data) => {
+      setAttackResult(data)
+    })
     s.on(WS.MAP_SWITCH, ({ battlemapId, userIds }) => {
       const concerned = userIds.length === 0 || userIds.includes(user?.id)
       if (!concerned) return
@@ -507,6 +512,7 @@ export default function SessionPage() {
     s.on(WS.COMBAT_ENDED, () => {
       resetCombat()
       setMode('play')
+      setAttackResult(null)
     })
     s.on(WS.COMBAT_STATE_SYNC, ({ combatState, roster, actions }) => {
       setCombatState({
@@ -1124,7 +1130,9 @@ export default function SessionPage() {
           onValidateTarget={handleValidateTarget}
           damagePayload={damagePayload}
           damageResults={damageResults}
-          onDamageConfirmed={() => { setDamagePayload(null); setDamageResults(null) }}
+          onDamageConfirmed={() => { setDamagePayload(null); setDamageResults(null); setAttackResult(null) }}
+          attackResult={attackResult}
+          onAttackConfirmed={() => setAttackResult(null)}
         />
       )}
 

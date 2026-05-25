@@ -11,7 +11,7 @@ import CombatModifiersWindow from './CombatModifiersWindow'
 import CombatDamageWindow from './CombatDamageWindow'
 
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed }) {
   const { phase, roster, activeSlotIdx, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
@@ -20,8 +20,17 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   const sortedRoster = [...roster].sort((a, b) => b.initiative - a.initiative)
   const gmActiveEntry = sortedRoster[activeSlotIdx]
   const gmActiveToken = gmActiveEntry ? tokens.find(t => t.id === gmActiveEntry.token_id) : null
+  const gmActiveCharacter = gmActiveToken ? characters.find(c => c.id === gmActiveToken.character_id) : null
   const activeAssaultAction = gmActiveEntry
     ? actions.find(a => a.token_id === gmActiveEntry.token_id && a.action_key === 'assault')
+    : null
+
+  // Slot actif PJ — fenêtre modificateurs côté joueur
+  const playerCharacter = !isGm ? characters.find(c => c.user_id === user?.id) : null
+  const playerToken = playerCharacter ? tokens.find(t => t.character_id === playerCharacter.id) : null
+  const playerRosterEntry = playerToken ? sortedRoster.find(e => e.token_id === playerToken.id) : null
+  const playerActiveAssaultAction = (phase === 'RESOLUTION' && sortedRoster[activeSlotIdx]?.token_id === playerToken?.id)
+    ? actions.find(a => a.token_id === playerToken?.id && a.action_key === 'assault')
     : null
 
   return (
@@ -62,8 +71,9 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* ANNOUNCEMENT + RÉSOLUTION — fenêtre d'action pour les joueurs */}
-      {!isGm && (phase === 'ANNOUNCEMENT' || phase === 'RESOLUTION') && (
+      {/* ANNOUNCEMENT + RÉSOLUTION — fenêtre d'action pour les joueurs
+          Masquée pendant la résolution d'un assaut PJ (CombatModifiersWindow prend le relais) */}
+      {!isGm && (phase === 'ANNOUNCEMENT' || (phase === 'RESOLUTION' && !playerActiveAssaultAction && !attackResult)) && (
         <CombatActionWindow
           socket={socket}
           user={user}
@@ -91,8 +101,19 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         </div>
       )}
 
-      {/* Phase RÉSOLUTION — modificateurs assaut (GM) */}
-      {isGm && phase === 'RESOLUTION' && activeAssaultAction && gmActiveEntry && (
+      {/* Phase RÉSOLUTION — modificateurs assaut PJ (joueur résout lui-même) */}
+      {!isGm && phase === 'RESOLUTION' && (playerActiveAssaultAction || attackResult) && (
+        <CombatModifiersWindow
+          socket={socket}
+          assaultAction={playerActiveAssaultAction}
+          activeRosterEntry={playerRosterEntry}
+          attackResult={attackResult}
+          onAttackConfirmed={onAttackConfirmed}
+        />
+      )}
+
+      {/* Phase RÉSOLUTION — modificateurs assaut PNJ (GM uniquement, PNJ seulement) */}
+      {isGm && phase === 'RESOLUTION' && activeAssaultAction && gmActiveEntry && gmActiveCharacter?.type === 'pnj' && (
         <CombatModifiersWindow
           socket={socket}
           assaultAction={activeAssaultAction}

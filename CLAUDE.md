@@ -107,23 +107,26 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 64 (2026-05-24)
+## État actuel — Session 64 (2026-05-25)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **57 migrations stables** — prochaine : **58**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅
 
-**Session 64 — Sprint 7.1 ✅ :**
-- Migration 57 : +`fire_mode`/`bullet_count`/`fire_mode_bonus_comp`/`fire_mode_bonus_dmg` sur `combat_actions` + `state_character` JSONB sur `combat_roster`
-- Bug corrigé : `target_token_id` dupliqué en integer (existait déjà en uuid migration 54) — retiré de migration 57
-- CombatActionWindow.jsx refondu : Kiwi-style Assaut (fenêtre 360→720px, armes auto MG/MD, sélection cible canvas 3D, cadence CC/RC/RL, dual-wield, forceCC)
-- Canvas3D.jsx + SessionPage.jsx + CombatOverlay.jsx : combatTargetMode + ligne R3F + bandeau cible
-- socket/index.js : payload assaut enrichi (fireMode, bulletCount, bonusComp, bonusDmg, isDualWield)
+**Session 64 — Sprint 7.3/7.4/7.4bis ✅ CONFIRMÉS :**
+- Bug fix critique : `skillAssoc` lookup via `weapon.equipment_id` (non `weapon_inv_id`) → skillTotal correct
+- resolveAssaultAction : jet attaque + DICE_RESULT broadcast + bifurcation PJ/PNJ + pendingDamageActions
+- COMBAT_DAMAGE_CONFIRM handler : calcul complet (loc + armures PI8 + dégâts + blessures + shockTest)
+- CombatDamageWindow.jsx : fenêtre PJ 3 phases (vide → animation → résultats)
+- COMBAT_ATTACK_PLAYER_RESULT : nouvel événement WS — serveur → socket tireur PJ (hit/miss)
+- CombatModifiersWindow : renommé "Lancer les dés", +isRolling, banner résultat, body masqué post-roll
+- CombatOverlay : PJ résout son propre assaut (pas le GM), GM résout PNJ uniquement
+
+**"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
 
 **Prochain chantier :**
-- Sprint 7.2 — CombatModifiersWindow (portée, situation, taille cible)
-- Sprint 7.3 — Résolution assaut serveur (LOS, jets, dégâts, blessures)
-- "Changer le mode de tir" — UI sub-panel (sprint dédié, non planifié)
+- Sprint 7.5 — Décompte munitions
+- Sprint 7.6 — Actions d'état dynamiques (state_weapon/state_position)
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser : ordre tri INI vs sémantique roll surpris.

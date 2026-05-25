@@ -88,7 +88,8 @@ export const WS = {
   COMBAT_ACTION_WINDOW:  'combat:action_window',    // serveur → socket joueur actif
   COMBAT_ACTION_CONFIRM: 'combat:action_confirm',   // joueur/GM → serveur
   COMBAT_ATTACK_RESULT:  'combat:attack_result',    // serveur → room : résumé dégâts
-  COMBAT_DAMAGE_PROMPT:  'combat:damage_prompt',    // serveur → socket tireur PJ : invite à lancer les dés
-  COMBAT_DAMAGE_CONFIRM: 'combat:damage_confirm',   // PJ → serveur : déclenche le calcul (jets serveur)
-  COMBAT_DAMAGE_RESULT:  'combat:damage_result',    // serveur → socket tireur PJ : résultats pour affichage fenêtre
+  COMBAT_DAMAGE_PROMPT:          'combat:damage_prompt',           // serveur → socket tireur PJ : invite à lancer les dés
+  COMBAT_DAMAGE_CONFIRM:         'combat:damage_confirm',          // PJ → serveur : déclenche le calcul (jets serveur)
+  COMBAT_DAMAGE_RESULT:          'combat:damage_result',           // serveur → socket tireur PJ : résultats pour affichage fenêtre
+  COMBAT_ATTACK_PLAYER_RESULT:   'combat:attack_player_result',    // serveur → socket tireur PJ : résultat jet de toucher
 }

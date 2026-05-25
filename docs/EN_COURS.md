@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-24 Session 63 (continuation)
+> Dernière mise à jour : 2026-05-25 Session 64
 
 ---
 
@@ -211,13 +211,15 @@ Travaux effectués :
 
 ---
 
-## Prochain chantier — Chantier 11 Sprint 7 — Jets d'attaque + Dégâts + Blessures
+## Chantier 11 Sprint 7 — Jets d'attaque + Dégâts + Blessures
 
 Objectif : Attaques complètes. Blessures enregistrées. Carence FOR appliquée.
 
-**Plan finalisé (session 63) — prêt à coder. NE PAS MODIFIER sans relire le plan entier.**
-Voir `PLAN_11_SYSCOMBAT.md § Sprint 7` pour le détail complet.
-Voir `SYSTEME.md §17` pour le pattern données personnage (calcul serveur combat + jets).
+**Sprint 7.1 ✅ CONFIRMÉ (session 64)**
+**Sprint 7.2 ✅ CONFIRMÉ (session 64)**
+**Sprint 7.3 ✅ CONFIRMÉ (session 64)** — resolveAssaultAction + COMBAT_DAMAGE_PROMPT + bug fix skillAssoc
+**Sprint 7.4 ✅ CONFIRMÉ (session 64)** — CombatDamageWindow + COMBAT_DAMAGE_CONFIRM handler
+**Sprint 7.4bis ✅ CONFIRMÉ (session 64)** — Jet de toucher interactif côté joueur (CombatModifiersWindow → COMBAT_ATTACK_PLAYER_RESULT)
 
 **Corrections et ajouts session 63 (ne pas réintroduire les erreurs) :**
 - Blessures : 1 par touche, gravité par seuils (≥5/10/15/20/25/30) — pas `Math.floor(nets/5)`
