@@ -7,10 +7,12 @@ import CombatTimeline from './CombatTimeline'
 import CombatActionWindow from './CombatActionWindow'
 import CombatPnjPanel from './CombatPnjPanel'
 import CombatGmDeclareWindow from './CombatGmDeclareWindow'
+import CombatModifiersWindow from './CombatModifiersWindow'
+import CombatDamageWindow from './CombatDamageWindow'
 
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget }) {
-  const { phase, roster, activeSlotIdx } = useCombatStore()
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed }) {
+  const { phase, roster, activeSlotIdx, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
 
@@ -18,6 +20,9 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   const sortedRoster = [...roster].sort((a, b) => b.initiative - a.initiative)
   const gmActiveEntry = sortedRoster[activeSlotIdx]
   const gmActiveToken = gmActiveEntry ? tokens.find(t => t.id === gmActiveEntry.token_id) : null
+  const activeAssaultAction = gmActiveEntry
+    ? actions.find(a => a.token_id === gmActiveEntry.token_id && a.action_key === 'assault')
+    : null
 
   return (
     <div style={styles.overlay}>
@@ -70,8 +75,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Phase RÉSOLUTION — panneau GM : confirmer le slot actif */}
-      {isGm && phase === 'RESOLUTION' && gmActiveEntry && (
+      {/* Phase RÉSOLUTION — panneau GM : confirmer le slot actif (hors assaut) */}
+      {isGm && phase === 'RESOLUTION' && gmActiveEntry && !activeAssaultAction && (
         <div style={styles.gmResolution}>
           <div style={styles.gmResolutionLabel}>
             Slot actif : <strong>{gmActiveToken?.label ?? '?'}</strong>
@@ -84,6 +89,15 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
             Agir
           </button>
         </div>
+      )}
+
+      {/* Phase RÉSOLUTION — modificateurs assaut (GM) */}
+      {isGm && phase === 'RESOLUTION' && activeAssaultAction && gmActiveEntry && (
+        <CombatModifiersWindow
+          socket={socket}
+          assaultAction={activeAssaultAction}
+          activeRosterEntry={gmActiveEntry}
+        />
       )}
 
       {/* Panneau visée assaut — visible pendant le mode sélection cible */}
@@ -110,6 +124,16 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
             Annuler la visée
           </button>
         </div>
+      )}
+
+      {/* Fenêtre "Gestion des dégâts" — PJ uniquement, après un toucher */}
+      {damagePayload && (
+        <CombatDamageWindow
+          payload={damagePayload}
+          results={damageResults}
+          socket={socket}
+          onConfirmed={onDamageConfirmed}
+        />
       )}
 
       {/* Panneau légende déplacement — visible pendant le mode sélection destination */}

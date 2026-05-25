@@ -86,6 +86,17 @@ export default function SessionPage() {
   const [lastDiceRoll, setLastDiceRoll] = useState(null)
   const handleDiceDone = useCallback(() => setLastDiceRoll(null), [])
 
+  // ─── Reload blessures — déclenché par WOUND_ADDED (socket) ───────────────
+  // Map { characterId → counter } — incrémenté à chaque blessure reçue.
+  // Passé à CharacterWindow → bumpInventoryVersion() → ArmorWoundPanel reload.
+  const [woundVersions, setWoundVersions] = useState({})
+
+  // ─── Fenêtre "Gestion des dégâts" — PJ uniquement ────────────────────────
+  // damagePayload : reçu via COMBAT_DAMAGE_PROMPT { tokenId, formula, targetName }
+  // damageResults : reçu via COMBAT_DAMAGE_RESULT après que le PJ clique "Lancer les dés"
+  const [damagePayload, setDamagePayload] = useState(null)
+  const [damageResults, setDamageResults] = useState(null)
+
   // Fenêtre character flottante — null = fermée, sinon id du character ouvert
   // Le character est dérivé du store pour se mettre à jour automatiquement via WS
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
@@ -381,7 +392,7 @@ export default function SessionPage() {
     s.on(WS.CHARACTER_UPDATED, (updatedCharacter) => {
       upsertCharacter(updatedCharacter)
     })
-    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess, interactionType, mr }) => {
+    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess, interactionType, mr, targetName, localisation, severity, severityColor }) => {
       addMessage({
         id: `dice-${userId}-${timestamp}`,
         type: 'dice',
@@ -401,12 +412,26 @@ export default function SessionPage() {
         isSuccess,
         interactionType,
         mr,
+        // Champs combat_damage — undefined pour tous les autres jets
+        targetName,
+        localisation,
+        severity,
+        severityColor,
       })
       // Animation dés — jets normaux uniquement (skillLabel absent)
       // Jets d'entité (skillcheck, displacement) → pas d'animation en V1
       if (skillLabel === undefined) {
         setLastDiceRoll({ rolls, dieType: formula.replace(/^\d+/, '').split('+')[0].split('-')[0], seed, timestamp, color })
       }
+    })
+    s.on(WS.WOUND_ADDED, ({ characterId }) => {
+      setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
+    })
+    s.on(WS.COMBAT_DAMAGE_PROMPT, (data) => {
+      setDamagePayload(data)
+    })
+    s.on(WS.COMBAT_DAMAGE_RESULT, (data) => {
+      setDamageResults(data)
     })
     s.on(WS.MAP_SWITCH, ({ battlemapId, userIds }) => {
       const concerned = userIds.length === 0 || userIds.includes(user?.id)
@@ -1022,6 +1047,7 @@ export default function SessionPage() {
           character={{ ...selectedCharacter, _currentUserId: user?.id }}
           isGm={isGm}
           onClose={() => setSelectedCharacterId(null)}
+          woundReloadKey={woundVersions[selectedCharacter?.id] ?? 0}
         />
       )}
 
@@ -1096,6 +1122,9 @@ export default function SessionPage() {
           combatTargetMode={combatTargetMode}
           onEnterTargetMode={handleEnterTargetMode}
           onValidateTarget={handleValidateTarget}
+          damagePayload={damagePayload}
+          damageResults={damageResults}
+          onDamageConfirmed={() => { setDamagePayload(null); setDamageResults(null) }}
         />
       )}
 

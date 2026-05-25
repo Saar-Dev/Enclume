@@ -1,5 +1,33 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-05-24 Session 63
+> Dernière mise à jour : 2026-05-24 Session 64
+
+---
+
+## 🔴 POURQUOI CETTE DOC EXISTE — LIRE EN PREMIER
+
+Ce projet dure depuis 64+ sessions. Chaque piège documenté représente des **heures perdues** à déboguer un bug qui aurait été évité en lisant la doc. Chaque section de SYSTEME.md a été écrite après une régression réelle, un bug silencieux, ou une réimplémentation de quelque chose qui existait déjà.
+
+**Session 64 — exemple concret de ce qu'il ne faut JAMAIS faire :**
+> En codant `resolveAssaultAction` (Sprint 7.3), j'ai inventé un événement `COMBAT_ATTACK_RESULT` et ignoré `DICE_RESULT` + `ArmorWoundPanel` — pourtant documentés en détail dans `SYSTEME.md` sections 10 ("Flux dés") et 16 ("Système blessures + armures"). J'avais "lu" SYSTEME.md mais je n'avais pas **appliqué** ce que j'avais lu. Résultat : des heures de boulot pour réimplémenter de zéro ce qui existait déjà.
+
+**La doc n'est pas une formalité. C'est la mémoire externe du projet. CODE > conversation.**
+
+---
+
+## 🔴 MÉCANISME DE RELECTURE OBLIGATOIRE
+
+**À chaque début de réponse qui implique du code ou une proposition technique :**
+
+1. Demande-toi : "Ai-je relu SYSTEME.md pour cette fonctionnalité ?"
+2. Si la réponse n'est pas "oui, je l'ai relu dans cette conversation pour cette feature" → **RELIS SYSTEME.md avant de continuer.**
+3. **Si tu ne sais pas si tu dois relire → c'est que c'est déjà trop tard. Relis.**
+
+**Checkpoints obligatoires de relecture de SYSTEME.md :**
+- Toute fonctionnalité qui touche aux dés → relire section 10 (Flux dés, DICE_RESULT, DiceRoller)
+- Toute fonctionnalité qui touche aux blessures/armures → relire section 16 (ArmorWoundPanel, WOUND_ADDED)
+- Toute fonctionnalité qui touche au combat → relire section 15 (Combat)
+- Toute fonctionnalité qui touche aux tokens/entités → relire sections PE14/PE27/PE28/PE29
+- Toute fonctionnalité nouvelle → vérifier que l'événement WS que tu t'apprêtes à créer n'existe pas déjà dans `shared/events.js`
 
 ---
 
@@ -43,6 +71,9 @@ Si tu t'apprêtes à poser "Je code ?" pour la deuxième fois sur le même sujet
 
 Si tu t'apprêtes à poser une question de diagnostic en console F12 →
 **STOP. La réponse est-elle lisible dans le code source ? Si oui → demander le fichier.**
+
+Si tu t'apprêtes à créer un nouvel événement WebSocket, un nouveau composant, ou une nouvelle fonction utilitaire →
+**STOP. Est-ce que ça n'existe pas déjà ? Vérifier `shared/events.js`, `client/src/`, `server/src/lib/` avant de créer quoi que ce soit.**
 
 ---
 

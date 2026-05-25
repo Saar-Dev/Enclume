@@ -283,6 +283,10 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
 
   // Phase 2 — Résolution : slot actif = c'est mon tour d'agir
   if (isMyTurnInResolution) {
+    const myAssaultAction = myActions.find(a => a.action_key === 'assault')
+    const cibleToken = myAssaultAction ? tokens.find(t => t.id === myAssaultAction.target_token_id) : null
+    const isRushed = rosterEntry.state_character?.is_rushed
+
     return (
       <div style={styles.window}>
         <div style={styles.header}>Phase 2 - Résolution</div>
@@ -294,15 +298,34 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
                 <span style={styles.itemMod}>{a.modifiers?.ini_mod ?? ''}</span>
               </div>
             ))}
+            {myAssaultAction && (
+              <div style={{ padding: '6px 14px', fontSize: 11, color: '#7070a0', borderTop: '1px solid #2a2a3e' }}>
+                <div>Cible : <span style={{ color: '#c0c0d0' }}>{cibleToken?.label ?? '—'}</span></div>
+                {myAssaultAction.fire_mode && myAssaultAction.fire_mode !== 'CC' && (
+                  <div>
+                    Mode : {FIRE_MODE_LABELS[myAssaultAction.fire_mode]}
+                    {myAssaultAction.bullet_count > 1 ? ` — ${myAssaultAction.bullet_count}b` : ''}
+                    {myAssaultAction.fire_mode_bonus_comp ? ` (+${myAssaultAction.fire_mode_bonus_comp} comp)` : ''}
+                  </div>
+                )}
+                {isRushed && <div style={{ color: '#e55' }}>⚠ Précipité (−5)</div>}
+              </div>
+            )}
           </div>
         </div>
         <div style={styles.footer}>
-          <button
-            style={styles.btnDeclare}
-            onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}
-          >
-            Agir
-          </button>
+          {myAssaultAction ? (
+            <div style={{ color: '#7070a0', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
+              En attente de validation GM…
+            </div>
+          ) : (
+            <button
+              style={styles.btnDeclare}
+              onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}
+            >
+              Agir
+            </button>
+          )}
         </div>
       </div>
     )

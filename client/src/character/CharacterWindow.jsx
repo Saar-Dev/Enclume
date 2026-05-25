@@ -62,7 +62,7 @@ const IconX = () => (
 )
 
 // ─── Composant principal ──────────────────────────────────────────────────────
-export default function CharacterWindow({ character, isGm, onClose }) {
+export default function CharacterWindow({ character, isGm, onClose, woundReloadKey = 0 }) {
   const { t } = useTranslation()
   const { members, updateCharacter, removeCharacter } = useCharacterStore()
 
@@ -167,6 +167,15 @@ export default function CharacterWindow({ character, isGm, onClose }) {
   // ─── État UI ───────────────────────────────────────────────────────────────
   const [inventoryVersion, setInventoryVersion] = useState(0)
   const bumpInventoryVersion = useCallback(() => setInventoryVersion(v => v + 1), [])
+
+  // Reload ArmorWoundPanel quand WOUND_ADDED arrive via SessionPage (woundReloadKey)
+  const prevWoundKeyRef = useRef(0)
+  useEffect(() => {
+    if (woundReloadKey !== prevWoundKeyRef.current) {
+      prevWoundKeyRef.current = woundReloadKey
+      bumpInventoryVersion()
+    }
+  }, [woundReloadKey, bumpInventoryVersion])
 
   const [activeTab,   setActiveTab]   = useState('sheet')
   const [saving,      setSaving]      = useState(false)

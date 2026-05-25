@@ -900,7 +900,34 @@ export default function Sidebar({
                       ? { background: 'rgba(76,175,119,0.07)', border: '1px solid rgba(76,175,119,0.2)' }
                       : { background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }
 
-                    // ── Déplacement d'entité ────────────────────────────────
+                    // ── Dégâts combat (PJ confirme) ─────────────────────────
+                    if (msg.interactionType === 'combat_damage') {
+                      return (
+                        <div key={msg.id} style={{
+                          ...styles.messageDice,
+                          background: (msg.severityColor ?? '#FF6B6B') + '18',
+                          border: `1px solid ${(msg.severityColor ?? '#FF6B6B')}44`,
+                        }}>
+                          <div style={styles.diceHeader}>
+                            <span style={{ ...styles.diceIcon, color: msg.severityColor ?? msg.color }}>⚔</span>
+                            <span style={{ ...styles.msgUser, color: msg.severityColor ?? msg.color }}>{msg.user}</span>
+                            <span style={styles.msgTime}> · {msg.time}</span>
+                          </div>
+                          <div style={{ paddingLeft: '2px', fontSize: '13px', color: '#c0c0d0' }}>
+                            <strong style={{ color: msg.severityColor ?? '#c0c0d0' }}>{msg.total}</strong> dégâts
+                            {' '}à <strong>{msg.localisation}</strong>
+                            {' '}de <strong>{msg.targetName}</strong>
+                          </div>
+                          {msg.severity && (
+                            <span style={{ ...styles.badgeCritFail, color: msg.severityColor, borderColor: msg.severityColor + '66', background: msg.severityColor + '22' }}>
+                              {msg.severity}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    }
+
+                  // ── Déplacement d'entité ────────────────────────────────
                     if (msg.interactionType === 'displacement') {
                       return (
                         <div key={msg.id} style={{ ...styles.messageDice, ...successStyle }}>

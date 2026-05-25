@@ -5944,3 +5944,31 @@ Session documentation uniquement (pas de code). Corriger toutes les erreurs dans
 - **Assaut ✅** (Saar : "Assaut → parfait") — fenêtre 360→720px, armes auto MG/MD, sélection cible canvas, cadence Kiwi-style, dual-wield, forceCC
 - **Migration 57 corrigée ✅**
 - **"Changer le mode de tir"** → UI non implémentée (attendu — sprint dédié futur)
+
+---
+
+## Session 64 — Sprint 7.2 : CombatModifiersWindow + fixes socket
+
+### Sprint 7.2 implémenté et confirmé fonctionnel
+
+**`server/src/routes/character/char-sheet.js` :**
+- Import ajouté : `calcSkillTotal` depuis `charStats.js`
+- Nouvelle route `GET /:characterId/weapon-skill/:weaponInvId` : fetch arme → ref_equipment_skill_assoc → ref_skills → charStats complets → `{ skillId, skillLabel, skillTotal }`
+
+**`server/src/socket/index.js` — COMBAT_ACTION_CONFIRM :**
+- Payload : `{ tokenId }` → `{ tokenId, confirmedModifiers? }`
+- Guard ownership corrigé : `if (socket.role !== 'gm') { if (character.user_id !== socket.user.id) return }` → GM peut confirmer tout slot (fix bug "Valider ne fait rien")
+- Log assault enrichi avec `JSON.stringify(confirmedModifiers ?? null)`
+
+**`client/src/components/CombatModifiersWindow.jsx` — réécriture complète :**
+- Titre : `{tireurToken.label} — Assaut — {cibleToken.label}`
+- Pill : `{skillLabel} {skillTotal} {formatMod(totalModComp)}` via fetch `/char-sheet/:id/weapon-skill/:weaponInvId` ; fallback `Comp +X`
+- Portée → `<select>` pré-rempli (distance + parseRange PC37/PC38/PE14)
+- Allure tireur → `<select>` auto-détecté depuis `actions` (useCombatStore) + corrigeable
+- Allure cible → `<select>` auto-détecté + corrigeable
+- Couverture + Obscurité → checkboxes (inchangées)
+- Taille → `<select>`
+- `confirmedModifiers.situation` : sitKeys allures + couvertures + obscurités
+- Haiku fix navigateur : Vite cache — hard refresh `Ctrl+Shift+R` requis si fenêtre inchangée visuellement
+
+**Validé Saar ✅ après hard refresh navigateur**

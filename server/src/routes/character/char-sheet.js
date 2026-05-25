@@ -31,10 +31,11 @@ import { Router } from 'express'
 import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
-import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty } from '../../lib/charStats.js'
+import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal } from '../../lib/charStats.js'
+import { resolveWoundInsertion, isShockTestRequired } from '../../lib/woundUtils.js'
 import { WS } from '../../../../shared/events.js'
 import {
-  WOUND_LOCATIONS, WOUND_SEVERITIES, WOUND_MAX_COUNTS,
+  WOUND_LOCATIONS, WOUND_SEVERITIES,
 } from '../../../../shared/woundConstants.js'
 
 const router = Router()
@@ -613,53 +614,7 @@ router.delete('/:characterId/advantages/:id', async (req, res, next) => {
   }
 })
 
-// ─── Helpers blessures ────────────────────────────────────────────────────────
-
-function isShockTestRequired(severity, location) {
-  if (severity === 'critique' || severity === 'mortelle') return true
-  if (severity === 'grave' && (location === 'tete' || location === 'corps')) return true
-  return false
-}
-
-function nextSeverity(severity) {
-  const idx = WOUND_SEVERITIES.indexOf(severity)
-  return idx < WOUND_SEVERITIES.length - 1 ? WOUND_SEVERITIES[idx + 1] : null
-}
-
-// Récursif — résout la promotion en cascade dans une transaction knex.
-// Promotion automatique : dès que le clic remplirait la ligne (count >= maxCount-1),
-// on promeut immédiatement — le joueur ne voit jamais une ligne pleine (LdB).
-// Exception : ligne mortelle (pas de gravité supérieure) — insertion normale jusqu'au max, AppError au-delà.
-async function resolveWoundInsertion(trx, char_sheet_id, location, severity) {
-  const maxCount = WOUND_MAX_COUNTS[location]?.[severity]
-  if (!maxCount) throw new AppError(400, `Gravité "${severity}" invalide pour "${location}"`)
-
-  const { count } = await trx('character_wounds')
-    .where({ char_sheet_id, location, severity })
-    .count('* as count')
-    .first()
-
-  const currentCount = parseInt(count)
-  const next = nextSeverity(severity)
-
-  // Promotion automatique : ajouter cette blessure remplirait la ligne ET il existe une gravité supérieure
-  if (next && currentCount >= maxCount - 1) {
-    // Supprimer toutes (y compris stabilisées — comportement LdB confirmé)
-    await trx('character_wounds').where({ char_sheet_id, location, severity }).del()
-    const result = await resolveWoundInsertion(trx, char_sheet_id, location, next)
-    return { ...result, promoted: true }
-  }
-
-  // Ligne mortelle pleine (pas de gravité supérieure) — refus explicite
-  if (currentCount >= maxCount) {
-    throw new AppError(400, 'Ligne pleine — gravité maximale atteinte pour cette localisation')
-  }
-
-  const [wound] = await trx('character_wounds')
-    .insert({ char_sheet_id, location, severity, is_stabilized: false })
-    .returning('*')
-  return { wound, promoted: false }
-}
+// ─── Helpers blessures — voir server/src/lib/woundUtils.js ──────────────────
 
 // ─── GET /api/char-sheet/:characterId/wounds ─────────────────────────────────
 router.get('/:characterId/wounds', async (req, res, next) => {
@@ -878,6 +833,46 @@ router.get('/:characterId/inventory', async (req, res, next) => {
       ini_penalty:  iniPenalty,
       threshold,
     })
+  } catch (err) { next(err) }
+})
+
+// ─── GET /api/char-sheet/:characterId/weapon-skill/:weaponInvId ──────────────
+// Retourne la compétence associée à une arme + le total de la compétence du personnage.
+// Utilisé par CombatModifiersWindow pour afficher "ArmedePoing 12 +3" dans le pill.
+router.get('/:characterId/weapon-skill/:weaponInvId', async (req, res, next) => {
+  try {
+    const { characterId, weaponInvId } = req.params
+    const empty = { skillId: null, skillLabel: null, skillTotal: null }
+
+    const weaponItem = await db('char_inventory')
+      .where({ id: weaponInvId, character_id: characterId })
+      .first()
+    if (!weaponItem) return res.json(empty)
+
+    const skillAssoc = await db('ref_equipment_skill_assoc')
+      .where({ item_id: weaponItem.equipment_id })
+      .first()
+    if (!skillAssoc) return res.json(empty)
+
+    const refSkill = await db('ref_skills').where({ id: skillAssoc.skill_id }).first()
+    if (!refSkill) return res.json(empty)
+
+    const sheet = await db('char_sheet').where({ character_id: characterId }).first()
+    if (!sheet) return res.json(empty)
+
+    const [attrs, charSkill, archetype] = await Promise.all([
+      db('char_attributes').where({ char_sheet_id: sheet.id }).select('*'),
+      db('char_skills').where({ char_sheet_id: sheet.id, skill_id: skillAssoc.skill_id }).first(),
+      db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+    ])
+
+    const genotypeRow = archetype?.genotype_id
+      ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
+      : null
+
+    const skillTotal = calcSkillTotal(attrs, charSkill, refSkill, genotypeRow)
+
+    res.json({ skillId: refSkill.id, skillLabel: refSkill.label, skillTotal })
   } catch (err) { next(err) }
 })
 

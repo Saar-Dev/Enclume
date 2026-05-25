@@ -16,6 +16,12 @@ export const SLOT_TO_REF_LOCATION = {
   '2M': 'M', Tr: 'M',
 }
 
+export const SLOT_TO_WOUND_LOCATION = {
+  T: 'tete', C: 'corps',
+  BD: 'bras_droit', BG: 'bras_gauche',
+  JD: 'jambe_droite', JG: 'jambe_gauche',
+}
+
 export const LOCATION_TO_SVG = {
   tete: 'head', corps: 'body',
   bras_gauche: 'left-arm', bras_droit: 'right-arm',

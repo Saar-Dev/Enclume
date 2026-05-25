@@ -391,3 +391,23 @@ export function calcCarenceArmure(equippedItems, forNA) {
   const worstMinStr = equippedItems.reduce((acc, i) => Math.max(acc, i.ref_min_str ?? 0), 0)
   return Math.max(0, worstMinStr - forNA)
 }
+
+// ─── Test de Choc — LdB p.239 ────────────────────────────────────────────────
+// is_lethal = dégâts nets >= 30 (blessure mortelle par impact direct — membre détruit)
+const MEMBER_LOCATIONS = ['bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']
+
+export function getShockMalus(severity, location, is_lethal) {
+  if (is_lethal && MEMBER_LOCATIONS.includes(location)) return -10
+  if (severity === 'grave') return location === 'tete' ? -5 : 0
+  if (severity === 'critique') {
+    if (location === 'tete')  return -10
+    if (location === 'corps') return -5
+    return 0
+  }
+  if (severity === 'mortelle') {
+    if (location === 'tete')  return -15
+    if (location === 'corps') return -10
+    return -5
+  }
+  return 0
+}
