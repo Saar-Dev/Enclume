@@ -1,5 +1,26 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-05-23 Session 62
+> Dernière mise à jour : 2026-05-25 Session 64
+
+---
+
+## Chantier Documentation — Refonte architecture docs (Session 64+)
+
+Objectif : réduire la pression contexte IA, éliminer les lectures nominales sans intégration, zéro perte de donnée.
+
+| Étape | Tâche | Règle | État |
+|---|---|---|---|
+| 1 | Archiver `JOURNAL2.md` → `Old/JOURNAL2.md` + créer `JOURNAL3.md` (état session 64) | Doublon obligatoire — JOURNAL2 conservé intégralement en archive | 🔲 |
+| 2 | Éclater `SYSTEME.md` → `docs/SYSTEME/` (COMBAT, DICE, BLESSURES, ENTITES, INVENTAIRE, PERSONNAGE) | Doublon obligatoire — SYSTEME.md original conservé jusqu'à vérification complète | 🔲 |
+| 3 | Créer `docs/GLOSSAIRE.md` (termes RPG Polaris → mapping code + identifiants techniques disambiguation) | Nouveau fichier, pas de migration | 🔲 |
+| 4 | Réécrire `CLAUDE.md` (protocole + 5 pièges critiques seulement + pointeurs vers SYSTEME/) | Doublon obligatoire — ancienne version conservée pendant transition | 🔲 |
+| 5 | Mettre à jour toutes les cross-références (EN_COURS, ASBUILT, ROADMAP → nouveaux chemins SYSTEME/) | Après validation étapes 1-4 | 🔲 |
+| 6 | Supprimer les doublons de transition (SYSTEME.md original, Old/JOURNAL2.md si voulu) | Après validation étape 5 | 🔲 |
+
+**Protocole d'exécution (par étape) :**
+- JOURNALTEMPORAIRE.md utilisé comme mémoire externe de travail — effacé en fin de chantier
+- Pattern : collecter une info → l'écrire dans le doc cible → effacer de la mémoire → boucle
+- Boucle analyse post-rédaction : relire le doc produit, vérifier couverture vs source, itérer
+- Ne jamais passer à l'étape N+1 sans confirmation que N est complet et sans perte
 
 ---
 
