@@ -168,30 +168,83 @@ Utilisé dans `COMBAT_ACTION_CONFIRM` pour convertir le slotCode issu du jet de 
 
 ---
 
+## Colonnes état combat_roster — Persistance
+
+Cinq colonnes TEXT enum sur `combat_roster`, toutes NOT NULL avec DEFAULT.
+
+| Colonne | Migration | CHECK values | Default | Persistance | Reset endTurn |
+|---|---|---|---|---|---|
+| `state_position` | 56 | `'standing'\|'crouching'\|'prone'` | `'standing'` | **par tour** | → `'standing'` |
+| `state_weapon` | 56 | `'holstered'\|'ready'\|'drawn'` | `'holstered'` | **combat** | inchangé |
+| `state_fire_mode` | 58 | `'cc'\|'rc'\|'rl'` | `'cc'` | **combat** | inchangé |
+| `state_cover` | 58 | `'exposed'\|'partial'\|'important'` | `'exposed'` | **par tour** | → `'exposed'` |
+| `state_vitesse` | 58 | `'normal'\|'delayed'\|'rushed'` | `'normal'` | **par tour** | → `'normal'` |
+
+**Règle :** `state_weapon` et `state_fire_mode` survivent entre les tours (posture d'arme réelle). `state_position`, `state_cover`, `state_vitesse` se réinitialisent à chaque nouveau tour.
+
+**Labels UI (français) :**
+- `state_position` : `'standing'`→ Debout, `'crouching'`→ Accroupi, `'prone'`→ Couché
+- `state_weapon` : `'holstered'`→ Rangée, `'ready'`→ Main sur l'arme, `'drawn'`→ Au clair
+- `state_fire_mode` : `'cc'`→ Coup par coup, `'rc'`→ Rafale courte, `'rl'`→ Rafale longue
+- `state_cover` : `'exposed'`→ Découvert, `'partial'`→ Partielle (50%), `'important'`→ Importante (75%)
+- `state_vitesse` : `'normal'`→ Normale, `'delayed'`→ Retardée, `'rushed'`→ Précipitée
+
+**Matrices de transition INI :**
+```
+POSITION:
+  standing  → { crouching: -3, prone: -5 }
+  crouching → { standing:  -3, prone: -5 }
+  prone     → { standing: -10, crouching: -10 }
+
+WEAPON:
+  holstered → { ready: -3, drawn: -5 }
+  ready     → { holstered: -5, drawn: -3 }
+  drawn     → { holstered: -10, ready: -3 }
+
+FIRE_MODE: tout changement → -3
+
+COVER: aucun coût INI (flag défensif pur, affecte les tireurs adverses en Phase 2)
+
+VITESSE:
+  delayed  → 0 (ordre spécial : résolution en fin de round)
+  normal   → 0
+  rushed   → +3 INI / −5 Modificateur de Compétence en Phase 2
+```
+
+**Effets Phase 2 :**
+- `state_vitesse = 'rushed'` : +3 CDR à la déclaration, −5 à tous les tests d'action en résolution
+- `state_vitesse = 'delayed'` : pas de modification INI, mais l'acteur est repoussé en fin d'ordre de résolution (logique custom endTurn V2)
+- `state_cover != 'exposed'` : modificateur défensif appliqué aux jets des tireurs adverses (table COUVERTURES dans CombatModifiersWindow)
+
+---
+
 ## state_character JSONB — combat_roster (migration 57)
 
-Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combinables.
+Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combinables pour statuts volatils.
 
 **Flags définis :**
 | Flag | Per-turn | Effet |
 |---|---|---|
-| `is_rushed` | oui (effacé à endTurn) | −5 Modificateur de Compétence au jet d'attaque |
 | `is_stunned` | non (persistant) | −5 actions, allure moyenne max, ne peut pas attaquer |
 | `is_rooted` | non | déplacement impossible |
-| `is_delayed` | oui | action retardée (V2) |
+
+⚠️ **`is_rushed` supprimé** — migré vers `state_vitesse = 'rushed'` (migration 58). Toute lecture `state_character?.is_rushed` → remplacer par `rosterEntry.state_vitesse === 'rushed'`.
 
 **PC39 — Règles obligatoires :**
 - Clé absente = `false`. **Ne jamais stocker `false` explicitement.**
-- Merge : `db.raw('state_character || ?::jsonb', [JSON.stringify({ is_rushed: true })])`
-- Suppression flag : `db.raw("state_character - 'is_rushed'")`
-- **Jamais** `UPDATE SET state_character = '{"is_rushed":true}'` — écrase tous les autres flags.
+- Merge : `db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })])`
+- Suppression flag : `db.raw("state_character - 'is_stunned'")`
+- **Jamais** `UPDATE SET state_character = '{"is_stunned":true}'` — écrase tous les autres flags.
 
-**Distinct de :** `state_position` (TEXT enum `standing/crouching/prone`) et `state_weapon` (TEXT enum `holstered/ready/drawn`) — ces deux colonnes sont exclusives, migration 56.
-
-**endTurn :** effacer uniquement les flags per-turn :
+**endTurn :** reset colonnes per-turn + nettoyage JSONB :
 ```js
-await db('combat_roster').where({ campaign_id })
-  .update({ state_character: db.raw("state_character - 'is_rushed'") })
+await db('combat_roster').where({ campaign_id, status: 'active' }).update({
+  state_position: 'standing',
+  state_cover:    'exposed',
+  state_vitesse:  'normal',
+  // state_weapon et state_fire_mode : inchangés (persistent)
+  // state_character : pas de flags per-turn définis en V1
+})
 ```
 
 ---
@@ -295,43 +348,60 @@ GET /battlemaps/:battlemapId/combat-ini → { iniPreview: [{ token_id, base_ini 
 
 ---
 
-## COMBAT_ACTION_DECLARE — payload complet
+## COMBAT_ACTION_DECLARE — payload v2
+
+⚠️ **Payload v2 (sprint Panel Joueur).** Payload v1 (`selectedKeys`) supprimé — pas de rétrocompat.
 
 ```javascript
 socket.emit(WS.COMBAT_ACTION_DECLARE, {
-  tokenId,           // token déclarant
-  selectedKeys,      // string[] — clés d'actions (voir KEY_MOD ci-dessous)
-  moveAction,        // { targetPosX, targetPosY, targetPosZ } | null — déplacement déclaré (coords PE14)
-  weaponInvId,       // char_inventory.id de l'arme (obligatoire si 'assault' dans selectedKeys)
-  targetTokenId,     // token cible (obligatoire pour assaut)
-  fireMode,          // 'CC' | 'RC' | 'RL' — cadence de tir
-  bulletCount,       // nombre de balles consommées (RC/RL)
-  fireModeBonusComp, // bonus Compétence du mode de tir (calculé côté client)
-  fireModeBonusDmg,  // bonus Dommages du mode de tir (calculé côté client)
-  isDualWield,       // bool — tir dual wield
-  dualWieldBonusComp // bonus Compétence dual wield (calculé côté client)
+  tokenId,        // token déclarant
+  state: {
+    position:  'standing'|'crouching'|'prone',
+    weapon:    'holstered'|'ready'|'drawn',
+    fire_mode: 'cc'|'rc'|'rl',
+    cover:     'exposed'|'partial'|'important',
+    vitesse:   'normal'|'delayed'|'rushed',
+  },
+  mapActions: {
+    move:     { targetPosX, targetPosY, targetPosZ, ini_mod, action_key } | null,  // coords PE14
+    attack:   {
+      weaponInvId,         // char_inventory.id de l'arme (slot MG ou MD)
+      targetTokenId,       // token cible
+      bulletCount,         // nombre de balles (CC/RC/RL)
+      fireModeBonusComp,   // bonus Compétence (calculé client — recalculé serveur)
+      fireModeBonusDmg,    // bonus Dommages (calculé client — recalculé serveur)
+      isDualWield,         // bool
+      dualWieldBonusComp,  // bonus Comp dual wield (calculé client)
+      cover_shot,          // bool — tirer depuis sa couverture (conditionnel : cover != 'exposed')
+    } | null,
+    melee:    bool,  // corps à corps (-3 INI serveur)
+    multi:    bool,  // attaque multiple (-5 INI serveur) — V2
+    interact: bool,  // interagir (pas de target_entity_id ce sprint — implémenté sprint suivant)
+  },
+  quick: {
+    observer: number,  // tranches 0–6 (0 = non sélectionné)
+    reperer:  number,  // tranches 0–6
+    phrase:   bool,
+  }
 })
 ```
 
-### KEY_MOD — table complète des clés d'actions (socket/index.js)
-
-Modifie `totalDiffMod` dans la résolution de compétence :
-
-```javascript
-const KEY_MOD = {
-  rushed:              +3,
-  micro_draw_ready:    -3,  micro_draw:         -5,
-  micro_phrase:        -3,  micro_fire_mode:    -3,
-  micro_observe_5:     -5,  micro_observe_10:  -10,  micro_observe_15: -15,  micro_observe_20: -20,
-  micro_locate_5:      -5,  micro_locate_10:  -10,  micro_locate_15:  -15,  micro_locate_20:  -20,
-  micro_mechanism_3:   -3,  micro_mechanism_5:  -5,
-  crouch:              -3,  dive:               -5,  stand_up:         -10,  take_cover:        -3,
-  assault:              0,  close_combat:       -3,
-  cover_shot_3:        -3,  cover_shot_5:       -5,
-}
+**Calcul INI serveur (recalcul strict) :**
 ```
+iniDelta = transitionCost(state_position) + transitionCost(state_weapon)
+         + transitionCost(state_fire_mode)
+         + (state_vitesse === 'rushed' ? +3 : 0)
+         + (mapActions.move ? ini_mod : 0)
+         + (mapActions.melee ? -3 : 0)
+         + (mapActions.multi ? -5 : 0)
+         + (mapActions.attack?.cover_shot ? (cover==='partial' ? -3 : -5) : 0)
+         + quick.observer * -5
+         + quick.reperer * -5
+         + (quick.phrase ? -3 : 0)
+```
+Le client affiche un breakdown INI indicatif — le serveur recalcule strictement, jamais trusted.
 
-⚠️ `rushed` ici = action déclarée "en hâte" (+3 CDR, bonus). Distinct de `state_character.is_rushed` (flag état, −5 Compétence, appliqué séparément).
+**PC28 :** les valeurs `state.*` du payload = nouvelles valeurs demandées (état cible). Le serveur UPDATE `combat_roster` avec ces valeurs + calcule l'iniDelta depuis les valeurs précédentes en DB.
 
 ### FIRE_MODE_VARIANTS — table complète (LdB p.227-228)
 

@@ -170,3 +170,53 @@ Refonte architecture docs — voir ROADMAP.md § "Chantier Documentation".
 - Filtre layer GM : `tokens.filter(t => isGm || t.layer !== 'gm')` — joueurs ne voient pas layer GM
 - Entity textures : fakeTexObjs `{ id:'bp.id__base', pack_id, faces }` + `{ id:'bp.id__state_X', ... }` → loadVoxelTextures → structured `{ base, states:{stateId: materials} }` — P26 confirmé (setBlocksReady(true) toujours en fin)
 
+---
+
+## Session 65 — Sprint 7.6 : Actions d'état dynamiques (fenêtre joueur v2)
+
+**Objectif :** Remplacer le système clé plate (selectedKeys/KEY_MOD) par des sélecteurs d'état avec matrices de transition INI. Payload v2 : `{ tokenId, state:{}, mapActions:{}, quick:{} }`.
+
+**Réalisé (session 65) :**
+
+*Migration 58 (`server/src/db/migrations/58_combat_v4.js`)* ✅
+- Ajout colonnes `state_cover`, `state_fire_mode`, `state_vitesse` sur `combat_roster`
+- Contraintes CHECK + backfill `state_vitesse='rushed'` depuis `state_character->>'is_rushed'`
+- (state_position + state_weapon déjà présents depuis migration 56)
+
+*`client/src/components/combatSections.js`* ✅ — réécriture complète
+- `STATE_DEFS` : 5 états (position/weapon/fire_mode/cover/vitesse) avec matrices coût asymétriques
+- `stateTransitionCost(def, from, to)` + `calcIniDelta(prevStates, nextStates, mapActions, quick)`
+- `MAP_ACTIONS` : multi-select (non exclusif), move/attack/melee/multi/interact
+- `QUICK_ACTIONS` : observer/reperer incrémentaux (max 6), phrase fixe
+- Suppression : KEY_MOD, SECTIONS, formatMod (remplacés par les nouvelles exports)
+
+*`client/src/components/CombatActionWindow.jsx`* ✅ — réécriture complète (~600 lignes)
+- `StateSelector` sub-composant (segmented control avec coût de transition affiché)
+- Bloc TACTIQUE : position / couverture / vitesse
+- Bloc ARMEMENT : weapon (verrouillé si attack/melee via QB) / fire_mode (grisé si modes indisponibles)
+- Bloc ACTION : MAP_ACTIONS multi-select + cover_shot conditionnel
+- Bloc ACTIONS RAPIDES : sliders observer/reperer + toggle phrase
+- Footer : INI delta coloré + bouton "Déclarer l'action"
+- QB (Quick Behavior) : attack/melee → weapon='drawn' automatique + revert sur désélection
+- `initialStates` ref : synced depuis rosterEntry sur changement de token
+- Emit v2 : `{ tokenId, state, mapActions, quick }`
+
+*`server/src/socket/index.js`* ✅ — 3 changements
+- COMBAT_ACTION_DECLARE v2 : handler réécrit pour payload `{ tokenId, state, mapActions, quick }`, matrices STATE_COSTS serveur-miroir de combatSections.js, calcul iniDelta serveur, UPDATE state_position/weapon/fire_mode/cover/vitesse + initiative, INSERT combat_actions par action (move/attack/melee/multi/interact/observer/reperer/phrase)
+- endTurn : remplacement `state_character - 'is_rushed'` → reset `state_position='standing', state_cover='exposed', state_vitesse='normal'`
+- resolveAssaultAction : `rosterTireur?.state_character?.is_rushed` → `rosterTireur?.state_vitesse === 'rushed'`
+
+*`client/src/components/CombatModifiersWindow.jsx`* ✅ — 1 ligne
+- `activeRosterEntry?.state_character?.is_rushed` → `activeRosterEntry?.state_vitesse === 'rushed'`
+
+*`client/src/components/CombatGmDeclareWindow.jsx`* ✅ — adapté v2
+- Suppression imports KEY_MOD/SECTIONS/formatMod (n'existent plus)
+- Nouveau : sélection MAP_ACTIONS (melee/multi/interact) + QUICK_ACTIONS avec sliders
+- Emit v2 avec états courants du roster (pas de changement d'état depuis la GM window)
+- Note : attack et move non disponibles dans la GM window (nécessitent UI dédiée — sprint futur)
+
+**Migration 58 lancée et validée ✅**
+**Sprint 7.6 CONFIRMÉ FONCTIONNEL ✅**
+
+Bug résolu : `if (next.has(key)) next.delete(key) else next.add(key)` → accolades obligatoires (OXC reject).
+

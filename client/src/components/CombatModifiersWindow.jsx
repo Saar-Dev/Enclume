@@ -156,7 +156,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   }, [assaultAction, tireurToken, cibleToken])
 
   const effectivePortee   = porteeOverride ?? prefilledPortee?.porteeKey ?? null
-  const isRushed          = activeRosterEntry?.state_character?.is_rushed
+  const isRushed          = activeRosterEntry?.state_vitesse === 'rushed'
   const tireurAllureDef   = TIREUR_ALLURES.find(a => a.val === tireurAllureVal)
   const cibleAllureDef    = CIBLE_ALLURES.find(a => a.val === cibleAllureVal)
 

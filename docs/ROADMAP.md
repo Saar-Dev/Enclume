@@ -194,8 +194,10 @@ Module Armes ← 🔲 Chantier 11 Étape 2
 | Sprint 5 | Serveur COMBAT_ACTION_DECLARE : moveAction, actionRows bulk (1 ligne/action), KEY_MOD nettoyé, PC33, modifiers:{ini_mod} JSONB + fix SURPRISE_RESULT/skipPlayer/startResolutionPhase (migration 56) | ✅ session 62 |
 | Sprint 6 | Phase Résolution : startResolutionPhase complet, COMBAT_ACTION_CONFIRM (déplacement Redis + boucle slots), advanceSlot, endTurn → retour ANNOUNCEMENT, UI joueur (recap + Agir) + panneau GM slot actif | ✅ session 62 |
 | Sprint 7.1 | Déclaration Assaut UI : CombatActionWindow Kiwi-style (360→720px), armes auto MG/MD, sélection cible canvas, cadence CC/RC/RL, dual-wield, migration 57 | ✅ session 64 |
-| Sprint 7.2 | CombatModifiersWindow : portée, situation, taille cible | 🔲 |
-| Sprint 7.3 | Résolution assaut serveur : LOS, jets, dégâts, blessures, carence FOR | 🔲 |
+| Sprint 7.2 | CombatModifiersWindow : portée, situation, taille cible, fetch weapon-skill, guard ownership | ✅ session 64 |
+| Sprint 7.3 | resolveAssaultAction serveur : jet attaque, DICE_RESULT broadcast, bifurcation PJ/PNJ, pendingDamageActions, bug fix skillAssoc | ✅ session 64 |
+| Sprint 7.4 | COMBAT_DAMAGE_CONFIRM handler (loc + armures PI8 + dégâts + blessures + shockTest) + CombatDamageWindow (3 phases) | ✅ session 64 |
+| Sprint 7.4bis | Jet de toucher interactif côté joueur (COMBAT_ATTACK_PLAYER_RESULT, CombatModifiersWindow refactorisé, CombatOverlay PJ/GM séparés) | ✅ session 64 |
 | Sprint 7.5 | Décompte munitions | 🔲 |
 | Sprint 7.6 | Actions d'état dynamiques : state_weapon + state_position pilotent les actions visibles | 🔲 |
 
@@ -269,8 +271,10 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
 | Bug A | Toggle visible character non répercuté en temps réel | ✅ session 44 |
 | Bug B | Modification faces voxel existant non exposée dans UI | 🔲 |
 | Bug WebGL | Context Lost au switch play/edit — non bloquant | documenté |
+| Bug surprise | roll=1 → initiative=1 (agit en dernier) — sémantique PJ surpris à revoir | 🔲 |
 | Dette | EntityEditorOLD.jsx commité par erreur — à supprimer | ✅ session 44 |
 | Dette | .gitattributes:3 attribut invalide — à corriger | 🔲 |
+| Dette arch. | `pendingDamageActions` Map in-memory — données perdues si redémarrage serveur entre ATTACK_PLAYER_RESULT et DAMAGE_CONFIRM — persister en DB ou Redis | 🔲 |
 
 ---
 

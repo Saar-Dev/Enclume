@@ -1511,36 +1511,31 @@ const initSocket = (io) => {
       }
     })
 
-    // ─── COMBAT:ACTION_DECLARE ────────────────────────────────────────────
+    // ─── COMBAT:ACTION_DECLARE v2 ─────────────────────────────────────────
     // Joueur (ou GM pour un PNJ) déclare son action pendant la phase ANNOUNCEMENT.
-    // Payload : { tokenId, selectedKeys: string[], moveAction?, weaponInvId? }
-    // moveAction : { action_key, ini_mod, targetPosX, targetPosY, targetPosZ } — coords DB PE14
-    socket.on(WS.COMBAT_ACTION_DECLARE, async ({ tokenId, selectedKeys: rawKeys, moveAction, weaponInvId, targetTokenId, fireMode, bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp }) => {
+    // Payload v2 : { tokenId, state:{position,weapon,fire_mode,cover,vitesse}, mapActions:{move?,attack?,melee?,multi?,interact?}, quick:{observer,reperer,phrase} }
+    socket.on(WS.COMBAT_ACTION_DECLARE, async ({ tokenId, state, mapActions, quick }) => {
       const campaignId = socket.campaignId
       try {
-        // KEY_MOD — synchronisé avec combatSections.js côté client
-        const KEY_MOD = {
-          rushed:              3,
-          micro_draw_ready:   -3,  micro_draw:        -5,
-          micro_phrase:       -3,  micro_fire_mode:   -3,
-          micro_observe_5:    -5,  micro_observe_10: -10,  micro_observe_15: -15,  micro_observe_20: -20,
-          micro_locate_5:     -5,  micro_locate_10:  -10,  micro_locate_15:  -15,  micro_locate_20:  -20,
-          micro_mechanism_3:  -3,  micro_mechanism_5: -5,
-          crouch:             -3,  dive:              -5,   stand_up:        -10,  take_cover:        -3,
-          assault:             0,  close_combat:      -3,
-          cover_shot_3:       -3,  cover_shot_5:      -5,
+        if (!tokenId || !state) return
+
+        // Valeurs autorisées par état
+        const VALID_STATES = {
+          position:  ['standing', 'crouching', 'prone'],
+          weapon:    ['holstered', 'ready', 'drawn'],
+          fire_mode: ['cc', 'rc', 'rl'],
+          cover:     ['exposed', 'partial', 'important'],
+          vitesse:   ['normal', 'delayed', 'rushed'],
+        }
+        for (const [k, vals] of Object.entries(VALID_STATES)) {
+          if (state[k] && !vals.includes(state[k])) return
         }
 
-        if (!Array.isArray(rawKeys)) return
-        const selectedKeys = rawKeys.filter(k => k in KEY_MOD)
-        // Guard canDeclare — au moins une key valide ou un moveAction
-        if (selectedKeys.length === 0 && !moveAction) return
-
-        // PC33 — si moveAction fourni, coordonnées doivent être des entiers valides (coords DB PE14)
-        if (moveAction) {
-          const px = parseInt(moveAction.targetPosX)
-          const py = parseInt(moveAction.targetPosY)
-          const pz = parseInt(moveAction.targetPosZ)
+        // PC33 — coordonnées déplacement obligatoires si move (coords DB PE14)
+        if (mapActions?.move) {
+          const px = parseInt(mapActions.move.targetPosX)
+          const py = parseInt(mapActions.move.targetPosY)
+          const pz = parseInt(mapActions.move.targetPosZ ?? 0)
           if (isNaN(px) || isNaN(py) || isNaN(pz)) {
             socket.emit('error', { message: 'Coordonnées de déplacement invalides (PC33)' })
             return
@@ -1557,7 +1552,6 @@ const initSocket = (io) => {
         if (character.type === 'pnj') {
           if (socket.role !== 'gm') return
         } else {
-          // PJ — vérification ownership (P1)
           if (character.user_id !== socket.user.id) return
         }
 
@@ -1566,9 +1560,10 @@ const initSocket = (io) => {
           .first()
         if (!entry || entry.has_announced) return
 
-        // PC22 — guard arme (slot MG/MD obligatoire pour assaut) + PC23 (TIR_AUTOMATIQUE)
+        // PC22 — arme requise pour assaut + PC23 (TIR_AUTOMATIQUE pour RC/RL)
         let assaultWeaponRefRange = null
-        if (selectedKeys.includes('assault')) {
+        if (mapActions?.attack) {
+          const { weaponInvId } = mapActions.attack
           if (!weaponInvId) {
             socket.emit('error', { message: 'Arme requise pour un assaut (PC22)' })
             return
@@ -1579,19 +1574,20 @@ const initSocket = (io) => {
             .select('char_inventory.slot', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
             .first()
           if (!weapon) {
-            socket.emit('error', { message: 'Arme introuvable dans l\'inventaire (PC22)' })
+            socket.emit('error', { message: "Arme introuvable dans l'inventaire (PC22)" })
             return
           }
           if (weapon.slot !== 'MG' && weapon.slot !== 'MD') {
-            socket.emit('error', { message: 'L\'arme doit être équipée (slot MG ou MD) (PC22)' })
+            socket.emit('error', { message: "L'arme doit être équipée (slot MG ou MD) (PC22)" })
             return
           }
-          if (fireMode && !weapon.ref_fire_mode?.includes(fireMode)) {
+          // fire_mode vient de state.fire_mode (v2) — comparaison insensible à la casse
+          const fireMode = (state.fire_mode ?? 'cc').toUpperCase()
+          if (!weapon.ref_fire_mode?.toUpperCase().includes(fireMode)) {
             socket.emit('error', { message: `Mode de tir ${fireMode} non disponible pour cette arme` })
             return
           }
           assaultWeaponRefRange = weapon.ref_range ?? null
-
           // PC23 — TIR_AUTOMATIQUE requis pour RC/RL
           if (fireMode === 'RC' || fireMode === 'RL') {
             const sheet = await db('char_sheet').where({ character_id: character.id }).first()
@@ -1603,114 +1599,147 @@ const initSocket = (io) => {
               return
             }
           }
-        } else if (weaponInvId) {
-          const weapon = await db('char_inventory')
-            .where({ id: weaponInvId, character_id: character.id })
-            .first()
-          if (!weapon) {
-            socket.emit('error', { message: 'Arme introuvable dans l\'inventaire' })
-            return
-          }
         }
 
-        // Helpers séquence et type (PC32 — sequence attribué serveur)
-        const getSequence = (key) => {
-          if (key.startsWith('move_')) return 1
-          if (key === 'assault' || key === 'close_combat') return 3
-          return 2
+        // Matrices de coût de transition INI (miroir de STATE_DEFS dans combatSections.js)
+        const STATE_COSTS = {
+          position:  { standing: { crouching: -3, prone: -5 }, crouching: { standing: -3, prone: -5 }, prone: { standing: -10, crouching: -10 } },
+          weapon:    { holstered: { ready: -3, drawn: -5 }, ready: { holstered: -5, drawn: -3 }, drawn: { holstered: -10, ready: -3 } },
+          fire_mode: { cc: { rc: -3, rl: -3 }, rc: { cc: -3, rl: -3 }, rl: { cc: -3, rc: -3 } },
+          cover:     {},
+          vitesse:   { delayed: { normal: 0, rushed: 3 }, normal: { delayed: 0, rushed: 3 }, rushed: { delayed: 0, normal: 0 } },
         }
-        // getType dérive la valeur pour la CHECK constraint SQL héritée (migration 54)
+        const transitionCost = (costs, from, to) => from === to ? 0 : (costs?.[from]?.[to] ?? 0)
+
+        let iniDelta = 0
+        for (const key of ['position', 'weapon', 'fire_mode', 'cover', 'vitesse']) {
+          const from = entry['state_' + key]
+          const to   = state[key] ?? from
+          iniDelta += transitionCost(STATE_COSTS[key], from, to)
+        }
+        if (mapActions?.move)  iniDelta += mapActions.move.ini_mod ?? 0
+        if (mapActions?.melee) iniDelta += -3
+        if (mapActions?.multi) iniDelta += -5
+        if (mapActions?.attack?.cover_shot) {
+          iniDelta += state.cover === 'important' ? -5 : -3
+        }
+        iniDelta += (quick?.observer ?? 0) * -5
+        iniDelta += (quick?.reperer  ?? 0) * -5
+        if (quick?.phrase) iniDelta += -3
+
+        // Construction des lignes combat_actions (PC32 — sequence attribué serveur)
         const getType = (key) => {
           if (key === 'assault') return 'assault'
-          if (key === 'skip') return 'skip'
           if (key === 'move_lente') return 'move_short'
           if (key.startsWith('move_')) return 'move_long'
           return 'micro'
         }
 
-        // Construction des lignes combat_actions — 1 ligne par action (command queue, PC32)
         const actionRows = []
 
-        for (const key of selectedKeys) {
-          if (key === 'assault') {
-            // Ligne enrichie avec toutes les données assaut (Sprint 7.1)
-            actionRows.push({
-              campaign_id:          campaignId,
-              token_id:             tokenId,
-              action_key:           'assault',
-              type:                 'assault',
-              sequence:             3,
-              weapon_inv_id:        weaponInvId ?? null,
-              target_token_id:      targetTokenId ?? null,
-              fire_mode:            fireMode ?? null,
-              bullet_count:         bulletCount ?? null,
-              fire_mode_bonus_comp: fireModeBonusComp ?? null,
-              fire_mode_bonus_dmg:  fireModeBonusDmg ?? null,
-              modifiers:            JSON.stringify({ ini_mod: 0, ref_range: assaultWeaponRefRange, dual_wield: isDualWield ?? false, dual_wield_bonus_comp: dualWieldBonusComp ?? 0 }),
-              status:               'pending',
-            })
-          } else {
-            actionRows.push({
-              campaign_id:   campaignId,
-              token_id:      tokenId,
-              action_key:    key,
-              type:          getType(key),
-              sequence:      getSequence(key),
-              weapon_inv_id: null,
-              modifiers:     JSON.stringify({ ini_mod: KEY_MOD[key] }),
-              status:        'pending',
-            })
-          }
-        }
-
-        if (moveAction) {
-          const px = parseInt(moveAction.targetPosX)
-          const py = parseInt(moveAction.targetPosY)
-          const pz = parseInt(moveAction.targetPosZ)
+        if (mapActions?.move) {
+          const px = parseInt(mapActions.move.targetPosX)
+          const py = parseInt(mapActions.move.targetPosY)
+          const pz = parseInt(mapActions.move.targetPosZ ?? 0)
+          const ak = mapActions.move.action_key
           actionRows.push({
-            campaign_id:   campaignId,
-            token_id:      tokenId,
-            action_key:    moveAction.action_key,
-            type:          getType(moveAction.action_key),
-            sequence:      getSequence(moveAction.action_key),
-            target_pos_x:  px,
-            target_pos_y:  py,
-            target_pos_z:  pz,
-            modifiers:     JSON.stringify({ ini_mod: moveAction.ini_mod ?? 0 }),
-            status:        'pending',
+            campaign_id: campaignId, token_id: tokenId,
+            action_key: ak, type: getType(ak), sequence: 1,
+            target_pos_x: px, target_pos_y: py, target_pos_z: pz,
+            modifiers: JSON.stringify({ ini_mod: mapActions.move.ini_mod ?? 0 }),
+            status: 'pending',
           })
         }
 
-        // ini_mod_total — relatif à l'initiative courante (compat joueurs surpris)
-        const ini_mod_total = selectedKeys.reduce((sum, k) => sum + (KEY_MOD[k] ?? 0), 0)
-          + (moveAction?.ini_mod ?? 0)
-
-        // PC39 — JSONB merge (jamais remplacement direct)
-        const rosterUpdate = {
-          initiative:    db.raw('initiative + ?', [ini_mod_total]),
-          has_announced: true,
-          updated_at:    db.fn.now(),
+        if (mapActions?.attack) {
+          const { weaponInvId, targetTokenId, bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp } = mapActions.attack
+          actionRows.push({
+            campaign_id:          campaignId, token_id: tokenId,
+            action_key:           'assault', type: 'assault', sequence: 3,
+            weapon_inv_id:        weaponInvId ?? null,
+            target_token_id:      targetTokenId ?? null,
+            fire_mode:            state.fire_mode ?? null,
+            bullet_count:         bulletCount ?? null,
+            fire_mode_bonus_comp: fireModeBonusComp ?? null,
+            fire_mode_bonus_dmg:  fireModeBonusDmg ?? null,
+            modifiers:            JSON.stringify({ ini_mod: 0, ref_range: assaultWeaponRefRange, dual_wield: isDualWield ?? false, dual_wield_bonus_comp: dualWieldBonusComp ?? 0 }),
+            status:               'pending',
+          })
         }
-        if (selectedKeys.includes('rushed')) {
-          rosterUpdate.state_character = db.raw('state_character || ?::jsonb', [JSON.stringify({ is_rushed: true })])
+
+        if (mapActions?.melee) {
+          actionRows.push({
+            campaign_id: campaignId, token_id: tokenId,
+            action_key: 'close_combat', type: 'micro', sequence: 3,
+            modifiers: JSON.stringify({ ini_mod: -3 }), status: 'pending',
+          })
         }
 
+        if (mapActions?.multi) {
+          actionRows.push({
+            campaign_id: campaignId, token_id: tokenId,
+            action_key: 'multi_attack', type: 'micro', sequence: 2,
+            modifiers: JSON.stringify({ ini_mod: -5 }), status: 'pending',
+          })
+        }
+
+        if (mapActions?.interact) {
+          actionRows.push({
+            campaign_id: campaignId, token_id: tokenId,
+            action_key: 'interact', type: 'micro', sequence: 2,
+            modifiers: JSON.stringify({ ini_mod: 0 }), status: 'pending',
+          })
+        }
+
+        if ((quick?.observer ?? 0) > 0) {
+          actionRows.push({
+            campaign_id: campaignId, token_id: tokenId,
+            action_key: 'observer', type: 'micro', sequence: 2,
+            modifiers: JSON.stringify({ ini_mod: quick.observer * -5 }), status: 'pending',
+          })
+        }
+
+        if ((quick?.reperer ?? 0) > 0) {
+          actionRows.push({
+            campaign_id: campaignId, token_id: tokenId,
+            action_key: 'reperer', type: 'micro', sequence: 2,
+            modifiers: JSON.stringify({ ini_mod: quick.reperer * -5 }), status: 'pending',
+          })
+        }
+
+        if (quick?.phrase) {
+          actionRows.push({
+            campaign_id: campaignId, token_id: tokenId,
+            action_key: 'phrase', type: 'micro', sequence: 2,
+            modifiers: JSON.stringify({ ini_mod: -3 }), status: 'pending',
+          })
+        }
+
+        // UPDATE combat_roster — états + initiative + has_announced
         const [updated] = await db('combat_roster')
           .where({ campaign_id: campaignId, token_id: tokenId })
-          .update(rosterUpdate)
+          .update({
+            state_position:  state.position  ?? entry.state_position,
+            state_weapon:    state.weapon    ?? entry.state_weapon,
+            state_fire_mode: state.fire_mode ?? entry.state_fire_mode,
+            state_cover:     state.cover     ?? entry.state_cover,
+            state_vitesse:   state.vitesse   ?? entry.state_vitesse,
+            initiative:      db.raw('initiative + ?', [iniDelta]),
+            has_announced:   true,
+            updated_at:      db.fn.now(),
+          })
           .returning(['initiative'])
 
         const updatedInitiative = updated.initiative
 
-        // INSERT bulk — 1 requête pour N lignes
-        await db('combat_actions').insert(actionRows)
+        if (actionRows.length > 0) await db('combat_actions').insert(actionRows)
 
-        // Dériver actionType pour le broadcast (compat client)
+        // Dériver actionType pour le broadcast
         let actionType = 'micro'
-        if (selectedKeys.includes('assault')) actionType = 'assault'
-        else if (moveAction) actionType = getType(moveAction.action_key)
+        if (mapActions?.attack)     actionType = 'assault'
+        else if (mapActions?.move)  actionType = getType(mapActions.move.action_key)
+        else if (mapActions?.melee) actionType = 'close_combat'
 
-        // Bug 1 fix : émettre COMBAT_ACTION_DECLARED AVANT de vérifier PC13
         io.to(campaignId).emit(WS.COMBAT_ACTION_DECLARED, {
           tokenId,
           actionType,
@@ -1733,7 +1762,7 @@ const initSocket = (io) => {
           await startResolutionPhase(io, campaignId)
         }
 
-        console.log(`[WS] combat:action_declare — ${socket.user.username} keys:[${selectedKeys.join(',')}] move:${moveAction?.action_key ?? '-'} ini:${updatedInitiative}`)
+        console.log(`[WS] combat:action_declare v2 — ${socket.user.username} state:${JSON.stringify(state)} iniDelta:${iniDelta} -> ${updatedInitiative}`)
       } catch (err) {
         console.error('[WS] combat:action_declare error:', err.message)
       }
@@ -2145,14 +2174,16 @@ async function advanceSlot(io, campaignId, slots, nextIdx) {
 // PC28 : DELETE combat_actions — queue nettoyée entre chaque tour.
 async function endTurn(io, campaignId) {
   try {
-    // PC18 — reset announced/resolved + nettoyage flags per-tour state_character
+    // PC18 — reset announced/resolved + états per-tour (position/cover/vitesse)
     await db('combat_roster')
       .where({ campaign_id: campaignId, status: 'active' })
       .update({
-        has_announced:   false,
-        has_resolved:    false,
-        state_character: db.raw("state_character - 'is_rushed'"),
-        updated_at:      db.fn.now(),
+        has_announced:  false,
+        has_resolved:   false,
+        state_position: 'standing',
+        state_cover:    'exposed',
+        state_vitesse:  'normal',
+        updated_at:     db.fn.now(),
       })
 
     // PC28 — vider la queue des actions
@@ -2271,7 +2302,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
     const situationModComp = (confirmedModifiers.situation ?? [])
       .reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
     const tailleModComp    = TAILLE_MODS[confirmedModifiers.taille] ?? 0
-    const isRushedMod      = rosterTireur?.state_character?.is_rushed ? -5 : 0  // BUG B
+    const isRushedMod      = rosterTireur?.state_vitesse === 'rushed' ? -5 : 0
     const fireModeComp     = action.fire_mode_bonus_comp ?? 0
     const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp
 

@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-25 Session 64
+> Dernière mise à jour : 2026-05-26 Session 65
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -19,12 +19,12 @@ Enclume/
 │   │   │   ├── CombatOverlay.jsx        # Modifié 64 — Sprint 7.1 : +combatTargetMode. Sprint 7.4bis : refactoring PJ vs GM (playerActiveAssaultAction, gmActiveCharacter), deux CombatModifiersWindow séparés, CombatActionWindow masqué pendant assaut PJ, +attackResult/onAttackConfirmed props
 │   │   │   ├── CombatRosterWindow.jsx  # NOUVEAU 57 — roster GM, INI preview, surpris, exclusion, bouton Démarrer
 │   │   │   ├── CombatTimeline.jsx      # Modifié 62 — timeline INI, portraits cliquables GM, topOffset + curseur slot actif RÉSOLUTION (slotActive, activeSlotIdx)
-│   │   │   ├── CombatActionWindow.jsx  # Modifié 64 — Kiwi-style Assaut : fenêtre 360→720px, armes auto MG/MD, sélection cible canvas (onEnterTargetMode), FIRE_MODE_VARIANTS CC/RC/RL, cadence (radio+slider+A/B / auto / boutons), dual-wield, forceCC, assaultValid
+│   │   │   ├── CombatActionWindow.jsx  # Modifié 65 Sprint 7.6 — réécriture v2 : StateSelector segmented control, blocs TACTIQUE/ARMEMENT/ACTION/RAPIDES, QB weapon auto-drawn, footer INI delta coloré, payload v2 {state,mapActions,quick}
 │   │   │   ├── CombatDamageWindow.jsx  # NOUVEAU 64 Sprint 7.4 — fenêtre PJ lancer dés dégâts : Phase 1 dés vides / Phase 2 animation / Phase 3 résultats colorés
-│   │   │   ├── CombatModifiersWindow.jsx # NOUVEAU 64 Sprint 7.2 (modificateurs assaut). Modifié 64 Sprint 7.4bis — +attackResult/onAttackConfirmed, +isRolling, "Lancer les dés", banner résultat, body masqué post-roll, footer 3 états
+│   │   │   ├── CombatModifiersWindow.jsx # NOUVEAU 64 Sprint 7.2. Modifié 65 Sprint 7.6 — is_rushed → state_vitesse === 'rushed'
 │   │   │   ├── CombatPnjPanel.jsx      # NOUVEAU 58 — modal GM PJs/PNJs read-only, isPnj via character.type
-│   │   │   ├── CombatGmDeclareWindow.jsx # Modifié 59s — accordion always-one-open, auto-progression, liste complète
-│   │   │   ├── combatSections.js       # Modifié 61 — move_short/move_long → isMove item unique
+│   │   │   ├── CombatGmDeclareWindow.jsx # Modifié 65 Sprint 7.6 — adapté v2 : MAP_ACTIONS (melee/multi/interact) + QUICK_ACTIONS sliders, emit v2 avec états courants roster
+│   │   │   ├── combatSections.js       # Modifié 65 Sprint 7.6 — réécriture complète : STATE_DEFS (5 états + matrices coût), stateTransitionCost, calcIniDelta, MAP_ACTIONS multi-select, QUICK_ACTIONS incrémentaux, MOVE_ZONE_DEFS
 │   │   │   ├── Canvas3D.jsx            # Modifié 64 — +combatTargetMode prop, combatTargetModeRef (P40), intercept drag→target, ligne R3F attaquant→cible (useMemo targetLinePoints)
 │   │   │   ├── Editor3D.jsx            # Modifié 9C — EntityEditorScene, activeEditorTab
 │   │   │   ├── EntityMesh.jsx          # Modifié 43 — Lerp 300ms EntityMeshVoxel + EntityMeshGlb
@@ -80,7 +80,7 @@ Enclume/
 │   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # migrations jusqu'à 57 (batch 29)
+│   │   │   ├── migrations/             # migrations jusqu'à 58 (batch 29)
 │   │   │   ├── seeds/
 │   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
@@ -108,7 +108,7 @@ Enclume/
 │   │   │   └── errorHandler.js
 │   │   ├── socket/
 │   │   │   ├── auth.js
-│   │   │   └── index.js                # Modifié 64 — COMBAT_ACTION_DECLARE enrichi Sprint 7.1 (targetTokenId, fireMode, bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield) + endTurn nettoyage state_character per-turn (PC39)
+│   │   │   └── index.js                # Modifié 65 Sprint 7.6 — COMBAT_ACTION_DECLARE v2 (payload {state,mapActions,quick}, matrices STATE_COSTS, UPDATE state_*, iniDelta), endTurn reset colonnes per-tour, is_rushed → state_vitesse
 │   │   ├── lib/
 │   │   │   ├── AppError.js
 │   │   │   ├── minio.js
@@ -198,6 +198,7 @@ Enclume/
 | 55_character_type | characters.type TEXT NOT NULL DEFAULT 'pnj' CHECK ('pj','pnj') + backfill user_id IS NOT NULL → 'pj' |
 | 56_combat_v2 | combat_actions : +action_key TEXT NOT NULL, +sequence SMALLINT, +target_pos_x/y/z INT, −is_micro, −initiative_score, −target_pos, +idx_actions_token/key. combat_roster : +state_position TEXT CHECK ('standing'/'crouching'/'prone'), +state_weapon TEXT CHECK ('holstered'/'ready'/'drawn'). battlemaps : +voxel_scale FLOAT DEFAULT 1.0 |
 | 57_combat_v3 | combat_actions : +fire_mode TEXT, +bullet_count SMALLINT, +fire_mode_bonus_comp SMALLINT, +fire_mode_bonus_dmg SMALLINT. combat_roster : +state_character JSONB NOT NULL DEFAULT '{}' (PC39 — merge obligatoire, jamais remplacement) |
+| 58_combat_v4 | combat_roster : +state_cover TEXT CHECK ('exposed'/'partial'/'important'), +state_fire_mode TEXT CHECK ('cc'/'rc'/'rl'), +state_vitesse TEXT CHECK ('normal'/'delayed'/'rushed'). Backfill state_vitesse='rushed' si state_character->>'is_rushed'='true' |
 
 ---
 

@@ -1,12 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { WS } from '../../../shared/events.js'
 import { calcAN, calcAllures } from '../../../shared/polarisUtils.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
-import { KEY_MOD, SECTIONS, MOVE_ZONE_DEFS, formatMod } from './combatSections.js'
+import {
+  STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS, MOVE_ZONE_DEFS,
+  stateTransitionCost, calcIniDelta,
+} from './combatSections.js'
 
-// Variants de mode de tir — source : Polaris LdB p.227-228
+// ---------------------------------------------------------------------------
+// Variants mode de tir (inchanges depuis Sprint 7.1)
+// ---------------------------------------------------------------------------
 const FIRE_MODE_VARIANTS = {
   CC: [
     { id: 'cc_1',   bulletCount: 1,  bonusComp: 0, bonusDmg: 0 },
@@ -18,9 +23,7 @@ const FIRE_MODE_VARIANTS = {
     { id: 'cc_10a', bulletCount: 10, bonusComp: 5, bonusDmg: 0 },
     { id: 'cc_10b', bulletCount: 10, bonusComp: 4, bonusDmg: 3 },
   ],
-  RC: [
-    { id: 'rc_3',   bulletCount: 3,  bonusComp: 3, bonusDmg: 5 },
-  ],
+  RC: [{ id: 'rc_3', bulletCount: 3, bonusComp: 3, bonusDmg: 5 }],
   RL: [
     { id: 'rl_5',   bulletCount: 5,  bonusComp: 2, bonusDmg: 2 },
     { id: 'rl_10',  bulletCount: 10, bonusComp: 4, bonusDmg: 4 },
@@ -29,47 +32,135 @@ const FIRE_MODE_VARIANTS = {
     { id: 'rl_mc',  bulletCount: 5,  bonusComp: 0, bonusDmg: 0 },
   ],
 }
-
-// Libellés modes de tir (pour l'en-tête section cadence)
-const FIRE_MODE_LABELS = {
-  CC: 'Coup par coup',
-  RC: 'Rafale courte',
-  RL: 'Rafale longue',
-}
-
-// Valeurs discrètes pour le slider CC "Tir à répétition"
 const CC_REPS_STEPS = [2, 3, 4, 7, 10]
-
-// Valeurs discrètes pour les boutons RL
 const RL_BUTTONS = [
-  { value: 5,       label: '5b' },
-  { value: 10,      label: '10b' },
-  { value: 15,      label: '15b' },
-  { value: 20,      label: '20b' },
+  { value: 5, label: '5b' }, { value: 10, label: '10b' },
+  { value: 15, label: '15b' }, { value: 20, label: '20b' },
   { value: 'multi', label: 'Multi' },
 ]
 
-export default function CombatActionWindow({ socket, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, onEnterTargetMode }) {
+// ---------------------------------------------------------------------------
+// Composant StateSelector
+// Affiche un segmented control pour un etat avec cout de transition visible.
+// ---------------------------------------------------------------------------
+function StateSelector({ stateKey, def, current, initial, onChange, disabled, availableKeys }) {
+  return (
+    <div style={ss.row}>
+      <span style={ss.label}>{def.label}</span>
+      <div style={ss.seg}>
+        {def.states.map(opt => {
+          const isActive   = opt.k === current
+          const isDisabled = disabled || (availableKeys && !availableKeys.includes(opt.k))
+          const cost       = stateTransitionCost(def, initial, opt.k)
+          const costStr    = cost === 0 ? null : cost > 0 ? `+${cost}` : `${cost}`
+          return (
+            <div
+              key={opt.k}
+              onClick={() => !isDisabled && !isActive && onChange(opt.k)}
+              style={{
+                ...ss.segOpt,
+                ...(isActive    ? ss.segOptActive    : {}),
+                ...(isDisabled  ? ss.segOptDisabled  : {}),
+              }}
+            >
+              <span style={ss.segOptLabel}>{opt.l}</span>
+              {costStr && !isActive && (
+                <span style={{ ...ss.segCost, color: cost > 0 ? '#3aaa6a' : '#c86030' }}>
+                  {costStr}
+                </span>
+              )}
+              {isActive && opt.k === initial && (
+                <span style={ss.segCostCurrent}>actuel</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+export default function CombatActionWindow({
+  socket, user, characters, pendingSurpriseRoll, onSurpriseRolled,
+  onEnterMoveMode, onEnterTargetMode,
+}) {
   const { roster, phase, activeSlotIdx, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
-  const [selectedKeys, setSelectedKeys] = useState(new Set())
-  const [allures, setAllures] = useState(null)
-  const [inMoveMode, setInMoveMode] = useState(false)
-  const [moveSelection, setMoveSelection] = useState(null)
 
-  // État sous-panneau assaut
-  const [assaultWeapons, setAssaultWeapons] = useState([])
-  const [assaultPendingTokenId, setAssaultPendingTokenId] = useState(null)
-  const [assaultBulletCount, setAssaultBulletCount] = useState(null)  // number | 'multi' | null
-  const [assaultVariantAB, setAssaultVariantAB] = useState('A')       // 'A' | 'B' — pour cc_7/cc_10
-  const [isDualWield, setIsDualWield] = useState(false)
-  const [inTargetMode, setInTargetMode] = useState(false)
-
-  const playerChar = characters.find(c => c.user_id === user?.id)
+  const playerChar  = characters.find(c => c.user_id === user?.id)
   const playerToken = tokens.find(t => t.character_id === playerChar?.id)
   const rosterEntry = playerToken ? roster.find(r => r.token_id === playerToken.id) : null
 
-  // Fetch allures dès que playerChar est disponible
+  // --- etats tactiques (initialises depuis rosterEntry quand dispo) ----------
+  const [states, setStates] = useState({
+    position:  'standing',
+    weapon:    'holstered',
+    fire_mode: 'cc',
+    cover:     'exposed',
+    vitesse:   'normal',
+  })
+  const prevWeaponRef = useRef(null) // pour revert QB
+
+  // Sync depuis rosterEntry a l'entree en phase ANNOUNCEMENT
+  useEffect(() => {
+    if (!rosterEntry) return
+    setStates({
+      position:  rosterEntry.state_position  || 'standing',
+      weapon:    rosterEntry.state_weapon    || 'holstered',
+      fire_mode: rosterEntry.state_fire_mode || 'cc',
+      cover:     rosterEntry.state_cover     || 'exposed',
+      vitesse:   rosterEntry.state_vitesse   || 'normal',
+    })
+  }, [rosterEntry?.token_id]) // reset a chaque nouveau tour (token_id stable)
+
+  // --- actions sur la carte (multi-select) ----------------------------------
+  const [mapSelected, setMapSelected] = useState(new Set())
+
+  // --- actions rapides ------------------------------------------------------
+  const [quick, setQuick] = useState({ observer: 0, reperer: 0, phrase: false })
+
+  // --- etat assaut (panneau droit) ------------------------------------------
+  const [allures, setAllures]                     = useState(null)
+  const [assaultWeapons, setAssaultWeapons]       = useState([])
+  const [assaultPendingTokenId, setAssaultPendingTokenId] = useState(null)
+  const [assaultBulletCount, setAssaultBulletCount]       = useState(null)
+  const [assaultVariantAB, setAssaultVariantAB]           = useState('A')
+  const [isDualWield, setIsDualWield]             = useState(false)
+  const [inMoveMode, setInMoveMode]               = useState(false)
+  const [inTargetMode, setInTargetMode]           = useState(false)
+  const [moveSelection, setMoveSelection]         = useState(null)
+
+  // --- etats initiaux (reference debut de tour pour calcul delta) -----------
+  const initialStates = useRef({
+    position:  'standing',
+    weapon:    'holstered',
+    fire_mode: 'cc',
+    cover:     'exposed',
+    vitesse:   'normal',
+  })
+  useEffect(() => {
+    if (!rosterEntry) return
+    const snap = {
+      position:  rosterEntry.state_position  || 'standing',
+      weapon:    rosterEntry.state_weapon    || 'holstered',
+      fire_mode: rosterEntry.state_fire_mode || 'cc',
+      cover:     rosterEntry.state_cover     || 'exposed',
+      vitesse:   rosterEntry.state_vitesse   || 'normal',
+    }
+    initialStates.current = snap
+    setStates({ ...snap })
+    setMapSelected(new Set())
+    setQuick({ observer: 0, reperer: 0, phrase: false })
+    setAssaultPendingTokenId(null)
+    setAssaultBulletCount(null)
+    setAssaultVariantAB('A')
+    setIsDualWield(false)
+    setMoveSelection(null)
+    prevWeaponRef.current = null
+  }, [rosterEntry?.token_id])
+
+  // --- fetch allures --------------------------------------------------------
   useEffect(() => {
     if (!playerChar?.id) return
     let cancelled = false
@@ -90,7 +181,7 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
         const for_na = calcNA('FOR', 'mod_for')
         const mastery = skills?.find(s => s.skill_id === 'ATHLETISME')?.mastery ?? 0
         const athletisme_total = calcAN(for_na) + calcAN(coo_na) + mastery
-        setAllures(calcAllures(coo_na, athletisme_total))
+        if (!cancelled) setAllures(calcAllures(coo_na, athletisme_total))
       } catch (e) {
         console.error('[CombatActionWindow] erreur fetch allures :', e)
       }
@@ -99,7 +190,7 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
     return () => { cancelled = true }
   }, [playerChar?.id])
 
-  // Fetch armes équipées (MG/MD) pour le sous-panneau assaut
+  // --- fetch armes equipees -------------------------------------------------
   useEffect(() => {
     if (!playerChar?.id) return
     let cancelled = false
@@ -113,39 +204,36 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
     return () => { cancelled = true }
   }, [playerChar?.id])
 
-  // Armes rechargées → reset état assaut
-  useEffect(() => {
-    setAssaultBulletCount(null)
-    setAssaultVariantAB('A')
-    setIsDualWield(false)
-  }, [assaultWeapons])
-
   if (!playerToken || !rosterEntry) return null
 
-  // Phase Résolution — tri identique CombatTimeline (initiative DESC)
+  // --- derives resolution --------------------------------------------------
   const sorted = [...roster].sort((a, b) => b.initiative - a.initiative)
   const isMyTurnInResolution = phase === 'RESOLUTION' && sorted[activeSlotIdx]?.token_id === playerToken.id
   const myActions = actions.filter(a => a.token_id === playerToken.id)
 
-  // ─── Dérivés assaut ────────────────────────────────────────────────────────
+  // --- derives assaut -------------------------------------------------------
   const weaponMg = assaultWeapons.find(w => w.slot === 'MG') || null
   const weaponMd = assaultWeapons.find(w => w.slot === 'MD') || null
   const hasTwoWeapons = !!(weaponMg && weaponMd)
-  const sameFirMode = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
-  const forceCC = hasTwoWeapons && !sameFirMode
+  const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
+  const forceCC       = hasTwoWeapons && !sameFirMode
   const selectedWeapon = weaponMg || weaponMd || null
   const assaultWeaponId = selectedWeapon?.id ?? null
 
-  // Mode actuel — dérivé du ref_fire_mode de l'arme (premier mode)
-  // forceCC = 2 armes modes différents → on impose CC (LdB p.228)
-  // "Changer le mode de tir" remplacera ce défaut dans un sprint futur
-  const fireModes = (selectedWeapon?.ref_fire_mode || '').split('/').map(s => s.trim()).filter(Boolean)
-  const currentFireMode = forceCC ? 'CC' : (fireModes[0] || null)
+  // Modes disponibles pour le StateSelector fire_mode
+  const availableFireModes = forceCC
+    ? ['cc']
+    : selectedWeapon
+      ? (selectedWeapon.ref_fire_mode || 'cc').split('/').map(s => s.trim().toLowerCase()).filter(Boolean)
+      : ['cc', 'rc', 'rl']
 
-  // Variant sélectionné selon le mode + bullet count + A/B
+  const fireModeUpper = states.fire_mode.toUpperCase()
+  const currentFireMode = forceCC ? 'CC' : fireModeUpper
+
+  // Variant assaut selectionne
   let currentVariant = null
   if (currentFireMode === 'RC') {
-    currentVariant = FIRE_MODE_VARIANTS.RC[0]  // unique option — auto-sélectionné
+    currentVariant = FIRE_MODE_VARIANTS.RC[0]
   } else if (currentFireMode === 'CC' && assaultBulletCount) {
     if (assaultBulletCount === 7) {
       currentVariant = FIRE_MODE_VARIANTS.CC.find(v => v.id === (assaultVariantAB === 'B' ? 'cc_7b' : 'cc_7a'))
@@ -160,7 +248,6 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
       : FIRE_MODE_VARIANTS.RL.find(v => v.bulletCount === assaultBulletCount)
   }
 
-  // Bonus tir double : +3 CC/RC, +5 RL (LdB p.228)
   const dualWieldBonusComp = (isDualWield && hasTwoWeapons && sameFirMode)
     ? (currentFireMode === 'RL' ? 5 : 3)
     : 0
@@ -169,52 +256,65 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
     ? tokens.find(t => t.id === assaultPendingTokenId)
     : null
 
-  const handleToggle = (key) => {
-    setSelectedKeys(prev => {
+  const attackSelected = mapSelected.has('attack')
+  const meleeSelected  = mapSelected.has('melee')
+  const weaponLocked   = attackSelected || meleeSelected
+
+  // --- QB : weapon auto-drawn quand attack/melee selectionne ---------------
+  const handleMapToggle = (k) => {
+    setMapSelected(prev => {
       const next = new Set(prev)
-      if (next.has(key)) {
-        next.delete(key)
-        if (key === 'assault') {
+      const wasAttackOrMelee = prev.has('attack') || prev.has('melee')
+      if (next.has(k)) {
+        next.delete(k)
+        if (k === 'attack') {
           setAssaultPendingTokenId(null)
           setAssaultBulletCount(null)
           setAssaultVariantAB('A')
           setIsDualWield(false)
           setInTargetMode(false)
         }
+        if (k === 'move') setMoveSelection(null)
       } else {
-        next.add(key)
+        next.add(k)
+      }
+      const willAttackOrMelee = next.has('attack') || next.has('melee')
+      if (!wasAttackOrMelee && willAttackOrMelee) {
+        // Entrer en mode combat => weapon passe a 'drawn'
+        prevWeaponRef.current = states.weapon
+        setStates(s => ({ ...s, weapon: 'drawn' }))
+      } else if (wasAttackOrMelee && !willAttackOrMelee) {
+        // Quitter le mode combat => revert weapon
+        const prev = prevWeaponRef.current ?? initialStates.current.weapon
+        setStates(s => ({ ...s, weapon: prev }))
+        prevWeaponRef.current = null
       }
       return next
     })
   }
 
-  const handleVarChange = (oldKey, newKey) => {
-    setSelectedKeys(prev => {
-      const next = new Set(prev)
-      if (oldKey) next.delete(oldKey)
-      next.add(newKey)
-      return next
-    })
-  }
-
-  const handleZoneSelectClick = (item) => {
-    if (moveSelection?.sourceKey === item.key) { setMoveSelection(null); return }
-    const zones = item.staticZones !== null
-      ? item.staticZones
-      : MOVE_ZONE_DEFS.map(def => ({
-          radius: allures[def.allureKey],
-          action_key: def.action_key,
-          ini_mod: def.ini_mod,
-          color: def.color,
-          label: def.label,
-        }))
-    const onSelected = (sel) => { setMoveSelection({ ...sel, sourceKey: item.key }); setInMoveMode(false) }
-    const onCancel = () => { setInMoveMode(false) }
+  // --- deplacement zone select ---------------------------------------------
+  const handleZoneSelectClick = () => {
+    if (moveSelection) { setMoveSelection(null); return }
+    if (!allures) return
+    const zones = MOVE_ZONE_DEFS.map(def => ({
+      radius:     allures[def.allureKey],
+      action_key: def.action_key,
+      ini_mod:    def.ini_mod,
+      color:      def.color,
+      label:      def.label,
+    }))
     setInMoveMode(true)
     setMoveSelection(null)
-    onEnterMoveMode(zones, playerToken.id, { x: playerToken.pos_x, z: playerToken.pos_y }, onSelected, onCancel)
+    onEnterMoveMode(
+      zones, playerToken.id,
+      { x: playerToken.pos_x, z: playerToken.pos_y },
+      (sel) => { setMoveSelection(sel); setInMoveMode(false) },
+      () => { setInMoveMode(false) }
+    )
   }
 
+  // --- choix cible assaut --------------------------------------------------
   const handleChooseTarget = () => {
     setInTargetMode(true)
     setAssaultPendingTokenId(null)
@@ -226,103 +326,124 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
     )
   }
 
-  const totalMod = [...selectedKeys].reduce((sum, k) => sum + (KEY_MOD[k] ?? 0), 0)
-    + (moveSelection?.ini_mod ?? 0)
+  // --- calcul INI total client (indicatif) ---------------------------------
+  const mapActionsObj = {
+    move:   moveSelection ? { ini_mod: moveSelection.ini_mod } : null,
+    attack: attackSelected ? { cover_shot: !!(attackSelected && states.cover !== 'exposed') } : null,
+    melee:  meleeSelected,
+    multi:  mapSelected.has('multi'),
+  }
+  const iniDelta = calcIniDelta(initialStates.current, states, mapActionsObj, quick)
+  const iniTotal = (rosterEntry.initiative ?? 0) - iniDelta // initiative decremente par les couts
 
-  const assaultSelected = selectedKeys.has('assault')
-  const assaultValid = !assaultSelected || (
+  // --- validite declaration ------------------------------------------------
+  const assaultValid = !attackSelected || (
     assaultWeaponId != null &&
     assaultPendingTokenId != null &&
     currentVariant != null
   )
-  const canDeclare = (selectedKeys.size > 0 || moveSelection !== null) && assaultValid
+  const hasAnyAction = mapSelected.size > 0 || moveSelection !== null
+    || quick.observer > 0 || quick.reperer > 0 || quick.phrase
+    || Object.values(states).some((v, i) => v !== Object.values(initialStates.current)[i])
 
+  // Comparer states vs initial proprement
+  const stateChanged = Object.keys(states).some(k => states[k] !== initialStates.current[k])
+  const canDeclare = (hasAnyAction || stateChanged) && assaultValid
+
+  // --- emit declaration ----------------------------------------------------
   const handleDeclare = () => {
     if (!socket || !playerToken || !canDeclare) return
     socket.emit(WS.COMBAT_ACTION_DECLARE, {
-      tokenId:             playerToken.id,
-      selectedKeys:        Array.from(selectedKeys),
-      moveAction:          moveSelection ?? undefined,
-      weaponInvId:         assaultWeaponId ?? null,
-      targetTokenId:       assaultPendingTokenId ?? null,
-      fireMode:            currentFireMode ?? null,
-      bulletCount:         currentVariant?.bulletCount ?? null,
-      fireModeBonusComp:   currentVariant ? (currentVariant.bonusComp + dualWieldBonusComp) : null,
-      fireModeBonusDmg:    currentVariant?.bonusDmg ?? null,
-      isDualWield:         isDualWield && hasTwoWeapons && sameFirMode,
-      dualWieldBonusComp:  dualWieldBonusComp,
+      tokenId: playerToken.id,
+      state: {
+        position:  states.position,
+        weapon:    states.weapon,
+        fire_mode: states.fire_mode,
+        cover:     states.cover,
+        vitesse:   states.vitesse,
+      },
+      mapActions: {
+        move:   moveSelection
+          ? { targetPosX: moveSelection.targetPosX, targetPosY: moveSelection.targetPosY,
+              targetPosZ: moveSelection.targetPosZ ?? 0,
+              ini_mod: moveSelection.ini_mod, action_key: moveSelection.action_key }
+          : null,
+        attack: attackSelected ? {
+          weaponInvId:        assaultWeaponId,
+          targetTokenId:      assaultPendingTokenId,
+          bulletCount:        currentVariant?.bulletCount ?? null,
+          fireModeBonusComp:  currentVariant ? (currentVariant.bonusComp + dualWieldBonusComp) : null,
+          fireModeBonusDmg:   currentVariant?.bonusDmg ?? null,
+          isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
+          dualWieldBonusComp: dualWieldBonusComp,
+          cover_shot:         states.cover !== 'exposed',
+        } : null,
+        melee:    meleeSelected,
+        multi:    mapSelected.has('multi'),
+        interact: mapSelected.has('interact'),
+      },
+      quick: {
+        observer: quick.observer,
+        reperer:  quick.reperer,
+        phrase:   quick.phrase,
+      },
     })
   }
 
-  // Mode jet de surprise
+  // =========================================================================
+  // RENDU — Surprise
+  // =========================================================================
   if (pendingSurpriseRoll?.tokenId === playerToken.id) {
     return (
-      <div style={styles.window}>
-        <div style={styles.header}>⚠ Surprise !</div>
-        <p style={styles.surpriseText}>
-          Vous êtes surpris. Lancez 1d20 pour déterminer votre initiative.
-        </p>
-        <button style={styles.btnRoll} onClick={onSurpriseRolled}>
-          Lancer le dé d'initiative
-        </button>
+      <div style={W.window}>
+        <div style={W.header}>Surprise !</div>
+        <p style={W.surpriseText}>Vous etes surpris. Lancez 1d20 pour determiner votre initiative.</p>
+        <button style={W.btnRoll} onClick={onSurpriseRolled}>Lancer le de d&apos;initiative</button>
       </div>
     )
   }
-
-  // Surprise échouée
   if (rosterEntry.is_surprised && rosterEntry.has_announced && rosterEntry.initiative === 0) {
     return (
-      <div style={styles.window}>
-        <div style={styles.header}>⚠ Surprise !</div>
-        <p style={styles.surpriseText}>
-          Vous êtes surpris — vous ne pouvez pas agir ce tour.
-        </p>
+      <div style={W.window}>
+        <div style={W.header}>Surprise !</div>
+        <p style={W.surpriseText}>Vous etes surpris — vous ne pouvez pas agir ce tour.</p>
       </div>
     )
   }
 
-  // Phase 2 — Résolution : slot actif = c'est mon tour d'agir
+  // =========================================================================
+  // RENDU — Phase Résolution (mon tour)
+  // =========================================================================
   if (isMyTurnInResolution) {
     const myAssaultAction = myActions.find(a => a.action_key === 'assault')
     const cibleToken = myAssaultAction ? tokens.find(t => t.id === myAssaultAction.target_token_id) : null
-    const isRushed = rosterEntry.state_character?.is_rushed
-
+    const isRushed = rosterEntry.state_vitesse === 'rushed'
     return (
-      <div style={styles.window}>
-        <div style={styles.header}>Phase 2 - Résolution</div>
-        <div style={styles.body}>
-          <div style={styles.leftPanel}>
+      <div style={W.window}>
+        <div style={W.header}>Phase 2 - Resolution</div>
+        <div style={W.body}>
+          <div style={W.leftPanel}>
             {myActions.map(a => (
               <div key={a.id} style={{ padding: '6px 14px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1e1e2e' }}>
-                <span style={styles.itemLabel}>{a.action_key}</span>
-                <span style={styles.itemMod}>{a.modifiers?.ini_mod ?? ''}</span>
+                <span style={W.itemLabel}>{a.action_key}</span>
+                <span style={W.itemMod}>{a.modifiers?.ini_mod ?? ''}</span>
               </div>
             ))}
             {myAssaultAction && (
               <div style={{ padding: '6px 14px', fontSize: 11, color: '#7070a0', borderTop: '1px solid #2a2a3e' }}>
                 <div>Cible : <span style={{ color: '#c0c0d0' }}>{cibleToken?.label ?? '—'}</span></div>
-                {myAssaultAction.fire_mode && myAssaultAction.fire_mode !== 'CC' && (
-                  <div>
-                    Mode : {FIRE_MODE_LABELS[myAssaultAction.fire_mode]}
-                    {myAssaultAction.bullet_count > 1 ? ` — ${myAssaultAction.bullet_count}b` : ''}
-                    {myAssaultAction.fire_mode_bonus_comp ? ` (+${myAssaultAction.fire_mode_bonus_comp} comp)` : ''}
-                  </div>
-                )}
-                {isRushed && <div style={{ color: '#e55' }}>⚠ Précipité (−5)</div>}
+                {isRushed && <div style={{ color: '#e55' }}>Precipite (-5)</div>}
               </div>
             )}
           </div>
         </div>
-        <div style={styles.footer}>
+        <div style={W.footer}>
           {myAssaultAction ? (
             <div style={{ color: '#7070a0', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
               En attente de validation GM…
             </div>
           ) : (
-            <button
-              style={styles.btnDeclare}
-              onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}
-            >
+            <button style={W.btnDeclare} onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}>
               Agir
             </button>
           )}
@@ -331,311 +452,338 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
     )
   }
 
-  // Déjà déclaré (ANNOUNCEMENT) ou en attente de son slot (RESOLUTION)
+  // Deja declare
   if (rosterEntry.has_announced) {
     return (
-      <div style={styles.window}>
-        <div style={styles.header}>Phase 1 - Déclaration d'intention</div>
-        <p style={styles.waitText}>
-          Action déclarée. En attente des autres participants…
-        </p>
+      <div style={W.window}>
+        <div style={W.header}>Phase 1 - Declaration d&apos;intention</div>
+        <p style={W.waitText}>Action declaree. En attente des autres participants…</p>
       </div>
     )
   }
 
-  const isHidden = inMoveMode || inTargetMode
+  const isHidden   = inMoveMode || inTargetMode
+  const showAssault = attackSelected
 
-  // Slider CC : index → bullet count
+  // CC slider index
   const ccSliderIdx = assaultBulletCount && assaultBulletCount !== 1
     ? CC_REPS_STEPS.indexOf(assaultBulletCount)
     : 0
   const ccSliderDisplayIdx = ccSliderIdx === -1 ? 0 : ccSliderIdx
 
+  // =========================================================================
+  // RENDU — Phase Annonce
+  // =========================================================================
   return (
     <div style={{
-      ...styles.window,
-      width: assaultSelected ? 720 : 360,
+      ...W.window,
+      width: showAssault ? 720 : 360,
       opacity: isHidden ? 0 : 1,
       pointerEvents: isHidden ? 'none' : 'auto',
     }}>
-      <div style={styles.header}>Phase 1 - Déclaration d'intention</div>
+      <div style={W.header}>Phase 1 — Declaration d&apos;intention</div>
 
-      <div style={styles.body}>
+      <div style={W.body}>
+        {/* ---- Panneau gauche ---- */}
+        <div style={W.leftPanel}>
 
-        {/* Panneau gauche — liste des actions */}
-        <div style={styles.leftPanel}>
-          {SECTIONS.map(section => (
-            <div key={section.key} style={styles.section}>
-              <div style={styles.sectionTitle}>{section.label}</div>
-              <div style={styles.itemsGrid}>
-                {section.items.map(item => {
-                  if (!item.active) {
-                    const modStr = formatMod(item)
-                    return (
-                      <div key={item.key} style={styles.itemGreyed}>
-                        <span style={styles.itemLabel}>{item.label}</span>
-                        {modStr && <span style={styles.itemMod}>{modStr}</span>}
-                      </div>
-                    )
-                  }
-                  if (item.isZoneSelect) {
-                    const isSelected = moveSelection?.sourceKey === item.key
-                    const canActivate = item.staticZones !== null || allures !== null
-                    return (
-                      <div
-                        key={item.key}
-                        style={{
-                          ...styles.item,
-                          ...(isSelected ? styles.itemSelected : {}),
-                          gridColumn: 'span 2',
-                          ...(!canActivate ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
-                        }}
-                        onClick={canActivate ? () => handleZoneSelectClick(item) : undefined}
-                      >
-                        <span style={styles.itemLabel}>{item.label}</span>
-                        <span style={{ ...styles.itemMod, ...(isSelected ? styles.itemModSelected : {}) }}>
-                          {isSelected ? `${moveSelection.ini_mod}` : '→'}
-                        </span>
-                      </div>
-                    )
-                  }
-                  if (item.range) {
-                    const selectedKey = [...selectedKeys].find(k => k.startsWith(item.key + '_'))
-                    const isSelected = !!selectedKey
-                    const currentMod = selectedKey ? KEY_MOD[selectedKey] : item.range.max
-                    const sliderPos = item.range.max - currentMod
-                    return (
-                      <div
-                        key={item.key}
-                        style={{ ...styles.item, ...(isSelected ? styles.itemSelected : {}), gridColumn: 'span 2' }}
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedKeys(prev => {
-                              const next = new Set(prev)
-                              ;[...next].filter(k => k.startsWith(item.key + '_')).forEach(k => next.delete(k))
-                              return next
-                            })
-                          } else {
-                            handleVarChange(null, `${item.key}_${Math.abs(item.range.max)}`)
-                          }
-                        }}
-                      >
-                        <span style={styles.itemLabel}>{item.label}</span>
-                        <div style={styles.sliderRow} onClick={isSelected ? e => e.stopPropagation() : undefined}>
-                          <input
-                            type="range"
-                            min={0}
-                            max={item.range.max - item.range.min}
-                            step={item.range.step}
-                            value={sliderPos}
-                            disabled={!isSelected}
-                            style={{ ...styles.slider, opacity: isSelected ? 1 : 0.35 }}
-                            onChange={e => {
-                              const newMod = item.range.max - Number(e.target.value)
-                              handleVarChange(selectedKey, `${item.key}_${Math.abs(newMod)}`)
-                            }}
-                          />
-                          <span style={{ ...styles.sliderVal, ...(isSelected ? styles.sliderValSelected : {}) }}>
-                            {currentMod}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  }
-                  const isSelected = selectedKeys.has(item.key)
-                  const modStr = formatMod(item)
+          {/* TACTIQUE */}
+          <div style={W.section}>
+            <div style={W.sectionTitle}>TACTIQUE</div>
+            <StateSelector
+              stateKey="position" def={STATE_DEFS.position}
+              current={states.position} initial={initialStates.current.position}
+              onChange={v => setStates(s => ({ ...s, position: v }))}
+            />
+            <StateSelector
+              stateKey="cover" def={STATE_DEFS.cover}
+              current={states.cover} initial={initialStates.current.cover}
+              onChange={v => setStates(s => ({ ...s, cover: v }))}
+            />
+            <StateSelector
+              stateKey="vitesse" def={STATE_DEFS.vitesse}
+              current={states.vitesse} initial={initialStates.current.vitesse}
+              onChange={v => setStates(s => ({ ...s, vitesse: v }))}
+            />
+          </div>
+
+          {/* ARMEMENT */}
+          <div style={W.section}>
+            <div style={W.sectionTitle}>ARMEMENT</div>
+            <StateSelector
+              stateKey="weapon" def={STATE_DEFS.weapon}
+              current={states.weapon} initial={initialStates.current.weapon}
+              onChange={v => setStates(s => ({ ...s, weapon: v }))}
+              disabled={weaponLocked}
+            />
+            <StateSelector
+              stateKey="fire_mode" def={STATE_DEFS.fire_mode}
+              current={states.fire_mode} initial={initialStates.current.fire_mode}
+              onChange={v => setStates(s => ({ ...s, fire_mode: v }))}
+              availableKeys={availableFireModes}
+            />
+          </div>
+
+          {/* ACTION */}
+          <div style={W.section}>
+            <div style={W.sectionTitle}>ACTION</div>
+            <div style={W.itemsGrid}>
+              {MAP_ACTIONS.map(a => {
+                const isActive   = mapSelected.has(a.k)
+                const isDisabled = a.active === false
+                if (isDisabled) {
+                  return (
+                    <div key={a.k} style={W.itemGreyed}>
+                      <span style={W.itemLabel}>{a.l}</span>
+                      {a.ini && <span style={W.itemMod}>{a.ini}</span>}
+                    </div>
+                  )
+                }
+                if (a.isZoneSelect) {
+                  const canActivate = allures !== null
                   return (
                     <div
-                      key={item.key}
-                      style={{ ...styles.item, ...(isSelected ? styles.itemSelected : {}) }}
-                      onClick={() => handleToggle(item.key)}
+                      key={a.k}
+                      style={{
+                        ...W.item,
+                        ...(isActive ? W.itemSelected : {}),
+                        ...(moveSelection ? W.itemSelected : {}),
+                        gridColumn: 'span 2',
+                        ...(!canActivate ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
+                      }}
+                      onClick={() => {
+                        if (!canActivate) return
+                        handleMapToggle(a.k)
+                        if (!mapSelected.has(a.k)) handleZoneSelectClick()
+                      }}
                     >
-                      <span style={styles.itemLabel}>{item.label}</span>
-                      <span style={{ ...styles.itemMod, ...(isSelected ? styles.itemModSelected : {}) }}>
-                        {modStr}
+                      <span style={W.itemLabel}>{a.l}</span>
+                      <span style={{ ...W.itemMod, ...(moveSelection ? { color: '#5b8dee' } : {}) }}>
+                        {moveSelection ? `${moveSelection.ini_mod}` : 'choix zone'}
                       </span>
                     </div>
                   )
-                })}
-              </div>
+                }
+                return (
+                  <div
+                    key={a.k}
+                    style={{ ...W.item, ...(isActive ? W.itemSelected : {}) }}
+                    onClick={() => handleMapToggle(a.k)}
+                  >
+                    <span style={W.itemLabel}>{a.l}</span>
+                    {a.ini && (
+                      <span style={{ ...W.itemMod, ...(isActive ? { color: '#5b8dee' } : {}) }}>
+                        {a.ini}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-          ))}
+
+            {/* Toggle cover_shot conditionnel (assault + cover != exposed) */}
+            {attackSelected && states.cover !== 'exposed' && (
+              <div
+                style={{
+                  ...W.item,
+                  gridColumn: 'span 2',
+                  marginTop: 4,
+                  background: 'rgba(180,80,80,0.08)',
+                  borderColor: '#c05050',
+                }}
+                onClick={() => {/* toggle gere via states.cover dans le payload */}}
+              >
+                <span style={{ ...W.itemLabel, color: '#e07070' }}>Tirer depuis ma couverture</span>
+                <span style={{ ...W.itemMod, color: '#e07070' }}>
+                  {states.cover === 'important' ? '-5' : '-3'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* ACTIONS RAPIDES */}
+          <div style={W.section}>
+            <div style={W.sectionTitle}>ACTIONS RAPIDES</div>
+            {QUICK_ACTIONS.map(a => {
+              const isFixed = a.kind === 'fixed'
+              const val     = isFixed ? quick.phrase : (quick[a.k] ?? 0)
+              const isActive = isFixed ? !!val : val > 0
+              const cost    = isFixed ? a.ini : (val * a.stepIni)
+              return (
+                <div key={a.k} style={{ borderBottom: '1px solid #1a1a2a' }}>
+                  <div
+                    style={{ ...W.item, gridColumn: 'span 2' }}
+                    onClick={() => {
+                      if (isFixed) {
+                        setQuick(q => ({ ...q, phrase: !q.phrase }))
+                      } else {
+                        setQuick(q => ({ ...q, [a.k]: q[a.k] > 0 ? 0 : 1 }))
+                      }
+                    }}
+                  >
+                    <span style={W.itemLabel}>{a.l}</span>
+                    {isActive && cost !== 0 && (
+                      <span style={{ ...W.itemMod, color: '#c86030' }}>{cost}</span>
+                    )}
+                    {!isActive && !isFixed && (
+                      <span style={W.itemMod}>-5/tr.</span>
+                    )}
+                  </div>
+                  {!isFixed && isActive && (
+                    <div style={{ padding: '2px 10px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 9, color: '#456575' }}>1</span>
+                      <input
+                        type="range" min={1} max={a.max} step={1}
+                        value={val}
+                        style={{ flex: 1, accentColor: '#3a8aaa' }}
+                        onChange={e => setQuick(q => ({ ...q, [a.k]: parseInt(e.target.value) }))}
+                      />
+                      <span style={{ fontSize: 9, color: '#456575' }}>{a.max}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: '#3a8aaa', minWidth: 22 }}>{val}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
 
-        {/* Panneau droit — sous-panneau assaut (Kiwi-style) */}
-        {assaultSelected && (
-          <div style={styles.assaultPanel}>
+        {/* ---- Panneau droit — assaut (inchange fonctionnellement) ---- */}
+        {showAssault && (
+          <div style={W.assaultPanel}>
 
-            {/* Arme — auto-sélectionnée */}
-            <div style={styles.assaultSection}>
-              <div style={styles.assaultSectionTitle}>Arme</div>
+            <div style={W.assaultSection}>
+              <div style={W.assaultSectionTitle}>Arme</div>
               {selectedWeapon ? (
-                <div style={styles.assaultInfoText}>
+                <div style={W.assaultInfoText}>
                   {selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'}
-                  <span style={styles.assaultInfoSub}> ({selectedWeapon.slot})</span>
+                  <span style={W.assaultInfoSub}> ({selectedWeapon.slot})</span>
                   {hasTwoWeapons && weaponMd && (
-                    <span style={styles.assaultInfoSub}>
+                    <span style={W.assaultInfoSub}>
                       {' + '}{weaponMd.custom_name || weaponMd.ref_name || 'Arme'} ({weaponMd.slot})
                     </span>
                   )}
                 </div>
               ) : (
-                <div style={styles.assaultNoWeapon}>Aucune arme équipée (MG/MD)</div>
+                <div style={W.assaultNoWeapon}>Aucune arme equipee (MG/MD)</div>
               )}
             </div>
 
-            {/* Cible — sélection par clic canvas 3D */}
-            <div style={styles.assaultSection}>
-              <div style={styles.assaultSectionTitle}>Cible</div>
+            <div style={W.assaultSection}>
+              <div style={W.assaultSectionTitle}>Cible</div>
               {pendingTargetToken ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={styles.assaultTargetName}>{pendingTargetToken.label ?? '?'}</span>
-                  <button style={styles.changeTargetBtn} onClick={handleChooseTarget}>Changer</button>
+                  <span style={W.assaultTargetName}>{pendingTargetToken.label ?? '?'}</span>
+                  <button style={W.changeTargetBtn} onClick={handleChooseTarget}>Changer</button>
                 </div>
               ) : (
-                <button style={styles.chooseTargetBtn} onClick={handleChooseTarget}>
-                  Choisir une cible →
-                </button>
+                <button style={W.chooseTargetBtn} onClick={handleChooseTarget}>Choisir une cible</button>
               )}
             </div>
 
-            {/* Tir double — si 2 armes même mode de tir */}
             {hasTwoWeapons && sameFirMode && (
-              <div style={styles.assaultSection}>
-                <div style={styles.assaultSectionTitle}>Type de tir</div>
+              <div style={W.assaultSection}>
+                <div style={W.assaultSectionTitle}>Type de tir</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
-                    style={{ ...styles.assaultToggleBtn, ...(!isDualWield ? styles.assaultToggleBtnActive : {}) }}
+                    style={{ ...W.assaultToggleBtn, ...(!isDualWield ? W.assaultToggleBtnActive : {}) }}
                     onClick={() => setIsDualWield(false)}
                   >Simple</button>
                   <button
-                    style={{ ...styles.assaultToggleBtn, ...(isDualWield ? styles.assaultToggleBtnActive : {}) }}
+                    style={{ ...W.assaultToggleBtn, ...(isDualWield ? W.assaultToggleBtnActive : {}) }}
                     onClick={() => setIsDualWield(true)}
                   >Double +{currentFireMode === 'RL' ? 5 : 3}</button>
                 </div>
               </div>
             )}
 
-            {/* Cadence — Kiwi-style, basé sur le mode actuel de l'arme */}
             {selectedWeapon && currentFireMode && (
-              <div style={styles.assaultSection}>
-                <div style={styles.assaultSectionTitle}>{FIRE_MODE_LABELS[currentFireMode] ?? currentFireMode}</div>
+              <div style={W.assaultSection}>
+                <div style={W.assaultSectionTitle}>
+                  {{ CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }[currentFireMode] ?? currentFireMode}
+                </div>
 
-                {/* CC — Tir simple + Tir à répétition + slider */}
                 {currentFireMode === 'CC' && (
                   <>
-                    {/* Radio Tir simple */}
-                    <div style={styles.assaultOption} onClick={() => {
-                      setAssaultBulletCount(1)
-                      setAssaultVariantAB('A')
-                    }}>
+                    <div style={W.assaultOption} onClick={() => { setAssaultBulletCount(1); setAssaultVariantAB('A') }}>
                       <div>
-                        <div style={styles.assaultOptionLabel}>Tir simple</div>
-                        <div style={styles.assaultOptionSub}>1 balle : +0</div>
+                        <div style={W.assaultOptionLabel}>Tir simple</div>
+                        <div style={W.assaultOptionSub}>1 balle : +0</div>
                       </div>
-                      <div style={{
-                        ...styles.assaultRadio,
-                        ...(assaultBulletCount === 1 ? styles.assaultRadioActive : {}),
-                      }} />
+                      <div style={{ ...W.assaultRadio, ...(assaultBulletCount === 1 ? W.assaultRadioActive : {}) }} />
                     </div>
-
-                    {/* Radio Tir à répétition */}
-                    <div style={styles.assaultOption} onClick={() => {
+                    <div style={W.assaultOption} onClick={() => {
                       if (!assaultBulletCount || assaultBulletCount === 1) setAssaultBulletCount(2)
                     }}>
-                      <div style={styles.assaultOptionLabel}>Tir à répétition</div>
-                      <div style={{
-                        ...styles.assaultRadio,
-                        ...(assaultBulletCount && assaultBulletCount !== 1 ? styles.assaultRadioActive : {}),
-                      }} />
+                      <div style={W.assaultOptionLabel}>Tir a repetition</div>
+                      <div style={{ ...W.assaultRadio, ...(assaultBulletCount && assaultBulletCount !== 1 ? W.assaultRadioActive : {}) }} />
                     </div>
-
-                    {/* Slider — visible si Tir à répétition sélectionné */}
                     {assaultBulletCount && assaultBulletCount !== 1 && (
                       <>
                         <input
-                          type="range"
-                          min={0}
-                          max={CC_REPS_STEPS.length - 1}
-                          step={1}
+                          type="range" min={0} max={CC_REPS_STEPS.length - 1} step={1}
                           value={ccSliderDisplayIdx}
-                          style={styles.assaultSlider}
+                          style={W.assaultSlider}
                           onChange={e => {
                             const count = CC_REPS_STEPS[Number(e.target.value)]
                             setAssaultBulletCount(count)
                             if (count !== 7 && count !== 10) setAssaultVariantAB('A')
                           }}
                         />
-
-                        {/* A/B pour 7 et 10 balles */}
                         {(assaultBulletCount === 7 || assaultBulletCount === 10) && (
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button
-                              style={{ ...styles.assaultVariantBtn, ...(assaultVariantAB === 'A' ? styles.assaultVariantBtnActive : {}) }}
+                              style={{ ...W.assaultVariantBtn, ...(assaultVariantAB === 'A' ? W.assaultVariantBtnActive : {}) }}
                               onClick={() => setAssaultVariantAB('A')}
-                            >
-                              +{assaultBulletCount === 7 ? 4 : 5} comp
-                            </button>
+                            >+{assaultBulletCount === 7 ? 4 : 5} comp</button>
                             <button
-                              style={{ ...styles.assaultVariantBtn, ...(assaultVariantAB === 'B' ? styles.assaultVariantBtnActive : {}) }}
+                              style={{ ...W.assaultVariantBtn, ...(assaultVariantAB === 'B' ? W.assaultVariantBtnActive : {}) }}
                               onClick={() => setAssaultVariantAB('B')}
-                            >
-                              +{assaultBulletCount === 7 ? 3 : 4} comp / +3 dég
-                            </button>
+                            >+{assaultBulletCount === 7 ? 3 : 4} comp / +3 deg</button>
                           </div>
                         )}
                       </>
                     )}
-
-                    {/* Résumé */}
                     {assaultBulletCount && currentVariant && (
-                      <div style={styles.assaultSummaryText}>
-                        {assaultBulletCount} balle{assaultBulletCount > 1 ? 's' : ''} tirée{assaultBulletCount > 1 ? 's' : ''}{' '}
-                        : +{currentVariant.bonusComp + dualWieldBonusComp} au test de tir
-                        {currentVariant.bonusDmg > 0 ? ` / +${currentVariant.bonusDmg} aux dommages` : ''}
+                      <div style={W.assaultSummaryText}>
+                        {assaultBulletCount} balle{assaultBulletCount > 1 ? 's' : ''} : +{currentVariant.bonusComp + dualWieldBonusComp} test
+                        {currentVariant.bonusDmg > 0 ? ` / +${currentVariant.bonusDmg} deg` : ''}
                       </div>
                     )}
                   </>
                 )}
 
-                {/* RC — auto-sélectionné, juste affiché */}
                 {currentFireMode === 'RC' && (
                   <>
-                    <div style={styles.assaultOption}>
+                    <div style={W.assaultOption}>
                       <div>
-                        <div style={styles.assaultOptionLabel}>Rafale courte</div>
-                        <div style={styles.assaultOptionSub}>3 balles : +3 test OU +5 dommages (courte portée)</div>
+                        <div style={W.assaultOptionLabel}>Rafale courte</div>
+                        <div style={W.assaultOptionSub}>3 balles : +3 test OU +5 deg (courte portee)</div>
                       </div>
-                      <div style={{ ...styles.assaultRadio, ...styles.assaultRadioActive }} />
+                      <div style={{ ...W.assaultRadio, ...W.assaultRadioActive }} />
                     </div>
-                    <div style={styles.assaultSummaryText}>
-                      3 balles : +{3 + dualWieldBonusComp} au test de tir (ou +5 dommages à courte portée)
+                    <div style={W.assaultSummaryText}>
+                      3 balles : +{3 + dualWieldBonusComp} test (ou +5 deg a courte portee)
                     </div>
                   </>
                 )}
 
-                {/* RL — boutons toggle pour les 5 cadences */}
                 {currentFireMode === 'RL' && (
                   <>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {RL_BUTTONS.map(btn => (
                         <button
                           key={btn.value}
-                          style={{
-                            ...styles.assaultVariantBtn,
-                            ...(assaultBulletCount === btn.value ? styles.assaultVariantBtnActive : {}),
-                          }}
+                          style={{ ...W.assaultVariantBtn, ...(assaultBulletCount === btn.value ? W.assaultVariantBtnActive : {}) }}
                           onClick={() => setAssaultBulletCount(btn.value)}
-                        >
-                          {btn.label}
-                        </button>
+                        >{btn.label}</button>
                       ))}
                     </div>
                     {currentVariant && (
-                      <div style={styles.assaultSummaryText}>
+                      <div style={W.assaultSummaryText}>
                         {assaultBulletCount === 'multi'
-                          ? `Multi-cibles : +0 test / zone 3m`
-                          : `${assaultBulletCount} balles : +${currentVariant.bonusComp + dualWieldBonusComp} test / +${currentVariant.bonusDmg} dommages`
+                          ? 'Multi-cibles : +0 test / zone 3m'
+                          : `${assaultBulletCount} balles : +${currentVariant.bonusComp + dualWieldBonusComp} test / +${currentVariant.bonusDmg} deg`
                         }
                       </div>
                     )}
@@ -647,30 +795,96 @@ export default function CombatActionWindow({ socket, user, characters, pendingSu
         )}
       </div>
 
-      <div style={styles.footer}>
-        <div style={styles.footerLeft}>
-          <span style={styles.totalMod}>
-            INI total : {totalMod > 0 ? `+${totalMod}` : totalMod}
+      {/* ---- Footer ---- */}
+      <div style={W.footer}>
+        <div style={W.footerLeft}>
+          <span style={{
+            ...W.totalMod,
+            color: iniDelta >= 0 ? '#3aaa6a' : (iniDelta < -10 ? '#c83030' : '#c86030'),
+          }}>
+            INI : {iniDelta >= 0 ? `+${iniDelta}` : iniDelta}
           </span>
           {moveSelection && (
-            <span style={styles.destination}>
-              → [{moveSelection.targetPosX}, {moveSelection.targetPosY}]
+            <span style={W.destination}>
+              [{moveSelection.targetPosX}, {moveSelection.targetPosY}]
             </span>
           )}
         </div>
         <button
-          style={{ ...styles.btnDeclare, ...(!canDeclare ? styles.btnDeclareDisabled : {}) }}
+          style={{ ...W.btnDeclare, ...(!canDeclare ? W.btnDeclareDisabled : {}) }}
           onClick={handleDeclare}
           disabled={!canDeclare}
         >
-          Déclarer l'action
+          Declarer l&apos;action
         </button>
       </div>
     </div>
   )
 }
 
-const styles = {
+// ===========================================================================
+// Styles StateSelector
+// ===========================================================================
+const ss = {
+  row: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '3px 10px',
+    gap: 6,
+  },
+  label: {
+    fontSize: 8,
+    color: '#456575',
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+    flexShrink: 0,
+    width: 76,
+  },
+  seg: {
+    display: 'flex',
+    flex: 1,
+    background: '#0a1018',
+    border: '1px solid #15212e',
+  },
+  segOpt: {
+    flex: 1,
+    padding: '4px 6px',
+    textAlign: 'center',
+    cursor: 'pointer',
+    border: '1px solid transparent',
+    transition: 'all 0.1s',
+  },
+  segOptActive: {
+    background: '#162028',
+    borderColor: '#3a8aaa66',
+  },
+  segOptDisabled: {
+    opacity: 0.3,
+    cursor: 'not-allowed',
+  },
+  segOptLabel: {
+    fontSize: 9,
+    color: '#dde7ee',
+    display: 'block',
+    fontWeight: 500,
+  },
+  segCost: {
+    fontSize: 7,
+    display: 'block',
+    marginTop: 1,
+  },
+  segCostCurrent: {
+    fontSize: 7,
+    color: '#3a8aaa',
+    display: 'block',
+    marginTop: 1,
+  },
+}
+
+// ===========================================================================
+// Styles fenetre principale
+// ===========================================================================
+const W = {
   window: {
     position: 'absolute',
     bottom: 24,
@@ -688,13 +902,14 @@ const styles = {
     transition: 'opacity 0.15s ease, width 0.2s ease',
   },
   header: {
-    padding: '10px 14px',
+    padding: '8px 14px',
     borderBottom: '1px solid #2a2a3e',
     background: '#0e0e1a',
-    fontSize: 13,
+    fontSize: 11,
     color: '#c0c0d0',
     fontWeight: 600,
     flexShrink: 0,
+    letterSpacing: '0.05em',
   },
   body: {
     display: 'flex',
@@ -712,24 +927,25 @@ const styles = {
     paddingBottom: 4,
   },
   sectionTitle: {
-    padding: '8px 14px 4px',
-    fontSize: 10,
+    padding: '7px 10px 3px',
+    fontSize: 8,
     fontWeight: 700,
-    color: '#5b5b7a',
+    color: '#5a8aaa',
     textTransform: 'uppercase',
-    letterSpacing: '0.06em',
+    letterSpacing: '0.12em',
   },
   itemsGrid: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
+    padding: '0 4px',
   },
   item: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '6px 10px',
-    margin: '1px 6px',
-    borderRadius: 4,
+    padding: '5px 8px',
+    margin: '1px 2px',
+    borderRadius: 3,
     cursor: 'pointer',
     background: 'rgba(255,255,255,0.02)',
     border: '1px solid transparent',
@@ -742,8 +958,8 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '6px 10px',
-    margin: '1px 6px',
+    padding: '5px 8px',
+    margin: '1px 2px',
     opacity: 0.3,
     cursor: 'not-allowed',
   },
@@ -751,7 +967,7 @@ const styles = {
     fontSize: 11,
     color: '#c0c0d0',
     flex: 1,
-    marginRight: 6,
+    marginRight: 4,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -760,34 +976,11 @@ const styles = {
     fontSize: 10,
     color: '#5b5b7a',
     flexShrink: 0,
-    minWidth: 30,
+    minWidth: 28,
     textAlign: 'right',
-  },
-  itemModSelected: {
-    color: '#5b8dee',
-  },
-  sliderRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    flexShrink: 0,
-  },
-  slider: {
-    width: 70,
-    accentColor: '#5b8dee',
-    cursor: 'pointer',
-  },
-  sliderVal: {
-    fontSize: 10,
-    color: '#5b5b7a',
-    minWidth: 26,
-    textAlign: 'right',
-  },
-  sliderValSelected: {
-    color: '#5b8dee',
   },
   footer: {
-    padding: '10px 14px',
+    padding: '9px 14px',
     borderTop: '1px solid #2a2a3e',
     background: '#0e0e1a',
     display: 'flex',
@@ -803,9 +996,9 @@ const styles = {
     minWidth: 0,
   },
   totalMod: {
-    fontSize: 12,
-    color: '#8888a8',
-    fontWeight: 600,
+    fontSize: 16,
+    fontWeight: 700,
+    fontFamily: 'monospace',
   },
   destination: {
     fontSize: 10,
@@ -853,8 +1046,6 @@ const styles = {
     cursor: 'pointer',
     width: 'calc(100% - 28px)',
   },
-
-  // ─── Panneau assaut droit (Kiwi-style) ──────────────────────────────────────
   assaultPanel: {
     flex: '0 0 360px',
     overflowY: 'auto',
@@ -864,38 +1055,23 @@ const styles = {
     background: 'rgba(180,80,80,0.04)',
   },
   assaultSection: {
-    padding: '10px 14px',
+    padding: '8px 14px',
     borderBottom: '1px solid #1e1e2e',
     display: 'flex',
     flexDirection: 'column',
-    gap: 8,
+    gap: 6,
   },
   assaultSectionTitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 700,
     color: '#e07070',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   },
-  assaultInfoText: {
-    fontSize: 12,
-    color: '#c0c0d0',
-  },
-  assaultInfoSub: {
-    fontSize: 10,
-    color: '#5b5b7a',
-  },
-  assaultNoWeapon: {
-    fontSize: 11,
-    color: '#5b5b7a',
-    fontStyle: 'italic',
-  },
-  assaultTargetName: {
-    fontSize: 12,
-    color: '#e07070',
-    fontWeight: 600,
-    flex: 1,
-  },
+  assaultInfoText:  { fontSize: 12, color: '#c0c0d0' },
+  assaultInfoSub:   { fontSize: 10, color: '#5b5b7a' },
+  assaultNoWeapon:  { fontSize: 11, color: '#5b5b7a', fontStyle: 'italic' },
+  assaultTargetName:{ fontSize: 12, color: '#e07070', fontWeight: 600, flex: 1 },
   chooseTargetBtn: {
     padding: '6px 10px',
     background: 'rgba(180,80,80,0.1)',
@@ -918,8 +1094,7 @@ const styles = {
     flexShrink: 0,
   },
   assaultToggleBtn: {
-    flex: 1,
-    padding: '5px 0',
+    flex: 1, padding: '5px 0',
     background: 'rgba(255,255,255,0.04)',
     border: '1px solid #2a2a3e',
     borderRadius: 4,
@@ -942,37 +1117,20 @@ const styles = {
     cursor: 'pointer',
     userSelect: 'none',
   },
-  assaultOptionLabel: {
-    fontSize: 12,
-    color: '#c0c0d0',
-    fontWeight: 500,
-  },
-  assaultOptionSub: {
-    fontSize: 10,
-    color: '#5b5b7a',
-    marginTop: 2,
-  },
+  assaultOptionLabel: { fontSize: 12, color: '#c0c0d0', fontWeight: 500 },
+  assaultOptionSub:   { fontSize: 10, color: '#5b5b7a', marginTop: 2 },
   assaultRadio: {
-    width: 14,
-    height: 14,
+    width: 14, height: 14,
     borderRadius: '50%',
     border: '2px solid #3a3a5a',
     flexShrink: 0,
     boxSizing: 'border-box',
     transition: 'border-color 0.1s, background 0.1s',
   },
-  assaultRadioActive: {
-    borderColor: '#e07070',
-    background: '#e07070',
-  },
-  assaultSlider: {
-    width: '100%',
-    accentColor: '#e07070',
-    cursor: 'pointer',
-  },
+  assaultRadioActive: { borderColor: '#e07070', background: '#e07070' },
+  assaultSlider:      { width: '100%', accentColor: '#e07070', cursor: 'pointer' },
   assaultVariantBtn: {
-    flex: 1,
-    padding: '4px 6px',
+    flex: 1, padding: '4px 6px',
     background: 'rgba(255,255,255,0.04)',
     border: '1px solid #2a2a3e',
     borderRadius: 4,

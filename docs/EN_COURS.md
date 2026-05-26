@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-25 Session 64
+> Dernière mise à jour : 2026-05-26 Session 65
 
 ---
 
@@ -268,27 +268,21 @@ Implique : nouvelle colonne `campaigns.gm_entity_move_mode`, option par token `t
 
 ---
 
-## Sprint 7.6 — Actions d'état dynamiques (planifié, non daté)
+## Sprint 7.6 — Actions d'état dynamiques ✅ CONFIRMÉ (session 65)
 
-**Concept :** les actions visibles dans `CombatActionWindow` dépendent de `state_weapon` et `state_position` du roster. Une seule action visible par "axe" — l'action change selon l'état courant.
+Remplacement du système clé plate (selectedKeys/KEY_MOD) par des sélecteurs d'état avec matrices de transition INI. Payload v2 `{ tokenId, state, mapActions, quick }`.
 
-**state_weapon** (`holstered` / `ready` / `drawn`) :
-- `holstered` → action "Dégainer" (−5 INI)
-- `ready` → action "Dégainer" (−3 INI) — arme en main, prête
-- `drawn` → action "Rengainer" (−5 INI)
-- Chaque action met à jour `state_weapon` dans `combat_roster` + insert dans `combat_actions`
+Travaux effectués :
+- `server/src/db/migrations/58_combat_v4.js` : +`state_cover`/`state_fire_mode`/`state_vitesse` sur `combat_roster`, CHECK constraints, backfill `state_vitesse='rushed'` depuis `state_character->>'is_rushed'` ✅
+- `client/src/components/combatSections.js` : réécriture complète — STATE_DEFS (5 états + matrices asymétriques), stateTransitionCost, calcIniDelta, MAP_ACTIONS multi-select, QUICK_ACTIONS incrémentaux ✅
+- `client/src/components/CombatActionWindow.jsx` : réécriture complète v2 (~600 lignes) — StateSelector segmented control, blocs TACTIQUE/ARMEMENT/ACTION/RAPIDES, QB weapon auto-drawn, footer INI delta coloré, emit v2 ✅
+- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE v2 (matrices STATE_COSTS serveur, calcul iniDelta, UPDATE états + initiative), endTurn reset colonnes per-tour, `is_rushed` → `state_vitesse` ✅
+- `client/src/components/CombatModifiersWindow.jsx` : `state_character.is_rushed` → `state_vitesse === 'rushed'` ✅
+- `client/src/components/CombatGmDeclareWindow.jsx` : adapté v2 (MAP_ACTIONS/QUICK_ACTIONS, emit v2 avec états courants) ✅
 
-**state_position** (`standing` / `crouching` / `prone`) :
-- `standing` → actions "S'accroupir" (−X INI) / "Se jeter à terre" (−X INI)
-- `crouching` → actions "Se redresser" / "Se jeter à terre"
-- `prone` → action "Se relever" (−X INI)
-- **Contrainte** : si `state_position ≠ 'standing'` → action Déplacement grisée (bloquée côté client ET validée côté serveur)
-
-**Implémentation nécessaire :**
-1. `combatStore.js` : stocker `state_weapon` / `state_position` du roster joueur (via COMBAT_PHASE_CHANGED ou COMBAT_SLOT_ADVANCED)
-2. `combatSections.js` : rendre les items "dégainer"/"position" dynamiques selon l'état
-3. `CombatActionWindow.jsx` : lire l'état, griser Déplacement si position ≠ standing
-4. `server/socket/index.js` : COMBAT_ACTION_DECLARE handler — mettre à jour `state_weapon`/`state_position` dans `combat_roster` lors des actions d'état
+**Limitations acceptées v1 :**
+- GM window : attack et move non disponibles (nécessitent UI dédiée — sprint futur)
+- state_vitesse = 'delayed' : pas de logique de report en fin de round (V2 futur)
 
 ---
 
