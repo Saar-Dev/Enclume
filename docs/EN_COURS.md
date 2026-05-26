@@ -275,8 +275,9 @@ Travaux effectués :
 - `combatSections.js` : ajout `tooltip` sur MAP_ACTIONS + QUICK_ACTIONS (texte LdB exact), correction label `reperer`, slider GM affiche coût INI (val×stepIni) ✅
 - `CombatActionWindow.jsx` : `title={a.tooltip}` sur les 3 branches MAP_ACTIONS + wrapper QUICK_ACTIONS ✅
 
-**Sprints restants :**
-- Sprint GM-A — Assaut PNJ (char_inventory équipée + fallback dropdown ref_equipment + cross-turn weapon persistence + PC22 bypass serveur)
+**Sprint GM-A ✅ CONFIRMÉ (session 65)** — CombatRosterWindow v2 : détection arme/armure pré-combat, chips T/C/B/J, quick-equip GM-only, bannière alerte
+
+**Sprint restant :**
 - Sprint GM-B — Déplacement PNJ (onEnterMoveMode depuis CombatOverlay, moveSelection per-PNJ)
 
 ---

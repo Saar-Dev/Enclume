@@ -16,8 +16,8 @@ Enclume/
 │   │   └── favicon.svg                 # ⚠ présent mais non référencé — à brancher
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── CombatOverlay.jsx        # Modifié 64 — Sprint 7.1 : +combatTargetMode. Sprint 7.4bis : refactoring PJ vs GM (playerActiveAssaultAction, gmActiveCharacter), deux CombatModifiersWindow séparés, CombatActionWindow masqué pendant assaut PJ, +attackResult/onAttackConfirmed props
-│   │   │   ├── CombatRosterWindow.jsx  # NOUVEAU 57 — roster GM, INI preview, surpris, exclusion, bouton Démarrer
+│   │   │   ├── CombatOverlay.jsx        # Modifié 64 — Sprint 7.1 : +combatTargetMode. Sprint 7.4bis : refactoring PJ vs GM, deux CombatModifiersWindow séparés, CombatActionWindow masqué pendant assaut PJ. Modifié 65 Sprint GM-A : +characters prop passée à CombatRosterWindow
+│   │   │   ├── CombatRosterWindow.jsx  # Réécriture complète 65 Sprint GM-A — détection arme/armure, chips T/C/B/J (PjArmorChips/PnjArmorChips), quick-equip PNJ, bannière alerte, fetches parallèles combat-ini+combat-equipment+refWeapons+refArmors
 │   │   │   ├── CombatTimeline.jsx      # Modifié 62 — timeline INI, portraits cliquables GM, topOffset + curseur slot actif RÉSOLUTION (slotActive, activeSlotIdx)
 │   │   │   ├── CombatActionWindow.jsx  # Modifié 65 Sprint 7.6 — réécriture v2 : StateSelector segmented control, blocs TACTIQUE/ARMEMENT/ACTION/RAPIDES, QB weapon auto-drawn, footer INI delta coloré, payload v2 {state,mapActions,quick}. Modifié 65 Sprint GM — title={a.tooltip} sur MAP_ACTIONS (3 branches) + QUICK_ACTIONS
 │   │   │   ├── CombatDamageWindow.jsx  # NOUVEAU 64 Sprint 7.4 — fenêtre PJ lancer dés dégâts : Phase 1 dés vides / Phase 2 animation / Phase 3 résultats colorés
@@ -98,9 +98,9 @@ Enclume/
 │   │   │   ├── texture-packs.js
 │   │   │   ├── entity-blueprints.js    # Modifié 33 — POST /:id/upload-glb
 │   │   │   ├── entities.js             # Modifié 39 — maintenance Redis collision map
-│   │   │   ├── equipment.js            # NOUVEAU 47 — CRUD ref_equipment + junction tables
+│   │   │   ├── equipment.js            # NOUVEAU 47 — CRUD ref_equipment + junction tables. Modifié 65 Sprint GM-A : +location dans GET /equipment SELECT
 │   │   │   └── character/
-│   │   │       └── char-sheet.js       # Modifié 56 — ref_min_str dans les 2 SELECT GET /inventory
+│   │   │       └── char-sheet.js       # Modifié 56 — ref_min_str dans les 2 SELECT GET /inventory. Modifié 65 Sprint GM-A : +POST /:characterId/quick-equip (GM-only, bypass isContainerAvailable, broadcast INVENTORY_ADDED)
 │   │   ├── middleware/
 │   │   │   ├── auth.js
 │   │   │   ├── role.js

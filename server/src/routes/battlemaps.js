@@ -84,6 +84,52 @@ router.get('/:id/combat-ini', requireAuth, async (req, res) => {
   res.json({ iniPreview })
 })
 
+// GET /api/battlemaps/:id/combat-equipment — équipement arme+armure par token (CombatRosterWindow)
+const WEAPON_SLOTS_SET = new Set(['MG', 'MD', '2M', 'Tr'])
+const NON_ARMOR_SLOTS  = new Set(['MG', 'MD', '2M', 'Tr', 'D', 'Ce'])
+
+router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
+  const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
+  if (!battlemap) throw new AppError(404, 'Battlemap not found')
+
+  const member = await db('campaign_members')
+    .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id })
+    .first()
+  if (!member) throw new AppError(403, 'Access denied')
+
+  const tokens = await db('tokens').where({ battlemap_id: req.params.id })
+  const equipment = {}
+
+  for (const token of tokens) {
+    if (!token.character_id) continue
+
+    const [weaponRow, armorRows] = await Promise.all([
+      db('char_inventory')
+        .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+        .where('char_inventory.character_id', token.character_id)
+        .whereIn('char_inventory.slot', ['MG', 'MD', '2M', 'Tr'])
+        .select('char_inventory.id as inv_id', 'ref_equipment.name', 'char_inventory.slot')
+        .first(),
+
+      db('char_inventory')
+        .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+        .where('char_inventory.character_id', token.character_id)
+        .where('ref_equipment.family', 'Protections')
+        .whereNotNull('char_inventory.slot')
+        .whereNotIn('char_inventory.slot', ['MG', 'MD', '2M', 'Tr', 'D', 'Ce'])
+        .select('char_inventory.id as inv_id', 'ref_equipment.name', 'ref_equipment.location'),
+    ])
+
+    equipment[token.id] = {
+      characterId:  token.character_id,
+      weapon:       weaponRow ?? null,
+      armorPieces:  armorRows,
+    }
+  }
+
+  res.json({ equipment })
+})
+
 // GET /api/battlemaps/:id — carte complète avec tokens
 router.get('/:id', requireAuth, async (req, res) => {
   const battlemap = await db('battlemaps')

@@ -276,3 +276,60 @@ Bug résolu : `if (next.has(key)) next.delete(key) else next.add(key)` → accol
 
 **Rappel mécanique :** Observer / Repérer = 1 résultat par tranche de 5 pts d'Init. Coût = N × (−5) INI. Le slider représente le nombre de tranches.
 
+---
+
+## Session 65 — Sprint GM-A : Détection équipement pré-combat + Quick-equip PNJ
+
+**Objectif :** Rework `CombatRosterWindow` — colonnes ARME/ARMURE, détection lacunes, équipement d'urgence GM-only via dropdowns inline. Aucune fenêtre séparée.
+
+**Réalisé :**
+
+*`server/src/routes/equipment.js`* ✅
+- `GET /api/equipment` : ajout colonne `location` dans le SELECT (nécessaire pour filtrage zones armure côté client)
+- `GET /api/equipment?family=Armes` + `?family=Protections` : filtre par famille déjà présent (ajouté Sprint 7.6)
+
+*`server/src/routes/battlemaps.js`* ✅ — nouvelle route
+- `GET /api/battlemaps/:id/combat-equipment` : pour chaque token avec `character_id`, retourne `{ characterId, weapon, armorPieces }` — weapon = premier slot dans {'MG','MD','2M','Tr'}, armorPieces = `char_inventory JOIN ref_equipment` WHERE `family='Protections'` AND `slot NOT IN NON_ARMOR_SLOTS` AND `slot NOT NULL`
+- `NON_ARMOR_SLOTS = {'MG','MD','2M','Tr','D','Ce'}` — filtre les slots hors zones de localisation
+
+*`server/src/routes/character/char-sheet.js`* ✅ — nouvelle route
+- `POST /api/char-sheet/:characterId/quick-equip` — GM uniquement (`req.isGm`)
+- Body : `{ equipment_id, slot }` — VALID_SLOTS existant réutilisé
+- Bypass `isContainerAvailable` : INSERT direct avec `container='Sac'`, `quantity:1`
+- Guard conflit : slot déjà occupé → 409
+- Broadcast `WS.INVENTORY_ADDED` vers la campagne après insertion
+
+*`client/src/components/CombatOverlay.jsx`* ✅
+- Passage de `characters={characters}` à `CombatRosterWindow` (prop manquante)
+
+*`client/src/components/CombatRosterWindow.jsx`* ✅ — réécriture complète (~500 lignes)
+- Props : `{ socket, battlemapId, characters }`
+- Fetches parallèles au montage (pré-combat uniquement) : `combat-ini` + `combat-equipment` + `equipment?family=Armes` + `equipment?family=Protections`
+- Helpers :
+  - `getCoverage(location)` → `{ T, C, B, J }` booleans (split sur '/')
+  - `mergeArmorPieces(pieces)` → union T/C/B/J + tips par zone (noms des pièces)
+  - `chipToSlot(chip)` → `{ T:'T', C:'C', B:'BD', J:'JD' }`
+  - `defaultArmorSlot(location)` → slot prioritaire (C > BD > JD > T)
+- `WEAPON_FAMILIES_EXCLUDE = Set(['Accessoires pour armes','Grenade','Lanceur'])` — filtre client refWeapons
+- Bannière alerte : compte PNJ sans arme + sans armure
+- Colonne ARME :
+  - PJ : lecture seule — nom + slot entre crochets (gris italique)
+  - PNJ équipé : point vert + nom + slot
+  - PNJ sans arme : `<select style danger>` → handleQuickEquip avec slot='MD'
+- Colonne ARMURE — chips T C B J :
+  - `PjArmorChips` : chips grises, filled = couvert, empty = découvert, tooltip = noms pièces (lecture seule)
+  - `PnjArmorChips` : chips vertes filled, rouge border sur lacunes, clic ouvre dropdown filtré par zone
+  - PNJ sans aucune armure : `<select style warn>` → handleQuickEquip via `defaultArmorSlot`
+- Fermeture dropdown au clic extérieur via `windowRef` + `useEffect`
+- Tokens sans `character_id` (entités de décor) : colonne arme/armure vide (PC27)
+
+**Décisions de design :**
+- `container='Sac'` sans Sac physique : WeaponPanel filtre `container !== 'Coffre'`, InventoryPanel groupe par container. Pas de crash, peut paraître dans l'inventaire.
+- Munitions hors scope : Sprint 7.5 dédié
+- Créatures hors scope : sprint futur — `character.type = 'creature'` ou équivalent
+- PJ : lecture seule intentionnelle — le joueur gère son propre équipement
+- Slot par défaut arme = 'MD' (main droite) — cas d'usage le plus courant pour un PNJ sans arme
+
+**Sprint GM-A CONFIRMÉ FONCTIONNEL ✅**
+
+

@@ -50,6 +50,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         <CombatRosterWindow
           socket={socket}
           battlemapId={battlemap?.id}
+          characters={characters}
         />
       )}
 

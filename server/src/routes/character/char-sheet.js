@@ -903,6 +903,34 @@ router.put('/:characterId/sols', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ─── POST /api/char-sheet/:characterId/quick-equip ───────────────────────────
+// GM uniquement. Équipement d'urgence pré-combat — bypass isContainerAvailable.
+router.post('/:characterId/quick-equip', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM uniquement')
+
+    const characterId = req.params.characterId
+    const { equipment_id, slot } = req.body
+
+    if (!equipment_id) throw new AppError(400, 'equipment_id requis')
+    if (!VALID_SLOTS.includes(slot)) throw new AppError(400, `slot invalide : ${slot}`)
+
+    const conflict = await db('char_inventory')
+      .where({ character_id: characterId, slot })
+      .first()
+    if (conflict) throw new AppError(409, `Slot ${slot} déjà occupé`)
+
+    const [inserted] = await db('char_inventory')
+      .insert({ character_id: characterId, equipment_id, container: 'Sac', slot, quantity: 1 })
+      .returning('*')
+
+    const item = await getItemWithRef(inserted.id)
+    req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_ADDED, { characterId, item })
+
+    res.status(201).json({ item })
+  } catch (err) { next(err) }
+})
+
 // ─── POST /api/char-sheet/:characterId/inventory ──────────────────────────────
 router.post('/:characterId/inventory', async (req, res, next) => {
   try {

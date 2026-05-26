@@ -51,7 +51,11 @@
       "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
       "Bash(node --input-type=module --env-file=../.env)",
       "Bash(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\Phase1-ActionPanel-GM.html\")",
-      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\Phase1-ActionPanel-GM.html\"\\).Count)"
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\Phase1-ActionPanel-GM.html\"\\).Count)",
+      "WebFetch(domain:claude.ai)",
+      "Bash(node -e \"const knex = require\\('./server/knexfile.cjs'\\); const k = require\\('knex'\\)\\(knex.development\\); k\\('ref_equipment'\\).distinct\\('family','category'\\).orderBy\\('family'\\).then\\(r => { console.log\\(JSON.stringify\\(r,null,2\\)\\); k.destroy\\(\\); }\\).catch\\(e => { console.error\\(e.message\\); k.destroy\\(\\); }\\)\")",
+      "Bash(node -e \"const knex = require\\('./knexfile.cjs'\\); const k = require\\('knex'\\)\\(knex.development\\); k\\('ref_equipment'\\).distinct\\('family','category'\\).orderBy\\('family'\\).then\\(r => { console.log\\(JSON.stringify\\(r,null,2\\)\\); k.destroy\\(\\); }\\).catch\\(e => { console.error\\(e.message\\); k.destroy\\(\\); }\\)\")",
+      "WebFetch(domain:api.anthropic.com)"
     ]
   }
 }

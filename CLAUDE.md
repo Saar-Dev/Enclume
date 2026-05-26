@@ -118,32 +118,32 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 64 (2026-05-25)
+## État actuel — Session 65 (2026-05-26)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **57 migrations stables** — prochaine : **58**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅
+- **58 migrations stables** — prochaine : **59**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅
 
-**Session 64 — Sprint 7.3/7.4/7.4bis ✅ CONFIRMÉS :**
-- Bug fix critique : `skillAssoc` lookup via `weapon.equipment_id` (non `weapon_inv_id`) → skillTotal correct
-- resolveAssaultAction : jet attaque + DICE_RESULT broadcast + bifurcation PJ/PNJ + pendingDamageActions
-- COMBAT_DAMAGE_CONFIRM handler : calcul complet (loc + armures PI8 + dégâts + blessures + shockTest)
-- CombatDamageWindow.jsx : fenêtre PJ 3 phases (vide → animation → résultats)
-- COMBAT_ATTACK_PLAYER_RESULT : nouvel événement WS — serveur → socket tireur PJ (hit/miss)
-- CombatModifiersWindow : "Lancer les dés", isRolling, banner résultat, body masqué post-roll
-- CombatOverlay : PJ résout son propre assaut, GM résout PNJ uniquement
+**Session 65 — Sprint 7.6 ✅ CONFIRMÉ :**
+- combatSections.js : STATE_DEFS 5 états + matrices coût, calcIniDelta, MAP_ACTIONS multi-select, QUICK_ACTIONS incrémentaux
+- CombatActionWindow v2 : StateSelector segmented control, blocs TACTIQUE/ARMEMENT/ACTION/RAPIDES, QB, payload v2
+- socket/index.js : COMBAT_ACTION_DECLARE v2, matrices STATE_COSTS, UPDATE state_*, endTurn reset colonnes
+- CombatGmDeclareWindow : adapté v2 (MAP_ACTIONS/QUICK_ACTIONS, emit v2)
+- Migration 58 : state_cover / state_fire_mode / state_vitesse sur combat_roster
 
-**Session 64 — Chantier Documentation ✅ :**
-- SYSTEME.md découpé en 9 fichiers thématiques dans `docs/SYSTEME/`
-- JOURNAL2.md archivé → `docs/Old/JOURNAL2.md`, JOURNAL3.md créé
-- GLOSSAIRE.md créé
-- CLAUDE.md réécrit (pointeurs vers SYSTEME/)
+**Session 65 — Sprint GM + Sprint GM-A ✅ CONFIRMÉS :**
+- CombatGmDeclareWindow : réécriture complète (InlineChip click-to-cycle, batch mode, STATE_DEFAULTS, roster intégré)
+- combatSections.js : tooltips LdB + label reperer corrigé, slider GM affiche coût INI réel
+- CombatRosterWindow v2 : détection arme/armure pré-combat, chips T/C/B/J PJ/PNJ, quick-equip GM-only, bannière alerte
+- battlemaps.js : GET /:id/combat-equipment
+- char-sheet.js : POST /:characterId/quick-equip (GM-only, bypass container)
+- equipment.js : +location dans GET /equipment SELECT
 
 **"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
 
 **Prochain chantier :**
+- Sprint GM-B — Déplacement PNJ (onEnterMoveMode depuis CombatOverlay, moveSelection per-PNJ)
 - Sprint 7.5 — Décompte munitions
-- Sprint 7.6 — Actions d'état dynamiques (state_weapon/state_position)
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser.
