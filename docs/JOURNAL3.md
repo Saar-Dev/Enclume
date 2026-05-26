@@ -330,6 +330,10 @@ Bug résolu : `if (next.has(key)) next.delete(key) else next.add(key)` → accol
 - PJ : lecture seule intentionnelle — le joueur gère son propre équipement
 - Slot par défaut arme = 'MD' (main droite) — cas d'usage le plus courant pour un PNJ sans arme
 
+**Post-confirmation — Bug fix overflow clipping :**
+- `PnjArmorChips` : dropdown custom `position:absolute` à l'intérieur de `tableWrap` (`overflow:auto`) → dropdown coupé par le scroll container (règle CSS déterministe)
+- Fix : état local `openChip` dans `PnjArmorChips`, `<select>` natif (s'ouvre au niveau viewport, hors overflow), suppression `openDropdown` dans le parent, suppression `windowRef`/click-outside, suppression styles `chipDropdown/chipDropdownEmpty/chipDropdownItem` orphelins
+
 **Sprint GM-A CONFIRMÉ FONCTIONNEL ✅**
 
 

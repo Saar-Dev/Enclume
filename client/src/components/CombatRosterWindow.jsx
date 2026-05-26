@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
@@ -61,7 +61,6 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
   const [equipment,    setEquipment]    = useState({})   // tokenId → { characterId, weapon, armorPieces }
   const [refWeapons,   setRefWeapons]   = useState([])
   const [refArmors,    setRefArmors]    = useState([])
-  const [openDropdown, setOpenDropdown] = useState(null) // { tokenId, kind:'weapon'|'armor', chip:null|'T'|'C'|'B'|'J' }
 
   const inCombat = phase !== null
 
@@ -140,17 +139,8 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
   const noWeaponCnt  = pnjRows.filter(r => !equipment[r.tokenId]?.weapon).length
   const noArmorCnt   = pnjRows.filter(r => (equipment[r.tokenId]?.armorPieces ?? []).length === 0).length
 
-  // ── Fermer dropdown au clic extérieur ──────────────────────────────────────
-  const windowRef = useRef(null)
-  useEffect(() => {
-    if (!openDropdown) return
-    const handler = e => { if (windowRef.current && !windowRef.current.contains(e.target)) setOpenDropdown(null) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [openDropdown])
-
   return (
-    <div ref={windowRef} style={S.window}>
+    <div style={S.window}>
       {/* HEADER */}
       <div style={S.header}>
         <div style={S.headerLeft}>
@@ -282,8 +272,6 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                             <PnjArmorChips
                               armorPieces={eq.armorPieces}
                               refArmors={refArmors}
-                              openDropdown={openDropdown?.tokenId === row.tokenId ? openDropdown : null}
-                              onChipClick={chip => setOpenDropdown({ tokenId: row.tokenId, chip })}
                               onSelect={(equipmentId, chip) => {
                                 const cid = equipment[row.tokenId]?.characterId
                                 handleQuickEquip(row.tokenId, cid, equipmentId, chipToSlot(chip))
@@ -373,40 +361,45 @@ function PjArmorChips({ armorPieces }) {
   )
 }
 
-function PnjArmorChips({ armorPieces, refArmors, openDropdown, onChipClick, onSelect }) {
+function PnjArmorChips({ armorPieces, refArmors, onSelect }) {
   const { coverage, tips } = mergeArmorPieces(armorPieces)
+  const [openChip, setOpenChip] = useState(null)
   return (
     <div style={S.chips}>
       {ARMOR_CHIPS.map(chip => {
-        const isOpen = openDropdown?.chip === chip
         const filteredArmors = refArmors.filter(a => a.location?.split('/').includes(chip))
-        return (
-          <div key={chip} style={{ position: 'relative' }}>
-            <span
-              title={tips[chip]?.join(', ') || undefined}
-              style={{
-                ...S.chip,
-                ...(coverage[chip] ? S.chipPnjFilled : S.chipPnjGap),
-                cursor: coverage[chip] ? 'default' : 'pointer',
-              }}
-              onClick={() => !coverage[chip] && onChipClick(chip)}
-            >
+        if (coverage[chip]) {
+          return (
+            <span key={chip} title={tips[chip]?.join(', ') || undefined}
+              style={{ ...S.chip, ...S.chipPnjFilled }}>
               {chip}
             </span>
-            {isOpen && (
-              <div style={S.chipDropdown}>
-                {filteredArmors.length === 0
-                  ? <div style={S.chipDropdownEmpty}>Aucun item disponible</div>
-                  : filteredArmors.map(a => (
-                      <div key={a.id} style={S.chipDropdownItem}
-                        onClick={() => onSelect(a.id, chip)}>
-                        {a.name}
-                      </div>
-                    ))
-                }
-              </div>
-            )}
-          </div>
+          )
+        }
+        if (openChip === chip) {
+          return (
+            <select key={chip}
+              style={{ ...S.selectWarn, width: 130, fontSize: 9, padding: '2px 4px' }}
+              defaultValue=""
+              autoFocus
+              onChange={e => { if (e.target.value) { onSelect(e.target.value, chip); setOpenChip(null) } }}
+              onBlur={() => setOpenChip(null)}
+            >
+              <option value="" disabled>{chip} ▾</option>
+              {filteredArmors.length === 0
+                ? <option disabled>Aucun item</option>
+                : filteredArmors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)
+              }
+            </select>
+          )
+        }
+        return (
+          <span key={chip}
+            style={{ ...S.chip, ...S.chipPnjGap, cursor: 'pointer' }}
+            onClick={() => setOpenChip(chip)}
+          >
+            {chip}
+          </span>
         )
       })}
     </div>
@@ -480,11 +473,6 @@ const S = {
   chipPjEmpty:   { background: 'transparent', color: '#2a3a4a', border: '1px solid #1a2030' },
   chipPnjFilled: { background: '#0a2010', color: '#50c878', border: '1px solid #2a6040' },
   chipPnjGap:    { background: 'transparent', color: '#4a2020', border: '1px solid #6a2020' },
-
-  // Chip dropdown custom
-  chipDropdown: { position: 'absolute', top: 22, left: 0, zIndex: 10, background: '#0d1018', border: '1px solid #2a3a4a', borderRadius: 3, minWidth: 180, maxHeight: 160, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.6)' },
-  chipDropdownEmpty: { padding: '6px 10px', fontSize: 10, color: '#4a5a6a', fontStyle: 'italic' },
-  chipDropdownItem:  { padding: '5px 10px', fontSize: 10, color: '#aaccdd', cursor: 'pointer', borderBottom: '1px solid #1a2030' },
 
   // Exclus
   excludedSection: { padding: '8px 14px', borderTop: '1px solid #1e2435', background: 'rgba(0,0,0,0.15)', flexShrink: 0 },
