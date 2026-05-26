@@ -49,7 +49,9 @@
       "Bash(Select-Object -Last 40)",
       "Bash(tasklist /fi \"imagename eq node.exe\" /fo csv)",
       "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
-      "Bash(node --input-type=module --env-file=../.env)"
+      "Bash(node --input-type=module --env-file=../.env)",
+      "Bash(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\Phase1-ActionPanel-GM.html\")",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\Phase1-ActionPanel-GM.html\"\\).Count)"
     ]
   }
 }

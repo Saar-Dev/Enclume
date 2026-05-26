@@ -100,18 +100,18 @@ export function calcIniDelta(prevStates, nextStates, mapActions, quick) {
 
 // Actions sur la carte -- multi-selection
 export const MAP_ACTIONS = [
-  { k: 'move',     l: 'Déplacement',       hint: 'cliquer destination',          isZoneSelect: true  },
-  { k: 'attack',   l: 'Assaut (tir)',       hint: 'cliquer cible',                requireWeapon: true },
-  { k: 'melee',    l: 'Corps à corps',      hint: 'cliquer adversaire', ini: -3                      },
-  { k: 'multi',    l: 'Attaque multiple',   hint: '',                   ini: -5,  active: false       },
-  { k: 'interact', l: 'Interagir',          hint: 'sprint suivant',               active: false       },
+  { k: 'move',     l: 'Déplacement',       tooltip: 'Déplacement court -3 / Se jeter à terre -5 / Se relever -10 / Se précipiter +3',              hint: 'cliquer destination',          isZoneSelect: true  },
+  { k: 'attack',   l: 'Assaut (tir)',       tooltip: 'Attaque à distance. Tirer depuis une couverture -3 à -5.',                                    hint: 'cliquer cible',                requireWeapon: true },
+  { k: 'melee',    l: 'Corps à corps',      tooltip: 'Venir au corps à corps pour saisir son adversaire -3.',                                       hint: 'cliquer adversaire', ini: -3                      },
+  { k: 'multi',    l: 'Attaque multiple',   tooltip: 'Attaque sur plusieurs cibles -5.',                                                            hint: '',                   ini: -5,  active: false       },
+  { k: 'interact', l: 'Interagir',          tooltip: 'Utiliser un mécanisme simple (actionner un interrupteur, ouvrir une porte, saisir un objet) -3 à -5.', hint: 'sprint suivant',    active: false       },
 ]
 
 // Actions rapides -- cumulables
 export const QUICK_ACTIONS = [
-  { k: 'observer', l: 'Observer le combat',       kind: 'incremental', stepIni: -5, max: 6 },
-  { k: 'reperer',  l: 'Repérer / scanner',        kind: 'incremental', stepIni: -5, max: 6 },
-  { k: 'phrase',   l: 'Prononcer une phrase',     kind: 'fixed',       ini: -3             },
+  { k: 'observer', l: 'Observer le combat',              tooltip: 'Observer le combat — 1 information par tranche de 5 pts d\'Init.',                                                    kind: 'incremental', stepIni: -5, max: 6 },
+  { k: 'reperer',  l: 'Repérer (obj., personne, lieu…)', tooltip: 'Tenter de repérer un objet, une arme, une personne, un endroit, etc. — 1 Test d\'Observation par tranche de 5 pts d\'Init.', kind: 'incremental', stepIni: -5, max: 6 },
+  { k: 'phrase',   l: 'Prononcer une phrase',            tooltip: 'Prononcer une phrase courte, donner des ordres brefs -3.',                                                             kind: 'fixed',       ini: -3             },
 ]
 
 // Zones de deplacement -- inchange

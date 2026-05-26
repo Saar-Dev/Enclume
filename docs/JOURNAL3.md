@@ -220,3 +220,59 @@ Refonte architecture docs — voir ROADMAP.md § "Chantier Documentation".
 
 Bug résolu : `if (next.has(key)) next.delete(key) else next.add(key)` → accolades obligatoires (OXC reject).
 
+---
+
+## Session 65 — Sprint GM : Refonte CombatGmDeclareWindow
+
+**Objectif :** Réécriture complète de `CombatGmDeclareWindow.jsx` pour correspondre au prototype `Phase1-ActionPanel-GM.html`. Fenêtre unifiée avec chips inline click-to-cycle, roster intégré, mode batch multi-PNJ.
+
+**Réalisé :**
+
+*`client/src/components/CombatGmDeclareWindow.jsx`* ✅ — réécriture complète (~520 lignes)
+- `STATE_DEFAULTS` : `{ position:'standing', weapon:'holstered', fire_mode:'cc', cover:'exposed', vitesse:'normal' }`
+- `nextKey(stateKey, currentKey)` : cycle circulaire, fallback STATE_DEFAULTS si clé inconnue (mode mixte)
+- `InlineChip` sub-composant : puce click-to-cycle compacte, coût de transition affiché, `'— mixte —'` en batch mixte
+- Mode batch : `selectedIds.size >= 2` → header orange, chips agrégées, DÉCLARER émet N événements WS séparés
+- `aggregate(stateKey)` / `aggregateInitial(stateKey)` : valeur unique ou `'__mixed__'`
+- Sections : TACTIQUE (position/cover/vitesse) / ARMEMENT (weapon/fire_mode) / ACTION (melee/multi/interact) / ACTIONS RAPIDES (observer/reperer sliders + phrase)
+- Roster intégré scrollable avec checkboxes, glyphes état (○/◉/✓), delta INI indicatif par PNJ
+- Footer : INI total (1 cible), avertissement coûts individuels en batch, bouton DÉCLARER
+- `canDeclare` : au moins 1 changement d'état OU 1 action sur au moins 1 PNJ non déclaré
+- Auto-focus prochain PNJ todo après DÉCLARER
+- `GM_DISABLED = new Set(['move', 'attack'])` — sprints dédiés
+
+**Décisions de design documentées :**
+- Clic sur chip mixte → reset à STATE_DEFAULTS (ex. vitesse mixte → 'normal')
+- Batch mode : selectedIds réinitialisé après DÉCLARER, focusedId pointe le prochain todo
+- attack grisé : nécessite fetch char_inventory + fallback ref_equipment dropdown + PC22 server bypass (Sprint GM-A)
+- move grisé : nécessite connexion onEnterMoveMode depuis CombatOverlay (Sprint GM-B)
+
+**Sprints restants :**
+- Sprint GM-A — Assaut PNJ (char_inventory équipée, fallback dropdown ref_equipment, cross-turn persistence, PC22 bypass serveur)
+- Sprint GM-B — Déplacement PNJ (passage onEnterMoveMode depuis CombatOverlay, moveSelection per-PNJ)
+
+---
+
+## Session 65 — Fix tooltips LdB + label reperer
+
+**Objectif :** Ajouter les textes exacts du Livre de Base Polaris comme tooltips HTML natifs (`title=`) au survol des actions de combat. Corriger le label `reperer` tronqué.
+
+**Réalisé :**
+
+*`client/src/components/combatSections.js`* ✅
+- Champ `tooltip` ajouté sur les 5 MAP_ACTIONS et les 3 QUICK_ACTIONS (texte LdB exact)
+- Label `reperer` corrigé : `'Repérer / scanner'` → `'Repérer (obj., personne, lieu…)'`
+- Tooltip reperer complet : "Tenter de repérer un objet, une arme, une personne, un endroit, etc. — 1 Test d'Observation par tranche de 5 pts d'Init."
+- Tooltip observer : "Observer le combat — 1 information par tranche de 5 pts d'Init."
+
+*`client/src/components/CombatGmDeclareWindow.jsx`* ✅
+- `title={qa.tooltip}` sur les quickRows (incremental + fixed)
+- `title={a.tooltip}` sur les actionBtns MAP_ACTIONS
+- Slider observer/reperer : `{val * stepIni}` (ex. `-10`) au lieu du compte brut ; `'–'` quand inactif
+
+*`client/src/components/CombatActionWindow.jsx`* ✅
+- `title={a.tooltip}` sur les 3 branches MAP_ACTIONS (greyed, zoneSelect, normal)
+- `title={a.tooltip}` sur le wrapper QUICK_ACTIONS
+
+**Rappel mécanique :** Observer / Repérer = 1 résultat par tranche de 5 pts d'Init. Coût = N × (−5) INI. Le slider représente le nombre de tranches.
+

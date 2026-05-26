@@ -533,7 +533,7 @@ export default function CombatActionWindow({
                 const isDisabled = a.active === false
                 if (isDisabled) {
                   return (
-                    <div key={a.k} style={W.itemGreyed}>
+                    <div key={a.k} title={a.tooltip} style={W.itemGreyed}>
                       <span style={W.itemLabel}>{a.l}</span>
                       {a.ini && <span style={W.itemMod}>{a.ini}</span>}
                     </div>
@@ -544,6 +544,7 @@ export default function CombatActionWindow({
                   return (
                     <div
                       key={a.k}
+                      title={a.tooltip}
                       style={{
                         ...W.item,
                         ...(isActive ? W.itemSelected : {}),
@@ -567,6 +568,7 @@ export default function CombatActionWindow({
                 return (
                   <div
                     key={a.k}
+                    title={a.tooltip}
                     style={{ ...W.item, ...(isActive ? W.itemSelected : {}) }}
                     onClick={() => handleMapToggle(a.k)}
                   >
@@ -610,7 +612,7 @@ export default function CombatActionWindow({
               const isActive = isFixed ? !!val : val > 0
               const cost    = isFixed ? a.ini : (val * a.stepIni)
               return (
-                <div key={a.k} style={{ borderBottom: '1px solid #1a1a2a' }}>
+                <div key={a.k} title={a.tooltip} style={{ borderBottom: '1px solid #1a1a2a' }}>
                   <div
                     style={{ ...W.item, gridColumn: 'span 2' }}
                     onClick={() => {

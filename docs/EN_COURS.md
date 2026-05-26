@@ -268,6 +268,19 @@ Implique : nouvelle colonne `campaigns.gm_entity_move_mode`, option par token `t
 
 ---
 
+## Sprint GM — Refonte CombatGmDeclareWindow ✅ CONFIRMÉ (session 65)
+
+Travaux effectués :
+- `CombatGmDeclareWindow.jsx` : réécriture complète — InlineChip click-to-cycle, batch mode (selectedIds), STATE_DEFAULTS, aggregate/aggregateInitial, sections TACTIQUE/ARMEMENT/ACTION/RAPIDES, roster intégré, footer INI delta ✅
+- `combatSections.js` : ajout `tooltip` sur MAP_ACTIONS + QUICK_ACTIONS (texte LdB exact), correction label `reperer`, slider GM affiche coût INI (val×stepIni) ✅
+- `CombatActionWindow.jsx` : `title={a.tooltip}` sur les 3 branches MAP_ACTIONS + wrapper QUICK_ACTIONS ✅
+
+**Sprints restants :**
+- Sprint GM-A — Assaut PNJ (char_inventory équipée + fallback dropdown ref_equipment + cross-turn weapon persistence + PC22 bypass serveur)
+- Sprint GM-B — Déplacement PNJ (onEnterMoveMode depuis CombatOverlay, moveSelection per-PNJ)
+
+---
+
 ## Sprint 7.6 — Actions d'état dynamiques ✅ CONFIRMÉ (session 65)
 
 Remplacement du système clé plate (selectedKeys/KEY_MOD) par des sélecteurs d'état avec matrices de transition INI. Payload v2 `{ tokenId, state, mapActions, quick }`.

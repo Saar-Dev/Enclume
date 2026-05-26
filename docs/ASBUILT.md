@@ -19,12 +19,12 @@ Enclume/
 │   │   │   ├── CombatOverlay.jsx        # Modifié 64 — Sprint 7.1 : +combatTargetMode. Sprint 7.4bis : refactoring PJ vs GM (playerActiveAssaultAction, gmActiveCharacter), deux CombatModifiersWindow séparés, CombatActionWindow masqué pendant assaut PJ, +attackResult/onAttackConfirmed props
 │   │   │   ├── CombatRosterWindow.jsx  # NOUVEAU 57 — roster GM, INI preview, surpris, exclusion, bouton Démarrer
 │   │   │   ├── CombatTimeline.jsx      # Modifié 62 — timeline INI, portraits cliquables GM, topOffset + curseur slot actif RÉSOLUTION (slotActive, activeSlotIdx)
-│   │   │   ├── CombatActionWindow.jsx  # Modifié 65 Sprint 7.6 — réécriture v2 : StateSelector segmented control, blocs TACTIQUE/ARMEMENT/ACTION/RAPIDES, QB weapon auto-drawn, footer INI delta coloré, payload v2 {state,mapActions,quick}
+│   │   │   ├── CombatActionWindow.jsx  # Modifié 65 Sprint 7.6 — réécriture v2 : StateSelector segmented control, blocs TACTIQUE/ARMEMENT/ACTION/RAPIDES, QB weapon auto-drawn, footer INI delta coloré, payload v2 {state,mapActions,quick}. Modifié 65 Sprint GM — title={a.tooltip} sur MAP_ACTIONS (3 branches) + QUICK_ACTIONS
 │   │   │   ├── CombatDamageWindow.jsx  # NOUVEAU 64 Sprint 7.4 — fenêtre PJ lancer dés dégâts : Phase 1 dés vides / Phase 2 animation / Phase 3 résultats colorés
 │   │   │   ├── CombatModifiersWindow.jsx # NOUVEAU 64 Sprint 7.2. Modifié 65 Sprint 7.6 — is_rushed → state_vitesse === 'rushed'
 │   │   │   ├── CombatPnjPanel.jsx      # NOUVEAU 58 — modal GM PJs/PNJs read-only, isPnj via character.type
-│   │   │   ├── CombatGmDeclareWindow.jsx # Modifié 65 Sprint 7.6 — adapté v2 : MAP_ACTIONS (melee/multi/interact) + QUICK_ACTIONS sliders, emit v2 avec états courants roster
-│   │   │   ├── combatSections.js       # Modifié 65 Sprint 7.6 — réécriture complète : STATE_DEFS (5 états + matrices coût), stateTransitionCost, calcIniDelta, MAP_ACTIONS multi-select, QUICK_ACTIONS incrémentaux, MOVE_ZONE_DEFS
+│   │   │   ├── CombatGmDeclareWindow.jsx # Réécriture complète 65 Sprint GM — InlineChip click-to-cycle, batch mode, STATE_DEFAULTS, aggregate/__mixed__, sections TACTIQUE/ARMEMENT/ACTION/RAPIDES, roster intégré, footer INI delta, GM_DISABLED move+attack, emit v2 N×WS. title tooltips LdB
+│   │   │   ├── combatSections.js       # Modifié 65 Sprint 7.6 — réécriture complète : STATE_DEFS (5 états + matrices coût), stateTransitionCost, calcIniDelta, MAP_ACTIONS multi-select, QUICK_ACTIONS incrémentaux, MOVE_ZONE_DEFS. Modifié 65 Sprint GM — tooltip LdB sur MAP_ACTIONS+QUICK_ACTIONS, label reperer corrigé
 │   │   │   ├── Canvas3D.jsx            # Modifié 64 — +combatTargetMode prop, combatTargetModeRef (P40), intercept drag→target, ligne R3F attaquant→cible (useMemo targetLinePoints)
 │   │   │   ├── Editor3D.jsx            # Modifié 9C — EntityEditorScene, activeEditorTab
 │   │   │   ├── EntityMesh.jsx          # Modifié 43 — Lerp 300ms EntityMeshVoxel + EntityMeshGlb
