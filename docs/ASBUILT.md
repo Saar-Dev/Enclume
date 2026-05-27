@@ -36,7 +36,7 @@ Enclume/
 │   │   │   ├── Sidebar.jsx             # Modifié 64 Sprint 7.4 — +rendu interactionType='combat_damage' (dégâts colorés par sévérité). Modifié 36 — entity_action structuré
 │   │   │   ├── GeometryIcon.jsx        # Stable 9A-3
 │   │   │   ├── DicePanel.jsx           # Stable session 18
-│   │   │   ├── DiceMesh.jsx            # NOUVEAU 44 — géométries, matériaux, animation, Html overlay D10
+│   │   │   ├── DiceMesh.jsx            # NOUVEAU 44 — géométries, matériaux, animation, Html overlay D10. Modifié 65 — branche D20 dédiée supprimée → D20 passe par faceNormal→D20_GLB_NORMALS (normales Blender exactes)
 │   │   │   └── DiceRoller.jsx          # NOUVEAU 44 — orchestrateur R3F dans Canvas3D
 │   │   ├── pages/
 │   │   │   ├── LoginPage.jsx
@@ -69,7 +69,7 @@ Enclume/
 │   │   ├── lib/
 │   │   │   ├── api.js
 │   │   │   ├── voxelTextures.js
-│   │   │   └── diceMath.js             # NOUVEAU 44 — PRNG, mappings, normales D4/D6/D8/D12/D20/D10
+│   │   │   └── diceMath.js             # NOUVEAU 44 — PRNG, mappings, normales D4/D6/D8/D12/D20/D10. Modifié 65 — D20_GLB_NORMALS : 20 normales Blender exactes, clés = numéros réels du dé (remapping par test visuel + validation antipodal)
 │   │   ├── i18n.js
 │   │   ├── App.jsx                     # Modifié 33 — route /workshop + redirect /texture-packs
 │   │   └── main.jsx
@@ -315,7 +315,7 @@ Chargée une seule fois depuis DB au premier jet.
 | D6 | BoxGeometry | Texture CanvasTexture par face | ✅ stable |
 | D4 | TetrahedronGeometry | Texture CanvasTexture par face | ✅ stable |
 | D8 | OctahedronGeometry | Texture CanvasTexture par face | ✅ stable |
-| D20 | IcosahedronGeometry | Texture CanvasTexture par face | ✅ stable |
+| D20 | GLB (D20_LP Blender) | Texture GLB albedo 4096×4096 | ✅ normales exactes session 65 |
 | D12 | DodecahedronGeometry | Atlas 12 cases (fillText centroïde 0.397) | ✅ stable |
 | D10/D100 | Trapezohedron custom | Html overlay V1 `position=[0,0,0]` | ✅ V1 stable |
 

@@ -1,9 +1,10 @@
 import { useRef, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
+import { Html, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import {
   DIE_GEOMETRY,
+  GLB_PATHS,
   getFinalRotation,
   getFaceNormal,
   D4_FACE_VALUES,
@@ -11,7 +12,6 @@ import {
   D8_FACE_VALUES,
   D8_FACE_NORMALS_LIST,
   D20_FACE_VALUES,
-  D20_FACE_NORMALS_LIST,
   D12_FACE_VALUES,
   D12_FACE_NORMALS_LIST,
   D10_KITE_NORMALS,
@@ -106,8 +106,114 @@ function createD10Geometry(radius = 0.85) {
   return geo
 }
 
-// ─── DiceMesh ─────────────────────────────────────────────────────────────────
-export default function DiceMesh({ dieType, faceValue, seed, laneX, color = '#1e3a5f' }) {
+// ─── DiceMeshGlb — rendu via modèle .glb (géométrie + matériau baked) ────────
+// Même logique d'animation que DiceMesh procédural.
+// Scale 104 : le D6.glb mesure ~0.0106 unités glTF, BoxGeometry actuel = 1.1 unités.
+function DiceMeshGlb({ glbPath, dieType, faceValue, seed, laneX }) {
+  const { camera } = useThree()
+  const groupRef = useRef()
+  const meshRef  = useRef()
+  const elapsed  = useRef(0)
+  const done     = useRef(false)
+
+  const { nodes } = useGLTF(glbPath)
+
+  const { geometry, material } = useMemo(() => {
+    const meshNode = Object.values(nodes).find(n => n.isMesh)
+    return {
+      geometry: meshNode?.geometry ?? new THREE.BoxGeometry(1, 1, 1),
+      material: meshNode?.material ?? new THREE.MeshStandardMaterial(),
+    }
+  }, [nodes])
+
+  const faceNormal = useMemo(() => getFaceNormal(dieType, faceValue), [dieType, faceValue])
+  const startQ     = useMemo(() => {
+    const r = getFinalRotation(seed ^ 0xDEAD)
+    return new THREE.Quaternion().setFromEuler(new THREE.Euler(r.rx, r.ry, r.rz))
+  }, [seed])
+  const noise    = useMemo(() => makeNoiseFunc(seed),   [seed])
+  const duration = useMemo(() => getAnimDuration(seed), [seed])
+
+  useFrame((_, delta) => {
+    if (!groupRef.current || !meshRef.current || done.current) return
+    elapsed.current += delta
+    const t = Math.min(elapsed.current / duration, 1)
+
+    const camDir = new THREE.Vector3()
+    camera.getWorldDirection(camDir)
+    const camPos = camera.position.clone()
+    const up    = new THREE.Vector3(0, 1, 0)
+    const right = new THREE.Vector3().crossVectors(camDir, up).normalize()
+
+    const basePos = camPos.clone()
+      .add(camDir.clone().multiplyScalar(6))
+      .add(right.clone().multiplyScalar(laneX))
+      .add(up.clone().multiplyScalar(0.5))
+
+    let posY = basePos.y
+    if (t < PHASES.BOUNCE_END) {
+      posY += Math.sin((t / PHASES.BOUNCE_END) * Math.PI) * 2.0
+    } else if (t < PHASES.ALIGN_END) {
+      const tp = (t - PHASES.BOUNCE_END) / (PHASES.ALIGN_END - PHASES.BOUNCE_END)
+      posY += Math.sin(tp * Math.PI) * 0.4
+    } else {
+      const tp = (t - PHASES.ALIGN_END) / (1 - PHASES.ALIGN_END)
+      posY += Math.sin(tp * Math.PI * 4) * 0.06 * (1 - tp)
+    }
+    groupRef.current.position.set(basePos.x, posY, basePos.z)
+
+    let targetQ
+    if (faceNormal) {
+      const fn = new THREE.Vector3(...faceNormal)
+      targetQ = new THREE.Quaternion().setFromUnitVectors(fn, camDir.clone().negate())
+    } else {
+      const r = getFinalRotation(seed)
+      targetQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(r.rx, r.ry, r.rz))
+    }
+
+    const noiseInfluence = t < PHASES.BOUNCE_END
+      ? 1.0
+      : t < PHASES.ALIGN_END
+        ? 1.0 - easeOut((t - PHASES.BOUNCE_END) / (PHASES.ALIGN_END - PHASES.BOUNCE_END))
+        : 0.0
+
+    const alignT = t < PHASES.BOUNCE_END ? 0 : easeInOut(
+      Math.min((t - PHASES.BOUNCE_END) / (PHASES.ALIGN_END - PHASES.BOUNCE_END), 1)
+    )
+
+    const q = new THREE.Quaternion()
+    q.slerpQuaternions(startQ, targetQ, alignT)
+
+    const n = noise(elapsed.current * 6)
+    const noiseQ = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(n.dx * noiseInfluence, n.dy * noiseInfluence, n.dz * noiseInfluence)
+    )
+    meshRef.current.quaternion.copy(q.multiply(noiseQ))
+
+    if (t >= 1) {
+      groupRef.current.position.set(basePos.x, basePos.y, basePos.z)
+      meshRef.current.quaternion.copy(targetQ)
+      done.current = true
+    }
+  })
+
+  return (
+    <group ref={groupRef} scale={104}>
+      <mesh ref={meshRef} geometry={geometry} material={material} castShadow />
+    </group>
+  )
+}
+
+useGLTF.preload('/models/D4.glb')
+useGLTF.preload('/models/D6.glb')
+useGLTF.preload('/models/D8.glb')
+useGLTF.preload('/models/D10.glb')
+useGLTF.preload('/models/D100.glb')
+useGLTF.preload('/models/D12.glb')
+useGLTF.preload('/models/D20.glb')
+
+// ─── DiceMeshProcedural — géométrie procédurale + CanvasTexture ──────────────
+function DiceMeshProcedural({ dieType, faceValue, seed, laneX, color = '#1e3a5f' }) {
   const { camera } = useThree()
   const groupRef = useRef()
   const meshRef  = useRef()
@@ -365,13 +471,6 @@ export default function DiceMesh({ dieType, faceValue, seed, laneX, color = '#1e
         ? new THREE.Vector3(...D8_FACE_NORMALS_LIST[faceIdx])
         : new THREE.Vector3(0, 1, 0)
       targetQ = new THREE.Quaternion().setFromUnitVectors(fn, camDir.clone().negate())
-    } else if (dieType === 'd20') {
-      // D20 — même pattern
-      const faceIdx = D20_FACE_VALUES.indexOf(faceValue)
-      const fn = faceIdx >= 0
-        ? new THREE.Vector3(...D20_FACE_NORMALS_LIST[faceIdx])
-        : new THREE.Vector3(0, 1, 0)
-      targetQ = new THREE.Quaternion().setFromUnitVectors(fn, camDir.clone().negate())
     } else if (dieType === 'd12') {
       // D12 — même pattern
       const faceIdx = D12_FACE_VALUES.indexOf(faceValue)
@@ -468,4 +567,12 @@ export default function DiceMesh({ dieType, faceValue, seed, laneX, color = '#1e
       )}
     </group>
   )
+}
+
+// ─── DiceMesh — routeur : GLB si dispo, procédural sinon ─────────────────────
+export default function DiceMesh(props) {
+  const glbPath = GLB_PATHS[props.dieType]
+  return glbPath
+    ? <DiceMeshGlb {...props} glbPath={glbPath} />
+    : <DiceMeshProcedural {...props} />
 }

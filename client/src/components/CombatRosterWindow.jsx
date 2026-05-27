@@ -4,9 +4,7 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api'
 
-// Slots arme — identiques à WEAPON_SLOTS serveur
-const WEAPON_SLOTS = new Set(['MG', 'MD', '2M', 'Tr'])
-const SLOT_LABELS  = { MG: 'MG', MD: 'MD', '2M': '2M', Tr: 'Tr' }
+const SLOT_LABELS = { MG: 'MG', MD: 'MD', '2M': '2M', Tr: 'Tr' }
 
 // Chips armure : T C B J
 const ARMOR_CHIPS = ['T', 'C', 'B', 'J']
@@ -107,7 +105,6 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
     } catch (e) {
       console.error('[QuickEquip]', e?.response?.data?.error?.message ?? e.message)
     }
-    setOpenDropdown(null)
   }
 
   // ── Helpers identification ─────────────────────────────────────────────────
@@ -299,7 +296,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                       <td style={{ ...S.td, textAlign: 'center' }}>
                         <input type="checkbox" checked={!row.excluded}
                           onChange={() => toggleExcluded(row.tokenId)}
-                          style={{ cursor: isExcl ? 'pointer' : 'pointer', accentColor: '#5b8dee' }} />
+                          style={{ cursor: 'pointer', accentColor: '#5b8dee' }} />
                       </td>
                     )}
                   </tr>

@@ -34,17 +34,31 @@ export const DIE_GEOMETRY = {
   d10_tens:  { type: 'pentagonal_bipyramid', label: 'D10 ×10' },
   d10_units: { type: 'pentagonal_bipyramid', label: 'D10'     },
 }
+
+// GLB paths — dés avec modèle .glb embarqué (texture baked, geometry artistique)
+// Clé absente → fallback géométrie procédurale dans DiceMesh.jsx
+// d10 et d10_units partagent D10.glb — d10_tens utilise D100.glb (labels 00-90)
+export const GLB_PATHS = {
+  d4:        '/models/D4.glb',
+  d6:        '/models/D6.glb',
+  d8:        '/models/D8.glb',
+  d10:       '/models/D10.glb',
+  d10_units: '/models/D10.glb',
+  d10_tens:  '/models/D100.glb',
+  d12:       '/models/D12.glb',
+  d20:       '/models/D20.glb',
+}
 // ─── Normales par face — vérifiées par inspection Three.js (Node.js) ─────────
 // Retourne le vecteur normal [nx, ny, nz] de la face à orienter vers la caméra.
 // Source : BoxGeometry groups inspectés via geo.attributes.normal.
 // Convention dé physique D6 : faces opposées = 7.
 const D6_FACE_NORMALS = {
-  1: [ 0,  1,  0],  // group 2 — top +Y
-  2: [-1,  0,  0],  // group 1 — west -X
-  3: [ 0,  0,  1],  // group 4 — south +Z
-  4: [ 0,  0, -1],  // group 5 — north -Z
-  5: [ 1,  0,  0],  // group 0 — east +X
-  6: [ 0, -1,  0],  // group 3 — bottom -Y
+  1: [ 0,  0,  1],  // Blender front (vue -Y → normale -Y en Blender) → Three.js +Z
+  2: [ 0, -1,  0],  // Blender bottom (-Z) → Three.js -Y
+  3: [-1,  0,  0],  // Blender left (-X)   → Three.js -X
+  4: [ 1,  0,  0],  // Blender right (+X)  → Three.js +X
+  5: [ 0,  1,  0],  // Blender top (+Z)    → Three.js +Y
+  6: [ 0,  0, -1],  // Blender back (+Y)   → Three.js -Z
 }
 
 // Registre des normales — étendu au fur et à mesure des dés implémentés.
@@ -65,9 +79,111 @@ const D4_FACE_NORMALS_LIST = [
   [-0.5774,-0.5774,-0.5774],  // face 3 → valeur 1
 ]
 
+// Normales par face — extraites du .glb par K-means (inspect-glb.js), confirmées visuellement.
+// ✓ = confirmé par test | ? = placeholder (cluster non encore mappé à sa valeur)
+const D4_GLB_NORMALS = {
+  1: [ 0.0000,  0.3380,  0.9412],  // C1 ✓
+  2: [-0.8151,  0.3380, -0.4705],  // C3 ✓
+  3: [ 0.0000, -1.0000,  0.0000],  // C4 ✓
+  4: [ 0.8151,  0.3379, -0.4706],  // C2 ✓
+}
+const D8_GLB_NORMALS = {
+  1: [-0.5981,  0.5335,  0.5981],  // C5 ✓
+  2: [ 0.5982, -0.5334, -0.5980],  // C6 ✓
+  3: [ 0.5979, -0.5335,  0.5982],  // C4 ✓
+  4: [-0.5981,  0.5333, -0.5982],  // C3 ✓
+  5: [ 0.5980,  0.5337, -0.5979],  // C2 ✓
+  6: [-0.5981, -0.5335,  0.5980],  // C1 ✓
+  7: [-0.5980, -0.5335, -0.5981],  // C8 ✓
+  8: [ 0.5981,  0.5335,  0.5981],  // C7 ✓
+}
+// D10, D100 partagent la même géométrie — normals identiques
+// face 8 : -C9 (cassé fix — C10 légèrement hors axe)
+const D10_FACE_GLB = {
+   1: [-0.2171,  0.3521,  0.9104],  // C9 ✓
+   2: [-0.5699, -0.6205, -0.5387],  // C1 ✓
+   3: [ 0.6884,  0.5493, -0.4737],  // C8 ✓
+   4: [ 0.3804, -0.5588,  0.7369],  // C6 ✓
+   5: [-0.3815,  0.5576, -0.7373],  // C7 ✓
+   6: [-0.7066, -0.5506,  0.4444],  // C3 ✓
+   7: [ 0.6330,  0.6026,  0.4859],  // C2 ✓
+   8: [ 0.2171, -0.3521, -0.9104],  // -C9 ✓
+   9: [-0.8221,  0.5551,  0.1268],  // C5 ✓
+  10: [ 0.8154, -0.5631, -0.1344],  // C4 ✓
+}
+const D10U_FACE_GLB = {
+  0: [ 0.8154, -0.5631, -0.1344],  // C4 ✓
+  1: [-0.2171,  0.3521,  0.9104],  // C9 ✓
+  2: [-0.5699, -0.6205, -0.5387],  // C1 ✓
+  3: [ 0.6884,  0.5493, -0.4737],  // C8 ✓
+  4: [ 0.3804, -0.5588,  0.7369],  // C6 ✓
+  5: [-0.3815,  0.5576, -0.7373],  // C7 ✓
+  6: [-0.7066, -0.5506,  0.4444],  // C3 ✓
+  7: [ 0.6330,  0.6026,  0.4859],  // C2 ✓
+  8: [ 0.2171, -0.3521, -0.9104],  // -C9 ✓
+  9: [-0.8221,  0.5551,  0.1268],  // C5 ✓
+}
+const D10T_FACE_GLB = {
+   0: [ 0.8154, -0.5631, -0.1344],  // C4 ✓
+  10: [-0.2171,  0.3521,  0.9104],  // C9 ✓
+  20: [-0.5699, -0.6205, -0.5387],  // C1 ✓
+  30: [ 0.6884,  0.5493, -0.4737],  // C8 ✓
+  40: [ 0.3804, -0.5588,  0.7369],  // C6 ✓
+  50: [-0.3815,  0.5576, -0.7373],  // C7 ✓
+  60: [-0.7066, -0.5506,  0.4444],  // C3 ✓
+  70: [ 0.6330,  0.6026,  0.4859],  // C2 ✓
+  80: [ 0.2171, -0.3521, -0.9104],  // -C9 ✓
+  90: [-0.8221,  0.5551,  0.1268],  // C5 ✓
+}
+const D12_GLB_NORMALS = {
+   1: [-0.0539,  0.9980, -0.0340],  // C4 ✓
+   2: [ 0.4044,  0.3860, -0.8291],  // C2 ?
+   3: [-0.6197,  0.2847, -0.7314],  // C1 ✓
+   4: [ 0.8355,  0.5397,  0.1037],  // C5 ?
+   5: [-0.8575,  0.4381,  0.2697],  // C6 ?
+   6: [-0.0158,  0.4513,  0.8922],  // C9 ?
+   7: [ 0.0133, -0.5923, -0.8056],  // C10 ✓
+   8: [ 0.8523, -0.4438, -0.2767],  // C8 ✓
+   9: [-0.7821, -0.5963, -0.1812],  // C7 ✓
+  10: [ 0.6154, -0.2660,  0.7420],  // C3 ✓
+  11: [-0.5350, -0.4026,  0.7428],  // C12 ?
+  12: [ 0.1213, -0.9671,  0.2235],  // C11 ✓
+}
+// D20 — normales exactes Blender, remappées par test visuel (session 65)
+// clé = numéro réel sur le dé, valeur = normale géométrique correspondante
+// Validation : toutes les paires antipodales (somme=21) ont dot=-1.000 ✓
+const D20_GLB_NORMALS = {
+   1: [-0.7949, -0.1880,  0.5769],
+   2: [ 0.3040, -0.1880, -0.9339],
+   3: [-0.1880,  0.7949,  0.5769],
+   4: [ 0.6069, -0.7948,  0.0000],
+   5: [-0.4909, -0.7948, -0.3569],
+   6: [ 0.7949,  0.1880,  0.5769],
+   7: [-0.9822,  0.1880,  0.0000],
+   8: [ 0.4909,  0.7948, -0.3569],
+   9: [ 0.3040, -0.1880,  0.9339],
+  10: [-0.1880,  0.7949, -0.5769],
+  11: [ 0.1880, -0.7949,  0.5769],
+  12: [-0.3040,  0.1880, -0.9339],
+  13: [-0.4909, -0.7948,  0.3569],
+  14: [ 0.9822, -0.1880,  0.0000],
+  15: [-0.7949, -0.1880, -0.5769],
+  16: [ 0.4909,  0.7948,  0.3569],
+  17: [-0.6069,  0.7948,  0.0000],
+  18: [ 0.1880, -0.7949, -0.5769],
+  19: [-0.3040,  0.1880,  0.9339],
+  20: [ 0.7949,  0.1880, -0.5769],
+}
+
 const FACE_NORMALS = {
-  d6: D6_FACE_NORMALS,
-  // d20, d8, d12, d10 — à ajouter session par session
+  d4:        D4_GLB_NORMALS,
+  d6:        D6_FACE_NORMALS,
+  d8:        D8_GLB_NORMALS,
+  d10:       D10_FACE_GLB,
+  d10_units: D10U_FACE_GLB,
+  d10_tens:  D10T_FACE_GLB,
+  d12:       D12_GLB_NORMALS,
+  d20:       D20_GLB_NORMALS,
 }
 
 // D10 — pentagonal trapezohedron (forme correcte d'un vrai D10)

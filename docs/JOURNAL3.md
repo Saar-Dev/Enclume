@@ -330,10 +330,41 @@ Bug résolu : `if (next.has(key)) next.delete(key) else next.add(key)` → accol
 - PJ : lecture seule intentionnelle — le joueur gère son propre équipement
 - Slot par défaut arme = 'MD' (main droite) — cas d'usage le plus courant pour un PNJ sans arme
 
-**Post-confirmation — Bug fix overflow clipping :**
-- `PnjArmorChips` : dropdown custom `position:absolute` à l'intérieur de `tableWrap` (`overflow:auto`) → dropdown coupé par le scroll container (règle CSS déterministe)
-- Fix : état local `openChip` dans `PnjArmorChips`, `<select>` natif (s'ouvre au niveau viewport, hors overflow), suppression `openDropdown` dans le parent, suppression `windowRef`/click-outside, suppression styles `chipDropdown/chipDropdownEmpty/chipDropdownItem` orphelins
+**Post-confirmation — Run à vide — 3 bugs corrigés :**
+- **Bug 1 — Overflow clipping** : `PnjArmorChips` dropdown custom `position:absolute` à l'intérieur de `tableWrap` (`overflow:auto`) → coupé par le scroll container (règle CSS déterministe). Fix : état local `openChip` dans `PnjArmorChips`, `<select>` natif (s'ouvre au niveau viewport, hors overflow), suppression `openDropdown` parent + `windowRef`/click-outside + styles `chipDropdown*` orphelins.
+- **Bug 2 — Crash garanti** : `setOpenDropdown(null)` résiduel dans `handleQuickEquip` après suppression de l'état `openDropdown` → `ReferenceError` à chaque quick-equip. Supprimé.
+- **Bug 3 — Dead code** : `WEAPON_SLOTS` déclaré mais jamais utilisé. Supprimé.
 
 **Sprint GM-A CONFIRMÉ FONCTIONNEL ✅**
 
 
+
+---
+
+## Session 65 — D20 normales GLB ✅ (2026-05-27)
+
+**Objectif :** Corriger la détection de face du D20 GLB — chaque résultat serveur devait animer le dé sur la face physique correspondante.
+
+**Problème de départ :** `DiceMesh.jsx` avait une branche D20 dédiée qui utilisait `D20_FACE_NORMALS_LIST` (normales IcosahedronGeometry approximatives). Les normales Blender exactes stockées dans `D20_GLB_NORMALS` étaient ignorées.
+
+**Méthode :**
+1. Script Blender Python → 20 normales exactes depuis le mesh `D20_LP` (groupement par aire → top 20 faces plates)
+2. `DiceMesh.jsx` : suppression branche D20 dédiée → D20 passe désormais par `else if (faceNormal)` → `getFaceNormal('d20', N)` → `D20_GLB_NORMALS[N]`
+3. Import `D20_FACE_NORMALS_LIST` retiré (inutilisé)
+4. Test visuel complet : 20 faces — résultat serveur X → face affichée Y → table de permutation
+5. Formule inverse : `new[X] = current[inverse[X]]` — où `inverse[Y]` = serveur X qui produit face Y
+6. Validation géométrique : toutes les paires antipodales (somme=21) ont dot=-1.000 ✓
+
+**Fichiers modifiés :**
+- `client/src/components/DiceMesh.jsx` : branche D20 supprimée, import `D20_FACE_NORMALS_LIST` retiré
+- `client/src/lib/diceMath.js` : `D20_GLB_NORMALS` — 20 normales Blender exactes, clés = numéros réels du dé
+
+**Outils créés (tools/) :**
+- `procrustes-d20.js` — tentative Procrustes abandonnée (erreur jusqu'à 34°)
+- `find-numbers.js` — détection blobs texture (non utilisé dans solution finale)
+- `blender-uv-map.js` — UV centroïdes par face Blender (non utilisé dans solution finale)
+- `sample-texture.js` — ajout support env `HALF` pour taille de fenêtre configurable
+
+**Piège notable :** remapping de permutation — `new[X] = current[mapping[X]]` est la mauvaise direction. La bonne formule est `new[X] = current[inverse[X]]`.
+
+**D20 normales ✅ CONFIRMÉ FONCTIONNEL**
