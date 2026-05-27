@@ -425,8 +425,9 @@ const initSocket = (io) => {
     // ─── DICE:ROLL ─────────────────────────────────────────────────────────
     // Le client demande un jet de dés.
     // Le serveur est le seul responsable du calcul — jamais le client.
-    // Payload : { formula } — ex: "2d6+3", "d20", "3d6"
-    socket.on(WS.DICE_ROLL, async ({ formula }) => {
+    // Payload : { formula, secret? } — ex: "2d6+3", "d20", "3d6"
+    // secret=true : broadcast uniquement au lanceur + GM (PE2 socket.data.role)
+    socket.on(WS.DICE_ROLL, async ({ formula, secret = false }) => {
       // Guard — le socket doit avoir rejoint une campagne
       if (!socket.campaignId) return
 
@@ -458,7 +459,7 @@ const initSocket = (io) => {
         } catch (_) {}
 
         const timestamp = new Date().toISOString()
-        io.to(socket.campaignId).emit(WS.DICE_RESULT, {
+        const payload = {
           userId: socket.user.id,
           username: socket.user.username,
           color,
@@ -469,9 +470,22 @@ const initSocket = (io) => {
           isCriticalFail,
           seed,
           timestamp,
-        })
+          secret: secret || false,
+        }
 
-        console.log(`[WS] dice:roll — ${socket.user.username} : ${normalizedFormula} = ${total}`)
+        if (secret) {
+          // Jet au MJ : visible uniquement par le lanceur et le(s) GM (PE2)
+          socket.emit(WS.DICE_RESULT, payload)
+          if (socket.role !== 'gm') {
+            const roomSockets = await io.in(socket.campaignId).fetchSockets()
+            const gmSockets = roomSockets.filter(s => s.data.role === 'gm')
+            gmSockets.forEach(s => s.emit(WS.DICE_RESULT, payload))
+          }
+        } else {
+          io.to(socket.campaignId).emit(WS.DICE_RESULT, payload)
+        }
+
+        console.log(`[WS] dice:roll — ${socket.user.username} : ${normalizedFormula} = ${total}${secret ? ' [secret]' : ''}`)
       } catch (err) {
         console.error(`[WS] dice:roll error (${socket.user.username}) : ${err.message}`)
       }

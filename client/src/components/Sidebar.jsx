@@ -1019,6 +1019,10 @@ export default function Sidebar({
                         </span>
                         <span style={{ ...styles.msgUser, color: msg.color || '#5b8dee' }}>{msg.user}</span>
                         <span style={styles.msgTime}> · {msg.time}</span>
+                        {/* Jet secret — visible uniquement par lanceur + GM */}
+                        {msg.secret && (
+                          <span style={{ fontSize: 11, opacity: 0.8 }} title="Jet au MJ — invisible aux autres joueurs">🔒</span>
+                        )}
                         {/* Badge critique — affiché uniquement si configuré */}
                         {msg.isCriticalSuccess && (
                           <span style={styles.badgeCritSuccess}>{t('dice.criticalSuccess')}</span>

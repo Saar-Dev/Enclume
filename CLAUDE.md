@@ -122,7 +122,7 @@ Toute décision non documentée est considérée comme nulle.
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **58 migrations stables** — prochaine : **59**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / D20 normales GLB ✅
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / D20 normales GLB ✅ / DicePanel v3 ✅
 
 **Session 65 — Sprint 7.6 ✅ CONFIRMÉ :**
 - combatSections.js : STATE_DEFS 5 états + matrices coût, calcIniDelta, MAP_ACTIONS multi-select, QUICK_ACTIONS incrémentaux
@@ -143,6 +143,12 @@ Toute décision non documentée est considérée comme nulle.
 - `DiceMesh.jsx` : branche D20 dédiée (IcosahedronGeometry) supprimée → D20 passe par `faceNormal` → `D20_GLB_NORMALS`
 - `diceMath.js` : `D20_GLB_NORMALS` — 20 normales Blender exactes, clés = numéros réels du dé (remapping par test visuel, validation antipodal dot=-1.000 ✓)
 - Piège : remapping permutation → toujours utiliser la direction inverse (`new[X] = old[inverse[X]]`, pas `old[mapping[X]]`)
+
+**Session 65 — DicePanel v3 ✅ CONFIRMÉ :**
+- `DicePanel.jsx` : réécriture complète — roue radiale SVG (PCBBackground + DieShape + DieButton), formule mono-type {k,n,mod}, favoris localStorage, historique local via DICE_RESULT filtré userId, JET AU MJ fonctionnel
+- `@fontsource/share-tech-mono` + `@fontsource/caveat` : installés npm, importés dans index.css (offline Pi)
+- `socket/index.js` : DICE_ROLL +`secret` → broadcast ciblé lanceur+GM (fetchSockets/PE2)
+- `SessionPage.jsx` + `Sidebar.jsx` : +`secret` propagé jusqu'à l'affichage 🔒
 
 **"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
 

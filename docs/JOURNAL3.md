@@ -368,3 +368,57 @@ Bug résolu : `if (next.has(key)) next.delete(key) else next.add(key)` → accol
 **Piège notable :** remapping de permutation — `new[X] = current[mapping[X]]` est la mauvaise direction. La bonne formule est `new[X] = current[inverse[X]]`.
 
 **D20 normales ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 65 — Sprint DicePanel v3 : Roue radiale ✅ (2026-05-27)
+
+**Objectif :** Rework complet de la fenêtre de lancer de dés — passage d'une grille tableau à une roue radiale SVG (design Dicev2.html).
+
+**Réalisé :**
+
+*`client/package.json`* — nouvelles dépendances
+- `@fontsource/share-tech-mono` + `@fontsource/caveat` installés (offline-compatible, bundlés par Vite)
+
+*`client/src/index.css`* ✅
+- +3 `@import` fontsource : `share-tech-mono/400`, `caveat/400`, `caveat/600`
+
+*`client/src/components/DicePanel.jsx`* ✅ — réécriture complète
+- `PCBBackground` : fond SVG ambiance SF (grille de points + traces + vias), `opacity:0.28`
+- `DieShape` : silhouette SVG par type de dé (hexagone D20, losange D10/D100, carré D6, triangle D4, losange D8, pentagone D12) — états vide/hover/actif avec fill graduel
+- `DieButton` : wrapper hitbox + badge count + hover state + `onContextMenu` pour décrément
+- Roue : D20 central 78px + 6 dés couronne 60px (RING_RADIUS=80, WHEEL_SIZE=240) — D10 en haut, sens horaire
+- Formule `{ k, n, mod }` mono-type — clic même type → `n++`, clic nouveau type → switch (garde mod), clic droit → `n--`
+- MOD : boutons −/+ + input numérique, clamp `[-99, 99]`, `borderRadius:0`
+- RESET contextuel (non-vide uniquement)
+- Barre formule : affichage `NdK.toUpperCase() ± mod` + bouton LANCER
+- Enregistrer comme favori : contextuel (non-vide), `prompt()` pour label, persistence `localStorage('dice-presets')`
+- FAVORIS : wrap flex, clic = lance, ⇧clic = charge, mode édition (✕ par preset)
+- HISTORIQUE : section repliable (replié par défaut), max 10 entrées, écoute `WS.DICE_RESULT` filtrée `userId`, clic = rejouer, crit vert / fumble rouge, 🔒 si secret
+- JET AU MJ : checkbox fonctionnelle (`secret` dans payload `WS.DICE_ROLL`)
+- Drag conservé (même pattern `pointermove`/`pointerup`)
+- Toggle button conservé (position sidebar), couleur `user?.color || '#3a8aaa'`
+- `useAuthStore()` direct dans le composant (pas de prop `userColor`)
+- P3 respecté : `socket` + `secret` dans deps `emitRoll`
+
+*`server/src/socket/index.js`* ✅
+- DICE_ROLL : destructure `{ formula, secret = false }`
+- Si `secret=true` : `socket.emit()` (lanceur) + `fetchSockets()` → GM sockets uniquement (PE2 `s.data.role === 'gm'`)
+- Si GM lanceur avec secret : pas de fetchSockets (déjà reçu)
+- +champ `secret` dans payload DICE_RESULT
+- Log : `[secret]` suffixe si applicable
+
+*`client/src/pages/SessionPage.jsx`* ✅
+- DICE_RESULT : +`secret` dans destructuring + `addMessage`
+
+*`client/src/components/Sidebar.jsx`* ✅
+- Jets normaux : +`{msg.secret && <span title="Jet au MJ — invisible aux autres joueurs">🔒</span>}` dans diceHeader
+
+**Décisions de design :**
+- Formule mono-type uniquement (compatible regex `parseDice` serveur `/^(\d+)?d(\d+)([+-]\d+)?$/i`)
+- Fonts via `@fontsource` npm (offline Pi) — pas de CDN Google Fonts
+- Favoris : `localStorage` seulement (pas de persistence serveur pour v1)
+- Historique local : écoute socket dans composant (même si panel fermé → hooks toujours actifs)
+- `borderRadius:0` sur input MOD pour éviter le `border-radius: var(--radius-md)` du CSS global
+
+**Sprint DicePanel v3 ✅ CONFIRMÉ FONCTIONNEL**

@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-26 Session 65
+> Dernière mise à jour : 2026-05-27 Session 65
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -33,16 +33,16 @@ Enclume/
 │   │   │   ├── RadialMenu.jsx          # Modifié 41 — tranche displacement, grisage portée, onMove
 │   │   │   ├── EntityInstancePanel.jsx # Modifié 36 — sélecteur état actuel
 │   │   │   ├── Voxel.jsx               # Stable 9A-5
-│   │   │   ├── Sidebar.jsx             # Modifié 64 Sprint 7.4 — +rendu interactionType='combat_damage' (dégâts colorés par sévérité). Modifié 36 — entity_action structuré
+│   │   │   ├── Sidebar.jsx             # Modifié 64 Sprint 7.4 — +rendu interactionType='combat_damage' (dégâts colorés par sévérité). Modifié 36 — entity_action structuré. Modifié 65 Sprint DicePanel v3 — +🔒 dans diceHeader si msg.secret
 │   │   │   ├── GeometryIcon.jsx        # Stable 9A-3
-│   │   │   ├── DicePanel.jsx           # Stable session 18
+│   │   │   ├── DicePanel.jsx           # Réécriture complète 65 Sprint DicePanel v3 — roue radiale SVG (PCBBackground, DieShape, DieButton), formule mono-type {k,n,mod}, favoris localStorage, historique local socket, JET AU MJ fonctionnel, useAuthStore direct, drag conservé
 │   │   │   ├── DiceMesh.jsx            # NOUVEAU 44 — géométries, matériaux, animation, Html overlay D10. Modifié 65 — branche D20 dédiée supprimée → D20 passe par faceNormal→D20_GLB_NORMALS (normales Blender exactes)
 │   │   │   └── DiceRoller.jsx          # NOUVEAU 44 — orchestrateur R3F dans Canvas3D
 │   │   ├── pages/
 │   │   │   ├── LoginPage.jsx
 │   │   │   ├── RegisterPage.jsx
 │   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern)
-│   │   │   ├── SessionPage.jsx         # Modifié 64 — Sprint 7.1 : combatTargetMode. Sprint 7.4 : damageResults + COMBAT_DAMAGE_RESULT. Sprint 7.4bis : +attackResult state + COMBAT_ATTACK_PLAYER_RESULT handler + onAttackConfirmed prop, onDamageConfirmed nettoie aussi attackResult
+│   │   │   ├── SessionPage.jsx         # Modifié 64 — Sprint 7.1 : combatTargetMode. Sprint 7.4 : damageResults + COMBAT_DAMAGE_RESULT. Sprint 7.4bis : +attackResult state + COMBAT_ATTACK_PLAYER_RESULT handler + onAttackConfirmed prop, onDamageConfirmed nettoie aussi attackResult. Modifié 65 Sprint DicePanel v3 — DICE_RESULT +secret dans destructuring + addMessage
 │   │   │   ├── CampaignSettingsPage.jsx
 │   │   │   ├── WorkshopPage.jsx        # Stable 33
 │   │   │   └── TexturePacksPage.jsx    # CONSERVÉ mais remplacé par WorkshopPage
@@ -108,7 +108,7 @@ Enclume/
 │   │   │   └── errorHandler.js
 │   │   ├── socket/
 │   │   │   ├── auth.js
-│   │   │   └── index.js                # Modifié 65 Sprint 7.6 — COMBAT_ACTION_DECLARE v2 (payload {state,mapActions,quick}, matrices STATE_COSTS, UPDATE state_*, iniDelta), endTurn reset colonnes per-tour, is_rushed → state_vitesse
+│   │   │   └── index.js                # Modifié 65 Sprint 7.6 — COMBAT_ACTION_DECLARE v2 (payload {state,mapActions,quick}, matrices STATE_COSTS, UPDATE state_*, iniDelta), endTurn reset colonnes per-tour, is_rushed → state_vitesse. Modifié 65 Sprint DicePanel v3 — DICE_ROLL +secret : broadcast ciblé lanceur+GM via fetchSockets (PE2)
 │   │   ├── lib/
 │   │   │   ├── AppError.js
 │   │   │   ├── minio.js

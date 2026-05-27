@@ -394,7 +394,7 @@ export default function SessionPage() {
     s.on(WS.CHARACTER_UPDATED, (updatedCharacter) => {
       upsertCharacter(updatedCharacter)
     })
-    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess, interactionType, mr, targetName, localisation, severity, severityColor }) => {
+    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess, interactionType, mr, targetName, localisation, severity, severityColor, secret }) => {
       addMessage({
         id: `dice-${userId}-${timestamp}`,
         type: 'dice',
@@ -419,6 +419,8 @@ export default function SessionPage() {
         localisation,
         severity,
         severityColor,
+        // Jet secret — visible uniquement par le lanceur + GM
+        secret: secret || false,
       })
       // Animation dés — jets normaux uniquement (skillLabel absent)
       // Jets d'entité (skillcheck, displacement) → pas d'animation en V1
