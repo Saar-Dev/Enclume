@@ -108,7 +108,7 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
         .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where('char_inventory.character_id', token.character_id)
         .whereIn('char_inventory.slot', ['MG', 'MD', '2M', 'Tr'])
-        .select('char_inventory.id as inv_id', 'ref_equipment.name', 'char_inventory.slot')
+        .select('char_inventory.id as inv_id', 'ref_equipment.name', 'char_inventory.slot', 'ref_equipment.fire_mode as ref_fire_mode')
         .first(),
 
       db('char_inventory')

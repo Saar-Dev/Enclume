@@ -1591,13 +1591,13 @@ const initSocket = (io) => {
             socket.emit('error', { message: "Arme introuvable dans l'inventaire (PC22)" })
             return
           }
-          if (weapon.slot !== 'MG' && weapon.slot !== 'MD') {
-            socket.emit('error', { message: "L'arme doit être équipée (slot MG ou MD) (PC22)" })
+          if (!['MG', 'MD', '2M', 'Tr'].includes(weapon.slot)) {
+            socket.emit('error', { message: "L'arme doit être équipée (slot arme) (PC22)" })
             return
           }
           // fire_mode vient de state.fire_mode (v2) — comparaison insensible à la casse
           const fireMode = (state.fire_mode ?? 'cc').toUpperCase()
-          if (!weapon.ref_fire_mode?.toUpperCase().includes(fireMode)) {
+          if (weapon.ref_fire_mode && !weapon.ref_fire_mode.toUpperCase().includes(fireMode)) {
             socket.emit('error', { message: `Mode de tir ${fireMode} non disponible pour cette arme` })
             return
           }
@@ -2261,9 +2261,11 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
       return
     }
 
-    const userRow = await db('users').where({ id: character.user_id }).select('color', 'username').first()
-    const tireurColor    = userRow?.color    ?? '#5b8dee'
-    const tireurUsername = userRow?.username ?? 'Inconnu'
+    const userRow = character.user_id
+      ? await db('users').where({ id: character.user_id }).select('color', 'username').first()
+      : null
+    const tireurColor    = userRow?.color    ?? '#c86030'
+    const tireurUsername = userRow?.username ?? character.name ?? 'Inconnu'
 
     let skillTotal = 0, effectiveMalus = 0, carenceArmure = 0
 
@@ -2459,6 +2461,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
           severity,
           is_lethal,
           isSuccess,
+          isPnj:       true,
           roll:        rollAttaque,
           chancesDeReussite,
           shockResult: null,
@@ -2471,6 +2474,21 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
         cdr: chancesDeReussite,
         tireurTokenId: action.token_id,
         cibleTokenId: action.target_token_id,
+      })
+    } else {
+      io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+        tireurId:         action.token_id,
+        cibleId:          action.target_token_id,
+        isSuccess:        false,
+        isPnj:            true,
+        roll:             rollAttaque,
+        chancesDeReussite,
+        localisation:     null,
+        degautsBruts:     null,
+        degatsNets:       null,
+        severity:         null,
+        is_lethal:        false,
+        shockResult:      null,
       })
     }
   } catch (err) {

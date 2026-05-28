@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
+import api from '../lib/api'
 import {
   STATE_DEFS, QUICK_ACTIONS, MAP_ACTIONS,
   calcIniDelta,
@@ -64,22 +65,38 @@ function InlineChip({ stateKey, initial, current, onChange }) {
 // ---------------------------------------------------------------------------
 // Composant principal
 // ---------------------------------------------------------------------------
-export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveMode }) {
+export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveMode, battlemapId, onEnterTargetMode, combatTargetMode }) {
   const { roster } = useCombatStore()
   const tokens     = useTokenStore(s => s.tokens)
 
-  const [focusedId,   setFocusedId]   = useState(null)
-  const [selectedIds, setSelectedIds] = useState(new Set())
-  const [selections,  setSelections]  = useState({})   // tokenId -> { states, mapAction, quick }
-  const [pendingGmMoves, setPendingGmMoves] = useState({})  // tokenId -> { action_key, ini_mod, targetPosX, targetPosY, targetPosZ }
-  const [moveTick,       setMoveTick]       = useState(0)
+  const [focusedId,         setFocusedId]         = useState(null)
+  const [selectedIds,       setSelectedIds]       = useState(new Set())
+  const [selections,        setSelections]        = useState({})   // tokenId -> { states, mapAction, quick }
+  const [pendingGmMoves,    setPendingGmMoves]    = useState({})   // tokenId -> { action_key, ini_mod, targetPosX, targetPosY, targetPosZ }
+  const [moveTick,          setMoveTick]          = useState(0)
+  const [assaultSelections, setAssaultSelections] = useState({})   // tokenId -> { targetTokenId }
+  const [equipment,         setEquipment]         = useState({})   // tokenId -> { characterId, weapon, armorPieces }
+  const [attackTick,        setAttackTick]        = useState(0)
 
   const moveQueueRef    = useRef([])
   const moveQueueIdxRef = useRef(0)
   const moveCancelRef   = useRef(null)
   const tokensRef       = useRef(tokens)
+  const attackQueueRef    = useRef([])
+  const attackQueueIdxRef = useRef(0)
+  const attackCancelRef   = useRef(null)
+
   useEffect(() => { tokensRef.current = tokens }, [tokens])
 
+  // ── Fetch équipement combat ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!battlemapId) return
+    api.get(`/battlemaps/${battlemapId}/combat-equipment`)
+      .then(r => setEquipment(r.data.equipment ?? {}))
+      .catch(() => {})
+  }, [battlemapId])
+
+  // ── Queue de déplacement PNJ séquentiel ────────────────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const queue = moveQueueRef.current
@@ -109,13 +126,42 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     onEnterMoveMode(DEFAULT_PNJ_ALLURES, tokenId, tokenPos, onMoveSelected, onCancel)
   }, [moveTick])
 
+  // ── Queue d'assaut PNJ séquentiel ──────────────────────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const queue = attackQueueRef.current
+    const idx   = attackQueueIdxRef.current
+    if (!onEnterTargetMode || queue.length === 0 || idx >= queue.length) return
+
+    const tokenId = queue[idx]
+    const token   = tokensRef.current.find(t => t.id === tokenId)
+    if (!token) {
+      attackQueueIdxRef.current = idx + 1
+      setAttackTick(t => t + 1)
+      return
+    }
+
+    const onTargetSelected = (targetTokenId) => {
+      setAssaultSelections(prev => ({ ...prev, [tokenId]: { targetTokenId } }))
+      attackQueueIdxRef.current = attackQueueIdxRef.current + 1
+      setAttackTick(t => t + 1)
+    }
+    const onCancel = () => {
+      attackQueueIdxRef.current = attackQueueIdxRef.current + 1
+      setAttackTick(t => t + 1)
+    }
+    attackCancelRef.current = onCancel
+    onEnterTargetMode(tokenId, { x: token.pos_x, z: token.pos_y }, onTargetSelected, onCancel)
+  }, [attackTick])
+
   // ── Helpers identification PNJ ──────────────────────────────────────────
   const isPnj = (entry) => {
     const token = tokens.find(t => t.id === entry.token_id)
     if (!token?.character_id) return false
     return characters.find(c => c.id === token.character_id)?.type === 'pnj'
   }
-  const getLabel = (tokenId) => tokens.find(t => t.id === tokenId)?.label ?? tokenId
+  const getLabel  = (tokenId) => tokens.find(t => t.id === tokenId)?.label ?? tokenId
+  const isRanged  = (tokenId) => !!equipment[tokenId]?.weapon?.ref_fire_mode
 
   const allPnjs        = roster.filter(r => r.status === 'active').filter(isPnj)
   const sortedPnjs     = [...allPnjs].sort((a, b) => b.initiative - a.initiative)
@@ -228,6 +274,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     return vals.size === 1 ? [...vals][0] : 0
   }
 
+  // ── Attack : état visuel ────────────────────────────────────────────────
+  const isAttackActive = targetIds.some(id => !!assaultSelections[id])
+    || (combatTargetMode?.tokenId != null && targetIds.includes(combatTargetMode.tokenId))
+
   // canDeclare : au moins un changement OU une action
   const canDeclare = targetIds.length > 0 && targetIds.some(id => {
     const sel   = getSel(id)
@@ -235,7 +285,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     if (!entry || entry.has_announced) return false
     const init  = getInitialStates(entry)
     const stateChanged = Object.keys(sel.states).some(k => sel.states[k] !== init[k])
-    const hasAction    = !!sel.mapAction || !!pendingGmMoves[id] || sel.quick.observer > 0 || sel.quick.reperer > 0 || sel.quick.phrase
+    const hasAction    = !!sel.mapAction || !!pendingGmMoves[id] || !!assaultSelections[id] || sel.quick.observer > 0 || sel.quick.reperer > 0 || sel.quick.phrase
     return stateChanged || hasAction
   })
 
@@ -247,14 +297,23 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       return entry && !entry.has_announced
     })
     toEmit.forEach(tokenId => {
-      const sel   = getSel(tokenId)
-      const entry = roster.find(r => r.token_id === tokenId)
+      const sel    = getSel(tokenId)
+      const assault = assaultSelections[tokenId]
+      const weapon  = equipment[tokenId]?.weapon
       socket.emit(WS.COMBAT_ACTION_DECLARE, {
         tokenId,
         state: { ...sel.states },
         mapActions: {
           move:     pendingGmMoves[tokenId] ?? null,
-          attack:   null,
+          attack:   weapon && assault?.targetTokenId ? {
+            weaponInvId:        weapon.inv_id,
+            targetTokenId:      assault.targetTokenId,
+            bulletCount:        1,
+            fireModeBonusComp:  0,
+            fireModeBonusDmg:   0,
+            isDualWield:        false,
+            dualWieldBonusComp: 0,
+          } : null,
           melee:    sel.mapAction === 'melee',
           multi:    sel.mapAction === 'multi',
           interact: sel.mapAction === 'interact',
@@ -270,16 +329,32 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   // ── Batch helpers ────────────────────────────────────────────────────────
   const toggleSelect = (id) => {
+    const isAdding = !selectedIds.has(id)
+    if (isAdding) {
+      const firstId = [...selectedIds][0]
+      // Type guard : empêche un batch mixte DIST/CTC — remplace la sélection si incompatible
+      if (firstId !== undefined && isRanged(firstId) !== isRanged(id)) {
+        setSelectedIds(new Set([id]))
+        setFocusedId(id)
+        return
+      }
+    }
     setSelectedIds(prev => {
       const n = new Set(prev)
       if (n.has(id)) n.delete(id); else n.add(id)
       return n
     })
   }
-  const selectAll  = () => setSelectedIds(new Set(sortedPnjs.filter(r => !r.has_announced).map(r => r.token_id)))
+  const selectAll = () => {
+    if (!activeFocusId) return
+    const refType = isRanged(activeFocusId)
+    setSelectedIds(new Set(
+      sortedPnjs.filter(r => !r.has_announced && isRanged(r.token_id) === refType).map(r => r.token_id)
+    ))
+  }
   const selectNone = () => setSelectedIds(new Set())
 
-  // ── Déplacement PNJ séquentiel ──────────────────────────────────────────────
+  // ── Déplacement PNJ séquentiel ──────────────────────────────────────────
   const handleStartMoveQueue = () => {
     if (!onEnterMoveMode || targetIds.length === 0) return
     moveQueueRef.current    = [...targetIds]
@@ -287,9 +362,17 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setMoveTick(t => t + 1)
   }
 
-  // ── MAP_ACTIONS disponibles pour le GM ──────────────────────────────────
-  // attack : grisé (sprint dédié) — move géré par handleStartMoveQueue
-  const GM_DISABLED = new Set(['attack'])
+  // ── Assaut PNJ séquentiel ───────────────────────────────────────────────
+  const handleStartAttackQueue = () => {
+    if (!onEnterTargetMode || targetIds.length === 0) return
+    attackQueueRef.current    = [...targetIds]
+    attackQueueIdxRef.current = 0
+    setAttackTick(t => t + 1)
+  }
+
+  // ── MAP_ACTIONS : toutes disponibles pour le GM ─────────────────────────
+  const GM_DISABLED  = new Set([])
+  const hasAnyRanged = targetIds.some(isRanged)
 
   // ── Render ───────────────────────────────────────────────────────────────
   const hasTargets = targetIds.length > 0
@@ -340,14 +423,15 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             <span style={{ ...S.sectionTitle, color: '#aa8a30' }}>ACTION</span>
             <div style={S.actionGrid}>
               {MAP_ACTIONS.map(a => {
-                const disabled = GM_DISABLED.has(a.k)
-                const active   = !disabled && curAction === a.k
+                const disabled = GM_DISABLED.has(a.k) || (a.k === 'attack' && !hasAnyRanged)
+                const active   = !disabled && (a.k === 'attack' ? isAttackActive : curAction === a.k)
                 return (
                   <div key={a.k}
                     title={a.tooltip}
                     onClick={() => {
                       if (disabled) return
-                      if (a.k === 'move') handleStartMoveQueue()
+                      if (a.k === 'move')   handleStartMoveQueue()
+                      else if (a.k === 'attack') handleStartAttackQueue()
                       else setMapAction(a.k)
                     }}
                     style={{
@@ -363,12 +447,28 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                       <span style={{ ...S.actionIni, color: active ? '#e8c870' : '#5a6070' }}>{a.ini}</span>
                     )}
                     {disabled && (
-                      <span style={S.actionDisabledTag}>sprint dédié</span>
+                      <span style={S.actionDisabledTag}>
+                        {a.k === 'attack' && !hasAnyRanged ? 'sans arme dist.' : 'sprint dédié'}
+                      </span>
                     )}
                   </div>
                 )
               })}
             </div>
+
+            {/* Cible sélectionnée (mode single) */}
+            {!batchMode && activeFocusId && assaultSelections[activeFocusId] && (() => {
+              const tgtTok = tokens.find(t => t.id === assaultSelections[activeFocusId].targetTokenId)
+              return (
+                <div style={S.attackTargetRow}>
+                  <span style={S.attackTargetLabel}>→</span>
+                  <span style={S.attackTargetName}>{tgtTok?.label ?? '?'}</span>
+                  {!equipment[activeFocusId]?.weapon && (
+                    <span style={S.attackNoWeapon}>sans arme</span>
+                  )}
+                </div>
+              )
+            })()}
           </div>
 
           {/* RAPIDES */}
@@ -460,6 +560,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                   {getLabel(tid)}
                 </span>
 
+                <span style={{
+                  ...S.rosterBadge,
+                  ...(isRanged(tid) ? S.rosterBadgeDst : (equipment[tid]?.weapon ? S.rosterBadgeCct : S.rosterBadgeNone))
+                }}>
+                  {isRanged(tid) ? 'DST' : (equipment[tid]?.weapon ? 'CTC' : '···')}
+                </span>
+
                 <span style={S.rosterIni}>INI {entry.initiative}</span>
 
                 {delta !== null && delta !== 0 && (
@@ -489,6 +596,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         {moveQueueRef.current.length > 0 && moveQueueIdxRef.current < moveQueueRef.current.length && (
           <button style={S.btnPasser} onClick={() => moveCancelRef.current?.()}>
             Passer ({getLabel(moveQueueRef.current[moveQueueIdxRef.current])})
+          </button>
+        )}
+        {attackQueueRef.current.length > 0 && attackQueueIdxRef.current < attackQueueRef.current.length && (
+          <button style={S.btnPasser} onClick={() => attackCancelRef.current?.()}>
+            Passer ({getLabel(attackQueueRef.current[attackQueueIdxRef.current])})
           </button>
         )}
         <button
@@ -550,6 +662,12 @@ const S = {
   actionIni: { fontSize: 8, fontFamily: 'monospace', flexShrink: 0 },
   actionDisabledTag: { fontSize: 7, color: '#2a3848', fontFamily: 'monospace', flexShrink: 0 },
 
+  // Attack target feedback
+  attackTargetRow: { marginTop: 5, display: 'flex', alignItems: 'center', gap: 5 },
+  attackTargetLabel: { fontSize: 9, color: '#c86030', fontFamily: 'monospace' },
+  attackTargetName: { fontSize: 10, color: '#e8a060', fontWeight: 600 },
+  attackNoWeapon: { fontSize: 8, color: '#6a3030', fontFamily: 'monospace', marginLeft: 4 },
+
   // Quick actions
   quickList: { display: 'flex', flexDirection: 'column', gap: 3 },
   quickRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', borderRadius: 2, background: 'rgba(255,255,255,0.01)', border: '1px solid transparent', cursor: 'pointer' },
@@ -566,10 +684,14 @@ const S = {
   rosterLink: { fontSize: 8, color: '#aa8a30', cursor: 'pointer', fontFamily: 'monospace', letterSpacing: '0.06em' },
   rosterList: { flex: 1, overflowY: 'auto' },
   rosterRow: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px 5px 8px', borderBottom: '1px solid #0e1520', borderLeft: '3px solid transparent', transition: 'opacity 0.15s' },
-  rosterRowActive: { background: '#0a1828', borderLeftColor: '#3a8aaa' },
-  rosterRowSel:    { background: '#181410', borderLeftColor: '#aa8a30' },
+  rosterRowActive: { background: '#0a1828', borderLeft: '3px solid #3a8aaa' },
+  rosterRowSel:    { background: '#181410', borderLeft: '3px solid #aa8a30' },
   rosterGlyph: { fontSize: 10, width: 12, textAlign: 'center', flexShrink: 0, fontFamily: 'monospace' },
   rosterName: { fontSize: 10, color: '#aaccdd', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  rosterBadge:    { fontSize: 7, fontFamily: 'monospace', fontWeight: 700, padding: '1px 4px', borderRadius: 2, letterSpacing: '0.08em', flexShrink: 0 },
+  rosterBadgeDst: { background: '#0a1e2e', color: '#3a8aaa', border: '1px solid #1a4a5a' },
+  rosterBadgeCct: { background: '#1e1a0a', color: '#aa8a30', border: '1px solid #5a4a1a' },
+  rosterBadgeNone:{ background: '#0a0e14', color: '#3a4a5a', border: '1px solid #1a2030' },
   rosterIni: { fontSize: 9, color: '#456575', flexShrink: 0, fontFamily: 'monospace' },
   rosterDelta: { fontSize: 9, flexShrink: 0, fontFamily: 'monospace', fontWeight: 700 },
 

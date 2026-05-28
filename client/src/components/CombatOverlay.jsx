@@ -10,9 +10,10 @@ import CombatGmDeclareWindow from './CombatGmDeclareWindow'
 import CombatModifiersWindow from './CombatModifiersWindow'
 import CombatDamageWindow from './CombatDamageWindow'
 import { MOVE_ZONE_DEFS } from './combatSections.js'
+import { CombatResultGM, CombatResultPlayer } from './CombatResultPanels'
 
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, gmSocketError, onGmSocketErrorClose }) {
   const { phase, roster, activeSlotIdx, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
@@ -71,6 +72,9 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           socket={socket}
           characters={characters}
           onEnterMoveMode={onEnterMoveMode}
+          battlemapId={battlemap?.id}
+          onEnterTargetMode={onEnterTargetMode}
+          combatTargetMode={combatTargetMode}
         />
       )}
 
@@ -157,6 +161,47 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           results={damageResults}
           socket={socket}
           onConfirmed={onDamageConfirmed}
+        />
+      )}
+
+      {/* Bannière d'erreur serveur — GM uniquement */}
+      {gmSocketError && (
+        <div style={styles.gmError}>
+          <span style={styles.gmErrorMsg}>⚠ {gmSocketError}</span>
+          <button style={styles.gmErrorClose} onClick={onGmSocketErrorClose}>✕</button>
+        </div>
+      )}
+
+      {/* Panneau résultat assaut PNJ — GM uniquement, après résolution auto */}
+      {isGm && gmAttackResult && (
+        <CombatResultGM
+          attaquant={tokens.find(t => t.id === gmAttackResult.tireurId)?.label ?? '?'}
+          cible={tokens.find(t => t.id === gmAttackResult.cibleId)?.label ?? '?'}
+          isSuccess={gmAttackResult.isSuccess}
+          roll={gmAttackResult.roll}
+          seuil={gmAttackResult.chancesDeReussite}
+          localisation={gmAttackResult.localisation}
+          degatsBruts={gmAttackResult.degautsBruts}
+          degatsNets={gmAttackResult.degatsNets}
+          severity={gmAttackResult.severity}
+          is_lethal={gmAttackResult.is_lethal}
+          onClose={onGmAttackResultClose}
+        />
+      )}
+
+      {/* Panneau résultat assaut PNJ — Joueur ciblé uniquement */}
+      {!isGm && pnjAttackResult && pnjAttackResult.cibleId === playerToken?.id && (
+        <CombatResultPlayer
+          attaquant={tokens.find(t => t.id === pnjAttackResult.tireurId)?.label ?? '?'}
+          isSuccess={pnjAttackResult.isSuccess}
+          roll={pnjAttackResult.roll}
+          seuil={pnjAttackResult.chancesDeReussite}
+          localisation={pnjAttackResult.localisation}
+          degatsBruts={pnjAttackResult.degautsBruts}
+          degatsNets={pnjAttackResult.degatsNets}
+          severity={pnjAttackResult.severity}
+          is_lethal={pnjAttackResult.is_lethal}
+          onClose={onPnjAttackResultClose}
         />
       )}
 
@@ -358,5 +403,35 @@ const styles = {
     fontSize: 11,
     cursor: 'pointer',
     width: '100%',
+  },
+  gmError: {
+    position: 'absolute',
+    top: 52,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    background: '#2a0a0a',
+    border: '1px solid #c83030',
+    borderRadius: 6,
+    padding: '8px 14px',
+    pointerEvents: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+    maxWidth: 480,
+  },
+  gmErrorMsg: {
+    fontSize: 12,
+    color: '#f08080',
+    flex: 1,
+  },
+  gmErrorClose: {
+    background: 'none',
+    border: 'none',
+    color: '#c83030',
+    fontSize: 13,
+    cursor: 'pointer',
+    flexShrink: 0,
+    padding: '0 2px',
   },
 }

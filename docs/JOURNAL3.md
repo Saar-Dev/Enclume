@@ -425,6 +425,81 @@ Bug résolu : `if (next.has(key)) next.delete(key) else next.add(key)` → accol
 
 ---
 
+## Session 65 — Sprint GM-B Assault PNJ ✅ (2026-05-28)
+
+**Objectif :** Permettre au GM de déclarer des actions d'assaut (tir) pour les PNJs en Phase Annonce, avec résolution automatique serveur et affichage résultat.
+
+### Sprint GM-B Assault PNJ — Mode Minimal ✅
+
+**Fichiers modifiés :**
+
+*`CombatGmDeclareWindow.jsx`* ✅
+- Queue séquentielle `attackTick` (même pattern que `moveTick`) : `attackQueueRef`, `attackQueueIdxRef`, `attackCancelRef`
+- `useEffect([attackTick])` AVANT early return (règle des Hooks — piège résolu)
+- `assaultSelections` state : `tokenId → { targetTokenId }`
+- `handleStartAttackQueue` : remplit `attackQueueRef` avec `targetIds`, démarre la queue
+- `handleDeclare` : construit le payload attack avec `weapon.inv_id` + `targetTokenId`
+- Bouton "Assaut (tir)" → déclenche la queue cible séquentielle
+- Bouton "Passer" (footer) pour sauter un PNJ dans la queue
+
+*`CombatOverlay.jsx`* ✅
+- Prop `onEnterTargetMode` propagée à `CombatGmDeclareWindow`
+
+*`server/src/socket/index.js`* ✅
+- Fix PC22 : slot check `!['MG','MD','2M','Tr'].includes(weapon.slot)` (était 'MG'/'MD' uniquement)
+- Fix null guard `ref_fire_mode` : `weapon.ref_fire_mode && !...` (évite TypeError sur armes sans fire_mode)
+- Fix "Inconnu" chat PNJ : query `users` conditionnelle sur `character.user_id`, fallback `character.name`
+- PNJ touche → `isPnj: true` dans `COMBAT_ATTACK_RESULT` broadcast (hit ET miss)
+
+### Sprint CombatResultPanels ✅
+
+**Fichiers créés/modifiés :**
+
+*`client/src/components/CombatResultPanels.jsx`* ✅ NOUVEAU
+- Design Claude Design "VTT Enclume Combat Result" — deux variantes :
+- `CombatResultGM` : bottom-left, 220px, ton neutre — "Résolution du tir", tireur→cible, Touché/Manqué, `RollSeuilLine` (Jet XX / Seuil XX coloré succès/échec), `DamageLine` (dégâts nets + loc + "X bruts − Y armure"), `SeverityBlock` coloré par sévérité + "Létal"
+- `CombatResultPlayer` : bottom-center, 220px, 2e personne dramatique — "Vous êtes touché"/"Vous esquivez le tir", glow ambiant couleur sévérité
+- Palette autonome `C {}`, `SEVERITY {}`, `LOC {}` — indépendant de `woundConstants.js`
+- `pointerEvents: 'auto'` sur chaque panneau (overlay parent = none)
+
+*`client/src/components/CombatOverlay.jsx`* ✅
+- Import `CombatResultGM/Player` remplace `SEVERITY_COLORS`
+- Panneau GM : `<CombatResultGM>` avec mapping payload → props (tireurId→label, `degautsBruts`→`degatsBruts`, `chancesDeReussite`→`seuil`)
+- Panneau Joueur : `<CombatResultPlayer>` conditionnel : `!isGm && pnjAttackResult && pnjAttackResult.cibleId === playerToken?.id`
+- Styles `gar*` supprimés (10 entrées)
+- Props signature : +`pnjAttackResult`, +`onPnjAttackResultClose`
+
+*`client/src/pages/SessionPage.jsx`* ✅
+- +`pnjAttackResult` state, +`setPnjAttackResult`
+- Handler `COMBAT_ATTACK_RESULT` : set les deux states (`gmAttackResult` + `pnjAttackResult`) simultanément
+- Props `pnjAttackResult`/`onPnjAttackResultClose` passés à `<CombatOverlay>`
+
+*`CombatGmDeclareWindow.jsx`* ✅ (fixes CSS)
+- `borderLeftColor` + `borderLeft` → fusionné en `borderLeft: '3px solid #color'` (fix warning React)
+
+### Sprint DST/CTC — Badges + Batch homogène ✅
+
+**Problème :** "Assaut (tir)" actif même pour PNJs sans arme à distance ; batch pouvait mélanger DIST et CONTACT.
+
+**Solution :**
+
+*`server/src/routes/battlemaps.js`* ✅
+- `combat-equipment` endpoint : +`'ref_equipment.fire_mode as ref_fire_mode'` au SELECT weapon
+- **Piège évité :** colonne DB = `fire_mode`, alias = `ref_fire_mode` (copier l'alias → erreur SQL → roster vide)
+
+*`client/src/components/CombatGmDeclareWindow.jsx`* ✅
+- `isRanged(tokenId)` : `!!equipment[tokenId]?.weapon?.ref_fire_mode`
+- `hasWeapon` → `hasAnyRanged` (détection arme à distance, pas juste "a une arme")
+- `toggleSelect` : type guard DIST/CTC — si incompatible, remplace la sélection + met le focus
+- `selectAll` : filtre par type du `activeFocusId` (ne sélectionne que les DIST OU que les CTC)
+- Badge `DST` (cyan) / `CTC` (amber) / `···` (gris) dans chaque ligne roster
+- Tag bouton désactivé : `'sans arme dist.'` au lieu de `'sprint dédié'`
+- 4 nouveaux styles : `rosterBadge`, `rosterBadgeDst`, `rosterBadgeCct`, `rosterBadgeNone`
+
+**Sprint GM-B Assault PNJ + CombatResultPanels + DST/CTC ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
 ## Session 65 — Sprint Pathfinding : A* déplacement combat ✅ (2026-05-28)
 
 **Objectif :** Remplacer les anneaux concentriques (invalidés par les murs) par un pathfinding A* Chebyshev en temps réel — cases colorées par allure sur le chemin vers le curseur.

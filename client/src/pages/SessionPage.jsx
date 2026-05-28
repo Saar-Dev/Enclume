@@ -98,6 +98,12 @@ export default function SessionPage() {
   const [damageResults, setDamageResults] = useState(null)
   // attackResult : reçu via COMBAT_ATTACK_PLAYER_RESULT { hit, roll, cdr, tireurTokenId, cibleTokenId }
   const [attackResult, setAttackResult] = useState(null)
+  // gmAttackResult : reçu via COMBAT_ATTACK_RESULT { isPnj:true, ... } — panneau résultat PNJ GM
+  const [gmAttackResult, setGmAttackResult] = useState(null)
+  // pnjAttackResult : même payload, affiché au joueur ciblé
+  const [pnjAttackResult, setPnjAttackResult] = useState(null)
+  // gmSocketError : erreur serveur visible GM (PC22, etc.)
+  const [gmSocketError, setGmSocketError] = useState(null)
 
   // Fenêtre character flottante — null = fermée, sinon id du character ouvert
   // Le character est dérivé du store pour se mettre à jour automatiquement via WS
@@ -439,6 +445,17 @@ export default function SessionPage() {
     })
     s.on(WS.COMBAT_ATTACK_PLAYER_RESULT, (data) => {
       setAttackResult(data)
+    })
+    s.on(WS.COMBAT_ATTACK_RESULT, (data) => {
+      if (data.isPnj) {
+        setGmAttackResult(data)
+        setPnjAttackResult(data)
+      }
+    })
+    s.on('error', (err) => {
+      const msg = err?.message ?? String(err)
+      console.error('[WS] Erreur serveur:', msg)
+      setGmSocketError(msg)
     })
     s.on(WS.MAP_SWITCH, ({ battlemapId, userIds }) => {
       const concerned = userIds.length === 0 || userIds.includes(user?.id)
@@ -1135,6 +1152,12 @@ export default function SessionPage() {
           onDamageConfirmed={() => { setDamagePayload(null); setDamageResults(null); setAttackResult(null) }}
           attackResult={attackResult}
           onAttackConfirmed={() => setAttackResult(null)}
+          gmAttackResult={gmAttackResult}
+          onGmAttackResultClose={() => setGmAttackResult(null)}
+          pnjAttackResult={pnjAttackResult}
+          onPnjAttackResultClose={() => setPnjAttackResult(null)}
+          gmSocketError={gmSocketError}
+          onGmSocketErrorClose={() => setGmSocketError(null)}
         />
       )}
 
