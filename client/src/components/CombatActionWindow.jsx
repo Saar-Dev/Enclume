@@ -5,7 +5,7 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
 import {
-  STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS, MOVE_ZONE_DEFS,
+  STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS,
   stateTransitionCost, calcIniDelta,
 } from './combatSections.js'
 
@@ -297,17 +297,10 @@ export default function CombatActionWindow({
   const handleZoneSelectClick = () => {
     if (moveSelection) { setMoveSelection(null); return }
     if (!allures) return
-    const zones = MOVE_ZONE_DEFS.map(def => ({
-      radius:     allures[def.allureKey],
-      action_key: def.action_key,
-      ini_mod:    def.ini_mod,
-      color:      def.color,
-      label:      def.label,
-    }))
     setInMoveMode(true)
     setMoveSelection(null)
     onEnterMoveMode(
-      zones, playerToken.id,
+      allures, playerToken.id,
       { x: playerToken.pos_x, z: playerToken.pos_y },
       (sel) => { setMoveSelection(sel); setInMoveMode(false) },
       () => { setInMoveMode(false) }

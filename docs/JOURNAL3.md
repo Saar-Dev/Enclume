@@ -422,3 +422,142 @@ Bug résolu : `if (next.has(key)) next.delete(key) else next.add(key)` → accol
 - `borderRadius:0` sur input MOD pour éviter le `border-radius: var(--radius-md)` du CSS global
 
 **Sprint DicePanel v3 ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 65 — Sprint Pathfinding : A* déplacement combat ✅ (2026-05-28)
+
+**Objectif :** Remplacer les anneaux concentriques (invalidés par les murs) par un pathfinding A* Chebyshev en temps réel — cases colorées par allure sur le chemin vers le curseur.
+
+**Décisions de conception (tout validé avant de coder) :**
+- Chebyshev (8 directions, coût=1 par case) — pas de Manhattan ni Euclidien
+- Double résolution ×2 : 1 Three.js unit = 2 gridY nodes → supporte `slab_bottom` nativement
+- Allure auto-détectée par longueur du chemin (seuils calcAllures)
+- Chute libre autorisée, unlimited (MAX_SCAN_DOWN=40 gridY)
+- slope/wedge V1 = cube (non-implémenté)
+- Tokens bloquants, entités V1 = [] (is_blocking incertain)
+- Calcul client-side uniquement — aucun changement serveur
+
+**Bugs identifiés et corrigés (3 rounds run à vide) :**
+- Bug 1 (PE34) : `startFeetGY = posZ*2` → corrigé en `(posZ+1)*2` (pieds = pos_z+1.0 Three.js)
+- Bug 2 : `targetPosZ` manquait `-1` dans conversion feetGridY→posZ DB
+- Bug 3 : `Array.sort()` sur open set = O(n²) — remplacé par binary min-heap O(log n)
+- Issue B : destination = départ → early return null (évite goal check immédiat)
+- Issue C : stale heap entries → lazy deletion (`gScore.get(curKey) < cur.g → continue`)
+- Issue A : `entity.state?.is_blocking` incertain → V1 pass `entities=[]`
+
+**Fichiers créés :**
+
+*`client/src/lib/pathfinder.js`* — NOUVEAU module pur (~170 lignes, zéro dépendance React/store)
+- `MinHeap` : binary heap O(log n) avec comparateur
+- `buildBlockedSet(voxels, tokens, entities, excludeTokenId)` : Set<"x:gy:z"> des nœuds bloqués
+- `isValidFeet`, `isBodyClear` : helpers de validation nœud
+- `getNeighbors` : scan de `feetGY+maxStepUp` vers `feetGY-maxScanDown`, premier `isValidFeet` = surface naturelle
+- `reconstructPath` : backtrack parent map → `[{ x, z, feetGridY, distFromStart }]`
+- `findPath(voxels, tokens, entities, from, to, allures, options)` : A* complet
+- `getActionKey(steps, allures)` : steps → `{ action_key, ini_mod }`
+- `getPathColor(distFromStart, allures)` : `#3b82f6/#22c55e/#f97316/#ef4444`
+
+**Fichiers modifiés :**
+
+*`client/src/components/Canvas3D.jsx`*
+- Import `{ findPath, getPathColor, getActionKey }` depuis pathfinder.js
+- Nouveaux refs/state : `currentPath`/`currentPathRef`, `voxelsRef`, `lastCellRef`
+- useEffect cleanup : reset chemin + curseur quand combatMoveMode → null
+- `handlePointerMove` : throttle par case, appel `findPath`, update `currentPathRef` synchrone
+- `handlePointerUp` : lit `currentPathRef`, `getActionKey`, payload PE14 + `targetPosZ = Math.round(feetGridY/2)-1`
+- JSX : anneaux → `currentPath.map(cell → mesh position=[x+0.5, feetGridY/2+0.05, z+0.5])`
+
+*`client/src/pages/SessionPage.jsx`*
+- `handleEnterMoveMode` : paramètre `zones` → `allures`, `combatMoveMode.zones` → `combatMoveMode.allures`
+
+*`client/src/components/CombatActionWindow.jsx`*
+- `handleZoneSelectClick` : construction `zones` supprimée, passe `allures` directement
+- Import `MOVE_ZONE_DEFS` retiré (inutilisé)
+
+*`client/src/components/CombatOverlay.jsx`*
+- Import `MOVE_ZONE_DEFS` ajouté depuis combatSections.js
+- Légende déplacement : `zones.map()` → `MOVE_ZONE_DEFS.map(def => allures[def.allureKey])`
+
+**Faiblesses identifiées post-test (chantiers futurs) :**
+- Raycast imprecis : `groundPlane` fixe à y=0 → X/Z erronés sur terrain élevé
+- Waypoints : alt+clic pour forcer un point de passage sur chemins complexes
+
+**Sprint Pathfinding ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 65 — Sprint Raycast : intersection voxel précise ✅ (2026-05-28)
+
+**Objectif :** Remplacer le raycast contre plan fixe y=0 (X/Z décalés sur terrain élevé) par une intersection précise contre la géométrie voxel réelle.
+
+**Problème résolu :** `raycastGround` castait contre `THREE.Plane(y=0)`. Sur terrain élevé, le rayon "passait derrière" le voxel depuis la caméra, donnant des coordonnées X/Z incorrectes (erreur pouvant dépasser plusieurs cases).
+
+**Solution :** Algorithme Amanatides/Woo via `fast-voxel-raycast@0.1.1` (npm, fenomas/andyhall). Traverse mathématiquement la grille voxel sans passer par les meshes Three.js — fonctionne directement sur `voxelsRef.current`.
+
+**Technique — décalage normale 0.5 :**
+```js
+x: Math.floor(hitPos[0] + hitNorm[0] * 0.5)
+z: Math.floor(hitPos[2] + hitNorm[2] * 0.5)
+```
+`hitPos` = point d'entrée sur la face touchée (float). Décaler de 0.5 dans la direction de la normale donne la case adjacente ouverte (là où se tient le joueur), correctement pour toutes orientations de face.
+
+**Fichiers modifiés :**
+
+*`client/package.json`* — +`fast-voxel-raycast@0.1.1`
+
+*`client/src/components/Canvas3D.jsx`*
+- Import `raycastVoxels from 'fast-voxel-raycast'`
+- Nouvelle fonction `raycastVoxelColumn(clientX, clientY)` :
+  - Si voxel touché → `{ x, z, isVoid: false }` (coordonnées entières précises)
+  - Si vide → fallback plan y=0 → `{ x, z, isVoid: true }`
+- Bloc combat move mode `handlePointerMove` : remplace `raycastGround` par `raycastVoxelColumn`
+- Guard `if (cell.isVoid && !isGm) return` — joueur interdit de marcher dans le vide
+- `handlePointerMove` deps : +`raycastVoxelColumn`, +`isGm`
+
+**Périmètre :** `raycastGround` (plan y=0) conservé pour drag token, visée entité — non affectés par le bug (terrain plat ou positions relatives). Seul le mode déplacement combat utilise `raycastVoxelColumn`.
+
+**Sprint Raycast ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 65 — Sprint GM-B Move : Déplacement PNJ séquentiel ✅ (2026-05-28)
+
+**Objectif :** Migrer la logique de déplacement combat des PJs vers les PNJs. Le GM peut choisir une destination pour chaque PNJ sélectionné, avec traitement séquentiel automatique (Option B + Passer).
+
+**Décisions architecturales :**
+- `DEFAULT_PNJ_ALLURES = { lente:4, moyenne:8, rapide:16, max:24 }` pour tous les PNJs sans stats (COO=10 équivalent) — option 2 validée.
+- Pas de 6ème paramètre `customOnPendingMove` dans `handleEnterMoveMode` — le GM voit le panneau "Valider/Changer" standard, ce qui est correct.
+- `moveTick` incrémental (au lieu de `moveQueueIdx`) pour éviter le bug "même valeur 0 → pas de re-render".
+- `tokensRef` synced par useEffect séparé pour éviter stale closures dans l'effect queue.
+- Rules of Hooks : `useEffect([moveTick])` déplacé avant `if (allPnjs.length === 0) return null` — piège identifié pendant l'écriture.
+
+**Piège résolu — Rules of Hooks :** L'`useEffect([moveTick])` était initialement placé après l'early return. Détecté pendant la relecture du fichier produit. Déplacé avant l'early return.
+
+**Aucun changement serveur :** `COMBAT_ACTION_DECLARE` v2 (Sprint 7.6) gère déjà `mapActions.move.ini_mod` et valide les coordonnées `targetPosX/Y/Z` (PC33) pour tout type de token (PJ ou PNJ avec guard GM).
+
+**Fichiers modifiés :**
+
+*`shared/polarisUtils.js`*
+- +`export const DEFAULT_PNJ_ALLURES = { lente: 4, moyenne: 8, rapide: 16, max: 24 }`
+
+*`client/src/components/CombatOverlay.jsx`*
+- +`onEnterMoveMode={onEnterMoveMode}` sur `<CombatGmDeclareWindow>` (+1 ligne)
+
+*`client/src/components/CombatGmDeclareWindow.jsx`*
+- Imports : `useEffect, useRef` + `DEFAULT_PNJ_ALLURES`
+- Prop `onEnterMoveMode` ajoutée
+- State : `pendingGmMoves` ({}), `moveTick` (0)
+- Refs : `moveQueueRef` ([]), `moveQueueIdxRef` (0), `moveCancelRef` (null), `tokensRef` (synced)
+- `useEffect([tokens])` : sync `tokensRef.current` — AVANT early return
+- `useEffect([moveTick])` : pour chaque tick, entre move mode pour le token courant de la queue ; `onMoveSelected` stocke dans `pendingGmMoves` + avance ; `onCancel` avance sans stocker — AVANT early return
+- `GM_DISABLED` : `'move'` retiré → `new Set(['attack'])`
+- Click 'move' : `handleStartMoveQueue()` au lieu de `setMapAction`
+- `handleStartMoveQueue` : construit queue depuis `targetIds`, initialise refs, `setMoveTick(t=>t+1)`
+- `calcDelta` : `move: pendingGmMoves[tokenId] ?? null` (calcIniDelta inclut `move.ini_mod`)
+- `canDeclare` : `|| !!pendingGmMoves[id]`
+- `handleDeclare` : `move: pendingGmMoves[tokenId] ?? null` dans mapActions
+- Footer : bouton "Passer (label)" conditionnel (moveQueueRef + moveQueueIdxRef + moveTick)
+- Style `btnPasser` ajouté
+
+**Sprint GM-B Move ✅ CONFIRMÉ FONCTIONNEL**

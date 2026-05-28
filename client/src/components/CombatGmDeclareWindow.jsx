@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
@@ -6,6 +6,7 @@ import {
   STATE_DEFS, QUICK_ACTIONS, MAP_ACTIONS,
   calcIniDelta,
 } from './combatSections.js'
+import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 
 // ---------------------------------------------------------------------------
 // Etat par defaut par cle (= DEFAULT colonne DB)
@@ -63,13 +64,50 @@ function InlineChip({ stateKey, initial, current, onChange }) {
 // ---------------------------------------------------------------------------
 // Composant principal
 // ---------------------------------------------------------------------------
-export default function CombatGmDeclareWindow({ socket, characters }) {
+export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveMode }) {
   const { roster } = useCombatStore()
   const tokens     = useTokenStore(s => s.tokens)
 
   const [focusedId,   setFocusedId]   = useState(null)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [selections,  setSelections]  = useState({})   // tokenId -> { states, mapAction, quick }
+  const [pendingGmMoves, setPendingGmMoves] = useState({})  // tokenId -> { action_key, ini_mod, targetPosX, targetPosY, targetPosZ }
+  const [moveTick,       setMoveTick]       = useState(0)
+
+  const moveQueueRef    = useRef([])
+  const moveQueueIdxRef = useRef(0)
+  const moveCancelRef   = useRef(null)
+  const tokensRef       = useRef(tokens)
+  useEffect(() => { tokensRef.current = tokens }, [tokens])
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const queue = moveQueueRef.current
+    const idx   = moveQueueIdxRef.current
+    if (!onEnterMoveMode || queue.length === 0 || idx >= queue.length) return
+
+    const tokenId = queue[idx]
+    const token   = tokensRef.current.find(t => t.id === tokenId)
+    if (!token) {
+      moveQueueIdxRef.current = idx + 1
+      setMoveTick(t => t + 1)
+      return
+    }
+
+    const tokenPos = { x: token.pos_x, z: token.pos_y }
+
+    const onMoveSelected = (sel) => {
+      setPendingGmMoves(prev => ({ ...prev, [tokenId]: sel }))
+      moveQueueIdxRef.current = moveQueueIdxRef.current + 1
+      setMoveTick(t => t + 1)
+    }
+    const onCancel = () => {
+      moveQueueIdxRef.current = moveQueueIdxRef.current + 1
+      setMoveTick(t => t + 1)
+    }
+    moveCancelRef.current = onCancel
+    onEnterMoveMode(DEFAULT_PNJ_ALLURES, tokenId, tokenPos, onMoveSelected, onCancel)
+  }, [moveTick])
 
   // ── Helpers identification PNJ ──────────────────────────────────────────
   const isPnj = (entry) => {
@@ -165,7 +203,7 @@ export default function CombatGmDeclareWindow({ socket, characters }) {
     return calcIniDelta(
       getInitialStates(entry),
       sel.states,
-      { move: null, attack: null, melee: sel.mapAction === 'melee', multi: sel.mapAction === 'multi' },
+      { move: pendingGmMoves[tokenId] ?? null, attack: null, melee: sel.mapAction === 'melee', multi: sel.mapAction === 'multi' },
       sel.quick,
     )
   }
@@ -197,7 +235,7 @@ export default function CombatGmDeclareWindow({ socket, characters }) {
     if (!entry || entry.has_announced) return false
     const init  = getInitialStates(entry)
     const stateChanged = Object.keys(sel.states).some(k => sel.states[k] !== init[k])
-    const hasAction    = !!sel.mapAction || sel.quick.observer > 0 || sel.quick.reperer > 0 || sel.quick.phrase
+    const hasAction    = !!sel.mapAction || !!pendingGmMoves[id] || sel.quick.observer > 0 || sel.quick.reperer > 0 || sel.quick.phrase
     return stateChanged || hasAction
   })
 
@@ -215,7 +253,7 @@ export default function CombatGmDeclareWindow({ socket, characters }) {
         tokenId,
         state: { ...sel.states },
         mapActions: {
-          move:     null,
+          move:     pendingGmMoves[tokenId] ?? null,
           attack:   null,
           melee:    sel.mapAction === 'melee',
           multi:    sel.mapAction === 'multi',
@@ -241,9 +279,17 @@ export default function CombatGmDeclareWindow({ socket, characters }) {
   const selectAll  = () => setSelectedIds(new Set(sortedPnjs.filter(r => !r.has_announced).map(r => r.token_id)))
   const selectNone = () => setSelectedIds(new Set())
 
+  // ── Déplacement PNJ séquentiel ──────────────────────────────────────────────
+  const handleStartMoveQueue = () => {
+    if (!onEnterMoveMode || targetIds.length === 0) return
+    moveQueueRef.current    = [...targetIds]
+    moveQueueIdxRef.current = 0
+    setMoveTick(t => t + 1)
+  }
+
   // ── MAP_ACTIONS disponibles pour le GM ──────────────────────────────────
-  // move et attack : grisés (sprint dédiés)
-  const GM_DISABLED = new Set(['move', 'attack'])
+  // attack : grisé (sprint dédié) — move géré par handleStartMoveQueue
+  const GM_DISABLED = new Set(['attack'])
 
   // ── Render ───────────────────────────────────────────────────────────────
   const hasTargets = targetIds.length > 0
@@ -299,7 +345,11 @@ export default function CombatGmDeclareWindow({ socket, characters }) {
                 return (
                   <div key={a.k}
                     title={a.tooltip}
-                    onClick={() => !disabled && setMapAction(a.k)}
+                    onClick={() => {
+                      if (disabled) return
+                      if (a.k === 'move') handleStartMoveQueue()
+                      else setMapAction(a.k)
+                    }}
                     style={{
                       ...S.actionBtn,
                       ...(active   ? S.actionBtnActive   : {}),
@@ -436,6 +486,11 @@ export default function CombatGmDeclareWindow({ socket, characters }) {
         {batchMode && (
           <div style={S.batchWarn}>⚠ coûts INI calculés individuellement</div>
         )}
+        {moveQueueRef.current.length > 0 && moveQueueIdxRef.current < moveQueueRef.current.length && (
+          <button style={S.btnPasser} onClick={() => moveCancelRef.current?.()}>
+            Passer ({getLabel(moveQueueRef.current[moveQueueIdxRef.current])})
+          </button>
+        )}
         <button
           style={{ ...S.btnDeclare, ...(!canDeclare ? S.btnDeclareDisabled : {}) }}
           onClick={handleDeclare}
@@ -526,4 +581,5 @@ const S = {
   batchWarn: { fontSize: 8, color: '#aa8a30', fontFamily: 'monospace', padding: '4px 6px', background: '#1a1410', border: '1px solid #aa8a3044', borderRadius: 2 },
   btnDeclare: { padding: '7px 12px', background: 'rgba(80,200,120,0.12)', border: '1px solid #50c878', borderRadius: 3, color: '#50c878', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', fontFamily: 'monospace' },
   btnDeclareDisabled: { opacity: 0.35, cursor: 'not-allowed' },
+  btnPasser: { padding: '5px 12px', background: 'none', border: '1px solid #3a4a5a', borderRadius: 3, color: '#7090a8', fontSize: 10, cursor: 'pointer', fontFamily: 'monospace' },
 }

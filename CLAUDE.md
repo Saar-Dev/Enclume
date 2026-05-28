@@ -118,43 +118,35 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 65 (2026-05-27)
+## État actuel — Session 65 (2026-05-28)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **58 migrations stables** — prochaine : **59**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / D20 normales GLB ✅ / DicePanel v3 ✅
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅
 
-**Session 65 — Sprint 7.6 ✅ CONFIRMÉ :**
-- combatSections.js : STATE_DEFS 5 états + matrices coût, calcIniDelta, MAP_ACTIONS multi-select, QUICK_ACTIONS incrémentaux
-- CombatActionWindow v2 : StateSelector segmented control, blocs TACTIQUE/ARMEMENT/ACTION/RAPIDES, QB, payload v2
-- socket/index.js : COMBAT_ACTION_DECLARE v2, matrices STATE_COSTS, UPDATE state_*, endTurn reset colonnes
-- CombatGmDeclareWindow : adapté v2 (MAP_ACTIONS/QUICK_ACTIONS, emit v2)
-- Migration 58 : state_cover / state_fire_mode / state_vitesse sur combat_roster
+**Session 65 — Sprint GM-B Move ✅ CONFIRMÉ :**
+- `shared/polarisUtils.js` : +`DEFAULT_PNJ_ALLURES { lente:4, moyenne:8, rapide:16, max:24 }`
+- `CombatOverlay.jsx` : +`onEnterMoveMode` propagé à CombatGmDeclareWindow
+- `CombatGmDeclareWindow.jsx` : queue séquentielle `moveTick` + `useEffect([moveTick])` AVANT early return, `pendingGmMoves`, `handleStartMoveQueue`, 'move' retiré GM_DISABLED, bouton "Passer", `calcDelta`/`canDeclare`/`handleDeclare` intègrent le move
+- Piège résolu : Rules of Hooks — `useEffect` ne peut pas être après `return null`
 
-**Session 65 — Sprint GM + Sprint GM-A ✅ CONFIRMÉS :**
-- CombatGmDeclareWindow : réécriture complète (InlineChip click-to-cycle, batch mode, STATE_DEFAULTS, roster intégré)
-- combatSections.js : tooltips LdB + label reperer corrigé, slider GM affiche coût INI réel
-- CombatRosterWindow v2 : détection arme/armure pré-combat, chips T/C/B/J PJ/PNJ, quick-equip GM-only, bannière alerte
-- battlemaps.js : GET /:id/combat-equipment
-- char-sheet.js : POST /:characterId/quick-equip (GM-only, bypass container)
-- equipment.js : +location dans GET /equipment SELECT
+**Session 65 — Sprint Pathfinding ✅ CONFIRMÉ :**
+- `client/src/lib/pathfinder.js` (NOUVEAU) : A* Chebyshev + binary min-heap, `findPath/getActionKey/getPathColor`
+- `Canvas3D.jsx` : anneaux → cellules colorées par allure, `handlePointerMove` throttlé par case, `handlePointerUp` lit `currentPathRef`
+- Remplacement complet de l'API `zones[]` par `allures` dans 4 fichiers
 
-**Session 65 — D20 normales GLB ✅ CONFIRMÉ :**
-- `DiceMesh.jsx` : branche D20 dédiée (IcosahedronGeometry) supprimée → D20 passe par `faceNormal` → `D20_GLB_NORMALS`
-- `diceMath.js` : `D20_GLB_NORMALS` — 20 normales Blender exactes, clés = numéros réels du dé (remapping par test visuel, validation antipodal dot=-1.000 ✓)
-- Piège : remapping permutation → toujours utiliser la direction inverse (`new[X] = old[inverse[X]]`, pas `old[mapping[X]]`)
+**Session 65 — Sprint Raycast ✅ CONFIRMÉ :**
+- `fast-voxel-raycast@0.1.1` : Amanatides/Woo sur `voxelsRef`, décalage normale +0.5 pour case adjacente ouverte
+- Guard GM/joueur : `isVoid && !isGm → return`
 
-**Session 65 — DicePanel v3 ✅ CONFIRMÉ :**
-- `DicePanel.jsx` : réécriture complète — roue radiale SVG (PCBBackground + DieShape + DieButton), formule mono-type {k,n,mod}, favoris localStorage, historique local via DICE_RESULT filtré userId, JET AU MJ fonctionnel
-- `@fontsource/share-tech-mono` + `@fontsource/caveat` : installés npm, importés dans index.css (offline Pi)
-- `socket/index.js` : DICE_ROLL +`secret` → broadcast ciblé lanceur+GM (fetchSockets/PE2)
-- `SessionPage.jsx` + `Sidebar.jsx` : +`secret` propagé jusqu'à l'affichage 🔒
+**Session 65 — Sprint 7.6 + Sprint GM + Sprint GM-A ✅ CONFIRMÉS :** voir JOURNAL3.md
 
 **"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
 
 **Prochain chantier :**
-- Sprint GM-B — Déplacement PNJ (onEnterMoveMode depuis CombatOverlay, moveSelection per-PNJ)
+- Sprint GM-B — Assault PNJ (Mode Minimal) — plan dans JOURNALTEMP.md
 - Sprint 7.5 — Décompte munitions
+- Sprint Waypoints — basse priorité
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser.

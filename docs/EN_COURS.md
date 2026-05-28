@@ -277,8 +277,7 @@ Travaux effectués :
 
 **Sprint GM-A ✅ CONFIRMÉ (session 65)** — CombatRosterWindow v2 : détection arme/armure pré-combat, chips T/C/B/J, quick-equip GM-only, bannière alerte
 
-**Sprint restant :**
-- Sprint GM-B — Déplacement PNJ (onEnterMoveMode depuis CombatOverlay, moveSelection per-PNJ)
+**Sprint GM-B ✅ CONFIRMÉ (session 65)** — Déplacement PNJ séquentiel (Option B + Passer) : `DEFAULT_PNJ_ALLURES`, queue `moveTick`, `useEffect([moveTick])`, `pendingGmMoves`, bouton "Passer", aucun changement serveur
 
 ---
 

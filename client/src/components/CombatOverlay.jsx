@@ -9,6 +9,7 @@ import CombatPnjPanel from './CombatPnjPanel'
 import CombatGmDeclareWindow from './CombatGmDeclareWindow'
 import CombatModifiersWindow from './CombatModifiersWindow'
 import CombatDamageWindow from './CombatDamageWindow'
+import { MOVE_ZONE_DEFS } from './combatSections.js'
 
 
 export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed }) {
@@ -69,6 +70,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         <CombatGmDeclareWindow
           socket={socket}
           characters={characters}
+          onEnterMoveMode={onEnterMoveMode}
         />
       )}
 
@@ -163,13 +165,14 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         <div style={styles.moveLegend}>
           <div style={styles.moveLegendTitle}>Déplacement</div>
 
-          {combatMoveMode.zones.map((zone, i) => {
-            const iniStr = zone.ini_mod > 0 ? `+${zone.ini_mod}` : zone.ini_mod === 0 ? '±0' : `${zone.ini_mod}`
+          {MOVE_ZONE_DEFS.map(def => {
+            const dist  = combatMoveMode.allures?.[def.allureKey]
+            const iniStr = def.ini_mod > 0 ? `+${def.ini_mod}` : def.ini_mod === 0 ? '±0' : `${def.ini_mod}`
             return (
-              <div key={zone.action_key + i} style={styles.moveLegendRow}>
-                <span style={{ ...styles.moveLegendDot, background: zone.color }} />
-                <span style={styles.moveLegendLabel}>{zone.label}</span>
-                <span style={styles.moveLegendDist}>≤ {zone.radius} m</span>
+              <div key={def.action_key} style={styles.moveLegendRow}>
+                <span style={{ ...styles.moveLegendDot, background: def.color }} />
+                <span style={styles.moveLegendLabel}>{def.label}</span>
+                <span style={styles.moveLegendDist}>≤ {dist} m</span>
                 <span style={styles.moveLegendIni}>{iniStr}</span>
               </div>
             )

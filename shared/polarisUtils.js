@@ -38,3 +38,6 @@ export function calcAllures(coo_na, athletisme_total) {
   const maxMoy = calcAllureMoy(athletisme_total ?? 2)
   return { lente: moy / 2, moyenne: moy, rapide: moy * 2, max: maxMoy * 4 }
 }
+
+// Allures de repli pour PNJs sans stats (équivalent COO=10)
+export const DEFAULT_PNJ_ALLURES = { lente: 4, moyenne: 8, rapide: 16, max: 24 }

@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
 import api from '../lib/api.js'
+import { findPath, getPathColor, getActionKey } from '../lib/pathfinder.js'
+import raycastVoxels from 'fast-voxel-raycast'
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import Voxel from './Voxel.jsx'
@@ -260,12 +262,26 @@ function Scene({
   const combatTargetModeRef = useRef(null)
   combatTargetModeRef.current = combatTargetMode
 
+  // ─── Chemin pathfinding combat (Sprint Pathfinding) ──────────────────────
+  const [currentPath, setCurrentPath] = useState([])
+  const currentPathRef = useRef([])
+  currentPathRef.current = currentPath
+
+  const voxelsRef = useRef(voxels)
+  voxelsRef.current = voxels
+
+  const lastCellRef = useRef(null)
+
   // Position curseur snappé (Three.js floor coords) — visible uniquement en mode combat
   const [combatCursorPos, setCombatCursorPos] = useState(null)
 
-  // Nettoyage curseur quand on quitte le mode (cancel ou sélection)
+  // Nettoyage chemin + curseur quand on quitte le mode déplacement
   useEffect(() => {
-    if (!combatMoveMode) setCombatCursorPos(null)
+    if (!combatMoveMode) {
+      setCombatCursorPos(null)
+      setCurrentPath([])
+      lastCellRef.current = null
+    }
   }, [combatMoveMode])
 
   const dragRef = useRef({
@@ -346,6 +362,50 @@ function Scene({
     return hit ? target : null
   }, [camera, gl])
 
+  // Raycast précis à travers la grille voxel — pour le mode déplacement combat.
+  // Retourne { x, z, isVoid } avec x/z en coordonnées entières Three.js (colonne).
+  // isVoid=true : aucun voxel touché (zone vide) — GM autorisé, joueur bloqué.
+  // Technique : Amanatides/Woo + décalage 0.5 dans la normale → case adjacente ouverte.
+  const raycastVoxelColumn = useCallback((clientX, clientY) => {
+    const rect = gl.domElement.getBoundingClientRect()
+    const mouse = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    )
+    raycaster.setFromCamera(mouse, camera)
+
+    const origin = raycaster.ray.origin
+    const dir    = raycaster.ray.direction
+    const hitPos  = [0, 0, 0]
+    const hitNorm = [0, 0, 0]
+
+    const getVoxel = (x, y, z) => !!voxelsRef.current[`${x}:${y}:${z}`]
+
+    const hit = raycastVoxels(
+      getVoxel,
+      [origin.x, origin.y, origin.z],
+      [dir.x,    dir.y,    dir.z],
+      100,
+      hitPos,
+      hitNorm
+    )
+
+    if (hit) {
+      return {
+        x: Math.floor(hitPos[0] + hitNorm[0] * 0.5),
+        z: Math.floor(hitPos[2] + hitNorm[2] * 0.5),
+        isVoid: false,
+      }
+    }
+
+    // Aucun voxel touché — fallback plan y=0
+    const target = new THREE.Vector3()
+    const groundPlane0 = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+    const fallback = raycaster.ray.intersectPlane(groundPlane0, target)
+    if (!fallback) return null
+    return { x: Math.floor(target.x), z: Math.floor(target.z), isVoid: true }
+  }, [camera, gl])
+
   const getColumnTopY = useCallback((x, z) => {
     let maxY = -1
     for (const v of Object.values(voxels)) {
@@ -384,9 +444,22 @@ function Scene({
   const handlePointerMove = useCallback((e) => {
     // ─── Mode déplacement combat — prioritaire sur tout ───────────────────────
     if (combatMoveModeRef.current) {
-      const worldPos = raycastGround(e.clientX, e.clientY)
-      if (!worldPos) return
-      setCombatCursorPos({ x: Math.floor(worldPos.x), z: Math.floor(worldPos.z) })
+      const cell = raycastVoxelColumn(e.clientX, e.clientY)
+      if (!cell) return
+      if (cell.isVoid && !isGm) return  // joueur : interdit de marcher dans le vide
+      // Throttle : ne recalculer que si la case change
+      if (cell.x !== lastCellRef.current?.x || cell.z !== lastCellRef.current?.z) {
+        lastCellRef.current = cell
+        setCombatCursorPos(cell)
+        const mode = combatMoveModeRef.current
+        const actorToken = tokensRef.current.find(t => t.id === mode.tokenId)
+        if (actorToken) {
+          const from = { x: actorToken.pos_x, z: actorToken.pos_y, posZ: actorToken.pos_z }
+          const path = findPath(voxelsRef.current, tokensRef.current, [], from, cell, mode.allures, { excludeTokenId: mode.tokenId })
+          currentPathRef.current = path ?? []
+          setCurrentPath(path ?? [])
+        }
+      }
       return
     }
 
@@ -468,32 +541,27 @@ function Scene({
       tiltX,
       tiltZ,
     })
-  }, [raycastGround, getColumnTopY, moveTarget])
+  }, [raycastGround, raycastVoxelColumn, getColumnTopY, moveTarget, isGm])
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(async (e) => {
     // ─── Mode déplacement combat — prioritaire sur tout ───────────────────────
     if (combatMoveModeRef.current) {
       const mode = combatMoveModeRef.current
-      const worldPos = raycastGround(e.clientX, e.clientY)
-      if (!worldPos) return
-      // Coords voxel cliqué (Three.js floor = indice de colonne)
-      const vx = Math.floor(worldPos.x)
-      const vz = Math.floor(worldPos.z)
-      // Token joueur pour calculer la distance
-      const playerToken = tokensRef.current.find(t => t.id === mode.tokenId)
-      if (playerToken) {
-        // Distance centre→centre (PE14 : pos_y = Z Three.js)
-        const dx = vx - playerToken.pos_x
-        const dz = vz - playerToken.pos_y
-        const dist = Math.sqrt(dx * dx + dz * dz)
-        const { zones } = mode
-        const matchedZone = zones.find(z => dist <= z.radius)
-        if (!matchedZone) return  // hors portée max — ignorer
-
-        // Conversion PE14 : vx = pos_x, vz = pos_y (profondeur = Z Three.js), altitude = 0
-        mode.onPendingMove({ action_key: matchedZone.action_key, ini_mod: matchedZone.ini_mod, targetPosX: vx, targetPosY: vz, targetPosZ: 0 })
-      }
+      const path = currentPathRef.current
+      if (!path || path.length < 2) return  // inaccessible ou destination = départ
+      const dest = path[path.length - 1]
+      const result = getActionKey(path.length - 1, mode.allures)
+      if (!result) return  // hors portée max
+      // PE14 : targetPosY = Z Three.js (profondeur)
+      // Bug 2 fix : targetPosZ = Math.round(feetGridY/2) - 1 (pieds → altitude DB)
+      mode.onPendingMove({
+        action_key:  result.action_key,
+        ini_mod:     result.ini_mod,
+        targetPosX:  dest.x,
+        targetPosY:  dest.z,
+        targetPosZ:  Math.round(dest.feetGridY / 2) - 1,
+      })
       return
     }
 
@@ -709,29 +777,25 @@ function Scene({
         )
       })}
 
-      {/* ── Anneaux déplacement combat (Sprint 4) ────────────────────────── */}
-      {/* Zones concentriques centrées sur le token joueur actif.              */}
-      {/* Générique : 1 zone (grab_close), 2 zones (grab_far), 4 zones (move) */}
-      {/* PE14 : pos_y du token = Z Three.js (profondeur) — PE34 : pieds = pos_z+1.0 */}
-      {combatMoveMode && (() => {
-        const { zones, tokenId } = combatMoveMode
-        const myToken = tokensRef.current.find(t => t.id === tokenId)
-        if (!myToken) return null
-        const cx = myToken.pos_x + 0.5
-        const cz = myToken.pos_y + 0.5  // PE14
-        return (
-          <group position={[cx, myToken.pos_z + 1.0 + 0.05, cz]} rotation={[-Math.PI / 2, 0, 0]}>
-            {zones.map((zone, i) => (
-              <mesh key={zone.action_key + i}>
-                {i === 0
-                  ? <circleGeometry args={[zone.radius, 64]} />
-                  : <ringGeometry args={[zones[i - 1].radius, zone.radius, 64]} />}
-                <meshBasicMaterial color={zone.color} transparent opacity={0.25} depthWrite={false} />
-              </mesh>
-            ))}
-          </group>
-        )
-      })()}
+      {/* ── Chemin déplacement combat (Sprint Pathfinding) ──────────────── */}
+      {/* Cases colorées par allure sur le chemin A* vers le curseur.         */}
+      {/* Bleu = lente, vert = moyenne, orange = rapide, rouge = max          */}
+      {/* feetGridY / 2 = hauteur Three.js des pieds sur cette case           */}
+      {combatMoveMode && currentPath.map((cell, i) => (
+        <mesh
+          key={`path-${i}`}
+          position={[cell.x + 0.5, cell.feetGridY / 2 + 0.05, cell.z + 0.5]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={[0.9, 0.9]} />
+          <meshBasicMaterial
+            color={getPathColor(cell.distFromStart, combatMoveMode.allures)}
+            transparent
+            opacity={0.5}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
 
       {/* ── Cursor wireframe case survolée en mode déplacement combat ────── */}
       {combatMoveMode && combatCursorPos && (() => {
@@ -775,7 +839,7 @@ function Scene({
 // onTokenRotate  : callback → SessionPage émet WS.TOKEN_ROTATE
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
-// combatMoveMode : { tokenId, zones, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat
+// combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
 export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, combatTargetMode }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()

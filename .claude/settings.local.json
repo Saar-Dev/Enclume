@@ -81,7 +81,10 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:api.github.com)",
-      "Bash(node tools/sample-texture.js client/public/models/D20_albedo.png 1997,3200,C1 1860,3714,C2 2189,3197,C3 2341,3233,C4 1774,3114,C5 2403,3590,C6 2055,3323,C7 1908,3343,C8 2137,3322,C9 2588,3276,C10 2204,3406,C11 2179,3014,C12 2046,3410,C13 2364,3399,C14 1925,3542,C15 2128,3421,C16 2244,3524,C17 2119,3505,C18 2240,3310,C19 2173,3677,C20)"
+      "Bash(node tools/sample-texture.js client/public/models/D20_albedo.png 1997,3200,C1 1860,3714,C2 2189,3197,C3 2341,3233,C4 1774,3114,C5 2403,3590,C6 2055,3323,C7 1908,3343,C8 2137,3322,C9 2588,3276,C10 2204,3406,C11 2179,3014,C12 2046,3410,C13 2364,3399,C14 1925,3542,C15 2128,3421,C16 2244,3524,C17 2119,3505,C18 2240,3310,C19 2173,3677,C20)",
+      "WebFetch(domain:medium.com)",
+      "Bash(npm show *)",
+      "WebFetch(domain:vite.dev)"
     ]
   }
 }
