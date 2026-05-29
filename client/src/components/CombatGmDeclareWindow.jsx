@@ -8,6 +8,7 @@ import {
   calcIniDelta,
 } from './combatSections.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
+import { useDraggable } from '../lib/useDraggable.js'
 
 // ---------------------------------------------------------------------------
 // Etat par defaut par cle (= DEFAULT colonne DB)
@@ -166,6 +167,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const allPnjs        = roster.filter(r => r.status === 'active').filter(isPnj)
   const sortedPnjs     = [...allPnjs].sort((a, b) => b.initiative - a.initiative)
   const unannouncedCnt = allPnjs.filter(r => !r.has_announced).length
+
+  const { pos, onHeaderMouseDown } = useDraggable(
+    'combat-gm-declare-pos',
+    { top: window.innerHeight - 660, left: window.innerWidth - 456 },
+    440,
+  )
 
   if (allPnjs.length === 0) return null
 
@@ -378,10 +385,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const hasTargets = targetIds.length > 0
 
   return (
-    <div style={S.window}>
+    <div style={{ ...S.window, left: pos.left, top: pos.top }}>
 
       {/* HEADER */}
-      <div style={{ ...S.header, ...(batchMode ? S.headerBatch : {}) }}>
+      <div style={{ ...S.header, ...(batchMode ? S.headerBatch : {}) }} onMouseDown={onHeaderMouseDown}>
         <span style={{ ...S.headerLabel, ...(batchMode ? S.headerLabelBatch : {}) }}>
           {batchMode ? `BATCH — ${targetIds.length} PNJs` : 'PHASE 1 — DÉCLARATION'}
         </span>
@@ -621,7 +628,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 // ---------------------------------------------------------------------------
 const S = {
   window: {
-    position: 'absolute', bottom: 24, right: 16,
+    position: 'absolute',
     width: 440, maxHeight: 'calc(100vh - 100px)',
     background: 'rgba(8,12,20,0.97)',
     border: '1.5px solid #15212e',
@@ -634,7 +641,7 @@ const S = {
   },
 
   // Header
-  header: { padding: '8px 12px', background: '#06080e', borderBottom: '1px solid #15212e', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
+  header: { padding: '8px 12px', background: '#06080e', borderBottom: '1px solid #15212e', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, cursor: 'grab', userSelect: 'none' },
   headerBatch: { background: '#2a1810' },
   headerLabel: { fontSize: 9, letterSpacing: '0.15em', fontWeight: 700, color: '#3a8aaa', flex: 1 },
   headerLabelBatch: { color: '#e8c870' },

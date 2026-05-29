@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { STATE_DEFS } from './combatSections.js'
@@ -27,6 +28,12 @@ export default function CombatInitStateWindow({ socket, playerToken }) {
   const [fireMode,  setFireMode]  = useState(entry?.state_fire_mode ?? 'cc')
   const [confirmed, setConfirmed] = useState(false)
 
+  const { pos, onHeaderMouseDown } = useDraggable(
+    'combat-init-state-pos',
+    { top: window.innerHeight - 220, left: window.innerWidth - 276 },
+    260,
+  )
+
   const handleConfirm = () => {
     if (!socket || !playerToken) return
     socket.emit(WS.COMBAT_INIT_STATE, {
@@ -43,7 +50,7 @@ export default function CombatInitStateWindow({ socket, playerToken }) {
     const wpnLabel = STATE_DEFS.weapon.states.find(s => s.k === weapon)?.l      ?? weapon
     const fmLabel  = STATE_DEFS.fire_mode.states.find(s => s.k === fireMode)?.l ?? fireMode
     return (
-      <div style={S.window}>
+      <div style={{ ...S.window, left: pos.left, top: pos.top }}>
         <div style={S.confirmedTitle}>État initial confirmé ✓</div>
         <div style={S.confirmedRow}>{posLabel} · {wpnLabel} · {fmLabel}</div>
       </div>
@@ -51,8 +58,8 @@ export default function CombatInitStateWindow({ socket, playerToken }) {
   }
 
   return (
-    <div style={S.window}>
-      <div style={S.header}>ÉTAT INITIAL</div>
+    <div style={{ ...S.window, left: pos.left, top: pos.top }}>
+      <div style={S.header} onMouseDown={onHeaderMouseDown}>ÉTAT INITIAL</div>
       <div style={S.chips}>
         <StateChip defKey="position"  current={position}  onChange={setPosition}  />
         <StateChip defKey="weapon"    current={weapon}    onChange={setWeapon}    />
@@ -65,7 +72,7 @@ export default function CombatInitStateWindow({ socket, playerToken }) {
 
 const S = {
   window: {
-    position: 'absolute', bottom: 24, right: 16,
+    position: 'absolute',
     width: 260,
     background: 'rgba(8,12,20,0.97)',
     border: '1.5px solid #15212e',
@@ -78,6 +85,7 @@ const S = {
   header: {
     fontSize: 9, letterSpacing: '0.15em', fontWeight: 700,
     color: '#3a8aaa', marginBottom: 10,
+    cursor: 'grab', userSelect: 'none',
   },
   chips: {
     display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10,

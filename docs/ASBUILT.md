@@ -17,13 +17,13 @@ Enclume/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── CombatOverlay.jsx        # Modifié 64 — Sprint 7.1 : +combatTargetMode. Sprint 7.4bis : refactoring PJ vs GM, deux CombatModifiersWindow séparés, CombatActionWindow masqué pendant assaut PJ. Modifié 65 Sprint GM-A : +characters prop passée à CombatRosterWindow. Modifié 65 Sprint GM-B : +onEnterMoveMode passé à CombatGmDeclareWindow
-│   │   │   ├── CombatRosterWindow.jsx  # Réécriture complète 65 Sprint GM-A — détection arme/armure, chips T/C/B/J (PjArmorChips/PnjArmorChips), quick-equip PNJ, bannière alerte, fetches parallèles combat-ini+combat-equipment+refWeapons+refArmors
+│   │   │   ├── CombatRosterWindow.jsx  # Réécriture complète 65 Sprint GM-A. Modifié 66 — draggable (useDraggable, key combat-roster-pos) — détection arme/armure, chips T/C/B/J (PjArmorChips/PnjArmorChips), quick-equip PNJ, bannière alerte, fetches parallèles combat-ini+combat-equipment+refWeapons+refArmors
 │   │   │   ├── CombatTimeline.jsx      # Modifié 62 — timeline INI, portraits cliquables GM, topOffset + curseur slot actif RÉSOLUTION (slotActive, activeSlotIdx)
-│   │   │   ├── CombatActionWindow.jsx  # Modifié 65 Sprint 7.6 — réécriture v2 : StateSelector segmented control, blocs TACTIQUE/ARMEMENT/ACTION/RAPIDES, QB weapon auto-drawn, footer INI delta coloré, payload v2 {state,mapActions,quick}. Modifié 65 Sprint GM — title={a.tooltip} sur MAP_ACTIONS (3 branches) + QUICK_ACTIONS
+│   │   │   ├── CombatActionWindow.jsx  # Modifié 65 Sprint 7.6. Modifié 66 — draggable 5 branches (useDraggable, key combat-action-pos) — réécriture v2 : StateSelector segmented control, blocs TACTIQUE/ARMEMENT/ACTION/RAPIDES, QB weapon auto-drawn, footer INI delta coloré, payload v2 {state,mapActions,quick}. Modifié 65 Sprint GM — title={a.tooltip} sur MAP_ACTIONS (3 branches) + QUICK_ACTIONS
 │   │   │   ├── CombatDamageWindow.jsx  # NOUVEAU 64 Sprint 7.4 — fenêtre PJ lancer dés dégâts : Phase 1 dés vides / Phase 2 animation / Phase 3 résultats colorés
-│   │   │   ├── CombatModifiersWindow.jsx # NOUVEAU 64 Sprint 7.2. Modifié 65 Sprint 7.6 — is_rushed → state_vitesse === 'rushed'
+│   │   │   ├── CombatModifiersWindow.jsx # NOUVEAU 64 Sprint 7.2. Modifié 65 Sprint 7.6. Modifié 66 — draggable (useDraggable, sticky retiré du header) — is_rushed → state_vitesse === 'rushed'
 │   │   │   ├── CombatPnjPanel.jsx      # NOUVEAU 58 — modal GM PJs/PNJs read-only, isPnj via character.type
-│   │   │   ├── CombatGmDeclareWindow.jsx # Réécriture complète 65 Sprint GM — InlineChip click-to-cycle, batch mode, STATE_DEFAULTS, aggregate/__mixed__, sections TACTIQUE/ARMEMENT/ACTION/RAPIDES, roster intégré, footer INI delta, emit v2 N×WS. title tooltips LdB. Modifié 65 Sprint GM-B : onEnterMoveMode, pendingGmMoves, moveTick, moveQueue refs, tokensRef, useEffect([moveTick]) AVANT early return, handleStartMoveQueue, 'move' retiré GM_DISABLED, bouton Passer, DEFAULT_PNJ_ALLURES
+│   │   │   ├── CombatGmDeclareWindow.jsx # Réécriture complète 65 Sprint GM. Modifié 66 — draggable (useDraggable avant early return allPnjs) — InlineChip click-to-cycle, batch mode, STATE_DEFAULTS, aggregate/__mixed__, sections TACTIQUE/ARMEMENT/ACTION/RAPIDES, roster intégré, footer INI delta, emit v2 N×WS. title tooltips LdB. Modifié 65 Sprint GM-B : onEnterMoveMode, pendingGmMoves, moveTick, moveQueue refs, tokensRef, useEffect([moveTick]) AVANT early return, handleStartMoveQueue, 'move' retiré GM_DISABLED, bouton Passer, DEFAULT_PNJ_ALLURES
 │   │   │   ├── combatSections.js       # Modifié 65 Sprint 7.6 — réécriture complète : STATE_DEFS (5 états + matrices coût), stateTransitionCost, calcIniDelta, MAP_ACTIONS multi-select, QUICK_ACTIONS incrémentaux, MOVE_ZONE_DEFS. Modifié 65 Sprint GM — tooltip LdB sur MAP_ACTIONS+QUICK_ACTIONS, label reperer corrigé
 │   │   │   ├── Canvas3D.jsx            # Modifié 64 — +combatTargetMode prop, combatTargetModeRef (P40), intercept drag→target, ligne R3F attaquant→cible (useMemo targetLinePoints)
 │   │   │   ├── Editor3D.jsx            # Modifié 9C — EntityEditorScene, activeEditorTab
@@ -41,6 +41,8 @@ Enclume/
 │   │   ├── pages/
 │   │   │   ├── LoginPage.jsx
 │   │   │   ├── RegisterPage.jsx        # Modifié 66 — +champ "Beta code" (inviteCode, filtre chiffres, maxLength 8)
+│   │   ├── lib/
+│   │   │   └── useDraggable.js         # NOUVEAU 66 — hook partagé drag+localStorage+clamp (storageKey, defaultPos, panelW)
 │   │   │   ├── RegisterPage.jsx
 │   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern)
 │   │   │   ├── SessionPage.jsx         # Modifié 64 — Sprint 7.1 : combatTargetMode. Sprint 7.4 : damageResults + COMBAT_DAMAGE_RESULT. Sprint 7.4bis : +attackResult state + COMBAT_ATTACK_PLAYER_RESULT handler + onAttackConfirmed prop, onDamageConfirmed nettoie aussi attackResult. Modifié 65 Sprint DicePanel v3 — DICE_RESULT +secret dans destructuring + addMessage

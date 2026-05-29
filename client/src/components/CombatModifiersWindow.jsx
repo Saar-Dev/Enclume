@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
@@ -83,6 +84,12 @@ function fmtOpt(n) { return n > 0 ? `+${n}` : n === 0 ? '±0' : n === -99 ? '✗
 export default function CombatModifiersWindow({ socket, assaultAction, activeRosterEntry, attackResult, onAttackConfirmed }) {
   const { actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
+
+  const { pos, onHeaderMouseDown } = useDraggable(
+    'combat-modifiers-pos',
+    { top: window.innerHeight - 540, left: window.innerWidth / 2 - 180 },
+    360,
+  )
 
   const [porteeOverride, setPorteeOverride] = useState(null)
   const [tireurAllureOverride, setTireurAllureOverride] = useState(null)
@@ -196,10 +203,10 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   }
 
   return (
-    <div style={styles.window}>
+    <div style={{ ...styles.window, left: pos.left, top: pos.top }}>
 
       {/* Header — titre + pill */}
-      <div style={styles.header}>
+      <div style={styles.header} onMouseDown={onHeaderMouseDown}>
         <span style={styles.headerTitle}>
           {tireurToken?.label ?? '?'} — Assaut — {cibleToken?.label ?? '?'}
         </span>
@@ -400,9 +407,6 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
 const styles = {
   window: {
     position: 'absolute',
-    bottom: 24,
-    left: '50%',
-    transform: 'translateX(-50%)',
     width: 360,
     maxHeight: '80vh',
     background: '#16162a',
@@ -415,8 +419,6 @@ const styles = {
     overflow: 'hidden',
   },
   header: {
-    position: 'sticky',
-    top: 0,
     background: '#16162a',
     borderBottom: '1px solid #2a2a3e',
     padding: '8px 14px',
@@ -425,8 +427,9 @@ const styles = {
     justifyContent: 'space-between',
     gap: 8,
     flexShrink: 0,
-    zIndex: 1,
     flexWrap: 'wrap',
+    cursor: 'grab',
+    userSelect: 'none',
   },
   headerTitle: { fontSize: 12, fontWeight: 700, color: '#f5c542', flex: 1, minWidth: 0 },
   pills: { display: 'flex', gap: 4, flexShrink: 0 },

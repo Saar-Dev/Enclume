@@ -716,3 +716,36 @@ z: Math.floor(hitPos[2] + hitNorm[2] * 0.5)
 - `inviteCode` passé dans le body du POST `/auth/register`
 
 **Code d'invitation beta ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 66 — Fenêtres combat draggables (useDraggable) ✅ (2026-05-29)
+
+**Objectif :** Rendre les 5 fenêtres flottantes du mode combat déplaçables par drag sur leur label/header, avec persistance localStorage et clamp écran.
+
+**Décisions architecturales :**
+- Hook partagé `useDraggable(storageKey, defaultPos, panelW)` — pattern extrait de `EntityInstancePanel` existant, enrichi de localStorage.
+- Persistance à la fin du drag (`mouseup`) uniquement — pas sur chaque pixel de mouvement.
+- `posRef` pour éviter la stale closure dans le handler `onUp` (sans ref, `pos` serait figé à la valeur de la première closure).
+- Clamp horizontal : `[8, window.innerWidth - panelW - 8]`. Clamp vertical : `[8, window.innerHeight - 40]` (au moins 40px de header visible même si contenu long).
+- `position: sticky` retiré du header de `CombatModifiersWindow` (inutile dans un flex column avec overflow:hidden sur le parent).
+- Rules of Hooks : hook appelé AVANT les early returns dans `CombatGmDeclareWindow` (avant `if allPnjs.length === 0`) et `CombatInitStateWindow` (avant `if confirmed`).
+- 4 branches `W.window` simples dans `CombatActionWindow` + 1 spread existant : tous couverts.
+
+**Fenêtres exclues (non flottantes) :** CombatTimeline (barre HUD), CombatDamageWindow (inset:0), CombatPnjPanel (backdrop), CombatResultPanels (notifications brèves).
+
+**Fichiers créés/modifiés :**
+
+*`client/src/lib/useDraggable.js`* (NOUVEAU)
+- `useDraggable(storageKey, defaultPos, panelW)` → `{ pos, onHeaderMouseDown }`
+- `useState` init : lecture localStorage → clamp → fallback defaultPos
+- `useEffect([])` : mousemove/mouseup sur window, écriture localStorage au mouseup
+- `posRef` synchronisé dans `onMove` pour éviter stale closure dans `onUp`
+
+*`CombatRosterWindow.jsx`* — key `combat-roster-pos`, default `{top:60, left:w-576}`, w:560
+*`CombatActionWindow.jsx`* — key `combat-action-pos`, default centré bas, w:720, 5 branches
+*`CombatGmDeclareWindow.jsx`* — key `combat-gm-declare-pos`, default bas-droite, w:440
+*`CombatModifiersWindow.jsx`* — key `combat-modifiers-pos`, default centré bas, w:360
+*`CombatInitStateWindow.jsx`* — key `combat-init-state-pos`, default bas-droite, w:260
+
+**Fenêtres combat draggables ✅ CONFIRMÉ FONCTIONNEL**

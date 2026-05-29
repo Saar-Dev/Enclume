@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
+import { useDraggable } from '../lib/useDraggable.js'
 import api from '../lib/api'
 
 const SLOT_LABELS = { MG: 'MG', MD: 'MD', '2M': '2M', Tr: 'Tr' }
@@ -52,6 +53,12 @@ const WEAPON_FAMILIES_EXCLUDE = new Set(['Accessoires pour armes', 'Grenade', 'L
 export default function CombatRosterWindow({ socket, battlemapId, characters }) {
   const { phase, roster } = useCombatStore()
   const tokens            = useTokenStore(s => s.tokens)
+
+  const { pos, onHeaderMouseDown } = useDraggable(
+    'combat-roster-pos',
+    { top: 60, left: window.innerWidth - 576 },
+    560,
+  )
 
   const [surprisedIds, setSurprisedIds] = useState([])
   const [excludedIds,  setExcludedIds]  = useState([])
@@ -137,9 +144,9 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
   const noArmorCnt   = pnjRows.filter(r => (equipment[r.tokenId]?.armorPieces ?? []).length === 0).length
 
   return (
-    <div style={S.window}>
+    <div style={{ ...S.window, left: pos.left, top: pos.top }}>
       {/* HEADER */}
-      <div style={S.header}>
+      <div style={S.header} onMouseDown={onHeaderMouseDown}>
         <div style={S.headerLeft}>
           <span style={S.title}>ROSTER COMBAT</span>
           {!inCombat && <span style={S.badge}>PRÉ-COMBAT</span>}
@@ -421,7 +428,7 @@ function PnjArmorChips({ armorPieces, refArmors, onSelect }) {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const S = {
   window: {
-    position: 'absolute', top: 60, right: 16,
+    position: 'absolute',
     width: 560,
     background: '#0d0f18',
     border: '1px solid #1e2435',
@@ -435,7 +442,7 @@ const S = {
   },
 
   // Header
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid #1e2435', background: '#080a12', flexShrink: 0 },
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid #1e2435', background: '#080a12', flexShrink: 0, cursor: 'grab', userSelect: 'none' },
   headerLeft: { display: 'flex', alignItems: 'center', gap: 8 },
   title: { fontSize: 11, letterSpacing: '0.15em', fontWeight: 700, color: '#3a8aaa' },
   badge: { fontSize: 9, letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 2, border: '1px solid #aa6030', color: '#e8a060', background: '#1a1008', fontWeight: 600 },

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
 import { calcAN, calcAllures } from '../../../shared/polarisUtils.js'
 import { useCombatStore } from '../stores/combatStore'
@@ -383,13 +384,19 @@ export default function CombatActionWindow({
     })
   }
 
+  const { pos, onHeaderMouseDown } = useDraggable(
+    'combat-action-pos',
+    { top: window.innerHeight - 760, left: window.innerWidth / 2 - 360 },
+    720,
+  )
+
   // =========================================================================
   // RENDU — Surprise
   // =========================================================================
   if (pendingSurpriseRoll?.tokenId === playerToken.id) {
     return (
-      <div style={W.window}>
-        <div style={W.header}>Surprise !</div>
+      <div style={{ ...W.window, left: pos.left, top: pos.top }}>
+        <div style={W.header} onMouseDown={onHeaderMouseDown}>Surprise !</div>
         <p style={W.surpriseText}>Vous etes surpris. Lancez 1d20 pour determiner votre initiative.</p>
         <button style={W.btnRoll} onClick={onSurpriseRolled}>Lancer le de d&apos;initiative</button>
       </div>
@@ -397,8 +404,8 @@ export default function CombatActionWindow({
   }
   if (rosterEntry.is_surprised && rosterEntry.has_announced && rosterEntry.initiative === 0) {
     return (
-      <div style={W.window}>
-        <div style={W.header}>Surprise !</div>
+      <div style={{ ...W.window, left: pos.left, top: pos.top }}>
+        <div style={W.header} onMouseDown={onHeaderMouseDown}>Surprise !</div>
         <p style={W.surpriseText}>Vous etes surpris — vous ne pouvez pas agir ce tour.</p>
       </div>
     )
@@ -412,8 +419,8 @@ export default function CombatActionWindow({
     const cibleToken = myAssaultAction ? tokens.find(t => t.id === myAssaultAction.target_token_id) : null
     const isRushed = rosterEntry.state_vitesse === 'rushed'
     return (
-      <div style={W.window}>
-        <div style={W.header}>Phase 2 - Resolution</div>
+      <div style={{ ...W.window, left: pos.left, top: pos.top }}>
+        <div style={W.header} onMouseDown={onHeaderMouseDown}>Phase 2 - Resolution</div>
         <div style={W.body}>
           <div style={W.leftPanel}>
             {myActions.map(a => (
@@ -448,8 +455,8 @@ export default function CombatActionWindow({
   // Deja declare
   if (rosterEntry.has_announced) {
     return (
-      <div style={W.window}>
-        <div style={W.header}>Phase 1 - Declaration d&apos;intention</div>
+      <div style={{ ...W.window, left: pos.left, top: pos.top }}>
+        <div style={W.header} onMouseDown={onHeaderMouseDown}>Phase 1 - Declaration d&apos;intention</div>
         <p style={W.waitText}>Action declaree. En attente des autres participants…</p>
       </div>
     )
@@ -473,8 +480,10 @@ export default function CombatActionWindow({
       width: showAssault ? 720 : 360,
       opacity: isHidden ? 0 : 1,
       pointerEvents: isHidden ? 'none' : 'auto',
+      left: pos.left,
+      top: pos.top,
     }}>
-      <div style={W.header}>Phase 1 — Declaration d&apos;intention</div>
+      <div style={W.header} onMouseDown={onHeaderMouseDown}>Phase 1 — Declaration d&apos;intention</div>
 
       <div style={W.body}>
         {/* ---- Panneau gauche ---- */}
@@ -882,9 +891,6 @@ const ss = {
 const W = {
   window: {
     position: 'absolute',
-    bottom: 24,
-    left: '50%',
-    transform: 'translateX(-50%)',
     maxHeight: 'calc(100vh - 80px)',
     background: '#16162a',
     border: '1px solid #2a2a3e',
@@ -905,6 +911,8 @@ const W = {
     fontWeight: 600,
     flexShrink: 0,
     letterSpacing: '0.05em',
+    cursor: 'grab',
+    userSelect: 'none',
   },
   body: {
     display: 'flex',
