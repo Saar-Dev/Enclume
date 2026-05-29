@@ -171,16 +171,19 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                 <th style={{ ...S.th, textAlign: 'center' }}>INI</th>
                 {!inCombat && <th style={S.th}>ARME</th>}
                 {!inCombat && <th style={S.th}>ARMURE</th>}
+                {phase === 'ROSTER' && <th style={{ ...S.th, textAlign: 'center' }}>ÉTAT INIT</th>}
                 <th style={{ ...S.th, textAlign: 'center' }}>SURPRIS</th>
                 {!inCombat && <th style={{ ...S.th, textAlign: 'center' }}>INCLUS</th>}
               </tr>
             </thead>
             <tbody>
               {activeRows.map(row => {
-                const charType = getCharType(row.tokenId)
-                const isPnj    = charType === 'pnj'
-                const eq       = equipment[row.tokenId]
-                const isExcl   = row.excluded
+                const charType      = getCharType(row.tokenId)
+                const isPnj         = charType === 'pnj'
+                const eq            = equipment[row.tokenId]
+                const isExcl        = row.excluded
+                const rEntry        = inCombat ? roster.find(e => e.token_id === row.tokenId) : null
+                const initConfirmed = rEntry?.state_character?.init_state_confirmed === true
 
                 return (
                   <tr key={row.tokenId} style={{ opacity: isExcl ? 0.4 : 1 }}>
@@ -275,6 +278,18 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                               }}
                             />
                           )
+                        }
+                      </td>
+                    )}
+
+                    {/* ÉTAT INIT */}
+                    {phase === 'ROSTER' && (
+                      <td style={{ ...S.td, textAlign: 'center' }}>
+                        {charType === 'pj'
+                          ? (initConfirmed
+                            ? <span style={S.initConfirmed}>✓</span>
+                            : <span style={S.initPending}>·</span>)
+                          : <span style={S.initNA}>—</span>
                         }
                       </td>
                     )}
@@ -483,5 +498,8 @@ const S = {
   btnDisabled: { opacity: 0.4, cursor: 'not-allowed' },
   btnAnnounce: { display: 'block', width: '100%', padding: '11px 14px', background: 'rgba(80,200,120,0.1)', border: 'none', borderTop: '1px solid #1e2435', color: '#50c878', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.1em', flexShrink: 0 },
 
+  initConfirmed: { color: '#50c878', fontWeight: 700 },
+  initPending:   { color: '#3a4a5a', fontSize: 16, lineHeight: 1 },
+  initNA:        { color: '#2a3a4a' },
   empty: { padding: '14px', color: '#3a4a5a', fontSize: 12, margin: 0 },
 }

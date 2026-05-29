@@ -1438,6 +1438,44 @@ const initSocket = (io) => {
       }
     })
 
+    // ─── COMBAT:INIT_STATE ────────────────────────────────────────────────
+    // Joueur déclare son état initial (posture/arme/mode de tir) en phase ROSTER.
+    socket.on(WS.COMBAT_INIT_STATE, async ({ tokenId, position, weapon, fire_mode }) => {
+      if (socket.role === 'gm') return
+      const campaignId = socket.campaignId
+      try {
+        const VALID_POS = new Set(['standing', 'crouching', 'prone'])
+        const VALID_WPN = new Set(['holstered', 'ready', 'drawn'])
+        const VALID_FM  = new Set(['cc', 'rc', 'rl'])
+        if (!VALID_POS.has(position) || !VALID_WPN.has(weapon) || !VALID_FM.has(fire_mode)) return
+
+        const existing = await db('combat_state').where({ campaign_id: campaignId }).first()
+        if (!existing || existing.phase !== 'ROSTER') return
+
+        const token = await db('tokens').where({ id: tokenId }).first()
+        if (!token?.character_id) return
+        const character = await db('characters').where({ id: token.character_id }).first()
+        if (!character || character.user_id !== socket.user.id) return
+
+        await db('combat_roster')
+          .where({ campaign_id: campaignId, token_id: tokenId })
+          .update({
+            state_position:  position,
+            state_weapon:    weapon,
+            state_fire_mode: fire_mode,
+            state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ init_state_confirmed: true })]),
+          })
+
+        const updatedRoster = await db('combat_roster').where({ campaign_id: campaignId })
+        const broadcastRoster = updatedRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
+        io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: broadcastRoster })
+
+        console.log(`[WS] combat:init_state — ${socket.user.username} pos:${position} wpn:${weapon} fm:${fire_mode}`)
+      } catch (err) {
+        console.error('[WS] combat:init_state error:', err.message)
+      }
+    })
+
     // ─── COMBAT:SURPRISE_RESULT ───────────────────────────────────────────
     // Joueur surpris déclenche son jet 1d20 — le serveur génère le dé côté serveur.
     // Payload : { tokenId }

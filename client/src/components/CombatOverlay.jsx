@@ -9,6 +9,7 @@ import CombatPnjPanel from './CombatPnjPanel'
 import CombatGmDeclareWindow from './CombatGmDeclareWindow'
 import CombatModifiersWindow from './CombatModifiersWindow'
 import CombatDamageWindow from './CombatDamageWindow'
+import CombatInitStateWindow from './CombatInitStateWindow'
 import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer } from './CombatResultPanels'
 
@@ -45,6 +46,11 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           topOffset={isGm ? 40 : 0}
           onPortraitClick={isGm && phase === 'ANNOUNCEMENT' ? () => setShowGmPanel(p => !p) : undefined}
         />
+      )}
+
+      {/* Phase ROSTER — fenêtre état initial pour les joueurs */}
+      {!isGm && phase === 'ROSTER' && playerToken && playerRosterEntry && (
+        <CombatInitStateWindow socket={socket} playerToken={playerToken} />
       )}
 
       {/* Roster — GM uniquement, avant démarrage ou pendant phase ROSTER */}

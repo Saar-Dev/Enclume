@@ -500,6 +500,53 @@ Bug résolu : `if (next.has(key)) next.delete(key) else next.add(key)` → accol
 
 ---
 
+## Session 65 — Sprint État Initial Joueur (phase ROSTER) ✅ (2026-05-29)
+
+**Objectif :** Permettre aux joueurs de déclarer leur état initial (posture/arme/mode tir) pendant la phase ROSTER, et informer le GM de leur confirmation dans la fenêtre ROSTER COMBAT.
+
+**Vérification persistance (COMBAT.md) :**
+- `state_position` : par tour (reset → 'standing' à chaque endTurn). La déclaration ROSTER = état initial du tour 1.
+- `state_weapon` : combat-persistant — inchangé entre les tours.
+- `state_fire_mode` : combat-persistant — inchangé entre les tours.
+
+**Fichiers créés/modifiés :**
+
+*`shared/events.js`* ✅
+- +`COMBAT_INIT_STATE: 'combat:init_state'` (entre COMBAT_ANNOUNCE_START et COMBAT_ACTION_DECLARE)
+
+*`server/src/socket/index.js`* ✅
+- Nouveau handler `COMBAT_INIT_STATE` (joueur uniquement, guard `phase === 'ROSTER'`)
+- Guard ownership : `token → character.user_id === socket.user.id`
+- Validation enum : `['standing','crouching','prone']`, `['holstered','ready','drawn']`, `['cc','rc','rl']`
+- UPDATE `combat_roster` : `state_position + state_weapon + state_fire_mode`
+- Merge JSONB PC39 : `state_character || '{"init_state_confirmed":true}'::jsonb` (détection confirmation sans migration)
+- Broadcast `COMBAT_ROSTER_UPDATED` (même format que COMBAT_SURPRISE_RESULT : `surprise_roll` strippé)
+
+*`client/src/components/CombatInitStateWindow.jsx`* ✅ NOUVEAU
+- Lit `roster` via `useCombatStore()`, initialise chips sur `entry.state_*` ou fallbacks
+- `StateChip` : click-to-cycle via `STATE_DEFS` de `combatSections.js` (réutilisation)
+- 3 chips : POSTURE / ARME / MODE DE TIR
+- Bouton "Confirmer" → `socket.emit(WS.COMBAT_INIT_STATE, { tokenId, position, weapon, fire_mode })`
+- Post-confirmation : écran "État initial confirmé ✓" + résumé des 3 valeurs choisies
+- Visible : `!isGm && phase === 'ROSTER' && playerToken && playerRosterEntry`
+- Position : bottom-right (même zone que CombatGmDeclareWindow mais le joueur ne voit pas les fenêtres GM)
+
+*`client/src/components/CombatOverlay.jsx`* ✅
+- Import `CombatInitStateWindow`
+- Condition ajoutée avant le bloc CombatRosterWindow (GM-only)
+
+*`client/src/components/CombatRosterWindow.jsx`* ✅
+- Colonne `ÉTAT INIT` entre INI et SURPRIS, conditionnelle `phase === 'ROSTER'`
+- `rEntry` + `initConfirmed` dérivés dans le `.map()` depuis `roster` store
+- `initConfirmed = rEntry?.state_character?.init_state_confirmed === true`
+- Affichage : `✓` vert (PJ confirmé) / `·` gris (PJ non confirmé) / `—` (PNJ)
+- La colonne disparaît automatiquement au passage en phase ANNONCE
+- 3 nouveaux styles : `initConfirmed`, `initPending`, `initNA`
+
+**Sprint État Initial Joueur ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
 ## Session 65 — Sprint Pathfinding : A* déplacement combat ✅ (2026-05-28)
 
 **Objectif :** Remplacer les anneaux concentriques (invalidés par les murs) par un pathfinding A* Chebyshev en temps réel — cases colorées par allure sur le chemin vers le curseur.
