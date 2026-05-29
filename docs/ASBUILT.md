@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-27 Session 65
+> Dernière mise à jour : 2026-05-29 Session 66
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -40,6 +40,7 @@ Enclume/
 │   │   │   └── DiceRoller.jsx          # NOUVEAU 44 — orchestrateur R3F dans Canvas3D
 │   │   ├── pages/
 │   │   │   ├── LoginPage.jsx
+│   │   │   ├── RegisterPage.jsx        # Modifié 66 — +champ "Beta code" (inviteCode, filtre chiffres, maxLength 8)
 │   │   │   ├── RegisterPage.jsx
 │   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern)
 │   │   │   ├── SessionPage.jsx         # Modifié 64 — Sprint 7.1 : combatTargetMode. Sprint 7.4 : damageResults + COMBAT_DAMAGE_RESULT. Sprint 7.4bis : +attackResult state + COMBAT_ATTACK_PLAYER_RESULT handler + onAttackConfirmed prop, onDamageConfirmed nettoie aussi attackResult. Modifié 65 Sprint DicePanel v3 — DICE_RESULT +secret dans destructuring + addMessage
@@ -85,7 +86,7 @@ Enclume/
 │   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
 │   │   ├── routes/
-│   │   │   ├── auth.js
+│   │   │   ├── auth.js                 # Modifié 66 — /register : +inviteCode, timingSafeEqual, guard REGISTRATION_CODE
 │   │   │   ├── campaigns.js            # Modifié 45 — POST /:id/cover + cover_url dans GET /
 │   │   │   ├── battlemaps.js
 │   │   │   ├── tokens.js               # Modifié 39 — maintenance Redis collision map
@@ -136,6 +137,7 @@ Enclume/
 | Cache/collisions | Redis + ioredis | Collision map par battlemap — branché session 39 |
 | Stockage fichiers | MinIO | Bucket unique |
 | Auth | JWT httpOnly cookie | 7 jours |
+| Inscription | Code d'invitation `REGISTRATION_CODE` dans `.env` | 8 chiffres, `timingSafeEqual`, guard 500 si absent |
 
 ---
 

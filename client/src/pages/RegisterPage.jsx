@@ -7,6 +7,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const { setUser } = useAuthStore()
@@ -21,7 +22,7 @@ export default function RegisterPage() {
     }
     setLoading(true)
     try {
-      const res = await api.post('/auth/register', { email, password, username })
+      const res = await api.post('/auth/register', { email, password, username, inviteCode })
       setUser(res.data.user)
       navigate('/dashboard')
     } catch (err) {
@@ -75,6 +76,19 @@ export default function RegisterPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="Min. 8 characters"
+              required
+            />
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.label}>Beta code</label>
+            <input
+              style={styles.input}
+              type="text"
+              value={inviteCode}
+              onChange={e => setInviteCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+              placeholder="8-digit code"
+              maxLength={8}
               required
             />
           </div>

@@ -683,3 +683,36 @@ z: Math.floor(hitPos[2] + hitNorm[2] * 0.5)
 - Style `btnPasser` ajouté
 
 **Sprint GM-B Move ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 66 — Code d'invitation beta (REGISTRATION_CODE) ✅ (2026-05-29)
+
+**Objectif :** Bloquer la création de compte sans un code partagé à 8 chiffres — distribué manuellement aux beta-testeurs.
+
+**Décisions architecturales :**
+- Code unique partagé (invite code), pas OTP par utilisateur — adapté au contexte beta fermée 4-8 joueurs.
+- Stocké dans `.env` sous `REGISTRATION_CODE` — non hardcodé, changeable sans toucher au code.
+- Comparaison `crypto.timingSafeEqual()` sur buffers 8 bytes fixes — standard pro, pas de timing leak.
+- Guard 500 si env var absente ou mal formée (`/^\d{8}$/`) — misconfiguration visible immédiatement, pas de faux positif.
+- Filtre `/\D/g` côté client — chiffres uniquement, tronqué à 8, pas de soumission accidentelle.
+- Aucune migration, aucune dépendance ajoutée.
+
+**Fichiers modifiés :**
+
+*`.env`*
+- +`REGISTRATION_CODE=` (code réel à renseigner)
+
+*`.env.example`*
+- +`REGISTRATION_CODE=your_8_digit_beta_code`
+
+*`server/src/routes/auth.js`*
+- Import `crypto` (natif Node.js)
+- `/register` : extraction `inviteCode` du body, guard champs requis (+inviteCode), guard env var (`!/^\d{8}$/`), `timingSafeEqual` buffers 8 bytes, 403 si échec — avant toute requête DB
+
+*`client/src/pages/RegisterPage.jsx`*
+- +state `inviteCode`
+- +champ "Beta code" (type text, filtre chiffres, maxLength 8, required)
+- `inviteCode` passé dans le body du POST `/auth/register`
+
+**Code d'invitation beta ✅ CONFIRMÉ FONCTIONNEL**

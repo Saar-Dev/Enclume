@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
@@ -35,10 +36,21 @@ const randomColor = () => PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
-  const { email, password, username } = req.body
+  const { email, password, username, inviteCode } = req.body
 
-  if (!email || !password || !username) {
-    throw new AppError(400, 'Email, password and username are required')
+  if (!email || !password || !username || !inviteCode) {
+    throw new AppError(400, 'Email, password, username and invite code are required')
+  }
+
+  const envCode = process.env.REGISTRATION_CODE
+  if (!envCode || !/^\d{8}$/.test(envCode)) {
+    throw new AppError(500, 'Server misconfiguration: REGISTRATION_CODE not set')
+  }
+
+  const submitted = Buffer.from(String(inviteCode).slice(0, 8).padEnd(8, '\0'))
+  const expected  = Buffer.from(envCode)
+  if (!crypto.timingSafeEqual(submitted, expected)) {
+    throw new AppError(403, 'Invalid invite code')
   }
 
   if (password.length < 8) {
