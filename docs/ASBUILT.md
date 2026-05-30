@@ -35,7 +35,7 @@ Enclume/
 │   │   │   ├── Voxel.jsx               # Stable 9A-5
 │   │   │   ├── Sidebar.jsx             # Modifié 64 Sprint 7.4 — +rendu interactionType='combat_damage' (dégâts colorés par sévérité). Modifié 36 — entity_action structuré. Modifié 65 Sprint DicePanel v3 — +🔒 dans diceHeader si msg.secret
 │   │   │   ├── GeometryIcon.jsx        # Stable 9A-3
-│   │   │   ├── DicePanel.jsx           # Réécriture complète 65 Sprint DicePanel v3 — roue radiale SVG (PCBBackground, DieShape, DieButton), formule mono-type {k,n,mod}, favoris localStorage, historique local socket, JET AU MJ fonctionnel, useAuthStore direct, drag conservé
+│   │   │   ├── DicePanel.jsx           # Réécriture complète 65 Sprint DicePanel v3. Modifié 66 — favoris inline form, section MACROS (chips ★, form création 3 dropdowns, preview seuil live, fix GM effectiveCharId) — roue radiale SVG (PCBBackground, DieShape, DieButton), formule mono-type {k,n,mod}, favoris localStorage, historique local socket, JET AU MJ fonctionnel, useAuthStore direct, drag conservé
 │   │   │   ├── DiceMesh.jsx            # NOUVEAU 44 — géométries, matériaux, animation, Html overlay D10. Modifié 65 — branche D20 dédiée supprimée → D20 passe par faceNormal→D20_GLB_NORMALS (normales Blender exactes)
 │   │   │   └── DiceRoller.jsx          # NOUVEAU 44 — orchestrateur R3F dans Canvas3D
 │   │   ├── pages/
@@ -103,7 +103,7 @@ Enclume/
 │   │   │   ├── entities.js             # Modifié 39 — maintenance Redis collision map
 │   │   │   ├── equipment.js            # NOUVEAU 47 — CRUD ref_equipment + junction tables. Modifié 65 Sprint GM-A : +location dans GET /equipment SELECT
 │   │   │   └── character/
-│   │   │       └── char-sheet.js       # Modifié 56 — ref_min_str dans les 2 SELECT GET /inventory. Modifié 65 Sprint GM-A : +POST /:characterId/quick-equip. Modifié 66 Sprint A : +4 routes /macros (GET/POST/PUT/DELETE), limit 10
+│   │   │       └── char-sheet.js       # Modifié 66 Sprint A+C2 — +6 routes /macros + /macro-options + /macro-preview (Express 5 : /: initial obligatoire)
 │   │   ├── middleware/
 │   │   │   ├── auth.js
 │   │   │   ├── role.js

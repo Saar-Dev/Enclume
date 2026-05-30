@@ -197,10 +197,14 @@ Champs :
 - SessionPage : listener MACRO_ROLL_RESULT → addMessage ✅
 - Sidebar : branche macro_result (formattedMessage + résultat/seuil + badge) ✅
 
-### Sprint C2 — Formulaire de création (à venir)
-- Section création inline DicePanel : 3 dropdowns source + mod + template + aperçu seuil live
-- Endpoint POST /char-sheet/:characterId/macro-preview (calcul threshold côté serveur)
-- Drag-to-reorder ou ▲▼ boutons en mode ÉDITER
+### Sprint C2 — Formulaire de création ✅ CONFIRMÉ (Session 66)
+- Section création inline : 3 dropdowns dynamiques (type→valeur), mod, template, preview seuil live ✅
+- GET /macro-options + POST /macro-preview ✅
+- Piège Express 5 résolu : routes sans `/` initial → 404 silencieux (toutes routes corrigées avec `/:`) ✅
+
+### Fix GM ✅ CONFIRMÉ (Session 66)
+- `isGm` + `selectedCharId` + `effectiveCharId` dans DicePanel
+- Dropdown personnage cible pour GM sans perso propre ✅
 
 ---
 

@@ -229,10 +229,13 @@ function DiceIcon({ size = 28 }) {
 // ─── Composant principal ─────────────────────────────────────────────────────
 export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }) {
   const { user } = useAuthStore()
-  const { characters } = useCharacterStore()
+  const { characters, isGm } = useCharacterStore()
   const playerColor = user?.color || '#3a8aaa'
   const isEditMode  = mode === 'edit'
   const playerChar  = characters.find(c => c.user_id === user?.id) ?? null
+
+  const [selectedCharId, setSelectedCharId] = useState(null)
+  const effectiveCharId = isGm ? selectedCharId : (playerChar?.id ?? null)
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [isOpen,      setIsOpen]  = useState(false)
@@ -270,25 +273,25 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
 
   // ── Fetch macros du personnage quand le panel s'ouvre ─────────────────────
   useEffect(() => {
-    if (!isOpen || !playerChar?.id) return
-    api.get(`/char-sheet/${playerChar.id}/macros`)
+    if (!isOpen || !effectiveCharId) return
+    api.get(`/char-sheet/${effectiveCharId}/macros`)
       .then(res => setMacros(res.data.macros || []))
       .catch(() => {})
-  }, [isOpen, playerChar?.id])
+  }, [isOpen, effectiveCharId])
 
   // ── Live preview seuil — debounce 500ms ───────────────────────────────────
   useEffect(() => {
-    if (!showMacroForm || !playerChar?.id) return
+    if (!showMacroForm || !effectiveCharId) return
     const valid = mfSources.filter(s => s.ref_id && s.ref_label)
     if (valid.length === 0) { setMfPreview(null); return }
     clearTimeout(previewTimerRef.current)
     previewTimerRef.current = setTimeout(() => {
-      api.post(`/char-sheet/${playerChar.id}/macro-preview`, { sources: valid, modifier: mfModifier })
+      api.post(`/char-sheet/${effectiveCharId}/macro-preview`, { sources: valid, modifier: mfModifier })
         .then(res => setMfPreview(res.data.threshold))
         .catch(() => setMfPreview(null))
     }, 500)
     return () => clearTimeout(previewTimerRef.current)
-  }, [showMacroForm, mfSources, mfModifier, playerChar?.id])
+  }, [showMacroForm, mfSources, mfModifier, effectiveCharId])
 
   // ── Historique local — écoute DICE_RESULT filtré sur userId ───────────────
   // P3 : socket dans le dep array
@@ -426,27 +429,29 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
   // ── Formulaire création macro ─────────────────────────────────────────────
   const openMacroForm = useCallback(() => {
     setShowMacroForm(true)
+    setSaveForm(false)   // ferme le form sauvegarde dé si ouvert
+    setHist(false)       // replie l'historique pour limiter la hauteur
     setMfName(''); setMfSources([{ type: 'skill', ref_id: '', ref_label: '' }])
     setMfModifier(0); setMfTemplate(''); setMfPreview(null)
-    if (!macroOptions && playerChar?.id) {
-      api.get(`/char-sheet/${playerChar.id}/macro-options`)
+    if (!macroOptions && effectiveCharId) {
+      api.get(`/char-sheet/${effectiveCharId}/macro-options`)
         .then(res => setMacroOptions(res.data))
         .catch(() => {})
     }
-  }, [macroOptions, playerChar?.id])
+  }, [macroOptions, effectiveCharId])
 
   const closeMacroForm = useCallback(() => { setShowMacroForm(false) }, [])
 
   const submitMacroForm = useCallback(() => {
     const valid = mfSources.filter(s => s.ref_id && s.ref_label)
-    if (!mfName.trim() || valid.length === 0 || !playerChar?.id) return
-    api.post(`/char-sheet/${playerChar.id}/macros`, {
+    if (!mfName.trim() || valid.length === 0 || !effectiveCharId) return
+    api.post(`/char-sheet/${effectiveCharId}/macros`, {
       label: mfName.trim(), sources: valid, modifier: mfModifier,
       template: mfTemplate.trim() || null,
     })
       .then(res => { setMacros(prev => [...prev, res.data.macro]); setShowMacroForm(false) })
       .catch(() => {})
-  }, [mfName, mfSources, mfModifier, mfTemplate, playerChar?.id])
+  }, [mfName, mfSources, mfModifier, mfTemplate, effectiveCharId])
 
   const updateSource = useCallback((idx, field, value) => {
     setMfSources(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s))
@@ -732,8 +737,30 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
         </div>}
 
         {/* ── MACROS ─────────────────────────────────────────────────────── */}
-        {playerChar && (
+        {(playerChar || isGm) && (
           <div style={{ padding: '10px 14px', borderBottom: '1px solid #15212e' }}>
+
+            {/* Sélecteur de personnage — GM sans perso propre */}
+            {isGm && !playerChar && (
+              <select
+                value={selectedCharId || ''}
+                onChange={e => {
+                  const val = e.target.value || null
+                  setSelectedCharId(val)
+                  setMacros([])
+                  setMacroOptions(null)
+                  setShowMacroForm(false)
+                  setEditMacros(false)
+                }}
+                style={{ ...styles.macroFormSelect, width: '100%', marginBottom: 8 }}
+              >
+                <option value=''>— Personnage cible —</option>
+                {characters.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            )}
+
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
               <span style={{ ...styles.monoSm, fontSize: 8, color: '#aa8a30', letterSpacing: '0.12em', fontWeight: 600 }}>MACROS</span>
               <span style={{ fontFamily: 'Caveat, cursive', fontSize: 10, color: '#456575' }}>— clic = lance</span>
@@ -760,7 +787,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                   key={m.id}
                   onClick={() => {
                     if (editMacros) return
-                    socket?.emit(WS.MACRO_ROLL, { macroId: m.id, characterId: playerChar.id, secret })
+                    socket?.emit(WS.MACRO_ROLL, { macroId: m.id, characterId: effectiveCharId, secret })
                   }}
                   title={m.sources.map(s => s.ref_label).join(' + ') + (m.modifier ? (m.modifier > 0 ? ` +${m.modifier}` : ` ${m.modifier}`) : '')}
                   style={styles.macroChip}
@@ -773,7 +800,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                     <span
                       onClick={(e) => {
                         e.stopPropagation()
-                        api.delete(`/char-sheet/${playerChar.id}/macros/${m.id}`)
+                        api.delete(`/char-sheet/${effectiveCharId}/macros/${m.id}`)
                           .then(() => setMacros(prev => prev.filter(x => x.id !== m.id)))
                           .catch(() => {})
                       }}
@@ -788,6 +815,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
 
             {/* ── Formulaire de création ── */}
             {showMacroForm ? (
+
               <div style={styles.macroForm}>
                 <input
                   type="text" value={mfName} onChange={e => setMfName(e.target.value)}
@@ -874,7 +902,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                   <button onClick={closeMacroForm} style={styles.macroFormBtn}>Annuler</button>
                 </div>
               </div>
-            ) : (
+            ) : macros.length < 10 ? (
               <div onClick={openMacroForm} style={{ ...styles.saveBtn, textAlign: 'left', opacity: 0.75 }}
                 onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
                 onMouseLeave={e => { e.currentTarget.style.opacity = '0.75' }}
@@ -882,6 +910,10 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                 <span style={{ fontFamily: 'Caveat, cursive', fontSize: 12, color: '#aa8a30' }}>
                   + Créer une macro
                 </span>
+              </div>
+            ) : (
+              <div style={{ fontFamily: 'Caveat, cursive', fontSize: 11, color: '#3a4a55', textAlign: 'center', padding: '4px 0' }}>
+                limite de 10 macros atteinte
               </div>
             )}
           </div>

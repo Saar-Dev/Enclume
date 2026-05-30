@@ -92,7 +92,8 @@
       "Bash(mkdir -p /tmp/design_extract)",
       "Bash(tar -xf \"C:\\\\Users\\\\Nemet\\\\AppData\\\\Local\\\\Temp\\\\combat_result_design_unzip.html\")",
       "Bash(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\JOURNAL3.md\")",
-      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\JOURNAL3.md\" | Measure-Object -Line\\).Lines)"
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\JOURNAL3.md\" | Measure-Object -Line\\).Lines)",
+      "Bash(node --input-type=module --eval \"import '/c/Users/Nemet/Documents/Enclume/server/src/routes/character/char-sheet.js'; console.log\\('OK'\\)\")"
     ]
   }
 }

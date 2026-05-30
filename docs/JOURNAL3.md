@@ -830,3 +830,48 @@ z: Math.floor(hitPos[2] + hitNorm[2] * 0.5)
 - +style `macroChip`
 
 **Sprint C1 Jets Favoris ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 66 — Sprint C2 Jets Favoris : formulaire création macro ✅ (2026-05-30)
+
+**Objectif :** Formulaire inline dans DicePanel pour créer des macros liées aux stats vivantes du personnage.
+
+**Bug résolu en cours de sprint :**
+- Routes `/macros` et `/macro-options` retournaient 404 malgré le code correct : Express 5 requiert un `/` initial sur toutes les routes de sous-routeurs montés avec `app.use()`. Les anciennes routes sans `/` initial (wounds, etc.) fonctionnaient car héritées d'Express 4. Les 6 nouvelles routes corrigées avec `'/:characterId/...'`.
+- Référence circulaire introduite par `replace_all` sur `playerChar?.id` → corrigée immédiatement.
+
+**Fichiers modifiés :**
+
+*`server/src/routes/character/char-sheet.js`*
+- Import étendu : +`calcAttributeNA, calcREA, calcSeuils, calcSouffle, calcResistanceDroguesInput`
+- `GET /:characterId/macro-options` : retourne `{ attributes[8], skills[char], secondary[5] }` (JOIN ref_skills pour labels)
+- `POST /:characterId/macro-preview` : calcul threshold live depuis sources+modifier (même logique que WS handler), retourne `{ threshold }`
+- **Correction** : toutes les nouvelles routes avec `/` initial (Express 5)
+
+*`client/src/components/DicePanel.jsx`*
+- +states : `showMacroForm`, `macroOptions`, `mfName`, `mfSources[]`, `mfModifier`, `mfTemplate`, `mfPreview`
+- +ref : `previewTimerRef` (debounce 500ms live preview)
+- `openMacroForm` : fetch macro-options + reset form + ferme saveForm + replie historique
+- `closeMacroForm`, `submitMacroForm`, `updateSource`, `addSource`, `removeSource`
+- useEffect live preview : `POST /macro-preview` debounced sur changement sources/modifier
+- JSX : roue/mod/formule/favoris masqués quand form ouverte, form inline avec 3 dropdowns dynamiques (type→valeur), aperçu seuil live, variables template affichées
+- Bouton `+ Créer une macro` caché si 10 macros atteintes
+
+---
+
+## Session 66 — Fix GM macros + Sprint C1 MACRO_ROLL_RESULT ✅ (2026-05-30)
+
+**Sprint C1 :**
+- `SessionPage.jsx` : +listener `WS.MACRO_ROLL_RESULT` → addMessage interactionType macro_result
+- `Sidebar.jsx` : +branche macro_result (★ coloré, formattedMessage, résultat/seuil, badge Succès/Échec)
+- `DicePanel.jsx` : chips ★ macros, fetch au panel open, exécution socket.emit MACRO_ROLL, suppression mode ÉDITER
+- `socket/index.js` : +fetch color user dans MACRO_ROLL payload
+
+**Fix GM :**
+- `DicePanel.jsx` : `isGm` depuis useCharacterStore, `selectedCharId` state, `effectiveCharId` dérivé
+- GM sans perso propre → dropdown `— Personnage cible —` (tous characters du store avec name)
+- Changement de personnage GM → reset macros/macroOptions/form
+- Joueur : comportement inchangé (effectiveCharId = playerChar?.id)
+
+**Jets Favoris — Sprint A + B + C1 + C2 + Fix GM ✅ CONFIRMÉS FONCTIONNELS**

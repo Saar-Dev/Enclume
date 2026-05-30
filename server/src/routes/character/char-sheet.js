@@ -1234,7 +1234,7 @@ router.delete('/:characterId/inventory/:itemId', async (req, res, next) => {
 })
 
 // ─── GET /api/char-sheet/:characterId/macros ──────────────────────────────────
-router.get(':characterId/macros', async (req, res, next) => {
+router.get('/:characterId/macros', async (req, res, next) => {
   try {
     const macros = await db('character_macros')
       .where({ character_id: req.params.characterId })
@@ -1245,7 +1245,7 @@ router.get(':characterId/macros', async (req, res, next) => {
 })
 
 // ─── POST /api/char-sheet/:characterId/macros ─────────────────────────────────
-router.post(':characterId/macros', async (req, res, next) => {
+router.post('/:characterId/macros', async (req, res, next) => {
   try {
     const { n } = await db('character_macros')
       .where({ character_id: req.params.characterId })
@@ -1281,7 +1281,7 @@ router.post(':characterId/macros', async (req, res, next) => {
 })
 
 // ─── PUT /api/char-sheet/:characterId/macros/:macroId ────────────────────────
-router.put(':characterId/macros/:macroId', async (req, res, next) => {
+router.put('/:characterId/macros/:macroId', async (req, res, next) => {
   try {
     const macro = await db('character_macros')
       .where({ id: req.params.macroId, character_id: req.params.characterId })
@@ -1306,7 +1306,7 @@ router.put(':characterId/macros/:macroId', async (req, res, next) => {
 })
 
 // ─── DELETE /api/char-sheet/:characterId/macros/:macroId ─────────────────────
-router.delete(':characterId/macros/:macroId', async (req, res, next) => {
+router.delete('/:characterId/macros/:macroId', async (req, res, next) => {
   try {
     const macro = await db('character_macros')
       .where({ id: req.params.macroId, character_id: req.params.characterId })
@@ -1323,7 +1323,7 @@ router.delete(':characterId/macros/:macroId', async (req, res, next) => {
 // - attributes : liste statique des 8 attributs Polaris
 // - skills     : compétences du personnage avec labels (JOIN ref_skills)
 // - secondary  : attributs secondaires disponibles
-router.get(':characterId/macro-options', async (req, res, next) => {
+router.get('/:characterId/macro-options', async (req, res, next) => {
   try {
     const sheet = await db('char_sheet').where({ character_id: req.params.characterId }).first()
 
@@ -1364,7 +1364,7 @@ router.get(':characterId/macro-options', async (req, res, next) => {
 // Calcule le seuil d'une macro en live pour l'aperçu dans le formulaire.
 // Body : { sources: [{type, ref_id}], modifier }
 // Retourne : { threshold }
-router.post(':characterId/macro-preview', async (req, res, next) => {
+router.post('/:characterId/macro-preview', async (req, res, next) => {
   try {
     const { sources = [], modifier = 0 } = req.body
 
