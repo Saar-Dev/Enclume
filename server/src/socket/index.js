@@ -15,6 +15,8 @@ import {
   calcResistanceArmure,
   calcCarenceArmure,
   getShockMalus,
+  calcSouffle,
+  calcResistanceDroguesInput,
   ATTR_LABELS,
 } from '../lib/charStats.js'
 import { resolveWoundInsertion, isShockTestRequired } from '../lib/woundUtils.js'
@@ -488,6 +490,128 @@ const initSocket = (io) => {
         console.log(`[WS] dice:roll — ${socket.user.username} : ${normalizedFormula} = ${total}${secret ? ' [secret]' : ''}`)
       } catch (err) {
         console.error(`[WS] dice:roll error (${socket.user.username}) : ${err.message}`)
+      }
+    })
+
+    // ─── MACRO:ROLL ────────────────────────────────────────────────────────
+    // Payload : { macroId, characterId, secret? }
+    // Lance un jet lié aux stats vivantes du personnage (PLAN 13).
+    socket.on(WS.MACRO_ROLL, async ({ macroId, characterId, secret = false }) => {
+      if (!socket.campaignId) return
+      try {
+        // ── 1. Macro ──────────────────────────────────────────────────────
+        const macro = await db('character_macros')
+          .where({ id: macroId, character_id: characterId }).first()
+        if (!macro) return
+
+        // ── 2. Ownership : propriétaire OU GM ──────────────────────────
+        const character = await db('characters').where({ id: characterId }).first()
+        if (!character) return
+        const isOwner = character.user_id === socket.user.id
+        if (!isOwner && socket.role !== 'gm') return
+
+        // ── 3. Stats du personnage ─────────────────────────────────────
+        const sheet = await db('char_sheet').where({ character_id: characterId }).first()
+        if (!sheet) return
+
+        const [attrs, archetype] = await Promise.all([
+          db('char_attributes').where({ char_sheet_id: sheet.id }),
+          db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+        ])
+        const genotypeRow = archetype?.genotype_id
+          ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
+          : null
+
+        // ── 4. Seuil (somme des sources + modificateur fixe) ──────────
+        const na = (attrId) => calcAttributeNA(attrs, attrId, genotypeRow)
+
+        const secondaryValue = (key) => {
+          switch (key) {
+            case 'rea':                return calcREA(na('ADA'), na('PER'))
+            case 'seuil_etourdi':      return calcSeuils(na('FOR'), na('CON'), na('VOL')).etourdissement
+            case 'seuil_incons':       return calcSeuils(na('FOR'), na('CON'), na('VOL')).inconscience
+            case 'souffle':            return calcSouffle(na('CON'), na('VOL'))
+            case 'resistance_drogues': return calcResistanceDroguesInput(na('CON'), na('VOL'))
+            default:                   return 0
+          }
+        }
+
+        let baseThreshold = 0
+        for (const src of macro.sources) {
+          if (src.type === 'attribute') {
+            baseThreshold += na(src.ref_id)
+          } else if (src.type === 'skill') {
+            const [charSkill, refSkill] = await Promise.all([
+              db('char_skills').where({ char_sheet_id: sheet.id, skill_id: src.ref_id }).first(),
+              db('ref_skills').where({ id: src.ref_id }).first(),
+            ])
+            baseThreshold += calcSkillTotal(attrs, charSkill, refSkill, genotypeRow)
+          } else if (src.type === 'secondary') {
+            baseThreshold += secondaryValue(src.ref_id)
+          }
+        }
+        const threshold = baseThreshold + macro.modifier
+
+        // ── 5. Jet 1d20 ───────────────────────────────────────────────
+        const { rolls, total: rollResult, seed } = await parseDice('1d20')
+
+        // ── 6. Succès / critique (règles absolues Polaris) ────────────
+        const isCriticalSuccess = rollResult === 1
+        const isCriticalFail    = rollResult === 20
+        const isSuccess = isCriticalFail ? false
+          : isCriticalSuccess ? true
+          : rollResult <= threshold
+
+        // ── 7. Substitution template ──────────────────────────────────
+        const sourceLabel  = macro.sources.map(s => s.ref_label).join(' + ')
+        const successText  = isSuccess ? 'Succès' : 'Échec'
+        const critiqueText = isCriticalSuccess ? 'critique !' : isCriticalFail ? 'fumble !' : ''
+        const modDisplay   = macro.modifier > 0 ? `+${macro.modifier}`
+          : macro.modifier < 0 ? `${macro.modifier}` : ''
+
+        const tpl = macro.template || '{me} — {source} → {résultat}/{seuil} → {succès} {critique}'
+        const formattedMessage = tpl
+          .replace(/\{me\}/g,           character.name || '?')
+          .replace(/\{source\}/g,       sourceLabel)
+          .replace(/\{résultat\}/g,     String(rollResult))
+          .replace(/\{seuil\}/g,        String(threshold))
+          .replace(/\{modificateur\}/g, modDisplay)
+          .replace(/\{succès\}/g,       successText)
+          .replace(/\{critique\}/g,     critiqueText)
+          .trim()
+
+        // ── 8. Broadcast ───────────────────────────────────────────────
+        const payload = {
+          macroId,
+          characterId,
+          characterName:    character.name,
+          sourceLabel,
+          rollResult,
+          threshold,
+          modifier:         macro.modifier,
+          isSuccess,
+          isCriticalSuccess,
+          isCriticalFail,
+          formattedMessage,
+          secret,
+          seed,
+          timestamp: new Date().toISOString(),
+        }
+
+        if (secret) {
+          socket.emit(WS.MACRO_ROLL_RESULT, payload)
+          if (socket.role !== 'gm') {
+            const roomSockets = await io.in(socket.campaignId).fetchSockets()
+            const gmSockets = roomSockets.filter(s => s.data.role === 'gm')
+            gmSockets.forEach(s => s.emit(WS.MACRO_ROLL_RESULT, payload))
+          }
+        } else {
+          io.to(socket.campaignId).emit(WS.MACRO_ROLL_RESULT, payload)
+        }
+
+        console.log(`[WS] macro:roll — ${socket.user.username} : ${macro.label} = ${rollResult}/${threshold} → ${successText}${secret ? ' [secret]' : ''}`)
+      } catch (err) {
+        console.error(`[WS] macro:roll error (${socket.user.username}) : ${err.message}`)
       }
     })
 
