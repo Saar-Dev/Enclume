@@ -2128,7 +2128,19 @@ const initSocket = (io) => {
             if      (rollChoc <= seuils.etourdissement + shockMalus) outcome = 'ok'
             else if (rollChoc <= seuils.inconscience    + shockMalus) outcome = 'etourdi'
             else                                                       outcome = 'inconscient'
-            shockResult = { triggered: true, roll: rollChoc, outcome, shockMalus }
+            shockResult = {
+              triggered:    true,
+              roll:         rollChoc,
+              outcome,
+              shockMalus,
+              seuilEtourdi: seuils.etourdissement + shockMalus,
+              seuilIncons:  seuils.inconscience   + shockMalus,
+            }
+            if (outcome !== 'ok') {
+              await db('combat_roster')
+                .where({ campaign_id: campaignId, token_id: targetTokenId })
+                .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
+            }
           }
         }
 
@@ -2143,6 +2155,7 @@ const initSocket = (io) => {
           dmgRolls,
           severity: finalSeverity,
           severityColor,
+          shockResult,
         })
 
         // 7. DICE_RESULT broadcast chat
@@ -2629,17 +2642,42 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
         else if (degatsNets >= 10) { severity = 'moyenne'  }
         else if (degatsNets >=  5) { severity = 'legere'   }
 
+        let finalSeverity = severity
+        let shockResult = null
         if (severity && char_sheet_id_cible) {
           try {
             const result = await db.transaction(trx =>
               resolveWoundInsertion(trx, char_sheet_id_cible, localisation, severity)
             )
+            finalSeverity = result.wound.severity
             io.to(campaignId).emit(WS.WOUND_ADDED, {
               characterId: cibleToken.character_id,
               wound: result.wound,
               promoted: result.promoted,
-              shock_test_required: isShockTestRequired(result.wound.severity, result.wound.location),
+              shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
             })
+            if (isShockTestRequired(finalSeverity, localisation)) {
+              const seuils     = calcSeuils(for_na_cible, con_na_cible, vol_na_cible)
+              const shockMalus = getShockMalus(finalSeverity, localisation, is_lethal)
+              const { total: rollChoc } = await parseDice('1d20')
+              let outcome
+              if      (rollChoc <= seuils.etourdissement + shockMalus) outcome = 'ok'
+              else if (rollChoc <= seuils.inconscience    + shockMalus) outcome = 'etourdi'
+              else                                                       outcome = 'inconscient'
+              shockResult = {
+                triggered:    true,
+                roll:         rollChoc,
+                outcome,
+                shockMalus,
+                seuilEtourdi: seuils.etourdissement + shockMalus,
+                seuilIncons:  seuils.inconscience   + shockMalus,
+              }
+              if (outcome !== 'ok') {
+                await db('combat_roster')
+                  .where({ campaign_id: campaignId, token_id: action.target_token_id })
+                  .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
+              }
+            }
           } catch (woundErr) {
             console.error('[WS] resolveAssaultAction (PNJ) — wound error:', woundErr.message)
           }
@@ -2650,13 +2688,13 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
           localisation,
           degautsBruts,
           degatsNets,
-          severity,
+          severity:    finalSeverity,
           is_lethal,
           isSuccess,
           isPnj:       true,
           roll:        rollAttaque,
           chancesDeReussite,
-          shockResult: null,
+          shockResult,
         })
       }
     } else if (character.type === 'pj') {
