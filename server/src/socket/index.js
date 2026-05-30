@@ -510,6 +510,12 @@ const initSocket = (io) => {
         const isOwner = character.user_id === socket.user.id
         if (!isOwner && socket.role !== 'gm') return
 
+        let color = '#aa8a30'
+        try {
+          const userRow = await db('users').where({ id: socket.user.id }).select('color').first()
+          if (userRow?.color) color = userRow.color
+        } catch (_) {}
+
         // ── 3. Stats du personnage ─────────────────────────────────────
         const sheet = await db('char_sheet').where({ character_id: characterId }).first()
         if (!sheet) return
@@ -585,6 +591,7 @@ const initSocket = (io) => {
           macroId,
           characterId,
           characterName:    character.name,
+          color,
           sourceLabel,
           rollResult,
           threshold,

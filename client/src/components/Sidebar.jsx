@@ -894,6 +894,36 @@ export default function Sidebar({
                 if (msg.type === 'dice') {
                   const isAnimating = animatingDiceId === msg.id
 
+                  // ── Macro favori (PLAN 13) ─────────────────────────────────
+                  if (msg.interactionType === 'macro_result') {
+                    const successStyle = msg.isSuccess
+                      ? { background: 'rgba(76,175,119,0.07)', border: '1px solid rgba(76,175,119,0.2)' }
+                      : { background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }
+                    return (
+                      <div key={msg.id} style={{ ...styles.messageDice, ...successStyle }}>
+                        <div style={styles.diceHeader}>
+                          <span style={{ ...styles.diceIcon, color: msg.color || '#aa8a30' }}>★</span>
+                          <span style={{ ...styles.msgUser, color: msg.color || '#aa8a30' }}>{msg.characterName}</span>
+                          <span style={styles.msgTime}> · {msg.time}</span>
+                          {msg.secret && <span style={{ fontSize: 9, marginLeft: 4 }}>🔒</span>}
+                        </div>
+                        <div style={{ paddingLeft: '2px', fontSize: '12px', color: '#c0c0d0', lineHeight: 1.4 }}>
+                          {msg.formattedMessage}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: '2px', marginTop: 3 }}>
+                          <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 14, fontWeight: 700, color: '#dde7ee' }}>
+                            {msg.rollResult}
+                          </span>
+                          <span style={{ fontSize: 10, color: '#456575' }}>/ {msg.threshold}</span>
+                          <span style={msg.isSuccess ? styles.badgeCritSuccess : styles.badgeCritFail}>
+                            {msg.isSuccess ? 'Succès' : 'Échec'}
+                            {msg.isCriticalSuccess ? ' critique !' : msg.isCriticalFail ? ' fumble !' : ''}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  }
+
                   // ── Jet d'interaction entité — affichage structuré ──────────
                   if (msg.skillLabel !== undefined) {
                     const successStyle = msg.isSuccess

@@ -749,3 +749,55 @@ z: Math.floor(hitPos[2] + hitNorm[2] * 0.5)
 *`CombatInitStateWindow.jsx`* — key `combat-init-state-pos`, default bas-droite, w:260
 
 **Fenêtres combat draggables ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 66 — Sprint A Jets Favoris : fondations serveur ✅ (2026-05-29)
+
+**Objectif :** Poser les fondations DB + routes + events pour le système de macros de compétences (PLAN 13).
+
+**Fichiers créés/modifiés :**
+
+*`server/src/db/migrations/59_character_macros.js`* (NOUVEAU)
+- Table `character_macros` : UUID PK, FK characters CASCADE, label TEXT, sources JSONB, modifier INTEGER, template TEXT, sort_order SMALLINT
+- CHECK constraints : `jsonb_array_length(sources) <= 3`, `modifier BETWEEN -99 AND 99`
+- INDEX sur character_id
+
+*`server/src/routes/character/char-sheet.js`*
+- +4 routes sous `/:characterId/macros` : GET (liste triée), POST (limit 10 via COUNT), PUT (patch partiel), DELETE
+- Ownership géré par `router.param('characterId')` existant — aucun middleware supplémentaire
+- Limit 10 enforced applicativement (COUNT + AppError 400)
+
+*`shared/events.js`*
+- +`MACRO_ROLL: 'macro:roll'`
+- +`MACRO_ROLL_RESULT: 'macro:roll_result'`
+
+**Migration 59 — Batch 31 ✅ CONFIRMÉ**
+
+---
+
+## Session 66 — Sprint B Jets Favoris : handler WS MACRO_ROLL ✅ (2026-05-29)
+
+**Objectif :** Exécuter une macro en un clic — lire les stats vivantes du perso, calculer le seuil, lancer 1d20, évaluer succès/critique, substituer le template, broadcaster.
+
+**Décisions techniques :**
+- `type: 'attribute'` → seuil = `calcAttributeNA` (NA = 3–25+, seuil réel Polaris)
+- `type: 'skill'` → seuil = `calcSkillTotal` (AN1+AN2+maîtrise)
+- `type: 'secondary'` → switch sur ref_id : rea/seuil_etourdi/seuil_incons/souffle/resistance_drogues
+- Sources multiples : somme des valeurs + modificateur fixe
+- Critiques Polaris absolus : roll=1 → Succès critique, roll=20 → Échec critique (indépendant du seuil)
+- Template par défaut si absent : `{me} — {source} → {résultat}/{seuil} → {succès} {critique}`
+- Broadcast secret : pattern identique DICE_ROLL (PE2 fetchSockets → gmSockets)
+
+**Fichiers modifiés :**
+
+*`server/src/socket/index.js`*
+- Import : +`calcSouffle`, +`calcResistanceDroguesInput` depuis charStats.js
+- Handler `WS.MACRO_ROLL` ajouté après DICE_ROLL :
+  - Fetch macro + character (ownership guard) + sheet + attrs + archetype + genotypeRow
+  - Boucle sur `macro.sources` : accumulation threshold par type
+  - `parseDice('1d20')` → évaluation isSuccess/isCriticalSuccess/isCriticalFail
+  - Substitution template 7 variables ({me}, {source}, {résultat}, {seuil}, {modificateur}, {succès}, {critique})
+  - Broadcast `MACRO_ROLL_RESULT` (room ou secret joueur+GM)
+
+**Sprint B Jets Favoris ✅ CONFIRMÉ FONCTIONNEL**

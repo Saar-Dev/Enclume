@@ -182,15 +182,15 @@ Champs :
 
 ## Plan des sprints
 
-### Sprint A — Fondations serveur
-- Migration 59 : table `character_macros`
-- Routes GET/POST/PUT/DELETE
-- `shared/events.js` : +MACRO_ROLL, +MACRO_ROLL_RESULT
+### Sprint A — Fondations serveur ✅ CONFIRMÉ (Session 66)
+- Migration 59 : table `character_macros` ✅
+- Routes GET/POST/PUT/DELETE ✅
+- `shared/events.js` : +MACRO_ROLL, +MACRO_ROLL_RESULT ✅
 
-### Sprint B — Exécution WS
-- `socket/index.js` : handler MACRO_ROLL complet
-- Calcul threshold live (charStats.js)
-- Substitution template + broadcast
+### Sprint B — Exécution WS ✅ CONFIRMÉ (Session 66)
+- `socket/index.js` : handler MACRO_ROLL complet ✅
+- Calcul threshold live (charStats.js) ✅
+- Substitution template 7 variables + broadcast secret ✅
 
 ### Sprint C — Interface client
 - DicePanel : fetch macros du perso au montage, chips macro distincts des presets

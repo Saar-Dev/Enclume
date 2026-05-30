@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { WS } from '../../../shared/events.js'
 import { useAuthStore } from '../stores/authStore.js'
+import { useCharacterStore } from '../stores/characterStore.js'
+import api from '../lib/api.js'
 
 // ─── Constantes layout ──────────────────────────────────────────────────────
 const WHEEL_SIZE  = 240
@@ -227,8 +229,10 @@ function DiceIcon({ size = 28 }) {
 // ─── Composant principal ─────────────────────────────────────────────────────
 export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }) {
   const { user } = useAuthStore()
+  const { characters } = useCharacterStore()
   const playerColor = user?.color || '#3a8aaa'
   const isEditMode  = mode === 'edit'
+  const playerChar  = characters.find(c => c.user_id === user?.id) ?? null
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [isOpen,      setIsOpen]  = useState(false)
@@ -244,6 +248,8 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
   const [showHistory,   setHist]    = useState(false)
   const [showSaveForm,  setSaveForm] = useState(false)
   const [presetName,    setPresetName] = useState('')
+  const [macros,        setMacros]   = useState([])
+  const [editMacros,    setEditMacros] = useState(false)
 
   const dragState          = useRef(null)
   const nameInputRef       = useRef(null)
@@ -253,6 +259,14 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
   useEffect(() => {
     localStorage.setItem('dice-presets', JSON.stringify(presets))
   }, [presets])
+
+  // ── Fetch macros du personnage quand le panel s'ouvre ─────────────────────
+  useEffect(() => {
+    if (!isOpen || !playerChar?.id) return
+    api.get(`/char-sheet/${playerChar.id}/macros`)
+      .then(res => setMacros(res.data.macros || []))
+      .catch(() => {})
+  }, [isOpen, playerChar?.id])
 
   // ── Historique local — écoute DICE_RESULT filtré sur userId ───────────────
   // P3 : socket dans le dep array
@@ -655,6 +669,72 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
           </div>
         </div>
 
+        {/* ── MACROS ─────────────────────────────────────────────────────── */}
+        {playerChar && (
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid #15212e' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
+              <span style={{ ...styles.monoSm, fontSize: 8, color: '#aa8a30', letterSpacing: '0.12em', fontWeight: 600 }}>MACROS</span>
+              <span style={{ fontFamily: 'Caveat, cursive', fontSize: 10, color: '#456575' }}>— clic = lance</span>
+              <div style={{ flex: 1 }}/>
+              {macros.length > 0 && (
+                <span
+                  onClick={() => setEditMacros(v => !v)}
+                  style={{ ...styles.monoSm, fontSize: 8, color: editMacros ? '#e8c870' : '#456575', cursor: 'pointer', letterSpacing: '0.08em', userSelect: 'none' }}
+                >
+                  {editMacros ? '✓ OK' : '✎ ÉDITER'}
+                </span>
+              )}
+            </div>
+
+            {macros.length === 0 && (
+              <div style={{ fontFamily: 'Caveat, cursive', fontSize: 11, color: '#3a4a55', textAlign: 'center', padding: '4px 0' }}>
+                aucune macro — créez-en une avec +
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: macros.length > 0 ? 6 : 0 }}>
+              {macros.map(m => (
+                <div
+                  key={m.id}
+                  onClick={() => {
+                    if (editMacros) return
+                    socket?.emit(WS.MACRO_ROLL, { macroId: m.id, characterId: playerChar.id, secret })
+                  }}
+                  title={m.sources.map(s => s.ref_label).join(' + ') + (m.modifier ? (m.modifier > 0 ? ` +${m.modifier}` : ` ${m.modifier}`) : '')}
+                  style={styles.macroChip}
+                  onMouseEnter={e => { if (!editMacros) e.currentTarget.style.borderColor = playerColor }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#aa8a3044' }}
+                >
+                  <span style={{ fontSize: 9, color: '#aa8a30' }}>★</span>
+                  <span style={{ fontSize: 10, color: '#dde7ee', fontFamily: 'Inter, system-ui, sans-serif' }}>{m.label}</span>
+                  {editMacros && (
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        api.delete(`/char-sheet/${playerChar.id}/macros/${m.id}`)
+                          .then(() => setMacros(prev => prev.filter(x => x.id !== m.id)))
+                          .catch(() => {})
+                      }}
+                      style={{ color: '#aa3030', fontSize: 11, marginLeft: 2, cursor: 'pointer', lineHeight: 1 }}
+                    >
+                      ✕
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{ ...styles.saveBtn, textAlign: 'left', opacity: 0.6 }}
+              title="Création de macros — disponible prochainement"
+            >
+              <span style={{ fontFamily: 'Caveat, cursive', fontSize: 12, color: '#aa8a30' }}>
+                + Créer une macro
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* ── HISTORIQUE ─────────────────────────────────────────────────── */}
         <div>
           <div
@@ -839,6 +919,14 @@ const styles = {
     display: 'flex', alignItems: 'center', gap: 5,
     padding: '4px 8px',
     background: '#0a1018', border: '1px solid #15212e',
+    cursor: 'pointer', transition: 'border-color 0.1s',
+    userSelect: 'none',
+  },
+
+  macroChip: {
+    display: 'flex', alignItems: 'center', gap: 5,
+    padding: '4px 8px',
+    background: '#0a1018', border: '1px solid #aa8a3044',
     cursor: 'pointer', transition: 'border-color 0.1s',
     userSelect: 'none',
   },

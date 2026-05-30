@@ -452,6 +452,25 @@ export default function SessionPage() {
         setPnjAttackResult(data)
       }
     })
+    s.on(WS.MACRO_ROLL_RESULT, ({ characterName, color, sourceLabel, rollResult, threshold, isSuccess, isCriticalSuccess, isCriticalFail, formattedMessage, secret, timestamp }) => {
+      addMessage({
+        id:               `macro-${timestamp}`,
+        type:             'dice',
+        interactionType:  'macro_result',
+        characterName,
+        color,
+        sourceLabel,
+        rollResult,
+        threshold,
+        isSuccess,
+        isCriticalSuccess,
+        isCriticalFail,
+        formattedMessage,
+        secret: secret || false,
+        time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      })
+    })
+
     s.on('error', (err) => {
       const msg = err?.message ?? String(err)
       console.error('[WS] Erreur serveur:', msg)

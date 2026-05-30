@@ -83,7 +83,7 @@ Enclume/
 │   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # migrations jusqu'à 58 (batch 29)
+│   │   │   ├── migrations/             # migrations jusqu'à 59 (batch 31)
 │   │   │   ├── seeds/
 │   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
@@ -103,7 +103,7 @@ Enclume/
 │   │   │   ├── entities.js             # Modifié 39 — maintenance Redis collision map
 │   │   │   ├── equipment.js            # NOUVEAU 47 — CRUD ref_equipment + junction tables. Modifié 65 Sprint GM-A : +location dans GET /equipment SELECT
 │   │   │   └── character/
-│   │   │       └── char-sheet.js       # Modifié 56 — ref_min_str dans les 2 SELECT GET /inventory. Modifié 65 Sprint GM-A : +POST /:characterId/quick-equip (GM-only, bypass isContainerAvailable, broadcast INVENTORY_ADDED)
+│   │   │       └── char-sheet.js       # Modifié 56 — ref_min_str dans les 2 SELECT GET /inventory. Modifié 65 Sprint GM-A : +POST /:characterId/quick-equip. Modifié 66 Sprint A : +4 routes /macros (GET/POST/PUT/DELETE), limit 10
 │   │   ├── middleware/
 │   │   │   ├── auth.js
 │   │   │   ├── role.js
@@ -111,7 +111,7 @@ Enclume/
 │   │   │   └── errorHandler.js
 │   │   ├── socket/
 │   │   │   ├── auth.js
-│   │   │   └── index.js                # Modifié 65 Sprint 7.6 — COMBAT_ACTION_DECLARE v2 (payload {state,mapActions,quick}, matrices STATE_COSTS, UPDATE state_*, iniDelta), endTurn reset colonnes per-tour, is_rushed → state_vitesse. Modifié 65 Sprint DicePanel v3 — DICE_ROLL +secret : broadcast ciblé lanceur+GM via fetchSockets (PE2)
+│   │   │   └── index.js                # Modifié 65 Sprint 7.6. Modifié 66 Sprint B : +MACRO_ROLL handler (threshold live, critiques Polaris, template {7 vars}, broadcast secret) — COMBAT_ACTION_DECLARE v2 (payload {state,mapActions,quick}, matrices STATE_COSTS, UPDATE state_*, iniDelta), endTurn reset colonnes per-tour, is_rushed → state_vitesse. Modifié 65 Sprint DicePanel v3 — DICE_ROLL +secret : broadcast ciblé lanceur+GM via fetchSockets (PE2)
 │   │   ├── lib/
 │   │   │   ├── AppError.js
 │   │   │   ├── minio.js
