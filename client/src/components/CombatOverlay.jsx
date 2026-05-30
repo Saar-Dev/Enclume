@@ -191,6 +191,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           degatsNets={gmAttackResult.degatsNets}
           severity={gmAttackResult.severity}
           is_lethal={gmAttackResult.is_lethal}
+          shockResult={gmAttackResult.shockResult}
           onClose={onGmAttackResultClose}
         />
       )}
@@ -207,6 +208,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           degatsNets={pnjAttackResult.degatsNets}
           severity={pnjAttackResult.severity}
           is_lethal={pnjAttackResult.is_lethal}
+          shockResult={pnjAttackResult.shockResult}
           onClose={onPnjAttackResultClose}
         />
       )}

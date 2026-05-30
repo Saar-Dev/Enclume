@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-05-25 Session 64
+> Dernière mise à jour : 2026-05-30 Session 66
 
 ---
 
@@ -9,12 +9,12 @@ Objectif : réduire la pression contexte IA, éliminer les lectures nominales sa
 
 | Étape | Tâche | Règle | État |
 |---|---|---|---|
-| 1 | Archiver `JOURNAL2.md` → `Old/JOURNAL2.md` + créer `JOURNAL3.md` (état session 64) | Doublon obligatoire — JOURNAL2 conservé intégralement en archive | 🔲 |
-| 2 | Éclater `SYSTEME.md` → `docs/SYSTEME/` (COMBAT, DICE, BLESSURES, ENTITES, INVENTAIRE, PERSONNAGE) | Doublon obligatoire — SYSTEME.md original conservé jusqu'à vérification complète | 🔲 |
-| 3 | Créer `docs/GLOSSAIRE.md` (termes RPG Polaris → mapping code + identifiants techniques disambiguation) | Nouveau fichier, pas de migration | 🔲 |
-| 4 | Réécrire `CLAUDE.md` (protocole + 5 pièges critiques seulement + pointeurs vers SYSTEME/) | Doublon obligatoire — ancienne version conservée pendant transition | 🔲 |
-| 5 | Mettre à jour toutes les cross-références (EN_COURS, ASBUILT, ROADMAP → nouveaux chemins SYSTEME/) | Après validation étapes 1-4 | 🔲 |
-| 6 | Supprimer les doublons de transition (SYSTEME.md original, Old/JOURNAL2.md si voulu) | Après validation étape 5 | 🔲 |
+| 1 | Archiver `JOURNAL2.md` → `Old/JOURNAL2.md` + créer `JOURNAL3.md` | Doublon obligatoire — JOURNAL2 conservé en archive | ✅ session 65 |
+| 2 | Éclater `SYSTEME.md` → `docs/SYSTEME/` (9 fichiers : COMBAT, DICE, BLESSURES, ENTITES, VOXELS, CORE, REACT, ASSETS, CONVENTIONS) | SYSTEME.md archivé dans Old/ | ✅ session 65 |
+| 3 | Créer `docs/GLOSSAIRE.md` (termes RPG Polaris → mapping code) | Nouveau fichier | ✅ session 65 |
+| 4 | Réécrire `CLAUDE.md` (protocole + pièges critiques + pointeurs SYSTEME/) | — | ✅ session 65 |
+| 5 | Mettre à jour cross-références (EN_COURS, ASBUILT, ROADMAP → SYSTEME/) | — | ✅ session 65 |
+| 6 | Supprimer doublons de transition | SYSTEME.md + JOURNAL2.md conservés dans Old/ intentionnellement | ✅ session 65 |
 
 **Protocole d'exécution (par étape) :**
 - JOURNALTEMPORAIRE.md utilisé comme mémoire externe de travail — effacé en fin de chantier
@@ -98,7 +98,7 @@ Objectif : réduire la pression contexte IA, éliminer les lectures nominales sa
 | index.js — actorBlocked à pos_z+1 (espace de marche) | ✅ |
 | index.js — stepsMax = min(dmax, stepsTarget) — destination joueur respectée | ✅ |
 
-### Chantier Dice Rework ✅ (session 44)
+### Chantier Dice Rework ✅ (session 44) · D20 normales GLB ✅ (session 65) · DicePanel v3 ✅ (session 65) · Jets Favoris PLAN13 ✅ (session 66)
 
 Architecture retenue : DiceRoller monté dans Canvas3D (un seul contexte WebGL).
 Pas de DiceOverlay HTML séparé — décision session 44.
@@ -198,8 +198,13 @@ Module Armes ← 🔲 Chantier 11 Étape 2
 | Sprint 7.3 | resolveAssaultAction serveur : jet attaque, DICE_RESULT broadcast, bifurcation PJ/PNJ, pendingDamageActions, bug fix skillAssoc | ✅ session 64 |
 | Sprint 7.4 | COMBAT_DAMAGE_CONFIRM handler (loc + armures PI8 + dégâts + blessures + shockTest) + CombatDamageWindow (3 phases) | ✅ session 64 |
 | Sprint 7.4bis | Jet de toucher interactif côté joueur (COMBAT_ATTACK_PLAYER_RESULT, CombatModifiersWindow refactorisé, CombatOverlay PJ/GM séparés) | ✅ session 64 |
-| Sprint 7.5 | Décompte munitions | 🔲 |
-| Sprint 7.6 | Actions d'état dynamiques : state_weapon + state_position pilotent les actions visibles | 🔲 |
+| Sprint 7.5 | Décompte munitions — migration 60 (ammo_remaining + pnj_unlimited_ammo), resolveAssaultAction décrément, POST /reload transaction, WeaponPanel picker, CampaignSettings toggle | ✅ session 66 |
+| Sprint 7.6 | Recharger l'arme comme action de combat (INI=0, remplace bouton Assaut si chargeur vide, Phase Annonce + Résolution) | 🔲 |
+| Sprint 7.6 | Actions d'état dynamiques (STATE_DEFS, matrices coût INI, payload v2 {state,mapActions,quick}, UPDATE state_cover/fire_mode/vitesse) | ✅ session 65 |
+| Sprint GM | Refonte CombatGmDeclareWindow (InlineChip, batch, STATE_DEFAULTS, aggregate, sections TACTIQUE/ARMEMENT/ACTION/RAPIDES) | ✅ session 65 |
+| Sprint GM-A | CombatRosterWindow v2 (détection arme/armure, chips T/C/B/J, quick-equip PNJ, bannière alerte) | ✅ session 65 |
+| Sprint GM-B (déplacement) | Déplacement PNJ séquentiel (DEFAULT_PNJ_ALLURES, queue moveTick, bouton Passer) | ✅ session 65 |
+| Sprint GM-B (assault) | Assault PNJ Mode Minimal — queue séquentielle attackTick, weapon/target sélectionnés, payload attack complet | ✅ session 65 |
 
 **Mécanique Polaris (rappel LdB) :**
 
@@ -252,6 +257,8 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
 | EntityBuilderTab — formulaire interactions SkillCheck/Déplacement | ✅ session 40 |
 | Mode visée déplacement entités — ghost wireframe + snap 8 axes + couleurs + Lerp | ✅ session 43 |
 | Animation dés 3D (DiceRoller dans Canvas3D) | ✅ session 44 |
+| Sprint Pathfinding — A* Chebyshev temps réel (cases colorées par allure, murs respectés, remplace anneaux concentriques) | ✅ session 65 |
+| Sprint Raycast — raycastVoxelColumn via fast-voxel-raycast (précis sur terrain élevé, remplace plan fixe y=0) | ✅ session 65 |
 | X-Ray voxels devant tokens | 🔲 |
 | Outil règle/mesure 3D | 🔲 |
 
@@ -264,6 +271,25 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
 | Badge MR displacement dans chat | ✅ session 43 |
 | Toggle visible character temps réel (Bug A) | ✅ session 44 |
 | Bibliothèque documents | 🔲 |
+
+### Chantier CaC — Corps à Corps Polaris
+
+Spec complète dans `docs/PLAN_12_CONTACT.md`. Questions ouvertes à valider avec Saar (LOC_TABLE contact, modificateur dégâts).
+
+| Tâche | État |
+|---|---|
+| Migration : `combat_actions` +7 colonnes melee | 🔲 |
+| `charStats.js` : `getModDom(for_na)` (déjà présent ✓) | ✅ |
+| Handler `COMBAT_ACTION_DECLARE` branche `melee` | 🔲 |
+| Jet opposition défenseur (auto-serveur pour PNJ) | 🔲 |
+| `CombatActionWindow` : onglet Corps à Corps (cible, arme, mode combat) | 🔲 |
+| `CombatModifiersWindow` : modificateurs CaC | 🔲 |
+
+### Client — Dashboard
+| Tâche | État |
+|---|---|
+| Changelog rétractable (ChangelogPanel + CHANGELOG.md, auto-open localStorage) | ✅ session 66 |
+| D2 Jets Favoris — drag-to-reorder macros (sort_order DB, UI non faite) | 🔲 |
 
 ### Corrections en attente
 | Bug | Description | État |
@@ -291,6 +317,20 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
 
 ---
 
+## Chantiers futurs — à analyser
+
+### Audit localisation (blessures)
+Le système de localisation des blessures est implanté (LOC_TABLE D20, `character_wounds` avec `wound_location`, `ArmorWoundPanel`, `LocationPanel`) mais le suivi a été négligé ou mal fait. Faire un point complet : vérifier que les localisations sont bien enregistrées, affichées et prises en compte dans tous les flux (assaut PJ + PNJ, shock test, carence FOR). Sprint d'audit avant toute extension.
+
+### Environnement de carte 2D (Redis)
+Alternative à la carte 3D voxel — mode "Roll20-like" : image en fond, quadrillage 2D, tokens 2D.
+- Backend : couche Redis dédiée (tokens 2D distincts des tokens 3D)
+- Frontend : canvas 2D (pas Three.js) — image background, overlay grille, drag tokens
+- Scope : nouvelle page `Session2DPage` ou mode switchable dans `SessionPage`
+- Complexité estimée : élevée (nouveau moteur de rendu, nouvelle couche données)
+
+---
+
 ## Idées documentées — à planifier
 
 ### Paramètre campagne GM entity move mode
@@ -307,6 +347,15 @@ Complexité estimée : faible.
 
 ### Export ZIP pack complet
 À ajouter : blueprints JSON dans `entites/`, GLB dans `glb/`.
+
+### Sprint SkillTooltips — Tooltips descriptifs LdB sur SkillsPanel
+Source : `docs/Character/SkillTooltips.md` (descriptions complètes LdB, 1182 lignes).
+Travail préalable requis :
+1. Nettoyer les artefacts OCR du fichier source (`￾`, doublons colonnes PDF, pages)
+2. Établir le mapping `skill.id` (DB) → clé tooltip (vérifier le seed `2_seed_equipment.js` + ref_skills)
+3. Ajouter les clés `skills.tooltip.*` dans `fr.json`
+4. Ajouter icône ℹ dans `renderSkillRow` + composant tooltip (pattern identique `SecondaryField`)
+Complexité estimée : moyenne (nettoyage OCR + mapping = travail éditorial, implémentation technique = faible).
 
 ### Chat MP
 Messagerie privée entre joueurs/GM.

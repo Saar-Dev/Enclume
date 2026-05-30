@@ -10,6 +10,7 @@ i18n
     },
     lng: 'fr',
     fallbackLng: 'fr',
+    supportedLngs: ['fr'], // Pour ajouter EN : importer en.json, ajouter resources.en et 'en' ici
     interpolation: {
       escapeValue: false, // React gère déjà l'échappement XSS
     },

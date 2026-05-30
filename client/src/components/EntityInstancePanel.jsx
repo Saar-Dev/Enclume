@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import { useEntityStore } from '../stores/entityStore'
 
@@ -19,6 +20,7 @@ const PANEL_W = 300
 const PANEL_H_EST = 420
 
 export default function EntityInstancePanel({ entity, x, y, onClose }) {
+  const { t } = useTranslation()
   const { updateEntity } = useEntityStore()
   const panelRef = useRef(null)
   const blueprint = entity.blueprint
@@ -180,7 +182,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose }) {
             style={S.input}
             value={labelOverride}
             onChange={e => setLabelOverride(e.target.value)}
-            placeholder={blueprint?.label || 'Nom du blueprint'}
+            placeholder={blueprint?.label || t('entityPanel.placeholderName')}
             maxLength={64}
           />
           <p style={S.hint}>Vide = nom du blueprint</p>
@@ -268,7 +270,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose }) {
             style={{ ...S.input, minHeight: '60px', resize: 'vertical' }}
             value={notesGm}
             onChange={e => setNotesGm(e.target.value)}
-            placeholder="Notes privées…"
+            placeholder={t('entityPanel.placeholderNotes')}
           />
         </div>
 
@@ -285,7 +287,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose }) {
             transition: 'background 0.2s, color 0.2s',
           }}
         >
-          {saving ? 'Sauvegarde…' : saved ? '✓ Sauvegardé' : 'Sauvegarder'}
+          {saving ? t('entityPanel.saving') : saved ? t('entityPanel.saved') : t('common.save')}
         </button>
       </div>
     </div>

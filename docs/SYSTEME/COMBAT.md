@@ -223,10 +223,10 @@ VITESSE:
 Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combinables pour statuts volatils.
 
 **Flags définis :**
-| Flag | Per-turn | Effet |
-|---|---|---|
-| `is_stunned` | non (persistant) | −5 actions, allure moyenne max, ne peut pas attaquer |
-| `is_rooted` | non | déplacement impossible |
+| Flag | Per-turn | Effet | Settable | Enforced |
+|---|---|---|---|---|
+| `is_stunned` | non (persistant) | −5 actions, allure moyenne max, ne peut pas attaquer | ✅ session 66 | ❌ sprint futur |
+| `is_rooted` | non | déplacement impossible | ❌ | ❌ |
 
 ⚠️ **`is_rushed` supprimé** — migré vers `state_vitesse = 'rushed'` (migration 58). Toute lecture `state_character?.is_rushed` → remplacer par `rosterEntry.state_vitesse === 'rushed'`.
 
@@ -236,6 +236,22 @@ Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combi
 - Suppression flag : `db.raw("state_character - 'is_stunned'")`
 - **Jamais** `UPDATE SET state_character = '{"is_stunned":true}'` — écrase tous les autres flags.
 
+**PC42 — `is_stunned` : settable mais non enforced (session 66)**
+
+`is_stunned` est posé automatiquement dans `state_character` après un Test de Choc (outcome `etourdi` ou `inconscient`) via `resolveAssaultAction` et `COMBAT_DAMAGE_CONFIRM`.
+
+Mais : **les effets gameplay ne sont pas encore appliqués.** `COMBAT_ACTION_DECLARE` ne lit pas `is_stunned`. Le flag est présent en DB, visible via `combat_roster.state_character`, mais sans conséquence mécanique.
+
+**Avant d'implémenter une logique qui *lit* `is_stunned` :** vérifier que le handler `COMBAT_ACTION_DECLARE` l'enforce déjà. Si non → sprint dédié requis.
+
+**Purge / cycle de vie :**
+- `endTurn` ne purge PAS `is_stunned` (flag non per-turn).
+- La purge naturelle = suppression de l'entrée `combat_roster` à `COMBAT_END`.
+- Si un combat est abandonné sans `COMBAT_END`, le flag persiste jusqu'au prochain combat qui réutilise le même roster (ou jusqu'à un reset manuel).
+- Pour clear manuellement : `db.raw("state_character - 'is_stunned'")` via une route GM (non implémentée).
+
+**Mots-clés :** `is_stunned`, `stunned`, `étourdi`, `inconscient`, `Test de Choc`, `shockResult`, `purge`, `clear`, `lifecycle`, `COMBAT_END`, `enforcement`, `COMBAT_ACTION_DECLARE`.
+
 **endTurn :** reset colonnes per-turn + nettoyage JSONB :
 ```js
 await db('combat_roster').where({ campaign_id, status: 'active' }).update({
@@ -243,7 +259,7 @@ await db('combat_roster').where({ campaign_id, status: 'active' }).update({
   state_cover:    'exposed',
   state_vitesse:  'normal',
   // state_weapon et state_fire_mode : inchangés (persistent)
-  // state_character : pas de flags per-turn définis en V1
+  // state_character : pas de flags per-turn définis en V1 — is_stunned persiste intentionnellement
 })
 ```
 

@@ -72,6 +72,27 @@ export default function CombatDamageWindow({ payload, results, socket, onConfirm
           </div>
         )}
 
+        {results?.shockResult?.triggered && (() => {
+          const OUTCOME = {
+            ok:          { label: 'Résistance',  col: '#3aaa6a' },
+            etourdi:     { label: 'Étourdi',     col: '#f5c542' },
+            inconscient: { label: 'Inconscient', col: '#c83030' },
+          }
+          const { label, col } = OUTCOME[results.shockResult.outcome] ?? { label: results.shockResult.outcome, col: '#7a7a90' }
+          return (
+            <div style={{ padding: '8px 10px', background: col + '14', border: `1px solid ${col}66`, borderLeft: `3px solid ${col}`, borderRadius: 4 }}>
+              <div style={{ fontSize: 9, color: '#5b5b7a', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>
+                Test de Choc
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ fontSize: 20, color: col, fontWeight: 700, fontFamily: 'monospace' }}>{results.shockResult.roll}</span>
+                <span style={{ fontSize: 11, color: '#5b5b7a' }}>/ seuil {results.shockResult.seuilEtourdi}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 12, color: col, fontWeight: 700 }}>{label}</span>
+              </div>
+            </div>
+          )
+        })()}
+
         {!results ? (
           <button
             style={{ ...styles.actionBtn, borderColor: '#5b8dee', color: '#5b8dee', opacity: isRolling ? 0.45 : 1, cursor: isRolling ? 'default' : 'pointer' }}

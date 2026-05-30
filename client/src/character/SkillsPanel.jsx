@@ -350,7 +350,7 @@ export default function SkillsPanel({
   // ─── Rendu ────────────────────────────────────────────────────────────────
 
   if (!refSkills || refSkills.length === 0) {
-    return <div style={s.empty}>Catalogue de compétences non chargé.</div>
+    return <div style={s.empty}>{t('skillsPanel.empty')}</div>
   }
 
   return (
@@ -376,11 +376,11 @@ export default function SkillsPanel({
             <table style={s.table}>
               <thead>
                 <tr>
-                  <th style={{ ...s.th, textAlign: 'left', width: '40%' }}>Compétence</th>
-                  <th style={s.th}>Attributs</th>
-                  <th style={s.th}>Base</th>
-                  <th style={s.th}>Maîtrise</th>
-                  <th style={s.th}>Total</th>
+                  <th style={{ ...s.th, textAlign: 'left', width: '40%' }}>{t('skillsPanel.colName')}</th>
+                  <th style={s.th}>{t('skillsPanel.colAttrs')}</th>
+                  <th style={s.th}>{t('skillsPanel.colBase')}</th>
+                  <th style={s.th}>{t('skillsPanel.colMastery')}</th>
+                  <th style={s.th}>{t('skillsPanel.colTotal')}</th>
                   {progressionMode && (
                     <th style={s.th}>{t('character.xp.buy')}</th>
                   )}

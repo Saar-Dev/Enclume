@@ -19,6 +19,9 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
   const [equipItemId, setEquipItemId] = useState('')
   const [equipping,   setEquipping]   = useState(false)
 
+  // ammoSelected : { [weaponId]: ammoItemId (char_inventory.id) }
+  const [ammoSelected, setAmmoSelected] = useState({})
+
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -91,17 +94,20 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
   const handleReload = useCallback(async (weaponItem) => {
     clearError(weaponItem.id)
     const compatAmmos = availableAmmoFor(weaponItem)
-    if (compatAmmos.length === 0) return  // échec silencieux
-    const firstAmmo = compatAmmos[0]
+    if (compatAmmos.length === 0) return
+    const selectedId = ammoSelected[weaponItem.id] || compatAmmos[0].id
     try {
-      const res = await api.put(`/char-sheet/${characterId}/inventory/${weaponItem.id}`, {
-        current_ammo: firstAmmo.equipment_id,
+      const res = await api.post(`/char-sheet/${characterId}/inventory/${weaponItem.id}/reload`, {
+        ammo_item_id: selectedId,
       })
+      // Mettre à jour l'arme dans la liste
       setItems(prev => prev.map(i => i.id === weaponItem.id ? res.data.item : i))
+      // Retirer la munition consommée si elle n'est plus dans la liste (supprimée côté serveur)
+      // Le serveur émet INVENTORY_UPDATED/REMOVED — le composant sera rechargé via reloadKey
     } catch (err) {
       setErrors(prev => ({ ...prev, [weaponItem.id]: err.response?.data?.error?.message || 'Erreur rechargement' }))
     }
-  }, [characterId, availableAmmoFor])
+  }, [characterId, availableAmmoFor, ammoSelected])
 
   const handleEquip = useCallback(async () => {
     if (!equipItemId || !equipSlot) return
@@ -180,26 +186,49 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
 
             {/* Munitions */}
             {weapon.ref_caliber && (
-              <div style={s.ammoRow}>
-                <span style={s.ammoLabel}>
-                  {weapon.current_ammo
-                    ? <span style={s.ammoName}>{ammoName}</span>
-                    : <span style={s.ammoNone}>non chargée</span>
-                  }
-                  {ammoCount > 0 && (
-                    <span style={{ color: '#4a4a60' }}>
-                      {' '}— {Math.min(ammoCount, totalAmmoQty)}/{ammoCount} chargeur · {totalAmmoQty} en stock
-                    </span>
-                  )}
-                </span>
+              <div style={s.ammoSection}>
+                {/* Ligne infos chargeur */}
+                <div style={s.ammoRow}>
+                  <span style={s.ammoLabel}>
+                    {weapon.current_ammo
+                      ? <span style={s.ammoName}>{ammoName}</span>
+                      : <span style={s.ammoNone}>non chargée</span>
+                    }
+                    {ammoCount > 0 && (() => {
+                      const remaining = weapon.ammo_remaining ?? ammoCount
+                      const isEmpty   = weapon.ammo_remaining === 0
+                      return (
+                        <span style={{ color: isEmpty ? '#c86030' : '#4a4a60' }}>
+                          {' '}— <span style={isEmpty ? { color: '#c86030', fontWeight: 600 } : {}}>{remaining}/{ammoCount}</span> chargeur · {totalAmmoQty} en stock
+                        </span>
+                      )
+                    })()}
+                  </span>
+                </div>
+                {/* Picker ammo + bouton recharger */}
                 {canEdit && (
-                  <button
-                    style={{ ...s.reloadBtn, opacity: hasCompatAmmo ? 1 : 0.4 }}
-                    onClick={() => handleReload(weapon)}
-                    title={hasCompatAmmo ? 'Recharger' : 'Aucune munition compatible disponible'}
-                  >
-                    ↺ Recharger
-                  </button>
+                  <div style={s.ammoReloadRow}>
+                    {compatAmmos.length > 1 && (
+                      <select
+                        style={s.ammoSelect}
+                        value={ammoSelected[weapon.id] || compatAmmos[0]?.id || ''}
+                        onChange={e => setAmmoSelected(prev => ({ ...prev, [weapon.id]: e.target.value }))}
+                      >
+                        {compatAmmos.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.custom_name || a.ref_name} ({a.quantity} dispo)
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <button
+                      style={{ ...s.reloadBtn, opacity: hasCompatAmmo ? 1 : 0.4 }}
+                      onClick={() => handleReload(weapon)}
+                      title={hasCompatAmmo ? 'Recharger' : 'Aucune munition compatible disponible'}
+                    >
+                      ↺ Recharger
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -321,11 +350,34 @@ const s = {
     letterSpacing: '0.05em',
     marginRight: 2,
   },
+  ammoSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
   ammoRow: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',
+  },
+  ammoReloadRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  ammoSelect: {
+    flex: 1,
+    background: '#0e0e1a',
+    border: '1px solid #2a2a3e',
+    borderRadius: 4,
+    color: '#7070a0',
+    fontSize: 11,
+    padding: '3px 4px',
+    cursor: 'pointer',
+    outline: 'none',
+    minWidth: 0,
   },
   ammoLabel: {
     flex: 1,

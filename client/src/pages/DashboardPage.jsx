@@ -122,7 +122,7 @@ export default function DashboardPage() {
               style={styles.texturePacksBtn}
               onClick={() => navigate('/workshop')}
             >
-              Atelier
+              {t('dashboard.workshop')}
             </button>
           )}
 
@@ -153,7 +153,7 @@ export default function DashboardPage() {
             {/* EMPTY STATE */}
             {campaigns.length === 0 && (
               <div className="card campaign-create" onClick={() => setShowCreate(true)}>
-                <div className="create-label">Créer une campagne</div>
+                <div className="create-label">{t('dashboard.createCardLabel')}</div>
                 <div className="create-plus">+</div>
               </div>
             )}
@@ -200,7 +200,7 @@ export default function DashboardPage() {
                       className="copy-btn"
                       onClick={(e) => handleCopy(e, campaign.invite_code, campaign.id)}
                     >
-                      {copiedId === campaign.id ? "Copié !" : "📋"}
+                      {copiedId === campaign.id ? t('dashboard.copied') : "📋"}
                     </button>
                   </div>
 
@@ -208,7 +208,7 @@ export default function DashboardPage() {
                     style={styles.btnPrimary}
                     onClick={() => navigate(`/session/${campaign.id}`)}
                   >
-                    Jouer
+                    {t('dashboard.play')}
                   </button>
 
                 </div>
@@ -231,7 +231,7 @@ export default function DashboardPage() {
             {/* CREATE CARD LAST */}
             {campaigns.length > 0 && (
               <div className="card campaign-create" onClick={() => setShowCreate(true)}>
-                <div className="create-label">Créer une campagne</div>
+                <div className="create-label">{t('dashboard.createCardLabel')}</div>
                 <div className="create-plus">+</div>
               </div>
             )}
@@ -263,6 +263,7 @@ const styles = {
     justifyContent: 'space-between',
     padding: '0 32px',
     height: '56px',
+    flexShrink: 0,
     backgroundColor: 'var(--bg-panel)',
     borderBottom: '1px solid var(--border-subtle)',
   },

@@ -529,7 +529,7 @@ export default function CharacterWindow({ character, isGm, onClose, woundReloadK
       <div
         style={s.resizeHandle}
         onPointerDown={handleResizeStart}
-        title="Redimensionner"
+        title={t('charSheet.resize')}
       />
 
     </div>

@@ -7,23 +7,8 @@ import Voxel from '../components/Voxel'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const GEOMETRIES = ['cube', 'slab_bottom', 'slab_top', 'slope', 'wedge']
-const GEOMETRY_LABELS = {
-  cube: 'Cube',
-  slab_bottom: 'Dalle basse',
-  slab_top: 'Dalle haute',
-  slope: 'Rampe',
-  wedge: 'Coin',
-}
+// Labels géométries/faces — voir fr.json builder.geometries.* et builder.faces.* pour les traductions
 const FACE_NAMES = ['all', 'top', 'bottom', 'north', 'south', 'east', 'west']
-const FACE_LABELS = {
-  all: 'Principal',
-  top: 'Dessus',
-  bottom: 'Dessous',
-  north: 'Nord',
-  south: 'Sud',
-  east: 'Est',
-  west: 'Ouest',
-}
 
 // ─── Aperçu 3D — voxel rotatif ───────────────────────────────────────────────
 function RotatingVoxel({ textureMaterials, geometry }) {
@@ -77,13 +62,6 @@ function VoxelPreview({ faces, packId, geometry }) {
 }
 
 // ─── VoxelBuilderTab ──────────────────────────────────────────────────────────
-// Props :
-//   selectedPack  : { id, name, label, tile_size, created_by }
-//   packDetail    : { pack, categories, textures } — voxel_textures[]
-//   setPackDetail : setter shell — mise à jour après création/modification voxel (PW1)
-//   setPacks      : setter shell — mise à jour du compteur texture_count
-//   packFiles     : fichiers PNG du pack
-//   isOwner       : boolean
 export default function VoxelBuilderTab({
   selectedPack,
   packDetail,
@@ -153,9 +131,9 @@ export default function VoxelBuilderTab({
   }, [setPackDetail])
 
   const handleSaveVoxel = useCallback(async () => {
-    if (!voxelForm.label.trim()) { setVoxelError('Un nom est requis'); return }
-    if (!voxelForm.faces.all) { setVoxelError('La face Principale est obligatoire'); return }
-    if ((voxelForm.allowed_geometries || []).length === 0) { setVoxelError('Au moins une géométrie requise'); return }
+    if (!voxelForm.label.trim()) { setVoxelError(t('builder.errorNameRequired')); return }
+    if (!voxelForm.faces.all) { setVoxelError(t('builder.errorFacePrimaryRequired')); return }
+    if ((voxelForm.allowed_geometries || []).length === 0) { setVoxelError(t('builder.errorGeometryRequired')); return }
 
     setSavingVoxel(true); setVoxelError(null)
     try {
@@ -189,7 +167,7 @@ export default function VoxelBuilderTab({
         {isOwner && (
           <button style={{ ...S.btnPrimary, marginBottom: '8px', fontSize: '12px' }}
             onClick={startNewVoxel}>
-            + Nouveau voxel
+            {t('builder.newVoxel')}
           </button>
         )}
         {packDetail.textures.length === 0 && <p style={S.muted}>{t('texturePacks.noVoxels')}</p>}
@@ -207,7 +185,7 @@ export default function VoxelBuilderTab({
               {previewUrl && <img src={previewUrl} alt={tex.label} style={S.voxelThumb} />}
               <div style={S.voxelItemInfo}>
                 <span style={S.voxelItemLabel}>{tex.label}</span>
-                {tex.deprecated && <span style={S.deprecatedBadge}>Désactivé</span>}
+                {tex.deprecated && <span style={S.deprecatedBadge}>{t('builder.deprecated')}</span>}
               </div>
             </div>
           )
@@ -218,7 +196,7 @@ export default function VoxelBuilderTab({
       <div style={S.builder}>
         {!editingVoxel && (
           <div style={S.builderEmpty}>
-            <p style={S.muted}>{isOwner ? 'Cliquez sur un voxel pour le modifier' : 'Sélectionnez un voxel'}</p>
+            <p style={S.muted}>{isOwner ? t('builder.clickToEditVoxel') : t('builder.selectVoxel')}</p>
           </div>
         )}
 
@@ -226,16 +204,16 @@ export default function VoxelBuilderTab({
           <div style={S.builderContent}>
             {/* Nom */}
             <div style={S.fieldGroup}>
-              <label style={S.fieldLabel}>Nom du voxel</label>
+              <label style={S.fieldLabel}>{t('builder.voxelNameLabel')}</label>
               <input style={S.input} value={voxelForm.label}
                 onChange={e => setVoxelForm(p => ({ ...p, label: e.target.value }))}
-                placeholder="ex: Plaque métal" disabled={!isOwner} />
+                placeholder={t('builder.placeholderVoxelName')} disabled={!isOwner} />
             </div>
 
             <div style={S.builderRow}>
               {/* Faces */}
               <div>
-                <p style={{ ...S.fieldLabel, marginBottom: '8px' }}>Faces (cliquer pour assigner)</p>
+                <p style={{ ...S.fieldLabel, marginBottom: '8px' }}>{t('builder.facesLabel')}</p>
                 <div style={S.facesGrid}>
                   {FACE_NAMES.map(faceName => {
                     const filePath = voxelForm.faces[faceName]
@@ -244,7 +222,7 @@ export default function VoxelBuilderTab({
                       : null
                     return (
                       <div key={faceName} style={S.faceSlot}>
-                        <span style={S.faceLabel}>{FACE_LABELS[faceName]}</span>
+                        <span style={S.faceLabel}>{t(`builder.faces.${faceName}`)}</span>
                         <div style={{ ...S.faceBox, ...(isOwner ? S.faceBoxClickable : {}) }}
                           onClick={() => isOwner && setPickerFace(faceName)}>
                           {url
@@ -270,14 +248,14 @@ export default function VoxelBuilderTab({
                   />
                 </div>
                 <div>
-                  <p style={{ ...S.fieldLabel, marginBottom: '6px' }}>Géométries autorisées</p>
+                  <p style={{ ...S.fieldLabel, marginBottom: '6px' }}>{t('builder.geometriesLabel')}</p>
                   {GEOMETRIES.map(geo => (
                     <label key={geo} style={S.geoRow}>
                       <input type="checkbox"
                         checked={(voxelForm.allowed_geometries || []).includes(geo)}
                         onChange={() => isOwner && toggleGeometry(geo)}
                         disabled={!isOwner} style={S.checkbox} />
-                      <span style={S.geoLabel}>{GEOMETRY_LABELS[geo]}</span>
+                      <span style={S.geoLabel}>{t(`builder.geometries.${geo}`)}</span>
                     </label>
                   ))}
                 </div>
@@ -308,11 +286,11 @@ export default function VoxelBuilderTab({
         <div style={S.overlay} onClick={() => setPickerFace(null)}>
           <div style={S.pickerModal} onClick={e => e.stopPropagation()}>
             <div style={S.pickerHeader}>
-              <span style={S.pickerTitle}>Choisir — {FACE_LABELS[pickerFace]}</span>
+              <span style={S.pickerTitle}>{t('builder.pickerTitle', { face: t(`builder.faces.${pickerFace}`) })}</span>
               <button style={S.btnGhost} onClick={() => setPickerFace(null)}>✕</button>
             </div>
             {packFiles.length === 0
-              ? <p style={S.muted}>Aucun PNG — ajoutez d'abord des fichiers dans l'onglet "Textures PNG"</p>
+              ? <p style={S.muted}>{t('builder.noPngVoxels')}</p>
               : (
                 <div style={S.pickerGrid}>
                   {packFiles.map(file => {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const ACCENT = '#3aaa6a'
 const MONO = { fontFamily: "'Share Tech Mono', monospace" }
@@ -28,6 +29,7 @@ function parseChangelog(text) {
 }
 
 export default function ChangelogPanel() {
+  const { t } = useTranslation()
   const [open, setOpen]       = useState(false)
   const [releases, setReleases] = useState([])
 
@@ -64,7 +66,7 @@ export default function ChangelogPanel() {
       {!open && (
         <div
           onClick={() => setOpen(true)}
-          title="Afficher le changelog"
+          title={t('changelog.openTitle')}
           style={{
             flex: 1, display: 'flex', flexDirection: 'column',
             alignItems: 'center', paddingTop: 16, gap: 10, cursor: 'pointer',
@@ -122,7 +124,7 @@ export default function ChangelogPanel() {
             <div style={{ flex: 1 }} />
             <span
               onClick={() => setOpen(false)}
-              title="Réduire"
+              title={t('changelog.reduceTitle')}
               style={{ ...MONO, fontSize: 13, color: '#3a6050', cursor: 'pointer', padding: '0 2px' }}
             >→</span>
           </div>
@@ -163,7 +165,7 @@ export default function ChangelogPanel() {
                           width: 58, flexShrink: 0,
                           border: `1px solid ${tag.color}44`, padding: '2px 2px',
                           textAlign: 'center', marginTop: 1, background: `${tag.color}11`,
-                        }}>{tag.label}</span>
+                        }}>{t(`changelog.tags.${e.tag || 'add'}`)}</span>
                         <span style={{ fontSize: 11, color: '#c0c0d0', lineHeight: 1.4 }}>{e.text}</span>
                       </div>
                     )

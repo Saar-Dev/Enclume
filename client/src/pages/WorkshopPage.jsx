@@ -164,7 +164,7 @@ export default function WorkshopPage() {
       {/* Header */}
       <div style={S.header}>
         <button style={S.backBtn} onClick={() => navigate('/dashboard')}>{t('texturePacks.back')}</button>
-        <h1 style={S.pageTitle}>Atelier du GM</h1>
+        <h1 style={S.pageTitle}>{t('workshop.pageTitle')}</h1>
         <div style={S.headerRight}>
           <label style={S.btnSecondary}>
             {importing ? t('common.loading') : t('texturePacks.importZip')}
@@ -182,7 +182,7 @@ export default function WorkshopPage() {
 
         {/* Colonne packs */}
         <div style={S.packList}>
-          <div style={S.sectionHeader}><span style={S.sectionTitle}>Packs</span></div>
+          <div style={S.sectionHeader}><span style={S.sectionTitle}>{t('workshop.sectionPacks')}</span></div>
           {packs.length === 0 && <p style={S.muted}>{t('texturePacks.noPacks')}</p>}
           {packs.map(pack => (
             <div key={pack.id}
@@ -219,13 +219,13 @@ export default function WorkshopPage() {
               {/* Onglets */}
               <div style={S.tabs}>
                 <button style={{ ...S.tab, ...(activeTab === 'files' ? S.tabActive : {}) }} onClick={() => setActiveTab('files')}>
-                  Textures {packFiles.length > 0 ? `(${packFiles.length})` : ''}
+                  {t('workshop.tabTextures')}{packFiles.length > 0 ? ` (${packFiles.length})` : ''}
                 </button>
                 <button style={{ ...S.tab, ...(activeTab === 'voxels' ? S.tabActive : {}) }} onClick={() => setActiveTab('voxels')}>
-                  Matériaux {packDetail ? `(${packDetail.textures.length})` : ''}
+                  {t('workshop.tabMaterials')}{packDetail ? ` (${packDetail.textures.length})` : ''}
                 </button>
                 <button style={{ ...S.tab, ...(activeTab === 'entities' ? S.tabActive : {}) }} onClick={() => setActiveTab('entities')}>
-                  Éléments interactifs {entityCount > 0 ? `(${entityCount})` : ''}
+                  {t('workshop.tabEntities')}{entityCount > 0 ? ` (${entityCount})` : ''}
                 </button>
               </div>
 
@@ -261,11 +261,11 @@ export default function WorkshopPage() {
                   {isOwner && (
                     <div style={S.filesHeader}>
                       <label style={S.btnPrimary}>
-                        {uploadingFile ? t('common.loading') : '+ Ajouter un PNG'}
+                        {uploadingFile ? t('common.loading') : t('workshop.addPng')}
                         <input type="file" accept="image/png,image/jpeg" style={{ display: 'none' }}
                           onChange={handleUploadFile} disabled={uploadingFile} />
                       </label>
-                      <span style={S.muted}>Dimensions multiples de {selectedPack.tile_size}px</span>
+                      <span style={S.muted}>{t('workshop.dimensionsHint', { size: selectedPack.tile_size })}</span>
                     </div>
                   )}
                   {packFiles.length === 0 && <p style={S.muted}>{t('texturePacks.noFiles')}</p>}
@@ -279,7 +279,7 @@ export default function WorkshopPage() {
                             <span style={{ ...S.fileName, ...(file.inUse ? { color: 'var(--color-danger)' } : {}) }}>
                               {file.path.replace(/\.[^.]+$/, '')}
                             </span>
-                            {file.inUse && <span style={S.usedBadge}>Utilisé</span>}
+                            {file.inUse && <span style={S.usedBadge}>{t('workshop.usedBadge')}</span>}
                           </div>
                           {isOwner && !file.inUse && (
                             <button style={S.fileDeleteBtn} onClick={() => handleDeleteFile(file.path)}>✕</button>
@@ -303,12 +303,12 @@ export default function WorkshopPage() {
             {createError && <p style={S.fieldError}>{createError}</p>}
             <div style={S.fieldGroup}>
               <label style={S.fieldLabel}>{t('texturePacks.packName')}</label>
-              <input style={S.input} value={createForm.name} onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))} placeholder="ex: mon-pack" />
-              <span style={S.fieldHint}>Identifiant technique — minuscules, tirets</span>
+              <input style={S.input} value={createForm.name} onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))} placeholder={t('workshop.packNamePlaceholder')} />
+              <span style={S.fieldHint}>{t('workshop.packNameHint')}</span>
             </div>
             <div style={S.fieldGroup}>
               <label style={S.fieldLabel}>{t('texturePacks.packLabel')}</label>
-              <input style={S.input} value={createForm.label} onChange={e => setCreateForm(p => ({ ...p, label: e.target.value }))} placeholder="ex: Mon Pack" />
+              <input style={S.input} value={createForm.label} onChange={e => setCreateForm(p => ({ ...p, label: e.target.value }))} placeholder={t('workshop.packLabelPlaceholder')} />
             </div>
             <div style={S.fieldGroup}>
               <label style={S.fieldLabel}>{t('texturePacks.packDescription')}</label>

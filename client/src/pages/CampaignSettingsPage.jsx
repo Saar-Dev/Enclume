@@ -159,6 +159,7 @@ export default function CampaignSettingsPage() {
   // ─── État section dés ──────────────────────────────────────────────────────
   const [diceEnabled, setDiceEnabled] = useState(false)
   const [expertMode, setExpertMode] = useState(false)
+  const [pnjUnlimitedAmmo, setPnjUnlimitedAmmo] = useState(true)
 
   // Mode simple
   const [successOn, setSuccessOn] = useState('max')    // 'max' | 'min' | null
@@ -184,10 +185,8 @@ export default function CampaignSettingsPage() {
         if (cfg && typeof cfg === 'object' && Object.keys(cfg).length > 0) {
           setDiceEnabled(true)
           setExpertRows(initExpertRows(cfg))
-          // Détecter si la config est "simple" (uniforme sur tous les dés)
-          // Pour l'instant on ouvre toujours en mode simple si une config existe
-          // L'utilisateur peut basculer en mode expert
         }
+        setPnjUnlimitedAmmo(campaign.pnj_unlimited_ammo ?? true)
 
         setLoading(false)
       } catch (err) {
@@ -217,7 +216,7 @@ export default function CampaignSettingsPage() {
           dice_config = buildSimpleConfig(resolvedSuccessOn, resolvedFailOn)
         }
       }
-      await api.put(`/campaigns/${campaignId}`, { dice_config })
+      await api.put(`/campaigns/${campaignId}`, { dice_config, pnj_unlimited_ammo: pnjUnlimitedAmmo })
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
     } catch (err) {
@@ -225,7 +224,7 @@ export default function CampaignSettingsPage() {
     } finally {
       setSaving(false)
     }
-  }, [campaignId, diceEnabled, expertMode, expertRows, successActive, successOn, failActive, failOn])
+  }, [campaignId, diceEnabled, expertMode, expertRows, successActive, successOn, failActive, failOn, pnjUnlimitedAmmo])
 
   // ─── Bascule mode expert → simple ─────────────────────────────────────────
   const handleSwitchToSimple = useCallback(() => {
@@ -566,6 +565,21 @@ export default function CampaignSettingsPage() {
                 )}
               </div>
             )}
+          </section>
+
+          {/* ── Section Règles de jeu ────────────────────────────────────── */}
+          <section style={styles.section}>
+            <h2 style={styles.sectionTitle}>{t('settings.sectionRules')}</h2>
+            <label style={styles.toggleRow}>
+              <input
+                type="checkbox"
+                checked={pnjUnlimitedAmmo}
+                onChange={e => setPnjUnlimitedAmmo(e.target.checked)}
+                style={styles.checkbox}
+              />
+              <span style={styles.toggleLabel}>{t('settings.pnjAmmoLabel')}</span>
+              <span style={styles.toggleHint}>{t('settings.pnjAmmoHint')}</span>
+            </label>
           </section>
 
           {/* ── Section Joueurs — placeholder ────────────────────────────── */}

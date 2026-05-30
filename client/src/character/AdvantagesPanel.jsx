@@ -33,6 +33,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 
 // ─── Constante : ID mutation Sensibilité au Polaris ───────────────────────────
@@ -50,6 +51,7 @@ export default function AdvantagesPanel({
   refSkillsPolaris,
   onSkillLearnedChange,
 }) {
+  const { t } = useTranslation()
 
   // ─── Données de référence ─────────────────────────────────────────────────
   const [refMutations, setRefMutations] = useState([])
@@ -69,8 +71,6 @@ export default function AdvantagesPanel({
   )
 
   // ─── Charger refMutations au montage ─────────────────────────────────────
-  // Chargé immédiatement — nécessaire pour résoudre mutation_nom dans handleAddMutation
-  // même si la modale n'a pas encore été ouverte.
   useEffect(() => {
     let cancelled = false
     api.get('/char-ref/mutations')
@@ -110,9 +110,6 @@ export default function AdvantagesPanel({
         type: 'MUTATION',
         muta_numero,
       })
-      // Le serveur retourne la ligne char_advantages sans le join ref_mutations.
-      // On enrichit localement depuis refMutations (déjà chargé) pour avoir mutation_nom
-      // et linked_skill_id sans second appel réseau.
       const raw = res.data.advantage
       const refMut = refMutations.find(m => m.muta_numero === raw.muta_numero)
       const updated = {
@@ -132,12 +129,12 @@ export default function AdvantagesPanel({
       onSaved?.()
       closeModal()
     } catch (err) {
-      setError('Erreur lors de l\'ajout')
+      setError(t('advantages.errorAdd'))
       console.error('Erreur add mutation :', err)
     } finally {
       setSaving(false)
     }
-  }, [characterId, onAdvantagesChange, onSaved])
+  }, [characterId, onAdvantagesChange, onSaved, refMutations, t])
 
   // ─── Toggle pouvoir Polaris (is_learned dans char_skills) ────────────────
   const handleTogglePolaris = useCallback(async (skillId) => {
@@ -152,12 +149,12 @@ export default function AdvantagesPanel({
       onSkillLearnedChange?.(skillId, !isCurrentlyLearned)
       onSaved?.()
     } catch (err) {
-      setError('Erreur lors de la mise à jour')
+      setError(t('advantages.errorUpdate'))
       console.error('Erreur toggle polaris :', err)
     } finally {
       setSaving(false)
     }
-  }, [characterId, learnedPolarisSet, onSaved, onSkillLearnedChange])
+  }, [characterId, learnedPolarisSet, onSaved, onSkillLearnedChange, t])
 
   // ─── Ajouter un texte libre ───────────────────────────────────────────────
   const handleAddOther = useCallback(async () => {
@@ -173,12 +170,12 @@ export default function AdvantagesPanel({
       onSaved?.()
       closeModal()
     } catch (err) {
-      setError('Erreur lors de l\'ajout')
+      setError(t('advantages.errorAdd'))
       console.error('Erreur add other :', err)
     } finally {
       setSaving(false)
     }
-  }, [characterId, otherLabel, onAdvantagesChange, onSaved])
+  }, [characterId, otherLabel, onAdvantagesChange, onSaved, t])
 
   // ─── Supprimer / décrémenter ──────────────────────────────────────────────
   const handleRemove = useCallback(async (advantage) => {
@@ -186,10 +183,8 @@ export default function AdvantagesPanel({
     try {
       const res = await api.delete(`/char-sheet/${characterId}/advantages/${advantage.id}`)
       if (res.data.deleted) {
-        // Suppression complète
         onAdvantagesChange(prev => prev.filter(a => a.id !== advantage.id))
       } else {
-        // Décrémentation level
         const updated = res.data.advantage
         onAdvantagesChange(prev => prev.map(a => a.id === updated.id ? updated : a))
       }
@@ -209,7 +204,7 @@ export default function AdvantagesPanel({
       {/* ── Liste des entrées existantes ─────────────────────────────────── */}
       <div style={s.list}>
         {charAdvantages.length === 0 && (
-          <div style={s.empty}>Aucun avantage ou désavantage enregistré.</div>
+          <div style={s.empty}>{t('advantages.empty')}</div>
         )}
 
         {charAdvantages.map(adv => (
@@ -218,7 +213,7 @@ export default function AdvantagesPanel({
               ...s.badge,
               ...(adv.type === 'MUTATION' ? s.badgeMut : s.badgeAtr),
             }}>
-              {adv.type === 'MUTATION' ? 'MUT' : 'ATR'}
+              {adv.type === 'MUTATION' ? t('advantages.badgeMut') : t('advantages.badgeAttr')}
             </span>
 
             <span style={s.entryLabel}>
@@ -236,7 +231,7 @@ export default function AdvantagesPanel({
                 style={s.removeBtn}
                 onClick={() => handleRemove(adv)}
                 disabled={saving}
-                title="Retirer"
+                title={t('advantages.removeTitle')}
               >
                 ×
               </button>
@@ -260,10 +255,10 @@ export default function AdvantagesPanel({
             {/* En-tête modale */}
             <div style={s.modalHeader}>
               <span style={s.modalTitle}>
-                {step === 'type'      && 'Ajouter'}
-                {step === 'mutations' && 'Choisir une mutation'}
-                {step === 'polaris'   && 'Pouvoirs Polaris'}
-                {step === 'other'     && 'Texte libre'}
+                {step === 'type'      && t('advantages.add')}
+                {step === 'mutations' && t('advantages.stepMutations')}
+                {step === 'polaris'   && t('advantages.stepPolaris')}
+                {step === 'other'     && t('advantages.stepOther')}
               </span>
               <button style={s.closeBtn} onClick={closeModal}>×</button>
             </div>
@@ -274,25 +269,25 @@ export default function AdvantagesPanel({
             {step === 'type' && (
               <div style={s.typeGrid}>
                 <button style={s.typeBtn} onClick={() => setStep('mutations')}>
-                  <span style={s.typeBtnLabel}>Mutations</span>
-                  <span style={s.typeBtnSub}>Capacités biologiques</span>
+                  <span style={s.typeBtnLabel}>{t('advantages.typeMutations')}</span>
+                  <span style={s.typeBtnSub}>{t('advantages.typeMutationsSub')}</span>
                 </button>
 
                 <button
                   style={{ ...s.typeBtn, ...(hasMuta029 ? {} : s.typeBtnDisabled) }}
                   onClick={() => hasMuta029 && setStep('polaris')}
                   disabled={!hasMuta029}
-                  title={hasMuta029 ? undefined : 'Requiert : Sensibilité au Polaris (muta_029)'}
+                  title={hasMuta029 ? undefined : t('advantages.polarisRequired')}
                 >
-                  <span style={s.typeBtnLabel}>Force Polaris</span>
+                  <span style={s.typeBtnLabel}>{t('advantages.typePolaris')}</span>
                   <span style={s.typeBtnSub}>
-                    {hasMuta029 ? 'Pouvoirs psioniques' : 'Nécessite muta_029'}
+                    {hasMuta029 ? t('advantages.typePolarisSub') : t('advantages.typePolarisDisabled')}
                   </span>
                 </button>
 
                 <button style={s.typeBtn} onClick={() => setStep('other')}>
-                  <span style={s.typeBtnLabel}>Autres</span>
-                  <span style={s.typeBtnSub}>Titre, ennemi, implant…</span>
+                  <span style={s.typeBtnLabel}>{t('advantages.typeOther')}</span>
+                  <span style={s.typeBtnSub}>{t('advantages.typeOtherSub')}</span>
                 </button>
               </div>
             )}
@@ -301,7 +296,7 @@ export default function AdvantagesPanel({
             {step === 'mutations' && (
               <div style={s.listStep}>
                 {refMutations.length === 0
-                  ? <div style={s.loadingMsg}>Chargement…</div>
+                  ? <div style={s.loadingMsg}>{t('common.loading')}</div>
                   : refMutations.map(mut => {
                       const existing = charAdvantages.find(
                         a => a.type === 'MUTATION' && a.muta_numero === mut.muta_numero
@@ -316,7 +311,9 @@ export default function AdvantagesPanel({
                         >
                           <span style={s.mutName}>{mut.nom}</span>
                           {existing && (
-                            <span style={s.mutLevel}>Niveau {existing.level} → {existing.level + 1}</span>
+                            <span style={s.mutLevel}>
+                              {t('advantages.mutLevel', { current: existing.level, next: existing.level + 1 })}
+                            </span>
                           )}
                         </button>
                       )
@@ -329,7 +326,7 @@ export default function AdvantagesPanel({
             {step === 'polaris' && (
               <div style={s.listStep}>
                 {refSkillsPolaris.length === 0
-                  ? <div style={s.loadingMsg}>Chargement…</div>
+                  ? <div style={s.loadingMsg}>{t('common.loading')}</div>
                   : refSkillsPolaris.map(skill => {
                       const isLearned = learnedPolarisSet.has(skill.id)
                       return (
@@ -342,7 +339,7 @@ export default function AdvantagesPanel({
                         >
                           <span style={s.mutName}>{skill.label}</span>
                           <span style={s.mutLevel}>
-                            {isLearned ? '✓ Affiché' : 'Masqué'}
+                            {isLearned ? t('advantages.polarisVisible') : t('advantages.polarisHidden')}
                           </span>
                         </button>
                       )
@@ -356,7 +353,7 @@ export default function AdvantagesPanel({
               <div style={s.otherStep}>
                 <textarea
                   style={s.textarea}
-                  placeholder="Ex : Cicatrice au visage, Ennemi : Clan Rykker, Implant neural…"
+                  placeholder={t('advantages.placeholderOther')}
                   maxLength={255}
                   value={otherLabel}
                   onChange={e => setOtherLabel(e.target.value)}
@@ -368,7 +365,7 @@ export default function AdvantagesPanel({
                   onClick={handleAddOther}
                   disabled={!otherLabel.trim() || saving}
                 >
-                  Ajouter
+                  {t('advantages.add')}
                 </button>
               </div>
             )}
@@ -376,7 +373,7 @@ export default function AdvantagesPanel({
             {/* Bouton retour si pas à l'étape 1 */}
             {step !== 'type' && (
               <button style={s.backBtn} onClick={() => setStep('type')}>
-                ← Retour
+                {t('advantages.back')}
               </button>
             )}
 
@@ -470,7 +467,6 @@ const s = {
   },
 
   // Overlay modale — pas de position:fixed (interdit dans le contexte iframe)
-  // On utilise un overlay inline dans le flux du composant
   overlay: {
     position: 'absolute',
     inset: 0,

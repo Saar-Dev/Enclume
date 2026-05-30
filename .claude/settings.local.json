@@ -96,7 +96,13 @@
       "Bash(node --input-type=module --eval \"import '/c/Users/Nemet/Documents/Enclume/server/src/routes/character/char-sheet.js'; console.log\\('OK'\\)\")",
       "PowerShell(git -C \"C:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\" status --short)",
       "Bash(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\JOURNAL3.md\" -Tail 100)",
-      "Bash(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\DashboardChangelog.html\" -TotalCount 300)"
+      "Bash(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\DashboardChangelog.html\" -TotalCount 300)",
+      "PowerShell(Move-Item \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\PLAN13_JetFavori.md\" \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\Old\\\\PLAN13_JetFavori.md\")",
+      "Read(//c/Users/Nemet/Documents/Enclume/server/src/db/migrations/**)",
+      "Bash(Select-String -Path \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\client\\\\src\\\\character\\\\ArmorWoundPanel.jsx\" -Pattern \"WOUND_ADDED|shock_test|COMBAT_ATTACK\")",
+      "Bash(Select-Object -First 20)",
+      "Bash(powershell -command \"\\(Get-Content 'c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\JOURNAL3.md'\\).Count\")",
+      "PowerShell(Remove-Item \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\client\\\\src\\\\character\\\\SilhouettePanel - Copie.jsx\" -Confirm:$false)"
     ]
   }
 }

@@ -315,10 +315,33 @@ Travaux effectués :
   - `ChangelogPanel.jsx` : panneau rétractable 38↔340px, auto-open localStorage, PCB SVG, tags colorés ✅
   - `DashboardPage.jsx` : layout height:100vh+flex-col, mount ChangelogPanel ✅
 
+**Sprint 7.5 ✅ CONFIRMÉ FONCTIONNEL (session 66)**
+- Migration 60 : `ammo_remaining` + `pnj_unlimited_ammo` ✅
+- `resolveAssaultAction` : décrément post-jet (guard NULL + PNJ unlimited) ✅
+- `POST /reload` : transaction charge arme + décrémente munition ✅
+- WeaponPanel : affichage chargeur + picker variantes ✅
+- CampaignSettingsPage : section Règles de jeu + toggle ✅
+
+**Sprint Test de Choc ✅ CONFIRMÉ FONCTIONNEL (session 66)**
+- Flux PNJ : compute shockResult complet + fix bug P49 severity pré-promotion ✅
+- Flux PJ (COMBAT_DAMAGE_CONFIRM) : enrichissement seuilEtourdi/seuilIncons + shockResult dans COMBAT_DAMAGE_RESULT ✅
+- `is_stunned` appliqué dans state_character (pattern PC39) pour les deux flux ✅
+- `CombatResultPanels.jsx` : ShockBlock (3 états colorés) dans CombatResultGM + CombatResultPlayer ✅
+- `CombatDamageWindow.jsx` : bloc Test de Choc après severityBanner ✅
+- `CombatOverlay.jsx` : shockResult passé aux deux panneaux résultat ✅
+
+## Sprint i18n Option B ✅ CONFIRMÉ FONCTIONNEL (session 66)
+
+17 composants wired : RegisterPage, LoginPage, DashboardPage, WorkshopPage, CampaignSettingsPage, Sidebar, SessionPage, CharacterWindow, CharacterSheet, EntityBuilderTab, VoxelBuilderTab, SkillsPanel, AdvantagesPanel, RadialMenu, EntityInstancePanel, ChangelogPanel + Canvas3D (clean).
+fr.json : +20 sections (charSheet ~50 clés, builder ~55 clés, advantages, skillsPanel, radialMenu, entityPanel, changelog, +ajouts existants).
+Hors scope : combat (12), équipement (6). SkillTooltips : roadmap.
+
 **Prochains chantiers :**
-- Sprint GM-B — Assault PNJ (Mode Minimal) — plan dans JOURNALTEMP.md
-- Sprint 7.5 — Décompte munitions
+- Sprint 7.6 — Recharger l'arme comme action de combat (INI=0, remplace bouton Assaut si vide)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, non implémenté côté UI)
+- Chantier CaC — Corps à Corps (plan dans PLAN_12_CONTACT.md)
+- Sprint Waypoints — priorité basse (plan dans JOURNALTEMP.md)
+- Sprint Test de Choc suite : guard is_stunned dans COMBAT_ACTION_DECLARE + clear logique
 
 ---
 

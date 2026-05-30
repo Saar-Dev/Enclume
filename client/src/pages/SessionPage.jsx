@@ -361,7 +361,7 @@ export default function SessionPage() {
       addMessage({
         id: `sys-join-${userId}-${Date.now()}`,
         system: true,
-        text: `${username} a rejoint la session`,
+        text: t('session.userJoined', { username }),
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     })
@@ -370,7 +370,7 @@ export default function SessionPage() {
       addMessage({
         id: `sys-left-${userId}-${Date.now()}`,
         system: true,
-        text: `${username} a quitté la session`,
+        text: t('session.userLeft', { username }),
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     })
@@ -513,10 +513,10 @@ export default function SessionPage() {
       // Informer le joueur via un message système dans le chat
       if (!isApproved) {
         const reasonText = reason === 'timeout'
-          ? 'Action expirée (pas de réponse du MJ)'
+          ? t('session.actionExpired')
           : reason === 'no_gm'
-            ? 'Aucun MJ connecté'
-            : 'Action refusée par le MJ'
+            ? t('session.noGm')
+            : t('session.actionRefused')
         addMessage({
           id: `entity-result-${requestId}`,
           system: true,
@@ -591,7 +591,7 @@ export default function SessionPage() {
       addMessage({
         id: `combat-skip-${tokenId}-${Date.now()}`,
         system: true,
-        text: `${tokenLabel} a été passé`,
+        text: t('session.tokenSkipped', { label: tokenLabel }),
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     })
@@ -818,7 +818,7 @@ export default function SessionPage() {
   if (error) return (
     <div style={styles.loading}>
       <p>{error}</p>
-      <button onClick={() => navigate('/dashboard')}>← Dashboard</button>
+      <button onClick={() => navigate('/dashboard')}>{t('settings.back')}</button>
     </div>
   )
 
@@ -858,9 +858,9 @@ export default function SessionPage() {
               marginLeft: 'auto',
               flexShrink: 0,
             }}
-            title={mode === 'combat' && combatPhase !== null ? 'Terminer le combat' : 'Mode Combat'}
+            title={mode === 'combat' && combatPhase !== null ? t('session.combatEnd') : t('session.combatMode')}
           >
-            {mode === 'combat' && combatPhase !== null ? '✕ Combat' : '⚔ Combat'}
+            {mode === 'combat' && combatPhase !== null ? `✕ ${t('session.combat')}` : `⚔ ${t('session.combat')}`}
           </button>
         </div>
       )}
@@ -956,7 +956,7 @@ export default function SessionPage() {
       {!sidebarVisible && (
         <button
           onClick={() => setSidebarVisible(true)}
-          title="Ouvrir la sidebar"
+          title={t('session.openSidebar')}
           style={styles.reopenBtn}
         >
           ‹

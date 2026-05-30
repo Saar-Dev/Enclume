@@ -94,6 +94,33 @@ function SeverityBlock({ severity, is_lethal }) {
   )
 }
 
+function ShockBlock({ shockResult }) {
+  if (!shockResult?.triggered) return null
+  const OUTCOME = {
+    ok:          { label: 'Résistance',  col: '#3aaa6a' },
+    etourdi:     { label: 'Étourdi',     col: '#f5c542' },
+    inconscient: { label: 'Inconscient', col: '#c83030' },
+  }
+  const { label, col } = OUTCOME[shockResult.outcome] ?? { label: shockResult.outcome, col: C.textDim }
+  return (
+    <div style={{
+      padding: '5px 9px',
+      background: col + '14',
+      border: `1px solid ${col}66`,
+      borderLeft: `3px solid ${col}`,
+    }}>
+      <div style={{ fontSize: 9, color: C.textDim, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 3 }}>
+        Test de Choc
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span style={{ fontSize: 16, color: col, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{shockResult.roll}</span>
+        <span style={{ fontSize: 10, color: C.textDim }}>/ seuil {shockResult.seuilEtourdi}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: col, fontWeight: 600 }}>{label}</span>
+      </div>
+    </div>
+  )
+}
+
 function CloseButton({ onClose }) {
   return (
     <div style={{ textAlign: 'center', marginTop: 10 }}>
@@ -115,7 +142,7 @@ function CloseButton({ onClose }) {
 }
 
 /* ── Vue GM — bottom-left, ton neutre, tireur → cible ──────────────────── */
-export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, localisation, degatsBruts, degatsNets, severity, is_lethal, onClose }) {
+export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, localisation, degatsBruts, degatsNets, severity, is_lethal, shockResult, onClose }) {
   const sevData = severity ? SEVERITY[severity] : null
   const accent  = isSuccess ? (sevData?.col || C.gold) : C.textDim
 
@@ -158,6 +185,7 @@ export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, local
       )}
 
       {isSuccess && <SeverityBlock severity={severity} is_lethal={is_lethal} />}
+      {isSuccess && <ShockBlock shockResult={shockResult} />}
 
       {onClose && <CloseButton onClose={onClose} />}
     </div>
@@ -165,7 +193,7 @@ export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, local
 }
 
 /* ── Vue Joueur — bottom-center, 2e personne, dramatique ───────────────── */
-export function CombatResultPlayer({ attaquant, isSuccess, roll, seuil, localisation, degatsBruts, degatsNets, severity, is_lethal, onClose }) {
+export function CombatResultPlayer({ attaquant, isSuccess, roll, seuil, localisation, degatsBruts, degatsNets, severity, is_lethal, shockResult, onClose }) {
   const sevData = severity ? SEVERITY[severity] : null
   const accent  = isSuccess ? (sevData?.col || C.red) : C.green
 
@@ -208,6 +236,7 @@ export function CombatResultPlayer({ attaquant, isSuccess, roll, seuil, localisa
       )}
 
       {isSuccess && <SeverityBlock severity={severity} is_lethal={is_lethal} />}
+      {isSuccess && <ShockBlock shockResult={shockResult} />}
 
       {onClose && <CloseButton onClose={onClose} />}
     </div>

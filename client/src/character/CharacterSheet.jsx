@@ -37,11 +37,7 @@ import { polarisRound, calcAN, calcAllureMoy, calcAllures } from '../../../share
 
 const ATTR_IDS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
 
-const ATTR_LABELS = {
-  FOR: 'Force', CON: 'Constitution', COO: 'Coordination',
-  ADA: 'Adaptation', PER: 'Perception', INT: 'Intelligence',
-  VOL: 'Volonté', PRE: 'Présence',
-}
+// Labels attributs Polaris — voir fr.json charSheet.attr.* pour les traductions
 
 // AN_TABLE, calcAN, calcAllureMoy, calcAllures — importés depuis shared/polarisUtils.js
 
@@ -67,13 +63,6 @@ const calcModDom = (forNA) => {
   if (forNA > 21) return 5 + Math.floor((forNA - 21) / 2)
   const entry = MOD_DOM_TABLE.find(e => forNA >= e.min && forNA <= e.max)
   return entry ? entry.val : -6
-}
-
-const ALLURES_TOOLTIPS = {
-  lente:   `Allure lente : c'est l'Allure d'un personnage dont les mouvements sont ralentis par un terrain difficile (décombres, terrain glissant, boue épaisse, végétation dense, passage étroit, eau jusqu'à la taille, etc.). Le personnage peut aussi choisir de se déplacer prudemment, en raison d'un terrain dangereux (mines, pièges, équilibre instable, débris de tôle tranchante, etc.). L'Allure lente est également recommandée pour les personnages désirant se déplacer silencieusement (pas de malus au Test de Furtivité/Déplacement silencieux). (LdB p.220)`,
-  moyenne: `Allure moyenne : c'est la vitesse de déplacement normale d'un personnage en combat. L'Allure moyenne peut entraîner un malus à tous les Tests de Compétences réclamant un peu de précision et de stabilité : Furtivité/Déplacement silencieux, Acrobatie/Équilibre, Tests de tir, etc. (LdB p.220)`,
-  rapide:  `Allure rapide : cette Allure permet de parcourir une distance plus importante, au pas de course. Elle augmente encore les malus pour les Actions nécessitant précision ou vigilance. C'est aussi la vitesse d'un personnage qui tente de courir tout en étant chargé et/ou encombré (armure, sacs, armes militaires de type fusil d'assaut, matériel divers…). (LdB p.220)`,
-  max:     `Allure maximale : c'est l'Allure d'un personnage qui court le plus vite possible sur un terrain plat et dégagé, en ligne droite (ou presque) et sans être encombré d'aucune manière. Cette Allure n'est donnée qu'à titre indicatif. Le personnage ne peut rien faire d'autre que courir, tout en se trouvant bien plus exposé aux dangers du combat et aux accidents de toute sorte. Il ne peut pas non plus effectuer de brusques changements de direction. Distance basée sur la Compétence Athlétisme (FOR + COO). (LdB p.220)`,
 }
 
 const calcSecondary = (naMap) => {
@@ -191,14 +180,14 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     const malus = woundPenalty - encumbrancePenalty
     const ini   = secondary.rea + malus
     if (malus === 0) {
-      return `En terme de jeu, le score d'Initiative de base d'un personnage est tout simplement égal à son niveau de Réaction. Toutefois, divers éléments peuvent affecter ce score de base, et principalement les malus dus à un mauvais état de santé (Blessures, Fatigue, maladies) : ces modificateurs affectent le niveau de Réaction du personnage et donc son Initiative de base. (LdB p.213)`
+      return t('charSheet.tooltip.iniBase')
     }
-    const lines = [`REA base : ${secondary.rea}`]
-    if (woundPenalty < 0)       lines.push(`Malus blessures : ${woundPenalty}`)
-    if (encumbrancePenalty > 0) lines.push(`Malus encombrement : −${encumbrancePenalty}`)
-    lines.push(`Initiative effective : ${ini}`)
+    const lines = [`${t('charSheet.tooltip.reaBase')} ${secondary.rea}`]
+    if (woundPenalty < 0)       lines.push(`${t('charSheet.tooltip.malusBlessures')} ${woundPenalty}`)
+    if (encumbrancePenalty > 0) lines.push(`${t('charSheet.tooltip.malusEncombrement')}${encumbrancePenalty}`)
+    lines.push(`${t('charSheet.tooltip.iniEffective')} ${ini}`)
     return lines.join('\n')
-  }, [woundPenalty, encumbrancePenalty, secondary.rea])
+  }, [woundPenalty, encumbrancePenalty, secondary.rea, t])
 
   const iniValue = secondary.rea + effectiveMalus
 
@@ -320,7 +309,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
         }
 
       } catch (err) {
-        if (!cancelled) setError('Impossible de charger la fiche')
+        if (!cancelled) setError(t('charSheet.errorLoad'))
         console.error('Erreur chargement CharacterSheet :', err)
       } finally {
         if (!cancelled) setLoading(false)
@@ -428,7 +417,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
               placeholder="—"
               readOnly={!canEdit}
             />
-            <span style={s.headerLabel}>Nom du Personnage</span>
+            <span style={s.headerLabel}>{t('charSheet.headerCharName')}</span>
           </div>
 
           <div style={s.headerField}>
@@ -440,7 +429,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
               placeholder="—"
               readOnly={!canEdit}
             />
-            <span style={s.headerLabel}>Nom du Joueur</span>
+            <span style={s.headerLabel}>{t('charSheet.headerPlayerName')}</span>
           </div>
 
           <div style={s.headerField}>
@@ -457,7 +446,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
                 <option key={g.id} value={g.id}>{g.label}</option>
               ))}
             </select>
-            <span style={s.headerLabel}>Type Génétique</span>
+            <span style={s.headerLabel}>{t('charSheet.headerGenotype')}</span>
           </div>
 
         </div>
@@ -514,115 +503,115 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
       {/* ══ BLOC 2 — DESCRIPTION ══════════════════════════════════════════ */}
       <div style={s.block}>
-        <div style={s.blockTitle}>Description du Personnage</div>
+        <div style={s.blockTitle}>{t('charSheet.sectionDesc')}</div>
         <div style={s.descGrid}>
 
-          <Field label="Taille (m)" style={{ gridColumn: 'span 1' }}>
+          <Field label={t('charSheet.descHeight')} style={{ gridColumn: 'span 1' }}>
             <input style={s.input} type="number" step="0.01" value={height}
               onChange={e => setHeight(e.target.value)}
               onBlur={() => saveIdentity({ height: height || null })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Poids (kg)" style={{ gridColumn: 'span 1' }}>
+          <Field label={t('charSheet.descWeight')} style={{ gridColumn: 'span 1' }}>
             <input style={s.input} type="number" step="0.1" value={weight}
               onChange={e => setWeight(e.target.value)}
               onBlur={() => saveIdentity({ weight: weight || null })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Peau" style={{ gridColumn: 'span 2' }}>
+          <Field label={t('charSheet.descSkin')} style={{ gridColumn: 'span 2' }}>
             <input style={s.input} value={skin}
               onChange={e => setSkin(e.target.value)}
               onBlur={() => saveIdentity({ skin })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Corpulence" style={{ gridColumn: 'span 2' }}>
+          <Field label={t('charSheet.descBuild')} style={{ gridColumn: 'span 2' }}>
             <input style={s.input} value={build}
               onChange={e => setBuild(e.target.value)}
               onBlur={() => saveIdentity({ build })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Yeux" style={{ gridColumn: 'span 2' }}>
+          <Field label={t('charSheet.descEyes')} style={{ gridColumn: 'span 2' }}>
             <input style={s.input} value={eyes}
               onChange={e => setEyes(e.target.value)}
               onBlur={() => saveIdentity({ eyes })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Cheveux" style={{ gridColumn: 'span 2' }}>
+          <Field label={t('charSheet.descHair')} style={{ gridColumn: 'span 2' }}>
             <input style={s.input} value={hair}
               onChange={e => setHair(e.target.value)}
               onBlur={() => saveIdentity({ hair })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Main directrice" style={{ gridColumn: 'span 2' }}>
+          <Field label={t('charSheet.descHand')} style={{ gridColumn: 'span 2' }}>
             <select style={s.select} value={handPref} disabled={!canEdit}
               onChange={e => { setHandPref(e.target.value); saveIdentity({ hand_pref: e.target.value }) }}>
-              <option value="R">Droitier</option>
-              <option value="L">Gaucher</option>
-              <option value="A">Ambidextre</option>
+              <option value="R">{t('charSheet.handRight')}</option>
+              <option value="L">{t('charSheet.handLeft')}</option>
+              <option value="A">{t('charSheet.handAmbi')}</option>
             </select>
           </Field>
 
-          <Field label="Genre" style={{ gridColumn: 'span 2' }}>
+          <Field label={t('charSheet.descGender')} style={{ gridColumn: 'span 2' }}>
             <input style={s.input} value={sex}
               onChange={e => setSex(e.target.value)}
               onBlur={() => saveArchetype({ sex })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Fécondité" style={{ gridColumn: 'span 2' }}>
+          <Field label={t('charSheet.descFertility')} style={{ gridColumn: 'span 2' }}>
             <select style={s.select} value={isFertile ? 'fertile' : 'sterile'} disabled={!canEdit}
               onChange={e => {
                 const val = e.target.value === 'fertile'
                 setIsFertile(val)
                 saveArchetype({ is_fertile: val })
               }}>
-              <option value="sterile">Stérile</option>
-              <option value="fertile">Fécond(e)</option>
+              <option value="sterile">{t('charSheet.fertileSterile')}</option>
+              <option value="fertile">{t('charSheet.fertileFertile')}</option>
             </select>
           </Field>
 
-          <Field label="Âge" style={{ gridColumn: 'span 1' }}>
+          <Field label={t('charSheet.descAge')} style={{ gridColumn: 'span 1' }}>
             <input style={s.input} type="number" value={age}
               onChange={e => setAge(e.target.value)}
               onBlur={() => saveArchetype({ age: age || null })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Origine géographique" style={{ gridColumn: 'span 3' }}>
+          <Field label={t('charSheet.descOriginGeo')} style={{ gridColumn: 'span 3' }}>
             <input style={s.input} value={originGeo}
               onChange={e => setOriginGeo(e.target.value)}
               onBlur={() => saveArchetype({ origin_geo: originGeo })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Origine sociale" style={{ gridColumn: 'span 3' }}>
+          <Field label={t('charSheet.descOriginSoc')} style={{ gridColumn: 'span 3' }}>
             <input style={s.input} value={originSoc}
               onChange={e => setOriginSoc(e.target.value)}
               onBlur={() => saveArchetype({ origin_soc: originSoc })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Formation de base" style={{ gridColumn: 'span 3' }}>
+          <Field label={t('charSheet.descTrainingBase')} style={{ gridColumn: 'span 3' }}>
             <input style={s.input} value={trainingBase}
               onChange={e => setTrainingBase(e.target.value)}
               onBlur={() => saveArchetype({ training_base: trainingBase })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Études supérieures" style={{ gridColumn: 'span 3' }}>
+          <Field label={t('charSheet.descHigherEd')} style={{ gridColumn: 'span 3' }}>
             <input style={s.input} value={higherEd}
               onChange={e => setHigherEd(e.target.value)}
               onBlur={() => saveArchetype({ higher_ed: higherEd })}
               readOnly={!canEdit} />
           </Field>
 
-          <Field label="Signes particuliers" style={{ gridColumn: 'span 6' }}>
+          <Field label={t('charSheet.descSigns')} style={{ gridColumn: 'span 6' }}>
             <input style={s.input} value={distinctiveSigns}
               onChange={e => setDistinctiveSigns(e.target.value)}
               onBlur={() => saveIdentity({ distinctive_signs: distinctiveSigns })}
@@ -634,22 +623,22 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
       {/* ══ BLOC 3 — ATTRIBUTS PRIMAIRES ══════════════════════════════════ */}
       <div style={s.block}>
-        <div style={s.blockTitle}>Attributs</div>
+        <div style={s.blockTitle}>{t('charSheet.sectionAttrs')}</div>
         <table style={s.attrTable}>
           <thead>
             <tr>
               <th style={s.th}></th>
               {ATTR_IDS.map(id => (
-                <th key={id} style={s.th}>{ATTR_LABELS[id]}</th>
+                <th key={id} style={s.th}>{t(`charSheet.attr.${id}`)}</th>
               ))}
-              <th style={{ ...s.th, borderLeft: '2px solid #2a2a3e' }}>Chance</th>
+              <th style={{ ...s.th, borderLeft: '2px solid #2a2a3e' }}>{t('charSheet.attrChance')}</th>
             </tr>
           </thead>
           <tbody>
 
             {/* Niveau de base */}
             <tr>
-              <td style={s.tdLabel}>Niveau de base</td>
+              <td style={s.tdLabel}>{t('charSheet.attrRowBase')}</td>
               {ATTR_IDS.map(id => (
                 <td key={id} style={s.td}>
                   <input
@@ -692,7 +681,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
             {/* Modif. Type Génétique */}
             <tr>
-              <td style={s.tdLabel}>Modif. Type Gén.</td>
+              <td style={s.tdLabel}>{t('charSheet.attrRowModGen')}</td>
               {ATTR_IDS.map(id => (
                 <td key={id} style={s.td}>
                   <span style={s.attrReadonly}>{getModGen(id) >= 0 ? `+${getModGen(id)}` : getModGen(id)}</span>
@@ -702,7 +691,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
             {/* Modif. PC */}
             <tr>
-              <td style={s.tdLabel}>Modif. PC</td>
+              <td style={s.tdLabel}>{t('charSheet.attrRowModPc')}</td>
               {ATTR_IDS.map(id => (
                 <td key={id} style={s.td}>
                   <input
@@ -725,7 +714,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
             {/* Niveau actuel */}
             <tr style={{ backgroundColor: 'rgba(91,141,238,0.08)' }}>
-              <td style={s.tdLabel}>Niveau actuel</td>
+              <td style={s.tdLabel}>{t('charSheet.attrRowCurrent')}</td>
               {ATTR_IDS.map(id => (
                 <td key={id} style={s.td}>
                   <span style={{ ...s.attrReadonly, color: '#5b8dee', fontWeight: '700' }}>
@@ -737,7 +726,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
             {/* Aptitude Naturelle */}
             <tr style={{ backgroundColor: 'rgba(91,141,238,0.04)' }}>
-              <td style={s.tdLabel}>Aptitude Naturelle</td>
+              <td style={s.tdLabel}>{t('charSheet.attrRowAN')}</td>
               {ATTR_IDS.map(id => (
                 <td key={id} style={s.td}>
                   <span style={{ ...s.attrReadonly, color: '#9090c8' }}>
@@ -753,23 +742,23 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
       {/* ══ BLOC 4 — ATTRIBUTS SECONDAIRES ═══════════════════════════════ */}
       <div style={s.block}>
-        <div style={s.blockTitle}>Attributs Secondaires</div>
+        <div style={s.blockTitle}>{t('charSheet.sectionSecondary')}</div>
         <div style={s.secondaryGrid}>
-          <SecondaryField label="Réaction"             value={secondary.rea} />
+          <SecondaryField label={t('charSheet.secondary.reaction')}    value={secondary.rea} />
           <SecondaryField
-            label="Initiative"
+            label={t('charSheet.secondary.initiative')}
             value={iniValue}
             tooltip={iniTooltip}
             valueStyle={effectiveMalus < 0 ? { color: '#e05c5c' } : undefined}
           />
-          <SecondaryField label="Seuil Étourdissement" value={secondary.seuilEtour} />
-          <SecondaryField label="Seuil Inconscience"   value={secondary.seuilIncons} />
-          <SecondaryField label="Allure lente"    value={`${allures.lente} m/t`}    tooltip={ALLURES_TOOLTIPS.lente} />
-          <SecondaryField label="Allure moyenne"  value={`${allures.moyenne} m/t`}  tooltip={ALLURES_TOOLTIPS.moyenne} />
-          <SecondaryField label="Allure rapide"   value={`${allures.rapide} m/t`}   tooltip={ALLURES_TOOLTIPS.rapide} />
-          <SecondaryField label="Allure maximale" value={`${allures.max} m/t`}      tooltip={ALLURES_TOOLTIPS.max} />
+          <SecondaryField label={t('charSheet.secondary.seuilEtour')}  value={secondary.seuilEtour} />
+          <SecondaryField label={t('charSheet.secondary.seuilIncons')} value={secondary.seuilIncons} />
+          <SecondaryField label={t('charSheet.secondary.allureLente')}   value={`${allures.lente} m/t`}   tooltip={t('charSheet.tooltip.allureLente')} />
+          <SecondaryField label={t('charSheet.secondary.allureMoyenne')} value={`${allures.moyenne} m/t`} tooltip={t('charSheet.tooltip.allureMoyenne')} />
+          <SecondaryField label={t('charSheet.secondary.allureRapide')}  value={`${allures.rapide} m/t`}  tooltip={t('charSheet.tooltip.allureRapide')} />
+          <SecondaryField label={t('charSheet.secondary.allureMax')}     value={`${allures.max} m/t`}     tooltip={t('charSheet.tooltip.allureMax')} />
           <SecondaryField
-            label="Mod. Dommages (contact)"
+            label={t('charSheet.secondary.modDom')}
             value={secondary.modDom >= 0 ? `+${secondary.modDom}` : secondary.modDom}
           />
         </div>
@@ -777,7 +766,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
       {/* ══ BLOC 5 — COMPÉTENCES ══════════════════════════════════════════ */}
       <div style={s.block}>
-        <div style={s.blockTitle}>Compétences</div>
+        <div style={s.blockTitle}>{t('charSheet.sectionSkills')}</div>
         <div style={{ padding: '8px' }}>
           <SkillsPanel
             refSkills={refSkills}
@@ -798,7 +787,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
       {/* ══ BLOC 6 — AVANTAGES & DÉSAVANTAGES ════════════════════════════ */}
       <div style={s.block}>
-        <div style={s.blockTitle}>Avantages &amp; Désavantages</div>
+        <div style={s.blockTitle}>{t('charSheet.sectionAdvantages')}</div>
         <AdvantagesPanel
           characterId={characterId}
           charAdvantages={charAdvantages}

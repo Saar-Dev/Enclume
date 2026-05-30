@@ -11,7 +11,7 @@
 | Sprint Pathfinding | ✅ CONFIRMÉ FONCTIONNEL | — |
 | Sprint Raycast | ✅ CONFIRMÉ FONCTIONNEL | — |
 | Sprint GM-B — Move PNJ | ✅ CONFIRMÉ FONCTIONNEL | — |
-| Sprint GM-B — Assault PNJ (Mode Minimal) | Plan complet — prêt à coder | rien |
+| Sprint GM-B — Assault PNJ (Mode Minimal) | ✅ CONFIRMÉ FONCTIONNEL | — |
 | Sprint Waypoints | En attente | priorité basse |
 
 ---

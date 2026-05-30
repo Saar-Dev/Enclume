@@ -35,6 +35,7 @@ Ce projet dure depuis 64+ sessions. Chaque piège documenté représente des **h
 | MinIO, faces entités, Atelier GM | `docs/SYSTEME/ASSETS.md` |
 | Conventions, pièges §18-§19 | `docs/SYSTEME/CONVENTIONS.md` |
 | Ambiguïtés identifiants, termes RPG | `docs/GLOSSAIRE.md` |
+| Nouvelles strings UI dans composant React | Convention i18n — voir `## Convention i18n` ci-dessous |
 
 **Avant tout nouvel événement WS, composant, ou fonction utilitaire :**
 → Vérifier `shared/events.js`, `client/src/`, `server/src/lib/` — est-ce que ça existe déjà ?
@@ -62,6 +63,7 @@ Ce n'est pas une liste de recommandations. Chaque point est le résultat d'une e
 ### Après chaque tâche confirmée fonctionnelle
 - Appender `docs/JOURNAL3.md`
 - Fin de session : mettre à jour `EN_COURS.md`, `ASBUILT.md`, `ROADMAP.md`, `CLAUDE.md`
+- Fin de session : mettre à jour `client/public/CHANGELOG.md` — version = numéro de session (ex: `## v66 — date — titre`)
 - **Rappeler le push Git** avec la commande complète
 
 ### Jamais
@@ -121,8 +123,8 @@ Toute décision non documentée est considérée comme nulle.
 ## État actuel — Session 66 (2026-05-30)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **59 migrations stables** — prochaine : **60**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅
+- **60 migrations stables** — prochaine : **61**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅
 
 **Session 66 ✅ :**
 - Code d'invitation beta `REGISTRATION_CODE` (8 chiffres, `timingSafeEqual`) ✅
@@ -131,13 +133,18 @@ Toute décision non documentée est considérée comme nulle.
 - PLAN 13 Jets Favoris complet : migration 59, routes CRUD, WS MACRO_ROLL, form création, fix GM ✅
 - Piège PC41 documenté : Express 5 routes sans `/` initial → 404 silencieux
 - Changelog Dashboard : `ChangelogPanel.jsx` + `CHANGELOG.md` + layout DashboardPage ✅
+- Sprint 7.5 Décompte munitions : migration 60, `/reload`, `ammo_remaining`, WeaponPanel picker, option campagne PNJ ✅
+- Sprint Test de Choc : compute PNJ + apply is_stunned (PC39) + ShockBlock UI + fix P49 PNJ ✅
+- Sprint i18n Option B : 17 composants wired, fr.json +20 sections, RegisterPage FR, convention documentée ✅
 
 **"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
 
 **Prochain chantier :**
-- Sprint GM-B — Assault PNJ (Mode Minimal) — plan dans JOURNALTEMP.md
-- Sprint 7.5 — Décompte munitions
+- Sprint 7.6 — Recharger l'arme comme action de combat (INI=0, remplace Assaut si vide)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, UI non implémentée)
+- Chantier CaC — Corps à Corps (plan dans PLAN_12_CONTACT.md)
+- Sprint Waypoints — priorité basse (plan dans JOURNALTEMP.md)
+- Sprint Test de Choc suite — guard is_stunned COMBAT_ACTION_DECLARE + clear logique
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser.
@@ -147,6 +154,8 @@ Toute décision non documentée est considérée comme nulle.
 - `useDiceAudio.js` — sons impact dés
 - `.gitattributes:3` — attribut invalide
 - Timer auto-skip (`action_timer_sec > 0`) — prévu Sprint 2, reporté Sprint 3
+- `is_stunned` settable (session 66) mais non enforced — `COMBAT_ACTION_DECLARE` ne lit pas le flag → PC42 (voir SYSTEME/COMBAT.md)
+- `is_stunned` purge manuelle non implémentée — clear via route GM à créer (actuellement purgé implicitement par COMBAT_END)
 
 ---
 
@@ -194,3 +203,27 @@ Tout `useCallback` qui émet via socket doit inclure `socket` dans ses deps. Abs
 - **Pour tout composant UI : inventaire exhaustif avant "Je code ?"** — lister chaque élément interactif (bouton, checkbox, input) avec son handler. Confirmation du plan = "cet inventaire est-il complet par rapport aux specs ?"
 
 **"La Forêt Maudite"** — pas de `default_battlemap_id` → ne jamais utiliser pour les tests.
+
+---
+
+## Convention i18n — Localisation
+
+**Règle : jamais de string UI hardcodée dans un composant React.**
+Toute chaîne visible par l'utilisateur passe par `useTranslation`.
+
+**Pattern obligatoire :**
+```js
+import { useTranslation } from 'react-i18next'
+const { t } = useTranslation()   // dans le composant
+{t('section.cle')}               // dans le JSX
+```
+
+**Source unique :** `client/src/locales/fr.json` — ajouter la clé **avant** de l'utiliser dans le code.
+Structure : `"section": { "cle": "valeur" }` → usage : `t('section.cle')`.
+
+**État session 66 :** ~18 fichiers wired. Combat (12) + équipement (6) : hors scope — sprint i18n dédié futur. SkillTooltips : roadmap.
+
+**Ajouter EN plus tard (Option C) :**
+1. Créer `client/src/locales/en.json` (même structure que fr.json)
+2. `i18n.js` : `import en` + `resources: { fr, en }` + `supportedLngs: ['fr', 'en']`
+3. Ajouter sélecteur de langue dans l'UI (sidebar ou page profil)

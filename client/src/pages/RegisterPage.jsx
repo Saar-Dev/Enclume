@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
 
 export default function RegisterPage() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
@@ -17,7 +19,7 @@ export default function RegisterPage() {
     e.preventDefault()
     setError(null)
     if (password.length < 8) {
-      setError('Password must be at least 8 characters')
+      setError(t('auth.passwordTooShort'))
       return
     }
     setLoading(true)
@@ -26,7 +28,7 @@ export default function RegisterPage() {
       setUser(res.data.user)
       navigate('/dashboard')
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Connection error')
+      setError(err.response?.data?.error?.message || t('auth.registerError'))
     } finally {
       setLoading(false)
     }
@@ -39,25 +41,25 @@ export default function RegisterPage() {
           <img src="/logo.svg" alt="Enclume" style={styles.logoImg} />
           <h1 style={styles.title}>Enclume</h1>
         </div>
-        <p style={styles.subtitle}>Create your account</p>
+        <p style={styles.subtitle}>{t('auth.registerSubtitle')}</p>
 
         {error && <div style={styles.error}>{error}</div>}
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.field}>
-            <label style={styles.label}>Username</label>
+            <label style={styles.label}>{t('auth.username')}</label>
             <input
               style={styles.input}
               type="text"
               value={username}
               onChange={e => setUsername(e.target.value)}
-              placeholder="Your name"
+              placeholder={t('auth.usernamePlaceholder')}
               required
             />
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>Email</label>
+            <label style={styles.label}>{t('auth.email')}</label>
             <input
               style={styles.input}
               type="email"
@@ -69,38 +71,38 @@ export default function RegisterPage() {
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>Password</label>
+            <label style={styles.label}>{t('auth.password')}</label>
             <input
               style={styles.input}
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Min. 8 characters"
+              placeholder={t('auth.passwordPlaceholder')}
               required
             />
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>Beta code</label>
+            <label style={styles.label}>{t('auth.betaCode')}</label>
             <input
               style={styles.input}
               type="text"
               value={inviteCode}
               onChange={e => setInviteCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
-              placeholder="8-digit code"
+              placeholder={t('auth.betaCodePlaceholder')}
               maxLength={8}
               required
             />
           </div>
 
           <button style={styles.button} type="submit" disabled={loading}>
-            {loading ? 'Creating account...' : 'Create account'}
+            {loading ? t('auth.registering') : t('auth.register')}
           </button>
         </form>
 
         <p style={styles.footer}>
-          Already have an account?{' '}
-          <Link to="/login">Sign in</Link>
+          {t('auth.alreadyAccount')}{' '}
+          <Link to="/login">{t('auth.login')}</Link>
         </p>
       </div>
     </div>

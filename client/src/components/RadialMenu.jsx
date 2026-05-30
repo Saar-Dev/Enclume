@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 // ─── RadialMenu ────────────────────────────────────────────────────────────────
 // Menu radial SVG positionné en fixed sur le canvas.
@@ -37,6 +38,7 @@ export default function RadialMenu({
   actorToken = null,
   entity = null,
 }) {
+  const { t } = useTranslation()
   const menuRef = useRef(null)
   const [hoveredIdx, setHoveredIdx] = useState(null)
   const [closing, setClosing] = useState(false)
@@ -254,7 +256,7 @@ export default function RadialMenu({
                 textTransform: 'uppercase',
               }}
             >
-              {truncate(slice.action_label, 9)}
+              {truncate(slice.id === '__gm_config__' ? t('radialMenu.gmModify') : slice.action_label, 9)}
             </text>
           )
         })}

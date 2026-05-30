@@ -40,19 +40,19 @@ export default function LoginPage() {
 
     <div className="login-header">
       <h1 className="login-title">Enclume</h1>
-      <p className="login-subtitle">Virtual Tabletop</p>
+      <p className="login-subtitle">{t('auth.subtitle')}</p>
     </div>
 
     {error && <div className="login-error">{error}</div>}
 
     <form onSubmit={handleSubmit} className="login-form">
       <div className="login-field">
-        <label>Email</label>
+        <label>{t('auth.email')}</label>
         <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
       </div>
 
       <div className="login-field">
-        <label>Password</label>
+        <label>{t('auth.password')}</label>
         <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
       </div>
 

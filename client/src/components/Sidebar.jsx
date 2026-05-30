@@ -693,13 +693,13 @@ export default function Sidebar({
               style={{ ...styles.editorTab, ...(activeEditorTab === 'voxel' ? styles.editorTabActive : {}) }}
               onClick={() => onEditorTabChange?.('voxel')}
             >
-              Voxels
+              {t('sidebar.editorTabVoxels')}
             </button>
             <button
               style={{ ...styles.editorTab, ...(activeEditorTab === 'entity' ? styles.editorTabActive : {}) }}
               onClick={() => onEditorTabChange?.('entity')}
             >
-              Entités
+              {t('sidebar.editorTabEntities')}
             </button>
           </div>
 
@@ -707,7 +707,7 @@ export default function Sidebar({
           {activeEditorTab === 'voxel' && (
             <>
               <div style={{ ...styles.paletteTitle, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
-                <span>Textures</span>
+                <span>{t('sidebar.paletteTextures')}</span>
                 {activeMaterial?.geo && (
                   <span style={{ color: '#5b8dee', lineHeight: 0 }}>
                     <GeometryIcon geometry={activeMaterial.geo} size={12} />
@@ -715,14 +715,14 @@ export default function Sidebar({
                 )}
               </div>
               {availableBlocks.length === 0 && (
-                <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>Chargement…</p>
+                <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>{t('common.loading')}</p>
               )}
               {(() => {
                 const groups = {}
                 for (const block of availableBlocks) {
                   if (block.deprecated) continue
                   const key = block.category_id || '__divers__'
-                  if (!groups[key]) groups[key] = { label: block.category_label || 'Divers', blocks: [] }
+                  if (!groups[key]) groups[key] = { label: block.category_label || t('sidebar.categoryFallback'), blocks: [] }
                   groups[key].blocks.push(block)
                 }
                 return Object.entries(groups).map(([catKey, group]) => (
@@ -763,10 +763,10 @@ export default function Sidebar({
             const bpList = Object.values(blueprints).filter(bp => !bp.deprecated)
             return (
               <div style={{ marginTop: '6px' }}>
-                <div style={styles.paletteTitle}>Éléments interactifs</div>
+                <div style={styles.paletteTitle}>{t('sidebar.paletteEntities')}</div>
                 {bpList.length === 0 && (
                   <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>
-                    Aucun blueprint disponible.
+                    {t('sidebar.noBlueprints')}
                   </p>
                 )}
                 {bpList.map(bp => {
@@ -916,8 +916,8 @@ export default function Sidebar({
                           </span>
                           <span style={{ fontSize: 10, color: '#456575' }}>/ {msg.threshold}</span>
                           <span style={msg.isSuccess ? styles.badgeCritSuccess : styles.badgeCritFail}>
-                            {msg.isSuccess ? 'Succès' : 'Échec'}
-                            {msg.isCriticalSuccess ? ' critique !' : msg.isCriticalFail ? ' fumble !' : ''}
+                            {msg.isSuccess ? t('sidebar.macroSuccess') : t('sidebar.macroFail')}
+                            {msg.isCriticalSuccess ? ` ${t('sidebar.macroCritical')}` : msg.isCriticalFail ? ` ${t('sidebar.macroFumble')}` : ''}
                           </span>
                         </div>
                       </div>

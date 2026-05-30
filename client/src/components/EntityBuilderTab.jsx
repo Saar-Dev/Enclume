@@ -5,24 +5,19 @@ import api from '../lib/api'
 import { loadVoxelTextures } from '../lib/voxelTextures'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
-// Faces entité — 6 faces nommées (pas de face 'all' — les entités n'ont pas de fallback principal)
+// Faces entité — labels via fr.json builder.faces.*
 const FACE_NAMES = ['top', 'bottom', 'north', 'south', 'east', 'west']
-const FACE_LABELS = {
-  top: 'Dessus', bottom: 'Dessous',
-  north: 'Nord', south: 'Sud',
-  east: 'Est', west: 'Ouest',
-}
 
 const EMPTY_FORM = {
   label: '',
-  appearance: 'voxel',   // 'voxel' | 'glb'
+  appearance: 'voxel',
   glb_url: '',
   width: 1,
   height: 1,
   depth: 1,
-  faces: {},             // { faceName: "uuid.png" } — chemins PNG relatifs au pack
-  states: [],            // [{ id, name, opacity, face_overrides: { faceName: "uuid.png"|null } }]
-  interactions: [],      // [{ id, type, ...champs selon type }] — type: 'skillcheck'|'displacement'
+  faces: {},
+  states: [],
+  interactions: [],
 }
 
 // ─── Aperçu 3D ────────────────────────────────────────────────────────────────
@@ -31,9 +26,7 @@ function RotatingEntity({ textureMaterials, width, height, depth }) {
   const w = width || 1
   const h = height || 1
   const d = depth || 1
-  // Ordre faces BoxGeometry P32 : east(0), west(1), top(2), bottom(3), south(4), north(5)
   const FACE_ORDER_3D = ['east', 'west', 'top', 'bottom', 'south', 'north']
-  const FACE_NAMES_3D = ['east', 'west', 'top', 'bottom', 'south', 'north']
 
   useFrame((_, delta) => {
     if (groupRef.current) groupRef.current.rotation.y += delta * 0.8
@@ -54,6 +47,7 @@ function RotatingEntity({ textureMaterials, width, height, depth }) {
 }
 
 function EntityPreview({ faces, packId, width, height, depth }) {
+  const { t } = useTranslation()
   const [materials, setMaterials] = useState(null)
 
   useEffect(() => {
@@ -66,7 +60,7 @@ function EntityPreview({ faces, packId, width, height, depth }) {
   if (!materials) {
     return (
       <div style={S.previewPlaceholder}>
-        <span style={S.muted}>Aperçu</span>
+        <span style={S.muted}>{t('builder.preview')}</span>
       </div>
     )
   }
@@ -87,13 +81,6 @@ function EntityPreview({ faces, packId, width, height, depth }) {
 }
 
 // ─── EntityBuilderTab ─────────────────────────────────────────────────────────
-// Props :
-//   selectedPack   : { id, name, label, tile_size, created_by }
-//   packDetail     : { pack, categories, textures }
-//   setPacks       : setter shell
-//   packFiles      : fichiers PNG bruts du pack — source des faces
-//   isOwner        : boolean
-//   onCountChange  : callback(n) — notifie WorkshopPage du nombre de blueprints
 export default function EntityBuilderTab({
   selectedPack,
   packDetail,
@@ -106,24 +93,21 @@ export default function EntityBuilderTab({
 
   const [blueprints, setBlueprints] = useState([])
   const [loadingBp, setLoadingBp] = useState(false)
-  const [editingBp, setEditingBp] = useState(null) // null | 'new' | objet blueprint
+  const [editingBp, setEditingBp] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [bpError, setBpError] = useState(null)
 
-  // Menu déroulant skill_id — chargé une seule fois
   const [skills, setSkills] = useState([])
   useEffect(() => {
     api.get('/char-ref/skills')
       .then(res => setSkills(res.data.skills || []))
-      .catch(() => {}) // non bloquant
+      .catch(() => {})
   }, [])
 
-  // pickerFace : { section: 'base'|'state', faceName, stateIdx? } | null
   const [pickerFace, setPickerFace] = useState(null)
   const [stateWarn, setStateWarn] = useState(null)
 
-  // Reset au changement de pack
   useEffect(() => { setEditingBp(null); setForm(EMPTY_FORM) }, [selectedPack?.id])
 
   // ─── Chargement blueprints ────────────────────────────────────────────────
@@ -134,9 +118,9 @@ export default function EntityBuilderTab({
       const res = await api.get(`/entity-blueprints/all?pack_id=${selectedPack.id}`)
       setBlueprints(res.data.blueprints)
       onCountChange?.(res.data.blueprints.length)
-    } catch { setBpError('Erreur lors du chargement') }
+    } catch { setBpError(t('builder.errorLoad')) }
     finally { setLoadingBp(false) }
-  }, [selectedPack, onCountChange])
+  }, [selectedPack, onCountChange, t])
 
   useEffect(() => { loadBlueprints() }, [loadBlueprints])
 
@@ -162,8 +146,6 @@ export default function EntityBuilderTab({
         opacity:      s.visual_override?.opacity ?? 1.0,
         face_overrides: { ...(s.visual_override?.face_overrides || {}) },
       })),
-      // Normalisation interactions : déduire `type` depuis `move_type` legacy,
-      // corriger les nullables qui feraient crasher les selects React (value={null} interdit)
       interactions: (bp.interactions || []).map(i => {
         const isDisplacement = i.type === 'displacement' || i.move_type === 'displacement'
         if (isDisplacement) {
@@ -177,13 +159,12 @@ export default function EntityBuilderTab({
             required_state_ids: i.required_state_ids || [],
           }
         }
-        // SkillCheck — legacy ou explicite
         return {
           id:                 i.id            || `inter_${Date.now()}`,
           type:               'skillcheck',
           action_label:       i.action_label  || '',
-          skill_id:           i.skill_id      || '',   // '' plutôt que null — évite value={null}
-          attribute_id:       i.attribute_id  || '',   // '' plutôt que null
+          skill_id:           i.skill_id      || '',
+          attribute_id:       i.attribute_id  || '',
           difficulty_dc:      i.difficulty_dc ?? 0,
           target_state_id:    i.target_state_id ?? 0,
           range:              i.range         ?? 1.5,
@@ -227,12 +208,12 @@ export default function EntityBuilderTab({
         (inter.required_state_ids || []).includes(stateId) || inter.target_state_id === stateId
       )
       if (referenced) {
-        setStateWarn(`L'état "${prev.states[idx].name || stateId}" est référencé dans une interaction.`)
+        setStateWarn(t('builder.stateReferenced', { name: prev.states[idx].name || stateId }))
         return prev
       }
       return { ...prev, states: prev.states.filter((_, i) => i !== idx) }
     })
-  }, [])
+  }, [t])
 
   // ─── Face overrides états ─────────────────────────────────────────────────
   const handlePickFaceOverride = useCallback((stateIdx, faceName, filePath) => {
@@ -261,7 +242,7 @@ export default function EntityBuilderTab({
       ...prev,
       interactions: [...prev.interactions, {
         id:                 `inter_${Date.now()}`,
-        type:               'skillcheck',   // défaut — le GM peut changer vers 'displacement'
+        type:               'skillcheck',
         action_label:       '',
         skill_id:           '',
         attribute_id:       '',
@@ -301,7 +282,7 @@ export default function EntityBuilderTab({
 
   // ─── Sauvegarde ───────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
-    if (!form.label.trim()) { setBpError('Un nom est requis'); return }
+    if (!form.label.trim()) { setBpError(t('builder.errorNameRequired')); return }
     setSaving(true); setBpError(null)
     try {
       const geometry = {
@@ -321,18 +302,17 @@ export default function EntityBuilderTab({
             id:                 inter.id,
             type:               'displacement',
             action_label:       'Déplacer',           // fixe — jamais configurable
-            move_type:          'displacement',        // rétrocompatibilité handler serveur
+            move_type:          'displacement',
             attribute_id:       inter.attribute_id || 'FOR',
             skill_id:           null,
             difficulty_dc:      Number(inter.difficulty_dc),
-            target_state_id:    null,                  // déplacement = pas de changement d'état
+            target_state_id:    null,
             range:              Number(inter.range),
             required_state_ids: inter.required_state_ids,
             dmax_override:      (inter.dmax_override !== null && inter.dmax_override !== '')
               ? Number(inter.dmax_override) : null,
           }
         }
-        // SkillCheck
         return {
           id:                 inter.id,
           type:               'skillcheck',
@@ -368,7 +348,7 @@ export default function EntityBuilderTab({
     } catch (err) {
       setBpError(err.response?.data?.error || t('common.error'))
     } finally { setSaving(false) }
-  }, [form, editingBp, selectedPack, t])
+  }, [form, editingBp, selectedPack, blueprints, onCountChange, t])
 
   // ─── Dépréciation ─────────────────────────────────────────────────────────
   const handleDeprecate = useCallback(async (bp) => {
@@ -415,7 +395,7 @@ export default function EntityBuilderTab({
       setDeleteConfirm(null)
     } catch (err) {
       setBpError(err.response?.status === 409
-        ? 'Ce blueprint est utilisé sur des cartes — utilisez Désactiver.'
+        ? t('builder.errorBpInUse')
         : (err.response?.data?.error || t('common.error'))
       )
       setDeleteConfirm(null)
@@ -445,10 +425,10 @@ export default function EntityBuilderTab({
       <div style={S.voxelList}>
         {isOwner && (
           <button style={{ ...S.btnPrimary, marginBottom: '8px', fontSize: '12px' }} onClick={startNew}>
-            + Nouvel élément
+            {t('builder.newEntity')}
           </button>
         )}
-        {blueprints.length === 0 && <p style={S.muted}>Aucun élément interactif</p>}
+        {blueprints.length === 0 && <p style={S.muted}>{t('builder.noEntities')}</p>}
         {blueprints.map(bp => {
           const isActive = editingBp && editingBp !== 'new' && editingBp.id === bp.id
           return (
@@ -458,9 +438,9 @@ export default function EntityBuilderTab({
             >
               <div style={S.voxelItemInfo}>
                 <span style={S.voxelItemLabel}>{bp.label}</span>
-                {bp.deprecated && <span style={S.deprecatedBadge}>Désactivé</span>}
+                {bp.deprecated && <span style={S.deprecatedBadge}>{t('builder.deprecated')}</span>}
                 <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
-                  {bp.glb_url ? 'GLB' : 'Voxel'} · {(bp.states || []).length} états
+                  {bp.glb_url ? 'GLB' : 'Voxel'} · {(bp.states || []).length} {t('builder.statesCount')}
                 </span>
               </div>
             </div>
@@ -472,7 +452,7 @@ export default function EntityBuilderTab({
       <div style={S.builder}>
         {!editingBp && (
           <div style={S.builderEmpty}>
-            <p style={S.muted}>{isOwner ? 'Cliquez sur un élément pour le modifier' : 'Sélectionnez un élément'}</p>
+            <p style={S.muted}>{isOwner ? t('builder.clickToEditEntity') : t('builder.selectEntity')}</p>
           </div>
         )}
 
@@ -484,17 +464,17 @@ export default function EntityBuilderTab({
 
             {/* ── Nom ────────────────────────────────────────────────────── */}
             <div style={S.fieldGroup}>
-              <label style={S.fieldLabel}>Nom</label>
+              <label style={S.fieldLabel}>{t('builder.fieldName')}</label>
               <input style={S.input} value={form.label}
                 onChange={e => setForm(p => ({ ...p, label: e.target.value }))}
-                placeholder="ex: Porte de sas" disabled={!isOwner} />
+                placeholder={t('builder.placeholderEntityName')} disabled={!isOwner} />
             </div>
 
             {/* ── Dimensions ─────────────────────────────────────────────── */}
             <div style={{ display: 'flex', gap: '12px' }}>
-              {[{ field: 'width', label: 'Largeur' }, { field: 'height', label: 'Hauteur' }, { field: 'depth', label: 'Profondeur' }].map(({ field, label }) => (
+              {[{ field: 'width', labelKey: 'builder.width' }, { field: 'height', labelKey: 'builder.height' }, { field: 'depth', labelKey: 'builder.depth' }].map(({ field, labelKey }) => (
                 <div key={field} style={{ ...S.fieldGroup, flex: 1 }}>
-                  <label style={S.fieldLabel}>{label}</label>
+                  <label style={S.fieldLabel}>{t(labelKey)}</label>
                   <input type="number" min="1" max="10" step="1" style={S.input}
                     value={form[field]}
                     onChange={e => setForm(p => ({ ...p, [field]: Number(e.target.value) || 1 }))}
@@ -505,15 +485,15 @@ export default function EntityBuilderTab({
 
             {/* ── Apparence ──────────────────────────────────────────────── */}
             <div style={S.fieldGroup}>
-              <label style={S.fieldLabel}>Apparence</label>
+              <label style={S.fieldLabel}>{t('builder.fieldAppearance')}</label>
               <div style={{ display: 'flex', gap: '16px' }}>
-                {[{ value: 'voxel', label: 'Voxel (textures)' }, { value: 'glb', label: 'Modèle GLB' }].map(opt => (
+                {[{ value: 'voxel', labelKey: 'builder.appearanceVoxel' }, { value: 'glb', labelKey: 'builder.appearanceGlb' }].map(opt => (
                   <label key={opt.value} style={{ ...S.geoRow, cursor: isOwner ? 'pointer' : 'default' }}>
                     <input type="radio" name="appearance"
                       checked={form.appearance === opt.value}
                       onChange={() => isOwner && setForm(p => ({ ...p, appearance: opt.value }))}
                       disabled={!isOwner} style={S.checkbox} />
-                    <span style={S.geoLabel}>{opt.label}</span>
+                    <span style={S.geoLabel}>{t(opt.labelKey)}</span>
                   </label>
                 ))}
               </div>
@@ -521,29 +501,28 @@ export default function EntityBuilderTab({
 
             {form.appearance === 'glb' && (
               <div style={S.fieldGroup}>
-                <label style={S.fieldLabel}>Modèle GLB</label>
+                <label style={S.fieldLabel}>{t('builder.appearanceGlb')}</label>
                 {form.glb_url
-                  ? <p style={S.fieldHint}>Fichier actuel : {form.glb_url.split('?')[0].split('/').pop()}</p>
-                  : <p style={S.fieldHint}>Aucun modèle GLB chargé</p>
+                  ? <p style={S.fieldHint}>{t('builder.glbCurrent')} {form.glb_url.split('?')[0].split('/').pop()}</p>
+                  : <p style={S.fieldHint}>{t('builder.glbNone')}</p>
                 }
                 {isOwner && editingBp !== 'new' && (
                   <label style={{ ...S.btnSecondary, display: 'inline-block', cursor: 'pointer' }}>
-                    {uploadingGlb ? t('common.loading') : form.glb_url ? 'Remplacer le GLB' : 'Uploader un GLB'}
+                    {uploadingGlb ? t('common.loading') : form.glb_url ? t('builder.glbReplace') : t('builder.glbUpload')}
                     <input type="file" accept=".glb,model/gltf-binary,application/octet-stream"
                       style={{ display: 'none' }} onChange={handleUploadGlb} disabled={uploadingGlb} />
                   </label>
                 )}
                 {isOwner && editingBp === 'new' && (
-                  <p style={S.fieldHint}>Sauvegardez d'abord le blueprint, puis uploadez le GLB.</p>
+                  <p style={S.fieldHint}>{t('builder.glbSaveFirst')}</p>
                 )}
               </div>
             )}
 
             {form.appearance === 'voxel' && (
               <div style={S.builderRow}>
-                {/* Grille de faces — même pattern que VoxelBuilderTab */}
                 <div>
-                  <p style={{ ...S.fieldLabel, marginBottom: '8px' }}>Faces (cliquer pour assigner)</p>
+                  <p style={{ ...S.fieldLabel, marginBottom: '8px' }}>{t('builder.facesLabel')}</p>
                   <div style={S.facesGrid}>
                     {FACE_NAMES.map(faceName => {
                       const filePath = form.faces[faceName]
@@ -552,7 +531,7 @@ export default function EntityBuilderTab({
                         : null
                       return (
                         <div key={faceName} style={S.faceSlot}>
-                          <span style={S.faceLabel}>{FACE_LABELS[faceName]}</span>
+                          <span style={S.faceLabel}>{t(`builder.faces.${faceName}`)}</span>
                           <div style={{ ...S.faceBox, ...(isOwner ? S.faceBoxClickable : {}) }}
                             onClick={() => isOwner && setPickerFace({ section: 'base', faceName })}>
                             {url
@@ -568,7 +547,6 @@ export default function EntityBuilderTab({
                   </div>
                 </div>
 
-                {/* Aperçu 3D */}
                 <div style={S.rightCol}>
                   <div style={S.previewBox}>
                     <EntityPreview faces={form.faces} packId={selectedPack.id}
@@ -581,23 +559,23 @@ export default function EntityBuilderTab({
             {/* ── États ──────────────────────────────────────────────────── */}
             <div style={S.sectionBlock}>
               <div style={S.sectionBlockHeader}>
-                <span style={S.fieldLabel}>États</span>
+                <span style={S.fieldLabel}>{t('builder.sectionStates')}</span>
                 {isOwner && (
                   <button style={{ ...S.btnSecondary, fontSize: '11px', padding: '3px 10px' }} onClick={addState}>
-                    + Ajouter un état
+                    {t('builder.addState')}
                   </button>
                 )}
               </div>
-              {form.states.length === 0 && <p style={S.muted}>Aucun état — l'élément sera statique.</p>}
+              {form.states.length === 0 && <p style={S.muted}>{t('builder.noStates')}</p>}
               {form.states.map((state, idx) => (
                 <div key={idx} style={S.stateBlock}>
                   <div style={S.stateHeader}>
                     <input style={{ ...S.input, flex: 1, fontSize: '12px', padding: '4px 8px' }}
                       value={state.name}
                       onChange={e => updateState(idx, 'name', e.target.value)}
-                      placeholder={`État ${idx} — ex: Fermé`} disabled={!isOwner} />
+                      placeholder={t('builder.statePlaceholder', { idx })} disabled={!isOwner} />
                     <label style={{ ...S.geoRow, marginLeft: '8px', marginBottom: 0 }}>
-                      <span style={{ ...S.geoLabel, fontSize: '11px' }}>Opacité</span>
+                      <span style={{ ...S.geoLabel, fontSize: '11px' }}>{t('builder.opacity')}</span>
                       <input type="number" min="0" max="1" step="0.1"
                         style={{ ...S.input, width: '56px', fontSize: '11px', padding: '3px 6px' }}
                         value={state.opacity}
@@ -606,12 +584,11 @@ export default function EntityBuilderTab({
                     </label>
                     {isOwner && (
                       <button style={{ ...S.btnGhost, color: 'var(--color-danger)', fontSize: '11px' }}
-                        onClick={() => removeState(idx)}>Supprimer</button>
+                        onClick={() => removeState(idx)}>{t('common.delete')}</button>
                     )}
                   </div>
-                  {/* Face overrides — même picker que faces de base */}
                   <div style={{ marginTop: '8px' }}>
-                    <p style={{ ...S.fieldHint, marginBottom: '6px' }}>Textures de remplacement pour cet état (optionnel)</p>
+                    <p style={{ ...S.fieldHint, marginBottom: '6px' }}>{t('builder.stateTexturesHint')}</p>
                     <div style={{ ...S.facesGrid, gridTemplateColumns: 'repeat(6, 52px)' }}>
                       {FACE_NAMES.map(faceName => {
                         const overridePath = state.face_overrides[faceName]
@@ -622,7 +599,7 @@ export default function EntityBuilderTab({
                           : null
                         return (
                           <div key={faceName} style={S.faceSlot}>
-                            <span style={S.faceLabel}>{FACE_LABELS[faceName]}</span>
+                            <span style={S.faceLabel}>{t(`builder.faces.${faceName}`)}</span>
                             <div style={{
                               ...S.faceBox, width: '44px', height: '44px',
                               ...(isOwner ? S.faceBoxClickable : {}),
@@ -632,7 +609,7 @@ export default function EntityBuilderTab({
                               {url
                                 ? <img src={url} alt={faceName} style={S.faceImg} />
                                 : isNull
-                                  ? <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>invisible</span>
+                                  ? <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{t('builder.faceInvisible')}</span>
                                   : <span style={S.facePlus}>{isOwner ? '+' : '—'}</span>}
                             </div>
                             {isOwner && hasOverride && (
@@ -651,25 +628,24 @@ export default function EntityBuilderTab({
             {/* ── Interactions ───────────────────────────────────────────── */}
             <div style={S.sectionBlock}>
               <div style={S.sectionBlockHeader}>
-                <span style={S.fieldLabel}>Interactions</span>
+                <span style={S.fieldLabel}>{t('builder.sectionInteractions')}</span>
                 {isOwner && (
                   <button style={{ ...S.btnSecondary, fontSize: '11px', padding: '3px 10px' }} onClick={addInteraction}>
-                    + Ajouter une interaction
+                    {t('builder.addInteraction')}
                   </button>
                 )}
               </div>
-              {form.interactions.length === 0 && <p style={S.muted}>Aucune interaction — l'élément sera décoratif.</p>}
+              {form.interactions.length === 0 && <p style={S.muted}>{t('builder.noInteractions')}</p>}
               {form.states.length === 0 && form.interactions.length > 0 && (
                 <p style={{ ...S.fieldHint, color: 'var(--color-danger)' }}>
-                  ⚠ Définissez d'abord des états avant de configurer les interactions.
+                  {t('builder.interactionsNeedStates')}
                 </p>
               )}
               {form.interactions.map((inter, idx) => (
                 <div key={idx} style={S.stateBlock}>
-                  {/* ── En-tête : type + supprimer ───────────────────────── */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ ...S.fieldLabel, fontSize: '11px' }}>Interaction {idx + 1}</span>
+                      <span style={{ ...S.fieldLabel, fontSize: '11px' }}>{t('builder.interactionLabel', { n: idx + 1 })}</span>
                       <select
                         style={{ ...S.input, fontSize: '11px', width: 'auto' }}
                         value={inter.type || 'skillcheck'}
@@ -706,123 +682,121 @@ export default function EntityBuilderTab({
                           }))
                         }}
                         disabled={!isOwner}>
-                        <option value="skillcheck">SkillCheck</option>
-                        <option value="displacement">Déplacement</option>
+                        <option value="skillcheck">{t('builder.typeSkillcheck')}</option>
+                        <option value="displacement">{t('builder.typeDisplacement')}</option>
                       </select>
                     </div>
                     {isOwner && (
                       <button style={{ ...S.btnGhost, color: 'var(--color-danger)', fontSize: '11px' }}
-                        onClick={() => removeInteraction(idx)}>Supprimer</button>
+                        onClick={() => removeInteraction(idx)}>{t('common.delete')}</button>
                     )}
                   </div>
 
-                  {/* ── Champs SkillCheck ─────────────────────────────────── */}
                   {(inter.type === 'skillcheck' || !inter.type) && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                       <div style={{ ...S.fieldGroup, gridColumn: '1 / -1' }}>
-                        <label style={S.fieldHint}>Label (affiché au joueur)</label>
+                        <label style={S.fieldHint}>{t('builder.skillcheckActionLabel')}</label>
                         <input style={{ ...S.input, fontSize: '11px' }}
                           value={inter.action_label || ''}
                           onChange={e => updateInteraction(idx, 'action_label', e.target.value)}
-                          placeholder="ex: Forcer la porte, Examiner, Pirater…"
+                          placeholder={t('builder.placeholderActionLabel')}
                           disabled={!isOwner} />
                       </div>
                       <div style={S.fieldGroup}>
-                        <label style={S.fieldHint}>Compétence requise</label>
+                        <label style={S.fieldHint}>{t('builder.fieldSkill')}</label>
                         <select style={{ ...S.input, fontSize: '11px' }}
                           value={inter.skill_id || ''}
                           onChange={e => updateInteraction(idx, 'skill_id', e.target.value)}
                           disabled={!isOwner}>
-                          <option value="">— Aucune —</option>
+                          <option value="">{t('builder.skillNone')}</option>
                           {skills.map(s => (
                             <option key={s.id} value={s.id}>{s.label}</option>
                           ))}
                         </select>
                       </div>
                       <div style={S.fieldGroup}>
-                        <label style={S.fieldHint}>Attribut requis</label>
-                        <p style={{ ...S.fieldHint, color: 'var(--text-muted)', marginBottom: '2px' }}>Prioritaire sur la compétence</p>
+                        <label style={S.fieldHint}>{t('builder.fieldAttribute')}</label>
+                        <p style={{ ...S.fieldHint, color: 'var(--text-muted)', marginBottom: '2px' }}>{t('builder.attributeHint')}</p>
                         <select style={{ ...S.input, fontSize: '11px' }}
                           value={inter.attribute_id || ''}
                           onChange={e => updateInteraction(idx, 'attribute_id', e.target.value)}
                           disabled={!isOwner}>
-                          <option value="">— Aucun —</option>
-                          <option value="FOR">Force (FOR)</option>
-                          <option value="CON">Constitution (CON)</option>
-                          <option value="COO">Coordination (COO)</option>
-                          <option value="ADA">Adaptation (ADA)</option>
-                          <option value="PER">Perception (PER)</option>
-                          <option value="INT">Intelligence (INT)</option>
-                          <option value="VOL">Volonté (VOL)</option>
-                          <option value="PRE">Présence (PRE)</option>
+                          <option value="">{t('builder.attributeNone')}</option>
+                          <option value="FOR">{t('charSheet.attr.FOR')} (FOR)</option>
+                          <option value="CON">{t('charSheet.attr.CON')} (CON)</option>
+                          <option value="COO">{t('charSheet.attr.COO')} (COO)</option>
+                          <option value="ADA">{t('charSheet.attr.ADA')} (ADA)</option>
+                          <option value="PER">{t('charSheet.attr.PER')} (PER)</option>
+                          <option value="INT">{t('charSheet.attr.INT')} (INT)</option>
+                          <option value="VOL">{t('charSheet.attr.VOL')} (VOL)</option>
+                          <option value="PRE">{t('charSheet.attr.PRE')} (PRE)</option>
                         </select>
                       </div>
                       <div style={S.fieldGroup}>
-                        <label style={S.fieldHint}>Difficulté</label>
+                        <label style={S.fieldHint}>{t('builder.fieldDifficulty')}</label>
                         <input type="number" style={{ ...S.input, fontSize: '11px' }}
                           value={inter.difficulty_dc ?? 0}
                           onChange={e => updateInteraction(idx, 'difficulty_dc', Number(e.target.value))}
                           disabled={!isOwner} />
                       </div>
                       <div style={S.fieldGroup}>
-                        <label style={S.fieldHint}>Portée (cases)</label>
+                        <label style={S.fieldHint}>{t('builder.fieldRange')}</label>
                         <input type="number" step="0.5" style={{ ...S.input, fontSize: '11px' }}
                           value={inter.range ?? 1.5}
                           onChange={e => updateInteraction(idx, 'range', Number(e.target.value))}
                           disabled={!isOwner} />
                       </div>
                       <div style={S.fieldGroup}>
-                        <label style={S.fieldHint}>État cible (succès)</label>
+                        <label style={S.fieldHint}>{t('builder.fieldTargetState')}</label>
                         <select style={{ ...S.input, fontSize: '11px' }}
                           value={inter.target_state_id ?? 0}
                           onChange={e => updateInteraction(idx, 'target_state_id', Number(e.target.value))}
                           disabled={!isOwner}>
                           {form.states.map(s => (
-                            <option key={s.id} value={s.id}>{s.name || `État ${s.id}`}</option>
+                            <option key={s.id} value={s.id}>{s.name || t('builder.stateFallbackName', { id: s.id })}</option>
                           ))}
                         </select>
                       </div>
                     </div>
                   )}
 
-                  {/* ── Champs Déplacement ────────────────────────────────── */}
                   {inter.type === 'displacement' && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                       <div style={S.fieldGroup}>
-                        <label style={S.fieldHint}>Attribut lié</label>
+                        <label style={S.fieldHint}>{t('builder.fieldAttributeLinked')}</label>
                         <select style={{ ...S.input, fontSize: '11px' }}
                           value={inter.attribute_id || 'FOR'}
                           onChange={e => updateInteraction(idx, 'attribute_id', e.target.value)}
                           disabled={!isOwner}>
-                          <option value="FOR">Force (FOR)</option>
-                          <option value="CON">Constitution (CON)</option>
-                          <option value="COO">Coordination (COO)</option>
-                          <option value="ADA">Adaptation (ADA)</option>
-                          <option value="PER">Perception (PER)</option>
-                          <option value="INT">Intelligence (INT)</option>
-                          <option value="VOL">Volonté (VOL)</option>
-                          <option value="PRE">Présence (PRE)</option>
+                          <option value="FOR">{t('charSheet.attr.FOR')} (FOR)</option>
+                          <option value="CON">{t('charSheet.attr.CON')} (CON)</option>
+                          <option value="COO">{t('charSheet.attr.COO')} (COO)</option>
+                          <option value="ADA">{t('charSheet.attr.ADA')} (ADA)</option>
+                          <option value="PER">{t('charSheet.attr.PER')} (PER)</option>
+                          <option value="INT">{t('charSheet.attr.INT')} (INT)</option>
+                          <option value="VOL">{t('charSheet.attr.VOL')} (VOL)</option>
+                          <option value="PRE">{t('charSheet.attr.PRE')} (PRE)</option>
                         </select>
                       </div>
                       <div style={S.fieldGroup}>
-                        <label style={S.fieldHint}>Difficulté</label>
+                        <label style={S.fieldHint}>{t('builder.fieldDifficulty')}</label>
                         <input type="number" style={{ ...S.input, fontSize: '11px' }}
                           value={inter.difficulty_dc ?? 0}
                           onChange={e => updateInteraction(idx, 'difficulty_dc', Number(e.target.value))}
                           disabled={!isOwner} />
                       </div>
                       <div style={S.fieldGroup}>
-                        <label style={S.fieldHint}>Déplacement max (cases)</label>
+                        <label style={S.fieldHint}>{t('builder.fieldDmaxOverride')}</label>
                         <input type="number" min="1" max="5" step="1"
                           style={{ ...S.input, fontSize: '11px' }}
                           value={inter.dmax_override ?? ''}
                           onChange={e => updateInteraction(idx, 'dmax_override',
                             e.target.value === '' ? null : Number(e.target.value))}
-                          placeholder="Illimité"
+                          placeholder={t('builder.placeholderUnlimited')}
                           disabled={!isOwner} />
                       </div>
                       <div style={S.fieldGroup}>
-                        <label style={S.fieldHint}>Portée (cases)</label>
+                        <label style={S.fieldHint}>{t('builder.fieldRange')}</label>
                         <input type="number" step="0.5" style={{ ...S.input, fontSize: '11px' }}
                           value={inter.range ?? 1}
                           onChange={e => updateInteraction(idx, 'range', Number(e.target.value))}
@@ -831,10 +805,9 @@ export default function EntityBuilderTab({
                     </div>
                   )}
 
-                  {/* ── États disponibles — commun aux deux types ─────────── */}
                   {form.states.length > 0 && (
                     <div style={{ marginTop: '10px' }}>
-                      <p style={S.fieldHint}>États depuis lesquels disponible</p>
+                      <p style={S.fieldHint}>{t('builder.statesRequired')}</p>
                       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '4px' }}>
                         {form.states.map(s => (
                           <label key={s.id} style={{ ...S.geoRow, marginBottom: 0 }}>
@@ -842,14 +815,13 @@ export default function EntityBuilderTab({
                               checked={(inter.required_state_ids || []).includes(s.id)}
                               onChange={() => isOwner && toggleRequiredState(idx, s.id)}
                               disabled={!isOwner} style={S.checkbox} />
-                            <span style={{ ...S.geoLabel, fontSize: '11px' }}>{s.name || `État ${s.id}`}</span>
+                            <span style={{ ...S.geoLabel, fontSize: '11px' }}>{s.name || t('builder.stateFallbackName', { id: s.id })}</span>
                           </label>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* ── Identifiant technique — visible en bas, non modifiable ── */}
                   <p style={{ ...S.fieldHint, color: 'var(--text-muted)', marginTop: '8px', fontFamily: 'monospace', fontSize: '10px' }}>
                     id : {inter.id}
                   </p>
@@ -864,7 +836,7 @@ export default function EntityBuilderTab({
                 {editingBp !== 'new' && (
                   <>
                     <button style={S.btnSecondary} onClick={() => handleDeprecate(editingBp)}>
-                      {editingBp.deprecated ? 'Réactiver' : 'Désactiver'}
+                      {editingBp.deprecated ? t('texturePacks.textureRestore') : t('texturePacks.textureDeprecate')}
                     </button>
                     <button style={S.btnDanger} onClick={() => setDeleteConfirm(editingBp.id)}>
                       {t('common.delete')}
@@ -881,16 +853,16 @@ export default function EntityBuilderTab({
         )}
       </div>
 
-      {/* ── Picker PNG — identique VoxelBuilderTab ────────────────────────── */}
+      {/* ── Picker PNG ────────────────────────────────────────────────────── */}
       {pickerFace && (
         <div style={S.overlay} onClick={() => setPickerFace(null)}>
           <div style={S.pickerModal} onClick={e => e.stopPropagation()}>
             <div style={S.pickerHeader}>
-              <span style={S.pickerTitle}>Choisir — {FACE_LABELS[pickerFace.faceName]}</span>
+              <span style={S.pickerTitle}>{t('builder.pickerTitle', { face: t(`builder.faces.${pickerFace.faceName}`) })}</span>
               <button style={S.btnGhost} onClick={() => setPickerFace(null)}>✕</button>
             </div>
             {packFiles.length === 0
-              ? <p style={S.muted}>Aucun PNG — ajoutez d'abord des fichiers dans l'onglet "Textures"</p>
+              ? <p style={S.muted}>{t('builder.noPngEntities')}</p>
               : (
                 <div style={S.pickerGrid}>
                   {packFiles.map(file => {
@@ -916,8 +888,8 @@ export default function EntityBuilderTab({
       {deleteConfirm && (
         <div style={S.overlay} onClick={() => setDeleteConfirm(null)}>
           <div style={S.modal} onClick={e => e.stopPropagation()}>
-            <h2 style={S.modalTitle}>Supprimer ce blueprint ?</h2>
-            <p style={S.modalText}>Cette action est irréversible. Si des instances existent sur des cartes, la suppression sera bloquée.</p>
+            <h2 style={S.modalTitle}>{t('builder.deleteTitle')}</h2>
+            <p style={S.modalText}>{t('builder.deleteText')}</p>
             <div style={S.modalFooter}>
               <button style={S.btnGhost} onClick={() => setDeleteConfirm(null)}>{t('common.cancel')}</button>
               <button style={S.btnDanger} onClick={() => handleDelete(deleteConfirm)} disabled={deleting}>
