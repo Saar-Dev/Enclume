@@ -239,11 +239,15 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
     catch { return [] }
   })
   const [history,     setHistory] = useState([])
-  const [secret,      setSecret]  = useState(false)
-  const [editPresets, setEdit]    = useState(false)
-  const [showHistory, setHist]    = useState(false)
+  const [secret,        setSecret]  = useState(false)
+  const [editPresets,   setEdit]    = useState(false)
+  const [showHistory,   setHist]    = useState(false)
+  const [showSaveForm,  setSaveForm] = useState(false)
+  const [presetName,    setPresetName] = useState('')
 
-  const dragState = useRef(null)
+  const dragState          = useRef(null)
+  const nameInputRef       = useRef(null)
+  const pendingFormulaRef  = useRef(null)
 
   // ── Persist presets ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -351,13 +355,33 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
     emitRoll(formulaStr)
   }, [emitRoll])
 
+  // ── Autofocus à l'ouverture du formulaire ─────────────────────────────────
+  useEffect(() => {
+    if (showSaveForm) nameInputRef.current?.focus()
+  }, [showSaveForm])
+
   // ── Favoris ────────────────────────────────────────────────────────────────
-  const savePreset = useCallback(() => {
+  const openSaveForm = useCallback(() => {
     if (isEmpty(formula)) return
-    const label = prompt('Nom du favori :', formulaDisplay(formula))
-    if (!label) return
-    setPresets(p => [...p, { id: 'p' + Date.now(), label, formula: { ...formula } }])
+    pendingFormulaRef.current = { ...formula }
+    setPresetName(formulaDisplay(formula))
+    setSaveForm(true)
   }, [formula])
+
+  const confirmSavePreset = useCallback(() => {
+    const trimmed = presetName.trim()
+    if (!trimmed || !pendingFormulaRef.current) return
+    setPresets(p => [...p, { id: 'p' + Date.now(), label: trimmed, formula: { ...pendingFormulaRef.current } }])
+    setSaveForm(false)
+    setPresetName('')
+    pendingFormulaRef.current = null
+  }, [presetName])
+
+  const cancelSaveForm = useCallback(() => {
+    setSaveForm(false)
+    setPresetName('')
+    pendingFormulaRef.current = null
+  }, [])
 
   const deletePreset = useCallback((id) => {
     setPresets(p => p.filter(x => x.id !== id))
@@ -541,9 +565,35 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
         </div>
 
         {/* ── ENREGISTRER (contextuel) ───────────────────────────────────── */}
-        {!isEmpty(formula) && (
+        {showSaveForm ? (
+          <div style={styles.saveForm}>
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={presetName}
+              onChange={e => setPresetName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter')  confirmSavePreset()
+                if (e.key === 'Escape') cancelSaveForm()
+              }}
+              placeholder="Nom du favori…"
+              style={styles.saveFormInput}
+              maxLength={40}
+            />
+            <button
+              onClick={confirmSavePreset}
+              disabled={!presetName.trim()}
+              style={{ ...styles.saveFormBtn, ...(presetName.trim() ? styles.saveFormBtnOk : styles.saveFormBtnDisabled) }}
+            >
+              OK
+            </button>
+            <button onClick={cancelSaveForm} style={styles.saveFormBtn}>
+              ✕
+            </button>
+          </div>
+        ) : !isEmpty(formula) && (
           <div
-            onClick={savePreset}
+            onClick={openSaveForm}
             style={styles.saveBtn}
             onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
             onMouseLeave={e => { e.currentTarget.style.opacity = '0.75' }}
@@ -756,6 +806,33 @@ const styles = {
     opacity: 0.75, transition: 'opacity 0.12s',
     flexShrink: 0,
     userSelect: 'none',
+  },
+
+  saveForm: {
+    display: 'flex', alignItems: 'center', gap: 4,
+    padding: '5px 10px',
+    background: '#0a0d14', borderBottom: '1px solid #15212e',
+    flexShrink: 0,
+  },
+  saveFormInput: {
+    flex: 1,
+    background: '#040608', border: '1px solid #3a8aaa55',
+    color: '#dde7ee', outline: 'none',
+    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11,
+    padding: '4px 7px',
+  },
+  saveFormBtn: {
+    background: '#0a1018', border: '1px solid #15212e',
+    color: '#7a8a99', cursor: 'pointer',
+    fontFamily: "'Share Tech Mono', monospace", fontSize: 10,
+    padding: '4px 8px', flexShrink: 0,
+    userSelect: 'none',
+  },
+  saveFormBtnOk: {
+    borderColor: '#3a8aaa66', color: '#aaccdd',
+  },
+  saveFormBtnDisabled: {
+    opacity: 0.35, cursor: 'not-allowed',
   },
 
   presetChip: {

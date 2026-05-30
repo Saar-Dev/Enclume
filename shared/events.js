@@ -93,4 +93,8 @@ export const WS = {
   COMBAT_DAMAGE_CONFIRM:         'combat:damage_confirm',          // PJ → serveur : déclenche le calcul (jets serveur)
   COMBAT_DAMAGE_RESULT:          'combat:damage_result',           // serveur → socket tireur PJ : résultats pour affichage fenêtre
   COMBAT_ATTACK_PLAYER_RESULT:   'combat:attack_player_result',    // serveur → socket tireur PJ : résultat jet de toucher
+
+  // Jets favoris — macros compétences (PLAN 13)
+  MACRO_ROLL:        'macro:roll',         // joueur → serveur : exécuter une macro
+  MACRO_ROLL_RESULT: 'macro:roll_result',  // serveur → socket : résultat + message formaté
 }

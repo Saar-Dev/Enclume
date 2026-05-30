@@ -25,6 +25,10 @@
  *   POST   /api/char-sheet/:characterId/wounds       — ajoute une blessure (+ promotion auto)
  *   PUT    /api/char-sheet/:characterId/wounds/:woundId/stabilize — stabilise une blessure
  *   DELETE /api/char-sheet/:characterId/wounds/:woundId — supprime une blessure (guérison)
+ *   GET    /api/char-sheet/:characterId/macros            — liste macros du personnage
+ *   POST   /api/char-sheet/:characterId/macros            — crée une macro (max 10)
+ *   PUT    /api/char-sheet/:characterId/macros/:macroId   — modifie label/sources/modifier/template/sort_order
+ *   DELETE /api/char-sheet/:characterId/macros/:macroId   — supprime une macro
  */
 
 import { Router } from 'express'
@@ -1224,6 +1228,91 @@ router.delete('/:characterId/inventory/:itemId', async (req, res, next) => {
     })
 
     res.json({ deleted: true, itemId })
+  } catch (err) { next(err) }
+})
+
+// ─── GET /api/char-sheet/:characterId/macros ──────────────────────────────────
+router.get(':characterId/macros', async (req, res, next) => {
+  try {
+    const macros = await db('character_macros')
+      .where({ character_id: req.params.characterId })
+      .orderBy('sort_order', 'asc')
+      .orderBy('created_at', 'asc')
+    res.json({ macros })
+  } catch (err) { next(err) }
+})
+
+// ─── POST /api/char-sheet/:characterId/macros ─────────────────────────────────
+router.post(':characterId/macros', async (req, res, next) => {
+  try {
+    const { n } = await db('character_macros')
+      .where({ character_id: req.params.characterId })
+      .count('id as n').first()
+    if (Number(n) >= 10) throw new AppError(400, 'Limite de 10 macros par personnage atteinte')
+
+    const { label, sources, modifier = 0, template } = req.body
+    if (!label?.trim()) throw new AppError(400, 'Le nom de la macro est requis')
+    if (!Array.isArray(sources) || sources.length === 0) throw new AppError(400, 'Au moins une source requise')
+    if (sources.length > 3) throw new AppError(400, 'Maximum 3 sources par macro')
+
+    const VALID_TYPES = new Set(['attribute', 'skill', 'secondary'])
+    for (const s of sources) {
+      if (!VALID_TYPES.has(s.type)) throw new AppError(400, `Type de source invalide : ${s.type}`)
+      if (!s.ref_id)    throw new AppError(400, 'ref_id requis pour chaque source')
+      if (!s.ref_label) throw new AppError(400, 'ref_label requis pour chaque source')
+    }
+    if (modifier < -99 || modifier > 99) throw new AppError(400, 'Modificateur entre −99 et +99')
+
+    const [macro] = await db('character_macros')
+      .insert({
+        character_id: req.params.characterId,
+        label:        label.trim(),
+        sources,
+        modifier,
+        template:     template?.trim() || null,
+        sort_order:   Number(n),
+      })
+      .returning('*')
+
+    res.status(201).json({ macro })
+  } catch (err) { next(err) }
+})
+
+// ─── PUT /api/char-sheet/:characterId/macros/:macroId ────────────────────────
+router.put(':characterId/macros/:macroId', async (req, res, next) => {
+  try {
+    const macro = await db('character_macros')
+      .where({ id: req.params.macroId, character_id: req.params.characterId })
+      .first()
+    if (!macro) throw new AppError(404, 'Macro introuvable')
+
+    const { label, sources, modifier, template, sort_order } = req.body
+    const updates = { updated_at: db.fn.now() }
+    if (label      !== undefined) updates.label      = label.trim()
+    if (sources    !== undefined) updates.sources    = sources
+    if (modifier   !== undefined) updates.modifier   = modifier
+    if (template   !== undefined) updates.template   = template?.trim() || null
+    if (sort_order !== undefined) updates.sort_order = sort_order
+
+    const [updated] = await db('character_macros')
+      .where({ id: req.params.macroId })
+      .update(updates)
+      .returning('*')
+
+    res.json({ macro: updated })
+  } catch (err) { next(err) }
+})
+
+// ─── DELETE /api/char-sheet/:characterId/macros/:macroId ─────────────────────
+router.delete(':characterId/macros/:macroId', async (req, res, next) => {
+  try {
+    const macro = await db('character_macros')
+      .where({ id: req.params.macroId, character_id: req.params.characterId })
+      .first()
+    if (!macro) throw new AppError(404, 'Macro introuvable')
+
+    await db('character_macros').where({ id: req.params.macroId }).del()
+    res.json({ deleted: true, macroId: req.params.macroId })
   } catch (err) { next(err) }
 })
 
