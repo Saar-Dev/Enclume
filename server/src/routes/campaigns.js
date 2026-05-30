@@ -167,7 +167,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // PUT /api/campaigns/:id — modifier une campagne
 router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
-  const { name, status, default_battlemap_id, dice_config } = req.body
+  const { name, status, default_battlemap_id, dice_config, pnj_unlimited_ammo } = req.body
   const updates = {}
   if (name !== undefined) updates.name = name
   if (status !== undefined) updates.status = status
@@ -179,13 +179,18 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
     updates.dice_config = dice_config === null ? null : JSON.stringify(dice_config)
   }
 
+  if (pnj_unlimited_ammo !== undefined) {
+    if (typeof pnj_unlimited_ammo !== 'boolean') throw new AppError(400, 'pnj_unlimited_ammo must be a boolean')
+    updates.pnj_unlimited_ammo = pnj_unlimited_ammo
+  }
+
   // updated_at systématique sur tout PUT
   updates.updated_at = db.fn.now()
 
   const [campaign] = await db('campaigns')
     .where({ id: req.params.id })
     .update(updates)
-    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'created_at', 'updated_at'])
+    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'pnj_unlimited_ammo', 'created_at', 'updated_at'])
   res.json({ campaign })
 })
 

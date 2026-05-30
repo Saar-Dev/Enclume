@@ -766,6 +766,7 @@ async function getItemWithRef(itemId) {
       'ref_equipment.capacity as ref_capacity',
       'ref_equipment.waterproof as ref_waterproof',
       'char_inventory.current_ammo',
+      'char_inventory.ammo_remaining',
       'ref_equipment.caliber as ref_caliber',
       'ref_equipment.damage_h as ref_damage_h',
       'ref_equipment.shock as ref_shock',
@@ -814,6 +815,7 @@ router.get('/:characterId/inventory', async (req, res, next) => {
         'ref_equipment.capacity as ref_capacity',
         'ref_equipment.waterproof as ref_waterproof',
         'char_inventory.current_ammo',
+        'char_inventory.ammo_remaining',
         'ref_equipment.caliber as ref_caliber',
         'ref_equipment.damage_h as ref_damage_h',
         'ref_equipment.shock as ref_shock',
@@ -1192,6 +1194,83 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
     req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, { characterId, item })
 
     res.json({ item })
+  } catch (err) { next(err) }
+})
+
+// ─── POST /api/char-sheet/:characterId/inventory/:itemId/reload ──────────────
+// Recharge une arme : définit current_ammo + ammo_remaining, décrémente l'inventaire munitions.
+// Body : { ammo_item_id: uuid }  ← char_inventory.id de la munition à charger
+router.post('/:characterId/inventory/:itemId/reload', async (req, res, next) => {
+  try {
+    const { characterId, itemId } = req.params
+    const { ammo_item_id } = req.body
+    if (!ammo_item_id) throw new AppError(400, 'ammo_item_id requis')
+
+    // Vérifier l'arme
+    const weapon = await db('char_inventory')
+      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .where({ 'char_inventory.id': itemId, 'char_inventory.character_id': characterId })
+      .select(
+        'char_inventory.id',
+        'char_inventory.equipment_id',
+        'ref_equipment.family as ref_family',
+        'ref_equipment.caliber as ref_caliber',
+        'ref_equipment.ammo_count as ref_ammo_count',
+      )
+      .first()
+    if (!weapon) throw new AppError(404, 'Arme introuvable')
+    if (weapon.ref_family !== 'Armes') throw new AppError(400, 'Cet item n\'est pas une arme')
+    if (!weapon.ref_caliber) throw new AppError(400, 'Cette arme n\'utilise pas de munitions')
+
+    // Vérifier la munition (doit être hors Coffre)
+    const ammoItem = await db('char_inventory')
+      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .where({ 'char_inventory.id': ammo_item_id, 'char_inventory.character_id': characterId })
+      .select(
+        'char_inventory.id',
+        'char_inventory.equipment_id',
+        'char_inventory.quantity',
+        'char_inventory.container',
+        'ref_equipment.caliber as ref_caliber',
+        'ref_equipment.ammo_count as ref_ammo_count',
+      )
+      .first()
+    if (!ammoItem) throw new AppError(404, 'Munition introuvable')
+    if (ammoItem.container === 'Coffre') throw new AppError(400, 'Munition dans le Coffre — non disponible')
+    if (ammoItem.ref_caliber !== weapon.ref_caliber) {
+      throw new AppError(400, `Calibre incompatible — attendu : ${weapon.ref_caliber}`)
+    }
+
+    // Parser ammo_count (ex: "30" ou "30 coups")
+    const parseCount = (s) => { if (!s) return 0; const m = String(s).match(/\d+/); return m ? parseInt(m[0], 10) : 0 }
+    const clipSize   = parseCount(weapon.ref_ammo_count)
+    const loadAmount = clipSize > 0 ? Math.min(clipSize, ammoItem.quantity) : ammoItem.quantity
+
+    await db.transaction(async (trx) => {
+      // Mettre à jour l'arme
+      await trx('char_inventory').where({ id: itemId }).update({
+        current_ammo:   ammoItem.equipment_id,
+        ammo_remaining: loadAmount,
+        updated_at:     db.fn.now(),
+      })
+
+      // Décrémenter ou supprimer la munition
+      if (ammoItem.quantity - loadAmount <= 0) {
+        await trx('char_inventory').where({ id: ammo_item_id }).delete()
+        req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_REMOVED, { characterId, itemId: ammo_item_id })
+      } else {
+        await trx('char_inventory').where({ id: ammo_item_id }).update({
+          quantity:   ammoItem.quantity - loadAmount,
+          updated_at: db.fn.now(),
+        })
+        const updatedAmmo = await getItemWithRef(ammo_item_id)
+        req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, { characterId, item: updatedAmmo })
+      }
+    })
+
+    const updatedWeapon = await getItemWithRef(itemId)
+    req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, { characterId, item: updatedWeapon })
+    res.json({ item: updatedWeapon })
   } catch (err) { next(err) }
 })
 

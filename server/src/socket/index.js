@@ -2420,7 +2420,12 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
       db('char_inventory')
         .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where({ 'char_inventory.id': action.weapon_inv_id })
-        .select('ref_equipment.damage_h as ref_damage_h', 'char_inventory.equipment_id')
+        .select(
+          'ref_equipment.damage_h as ref_damage_h',
+          'char_inventory.equipment_id',
+          'char_inventory.ammo_remaining',
+          'ref_equipment.ammo_count as ref_ammo_count',
+        )
         .first(),
       db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first(),
     ])
@@ -2508,6 +2513,24 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
       seed:              attackSeed,
       timestamp:         new Date().toISOString(),
     })
+
+    // ── Décompte munitions ──────────────────────────────────────────────────────
+    // Balles consommées quel que soit le résultat (touché ou raté).
+    // Skip si ammo_remaining = NULL (arme non initialisée = pas encore suivie).
+    // Skip pour les PNJ si pnj_unlimited_ammo = true (option campagne).
+    if (action.weapon_inv_id && weapon.ammo_remaining !== null && weapon.ammo_remaining !== undefined) {
+      const isPnj = character.type === 'pnj'
+      let skipDecrement = false
+      if (isPnj) {
+        const campaign = await db('campaigns').where({ id: campaignId }).select('pnj_unlimited_ammo').first()
+        skipDecrement = campaign?.pnj_unlimited_ammo ?? true
+      }
+      if (!skipDecrement) {
+        const bulletsFired = action.bullet_count ?? 1
+        const newRemaining = Math.max(0, weapon.ammo_remaining - bulletsFired)
+        await db('char_inventory').where({ id: action.weapon_inv_id }).update({ ammo_remaining: newRemaining })
+      }
+    }
 
     if (isSuccess) {
       // Fetch stats de la cible (commun PJ et PNJ)
