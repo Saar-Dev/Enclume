@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-26 Session 65
+> Dernière mise à jour : 2026-05-30 Session 66
 
 ---
 
@@ -299,6 +299,29 @@ Travaux effectués :
 
 ---
 
+## Session 66 ✅ (2026-05-30)
+
+- Code d'invitation beta `REGISTRATION_CODE` (8 chiffres, `timingSafeEqual`, guard env var) ✅
+- Fenêtres combat draggables : `useDraggable` hook + localStorage + clamp écran (5 fenêtres) ✅
+- DicePanel favoris form inline (remplace `prompt()`) ✅
+- **PLAN 13 — Jets Favoris complet ✅**
+  - Migration 59 : `character_macros` + routes CRUD `/macros` ✅
+  - Handler WS `MACRO_ROLL` : threshold live charStats, critiques Polaris absolus, template {7 vars} ✅
+  - Client : chips ★, exécution socket, chat `MACRO_ROLL_RESULT`, formulaire création 3 dropdowns, preview seuil live ✅
+  - Fix GM : `effectiveCharId`, dropdown personnage cible ✅
+- Piège PC41 documenté : Express 5 routes sans `/` initial → 404 silencieux ✅
+- **Changelog Dashboard ✅**
+  - `client/public/CHANGELOG.md` : source de données (6 versions, format parseable) ✅
+  - `ChangelogPanel.jsx` : panneau rétractable 38↔340px, auto-open localStorage, PCB SVG, tags colorés ✅
+  - `DashboardPage.jsx` : layout height:100vh+flex-col, mount ChangelogPanel ✅
+
+**Prochains chantiers :**
+- Sprint GM-B — Assault PNJ (Mode Minimal) — plan dans JOURNALTEMP.md
+- Sprint 7.5 — Décompte munitions
+- D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, non implémenté côté UI)
+
+---
+
 ## Bugs connus toujours ouverts
 
 ### Bug WebGL — Context Lost au switch play/edit
@@ -330,3 +353,4 @@ Statut : correction prévue si besoin.
 - D10 Html overlay — position=[0,0,0] — ne pas déplacer (PE33)
 - P49 — promotion blessures : always GET /wounds si promoted === true (ne pas ajouter wound localement)
 - PI11 — polarisRound : source unique `shared/polarisUtils.js` — jamais redéfini localement
+- PC41 — Express 5 : routes sans `/` initial → 404 silencieux — toujours `'/:id/foo'`

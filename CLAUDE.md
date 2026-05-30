@@ -118,35 +118,26 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 65 (2026-05-28)
+## État actuel — Session 66 (2026-05-30)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **58 migrations stables** — prochaine : **59**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅
+- **59 migrations stables** — prochaine : **60**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅
 
-**Session 65 — Sprint GM-B Move ✅ CONFIRMÉ :**
-- `shared/polarisUtils.js` : +`DEFAULT_PNJ_ALLURES { lente:4, moyenne:8, rapide:16, max:24 }`
-- `CombatOverlay.jsx` : +`onEnterMoveMode` propagé à CombatGmDeclareWindow
-- `CombatGmDeclareWindow.jsx` : queue séquentielle `moveTick` + `useEffect([moveTick])` AVANT early return, `pendingGmMoves`, `handleStartMoveQueue`, 'move' retiré GM_DISABLED, bouton "Passer", `calcDelta`/`canDeclare`/`handleDeclare` intègrent le move
-- Piège résolu : Rules of Hooks — `useEffect` ne peut pas être après `return null`
-
-**Session 65 — Sprint Pathfinding ✅ CONFIRMÉ :**
-- `client/src/lib/pathfinder.js` (NOUVEAU) : A* Chebyshev + binary min-heap, `findPath/getActionKey/getPathColor`
-- `Canvas3D.jsx` : anneaux → cellules colorées par allure, `handlePointerMove` throttlé par case, `handlePointerUp` lit `currentPathRef`
-- Remplacement complet de l'API `zones[]` par `allures` dans 4 fichiers
-
-**Session 65 — Sprint Raycast ✅ CONFIRMÉ :**
-- `fast-voxel-raycast@0.1.1` : Amanatides/Woo sur `voxelsRef`, décalage normale +0.5 pour case adjacente ouverte
-- Guard GM/joueur : `isVoid && !isGm → return`
-
-**Session 65 — Sprint 7.6 + Sprint GM + Sprint GM-A ✅ CONFIRMÉS :** voir JOURNAL3.md
+**Session 66 ✅ :**
+- Code d'invitation beta `REGISTRATION_CODE` (8 chiffres, `timingSafeEqual`) ✅
+- Fenêtres combat draggables : `useDraggable` hook + localStorage + clamp (5 fenêtres) ✅
+- DicePanel favoris form inline (remplace `prompt()`) ✅
+- PLAN 13 Jets Favoris complet : migration 59, routes CRUD, WS MACRO_ROLL, form création, fix GM ✅
+- Piège PC41 documenté : Express 5 routes sans `/` initial → 404 silencieux
+- Changelog Dashboard : `ChangelogPanel.jsx` + `CHANGELOG.md` + layout DashboardPage ✅
 
 **"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
 
 **Prochain chantier :**
 - Sprint GM-B — Assault PNJ (Mode Minimal) — plan dans JOURNALTEMP.md
 - Sprint 7.5 — Décompte munitions
-- Sprint Waypoints — basse priorité
+- D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, UI non implémentée)
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser.

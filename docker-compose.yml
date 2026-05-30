@@ -23,7 +23,7 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: vttuser
-      MINIO_ROOT_PASSWORD: vttpass123
+      MINIO_ROOT_PASSWORD: ha8ZqKYRpUb52fr!fQ9N
     ports:
       - "9000:9000"
       - "9001:9001"

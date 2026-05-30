@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import api from '../lib/api'
+import ChangelogPanel from '../components/ChangelogPanel'
 
 export default function DashboardPage() {
   const { user, clearUser, setUser } = useAuthStore()
@@ -135,15 +136,19 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* CONTENT */}
-      <div style={styles.content}>
+      {/* BODY */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
 
-        {error && <div style={styles.error}>{error}</div>}
+          {/* CONTENT */}
+          <div style={styles.content}>
 
-        {loading ? (
-          <p style={styles.muted}>{t('common.loading')}</p>
-        ) : (
-          <div className="campaign-grid">
+            {error && <div style={styles.error}>{error}</div>}
+
+            {loading ? (
+              <p style={styles.muted}>{t('common.loading')}</p>
+            ) : (
+              <div className="campaign-grid">
 
             {/* EMPTY STATE */}
             {campaigns.length === 0 && (
@@ -232,16 +237,23 @@ export default function DashboardPage() {
             )}
 
           </div>
-        )}
+            )}
 
+          </div>
+
+        </div>
+        <ChangelogPanel />
       </div>
+
     </div>
   )
 }
 
 const styles = {
   container: {
-    minHeight: '100vh',
+    height: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
     backgroundColor: 'var(--bg-app)',
   },
 

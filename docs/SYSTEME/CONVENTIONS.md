@@ -40,6 +40,7 @@
 - **`fire_mode_bonus_dmg`** — appliqué uniquement en portée `bout_portant` / `courte` (pas en moyenne/longue/extrême)
 - **`sortedRoster`** — toujours `[...roster].sort((a,b) => b.initiative - a.initiative)` avant d'indexer avec `activeSlotIdx` (PC29)
 - **`surprise_roll`** — jamais dans le broadcast `COMBAT_STARTED` / `COMBAT_PHASE_CHANGED` (PC25)
+- **Express 5 — routes sous-routeur** — toujours un `/` initial : `router.get('/:id/foo')` et non `router.get(':id/foo')`. Sans `/`, la route retourne 404 silencieusement sous Express 5 (PC41). Les anciennes routes sans `/` tolérées par Express 4 ne fonctionnent plus.
 
 ---
 
@@ -83,6 +84,7 @@
 | PE27 | moveType calculé client (feedback) ET recalculé serveur (validation) | ENTITES.md |
 | PE29 | Acteur step-by-step vérifié à `pos_z+1` (espace de marche) | ENTITES.md |
 | PE34 | Pieds token Three.js : `pos_z + 1.0` (top voxel) — pas `pos_z + 0.5` | VOXELS.md |
+| PC41 | Express 5 : routes sans `/` initial → 404 silencieux — toujours `'/:id/foo'` | CONVENTIONS.md |
 | PEF1 | `pack_id` obligatoire sur blueprint | ASSETS.md |
 | PEF2 | fakeTexObj : `{ id, pack_id, faces }` | ASSETS.md |
 | PEF3 | `entityTextureMaterials` indexé par `blueprint.id` UUID | ASSETS.md |

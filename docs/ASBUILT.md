@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-29 Session 66
+> Dernière mise à jour : 2026-05-30 Session 66
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -13,7 +13,8 @@ Enclume/
 │   ├── public/
 │   │   ├── fonts/
 │   │   │   └── inter.woff              # Police locale pour labels 3D (drei Text)
-│   │   └── favicon.svg                 # ⚠ présent mais non référencé — à brancher
+│   │   ├── favicon.svg                 # ⚠ présent mais non référencé — à brancher
+│   │   └── CHANGELOG.md               # NOUVEAU 66 — source changelog Dashboard (6 versions, format ## v{x} — {date} — {titre} + [add|fix|chg])
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── CombatOverlay.jsx        # Modifié 64 — Sprint 7.1 : +combatTargetMode. Sprint 7.4bis : refactoring PJ vs GM, deux CombatModifiersWindow séparés, CombatActionWindow masqué pendant assaut PJ. Modifié 65 Sprint GM-A : +characters prop passée à CombatRosterWindow. Modifié 65 Sprint GM-B : +onEnterMoveMode passé à CombatGmDeclareWindow
@@ -37,14 +38,15 @@ Enclume/
 │   │   │   ├── GeometryIcon.jsx        # Stable 9A-3
 │   │   │   ├── DicePanel.jsx           # Réécriture complète 65 Sprint DicePanel v3. Modifié 66 — favoris inline form, section MACROS (chips ★, form création 3 dropdowns, preview seuil live, fix GM effectiveCharId) — roue radiale SVG (PCBBackground, DieShape, DieButton), formule mono-type {k,n,mod}, favoris localStorage, historique local socket, JET AU MJ fonctionnel, useAuthStore direct, drag conservé
 │   │   │   ├── DiceMesh.jsx            # NOUVEAU 44 — géométries, matériaux, animation, Html overlay D10. Modifié 65 — branche D20 dédiée supprimée → D20 passe par faceNormal→D20_GLB_NORMALS (normales Blender exactes)
-│   │   │   └── DiceRoller.jsx          # NOUVEAU 44 — orchestrateur R3F dans Canvas3D
+│   │   │   ├── DiceRoller.jsx          # NOUVEAU 44 — orchestrateur R3F dans Canvas3D
+│   │   │   └── ChangelogPanel.jsx      # NOUVEAU 66 — panneau latéral rétractable Dashboard : fetch+parse CHANGELOG.md, auto-open localStorage (changelog_last_seen), PCB SVG déco, 38px rail ↔ 340px ouvert, tags AJOUT/CORRECTIF/CHANGEMENT
 │   │   ├── pages/
 │   │   │   ├── LoginPage.jsx
 │   │   │   ├── RegisterPage.jsx        # Modifié 66 — +champ "Beta code" (inviteCode, filtre chiffres, maxLength 8)
 │   │   ├── lib/
 │   │   │   └── useDraggable.js         # NOUVEAU 66 — hook partagé drag+localStorage+clamp (storageKey, defaultPos, panelW)
 │   │   │   ├── RegisterPage.jsx
-│   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern)
+│   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern). Modifié 66 — layout height:100vh+flex-col, body flex-row+scroll wrapper, mount ChangelogPanel
 │   │   │   ├── SessionPage.jsx         # Modifié 64 — Sprint 7.1 : combatTargetMode. Sprint 7.4 : damageResults + COMBAT_DAMAGE_RESULT. Sprint 7.4bis : +attackResult state + COMBAT_ATTACK_PLAYER_RESULT handler + onAttackConfirmed prop, onDamageConfirmed nettoie aussi attackResult. Modifié 65 Sprint DicePanel v3 — DICE_RESULT +secret dans destructuring + addMessage
 │   │   │   ├── CampaignSettingsPage.jsx
 │   │   │   ├── WorkshopPage.jsx        # Stable 33

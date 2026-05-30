@@ -875,3 +875,37 @@ z: Math.floor(hitPos[2] + hitNorm[2] * 0.5)
 - Joueur : comportement inchangÃ© (effectiveCharId = playerChar?.id)
 
 **Jets Favoris â€” Sprint A + B + C1 + C2 + Fix GM âœ… CONFIRMÃ‰S FONCTIONNELS**
+
+
+## Session 66 — Chantier Changelog Dashboard ? (2026-05-30)
+
+**Objectif :** Fenêtre changelog intégrée au Dashboard — panneau latéral rétractable, source .md, auto-ouverture à la nouveauté.
+
+**Décisions techniques :**
+- Source de données : client/public/CHANGELOG.md (statique, servi par Vite, pas de route API)
+- Format : ## v{x} — {date} — {titre} + entrées - [add|fix|chg] texte
+- Parser : 	ext.split(/^## /m) + regex - \[(\w+)\] (.+) — aucune lib externe
+- État open interne au composant (pas de remontée d'état vers DashboardPage)
+- Auto-ouverture : localStorage.changelog_last_seen !== latestVersion ? open + save au mount
+- Rechargements suivants : fermé (version déjà vue). Mise à jour CHANGELOG.md ? réouverture automatique
+- Design fidèle au prototype Anthropic : fond PCB SVG (id=cl-pads), ACCENT #3aaa6a, Share Tech Mono, ? SYSTEM_LOG, badges AJOUT/CORRECTIF/CHANGEMENT
+- Layout DashboardPage : height:100vh + flex-col, body lex-row flex:1 overflow:hidden, scroll wrapper lex:1 overflowY:auto
+
+**Fichiers créés/modifiés :**
+
+*client/public/CHANGELOG.md*
+- 6 versions seedées (v0.6.0 ? v0.8.0) avec contenu réel des sessions Enclume
+
+*client/src/components/ChangelogPanel.jsx* (NOUVEAU)
+- Fetch + parse CHANGELOG.md au mount
+- Auto-open localStorage (changelog_last_seen vs latestVersion)
+- Collapsé 38px : rail vertical ? SYSTEM_LOG, clic ? open
+- Ouvert 340px : SVG PCB déco + header ? SYSTEM_LOG + ? fermer + scroll entries + footer BUILD x.x.x · OK
+- Tags AJOUT/CORRECTIF/CHANGEMENT avec couleurs distinctes
+
+*client/src/pages/DashboardPage.jsx*
+- +import ChangelogPanel
+- styles.container : minHeight:100vh ? height:100vh + display:flex + flexDirection:column
+- Body : wrapper flex-row + scroll wrapper autour du content existant + <ChangelogPanel />
+
+**Chantier Changelog Dashboard ? CONFIRMÉ FONCTIONNEL**
