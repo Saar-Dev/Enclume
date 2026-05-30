@@ -192,11 +192,15 @@ Champs :
 - Calcul threshold live (charStats.js) ✅
 - Substitution template 7 variables + broadcast secret ✅
 
-### Sprint C — Interface client
-- DicePanel : fetch macros du perso au montage, chips macro distincts des presets
-- Section création inline (extension DicePanel) : 3 dropdowns source + mod + template + aperçu seuil live
-- Drag-to-reorder des chips macro (sort_order mis à jour via PUT)
-- Sidebar.jsx : affichage `interactionType: 'macro_result'` (résultat formaté + template substitué)
+### Sprint C1 — Chips + Chat ✅ CONFIRMÉ (Session 66)
+- DicePanel : fetch macros, chips ★ dorés, exécution MACRO_ROLL, suppression mode ÉDITER ✅
+- SessionPage : listener MACRO_ROLL_RESULT → addMessage ✅
+- Sidebar : branche macro_result (formattedMessage + résultat/seuil + badge) ✅
+
+### Sprint C2 — Formulaire de création (à venir)
+- Section création inline DicePanel : 3 dropdowns source + mod + template + aperçu seuil live
+- Endpoint POST /char-sheet/:characterId/macro-preview (calcul threshold côté serveur)
+- Drag-to-reorder ou ▲▼ boutons en mode ÉDITER
 
 ---
 

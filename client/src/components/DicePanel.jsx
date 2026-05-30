@@ -248,12 +248,20 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
   const [showHistory,   setHist]    = useState(false)
   const [showSaveForm,  setSaveForm] = useState(false)
   const [presetName,    setPresetName] = useState('')
-  const [macros,        setMacros]   = useState([])
-  const [editMacros,    setEditMacros] = useState(false)
+  const [macros,          setMacros]        = useState([])
+  const [editMacros,      setEditMacros]    = useState(false)
+  const [showMacroForm,   setShowMacroForm] = useState(false)
+  const [macroOptions,    setMacroOptions]  = useState(null)
+  const [mfName,          setMfName]        = useState('')
+  const [mfSources,       setMfSources]     = useState([{ type: 'skill', ref_id: '', ref_label: '' }])
+  const [mfModifier,      setMfModifier]    = useState(0)
+  const [mfTemplate,      setMfTemplate]    = useState('')
+  const [mfPreview,       setMfPreview]     = useState(null)
 
   const dragState          = useRef(null)
   const nameInputRef       = useRef(null)
   const pendingFormulaRef  = useRef(null)
+  const previewTimerRef    = useRef(null)
 
   // ── Persist presets ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -267,6 +275,20 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
       .then(res => setMacros(res.data.macros || []))
       .catch(() => {})
   }, [isOpen, playerChar?.id])
+
+  // ── Live preview seuil — debounce 500ms ───────────────────────────────────
+  useEffect(() => {
+    if (!showMacroForm || !playerChar?.id) return
+    const valid = mfSources.filter(s => s.ref_id && s.ref_label)
+    if (valid.length === 0) { setMfPreview(null); return }
+    clearTimeout(previewTimerRef.current)
+    previewTimerRef.current = setTimeout(() => {
+      api.post(`/char-sheet/${playerChar.id}/macro-preview`, { sources: valid, modifier: mfModifier })
+        .then(res => setMfPreview(res.data.threshold))
+        .catch(() => setMfPreview(null))
+    }, 500)
+    return () => clearTimeout(previewTimerRef.current)
+  }, [showMacroForm, mfSources, mfModifier, playerChar?.id])
 
   // ── Historique local — écoute DICE_RESULT filtré sur userId ───────────────
   // P3 : socket dans le dep array
@@ -401,6 +423,43 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
     setPresets(p => p.filter(x => x.id !== id))
   }, [])
 
+  // ── Formulaire création macro ─────────────────────────────────────────────
+  const openMacroForm = useCallback(() => {
+    setShowMacroForm(true)
+    setMfName(''); setMfSources([{ type: 'skill', ref_id: '', ref_label: '' }])
+    setMfModifier(0); setMfTemplate(''); setMfPreview(null)
+    if (!macroOptions && playerChar?.id) {
+      api.get(`/char-sheet/${playerChar.id}/macro-options`)
+        .then(res => setMacroOptions(res.data))
+        .catch(() => {})
+    }
+  }, [macroOptions, playerChar?.id])
+
+  const closeMacroForm = useCallback(() => { setShowMacroForm(false) }, [])
+
+  const submitMacroForm = useCallback(() => {
+    const valid = mfSources.filter(s => s.ref_id && s.ref_label)
+    if (!mfName.trim() || valid.length === 0 || !playerChar?.id) return
+    api.post(`/char-sheet/${playerChar.id}/macros`, {
+      label: mfName.trim(), sources: valid, modifier: mfModifier,
+      template: mfTemplate.trim() || null,
+    })
+      .then(res => { setMacros(prev => [...prev, res.data.macro]); setShowMacroForm(false) })
+      .catch(() => {})
+  }, [mfName, mfSources, mfModifier, mfTemplate, playerChar?.id])
+
+  const updateSource = useCallback((idx, field, value) => {
+    setMfSources(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s))
+  }, [])
+
+  const addSource = useCallback(() => {
+    setMfSources(prev => prev.length < 3 ? [...prev, { type: 'skill', ref_id: '', ref_label: '' }] : prev)
+  }, [])
+
+  const removeSource = useCallback((idx) => {
+    setMfSources(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)
+  }, [])
+
   // ── Toggle button (toujours présent) ──────────────────────────────────────
   const btnRight = (sidebarVisible && sidebarWidth) ? sidebarWidth + 12 : 12
   const toggleButton = (
@@ -462,6 +521,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
         </div>
 
         {/* ── ROUE ───────────────────────────────────────────────────────── */}
+        {!showMacroForm && (<>
         <div style={{ padding: '14px 0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ position: 'relative', width: WHEEL_SIZE, height: WHEEL_SIZE }}>
 
@@ -618,8 +678,10 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
           </div>
         )}
 
+        </>)}
+
         {/* ── FAVORIS ────────────────────────────────────────────────────── */}
-        <div style={{ padding: '10px 14px', borderBottom: '1px solid #15212e' }}>
+        {!showMacroForm && <div style={{ padding: '10px 14px', borderBottom: '1px solid #15212e' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
             <span style={{ ...styles.monoSm, fontSize: 8, color: '#aa8a30', letterSpacing: '0.12em', fontWeight: 600 }}>FAVORIS</span>
             <span style={{ fontFamily: 'Caveat, cursive', fontSize: 10, color: '#456575' }}>— clic = lance · ⇧clic = charge</span>
@@ -667,7 +729,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
               </div>
             ))}
           </div>
-        </div>
+        </div>}
 
         {/* ── MACROS ─────────────────────────────────────────────────────── */}
         {playerChar && (
@@ -724,14 +786,104 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
               ))}
             </div>
 
-            <div
-              style={{ ...styles.saveBtn, textAlign: 'left', opacity: 0.6 }}
-              title="Création de macros — disponible prochainement"
-            >
-              <span style={{ fontFamily: 'Caveat, cursive', fontSize: 12, color: '#aa8a30' }}>
-                + Créer une macro
-              </span>
-            </div>
+            {/* ── Formulaire de création ── */}
+            {showMacroForm ? (
+              <div style={styles.macroForm}>
+                <input
+                  type="text" value={mfName} onChange={e => setMfName(e.target.value)}
+                  placeholder="Nom de la macro…" maxLength={40}
+                  style={{ ...styles.macroFormInput, marginBottom: 8 }}
+                />
+
+                {mfSources.map((src, idx) => {
+                  const opts = src.type === 'attribute' ? (macroOptions?.attributes || [])
+                    : src.type === 'skill' ? (macroOptions?.skills || [])
+                    : (macroOptions?.secondary || [])
+                  return (
+                    <div key={idx} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
+                      <select
+                        value={src.type}
+                        onChange={e => {
+                          const t = e.target.value
+                          setMfSources(prev => prev.map((s, i) => i === idx ? { type: t, ref_id: '', ref_label: '' } : s))
+                        }}
+                        style={styles.macroFormSelect}
+                      >
+                        <option value="skill">Compétence</option>
+                        <option value="attribute">Attribut</option>
+                        <option value="secondary">Secondaire</option>
+                      </select>
+                      <select
+                        value={src.ref_id}
+                        onChange={e => {
+                          const sel = opts.find(o => (o.skill_id || o.id) === e.target.value)
+                          updateSource(idx, 'ref_id', e.target.value)
+                          updateSource(idx, 'ref_label', sel?.label || '')
+                        }}
+                        style={{ ...styles.macroFormSelect, flex: 1 }}
+                      >
+                        <option value="">— choisir —</option>
+                        {opts.map(o => (
+                          <option key={o.skill_id || o.id} value={o.skill_id || o.id}>{o.label}</option>
+                        ))}
+                      </select>
+                      {mfSources.length > 1 && (
+                        <span onClick={() => removeSource(idx)} style={{ color: '#aa3030', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>✕</span>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {mfSources.length < 3 && (
+                  <div onClick={addSource} style={{ ...styles.macroFormSmallBtn, marginBottom: 8 }}>+ source</div>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <span style={{ ...styles.monoSm, fontSize: 9, color: '#456575' }}>MOD</span>
+                  <input
+                    type="number" value={mfModifier} min={-99} max={99}
+                    onChange={e => setMfModifier(parseInt(e.target.value, 10) || 0)}
+                    style={{ ...styles.macroFormInput, width: 52, textAlign: 'center' }}
+                  />
+                  {mfPreview !== null && (
+                    <span style={{ ...styles.monoSm, fontSize: 10, color: '#aa8a30', marginLeft: 4 }}>
+                      seuil : <strong>{mfPreview}</strong>
+                    </span>
+                  )}
+                </div>
+
+                <textarea
+                  value={mfTemplate}
+                  onChange={e => setMfTemplate(e.target.value)}
+                  placeholder={'{me} — {source} → {résultat}/{seuil} → {succès} {critique}'}
+                  rows={2}
+                  style={{ ...styles.macroFormInput, resize: 'none', width: '100%', boxSizing: 'border-box', marginBottom: 4 }}
+                />
+                <div style={{ fontFamily: 'Caveat, cursive', fontSize: 9, color: '#3a4a55', marginBottom: 8 }}>
+                  {'{me} {source} {résultat} {seuil} {modificateur} {succès} {critique}'}
+                </div>
+
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    onClick={submitMacroForm}
+                    disabled={!mfName.trim() || mfSources.every(s => !s.ref_id)}
+                    style={{ ...styles.macroFormBtn, flex: 1, ...(mfName.trim() && mfSources.some(s => s.ref_id) ? { borderColor: '#aa8a30', color: '#e8c870' } : { opacity: 0.4 }) }}
+                  >
+                    Créer
+                  </button>
+                  <button onClick={closeMacroForm} style={styles.macroFormBtn}>Annuler</button>
+                </div>
+              </div>
+            ) : (
+              <div onClick={openMacroForm} style={{ ...styles.saveBtn, textAlign: 'left', opacity: 0.75 }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = '0.75' }}
+              >
+                <span style={{ fontFamily: 'Caveat, cursive', fontSize: 12, color: '#aa8a30' }}>
+                  + Créer une macro
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -921,6 +1073,33 @@ const styles = {
     background: '#0a1018', border: '1px solid #15212e',
     cursor: 'pointer', transition: 'border-color 0.1s',
     userSelect: 'none',
+  },
+
+  macroForm: {
+    padding: '8px 0 4px',
+  },
+  macroFormInput: {
+    background: '#040608', border: '1px solid #3a8aaa33',
+    color: '#dde7ee', outline: 'none',
+    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11,
+    padding: '4px 7px', width: '100%', boxSizing: 'border-box',
+  },
+  macroFormSelect: {
+    background: '#040608', border: '1px solid #1a2a38',
+    color: '#c0c0d0', outline: 'none',
+    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10,
+    padding: '3px 5px', cursor: 'pointer',
+  },
+  macroFormBtn: {
+    background: '#0a1018', border: '1px solid #1a2a38',
+    color: '#7a8a99', cursor: 'pointer',
+    fontFamily: "'Share Tech Mono', monospace", fontSize: 10,
+    padding: '5px 10px', userSelect: 'none',
+  },
+  macroFormSmallBtn: {
+    fontSize: 10, color: '#456575', cursor: 'pointer',
+    fontFamily: 'Caveat, cursive', userSelect: 'none',
+    display: 'inline-block',
   },
 
   macroChip: {

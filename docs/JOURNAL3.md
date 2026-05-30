@@ -801,3 +801,32 @@ z: Math.floor(hitPos[2] + hitNorm[2] * 0.5)
   - Broadcast `MACRO_ROLL_RESULT` (room ou secret joueur+GM)
 
 **Sprint B Jets Favoris ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 66 — Sprint C1 Jets Favoris : UI chips + chat ✅ (2026-05-29)
+
+**Objectif :** Rendre les macros visibles et exécutables dans le DicePanel, afficher les résultats dans le chat.
+
+**Fichiers modifiés :**
+
+*`server/src/socket/index.js`*
+- MACRO_ROLL handler : +fetch `color` depuis `users` (oubli Sprint B) — inclus dans payload
+
+*`client/src/pages/SessionPage.jsx`*
+- +listener `WS.MACRO_ROLL_RESULT` → `addMessage({ type: 'dice', interactionType: 'macro_result', ... })`
+
+*`client/src/components/Sidebar.jsx`*
+- +branche `interactionType === 'macro_result'` AVANT `if (msg.skillLabel !== undefined)` (piège : sinon tombe dans jet normal)
+- Affichage : nom perso coloré ★, formattedMessage, résultat/seuil, badge Succès/Échec, 🔒 si secret
+
+*`client/src/components/DicePanel.jsx`*
+- +imports `useCharacterStore`, `api`
+- +`playerChar = characters.find(c => c.user_id === user?.id)`
+- +state `macros[]`, `editMacros`
+- +useEffect fetch `GET /char-sheet/:characterId/macros` à l'ouverture du panel
+- +section MACROS (chips dorés ★, clic → `socket.emit(WS.MACRO_ROLL, ...)`, mode ÉDITER → suppression via DELETE REST)
+- +bouton placeholder `+ Créer une macro` (C2)
+- +style `macroChip`
+
+**Sprint C1 Jets Favoris ✅ CONFIRMÉ FONCTIONNEL**

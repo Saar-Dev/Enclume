@@ -25,17 +25,19 @@
  *   POST   /api/char-sheet/:characterId/wounds       — ajoute une blessure (+ promotion auto)
  *   PUT    /api/char-sheet/:characterId/wounds/:woundId/stabilize — stabilise une blessure
  *   DELETE /api/char-sheet/:characterId/wounds/:woundId — supprime une blessure (guérison)
- *   GET    /api/char-sheet/:characterId/macros            — liste macros du personnage
- *   POST   /api/char-sheet/:characterId/macros            — crée une macro (max 10)
- *   PUT    /api/char-sheet/:characterId/macros/:macroId   — modifie label/sources/modifier/template/sort_order
- *   DELETE /api/char-sheet/:characterId/macros/:macroId   — supprime une macro
+ *   GET    /api/char-sheet/:characterId/macros              — liste macros du personnage
+ *   POST   /api/char-sheet/:characterId/macros              — crée une macro (max 10)
+ *   PUT    /api/char-sheet/:characterId/macros/:macroId     — modifie label/sources/modifier/template/sort_order
+ *   DELETE /api/char-sheet/:characterId/macros/:macroId     — supprime une macro
+ *   GET    /api/char-sheet/:characterId/macro-options       — options pour formulaire création (attributs, compétences, secondaires)
+ *   POST   /api/char-sheet/:characterId/macro-preview       — calcule le seuil live { sources, modifier } → { threshold }
  */
 
 import { Router } from 'express'
 import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
-import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal } from '../../lib/charStats.js'
+import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal, calcAttributeNA, calcREA, calcSeuils, calcSouffle, calcResistanceDroguesInput } from '../../lib/charStats.js'
 import { resolveWoundInsertion, isShockTestRequired } from '../../lib/woundUtils.js'
 import { WS } from '../../../../shared/events.js'
 import {
@@ -1313,6 +1315,100 @@ router.delete(':characterId/macros/:macroId', async (req, res, next) => {
 
     await db('character_macros').where({ id: req.params.macroId }).del()
     res.json({ deleted: true, macroId: req.params.macroId })
+  } catch (err) { next(err) }
+})
+
+// ─── GET /api/char-sheet/:characterId/macro-options ───────────────────────────
+// Données pour le formulaire de création de macro :
+// - attributes : liste statique des 8 attributs Polaris
+// - skills     : compétences du personnage avec labels (JOIN ref_skills)
+// - secondary  : attributs secondaires disponibles
+router.get(':characterId/macro-options', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet').where({ character_id: req.params.characterId }).first()
+
+    let skills = []
+    if (sheet) {
+      skills = await db('char_skills')
+        .join('ref_skills', 'char_skills.skill_id', 'ref_skills.id')
+        .where({ 'char_skills.char_sheet_id': sheet.id })
+        .select('ref_skills.id as skill_id', 'ref_skills.label', 'ref_skills.family')
+        .orderBy('ref_skills.family')
+        .orderBy('ref_skills.label')
+    }
+
+    const attributes = [
+      { id: 'FOR', label: 'Force' },
+      { id: 'CON', label: 'Constitution' },
+      { id: 'COO', label: 'Coordination' },
+      { id: 'ADA', label: 'Adaptation' },
+      { id: 'PER', label: 'Perception' },
+      { id: 'INT', label: 'Intelligence' },
+      { id: 'VOL', label: 'Volonté' },
+      { id: 'PRE', label: 'Présence' },
+    ]
+
+    const secondary = [
+      { id: 'rea',                label: 'Réactivité (REA)' },
+      { id: 'seuil_etourdi',      label: 'Seuil Étourdissement' },
+      { id: 'seuil_incons',       label: 'Seuil Inconscience' },
+      { id: 'souffle',            label: 'Souffle' },
+      { id: 'resistance_drogues', label: 'Résistance aux drogues' },
+    ]
+
+    res.json({ attributes, skills, secondary })
+  } catch (err) { next(err) }
+})
+
+// ─── POST /api/char-sheet/:characterId/macro-preview ─────────────────────────
+// Calcule le seuil d'une macro en live pour l'aperçu dans le formulaire.
+// Body : { sources: [{type, ref_id}], modifier }
+// Retourne : { threshold }
+router.post(':characterId/macro-preview', async (req, res, next) => {
+  try {
+    const { sources = [], modifier = 0 } = req.body
+
+    const sheet = await db('char_sheet').where({ character_id: req.params.characterId }).first()
+    if (!sheet) return res.json({ threshold: Number(modifier) })
+
+    const [attrs, archetype] = await Promise.all([
+      db('char_attributes').where({ char_sheet_id: sheet.id }),
+      db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+    ])
+    const genotypeRow = archetype?.genotype_id
+      ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
+      : null
+
+    const na = (attrId) => calcAttributeNA(attrs, attrId, genotypeRow)
+
+    const secondaryValue = (key) => {
+      switch (key) {
+        case 'rea':                return calcREA(na('ADA'), na('PER'))
+        case 'seuil_etourdi':      return calcSeuils(na('FOR'), na('CON'), na('VOL')).etourdissement
+        case 'seuil_incons':       return calcSeuils(na('FOR'), na('CON'), na('VOL')).inconscience
+        case 'souffle':            return calcSouffle(na('CON'), na('VOL'))
+        case 'resistance_drogues': return calcResistanceDroguesInput(na('CON'), na('VOL'))
+        default:                   return 0
+      }
+    }
+
+    let baseThreshold = 0
+    for (const src of sources) {
+      if (!src.ref_id) continue
+      if (src.type === 'attribute') {
+        baseThreshold += na(src.ref_id)
+      } else if (src.type === 'skill') {
+        const [charSkill, refSkill] = await Promise.all([
+          db('char_skills').where({ char_sheet_id: sheet.id, skill_id: src.ref_id }).first(),
+          db('ref_skills').where({ id: src.ref_id }).first(),
+        ])
+        baseThreshold += calcSkillTotal(attrs, charSkill, refSkill, genotypeRow)
+      } else if (src.type === 'secondary') {
+        baseThreshold += secondaryValue(src.ref_id)
+      }
+    }
+
+    res.json({ threshold: baseThreshold + Number(modifier) })
   } catch (err) { next(err) }
 })
 
