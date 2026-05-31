@@ -167,7 +167,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // PUT /api/campaigns/:id — modifier une campagne
 router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
-  const { name, status, default_battlemap_id, dice_config, pnj_unlimited_ammo, reload_mode } = req.body
+  const { name, status, default_battlemap_id, dice_config, pnj_unlimited_ammo, reload_mode, action_timer_sec } = req.body
   const updates = {}
   if (name !== undefined) updates.name = name
   if (status !== undefined) updates.status = status
@@ -189,13 +189,18 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
     updates.reload_mode = reload_mode
   }
 
+  if (action_timer_sec !== undefined) {
+    if (!Number.isInteger(action_timer_sec) || action_timer_sec < 0) throw new AppError(400, 'action_timer_sec doit être un entier ≥ 0')
+    updates.action_timer_sec = action_timer_sec
+  }
+
   // updated_at systématique sur tout PUT
   updates.updated_at = db.fn.now()
 
   const [campaign] = await db('campaigns')
     .where({ id: req.params.id })
     .update(updates)
-    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'pnj_unlimited_ammo', 'reload_mode', 'created_at', 'updated_at'])
+    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'pnj_unlimited_ammo', 'reload_mode', 'action_timer_sec', 'created_at', 'updated_at'])
   res.json({ campaign })
 })
 

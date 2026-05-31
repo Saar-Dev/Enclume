@@ -1394,6 +1394,10 @@ const initSocket = (io) => {
           return
         }
 
+        // Lire le timer configuré pour cette campagne
+        const campaignRow = await db('campaigns').where({ id: campaignId }).select('action_timer_sec').first()
+        const actionTimerSec = campaignRow?.action_timer_sec ?? 0
+
         // Guard — tokens présents sur la carte (hors exclus GM)
         const allTokens = await db('tokens').where({ battlemap_id })
         const tokens = allTokens.filter(t => !excludedTokenIds.includes(t.id))
@@ -1469,7 +1473,7 @@ const initSocket = (io) => {
           phase: 'ROSTER',
           current_turn: 1,
           active_slot_idx: 0,
-          action_timer_sec: 0,
+          action_timer_sec: actionTimerSec,
         })
         const insertedRoster = await db('combat_roster').insert(rosterRows).returning('*')
 
@@ -1547,23 +1551,7 @@ const initSocket = (io) => {
         io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT' })
 
         // PC17 — timers auto-skip uniquement si action_timer_sec > 0
-        if (updated.action_timer_sec > 0) {
-          const rosterEntries = await db('combat_roster')
-            .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
-          const gmUserId = socket.user.id
-          if (!combatTimers.has(campaignId)) combatTimers.set(campaignId, new Map())
-          const campaignTimersMap = combatTimers.get(campaignId)
-          for (const entry of rosterEntries) {
-            const token = await db('tokens').where({ id: entry.token_id }).first()
-            if (!token?.character_id) continue
-            const character = await db('characters').where({ id: token.character_id }).first()
-            if (!character || character.user_id === gmUserId) continue  // PNJ → pas de timer
-            const timeoutId = setTimeout(async () => {
-              await skipPlayer(io, campaignId, entry.token_id)
-            }, updated.action_timer_sec * 1000)
-            campaignTimersMap.set(entry.token_id, timeoutId)
-          }
-        }
+        await startAnnouncementTimers(io, campaignId, updated.action_timer_sec, socket.user.id)
 
         console.log(`[WS] combat:announce_start — ${socket.user.username} (campagne ${campaignId})`)
       } catch (err) {
@@ -2498,6 +2486,26 @@ async function resolveEntityState(entityId, interactionId, campaignId, io) {
   }
 }
 
+// ─── Helper — démarrer les timers auto-skip pour la phase ANNONCE ─────────────
+// PC17 : skip uniquement si timerSec > 0. Exclut PNJs et tokens du GM (gmUserId).
+async function startAnnouncementTimers(io, campaignId, timerSec, gmUserId) {
+  if (!timerSec || timerSec <= 0) return
+  const rosterEntries = await db('combat_roster')
+    .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
+  if (!combatTimers.has(campaignId)) combatTimers.set(campaignId, new Map())
+  const campaignTimersMap = combatTimers.get(campaignId)
+  for (const entry of rosterEntries) {
+    const token = await db('tokens').where({ id: entry.token_id }).first()
+    if (!token?.character_id) continue
+    const character = await db('characters').where({ id: token.character_id }).first()
+    if (!character || character.user_id === gmUserId) continue  // PNJ ou GM → pas de timer
+    const timeoutId = setTimeout(async () => {
+      await skipPlayer(io, campaignId, entry.token_id)
+    }, timerSec * 1000)
+    campaignTimersMap.set(entry.token_id, timeoutId)
+  }
+}
+
 // ─── Helper — skip d'un participant pendant la phase ANNONCE ──────────────────
 // Appelé par COMBAT_SKIP_PLAYER (GM) et par le timer auto-skip (PC17).
 // Race condition guard : re-vérifie has_announced avant d'agir.
@@ -2618,7 +2626,7 @@ async function endTurn(io, campaignId) {
     await db('combat_actions').where({ campaign_id: campaignId }).delete()
 
     // Incrémenter le tour, retour à ANNOUNCEMENT
-    await db('combat_state')
+    const [updatedState] = await db('combat_state')
       .where({ campaign_id: campaignId })
       .update({
         phase: 'ANNOUNCEMENT',
@@ -2626,6 +2634,7 @@ async function endTurn(io, campaignId) {
         active_slot_idx: 0,
         updated_at: db.fn.now(),
       })
+      .returning('action_timer_sec')
 
     const roster = await db('combat_roster')
       .where({ campaign_id: campaignId })
@@ -2633,6 +2642,14 @@ async function endTurn(io, campaignId) {
     const broadcastRoster = roster.map(({ surprise_roll: _sr, ...rest }) => rest)
 
     io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT', roster: broadcastRoster })
+
+    // Relancer les timers pour le nouveau tour
+    const gmMember = await db('campaign_members')
+      .where({ campaign_id: campaignId, role: 'gm' })
+      .select('user_id')
+      .first()
+    await startAnnouncementTimers(io, campaignId, updatedState?.action_timer_sec ?? 0, gmMember?.user_id)
+
     console.log(`[WS] endTurn — campagne ${campaignId}`)
   } catch (err) {
     console.error('[WS] endTurn error:', err.message)
