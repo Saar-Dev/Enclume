@@ -1706,11 +1706,12 @@ const initSocket = (io) => {
 
         // Valeurs autorisées par état
         const VALID_STATES = {
-          position:  ['standing', 'crouching', 'prone'],
-          weapon:    ['holstered', 'ready', 'drawn'],
-          fire_mode: ['cc', 'rc', 'rl'],
-          cover:     ['exposed', 'partial', 'important'],
-          vitesse:   ['normal', 'delayed', 'rushed'],
+          position:     ['standing', 'crouching', 'prone'],
+          weapon:       ['holstered', 'ready', 'drawn'],
+          fire_mode:    ['cc', 'rc', 'rl'],
+          cover:        ['exposed', 'partial', 'important'],
+          vitesse:      ['normal', 'delayed', 'rushed'],
+          combat_mode:  ['normal', 'offensif', 'charge', 'defensif', 'retraite'],
         }
         for (const [k, vals] of Object.entries(VALID_STATES)) {
           if (state[k] && !vals.includes(state[k])) return
@@ -1802,7 +1803,9 @@ const initSocket = (io) => {
           const to   = state[key] ?? from
           iniDelta += transitionCost(STATE_COSTS[key], from, to)
         }
-        if (mapActions?.move)  iniDelta += mapActions.move.ini_mod ?? 0
+        // Charge : déplacement court gratuit — override ini_mod serveur (non trusté client)
+        const chargeMove = (state.combat_mode === 'charge') && !!mapActions?.move
+        if (mapActions?.move)  iniDelta += chargeMove ? 0 : (mapActions.move.ini_mod ?? 0)
         if (mapActions?.melee) iniDelta += -3
         if (mapActions?.multi) iniDelta += -5
         if (mapActions?.attack?.cover_shot) {
@@ -1852,42 +1855,18 @@ const initSocket = (io) => {
           })
         }
 
+        // Phase 1 : intention enregistrée sans validation distance (vérifiée en Phase 2)
         if (mapActions?.melee && typeof mapActions.melee === 'object') {
           const { targetTokenId: meleeTargetId, weaponInvId: meleeWeaponId } = mapActions.melee
           if (meleeTargetId) {
-            // Validation distance (PE14) : dist2D ≤ 3 + allonge
-            const [myToken, targetToken] = await Promise.all([
-              db('tokens').where({ id: tokenId }).select('pos_x','pos_y').first(),
-              db('tokens').where({ id: meleeTargetId }).select('pos_x','pos_y').first(),
-            ])
-            let allonge = 0
-            if (meleeWeaponId) {
-              const meleeWeapon = await db('char_inventory')
-                .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-                .where({ 'char_inventory.id': meleeWeaponId })
-                .select('ref_equipment.range as ref_range')
-                .first()
-              allonge = parseInt(meleeWeapon?.ref_range) || 0
-            }
-            const dx = (myToken?.pos_x ?? 0) - (targetToken?.pos_x ?? 0)
-            const dz = (myToken?.pos_y ?? 0) - (targetToken?.pos_y ?? 0)  // PE14 : pos_y = axe Z
-            const dist2d = Math.sqrt(dx * dx + dz * dz)
-            if (dist2d <= 3 + allonge) {
-              actionRows.push({
-                campaign_id: campaignId, token_id: tokenId,
-                action_key: 'melee', type: 'melee', sequence: 3,
-                weapon_inv_id: meleeWeaponId ?? null,
-                target_token_id: meleeTargetId,
-                modifiers: JSON.stringify({ ini_mod: -3 }),
-                status: 'pending',
-              })
-            } else {
-              console.warn(`[WS] COMBAT_ACTION_DECLARE — melee hors portée: dist=${dist2d.toFixed(1)}m allonge=${allonge} token:${tokenId}`)
-              socket.emit(WS.COMBAT_DECLARE_ERROR, {
-                message: `Cible hors portée — distance : ${dist2d.toFixed(1)}m, portée max : ${3 + allonge}m`,
-              })
-              return  // annuler toute la déclaration, ne pas marquer announced
-            }
+            actionRows.push({
+              campaign_id: campaignId, token_id: tokenId,
+              action_key: 'melee', type: 'melee', sequence: 3,
+              weapon_inv_id: meleeWeaponId ?? null,
+              target_token_id: meleeTargetId,
+              modifiers: JSON.stringify({ ini_mod: -3 }),
+              status: 'pending',
+            })
           }
         }
 
@@ -1946,14 +1925,15 @@ const initSocket = (io) => {
         const [updated] = await db('combat_roster')
           .where({ campaign_id: campaignId, token_id: tokenId })
           .update({
-            state_position:  state.position  ?? entry.state_position,
-            state_weapon:    state.weapon    ?? entry.state_weapon,
-            state_fire_mode: state.fire_mode ?? entry.state_fire_mode,
-            state_cover:     state.cover     ?? entry.state_cover,
-            state_vitesse:   state.vitesse   ?? entry.state_vitesse,
-            initiative:      db.raw('initiative + ?', [iniDelta]),
-            has_announced:   true,
-            updated_at:      db.fn.now(),
+            state_position:    state.position     ?? entry.state_position,
+            state_weapon:      state.weapon       ?? entry.state_weapon,
+            state_fire_mode:   state.fire_mode    ?? entry.state_fire_mode,
+            state_cover:       state.cover        ?? entry.state_cover,
+            state_vitesse:     state.vitesse      ?? entry.state_vitesse,
+            state_combat_mode: state.combat_mode  ?? entry.state_combat_mode,
+            initiative:        db.raw('initiative + ?', [iniDelta]),
+            has_announced:     true,
+            updated_at:        db.fn.now(),
           })
           .returning(['initiative'])
 
@@ -2116,7 +2096,7 @@ const initSocket = (io) => {
         mr, portee, fire_mode_bonus_dmg, formula,
         for_na_cible, con_na_cible, vol_na_cible,
         tireurUsername, tireurColor, userId, targetName,
-        type: pendingType, modDom,
+        type: pendingType, modDom, combatModeBonus,
       } = pending
 
       try {
@@ -2144,7 +2124,7 @@ const initSocket = (io) => {
         const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula.replace(/\s/g, ''))
         let degautsBruts
         if (pendingType === 'melee') {
-          degautsBruts = rawDice + (modDom ?? 0)
+          degautsBruts = rawDice + (modDom ?? 0) + (combatModeBonus ?? 0)
         } else {
           const mrTable = await getMrTable()
           const modDomAttaque = getModifier(mrTable, mr)
@@ -2290,7 +2270,7 @@ const initSocket = (io) => {
         attackerUsername, attackerColor,
         rollAttaque, chancesAttaque,
         defenderSkillTotal, defenderEffectiveMalus,
-        damageFormula, modDom,
+        damageFormula, modDom, combatModeBonus,
         characterIdCible, char_sheet_id_cible,
         for_na_cible, con_na_cible, vol_na_cible,
         targetName, userId,
@@ -2299,7 +2279,14 @@ const initSocket = (io) => {
       try {
         // 1. Roll défense D20 (serveur)
         const { total: rollDefense, rolls: defRolls, seed: defSeed } = await parseDice('1d20')
-        const chanceDefense = defenderSkillTotal + defenderEffectiveMalus
+        // Mode combat du défenseur PJ — Offensif/Charge → pénalité, Défensif/Retraite → bonus (CaC3)
+        const rosterDef = await db('combat_roster').where({ campaign_id: meleeCampaignId, token_id: tokenId }).first()
+        const defCombatMode = rosterDef?.state_combat_mode ?? 'normal'
+        let chanceDefense = defenderSkillTotal + defenderEffectiveMalus
+        if      (defCombatMode === 'offensif') chanceDefense -= 5
+        else if (defCombatMode === 'charge')   chanceDefense -= 7
+        else if (defCombatMode === 'defensif') chanceDefense += 3
+        else if (defCombatMode === 'retraite') chanceDefense += 5
 
         // 2. Résolution Polaris : attaquant réussit ET défenseur rate → touche
         const attackSuccess  = rollAttaque  <= chancesAttaque
@@ -2339,6 +2326,7 @@ const initSocket = (io) => {
               characterIdCible,
               char_sheet_id_cible,
               modDom,
+              combatModeBonus,
               formula: damageFormula,
               for_na_cible,
               con_na_cible,
@@ -2379,7 +2367,7 @@ const initSocket = (io) => {
             }
 
             const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
-            const degautsBruts = rawDice + (modDom ?? 0)
+            const degautsBruts = rawDice + (modDom ?? 0) + (combatModeBonus ?? 0)
             const rd = calcResistanceDommages(for_na_cible, con_na_cible)
             const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
 
@@ -2617,12 +2605,13 @@ async function endTurn(io, campaignId) {
     await db('combat_roster')
       .where({ campaign_id: campaignId, status: 'active' })
       .update({
-        has_announced:  false,
-        has_resolved:   false,
-        state_position: 'standing',
-        state_cover:    'exposed',
-        state_vitesse:  'normal',
-        updated_at:     db.fn.now(),
+        has_announced:     false,
+        has_resolved:      false,
+        state_position:    'standing',
+        state_cover:       'exposed',
+        state_vitesse:     'normal',
+        state_combat_mode: 'normal',
+        updated_at:        db.fn.now(),
       })
 
     // PC28 — vider la queue des actions
@@ -2663,15 +2652,33 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
     const sheetAttaquant = await db('char_sheet').where({ character_id: character.id }).first()
     if (!sheetAttaquant) return false
 
-    // Arme + formule dégâts
+    // Arme + formule dégâts + allonge
     let weapon = null, damageFormula = '1D4'
     if (weaponInvId) {
       weapon = await db('char_inventory')
         .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where({ 'char_inventory.id': weaponInvId })
-        .select('ref_equipment.damage_h as ref_damage_h', 'char_inventory.equipment_id')
+        .select('ref_equipment.damage_h as ref_damage_h', 'char_inventory.equipment_id',
+                'ref_equipment.range as ref_range')
         .first()
       if (weapon?.ref_damage_h) damageFormula = weapon.ref_damage_h
+    }
+    const allonge = parseInt(weapon?.ref_range) || 0
+
+    // Validation distance Phase 2 — positions post-déplacement (PE14)
+    const [myTokenPos, targetTokenPos] = await Promise.all([
+      db('tokens').where({ id: action.token_id }).select('pos_x','pos_y').first(),
+      db('tokens').where({ id: targetTokenId }).select('pos_x','pos_y').first(),
+    ])
+    const dxChk = (myTokenPos?.pos_x ?? 0) - (targetTokenPos?.pos_x ?? 0)
+    const dzChk = (myTokenPos?.pos_y ?? 0) - (targetTokenPos?.pos_y ?? 0)
+    const dist2dChk = Math.sqrt(dxChk * dxChk + dzChk * dzChk)
+    if (dist2dChk > 3 + allonge) {
+      console.warn(`[WS] resolveMeleeAction — hors portée: ${dist2dChk.toFixed(1)}m max:${3 + allonge}m token:${action.token_id}`)
+      socket.emit(WS.COMBAT_DECLARE_ERROR, {
+        message: `Corps à corps impossible — distance : ${dist2dChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
+      })
+      return false
     }
 
     // Skill associé à l'arme (via ref_equipment_skill_assoc) ou COMBAT_A_MAINS_NUES (mains nues)
@@ -2711,8 +2718,11 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
     const modDom = getModDom(for_na_attaquant)
 
     const rosterAttaquant = await db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first()
-    const isRushedMod = rosterAttaquant?.state_vitesse === 'rushed' ? -5 : 0
-    const chancesAttaque = attackerSkillTotal + effectiveMalusAttaquant - carenceAttaquant + isRushedMod
+    const isRushedMod    = rosterAttaquant?.state_vitesse === 'rushed' ? -5 : 0
+    const combatModeAtk  = rosterAttaquant?.state_combat_mode ?? 'normal'
+    const attackModeBonus = (combatModeAtk === 'offensif' || combatModeAtk === 'charge') ? 3 : 0
+    const combatModeBonus = combatModeAtk === 'charge' ? 3 : 0   // +3 dégâts Charge
+    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant - carenceAttaquant + isRushedMod + attackModeBonus
 
     // Roll attaquant
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
@@ -2800,6 +2810,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
       defenderEffectiveMalus,
       damageFormula,
       modDom,
+      combatModeBonus,
       characterIdCible: defenderCharacter.id,
       char_sheet_id_cible,
       for_na_cible,
@@ -2812,7 +2823,14 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
     // ── 4. PNJ défenseur : auto-résolution ────────────────────────────────────
     if (defenderCharacter.type === 'pnj') {
       const { total: rollDefense, rolls: defRolls, seed: defSeed } = await parseDice('1d20')
-      const chanceDefense = defenderSkillTotal + defenderEffectiveMalus
+      // Mode combat du défenseur — Offensif/Charge → pénalité défense
+      const rosterDef = await db('combat_roster').where({ campaign_id: campaignId, token_id: targetTokenId }).first()
+      const defCombatMode = rosterDef?.state_combat_mode ?? 'normal'
+      let chanceDefense = defenderSkillTotal + defenderEffectiveMalus
+      if      (defCombatMode === 'offensif') chanceDefense -= 5
+      else if (defCombatMode === 'charge')   chanceDefense -= 7
+      else if (defCombatMode === 'defensif') chanceDefense += 3
+      else if (defCombatMode === 'retraite') chanceDefense += 5
       const attackSuccess  = rollAttaque  <= chancesAttaque
       const defenseSuccess = rollDefense  <= chanceDefense
       const hit = attackSuccess && !defenseSuccess
@@ -2852,7 +2870,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
         }
 
         const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
-        const degautsBruts = rawDice + modDom
+        const degautsBruts = rawDice + (modDom ?? 0) + combatModeBonus
         const rd = calcResistanceDommages(for_na_cible, con_na_cible)
         const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
 
