@@ -1874,6 +1874,17 @@ const initSocket = (io) => {
           })
         }
 
+        if (mapActions?.reload) {
+          const reloadData = typeof mapActions.reload === 'object' ? mapActions.reload : {}
+          actionRows.push({
+            campaign_id:  campaignId, token_id: tokenId,
+            action_key:   'reload', type: 'reload', sequence: 3,
+            weapon_inv_id: reloadData.weapon_inv_id ?? null,
+            modifiers:    JSON.stringify({ ini_mod: 0, ammo_item_id: reloadData.ammo_item_id ?? null }),
+            status:       'pending',
+          })
+        }
+
         if ((quick?.observer ?? 0) > 0) {
           actionRows.push({
             campaign_id: campaignId, token_id: tokenId,
@@ -1919,9 +1930,10 @@ const initSocket = (io) => {
 
         // Dériver actionType pour le broadcast
         let actionType = 'micro'
-        if (mapActions?.attack)     actionType = 'assault'
-        else if (mapActions?.move)  actionType = getType(mapActions.move.action_key)
-        else if (mapActions?.melee) actionType = 'close_combat'
+        if (mapActions?.attack)      actionType = 'assault'
+        else if (mapActions?.move)   actionType = getType(mapActions.move.action_key)
+        else if (mapActions?.melee)  actionType = 'close_combat'
+        else if (mapActions?.reload) actionType = 'reload'
 
         io.to(campaignId).emit(WS.COMBAT_ACTION_DECLARED, {
           tokenId,
@@ -2036,6 +2048,8 @@ const initSocket = (io) => {
             } else {
               await resolveAssaultAction(io, socket, campaignId, action, confirmedModifiers, character)
             }
+          } else if (action.type === 'reload') {
+            await resolveReloadAction(io, socket, campaignId, character, action)
           }
           // micro / skip : resolved direct, pas d'effet V1
           await db('combat_actions')
@@ -2405,6 +2419,139 @@ async function endTurn(io, campaignId) {
   } catch (err) {
     console.error('[WS] endTurn error:', err.message)
   }
+}
+
+// ─── RÉSOLUTION RECHARGEMENT ────────────────────────────────────────────────
+// Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='reload'.
+// Utilise weapon_inv_id + modifiers.ammo_item_id (déclaration PJ) ou auto-sélection (PNJ).
+// PNJ + pnj_unlimited_ammo : recharge sans consommer de munitions.
+async function resolveReloadAction(io, socket, campaignId, character, action) {
+  const characterId = character.id
+  console.log(`[DBG] resolveReload — début. characterId:${characterId} type:${character.type} campaignId:${campaignId}`)
+
+  const campaign = await db('campaigns').where({ id: campaignId }).select('pnj_unlimited_ammo', 'reload_mode').first()
+  const pnjUnlimited = campaign?.pnj_unlimited_ammo && character.type === 'pnj'
+  const reloadMode   = campaign?.reload_mode ?? 'magazine'
+  console.log(`[DBG] resolveReload — pnj_unlimited_ammo:${campaign?.pnj_unlimited_ammo} pnjUnlimited:${pnjUnlimited} reloadMode:${reloadMode}`)
+
+  const parseCount = (s) => { const m = String(s ?? '').match(/\d+/); return m ? parseInt(m[0], 10) : 0 }
+
+  // Émet le résultat ciblé vers le socket du joueur (pas pour les PNJs)
+  const emitResult = async (payload) => {
+    if (!character.user_id) return
+    if (socket.user?.id === character.user_id) {
+      socket.emit(WS.COMBAT_RELOAD_RESULT, payload)
+    } else {
+      // GM a cliqué Agir pour le slot du joueur — trouver le socket du joueur
+      const allSockets = await io.fetchSockets()
+      const playerSock = allSockets.find(sock =>
+        sock.campaignId === campaignId && sock.user?.id === character.user_id
+      )
+      if (playerSock) playerSock.emit(WS.COMBAT_RELOAD_RESULT, payload)
+    }
+  }
+
+  // Identifier l'arme : weapon_inv_id stocké en Phase 1 (PJ) ou auto-détection MG/MD (PNJ)
+  const weaponSelect = [
+    'char_inventory.id',
+    'char_inventory.equipment_id as weapon_equip_id',
+    'char_inventory.current_ammo',
+    'char_inventory.ammo_remaining',
+    'ref_equipment.caliber as ref_caliber',
+    'ref_equipment.ammo_count as ref_ammo_count',
+  ]
+  let weapons
+  if (action?.weapon_inv_id) {
+    const w = await db('char_inventory')
+      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .where({ 'char_inventory.id': action.weapon_inv_id, 'char_inventory.character_id': characterId })
+      .whereNotNull('ref_equipment.caliber')
+      .select(weaponSelect)
+      .first()
+    weapons = w ? [w] : []
+  } else {
+    weapons = await db('char_inventory')
+      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .where({ 'char_inventory.character_id': characterId })
+      .whereIn('char_inventory.slot', ['MG', 'MD'])
+      .whereNotNull('ref_equipment.caliber')
+      .select(weaponSelect)
+  }
+  console.log(`[DBG] resolveReload — ${weapons.length} arme(s) à recharger`)
+
+  for (const weapon of weapons) {
+    const clipSize = parseCount(weapon.ref_ammo_count)
+    console.log(`[DBG] resolveReload — arme:${weapon.id} caliber:${weapon.ref_caliber} clipSize:${clipSize}`)
+    if (clipSize === 0) { console.log('[DBG] resolveReload — clipSize=0, ignorée'); continue }
+
+    if (pnjUnlimited) {
+      console.log(`[DBG] resolveReload — PNJ unlimited, rechargement direct à ${clipSize}`)
+      await db('char_inventory').where({ id: weapon.id }).update({ ammo_remaining: clipSize, updated_at: db.fn.now() })
+      io.to(campaignId).emit(WS.INVENTORY_UPDATED, { characterId, item: { id: weapon.id, ammo_remaining: clipSize } })
+    } else {
+      // Identifier la munition : sélectionnée en Phase 1 (ammo_item_id) ou auto-sélection
+      const ammoItemId = action?.modifiers?.ammo_item_id ?? null
+      let ammoItem = null
+
+      if (ammoItemId) {
+        ammoItem = await db('char_inventory')
+          .where({ id: ammoItemId, character_id: characterId })
+          .select('id', 'equipment_id', 'quantity')
+          .first()
+        if (!ammoItem || ammoItem.quantity <= 0) {
+          console.log(`[DBG] resolveReload — munition sélectionnée introuvable ou épuisée : ${ammoItemId}`)
+          await emitResult({ success: false, characterId, caliber: weapon.ref_caliber })
+          continue
+        }
+      } else {
+        // Fallback : première munition compatible hors Coffre
+        const ammoItems = await db('char_inventory')
+          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+          .where({ 'char_inventory.character_id': characterId })
+          .where(function() { this.whereNull('char_inventory.container').orWhereNot('char_inventory.container', 'Coffre') })
+          .whereNot({ 'char_inventory.id': weapon.id })
+          .where({ 'ref_equipment.caliber': weapon.ref_caliber })
+          .select('char_inventory.id', 'char_inventory.equipment_id', 'char_inventory.quantity')
+        console.log(`[DBG] resolveReload — fallback : ${ammoItems.length} munition(s) caliber:${weapon.ref_caliber}`)
+        if (ammoItems.length === 0) {
+          console.log(`[DBG] resolveReload — aucune munition disponible, tour consommé`)
+          await emitResult({ success: false, characterId, caliber: weapon.ref_caliber })
+          continue
+        }
+        const preferred = weapon.current_ammo ? ammoItems.find(a => a.equipment_id === weapon.current_ammo) : null
+        ammoItem = preferred ?? ammoItems[0]
+      }
+
+      const currentAmmo = weapon.ammo_remaining ?? 0
+      let roundsConsumed, newAmmo
+      if (reloadMode === 'topup') {
+        const needed   = clipSize - currentAmmo
+        roundsConsumed = Math.min(needed, ammoItem.quantity)
+        newAmmo        = currentAmmo + roundsConsumed
+      } else {
+        roundsConsumed = Math.min(clipSize, ammoItem.quantity)
+        newAmmo        = roundsConsumed
+      }
+      console.log(`[DBG] resolveReload — mode:${reloadMode} consumed:${roundsConsumed} new_ammo:${newAmmo}`)
+
+      await db.transaction(async (trx) => {
+        await trx('char_inventory').where({ id: weapon.id }).update({
+          current_ammo: ammoItem.equipment_id, ammo_remaining: newAmmo, updated_at: db.fn.now(),
+        })
+        if (ammoItem.quantity - roundsConsumed <= 0) {
+          await trx('char_inventory').where({ id: ammoItem.id }).delete()
+          io.to(campaignId).emit(WS.INVENTORY_REMOVED, { characterId, itemId: ammoItem.id })
+        } else {
+          const newQty = ammoItem.quantity - roundsConsumed
+          await trx('char_inventory').where({ id: ammoItem.id }).update({ quantity: newQty, updated_at: db.fn.now() })
+          io.to(campaignId).emit(WS.INVENTORY_UPDATED, { characterId, item: { id: ammoItem.id, quantity: newQty } })
+        }
+      })
+      io.to(campaignId).emit(WS.INVENTORY_UPDATED, { characterId, item: { id: weapon.id, ammo_remaining: newAmmo } })
+      await emitResult({ success: true, characterId, newAmmo, clipSize, caliber: weapon.ref_caliber })
+    }
+  }
+  console.log(`[DBG] resolveReload — FIN. personnage ${characterId}`)
 }
 
 // ─── RÉSOLUTION ASSAUT ──────────────────────────────────────────────────────
