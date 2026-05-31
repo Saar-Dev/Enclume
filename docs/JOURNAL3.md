@@ -1168,3 +1168,90 @@ RegisterPage, LoginPage, DashboardPage, WorkshopPage, CampaignSettingsPage, Side
 **Nettoyage :**
 - `SilhouettePanel - Copie.jsx` supprimé (orphelin)
 - `CombatInitStateWindow.jsx` documenté dans ASBUILT.md
+
+---
+
+## Session 66 — Sprint 7.6 : Rechargement comme action de combat ✅ (2026-05-31)
+
+**Migrations :**
+*`server/src/db/migrations/61_combat_actions_reload.js`* : +`reload` au CHECK constraint `chk_action_type` de `combat_actions`
+*`server/src/db/migrations/62_reload_mode.js`* : +`campaigns.reload_mode TEXT NOT NULL DEFAULT 'magazine' CHECK (IN 'magazine','topup')`
+
+**Serveur :**
+*`shared/events.js`* : +`COMBAT_RELOAD_RESULT`
+*`server/src/routes/campaigns.js`* : PUT accepte/valide `reload_mode`, `.returning` mis à jour
+*`server/src/socket/index.js`* :
+- `COMBAT_ACTION_DECLARE` : payload `mapActions.reload` accepte objet `{weapon_inv_id, ammo_item_id}` (PJ) ou boolean (PNJ fallback) ; action row stocke `weapon_inv_id` + `ammo_item_id` dans `modifiers`
+- `COMBAT_ACTION_CONFIRM` : passe `socket` + `action` à `resolveReloadAction`
+- `resolveReloadAction` réécrit : arme par `weapon_inv_id` ou auto-détection MG/MD (PNJ), munition par `ammo_item_id` ou auto-sélection, formule magazine/topup selon `reload_mode`, émet `COMBAT_RELOAD_RESULT` ciblé sur le socket joueur (`io.fetchSockets` si GM a cliqué Agir), logs `[DBG]` complets
+
+**Client :**
+*`client/src/components/combatSections.js`* : `reload` dans MAP_ACTIONS (span2), `attack` grayed si vide, exclusion mutuelle EXCLUSIVE_ACTIONS
+*`client/src/components/CombatActionWindow.jsx`* :
+- Phase 1 : +`allInventoryItems` + `selectedAmmoId` states, fetch inventaire complet, dérivation `reloadAmmoItems` (calibre + hors Coffre + non équipée), panneau droit munitions (sélection radio), `reloadValid` dans `canDeclare`, payload `reload: {weapon_inv_id, ammo_item_id}`
+- Phase 2 : `myReloadAction` détecté → "Rechargement — en attente du MJ…" (pas de bouton Agir)
+*`client/src/components/CombatResultPanels.jsx`* : +export `CombatResultReload` (bottom-center, succès vert / échec rouge avec calibre)
+*`client/src/components/CombatOverlay.jsx`* : +import `CombatResultReload`, +props `reloadResult`/`onReloadResultClose`, mount conditionnel joueur
+*`client/src/pages/SessionPage.jsx`* : +`reloadResult` state, listener `COMBAT_RELOAD_RESULT`, clear sur `ANNOUNCEMENT`, props passées à `CombatOverlay`
+*`client/src/pages/CampaignSettingsPage.jsx`* : +section "Mode de rechargement" (radio Chargeur/Complément + hint explicatif)
+*`client/src/locales/fr.json`* : +4 clés `settings.reloadMode*`
+
+**Pièges rencontrés et résolus :**
+- PC — `type: 'reload'` violait le CHECK constraint PostgreSQL → migration 61
+- PC — `CASE WHEN ? IS NOT NULL` dans `orderByRaw` : PostgreSQL ne peut pas inférer le type UUID → suppression de `orderByRaw`, préférence gérée en JS
+- PC — `WHERE NOT container = 'Coffre'` exclut les NULL en PostgreSQL → remplacé par `WHERE (container IS NULL OR container != 'Coffre')`
+- PC — `resolveReloadAction` ne transmettait pas le bon socket quand le GM clique "Agir" pour un slot joueur → `io.fetchSockets()` ciblé par `user_id`
+
+**Sprint 7.6 ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 67 — Sprint CaC 1 — Corps à Corps fondations (2026-05-31)
+
+**Migration 63 :** `'melee'` ajouté au CHECK constraint `chk_action_type` de `combat_actions`.
+
+**`shared/events.js` :** +3 events — `COMBAT_MELEE_DEFENSE_PROMPT`, `COMBAT_MELEE_DEFENSE_CONFIRM`, `COMBAT_MELEE_RESULT`.
+
+**`server/src/socket/index.js` :**
+- `getModDom` ajouté aux imports `charStats.js`
+- `pendingMeleeDefense` Map déclarée (key = defenderTokenId)
+- `COMBAT_ACTION_DECLARE` — melee : payload object `{targetTokenId, weaponInvId}`, validation distance `√(dx²+dz²) ≤ 3 + allonge` (PE14), action stockée `type:'melee'` + colonnes `weapon_inv_id`/`target_token_id`
+- `COMBAT_ACTION_CONFIRM` — branche `type==='melee'` → `resolveMeleeAction()` + flag `needsDefenseWait` : si vrai le slot ne progresse pas jusqu'à `COMBAT_MELEE_DEFENSE_CONFIRM`
+- `COMBAT_DAMAGE_CONFIRM` — branche `pendingType==='melee'` : `degautsBruts = rawDice + modDom` (sans MR table ni fire_mode_bonus)
+- `resolveMeleeAction()` : fetch attaquant (skill via ref_equipment_skill_assoc ou COMBAT_CONTACT), roll D20, fetch défenseur — si PNJ : auto-resolve complet (roll défense, dégâts, blessures, shockResult, COMBAT_ATTACK_RESULT) — si PJ : stocke pending + émet COMBAT_MELEE_DEFENSE_PROMPT ciblé, retourne true (slot bloqué)
+- `COMBAT_MELEE_DEFENSE_CONFIRM` handler : roll D20 défense serveur, résolution opposition (Polaris : attaquant réussit ET défenseur rate → touche), COMBAT_MELEE_RESULT room, dégâts (PJ attaquant → COMBAT_DAMAGE_PROMPT / PNJ → auto), advanceSlot()
+
+**`client/src/components/CombatActionWindow.jsx` :**
+- États melee : `meleePendingTokenId`, `selectedMeleeWeaponId`, `inMeleeTargetMode`
+- `meleeWeapons` dérivé de `allInventoryItems` : filtre `ref_category === 'Arme de contact'` + slots MG/MD/2M
+- `meleeValid` dans `canDeclare`
+- Payload melee : `{ targetTokenId, weaponInvId }` (null = mains nues)
+- Panneau droit "Corps à corps" : liste armes (allonge visible), sélection cible via `onEnterTargetMode`
+- Phase 2 RESOLUTION : `myMeleeAction` → message "Corps à corps — en attente du résultat…"
+
+**`client/src/components/CombatResultPanels.jsx` :** +`CombatResultMelee` — bottom-right, jets attaque/défense en opposition, highlight vert/rouge.
+
+**`client/src/components/CombatOverlay.jsx` :** +import `CombatResultMelee`, props `meleeDefensePrompt`/`onMeleeDefenseConfirm`/`meleeResult`/`onMeleeResultClose` — panneau défense modal centré (apparaît quand `defenderTokenId === playerToken.id`), bouton "Défendre" → émet `COMBAT_MELEE_DEFENSE_CONFIRM`.
+
+**`client/src/pages/SessionPage.jsx` :** +états `meleeDefensePrompt`/`meleeResult`, listeners `COMBAT_MELEE_DEFENSE_PROMPT`/`COMBAT_MELEE_RESULT`, clear on ANNOUNCEMENT, props passées à CombatOverlay.
+
+**Limitations V1 acceptées :**
+- Mode Normal uniquement (Offensif/Défensif/Charge/Retraite → Sprint CaC 2)
+- Défenseur PNJ : toujours COMBAT_CONTACT pour la défense (V1)
+- Pas d'icône "Engagé au contact" dans CombatRosterWindow
+
+**Pièges résolus :**
+- Slot bloqué si défenseur PJ (sequentiel voulu par Saar) — advanceSlot appelé depuis COMBAT_MELEE_DEFENSE_CONFIRM uniquement
+- `category = 'Arme de contact'` est le bon filtre (vs double filtre location + range IS NULL — confirmé par requête SQL)
+- `range` pour "Arme de contact" = allonge en mètres (LdB), pas portée de tir — formule `≤ 3 + allonge`
+- `getModDom` n'était pas importé dans socket/index.js → ajouté
+
+---
+
+## Session 67 — D10 UV texturing V2 — Dette fermée (2026-05-31)
+
+La dette "D10 UV texturing V2 — modèle Blender .glb (PE33)" est considérée résolue. La refonte DicePanel v3 (session 65) en objet 3D intégral a rendu superflue la création d'un modèle Blender dédié au D10. Le rendu Html overlay V1 (`position=[0,0,0]`) est satisfaisant dans le contexte 3D actuel.
+
+**Modifications docs :**
+- `CLAUDE.md` : retrait de la dette D10 UV texturing V2
+- `ASBUILT.md` : retrait de la ligne D10 UV texturing dans "V2 / todo" (section Dice Rework)

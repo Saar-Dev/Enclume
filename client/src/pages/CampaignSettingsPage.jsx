@@ -160,6 +160,7 @@ export default function CampaignSettingsPage() {
   const [diceEnabled, setDiceEnabled] = useState(false)
   const [expertMode, setExpertMode] = useState(false)
   const [pnjUnlimitedAmmo, setPnjUnlimitedAmmo] = useState(true)
+  const [reloadMode,       setReloadMode]       = useState('magazine')
 
   // Mode simple
   const [successOn, setSuccessOn] = useState('max')    // 'max' | 'min' | null
@@ -187,6 +188,7 @@ export default function CampaignSettingsPage() {
           setExpertRows(initExpertRows(cfg))
         }
         setPnjUnlimitedAmmo(campaign.pnj_unlimited_ammo ?? true)
+        setReloadMode(campaign.reload_mode ?? 'magazine')
 
         setLoading(false)
       } catch (err) {
@@ -216,7 +218,7 @@ export default function CampaignSettingsPage() {
           dice_config = buildSimpleConfig(resolvedSuccessOn, resolvedFailOn)
         }
       }
-      await api.put(`/campaigns/${campaignId}`, { dice_config, pnj_unlimited_ammo: pnjUnlimitedAmmo })
+      await api.put(`/campaigns/${campaignId}`, { dice_config, pnj_unlimited_ammo: pnjUnlimitedAmmo, reload_mode: reloadMode })
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
     } catch (err) {
@@ -224,7 +226,7 @@ export default function CampaignSettingsPage() {
     } finally {
       setSaving(false)
     }
-  }, [campaignId, diceEnabled, expertMode, expertRows, successActive, successOn, failActive, failOn, pnjUnlimitedAmmo])
+  }, [campaignId, diceEnabled, expertMode, expertRows, successActive, successOn, failActive, failOn, pnjUnlimitedAmmo, reloadMode])
 
   // ─── Bascule mode expert → simple ─────────────────────────────────────────
   const handleSwitchToSimple = useCallback(() => {
@@ -580,6 +582,27 @@ export default function CampaignSettingsPage() {
               <span style={styles.toggleLabel}>{t('settings.pnjAmmoLabel')}</span>
               <span style={styles.toggleHint}>{t('settings.pnjAmmoHint')}</span>
             </label>
+
+            <div style={{ marginTop: 12 }}>
+              <span style={styles.toggleLabel}>{t('settings.reloadModeLabel')}</span>
+              <span style={styles.toggleHint}>{t('settings.reloadModeHint')}</span>
+              <div style={{ display: 'flex', gap: 20, marginTop: 6 }}>
+                <label style={styles.toggleRow}>
+                  <input type="radio" name="reloadMode" value="magazine"
+                    checked={reloadMode === 'magazine'}
+                    onChange={() => setReloadMode('magazine')}
+                    style={styles.checkbox} />
+                  <span style={styles.toggleLabel}>{t('settings.reloadModeChargeur')}</span>
+                </label>
+                <label style={styles.toggleRow}>
+                  <input type="radio" name="reloadMode" value="topup"
+                    checked={reloadMode === 'topup'}
+                    onChange={() => setReloadMode('topup')}
+                    style={styles.checkbox} />
+                  <span style={styles.toggleLabel}>{t('settings.reloadModeTopup')}</span>
+                </label>
+              </div>
+            </div>
           </section>
 
           {/* ── Section Joueurs — placeholder ────────────────────────────── */}

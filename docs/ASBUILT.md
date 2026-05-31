@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-30 Session 66 (Sprint Test de Choc)
+> Dernière mise à jour : 2026-05-31 Session 67
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -14,20 +14,20 @@ Enclume/
 │   │   ├── fonts/
 │   │   │   └── inter.woff              # Police locale pour labels 3D (drei Text)
 │   │   ├── favicon.svg                 # ⚠ présent mais non référencé — à brancher
-│   │   └── CHANGELOG.md               # NOUVEAU 66 — source changelog Dashboard (6 versions, format ## v{x} — {date} — {titre} + [add|fix|chg])
+│   │   └── CHANGELOG.md               # Modifié 67 Sprint 7.6 — +v67 rechargement combat
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── CombatOverlay.jsx        # Modifié 64 — Sprint 7.1 : +combatTargetMode. Sprint 7.4bis : refactoring PJ vs GM, deux CombatModifiersWindow séparés, CombatActionWindow masqué pendant assaut PJ. Modifié 65 Sprint GM-A : +characters prop passée à CombatRosterWindow. Modifié 65 Sprint GM-B : +onEnterMoveMode passé à CombatGmDeclareWindow. Modifié 66 Sprint Test de Choc : +shockResult prop passé à CombatResultGM et CombatResultPlayer
+│   │   │   ├── CombatOverlay.jsx        # Modifié 64 — Sprint 7.1 : +combatTargetMode. Modifié 66 Sprint Test de Choc : +shockResult. Modifié 67 Sprint 7.6 : +import CombatResultReload, +props reloadResult/onReloadResultClose, mount CombatResultReload (joueur uniquement, bottom-center)
 │   │   │   ├── CombatRosterWindow.jsx  # Réécriture complète 65 Sprint GM-A. Modifié 66 — draggable (useDraggable, key combat-roster-pos) — détection arme/armure, chips T/C/B/J (PjArmorChips/PnjArmorChips), quick-equip PNJ, bannière alerte, fetches parallèles combat-ini+combat-equipment+refWeapons+refArmors
 │   │   │   ├── CombatTimeline.jsx      # Modifié 62 — timeline INI, portraits cliquables GM, topOffset + curseur slot actif RÉSOLUTION (slotActive, activeSlotIdx)
-│   │   │   ├── CombatActionWindow.jsx  # Modifié 65 Sprint 7.6. Modifié 66 — draggable 5 branches (useDraggable, key combat-action-pos) — réécriture v2 : StateSelector segmented control, blocs TACTIQUE/ARMEMENT/ACTION/RAPIDES, QB weapon auto-drawn, footer INI delta coloré, payload v2 {state,mapActions,quick}. Modifié 65 Sprint GM — title={a.tooltip} sur MAP_ACTIONS (3 branches) + QUICK_ACTIONS
+│   │   │   ├── CombatActionWindow.jsx  # Modifié 66 — draggable v2, StateSelector, exclusion mutuelle EXCLUSIVE_ACTIONS. Modifié 67 Sprint 7.6 — Phase 1 : panneau droit munitions (allInventoryItems + selectedAmmoId + reloadAmmoItems), reloadValid dans canDeclare, payload reload:{weapon_inv_id, ammo_item_id} ; Phase 2 : myReloadAction → "en attente du MJ…" (pas de bouton Agir)
 │   │   │   ├── CombatDamageWindow.jsx  # NOUVEAU 64 Sprint 7.4 — fenêtre PJ lancer dés dégâts : Phase 1 dés vides / Phase 2 animation / Phase 3 résultats colorés. Modifié 66 Sprint Test de Choc : +bloc Test de Choc après severityBanner (roll/seuil/outcome coloré)
 │   │   │   ├── CombatModifiersWindow.jsx # NOUVEAU 64 Sprint 7.2. Modifié 65 Sprint 7.6. Modifié 66 — draggable (useDraggable, sticky retiré du header) — is_rushed → state_vitesse === 'rushed'
-│   │   │   ├── CombatResultPanels.jsx  # NOUVEAU 66 Sprint Test de Choc — CombatResultGM (bottom-left GM) + CombatResultPlayer (bottom-center PJ ciblé) + ShockBlock (3 états colorés : Résistance/Étourdi/Inconscient, roll/seuil/outcome)
+│   │   │   ├── CombatResultPanels.jsx  # NOUVEAU 66 Sprint Test de Choc — CombatResultGM + CombatResultPlayer + ShockBlock. Modifié 67 Sprint 7.6 — +CombatResultReload (bottom-center, succès vert/échec rouge avec calibre, Fermer button)
 │   │   │   ├── CombatPnjPanel.jsx      # NOUVEAU 58 — modal GM PJs/PNJs read-only, isPnj via character.type
 │   │   │   ├── CombatGmDeclareWindow.jsx # Réécriture complète 65 Sprint GM. Modifié 66 — draggable (useDraggable avant early return allPnjs) — InlineChip click-to-cycle, batch mode, STATE_DEFAULTS, aggregate/__mixed__, sections TACTIQUE/ARMEMENT/ACTION/RAPIDES, roster intégré, footer INI delta, emit v2 N×WS. title tooltips LdB. Modifié 65 Sprint GM-B : onEnterMoveMode, pendingGmMoves, moveTick, moveQueue refs, tokensRef, useEffect([moveTick]) AVANT early return, handleStartMoveQueue, 'move' retiré GM_DISABLED, bouton Passer, DEFAULT_PNJ_ALLURES
 │   │   │   ├── CombatInitStateWindow.jsx # NOUVEAU 65 Sprint 7.6 — fenêtre joueur phase ROSTER : sélection état initial (position/arme/mode de tir), StateChip click-to-cycle, draggable, emit COMBAT_INIT_STATE. Affiché par CombatOverlay.
-│   │   │   ├── combatSections.js       # Modifié 65 Sprint 7.6 — réécriture complète : STATE_DEFS (5 états + matrices coût), stateTransitionCost, calcIniDelta, MAP_ACTIONS multi-select, QUICK_ACTIONS incrémentaux, MOVE_ZONE_DEFS. Modifié 65 Sprint GM — tooltip LdB sur MAP_ACTIONS+QUICK_ACTIONS, label reperer corrigé
+│   │   │   ├── combatSections.js       # Modifié 65 Sprint 7.6 — STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS, MOVE_ZONE_DEFS. Modifié 67 Sprint 7.6 — +reload dans MAP_ACTIONS (span2, après melee), +span2 sur move, EXCLUSIVE_ACTIONS dans CombatActionWindow
 │   │   │   ├── Canvas3D.jsx            # Modifié 64 — +combatTargetMode prop, combatTargetModeRef (P40), intercept drag→target, ligne R3F attaquant→cible (useMemo targetLinePoints). Modifié 65 Sprint Pathfinding — A* Chebyshev temps réel (cases colorées par allure, murs respectés). Modifié 65 Sprint Raycast — raycastVoxelColumn via fast-voxel-raycast (remplace plan y=0 fixe, précis sur terrain élevé)
 │   │   │   ├── Editor3D.jsx            # Modifié 9C — EntityEditorScene, activeEditorTab
 │   │   │   ├── EntityMesh.jsx          # Modifié 43 — Lerp 300ms EntityMeshVoxel + EntityMeshGlb
@@ -87,13 +87,13 @@ Enclume/
 │   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # migrations jusqu'à 59 (batch 31)
+│   │   │   ├── migrations/             # migrations jusqu'à 62 — 61 : +reload dans chk_action_type ; 62 : campaigns.reload_mode
 │   │   │   ├── seeds/
 │   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
 │   │   ├── routes/
 │   │   │   ├── auth.js                 # Modifié 66 — /register : +inviteCode, timingSafeEqual, guard REGISTRATION_CODE
-│   │   │   ├── campaigns.js            # Modifié 45 — POST /:id/cover + cover_url dans GET /. Modifié 66 Sprint 7.5 — +pnj_unlimited_ammo (PUT validation + returning)
+│   │   │   ├── campaigns.js            # Modifié 45 — POST /:id/cover + cover_url dans GET /. Modifié 66 Sprint 7.5 — +pnj_unlimited_ammo. Modifié 67 Sprint 7.6 — +reload_mode (PUT validation + returning)
 │   │   │   ├── battlemaps.js
 │   │   │   ├── tokens.js               # Modifié 39 — maintenance Redis collision map
 │   │   │   ├── characters.js           # Modifié 59 — type dans GET/POST/PUT/broadcastCharacterUpdate
@@ -122,10 +122,10 @@ Enclume/
 │   │   │   ├── diceParser.js
 │   │   │   ├── charStats.js            # Modifié 60 — calcVitesses→calcAllures (4 allures LdB p.221, lookup COO+Athlétisme)
 │   │   │   └── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
-│   │   └── index.js                    # Modifié 64 Sprint 7.3/7.4/7.4bis — resolveAssaultAction (jet attaque + PJ/PNJ bifurcation + pendingDamageActions + COMBAT_ATTACK_PLAYER_RESULT hit/miss) + COMBAT_DAMAGE_CONFIRM handler + bug fix skillAssoc. Modifié 66 Sprint Test de Choc — branche PNJ : compute shockResult + is_stunned PC39 + fix P49 severity. Branche PJ : shockResult enrichi (seuilEtourdi/seuilIncons) + is_stunned + shockResult dans COMBAT_DAMAGE_RESULT
+│   │   └── index.js                    # Modifié 64-66 — resolveAssaultAction, Test de Choc, MACRO_ROLL. Modifié 67 Sprint 7.6 — COMBAT_ACTION_DECLARE : reload payload objet {weapon_inv_id, ammo_item_id} ; resolveReloadAction réécrit : arme/munition ciblées, formule magazine/topup, COMBAT_RELOAD_RESULT ciblé joueur (io.fetchSockets si GM clique Agir), logs [DBG]
 ├── shared/
 │   ├── polarisUtils.js                 # Modifié 61 — +calcAN, calcAllureMoy, calcAllures (exports partagés PI11). Modifié 65 Sprint GM-B : +DEFAULT_PNJ_ALLURES { lente:4, moyenne:8, rapide:16, max:24 }
-│   ├── events.js                       # Modifié 64 Sprint 7.4/7.4bis — +COMBAT_DAMAGE_PROMPT/CONFIRM/RESULT + COMBAT_ATTACK_PLAYER_RESULT. Modifié 51 — +INVENTORY_ADDED/UPDATED/REMOVED/SOLS_UPDATED
+│   ├── events.js                       # Modifié 64 — +COMBAT_DAMAGE_*/ATTACK_PLAYER_RESULT. Modifié 67 Sprint 7.6 — +COMBAT_RELOAD_RESULT
 │   ├── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES/SEVERITY_COLORS
 │   └── armorConstants.js               # NOUVEAU 54 — ARMOR_CATEGORY_MALUS/LOCATION_TO_SLOT/SLOT_TO_REF_LOCATION/LOCATION_TO_SVG/LOCATION_LABELS
 └── docs/
@@ -144,6 +144,7 @@ Enclume/
 | Stockage fichiers | MinIO | Bucket unique |
 | Auth | JWT httpOnly cookie | 7 jours |
 | Inscription | Code d'invitation `REGISTRATION_CODE` dans `.env` | 8 chiffres, `timingSafeEqual`, guard 500 si absent |
+| Rechargement combat | `campaigns.reload_mode` | `'magazine'` (défaut) ou `'topup'` — configurable dans CampaignSettingsPage |
 
 ---
 
@@ -333,7 +334,6 @@ Chargée une seule fois depuis DB au premier jet.
 - D12 atlas `fillText` à `atlasSize * 0.397` — centroïde calculé, ne pas modifier
 
 ### V2 / todo
-- D10 UV texturing — modèle Blender (.glb) avec UVs kite pré-calculés
 - Audio — `useDiceAudio.js` — sons d'impact au rebond
 
 ---

@@ -11,10 +11,10 @@ import CombatModifiersWindow from './CombatModifiersWindow'
 import CombatDamageWindow from './CombatDamageWindow'
 import CombatInitStateWindow from './CombatInitStateWindow'
 import { MOVE_ZONE_DEFS } from './combatSections.js'
-import { CombatResultGM, CombatResultPlayer } from './CombatResultPanels'
+import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
 
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, gmSocketError, onGmSocketErrorClose }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, gmSocketError, onGmSocketErrorClose }) {
   const { phase, roster, activeSlotIdx, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
@@ -210,6 +210,72 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           is_lethal={pnjAttackResult.is_lethal}
           shockResult={pnjAttackResult.shockResult}
           onClose={onPnjAttackResultClose}
+        />
+      )}
+
+      {/* Résultat rechargement — joueur rechargeur uniquement, persistant après avance du slot */}
+      {!isGm && reloadResult && reloadResult.characterId === playerCharacter?.id && (
+        <CombatResultReload result={reloadResult} onClose={onReloadResultClose} />
+      )}
+
+      {/* Prompt défense corps à corps — défenseur PJ uniquement */}
+      {!isGm && meleeDefensePrompt && meleeDefensePrompt.defenderTokenId === playerToken?.id && (
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 280,
+          background: '#16162a',
+          border: '2px solid #c05050',
+          borderRadius: 8,
+          padding: '18px 16px 14px',
+          boxShadow: '0 0 40px rgba(192,80,80,0.4), 0 12px 32px rgba(0,0,0,0.7)',
+          color: '#c0c0d0',
+          pointerEvents: 'auto',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          zIndex: 10,
+        }}>
+          <div style={{ fontSize: 9, color: '#c05050', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+            Corps à corps — Défense !
+          </div>
+          <div style={{ fontSize: 14, color: '#e8e8f5', fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>
+            <span style={{ color: '#e07070' }}>{meleeDefensePrompt.attackerName}</span> vous attaque !
+          </div>
+          <div style={{ fontSize: 11, color: '#7a7a90', marginBottom: 14 }}>
+            Son jet d&apos;attaque : <span style={{ color: '#c0c0d0', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{meleeDefensePrompt.rollAttaque}</span>
+            {' '}/ seuil{' '}
+            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{meleeDefensePrompt.chancesAttaque}</span>
+          </div>
+          <button
+            onClick={onMeleeDefenseConfirm}
+            style={{
+              width: '100%',
+              padding: '9px 0',
+              background: 'rgba(91,141,238,0.15)',
+              border: '1px solid #5b8dee',
+              borderRadius: 4,
+              color: '#5b8dee',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              letterSpacing: '0.04em',
+            }}
+          >
+            Défendre
+          </button>
+        </div>
+      )}
+
+      {/* Résultat corps à corps — attaquant et défenseur, bottom-right */}
+      {meleeResult && (
+        <CombatResultMelee
+          attaquant={tokens.find(t => t.id === meleeResult.attaquantId)?.label ?? '?'}
+          defenseur={tokens.find(t => t.id === meleeResult.defenseurId)?.label ?? '?'}
+          rollAttaque={meleeResult.rollAttaque}
+          chancesAttaque={meleeResult.chancesAttaque}
+          rollDefense={meleeResult.rollDefense}
+          chanceDefense={meleeResult.chanceDefense}
+          hit={meleeResult.hit}
+          onClose={onMeleeResultClose}
         />
       )}
 

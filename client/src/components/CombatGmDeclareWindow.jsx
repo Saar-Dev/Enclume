@@ -76,8 +76,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [pendingGmMoves,    setPendingGmMoves]    = useState({})   // tokenId -> { action_key, ini_mod, targetPosX, targetPosY, targetPosZ }
   const [moveTick,          setMoveTick]          = useState(0)
   const [assaultSelections, setAssaultSelections] = useState({})   // tokenId -> { targetTokenId }
+  const [declareError,      setDeclareError]      = useState(null)
+  const [meleeSelections,   setMeleeSelections]   = useState({})   // tokenId -> { targetTokenId }
   const [equipment,         setEquipment]         = useState({})   // tokenId -> { characterId, weapon, armorPieces }
   const [attackTick,        setAttackTick]        = useState(0)
+  const [meleeTick,         setMeleeTick]         = useState(0)
 
   const moveQueueRef    = useRef([])
   const moveQueueIdxRef = useRef(0)
@@ -86,8 +89,22 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const attackQueueRef    = useRef([])
   const attackQueueIdxRef = useRef(0)
   const attackCancelRef   = useRef(null)
+  const meleeQueueRef     = useRef([])
+  const meleeQueueIdxRef  = useRef(0)
+  const meleeCancelRef    = useRef(null)
 
   useEffect(() => { tokensRef.current = tokens }, [tokens])
+
+  // ── Écoute COMBAT_DECLARE_ERROR ────────────────────────────────────────
+  useEffect(() => {
+    if (!socket) return
+    const handler = ({ message }) => {
+      setDeclareError(message)
+      setTimeout(() => setDeclareError(null), 4000)
+    }
+    socket.on(WS.COMBAT_DECLARE_ERROR, handler)
+    return () => socket.off(WS.COMBAT_DECLARE_ERROR, handler)
+  }, [socket])
 
   // ── Fetch équipement combat ─────────────────────────────────────────────
   useEffect(() => {
@@ -154,6 +171,34 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     attackCancelRef.current = onCancel
     onEnterTargetMode(tokenId, { x: token.pos_x, z: token.pos_y }, onTargetSelected, onCancel)
   }, [attackTick])
+
+  // ── Queue melee PNJ séquentiel ─────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const queue = meleeQueueRef.current
+    const idx   = meleeQueueIdxRef.current
+    if (!onEnterTargetMode || queue.length === 0 || idx >= queue.length) return
+
+    const tokenId = queue[idx]
+    const token   = tokensRef.current.find(t => t.id === tokenId)
+    if (!token) {
+      meleeQueueIdxRef.current = idx + 1
+      setMeleeTick(t => t + 1)
+      return
+    }
+
+    const onTargetSelected = (targetTokenId) => {
+      setMeleeSelections(prev => ({ ...prev, [tokenId]: { targetTokenId } }))
+      meleeQueueIdxRef.current = meleeQueueIdxRef.current + 1
+      setMeleeTick(t => t + 1)
+    }
+    const onCancel = () => {
+      meleeQueueIdxRef.current = meleeQueueIdxRef.current + 1
+      setMeleeTick(t => t + 1)
+    }
+    meleeCancelRef.current = onCancel
+    onEnterTargetMode(tokenId, { x: token.pos_x, z: token.pos_y }, onTargetSelected, onCancel)
+  }, [meleeTick])
 
   // ── Helpers identification PNJ ──────────────────────────────────────────
   const isPnj = (entry) => {
@@ -256,7 +301,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     return calcIniDelta(
       getInitialStates(entry),
       sel.states,
-      { move: pendingGmMoves[tokenId] ?? null, attack: null, melee: sel.mapAction === 'melee', multi: sel.mapAction === 'multi' },
+      { move: pendingGmMoves[tokenId] ?? null, attack: null, melee: meleeSelections[tokenId] ? true : null, multi: sel.mapAction === 'multi' },
       sel.quick,
     )
   }
@@ -292,7 +337,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     if (!entry || entry.has_announced) return false
     const init  = getInitialStates(entry)
     const stateChanged = Object.keys(sel.states).some(k => sel.states[k] !== init[k])
-    const hasAction    = !!sel.mapAction || !!pendingGmMoves[id] || !!assaultSelections[id] || sel.quick.observer > 0 || sel.quick.reperer > 0 || sel.quick.phrase
+    const hasAction    = !!sel.mapAction || !!pendingGmMoves[id] || !!assaultSelections[id] || !!meleeSelections[id] || sel.quick.observer > 0 || sel.quick.reperer > 0 || sel.quick.phrase
     return stateChanged || hasAction
   })
 
@@ -321,7 +366,15 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             isDualWield:        false,
             dualWieldBonusComp: 0,
           } : null,
-          melee:    sel.mapAction === 'melee',
+          melee:    meleeSelections[tokenId]?.targetTokenId
+            ? {
+                targetTokenId: meleeSelections[tokenId].targetTokenId,
+                weaponInvId: (equipment[tokenId]?.weapon && !equipment[tokenId].weapon.ref_fire_mode)
+                  ? equipment[tokenId].weapon.inv_id
+                  : null,
+              }
+            : null,
+          reload:   sel.mapAction === 'reload',
           multi:    sel.mapAction === 'multi',
           interact: sel.mapAction === 'interact',
         },
@@ -372,9 +425,41 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ── Assaut PNJ séquentiel ───────────────────────────────────────────────
   const handleStartAttackQueue = () => {
     if (!onEnterTargetMode || targetIds.length === 0) return
+    // Sélectionner l'assaut efface toute mapAction exclusive (ex: reload)
+    setSelections(prev => {
+      const next = { ...prev }
+      targetIds.forEach(id => {
+        const cur = getSel(id)
+        if (cur.mapAction !== null) next[id] = { ...cur, mapAction: null }
+      })
+      return next
+    })
     attackQueueRef.current    = [...targetIds]
     attackQueueIdxRef.current = 0
     setAttackTick(t => t + 1)
+  }
+
+  // ── Melee PNJ séquentiel ────────────────────────────────────────────────
+  const handleStartMeleeQueue = () => {
+    if (!onEnterTargetMode || targetIds.length === 0) return
+    // Efface toute mapAction exclusive (reload, multi…)
+    setSelections(prev => {
+      const next = { ...prev }
+      targetIds.forEach(id => {
+        const cur = getSel(id)
+        if (cur.mapAction !== null) next[id] = { ...cur, mapAction: null }
+      })
+      return next
+    })
+    // Efface les sélections d'assaut en attente (exclusif)
+    setAssaultSelections(prev => {
+      const next = { ...prev }
+      targetIds.forEach(id => { delete next[id] })
+      return next
+    })
+    meleeQueueRef.current    = [...targetIds]
+    meleeQueueIdxRef.current = 0
+    setMeleeTick(t => t + 1)
   }
 
   // ── MAP_ACTIONS : toutes disponibles pour le GM ─────────────────────────
@@ -430,21 +515,48 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             <span style={{ ...S.sectionTitle, color: '#aa8a30' }}>ACTION</span>
             <div style={S.actionGrid}>
               {MAP_ACTIONS.map(a => {
+                const isMeleeActive = targetIds.some(id => !!meleeSelections[id])
+                  || (combatTargetMode?.tokenId != null && targetIds.includes(combatTargetMode.tokenId) && meleeQueueRef.current.includes(combatTargetMode.tokenId))
                 const disabled = GM_DISABLED.has(a.k) || (a.k === 'attack' && !hasAnyRanged)
-                const active   = !disabled && (a.k === 'attack' ? isAttackActive : curAction === a.k)
+                const active   = !disabled && (a.k === 'attack' ? isAttackActive : a.k === 'melee' ? isMeleeActive : curAction === a.k)
+                const span2    = a.span2 ? { gridColumn: 'span 2' } : {}
                 return (
                   <div key={a.k}
                     title={a.tooltip}
                     onClick={() => {
                       if (disabled) return
-                      if (a.k === 'move')   handleStartMoveQueue()
-                      else if (a.k === 'attack') handleStartAttackQueue()
-                      else setMapAction(a.k)
+                      if (a.k === 'move') {
+                        handleStartMoveQueue()
+                      } else if (a.k === 'attack') {
+                        handleStartAttackQueue()
+                        // Effacer les sélections melee (exclusif)
+                        setMeleeSelections(prev => {
+                          const next = { ...prev }
+                          targetIds.forEach(id => { delete next[id] })
+                          return next
+                        })
+                      } else if (a.k === 'melee') {
+                        handleStartMeleeQueue()
+                      } else {
+                        setMapAction(a.k)
+                        // Sélectionner une mapAction efface les cibles d'assaut et melee en attente
+                        setAssaultSelections(prev => {
+                          const next = { ...prev }
+                          targetIds.forEach(id => { delete next[id] })
+                          return next
+                        })
+                        setMeleeSelections(prev => {
+                          const next = { ...prev }
+                          targetIds.forEach(id => { delete next[id] })
+                          return next
+                        })
+                      }
                     }}
                     style={{
                       ...S.actionBtn,
                       ...(active   ? S.actionBtnActive   : {}),
                       ...(disabled ? S.actionBtnDisabled : {}),
+                      ...span2,
                     }}
                   >
                     <span style={{ ...S.actionLabel, color: active ? '#e8c870' : (disabled ? '#2a3040' : '#aaccdd') }}>
@@ -463,7 +575,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               })}
             </div>
 
-            {/* Cible sélectionnée (mode single) */}
+            {/* Cible assaut sélectionnée (mode single) */}
             {!batchMode && activeFocusId && assaultSelections[activeFocusId] && (() => {
               const tgtTok = tokens.find(t => t.id === assaultSelections[activeFocusId].targetTokenId)
               return (
@@ -473,6 +585,22 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                   {!equipment[activeFocusId]?.weapon && (
                     <span style={S.attackNoWeapon}>sans arme</span>
                   )}
+                </div>
+              )
+            })()}
+            {/* Cible + arme melee (mode single) */}
+            {!batchMode && activeFocusId && meleeSelections[activeFocusId] && (() => {
+              const tgtTok     = tokens.find(t => t.id === meleeSelections[activeFocusId].targetTokenId)
+              const meleeWeapon = equipment[activeFocusId]?.weapon && !equipment[activeFocusId].weapon.ref_fire_mode
+                ? equipment[activeFocusId].weapon
+                : null
+              return (
+                <div style={S.attackTargetRow}>
+                  <span style={{ ...S.attackTargetLabel, color: '#50a870' }}>⚔</span>
+                  <span style={{ ...S.attackTargetName, color: '#70c870' }}>{tgtTok?.label ?? '?'}</span>
+                  <span style={{ fontSize: 8, color: '#507050', fontFamily: 'monospace', marginLeft: 4 }}>
+                    {meleeWeapon ? (meleeWeapon.ref_name ?? 'arme') : 'mains nues'}
+                  </span>
                 </div>
               )
             })()}
@@ -597,6 +725,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             </span>
           </div>
         )}
+        {declareError && (
+          <div style={{ fontSize: 9, color: '#c83030', background: 'rgba(200,48,48,0.08)', border: '1px solid #c8303044', borderRadius: 2, padding: '4px 8px', fontFamily: 'monospace' }}>
+            ⚠ {declareError}
+          </div>
+        )}
         {batchMode && (
           <div style={S.batchWarn}>⚠ coûts INI calculés individuellement</div>
         )}
@@ -608,6 +741,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         {attackQueueRef.current.length > 0 && attackQueueIdxRef.current < attackQueueRef.current.length && (
           <button style={S.btnPasser} onClick={() => attackCancelRef.current?.()}>
             Passer ({getLabel(attackQueueRef.current[attackQueueIdxRef.current])})
+          </button>
+        )}
+        {meleeQueueRef.current.length > 0 && meleeQueueIdxRef.current < meleeQueueRef.current.length && (
+          <button style={S.btnPasser} onClick={() => meleeCancelRef.current?.()}>
+            Passer CaC ({getLabel(meleeQueueRef.current[meleeQueueIdxRef.current])})
           </button>
         )}
         <button

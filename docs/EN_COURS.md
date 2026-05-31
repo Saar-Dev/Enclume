@@ -336,8 +336,16 @@ Travaux effectués :
 fr.json : +20 sections (charSheet ~50 clés, builder ~55 clés, advantages, skillsPanel, radialMenu, entityPanel, changelog, +ajouts existants).
 Hors scope : combat (12), équipement (6). SkillTooltips : roadmap.
 
+**Sprint 7.6 ✅ CONFIRMÉ FONCTIONNEL (session 66)**
+- Migrations 61 (CHECK reload) + 62 (reload_mode) ✅
+- Phase 1 : panneau droit sélection munitions, payload `{weapon_inv_id, ammo_item_id}` ✅
+- Phase 2 : "Rechargement — en attente du MJ…" (pas de bouton Agir joueur) ✅
+- `resolveReloadAction` : arme ciblée, munition ciblée, formule magazine/topup ✅
+- `COMBAT_RELOAD_RESULT` ciblé sur le socket joueur (via `io.fetchSockets` si GM clique Agir) ✅
+- `CombatResultReload` : panneau bottom-center succès/échec persistant jusqu'au tour suivant ✅
+- Option campagne "Mode de rechargement" (Chargeur / Complément) + hint ✅
+
 **Prochains chantiers :**
-- Sprint 7.6 — Recharger l'arme comme action de combat (INI=0, remplace bouton Assaut si vide)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, non implémenté côté UI)
 - Chantier CaC — Corps à Corps (plan dans PLAN_12_CONTACT.md)
 - Sprint Waypoints — priorité basse (plan dans JOURNALTEMP.md)
@@ -377,3 +385,6 @@ Statut : correction prévue si besoin.
 - P49 — promotion blessures : always GET /wounds si promoted === true (ne pas ajouter wound localement)
 - PI11 — polarisRound : source unique `shared/polarisUtils.js` — jamais redéfini localement
 - PC41 — Express 5 : routes sans `/` initial → 404 silencieux — toujours `'/:id/foo'`
+- PC42 — `WHERE NOT col = 'val'` exclut les NULL en PostgreSQL → toujours `(col IS NULL OR col != 'val')`
+- PC43 — `orderByRaw('CASE WHEN ? IS NOT NULL ...')` : PostgreSQL ne peut pas inférer le type UUID sans cast → éviter pour les UUID, préférer le JS post-fetch
+- PC44 — `io.fetchSockets()` nécessaire quand le GM clique Agir pour un slot joueur (socket ≠ joueur)

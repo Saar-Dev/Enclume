@@ -123,7 +123,7 @@ Toute décision non documentée est considérée comme nulle.
 ## État actuel — Session 66 (2026-05-30)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **60 migrations stables** — prochaine : **61**
+- **62 migrations stables** — prochaine : **63**
 - Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅
 
 **Session 66 ✅ :**
@@ -136,11 +136,11 @@ Toute décision non documentée est considérée comme nulle.
 - Sprint 7.5 Décompte munitions : migration 60, `/reload`, `ammo_remaining`, WeaponPanel picker, option campagne PNJ ✅
 - Sprint Test de Choc : compute PNJ + apply is_stunned (PC39) + ShockBlock UI + fix P49 PNJ ✅
 - Sprint i18n Option B : 17 composants wired, fr.json +20 sections, RegisterPage FR, convention documentée ✅
+- **Sprint 7.6 Rechargement combat** : migrations 61+62, Phase 1 panneau munitions, Phase 2 "En attente MJ…", resolveReloadAction ciblé, CombatResultReload, option reload_mode ✅
 
 **"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
 
 **Prochain chantier :**
-- Sprint 7.6 — Recharger l'arme comme action de combat (INI=0, remplace Assaut si vide)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, UI non implémentée)
 - Chantier CaC — Corps à Corps (plan dans PLAN_12_CONTACT.md)
 - Sprint Waypoints — priorité basse (plan dans JOURNALTEMP.md)
@@ -150,7 +150,6 @@ Toute décision non documentée est considérée comme nulle.
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser.
 
 **Dettes actives :**
-- D10 UV texturing V2 — modèle Blender .glb (PE33)
 - `useDiceAudio.js` — sons impact dés
 - `.gitattributes:3` — attribut invalide
 - Timer auto-skip (`action_timer_sec > 0`) — prévu Sprint 2, reporté Sprint 3

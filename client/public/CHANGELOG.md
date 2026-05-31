@@ -1,3 +1,11 @@
+## v67 — 2026-05-31 — Rechargement en combat, options campagne
+- [add] Action "Rechargement" en Phase 1 : sélection munitions dans panneau droit
+- [add] Phase 2 : résultat rechargement (succès / aucune munition) affiché au joueur
+- [add] Option campagne : mode de rechargement Chargeur complet (défaut) ou Complément
+- [chg] Le joueur ne clique plus "Agir" pour le rechargement — le MJ est maître du timing
+- [fix] Exclusion mutuelle des actions de combat (Assaut, CàC, Rechargement, etc.)
+- [fix] "Assaut (tir)" grisé automatiquement si chargeur vide
+
 ## v66 — 2026-05-30 — Décompte munitions, Jets Favoris, Test de Choc, i18n
 - [add] Localisation i18n : 17 composants wired (fiche perso, builder, sidebar, sessions, auth…)
 - [add] Fiche personnage : labels Polaris FR (attrs, stats, bio, tooltips allures LdB)

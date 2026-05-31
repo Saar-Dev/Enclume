@@ -199,7 +199,7 @@ Module Armes ← 🔲 Chantier 11 Étape 2
 | Sprint 7.4 | COMBAT_DAMAGE_CONFIRM handler (loc + armures PI8 + dégâts + blessures + shockTest) + CombatDamageWindow (3 phases) | ✅ session 64 |
 | Sprint 7.4bis | Jet de toucher interactif côté joueur (COMBAT_ATTACK_PLAYER_RESULT, CombatModifiersWindow refactorisé, CombatOverlay PJ/GM séparés) | ✅ session 64 |
 | Sprint 7.5 | Décompte munitions — migration 60 (ammo_remaining + pnj_unlimited_ammo), resolveAssaultAction décrément, POST /reload transaction, WeaponPanel picker, CampaignSettings toggle | ✅ session 66 |
-| Sprint 7.6 | Recharger l'arme comme action de combat (INI=0, remplace bouton Assaut si chargeur vide, Phase Annonce + Résolution) | 🔲 |
+| Sprint 7.6 | Recharger l'arme comme action de combat (INI=0, Phase Annonce sélection ammo, Phase 2 "en attente MJ", CombatResultReload, reload_mode campagne) | ✅ session 67 |
 | Sprint 7.6 | Actions d'état dynamiques (STATE_DEFS, matrices coût INI, payload v2 {state,mapActions,quick}, UPDATE state_cover/fire_mode/vitesse) | ✅ session 65 |
 | Sprint GM | Refonte CombatGmDeclareWindow (InlineChip, batch, STATE_DEFAULTS, aggregate, sections TACTIQUE/ARMEMENT/ACTION/RAPIDES) | ✅ session 65 |
 | Sprint GM-A | CombatRosterWindow v2 (détection arme/armure, chips T/C/B/J, quick-equip PNJ, bannière alerte) | ✅ session 65 |
@@ -271,6 +271,33 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
 | Badge MR displacement dans chat | ✅ session 43 |
 | Toggle visible character temps réel (Bug A) | ✅ session 44 |
 | Bibliothèque documents | 🔲 |
+
+### PLAN 14 — Système de Statuts (Status Effects) 🔲
+
+Plan complet dans `docs/PLAN14_StatusEffects.md`.
+**Bloqué** : en attente des 15 fichiers SVG (1 par statut).
+
+| Statut | Code | Temporalité |
+|---|---|---|
+| Étourdi | `stunned` | Combat, N tours |
+| Inconscient | `unconscious` | Combat |
+| Saisi | `grappled` | Combat |
+| Entravé | `restrained` | Persistant |
+| Déséquilibré | `off_balance` | Combat, 1 tour |
+| Enflammé | `burning` | Combat, DoT |
+| Corrodé | `acid` | Combat, DoT |
+| Asphyxie | `asphyxia` | Combat |
+| Décompression | `decompression` | Combat, DoT |
+| Électrocuté | `electrocuted` | Combat, 1 tour |
+| Aveuglé | `blinded` | Combat, N tours |
+| Hypothermie | `hypothermia` | Long terme |
+| Infecté | `infected` | Long terme |
+| Empoisonné | `poisoned` | Long terme |
+| Irradié | `irradiated` | Long terme |
+
+Architecture : nouvelle table `combat_status_effects` (migration 63) + icônes `Html` R3F au-dessus des tokens.
+
+---
 
 ### Chantier CaC — Corps à Corps Polaris
 

@@ -101,7 +101,10 @@ export default function SessionPage() {
   // gmAttackResult : reçu via COMBAT_ATTACK_RESULT { isPnj:true, ... } — panneau résultat PNJ GM
   const [gmAttackResult, setGmAttackResult] = useState(null)
   // pnjAttackResult : même payload, affiché au joueur ciblé
-  const [pnjAttackResult, setPnjAttackResult] = useState(null)
+  const [pnjAttackResult,  setPnjAttackResult]  = useState(null)
+  const [reloadResult,       setReloadResult]       = useState(null)
+  const [meleeDefensePrompt, setMeleeDefensePrompt] = useState(null)  // { attackerName, attackerTokenId, defenderTokenId, rollAttaque, chancesAttaque }
+  const [meleeResult,        setMeleeResult]        = useState(null)  // { attaquantId, defenseurId, rollAttaque, chancesAttaque, rollDefense, chanceDefense, hit }
   // gmSocketError : erreur serveur visible GM (PC22, etc.)
   const [gmSocketError, setGmSocketError] = useState(null)
 
@@ -437,6 +440,21 @@ export default function SessionPage() {
     s.on(WS.WOUND_ADDED, ({ characterId }) => {
       setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
     })
+    s.on(WS.INVENTORY_UPDATED, ({ characterId }) => {
+      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
+    })
+    s.on(WS.INVENTORY_REMOVED, ({ characterId }) => {
+      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
+    })
+    s.on(WS.COMBAT_RELOAD_RESULT, (data) => {
+      setReloadResult(data)
+    })
+    s.on(WS.COMBAT_MELEE_DEFENSE_PROMPT, (data) => {
+      setMeleeDefensePrompt(data)
+    })
+    s.on(WS.COMBAT_MELEE_RESULT, (data) => {
+      setMeleeResult(data)
+    })
     s.on(WS.COMBAT_DAMAGE_PROMPT, (data) => {
       setDamagePayload(data)
     })
@@ -551,6 +569,7 @@ export default function SessionPage() {
       resetCombat()
       setMode('play')
       setAttackResult(null)
+      setReloadResult(null)
     })
     s.on(WS.COMBAT_STATE_SYNC, ({ combatState, roster, actions }) => {
       setCombatState({
@@ -568,6 +587,11 @@ export default function SessionPage() {
       setPhase(phase)
       if (roster) updateRoster(roster)
       if (actions) setActions(actions)
+      if (phase === 'ANNOUNCEMENT') {
+        setReloadResult(null)
+        setMeleeDefensePrompt(null)
+        setMeleeResult(null)
+      }
     })
     // Roster mis à jour — après jet de surprise (COMBAT_SURPRISE_RESULT)
     s.on(WS.COMBAT_ROSTER_UPDATED, ({ roster }) => {
@@ -793,7 +817,10 @@ export default function SessionPage() {
       pendingTargetId: null,
       onTargetSelected: wrappedSelected,
       onCancel: wrappedCancel,
-      onPendingTarget: (id) => setCombatTargetMode(prev => prev ? { ...prev, pendingTargetId: id } : null),
+      onPendingTarget: (id) => {
+        if (id === tokenId) return  // prevent self-targeting
+        setCombatTargetMode(prev => prev ? { ...prev, pendingTargetId: id } : null)
+      },
     })
     setCombatCameraCenter(tokenPos)
   }, [])
@@ -1175,6 +1202,16 @@ export default function SessionPage() {
           onGmAttackResultClose={() => setGmAttackResult(null)}
           pnjAttackResult={pnjAttackResult}
           onPnjAttackResultClose={() => setPnjAttackResult(null)}
+          reloadResult={reloadResult}
+          onReloadResultClose={() => setReloadResult(null)}
+          meleeDefensePrompt={meleeDefensePrompt}
+          onMeleeDefenseConfirm={() => {
+            if (!meleeDefensePrompt?.defenderTokenId || !socket) return
+            socket.emit(WS.COMBAT_MELEE_DEFENSE_CONFIRM, { tokenId: meleeDefensePrompt.defenderTokenId })
+            setMeleeDefensePrompt(null)
+          }}
+          meleeResult={meleeResult}
+          onMeleeResultClose={() => setMeleeResult(null)}
           gmSocketError={gmSocketError}
           onGmSocketErrorClose={() => setGmSocketError(null)}
         />

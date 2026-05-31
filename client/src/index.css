@@ -431,6 +431,12 @@ DASHBOARD EXTENSION
 .campaign-create {
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  cursor: pointer;
 }
 
 /* FILIGRANE */

@@ -34,6 +34,7 @@ const FIRE_MODE_VARIANTS = {
   ],
 }
 const CC_REPS_STEPS = [2, 3, 4, 7, 10]
+const EXCLUSIVE_ACTIONS = new Set(['attack', 'melee', 'reload', 'multi', 'interact'])
 const RL_BUTTONS = [
   { value: 5, label: '5b' }, { value: 10, label: '10b' },
   { value: 15, label: '15b' }, { value: 20, label: '20b' },
@@ -101,7 +102,9 @@ export default function CombatActionWindow({
     cover:     'exposed',
     vitesse:   'normal',
   })
-  const prevWeaponRef = useRef(null) // pour revert QB
+  const prevWeaponRef          = useRef(null)   // pour revert QB
+  const prevHasAnnouncedRef    = useRef(false)  // détection nouveau tour
+  const [declareError, setDeclareError] = useState(null)
 
   // Sync depuis rosterEntry a l'entree en phase ANNOUNCEMENT
   useEffect(() => {
@@ -124,6 +127,8 @@ export default function CombatActionWindow({
   // --- etat assaut (panneau droit) ------------------------------------------
   const [allures, setAllures]                     = useState(null)
   const [assaultWeapons, setAssaultWeapons]       = useState([])
+  const [allInventoryItems, setAllInventoryItems] = useState([])
+  const [selectedAmmoId, setSelectedAmmoId]       = useState(null)
   const [assaultPendingTokenId, setAssaultPendingTokenId] = useState(null)
   const [assaultBulletCount, setAssaultBulletCount]       = useState(null)
   const [assaultVariantAB, setAssaultVariantAB]           = useState('A')
@@ -131,6 +136,11 @@ export default function CombatActionWindow({
   const [inMoveMode, setInMoveMode]               = useState(false)
   const [inTargetMode, setInTargetMode]           = useState(false)
   const [moveSelection, setMoveSelection]         = useState(null)
+
+  // --- etat melee (panneau droit) -------------------------------------------
+  const [meleePendingTokenId, setMeleePendingTokenId]       = useState(null)
+  const [selectedMeleeWeaponId, setSelectedMeleeWeaponId]   = useState(null)  // null = mains nues
+  const [inMeleeTargetMode, setInMeleeTargetMode]           = useState(false)
 
   // --- etats initiaux (reference debut de tour pour calcul delta) -----------
   const initialStates = useRef({
@@ -158,6 +168,10 @@ export default function CombatActionWindow({
     setAssaultVariantAB('A')
     setIsDualWield(false)
     setMoveSelection(null)
+    setSelectedAmmoId(null)
+    setMeleePendingTokenId(null)
+    setSelectedMeleeWeaponId(null)
+    setInMeleeTargetMode(false)
     prevWeaponRef.current = null
   }, [rosterEntry?.token_id])
 
@@ -191,19 +205,55 @@ export default function CombatActionWindow({
     return () => { cancelled = true }
   }, [playerChar?.id])
 
-  // --- fetch armes equipees -------------------------------------------------
+  // --- écoute COMBAT_DECLARE_ERROR — message temporaire (3s) ---------------
+  useEffect(() => {
+    if (!socket) return
+    const handler = ({ message }) => {
+      setDeclareError(message)
+      setTimeout(() => setDeclareError(null), 4000)
+    }
+    socket.on(WS.COMBAT_DECLARE_ERROR, handler)
+    return () => socket.off(WS.COMBAT_DECLARE_ERROR, handler)
+  }, [socket])
+
+  // --- reset sélections au nouveau tour (has_announced true → false) --------
+  useEffect(() => {
+    if (!rosterEntry) return
+    const wasAnnounced = prevHasAnnouncedRef.current
+    const isAnnounced  = rosterEntry.has_announced ?? false
+    prevHasAnnouncedRef.current = isAnnounced
+    if (wasAnnounced && !isAnnounced) {
+      setMapSelected(new Set())
+      setQuick({ observer: 0, reperer: 0, phrase: false })
+      setAssaultPendingTokenId(null)
+      setAssaultBulletCount(null)
+      setAssaultVariantAB('A')
+      setIsDualWield(false)
+      setMoveSelection(null)
+      setSelectedAmmoId(null)
+      setMeleePendingTokenId(null)
+      setSelectedMeleeWeaponId(null)
+      setInMeleeTargetMode(false)
+      prevWeaponRef.current = null
+    }
+  }, [rosterEntry?.has_announced])
+
+  // --- fetch armes equipees + inventaire complet ---------------------------
+  // Dépend de phase pour se relancer à chaque nouveau tour (ANNOUNCEMENT)
+  // et obtenir ammo_remaining à jour après un rechargement en phase précédente.
   useEffect(() => {
     if (!playerChar?.id) return
     let cancelled = false
     api.get(`/char-sheet/${playerChar.id}/inventory`).then(res => {
       if (cancelled) return
-      const weapons = (res.data.items || []).filter(
+      const items = res.data.items || []
+      setAssaultWeapons(items.filter(
         item => (item.slot === 'MG' || item.slot === 'MD') && item.ref_fire_mode
-      )
-      setAssaultWeapons(weapons)
+      ))
+      setAllInventoryItems(items)
     }).catch(() => {})
     return () => { cancelled = true }
-  }, [playerChar?.id])
+  }, [playerChar?.id, phase])
 
   if (!playerToken || !rosterEntry) return null
 
@@ -249,6 +299,21 @@ export default function CombatActionWindow({
       : FIRE_MODE_VARIANTS.RL.find(v => v.bulletCount === assaultBulletCount)
   }
 
+  // Munitions disponibles pour le rechargement — filtrées par calibre de l'arme sélectionnée
+  const reloadAmmoItems = (selectedWeapon?.ref_caliber && allInventoryItems.length)
+    ? allInventoryItems.filter(item =>
+        item.ref_caliber === selectedWeapon.ref_caliber &&
+        !item.slot &&
+        item.container !== 'Coffre'
+      )
+    : []
+
+  // Ammo state — ammo_remaining null = jamais chargée (traité comme vide)
+  const ammoRemaining = selectedWeapon?.ammo_remaining ?? null
+  const ammoCount     = selectedWeapon?.ref_ammo_count ?? null
+  const isAmmoEmpty   = !selectedWeapon || ammoRemaining === null || ammoRemaining <= 0
+  const isAmmoFull    = !!selectedWeapon && ammoCount !== null && ammoRemaining !== null && ammoRemaining >= ammoCount
+
   const dualWieldBonusComp = (isDualWield && hasTwoWeapons && sameFirMode)
     ? (currentFireMode === 'RL' ? 5 : 3)
     : 0
@@ -261,12 +326,22 @@ export default function CombatActionWindow({
   const meleeSelected  = mapSelected.has('melee')
   const weaponLocked   = attackSelected || meleeSelected
 
+  // Armes de contact équipées (slots MG/MD/2M, catégorie 'Arme de contact')
+  const meleeWeapons = allInventoryItems.filter(item =>
+    (item.slot === 'MG' || item.slot === 'MD' || item.slot === '2M') &&
+    item.ref_category === 'Arme de contact'
+  )
+  // Armes de contact en inventaire (tous slots/containers) — pour message d'état
+  const hasMeleeInInventory = allInventoryItems.some(item => item.ref_category === 'Arme de contact')
+
   // --- QB : weapon auto-drawn quand attack/melee selectionne ---------------
   const handleMapToggle = (k) => {
     setMapSelected(prev => {
       const next = new Set(prev)
       const wasAttackOrMelee = prev.has('attack') || prev.has('melee')
+
       if (next.has(k)) {
+        // Désélection
         next.delete(k)
         if (k === 'attack') {
           setAssaultPendingTokenId(null)
@@ -275,19 +350,45 @@ export default function CombatActionWindow({
           setIsDualWield(false)
           setInTargetMode(false)
         }
+        if (k === 'melee') {
+          setMeleePendingTokenId(null)
+          setSelectedMeleeWeaponId(null)
+          setInMeleeTargetMode(false)
+        }
         if (k === 'move') setMoveSelection(null)
+        if (k === 'reload') setSelectedAmmoId(null)
       } else {
+        // Sélection : si action exclusive, désélectionner toutes les autres exclusives
+        if (EXCLUSIVE_ACTIONS.has(k)) {
+          for (const ex of EXCLUSIVE_ACTIONS) {
+            if (next.has(ex)) {
+              next.delete(ex)
+              if (ex === 'reload') setSelectedAmmoId(null)
+              if (ex === 'attack') {
+                setAssaultPendingTokenId(null)
+                setAssaultBulletCount(null)
+                setAssaultVariantAB('A')
+                setIsDualWield(false)
+                setInTargetMode(false)
+              }
+              if (ex === 'melee') {
+                setMeleePendingTokenId(null)
+                setSelectedMeleeWeaponId(null)
+                setInMeleeTargetMode(false)
+              }
+            }
+          }
+        }
         next.add(k)
       }
+
       const willAttackOrMelee = next.has('attack') || next.has('melee')
       if (!wasAttackOrMelee && willAttackOrMelee) {
-        // Entrer en mode combat => weapon passe a 'drawn'
         prevWeaponRef.current = states.weapon
         setStates(s => ({ ...s, weapon: 'drawn' }))
       } else if (wasAttackOrMelee && !willAttackOrMelee) {
-        // Quitter le mode combat => revert weapon
-        const prev = prevWeaponRef.current ?? initialStates.current.weapon
-        setStates(s => ({ ...s, weapon: prev }))
+        const revert = prevWeaponRef.current ?? initialStates.current.weapon
+        setStates(s => ({ ...s, weapon: revert }))
         prevWeaponRef.current = null
       }
       return next
@@ -336,13 +437,16 @@ export default function CombatActionWindow({
     assaultPendingTokenId != null &&
     currentVariant != null
   )
+  const reloadSelected = mapSelected.has('reload')
+  const reloadValid    = !reloadSelected || (selectedWeapon !== null && selectedAmmoId !== null)
+  const meleeValid     = !meleeSelected  || meleePendingTokenId != null
   const hasAnyAction = mapSelected.size > 0 || moveSelection !== null
     || quick.observer > 0 || quick.reperer > 0 || quick.phrase
     || Object.values(states).some((v, i) => v !== Object.values(initialStates.current)[i])
 
   // Comparer states vs initial proprement
   const stateChanged = Object.keys(states).some(k => states[k] !== initialStates.current[k])
-  const canDeclare = (hasAnyAction || stateChanged) && assaultValid
+  const canDeclare = (hasAnyAction || stateChanged) && assaultValid && reloadValid && meleeValid
 
   // --- emit declaration ----------------------------------------------------
   const handleDeclare = () => {
@@ -372,7 +476,10 @@ export default function CombatActionWindow({
           dualWieldBonusComp: dualWieldBonusComp,
           cover_shot:         states.cover !== 'exposed',
         } : null,
-        melee:    meleeSelected,
+        melee:    meleeSelected
+          ? { targetTokenId: meleePendingTokenId, weaponInvId: selectedMeleeWeaponId }
+          : null,
+        reload:   reloadSelected ? { weapon_inv_id: selectedWeapon?.id ?? null, ammo_item_id: selectedAmmoId } : false,
         multi:    mapSelected.has('multi'),
         interact: mapSelected.has('interact'),
       },
@@ -416,7 +523,10 @@ export default function CombatActionWindow({
   // =========================================================================
   if (isMyTurnInResolution) {
     const myAssaultAction = myActions.find(a => a.action_key === 'assault')
+    const myReloadAction  = myActions.find(a => a.action_key === 'reload')
+    const myMeleeAction   = myActions.find(a => a.action_key === 'melee')
     const cibleToken = myAssaultAction ? tokens.find(t => t.id === myAssaultAction.target_token_id) : null
+    const meleeCibleToken = myMeleeAction ? tokens.find(t => t.id === myMeleeAction.target_token_id) : null
     const isRushed = rosterEntry.state_vitesse === 'rushed'
     return (
       <div style={{ ...W.window, left: pos.left, top: pos.top }}>
@@ -442,6 +552,14 @@ export default function CombatActionWindow({
             <div style={{ color: '#7070a0', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
               En attente de validation GM…
             </div>
+          ) : myReloadAction ? (
+            <div style={{ color: '#7070a0', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
+              Rechargement — en attente du MJ…
+            </div>
+          ) : myMeleeAction ? (
+            <div style={{ color: '#7070a0', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
+              Corps à corps → <strong style={{ color: '#c0c0d0' }}>{meleeCibleToken?.label ?? '?'}</strong> — en attente du résultat…
+            </div>
           ) : (
             <button style={W.btnDeclare} onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}>
               Agir
@@ -462,8 +580,22 @@ export default function CombatActionWindow({
     )
   }
 
-  const isHidden   = inMoveMode || inTargetMode
+  // --- choix cible melee ---------------------------------------------------
+  const handleChooseMeleeTarget = () => {
+    setInMeleeTargetMode(true)
+    setMeleePendingTokenId(null)
+    onEnterTargetMode(
+      playerToken.id,
+      { x: playerToken.pos_x, z: playerToken.pos_y },
+      (tokenId) => { setMeleePendingTokenId(tokenId); setInMeleeTargetMode(false) },
+      () => { setInMeleeTargetMode(false) }
+    )
+  }
+
+  const isHidden    = inMoveMode || inTargetMode || inMeleeTargetMode
   const showAssault = attackSelected
+  const showReload  = reloadSelected && !showAssault
+  const showMelee   = meleeSelected  && !showAssault && !showReload
 
   // CC slider index
   const ccSliderIdx = assaultBulletCount && assaultBulletCount !== 1
@@ -477,7 +609,7 @@ export default function CombatActionWindow({
   return (
     <div style={{
       ...W.window,
-      width: showAssault ? 720 : 360,
+      width: (showAssault || showReload || showMelee) ? 720 : 360,
       opacity: isHidden ? 0 : 1,
       pointerEvents: isHidden ? 'none' : 'auto',
       left: pos.left,
@@ -531,16 +663,51 @@ export default function CombatActionWindow({
             <div style={W.sectionTitle}>ACTION</div>
             <div style={W.itemsGrid}>
               {MAP_ACTIONS.map(a => {
-                const isActive   = mapSelected.has(a.k)
-                const isDisabled = a.active === false
-                if (isDisabled) {
+                const isActive = mapSelected.has(a.k)
+                const span2    = a.span2 ? { gridColumn: 'span 2' } : {}
+
+                // Assaut grisé dynamiquement si arme vide
+                if (a.k === 'attack' && isAmmoEmpty) {
                   return (
-                    <div key={a.k} title={a.tooltip} style={W.itemGreyed}>
+                    <div key={a.k} title="Arme vide — rechargez d'abord" style={W.itemGreyed}>
+                      <span style={W.itemLabel}>{a.l}</span>
+                    </div>
+                  )
+                }
+
+                // Rechargement — label dynamique, grisé si plein ou sans arme
+                if (a.k === 'reload') {
+                  const reloadLabel = selectedWeapon && ammoCount !== null
+                    ? `Rechargement ${ammoRemaining ?? 0}/${ammoCount}`
+                    : 'Recharger'
+                  if (isAmmoFull || !selectedWeapon) {
+                    return (
+                      <div key={a.k} title={a.tooltip} style={{ ...W.itemGreyed, ...span2 }}>
+                        <span style={W.itemLabel}>{reloadLabel}</span>
+                      </div>
+                    )
+                  }
+                  return (
+                    <div key={a.k} title={a.tooltip}
+                      style={{ ...W.item, ...(isActive ? W.itemSelected : {}), ...span2 }}
+                      onClick={() => handleMapToggle(a.k)}
+                    >
+                      <span style={W.itemLabel}>{reloadLabel}</span>
+                    </div>
+                  )
+                }
+
+                // Statiquement désactivé (multi, interact)
+                if (a.active === false) {
+                  return (
+                    <div key={a.k} title={a.tooltip} style={{ ...W.itemGreyed, ...span2 }}>
                       <span style={W.itemLabel}>{a.l}</span>
                       {a.ini && <span style={W.itemMod}>{a.ini}</span>}
                     </div>
                   )
                 }
+
+                // Déplacement (zone select)
                 if (a.isZoneSelect) {
                   const canActivate = allures !== null
                   return (
@@ -551,7 +718,7 @@ export default function CombatActionWindow({
                         ...W.item,
                         ...(isActive ? W.itemSelected : {}),
                         ...(moveSelection ? W.itemSelected : {}),
-                        gridColumn: 'span 2',
+                        ...span2,
                         ...(!canActivate ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
                       }}
                       onClick={() => {
@@ -567,11 +734,13 @@ export default function CombatActionWindow({
                     </div>
                   )
                 }
+
+                // Défaut
                 return (
                   <div
                     key={a.k}
                     title={a.tooltip}
-                    style={{ ...W.item, ...(isActive ? W.itemSelected : {}) }}
+                    style={{ ...W.item, ...(isActive ? W.itemSelected : {}), ...span2 }}
                     onClick={() => handleMapToggle(a.k)}
                   >
                     <span style={W.itemLabel}>{a.l}</span>
@@ -651,6 +820,153 @@ export default function CombatActionWindow({
             })}
           </div>
         </div>
+
+        {/* ---- Panneau droit — rechargement : sélection munitions ---- */}
+        {showReload && (
+          <div style={W.assaultPanel}>
+            <div style={W.assaultSection}>
+              <div style={W.assaultSectionTitle}>Arme</div>
+              {selectedWeapon ? (
+                <div style={W.assaultInfoText}>
+                  {selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'}
+                  <span style={W.assaultInfoSub}> ({selectedWeapon.slot}) — {selectedWeapon.ref_caliber}</span>
+                </div>
+              ) : (
+                <div style={W.assaultNoWeapon}>Aucune arme équipée (MG/MD)</div>
+              )}
+            </div>
+
+            <div style={W.assaultSection}>
+              <div style={W.assaultSectionTitle}>
+                Munitions disponibles {selectedWeapon?.ref_caliber ? `— ${selectedWeapon.ref_caliber}` : ''}
+              </div>
+              {reloadAmmoItems.length === 0 ? (
+                <div style={{ ...W.assaultNoWeapon, color: '#c83030' }}>
+                  Aucune munition compatible dans le sac
+                </div>
+              ) : (
+                reloadAmmoItems.map(item => {
+                  const isSelected = item.id === selectedAmmoId
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => setSelectedAmmoId(isSelected ? null : item.id)}
+                      style={{
+                        ...W.assaultOption,
+                        padding: '6px 0',
+                        borderBottom: '1px solid #1e1e2e',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={W.assaultOptionLabel}>{item.custom_name || item.ref_name || 'Munition'}</div>
+                        <div style={W.assaultOptionSub}>Qté : {item.quantity}</div>
+                      </div>
+                      <div style={{ ...W.assaultRadio, ...(isSelected ? W.assaultRadioActive : {}) }} />
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {selectedAmmoId && (
+              <div style={{ padding: '8px 14px' }}>
+                <div style={{ ...W.assaultSummaryText, color: '#3aaa6a' }}>
+                  ✓ Munition sélectionnée
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ---- Panneau droit — corps à corps ---- */}
+        {showMelee && (
+          <div style={{ ...W.assaultPanel, background: 'rgba(80,180,80,0.04)' }}>
+
+            <div style={W.assaultSection}>
+              <div style={{ ...W.assaultSectionTitle, color: '#70c070' }}>Arme</div>
+              {/* Mains nues */}
+              <div
+                onClick={() => setSelectedMeleeWeaponId(null)}
+                style={{
+                  ...W.assaultOption,
+                  padding: '6px 0',
+                  borderBottom: '1px solid #1e1e2e',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={W.assaultOptionLabel}>Mains nues</div>
+                  <div style={W.assaultOptionSub}>1D4 + Mod.Dom.</div>
+                </div>
+                <div style={{ ...W.assaultRadio, ...(selectedMeleeWeaponId === null ? W.assaultRadioActive : {}) }} />
+              </div>
+              {/* Armes de contact équipées */}
+              {meleeWeapons.map(item => {
+                const allonge   = parseInt(item.ref_range) || 0
+                const isSelected = item.id === selectedMeleeWeaponId
+                const weaponUsable = states.weapon === 'drawn'
+                return (
+                  <div
+                    key={item.id}
+                    title={weaponUsable ? undefined : 'Mettez l\'arme "Au clair" d\'abord (−3 INI)'}
+                    onClick={() => weaponUsable && setSelectedMeleeWeaponId(isSelected ? null : item.id)}
+                    style={{
+                      ...W.assaultOption,
+                      padding: '6px 0',
+                      borderBottom: '1px solid #1e1e2e',
+                      cursor: weaponUsable ? 'pointer' : 'not-allowed',
+                      opacity: weaponUsable ? 1 : 0.35,
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={W.assaultOptionLabel}>{item.custom_name || item.ref_name || 'Arme'}</div>
+                      <div style={W.assaultOptionSub}>
+                        {item.slot} · {item.ref_damage_h || '—'}
+                        {allonge > 0 ? ` · +${allonge}m allonge` : ''}
+                      </div>
+                    </div>
+                    <div style={{ ...W.assaultRadio, ...(isSelected && weaponUsable ? { ...W.assaultRadioActive, borderColor: '#70c070', background: '#70c070' } : {}) }} />
+                  </div>
+                )
+              })}
+              {meleeWeapons.length === 0 && (
+                <div style={{ ...W.assaultNoWeapon, color: '#70a070', marginTop: 4 }}>
+                  {hasMeleeInInventory
+                    ? 'Mains nues uniquement (arme rangée — équipez-la en main)'
+                    : 'Mains nues uniquement (aucune arme de contact)'
+                  }
+                </div>
+              )}
+            </div>
+
+            <div style={W.assaultSection}>
+              <div style={{ ...W.assaultSectionTitle, color: '#70c070' }}>Cible</div>
+              {meleePendingTokenId ? (() => {
+                const tgt = tokens.find(t => t.id === meleePendingTokenId)
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ ...W.assaultTargetName, color: '#70c070' }}>{tgt?.label ?? '?'}</span>
+                    <button style={W.changeTargetBtn} onClick={handleChooseMeleeTarget}>Changer</button>
+                  </div>
+                )
+              })() : (
+                <button
+                  style={{ ...W.chooseTargetBtn, borderColor: '#507050', color: '#70c070', background: 'rgba(80,180,80,0.1)' }}
+                  onClick={handleChooseMeleeTarget}
+                >Choisir l'adversaire</button>
+              )}
+            </div>
+
+            {meleePendingTokenId && (
+              <div style={{ padding: '8px 14px' }}>
+                <div style={{ ...W.assaultSummaryText, color: '#70c070' }}>
+                  ✓ Prêt à l'assaut
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ---- Panneau droit — assaut (inchange fonctionnellement) ---- */}
         {showAssault && (
@@ -801,26 +1117,33 @@ export default function CombatActionWindow({
 
       {/* ---- Footer ---- */}
       <div style={W.footer}>
-        <div style={W.footerLeft}>
-          <span style={{
-            ...W.totalMod,
-            color: iniDelta >= 0 ? '#3aaa6a' : (iniDelta < -10 ? '#c83030' : '#c86030'),
-          }}>
-            INI : {iniDelta >= 0 ? `+${iniDelta}` : iniDelta}
-          </span>
-          {moveSelection && (
-            <span style={W.destination}>
-              [{moveSelection.targetPosX}, {moveSelection.targetPosY}]
+        {declareError && (
+          <div style={{ fontSize: 10, color: '#c83030', background: 'rgba(200,48,48,0.08)', border: '1px solid #c8303044', borderRadius: 3, padding: '4px 8px', marginBottom: 4 }}>
+            ⚠ {declareError}
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <div style={W.footerLeft}>
+            <span style={{
+              ...W.totalMod,
+              color: iniDelta >= 0 ? '#3aaa6a' : (iniDelta < -10 ? '#c83030' : '#c86030'),
+            }}>
+              INI : {iniDelta >= 0 ? `+${iniDelta}` : iniDelta}
             </span>
-          )}
+            {moveSelection && (
+              <span style={W.destination}>
+                [{moveSelection.targetPosX}, {moveSelection.targetPosY}]
+              </span>
+            )}
+          </div>
+          <button
+            style={{ ...W.btnDeclare, ...(!canDeclare ? W.btnDeclareDisabled : {}) }}
+            onClick={handleDeclare}
+            disabled={!canDeclare}
+          >
+            Declarer l&apos;action
+          </button>
         </div>
-        <button
-          style={{ ...W.btnDeclare, ...(!canDeclare ? W.btnDeclareDisabled : {}) }}
-          onClick={handleDeclare}
-          disabled={!canDeclare}
-        >
-          Declarer l&apos;action
-        </button>
       </div>
     </div>
   )

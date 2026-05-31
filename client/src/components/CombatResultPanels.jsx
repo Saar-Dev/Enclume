@@ -141,6 +141,124 @@ function CloseButton({ onClose }) {
   )
 }
 
+/* ── Vue Rechargement — bottom-center, joueur rechargeur uniquement ────── */
+export function CombatResultReload({ result, onClose }) {
+  if (!result) return null
+  const success = result.success
+  const accent  = success ? C.green : C.red
+
+  return (
+    <div style={{
+      position: 'absolute', bottom: 24, left: '50%',
+      transform: 'translateX(-50%)',
+      width: 220,
+      background: C.bg,
+      border: `1px solid ${accent}55`,
+      borderTop: `3px solid ${accent}`,
+      padding: '14px 12px 12px',
+      boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+      color: C.text,
+      pointerEvents: 'auto',
+      fontFamily: 'Inter, system-ui, sans-serif',
+    }}>
+      <div style={{ fontSize: 9, color: C.textDim, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+        Rechargement
+      </div>
+      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: accent, letterSpacing: '0.01em' }}>
+        {success ? 'Réussi' : 'Impossible'}
+      </div>
+      {success ? (
+        <div style={{
+          padding: '6px 10px',
+          background: C.bgInner,
+          border: `1px solid ${C.border}`,
+          borderLeft: `3px solid ${C.green}`,
+          display: 'flex', alignItems: 'baseline', gap: 4,
+        }}>
+          <span style={{ fontSize: 20, color: C.textBright, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{result.newAmmo}</span>
+          <span style={{ fontSize: 11, color: C.textDim }}>/ {result.clipSize} balles</span>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: C.textDim, fontStyle: 'italic' }}>
+          Aucune munition ({result.caliber}) disponible
+        </div>
+      )}
+      {onClose && <CloseButton onClose={onClose} />}
+    </div>
+  )
+}
+
+/* ── Vue Corps à corps — bottom-right, jets en opposition ───────────────── */
+export function CombatResultMelee({ attaquant, defenseur, rollAttaque, chancesAttaque, rollDefense, chanceDefense, hit, onClose }) {
+  const accent = hit ? C.red : C.green
+
+  return (
+    <div style={{
+      position: 'absolute', bottom: 24, right: 24,
+      width: 240,
+      background: C.bg,
+      border: `1px solid ${accent}55`,
+      borderTop: `3px solid ${accent}`,
+      padding: '12px',
+      boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+      color: C.text,
+      pointerEvents: 'auto',
+      fontFamily: 'Inter, system-ui, sans-serif',
+    }}>
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 9, color: C.textDim, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 3 }}>
+          Corps à corps
+        </div>
+        <div style={{ fontSize: 13, color: C.textBright, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span>{attaquant}</span>
+          <span style={{ color: C.textDim, fontSize: 11 }}>→</span>
+          <span>{defenseur}</span>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: accent, letterSpacing: '0.02em' }}>
+        {hit ? 'Touché' : 'Esquivé'}
+      </div>
+
+      {/* Jet attaquant */}
+      <div style={{ marginBottom: 4 }}>
+        <div style={{ fontSize: 9, color: C.textDim, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 2 }}>Attaque</div>
+        <div style={{
+          display: 'flex', alignItems: 'baseline', gap: 6,
+          padding: '5px 8px',
+          background: C.bgInner,
+          border: `1px solid ${C.border}`,
+          borderLeft: `3px solid ${rollAttaque <= chancesAttaque ? C.green : C.red}`,
+        }}>
+          <span style={{ fontSize: 16, color: rollAttaque <= chancesAttaque ? C.green : C.red, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{rollAttaque}</span>
+          <span style={{ fontSize: 10, color: C.textDim }}>/</span>
+          <span style={{ fontSize: 12, color: C.text, fontVariantNumeric: 'tabular-nums' }}>{chancesAttaque}</span>
+        </div>
+      </div>
+
+      {/* Jet défenseur */}
+      {rollDefense != null && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 9, color: C.textDim, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 2 }}>Défense</div>
+          <div style={{
+            display: 'flex', alignItems: 'baseline', gap: 6,
+            padding: '5px 8px',
+            background: C.bgInner,
+            border: `1px solid ${C.border}`,
+            borderLeft: `3px solid ${rollDefense <= chanceDefense ? C.green : C.red}`,
+          }}>
+            <span style={{ fontSize: 16, color: rollDefense <= chanceDefense ? C.green : C.red, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{rollDefense}</span>
+            <span style={{ fontSize: 10, color: C.textDim }}>/</span>
+            <span style={{ fontSize: 12, color: C.text, fontVariantNumeric: 'tabular-nums' }}>{chanceDefense}</span>
+          </div>
+        </div>
+      )}
+
+      {onClose && <CloseButton onClose={onClose} />}
+    </div>
+  )
+}
+
 /* ── Vue GM — bottom-left, ton neutre, tireur → cible ──────────────────── */
 export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, localisation, degatsBruts, degatsNets, severity, is_lethal, shockResult, onClose }) {
   const sevData = severity ? SEVERITY[severity] : null

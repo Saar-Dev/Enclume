@@ -143,7 +143,43 @@ export default function DashboardPage() {
           {/* CONTENT */}
           <div style={styles.content}>
 
+            <div style={styles.actionsRow}>
+              <button style={styles.btnSecondary} onClick={() => { setShowJoin(true); setShowCreate(false) }}>
+                {t('dashboard.joinWithCode')}
+              </button>
+            </div>
+
             {error && <div style={styles.error}>{error}</div>}
+
+            {showCreate && (
+              <form onSubmit={handleCreate} style={styles.inlineForm}>
+                <input
+                  style={styles.input}
+                  placeholder={t('dashboard.campaignName')}
+                  value={newCampaignName}
+                  onChange={e => setNewCampaignName(e.target.value)}
+                  required
+                  autoFocus
+                />
+                <button style={styles.btnPrimary} type="submit">{t('dashboard.create')}</button>
+                <button style={styles.btnGhost} type="button" onClick={() => setShowCreate(false)}>{t('common.cancel')}</button>
+              </form>
+            )}
+
+            {showJoin && (
+              <form onSubmit={handleJoin} style={styles.inlineForm}>
+                <input
+                  style={styles.input}
+                  placeholder={t('dashboard.inviteCode')}
+                  value={inviteCode}
+                  onChange={e => setInviteCode(e.target.value)}
+                  required
+                  autoFocus
+                />
+                <button style={styles.btnPrimary} type="submit">{t('dashboard.join')}</button>
+                <button style={styles.btnGhost} type="button" onClick={() => setShowJoin(false)}>{t('common.cancel')}</button>
+              </form>
+            )}
 
             {loading ? (
               <p style={styles.muted}>{t('common.loading')}</p>
@@ -152,9 +188,8 @@ export default function DashboardPage() {
 
             {/* EMPTY STATE */}
             {campaigns.length === 0 && (
-              <div className="card campaign-create" onClick={() => setShowCreate(true)}>
+              <div className="card campaign-create" onClick={() => { setShowCreate(true); setShowJoin(false) }}>
                 <div className="create-label">{t('dashboard.createCardLabel')}</div>
-                <div className="create-plus">+</div>
               </div>
             )}
 
@@ -230,9 +265,8 @@ export default function DashboardPage() {
 
             {/* CREATE CARD LAST */}
             {campaigns.length > 0 && (
-              <div className="card campaign-create" onClick={() => setShowCreate(true)}>
+              <div className="card campaign-create" onClick={() => { setShowCreate(true); setShowJoin(false) }}>
                 <div className="create-label">{t('dashboard.createCardLabel')}</div>
-                <div className="create-plus">+</div>
               </div>
             )}
 
@@ -391,6 +425,49 @@ const styles = {
     borderRadius: '6px',
     padding: '8px 16px',
     fontSize: '13px',
+    cursor: 'pointer',
+  },
+
+  actionsRow: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    marginBottom: '20px',
+  },
+
+  btnSecondary: {
+    backgroundColor: 'var(--bg-card)',
+    color: 'var(--text-primary)',
+    border: '1px solid var(--border-normal)',
+    borderRadius: '6px',
+    padding: '8px 16px',
+    fontSize: '13px',
+    cursor: 'pointer',
+  },
+
+  inlineForm: {
+    display: 'flex',
+    gap: '10px',
+    marginBottom: '24px',
+    alignItems: 'center',
+  },
+
+  input: {
+    backgroundColor: 'var(--bg-card)',
+    border: '1px solid var(--border-normal)',
+    borderRadius: '8px',
+    padding: '9px 14px',
+    color: 'var(--text-primary)',
+    outline: 'none',
+    fontSize: '14px',
+    minWidth: '240px',
+  },
+
+  btnGhost: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-secondary)',
+    fontSize: '13px',
+    padding: '8px',
     cursor: 'pointer',
   },
 }

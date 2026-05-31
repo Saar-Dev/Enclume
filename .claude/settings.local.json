@@ -102,7 +102,16 @@
       "Bash(Select-String -Path \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\client\\\\src\\\\character\\\\ArmorWoundPanel.jsx\" -Pattern \"WOUND_ADDED|shock_test|COMBAT_ATTACK\")",
       "Bash(Select-Object -First 20)",
       "Bash(powershell -command \"\\(Get-Content 'c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\JOURNAL3.md'\\).Count\")",
-      "PowerShell(Remove-Item \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\client\\\\src\\\\character\\\\SilhouettePanel - Copie.jsx\" -Confirm:$false)"
+      "PowerShell(Remove-Item \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\client\\\\src\\\\character\\\\SilhouettePanel - Copie.jsx\" -Confirm:$false)",
+      "Bash(psql postgresql://vtt:vttpass@localhost:5432/vtt -c ' *)",
+      "PowerShell($env:PGPASSWORD = \"vttpass\"; & \"C:\\\\Program Files\\\\PostgreSQL\\\\17\\\\bin\\\\psql.exe\" -U vtt -h localhost -d vtt -c \"SELECT id, name, location, range, category FROM ref_equipment WHERE location IN \\('M', '2M'\\) ORDER BY category, name LIMIT 80;\")",
+      "PowerShell(docker exec -it enclume-postgres-1 psql -U vtt -d vtt -c \"SELECT id, name, location, range, category FROM ref_equipment WHERE location IN \\('M', '2M'\\) ORDER BY category, name LIMIT 80;\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "Bash(node --input-type=module --check)",
+      "Bash(echo \"CombatActionWindow:$?\")",
+      "Bash(echo \"CombatResultPanels:$?\")",
+      "Bash(echo \"CombatOverlay:$?\")",
+      "Bash(echo \"SessionPage:$?\")"
     ]
   }
 }

@@ -93,6 +93,11 @@ export const WS = {
   COMBAT_DAMAGE_CONFIRM:         'combat:damage_confirm',          // PJ → serveur : déclenche le calcul (jets serveur)
   COMBAT_DAMAGE_RESULT:          'combat:damage_result',           // serveur → socket tireur PJ : résultats pour affichage fenêtre
   COMBAT_ATTACK_PLAYER_RESULT:   'combat:attack_player_result',    // serveur → socket tireur PJ : résultat jet de toucher
+  COMBAT_RELOAD_RESULT:          'combat:reload_result',           // serveur → socket joueur rechargeur : succès ou échec
+  COMBAT_MELEE_DEFENSE_PROMPT:   'combat:melee_defense_prompt',    // serveur → socket défenseur PJ : invite à défendre
+  COMBAT_MELEE_DEFENSE_CONFIRM:  'combat:melee_defense_confirm',   // défenseur PJ → serveur : déclenche la résolution
+  COMBAT_MELEE_RESULT:           'combat:melee_result',            // serveur → room : résultat jets en opposition (attaque/défense)
+  COMBAT_DECLARE_ERROR:          'combat:declare_error',           // serveur → socket : erreur de validation déclaration (ex: hors portée)
 
   // Jets favoris — macros compétences (PLAN 13)
   MACRO_ROLL:        'macro:roll',         // joueur → serveur : exécuter une macro

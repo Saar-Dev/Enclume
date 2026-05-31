@@ -15,6 +15,7 @@ import {
   calcResistanceArmure,
   calcCarenceArmure,
   getShockMalus,
+  getModDom,
   calcSouffle,
   calcResistanceDroguesInput,
   ATTR_LABELS,
@@ -41,6 +42,7 @@ import {
 // Nettoyée à chaque résolution (ENTITY_ACTION_RESOLVE) ou expiration (timeout 60s — PE12).
 const pendingEntityActions = new Map()
 const pendingDamageActions = new Map()
+const pendingMeleeDefense  = new Map()  // key = defenderTokenId, valeur = données attaque en attente
 
 const LOC_TABLE = [
   { max: 2,  slot: 'T'  },
@@ -1850,12 +1852,43 @@ const initSocket = (io) => {
           })
         }
 
-        if (mapActions?.melee) {
-          actionRows.push({
-            campaign_id: campaignId, token_id: tokenId,
-            action_key: 'close_combat', type: 'micro', sequence: 3,
-            modifiers: JSON.stringify({ ini_mod: -3 }), status: 'pending',
-          })
+        if (mapActions?.melee && typeof mapActions.melee === 'object') {
+          const { targetTokenId: meleeTargetId, weaponInvId: meleeWeaponId } = mapActions.melee
+          if (meleeTargetId) {
+            // Validation distance (PE14) : dist2D ≤ 3 + allonge
+            const [myToken, targetToken] = await Promise.all([
+              db('tokens').where({ id: tokenId }).select('pos_x','pos_y').first(),
+              db('tokens').where({ id: meleeTargetId }).select('pos_x','pos_y').first(),
+            ])
+            let allonge = 0
+            if (meleeWeaponId) {
+              const meleeWeapon = await db('char_inventory')
+                .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+                .where({ 'char_inventory.id': meleeWeaponId })
+                .select('ref_equipment.range as ref_range')
+                .first()
+              allonge = parseInt(meleeWeapon?.ref_range) || 0
+            }
+            const dx = (myToken?.pos_x ?? 0) - (targetToken?.pos_x ?? 0)
+            const dz = (myToken?.pos_y ?? 0) - (targetToken?.pos_y ?? 0)  // PE14 : pos_y = axe Z
+            const dist2d = Math.sqrt(dx * dx + dz * dz)
+            if (dist2d <= 3 + allonge) {
+              actionRows.push({
+                campaign_id: campaignId, token_id: tokenId,
+                action_key: 'melee', type: 'melee', sequence: 3,
+                weapon_inv_id: meleeWeaponId ?? null,
+                target_token_id: meleeTargetId,
+                modifiers: JSON.stringify({ ini_mod: -3 }),
+                status: 'pending',
+              })
+            } else {
+              console.warn(`[WS] COMBAT_ACTION_DECLARE — melee hors portée: dist=${dist2d.toFixed(1)}m allonge=${allonge} token:${tokenId}`)
+              socket.emit(WS.COMBAT_DECLARE_ERROR, {
+                message: `Cible hors portée — distance : ${dist2d.toFixed(1)}m, portée max : ${3 + allonge}m`,
+              })
+              return  // annuler toute la déclaration, ne pas marquer announced
+            }
+          }
         }
 
         if (mapActions?.multi) {
@@ -1932,7 +1965,7 @@ const initSocket = (io) => {
         let actionType = 'micro'
         if (mapActions?.attack)      actionType = 'assault'
         else if (mapActions?.move)   actionType = getType(mapActions.move.action_key)
-        else if (mapActions?.melee)  actionType = 'close_combat'
+        else if (mapActions?.melee)  actionType = 'melee'
         else if (mapActions?.reload) actionType = 'reload'
 
         io.to(campaignId).emit(WS.COMBAT_ACTION_DECLARED, {
@@ -2018,6 +2051,7 @@ const initSocket = (io) => {
           .orderBy('sequence', 'asc')
 
         // Résolution action par action
+        let needsDefenseWait = false
         for (const action of actions) {
           if (action.type === 'move_short' || action.type === 'move_long') {
             const tx = action.target_pos_x
@@ -2050,6 +2084,8 @@ const initSocket = (io) => {
             }
           } else if (action.type === 'reload') {
             await resolveReloadAction(io, socket, campaignId, character, action)
+          } else if (action.type === 'melee') {
+            needsDefenseWait = await resolveMeleeAction(io, socket, campaignId, action, character)
           }
           // micro / skip : resolved direct, pas d'effet V1
           await db('combat_actions')
@@ -2057,7 +2093,10 @@ const initSocket = (io) => {
             .update({ status: 'resolved', updated_at: db.fn.now() })
         }
 
-        await advanceSlot(io, campaignId, slots, state.active_slot_idx + 1)
+        // Slot bloqué si on attend le jet de défense d'un PJ
+        if (!needsDefenseWait) {
+          await advanceSlot(io, campaignId, slots, state.active_slot_idx + 1)
+        }
       } catch (err) {
         console.error('[WS] COMBAT_ACTION_CONFIRM error:', err.message)
       }
@@ -2077,6 +2116,7 @@ const initSocket = (io) => {
         mr, portee, fire_mode_bonus_dmg, formula,
         for_na_cible, con_na_cible, vol_na_cible,
         tireurUsername, tireurColor, userId, targetName,
+        type: pendingType, modDom,
       } = pending
 
       try {
@@ -2100,13 +2140,18 @@ const initSocket = (io) => {
           etq = resistanceArmure.etq
         }
 
-        // 3. Calcul dégâts
-        const mrTable = await getMrTable()
-        const modDomAttaque = getModifier(mrTable, mr)
-        const isShortRange = ['bout_portant', 'courte'].includes(portee)
-        const modDegatsMode = isShortRange ? fire_mode_bonus_dmg : 0
+        // 3. Calcul dégâts (branche melee vs assault)
         const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula.replace(/\s/g, ''))
-        const degautsBruts = rawDice + modDomAttaque + modDegatsMode
+        let degautsBruts
+        if (pendingType === 'melee') {
+          degautsBruts = rawDice + (modDom ?? 0)
+        } else {
+          const mrTable = await getMrTable()
+          const modDomAttaque = getModifier(mrTable, mr)
+          const isShortRange = ['bout_portant', 'courte'].includes(portee)
+          const modDegatsMode = isShortRange ? fire_mode_bonus_dmg : 0
+          degautsBruts = rawDice + modDomAttaque + modDegatsMode
+        }
         const rd = calcResistanceDommages(for_na_cible, con_na_cible)
         const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
 
@@ -2226,6 +2271,190 @@ const initSocket = (io) => {
         })
       } catch (err) {
         console.error('[WS] COMBAT_DAMAGE_CONFIRM error:', err.message)
+      }
+    })
+
+    // ─── COMBAT_MELEE_DEFENSE_CONFIRM — défenseur PJ valide son jet ───────────
+    // Résout l'opposition (rollAttaque vs rollDefense), gère les dégâts, avance le slot.
+    socket.on(WS.COMBAT_MELEE_DEFENSE_CONFIRM, async ({ tokenId }) => {
+      const pending = pendingMeleeDefense.get(tokenId)
+      if (!pending) {
+        console.warn(`[WS] COMBAT_MELEE_DEFENSE_CONFIRM — pas de pending pour defender:${tokenId}`)
+        return
+      }
+      pendingMeleeDefense.delete(tokenId)
+
+      const {
+        campaignId: meleeCampaignId,
+        attackerTokenId, attackerCharacter,
+        attackerUsername, attackerColor,
+        rollAttaque, chancesAttaque,
+        defenderSkillTotal, defenderEffectiveMalus,
+        damageFormula, modDom,
+        characterIdCible, char_sheet_id_cible,
+        for_na_cible, con_na_cible, vol_na_cible,
+        targetName, userId,
+      } = pending
+
+      try {
+        // 1. Roll défense D20 (serveur)
+        const { total: rollDefense, rolls: defRolls, seed: defSeed } = await parseDice('1d20')
+        const chanceDefense = defenderSkillTotal + defenderEffectiveMalus
+
+        // 2. Résolution Polaris : attaquant réussit ET défenseur rate → touche
+        const attackSuccess  = rollAttaque  <= chancesAttaque
+        const defenseSuccess = rollDefense  <= chanceDefense
+        const hit = attackSuccess && !defenseSuccess
+
+        console.log(`[WS] melee défense — rollAtk:${rollAttaque}/${chancesAttaque} rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
+
+        // Broadcast roll défense au chat
+        const now = new Date().toISOString()
+        io.to(meleeCampaignId).emit(WS.DICE_RESULT, {
+          userId: socket.user?.id, username: socket.user?.username ?? 'Défenseur',
+          color: '#6060c0',
+          formula: '1d20', rolls: defRolls, total: rollDefense,
+          isCriticalSuccess: rollDefense === 1, isCriticalFail: rollDefense === 20,
+          seed: defSeed, timestamp: now,
+          skillLabel: 'Corps à corps — Défense',
+        })
+
+        // 3. Résultat opposition → room
+        io.to(meleeCampaignId).emit(WS.COMBAT_MELEE_RESULT, {
+          attaquantId: attackerTokenId,
+          defenseurId: tokenId,
+          rollAttaque, chancesAttaque,
+          rollDefense, chanceDefense,
+          hit,
+        })
+
+        // 4. Dégâts si touche
+        if (hit) {
+          if (attackerCharacter.type === 'pj') {
+            // PJ attaquant : invite à lancer les dés de dégâts (CombatDamageWindow existant)
+            pendingDamageActions.set(attackerTokenId, {
+              type: 'melee',
+              campaignId: meleeCampaignId,
+              targetTokenId: tokenId,
+              characterIdCible,
+              char_sheet_id_cible,
+              modDom,
+              formula: damageFormula,
+              for_na_cible,
+              con_na_cible,
+              vol_na_cible,
+              tireurUsername: attackerUsername,
+              tireurColor: attackerColor,
+              userId,
+              targetName,
+            })
+            // Trouver le socket de l'attaquant PJ
+            const sockets = await io.fetchSockets()
+            const attackerSocket = sockets.find(s =>
+              s.campaignId === meleeCampaignId && s.user?.id === attackerCharacter.user_id
+            )
+            const prompt = { tokenId: attackerTokenId, formula: damageFormula, targetName }
+            if (attackerSocket) {
+              attackerSocket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)
+            } else {
+              socket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)  // fallback : même socket (rare)
+            }
+          } else {
+            // PNJ attaquant : résolution auto des dégâts
+            const { total: rollLoc } = await parseDice('1d20')
+            const slotCode = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
+            const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
+
+            let etq = null
+            if (char_sheet_id_cible && characterIdCible) {
+              const armuresCible = await db('char_inventory')
+                .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+                .where({ 'char_inventory.character_id': characterIdCible })
+                .whereNotNull('char_inventory.slot')
+                .select('char_inventory.slot', 'ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock')
+              const armuresSlot = armuresCible.filter(a =>
+                a.slot && ('/' + a.slot + '/').includes('/' + slotCode + '/')
+              )
+              etq = calcResistanceArmure(armuresSlot).etq
+            }
+
+            const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
+            const degautsBruts = rawDice + (modDom ?? 0)
+            const rd = calcResistanceDommages(for_na_cible, con_na_cible)
+            const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
+
+            let severity = null, is_lethal = false
+            if      (degatsNets >= 30) { severity = 'mortelle'; is_lethal = true }
+            else if (degatsNets >= 25) { severity = 'mortelle' }
+            else if (degatsNets >= 20) { severity = 'critique' }
+            else if (degatsNets >= 15) { severity = 'grave'    }
+            else if (degatsNets >= 10) { severity = 'moyenne'  }
+            else if (degatsNets >=  5) { severity = 'legere'   }
+
+            let finalSeverity = severity
+            let shockResult = null
+            if (severity && char_sheet_id_cible) {
+              try {
+                const result = await db.transaction(trx =>
+                  resolveWoundInsertion(trx, char_sheet_id_cible, localisation, severity)
+                )
+                finalSeverity = result.wound.severity
+                io.to(meleeCampaignId).emit(WS.WOUND_ADDED, {
+                  characterId: characterIdCible,
+                  wound: result.wound,
+                  promoted: result.promoted,
+                  shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
+                })
+                if (isShockTestRequired(finalSeverity, localisation)) {
+                  const seuils     = calcSeuils(for_na_cible, con_na_cible, vol_na_cible)
+                  const shockMalus = getShockMalus(finalSeverity, localisation, is_lethal)
+                  const { total: rollChoc } = await parseDice('1d20')
+                  let outcome
+                  if      (rollChoc <= seuils.etourdissement + shockMalus) outcome = 'ok'
+                  else if (rollChoc <= seuils.inconscience    + shockMalus) outcome = 'etourdi'
+                  else                                                       outcome = 'inconscient'
+                  shockResult = {
+                    triggered: true, roll: rollChoc, outcome, shockMalus,
+                    seuilEtourdi: seuils.etourdissement + shockMalus,
+                    seuilIncons:  seuils.inconscience   + shockMalus,
+                  }
+                  if (outcome !== 'ok') {
+                    await db('combat_roster')
+                      .where({ campaign_id: meleeCampaignId, token_id: tokenId })
+                      .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
+                  }
+                }
+              } catch (woundErr) {
+                console.error('[WS] COMBAT_MELEE_DEFENSE_CONFIRM (PNJ dmg) — wound error:', woundErr.message)
+              }
+            }
+
+            io.to(meleeCampaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+              tireurId:    attackerTokenId,
+              cibleId:     tokenId,
+              localisation,
+              degautsBruts,
+              degatsNets,
+              severity:    finalSeverity,
+              is_lethal,
+              isSuccess:   true,
+              isPnj:       true,
+              roll:        rollAttaque,
+              chancesDeReussite: chancesAttaque,
+              shockResult,
+            })
+          }
+        }
+
+        // 5. Avance le slot (débloque le combat)
+        const state = await db('combat_state').where({ campaign_id: meleeCampaignId }).first()
+        const slots = await db('combat_roster')
+          .where({ campaign_id: meleeCampaignId, status: 'active', has_announced: true })
+          .orderBy('initiative', 'desc')
+          .select('token_id', 'initiative')
+        await advanceSlot(io, meleeCampaignId, slots, state.active_slot_idx + 1)
+      } catch (err) {
+        console.error('[WS] COMBAT_MELEE_DEFENSE_CONFIRM error:', err.message)
       }
     })
 
@@ -2422,8 +2651,295 @@ async function endTurn(io, campaignId) {
 }
 
 // ─── RÉSOLUTION RECHARGEMENT ────────────────────────────────────────────────
+// Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='melee'.
+// Retourne true si le slot doit rester bloqué (défenseur PJ en attente), false sinon.
+async function resolveMeleeAction(io, socket, campaignId, action, character) {
+  try {
+    const weaponInvId   = action.weapon_inv_id ?? null
+    const targetTokenId = action.target_token_id
+    if (!targetTokenId) return false
+
+    // ── 1. Données attaquant ──────────────────────────────────────────────────
+    const sheetAttaquant = await db('char_sheet').where({ character_id: character.id }).first()
+    if (!sheetAttaquant) return false
+
+    // Arme + formule dégâts
+    let weapon = null, damageFormula = '1D4'
+    if (weaponInvId) {
+      weapon = await db('char_inventory')
+        .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+        .where({ 'char_inventory.id': weaponInvId })
+        .select('ref_equipment.damage_h as ref_damage_h', 'char_inventory.equipment_id')
+        .first()
+      if (weapon?.ref_damage_h) damageFormula = weapon.ref_damage_h
+    }
+
+    // Skill associé à l'arme (via ref_equipment_skill_assoc) ou COMBAT_A_MAINS_NUES (mains nues)
+    let skillId = 'COMBAT_A_MAINS_NUES'
+    if (weapon?.equipment_id) {
+      const skillAssoc = await db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first()
+      if (skillAssoc) skillId = skillAssoc.skill_id
+    }
+
+    const [attrsAttaquant, archetypeAttaquant, charSkill, refSkill, woundsAttaquant, invAttaquant] = await Promise.all([
+      db('char_attributes').where({ char_sheet_id: sheetAttaquant.id }),
+      db('char_archetype').where({ char_sheet_id: sheetAttaquant.id }).first(),
+      db('char_skills').where({ char_sheet_id: sheetAttaquant.id, skill_id: skillId }).first(),
+      db('ref_skills').where({ id: skillId }).first(),
+      db('character_wounds').where({ char_sheet_id: sheetAttaquant.id }),
+      db('char_inventory')
+        .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+        .where({ 'char_inventory.character_id': character.id })
+        .select('char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
+                'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str'),
+    ])
+    const genoAttaquant = archetypeAttaquant?.genotype_id
+      ? await db('ref_genotypes').where({ id: archetypeAttaquant.genotype_id }).first()
+      : null
+
+    const attackerSkillTotal = refSkill ? calcSkillTotal(attrsAttaquant, charSkill, refSkill, genoAttaquant) : 0
+    const woundPenalty = calcWoundPenalty(woundsAttaquant)
+    const forAttr = attrsAttaquant.find(a => a.attr_id === 'FOR')
+    const forValue = (forAttr?.base_level ?? 7) + (forAttr?.pc_modifier ?? 0)
+    const totalWeight = invAttaquant.reduce((sum, i) =>
+      (i.container === 'Coffre' || i.ref_weight == null) ? sum : sum + i.ref_weight * i.quantity, 0
+    )
+    const effectiveMalusAttaquant = woundPenalty - calcEncumbrancePenalty(totalWeight, forValue)
+    const for_na_attaquant = calcAttributeNA(attrsAttaquant, 'FOR', genoAttaquant)
+    const equippedAttaquant = invAttaquant.filter(i => i.slot != null)
+    const carenceAttaquant  = calcCarenceArmure(equippedAttaquant, for_na_attaquant)
+    const modDom = getModDom(for_na_attaquant)
+
+    const rosterAttaquant = await db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first()
+    const isRushedMod = rosterAttaquant?.state_vitesse === 'rushed' ? -5 : 0
+    const chancesAttaque = attackerSkillTotal + effectiveMalusAttaquant - carenceAttaquant + isRushedMod
+
+    // Roll attaquant
+    const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
+
+    // Info affichage
+    const userRow = character.user_id
+      ? await db('users').where({ id: character.user_id }).select('color', 'username').first()
+      : null
+    const attackerColor    = userRow?.color    ?? '#c86030'
+    const attackerUsername = userRow?.username ?? character.name ?? 'Inconnu'
+
+    console.log(`[WS] melee attaque — roll:${rollAttaque} CDR:${chancesAttaque} token:${action.token_id}`)
+    io.to(campaignId).emit(WS.DICE_RESULT, {
+      userId: character.user_id, username: attackerUsername, color: attackerColor,
+      formula: '1d20', rolls: attackRolls, total: rollAttaque,
+      isCriticalSuccess: rollAttaque === 1, isCriticalFail: rollAttaque === 20,
+      seed: attackSeed, timestamp: new Date().toISOString(),
+      skillLabel: `Corps à corps — ${skillId}`,
+    })
+
+    // ── 2. Cible ──────────────────────────────────────────────────────────────
+    const targetToken = await db('tokens').where({ id: targetTokenId }).first()
+    if (!targetToken?.character_id) {
+      // Entité de décor — pas de défense ni dégâts
+      io.to(campaignId).emit(WS.COMBAT_MELEE_RESULT, {
+        attaquantId: action.token_id, defenseurId: targetTokenId,
+        rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit: false,
+      })
+      return false
+    }
+
+    const defenderCharacter = await db('characters').where({ id: targetToken.character_id }).first()
+    if (!defenderCharacter) return false
+
+    const targetName = defenderCharacter.name ?? targetToken.label ?? 'Cible'
+
+    // ── 3. Données défenseur ──────────────────────────────────────────────────
+    const sheetCible = await db('char_sheet').where({ character_id: defenderCharacter.id }).first()
+    let defenderSkillTotal = 0, defenderEffectiveMalus = 0
+    let for_na_cible = 8, con_na_cible = 8, vol_na_cible = 8
+    let char_sheet_id_cible = null
+
+    if (sheetCible) {
+      char_sheet_id_cible = sheetCible.id
+      const [attrsCible, archetypeCible, charSkillDef, refSkillDef, woundsCible, invCible] = await Promise.all([
+        db('char_attributes').where({ char_sheet_id: sheetCible.id }),
+        db('char_archetype').where({ char_sheet_id: sheetCible.id }).first(),
+        db('char_skills').where({ char_sheet_id: sheetCible.id, skill_id: 'COMBAT_A_MAINS_NUES' }).first(),
+        db('ref_skills').where({ id: 'COMBAT_A_MAINS_NUES' }).first(),
+        db('character_wounds').where({ char_sheet_id: sheetCible.id }),
+        db('char_inventory')
+          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+          .where({ 'char_inventory.character_id': defenderCharacter.id })
+          .select('char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
+                  'ref_equipment.weight as ref_weight'),
+      ])
+      const genoCible = archetypeCible?.genotype_id
+        ? await db('ref_genotypes').where({ id: archetypeCible.genotype_id }).first()
+        : null
+
+      for_na_cible = calcAttributeNA(attrsCible, 'FOR', genoCible)
+      con_na_cible = calcAttributeNA(attrsCible, 'CON', genoCible)
+      vol_na_cible = calcAttributeNA(attrsCible, 'VOL', genoCible)
+
+      if (refSkillDef) defenderSkillTotal = calcSkillTotal(attrsCible, charSkillDef, refSkillDef, genoCible)
+
+      const woundPenaltyDef = calcWoundPenalty(woundsCible)
+      const forAttrDef = attrsCible.find(a => a.attr_id === 'FOR')
+      const forValueDef = (forAttrDef?.base_level ?? 7) + (forAttrDef?.pc_modifier ?? 0)
+      const totalWeightDef = invCible.reduce((sum, i) =>
+        (i.container === 'Coffre' || i.ref_weight == null) ? sum : sum + i.ref_weight * i.quantity, 0
+      )
+      defenderEffectiveMalus = woundPenaltyDef - calcEncumbrancePenalty(totalWeightDef, forValueDef)
+    }
+
+    const commonPending = {
+      campaignId,
+      attackerTokenId: action.token_id,
+      attackerCharacter: character,
+      attackerUsername,
+      attackerColor,
+      rollAttaque,
+      chancesAttaque,
+      defenderSkillTotal,
+      defenderEffectiveMalus,
+      damageFormula,
+      modDom,
+      characterIdCible: defenderCharacter.id,
+      char_sheet_id_cible,
+      for_na_cible,
+      con_na_cible,
+      vol_na_cible,
+      targetName,
+      userId: character.user_id,
+    }
+
+    // ── 4. PNJ défenseur : auto-résolution ────────────────────────────────────
+    if (defenderCharacter.type === 'pnj') {
+      const { total: rollDefense, rolls: defRolls, seed: defSeed } = await parseDice('1d20')
+      const chanceDefense = defenderSkillTotal + defenderEffectiveMalus
+      const attackSuccess  = rollAttaque  <= chancesAttaque
+      const defenseSuccess = rollDefense  <= chanceDefense
+      const hit = attackSuccess && !defenseSuccess
+
+      console.log(`[WS] melee défense PNJ — rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
+
+      io.to(campaignId).emit(WS.DICE_RESULT, {
+        userId: null, username: defenderCharacter.name ?? 'PNJ', color: '#808080',
+        formula: '1d20', rolls: defRolls, total: rollDefense,
+        isCriticalSuccess: rollDefense === 1, isCriticalFail: rollDefense === 20,
+        seed: defSeed, timestamp: new Date().toISOString(),
+        skillLabel: 'Corps à corps — Défense (PNJ)',
+      })
+
+      io.to(campaignId).emit(WS.COMBAT_MELEE_RESULT, {
+        attaquantId: action.token_id, defenseurId: targetTokenId,
+        rollAttaque, chancesAttaque, rollDefense, chanceDefense, hit,
+      })
+
+      if (hit) {
+        // Dégâts auto (même logique que PNJ dans resolveAssaultAction)
+        const { total: rollLoc } = await parseDice('1d20')
+        const slotCode    = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
+        const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
+
+        let etq = null
+        if (char_sheet_id_cible && defenderCharacter.id) {
+          const armuresCible = await db('char_inventory')
+            .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+            .where({ 'char_inventory.character_id': defenderCharacter.id })
+            .whereNotNull('char_inventory.slot')
+            .select('char_inventory.slot', 'ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock')
+          const armuresSlot = armuresCible.filter(a =>
+            a.slot && ('/' + a.slot + '/').includes('/' + slotCode + '/')
+          )
+          etq = calcResistanceArmure(armuresSlot).etq
+        }
+
+        const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
+        const degautsBruts = rawDice + modDom
+        const rd = calcResistanceDommages(for_na_cible, con_na_cible)
+        const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
+
+        let severity = null, is_lethal = false
+        if      (degatsNets >= 30) { severity = 'mortelle'; is_lethal = true }
+        else if (degatsNets >= 25) { severity = 'mortelle' }
+        else if (degatsNets >= 20) { severity = 'critique' }
+        else if (degatsNets >= 15) { severity = 'grave'    }
+        else if (degatsNets >= 10) { severity = 'moyenne'  }
+        else if (degatsNets >=  5) { severity = 'legere'   }
+
+        let finalSeverity = severity, shockResult = null
+        if (severity && char_sheet_id_cible) {
+          try {
+            const result = await db.transaction(trx =>
+              resolveWoundInsertion(trx, char_sheet_id_cible, localisation, severity)
+            )
+            finalSeverity = result.wound.severity
+            io.to(campaignId).emit(WS.WOUND_ADDED, {
+              characterId: defenderCharacter.id,
+              wound: result.wound, promoted: result.promoted,
+              shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
+            })
+            if (isShockTestRequired(finalSeverity, localisation)) {
+              const seuils     = calcSeuils(for_na_cible, con_na_cible, vol_na_cible)
+              const shockMalus = getShockMalus(finalSeverity, localisation, is_lethal)
+              const { total: rollChoc } = await parseDice('1d20')
+              let outcome
+              if      (rollChoc <= seuils.etourdissement + shockMalus) outcome = 'ok'
+              else if (rollChoc <= seuils.inconscience    + shockMalus) outcome = 'etourdi'
+              else                                                       outcome = 'inconscient'
+              shockResult = {
+                triggered: true, roll: rollChoc, outcome, shockMalus,
+                seuilEtourdi: seuils.etourdissement + shockMalus,
+                seuilIncons:  seuils.inconscience   + shockMalus,
+              }
+              if (outcome !== 'ok') {
+                await db('combat_roster')
+                  .where({ campaign_id: campaignId, token_id: targetTokenId })
+                  .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
+              }
+            }
+          } catch (woundErr) {
+            console.error('[WS] resolveMeleeAction (PNJ dmg) — wound error:', woundErr.message)
+          }
+        }
+
+        io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+          tireurId:    action.token_id, cibleId: targetTokenId,
+          localisation, degautsBruts, degatsNets,
+          severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
+          roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
+        })
+      }
+
+      return false  // slot avance immédiatement
+    }
+
+    // ── 5. PJ défenseur : bloquer le slot, émettre le prompt ─────────────────
+    pendingMeleeDefense.set(targetTokenId, commonPending)
+
+    // Cibler le socket du défenseur PJ
+    const sockets = await io.fetchSockets()
+    const defSocket = sockets.find(s => s.campaignId === campaignId && s.user?.id === defenderCharacter.user_id)
+    const prompt = {
+      attackerName:    attackerUsername,
+      attackerTokenId: action.token_id,
+      defenderTokenId: targetTokenId,
+      rollAttaque,
+      chancesAttaque,
+    }
+    if (defSocket) {
+      defSocket.emit(WS.COMBAT_MELEE_DEFENSE_PROMPT, prompt)
+    } else {
+      // Fallback : broadcast à toute la room (cas GM remplaçant)
+      io.to(campaignId).emit(WS.COMBAT_MELEE_DEFENSE_PROMPT, { ...prompt, allPlayers: true })
+    }
+
+    return true  // slot bloqué jusqu'à COMBAT_MELEE_DEFENSE_CONFIRM
+  } catch (err) {
+    console.error('[WS] resolveMeleeAction error:', err.message)
+    return false
+  }
+}
+
 // Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='reload'.
-// Utilise weapon_inv_id + modifiers.ammo_item_id (déclaration PJ) ou auto-sélection (PNJ).
+//Utilise weapon_inv_id + modifiers.ammo_item_id (déclaration PJ) ou auto-sélection (PNJ).
 // PNJ + pnj_unlimited_ammo : recharge sans consommer de munitions.
 async function resolveReloadAction(io, socket, campaignId, character, action) {
   const characterId = character.id

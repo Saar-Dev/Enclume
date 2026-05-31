@@ -100,9 +100,10 @@ export function calcIniDelta(prevStates, nextStates, mapActions, quick) {
 
 // Actions sur la carte -- multi-selection
 export const MAP_ACTIONS = [
-  { k: 'move',     l: 'Déplacement',       tooltip: 'Déplacement court -3 / Se jeter à terre -5 / Se relever -10 / Se précipiter +3',              hint: 'cliquer destination',          isZoneSelect: true  },
+  { k: 'move',     l: 'Déplacement',       tooltip: 'Déplacement court -3 / Se jeter à terre -5 / Se relever -10 / Se précipiter +3',              hint: 'cliquer destination',          isZoneSelect: true, span2: true },
   { k: 'attack',   l: 'Assaut (tir)',       tooltip: 'Attaque à distance. Tirer depuis une couverture -3 à -5.',                                    hint: 'cliquer cible',                requireWeapon: true },
   { k: 'melee',    l: 'Corps à corps',      tooltip: 'Venir au corps à corps pour saisir son adversaire -3.',                                       hint: 'cliquer adversaire', ini: -3                      },
+  { k: 'reload',   l: 'Rechargement',       tooltip: 'Recharger son arme — aucun tir ni corps à corps possible ce tour. Coût INI : 0.',                                                                      span2: true          },
   { k: 'multi',    l: 'Attaque multiple',   tooltip: 'Attaque sur plusieurs cibles -5.',                                                            hint: '',                   ini: -5,  active: false       },
   { k: 'interact', l: 'Interagir',          tooltip: 'Utiliser un mécanisme simple (actionner un interrupteur, ouvrir une porte, saisir un objet) -3 à -5.', hint: 'sprint suivant',    active: false       },
 ]
