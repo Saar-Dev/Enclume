@@ -1803,9 +1803,9 @@ const initSocket = (io) => {
           const to   = state[key] ?? from
           iniDelta += transitionCost(STATE_COSTS[key], from, to)
         }
-        // Charge : déplacement court gratuit — override ini_mod serveur (non trusté client)
-        const chargeMove = (state.combat_mode === 'charge') && !!mapActions?.move
-        if (mapActions?.move)  iniDelta += chargeMove ? 0 : (mapActions.move.ini_mod ?? 0)
+        // Charge/Retraite : déplacement gratuit — override ini_mod serveur (non trusté client)
+        const freeMove = (state.combat_mode === 'charge' || state.combat_mode === 'retraite') && !!mapActions?.move
+        if (mapActions?.move)  iniDelta += freeMove ? 0 : (mapActions.move.ini_mod ?? 0)
         if (mapActions?.melee) iniDelta += -3
         if (mapActions?.multi) iniDelta += -5
         if (mapActions?.attack?.cover_shot) {
