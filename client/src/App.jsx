@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage'
 import SessionPage from './pages/SessionPage'
 import CampaignSettingsPage from './pages/CampaignSettingsPage'
 import WorkshopPage from './pages/WorkshopPage'
+import HealthPage from './pages/HealthPage'
 
 function ProtectedRoute({ children }) {
   const { user, isLoading } = useAuthStore()
@@ -53,6 +54,9 @@ export default function App() {
         } />
         <Route path="/workshop" element={
           <ProtectedRoute><WorkshopPage /></ProtectedRoute>
+        } />
+        <Route path="/health" element={
+          <ProtectedRoute><HealthPage /></ProtectedRoute>
         } />
         {/* Redirect legacy — bookmarks /texture-packs restent fonctionnels */}
         <Route path="/texture-packs" element={<Navigate to="/workshop" replace />} />

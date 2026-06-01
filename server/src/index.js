@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url'
 import db from './db/knex.js'
 import getMinioClient, { BUCKET } from './lib/minio.js'
 import { errorHandler } from './middleware/errorHandler.js'
+import healthRouter from './routes/health.js'
 import authRouter from './routes/auth.js'
 import campaignsRouter from './routes/campaigns.js'
 import battlemapsRouter from './routes/battlemaps.js'
@@ -56,6 +57,7 @@ app.use('/api/assets', assetsRouter)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', project: 'Enclume' })
 })
+app.use('/api/health/detailed', healthRouter)
 app.use('/api/auth', authRouter)
 app.use('/api/campaigns', campaignsRouter)
 app.use('/api/campaigns/:campaignId/characters', charactersRouter)

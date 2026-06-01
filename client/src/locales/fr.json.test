@@ -1,4 +1,4 @@
-{
+﻿{
   "common": {
     "loading": "Chargement...",
     "error": "Une erreur est survenue",
@@ -551,21 +551,5 @@
     },
     "openTitle": "Afficher le changelog",
     "reduceTitle": "Réduire"
-  },
-  "health": {
-    "title": "Santé Serveur",
-    "backToDashboard": "Tableau de bord",
-    "updatedAt": "mis à jour à",
-    "system": "Système",
-    "uptime": "Durée de fonctionnement",
-    "cores": "cœurs",
-    "load": "Charge CPU",
-    "memory": "Mémoire RAM",
-    "disk": "Disque /",
-    "free": "libre",
-    "temperature": "Températures & Ventilateurs",
-    "services": "Services",
-    "processes": "Processus (top CPU)",
-    "command": "Commande"
   }
-}
+, "health": { "title": "Sante Serveur", "backToDashboard": "Tableau de bord", "updatedAt": "mis a jour a", "system": "Systeme", "uptime": "Duree de fonctionnement", "cores": "coeurs", "load": "Charge CPU", "memory": "Memoire RAM", "disk": "Disque /", "free": "libre", "temperature": "Temperatures & Ventilateurs", "services": "Services", "processes": "Processus (top CPU)", "command": "Commande" } }
