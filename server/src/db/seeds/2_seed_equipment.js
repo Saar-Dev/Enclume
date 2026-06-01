@@ -27,7 +27,7 @@ const DRY_RUN = !process.argv.includes('--insert')
 
 const STEP1_PATH = resolve(
   __dirname,
-  '../../../../docs/Character/script Extraction Excel/equipement/STEP1_cleaned_data.js'
+  '../../../../docs/Old/script Extraction Excel/equipement/STEP1_cleaned_data.js'
 )
 
 // ─── Constantes de validation ─────────────────────────────────────────────────
