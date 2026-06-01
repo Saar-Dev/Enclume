@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
@@ -162,6 +162,9 @@ export default function CampaignSettingsPage() {
   const [pnjUnlimitedAmmo, setPnjUnlimitedAmmo] = useState(true)
   const [reloadMode,       setReloadMode]       = useState('magazine')
   const [actionTimerSec,   setActionTimerSec]   = useState(0)
+  const [defaultTokenGlbUrl, setDefaultTokenGlbUrl] = useState(null)
+  const [uploadingToken, setUploadingToken] = useState(false)
+  const tokenFileInputRef = useRef(null)
 
   // Mode simple
   const [successOn, setSuccessOn] = useState('max')    // 'max' | 'min' | null
@@ -193,6 +196,7 @@ export default function CampaignSettingsPage() {
         setPnjUnlimitedAmmo(campaign.pnj_unlimited_ammo ?? true)
         setReloadMode(campaign.reload_mode ?? 'magazine')
         setActionTimerSec(campaign.action_timer_sec ?? 0)
+        setDefaultTokenGlbUrl(campaign.default_token_glb_url ?? null)
 
         setLoading(false)
       } catch (err) {
@@ -250,6 +254,24 @@ export default function CampaignSettingsPage() {
     setExpertRows(initExpertRows(simpleConfig))
     setExpertMode(true)
   }, [diceEnabled, successActive, successOn, failActive, failOn])
+
+  // ─── Upload token par défaut ───────────────────────────────────────────────
+  const handleUploadDefaultToken = useCallback(async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingToken(true)
+    try {
+      const formData = new FormData()
+      formData.append('glb', file)
+      const res = await api.post(`/campaigns/${campaignId}/default-token`, formData)
+      setDefaultTokenGlbUrl(res.data.campaign.default_token_glb_url)
+    } catch (err) {
+      console.error('Erreur upload token par défaut :', err)
+    } finally {
+      setUploadingToken(false)
+      if (tokenFileInputRef.current) tokenFileInputRef.current.value = ''
+    }
+  }, [campaignId])
 
   // ─── Mise à jour ligne expert ──────────────────────────────────────────────
   const updateExpertRow = useCallback((die, field, value) => {
@@ -627,6 +649,32 @@ export default function CampaignSettingsPage() {
             </div>
           </section>
 
+          {/* ── Section Tokens 3D ────────────────────────────────────────── */}
+          <section style={styles.section}>
+            <h2 style={styles.sectionTitle}>{t('settings.sectionTokens')}</h2>
+            <p style={styles.toggleLabel}>{t('settings.defaultTokenLabel')}</p>
+            <p style={{ ...styles.toggleHint, marginBottom: '12px' }}>{t('settings.defaultTokenHint')}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={defaultTokenGlbUrl ? styles.tokenStatusSet : styles.tokenStatusNone}>
+                {defaultTokenGlbUrl ? t('settings.defaultTokenSet') : t('settings.defaultTokenNone')}
+              </span>
+              <input
+                ref={tokenFileInputRef}
+                type="file"
+                accept=".glb"
+                style={{ display: 'none' }}
+                onChange={handleUploadDefaultToken}
+              />
+              <button
+                style={styles.btnSecondary}
+                onClick={() => tokenFileInputRef.current?.click()}
+                disabled={uploadingToken}
+              >
+                {uploadingToken ? t('settings.defaultTokenUploading') : t('settings.defaultTokenUpload')}
+              </button>
+            </div>
+          </section>
+
           {/* ── Section Joueurs — placeholder ────────────────────────────── */}
           <section style={{ ...styles.section, ...styles.sectionPlaceholder }}>
             <h2 style={styles.sectionTitle}>{t('settings.sectionPlayers')}</h2>
@@ -999,7 +1047,29 @@ const styles = {
     fontSize: '12px',
   },
 
+  // Statut token
+  tokenStatusNone: {
+    fontSize: '13px',
+    color: 'var(--text-muted)',
+    fontStyle: 'italic',
+  },
+  tokenStatusSet: {
+    fontSize: '13px',
+    color: '#4caf77',
+    fontWeight: '500',
+  },
+
   // Boutons
+  btnSecondary: {
+    backgroundColor: 'transparent',
+    border: '1px solid var(--border-normal)',
+    borderRadius: '6px',
+    color: 'var(--text-primary)',
+    padding: '7px 14px',
+    fontWeight: '500',
+    fontSize: '13px',
+    cursor: 'pointer',
+  },
   btnPrimary: {
     backgroundColor: 'var(--color-primary)',
     color: 'white',

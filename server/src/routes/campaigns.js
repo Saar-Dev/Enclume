@@ -4,7 +4,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { requireRole } from '../middleware/role.js'
-import { multerUpload } from '../middleware/upload.js'
+import { multerUpload, multerGlb } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
 
 const router = Router()
@@ -200,7 +200,7 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
   const [campaign] = await db('campaigns')
     .where({ id: req.params.id })
     .update(updates)
-    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'pnj_unlimited_ammo', 'reload_mode', 'action_timer_sec', 'created_at', 'updated_at'])
+    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'pnj_unlimited_ammo', 'reload_mode', 'action_timer_sec', 'default_token_glb_url', 'created_at', 'updated_at'])
   res.json({ campaign })
 })
 
@@ -248,6 +248,34 @@ router.post('/:id/cover', requireAuth, requireRole('gm'), multerUpload.single('c
     .where({ id: req.params.id })
     .update({ cover_url: objectName, updated_at: db.fn.now() })
     .returning(['id', 'name', 'cover_url'])
+
+  res.json({ campaign })
+})
+
+// POST /api/campaigns/:id/default-token — upload GLB token par défaut (GM uniquement)
+// Chemin MinIO : campaigns/<id>/default-token — nom fixe, écrasement automatique
+// default_token_glb_url stocke le chemin MinIO relatif avec ?v=<timestamp> (P18 + cache-busting)
+router.post('/:id/default-token', requireAuth, requireRole('gm'), multerGlb.single('glb'), async (req, res) => {
+  if (!req.file) throw new AppError(400, 'No file uploaded')
+
+  const objectName = `campaigns/${req.params.id}/default-token`
+  const minio = getMinioClient()
+
+  // MinIO avant base — P25
+  await minio.putObject(
+    BUCKET(),
+    objectName,
+    req.file.buffer,
+    req.file.size,
+    { 'Content-Type': 'model/gltf-binary' }
+  )
+
+  const glbUrl = `${objectName}?v=${Date.now()}`
+
+  const [campaign] = await db('campaigns')
+    .where({ id: req.params.id })
+    .update({ default_token_glb_url: glbUrl, updated_at: db.fn.now() })
+    .returning(['id', 'default_token_glb_url'])
 
   res.json({ campaign })
 })

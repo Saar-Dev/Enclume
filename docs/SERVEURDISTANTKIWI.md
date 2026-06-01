@@ -221,6 +221,8 @@ node 2_seed_equipment.js --insert
 
 Le script charge lui-même le `.env` via dotenv — pas besoin de `--env-file`.
 
+**✅ Appliqué session 70 (2026-06-01) :** 715 items insérés, 2 rejections non bloquantes (`Oxyma` + `Poing Kryss` — `init_mod` invalide dans la source). `client/src/lib/api.js` ajouté au skip-worktree.
+
 ## Procédure git pull (mise à jour du serveur)
 
 ```bash

@@ -938,6 +938,9 @@ export default function SessionPage() {
               combatCameraCenter={combatCameraCenter}
               combatMoveMode={combatMoveMode}
               combatTargetMode={combatTargetMode}
+              defaultTokenGlbUrl={campaign?.default_token_glb_url
+                ? `${import.meta.env.VITE_API_URL}/api/assets/${campaign.default_token_glb_url}`
+                : null}
             />
         )}
         {!canvasVisible && (

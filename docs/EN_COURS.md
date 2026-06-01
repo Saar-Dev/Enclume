@@ -364,7 +364,10 @@ Hors scope : combat (12), équipement (6). SkillTooltips : roadmap.
 - Sprint Test de Choc suite : guard is_stunned dans COMBAT_ACTION_DECLARE + clear logique (PC42)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, non implémenté côté UI)
 - Sprint CaC 4 — modes avancés, multi-adversaires (priorité basse)
-- Sprint Waypoints — priorité basse (plan dans JOURNALTEMP.md)
+- Sprint Waypoints — priorité basse
+  - Waypoints = partie intégrante de la déclaration serveur (pas juste visuel)
+  - Interface : alt+clic ajoute une case avec liseré blanc ; alt+clic sur waypoint l'annule
+  - Le serveur doit recevoir la liste ordonnée de waypoints pour reconstruire le chemin exact
 - **Sprint Page Santé Serveur** (priorité basse) — route `/api/health/detailed` (mémoire, uptime, températures `/sys/class/thermal/`, statut services) + page client dédiée. Voir `docs/SERVEURDISTANTKIWI.md`.
 - **Fix WorkshopPage** : `err.response?.data?.error` est un objet AppError `{message, code}`, pas une string → crash React (écran blanc) sur import invalide. Fix : extraire `.message`. Sprint futur.
 

@@ -21,7 +21,6 @@ import { useEntityStore } from '../stores/entityStore'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const GRID_SIZE = 50
-const DEFAULT_TOKEN_URL = `${import.meta.env.VITE_API_URL}/api/assets/tokens/default.glb`
 const FONT_URL = '/fonts/inter.woff'
 
 // Seuil en pixels pour distinguer clic court (sélection) de drag
@@ -77,58 +76,10 @@ function TokenRing({ color, isSelected, isDragging, opacity }) {
 // ─── Token individuel ─────────────────────────────────────────────────────────
 const Y_OFFSET = 0.5
 
-// glbUrl : URL complète du GLB à charger — calculée dans Scene depuis character.glb_url
-// ou DEFAULT_TOKEN_URL si pas de modèle custom.
-// useGLTF met en cache par URL — si plusieurs tokens partagent la même URL,
-// le fichier n'est téléchargé qu'une seule fois.
-function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick, dragState, isGmLayer }) {
-  const color = token.color || '#4A90D9'
-  const label = token.label || '?'
-
-  const baseX = token.pos_x ?? 0
-  const baseY = token.pos_z ?? 0
-  const baseZ = token.pos_y ?? 0
-
-  const isDragging = dragState !== null
-  const x = isDragging ? dragState.x + 0.5 : baseX + 0.5
-  const y = isDragging ? dragState.y : baseY + 0.5
-  const z = isDragging ? dragState.z + 0.5 : baseZ + 0.5
-
-  const tiltX = isDragging ? dragState.tiltX : 0
-  const tiltZ = isDragging ? dragState.tiltZ : 0
-
-  // PE21 : rotation.y = r * Math.PI / 4 — 8 orientations, incréments 45°
-  // Appliqué sur le <group> parent — indépendant du tilt de drag (sur le <primitive>)
-  const rotationY = (token.r ?? 0) * Math.PI / 4
-
-  // ── Lerp 300ms — P40 : position via ref, jamais via state dans useFrame ──
-  const groupRef = useRef()
-  const lerpPos = useRef({ x: baseX + 0.5, y: baseY + 0.5, z: baseZ + 0.5 })
-  // targetRef et isDraggingRef évitent les closures stales dans useFrame
-  const targetRef = useRef({ x, y, z })
-  targetRef.current = { x, y, z }
-  const isDraggingRef = useRef(isDragging)
-  isDraggingRef.current = isDragging
-
-  useFrame((_, delta) => {
-    if (!groupRef.current) return
-    if (isDraggingRef.current) {
-      // Drag : snap immédiat — pas de Lerp
-      groupRef.current.position.set(targetRef.current.x, targetRef.current.y, targetRef.current.z)
-      lerpPos.current.x = targetRef.current.x
-      lerpPos.current.y = targetRef.current.y
-      lerpPos.current.z = targetRef.current.z
-    } else {
-      // Lerp exponentiel — tau=0.1 → 95% en ~300ms
-      const alpha = 1 - Math.exp(-delta / 0.1)
-      lerpPos.current.x += (targetRef.current.x - lerpPos.current.x) * alpha
-      lerpPos.current.y += (targetRef.current.y - lerpPos.current.y) * alpha
-      lerpPos.current.z += (targetRef.current.z - lerpPos.current.z) * alpha
-      groupRef.current.position.set(lerpPos.current.x, lerpPos.current.y, lerpPos.current.z)
-    }
-  })
-
-  // useGLTF suspend le composant le temps du chargement (géré nativement par Canvas R3F).
+// Corps GLB — appelé uniquement quand glbUrl est défini.
+// useGLTF suspend le composant le temps du chargement (géré nativement par Canvas R3F).
+// useGLTF met en cache par URL — plusieurs tokens partageant la même URL ne téléchargent qu'une fois.
+function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ }) {
   const { scene: gltfScene } = useGLTF(glbUrl)
 
   const clonedScene = useMemo(() => {
@@ -136,9 +87,8 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick,
     const clone = SkeletonUtils.clone(gltfScene)
     clone.traverse((child) => {
       if (child.isMesh && child.material) {
-        // Cloner les materiaux AVANT toute mutation - partages par reference
-        // entre tous les clones du meme gltfScene. Sans clone, muter opacity
-        // sur un token GM corrompt les materiaux de tous les autres tokens.
+        // Cloner les materiaux AVANT toute mutation — partagés par référence entre tous les clones
+        // du même gltfScene. Sans clone, muter opacity sur un token GM corrompt les autres.
         const cloneMat = (mat) => {
           const m = mat.clone()
           if (m.map) {
@@ -165,8 +115,81 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick,
   if (!clonedScene) return null
 
   return (
+    <primitive
+      object={clonedScene}
+      position={[0, Y_OFFSET, 0]}
+      scale={[1, 1, 1]}
+      rotation={[tiltX, 0, tiltZ]}
+    />
+  )
+}
+
+// Corps fallback — silhouette capsule colorée, aucun appel réseau.
+// Rendu quand le personnage n'a pas de glb_url et qu'aucun token par défaut de campagne n'est défini.
+function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ }) {
+  return (
+    <group position={[0, Y_OFFSET, 0]} rotation={[tiltX, 0, tiltZ]}>
+      <mesh position={[0, 0.8, 0]}>
+        <capsuleGeometry args={[0.28, 1.0, 4, 8]} />
+        <meshLambertMaterial
+          color={color}
+          transparent={!!isGmLayer}
+          opacity={isGmLayer ? 0.5 : 1}
+        />
+      </mesh>
+    </group>
+  )
+}
+
+// Token individuel — gère drag, lerp, ring, label.
+// glbUrl : URL complète du GLB à charger (character.glb_url ou default_token_glb_url de campagne), ou null.
+// Si null → TokenFallbackBody (silhouette géométrique). Si défini → TokenGlbBody (modèle 3D).
+function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick, dragState, isGmLayer }) {
+  const color = token.color || '#4A90D9'
+  const label = token.label || '?'
+
+  const baseX = token.pos_x ?? 0
+  const baseY = token.pos_z ?? 0
+  const baseZ = token.pos_y ?? 0
+
+  const isDragging = dragState !== null
+  const x = isDragging ? dragState.x + 0.5 : baseX + 0.5
+  const y = isDragging ? dragState.y : baseY + 0.5
+  const z = isDragging ? dragState.z + 0.5 : baseZ + 0.5
+
+  const tiltX = isDragging ? dragState.tiltX : 0
+  const tiltZ = isDragging ? dragState.tiltZ : 0
+
+  // PE21 : rotation.y = r * Math.PI / 4 — 8 orientations, incréments 45°
+  // Appliqué sur le <group> parent — indépendant du tilt de drag (sur le corps)
+  const rotationY = (token.r ?? 0) * Math.PI / 4
+
+  // ── Lerp 300ms — P40 : position via ref, jamais via state dans useFrame ──
+  const groupRef = useRef()
+  const lerpPos = useRef({ x: baseX + 0.5, y: baseY + 0.5, z: baseZ + 0.5 })
+  const targetRef = useRef({ x, y, z })
+  targetRef.current = { x, y, z }
+  const isDraggingRef = useRef(isDragging)
+  isDraggingRef.current = isDragging
+
+  useFrame((_, delta) => {
+    if (!groupRef.current) return
+    if (isDraggingRef.current) {
+      groupRef.current.position.set(targetRef.current.x, targetRef.current.y, targetRef.current.z)
+      lerpPos.current.x = targetRef.current.x
+      lerpPos.current.y = targetRef.current.y
+      lerpPos.current.z = targetRef.current.z
+    } else {
+      const alpha = 1 - Math.exp(-delta / 0.1)
+      lerpPos.current.x += (targetRef.current.x - lerpPos.current.x) * alpha
+      lerpPos.current.y += (targetRef.current.y - lerpPos.current.y) * alpha
+      lerpPos.current.z += (targetRef.current.z - lerpPos.current.z) * alpha
+      groupRef.current.position.set(lerpPos.current.x, lerpPos.current.y, lerpPos.current.z)
+    }
+  })
+
+  return (
     // rotation.y permanent sur le group — PE21
-    // Le tilt de drag reste sur le <primitive> — indépendant
     // position pilotée par useFrame (Lerp) — jamais via prop JSX
     <group
       ref={groupRef}
@@ -182,12 +205,10 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick,
       }}
     >
       <TokenRing color={color} isSelected={isSelected} isDragging={isDragging} opacity={isGmLayer ? 0.25 : undefined} />
-      <primitive
-        object={clonedScene}
-        position={[0, Y_OFFSET, 0]}
-        scale={[1, 1, 1]}
-        rotation={[tiltX, 0, tiltZ]}
-      />
+      {glbUrl
+        ? <TokenGlbBody glbUrl={glbUrl} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
+        : <TokenFallbackBody color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
+      }
       <Text
         position={[0, 2.5, 0]}
         font={FONT_URL}
@@ -230,6 +251,7 @@ function Scene({
   combatCameraCenter,
   combatMoveMode,
   combatTargetMode,
+  defaultTokenGlbUrl,
 }) {
   const { camera, gl } = useThree()
   const orbitRef = useRef()
@@ -762,7 +784,7 @@ function Scene({
         const character = characters.find(c => c.id === token.character_id)
         const glbUrl = character?.glb_url
           ? `${import.meta.env.VITE_API_URL}/api/assets/${character.glb_url}`
-          : DEFAULT_TOKEN_URL
+          : (defaultTokenGlbUrl || null)
         return (
           <TokenMesh
             key={token.id}
@@ -840,7 +862,7 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, combatTargetMode }) {
+export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, combatTargetMode, defaultTokenGlbUrl }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
@@ -1031,6 +1053,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           combatCameraCenter={combatCameraCenter}
           combatMoveMode={combatMoveMode}
           combatTargetMode={combatTargetMode}
+          defaultTokenGlbUrl={defaultTokenGlbUrl}
         />
       )}
     </Canvas>

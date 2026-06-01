@@ -306,7 +306,16 @@
     "reloadModeLabel": "Mode de rechargement",
     "reloadModeChargeur": "Chargeur complet (défaut)",
     "reloadModeTopup": "Complément",
-    "reloadModeHint": "Chargeur : éjecte le chargeur partiel et charge un neuf depuis la réserve — les balles restantes sont perdues. Complément : ajoute les balles manquantes sans éjecter le chargeur en cours."
+    "reloadModeHint": "Chargeur : éjecte le chargeur partiel et charge un neuf depuis la réserve — les balles restantes sont perdues. Complément : ajoute les balles manquantes sans éjecter le chargeur en cours.",
+    "actionTimerLabel": "Declaration timer (s)",
+    "actionTimerHint": "Delay before auto-skip per player · 0 = infinite (disabled)",
+    "sectionTokens": "3D Tokens",
+    "defaultTokenLabel": "Default token",
+    "defaultTokenHint": "GLB model used for characters without an assigned 3D token",
+    "defaultTokenNone": "No model — generic silhouette",
+    "defaultTokenSet": "GLB model loaded",
+    "defaultTokenUpload": "Choose a GLB model",
+    "defaultTokenUploading": "Uploading..."
   },
   "texturePacks": {
     "pageTitle": "Packs de textures",

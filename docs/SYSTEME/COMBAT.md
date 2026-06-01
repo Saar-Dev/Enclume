@@ -1,6 +1,7 @@
 # SYSTEME/COMBAT.md — Données personnage serveur, calculs combat, state_character
 > Source : SYSTEME.md §17
 > Lire pour : COMBAT_ACTION_CONFIRM, resolveAssaultAction, charStats.js, state_character
+> Règles LdB CaC (arts martiaux, multi-adversaires) : voir `docs/SYSTEME/REGLES_Contact.md`
 
 ---
 
