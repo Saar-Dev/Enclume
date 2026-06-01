@@ -29,7 +29,7 @@ export default function TimelineCard({
         border: `2px solid ${borderColor}`,
         flexShrink: 0,
         cursor: onClick ? 'pointer' : 'default',
-        transition: 'width 0.2s ease, height 0.2s ease, border-color 0.3s ease',
+        transition: 'border-color 0.3s ease',
         boxShadow: isActive ? '0 0 12px rgba(245,197,66,0.35)' : 'none',
       }}
     >

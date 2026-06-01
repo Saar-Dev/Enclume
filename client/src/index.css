@@ -476,6 +476,7 @@ DASHBOARD EXTENSION
   font-size: 13px;
   color: var(--text-secondary);
   text-align: center;
+  margin-bottom: 12px;
 }
 /* SYMBOL */
 .campaign-symbol {
@@ -503,4 +504,43 @@ DASHBOARD EXTENSION
 .campaign-create::before {
   font-size: 160px;
   color: rgba(255,255,255,0.04);
+}
+
+/* JOIN CARD */
+.campaign-join {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  cursor: pointer;
+}
+
+.campaign-join::before {
+  content: "→";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 160px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.04);
+  pointer-events: none;
+}
+
+.campaign-join:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.join-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  margin-bottom: 12px;
 }

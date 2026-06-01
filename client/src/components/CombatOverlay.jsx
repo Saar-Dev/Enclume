@@ -241,6 +241,11 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           <div style={{ fontSize: 14, color: '#e8e8f5', fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>
             <span style={{ color: '#e07070' }}>{meleeDefensePrompt.attackerName}</span> vous attaque !
           </div>
+          {!!meleeDefensePrompt.multiMalusDefenseur && (
+            <div style={{ fontSize: 10, color: '#e0a040', background: 'rgba(224,160,64,0.08)', border: '1px solid rgba(224,160,64,0.25)', borderRadius: 3, padding: '4px 7px', marginBottom: 8 }}>
+              ⚠ Encerclé — malus {meleeDefensePrompt.multiMalusDefenseur} à votre défense
+            </div>
+          )}
           <div style={{ fontSize: 11, color: '#7a7a90', marginBottom: 14 }}>
             Son jet d&apos;attaque : <span style={{ color: '#c0c0d0', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{meleeDefensePrompt.rollAttaque}</span>
             {' '}/ seuil{' '}
@@ -276,6 +281,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           rollDefense={meleeResult.rollDefense}
           chanceDefense={meleeResult.chanceDefense}
           hit={meleeResult.hit}
+          multiMalusAttaquant={meleeResult.multiMalusAttaquant}
+          multiMalusDefenseur={meleeResult.multiMalusDefenseur}
           onClose={onMeleeResultClose}
         />
       )}

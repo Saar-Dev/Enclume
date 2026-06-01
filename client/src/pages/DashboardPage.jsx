@@ -12,8 +12,6 @@ export default function DashboardPage() {
 
   const [campaigns, setCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showCreate, setShowCreate] = useState(false)
-  const [showJoin, setShowJoin] = useState(false)
   const [newCampaignName, setNewCampaignName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState(null)
@@ -22,6 +20,8 @@ export default function DashboardPage() {
   const [uploadingCoverId, setUploadingCoverId] = useState(null)
   const coverInputRef = useRef(null)
   const pendingCoverIdRef = useRef(null)
+  const createInputRef = useRef(null)
+  const joinInputRef = useRef(null)
 
   useEffect(() => { document.title = 'Enclume — Tableau de bord' }, [])
 
@@ -47,7 +47,6 @@ export default function DashboardPage() {
       const res = await api.post('/campaigns', { name: newCampaignName })
       setCampaigns(prev => [...prev, { ...res.data.campaign, role: 'gm' }])
       setNewCampaignName('')
-      setShowCreate(false)
     } catch (err) {
       setError(err.response?.data?.error?.message || t('dashboard.errorCreate'))
     }
@@ -59,7 +58,6 @@ export default function DashboardPage() {
       const res = await api.post('/campaigns/join', { invite_code: inviteCode })
       setCampaigns(prev => [...prev, { ...res.data.campaign, role: 'player' }])
       setInviteCode('')
-      setShowJoin(false)
     } catch (err) {
       setError(err.response?.data?.error?.message || t('dashboard.errorJoin'))
     }
@@ -145,55 +143,12 @@ export default function DashboardPage() {
           {/* CONTENT */}
           <div style={styles.content}>
 
-            <div style={styles.actionsRow}>
-              <button style={styles.btnSecondary} onClick={() => { setShowJoin(true); setShowCreate(false) }}>
-                {t('dashboard.joinWithCode')}
-              </button>
-            </div>
-
             {error && <div style={styles.error}>{error}</div>}
-
-            {showCreate && (
-              <form onSubmit={handleCreate} style={styles.inlineForm}>
-                <input
-                  style={styles.input}
-                  placeholder={t('dashboard.campaignName')}
-                  value={newCampaignName}
-                  onChange={e => setNewCampaignName(e.target.value)}
-                  required
-                  autoFocus
-                />
-                <button style={styles.btnPrimary} type="submit">{t('dashboard.create')}</button>
-                <button style={styles.btnGhost} type="button" onClick={() => setShowCreate(false)}>{t('common.cancel')}</button>
-              </form>
-            )}
-
-            {showJoin && (
-              <form onSubmit={handleJoin} style={styles.inlineForm}>
-                <input
-                  style={styles.input}
-                  placeholder={t('dashboard.inviteCode')}
-                  value={inviteCode}
-                  onChange={e => setInviteCode(e.target.value)}
-                  required
-                  autoFocus
-                />
-                <button style={styles.btnPrimary} type="submit">{t('dashboard.join')}</button>
-                <button style={styles.btnGhost} type="button" onClick={() => setShowJoin(false)}>{t('common.cancel')}</button>
-              </form>
-            )}
 
             {loading ? (
               <p style={styles.muted}>{t('common.loading')}</p>
             ) : (
               <div className="campaign-grid">
-
-            {/* EMPTY STATE */}
-            {campaigns.length === 0 && (
-              <div className="card campaign-create" onClick={() => { setShowCreate(true); setShowJoin(false) }}>
-                <div className="create-label">{t('dashboard.createCardLabel')}</div>
-              </div>
-            )}
 
             {/* CAMPAIGNS */}
             {campaigns.map(campaign => (
@@ -265,12 +220,43 @@ export default function DashboardPage() {
               </div>
             ))}
 
-            {/* CREATE CARD LAST */}
-            {campaigns.length > 0 && (
-              <div className="card campaign-create" onClick={() => { setShowCreate(true); setShowJoin(false) }}>
-                <div className="create-label">{t('dashboard.createCardLabel')}</div>
-              </div>
-            )}
+            {/* REJOINDRE CARD */}
+            <div
+              className="card campaign-join"
+              onClick={() => joinInputRef.current?.focus()}
+            >
+              <div className="join-label">{t('dashboard.joinCard')}</div>
+              <form onSubmit={handleJoin} style={styles.cardForm} onClick={e => e.stopPropagation()}>
+                <input
+                  ref={joinInputRef}
+                  style={styles.cardInput}
+                  placeholder={t('dashboard.codePlaceholder')}
+                  value={inviteCode}
+                  onChange={e => setInviteCode(e.target.value)}
+                  required
+                />
+                <button style={styles.btnPrimary} type="submit">{t('dashboard.join')}</button>
+              </form>
+            </div>
+
+            {/* CREATE CARD */}
+            <div
+              className="card campaign-create"
+              onClick={() => createInputRef.current?.focus()}
+            >
+              <div className="create-label">{t('dashboard.createCardLabel')}</div>
+              <form onSubmit={handleCreate} style={styles.cardForm} onClick={e => e.stopPropagation()}>
+                <input
+                  ref={createInputRef}
+                  style={styles.cardInput}
+                  placeholder={t('dashboard.campaignName')}
+                  value={newCampaignName}
+                  onChange={e => setNewCampaignName(e.target.value)}
+                  required
+                />
+                <button style={styles.btnPrimary} type="submit">{t('dashboard.create')}</button>
+              </form>
+            </div>
 
           </div>
             )}
@@ -430,46 +416,24 @@ const styles = {
     cursor: 'pointer',
   },
 
-  actionsRow: {
+  cardForm: {
+    position: 'relative',
+    zIndex: 1,
+    width: '100%',
     display: 'flex',
-    justifyContent: 'flex-end',
-    marginBottom: '20px',
+    flexDirection: 'column',
+    gap: '8px',
   },
 
-  btnSecondary: {
-    backgroundColor: 'var(--bg-card)',
-    color: 'var(--text-primary)',
+  cardInput: {
+    backgroundColor: 'var(--bg-app)',
     border: '1px solid var(--border-normal)',
     borderRadius: '6px',
-    padding: '8px 16px',
-    fontSize: '13px',
-    cursor: 'pointer',
-  },
-
-  inlineForm: {
-    display: 'flex',
-    gap: '10px',
-    marginBottom: '24px',
-    alignItems: 'center',
-  },
-
-  input: {
-    backgroundColor: 'var(--bg-card)',
-    border: '1px solid var(--border-normal)',
-    borderRadius: '8px',
-    padding: '9px 14px',
+    padding: '8px 12px',
     color: 'var(--text-primary)',
     outline: 'none',
-    fontSize: '14px',
-    minWidth: '240px',
-  },
-
-  btnGhost: {
-    background: 'none',
-    border: 'none',
-    color: 'var(--text-secondary)',
     fontSize: '13px',
-    padding: '8px',
-    cursor: 'pointer',
+    width: '100%',
+    boxSizing: 'border-box',
   },
 }

@@ -49,7 +49,9 @@
     "workshop": "Atelier",
     "copied": "Copié !",
     "play": "Jouer",
-    "createCardLabel": "Créer une campagne"
+    "createCardLabel": "Créer une campagne",
+    "joinCard": "Rejoindre une campagne",
+    "codePlaceholder": "#code-invitation"
   },
   "session": {
     "loading": "Connexion à la session...",

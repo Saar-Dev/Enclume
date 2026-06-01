@@ -358,6 +358,26 @@ Hors scope : combat (12), équipement (6). SkillTooltips : roadmap.
 
 ---
 
+## Session 72 ✅ (2026-06-01)
+
+- **Sprint CaC 4a — Multi-adversaires ✅ EN ATTENTE VALIDATION**
+  - Règle LdB p.224 : malus −5/−7/−10 pour 2/3/4+ adversaires distincts en CaC
+  - Critère positionnel : `dist2d(X, Y) ≤ 3 + allonge_max_de_Y`, positions post-déplacement
+  - Requête roster unique dans `Promise.all` de `resolveMeleeAction` (tokens → combat_roster → characters → char_inventory → ref_equipment, groupée par token)
+  - Helpers module-level : `multiAdversaryMalus(n)` + `countAdversaires(tokenPos, rosterTokens, excludeId, enemyType)`
+  - `multiMalusAttaquant` → `chancesAttaque` ; `multiMalusDefenseur` → `chanceDefense` (PNJ path + PJ via commonPending)
+  - Payloads enrichis : `COMBAT_MELEE_RESULT` (les deux paths) + `COMBAT_MELEE_DEFENSE_PROMPT`
+  - Client : alerte ⚠ orange dans le prompt défense PJ + panneau `CombatResultMelee`
+  - Choix V1 documenté : `PNJ = ennemi du PJ` — limitation PNJ alliés (voir SYSTEME/COMBAT.md)
+
+**Prochains chantiers :**
+- **Sprint CaC 4b** : attaque multiple (2/3 cibles, −5/−7 malus), UI PJ séquentielle + GM queue étendue
+- Sprint Test de Choc suite : guard is_stunned COMBAT_ACTION_DECLARE (PC42)
+- D2 Jets Favoris : drag-to-reorder macros (sort_order DB)
+- Sprint Tooltips Compétences
+
+---
+
 ## Session 68 ✅ (2026-05-31)
 
 - **Sprint CaC 2 ✅ CONFIRMÉ FONCTIONNEL**
@@ -376,6 +396,8 @@ Hors scope : combat (12), équipement (6). SkillTooltips : roadmap.
 **Prochains chantiers :**
 - Sprint Test de Choc suite : guard is_stunned dans COMBAT_ACTION_DECLARE + clear logique (PC42)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, non implémenté côté UI)
+- **Sprint Tooltips Compétences** : ajouter un `(i)` cliquable avant/après le nom de chaque compétence dans la fiche personnage → tooltip affichant la description de la compétence. À lire avant : modèle de données skills, `ref_equipment_skills`, routes `/api/char-ref`, `SkillsPanel.jsx` / `AdvantagesPanel.jsx`. Lien CLAUDE.md : "SkillTooltips : roadmap" (noté depuis session 66).
+- **Sprint Évolution skills coût doublé** : dans Polaris LdB, certaines compétences ont un coût d'augmentation doublé (ou triplé). À faire : (1) identifier ces compétences depuis le LdB + les tooltips, (2) ajouter un champ `level_cost_multiplier` dans `ref_equipment_skills` ou dans un fichier de constantes partagé, (3) adapter le calcul de coût dans le panneau compétences. Dépend du Sprint Tooltips pour l'identification.
 - Sprint CaC 4 — modes avancés, multi-adversaires (priorité basse)
 - Sprint Waypoints — priorité basse
   - Waypoints = partie intégrante de la déclaration serveur (pas juste visuel)

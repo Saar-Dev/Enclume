@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo, Component } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { MapControls, Grid, Text } from '@react-three/drei'
+import { MapControls, Grid, Text, Billboard } from '@react-three/drei'
 import { useGLTF } from '@react-three/drei'
 import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
@@ -165,7 +165,7 @@ function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ }) {
 // glbUrl : URL complète du GLB à charger (character.glb_url ou default_token_glb_url de campagne), ou null.
 // Si null → TokenFallbackBody (silhouette géométrique). Si défini → TokenGlbBody (modèle 3D).
 function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick, dragState, isGmLayer }) {
-  const color = token.color || '#4A90D9'
+  const color = token.user_color || token.color || '#4A90D9'
   const label = token.label || '?'
 
   const baseX = token.pos_x ?? 0
@@ -228,31 +228,33 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick,
       <TokenGlbErrorBoundary color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ}>
         <TokenGlbBody glbUrl={glbUrl} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
       </TokenGlbErrorBoundary>
-      <Text
-        position={[0, 2.5, 0]}
-        font={FONT_URL}
-        fontSize={0.3}
-        color={color}
-        fillOpacity={isGmLayer ? 0.5 : 1}
-        anchorX="center"
-        anchorY="bottom"
-        outlineWidth={0.04}
-        outlineColor="#000000"
-      >
-        {label}
-      </Text>
-      {isGmLayer && (
+      <Billboard>
         <Text
-          position={[0, 2.85, 0]}
+          position={[0, 2.5, 0]}
           font={FONT_URL}
-          fontSize={0.22}
-          color="#a855f7"
+          fontSize={0.3}
+          color={color}
+          fillOpacity={isGmLayer ? 0.5 : 1}
           anchorX="center"
           anchorY="bottom"
+          outlineWidth={0.04}
+          outlineColor="#000000"
         >
-          {'\u2298 GM'}
+          {label}
         </Text>
-      )}
+        {isGmLayer && (
+          <Text
+            position={[0, 2.85, 0]}
+            font={FONT_URL}
+            fontSize={0.22}
+            color="#a855f7"
+            anchorX="center"
+            anchorY="bottom"
+          >
+            {'\u2298 GM'}
+          </Text>
+        )}
+      </Billboard>
     </group>
   )
 }
@@ -432,9 +434,13 @@ function Scene({
     )
 
     if (hit) {
+      const adjX = hitPos[0] + hitNorm[0] * 0.5
+      const adjZ = hitPos[2] + hitNorm[2] * 0.5
       return {
-        x: Math.floor(hitPos[0] + hitNorm[0] * 0.5),
-        z: Math.floor(hitPos[2] + hitNorm[2] * 0.5),
+        x: Math.floor(adjX),
+        z: Math.floor(adjZ),
+        rawX: adjX,
+        rawZ: adjZ,
         isVoid: false,
       }
     }
@@ -444,7 +450,7 @@ function Scene({
     const groundPlane0 = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
     const fallback = raycaster.ray.intersectPlane(groundPlane0, target)
     if (!fallback) return null
-    return { x: Math.floor(target.x), z: Math.floor(target.z), isVoid: true }
+    return { x: Math.floor(target.x), z: Math.floor(target.z), rawX: target.x, rawZ: target.z, isVoid: true }
   }, [camera, gl])
 
   const getColumnTopY = useCallback((x, z) => {
@@ -556,29 +562,29 @@ function Scene({
       dragRef.current.hasMoved = true
     }
 
-    const worldPos = raycastGround(e.clientX, e.clientY)
-    if (!worldPos) return
+    const cell = raycastVoxelColumn(e.clientX, e.clientY)
+    if (!cell) return
 
-    const snappedX = Math.round(worldPos.x)
-    const snappedZ = Math.round(worldPos.z)
+    const snappedX = Math.round(cell.rawX)
+    const snappedZ = Math.round(cell.rawZ)
     const columnY = getColumnTopY(snappedX, snappedZ)
 
     let tiltX = 0
     let tiltZ = 0
     if (dragRef.current.prevWorldX !== null) {
-      const deltaX = worldPos.x - dragRef.current.prevWorldX
-      const deltaZ = worldPos.z - dragRef.current.prevWorldZ
+      const deltaX = cell.rawX - dragRef.current.prevWorldX
+      const deltaZ = cell.rawZ - dragRef.current.prevWorldZ
       tiltX = Math.max(-DRAG_TILT_MAX, Math.min(DRAG_TILT_MAX, -deltaZ * 2))
       tiltZ = Math.max(-DRAG_TILT_MAX, Math.min(DRAG_TILT_MAX, deltaX * 2))
     }
-    dragRef.current.prevWorldX = worldPos.x
-    dragRef.current.prevWorldZ = worldPos.z
+    dragRef.current.prevWorldX = cell.rawX
+    dragRef.current.prevWorldZ = cell.rawZ
 
     setDragState({
       tokenId: dragRef.current.tokenId,
-      x: worldPos.x,
+      x: snappedX,
       y: Math.max(0, columnY) + 0.5 + DRAG_HOVER,
-      z: worldPos.z,
+      z: snappedZ,
       tiltX,
       tiltZ,
     })

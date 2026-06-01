@@ -309,7 +309,8 @@ Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation doc
 | Sprint CaC 1 | Migration 63 (+melee chk_action_type), `resolveMeleeAction`, opposition PNJ auto / PJ bloque slot, UI CombatActionWindow melee, GM queue séquentielle | ✅ session 67 |
 | Sprint CaC 2 | Migration 64 (`state_combat_mode`), modes Normal/Offensif/Charge PJ+PNJ, `handleChargeFlow`, bonus attaque/défense/dégâts | ✅ session 68 |
 | Sprint CaC 3 | Modes Défensif (+3) / Retraite (+5) PJ+PNJ, `handleRetraiteMove`, `freeMove` étendu à retraite | ✅ session 68 |
-| Sprint CaC 4 | Multi-adversaires (−5/−7/−10 LdB), modes avancés — voir `docs/SYSTEME/REGLES_LdB.md` | 🔲 priorité basse |
+| Sprint CaC 4a | Multi-adversaires (−5/−7/−10 LdB) : critère positionnel + allonge, alerte ⚠ UI | ✅ session 72 |
+| Sprint CaC 4b | Attaque multiple (2 ou 3 cibles, −5/−7 malus LdB p.218) — UI PJ séquentielle + GM queue étendue | 🔲 |
 
 ### Client — Dashboard
 | Tâche | État |

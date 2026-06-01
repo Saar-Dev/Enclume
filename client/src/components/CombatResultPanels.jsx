@@ -189,8 +189,10 @@ export function CombatResultReload({ result, onClose }) {
 }
 
 /* ── Vue Corps à corps — bottom-right, jets en opposition ───────────────── */
-export function CombatResultMelee({ attaquant, defenseur, rollAttaque, chancesAttaque, rollDefense, chanceDefense, hit, onClose }) {
+export function CombatResultMelee({ attaquant, defenseur, rollAttaque, chancesAttaque, rollDefense, chanceDefense, hit, multiMalusAttaquant, multiMalusDefenseur, onClose }) {
   const accent = hit ? C.red : C.green
+  const malusAtk = multiMalusAttaquant ?? 0
+  const malusDef = multiMalusDefenseur ?? 0
 
   return (
     <div style={{
@@ -219,6 +221,14 @@ export function CombatResultMelee({ attaquant, defenseur, rollAttaque, chancesAt
       <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: accent, letterSpacing: '0.02em' }}>
         {hit ? 'Touché' : 'Esquivé'}
       </div>
+
+      {/* Malus encerclement */}
+      {(malusAtk !== 0 || malusDef !== 0) && (
+        <div style={{ fontSize: 10, color: '#e0a040', background: 'rgba(224,160,64,0.08)', border: '1px solid rgba(224,160,64,0.25)', borderRadius: 3, padding: '4px 7px', marginBottom: 8 }}>
+          {malusAtk !== 0 && <div>⚠ {attaquant} encerclé : {malusAtk}</div>}
+          {malusDef !== 0 && <div>⚠ {defenseur} encerclé : {malusDef}</div>}
+        </div>
+      )}
 
       {/* Jet attaquant */}
       <div style={{ marginBottom: 4 }}>

@@ -502,6 +502,32 @@ COMBAT_MELEE_DEFENSE_CONFIRM payload = `{ tokenId: defenderTokenId }`.
 **PC-CaC8 — Batch GM : type guard à la sélection = supprimé.**
 `toggleSelect` et `selectAll` = libres. `handleStartAttackQueue` filtre `targetIds.filter(isRanged)`. Ne jamais réintroduire le guard dans toggleSelect/selectAll.
 
+---
+
+### Multi-adversaires — Sprint CaC 4a (session 72)
+
+**Règle LdB p.224 :** un personnage confronté à plusieurs adversaires simultanés en CaC subit un malus à ses Tests d'opposition (attaque ET défense).
+
+| Adversaires distincts | Malus |
+|---|---|
+| 2 | −5 |
+| 3 | −7 |
+| 4+ | −10 |
+
+**Critère "confronté" :** tout token ennemi actif dans le roster dont la distance PE14 (positions post-déplacement) est ≤ `3 + allonge_max_de_l_adversaire`. L'allonge est celle de l'arme de contact équipée (slot MG/MD/2M, category='Arme de contact'). Si l'adversaire n'a pas d'arme de contact équipée, allonge = 0 → portée de base 3m.
+
+**Implémentation :**
+- Helper module-level `countAdversaires(tokenPos, rosterTokens, excludeId, enemyType)` — filtrage JS sur les données pré-fetchées.
+- `rosterTokens` : requête unique dans le `Promise.all` de `resolveMeleeAction` (jointure `tokens → combat_roster → characters → char_inventory → ref_equipment`), groupée par token, avec `MAX(range::INTEGER)` comme allonge.
+- `multiMalusAttaquant` appliqué à `chancesAttaque`.
+- `multiMalusDefenseur` appliqué à `chanceDefense` dans les deux paths (PNJ auto-résolu + PJ via `commonPending → COMBAT_MELEE_DEFENSE_CONFIRM`).
+
+**Choix V1 documenté :**
+- `PNJ = ennemi du PJ`, `PJ = ennemi du PNJ` — proxy sur `character.type`.
+- **Limitation** : un PNJ allié du groupe n'est pas distingué des PNJ ennemis → comptabilisé à tort comme adversaire du PJ. Cas rare en pratique (parties privées 4–8 joueurs sans PNJ alliés en roster). Résolution future : colonne `combat_roster.side` (non implémentée).
+
+**Ne pas confondre avec PC-CaC7 :** le seuil d'engagement Charge reste 3m fixe. Le `3 + allonge` ici concerne uniquement le comptage des adversaires pour le malus, pas la validation de la Charge.
+
 ### Nouveaux events WS (session 67)
 
 | Event | Direction | Description |

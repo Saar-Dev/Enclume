@@ -2287,6 +2287,7 @@ const initSocket = (io) => {
         attackerUsername, attackerColor,
         rollAttaque, chancesAttaque,
         defenderSkillTotal, defenderEffectiveMalus,
+        multiMalusDefenseur,
         damageFormula, modDom, combatModeBonus,
         characterIdCible, char_sheet_id_cible,
         for_na_cible, con_na_cible, vol_na_cible,
@@ -2299,7 +2300,7 @@ const initSocket = (io) => {
         // Mode combat du défenseur PJ — Offensif/Charge → pénalité, Défensif/Retraite → bonus (CaC3)
         const rosterDef = await db('combat_roster').where({ campaign_id: meleeCampaignId, token_id: tokenId }).first()
         const defCombatMode = rosterDef?.state_combat_mode ?? 'normal'
-        let chanceDefense = defenderSkillTotal + defenderEffectiveMalus
+        let chanceDefense = defenderSkillTotal + defenderEffectiveMalus + (multiMalusDefenseur ?? 0)
         if      (defCombatMode === 'offensif') chanceDefense -= 5
         else if (defCombatMode === 'charge')   chanceDefense -= 7
         else if (defCombatMode === 'defensif') chanceDefense += 3
@@ -2330,6 +2331,8 @@ const initSocket = (io) => {
           rollAttaque, chancesAttaque,
           rollDefense, chanceDefense,
           hit,
+          multiMalusAttaquant: pending.multiMalusAttaquant ?? 0,
+          multiMalusDefenseur: pending.multiMalusDefenseur ?? 0,
         })
 
         // 4. Dégâts si touche
@@ -2702,6 +2705,28 @@ async function endTurn(io, campaignId) {
   }
 }
 
+// ─── MULTI-ADVERSAIRES — helpers ─────────────────────────────────────────────
+// Malus LdB p.224 : confronté à N adversaires distincts en CaC.
+// V1 : PNJ = ennemi du PJ, PJ = ennemi du PNJ. PNJ alliés non distingués.
+function multiAdversaryMalus(n) {
+  return n >= 4 ? -10 : n === 3 ? -7 : n === 2 ? -5 : 0
+}
+
+// Compte les tokens ennemis actifs (enemyType) dans le roster à portée de tokenPos.
+// Portée = 3m + allonge maximale de l'adversaire (arme de contact équipée).
+// excludeId : token à exclure (soi-même).
+function countAdversaires(tokenPos, rosterTokens, excludeId, enemyType) {
+  let count = 0
+  for (const t of rosterTokens) {
+    if (t.char_type !== enemyType || t.token_id === excludeId) continue
+    const dx = (tokenPos.pos_x ?? 0) - (t.pos_x ?? 0)
+    const dz = (tokenPos.pos_y ?? 0) - (t.pos_y ?? 0)
+    const maxAllonge = parseInt(t.max_allonge) || 0
+    if (Math.sqrt(dx * dx + dz * dz) <= 3 + maxAllonge) count++
+  }
+  return count
+}
+
 // ─── RÉSOLUTION RECHARGEMENT ────────────────────────────────────────────────
 // Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='melee'.
 // Retourne true si le slot doit rester bloqué (défenseur PJ en attente), false sinon.
@@ -2751,7 +2776,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
       if (skillAssoc) skillId = skillAssoc.skill_id
     }
 
-    const [attrsAttaquant, archetypeAttaquant, charSkill, refSkill, woundsAttaquant, invAttaquant] = await Promise.all([
+    const [attrsAttaquant, archetypeAttaquant, charSkill, refSkill, woundsAttaquant, invAttaquant, rosterTokens] = await Promise.all([
       db('char_attributes').where({ char_sheet_id: sheetAttaquant.id }),
       db('char_archetype').where({ char_sheet_id: sheetAttaquant.id }).first(),
       db('char_skills').where({ char_sheet_id: sheetAttaquant.id, skill_id: skillId }).first(),
@@ -2762,6 +2787,25 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
         .where({ 'char_inventory.character_id': character.id })
         .select('char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
                 'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str'),
+      // Tous les tokens actifs du roster avec leur type et leur allonge max (arme de contact équipée).
+      // Utilisé pour le calcul multi-adversaires (positions post-déplacement garanties).
+      db('tokens as t')
+        .join('combat_roster as cr', 'cr.token_id', 't.id')
+        .join('characters as c', 'c.id', 't.character_id')
+        .leftJoin('char_inventory as ci',
+          db.raw(`ci.character_id = c.id AND ci.slot IN ('MG', 'MD', '2M')`))
+        .leftJoin('ref_equipment as re',
+          db.raw(`re.id = ci.equipment_id AND re.category = 'Arme de contact'`))
+        .where('cr.campaign_id', campaignId)
+        .where('cr.status', 'active')
+        .groupBy('t.id', 't.pos_x', 't.pos_y', 'c.type')
+        .select(
+          't.id as token_id',
+          't.pos_x',
+          't.pos_y',
+          'c.type as char_type',
+          db.raw(`COALESCE(MAX(CASE WHEN re.range ~ '^[0-9]+$' THEN re.range::INTEGER ELSE 0 END), 0) as max_allonge`)
+        ),
     ])
     const genoAttaquant = archetypeAttaquant?.genotype_id
       ? await db('ref_genotypes').where({ id: archetypeAttaquant.genotype_id }).first()
@@ -2785,7 +2829,14 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
     const combatModeAtk  = rosterAttaquant?.state_combat_mode ?? 'normal'
     const attackModeBonus = (combatModeAtk === 'offensif' || combatModeAtk === 'charge') ? 3 : 0
     const combatModeBonus = combatModeAtk === 'charge' ? 3 : 0   // +3 dégâts Charge
-    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant - carenceAttaquant + isRushedMod + attackModeBonus
+
+    // Multi-adversaires : malus si l'attaquant est lui-même entouré d'ennemis
+    const atkEnemyType = character.type === 'pj' ? 'pnj' : 'pj'
+    const multiMalusAttaquant = multiAdversaryMalus(
+      countAdversaires(myTokenPos, rosterTokens, action.token_id, atkEnemyType)
+    )
+
+    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant - carenceAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant
 
     // Roll attaquant
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
@@ -2821,6 +2872,12 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
     if (!defenderCharacter) return false
 
     const targetName = defenderCharacter.name ?? targetToken.label ?? 'Cible'
+
+    // Multi-adversaires : malus si le défenseur est entouré d'ennemis (positions post-déplacement)
+    const defEnemyType = defenderCharacter.type === 'pj' ? 'pnj' : 'pj'
+    const multiMalusDefenseur = multiAdversaryMalus(
+      countAdversaires(targetTokenPos, rosterTokens, targetTokenId, defEnemyType)
+    )
 
     // ── 3. Données défenseur ──────────────────────────────────────────────────
     const sheetCible = await db('char_sheet').where({ character_id: defenderCharacter.id }).first()
@@ -2871,6 +2928,8 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
       chancesAttaque,
       defenderSkillTotal,
       defenderEffectiveMalus,
+      multiMalusAttaquant,
+      multiMalusDefenseur,
       damageFormula,
       modDom,
       combatModeBonus,
@@ -2889,7 +2948,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
       // Mode combat du défenseur — Offensif/Charge → pénalité défense
       const rosterDef = await db('combat_roster').where({ campaign_id: campaignId, token_id: targetTokenId }).first()
       const defCombatMode = rosterDef?.state_combat_mode ?? 'normal'
-      let chanceDefense = defenderSkillTotal + defenderEffectiveMalus
+      let chanceDefense = defenderSkillTotal + defenderEffectiveMalus + multiMalusDefenseur
       if      (defCombatMode === 'offensif') chanceDefense -= 5
       else if (defCombatMode === 'charge')   chanceDefense -= 7
       else if (defCombatMode === 'defensif') chanceDefense += 3
@@ -2911,6 +2970,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
       io.to(campaignId).emit(WS.COMBAT_MELEE_RESULT, {
         attaquantId: action.token_id, defenseurId: targetTokenId,
         rollAttaque, chancesAttaque, rollDefense, chanceDefense, hit,
+        multiMalusAttaquant, multiMalusDefenseur,
       })
 
       if (hit) {
@@ -3004,6 +3064,9 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
       defenderTokenId: targetTokenId,
       rollAttaque,
       chancesAttaque,
+      // Défenseur : CDR de base (sans ajustement combat_mode, résolu au confirm) + malus encerclement
+      chanceDefenseBase: defenderSkillTotal + defenderEffectiveMalus + multiMalusDefenseur,
+      multiMalusDefenseur,
     }
     if (defSocket) {
       defSocket.emit(WS.COMBAT_MELEE_DEFENSE_PROMPT, prompt)

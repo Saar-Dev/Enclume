@@ -143,12 +143,17 @@ router.get('/:id', requireAuth, async (req, res) => {
     .first()
   if (!member) throw new AppError(403, 'Access denied')
 
-  // Tokens visibles selon le rôle
-  let tokensQuery = db('tokens').where({ battlemap_id: req.params.id })
+  // Tokens visibles selon le rôle — JOIN pour user_color toujours à jour
+  let tokensQuery = db('tokens')
+    .leftJoin('characters', 'tokens.character_id', 'characters.id')
+    .leftJoin('users', 'characters.user_id', 'users.id')
+    .where({ 'tokens.battlemap_id': req.params.id })
   if (member.role !== 'gm') {
-    tokensQuery = tokensQuery.where({ visible_to_players: true }).whereNot({ layer: 'gm' })
+    tokensQuery = tokensQuery
+      .where({ 'tokens.visible_to_players': true })
+      .whereNot({ 'tokens.layer': 'gm' })
   }
-  const tokens = await tokensQuery.select('*')
+  const tokens = await tokensQuery.select('tokens.*', 'users.color as user_color')
 
   res.json({ battlemap, tokens })
 })

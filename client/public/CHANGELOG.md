@@ -1,3 +1,11 @@
+## v72 — 2026-06-01 — Multi-adversaires Corps à Corps
+
+### Combat — Corps à corps
+- [add] Malus encerclement CaC (LdB p.224) : −5 pour 2 adversaires, −7 pour 3, −10 pour 4+
+- [add] Critère positionnel : tout ennemi à portée (3m + allonge de son arme) au moment de la résolution
+- [add] Alerte ⚠ dans le popup défense PJ : "Encerclé — malus −X à votre défense" si applicable
+- [add] Alerte ⚠ dans le panneau résultat melee : indique qui est encerclé et de combien
+
 ## v71 — 2026-06-01 — Timeline combat BG3-style
 
 ### Combat — Timeline initiative
