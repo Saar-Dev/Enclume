@@ -87,7 +87,7 @@ Enclume/
 │   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # migrations jusqu'à 65 — 63 : +melee ; 64 : state_combat_mode ; 65 : campaigns.action_timer_sec
+│   │   │   ├── migrations/             # migrations jusqu'à 66 — 63 : +melee ; 64 : state_combat_mode ; 65 : campaigns.action_timer_sec ; 66 : campaigns.default_token_glb_url
 │   │   │   ├── seeds/
 │   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
@@ -216,6 +216,7 @@ Enclume/
 | 63_melee | combat_actions : ajout 'melee' au CHECK constraint `chk_action_type` |
 | 64_combat_mode | combat_roster : +`state_combat_mode TEXT NOT NULL DEFAULT 'normal'` CHECK ('normal','offensif','charge','defensif','retraite') |
 | 65_action_timer | campaigns : +`action_timer_sec INTEGER NOT NULL DEFAULT 0` — 0 = infini, timer auto-skip Phase Annonce |
+| 66_campaign_default_token | campaigns : +`default_token_glb_url TEXT` nullable — URL GLB token par défaut de campagne |
 
 ---
 

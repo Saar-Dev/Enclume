@@ -295,22 +295,20 @@ Plan complet dans `docs/PLAN14_StatusEffects.md`.
 | Empoisonné | `poisoned` | Long terme |
 | Irradié | `irradiated` | Long terme |
 
-Architecture : nouvelle table `combat_status_effects` (migration 63) + icônes `Html` R3F au-dessus des tokens.
+Architecture : nouvelle table `combat_status_effects` (migration à assigner — 63 prise par melee, voir `docs/PLAN14_StatusEffects.md`) + icônes `Html` R3F au-dessus des tokens.
 
 ---
 
-### Chantier CaC — Corps à Corps Polaris
+### Chantier CaC — Corps à Corps Polaris ✅ (sessions 67-68)
 
-Spec complète dans `docs/PLAN_12_CONTACT.md`. Questions ouvertes à valider avec Saar (LOC_TABLE contact, modificateur dégâts).
+Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation documentée dans `docs/SYSTEME/COMBAT.md`.
 
-| Tâche | État |
-|---|---|
-| Migration : `combat_actions` +7 colonnes melee | 🔲 |
-| `charStats.js` : `getModDom(for_na)` (déjà présent ✓) | ✅ |
-| Handler `COMBAT_ACTION_DECLARE` branche `melee` | 🔲 |
-| Jet opposition défenseur (auto-serveur pour PNJ) | 🔲 |
-| `CombatActionWindow` : onglet Corps à Corps (cible, arme, mode combat) | 🔲 |
-| `CombatModifiersWindow` : modificateurs CaC | 🔲 |
+| Sprint | Contenu | État |
+|---|---|---|
+| Sprint CaC 1 | Migration 63 (+melee chk_action_type), `resolveMeleeAction`, opposition PNJ auto / PJ bloque slot, UI CombatActionWindow melee, GM queue séquentielle | ✅ session 67 |
+| Sprint CaC 2 | Migration 64 (`state_combat_mode`), modes Normal/Offensif/Charge PJ+PNJ, `handleChargeFlow`, bonus attaque/défense/dégâts | ✅ session 68 |
+| Sprint CaC 3 | Modes Défensif (+3) / Retraite (+5) PJ+PNJ, `handleRetraiteMove`, `freeMove` étendu à retraite | ✅ session 68 |
+| Sprint CaC 4 | Multi-adversaires (−5/−7/−10 LdB), modes avancés — voir `docs/SYSTEME/REGLES_LdB.md` | 🔲 priorité basse |
 
 ### Client — Dashboard
 | Tâche | État |

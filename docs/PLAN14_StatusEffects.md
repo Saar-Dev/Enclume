@@ -75,7 +75,8 @@ CREATE TABLE combat_status_effects (
 
 **CHECK constraint** : `status_type IN ('stunned','unconscious','grappled','restrained','off_balance','burning','acid','asphyxia','decompression','electrocuted','blinded','hypothermia','infected','poisoned','irradiated')`
 
-### Migration : 63
+### Migration : à assigner au démarrage du sprint
+> ⚠️ La migration 63 est prise (`63_melee`). Vérifier la prochaine disponible dans CLAUDE.md avant de créer le fichier de migration.
 
 ---
 

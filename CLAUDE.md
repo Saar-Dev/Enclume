@@ -34,6 +34,7 @@ Ce projet dure depuis 64+ sessions. Chaque piège documenté représente des **h
 | Hooks React, dependency arrays, lock éditeur | `docs/SYSTEME/REACT.md` |
 | MinIO, faces entités, Atelier GM | `docs/SYSTEME/ASSETS.md` |
 | Conventions, pièges §18-§19 | `docs/SYSTEME/CONVENTIONS.md` |
+| Règles LdB Polaris (CaC, tir, actions, déplacements) | `docs/SYSTEME/REGLES_LdB.md` |
 | Ambiguïtés identifiants, termes RPG | `docs/GLOSSAIRE.md` |
 | Nouvelles strings UI dans composant React | Convention i18n — voir `## Convention i18n` ci-dessous |
 
@@ -109,7 +110,7 @@ git push origin master
 
 ## Lecture obligatoire — dans cet ordre, en entier
 
-1. `docs/JOURNAL3.md` — 100 dernières lignes en priorité absolue
+1. `docs/JOURNAL3.md` — lire depuis le **dernier** en-tête `## Session N` jusqu'à la fin du fichier (dernier bloc uniquement — pas un nombre de lignes fixe)
 2. `docs/ASBUILT.md` — snapshot stable actuel
 3. `docs/EN_COURS.md` — prochaine étape exacte
 4. `docs/SYSTEME/` — lire le(s) fichier(s) thématique(s) concerné(s) par le chantier (voir tableau ci-dessus)
@@ -123,7 +124,7 @@ Toute décision non documentée est considérée comme nulle.
 ## État actuel — Session 69 (2026-06-01)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **65 migrations stables** — prochaine : **66**
+- **66 migrations stables** — prochaine : **67**
 - Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.5 ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅ / Sprint CaC 1 ✅ / Sprint CaC 2 ✅ / Sprint CaC 3 ✅ / Déploiement Kiwi ✅
 
 **Session 68 ✅ :**

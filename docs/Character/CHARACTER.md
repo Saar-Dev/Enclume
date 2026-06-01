@@ -27,7 +27,7 @@ Gère la fiche personnage Polaris et tous les modules joueur associés (compéte
 
 ### ⚠️ Tables hors-scope de ce document
 
-Les tables suivantes appartiennent au domaine **VTT** et sont documentées dans `JOURNAL.md`, `ASBUILT.md`, `SYSTEME.md` :
+Les tables suivantes appartiennent au domaine **VTT** et sont documentées dans `docs/ASBUILT.md` et `docs/SYSTEME/` :
 
 `users` · `campaigns` · `campaign_members` · `battlemaps` · `tokens` · `characters` · `dice_rolls` · `player_locations` · `documents` · `walls` · `zones` · `texture_packs` · `texture_pack_categories` · `voxel_textures` · `battlemap_texture_usage`
 
