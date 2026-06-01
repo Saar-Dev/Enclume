@@ -164,6 +164,7 @@ export default function CampaignSettingsPage() {
   const [actionTimerSec,   setActionTimerSec]   = useState(0)
   const [defaultTokenGlbUrl, setDefaultTokenGlbUrl] = useState(null)
   const [uploadingToken, setUploadingToken] = useState(false)
+  const [uploadTokenStatus, setUploadTokenStatus] = useState(null) // 'saved' | 'error' | null
   const tokenFileInputRef = useRef(null)
 
   // Mode simple
@@ -260,13 +261,17 @@ export default function CampaignSettingsPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadingToken(true)
+    setUploadTokenStatus(null)
     try {
       const formData = new FormData()
       formData.append('glb', file)
       const res = await api.post(`/campaigns/${campaignId}/default-token`, formData)
       setDefaultTokenGlbUrl(res.data.campaign.default_token_glb_url)
+      setUploadTokenStatus('saved')
+      setTimeout(() => setUploadTokenStatus(null), 3000)
     } catch (err) {
       console.error('Erreur upload token par défaut :', err)
+      setUploadTokenStatus('error')
     } finally {
       setUploadingToken(false)
       if (tokenFileInputRef.current) tokenFileInputRef.current.value = ''
@@ -654,7 +659,7 @@ export default function CampaignSettingsPage() {
             <h2 style={styles.sectionTitle}>{t('settings.sectionTokens')}</h2>
             <p style={styles.toggleLabel}>{t('settings.defaultTokenLabel')}</p>
             <p style={{ ...styles.toggleHint, marginBottom: '12px' }}>{t('settings.defaultTokenHint')}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
               <span style={defaultTokenGlbUrl ? styles.tokenStatusSet : styles.tokenStatusNone}>
                 {defaultTokenGlbUrl ? t('settings.defaultTokenSet') : t('settings.defaultTokenNone')}
               </span>
@@ -672,6 +677,12 @@ export default function CampaignSettingsPage() {
               >
                 {uploadingToken ? t('settings.defaultTokenUploading') : t('settings.defaultTokenUpload')}
               </button>
+              {uploadTokenStatus === 'saved' && (
+                <span style={styles.saveSuccess}>{t('settings.saved')}</span>
+              )}
+              {uploadTokenStatus === 'error' && (
+                <span style={styles.saveError}>{t('settings.errorSave')}</span>
+              )}
             </div>
           </section>
 
