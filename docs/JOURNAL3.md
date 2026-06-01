@@ -1557,3 +1557,28 @@ if (err.code === 'NoSuchKey' || err.code === 'NotFound') {
 **Note :** même faille présente dans `assets.js:51` et `textures.js:28` — non symptomatique car les assets existent toujours avant d'être servis. À corriger en sprint dédié si besoin.
 
 **Fix ✅ CONFIRMÉ FONCTIONNEL**
+
+
+---
+
+## Session 70 — Seed ref_equipment sur Kiwi (2026-06-01)
+
+**Problème :** `ref_equipment` vide sur Kiwi — les migrations créent la structure, mais le seed `2_seed_equipment.js` n'avait jamais été lancé sur le serveur distant.
+
+**Cause secondaire :** chemin hardcodé dans `2_seed_equipment.js` pointait vers `docs/Character/script Extraction Excel/equipement/STEP1_cleaned_data.js` alors que le fichier source est dans `docs/Old/`.
+
+**Fix — `server/src/db/seeds/2_seed_equipment.js` ligne 30 :**
+```js
+// AVANT
+'../../../../docs/Character/script Extraction Excel/equipement/STEP1_cleaned_data.js'
+// APRÈS
+'../../../../docs/Old/script Extraction Excel/equipement/STEP1_cleaned_data.js'
+```
+Validé en dry run local avant push.
+
+**Sur Kiwi :**
+- Conflit `git pull` sur `client/src/lib/api.js` (fix VITE_API_URL appliqué manuellement en session 69, identique dans git) → `git checkout -- client/src/lib/api.js` puis `git pull`
+- `git update-index --skip-worktree client/src/lib/api.js` — ajouté aux fichiers protégés
+- Seed lancé : **715 items insérés**, 2 rejections non bloquantes (`Oxyma` + `Poing Kryss` — `init_mod` invalide dans la source), 207 NT=1 par défaut (comportement normal, corrigeable via admin)
+
+**✅ CONFIRMÉ FONCTIONNEL**

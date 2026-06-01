@@ -202,7 +202,24 @@ Ces fichiers ont des valeurs spécifiques au serveur. **Ne pas écraser avec git
 | `docker-compose.yml` | Passwords forts + MinIO version 2022 |
 | `server/src/lib/redis.js` | Approche REDIS_PASSWORD (pas buildRedisConfig) |
 | `client/vite.config.js` | `port: 8193` + `host: true` (vs local `port: 5173`) |
+| `client/src/lib/api.js` | `VITE_API_URL` pointe vers `http://89.92.219.211:8194` |
 | `.env` | Non tracké git — spécifique au serveur |
+
+## Seeds (première install uniquement)
+
+`ref_equipment` doit être peuplé via le seed après les migrations :
+
+```bash
+cd /home/didier/Enclume/server/src/db/seeds
+
+# Dry run d'abord — attendu : ~715 "À insérer", 2 rejections non bloquantes
+node 2_seed_equipment.js
+
+# Si rapport cohérent → insert réel
+node 2_seed_equipment.js --insert
+```
+
+Le script charge lui-même le `.env` via dotenv — pas besoin de `--env-file`.
 
 ## Procédure git pull (mise à jour du serveur)
 
