@@ -90,6 +90,10 @@ const startServer = async () => {
     await db.raw('SELECT 1')
     console.log('Base de données connectée')
 
+    // Migrations — applique toutes les migrations en attente au démarrage
+    await db.migrate.latest()
+    console.log('Migrations à jour')
+
     // Vérification MinIO — bucket accessible
     const minio = getMinioClient()
     await minio.bucketExists(BUCKET())

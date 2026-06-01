@@ -22,6 +22,7 @@ import { useEntityStore } from '../stores/entityStore'
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const GRID_SIZE = 50
 const FONT_URL = '/fonts/inter.woff'
+const HARDCODED_DEFAULT_TOKEN_URL = '/models/default.glb'
 
 // Seuil en pixels pour distinguer clic court (sélection) de drag
 const DRAG_THRESHOLD = 4
@@ -784,7 +785,7 @@ function Scene({
         const character = characters.find(c => c.id === token.character_id)
         const glbUrl = character?.glb_url
           ? `${import.meta.env.VITE_API_URL}/api/assets/${character.glb_url}`
-          : (defaultTokenGlbUrl || null)
+          : (defaultTokenGlbUrl || HARDCODED_DEFAULT_TOKEN_URL)
         return (
           <TokenMesh
             key={token.id}
