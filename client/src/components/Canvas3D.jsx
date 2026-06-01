@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { useRef, useState, useEffect, useCallback, useMemo, Component } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { MapControls, Grid, Text } from '@react-three/drei'
 import { useGLTF } from '@react-three/drei'
@@ -22,6 +22,7 @@ import { useEntityStore } from '../stores/entityStore'
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const GRID_SIZE = 50
 const FONT_URL = '/fonts/inter.woff'
+const HARDCODED_DEFAULT_TOKEN_URL = '/models/default.glb'
 
 // Seuil en pixels pour distinguer clic court (sélection) de drag
 const DRAG_THRESHOLD = 4
@@ -75,6 +76,25 @@ function TokenRing({ color, isSelected, isDragging, opacity }) {
 
 // ─── Token individuel ─────────────────────────────────────────────────────────
 const Y_OFFSET = 0.5
+
+// Filet de sécurité : si useGLTF échoue (404, GLB invalide, etc.), rend la capsule
+// au lieu de noircir le canvas entier. La capsule est le dernier recours, pas le fallback normal.
+class TokenGlbErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  render() {
+    if (this.state.hasError) {
+      const { color, isGmLayer, tiltX, tiltZ } = this.props
+      return <TokenFallbackBody color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
+    }
+    return this.props.children
+  }
+}
 
 // Corps GLB — appelé uniquement quand glbUrl est défini.
 // useGLTF suspend le composant le temps du chargement (géré nativement par Canvas R3F).
@@ -205,10 +225,9 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick,
       }}
     >
       <TokenRing color={color} isSelected={isSelected} isDragging={isDragging} opacity={isGmLayer ? 0.25 : undefined} />
-      {glbUrl
-        ? <TokenGlbBody glbUrl={glbUrl} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
-        : <TokenFallbackBody color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
-      }
+      <TokenGlbErrorBoundary color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ}>
+        <TokenGlbBody glbUrl={glbUrl} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
+      </TokenGlbErrorBoundary>
       <Text
         position={[0, 2.5, 0]}
         font={FONT_URL}
@@ -784,7 +803,7 @@ function Scene({
         const character = characters.find(c => c.id === token.character_id)
         const glbUrl = character?.glb_url
           ? `${import.meta.env.VITE_API_URL}/api/assets/${character.glb_url}`
-          : (defaultTokenGlbUrl || null)
+          : (defaultTokenGlbUrl || HARDCODED_DEFAULT_TOKEN_URL)
         return (
           <TokenMesh
             key={token.id}
