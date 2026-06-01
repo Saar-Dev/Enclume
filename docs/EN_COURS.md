@@ -366,6 +366,7 @@ Hors scope : combat (12), équipement (6). SkillTooltips : roadmap.
 - Sprint CaC 4 — modes avancés, multi-adversaires (priorité basse)
 - Sprint Waypoints — priorité basse (plan dans JOURNALTEMP.md)
 - **Sprint Page Santé Serveur** (priorité basse) — route `/api/health/detailed` (mémoire, uptime, températures `/sys/class/thermal/`, statut services) + page client dédiée. Voir `docs/SERVEURDISTANTKIWI.md`.
+- **Fix WorkshopPage** : `err.response?.data?.error` est un objet AppError `{message, code}`, pas une string → crash React (écran blanc) sur import invalide. Fix : extraire `.message`. Sprint futur.
 
 ---
 

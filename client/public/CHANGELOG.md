@@ -1,3 +1,16 @@
+## v69 — 2026-06-01 — Serveur Alpha Kiwi + correctifs UI
+
+### Serveur distant Alpha "Kiwi"
+- [add] Déploiement sur serveur Linux maison (accessible via internet)
+- [add] Services systemd — démarrage automatique au boot, redémarrage en cas de crash
+- [fix] api.js : baseURL hardcodée `localhost:3001` → `VITE_API_URL` (fix critique distant)
+- [fix] Titres onglets navigateur : toutes les pages s'appelaient "client" → titres explicites par page
+- [fix] SessionPage : titre dynamique `Enclume — <nom de la campagne>`
+
+### Atelier du GM
+- [fix] Bouton "Supprimer ce pack" maintenant visible sur les packs sans propriétaire (packs migrés)
+- [fix] Séparation des droits : Export (propriétaire uniquement) vs Supprimer (propriétaire ou pack orphelin)
+
 ## v68 — 2026-05-31 — Modes de combat Corps à Corps + correctifs Dashboard
 
 ### Modes CaC (Sprint CaC 3)

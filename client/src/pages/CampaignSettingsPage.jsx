@@ -172,6 +172,8 @@ export default function CampaignSettingsPage() {
   // Mode expert
   const [expertRows, setExpertRows] = useState(() => initExpertRows(null))
 
+  useEffect(() => { document.title = 'Enclume — Paramètres campagne' }, [])
+
   // ─── Chargement campagne ───────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {

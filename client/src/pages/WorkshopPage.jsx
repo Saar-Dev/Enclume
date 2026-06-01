@@ -42,6 +42,7 @@ export default function WorkshopPage() {
   const [entityCount, setEntityCount] = useState(0)
 
   const isOwner = selectedPack?.created_by === user?.id
+  const canDelete = isOwner || !selectedPack?.created_by
 
   // ─── Chargement packs ─────────────────────────────────────────────────────────
   const loadPacks = useCallback(async () => {
@@ -53,6 +54,7 @@ export default function WorkshopPage() {
     finally { setLoading(false) }
   }, [t])
 
+  useEffect(() => { document.title = 'Enclume — Atelier' }, [])
   useEffect(() => { loadPacks() }, [loadPacks])
 
   // ─── Chargement détail pack ───────────────────────────────────────────────────
@@ -207,12 +209,14 @@ export default function WorkshopPage() {
                   <p style={S.detailMeta}>{selectedPack.name} · {selectedPack.tile_size}px</p>
                 </div>
                 <div style={S.detailActions}>
-                  {isOwner && <>
+                  {isOwner && (
                     <button style={S.btnSecondary} onClick={() => handleExport(selectedPack)} disabled={!!exporting}>
                       {exporting === selectedPack.id ? t('common.loading') : t('texturePacks.exportZip')}
                     </button>
+                  )}
+                  {canDelete && (
                     <button style={S.btnDanger} onClick={() => setDeleteConfirm(selectedPack.id)}>{t('texturePacks.deletePack')}</button>
-                  </>}
+                  )}
                 </div>
               </div>
 

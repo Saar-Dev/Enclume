@@ -120,19 +120,22 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 68 (2026-05-31)
+## État actuel — Session 69 (2026-06-01)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **64 migrations stables** — prochaine : **65**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.5 ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅ / Sprint CaC 1 ✅ / Sprint CaC 2 ✅ / Sprint CaC 3 ✅
-
-**Session 67 ✅ :**
-- D10 UV texturing V2 — dette fermée ✅
-- Sprint CaC 1 ✅ — migration 63, resolveMeleeAction, jet défense PJ séquentiel
+- **65 migrations stables** — prochaine : **66**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.5 ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅ / Sprint CaC 1 ✅ / Sprint CaC 2 ✅ / Sprint CaC 3 ✅ / Déploiement Kiwi ✅
 
 **Session 68 ✅ :**
-- **Sprint CaC 2 — Modes de combat** : migration 64, Normal/Offensif/Charge, Défensif/Retraite en DB (CaC3), validation distance Phase 2, Charge PJ flow séquentiel, panneau GM 720px + queue Charge PNJ, batch libre ✅
-- **Sprint CaC 3 — Défensif et Retraite** : modes passifs pleinement implémentés — chips vert uniformes, pas de cible, INI=0, handleRetraiteMove() recul lente optionnel, server freeMove+chanceDefense ✅
+- **Sprint CaC 2 — Modes de combat** : migration 64, Normal/Offensif/Charge, Défensif/Retraite en DB ✅
+- **Sprint CaC 3 — Défensif et Retraite** : modes passifs, handleRetraiteMove(), freeMove+chanceDefense ✅
+- **Timer auto-skip** : migration 65, option campagne, relance chaque tour ✅
+
+**Session 69 ✅ :**
+- **Déploiement Kiwi** : systemd (enclume-server + enclume-client), SSH keepalive, api.js baseURL fix, test fonctionnel ✅
+- **Fix WorkshopPage** : canDelete (pack sans created_by), titres onglets navigateur ✅
+
+**Serveur Alpha "Kiwi" :** `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md`
 
 **"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
 
@@ -140,7 +143,7 @@ Toute décision non documentée est considérée comme nulle.
 - Sprint Test de Choc suite — guard is_stunned COMBAT_ACTION_DECLARE + clear logique (PC42)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, UI non implémentée)
 - Sprint CaC 4 — modes avancés, multi-adversaires (priorité basse)
-- Sprint Waypoints — priorité basse (plan dans JOURNALTEMP.md)
+- Sprint Page Santé Serveur — priorité basse
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser.
@@ -148,9 +151,10 @@ Toute décision non documentée est considérée comme nulle.
 **Dettes actives :**
 - `useDiceAudio.js` — sons impact dés
 - `.gitattributes:3` — attribut invalide
-- Timer auto-skip (`action_timer_sec > 0`) — prévu Sprint 2, reporté Sprint 3
 - `is_stunned` settable (session 66) mais non enforced — `COMBAT_ACTION_DECLARE` ne lit pas le flag → PC42 (voir SYSTEME/COMBAT.md)
 - `is_stunned` purge manuelle non implémentée — clear via route GM à créer (actuellement purgé implicitement par COMBAT_END)
+- WorkshopPage écran blanc sur import invalide — `err.response?.data?.error` objet AppError → crash React
+- Kiwi P-SRV-5 — ports Docker non restreints à 127.0.0.1 (UFW contourné par Docker)
 
 ---
 

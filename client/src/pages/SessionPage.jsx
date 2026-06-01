@@ -41,6 +41,10 @@ export default function SessionPage() {
 
   const [campaign, setCampaign] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    document.title = campaign?.name ? `Enclume — ${campaign.name}` : 'Enclume — Session'
+  }, [campaign])
   const [error, setError] = useState(null)
 
   const [mode, setMode] = useState('play')

@@ -250,7 +250,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
     const pack = await db('texture_packs').where({ id: req.params.id }).first()
     if (!pack) throw new AppError(404, 'Pack introuvable')
-    if (pack.created_by !== req.user.id) throw new AppError(403, 'Accès réservé au créateur du pack')
+    if (pack.created_by && pack.created_by !== req.user.id) throw new AppError(403, 'Accès réservé au créateur du pack')
 
     // Guard 409 — P42 : battlemap_texture_usage JOIN voxel_textures (jamais block_types)
     const usedTextures = await db('battlemap_texture_usage')

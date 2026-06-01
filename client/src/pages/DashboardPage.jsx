@@ -23,6 +23,8 @@ export default function DashboardPage() {
   const coverInputRef = useRef(null)
   const pendingCoverIdRef = useRef(null)
 
+  useEffect(() => { document.title = 'Enclume — Tableau de bord' }, [])
+
   useEffect(() => {
     api.get('/campaigns')
       .then(res => setCampaigns(res.data.campaigns))

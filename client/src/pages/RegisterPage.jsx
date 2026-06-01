@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useTranslation } from 'react-i18next'
@@ -14,6 +14,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const { setUser } = useAuthStore()
   const navigate = useNavigate()
+
+  useEffect(() => { document.title = 'Enclume — Inscription' }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

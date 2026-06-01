@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-05-31 Session 68 (Sprint CaC 3)
+> Dernière mise à jour : 2026-06-01 Session 69
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -43,15 +43,15 @@ Enclume/
 │   │   │   ├── DiceRoller.jsx          # NOUVEAU 44 — orchestrateur R3F dans Canvas3D
 │   │   │   └── ChangelogPanel.jsx      # NOUVEAU 66 — panneau latéral rétractable Dashboard : fetch+parse CHANGELOG.md, auto-open localStorage (changelog_last_seen), PCB SVG déco, 38px rail ↔ 340px ouvert, tags AJOUT/CORRECTIF/CHANGEMENT
 │   │   ├── pages/
-│   │   │   ├── LoginPage.jsx
-│   │   │   ├── RegisterPage.jsx        # Modifié 66 — +champ "Beta code" (inviteCode, filtre chiffres, maxLength 8)
+│   │   │   ├── LoginPage.jsx           # Modifié 69 — +useEffect import + document.title 'Enclume — Connexion'
+│   │   │   ├── RegisterPage.jsx        # Modifié 66 — +champ "Beta code". Modifié 69 — +useEffect import + document.title 'Enclume — Inscription'
 │   │   ├── lib/
 │   │   │   └── useDraggable.js         # NOUVEAU 66 — hook partagé drag+localStorage+clamp (storageKey, defaultPos, panelW)
 │   │   │   ├── RegisterPage.jsx
-│   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover campagne (pendingCoverIdRef pattern). Modifié 66 — layout height:100vh+flex-col, body flex-row+scroll wrapper, mount ChangelogPanel. Modifié 68 — restauration formulaires inline (showCreate+showJoin), bouton "Rejoindre avec un code", suppression create-plus div, styles actionsRow/btnSecondary/inlineForm/input/btnGhost
-│   │   │   ├── SessionPage.jsx         # Modifié 64 — Sprint 7.1 : combatTargetMode. Sprint 7.4 : damageResults + COMBAT_DAMAGE_RESULT. Sprint 7.4bis : +attackResult state + COMBAT_ATTACK_PLAYER_RESULT handler + onAttackConfirmed prop, onDamageConfirmed nettoie aussi attackResult. Modifié 65 Sprint DicePanel v3 — DICE_RESULT +secret dans destructuring + addMessage
-│   │   │   ├── CampaignSettingsPage.jsx # Modifié 66 Sprint 7.5 — +section "Règles de jeu" + toggle pnjUnlimitedAmmo
-│   │   │   ├── WorkshopPage.jsx        # Stable 33
+│   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover. Modifié 66 — layout flex+ChangelogPanel. Modifié 68 — formulaires inline. Modifié 69 — document.title 'Enclume — Tableau de bord'
+│   │   │   ├── SessionPage.jsx         # Modifié 64-66 — combat, dés. Modifié 69 — document.title dynamique `Enclume — ${campaign.name}` (dépend de [campaign])
+│   │   │   ├── CampaignSettingsPage.jsx # Modifié 66 Sprint 7.5 — section Règles de jeu. Modifié 68 Sprint Timer — +actionTimerSec. Modifié 69 — document.title 'Enclume — Paramètres campagne'
+│   │   │   ├── WorkshopPage.jsx        # Modifié 69 — canDelete (isOwner || !created_by), Export/Supprimer séparés, document.title 'Enclume — Atelier'
 │   │   │   └── TexturePacksPage.jsx    # CONSERVÉ mais remplacé par WorkshopPage
 │   │   ├── stores/
 │   │   │   ├── authStore.js
@@ -74,7 +74,7 @@ Enclume/
 │   │   ├── locales/
 │   │   │   └── fr.json                 # Modifié 66 Sprint i18n — +20 sections : charSheet (~50 clés attrs/stats/bio/tooltips LdB), builder (~55 clés faces/géométries/formulaires), advantages (24), skillsPanel (6), radialMenu, entityPanel, changelog + ajouts dans auth/dashboard/session/settings/sidebar/workshop/character
 │   │   ├── lib/
-│   │   │   ├── api.js
+│   │   │   ├── api.js                  # Modifié 69 — baseURL: `${VITE_API_URL}/api` (était hardcodé localhost:3001)
 │   │   │   ├── voxelTextures.js
 │   │   │   └── diceMath.js             # NOUVEAU 44 — PRNG, mappings, normales D4/D6/D8/D12/D20/D10. Modifié 65 — D20_GLB_NORMALS : 20 normales Blender exactes, clés = numéros réels du dé (remapping par test visuel + validation antipodal)
 │   │   ├── i18n.js
@@ -87,7 +87,7 @@ Enclume/
 │   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # migrations jusqu'à 63 — 61 : +reload ; 62 : campaigns.reload_mode ; 63 : +melee dans chk_action_type
+│   │   │   ├── migrations/             # migrations jusqu'à 65 — 63 : +melee ; 64 : state_combat_mode ; 65 : campaigns.action_timer_sec
 │   │   │   ├── seeds/
 │   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
@@ -102,7 +102,7 @@ Enclume/
 │   │   │   ├── users.js
 │   │   │   ├── dice.js
 │   │   │   ├── voxel-textures.js       # Modifié 33 — usage_hint exposé GET+PUT
-│   │   │   ├── texture-packs.js
+│   │   │   ├── texture-packs.js        # Modifié 69 — DELETE guard null-safe : created_by NULL → suppressible par tout user auth
 │   │   │   ├── entity-blueprints.js    # Modifié 33 — POST /:id/upload-glb
 │   │   │   ├── entities.js             # Modifié 39 — maintenance Redis collision map
 │   │   │   ├── equipment.js            # NOUVEAU 47 — CRUD ref_equipment + junction tables. Modifié 65 Sprint GM-A : +location dans GET /equipment SELECT
@@ -137,8 +137,9 @@ Enclume/
 
 | Composant | Tech | Notes |
 |---|---|---|
-| Frontend | React 19 + Vite | Port 5173 dev |
-| Backend | Node.js + Express + Socket.io | Port 3001 |
+| Frontend | React 19 + Vite | Port 5173 dev (8193 Kiwi) |
+| Backend | Node.js + Express + Socket.io | Port 3001 dev (8194 Kiwi) |
+| Serveur Alpha "Kiwi" | Debian 13, systemd, box Bouygues | `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md` |
 | Base de données | PostgreSQL | Knex migrations |
 | Cache/collisions | Redis + ioredis | Collision map par battlemap — branché session 39 |
 | Stockage fichiers | MinIO | Bucket unique |
@@ -214,6 +215,7 @@ Enclume/
 | 62_campaign_reload_mode | campaigns.reload_mode TEXT NOT NULL DEFAULT 'magazine' CHECK ('magazine','topup') |
 | 63_melee | combat_actions : ajout 'melee' au CHECK constraint `chk_action_type` |
 | 64_combat_mode | combat_roster : +`state_combat_mode TEXT NOT NULL DEFAULT 'normal'` CHECK ('normal','offensif','charge','defensif','retraite') |
+| 65_action_timer | campaigns : +`action_timer_sec INTEGER NOT NULL DEFAULT 0` — 0 = infini, timer auto-skip Phase Annonce |
 
 ---
 

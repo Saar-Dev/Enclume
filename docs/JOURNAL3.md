@@ -1435,6 +1435,91 @@ Le plan `docs/PLAN_REWORK_TIMELINE.md` est annulé et supprimé. Rework visuel T
 
 ---
 
+## Session 69 — Déploiement serveur Alpha "Kiwi" + correctifs UI (2026-06-01)
+
+Session démarrée avec l'ouverture du serveur Alpha "Kiwi" (serveur maison Linux derrière box Bouygues). Voir `docs/SERVEURDISTANTKIWI.md` pour la documentation complète du déploiement.
+
+### Déploiement Kiwi ✅
+
+**Nettoyage redis.js (serveur) :**
+- Suppression log debug `[Redis] REDIS_PASSWORD lu: ...` et variable orpheline `const _rp`
+- Correction commentaire header (approche REDIS_PASSWORD — pas parsing URL)
+
+**skip-worktree ✅ — 3 fichiers protégés sur Kiwi :**
+```bash
+git update-index --skip-worktree docker-compose.yml
+git update-index --skip-worktree server/src/lib/redis.js
+git update-index --skip-worktree client/vite.config.js
+```
+Vérifié : `git ls-files -v | grep "^S"` retourne les 3 fichiers avec flag `S`.
+
+**systemd — remplacement des terminaux ouverts :**
+- `enclume-server.service` : `ExecStart=/usr/bin/node --env-file=../.env --es-module-specifier-resolution=node src/index.js`, `Restart=on-failure`, `enabled`
+- `enclume-client.service` : `ExecStart=/home/didier/Enclume/client/node_modules/.bin/vite --host --port 8193`, `enabled`
+- Les deux démarrent au boot, survivent aux déconnexions SSH, redémarrent en cas de crash
+- `journalctl -u enclume-server -f` pour les logs temps réel
+
+**SSH keepalive :**
+- Serveur : `ClientAliveInterval 120` + `ClientAliveCountMax 10` dans `/etc/ssh/sshd_config` + `sudo systemctl restart ssh`
+- Client local `~/.ssh/config` : `ServerAliveInterval 60` + `ServerAliveCountMax 5`
+
+**Fix critique — `client/src/lib/api.js` :**
+- `baseURL: 'http://localhost:3001/api'` → `baseURL: \`${import.meta.env.VITE_API_URL}/api\``
+- Cause : depuis un navigateur distant, `localhost:3001` est l'adresse du client (pas du serveur) → 0 requêtes reçues par Express, nodemon silencieux
+- Appliqué local + serveur (Kiwi)
+- Piège documenté P-SRV-6 dans SERVEURDISTANTKIWI.md
+
+**Pièges découverts et documentés :**
+- P-SRV-6 : api.js baseURL hardcodée → inutilisable en distant
+- P-SRV-7 : SSH timeout Kiwi → ClientAliveInterval côté serveur + ServerAliveInterval côté client
+- P-SRV-8 : Claude Code SIGILL sur ce serveur (CPU sans x86-64-v2) — même cause que MinIO récent
+
+**Test fonctionnel ✅ :**
+- Création de compte + login ✅
+- Dashboard + création campagne ✅
+- Import pack de textures via Export/Import (pas ZIP fait-maison sans manifest) ✅
+
+**Bug pack textures (résolu en cours) :**
+- Pack migré sans `created_by` (NULL) → bouton Supprimer absent (`isOwner = false`)
+- Fix SQL : `UPDATE texture_packs SET created_by = '<uuid>' WHERE id = '<pack_vide>'`
+- Fix code : voir Fix WorkshopPage ci-dessous
+
+---
+
+### Fix WorkshopPage — canDelete ✅
+
+*`client/src/pages/WorkshopPage.jsx`*
+- `const canDelete = isOwner || !selectedPack?.created_by` — pack sans propriétaire (migré/NULL) supprimable
+- Bouton Export conservé sous `{isOwner && ...}` (séparé du delete)
+- Bouton Supprimer sous `{canDelete && ...}`
+
+*`server/src/routes/texture-packs.js`* — DELETE `/:id`
+- `if (pack.created_by !== req.user.id)` → `if (pack.created_by && pack.created_by !== req.user.id)`
+- `created_by = NULL` → suppressible par tout utilisateur authentifié
+
+**Bonne pratique retenue :** ne jamais faire de DELETE SQL direct sur un pack — la route gère le nettoyage MinIO (objets + `pack_archive.zip`). Passer toujours par l'UI.
+
+---
+
+### Fix titres onglets navigateur ✅
+
+*`client/index.html`* : `<title>Enclume</title>` (fallback par défaut)
+
+`document.title` via `useEffect` dans 6 pages :
+
+| Page | Titre | Notes |
+|---|---|---|
+| LoginPage | `Enclume — Connexion` | +import useEffect |
+| RegisterPage | `Enclume — Inscription` | +import useEffect |
+| DashboardPage | `Enclume — Tableau de bord` | useEffect déjà importé |
+| WorkshopPage | `Enclume — Atelier` | useEffect déjà importé |
+| CampaignSettingsPage | `Enclume — Paramètres campagne` | useEffect déjà importé |
+| SessionPage | `Enclume — ${campaign.name}` | dynamique, dépend de `[campaign]` |
+
+**Dette ouverte :** WorkshopPage écran blanc lors d'un import invalide — `err.response?.data?.error` est un objet AppError `{message, code}`, pas une string → crash React au render. Fix : extraire `.message`. Sprint futur.
+
+---
+
 ## Session 69 — Fix serveur local cassé après config Kiwi (2026-06-01)
 
 **Cause :** `server/package.json` script `dev` modifié pour la config systemd du serveur distant Kiwi :
