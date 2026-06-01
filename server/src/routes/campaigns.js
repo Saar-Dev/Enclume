@@ -167,7 +167,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // PUT /api/campaigns/:id — modifier une campagne
 router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
-  const { name, status, default_battlemap_id, dice_config, pnj_unlimited_ammo, reload_mode, action_timer_sec } = req.body
+  const { name, status, default_battlemap_id, dice_config, pnj_unlimited_ammo, reload_mode, action_timer_sec, default_token_glb_url } = req.body
   const updates = {}
   if (name !== undefined) updates.name = name
   if (status !== undefined) updates.status = status
@@ -192,6 +192,10 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
   if (action_timer_sec !== undefined) {
     if (!Number.isInteger(action_timer_sec) || action_timer_sec < 0) throw new AppError(400, 'action_timer_sec doit être un entier ≥ 0')
     updates.action_timer_sec = action_timer_sec
+  }
+
+  if (default_token_glb_url !== undefined) {
+    updates.default_token_glb_url = default_token_glb_url === null ? null : String(default_token_glb_url)
   }
 
   // updated_at systématique sur tout PUT

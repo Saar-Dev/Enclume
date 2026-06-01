@@ -315,7 +315,8 @@
     "defaultTokenNone": "No model — generic silhouette",
     "defaultTokenSet": "GLB model loaded",
     "defaultTokenUpload": "Choose a GLB model",
-    "defaultTokenUploading": "Uploading..."
+    "defaultTokenUploading": "Uploading...",
+    "defaultTokenClear": "Reset"
   },
   "texturePacks": {
     "pageTitle": "Packs de textures",

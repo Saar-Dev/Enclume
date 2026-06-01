@@ -256,6 +256,23 @@ export default function CampaignSettingsPage() {
     setExpertMode(true)
   }, [diceEnabled, successActive, successOn, failActive, failOn])
 
+  // ─── Réinitialiser token par défaut ───────────────────────────────────────
+  const handleClearDefaultToken = useCallback(async () => {
+    setUploadingToken(true)
+    setUploadTokenStatus(null)
+    try {
+      await api.put(`/campaigns/${campaignId}`, { default_token_glb_url: null })
+      setDefaultTokenGlbUrl(null)
+      setUploadTokenStatus('saved')
+      setTimeout(() => setUploadTokenStatus(null), 3000)
+    } catch (err) {
+      console.error('Erreur réinitialisation token par défaut :', err)
+      setUploadTokenStatus('error')
+    } finally {
+      setUploadingToken(false)
+    }
+  }, [campaignId])
+
   // ─── Upload token par défaut ───────────────────────────────────────────────
   const handleUploadDefaultToken = useCallback(async (e) => {
     const file = e.target.files?.[0]
@@ -677,6 +694,15 @@ export default function CampaignSettingsPage() {
               >
                 {uploadingToken ? t('settings.defaultTokenUploading') : t('settings.defaultTokenUpload')}
               </button>
+              {defaultTokenGlbUrl && (
+                <button
+                  style={styles.btnDanger}
+                  onClick={handleClearDefaultToken}
+                  disabled={uploadingToken}
+                >
+                  {t('settings.defaultTokenClear')}
+                </button>
+              )}
               {uploadTokenStatus === 'saved' && (
                 <span style={styles.saveSuccess}>{t('settings.saved')}</span>
               )}
@@ -1076,6 +1102,16 @@ const styles = {
     border: '1px solid var(--border-normal)',
     borderRadius: '6px',
     color: 'var(--text-primary)',
+    padding: '7px 14px',
+    fontWeight: '500',
+    fontSize: '13px',
+    cursor: 'pointer',
+  },
+  btnDanger: {
+    backgroundColor: 'transparent',
+    border: '1px solid var(--color-danger)',
+    borderRadius: '6px',
+    color: 'var(--color-danger)',
     padding: '7px 14px',
     fontWeight: '500',
     fontSize: '13px',
