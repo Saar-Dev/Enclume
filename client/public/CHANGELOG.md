@@ -1,3 +1,15 @@
+## v70 — 2026-06-01 — Token par défaut campagne + stabilité serveur
+
+### Tokens 3D
+- [fix] Crash écran noir quand un token sans modèle 3D est placé sur une carte
+- [add] Token par défaut de campagne : le GM peut uploader un GLB dans les options campagne
+- [add] Bouton "Réinitialiser" pour retirer le token par défaut de campagne
+- [add] Hiérarchie fallback : modèle personnage → token campagne → défaut bundle → silhouette
+
+### Serveur
+- [fix] Migrations automatiques au démarrage du serveur (plus de migration manuelle)
+- [fix] "Erreur lors de l'enregistrement" sur la page Options campagne (colonne inconnue)
+
 ## v69 — 2026-06-01 — Serveur Alpha Kiwi + correctifs UI
 
 ### Serveur distant Alpha "Kiwi"

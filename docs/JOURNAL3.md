@@ -1582,3 +1582,64 @@ Validé en dry run local avant push.
 - Seed lancé : **715 items insérés**, 2 rejections non bloquantes (`Oxyma` + `Poing Kryss` — `init_mod` invalide dans la source), 207 NT=1 par défaut (comportement normal, corrigeable via admin)
 
 **✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 70 — Sprint Token par défaut campagne (2026-06-01)
+
+**Objectif :** Corriger le crash écran noir du playground lors de l'ajout d'un token sans modèle 3D, et permettre au GM de configurer un token de fallback par campagne.
+
+### Diagnostic du crash
+
+`Canvas3D.jsx` définissait `DEFAULT_TOKEN_URL = /api/assets/tokens/default.glb` comme fallback pour tout token sans `character.glb_url`. Ce fichier n'existe pas dans MinIO → `useGLTF` throw → crash R3F (écran noir). Aucun `ErrorBoundary` en place.
+
+### Hiérarchie fallback token (finale)
+
+| Priorité | Source | Rendu |
+|---|---|---|
+| 1 | `character.glb_url` | `TokenGlbBody` — modèle propre au personnage |
+| 2 | `campaign.default_token_glb_url` | `TokenGlbBody` — token uploadé par le GM dans les options |
+| 3 | `/models/default.glb` (bundle statique) | `TokenGlbBody` — toujours présent |
+| 4 | `TokenFallbackBody` (capsule) | `TokenGlbErrorBoundary` — filet si useGLTF crash |
+
+### Migration 66 — `campaigns.default_token_glb_url`
+
+`server/src/db/migrations/66_campaign_default_token.js` : `ALTER TABLE campaigns ADD COLUMN default_token_glb_url TEXT`
+
+**Piège découvert :** le serveur ne lance pas `db.migrate.latest()` au démarrage → la migration 66 non appliquée sur Kiwi faisait échouer le `PUT /campaigns/:id` (clause `.returning(['default_token_glb_url'])` → colonne inconnue → "Erreur lors de l'enregistrement"). Fix : ajout `await db.migrate.latest()` dans `startServer()` de `server/src/index.js`.
+
+### Fichiers modifiés
+
+**`client/src/components/Canvas3D.jsx` :**
+- Import `Component` depuis react (pour ErrorBoundary class)
+- `HARDCODED_DEFAULT_TOKEN_URL = '/models/default.glb'`
+- Suppression `DEFAULT_TOKEN_URL` (pointait vers MinIO inexistant)
+- `TokenGlbErrorBoundary` : class ErrorBoundary → `hasError` → rend `TokenFallbackBody` si `useGLTF` crash
+- `TokenGlbBody` : extrait de `TokenMesh`, contient `useGLTF` + `useMemo clonedScene` + `<primitive>`
+- `TokenFallbackBody` : capsule colorée (token.color, transparent si GM layer) — jamais appelée directement
+- `TokenMesh` : ne contient plus `useGLTF`. Rend `<TokenGlbErrorBoundary> → <TokenGlbBody>` avec `glbUrl` toujours défini
+- `Scene` : `glbUrl = character?.glb_url || defaultTokenGlbUrl || HARDCODED_DEFAULT_TOKEN_URL`
+- Props : `defaultTokenGlbUrl` ajouté à `Scene` et `Canvas3D`
+
+**`server/src/routes/campaigns.js` :**
+- Import `multerGlb` ajouté
+- Route `POST /:id/default-token` : upload GLB → MinIO `campaigns/<id>/default-token` → update `default_token_glb_url = "campaigns/<id>/default-token?v=<timestamp>"`
+- `PUT /:id` : destructure + update `default_token_glb_url` (accepte `null` pour réinitialiser), ajouté au `.returning()`
+
+**`server/src/index.js` :**
+- `await db.migrate.latest()` ajouté dans `startServer()` entre la vérif DB et MinIO — migrations auto au boot
+
+**`client/src/pages/SessionPage.jsx` :**
+- Prop `defaultTokenGlbUrl` passée à `<Canvas3D>` : `campaign?.default_token_glb_url ? ${VITE_API_URL}/api/assets/... : null`
+
+**`client/src/pages/CampaignSettingsPage.jsx` :**
+- Import `useRef` ajouté
+- States : `defaultTokenGlbUrl`, `uploadingToken`, `uploadTokenStatus`, `tokenFileInputRef`
+- `load()` : `setDefaultTokenGlbUrl(campaign.default_token_glb_url ?? null)`
+- `handleUploadDefaultToken` : FormData → `POST /:id/default-token` → update state + feedback
+- `handleClearDefaultToken` : `PUT /:id { default_token_glb_url: null }` → reset state
+- Section "Tokens 3D" : statut chargé/non chargé + bouton upload + bouton Réinitialiser (si token chargé) + feedback succès/erreur
+
+**`client/src/locales/fr.json` + `en.json` :** +8 clés `settings.defaultToken*` + `actionTimerLabel/Hint` en en.json
+
+**Sprint Token par défaut campagne ✅ CONFIRMÉ FONCTIONNEL**
