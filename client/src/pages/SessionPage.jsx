@@ -572,12 +572,23 @@ export default function SessionPage() {
       setReloadResult(null)
     })
     s.on(WS.COMBAT_STATE_SYNC, ({ combatState, roster, actions }) => {
+      // Calculer activeTokenId depuis le roster (fallback si COMBAT_SLOT_ADVANCED non reçu)
+      let activeTokenId = null
+      if (combatState.phase === 'ANNOUNCEMENT') {
+        activeTokenId = [...roster]
+          .filter(r => !r.has_announced && r.status === 'active')
+          .sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))[0]?.token_id ?? null
+      } else if (combatState.phase === 'RESOLUTION') {
+        activeTokenId = [...roster]
+          .sort((a, b) => b.initiative - a.initiative)[combatState.active_slot_idx]?.token_id ?? null
+      }
       setCombatState({
         phase: combatState.phase,
         roster,
         actions,
         currentTurn: combatState.current_turn,
         activeSlotIdx: combatState.active_slot_idx,
+        activeTokenId,
       })
       if (combatState.phase) setMode('combat')
     })
@@ -605,9 +616,9 @@ export default function SessionPage() {
     s.on(WS.COMBAT_ACTION_DECLARED, ({ tokenId, initiative }) => {
       markTokenAnnounced(tokenId, initiative)
     })
-    // Slot actif avancé pendant la phase RESOLUTION
-    s.on(WS.COMBAT_SLOT_ADVANCED, ({ activeSlotIdx }) => {
-      advanceSlot(activeSlotIdx)
+    // Slot actif avancé (ANNOUNCEMENT et RESOLUTION)
+    s.on(WS.COMBAT_SLOT_ADVANCED, ({ activeSlotIdx, tokenId }) => {
+      advanceSlot(activeSlotIdx, tokenId)
     })
     // Participant passé par le GM ou timer auto-skip
     s.on(WS.COMBAT_TURN_SKIPPED, ({ tokenId, tokenLabel }) => {

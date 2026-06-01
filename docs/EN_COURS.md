@@ -345,11 +345,42 @@ Hors scope : combat (12), équipement (6). SkillTooltips : roadmap.
 - `CombatResultReload` : panneau bottom-center succès/échec persistant jusqu'au tour suivant ✅
 - Option campagne "Mode de rechargement" (Chargeur / Complément) + hint ✅
 
+## Session 68 ✅ (2026-05-31)
+
+- **Sprint CaC 2 ✅ CONFIRMÉ FONCTIONNEL**
+  - Migration 64 : `state_combat_mode` sur `combat_roster`
+  - Modes Normal, Offensif, Charge implémentés (Défensif/Retraite en DB, CaC3)
+  - Validation distance déplacée Phase 2 (post-déplacement)
+  - PJ : mode selector chips + Charge flow séquentiel (chargeAllures=lente, move→cible)
+  - GM : panneau droit 720px, queue Charge PNJ combinée, batch libre (filter(isRanged) dans assault queue)
+  - 7 bug fixes post-tests (double sélection, boutons fantômes, batch type guard, etc.)
+
+- **Sprint CaC 3 ✅ CONFIRMÉ FONCTIONNEL**
+  - Modes Défensif (+3 défense) et Retraite (+5 défense) — PJ + PNJ
+  - PJ : chips vert uniforme, pas de cible, INI=0, handleRetraiteMove() recul optionnel lente
+  - Serveur : freeMove étendu à retraite, chanceDefense += 3/+5 dans les deux paths défense
+
 **Prochains chantiers :**
+- Sprint Test de Choc suite : guard is_stunned dans COMBAT_ACTION_DECLARE + clear logique (PC42)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, non implémenté côté UI)
-- Chantier CaC — Corps à Corps (plan dans PLAN_12_CONTACT.md)
+- Sprint CaC 4 — modes avancés, multi-adversaires (priorité basse)
 - Sprint Waypoints — priorité basse (plan dans JOURNALTEMP.md)
-- Sprint Test de Choc suite : guard is_stunned dans COMBAT_ACTION_DECLARE + clear logique
+- **Sprint Page Santé Serveur** (priorité basse) — route `/api/health/detailed` (mémoire, uptime, températures `/sys/class/thermal/`, statut services) + page client dédiée. Voir `docs/SERVEURDISTANTKIWI.md`.
+
+---
+
+## Session 67 ✅ (2026-05-31)
+
+- D10 UV texturing V2 — dette fermée (DicePanel v3 a rendu la chose superflue) ✅
+- **Sprint CaC 1 ✅ CONFIRMÉ FONCTIONNEL**
+  - Migration 63 : +`melee` dans `chk_action_type`
+  - `resolveMeleeAction` : calcul skillTotal (COMBAT_ARME/COMBAT_A_MAINS_NUES FOR+COO), roll D20, opposition PNJ auto / PJ bloque slot
+  - `COMBAT_MELEE_DEFENSE_CONFIRM` : roll D20 défenseur, résolution, dégâts, advanceSlot
+  - `COMBAT_DECLARE_ERROR` + return si hors portée (distance affichée)
+  - Client : panneau melee CombatActionWindow (armes de contact + allonge + cible), Phase 2, reset nouveau tour
+  - GM : queue cible PNJ séquentielle (miroir assault), arme auto-affichée
+  - Fix auto-ciblage (onPendingTarget filtre tokenId)
+  - Pièges : COMBAT_A_MAINS_NUES (pas COMBAT_CONTACT), category='Arme de contact' (pas location+range IS NULL)
 
 ---
 

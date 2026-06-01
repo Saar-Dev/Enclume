@@ -2,15 +2,15 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 
 export default function CombatTimeline({ characters, topOffset = 0, onPortraitClick }) {
-  const { roster, phase, activeSlotIdx } = useCombatStore()
+  const { roster, phase, activeTokenId } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
   if (!phase || roster.length === 0) return null
 
-  // Tri initiative DESC — ordre de résolution
-  const sorted = [...roster].sort((a, b) => b.initiative - a.initiative)
-  // Curseur actif uniquement en phase RÉSOLUTION
-  const activeTokenId = phase === 'RESOLUTION' ? (sorted[activeSlotIdx]?.token_id ?? null) : null
+  // LdB p.212 — ANNONCE : lents en premier (ASC) / RÉSOLUTION : rapides en premier (DESC)
+  const sorted = [...roster].sort((a, b) =>
+    phase === 'ANNOUNCEMENT' ? a.initiative - b.initiative : b.initiative - a.initiative
+  )
 
   return (
     <div style={{ ...styles.bar, top: topOffset }}>

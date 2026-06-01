@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-05-25 Session 64
+> Dernière mise à jour : 2026-05-31 Session 68
 
 ---
 
@@ -120,31 +120,27 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 66 (2026-05-30)
+## État actuel — Session 68 (2026-05-31)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **62 migrations stables** — prochaine : **63**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅
+- **64 migrations stables** — prochaine : **65**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.5 ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅ / Sprint CaC 1 ✅ / Sprint CaC 2 ✅ / Sprint CaC 3 ✅
 
-**Session 66 ✅ :**
-- Code d'invitation beta `REGISTRATION_CODE` (8 chiffres, `timingSafeEqual`) ✅
-- Fenêtres combat draggables : `useDraggable` hook + localStorage + clamp (5 fenêtres) ✅
-- DicePanel favoris form inline (remplace `prompt()`) ✅
-- PLAN 13 Jets Favoris complet : migration 59, routes CRUD, WS MACRO_ROLL, form création, fix GM ✅
-- Piège PC41 documenté : Express 5 routes sans `/` initial → 404 silencieux
-- Changelog Dashboard : `ChangelogPanel.jsx` + `CHANGELOG.md` + layout DashboardPage ✅
-- Sprint 7.5 Décompte munitions : migration 60, `/reload`, `ammo_remaining`, WeaponPanel picker, option campagne PNJ ✅
-- Sprint Test de Choc : compute PNJ + apply is_stunned (PC39) + ShockBlock UI + fix P49 PNJ ✅
-- Sprint i18n Option B : 17 composants wired, fr.json +20 sections, RegisterPage FR, convention documentée ✅
-- **Sprint 7.6 Rechargement combat** : migrations 61+62, Phase 1 panneau munitions, Phase 2 "En attente MJ…", resolveReloadAction ciblé, CombatResultReload, option reload_mode ✅
+**Session 67 ✅ :**
+- D10 UV texturing V2 — dette fermée ✅
+- Sprint CaC 1 ✅ — migration 63, resolveMeleeAction, jet défense PJ séquentiel
+
+**Session 68 ✅ :**
+- **Sprint CaC 2 — Modes de combat** : migration 64, Normal/Offensif/Charge, Défensif/Retraite en DB (CaC3), validation distance Phase 2, Charge PJ flow séquentiel, panneau GM 720px + queue Charge PNJ, batch libre ✅
+- **Sprint CaC 3 — Défensif et Retraite** : modes passifs pleinement implémentés — chips vert uniformes, pas de cible, INI=0, handleRetraiteMove() recul lente optionnel, server freeMove+chanceDefense ✅
 
 **"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
 
 **Prochain chantier :**
+- Sprint Test de Choc suite — guard is_stunned COMBAT_ACTION_DECLARE + clear logique (PC42)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, UI non implémentée)
-- Chantier CaC — Corps à Corps (plan dans PLAN_12_CONTACT.md)
+- Sprint CaC 4 — modes avancés, multi-adversaires (priorité basse)
 - Sprint Waypoints — priorité basse (plan dans JOURNALTEMP.md)
-- Sprint Test de Choc suite — guard is_stunned COMBAT_ACTION_DECLARE + clear logique
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser.

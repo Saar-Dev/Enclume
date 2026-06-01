@@ -292,7 +292,9 @@
     "reloadModeLabel": "Mode de rechargement",
     "reloadModeChargeur": "Chargeur complet (défaut)",
     "reloadModeTopup": "Complément",
-    "reloadModeHint": "Chargeur : éjecte le chargeur partiel et charge un neuf depuis la réserve — les balles restantes sont perdues. Complément : ajoute les balles manquantes sans éjecter le chargeur en cours."
+    "reloadModeHint": "Chargeur : éjecte le chargeur partiel et charge un neuf depuis la réserve — les balles restantes sont perdues. Complément : ajoute les balles manquantes sans éjecter le chargeur en cours.",
+    "actionTimerLabel": "Temps de déclaration (s)",
+    "actionTimerHint": "Délai avant skip automatique par joueur · 0 = infini (désactivé)"
   },
   "texturePacks": {
     "pageTitle": "Packs de textures",

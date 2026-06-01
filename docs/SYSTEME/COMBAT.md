@@ -356,11 +356,159 @@ GET /battlemaps/:battlemapId/combat-ini → { iniPreview: [{ token_id, base_ini 
 }
 ```
 
-**Type enum :** `move_lente` → `'move_short'`, toute autre `move_*` → `'move_long'`, autres → `'micro'`.
+**Type enum :** `move_lente` → `'move_short'`, toute autre `move_*` → `'move_long'`, autres → `'micro'`. **Melee** → `'melee'` (migration 63).
 **PC32 :** sequence attribuée serveur — jamais calculée côté client.
 **PC22 :** arme assault doit être en slot `'MG'` ou `'MD'` — rejeté sinon.
 **PC23 :** `'RC'` / `'RL'` nécessitent `is_learned=true` pour `TIR_AUTOMATIQUE`.
 **PC33 :** coordonnées `moveAction` doivent être des entiers valides (coords DB PE14).
+
+---
+
+## Corps à Corps — Sprint CaC 1 (session 67)
+
+### Flux complet
+
+```
+ANNOUNCEMENT : joueur déclare melee { targetTokenId, weaponInvId }
+  → serveur valide distance ≤ 3 + allonge (PE14 — dist2D)
+  → si hors portée : COMBAT_DECLARE_ERROR (message distance) → return (pas announced)
+  → si OK : action melee stockée (type='melee', weapon_inv_id, target_token_id, modifiers:{ini_mod:-3})
+
+RESOLUTION (COMBAT_ACTION_CONFIRM) :
+  → resolveMeleeAction()
+  → calcul skillTotal attaquant (weapon → ref_equipment_skill_assoc → skill_id, ou COMBAT_A_MAINS_NUES si mains nues)
+  → roll D20 attaquant côté serveur
+  → fetch skillTotal défenseur (toujours COMBAT_A_MAINS_NUES en V1)
+  → défenseur PNJ → roll D20 auto → résolution → COMBAT_MELEE_RESULT → advanceSlot (slot non bloqué)
+  → défenseur PJ → stocke pendingMeleeDefense → COMBAT_MELEE_DEFENSE_PROMPT → return true (slot BLOQUÉ)
+
+COMBAT_MELEE_DEFENSE_CONFIRM (défenseur PJ clique "Défendre") :
+  → roll D20 défenseur côté serveur
+  → hit = (rollAtk ≤ CDRatk) AND NOT (rollDef ≤ CDRdef)
+  → COMBAT_MELEE_RESULT → room
+  → si hit + PJ attaquant → COMBAT_DAMAGE_PROMPT → PJ roule dégâts (CombatDamageWindow existant)
+  → si hit + PNJ attaquant → auto dégâts → COMBAT_ATTACK_RESULT
+  → advanceSlot (slot débloqué)
+```
+
+### Formules
+
+```js
+// Skill attaquant (ou défenseur)
+skillTotal = calcAN(for_na) + calcAN(coo_na) + mastery  // COMBAT_A_MAINS_NUES / COMBAT_ARME : attr FOR+COO
+
+// Chances de réussite attaque
+chancesAttaque = skillTotal + effectiveMalus - carenceArmure + isRushedMod
+
+// Chances de réussite défense
+chanceDefense = defenderSkillTotal + defenderEffectiveMalus
+
+// Résolution opposition (Polaris LdB)
+hit = (rollAttaque <= chancesAttaque) AND NOT (rollDefense <= chanceDefense)
+
+// Dégâts bruts melee (dans COMBAT_DAMAGE_CONFIRM, type='melee')
+degautsBruts = rawDice + getModDom(for_na_attaquant)   // pas de MR table, pas de fire_mode_bonus
+```
+
+### Filtrage armes de contact (client)
+
+```js
+// CORRECT : filtrer par category, pas par location + range IS NULL
+item.ref_category === 'Arme de contact'
+  && (item.slot === 'MG' || item.slot === 'MD' || item.slot === '2M')
+
+// allonge : ref_equipment.range pour 'Arme de contact' = allonge en mètres (1/2/3), PAS portée de tir
+// distance max = 3 + parseInt(weapon.ref_range || '0')
+```
+
+### Modes de combat — Sprint CaC 2 (session 68)
+
+Implémentés : Normal, Offensif, Charge. En DB (prêts pour CaC3) : Défensif, Retraite.
+
+| Mode | Effet attaque | Effet défense (si attaqué) | Contrainte |
+|---|---|---|---|
+| `normal` | ±0 | ±0 | — |
+| `offensif` | +3 | −5 | — |
+| `charge` | +3 + **+3 dégâts** | −7 | Doit être à > 3m, dépl. court gratuit |
+| `defensif` | pas d'attaque | +3 | Retarde l'action (CaC3) |
+| `retraite` | pas d'attaque | +5 | Retarde + recule (CaC3) |
+
+**Stockage :** `combat_roster.state_combat_mode` — reset à 'normal' à chaque `endTurn`.
+
+**Flux client (PJ) :**
+```
+Panneau melee → chips Normal/Offensif/Charge
+Charge : handleChargeFlow() → onEnterMoveMode(chargeAllures=lente×4) → onMoveSelected
+  → auto-enchaîne onEnterTargetMode → meleePendingTokenId
+Payload : state.combat_mode + move.ini_mod=0 + melee.targetTokenId
+```
+
+**Flux client (GM) :**
+```
+Clic CaC → meleePendingMode=true → panneau droit 720px visible avec 3 chips
+Normal/Offensif → handleStartMeleeQueue()
+Charge → handleStartChargeQueue() : pour chaque PNJ → onEnterMoveMode → onEnterTargetMode
+chargeSelections[tokenId] = { move: {...,ini_mod:0}, targetTokenId }
+```
+
+**Flux serveur :**
+```
+COMBAT_ACTION_DECLARE : state.combat_mode → UPDATE combat_roster.state_combat_mode
+  move Charge : chargeMove = (combat_mode==='charge' && mapActions.move) → iniDelta += 0
+  melee Phase 1 : aucune validation distance — intention libre
+
+COMBAT_ACTION_CONFIRM (Phase 2) :
+  move_short fires first → token moves in DB
+  resolveMeleeAction fires → fetch token positions (post-move) → check dist ≤ 3+allonge
+    read rosterAttaquant.state_combat_mode → attackModeBonus (+3 offensif/charge)
+    read rosterDefendeur.state_combat_mode → chanceDefense ajustée
+    combatModeBonus = charge ? 3 : 0 → stocké dans commonPending → pendingDamageActions
+
+COMBAT_DAMAGE_CONFIRM : degautsBruts = rawDice + modDom + combatModeBonus
+```
+
+**Batch GM — règle :** `toggleSelect` et `selectAll` = libres (tous PNJs ensemble). Filtre `isRanged` uniquement dans `handleStartAttackQueue().filter(isRanged)`. Ne jamais réintroduire le guard à la sélection.
+
+---
+
+### Pièges CaC
+
+**PC-CaC1 — `COMBAT_CONTACT` n'existe pas dans `ref_skills`.**
+Skill mains nues = `COMBAT_A_MAINS_NUES` (FOR/COO). Skill armes de contact = `COMBAT_ARME` (FOR/COO).
+→ Si `refSkill = null`, `skillTotal = 0`, jamais de touche. Toujours vérifier l'existence du skill en DB.
+
+**PC-CaC2 — `range` pour 'Arme de contact' = allonge, pas portée de tir.**
+Lance (range=3) → peut attaquer à 3+3=6m. Couteau (range=null) → portée de base 3m.
+Les armes à distance ont range en format `"10/50/100/200 (300)"` — le filtre `category='Arme de contact'` suffit.
+
+**PC-CaC3 — Slot bloqué jusqu'à COMBAT_MELEE_DEFENSE_CONFIRM (défenseur PJ).**
+`needsDefenseWait = true` → `advanceSlot` non appelé dans COMBAT_ACTION_CONFIRM.
+`advanceSlot` appelé depuis COMBAT_MELEE_DEFENSE_CONFIRM uniquement.
+Perte du pending (restart serveur) → slot bloqué indéfiniment — à gérer en V2.
+
+**PC-CaC4 — `pendingMeleeDefense` keyed par `defenderTokenId` (pas attaquant).**
+COMBAT_MELEE_DEFENSE_CONFIRM payload = `{ tokenId: defenderTokenId }`.
+
+**PC-CaC5 — COMBAT_DECLARE_ERROR + `return` si hors portée (Phase 2).**
+Émis depuis `resolveMeleeAction` si dist2d > 3+allonge à la résolution. Ne pas bloquer en Phase 1.
+
+**PC-CaC6 — Distance melee validée Phase 2 uniquement (post-déplacement).**
+`resolveMeleeAction` fetch les positions DB APRÈS que le `move_short` de la même boucle `COMBAT_ACTION_CONFIRM` a mis à jour les coordonnées. Phase 1 = intention libre, aucune validation.
+
+**PC-CaC7 — Seuil Charge = 3m fixe (pas 3+allonge).**
+"Engagé au contact" = ≤ 3m (LdB). L'allonge étend la portée d'attaque mais pas le seuil d'engagement. Guard Charge en Phase 2 : `dist2d > 3` (pas `> 3+allonge`).
+
+**PC-CaC8 — Batch GM : type guard à la sélection = supprimé.**
+`toggleSelect` et `selectAll` = libres. `handleStartAttackQueue` filtre `targetIds.filter(isRanged)`. Ne jamais réintroduire le guard dans toggleSelect/selectAll.
+
+### Nouveaux events WS (session 67)
+
+| Event | Direction | Description |
+|---|---|---|
+| `COMBAT_MELEE_DEFENSE_PROMPT` | serveur → socket défenseur PJ | Invite à lancer la défense |
+| `COMBAT_MELEE_DEFENSE_CONFIRM` | défenseur PJ → serveur | Déclenche roll D20 serveur + résolution |
+| `COMBAT_MELEE_RESULT` | serveur → room | Jets opposition + outcome (hit/esquive) |
+| `COMBAT_DECLARE_ERROR` | serveur → socket | Validation déclaration échouée (hors portée, etc.) |
 
 ---
 

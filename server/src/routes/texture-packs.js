@@ -297,7 +297,7 @@ router.get('/:id/export', requireAuth, async (req, res, next) => {
     try {
       stat = await minio.statObject(bucket, zipPath)
     } catch (err) {
-      if (err.code === 'NoSuchKey') {
+      if (err.code === 'NoSuchKey' || err.code === 'NotFound') {
         // ZIP absent — le régénérer à la demande (cas de reprise)
         await rebuildPackZip(req.params.id)
         stat = await minio.statObject(bucket, zipPath)

@@ -1206,6 +1206,34 @@ RegisterPage, LoginPage, DashboardPage, WorkshopPage, CampaignSettingsPage, Side
 
 ---
 
+## Session 67 — Sprint CaC 1 — Bug fixes post-tests (2026-05-31)
+
+**4 bugs fixes (phase 1 — déclaration/UI) :**
+- P1 : Échec silencieux hors portée → `COMBAT_DECLARE_ERROR` émis + `return` (déclaration annulée, message 4s côté joueur et GM)
+- P2 : Sélections non réinitialisées au nouveau tour → `useEffect([rosterEntry?.has_announced])` + `prevHasAnnouncedRef` : reset complet quand `true → false`
+- P3 : Arme non "Au clair" utilisable → grisage + tooltip dans la liste melee si `states.weapon !== 'drawn'`
+- P4 : Auto-ciblage possible → `onPendingTarget` filtre `id === tokenId` (couvre assaut + melee + GM en un seul endroit)
+
+**3 bugs fixes (phase 2 — résolution/GM) :**
+- P5 : PNJ — pas de panneau d'arme (GM) → ajout arme auto-affichée dans le feedback melee GM (⚔ label + "mains nues")
+- P6 : Message PJ incorrect ("aucune arme équipée" vs "arme rangée") → `hasMeleeInInventory` distingue "en inventaire mais pas en main" vs "absente de l'inventaire"
+- **P7 (critique) : Aucun jet de touche en 8 tentatives** → `COMBAT_CONTACT` n'existe pas dans `ref_skills`. Correct = `COMBAT_A_MAINS_NUES` (FOR/COO). Armes de contact → `COMBAT_ARME` (FOR/COO) via `ref_equipment_skill_assoc`. Remplacement global dans `resolveMeleeAction`.
+
+**Sprint CaC 1 ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 67 — Documentation Sprint CaC 1 (2026-05-31)
+
+**Fichiers mis à jour :**
+- `CLAUDE.md` : session 67, migration 63, Sprint CaC 1 ✅ dans chantiers terminés
+- `docs/ASBUILT.md` : 6 composants mis à jour, migration 63, events.js +4, index.js
+- `docs/EN_COURS.md` : session 67 ✅, prochains chantiers (Sprint CaC 2 en tête)
+- `docs/SYSTEME/COMBAT.md` : section Corps à Corps (flux, formules, filtrage armes, 5 pièges CaC, 4 nouveaux events)
+- `client/public/CHANGELOG.md` : v67 enrichi avec section Corps à Corps complète
+
+---
+
 ## Session 67 — Sprint CaC 1 — Corps à Corps fondations (2026-05-31)
 
 **Migration 63 :** `'melee'` ajouté au CHECK constraint `chk_action_type` de `combat_actions`.
@@ -1248,6 +1276,50 @@ RegisterPage, LoginPage, DashboardPage, WorkshopPage, CampaignSettingsPage, Side
 
 ---
 
+## Session 68 — Sprint CaC 2 — Modes de combat (2026-05-31)
+
+**Objectif :** Implémenter les modes de combat CaC du LdB Polaris (p.223) : Normal, Offensif, Charge. Défensif et Retraite en base de données (prêts pour CaC3 sans migration supplémentaire).
+
+**Migration 64 :**
+- `state_combat_mode TEXT NOT NULL DEFAULT 'normal'` sur `combat_roster`
+- CHECK : `('normal','offensif','charge','defensif','retraite')` — les 5 modes inclus dès maintenant
+
+**`server/src/socket/index.js` :**
+- `COMBAT_ACTION_DECLARE` : `state.combat_mode` validé, stocké dans `combat_roster.state_combat_mode`. Bloc melee simplifié → **aucune validation distance Phase 1** (intention enregistrée sans vérification). INI override serveur pour Charge : `move.ini_mod = 0` (non trusté client).
+- `resolveMeleeAction` : **validation distance Phase 2** (post-déplacement), après move_short de la même boucle `COMBAT_ACTION_CONFIRM`. Lecture `state_combat_mode` attaquant → `attackModeBonus` (+3 si offensif/charge) + `combatModeBonus` (+3 dégâts si charge). Lecture mode défenseur PNJ → modifie `chanceDefense` (-5 offensif, -7 charge, +3 défensif, +5 retraite).
+- `COMBAT_MELEE_DEFENSE_CONFIRM` : lecture mode défenseur PJ → même application que PNJ. `combatModeBonus` transmis via `pendingDamageActions`.
+- `COMBAT_DAMAGE_CONFIRM` : branche melee → `degautsBruts = rawDice + modDom + combatModeBonus`.
+- `endTurn` : reset `state_combat_mode = 'normal'` (per-turn, comme state_vitesse).
+
+**`client/src/components/CombatActionWindow.jsx` (PJ) :**
+- Nouveau state `combatMode` ('normal'|'offensif'|'charge')
+- Mode selector : 3 chips avec tooltips LdB dans le panneau melee droit
+- **Charge flow séquentiel** : clic Charge → `handleChargeFlow()` → onEnterMoveMode (zone lente uniquement, `chargeAllures = {lente×4}`) → onMoveSelected → auto-enchaîne onEnterTargetMode CaC
+- Bug A corrigé : chip 'move' inerte si `combatMode === 'charge'` (évite conflit de queue)
+- Bug B corrigé : `handleChargeFlow` clear `moveSelection` + retire 'move' de `mapSelected` en entrée
+- `meleeValid` : Charge requiert aussi `moveSelection != null`
+- Payload : `state.combat_mode: combatMode`, `move.ini_mod: 0` pour Charge
+
+**`client/src/components/CombatGmDeclareWindow.jsx` (GM) :**
+- **Panneau droit étendu** : fenêtre 440→720px quand `isMeleeSetup`, panneau vert droit 280px avec mode selector + statut/feedback
+- Clic CaC → `meleePendingMode = true` (chips visibles **immédiatement** avant queue)
+- Chip Normal/Offensif → démarre `handleStartMeleeQueue()`. Chip Charge → démarre `handleStartChargeQueue()`
+- **Queue Charge PNJ combinée** : `chargeQueueRef` + `chargePhaseRef` ('move'|'target') — pour chaque PNJ : onEnterMoveMode (lente seulement) puis onEnterTargetMode, `chargeSelections[tokenId] = { move, targetTokenId }`
+- **Batch libre** : `toggleSelect` sans type guard, `selectAll` tous PNJs. Filtre ranged **uniquement** dans `handleStartAttackQueue.filter(isRanged)`
+- Payload Charge : `state.combat_mode = 'charge'` + `move = chargeInfo.move (ini_mod=0)` + `melee = { targetTokenId: chargeInfo.targetTokenId }`
+- Bug corrigé : `isAttackActive` ne s'active plus pendant la queue melee (`attackQueueRef.current.includes(...)` requis)
+- Bug corrigé : `handleStartMeleeQueue`/`handleStartAttackQueue` reset la queue adverse (boutons "Passer" fantômes éliminés)
+
+**Pièges identifiés :**
+- **PC-CaC6** : distance melee validée **Phase 2 uniquement** (post-déplacement). Phase 1 = intention libre, aucun refus.
+- **PC-CaC7** : seuil "engagé au contact" = 3m fixe. L'allonge ne s'applique qu'à la portée d'attaque (≤ 3+allonge), pas au seuil de Charge (> 3m).
+- **PC-CaC8** : `chargeAllures = { lente × 4 }` côté UI — limite visuellement à move_short. Côté serveur, `chargeMove = state.combat_mode==='charge' && mapActions.move → ini_mod = 0` (toute zone free V1, documenté comme simplification).
+- **PC-CaC9** : batch type guard supprimé de la sélection — uniquement appliqué au démarrage de la queue assault (`targetIds.filter(isRanged)`). Ne jamais réintroduire le guard à la sélection.
+
+**Sprint CaC 2 ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
 ## Session 67 — D10 UV texturing V2 — Dette fermée (2026-05-31)
 
 La dette "D10 UV texturing V2 — modèle Blender .glb (PE33)" est considérée résolue. La refonte DicePanel v3 (session 65) en objet 3D intégral a rendu superflue la création d'un modèle Blender dédié au D10. Le rendu Html overlay V1 (`position=[0,0,0]`) est satisfaisant dans le contexte 3D actuel.
@@ -1255,3 +1327,148 @@ La dette "D10 UV texturing V2 — modèle Blender .glb (PE33)" est considérée 
 **Modifications docs :**
 - `CLAUDE.md` : retrait de la dette D10 UV texturing V2
 - `ASBUILT.md` : retrait de la ligne D10 UV texturing dans "V2 / todo" (section Dice Rework)
+
+---
+
+## Session 68 — Correctif DashboardPage : formulaire "Rejoindre avec un code" restauré (2026-05-31)
+
+**Régression identifiée :** Le formulaire pour rejoindre une campagne avec un code d'invitation (`#2b5140ba`) était absent depuis la refonte card-based UI (Session ~45). Les états `showJoin`/`inviteCode` et le handler `handleJoin` existaient dans le fichier, mais aucun bouton ni formulaire n'était rendu dans le JSX. Identiquement, cliquer sur la card "+" déclenchait `setShowCreate(true)` sans afficher de formulaire. Régression non détectée depuis plusieurs sessions.
+
+**`client/src/pages/DashboardPage.jsx` :**
+- Bouton "Rejoindre avec un code" ajouté en haut du content (aligné droite) — `setShowJoin(true)` + ferme `showCreate`
+- `{showJoin && <form>}` : input `inviteCode` + Rejoindre + Annuler
+- `{showCreate && <form>}` : input `newCampaignName` + Créer + Annuler
+- `<div className="create-plus">+</div>` supprimé des deux occurrences (redondant avec le `::before` watermark CSS)
+- onClick des cards create : `{ setShowCreate(true); setShowJoin(false) }` — ferme mutuellement les deux formulaires
+- Styles ajoutés : `actionsRow`, `btnSecondary`, `inlineForm`, `input`, `btnGhost`
+
+**`client/src/index.css` :**
+- `.campaign-create` : ajout `display:flex`, `flex-direction:column`, `align-items:center`, `justify-content:center`, `min-height:180px`, `cursor:pointer` — label texte centré dans la card, hauteur minimale cohérente avec les campaign-cards
+
+---
+
+## Session 68 — Sprint CaC 3 — Défensif et Retraite (2026-05-31)
+
+**Objectif :** Implémenter les modes Défensif (+3 défense) et Retraite (+5 défense + recul optionnel), déjà en DB depuis CaC2.
+
+**`client/src/components/CombatActionWindow.jsx` (PJ) :**
+- `meleeDefensif` déclaré ligne 330 — avant handleMapToggle et mapActionsObj (fix TDZ : temporal dead zone)
+- Chips : tous 5 modes même couleur verte (`#70c070` actif / `#7a9a7a` inactif) — bug fix couleurs bleues résiduelles
+- `mapActionsObj.melee = null` si `meleeDefensif` — pas de coût INI attaque
+- Payload `melee = null` si `meleeDefensif` — serveur ne reçoit aucune cible
+- Section cible masquée : `{!meleeDefensif && <div>Cible...}` — UI sans target en mode passif
+- `meleeValid` : `meleeDefensif` suffit sans cible ni moveSelection
+- `handleMapToggle` CaC : clear `moveSelection` si combatMode retraite/charge
+- **`handleRetraiteMove()`** : toggle (annuler si déjà sélectionné), `retraiteAllures = {lente×4}`, appel `onEnterMoveMode`, stocke `moveSelection.ini_mod=0`
+- Section "Recul (optionnel)" visible uniquement si `combatMode === 'retraite'`
+- Fix bug : clic Défensif/Retraite ne revert plus l'arme QB — état arme inchangé (règle LdB)
+- Resets `setCombatMode('normal')` dans les deux useEffects de changement de tour
+
+**`server/src/socket/index.js` :**
+- `freeMove` : `(state.combat_mode === 'charge' || state.combat_mode === 'retraite') && !!mapActions?.move`
+- `iniDelta` override : `freeMove ? 0 : mapActions.move.ini_mod` — recul Retraite ne coûte pas d'INI
+- `resolveMeleeAction` PNJ : `chanceDefense += 3` si défensif, `+= 5` si retraite
+- `COMBAT_MELEE_DEFENSE_CONFIRM` PJ : même application sur `chanceDefense`
+
+**Pièges identifiés :**
+- **TDZ** : en JS `const` inaccessible avant sa ligne de déclaration dans la même fonction — placer toutes les constantes dérivées avant leurs usages dans mapActionsObj et handlers
+- **Chip colors** : styles inline CSS sans classe → bug couleur difficile à détecter sans lire le JSX complet
+
+**Sprint CaC 3 ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 68 — Timer auto-skip (2026-05-31)
+
+**Objectif :** Activer la fonctionnalité timer auto-skip existante (code serveur déjà présent mais `action_timer_sec` toujours à 0) via une option de campagne.
+
+**Migration 65 :**
+- `campaigns.action_timer_sec INTEGER NOT NULL DEFAULT 0` — 0 = infini (backward compatible)
+
+**`server/src/routes/campaigns.js` :**
+- PUT `/:id` : destructure + valide `action_timer_sec` (entier ≥ 0, `Number.isInteger`) + `updates` + `returning`
+
+**`server/src/socket/index.js` :**
+- `COMBAT_START` : fetch `campaigns.action_timer_sec` → stocké dans `combat_state.action_timer_sec` (remplace le `0` hardcodé)
+- Helper `startAnnouncementTimers(io, campaignId, timerSec, gmUserId)` : extrait le bloc timer de `COMBAT_ANNOUNCE_START`. Guard `timerSec > 0`. Filtre : `character.user_id === gmUserId` (exclut PNJs **et** PJ du GM). `combatTimers` Map initialisée si absente.
+- `COMBAT_ANNOUNCE_START` : remplace le bloc timer inline par l'appel au helper
+- `endTurn` : `.returning('action_timer_sec')` sur l'UPDATE `combat_state` + fetch `gmUserId` via `campaign_members WHERE role='gm'` + appel helper → **timers relancés à chaque tour, pas seulement le tour 1**
+
+**`client/src/pages/CampaignSettingsPage.jsx` :**
+- State `actionTimerSec` (default 0), init depuis `campaign.action_timer_sec ?? 0`
+- Input numérique `min=0` dans section "Règles de jeu" (après reloadMode)
+- PUT inclut `action_timer_sec: actionTimerSec`, ajouté aux deps `useCallback`
+
+**`client/src/locales/fr.json` :**
+- `settings.actionTimerLabel` + `settings.actionTimerHint`
+
+**Pièges identifiés :**
+- **DEFAULT 0 obligatoire** (pas 30) : `ALTER TABLE ADD COLUMN NOT NULL DEFAULT 30` s'applique aux lignes existantes → breaking change silencieuse
+- **gmUserId dans helper** : `character.user_id === gmUserId` conservé (original correct) plutôt que `character.type === 'pnj'` — couvre aussi le cas PJ du GM
+- **endTurn sans socket** : `gmUserId` récupéré via `db('campaign_members').where({ role: 'gm' })` — pas de dépendance au socket
+- **Race condition** couverte : guard `has_announced` dans le helper + guard `skipPlayer`
+- **Migration manuelle** : `npx knex migrate:latest` depuis `server/` — les migrations ne tournent pas au démarrage
+
+**Timer auto-skip ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 68 — Pause Rework Timeline (2026-05-31)
+
+Plan de rework `CombatTimeline.jsx` initié, mis en pause pour réflexion.
+Plan complet dans `docs/PLAN_REWORK_TIMELINE.md`.
+
+**Bug critique identifié :**
+- Phase ANNONCE : ordre doit être **croissant** (lents d'abord) — actuellement trié DESC → affiché dans le mauvais ordre
+- Phase RÉSOLUTION : ordre DESC correct
+- Règle Polaris : les rapides voient les déclarations des lents (broadcast `COMBAT_ACTION_DECLARED` déjà correct serveur)
+
+**Chantier à venir (sprint dédié) :**
+- Enrichissement broadcast roster : `worst_wound_severity` par personnage
+- Propagation `action_timer_sec` au client (SESSION_JOIN + COMBAT_STARTED + COMBAT_PHASE_CHANGED)
+- `combatStore` : ajout `actionTimerSec`
+- `CombatTimeline.jsx` : réécriture complète (tri dynamique par phase, cards BG3, countdown, bordure blessure)
+
+## Session 68 — Annulation plan CombatTimeline (2026-05-31)
+
+Le plan `docs/PLAN_REWORK_TIMELINE.md` est annulé et supprimé. Rework visuel Timeline = hors scope. Chantier réel = rework mécanique des tours (ordre annonce séquentiel ASC LdB p.212) — voir sprint dédié à venir.
+
+---
+
+## Session 69 — Fix serveur local cassé après config Kiwi (2026-06-01)
+
+**Cause :** `server/package.json` script `dev` modifié pour la config systemd du serveur distant Kiwi :
+```
+"dev": "nodemon --exec 'node --env-file=../.env --es-module-specifier-resolution=node' src/index.js"
+```
+Guillemets simples non supportés sous Windows (cmd.exe via npm) — nodemon tentait d'exécuter `'node` (apostrophe incluse) comme commande, échec immédiat au démarrage.
+
+**Fix :** Revenu à `"dev": "nodemon src/index.js"` — `server/src/index.js` charge déjà le `.env` via `dotenv.config({ path: '../.env' })`.
+
+**Impact serveur distant :** Aucun — systemd utilise `ExecStart=/usr/bin/node --env-file=../.env ...` directement, pas `npm run dev`.
+
+**Fix ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 69 — Fix export pack de textures (2026-06-01)
+
+**Symptôme :** "Erreur lors de l'export" sur tout pack dans l'Atelier GM. HTTP 500 côté serveur.
+
+**Cause racine — bug SDK MinIO v8 + HTTP HEAD :**
+- `statObject` utilise une requête HTTP HEAD (pas GET)
+- HTTP HEAD n'a jamais de corps de réponse — le XML S3 `<Code>NoSuchKey</Code>` est impossible à envoyer
+- Le SDK MinIO `parseResponseError` : si XML présent → extrait `<Code>` → `err.code = 'NoSuchKey'` ; si pas de XML (HEAD) → fallback HTTP status → pour 404 : `err.code = 'NotFound'`
+- Le code vérifiait `err.code === 'NoSuchKey'` → jamais vrai pour `statObject` → branche `else { throw err }` → 500
+
+**Fix :** `server/src/routes/texture-packs.js` ligne 300 :
+```js
+// AVANT
+if (err.code === 'NoSuchKey') {
+// APRÈS
+if (err.code === 'NoSuchKey' || err.code === 'NotFound') {
+```
+
+**Note :** même faille présente dans `assets.js:51` et `textures.js:28` — non symptomatique car les assets existent toujours avant d'être servis. À corriger en sprint dédié si besoin.
+
+**Fix ✅ CONFIRMÉ FONCTIONNEL**

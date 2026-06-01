@@ -1,4 +1,43 @@
-## v67 — 2026-05-31 — Rechargement en combat, options campagne
+## v68 — 2026-05-31 — Modes de combat Corps à Corps + correctifs Dashboard
+
+### Modes CaC (Sprint CaC 3)
+- [add] Mode Défensif : aucune attaque, +3 défense si attaqué (LdB p.223)
+- [add] Mode Retraite : aucune attaque, +5 défense si attaqué, recul optionnel gratuit (zone lente)
+- [add] Recul Retraite : sélection destination en zone lente (identique Charge), ini_mod=0 forcé serveur
+- [fix] Chips modes CaC : même couleur verte pour les 5 modes (Défensif/Retraite n'étaient pas verts)
+- [fix] Mode Défensif/Retraite : arme QB non modifiée au clic — état arme inchangé (règle LdB)
+
+### Modes CaC (Sprint CaC 2)
+- [add] Mode Offensif : +3 attaque, −5 défense si attaqué — déclarable Phase 1
+- [add] Mode Charge : +3 attaque, +3 dégâts, −7 défense / requiert ≥3m + déplacement court gratuit
+- [add] Sélecteur de mode (chips) dans le panneau CaC côté joueur et côté GM
+- [add] Charge PJ : flux séquentiel automatique (déplacement → cible, zone lente uniquement)
+- [add] Charge PNJ (GM) : queue combinée move_short + cible, panneau droit étendu (720px)
+- [add] Validation distance déplacée en Phase 2 (post-déplacement réel) — Phase 1 = intention libre
+- [chg] GM : fenêtre Corps à corps étendue à 720px avec panneau droit dédié
+- [chg] GM : batch PNJs libre (DST+CTC ensemble) — filtre type arme appliqué uniquement au démarrage assault
+- [fix] Double sélection Assaut+CaC lors du clic CaC (GM) — corrigé
+- [fix] Boutons "Passer" fantômes quand deux queues actives simultanément (GM) — corrigé
+
+### Dashboard
+- [fix] Formulaire "Rejoindre avec un code" restauré (champ absent depuis la refonte UI)
+- [fix] Card "Créer une campagne" : label centré, "+" flottant supprimé
+
+## v67 — 2026-05-31 — Corps à Corps, Rechargement en combat
+
+### Corps à Corps (Sprint CaC 1)
+- [add] Action "Corps à corps" déclarable en Phase 1 : sélection cible + arme de contact (ou mains nues)
+- [add] Allonge des armes de contact respectée (lance +3m, bâton +2m, etc.)
+- [add] Résolution en opposition : jet attaquant vs jet défenseur (Polaris LdB)
+- [add] Défenseur PJ lance son dé interactivement — le slot reste bloqué jusqu'à confirmation
+- [add] Dégâts melee : formule arme + Mod.Dom. (FOR_na) — identique au corps à corps Polaris
+- [add] GM : sélection cible PNJ séquentielle (même queue que l'assaut)
+- [add] Résultat opposition affiché (jets attaque/défense, touche ou esquive)
+- [fix] Auto-ciblage impossible (on ne peut pas se cibler soi-même)
+- [fix] Message d'erreur explicite si cible hors portée (distance affichée)
+- [fix] Sélections décochées automatiquement au nouveau tour
+
+### Rechargement en combat
 - [add] Action "Rechargement" en Phase 1 : sélection munitions dans panneau droit
 - [add] Phase 2 : résultat rechargement (succès / aucune munition) affiché au joueur
 - [add] Option campagne : mode de rechargement Chargeur complet (défaut) ou Complément

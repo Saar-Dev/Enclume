@@ -1553,6 +1553,15 @@ const initSocket = (io) => {
         // PC17 — timers auto-skip uniquement si action_timer_sec > 0
         await startAnnouncementTimers(io, campaignId, updated.action_timer_sec, socket.user.id)
 
+        // LdB p.212 — annonce séquentielle : émettre le premier slot (base_ini ASC)
+        const firstAnnounceSlot = await db('combat_roster')
+          .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
+          .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
+          .first()
+        if (firstAnnounceSlot) {
+          io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: firstAnnounceSlot.token_id })
+        }
+
         console.log(`[WS] combat:announce_start — ${socket.user.username} (campagne ${campaignId})`)
       } catch (err) {
         console.error('[WS] combat:announce_start error:', err.message)
@@ -1733,6 +1742,18 @@ const initSocket = (io) => {
           .where({ campaign_id: campaignId, token_id: tokenId })
           .first()
         if (!entry || entry.has_announced) return
+
+        // LdB p.212 — guard ordre d'annonce : seul le slot actuel (base_ini ASC) peut déclarer
+        const announceState = await db('combat_state').where({ campaign_id: campaignId }).first()
+        if (!announceState || announceState.phase !== 'ANNOUNCEMENT') return
+        const firstNonAnnounced = await db('combat_roster')
+          .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
+          .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
+          .first()
+        if (!firstNonAnnounced || firstNonAnnounced.token_id !== tokenId) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Ce n'est pas encore votre tour de déclarer" })
+          return
+        }
 
         // PC22 — arme requise pour assaut + PC23 (TIR_AUTOMATIQUE pour RC/RL)
         let assaultWeaponRefRange = null
@@ -1950,12 +1971,20 @@ const initSocket = (io) => {
           campaignTimersMap.delete(tokenId)
         }
 
-        // PC13 — tous annoncés → phase Résolution
+        // PC13 — tous annoncés → phase Résolution, sinon émettre le slot suivant (LdB p.212)
         const [{ count }] = await db('combat_roster')
           .where({ campaign_id: campaignId, has_announced: false })
           .count('* as count')
         if (parseInt(count) === 0) {
           await startResolutionPhase(io, campaignId)
+        } else {
+          const nextAnnounceSlot = await db('combat_roster')
+            .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
+            .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
+            .first()
+          if (nextAnnounceSlot) {
+            io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: nextAnnounceSlot.token_id })
+          }
         }
 
         console.log(`[WS] combat:action_declare v2 — ${socket.user.username} state:${JSON.stringify(state)} iniDelta:${iniDelta} -> ${updatedInitiative}`)
@@ -2537,12 +2566,20 @@ async function skipPlayer(io, campaignId, tokenId) {
     // Bug 1 fix : émettre COMBAT_TURN_SKIPPED AVANT de vérifier PC13
     io.to(campaignId).emit(WS.COMBAT_TURN_SKIPPED, { tokenId, tokenLabel })
 
-    // PC13 — tous annoncés → phase Résolution
+    // PC13 — tous annoncés → phase Résolution, sinon émettre le slot suivant (LdB p.212)
     const [{ count }] = await db('combat_roster')
       .where({ campaign_id: campaignId, has_announced: false })
       .count('* as count')
     if (parseInt(count) === 0) {
       await startResolutionPhase(io, campaignId)
+    } else {
+      const nextAnnounceSlot = await db('combat_roster')
+        .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
+        .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
+        .first()
+      if (nextAnnounceSlot) {
+        io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: nextAnnounceSlot.token_id })
+      }
     }
   } catch (err) {
     console.error('[WS] skipPlayer error:', err.message)
@@ -2642,6 +2679,15 @@ async function endTurn(io, campaignId) {
     const broadcastRoster = roster.map(({ surprise_roll: _sr, ...rest }) => rest)
 
     io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT', roster: broadcastRoster })
+
+    // LdB p.212 — émettre le premier slot d'annonce du nouveau tour (base_ini ASC)
+    const firstAnnounceSlotNewTurn = await db('combat_roster')
+      .where({ campaign_id: campaignId, has_announced: false, status: 'active' })
+      .orderBy('base_ini', 'asc').orderBy('token_id', 'asc')
+      .first()
+    if (firstAnnounceSlotNewTurn) {
+      io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, { activeSlotIdx: 0, tokenId: firstAnnounceSlotNewTurn.token_id })
+    }
 
     // Relancer les timers pour le nouveau tour
     const gmMember = await db('campaign_members')

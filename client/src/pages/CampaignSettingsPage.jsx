@@ -161,6 +161,7 @@ export default function CampaignSettingsPage() {
   const [expertMode, setExpertMode] = useState(false)
   const [pnjUnlimitedAmmo, setPnjUnlimitedAmmo] = useState(true)
   const [reloadMode,       setReloadMode]       = useState('magazine')
+  const [actionTimerSec,   setActionTimerSec]   = useState(0)
 
   // Mode simple
   const [successOn, setSuccessOn] = useState('max')    // 'max' | 'min' | null
@@ -189,6 +190,7 @@ export default function CampaignSettingsPage() {
         }
         setPnjUnlimitedAmmo(campaign.pnj_unlimited_ammo ?? true)
         setReloadMode(campaign.reload_mode ?? 'magazine')
+        setActionTimerSec(campaign.action_timer_sec ?? 0)
 
         setLoading(false)
       } catch (err) {
@@ -218,7 +220,7 @@ export default function CampaignSettingsPage() {
           dice_config = buildSimpleConfig(resolvedSuccessOn, resolvedFailOn)
         }
       }
-      await api.put(`/campaigns/${campaignId}`, { dice_config, pnj_unlimited_ammo: pnjUnlimitedAmmo, reload_mode: reloadMode })
+      await api.put(`/campaigns/${campaignId}`, { dice_config, pnj_unlimited_ammo: pnjUnlimitedAmmo, reload_mode: reloadMode, action_timer_sec: actionTimerSec })
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
     } catch (err) {
@@ -226,7 +228,7 @@ export default function CampaignSettingsPage() {
     } finally {
       setSaving(false)
     }
-  }, [campaignId, diceEnabled, expertMode, expertRows, successActive, successOn, failActive, failOn, pnjUnlimitedAmmo, reloadMode])
+  }, [campaignId, diceEnabled, expertMode, expertRows, successActive, successOn, failActive, failOn, pnjUnlimitedAmmo, reloadMode, actionTimerSec])
 
   // ─── Bascule mode expert → simple ─────────────────────────────────────────
   const handleSwitchToSimple = useCallback(() => {
@@ -601,6 +603,24 @@ export default function CampaignSettingsPage() {
                     style={styles.checkbox} />
                   <span style={styles.toggleLabel}>{t('settings.reloadModeTopup')}</span>
                 </label>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <span style={styles.toggleLabel}>{t('settings.actionTimerLabel')}</span>
+              <span style={styles.toggleHint}>{t('settings.actionTimerHint')}</span>
+              <div style={{ marginTop: 6 }}>
+                <input
+                  type="number"
+                  min={0}
+                  value={actionTimerSec}
+                  onChange={e => {
+                    const val = parseInt(e.target.value, 10)
+                    setActionTimerSec(isNaN(val) ? 0 : Math.max(0, val))
+                  }}
+                  style={{ ...styles.numInput, width: '80px' }}
+                />
+                <span style={{ ...styles.toggleHint, marginLeft: 8 }}>s</span>
               </div>
             </div>
           </section>

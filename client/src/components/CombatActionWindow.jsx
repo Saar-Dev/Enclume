@@ -87,7 +87,7 @@ export default function CombatActionWindow({
   socket, user, characters, pendingSurpriseRoll, onSurpriseRolled,
   onEnterMoveMode, onEnterTargetMode,
 }) {
-  const { roster, phase, activeSlotIdx, actions } = useCombatStore()
+  const { roster, phase, activeSlotIdx, actions, activeTokenId } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
   const playerChar  = characters.find(c => c.user_id === user?.id)
@@ -141,6 +141,7 @@ export default function CombatActionWindow({
   const [meleePendingTokenId, setMeleePendingTokenId]       = useState(null)
   const [selectedMeleeWeaponId, setSelectedMeleeWeaponId]   = useState(null)  // null = mains nues
   const [inMeleeTargetMode, setInMeleeTargetMode]           = useState(false)
+  const [combatMode, setCombatMode]                         = useState('normal')  // 'normal'|'offensif'|'charge'
 
   // --- etats initiaux (reference debut de tour pour calcul delta) -----------
   const initialStates = useRef({
@@ -172,6 +173,7 @@ export default function CombatActionWindow({
     setMeleePendingTokenId(null)
     setSelectedMeleeWeaponId(null)
     setInMeleeTargetMode(false)
+    setCombatMode('normal')
     prevWeaponRef.current = null
   }, [rosterEntry?.token_id])
 
@@ -234,6 +236,7 @@ export default function CombatActionWindow({
       setMeleePendingTokenId(null)
       setSelectedMeleeWeaponId(null)
       setInMeleeTargetMode(false)
+      setCombatMode('normal')
       prevWeaponRef.current = null
     }
   }, [rosterEntry?.has_announced])
@@ -260,6 +263,17 @@ export default function CombatActionWindow({
   // --- derives resolution --------------------------------------------------
   const sorted = [...roster].sort((a, b) => b.initiative - a.initiative)
   const isMyTurnInResolution = phase === 'RESOLUTION' && sorted[activeSlotIdx]?.token_id === playerToken.id
+
+  // --- derive announce : mon tour si activeTokenId correspond à mon token ---
+  // Fallback : calcul depuis le roster si activeTokenId pas encore reçu (race condition COMBAT_SLOT_ADVANCED)
+  const computedAnnounceTokenId = activeTokenId ?? (
+    phase === 'ANNOUNCEMENT'
+      ? [...roster]
+          .filter(r => !r.has_announced && r.status === 'active')
+          .sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))[0]?.token_id ?? null
+      : null
+  )
+  const isMyTurnInAnnouncement = phase === 'ANNOUNCEMENT' && computedAnnounceTokenId === playerToken.id
   const myActions = actions.filter(a => a.token_id === playerToken.id)
 
   // --- derives assaut -------------------------------------------------------
@@ -324,6 +338,7 @@ export default function CombatActionWindow({
 
   const attackSelected = mapSelected.has('attack')
   const meleeSelected  = mapSelected.has('melee')
+  const meleeDefensif  = combatMode === 'defensif' || combatMode === 'retraite'
   const weaponLocked   = attackSelected || meleeSelected
 
   // Armes de contact équipées (slots MG/MD/2M, catégorie 'Arme de contact')
@@ -354,6 +369,8 @@ export default function CombatActionWindow({
           setMeleePendingTokenId(null)
           setSelectedMeleeWeaponId(null)
           setInMeleeTargetMode(false)
+          if (combatMode === 'retraite' || combatMode === 'charge') setMoveSelection(null)
+          setCombatMode('normal')
         }
         if (k === 'move') setMoveSelection(null)
         if (k === 'reload') setSelectedAmmoId(null)
@@ -375,6 +392,8 @@ export default function CombatActionWindow({
                 setMeleePendingTokenId(null)
                 setSelectedMeleeWeaponId(null)
                 setInMeleeTargetMode(false)
+                if (combatMode === 'retraite' || combatMode === 'charge') setMoveSelection(null)
+                setCombatMode('normal')
               }
             }
           }
@@ -423,9 +442,10 @@ export default function CombatActionWindow({
 
   // --- calcul INI total client (indicatif) ---------------------------------
   const mapActionsObj = {
-    move:   moveSelection ? { ini_mod: moveSelection.ini_mod } : null,
+    move:   moveSelection ? { ini_mod: (combatMode === 'charge' || combatMode === 'retraite') ? 0 : moveSelection.ini_mod } : null,
     attack: attackSelected ? { cover_shot: !!(attackSelected && states.cover !== 'exposed') } : null,
-    melee:  meleeSelected,
+    // Défensif/Retraite : pas d'action d'attaque → pas de coût INI melee
+    melee:  (meleeSelected && !meleeDefensif) ? true : null,
     multi:  mapSelected.has('multi'),
   }
   const iniDelta = calcIniDelta(initialStates.current, states, mapActionsObj, quick)
@@ -439,7 +459,10 @@ export default function CombatActionWindow({
   )
   const reloadSelected = mapSelected.has('reload')
   const reloadValid    = !reloadSelected || (selectedWeapon !== null && selectedAmmoId !== null)
-  const meleeValid     = !meleeSelected  || meleePendingTokenId != null
+  const meleeValid     = !meleeSelected  || (
+    meleeDefensif ||
+    (meleePendingTokenId != null && (combatMode !== 'charge' || moveSelection != null))
+  )
   const hasAnyAction = mapSelected.size > 0 || moveSelection !== null
     || quick.observer > 0 || quick.reperer > 0 || quick.phrase
     || Object.values(states).some((v, i) => v !== Object.values(initialStates.current)[i])
@@ -454,17 +477,20 @@ export default function CombatActionWindow({
     socket.emit(WS.COMBAT_ACTION_DECLARE, {
       tokenId: playerToken.id,
       state: {
-        position:  states.position,
-        weapon:    states.weapon,
-        fire_mode: states.fire_mode,
-        cover:     states.cover,
-        vitesse:   states.vitesse,
+        position:    states.position,
+        weapon:      states.weapon,
+        fire_mode:   states.fire_mode,
+        cover:       states.cover,
+        vitesse:     states.vitesse,
+        combat_mode: combatMode,
       },
       mapActions: {
         move:   moveSelection
           ? { targetPosX: moveSelection.targetPosX, targetPosY: moveSelection.targetPosY,
               targetPosZ: moveSelection.targetPosZ ?? 0,
-              ini_mod: moveSelection.ini_mod, action_key: moveSelection.action_key }
+              // Charge/Retraite : déplacement gratuit → ini_mod forcé à 0 côté client (confirmé serveur)
+              ini_mod: (combatMode === 'charge' || combatMode === 'retraite') ? 0 : moveSelection.ini_mod,
+              action_key: moveSelection.action_key }
           : null,
         attack: attackSelected ? {
           weaponInvId:        assaultWeaponId,
@@ -476,7 +502,8 @@ export default function CombatActionWindow({
           dualWieldBonusComp: dualWieldBonusComp,
           cover_shot:         states.cover !== 'exposed',
         } : null,
-        melee:    meleeSelected
+        // Défensif/Retraite : pas de cible — mode passif, bonus appliqué via state_combat_mode
+        melee:    (meleeSelected && !meleeDefensif)
           ? { targetTokenId: meleePendingTokenId, weaponInvId: selectedMeleeWeaponId }
           : null,
         reload:   reloadSelected ? { weapon_inv_id: selectedWeapon?.id ?? null, ammo_item_id: selectedAmmoId } : false,
@@ -570,6 +597,19 @@ export default function CombatActionWindow({
     )
   }
 
+  // Pas encore mon tour d'annoncer — attente du slot actuel
+  if (phase === 'ANNOUNCEMENT' && !rosterEntry.has_announced && !isMyTurnInAnnouncement) {
+    const currentDeclarer = tokens.find(t => t.id === computedAnnounceTokenId)
+    return (
+      <div style={{ ...W.window, left: pos.left, top: pos.top }}>
+        <div style={W.header} onMouseDown={onHeaderMouseDown}>Phase 1 — Déclaration d&apos;intention</div>
+        <p style={W.waitText}>
+          En attente de {currentDeclarer?.label ?? '…'}…
+        </p>
+      </div>
+    )
+  }
+
   // Deja declare
   if (rosterEntry.has_announced) {
     return (
@@ -589,6 +629,51 @@ export default function CombatActionWindow({
       { x: playerToken.pos_x, z: playerToken.pos_y },
       (tokenId) => { setMeleePendingTokenId(tokenId); setInMeleeTargetMode(false) },
       () => { setInMeleeTargetMode(false) }
+    )
+  }
+
+  // --- Retraite : déplacement gratuit optionnel (toggle) ----------------------
+  const handleRetraiteMove = () => {
+    if (moveSelection) { setMoveSelection(null); return }
+    if (!allures) return
+    setInMoveMode(true)
+    const retraiteAllures = { lente: allures.lente, moyenne: allures.lente, rapide: allures.lente, max: allures.lente }
+    onEnterMoveMode(
+      retraiteAllures, playerToken.id,
+      { x: playerToken.pos_x, z: playerToken.pos_y },
+      (sel) => { setMoveSelection({ ...sel, ini_mod: 0 }); setInMoveMode(false) },
+      () => { setInMoveMode(false) }
+    )
+  }
+
+  // --- Charge : move_short gratuit → chaîne automatiquement la sélection cible CaC ---
+  const handleChargeFlow = () => {
+    setCombatMode('charge')
+    // Bug B : nettoyer tout déplacement normal pré-existant
+    setMoveSelection(null)
+    setMapSelected(prev => { const n = new Set(prev); n.delete('move'); return n })
+    if (!allures) return
+    setInMoveMode(true)
+    // Charge : limiter visuellement à la zone lente (déplacement court) uniquement
+    const chargeAllures = { lente: allures.lente, moyenne: allures.lente, rapide: allures.lente, max: allures.lente }
+    onEnterMoveMode(
+      chargeAllures, playerToken.id,
+      { x: playerToken.pos_x, z: playerToken.pos_y },
+      (sel) => {
+        // Move sélectionné : ini_mod = 0 (gratuit pour Charge)
+        setMoveSelection({ ...sel, ini_mod: 0 })
+        setInMoveMode(false)
+        // Chaîner automatiquement la sélection de cible CaC
+        setInMeleeTargetMode(true)
+        setMeleePendingTokenId(null)
+        onEnterTargetMode(
+          playerToken.id,
+          { x: playerToken.pos_x, z: playerToken.pos_y },
+          (tid) => { setMeleePendingTokenId(tid); setInMeleeTargetMode(false) },
+          () => { setInMeleeTargetMode(false) }
+        )
+      },
+      () => { setInMoveMode(false); setCombatMode('normal') }
     )
   }
 
@@ -723,6 +808,8 @@ export default function CombatActionWindow({
                       }}
                       onClick={() => {
                         if (!canActivate) return
+                        // Bug A : Charge/Retraite gèrent le déplacement internalement — chip 'move' inerte
+                        if (combatMode === 'charge' || combatMode === 'retraite') return
                         handleMapToggle(a.k)
                         if (!mapSelected.has(a.k)) handleZoneSelectClick()
                       }}
@@ -940,23 +1027,109 @@ export default function CombatActionWindow({
               )}
             </div>
 
+            {/* Mode de combat */}
             <div style={W.assaultSection}>
-              <div style={{ ...W.assaultSectionTitle, color: '#70c070' }}>Cible</div>
-              {meleePendingTokenId ? (() => {
-                const tgt = tokens.find(t => t.id === meleePendingTokenId)
-                return (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ ...W.assaultTargetName, color: '#70c070' }}>{tgt?.label ?? '?'}</span>
-                    <button style={W.changeTargetBtn} onClick={handleChooseMeleeTarget}>Changer</button>
-                  </div>
-                )
-              })() : (
-                <button
-                  style={{ ...W.chooseTargetBtn, borderColor: '#507050', color: '#70c070', background: 'rgba(80,180,80,0.1)' }}
-                  onClick={handleChooseMeleeTarget}
-                >Choisir l'adversaire</button>
+              <div style={{ ...W.assaultSectionTitle, color: '#70c070' }}>Mode de combat</div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {[
+                  { k: 'normal',   l: 'Normal',   tooltip: 'Mode par défaut — aucun modificateur.' },
+                  { k: 'offensif', l: 'Offensif',  tooltip: '+3 à l\'attaque / −5 à la défense si attaqué jusqu\'à la prochaine action.' },
+                  { k: 'charge',   l: 'Charge',    tooltip: '+3 attaque +3 dégâts / −7 défense / distance ≥ 3m requise + déplacement court gratuit.' },
+                  { k: 'defensif', l: 'Défensif',  tooltip: 'Aucune attaque. +3 en défense si attaqué. Retarde l\'action. (LdB p.223)' },
+                  { k: 'retraite', l: 'Retraite',  tooltip: 'Aucune attaque. +5 en défense si attaqué. Recul possible. (LdB p.223)' },
+                ].map(m => {
+                  const isDefensif = m.k === 'defensif' || m.k === 'retraite'
+                  return (
+                    <div
+                      key={m.k}
+                      title={m.tooltip}
+                      onClick={() => {
+                        if (m.k === 'charge') {
+                          handleChargeFlow()
+                        } else if (isDefensif) {
+                          setCombatMode(m.k)
+                          setMeleePendingTokenId(null)
+                          if (combatMode === 'charge') setMoveSelection(null)
+                        } else {
+                          setCombatMode(m.k)
+                          if (combatMode === 'charge') { setMoveSelection(null); setMeleePendingTokenId(null) }
+                        }
+                      }}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: 3,
+                        cursor: 'pointer',
+                        border: `1px solid ${combatMode === m.k ? '#70c070' : '#2a3a2a'}`,
+                        background: combatMode === m.k ? 'rgba(112,192,112,0.15)' : 'rgba(255,255,255,0.02)',
+                        fontSize: 10,
+                        color: combatMode === m.k ? '#70c070' : '#7a9a7a',
+                        fontWeight: combatMode === m.k ? 600 : 400,
+                      }}
+                    >
+                      {m.l}
+                    </div>
+                  )
+                })}
+              </div>
+              {combatMode === 'charge' && !moveSelection && (
+                <div style={{ fontSize: 9, color: '#c8a030', marginTop: 4 }}>
+                  ↑ Sélectionnez d&apos;abord votre déplacement
+                </div>
+              )}
+              {combatMode === 'charge' && moveSelection && (
+                <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
+                  Déplacement sélectionné (+0 INI gratuit)
+                </div>
+              )}
+              {combatMode === 'defensif' && (
+                <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
+                  Aucune attaque — +3 en défense si attaqué
+                </div>
+              )}
+              {combatMode === 'retraite' && (
+                <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
+                  Aucune attaque — +5 en défense
+                  {moveSelection
+                    ? <span style={{ color: '#70c070', marginLeft: 4 }}>· recul sélectionné (+0 INI)</span>
+                    : <span style={{ color: '#5a7a5a', marginLeft: 4 }}>· recul optionnel</span>
+                  }
+                </div>
               )}
             </div>
+
+            {/* Retraite : recul optionnel et gratuit */}
+            {combatMode === 'retraite' && (
+              <div style={W.assaultSection}>
+                <div style={{ ...W.assaultSectionTitle, color: '#70c070' }}>Recul (optionnel)</div>
+                <button
+                  style={{ ...W.chooseTargetBtn, borderColor: '#507050', color: '#70c070', background: 'rgba(80,180,80,0.1)' }}
+                  onClick={handleRetraiteMove}
+                >
+                  {moveSelection ? `✓ Recul sélectionné — Annuler` : 'Sélectionner la destination de recul'}
+                </button>
+              </div>
+            )}
+
+            {/* Sélection cible — masquée en mode Défensif/Retraite */}
+            {!meleeDefensif && (
+              <div style={W.assaultSection}>
+                <div style={{ ...W.assaultSectionTitle, color: '#70c070' }}>Cible</div>
+                {meleePendingTokenId ? (() => {
+                  const tgt = tokens.find(t => t.id === meleePendingTokenId)
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ ...W.assaultTargetName, color: '#70c070' }}>{tgt?.label ?? '?'}</span>
+                      <button style={W.changeTargetBtn} onClick={handleChooseMeleeTarget}>Changer</button>
+                    </div>
+                  )
+                })() : (
+                  <button
+                    style={{ ...W.chooseTargetBtn, borderColor: '#507050', color: '#70c070', background: 'rgba(80,180,80,0.1)' }}
+                    onClick={handleChooseMeleeTarget}
+                  >Choisir l&apos;adversaire</button>
+                )}
+              </div>
+            )}
 
             {meleePendingTokenId && (
               <div style={{ padding: '8px 14px' }}>

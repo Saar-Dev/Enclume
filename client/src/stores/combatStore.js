@@ -1,18 +1,20 @@
 import { create } from 'zustand'
 
 export const useCombatStore = create((set) => ({
-  phase: null,        // 'ROSTER' | 'ANNOUNCEMENT' | 'RESOLUTION' | null
-  roster: [],         // [{ id, token_id, base_ini, initiative, status, has_announced, has_resolved, is_surprised }]
-  actions: [],        // [{ id, token_id, type, initiative_score, status, ... }]
+  phase: null,          // 'ROSTER' | 'ANNOUNCEMENT' | 'RESOLUTION' | null
+  roster: [],           // [{ id, token_id, base_ini, initiative, status, has_announced, has_resolved, is_surprised }]
+  actions: [],          // [{ id, token_id, type, initiative_score, status, ... }]
   currentTurn: 1,
   activeSlotIdx: 0,
+  activeTokenId: null,  // token_id du slot actif (ANNOUNCEMENT et RESOLUTION)
 
-  setCombatState: ({ phase, roster, actions, currentTurn, activeSlotIdx }) => set({
+  setCombatState: ({ phase, roster, actions, currentTurn, activeSlotIdx, activeTokenId }) => set({
     phase,
     roster: roster ?? [],
     actions: actions ?? [],
     currentTurn: currentTurn ?? 1,
     activeSlotIdx: activeSlotIdx ?? 0,
+    activeTokenId: activeTokenId ?? null,
   }),
 
   updateRoster: (updatedRoster) => set({ roster: updatedRoster }),
@@ -21,7 +23,7 @@ export const useCombatStore = create((set) => ({
     actions: [...state.actions, action],
   })),
 
-  advanceSlot: (activeSlotIdx) => set({ activeSlotIdx }),
+  advanceSlot: (activeSlotIdx, activeTokenId) => set({ activeSlotIdx, activeTokenId: activeTokenId ?? null }),
 
   setActions: (actions) => set({ actions }),
 
@@ -41,5 +43,6 @@ export const useCombatStore = create((set) => ({
     actions: [],
     currentTurn: 1,
     activeSlotIdx: 0,
+    activeTokenId: null,
   }),
 }))
