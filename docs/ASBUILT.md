@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-06-01 Session 70
+> Dernière mise à jour : 2026-06-01 Session 71
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -17,9 +17,10 @@ Enclume/
 │   │   └── CHANGELOG.md               # Modifié 67 Sprint 7.6 — +v67 rechargement combat
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── CombatOverlay.jsx        # Modifié 64 — +combatTargetMode. Modifié 66 — +shockResult. Modifié 67 Sprint 7.6 — +CombatResultReload. Modifié 67 Sprint CaC 1 — +CombatResultMelee (bottom-right), +modal défense PJ centré (COMBAT_MELEE_DEFENSE_PROMPT → bouton "Défendre"), props meleeDefensePrompt/onMeleeDefenseConfirm/meleeResult/onMeleeResultClose
+│   │   │   ├── CombatOverlay.jsx        # Modifié 64 — +combatTargetMode. Modifié 66 — +shockResult. Modifié 67 Sprint 7.6 — +CombatResultReload. Modifié 67 Sprint CaC 1 — +CombatResultMelee (bottom-right), +modal défense PJ. Modifié 71 — +actionTimerSec prop passé à CombatTimeline
 │   │   │   ├── CombatRosterWindow.jsx  # Réécriture complète 65 Sprint GM-A. Modifié 66 — draggable (useDraggable, key combat-roster-pos) — détection arme/armure, chips T/C/B/J (PjArmorChips/PnjArmorChips), quick-equip PNJ, bannière alerte, fetches parallèles combat-ini+combat-equipment+refWeapons+refArmors
-│   │   │   ├── CombatTimeline.jsx      # Modifié 62 — timeline INI, portraits cliquables GM, topOffset + curseur slot actif RÉSOLUTION (slotActive, activeSlotIdx)
+│   │   │   ├── CombatTimeline.jsx      # Réécriture complète 71 — BG3-style, Motion FLIP, ANNOUNCEMENT(roster ASC)/RESOLUTION(actions seq), TimelineCard, timer countdown, MAX_CARDS=12, phase indicator+flèche
+│   │   │   ├── TimelineCard.jsx        # NOUVEAU 71 — carte portrait plein format, gradient overlay nom+INI, bordure SEVERITY_COLORS, taille active 72×100/normal 54×76, badges ✓⚠
 │   │   │   ├── CombatActionWindow.jsx  # Modifié 66 — draggable v2, StateSelector, exclusion mutuelle EXCLUSIVE_ACTIONS. Modifié 67 Sprint 7.6 — +reload panneau. Modifié 67 Sprint CaC 1 — +melee panneau droit (liste armes contact + allonge + cible via target mode), Phase 2 myMeleeAction, reset has_announced, COMBAT_DECLARE_ERROR listener. Modifié 68 Sprint CaC 2 — +combatMode state (normal/offensif/charge), mode selector 3 chips, handleChargeFlow séquentiel (chargeAllures=lente uniquement), meleeValid Charge, payload state.combat_mode + move.ini_mod=0. Modifié 68 Sprint CaC 3 — meleeDefensif const ligne 330 (fix TDZ), modes Défensif+Retraite : chips vert uniforme, melee/cible masqués si meleeDefensif, handleRetraiteMove() toggle zone lente ini_mod=0, mapActionsObj.melee=null, server freeMove étendu à retraite
 │   │   │   ├── CombatDamageWindow.jsx  # NOUVEAU 64 Sprint 7.4 — fenêtre PJ lancer dés dégâts : Phase 1 dés vides / Phase 2 animation / Phase 3 résultats colorés. Modifié 66 Sprint Test de Choc : +bloc Test de Choc après severityBanner (roll/seuil/outcome coloré)
 │   │   │   ├── CombatModifiersWindow.jsx # NOUVEAU 64 Sprint 7.2. Modifié 65 Sprint 7.6. Modifié 66 — draggable (useDraggable, sticky retiré du header) — is_rushed → state_vitesse === 'rushed'
@@ -49,7 +50,7 @@ Enclume/
 │   │   │   └── useDraggable.js         # NOUVEAU 66 — hook partagé drag+localStorage+clamp (storageKey, defaultPos, panelW)
 │   │   │   ├── RegisterPage.jsx
 │   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover. Modifié 66 — layout flex+ChangelogPanel. Modifié 68 — formulaires inline. Modifié 69 — document.title 'Enclume — Tableau de bord'
-│   │   │   ├── SessionPage.jsx         # Modifié 64-66 — combat, dés. Modifié 69 — document.title dynamique `Enclume — ${campaign.name}`. Modifié 70 — prop defaultTokenGlbUrl → Canvas3D
+│   │   │   ├── SessionPage.jsx         # Modifié 64-66 — combat, dés. Modifié 69 — document.title dynamique. Modifié 70 — defaultTokenGlbUrl. Modifié 71 — +updateCharacter destructure, +3 listeners wound (WOUND_ADDED/UPDATED/REMOVED → updateCharacter({id,worst_wound_severity})), +actionTimerSec prop CombatOverlay
 │   │   │   ├── CampaignSettingsPage.jsx # Modifié 66 Sprint 7.5 — section Règles de jeu. Modifié 68 Sprint Timer — +actionTimerSec. Modifié 69 — document.title. Modifié 70 — section Tokens 3D : upload/réinitialiser default_token_glb_url, feedback succès/erreur
 │   │   │   ├── WorkshopPage.jsx        # Modifié 69 — canDelete (isOwner || !created_by), Export/Supprimer séparés, document.title 'Enclume — Atelier'
 │   │   │   └── TexturePacksPage.jsx    # CONSERVÉ mais remplacé par WorkshopPage
@@ -87,7 +88,7 @@ Enclume/
 │   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/             # migrations jusqu'à 66 — 63 : +melee ; 64 : state_combat_mode ; 65 : campaigns.action_timer_sec ; 66 : campaigns.default_token_glb_url
+│   │   │   ├── migrations/             # migrations jusqu'à 66 (inchangé session 71 — 0 migration)
 │   │   │   ├── seeds/
 │   │   │   │   └── 2_seed_equipment.js # NOUVEAU 48 — seed ref_equipment 636 items (KO-par-défaut, idempotent)
 │   │   │   └── knex.js
@@ -107,7 +108,7 @@ Enclume/
 │   │   │   ├── entities.js             # Modifié 39 — maintenance Redis collision map
 │   │   │   ├── equipment.js            # NOUVEAU 47 — CRUD ref_equipment + junction tables. Modifié 65 Sprint GM-A : +location dans GET /equipment SELECT
 │   │   │   └── character/
-│   │   │       └── char-sheet.js       # Modifié 66 Sprint A+C2 — +6 routes /macros + /macro-options + /macro-preview (Express 5 : /: initial obligatoire). Modifié 66 Sprint 7.5 — +ammo_remaining SELECT + POST /reload (transaction : charge arme, décrémente/supprime munition, broadcast WS)
+│   │   │       └── char-sheet.js       # Modifié 66 Sprint A+C2 — +6 routes /macros. Modifié 66 Sprint 7.5 — +ammo_remaining + POST /reload. Modifié 71 — +helper getWorstWoundSeverity(charSheetId) + worst_wound_severity dans payloads WOUND_ADDED/UPDATED/REMOVED
 │   │   ├── middleware/
 │   │   │   ├── auth.js
 │   │   │   ├── role.js

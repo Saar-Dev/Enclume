@@ -345,6 +345,19 @@ Hors scope : combat (12), équipement (6). SkillTooltips : roadmap.
 - `CombatResultReload` : panneau bottom-center succès/échec persistant jusqu'au tour suivant ✅
 - Option campagne "Mode de rechargement" (Chargeur / Complément) + hint ✅
 
+## Session 71 ✅ (2026-06-01)
+
+- **Sprint Timeline BG3-style ✅ CONFIRMÉ FONCTIONNEL**
+  - `TimelineCard.jsx` (NOUVEAU) : portrait plein format, gradient overlay nom+INI, bordure SEVERITY_COLORS, taille active 72×100 / normale 54×76
+  - `CombatTimeline.jsx` réécriture : Motion FLIP (LayoutGroup+AnimatePresence), ANNOUNCEMENT(roster ASC ini) / RESOLUTION(actions sequence ASC), timer countdown coloré, MAX_CARDS=12
+  - `worst_wound_severity` : subquery dans GET /characters + helper getWorstWoundSeverity + payloads WS WOUND_ADDED/UPDATED/REMOVED + listeners SessionPage → updateCharacter (merge partiel)
+  - `actionTimerSec` propagé : SessionPage → CombatOverlay → CombatTimeline
+  - Fix portrait URL (manquait préfixe /api/assets/) — bug silencieux depuis session 57
+  - Librairie `motion` v12 ajoutée (React 19 + Vite 8 compatible)
+  - Plan documenté dans `docs/PLAN_TIMELINE.md`
+
+---
+
 ## Session 68 ✅ (2026-05-31)
 
 - **Sprint CaC 2 ✅ CONFIRMÉ FONCTIONNEL**

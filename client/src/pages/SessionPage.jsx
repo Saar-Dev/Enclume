@@ -27,7 +27,7 @@ export default function SessionPage() {
   const navigate = useNavigate()
 
   const { tokens, setTokens, addToken, removeToken, updateToken } = useTokenStore()
-  const { characters, isGm, setCharacters, setMembers, upsertCharacter } = useCharacterStore()
+  const { characters, isGm, setCharacters, setMembers, upsertCharacter, updateCharacter } = useCharacterStore()
   const {
     battlemap, battlemaps,
     setBattlemap, setBattlemaps,
@@ -441,8 +441,15 @@ export default function SessionPage() {
         setLastDiceRoll({ rolls, dieType: formula.replace(/^\d+/, '').split('+')[0].split('-')[0], seed, timestamp, color })
       }
     })
-    s.on(WS.WOUND_ADDED, ({ characterId }) => {
+    s.on(WS.WOUND_ADDED, ({ characterId, worst_wound_severity }) => {
       setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
+      updateCharacter({ id: characterId, worst_wound_severity })
+    })
+    s.on(WS.WOUND_UPDATED, ({ characterId, worst_wound_severity }) => {
+      updateCharacter({ id: characterId, worst_wound_severity })
+    })
+    s.on(WS.WOUND_REMOVED, ({ characterId, worst_wound_severity }) => {
+      updateCharacter({ id: characterId, worst_wound_severity })
     })
     s.on(WS.INVENTORY_UPDATED, ({ characterId }) => {
       if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
@@ -1200,6 +1207,7 @@ export default function SessionPage() {
           isGm={isGm}
           user={user}
           characters={characters}
+          actionTimerSec={campaign?.action_timer_sec ?? 0}
           tokens={tokens}
           pendingSurpriseRoll={pendingSurpriseRoll}
           onSurpriseRolled={handleSurpriseRolled}

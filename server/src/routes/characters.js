@@ -41,6 +41,16 @@ router.get('/', requireAuth, async (req, res) => {
     'characters.created_at',
     'characters.updated_at',
     'users.username as owner_username',
+    db.raw(`(
+      SELECT cw.severity
+      FROM character_wounds cw
+      INNER JOIN char_sheet cs ON cs.id = cw.char_sheet_id
+      WHERE cs.character_id = characters.id
+      ORDER BY CASE cw.severity
+        WHEN 'mortelle' THEN 1 WHEN 'critique' THEN 2 WHEN 'grave' THEN 3
+        WHEN 'moyenne'  THEN 4 WHEN 'legere'   THEN 5 END
+      LIMIT 1
+    ) as worst_wound_severity`),
   ]
 
   // gm_notes jamais envoyé aux joueurs

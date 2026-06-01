@@ -1,3 +1,17 @@
+## v71 — 2026-06-01 — Timeline combat BG3-style
+
+### Combat — Timeline initiative
+- [add] Portraits illustrés plein format (illustration fiche personnage)
+- [add] Bordure de carte = couleur de la pire blessure active (légère jaune → mortelle rouge foncé)
+- [add] Carte active agrandie (64px vs 44px) avec halo doré
+- [add] Phase Annonce : cartes triées INI croissante (lents à gauche), curseur flèche ←
+- [add] Phase Résolution : cartes depuis les actions déclarées, curseur flèche →
+- [add] Timer de tour (si configuré dans les options campagne) — vert/orange/rouge
+- [add] Maximum 12 cartes affichées, badge +N pour le surplus
+- [add] Animations fluides : entrée/sortie et réordonnancement si INI change (Motion FLIP)
+- [fix] Portrait URL cassée (image jamais affichée depuis session 57)
+- [fix] Blessures temps réel : bordure se met à jour sans rechargement
+
 ## v70 — 2026-06-01 — Token par défaut campagne + stabilité serveur
 
 ### Tokens 3D

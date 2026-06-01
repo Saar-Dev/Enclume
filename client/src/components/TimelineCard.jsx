@@ -1,0 +1,101 @@
+import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
+
+const VITE_API_URL = import.meta.env.VITE_API_URL
+
+export default function TimelineCard({
+  portraitUrl,
+  label,
+  initiative,
+  isActive,
+  hasAnnounced,
+  isSurprised,
+  worstSeverity,
+  onClick,
+}) {
+  const imgSrc = portraitUrl ? `${VITE_API_URL}/api/assets/${portraitUrl}` : null
+  const borderColor = worstSeverity ? SEVERITY_COLORS[worstSeverity] : 'rgba(255,255,255,0.12)'
+  const w = isActive ? 72 : 54
+  const h = isActive ? 100 : 76
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        position: 'relative',
+        width: w,
+        height: h,
+        borderRadius: 6,
+        overflow: 'hidden',
+        border: `2px solid ${borderColor}`,
+        flexShrink: 0,
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'width 0.2s ease, height 0.2s ease, border-color 0.3s ease',
+        boxShadow: isActive ? '0 0 12px rgba(245,197,66,0.35)' : 'none',
+      }}
+    >
+      {/* Portrait plein format */}
+      {imgSrc
+        ? <img
+            src={imgSrc}
+            alt={label}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        : <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(160deg, #1a1a2e, #2a2a4e)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: isActive ? 26 : 20,
+            color: '#5555aa',
+            fontWeight: 700,
+            userSelect: 'none',
+          }}>
+            {(label ?? '?').charAt(0).toUpperCase()}
+          </div>
+      }
+
+      {/* Gradient bas — nom + INI */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        background: 'linear-gradient(transparent, rgba(0,0,0,0.88))',
+        padding: '16px 4px 4px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+      }}>
+        <span style={{
+          fontSize: 9,
+          color: isActive ? '#f5c542' : '#e0e0f0',
+          fontWeight: 700,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          maxWidth: w - 8,
+          lineHeight: 1.2,
+          textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+          transition: 'color 0.2s ease',
+        }}>
+          {label ?? '?'}
+        </span>
+        <span style={{
+          fontSize: 8,
+          color: '#5b8dee',
+          fontWeight: 600,
+          textShadow: '0 1px 2px rgba(0,0,0,0.9)',
+        }}>
+          {initiative}
+        </span>
+      </div>
+
+      {/* Badge annoncé */}
+      {hasAnnounced && (
+        <span style={{ position: 'absolute', top: 3, right: 4, fontSize: 10, color: '#50c878', fontWeight: 700, textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
+          ✓
+        </span>
+      )}
+      {/* Badge surpris */}
+      {isSurprised && !hasAnnounced && (
+        <span style={{ position: 'absolute', top: 3, right: 4, fontSize: 10, color: '#e0a050', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
+          ⚠
+        </span>
+      )}
+    </div>
+  )
+}

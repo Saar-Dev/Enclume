@@ -1,145 +1,223 @@
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence, LayoutGroup } from 'motion/react'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
+import TimelineCard from './TimelineCard'
 
-export default function CombatTimeline({ characters, topOffset = 0, onPortraitClick }) {
-  const { roster, phase, activeTokenId } = useCombatStore()
+const MAX_CARDS = 12
+
+export default function CombatTimeline({ characters, topOffset = 0, onPortraitClick, actionTimerSec = 0 }) {
+  const { roster, actions, phase, activeTokenId, activeSlotIdx, currentTurn } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
-  if (!phase || roster.length === 0) return null
+  // ── Timer de tour (ANNOUNCEMENT uniquement) ──────────────────────────────────
+  // Se remet à zéro à chaque changement de slot actif.
+  const [secondsLeft, setSecondsLeft] = useState(null)
 
-  // LdB p.212 — ANNONCE : lents en premier (ASC) / RÉSOLUTION : rapides en premier (DESC)
-  const sorted = [...roster].sort((a, b) =>
-    phase === 'ANNOUNCEMENT' ? a.initiative - b.initiative : b.initiative - a.initiative
-  )
+  useEffect(() => {
+    if (!actionTimerSec || phase !== 'ANNOUNCEMENT') {
+      setSecondsLeft(null)
+      return
+    }
+    setSecondsLeft(actionTimerSec)
+    const id = setInterval(() => {
+      setSecondsLeft(prev => {
+        if (prev === null || prev <= 1) { clearInterval(id); return 0 }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [activeTokenId, phase, actionTimerSec])
+
+  if (!phase || phase === 'ROSTER' || roster.length === 0) return null
+
+  // ── Dériver les cartes selon la phase ────────────────────────────────────────
+  let cards
+  if (phase === 'ANNOUNCEMENT') {
+    cards = [...roster]
+      .sort((a, b) => a.initiative - b.initiative)
+      .map(entry => {
+        const token = tokens.find(t => t.id === entry.token_id)
+        const char  = token ? characters.find(c => c.id === token.character_id) : null
+        return {
+          key:           `r-${entry.token_id}`,
+          portraitUrl:   char?.portrait_url ?? null,
+          label:         token?.label ?? '?',
+          initiative:    entry.initiative,
+          worstSeverity: char?.worst_wound_severity ?? null,
+          hasAnnounced:  entry.has_announced ?? false,
+          isSurprised:   entry.is_surprised ?? false,
+          isActive:      entry.token_id === activeTokenId,
+        }
+      })
+  } else {
+    cards = [...actions]
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((action, idx) => {
+        const token       = tokens.find(t => t.id === action.token_id)
+        const char        = token ? characters.find(c => c.id === token.character_id) : null
+        const rosterEntry = roster.find(r => r.token_id === action.token_id)
+        return {
+          key:           `a-${action.id}`,
+          portraitUrl:   char?.portrait_url ?? null,
+          label:         token?.label ?? '?',
+          initiative:    rosterEntry?.initiative ?? 0,
+          worstSeverity: char?.worst_wound_severity ?? null,
+          hasAnnounced:  false,
+          isSurprised:   false,
+          isActive:      idx === activeSlotIdx,
+        }
+      })
+  }
+
+  const visible  = cards.slice(0, MAX_CARDS)
+  const overflow = Math.max(0, cards.length - MAX_CARDS)
+  const isAnnouncement = phase === 'ANNOUNCEMENT'
+
+  // Couleur timer : vert → orange → rouge
+  const timerColor = secondsLeft === null ? '#50c878'
+    : secondsLeft > actionTimerSec * 0.5 ? '#50c878'
+    : secondsLeft > actionTimerSec * 0.25 ? '#e0a050'
+    : '#e05050'
 
   return (
-    <div style={{ ...styles.bar, top: topOffset }}>
-      {sorted.map(entry => {
-        const token = tokens.find(t => t.id === entry.token_id)
-        const char = token ? characters.find(c => c.id === token.character_id) : null
-        const portraitUrl = char?.portrait_url ?? null  // PC20 : portrait_url nullable
-        const isActive = entry.token_id === activeTokenId
+    <div style={styles.bar(topOffset)}>
 
-        return (
-          <div
-            key={entry.id ?? entry.token_id}
-            style={{
-              ...styles.slot,
-              ...(entry.has_announced ? styles.slotAnnounced : {}),
-              ...(isActive ? styles.slotActive : {}),
-              ...(onPortraitClick ? { cursor: 'pointer' } : {}),
-            }}
-            onClick={onPortraitClick}
-          >
-            {portraitUrl
-              ? (
-                <img
-                  src={portraitUrl}
-                  alt={token?.label}
-                  style={styles.portrait}
-                />
-              )
-              : (
-                <div style={styles.portraitPlaceholder}>
-                  {(token?.label ?? '?').charAt(0).toUpperCase()}
-                </div>
-              )
-            }
-            <div style={styles.info}>
-              <span style={styles.label}>{token?.label ?? '?'}</span>
-              <span style={styles.ini}>{entry.initiative}</span>
-            </div>
-            {entry.has_announced && <span style={styles.badge}>✓</span>}
-            {entry.is_surprised && !entry.has_announced && (
-              <span style={styles.surpriseBadge}>⚠</span>
-            )}
+      {/* Timer + Tour N — ancrage gauche */}
+      <div style={styles.leftPanel}>
+        {secondsLeft !== null && (
+          <div style={styles.timer(timerColor)}>
+            {secondsLeft}
           </div>
-        )
-      })}
+        )}
+        <div style={styles.turnLabel}>
+          Tour {currentTurn}
+        </div>
+      </div>
+
+      {/* Cartes */}
+      <div style={styles.cardList}>
+        <LayoutGroup>
+          <AnimatePresence initial={false}>
+            {visible.map(card => (
+              <motion.div
+                key={card.key}
+                layout
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+                style={{ flexShrink: 0 }}
+              >
+                <TimelineCard
+                  portraitUrl={card.portraitUrl}
+                  label={card.label}
+                  initiative={card.initiative}
+                  isActive={card.isActive}
+                  hasAnnounced={card.hasAnnounced}
+                  isSurprised={card.isSurprised}
+                  worstSeverity={card.worstSeverity}
+                  onClick={onPortraitClick}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </LayoutGroup>
+
+        {overflow > 0 && (
+          <div style={styles.overflow}>+{overflow}</div>
+        )}
+      </div>
+
+      {/* Indicateur phase + flèche — ancrage droite */}
+      <div style={styles.phaseIndicator}>
+        <span style={styles.phaseLabel}>
+          {isAnnouncement ? 'Annonce' : 'Résolution'}
+        </span>
+        <span style={styles.phaseArrow(isAnnouncement)}>
+          {isAnnouncement ? '←' : '→'}
+        </span>
+      </div>
+
     </div>
   )
 }
 
 const styles = {
-  bar: {
+  bar: (topOffset) => ({
     position: 'absolute',
-    top: 0,
+    top: topOffset,
     left: 0,
     right: 0,
     display: 'flex',
     flexDirection: 'row',
-    gap: 4,
-    padding: '6px 12px',
-    background: 'rgba(10,10,20,0.85)',
+    alignItems: 'flex-end',
+    gap: 10,
+    padding: '10px 14px',
+    background: 'rgba(10,10,20,0.88)',
     borderBottom: '1px solid #2a2a3e',
-    overflowX: 'auto',
     pointerEvents: 'auto',
-  },
-  slot: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '4px 8px',
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid #2a2a3e',
-    borderRadius: 6,
-    flexShrink: 0,
-    position: 'relative',
-  },
-  slotAnnounced: {
-    border: '1px solid #50c878',
-    background: 'rgba(80,200,120,0.06)',
-  },
-  slotActive: {
-    border: '2px solid #f5c542',
-    background: 'rgba(245,197,66,0.10)',
-  },
-  portrait: {
-    width: 28,
-    height: 28,
-    borderRadius: '50%',
-    objectFit: 'cover',
-  },
-  portraitPlaceholder: {
-    width: 28,
-    height: 28,
-    borderRadius: '50%',
-    background: '#2a2a3e',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 12,
-    color: '#8888a8',
-    fontWeight: 600,
-    flexShrink: 0,
-  },
-  info: {
+    zIndex: 10,
+  }),
+  leftPanel: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 1,
+    alignItems: 'center',
+    paddingBottom: 4,
+    flexShrink: 0,
+    gap: 2,
   },
-  label: {
-    fontSize: 11,
-    color: '#c0c0d0',
-    fontWeight: 500,
-    maxWidth: 80,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  ini: {
-    fontSize: 11,
-    color: '#5b8dee',
-  },
-  badge: {
-    fontSize: 11,
-    color: '#50c878',
+  timer: (color) => ({
+    fontSize: 22,
     fontWeight: 700,
-    marginLeft: 2,
+    color,
+    lineHeight: 1,
+    fontVariantNumeric: 'tabular-nums',
+    letterSpacing: '-0.02em',
+    transition: 'color 0.5s ease',
+  }),
+  turnLabel: {
+    fontSize: 10,
+    color: '#55558a',
+    fontWeight: 700,
+    whiteSpace: 'nowrap',
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase',
   },
-  surpriseBadge: {
+  cardList: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+    flex: 1,
+  },
+  overflow: {
     fontSize: 11,
-    color: '#e0a050',
-    marginLeft: 2,
+    color: '#55558a',
+    fontWeight: 600,
+    paddingBottom: 6,
+    paddingLeft: 4,
+    flexShrink: 0,
   },
+  phaseIndicator: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 2,
+    paddingBottom: 6,
+    flexShrink: 0,
+  },
+  phaseLabel: {
+    fontSize: 10,
+    color: '#55558a',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+  },
+  phaseArrow: (isAnnouncement) => ({
+    fontSize: 18,
+    color: isAnnouncement ? '#e0a050' : '#50c878',
+    lineHeight: 1,
+    fontWeight: 700,
+  }),
 }

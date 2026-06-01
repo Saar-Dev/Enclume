@@ -1643,3 +1643,52 @@ Validé en dry run local avant push.
 **`client/src/locales/fr.json` + `en.json` :** +8 clés `settings.defaultToken*` + `actionTimerLabel/Hint` en en.json
 
 **Sprint Token par défaut campagne ✅ CONFIRMÉ FONCTIONNEL**
+
+## Session 71 — Sprint Timeline BG3-style (2026-06-01)
+
+**Objectif :** Refonte complète de `CombatTimeline.jsx` — portraits illustrés plein format, bordure blessure, carte active agrandie, indicateur de phase + flèche directionnelle, timer de tour.
+
+### Design et architecture
+
+Phase de design longue avant toute ligne de code : références pros analysées, questions design tranchées une par une.
+
+**Références :**
+- [Foundry VTT SCS](https://github.com/arcanistzed/scs) — même architecture Annonce/Résolution que Polaris
+- [Motion/framer-motion](https://motion.dev/docs/react-layout-animations) — FLIP animations liste triée dynamique
+
+**Décisions architecturales :**
+- ANNOUNCEMENT : 1 card/acteur depuis `roster[]`, tri ASC initiative (lents à gauche)
+- RESOLUTION : 1 card/action depuis `actions[]`, tri ASC sequence (acteur multi-action = cartes adjacentes)
+- Sens fixe gauche->droite. Curseur droite->gauche (ANNOUNCEMENT), gauche->droite (RESOLUTION)
+- Les cartes ne se réordonnent PAS entre les phases — transition enter/exit via AnimatePresence
+- Librairie `motion` v12 (anciennement framer-motion) — React 19 + Vite 8 compatible, 5 packages
+- MAX_CARDS = 12, badge +N pour le surplus
+- Plan documenté dans `docs/PLAN_TIMELINE.md`
+
+### Données ajoutées
+
+**`worst_wound_severity` par personnage :**
+- `characters.js` GET /campaigns/:id/characters : subquery corrélée SQL (char_sheet -> character_wounds ORDER BY gravité LIMIT 1)
+- `char-sheet.js` : helper `getWorstWoundSeverity(charSheetId)` + champ ajouté aux 3 payloads WS : WOUND_ADDED, WOUND_UPDATED, WOUND_REMOVED
+- `SessionPage.jsx` : +`updateCharacter` au destructure useCharacterStore, patch WOUND_ADDED, +listeners WOUND_UPDATED/WOUND_REMOVED
+
+**Piège identifié :** `upsertCharacter` = remplacement complet. Utiliser `updateCharacter` (merge partiel) pour les updates wound.
+
+**Timer de tour :**
+- `actionTimerSec` propagé : SessionPage -> CombatOverlay -> CombatTimeline
+- Countdown dans CombatTimeline via useEffect dependant de activeTokenId
+- Couleur : vert > 50% / orange 25-50% / rouge < 25%
+- Visible uniquement en ANNOUNCEMENT si action_timer_sec > 0
+
+### Fichiers livrés
+
+- `client/package.json` : +motion
+- `server/src/routes/characters.js` : +subquery worst_wound_severity
+- `server/src/routes/character/char-sheet.js` : +helper getWorstWoundSeverity + 3 payloads WS
+- `client/src/pages/SessionPage.jsx` : +updateCharacter, +3 listeners wound, +actionTimerSec CombatOverlay
+- `client/src/components/TimelineCard.jsx` : NOUVEAU — portrait plein format, gradient overlay, bordure severite
+- `client/src/components/CombatTimeline.jsx` : Reecriture — Motion FLIP, phases, timer, MAX 12
+- `client/src/components/CombatOverlay.jsx` : +actionTimerSec prop
+- `docs/PLAN_TIMELINE.md` : NOUVEAU — memoire externe du sprint
+
+**Sprint Timeline CONFIRME FONCTIONNEL**

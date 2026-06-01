@@ -205,6 +205,7 @@ Module Armes ← 🔲 Chantier 11 Étape 2
 | Sprint GM-A | CombatRosterWindow v2 (détection arme/armure, chips T/C/B/J, quick-equip PNJ, bannière alerte) | ✅ session 65 |
 | Sprint GM-B (déplacement) | Déplacement PNJ séquentiel (DEFAULT_PNJ_ALLURES, queue moveTick, bouton Passer) | ✅ session 65 |
 | Sprint GM-B (assault) | Assault PNJ Mode Minimal — queue séquentielle attackTick, weapon/target sélectionnés, payload attack complet | ✅ session 65 |
+| Sprint Timeline BG3 | Refonte CombatTimeline — TimelineCard portrait plein format, bordure blessure, Motion FLIP, phases ANNOUNCEMENT/RESOLUTION, timer, worst_wound_severity WS | ✅ session 71 |
 
 **Mécanique Polaris (rappel LdB) :**
 
