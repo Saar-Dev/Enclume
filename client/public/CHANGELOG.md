@@ -1,3 +1,13 @@
+## v74 — 2026-06-02 — CaC : Attaque multiple
+
+### Combat — Corps à corps
+- [add] Attaque multiple melee : déclarer 2 attaques (malus −5) ou 3 attaques (malus −7) en un tour (LdB p.218)
+- [add] Sélection séquentielle des cibles dans le panel CaC (PJ) : N boutons "Choisir l'adversaire"
+- [add] GM : chips "1 / 2 (−5) / 3 (−7)" dans le panneau CaC + queue étendue (N cibles par PNJ)
+- [add] Résolution séquentielle dans le même slot : attaque 1 → résultat → attaque 2 → etc.
+
+---
+
 ## v73 — 2026-06-01 — Correctifs UX & Playground
 
 ### Dashboard

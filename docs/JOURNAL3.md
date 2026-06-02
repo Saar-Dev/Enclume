@@ -1837,3 +1837,38 @@ Après relecture du LdB (SkillTooltips.md p.188), le "coût doublé" ne concerne
 - `index.css` : `@keyframes hourglass-flip` + `.entity-pending`
 
 **Notification entité interactive CONFIRMÉ FONCTIONNEL**
+
+
+## Session 74 — Sprint CaC 4b : Attaque multiple melee (2026-06-02)
+
+### Sprint CaC 4b — Attaque multiple
+
+**Règle LdB p.218 :** jusqu'à 3 attaques melee par tour, malus −5 (2 attaques) ou −7 (3 attaques) sur tous les jets d'attaque.
+
+**Architecture :** `mapActions.melee` passe de `{ targetTokenId, weaponInvId }` (objet) à un array. Le serveur insère N lignes `type='melee'` dans `combat_actions`. Résolution séquentielle dans le même slot. Aucune migration DB.
+
+**Pièges documentés :**
+- P-4b-1 : `totalMeleeCount` passé en paramètre explicite dans `resolveMeleeAction` — appels récursifs conservent le malus
+- P-4b-2 : `COMBAT_MELEE_DEFENSE_CONFIRM` chaîne les attaques restantes, `advanceSlot` seulement après la dernière
+- Limitation V1 : PJ attaquant vs 2 PJ défenseurs tous touchés → dommages 1ère attaque perdus (cas impossible en coopératif)
+
+**Fichiers modifiés :**
+- `client/src/components/combatSections.js` : `calcIniDelta` melee array, INI −3 + (count > 1 ? −5 : 0), suppression ligne multi
+- `server/src/socket/index.js` :
+  - `COMBAT_ACTION_DECLARE` : INI delta melee array, insertion N rows, suppression bloc `mapActions?.multi`
+  - `COMBAT_ACTION_CONFIRM` : séparation melee/non-melee, mark resolved upfront, appel avec remaining + totalCount
+  - `resolveMeleeAction` : signature étendue, `multiAttackMalus` sur `chancesAttaque`, récursion PNJ, `remainingMeleeActions`+`totalMeleeCount` dans commonPending
+  - `COMBAT_MELEE_DEFENSE_CONFIRM` : destructure remaining/totalCount, chaîne attaque suivante via fetchSockets, advanceSlot après la dernière
+- `client/src/components/CombatActionWindow.jsx` :
+  - `meleePendingTokenId` → `meleePendingTokenIds[]` + `meleeCount` state
+  - `handleChooseMeleeTarget(idx)` — met à jour `meleePendingTokenIds[idx]`
+  - Panel melee : chips nombre attaques, N lignes cible séquentielles
+  - Payload : array melee, Charge = 1 cible toujours (exclusive LdB)
+- `client/src/components/CombatGmDeclareWindow.jsx` :
+  - `meleeAttackCount` state + chips dans panneau CaC
+  - Queue étendue : `targetIds.flatMap(id => Array(meleeAttackCount).fill(id))`
+  - `onTargetSelected` accumule dans `meleeSelections[id].targets[]`
+  - `onCancel` saute toutes les sélections restantes pour le PNJ courant
+  - Payload melee : array de cibles
+
+**Sprint CaC 4b — EN ATTENTE VALIDATION FONCTIONNELLE**

@@ -85,8 +85,10 @@ export function calcIniDelta(prevStates, nextStates, mapActions, quick) {
   }
 
   if (mapActions.move)   delta += mapActions.move.ini_mod ?? 0
-  if (mapActions.melee)  delta += -3
-  if (mapActions.multi)  delta += -5
+  if (Array.isArray(mapActions.melee) && mapActions.melee.length > 0) {
+    delta += -3
+    if (mapActions.melee.length > 1) delta += -5
+  }
   if (mapActions.attack?.cover_shot) {
     delta += nextStates.cover === 'important' ? -5 : -3
   }

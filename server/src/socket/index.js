@@ -1815,8 +1815,10 @@ const initSocket = (io) => {
         // Charge/Retraite : déplacement gratuit — override ini_mod serveur (non trusté client)
         const freeMove = (state.combat_mode === 'charge' || state.combat_mode === 'retraite') && !!mapActions?.move
         if (mapActions?.move)  iniDelta += freeMove ? 0 : (mapActions.move.ini_mod ?? 0)
-        if (mapActions?.melee) iniDelta += -3
-        if (mapActions?.multi) iniDelta += -5
+        if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) {
+          iniDelta += -3
+          if (mapActions.melee.length > 1) iniDelta += -5
+        }
         if (mapActions?.attack?.cover_shot) {
           iniDelta += state.cover === 'important' ? -5 : -3
         }
@@ -1865,26 +1867,20 @@ const initSocket = (io) => {
         }
 
         // Phase 1 : intention enregistrée sans validation distance (vérifiée en Phase 2)
-        if (mapActions?.melee && typeof mapActions.melee === 'object') {
-          const { targetTokenId: meleeTargetId, weaponInvId: meleeWeaponId } = mapActions.melee
-          if (meleeTargetId) {
-            actionRows.push({
-              campaign_id: campaignId, token_id: tokenId,
-              action_key: 'melee', type: 'melee', sequence: 3,
-              weapon_inv_id: meleeWeaponId ?? null,
-              target_token_id: meleeTargetId,
-              modifiers: JSON.stringify({ ini_mod: -3 }),
-              status: 'pending',
-            })
+        // mapActions.melee est un array : [{ targetTokenId, weaponInvId }, ...]
+        if (Array.isArray(mapActions?.melee)) {
+          for (const { targetTokenId: meleeTargetId, weaponInvId: meleeWeaponId } of mapActions.melee) {
+            if (meleeTargetId) {
+              actionRows.push({
+                campaign_id: campaignId, token_id: tokenId,
+                action_key: 'melee', type: 'melee', sequence: 3,
+                weapon_inv_id: meleeWeaponId ?? null,
+                target_token_id: meleeTargetId,
+                modifiers: JSON.stringify({ ini_mod: -3 }),
+                status: 'pending',
+              })
+            }
           }
-        }
-
-        if (mapActions?.multi) {
-          actionRows.push({
-            campaign_id: campaignId, token_id: tokenId,
-            action_key: 'multi_attack', type: 'micro', sequence: 2,
-            modifiers: JSON.stringify({ ini_mod: -5 }), status: 'pending',
-          })
         }
 
         if (mapActions?.interact) {
@@ -2047,9 +2043,13 @@ const initSocket = (io) => {
           .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending' })
           .orderBy('sequence', 'asc')
 
-        // Résolution action par action
+        // Séparer melee (traitement séquentiel multi-attaque) du reste
+        const nonMeleeActions = actions.filter(a => a.type !== 'melee')
+        const meleeActions    = actions.filter(a => a.type === 'melee')
+
+        // Résolution actions non-melee (move, assault, reload, micro)
         let needsDefenseWait = false
-        for (const action of actions) {
+        for (const action of nonMeleeActions) {
           if (action.type === 'move_short' || action.type === 'move_long') {
             const tx = action.target_pos_x
             const ty = action.target_pos_y
@@ -2081,13 +2081,22 @@ const initSocket = (io) => {
             }
           } else if (action.type === 'reload') {
             await resolveReloadAction(io, socket, campaignId, character, action)
-          } else if (action.type === 'melee') {
-            needsDefenseWait = await resolveMeleeAction(io, socket, campaignId, action, character)
           }
           // micro / skip : resolved direct, pas d'effet V1
           await db('combat_actions')
             .where({ id: action.id })
             .update({ status: 'resolved', updated_at: db.fn.now() })
+        }
+
+        // Résolution melee : marquer toutes les rows resolved upfront, puis traiter séquentiellement
+        if (meleeActions.length > 0) {
+          for (const a of meleeActions) {
+            await db('combat_actions').where({ id: a.id }).update({ status: 'resolved', updated_at: db.fn.now() })
+          }
+          needsDefenseWait = await resolveMeleeAction(
+            io, socket, campaignId, meleeActions[0], character,
+            meleeActions.slice(1), meleeActions.length
+          )
         }
 
         // Slot bloqué si on attend le jet de défense d'un PJ
@@ -2292,6 +2301,8 @@ const initSocket = (io) => {
         characterIdCible, char_sheet_id_cible,
         for_na_cible, con_na_cible, vol_na_cible,
         targetName, userId,
+        remainingMeleeActions: pendingRemainingMelee = [],
+        totalMeleeCount: pendingTotalMeleeCount = 1,
       } = pending
 
       try {
@@ -2454,13 +2465,34 @@ const initSocket = (io) => {
           }
         }
 
-        // 5. Avance le slot (débloque le combat)
-        const state = await db('combat_state').where({ campaign_id: meleeCampaignId }).first()
-        const slots = await db('combat_roster')
-          .where({ campaign_id: meleeCampaignId, status: 'active', has_announced: true })
-          .orderBy('initiative', 'desc')
-          .select('token_id', 'initiative')
-        await advanceSlot(io, meleeCampaignId, slots, state.active_slot_idx + 1)
+        // 5. Attaque suivante (CaC 4b multi-attack) ou avance le slot
+        if (pendingRemainingMelee.length > 0) {
+          const [nextAction, ...restActions] = pendingRemainingMelee
+          const allSockets = await io.fetchSockets()
+          const attackerSocket = allSockets.find(
+            s => s.campaignId === meleeCampaignId && s.user?.id === attackerCharacter.user_id
+          ) || socket
+          const waitForNext = await resolveMeleeAction(
+            io, attackerSocket, meleeCampaignId,
+            nextAction, attackerCharacter,
+            restActions, pendingTotalMeleeCount
+          )
+          if (!waitForNext) {
+            const state = await db('combat_state').where({ campaign_id: meleeCampaignId }).first()
+            const slots = await db('combat_roster')
+              .where({ campaign_id: meleeCampaignId, status: 'active', has_announced: true })
+              .orderBy('initiative', 'desc')
+              .select('token_id', 'initiative')
+            await advanceSlot(io, meleeCampaignId, slots, state.active_slot_idx + 1)
+          }
+        } else {
+          const state = await db('combat_state').where({ campaign_id: meleeCampaignId }).first()
+          const slots = await db('combat_roster')
+            .where({ campaign_id: meleeCampaignId, status: 'active', has_announced: true })
+            .orderBy('initiative', 'desc')
+            .select('token_id', 'initiative')
+          await advanceSlot(io, meleeCampaignId, slots, state.active_slot_idx + 1)
+        }
       } catch (err) {
         console.error('[WS] COMBAT_MELEE_DEFENSE_CONFIRM error:', err.message)
       }
@@ -2730,7 +2762,7 @@ function countAdversaires(tokenPos, rosterTokens, excludeId, enemyType) {
 // ─── RÉSOLUTION RECHARGEMENT ────────────────────────────────────────────────
 // Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='melee'.
 // Retourne true si le slot doit rester bloqué (défenseur PJ en attente), false sinon.
-async function resolveMeleeAction(io, socket, campaignId, action, character) {
+async function resolveMeleeAction(io, socket, campaignId, action, character, remainingMeleeActions = [], totalMeleeCount = 1) {
   try {
     const weaponInvId   = action.weapon_inv_id ?? null
     const targetTokenId = action.target_token_id
@@ -2836,7 +2868,10 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
       countAdversaires(myTokenPos, rosterTokens, action.token_id, atkEnemyType)
     )
 
-    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant - carenceAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant
+    // CaC 4b — malus attaque multiple (LdB p.218) : −5 pour 2 attaques, −7 pour 3+
+    const multiAttackMalus = totalMeleeCount === 2 ? -5 : totalMeleeCount >= 3 ? -7 : 0
+
+    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant - carenceAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant + multiAttackMalus
 
     // Roll attaquant
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
@@ -2940,6 +2975,9 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
       vol_na_cible,
       targetName,
       userId: character.user_id,
+      // CaC 4b — attaque multiple
+      remainingMeleeActions,
+      totalMeleeCount,
     }
 
     // ── 4. PNJ défenseur : auto-résolution ────────────────────────────────────
@@ -3049,6 +3087,14 @@ async function resolveMeleeAction(io, socket, campaignId, action, character) {
         })
       }
 
+      // CaC 4b — attaque suivante si multi-attack
+      if (remainingMeleeActions.length > 0) {
+        return await resolveMeleeAction(
+          io, socket, campaignId,
+          remainingMeleeActions[0], character,
+          remainingMeleeActions.slice(1), totalMeleeCount
+        )
+      }
       return false  // slot avance immédiatement
     }
 

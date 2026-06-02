@@ -84,7 +84,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [moveTick,          setMoveTick]          = useState(0)
   const [assaultSelections, setAssaultSelections] = useState({})   // tokenId -> { targetTokenId }
   const [declareError,      setDeclareError]      = useState(null)
-  const [meleeSelections,   setMeleeSelections]   = useState({})   // tokenId -> { targetTokenId }
+  const [meleeSelections,   setMeleeSelections]   = useState({})   // tokenId -> { targets: [id, ...] }
+  const [meleeAttackCount,  setMeleeAttackCount]  = useState(1)    // 1|2|3 — pour le batch CaC courant
   const [equipment,         setEquipment]         = useState({})   // tokenId -> { characterId, weapon, armorPieces }
   const [attackTick,        setAttackTick]        = useState(0)
   const [meleeTick,         setMeleeTick]         = useState(0)
@@ -209,12 +210,21 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     }
 
     const onTargetSelected = (targetTokenId) => {
-      setMeleeSelections(prev => ({ ...prev, [tokenId]: { targetTokenId } }))
+      setMeleeSelections(prev => {
+        const existing = prev[tokenId]?.targets ?? []
+        return { ...prev, [tokenId]: { targets: [...existing, targetTokenId] } }
+      })
       meleeQueueIdxRef.current = meleeQueueIdxRef.current + 1
       setMeleeTick(t => t + 1)
     }
     const onCancel = () => {
-      meleeQueueIdxRef.current = meleeQueueIdxRef.current + 1
+      // Passer CaC : sauter toutes les sélections restantes pour ce PNJ + nettoyer partial
+      const queue = meleeQueueRef.current
+      const currentId = tokenId
+      let newIdx = meleeQueueIdxRef.current + 1
+      while (newIdx < queue.length && queue[newIdx] === currentId) newIdx++
+      meleeQueueIdxRef.current = newIdx
+      setMeleeSelections(prev => { const n = { ...prev }; delete n[currentId]; return n })
       setMeleeTick(t => t + 1)
     }
     meleeCancelRef.current = onCancel
@@ -386,7 +396,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     return calcIniDelta(
       getInitialStates(entry),
       sel.states,
-      { move: pendingGmMoves[tokenId] ?? null, attack: null, melee: meleeSelections[tokenId] ? true : null, multi: sel.mapAction === 'multi' },
+      { move: pendingGmMoves[tokenId] ?? null, attack: null,
+        melee: meleeSelections[tokenId]?.targets?.length > 0 ? meleeSelections[tokenId].targets : null },
       sel.quick,
     )
   }
@@ -450,15 +461,15 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       const assault    = assaultSelections[tokenId]
       const weapon     = equipment[tokenId]?.weapon
       const chargeInfo = chargeSelections[tokenId]
-      const meleeTgt   = chargeInfo?.targetTokenId
-        ? chargeInfo.targetTokenId
-        : meleeSelections[tokenId]?.targetTokenId ?? null
-      const meleeCaC = meleeTgt
-        ? {
-            targetTokenId: meleeTgt,
-            weaponInvId: (weapon && !weapon.ref_fire_mode) ? weapon.inv_id : null,
-          }
-        : null
+      // Charge : 1 cible unique (toujours monoattaque LdB)
+      // Melee normal/offensif : array de cibles (meleeAttackCount)
+      const weaponInvIdForMelee = (weapon && !weapon.ref_fire_mode) ? weapon.inv_id : null
+      const meleeCaC = chargeInfo?.targetTokenId
+        ? [{ targetTokenId: chargeInfo.targetTokenId, weaponInvId: weaponInvIdForMelee }]
+        : (meleeSelections[tokenId]?.targets ?? []).map(tgtId => ({
+            targetTokenId: tgtId,
+            weaponInvId:   weaponInvIdForMelee,
+          }))
       // Charge : move inclus et gratuit (ini_mod=0)
       const movePayload = chargeInfo?.move ?? (pendingGmMoves[tokenId] ?? null)
       socket.emit(WS.COMBAT_ACTION_DECLARE, {
@@ -475,9 +486,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             isDualWield:        false,
             dualWieldBonusComp: 0,
           } : null,
-          melee:    meleeCaC,
+          melee:    meleeCaC.length > 0 ? meleeCaC : null,
           reload:   sel.mapAction === 'reload',
-          multi:    sel.mapAction === 'multi',
+          multi:    false,
           interact: sel.mapAction === 'interact',
         },
         quick: { ...sel.quick },
@@ -549,7 +560,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setMeleePendingMode(false)
     setAssaultSelections(prev => { const n={...prev}; targetIds.forEach(id=>delete n[id]); return n })
     setChargeSelections(prev => { const n={...prev}; targetIds.forEach(id=>delete n[id]); return n })
-    meleeQueueRef.current    = [...targetIds]
+    setMeleeSelections(prev => { const n={...prev}; targetIds.forEach(id=>delete n[id]); return n })
+    // Queue étendue : N sélections de cible par PNJ (meleeAttackCount)
+    meleeQueueRef.current    = targetIds.flatMap(id => Array(meleeAttackCount).fill(id))
     meleeQueueIdxRef.current = 0
     setMeleeTick(t => t + 1)
   }
@@ -821,9 +834,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         {/* PANNEAU DROIT — Mode CaC (apparaît quand melee actif) */}
         {isMeleeSetup && activeFocusId && (() => {
           const curMode = getSel(activeFocusId).combatMode ?? 'normal'
-          const meleeSel  = meleeSelections[activeFocusId]
+          const meleeSel     = meleeSelections[activeFocusId]
+          const meleeTargets = meleeSel?.targets ?? []
           const chargeSel = chargeSelections[activeFocusId]
-          const meleeTgt  = meleeSel ? tokens.find(t => t.id === meleeSel.targetTokenId) : null
+          const meleeTgt  = meleeTargets.length > 0 ? tokens.find(t => t.id === meleeTargets[0]) : null
           const chargeTgt = chargeSel?.targetTokenId ? tokens.find(t => t.id === chargeSel.targetTokenId) : null
           const meleeWeapon = equipment[activeFocusId]?.weapon && !equipment[activeFocusId].weapon.ref_fire_mode
             ? equipment[activeFocusId].weapon : null
@@ -861,6 +875,31 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               </div>
 
               {/* Statut / feedback */}
+              {/* Nombre d'attaques — masqué en Défensif/Retraite/Charge */}
+              {curMode !== 'defensif' && curMode !== 'retraite' && curMode !== 'charge' && (
+                <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                  {[
+                    { n: 1, label: '1' },
+                    { n: 2, label: '2 (−5)' },
+                    { n: 3, label: '3 (−7)' },
+                  ].map(({ n, label }) => (
+                    <div
+                      key={n}
+                      title={n === 1 ? 'Une attaque — aucun malus.' : `${n} attaques — malus −${n === 2 ? 5 : 7} à tous les jets (LdB p.218).`}
+                      onClick={() => { setMeleeAttackCount(n); setMeleeSelections(prev => { const np={...prev}; targetIds.forEach(id=>{ if(np[id]?.targets) np[id]={ targets: np[id].targets.slice(0,n) } }); return np }) }}
+                      style={{
+                        padding: '3px 7px', borderRadius: 3, cursor: 'pointer', fontSize: 9,
+                        border: `1px solid ${meleeAttackCount === n ? '#70c070' : '#2a3a2a'}`,
+                        background: meleeAttackCount === n ? 'rgba(112,192,112,0.12)' : 'rgba(255,255,255,0.02)',
+                        color: meleeAttackCount === n ? '#70c070' : '#7a9a7a',
+                        fontWeight: meleeAttackCount === n ? 600 : 400,
+                      }}
+                    >{label}</div>
+                  ))}
+                  <span style={{ fontSize: 9, color: '#506050', alignSelf: 'center' }}>attaque(s)</span>
+                </div>
+              )}
+
               {(curMode === 'defensif') && (
                 <div style={{ fontSize: 9, color: '#8ab4f0', fontStyle: 'italic' }}>
                   Aucune attaque — +3 en défense si attaqué
@@ -882,15 +921,27 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               {isQueueTarget && (
                 <div style={{ fontSize: 9, color: '#70c070' }}>⚔ Cliquez sur la cible CaC</div>
               )}
-              {meleeSel && meleeTgt && (
+              {meleeTargets.length > 0 && (
                 <div style={{ marginTop: 4 }}>
-                  <div style={{ fontSize: 9, color: '#3a6a3a', marginBottom: 3 }}>CIBLE</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ fontSize: 11, color: '#70c870', fontWeight: 600 }}>{meleeTgt.label}</span>
-                    <span style={{ fontSize: 8, color: '#507050', fontFamily: 'monospace' }}>
-                      {meleeWeapon ? (meleeWeapon.ref_name ?? 'arme') : 'mains nues'}
-                    </span>
+                  <div style={{ fontSize: 9, color: '#3a6a3a', marginBottom: 3 }}>
+                    {meleeTargets.length > 1 ? `CIBLES (${meleeTargets.length})` : 'CIBLE'}
                   </div>
+                  {meleeTargets.map((tgtId, i) => {
+                    const t = tokens.find(tk => tk.id === tgtId)
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                        {meleeTargets.length > 1 && (
+                          <span style={{ fontSize: 8, color: '#3a6a3a', minWidth: 10 }}>{i + 1}.</span>
+                        )}
+                        <span style={{ fontSize: 11, color: '#70c870', fontWeight: 600 }}>{t?.label ?? '?'}</span>
+                        {i === 0 && (
+                          <span style={{ fontSize: 8, color: '#507050', fontFamily: 'monospace' }}>
+                            {meleeWeapon ? (meleeWeapon.ref_name ?? 'arme') : 'mains nues'}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
               {chargeSel && (
