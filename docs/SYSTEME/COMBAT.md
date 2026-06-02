@@ -635,7 +635,7 @@ Le radius de chaque zone = `allures[allureKey]` — calculé depuis COO_na + ath
 ### Actions inactives (SECTIONS — non implémentées)
 `active: false` → grayed out, non cliquable dans CombatActionWindow :
 - `micro_delay` — Retarder son action (V2)
-- `multi_attack` — Attaque multiple (sprint futur)
+- `multi_attack` — Placeholder initial, désormais **dead** pour melee (remplacé par le count selector dans le panel melee, Sprint CaC 4b). À réutiliser pour le Sprint Tir Multi (attaques multiples de tir contre cibles différentes, LdB p.218).
 - `change_fire_mode` — Changer le mode de tir (sprint futur)
 
 ## COMBAT_ACTION_CONFIRM — payload confirmedModifiers

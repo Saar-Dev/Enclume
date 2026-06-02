@@ -310,7 +310,8 @@ Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation doc
 | Sprint CaC 2 | Migration 64 (`state_combat_mode`), modes Normal/Offensif/Charge PJ+PNJ, `handleChargeFlow`, bonus attaque/défense/dégâts | ✅ session 68 |
 | Sprint CaC 3 | Modes Défensif (+3) / Retraite (+5) PJ+PNJ, `handleRetraiteMove`, `freeMove` étendu à retraite | ✅ session 68 |
 | Sprint CaC 4a | Multi-adversaires (−5/−7/−10 LdB) : critère positionnel + allonge, alerte ⚠ UI | ✅ session 72 |
-| Sprint CaC 4b | Attaque multiple (2 ou 3 cibles, −5/−7 malus LdB p.218) — UI PJ séquentielle + GM queue étendue | 🔲 |
+| Sprint CaC 4b | Attaque multiple melee (2 ou 3 cibles, −5/−7 malus LdB p.218) — UI PJ séquentielle + GM queue étendue | ✅ session 74 |
+| Sprint Tir Multi | Attaque multiple de tir contre cibles différentes (LdB p.218) — même règle que CaC 4b mais pour le tir : 2/3 tests distincts, −5/−7 malus, cibles séparées. Distinct des modes de tir CC/RC/RL (qui ciblent une seule cible avec bonus). | 🔲 |
 
 ### Client — Dashboard
 | Tâche | État |
