@@ -1,3 +1,21 @@
+## v73 — 2026-06-01 — Correctifs UX & Playground
+
+### Dashboard
+- [fix] Boutons Créer/Rejoindre asymétriques → deux cartes identiques avec formulaire inline (filigrane + et →)
+- [add] Carte "Rejoindre une campagne" avec champ pré-rempli #code-invitation toujours visible
+
+### Playground — Tokens
+- [fix] Étiquettes de nom des tokens ne faisaient pas face à la caméra (Billboard drei)
+- [fix] Couleur des étiquettes ne correspondait pas à la couleur du joueur (user_color via JOIN)
+- [fix] Drag & Drop imprécis sur terrain plat : token snappe désormais au centre de la case
+- [fix] Drag & Drop décalé sur terrain en altitude : raycast voxel remplace plan y=0
+
+### Fiche personnage
+- [add] Panel description compétence : bouton ⓘ sur chaque compétence → panel fixe avec texte complet du LdB (scrollable, fermeture clic extérieur)
+
+### Chat
+- [fix] Messages partagés entre toutes les campagnes → chaque campagne conserve son propre historique
+
 ## v72 — 2026-06-01 — Multi-adversaires Corps à Corps
 
 ### Combat — Corps à corps

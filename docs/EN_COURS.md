@@ -396,8 +396,9 @@ Hors scope : combat (12), équipement (6). SkillTooltips : roadmap.
 **Prochains chantiers :**
 - Sprint Test de Choc suite : guard is_stunned dans COMBAT_ACTION_DECLARE + clear logique (PC42)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, non implémenté côté UI)
-- **Sprint Tooltips Compétences** : ajouter un `(i)` cliquable avant/après le nom de chaque compétence dans la fiche personnage → tooltip affichant la description de la compétence. À lire avant : modèle de données skills, `ref_equipment_skills`, routes `/api/char-ref`, `SkillsPanel.jsx` / `AdvantagesPanel.jsx`. Lien CLAUDE.md : "SkillTooltips : roadmap" (noté depuis session 66).
-- **Sprint Évolution skills coût doublé** : dans Polaris LdB, certaines compétences ont un coût d'augmentation doublé (ou triplé). À faire : (1) identifier ces compétences depuis le LdB + les tooltips, (2) ajouter un champ `level_cost_multiplier` dans `ref_equipment_skills` ou dans un fichier de constantes partagé, (3) adapter le calcul de coût dans le panneau compétences. Dépend du Sprint Tooltips pour l'identification.
+- **Sprint Tooltips Compétences ✅ Session 73** : bouton ⓘ + panel position:fixed (description LdB, scrollable, click-outside) dans SkillsPanel.jsx. description déjà en DB ref_skills, zéro travail serveur.
+- **Sprint Évolution skills coût doublé — SUSPENDU** : le "coût doublé" Polaris concerne les compétences réservées (X) hors profession (règle contextuelle par personnage, pas propriété fixe par compétence). Feature suspendue.
+- **Notification entité interactive** — sablier animé au-dessus de l'entité côté joueur (en attente du GM) + bouton rouge dans l'onglet chat GM. Sprint futur.
 - Sprint CaC 4 — modes avancés, multi-adversaires (priorité basse)
 - Sprint Waypoints — priorité basse
   - Waypoints = partie intégrante de la déclaration serveur (pas juste visuel)

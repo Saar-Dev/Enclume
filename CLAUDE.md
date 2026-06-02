@@ -134,6 +134,12 @@ Toute décision non documentée est considérée comme nulle.
 **Session 72 ✅ :**
 - **Sprint CaC 4a — Multi-adversaires** : malus −5/−7/−10 (LdB p.224), critère positionnel (dist ≤ 3+allonge), requête roster unique, alerte ⚠ prompt défense PJ + panneau résultat melee ✅
 
+**Session 73 ✅ :**
+- **Correctifs Dashboard** : deux cartes Créer/Rejoindre symétriques (filigrane +/→, formulaires inline) ✅
+- **Correctifs Playground** : Billboard étiquettes ✅, couleur user_color via JOIN ✅, drag snap case + raycastVoxelColumn altitude ✅
+- **Panel description compétences** : bouton ⓘ → panel position:fixed, texte LdB, click-outside ✅
+- **Chat par campagne** : sessionStore messagesByCampaign, historique isolé par campaignId ✅
+
 **Serveur Alpha "Kiwi" :** `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md`
 
 **"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
@@ -142,7 +148,7 @@ Toute décision non documentée est considérée comme nulle.
 - **Sprint CaC 4b — Attaque multiple** : déclarer 2 ou 3 attaques melee (−5/−7 LdB), UI sélection séquentielle PJ, GM queue étendue, server N rows melee
 - Sprint Test de Choc suite — guard is_stunned COMBAT_ACTION_DECLARE + clear logique (PC42)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, UI non implémentée)
-- **Sprint Tooltips Compétences** — `(i)` sur chaque skill dans la fiche → tooltip description LdB
+- **Notification entité interactive** — sablier joueur au-dessus de l'entité + bouton rouge GM dans chat (en attente du GM)
 - Sprint Page Santé Serveur — priorité basse (Session 71 ✅)
 
 **Bug ouvert :**

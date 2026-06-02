@@ -29,7 +29,7 @@ Enclume/
 │   │   │   ├── CombatGmDeclareWindow.jsx # Réécriture complète 65 Sprint GM. Modifié 66 — draggable. Modifié 65 Sprint GM-B — queue déplacement PNJ séquentiel. Modifié 67 Sprint CaC 1 — +meleeSelections + meleeQueueRef + handleStartMeleeQueue. Modifié 68 Sprint CaC 2 — panneau droit 720px (isMeleeSetup), meleePendingMode (chips avant queue), chargeQueueRef (queue combinée move+cible), batch libre (type guard supprimé, filter(isRanged) uniquement dans handleStartAttackQueue), getSel +combatMode, handleDeclare +charge move+melee, isMeleeActive couvre charge
 │   │   │   ├── CombatInitStateWindow.jsx # NOUVEAU 65 Sprint 7.6 — fenêtre joueur phase ROSTER : sélection état initial (position/arme/mode de tir), StateChip click-to-cycle, draggable, emit COMBAT_INIT_STATE. Affiché par CombatOverlay.
 │   │   │   ├── combatSections.js       # Modifié 65 Sprint 7.6 — STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS, MOVE_ZONE_DEFS. Modifié 67 Sprint 7.6 — +reload dans MAP_ACTIONS (span2, après melee), +span2 sur move, EXCLUSIVE_ACTIONS dans CombatActionWindow
-│   │   │   ├── Canvas3D.jsx            # Modifié 64 — +combatTargetMode prop, combatTargetModeRef (P40), intercept drag→target, ligne R3F attaquant→cible (useMemo targetLinePoints). Modifié 65 Sprint Pathfinding — A* Chebyshev temps réel (cases colorées par allure, murs respectés). Modifié 65 Sprint Raycast — raycastVoxelColumn via fast-voxel-raycast (remplace plan y=0 fixe, précis sur terrain élevé). Modifié 70 — TokenGlbBody + TokenFallbackBody + TokenGlbErrorBoundary, HARDCODED_DEFAULT_TOKEN_URL=/models/default.glb, prop defaultTokenGlbUrl, hiérarchie fallback 4 niveaux
+│   │   │   ├── Canvas3D.jsx            # Modifié 64 — +combatTargetMode prop, combatTargetModeRef (P40), intercept drag→target, ligne R3F attaquant→cible (useMemo targetLinePoints). Modifié 65 Sprint Pathfinding — A* Chebyshev temps réel (cases colorées par allure, murs respectés). Modifié 65 Sprint Raycast — raycastVoxelColumn via fast-voxel-raycast (remplace plan y=0 fixe, précis sur terrain élevé). Modifié 70 — TokenGlbBody + TokenFallbackBody + TokenGlbErrorBoundary, HARDCODED_DEFAULT_TOKEN_URL=/models/default.glb, prop defaultTokenGlbUrl, hiérarchie fallback 4 niveaux. Modifié 73 — Billboard drei sur étiquettes tokens (billboarding), color=user_color||token.color||'#4A90D9', drag snappedX/Z (snap case), raycastVoxelColumn +rawX/rawZ, drag utilise raycastVoxelColumn (précision altitude)
 │   │   │   ├── Editor3D.jsx            # Modifié 9C — EntityEditorScene, activeEditorTab
 │   │   │   ├── EntityMesh.jsx          # Modifié 43 — Lerp 300ms EntityMeshVoxel + EntityMeshGlb
 │   │   │   ├── EntityBuilderTab.jsx    # Modifié 40 — refonte formulaire interactions SkillCheck/Déplacement
@@ -37,7 +37,7 @@ Enclume/
 │   │   │   ├── RadialMenu.jsx          # Modifié 41 — tranche displacement, grisage portée, onMove
 │   │   │   ├── EntityInstancePanel.jsx # Modifié 36 — sélecteur état actuel
 │   │   │   ├── Voxel.jsx               # Stable 9A-5
-│   │   │   ├── Sidebar.jsx             # Modifié 64 Sprint 7.4 — +rendu interactionType='combat_damage' (dégâts colorés par sévérité). Modifié 36 — entity_action structuré. Modifié 65 Sprint DicePanel v3 — +🔒 dans diceHeader si msg.secret
+│   │   │   ├── Sidebar.jsx             # Modifié 64 Sprint 7.4 — +rendu interactionType='combat_damage' (dégâts colorés par sévérité). Modifié 36 — entity_action structuré. Modifié 65 Sprint DicePanel v3 — +🔒 dans diceHeader si msg.secret. Modifié 73 — messages depuis messagesByCampaign[activeCampaignId]
 │   │   │   ├── GeometryIcon.jsx        # Stable 9A-3
 │   │   │   ├── DicePanel.jsx           # Réécriture complète 65 Sprint DicePanel v3. Modifié 66 — favoris inline form, section MACROS (chips ★, form création 3 dropdowns, preview seuil live, fix GM effectiveCharId) — roue radiale SVG (PCBBackground, DieShape, DieButton), formule mono-type {k,n,mod}, favoris localStorage, historique local socket, JET AU MJ fonctionnel, useAuthStore direct, drag conservé
 │   │   │   ├── DiceMesh.jsx            # NOUVEAU 44 — géométries, matériaux, animation, Html overlay D10. Modifié 65 — branche D20 dédiée supprimée → D20 passe par faceNormal→D20_GLB_NORMALS (normales Blender exactes)
@@ -49,8 +49,8 @@ Enclume/
 │   │   ├── lib/
 │   │   │   └── useDraggable.js         # NOUVEAU 66 — hook partagé drag+localStorage+clamp (storageKey, defaultPos, panelW)
 │   │   │   ├── RegisterPage.jsx
-│   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover. Modifié 66 — layout flex+ChangelogPanel. Modifié 68 — formulaires inline. Modifié 69 — document.title 'Enclume — Tableau de bord'
-│   │   │   ├── SessionPage.jsx         # Modifié 64-66 — combat, dés. Modifié 69 — document.title dynamique. Modifié 70 — defaultTokenGlbUrl. Modifié 71 — +updateCharacter destructure, +3 listeners wound (WOUND_ADDED/UPDATED/REMOVED → updateCharacter({id,worst_wound_severity})), +actionTimerSec prop CombatOverlay
+│   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover. Modifié 66 — layout flex+ChangelogPanel. Modifié 68 — formulaires inline. Modifié 69 — document.title 'Enclume — Tableau de bord'. Modifié 73 — deux cartes Créer/Rejoindre symétriques (filigrane +/→, formulaires inline, refs focus, suppression actionsRow/showCreate/showJoin)
+│   │   │   ├── SessionPage.jsx         # Modifié 64-66 — combat, dés. Modifié 69 — document.title dynamique. Modifié 70 — defaultTokenGlbUrl. Modifié 71 — +updateCharacter destructure, +3 listeners wound (WOUND_ADDED/UPDATED/REMOVED → updateCharacter({id,worst_wound_severity})), +actionTimerSec prop CombatOverlay. Modifié 73 — setActiveCampaign(campaignId) début useEffect socket
 │   │   │   ├── CampaignSettingsPage.jsx # Modifié 66 Sprint 7.5 — section Règles de jeu. Modifié 68 Sprint Timer — +actionTimerSec. Modifié 69 — document.title. Modifié 70 — section Tokens 3D : upload/réinitialiser default_token_glb_url, feedback succès/erreur
 │   │   │   ├── WorkshopPage.jsx        # Modifié 69 — canDelete (isOwner || !created_by), Export/Supprimer séparés, document.title 'Enclume — Atelier'
 │   │   │   └── TexturePacksPage.jsx    # CONSERVÉ mais remplacé par WorkshopPage
@@ -60,7 +60,7 @@ Enclume/
 │   │   │   ├── characterStore.js       # Modifié 44 — upsertCharacter guard visible+isGm (Bug A)
 │   │   │   ├── combatStore.js          # Modifié 62 — phase/roster/actions/currentTurn/activeSlotIdx/markTokenAnnounced + setActions + advanceSlot
 │   │   │   ├── mapStore.js
-│   │   │   ├── sessionStore.js
+│   │   │   ├── sessionStore.js         # Modifié 73 — messages[]→messagesByCampaign{}, activeCampaignId, setActiveCampaign. resetSession mis à jour (était dead code)
 │   │   │   └── entityStore.js          # Modifié 34 — fetchBlueprints() ajouté
 │   │   ├── character/
 │   │   │   ├── WeaponPanel.jsx         # NOUVEAU 55 — armes équipées MG/MD, stats, munitions chargées, rechargement, équipement. Modifié 66 Sprint 7.5 — affichage ammo_remaining/ammo_count (rouge si vide), picker variantes ammo, POST /reload
@@ -70,10 +70,11 @@ Enclume/
 │   │   │   ├── ContainerPanel.jsx      # NOUVEAU 54 — Sac/Ceinture/Coffre — équipement conteneur
 │   │   │   ├── SilhouettePanel.jsx     # NOUVEAU 54 — SVG silhouette colorée par blessures, 50% width
 │   │   │   ├── AdvantagesPanel.jsx     # Modifié 50 — rework lift-state-up, props charSkills/refSkillsPolaris/onSkillLearnedChange
+│   │   │   ├── SkillsPanel.jsx         # Modifié 73 — bouton ⓘ par compétence (si description non nulle), panel position:fixed (description LdB complet, scrollable, click-outside via useEffect+ref)
 │   │   │   ├── CharacterSheet.jsx      # Modifié 61 — import calcAN/calcAllureMoy/calcAllures shared, déf locales supprimées
 │   │   │   └── CharacterWindow.jsx     # Modifié 55 — WeaponPanel monté entre ArmorWoundPanel et InventoryPanel
 │   │   ├── locales/
-│   │   │   └── fr.json                 # Modifié 66 Sprint i18n — +20 sections : charSheet (~50 clés attrs/stats/bio/tooltips LdB), builder (~55 clés faces/géométries/formulaires), advantages (24), skillsPanel (6), radialMenu, entityPanel, changelog + ajouts dans auth/dashboard/session/settings/sidebar/workshop/character
+│   │   │   └── fr.json                 # Modifié 66 Sprint i18n — +20 sections : charSheet (~50 clés attrs/stats/bio/tooltips LdB), builder (~55 clés faces/géométries/formulaires), advantages (24), skillsPanel (6), radialMenu, entityPanel, changelog + ajouts dans auth/dashboard/session/settings/sidebar/workshop/character. Modifié 73 — +dashboard.joinCard, dashboard.codePlaceholder
 │   │   ├── lib/
 │   │   │   ├── api.js                  # Modifié 69 — baseURL: `${VITE_API_URL}/api` (était hardcodé localhost:3001)
 │   │   │   ├── voxelTextures.js
@@ -95,7 +96,7 @@ Enclume/
 │   │   ├── routes/
 │   │   │   ├── auth.js                 # Modifié 66 — /register : +inviteCode, timingSafeEqual, guard REGISTRATION_CODE
 │   │   │   ├── campaigns.js            # Modifié 45 — POST /:id/cover + cover_url dans GET /. Modifié 66 Sprint 7.5 — +pnj_unlimited_ammo. Modifié 67 Sprint 7.6 — +reload_mode (PUT validation + returning). Modifié 70 — import multerGlb, POST /:id/default-token (upload GLB MinIO), PUT accepte default_token_glb_url=null (réinitialisation)
-│   │   │   ├── battlemaps.js
+│   │   │   ├── battlemaps.js           # Modifié 73 — GET /:id LEFT JOIN characters+users → user_color dans SELECT tokens
 │   │   │   ├── tokens.js               # Modifié 39 — maintenance Redis collision map
 │   │   │   ├── characters.js           # Modifié 59 — type dans GET/POST/PUT/broadcastCharacterUpdate
 │   │   │   ├── textures.js

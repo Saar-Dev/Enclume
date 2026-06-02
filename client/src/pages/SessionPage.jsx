@@ -34,7 +34,7 @@ export default function SessionPage() {
     renameBattlemap, addBattlemap, removeBattlemap,
   } = useMapStore()
   const {
-    setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage,
+    setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage, setActiveCampaign,
   } = useSessionStore()
   const { setEntities, fetchBlueprints } = useEntityStore()
   const { setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster, advanceSlot, setActions, phase: combatPhase } = useCombatStore()
@@ -357,6 +357,7 @@ export default function SessionPage() {
   }, [battlemap?.id, characters, layer])
 
   useEffect(() => {
+    setActiveCampaign(campaignId)
     const s = io(import.meta.env.VITE_API_URL, { withCredentials: true })
     s.emit(WS.SESSION_JOIN, { campaignId })
 

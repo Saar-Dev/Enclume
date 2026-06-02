@@ -430,7 +430,8 @@ export default function Sidebar({
   const { t } = useTranslation()
   const { user, setUser } = useAuthStore()
   const { characters, members, isGm, addCharacter } = useCharacterStore()
-  const { messages, onlineUsers } = useSessionStore()
+  const { messagesByCampaign, activeCampaignId, onlineUsers } = useSessionStore()
+  const messages = messagesByCampaign[activeCampaignId] || []
   const { blueprints } = useEntityStore()
 
   const [activeTab, setActiveTab] = useState('chat')
