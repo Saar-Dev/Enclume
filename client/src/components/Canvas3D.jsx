@@ -18,6 +18,7 @@ import { useCharacterStore } from '../stores/characterStore'
 import { useAuthStore } from '../stores/authStore'
 import { useMapStore } from '../stores/mapStore'
 import { useEntityStore } from '../stores/entityStore'
+import { useSessionStore } from '../stores/sessionStore'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const GRID_SIZE = 50
@@ -372,6 +373,8 @@ function Scene({
     const handleEntityDeleted = ({ entityId }) => removeEntity(entityId)
     const handleEntityUpdated = ({ entityId, current_state_id, state, updated_at }) => {
       updateEntity({ id: entityId, current_state_id, state, updated_at })
+      const { pendingEntityId, clearPendingEntityId } = useSessionStore.getState()
+      if (pendingEntityId === entityId) clearPendingEntityId()
     }
     const handleEntityMoved = ({ entityId, pos_x, pos_y, pos_z, r, updated_at }) => {
       updateEntity({ id: entityId, pos_x, pos_y, pos_z, r, updated_at })

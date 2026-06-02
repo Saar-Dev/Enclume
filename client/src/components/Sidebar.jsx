@@ -436,6 +436,8 @@ export default function Sidebar({
 
   const [activeTab, setActiveTab] = useState('chat')
   const [toolsOpen, setToolsOpen] = useState(false)
+  const [pendingActionCount, setPendingActionCount] = useState(0)
+  const prevEntityActionCountRef = useRef(0)
   const [chatInput, setChatInput] = useState('')
   const [showHelp, setShowHelp] = useState(false)
 
@@ -534,6 +536,16 @@ export default function Sidebar({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // ─── Badge GM — actions entités en attente ───────────────────────────────
+  useEffect(() => {
+    if (!isGm) return
+    const count = messages.filter(m => m.type === 'entity_action').length
+    if (count > prevEntityActionCountRef.current) {
+      setPendingActionCount(prev => prev + (count - prevEntityActionCountRef.current))
+    }
+    prevEntityActionCountRef.current = count
+  }, [messages, isGm])
 
   // ─── ANIMATION dé — Option B ─────────────────────────────────────────────
   // Détecte le dernier message de type 'dice', stocke son id pendant 800ms,
@@ -811,6 +823,9 @@ export default function Sidebar({
           onClick={() => setActiveTab('chat')}
         >
           {t('sidebar.chat')}
+          {isGm && pendingActionCount > 0 && (
+            <span style={styles.pendingBadge}>{pendingActionCount}</span>
+          )}
         </button>
         <button
           style={{ ...styles.tab, ...(activeTab === 'persos' ? styles.tabActive : {}) }}
@@ -879,13 +894,13 @@ export default function Sidebar({
                         </div>
                       )}
                       <div style={styles.actionBtns}>
-                        <button style={styles.btnAccept} onClick={() => onEntityActionResolve?.(msg.requestId, true, false, 0)}>
+                        <button style={styles.btnAccept} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, true, false, 0) }}>
                           {t('sidebar.actionAccept')}
                         </button>
-                        <button style={styles.btnAuto} onClick={() => onEntityActionResolve?.(msg.requestId, true, true, 0)}>
+                        <button style={styles.btnAuto} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, true, true, 0) }}>
                           {t('sidebar.actionAuto')}
                         </button>
-                        <button style={styles.btnRefuse} onClick={() => onEntityActionResolve?.(msg.requestId, false, false, 0)}>
+                        <button style={styles.btnRefuse} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, false, false, 0) }}>
                           {t('sidebar.actionRefuse')}
                         </button>
                       </div>
@@ -2307,5 +2322,20 @@ const styles = {
     display: 'flex',
     gap: '6px',
     marginTop: '2px',
+  },
+  pendingBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#e05c5c',
+    color: '#fff',
+    borderRadius: '50%',
+    width: '14px',
+    height: '14px',
+    fontSize: '9px',
+    fontWeight: '700',
+    marginLeft: '4px',
+    verticalAlign: 'middle',
+    lineHeight: 1,
   },
 }

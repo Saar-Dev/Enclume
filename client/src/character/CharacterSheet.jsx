@@ -37,6 +37,18 @@ import { polarisRound, calcAN, calcAllureMoy, calcAllures } from '../../../share
 
 const ATTR_IDS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
 
+const ATTR_DESCRIPTIONS = {
+  FOR: "La Force est une mesure de la puissance brute d'un individu, sa capacité musculaire.",
+  CON: "La Constitution caractérise l'endurance d'un individu, sa santé, sa résistance à l'effort physique, aux poisons, aux maladies, aux traumatismes, aux conditions extrêmes.",
+  COO: "La Coordination détermine la coordination neuromusculaire du personnage, mais aussi plus largement son agilité physique, son sens de l'équilibre, la fluidité et la précision de ses gestes, de ses mouvements et de ses déplacements.",
+  ADA: "L'Adaptation représente la capacité du personnage à s'adapter à son environnement, et notamment à une situation qui change brutalement, les réflexes issus de son instinct de survie et la rapidité de sa réflexion.",
+  PER: "La Perception détermine l'acuité des cinq sens du personnage, mais aussi sa vigilance, l'attention qu'il porte à son environnement ou au comportement des gens, sa capacité à remarquer les petits détails du monde qui l'entoure.",
+  INT: "L'Intelligence mesure les capacités mentales d'un individu. C'est aussi sa faculté d'assimilation de nouvelles connaissances.",
+  VOL: "La Volonté détermine la résistance mentale d'une personne, sa capacité à maîtriser ses réactions en situation de stress et le temps pendant lequel elle peut maintenir sa concentration sur une action quelconque. C'est aussi sa persévérance, sa force de caractère et sa volonté de survivre face à l'adversité.",
+  PRE: "La Présence est une mesure de l'aura dégagée par une personne, de son charisme. Son importance est vitale dans toutes les actions relationnelles : séduire, impressionner, commander, intimider… Plus largement, cet attribut est utile pour s'intégrer dans un groupe, engager le dialogue avec des inconnus ou se faire de nouvelles relations.",
+  CHC: "La Chance est un Attribut particulier, qui représente la capacité du personnage à bénéficier de temps à autre d'un coup de pouce du destin. Utiliser sa Chance permet d'éviter certains événements malheureux, de relancer des dés lors de tests malchanceux, de réduire la gravité de certaines blessures ou même d'obtenir des indices et des petits bonus supplémentaires de la part du MJ. Le score de Chance est exprimé par un niveau, sur 20.",
+}
+
 // Labels attributs Polaris — voir fr.json charSheet.attr.* pour les traductions
 
 // AN_TABLE, calcAN, calcAllureMoy, calcAllures — importés depuis shared/polarisUtils.js
@@ -207,6 +219,9 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     () => calcAllures(naMap['COO'] || 3, athletismeTotal),
     [naMap, athletismeTotal]
   )
+
+  // ─── Tooltip hover attribut (même pattern que SecondaryField) ────────────
+  const [attrTooltip, setAttrTooltip] = useState(null)  // { description, top, left } | null
 
   // Cleanup timers debounce au démontage
   useEffect(() => {
@@ -629,9 +644,28 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
             <tr>
               <th style={s.th}></th>
               {ATTR_IDS.map(id => (
-                <th key={id} style={s.th}>{t(`charSheet.attr.${id}`)}</th>
+                <th
+                  key={id}
+                  style={{ ...s.th, cursor: 'help' }}
+                  onMouseEnter={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    setAttrTooltip({ description: ATTR_DESCRIPTIONS[id], top: rect.top, left: rect.left + rect.width / 2 })
+                  }}
+                  onMouseLeave={() => setAttrTooltip(null)}
+                >
+                  {t(`charSheet.attr.${id}`)}
+                </th>
               ))}
-              <th style={{ ...s.th, borderLeft: '2px solid #2a2a3e' }}>{t('charSheet.attrChance')}</th>
+              <th
+                style={{ ...s.th, borderLeft: '2px solid #2a2a3e', cursor: 'help' }}
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  setAttrTooltip({ description: ATTR_DESCRIPTIONS.CHC, top: rect.top, left: rect.left + rect.width / 2 })
+                }}
+                onMouseLeave={() => setAttrTooltip(null)}
+              >
+                {t('charSheet.attrChance')}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -744,15 +778,15 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
       <div style={s.block}>
         <div style={s.blockTitle}>{t('charSheet.sectionSecondary')}</div>
         <div style={s.secondaryGrid}>
-          <SecondaryField label={t('charSheet.secondary.reaction')}    value={secondary.rea} />
+          <SecondaryField label={t('charSheet.secondary.reaction')}    value={secondary.rea}          tooltip={t('charSheet.tooltip.reaction')} />
           <SecondaryField
             label={t('charSheet.secondary.initiative')}
             value={iniValue}
             tooltip={iniTooltip}
             valueStyle={effectiveMalus < 0 ? { color: '#e05c5c' } : undefined}
           />
-          <SecondaryField label={t('charSheet.secondary.seuilEtour')}  value={secondary.seuilEtour} />
-          <SecondaryField label={t('charSheet.secondary.seuilIncons')} value={secondary.seuilIncons} />
+          <SecondaryField label={t('charSheet.secondary.seuilEtour')}  value={secondary.seuilEtour}  tooltip={t('charSheet.tooltip.seuilEtour')} />
+          <SecondaryField label={t('charSheet.secondary.seuilIncons')} value={secondary.seuilIncons} tooltip={t('charSheet.tooltip.seuilIncons')} />
           <SecondaryField label={t('charSheet.secondary.allureLente')}   value={`${allures.lente} m/t`}   tooltip={t('charSheet.tooltip.allureLente')} />
           <SecondaryField label={t('charSheet.secondary.allureMoyenne')} value={`${allures.moyenne} m/t`} tooltip={t('charSheet.tooltip.allureMoyenne')} />
           <SecondaryField label={t('charSheet.secondary.allureRapide')}  value={`${allures.rapide} m/t`}  tooltip={t('charSheet.tooltip.allureRapide')} />
@@ -760,6 +794,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           <SecondaryField
             label={t('charSheet.secondary.modDom')}
             value={secondary.modDom >= 0 ? `+${secondary.modDom}` : secondary.modDom}
+            tooltip={t('charSheet.tooltip.modDom')}
           />
         </div>
       </div>
@@ -800,6 +835,17 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
         />
       </div>
 
+      {/* ─── Tooltip hover attribut ───────────────────────────────────────── */}
+      {attrTooltip && (
+        <div style={{
+          ...s.tooltip,
+          top: attrTooltip.top,
+          left: attrTooltip.left,
+          transform: 'translate(-50%, calc(-100% - 8px))',
+        }}>
+          {attrTooltip.description}
+        </div>
+      )}
 
     </div>
   )
@@ -1134,4 +1180,5 @@ const s = {
     pointerEvents: 'none',
     boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
   },
+
 }

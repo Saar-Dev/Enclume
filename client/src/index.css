@@ -544,3 +544,17 @@ DASHBOARD EXTENSION
   z-index: 1;
   margin-bottom: 12px;
 }
+/* ENTITY PENDING — sablier animé au-dessus de l'entité en attente du GM */
+@keyframes hourglass-flip {
+  0%, 40%  { transform: rotate(0deg); }
+  60%, 100% { transform: rotate(180deg); }
+}
+
+.entity-pending {
+  animation: hourglass-flip 1.2s ease-in-out infinite;
+  display: inline-block;
+  font-size: 18px;
+  filter: drop-shadow(0 0 5px rgba(255, 200, 0, 0.8));
+  pointer-events: none;
+  user-select: none;
+}

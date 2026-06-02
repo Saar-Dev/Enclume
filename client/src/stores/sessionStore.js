@@ -4,6 +4,7 @@ export const useSessionStore = create((set) => ({
   onlineUsers: new Set(),
   messagesByCampaign: {},   // { [campaignId]: Message[] }
   activeCampaignId: null,
+  pendingEntityId: null,    // entityId dont l'action attend l'arbitrage GM (un seul à la fois)
 
   setActiveCampaign: (campaignId) => set({ activeCampaignId: campaignId }),
 
@@ -31,10 +32,14 @@ export const useSessionStore = create((set) => ({
     }
   }),
 
+  setPendingEntityId: (entityId) => set({ pendingEntityId: entityId }),
+  clearPendingEntityId: () => set({ pendingEntityId: null }),
+
   // Vide tout l'état de session (usage futur : logout, tests)
   resetSession: () => set({
     onlineUsers: new Set(),
     messagesByCampaign: {},
     activeCampaignId: null,
+    pendingEntityId: null,
   }),
 }))

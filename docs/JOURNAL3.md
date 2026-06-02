@@ -1814,3 +1814,26 @@ Après relecture du LdB (SkillTooltips.md p.188), le "coût doublé" ne concerne
 **Note :** `resetSession` était dead code (jamais appelé nulle part). Conservé pour usage futur (logout).
 
 **Chat par campagne CONFIRMÉ FONCTIONNEL**
+
+### Correctif : Tooltips attributs primaires et secondaires (CharacterSheet)
+
+- `CharacterSheet.jsx` : constante `ATTR_DESCRIPTIONS` (9 entrées LdB), state `attrTooltip`, hover `onMouseEnter/Leave` sur chaque `<th>` attribut → tooltip `position: fixed` identique à `SecondaryField`. Même pattern hover pour REA, seuilEtour, seuilIncons, modDom via prop `tooltip` existante.
+- `fr.json` : +4 clés `charSheet.tooltip.reaction/seuilEtour/seuilIncons/modDom`
+
+**Tooltips attributs CONFIRMÉ FONCTIONNEL**
+
+### Feature : Notification "en attente du GM" — sablier entité + badge chat
+
+**Joueur :** sablier ⏳ animé au-dessus de l'entité interactive après `ENTITY_ACTION_REQUEST`. Disparaît sur `ENTITY_ACTION_RESULT` (refus/timeout) ou `ENTITY_UPDATED` (approuvé).
+
+**GM :** badge rouge numérique sur l'onglet "Chat" de la Sidebar — incrémente à chaque nouveau message `entity_action`, décrémente à chaque clic Accepter/Auto/Refuser.
+
+**Architecture :**
+- `sessionStore.js` : +`pendingEntityId`, `setPendingEntityId`, `clearPendingEntityId` (reset inclus dans `resetSession`)
+- `SessionPage.jsx` : `setPendingEntityId(entity.id)` après émission REQUEST, `clearPendingEntityId()` dans listener ENTITY_ACTION_RESULT
+- `Canvas3D.jsx` : import `useSessionStore`, `handleEntityUpdated` appelle `useSessionStore.getState().clearPendingEntityId()` si `pendingEntityId === entityId` (pattern Zustand event listener)
+- `EntityMesh.jsx` : import `useSessionStore`, `isPending = pendingEntityId === entity.id` dans `EntityMeshGlb` + `EntityMeshVoxel`, nouveau composant `PendingWaitIcon` (`<Html>` drei, `className="entity-pending"`)
+- `Sidebar.jsx` : state `pendingActionCount`, `useEffect([messages])` incrémente sur nouveaux `entity_action`, boutons Accepter/Auto/Refuser décrémentent, badge `styles.pendingBadge` sur onglet chat
+- `index.css` : `@keyframes hourglass-flip` + `.entity-pending`
+
+**Notification entité interactive CONFIRMÉ FONCTIONNEL**

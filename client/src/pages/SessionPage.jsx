@@ -35,6 +35,7 @@ export default function SessionPage() {
   } = useMapStore()
   const {
     setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage, setActiveCampaign,
+    setPendingEntityId, clearPendingEntityId,
   } = useSessionStore()
   const { setEntities, fetchBlueprints } = useEntityStore()
   const { setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster, advanceSlot, setActions, phase: combatPhase } = useCombatStore()
@@ -540,6 +541,7 @@ export default function SessionPage() {
     })
     // ENTITY_ACTION_RESULT — résultat reçu par le joueur (refus, timeout, no_gm)
     s.on(WS.ENTITY_ACTION_RESULT, ({ requestId, isApproved, reason }) => {
+      clearPendingEntityId()
       // Informer le joueur via un message système dans le chat
       if (!isApproved) {
         const reasonText = reason === 'timeout'
@@ -726,6 +728,7 @@ export default function SessionPage() {
       attributeId: interaction.attribute_id || null,
       // skillTotal supprimé — le serveur calcule via charStats.js (9F-0)
     })
+    setPendingEntityId(entity.id)
   }, [socket, characters, user?.id, isGm])
 
   // ─── Émission ENTITY_MOVE_REQUEST (joueur/GM → serveur) — 9F-B2 ─────────

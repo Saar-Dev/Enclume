@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
+import { useSessionStore } from '../stores/sessionStore';
 
 // --- Constantes ---
 const ICON_INTERACTION = '⚙';
@@ -82,6 +83,8 @@ function EntityMeshGlb({
   onHover, onEntityClick,
 }) {
   const hasInteractions = (blueprint.interactions || []).length > 0;
+  const { pendingEntityId } = useSessionStore();
+  const isPending = pendingEntityId === entity.id;
   const [hovered, setHovered] = React.useState(false);
   const leaveTimerRef = useRef(null);
 
@@ -166,6 +169,7 @@ function EntityMeshGlb({
       {hasInteractions && (
         <HoverIcon entity={entity} height={height} hovered={hovered} onEntityClick={onEntityClick} />
       )}
+      <PendingWaitIcon height={height} isPending={isPending} />
     </group>
   );
 }
@@ -177,6 +181,8 @@ function EntityMeshVoxel({
   stateOpacity, altPressed, isGmOnly, onHover, onEntityClick,
 }) {
   const hasInteractions = (blueprint.interactions || []).length > 0;
+  const { pendingEntityId } = useSessionStore();
+  const isPending = pendingEntityId === entity.id;
   const [hovered, setHovered] = React.useState(false);
   const leaveTimerRef = useRef(null);
 
@@ -294,6 +300,7 @@ function EntityMeshVoxel({
       {hasInteractions && (
         <HoverIcon entity={entity} height={height} hovered={hovered} onEntityClick={onEntityClick} />
       )}
+      <PendingWaitIcon height={height} isPending={isPending} />
     </group>
   );
 }
@@ -332,6 +339,24 @@ function HoverIcon({ entity, height, hovered, onEntityClick }) {
       >
         {ICON_INTERACTION}
       </div>
+    </Html>
+  );
+}
+
+// --- PendingWaitIcon — sablier animé visible uniquement quand l'entité attend l'arbitrage GM ---
+function PendingWaitIcon({ height, isPending }) {
+  return (
+    <Html
+      position={[0, height / 2 + 1.0, 0]}
+      center
+      style={{ pointerEvents: 'none', userSelect: 'none' }}
+    >
+      <span
+        className="entity-pending"
+        style={{ display: isPending ? 'inline-block' : 'none' }}
+      >
+        ⏳
+      </span>
     </Html>
   );
 }
