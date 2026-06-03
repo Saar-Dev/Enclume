@@ -29,6 +29,7 @@ import charRefRouter from './routes/character/ref.js'
 import entityBlueprintsRouter from './routes/entity-blueprints.js'
 import entitiesRouter from './routes/entities.js'
 import equipmentRouter from './routes/equipment.js'
+import documentsRouter from './routes/documents.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -76,6 +77,7 @@ app.use('/api/entity-blueprints', entityBlueprintsRouter)
 app.use('/api/battlemaps/:id/entities', entitiesRouter)
 app.use('/api/entities', entitiesRouter)
 app.use('/api/equipment', equipmentRouter)
+app.use('/api/campaigns/:campaignId/documents', documentsRouter)
 
 // Socket.io
 initSocket(io)
