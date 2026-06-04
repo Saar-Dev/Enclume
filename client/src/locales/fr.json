@@ -563,6 +563,23 @@
     "statuts":        "Statuts",
     "detailStatuts":  "Gérer les statuts"
   },
+  "status": {
+    "stunned":       "Étourdi",
+    "unconscious":   "Inconscient",
+    "blinded":       "Aveuglé",
+    "grappled":      "Saisi",
+    "restrained":    "Entravé",
+    "off_balance":   "Déséquilibré",
+    "burning":       "Enflammé",
+    "acid":          "Corrodé",
+    "asphyxia":      "Asphyxie",
+    "decompression": "Décompression",
+    "electrocuted":  "Électrocuté",
+    "hypothermia":   "Hypothermie",
+    "infected":      "Infecté",
+    "poisoned":      "Empoisonné",
+    "irradiated":    "Irradié"
+  },
   "entityPanel": {
     "placeholderName": "Nom du blueprint",
     "placeholderNotes": "Notes privées…",

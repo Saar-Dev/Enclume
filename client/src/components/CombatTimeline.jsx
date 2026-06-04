@@ -45,6 +45,7 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
           label:         token?.label ?? '?',
           initiative:    entry.initiative,
           worstSeverity: char?.worst_wound_severity ?? null,
+          isPnj:         char?.type === 'pnj',
           hasAnnounced:  entry.has_announced ?? false,
           isSurprised:   entry.is_surprised ?? false,
           isActive:      entry.token_id === activeTokenId,
@@ -63,6 +64,7 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
           label:         token?.label ?? '?',
           initiative:    rosterEntry?.initiative ?? 0,
           worstSeverity: char?.worst_wound_severity ?? null,
+          isPnj:         char?.type === 'pnj',
           hasAnnounced:  false,
           isSurprised:   false,
           isActive:      idx === activeSlotIdx,
@@ -117,6 +119,7 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
                   hasAnnounced={card.hasAnnounced}
                   isSurprised={card.isSurprised}
                   worstSeverity={card.worstSeverity}
+                  isPnj={card.isPnj}
                   onClick={onPortraitClick}
                 />
               </motion.div>

@@ -1,5 +1,6 @@
 # PLAN_STATUT — Système de statuts sur les tokens
 > Créé : Session 74 (2026-06-03)
+> Mis à jour : Session 77 (2026-06-04)
 > Source LdB : p.237 (Choc), p.523 (Arts martiaux)
 
 ---
@@ -7,31 +8,27 @@
 ## 1. Contexte et scope V1
 
 **Ce que ce sprint apporte :**
-- Badges de statut visuels sous le nom des tokens (15 statuts, SVGs prêts)
-- Option de campagne `status_effects_mode` (icône seule ou effets mécaniques)
-- Deux statuts mécaniquement actifs : `stunned` et `unconscious` (déclenchés par le Test de Choc)
-- Menu clic sur token pour ajouter/retirer des statuts (GM + propriétaire)
+- Secteur "Statuts" du TokenRadialMenu → bulle-grille 15 icônes
+- Toggle applique/retire un statut (clic unique)
+- Badges visuels sous le nom des tokens (Html drei, 3D)
+- Permissions : GM ajoute et retire / Propriétaire retire uniquement
+- Table `token_statuses` persistante (hors combat inclus)
 
 **Ce que ce sprint ne fait PAS :**
+- Pas d'effets mécaniques (stunned/unconscious non enforced ici — Sprint 3 futur)
 - Pas d'expiration automatique — retrait manuel uniquement
-- Pas d'effets mécaniques pour les 13 autres statuts (affiché visuellement, inerte en code)
 - Pas de durée LdB (table p.237 bas de page) — reporté V2
+- Pas d'option campagne `status_effects_mode` — Sprint 3 futur
 
 ---
 
 ## 2. Assets SVG
 
-**Emplacement :** `docs/Character/Statuts/` — 15 fichiers présents.
+**Emplacement source :** `docs/Character/Statuts/` — 15 fichiers présents, noms corrects.
+**Destination runtime :** `client/public/assets/status/` — déjà présents, aucune copie.
+**Usage dans les badges :** `<img src="/assets/status/stunned.svg">` (16×16px).
 
-**Deux typos à corriger au moment du sprint :**
-| Fichier actuel | Doit devenir |
-|---|---|
-| `axphyxia.svg` | `asphyxia.svg` |
-| `hypodermia.svg` | `hypothermia.svg` |
-
-**Destination runtime :** copier dans `client/public/statuts/` pour être servis statiquement. Usage : `<img src="/statuts/stunned.svg">` dans les badges `<Html>` drei.
-
-**Catégories et couleurs (du mockup `Status innacheve.html`) :**
+**Catégories et couleurs :**
 | Catégorie | Couleur | Statuts |
 |---|---|---|
 | entrave (contrôle) | `#d8a838` ambre | grappled, restrained, off_balance |
@@ -39,149 +36,146 @@
 | sens (perception/mental) | `#9858c8` violet | stunned, unconscious, blinded |
 | chronique (long terme) | `#38a8c8` cyan | hypothermia, infected, poisoned, irradiated |
 
+**Table complète statuts (15) :**
+| Code | Catégorie | Nom FR |
+|---|---|---|
+| `stunned` | sens | Étourdi |
+| `unconscious` | sens | Inconscient |
+| `blinded` | sens | Aveuglé |
+| `grappled` | entrave | Saisi |
+| `restrained` | entrave | Entravé |
+| `off_balance` | entrave | Déséquilibré |
+| `burning` | dot | Enflammé |
+| `acid` | dot | Corrodé |
+| `asphyxia` | dot | Asphyxie |
+| `decompression` | dot | Décompression |
+| `electrocuted` | dot | Électrocuté |
+| `hypothermia` | chronique | Hypothermie |
+| `infected` | chronique | Infecté |
+| `poisoned` | chronique | Empoisonné |
+| `irradiated` | chronique | Irradié |
+
 ---
 
-## 3. Prérequis — Sprint Interface Token (AVANT ce sprint)
+## 3. Interface — Intégration dans TokenRadialMenu
 
-**Problème actuel :** les tokens PJ/PNJ n'ont aucun menu clic. Le `RadialMenu` n'existe que pour les entités de décor. `onDoubleClick` sur un token ouvre la fiche personnage.
+**Décision Session 77 :** menu contextuel right-click remplacé par le secteur `statuts` du `TokenRadialMenu.jsx` existant.
 
-**Ce qu'il faut construire d'abord :**
+Le secteur `statuts` existe déjà à l'index 7 (`enabled: false`) — il suffit de l'activer.
 
-### 3a. Menu contextuel token (right-click ou clic long)
+### 3a. Flux d'interaction
 
-Un menu 2D HTML (pas Three.js) qui apparaît au clic droit sur un token en session.
+1. Clic sur token → `TokenRadialMenu` s'ouvre
+2. Clic secteur "STATUTS" → `onOpenStatusPanel()` callback → radial se ferme
+3. `SessionPage` monte `TokenStatusPanel` positionné aux mêmes coords x/y
+4. Bulle-grille 3 rangées × 5 colonnes :
+   - Statuts actifs : fond coloré catégorie + bordure glow + cursor pointer
+   - Statuts inactifs (GM) : icône atténuée + cursor pointer
+   - Statuts inactifs (propriétaire non-GM) : icône grisée + cursor default (non cliquable)
+5. Clic icône → émet `TOKEN_STATUS_TOGGLE` → serveur toggle → broadcast `TOKEN_STATUS_UPDATED`
+6. Fermeture : click-dehors ou Échap
 
-**Déclencheur :** `onContextMenu` sur le `<group>` dans `TokenMesh` → `e.preventDefault()` + callback vers `SessionPage` → state `tokenContextMenu { tokenId, x, y }`.
+### 3b. Permissions
 
-**Contenu du menu :**
-- Ligne d'identité (nom du personnage + avatar miniature)
-- Section "Statuts actifs" (liste des badges avec bouton × pour retirer — visible GM + propriétaire)
-- Section "Ajouter un statut" (grille des 15 icônes — visible GM uniquement)
-- Fermeture au clic extérieur / Échap
-
-**Visibilité des actions :**
-| Action | Qui peut l'effectuer |
-|---|---|
-| Voir les statuts actifs | Tous |
-| Retirer un statut | GM + propriétaire du token |
-| Ajouter un statut | GM uniquement |
+| Action | GM | Propriétaire du token | Autres |
+|---|---|---|---|
+| Voir les statuts actifs | ✅ | ✅ | ✅ |
+| Ajouter un statut | ✅ | ✅ (son token) | ❌ |
+| Retirer un statut | ✅ | ✅ (son token) | ❌ |
 
 **Propriétaire :** `token.character_id → characters.user_id === socket.user.id`
+**Entité de décor** (`!token.character_id`, PC27) : toggle interdit, pas de propriétaire.
 
-### 3b. Transport WS
+### 3c. Transport WS
 
-Deux nouveaux events pour la gestion des statuts (à ajouter dans `shared/events.js`) :
+**Deux nouveaux events** dans `shared/events.js` :
+```js
+TOKEN_STATUS_TOGGLE:  'token:status_toggle',  // client → serveur : { tokenId, statusCode }
+TOKEN_STATUS_UPDATED: 'token:status_updated', // serveur → room   : { tokenId, statuses: ['stunned',...] }
 ```
-COMBAT_STATUS_ADD    — client (GM) → serveur : { tokenId, statusCode }
-COMBAT_STATUS_REMOVE — client (GM ou owner) → serveur : { tokenId, statusCode }
-```
-Broadcast en room → tous les clients mettent à jour le token dans `tokenStore`.
 
-**Stockage :** extension du JSONB `combat_roster.state_character` :
-```json
-{ "statuses": ["stunned", "burning"] }
-```
-Hors combat : `tokens.state_character JSONB` à ajouter (ou table `token_statuses` simple). À décider au sprint.
+**Handler serveur `TOKEN_STATUS_TOGGLE` :**
+1. Vérifier que `token.character_id → characters.user_id` ou `socket.data.role === 'gm'`
+2. Vérifier si statut déjà actif dans `token_statuses`
+   - Pas actif → guard GM only → INSERT
+   - Actif → guard GM ou owner → DELETE
+3. Query statuts restants → broadcast `TOKEN_STATUS_UPDATED` avec tableau complet
 
 ---
 
-## 4. Affichage des badges (dans ce sprint)
+## 4. Stockage — Migration 68
 
-**Position :** juste en dessous du nom du token, à l'intérieur du `<Billboard>`.
+**Décision Session 77 :** table dédiée `token_statuses` (persistance hors combat).
+Raison : `state_character` est sur `combat_roster` (scope combat uniquement) — les statuts doivent survivre entre les sessions de combat.
 
-Le label est à `position={[0, 2.5, 0]}`. Les badges s'affichent via `<Html>` drei à `position={[0, 2.1, 0]}`.
-
-**Rendu :** rangée horizontale de pastilles hexagonales (Variante A du mockup). Chaque pastille = `<img>` du SVG correspondant, 16×16px, fond coloré par catégorie, contour noir.
-
-Overflow : si > 4 statuts → les 3 premiers + pastille `+N` (Variante C du mockup pour l'overflow).
-
-**Couleur de fond pastille** = couleur de la catégorie du statut.
-
----
-
-## 5. Option de campagne `status_effects_mode`
-
-**Nouvelle colonne :** `campaigns.status_effects_mode TEXT NOT NULL DEFAULT 'off'`
-- `'off'` — statuts visuels ET mécaniques désactivés (comportement actuel)
-- `'icon_only'` — échec Test de Choc → affiche l'icône sur le token, aucun effet en jeu
-- `'enforced'` — échec Test de Choc → icône + effets mécaniques appliqués
-
-**Migration :** numéro à assigner (actuellement au moins 67).
-
-**UI :** section "Effets de statuts" dans `CampaignSettingsPage`, 3 radio boutons.
-
----
-
-## 6. Test de Choc — modifications du flux
-
-### Flux PNJ (déjà auto-côté serveur)
-Aucun changement sur le roll lui-même. Modification : après le calcul du `shockResult`, si `status_effects_mode !== 'off'` → écrire le statut dans `state_character.statuses`.
-
-### Flux PJ — nouvelle fenêtre (actuellement auto-serveur aussi)
-
-**Actuellement :** serveur auto-roll après `COMBAT_DAMAGE_CONFIRM`.
-**Nouveau :** serveur émet `COMBAT_SHOCK_PROMPT` → PJ voit une fenêtre → clique "Lancer le jet de choc" → émet `COMBAT_SHOCK_CONFIRM` → serveur calcule.
-
-**Nouveaux events WS :**
-```
-COMBAT_SHOCK_PROMPT  — serveur → socket PJ : { tokenId, formula:'1d20', seuilEtourdi, seuilIncons, shockMalus }
-COMBAT_SHOCK_CONFIRM — PJ → serveur : { tokenId }
+```sql
+CREATE TABLE token_statuses (
+  id          SERIAL PRIMARY KEY,
+  token_id    UUID NOT NULL REFERENCES tokens(id) ON DELETE CASCADE,
+  status_code TEXT NOT NULL,
+  applied_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+  applied_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (token_id, status_code)
+)
 ```
 
-**Nouveau composant :** `CombatShockWindow.jsx`
-- Affiche les seuils (étourdissement / inconscience)
-- Bouton "Lancer le jet" → émet `COMBAT_SHOCK_CONFIRM`
-- Le serveur roule le D20 côté serveur (jamais trusted client)
+**Sync au chargement :** la route HTTP qui retourne les tokens pour une battlemap doit inclure les statuts en LEFT JOIN (`statuses: ['stunned', 'burning']` ou `[]`).
 
 ---
 
-## 7. Effets mécaniques (`status_effects_mode = 'enforced'`)
+## 5. Badges 3D (Sprint Phase 2)
 
-### `stunned` (LdB p.237)
+**Position :** juste en dessous du nom du token, dans `<Billboard>` via `<Html>` drei.
 
-| Effet | Implémentation |
-|---|---|
-| Ne peut pas attaquer | `COMBAT_ACTION_DECLARE` : guard → reject si `statuses.includes('stunned')` + `COMBAT_DECLARE_ERROR` |
-| −5 à toutes les actions | Ajout dans `effectiveMalus` lors du calcul des jets (serveur) |
-| Allure max = **moyenne** (LdB p.237) | `COMBAT_ACTION_DECLARE` : si `move.action_key` = `move_rapide` ou `move_max` → reject |
+Le label est à `position={[0, 2.5, 0]}`. Les badges s'affichent à `position={[0, 2.1, 0]}`.
 
-### `unconscious` (LdB p.237)
-
-| Effet | Implémentation |
-|---|---|
-| Passe son tour | `COMBAT_ACTION_CONFIRM` : si `statuses.includes('unconscious')` → skip direct + `advanceSlot` sans résoudre les actions |
+**Rendu :** rangée horizontale de pastilles (16×16px). Chaque pastille = `<img src="/statuts/{code}.svg">`, fond coloré par catégorie, contour.
+Overflow : si > 4 statuts → les 3 premiers + pastille `+N`.
 
 ---
 
-## 8. Expiration
+## 6. Option de campagne `status_effects_mode` — Sprint 3 futur
 
-**V1 :** retrait manuel uniquement — GM ou propriétaire via le menu contextuel token (§3).
+Reporté. Pas de migration dans ce sprint.
 
-**V2 futur :** table durée LdB p.237 (dépend gravité blessure × localisation) + tours automatiques.
+`'off'` / `'icon_only'` / `'enforced'` — voir §5 de la version précédente.
+
+---
+
+## 7. Test de Choc — modifications du flux — Sprint 3 futur
+
+Reporté. Flux PJ `COMBAT_SHOCK_PROMPT`/`COMBAT_SHOCK_CONFIRM` + `CombatShockWindow.jsx` en sprint dédié.
+
+---
+
+## 8. Effets mécaniques — Sprint 3 futur
+
+`stunned` et `unconscious` enforced (−5 / no attack / allure max / skip tour) reportés.
+Guard `is_stunned` dans `COMBAT_ACTION_DECLARE` (PC42) reste en dette.
 
 ---
 
 ## 9. Découpage en sprints
 
-### Sprint Prérequis — Menu contextuel token
-**Fichiers :** `Canvas3D.jsx`, `SessionPage.jsx`, `shared/events.js`, `server/src/socket/index.js`
-**Résultat :** right-click sur token → menu 2D → ajouter/retirer statuts → broadcast WS → `state_character.statuses[]` mis à jour
-**Bloqueur pour les sprints suivants.**
+### Sprint Statuts Phase 1 — Infrastructure + Sub-panel + Badges 3D
+**Migration :** 68 `token_statuses`
+**Fichiers :** `shared/events.js`, `server/src/socket/index.js`, route tokens HTTP,
+`TokenRadialMenu.jsx`, `TokenStatusPanel.jsx` (NOUVEAU), `SessionPage.jsx`,
+`Canvas3D.jsx` (badges Html drei), `client/public/statuts/` (copie SVGs), `fr.json`
+**Résultat :** secteur Statuts actif, bulle-grille toggle, badges sous nom token
 
-### Sprint Statuts — Affichage badges
-**Fichiers :** `Canvas3D.jsx` (badges `<Html>` dans TokenMesh), `client/public/statuts/` (copie SVGs)
-**Résultat :** badges sous le nom, visibles pour tous, couleur par catégorie
-**Dépend de :** Sprint Prérequis pour que les statuts existent en DB
-
-### Sprint Statuts — Option campagne + Flux Choc PJ + Mécaniques enforced
-**Fichiers :** migration, `CampaignSettingsPage.jsx`, `server/src/socket/index.js`, `CombatShockWindow.jsx` (NOUVEAU), `CombatOverlay.jsx`
-**Résultat :** `status_effects_mode` opérationnel, stunned/unconscious enforced, PJ roule son jet de choc
-**Dépend de :** Sprint Affichage badges
+### Sprint Statuts Phase 2 — Option campagne + Flux Choc PJ + Mécaniques enforced
+**Migration :** 69 `campaign.status_effects_mode`
+**Fichiers :** `CampaignSettingsPage.jsx`, `server/src/socket/index.js`, `CombatShockWindow.jsx` (NOUVEAU), `CombatOverlay.jsx`
+**Dépend de :** Sprint Phase 1
 
 ---
 
-## 10. Décisions ouvertes
+## 10. Décisions actées (Session 77)
 
-- [ ] Hors combat : stocker les statuts dans `tokens.state_character JSONB` ou table `token_statuses` séparée ? (impact : persistance entre sessions)
-- [ ] Sprint Prérequis : le double-clic actuel ouvre la fiche perso — le garder ou le remplacer par le menu contextuel ?
-- [ ] Sprint Arts martiaux : `grappled` est prérequis pour la Lutte — à synchroniser
+- [x] Stockage : table `token_statuses` (migration 68) — hors combat persistant
+- [x] Interface : bulle-grille 3×5 (pas sub-radial — trop serré à 15 items)
+- [x] Permissions : GM ajoute+retire (tous tokens) / Propriétaire ajoute+retire (son token uniquement)
+- [x] Toggle : event unique `TOKEN_STATUS_TOGGLE` (add si absent, remove si présent)
+- [x] Double-clic sur token garde son comportement (ouvre fiche perso) — inchangé
+- [ ] `grappled` prérequis Arts martiaux — à synchroniser avec ce sprint

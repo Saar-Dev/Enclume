@@ -90,6 +90,7 @@ export default function TokenRadialMenu({
   onOpenCharacterSheet,
   onRemoveToken,
   onSetRotation,
+  onOpenStatusPanel,
   onClose,
 }) {
   const { t } = useTranslation()
@@ -172,13 +173,14 @@ export default function TokenRadialMenu({
     { id: 'retirer',   label: t('tokenRadial.retirer'),   enabled: true  },
     { id: 'portee',    label: t('tokenRadial.portee'),    enabled: false },
     { id: 'viser',     label: t('tokenRadial.viser'),     enabled: false },
-    { id: 'statuts',   label: t('tokenRadial.statuts'),   enabled: false },
+    { id: 'statuts',   label: t('tokenRadial.statuts'),   enabled: true  },
   ]
 
   const handleSliceClick = (a) => {
     if (!a.enabled) return
     if (a.id === 'fiche')   { doClose(); onOpenCharacterSheet?.() }
     if (a.id === 'retirer') { doClose(); onRemoveToken?.() }
+    if (a.id === 'statuts') { doClose(); onOpenStatusPanel?.() }
   }
 
   // ─── Secteurs ─────────────────────────────────────────────────────────────

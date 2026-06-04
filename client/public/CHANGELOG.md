@@ -1,4 +1,21 @@
-## v76 — 2026-06-04 — Menu radial Token + Design System
+## v79 — 2026-06-04 — Fix placement tokens
+
+### Playground — Tokens
+- [fix] Tokens posés sur des demi-dalles (`slab_bottom`) ne flottent plus dans les airs
+- [fix] Drop du token se fait maintenant à l'endroit exact où le ghost était affiché, pas là où pointe le curseur
+- [fix] Ghost ne saute plus sur la case voisine en bord de voxel pendant le drag
+- [fix] Crash écran noir au démarrage de session (TDZ `statusPanel`)
+
+---
+
+## v77 — 2026-06-04 — Optimisation Voxels Phase B
+
+### Playground — Voxels
+- [fix] Cubes avec textures multi-faces (east≠south≠top…) affichent désormais la bonne texture sur chaque face lors d'une rotation (r=1/2/3). Invisible avec les textures actuelles (toutes `all`) — correction active pour les futurs packs multi-faces.
+
+---
+
+## v76 — 2026-06-04 — Menu radial Token + Design System + Optimisation Playground
 
 ### Playground — Tokens
 - [add] Menu radial SVG sur les tokens (clic simple) : 8 secteurs, style hard-SF HUD
@@ -8,6 +25,11 @@
 - [add] Cœur coloré selon la pire blessure active (jaune → rouge foncé)
 - [add] Animation bloom + pulse danger si critique/mortelle
 - [chg] Clic simple sur token = menu radial (était : rotation 45°)
+
+### Playground — Performances voxels
+- [perf] Rendu voxels : faces cachées entre cubes adjacents éliminées (face culling)
+- [perf] Draw calls réduits de N voxels → nb_textures × 6 maximum
+- [perf] Carte complexe : lag quasi supprimé (confirmé session)
 
 ### Design System — Interface
 - [add] Police Venus Rising active sur les titres (Login, Dashboard)

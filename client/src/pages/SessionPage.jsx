@@ -19,6 +19,7 @@ import DicePanel from '../components/DicePanel'
 import CharacterWindow from '../character/CharacterWindow'
 import RadialMenu from '../components/RadialMenu'
 import TokenRadialMenu from '../components/TokenRadialMenu'
+import TokenStatusPanel from '../components/TokenStatusPanel'
 import EntityInstancePanel from '../components/EntityInstancePanel'
 import CombatOverlay from '../components/CombatOverlay'
 
@@ -45,6 +46,7 @@ export default function SessionPage() {
 
   const [campaign, setCampaign] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [statusPanel, setStatusPanel] = useState(null)
 
   useEffect(() => {
     document.title = campaign?.name ? `Enclume — ${campaign.name}` : 'Enclume — Session'
@@ -251,6 +253,13 @@ export default function SessionPage() {
     socket?.emit(WS.MAP_SWITCH, { battlemapId, userIds: [] })
   }, [loadMap, socket])
 
+  // Fermer le panneau statuts si le token est supprimé pendant qu'il est ouvert
+  useEffect(() => {
+    if (!statusPanel) return
+    const exists = tokens.some(t => t.id === statusPanel.tokenId)
+    if (!exists) setStatusPanel(null)
+  }, [statusPanel, tokens])
+
   // Fermeture menu contextuel barre GM sur clic ailleurs
   useEffect(() => {
     if (!mapContextMenu) return
@@ -403,6 +412,9 @@ export default function SessionPage() {
       // Mise à jour partielle — token contient id + tous les champs modifiés (ex: r après TOKEN_ROTATE)
       // Guard updated_at géré dans le store — événements obsolètes ignorés silencieusement
       updateToken(token)
+    })
+    s.on(WS.TOKEN_STATUS_UPDATED, ({ tokenId, statuses }) => {
+      updateToken({ id: tokenId, statuses })
     })
     s.on(WS.CHAT_MESSAGE, ({ userId, username, color, text, timestamp }) => {
       addMessage({
@@ -1031,7 +1043,28 @@ export default function SessionPage() {
             onOpenCharacterSheet={() => setSelectedCharacterId(character?.id)}
             onRemoveToken={handleRemoveContextToken}
             onSetRotation={handleSetContextTokenRotation}
+            onOpenStatusPanel={() => setStatusPanel({ tokenId: contextMenu.token.id, x: contextMenu.x, y: contextMenu.y })}
             onClose={() => setContextMenu(null)}
+          />
+        )
+      })()}
+
+      {/* ─── Panneau statuts token ───────────────────────────────────────── */}
+      {statusPanel && (() => {
+        const liveToken  = tokens.find(t => t.id === statusPanel.tokenId)
+        if (!liveToken) return null
+        const character  = characters.find(c => c.id === liveToken.character_id)
+        return (
+          <TokenStatusPanel
+            x={statusPanel.x}
+            y={statusPanel.y}
+            token={liveToken}
+            character={character}
+            statuses={liveToken.statuses ?? []}
+            isGm={isGm}
+            userId={user?.id}
+            socket={socket}
+            onClose={() => setStatusPanel(null)}
           />
         )
       })()}

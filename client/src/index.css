@@ -119,6 +119,22 @@ background: var(--bg-app);
 /* === RADIUS ADDITIONS === */
 --radius-xs: 4px;
 
+/* === TACTICAL HUD COMBAT (fenêtres flottantes mode combat) === */
+--combat-body:    #0d0f18;   /* fond fenêtre */
+--combat-header:  #080a12;   /* fond header + th */
+--combat-border:  #1e2435;   /* bordure fenêtre */
+--combat-sep:     #1e1e2e;   /* séparateur de section */
+--combat-row:     #10141e;   /* ligne de tableau */
+--combat-seg-bg:  #0a1018;   /* fond segmented control */
+--combat-title:   #3a8aaa;   /* titre fenêtre */
+--combat-section: #5a8aaa;   /* libellé section */
+--combat-field:   #456575;   /* libellé champ */
+--combat-cell:    #c0c8d0;   /* texte cellule */
+--combat-value:   #dde7ee;   /* valeur forte (INI, etc.) */
+--combat-dim:     #3a4a5a;   /* méta / dim */
+--combat-ini-pos: #3aaa6a;   /* coût INI positif */
+--combat-ini-neg: #c86030;   /* coût INI négatif */
+
 /* === FONT FAMILIES === */
 --font-display: 'Venus Rising', 'Inter', system-ui, sans-serif;
 --font-ui:      'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
@@ -858,6 +874,47 @@ Convention :
   font: 700 20px/1 var(--font-mono);
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+}
+
+/* ── .btn-tac — bouton footer tactical HUD (fenêtres combat) ───────── */
+/* NE PAS chamfrer : vocabulaire visuel distinct des boutons HUD standard */
+.btn-tac {
+  display: block;
+  width: 100%;
+  padding: 11px 14px;
+  background: rgba(58,138,170,0.08);
+  border: none;
+  border-top: 1px solid #1e2435;
+  color: #3a8aaa;
+  font: 700 11px/1 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  cursor: pointer;
+  transition: background .1s;
+}
+.btn-tac:hover { background: rgba(58,138,170,0.15); filter: none; }
+.btn-tac:active { transform: none; }
+
+/* ── .seg-opt — segmented control compact tactical (CombatActionWindow) ── */
+.seg-opt {
+  flex: 1;
+  padding: 4px 6px;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: rgba(255,255,255,0.02);
+  font-size: 9px;
+  color: #dde7ee;
+  font-family: var(--font-ui);
+  transition: background .1s, border-color .1s;
+  clip-path: none;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.seg-opt[data-active="true"] {
+  background: #162028;
+  border-color: rgba(58,138,170,0.4);
+  color: #c8e0ec;
 }
 
 /* ── HEX ICON BUTTON (conservé, non utilisé en prod pour l'instant) */

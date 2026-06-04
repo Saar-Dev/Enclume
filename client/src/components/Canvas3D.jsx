@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo, Component } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { MapControls, Grid, Text, Billboard } from '@react-three/drei'
+import { MapControls, Grid, Text, Billboard, Html } from '@react-three/drei'
 import { useGLTF } from '@react-three/drei'
 import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
@@ -10,7 +10,7 @@ import { findPath, getPathColor, getActionKey } from '../lib/pathfinder.js'
 import raycastVoxels from 'fast-voxel-raycast'
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
-import Voxel from './Voxel.jsx'
+import CulledVoxelScene from './CulledVoxelScene.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
 import { useTokenStore } from '../stores/tokenStore'
@@ -41,6 +41,13 @@ const DRAG_TILT_MAX = 0.3
 // NE PAS FAIRE CE MAPPING INLINE — toujours passer par cette fonction.
 function threeToDb(tx, ty, tz) {
   return { pos_x: tx, pos_y: tz, pos_z: ty }
+}
+
+// Hauteur réelle du sommet d'un voxel en Three.js Y selon sa géométrie.
+// Utilisée pour poser les tokens exactement sur la surface (pas dans le vide).
+function getVoxelSurfaceTop(v) {
+  if (v.geo === 'slab_bottom') return v.y + 0.5  // dalle basse : sommet à mi-case
+  return v.y + 1.0                                 // cube, slab_top, autres : sommet en haut de case
 }
 
 // ─── Anneau de base du token ──────────────────────────────────────────────────
@@ -162,6 +169,19 @@ function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ }) {
   )
 }
 
+const STATUS_CATEGORY_COLOR = {
+  entrave:  '#d8a838',
+  dot:      '#d84838',
+  sens:     '#9858c8',
+  chronique:'#38a8c8',
+}
+const STATUS_CATEGORY = {
+  grappled: 'entrave', restrained: 'entrave', off_balance: 'entrave',
+  burning: 'dot', acid: 'dot', asphyxia: 'dot', decompression: 'dot', electrocuted: 'dot',
+  stunned: 'sens', unconscious: 'sens', blinded: 'sens',
+  hypothermia: 'chronique', infected: 'chronique', poisoned: 'chronique', irradiated: 'chronique',
+}
+
 // Token individuel — gère drag, lerp, ring, label.
 // glbUrl : URL complète du GLB à charger (character.glb_url ou default_token_glb_url de campagne), ou null.
 // Si null → TokenFallbackBody (silhouette géométrique). Si défini → TokenGlbBody (modèle 3D).
@@ -250,6 +270,46 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, dragState, isGmLaye
           >
             {'\u2298 GM'}
           </Text>
+        )}
+        {(token.statuses?.length > 0) && (
+          <Html position={[0, 2.1, 0]} center style={{ pointerEvents: 'none', userSelect: 'none' }}>
+            <div style={{ display: 'flex', gap: 2 }}>
+              {(token.statuses.length > 4
+                ? token.statuses.slice(0, 3)
+                : token.statuses
+              ).map(code => {
+                const color = STATUS_CATEGORY_COLOR[STATUS_CATEGORY[code]] ?? '#888'
+                return (
+                  <img
+                    key={code}
+                    src={`/assets/status/${code}.svg`}
+                    width={14}
+                    height={14}
+                    alt={code}
+                    style={{
+                      borderRadius: 2,
+                      background: `${color}44`,
+                      outline: `1px solid ${color}99`,
+                      filter: `drop-shadow(0 0 2px ${color})`,
+                    }}
+                  />
+                )
+              })}
+              {token.statuses.length > 4 && (
+                <span style={{
+                  fontSize: 9,
+                  color: '#ccc',
+                  background: 'rgba(0,0,0,0.6)',
+                  borderRadius: 2,
+                  padding: '0 2px',
+                  lineHeight: '14px',
+                  outline: '1px solid rgba(255,255,255,0.2)',
+                }}>
+                  +{token.statuses.length - 3}
+                </span>
+              )}
+            </div>
+          </Html>
         )}
       </Billboard>
     </group>
@@ -452,12 +512,16 @@ function Scene({
     return { x: Math.floor(target.x), z: Math.floor(target.z), rawX: target.x, rawZ: target.z, isVoid: true }
   }, [camera, gl])
 
-  const getColumnTopY = useCallback((x, z) => {
-    let maxY = -1
+  // Index colonne → hauteur réelle de surface (Three.js Y). Reconstruit uniquement quand voxels change.
+  // O(1) par lookup vs O(N) par frame pour le getColumnTopY précédent.
+  const colTopSurface = useMemo(() => {
+    const map = {}
     for (const v of Object.values(voxels)) {
-      if (v.x === x && v.z === z) maxY = Math.max(maxY, v.y)
+      const key = `${v.x}:${v.z}`
+      const surf = getVoxelSurfaceTop(v)
+      if (map[key] === undefined || surf > map[key]) map[key] = surf
     }
-    return maxY
+    return map
   }, [voxels])
 
   const handleDragStart = useCallback((e, token) => {
@@ -483,6 +547,9 @@ function Scene({
       hasMoved: false,
       prevWorldX: null,
       prevWorldZ: null,
+      snappedX: null,
+      snappedZ: null,
+      surfaceY: null,
     }
     if (orbitRef.current) orbitRef.current.enabled = false
   }, [isGm, user, characters])
@@ -564,9 +631,9 @@ function Scene({
     const cell = raycastVoxelColumn(e.clientX, e.clientY)
     if (!cell) return
 
-    const snappedX = Math.round(cell.rawX)
-    const snappedZ = Math.round(cell.rawZ)
-    const columnY = getColumnTopY(snappedX, snappedZ)
+    const snappedX = Math.floor(cell.rawX)
+    const snappedZ = Math.floor(cell.rawZ)
+    const surfaceY = colTopSurface[`${snappedX}:${snappedZ}`] ?? 0
 
     let tiltX = 0
     let tiltZ = 0
@@ -578,16 +645,19 @@ function Scene({
     }
     dragRef.current.prevWorldX = cell.rawX
     dragRef.current.prevWorldZ = cell.rawZ
+    dragRef.current.snappedX = snappedX
+    dragRef.current.snappedZ = snappedZ
+    dragRef.current.surfaceY = surfaceY
 
     setDragState({
       tokenId: dragRef.current.tokenId,
       x: snappedX,
-      y: Math.max(0, columnY) + 0.5 + DRAG_HOVER,
+      y: Math.max(0, surfaceY - 0.5) + DRAG_HOVER,
       z: snappedZ,
       tiltX,
       tiltZ,
     })
-  }, [raycastGround, raycastVoxelColumn, getColumnTopY, moveTarget, isGm])
+  }, [raycastGround, raycastVoxelColumn, colTopSurface, moveTarget, isGm])
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(async (e) => {
@@ -655,19 +725,17 @@ function Scene({
       return
     }
 
-    const worldPos = raycastGround(e.clientX, e.clientY)
-    if (!worldPos) return
+    // Position du drop = là où le token ghost était affiché pendant le drag,
+    // PAS là où pointe le curseur (qui est souvent caché sous le token).
+    const snappedX = dragRef.current.snappedX
+    const snappedZ = dragRef.current.snappedZ
+    const surfaceY = dragRef.current.surfaceY
+    if (snappedX === null || snappedZ === null || surfaceY === null) return
 
-    const snappedX = Math.round(worldPos.x)
-    const snappedZ = Math.round(worldPos.z)
-    const snappedY = getColumnTopY(snappedX, snappedZ)
-
-    const minY = isGm ? -1 : 0
-    const maxY = isGm ? 8 : 7
-    if (snappedY < minY || snappedY > maxY) return
+    if (!isGm && surfaceY === 0) return  // joueur : interdit de poser dans le vide
     if (Math.abs(snappedX) > GRID_SIZE / 2 || Math.abs(snappedZ) > GRID_SIZE / 2) return
 
-    const dbPos = threeToDb(snappedX, snappedY, snappedZ)
+    const dbPos = threeToDb(snappedX, surfaceY - 1.0, snappedZ)
 
     try {
       const res = await api.put(`/tokens/${token.id}`, dbPos)
@@ -675,7 +743,7 @@ function Scene({
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [raycastGround, getColumnTopY, onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel])
+  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -760,15 +828,7 @@ function Scene({
         fadeDistance={80}
       />
 
-      {Object.values(voxels).map(v => (
-        <Voxel
-          key={getVoxelKey(v.x, v.y, v.z)}
-          position={[v.x, v.y, v.z]}
-          textureMaterials={textureMaterials[v.tex]}
-          geometry={v.geo}
-          rotation={v.r}
-        />
-      ))}
+      <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
 
       {/* ── Entités interactables — entre voxels et tokens ────────────────── */}
       {entities.map(entity => {
@@ -793,7 +853,7 @@ function Scene({
       {/* PE14 : ghostPos.x = pos_x base, ghostPos.z = pos_y base (profondeur)  */}
       {moveTarget && ghostPos && (() => {
         const color = dotResult > 0 ? '#2563eb' : dotResult < 0 ? '#f97316' : '#ef4444'
-        const y = getColumnTopY(ghostPos.x, ghostPos.z) + 1 + 0.05
+        const y = (colTopSurface[`${ghostPos.x}:${ghostPos.z}`] ?? 0) + 0.05
         return (
           <group position={[ghostPos.x + 0.5, y, ghostPos.z + 0.5]}>
             <mesh rotation={[-Math.PI / 2, 0, 0]}>

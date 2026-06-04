@@ -11,8 +11,10 @@ export const WS = {
   TOKEN_CREATED: 'token:created',
   TOKEN_DELETED: 'token:deleted',
   TOKEN_UPDATED: 'token:updated',
-  TOKEN_ROTATE:      'token:rotate',       // joueur/GM → serveur : rotation 45° (9F-A)
-  TOKEN_SET_ROTATION:'token:set_rotation', // joueur/GM → serveur : orientation absolue (0..7)
+  TOKEN_ROTATE:         'token:rotate',          // joueur/GM → serveur : rotation 45° (9F-A)
+  TOKEN_SET_ROTATION:   'token:set_rotation',    // joueur/GM → serveur : orientation absolue (0..7)
+  TOKEN_STATUS_TOGGLE:  'token:status_toggle',   // client → serveur : { tokenId, statusCode }
+  TOKEN_STATUS_UPDATED: 'token:status_updated',  // serveur → room   : { tokenId, statuses[] }
 
   // Voxels (carte 3D)
   VOXEL_ADD:     'voxel:add',

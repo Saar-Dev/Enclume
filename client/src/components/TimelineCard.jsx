@@ -10,6 +10,7 @@ export default function TimelineCard({
   hasAnnounced,
   isSurprised,
   worstSeverity,
+  isPnj = false,
   onClick,
 }) {
   const imgSrc = portraitUrl ? `${VITE_API_URL}/api/assets/${portraitUrl}` : null
@@ -42,10 +43,12 @@ export default function TimelineCard({
           />
         : <div style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(160deg, #1a1a2e, #2a2a4e)',
+            background: isPnj
+              ? 'linear-gradient(160deg, #2e1a1a, #4e2a2a)'
+              : 'linear-gradient(160deg, #1a1a2e, #2a2a4e)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: isActive ? 26 : 20,
-            color: '#5555aa',
+            color: isPnj ? '#aa5555' : '#5555aa',
             fontWeight: 700,
             userSelect: 'none',
           }}>

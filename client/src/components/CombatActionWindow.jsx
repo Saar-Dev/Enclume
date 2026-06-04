@@ -602,7 +602,7 @@ export default function CombatActionWindow({
               ))} — en attente du résultat…
             </div>
           ) : (
-            <button style={W.btnDeclare} onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}>
+            <button className="btn-tac" onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}>
               Agir
             </button>
           )}
@@ -1234,13 +1234,13 @@ export default function CombatActionWindow({
                 <div style={W.assaultSectionTitle}>Type de tir</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
-                    className="btn-toggle"
+                    className="seg-opt"
                     data-active={!isDualWield}
                     style={{ flex: 1 }}
                     onClick={() => setIsDualWield(false)}
                   >Simple</button>
                   <button
-                    className="btn-toggle"
+                    className="seg-opt"
                     data-active={isDualWield}
                     style={{ flex: 1 }}
                     onClick={() => setIsDualWield(true)}
@@ -1285,13 +1285,13 @@ export default function CombatActionWindow({
                         {(assaultBulletCount === 7 || assaultBulletCount === 10) && (
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button
-                              className="btn-toggle"
+                              className="seg-opt"
                               data-active={assaultVariantAB === 'A'}
                               style={{ flex: 1 }}
                               onClick={() => setAssaultVariantAB('A')}
                             >+{assaultBulletCount === 7 ? 4 : 5} comp</button>
                             <button
-                              className="btn-toggle"
+                              className="seg-opt"
                               data-active={assaultVariantAB === 'B'}
                               style={{ flex: 1 }}
                               onClick={() => setAssaultVariantAB('B')}
@@ -1330,7 +1330,7 @@ export default function CombatActionWindow({
                       {RL_BUTTONS.map(btn => (
                         <button
                           key={btn.value}
-                          className="btn-toggle"
+                          className="seg-opt"
                           data-active={assaultBulletCount === btn.value}
                           style={{ flex: 1 }}
                           onClick={() => setAssaultBulletCount(btn.value)}
@@ -1375,8 +1375,8 @@ export default function CombatActionWindow({
             )}
           </div>
           <button
-            className="btn"
-            style={{ flexShrink: 0 }}
+            className="btn-tac"
+            style={{ opacity: canDeclare ? 1 : 0.4, cursor: canDeclare ? 'pointer' : 'not-allowed' }}
             onClick={handleDeclare}
             disabled={!canDeclare}
           >

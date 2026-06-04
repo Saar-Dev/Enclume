@@ -2042,3 +2042,174 @@ Ajout dans l'onglet Profil de la Sidebar (après liste connectés). `useNavigate
 
 ### Roadmap ajoutée
 - **Persistance du chat** : à planifier (sprint dédié)
+
+
+---
+
+### Sprint Optimisation Voxels � Culled Mesh Phase A ? CONFIRM� FONCTIONNEL (session 76)
+
+**Objectif** : r�duire les draw calls et polygones du playground (Canvas3D) sans toucher Editor3D ni le syst�me de raycasting fast-voxel-raycast.
+
+**Recherche pr�alable** : Three.js manual (threejs.org/manual � voxel geometry with culled faces) = r�f�rence officielle. Aucun package npm professionnel maintenu pour ce besoin. Algorithme face culling copi� depuis la doc officielle, adapt� pour notre syst�me de mat�riaux multi-face (pas d'atlas).
+
+**Fichiers cr��s / modifi�s :**
+- `client/src/lib/buildCulledMesh.js` (NOUVEAU) : fonction pure, z�ro Three.js. FACES array = 6 face definitions (dir, physIdx P32, corners/UVs) copi�es du Three.js manual. Boucle : pour chaque cube, v�rifie 6 voisins, ajoute la face seulement si le voisin n'est pas un cube. Groupe par `${texId}_${physIdx}` ? arrays positions/normals/uvs/indices.
+- `client/src/components/CulledVoxelScene.jsx` (NOUVEAU) : `useMemo([voxels])` ? buildCulledMesh ? BufferGeometry. `useEffect` dispose explicite (R3F n'auto-dispose pas quand geometry prop change sur mesh mont�). Non-cubes (slabs, slopes, wedges futurs) ? `<Voxel>` individuel inchang�.
+- `client/src/components/Canvas3D.jsx` : boucle `Object.values(voxels).map(<Voxel>)` remplac�e par `<CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />`. Import Voxel retir�.
+
+**R�sultat** : am�lioration FPS visible sur carte complexe (confirm�). Textures correctes, �diteur voxels intact, VOXEL_ADDED/REMOVED temps r�el fonctionnels.
+
+**Limite Phase A** : rotation r ? 0 ignor�e dans le mesher ? cubes avec textures multi-faces ET rotation non-identity peuvent afficher la mauvaise texture par face. Invisible en pratique (toutes textures actuelles utilisent `all`). Phase B : ROTATION_FACE_MAP d�riv�e et v�rifi�e par composition (appliquer r=1 deux fois = r=2 ?).
+
+**Pi�ges d�couverts :**
+- Faces order Three.js manual (left/right/bottom/top/back/front) ? P32 BoxGeometry (east(0)/west(1)/top(2)/bottom(3)/south(4)/north(5)) ? mapping `physIdx` obligatoire sur chaque face
+- ROTATION_FACE_MAP : formule Three.js rotation.y=p/2 donne x'=z, z'=-x ? east(+X) va vers north(-Z), pas south. Erreur de signe facile si d�riv� informellement. V�rification par composition obligatoire.
+- R3F ne dispose pas les BufferGeometry quand la prop `geometry` change sur un mesh mont� ? `useEffect` cleanup explicite obligatoire
+
+---
+
+## Session 77 — Sprint Optimisation Voxels Phase B : ROTATION_FACE_MAP (2026-06-04)
+
+### Objectif
+Implémenter la correction de texture des cubes voxels en rotation dans le culled mesh (dette Phase A).
+Quand un cube a des textures différentes par face ET une rotation r≠0, la bonne texture doit apparaître sur chaque face du monde.
+
+### Recherche préalable
+- Three.js Manual (base de Phase A) : pas de rotation — extension documentée comme future.
+- PrismarineJS/prismarine-viewer (viewer Minecraft JS professionnel) : rotation par multiplication de matrices 3×3 (`buildRotationMatrix`, `matmul3`). Valide mais surdimensionné pour notre cas (Y seul, 4 valeurs discrètes).
+- Voxel-Tools (Godot) : variantes précompilées par rotation (voxel ID distinct par orientation). Inadapté.
+- Minecraft Wiki (spec block model) : *"rotation amounts to permutation of the selected texture vertices"* — confirme l'approche lookup table.
+- Décision : lookup table statique O(1) — plus approprié que matrices continues pour r=0..3 Y-only.
+
+### Découverte critique
+Voxel.jsx ligne 28 : `rotation * (Math.PI / 2)` → r=0..3 (quarts de tour), PAS r=0..7 comme les tokens.
+Table = 4 lignes, pas 8.
+
+### Dérivation ROTATION_FACE_MAP
+Formule : pour un cube en rotation r, face monde-facing physIdx → original face = R(-θ)(physIdx).
+Inverse rotation par −90°/tour : R(-90°)(+X) = +Z → east(0) ← south(4) pour r=1.
+
+```
+ROTATION_FACE_MAP[r][physIdx] → origPhysIdx (texture source)
+r=0 : [0, 1, 2, 3, 4, 5]  — identité
+r=1 : [4, 5, 2, 3, 1, 0]  — E←S  W←N  S←W  N←E
+r=2 : [1, 0, 2, 3, 5, 4]  — E←W  W←E  S←N  N←S
+r=3 : [5, 4, 2, 3, 0, 1]  — E←N  W←S  S←E  N←W
+```
+
+Vérifiée par composition (groupe cyclique d'ordre 4) : r=1×4 = identité ✓, r=1×2 = r=2 ✓, r=1×3 = r=3 ✓.
+
+### Fichiers modifiés
+- `client/src/lib/buildCulledMesh.js` : +ROTATION_FACE_MAP const, +origPhysIdx dans boucle faces, group key/physIdx utilisent origPhysIdx
+- `client/src/components/CulledVoxelScene.jsx` : commentaire Phase A→B (zéro logique)
+
+### Limite connue — testabilité
+Le bug était invisible (toutes textures actuelles = `all`, même image 6 faces). La correction est aussi invisible sans texture multi-face. Validation fonctionnelle différée au premier cas d'usage réel (texture pack avec faces distinctes).
+
+**Dette Phase B fermée.** Code correct, non régression sur r=0, non testable en pratique aujourd'hui.
+
+---
+
+## Session 77 — Sprint Statuts Phase 1 : badges tokens + TokenStatusPanel (2026-06-04)
+
+### Objectif
+Implanter un système de statuts visuels sur les tokens (15 statuts Polaris) sans effets mécaniques.
+Accès via le secteur "Statuts" du TokenRadialMenu existant. Persistance hors combat via table dédiée.
+
+### Décisions d'architecture
+- **Interface** : bulle-grille 3×5 (sub-radial écarté — 24°/secteur illisible à 15 items)
+- **Stockage** : table `token_statuses` (migration 68), pas `state_character` JSONB (scope combat uniquement)
+- **Permissions** : GM ajoute+retire tout token / Propriétaire ajoute+retire son propre token
+- **Transport WS** : event unique `TOKEN_STATUS_TOGGLE` (toggle) → broadcast `TOKEN_STATUS_UPDATED` tableau complet
+- **SVGs** : déjà présents dans `client/public/assets/status/` — aucune copie
+
+### Analyse préalable (run à vide)
+- Pattern handler socket calqué sur TOKEN_ROTATE/TOKEN_SET_ROTATION : `socket.role`, `socket.data.userId`
+- `tokenStore.updateToken(partial)` gère `statuses` sans modification — spread `{ ...t, ...partial }`
+- `Html` drei utilisable dans `<Billboard>` — world position calculée indépendamment des rotations parent
+- Snap stale résolu : `statusPanel` stocke `tokenId`, look-up live depuis `tokens` store au rendu
+- Anti-pattern `setStatusPanel(null)` pendant render → corrigé en `useEffect`
+
+### Fichiers créés
+- `server/src/db/migrations/68_token_statuses.js` : table `token_statuses(id, token_id UUID FK CASCADE, status_code TEXT, applied_by UUID FK SET NULL, applied_at, UNIQUE(token_id, status_code))`
+- `client/src/components/TokenStatusPanel.jsx` : grille 3×5, toggle, active/inactive, canToggle guard, fermeture click-dehors/Échap
+
+### Fichiers modifiés
+- `shared/events.js` : +`TOKEN_STATUS_TOGGLE` + `TOKEN_STATUS_UPDATED`
+- `server/src/routes/battlemaps.js` : GET /:id enrichi — batch query `token_statuses`, `statuses[]` dans chaque token
+- `server/src/socket/index.js` : handler `TOKEN_STATUS_TOGGLE` entre TOKEN_SET_ROTATION et TOKEN_CREATED
+- `client/src/components/TokenRadialMenu.jsx` : secteur `statuts` activé (`enabled: true`), prop `onOpenStatusPanel`
+- `client/src/pages/SessionPage.jsx` : import + state `statusPanel` + listener `TOKEN_STATUS_UPDATED` + useEffect guard + mount `TokenStatusPanel`
+- `client/src/components/Canvas3D.jsx` : import `Html`, constantes `STATUS_CATEGORY` + `STATUS_CATEGORY_COLOR`, badges dans `<Billboard>` (overflow +N)
+- `client/src/locales/fr.json` : section `"status"` 15 clés
+
+### Dettes créées
+- `TOKEN_CREATED` WS : nouveau token sans `statuses` → safe par `?? []` partout
+- Sprint Statuts Phase 2 : option campagne `status_effects_mode` + flux choc PJ (`CombatShockWindow`) + enforcement `stunned`/`unconscious` — sprint futur
+- PC42 (`is_stunned` dans COMBAT_ACTION_DECLARE) — toujours actif, non touché par ce sprint
+
+**Sprint Statuts Phase 1 ✅ CONFIRMÉ FONCTIONNEL**
+
+---
+
+## Session 79 — Fix placement tokens : slab_bottom + terrain varié + TDZ crash (2026-06-04)
+
+### Objectif
+Corriger deux bugs de placement de tokens signalés en jeu :
+1. Tokens qui "volent" au-dessus des demi-dalles (`slab_bottom`)
+2. Précision catastrophique du drop sur terrain avec dénivelé
+
+### Diagnostic
+
+**Bug 1 — slab_bottom** : `getColumnTopY` retournait `v.y` (entier base), sans tenir compte de la géométrie. Une `slab_bottom` à y=2 a sa surface à y+0.5=2.5, mais le token était posé à pos_z=2 → pieds à 3.0 → flottait 0.5 au-dessus. `tokens.pos_z` est FLOAT — aucune migration nécessaire.
+
+**Bug 2 — précision drop** : `handlePointerUp` raycatstait depuis la *position du curseur* au moment du relâchement, pas depuis la *position affichée du ghost*. Le curseur est souvent caché sous le token ou décalé en 3D perspective. Résultat : décalage 1–10 cases selon l'angle de vue.
+
+**Correction fondamentale (confirmée par recherche FoundryVTT v12–v14, Three.js forum, XCOM/BG3)** : le drop doit confirmer la position déjà affichée par le ghost, jamais re-raycaster depuis le curseur. C'est le pattern universel dans tous les systèmes documentés.
+
+### Fichiers modifiés
+- `client/src/components/Canvas3D.jsx`
+- `client/src/pages/SessionPage.jsx` (fix TDZ séparé)
+
+### Architecture
+
+**`getVoxelSurfaceTop(v)` — fonction module-level :**
+```js
+function getVoxelSurfaceTop(v) {
+  if (v.geo === 'slab_bottom') return v.y + 0.5
+  return v.y + 1.0
+}
+```
+
+**`colTopSurface` useMemo (remplace `getColumnTopY` useCallback O(N)/frame) :**
+```js
+const colTopSurface = useMemo(() => {
+  const map = {}
+  for (const v of Object.values(voxels)) {
+    const key = `${v.x}:${v.z}`
+    const surf = getVoxelSurfaceTop(v)
+    if (map[key] === undefined || surf > map[key]) map[key] = surf
+  }
+  return map
+}, [voxels])
+```
+O(1) par lookup, reconstruit uniquement quand `voxels` change.
+
+**`dragRef` enrichi** — `snappedX`, `snappedZ`, `surfaceY` stockés à chaque frame de drag (dans `handlePointerMove`).
+
+**`handlePointerUp` drop** — lit `dragRef.current.snappedX/Z/surfaceY` directement. Aucun raycast. `threeToDb(snappedX, surfaceY - 1.0, snappedZ)`.
+
+**Ghost overlay entité** — mis à jour : `(colTopSurface[x:z] ?? 0) + 0.05` (ancienne formule `getColumnTopY + 1 + 0.05` incorrecte pour slabs).
+
+**Polissage** : `Math.round` → `Math.floor` dans `handlePointerMove` — un voxel occupe `[x, x+1)` donc `Math.floor` évite le ghost qui saute sur la case voisine en bord de voxel.
+
+### Fix TDZ SessionPage
+`const [statusPanel, setStatusPanel] = useState(null)` déclaré ligne 688 mais utilisé dans un `useEffect` ligne 256 → TDZ crash au démarrage. Déclaration déplacée avec les autres `useState` en tête du composant (ligne ~49).
+
+### Pièges documentés
+- **Drag-and-drop 3D** : ne jamais re-raycaster au drop — utiliser la position du ghost. Pattern universel (FoundryVTT, XCOM, BG3). Voir memory `feedback_dragdrop_ux.md`.
+- **`Math.floor` vs `Math.round`** : un voxel occupe `[x, x+1)` en Three.js. `Math.floor` pour la colonne, pas `Math.round`.
+- **`getVoxelSurfaceTop`** : dette future pour `slope`/`wedge` (géométries non implémentées, default `v.y+1.0` acceptable).
+- **TDZ React** : `const` utilisé dans dep array d'un `useEffect` avant sa déclaration dans le corps du composant → crash. Toujours déclarer les `useState` avant les `useEffect` qui les utilisent.
+
+**Session 79 ✅ CONFIRMÉ FONCTIONNEL**
