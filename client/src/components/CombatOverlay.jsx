@@ -14,7 +14,7 @@ import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
 
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, gmSocketError, onGmSocketErrorClose }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, gmSocketError, onGmSocketErrorClose, sidebarWidth = 0 }) {
   const { phase, roster, activeSlotIdx, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
@@ -37,7 +37,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
     : null
 
   return (
-    <div style={styles.overlay}>
+    <div style={{ ...styles.overlay, '--sidebar-w': sidebarWidth + 'px' }}>
 
       {/* Timeline — visible à tous dès que le combat est actif */}
       {phase && (
@@ -107,7 +107,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
             <span style={styles.gmResolutionIni}> INI {gmActiveEntry.initiative}</span>
           </div>
           <button
-            style={styles.gmResolutionBtn}
+            className="btn btn-gold"
+            style={{ flexShrink: 0 }}
             onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: gmActiveEntry.token_id })}
           >
             Agir
@@ -148,14 +149,14 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
                   <span style={styles.movePendingDest}>{tgt?.label ?? '?'}</span>
                 </div>
                 <div style={styles.movePendingBtns}>
-                  <button style={styles.btnValider} onClick={onValidateTarget}>Valider</button>
-                  <button style={styles.btnChanger} onClick={() => combatTargetMode.onPendingTarget(null)}>Changer</button>
+                  <button className="btn" style={{ flex: 1 }} onClick={onValidateTarget}>Valider</button>
+                  <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => combatTargetMode.onPendingTarget(null)}>Changer</button>
                 </div>
               </div>
             )
           })()}
 
-          <button style={styles.btnAnnulerMode} onClick={() => combatTargetMode.onCancel()}>
+          <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => combatTargetMode.onCancel()}>
             Annuler la visée
           </button>
         </div>
@@ -252,19 +253,9 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
             <span style={{ fontVariantNumeric: 'tabular-nums' }}>{meleeDefensePrompt.chancesAttaque}</span>
           </div>
           <button
+            className="btn"
+            style={{ width: '100%' }}
             onClick={onMeleeDefenseConfirm}
-            style={{
-              width: '100%',
-              padding: '9px 0',
-              background: 'rgba(91,141,238,0.15)',
-              border: '1px solid #5b8dee',
-              borderRadius: 4,
-              color: '#5b8dee',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              letterSpacing: '0.04em',
-            }}
           >
             Défendre
           </button>
@@ -316,13 +307,13 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
                 </span>
               </div>
               <div style={styles.movePendingBtns}>
-                <button style={styles.btnValider} onClick={onValidateMove}>Valider</button>
-                <button style={styles.btnChanger} onClick={onCancelPendingMove}>Changer</button>
+                <button className="btn" style={{ flex: 1 }} onClick={onValidateMove}>Valider</button>
+                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onCancelPendingMove}>Changer</button>
               </div>
             </div>
           )}
 
-          <button style={styles.btnAnnulerMode} onClick={() => combatMoveMode.onCancel()}>
+          <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => combatMoveMode.onCancel()}>
             Annuler le déplacement
           </button>
         </div>
@@ -362,17 +353,6 @@ const styles = {
     fontSize: 11,
     color: '#5b8dee',
     marginLeft: 4,
-  },
-  gmResolutionBtn: {
-    padding: '6px 18px',
-    background: 'rgba(245,197,66,0.15)',
-    border: '1px solid #f5c542',
-    borderRadius: 4,
-    color: '#f5c542',
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer',
-    flexShrink: 0,
   },
   moveLegend: {
     position: 'absolute',
@@ -453,38 +433,6 @@ const styles = {
   movePendingBtns: {
     display: 'flex',
     gap: 6,
-  },
-  btnValider: {
-    flex: 1,
-    padding: '6px 0',
-    background: 'rgba(91,141,238,0.15)',
-    border: '1px solid #5b8dee',
-    borderRadius: 4,
-    color: '#5b8dee',
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  btnChanger: {
-    flex: 1,
-    padding: '6px 0',
-    background: 'none',
-    border: '1px solid #3a3a5a',
-    borderRadius: 4,
-    color: '#7070a0',
-    fontSize: 12,
-    cursor: 'pointer',
-  },
-  btnAnnulerMode: {
-    marginTop: 8,
-    padding: '6px 0',
-    background: 'none',
-    border: '1px solid #3a3a5a',
-    borderRadius: 4,
-    color: '#5a5a7a',
-    fontSize: 11,
-    cursor: 'pointer',
-    width: '100%',
   },
   gmError: {
     position: 'absolute',

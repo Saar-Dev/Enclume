@@ -137,6 +137,7 @@
     "characters": "Persos",
     "players": "Joueurs",
     "library": "Biblio",
+    "profil": "Profil",
     "helpTitle": "Raccourcis clavier",
     "helpClose": "Fermer",
     "helpSectionPlay": "Mode jeu",
@@ -167,7 +168,7 @@
     "libraryPlaceholder": "Bibliothèque — Phase 3",
     "noCharacters": "Aucun personnage dans cette campagne.",
     "noPlayers": "Aucun membre dans cette campagne.",
-    "newCharacter": "Nouveau personnage",
+    "newCharacter": "+ Nouveau personnage",
     "characterNamePlaceholder": "Nom du personnage",
     "dragToMap": "Glisser sur la carte pour placer",
     "hiddenFromPlayers": "Masqué aux joueurs",
@@ -199,7 +200,8 @@
     "macroSuccess": "Succès",
     "macroFail": "Échec",
     "macroCritical": "critique !",
-    "macroFumble": "fumble !"
+    "macroFumble": "fumble !",
+    "quit": "Quitter la session"
   },
   "character": {
     "tabSheet": "Fiche",
@@ -543,6 +545,24 @@
   "radialMenu": {
     "gmModify": "Modifier"
   },
+  "tokenRadial": {
+    "fiche":          "Fiche",
+    "detailFiche":    "Ouvrir la fiche personnage",
+    "jet":            "Jet",
+    "detailJet":      "Jet rapide",
+    "recharger":      "Recharger",
+    "detailRecharger":"Recharger l'arme",
+    "deplacer":       "Déplacer",
+    "detailDeplacer": "Portée de déplacement",
+    "retirer":        "Retirer",
+    "detailRetirer":  "Retirer du plateau",
+    "portee":         "Portée",
+    "detailPortee":   "Portée d'arme",
+    "viser":          "Viser",
+    "detailViser":    "Ligne de vue",
+    "statuts":        "Statuts",
+    "detailStatuts":  "Gérer les statuts"
+  },
   "entityPanel": {
     "placeholderName": "Nom du blueprint",
     "placeholderNotes": "Notes privées…",
@@ -557,6 +577,25 @@
     },
     "openTitle": "Afficher le changelog",
     "reduceTitle": "Réduire"
+  },
+  "library": {
+    "newDocument": "+ Nouveau document",
+    "emptyState": "Aucun document dans cette campagne.",
+    "emptyStatePlayer": "Aucun document partagé avec vous.",
+    "documentName": "Nom du document",
+    "namePlaceholder": "Nom du document",
+    "visibleBy": "Dans le journal des joueurs",
+    "editableBy": "Peut être modifié par",
+    "allPlayers": "Tous les joueurs",
+    "nobody": "Personne (MJ uniquement)",
+    "descriptionNotes": "Description & notes",
+    "gmNotes": "Notes du MJ (visible uniquement par le MJ)",
+    "save": "Sauvegarder",
+    "cancel": "Annuler",
+    "delete": "Supprimer le document",
+    "deleteConfirm": "Supprimer ce document définitivement ?",
+    "readOnly": "Lecture seule",
+    "editableIcon": "Vous pouvez modifier ce document"
   },
   "health": {
     "title": "Santé Serveur",

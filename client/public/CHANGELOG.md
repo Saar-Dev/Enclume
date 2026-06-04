@@ -1,3 +1,41 @@
+## v76 — 2026-06-04 — Menu radial Token + Design System
+
+### Playground — Tokens
+- [add] Menu radial SVG sur les tokens (clic simple) : 8 secteurs, style hard-SF HUD
+- [add] "Fiche" : ouvre la fiche personnage directement depuis le token
+- [add] "Retirer" : retire le token du plateau
+- [add] Boussole directionnelle dans le cœur du menu : orienter le token en 8 directions
+- [add] Cœur coloré selon la pire blessure active (jaune → rouge foncé)
+- [add] Animation bloom + pulse danger si critique/mortelle
+- [chg] Clic simple sur token = menu radial (était : rotation 45°)
+
+### Design System — Interface
+- [add] Police Venus Rising active sur les titres (Login, Dashboard)
+- [add] 36 tokens CSS : surfaces session, couleurs blessures, accents statuts, familles de polices
+- [add] 15 icônes HUD hexagonales de statuts (étourdi, hypothermie, en feu…)
+- [add] Boutons harmonisés : style chamfré hard-SF unifié sur Dashboard, Sidebar, CombatOverlay, CombatActionWindow, SessionPage, LibraryPanel
+- [add] Badges MJ/Joueur/Résultat chamfrés sur toutes les vues
+- [add] Bouton "Quitter la session" dans l'onglet Profil (→ tableau de bord)
+- [fix] Timeline mode combat : ne chevauche plus la sidebar (s'arrête au bord gauche de la sidebar)
+- [chg] Bouton ⚔ Combat : rouge en mode combat actif, bleu sinon
+
+---
+
+## v75 — 2026-06-03 — Bibliothèque de campagne
+
+### Bibliothèque
+- [add] Onglet "Bibliothèque" dans la Sidebar : liste des documents de campagne accessibles
+- [add] Éditeur de texte riche (Quill 2.0) : gras, italique, titres, listes, alignement, liens, couleurs, images inline
+- [add] Notes du MJ : second éditeur visible uniquement par le MJ
+- [add] Permissions par document : "Personne / Tous les joueurs / sélection individuelle" (dropdown multi-select)
+- [add] Indicateurs de partage : œil masqué (non partagé), œil ouvert (tous), punaise colorée (joueur(s) spécifique(s))
+- [add] Propagation temps réel : document créé/modifié/supprimé visible instantanément par les joueurs autorisés
+
+### Interface
+- [chg] Fusion onglets "Joueurs" et "Config" → onglet "Profil" (réglages en haut, liste connectés en bas)
+
+---
+
 ## v74 — 2026-06-02 — CaC : Attaque multiple
 
 ### Combat — Corps à corps

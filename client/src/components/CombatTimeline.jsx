@@ -148,7 +148,7 @@ const styles = {
     position: 'absolute',
     top: topOffset,
     left: 0,
-    right: 0,
+    right: 'var(--sidebar-w, 0px)',
     display: 'flex',
     flexDirection: 'row',
     alignItems: 'flex-end',

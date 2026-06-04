@@ -1,0 +1,273 @@
+SOUFFLE (OPTIONNEL)
+L’Attribut secondaire Souffle indique le nombre de 
+Tours de combat pendant lesquels un personnage peut re tenir sa respiration. Il faut un Tour de combat complet pour 
+prendre sa respiration : si le personnage est surpris et n’a 
+pas le temps de se préparer, son niveau de Souffle doit être 
+divisé par deux. Retenir sa respiration permet bien enten du d’échapper à la noyade, en cas d’immersion, mais peut 
+aussi être utile si le personnage veut éviter de s’asphyxier 
+par manque d’oxygène ou de respirer un gaz nocif.
+Dès qu’un personnage retient sa respiration, il com mence à perdre des points de Souffle (le compteur de Souf fle de la fiche de personnage peut être utilisé pour gérer 
+tout cela). Le rythme auquel un personnage perd ses points 
+de Souffle dépend de l’intensité de son activité :
+• Personnage immobile : perte d’1 point de Souffle 
+par Tour de combat.
+• Activité modérée (nage peu rapide, mar che…) : perte de 2 points/Tour.
+• Activité intense (nage rapide, course…) : perte 
+de 3 points/Tour.
+• Activité très intense (combat…) : perte de 4 
+points/Tour.
+Lorsqu’un personnage a épuisé tous ses points de Souf fle, il peut encore effectuer un Test d’Athlétisme : le modifi cateur de réussite (s’il est égal à 1 ou plus) indique le nom bre de Tours de combat qu’il gagne avant de devoir faire un 
+nouveau Test. À chaque nouveau Test, le personnage subit 
+un malus cumulatif égal à la valeur du nombre de points de 
+Souffle perdus, en fonction de son activité (par exemple -2 
+pour une activité modérée, -3 pour une activité intense, 
+etc.). Dès qu’un Test d’Athlétisme est raté, le personnage 
+commence à se noyer (voir Noyade, dans Autres sour ces de dommages, page 244), à s’asphyxier ou à subir les 
+effets du gaz nocif (qui n’est pas forcément mortel, il peut 
+s’agir d’un gaz lacrymogène ou soporifique.
+
+Autres sources 
+de dommages 
+physiques_
+Acide
+La plupart des acides infligent des Dommages progressifs 
+(comme les Dommages dus au feu), à un certain rythme et pen dant une certaine période, ou jusqu’à ce que l’agent corrosif soit 
+neutralisé d’une manière ou d’une autre. Les Dommages subis dé-
+pendent de la puissance de l’acide. Quand on est soumis à une at mosphère corrosive (les pluies acides de la Surface par exemple), 
+on subit les Dommages jusqu’à ce qu’on sorte de la zone dange reuse. L’effet de l’acide peut alors persister pendant 1D6 Tour(s) 
+de combat (où jusqu’à la neutralisation de l’agent corrosif). Enfin, 
+certaines substances affectent certains matériaux et pas d’autres. 
+Il est donc utile de préciser si la substance ronge le métal, la chair, 
+etc. Généralement, le produit ou la méthode permettant de neu traliser l’acide est également indiqué.
+Chutes
+Les Dommages d’une chute dépendent principalement de la 
+hauteur :
+• Niveau du sol : 1D6 si le personnage était en train de courir 
+à l’Allure maximale (ou s’il obtient une Catastrophe sur un Test 
+d’Acrobatie/Équilibre, voir plus bas), 1 Localisation touchée.
+• 1 m : 1D6, 1 Localisation touchée.
+• 2 m : 1D10, 1 Localisation touchée.
+• 3 m : 2D10, 1 Localisation touchée.
+• 4 m : 3D10, 1D3 Localisation(s) touchée(s).
+• Au-delà : +1D10/mètre, 1D3+3 Localisation(s) touchée(s).
+• Au-delà de 10D10 : il s’agit de dommages massifs...
+Les Localisations touchées sont déterminées au hasard, sur la ta ble des Localisations du combat à distance. La protection offerte par 
+l’armure est réduite de moitié.
+Note : si le personnage tombe sur un terrain très accidenté/
+encombré (gravas, ferraille, tessons de verre), les Dommages sont 
+augmentés de 1D10 points.
+Un personnage qui chute, et qui est en mesure de contrôler sa 
+chute*, a le droit de faire un Test d’Acrobatie/Équilibre, avec un malus 
+dont la valeur est égale à la hauteur de la chute x 2 (par exemple -4 
+pour une chute de 2 mètres). En cas de réussite, les Dommages sont 
+réduits de 1D6 + modificateur de réussite. Au-delà de 5 mètres, il est 
+impossible de réduire les Dommages d’une chute.
+* Si le MJ n’est pas certain, il peut demander un Test de Réaction. C’est 
+également approprié si la chute est soudaine (par exemple si le sol se dérobe sous 
+les pieds du personnage ou si on le pousse dans le vide par surprise).
+Décompression
+Techniquement, la décompression est susceptible d’affecter l’en semble du corps mais, pour simplifier, nous localiserons les Dom mages physiques dans le Corps. Un personnage qui ne respecte pas 
+les paliers de décompression alors qu’il respire du mélange subit à 
+chaque Tour 1D10 points de Dommages physiques dans le Corps 
+(ces Dommages peuvent même passer à 2D10, si le personnage a 
+manqué plusieurs paliers). Le seul moyen d’arrêter le phénomène 
+est de placer l’individu en caisson hyperbare, ou de le redescendre 
+au dernier palier respecté (si c’est possible…). Le personnage devra 
+alors respecter le temps de décompression nécessaire.
+en oxygène, et peut entraîner une syncope imprévisible. 
+En terme de jeu, avant que le personnage ne retienne son 
+souffle, le MJ doit effectuer secrètement un Test 
+d’Athlétisme pour le joueur. Ce dernier ne doit pas 
+être averti du résultat du Test, pour simuler les effets réels 
+d’une hyperventilation ratée. En cas de réussite, le modi ficateur de réussite indique le nombre de Tours de combat 
+supplémentaires dont le personnage dispose, en plus de son 
+niveau habituel de Souffle. En cas d’échec, le modificateur 
+doit être retranché du niveau de Souffle.
+Note : pour employer une technique d’hyperventilation, 
+le personnage doit avoir un peu de temps devant lui avant de 
+retenir son souffle (comptez une dizaine de Tours de combat, 
+soit à peu près une minute). Il ne peut faire aucune autre ac tion pendant ce temps.
+243
+Etats de santé tats de santé
+Dommages 
+étourdissants et 
+assommants
+En plus des Dommages physiques habituels, certaines armes sont 
+capables de causer des « Dommages de Choc » capable d’étourdir ou 
+d’assommer un personnage. Il s’agit en général d’armes lourdes et/
+ou contondantes, qui créent ces Dommages étourdissants lorsqu’elles 
+touchent la tête de l’adversaire. La marche à suivre est simple, lors qu’une attaque avec une telle arme est localisée sur la Tête :
+• Faites le jet de dés correspondant aux Domma ges physiques de l’arme et comparez comme d’habi tude le total aux seuils de blessure du personnage. Notez 
+l’éventuelle blessure qui en résulte (ne vous occupez pas 
+du Choc à cette étape).
+• Faites ensuite le jet de dés correspondant aux 
+Dommages additionnels de Choc de l’arme (la Ré-
+sistance aux blessures du personnage s’applique). 
+Ajoutez ces Dommages additionnels au total de Dommages 
+physiques obtenu précédemment.
+• Comparez ce nouveau total aux seuils de blessure 
+de l’adversaire : celui-ci doit tout simplement effectuer 
+un Test de Résistance au Choc, correspondant au seuil de 
+blessure atteint (voir Description et effet des blessures, page 235), et en subir les éventuels effets.
+Les Dommages de Choc ne sont que virtuels, ils ne causent pas 
+de blessures physiques mais augmentent la Difficulté du Test de résis tance au Choc. Ainsi, on peut frapper quelqu’un avec une matraque, 
+en ne lui causant qu’une grosse bosse (Dommages physiques faibles), 
+mais l’assommer tout de même (Dommages de Choc importants).
+N’oubliez pas qu’avec une arme normale, créer des Domma ges additionnels de Choc n’est possible que sur un coup localisé à 
+la tête. Quelques armes cependant ne causent que des Dommages 
+de Choc (les armes électriques par exemple). Dans ce cas, la pro cédure ne change pas, il suffit juste de comparer les Dommages 
+de Choc aux seuils de blessure du personnage, et d’appliquer le 
+malus indiqué au Test de résistance au Choc. La victime ne subira 
+que les effets de celui-ci.
+Faim et soif
+Un personnage qui souffre de malnutrition ou de sous-alimen tation voit ses niveaux de Force, de Constitution et de Volonté divi sés par deux. Il gagne d’autre part un niveau de Fatigue automatique 
+par mois (niveau maximum : Très fatigué). Un personnage qui ne 
+mange rien perd 1 point de Force et 1 point de Constitution par 
+semaine. Si l’un de ces deux Attributs tombe en dessous de 3, il 
+meurt d’inanition. Il gagne un niveau de Fatigue automatique par 
+semaine (niveau maximum : Épuisé). Si le personnage recommence 
+à s’alimenter normalement, il lui faudra tout de même quelques 
+semaines, voire quelques mois pour retrouver ses niveaux d’Attri buts. Le froid oblige les individus à s’alimenter plus souvent.
+Le manque d’eau potable a des effets encore plus radicaux : 
+personne ne peut survivre plus de trois jours sans boire, dans des 
+conditions normales (un ou deux jours seulement en cas de forte 
+chaleur). Pour chaque jour passé sans boire, le personnage subit un 
+malus de -5 à tous ses Tests.
+Feu
+Les Dommages dus au feu dépendent de l’intensité de celui-ci, 
+ainsi que du temps d’exposition, mesuré en Tours de combat, jusqu’à 
+ce que les flammes soient éteintes ou que le personnage ne soit plus 
+exposé à celles-ci :
+• Une petite flamme : 1D6/Tour, sur la Localisation ex posée.
+• Un feu de taille moyenne : 1D10/Tour, sur la Localisa tion exposée. Des vêtements qui prennent feu sur un person nage infligent ce genre de dommages.
+• Un grand feu : 2D10/Tour, sur 1D3 Localisation(s). Un 
+personnage aspergé de liquide inflammable auquel on met le 
+feu subit ce genre de dommages (c’est, de plus, un feu très 
+difficile à étouffer).
+• Un brasier : 3D10/Tour. 
+Certaines tenues de protection ignifugées permettent de ré-
+duire considérablement les dommages dus au feu. N’oubliez pas 
+non plus qu’un incendie peut aussi avoir d’autres effets néfastes : 
+fumées toxiques, asphyxiantes et aveuglantes, chaleur intense ou 
+même raréfaction de l’oxygène dans un lieu clos ! Enfin, être 
+confronté à un feu important est un événement qui peut être ex trêmement stressant, notamment pour les personnages vulnéra bles (les hybrides par exemple) ou pour la plupart des animaux, 
+qui feront tout pour prendre la fuite.
+Froid
+Dans les fonds marins, le froid est un danger redoutable. Nul be soin d’être plongé dans une eau glacée pour en ressentir les effets : quel ques générateurs en panne et c’est toute une station ou tout un navire 
+qui se refroidit lentement… Le froid est de plus en plus dangereux au 
+fur et à mesure que la température baisse, pouvant plonger un person nage dans l’inconscience ou même créer des engelures terribles :
+• Froid (entre 10 et 15°C) : à cette température, le froid n’a 
+pas encore de réels effets physiques, mais épuise l’organisme. 
+Le personnage doit se soumettre à un Test de résistance à la 
+Fatigue (Constitution) toutes les 2 heures.
+• Très froid (entre 5 et 10°C) : même chose que ci-dessus, 
+mais le Test doit être effectué toutes les heures.
+• Glacial (aux alentours de 0°C) : même chose que ci dessus, mais le Test doit être effectué toutes les demi-heu res. De plus, à cette température, le froid créé des Dom mages physiques :
+° Au bout d’une heure, les Bras et les Jambes 
+sont touchés en premier : ces Localisations subis sent 1D10 points de Dommages physiques. Ensuite, 
+pour chaque heure supplémentaire passée dans un tel 
+environnement, le personnage subit une nouvelle atta que du froid sur ces Localisations, mais les dommages 
+augmentent d’1D10 à chaque fois (2D10 la deuxième 
+heure, 3D10 la troisième heure, etc.). Si le froid inflige 
+une Blessure critique, l’amputation de quelques doigts 
+et/ou orteils est inévitable. Une Blessure mortelle ou 
+supérieure peut nécessiter l’amputation d’un membre.
+° Au bout de deux heures, les dommages s’éten dent au Corps et à la Tête, qui subissent à leur 
+tour des Dommages physiques, à chaque heure, en 
+suivant les mêmes règles que précédemment (1D10, 
+puis 2D10, 3D10, etc.).
+BLESSURES DUES AU FEU 
+(OPTIONNEL)
+Les blessures infligées par les flammes sont atroces ; el les s’infectent terriblement vite et, surtout, sont intolérables 
+pour l’organisme. La Difficulté des soins subit un malus de -5 
+et le temps de guérison est doublé, sauf si la victime est plon gée dans une cuve de guérison ou si elle est traitée avec un 
+medkit antibrûlure (c’est la même chose qu’un medkit, mais 
+spécialisé dans les brûlures). Les Tests contre l’infection (s’il 
+y en a) doivent être effectués tous les jours, avec un malus 
+supplémentaire de -3. Enfin, en cas de blessure au visage, les 
+séquelles sont radicales : à cause des cicatrices, le personnage 
+perd 1 point de Présence par Blessure grave, 3 points par Bles sure critique et 5 points par Blessure mortelle. Il faudra une 
+lourde et coûteuse opération de chirurgie esthétique pour ré-
+parer tout cela.
+Etats de santé tats de santé
+244
+• Froid extrême (en dessous de 0°C) : personne ne peut 
+survivre à des températures aussi basses, sans protections 
+adéquates. Pour chaque tranche de 5°C en dessous de 0°C, 
+vous pouvez appliquer les règles ci-dessus, en divisant à cha que fois les temps indiqués par deux.
+Si le personnage effectue une action fatigante (courir, nager, se 
+battre, etc.), le MJ est libre de demander des Tests de Résistance à 
+la Fatigue de manière beaucoup plus fréquente. Notez que ces rè-
+gles concernent les effets du froid à l’air libre : si le personnage 
+est dans l’eau (ou si ses vêtements sont mouillés), tous les 
+temps indiqués plus haut doivent être divisés par deux.
+Note : pour les blessures dues au gel, le MJ peut, s’il le souhaite, 
+appliquer les règles optionnelles des blessures dues au feu, plus haut.
+Une station ou un navire de taille moyenne offre habituellement 
+une température moyenne de 20°C. En cas de panne du système de 
+chauffage, le MJ peut mettre en scène la baisse progressive et régu lière de la température, en fonction de la situation. Un personnage 
+habillé normalement subit normalement les effets du froid. Avec des 
+vêtements chauds, la température peut être considérée comme étant 
+supérieure de 5 à 15 degrés, selon leur qualité. Un personnage vêtu de 
+vêtements ou d’une combinaison adaptée au grand froid peut même 
+annuler les effets de la température (jusqu’à un certain niveau). Un 
+personnage qui porte une armure de plongée n’a normalement aucun 
+problème mais, si le système de chauffage tombe en panne, il com mencera à subir les effets du froid très rapidement.
+Note : les hybrides (de tout type) ne ressentent pas les effets du 
+froid lorsqu’ils sont sour l’eau.
+Noyade/Asphyxie
+Un personnage commence à se noyer ou à s’asphyxier quand il 
+n’a plus de points de Souffle (voir « Souffle », plus haut). Il sombre 
+alors dans l’inconscience en 2D6 Tours de combat, et subit toutes les 
+complications de la noyade (arrêt respiratoire, puis arrêt cardiaque). 
+Si rien n’est fait pour lui, le personnage meurt au bout de quelques 
+minutes (5 à 7 minutes environ). Avant cela, un personnage compé-
+tent en Premiers soins peut toutefois tenter de le réanimer (à condition 
+d’avoir le matériel de secours nécessaire) ; son Test subit toutefois un 
+malus égal au double du nombre de minutes qui se sont écoulées de puis que l’individu a cessé de respirer (chaque tentative de réanima tion prend 3 minutes). Au-delà de 7 à 8 minutes, aucun espoir n’est 
+plus permis (sauf si on utilise un équipement médical de très haute 
+technologie).
+Note : dans une eau glaciale (0°C ou moins), les chances de 
+survie sont légèrement supérieures, car le froid conserve mieux les 
+cellules du cerveau. Le malus du Test de Premiers soins est alors sim plement égal au nombre de minutes d’asphyxie.
+Maladies et 
+poisons_
+Il existe une multitude de maladies et de poisons, aux effets très 
+divers. Techniquement, les maladies et les empoisonnements sont gé-
+rés par les mêmes règles, à quelques détails près.
+Niveau de maladie ou 
+d’empoisonnement
+Le niveau de maladie ou d’empoisonnement représente les effets 
+de ces maux sur le personnage. Chez un individu sain, ces niveaux 
+sont à 0, mais s’il tombe malade ou s’il est victime d’un empoison nement, le niveau de maladie ou d’empoisonnement va augmenter 
+– plus ou moins rapidement –, représentant la progression du mal. À 
+l’instar des seuils de Blessures physiques, dès que ce niveau atteint un 
+certain seuil, le personnage subit les effets correspondants à la mala die en question. Voici l’échelle des niveaux de maladie et d’empoison nement (comparable à celle des blessures) :
+• Seuil 5 : légèrement malade ou empoisonnement léger. Le 
+personnage est considéré comme Légèrement fatigué (malus de 
+-2 aux actions).
+• Seuil 10 : moyennement malade ou empoisonnement 
+moyen. Le personnage est Fatigué (malus de -4).
+• Seuil 15 : gravement malade ou empoisonnement grave. Le 
+personnage est Très fatigué (malus de -6).
+• Seuil 20 : très gravement malade. Le personnage est Épuisé
+(malus de -8).
+• Seuil 25 : état critique. Le personnage est À bout de force (ma lus de -10).
+• Seuil 30 : stade ultime.
+Le premier effet commun à toutes les maladies et tous les poi sons est l’affaiblissement du personnage, qui se traduit par une aug mentation de son niveau de Fatigue, entraînant un malus à toutes ses 
+actions, tant que le niveau de maladie ou d’empoisonnement ne baisse 
+pas. Il ne s’agit pas forcément d’un véritable état de fatigue, cela peut 
+aussi être des vertiges, une douleur, des nausées, etc.
+Note : si vous n’utilisez pas les règles avancées de Fatigue, appli quez juste les malus.
+Chaque maladie ou poison a ensuite des effets spécifiques, qui 
+se déclenchent dès que le niveau correspondant atteint ou franchit 
+certains seuils (tous les seuils n’ont pas forcément d’effets asso ciés). Ainsi, si les premiers symptômes d’une maladie apparaissent 
+au seuil 5, le personnage en subira les effets dès que son niveau de 
+maladie atteindra 5 ou dépassera 5 points. Les maladies et les poi sons peuvent entraîner une diminution du niveau d’un ou plusieurs 
+Attribut(s). En règle générale, cette perte est temporaire : le per sonnage retrouve ses niveaux habituels après guérison.
+Un personnage qui possède un niveau de maladie ou d’em poisonnement de 30 ne peut plus lutter contre les effets du mal. 
+De plus, il gagne chaque jour un nouveau point de maladie ou 
+d’empoisonnement, tant que son niveau n’est pas redescendu en 
+dessous de 30. Dans le cas des maladies ou des poisons mortels, 
+le personnage meurt dès que le niveau correspondant atteint ou 
+dépasse 30…

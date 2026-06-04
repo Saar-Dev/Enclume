@@ -10,6 +10,7 @@ import { useMapStore } from '../stores/mapStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useEntityStore } from '../stores/entityStore'
 import { useCombatStore } from '../stores/combatStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import api from '../lib/api'
 import Canvas3D from '../components/Canvas3D'
 import Editor3D from '../components/Editor3D'
@@ -17,6 +18,7 @@ import Sidebar from '../components/Sidebar'
 import DicePanel from '../components/DicePanel'
 import CharacterWindow from '../character/CharacterWindow'
 import RadialMenu from '../components/RadialMenu'
+import TokenRadialMenu from '../components/TokenRadialMenu'
 import EntityInstancePanel from '../components/EntityInstancePanel'
 import CombatOverlay from '../components/CombatOverlay'
 
@@ -39,6 +41,7 @@ export default function SessionPage() {
   } = useSessionStore()
   const { setEntities, fetchBlueprints } = useEntityStore()
   const { setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster, advanceSlot, setActions, phase: combatPhase } = useCombatStore()
+  const { setDocuments, addDocument, updateDocument, removeDocument } = useLibraryStore()
 
   const [campaign, setCampaign] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -164,6 +167,10 @@ export default function SessionPage() {
       // Chargement de la liste des battlemaps (pour la barre GM)
       const mapsRes = await api.get(`/campaigns/${campaignId}/battlemaps`)
       setBattlemaps(mapsRes.data.battlemaps || [])
+
+      // Chargement des documents de la bibliothèque
+      const docsRes = await api.get(`/campaigns/${campaignId}/documents`)
+      setDocuments(docsRes.data.documents || [])
 
     } catch (err) {
       setError(t('session.connectionError'))
@@ -654,13 +661,18 @@ export default function SessionPage() {
       setReconnectTrigger(n => n + 1)
     })
 
+    // ─── Bibliothèque — documents ────────────────────────────────────────────
+    s.on(WS.DOC_CREATED, (doc) => addDocument(doc))
+    s.on(WS.DOC_UPDATED, (doc) => updateDocument(doc))
+    s.on(WS.DOC_DELETED, ({ id }) => removeDocument(id))
+
     setSocket(s)
     return () => s.disconnect()
   }, [campaignId, reconnectTrigger, loadSession])
 
-  // ─── Menu contextuel clic droit token ────────────────────────────────────────
+  // ─── Menu radial token ───────────────────────────────────────────────────────
+  // Ouvert au double-clic sur un token. Fermé par le composant lui-même.
   const [contextMenu, setContextMenu] = useState(null)
-  const contextMenuRef = useRef(null)
 
   // Ouverture — vérifie que l'utilisateur est propriétaire du token OU GM
   const handleTokenDoubleClick = useCallback((token, x, y) => {
@@ -670,23 +682,16 @@ export default function SessionPage() {
     setContextMenu({ token, x, y })
   }, [characters, user?.id, isGm])
 
-  // Fermeture sur clic ailleurs
-  useEffect(() => {
-    if (!contextMenu) return
-    const handleMouseDown = (e) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
-        setContextMenu(null)
-      }
-    }
-    document.addEventListener('mousedown', handleMouseDown)
-    return () => document.removeEventListener('mousedown', handleMouseDown)
-  }, [contextMenu])
+  // Orientation absolue depuis la boussole du menu radial (r = 0..7, PE21)
+  const handleSetContextTokenRotation = useCallback((r) => {
+    if (!contextMenu || !socket) return
+    socket.emit(WS.TOKEN_SET_ROTATION, { tokenId: contextMenu.token.id, r })
+  }, [contextMenu, socket])  // P3 : socket dans deps
 
-  // Suppression depuis le menu contextuel
-  const handleContextMenuDelete = useCallback(async () => {
+  // Suppression depuis le menu radial — sans setContextMenu(null) : c'est doClose() du composant qui gère la fermeture
+  const handleRemoveContextToken = useCallback(async () => {
     if (!contextMenu) return
     const tokenId = contextMenu.token.id
-    setContextMenu(null)
     try {
       await api.delete(`/tokens/${tokenId}`)
       removeToken(tokenId)
@@ -886,10 +891,9 @@ export default function SessionPage() {
             {battlemaps.map(bm => (
               <button
                 key={bm.id}
-                style={{
-                  ...styles.gmBarBtn,
-                  ...(bm.id === battlemap?.id ? styles.gmBarBtnActive : {}),
-                }}
+                className="btn btn-ghost"
+                data-active={bm.id === battlemap?.id}
+                style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
                 onClick={() => loadMap(bm.id)}
                 onContextMenu={(e) => {
                   e.preventDefault()
@@ -903,14 +907,8 @@ export default function SessionPage() {
           </div>
           <button
             onClick={handleCombatToggle}
-            style={{
-              ...styles.gmBarBtn,
-              ...(mode === 'combat' ? styles.gmBarBtnActive : {}),
-              borderColor: mode === 'combat' ? '#e05b5b' : '#2a2a3e',
-              color: mode === 'combat' ? '#e05b5b' : '#8888a8',
-              marginLeft: 'auto',
-              flexShrink: 0,
-            }}
+            className={mode === 'combat' ? 'btn btn-danger' : 'btn'}
+            style={{ marginLeft: 'auto', flexShrink: 0 }}
             title={mode === 'combat' && combatPhase !== null ? t('session.combatEnd') : t('session.combatMode')}
           >
             {mode === 'combat' && combatPhase !== null ? `✕ ${t('session.combat')}` : `⚔ ${t('session.combat')}`}
@@ -1020,31 +1018,21 @@ export default function SessionPage() {
       )}
       </div>
 
-      {/* ─── Menu contextuel clic droit token ─────────────────────────────── */}
+      {/* ─── Menu radial token ───────────────────────────────────────────────── */}
       {contextMenu && (() => {
-        const MENU_W = 180
-        const MENU_H = 136
-        const x = contextMenu.x + MENU_W > window.innerWidth
-          ? contextMenu.x - MENU_W
-          : contextMenu.x
-        const y = contextMenu.y + MENU_H > window.innerHeight
-          ? contextMenu.y - MENU_H
-          : contextMenu.y
+        const character = characters.find(c => c.id === contextMenu.token.character_id)
         return (
-          <div ref={contextMenuRef} style={{ ...styles.contextMenu, left: x, top: y }}>
-            <button style={styles.contextMenuItem} onClick={handleContextMenuDelete}>
-              {t('token.removeFromMap')}
-            </button>
-            <button style={{ ...styles.contextMenuItem, ...styles.contextMenuItemDisabled }} disabled>
-              {t('token.measure')}
-            </button>
-            <button style={{ ...styles.contextMenuItem, ...styles.contextMenuItemDisabled }} disabled>
-              {t('token.lineOfSight')}
-            </button>
-            <button style={{ ...styles.contextMenuItem, ...styles.contextMenuItemDisabled }} disabled>
-              {t('token.range')}
-            </button>
-          </div>
+          <TokenRadialMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            token={contextMenu.token}
+            character={character}
+            isGm={isGm}
+            onOpenCharacterSheet={() => setSelectedCharacterId(character?.id)}
+            onRemoveToken={handleRemoveContextToken}
+            onSetRotation={handleSetContextTokenRotation}
+            onClose={() => setContextMenu(null)}
+          />
         )
       })()}
 
@@ -1106,10 +1094,10 @@ export default function SessionPage() {
               autoFocus
             />
             <div style={styles.modalActions}>
-              <button style={styles.btnGhost} onClick={() => setShowRenameModal(false)}>
+              <button className="btn btn-ghost" onClick={() => setShowRenameModal(false)}>
                 {t('common.cancel')}
               </button>
-              <button style={styles.btnPrimary} onClick={handleMapRename}>
+              <button className="btn" onClick={handleMapRename}>
                 {t('common.save')}
               </button>
             </div>
@@ -1130,10 +1118,10 @@ export default function SessionPage() {
               autoFocus
             />
             <div style={styles.modalActions}>
-              <button style={styles.btnGhost} onClick={() => setShowCreateModal(false)}>
+              <button className="btn btn-ghost" onClick={() => setShowCreateModal(false)}>
                 {t('common.cancel')}
               </button>
-              <button style={styles.btnPrimary} onClick={handleMapCreate}>
+              <button className="btn" onClick={handleMapCreate}>
                 {t('common.save')}
               </button>
             </div>
@@ -1244,6 +1232,7 @@ export default function SessionPage() {
           onMeleeResultClose={() => setMeleeResult(null)}
           gmSocketError={gmSocketError}
           onGmSocketErrorClose={() => setGmSocketError(null)}
+          sidebarWidth={sidebarVisible ? sidebarWidth : 0}
         />
       )}
 
@@ -1284,22 +1273,6 @@ const styles = {
     gap: '6px',
     overflowX: 'auto',
     flex: 1,
-  },
-  gmBarBtn: {
-    background: 'none',
-    border: '1px solid #2a2a3e',
-    borderRadius: '4px',
-    color: '#8888a8',
-    fontSize: '12px',
-    padding: '3px 10px',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    flexShrink: 0,
-  },
-  gmBarBtnActive: {
-    backgroundColor: 'rgba(91,141,238,0.15)',
-    borderColor: '#5b8dee',
-    color: '#5b8dee',
   },
   mainArea: {
     display: 'flex',
@@ -1424,23 +1397,5 @@ const styles = {
     display: 'flex',
     justifyContent: 'flex-end',
     gap: '8px',
-  },
-  btnPrimary: {
-    backgroundColor: '#5b8dee',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    padding: '7px 16px',
-    fontSize: '13px',
-    fontWeight: '500',
-    cursor: 'pointer',
-  },
-  btnGhost: {
-    background: 'none',
-    border: 'none',
-    color: '#8888a8',
-    fontSize: '13px',
-    padding: '7px 8px',
-    cursor: 'pointer',
   },
 }

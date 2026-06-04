@@ -165,7 +165,7 @@ function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ }) {
 // Token individuel — gère drag, lerp, ring, label.
 // glbUrl : URL complète du GLB à charger (character.glb_url ou default_token_glb_url de campagne), ou null.
 // Si null → TokenFallbackBody (silhouette géométrique). Si défini → TokenGlbBody (modèle 3D).
-function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick, dragState, isGmLayer }) {
+function TokenMesh({ token, glbUrl, isSelected, onDragStart, dragState, isGmLayer }) {
   const color = token.user_color || token.color || '#4A90D9'
   const label = token.label || '?'
 
@@ -219,10 +219,6 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, onTokenDoubleClick,
       onPointerDown={(e) => {
         e.stopPropagation()
         onDragStart(e, token)
-      }}
-      onDoubleClick={(e) => {
-        e.stopPropagation()
-        onTokenDoubleClick?.(token, e.clientX, e.clientY)
       }}
     >
       <TokenRing color={color} isSelected={isSelected} isDragging={isDragging} opacity={isGmLayer ? 0.25 : undefined} />
@@ -652,7 +648,7 @@ function Scene({
       const character = characters.find(c => c.id === token.character_id)
       const isOwner = character?.user_id === user?.id
       if (isOwner || isGm) {
-        onTokenRotate?.(token.id)
+        onTokenDoubleClick?.(token, e.clientX, e.clientY)
       }
       justSelectedRef.current = true
       onTokenSelect(token.id)
@@ -679,7 +675,7 @@ function Scene({
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [raycastGround, getColumnTopY, onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenRotate, socket, moveTarget, onMoveCancel])
+  }, [raycastGround, getColumnTopY, onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -820,7 +816,6 @@ function Scene({
             glbUrl={glbUrl}
             isSelected={selectedTokenId === token.id}
             onDragStart={handleDragStart}
-            onTokenDoubleClick={onTokenDoubleClick}
             dragState={dragState?.tokenId === token.id ? dragState : null}
             isGmLayer={token.layer === 'gm'}
           />

@@ -19,6 +19,7 @@
     "fast-voxel-raycast": "^0.1.1",
     "i18next": "^26.0.2",
     "motion": "^12.40.0",
+    "quill": "^2.0.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-i18next": "^17.0.1",

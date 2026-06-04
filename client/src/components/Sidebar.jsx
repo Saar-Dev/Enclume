@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import { useCharacterStore } from '../stores/characterStore'
@@ -7,6 +8,7 @@ import { useEntityStore } from '../stores/entityStore'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
 import GeometryIcon from './GeometryIcon.jsx'
+import LibraryPanel from './LibraryPanel.jsx'
 
 const SIDEBAR_MIN = 220
 const SIDEBAR_MAX = 500
@@ -57,16 +59,20 @@ const IconX = () => (
     <line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 )
-const IconDice = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="2" y="2" width="20" height="20" rx="4" ry="4"/>
-    <circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"/>
-    <circle cx="16" cy="8" r="1.2" fill="currentColor" stroke="none"/>
-    <circle cx="8" cy="16" r="1.2" fill="currentColor" stroke="none"/>
-    <circle cx="16" cy="16" r="1.2" fill="currentColor" stroke="none"/>
-    <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>
-  </svg>
-)
+const IconDice = () => {
+  const s = 14, cx = 7, cy = 7, r = s * 0.46
+  const r85 = r * 0.85
+  const pts = `${cx},${(cy - r).toFixed(2)} ${(cx + r85).toFixed(2)},${(cy - r * 0.5).toFixed(2)} ${(cx + r85).toFixed(2)},${(cy + r * 0.5).toFixed(2)} ${cx},${(cy + r).toFixed(2)} ${(cx - r85).toFixed(2)},${(cy + r * 0.5).toFixed(2)} ${(cx - r85).toFixed(2)},${(cy - r * 0.5).toFixed(2)}`
+  return (
+    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} style={{ display: 'block' }}>
+      <polygon points={pts} fill="currentColor" fillOpacity="0.18" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+      <line x1={(cx - r85).toFixed(2)} y1={(cy - r * 0.5).toFixed(2)} x2={cx} y2={(cy + r * 0.34).toFixed(2)} stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+      <line x1={(cx + r85).toFixed(2)} y1={(cy - r * 0.5).toFixed(2)} x2={cx} y2={(cy + r * 0.34).toFixed(2)} stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+      <line x1={cx} y1={(cy - r).toFixed(2)} x2={cx} y2={(cy + r * 0.34).toFixed(2)} stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+      <text x={cx} y={(cy + s * 0.07).toFixed(2)} textAnchor="middle" fontFamily="'Share Tech Mono', monospace" fontSize={(s * 0.26).toFixed(2)} fill="currentColor">20</text>
+    </svg>
+  )
+}
 const IconPen = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M12 20h9"/>
@@ -427,6 +433,7 @@ export default function Sidebar({
   onOpenCharacter,
   onEntityActionResolve,
 }) {
+  const navigate = useNavigate()
   const { t } = useTranslation()
   const { user, setUser } = useAuthStore()
   const { characters, members, isGm, addCharacter } = useCharacterStore()
@@ -467,7 +474,7 @@ export default function Sidebar({
 
   // Initialiser les champs config quand on ouvre l'onglet
   useEffect(() => {
-    if (activeTab === 'config' && user) {
+    if (activeTab === 'profil' && user) {
       setConfigUsername(user.username || '')
       setConfigColor(user.color || '#4A90D9')
       setConfigSuccess(false)
@@ -645,47 +652,50 @@ export default function Sidebar({
       <div style={styles.resizeHandle} onMouseDown={onMouseDown} />
 
       {/* Bouton fermeture */}
-      <button style={styles.closeBtn} onClick={onClose} title={t('common.close')}>›</button>
+      <button className="btn-icon" onClick={onClose} title={t('common.close')} style={{ position:'absolute', top:'8px', right:'8px', zIndex:10, fontSize:'18px' }}>›</button>
 
       {/* Bouton aide raccourcis */}
       <button
-        style={styles.helpBtn}
+        className="btn-icon"
         onClick={() => setShowHelp(v => !v)}
         title={t('sidebar.helpTitle')}
+        style={{ position:'absolute', top:'8px', right:'34px', zIndex:10, border:'1px solid #2a2a3e', borderRadius:'50%', width:'20px', height:'20px', fontSize:'11px', fontWeight:'700', display:'flex', alignItems:'center', justifyContent:'center' }}
       >?</button>
 
       {/* ─── OUTILS ─────────────────────────────────────────────────────── */}
       <div style={styles.toolsRow}>
         {isGm && (
           <button
-            style={{ ...styles.toolBtn, ...(mode === 'edit' ? styles.toolBtnActive : {}) }}
+            className="btn-tool"
+            data-active={mode === 'edit'}
             onClick={() => onModeChange(mode === 'edit' ? 'play' : 'edit')}
             title={mode === 'edit' ? t('session.modePlay') : t('session.modeEdit')}
           >
             {mode === 'edit' ? <IconEdit /> : <IconPlay />}
-            <span style={styles.toolLabel}>{mode === 'edit' ? t('session.modeEdit') : t('session.modePlay')}</span>
+            <span style={{ fontSize:'9px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{mode === 'edit' ? t('session.modeEdit') : t('session.modePlay')}</span>
           </button>
         )}
 
         {isGm && (
           <button
-            style={{ ...styles.toolBtn, ...(layer === 'gm' ? styles.toolBtnActive : {}) }}
+            className="btn-tool"
+            data-active={layer === 'gm'}
             onClick={() => onLayerChange(layer === 'gm' ? 'token' : 'gm')}
             title={layer === 'gm' ? t('session.layerToken') : t('session.layerGM')}
           >
             {layer === 'gm' ? <IconEyeOff /> : <IconEye />}
-            <span style={styles.toolLabel}>{layer === 'gm' ? t('session.layerGM') : t('session.layerToken')}</span>
+            <span style={{ fontSize:'9px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{layer === 'gm' ? t('session.layerGM') : t('session.layerToken')}</span>
           </button>
         )}
 
         <div style={{ position: 'relative' }}>
           <button
-            style={styles.toolBtn}
+            className="btn-tool"
             onClick={() => setToolsOpen(v => !v)}
             title={t('session.tools')}
           >
             <IconRuler />
-            <span style={styles.toolLabel}>{t('session.tools')}</span>
+            <span style={{ fontSize:'9px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{t('session.tools')}</span>
           </button>
           {toolsOpen && (
             <div style={styles.toolsDropdown}>
@@ -834,22 +844,16 @@ export default function Sidebar({
           {t('sidebar.characters')}
         </button>
         <button
-          style={{ ...styles.tab, ...(activeTab === 'joueurs' ? styles.tabActive : {}) }}
-          onClick={() => setActiveTab('joueurs')}
-        >
-          {t('sidebar.players')}
-        </button>
-        <button
           style={{ ...styles.tab, ...(activeTab === 'biblio' ? styles.tabActive : {}) }}
           onClick={() => setActiveTab('biblio')}
         >
           {t('sidebar.library')}
         </button>
         <button
-          style={{ ...styles.tab, ...(activeTab === 'config' ? styles.tabActive : {}) }}
-          onClick={() => setActiveTab('config')}
+          style={{ ...styles.tab, ...(activeTab === 'profil' ? styles.tabActive : {}) }}
+          onClick={() => setActiveTab('profil')}
         >
-          {t('sidebar.config')}
+          {t('sidebar.profil')}
         </button>
       </div>
       )}
@@ -931,7 +935,7 @@ export default function Sidebar({
                             {msg.rollResult}
                           </span>
                           <span style={{ fontSize: 10, color: '#456575' }}>/ {msg.threshold}</span>
-                          <span style={msg.isSuccess ? styles.badgeCritSuccess : styles.badgeCritFail}>
+                          <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'}>
                             {msg.isSuccess ? t('sidebar.macroSuccess') : t('sidebar.macroFail')}
                             {msg.isCriticalSuccess ? ` ${t('sidebar.macroCritical')}` : msg.isCriticalFail ? ` ${t('sidebar.macroFumble')}` : ''}
                           </span>
@@ -965,7 +969,7 @@ export default function Sidebar({
                             {' '}de <strong>{msg.targetName}</strong>
                           </div>
                           {msg.severity && (
-                            <span style={{ ...styles.badgeCritFail, color: msg.severityColor, borderColor: msg.severityColor + '66', background: msg.severityColor + '22' }}>
+                            <span className="badge" style={{ color: msg.severityColor, background: msg.severityColor + '22', boxShadow: `inset 0 0 0 1px ${msg.severityColor}66` }}>
                               {msg.severity}
                             </span>
                           )}
@@ -999,7 +1003,7 @@ export default function Sidebar({
                           </div>
                           {/* Badge résultat avec marge de réussite */}
                           <div style={{ paddingLeft: '2px' }}>
-                            <span style={msg.isSuccess ? styles.badgeCritSuccess : styles.badgeCritFail}>
+                            <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'}>
                               {msg.isSuccess
                                 ? t('sidebar.displacementSuccess', { mr: msg.mr })
                                 : t('sidebar.displacementFail', { mr: msg.mr })
@@ -1036,7 +1040,7 @@ export default function Sidebar({
                         </div>
                         {/* Badge résultat */}
                         <div style={{ paddingLeft: '2px' }}>
-                          <span style={msg.isSuccess ? styles.badgeCritSuccess : styles.badgeCritFail}>
+                          <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'}>
                             {msg.isSuccess ? t('sidebar.entityActionSuccess') : t('sidebar.entityActionFail')}
                           </span>
                         </div>
@@ -1071,10 +1075,10 @@ export default function Sidebar({
                         )}
                         {/* Badge critique — affiché uniquement si configuré */}
                         {msg.isCriticalSuccess && (
-                          <span style={styles.badgeCritSuccess}>{t('dice.criticalSuccess')}</span>
+                          <span className="badge badge-success">{t('dice.criticalSuccess')}</span>
                         )}
                         {msg.isCriticalFail && (
-                          <span style={styles.badgeCritFail}>{t('dice.criticalFail')}</span>
+                          <span className="badge badge-fail">{t('dice.criticalFail')}</span>
                         )}
                       </div>
                       {/* Corps : formule + rolls individuels + total */}
@@ -1108,7 +1112,7 @@ export default function Sidebar({
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
               />
-              <button style={styles.sendBtn} type="submit">➤</button>
+              <button className="btn-icon" type="submit" style={{ color: 'var(--color-primary)', fontSize: '14px' }}>➤</button>
             </form>
           </>
         )}
@@ -1119,14 +1123,13 @@ export default function Sidebar({
 
             {/* Bouton créer — GM uniquement */}
             {isGm && (
-              <div style={styles.persosHeader}>
-                <button
-                  style={styles.newCharBtn}
-                  onClick={() => setShowNewChar(v => !v)}
-                >
-                  <IconPlus /> {t('sidebar.newCharacter')}
-                </button>
-              </div>
+              <button
+                className="btn"
+                style={{ width: '100%', marginBottom: '8px' }}
+                onClick={() => setShowNewChar(v => !v)}
+              >
+                {t('sidebar.newCharacter')}
+              </button>
             )}
 
             {/* Formulaire création */}
@@ -1140,9 +1143,10 @@ export default function Sidebar({
                   autoFocus
                 />
                 <button
-                  style={styles.sendBtn}
+                  className="btn-icon"
                   type="submit"
                   disabled={creating || !newCharName.trim()}
+                  style={{ color: 'var(--color-primary)' }}
                 >
                   {creating ? '…' : '✓'}
                 </button>
@@ -1183,86 +1187,89 @@ export default function Sidebar({
           </div>
         )}
 
-        {/* ── Joueurs ── */}
-        {activeTab === 'joueurs' && (
-          <div style={styles.playersList}>
-            {members.length === 0 && (
-              <p style={styles.emptyMsg}>{t('sidebar.noPlayers')}</p>
-            )}
-            {members.map(member => {
-              const isOnline = onlineUsers.has(member.id)
-              const character = characters.find(c => c.user_id === member.id)
-              return (
-                <div key={member.id} style={styles.playerCard}>
-                  {/* Indicateur en ligne */}
-                  <div style={{
-                    ...styles.onlineDot,
-                    background: isOnline ? '#4caf77' : '#2a2a3e',
-                  }} />
-                  <div style={styles.playerInfo}>
-                    <div style={styles.playerNameRow}>
-                      <span style={styles.playerName}>{member.username}</span>
-                      <span style={member.role === 'gm' ? styles.badgeGM : styles.badgePlayer}>
-                        {member.role === 'gm' ? t('sidebar.roleGM') : t('sidebar.rolePlayer')}
-                      </span>
-                    </div>
-                    {character && (
-                      <span style={styles.playerCharacter}>
-                        ↳ {character.name}
-                      </span>
-                    )}
-                  </div>
-                  <span style={{ ...styles.onlineLabel, color: isOnline ? '#4caf77' : '#2a2a3e' }}>
-                    {isOnline ? t('sidebar.online') : t('sidebar.offline')}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
         {/* ── Biblio ── */}
         {activeTab === 'biblio' && (
-          <p style={styles.emptyMsg}>{t('sidebar.libraryPlaceholder')}</p>
+          <LibraryPanel />
         )}
 
-        {/* ── Config ── */}
-        {activeTab === 'config' && (
-          <div style={styles.configContent}>
-            <p style={styles.configTitle}>{t('sidebar.configTitle')}</p>
-            {configSuccess && (
-              <p style={styles.configSuccess}>{t('sidebar.configSaved')}</p>
-            )}
-            <form onSubmit={handleConfigSave}>
-              <div style={styles.configField}>
-                <label style={styles.configLabel}>{t('sidebar.configUsername')}</label>
-                <input
-                  style={styles.configInput}
-                  value={configUsername}
-                  onChange={e => setConfigUsername(e.target.value)}
-                />
-              </div>
-              <div style={styles.configField}>
-                <label style={styles.configLabel}>{t('sidebar.configColor')}</label>
-                <div style={styles.configColorRow}>
+        {/* ── Profil — réglages compte + séparateur + liste connectés ── */}
+        {activeTab === 'profil' && (
+          <>
+            {/* Réglages compte */}
+            <div style={styles.configContent}>
+              {configSuccess && (
+                <p style={styles.configSuccess}>{t('sidebar.configSaved')}</p>
+              )}
+              <form onSubmit={handleConfigSave}>
+                <div style={styles.configField}>
+                  <label style={styles.configLabel}>{t('sidebar.configUsername')}</label>
                   <input
-                    type="color"
-                    value={configColor}
-                    onChange={e => setConfigColor(e.target.value)}
-                    style={styles.configColorPicker}
+                    style={styles.configInput}
+                    value={configUsername}
+                    onChange={e => setConfigUsername(e.target.value)}
                   />
-                  <span style={{ ...styles.configLabel, color: configColor }}>{configColor}</span>
                 </div>
-              </div>
-              <button
-                style={styles.configSaveBtn}
-                type="submit"
-                disabled={configSaving}
-              >
-                {configSaving ? '…' : t('common.save')}
+                <div style={styles.configField}>
+                  <label style={styles.configLabel}>{t('sidebar.configColor')}</label>
+                  <div style={styles.configColorRow}>
+                    <input
+                      type="color"
+                      value={configColor}
+                      onChange={e => setConfigColor(e.target.value)}
+                      style={styles.configColorPicker}
+                    />
+                    <span style={{ ...styles.configLabel, color: configColor }}>{configColor}</span>
+                  </div>
+                </div>
+                <button className="btn" style={{ width:'100%', marginTop:'8px' }} type="submit" disabled={configSaving}>
+                  {configSaving ? '…' : t('common.save')}
+                </button>
+              </form>
+            </div>
+
+            {/* Séparateur */}
+            <div style={styles.profilSeparator} />
+
+            {/* Liste des connectés */}
+            <div style={styles.playersList}>
+              {members.length === 0 && (
+                <p style={styles.emptyMsg}>{t('sidebar.noPlayers')}</p>
+              )}
+              {members.map(member => {
+                const isOnline = onlineUsers.has(member.id)
+                const character = characters.find(c => c.user_id === member.id)
+                return (
+                  <div key={member.id} style={styles.playerCard}>
+                    <div style={{
+                      ...styles.onlineDot,
+                      background: isOnline ? '#4caf77' : '#2a2a3e',
+                    }} />
+                    <div style={styles.playerInfo}>
+                      <div style={styles.playerNameRow}>
+                        <span style={styles.playerName}>{member.username}</span>
+                        <span className={member.role === 'gm' ? 'badge badge-gm' : 'badge badge-player'}>
+                          {member.role === 'gm' ? t('sidebar.roleGM') : t('sidebar.rolePlayer')}
+                        </span>
+                      </div>
+                      {character && (
+                        <span style={styles.playerCharacter}>↳ {character.name}</span>
+                      )}
+                    </div>
+                    <span style={{ ...styles.onlineLabel, color: isOnline ? '#4caf77' : '#2a2a3e' }}>
+                      {isOnline ? t('sidebar.online') : t('sidebar.offline')}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Quitter la session */}
+            <div style={{ padding: '8px 12px 12px' }}>
+              <button className="btn btn-ghost" style={{ width:'100%', padding:'8px 0' }} onClick={() => navigate('/dashboard')}>
+                {t('sidebar.quit')}
               </button>
-            </form>
-          </div>
+            </div>
+          </>
         )}
 
       </div>
@@ -1329,49 +1336,11 @@ const styles = {
     cursor: 'col-resize',
     zIndex: 20,
   },
-  closeBtn: {
-    position: 'absolute',
-    top: '8px',
-    right: '8px',
-    background: 'none',
-    border: 'none',
-    color: '#4a4a60',
-    cursor: 'pointer',
-    padding: '2px 6px',
-    borderRadius: '4px',
-    fontSize: '18px',
-    lineHeight: 1,
-    zIndex: 10,
-  },
   toolsRow: {
     display: 'flex',
     gap: '6px',
     padding: '12px 12px 8px 16px',
     flexWrap: 'wrap',
-  },
-  toolBtn: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '3px',
-    padding: '8px 10px',
-    background: '#16162a',
-    border: '1px solid #1e1e2e',
-    borderRadius: '6px',
-    color: '#9090a8',
-    cursor: 'pointer',
-    minWidth: '52px',
-    transition: 'all 0.15s',
-  },
-  toolBtnActive: {
-    background: 'rgba(91,141,238,0.15)',
-    borderColor: '#5b8dee',
-    color: '#5b8dee',
-  },
-  toolLabel: {
-    fontSize: '9px',
-    letterSpacing: '0.5px',
-    textTransform: 'uppercase',
   },
   toolsDropdown: {
     position: 'absolute',
@@ -1526,14 +1495,6 @@ const styles = {
     fontSize: '12px',
     outline: 'none',
   },
-  sendBtn: {
-    background: 'none',
-    border: 'none',
-    color: '#5b8dee',
-    cursor: 'pointer',
-    fontSize: '14px',
-    padding: '4px 6px',
-  },
   persosList: {
     display: 'flex',
     flexDirection: 'column',
@@ -1544,18 +1505,6 @@ const styles = {
     display: 'flex',
     justifyContent: 'flex-end',
     marginBottom: '4px',
-  },
-  newCharBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    background: 'rgba(91,141,238,0.1)',
-    border: '1px solid rgba(91,141,238,0.3)',
-    borderRadius: '6px',
-    color: '#5b8dee',
-    fontSize: '11px',
-    padding: '5px 10px',
-    cursor: 'pointer',
   },
   newCharForm: {
     display: 'flex',
@@ -1636,26 +1585,6 @@ const styles = {
   playerName: {
     fontSize: '13px',
     color: '#c0c0d0',
-  },
-  badgeGM: {
-    fontSize: '9px',
-    color: '#5b8dee',
-    background: 'rgba(91,141,238,0.15)',
-    border: '1px solid rgba(91,141,238,0.3)',
-    borderRadius: '3px',
-    padding: '1px 4px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-  badgePlayer: {
-    fontSize: '9px',
-    color: '#4a4a60',
-    background: 'rgba(74,74,96,0.2)',
-    border: '1px solid rgba(74,74,96,0.3)',
-    borderRadius: '3px',
-    padding: '1px 4px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
   },
   playerCharacter: {
     fontSize: '11px',
@@ -2033,10 +1962,15 @@ const styles = {
     cursor: 'pointer',
     width: '100%',
   },
+  // ── Séparateur Profil ──
+  profilSeparator: {
+    height: '1px',
+    background: '#1e1e2e',
+    margin: '8px 0',
+    flexShrink: 0,
+  },
   // ── Config ──
   configContent: {
-    flex: 1,
-    overflowY: 'auto',
     padding: '16px 12px',
     display: 'flex',
     flexDirection: 'column',
@@ -2093,25 +2027,13 @@ const styles = {
     backgroundColor: '#16162a',
     cursor: 'pointer',
   },
-  configSaveBtn: {
-    marginTop: '4px',
-    width: '100%',
-    padding: '9px 0',
-    background: 'rgba(91,141,238,0.15)',
-    border: '1px solid #5b8dee',
-    borderRadius: '6px',
-    color: '#5b8dee',
-    fontSize: '12px',
-    fontWeight: '500',
-    cursor: 'pointer',
-  },
   // ── Messages dés ──
   messageDice: {
     display: 'flex',
     flexDirection: 'column',
     gap: '3px',
     padding: '6px 8px',
-    borderRadius: '6px',
+    clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
     background: 'rgba(91,141,238,0.07)',
     border: '1px solid rgba(91,141,238,0.15)',
   },
@@ -2164,28 +2086,6 @@ const styles = {
     fontWeight: '700',
     color: '#c0c0d0',
     fontFamily: 'monospace',
-  },
-  badgeCritSuccess: {
-    fontSize: '10px',
-    fontWeight: '600',
-    color: '#4caf77',
-    background: 'rgba(76,175,119,0.15)',
-    border: '1px solid rgba(76,175,119,0.4)',
-    borderRadius: '4px',
-    padding: '1px 5px',
-    letterSpacing: '0.03em',
-    textTransform: 'uppercase',
-  },
-  badgeCritFail: {
-    fontSize: '10px',
-    fontWeight: '600',
-    color: '#e05c5c',
-    background: 'rgba(224,92,92,0.15)',
-    border: '1px solid rgba(224,92,92,0.4)',
-    borderRadius: '4px',
-    padding: '1px 5px',
-    letterSpacing: '0.03em',
-    textTransform: 'uppercase',
   },
   // ── Bouton aide ──
   helpBtn: {

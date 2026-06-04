@@ -1075,16 +1075,7 @@ export default function CombatActionWindow({
                           if (combatMode === 'charge') { setMoveSelection(null); setMeleePendingTokenIds([]) }
                         }
                       }}
-                      style={{
-                        padding: '4px 8px',
-                        borderRadius: 3,
-                        cursor: 'pointer',
-                        border: `1px solid ${combatMode === m.k ? '#70c070' : '#2a3a2a'}`,
-                        background: combatMode === m.k ? 'rgba(112,192,112,0.15)' : 'rgba(255,255,255,0.02)',
-                        fontSize: 10,
-                        color: combatMode === m.k ? '#70c070' : '#7a9a7a',
-                        fontWeight: combatMode === m.k ? 600 : 400,
-                      }}
+                      className={combatMode === m.k ? 'badge badge-mode' : 'badge badge-mode-off'}
                     >
                       {m.l}
                     </div>
@@ -1243,11 +1234,15 @@ export default function CombatActionWindow({
                 <div style={W.assaultSectionTitle}>Type de tir</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
-                    style={{ ...W.assaultToggleBtn, ...(!isDualWield ? W.assaultToggleBtnActive : {}) }}
+                    className="btn-toggle"
+                    data-active={!isDualWield}
+                    style={{ flex: 1 }}
                     onClick={() => setIsDualWield(false)}
                   >Simple</button>
                   <button
-                    style={{ ...W.assaultToggleBtn, ...(isDualWield ? W.assaultToggleBtnActive : {}) }}
+                    className="btn-toggle"
+                    data-active={isDualWield}
+                    style={{ flex: 1 }}
                     onClick={() => setIsDualWield(true)}
                   >Double +{currentFireMode === 'RL' ? 5 : 3}</button>
                 </div>
@@ -1290,11 +1285,15 @@ export default function CombatActionWindow({
                         {(assaultBulletCount === 7 || assaultBulletCount === 10) && (
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button
-                              style={{ ...W.assaultVariantBtn, ...(assaultVariantAB === 'A' ? W.assaultVariantBtnActive : {}) }}
+                              className="btn-toggle"
+                              data-active={assaultVariantAB === 'A'}
+                              style={{ flex: 1 }}
                               onClick={() => setAssaultVariantAB('A')}
                             >+{assaultBulletCount === 7 ? 4 : 5} comp</button>
                             <button
-                              style={{ ...W.assaultVariantBtn, ...(assaultVariantAB === 'B' ? W.assaultVariantBtnActive : {}) }}
+                              className="btn-toggle"
+                              data-active={assaultVariantAB === 'B'}
+                              style={{ flex: 1 }}
                               onClick={() => setAssaultVariantAB('B')}
                             >+{assaultBulletCount === 7 ? 3 : 4} comp / +3 deg</button>
                           </div>
@@ -1331,7 +1330,9 @@ export default function CombatActionWindow({
                       {RL_BUTTONS.map(btn => (
                         <button
                           key={btn.value}
-                          style={{ ...W.assaultVariantBtn, ...(assaultBulletCount === btn.value ? W.assaultVariantBtnActive : {}) }}
+                          className="btn-toggle"
+                          data-active={assaultBulletCount === btn.value}
+                          style={{ flex: 1 }}
                           onClick={() => setAssaultBulletCount(btn.value)}
                         >{btn.label}</button>
                       ))}
@@ -1374,7 +1375,8 @@ export default function CombatActionWindow({
             )}
           </div>
           <button
-            style={{ ...W.btnDeclare, ...(!canDeclare ? W.btnDeclareDisabled : {}) }}
+            className="btn"
+            style={{ flexShrink: 0 }}
             onClick={handleDeclare}
             disabled={!canDeclare}
           >
@@ -1568,21 +1570,6 @@ const W = {
     color: '#5b8dee',
     fontWeight: 600,
   },
-  btnDeclare: {
-    padding: '7px 14px',
-    background: 'rgba(91,141,238,0.15)',
-    border: '1px solid #5b8dee',
-    borderRadius: 4,
-    color: '#5b8dee',
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: 'pointer',
-    flexShrink: 0,
-  },
-  btnDeclareDisabled: {
-    opacity: 0.4,
-    cursor: 'not-allowed',
-  },
   surpriseText: {
     padding: '14px 14px 0',
     fontSize: 12,
@@ -1656,22 +1643,6 @@ const W = {
     cursor: 'pointer',
     flexShrink: 0,
   },
-  assaultToggleBtn: {
-    flex: 1, padding: '5px 0',
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid #2a2a3e',
-    borderRadius: 4,
-    color: '#8888a8',
-    fontSize: 11,
-    cursor: 'pointer',
-    textAlign: 'center',
-    fontWeight: 600,
-  },
-  assaultToggleBtnActive: {
-    background: 'rgba(180,80,80,0.2)',
-    borderColor: '#c05050',
-    color: '#e07070',
-  },
   assaultOption: {
     display: 'flex',
     alignItems: 'center',
@@ -1692,21 +1663,6 @@ const W = {
   },
   assaultRadioActive: { borderColor: '#e07070', background: '#e07070' },
   assaultSlider:      { width: '100%', accentColor: '#e07070', cursor: 'pointer' },
-  assaultVariantBtn: {
-    flex: 1, padding: '4px 6px',
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid #2a2a3e',
-    borderRadius: 4,
-    color: '#8888a8',
-    fontSize: 10,
-    cursor: 'pointer',
-    textAlign: 'center',
-  },
-  assaultVariantBtnActive: {
-    background: 'rgba(180,80,80,0.2)',
-    borderColor: '#c05050',
-    color: '#e07070',
-  },
   assaultSummaryText: {
     fontSize: 11,
     color: '#e07070',

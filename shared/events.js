@@ -11,7 +11,8 @@ export const WS = {
   TOKEN_CREATED: 'token:created',
   TOKEN_DELETED: 'token:deleted',
   TOKEN_UPDATED: 'token:updated',
-  TOKEN_ROTATE:  'token:rotate',   // joueur/GM → serveur : rotation 45° (9F-A)
+  TOKEN_ROTATE:      'token:rotate',       // joueur/GM → serveur : rotation 45° (9F-A)
+  TOKEN_SET_ROTATION:'token:set_rotation', // joueur/GM → serveur : orientation absolue (0..7)
 
   // Voxels (carte 3D)
   VOXEL_ADD:     'voxel:add',
@@ -30,7 +31,10 @@ export const WS = {
   MAP_VIEWPORT: 'map:viewport',
 
   // Documents
-  DOC_SHARED: 'doc:shared',
+  DOC_SHARED:  'doc:shared',
+  DOC_CREATED: 'doc:created',  // serveur → sockets autorisés : nouveau document
+  DOC_UPDATED: 'doc:updated',  // serveur → sockets autorisés : document modifié
+  DOC_DELETED: 'doc:deleted',  // serveur → sockets autorisés : document supprimé
 
   // Characters
   CHARACTER_UPDATED: 'character:updated',

@@ -8,6 +8,14 @@
    @import '@fontsource/caveat/400.css';
    @import '@fontsource/caveat/600.css';
 
+@font-face {
+  font-family: 'Venus Rising';
+  src: url('/fonts/venus-rising.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* =========================
 2. RESET
 ========================= */
@@ -65,18 +73,57 @@ padding: 0;
 font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 font-size: 14px;
 line-height: 1.5;
-@font-face {
-  font-family: 'Venus Rising';
-  src: url('/fonts/venus-rising.woff2') format('woff2'),
-       url('/fonts/venus-rising.woff') format('woff');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
 
 /* === GLOBAL === */
 color: var(--text-primary);
 background: var(--bg-app);
+
+/* === IN-SESSION SURFACES (over 3D map — darker for contrast) === */
+--bg-session:        #0f0f1a;
+--bg-session-raised: #16162a;
+--bg-session-scrim:  rgba(10,10,20,0.88);
+--border-session:    #1e1e2e;
+--border-session-2:  #2a2a3e;
+
+/* === SEMANTIC COLORS SOFT === */
+--color-success-soft: #4caf77;
+--color-danger-soft:  #e05b5b;
+--color-warning-soft: #e0a050;
+--color-gold:         #f5c542;
+--color-gold-muted:   #aa8a30;
+
+/* === TEXT IN-SESSION === */
+--text-session-hi:  #c0c0d0;
+--text-session-mid: #9090a8;
+--text-session-lo:  #4a4a60;
+
+/* === WOUND SEVERITY (Polaris LdB : légère → mortelle) === */
+--wound-legere:   #FFD700;
+--wound-moyenne:  #FFA500;
+--wound-grave:    #FF6B6B;
+--wound-critique: #FF0000;
+--wound-mortelle: #8B0000;
+
+/* === STATUS ICON ACCENTS (hexagonal HUD badges) === */
+--status-dot:        #d84838;   /* dégâts continus */
+--status-env:        #38a8c8;   /* environnement / bio */
+--status-control:    #d8a838;   /* contrôle physique */
+--status-neuro:      #9858c8;   /* neuro / mental */
+--status-frame:      #0a0d12;
+--status-frame-edge: #05070b;
+
+/* === ELEVATION ADDITIONS === */
+--shadow-window: 0 4px 12px rgba(0,0,0,0.4);
+--halo-active:   0 0 12px rgba(245,197,66,0.35);
+
+/* === RADIUS ADDITIONS === */
+--radius-xs: 4px;
+
+/* === FONT FAMILIES === */
+--font-display: 'Venus Rising', 'Inter', system-ui, sans-serif;
+--font-ui:      'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+--font-mono:    'Share Tech Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+--font-hand:    'Caveat', cursive;
 }
 
 /* =========================
@@ -558,3 +605,269 @@ DASHBOARD EXTENSION
   pointer-events: none;
   user-select: none;
 }
+
+/* =========================
+10. DESIGN SYSTEM — HARD-SF HUD
+Convention :
+  .btn            = bouton HUD chamfré (base bleue)
+  .btn.btn-ghost  = variante fantôme
+  .btn.btn-danger = variante rouge
+  .btn.btn-gold   = variante or (Agir GM)
+  .btn.btn-success= variante verte
+  .btn-icon       = petit utilitaire, pas de chamfer (×, ?, ➤)
+  .btn-toggle     = sélecteur segmenté + [data-active="true"]
+  .btn-tool       = outil sidebar (column, icon+label)
+
+  .badge              = badge chamfré (base)
+  .badge.badge-gm     = MJ bleu
+  .badge.badge-player = Joueur vert
+  .badge.badge-success= résultat succès vert
+  .badge.badge-fail   = résultat échec rouge
+  .badge.badge-mode   = mode CaC actif
+  .badge.badge-mode-off = mode CaC inactif
+
+  .doc-row = ligne liste document (card-row, pas chamfré)
+========================= */
+
+/* ── .btn — bouton HUD chamfré ─────────────────────────────────── */
+.btn {
+  font: 600 11px/1 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .13em;
+  color: #c8d4ee;
+  background: linear-gradient(180deg, #141a2a, #0e1320);
+  border: none;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  box-shadow: inset 0 0 0 1px rgba(91,141,238,0.55),
+              inset 0 0 14px rgba(91,141,238,0.12);
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: filter .1s, box-shadow .1s;
+}
+.btn:hover {
+  filter: brightness(1.12);
+  box-shadow: inset 0 0 0 1px #5b8dee,
+              inset 0 0 18px rgba(91,141,238,0.22);
+}
+.btn:active { filter: brightness(.95); transform: none; }
+.btn:disabled { opacity: .4; cursor: not-allowed; filter: none; }
+
+/* ── .btn.btn-ghost ─────────────────────────────────────────────── */
+.btn.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  box-shadow: inset 0 0 0 1px #2a3550;
+}
+.btn.btn-ghost:hover {
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px #3a4a6a;
+  filter: none;
+}
+.btn.btn-ghost[data-active="true"] {
+  background: var(--color-primary-muted);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* ── .btn.btn-danger ────────────────────────────────────────────── */
+.btn.btn-danger {
+  background: linear-gradient(180deg, #1a0f0f, #100a0a);
+  color: #f0c4c4;
+  box-shadow: inset 0 0 0 1px rgba(224,91,91,0.55),
+              inset 0 0 14px rgba(224,91,91,0.12);
+}
+.btn.btn-danger:hover {
+  box-shadow: inset 0 0 0 1px #e05b5b,
+              inset 0 0 18px rgba(224,91,91,0.22);
+}
+
+/* ── .btn.btn-gold ──────────────────────────────────────────────── */
+.btn.btn-gold {
+  background: linear-gradient(180deg, #1a1500, #100e00);
+  color: #f5c542;
+  box-shadow: inset 0 0 0 1px rgba(245,197,66,0.55),
+              inset 0 0 14px rgba(245,197,66,0.12);
+}
+.btn.btn-gold:hover {
+  box-shadow: inset 0 0 0 1px #f5c542,
+              inset 0 0 18px rgba(245,197,66,0.22);
+}
+
+/* ── .btn.btn-success ───────────────────────────────────────────── */
+.btn.btn-success {
+  background: linear-gradient(180deg, #0f1f17, #0a1410);
+  color: #bdebcf;
+  box-shadow: inset 0 0 0 1px rgba(76,175,119,0.55),
+              inset 0 0 14px rgba(76,175,119,0.12);
+}
+.btn.btn-success:hover {
+  box-shadow: inset 0 0 0 1px #4caf77,
+              inset 0 0 18px rgba(76,175,119,0.22);
+}
+
+/* ── .btn-icon — utilitaire sans chamfer ────────────────────────── */
+.btn-icon {
+  background: none;
+  border: none;
+  clip-path: none;
+  box-shadow: none;
+  padding: 4px 6px;
+  font-size: 14px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: filter .1s;
+}
+.btn-icon:hover { color: var(--text-primary); filter: none; }
+
+/* ── .btn-toggle — sélecteur segmenté ──────────────────────────── */
+.btn-toggle {
+  flex: 1;
+  padding: 5px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid #2a2a3e;
+  border-radius: 3px;
+  color: #8888a8;
+  font: 600 10px/1.2 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  cursor: pointer;
+  text-align: center;
+  transition: background .1s, border-color .1s, color .1s;
+}
+.btn-toggle[data-active="true"] {
+  background: rgba(91,141,238,0.18);
+  border-color: #5b8dee;
+  color: #c8d4ee;
+}
+
+/* ── .btn-tool — outil sidebar (icon + label column) ───────────── */
+.btn-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 10px;
+  background: var(--bg-session-raised);
+  border: 1px solid var(--border-session);
+  border-radius: var(--radius-sm);
+  color: var(--text-session-mid);
+  cursor: pointer;
+  min-width: 52px;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.btn-tool[data-active="true"] {
+  background: var(--color-primary-muted);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* ── .badge — base chamfré ──────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 10px/1 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 2px 8px;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+}
+.badge .num { font-family: var(--font-mono); font-weight: 700; letter-spacing: 0; }
+
+/* ── .badge.badge-gm ────────────────────────────────────────────── */
+.badge.badge-gm {
+  color: var(--color-primary);
+  background: rgba(91,141,238,0.12);
+  box-shadow: inset 0 0 0 1px rgba(91,141,238,0.45);
+}
+
+/* ── .badge.badge-player ────────────────────────────────────────── */
+.badge.badge-player {
+  color: var(--color-success-soft);
+  background: rgba(76,175,119,0.12);
+  box-shadow: inset 0 0 0 1px rgba(76,175,119,0.45);
+}
+
+/* ── .badge.badge-success ───────────────────────────────────────── */
+.badge.badge-success {
+  color: var(--color-success-soft);
+  background: rgba(76,175,119,0.12);
+  box-shadow: inset 0 0 0 1px rgba(76,175,119,0.45);
+}
+
+/* ── .badge.badge-fail ──────────────────────────────────────────── */
+.badge.badge-fail {
+  color: var(--color-danger-soft);
+  background: rgba(224,91,91,0.12);
+  box-shadow: inset 0 0 0 1px rgba(224,91,91,0.45);
+}
+
+/* ── .badge.badge-mode — mode CaC actif ─────────────────────────── */
+.badge.badge-mode {
+  color: var(--color-success-soft);
+  background: rgba(76,175,119,0.12);
+  box-shadow: inset 0 0 0 1px rgba(76,175,119,0.45);
+  cursor: pointer;
+}
+
+/* ── .badge.badge-mode-off — mode CaC inactif ───────────────────── */
+.badge.badge-mode-off {
+  color: #2a6040;
+  background: rgba(42,96,64,0.08);
+  box-shadow: inset 0 0 0 1px rgba(42,96,64,0.3);
+  cursor: pointer;
+}
+
+/* ── .doc-row — ligne liste document (card-row) ─────────────────── */
+.doc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-session-raised);
+  border: 1px solid var(--border-session);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--text-session-hi);
+  font-size: 13px;
+  text-align: left;
+  width: 100%;
+  transition: background .1s, border-color .1s;
+}
+.doc-row:hover {
+  background: #1e1e3a;
+  border-color: var(--border-session-2);
+}
+
+/* ── TYPE HELPERS (inchangés) ───────────────────────────────────── */
+.enc-eyebrow {
+  font: 600 10px/1.2 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-session-lo);
+}
+.enc-mono {
+  font: 400 14px/1.4 var(--font-mono);
+  color: var(--text-session-hi);
+  font-variant-numeric: tabular-nums;
+}
+.enc-mono-lg {
+  font: 700 20px/1 var(--font-mono);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── HEX ICON BUTTON (conservé, non utilisé en prod pour l'instant) */
+.hexbtn {
+  position: relative; width: 42px; height: 46px;
+  border: none; cursor: pointer; background: none; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--status-env); transition: filter .1s;
+}
+.hexbtn svg.frame { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hexbtn .glyph { position: relative; display: flex; }
+.hexbtn:hover { filter: brightness(1.3); }
+.d20txt { font: 700 12px var(--font-mono); position: relative; }

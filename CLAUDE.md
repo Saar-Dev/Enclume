@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-06-01 Session 71
+> Dernière mise à jour : 2026-06-03 Session 76
 
 ---
 
@@ -121,35 +121,31 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 72 (2026-06-01)
+## État actuel — Session 76 (2026-06-04)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **66 migrations stables** — prochaine : **67**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.5 ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅ / Sprint CaC 1 ✅ / Sprint CaC 2 ✅ / Sprint CaC 3 ✅ / Déploiement Kiwi ✅ / Sprint Token par défaut campagne ✅ / Sprint Timeline BG3 ✅ / Sprint CaC 4a ✅
+- **67 migrations stables** — prochaine : **68**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.5 ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅ / Sprint CaC 1 ✅ / Sprint CaC 2 ✅ / Sprint CaC 3 ✅ / Déploiement Kiwi ✅ / Sprint Token par défaut campagne ✅ / Sprint Timeline BG3 ✅ / Sprint CaC 4a ✅ / Sprint Bibliothèque 1 ✅ / Sprint Token Radial 1 ✅
 
-**Session 71 ✅ :**
-- **Sprint Page Santé Serveur** : route `/api/health/detailed`, HealthPage client ✅
-- **Sprint Timeline BG3-style** : TimelineCard.jsx (portrait plein format, bordure blessure), CombatTimeline réécriture (Motion FLIP, phases, timer, MAX 12), worst_wound_severity pipeé en temps réel via WS ✅
+**Session 74 — EN ATTENTE VALIDATION :**
+- **Sprint CaC 4b — Attaque multiple** : malus −5/−7 (LdB p.218), UI PJ séquentielle, GM queue étendue, N rows melee server — codé, non validé fonctionnellement
 
-**Session 72 ✅ :**
-- **Sprint CaC 4a — Multi-adversaires** : malus −5/−7/−10 (LdB p.224), critère positionnel (dist ≤ 3+allonge), requête roster unique, alerte ⚠ prompt défense PJ + panneau résultat melee ✅
-
-**Session 73 ✅ :**
-- **Correctifs Dashboard** : deux cartes Créer/Rejoindre symétriques (filigrane +/→, formulaires inline) ✅
-- **Correctifs Playground** : Billboard étiquettes ✅, couleur user_color via JOIN ✅, drag snap case + raycastVoxelColumn altitude ✅
-- **Panel description compétences** : bouton ⓘ → panel position:fixed, texte LdB, click-outside ✅
-- **Chat par campagne** : sessionStore messagesByCampaign, historique isolé par campaignId ✅
+**Session 76 ✅ :**
+- **Sprint Token Radial 1** : TokenRadialMenu.jsx SVG hard-SF, 8 secteurs (Fiche+Retirer actifs), boussole directionnelle cœur (TOKEN_SET_ROTATION), clic simple = menu (Canvas3D inversé) ✅
+- **Sprint Design System** : design system Claude Design appliqué — tokens CSS (36), police Venus Rising fixée, 15 SVG statuts HUD, architecture CSS classes `.btn`/`.badge` (15 classes), migration 7 composants, fix timeline `--sidebar-w`, bouton Quitter session ✅
 
 **Serveur Alpha "Kiwi" :** `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md`
 
 **"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
 
 **Prochain chantier :**
-- **Sprint CaC 4b — Attaque multiple** : déclarer 2 ou 3 attaques melee (−5/−7 LdB), UI sélection séquentielle PJ, GM queue étendue, server N rows melee
+- **Sprint CaC 4b — Validation** : tester attaque multiple melee (Session 74 codé, non validé)
+- **Sprint Token Radial 2** : wounds array complet dans anneau, secteur Jet (jets favoris), secteur Recharger (ammo_remaining live), portée d'arme (anneaux concentriques)
+- **Sprint Bibliothèque 2** : migration 68 `file_url`, upload image/PDF → MinIO, affichage pièce jointe dans modal
 - Sprint Test de Choc suite — guard is_stunned COMBAT_ACTION_DECLARE + clear logique (PC42)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, UI non implémentée)
-- **Notification entité interactive** — sablier joueur au-dessus de l'entité + bouton rouge GM dans chat (en attente du GM)
-- Sprint Page Santé Serveur — priorité basse (Session 71 ✅)
+- **Notification entité interactive** — sablier joueur au-dessus de l'entité + bouton rouge GM dans chat
+- **Persistance du chat** — sprint dédié futur
 
 **Bug ouvert :**
 - Surprise critique (roll=1) → initiative=1 (agit en dernier). À analyser.
@@ -161,6 +157,8 @@ Toute décision non documentée est considérée comme nulle.
 - `is_stunned` purge manuelle non implémentée — clear via route GM à créer (actuellement purgé implicitement par COMBAT_END)
 - WorkshopPage écran blanc sur import invalide — `err.response?.data?.error` objet AppError → crash React
 - Kiwi P-SRV-5 — ports Docker non restreints à 127.0.0.1 (UFW contourné par Docker)
+- Bibliothèque — images inline base64 (Sprint 2 : upload MinIO propre)
+- `onTokenRotate` dead code dans Canvas3D/Scene (signatures + prop SessionPage) — nettoyage sprint futur
 
 ---
 
@@ -227,6 +225,13 @@ const { t } = useTranslation()   // dans le composant
 Structure : `"section": { "cle": "valeur" }` → usage : `t('section.cle')`.
 
 **État session 66 :** ~18 fichiers wired. Combat (12) + équipement (6) : hors scope — sprint i18n dédié futur. SkillTooltips : roadmap.
+
+**Convention CSS (Session 76) :**
+- Tout bouton → `className="btn"` ou variante (`.btn-ghost`, `.btn-danger`, `.btn-gold`, `.btn-icon`, `.btn-toggle`, `.btn-tool`)
+- Tout badge → `className="badge badge-gm"` etc.
+- Inline `style={}` = UNIQUEMENT layout/position calculé (width, flex, margin, top...) — jamais de visuel (background, border, color, font)
+- Valeurs visuelles dynamiques → CSS custom property : `style={{ '--sidebar-w': '300px' }}`
+- Les classes sont définies dans `index.css` Section 10 — modifier une classe = modifier partout
 
 **Ajouter EN plus tard (Option C) :**
 1. Créer `client/src/locales/en.json` (même structure que fr.json)

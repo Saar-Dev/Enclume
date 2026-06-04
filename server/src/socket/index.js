@@ -244,6 +244,34 @@ const initSocket = (io) => {
       }
     })
 
+    // Joueur ou GM oriente son token vers une direction absolue (r = 0..7)
+    // Payload : { tokenId, r } — r validé serveur, jamais fait confiance au client
+    socket.on(WS.TOKEN_SET_ROTATION, async ({ tokenId, r }) => {
+      try {
+        if (!Number.isInteger(r) || r < 0 || r > 7) return
+
+        const token = await db('tokens').where({ id: tokenId }).first()
+        if (!token) return
+
+        const isGm = socket.role === 'gm'
+        let isOwner = false
+        if (token.character_id) {
+          const character = await db('characters').where({ id: token.character_id }).first()
+          isOwner = character?.user_id === socket.data.userId
+        }
+        if (!isOwner && !isGm) return
+
+        const [updated] = await db('tokens')
+          .where({ id: tokenId })
+          .update({ r, updated_at: db.fn.now() })
+          .returning('*')
+
+        io.to(socket.campaignId).emit(WS.TOKEN_UPDATED, { token: updated })
+      } catch (err) {
+        console.error('[WS] token:set_rotation error:', err.message)
+      }
+    })
+
     // ─── TOKEN:CREATED ─────────────────────────────────────────────────────
     // Conservé temporairement — relique Chantier 1, à nettoyer chantier dédié.
     // La création REST (POST /tokens) gère déjà le broadcast ET la collision map.

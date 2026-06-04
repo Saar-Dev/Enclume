@@ -119,18 +119,18 @@ export default function DashboardPage() {
           {/* Lien Packs de textures — visible uniquement si GM dans au moins une campagne */}
           {isGmAnywhere && (
             <button
-              style={styles.texturePacksBtn}
+              className="btn-icon"
               onClick={() => navigate('/workshop')}
             >
               {t('dashboard.workshop')}
             </button>
           )}
 
-          <button style={styles.usernameBtn}>
+          <button className="btn-icon">
             {user?.username}
           </button>
 
-          <button style={styles.logoutBtn} onClick={handleLogout}>
+          <button className="btn btn-ghost" onClick={handleLogout}>
             {t('auth.logout')}
           </button>
         </div>
@@ -173,7 +173,7 @@ export default function DashboardPage() {
                 <div style={styles.cardHeader}>
                   <span style={styles.cardTitle}>{campaign.name}</span>
 
-                  <span style={campaign.role === 'gm' ? styles.badgeGM : styles.badgePlayer}>
+                  <span className={campaign.role === 'gm' ? 'badge badge-gm' : 'badge badge-player'}>
                     {campaign.role === 'gm'
                       ? t('dashboard.roleGM')
                       : t('dashboard.rolePlayer')}
@@ -197,7 +197,7 @@ export default function DashboardPage() {
                   </div>
 
                   <button
-                    style={styles.btnPrimary}
+                    className="btn"
                     onClick={() => navigate(`/session/${campaign.id}`)}
                   >
                     {t('dashboard.play')}
@@ -209,7 +209,7 @@ export default function DashboardPage() {
                 {campaign.role === 'gm' && (
                   <div style={styles.cardActions}>
                     <button
-                      style={styles.btnSettings}
+                      className="btn btn-ghost"
                       onClick={() => navigate(`/campaigns/${campaign.id}/settings`)}
                     >
                       {t('dashboard.settings')}
@@ -235,7 +235,7 @@ export default function DashboardPage() {
                   onChange={e => setInviteCode(e.target.value)}
                   required
                 />
-                <button style={styles.btnPrimary} type="submit">{t('dashboard.join')}</button>
+                <button className="btn" type="submit">{t('dashboard.join')}</button>
               </form>
             </div>
 
@@ -254,7 +254,7 @@ export default function DashboardPage() {
                   onChange={e => setNewCampaignName(e.target.value)}
                   required
                 />
-                <button style={styles.btnPrimary} type="submit">{t('dashboard.create')}</button>
+                <button className="btn" type="submit">{t('dashboard.create')}</button>
               </form>
             </div>
 
@@ -306,6 +306,7 @@ const styles = {
     fontSize: '16px',
     fontWeight: '500',
     color: 'var(--text-primary)',
+    fontFamily: 'var(--font-display)',
   },
 
   headerRight: {
@@ -314,32 +315,6 @@ const styles = {
     gap: '16px',
   },
 
-  texturePacksBtn: {
-    background: 'none',
-    border: 'none',
-    fontSize: '13px',
-    color: 'var(--text-secondary)',
-    cursor: 'pointer',
-    padding: '6px 8px',
-  },
-
-  usernameBtn: {
-    background: 'none',
-    border: 'none',
-    fontSize: '14px',
-    color: 'var(--text-primary)',
-    cursor: 'pointer',
-  },
-
-  logoutBtn: {
-    background: 'none',
-    border: '1px solid var(--border-subtle)',
-    borderRadius: '6px',
-    padding: '6px 12px',
-    color: 'var(--text-secondary)',
-    fontSize: '13px',
-    cursor: 'pointer',
-  },
 
   content: {
     maxWidth: '900px',
@@ -390,31 +365,6 @@ const styles = {
     color: 'var(--text-muted)',
   },
 
-  badgeGM: {
-    fontSize: '11px',
-    padding: '3px 8px',
-    borderRadius: '6px',
-    backgroundColor: 'rgba(91,141,238,0.2)',
-    color: '#5b8dee',
-  },
-
-  badgePlayer: {
-    fontSize: '11px',
-    padding: '3px 8px',
-    borderRadius: '6px',
-    backgroundColor: 'rgba(76,175,119,0.2)',
-    color: '#4caf77',
-  },
-
-  btnPrimary: {
-    backgroundColor: 'var(--color-primary)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    padding: '8px 16px',
-    fontSize: '13px',
-    cursor: 'pointer',
-  },
 
   cardForm: {
     position: 'relative',

@@ -275,28 +275,62 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
 
 ### PLAN 14 — Système de Statuts (Status Effects) 🔲
 
-Plan complet dans `docs/PLAN14_StatusEffects.md`.
-**Bloqué** : en attente des 15 fichiers SVG (1 par statut).
+Mockup visuel : `docs/Status innacheve.html` — 15 icônes SVG déjà conçues, 3 variantes d'affichage testées (Row / Arc / Single+compteur). **Le bloqueur SVG est levé.**
 
-| Statut | Code | Temporalité |
-|---|---|---|
-| Étourdi | `stunned` | Combat, N tours |
-| Inconscient | `unconscious` | Combat |
-| Saisi | `grappled` | Combat |
-| Entravé | `restrained` | Persistant |
-| Déséquilibré | `off_balance` | Combat, 1 tour |
-| Enflammé | `burning` | Combat, DoT |
-| Corrodé | `acid` | Combat, DoT |
-| Asphyxie | `asphyxia` | Combat |
-| Décompression | `decompression` | Combat, DoT |
-| Électrocuté | `electrocuted` | Combat, 1 tour |
-| Aveuglé | `blinded` | Combat, N tours |
-| Hypothermie | `hypothermia` | Long terme |
-| Infecté | `infected` | Long terme |
-| Empoisonné | `poisoned` | Long terme |
-| Irradié | `irradiated` | Long terme |
+| Statut | Code | Catégorie | Priorité |
+|---|---|---|---|
+| Étourdi | `stunned` | sens (violet) | 7 |
+| Inconscient | `unconscious` | sens (violet) | 10 |
+| Saisi | `grappled` | entrave (ambre) | 5 |
+| Entravé | `restrained` | entrave (ambre) | 5 |
+| Déséquilibré | `off_balance` | entrave (ambre) | 3 |
+| Enflammé | `burning` | dot (rouge) | 8 |
+| Corrodé | `acid` | dot (rouge) | 7 |
+| Asphyxie | `asphyxia` | dot (rouge) | 9 |
+| Décompression | `decompression` | dot (rouge) | 9 |
+| Électrocuté | `electrocuted` | dot (rouge) | 6 |
+| Aveuglé | `blinded` | sens (violet) | 6 |
+| Hypothermie | `hypothermia` | chronique (cyan) | 4 |
+| Infecté | `infected` | chronique (cyan) | 4 |
+| Empoisonné | `poisoned` | chronique (cyan) | 4 |
+| Irradié | `irradiated` | chronique (cyan) | 4 |
 
-Architecture : nouvelle table `combat_status_effects` (migration à assigner — 63 prise par melee, voir `docs/PLAN14_StatusEffects.md`) + icônes `Html` R3F au-dessus des tokens.
+Plan complet : `docs/Character/PLAN_STATUT.md`
+
+**Décisions actées :**
+- SVGs dans `docs/Character/Statuts/` (2 typos à corriger : axphyxia→asphyxia, hypodermia→hypothermia)
+- Affichage : rangée sous le nom du token (Variante A + overflow +N)
+- Expiration : manuelle par GM ou propriétaire du token uniquement (V1)
+- Seuls `stunned` + `unconscious` ont des effets mécaniques (optionnel via `status_effects_mode`)
+- stunned : −5 toutes actions + no attack + allure max moyenne (LdB p.237)
+- unconscious : passe son tour
+
+**Ordre des sprints (voir PLAN_STATUT.md §9) :**
+1. **Prérequis — Menu contextuel token** (right-click → ajouter/retirer statuts, GM + propriétaire)
+2. **Affichage badges** (Html drei sous le nom, SVGs, couleurs par catégorie)
+3. **Option campagne + Flux Choc PJ + Mécaniques enforced** (migration, CombatShockWindow, enforcement)
+
+Architecture V1 : `state_character.statuses[]` dans JSONB existant (pas de nouvelle table).
+
+### Chantier Arts Martiaux 🔲
+
+Toute la section Arts martiaux du LdB (p.523-640) — non implémentée.
+
+| Règle | Complexité estimée |
+|---|---|
+| Techniques offensives : Frappe puissante (+3 dmg) | faible |
+| Techniques offensives : Frappe incapacitante (Test de Choc −5) | faible |
+| Techniques offensives : Frappe précise (malus visée −3) | faible |
+| Techniques offensives : Enchaînement (multi-attaque AM, malus −3/−5/−7 au lieu de −5/−7) | moyenne |
+| Techniques offensives : Combat à deux armes (attaque gratuite −5) | moyenne |
+| Techniques offensives : Balayage (malus INI adversaire) | moyenne |
+| Techniques défensives : Garde de combat (adversaire −3) | faible |
+| Techniques défensives : Contre-attaque simultanée (mode défensif) | moyenne |
+| Techniques défensives : Esquive retraite (bonus sans recul) | faible |
+| Techniques défensives : Défense adversaires multiples (malus −3) | faible |
+| Lutte : Saisie → Clé / Étranglement / Projection | élevée |
+
+Prérequis : statut `grappled` (PLAN14) pour la Lutte. Techniques offensives/défensives peuvent être un sprint indépendant.
 
 ---
 
