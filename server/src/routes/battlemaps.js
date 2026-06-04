@@ -155,7 +155,21 @@ router.get('/:id', requireAuth, async (req, res) => {
   }
   const tokens = await tokensQuery.select('tokens.*', 'users.color as user_color')
 
-  res.json({ battlemap, tokens })
+  // Enrichir chaque token avec ses statuts actifs
+  const tokenIds = tokens.map(t => t.id)
+  let statusMap = {}
+  if (tokenIds.length > 0) {
+    const allStatuses = await db('token_statuses')
+      .whereIn('token_id', tokenIds)
+      .select('token_id', 'status_code')
+    allStatuses.forEach(s => {
+      if (!statusMap[s.token_id]) statusMap[s.token_id] = []
+      statusMap[s.token_id].push(s.status_code)
+    })
+  }
+  const tokensWithStatuses = tokens.map(t => ({ ...t, statuses: statusMap[t.id] || [] }))
+
+  res.json({ battlemap, tokens: tokensWithStatuses })
 })
 
 // PUT /api/battlemaps/:id — modifier une carte

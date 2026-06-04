@@ -272,6 +272,46 @@ const initSocket = (io) => {
       }
     })
 
+    // ─── TOKEN:STATUS_TOGGLE ───────────────────────────────────────────────
+    // GM ou propriétaire du token : ajoute ou retire un statut (toggle)
+    // Payload : { tokenId, statusCode }
+    socket.on(WS.TOKEN_STATUS_TOGGLE, async ({ tokenId, statusCode }) => {
+      try {
+        const token = await db('tokens').where({ id: tokenId }).first()
+        if (!token) return
+
+        const isGm = socket.role === 'gm'
+        let isOwner = false
+        if (token.character_id) {
+          const character = await db('characters').where({ id: token.character_id }).first()
+          isOwner = character?.user_id === socket.data.userId
+        }
+        if (!isOwner && !isGm) return
+
+        const existing = await db('token_statuses')
+          .where({ token_id: tokenId, status_code: statusCode })
+          .first()
+
+        if (existing) {
+          await db('token_statuses').where({ id: existing.id }).delete()
+        } else {
+          await db('token_statuses').insert({
+            token_id: tokenId,
+            status_code: statusCode,
+            applied_by: socket.user.id,
+          })
+        }
+
+        const statuses = await db('token_statuses')
+          .where({ token_id: tokenId })
+          .pluck('status_code')
+
+        io.to(socket.campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId, statuses })
+      } catch (err) {
+        console.error('[WS] token:status_toggle error:', err.message)
+      }
+    })
+
     // ─── TOKEN:CREATED ─────────────────────────────────────────────────────
     // Conservé temporairement — relique Chantier 1, à nettoyer chantier dédié.
     // La création REST (POST /tokens) gère déjà le broadcast ET la collision map.
