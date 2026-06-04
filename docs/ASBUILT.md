@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-06-04 Session 77
+> Dernière mise à jour : 2026-06-04 Session 80
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL2.md.
@@ -44,7 +44,9 @@ Enclume/
 │   │   │   ├── DicePanel.jsx           # Réécriture complète 65 Sprint DicePanel v3. Modifié 66 — favoris inline form, section MACROS (chips ★, form création 3 dropdowns, preview seuil live, fix GM effectiveCharId) — roue radiale SVG (PCBBackground, DieShape, DieButton), formule mono-type {k,n,mod}, favoris localStorage, historique local socket, JET AU MJ fonctionnel, useAuthStore direct, drag conservé
 │   │   │   ├── DiceMesh.jsx            # NOUVEAU 44 — géométries, matériaux, animation, Html overlay D10. Modifié 65 — branche D20 dédiée supprimée → D20 passe par faceNormal→D20_GLB_NORMALS (normales Blender exactes)
 │   │   │   ├── DiceRoller.jsx          # NOUVEAU 44 — orchestrateur R3F dans Canvas3D
-│   │   │   └── ChangelogPanel.jsx      # NOUVEAU 66 — panneau latéral rétractable Dashboard : fetch+parse CHANGELOG.md, auto-open localStorage (changelog_last_seen), PCB SVG déco, 38px rail ↔ 340px ouvert, tags AJOUT/CORRECTIF/CHANGEMENT
+│   │   │   ├── ChangelogPanel.jsx      # NOUVEAU 66 — panneau latéral rétractable Dashboard : fetch+parse CHANGELOG.md, auto-open localStorage (changelog_last_seen), PCB SVG déco, 38px rail ↔ 340px ouvert, tags AJOUT/CORRECTIF/CHANGEMENT
+│   │   │   ├── LibraryPanel.jsx        # NOUVEAU 75 — liste documents campagne, ShareIndicator (œil/punaise), canEdit, ouvre DocumentModal
+│   │   │   └── DocumentModal.jsx       # NOUVEAU 75 — éditeur Quill x2 (content+gmNotes), PermissionSelect (portal), save/delete. Modifié 80 — makeImageHandler base64→upload MinIO (POST /upload-image), useQuillEditor +campaignId/onError
 │   │   ├── pages/
 │   │   │   ├── LoginPage.jsx           # Modifié 69 — +useEffect import + document.title 'Enclume — Connexion'
 │   │   │   ├── RegisterPage.jsx        # Modifié 66 — +champ "Beta code". Modifié 69 — +useEffect import + document.title 'Enclume — Inscription'
@@ -63,6 +65,7 @@ Enclume/
 │   │   │   ├── combatStore.js          # Modifié 62 — phase/roster/actions/currentTurn/activeSlotIdx/markTokenAnnounced + setActions + advanceSlot
 │   │   │   ├── mapStore.js
 │   │   │   ├── sessionStore.js         # Modifié 73 — messages[]→messagesByCampaign{}, activeCampaignId, setActiveCampaign. resetSession mis à jour (était dead code)
+│   │   │   ├── libraryStore.js         # NOUVEAU 75 — documents[], addDocument (upsert), updateDocument, removeDocument
 │   │   │   └── entityStore.js          # Modifié 34 — fetchBlueprints() ajouté
 │   │   ├── character/
 │   │   │   ├── WeaponPanel.jsx         # NOUVEAU 55 — armes équipées MG/MD, stats, munitions chargées, rechargement, équipement. Modifié 66 Sprint 7.5 — affichage ammo_remaining/ammo_count (rouge si vide), picker variantes ammo, POST /reload
@@ -111,6 +114,7 @@ Enclume/
 │   │   │   ├── entity-blueprints.js    # Modifié 33 — POST /:id/upload-glb
 │   │   │   ├── entities.js             # Modifié 39 — maintenance Redis collision map
 │   │   │   ├── equipment.js            # NOUVEAU 47 — CRUD ref_equipment + junction tables. Modifié 65 Sprint GM-A : +location dans GET /equipment SELECT
+│   │   │   ├── documents.js            # NOUVEAU 75 — GET/POST/PUT/DELETE /campaigns/:id/documents (mergeParams, broadcast filtré canView, gm_notes_html retiré non-GM). Modifié 80 — +POST /upload-image (multerUpload, minio.putObject, GM only, campaigns/<id>/documents/<uuid>.<ext>, retourne {url:objectName})
 │   │   │   └── character/
 │   │   │       └── char-sheet.js       # Modifié 66 Sprint A+C2 — +6 routes /macros. Modifié 66 Sprint 7.5 — +ammo_remaining + POST /reload. Modifié 71 — +helper getWorstWoundSeverity(charSheetId) + worst_wound_severity dans payloads WOUND_ADDED/UPDATED/REMOVED
 │   │   ├── middleware/
@@ -179,6 +183,7 @@ Enclume/
 /api/char-sheet
 /api/char-ref
 /api/equipment                           ← CRUD ref_equipment + junction tables (session 47)
+/api/campaigns/:campaignId/documents     ← mergeParams — GET/POST/PUT/DELETE + POST /upload-image (session 75-80)
 ```
 
 ### Routes REST — Entities (/api/battlemaps/:id/entities + /api/entities)

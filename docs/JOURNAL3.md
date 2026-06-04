@@ -2213,3 +2213,42 @@ O(1) par lookup, reconstruit uniquement quand `voxels` change.
 - **TDZ React** : `const` utilisé dans dep array d'un `useEffect` avant sa déclaration dans le corps du composant → crash. Toujours déclarer les `useState` avant les `useEffect` qui les utilisent.
 
 **Session 79 ✅ CONFIRMÉ FONCTIONNEL**
+
+## Session 80 — Sprint Bibliothèque 2 : upload image MinIO dans l'éditeur (2026-06-04)
+
+### Objectif
+Remplacer les images base64 inline dans l'éditeur Quill (Bibliothèque documents) par un vrai upload MinIO. L'image est stockée dans MinIO et une URL `/api/assets/` est insérée dans le contenu HTML du document.
+
+### Décisions de périmètre
+- **Images uniquement** (jpeg, png, webp, gif) — `multerUpload` existant gère déjà ces MIME types
+- **PDF exclu** : le projet sera proposé sur les forums Polaris (GMs inconnus). `Content-Disposition: attachment` mitigue le vecteur JS inline mais ne protège pas contre les exploits lecteur PDF au téléchargement. Reporté avec analyse sécurité dédiée.
+- **Pièce jointe séparée (`file_url`)** : non retenue — images directement dans le corps Quill. Pas de migration 69 nécessaire pour ce sprint.
+- **GM uniquement** : seul le GM peut créer et éditer des documents (règle existante confirmée).
+
+### Fichiers modifiés
+- `server/src/routes/documents.js`
+- `client/src/components/DocumentModal.jsx`
+
+### Architecture
+
+**Serveur — `documents.js`**
+- Nouveaux imports : `randomUUID`, `path`, `multerUpload`, `getMinioClient`, `BUCKET`
+- Route `POST /upload-image` ajoutée avant `GET /:docId` (P46 — route statique avant paramétrique)
+- Chemin MinIO : `campaigns/<campaignId>/documents/<uuid>.<ext>`
+- Pattern identique à `campaigns.js` cover : `multerUpload.single()` + `minio.putObject()` manuel (pas `uploadToMinio` — qui retourne une URL MinIO directe inutilisable derrière le proxy)
+- Guards : membre campagne + rôle GM + `req.file` présent
+- Retourne : `{ url: objectName }` — chemin relatif MinIO (P18)
+
+**Client — `DocumentModal.jsx`**
+- `makeImageHandler(quill, campaignId, onError)` : `FileReader` base64 → `api.post(FormData)` → insert URL dans Quill
+- `useQuillEditor(containerRef, initialHtml, editable, campaignId, onError)` : signature étendue
+- Aucun nouveau dep dans `useEffect []` — `campaignId` (route param) et `setError` (useState setter) sont stables par nature
+- Les deux éditeurs (content + gmNotes) utilisent le même handler upload
+
+### Pièges respectés
+- **P18** : serveur retourne `objectName` (relatif), pas `getFileUrl(objectName)` (URL MinIO directe, inutilisable via proxy)
+- **P25** : MinIO avant base — pas d'écriture en base dans ce sprint (URL stockée dans `content_html` via Quill)
+- **P46** : route statique `/upload-image` déclarée avant paramétrique `/:docId`
+- **PL-Q3** : `campaignId` et `onError` capturés dans `useEffect []` — stables, pas de stale closure
+
+### Session 80 ✅ CONFIRMÉ FONCTIONNEL

@@ -1,7 +1,11 @@
 import { Router } from 'express'
+import { randomUUID } from 'crypto'
+import path from 'path'
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
+import { multerUpload } from '../middleware/upload.js'
+import getMinioClient, { BUCKET } from '../lib/minio.js'
 import { WS } from '../../../shared/events.js'
 
 // Monté sous /api/campaigns/:campaignId/documents
@@ -96,6 +100,36 @@ router.post('/', requireAuth, async (req, res) => {
   await broadcastDoc(io, campaignId, doc, WS.DOC_CREATED)
 
   res.status(201).json({ document: doc })
+})
+
+// ─── POST /upload-image — upload image pour insertion dans l'éditeur (GM) ───
+// Chemin MinIO : campaigns/<campaignId>/documents/<uuid>.<ext>
+// Retourne { url: objectName } — le client reconstruit VITE_API_URL/api/assets/${url}
+
+router.post('/upload-image', requireAuth, multerUpload.single('image'), async (req, res) => {
+  const { campaignId } = req.params
+
+  const member = await db('campaign_members')
+    .where({ campaign_id: campaignId, user_id: req.user.id })
+    .first()
+  if (!member) throw new AppError(403, 'Not a member of this campaign')
+  if (member.role !== 'gm') throw new AppError(403, 'GM only')
+
+  if (!req.file) throw new AppError(400, 'No file uploaded')
+
+  const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
+  const objectName = `campaigns/${campaignId}/documents/${randomUUID()}${ext}`
+  const minio = getMinioClient()
+
+  await minio.putObject(
+    BUCKET(),
+    objectName,
+    req.file.buffer,
+    req.file.size,
+    { 'Content-Type': req.file.mimetype }
+  )
+
+  res.json({ url: objectName })
 })
 
 // ─── GET /:docId — lire un document ─────────────────────────────────────────

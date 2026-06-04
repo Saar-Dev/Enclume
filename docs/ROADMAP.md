@@ -271,7 +271,8 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
 | Onglets Voxels/Entités en mode édition | ✅ |
 | Badge MR displacement dans chat | ✅ session 43 |
 | Toggle visible character temps réel (Bug A) | ✅ session 44 |
-| Bibliothèque documents | 🔲 |
+| Bibliothèque documents (Sprint 1 : éditeur Quill, permissions, temps réel) | ✅ session 75 |
+| Bibliothèque documents (Sprint 2 : images uploadées MinIO) | ✅ session 80 |
 
 ### PLAN 14 — Système de Statuts (Status Effects) 🔲
 

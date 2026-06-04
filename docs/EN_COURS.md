@@ -1,5 +1,5 @@
 # EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-05-30 Session 66
+> Dernière mise à jour : 2026-06-04 Session 80
 
 ---
 
@@ -459,3 +459,25 @@ Statut : correction prévue si besoin.
 - PC42 — `WHERE NOT col = 'val'` exclut les NULL en PostgreSQL → toujours `(col IS NULL OR col != 'val')`
 - PC43 — `orderByRaw('CASE WHEN ? IS NOT NULL ...')` : PostgreSQL ne peut pas inférer le type UUID sans cast → éviter pour les UUID, préférer le JS post-fetch
 - PC44 — `io.fetchSockets()` nécessaire quand le GM clique Agir pour un slot joueur (socket ≠ joueur)
+- PL-Q1 — `getSemanticHTML()` Quill 2.0 retourne vide — utiliser `querySelector('.ql-editor').innerHTML`
+- PL-Q2 — Quill insère la toolbar comme `previousElementSibling`, pas à l'intérieur du container — guard `classList.contains('ql-container')`
+- PL-Q3 — `containerRef.current` peut être null dans le cleanup React 19 — toujours capturer en variable locale en début d'effect
+- PL-Q4 — `editor.destroy()` n'existe pas en Quill 2.0 public API
+
+---
+
+## Session 75 ✅ (2026-06-03) — Sprint Bibliothèque 1
+
+- Migration 67 : `campaign_documents` (id, campaign_id, name, content_html, gm_notes_html, viewer_ids JSONB, editor_ids JSONB, created_by, timestamps) ✅
+- `server/src/routes/documents.js` : GET/POST/PUT/DELETE, broadcast filtré canView, gm_notes_html retiré pour non-GM ✅
+- `libraryStore.js` : documents[], addDocument upsert, updateDocument, removeDocument ✅
+- `LibraryPanel.jsx` : liste documents, ShareIndicator (œil/punaise colorée), canEdit ✅
+- `DocumentModal.jsx` : éditeur Quill x2 (content + gmNotes), PermissionSelect portal, save/delete ✅
+- `SessionPage.jsx` : fetch initial dans loadSession, listeners DOC_CREATED/UPDATED/DELETED ✅
+- Sidebar : fusion onglets Joueurs+Config → Profil (4 onglets au lieu de 5) ✅
+
+## Session 80 ✅ (2026-06-04) — Sprint Bibliothèque 2
+
+- `server/src/routes/documents.js` : +POST /upload-image (multerUpload, minio.putObject, GM only, campaigns/<id>/documents/<uuid>.<ext>, retourne {url:objectName}) ✅
+- `client/src/components/DocumentModal.jsx` : makeImageHandler base64→upload MinIO, useQuillEditor +campaignId/onError ✅
+- PDF exclu du scope : projet public forums Polaris — analyse sécurité requise (voir JOURNAL3 Session 80)

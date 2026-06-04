@@ -22,9 +22,9 @@ const TOOLBAR = [
 ]
 
 // ─── Handler image ────────────────────────────────────────────────────────────
-// File picker → base64 inline. Sprint 2 : upload MinIO + file_url en DB.
+// File picker → upload MinIO via POST /upload-image → URL insérée dans Quill.
 
-function makeImageHandler(quill) {
+function makeImageHandler(quill, campaignId, onError) {
   return function () {
     const input = document.createElement('input')
     input.type = 'file'
@@ -42,13 +42,20 @@ function makeImageHandler(quill) {
       const file = input.files?.[0]
       cleanup()
       if (!file) return
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const range = quill.getSelection(true)
-        quill.insertEmbed(range.index, 'image', e.target.result)
-        quill.setSelection(range.index + 1)
-      }
-      reader.readAsDataURL(file)
+
+      const fd = new FormData()
+      fd.append('image', file)
+
+      api.post(`/campaigns/${campaignId}/documents/upload-image`, fd)
+        .then(res => {
+          const url = `${import.meta.env.VITE_API_URL}/api/assets/${res.data.url}`
+          const range = quill.getSelection(true)
+          quill.insertEmbed(range.index, 'image', url)
+          quill.setSelection(range.index + 1)
+        })
+        .catch(err => {
+          onError?.(err.response?.data?.error || 'Erreur upload image')
+        })
     })
 
     input.click()
@@ -70,7 +77,7 @@ function resolvePlayerCanEdit(doc, userId) {
 // Guard : classList.contains('ql-container') détecte une initialisation existante.
 // Cleanup : retire la toolbar sibling + réinitialise le container.
 
-function useQuillEditor(containerRef, initialHtml, editable) {
+function useQuillEditor(containerRef, initialHtml, editable, campaignId, onError) {
   useEffect(() => {
     // Capturer la valeur du ref au moment de l'effect.
     // containerRef.current peut être null dans le cleanup (React 19) —
@@ -89,7 +96,7 @@ function useQuillEditor(containerRef, initialHtml, editable) {
 
     if (editable) {
       const toolbar = editor.getModule('toolbar')
-      if (toolbar) toolbar.addHandler('image', makeImageHandler(editor))
+      if (toolbar) toolbar.addHandler('image', makeImageHandler(editor, campaignId, onError))
     }
 
     if (initialHtml) editor.clipboard.dangerouslyPasteHTML(initialHtml)
@@ -132,8 +139,8 @@ export default function DocumentModal({ doc, isGm, members, userId, onClose }) {
   const contentRef = useRef(null)
   const gmNotesRef = useRef(null)
 
-  const { getHTML: getContent  } = useQuillEditor(contentRef,  doc?.content_html  ?? '', canEditContent)
-  const { getHTML: getGmNotes  } = useQuillEditor(gmNotesRef,  doc?.gm_notes_html ?? '', isGm)
+  const { getHTML: getContent  } = useQuillEditor(contentRef,  doc?.content_html  ?? '', canEditContent, campaignId, setError)
+  const { getHTML: getGmNotes  } = useQuillEditor(gmNotesRef,  doc?.gm_notes_html ?? '', isGm,            campaignId, setError)
 
   const playerMembers = members.filter(m => m.role !== 'gm')
 

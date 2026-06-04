@@ -1,3 +1,11 @@
+## v80 — 2026-06-04 — Bibliothèque : images uploadées dans le cloud
+
+### Bibliothèque
+- [fix] Images insérées dans un document sont maintenant hébergées sur le serveur (était : stockées en base64 dans le contenu, alourdissait les documents)
+- [chg] Le bouton image dans l'éditeur upload le fichier et insère un lien — comportement identique côté MJ
+
+---
+
 ## v79 — 2026-06-04 — Fix placement tokens
 
 ### Playground — Tokens

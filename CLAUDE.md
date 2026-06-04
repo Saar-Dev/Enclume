@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-06-04 Session 77
+> Dernière mise à jour : 2026-06-04 Session 80
 
 ---
 
@@ -121,11 +121,11 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 79 (2026-06-04)
+## État actuel — Session 80 (2026-06-04)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **68 migrations stables** — prochaine : **69**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.5 ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅ / Sprint CaC 1 ✅ / Sprint CaC 2 ✅ / Sprint CaC 3 ✅ / Déploiement Kiwi ✅ / Sprint Token par défaut campagne ✅ / Sprint Timeline BG3 ✅ / Sprint CaC 4a ✅ / Sprint Bibliothèque 1 ✅ / Sprint Token Radial 1 ✅ / Sprint Optimisation Voxels Phase A ✅ / Sprint Optimisation Voxels Phase B ✅ / Sprint Statuts Phase 1 ✅
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.5 ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅ / Sprint CaC 1 ✅ / Sprint CaC 2 ✅ / Sprint CaC 3 ✅ / Déploiement Kiwi ✅ / Sprint Token par défaut campagne ✅ / Sprint Timeline BG3 ✅ / Sprint CaC 4a ✅ / Sprint Bibliothèque 1 ✅ / Sprint Token Radial 1 ✅ / Sprint Optimisation Voxels Phase A ✅ / Sprint Optimisation Voxels Phase B ✅ / Sprint Statuts Phase 1 ✅ / Sprint Bibliothèque 2 ✅
 
 **Session 74 — EN ATTENTE VALIDATION :**
 - **Sprint CaC 4b — Attaque multiple** : malus −5/−7 (LdB p.218), UI PJ séquentielle, GM queue étendue, N rows melee server — codé, non validé fonctionnellement
@@ -137,6 +137,9 @@ Toute décision non documentée est considérée comme nulle.
 **Session 79 ✅ :**
 - **Fix placement tokens** : `getVoxelSurfaceTop()` + `colTopSurface` useMemo, drop lit `dragRef` (ghost position), `Math.floor`, fix TDZ `statusPanel` SessionPage ✅
 
+**Session 80 ✅ :**
+- **Sprint Bibliothèque 2** : `POST /upload-image` dans `documents.js` (MinIO, GM only, `campaigns/<id>/documents/<uuid>.<ext>`), `makeImageHandler` base64→upload dans `DocumentModal.jsx` ✅
+
 **Serveur Alpha "Kiwi" :** `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md`
 
 **"Changer le mode de tir" — non implémenté.** Sprint dédié futur.
@@ -144,7 +147,7 @@ Toute décision non documentée est considérée comme nulle.
 **Prochain chantier :**
 - **Sprint CaC 4b — Validation** : tester attaque multiple melee (Session 74 codé, non validé)
 - **Sprint Token Radial 2** : wounds array complet dans anneau, secteur Jet (jets favoris), secteur Recharger (ammo_remaining live), portée d'arme (anneaux concentriques)
-- **Sprint Bibliothèque 2** : migration 69 `file_url`, upload image/PDF → MinIO, affichage pièce jointe dans modal
+- **Sprint Bibliothèque 3** : upload PDF sécurisé (analyse sécurité préalable requise — voir JOURNAL3 Session 80)
 - Sprint Test de Choc suite — guard is_stunned COMBAT_ACTION_DECLARE + clear logique (PC42)
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, UI non implémentée)
 - **Notification entité interactive** — sablier joueur au-dessus de l'entité + bouton rouge GM dans chat
