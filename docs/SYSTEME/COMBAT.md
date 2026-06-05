@@ -291,14 +291,21 @@ await db('combat_roster').where({ campaign_id, status: 'active' }).update({
 ```javascript
 // 1. Reset roster (toutes les entrées status='active') :
 await db('combat_roster').where({ campaign_id, status: 'active' }).update({
-  has_announced: false,
-  has_resolved:  false,
-  state_character: db.raw("state_character - 'is_rushed'"),  // flags per-turn
+  has_announced:     false,
+  has_resolved:      false,
+  state_position:    'standing',   // per-turn
+  state_cover:       'exposed',    // per-turn
+  state_vitesse:     'normal',     // per-turn (remplace l'ancien flag is_rushed dans state_character — migration 58)
+  state_combat_mode: 'normal',     // per-turn
+  // state_weapon, state_fire_mode : inchangés (persistent combat)
+  // state_character : is_stunned persiste intentionnellement (non per-turn)
 })
 // 2. Vider toutes les actions du tour :
 await db('combat_actions').where({ campaign_id }).delete()
 // 3. Incrémenter current_turn, reset active_slot_idx=0, phase='ANNOUNCEMENT'
 // 4. Broadcast COMBAT_PHASE_CHANGED { phase: 'ANNOUNCEMENT', roster }
+// 5. Émettre COMBAT_SLOT_ADVANCED { activeSlotIdx:0, tokenId: firstAnnounceSlot }
+// 6. Relancer les timers auto-skip (startAnnouncementTimers)
 ```
 
 ---

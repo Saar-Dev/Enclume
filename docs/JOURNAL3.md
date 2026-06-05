@@ -2478,3 +2478,46 @@ Plan de refactoring progressif (strangler fig) :
 - Sprint niveau 2 (après validation niveau 1) : split handlers par domaine via
   `registerCombatHandlers(io, socket)`, `registerTokenHandlers(io, socket)`, etc.
 - Règle immédiate : tout nouveau handler s'écrit dans le bon module dès maintenant.
+
+## Session 82 — suite : Run à vide Sprint Test de Choc (2026-06-05)
+
+### Périmètre analysé
+
+Analyse complète du Sprint Test de Choc (session 81 suite) : 4 chemins shock server, wiring client
+ShockBlock/CombatResultPanels, COMBAT_APPLY_STUN, COMBAT_END cleanup, applyStunStatus.
+
+### Résultat : architecture correcte ✅
+
+Les 4 chemins shock sont tous branchés et fonctionnels :
+- COMBAT_DAMAGE_CONFIRM (PJ tireur) → COMBAT_DAMAGE_RESULT socket + COMBAT_ATTACK_RESULT room ✅
+- COMBAT_MELEE_DEFENSE_CONFIRM (PNJ auto-dégâts) → COMBAT_ATTACK_RESULT isPnj:true ✅
+- resolveAssaultAction PNJ path → COMBAT_ATTACK_RESULT isPnj:true ✅
+- COMBAT_APPLY_STUN (GM manuel) → guard role corrigé session 82 ✅
+
+vol_na_cible présent dans les 3 paths. getShockMalus + isShockTestRequired correctement importés.
+Idempotence applyStunStatus correcte. COMBAT_END nettoie stunned/unconscious. ✅
+
+### 3 correctifs appliqués
+
+**Fix 1 — COMBAT.md endTurn pseudocode stale (documentation)**
+Le pseudocode référençait `state_character - 'is_rushed'` (n'a jamais existé dans endTurn — reliquat
+avant migration 58 qui a migré is_rushed vers la colonne state_vitesse). Les colonnes per-turn réelles
+(state_position/cover/vitesse/combat_mode) et les étapes 5-6 (COMBAT_SLOT_ADVANCED, timers) étaient absentes.
+Corrigé : `docs/SYSTEME/COMBAT.md` section "endTurn — comportement serveur".
+
+**Fix 2 — COMBAT_APPLY_STUN : outcome non validé (sécurité mineure)**
+Guard `!outcome` (truthy) remplacé par `!['etourdi', 'inconscient'].includes(outcome)`.
+Avant : tout string truthy accepté → applyStunStatus defaultait à 'stunned'.
+Après : seuls les deux outcomes légitimes passent.
+Fichier : `server/src/socket/index.js` ligne 2636.
+
+**Fix 3 — COMBAT_APPLY_STUN : pas de feedback GM sur erreur serveur**
+Ajout `socket.emit('error', ...)` dans le catch. L'optimistic update client (setStunApplied(true))
+restait désynchronisé si le serveur échouait silencieusement.
+Fichier : `server/src/socket/index.js` ligne 2645.
+
+### Dettes confirmées (non nouvelles)
+
+- PC42 : is_stunned non enforced dans COMBAT_ACTION_DECLARE — sprint dédié
+- stunned_until_turn : durée réelle 1d6 tours non implémentée — sprint dédié
+- shock_auto_stun : fetch DB répété dans chaque path (3×/hit) — acceptable V1

@@ -2633,7 +2633,7 @@ const initSocket = (io) => {
     socket.on(WS.COMBAT_APPLY_STUN, async ({ tokenId, outcome }) => {
       if (socket.role !== 'gm') return
       const campaignId = socket.campaignId
-      if (!campaignId || !tokenId || !outcome) return
+      if (!campaignId || !tokenId || !['etourdi', 'inconscient'].includes(outcome)) return
       try {
         await db('combat_roster')
           .where({ campaign_id: campaignId, token_id: tokenId })
@@ -2642,6 +2642,7 @@ const initSocket = (io) => {
         console.log(`[WS] COMBAT_APPLY_STUN — is_stunned posé manuellement. token:${tokenId} outcome:${outcome} campaign:${campaignId}`)
       } catch (err) {
         console.error('[WS] COMBAT_APPLY_STUN error:', err.message)
+        socket.emit('error', { message: 'Erreur lors de l\'application de l\'étourdissement' })
       }
     })
 
