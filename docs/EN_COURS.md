@@ -482,7 +482,7 @@ Statut : correction prévue si besoin.
 - `client/src/components/DocumentModal.jsx` : makeImageHandler base64→upload MinIO, useQuillEditor +campaignId/onError ✅
 - PDF exclu du scope : projet public forums Polaris — analyse sécurité requise (voir JOURNAL3 Session 80)
 
-## Session 81 ✅ (2026-06-05) — Corrections combat + Sprint Annonce v2
+## Session 81 ✅ (2026-06-05) — Corrections combat + Sprint Annonce v2 + S1/S2/S3
 
 - **Bug ammo_remaining** : migration 70 backfill + `resolveAmmoInit()` dans char-sheet.js (PUT/POST/quick-equip) + fix `isAmmoEmpty` client ✅
 - **Bug crash écran noir joueur** : `setMeleePendingTokenId(null)×3` → `setMeleePendingTokenIds([])` dans `CombatActionWindow.jsx` ✅
@@ -494,3 +494,7 @@ Statut : correction prévue si besoin.
   - `TimelineCard.jsx` : prop `isDimmed` (opacity 0.35) ✅
   - `CombatTimeline.jsx` : `isDimmed = hasAnnounced && !isActive` en ANNOUNCEMENT ✅
   - `CombatGmDeclareWindow.jsx` : réécriture complète — batch supprimé, appels directs, "Passer [PJ]" ✅
+- **S1 GM** : roster PNJ collapsible localStorage dans `CombatGmDeclareWindow` ✅
+- **S2** : ligne déplacement bleu + label Billboard/Text au-dessus destination (`Canvas3D`) ✅
+- **S1 PJ** : roster multi-personnage collapsible + architecture multi-token dans `CombatActionWindow` ✅
+- **S3 Live Preview GM** : `COMBAT_ANNOUNCE_PREVIEW` — in-memory Map serveur + relay + sync SESSION_JOIN + debounce 150ms PJ + panneau monitoring GM ✅

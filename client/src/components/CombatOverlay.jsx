@@ -14,7 +14,7 @@ import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
 
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, gmSocketError, onGmSocketErrorClose, announcementMarker, sidebarWidth = 0 }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, gmSocketError, onGmSocketErrorClose, announcementMarker, pjPreview, sidebarWidth = 0 }) {
   const { phase, roster, activeSlotIdx, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
@@ -82,6 +82,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           battlemapId={battlemap?.id}
           onEnterTargetMode={onEnterTargetMode}
           combatTargetMode={combatTargetMode}
+          pjPreview={pjPreview}
         />
       )}
 
@@ -197,7 +198,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           onClose={onGmAttackResultClose}
           onApplyStun={
             gmAttackResult.shockResult?.stun_applied === false
-              ? () => socket.emit(WS.COMBAT_APPLY_STUN, { tokenId: gmAttackResult.cibleId })
+              ? () => socket.emit(WS.COMBAT_APPLY_STUN, { tokenId: gmAttackResult.cibleId, outcome: gmAttackResult.shockResult.outcome })
               : undefined
           }
         />

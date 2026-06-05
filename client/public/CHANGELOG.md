@@ -1,4 +1,4 @@
-## v81 — 2026-06-04 — Sprint Annonce v2 + corrections combat
+## v81 — 2026-06-05 — Sprint Annonce v2 + corrections combat + roster personnages
 
 ### Combat — Phase Annonce
 - [chg] Déclaration séquentielle stricte : une fenêtre à la fois dans l'ordre d'initiative, le GM ne peut plus grouper des PNJs en batch
@@ -7,6 +7,22 @@
 - [add] Mini-panneau "vient d'annoncer" en bas-gauche (nom, INI, destination, cible)
 - [chg] Timeline phase Annonce : le déclarant actif est affiché en grand, les déclarés sont atténués
 - [add] Bouton "Passer" dans la fenêtre GM quand un joueur bloque le flux d'annonce
+
+### Combat — Monitoring GM en temps réel
+- [add] Le GM voit en direct ce que le joueur actif est en train de déclarer : actions choisies, cible visée, destination de déplacement, mode de combat — mis à jour en temps réel (150ms) sans attendre la confirmation
+- [add] Reconnexion du GM en cours de déclaration : le preview courant est resynchronisé automatiquement
+
+### Combat — Fenêtre de déclaration
+- [add] Roster PNJs collapsible (GM) avec mémorisation de l'état ouvert/fermé
+- [add] Roster de personnages collapsible (joueurs) : liste tous les persos du joueur en combat, visible dans tous les états (attente, déclaré, formulaire). Utile pour hackers avec drones ou PNJ alliés assignés
+- [add] Ligne de déplacement bleue de l'origine à la destination + nom du token au-dessus — les spectateurs voient clairement qui se déplace et où
+
+### Combat — Test de Choc
+- [add] Option campagne "Appliquer l'étourdissement automatiquement" (activée par défaut) — désactivez pour arbitrer manuellement
+- [add] Bouton "Appliquer l'étourdissement" dans le panneau résultat GM quand l'option est désactivée
+- [fix] L'échec d'un Test de Choc applique désormais le badge Étourdi ou Inconscient sur le token
+- [fix] La fin du combat retire automatiquement les badges Étourdi/Inconscient des participants
+- [fix] Le MJ voit le panneau résultat dégâts quand un PJ attaque un PNJ
 
 ### Combat — Bugs corrigés
 - [fix] Écran noir joueur au passage en mode combat (erreur JavaScript interne)

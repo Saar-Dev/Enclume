@@ -121,7 +121,7 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 81 (2026-06-04)
+## État actuel — Session 81 (2026-06-05)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **70 migrations stables** — prochaine : **71**
@@ -134,6 +134,13 @@ Toute décision non documentée est considérée comme nulle.
 - **Bug ammo_remaining** : migration 70 backfill + `resolveAmmoInit` serveur (3 routes) + fix `isAmmoEmpty` client ✅
 - **Bug crash écran noir** : `setMeleePendingTokenIds` (3 occurrences corrigées dans `CombatActionWindow.jsx`) ✅
 - **Sprint Annonce v2** : batch GM supprimé, appels directs, ghost déplacement + ligne assaut pour spectateurs, mini-panneau déclarant, timeline `isDimmed` ✅
+- **S1 GM** : roster PNJ collapsible localStorage dans `CombatGmDeclareWindow` ✅
+- **S2** : ligne déplacement bleu + label token Billboard/Text au-dessus destination (`Canvas3D`) ✅
+- **S1 PJ** : roster multi-personnage dans `CombatActionWindow`, architecture multi-token, fix violation hooks `useDraggable` ✅
+- **S3 Live Preview GM** : `COMBAT_ANNOUNCE_PREVIEW` — in-memory Map serveur, relay room, sync SESSION_JOIN, debounce 150ms PJ, panneau monitoring GM ✅
+
+**Session 81 suite — EN ATTENTE VALIDATION :**
+- **Sprint Test de Choc** : migration 69 `shock_auto_stun`, option campagne, bouton GM "Appliquer l'étourdissement", helper `applyStunStatus` + connexion `token_statuses`, `COMBAT_END` cleanup badges, fix GM voit dégâts PJ→PNJ — codé, non validé fonctionnellement
 
 **Serveur Alpha "Kiwi" :** `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md`
 
@@ -141,10 +148,11 @@ Toute décision non documentée est considérée comme nulle.
 
 **Prochain chantier :**
 - **Sprint CaC 4b — Validation** : tester attaque multiple melee (Session 74 codé, non validé)
-- **Sprint Annonce v2 — Suite (Bug 2)** : fenêtre GM n'affiche les actions qu'au déclarant courant (architecture séquentielle 1-par-1 complète)
+- **Harmonisation boutons d'attaque** : CaC vs Tir — extension fenêtre, sélection cible, validation selon acteur (PNJ/PJ) et type d'assaut — sprint dédié
 - **Sprint Token Radial 2** : wounds array complet dans anneau, secteur Jet (jets favoris), secteur Recharger (ammo_remaining live), portée d'arme (anneaux concentriques)
 - **Sprint Bibliothèque 3** : upload PDF sécurisé (analyse sécurité préalable requise — voir JOURNAL3 Session 80)
-- Sprint Test de Choc suite — guard is_stunned COMBAT_ACTION_DECLARE + clear logique (PC42)
+- **Sprint Test de Choc — Durée** : `stunned_until_turn: current_turn + 1d6` remplace `is_stunned: true`, `endTurn` expire les stuns + retire badge `token_statuses`, `is_unconscious: true` flag séparé
+- **Sprint Test de Choc — Enforcement (PC42)** : guard `is_stunned` dans `COMBAT_ACTION_DECLARE` — −5 compétence, allure max moyenne, ne peut pas attaquer
 - D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, UI non implémentée)
 - **Notification entité interactive** — sablier joueur au-dessus de l'entité + bouton rouge GM dans chat
 - **Persistance du chat** — sprint dédié futur
@@ -155,8 +163,8 @@ Toute décision non documentée est considérée comme nulle.
 **Dettes actives :**
 - `useDiceAudio.js` — sons impact dés
 - `.gitattributes:3` — attribut invalide
-- `is_stunned` settable (session 66) mais non enforced — `COMBAT_ACTION_DECLARE` ne lit pas le flag → PC42 (voir SYSTEME/COMBAT.md)
-- `is_stunned` purge manuelle non implémentée — clear via route GM à créer (actuellement purgé implicitement par COMBAT_END)
+- `is_stunned` settable + badge `token_statuses` connecté (session 81) mais non enforced — `COMBAT_ACTION_DECLARE` ne lit pas le flag → PC42 (voir SYSTEME/COMBAT.md)
+- `is_stunned` sans durée — flag persistant jusqu'à `COMBAT_END` ; durée réelle LdB = 1d6 tours → sprint `stunned_until_turn` requis
 - WorkshopPage écran blanc sur import invalide — `err.response?.data?.error` objet AppError → crash React
 - Kiwi P-SRV-5 — ports Docker non restreints à 127.0.0.1 (UFW contourné par Docker)
 - `onTokenRotate` dead code dans Canvas3D/Scene (signatures + prop SessionPage) — nettoyage sprint futur

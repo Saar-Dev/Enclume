@@ -933,15 +933,48 @@ function Scene({
         </line>
       )}
 
-      {/* ── Ghost déplacement — destination annoncée (Sprint Annonce v2) ─── */}
+      {/* ── Ghost déplacement — destination + ligne + label (S2) ─── */}
       {announcementMarker?.moveTarget && (() => {
-        const m = announcementMarker.moveTarget
+        const m   = announcementMarker.moveTarget
+        const src = tokens.find(t => t.id === announcementMarker.tokenId)
         // PE14 → Three.js : X=pos_x, Y=pos_z(altitude), Z=pos_y(depth)
+        const movePts = src ? new Float32Array([
+          src.pos_x + 0.5, src.pos_z + 1.5, src.pos_y + 0.5,
+          m.x + 0.5,       m.z + 1.0,       m.y + 0.5,
+        ]) : null
         return (
-          <mesh position={[m.x + 0.5, m.z + 0.5, m.y + 0.5]}>
-            <boxGeometry args={[1, 1, 1]} />
-            <meshBasicMaterial color="#5b8dee" transparent opacity={0.22} wireframe={false} />
-          </mesh>
+          <>
+            {/* Marqueur destination */}
+            <mesh position={[m.x + 0.5, m.z + 0.5, m.y + 0.5]}>
+              <boxGeometry args={[1, 1, 1]} />
+              <meshBasicMaterial color="#5b8dee" transparent opacity={0.22} />
+            </mesh>
+            {/* Ligne origine → destination */}
+            {movePts && (
+              <line>
+                <bufferGeometry>
+                  <bufferAttribute attach="attributes-position" count={2} array={movePts} itemSize={3} />
+                </bufferGeometry>
+                <lineBasicMaterial color="#7ab8f5" linewidth={2} />
+              </line>
+            )}
+            {/* Label nom du token au-dessus de la destination */}
+            {src && (
+              <Billboard position={[m.x + 0.5, m.z + 2.0, m.y + 0.5]}>
+                <Text
+                  font={FONT_URL}
+                  fontSize={0.25}
+                  color="#7ab8f5"
+                  anchorX="center"
+                  anchorY="bottom"
+                  outlineWidth={0.03}
+                  outlineColor="#000000"
+                >
+                  {src.label ?? '?'}
+                </Text>
+              </Billboard>
+            )}
+          </>
         )
       })()}
 

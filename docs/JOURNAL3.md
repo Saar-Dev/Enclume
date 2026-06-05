@@ -2300,3 +2300,119 @@ tokensRef.current utilise dans la ligne d'annonce (ref miroir stable hors render
 handleStartMelee : N selections chainees via recursion de callbacks.
 
 ### Session 81 CONFIRME FONCTIONNEL
+
+---
+
+## Session 81 — suite (2026-06-05)
+
+### S1 GM — Toggle roster localStorage CONFIRME FONCTIONNEL
+
+CombatGmDeclareWindow.jsx : state rosterOpen initialisé depuis localStorage('gm-roster-open'),
+bouton chevron dans le rosterHeader, rendu conditionnel {rosterOpen && <div>...</div>}.
+Style S.rosterToggle ajouté.
+
+### S2 — Ligne déplacement + label token CONFIRME FONCTIONNEL
+
+Canvas3D.jsx : ghost box bleue remplacée par bloc enrichi :
+- Ligne bleue (#7ab8f5) depuis position courante du token (tokensRef→tokens) vers destination
+- Float32Array([src.pos_x+0.5, src.pos_z+1.5, src.pos_y+0.5, m.x+0.5, m.z+1.0, m.y+0.5]) — PE14
+- Billboard+Text FONT_URL au-dessus destination avec nom du token déclarant
+
+### S1 PJ — Roster multi-personnage CONFIRME FONCTIONNEL
+
+CombatActionWindow.jsx — refactor architecture :
+- playerChar (find) → playerChars (filter) + playerTokensInRoster (subset dans le roster)
+- activeStoreToken : token du joueur dans le slot actif (activeTokenId du store)
+- playerToken = activeStoreToken ?? playerTokensInRoster[0] — suit le tour du drone B quand c'est son tour
+- useDraggable déplacé AVANT les early returns (correction violation règles des hooks existante)
+- Fetch allures + inventaire : dep [playerToken?.id] au lieu de [playerChar?.id]
+- Early return guard : playerTokensInRoster.length === 0 (et non plus playerToken || rosterEntry)
+- rosterSection JSX : collapsible, localStorage('pj-roster-open'), affichée dans états attente/déclaré/formulaire
+- Roster dans formulaire conditionnel : visible uniquement si playerTokensInRoster.length > 1
+- isMyTurnInAnnouncement/Resolution : playerTokensInRoster.some() au lieu de playerToken.id ===
+
+---
+
+## Session 81 — Sprint Test de Choc : option shock_auto_stun + badges visuels (2026-06-05)
+
+### Objectif
+Option campagne pour contrôler l'application automatique de l'étourdissement après un Test de Choc raté. Connexion du Test de Choc au système de statuts visuels (`token_statuses`). Bouton d'application manuelle GM quand l'automatisme est désactivé.
+
+### Migration 69 — shock_auto_stun
+`campaigns.shock_auto_stun BOOLEAN NOT NULL DEFAULT true`
+- `true` (défaut) : étourdissement appliqué automatiquement + badge visuel
+- `false` : jet calculé et affiché, aucun effet appliqué — le GM décide via bouton dans le panneau résultat
+
+### Nouvelle option campagne (CampaignSettingsPage + fr.json)
+Checkbox "Appliquer l'étourdissement automatiquement" dans section "Règles de jeu". Initialisée depuis `campaign.shock_auto_stun ?? true`. Incluse dans PUT /campaigns/:id.
+
+### Payload shockResult — nouveau champ stun_applied
+`stun_applied: outcome !== 'ok' && shockAutoStun` — embarqué dans chaque `COMBAT_ATTACK_RESULT`. Permet au client de décider d'afficher le bouton sans accéder aux settings campagne.
+
+### Panneau résultat GM — CombatResultPanels + CombatOverlay
+- `ShockBlock` : prop `onApplyStun` + `useState applied` (init depuis `shockResult.stun_applied ?? true`). Bouton `btn-danger` "Appliquer l'étourdissement" si `outcome !== 'ok' && onApplyStun && !applied`. Après clic : `setApplied(true)` + "✓ Étourdissement appliqué".
+- `CombatResultGM` : prop `onApplyStun`, `RollSeuilLine` conditionnel (`roll !== undefined`) car Block 1 n'a pas le roll d'attaque dans son payload.
+- `CombatOverlay` : closure `() => socket.emit(WS.COMBAT_APPLY_STUN, { tokenId: cibleId, outcome })` si `stun_applied === false`.
+
+### Fix GM voit les dégâts PJ→PNJ (SessionPage)
+Pre-sprint : `COMBAT_ATTACK_RESULT` sans `isPnj` → GM ne voyait jamais le panneau pour les attaques PJ. Fix : `else if (isGm) { setGmAttackResult(data) }` dans le listener.
+
+### Helper applyStunStatus + connexion token_statuses
+Nouveau helper module-level `applyStunStatus(io, campaignId, tokenId, outcome)` :
+- Détermine `statusCode = outcome === 'inconscient' ? 'unconscious' : 'stunned'`
+- Delete-then-insert idempotent dans `token_statuses`
+- Broadcast `TOKEN_STATUS_UPDATED`
+
+Appelé dans les 4 blocs shock (si `shockAutoStun`) et dans le handler `COMBAT_APPLY_STUN`.
+
+### Nettoyage COMBAT_END
+Avant suppression du roster : récupère `token_id[]`, supprime `stunned`/`unconscious` de `token_statuses`, broadcast `TOKEN_STATUS_UPDATED` pour chaque token affecté.
+
+### Nouveau event WS
+`COMBAT_APPLY_STUN: 'combat:apply_stun'` — GM → serveur : `{ tokenId, outcome }`
+
+### Piège — durée étourdissement (dette)
+LdB p.237 : Étourdi = 1d6 tours, Inconscient = 1d6 minutes. **Non implémentée dans ce sprint** — `is_stunned` est un flag persistant jusqu'à `COMBAT_END`. Sprint dédié requis : `stunned_until_turn: current_turn + d6` + purge dans `endTurn` + retrait badge `token_statuses`.
+
+### Fichiers modifiés
+- `server/src/db/migrations/69_shock_auto_stun.js` (nouveau)
+- `shared/events.js` : +COMBAT_APPLY_STUN
+- `server/src/routes/campaigns.js` : +shock_auto_stun CRUD
+- `server/src/socket/index.js` : 4 blocs shock conditionnés, applyStunStatus helper, COMBAT_APPLY_STUN handler, COMBAT_END cleanup
+- `client/src/pages/CampaignSettingsPage.jsx` : +shockAutoStun state + checkbox
+- `client/src/locales/fr.json` : +shockAutoStunLabel/Hint
+- `client/src/components/CombatResultPanels.jsx` : ShockBlock bouton + CombatResultGM roll conditionnel
+- `client/src/components/CombatOverlay.jsx` : wire onApplyStun + outcome
+- `client/src/pages/SessionPage.jsx` : +else if isGm dans COMBAT_ATTACK_RESULT listener
+
+**En attente de validation fonctionnelle**
+
+---
+
+## Session 81 — suite S3 (2026-06-05)
+
+### S3 — Live Preview GM (COMBAT_ANNOUNCE_PREVIEW) CONFIRME FONCTIONNEL
+
+Architecture : pattern presence ephemere Socket.io (in-memory Map, relay pur, sync reconnect).
+Valide par recherche pro (Foundry VTT, Liveblocks, docs Socket.io officielles).
+
+Composantes :
+1. shared/events.js : +COMBAT_ANNOUNCE_PREVIEW ('combat:announce_preview')
+2. socket/index.js :
+   - combatPreviews = new Map() singleton (meme pattern que combatTimers)
+   - handler relay : combatPreviews.set(campaignId, payload) + io.to(room).emit
+   - SESSION_JOIN sync : socket.emit(COMBAT_ANNOUNCE_PREVIEW, preview) si preview courant existe
+   - 3 clears : apres COMBAT_ACTION_DECLARED (declaration confirmee), startResolutionPhase, COMBAT_END
+3. CombatActionWindow.jsx :
+   - useEffect debounce 150ms sur [socket, phase, activeTokenId, mapSelected, assaultPendingTokenId,
+     meleePendingTokenIds, moveSelection, combatMode]
+   - guard : phase === ANNOUNCEMENT && playerTokensInRoster.some(t => t.id === activeTokenId)
+   - payload : { tokenId, actions:[...mapSelected], assaultTargetId, meleeTargetIds, moveDestination{x,y}, combatMode }
+4. SessionPage.jsx : state pjPreview, listener COMBAT_ANNOUNCE_PREVIEW→setPjPreview,
+   clear sur COMBAT_ACTION_DECLARED + COMBAT_PHASE_CHANGED, passe a CombatOverlay
+5. CombatOverlay.jsx : +pjPreview dans signature, passe a CombatGmDeclareWindow
+6. CombatGmDeclareWindow.jsx : +pjPreview prop, panneau monitoring bleu quand
+   pjPreview.tokenId === activeTokenId && !isActivePnj — actions/cible/destination/combatMode
+
+Note bug futur noteé : harmonisation boutons d'attaque CaC vs Tir (fenetre, extension, cible, validation)
+selon type d'acteur (PNJ/PJ) et type d'assaut — sprint dédié.

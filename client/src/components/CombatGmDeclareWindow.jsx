@@ -52,7 +52,7 @@ function InlineChip({ stateKey, initial, current, onChange }) {
 // ---------------------------------------------------------------------------
 // Composant principal
 // ---------------------------------------------------------------------------
-export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveMode, battlemapId, onEnterTargetMode, combatTargetMode }) {
+export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveMode, battlemapId, onEnterTargetMode, combatTargetMode, pjPreview }) {
   const { roster, activeTokenId: storeActiveTokenId } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
@@ -65,6 +65,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   const [declareError, setDeclareError] = useState(null)
   const [equipment,    setEquipment]    = useState({})   // tokenId -> { characterId, weapon, armorPieces }
+  const [rosterOpen,   setRosterOpen]   = useState(
+    () => localStorage.getItem('gm-roster-open') !== 'false'
+  )
 
   // ── États de déclaration pour le PNJ actif ───────────────────────────────
   const [localStates,     setLocalStates]     = useState({ ...STATE_DEFAULTS })
@@ -471,12 +474,68 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             </div>
           )}
 
-          {/* Message d'attente — slot actif = PJ */}
+          {/* Message d'attente / monitoring — slot actif = PJ */}
           {!isActivePnj && activeTokenId && (
             <div style={S.waitBlock}>
               <span style={S.waitText}>
                 En attente de <strong style={{ color: '#c0c0d0' }}>{getLabel(activeTokenId)}</strong>
               </span>
+
+              {/* Panneau monitoring live — preview en cours du PJ actif */}
+              {pjPreview?.tokenId === activeTokenId && (
+                <div style={S.monitorPanel}>
+                  <div style={S.monitorTitle}>En cours de déclaration…</div>
+
+                  {/* Actions sélectionnées */}
+                  {pjPreview.actions?.length > 0 && (
+                    <div style={S.monitorRow}>
+                      <span style={S.monitorIcon}>⚡</span>
+                      <span style={S.monitorText}>
+                        {pjPreview.actions.join(' + ')}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Cible assaut */}
+                  {pjPreview.assaultTargetId && (
+                    <div style={S.monitorRow}>
+                      <span style={S.monitorIcon}>→</span>
+                      <span style={{ ...S.monitorText, color: '#e07070' }}>
+                        {getLabel(pjPreview.assaultTargetId)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Cibles melee */}
+                  {pjPreview.meleeTargetIds?.length > 0 && (
+                    <div style={S.monitorRow}>
+                      <span style={S.monitorIcon}>⚔</span>
+                      <span style={{ ...S.monitorText, color: '#70c070' }}>
+                        {pjPreview.meleeTargetIds.map(id => getLabel(id)).join(', ')}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Déplacement */}
+                  {pjPreview.moveDestination && (
+                    <div style={S.monitorRow}>
+                      <span style={S.monitorIcon}>⇒</span>
+                      <span style={{ ...S.monitorText, color: '#5b8dee' }}>
+                        [{pjPreview.moveDestination.x}, {pjPreview.moveDestination.y}]
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Mode combat si différent de normal */}
+                  {pjPreview.combatMode && pjPreview.combatMode !== 'normal' && (
+                    <div style={S.monitorRow}>
+                      <span style={S.monitorIcon}>◈</span>
+                      <span style={S.monitorText}>{pjPreview.combatMode}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {blockerIsPj && (
                 <button
                   style={S.btnSkip}
@@ -492,8 +551,18 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           <div style={S.roster}>
             <div style={S.rosterHeader}>
               <span style={S.rosterTitle}>ROSTER — {allPnjs.length} PNJs</span>
+              <button
+                onClick={() => {
+                  const next = !rosterOpen
+                  setRosterOpen(next)
+                  localStorage.setItem('gm-roster-open', next ? 'true' : 'false')
+                }}
+                style={S.rosterToggle}
+              >
+                {rosterOpen ? '▲' : '▼'}
+              </button>
             </div>
-            <div style={S.rosterList}>
+            {rosterOpen && <div style={S.rosterList}>
               {sortedPnjs.map(entry => {
                 const tid     = entry.token_id
                 const isAct   = tid === activeTokenId && isActivePnj
@@ -529,7 +598,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                   </div>
                 )
               })}
-            </div>
+            </div>}
           </div>
         </div>
 
@@ -732,9 +801,18 @@ const S = {
   waitBlock: { padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '1px solid #15212e' },
   waitText: { fontSize: 12, color: '#5a6575', fontStyle: 'italic' },
   btnSkip: { padding: '5px 12px', background: 'none', border: '1px solid #3a4a5a', borderRadius: 3, color: '#7090a8', fontSize: 10, cursor: 'pointer', fontFamily: 'monospace', alignSelf: 'flex-start' },
+  monitorPanel: {
+    background: 'rgba(91,141,238,0.06)', border: '1px solid #2a3a5a', borderRadius: 4,
+    padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4,
+  },
+  monitorTitle: { fontSize: 8, color: '#5b8dee', letterSpacing: '0.1em', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 },
+  monitorRow:   { display: 'flex', alignItems: 'center', gap: 6 },
+  monitorIcon:  { fontSize: 10, color: '#5b5b7a', flexShrink: 0 },
+  monitorText:  { fontSize: 10, color: '#8888b8' },
 
   roster: { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: '#070a10' },
   rosterHeader: { padding: '5px 12px', background: '#060810', borderBottom: '1px solid #15212e', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
+  rosterToggle: { background: 'none', border: 'none', color: '#456575', fontSize: 9, cursor: 'pointer', padding: '0 2px', flexShrink: 0 },
   rosterTitle: { fontSize: 8, letterSpacing: '0.12em', fontWeight: 700, color: '#aa6030', flex: 1, fontFamily: 'monospace' },
   rosterList: { flex: 1, overflowY: 'auto' },
   rosterRow: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px 5px 8px', borderBottom: '1px solid #0e1520', borderLeft: '3px solid transparent' },

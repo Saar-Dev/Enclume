@@ -58,6 +58,11 @@ const LOC_TABLE = [
 // Sprint 1 : déclarée uniquement. Logique timer démarrée en Sprint 2.
 const combatTimers = new Map()
 
+// Cache éphémère des previews d'annonce en cours — Map<campaignId, previewPayload>
+// Non persisté : perdu sur restart serveur (perte tolérée — présence éphémère LdB).
+// Synchronisé au client sur SESSION_JOIN. Purgé sur declare / phase change / combat end.
+const combatPreviews = new Map()
+
 // Cache table marges de réussite Polaris — chargée une seule fois depuis DB au premier appel.
 // Évite une requête SQL par jet de déplacement.
 // Format : [{ mr_min, mr_max, dmax }] — seed dans migration 45.
@@ -156,6 +161,9 @@ const initSocket = (io) => {
               db('combat_actions').where({ campaign_id: campaignId }),
             ])
             socket.emit(WS.COMBAT_STATE_SYNC, { combatState: activeCombat, roster, actions })
+            // Sync preview éphémère si un joueur est en train de déclarer
+            const currentPreview = combatPreviews.get(campaignId)
+            if (currentPreview) socket.emit(WS.COMBAT_ANNOUNCE_PREVIEW, currentPreview)
           }
         } catch (err) {
           console.warn('[WS] session:join — combat state sync error (non bloquant):', err.message)
@@ -1587,9 +1595,33 @@ const initSocket = (io) => {
         }
 
         await db('combat_actions').where({ campaign_id: campaignId }).delete()
+
+        // Nettoyer les statuts stunned/unconscious des tokens du roster avant suppression
+        const rosterTokenIds = await db('combat_roster')
+          .where({ campaign_id: campaignId })
+          .pluck('token_id')
+        if (rosterTokenIds.length > 0) {
+          const affected = await db('token_statuses')
+            .whereIn('token_id', rosterTokenIds)
+            .whereIn('status_code', ['stunned', 'unconscious'])
+            .select('token_id')
+          if (affected.length > 0) {
+            await db('token_statuses')
+              .whereIn('token_id', rosterTokenIds)
+              .whereIn('status_code', ['stunned', 'unconscious'])
+              .delete()
+            const affectedIds = [...new Set(affected.map(r => r.token_id))]
+            for (const tid of affectedIds) {
+              const statuses = await db('token_statuses').where({ token_id: tid }).pluck('status_code')
+              io.to(campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId: tid, statuses })
+            }
+          }
+        }
+
         await db('combat_roster').where({ campaign_id: campaignId }).delete()
         await db('combat_state').where({ campaign_id: campaignId }).delete()
 
+        combatPreviews.delete(campaignId)
         io.to(campaignId).emit(WS.COMBAT_ENDED)
 
         console.log(`[WS] combat:end — ${socket.user.username} (campagne ${campaignId})`)
@@ -2043,6 +2075,9 @@ const initSocket = (io) => {
           campaignTimersMap.delete(tokenId)
         }
 
+        // Purger le preview éphémère — le joueur a confirmé sa déclaration
+        combatPreviews.delete(campaignId)
+
         // PC13 — tous annoncés → phase Résolution, sinon émettre le slot suivant (LdB p.212)
         const [{ count }] = await db('combat_roster')
           .where({ campaign_id: campaignId, has_announced: false })
@@ -2082,6 +2117,16 @@ const initSocket = (io) => {
       } catch (err) {
         console.error('[WS] combat:skip_player error:', err.message)
       }
+    })
+
+    // ─── COMBAT:ANNOUNCE_PREVIEW — Preview éphémère en cours de déclaration ─
+    // PJ émet ses sélections en cours (debounce client). Relay sans DB write.
+    // Payload : { tokenId, actions[], assaultTargetId, meleeTargetIds[], moveDestination, combatMode }
+    socket.on(WS.COMBAT_ANNOUNCE_PREVIEW, (payload) => {
+      const campaignId = socket.campaignId
+      if (!campaignId || !payload?.tokenId) return
+      combatPreviews.set(campaignId, payload)
+      io.to(campaignId).emit(WS.COMBAT_ANNOUNCE_PREVIEW, payload)
     })
 
     // ─── COMBAT_ACTION_CONFIRM — Phase Résolution ─────────────────────────
@@ -2284,6 +2329,7 @@ const initSocket = (io) => {
               await db('combat_roster')
                 .where({ campaign_id: campaignId, token_id: targetTokenId })
                 .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
+              await applyStunStatus(io, campaignId, targetTokenId, outcome)
             }
           }
         }
@@ -2523,6 +2569,7 @@ const initSocket = (io) => {
                     await db('combat_roster')
                       .where({ campaign_id: meleeCampaignId, token_id: tokenId })
                       .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
+                    await applyStunStatus(io, meleeCampaignId, tokenId, outcome)
                   }
                 }
               } catch (woundErr) {
@@ -2581,15 +2628,16 @@ const initSocket = (io) => {
     })
 
     // ─── COMBAT_APPLY_STUN — GM applique manuellement is_stunned ─────────────
-    socket.on(WS.COMBAT_APPLY_STUN, async ({ tokenId }) => {
+    socket.on(WS.COMBAT_APPLY_STUN, async ({ tokenId, outcome }) => {
       if (socket.user.role !== 'gm') return
       const campaignId = socket.campaignId
-      if (!campaignId || !tokenId) return
+      if (!campaignId || !tokenId || !outcome) return
       try {
         await db('combat_roster')
           .where({ campaign_id: campaignId, token_id: tokenId })
           .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
-        console.log(`[WS] COMBAT_APPLY_STUN — is_stunned posé manuellement. token:${tokenId} campaign:${campaignId}`)
+        await applyStunStatus(io, campaignId, tokenId, outcome)
+        console.log(`[WS] COMBAT_APPLY_STUN — is_stunned posé manuellement. token:${tokenId} outcome:${outcome} campaign:${campaignId}`)
       } catch (err) {
         console.error('[WS] COMBAT_APPLY_STUN error:', err.message)
       }
@@ -2735,6 +2783,8 @@ async function startResolutionPhase(io, campaignId) {
 
     const broadcastRoster = roster.map(({ surprise_roll: _sr, ...rest }) => rest)
 
+    combatPreviews.delete(campaignId)
+
     io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, {
       phase: 'RESOLUTION',
       roster: broadcastRoster,
@@ -2831,6 +2881,21 @@ async function endTurn(io, campaignId) {
     console.log(`[WS] endTurn — campagne ${campaignId}`)
   } catch (err) {
     console.error('[WS] endTurn error:', err.message)
+  }
+}
+
+// ─── Helper — appliquer un statut étourdissement/inconscience sur un token ────
+// Écrit dans token_statuses (badge visuel) et broadcast TOKEN_STATUS_UPDATED.
+// Idempotent : supprime l'entrée existante avant d'insérer.
+async function applyStunStatus(io, campaignId, tokenId, outcome) {
+  try {
+    const statusCode = outcome === 'inconscient' ? 'unconscious' : 'stunned'
+    await db('token_statuses').where({ token_id: tokenId, status_code: statusCode }).delete()
+    await db('token_statuses').insert({ token_id: tokenId, status_code: statusCode, applied_by: null })
+    const statuses = await db('token_statuses').where({ token_id: tokenId }).pluck('status_code')
+    io.to(campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId, statuses })
+  } catch (err) {
+    console.error('[WS] applyStunStatus error:', err.message)
   }
 }
 
@@ -3172,6 +3237,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
                 await db('combat_roster')
                   .where({ campaign_id: campaignId, token_id: targetTokenId })
                   .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
+                await applyStunStatus(io, campaignId, targetTokenId, outcome)
               }
             }
           } catch (woundErr) {
@@ -3632,6 +3698,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
                 await db('combat_roster')
                   .where({ campaign_id: campaignId, token_id: action.target_token_id })
                   .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
+                await applyStunStatus(io, campaignId, action.target_token_id, outcome)
               }
             }
           } catch (woundErr) {

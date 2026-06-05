@@ -90,8 +90,17 @@ export default function CombatActionWindow({
   const { roster, phase, activeSlotIdx, actions, activeTokenId } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
-  const playerChar  = characters.find(c => c.user_id === user?.id)
-  const playerToken = tokens.find(t => t.character_id === playerChar?.id)
+  // Multi-personnage : tous les persos contrôlés par ce joueur
+  const playerChars          = characters.filter(c => c.user_id === user?.id)
+  const playerTokens         = tokens.filter(t => playerChars.some(c => c.id === t.character_id))
+  // Seuls les tokens effectivement dans le roster de combat
+  const playerTokensInRoster = playerTokens.filter(t => roster.some(r => r.token_id === t.id))
+
+  // Token actif = le personnage du joueur qui occupe le slot courant (annonce ou résolution)
+  const activeStoreToken = playerTokensInRoster.find(t => t.id === activeTokenId) ?? null
+  // playerToken = actif si disponible, sinon premier dans le roster (pour les effets entre les tours)
+  const playerToken = activeStoreToken ?? playerTokensInRoster[0] ?? null
+  const playerChar  = playerToken ? playerChars.find(c => c.id === playerToken.character_id) ?? null : null
   const rosterEntry = playerToken ? roster.find(r => r.token_id === playerToken.id) : null
 
   // --- etats tactiques (initialises depuis rosterEntry quand dispo) ----------
@@ -144,6 +153,18 @@ export default function CombatActionWindow({
   const [inMeleeTargetMode, setInMeleeTargetMode]           = useState(false)
   const [combatMode, setCombatMode]                         = useState('normal')  // 'normal'|'offensif'|'charge'
 
+  // --- roster PJ collapsible ------------------------------------------------
+  const [rosterOpen, setRosterOpen] = useState(
+    () => localStorage.getItem('pj-roster-open') !== 'false'
+  )
+
+  // --- draggable (déplacé ici pour respecter l'ordre des hooks) -------------
+  const { pos, onHeaderMouseDown } = useDraggable(
+    'combat-action-pos',
+    { top: window.innerHeight - 760, left: window.innerWidth / 2 - 360 },
+    720,
+  )
+
   // --- etats initiaux (reference debut de tour pour calcul delta) -----------
   const initialStates = useRef({
     position:  'standing',
@@ -178,14 +199,15 @@ export default function CombatActionWindow({
     prevWeaponRef.current = null
   }, [rosterEntry?.token_id])
 
-  // --- fetch allures --------------------------------------------------------
+  // --- fetch allures — suit le token actif du joueur -----------------------
   useEffect(() => {
-    if (!playerChar?.id) return
+    const charId = playerToken?.character_id
+    if (!charId) return
     let cancelled = false
     const load = async () => {
       try {
         const [sheetRes, genoRes] = await Promise.all([
-          api.get(`/char-sheet/${playerChar.id}`),
+          api.get(`/char-sheet/${charId}`),
           api.get('/char-ref/genotypes'),
         ])
         if (cancelled) return
@@ -206,7 +228,7 @@ export default function CombatActionWindow({
     }
     load()
     return () => { cancelled = true }
-  }, [playerChar?.id])
+  }, [playerToken?.id])
 
   // --- écoute COMBAT_DECLARE_ERROR — message temporaire (3s) ---------------
   useEffect(() => {
@@ -246,9 +268,10 @@ export default function CombatActionWindow({
   // Dépend de phase pour se relancer à chaque nouveau tour (ANNOUNCEMENT)
   // et obtenir ammo_remaining à jour après un rechargement en phase précédente.
   useEffect(() => {
-    if (!playerChar?.id) return
+    const charId = playerToken?.character_id
+    if (!charId) return
     let cancelled = false
-    api.get(`/char-sheet/${playerChar.id}/inventory`).then(res => {
+    api.get(`/char-sheet/${charId}/inventory`).then(res => {
       if (cancelled) return
       const items = res.data.items || []
       setAssaultWeapons(items.filter(
@@ -257,15 +280,40 @@ export default function CombatActionWindow({
       setAllInventoryItems(items)
     }).catch(() => {})
     return () => { cancelled = true }
-  }, [playerChar?.id, phase])
+  }, [playerToken?.id, phase])
 
-  if (!playerToken || !rosterEntry) return null
+  // --- preview GM en temps réel (debounce 150ms) ---------------------------
+  // Émet COMBAT_ANNOUNCE_PREVIEW à la room quand le joueur modifie ses sélections.
+  // Dépendances : toutes les sélections qui constituent une déclaration.
+  useEffect(() => {
+    if (!socket || phase !== 'ANNOUNCEMENT') return
+    if (!playerTokensInRoster.some(t => t.id === activeTokenId)) return
+    const tokenId = activeTokenId
+    const timer = setTimeout(() => {
+      socket.emit(WS.COMBAT_ANNOUNCE_PREVIEW, {
+        tokenId,
+        actions:         [...mapSelected],
+        assaultTargetId: assaultPendingTokenId ?? null,
+        meleeTargetIds:  [...meleePendingTokenIds],
+        moveDestination: moveSelection
+          ? { x: moveSelection.targetPosX, y: moveSelection.targetPosY }
+          : null,
+        combatMode,
+      })
+    }, 150)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, phase, activeTokenId, mapSelected, assaultPendingTokenId, meleePendingTokenIds, moveSelection, combatMode])
+
+  if (playerTokensInRoster.length === 0) return null
 
   // --- derives resolution --------------------------------------------------
   const sorted = [...roster].sort((a, b) => b.initiative - a.initiative)
-  const isMyTurnInResolution = phase === 'RESOLUTION' && sorted[activeSlotIdx]?.token_id === playerToken.id
+  const resolveSlotTid = phase === 'RESOLUTION' ? sorted[activeSlotIdx]?.token_id : null
+  const isMyTurnInResolution = resolveSlotTid != null
+    && playerTokensInRoster.some(t => t.id === resolveSlotTid)
 
-  // --- derive announce : mon tour si activeTokenId correspond à mon token ---
+  // --- derive announce : mon tour si activeTokenId correspond à l'un de mes tokens ---
   // Fallback : calcul depuis le roster si activeTokenId pas encore reçu (race condition COMBAT_SLOT_ADVANCED)
   const computedAnnounceTokenId = activeTokenId ?? (
     phase === 'ANNOUNCEMENT'
@@ -274,8 +322,13 @@ export default function CombatActionWindow({
           .sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))[0]?.token_id ?? null
       : null
   )
-  const isMyTurnInAnnouncement = phase === 'ANNOUNCEMENT' && computedAnnounceTokenId === playerToken.id
-  const myActions = actions.filter(a => a.token_id === playerToken.id)
+  const isMyTurnInAnnouncement = phase === 'ANNOUNCEMENT'
+    && computedAnnounceTokenId != null
+    && playerTokensInRoster.some(t => t.id === computedAnnounceTokenId)
+    && !rosterEntry?.has_announced
+  const myActions = actions.filter(a => playerTokensInRoster.some(t => t.id === a.token_id)
+    && (resolveSlotTid ? a.token_id === resolveSlotTid : a.token_id === playerToken?.id)
+  )
 
   // --- derives assaut -------------------------------------------------------
   const weaponMg = assaultWeapons.find(w => w.slot === 'MG') || null
@@ -526,16 +579,10 @@ export default function CombatActionWindow({
     })
   }
 
-  const { pos, onHeaderMouseDown } = useDraggable(
-    'combat-action-pos',
-    { top: window.innerHeight - 760, left: window.innerWidth / 2 - 360 },
-    720,
-  )
-
   // =========================================================================
   // RENDU — Surprise
   // =========================================================================
-  if (pendingSurpriseRoll?.tokenId === playerToken.id) {
+  if (pendingSurpriseRoll?.tokenId && playerTokensInRoster.some(t => t.id === pendingSurpriseRoll.tokenId)) {
     return (
       <div style={{ ...W.window, left: pos.left, top: pos.top }}>
         <div style={W.header} onMouseDown={onHeaderMouseDown}>Surprise !</div>
@@ -611,12 +658,56 @@ export default function CombatActionWindow({
     )
   }
 
+  // Section roster PJ — collapsible, présente dans tous les états
+  const rosterSection = (
+    <div style={{ borderBottom: '1px solid #2a2a3e' }}>
+      <div
+        style={{ ...W.rosterHeader }}
+        onClick={() => {
+          const next = !rosterOpen
+          setRosterOpen(next)
+          localStorage.setItem('pj-roster-open', next ? 'true' : 'false')
+        }}
+      >
+        <span style={W.rosterTitle}>Mes personnages ({playerTokensInRoster.length})</span>
+        <span style={{ fontSize: 10, color: '#5b5b7a', cursor: 'pointer' }}>{rosterOpen ? '▲' : '▼'}</span>
+      </div>
+      {rosterOpen && (
+        <div>
+          {playerTokensInRoster.map(tok => {
+            const entry    = roster.find(r => r.token_id === tok.id)
+            const isActive = tok.id === (resolveSlotTid ?? computedAnnounceTokenId)
+            const isDone   = entry?.has_announced ?? false
+            return (
+              <div key={tok.id} style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '4px 12px',
+                borderBottom: '1px solid #1e1e2e',
+                opacity: isDone ? 0.5 : 1,
+                background: isActive ? 'rgba(91,141,238,0.07)' : 'transparent',
+              }}>
+                <span style={{ fontSize: 9, color: isActive ? '#5b8dee' : '#456575', minWidth: 10 }}>
+                  {isDone ? '✓' : (isActive ? '▶' : '○')}
+                </span>
+                <span style={{ fontSize: 10, color: '#c0c0d0', flex: 1 }}>{tok.label}</span>
+                <span style={{ fontSize: 9, color: '#456575', fontFamily: 'monospace' }}>
+                  INI {entry?.initiative ?? '?'}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+
   // Pas encore mon tour d'annoncer — attente du slot actuel
-  if (phase === 'ANNOUNCEMENT' && !rosterEntry.has_announced && !isMyTurnInAnnouncement) {
+  if (phase === 'ANNOUNCEMENT' && !(rosterEntry?.has_announced) && !isMyTurnInAnnouncement) {
     const currentDeclarer = tokens.find(t => t.id === computedAnnounceTokenId)
     return (
       <div style={{ ...W.window, left: pos.left, top: pos.top }}>
         <div style={W.header} onMouseDown={onHeaderMouseDown}>Phase 1 — Déclaration d&apos;intention</div>
+        {rosterSection}
         <p style={W.waitText}>
           En attente de {currentDeclarer?.label ?? '…'}…
         </p>
@@ -625,10 +716,11 @@ export default function CombatActionWindow({
   }
 
   // Deja declare
-  if (rosterEntry.has_announced) {
+  if (rosterEntry?.has_announced) {
     return (
       <div style={{ ...W.window, left: pos.left, top: pos.top }}>
         <div style={W.header} onMouseDown={onHeaderMouseDown}>Phase 1 - Declaration d&apos;intention</div>
+        {rosterSection}
         <p style={W.waitText}>Action declaree. En attente des autres participants…</p>
       </div>
     )
@@ -926,6 +1018,10 @@ export default function CombatActionWindow({
               )
             })}
           </div>
+
+          {/* ---- Roster PJ (bas du panneau gauche) ---- */}
+          {playerTokensInRoster.length > 1 && rosterSection}
+
         </div>
 
         {/* ---- Panneau droit — rechargement : sélection munitions ---- */}
@@ -1576,6 +1672,15 @@ const W = {
     color: '#c0c0d0',
     lineHeight: '1.5',
     margin: 0,
+  },
+  rosterHeader: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '5px 12px', cursor: 'pointer', userSelect: 'none',
+    background: '#0e0e1a',
+  },
+  rosterTitle: {
+    fontSize: 8, letterSpacing: '0.1em', fontWeight: 700,
+    color: '#456575', textTransform: 'uppercase',
   },
   waitText: {
     padding: '14px',

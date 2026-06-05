@@ -229,6 +229,10 @@ export default function SessionPage() {
   // null | { tokenId, moveTarget:{x,y,z}|null, attackTargetId:uuid|null }
   const [announcementMarker, setAnnouncementMarker] = useState(null)
 
+  // Preview éphémère de la déclaration en cours (PJ) — pour monitoring GM
+  // null | { tokenId, actions[], assaultTargetId, meleeTargetIds[], moveDestination, combatMode }
+  const [pjPreview, setPjPreview] = useState(null)
+
   // Chargement local d'une carte — GM uniquement, sans déplacer les joueurs
   // Utilisé : clic barre GM, suppression carte active
   const loadMap = useCallback(async (battlemapId) => {
@@ -636,6 +640,7 @@ export default function SessionPage() {
     // Phase changée — ANNOUNCEMENT ou RESOLUTION (avec roster et actions pour RESOLUTION)
     s.on(WS.COMBAT_PHASE_CHANGED, ({ phase, roster, actions }) => {
       setAnnouncementMarker(null)
+      setPjPreview(null)
       setPhase(phase)
       if (roster) updateRoster(roster)
       if (actions) setActions(actions)
@@ -653,10 +658,15 @@ export default function SessionPage() {
     s.on(WS.COMBAT_SURPRISE_ROLL, ({ tokenId }) => {
       setPendingSurpriseRoll({ tokenId })
     })
+    // Preview éphémère en cours de déclaration (PJ → serveur → room)
+    s.on(WS.COMBAT_ANNOUNCE_PREVIEW, (preview) => {
+      setPjPreview(preview)
+    })
     // Participant a déclaré son action — initiative inclus si précipité (+3)
     s.on(WS.COMBAT_ACTION_DECLARED, ({ tokenId, initiative, moveTarget, attackTargetId }) => {
       markTokenAnnounced(tokenId, initiative)
       setAnnouncementMarker({ tokenId, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
+      setPjPreview(null)   // déclaration confirmée — purge le preview
     })
     // Slot actif avancé (ANNOUNCEMENT et RESOLUTION)
     s.on(WS.COMBAT_SLOT_ADVANCED, ({ activeSlotIdx, tokenId }) => {
@@ -1255,6 +1265,7 @@ export default function SessionPage() {
           onEnterTargetMode={handleEnterTargetMode}
           onValidateTarget={handleValidateTarget}
           announcementMarker={announcementMarker}
+          pjPreview={pjPreview}
           damagePayload={damagePayload}
           damageResults={damageResults}
           onDamageConfirmed={() => { setDamagePayload(null); setDamageResults(null); setAttackResult(null) }}
