@@ -10,7 +10,6 @@ const ALLOWED_MIME_TYPES = [
   'image/png',
   'image/webp',
   'image/gif',
-  'application/pdf',
 ]
 
 // Types MIME autorisés — modèles 3D GLB

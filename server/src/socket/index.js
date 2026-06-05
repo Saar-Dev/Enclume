@@ -2236,6 +2236,7 @@ const initSocket = (io) => {
         console.warn(`[WS] COMBAT_DAMAGE_CONFIRM — pas de pending pour token:${tokenId}`)
         return
       }
+      if (pending.userId !== socket.user.id && socket.role !== 'gm') return
       pendingDamageActions.delete(tokenId)
 
       const {
@@ -2413,6 +2414,7 @@ const initSocket = (io) => {
         console.warn(`[WS] COMBAT_MELEE_DEFENSE_CONFIRM — pas de pending pour defender:${tokenId}`)
         return
       }
+      if (pending.defenderUserId !== socket.user.id && socket.role !== 'gm') return
       pendingMeleeDefense.delete(tokenId)
 
       const {
@@ -2629,7 +2631,7 @@ const initSocket = (io) => {
 
     // ─── COMBAT_APPLY_STUN — GM applique manuellement is_stunned ─────────────
     socket.on(WS.COMBAT_APPLY_STUN, async ({ tokenId, outcome }) => {
-      if (socket.user.role !== 'gm') return
+      if (socket.role !== 'gm') return
       const campaignId = socket.campaignId
       if (!campaignId || !tokenId || !outcome) return
       try {
@@ -3137,6 +3139,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
       vol_na_cible,
       targetName,
       userId: character.user_id,
+      defenderUserId: defenderCharacter.user_id,
       // CaC 4b — attaque multiple
       remainingMeleeActions,
       totalMeleeCount,

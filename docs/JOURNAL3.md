@@ -2416,3 +2416,65 @@ Composantes :
 
 Note bug futur noteé : harmonisation boutons d'attaque CaC vs Tir (fenetre, extension, cible, validation)
 selon type d'acteur (PNJ/PJ) et type d'assaut — sprint dédié.
+
+---
+
+## Session 82 — Run à vide + correctifs sécurité (2026-06-05)
+
+### Run à vide — analyse complète CONFIRMÉ FONCTIONNEL
+
+Analyse transversale documentation / code / sécurité / architecture. 5 problèmes identifiés, 5 corrigés.
+
+### Bug critique — COMBAT_APPLY_STUN : garde GM cassée CONFIRMÉ FONCTIONNEL
+
+Fichier : `server/src/socket/index.js` ligne 2632.
+`socket.user.role` utilisé au lieu de `socket.role`.
+`socket.user` = payload JWT {id, email, username} — sans champ `role`.
+Résultat : `undefined !== 'gm'` → `true` → return pour TOUS, GM compris.
+Le bouton "Appliquer l'étourdissement" était silencieusement mort pour tout le monde.
+Fix : `socket.role !== 'gm'`
+
+Piège : Sprint Test de Choc (session 81) partiellement cassé. Le chemin auto (`shock_auto_stun = true`)
+fonctionnait. Seul le chemin manuel GM était mort. Cette asymétrie explique pourquoi le sprint
+était "EN ATTENTE VALIDATION" alors que les badges apparaissaient en mode auto.
+
+### Sécurité — PDF retiré du filtre upload images CONFIRMÉ FONCTIONNEL
+
+Fichier : `server/src/middleware/upload.js`
+`application/pdf` était dans `ALLOWED_MIME_TYPES` utilisé par `multerUpload` (filtre images).
+La route `POST /upload-image` des documents acceptait donc les PDFs.
+Incohérence avec la décision session 80 ("PDF exclu du scope — analyse sécurité requise").
+Fix : retrait de `application/pdf` de `ALLOWED_MIME_TYPES`.
+
+### Sécurité — Ownership checks COMBAT_DAMAGE_CONFIRM + COMBAT_MELEE_DEFENSE_CONFIRM CONFIRMÉ FONCTIONNEL
+
+Fichiers : `server/src/socket/index.js` lignes 2234, 2411, 3139.
+Les deux handlers vérifiaient uniquement l'existence du pending, pas que l'émetteur
+était bien le propriétaire du token. Tout joueur authentifié dans la campagne pouvait
+déclencher la résolution pour le token d'un autre.
+
+Corrections :
+- `commonPending` (resolveMeleeAction) : ajout `defenderUserId: defenderCharacter.user_id`
+- `COMBAT_DAMAGE_CONFIRM` : guard `pending.userId !== socket.user.id && socket.role !== 'gm'`
+  placé AVANT le `.delete()` — si non autorisé, le pending reste intact
+- `COMBAT_MELEE_DEFENSE_CONFIRM` : guard `pending.defenderUserId !== socket.user.id && socket.role !== 'gm'`
+  placé AVANT le `.delete()`
+- Le GM peut toujours agir via la branche `|| socket.role !== 'gm'`
+
+Piège : `commonPending.userId` est l'userId de l'ATTAQUANT, pas du défenseur. Il fallait ajouter
+un champ séparé `defenderUserId` pour le check defense confirm.
+
+### Architecture — dette documentée
+
+`socket/index.js` : 3750 lignes, monolithe de 40+ handlers.
+Le bug COMBAT_APPLY_STUN est une illustration directe de ce risque (typo passée inaperçue).
+
+Plan de refactoring progressif (strangler fig) :
+- Sprint niveau 1 (2-3h, faible risque) : extraire fonctions module-level déjà isolées
+  (resolveAssaultAction, resolveMeleeAction, endTurn, advanceSlot, applyStunStatus,
+  resolveEntityState, startAnnouncementTimers) dans `server/src/lib/combatResolver.js`.
+  Elles reçoivent déjà `io, campaignId` en params — zéro changement de comportement.
+  Résultat : ~1000 lignes disparaissent de index.js.
+- Sprint niveau 2 (après validation niveau 1) : split handlers par domaine via
+  `registerCombatHandlers(io, socket)`, `registerTokenHandlers(io, socket)`, etc.
+- Règle immédiate : tout nouveau handler s'écrit dans le bon module dès maintenant.
