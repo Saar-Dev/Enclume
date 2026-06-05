@@ -2521,3 +2521,38 @@ Fichier : `server/src/socket/index.js` ligne 2645.
 - PC42 : is_stunned non enforced dans COMBAT_ACTION_DECLARE — sprint dédié
 - stunned_until_turn : durée réelle 1d6 tours non implémentée — sprint dédié
 - shock_auto_stun : fetch DB répété dans chaque path (3×/hit) — acceptable V1
+
+## Session 82 — Guards audit socket/index.js (2026-06-05)
+
+### Périmètre analysé
+
+Audit systématique des 32 handlers WS de socket/index.js : guards role, ownership checks,
+validation payload. Focus sur les patterns du même type que les bugs trouvés en session 82
+(socket.user.role, ownership manquant).
+
+### Résultat socket.role — aucune régression ✅
+
+Aucun autre usage de `socket.user.role` (typo corrigée session 82). Les 34 usages de
+`socket.role` sont tous corrects. Pattern uniforme dans tout le fichier.
+
+### 4 correctifs appliqués
+
+**Fix 1&2 — TOKEN_CREATED / TOKEN_DELETED : dead code supprimé (sécurité)**
+Ces deux handlers WS étaient des reliques Chantier 1, documentées "à nettoyer" mais jamais retirées.
+La REST (POST/DELETE /tokens) est le seul émetteur légitime — elle broadcast ET maintient Redis.
+Les handlers WS n'avaient aucun guard : tout joueur authentifié pouvait :
+- TOKEN_DELETED → ghost-delete n'importe quel token pour toute la room (token intact en DB, invisible jusqu'au refresh)
+- TOKEN_CREATED → force-broadcast n'importe quel token, y compris les tokens layer='gm'
+Supprimés. Remplacés par un commentaire expliquant pourquoi.
+
+**Fix 3 — TOKEN_STATUS_TOGGLE : statusCode non validé (intégrité DB)**
+Ownership présent mais `statusCode` acceptait n'importe quelle chaîne.
+Ajout whitelist VALID_STATUS_CODES (15 codes, miroir exact de STATUS_LIST dans TokenStatusPanel.jsx).
+Pattern inline `new Set([...])` identique aux VALID_STATES de COMBAT_ACTION_DECLARE.
+
+**Fix 4 — COMBAT_ANNOUNCE_PREVIEW : pas d'ownership check (intégrité données GM)**
+Handler sync sans guard : tout joueur pouvait émettre des previews pour n'importe quel tokenId.
+- Spoof : afficher les fausses intentions d'un autre joueur dans le panneau monitoring GM
+- Override : écraser le preview légitime d'un autre joueur (stocké par campaignId, last write wins)
+Converti en async + ownership check (character.user_id === socket.user.id) + try/catch.
+Confirmé que seul CombatActionWindow émet cet event (jamais CombatGmDeclareWindow).

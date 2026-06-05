@@ -296,6 +296,14 @@ const initSocket = (io) => {
         }
         if (!isOwner && !isGm) return
 
+        const VALID_STATUS_CODES = new Set([
+          'grappled', 'restrained', 'off_balance',
+          'burning', 'acid', 'asphyxia', 'decompression', 'electrocuted',
+          'stunned', 'unconscious', 'blinded',
+          'hypothermia', 'infected', 'poisoned', 'irradiated',
+        ])
+        if (!VALID_STATUS_CODES.has(statusCode)) return
+
         const existing = await db('token_statuses')
           .where({ token_id: tokenId, status_code: statusCode })
           .first()
@@ -320,35 +328,9 @@ const initSocket = (io) => {
       }
     })
 
-    // ─── TOKEN:CREATED ─────────────────────────────────────────────────────
-    // Conservé temporairement — relique Chantier 1, à nettoyer chantier dédié.
-    // La création REST (POST /tokens) gère déjà le broadcast ET la collision map.
-    // Ce handler ne touche pas Redis — évite le double-traitement.
-    // Payload : { tokenId }
-    socket.on(WS.TOKEN_CREATED, async ({ tokenId }) => {
-      try {
-        const token = await db('tokens').where({ id: tokenId }).first()
-        if (!token) return
-        // Broadcast à toute la room — le joueur voit apparaître le token
-        io.to(socket.campaignId).emit(WS.TOKEN_CREATED, { token })
-      } catch (err) {
-        console.error('[WS] token:created error:', err.message)
-      }
-    })
-
-    // ─── TOKEN:DELETED ─────────────────────────────────────────────────────
-    // Conservé temporairement — relique Chantier 1, à nettoyer chantier dédié.
-    // La suppression REST (DELETE /tokens/:id) gère déjà la collision map.
-    // Ce handler ne touche pas Redis.
-    // Payload : { tokenId }
-    socket.on(WS.TOKEN_DELETED, async ({ tokenId }) => {
-      try {
-        // Broadcast à toute la room
-        io.to(socket.campaignId).emit(WS.TOKEN_DELETED, { tokenId })
-      } catch (err) {
-        console.error('[WS] token:deleted error:', err.message)
-      }
-    })
+    // TOKEN_CREATED + TOKEN_DELETED : supprimés — la REST (POST/DELETE /tokens) est le seul
+    // émetteur légitime (broadcast + collision map). Ces handlers WS étaient dead code
+    // accessible à tout joueur authentifié (vecteur ghost-add/ghost-delete).
 
     // ─── VOXEL:ADD ─────────────────────────────────────────────────────────
     // Le GM pose un voxel sur la carte (mode édition)
@@ -2122,11 +2104,19 @@ const initSocket = (io) => {
     // ─── COMBAT:ANNOUNCE_PREVIEW — Preview éphémère en cours de déclaration ─
     // PJ émet ses sélections en cours (debounce client). Relay sans DB write.
     // Payload : { tokenId, actions[], assaultTargetId, meleeTargetIds[], moveDestination, combatMode }
-    socket.on(WS.COMBAT_ANNOUNCE_PREVIEW, (payload) => {
+    socket.on(WS.COMBAT_ANNOUNCE_PREVIEW, async (payload) => {
       const campaignId = socket.campaignId
       if (!campaignId || !payload?.tokenId) return
-      combatPreviews.set(campaignId, payload)
-      io.to(campaignId).emit(WS.COMBAT_ANNOUNCE_PREVIEW, payload)
+      try {
+        const token = await db('tokens').where({ id: payload.tokenId }).first()
+        if (!token?.character_id) return
+        const character = await db('characters').where({ id: token.character_id }).first()
+        if (!character || character.user_id !== socket.user.id) return
+        combatPreviews.set(campaignId, payload)
+        io.to(campaignId).emit(WS.COMBAT_ANNOUNCE_PREVIEW, payload)
+      } catch (err) {
+        console.error('[WS] COMBAT_ANNOUNCE_PREVIEW error:', err.message)
+      }
     })
 
     // ─── COMBAT_ACTION_CONFIRM — Phase Résolution ─────────────────────────
