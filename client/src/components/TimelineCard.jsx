@@ -11,6 +11,7 @@ export default function TimelineCard({
   isSurprised,
   worstSeverity,
   isPnj = false,
+  isDimmed = false,
   onClick,
 }) {
   const imgSrc = portraitUrl ? `${VITE_API_URL}/api/assets/${portraitUrl}` : null
@@ -30,8 +31,9 @@ export default function TimelineCard({
         border: `2px solid ${borderColor}`,
         flexShrink: 0,
         cursor: onClick ? 'pointer' : 'default',
-        transition: 'border-color 0.3s ease',
+        transition: 'border-color 0.3s ease, opacity 0.3s ease',
         boxShadow: isActive ? '0 0 12px rgba(245,197,66,0.35)' : 'none',
+        opacity: isDimmed ? 0.35 : 1,
       }}
     >
       {/* Portrait plein format */}

@@ -49,6 +49,7 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
           hasAnnounced:  entry.has_announced ?? false,
           isSurprised:   entry.is_surprised ?? false,
           isActive:      entry.token_id === activeTokenId,
+          isDimmed:      (entry.has_announced ?? false) && entry.token_id !== activeTokenId,
         }
       })
   } else {
@@ -120,6 +121,7 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
                   isSurprised={card.isSurprised}
                   worstSeverity={card.worstSeverity}
                   isPnj={card.isPnj}
+                  isDimmed={card.isDimmed ?? false}
                   onClick={onPortraitClick}
                 />
               </motion.div>

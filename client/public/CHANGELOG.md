@@ -1,3 +1,19 @@
+## v81 — 2026-06-04 — Sprint Annonce v2 + corrections combat
+
+### Combat — Phase Annonce
+- [chg] Déclaration séquentielle stricte : une fenêtre à la fois dans l'ordre d'initiative, le GM ne peut plus grouper des PNJs en batch
+- [add] Ghost de déplacement (cube bleu semi-transparent) visible pour tous après chaque déclaration
+- [add] Ligne ambre reliant l'assaillant à sa cible annoncée, visible pour tous les spectateurs
+- [add] Mini-panneau "vient d'annoncer" en bas-gauche (nom, INI, destination, cible)
+- [chg] Timeline phase Annonce : le déclarant actif est affiché en grand, les déclarés sont atténués
+- [add] Bouton "Passer" dans la fenêtre GM quand un joueur bloque le flux d'annonce
+
+### Combat — Bugs corrigés
+- [fix] Écran noir joueur au passage en mode combat (erreur JavaScript interne)
+- [fix] Bouton "Assaut (tir)" grisé à tort pour les armes n'ayant jamais été rechargées via l'interface (migration 70 : initialisation automatique du chargeur à l'équipement)
+
+---
+
 ## v80 — 2026-06-04 — Bibliothèque : images uploadées dans le cloud
 
 ### Bibliothèque

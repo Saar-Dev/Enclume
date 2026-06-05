@@ -329,6 +329,7 @@ function Scene({
   combatCameraCenter,
   combatMoveMode,
   combatTargetMode,
+  announcementMarker,
   defaultTokenGlbUrl,
 }) {
   const { camera, gl } = useThree()
@@ -932,6 +933,38 @@ function Scene({
         </line>
       )}
 
+      {/* ── Ghost déplacement — destination annoncée (Sprint Annonce v2) ─── */}
+      {announcementMarker?.moveTarget && (() => {
+        const m = announcementMarker.moveTarget
+        // PE14 → Three.js : X=pos_x, Y=pos_z(altitude), Z=pos_y(depth)
+        return (
+          <mesh position={[m.x + 0.5, m.z + 0.5, m.y + 0.5]}>
+            <boxGeometry args={[1, 1, 1]} />
+            <meshBasicMaterial color="#5b8dee" transparent opacity={0.22} wireframe={false} />
+          </mesh>
+        )
+      })()}
+
+      {/* ── Ligne d'annonce assaut — déclarant→cible (Sprint Annonce v2) ─── */}
+      {(() => {
+        if (!announcementMarker?.tokenId || !announcementMarker?.attackTargetId) return null
+        const src = tokensRef.current.find(t => t.id === announcementMarker.tokenId)
+        const tgt = tokensRef.current.find(t => t.id === announcementMarker.attackTargetId)
+        if (!src || !tgt) return null
+        const pts = new Float32Array([
+          src.pos_x + 0.5, src.pos_z + 1.5, src.pos_y + 0.5,
+          tgt.pos_x + 0.5, tgt.pos_z + 1.5, tgt.pos_y + 0.5,
+        ])
+        return (
+          <line>
+            <bufferGeometry>
+              <bufferAttribute attach="attributes-position" count={2} array={pts} itemSize={3} />
+            </bufferGeometry>
+            <lineBasicMaterial color="#e0a050" linewidth={2} />
+          </line>
+        )
+      })()}
+
       {/* ── DiceRoller — animation dés (Dice Rework) */}
       {dicePayload && <DiceRoller payload={dicePayload} onDone={onDiceDone} />}
     </>
@@ -945,7 +978,7 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, combatTargetMode, defaultTokenGlbUrl }) {
+export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, combatTargetMode, announcementMarker, defaultTokenGlbUrl }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
@@ -1136,6 +1169,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           combatCameraCenter={combatCameraCenter}
           combatMoveMode={combatMoveMode}
           combatTargetMode={combatTargetMode}
+          announcementMarker={announcementMarker}
           defaultTokenGlbUrl={defaultTokenGlbUrl}
         />
       )}

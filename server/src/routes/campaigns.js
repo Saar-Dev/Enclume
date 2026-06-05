@@ -167,7 +167,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // PUT /api/campaigns/:id — modifier une campagne
 router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
-  const { name, status, default_battlemap_id, dice_config, pnj_unlimited_ammo, reload_mode, action_timer_sec, default_token_glb_url } = req.body
+  const { name, status, default_battlemap_id, dice_config, pnj_unlimited_ammo, reload_mode, action_timer_sec, default_token_glb_url, shock_auto_stun } = req.body
   const updates = {}
   if (name !== undefined) updates.name = name
   if (status !== undefined) updates.status = status
@@ -198,13 +198,18 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
     updates.default_token_glb_url = default_token_glb_url === null ? null : String(default_token_glb_url)
   }
 
+  if (shock_auto_stun !== undefined) {
+    if (typeof shock_auto_stun !== 'boolean') throw new AppError(400, 'shock_auto_stun must be a boolean')
+    updates.shock_auto_stun = shock_auto_stun
+  }
+
   // updated_at systématique sur tout PUT
   updates.updated_at = db.fn.now()
 
   const [campaign] = await db('campaigns')
     .where({ id: req.params.id })
     .update(updates)
-    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'pnj_unlimited_ammo', 'reload_mode', 'action_timer_sec', 'default_token_glb_url', 'created_at', 'updated_at'])
+    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'pnj_unlimited_ammo', 'reload_mode', 'action_timer_sec', 'default_token_glb_url', 'shock_auto_stun', 'created_at', 'updated_at'])
   res.json({ campaign })
 })
 

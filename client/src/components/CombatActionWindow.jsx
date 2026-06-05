@@ -171,7 +171,7 @@ export default function CombatActionWindow({
     setIsDualWield(false)
     setMoveSelection(null)
     setSelectedAmmoId(null)
-    setMeleePendingTokenId(null)
+    setMeleePendingTokenIds([])
     setSelectedMeleeWeaponId(null)
     setInMeleeTargetMode(false)
     setCombatMode('normal')
@@ -234,7 +234,7 @@ export default function CombatActionWindow({
       setIsDualWield(false)
       setMoveSelection(null)
       setSelectedAmmoId(null)
-      setMeleePendingTokenId(null)
+      setMeleePendingTokenIds([])
       setSelectedMeleeWeaponId(null)
       setInMeleeTargetMode(false)
       setCombatMode('normal')
@@ -326,7 +326,7 @@ export default function CombatActionWindow({
   // Ammo state — ammo_remaining null = jamais chargée (traité comme vide)
   const ammoRemaining = selectedWeapon?.ammo_remaining ?? null
   const ammoCount     = selectedWeapon?.ref_ammo_count ?? null
-  const isAmmoEmpty   = !selectedWeapon || ammoRemaining === null || ammoRemaining <= 0
+  const isAmmoEmpty   = !selectedWeapon || (ammoRemaining !== null && ammoRemaining <= 0)
   const isAmmoFull    = !!selectedWeapon && ammoCount !== null && ammoRemaining !== null && ammoRemaining >= ammoCount
 
   const dualWieldBonusComp = (isDualWield && hasTwoWeapons && sameFirMode)
@@ -391,7 +391,7 @@ export default function CombatActionWindow({
                 setInTargetMode(false)
               }
               if (ex === 'melee') {
-                setMeleePendingTokenId(null)
+                setMeleePendingTokenIds([])
                 setSelectedMeleeWeaponId(null)
                 setInMeleeTargetMode(false)
                 if (combatMode === 'retraite' || combatMode === 'charge') setMoveSelection(null)

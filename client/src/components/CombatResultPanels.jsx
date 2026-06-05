@@ -2,6 +2,7 @@
    CombatResultGM   : vue GM, bottom-left, ton neutre
    CombatResultPlayer : vue Joueur, bottom-center, 2e personne dramatique
 */
+import { useState } from 'react'
 
 const C = {
   bg:         '#16162a',
@@ -94,7 +95,8 @@ function SeverityBlock({ severity, is_lethal }) {
   )
 }
 
-function ShockBlock({ shockResult }) {
+function ShockBlock({ shockResult, onApplyStun }) {
+  const [stunApplied, setStunApplied] = useState(shockResult?.stun_applied ?? true)
   if (!shockResult?.triggered) return null
   const OUTCOME = {
     ok:          { label: 'Résistance',  col: '#3aaa6a' },
@@ -102,6 +104,7 @@ function ShockBlock({ shockResult }) {
     inconscient: { label: 'Inconscient', col: '#c83030' },
   }
   const { label, col } = OUTCOME[shockResult.outcome] ?? { label: shockResult.outcome, col: C.textDim }
+  const canApply = onApplyStun && shockResult.outcome !== 'ok' && !stunApplied
   return (
     <div style={{
       padding: '5px 9px',
@@ -117,6 +120,18 @@ function ShockBlock({ shockResult }) {
         <span style={{ fontSize: 10, color: C.textDim }}>/ seuil {shockResult.seuilEtourdi}</span>
         <span style={{ marginLeft: 'auto', fontSize: 11, color: col, fontWeight: 600 }}>{label}</span>
       </div>
+      {canApply && (
+        <button
+          className="btn btn-danger"
+          style={{ marginTop: 6, width: '100%', fontSize: 11 }}
+          onClick={() => { onApplyStun(); setStunApplied(true) }}
+        >
+          Appliquer l'étourdissement
+        </button>
+      )}
+      {!canApply && onApplyStun && shockResult.outcome !== 'ok' && (
+        <div style={{ marginTop: 5, fontSize: 10, color: C.textDim, textAlign: 'center' }}>✓ Étourdissement appliqué</div>
+      )}
     </div>
   )
 }
@@ -270,7 +285,7 @@ export function CombatResultMelee({ attaquant, defenseur, rollAttaque, chancesAt
 }
 
 /* ── Vue GM — bottom-left, ton neutre, tireur → cible ──────────────────── */
-export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, localisation, degatsBruts, degatsNets, severity, is_lethal, shockResult, onClose }) {
+export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, localisation, degatsBruts, degatsNets, severity, is_lethal, shockResult, onClose, onApplyStun }) {
   const sevData = severity ? SEVERITY[severity] : null
   const accent  = isSuccess ? (sevData?.col || C.gold) : C.textDim
 
@@ -302,9 +317,11 @@ export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, local
         {isSuccess ? 'Touché' : 'Manqué'}
       </div>
 
-      <div style={{ marginBottom: 8 }}>
-        <RollSeuilLine roll={roll} seuil={seuil} isSuccess={isSuccess} />
-      </div>
+      {roll !== undefined && (
+        <div style={{ marginBottom: 8 }}>
+          <RollSeuilLine roll={roll} seuil={seuil} isSuccess={isSuccess} />
+        </div>
+      )}
 
       {isSuccess && (
         <div style={{ marginBottom: 8 }}>
@@ -313,7 +330,7 @@ export function CombatResultGM({ attaquant, cible, isSuccess, roll, seuil, local
       )}
 
       {isSuccess && <SeverityBlock severity={severity} is_lethal={is_lethal} />}
-      {isSuccess && <ShockBlock shockResult={shockResult} />}
+      {isSuccess && <ShockBlock shockResult={shockResult} onApplyStun={onApplyStun} />}
 
       {onClose && <CloseButton onClose={onClose} />}
     </div>

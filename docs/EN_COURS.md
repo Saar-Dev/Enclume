@@ -481,3 +481,16 @@ Statut : correction prévue si besoin.
 - `server/src/routes/documents.js` : +POST /upload-image (multerUpload, minio.putObject, GM only, campaigns/<id>/documents/<uuid>.<ext>, retourne {url:objectName}) ✅
 - `client/src/components/DocumentModal.jsx` : makeImageHandler base64→upload MinIO, useQuillEditor +campaignId/onError ✅
 - PDF exclu du scope : projet public forums Polaris — analyse sécurité requise (voir JOURNAL3 Session 80)
+
+## Session 81 ✅ (2026-06-05) — Corrections combat + Sprint Annonce v2
+
+- **Bug ammo_remaining** : migration 70 backfill + `resolveAmmoInit()` dans char-sheet.js (PUT/POST/quick-equip) + fix `isAmmoEmpty` client ✅
+- **Bug crash écran noir joueur** : `setMeleePendingTokenId(null)×3` → `setMeleePendingTokenIds([])` dans `CombatActionWindow.jsx` ✅
+- **Sprint Annonce v2** :
+  - `socket/index.js` : `COMBAT_ACTION_DECLARED` enrichi (`moveTarget`, `attackTargetId`) ✅
+  - `SessionPage.jsx` : state `announcementMarker`, reset sur `COMBAT_PHASE_CHANGED` ✅
+  - `Canvas3D.jsx` : ghost box bleue (moveTarget) + ligne ambre (déclarant→cible) ✅
+  - `CombatOverlay.jsx` : mini-panneau bottom-left "vient d'annoncer" ✅
+  - `TimelineCard.jsx` : prop `isDimmed` (opacity 0.35) ✅
+  - `CombatTimeline.jsx` : `isDimmed = hasAnnounced && !isActive` en ANNOUNCEMENT ✅
+  - `CombatGmDeclareWindow.jsx` : réécriture complète — batch supprimé, appels directs, "Passer [PJ]" ✅

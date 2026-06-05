@@ -162,6 +162,7 @@ export default function CampaignSettingsPage() {
   const [pnjUnlimitedAmmo, setPnjUnlimitedAmmo] = useState(true)
   const [reloadMode,       setReloadMode]       = useState('magazine')
   const [actionTimerSec,   setActionTimerSec]   = useState(0)
+  const [shockAutoStun,    setShockAutoStun]    = useState(true)
   const [defaultTokenGlbUrl, setDefaultTokenGlbUrl] = useState(null)
   const [uploadingToken, setUploadingToken] = useState(false)
   const [uploadTokenStatus, setUploadTokenStatus] = useState(null) // 'saved' | 'error' | null
@@ -197,6 +198,7 @@ export default function CampaignSettingsPage() {
         setPnjUnlimitedAmmo(campaign.pnj_unlimited_ammo ?? true)
         setReloadMode(campaign.reload_mode ?? 'magazine')
         setActionTimerSec(campaign.action_timer_sec ?? 0)
+        setShockAutoStun(campaign.shock_auto_stun ?? true)
         setDefaultTokenGlbUrl(campaign.default_token_glb_url ?? null)
 
         setLoading(false)
@@ -227,7 +229,7 @@ export default function CampaignSettingsPage() {
           dice_config = buildSimpleConfig(resolvedSuccessOn, resolvedFailOn)
         }
       }
-      await api.put(`/campaigns/${campaignId}`, { dice_config, pnj_unlimited_ammo: pnjUnlimitedAmmo, reload_mode: reloadMode, action_timer_sec: actionTimerSec })
+      await api.put(`/campaigns/${campaignId}`, { dice_config, pnj_unlimited_ammo: pnjUnlimitedAmmo, reload_mode: reloadMode, action_timer_sec: actionTimerSec, shock_auto_stun: shockAutoStun })
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
     } catch (err) {
@@ -235,7 +237,7 @@ export default function CampaignSettingsPage() {
     } finally {
       setSaving(false)
     }
-  }, [campaignId, diceEnabled, expertMode, expertRows, successActive, successOn, failActive, failOn, pnjUnlimitedAmmo, reloadMode, actionTimerSec])
+  }, [campaignId, diceEnabled, expertMode, expertRows, successActive, successOn, failActive, failOn, pnjUnlimitedAmmo, reloadMode, actionTimerSec, shockAutoStun])
 
   // ─── Bascule mode expert → simple ─────────────────────────────────────────
   const handleSwitchToSimple = useCallback(() => {
@@ -669,6 +671,17 @@ export default function CampaignSettingsPage() {
                 <span style={{ ...styles.toggleHint, marginLeft: 8 }}>s</span>
               </div>
             </div>
+
+            <label style={{ ...styles.toggleRow, marginTop: 12 }}>
+              <input
+                type="checkbox"
+                checked={shockAutoStun}
+                onChange={e => setShockAutoStun(e.target.checked)}
+                style={styles.checkbox}
+              />
+              <span style={styles.toggleLabel}>{t('settings.shockAutoStunLabel')}</span>
+              <span style={styles.toggleHint}>{t('settings.shockAutoStunHint')}</span>
+            </label>
           </section>
 
           {/* ── Section Tokens 3D ────────────────────────────────────────── */}

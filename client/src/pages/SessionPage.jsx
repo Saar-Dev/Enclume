@@ -225,6 +225,10 @@ export default function SessionPage() {
   // null = inactif, sinon { tokenId, pendingTargetId, onTargetSelected, onCancel, onPendingTarget }
   const [combatTargetMode, setCombatTargetMode] = useState(null)
 
+  // Dernière déclaration reçue — ghost déplacement + ligne cible pour les spectateurs
+  // null | { tokenId, moveTarget:{x,y,z}|null, attackTargetId:uuid|null }
+  const [announcementMarker, setAnnouncementMarker] = useState(null)
+
   // Chargement local d'une carte — GM uniquement, sans déplacer les joueurs
   // Utilisé : clic barre GM, suppression carte active
   const loadMap = useCallback(async (battlemapId) => {
@@ -500,6 +504,9 @@ export default function SessionPage() {
       if (data.isPnj) {
         setGmAttackResult(data)
         setPnjAttackResult(data)
+      } else if (isGm) {
+        // PJ attaquant — le GM voit aussi le résultat (dégâts + shock) sans le jet d'attaque
+        setGmAttackResult(data)
       }
     })
     s.on(WS.MACRO_ROLL_RESULT, ({ characterName, color, sourceLabel, rollResult, threshold, isSuccess, isCriticalSuccess, isCriticalFail, formattedMessage, secret, timestamp }) => {
@@ -628,6 +635,7 @@ export default function SessionPage() {
 
     // Phase changée — ANNOUNCEMENT ou RESOLUTION (avec roster et actions pour RESOLUTION)
     s.on(WS.COMBAT_PHASE_CHANGED, ({ phase, roster, actions }) => {
+      setAnnouncementMarker(null)
       setPhase(phase)
       if (roster) updateRoster(roster)
       if (actions) setActions(actions)
@@ -646,8 +654,9 @@ export default function SessionPage() {
       setPendingSurpriseRoll({ tokenId })
     })
     // Participant a déclaré son action — initiative inclus si précipité (+3)
-    s.on(WS.COMBAT_ACTION_DECLARED, ({ tokenId, initiative }) => {
+    s.on(WS.COMBAT_ACTION_DECLARED, ({ tokenId, initiative, moveTarget, attackTargetId }) => {
       markTokenAnnounced(tokenId, initiative)
+      setAnnouncementMarker({ tokenId, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
     })
     // Slot actif avancé (ANNOUNCEMENT et RESOLUTION)
     s.on(WS.COMBAT_SLOT_ADVANCED, ({ activeSlotIdx, tokenId }) => {
@@ -959,6 +968,7 @@ export default function SessionPage() {
               combatCameraCenter={combatCameraCenter}
               combatMoveMode={combatMoveMode}
               combatTargetMode={combatTargetMode}
+              announcementMarker={announcementMarker}
               defaultTokenGlbUrl={campaign?.default_token_glb_url
                 ? `${import.meta.env.VITE_API_URL}/api/assets/${campaign.default_token_glb_url}`
                 : null}
@@ -1244,6 +1254,7 @@ export default function SessionPage() {
           combatTargetMode={combatTargetMode}
           onEnterTargetMode={handleEnterTargetMode}
           onValidateTarget={handleValidateTarget}
+          announcementMarker={announcementMarker}
           damagePayload={damagePayload}
           damageResults={damageResults}
           onDamageConfirmed={() => { setDamagePayload(null); setDamageResults(null); setAttackResult(null) }}

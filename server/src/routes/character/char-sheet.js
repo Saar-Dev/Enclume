@@ -796,6 +796,21 @@ async function getItemWithRef(itemId) {
     .first()
 }
 
+// Retourne le nombre de coups à charger lors de l'équipement initial d'une arme à feu.
+// Conditions : slot ∈ WEAPON_SLOTS, caliber non null, ammo_count parseable > 0.
+// Retourne null si l'item n'est pas une arme à feu ou si ammo_count est absent/invalide.
+async function resolveAmmoInit(equipmentId, slot) {
+  if (!equipmentId || !WEAPON_SLOTS.has(slot)) return null
+  const ref = await db('ref_equipment')
+    .where({ id: equipmentId })
+    .select('caliber', 'ammo_count')
+    .first()
+  if (!ref?.caliber || !ref?.ammo_count) return null
+  const m = String(ref.ammo_count).match(/\d+/)
+  const n = m ? parseInt(m[0], 10) : 0
+  return n > 0 ? n : null
+}
+
 // ─── GET /api/char-sheet/:characterId/inventory ───────────────────────────────
 router.get('/:characterId/inventory', async (req, res, next) => {
   try {
@@ -947,8 +962,12 @@ router.post('/:characterId/quick-equip', async (req, res, next) => {
       .first()
     if (conflict) throw new AppError(409, `Slot ${slot} déjà occupé`)
 
+    const quickInsertData = { character_id: characterId, equipment_id, container: 'Sac', slot, quantity: 1 }
+    const autoAmmo = await resolveAmmoInit(equipment_id, slot)
+    if (autoAmmo !== null) quickInsertData.ammo_remaining = autoAmmo
+
     const [inserted] = await db('char_inventory')
-      .insert({ character_id: characterId, equipment_id, container: 'Sac', slot, quantity: 1 })
+      .insert(quickInsertData)
       .returning('*')
 
     const item = await getItemWithRef(inserted.id)
@@ -1070,6 +1089,12 @@ router.post('/:characterId/inventory', async (req, res, next) => {
     if (custom_name !== undefined) insertData.custom_name = custom_name
     if (custom_desc !== undefined) insertData.custom_desc = custom_desc
     if (notes      !== undefined) insertData.notes       = notes
+
+    // Auto-init ammo_remaining si le nouvel item est équipé directement en slot main
+    if (resolvedSlot && equipment_id) {
+      const autoAmmo = await resolveAmmoInit(equipment_id, resolvedSlot)
+      if (autoAmmo !== null) insertData.ammo_remaining = autoAmmo
+    }
 
     const [inserted] = await db('char_inventory').insert(insertData).returning('*')
     const item = await getItemWithRef(inserted.id)
@@ -1202,6 +1227,12 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
         throw new AppError(400, 'current_ammo ne peut être défini que sur une arme')
       if (weaponRef.caliber !== ammo.caliber)
         throw new AppError(400, `Munition incompatible — caliber attendu : ${weaponRef.caliber}`)
+    }
+
+    // Auto-init ammo_remaining si l'arme passe en main pour la première fois
+    if (WEAPON_SLOTS.has(updates.slot) && existing.ammo_remaining === null) {
+      const autoAmmo = await resolveAmmoInit(existing.equipment_id, updates.slot)
+      if (autoAmmo !== null) updates.ammo_remaining = autoAmmo
     }
 
     // P13 — updated_at APRÈS le guard

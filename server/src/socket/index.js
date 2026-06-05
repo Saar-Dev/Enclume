@@ -2026,6 +2026,14 @@ const initSocket = (io) => {
           actionType,
           initiative_score: updatedInitiative,
           initiative:       updatedInitiative,
+          // Coords PE14 destination déplacement (pour ghost spectateurs)
+          moveTarget: mapActions?.move
+            ? { x: mapActions.move.targetPosX, y: mapActions.move.targetPosY, z: mapActions.move.targetPosZ }
+            : null,
+          // Token cible (tir ou CaC, pour ligne d'annonce spectateurs)
+          attackTargetId: mapActions?.attack?.targetTokenId
+            ?? mapActions?.melee?.[0]?.targetTokenId
+            ?? null,
         })
 
         // Nettoyer le timer auto-skip si actif
@@ -2254,6 +2262,8 @@ const initSocket = (io) => {
           finalSeverity = result.wound.severity  // P49
 
           if (isShockTestRequired(finalSeverity, localisation)) {
+            const shockCampaign = await db('campaigns').where({ id: campaignId }).select('shock_auto_stun').first()
+            const shockAutoStun = shockCampaign?.shock_auto_stun ?? true
             const seuils = calcSeuils(for_na_cible, con_na_cible, vol_na_cible)
             const shockMalus = getShockMalus(finalSeverity, localisation, is_lethal)
             const { total: rollChoc } = await parseDice('1d20')
@@ -2268,8 +2278,9 @@ const initSocket = (io) => {
               shockMalus,
               seuilEtourdi: seuils.etourdissement + shockMalus,
               seuilIncons:  seuils.inconscience   + shockMalus,
+              stun_applied: outcome !== 'ok' && shockAutoStun,
             }
-            if (outcome !== 'ok') {
+            if (outcome !== 'ok' && shockAutoStun) {
               await db('combat_roster')
                 .where({ campaign_id: campaignId, token_id: targetTokenId })
                 .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
@@ -2493,6 +2504,8 @@ const initSocket = (io) => {
                   shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
                 })
                 if (isShockTestRequired(finalSeverity, localisation)) {
+                  const shockCampaign = await db('campaigns').where({ id: meleeCampaignId }).select('shock_auto_stun').first()
+                  const shockAutoStun = shockCampaign?.shock_auto_stun ?? true
                   const seuils     = calcSeuils(for_na_cible, con_na_cible, vol_na_cible)
                   const shockMalus = getShockMalus(finalSeverity, localisation, is_lethal)
                   const { total: rollChoc } = await parseDice('1d20')
@@ -2504,8 +2517,9 @@ const initSocket = (io) => {
                     triggered: true, roll: rollChoc, outcome, shockMalus,
                     seuilEtourdi: seuils.etourdissement + shockMalus,
                     seuilIncons:  seuils.inconscience   + shockMalus,
+                    stun_applied: outcome !== 'ok' && shockAutoStun,
                   }
-                  if (outcome !== 'ok') {
+                  if (outcome !== 'ok' && shockAutoStun) {
                     await db('combat_roster')
                       .where({ campaign_id: meleeCampaignId, token_id: tokenId })
                       .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
@@ -2563,6 +2577,21 @@ const initSocket = (io) => {
         }
       } catch (err) {
         console.error('[WS] COMBAT_MELEE_DEFENSE_CONFIRM error:', err.message)
+      }
+    })
+
+    // ─── COMBAT_APPLY_STUN — GM applique manuellement is_stunned ─────────────
+    socket.on(WS.COMBAT_APPLY_STUN, async ({ tokenId }) => {
+      if (socket.user.role !== 'gm') return
+      const campaignId = socket.campaignId
+      if (!campaignId || !tokenId) return
+      try {
+        await db('combat_roster')
+          .where({ campaign_id: campaignId, token_id: tokenId })
+          .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
+        console.log(`[WS] COMBAT_APPLY_STUN — is_stunned posé manuellement. token:${tokenId} campaign:${campaignId}`)
+      } catch (err) {
+        console.error('[WS] COMBAT_APPLY_STUN error:', err.message)
       }
     })
 
@@ -3124,6 +3153,8 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
               shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
             })
             if (isShockTestRequired(finalSeverity, localisation)) {
+              const shockCampaign = await db('campaigns').where({ id: campaignId }).select('shock_auto_stun').first()
+              const shockAutoStun = shockCampaign?.shock_auto_stun ?? true
               const seuils     = calcSeuils(for_na_cible, con_na_cible, vol_na_cible)
               const shockMalus = getShockMalus(finalSeverity, localisation, is_lethal)
               const { total: rollChoc } = await parseDice('1d20')
@@ -3135,8 +3166,9 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
                 triggered: true, roll: rollChoc, outcome, shockMalus,
                 seuilEtourdi: seuils.etourdissement + shockMalus,
                 seuilIncons:  seuils.inconscience   + shockMalus,
+                stun_applied: outcome !== 'ok' && shockAutoStun,
               }
-              if (outcome !== 'ok') {
+              if (outcome !== 'ok' && shockAutoStun) {
                 await db('combat_roster')
                   .where({ campaign_id: campaignId, token_id: targetTokenId })
                   .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
@@ -3578,6 +3610,8 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
               shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
             })
             if (isShockTestRequired(finalSeverity, localisation)) {
+              const shockCampaign = await db('campaigns').where({ id: campaignId }).select('shock_auto_stun').first()
+              const shockAutoStun = shockCampaign?.shock_auto_stun ?? true
               const seuils     = calcSeuils(for_na_cible, con_na_cible, vol_na_cible)
               const shockMalus = getShockMalus(finalSeverity, localisation, is_lethal)
               const { total: rollChoc } = await parseDice('1d20')
@@ -3592,8 +3626,9 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
                 shockMalus,
                 seuilEtourdi: seuils.etourdissement + shockMalus,
                 seuilIncons:  seuils.inconscience   + shockMalus,
+                stun_applied: outcome !== 'ok' && shockAutoStun,
               }
-              if (outcome !== 'ok') {
+              if (outcome !== 'ok' && shockAutoStun) {
                 await db('combat_roster')
                   .where({ campaign_id: campaignId, token_id: action.target_token_id })
                   .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })

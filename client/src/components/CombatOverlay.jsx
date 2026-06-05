@@ -14,7 +14,7 @@ import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
 
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, gmSocketError, onGmSocketErrorClose, sidebarWidth = 0 }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, gmSocketError, onGmSocketErrorClose, announcementMarker, sidebarWidth = 0 }) {
   const { phase, roster, activeSlotIdx, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
@@ -195,6 +195,11 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           is_lethal={gmAttackResult.is_lethal}
           shockResult={gmAttackResult.shockResult}
           onClose={onGmAttackResultClose}
+          onApplyStun={
+            gmAttackResult.shockResult?.stun_applied === false
+              ? () => socket.emit(WS.COMBAT_APPLY_STUN, { tokenId: gmAttackResult.cibleId })
+              : undefined
+          }
         />
       )}
 
@@ -278,6 +283,44 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
+      {/* Panneau déclarant courant — visible pour tous pendant ANNOUNCEMENT après chaque déclaration */}
+      {phase === 'ANNOUNCEMENT' && announcementMarker && (() => {
+        const declToken  = tokens.find(t => t.id === announcementMarker.tokenId)
+        const atkToken   = announcementMarker.attackTargetId
+          ? tokens.find(t => t.id === announcementMarker.attackTargetId)
+          : null
+        const declChar   = declToken ? characters.find(c => c.id === declToken.character_id) : null
+        const rosterEntry = roster.find(r => r.token_id === announcementMarker.tokenId)
+        if (!declToken) return null
+        return (
+          <div style={styles.announcePanel}>
+            <div style={styles.announcePanelTitle}>vient d&apos;annoncer</div>
+            <div style={styles.announceName}>
+              {declToken.label ?? '?'}
+              {rosterEntry && (
+                <span style={styles.announceIni}> INI {rosterEntry.initiative}</span>
+              )}
+            </div>
+            {announcementMarker.moveTarget && (
+              <div style={styles.announceRow}>
+                <span style={styles.announceIcon}>→</span>
+                <span style={styles.announceDetail}>
+                  Déplacement [{announcementMarker.moveTarget.x}, {announcementMarker.moveTarget.y}]
+                </span>
+              </div>
+            )}
+            {atkToken && (
+              <div style={styles.announceRow}>
+                <span style={styles.announceIcon}>⚡</span>
+                <span style={{ ...styles.announceDetail, color: '#e0a050' }}>
+                  {atkToken.label ?? '?'}
+                </span>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
       {/* Panneau légende déplacement — visible pendant le mode sélection destination */}
       {combatMoveMode && (
         <div style={styles.moveLegend}>
@@ -353,6 +396,53 @@ const styles = {
     fontSize: 11,
     color: '#5b8dee',
     marginLeft: 4,
+  },
+  announcePanel: {
+    position: 'absolute',
+    bottom: 24,
+    left: 24,
+    width: 180,
+    background: 'rgba(10,12,22,0.92)',
+    border: '1px solid #2a2a3e',
+    borderRadius: 6,
+    boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+    pointerEvents: 'none',
+    padding: '8px 10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  announcePanelTitle: {
+    fontSize: 8,
+    color: '#456575',
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+    fontWeight: 600,
+  },
+  announceName: {
+    fontSize: 12,
+    color: '#c0c0d0',
+    fontWeight: 700,
+  },
+  announceIni: {
+    fontSize: 10,
+    color: '#5b8dee',
+    fontWeight: 600,
+    marginLeft: 4,
+  },
+  announceRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+  },
+  announceIcon: {
+    fontSize: 10,
+    color: '#7070a0',
+    flexShrink: 0,
+  },
+  announceDetail: {
+    fontSize: 10,
+    color: '#8888a8',
   },
   moveLegend: {
     position: 'absolute',

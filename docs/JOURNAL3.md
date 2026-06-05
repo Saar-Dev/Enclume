@@ -2252,3 +2252,51 @@ Remplacer les images base64 inline dans l'éditeur Quill (Bibliothèque document
 - **PL-Q3** : `campaignId` et `onError` capturés dans `useEffect []` — stables, pas de stale closure
 
 ### Session 80 ✅ CONFIRMÉ FONCTIONNEL
+
+---
+
+## Session 81 — 2026-06-04
+
+### Bug 1 — Auto-init ammo_remaining à l'équipement CONFIRME FONCTIONNEL
+
+Cause racine : ammo_remaining (migration 60) n'était jamais initialisée à l'équipement d'une arme.
+Seul POST /reload l'écrivait. Toute arme équipée sans rechargement restait à NULL
+=> isAmmoEmpty = true cote client => bouton "Assaut (tir)" grise (non cliquable).
+
+Fix — 4 composantes :
+- 70_ammo_init_on_equip.js : backfill PostgreSQL armes equipees avec ammo_remaining IS NULL et caliber IS NOT NULL
+- char-sheet.js : helper resolveAmmoInit(equipmentId, slot) + appel dans 3 routes (PUT /inventory/:itemId, POST /inventory, POST /quick-equip)
+  Guard : slot dans WEAPON_SLOTS && caliber non null && ammo_count parseable > 0 && existing.ammo_remaining === null
+- CombatActionWindow.jsx : isAmmoEmpty ne bloque plus sur null (arme jamais initialisee) — seulement sur === 0 (arme vraiment vide)
+
+Pièges evites : ammo_count est une chaine ("30 coups"), parser avec /\d+/ identique au pattern resolveReload.
+current_ammo inutile pour le decompte combat (guard NULL deja present ligne 3477 socket/index.js).
+down migration non reversible.
+
+### Bug 2 — Crash ecran noir joueur en mode combat CONFIRME FONCTIONNEL
+
+Cause : etat meleePendingTokenIds (array, pluriel) reinitialise avec setMeleePendingTokenId(null) (sans s, inexistant)
+en 3 endroits dans CombatActionWindow.jsx (lignes 174, 237, 394). ReferenceError au montage du composant.
+
+Fix : 3 occurrences remplacees par setMeleePendingTokenIds([]).
+
+### Sprint Annonce v2 CONFIRME FONCTIONNEL
+
+Architecture : la phase ANNOUNCEMENT etait deja sequentielle cote serveur (guard base_ini ASC), mais le client GM
+permettait un batch multi-PNJ incoherent avec cette contrainte. Sprint aligne le client sur le serveur.
+
+7 composantes :
+1. socket/index.js : COMBAT_ACTION_DECLARED enrichi — moveTarget:{x,y,z} (coords PE14) + attackTargetId:uuid
+2. SessionPage.jsx : state announcementMarker, reset sur COMBAT_PHASE_CHANGED, passe a Canvas3D + CombatOverlay
+3. Canvas3D.jsx : ghost box bleue semi-transparente a moveTarget + ligne ambre announcementToken -> attackTarget
+4. CombatOverlay.jsx : mini-panneau bottom-left "vient d'annoncer" (nom, INI, deplacement, cible) — visible de tous
+5. TimelineCard.jsx : prop isDimmed -> opacity 0.35
+6. CombatTimeline.jsx : isDimmed = hasAnnounced && !isActive en phase ANNOUNCEMENT
+7. CombatGmDeclareWindow.jsx : reecriture complete (~600 lignes vs 1128)
+   — batch supprime, appels directs onEnterMoveMode/onEnterTargetMode, bouton "Passer" si PJ bloque le slot
+
+Pièges : announcementMarker.moveTarget = {x:pos_x, y:pos_y(Three.js Z), z:pos_z(Three.js Y)} — PE14 applique au rendu.
+tokensRef.current utilise dans la ligne d'annonce (ref miroir stable hors render).
+handleStartMelee : N selections chainees via recursion de callbacks.
+
+### Session 81 CONFIRME FONCTIONNEL
