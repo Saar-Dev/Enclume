@@ -32,7 +32,7 @@ export default function TimelineCard({
         flexShrink: 0,
         cursor: onClick ? 'pointer' : 'default',
         transition: 'border-color 0.3s ease, opacity 0.3s ease',
-        boxShadow: isActive ? '0 0 12px rgba(245,197,66,0.35)' : 'none',
+        boxShadow: isActive ? 'var(--halo-active)' : 'none',
         opacity: isDimmed ? 0.35 : 1,
       }}
     >
@@ -67,7 +67,7 @@ export default function TimelineCard({
       }}>
         <span style={{
           fontSize: 9,
-          color: isActive ? '#f5c542' : '#e0e0f0',
+          color: isActive ? 'var(--color-gold)' : '#e0e0f0',
           fontWeight: 700,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
@@ -81,7 +81,7 @@ export default function TimelineCard({
         </span>
         <span style={{
           fontSize: 8,
-          color: '#5b8dee',
+          color: 'var(--color-primary)',
           fontWeight: 600,
           textShadow: '0 1px 2px rgba(0,0,0,0.9)',
         }}>
@@ -91,13 +91,13 @@ export default function TimelineCard({
 
       {/* Badge annoncé */}
       {hasAnnounced && (
-        <span style={{ position: 'absolute', top: 3, right: 4, fontSize: 10, color: '#50c878', fontWeight: 700, textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
+        <span style={{ position: 'absolute', top: 3, right: 4, fontSize: 10, color: 'var(--color-success-soft)', fontWeight: 700, textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
           ✓
         </span>
       )}
       {/* Badge surpris */}
       {isSurprised && !hasAnnounced && (
-        <span style={{ position: 'absolute', top: 3, right: 4, fontSize: 10, color: '#e0a050', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
+        <span style={{ position: 'absolute', top: 3, right: 4, fontSize: 10, color: 'var(--color-warning-soft)', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
           ⚠
         </span>
       )}

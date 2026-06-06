@@ -17,6 +17,7 @@ import Editor3D from '../components/Editor3D'
 import Sidebar from '../components/Sidebar'
 import DicePanel from '../components/DicePanel'
 import CharacterWindow from '../character/CharacterWindow'
+import DroneWindow from '../character/DroneWindow'
 import RadialMenu from '../components/RadialMenu'
 import TokenRadialMenu from '../components/TokenRadialMenu'
 import TokenStatusPanel from '../components/TokenStatusPanel'
@@ -123,6 +124,12 @@ export default function SessionPage() {
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
   const selectedCharacter = selectedCharacterId
     ? characters.find(c => c.id === selectedCharacterId) ?? null
+    : null
+
+  // Fenêtre drone flottante — même pattern que selectedCharacterId
+  const [selectedDroneId, setSelectedDroneId] = useState(null)
+  const selectedDrone = selectedDroneId
+    ? characters.find(c => c.id === selectedDroneId) ?? null
     : null
 
   // Menu contextuel barre GM — clic droit sur un bouton de carte
@@ -865,7 +872,7 @@ export default function SessionPage() {
   }, [])
 
   // ─── Mode sélection cible combat (Sprint 7.1) ─────────────────────────────
-  const handleEnterTargetMode = useCallback((tokenId, tokenPos, onTargetSelected, onCancel) => {
+  const handleEnterTargetMode = useCallback((tokenId, tokenPos, onTargetSelected, onCancel, mode = 'ranged') => {
     const wrappedSelected = (targetTokenId) => {
       onTargetSelected(targetTokenId)
       setCombatTargetMode(null)
@@ -876,6 +883,7 @@ export default function SessionPage() {
     }
     setCombatTargetMode({
       tokenId,
+      mode,
       pendingTargetId: null,
       onTargetSelected: wrappedSelected,
       onCancel: wrappedCancel,
@@ -1034,7 +1042,10 @@ export default function SessionPage() {
           campaignId={campaignId}
           socket={socket}
           onReconnectSocket={() => setReconnectTrigger(n => n + 1)}
-          onOpenCharacter={(char) => setSelectedCharacterId(char.id)}
+          onOpenCharacter={(char) => {
+            if (char.type === 'drone') setSelectedDroneId(char.id)
+            else setSelectedCharacterId(char.id)
+          }}
           onEntityActionResolve={handleEntityActionResolve}
         />
       )}
@@ -1060,7 +1071,10 @@ export default function SessionPage() {
             token={contextMenu.token}
             character={character}
             isGm={isGm}
-            onOpenCharacterSheet={() => setSelectedCharacterId(character?.id)}
+            onOpenCharacterSheet={() => {
+              if (character?.type === 'drone') setSelectedDroneId(character.id)
+              else setSelectedCharacterId(character?.id)
+            }}
             onRemoveToken={handleRemoveContextToken}
             onSetRotation={handleSetContextTokenRotation}
             onOpenStatusPanel={() => setStatusPanel({ tokenId: contextMenu.token.id, x: contextMenu.x, y: contextMenu.y })}
@@ -1189,6 +1203,15 @@ export default function SessionPage() {
           isGm={isGm}
           onClose={() => setSelectedCharacterId(null)}
           woundReloadKey={woundVersions[selectedCharacter?.id] ?? 0}
+        />
+      )}
+
+      {/* ─── DroneWindow — flottante, déplaçable ────────────────────────────── */}
+      {selectedDrone && (
+        <DroneWindow
+          character={{ ...selectedDrone, _currentUserId: user?.id }}
+          isGm={isGm}
+          onClose={() => setSelectedDroneId(null)}
         />
       )}
 

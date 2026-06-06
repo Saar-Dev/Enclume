@@ -22,9 +22,9 @@ export default function CombatDamageWindow({ payload, results, socket, onConfirm
         }
         .dice-rolling { animation: diceRoll 0.35s ease-in-out infinite; }
       `}</style>
-      <div style={styles.window}>
+      <div className="combat-float-win" style={{ minWidth: 340, maxWidth: 420, padding: '18px 22px', gap: 14 }}>
 
-        <div style={styles.header}>
+        <div className="combat-float-header" style={{ alignItems: 'baseline', borderBottom: '1px solid var(--border-session)', paddingBottom: 10, cursor: 'default' }}>
           <span style={styles.headerTitle}>Gestion des dégâts</span>
           <span style={styles.headerTarget}>→ {payload.targetName}</span>
         </div>
@@ -124,26 +124,6 @@ const styles = {
     justifyContent: 'center',
     pointerEvents: 'none',
     zIndex: 1100,
-  },
-  window: {
-    pointerEvents: 'auto',
-    background: '#0f0f1a',
-    border: '1px solid #2a2a3e',
-    borderRadius: 10,
-    padding: '18px 22px',
-    minWidth: 340,
-    maxWidth: 420,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 14,
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 10,
-    borderBottom: '1px solid #1e1e2e',
-    paddingBottom: 10,
   },
   headerTitle: {
     fontSize: 14,

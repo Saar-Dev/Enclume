@@ -8,38 +8,10 @@ import api from '../lib/api.js'
 import {
   STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS,
   stateTransitionCost, calcIniDelta,
+  FIRE_MODE_VARIANTS, CC_REPS_STEPS, RL_BUTTONS,
 } from './combatSections.js'
 
-// ---------------------------------------------------------------------------
-// Variants mode de tir (inchanges depuis Sprint 7.1)
-// ---------------------------------------------------------------------------
-const FIRE_MODE_VARIANTS = {
-  CC: [
-    { id: 'cc_1',   bulletCount: 1,  bonusComp: 0, bonusDmg: 0 },
-    { id: 'cc_2',   bulletCount: 2,  bonusComp: 1, bonusDmg: 0 },
-    { id: 'cc_3',   bulletCount: 3,  bonusComp: 2, bonusDmg: 0 },
-    { id: 'cc_4',   bulletCount: 4,  bonusComp: 3, bonusDmg: 0 },
-    { id: 'cc_7a',  bulletCount: 7,  bonusComp: 4, bonusDmg: 0 },
-    { id: 'cc_7b',  bulletCount: 7,  bonusComp: 3, bonusDmg: 3 },
-    { id: 'cc_10a', bulletCount: 10, bonusComp: 5, bonusDmg: 0 },
-    { id: 'cc_10b', bulletCount: 10, bonusComp: 4, bonusDmg: 3 },
-  ],
-  RC: [{ id: 'rc_3', bulletCount: 3, bonusComp: 3, bonusDmg: 5 }],
-  RL: [
-    { id: 'rl_5',   bulletCount: 5,  bonusComp: 2, bonusDmg: 2 },
-    { id: 'rl_10',  bulletCount: 10, bonusComp: 4, bonusDmg: 4 },
-    { id: 'rl_15',  bulletCount: 15, bonusComp: 6, bonusDmg: 6 },
-    { id: 'rl_20',  bulletCount: 20, bonusComp: 8, bonusDmg: 8 },
-    { id: 'rl_mc',  bulletCount: 5,  bonusComp: 0, bonusDmg: 0 },
-  ],
-}
-const CC_REPS_STEPS = [2, 3, 4, 7, 10]
 const EXCLUSIVE_ACTIONS = new Set(['attack', 'melee', 'reload', 'multi', 'interact'])
-const RL_BUTTONS = [
-  { value: 5, label: '5b' }, { value: 10, label: '10b' },
-  { value: 15, label: '15b' }, { value: 20, label: '20b' },
-  { value: 'multi', label: 'Multi' },
-]
 
 // ---------------------------------------------------------------------------
 // Composant StateSelector
@@ -584,8 +556,8 @@ export default function CombatActionWindow({
   // =========================================================================
   if (pendingSurpriseRoll?.tokenId && playerTokensInRoster.some(t => t.id === pendingSurpriseRoll.tokenId)) {
     return (
-      <div style={{ ...W.window, left: pos.left, top: pos.top }}>
-        <div style={W.header} onMouseDown={onHeaderMouseDown}>Surprise !</div>
+      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Surprise !</div>
         <p style={W.surpriseText}>Vous etes surpris. Lancez 1d20 pour determiner votre initiative.</p>
         <button style={W.btnRoll} onClick={onSurpriseRolled}>Lancer le de d&apos;initiative</button>
       </div>
@@ -593,8 +565,8 @@ export default function CombatActionWindow({
   }
   if (rosterEntry.is_surprised && rosterEntry.has_announced && rosterEntry.initiative === 0) {
     return (
-      <div style={{ ...W.window, left: pos.left, top: pos.top }}>
-        <div style={W.header} onMouseDown={onHeaderMouseDown}>Surprise !</div>
+      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Surprise !</div>
         <p style={W.surpriseText}>Vous etes surpris — vous ne pouvez pas agir ce tour.</p>
       </div>
     )
@@ -612,9 +584,9 @@ export default function CombatActionWindow({
     const meleeCibleTokens = myMeleeActions.map(a => tokens.find(t => t.id === a.target_token_id) ?? null)
     const isRushed = rosterEntry.state_vitesse === 'rushed'
     return (
-      <div style={{ ...W.window, left: pos.left, top: pos.top }}>
-        <div style={W.header} onMouseDown={onHeaderMouseDown}>Phase 2 - Resolution</div>
-        <div style={W.body}>
+      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 2 - Resolution</div>
+        <div className="combat-win-body">
           <div style={W.leftPanel}>
             {myActions.map(a => (
               <div key={a.id} style={{ padding: '6px 14px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1e1e2e' }}>
@@ -630,7 +602,7 @@ export default function CombatActionWindow({
             )}
           </div>
         </div>
-        <div style={W.footer}>
+        <div className="combat-float-footer">
           {myAssaultAction ? (
             <div style={{ color: '#7070a0', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
               En attente de validation GM…
@@ -705,8 +677,8 @@ export default function CombatActionWindow({
   if (phase === 'ANNOUNCEMENT' && !(rosterEntry?.has_announced) && !isMyTurnInAnnouncement) {
     const currentDeclarer = tokens.find(t => t.id === computedAnnounceTokenId)
     return (
-      <div style={{ ...W.window, left: pos.left, top: pos.top }}>
-        <div style={W.header} onMouseDown={onHeaderMouseDown}>Phase 1 — Déclaration d&apos;intention</div>
+      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 — Déclaration d&apos;intention</div>
         {rosterSection}
         <p style={W.waitText}>
           En attente de {currentDeclarer?.label ?? '…'}…
@@ -718,8 +690,8 @@ export default function CombatActionWindow({
   // Deja declare
   if (rosterEntry?.has_announced) {
     return (
-      <div style={{ ...W.window, left: pos.left, top: pos.top }}>
-        <div style={W.header} onMouseDown={onHeaderMouseDown}>Phase 1 - Declaration d&apos;intention</div>
+      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 - Declaration d&apos;intention</div>
         {rosterSection}
         <p style={W.waitText}>Action declaree. En attente des autres participants…</p>
       </div>
@@ -740,7 +712,8 @@ export default function CombatActionWindow({
         })
         setInMeleeTargetMode(false)
       },
-      () => { setInMeleeTargetMode(false) }
+      () => { setInMeleeTargetMode(false) },
+      'melee'
     )
   }
 
@@ -782,7 +755,8 @@ export default function CombatActionWindow({
           playerToken.id,
           { x: playerToken.pos_x, z: playerToken.pos_y },
           (tid) => { setMeleePendingTokenIds([tid]); setInMeleeTargetMode(false) },
-          () => { setInMeleeTargetMode(false) }
+          () => { setInMeleeTargetMode(false) },
+          'melee'
         )
       },
       () => { setInMoveMode(false); setCombatMode('normal') }
@@ -804,13 +778,13 @@ export default function CombatActionWindow({
   // RENDU — Phase Annonce
   // =========================================================================
   return (
-    <div style={{
-      ...W.window,
+    <div className="combat-float-win" style={{
       width: (showAssault || showReload || showMelee) ? 720 : 360,
       opacity: isHidden ? 0 : 1,
       pointerEvents: isHidden ? 'none' : 'auto',
       left: pos.left,
       top: pos.top,
+      maxHeight: 'calc(100vh - 80px)',
     }}>
       <div style={W.header} onMouseDown={onHeaderMouseDown}>Phase 1 — Declaration d&apos;intention</div>
 
@@ -819,7 +793,7 @@ export default function CombatActionWindow({
         <div style={W.leftPanel}>
 
           {/* TACTIQUE */}
-          <div style={W.section}>
+          <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
             <div style={W.sectionTitle}>TACTIQUE</div>
             <StateSelector
               stateKey="position" def={STATE_DEFS.position}
@@ -839,7 +813,7 @@ export default function CombatActionWindow({
           </div>
 
           {/* ARMEMENT */}
-          <div style={W.section}>
+          <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
             <div style={W.sectionTitle}>ARMEMENT</div>
             <StateSelector
               stateKey="weapon" def={STATE_DEFS.weapon}
@@ -856,7 +830,7 @@ export default function CombatActionWindow({
           </div>
 
           {/* ACTION */}
-          <div style={W.section}>
+          <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
             <div style={W.sectionTitle}>ACTION</div>
             <div style={W.itemsGrid}>
               {MAP_ACTIONS.map(a => {
@@ -974,7 +948,7 @@ export default function CombatActionWindow({
           </div>
 
           {/* ACTIONS RAPIDES */}
-          <div style={W.section}>
+          <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
             <div style={W.sectionTitle}>ACTIONS RAPIDES</div>
             {QUICK_ACTIONS.map(a => {
               const isFixed = a.kind === 'fixed'
@@ -1505,8 +1479,8 @@ const ss = {
   seg: {
     display: 'flex',
     flex: 1,
-    background: '#0a1018',
-    border: '1px solid #15212e',
+    background: 'var(--combat-seg-bg)',
+    border: '1px solid var(--combat-seg-border)',
   },
   segOpt: {
     flex: 1,
@@ -1517,7 +1491,7 @@ const ss = {
     transition: 'all 0.1s',
   },
   segOptActive: {
-    background: '#162028',
+    background: 'var(--combat-seg-active)',
     borderColor: '#3a8aaa66',
   },
   segOptDisabled: {
@@ -1537,7 +1511,7 @@ const ss = {
   },
   segCostCurrent: {
     fontSize: 7,
-    color: '#3a8aaa',
+    color: 'var(--combat-title)',
     display: 'block',
     marginTop: 1,
   },
@@ -1547,51 +1521,17 @@ const ss = {
 // Styles fenetre principale
 // ===========================================================================
 const W = {
-  window: {
-    position: 'absolute',
-    maxHeight: 'calc(100vh - 80px)',
-    background: '#16162a',
-    border: '1px solid #2a2a3e',
-    borderRadius: 8,
-    boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-    pointerEvents: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-    transition: 'opacity 0.15s ease, width 0.2s ease',
-  },
-  header: {
-    padding: '8px 14px',
-    borderBottom: '1px solid #2a2a3e',
-    background: '#0e0e1a',
-    fontSize: 11,
-    color: '#c0c0d0',
-    fontWeight: 600,
-    flexShrink: 0,
-    letterSpacing: '0.05em',
-    cursor: 'grab',
-    userSelect: 'none',
-  },
-  body: {
-    display: 'flex',
-    flex: 1,
-    overflow: 'hidden',
-  },
   leftPanel: {
     flex: '0 0 360px',
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
   },
-  section: {
-    borderBottom: '1px solid #1e1e2e',
-    paddingBottom: 4,
-  },
   sectionTitle: {
     padding: '7px 10px 3px',
     fontSize: 8,
     fontWeight: 700,
-    color: '#5a8aaa',
+    color: 'var(--combat-section)',
     textTransform: 'uppercase',
     letterSpacing: '0.12em',
   },
@@ -1639,16 +1579,6 @@ const W = {
     flexShrink: 0,
     minWidth: 28,
     textAlign: 'right',
-  },
-  footer: {
-    padding: '9px 14px',
-    borderTop: '1px solid #2a2a3e',
-    background: '#0e0e1a',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexShrink: 0,
-    gap: 8,
   },
   footerLeft: {
     display: 'flex',

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token radial — exploration</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;height:100%;background:#0a0a0f}
+  *{box-sizing:border-box}
+  #root{position:fixed;inset:0}
+  text{font-family:'Inter',sans-serif}
+  @keyframes danger { 0%,100%{opacity:.15;transform:scale(1)} 50%{opacity:.5;transform:scale(1.12)} }
+  @keyframes sweep { from{stroke-dashoffset:var(--len)} to{stroke-dashoffset:0} }
+</style>
+</head><body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "#46c6e6",
+  "actionCount": 8,
+  "wedgeStyle": "contour",
+  "core": "disque",
+  "woundRing": "jauge",
+  "glow": true,
+  "gap": 5,
+  "severity": "grave"
+}/*EDITMODE-END*/;
+
+const SEV = { legere:'#FFD700', moyenne:'#FFA500', grave:'#FF6B6B', critique:'#FF0000', mortelle:'#8B0000' };
+const SEV_ORDER = ['legere','moyenne','grave','critique','mortelle'];
+const SEV_LABEL = { legere:'Légère', moyenne:'Moyenne', grave:'Grave', critique:'Critique', mortelle:'Mortelle' };
+
+// action pool — mirrors production TokenRadialMenu (fiche/jet/recharger/déplacer/retirer/portée/viser/statuts).
+// `stat` rides along (e.g. ammo count); `detail` shows in the freed core on hover.
+const ACTIONS = [
+  {label:'Fiche',     detail:'Ouvrir la fiche personnage'},
+  {label:'Jet',       detail:'Lancer de dés rapide'},
+  {label:'Recharger', stat:'14/24', detail:'Chargeur 14/24 · recharge complète'},
+  {label:'Déplacer',  detail:'Déplacement · 6 m restants'},
+  {label:'Retirer',   detail:'Retirer le token du combat'},
+  {label:'Portée',    detail:'Afficher les portées d\u2019arme'},
+  {label:'Viser',     detail:'Viser · +2 au prochain tir'},
+  {label:'Statuts',   detail:'2 états actifs'},
+];
+const WOUNDS = { legere:['legere','legere'], moyenne:['legere','moyenne','legere'],
+  grave:['legere','legere','moyenne','grave'], critique:['legere','moyenne','grave','critique','moyenne'],
+  mortelle:['moyenne','grave','critique','mortelle','grave','legere'] };
+
+const CX=185, CY=185;
+const polar=(r,deg)=>{const a=(deg-90)*Math.PI/180;return [CX+r*Math.cos(a),CY+r*Math.sin(a)];};
+const P=(r,d)=>polar(r,d).map(n=>n.toFixed(1)).join(',');
+function arcSector(r1,r2,a0,a1){ const lg=(a1-a0)>180?1:0;
+  return `M${P(r2,a0)} A${r2},${r2} 0 ${lg} 1 ${P(r2,a1)} L${P(r1,a1)} A${r1},${r1} 0 ${lg} 0 ${P(r1,a0)} Z`; }
+function facetSector(r1,r2,a0,a1){ const mid=(a0+a1)/2;
+  return `M${P(r1,a0)} L${P(r2,a0)} L${P(r2-3,mid)} L${P(r2,a1)} L${P(r1,a1)} L${P(r1+2,mid)} Z`; }
+function arcPath(r,a0,a1){ const lg=(a1-a0)>180?1:0; return `M${P(r,a0)} A${r},${r} 0 ${lg} 1 ${P(r,a1)}`; }
+function hexPts(r){ return [0,60,120,180,240,300].map(d=>P(r,d)).join(' '); }
+function diaPts(r){ return [0,90,180,270].map(d=>P(r,d)).join(' '); }
+
+function Radial({ t }){
+  const [hover,setHover] = useState(null);
+  const [open,setOpen]  = useState(false);
+  useEffect(()=>{ const id=requestAnimationFrame(()=>setOpen(true)); return ()=>cancelAnimationFrame(id); },[]);
+  const n=t.actionCount, gap=t.gap, accent=t.accent, acDim=accent+'40';
+  const R1=80, R2=170;
+  const wounds=WOUNDS[t.severity], worst=t.severity, orbCol=SEV[worst];
+  const severe = worst==='critique'||worst==='mortelle';
+  const acts = ACTIONS.slice(0,n);
+  const hot = acts.find(a=>a.label===hover);
+
+  const wedges = acts.map((a,i)=>{
+    const seg=360/n, a0=i*seg+gap/2, a1=(i+1)*seg-gap/2, mid=i*seg+seg/2, isHot=hover===a.label;
+    const d = t.wedgeStyle==='facette'?facetSector(R1,R2,a0,a1):arcSector(R1,R2,a0,a1);
+    const fill = t.wedgeStyle==='contour'?(isHot?accent+'24':'rgba(11,17,25,0.40)'):(isHot?accent+'2e':'rgba(13,20,30,0.88)');
+    const [lx,ly]=polar(a.stat?R1+60:(R1+R2)/2, mid);
+    const [sx,sy]=polar(R1+33, mid);
+    return <g key={a.label} onMouseEnter={()=>setHover(a.label)} onMouseLeave={()=>setHover(h=>h===a.label?null:h)}
+      style={{cursor:'pointer', transformOrigin:`${CX}px ${CY}px`,
+        transform:open?'scale(1)':'scale(.82)', opacity:open?1:0,
+        transition:`transform .34s cubic-bezier(.18,.9,.2,1.05) ${i*0.028}s, opacity .26s ease ${i*0.028}s`}}>
+      <path d={d} fill={fill} stroke={isHot?accent:acDim} strokeWidth={isHot?1.8:1}
+        style={{transition:'fill .12s, stroke .12s', filter:isHot&&t.glow?`drop-shadow(0 0 8px ${accent}bb)`:'none'}}/>
+      <text x={lx} y={ly+4} textAnchor="middle" fontSize={n>=8?'10.5':'11.5'} fontWeight="600" letterSpacing="1.5"
+        fill={isHot?'#eafaff':'#a4cdda'} style={{textTransform:'uppercase'}}>{a.label}</text>
+      {a.stat && <text x={sx} y={sy+5} textAnchor="middle" fontFamily="'Share Tech Mono'" fontSize="14"
+        fontWeight="700" fill={isHot?accent:'#7fb8cc'}>{a.stat}</text>}
+    </g>;
+  });
+
+  // boundary tick marks (HUD detail)
+  const ticks = acts.map((a,i)=>{ const ang=i*(360/n); const [x1,y1]=polar(R2,ang),[x2,y2]=polar(R2+5,ang);
+    return <line key={'t'+i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={acDim} strokeWidth="1"
+      style={{opacity:open?.7:0, transition:`opacity .3s ease ${.2+i*.02}s`}}/>; });
+
+  // wound ring — sorted worst-first, on a faint track
+  const RW=64; let woundEls;
+  const sorted=[...wounds].sort((a,b)=>SEV_ORDER.indexOf(b)-SEV_ORDER.indexOf(a));
+  if(t.woundRing==='jauge'){
+    const cap=Math.max(8,sorted.length), span=270, start=-135, slot=span/cap, g=2.6;
+    woundEls=<g><path d={arcPath(RW,start,start+span)} stroke="#1a232e" strokeWidth="7" fill="none" strokeLinecap="round"/>
+      {[...Array(cap)].map((_,i)=>{ const a0=start+i*slot+g/2,a1=start+(i+1)*slot-g/2,w=sorted[i];
+        return w&&<path key={i} d={arcPath(RW,a0,a1)} stroke={SEV[w]} strokeWidth="6.5" fill="none" strokeLinecap="round"
+          style={{opacity:open?1:0, transition:`opacity .3s ease ${.34+i*.04}s`}}/>; })}</g>;
+  } else if(t.woundRing==='segments'){
+    const sp=18,sg=7,total=sorted.length*sp+(sorted.length-1)*sg; let c=-total/2;
+    woundEls=<g>{sorted.map((w,i)=>{const e=<path key={i} d={arcPath(RW,c,c+sp)} stroke={SEV[w]} strokeWidth="6.5" fill="none" strokeLinecap="round"/>;c+=sp+sg;return e;})}</g>;
+  } else {
+    const cap=Math.max(10,sorted.length);
+    woundEls=<g>{[...Array(cap)].map((_,i)=>{const ang=i*(360/cap),[x,y]=polar(RW,ang),w=sorted[i];
+      return <circle key={i} cx={x} cy={y} r={w?4:2.5} fill={w?SEV[w]:'#243040'}/>;})}</g>;
+  }
+
+  // flat core
+  let coreShape;
+  if(t.core==='losange') coreShape=<polygon points={diaPts(50)} fill={orbCol} stroke="#05070b" strokeWidth="3" strokeLinejoin="round"/>;
+  else if(t.core==='hexagone') coreShape=<polygon points={hexPts(50)} fill={orbCol} stroke="#05070b" strokeWidth="3" strokeLinejoin="round"/>;
+  else coreShape=<g><circle cx={CX} cy={CY} r={45} fill={orbCol}/><circle cx={CX} cy={CY} r={45} fill="none" stroke="#05070b" strokeWidth="2.5"/></g>;
+
+  return (
+    <svg width="700" height="430" viewBox="0 0 700 430" style={{display:'block'}}>
+      <g transform="translate(165,40)">
+        {t.glow && <circle cx={CX} cy={CY} r={R2} fill={accent} fillOpacity=".035"/>}
+        {ticks}
+        {wedges}
+        <circle cx={CX} cy={CY} r={R1-4} fill="none" stroke={acDim} strokeWidth="1" strokeDasharray="2 4" opacity=".5"/>
+
+        {/* core group with mount pop */}
+        <g style={{transformOrigin:`${CX}px ${CY}px`, transform:open?'scale(1)':'scale(.4)', opacity:open?1:0, transition:'transform .3s cubic-bezier(.2,.9,.2,1.1), opacity .2s'}}>
+          {severe && <circle cx={CX} cy={CY} r={52} fill="none" stroke={orbCol} strokeWidth="3" style={{transformOrigin:`${CX}px ${CY}px`, animation:'danger 1.6s ease-in-out infinite'}}/>}
+          {woundEls}
+          <circle cx={CX} cy={CY} r={51} fill="none" stroke={accent} strokeWidth="1" strokeOpacity=".22"/>
+          {coreShape}
+          <circle cx={CX} cy={CY} r={45} fill="#000" fillOpacity={hot?0:.0}/>
+          {/* contextual readout — uses the freed center space */}
+          {hot ? (
+            <g style={{pointerEvents:'none'}}>
+              {hot.stat
+                ? <text x={CX} y={CY+1} textAnchor="middle" fontFamily="'Share Tech Mono'" fontSize="19" fontWeight="700" fill="#fff" fillOpacity=".95">{hot.stat}</text>
+                : <text x={CX} y={CY+2} textAnchor="middle" fontSize="12" fontWeight="700" letterSpacing="1.5" fill="#fff" fillOpacity=".92" style={{textTransform:'uppercase'}}>{hot.label}</text>}
+            </g>
+          ) : (
+            severe && <text x={CX} y={CY+4} textAnchor="middle" fontSize="13" letterSpacing="2" fill="#fff" fillOpacity=".55" style={{textTransform:'uppercase'}}>⚠</text>
+          )}
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+function HudCaption({ t }){
+  // mirrors the hovered action below the wheel; resolved from the same data
+  return null;
+}
+
+function App(){
+  const [t,setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [cap,setCap] = useState(null);
+  return (
+    <div style={{position:'fixed',inset:0,background:'radial-gradient(circle at 42% 38%,#1a2340 0%,transparent 45%),radial-gradient(circle at 78% 82%,#160e22 0%,transparent 50%),#0a0a0f'}}>
+      <div style={{position:'absolute',top:14,left:20,font:"600 10px 'Inter'",textTransform:'uppercase',letterSpacing:'.08em',color:'#8b93a3'}}>Token radial — menu d'action personnage</div>
+      <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-52%)'}}>
+        <Radial t={t}/>
+      </div>
+      <div style={{position:'absolute',bottom:16,left:20,right:20,display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:16}}>
+        <div style={{font:"11px 'Share Tech Mono'",color:'#7c8aa0',maxWidth:360,lineHeight:1.5}}>Cœur = pire blessure (<span style={{color:SEV[t.severity]}}>{SEV_LABEL[t.severity]}</span>) · anneau = chaque blessure · survol d'un secteur = détail au centre · clic extérieur = fermer</div>
+        <div style={{font:"600 9px 'Inter'",textTransform:'uppercase',letterSpacing:'.1em',color:'#3a4658'}}>survolez les secteurs ↑</div>
+      </div>
+
+      <TweaksPanel>
+        <TweakSection label="Disposition"/>
+        <TweakRadio label="Actions" value={t.actionCount} options={[4,6,8]} onChange={v=>setTweak('actionCount',+v)}/>
+        <TweakSlider label="Écart secteurs" value={t.gap} min={2} max={14} unit="°" onChange={v=>setTweak('gap',v)}/>
+        <TweakSection label="Style"/>
+        <TweakRadio label="Secteurs" value={t.wedgeStyle} options={['plein','facette','contour']} onChange={v=>setTweak('wedgeStyle',v)}/>
+        <TweakRadio label="Cœur" value={t.core} options={['disque','hexagone','losange']} onChange={v=>setTweak('core',v)}/>
+        <TweakToggle label="Lueur (glow)" value={t.glow} onChange={v=>setTweak('glow',v)}/>
+        <TweakColor label="Accent" value={t.accent} options={['#46c6e6','#5b8dee','#9858c8','#50c878']} onChange={v=>setTweak('accent',v)}/>
+        <TweakSection label="Blessures"/>
+        <TweakSelect label="Anneau" value={t.woundRing} options={['jauge','segments','pips']} onChange={v=>setTweak('woundRing',v)}/>
+        <TweakSelect label="Pire blessure" value={t.severity} options={SEV_ORDER} onChange={v=>setTweak('severity',v)}/>
+      </TweaksPanel>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body></html>

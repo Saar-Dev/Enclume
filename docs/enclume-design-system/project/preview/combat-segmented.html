@@ -1,0 +1,27 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0}
+  body{width:700px;min-height:160px;background:#06070c;color:#c0c8d0;font-family:'Inter',sans-serif;display:flex;box-sizing:border-box}
+  .wrap{padding:20px 22px;display:flex;flex-direction:column;gap:13px;width:100%;box-sizing:border-box}
+  .ey{font:600 10px/1.2 'Inter';text-transform:uppercase;letter-spacing:.1em;color:#5a8aaa}
+  .meta{font:11px 'Share Tech Mono';color:#3a4a5a}
+  .row{display:flex;gap:8px;align-items:stretch}
+  .sw{flex:1;border-radius:4px;display:flex;flex-direction:column;justify-content:flex-end;padding:8px;min-height:62px;border:1px solid rgba(255,255,255,.05)}
+  .sw b{font:600 10px 'Inter'}
+  .sw code{font:10px 'Share Tech Mono';opacity:.75;margin-top:2px}
+</style></head><body><div class="wrap">
+<div class="ey">HUD Combat — segmented control & coût INI</div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+  <span style="font:8px 'Inter';color:#456575;letter-spacing:.1em;text-transform:uppercase;width:76px">POSTURE</span>
+  <div style="display:flex;flex:1;background:#0a1018;border:1px solid #15212e">
+    <div style="flex:1;padding:5px 6px;text-align:center;border:1px solid #3a8aaa66;background:#162028;"><span style="font:9px 'Inter';color:#dde7ee;display:block">Debout</span><span style="font:7px 'Share Tech Mono';color:#3a8aaa;display:block;margin-top:1px">actuel</span></div><div style="flex:1;padding:5px 6px;text-align:center;border:1px solid transparent;"><span style="font:9px 'Inter';color:#dde7ee;display:block">Accroupi</span><span style="font:7px 'Share Tech Mono';color:#c86030;display:block;margin-top:1px">-3</span></div><div style="flex:1;padding:5px 6px;text-align:center;border:1px solid transparent;"><span style="font:9px 'Inter';color:#dde7ee;display:block">Couché</span><span style="font:7px 'Share Tech Mono';color:#c86030;display:block;margin-top:1px">-5</span></div>
+  </div>
+</div>
+<div style="display:flex;align-items:center;gap:8px">
+  <span style="font:8px 'Inter';color:#456575;letter-spacing:.1em;text-transform:uppercase;width:76px">VITESSE</span>
+  <div style="display:flex;flex:1;background:#0a1018;border:1px solid #15212e">
+    <div style="flex:1;padding:5px 6px;text-align:center;border:1px solid transparent;"><span style="font:9px 'Inter';color:#dde7ee;display:block">Retardée</span></div><div style="flex:1;padding:5px 6px;text-align:center;border:1px solid #3a8aaa66;background:#162028;"><span style="font:9px 'Inter';color:#dde7ee;display:block">Normale</span><span style="font:7px 'Share Tech Mono';color:#3a8aaa;display:block;margin-top:1px">actuel</span></div><div style="flex:1;padding:5px 6px;text-align:center;border:1px solid transparent;"><span style="font:9px 'Inter';color:#dde7ee;display:block">Précipitée</span><span style="font:7px 'Share Tech Mono';color:#3aaa6a;display:block;margin-top:1px">+3</span></div>
+  </div>
+</div>
+<div class="meta">option active : fond #162028, bordure #3a8aaa66 · coût +X vert #3aaa6a / −X orange #c86030</div></div></body></html>

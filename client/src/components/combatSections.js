@@ -124,3 +124,37 @@ export const MOVE_ZONE_DEFS = [
   { allureKey: 'rapide',  action_key: 'move_rapide',   ini_mod: -7, color: '#f97316', label: 'Rapide'  },
   { allureKey: 'max',     action_key: 'move_max',      ini_mod:  0, color: '#ef4444', label: 'Max'     },
 ]
+
+// Variants mode de tir — source unique partagée (LdB p.227-228)
+export const FIRE_MODE_VARIANTS = {
+  CC: [
+    { id: 'cc_1',   bulletCount: 1,  bonusComp: 0, bonusDmg: 0 },
+    { id: 'cc_2',   bulletCount: 2,  bonusComp: 1, bonusDmg: 0 },
+    { id: 'cc_3',   bulletCount: 3,  bonusComp: 2, bonusDmg: 0 },
+    { id: 'cc_4',   bulletCount: 4,  bonusComp: 3, bonusDmg: 0 },
+    { id: 'cc_7a',  bulletCount: 7,  bonusComp: 4, bonusDmg: 0 },
+    { id: 'cc_7b',  bulletCount: 7,  bonusComp: 3, bonusDmg: 3 },
+    { id: 'cc_10a', bulletCount: 10, bonusComp: 5, bonusDmg: 0 },
+    { id: 'cc_10b', bulletCount: 10, bonusComp: 4, bonusDmg: 3 },
+  ],
+  RC: [{ id: 'rc_3', bulletCount: 3, bonusComp: 3, bonusDmg: 5 }],
+  RL: [
+    { id: 'rl_5',   bulletCount: 5,  bonusComp: 2, bonusDmg: 2 },
+    { id: 'rl_10',  bulletCount: 10, bonusComp: 4, bonusDmg: 4 },
+    { id: 'rl_15',  bulletCount: 15, bonusComp: 6, bonusDmg: 6 },
+    { id: 'rl_20',  bulletCount: 20, bonusComp: 8, bonusDmg: 8 },
+    { id: 'rl_mc',  bulletCount: 5,  bonusComp: 0, bonusDmg: 0 },
+  ],
+}
+
+// Paliers répétition CC (index → bulletCount)
+export const CC_REPS_STEPS = [2, 3, 4, 7, 10]
+
+// Boutons RL
+export const RL_BUTTONS = [
+  { value: 5,       label: '5b'    },
+  { value: 10,      label: '10b'   },
+  { value: 15,      label: '15b'   },
+  { value: 20,      label: '20b'   },
+  { value: 'multi', label: 'Multi' },
+]

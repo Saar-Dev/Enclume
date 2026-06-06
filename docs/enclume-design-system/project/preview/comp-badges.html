@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0}
+  body{width:700px;min-height:260px;background:var(--bg-app);color:var(--text-primary);
+    font-family:var(--font-ui);display:flex;box-sizing:border-box}
+  .wrap{padding:20px 22px;display:flex;flex-direction:column;gap:13px;width:100%;box-sizing:border-box}
+  .ey{font:600 10px/1.2 'Inter';text-transform:uppercase;letter-spacing:.08em;color:#8b93a3}
+  .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+
+  /* chamfered HUD tag — same facet language as the buttons */
+  .tag{
+    --c:#5b8dee; --ch:5px;
+    display:inline-flex;align-items:center;gap:6px;
+    font:600 10px/1 'Inter'; text-transform:uppercase; letter-spacing:.1em;
+    color:var(--c); padding:5px 10px; background:color-mix(in srgb,var(--c) 9%, #0e1320);
+    clip-path:polygon(var(--ch) 0,100% 0,100% calc(100% - var(--ch)),calc(100% - var(--ch)) 100%,0 100%,0 var(--ch));
+    box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 50%,transparent);
+  }
+  .tag .dot{width:5px;height:5px;border-radius:1px;background:var(--c)}
+  .tag .num{font-family:'Share Tech Mono';font-weight:700;letter-spacing:0}
+  .tag--solid{ color:#0a0d12; background:var(--c); box-shadow:none; }
+
+  /* status tag = hex badge + chamfered label */
+  .stag{ --c:#9858c8; display:inline-flex;align-items:center;gap:7px; padding:3px 11px 3px 5px;
+    background:color-mix(in srgb,var(--c) 8%, #0c0f16);
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 40%,transparent); }
+  .stag span{ font:600 10px/1 'Inter'; text-transform:uppercase; letter-spacing:.09em; color:var(--c); }
+</style></head><body><div class="wrap">
+
+<div class="ey">Rôles</div>
+<div class="row">
+  <span class="tag" style="--c:#5b8dee">MJ</span>
+  <span class="tag" style="--c:#4caf77">Joueur</span>
+  <span class="tag" style="--c:#5b8dee;--ch:4px;font-size:9px;padding:3px 7px">GM</span>
+  <span class="tag tag--solid" style="--c:#5b8dee">En ligne</span>
+</div>
+
+<div class="ey">Résultat de jet</div>
+<div class="row">
+  <span class="tag" style="--c:#4caf77">Marge de réussite <span class="num">+5</span></span>
+  <span class="tag" style="--c:#e05b5b">Marge d'échec <span class="num">-9</span></span>
+  <span class="tag" style="--c:#f5c542">Critique <span class="num">✦</span></span>
+  <span class="tag" style="--c:#aa8a30">Maladresse</span>
+</div>
+
+<div class="ey">Modes de combat (CaC)</div>
+<div class="row">
+  <span class="tag" style="--c:#50c878"><span class="dot"></span>Offensif <span class="num">+3 ATT</span></span>
+  <span class="tag" style="--c:#50c878"><span class="dot"></span>Défensif <span class="num">+3 DEF</span></span>
+  <span class="tag" style="--c:#50c878"><span class="dot"></span>Charge</span>
+  <span class="tag" style="--c:#50c878"><span class="dot"></span>Retraite <span class="num">+5 DEF</span></span>
+</div>
+
+<div class="ey">Statuts (badge hex + libellé)</div>
+<div class="row">
+  <span class="stag" style="--c:#9858c8"><img src="../assets/status/stunned.svg" width="20" height="20"><span>Étourdi</span></span>
+  <span class="stag" style="--c:#38a8c8"><img src="../assets/status/hypothermia.svg" width="20" height="20"><span>Hypothermie</span></span>
+  <span class="stag" style="--c:#d84838"><img src="../assets/status/burning.svg" width="20" height="20"><span>En feu</span></span>
+  <span class="stag" style="--c:#d8a838"><img src="../assets/status/grappled.svg" width="20" height="20"><span>Agrippé</span></span>
+</div>
+</div></body></html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0}
+  body{width:700px;min-height:230px;background:var(--bg-session);color:var(--text-primary);
+    font-family:var(--font-ui);display:flex;box-sizing:border-box}
+  .wrap{padding:20px 22px;display:flex;flex-direction:column;gap:13px;width:100%;box-sizing:border-box}
+  .ey{font:600 10px/1.2 'Inter';text-transform:uppercase;letter-spacing:.08em;color:#8b93a3}
+  .col{display:flex;flex-direction:column;gap:9px;max-width:300px}
+
+  /* chat roll card — HUD facet: chamfered top-left + bottom-right */
+  .roll{ --c:#4caf77; position:relative; padding:9px 11px;
+    background:color-mix(in srgb,var(--c) 7%, transparent);
+    clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+    box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 26%,transparent); }
+  /* left accent rail */
+  .roll::before{ content:''; position:absolute; left:0; top:10px; bottom:0; width:2px; background:var(--c); opacity:.7; }
+  .rhead{ display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+  .rname{ font:500 12px 'Inter'; }
+  .rtime{ font:10px 'Inter'; color:#4a4a60; }
+  .rbody{ display:flex; align-items:baseline; gap:8px; }
+  .rlabel{ font:13px 'Inter'; color:#9090a8; }
+  .rtotal{ font:700 20px 'Share Tech Mono'; color:#dde7ee; font-variant-numeric:tabular-nums; }
+  .rseuil{ font:10px 'Inter'; color:#456575; }
+
+  .tag{ --c:#4caf77; display:inline-flex; align-items:center; gap:5px; margin-top:5px;
+    font:600 10px/1 'Inter'; text-transform:uppercase; letter-spacing:.1em; color:var(--c);
+    padding:4px 9px; background:color-mix(in srgb,var(--c) 12%, #0e1320);
+    clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+    box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 50%,transparent); }
+  .tag .num{ font-family:'Share Tech Mono'; font-weight:700; letter-spacing:0; }
+  .meta{font:11px var(--font-mono);color:#6b7280}
+</style></head><body><div class="wrap">
+<div class="ey">Chat — messages de jet</div>
+<div class="col">
+
+  <!-- success -->
+  <div class="roll" style="--c:#4caf77">
+    <div class="rhead">
+      <svg width="15" height="15" viewBox="0 0 18 18"><polygon points="9,1 16,5 16,13 9,17 2,13 2,5" fill="#5b8dee" fill-opacity=".18" stroke="#5b8dee" stroke-width="1.3" stroke-linejoin="round"/><text x="9" y="11.5" text-anchor="middle" font-family="'Share Tech Mono',monospace" font-size="6" fill="#9db4e8">20</text></svg>
+      <span class="rname" style="color:#5b8dee">Kaelen</span><span class="rtime"> · 21:04</span>
+    </div>
+    <div class="rbody"><span class="rlabel">Jet de Tir</span><span class="rtotal">17</span><span class="rseuil">/ 12</span></div>
+    <span class="tag" style="--c:#4caf77">Marge de réussite <span class="num">+5</span></span>
+  </div>
+
+  <!-- fail + favorite + secret -->
+  <div class="roll" style="--c:#e05b5b">
+    <div class="rhead">
+      <span style="color:#aa8a30;font-size:13px;line-height:1">★</span>
+      <span class="rname" style="color:#aa8a30">Esquive rapide</span><span class="rtime"> · 21:05</span>
+      <span style="font-size:9px">🔒</span>
+    </div>
+    <div class="rbody"><span class="rtotal" style="font-size:15px">3</span><span class="rseuil">/ 12</span></div>
+    <span class="tag" style="--c:#e05b5b">Marge d'échec <span class="num">-9</span></span>
+  </div>
+
+</div></div></body></html>

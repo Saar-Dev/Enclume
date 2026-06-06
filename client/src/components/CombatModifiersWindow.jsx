@@ -203,10 +203,10 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   }
 
   return (
-    <div style={{ ...styles.window, left: pos.left, top: pos.top }}>
+    <div className="combat-float-win combat-float-win--gold" style={{ left: pos.left, top: pos.top, maxHeight: '80vh' }}>
 
       {/* Header — titre + pill */}
-      <div style={styles.header} onMouseDown={onHeaderMouseDown}>
+      <div className="combat-float-header" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }} onMouseDown={onHeaderMouseDown}>
         <span style={styles.headerTitle}>
           {tireurToken?.label ?? '?'} — Assaut — {cibleToken?.label ?? '?'}
         </span>
@@ -279,7 +279,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
           </div>
 
           {/* Portée */}
-          <div style={styles.section}>
+          <div className="combat-float-section">
             <div style={styles.sectionTitle}>Portée</div>
             <select
               value={effectivePortee ?? ''}
@@ -294,7 +294,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
           </div>
 
           {/* Allure tireur */}
-          <div style={styles.section}>
+          <div className="combat-float-section">
             <div style={styles.sectionTitle}>Allure tireur</div>
             <select
               value={tireurAllureVal}
@@ -308,7 +308,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
           </div>
 
           {/* Allure cible */}
-          <div style={styles.section}>
+          <div className="combat-float-section">
             <div style={styles.sectionTitle}>Allure cible</div>
             <select
               value={cibleAllureVal}
@@ -322,7 +322,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
           </div>
 
           {/* Couverture */}
-          <div style={styles.section}>
+          <div className="combat-float-section">
             <div style={styles.sectionTitle}>Couverture</div>
             {COUVERTURES.map(c => (
               <label key={c.key} style={styles.checkLabel}>
@@ -341,7 +341,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
           </div>
 
           {/* Obscurité */}
-          <div style={styles.section}>
+          <div className="combat-float-section">
             <div style={styles.sectionTitle}>Obscurité</div>
             {OBSCURITES.map(o => (
               <label key={o.key} style={styles.checkLabel}>
@@ -362,7 +362,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
           </div>
 
           {/* Taille cible */}
-          <div style={styles.section}>
+          <div className="combat-float-section">
             <div style={styles.sectionTitle}>Taille cible</div>
             <select
               value={taille}
@@ -379,11 +379,12 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
       )}
 
       {/* Footer — 3 états : prêt / en cours / résultat */}
-      <div style={styles.footer}>
+      <div className="combat-float-footer">
         {!attackResult && (
           <button
+            className="btn btn-gold"
             style={{
-              ...styles.btnValider,
+              width: '100%',
               opacity: (effectivePortee && !hasTirImpossible && !isRolling) ? 1 : 0.4,
               cursor:  (effectivePortee && !hasTirImpossible && !isRolling) ? 'pointer' : 'not-allowed',
             }}
@@ -394,7 +395,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
           </button>
         )}
         {attackResult && !attackResult.hit && (
-          <button style={styles.btnFermer} onClick={onAttackConfirmed}>
+          <button className="btn btn-ghost" style={{ width: '100%' }} onClick={onAttackConfirmed}>
             Fermer
           </button>
         )}
@@ -405,32 +406,6 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
 }
 
 const styles = {
-  window: {
-    position: 'absolute',
-    width: 360,
-    maxHeight: '80vh',
-    background: '#16162a',
-    border: '1px solid #f5c542',
-    borderRadius: 8,
-    boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
-    pointerEvents: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  header: {
-    background: '#16162a',
-    borderBottom: '1px solid #2a2a3e',
-    padding: '8px 14px',
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
-    flexShrink: 0,
-    flexWrap: 'wrap',
-    cursor: 'grab',
-    userSelect: 'none',
-  },
   headerTitle: { fontSize: 12, fontWeight: 700, color: '#f5c542', flex: 1, minWidth: 0 },
   pills: { display: 'flex', gap: 4, flexShrink: 0 },
   pill: { fontSize: 11, fontWeight: 700, borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap' },
@@ -443,7 +418,6 @@ const styles = {
   infoRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' },
   infoLabel: { fontSize: 11, color: '#5b5b7a' },
   infoValue: { fontSize: 11, color: '#c0c0d0' },
-  section: { padding: '6px 14px', borderBottom: '1px solid #1e1e2e' },
   sectionTitle: {
     fontSize: 10, fontWeight: 700, color: '#5b5b7a',
     textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4,
@@ -462,28 +436,6 @@ const styles = {
   checkbox: { accentColor: '#f5c542', cursor: 'pointer', flexShrink: 0 },
   checkText: { fontSize: 11, color: '#c0c0d0', flex: 1, display: 'flex', justifyContent: 'space-between' },
   checkMod: { fontSize: 10, fontWeight: 700, minWidth: 24, textAlign: 'right' },
-  footer: { padding: '8px 14px', borderTop: '1px solid #2a2a3e', flexShrink: 0 },
-  btnValider: {
-    width: '100%',
-    padding: '8px 0',
-    background: 'rgba(245,197,66,0.15)',
-    border: '1px solid #f5c542',
-    borderRadius: 4,
-    color: '#f5c542',
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-  btnFermer: {
-    width: '100%',
-    padding: '8px 0',
-    background: 'none',
-    border: '1px solid #3a3a5a',
-    borderRadius: 4,
-    color: '#7070a0',
-    fontSize: 13,
-    cursor: 'pointer',
-  },
   attackBanner: {
     margin: '10px 14px',
     padding: '10px 14px',

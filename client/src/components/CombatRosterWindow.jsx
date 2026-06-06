@@ -144,24 +144,24 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
   const noArmorCnt   = pnjRows.filter(r => (equipment[r.tokenId]?.armorPieces ?? []).length === 0).length
 
   return (
-    <div style={{ ...S.window, left: pos.left, top: pos.top }}>
+    <div className="combat-win" style={{ width: 560, left: pos.left, top: pos.top }}>
       {/* HEADER */}
-      <div style={S.header} onMouseDown={onHeaderMouseDown}>
+      <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>
         <div style={S.headerLeft}>
-          <span style={S.title}>ROSTER COMBAT</span>
-          {!inCombat && <span style={S.badge}>PRÉ-COMBAT</span>}
-          {inCombat  && <span style={{ ...S.badge, background: '#1a2a1a', color: '#50c878', borderColor: '#50c878' }}>{phase}</span>}
+          <span className="combat-win-title">ROSTER COMBAT</span>
+          {!inCombat && <span className="combat-badge-pnj">PRÉ-COMBAT</span>}
+          {inCombat  && <span className="combat-badge-pj">{phase}</span>}
         </div>
         <span style={S.participantCount}>{activeRows.length} participants</span>
       </div>
 
       {/* BANNIÈRE ALERTE */}
       {!inCombat && (noWeaponCnt > 0 || noArmorCnt > 0) && (
-        <div style={S.alertBanner}>
+        <div className="combat-win-alert">
           <span style={S.alertIcon}>⚠</span>
-          <span style={S.alertLabel}>AVANT DÉMARRAGE</span>
-          {noWeaponCnt > 0 && <span style={S.alertItem}>{noWeaponCnt} PNJ{noWeaponCnt > 1 ? 's' : ''} sans arme</span>}
-          {noArmorCnt  > 0 && <span style={S.alertItem}>{noArmorCnt}  PNJ{noArmorCnt  > 1 ? 's' : ''} non protégé{noArmorCnt > 1 ? 's' : ''}</span>}
+          <span className="combat-win-alert-label">AVANT DÉMARRAGE</span>
+          {noWeaponCnt > 0 && <span className="combat-win-alert-item">{noWeaponCnt} PNJ{noWeaponCnt > 1 ? 's' : ''} sans arme</span>}
+          {noArmorCnt  > 0 && <span className="combat-win-alert-item">{noArmorCnt}  PNJ{noArmorCnt  > 1 ? 's' : ''} non protégé{noArmorCnt > 1 ? 's' : ''}</span>}
         </div>
       )}
 
@@ -174,13 +174,13 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
           <table style={S.table}>
             <thead>
               <tr>
-                <th style={S.th}>TOKEN</th>
-                <th style={{ ...S.th, textAlign: 'center' }}>INI</th>
-                {!inCombat && <th style={S.th}>ARME</th>}
-                {!inCombat && <th style={S.th}>ARMURE</th>}
-                {phase === 'ROSTER' && <th style={{ ...S.th, textAlign: 'center' }}>ÉTAT INIT</th>}
-                <th style={{ ...S.th, textAlign: 'center' }}>SURPRIS</th>
-                {!inCombat && <th style={{ ...S.th, textAlign: 'center' }}>INCLUS</th>}
+                <th className="combat-win-th">TOKEN</th>
+                <th className="combat-win-th" style={{ textAlign: 'center' }}>INI</th>
+                {!inCombat && <th className="combat-win-th">ARME</th>}
+                {!inCombat && <th className="combat-win-th">ARMURE</th>}
+                {phase === 'ROSTER' && <th className="combat-win-th" style={{ textAlign: 'center' }}>ÉTAT INIT</th>}
+                <th className="combat-win-th" style={{ textAlign: 'center' }}>SURPRIS</th>
+                {!inCombat && <th className="combat-win-th" style={{ textAlign: 'center' }}>INCLUS</th>}
               </tr>
             </thead>
             <tbody>
@@ -196,10 +196,10 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                   <tr key={row.tokenId} style={{ opacity: isExcl ? 0.4 : 1 }}>
 
                     {/* TOKEN */}
-                    <td style={S.td}>
+                    <td className="combat-win-td">
                       <div style={S.tokenCell}>
                         {charType && (
-                          <span style={{ ...S.badge, ...(isPnj ? S.badgePnj : S.badgePj) }}>
+                          <span className={isPnj ? 'combat-badge-pnj' : 'combat-badge-pj'}>
                             {isPnj ? 'PN' : 'PJ'}
                           </span>
                         )}
@@ -208,13 +208,13 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                     </td>
 
                     {/* INI */}
-                    <td style={{ ...S.td, textAlign: 'center', fontFamily: 'monospace', fontWeight: 600 }}>
+                    <td className="combat-win-td" style={{ textAlign: 'center', fontFamily: 'monospace', fontWeight: 600 }}>
                       {row.base_ini != null ? row.base_ini : '—'}
                     </td>
 
                     {/* ARME */}
                     {!inCombat && (
-                      <td style={S.td}>
+                      <td className="combat-win-td">
                         {!charType ? null
                           : !isPnj ? (
                             // PJ — lecture seule
@@ -223,14 +223,14 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                             </span>
                           ) : eq?.weapon ? (
                             // PNJ équipé
-                            <span style={S.equippedGreen}>
-                              <span style={S.dot}>●</span>{eq.weapon.name} <span style={S.slotTag}>[{SLOT_LABELS[eq.weapon.slot] ?? eq.weapon.slot}]</span>
+                            <span className="combat-equip-ok">
+                              <span className="combat-equip-dot" />{eq.weapon.name} <span style={S.slotTag}>[{SLOT_LABELS[eq.weapon.slot] ?? eq.weapon.slot}]</span>
                             </span>
                           ) : (
                             // PNJ sans arme — dropdown
                             <div style={S.dropdownWrap}>
                               <select
-                                style={S.selectDanger}
+                                className="combat-select-danger"
                                 value=""
                                 onChange={e => {
                                   if (!e.target.value) return
@@ -251,7 +251,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
 
                     {/* ARMURE — chips T C B J */}
                     {!inCombat && (
-                      <td style={S.td}>
+                      <td className="combat-win-td">
                         {!charType ? null
                           : !isPnj ? (
                             <PjArmorChips armorPieces={eq?.armorPieces ?? []} />
@@ -259,7 +259,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                             // PNJ sans armure — wrapper amber + dropdown général
                             <div style={S.dropdownWrap}>
                               <select
-                                style={S.selectWarn}
+                                className="combat-select-warn"
                                 value=""
                                 onChange={e => {
                                   if (!e.target.value) return
@@ -291,7 +291,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
 
                     {/* ÉTAT INIT */}
                     {phase === 'ROSTER' && (
-                      <td style={{ ...S.td, textAlign: 'center' }}>
+                      <td className="combat-win-td" style={{ textAlign: 'center' }}>
                         {charType === 'pj'
                           ? (initConfirmed
                             ? <span style={S.initConfirmed}>✓</span>
@@ -302,7 +302,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                     )}
 
                     {/* SURPRIS */}
-                    <td style={{ ...S.td, textAlign: 'center' }}>
+                    <td className="combat-win-td" style={{ textAlign: 'center' }}>
                       {inCombat
                         ? (row.is_surprised ? '⚠' : '—')
                         : (
@@ -315,7 +315,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
 
                     {/* INCLUS */}
                     {!inCombat && (
-                      <td style={{ ...S.td, textAlign: 'center' }}>
+                      <td className="combat-win-td" style={{ textAlign: 'center' }}>
                         <input type="checkbox" checked={!row.excluded}
                           onChange={() => toggleExcluded(row.tokenId)}
                           style={{ cursor: 'pointer', accentColor: '#5b8dee' }} />
@@ -345,7 +345,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
       {/* FOOTER */}
       {!inCombat && (
         <button
-          style={{ ...S.btnStart, ...(activeRows.length === 0 ? S.btnDisabled : {}) }}
+          className="btn-tac"
           onClick={handleStart}
           disabled={activeRows.length === 0}
         >
@@ -353,7 +353,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
         </button>
       )}
       {inCombat && phase === 'ROSTER' && (
-        <button style={S.btnAnnounce} onClick={handleAnnounceStart}>
+        <button className="btn-tac-confirm" onClick={handleAnnounceStart}>
           Passer en Annonce →
         </button>
       )}
@@ -371,7 +371,7 @@ function PjArmorChips({ armorPieces }) {
         <span
           key={chip}
           title={tips[chip]?.join(', ') || undefined}
-          style={{ ...S.chip, ...(coverage[chip] ? S.chipPjFilled : S.chipPjEmpty) }}
+          className={coverage[chip] ? 'combat-chip combat-chip-pj' : 'combat-chip combat-chip-pj-empty'}
         >
           {chip}
         </span>
@@ -390,7 +390,7 @@ function PnjArmorChips({ armorPieces, refArmors, onSelect }) {
         if (coverage[chip]) {
           return (
             <span key={chip} title={tips[chip]?.join(', ') || undefined}
-              style={{ ...S.chip, ...S.chipPnjFilled }}>
+              className="combat-chip combat-chip-pnj">
               {chip}
             </span>
           )
@@ -398,7 +398,8 @@ function PnjArmorChips({ armorPieces, refArmors, onSelect }) {
         if (openChip === chip) {
           return (
             <select key={chip}
-              style={{ ...S.selectWarn, width: 130, fontSize: 9, padding: '2px 4px' }}
+              className="combat-select-warn"
+              style={{ width: 130, fontSize: 9, padding: '2px 4px' }}
               defaultValue=""
               autoFocus
               onChange={e => { if (e.target.value) { onSelect(e.target.value, chip); setOpenChip(null) } }}
@@ -414,7 +415,8 @@ function PnjArmorChips({ armorPieces, refArmors, onSelect }) {
         }
         return (
           <span key={chip}
-            style={{ ...S.chip, ...S.chipPnjGap, cursor: 'pointer' }}
+            className="combat-chip combat-chip-pnj-gap"
+            style={{ cursor: 'pointer' }}
             onClick={() => setOpenChip(chip)}
           >
             {chip}
@@ -425,88 +427,26 @@ function PnjArmorChips({ armorPieces, refArmors, onSelect }) {
   )
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles résiduels (non migrés — layout local ou trop spécifiques) ─────────
 const S = {
-  window: {
-    position: 'absolute',
-    width: 560,
-    background: '#0d0f18',
-    border: '1px solid #1e2435',
-    borderRadius: 6,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
-    pointerEvents: 'auto',
-    maxHeight: 'calc(100vh - 80px)',
-    display: 'flex', flexDirection: 'column',
-    overflow: 'hidden',
-    fontFamily: 'Inter, system-ui',
-  },
-
-  // Header
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid #1e2435', background: '#080a12', flexShrink: 0, cursor: 'grab', userSelect: 'none' },
-  headerLeft: { display: 'flex', alignItems: 'center', gap: 8 },
-  title: { fontSize: 11, letterSpacing: '0.15em', fontWeight: 700, color: '#3a8aaa' },
-  badge: { fontSize: 9, letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 2, border: '1px solid #aa6030', color: '#e8a060', background: '#1a1008', fontWeight: 600 },
-  badgePj:  { background: '#0a1a0a', color: '#50c878', borderColor: '#50c878', letterSpacing: '0.05em' },
-  badgePnj: { background: '#1a0a08', color: '#c86030', borderColor: '#c86030', letterSpacing: '0.05em' },
   participantCount: { fontSize: 10, color: '#3a4a5a', fontFamily: 'monospace', fontStyle: 'italic' },
-
-  // Alert banner
-  alertBanner: { display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px', background: '#1a1008', borderBottom: '1px solid #aa6030', flexShrink: 0 },
-  alertIcon:   { fontSize: 11, color: '#c86030' },
-  alertLabel:  { fontSize: 9, letterSpacing: '0.12em', color: '#6a4a20', fontWeight: 700 },
-  alertItem:   { fontSize: 10, color: '#e8a060', fontWeight: 600 },
-
-  // Table
-  tableWrap: { flex: 1, overflowY: 'auto', minHeight: 0 },
-  table:     { width: '100%', borderCollapse: 'collapse' },
-  th: { padding: '6px 10px', fontSize: 9, color: '#3a8aaa', letterSpacing: '0.1em', textAlign: 'left', borderBottom: '1px solid #1e2435', background: '#080a12', position: 'sticky', top: 0, zIndex: 1, whiteSpace: 'nowrap' },
-  td: { padding: '6px 10px', fontSize: 11, color: '#c0c8d0', borderBottom: '1px solid #10141e', verticalAlign: 'middle' },
-
-  // Token cell
-  tokenCell:   { display: 'flex', alignItems: 'center', gap: 6 },
-  tokenLabel:  { fontSize: 11, color: '#c0c8d0' },
-
-  // Equipment text
-  equippedText:  { fontSize: 10, color: '#4a5a6a', fontStyle: 'italic' },
-  equippedGreen: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#90c090' },
-  dot:           { color: '#50c878', fontSize: 8 },
-  slotTag:       { color: '#4a6a4a', fontSize: 9 },
-
-  // Dropdown
-  dropdownWrap: { position: 'relative' },
-  selectDanger: {
-    width: '100%', padding: '3px 6px', fontSize: 10,
-    background: '#1a0808', border: '1px solid #aa3030', borderRadius: 2,
-    color: '#e08080', cursor: 'pointer', outline: 'none',
-  },
-  selectWarn: {
-    width: '100%', padding: '3px 6px', fontSize: 10,
-    background: '#1a1208', border: '1px solid #aa6030', borderRadius: 2,
-    color: '#e0a060', cursor: 'pointer', outline: 'none',
-  },
-
-  // Armor chips
-  chips: { display: 'flex', gap: 3, alignItems: 'center' },
-  chip:  { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, fontSize: 9, fontWeight: 700, borderRadius: 2, fontFamily: 'monospace', userSelect: 'none' },
-  chipPjFilled:  { background: '#1a2030', color: '#5a6a7a', border: '1px solid #2a3a4a' },
-  chipPjEmpty:   { background: 'transparent', color: '#2a3a4a', border: '1px solid #1a2030' },
-  chipPnjFilled: { background: '#0a2010', color: '#50c878', border: '1px solid #2a6040' },
-  chipPnjGap:    { background: 'transparent', color: '#4a2020', border: '1px solid #6a2020' },
-
-  // Exclus
-  excludedSection: { padding: '8px 14px', borderTop: '1px solid #1e2435', background: 'rgba(0,0,0,0.15)', flexShrink: 0 },
-  excludedLabel:   { display: 'block', fontSize: 9, color: '#3a4a5a', letterSpacing: '0.1em', marginBottom: 5 },
-  excludedRow:     { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 0' },
-  excludedName:    { fontSize: 11, color: '#3a4a5a', textDecoration: 'line-through' },
-  btnReinclude:    { background: 'none', border: '1px solid #1e2435', borderRadius: 2, color: '#3a8aaa', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '1px 6px' },
-
-  // Boutons footer
-  btnStart:   { display: 'block', width: '100%', padding: '11px 14px', background: 'rgba(58,138,170,0.1)', border: 'none', borderTop: '1px solid #1e2435', color: '#3a8aaa', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.1em', flexShrink: 0 },
-  btnDisabled: { opacity: 0.4, cursor: 'not-allowed' },
-  btnAnnounce: { display: 'block', width: '100%', padding: '11px 14px', background: 'rgba(80,200,120,0.1)', border: 'none', borderTop: '1px solid #1e2435', color: '#50c878', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.1em', flexShrink: 0 },
-
-  initConfirmed: { color: '#50c878', fontWeight: 700 },
-  initPending:   { color: '#3a4a5a', fontSize: 16, lineHeight: 1 },
-  initNA:        { color: '#2a3a4a' },
-  empty: { padding: '14px', color: '#3a4a5a', fontSize: 12, margin: 0 },
+  headerLeft:       { display: 'flex', alignItems: 'center', gap: 8 },
+  alertIcon:        { fontSize: 11, color: '#c86030' },
+  tableWrap:        { flex: 1, overflowY: 'auto', minHeight: 0 },
+  table:            { width: '100%', borderCollapse: 'collapse' },
+  tokenCell:        { display: 'flex', alignItems: 'center', gap: 6 },
+  tokenLabel:       { fontSize: 11, color: '#c0c8d0' },
+  equippedText:     { fontSize: 10, color: '#4a5a6a', fontStyle: 'italic' },
+  slotTag:          { color: '#4a6a4a', fontSize: 9 },
+  dropdownWrap:     { position: 'relative' },
+  chips:            { display: 'flex', gap: 3, alignItems: 'center' },
+  excludedSection:  { padding: '8px 14px', borderTop: '1px solid #1e2435', background: 'rgba(0,0,0,0.15)', flexShrink: 0 },
+  excludedLabel:    { display: 'block', fontSize: 9, color: '#3a4a5a', letterSpacing: '0.1em', marginBottom: 5 },
+  excludedRow:      { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 0' },
+  excludedName:     { fontSize: 11, color: '#3a4a5a', textDecoration: 'line-through' },
+  btnReinclude:     { background: 'none', border: '1px solid #1e2435', borderRadius: 2, color: '#3a8aaa', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '1px 6px' },
+  initConfirmed:    { color: '#50c878', fontWeight: 700 },
+  initPending:      { color: '#3a4a5a', fontSize: 16, lineHeight: 1 },
+  initNA:           { color: '#2a3a4a' },
+  empty:            { padding: '14px', color: '#3a4a5a', fontSize: 12, margin: 0 },
 }

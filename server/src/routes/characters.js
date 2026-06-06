@@ -6,6 +6,8 @@ import { requireRole } from '../middleware/role.js'
 import { multerUpload, multerGlb } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
 import { WS } from '../../../shared/events.js'
+import { WOUND_MAX_COUNTS } from '../../../shared/woundConstants.js'
+import { initDamages } from '../../../shared/droneConstants.js'
 
 // ─── Router imbriqué ──────────────────────────────────────────────────────────
 // Monté sous /api/campaigns/:campaignId/characters
@@ -75,7 +77,7 @@ router.get('/', requireAuth, async (req, res) => {
 // visible = false par défaut — le GM choisit quand révéler le personnage aux joueurs.
 router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
   const { campaignId } = req.params
-  const { name, user_id, visible = false } = req.body
+  const { name, user_id, visible = false, type: typeOverride } = req.body
 
   if (!name) throw new AppError(400, 'Character name is required')
 
@@ -91,7 +93,7 @@ router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
     if (!ownerMember) throw new AppError(400, 'This user is not a member of this campaign')
   }
 
-  const type = user_id ? 'pj' : 'pnj'
+  const type = typeOverride === 'drone' ? 'drone' : (user_id ? 'pj' : 'pnj')
 
   const [character] = await db('characters')
     .insert({ campaign_id: campaignId, user_id: user_id || null, name, color, visible, type })
@@ -100,6 +102,11 @@ router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
       'visible', 'glb_url', 'portrait_url',
       'description', 'gm_notes', 'created_at', 'updated_at',
     ])
+
+  if (type === 'drone') {
+    const damages = initDamages('corps', WOUND_MAX_COUNTS)
+    await db('drone_sheet').insert({ character_id: character.id, damages: JSON.stringify(damages) })
+  }
 
   res.status(201).json({ character })
 })
@@ -149,15 +156,16 @@ actionsRouter.put('/:id', requireAuth, async (req, res) => {
   // Recalcul color si user_id change — GM uniquement (user_id absent des updates joueur)
   // Désassignation (null) → couleur PNJ par défaut
   // Nouvelle assignation → couleur du nouveau propriétaire
+  // Les drones gardent leur type 'drone' quelle que soit l'assignation
   if ('user_id' in updates) {
     if (updates.user_id === null) {
       updates.color = '#4A90D9'
-      updates.type = 'pnj'
+      if (character.type !== 'drone') updates.type = 'pnj'
     } else {
       const owner = await db('users').where({ id: updates.user_id }).select('color').first()
       if (!owner) throw new AppError(404, 'User not found')
       updates.color = owner.color
-      updates.type = 'pj'
+      if (character.type !== 'drone') updates.type = 'pj'
     }
   }
 

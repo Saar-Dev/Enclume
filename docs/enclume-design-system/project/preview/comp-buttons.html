@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0}
+  body{width:700px;min-height:250px;background:var(--bg-app);color:var(--text-primary);
+    font-family:var(--font-ui);display:flex;box-sizing:border-box}
+  .wrap{padding:20px 22px;display:flex;flex-direction:column;gap:16px;width:100%;box-sizing:border-box}
+  .hd{font:600 11px/1.2 'Inter';text-transform:uppercase;letter-spacing:.08em;color:#9aa4b2}
+  .meta{font:11px var(--font-mono);color:#8b93a3}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+
+  /* ── Hard-SF HUD button ─────────────────────────────────────────
+     Chamfered top-left + bottom-right corners (hex/d20 facet motif).
+     The 1px accent frame is an INSET box-shadow → it follows the chamfer. */
+  .hbtn{
+    --c:#5b8dee; --fill1:#141a2a; --fill2:#0e1320; --chamfer:9px;
+    position:relative; cursor:pointer; border:none; padding:9px 18px;
+    font:600 11px/1 'Inter'; text-transform:uppercase; letter-spacing:.14em;
+    color:#c8d4ee; background:linear-gradient(180deg,var(--fill1),var(--fill2));
+    clip-path:polygon(var(--chamfer) 0, 100% 0, 100% calc(100% - var(--chamfer)), calc(100% - var(--chamfer)) 100%, 0 100%, 0 var(--chamfer));
+    box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), inset 0 0 14px color-mix(in srgb, var(--c) 12%, transparent);
+    transition:filter .1s, box-shadow .1s;
+  }
+  .hbtn:hover{ box-shadow:inset 0 0 0 1px var(--c), inset 0 0 18px color-mix(in srgb, var(--c) 22%, transparent); filter:brightness(1.12); }
+  .hbtn:active{ filter:brightness(.95); }
+  /* armed: left accent bar + brighter glyph */
+  .hbtn--armed{ color:#eaf1ff; box-shadow:inset 3px 0 0 var(--c), inset 0 0 0 1px color-mix(in srgb,var(--c) 60%,transparent), inset 0 0 16px color-mix(in srgb,var(--c) 18%,transparent); }
+  /* ghost: hairline only */
+  .hbtn--ghost{ background:transparent; color:#9aa4b2; box-shadow:inset 0 0 0 1px #2a3550; }
+  .hbtn--ghost:hover{ color:#c8d4ee; box-shadow:inset 0 0 0 1px #3a4a6a; }
+
+  /* hex icon button (status-badge frame, for tools) */
+  .hexbtn{ position:relative; width:42px;height:46px;border:none;cursor:pointer;background:none;padding:0;
+    display:flex;align-items:center;justify-content:center; color:var(--c,#38a8c8); transition:filter .1s; }
+  .hexbtn svg.frame{ position:absolute; inset:0; width:100%; height:100%; }
+  .hexbtn .glyph{ position:relative; display:flex; }
+  .hexbtn:hover{ filter:brightness(1.3) drop-shadow(0 0 4px color-mix(in srgb,var(--c) 50%,transparent)); }
+  .d20txt{ font:700 12px 'Share Tech Mono'; position:relative; }
+</style></head><body><div class="wrap">
+
+<div class="hd">Buttons — hard-SF HUD set (chamfered facets)</div>
+
+<div class="row">
+  <button class="hbtn hbtn--armed" style="--c:#5b8dee">Annoncer</button>
+  <button class="hbtn" style="--c:#3a8aaa">Déclarer</button>
+  <button class="hbtn" style="--c:#50c878;--fill1:#0f1f17;--fill2:#0a1410;color:#bdebcf">Accepter</button>
+  <button class="hbtn" style="--c:#e05b5b;--fill1:#1f1212;--fill2:#140b0b;color:#f0c4c4">Fin combat</button>
+  <button class="hbtn hbtn--ghost">Annuler</button>
+</div>
+
+<div class="row">
+  <button class="hbtn" style="--c:#5b8dee;opacity:.4;cursor:not-allowed">Indisponible</button>
+  <span class="meta">hover: border ignites + glow · active: dim · disabled: 40%</span>
+</div>
+
+<div class="row">
+  <span class="meta" style="margin-right:2px">Tool / icon buttons →</span>
+  <button class="hexbtn" style="--c:#5b8dee" title="Dés"><svg class="frame" viewBox="0 0 42 46"><polygon points="21,1 41,12 41,34 21,45 1,34 1,12" fill="#0a0d12" stroke="#05070b" stroke-width="3" stroke-linejoin="round"/><polygon points="21,1 41,12 41,34 21,45 1,34 1,12" fill="none" stroke="#5b8dee" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="d20txt">20</span></button>
+  <button class="hexbtn" style="--c:#38a8c8" title="Mesure"><svg class="frame" viewBox="0 0 42 46"><polygon points="21,1 41,12 41,34 21,45 1,34 1,12" fill="#0a0d12" stroke="#05070b" stroke-width="3" stroke-linejoin="round"/><polygon points="21,1 41,12 41,34 21,45 1,34 1,12" fill="none" stroke="#38a8c8" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 8.7L8.7 21.3a2.12 2.12 0 0 1-3 0L2.7 18.3a2.12 2.12 0 0 1 0-3L15.3 2.7a2.12 2.12 0 0 1 3 0l3 3a2.12 2.12 0 0 1 0 3z"/><line x1="7.5" y1="10.5" x2="10" y2="13"/><line x1="10.5" y1="7.5" x2="13" y2="10"/></svg></span></button>
+  <button class="hexbtn" style="--c:#d8a838" title="Éditer"><svg class="frame" viewBox="0 0 42 46"><polygon points="21,1 41,12 41,34 21,45 1,34 1,12" fill="#0a0d12" stroke="#05070b" stroke-width="3" stroke-linejoin="round"/><polygon points="21,1 41,12 41,34 21,45 1,34 1,12" fill="none" stroke="#d8a838" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="glyph"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></span></button>
+  <span class="meta">même cadre hex que les statuts</span>
+</div>
+</div></body></html>

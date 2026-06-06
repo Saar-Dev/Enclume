@@ -135,6 +135,36 @@ background: var(--bg-app);
 --combat-ini-pos: #3aaa6a;   /* coût INI positif */
 --combat-ini-neg: #c86030;   /* coût INI négatif */
 
+--combat-shadow:        0 8px 32px rgba(0,0,0,0.7);
+--combat-seg-border:    #15212e;
+--combat-seg-active:    #162028;
+
+--combat-pj-fg:         #50c878;
+--combat-pj-bg:         #0a1a0a;
+--combat-pj-border:     #50c878;
+--combat-pnj-fg:        #c86030;
+--combat-pnj-bg:        #1a0a08;
+--combat-pnj-border:    #c86030;
+
+--combat-equip-ok:      #90c090;
+--combat-equip-dot:     #50c878;
+--combat-danger-fg:     #e08080;
+--combat-danger-bg:     #1a0808;
+--combat-danger-border: #aa3030;
+--combat-warn-fg:       #e0a060;
+--combat-warn-bg:       #1a1208;
+--combat-warn-border:   #aa6030;
+--combat-alert-fg:      #e8a060;
+--combat-alert-label:   #6a4a20;
+
+--combat-chip-pj-fg:      #5a6a7a;
+--combat-chip-pj-bg:      #1a2030;
+--combat-chip-pj-border:  #2a3a4a;
+--combat-chip-pnj-fg:     #50c878;
+--combat-chip-pnj-bg:     #0a2010;
+--combat-chip-pnj-border: #2a6040;
+--combat-chip-gap-border: #6a2020;
+
 /* === FONT FAMILIES === */
 --font-display: 'Venus Rising', 'Inter', system-ui, sans-serif;
 --font-ui:      'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
@@ -927,4 +957,292 @@ Convention :
 .hexbtn svg.frame { position: absolute; inset: 0; width: 100%; height: 100%; }
 .hexbtn .glyph { position: relative; display: flex; }
 .hexbtn:hover { filter: brightness(1.3); }
+
+/* =========================
+11. COMBAT WINDOW SYSTEM
+   Palette A (HUD Tactical) : Roster, GmDeclare, InitState
+   Palette B (In-session)   : ActionWindow, Modifiers, Damage, ResultPanels
+========================= */
+
+/* ── Structure fenêtre HUD (Palette A) ───────────────────────────── */
+.combat-win {
+  position: absolute;
+  background: var(--combat-body);
+  border: 1.5px solid var(--combat-border);
+  border-radius: var(--radius-xs);
+  box-shadow: var(--combat-shadow);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  max-height: calc(100vh - 100px);
+}
+
+/* ── Header (drag handle) ─────────────────────────────────────────── */
+.combat-win-header {
+  padding: 8px 12px;
+  background: var(--combat-header);
+  border-bottom: 1px solid var(--combat-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
+}
+.combat-win-header:active { cursor: grabbing; }
+
+/* ── Titre de fenêtre ─────────────────────────────────────────────── */
+.combat-win-title {
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  font-weight: 700;
+  color: var(--combat-title);
+  text-transform: uppercase;
+}
+
+/* ── Corps de fenêtre ─────────────────────────────────────────────── */
+.combat-win-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Section (bloc séparé par une ligne) ──────────────────────────── */
+.combat-win-section {
+  padding: 6px 12px 8px;
+  border-bottom: 1px solid var(--combat-sep);
+}
+
+/* ── Eyebrow de section ───────────────────────────────────────────── */
+.combat-win-section-title {
+  display: block;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--combat-section);
+  margin-bottom: 5px;
+}
+
+/* ── Label de champ ───────────────────────────────────────────────── */
+.combat-win-field-label {
+  font-size: 7px;
+  color: var(--combat-field);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+/* ── Footer ───────────────────────────────────────────────────────── */
+.combat-win-footer {
+  padding: 8px 12px;
+  background: var(--combat-header);
+  border-top: 1.5px solid var(--combat-border);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Table / Roster ───────────────────────────────────────────────── */
+.combat-win-th {
+  padding: 6px 10px;
+  font-size: 9px;
+  color: var(--combat-title);
+  letter-spacing: 0.1em;
+  text-align: left;
+  border-bottom: 1px solid var(--combat-border);
+  background: var(--combat-header);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  white-space: nowrap;
+}
+.combat-win-td {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--combat-cell);
+  border-bottom: 1px solid var(--combat-row);
+  vertical-align: middle;
+}
+
+/* ── Bannière alerte ──────────────────────────────────────────────── */
+.combat-win-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  background: var(--combat-warn-bg);
+  border-bottom: 1px solid var(--combat-warn-border);
+  flex-shrink: 0;
+}
+.combat-win-alert-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--combat-alert-label);
+  font-weight: 700;
+}
+.combat-win-alert-item {
+  font-size: 10px;
+  color: var(--combat-alert-fg);
+  font-weight: 600;
+}
+
+/* ── Badges rôle PJ / PNJ ─────────────────────────────────────────── */
+.combat-badge-pj {
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-weight: 600;
+  color: var(--combat-pj-fg);
+  background: var(--combat-pj-bg);
+  border: 1px solid var(--combat-pj-border);
+}
+.combat-badge-pnj {
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-weight: 600;
+  color: var(--combat-pnj-fg);
+  background: var(--combat-pnj-bg);
+  border: 1px solid var(--combat-pnj-border);
+}
+
+/* ── Chips armure T C B J ─────────────────────────────────────────── */
+.combat-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  user-select: none;
+}
+.combat-chip-pj       { background: var(--combat-chip-pj-bg);  color: var(--combat-chip-pj-fg);  border: 1px solid var(--combat-chip-pj-border); }
+.combat-chip-pj-empty { background: transparent; color: var(--combat-chip-pj-border); border: 1px solid var(--combat-chip-pj-bg); }
+.combat-chip-pnj      { background: var(--combat-chip-pnj-bg); color: var(--combat-chip-pnj-fg); border: 1px solid var(--combat-chip-pnj-border); }
+.combat-chip-pnj-gap  { background: transparent; color: var(--combat-chip-gap-border); border: 1px solid var(--combat-chip-gap-border); }
+
+/* ── Dropdowns équipement ─────────────────────────────────────────── */
+.combat-select-danger {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 10px;
+  background: var(--combat-danger-bg);
+  border: 1px solid var(--combat-danger-border);
+  border-radius: 2px;
+  color: var(--combat-danger-fg);
+  cursor: pointer;
+  outline: none;
+  font-family: var(--font-ui);
+}
+.combat-select-warn {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 10px;
+  background: var(--combat-warn-bg);
+  border: 1px solid var(--combat-warn-border);
+  border-radius: 2px;
+  color: var(--combat-warn-fg);
+  cursor: pointer;
+  outline: none;
+  font-family: var(--font-ui);
+}
+
+/* ── Arme équipée ─────────────────────────────────────────────────── */
+.combat-equip-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--combat-equip-ok);
+}
+.combat-equip-dot::before { content: '●'; color: var(--combat-equip-dot); font-size: 8px; }
+
+/* ── btn-tac-confirm — footer vert "DÉCLARER / CONFIRMER" ────────── */
+.btn-tac-confirm {
+  display: block;
+  width: 100%;
+  padding: 7px 14px;
+  background: rgba(80, 200, 120, 0.10);
+  border: none;
+  border-top: 1px solid var(--combat-border);
+  color: var(--combat-pj-fg);
+  font: 700 11px/1 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.1s;
+}
+.btn-tac-confirm:hover   { background: rgba(80, 200, 120, 0.18); filter: none; }
+.btn-tac-confirm:active  { transform: none; }
+.btn-tac-confirm:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Palette B : In-session floating ─────────────────────────────── */
+.combat-float-win {
+  pointer-events: auto;
+  background: var(--bg-session-raised);
+  border: 1px solid var(--border-session-2);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--combat-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  transition: opacity 0.15s ease, width 0.2s ease;
+}
+.combat-float-win--gold {
+  border-color: var(--color-gold);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+}
+
+.combat-float-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-session-2);
+  background: var(--bg-session-raised);
+  flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
+}
+.combat-float-header:active { cursor: grabbing; }
+
+.combat-float-section {
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border-session);
+}
+
+.combat-float-footer {
+  padding: 8px 14px;
+  border-top: 1px solid var(--border-session-2);
+  flex-shrink: 0;
+}
+
+/* ── Timeline bar ─────────────────────────────────────────────────── */
+.combat-timeline-bar {
+  position: absolute;
+  left: 0;
+  right: var(--sidebar-w, 0px);
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-session-scrim);
+  border-bottom: 1px solid var(--border-session-2);
+  pointer-events: auto;
+  z-index: 10;
+}
 .d20txt { font: 700 12px var(--font-mono); position: relative; }

@@ -50,7 +50,7 @@ export default function CombatInitStateWindow({ socket, playerToken }) {
     const wpnLabel = STATE_DEFS.weapon.states.find(s => s.k === weapon)?.l      ?? weapon
     const fmLabel  = STATE_DEFS.fire_mode.states.find(s => s.k === fireMode)?.l ?? fireMode
     return (
-      <div style={{ ...S.window, left: pos.left, top: pos.top }}>
+      <div className="combat-win" style={{ width: 260, left: pos.left, top: pos.top, padding: '12px' }}>
         <div style={S.confirmedTitle}>État initial confirmé ✓</div>
         <div style={S.confirmedRow}>{posLabel} · {wpnLabel} · {fmLabel}</div>
       </div>
@@ -58,62 +58,23 @@ export default function CombatInitStateWindow({ socket, playerToken }) {
   }
 
   return (
-    <div style={{ ...S.window, left: pos.left, top: pos.top }}>
-      <div style={S.header} onMouseDown={onHeaderMouseDown}>ÉTAT INITIAL</div>
+    <div className="combat-win" style={{ width: 260, left: pos.left, top: pos.top, padding: '12px' }}>
+      <div className="combat-win-title" style={{ marginBottom: 10, cursor: 'grab', userSelect: 'none' }} onMouseDown={onHeaderMouseDown}>ÉTAT INITIAL</div>
       <div style={S.chips}>
         <StateChip defKey="position"  current={position}  onChange={setPosition}  />
         <StateChip defKey="weapon"    current={weapon}    onChange={setWeapon}    />
         <StateChip defKey="fire_mode" current={fireMode}  onChange={setFireMode}  />
       </div>
-      <button style={S.btnConfirm} onClick={handleConfirm}>Confirmer</button>
+      <button className="btn-tac-confirm" onClick={handleConfirm}>Confirmer</button>
     </div>
   )
 }
 
 const S = {
-  window: {
-    position: 'absolute',
-    width: 260,
-    background: 'rgba(8,12,20,0.97)',
-    border: '1.5px solid #15212e',
-    borderRadius: 4,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
-    pointerEvents: 'auto',
-    padding: '12px',
-    fontFamily: 'Inter, system-ui',
-  },
-  header: {
-    fontSize: 9, letterSpacing: '0.15em', fontWeight: 700,
-    color: '#3a8aaa', marginBottom: 10,
-    cursor: 'grab', userSelect: 'none',
-  },
-  chips: {
-    display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10,
-  },
-  chip: {
-    display: 'flex', alignItems: 'center', gap: 8,
-    padding: '5px 10px',
-    background: '#0a1018', border: '1px solid #1a2a38', borderRadius: 2,
-    cursor: 'pointer', userSelect: 'none',
-  },
-  chipLabel: {
-    fontSize: 8, color: '#456575', letterSpacing: '0.1em',
-    fontFamily: 'monospace', minWidth: 72,
-  },
-  chipValue: {
-    fontSize: 11, color: '#dde7ee', fontWeight: 600,
-  },
-  btnConfirm: {
-    width: '100%', padding: '7px 0',
-    background: 'rgba(80,200,120,0.12)', border: '1px solid #50c878',
-    borderRadius: 3, color: '#50c878', fontSize: 11,
-    fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em',
-    fontFamily: 'monospace',
-  },
-  confirmedTitle: {
-    fontSize: 11, color: '#50c878', fontWeight: 700, marginBottom: 4,
-  },
-  confirmedRow: {
-    fontSize: 10, color: '#7a8a9a', fontFamily: 'monospace',
-  },
+  chips:         { display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 },
+  chip:          { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: '#0a1018', border: '1px solid #1a2a38', borderRadius: 2, cursor: 'pointer', userSelect: 'none' },
+  chipLabel:     { fontSize: 8, color: '#456575', letterSpacing: '0.1em', fontFamily: 'monospace', minWidth: 72 },
+  chipValue:     { fontSize: 11, color: '#dde7ee', fontWeight: 600 },
+  confirmedTitle:{ fontSize: 11, color: '#50c878', fontWeight: 700, marginBottom: 4 },
+  confirmedRow:  { fontSize: 10, color: '#7a8a9a', fontFamily: 'monospace' },
 }

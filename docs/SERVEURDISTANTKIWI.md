@@ -190,20 +190,28 @@ Le CPU ne supporte pas x86-64-v2. Le binaire Claude Code crashe avec `SIGILL`. M
 
 ## Fichiers qui divergent entre local et serveur
 
-Ces fichiers ont des valeurs spécifiques au serveur. **Ne pas écraser avec git pull.**
+**Un seul fichier** a une vraie raison de diverger. Tous les autres sont pilotés par `.env`.
 
 ```bash
-# Déjà appliqué — skip-worktree actif sur les 3 fichiers
+# État actuel — skip-worktree actif sur UN seul fichier (session 82)
 # Vérifier : git ls-files -v | grep "^S"
+# Résultat attendu : S docker-compose.yml
 ```
 
-| Fichier | Différence serveur |
-|---|---|
-| `docker-compose.yml` | Passwords forts + MinIO version 2022 |
-| `server/src/lib/redis.js` | Approche REDIS_PASSWORD (pas buildRedisConfig) |
-| `client/vite.config.js` | `port: 8193` + `host: true` (vs local `port: 5173`) |
-| `client/src/lib/api.js` | `VITE_API_URL` pointe vers `http://89.92.219.211:8194` |
-| `.env` | Non tracké git — spécifique au serveur |
+| Fichier | Statut | Raison |
+|---|---|---|
+| `docker-compose.yml` | **skip-worktree** | Passwords forts + MinIO version 2022 pinné |
+| `client/vite.config.js` | identique au repo | systemd passe `--host --port 8193` en CLI — pas de divergence fichier nécessaire |
+| `server/src/lib/redis.js` | identique au repo | `REDIS_PASSWORD \|\| undefined` fonctionne local + serveur |
+| `client/src/lib/api.js` | identique au repo | `VITE_API_URL` dans `.env` suffit |
+| `client/package.json` | identique au repo | doit toujours rester identique — ne jamais mettre en skip-worktree |
+| `client/package-lock.json` | identique au repo | idem |
+| `.env` | non tracké git | spécifique au serveur — source de vérité pour toute la config |
+
+**Règle : si une valeur peut aller dans `.env`, elle va dans `.env`. skip-worktree = dernier recours.**
+
+**⚠ Piège session 82 — `client/package.json` en skip-worktree**
+La version serveur avait `quill`/`motion` mais pas `socket.io-client` → crash après `rm -rf node_modules`. Fix appliqué : `socket.io-client@^4.8.3` ajouté au repo (commit e4f80ef), skip-worktree retiré.
 
 ## Seeds (première install uniquement)
 
@@ -228,7 +236,8 @@ Le script charge lui-même le `.env` via dotenv — pas besoin de `--env-file`.
 ```bash
 cd /home/didier/Enclume
 git pull
-# Les 3 fichiers divergents sont protégés par skip-worktree — pas écrasés
+# docker-compose.yml est protégé par skip-worktree — pas écrasé
+# Si nouvelles dépendances npm : cd client && npm install && cd ..
 sudo systemctl restart enclume-server enclume-client
 # Si nouvelles migrations : lancer la commande migrations ci-dessus
 ```

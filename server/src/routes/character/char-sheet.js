@@ -62,8 +62,12 @@ router.param('characterId', async (req, res, next, characterId) => {
     req.character = character
     req.isGm     = member.role === 'gm'
 
-    const isOwner = character.user_id === req.user.id
-    if (!isOwner && !req.isGm) return next(new AppError(403, 'You do not have permission to access this sheet'))
+    const isOwner = character.user_id && character.user_id === req.user.id
+    const isDrone = character.type === 'drone'
+    // Drones : tout membre de la campagne peut lire — les routes d'écriture gardent req.isGm
+    if (!isOwner && !req.isGm && !isDrone) {
+      return next(new AppError(403, 'You do not have permission to access this sheet'))
+    }
 
     next()
   } catch (err) { next(err) }
@@ -1538,6 +1542,352 @@ router.post('/:characterId/macro-preview', async (req, res, next) => {
     }
 
     res.json({ threshold: baseThreshold + Number(modifier) })
+  } catch (err) { next(err) }
+})
+
+// ─── Routes drone ─────────────────────────────────────────────────────────────
+// Ownership : router.param laisse passer tous les membres pour les drones (isDrone bypass).
+// Lectures : ouvertes à tous les membres.
+// Écritures : req.isGm obligatoire, sauf PUT /drone/weapons/:id (GM ou owner).
+
+// Même logique que resolveAmmoInit mais sans paramètre slot (drones n'ont pas de slots)
+async function resolveDroneAmmoInit(equipmentId) {
+  if (!equipmentId) return null
+  const ref = await db('ref_equipment')
+    .where({ id: equipmentId })
+    .select('caliber', 'ammo_count')
+    .first()
+  if (!ref?.caliber || !ref?.ammo_count) return null
+  const m = String(ref.ammo_count).match(/\d+/)
+  const n = m ? parseInt(m[0], 10) : 0
+  return n > 0 ? n : null
+}
+
+// GET /:characterId/drone — fiche + programmes (JOIN ref_equipment pour name/description tooltip)
+router.get('/:characterId/drone', async (req, res, next) => {
+  try {
+    const drone = await db('drone_sheet')
+      .where({ character_id: req.params.characterId })
+      .first()
+    if (!drone) return res.json({ drone: null })
+
+    const programs = await db('drone_programs')
+      .where({ 'drone_programs.character_id': req.params.characterId })
+      .leftJoin('ref_equipment', 'drone_programs.equipment_id', 'ref_equipment.id')
+      .select(
+        'drone_programs.id',
+        'drone_programs.character_id',
+        'drone_programs.equipment_id',
+        'drone_programs.label_override',
+        'drone_programs.category',
+        'drone_programs.level',
+        'drone_programs.sort_order',
+        'ref_equipment.name as program_name',
+        'ref_equipment.description as program_description',
+      )
+      .orderBy('drone_programs.sort_order', 'asc')
+      .orderBy('drone_programs.id', 'asc')
+
+    res.json({ drone, programs })
+  } catch (err) { next(err) }
+})
+
+// PUT /:characterId/drone — mise à jour stats descriptives (GM uniquement)
+// localisation_ref exclu intentionnellement : changer sa valeur invaliderait damages
+router.put('/:characterId/drone', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM role required')
+
+    const {
+      taille, poids, vitesse, nt,
+      source_energie, autonomie, mode_deplacement, profondeur_max, disponibilite,
+      blindage, blindage_iem, armure_materiau,
+      ordinateur_gen, ordinateur_nt,
+      echelle, integrite_max, equip_special, notes_gm,
+    } = req.body
+
+    const updates = {
+      taille, poids, vitesse, nt,
+      source_energie, autonomie, mode_deplacement, profondeur_max, disponibilite,
+      blindage, blindage_iem, armure_materiau,
+      ordinateur_gen, ordinateur_nt,
+      echelle, integrite_max, equip_special, notes_gm,
+    }
+    Object.keys(updates).forEach(k => updates[k] === undefined && delete updates[k])
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+
+    const [drone] = await db('drone_sheet')
+      .where({ character_id: req.params.characterId })
+      .update(updates)
+      .returning('*')
+
+    res.json({ drone })
+  } catch (err) { next(err) }
+})
+
+// PUT /:characterId/drone/integrity — intégrité actuelle + cases dommages (GM uniquement)
+router.put('/:characterId/drone/integrity', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM role required')
+
+    const { integrite_actuelle, damages } = req.body
+    const updates = {}
+    if (integrite_actuelle !== undefined) updates.integrite_actuelle = integrite_actuelle
+    if (damages            !== undefined) updates.damages = JSON.stringify(damages)
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+
+    const [drone] = await db('drone_sheet')
+      .where({ character_id: req.params.characterId })
+      .update(updates)
+      .returning('*')
+
+    res.json({ drone })
+  } catch (err) { next(err) }
+})
+
+// POST /:characterId/drone/programs — ajouter un programme (GM uniquement)
+// Catalogue : equipment_id → catégorie lue depuis ref_equipment (jamais confiance au client)
+// Custom    : label_override + category obligatoires
+// Validation contrainte ordinateur si ordinateur_gen/nt définis
+router.post('/:characterId/drone/programs', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM role required')
+
+    const { equipment_id, label_override, level, sort_order = 0 } = req.body
+    if (!equipment_id && !label_override) throw new AppError(400, 'equipment_id ou label_override requis')
+    if (level === undefined || level === null) throw new AppError(400, 'level is required')
+    if (level < 0 || level > 30) throw new AppError(400, 'level must be between 0 and 30')
+
+    // Déterminer la catégorie
+    let category
+    if (equipment_id) {
+      const ref = await db('ref_equipment').where({ id: equipment_id }).select('category').first()
+      if (!ref) throw new AppError(404, 'Programme introuvable dans le catalogue')
+      category = ref.category
+    } else {
+      category = req.body.category
+      if (!category) throw new AppError(400, 'category requis pour un programme custom')
+    }
+
+    // Validation contrainte ordinateur (si configuré)
+    const droneSheet = await db('drone_sheet')
+      .where({ character_id: req.params.characterId })
+      .select('ordinateur_gen', 'ordinateur_nt')
+      .first()
+    if (droneSheet?.ordinateur_gen != null && droneSheet?.ordinateur_nt != null) {
+      const niveauMax = droneSheet.ordinateur_gen + 2 * droneSheet.ordinateur_nt
+      if (level > niveauMax) throw new AppError(400, `Niveau max pour cet ordinateur : ${niveauMax}`)
+      const potentiel = 10 + (droneSheet.ordinateur_gen * droneSheet.ordinateur_nt) * 2
+      const row = await db('drone_programs')
+        .where({ character_id: req.params.characterId })
+        .sum('level as total')
+        .first()
+      if ((Number(row.total) || 0) + level > potentiel) {
+        throw new AppError(400, `Potentiel total dépassé (max : ${potentiel})`)
+      }
+    }
+
+    const [program] = await db('drone_programs')
+      .insert({
+        character_id: req.params.characterId,
+        equipment_id: equipment_id || null,
+        label_override: label_override || null,
+        category,
+        level,
+        sort_order,
+      })
+      .returning('*')
+
+    // Enrichir avec name/description pour le client
+    const enriched = { ...program }
+    if (equipment_id) {
+      const ref = await db('ref_equipment').where({ id: equipment_id }).select('name', 'description').first()
+      enriched.program_name = ref?.name ?? null
+      enriched.program_description = ref?.description ?? null
+    }
+
+    res.status(201).json({ program: enriched })
+  } catch (err) { next(err) }
+})
+
+// PUT /:characterId/drone/programs/:programId — modifier un programme (GM uniquement)
+// Seuls level et sort_order sont modifiables après création.
+// equipment_id / label_override / category sont immuables.
+router.put('/:characterId/drone/programs/:programId', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM role required')
+
+    const { level, sort_order } = req.body
+    const updates = {}
+    if (level !== undefined) {
+      if (level < 0 || level > 30) throw new AppError(400, 'level must be between 0 and 30')
+      updates.level = level
+    }
+    if (sort_order !== undefined) updates.sort_order = sort_order
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+
+    const program = await db('drone_programs')
+      .where({ id: req.params.programId, character_id: req.params.characterId })
+      .first()
+    if (!program) throw new AppError(404, 'Program not found')
+
+    const [updated] = await db('drone_programs')
+      .where({ id: req.params.programId })
+      .update(updates)
+      .returning('*')
+
+    // Enrichir avec name/description pour le client
+    const enriched = { ...updated }
+    if (updated.equipment_id) {
+      const ref = await db('ref_equipment').where({ id: updated.equipment_id }).select('name', 'description').first()
+      enriched.program_name = ref?.name ?? null
+      enriched.program_description = ref?.description ?? null
+    }
+
+    res.json({ program: enriched })
+  } catch (err) { next(err) }
+})
+
+// DELETE /:characterId/drone/programs/:programId — supprimer un programme (GM uniquement)
+router.delete('/:characterId/drone/programs/:programId', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM role required')
+
+    const deleted = await db('drone_programs')
+      .where({ id: req.params.programId, character_id: req.params.characterId })
+      .delete()
+    if (!deleted) throw new AppError(404, 'Program not found')
+
+    res.json({ message: 'Program deleted' })
+  } catch (err) { next(err) }
+})
+
+// GET /:characterId/drone/weapons — liste armes avec stats ref_equipment
+router.get('/:characterId/drone/weapons', async (req, res, next) => {
+  try {
+    const weapons = await db('drone_weapons')
+      .where({ 'drone_weapons.character_id': req.params.characterId })
+      .join('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
+      .select(
+        'drone_weapons.id',
+        'drone_weapons.character_id',
+        'drone_weapons.equipment_id',
+        'drone_weapons.contenance_chargeur',
+        'drone_weapons.ammo_restant',
+        'drone_weapons.sort_order',
+        'drone_weapons.label_override',
+        'ref_equipment.name as ref_name',
+        'ref_equipment.damage_h as ref_damage_h',
+        'ref_equipment.shock as ref_shock',
+        'ref_equipment.range as ref_range',
+        'ref_equipment.fire_mode as ref_fire_mode',
+        'ref_equipment.caliber as ref_caliber',
+        'ref_equipment.ammo_count as ref_ammo_count',
+      )
+      .orderBy('drone_weapons.sort_order', 'asc')
+      .orderBy('drone_weapons.id', 'asc')
+
+    res.json({ weapons })
+  } catch (err) { next(err) }
+})
+
+// POST /:characterId/drone/weapons — ajouter une arme (GM uniquement)
+router.post('/:characterId/drone/weapons', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM role required')
+
+    const { equipment_id, contenance_chargeur = 0, label_override, sort_order = 0 } = req.body
+    if (!equipment_id) throw new AppError(400, 'equipment_id is required')
+
+    const ref = await db('ref_equipment')
+      .where({ id: equipment_id, family: 'Armes' })
+      .first()
+    if (!ref) throw new AppError(400, 'Equipment not found or not a weapon')
+
+    const autoAmmo = await resolveDroneAmmoInit(equipment_id)
+
+    const insertData = {
+      character_id: req.params.characterId,
+      equipment_id,
+      contenance_chargeur,
+      sort_order,
+    }
+    if (label_override) insertData.label_override = label_override
+    if (autoAmmo !== null) insertData.ammo_restant = autoAmmo
+
+    const [weapon] = await db('drone_weapons').insert(insertData).returning('*')
+
+    const weaponWithRef = await db('drone_weapons')
+      .where({ 'drone_weapons.id': weapon.id })
+      .join('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
+      .select(
+        'drone_weapons.*',
+        'ref_equipment.name as ref_name',
+        'ref_equipment.damage_h as ref_damage_h',
+        'ref_equipment.shock as ref_shock',
+        'ref_equipment.range as ref_range',
+        'ref_equipment.fire_mode as ref_fire_mode',
+        'ref_equipment.caliber as ref_caliber',
+        'ref_equipment.ammo_count as ref_ammo_count',
+      )
+      .first()
+
+    res.status(201).json({ weapon: weaponWithRef })
+  } catch (err) { next(err) }
+})
+
+// PUT /:characterId/drone/weapons/:weaponId — modifier arme (GM ou owner)
+// Champs éditables : contenance_chargeur, ammo_restant, label_override, sort_order
+router.put('/:characterId/drone/weapons/:weaponId', async (req, res, next) => {
+  try {
+    const isOwner = req.character.user_id && req.character.user_id === req.user.id
+    if (!req.isGm && !isOwner) throw new AppError(403, 'GM or owner required')
+
+    const { contenance_chargeur, ammo_restant, label_override, sort_order } = req.body
+    const updates = {}
+    if (contenance_chargeur !== undefined) updates.contenance_chargeur = contenance_chargeur
+    if (ammo_restant        !== undefined) updates.ammo_restant        = ammo_restant
+    if (label_override      !== undefined) updates.label_override      = label_override
+    if (sort_order          !== undefined) updates.sort_order          = sort_order
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+
+    const existing = await db('drone_weapons')
+      .where({ id: req.params.weaponId, character_id: req.params.characterId })
+      .first()
+    if (!existing) throw new AppError(404, 'Weapon not found')
+
+    await db('drone_weapons').where({ id: req.params.weaponId }).update(updates)
+
+    const weapon = await db('drone_weapons')
+      .where({ 'drone_weapons.id': req.params.weaponId })
+      .join('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
+      .select(
+        'drone_weapons.*',
+        'ref_equipment.name as ref_name',
+        'ref_equipment.damage_h as ref_damage_h',
+        'ref_equipment.shock as ref_shock',
+        'ref_equipment.range as ref_range',
+        'ref_equipment.fire_mode as ref_fire_mode',
+        'ref_equipment.caliber as ref_caliber',
+        'ref_equipment.ammo_count as ref_ammo_count',
+      )
+      .first()
+
+    res.json({ weapon })
+  } catch (err) { next(err) }
+})
+
+// DELETE /:characterId/drone/weapons/:weaponId — supprimer arme (GM uniquement)
+router.delete('/:characterId/drone/weapons/:weaponId', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM role required')
+
+    const deleted = await db('drone_weapons')
+      .where({ id: req.params.weaponId, character_id: req.params.characterId })
+      .delete()
+    if (!deleted) throw new AppError(404, 'Weapon not found')
+
+    res.json({ message: 'Weapon deleted' })
   } catch (err) { next(err) }
 })
 

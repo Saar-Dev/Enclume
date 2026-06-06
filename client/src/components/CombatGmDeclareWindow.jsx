@@ -6,6 +6,7 @@ import api from '../lib/api'
 import {
   STATE_DEFS, QUICK_ACTIONS, MAP_ACTIONS,
   calcIniDelta,
+  FIRE_MODE_VARIANTS, CC_REPS_STEPS, RL_BUTTONS,
 } from './combatSections.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 import { useDraggable } from '../lib/useDraggable.js'
@@ -21,23 +22,26 @@ const STATE_DEFAULTS = {
   vitesse:   'normal',
 }
 
-function nextKey(stateKey, currentKey) {
-  const states = STATE_DEFS[stateKey].states
-  const idx    = states.findIndex(s => s.k === currentKey)
-  if (idx === -1) return STATE_DEFAULTS[stateKey]
+function nextKey(stateKey, currentKey, availableKeys) {
+  const allStates = STATE_DEFS[stateKey].states
+  const states    = availableKeys ? allStates.filter(s => availableKeys.includes(s.k)) : allStates
+  if (states.length === 0) return currentKey
+  const idx = states.findIndex(s => s.k === currentKey)
+  if (idx === -1) return states[0].k
   return states[(idx + 1) % states.length].k
 }
 
 // ---------------------------------------------------------------------------
 // InlineChip — puce click-to-cycle compacte
+// availableKeys : restreint les états cyclables (ex: modes de tir de l'arme)
 // ---------------------------------------------------------------------------
-function InlineChip({ stateKey, initial, current, onChange }) {
+function InlineChip({ stateKey, initial, current, onChange, availableKeys }) {
   const def  = STATE_DEFS[stateKey]
   const cur  = def.states.find(s => s.k === current)
   const cost = current === initial ? 0 : (def.cost?.[initial]?.[current] ?? 0)
 
   return (
-    <div onClick={() => onChange(nextKey(stateKey, current))} style={S.chip}>
+    <div onClick={() => onChange(nextKey(stateKey, current, availableKeys))} style={S.chip}>
       <span style={S.chipLabel}>{def.label}</span>
       <span style={S.chipValue}>{cur?.l ?? current}</span>
       {cost !== 0 && (
@@ -80,6 +84,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [assaultTarget,   setAssaultTarget]   = useState(null)     // { targetTokenId } | null
   const [meleeTargets,    setMeleeTargets]    = useState([])       // [tokenId, ...]
   const [chargeSelection, setChargeSelection] = useState(null)     // { move, targetTokenId } | null
+  // Tir GM — variant mode de tir (miroir PJ)
+  const [assaultBulletCount,  setAssaultBulletCount]  = useState(null)   // number | 'multi' | null
+  const [assaultVariantAB,    setAssaultVariantAB]    = useState('A')
+  // CaC GM — sélection arme (null = mains nues)
+  const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(null)
 
   const tokensRef = useRef(tokens)
   useEffect(() => { tokensRef.current = tokens }, [tokens])
@@ -96,6 +105,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setAssaultTarget(null)
     setMeleeTargets([])
     setChargeSelection(null)
+    setAssaultBulletCount(null)
+    setAssaultVariantAB('A')
+    setSelectedGmMeleeWeaponId(null)
   }, [activeTokenId])
 
   // Sync states initiaux depuis rosterEntry
@@ -175,7 +187,43 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   const meleeDefensif    = combatMode === 'defensif' || combatMode === 'retraite'
   const effectiveMeleeCount = combatMode === 'charge' ? 1 : meleeAttackCount
-  const weaponInvIdForMelee = (weapon && !weapon.ref_fire_mode) ? weapon.inv_id : null
+  // CaC — arme sélectionnée (null = mains nues, sinon inv_id)
+  // Si le GM a une arme de contact disponible et l'a sélectionnée, on l'utilise
+  const meleeWeaponAvailable = weapon && !weapon.ref_fire_mode ? weapon : null
+  const weaponInvIdForMelee  = selectedGmMeleeWeaponId  // null = mains nues
+
+  // Tir GM — mode de tir et variant (miroir logique CombatActionWindow)
+  const availableFireModes = weapon?.ref_fire_mode
+    ? weapon.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
+    : ['cc']
+  const currentFireMode = localStates.fire_mode.toUpperCase()
+  // bulletCount effectif : CC défaut = 1 (tir simple), RC = 3 auto, RL = choix explicite
+  const effectiveBulletCount = assaultBulletCount ?? (
+    currentFireMode === 'RC' ? 3 :
+    currentFireMode === 'CC' ? 1 :
+    null
+  )
+  let currentVariant = null
+  if (currentFireMode === 'RC') {
+    currentVariant = FIRE_MODE_VARIANTS.RC[0]
+  } else if (currentFireMode === 'CC' && effectiveBulletCount) {
+    if (effectiveBulletCount === 7) {
+      currentVariant = FIRE_MODE_VARIANTS.CC.find(v => v.id === (assaultVariantAB === 'B' ? 'cc_7b' : 'cc_7a'))
+    } else if (effectiveBulletCount === 10) {
+      currentVariant = FIRE_MODE_VARIANTS.CC.find(v => v.id === (assaultVariantAB === 'B' ? 'cc_10b' : 'cc_10a'))
+    } else {
+      currentVariant = FIRE_MODE_VARIANTS.CC.find(v => v.bulletCount === effectiveBulletCount)
+    }
+  } else if (currentFireMode === 'RL' && assaultBulletCount) {
+    currentVariant = assaultBulletCount === 'multi'
+      ? FIRE_MODE_VARIANTS.RL.find(v => v.id === 'rl_mc')
+      : FIRE_MODE_VARIANTS.RL.find(v => v.bulletCount === assaultBulletCount)
+  }
+  // Slider CC répétition
+  const ccSliderIdx = assaultBulletCount && assaultBulletCount !== 1
+    ? CC_REPS_STEPS.indexOf(assaultBulletCount)
+    : 0
+  const ccSliderDisplayIdx = ccSliderIdx === -1 ? 0 : ccSliderIdx
 
   // ── canDeclare ───────────────────────────────────────────────────────────
   const stateChanged = isActivePnj && Object.keys(localStates).some(k => localStates[k] !== initialStates[k])
@@ -189,7 +237,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     combatMode !== 'normal' ||
     localQuick.observer > 0 || localQuick.reperer > 0 || localQuick.phrase
   )
-  const canDeclare = isActivePnj && (stateChanged || hasAction)
+  // Si cible d'assaut sélectionnée, un variant doit être configuré
+  const assaultValid = !assaultTarget?.targetTokenId || currentVariant !== null
+  const canDeclare = isActivePnj && (stateChanged || hasAction) && assaultValid
 
   // ── Déplacement direct ───────────────────────────────────────────────────
   const handleStartMove = () => {
@@ -211,6 +261,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       { x: activeToken.pos_x, z: activeToken.pos_y },
       (targetId) => setAssaultTarget({ targetTokenId: targetId }),
       () => {},
+      'ranged'
     )
   }
 
@@ -232,6 +283,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           if (idx + 1 < effectiveMeleeCount) selectNext(idx + 1)
         },
         () => {},
+        'melee'
       )
     }
     selectNext(0)
@@ -256,6 +308,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           { x: activeToken.pos_x, z: activeToken.pos_y },
           (targetId) => setChargeSelection({ move, targetTokenId: targetId }),
           () => setCombatMode('normal'),
+          'melee'
         )
       },
       () => setCombatMode('normal'),
@@ -277,9 +330,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         attack:   weapon && assaultTarget?.targetTokenId ? {
           weaponInvId:        weapon.inv_id,
           targetTokenId:      assaultTarget.targetTokenId,
-          bulletCount:        1,
-          fireModeBonusComp:  0,
-          fireModeBonusDmg:   0,
+          bulletCount:        currentVariant?.bulletCount ?? null,
+          fireModeBonusComp:  currentVariant?.bonusComp   ?? 0,
+          fireModeBonusDmg:   currentVariant?.bonusDmg    ?? 0,
           isDualWield:        false,
           dualWieldBonusComp: 0,
         } : null,
@@ -307,11 +360,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // RENDU
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ ...S.window, width: isMeleeSetup ? 720 : 440, left: pos.left, top: pos.top }}>
+    <div className="combat-win" style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top }}>
 
       {/* HEADER */}
-      <div style={S.header} onMouseDown={onHeaderMouseDown}>
-        <span style={S.headerLabel}>PHASE 1 — DÉCLARATION</span>
+      <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>
+        <span className="combat-win-title" style={{ flex: 1 }}>PHASE 1 — DÉCLARATION</span>
         <span style={S.headerProgress}>{allPnjs.length - unannouncedCnt}/{allPnjs.length} déclarés</span>
       </div>
 
@@ -326,8 +379,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             <div style={S.controls}>
 
               {/* TACTIQUE */}
-              <div style={S.section}>
-                <span style={S.sectionTitle}>TACTIQUE</span>
+              <div className="combat-win-section">
+                <span className="combat-win-section-title">TACTIQUE</span>
                 <div style={S.chips}>
                   {['position', 'cover', 'vitesse'].map(k => (
                     <InlineChip key={k} stateKey={k}
@@ -339,21 +392,25 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               </div>
 
               {/* ARMEMENT */}
-              <div style={S.section}>
-                <span style={{ ...S.sectionTitle, color: '#aa6a30' }}>ARMEMENT</span>
+              <div className="combat-win-section">
+                <span className="combat-win-section-title" style={{ color: '#aa6a30' }}>ARMEMENT</span>
                 <div style={S.chips}>
                   {['weapon', 'fire_mode'].map(k => (
                     <InlineChip key={k} stateKey={k}
                       initial={initialStates[k]}
                       current={localStates[k]}
-                      onChange={v => setLocalStates(s => ({ ...s, [k]: v }))} />
+                      availableKeys={k === 'fire_mode' && rangedActive ? availableFireModes : undefined}
+                      onChange={v => {
+                        setLocalStates(s => ({ ...s, [k]: v }))
+                        if (k === 'fire_mode') { setAssaultBulletCount(null); setAssaultVariantAB('A') }
+                      }} />
                   ))}
                 </div>
               </div>
 
               {/* ACTION */}
-              <div style={S.section}>
-                <span style={{ ...S.sectionTitle, color: '#aa8a30' }}>ACTION</span>
+              <div className="combat-win-section">
+                <span className="combat-win-section-title" style={{ color: '#aa8a30' }}>ACTION</span>
                 <div style={S.actionGrid}>
                   {MAP_ACTIONS.map(a => {
                     const disabled = a.k === 'attack' && !rangedActive
@@ -373,7 +430,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                             if (pendingMove) { setPendingMove(null); return }
                             handleStartMove()
                           } else if (a.k === 'attack') {
-                            if (isAttackActive) { setAssaultTarget(null); return }
+                            if (isAttackActive) {
+                              setAssaultTarget(null)
+                              setAssaultBulletCount(null)
+                              setAssaultVariantAB('A')
+                              return
+                            }
                             handleStartAttack()
                           } else if (a.k === 'melee') {
                             if (isMeleeSetup) {
@@ -409,16 +471,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                   })}
                 </div>
 
-                {/* Cible assaut */}
-                {assaultTarget?.targetTokenId && (
-                  <div style={S.attackTargetRow}>
-                    <span style={S.attackTargetLabel}>→</span>
-                    <span style={S.attackTargetName}>
-                      {getLabel(assaultTarget.targetTokenId)}
-                    </span>
-                  </div>
-                )}
-
                 {/* Déplacement sélectionné */}
                 {pendingMove && !chargeSelection && (
                   <div style={S.attackTargetRow}>
@@ -431,8 +483,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               </div>
 
               {/* ACTIONS RAPIDES */}
-              <div style={{ ...S.section, borderBottom: 'none' }}>
-                <span style={{ ...S.sectionTitle, color: '#5a8a5a' }}>ACTIONS RAPIDES</span>
+              <div className="combat-win-section" style={{ borderBottom: 'none' }}>
+                <span className="combat-win-section-title" style={{ color: '#5a8a5a' }}>ACTIONS RAPIDES</span>
                 <div style={S.quickList}>
                   {QUICK_ACTIONS.map(qa => {
                     if (qa.kind === 'incremental') {
@@ -606,10 +658,34 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         {isMeleeSetup && isActivePnj && (() => {
           const curMode   = combatMode
           const chargeTgt = chargeSelection?.targetTokenId ? tokens.find(t => t.id === chargeSelection.targetTokenId) : null
-          const meleeWeapon = weapon && !weapon.ref_fire_mode ? weapon : null
           const isQueueTarget = combatTargetMode?.tokenId === activeTokenId && !chargeSelection?.targetTokenId
           return (
             <div style={S.meleePanelGm}>
+
+              {/* Sélection arme CaC */}
+              <div style={S.meleePanelTitle}>ARME</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
+                {/* Mains nues */}
+                <div
+                  onClick={() => setSelectedGmMeleeWeaponId(null)}
+                  style={{ ...S.weaponOption, ...(selectedGmMeleeWeaponId === null ? S.weaponOptionActive : {}) }}
+                >
+                  <span style={S.weaponOptionLabel}>Mains nues</span>
+                  <span style={{ ...S.weaponRadio, ...(selectedGmMeleeWeaponId === null ? S.weaponRadioActive : {}) }} />
+                </div>
+                {/* Arme de contact (si équipée et non-ranged) */}
+                {meleeWeaponAvailable && (
+                  <div
+                    onClick={() => setSelectedGmMeleeWeaponId(meleeWeaponAvailable.inv_id)}
+                    style={{ ...S.weaponOption, ...(selectedGmMeleeWeaponId === meleeWeaponAvailable.inv_id ? S.weaponOptionActive : {}) }}
+                  >
+                    <span style={S.weaponOptionLabel}>{meleeWeaponAvailable.name ?? 'Arme'}</span>
+                    <span style={{ fontSize: 8, color: '#507050', fontFamily: 'monospace' }}>{meleeWeaponAvailable.slot}</span>
+                    <span style={{ ...S.weaponRadio, ...(selectedGmMeleeWeaponId === meleeWeaponAvailable.inv_id ? { ...S.weaponRadioActive, borderColor: '#70c070', background: '#70c070' } : {}) }} />
+                  </div>
+                )}
+              </div>
+
               <div style={S.meleePanelTitle}>MODE DE COMBAT</div>
 
               {/* Chips Normal / Offensif / Charge / Défensif / Retraite */}
@@ -690,7 +766,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                         )}
                         <span style={{ fontSize: 11, color: '#70c870', fontWeight: 600 }}>{t?.label ?? '?'}</span>
                         <span style={{ fontSize: 8, color: '#507050', fontFamily: 'monospace' }}>
-                          {meleeWeapon ? (meleeWeapon.ref_name ?? 'arme') : 'mains nues'}
+                          {selectedGmMeleeWeaponId && meleeWeaponAvailable ? (meleeWeaponAvailable.name ?? 'arme') : 'mains nues'}
                         </span>
                       </div>
                     )
@@ -718,10 +794,156 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           )
         })()}
 
+        {/* PANNEAU DROIT — Tir */}
+        {isAttackActive && isActivePnj && (
+          <div style={S.assaultPanelGm}>
+
+            {/* Arme — affichage seul (auto-sélectionnée pour les PNJs) */}
+            <div style={S.assaultSection}>
+              <div style={S.assaultSectionTitle}>Arme</div>
+              {weapon ? (
+                <div style={S.assaultInfoText}>
+                  {weapon.name ?? 'Arme'}
+                  <span style={S.assaultInfoSub}> ({weapon.slot})</span>
+                </div>
+              ) : (
+                <div style={S.assaultNoWeapon}>Aucune arme équipée</div>
+              )}
+            </div>
+
+            {/* Cible */}
+            <div style={S.assaultSection}>
+              <div style={S.assaultSectionTitle}>Cible</div>
+              {assaultTarget?.targetTokenId ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={S.assaultTargetName}>{getLabel(assaultTarget.targetTokenId)}</span>
+                  <button style={S.changeTargetBtn} onClick={handleStartAttack}>Changer</button>
+                </div>
+              ) : (
+                <button style={S.chooseTargetBtn} onClick={handleStartAttack}>Choisir une cible</button>
+              )}
+            </div>
+
+            {/* Mode de tir — CC / RC / RL */}
+            {weapon && currentFireMode && (
+              <div style={S.assaultSection}>
+                <div style={S.assaultSectionTitle}>
+                  {{ CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }[currentFireMode] ?? currentFireMode}
+                </div>
+
+                {currentFireMode === 'CC' && (
+                  <>
+                    <div style={S.assaultOption} onClick={() => { setAssaultBulletCount(1); setAssaultVariantAB('A') }}>
+                      <div>
+                        <div style={S.assaultOptionLabel}>Tir simple</div>
+                        <div style={S.assaultOptionSub}>1 balle : +0</div>
+                      </div>
+                      <span style={{ ...S.assaultRadio, ...(effectiveBulletCount === 1 ? S.assaultRadioActive : {}) }} />
+                    </div>
+                    <div style={S.assaultOption} onClick={() => {
+                      if (!assaultBulletCount || assaultBulletCount === 1) setAssaultBulletCount(2)
+                    }}>
+                      <div style={S.assaultOptionLabel}>Tir à répétition</div>
+                      <span style={{ ...S.assaultRadio, ...(assaultBulletCount && assaultBulletCount !== 1 ? S.assaultRadioActive : {}) }} />
+                    </div>
+                    {assaultBulletCount && assaultBulletCount !== 1 && (
+                      <>
+                        <input
+                          type="range" min={0} max={CC_REPS_STEPS.length - 1} step={1}
+                          value={ccSliderDisplayIdx}
+                          style={S.assaultSlider}
+                          onChange={e => {
+                            const count = CC_REPS_STEPS[Number(e.target.value)]
+                            setAssaultBulletCount(count)
+                            if (count !== 7 && count !== 10) setAssaultVariantAB('A')
+                          }}
+                        />
+                        {(assaultBulletCount === 7 || assaultBulletCount === 10) && (
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {['A', 'B'].map(ab => (
+                              <div
+                                key={ab}
+                                onClick={() => setAssaultVariantAB(ab)}
+                                style={{
+                                  flex: 1, padding: '3px 6px', borderRadius: 3, cursor: 'pointer',
+                                  fontSize: 9, fontFamily: 'monospace', textAlign: 'center',
+                                  border: `1px solid ${assaultVariantAB === ab ? '#e07070' : '#2a3040'}`,
+                                  background: assaultVariantAB === ab ? 'rgba(224,112,112,0.12)' : 'rgba(255,255,255,0.02)',
+                                  color: assaultVariantAB === ab ? '#e07070' : '#7a8a9a',
+                                }}
+                              >
+                                {ab === 'A'
+                                  ? `+${assaultBulletCount === 7 ? 4 : 5} comp`
+                                  : `+${assaultBulletCount === 7 ? 3 : 4} comp / +3 dég`
+                                }
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {currentVariant && (
+                      <div style={S.assaultSummaryText}>
+                        {effectiveBulletCount} balle{effectiveBulletCount > 1 ? 's' : ''} : +{currentVariant.bonusComp} test
+                        {currentVariant.bonusDmg > 0 ? ` / +${currentVariant.bonusDmg} dég` : ''}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {currentFireMode === 'RC' && (
+                  <>
+                    <div style={S.assaultOption}>
+                      <div>
+                        <div style={S.assaultOptionLabel}>Rafale courte</div>
+                        <div style={S.assaultOptionSub}>3 balles : +3 test / +5 dég (courte portée)</div>
+                      </div>
+                      <span style={{ ...S.assaultRadio, ...S.assaultRadioActive }} />
+                    </div>
+                    <div style={S.assaultSummaryText}>3 balles : +3 test (ou +5 dég à courte portée)</div>
+                  </>
+                )}
+
+                {currentFireMode === 'RL' && (
+                  <>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {RL_BUTTONS.map(btn => (
+                        <div
+                          key={btn.value}
+                          onClick={() => setAssaultBulletCount(btn.value)}
+                          style={{
+                            flex: 1, padding: '3px 6px', borderRadius: 3, cursor: 'pointer',
+                            fontSize: 9, fontFamily: 'monospace', textAlign: 'center',
+                            border: `1px solid ${assaultBulletCount === btn.value ? '#e07070' : '#2a3040'}`,
+                            background: assaultBulletCount === btn.value ? 'rgba(224,112,112,0.12)' : 'rgba(255,255,255,0.02)',
+                            color: assaultBulletCount === btn.value ? '#e07070' : '#7a8a9a',
+                          }}
+                        >{btn.label}</div>
+                      ))}
+                    </div>
+                    {currentVariant && (
+                      <div style={S.assaultSummaryText}>
+                        {assaultBulletCount === 'multi'
+                          ? 'Multi-cibles : +0 test / zone 3m'
+                          : `${assaultBulletCount} balles : +${currentVariant.bonusComp} test / +${currentVariant.bonusDmg} dég`
+                        }
+                      </div>
+                    )}
+                    {!assaultBulletCount && (
+                      <div style={{ fontSize: 9, color: '#706050', fontStyle: 'italic' }}>Sélectionnez un volume de tir</div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+          </div>
+        )}
+
       </div>{/* fin body flex-row */}
 
       {/* FOOTER */}
-      <div style={S.footer}>
+      <div className="combat-win-footer">
         {iniDelta !== 0 && isActivePnj && (
           <div style={S.iniRow}>
             <span style={S.iniLabel}>INI TOTAL</span>
@@ -736,7 +958,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           </div>
         )}
         <button
-          style={{ ...S.btnDeclare, ...(!canDeclare ? S.btnDeclareDisabled : {}) }}
+          className="btn-tac-confirm"
           onClick={handleDeclare}
           disabled={!canDeclare}
         >
@@ -752,25 +974,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 // Styles
 // ---------------------------------------------------------------------------
 const S = {
-  window: {
-    position: 'absolute',
-    width: 440, maxHeight: 'calc(100vh - 100px)',
-    background: 'rgba(8,12,20,0.97)',
-    border: '1.5px solid #15212e',
-    borderRadius: 4,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
-    pointerEvents: 'auto',
-    display: 'flex', flexDirection: 'column',
-    overflow: 'hidden',
-    fontFamily: 'Inter, system-ui',
-  },
-  header: { padding: '8px 12px', background: '#06080e', borderBottom: '1px solid #15212e', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, cursor: 'grab', userSelect: 'none' },
-  headerLabel: { fontSize: 9, letterSpacing: '0.15em', fontWeight: 700, color: '#3a8aaa', flex: 1 },
   headerProgress: { fontSize: 9, color: '#5a6575', fontFamily: 'monospace' },
 
   controls: { flexShrink: 0, borderBottom: '1px solid #15212e' },
-  section: { padding: '6px 12px 8px', borderBottom: '1px solid #0e1520' },
-  sectionTitle: { display: 'block', fontSize: 8, letterSpacing: '0.12em', fontWeight: 700, color: '#3a8aaa', marginBottom: 5 },
 
   chips: { display: 'flex', gap: 5, flexWrap: 'wrap' },
   chip: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', background: '#0a1018', border: '1px solid #1a2a38', borderRadius: 2, cursor: 'pointer', userSelect: 'none' },
@@ -826,13 +1032,9 @@ const S = {
   rosterIni: { fontSize: 9, color: '#456575', flexShrink: 0, fontFamily: 'monospace' },
   rosterDelta: { fontSize: 9, flexShrink: 0, fontFamily: 'monospace', fontWeight: 700 },
 
-  footer: { padding: '8px 12px', background: '#06080e', borderTop: '1.5px solid #15212e', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6 },
   iniRow: { display: 'flex', alignItems: 'center', gap: 8 },
   iniLabel: { fontSize: 9, color: '#456575', letterSpacing: '0.12em', fontFamily: 'monospace', flex: 1 },
   iniValue: { fontSize: 18, fontWeight: 'bold', fontFamily: 'monospace' },
-  btnDeclare: { padding: '7px 12px', background: 'rgba(80,200,120,0.12)', border: '1px solid #50c878', borderRadius: 3, color: '#50c878', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', fontFamily: 'monospace' },
-  btnDeclareDisabled: { opacity: 0.35, cursor: 'not-allowed' },
-
   modeChip: { padding: '2px 7px', borderRadius: 2, cursor: 'pointer', border: '1px solid #1a3a2a', background: 'rgba(255,255,255,0.02)', fontSize: 9, color: '#5a7a5a', fontFamily: 'monospace' },
   modeChipActive: { border: '1px solid #50a870', background: 'rgba(80,168,112,0.15)', color: '#70c870', fontWeight: 700 },
   modeChipDefensif: { border: '1px solid #5b8dee', background: 'rgba(91,141,238,0.15)', color: '#8ab4f0', fontWeight: 700 },
@@ -846,4 +1048,45 @@ const S = {
     overflowY: 'auto',
   },
   meleePanelTitle: { fontSize: 8, fontWeight: 700, color: '#3a6a4a', letterSpacing: '0.12em', marginBottom: 4, textTransform: 'uppercase' },
+
+  // Panneau droit — tir
+  assaultPanelGm: {
+    flex: '0 0 280px',
+    borderLeft: '1px solid #1a2030',
+    background: 'rgba(180,80,80,0.04)',
+    display: 'flex', flexDirection: 'column',
+    overflowY: 'auto',
+  },
+  assaultSection: { padding: '8px 12px', borderBottom: '1px solid #0e1520', display: 'flex', flexDirection: 'column', gap: 5 },
+  assaultSectionTitle: { fontSize: 9, fontWeight: 700, color: '#e07070', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  assaultInfoText:  { fontSize: 11, color: '#c0c0d0' },
+  assaultInfoSub:   { fontSize: 9, color: '#5b5b7a' },
+  assaultNoWeapon:  { fontSize: 10, color: '#5b5b7a', fontStyle: 'italic' },
+  assaultTargetName:{ fontSize: 11, color: '#e07070', fontWeight: 600, flex: 1 },
+  chooseTargetBtn: {
+    padding: '5px 8px',
+    background: 'rgba(180,80,80,0.1)', border: '1px solid #c05050', borderRadius: 3,
+    color: '#e07070', fontSize: 10, cursor: 'pointer', textAlign: 'left', width: '100%',
+  },
+  changeTargetBtn: {
+    padding: '2px 7px', background: 'none', border: '1px solid #3a3a5a', borderRadius: 3,
+    color: '#7070a0', fontSize: 9, cursor: 'pointer', flexShrink: 0,
+  },
+  assaultOption: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 0', cursor: 'pointer', userSelect: 'none' },
+  assaultOptionLabel: { fontSize: 11, color: '#c0c0d0', fontWeight: 500 },
+  assaultOptionSub:   { fontSize: 9, color: '#5b5b7a', marginTop: 1 },
+  assaultRadio: { width: 12, height: 12, borderRadius: '50%', border: '2px solid #3a3a5a', flexShrink: 0, boxSizing: 'border-box' },
+  assaultRadioActive: { borderColor: '#e07070', background: '#e07070' },
+  assaultSlider: { width: '100%', accentColor: '#e07070', cursor: 'pointer' },
+  assaultSummaryText: { fontSize: 10, color: '#e07070', fontWeight: 600, fontStyle: 'italic' },
+
+  // Sélection arme CaC
+  weaponOption: {
+    display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', borderRadius: 3,
+    cursor: 'pointer', border: '1px solid transparent', background: 'rgba(255,255,255,0.01)',
+  },
+  weaponOptionActive: { background: 'rgba(80,168,112,0.12)', border: '1px solid #3a6a4a' },
+  weaponOptionLabel: { fontSize: 10, color: '#aaccdd', flex: 1 },
+  weaponRadio: { width: 11, height: 11, borderRadius: '50%', border: '2px solid #3a4a5a', flexShrink: 0, boxSizing: 'border-box' },
+  weaponRadioActive: { borderColor: '#50c878', background: '#50c878' },
 }

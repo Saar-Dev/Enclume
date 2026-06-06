@@ -498,3 +498,8 @@ Statut : correction prévue si besoin.
 - **S2** : ligne déplacement bleu + label Billboard/Text au-dessus destination (`Canvas3D`) ✅
 - **S1 PJ** : roster multi-personnage collapsible + architecture multi-token dans `CombatActionWindow` ✅
 - **S3 Live Preview GM** : `COMBAT_ANNOUNCE_PREVIEW` — in-memory Map serveur + relay + sync SESSION_JOIN + debounce 150ms PJ + panneau monitoring GM ✅
+
+## Session 83 ✅ (2026-06-06) — Sprint Rework Design + Sprint Drones 1bis
+
+- **Sprint Rework Design** : 9 composants combat + `index.css` — styles JS inline → classes CSS système. 27 tokens `--combat-*`, Section 11 COMBAT WINDOW SYSTEM. ✅
+- **Sprint Drones 1bis** : migration 73 (drone_programs ALTER + seed 34 logiciels ref_equipment), char-sheet.js 4 routes drone corrigées, DroneSheet.jsx réécriture complète (DISPLAY_GROUPS, optgroups, tooltip, mode catalogue/custom), fr.json section drone nettoyée. Déployé Kiwi ✅

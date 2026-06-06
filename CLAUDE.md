@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Dernière mise à jour : 2026-06-04 Session 81
+> Dernière mise à jour : 2026-06-06 Session 83
 
 ---
 
@@ -37,6 +37,7 @@ Ce projet dure depuis 64+ sessions. Chaque piège documenté représente des **h
 | Règles LdB Polaris (CaC, tir, actions, déplacements) | `docs/SYSTEME/REGLES_LdB.md` |
 | Ambiguïtés identifiants, termes RPG | `docs/GLOSSAIRE.md` |
 | Nouvelles strings UI dans composant React | Convention i18n — voir `## Convention i18n` ci-dessous |
+| Fenêtres combat, classes CSS, visuels | `client/src/index.css` Section 11 — modifier là, pas dans le composant |
 
 **Avant tout nouvel événement WS, composant, ou fonction utilitaire :**
 → Vérifier `shared/events.js`, `client/src/`, `server/src/lib/` — est-ce que ça existe déjà ?
@@ -121,11 +122,11 @@ Toute décision non documentée est considérée comme nulle.
 
 ---
 
-## État actuel — Session 81 (2026-06-05)
+## État actuel — Session 83 (2026-06-06)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **70 migrations stables** — prochaine : **71**
-- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.5 ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅ / Sprint CaC 1 ✅ / Sprint CaC 2 ✅ / Sprint CaC 3 ✅ / Déploiement Kiwi ✅ / Sprint Token par défaut campagne ✅ / Sprint Timeline BG3 ✅ / Sprint CaC 4a ✅ / Sprint Bibliothèque 1 ✅ / Sprint Token Radial 1 ✅ / Sprint Optimisation Voxels Phase A ✅ / Sprint Optimisation Voxels Phase B ✅ / Sprint Statuts Phase 1 ✅ / Sprint Bibliothèque 2 ✅ / Sprint Annonce v2 ✅
+- **73 migrations stables** — prochaine : **74**
+- Chantiers terminés : 9A–9E ✅ / 9F-0/A/B/C ✅ / Dice Rework ✅ / Chantier 10 sprint 1+2+3+4+5 ✅ / Chantier 11 sprint 1+2 ✅ / PC22 ✅ / Sprint 2.5 ✅ / Sprint 4 ✅ / Sprint 4.1 ✅ / Sprint 5 ✅ / Sprint 6 ✅ / Sprint 7.1 ✅ / Sprint 7.2 ✅ / Sprint 7.3 ✅ / Sprint 7.4 ✅ / Sprint 7.4bis ✅ / Sprint 7.5 ✅ / Sprint 7.6 ✅ / Sprint GM ✅ / Sprint GM-A ✅ / Sprint GM-B ✅ / D20 normales GLB ✅ / DicePanel v3 ✅ / Sprint Pathfinding ✅ / Sprint Raycast ✅ / PLAN13 Jets Favoris ✅ / Sprint i18n Option B ✅ / Sprint CaC 1 ✅ / Sprint CaC 2 ✅ / Sprint CaC 3 ✅ / Déploiement Kiwi ✅ / Sprint Token par défaut campagne ✅ / Sprint Timeline BG3 ✅ / Sprint CaC 4a ✅ / Sprint Bibliothèque 1 ✅ / Sprint Token Radial 1 ✅ / Sprint Optimisation Voxels Phase A ✅ / Sprint Optimisation Voxels Phase B ✅ / Sprint Statuts Phase 1 ✅ / Sprint Bibliothèque 2 ✅ / Sprint Annonce v2 ✅ / Sprint Rework Design ✅ / Sprint Drones 1bis ✅
 
 **Session 74 — EN ATTENTE VALIDATION :**
 - **Sprint CaC 4b — Attaque multiple** : malus −5/−7 (LdB p.218), UI PJ séquentielle, GM queue étendue, N rows melee server — codé, non validé fonctionnellement
@@ -141,6 +142,10 @@ Toute décision non documentée est considérée comme nulle.
 
 **Session 81 suite — EN ATTENTE VALIDATION :**
 - **Sprint Test de Choc** : migration 69 `shock_auto_stun`, option campagne, bouton GM "Appliquer l'étourdissement", helper `applyStunStatus` + connexion `token_statuses`, `COMBAT_END` cleanup badges, fix GM voit dégâts PJ→PNJ — codé, non validé fonctionnellement
+
+**Session 83 ✅ :**
+- **Sprint Rework Design** : 9 composants combat + `index.css` — styles JS inline → classes CSS système. 27 tokens `--combat-*`, Section 11 COMBAT WINDOW SYSTEM. `C.red`/`C.green` conservés hex (template literals `${accent}55`). ✅
+- **Sprint Drones 1bis** : migration 73 (drone_programs ALTER + seed 34 logiciels ref_equipment family='Logiciels'), char-sheet.js 4 routes drone (fix 5 champs + profondeur_max/disponibilite + catégorie serveur + validation ordinateur), DroneSheet.jsx réécriture (DISPLAY_GROUPS + optgroups + tooltip + mode catalogue/custom), fr.json nettoyé. Déployé Kiwi ✅
 
 **Serveur Alpha "Kiwi" :** `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md`
 

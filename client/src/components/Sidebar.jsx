@@ -451,6 +451,7 @@ export default function Sidebar({
   // Formulaire de création de personnage
   const [showNewChar, setShowNewChar] = useState(false)
   const [newCharName, setNewCharName] = useState('')
+  const [newCharType, setNewCharType] = useState('pnj')
   const [creating, setCreating] = useState(false)
 
   // Modale character — déléguée à SessionPage via onOpenCharacter
@@ -597,9 +598,11 @@ export default function Sidebar({
     try {
       const res = await api.post(`/campaigns/${campaignId}/characters`, {
         name: newCharName.trim(),
+        type: newCharType,
       })
       addCharacter(res.data.character)
       setNewCharName('')
+      setNewCharType('pnj')
       setShowNewChar(false)
     } catch (err) {
       console.error('Erreur création personnage :', err)
@@ -1134,22 +1137,33 @@ export default function Sidebar({
 
             {/* Formulaire création */}
             {isGm && showNewChar && (
-              <form onSubmit={handleCreateCharacter} style={styles.newCharForm}>
-                <input
-                  style={styles.chatInput}
-                  placeholder={t('sidebar.characterNamePlaceholder')}
-                  value={newCharName}
-                  onChange={e => setNewCharName(e.target.value)}
-                  autoFocus
-                />
-                <button
-                  className="btn-icon"
-                  type="submit"
-                  disabled={creating || !newCharName.trim()}
-                  style={{ color: 'var(--color-primary)' }}
+              <form onSubmit={handleCreateCharacter} style={{ ...styles.newCharForm, flexDirection: 'column', gap: '6px' }}>
+                <select
+                  style={styles.select}
+                  value={newCharType}
+                  onChange={e => setNewCharType(e.target.value)}
                 >
-                  {creating ? '…' : '✓'}
-                </button>
+                  <option value="pnj">{t('drone.typeHumanoid')}</option>
+                  <option value="drone">{t('drone.typeDrone')}</option>
+                  <option value="armure" disabled>{t('drone.typeArmor')}</option>
+                </select>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input
+                    style={styles.chatInput}
+                    placeholder={t('sidebar.characterNamePlaceholder')}
+                    value={newCharName}
+                    onChange={e => setNewCharName(e.target.value)}
+                    autoFocus
+                  />
+                  <button
+                    className="btn-icon"
+                    type="submit"
+                    disabled={creating || !newCharName.trim()}
+                    style={{ color: 'var(--color-primary)' }}
+                  >
+                    {creating ? '…' : '✓'}
+                  </button>
+                </div>
               </form>
             )}
 

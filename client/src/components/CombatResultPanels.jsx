@@ -5,13 +5,13 @@
 import { useState } from 'react'
 
 const C = {
-  bg:         '#16162a',
-  bgInner:    '#0f0f20',
-  border:     '#2a2a3e',
-  text:       '#c0c0d0',
-  textDim:    '#7a7a90',
-  textBright: '#e8e8f5',
-  gold:       '#f5c542',
+  bg:         'var(--bg-session-raised)',
+  bgInner:    'var(--bg-session)',
+  border:     'var(--border-session-2)',
+  text:       'var(--text-session-hi)',
+  textDim:    'var(--text-session-mid)',
+  textBright: 'var(--text-primary)',
+  gold:       'var(--color-gold)',
   red:        '#c83030',
   green:      '#3aaa6a',
 }

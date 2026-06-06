@@ -84,7 +84,7 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
     : '#e05050'
 
   return (
-    <div style={styles.bar(topOffset)}>
+    <div className="combat-timeline-bar" style={{ top: topOffset }}>
 
       {/* Timer + Tour N — ancrage gauche */}
       <div style={styles.leftPanel}>
@@ -149,21 +149,6 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
 }
 
 const styles = {
-  bar: (topOffset) => ({
-    position: 'absolute',
-    top: topOffset,
-    left: 0,
-    right: 'var(--sidebar-w, 0px)',
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
-    padding: '10px 14px',
-    background: 'rgba(10,10,20,0.88)',
-    borderBottom: '1px solid #2a2a3e',
-    pointerEvents: 'auto',
-    zIndex: 10,
-  }),
   leftPanel: {
     display: 'flex',
     flexDirection: 'column',

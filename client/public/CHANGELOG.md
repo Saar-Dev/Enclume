@@ -1,3 +1,21 @@
+## v83 — 2026-06-06 — Fiche Drone : programmes logiciels + Design System CSS
+
+### Fiche Drone — Programmes
+- [add] Catalogue de 34 programmes logiciels (LdB p.281) : Détection, Ami/Ennemi, Armement, Esquive, Pilotage, Analyse, Médical, Communication, Spécialisés
+- [add] Section "Duel d'ordinateurs" regroupant les programmes Sécurité, Offensif, Contre-attaque et Rempart
+- [add] Tooltip description au survol du nom de programme (texte LdB complet)
+- [add] Mode "Catalogue" : sélection depuis le catalogue organisé par catégorie
+- [add] Mode "Personnalisé" : saisie libre avec catégorie assignable (pour programmes custom hors LdB)
+- [add] Validation contrainte ordinateur : niveau max (gen + 2×NT) et potentiel total (10 + gen×NT×2)
+- [add] Intégrité actuelle éditable directement par le GM
+
+### Interface Combat — Design System
+- [chg] 9 composants combat migrés de styles JS inline vers classes CSS centralisées dans index.css
+- [add] 27 tokens CSS --combat-* dans :root
+- [add] Section 11 COMBAT WINDOW SYSTEM (~320 lignes) : .combat-win, .combat-float-win, .btn-tac-confirm, .combat-timeline-bar, badges, chips, selects
+
+---
+
 ## v81 — 2026-06-05 — Sprint Annonce v2 + corrections combat + roster personnages
 
 ### Combat — Phase Annonce
@@ -263,3 +281,4 @@
 - [add] Roster de combat avec vérification équipement pré-combat
 - [add] Fenêtre déclaration PJ (21 actions, multi-select, INI delta)
 - [fix] Distinction PJ / PNJ / Entité de décor (PC27)
+

@@ -140,7 +140,9 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {/* Panneau visée assaut — visible pendant le mode sélection cible */}
       {combatTargetMode && (
         <div style={styles.moveLegend}>
-          <div style={styles.moveLegendTitle}>Assaut — Cliquez sur la cible</div>
+          <div style={styles.moveLegendTitle}>
+            {combatTargetMode.mode === 'melee' ? 'Corps à corps — Cliquez sur la cible' : 'Assaut — Cliquez sur la cible'}
+          </div>
 
           {combatTargetMode.pendingTargetId && (() => {
             const tgt = tokens.find(t => t.id === combatTargetMode.pendingTargetId)
@@ -158,7 +160,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           })()}
 
           <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => combatTargetMode.onCancel()}>
-            Annuler la visée
+            Annuler
           </button>
         </div>
       )}

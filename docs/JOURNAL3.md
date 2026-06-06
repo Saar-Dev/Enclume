@@ -2556,3 +2556,122 @@ Handler sync sans guard : tout joueur pouvait émettre des previews pour n'impor
 - Override : écraser le preview légitime d'un autre joueur (stocké par campaignId, last write wins)
 Converti en async + ownership check (character.user_id === socket.user.id) + try/catch.
 Confirmé que seul CombatActionWindow émet cet event (jamais CombatGmDeclareWindow).
+
+## Session 83 � Sprint Rework Design (2026-06-06)
+
+### Objectif
+Migrer les 9 composants combat de leurs objets de style JS inline vers un syst�me de classes CSS
+centralis� dans index.css. Point de contr�le unique pour tout changement visuel futur.
+
+### Ce qui a �t� fait
+
+**Phase 1 � Tokens CSS (index.css)**
+27 nouveaux tokens --combat-* ajout�s dans :root :
+- --combat-shadow, --combat-seg-border/active
+- --combat-pj/pnj-fg/bg/border
+- --combat-equip-ok/dot
+- --combat-danger/warn/alert-*
+- --combat-chip-pj/pnj/gap-*
+
+**Phase 2 � Section 11 COMBAT WINDOW SYSTEM (index.css)**
+~320 lignes de nouvelles classes ajout�es :
+- Palette A (HUD Tactical) : .combat-win, .combat-win-header/title/body/section/footer/th/td
+- Palette A : .combat-win-alert, .combat-badge-pj/pnj, .combat-chip[-pj/-pnj/-pnj-gap]
+- Palette A : .combat-select-danger/warn, .combat-equip-ok/dot, .btn-tac-confirm
+- Palette B (In-session) : .combat-float-win[--gold], .combat-float-header/section/footer
+- Timeline : .combat-timeline-bar
+Fix .combat-win-header : ajout justify-content: space-between (n�cessaire pour layout left+right)
+
+**Phase 3 � Migration composants (9 fichiers)**
+
+| Composant | ? lignes | Objets migr�s |
+|---|---|---|
+| CombatRosterWindow.jsx | 512?452 | const S : window/header/title/badges/chips/selects/btns |
+| CombatInitStateWindow.jsx | 119?80 | const S : window/header/btnConfirm |
+| CombatGmDeclareWindow.jsx | 1113?1092 | const S : window/header/headerLabel/sections/footer/btnDeclare |
+| CombatActionWindow.jsx | 1751?1707 | const W : window/header/body/section/footer + const ss hex?CSS vars |
+| CombatModifiersWindow.jsx | 499?451 | const styles : window/header/sections/footer/btns |
+| CombatDamageWindow.jsx | 242?222 | const styles : window/header |
+| CombatResultPanels.jsx | �/� | const C : 7 hex?CSS vars (C.red/C.green conserv�s hex � template literals) |
+| CombatTimeline.jsx | 228?211 | const styles : bar() |
+| TimelineCard.jsx | �/� | 5 hex inline ? CSS vars |
+
+### Bug trouv� et corrig� en run � vide
+CombatResultPanels � tentative initiale de substituer C.red/C.green par CSS vars.
+Pattern \55 dans les template literals produirait ar(--color-danger-soft)55 (CSS invalide).
+C.red et C.green conserv�s en hex � les autres 7 valeurs de const C passent en CSS vars.
+Explication : \55 avec ccent='#c83030' ? '#c8303055' (hex RGBA valide) ?
+
+### Ce que ce sprint NE fait PAS
+- Aucun changement de logique m�tier
+- Aucun �v�nement WS touch�
+- Les deltas visuels mineurs sont intentionnels (harmonisation) :
+  - header text-size 11?14px dans CombatActionWindow (combat-float-header n'a pas de fontSize)
+  - CombatDamageWindow fond l�g�rement plus clair (#0f0f1a?#16162a)
+  - CombatInitStateWindow bouton Confirmer : border plein ? border-top seul
+  - CombatModifiersWindow btns Lancer/Fermer : chamfer .btn au lieu de borderRadius 4px
+
+## Session 83 — Maintenance déploiement Kiwi + config fichiers (2026-06-06)
+
+### Objectif
+Mettre à jour le serveur Kiwi (git pull Sessions 81+82) et corriger la stratégie de protection des fichiers de config.
+
+### Problèmes rencontrés et résolus
+
+**P1 — Conflit git pull : package.json/package-lock.json**
+Fichiers protégés par skip-worktree mais working tree modifié → git pull bloqué.
+Fix : `--no-skip-worktree` + `checkout` + pull + `--skip-worktree` rétabli.
+
+**P2 — node_modules corrompu après rm -rf**
+La version serveur de package.json manquait `socket.io-client` (installé anciennement en dehors de package.json).
+Fix : accepter la version repo + `rm -rf node_modules && npm install`.
+
+**P3 — socket.io-client absent du repo**
+`socket.io-client` non listé dans `client/package.json` local ni serveur — dette latente depuis plusieurs sessions.
+Fix : ajout `socket.io-client@^4.8.3` dans `client/package.json` (commit e4f80ef), push, `npm install` serveur.
+
+**P4 — skip-worktree sur fichiers inutilement divergents**
+`api.js` et `redis.js` utilisent déjà des env vars compatibles local+serveur.
+`vite.config.js` : systemd passe `--host --port 8193` en CLI — pas de divergence fichier nécessaire.
+Fix : skip-worktree retiré des 3 fichiers. Seul `docker-compose.yml` reste protégé.
+
+### État final Kiwi
+- `git ls-files -v | grep "^S"` → `S docker-compose.yml` uniquement
+- `client/package.json` identique au repo, socket.io-client présent
+- SR fonctionnel confirmé
+
+### Documentation mise à jour
+- `docs/SERVEURDISTANTKIWI.md` — section "Fichiers qui divergent" et "Procédure git pull" refondues
+
+---
+
+## Session 83 — Sprint Drones 1bis (2026-06-06)
+
+### Objectif
+Compléter la fiche drone : catalogue de programmes logiciels dans ref_equipment (family='Logiciels'), section UI programmes avec optgroups, tooltip description, mode catalogue/personnalisé. Corrections 5 champs erronés routes + composant.
+
+### Réalisé
+
+**Migration 73 — drone_programs + seed ref_equipment**
+- drone_programs : DROP COLUMN label, ADD equipment_id UUID FK ref_equipment ON DELETE RESTRICT, ADD label_override TEXT, ADD category TEXT NOT NULL, CONSTRAINT chk_dp_source
+- Seed 34 programmes ref_equipment family='Logiciels' — 13 catégories mécaniques
+- down() : DELETE WHERE family='Logiciels' d'abord (FK), puis revert schema
+
+**char-sheet.js — routes drone**
+- GET : LEFT JOIN ref_equipment pour program_name + program_description
+- PUT : suppression 5 colonnes inexistantes (iv/survie_iem/resistance_dommages/architecture/structure_materiau) + ajout profondeur_max + disponibilite
+- POST programs : catégorie résolue serveur depuis ref_equipment (catalogue) ; category client (custom) ; validation ordinateur
+- PUT programs/:id : level + sort_order uniquement
+
+**DroneSheet.jsx — réécriture complète**
+- DISPLAY_GROUPS : duel_ordinateurs regroupe securite+offensif+contre_attaque+rempart (visuel seulement)
+- IntegritySection : integrite_actuelle éditable GM
+- ProgramsSection : optgroups fond sombre, tooltip description, mode Catalogue/Personnalisé
+- 5 StatFields erronés supprimés, profondeur_max + disponibilite ajoutés
+
+**fr.json** : 5 clés erronées supprimées, nouvelles clés programme + category{} 14 entrées
+
+**Kiwi — git pull + migration 73**
+- Problème : client/package-lock.json non tracké, commit e4f80ef l'ajoute → pull bloqué
+- Diagnostic : .gitignore ne le liste pas + e4f80ef confirmé +87 lignes avant rm
+- Fix : rm client/package-lock.json → git pull → migration 73 OK
