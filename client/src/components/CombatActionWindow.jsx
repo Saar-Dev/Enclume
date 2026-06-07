@@ -687,7 +687,21 @@ export default function CombatActionWindow({
     )
   }
 
-  // Deja declare
+  // Phase 2 — résolution en cours, pas encore mon slot actif
+  if (phase === 'RESOLUTION' && !isMyTurnInResolution) {
+    const activeResolveToken = tokens.find(t => t.id === resolveSlotTid)
+    return (
+      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 2 — Résolution</div>
+        {rosterSection}
+        <p style={W.waitText}>
+          {activeResolveToken ? `${activeResolveToken.label} agit…` : 'Résolution en cours…'}
+        </p>
+      </div>
+    )
+  }
+
+  // Déjà déclaré (ANNOUNCEMENT)
   if (rosterEntry?.has_announced) {
     return (
       <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
@@ -786,9 +800,9 @@ export default function CombatActionWindow({
       top: pos.top,
       maxHeight: 'calc(100vh - 80px)',
     }}>
-      <div style={W.header} onMouseDown={onHeaderMouseDown}>Phase 1 — Declaration d&apos;intention</div>
+      <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 — Déclaration d&apos;intention</div>
 
-      <div style={W.body}>
+      <div className="combat-win-body">
         {/* ---- Panneau gauche ---- */}
         <div style={W.leftPanel}>
 
@@ -1424,7 +1438,7 @@ export default function CombatActionWindow({
       </div>
 
       {/* ---- Footer ---- */}
-      <div style={W.footer}>
+      <div className="combat-float-footer">
         {declareError && (
           <div style={{ fontSize: 10, color: '#c83030', background: 'rgba(200,48,48,0.08)', border: '1px solid #c8303044', borderRadius: 3, padding: '4px 8px', marginBottom: 4 }}>
             ⚠ {declareError}

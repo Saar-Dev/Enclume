@@ -2675,3 +2675,42 @@ Compléter la fiche drone : catalogue de programmes logiciels dans ref_equipment
 - Problème : client/package-lock.json non tracké, commit e4f80ef l'ajoute → pull bloqué
 - Diagnostic : .gitignore ne le liste pas + e4f80ef confirmé +87 lignes avant rm
 - Fix : rm client/package-lock.json → git pull → migration 73 OK
+
+
+## Migration 74 — fix_ref_skills (suite session 83) 2026-06-06
+
+Capture de 3 scripts SQL correctifs appliques manuellement sans migration apres le seed 37 (la BDD Kiwi etait restee a 231 lignes, la locale a 248).
+
+**Operations :**
+- INSERT 11 lignes : 10 groupes structurels CHC (ARME_SPECIALE_CONTACT, ARME_SPECIALE_DISTANCE, EXPRESSION_ARTISTIQUE, CONTROLE_DES_MUTATIONS, MUTATION, POUVOIRS_POLARIS, COMMERCE_TRAFIC, SCIENCES_CONNAISANCES_SPECIALISEES, PILOTAGE, GENIE_TECHNIQUE) + competence reelle ARTS_MARTIAUX (COO/ADA, marker (-3))
+- UPDATE 4 enfants ARMES_SPECIALES : parent corrige (pluriel singulier) + labels complets + marker S>(X)
+- UPDATE 3 enfants ARTS_MARTIAUX : marker S>(-3), labels singuliers (Technique defensive/offensive)
+- UPDATE en masse MUTATION_* et POUVOIRS_POLARIS_* : marker S>(X)
+- UPDATE EXPRESSION_ARTISTIQUE_INSTRUMENT_DE_MUSIQUE : marker S>(X)
+- Renommage PK ACCROBATIE_EQUILIBRE>ACROBATIE_EQUILIBRE (typo) : char_skills + ref_skill_requirements (skill_id + value) en cascade avant la PK
+- INSERT 5 prerequis absents de la migration 39 : CHIRURGIE (SKILL_MIN 10), FALSIFICATION (SKILL_MIN 7), MAITRISE_DE_LA_FORCE_POLARIS (muta_029), MAITRISE_DE_LECHO_POLARIS (muta_029), MUTATION_AGILITE_CAUDALE (muta_026)
+- Note : MECANIQUE->ELECTRONIQUE deja en migration 39 - non repete
+
+**Piege resolu :** onConflict ignore necessaire sur les deux INSERTs (la BDD locale avait deja les corrections manuelles - migration echouait avec "duplicate key").
+
+**Valide local + Kiwi** - 74 migrations stables, prochaine : 75
+
+
+## Session 84 — Bug #1 : fenêtres Phase 1 = Phase 2 2026-06-07
+
+**Contexte :** Après le Sprint Rework Design (Session 83), les joueurs voyaient une fenêtre "Phase 1 - Declaration d'intention" pendant la phase RESOLUTION du combat.
+
+**Root cause — double :**
+
+1. `CombatActionWindow.jsx` n'avait pas de guard RESOLUTION avant le bloc "Déjà déclaré" (l. 691). Pendant RESOLUTION, `has_announced` reste `true` pour tous les participants (remis à `false` uniquement dans `endTurn`, pas dans `startResolutionPhase`). Le joueur non-actif tombait donc dans `if (rosterEntry?.has_announced)` qui retournait un panneau avec header "Phase 1 - Declaration d'intention" — alors qu'il était en Phase 2.
+
+2. La migration graphique Rework Design avait supprimé `W.header`, `W.body`, `W.footer` de `const W` mais les usages dans le return Phase 1 (l. 789, 791, 1427) n'avaient pas été mis à jour → `undefined` → divs non stylées.
+
+**Fix — `client/src/components/CombatActionWindow.jsx` uniquement :**
+
+- Insertion guard RESOLUTION avant le bloc "Déjà déclaré" : `if (phase === 'RESOLUTION' && !isMyTurnInResolution)` → affiche "Phase 2 — Résolution" + nom du token actif
+- l. 789 : `style={W.header}` → `className="combat-float-header"`
+- l. 791 : `style={W.body}` → `className="combat-win-body"`
+- l. 1427 : `style={W.footer}` → `className="combat-float-footer"`
+
+**Validé fonctionnel.**
