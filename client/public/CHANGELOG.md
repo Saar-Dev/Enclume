@@ -1,4 +1,4 @@
-## v83 — 2026-06-06 — Fiche Drone : programmes logiciels + Design System CSS
+## v83 — 2026-06-06 — Fiche Drone + Design System CSS + Migration catalogue compétences
 
 ### Fiche Drone — Programmes
 - [add] Catalogue de 34 programmes logiciels (LdB p.281) : Détection, Ami/Ennemi, Armement, Esquive, Pilotage, Analyse, Médical, Communication, Spécialisés
@@ -13,6 +13,13 @@
 - [chg] 9 composants combat migrés de styles JS inline vers classes CSS centralisées dans index.css
 - [add] 27 tokens CSS --combat-* dans :root
 - [add] Section 11 COMBAT WINDOW SYSTEM (~320 lignes) : .combat-win, .combat-float-win, .btn-tac-confirm, .combat-timeline-bar, badges, chips, selects
+
+### Catalogue compétences (migration 74)
+- [fix] 10 groupes structurels manquants insérés (Mutation, Pouvoirs Polaris, Armes Spéciales, Arts martiaux, Commerce/Trafic, Pilotage, Génie technique…)
+- [fix] Compétence Arts martiaux restaurée avec le bon attribut (COO/ADA) et le malus (-3) sur ses sous-compétences
+- [fix] MUTATION_* et POUVOIRS_POLARIS_* : marqueur (X) appliqué — ces compétences se masquent correctement si non acquises
+- [fix] Prérequis CHIRURGIE, FALSIFICATION et 3 compétences Polaris/Mutation ajoutés
+- [fix] Typo identifiant ACCROBATIE_EQUILIBRE → ACROBATIE_EQUILIBRE
 
 ---
 
