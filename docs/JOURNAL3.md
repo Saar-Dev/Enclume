@@ -2714,3 +2714,33 @@ Capture de 3 scripts SQL correctifs appliques manuellement sans migration apres 
 - l. 1427 : `style={W.footer}` → `className="combat-float-footer"`
 
 **Validé fonctionnel.**
+
+
+## Session 84 — Bug #2 : munitions calibre incompatible (migration 75) — 2026-06-09
+
+**Contexte :** Les munitions étaient filtrées par caliber dans `WeaponPanel.jsx` et `char-sheet.js`. Deux bugs cumulés rendaient la compatibilité aléatoire.
+
+**Root cause — triple :**
+
+1. **Calibers armes en notation française** : `7,62 mm` (virgule décimale française) vs munitions `7.62 mm` (point international) → jamais de match pour tout calibre décimal. Seuls `9 mm`, `17 mm`, `20 mm`, etc. (sans décimale) fonctionnaient.
+
+2. **Kiwi — caliber des munitions à NULL** : seed Session 70 rejoué sur Kiwi sans migration 53 → colonne `caliber` vide pour les 122 munitions. Tous les calibres avec décimale ne matchaient rien.
+
+3. **Kiwi — noms avec qualificatif d'arme** : migration 53 jamais appliquée sur Kiwi → tous les noms du style `9 mm - Balle HP - Arme de poing` encore présents. Sur local, migration 53 avait traité la plupart mais raté 5 calibres à cause de l'apostrophe U+2019 dans le seed (vs ASCII `'` dans le code de la migration).
+
+**Fix — migration 75 (`server/src/db/migrations/75_ammo_caliber_names_fix.js`) :**
+
+- **Partie A** : `UPDATE ref_equipment SET caliber = replace(replace(caliber, ',', '.'), ' ST', '')` sur toutes les armes → 40 armes corrigées localement, idem Kiwi.
+- **Partie B** : CASE WHEN sur le préfixe du nom → set caliber pour toutes les munitions `caliber IS NULL` (Kiwi) ou `caliber = '12'` (local Calibre 12 incohérent).
+- **Partie C** : `mergeAmmo()` pour les doublons Kiwi (9mm ×4, 5.45mm ×1, 7.62mm ×5, 12.7mm ×1). Idempotent (no-op si l'une des deux entrées absente).
+- **Partie D** : `rename()` collision-safe pour tous les renommages `Balle TYPE - Arme` → `Munition TYPE`. Utilise l'apostrophe U+2019 pour matcher les noms du seed.
+
+**Piège découvert :** Le seed utilise U+2019 (apostrophe curly `'`) dans `Fusil d'assaut`, `Arme d'épaule`. Migration 53 utilisait ASCII `'` → no-op silencieux pour ces entrées. Première exécution de migration 75 en batch 47 avait les mauvaises apostrophes → reset de la table knex_migrations + correction du fichier → ré-exécution.
+
+**Résultat local :**
+- 120 munitions, 0 NULL caliber, 0 virgule dans armes
+- `Paloma` (9mm) ↔ `9 mm - Munition HP` : MATCH ✓
+- `7.62 mm weapon` ↔ `7.62 mm - Munition standard` : MATCH ✓
+- Darts : caliber arme = caliber mun ✓
+
+**À appliquer sur Kiwi** : `git pull` + redémarrage du serveur (migration s'applique au démarrage).
