@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/auth.js'
 import { requireRole } from '../middleware/role.js'
 import { multerUpload, multerGlb } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
+import { WS } from '../../../shared/events.js'
 
 const router = Router()
 
@@ -210,6 +211,7 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
     .where({ id: req.params.id })
     .update(updates)
     .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'pnj_unlimited_ammo', 'reload_mode', 'action_timer_sec', 'default_token_glb_url', 'shock_auto_stun', 'created_at', 'updated_at'])
+  req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_SETTINGS_UPDATED, { campaign })
   res.json({ campaign })
 })
 

@@ -173,7 +173,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   const couvertureMod   = couvertures.reduce((sum, k) => sum + (COUVERTURES.find(c => c.key === k)?.mod ?? 0), 0)
   const obscuriteMod    = obscurites.reduce((sum, k) => sum + (OBSCURITES.find(o => o.key === k)?.mod ?? 0), 0)
   const tailleModComp   = TAILLES.find(t => t.key === taille)?.mod ?? 0
-  const totalModComp    = porteeModComp + tireurAllureMod + cibleAllureMod + couvertureMod + obscuriteMod + tailleModComp
+  const totalModComp    = porteeModComp + tireurAllureMod + cibleAllureMod + couvertureMod + obscuriteMod + tailleModComp + (isRushed ? -5 : 0)
   const bonusDmg        = assaultAction?.fire_mode_bonus_dmg ?? 0
 
   const hasTirImpossible = tireurAllureMod === -99 || obscurites.some(k => OBSCURITES.find(o => o.key === k)?.mod === -99)
@@ -203,7 +203,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   }
 
   return (
-    <div className="combat-float-win combat-float-win--gold" style={{ left: pos.left, top: pos.top, maxHeight: '80vh' }}>
+    <div className="combat-float-win combat-float-win--gold" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: '80vh' }}>
 
       {/* Header — titre + pill */}
       <div className="combat-float-header" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }} onMouseDown={onHeaderMouseDown}>

@@ -110,4 +110,7 @@ export const WS = {
   // Jets favoris — macros compétences (PLAN 13)
   MACRO_ROLL:        'macro:roll',         // joueur → serveur : exécuter une macro
   MACRO_ROLL_RESULT: 'macro:roll_result',  // serveur → socket : résultat + message formaté
+
+  // Campagne
+  CAMPAIGN_SETTINGS_UPDATED: 'campaign:settings_updated',  // serveur → room : paramètres campagne modifiés
 }

@@ -414,6 +414,9 @@ export default function SessionPage() {
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     })
+    s.on(WS.CAMPAIGN_SETTINGS_UPDATED, ({ campaign: updated }) => {
+      setCampaign(prev => ({ ...prev, ...updated }))
+    })
     s.on(WS.TOKEN_MOVED, ({ tokenId, pos_x, pos_y, pos_z, updated_at }) => {
       updateToken({ id: tokenId, pos_x, pos_y, pos_z, updated_at })
     })
@@ -482,10 +485,15 @@ export default function SessionPage() {
       updateCharacter({ id: characterId, worst_wound_severity })
     })
     s.on(WS.WOUND_UPDATED, ({ characterId, worst_wound_severity }) => {
+      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
       updateCharacter({ id: characterId, worst_wound_severity })
     })
     s.on(WS.WOUND_REMOVED, ({ characterId, worst_wound_severity }) => {
+      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
       updateCharacter({ id: characterId, worst_wound_severity })
+    })
+    s.on(WS.INVENTORY_ADDED, ({ characterId }) => {
+      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
     })
     s.on(WS.INVENTORY_UPDATED, ({ characterId }) => {
       if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
@@ -887,9 +895,9 @@ export default function SessionPage() {
       pendingTargetId: null,
       onTargetSelected: wrappedSelected,
       onCancel: wrappedCancel,
-      onPendingTarget: (id) => {
+      onPendingTarget: (id, screenX, screenY) => {
         if (id === tokenId) return  // prevent self-targeting
-        setCombatTargetMode(prev => prev ? { ...prev, pendingTargetId: id } : null)
+        setCombatTargetMode(prev => prev ? { ...prev, pendingTargetId: id, pendingTargetScreenPos: screenX != null ? { x: screenX, y: screenY } : null } : null)
       },
     })
     setCombatCameraCenter(tokenPos)
@@ -985,6 +993,7 @@ export default function SessionPage() {
               onDiceDone={handleDiceDone}
               combatCameraCenter={combatCameraCenter}
               combatMoveMode={combatMoveMode}
+              pendingMoveSelection={pendingMoveSelection}
               combatTargetMode={combatTargetMode}
               announcementMarker={announcementMarker}
               defaultTokenGlbUrl={campaign?.default_token_glb_url

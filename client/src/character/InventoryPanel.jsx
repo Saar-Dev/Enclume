@@ -4,7 +4,7 @@ import api from '../lib/api.js'
 const CONTAINER_ORDER = ['Sac', 'Ceinture', 'Coffre']
 const VALID_SLOTS     = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'MG', 'MD', '2M', 'Tr']
 
-export default function InventoryPanel({ characterId, canEdit, isGm, onInventoryMutated = () => {} }) {
+export default function InventoryPanel({ characterId, canEdit, isGm, onInventoryMutated = () => {}, reloadKey = 0 }) {
   const [items,       setItems]       = useState([])
   const [sols,        setSols]        = useState(0)
   const [totalWeight, setTotalWeight] = useState(0)
@@ -40,7 +40,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
       .catch(err => console.error('Erreur chargement inventaire :', err))
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [characterId])
+  }, [characterId, reloadKey])
 
   const availableContainers = useMemo(() => {
     const list = ['Coffre']

@@ -7,7 +7,7 @@ import TimelineCard from './TimelineCard'
 const MAX_CARDS = 12
 
 export default function CombatTimeline({ characters, topOffset = 0, onPortraitClick, actionTimerSec = 0 }) {
-  const { roster, actions, phase, activeTokenId, activeSlotIdx, currentTurn } = useCombatStore()
+  const { roster, phase, activeTokenId, activeSlotIdx, currentTurn } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
   // ── Timer de tour (ANNOUNCEMENT uniquement) ──────────────────────────────────
@@ -53,22 +53,23 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
         }
       })
   } else {
-    cards = [...actions]
-      .sort((a, b) => a.sequence - b.sequence)
-      .map((action, idx) => {
-        const token       = tokens.find(t => t.id === action.token_id)
-        const char        = token ? characters.find(c => c.id === token.character_id) : null
-        const rosterEntry = roster.find(r => r.token_id === action.token_id)
+    cards = [...roster]
+      .filter(e => e.status === 'active')
+      .sort((a, b) => b.initiative - a.initiative)
+      .map((entry, idx) => {
+        const token = tokens.find(t => t.id === entry.token_id)
+        const char  = token ? characters.find(c => c.id === token.character_id) : null
         return {
-          key:           `a-${action.id}`,
+          key:           `r-${entry.token_id}`,
           portraitUrl:   char?.portrait_url ?? null,
           label:         token?.label ?? '?',
-          initiative:    rosterEntry?.initiative ?? 0,
+          initiative:    entry.initiative,
           worstSeverity: char?.worst_wound_severity ?? null,
           isPnj:         char?.type === 'pnj',
           hasAnnounced:  false,
           isSurprised:   false,
-          isActive:      idx === activeSlotIdx,
+          isActive:      entry.token_id === activeTokenId,
+          isDimmed:      idx < activeSlotIdx,
         }
       })
   }

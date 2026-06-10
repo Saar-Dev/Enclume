@@ -19,6 +19,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useMapStore } from '../stores/mapStore'
 import { useEntityStore } from '../stores/entityStore'
 import { useSessionStore } from '../stores/sessionStore'
+import { useCombatStore } from '../stores/combatStore'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const GRID_SIZE = 50
@@ -328,6 +329,7 @@ function Scene({
   dicePayload, onDiceDone,
   combatCameraCenter,
   combatMoveMode,
+  pendingMoveSelection,
   combatTargetMode,
   announcementMarker,
   defaultTokenGlbUrl,
@@ -342,6 +344,7 @@ function Scene({
   const { characters, isGm } = useCharacterStore()
   const { user } = useAuthStore()
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
+  const { phase } = useCombatStore()
 
   const [dragState, setDragState] = useState(null)
 
@@ -362,6 +365,10 @@ function Scene({
   // ─── Mode sélection cible combat — P40 : ref miroir ───────────────────────
   const combatTargetModeRef = useRef(null)
   combatTargetModeRef.current = combatTargetMode
+
+  // ─── Phase combat — P40 : ref miroir pour handleDragStart stable ──────────
+  const combatPhaseRef = useRef(null)
+  combatPhaseRef.current = phase
 
   // ─── Chemin pathfinding combat (Sprint Pathfinding) ──────────────────────
   const [currentPath, setCurrentPath] = useState([])
@@ -530,7 +537,7 @@ function Scene({
     if (e.nativeEvent.button !== 0) return
     if (combatMoveModeRef.current) return  // mode déplacement combat — pas de drag token
     if (combatTargetModeRef.current) {
-      combatTargetModeRef.current.onPendingTarget(token.id)
+      combatTargetModeRef.current.onPendingTarget(token.id, e.clientX, e.clientY)
       return
     }
 
@@ -620,6 +627,7 @@ function Scene({
     }
 
     if (!dragRef.current.active) return
+    if (combatPhaseRef.current && !isGm) return  // combat actif — drag silencieux pour PJ (clic toujours détecté)
 
     const dx = e.clientX - dragRef.current.startX
     const dy = e.clientY - dragRef.current.startY
@@ -678,6 +686,8 @@ function Scene({
         targetPosX:  dest.x,
         targetPosY:  dest.z,
         targetPosZ:  Math.round(dest.feetGridY / 2) - 1,
+        screenX:     e.clientX,
+        screenY:     e.clientY,
       })
       return
     }
@@ -918,6 +928,21 @@ function Scene({
         )
       })()}
 
+      {/* ── Case destination sélectionnée — surbrillance bleue (Bug B) ─────── */}
+      {combatMoveMode && pendingMoveSelection && (() => {
+        const curToken = tokensRef.current.find(t => t.id === combatMoveMode.tokenId)
+        const y = curToken ? curToken.pos_z + 1.0 + 0.06 : 0.1
+        return (
+          <mesh
+            position={[pendingMoveSelection.targetPosX + 0.5, y, pendingMoveSelection.targetPosY + 0.5]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <planeGeometry args={[1, 1]} />
+            <meshBasicMaterial color="#3b82f6" transparent opacity={0.7} depthWrite={false} />
+          </mesh>
+        )
+      })()}
+
       {/* ── Ligne de visée assaut — joueur→cible pending (Sprint 7.1) ─────── */}
       {targetLinePoints && (
         <line>
@@ -1011,7 +1036,7 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, combatTargetMode, announcementMarker, defaultTokenGlbUrl }) {
+export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, announcementMarker, defaultTokenGlbUrl }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
@@ -1201,6 +1226,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           onDiceDone={onDiceDone}
           combatCameraCenter={combatCameraCenter}
           combatMoveMode={combatMoveMode}
+          pendingMoveSelection={pendingMoveSelection}
           combatTargetMode={combatTargetMode}
           announcementMarker={announcementMarker}
           defaultTokenGlbUrl={defaultTokenGlbUrl}

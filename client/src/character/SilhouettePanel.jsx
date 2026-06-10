@@ -104,6 +104,7 @@ const s = {
 
   svg: {
     width: '50%',
+    maxWidth: '160px',
     height: 'auto',
     display: 'block',
   },

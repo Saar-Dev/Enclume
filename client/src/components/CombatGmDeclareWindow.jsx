@@ -95,7 +95,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   // ── Reset complet quand le slot actif change ─────────────────────────────
   useEffect(() => {
-    setLocalStates({ ...STATE_DEFAULTS })
+    setLocalStates({ ...initialStates })
     setLocalQuick({ observer: 0, reperer: 0, phrase: false })
     setMapAction(null)
     setCombatMode('normal')
@@ -349,8 +349,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const isMeleeSetup = isActivePnj && (
     meleePendingMode ||
     meleeTargets.length > 0 ||
-    !!chargeSelection ||
-    (combatTargetMode?.tokenId === activeTokenId)
+    !!chargeSelection
   )
 
   // ── Attack actif (visuellement) ───────────────────────────────────────────

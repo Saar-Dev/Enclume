@@ -1,436 +1,56 @@
-# EN COURS — Travail en cours / incomplet
-> Dernière mise à jour : 2026-06-04 Session 80
+# EN COURS — Dettes actives et prochaines étapes
+> Dernière mise à jour : 2026-06-10 Session 85
+> Contenu : dettes actives + roadmap + points de vigilance permanents.
+> Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
 ---
 
-## Phase 0 — ✅ Complète
-## Phase 1 — ✅ Complète
-## Phase 2 — En cours
+## État global
 
-### Chantier 9A — Refonte voxel ✅
-### Chantier 9B — Interface CRUD texture packs ✅
-### Chantier 9C — Système entités interactables ✅
-### Chantier 9D — Atelier du GM ✅
-### Chantier 9E — Entités en session ✅ (session 36)
-### Chantier 9F-0 — Calcul serveur Polaris ✅ (session 36)
-### Chantier 9F-A — Fondations mouvement ✅ (session 39)
-### Chantier 9F-B1 — Déplacement entités serveur + atelier ✅ (session 40)
-### Chantier 9F-B2 — Mode visée client ✅ (session 41)
-### Chantier 9F-C — Diagonal 45° + animation Lerp ✅ (session 43)
-### Chantier Dice Rework ✅ (session 44)
-### Chantier 10 sprint 1 — ref_equipment ✅ (sessions 46-47)
-
-Travaux effectués en sessions 46-47 :
-- Schéma `ref_equipment` défini champ par champ avec Saar ✅
-- Migration 48 : `ref_equipment` + 3 junction tables + 6 CHECK constraints ✅
-- Route API `/api/equipment` (CRUD complet + transaction) ✅
-- Page admin standalone `localhost:3001/equipment-admin.html` ✅
-  - Saisie rapide YAML (33 alias courts, js-yaml CDN)
-  - Presets catégories (Arme / Protection / Munition / Conteneur / Divers)
-  - Multi-select compétences groupées par famille
-
-Travaux effectués en session 48 :
-- Seed `2_seed_equipment.js` — 636 items injectés (KO-par-défaut, garde name idempotent) ✅
-- `diff_equip.mjs` — outil diff BDD vs STEP1, réutilisable ✅
-- Vérification post-seed : 23 divergences acceptées (corrections intentionnelles vs livre de règles) ✅
-- Junction tables skills : enrichissement manuel en cours
-
-### Chantier 11 sprint 1 — Module Blessures ✅ (session 49)
-### PC22 — Fix 403 toggle is_learned MUTATION/POLARIS ✅ (session 50)
-
-Travaux effectués en session 49 :
-- `shared/woundConstants.js` — source de vérité partagée (LOCATIONS, SEVERITIES, MAX_COUNTS, PENALTIES) ✅
-- Migration 49 : `character_wounds` (UUID PK, FK char_sheet CASCADE, CHECK constraints SQL) ✅
-- `char-sheet.js` — refactorisé avec `router.param` + 4 routes blessures + broadcasts WS ✅
-- `charStats.js` — `calcWoundPenalty()` ajoutée ✅
-- `WoundManager.jsx` — composant autonome (grille fixe, clic POST/PUT/DELETE, promotion transparente) ✅
-- Onglet "Matériel" dans CharacterWindow ✅
+- Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
+- **75 migrations stables**
+- Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---
 
-## Prochaines tâches
+## En attente de validation fonctionnelle
 
-### Chantier 10 sprint 2 — char_inventory ✅ (session 51)
-
-Travaux effectués en session 51 :
-- Migration 50 : `char_inventory` + `char_sheet.sols` ✅
-- `calcEncumbrancePenalty()` dans `charStats.js` ✅
-- 5 routes inventaire + route sols dans `char-sheet.js` ✅
-- `InventoryPanel.jsx` — affichage + edit GM (ajout depuis catalogue, équipement, suppression) ✅
-- Montage dans `CharacterWindow.jsx` onglet Matériel sous WoundManager ✅
-
-### Chantier 11 suite — Intégration malus blessures dans calculs Polaris ✅ (session 52)
-
-Travaux effectués en session 52 :
-- `GET /wounds` enrichi avec `wound_penalty` calculé côté serveur ✅
-- `CharacterSheet.jsx` — Initiative effective avec tooltip `position:fixed` ✅
-- `socket/index.js` — `effectiveMalus` dans `chancesDeReussite` (jets réels) ✅
-- Règle documentée : malus santé non-cumulatif (pire seul) + encombrement cumulatif (règle maison)
-
-### Chantier 10 sprint 3 — Armures multi-couches + codes slots indépendants ✅ (session 54)
-### Chantier 10 sprint 4 — Module Armes équipées ✅ (session 55)
-
-Travaux effectués en session 54 :
-- Problème : `LOCATION_TO_SLOT` mappait bras_gauche + bras_droit → 'B', jambe_gauche + jambe_droite → 'J' → équiper à l'un affichait partout
-- Solution : codes distincts BG/BD/JG/JD (localisation indépendante)
-- `shared/armorConstants.js` — LOCATION_TO_SLOT + nouveau SLOT_TO_REF_LOCATION (mapping compat ref_equipment) ✅
-- `LocationPanel.jsx` — `refCode` pour lookup ref_location, equip/unequip indépendant par slotCode ✅
-- `char-sheet.js` — VALID_SLOTS + BASE_ARMOR + POST/PUT LIKE queries (multi-slot) ✅
-- Migration 51 — nullifie slots B/J stales via regex `(^|/)(B|J)(/|$)` ✅
-- ref_equipment.location intouché — mapping client gère la compat
-- Test : Pagan équipée indépendamment à Tête+Bras+Jambes ✅
-
-Travaux effectués en session 55 :
-- Migration 52 : `char_inventory.current_ammo UUID FK ref_equipment.id SET NULL` ✅
-- Migration 53 : fusions doublons munitions (11 groupes) + renommages 89 entrées ✅
-- `WeaponPanel.jsx` (NEW) : armes 1M équipées, stats DMG/CHC/PTÉ/TIR/CAL, munitions, rechargement, équipement ✅
-- `char-sheet.js` : WEAPON_SLOTS, +6 SELECT champs arme/munition, POST/PUT weapon branch + current_ammo caliber validation ✅
-- `InventoryPanel.jsx` : VALID_SLOTS bug fix (codes BG/BD/JG/JD/MG/MD/2M/Tr) ✅
-- `WeaponPanel` monté dans `CharacterWindow` entre ArmorWoundPanel et InventoryPanel ✅
-- Tri munitions "standard" en premier dans availableAmmoFor ✅
-
-### Chantier 10 sprint 5 — Mille-feuille serveur + polarisRound unifié + ref_min_str ✅ (session 56)
-### Chantier 11 Sprint 1 — Fondations + COMBAT_START/END ✅ (session 57)
-
-Travaux effectués en session 56 :
-- `shared/polarisUtils.js` (NOUVEAU) — source unique `polarisRound(x) = Math.floor(x + 0.4)` ✅
-- `server/src/lib/charStats.js` — import depuis shared, def locale supprimée, + `calcResistanceArmure` + `calcCarenceArmure` ✅
-- `client/src/character/CharacterSheet.jsx` — import depuis shared, const locale supprimée ✅
-- `client/src/character/LocationPanel.jsx` — import depuis shared, `calcMillefeuille` utilise polarisRound ✅
-- `server/src/routes/character/char-sheet.js` — `ref_min_str` dans les 2 SELECT GET /inventory ✅
-- Affichage carence FOR (rouge si FOR < min_str) reporté Chantier 11 sprint 3 (nécessite forNA dans ArmorWoundPanel)
-
-Travaux effectués en session 57 :
-- Migration 54 : `combat_state` + `combat_roster` + `combat_actions` ✅
-- `shared/events.js` : +17 constantes COMBAT_* ✅
-- `client/src/stores/combatStore.js` (NOUVEAU) ✅
-- `client/src/components/CombatOverlay.jsx` (NOUVEAU) ✅
-- `client/src/components/CombatRosterWindow.jsx` (NOUVEAU) — INI preview + surpris + exclusion participants ✅
-- `server/src/routes/battlemaps.js` : `GET /:id/combat-ini` ✅
-- `server/src/socket/index.js` : combatTimers + calcREA import + COMBAT_START/END + SESSION_JOIN sync ✅
-- `client/src/pages/SessionPage.jsx` : PC15 bypass + handleCombatToggle + bouton ⚔ gmBar + handlers COMBAT_* + CombatOverlay ✅
+- **Sprint CaC 4b** (attaque multiple melee — 2/3 cibles, −5/−7 malus) — Session 74
+- **Sprint Test de Choc** (migration 69, shock_auto_stun) — Session 81
 
 ---
 
-### Chantier 11 Sprint 2 — Surprise + Phase Annonce ✅ (sessions 58-59)
+## Dettes actives
 
-Travaux effectués en session 58 :
-- `client/src/components/CombatTimeline.jsx` (NOUVEAU) — timeline INI, portraits cliquables GM, topOffset ✅
-- `client/src/components/CombatActionWindow.jsx` (NOUVEAU) — déclaration PJ (grille 4 actions, précipité), états surprise ✅
-- `client/src/components/CombatPnjPanel.jsx` (NOUVEAU) — modal GM PJs/PNJs read-only, bouton Passer ✅
-- `client/src/components/CombatGmDeclareWindow.jsx` (NOUVEAU) — fenêtre GM bottom-right déclaration PNJs ✅
-- `server/src/socket/index.js` : COMBAT_SURPRISE_RESULT + COMBAT_ACTION_DECLARE (PC26 ini_mod) + COMBAT_SKIP_PLAYER ✅
-- Fix formule surprise : `isSuccess = roll ≤ base_ini`, initiative = roll (succès) ou 0 (échec) ✅
-
-Travaux effectués en session 59 (architecture) :
-- Migration 55 : `characters.type TEXT NOT NULL DEFAULT 'pnj'` + backfill `user_id IS NOT NULL → 'pj'` ✅
-- `server/src/routes/characters.js` : `type` dans GET colonnes + POST insert/returning + PUT sync user_id + broadcastCharacterUpdate ✅
-- `server/src/socket/index.js` : COMBAT_START filtre Entités (`!character_id → continue`), `is_pnj = character?.type === 'pnj'` ✅
-- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE — `character.type` pour guard PJ/PNJ, Entité exclue ✅
-- `CombatGmDeclareWindow` + `CombatPnjPanel` : `isPnj` via `char?.type === 'pnj'`, props `user`/`gmUserId` supprimés ✅
-
-Travaux effectués en session 59 (suite) — Rework Phase Annonce :
-- `client/src/components/combatSections.js` (NOUVEAU) — source unique `SECTIONS` + `KEY_MOD` + `formatMod` partagés ✅
-- `client/src/components/CombatActionWindow.jsx` — refonte : 4 sections, 21 items (8 actifs/13 grisés), multi-select, INI total, `selectedKeys[]` payload ✅
-- `client/src/components/CombatGmDeclareWindow.jsx` — refonte : accordion always-one-open, auto-progression après déclaration, même liste complète que joueur ✅
-- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE — nouveau payload `selectedKeys[]`, `KEY_MOD` dict, `primaryType` dérivé, `modifiers JSONB` ✅
-
-**Bug ouvert (non bloquant) :**
-- Surprise critique (roll=1) → initiative=1 (agit en dernier). Sémantique roll surpris à revoir.
+| Dette | Priorité | Contexte |
+|---|---|---|
+| `is_stunned` non enforced dans `COMBAT_ACTION_DECLARE` | Haute | PC42 — sprint `stunned_until_turn` |
+| `is_stunned` sans durée (LdB p.237 : 1d6 tours) | Haute | sprint `stunned_until_turn` requis |
+| "Changer le mode de tir" — non implémenté | Moyenne | sprint dédié futur |
+| Sprint Annonce v2 — actions précédentes en lecture seule | Moyenne | GmDeclareWindow + ActionWindow |
+| Surprise critique (roll=1) → initiative=1 | Basse | à analyser |
+| WorkshopPage crash `err.response?.data?.error` | Basse | extraire `.message` |
+| `useDiceAudio.js` — sons dés | Basse | — |
+| `.gitattributes:3` — attribut invalide | Basse | — |
+| `onTokenRotate` dead code Canvas3D/Scene | Basse | — |
+| `getVoxelSurfaceTop` — pas de cas slope/wedge | Basse | default y+1.0 acceptable V1 |
+| Kiwi P-SRV-5 — ports Docker non restreints à 127.0.0.1 | Infra | voir SERVEURDISTANTKIWI.md |
+| Logs debug `index.js` — conservés volontairement | Infra | à retirer avant production |
 
 ---
 
-### Chantier 11 Sprint 2.5 — Centrage caméra combat ✅ (session 61)
-### Chantier 11 Sprint 4 — UI Déplacement combat ✅ (session 61)
+## Roadmap
 
-Travaux effectués en session 61 :
-- `shared/polarisUtils.js` : calcAN + calcAllureMoy + calcAllures (exports partagés PI11) ✅
-- `client/src/character/CharacterSheet.jsx` : import shared — déf locales supprimées ✅
-- `client/src/components/combatSections.js` : move_short/move_long → isMove item unique ✅
-- `client/src/components/CombatActionWindow.jsx` : fetch allures, mode déplacement, inMoveMode, moveSelection ✅
-- `client/src/components/CombatOverlay.jsx` : légende allures + ZONE_DEFS + Valider/Changer/Annuler ✅
-- `client/src/components/Canvas3D.jsx` : anneaux 4 zones PE34, cursor, combatMoveModeRef, onPendingMove ✅
-- `client/src/pages/SessionPage.jsx` : combatMoveMode + pendingMoveSelection + handlers ✅
-- Correction PE34 : altitude anneaux `pos_z + 1.0` (pieds token, pas centre voxel) ✅
-
-**Validé joueur ✅ — GM/PNJ déplacement reporté Sprint 4.1**
-
----
-
-### Chantier 11 Sprint 4.1 — Généralisation zones[] + micro_grab ✅ (session 61 suite)
-
-Travaux effectués :
-- `combatSections.js` : MOVE_ZONE_DEFS export, micro_grab_close+micro_grab_far fusionnés en micro_grab (3 zones statiques), isZoneSelect, KEY_MOD nettoyé ✅
-- `CombatActionWindow.jsx` : handleZoneSelectClick(item), toggle-deselect, moveSelection.sourceKey ✅
-- `SessionPage.jsx` : zones[] dans handleEnterMoveMode + combatMoveMode ✅
-- `Canvas3D.jsx` : rings zones.map, zone-click zones.find, cursor altitude PE34 corrigée ✅
-- `CombatOverlay.jsx` : ZONE_DEFS supprimé, iterate zones directement ✅
-
-**Limitations acceptées v1 :**
-- Zones euclidiennes (pas de pathfinding) — inexact en terrain obstrué, acceptable en zone dégagée
-- GM/PNJ déplacement non implémenté (CombatGmDeclareWindow sans onEnterMoveMode)
-
----
-
-### Chantier 11 Sprint 5 — Serveur COMBAT_ACTION_DECLARE ✅ (session 62)
-
-Travaux effectués :
-- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE rewrite — moveAction destructuré, KEY_MOD nettoyé, guard PC33, `getSequence`/`getType`, `actionRows[]` bulk insert (1 ligne/action), `modifiers:{ini_mod}` par ligne ✅
-- `server/src/socket/index.js` : COMBAT_SURPRISE_RESULT fix — `is_micro`/`initiative_score` → `action_key:'skip', sequence:99` ✅
-- `server/src/socket/index.js` : `skipPlayer()` fix — `initiative_score` → `action_key:'skip', sequence:99` ✅
-- `server/src/socket/index.js` : `startResolutionPhase()` fix — `orderBy('initiative_score','desc')` → `orderBy('sequence','asc')` ✅
-
----
-
-### Chantier 11 Sprint 6 — Phase Résolution ✅ (session 62)
-
-Travaux effectués :
-- `server/src/socket/index.js` : `startResolutionPhase()` complet — `active_slot_idx:0` + emit `COMBAT_SLOT_ADVANCED` slot 0 ✅
-- `server/src/socket/index.js` : `COMBAT_ACTION_CONFIRM` — guards, move (PE29 Redis), assault stub Sprint 7, micro resolved direct ✅
-- `server/src/socket/index.js` : `advanceSlot(io, campaignId, slots, nextIdx)` — nextIdx≥length → endTurn, sinon COMBAT_SLOT_ADVANCED ✅
-- `server/src/socket/index.js` : `endTurn(io, campaignId)` — PC18 bulk UPDATE + PC28 DELETE + current_turn+1 + ANNOUNCEMENT ✅
-- `client/src/stores/combatStore.js` : `setActions` ✅
-- `client/src/pages/SessionPage.jsx` : COMBAT_SLOT_ADVANCED handler + COMBAT_PHASE_CHANGED stocke actions ✅
-- `client/src/components/CombatTimeline.jsx` : curseur jaune `activeSlotIdx` (RESOLUTION uniquement) ✅
-- `client/src/components/CombatActionWindow.jsx` : mode Résolution — recap + bouton Agir → COMBAT_ACTION_CONFIRM ✅
-- `client/src/components/CombatOverlay.jsx` : condition RESOLUTION joueur + panneau GM résolution (nom+INI+Agir jaune) ✅
-
----
-
-## Chantier 11 Sprint 7.1 — Déclaration Assaut UI ✅ (session 64)
-
-Travaux effectués :
-- `server/src/db/migrations/57_combat_v3.js` : +`fire_mode`/`bullet_count`/`fire_mode_bonus_comp`/`fire_mode_bonus_dmg` sur `combat_actions` + `state_character JSONB NOT NULL DEFAULT '{}'` sur `combat_roster` (PC39). Bug corrigé : `target_token_id` dupliqué retiré (existait déjà uuid en migration 54).
-- `client/src/components/CombatActionWindow.jsx` : Kiwi-style Assaut — fenêtre 360→720px, armes auto MG/MD (PC22), sélection cible canvas (mode cible), FIRE_MODE_VARIANTS CC/RC/RL complet, cadence CC (radio tir simple/répétition + slider + A/B), RC (auto), RL (5 boutons), dual-wield toggle (+3/+5), forceCC, assaultValid
-- `client/src/pages/SessionPage.jsx` : combatTargetMode state + handleEnterTargetMode + handleValidateTarget
-- `client/src/components/Canvas3D.jsx` : combatTargetModeRef (P40), intercept drag pour target mode, ligne R3F native attaquant→cible (useMemo)
-- `client/src/components/CombatOverlay.jsx` : bandeau "Assaut — Cliquez sur la cible" + Valider/Changer/Annuler la visée
-- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE enrichi (targetTokenId, fireMode, bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp)
-
-**"Changer le mode de tir" — UI non implémentée.** L'action existe dans combatSections.js mais le sub-panel de sélection CC/RC/RL n'est pas codé. Sprint dédié futur.
-
----
-
-## Chantier 11 Sprint 7 — Jets d'attaque + Dégâts + Blessures
-
-Objectif : Attaques complètes. Blessures enregistrées. Carence FOR appliquée.
-
-**Sprint 7.1 ✅ CONFIRMÉ (session 64)**
-**Sprint 7.2 ✅ CONFIRMÉ (session 64)**
-**Sprint 7.3 ✅ CONFIRMÉ (session 64)** — resolveAssaultAction + COMBAT_DAMAGE_PROMPT + bug fix skillAssoc
-**Sprint 7.4 ✅ CONFIRMÉ (session 64)** — CombatDamageWindow + COMBAT_DAMAGE_CONFIRM handler
-**Sprint 7.4bis ✅ CONFIRMÉ (session 64)** — Jet de toucher interactif côté joueur (CombatModifiersWindow → COMBAT_ATTACK_PLAYER_RESULT)
-
-**Corrections et ajouts session 63 (ne pas réintroduire les erreurs) :**
-- Blessures : 1 par touche, gravité par seuils (≥5/10/15/20/25/30) — pas `Math.floor(nets/5)`
-- Mode de tir (RC/RL) : sélection en ST1 (Annonce), stocké `fire_mode`/`bullet_count`/`fire_mode_bonus_comp`/`fire_mode_bonus_dmg` dans `combat_actions` (4 colonnes — migration 57)
-- Tir instinctif : hors scope Sprint 7 (assaut classique uniquement)
-- `confirmedModifiers` : `{ portee, situation[], taille }` — sans tirInstinctif, sans fireMode
-- Broadcast : `severity + is_lethal` — pas `nbrBlessures`
-- `target_token_id` : colonne existe déjà (migration 54), juste à stocker dans le handler
-- `resolveWoundInsertion` + `isShockTestRequired` : locales dans `char-sheet.js`, à exporter (Sprint 7.3)
-- LOS + portée : vérification pré-jet serveur (COMBAT_ACTION_CONFIRM) — LOS binaire V1, portée extrême → −99
-- Portée auto-calc : parse `ref_equipment.range`, PC37 (espace millier), PC38 (arme contact), pré-remplissage CombatModifiersWindow
-- SYSTEME.md §17 ajouté : pattern données personnage serveur (chaîne calcul, charStats.js, données par rôle)
-- Sprint 7.5 ajouté : décompte munitions (sprint dédié)
-- "Validation Sprint 4" → "Validation Sprint 7" (corrigé)
-- `run à vide autocentré OBLIGATOIRE` ajouté dans CLAUDE.md (§ Pendant le développement)
-
-**Corrections session 63 continuation — architecture state_character + bugs résiduels :**
-- `combat_roster.state_character JSONB NOT NULL DEFAULT '{}'` ajouté au plan + SYSTEME.md (migration 57, bloc 2)
-- `is_rushed` = STATE (pas action distincte), implémentation deux temps : INSERT combat_actions + UPDATE state_character (PC39)
-- **BUG A résolu** : `ref_degats` → `parseDice(weapon.ref_damage_h)` — colonne réelle `damage_h`, alias `ref_damage_h` (PC40)
-- **BUG B résolu** : `is_rushed` lu depuis `state_character.is_rushed`, jamais `SELECT combat_actions` (PC28)
-- **BUG C résolu** : chaîne skill_id : `weapon_inv_id → item_id → ref_equipment_skill_assoc → skill_id`
-- **L9 résolu** : fetch `char_inventory WHERE container != 'Coffre'` pour `calcEncumbrancePenalty`
-- **L10 résolu** : `PORTEE_MOD_COMP = { bout_portant:5, courte:0, moyenne:-5, longue:-10, extreme:-15 }` documenté
-- PC39 + PC40 ajoutés dans section 8 pièges
-- Section 11 Sprint 3 endTurn : nettoyage state_character per-turn documenté
-- PO1/PO2/PO3 marqués ✅ dans section 6 ET section 11
-
-À lire avant de coder :
-- `server/src/socket/index.js` — état après Sprint 6
-- `server/src/lib/charStats.js` — calcResistanceArmure, calcCarenceArmure, calcResistanceDommages, calcSeuils
-- `shared/woundConstants.js`, `shared/armorConstants.js`
-- `server/src/routes/character/char-sheet.js` — resolveWoundInsertion, isShockTestRequired, POST /wounds
-
----
-
-## Chantier reporté — Paramètre campagne GM entity move mode
-
-Décision session 41 : reporté en chantier dédié.
-3 options prévues :
-- Option réaliste : tous les tokens GM font des jets
-- Option à la carte : case à cocher par token non attribué à un joueur
-- Option divine : GM ne fait jamais de jet
-
-Implique : nouvelle colonne `campaigns.gm_entity_move_mode`, option par token `tokens.bypass_entity_move_roll`, interface paramètres campagne.
-
----
-
-## Sprint GM — Refonte CombatGmDeclareWindow ✅ CONFIRMÉ (session 65)
-
-Travaux effectués :
-- `CombatGmDeclareWindow.jsx` : réécriture complète — InlineChip click-to-cycle, batch mode (selectedIds), STATE_DEFAULTS, aggregate/aggregateInitial, sections TACTIQUE/ARMEMENT/ACTION/RAPIDES, roster intégré, footer INI delta ✅
-- `combatSections.js` : ajout `tooltip` sur MAP_ACTIONS + QUICK_ACTIONS (texte LdB exact), correction label `reperer`, slider GM affiche coût INI (val×stepIni) ✅
-- `CombatActionWindow.jsx` : `title={a.tooltip}` sur les 3 branches MAP_ACTIONS + wrapper QUICK_ACTIONS ✅
-
-**Sprint GM-A ✅ CONFIRMÉ (session 65)** — CombatRosterWindow v2 : détection arme/armure pré-combat, chips T/C/B/J, quick-equip GM-only, bannière alerte
-
-**Sprint GM-B ✅ CONFIRMÉ (session 65)** — Déplacement PNJ séquentiel (Option B + Passer) : `DEFAULT_PNJ_ALLURES`, queue `moveTick`, `useEffect([moveTick])`, `pendingGmMoves`, bouton "Passer", aucun changement serveur
-
----
-
-## Sprint 7.6 — Actions d'état dynamiques ✅ CONFIRMÉ (session 65)
-
-Remplacement du système clé plate (selectedKeys/KEY_MOD) par des sélecteurs d'état avec matrices de transition INI. Payload v2 `{ tokenId, state, mapActions, quick }`.
-
-Travaux effectués :
-- `server/src/db/migrations/58_combat_v4.js` : +`state_cover`/`state_fire_mode`/`state_vitesse` sur `combat_roster`, CHECK constraints, backfill `state_vitesse='rushed'` depuis `state_character->>'is_rushed'` ✅
-- `client/src/components/combatSections.js` : réécriture complète — STATE_DEFS (5 états + matrices asymétriques), stateTransitionCost, calcIniDelta, MAP_ACTIONS multi-select, QUICK_ACTIONS incrémentaux ✅
-- `client/src/components/CombatActionWindow.jsx` : réécriture complète v2 (~600 lignes) — StateSelector segmented control, blocs TACTIQUE/ARMEMENT/ACTION/RAPIDES, QB weapon auto-drawn, footer INI delta coloré, emit v2 ✅
-- `server/src/socket/index.js` : COMBAT_ACTION_DECLARE v2 (matrices STATE_COSTS serveur, calcul iniDelta, UPDATE états + initiative), endTurn reset colonnes per-tour, `is_rushed` → `state_vitesse` ✅
-- `client/src/components/CombatModifiersWindow.jsx` : `state_character.is_rushed` → `state_vitesse === 'rushed'` ✅
-- `client/src/components/CombatGmDeclareWindow.jsx` : adapté v2 (MAP_ACTIONS/QUICK_ACTIONS, emit v2 avec états courants) ✅
-
-**Limitations acceptées v1 :**
-- GM window : attack et move non disponibles (nécessitent UI dédiée — sprint futur)
-- state_vitesse = 'delayed' : pas de logique de report en fin de round (V2 futur)
-
----
-
-## Session 66 ✅ (2026-05-30)
-
-- Code d'invitation beta `REGISTRATION_CODE` (8 chiffres, `timingSafeEqual`, guard env var) ✅
-- Fenêtres combat draggables : `useDraggable` hook + localStorage + clamp écran (5 fenêtres) ✅
-- DicePanel favoris form inline (remplace `prompt()`) ✅
-- **PLAN 13 — Jets Favoris complet ✅**
-  - Migration 59 : `character_macros` + routes CRUD `/macros` ✅
-  - Handler WS `MACRO_ROLL` : threshold live charStats, critiques Polaris absolus, template {7 vars} ✅
-  - Client : chips ★, exécution socket, chat `MACRO_ROLL_RESULT`, formulaire création 3 dropdowns, preview seuil live ✅
-  - Fix GM : `effectiveCharId`, dropdown personnage cible ✅
-- Piège PC41 documenté : Express 5 routes sans `/` initial → 404 silencieux ✅
-- **Changelog Dashboard ✅**
-  - `client/public/CHANGELOG.md` : source de données (6 versions, format parseable) ✅
-  - `ChangelogPanel.jsx` : panneau rétractable 38↔340px, auto-open localStorage, PCB SVG, tags colorés ✅
-  - `DashboardPage.jsx` : layout height:100vh+flex-col, mount ChangelogPanel ✅
-
-**Sprint 7.5 ✅ CONFIRMÉ FONCTIONNEL (session 66)**
-- Migration 60 : `ammo_remaining` + `pnj_unlimited_ammo` ✅
-- `resolveAssaultAction` : décrément post-jet (guard NULL + PNJ unlimited) ✅
-- `POST /reload` : transaction charge arme + décrémente munition ✅
-- WeaponPanel : affichage chargeur + picker variantes ✅
-- CampaignSettingsPage : section Règles de jeu + toggle ✅
-
-**Sprint Test de Choc ✅ CONFIRMÉ FONCTIONNEL (session 66)**
-- Flux PNJ : compute shockResult complet + fix bug P49 severity pré-promotion ✅
-- Flux PJ (COMBAT_DAMAGE_CONFIRM) : enrichissement seuilEtourdi/seuilIncons + shockResult dans COMBAT_DAMAGE_RESULT ✅
-- `is_stunned` appliqué dans state_character (pattern PC39) pour les deux flux ✅
-- `CombatResultPanels.jsx` : ShockBlock (3 états colorés) dans CombatResultGM + CombatResultPlayer ✅
-- `CombatDamageWindow.jsx` : bloc Test de Choc après severityBanner ✅
-- `CombatOverlay.jsx` : shockResult passé aux deux panneaux résultat ✅
-
-## Sprint i18n Option B ✅ CONFIRMÉ FONCTIONNEL (session 66)
-
-17 composants wired : RegisterPage, LoginPage, DashboardPage, WorkshopPage, CampaignSettingsPage, Sidebar, SessionPage, CharacterWindow, CharacterSheet, EntityBuilderTab, VoxelBuilderTab, SkillsPanel, AdvantagesPanel, RadialMenu, EntityInstancePanel, ChangelogPanel + Canvas3D (clean).
-fr.json : +20 sections (charSheet ~50 clés, builder ~55 clés, advantages, skillsPanel, radialMenu, entityPanel, changelog, +ajouts existants).
-Hors scope : combat (12), équipement (6). SkillTooltips : roadmap.
-
-**Sprint 7.6 ✅ CONFIRMÉ FONCTIONNEL (session 66)**
-- Migrations 61 (CHECK reload) + 62 (reload_mode) ✅
-- Phase 1 : panneau droit sélection munitions, payload `{weapon_inv_id, ammo_item_id}` ✅
-- Phase 2 : "Rechargement — en attente du MJ…" (pas de bouton Agir joueur) ✅
-- `resolveReloadAction` : arme ciblée, munition ciblée, formule magazine/topup ✅
-- `COMBAT_RELOAD_RESULT` ciblé sur le socket joueur (via `io.fetchSockets` si GM clique Agir) ✅
-- `CombatResultReload` : panneau bottom-center succès/échec persistant jusqu'au tour suivant ✅
-- Option campagne "Mode de rechargement" (Chargeur / Complément) + hint ✅
-
-## Session 71 ✅ (2026-06-01)
-
-- **Sprint Timeline BG3-style ✅ CONFIRMÉ FONCTIONNEL**
-  - `TimelineCard.jsx` (NOUVEAU) : portrait plein format, gradient overlay nom+INI, bordure SEVERITY_COLORS, taille active 72×100 / normale 54×76
-  - `CombatTimeline.jsx` réécriture : Motion FLIP (LayoutGroup+AnimatePresence), ANNOUNCEMENT(roster ASC ini) / RESOLUTION(actions sequence ASC), timer countdown coloré, MAX_CARDS=12
-  - `worst_wound_severity` : subquery dans GET /characters + helper getWorstWoundSeverity + payloads WS WOUND_ADDED/UPDATED/REMOVED + listeners SessionPage → updateCharacter (merge partiel)
-  - `actionTimerSec` propagé : SessionPage → CombatOverlay → CombatTimeline
-  - Fix portrait URL (manquait préfixe /api/assets/) — bug silencieux depuis session 57
-  - Librairie `motion` v12 ajoutée (React 19 + Vite 8 compatible)
-  - Plan documenté dans `docs/PLAN_TIMELINE.md`
-
----
-
-## Session 72 ✅ (2026-06-01)
-
-- **Sprint CaC 4a — Multi-adversaires ✅ EN ATTENTE VALIDATION**
-  - Règle LdB p.224 : malus −5/−7/−10 pour 2/3/4+ adversaires distincts en CaC
-  - Critère positionnel : `dist2d(X, Y) ≤ 3 + allonge_max_de_Y`, positions post-déplacement
-  - Requête roster unique dans `Promise.all` de `resolveMeleeAction` (tokens → combat_roster → characters → char_inventory → ref_equipment, groupée par token)
-  - Helpers module-level : `multiAdversaryMalus(n)` + `countAdversaires(tokenPos, rosterTokens, excludeId, enemyType)`
-  - `multiMalusAttaquant` → `chancesAttaque` ; `multiMalusDefenseur` → `chanceDefense` (PNJ path + PJ via commonPending)
-  - Payloads enrichis : `COMBAT_MELEE_RESULT` (les deux paths) + `COMBAT_MELEE_DEFENSE_PROMPT`
-  - Client : alerte ⚠ orange dans le prompt défense PJ + panneau `CombatResultMelee`
-  - Choix V1 documenté : `PNJ = ennemi du PJ` — limitation PNJ alliés (voir SYSTEME/COMBAT.md)
-
-**Prochains chantiers :**
-- **Sprint CaC 4b** : attaque multiple (2/3 cibles, −5/−7 malus), UI PJ séquentielle + GM queue étendue
-- Sprint Test de Choc suite : guard is_stunned COMBAT_ACTION_DECLARE (PC42)
-- D2 Jets Favoris : drag-to-reorder macros (sort_order DB)
-- Sprint Tooltips Compétences
-
----
-
-## Session 68 ✅ (2026-05-31)
-
-- **Sprint CaC 2 ✅ CONFIRMÉ FONCTIONNEL**
-  - Migration 64 : `state_combat_mode` sur `combat_roster`
-  - Modes Normal, Offensif, Charge implémentés (Défensif/Retraite en DB, CaC3)
-  - Validation distance déplacée Phase 2 (post-déplacement)
-  - PJ : mode selector chips + Charge flow séquentiel (chargeAllures=lente, move→cible)
-  - GM : panneau droit 720px, queue Charge PNJ combinée, batch libre (filter(isRanged) dans assault queue)
-  - 7 bug fixes post-tests (double sélection, boutons fantômes, batch type guard, etc.)
-
-- **Sprint CaC 3 ✅ CONFIRMÉ FONCTIONNEL**
-  - Modes Défensif (+3 défense) et Retraite (+5 défense) — PJ + PNJ
-  - PJ : chips vert uniforme, pas de cible, INI=0, handleRetraiteMove() recul optionnel lente
-  - Serveur : freeMove étendu à retraite, chanceDefense += 3/+5 dans les deux paths défense
-
-**Prochains chantiers :**
-- Sprint Test de Choc suite : guard is_stunned dans COMBAT_ACTION_DECLARE + clear logique (PC42)
-- D2 Jets Favoris : drag-to-reorder macros (sort_order en DB, non implémenté côté UI)
-- **Sprint Tooltips Compétences ✅ Session 73** : bouton ⓘ + panel position:fixed (description LdB, scrollable, click-outside) dans SkillsPanel.jsx. description déjà en DB ref_skills, zéro travail serveur.
-- **Sprint Évolution skills coût doublé — SUSPENDU** : le "coût doublé" Polaris concerne les compétences réservées (X) hors profession (règle contextuelle par personnage, pas propriété fixe par compétence). Feature suspendue.
-- **Notification entité interactive** — sablier animé au-dessus de l'entité côté joueur (en attente du GM) + bouton rouge dans l'onglet chat GM. Sprint futur.
-- Sprint CaC 4 — modes avancés, multi-adversaires (priorité basse)
-- Sprint Waypoints — priorité basse
-  - Waypoints = partie intégrante de la déclaration serveur (pas juste visuel)
-  - Interface : alt+clic ajoute une case avec liseré blanc ; alt+clic sur waypoint l'annule
-  - Le serveur doit recevoir la liste ordonnée de waypoints pour reconstruire le chemin exact
-- **Sprint Page Santé Serveur** (priorité basse) — route `/api/health/detailed` (mémoire, uptime, températures `/sys/class/thermal/`, statut services) + page client dédiée. Voir `docs/SERVEURDISTANTKIWI.md`.
-- **Fix WorkshopPage** : `err.response?.data?.error` est un objet AppError `{message, code}`, pas une string → crash React (écran blanc) sur import invalide. Fix : extraire `.message`. Sprint futur.
-
----
-
-## Session 67 ✅ (2026-05-31)
-
-- D10 UV texturing V2 — dette fermée (DicePanel v3 a rendu la chose superflue) ✅
-- **Sprint CaC 1 ✅ CONFIRMÉ FONCTIONNEL**
-  - Migration 63 : +`melee` dans `chk_action_type`
-  - `resolveMeleeAction` : calcul skillTotal (COMBAT_ARME/COMBAT_A_MAINS_NUES FOR+COO), roll D20, opposition PNJ auto / PJ bloque slot
-  - `COMBAT_MELEE_DEFENSE_CONFIRM` : roll D20 défenseur, résolution, dégâts, advanceSlot
-  - `COMBAT_DECLARE_ERROR` + return si hors portée (distance affichée)
-  - Client : panneau melee CombatActionWindow (armes de contact + allonge + cible), Phase 2, reset nouveau tour
-  - GM : queue cible PNJ séquentielle (miroir assault), arme auto-affichée
-  - Fix auto-ciblage (onPendingTarget filtre tokenId)
-  - Pièges : COMBAT_A_MAINS_NUES (pas COMBAT_CONTACT), category='Arme de contact' (pas location+range IS NULL)
-
----
-
-## Bugs connus toujours ouverts
-
-### Bug WebGL — Context Lost au switch play/edit
-Cause : Three.js r160+ + drivers GPU Windows. Non bloquant. Statut : documenté, abandonné.
-
-### Bug B — Modification faces voxel existant non exposée dans l'UI
-Statut : correction prévue si besoin.
+- **Sprint Drones 2** — Combat (initiative INI 12, jets programme, dommages intégrité, taille cible)
+- **Sprint Drones 3** — Télépilotage (drone lié à PJ pilote)
+- **Sprint stunned_until_turn** — durée étourdissement + purge endTurn
+- **Sprint CaC 4b** — validation fonctionnelle requise avant
+- **Sprint Annonce v2** — actions précédentes en lecture seule (GmDeclareWindow + ActionWindow)
+- **Sprint Tooltips Compétences** — SkillsPanel bouton ⓘ (déjà codé Session 73)
+- **Sprint Waypoints** — déplacement points intermédiaires (déclaration serveur, alt+clic)
+- **Sprint Page Santé Serveur** — `/api/health/detailed` (mémoire, uptime, températures)
+- **D2 Jets Favoris** — drag-to-reorder macros (sort_order UI)
+- **i18n combat+équipement** — 18 composants hors scope (sprint dédié futur)
 
 ---
 
@@ -450,7 +70,6 @@ Statut : correction prévue si besoin.
 - PE27 moveType — calculé client (feedback) ET recalculé serveur (validation). Si discordance → refus silencieux
 - Token GM sans char_sheet → ENTITY_MOVE_REQUEST ignoré silencieusement — comportement documenté V1
 - Lerp EntityMesh — useFrame dans sous-composants (pas EntityMesh parent) — règle des hooks
-- Logs debug index.js — conservés volontairement, à retirer avant production
 - DiceMesh useMemo — deps [geoDef.type, color, dieType] — dieType obligatoire pour D10 (PE32)
 - D10 Html overlay — position=[0,0,0] — ne pas déplacer (PE33)
 - P49 — promotion blessures : always GET /wounds si promoted === true (ne pas ajouter wound localement)
@@ -463,43 +82,3 @@ Statut : correction prévue si besoin.
 - PL-Q2 — Quill insère la toolbar comme `previousElementSibling`, pas à l'intérieur du container — guard `classList.contains('ql-container')`
 - PL-Q3 — `containerRef.current` peut être null dans le cleanup React 19 — toujours capturer en variable locale en début d'effect
 - PL-Q4 — `editor.destroy()` n'existe pas en Quill 2.0 public API
-
----
-
-## Session 75 ✅ (2026-06-03) — Sprint Bibliothèque 1
-
-- Migration 67 : `campaign_documents` (id, campaign_id, name, content_html, gm_notes_html, viewer_ids JSONB, editor_ids JSONB, created_by, timestamps) ✅
-- `server/src/routes/documents.js` : GET/POST/PUT/DELETE, broadcast filtré canView, gm_notes_html retiré pour non-GM ✅
-- `libraryStore.js` : documents[], addDocument upsert, updateDocument, removeDocument ✅
-- `LibraryPanel.jsx` : liste documents, ShareIndicator (œil/punaise colorée), canEdit ✅
-- `DocumentModal.jsx` : éditeur Quill x2 (content + gmNotes), PermissionSelect portal, save/delete ✅
-- `SessionPage.jsx` : fetch initial dans loadSession, listeners DOC_CREATED/UPDATED/DELETED ✅
-- Sidebar : fusion onglets Joueurs+Config → Profil (4 onglets au lieu de 5) ✅
-
-## Session 80 ✅ (2026-06-04) — Sprint Bibliothèque 2
-
-- `server/src/routes/documents.js` : +POST /upload-image (multerUpload, minio.putObject, GM only, campaigns/<id>/documents/<uuid>.<ext>, retourne {url:objectName}) ✅
-- `client/src/components/DocumentModal.jsx` : makeImageHandler base64→upload MinIO, useQuillEditor +campaignId/onError ✅
-- PDF exclu du scope : projet public forums Polaris — analyse sécurité requise (voir JOURNAL3 Session 80)
-
-## Session 81 ✅ (2026-06-05) — Corrections combat + Sprint Annonce v2 + S1/S2/S3
-
-- **Bug ammo_remaining** : migration 70 backfill + `resolveAmmoInit()` dans char-sheet.js (PUT/POST/quick-equip) + fix `isAmmoEmpty` client ✅
-- **Bug crash écran noir joueur** : `setMeleePendingTokenId(null)×3` → `setMeleePendingTokenIds([])` dans `CombatActionWindow.jsx` ✅
-- **Sprint Annonce v2** :
-  - `socket/index.js` : `COMBAT_ACTION_DECLARED` enrichi (`moveTarget`, `attackTargetId`) ✅
-  - `SessionPage.jsx` : state `announcementMarker`, reset sur `COMBAT_PHASE_CHANGED` ✅
-  - `Canvas3D.jsx` : ghost box bleue (moveTarget) + ligne ambre (déclarant→cible) ✅
-  - `CombatOverlay.jsx` : mini-panneau bottom-left "vient d'annoncer" ✅
-  - `TimelineCard.jsx` : prop `isDimmed` (opacity 0.35) ✅
-  - `CombatTimeline.jsx` : `isDimmed = hasAnnounced && !isActive` en ANNOUNCEMENT ✅
-  - `CombatGmDeclareWindow.jsx` : réécriture complète — batch supprimé, appels directs, "Passer [PJ]" ✅
-- **S1 GM** : roster PNJ collapsible localStorage dans `CombatGmDeclareWindow` ✅
-- **S2** : ligne déplacement bleu + label Billboard/Text au-dessus destination (`Canvas3D`) ✅
-- **S1 PJ** : roster multi-personnage collapsible + architecture multi-token dans `CombatActionWindow` ✅
-- **S3 Live Preview GM** : `COMBAT_ANNOUNCE_PREVIEW` — in-memory Map serveur + relay + sync SESSION_JOIN + debounce 150ms PJ + panneau monitoring GM ✅
-
-## Session 83 ✅ (2026-06-06) — Sprint Rework Design + Sprint Drones 1bis
-
-- **Sprint Rework Design** : 9 composants combat + `index.css` — styles JS inline → classes CSS système. 27 tokens `--combat-*`, Section 11 COMBAT WINDOW SYSTEM. ✅
-- **Sprint Drones 1bis** : migration 73 (drone_programs ALTER + seed 34 logiciels ref_equipment), char-sheet.js 4 routes drone corrigées, DroneSheet.jsx réécriture complète (DISPLAY_GROUPS, optgroups, tooltip, mode catalogue/custom), fr.json section drone nettoyée. Déployé Kiwi ✅

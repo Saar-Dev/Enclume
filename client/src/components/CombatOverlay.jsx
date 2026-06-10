@@ -139,7 +139,9 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
 
       {/* Panneau visée assaut — visible pendant le mode sélection cible */}
       {combatTargetMode && (
-        <div style={styles.moveLegend}>
+        <div style={combatTargetMode.pendingTargetScreenPos
+          ? { ...styles.moveLegend, position: 'fixed', left: `clamp(8px, ${combatTargetMode.pendingTargetScreenPos.x - 110}px, calc(100vw - 228px))`, top: `clamp(8px, ${combatTargetMode.pendingTargetScreenPos.y + 16}px, calc(100vh - 160px))`, bottom: 'auto', right: 'auto' }
+          : styles.moveLegend}>
           <div style={styles.moveLegendTitle}>
             {combatTargetMode.mode === 'melee' ? 'Corps à corps — Cliquez sur la cible' : 'Assaut — Cliquez sur la cible'}
           </div>
@@ -326,7 +328,9 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
 
       {/* Panneau légende déplacement — visible pendant le mode sélection destination */}
       {combatMoveMode && (
-        <div style={styles.moveLegend}>
+        <div style={pendingMoveSelection?.screenX != null
+          ? { ...styles.moveLegend, position: 'fixed', left: `clamp(8px, ${pendingMoveSelection.screenX - 110}px, calc(100vw - 228px))`, top: `clamp(8px, ${pendingMoveSelection.screenY + 16}px, calc(100vh - 200px))`, bottom: 'auto', right: 'auto' }
+          : styles.moveLegend}>
           <div style={styles.moveLegendTitle}>Déplacement</div>
 
           {MOVE_ZONE_DEFS.map(def => {

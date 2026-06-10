@@ -204,18 +204,19 @@ export default function LocationPanel({
                       }
                       style={{
                         width: 13, height: 13,
-                        border: `1px solid ${w ? '#fff' : '#2a2a3e'}`,
+                        border: `1px solid ${w ? '#5a5a7a' : '#2a2a3e'}`,
                         background: w ? SEVERITY_COLORS[sev] : 'transparent',
                         cursor: canEdit ? 'pointer' : 'default',
                         borderRadius: 2,
                         position: 'relative',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 8,
-                        boxShadow: w?.is_stabilized ? '0 0 4px #00ff00' : 'none',
+                        outline: w?.is_stabilized ? '2px solid #4caf77' : 'none',
+                        boxShadow: w?.is_stabilized ? '0 0 5px rgba(76,175,119,0.6)' : 'none',
                         flexShrink: 0,
                       }}
                     >
-                      {w?.is_stabilized && <span style={{ color: '#00ff00', lineHeight: 1 }}>✓</span>}
+                      {w?.is_stabilized && <span style={{ color: '#fff', fontWeight: 'bold', fontSize: 9, lineHeight: 1 }}>✓</span>}
                       {isShock && !w?.is_stabilized && (
                         <span style={{
                           color: '#FFA500', position: 'absolute',

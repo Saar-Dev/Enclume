@@ -62,6 +62,7 @@
 | `battlemap_id` | UUID de la battlemap (carte) | `campaign_id` (UUID de la campagne — parent) |
 | `combat_roster.token_id` | FK vers `tokens.id` — seule FK identité du roster | Pour obtenir le `character_id` : `roster.token_id → tokens.character_id` (pas de colonne directe) |
 | `action.weapon_inv_id` | `char_inventory.id` de l'arme — stocké dans `combat_actions` | Ne pas utiliser directement pour `ref_equipment_skill_assoc` — passer par `char_inventory.equipment_id` |
+| `combat_actions.fire_mode` | Mode de tir utilisé dans l'action déclarée — `'CC'`/`'RC'`/`'RL'` (majuscules) | `combat_roster.state_fire_mode` = mode courant du combattant — `'cc'`/`'rc'`/`'rl'` (minuscules, migration 58) |
 
 ---
 
@@ -84,3 +85,4 @@
 | COMBAT_DAMAGE_CONFIRM | Événement WS — le tireur PJ confirme le lancer |
 | COMBAT_DAMAGE_RESULT | Événement WS — résultats complets pour affichage fenêtre |
 | COMBAT_ATTACK_PLAYER_RESULT | Événement WS — résultat toucher/raté vers socket tireur PJ uniquement |
+| CAMPAIGN_SETTINGS_UPDATED | Événement WS serveur→room — propagation live des paramètres campagne (action_timer_sec, shock_auto_stun, etc.) — Session 85 |

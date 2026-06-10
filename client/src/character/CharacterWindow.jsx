@@ -387,6 +387,7 @@ export default function CharacterWindow({ character, isGm, onClose, woundReloadK
               characterId={character.id}
               canEdit={isGm || isOwner}
               isGm={isGm}
+              reloadKey={inventoryVersion}
               onInventoryMutated={bumpInventoryVersion}
             />
           </>

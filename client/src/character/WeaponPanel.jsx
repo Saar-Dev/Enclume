@@ -10,6 +10,15 @@ function parseAmmoCount(ammoCount) {
   return match ? parseInt(match[0], 10) : 0
 }
 
+function getSlotInfo(refLocation) {
+  const locs = (refLocation || '').split('/')
+  if (locs.includes('M'))                          return { type: '1H',    defaultSlot: 'MG' }
+  if (locs.includes('2M') && locs.includes('Tr')) return { type: '2M_Tr', defaultSlot: '2M' }
+  if (locs.includes('2M'))                         return { type: '2M',    defaultSlot: '2M' }
+  if (locs.includes('Tr'))                         return { type: 'Tr',    defaultSlot: 'Tr' }
+  return { type: 'unknown', defaultSlot: '' }
+}
+
 export default function WeaponPanel({ characterId, canEdit, reloadKey, onInventoryMutated = () => {} }) {
   const [items,   setItems]   = useState([])
   const [loading, setLoading] = useState(true)
@@ -44,8 +53,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
       i.ref_family === 'Armes' &&
       i.ref_location &&
       ['M', '2M', 'Tr'].some(loc => i.ref_location.split('/').includes(loc)) &&
-      i.container !== 'Coffre' &&
-      !i.slot,
+      i.container !== 'Coffre',
     ),
     [items],
   )
@@ -111,8 +119,15 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
 
   const handleEquip = useCallback(async () => {
     if (!equipItemId || !equipSlot) return
+    const isTwoHand = equipSlot === '2M' || equipSlot === 'Tr'
+    const conflictSlots = isTwoHand ? ['MG', 'MD', '2M', 'Tr'] : [equipSlot, '2M', 'Tr']
+    const conflicts = equippedWeapons.filter(w => w.id !== equipItemId && conflictSlots.includes(w.slot))
     setEquipping(true)
     try {
+      for (const c of conflicts) {
+        const r = await api.put(`/char-sheet/${characterId}/inventory/${c.id}`, { slot: null })
+        setItems(prev => prev.map(i => i.id === c.id ? r.data.item : i))
+      }
       const res = await api.put(`/char-sheet/${characterId}/inventory/${equipItemId}`, { slot: equipSlot })
       setItems(prev => prev.map(i => i.id === equipItemId ? res.data.item : i))
       setEquipItemId('')
@@ -123,7 +138,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
     } finally {
       setEquipping(false)
     }
-  }, [characterId, equipItemId, equipSlot, onInventoryMutated])
+  }, [characterId, equipItemId, equipSlot, equippedWeapons, onInventoryMutated])
 
   // Quand l'item sélectionné change, pré-sélectionner le slot selon ref_location
   const handleSelectWeapon = useCallback((itemId) => {
@@ -132,9 +147,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
     if (!itemId) { setEquipSlot(''); return }
     const item = availableWeapons.find(i => i.id === itemId)
     if (!item) { setEquipSlot(''); return }
-    const loc = item.ref_location || ''
-    const isTwoHand = loc.split('/').some(l => l === '2M' || l === 'Tr')
-    setEquipSlot(isTwoHand ? '2M' : 'MG')
+    setEquipSlot(getSlotInfo(item.ref_location).defaultSlot)
   }, [availableWeapons])
 
   // ── Rendu ────────────────────────────────────────────────────────────────────
@@ -170,6 +183,12 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
             <div style={s.weaponHeader}>
               <span style={s.slotBadge}>{SLOT_LABELS[weapon.slot] || weapon.slot}</span>
               <span style={s.weaponName}>{weapon.custom_name || weapon.ref_name || '—'}</span>
+              {weapon.slot === 'Tr' && (
+                <span
+                  style={s.trWarning}
+                  title="Arme lourde sur trépied. Si le personnage n'est pas en position stable, la compétence est divisée par 2."
+                >⚠ Trépied</span>
+              )}
               {canEdit && (
                 <button style={s.unequipBtn} onClick={() => handleUnequip(weapon)} title="Déséquiper">×</button>
               )}
@@ -194,7 +213,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
                       ? <span style={s.ammoName}>{ammoName}</span>
                       : <span style={s.ammoNone}>non chargée</span>
                     }
-                    {ammoCount > 0 && (() => {
+                    {weapon.current_ammo && ammoCount > 0 && (() => {
                       const remaining = weapon.ammo_remaining ?? ammoCount
                       const isEmpty   = weapon.ammo_remaining === 0
                       return (
@@ -248,27 +267,43 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
           >
             <option value="">— Équiper une arme —</option>
             {availableWeapons.map(i => (
-              <option key={i.id} value={i.id}>{i.custom_name || i.ref_name}</option>
+              <option key={i.id} value={i.id}>
+                {i.custom_name || i.ref_name}{i.slot ? ` (${SLOT_LABELS[i.slot] || i.slot})` : ''}
+              </option>
             ))}
           </select>
 
-          {equipItemId && (
-            <select
-              style={{ ...s.select, width: 'auto', flexShrink: 0 }}
-              value={equipSlot}
-              onChange={e => setEquipSlot(e.target.value)}
-            >
-              {(() => {
-                const item = availableWeapons.find(i => i.id === equipItemId)
-                const loc  = item?.ref_location || ''
-                const isTwoHand = loc.split('/').some(l => l === '2M' || l === 'Tr')
-                if (isTwoHand) return [<option key="2M" value="2M">2 mains</option>]
-                return [
-                  <option key="MG" value="MG">Main G</option>,
-                  <option key="MD" value="MD">Main D</option>,
-                ]
-              })()}
-            </select>
+          {equipItemId && (() => {
+            const item = availableWeapons.find(i => i.id === equipItemId)
+            const { type } = getSlotInfo(item?.ref_location)
+            if (type === '1H') return (
+              <select
+                style={{ ...s.select, width: 'auto', flexShrink: 0 }}
+                value={equipSlot}
+                onChange={e => setEquipSlot(e.target.value)}
+              >
+                <option value="MG">Main G</option>
+                <option value="MD">Main D</option>
+              </select>
+            )
+            if (type === '2M_Tr') return (
+              <select
+                style={{ ...s.select, width: 'auto', flexShrink: 0 }}
+                value={equipSlot}
+                onChange={e => setEquipSlot(e.target.value)}
+              >
+                <option value="2M">2 mains</option>
+                <option value="Tr">Trépied</option>
+              </select>
+            )
+            return null
+          })()}
+
+          {equipItemId && equipSlot === 'Tr' && (
+            <span
+              style={s.trWarning}
+              title="Arme lourde sur trépied. Si le personnage n'est pas en position stable, la compétence est divisée par 2."
+            >⚠ Trépied requis</span>
           )}
 
           {equipItemId && (
@@ -434,6 +469,12 @@ const s = {
     cursor: 'pointer',
     fontSize: 11,
     padding: '4px 10px',
+    flexShrink: 0,
+  },
+  trWarning: {
+    fontSize: 10,
+    color: '#e8a020',
+    cursor: 'default',
     flexShrink: 0,
   },
 }

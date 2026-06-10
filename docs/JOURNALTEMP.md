@@ -1,253 +1,263 @@
-# JOURNALTEMP — Vérification MANUELSYSCOMBAT.md vs LdB
-> Session 85 — 2026-06-09
-> Objectif : vérifier MANUELSYSCOMBAT.md ligne par ligne contre REGLESYSCOMBAT.md (source de vérité absolue)
-> Statuts : ✅ CONFORME | ❌ FAUX | ⚠️ PARTIEL/NUANCE | ❓ ABSENT DU LdB (invention) | 🔲 À VÉRIFIER
+# JOURNALTEMP — Vérification planification DRONE
+> Session 86 — 2026-06-10
+> Objectif : Planifier et verifier la planification des drones au systeme de combat
 
----
+§Vision — tableau modes
+V1 — Catégorie armement non explicite dans vision — RÉSOLU — précision à ajouter :
+La logique est correcte (fire_mode === 'cc' → armement_contact, sinon armement_distance) et documentée dans le plan Sprint 2c (correction V14).
+À clarifier dans la table Vision : ajouter note "catégorie déterminée par drone_weapons.fire_mode".
 
-## LÉGENDE
+V2 — Déplacement drone CaC autonome — HORS SCOPE SPRINT 2 — comportement existant suffisant :
+Le joueur déplace le token drone via le système de mouvement combat existant (combat_actions type='move_short'/'move_long').
+Le drone ayant un roster entry et un token_id, il peut déclarer un move action comme tout participant.
+Pas de mécanique spéciale requise pour V1. Le joueur contrôle le drone token comme une 2e entité.
+À documenter dans le plan comme comportement hérité du système existant.
 
-- **✅ CONFORME** : affirmation du manuel vérifiée et exacte par rapport au LdB.
-- **❌ FAUX** : affirmation contredit explicitement le LdB.
-- **⚠️ PARTIEL** : vrai en partie, mais incomplet ou nuancé.
-- **❓ ABSENT DU LdB** : invention ou interprétation technique absente du LdB (peut être acceptable comme choix d'implémentation, à signaler explicitement).
-- **🔲 À VÉRIFIER** : pas encore traité.
+§Différences mécaniques
+V3 — integrite_actuelle décrémentation — ANALYSÉ — FORMULE FAUSSE CONFIRMÉE :
+LdB vérifié (REGLEDRONE.md p.82-88) : "cases de blessures équivalent à celui du Corps".
+Système identique au système humanoïde : 1 hit = 1 case. Gravité déterminée par palier de 5 pts nets.
+Décrémentation correcte : integrite_actuelle -= 1 par hit (indépendamment des dégâts nets).
+Sauf exception : severity = 'detruit' (degatsNets ≥ 30) → integrite_actuelle = 0 direct.
+Formule plan Math.floor(degatsNets / 5) : FAUSSE. Pour 15 nets → plan donne -3, correct est -1. Facteur d'erreur 3x.
+Pour 25 nets → plan donne -5, correct est -1. Facteur d'erreur 5x.
+Le drone serait détruit en 1-2 hits avec la formule actuelle pour des armes standard.
+Correction à apporter dans Sprint 2b du plan :
+  const newIntegrite = severity === 'detruit' ? 0 : Math.max(0, droneSheet.integrite_actuelle - 1)
+NOTE : B4 reste valide pour les cas d'overflow (box déjà pleine → déborde-t-on sur la suivante ?). Ce point précis reste à confirmer. Mais la décrémentation de base (-1 par hit) est suffisamment documentée par le LdB.
 
----
+V4 — damages JSONB et integrite_actuelle — ANALYSÉ — risque réduit après V3 :
+Avec la correction V3 (integrite -= 1 par hit), synchro est naturelle : 1 case cochée ET integrite -= 1 simultanément.
+Risque résiduel — cas overflow : si damages[severity].indexOf(false) === -1 (toutes cases plein pour ce niveau), la case n'est pas cochée MAIS integrite -= 1 quand même → décalage 1 pt entre JSONB et integrite.
+Fix recommandé : si idx === -1, chercher le premier slot false dans le niveau suivant (overflow vers gravité supérieure).
+Pour V1 scope : comportement acceptable (drone en fin de vie, overflow rare). Ajouter commentaire dans le code.
 
-## PROGRESSION
+§Migration 76
+V5 — Contrainte XOR absente — CONFIRMÉ — À CORRIGER DANS LE PLAN :
+Le plan dit "Jamais les deux non-nuls simultanément." Invariant non enforced en DB.
+Analyse : CHECK (A IS NULL OR B IS NULL) = autorise [null,null], [X,null], [null,Y] — refuse [X,Y].
+Ne pas utiliser XOR strict qui bloquerait les actions sans arme (move, skip, reload).
+Formulation correcte pour Migration 76 :
+  ALTER TABLE combat_actions
+    ADD CONSTRAINT chk_weapon_xor
+      CHECK (weapon_inv_id IS NULL OR drone_weapon_inv_id IS NULL);
+DÉCISION : ajouter ce CHECK dans la définition de Migration 76 du plan.
 
-- [ ] Section 1 — Modèle de données persistant (schéma PostgreSQL)
-- [ ] Section 2 — Automate d'état du tour (state machine)
-- [ ] Section 3 — Moteur d'initiative et modificateurs transitoires
-- [ ] Section 4 — Pipeline balistique (résolution assaut distance)
-- [ ] Section 5 — Matrice d'isolation des risques
-- [ ] Section 6 — Phase d'initialisation (Roster & Surprise)
-- [ ] Section 7 — Phase d'annonce
-- [ ] Section 8 — Mutations d'initiative
-- [ ] Section 9 — Phase de résolution
-- [ ] Section 10 — Clôture et maintenance des états (endTurn)
+§Sprint 2a — COMBAT_START
+V6 — is_pnj: false pour les drones — VÉRIFIÉ — DEUX IMPACTS RÉELS :
 
----
+Impact 1 — Surprise (mineur) :
+Code vérifié (index.js:1538-1549) : surprisedPlayers filtre !is_pnj → drone inclus si surpris.
+Émet COMBAT_SURPRISE_ROLL vers character?.user_id = null → targetSocket = undefined → guard if(targetSocket) → pas de crash.
+MAIS : is_surprised: true en DB pour un drone si le GM le met dans surprisedTokenIds. Flag incorrect, pas de conséquence mécanique visible (COMBAT_ACTION_DECLARE ne check pas is_surprised).
+Fix requis dans le plan : dans rosterRows.map, forcer is_surprised = false si character.type === 'drone'.
 
-## SECTION 1 — Modèle de données persistant
+Impact 2 — CRITIQUE — drones bloqués dans COMBAT_ACTION_DECLARE :
+Code vérifié (index.js:1817-1821) :
+  if (character.type === 'pnj') { if (socket.role !== 'gm') return }
+  else { if (character.user_id !== socket.user.id) return }
+Pour character.type === 'drone' : tombe dans else → character.user_id = null → null !== socket.user.id → TOUJOURS REFUSÉ.
+Conséquence : Sprint 2c (GM déclare drone via CombatGmDeclareWindow = COMBAT_ACTION_DECLARE) est bloqué.
+Sprint 2d (auto-announcement serveur = insert direct DB, bypass COMBAT_ACTION_DECLARE) est intact.
+Fix requis dans COMBAT_ACTION_DECLARE : étendre la condition PNJ :
+  if (character.type === 'pnj' || character.type === 'drone') { if (socket.role !== 'gm') return }
 
-### combat_state
-| Champ | Manuel | LdB | Statut |
-|---|---|---|---|
-| campaign_id (PK) | 1 ligne active par campaign_id | non précisé dans LdB (choix technique) | ❓ |
-| current_phase | 'ROSTER', 'ANNOUNCEMENT', 'RESOLUTION' | LdB parle d'étapes : Surprise / Initiative / Déclaration / Résolution / Fatigue / Fin — pas de noms de phases | ❓ phaseNames = convention technique |
-| round | compteur de round | ✅ LdB confirme notion de "Tour de combat" | ✅ |
-| active_slot_idx | index du slot actif | ❓ abstraction technique, LdB parle de "phases d'action" numérotées par score d'initiative | ❓ |
+V7 — state_control_mode utilisé en Sprint 2d avant création — RÉSOLU PAR CONCEPTION :
+Analyse : deux options.
+Option A : migration anticipée (ajouter state_control_mode dans Migration 76 ou 76b). Crée une dépendance inutile entre Sprint 2 et Sprint 3.
+Option B (retenue) : Sprint 2d ne filtre PAS sur state_control_mode — tous les drones sont autonomes par définition avant Sprint 3. Le filtre est ajouté à Sprint 3 lors de l'ajout de la colonne.
+Décision : supprimer le filtre r.state_control_mode === 'autonome' de Sprint 2d. Garder uniquement character.type === 'drone' comme critère d'auto-announcement. Sprint 3 ajoutera la colonne (DEFAULT 'autonome') + le filtre. Résout aussi partiellement V23.
 
-### combat_roster
-| Champ | Manuel | LdB | Statut |
-|---|---|---|---|
-| base_initiative | = calcREA = ADA + PER | ❌ LdB dit Initiative de base = **Niveau de Réaction** (pas ADA+PER). Réaction est un attribut calculé, pas ADA+PER directement. calcREA dans le code = polarisRound((ADA+PER)/2). À confirmer avec charStats.js. | ❌ À VÉRIFIER DANS LE CODE |
-| current_initiative | modifiable intra-tour | ✅ LdB nomme cela "niveau actuel" vs "niveau de base" | ✅ |
-| state_position | 'standing', 'crouching', 'prone' | ✅ LdB mentionne ces positions (debout, accroupi, allongé) | ✅ |
-| state_weapon | 'holstered', 'ready', 'drawn' | ⚠️ LdB parle de "dégainer" comme préparation, et "main sur l'arme" (-3 au lieu de -5). Les 3 états sont une interprétation raisonnable. | ⚠️ |
-| state_character (JSONB) | flags volatils : is_rushed, is_surprised, is_stunned | ⚠️ LdB confirme surprised et précipitation (is_rushed). is_stunned existe (Test de Choc → état étourdi). Mais LdB dit stunned = **1D6 rounds**, jamais un booléen permanent. | ⚠️ |
-| Armure mécanisée : MIN(Réaction, Manœuvre_armure) | mentionné dans le manuel comme calcul de base_initiative | ⚠️ LdB marque cette règle **OPTIONNEL** (encart). Manuel ne précise pas l'optionnalité. | ⚠️ |
+§Sprint 2b — Drone comme cible
+V8 — modDegatsMode absent — CONFIRMÉ — BUG STRUCTUREL DANS LE PLAN :
+Code serveur vérifié (index.js:2263-2271) : le COMBAT_DAMAGE_CONFIRM handler calcule degautsBruts en deux branches :
+  melee : rawDice + modDom + combatModeBonus
+  ranged : rawDice + modDomAttaque + modDegatsMode (isShortRange ? fire_mode_bonus_dmg : 0)
+Le plan Sprint 2b recompute degautsBruts = rawDice + modDomAttaque DANS le handler drone → modDegatsMode absent.
+Mais ce calcul est déjà fait en amont dans le handler, AVANT la vérification du type de cible.
+Fix architectural requis : restructurer Sprint 2b pour intercepter APRÈS le calcul commun degautsBruts, pas le recomputer :
+  compute degautsBruts (commun, avec modDegatsMode inclus)
+  if (cibleCharacter.type === 'drone') {
+    // etq = blindage, rd = calcDroneRD(integrite)
+    const degatsNets = Math.max(0, degautsBruts - etq - rd)
+    await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, droneSheet, degatsNets)
+    return
+  }
+  // ... humanoid path (existant)
+Signature resolveDroneIntegrityLoss reçoit degatsNets (post-defenses drone), pas degautsBruts.
 
-### combat_actions
-| Champ | Manuel | LdB | Statut |
-|---|---|---|---|
-| sequence | Mouvement=1, Micro-actions=2, Assaut=3 | ⚠️ LdB ne définit pas de "séquence 1/2/3". LdB dit : déplacement court = PRÉPARATION (coûte −3 INI, intégré à l'attaque). Déplacement long = action de déplacement séparée (action entière). La distinction "séquence 1/2/3 dans la DB" est une abstraction technique. | ❓ |
-| payload (JSONB) | stocke données métier | ❓ choix technique | ❓ |
+V9 — CaC humanoïde → drone — RÉSOLU PAR V8+V13 :
+Code vérifié (index.js:2263-2271) : le calcul degautsBruts distingue déjà melee vs ranged AVANT la branche cible :
+  melee : degautsBruts = rawDice + modDom + combatModeBonus
+  ranged : degautsBruts = rawDice + modDomAttaque + modDegatsMode
+Le fix architectural V8+V13 (intercepter après degautsBruts calculé) résout le cas CaC automatiquement.
+La branche drone dans COMBAT_DAMAGE_CONFIRM reçoit degautsBruts déjà correct pour les deux types d'attaque.
+Aucune action additionnelle requise pour V9 spécifiquement.
 
-**Résumé Section 1 :**
-- `base_initiative = calcREA = ADA+PER` → **⚠️ à vérifier** : dans le code `calcREA = polarisRound((ADA+PER)/2)` pas `ADA+PER` direct. Le manuel écrit "ADA + PER" sans la division par 2. Potentiellement une erreur dans le manuel.
-- Armure mécanisée : optionnel selon LdB, traité comme obligatoire dans le manuel.
-- `sequence 1/2/3` : abstraction technique absente du LdB, pas fausse mais non sourcée.
+V10 — droneSheet.token_id n'existe pas — RÉSOLU — Option A retenue :
+drone_sheet n'a pas de colonne token_id (confirmé migration 71, 72, 73).
+DÉCISION : passer tokenId en paramètre supplémentaire.
+Nouvelle signature : resolveDroneIntegrityLoss(io, campaignId, characterId, tokenId, droneSheet, degatsNets)
+token_id est toujours disponible dans le contexte appelant (token déjà fetché pour vérifier character.type).
+Aucune requête supplémentaire. À corriger dans la définition de la fonction dans le plan.
 
----
+V11 — Cascade combat_actions — VÉRIFIÉ — FAUX POSITIF :
+Prémisse incorrecte dans l'analyse initiale : combat_actions n'a JAMAIS eu de colonne roster_id.
+Schéma réel (migration 54) : combat_actions.token_id FK → tokens.id ON DELETE CASCADE.
+Comportement à la destruction drone (DELETE FROM combat_roster WHERE token_id = X) :
+- La ligne roster est supprimée. Les combat_actions du drone restent (FK sur tokens.id, pas sur combat_roster).
+- advanceSlot itère sur combat_roster → drone absent → ses actions ne sont pas consommées.
+- endTurn fait DELETE FROM combat_actions WHERE campaign_id = ... → nettoyage garanti.
+Verdict : actions orphelines pour le round courant uniquement. Pas de crash, pas d'exécution fantôme. COMPORTEMENT SÛUR.
 
-## SECTION 2 — Automate d'état du tour (state machine)
+V12 — Token drone sur battlemap après destruction — DÉCISION DE DESIGN :
+TOKEN_DELETED existe dans shared/events.js (vérifié).
+DÉCISION RETENUE : token reste sur la carte comme épave. Comportement intentionnel.
+- DRONE_INTEGRITY_UPDATED { detruit: true } est déjà émis → UI peut marquer le token visuellement comme détruit.
+- Le GM supprime le token manuellement via l'interface existante quand il le souhaite.
+- Pas d'émission automatique de TOKEN_DELETED à la destruction.
+À documenter explicitement dans le plan (actuellement silencieux sur ce point).
 
-| Affirmation | LdB | Statut |
-|---|---|---|
-| Phases : ROSTER → ANNOUNCEMENT → RESOLUTION → (boucle ou fin) | ✅ LdB : Surprise → Initiative → Déclaration → Résolution → Fin/boucle. Correspondance acceptable. | ✅ |
-| COMBAT_START calcule base_initiative + surprise + passe en ANNOUNCEMENT | ✅ cohérent avec LdB étapes 1+2 | ✅ |
-| COMBAT_ACTION_DECLARE : insère action + applique modificateur initiative immédiatement en DB | ✅ LdB : "la modification prend effet immédiatement, le marqueur est déplacé tout de suite" | ✅ |
-| Validation "tous ont déclaré" → RESOLUTION | ✅ LdB : "une fois que tout le monde a déclaré ses intentions" → résolution | ✅ |
-| Fin de la file d'actions → incrémente round + purge + reset init + retour ANNOUNCEMENT | ✅ LdB étape 5 : "on recommence à l'étape 2 (Initiative)" | ✅ |
-| Événement `COMBAT_ROUND_INCREMENTED` | ❓ nom d'événement technique, pas dans LdB | ❓ |
-| `COMBAT_NEXT_SLOT` : sélectionne le roster_id de l'index d'initiative courant, consomme combat_actions filtrées par sequence ASC | ⚠️ LdB ne parle pas de "slots" nommés ainsi. L'idée de consommer les actions d'un personnage séquentiellement dans l'ordre INI décroissant est conforme, mais la terminologie "slot" + activeSlotIdx est une abstraction technique. | ⚠️ |
+V13 — PJ attaque drone : rouler les dés ou auto-résolu ? — ANALYSÉ — BUG STRUCTUREL :
+Code vérifié (index.js:~3616 ranged, ~2494 melee) : le serveur distingue bien PJ vs PNJ attaquant :
+  PJ attaquant → COMBAT_DAMAGE_PROMPT → player rolls → COMBAT_DAMAGE_CONFIRM
+  PNJ attaquant → auto-résolution directe dans resolveAssaultAction
+La matrice du plan (ligne "PJ attaque drone") est CORRECTE : PJ → COMBAT_DAMAGE_PROMPT → CONFIRM → resolveDroneIntegrityLoss.
+MAIS : Sprint 2b place le handler drone dans resolveAssaultAction AVANT la branche PJ/PNJ.
+Pour PJ attaquant un drone : rawDice n'est pas encore disponible à ce point → rawDice = undefined → degautsBruts = NaN → CRASH.
+Fix architectural : Sprint 2b doit avoir DEUX branches séparées :
+  A) resolveAssaultAction — PNJ attaquant drone : guarded if (attackerCharacter.type !== 'pj') → auto-resolve direct
+  B) COMBAT_DAMAGE_CONFIRM — PJ attaquant drone : check cibleCharacter.type === 'drone' → appliquer defenses drone sur degautsBruts déjà calculé → resolveDroneIntegrityLoss
+La branche B est absente du plan actuel. À ajouter dans Sprint 2b.
+Décision confirmée : PJ roule ses propres dés de dégâts contre un drone (cohérence UX).
 
-**Résumé Section 2 :**
-- Structure globale de la machine à états : **conforme** à l'esprit du LdB.
-- Terminologie "SLOT" et `activeSlotIdx` : abstraction technique acceptable mais non sourcée LdB.
+§Sprint 2c — resolveDroneAssaultAction
+V14 — weapon.melee n'existe pas dans drone_weapons — CONFIRMÉ — BUG CONCEPTION :
+Schema drone_weapons (Option A) : champs id, character_id, equipment_id, name, damage_formula, portee, fire_mode, notes.
+Pas de champ melee. Le champ existant est fire_mode CHECK ('cc','rc','rl').
+Correction directe :
+  FAUX : AND category = weapon.melee ? 'armement_contact' : 'armement_distance'
+  CORRECT : AND category = (weapon.fire_mode === 'cc') ? 'armement_contact' : 'armement_distance'
+Une ligne à corriger dans Sprint 2c du plan.
 
----
+V15 — isRushedMod dans la formule drone — ANALYSÉ — DEAD CODE, pas de crash :
+state_vitesse existe bien sur combat_roster (migration 58, DEFAULT 'normal'). Drones = toujours 'normal'.
+isRushedMod = 0 systématiquement pour les drones → pas de bug fonctionnel.
+Mais sémantiquement faux (drones ne peuvent pas se précipiter). À retirer de la formule drone dans Sprint 2c pour propreté du code.
+Correction simple : supprimer isRushedMod du calcul chancesDeReussite dans resolveDroneAssaultAction.
 
-## SECTION 3 — Moteur d'initiative et modificateurs
+V16 — drone_weapons.ammo_restant absent du schéma — DÉCISION — HORS SCOPE V1 :
+LdB : les armes drone ont des munitions (ex: lance dard 70 munitions). Fonctionnalité valide.
+DÉCISION V1 : pas de suivi munitions. Retirer le commentaire "décrémenter ammo_restant" du plan Sprint 2c.
+Ajouter en TODO du plan : "B6 — ammo_restant sur drone_weapons : colonne ammo_remaining INTEGER nullable + décrémentation dans resolveDroneAssaultAction".
 
-### Ordre des phases
-| Affirmation | LdB | Statut |
-|---|---|---|
-| Ordre d'annonce : CROISSANT (lents en premier) | ✅ LdB p.213 : "dans l'ordre croissant des niveaux d'Initiative (les plus lents en premiers)" | ✅ |
-| Ordre de résolution : DÉCROISSANT (rapides en premier) | ✅ LdB p.213 : "résolues dans l'ordre décroissant des niveaux d'Initiative" | ✅ |
+V17 — Portée drone non parsée — ANALYSÉ — ACCEPTABLE V1, pas de gap fonctionnel :
+Sprint 2c utilise confirmedModifiers identiques humanoïdes → GM sélectionne palier portée manuellement dans CombatModifiersWindow.
+Même workflow que les armes humanoïdes (aucune auto-détection portée dans le flow actuel non plus).
+La portée free-text de drone_weapons est informationnelle uniquement pour V1.
+À documenter comme future amélioration : "TODO UX — parser portee TEXT de drone_weapons pour pré-sélectionner le palier dans CombatModifiersWindow."
 
-### Bris d'égalité
-| Affirmation | LdB | Statut |
-|---|---|---|
-| Manuel : "Priorité 1 : plus haut niveau de Réaction. Priorité 2 : plus haute valeur d'Adrénaline. Priorité 3 : Simultané strict (Math.random() encapsulé)" | LdB p.214 : "la priorité va au personnage possédant le niveau de Réaction le plus élevé (avec malus blessures/fatigue). En cas d'égalité des niveaux de Réaction → simultané." | ❌ PARTIELLEMENT FAUX : le LdB ne mentionne PAS l'Adrénaline comme critère de bris d'égalité secondaire. Il dit : égalité de Réaction = simultané, point. Le "Priorité 2 : ADA" est une invention du manuel. |
+§Sprint 2d — Auto-announcement
+V18 — r.character_type n'existe pas dans combat_roster — CONFIRMÉ — FIX IDENTIFIÉ :
+Migrations vérifiées (54, 56, 57, 58, 64) : combat_roster n'a pas de character_type.
+Le serveur n'utilise jamais de JOIN combat_roster→characters — accès séparé via token_id.
+Fix pour Sprint 2d : remplacer le filtre JS par un JOIN SQL :
+  const droneRosterEntries = await db('combat_roster as r')
+    .join('tokens as t', 't.id', 'r.token_id')
+    .join('characters as c', 'c.id', 't.character_id')
+    .where({ 'r.campaign_id': campaignId, 'r.has_announced': false, 'r.status': 'active' })
+    .where('c.type', 'drone')
+    .select('r.*', 'c.id as character_id')
+Ce pattern est aussi cohérent avec COMBAT_START qui fetchait tokens puis characters séparément.
 
-### Table de mutation d'initiative
-| Action | Manuel | LdB | Statut |
-|---|---|---|---|
-| Précipiter : +3 INI / −5 test | ✅ | LdB p.218 : +3 Initiative, malus −5 à l'Action | ✅ |
-| Dégainer : −5 (ou −3 si main sur arme) | ✅ | LdB p.217 : "Dégainer une arme : Initiative −5, ou −3 si le personnage se tient prêt à dégainer, main sur l'arme" | ✅ |
-| Déplacement court (≤3m) : −3 | ✅ | LdB p.221 : "déplacements inférieurs à 3 mètres peuvent être considérés comme des Préparations… coûtent alors 3 points d'Initiative" | ✅ |
-| Changer mode de tir : −3 | ✅ | LdB p.217 : "Changer le mode de tir d'une arme à feu : Initiative −3" | ✅ |
-| S'accroupir : −3 | ✅ | LdB p.221 : "S'accroupir/Se redresser (Init. −3)*" | ✅ |
-| Se jeter à terre : −5 | ✅ | LdB p.221 : "Se jeter à terre, plonger (Init. −5)*" | ✅ |
-| Se relever : −10 | ✅ | LdB p.221 : "Se relever (Init. −10)" | ✅ |
-| **ABSENT du manuel** : Saisie (lutte) | ❌ MANQUE | LdB p.226 : "Effectuer une saisie nécessite de réussir un Test de combat, considérée comme une Préparation qui coûte 3 points d'Initiative" | ❌ OUBLI |
-| **ABSENT du manuel** : Tirer depuis une couverture | ❌ MANQUE | LdB p.217 : "Tirer depuis une couverture : malus à l'Initiative de −3 à −5 selon position" | ❌ OUBLI (mineur, MJ-dépendant) |
-| Règle de report si INI ≤ 0 : "current_initiative = max_init + 1" | ⚠️ | LdB p.216 : "si ≤ 0, l'action est reportée au tour suivant, le personnage agit en PREMIER et bénéficie de la préparation". La formule "max_init + 1" est une convention d'implémentation pour "agir en premier". Acceptable comme traduction technique. | ⚠️ |
+V19 — computeSequence(12) : fonction inexistante — CONFIRMÉ — fix trivial :
+Migrations vérifiées (56_combat_v2) : sequence est SMALLINT, valeurs 1=mouvement, 2=micro, 3=assaut.
+C'est l'ordre intra-slot (pas l'INI). computeSequence n'existe nulle part dans le codebase.
+Pour une action drone_auto (assaut autonome sans déplacement préalable) : sequence = 3 directement.
+Correction : remplacer computeSequence(12) par la valeur littérale 3.
 
-**Résumé Section 3 :**
-- Bris d'égalité ADA secondaire → **❌ FAUX** : inventé, pas dans le LdB.
-- Saisie (lutte) = préparation −3 INI → **❌ absent** du manuel.
-- Reste de la table : conforme.
+V20 — Guard PD2 bloque drone_auto sans cible — CONFIRMÉ — guard vérifié ligne 3443 :
+Code actuel : if (!action.weapon_inv_id || !action.target_token_id) return
+Pour drone_auto sans cible : weapon_inv_id = null (a drone_weapon_inv_id) ET target_token_id = null → double vrai → return silencieux.
+La correction PD2 du plan (étendre à drone_weapon_inv_id) ne résout pas le cas target_token_id null.
+Fix correct : dériver le drone_auto avant ce guard :
+  if (action.action_key === 'drone_auto') {
+    await resolveDroneAutoAction(io, campaignId, action)
+    return
+  }
+  if (!action.weapon_inv_id || !action.target_token_id) return
+La logique drone_auto a sa propre gestion du cas sans cible (Détection). À ajouter au plan.
 
----
+§Sprint 3 — Télépilotage
+V21 — INI du drone en mode télépiloté : mécanisme non défini — EN COURS D'ANALYSE :
+LdB p.319 : le character agit à son INI normale. Le drone n'a pas de slot indépendant en mode télépiloté.
+Trois options architecturales :
+Option A : double slot (drone INI 12 + propriétaire INI X). Drone ignoré. Timeline confuse.
+Option B : mise à jour base_ini du drone en DB au moment du toggle. Viole l'invariante base_ini figé.
+DÉCISION RETENUE — Option C :
+  - Le propriétaire déclare "Télépiloter" en ANNOUNCEMENT.
+  - Son action dans combat_actions référence drone_weapon_inv_id (pas weapon_inv_id).
+  - Le drone dans combat_roster : has_announced = true + status = 'done' immédiatement (il n'a pas de slot propre ce round).
+  - La timeline montre le propriétaire qui agit pour le drone. INI = INI du propriétaire.
+  - La résolution lit drone_weapon_inv_id → skillTotal = min(programme.level, TELEPILOTAGE_proprio).
+Implications à ajouter au plan Sprint 3 :
+  1. "Télépiloter" = action spéciale dans COMBAT_ACTION_DECLARE du propriétaire → insère drone_weapon_inv_id dans ses combat_actions + marque drone roster has_announced=true, status='done'.
+  2. La résolution (advanceSlot) pour le slot du propriétaire : si action a drone_weapon_inv_id → path télépilotage.
+  3. Le drone n'apparaît pas dans la timeline de résolution ce round (status='done' → filtré).
 
-## SECTION 4 — Pipeline balistique (assaut distance)
+V22 — "Le character consomme son tour" : non-enforcement — RÉSOLU PAR OPTION C (V21) :
+Option C : le propriétaire déclare "Télépiloter" → COMBAT_ACTION_DECLARE normal → has_announced = true → slot avancé.
+Enforcement structurel : une fois has_announced = true, le guard COMBAT_ACTION_DECLARE (ligne 1826) bloque toute nouvelle déclaration pour ce token.
+Le drone est simultanément marqué has_announced = true + status = 'done' → ne peut plus agir de son côté.
+Aucun mécanisme supplémentaire requis.
 
-| Affirmation | LdB | Statut |
-|---|---|---|
-| [1] LOS : Raycasting 3D depuis source_pos_z + hauteur_posture vers target_pos_z + hauteur_posture | ⚠️ LdB ne spécifie pas de raycasting technique. La notion de ligne de vue existe implicitement dans les règles de couverture/obscurité. Implémentation raisonnable. | ❓ |
-| [1] Portée : parsing ref_equipment.range, paliers Courte/Moyenne/Longue/Extrême | ✅ LdB p.226 : tableau de portée avec modificateurs identiques | ✅ |
-| [1] Munitions : invalidation si quantity < bullet_count | ✅ logique, LdB parle de gestion des munitions | ✅ |
-| [2] Seuil = Compétence + mod portée − malus blessures − carence FOR − malus précipitation (−5) | ✅ LdB p.226 : modificateurs de portée + p.236 malus blessures | ✅ |
-| [2] Cible sans défense (surprise totale) : test simple +5 | ✅ LdB p.223 : "Attaquer un personnage sans défense : Test simple avec bonus de +5" | ✅ |
-| [3] MR = Seuil − Jet. Si Jet > Seuil → échec | ✅ LdB : marge de réussite = seuil − dé | ✅ |
-| [4] Dommages_Bruts = Dommages_Arme + MR | ✅ LdB p.229 : "Dommages de l'arme + modificateur de réussite" | ✅ |
-| [4] Dommages_Nets = Bruts − (Protection_Localisation + Modificateur_Résistance_Naturelle) | ✅ LdB p.229-230 : armure absorbe N points sur la localisation touchée | ✅ |
-| [4] Gravité : incrémentée par tranche stricte de 5 points nets | ✅ LdB p.229 : "chaque tranche de 5 points de Dommages fait augmenter la gravité" | ✅ |
-| [4] Jet de localisation 1D20 | ✅ LdB p.230 : table 1D20 | ✅ |
-| [5] Test de Choc si blessure grave/critique/mortelle | ✅ LdB p.229 + chapitre État de santé p.237 (mentionné) | ✅ |
-| [5] is_stunned dans state_character si Test de Choc raté | ⚠️ LdB ne nomme pas "is_stunned" mais décrit l'état "Étourdi". Implémentation conforme dans l'esprit. | ✅ |
-| **ABSENT** : déplacement cible en combat à distance (−3/−5/−7) | ❌ MANQUE | LdB p.227 : "Cible en déplacement : allure moyenne −3, rapide −5, max −7" | ❌ OUBLI IMPORTANT |
-| **ABSENT** : tireur en déplacement (−3/−5/−7/impossible) | ❌ MANQUE | LdB p.227 : "Tireur en déplacement : lente −3, moyenne −5, rapide −7, max = impossible" | ❌ OUBLI IMPORTANT |
-| **ABSENT** : couverture partielle (−3) / importante (−5) | ❌ MANQUE | LdB p.227 : tableau modificateurs de circonstances | ❌ OUBLI |
-| **ABSENT** : obscurité (−3/−5/impossible) | ❌ MANQUE | LdB p.227 | ❌ OUBLI |
-| **ABSENT** : taille de la cible (−10 à +15) | ❌ MANQUE | LdB p.226 : tableau taille cible | ❌ OUBLI |
-| **ABSENT** dans pipeline : CaC (mêlée) | ⚠️ MANQUE | Pipeline décrit uniquement le combat à distance. CaC = test d'opposition, pas test simple. Règles distinctes. | ❌ OUBLI MAJEUR |
+V23 — Migration state_control_mode manquante — RÉSOLU PAR V7 + DÉCISION SPRINT 3 :
+V7 a retiré state_control_mode de Sprint 2d. Cette colonne n'est requise qu'en Sprint 3.
+Migration à écrire dans Sprint 3 (ex : Migration 77b ou intégrée à Migration 77) :
+  ALTER TABLE combat_roster
+    ADD COLUMN state_control_mode TEXT NOT NULL DEFAULT 'autonome',
+    ADD CONSTRAINT chk_state_control_mode CHECK (state_control_mode IN ('autonome','telepilote'));
+Migration 77 (drone_sheet.owner_character_id) et cette migration sont dans des tables différentes — deux ALTER TABLE dans la même migration ou deux migrations distinctes. Décision à prendre en Sprint 3.
+À ajouter dans la description de Sprint 3 du plan.
 
-**Résumé Section 4 :**
-- Pipeline balistique distance : structure correcte.
-- **5 modificateurs de circonstances absents** : déplacement cible, déplacement tireur, couverture, obscurité, taille cible.
-- **CaC entièrement absent** du pipeline.
+§drone_weapons schéma
+V24 — fire_mode nullable sans default — DÉCISION — NOT NULL DEFAULT 'rc' :
+fire_mode NULL → catégorie armement_distance silencieusement (fire_mode === 'cc' = false pour null).
+Comportement ambigu. Décision : NOT NULL DEFAULT 'rc' (semi-automatique = cas le plus courant pour un drone de combat).
+Raison : un drone sans fire_mode spécifié est probablement une arme à distance standard.
+Correction dans le schéma drone_weapons du plan : fire_mode TEXT NOT NULL DEFAULT 'rc' CHECK (fire_mode IN ('cc','rc','rl')).
 
----
+§TODO — B4 et incohérence du plan
+V25 — B4 non signalé dans le code Sprint 2b — RÉSOLU par V3 :
+V3 a établi la formule correcte (integrite -= 1 par hit, sauf detruit → 0) via lecture LdB.
+La formule Math.floor(degatsNets / 5) est remplacée par la correction V3.
+B4 reste pertinent uniquement pour le cas overflow (comportement lors des boxes déjà pleines).
+Code Sprint 2b à annoter : // TODO B4 — overflow: si damages[severity] plein, déborder sur gravité suivante.
 
-## SECTION 5 — Matrice d'isolation des risques
-
-*(Section descriptive/méta, pas de règles mécaniques à vérifier. Commentaires organisationnels uniquement.)*
-
-| Affirmation | LdB | Statut |
-|---|---|---|
-| "combat_actions : séquence obligatoire Mouvement (1) avant Assaut (3)" | ⚠️ LdB ne définit pas cet ordre en DB. Mais logiquement : déplacement avant attaque dans le même tour. Acceptable. | ⚠️ |
-| "endTurn : opérateur JSONB (− 'is_rushed') n'efface pas is_stunned" | ✅ correct : is_rushed = éphémère, is_stunned = persistant | ✅ |
-
----
-
-## SECTION 6 — Phase d'initialisation (Roster & Surprise)
-
-| Affirmation | LdB | Statut |
-|---|---|---|
-| "Calcul de Base : validé via calcREA dans charStats.js" | ⚠️ calcREA = polarisRound((ADA+PER)/2). LdB : Réaction = attribut du personnage. calcREA est le calcul de la Réaction à partir des attributs. Conforme si la formule (ADA+PER)/2 correspond au LdB. **À vérifier dans les règles de création de personnage** (hors scope du fichier REGLESYSCOMBAT.md fourni). | ⚠️ HORS SCOPE |
-| "Bris d'égalité : jet caché serveur (déterministe)" | ❌ | LdB p.214 : pas de jet caché — égalité de Réaction = **simultané**. Un jet aléatoire est une simplification d'implémentation mais contredit la règle "simultané" (les deux actions se résolvent en parallèle, possibilité de s'entretuer mutuellement). | ❌ CONTREDIT LE LdB |
-| "is_surprised stocké dans JSONB state_character pour conditionner les droits d'action" | ✅ cohérent avec LdB : surpris = ne peut pas agir au 1er tour | ✅ |
-| "Armure mécanisée : MIN(Réaction, Manœuvre_armure)" | ⚠️ LdB : OPTIONNEL | ⚠️ |
-
----
-
-## SECTION 7 — Phase d'annonce
-
-| Affirmation | LdB | Statut |
-|---|---|---|
-| "Ordre des annonces : CROISSANT (éléments lents d'abord)" | ✅ | ✅ |
-| "Le moteur doit bloquer COMBAT_ACTION_DECLARE tant que activeSlotIdx n'a pas atteint le token dans l'ordre croissant" | ✅ esprit du LdB : l'ordre est obligatoire (le MJ interroge dans l'ordre croissant). Implémenter un verrou serveur est la bonne approche. | ✅ (bonne pratique) |
-| "Alerte : Risque d'inversion visuelle/applicative" — identifié comme problème | ✅ problème réel, bien identifié | ✅ |
-| **ABSENT** : règle de simultanéité lors de l'égalité d'INI en phase d'annonce | ❌ MANQUE | LdB p.214 : "Si plusieurs personnages peuvent agir à la même phase d'action et que les Actions ne sont pas considérées comme simultanées, les déclarations doivent être faites dans l'ordre croissant." L'ordre d'annonce s'applique AUSSI en cas d'égalité. | ❌ OUBLI |
-
----
-
-## SECTION 8 — Mutations d'initiative
-
-*(Voir Section 3 — même contenu, vérification déjà faite.)*
-
-Résumé des écarts non repris :
-- Bris d'égalité ADA → ❌
-- Saisie −3 → ❌ absent
-- Règle report INI ≤ 0 → ⚠️ formule "max_init+1" acceptable
-
----
-
-## SECTION 9 — Phase de résolution
-
-| Affirmation | LdB | Statut |
-|---|---|---|
-| "Ordre de résolution : DÉCROISSANT" | ✅ | ✅ |
-| "Séquence interne : Mouvement (1) → Micro-actions (2) → Assaut (3)" | ⚠️ LdB ne définit pas d'ordre fixe "1/2/3". LdB dit : déplacement court (-3 INI) est une préparation intégrée à l'attaque, pas une action séparée. Déplacement long = action de déplacement distincte (le personnage ne peut pas attaquer dans le même tour, sauf exceptions). La modélisation en 3 séquences dans la DB ne reflète pas exactement ce comportement. | ❌ IMPRÉCIS |
-| "Si is_stunned → invalidation des slots futurs" | ✅ LdB : effets des actions instantanés, un personnage tué ou étourdi avant son action ne peut pas agir | ✅ |
-| "Consommation pas-à-pas via activeSlotIdx + advanceSlot" | ❓ abstraction technique | ❓ |
-| **ABSENT** : attaques multiples (jusqu'à 3 attaques, −5/−7, intervalles INI −5/−10) | ❌ MANQUE CRITIQUE | LdB p.218 : règle complète sur les attaques multiples. Non traitée dans le manuel. | ❌ MANQUE CRITIQUE |
-| **ABSENT** : actions exclusives (Charge, Tir visé, Rafale longue, Tir suppression → 1 seule attaque autorisée) | ❌ MANQUE | LdB p.218-219 : "Certaines Attaques sont exclusives" | ❌ MANQUE |
-| **ABSENT** : règle du retard d'action (personnage peut retarder et agir plus tard dans le tour à n'importe quelle phase) | ❌ MANQUE | LdB p.218 : "Retarder son Action" — peut agir à n'importe quelle phase ultérieure. Action prioritaire sur les acteurs à initiative normale à la même phase. | ❌ MANQUE |
-| **ABSENT** : "dégâts instantanés" — si acteur rapide tue/étourdit cible lente, les actions futures de la cible sont annulées | ✅ mentionné "is_stunned → invalidation" mais pas le cas "mort" | ⚠️ |
-
----
-
-## SECTION 10 — Clôture et maintenance des états (endTurn)
-
-| Affirmation | LdB | Statut |
-|---|---|---|
-| "Purge des modes éphémères (is_rushed)" | ✅ LdB : précipitation = modificateur du tour, n'est pas persistant | ✅ |
-| "is_stunned dure 1D6 rounds (variable numérique dans state_character)" | ✅ LdB p.237 (référencé) : "état Étourdi dure 1d6 rounds" | ✅ |
-| "Inconscience dure 1d6 minutes" | ✅ LdB p.237 (référencé) | ✅ |
-| "stunned_until_turn : JSONB ne stocke pas un booléen mais un entier décrémenté à chaque round" | ✅ recommandation correcte | ✅ |
-| **ABSENT** : reset de current_initiative = base_initiative au début de chaque tour | ❌ MANQUE | LdB p.213 : "Chaque joueur détermine l'Initiative de base de son personnage" à chaque tour (étape 2). Current_initiative doit être réinitialisée à base_initiative en début de chaque tour AVANT les déclarations. | ❌ MANQUE |
-
----
-
-## SYNTHÈSE FINALE
-
-### Erreurs factuelles (contredisent le LdB)
-| # | Section | Erreur |
-|---|---|---|
-| E1 | §3, §6 | Bris d'égalité : "Priorité 2 = ADA" **inexistant** dans LdB. LdB dit : égalité Réaction = **simultané**. |
-| E2 | §6 | "Bris d'égalité = jet caché" : **contredit** LdB. LdB dit égalité = simultané (les deux attaques se résolvent, les deux peuvent s'entretuer). |
-
-### Omissions importantes (absentes du manuel, présentes dans LdB)
-| # | Section | Omission |
-|---|---|---|
-| O1 | §4 | Modificateurs de circonstances balistiques : déplacement cible, déplacement tireur, couverture, obscurité, taille cible — **tous absents**. |
-| O2 | §4 | **Pipeline CaC entièrement absent** (test d'opposition, pas test simple). |
-| O3 | §9 | **Attaques multiples** (LdB p.218) : jusqu'à 3 attaques, malus −5/−7, intervalles INI −5/−10 — **absent du manuel**. |
-| O4 | §9 | **Actions exclusives** (Charge, Tir visé, Rafale longue, Tir suppression) — non listées comme telles. |
-| O5 | §9 | **Retarder son action** : règle non traitée. |
-| O6 | §3 | **Saisie (lutte) = préparation −3 INI** — absent. |
-| O7 | §10 | **Reset current_initiative = base_initiative** au début de chaque nouveau tour — absent. |
-
-### Nuances / Implémentations acceptables (absentes LdB mais non incorrectes)
-| # | Section | Note |
-|---|---|---|
-| N1 | §1 | `sequence 1/2/3` en DB : abstraction technique non sourcée mais logiquement cohérente. |
-| N2 | §2 | Terminologie "SLOT", `activeSlotIdx` : abstraction technique. |
-| N3 | §3 | Règle report INI ≤ 0 : formule "max_init+1" = traduction acceptable de "agit en premier au tour suivant". |
-| N4 | §1 | Armure mécanisée MIN(Réaction, Manœuvre) : **optionnel** selon LdB, traité comme obligatoire dans le manuel — choix acceptable. |
-| N5 | §9 | Modélisation séquence déplacement/assaut en 3 steps DB : imprécise mais gérable. |
-
----
-
-## PROCHAINES ÉTAPES
-
-- [ ] Comparer avec BUGIDENTIFIE.md — recouper les bugs identifiés avec les erreurs trouvées ici
-- [ ] Lire le code actuel (socket/index.js, CombatTimeline.jsx, combatSections.js) pour vérifier ce qui est effectivement implémenté
-- [ ] Dresser le plan de correction priorisé (erreurs bloquantes vs dettes)
+Synthèse
+#	Sévérité	Nature
+V5	Haute	Contrainte XOR DB manquante — CONFIRMÉ — correction à appliquer dans Migration 76
+V6	Haute	Bug surprise mecanique pour drone — VÉRIFIÉ — 2 impacts : is_surprised flag incorrect (mineur) + COMBAT_ACTION_DECLARE bloque Sprint 2c (CRITIQUE — fix: étendre condition PNJ à drone)
+V7	Haute	state_control_mode utilisé avant d'être créé — RÉSOLU — Sprint 2d ne filtre pas sur cette colonne, tous les drones sont autonomes par défaut
+V8	Haute	modDegatsMode absent dans dégâts humanoïde → drone — CONFIRMÉ — fix architectural : intercepter après calcul commun degautsBruts, ne pas recomputer
+V11	~~Haute~~	~~Cascade combat_actions non vérifiée~~ FAUX POSITIF — roster_id inexistant, comportement sûr
+V13	Haute	PJ → drone : rouler ou auto — ANALYSÉ — Bug structurel : rawDice indisponible pour PJ, Sprint 2b manque la branche COMBAT_DAMAGE_CONFIRM pour PJ→drone
+V14	Haute	weapon.melee n'existe pas — CONFIRMÉ — 1 ligne : remplacer weapon.melee par weapon.fire_mode === 'cc'
+V18	Haute	r.character_type inexistant en DB — CONFIRMÉ — fix : JOIN combat_roster→tokens→characters WHERE c.type='drone'
+V19	Haute	computeSequence(12) — CONFIRMÉ — fix : sequence = 3 directement
+V20	Haute	Guard PD2 bloque les drone_auto sans cible — CONFIRMÉ — fix : intercepter drone_auto AVANT le guard existant, dispatch vers resolveDroneAutoAction
+V21	Haute	INI télépilotage — mécanisme non défini — RÉSOLU — Option C : slot propriétaire porte l'action drone, drone status='done' ce round
+V3	Moyenne→Haute	Formule intégrité provisoire — ANALYSÉ — formule FAUSSE (facteur 3-5x), correction : integrite -= 1 par hit, sauf 'detruit' → 0
+V9	Moyenne	CaC humanoïde → drone — RÉSOLU par fix V8+V13 — aucune action additionnelle
+V10	Moyenne	token_id solution non choisie — RÉSOLU — Option A : tokenId en paramètre de resolveDroneIntegrityLoss
+V12	Moyenne	Token map non retiré à destruction — DÉCISION — épave intentionnelle, TOKEN_DELETED non émis, DRONE_INTEGRITY_UPDATED { detruit: true } suffit
+V15	Moyenne	isRushedMod non exclu pour drone — dead code, à supprimer de la formule Sprint 2c
+V16	Moyenne	ammo_restant — DÉCISION — hors scope V1, retirer commentaire Sprint 2c, ajouter TODO B6
+V17	Moyenne	Portée drone non parsée — ACCEPTABLE V1 — GM sélectionne manuellement comme pour humanoïdes
+V22	Moyenne	"consomme son tour" — RÉSOLU par Option C V21 — enforcement structurel via has_announced
+V23	Moyenne	Migration state_control_mode absente — RÉSOLU — appartient à Sprint 3, SQL défini
+V1	Faible	Catégorie armement non explicite dans vision
+V2	Faible	Déplacement drone CaC autonome non documenté
+V4	Faible	Désynchronisation JSONB / integrite — ANALYSÉ — risque résiduel overflow uniquement, acceptable V1
+V24	Faible	fire_mode nullable — DÉCISION : NOT NULL DEFAULT 'rc'
+V25	Faible	TODO B4 dans code — résolu par V3, overflow seul reste à annoter

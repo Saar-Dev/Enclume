@@ -133,7 +133,7 @@ export default function CombatActionWindow({
   // --- draggable (déplacé ici pour respecter l'ordre des hooks) -------------
   const { pos, onHeaderMouseDown } = useDraggable(
     'combat-action-pos',
-    { top: window.innerHeight - 760, left: window.innerWidth / 2 - 360 },
+    { top: Math.max(80, window.innerHeight - 760), left: window.innerWidth / 2 - 360 },
     720,
   )
 
@@ -556,7 +556,7 @@ export default function CombatActionWindow({
   // =========================================================================
   if (pendingSurpriseRoll?.tokenId && playerTokensInRoster.some(t => t.id === pendingSurpriseRoll.tokenId)) {
     return (
-      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Surprise !</div>
         <p style={W.surpriseText}>Vous etes surpris. Lancez 1d20 pour determiner votre initiative.</p>
         <button style={W.btnRoll} onClick={onSurpriseRolled}>Lancer le de d&apos;initiative</button>
@@ -565,7 +565,7 @@ export default function CombatActionWindow({
   }
   if (rosterEntry.is_surprised && rosterEntry.has_announced && rosterEntry.initiative === 0) {
     return (
-      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Surprise !</div>
         <p style={W.surpriseText}>Vous etes surpris — vous ne pouvez pas agir ce tour.</p>
       </div>
@@ -584,7 +584,7 @@ export default function CombatActionWindow({
     const meleeCibleTokens = myMeleeActions.map(a => tokens.find(t => t.id === a.target_token_id) ?? null)
     const isRushed = rosterEntry.state_vitesse === 'rushed'
     return (
-      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 2 - Resolution</div>
         <div className="combat-win-body">
           <div style={W.leftPanel}>
@@ -677,7 +677,7 @@ export default function CombatActionWindow({
   if (phase === 'ANNOUNCEMENT' && !(rosterEntry?.has_announced) && !isMyTurnInAnnouncement) {
     const currentDeclarer = tokens.find(t => t.id === computedAnnounceTokenId)
     return (
-      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 — Déclaration d&apos;intention</div>
         {rosterSection}
         <p style={W.waitText}>
@@ -691,7 +691,7 @@ export default function CombatActionWindow({
   if (phase === 'RESOLUTION' && !isMyTurnInResolution) {
     const activeResolveToken = tokens.find(t => t.id === resolveSlotTid)
     return (
-      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 2 — Résolution</div>
         {rosterSection}
         <p style={W.waitText}>
@@ -704,7 +704,7 @@ export default function CombatActionWindow({
   // Déjà déclaré (ANNOUNCEMENT)
   if (rosterEntry?.has_announced) {
     return (
-      <div className="combat-float-win" style={{ left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 - Declaration d&apos;intention</div>
         {rosterSection}
         <p style={W.waitText}>Action declaree. En attente des autres participants…</p>
@@ -793,6 +793,7 @@ export default function CombatActionWindow({
   // =========================================================================
   return (
     <div className="combat-float-win" style={{
+      position: 'fixed',
       width: (showAssault || showReload || showMelee) ? 720 : 360,
       opacity: isHidden ? 0 : 1,
       pointerEvents: isHidden ? 'none' : 'auto',

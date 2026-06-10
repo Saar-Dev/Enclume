@@ -58,3 +58,373 @@ Acteur Lent (INI: 7) Déclare ──> Acteur Rapide (INI: 15) Observe et S'adapt
 Implémentation Système (Plan / Store)Structure de la File : L'état transitoire est matérialisé par has_announced: false/true dans le roster.Régression Systémique Potentielle : Pour être conforme à Polaris, le moteur de tour doit bloquer la possibilité d'émettre l'événement COMBAT_ACTION_DECLARE tant que l'index du slot actif (activeSlotIdx) n'a pas atteint le jeton du joueur concerné dans l'ordre croissant. Si le système permet une déclaration simultanée ou désordonnée (chaque joueur clique quand il veut), l'avantage tactique des hautes initiatives est détruit.3. Mutations d'Initiative (Modificateurs Intra-Tour)Règle Polaris (LdB)L'Initiative courante (current_initiative) n'est pas statique. La déclaration de certaines actions altère immédiatement le score d'action pour le round en cours :Précipiter son action (vitesse augmentée mais précision réduite) : $+3$ INI / Malus de $-5$ au jet de compétence.Dégainer ou préparer une arme : $-5$ ou $-3$ INI.Changement de mode de tir / Changement de posture : $-3$ à $-10$ INI.Règle de report : Si l'accumulation des malus fait descendre l'initiative courante à une valeur $\le 0$, l'action principale est annulée pour le round en cours et reportée au début du round suivant.Implémentation Système (Plan / Store)Calcul des Mutations : Le système intègre ces variations. L'événement COMBAT_ACTION_DECLARE recalcule instantanément current_initiative en DB et met à jour le store via updateRoster. Le flag is_rushed est correctement tracé.Écart Logique V1 : Le document de planification ne spécifie pas de structure de bascule pour le report des actions dont l'INI tombe sous le seuil de 0. Elles risquent d'être traitées en fin de boucle de résolution au lieu d'être migrées vers le round suivant.4. Phase de Résolution (Cinétique Physique)Règle Polaris (LdB)L'ordre de résolution est impérativement décroissant. L'acteur ayant la plus haute initiative résout ses actions en premier. L'ordre d'exécution physique interne à un personnage suit une séquence stricte : Déplacement court ($\le\text{3m}$) intégré à l'assaut, ou Déplacement long ($>\text{3m}$) coupant l'action principale. Les dégâts sont instantanés : si un acteur à haute initiative tue ou étourdit (is_stunned) une cible plus lente, les actions déclarées de cette cible sont modifiées ou annulées avant son slot de résolution.[ORDRE DE RÉSOLUTION : DÉCROISSANT]
 Acteur Rapide (INI: 15) Résout ──> [Impact Physique / Mort] ──> Acteur Lent (INI: 7) Annulé
 Implémentation Système (Plan / Store)Séquencement Interne : Conforme. La table combat_actions utilise la colonne sequence (SMALLINT) pour garantir l'ordre : Mouvement (1) $\rightarrow$ Micro-actions (2) $\rightarrow$ Assaut (3).Consommation des Slots : L'automate progresse via activeSlotIdx et advanceSlot dans le store. Le traitement est séquentiel.5. Clôture et Maintenance des États (Fin de Round)Règle Polaris (LdB)À la fin du round de combat (tous les slots résolus), les modifications transitoires de type comportemental (Précipitation) s'effacent. En revanche, les altérations physiques persistent sur des durées définies par des dés : l'état Étourdi (is_stunned) dure 1d6 rounds, tandis que l'Inconscience dure 1d6 minutes.Implémentation Système (Plan / Store)Routine endTurn : Le système effectue une purge. L'usage de l'opérateur JSONB (- 'is_rushed') isole correctement l'effacement de la précipitation.Conformité des Compteurs : L'introduction de variables de type 1d6 tours pour l'état is_stunned nécessite que le JSONB state_character ne stocke pas un simple booléen, mais un entier décrémenté par le serveur à chaque itération de round dans combat_state.Matrice Globale d'Adéquation Polaris (Synthèse)Étape du TourRègle Métier PolarisModélisation TechniqueStatut LogiqueInitialisationTri Réactivité + Bris d'égalité masqué.calcREA + Jet caché serveur.ConformeOrdre AnnonceTri Croissant strict (Éléments lents d'abord).Store roster, ordonnancement UI dépendant de la phase.Alerte : Risque d'inversion visuelle/applicativeMutation INIModificateurs immédiats. Report si INI $\le 0$.Événement DECLARE modifiant current_initiative.Partiel (Gestion du seuil $\le 0$ manquante)Ordre RésolutionTri Décroissant strict (Éléments rapides d'abord).Progression par activeSlotIdx décroissant en INI.ConformeSéquence d'ActionMouvement puis Action principale.Contrainte de tri sequence (1, 2, 3) en base de données.ConformeFin de RoundPurge des modes, maintien des états physiques ($X$ tours).Routine endTurn avec traitement JSONB sélectif.Conforme
+
+---
+
+## 6. RÃ¨gles Omises â€” ComplÃ©ments Obligatoires
+
+Les sections suivantes complÃ¨tent le manuel avec les rÃ¨gles du LdB non couvertes dans la version initiale. Source : REGLESYSCOMBAT.md (LdB Polaris, source de vÃ©ritÃ© absolue).
+
+---
+
+### 6.1 Modificateurs de Circonstances â€” Combat Ã  Distance (LdB p.227)
+
+Le pipeline balistique doit appliquer ces modificateurs AVANT le jet de tir :
+
+#### DÃ©placement de la cible
+| Allure cible | Modificateur |
+|---|---|
+| Allure moyenne | -3 |
+| Allure rapide | -5 |
+| Allure maximale | -7 |
+
+#### DÃ©placement du tireur
+| Allure tireur | Modificateur |
+|---|---|
+| Allure lente | -3 |
+| Allure moyenne | -5 |
+| Allure rapide | -7 |
+| Allure maximale | Tir impossible |
+
+#### Couverture de la cible
+| Type de couverture | Modificateur |
+|---|---|
+| Partielle (50% du corps) | -3 |
+| Importante (75% du corps) | -5 |
+| Totale | Tir impossible (sauf tir en aveugle) |
+
+#### Conditions d'eclairage
+| Obscurite | Modificateur |
+|---|---|
+| Legere | -3 |
+| Importante | -5 |
+| Totale | Tir impossible (sauf tir en aveugle avec Test Observation oppose) |
+
+#### Taille de la cible
+| Taille | Modificateur |
+|---|---|
+| Minuscule (~30 cm) | -10 |
+| Tres petite (~50 cm) | -5 |
+| Petite (~1 m) | -3 |
+| Moyenne (taille humaine) | 0 |
+| Grande (~3 m) | +3 |
+| Tres grande (~5 m) | +5 |
+| Enorme (~7 m) | +10 |
+| Gigantesque (10 m et +) | +15 |
+
+**Implementation :** Ces modificateurs sont a integrer dans `resolveAssaultAction` (serveur) et dans `CombatModifiersWindow.jsx` (client). Les allures du tireur et de la cible sont disponibles via `state_vitesse` (combat_roster) et le deplacement declare (combat_actions).
+
+---
+
+### 6.2 Pipeline Combat au Contact (CaC) â€” Test d'Opposition (LdB p.222-225)
+
+Contrairement au combat a distance (test simple), le CaC utilise un **test d'opposition** entre les deux combattants.
+
+#### Resolution
+```
+[1. Verification distance]
+   Engage au contact = distance <= 3m (ou selon allonge de l'arme)
+
+[2. Test d'opposition]
+   Attaquant : Test Competence CaC (Combat arme / Combat a mains nues / Armes lourdes)
+   Defenseur : Test Competence CaC (meme categorie)
+
+[3. Lecture du resultat]
+   A reussit, D rate  => Attaque passe, jet de dommages
+   A rate, D reussit  => Attaque bloquee (D peut contre-attaquer si Arts martiaux)
+   Les deux ratent    => Rien ne se passe
+   Les deux reussissent => Meilleure marge de reussite l'emporte. Egalite = rien.
+
+[4. Dommages (si attaque passe)]
+   Dommages_Bruts = Dommages_Arme + MR + Mod_Dommages_Contact (FOR)
+   Dommages_Nets  = Dommages_Bruts + Mod_Resistance_Dommages_Defenseur
+   Gravite = par tranche de 5 points nets
+
+[5. Localisation]
+   1D20 => table localisation (colonne "Contact" optionnelle du LdB)
+```
+
+#### Cible sans defense
+Si la cible ne peut pas se defendre (surprise totale, inconsciente) : test simple avec **+5** au lieu du test d'opposition.
+
+#### Modificateurs de situation CaC
+| Situation | Mod |
+|---|---|
+| Attaque par le cote | -3 |
+| Attaque alors qu'on est au sol | -5 |
+| Position desavantageuse (espace confine) | -3 a -5 |
+| Position avantageuse (sureleve, couverture) | +3 |
+| Utiliser la main non directrice | -5 |
+| Terrain instable | limite par Acrobatie/Equilibre |
+
+#### Deux armes (CaC)
+- Attaquant : +3 au Test de combat au contact
+- Arts martiaux permettent une attaque supplementaire gratuite avec malus -5
+
+---
+
+### 6.3 Attaques Multiples par Tour (LdB p.218-219)
+
+**Regle avancee â€” doit etre annoncee lors de la declaration d'intention.**
+
+- Maximum **3 attaques** par tour de combat.
+- Malus applique a **toutes** les attaques du tour :
+  - 2 attaques : **-5** a tous les tests
+  - 3 attaques : **-7** a tous les tests
+- Intervalles d'initiative :
+  - 1ere attaque : score d'Initiative normal
+  - 2eme attaque : INI - 5
+  - 3eme attaque : INI - 10
+- Si une attaque est decalee au-dela de la phase 1 => **supprimee**. Le malus est ajuste.
+- Une attaque qui utilise Precision (+3 INI) decale TOUTES les attaques suivantes dans le meme sens.
+
+**Actions exclusives incompatibles avec attaques multiples :** Charge, Tir vise, Rafale longue, Tir de suppression (voir 6.4).
+
+**Implementation :**
+- `CombatActionWindow` doit permettre de declarer N attaques (1/2/3) avec affichage du malus et des phases INI calculees.
+- `COMBAT_ACTION_DECLARE` insere N lignes dans `combat_actions` avec les sequences et initiative_at_execution calcules.
+- `combat_actions` stocke le `multi_attack_malus` (-5 ou -7) applique au jet.
+
+---
+
+### 6.4 Actions Exclusives (LdB p.218-219, p.227-228)
+
+Certaines actions n'autorisent **qu'une seule attaque** par tour :
+
+| Action | Type | Regle |
+|---|---|---|
+| Charge | CaC | Exclusive. Necessite elan (deplacement court gratuit minimum). +3 attaque, +3 dommages, -7 defense jusqu'a prochaine action. |
+| Tir vise | Distance | Exclusive. Immobile obligatoire. +1 test par tranche de 2 INI sacrifies (max +5). |
+| Rafale longue | Distance | Exclusive. 5 a 20 balles. +2 test et +2 dommages par groupe de 5 balles. |
+| Tir de suppression | Distance | Exclusive. Zone 3m de base, +3m ou +2 test par groupe de 5 balles. Test de Chance pour chaque cible dans la zone. |
+| Rafale longue multi-adversaires | Distance | Exclusive. Un groupe de 5 balles par cible. Ecart max 3m entre cibles. |
+
+**Regle de coherence :** `EXCLUSIVE_ACTIONS` dans combatSections.js doit correspondre exactement a cette liste. Une action exclusive detectee dans le payload bloque toute ligne `combat_actions` supplementaire pour ce token au meme tour.
+
+---
+
+### 6.5 Retarder son Action (LdB p.218)
+
+Un joueur peut ne pas agir a sa phase d'initiative et attendre.
+
+- Peut agir a **n'importe quelle phase ulterieure** dans le meme tour.
+- Si action retardee vs action normale a la meme phase => **action retardee prioritaire** (resolue en premier).
+- Si deux actions retardees a la meme phase => regles normales d'egalite d'initiative.
+- Report d'un tour entier possible : agit **des la 1ere phase du tour suivant** quelle que soit son initiative.
+- **Une action precipitee ne peut pas etre retardee.**
+
+**Implementation :**
+- `COMBAT_ACTION_DECLARE` avec `action_key: 'delayed'` + `target_initiative` (phase choisie).
+- `startResolutionPhase` integre ces slots avec la regle de priorite.
+
+---
+
+### 6.6 Saisie (Lutte) â€” Preparation -3 INI (LdB p.226)
+
+Effectuer une saisie sur un adversaire necessite d'abord de **reussir un test de combat au contact**. Cette saisie est une **Preparation** qui coute **-3 points d'Initiative**.
+
+- La saisie se declare en phase d'annonce => modifie immediatement l'initiative courante (-3).
+- L'action de lutte (cle / etranglement / projection) n'est executee qu'a la phase d'initiative resultante.
+- Si la saisie echoue, l'action de lutte n'a pas lieu.
+
+**Implementation :** A ajouter dans `STATE_COSTS` serveur (socket/index.js) et dans `combatSections.js`.
+
+---
+
+### 6.7 Reset de l'Initiative en Debut de Tour (LdB p.213)
+
+A chaque nouveau tour, **avant les declarations**, chaque personnage redetermine son Initiative de base :
+
+1. `current_initiative` <- `base_initiative` (remise a zero des modificateurs du tour precedent).
+2. Les modificateurs de blessures/fatigue affectant `base_initiative` sont recalcules si necessaire.
+3. Ensuite seulement les declarations commencent dans l'ordre croissant recalcule.
+
+**Implementation :**
+La routine `endTurn` (socket/index.js) doit executer :
+```sql
+UPDATE combat_roster
+SET current_initiative = base_initiative
+WHERE campaign_id = :campaignId
+```
+Ce reset doit se faire **AVANT** le passage en phase ANNOUNCEMENT du tour suivant.
+
+---
+
+### 6.8 Simultaneite â€” Note d'Implementation (LdB p.214)
+
+Le LdB dit : egalite de Reaction = **actions simultanees** (les deux attaques se resolvent en parallele, les deux peuvent s'entretuer mutuellement avant que l'une annule l'autre).
+
+**Limitation VTT acceptee :** Un VTT doit ordonner l'affichage. Le tiebreaker aleatoire actuel est une simplification necessaire pour l'ordre visuel. La fidelite stricte au LdB necessiterait un traitement en "groupe simultane" : les deux jets s'executent, les deux degats s'appliquent avant tout check d'incapacitation. C'est une **dette technique connue et acceptee**.
+
+---
+
+## §7 — DRONES EN COMBAT
+
+> ⚠️ **SECTION DRONES UNIQUEMENT** (`character.type === 'drone'`). Si la tâche en cours ne concerne pas les drones, arrêter la lecture ici.
+
+**Sources :** `docs/REGLEDRONE.md` (LdB p.319-320 + Guide Technique p.245-253)
+**Voir aussi :** `shared/droneConstants.js`, `docs/PLAN_DRONE.md`
+
+---
+
+### 7.1 Modes de contrôle
+
+**`state_control_mode`** — état persistant stocké sur la ligne du drone dans `combat_roster`.
+Défini en phase Roster (état initial). Modifiable en ANNOUNCEMENT via l'action **"Télépiloter"** du character propriétaire (toggle). Persiste d'un tour à l'autre jusqu'à toggle explicite.
+
+Affiché uniquement pour les propriétaires de drone (conditionnel UI). Pour un drone non assigné : GM gère le toggle.
+
+| Mode | INI | Compétence d'attaque | Déplacement CaC |
+|---|---|---|---|
+| **`autonome`** | 12 (fixe, immuable) | `min(programme_armement_drone, TELEPILOTAGE_proprio)` si télépiloté — `programme_armement_drone` si autonome | Joueur déplace le token drone (2e entité contrôlée) |
+| **`télépiloté`** | INI du character propriétaire | `min(programme_armement_drone, TELEPILOTAGE_proprio)` | Character propriétaire déplace et attaque |
+
+**Mode autonome — deux entités :** le joueur (user) contrôle son character ET le drone indépendamment. Le character agit à son propre INI. Le drone agit à INI 12. Le tour du character n'est pas consommé.
+
+**Mode télépiloté — règle limitative (LdB p.319) :** le character propriétaire consomme son tour au profit du drone. La compétence d'attaque est le niveau du programme `armement` du drone, plafonné par `TELEPILOTAGE` du character.
+Ex. : programme Armement drone niv. 15, pilote Télépilotage 10 → niveau effectif = 10. Programme 8, Télépilotage 12 → niveau effectif = 8.
+
+**Mode télépiloté — acquisition :** désignation directe de la cible par le character. Pas de Détection, pas d'Ami/Ennemi.
+
+**Interception — mode autonome uniquement :** en mode télépiloté, l'ordinateur n'exécute pas de comportements réactifs automatiques.
+
+**Mode autonome — auto-déclaration ANNOUNCEMENT :** en fin de phase ANNOUNCEMENT, le serveur auto-valide (`has_announced = true`) les drones autonomes sans déclaration manuelle existante. La séquence (Détection → Ami/Ennemi → Armement) s'exécute en RESOLUTION. Si le GM déclare manuellement pour le drone avant la fin d'ANNOUNCEMENT, l'auto-déclaration n'a pas lieu.
+
+**INI 12 — valeur immuable :** aucun modificateur d'état ne modifie l'initiative du drone autonome.
+
+---
+
+### 7.2 Mode autonome — séquence d'acquisition et d'attaque
+
+**Règle fondamentale :** un drone autonome attaque **une fois par Tour**, à **INI 12**.
+
+#### Cas A — Aucune cible acquise (début de combat ou cible perdue)
+
+```
+INI 12 → Test Détection (D20 ≤ niveau programme détection)
+  Échec → INI 7 → re-Test Détection
+    Échec → INI 2 → re-Test Détection
+      Échec → action perdue ce tour
+  Succès → Test Ami/Ennemi (si programme disponible)
+    Succès → cible acquise → Test Armement → 1 tir (pas de retry)
+    Échec  → cible non identifiable ce tour (pas de retry Ami/Ennemi)
+  Sans programme Ami/Ennemi → cible acquise immédiatement
+                               (1 cible au hasard parmi les tokens du roster actif, alliés compris)
+```
+
+**Tir après retry :** si la Détection réussit à INI 7 (ou INI 2), le tir s'effectue à ce même rang d'initiative dans le même tour.
+
+#### Cas B — Cible déjà acquise
+
+```
+INI 12 → Test Armement (D20 ≤ niveau programme armement) → 1 tir
+  Raté → pas de retry. Cible reste acquise pour le tour suivant.
+```
+
+**Persistence :** une cible acquise le reste jusqu'à ce qu'elle sorte de la zone de détection. Tant qu'elle y reste, la séquence Détection + Ami/Ennemi n'est pas relancée.
+
+**Perte de cible :** si la cible acquise sort de la zone, le drone relance la séquence complète (Cas A) dès son prochain tour. La zone de détection n'étant pas calculée automatiquement, le GM dispose d'une fenêtre pour marquer manuellement une cible comme "perdue" (force le retour en Cas A au tour suivant).
+
+**Zone de détection :** non définie par le LdB. Déterminée par le MJ selon les capteurs du drone (portée indiquée dans les programmes ou l'équipement spécial de la fiche).
+
+**Stockage cible acquise :** `combat_roster.acquired_target_token_id UUID REFERENCES tokens(id) ON DELETE SET NULL`. La FK cascade automatiquement à NULL si le token cible est retiré du roster (mort, fin de combat) — désacquisition automatique sans code supplémentaire.
+
+---
+
+### 7.3 Programmes comme compétences — règle fondamentale
+
+Pour tout Test de programme : **D20 ≤ niveau du programme = succès**.
+
+Pas d'attributs. Pas de maîtrise. Pas de calcul AN/NA. Le niveau du programme est directement le seuil de réussite.
+
+**Modificateurs situationnels standard applicables** au Test Armement : portée, taille cible, obscurité, couverture (mêmes tables que humanoïdes).
+
+**Pas de malus blessures ni d'encombrement** — les drones n'ont pas ces mécaniques.
+
+**Mode télépiloté :** le programme du drone reste la base du Test — c'est `min(programme.level, TELEPILOTAGE_proprio)` qui s'applique. Le character propriétaire n'utilise pas sa propre compétence d'arme.
+
+---
+
+### 7.4 Actions conditionnées par programme
+
+| Programme (`category`) | Action | Déclencheur | Mécanique |
+|---|---|---|---|
+| `detection` | Acquisition de cible | Début du tour sans cible / cible perdue | D20 ≤ niveau → cible détectée |
+| `ami_ennemi` | Identification ami/ennemi | Après succès Détection | D20 ≤ niveau → cible identifiée. Échec = pas d'attaque ce tour |
+| `armement_distance` | Attaque à distance | Cible acquise | D20 ≤ niveau → touché. Résolution dommages standard |
+| `armement_contact` | Attaque au contact | Cible acquise + drone en portée CaC | D20 ≤ niveau → touché. Résolution dommages standard |
+| `esquive` | Défense contre attaque CaC | Attaqué au contact | D20 ≤ niveau → esquive (test d'opposition). **Déclenché automatiquement** si le programme est présent. Mise à couvert = déplacement standard (pas de test `esquive`). |
+| `interception` | S'interposer contre tir/explosion | Attaque ranged sur entité alliée dans la zone | D20 ≤ niveau interception ET MR(interception) > MR(attaque) → drone s'interpose (obstacle, absorbe tout). **Binaire : tout ou rien. Mode autonome uniquement. Inutile au CaC (LdB p.247).** |
+| `pilotage` | Déplacement (mode autonome) | Tour du drone | Pas de test requis — déplacement selon `drone_sheet.vitesse` |
+| `medical` | Premiers soins / Chirurgie | Personnage blessé à portée | D20 ≤ niveau → soin (hors combat principalement) |
+| `reparation` | Restaurer intégrité d'un drone | Drone endommagé à portée | D20 ≤ niveau → restauration partielle |
+
+**Sans programme `esquive` :** le drone ne peut pas se défendre contre les attaques CaC — aucun test d'opposition possible.
+
+**Sans programme `interception` :** le drone bouclier ne peut pas s'interposer.
+
+**Mode de tir (armement_distance) :** CC/RC/RL selon l'arme — `drone_weapons.fire_mode`. Configuré à l'avance dans la fiche drone.
+
+**Interception et attaque dans le même tour :** possible si l'ordinateur embarqué a une capacité suffisante. Règle LdB p.279 : `gestion_systemes = 10 + (ordinateur_gen × ordinateur_nt)` — nombre de programmes gérés simultanément. Si le nombre de programmes actifs ce tour dépasse cette valeur, l'ordinateur déconnecte les moins prioritaires.
+
+---
+
+### 7.5 Programmes réactifs — HORS SCOPE V1
+
+**Ancrage LdB :** programme réactif (p.281) — *"définit la manière dont un ordinateur va réagir en cas de détection. Un seul programme pour plusieurs équipements s'ils réagissent tous de la même manière."*
+
+> ⚠️ **Non implémenté en V1.** Les programmes réactifs nécessitent un mécanisme d'interruption (INI = INI de l'assaillant, drone réagit hors de son slot INI 12) qui sera traité dans un sprint dédié.
+
+**Ce que ça couvrira (sprint futur) :**
+- `tir_si_ident_echec` : si Test Ami/Ennemi échoue → attaque quand même (comportement configurable)
+- `intercepter_proprietaire` : s'interposer automatiquement si le propriétaire est attaqué
+- Mécanique d'interruption : drone réagit à INI = assaillant, perd son slot INI 12 ce tour
+
+---
+
+### 7.6 Drones comme cibles
+
+Les drones n'ont pas de système de blessures humanoïdes.
+
+**Localisation :** une seule zone fixe (`drone_sheet.localisation_ref` — définie à la création). Pas de jet de localisation D20.
+
+**Armure :** `drone_sheet.blindage` — valeur directe soustraite des dommages bruts (pas de `calcResistanceArmure`).
+
+**Résistance aux dommages :**
+```
+rd = drone_sheet.integrite_actuelle × 2 → table RD LdB p.112
+degats_nets = max(0, degats_bruts - blindage - rd)
+```
+
+**Enregistrement :** `drone_sheet.damages` JSONB + décrémentation `integrite_actuelle`. Pas de `character_wounds`. Pas de Test de Choc.
+
+**Destruction :** `integrite_actuelle ≤ 0`.
+
+**Effets de la destruction :**
+- Retrait immédiat du roster
+- Actions déclarées par le drone ce tour : annulées
+- Toute action ciblant ce drone (`target_token_id`) : échec automatique
+- Pas de Test de Choc. Pas de blessures résiduelles.
+
+**Dommages bruts :** formule identique à un humanoïde — même arme, même table `ref_equipment`, même MR. La différence est uniquement côté cible (blindage + rd intégrité).
+
+---
+
+### 7.7 Matrice d'adéquation Polaris — Drones
+
+| Aspect | Règle LdB | Statut |
+|---|---|---|
+| INI autonome = 12 | LdB p.320 "Armes automatisées" | À implémenter |
+| INI télépiloté = INI pilote | LdB p.319 "Drones et Initiative" | À implémenter (télépilotage) |
+| Séquence Détection → Ami/Ennemi → Armement | LdB p.320 | À implémenter |
+| Retry détection à −5 INI (12→7→2) | LdB p.320 | À implémenter |
+| Cible acquise persistante | LdB p.320 | À implémenter |
+| Programmes = compétences directes (D20 ≤ niveau) | LdB p.281 | À implémenter |
+| Télépilotage : `min(programme_armement_drone, TELEPILOTAGE_proprio)` | LdB p.319 | À implémenter (sprint télépilotage) |
+| Télépilotage : pas de Détection/Ami-Ennemi — cible directe | LdB p.319 | À implémenter (sprint télépilotage) |
+| Esquive programme (défense CaC) | LdB p.100 (drones de combat) | À implémenter |
+| Interception programme — mode autonome uniquement, inutile au CaC | LdB p.247-248 | À implémenter |
+| Programmes réactifs + interruption (INI = assaillant) | LdB p.281 + p.319 | Hors scope V1 — §7.5 |
+| Une seule localisation | LdB p.319 | Défini dans `PLAN_DRONE.md` |
+| Blindage = armure directe | LdB p.319 | Défini dans `PLAN_DRONE.md` |
+| Intégrité × 2 → table RD | LdB p.319 | Défini dans `PLAN_DRONE.md` |

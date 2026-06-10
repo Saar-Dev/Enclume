@@ -1,3 +1,25 @@
+## v87 — 2026-06-10 — Audit plan intégration drones combat — architecture complète
+
+### Documentation
+- Audit exhaustif `docs/PLAN_DRONESYSCOMBAT.md` — 25 issues identifiées et résolues
+- Architecture Sprint 2b : deux branches (PNJ→drone dans resolveAssaultAction, PJ→drone dans COMBAT_DAMAGE_CONFIRM)
+- Décision télépilotage Option C : propriétaire consomme son slot, drone status='done' ce round
+- Migration 77b planifiée : state_control_mode sur combat_roster
+- Plan prêt pour implémentation (Sprints 2a → 3)
+
+## v85 — 2026-06-09 — Tour de combat complet + Corrections UI fenêtres
+
+### Combat — Corrections critiques
+- [fix] "Assaut (tir)" PNJ déclenchait le panneau Corps à corps au lieu du mode visée (isMeleeSetup)
+- [fix] Fenêtre déclaration joueur (Phase 1) bloquée en haut à gauche sous la Timeline — position:fixed
+- [fix] Fenêtre résolution GM bloquée en haut à gauche + largeur plein écran — position:fixed
+- [fix] Drag & drop token silencieusement annulé pendant un combat pour les joueurs (intégrité)
+
+### Combat — UX harmonisée GM/Joueur
+- [add] Fenêtre validation assaut se positionne près du token cible cliqué (GM et joueur)
+- [add] Fenêtre validation déplacement se positionne près de la case sélectionnée
+- [add] Case de destination mise en surbrillance bleue dans la vue 3D après sélection
+
 ## v83 — 2026-06-06 — Fiche Drone + Design System CSS + Migration catalogue compétences
 
 ### Fiche Drone — Programmes
