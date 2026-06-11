@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import api from '../lib/api.js'
 import SilhouettePanel from './SilhouettePanel.jsx'
 import LocationPanel   from './LocationPanel.jsx'
@@ -10,9 +10,11 @@ export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
   const [totalWeight, setTotalWeight] = useState(0)
   const [threshold,   setThreshold]   = useState(0)
   const [loading,    setLoading]    = useState(true)
+  const hasLoadedRef = useRef(false)
 
   const load = useCallback(async () => {
-    setLoading(true)
+    const showSpinner = !hasLoadedRef.current
+    if (showSpinner) setLoading(true)
     try {
       const [wRes, invRes] = await Promise.all([
         api.get(`/char-sheet/${characterId}/wounds`),
@@ -25,7 +27,8 @@ export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
     } catch (err) {
       console.error('Erreur chargement ArmorWoundPanel :', err)
     } finally {
-      setLoading(false)
+      hasLoadedRef.current = true
+      if (showSpinner) setLoading(false)
     }
   }, [characterId])
 

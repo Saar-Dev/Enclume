@@ -51,7 +51,7 @@ function defaultArmorSlot(location) {
 const WEAPON_FAMILIES_EXCLUDE = new Set(['Accessoires pour armes', 'Grenade', 'Lanceur'])
 
 export default function CombatRosterWindow({ socket, battlemapId, characters }) {
-  const { phase, roster } = useCombatStore()
+  const { phase, roster, currentTurn } = useCombatStore()
   const tokens            = useTokenStore(s => s.tokens)
 
   const { pos, onHeaderMouseDown } = useDraggable(
@@ -204,6 +204,11 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                           </span>
                         )}
                         <span style={S.tokenLabel}>{row.label}</span>
+                        {inCombat && rEntry?.state_character?.is_stunned === true && (
+                          <span title="Assommé" style={{ fontSize: 9, color: '#f5c542', marginLeft: 4, fontWeight: 600 }}>
+                            ☠ étourdi ({Math.max(0, (rEntry.state_character.stunned_until_turn ?? 0) - currentTurn)} t.)
+                          </span>
+                        )}
                       </div>
                     </td>
 

@@ -60,6 +60,27 @@ function buildExpertConfig(expertRows) {
 }
 
 /**
+ * Détecte si un dice_config est issu du mode simple et retourne les états simples.
+ * Retourne null si le config est expert (dés non uniformes ou partiels).
+ */
+function detectSimpleConfig(cfg) {
+  if (!cfg || typeof cfg !== 'object') return null
+  if (!DICE_TYPES.every(d => cfg[d] !== undefined)) return null
+  const d20 = cfg['d20']
+  let successOn = 'max', successActive = false
+  if (d20.success?.min === 20 && d20.success?.max === 20) { successOn = 'max'; successActive = true }
+  else if (d20.success?.min === 1 && d20.success?.max === 1) { successOn = 'min'; successActive = true }
+  else if (!d20.success) { successActive = false }
+  else return null
+  let failOn = 'min', failActive = false
+  if (d20.fail?.min === 1 && d20.fail?.max === 1) { failOn = 'min'; failActive = true }
+  else if (d20.fail?.min === 20 && d20.fail?.max === 20) { failOn = 'max'; failActive = true }
+  else if (!d20.fail) { failActive = false }
+  else return null
+  return { successOn, failOn, successActive, failActive }
+}
+
+/**
  * Initialise le state expert depuis un dice_config existant.
  */
 function initExpertRows(diceConfig) {
@@ -193,6 +214,16 @@ export default function CampaignSettingsPage() {
         const cfg = campaign.dice_config
         if (cfg && typeof cfg === 'object' && Object.keys(cfg).length > 0) {
           setDiceEnabled(true)
+          const simple = detectSimpleConfig(cfg)
+          if (simple) {
+            setExpertMode(false)
+            setSuccessOn(simple.successOn)
+            setSuccessActive(simple.successActive)
+            setFailOn(simple.failOn)
+            setFailActive(simple.failActive)
+          } else {
+            setExpertMode(true)
+          }
           setExpertRows(initExpertRows(cfg))
         }
         setPnjUnlimitedAmmo(campaign.pnj_unlimited_ammo ?? true)

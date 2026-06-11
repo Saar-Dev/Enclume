@@ -38,7 +38,7 @@ const IconEyeOff = () => (
 // ─── Composant principal ──────────────────────────────────────────────────────
 export default function DroneWindow({ character, isGm, onClose }) {
   const { t } = useTranslation()
-  const { members, removeCharacter } = useCharacterStore()
+  const { members, removeCharacter, updateCharacter } = useCharacterStore()
 
   const isOwner = character.user_id != null && character.user_id === character._currentUserId
 
@@ -283,6 +283,7 @@ export default function DroneWindow({ character, isGm, onClose }) {
             isGm={isGm}
             members={members}
             removeCharacter={removeCharacter}
+            updateCharacter={updateCharacter}
             onClose={onClose}
           />
         )}
@@ -306,7 +307,7 @@ export default function DroneWindow({ character, isGm, onClose }) {
 }
 
 // ─── Onglet Paramètres ───────────────────────────────────────────────────────
-function SettingsTab({ character, isGm, members, removeCharacter, onClose }) {
+function SettingsTab({ character, isGm, members, removeCharacter, updateCharacter, onClose }) {
   const { t } = useTranslation()
   const [glbUploading, setGlbUploading] = useState(false)
 
@@ -324,7 +325,8 @@ function SettingsTab({ character, isGm, members, removeCharacter, onClose }) {
     try {
       const formData = new FormData()
       formData.append('glb', file)
-      await api.post(`/characters/${character.id}/glb`, formData)
+      const res = await api.post(`/characters/${character.id}/glb`, formData)
+      updateCharacter(res.data.character)
     } catch (err) { console.error(err) }
     finally {
       setGlbUploading(false)

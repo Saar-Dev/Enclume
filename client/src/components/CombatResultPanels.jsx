@@ -120,6 +120,11 @@ function ShockBlock({ shockResult, onApplyStun }) {
         <span style={{ fontSize: 10, color: C.textDim }}>/ seuil {shockResult.seuilEtourdi}</span>
         <span style={{ marginLeft: 'auto', fontSize: 11, color: col, fontWeight: 600 }}>{label}</span>
       </div>
+      {shockResult.stun_duration != null && shockResult.outcome !== 'ok' && (
+        <div style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>
+          Durée : {shockResult.stun_duration} tour{shockResult.stun_duration > 1 ? 's' : ''}
+        </div>
+      )}
       {canApply && (
         <button
           className="btn btn-danger"

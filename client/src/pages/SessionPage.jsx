@@ -42,7 +42,7 @@ export default function SessionPage() {
     setPendingEntityId, clearPendingEntityId,
   } = useSessionStore()
   const { setEntities, fetchBlueprints } = useEntityStore()
-  const { setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster, advanceSlot, setActions, phase: combatPhase } = useCombatStore()
+  const { setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster, advanceSlot, setActions, addAnnouncedAction, resetAnnouncedActions, phase: combatPhase } = useCombatStore()
   const { setDocuments, addDocument, updateDocument, removeDocument } = useLibraryStore()
 
   const [campaign, setCampaign] = useState(null)
@@ -107,7 +107,7 @@ export default function SessionPage() {
   // damageResults : reçu via COMBAT_DAMAGE_RESULT après que le PJ clique "Lancer les dés"
   const [damagePayload, setDamagePayload] = useState(null)
   const [damageResults, setDamageResults] = useState(null)
-  // attackResult : reçu via COMBAT_ATTACK_PLAYER_RESULT { hit, roll, cdr, tireurTokenId, cibleTokenId }
+  // attackResult : reçu via COMBAT_ATTACK_PLAYER_RESULT { hit, roll, seuil, tireurTokenId, cibleTokenId }
   const [attackResult, setAttackResult] = useState(null)
   // gmAttackResult : reçu via COMBAT_ATTACK_RESULT { isPnj:true, ... } — panneau résultat PNJ GM
   const [gmAttackResult, setGmAttackResult] = useState(null)
@@ -131,6 +131,16 @@ export default function SessionPage() {
   const selectedDrone = selectedDroneId
     ? characters.find(c => c.id === selectedDroneId) ?? null
     : null
+
+  // Dispatcher centralisé — route vers la bonne fenêtre selon character.type
+  // Extensible : ajouter un case 'armure' quand ArmorWindow sera implémentée
+  const openSheet = useCallback((character) => {
+    if (!character) return
+    switch (character.type) {
+      case 'drone': setSelectedDroneId(character.id); break
+      default:      setSelectedCharacterId(character.id)
+    }
+  }, [])
 
   // Menu contextuel barre GM — clic droit sur un bouton de carte
   const [mapContextMenu, setMapContextMenu] = useState(null) // { bm, x, y }
@@ -663,6 +673,7 @@ export default function SessionPage() {
         setReloadResult(null)
         setMeleeDefensePrompt(null)
         setMeleeResult(null)
+        resetAnnouncedActions()
       }
     })
     // Roster mis à jour — après jet de surprise (COMBAT_SURPRISE_RESULT)
@@ -678,10 +689,11 @@ export default function SessionPage() {
       setPjPreview(preview)
     })
     // Participant a déclaré son action — initiative inclus si précipité (+3)
-    s.on(WS.COMBAT_ACTION_DECLARED, ({ tokenId, initiative, moveTarget, attackTargetId }) => {
+    s.on(WS.COMBAT_ACTION_DECLARED, ({ tokenId, actionType, initiative, moveTarget, attackTargetId }) => {
       markTokenAnnounced(tokenId, initiative)
       setAnnouncementMarker({ tokenId, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
       setPjPreview(null)   // déclaration confirmée — purge le preview
+      addAnnouncedAction({ tokenId, actionType, initiative, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
     })
     // Slot actif avancé (ANNOUNCEMENT et RESOLUTION)
     s.on(WS.COMBAT_SLOT_ADVANCED, ({ activeSlotIdx, tokenId }) => {
@@ -1051,10 +1063,7 @@ export default function SessionPage() {
           campaignId={campaignId}
           socket={socket}
           onReconnectSocket={() => setReconnectTrigger(n => n + 1)}
-          onOpenCharacter={(char) => {
-            if (char.type === 'drone') setSelectedDroneId(char.id)
-            else setSelectedCharacterId(char.id)
-          }}
+          onOpenCharacter={openSheet}
           onEntityActionResolve={handleEntityActionResolve}
         />
       )}
@@ -1080,10 +1089,7 @@ export default function SessionPage() {
             token={contextMenu.token}
             character={character}
             isGm={isGm}
-            onOpenCharacterSheet={() => {
-              if (character?.type === 'drone') setSelectedDroneId(character.id)
-              else setSelectedCharacterId(character?.id)
-            }}
+            onOpenCharacterSheet={() => openSheet(character)}
             onRemoveToken={handleRemoveContextToken}
             onSetRotation={handleSetContextTokenRotation}
             onOpenStatusPanel={() => setStatusPanel({ tokenId: contextMenu.token.id, x: contextMenu.x, y: contextMenu.y })}

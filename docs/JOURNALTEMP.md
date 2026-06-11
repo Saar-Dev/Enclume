@@ -261,3 +261,203 @@ V2	Faible	Déplacement drone CaC autonome non documenté
 V4	Faible	Désynchronisation JSONB / integrite — ANALYSÉ — risque résiduel overflow uniquement, acceptable V1
 V24	Faible	fire_mode nullable — DÉCISION : NOT NULL DEFAULT 'rc'
 V25	Faible	TODO B4 dans code — résolu par V3, overflow seul reste à annoter
+
+---
+
+## Simulation d'écriture — Sprint Drones 2 + 3
+> Session 88 — 2026-06-11
+> Méthode : parcours séquentiel sans écrire de code — identification de tout ce qui est flou, manquant ou à retravailler.
+
+### Fichiers lus pour ancrer la simulation
+- `shared/events.js` — état réel des événements WS
+- `shared/droneConstants.js` — structure JSONB `damages`, seuils, `initDamages`
+- `server/src/lib/charStats.js` — structure `RD_TABLE`, exports
+- `server/src/db/migrations/71_drone_sheet.js` — schéma réel `drone_weapons`
+
+---
+
+### BLOCKERS — bloquent l'implémentation sans résolution préalable
+
+**SIM-B1 — Migration `drone_weapons` manquante (CRITIQUE)**
+
+Schema migration 71 (existant en DB) :
+```
+equipment_id UUID NOT NULL FK ref_equipment
+contenance_chargeur INTEGER NOT NULL DEFAULT 0
+ammo_restant INTEGER
+sort_order SMALLINT DEFAULT 0
+label_override TEXT
+```
+Schema Option A du plan (Sprint 2c) :
+```
+equipment_id UUID NULLABLE FK ref_equipment ON DELETE SET NULL
+name TEXT NOT NULL
+damage_formula TEXT NOT NULL
+portee TEXT
+fire_mode TEXT NOT NULL DEFAULT 'rc' CHECK (cc/rc/rl)
+notes TEXT
+```
+Deltas : 5 colonnes ajoutées, 4 supprimées, `equipment_id` NOT NULL → NULLABLE.
+Aucune migration planifiée ne touche `drone_weapons` (76, 76b, 77, 77b concernent d'autres tables).
+→ Bloquer Sprint 2c. Migration à numéroter (proposition : `76c`). DROP/recreate si pas de données, sinon ALTER TABLE complet.
+
+**SIM-B2 — `RD_TABLE` non exportée + plan utilise un indexage inexistant (CRITIQUE)**
+
+`charStats.js` : `const RD_TABLE = [{ min, max, rd }, ...]` — non exportée. `lookupTable()` — non exportée.
+Plan `calcDroneRD` : `RD_TABLE[Math.min(rdInput, RD_TABLE_MAX_KEY)]` → index entier sur tableau d'objets de range → retourne TOUJOURS `undefined`.
+Correction : exporter `RD_TABLE` + `lookupTable` depuis `charStats.js` ET remplacer l'indexage par un `lookupTable(RD_TABLE, rdInput, 'rd')`. Sans ça, `calcDroneRD` retourne toujours `0` → dégâts aux drones = bruts − blindage (sans RD), système sous-résistant.
+→ Bloquer Sprint 2b.
+
+**SIM-B3 — C1 : migration split catégories `armement` non planifiée (CRITIQUE pour Sprint 2c)**
+
+Migration 73 a seedé 34 programmes avec `category='armement'`.
+Sprint 2c : `WHERE category = 'armement_distance'` → 0 résultat → `program = null` → `skillTotal = 0` → toutes attaques drones ratées systématiquement.
+Aucune migration numérotée pour C1. Aucune décision par programme (lequel va en `armement_distance`, lequel en `armement_contact` ?).
+→ Bloquer Sprint 2c. Sprint C1 (classification + migration) doit précéder Sprint 2c.
+
+**SIM-B4 — `campaign_id` absent de l'INSERT `combat_actions` (Sprint 2d)**
+
+`endTurn` utilise `DELETE FROM combat_actions WHERE campaign_id = ...` → colonne existe et est requise.
+L'INSERT auto-announcement du plan ne l'inclut pas → violation NOT NULL → erreur DB silencieuse.
+Fix : `campaign_id: campaignId` à ajouter à l'INSERT.
+→ Vérifier migration 54 pour confirmer le NOT NULL.
+
+---
+
+### GAPS ARCHITECTURAUX — à résoudre avant "Je code ?"
+
+**SIM-A1 — `DRONE_INTEGRITY_UPDATED` absent de `shared/events.js`**
+
+Confirmé : absent. Le plan note "vérifier d'abord que cet event n'existe pas" — il n'existe pas.
+Fix trivial : 1 ligne dans `events.js`. À faire avant Sprint 2b.
+
+**SIM-A2 — Sémantique `rd` pour les drones : contre-intuitif, à valider**
+
+`RD_TABLE` : drone sain (integrite=15) → rdInput=30 → rd=-3. Drone presque détruit (integrite=5) → rdInput=10 → rd=+2.
+Dans la formule `degatsNets = degautsBruts - blindage - rd` :
+- Drone sain : rd=-3 → `-(-3)` = soustrait 3 de moins → PLUS de dégâts
+- Drone endommagé : rd=+2 → soustrait 2 de plus → MOINS de dégâts
+Résultat : drone plus résistant quand il est endommagé, plus vulnérable quand intact. Sémantiquement inversé.
+→ À valider dans LdB p.319. Peut nécessiter une adaptation de la formule pour les drones (ex: formula inversée, ou table différente).
+
+**SIM-A3 — `pendingDamageActions` : contexte drone-attaquant non spécifié**
+
+Matrice : "Drone attaque PJ humanoïde → COMBAT_DAMAGE_PROMPT PJ normalement".
+`pendingDamageActions` stocke le contexte attaquant pour COMBAT_DAMAGE_CONFIRM. Pour un drone attaquant, les champs diffèrent (`drone_weapon` vs `char_inventory`, pas de `calcResistanceArmure` attaquant, etc.).
+`resolveDroneAssaultAction` doit savoir exactement quels champs stocker dans `pendingDamageActions` pour que COMBAT_DAMAGE_CONFIRM fonctionne. Ces champs ne sont pas listés dans le plan.
+→ Lire le handler `COMBAT_DAMAGE_CONFIRM` pour identifier les champs requis, puis adapter la structure stored pour le cas drone-attaquant.
+
+**SIM-A4 — Sprint 2d : timing et point d'injection de l'auto-announcement**
+
+"En fin de phase ANNOUNCEMENT" = non précisé dans le code. La transition ANNOUNCEMENT→RESOLUTION est déclenchée par le screening SQL de complétion dans le flow actuel. Le code auto-announcement doit s'exécuter AVANT ce screening, et APRÈS que tous les joueurs humains aient eu leur chance de déclarer.
+→ Lire le handler ANNOUNCEMENT→RESOLUTION pour identifier le point exact d'injection.
+
+**SIM-A5 — Sprint 2d : broadcast pour drones auto-annoncés**
+
+Quand le serveur auto-valide les drones, `COMBAT_ACTION_DECLARED` doit-il être émis pour chaque drone ?
+Sans ça : la timeline client ne se met pas à jour, les joueurs ne voient pas les drones "prêts". Le plan est silencieux sur ce point.
+
+**SIM-A6 — Sprint 2d : retry INI 7 → INI 2 — mécanisme non architecturé**
+
+Deux approches possibles :
+- Option inline : `resolveDroneAutoAction` résout tout en séquence synchrone dans le slot INI 12 (simple)
+- Option rows : insertion de nouvelles `combat_actions` à sequence INI 7 et INI 2 (fidèle à l'architecture)
+Le plan ne tranche pas. L'option inline est plus simple mais fait des jets "cachés" dans le slot 12. L'option rows est plus cohérente mais nécessite un mécanisme de "sous-slot".
+→ Décision requise avant implémentation.
+
+**SIM-A7 — Sprint 2c : parsing `droneWeaponInvId` côté serveur non montré**
+
+Le plan montre le payload client (`mapActions.droneWeaponInvId`). Mais le handler `COMBAT_ACTION_DECLARE` (~ligne 1815) doit extraire ce champ et l'écrire dans `combat_actions.drone_weapon_inv_id`. Cette modification n'est pas documentée dans le plan.
+
+**SIM-A8 — `damages.detruit` JSONB non mis à jour à la destruction**
+
+`initDamages` produit `{ ..., detruit: false }`. `resolveDroneIntegrityLoss` met `integrite_actuelle = 0` mais n'écrit pas `damages.detruit = true` dans le JSONB. DroneWindow affiche `detruit: false` malgré la destruction.
+Fix : `if (detruit) damages.detruit = true` avant l'UPDATE.
+
+---
+
+### GAPS UI
+
+**SIM-U1 — `CombatGmDeclareWindow.jsx` : changements UI non spécifiés**
+
+Le plan dit "bifurcation sur `character.type === 'drone'`" mais ne décrit pas : quelle section remplace la sélection d'arme humanoïde, comment le GM sélectionne drone_weapon vs char_inventory, mise en page.
+→ Inventaire exhaustif requis avant "Je code ?" (règle composant UI).
+
+**SIM-U2 — `CombatModifiersWindow.jsx` : pre-sélection taille cible drone**
+
+Fetch `drone_sheet.taille → getTailleCible(taille)` non situé : dans le composant lui-même, dans le parent, ou via un prop ? État mis à jour comment (prop override ou state interne) ?
+
+**SIM-U3 — `DroneWindow.jsx` : subscription `DRONE_INTEGRITY_UPDATED` non implémentée**
+
+PD5 liste le besoin sans montrer : useEffect + dépendances, quels champs du state local sont mis à jour (`integrite_actuelle` + `damages`), comment merger le JSONB damages partiellement mis à jour.
+
+**SIM-U4 — Sprint 3 : UI "Télépiloter" dans `CombatActionWindow.jsx` non décrite**
+
+Aucun détail sur l'ajout de cette option pour le joueur propriétaire. Comment identifier quel drone est ciblé par l'action (dropdown ? auto si 1 seul drone du joueur dans le roster ?).
+
+---
+
+### GAPS MINEURS
+
+**SIM-M1 — `base_ini` vs `base_initiative`**
+Plan pseudocode : `base_ini: 12`. Colonne DB (migration 56) : `base_initiative`. Risque de typo.
+
+**SIM-M2 — `severity === null` (degatsNets < 5)**
+Integrity décrémentée mais aucune case JSONB cochée → divergence visible dans DroneWindow. Comportement V1 acceptable (cf. B4) mais non documenté dans le plan. Ajouter note de comportement dans le code.
+
+**SIM-M3 — `chk_action_type` CHECK et `'drone_auto'`**
+Migrations 61 + 63 modifient un CHECK sur `combat_actions`. À vérifier : ce CHECK couvre-t-il `action_key` (ou seulement un champ `type` séparé) ? Si oui, `'drone_auto'` doit être ajouté dans une migration.
+
+**SIM-M4 — `damage_formula` parsing**
+`drone_weapons.damage_formula` = TEXT libre ("2d6+3"). Vérifier que `diceParser.js` accepte ce format. Non confirmé.
+
+**SIM-M5 — Sprint 3 : `TELEPILOTAGE` skill — nom de colonne non vérifié**
+`ref_skills WHERE skill_key = 'TELEPILOTAGE'` : vérifier que `skill_key` est bien le nom de colonne et que le skill existe en DB après migration 74.
+
+---
+
+### Synthèse — ordre de résolution recommandé
+
+**Avant toute migration :**
+- SIM-A1 : +`DRONE_INTEGRITY_UPDATED` dans `events.js` (1 ligne)
+- SIM-B2 : export `RD_TABLE` + `lookupTable` dans `charStats.js` (2 lignes)
+- SIM-M3 : vérifier `chk_action_type` → migration si nécessaire
+- SIM-A2 : valider sémantique rd pour drones (LdB p.319)
+
+**Migrations dans l'ordre :**
+1. SIM-B1 : `76c_drone_weapons_schema` (ALTER TABLE)
+2. Migration 76 : `combat_actions.drone_weapon_inv_id` + XOR CHECK
+3. Migration 76b : `combat_roster.acquired_target_token_id`
+4. C1 : split catégories armement (avant Sprint 2c)
+5. Migration 77 + 77b : télépilotage (Sprint 3)
+
+**Sprints dans l'ordre (après migrations) :**
+1. Sprint 2a (micro — COMBAT_START INI 12) — le plus safe
+2. Sprint 2b — résoudre SIM-A2 + SIM-A3 + SIM-A8 avant
+3. Sprint 2d — résoudre SIM-A4 + SIM-A5 + SIM-A6 + SIM-B4 avant
+4. Sprint 2c — bloqué par SIM-B1 + SIM-B3 (C1)
+5. Sprint 3 — résoudre SIM-U4 + SIM-M5 avant
+---
+
+## Session 88 — Consolidation corrections plan — 2026-06-11
+
+**Statut corrections (10 edits appliqués à PLAN_DRONESYSCOMBAT.md) :**
+- ✅ SIM-M1 : `base_ini` → `base_initiative`
+- ✅ SIM-B2 : `calcDroneRD` → `lookupTable(RD_TABLE, rdInput, 'rd')`
+- ✅ SIM-B3 : PD3 note — deux exports requis (`RD_TABLE` + `lookupTable`)
+- ✅ SIM-A8 : `damages.detruit = true` avant UPDATE
+- ✅ SIM-A1 : events.js comment mis à jour
+- ✅ SIM-B4 : `campaign_id: campaignId` dans INSERT Sprint 2d
+- ✅ SIM-A5 : broadcast COMBAT_ACTION_DECLARED noté Sprint 2d
+- ✅ SIM-A7 : parsing `droneWeaponInvId` noté COMBAT_ACTION_DECLARE handler
+- ✅ SIM-A6 : Option rows retry INI 7/2 — pseudo-code complet
+- ✅ SIM-B1 : Migration 76c documentée — ALTER TABLE drone_weapons
+- ✅ C1 : TODO mis à jour — tableau décisions + SQL migration 76d
+
+**Reste ouvert pour l'implémentation :**
+- SIM-A2 : sémantique RD validée → à appliquer dans le code (export charStats.js)
+- SIM-A3 : `pendingDamageActions` drone attaquant PJ — non résolu dans le plan (hors scope V1 ?), à vérifier pendant Sprint 2c
+- SIM-M3 : vérifier contrainte `chk_action_type` avant migration 76
+- SIM-U* : items UI (DroneWindow, CombatTimeline) — à traiter pendant les sprints correspondants
+
+**Plan PLAN_DRONESYSCOMBAT.md : COMPLET — prêt pour implémentation Sprint 2a.**

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
@@ -12,12 +12,26 @@ import CombatDamageWindow from './CombatDamageWindow'
 import CombatInitStateWindow from './CombatInitStateWindow'
 import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
+import CombatDeclareLog from './CombatDeclareLog'
 
 
 export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, gmSocketError, onGmSocketErrorClose, announcementMarker, pjPreview, sidebarWidth = 0 }) {
   const { phase, roster, activeSlotIdx, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
+  const [stunDialog, setStunDialog] = useState(null) // null | { tokenId, outcome }
+  const [stunDialogDuration, setStunDialogDuration] = useState('')
+
+  // Écoute expiry étourdissement — notification simple
+  useEffect(() => {
+    if (!socket) return
+    const handler = ({ tokenId }) => {
+      const token = tokens.find(t => t.id === tokenId)
+      console.log(`[Combat] Étourdissement expiré — ${token?.label ?? tokenId}`)
+    }
+    socket.on(WS.COMBAT_STUN_EXPIRED, handler)
+    return () => socket.off(WS.COMBAT_STUN_EXPIRED, handler)
+  }, [socket, tokens])
 
   // Slot actif en RÉSOLUTION — pour le panneau GM
   const sortedRoster = [...roster].sort((a, b) => b.initiative - a.initiative)
@@ -202,7 +216,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           onClose={onGmAttackResultClose}
           onApplyStun={
             gmAttackResult.shockResult?.stun_applied === false
-              ? () => socket.emit(WS.COMBAT_APPLY_STUN, { tokenId: gmAttackResult.cibleId, outcome: gmAttackResult.shockResult.outcome })
+              ? () => { setStunDialogDuration(''); setStunDialog({ tokenId: gmAttackResult.cibleId, outcome: gmAttackResult.shockResult.outcome }) }
               : undefined
           }
         />
@@ -288,43 +302,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Panneau déclarant courant — visible pour tous pendant ANNOUNCEMENT après chaque déclaration */}
-      {phase === 'ANNOUNCEMENT' && announcementMarker && (() => {
-        const declToken  = tokens.find(t => t.id === announcementMarker.tokenId)
-        const atkToken   = announcementMarker.attackTargetId
-          ? tokens.find(t => t.id === announcementMarker.attackTargetId)
-          : null
-        const declChar   = declToken ? characters.find(c => c.id === declToken.character_id) : null
-        const rosterEntry = roster.find(r => r.token_id === announcementMarker.tokenId)
-        if (!declToken) return null
-        return (
-          <div style={styles.announcePanel}>
-            <div style={styles.announcePanelTitle}>vient d&apos;annoncer</div>
-            <div style={styles.announceName}>
-              {declToken.label ?? '?'}
-              {rosterEntry && (
-                <span style={styles.announceIni}> INI {rosterEntry.initiative}</span>
-              )}
-            </div>
-            {announcementMarker.moveTarget && (
-              <div style={styles.announceRow}>
-                <span style={styles.announceIcon}>→</span>
-                <span style={styles.announceDetail}>
-                  Déplacement [{announcementMarker.moveTarget.x}, {announcementMarker.moveTarget.y}]
-                </span>
-              </div>
-            )}
-            {atkToken && (
-              <div style={styles.announceRow}>
-                <span style={styles.announceIcon}>⚡</span>
-                <span style={{ ...styles.announceDetail, color: '#e0a050' }}>
-                  {atkToken.label ?? '?'}
-                </span>
-              </div>
-            )}
-          </div>
-        )
-      })()}
+      {/* CombatDeclareLog — liste cumulative des déclarations du tour — lecteur GM uniquement (joueurs : intégré dans CombatActionWindow) */}
+      {isGm && (phase === 'ANNOUNCEMENT' || phase === 'RESOLUTION') && <CombatDeclareLog />}
 
       {/* Panneau légende déplacement — visible pendant le mode sélection destination */}
       {combatMoveMode && (
@@ -366,6 +345,64 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => combatMoveMode.onCancel()}>
             Annuler le déplacement
           </button>
+        </div>
+      )}
+
+      {/* Dialog durée étourdissement manuel GM */}
+      {stunDialog && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 2000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto',
+        }}>
+          <div style={{
+            background: '#16162a', border: '2px solid #f5c542', borderRadius: 10,
+            padding: '20px 24px 16px', width: 280, color: '#c0c0d0',
+            fontFamily: 'Inter, system-ui, sans-serif', boxShadow: '0 0 40px rgba(245,197,66,0.3)',
+          }}>
+            <div style={{ fontSize: 9, color: '#f5c542', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 10 }}>
+              Durée de l&apos;étourdissement
+            </div>
+            <button
+              className="btn btn-gold"
+              style={{ width: '100%', marginBottom: 8 }}
+              onClick={() => {
+                const roll = Math.ceil(Math.random() * 6)
+                const d = stunDialog.outcome === 'inconscient' ? roll * 10 : roll
+                setStunDialogDuration(String(d))
+              }}
+            >
+              Lancer 1D6{stunDialog.outcome === 'inconscient' ? ' × 10' : ''} tours
+            </button>
+            <input
+              type="number" min="1" max="60"
+              value={stunDialogDuration}
+              onChange={e => setStunDialogDuration(e.target.value)}
+              placeholder="Durée (tours)"
+              style={{
+                width: '100%', background: '#0e0e1e', border: '1px solid #3a3a5a',
+                borderRadius: 4, color: '#e0e0f0', padding: '6px 8px', fontSize: 13,
+                boxSizing: 'border-box', marginBottom: 10,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn-danger"
+                style={{ flex: 1 }}
+                disabled={!stunDialogDuration || isNaN(Number(stunDialogDuration)) || Number(stunDialogDuration) < 1}
+                onClick={() => {
+                  const d = parseInt(stunDialogDuration, 10)
+                  if (!d || d < 1 || d > 60) return
+                  socket.emit(WS.COMBAT_APPLY_STUN, { tokenId: stunDialog.tokenId, outcome: stunDialog.outcome, duration: d })
+                  setStunDialog(null)
+                }}
+              >
+                Confirmer
+              </button>
+              <button className="btn btn-ghost" onClick={() => setStunDialog(null)}>
+                Annuler
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

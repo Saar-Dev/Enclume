@@ -243,7 +243,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             {attackResult.hit ? '✓ Touché !' : '✗ Raté'}
           </span>
           <span style={styles.attackBannerDetail}>
-            {attackResult.roll} / {attackResult.cdr} CDR
+            {attackResult.roll} / {attackResult.seuil} Seuil
           </span>
         </div>
       )}

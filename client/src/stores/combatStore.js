@@ -7,6 +7,7 @@ export const useCombatStore = create((set) => ({
   currentTurn: 1,
   activeSlotIdx: 0,
   activeTokenId: null,  // token_id du slot actif (ANNOUNCEMENT et RESOLUTION)
+  announcedActions: [], // [{ tokenId, actionType, initiative, moveTarget, attackTargetId }] — cumul du tour
 
   setCombatState: ({ phase, roster, actions, currentTurn, activeSlotIdx, activeTokenId }) => set({
     phase,
@@ -37,6 +38,12 @@ export const useCombatStore = create((set) => ({
     ),
   })),
 
+  addAnnouncedAction: (entry) => set((state) => ({
+    announcedActions: [...state.announcedActions, entry],
+  })),
+
+  resetAnnouncedActions: () => set({ announcedActions: [] }),
+
   resetCombat: () => set({
     phase: null,
     roster: [],
@@ -44,5 +51,6 @@ export const useCombatStore = create((set) => ({
     currentTurn: 1,
     activeSlotIdx: 0,
     activeTokenId: null,
+    announcedActions: [],
   }),
 }))

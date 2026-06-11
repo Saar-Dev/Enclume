@@ -243,7 +243,7 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, dragState, isGmLaye
       }}
     >
       <TokenRing color={color} isSelected={isSelected} isDragging={isDragging} opacity={isGmLayer ? 0.25 : undefined} />
-      <TokenGlbErrorBoundary color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ}>
+      <TokenGlbErrorBoundary key={glbUrl} color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ}>
         <TokenGlbBody glbUrl={glbUrl} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
       </TokenGlbErrorBoundary>
       <Billboard>
@@ -273,7 +273,7 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, dragState, isGmLaye
           </Text>
         )}
         {(token.statuses?.length > 0) && (
-          <Html position={[0, 2.1, 0]} center style={{ pointerEvents: 'none', userSelect: 'none' }}>
+          <Html position={[0, 2.1, 0]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
             <div style={{ display: 'flex', gap: 2 }}>
               {(token.statuses.length > 4
                 ? token.statuses.slice(0, 3)

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import api from '../lib/api.js'
 
 const CONTAINER_ORDER = ['Sac', 'Ceinture', 'Coffre']
@@ -24,9 +24,12 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
   const [addContainer,  setAddContainer]  = useState('Coffre')
   const [adding,        setAdding]        = useState(false)
 
+  const hasLoadedRef = useRef(false)
+
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    const showSpinner = !hasLoadedRef.current
+    if (showSpinner) setLoading(true)
     api.get(`/char-sheet/${characterId}/inventory`)
       .then(res => {
         if (cancelled) return
@@ -38,7 +41,10 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
         setThreshold(res.data.threshold)
       })
       .catch(err => console.error('Erreur chargement inventaire :', err))
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .finally(() => {
+        hasLoadedRef.current = true
+        if (!cancelled && showSpinner) setLoading(false)
+      })
     return () => { cancelled = true }
   }, [characterId, reloadKey])
 

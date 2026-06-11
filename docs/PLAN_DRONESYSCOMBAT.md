@@ -62,7 +62,7 @@ ALTER TABLE combat_actions
 
 ---
 
-## Sprint Drones 2a — COMBAT_START + base_ini (micro)
+## Sprint Drones 2a — COMBAT_START + base_initiative (micro)
 
 **Scope :** drone apparaît dans la timeline à INI 12. Rien d'autre.
 
@@ -72,7 +72,7 @@ ALTER TABLE combat_actions
 character = await db('characters').where({ id: token.character_id }).first()
 
 if (character?.type === 'drone') {
-  rosterData.push({ token, base_ini: 12, character, is_pnj: false, forcedNotSurprised: true })
+  rosterData.push({ token, base_initiative: 12, character, is_pnj: false, forcedNotSurprised: true })  // base_initiative (pas base_ini)
   continue  // pas de char_sheet, pas de calcREA
 }
 // Note : dans rosterRows.map, forcer is_surprised = false si forcedNotSurprised
@@ -143,18 +143,19 @@ if (cibleCharacter.type === 'drone') {
 ### Nouvelle fonction `calcDroneRD(integrite)`
 
 ```js
+// ⚠️ PD3 : exporter lookupTable + RD_TABLE depuis charStats.js avant d'utiliser cette fonction.
+// RD_TABLE = [{ min, max, rd }, ...] — lookup par range, PAS par index entier.
+// Input = integrite_actuelle × 2 (LdB p.88 : "en multipliant l'Intégrité actuelle par deux").
+// Comportement intentionnel : drone sain (intégrité haute) → rd négatif → soustrait moins → plus vulnérable.
+//   Drone endommagé (intégrité basse) → rd positif → soustrait plus → plus résistant (noyau durci).
+//   Source : LdB p.88 — validé Session 88.
 function calcDroneRD(integrite) {
-  // LdB p.319 : RD = integrite × 2, puis table RD p.112
-  // RD_TABLE dans charStats.js prend for_na + con_na comme input.
-  // Pour les drones, input = integrite × 2 directement.
-  // Ne pas appeler calcResistanceDommages(integrite, 0) — sémantique différente.
-  // Lire RD_TABLE directement avec rdInput comme clé.
   const rdInput = (integrite ?? 0) * 2
-  return RD_TABLE[Math.min(rdInput, RD_TABLE_MAX_KEY)] ?? 0
+  return lookupTable(RD_TABLE, rdInput, 'rd') ?? 0
 }
 ```
 
-⚠️ **PD3** : exporter `RD_TABLE` depuis `charStats.js` ou dupliquer la table ici. Pas de calcul `for_na + con_na`.
+⚠️ **PD3** : exporter `RD_TABLE` et `lookupTable` depuis `charStats.js`. Ces deux symboles sont actuellement `const` internes non exportés. Ajouter `export` devant les deux déclarations. Pas de calcul `for_na + con_na` — input direct.
 
 ### Nouvelle fonction `resolveDroneIntegrityLoss`
 
@@ -180,11 +181,15 @@ async function resolveDroneIntegrityLoss(io, campaignId, characterId, tokenId, d
     // TODO B4 overflow — si idx === -1 (toutes cases pleines pour ce niveau),
     // déborder vers la gravité suivante (comportement à confirmer LdB)
   }
+  // Note : si severity === null (degatsNets < 5), aucune case cochée mais integrite -= 1 quand même.
+  // Décalage visible dans DroneWindow (B4/B5) — comportement V1 acceptable.
 
   // LdB : 1 case de blessure = 1 point d'intégrité. 1 hit = 1 case.
   // 'detruit' (degatsNets ≥ 30) → destruction immédiate
   const newIntegrite = severity === 'detruit' ? 0 : Math.max(0, droneSheet.integrite_actuelle - 1)
   const detruit = newIntegrite <= 0
+
+  if (detruit) damages.detruit = true  // mettre à jour le JSONB avant l'UPDATE
 
   await db('drone_sheet').where({ character_id: characterId }).update({
     damages: JSON.stringify(damages),
@@ -211,7 +216,7 @@ async function resolveDroneIntegrityLoss(io, campaignId, characterId, tokenId, d
 DRONE_INTEGRITY_UPDATED: 'drone:integrity_updated',
 ```
 
-Vérifier d'abord que cet event n'existe pas.
+⚠️ Confirmé absent de `shared/events.js` (Session 88) — à ajouter avant Sprint 2b.
 
 **Smoke test A (PNJ→drone) :** PNJ attaque drone → auto-résolution dans `resolveAssaultAction` → intégrité décrémentée → `DRONE_INTEGRITY_UPDATED` broadcast.
 **Smoke test B (PJ→drone) :** PJ attaque drone → `COMBAT_DAMAGE_PROMPT` → joueur lance les dés → `COMBAT_DAMAGE_CONFIRM` → intégrité décrémentée → `DRONE_INTEGRITY_UPDATED` broadcast.
@@ -252,6 +257,12 @@ Le sélecteur d'arme actuel lit `char_inventory`. Bifurcation sur `character.typ
 ```
 
 Le serveur lit `mapActions.droneWeaponInvId` → stocke dans `combat_actions.drone_weapon_inv_id`.
+
+⚠️ **SIM-A7 — COMBAT_ACTION_DECLARE handler (~ligne 1815)** : le handler existant ne connaît pas `droneWeaponInvId`. Ajouter dans la section INSERT de `combat_actions` :
+```js
+drone_weapon_inv_id: mapActions?.droneWeaponInvId ?? null,
+```
+Guard XOR déjà garanti en DB (migration 76) — pas de vérification applicative requise.
 
 ### server/src/socket/index.js — resolveDroneAssaultAction (attaquant drone)
 
@@ -326,12 +337,16 @@ const autonomousDrones = await db('combat_roster as r')
 for (const drone of autonomousDrones) {
   await db('combat_roster').where({ id: drone.id }).update({ has_announced: true })
   await db('combat_actions').insert({
-    token_id: drone.token_id,        // FK → tokens.id (pas roster_id — V11)
+    campaign_id: campaignId,          // NOT NULL — requis (SIM-B4)
+    token_id: drone.token_id,         // FK → tokens.id (pas roster_id — V11)
     action_key: 'drone_auto',
-    sequence: 3,                     // assaut, sans déplacement préalable (V19)
+    sequence: 3,                      // assaut, sans déplacement préalable (V19)
     target_token_id: drone.acquired_target_token_id ?? null,
   })
 }
+// ⚠️ Broadcaster COMBAT_ACTION_DECLARED pour chaque drone auto-annoncé
+//    afin que la timeline client se mette à jour (SIM-A5) :
+// io.to(campaignId).emit(WS.COMBAT_ACTION_DECLARED, { tokenId: drone.token_id, ... })
 ```
 
 ### Phase RESOLUTION — séquence autonome à INI 12
@@ -341,13 +356,44 @@ Quand le slot INI 12 est traité et que l'action est `action_key = 'drone_auto'`
 **Cas A — pas de cible acquise (`acquired_target_token_id = null`) :**
 ```
 INI 12 → Test Détection → [succès] → Test Ami/Ennemi → [succès] → Test Armement → tir
-                        → [échec]  → INI 7 → re-Test ...
+                        → [échec]  → INI 7 → re-Test Détection → [succès] → Test Ami/Ennemi → ...
+                                            → [échec]          → INI 2 → re-Test Détection → ...
 ```
 
 **Cas B — cible déjà acquise :**
 ```
 INI 12 → Test Armement → tir
 ```
+
+**Mécanisme Option rows (SIM-A6) :** les retries INI 7 et INI 2 ne sont pas pré-insérés. Ils sont insérés **dynamiquement** lors du traitement du slot courant si la Détection échoue. Les retries se traitent **dans le même slot de résolution** que l'action initiale (sous-séquences dans le tour INI 12 du drone), pas dans des slots INI séparés. INI 7 et INI 2 sont les noms de sous-étapes, pas de vrais slots roster.
+
+⚠️ **Ambiguïté à résoudre au moment de l'implémentation** : comment `advanceSlot` sait-il qu'un row `drone_auto_retry` appartient au slot INI 12 et pas au slot INI 7 réel ? Options :
+- **Option a** (recommandée) : les retries sont traités en cascade dans `resolveDroneAutoAction` — pas de rows supplémentaires en DB, la boucle Détection→Ami/Ennemi→Armement se fait en mémoire avec 3 passes max.
+- **Option b** : rows supplémentaires avec `sequence = 4` (retry INI 7) et `sequence = 5` (retry INI 2), traités quand `advanceSlot` traite le token à INI 12 (tous les rows `combat_actions` pour ce token dans cet ordre).
+- **Option c** : colonne `scheduled_ini INTEGER` sur `combat_actions` pour déclencher au bon slot — schema change requis.
+
+```js
+// Squelette Option a (recommandée — pas de rows supplémentaires) :
+async function resolveDroneAutoAction(io, campaignId, action) {
+  // ...
+  // Cas A — pas de cible acquise : jusqu'à 3 tentatives (INI 12, 7, 2)
+  const retryINIs = [12, 7, 2]
+  for (const retryINI of retryINIs) {
+    const detectionOk = await rollTest(/* programme Détection */)
+    io.to(campaignId).emit(WS.DICE_RESULT, { label: `Détection INI ${retryINI}`, ... })
+    if (!detectionOk) continue  // échec → prochaine tentative
+    const amiEnnemyOk = await rollTest(/* programme Ami/Ennemi */)
+    io.to(campaignId).emit(WS.DICE_RESULT, { label: `Ami/Ennemi INI ${retryINI}`, ... })
+    if (!amiEnnemyOk) continue
+    // Cible acquise → UPDATE acquired_target_token_id → passer à l'Armement
+    await executeArmement(io, campaignId, action, droneSheet)
+    return
+  }
+  // 3 échecs → drone ne tire pas ce tour
+}
+```
+
+Chaque appel `rollTest` émet un `DICE_RESULT` broadcast pour la timeline client.
 
 **Mise à jour `acquired_target_token_id` :** après succès Détection → `UPDATE combat_roster SET acquired_target_token_id = tokenId WHERE id = droneRosterId`.
 **Perte de cible :** GM marque manuellement (met `acquired_target_token_id = null`) → retour Cas A tour suivant.
@@ -446,7 +492,7 @@ En mode télépiloté, le programme `interception` n'est pas actif — l'ordinat
 |---|---|
 | PJ humanoïde attaque PNJ humanoïde | Zéro delta — path inchangé |
 | PNJ humanoïde attaque PJ humanoïde | Zéro delta |
-| Drone dans COMBAT_START | `base_ini = 12`, `char_sheet` non fetchée |
+| Drone dans COMBAT_START | `base_initiative = 12`, `char_sheet` non fetchée |
 | GM déclare pour drone | `combat_actions.drone_weapon_inv_id` non null, `weapon_inv_id` null |
 | Drone attaque PNJ humanoïde | Skill = programme armement, localisation D20, wound insertion normale |
 | Drone attaque PJ humanoïde | `COMBAT_DAMAGE_PROMPT` PJ normalement |
@@ -501,6 +547,38 @@ La migration qui split en `armement_distance` / `armement_contact` est requise a
 
 ---
 
+## Migration 76c — Reconciliation schéma `drone_weapons` (SIM-B1)
+
+⚠️ **Problème :** Migration 71 a créé `drone_weapons` avec le schéma Sprint 1 (lié à `ref_equipment`, champs catalogue). Option A (champs libres) est incompatible avec ce schéma existant.
+
+**Schéma actuel migration 71 :**
+- `equipment_id UUID NOT NULL FK` (NOT NULL — incompatible Option A)
+- `contenance_chargeur INTEGER NOT NULL DEFAULT 0`
+- `ammo_restant INTEGER`
+- `sort_order SMALLINT`
+- `label_override TEXT`
+- Pas de `character_id`, `name`, `damage_formula`, `portee`, `fire_mode`
+
+**Migration 76c — `76c_drone_weapons_option_a.js` :**
+```sql
+ALTER TABLE drone_weapons
+  ADD COLUMN character_id  UUID REFERENCES characters(id) ON DELETE CASCADE,
+  ADD COLUMN name          TEXT,
+  ADD COLUMN damage_formula TEXT,
+  ADD COLUMN portee        TEXT,
+  ADD COLUMN fire_mode     TEXT NOT NULL DEFAULT 'rc' CHECK (fire_mode IN ('cc', 'rc', 'rl')),
+  ADD COLUMN notes         TEXT,
+  ALTER COLUMN equipment_id DROP NOT NULL;
+
+-- Backfill character_id depuis char_inventory (armes associées à un character)
+-- Si rows existants : requiert UPDATE manuel ou script de migration de données
+-- En V1 : table vide en pratique → backfill non requis
+```
+
+Colonnes migration 71 conservées (rétrocompatibilité) : `contenance_chargeur`, `ammo_restant` (sera utilisé en B6), `sort_order`, `label_override`. La migration 76c les laisse en place.
+
+---
+
 ## drone_weapons — Schéma retenu (Option A)
 
 Champs libres sans référence `ref_equipment`. Le GM ou le propriétaire saisit les stats manuellement.
@@ -538,5 +616,21 @@ Si une case est déjà cochée et qu'un nouveau dommage tombe dans le même seui
 **B6 — `ammo_restant` sur `drone_weapons`**
 LdB : armes drone ont des munitions (ex: lance dard 70 munitions). Hors scope V1. Ajout requis : colonne `ammo_remaining INTEGER` nullable sur `drone_weapons` + décrémentation dans `resolveDroneAssaultAction` si applicable.
 
-**C1 — Migration split catégories programmes**
-Migration 73 a seedé 34 programmes avec `category='armement'`. Il faut les migrer vers `armement_distance` ou `armement_contact` selon le type de programme. Requiert une décision par programme (ou par famille). Sprint dédié avant Sprint 2c.
+**C1 — Migration split catégories programmes** *(décisions validées Session 88)*
+Migration 73 a seedé des programmes avec `category='armement'`. Décisions de migration confirmées :
+
+| Programme | Action | Nouvelle catégorie |
+|---|---|---|
+| **Tir** | UPDATE | `armement_distance` |
+| **Bombardement** | UPDATE | `armement_distance` |
+| **Attaque** | UPDATE | `armement_contact` |
+| **Contre-attaque** | Inchangé | `contre_attaque` (déjà correct, cyber) |
+| **Contrôle armement** | DELETE | — (supprimé) |
+
+```sql
+-- Migration 76d — split catégories programmes drones
+UPDATE drone_programs SET category = 'armement_distance' WHERE name IN ('Tir', 'Bombardement');
+UPDATE drone_programs SET category = 'armement_contact'  WHERE name = 'Attaque';
+DELETE FROM drone_programs WHERE name = 'Contrôle armement';
+```
+Requis **avant Sprint 2c** — sans cette migration, fetch `WHERE category = 'armement_distance'` retourne 0.

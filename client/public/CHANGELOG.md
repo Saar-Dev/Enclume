@@ -1,11 +1,31 @@
-## v87 — 2026-06-10 — Audit plan intégration drones combat — architecture complète
+## v87 — 2026-06-11 — Correctifs combat + CombatDeclareLog
 
-### Documentation
-- Audit exhaustif `docs/PLAN_DRONESYSCOMBAT.md` — 25 issues identifiées et résolues
-- Architecture Sprint 2b : deux branches (PNJ→drone dans resolveAssaultAction, PJ→drone dans COMBAT_DAMAGE_CONFIRM)
-- Décision télépilotage Option C : propriétaire consomme son slot, drone status='done' ce round
-- Migration 77b planifiée : state_control_mode sur combat_roster
-- Plan prêt pour implémentation (Sprints 2a → 3)
+### Combat — Déclarations
+- [add] CombatDeclareLog — panneau cumulatif des déclarations du tour, persistant pendant ANNOUNCEMENT et RESOLUTION
+- [fix] Double fenêtre CombatDeclareLog côté joueur — standalone réservé au GM, déclarations intégrées dans CombatActionWindow (lecture seule) pour les joueurs
+- [fix] Style lecteur clair (fond `#f4f7f8`, texte `#1a2a3a`) — même CSS partagé GM/joueur
+
+### Combat — Correctifs
+- [fix] Actions Corps à corps jamais résolues — bouton "Agir" masqué par la branche `myMeleeAction` dans le footer
+- [fix] Assaut/CaC bloqué si arme non "Au clair" — guard visuel + surbrillance état arme dans StateSelector
+- [fix] Dégainer automatique (QB) supprimé — dégainer coûte des INI comme le prescrit le LdB Polaris
+- [fix] CaC — sélection auto arme supprimée, défaut = Mains nues (fallback si aucune arme de contact équipée)
+- [fix] EXCLUSIVE_ACTIONS supprimé — Recharger ne désélectionne plus les autres actions
+- [fix] Munitions vérifiées en ANNOUNCEMENT — `COMBAT_DECLARE_ERROR` si insuffisantes pour le mode de tir choisi
+- [fix] Flash blanc onglet Matériel — rechargements WS silencieux via `hasLoadedRef` (ArmorWoundPanel, WeaponPanel, InventoryPanel)
+- [fix] Icônes de statut s'affichant au-dessus de toute l'UI — `zIndexRange={[1, 0]}` sur le `<Html>` Drei
+- [fix] Options de jet critique non mémorisées au rechargement — `detectSimpleConfig` restaure les 4 états depuis `dice_config`
+- [fix] Chat combat — DICE_RESULT structuré pour les 4 jets (assaut tir, CaC attaque, CaC défense PJ, CaC défense PNJ)
+- [fix] Terminologie `cdr` → `seuil` dans les payloads COMBAT_ATTACK_PLAYER_RESULT
+- [fix] Dé résultat — taille fixe 20px + aligné à droite dans le chat (Sidebar)
+- [fix] Joueur propriétaire peut modifier le GLB de son propre token (route `characters.js` + `CharacterWindow`)
+
+### Documentation — Plan drones combat
+- Audit exhaustif `docs/PLAN_DRONESYSCOMBAT.md` — 25 issues V1–V25 identifiées et résolues
+- Architecture Sprint 2b : deux branches (PNJ→drone resolveAssaultAction, PJ→drone COMBAT_DAMAGE_CONFIRM)
+- Décision V21 télépilotage Option C : propriétaire consomme son slot, drone status='done' ce round
+- Simulation à blanc Sprints 2a–3 : 14 findings, 3 décisions design, 10 corrections supplémentaires au plan
+- Migrations planifiées : 76, 76b, 76c, 76d, 77, 77b
 
 ## v85 — 2026-06-09 — Tour de combat complet + Corrections UI fenêtres
 

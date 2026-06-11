@@ -364,6 +364,11 @@ Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation doc
 | Dette | EntityEditorOLD.jsx commité par erreur — à supprimer | ✅ session 44 |
 | Dette | .gitattributes:3 attribut invalide — à corriger | 🔲 |
 | Dette arch. | `pendingDamageActions` Map in-memory — données perdues si redémarrage serveur entre ATTACK_PLAYER_RESULT et DAMAGE_CONFIRM — persister en DB ou Redis | 🔲 |
+| Bug CL1 | Portraits PNJ non visibles dans timeline joueur (absent du characterStore joueur) | 🔲 session 92 |
+| Bug CL2 | Design CombatDeclareLog mauvais + divergence GM/joueur — référence = version GM | 🔲 session 92 |
+| Bug CL3 | Ghosts de déplacement d'annonce disparus (régression announcementMarker) | 🔲 session 92 |
+| Bug D1 | Menu radial "fiche" drone : rien ne s'ouvre (mismatch type character_id) | 🔲 session 89 |
+| Bug D2 | Token drone : changement GLB non fonctionnel (dépend D1) | 🔲 session 89 |
 
 ---
 

@@ -499,27 +499,27 @@ export default function CharacterWindow({ character, isGm, onClose, woundReloadK
               )}
             </div>
 
-            {isGm && (
-              <>
-                <label style={{
-                  ...s.uploadBtn,
-                  opacity: glbUploading ? 0.5 : 1,
-                  pointerEvents: glbUploading ? 'none' : 'auto',
-                  marginTop: '8px',
-                }}>
-                  {glbUploading ? t('character.glbUploading') : t('character.glbUpload')}
-                  <input
-                    type="file"
-                    accept=".glb"
-                    style={{ display: 'none' }}
-                    onChange={handleGlbUpload}
-                  />
-                </label>
+            {(isGm || isOwner) && (
+              <label style={{
+                ...s.uploadBtn,
+                opacity: glbUploading ? 0.5 : 1,
+                pointerEvents: glbUploading ? 'none' : 'auto',
+                marginTop: '8px',
+              }}>
+                {glbUploading ? t('character.glbUploading') : t('character.glbUpload')}
+                <input
+                  type="file"
+                  accept=".glb"
+                  style={{ display: 'none' }}
+                  onChange={handleGlbUpload}
+                />
+              </label>
+            )}
 
-                <button style={s.deleteBtn} onClick={handleDelete}>
-                  {t('character.deleteCharacter')}
-                </button>
-              </>
+            {isGm && (
+              <button style={s.deleteBtn} onClick={handleDelete}>
+                {t('character.deleteCharacter')}
+              </button>
             )}
           </div>
         )}

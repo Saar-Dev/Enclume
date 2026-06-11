@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-10 Session 85
+> Dernière mise à jour : 2026-06-11 Session 87
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -26,6 +26,9 @@
 |---|---|---|
 | `is_stunned` non enforced dans `COMBAT_ACTION_DECLARE` | Haute | PC42 — sprint `stunned_until_turn` |
 | `is_stunned` sans durée (LdB p.237 : 1d6 tours) | Haute | sprint `stunned_until_turn` requis |
+| Bug CL1 — Portraits PNJ non visibles dans timeline joueur | Haute | CombatTimeline.jsx — PNJ absent characterStore joueur |
+| Bug CL2 — Design CombatDeclareLog mauvais + divergence GM/joueur | Moyenne | CombatDeclareLog.jsx + declareLogSection — ref = version GM |
+| Bug CL3 — Ghosts déplacement d'annonce disparus | Moyenne | CombatOverlay.jsx — announcementMarker, régression Sessions 88–91 |
 | "Changer le mode de tir" — non implémenté | Moyenne | sprint dédié futur |
 | Sprint Annonce v2 — actions précédentes en lecture seule | Moyenne | GmDeclareWindow + ActionWindow |
 | Surprise critique (roll=1) → initiative=1 | Basse | à analyser |

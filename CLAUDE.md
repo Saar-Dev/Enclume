@@ -98,26 +98,29 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 87 (2026-06-10)
+## ÉTAT COURANT — Session 87 (2026-06-11)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **75 migrations stables** (76, 76b, 77, 77b planifiées — Sprint Drones 2+3)
+- **75 migrations stables** (76, 76b, 76c, 76d, 77, 77b planifiées — Sprint Drones 2+3)
 - "Changer le mode de tir" — non implémenté. Sprint dédié futur.
 
 **En attente de validation fonctionnelle :**
 - Sprint CaC 4b (attaque multiple melee) — Session 74
 - Sprint Test de Choc (migration 69, shock_auto_stun) — Session 81
 
-**Session 87 — Audit PLAN_DRONESYSCOMBAT.md :**
-- 25 issues analysées (V1–V25), 15 corrections appliquées au plan
-- Architecture Sprint 2b : deux branches (PNJ→drone dans resolveAssaultAction, PJ→drone dans COMBAT_DAMAGE_CONFIRM)
-- Décision V21 : Option C télépilotage (propriétaire déclare "Télépiloter" → drone status='done' ce round)
-- Migration 77b ajoutée (state_control_mode sur combat_roster)
-- Plan `docs/PLAN_DRONESYSCOMBAT.md` : **prêt pour implémentation**
+**Session 87 — Livré :**
+- PLAN_DRONESYSCOMBAT.md : prêt pour implémentation (Sprints 2a→3, migrations 76→77b)
+- 13 bugs combat corrigés (CaC, QB, flash, munitions ANNOUNCEMENT, zIndex statuts, etc.)
+- CombatDeclareLog : panneau cumulatif déclarations GM+joueurs, double fenêtre corrigée, style lecteur
 
 **Dettes actives :**
 - `is_stunned` non enforced dans `COMBAT_ACTION_DECLARE` → PC42
 - `is_stunned` sans durée → sprint `stunned_until_turn` requis
+- Bug CL1 — Portraits PNJ non visibles timeline joueur
+- Bug CL2 — Design CombatDeclareLog + divergence GM/joueur
+- Bug CL3 — Ghosts déplacement d'annonce disparus
+- Bug D1 — Menu radial "fiche" drone : rien ne s'ouvre
+- Bug D2 — Token drone : changement GLB non fonctionnel (dépend D1)
 - `useDiceAudio.js` — sons dés
 - `.gitattributes:3` — attribut invalide
 - WorkshopPage crash import invalide (`err.response?.data?.error`)

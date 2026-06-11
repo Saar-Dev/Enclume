@@ -11,30 +11,43 @@ import {
   FIRE_MODE_VARIANTS, CC_REPS_STEPS, RL_BUTTONS,
 } from './combatSections.js'
 
-const EXCLUSIVE_ACTIONS = new Set(['attack', 'melee', 'reload', 'multi', 'interact'])
+const ACTION_LABELS = {
+  assault:    'Assaut (tir)',
+  melee:      'Assaut (CaC)',
+  reload:     'Rechargement',
+  micro:      'Action',
+  move_short: 'Déplacement',
+  move_long:  'Déplacement (long)',
+  sprint:     'Sprint',
+  rush:       'Rush',
+  move:       'Déplacement',
+}
+const PURE_MOVE_TYPES = new Set(['move_short', 'move_long', 'sprint', 'rush', 'move'])
 
 // ---------------------------------------------------------------------------
 // Composant StateSelector
 // Affiche un segmented control pour un etat avec cout de transition visible.
 // ---------------------------------------------------------------------------
-function StateSelector({ stateKey, def, current, initial, onChange, disabled, availableKeys }) {
+function StateSelector({ stateKey, def, current, initial, onChange, disabled, availableKeys, highlightKey }) {
   return (
     <div style={ss.row}>
       <span style={ss.label}>{def.label}</span>
       <div style={ss.seg}>
         {def.states.map(opt => {
-          const isActive   = opt.k === current
-          const isDisabled = disabled || (availableKeys && !availableKeys.includes(opt.k))
-          const cost       = stateTransitionCost(def, initial, opt.k)
-          const costStr    = cost === 0 ? null : cost > 0 ? `+${cost}` : `${cost}`
+          const isActive      = opt.k === current
+          const isDisabled    = disabled || (availableKeys && !availableKeys.includes(opt.k))
+          const isHighlighted = !isActive && !isDisabled && opt.k === highlightKey
+          const cost          = stateTransitionCost(def, initial, opt.k)
+          const costStr       = cost === 0 ? null : cost > 0 ? `+${cost}` : `${cost}`
           return (
             <div
               key={opt.k}
               onClick={() => !isDisabled && !isActive && onChange(opt.k)}
               style={{
                 ...ss.segOpt,
-                ...(isActive    ? ss.segOptActive    : {}),
-                ...(isDisabled  ? ss.segOptDisabled  : {}),
+                ...(isActive      ? ss.segOptActive   : {}),
+                ...(isDisabled    ? ss.segOptDisabled  : {}),
+                ...(isHighlighted ? { borderColor: '#5b8dee', color: '#5b8dee' } : {}),
               }}
             >
               <span style={ss.segOptLabel}>{opt.l}</span>
@@ -59,7 +72,7 @@ export default function CombatActionWindow({
   socket, user, characters, pendingSurpriseRoll, onSurpriseRolled,
   onEnterMoveMode, onEnterTargetMode,
 }) {
-  const { roster, phase, activeSlotIdx, actions, activeTokenId } = useCombatStore()
+  const { roster, phase, activeSlotIdx, actions, activeTokenId, announcedActions, currentTurn } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
   // Multi-personnage : tous les persos contrôlés par ce joueur
@@ -74,6 +87,7 @@ export default function CombatActionWindow({
   const playerToken = activeStoreToken ?? playerTokensInRoster[0] ?? null
   const playerChar  = playerToken ? playerChars.find(c => c.id === playerToken.character_id) ?? null : null
   const rosterEntry = playerToken ? roster.find(r => r.token_id === playerToken.id) : null
+  const isStunned   = rosterEntry?.state_character?.is_stunned === true
 
   // --- etats tactiques (initialises depuis rosterEntry quand dispo) ----------
   const [states, setStates] = useState({
@@ -83,7 +97,6 @@ export default function CombatActionWindow({
     cover:     'exposed',
     vitesse:   'normal',
   })
-  const prevWeaponRef          = useRef(null)   // pour revert QB
   const prevHasAnnouncedRef    = useRef(false)  // détection nouveau tour
   const [declareError, setDeclareError] = useState(null)
 
@@ -168,7 +181,6 @@ export default function CombatActionWindow({
     setSelectedMeleeWeaponId(null)
     setInMeleeTargetMode(false)
     setCombatMode('normal')
-    prevWeaponRef.current = null
   }, [rosterEntry?.token_id])
 
   // --- fetch allures — suit le token actif du joueur -----------------------
@@ -232,7 +244,6 @@ export default function CombatActionWindow({
       setSelectedMeleeWeaponId(null)
       setInMeleeTargetMode(false)
       setCombatMode('normal')
-      prevWeaponRef.current = null
     }
   }, [rosterEntry?.has_announced])
 
@@ -375,11 +386,9 @@ export default function CombatActionWindow({
   // Armes de contact en inventaire (tous slots/containers) — pour message d'état
   const hasMeleeInInventory = allInventoryItems.some(item => item.ref_category === 'Arme de contact')
 
-  // --- QB : weapon auto-drawn quand attack/melee selectionne ---------------
   const handleMapToggle = (k) => {
     setMapSelected(prev => {
       const next = new Set(prev)
-      const wasAttackOrMelee = prev.has('attack') || prev.has('melee')
 
       if (next.has(k)) {
         // Désélection
@@ -402,41 +411,9 @@ export default function CombatActionWindow({
         if (k === 'move') setMoveSelection(null)
         if (k === 'reload') setSelectedAmmoId(null)
       } else {
-        // Sélection : si action exclusive, désélectionner toutes les autres exclusives
-        if (EXCLUSIVE_ACTIONS.has(k)) {
-          for (const ex of EXCLUSIVE_ACTIONS) {
-            if (next.has(ex)) {
-              next.delete(ex)
-              if (ex === 'reload') setSelectedAmmoId(null)
-              if (ex === 'attack') {
-                setAssaultPendingTokenId(null)
-                setAssaultBulletCount(null)
-                setAssaultVariantAB('A')
-                setIsDualWield(false)
-                setInTargetMode(false)
-              }
-              if (ex === 'melee') {
-                setMeleePendingTokenIds([])
-                setSelectedMeleeWeaponId(null)
-                setInMeleeTargetMode(false)
-                if (combatMode === 'retraite' || combatMode === 'charge') setMoveSelection(null)
-                setCombatMode('normal')
-              }
-            }
-          }
-        }
         next.add(k)
       }
 
-      const willAttackOrMelee = next.has('attack') || next.has('melee')
-      if (!wasAttackOrMelee && willAttackOrMelee) {
-        prevWeaponRef.current = states.weapon
-        setStates(s => ({ ...s, weapon: 'drawn' }))
-      } else if (wasAttackOrMelee && !willAttackOrMelee) {
-        const revert = prevWeaponRef.current ?? initialStates.current.weapon
-        setStates(s => ({ ...s, weapon: revert }))
-        prevWeaponRef.current = null
-      }
       return next
     })
   }
@@ -447,8 +424,9 @@ export default function CombatActionWindow({
     if (!allures) return
     setInMoveMode(true)
     setMoveSelection(null)
+    const effectiveAllures = isStunned ? { lente: allures.lente, moyenne: allures.moyenne } : allures
     onEnterMoveMode(
-      allures, playerToken.id,
+      effectiveAllures, playerToken.id,
       { x: playerToken.pos_x, z: playerToken.pos_y },
       (sel) => { setMoveSelection(sel); setInMoveMode(false) },
       () => { setInMoveMode(false) }
@@ -487,7 +465,7 @@ export default function CombatActionWindow({
     currentVariant != null
   )
   const reloadSelected = mapSelected.has('reload')
-  const reloadValid    = !reloadSelected || (selectedWeapon !== null && selectedAmmoId !== null)
+  const reloadValid    = !reloadSelected || attackSelected || (selectedWeapon !== null && selectedAmmoId !== null)
   const effectiveMeleeCount = combatMode === 'charge' ? 1 : meleeCount
   const meleeValid     = !meleeSelected  || (
     meleeDefensif ||
@@ -611,15 +589,6 @@ export default function CombatActionWindow({
             <div style={{ color: '#7070a0', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
               Rechargement — en attente du MJ…
             </div>
-          ) : myMeleeAction ? (
-            <div style={{ color: '#7070a0', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
-              Corps à corps → {meleeCibleTokens.map((t, i) => (
-                <span key={i}>
-                  {i > 0 && <span style={{ color: '#505060' }}>, </span>}
-                  <strong style={{ color: '#c0c0d0' }}>{t?.label ?? '?'}</strong>
-                </span>
-              ))} — en attente du résultat…
-            </div>
           ) : (
             <button className="btn-tac" onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}>
               Agir
@@ -673,13 +642,69 @@ export default function CombatActionWindow({
     </div>
   )
 
+  // Panneau lecture seule déclarations — remplace rosterSection dans les 3 branches d'attente
+  const declareLogSection = (
+    <div>
+      <div style={W.sectionTitle}>Déclarations — Tour {currentTurn}</div>
+      <div className="combat-declare-log-body" style={{ maxHeight: 170 }}>
+        {announcedActions.length === 0 ? (
+          <div className="combat-declare-log-empty">Aucune déclaration pour ce tour.</div>
+        ) : (
+          announcedActions.map((entry, i) => {
+            const tok    = tokens.find(t => t.id === entry.tokenId)
+            const atkTok = entry.attackTargetId ? tokens.find(t => t.id === entry.attackTargetId) : null
+            const isPureMove = PURE_MOVE_TYPES.has(entry.actionType)
+            const moveDest = entry.moveTarget
+              ? `[${entry.moveTarget.x ?? '?'}, ${entry.moveTarget.y ?? entry.moveTarget.z ?? '?'}]`
+              : null
+            return (
+              <div key={`${entry.tokenId}-${i}`}>
+                <div className="combat-declare-log-actor">
+                  <span className="combat-declare-log-dot" style={{ background: tok?.color ?? '#5b8dee' }} />
+                  <span className="combat-declare-log-name">{tok?.label ?? '?'}</span>
+                  <span className="combat-declare-log-ini">INI {entry.initiative ?? '?'}</span>
+                </div>
+                {entry.moveTarget && !isPureMove && (
+                  <div className="combat-declare-log-line">
+                    <span className="combat-declare-log-icon">→</span>
+                    <span className="combat-declare-log-detail combat-declare-log-detail--move">
+                      Déplacement {moveDest}
+                    </span>
+                  </div>
+                )}
+                <div className="combat-declare-log-line">
+                  <span className="combat-declare-log-icon">
+                    {(entry.actionType === 'assault' || entry.actionType === 'melee') ? '⚡'
+                      : isPureMove ? '→'
+                      : entry.actionType === 'reload' ? '↺'
+                      : '◆'}
+                  </span>
+                  <span className={
+                    'combat-declare-log-detail' +
+                    (entry.actionType === 'assault' ? ' combat-declare-log-detail--atk'   : '') +
+                    (entry.actionType === 'melee'   ? ' combat-declare-log-detail--melee' : '') +
+                    (isPureMove                     ? ' combat-declare-log-detail--move'  : '')
+                  }>
+                    {ACTION_LABELS[entry.actionType] ?? (entry.actionType ?? '–')}
+                    {isPureMove && moveDest ? ` ${moveDest}` : ''}
+                    {atkTok ? ` → ${atkTok.label}` : ''}
+                  </span>
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+    </div>
+  )
+
   // Pas encore mon tour d'annoncer — attente du slot actuel
   if (phase === 'ANNOUNCEMENT' && !(rosterEntry?.has_announced) && !isMyTurnInAnnouncement) {
     const currentDeclarer = tokens.find(t => t.id === computedAnnounceTokenId)
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 — Déclaration d&apos;intention</div>
-        {rosterSection}
+        {declareLogSection}
         <p style={W.waitText}>
           En attente de {currentDeclarer?.label ?? '…'}…
         </p>
@@ -693,7 +718,7 @@ export default function CombatActionWindow({
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 2 — Résolution</div>
-        {rosterSection}
+        {declareLogSection}
         <p style={W.waitText}>
           {activeResolveToken ? `${activeResolveToken.label} agit…` : 'Résolution en cours…'}
         </p>
@@ -706,7 +731,7 @@ export default function CombatActionWindow({
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 - Declaration d&apos;intention</div>
-        {rosterSection}
+        {declareLogSection}
         <p style={W.waitText}>Action declaree. En attente des autres participants…</p>
       </div>
     )
@@ -835,6 +860,7 @@ export default function CombatActionWindow({
               current={states.weapon} initial={initialStates.current.weapon}
               onChange={v => setStates(s => ({ ...s, weapon: v }))}
               disabled={weaponLocked}
+              highlightKey={states.weapon !== 'drawn' ? 'drawn' : undefined}
             />
             <StateSelector
               stateKey="fire_mode" def={STATE_DEFS.fire_mode}
@@ -851,6 +877,24 @@ export default function CombatActionWindow({
               {MAP_ACTIONS.map(a => {
                 const isActive = mapSelected.has(a.k)
                 const span2    = a.span2 ? { gridColumn: 'span 2' } : {}
+
+                // Assaut/CaC grisé si assommé
+                if ((a.k === 'attack' || a.k === 'melee') && isStunned) {
+                  return (
+                    <div key={a.k} title="Assommé — −5 à toutes les actions, allure max = Moyenne, ne peut pas attaquer" style={W.itemGreyed}>
+                      <span style={W.itemLabel}>{a.l} ☠</span>
+                    </div>
+                  )
+                }
+
+                // Assaut/CaC bloqué si arme non au clair
+                if ((a.k === 'attack' || a.k === 'melee') && states.weapon !== 'drawn') {
+                  return (
+                    <div key={a.k} title="Arme non au clair — dégainez d'abord (section ARMEMENT)" style={{ ...W.itemGreyed, ...span2 }}>
+                      <span style={W.itemLabel}>{a.l}</span>
+                    </div>
+                  )
+                }
 
                 // Assaut grisé dynamiquement si arme vide
                 if (a.k === 'attack' && isAmmoEmpty) {

@@ -327,8 +327,8 @@ actionsRouter.post('/:id/glb',
       .first()
     if (!member) throw new AppError(403, 'You are not a member of this campaign')
 
-    if (member.role !== 'gm') {
-      throw new AppError(403, 'GM role required to upload a 3D model')
+    if (member.role !== 'gm' && character.user_id !== req.user.id) {
+      throw new AppError(403, 'GM role or character ownership required to upload a 3D model')
     }
 
     if (!req.file) throw new AppError(400, 'No file uploaded')

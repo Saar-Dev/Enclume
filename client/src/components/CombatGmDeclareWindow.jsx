@@ -67,6 +67,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       .sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))[0]?.token_id ?? null
   )
 
+  const activeRosterEntry    = activeTokenId ? roster.find(r => r.token_id === activeTokenId) : null
+  const isStunnedActivePnj   = activeRosterEntry?.state_character?.is_stunned === true
+
   const [declareError, setDeclareError] = useState(null)
   const [equipment,    setEquipment]    = useState({})   // tokenId -> { characterId, weapon, armorPieces }
   const [rosterOpen,   setRosterOpen]   = useState(
@@ -412,7 +415,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 <span className="combat-win-section-title" style={{ color: '#aa8a30' }}>ACTION</span>
                 <div style={S.actionGrid}>
                   {MAP_ACTIONS.map(a => {
-                    const disabled = a.k === 'attack' && !rangedActive
+                    const disabled = (a.k === 'attack' && !rangedActive) || (isStunnedActivePnj && (a.k === 'attack' || a.k === 'melee'))
                     const active   = !disabled && (
                       a.k === 'attack' ? isAttackActive :
                       a.k === 'melee'  ? isMeleeSetup   :
@@ -420,9 +423,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                       mapAction === a.k
                     )
                     const span2 = a.span2 ? { gridColumn: 'span 2' } : {}
+                    const stunTitle = isStunnedActivePnj && (a.k === 'attack' || a.k === 'melee')
+                      ? 'Assommé — −5 à toutes les actions, allure max = Moyenne, ne peut pas attaquer'
+                      : null
                     return (
                       <div key={a.k}
-                        title={a.tooltip}
+                        title={stunTitle ?? a.tooltip}
                         onClick={() => {
                           if (disabled) return
                           if (a.k === 'move') {

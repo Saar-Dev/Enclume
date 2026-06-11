@@ -995,7 +995,7 @@ export default function Sidebar({
                           {/* Corps : "Jet de Force" + résultat du dé en grand */}
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', paddingLeft: '2px' }}>
                             <span style={styles.diceFormula}>{t('sidebar.displacementJet', { attr: msg.skillLabel })}</span>
-                            <span style={{ ...styles.diceTotal, fontSize: '20px', fontWeight: '700' }}>{msg.total}</span>
+                            <span style={styles.diceTotal}>{msg.total}</span>
                           </div>
                           {/* Détail : difficulté · seuil */}
                           <div style={{ paddingLeft: '2px', fontSize: '11px', color: '#64748b' }}>
@@ -1031,7 +1031,7 @@ export default function Sidebar({
                         {/* Corps : nom compétence + résultat du dé en grand */}
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', paddingLeft: '2px' }}>
                           <span style={styles.diceFormula}>{msg.skillLabel}</span>
-                          <span style={{ ...styles.diceTotal, fontSize: '20px' }}>{msg.total}</span>
+                          <span style={styles.diceTotal}>{msg.total}</span>
                         </div>
                         {/* Détail : compétence · difficulté · seuil */}
                         <div style={{ paddingLeft: '2px', fontSize: '11px', color: '#64748b' }}>
@@ -2096,10 +2096,11 @@ const styles = {
     color: '#4a4a60',
   },
   diceTotal: {
-    fontSize: '15px',
+    fontSize: '20px',
     fontWeight: '700',
     color: '#c0c0d0',
     fontFamily: 'monospace',
+    marginLeft: 'auto',
   },
   // ── Bouton aide ──
   helpBtn: {

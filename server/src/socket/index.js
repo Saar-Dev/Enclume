@@ -1837,6 +1837,23 @@ const initSocket = (io) => {
           return
         }
 
+        // Stun guard (PC42 réglé) — is_stunned interdit attaque et allures rapide/max
+        if (entry.state_character?.is_stunned === true) {
+          if (mapActions?.attack) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Assommé — ne peut pas attaquer" })
+            return
+          }
+          if (mapActions?.melee?.length > 0) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Assommé — ne peut pas attaquer au corps à corps" })
+            return
+          }
+          const ak = mapActions?.move?.action_key
+          if (ak === 'move_rapide' || ak === 'move_max') {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Assommé — allure maximale : Moyenne" })
+            return
+          }
+        }
+
         // PC22 — arme requise pour assaut + PC23 (TIR_AUTOMATIQUE pour RC/RL)
         let assaultWeaponRefRange = null
         if (mapActions?.attack) {
@@ -1848,7 +1865,7 @@ const initSocket = (io) => {
           const weapon = await db('char_inventory')
             .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
             .where({ 'char_inventory.id': weaponInvId, 'char_inventory.character_id': character.id })
-            .select('char_inventory.slot', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
+            .select('char_inventory.slot', 'char_inventory.ammo_remaining', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
             .first()
           if (!weapon) {
             socket.emit('error', { message: "Arme introuvable dans l'inventaire (PC22)" })
@@ -1873,6 +1890,20 @@ const initSocket = (io) => {
               : null
             if (!autoSkill) {
               socket.emit('error', { message: 'Compétence Tir Automatique requise (PC23)' })
+              return
+            }
+          }
+          // Vérification munitions ANNOUNCEMENT (MANUELSYSCOMBAT §4)
+          // ammo_remaining null = tracking désactivé (arme sans chargeur) → pas de vérification
+          const bulletCount = mapActions.attack.bulletCount ?? 1
+          if (weapon.ammo_remaining !== null && weapon.ammo_remaining < bulletCount) {
+            let pnjUnlimited = false
+            if (character.type === 'pnj') {
+              const campaign = await db('campaigns').where({ id: campaignId }).select('pnj_unlimited_ammo').first()
+              pnjUnlimited = campaign?.pnj_unlimited_ammo ?? false
+            }
+            if (!pnjUnlimited) {
+              socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Munitions insuffisantes — rechargez d'abord" })
               return
             }
           }
@@ -2307,6 +2338,13 @@ const initSocket = (io) => {
             if      (rollChoc <= seuils.etourdissement + shockMalus) outcome = 'ok'
             else if (rollChoc <= seuils.inconscience    + shockMalus) outcome = 'etourdi'
             else                                                       outcome = 'inconscient'
+            let stunDuration = null, stunUntilTurn = null
+            if (outcome !== 'ok' && shockAutoStun) {
+              const combatSt = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
+              stunDuration = await rollStunDuration(outcome)
+              stunUntilTurn = (combatSt?.current_turn ?? 1) + stunDuration
+              await applyStunWithDuration(io, campaignId, targetTokenId, outcome, stunDuration, combatSt?.current_turn ?? 1)
+            }
             shockResult = {
               triggered:    true,
               roll:         rollChoc,
@@ -2315,12 +2353,8 @@ const initSocket = (io) => {
               seuilEtourdi: seuils.etourdissement + shockMalus,
               seuilIncons:  seuils.inconscience   + shockMalus,
               stun_applied: outcome !== 'ok' && shockAutoStun,
-            }
-            if (outcome !== 'ok' && shockAutoStun) {
-              await db('combat_roster')
-                .where({ campaign_id: campaignId, token_id: targetTokenId })
-                .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
-              await applyStunStatus(io, campaignId, targetTokenId, outcome)
+              stun_duration: stunDuration,
+              stunned_until_turn: stunUntilTurn,
             }
           }
         }
@@ -2449,7 +2483,12 @@ const initSocket = (io) => {
           formula: '1d20', rolls: defRolls, total: rollDefense,
           isCriticalSuccess: rollDefense === 1, isCriticalFail: rollDefense === 20,
           seed: defSeed, timestamp: now,
-          skillLabel: 'Corps à corps — Défense',
+          skillLabel:        'Jet pour défendre (contact)',
+          mechanicalTotal:   defenderSkillTotal,
+          diffLabel:         chanceDefense - defenderSkillTotal >= 0 ? `+${chanceDefense - defenderSkillTotal}` : `${chanceDefense - defenderSkillTotal}`,
+          chancesDeReussite: chanceDefense,
+          isSuccess:         defenseSuccess,
+          mr:                chanceDefense - rollDefense,
         })
 
         // 3. Résultat opposition → room
@@ -2551,17 +2590,20 @@ const initSocket = (io) => {
                   if      (rollChoc <= seuils.etourdissement + shockMalus) outcome = 'ok'
                   else if (rollChoc <= seuils.inconscience    + shockMalus) outcome = 'etourdi'
                   else                                                       outcome = 'inconscient'
+                  let stunDuration2 = null, stunUntilTurn2 = null
+                  if (outcome !== 'ok' && shockAutoStun) {
+                    const combatSt2 = await db('combat_state').where({ campaign_id: meleeCampaignId }).select('current_turn').first()
+                    stunDuration2 = await rollStunDuration(outcome)
+                    stunUntilTurn2 = (combatSt2?.current_turn ?? 1) + stunDuration2
+                    await applyStunWithDuration(io, meleeCampaignId, tokenId, outcome, stunDuration2, combatSt2?.current_turn ?? 1)
+                  }
                   shockResult = {
                     triggered: true, roll: rollChoc, outcome, shockMalus,
                     seuilEtourdi: seuils.etourdissement + shockMalus,
                     seuilIncons:  seuils.inconscience   + shockMalus,
                     stun_applied: outcome !== 'ok' && shockAutoStun,
-                  }
-                  if (outcome !== 'ok' && shockAutoStun) {
-                    await db('combat_roster')
-                      .where({ campaign_id: meleeCampaignId, token_id: tokenId })
-                      .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
-                    await applyStunStatus(io, meleeCampaignId, tokenId, outcome)
+                    stun_duration: stunDuration2,
+                    stunned_until_turn: stunUntilTurn2,
                   }
                 }
               } catch (woundErr) {
@@ -2619,17 +2661,19 @@ const initSocket = (io) => {
       }
     })
 
-    // ─── COMBAT_APPLY_STUN — GM applique manuellement is_stunned ─────────────
-    socket.on(WS.COMBAT_APPLY_STUN, async ({ tokenId, outcome }) => {
+    // ─── COMBAT_APPLY_STUN — GM applique manuellement is_stunned avec durée ──
+    socket.on(WS.COMBAT_APPLY_STUN, async ({ tokenId, outcome, duration }) => {
       if (socket.role !== 'gm') return
       const campaignId = socket.campaignId
       if (!campaignId || !tokenId || !['etourdi', 'inconscient'].includes(outcome)) return
+      if (!Number.isInteger(duration) || duration < 1 || duration > 60) {
+        socket.emit('error', { message: 'Durée invalide (1–60 tours requis)' })
+        return
+      }
       try {
-        await db('combat_roster')
-          .where({ campaign_id: campaignId, token_id: tokenId })
-          .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
-        await applyStunStatus(io, campaignId, tokenId, outcome)
-        console.log(`[WS] COMBAT_APPLY_STUN — is_stunned posé manuellement. token:${tokenId} outcome:${outcome} campaign:${campaignId}`)
+        const combatSt = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
+        await applyStunWithDuration(io, campaignId, tokenId, outcome, duration, combatSt?.current_turn ?? 1)
+        console.log(`[WS] COMBAT_APPLY_STUN — is_stunned posé manuellement. token:${tokenId} outcome:${outcome} duration:${duration} campaign:${campaignId}`)
       } catch (err) {
         console.error('[WS] COMBAT_APPLY_STUN error:', err.message)
         socket.emit('error', { message: 'Erreur lors de l\'application de l\'étourdissement' })
@@ -2846,7 +2890,24 @@ async function endTurn(io, campaignId) {
         active_slot_idx: 0,
         updated_at: db.fn.now(),
       })
-      .returning('action_timer_sec')
+      .returning(['action_timer_sec', 'current_turn'])
+
+    // Expiry étourdissement — purger les tokens dont stunned_until_turn <= new_turn
+    const newTurn = updatedState?.current_turn ?? 1
+    const expiredStun = await db('combat_roster')
+      .where({ campaign_id: campaignId })
+      .whereRaw("state_character IS NOT NULL AND (state_character->>'stunned_until_turn') IS NOT NULL AND (state_character->>'stunned_until_turn')::int <= ?", [newTurn])
+      .select('token_id')
+    for (const { token_id } of expiredStun) {
+      await db('combat_roster')
+        .where({ campaign_id: campaignId, token_id })
+        .update({ state_character: db.raw("state_character - 'is_stunned' - 'stunned_until_turn'") })
+      await db('token_statuses').where({ token_id }).whereIn('status_code', ['stunned', 'unconscious']).delete()
+      const statuses = await db('token_statuses').where({ token_id }).pluck('status_code')
+      io.to(campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId: token_id, statuses })
+      io.to(campaignId).emit(WS.COMBAT_STUN_EXPIRED, { tokenId: token_id })
+      console.log(`[WS] endTurn — étourdissement expiré. token:${token_id} turn:${newTurn}`)
+    }
 
     const roster = await db('combat_roster')
       .where({ campaign_id: campaignId })
@@ -2890,6 +2951,24 @@ async function applyStunStatus(io, campaignId, tokenId, outcome) {
   } catch (err) {
     console.error('[WS] applyStunStatus error:', err.message)
   }
+}
+
+// ─── Helper — calculer durée étourdissement (LdB p.237) ─────────────────────
+// étourdi = 1d6 tours ; inconscient = 1d6 minutes = 1d6 × 10 tours
+async function rollStunDuration(outcome) {
+  const { total } = await parseDice('1d6')
+  return outcome === 'inconscient' ? total * 10 : total
+}
+
+// ─── Helper — appliquer is_stunned avec durée dans state_character ───────────
+// Écrit stunned_until_turn dans JSONB (PC39 merge ||) + badge visuel via applyStunStatus.
+async function applyStunWithDuration(io, campaignId, tokenId, outcome, stunDuration, currentTurn) {
+  const stunUntil = currentTurn + stunDuration
+  await db('combat_roster')
+    .where({ campaign_id: campaignId, token_id: tokenId })
+    .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true, stunned_until_turn: stunUntil })]) })
+  await applyStunStatus(io, campaignId, tokenId, outcome)
+  console.log(`[WS] applyStunWithDuration — token:${tokenId} outcome:${outcome} duration:${stunDuration} until_turn:${stunUntil}`)
 }
 
 // ─── MULTI-ADVERSAIRES — helpers ─────────────────────────────────────────────
@@ -3038,13 +3117,18 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
     const attackerColor    = userRow?.color    ?? '#c86030'
     const attackerUsername = userRow?.username ?? character.name ?? 'Inconnu'
 
-    console.log(`[WS] melee attaque — roll:${rollAttaque} CDR:${chancesAttaque} token:${action.token_id}`)
+    console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
     io.to(campaignId).emit(WS.DICE_RESULT, {
       userId: character.user_id, username: attackerUsername, color: attackerColor,
       formula: '1d20', rolls: attackRolls, total: rollAttaque,
       isCriticalSuccess: rollAttaque === 1, isCriticalFail: rollAttaque === 20,
       seed: attackSeed, timestamp: new Date().toISOString(),
-      skillLabel: `Corps à corps — ${skillId}`,
+      skillLabel:        'Jet pour toucher (contact)',
+      mechanicalTotal:   attackerSkillTotal,
+      diffLabel:         chancesAttaque - attackerSkillTotal >= 0 ? `+${chancesAttaque - attackerSkillTotal}` : `${chancesAttaque - attackerSkillTotal}`,
+      chancesDeReussite: chancesAttaque,
+      isSuccess:         rollAttaque <= chancesAttaque,
+      mr:                chancesAttaque - rollAttaque,
     })
 
     // ── 2. Cible ──────────────────────────────────────────────────────────────
@@ -3158,7 +3242,12 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
         formula: '1d20', rolls: defRolls, total: rollDefense,
         isCriticalSuccess: rollDefense === 1, isCriticalFail: rollDefense === 20,
         seed: defSeed, timestamp: new Date().toISOString(),
-        skillLabel: 'Corps à corps — Défense (PNJ)',
+        skillLabel:        'Jet pour défendre (contact)',
+        mechanicalTotal:   defenderSkillTotal,
+        diffLabel:         chanceDefense - defenderSkillTotal >= 0 ? `+${chanceDefense - defenderSkillTotal}` : `${chanceDefense - defenderSkillTotal}`,
+        chancesDeReussite: chanceDefense,
+        isSuccess:         defenseSuccess,
+        mr:                chanceDefense - rollDefense,
       })
 
       io.to(campaignId).emit(WS.COMBAT_MELEE_RESULT, {
@@ -3221,17 +3310,20 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
               if      (rollChoc <= seuils.etourdissement + shockMalus) outcome = 'ok'
               else if (rollChoc <= seuils.inconscience    + shockMalus) outcome = 'etourdi'
               else                                                       outcome = 'inconscient'
+              let stunDuration3 = null, stunUntilTurn3 = null
+              if (outcome !== 'ok' && shockAutoStun) {
+                const combatSt3 = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
+                stunDuration3 = await rollStunDuration(outcome)
+                stunUntilTurn3 = (combatSt3?.current_turn ?? 1) + stunDuration3
+                await applyStunWithDuration(io, campaignId, targetTokenId, outcome, stunDuration3, combatSt3?.current_turn ?? 1)
+              }
               shockResult = {
                 triggered: true, roll: rollChoc, outcome, shockMalus,
                 seuilEtourdi: seuils.etourdissement + shockMalus,
                 seuilIncons:  seuils.inconscience   + shockMalus,
                 stun_applied: outcome !== 'ok' && shockAutoStun,
-              }
-              if (outcome !== 'ok' && shockAutoStun) {
-                await db('combat_roster')
-                  .where({ campaign_id: campaignId, token_id: targetTokenId })
-                  .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
-                await applyStunStatus(io, campaignId, targetTokenId, outcome)
+                stun_duration: stunDuration3,
+                stunned_until_turn: stunUntilTurn3,
               }
             }
           } catch (woundErr) {
@@ -3270,7 +3362,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
       defenderTokenId: targetTokenId,
       rollAttaque,
       chancesAttaque,
-      // Défenseur : CDR de base (sans ajustement combat_mode, résolu au confirm) + malus encerclement
+      // Défenseur : Seuil de base (sans ajustement combat_mode, résolu au confirm) + malus encerclement
       chanceDefenseBase: defenderSkillTotal + defenderEffectiveMalus + multiMalusDefenseur,
       multiMalusDefenseur,
     }
@@ -3526,7 +3618,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
     const isSuccess = rollAttaque <= chancesDeReussite
     const mr = chancesDeReussite - rollAttaque
-    console.log(`[WS] assault — roll:${rollAttaque} CDR:${chancesDeReussite} → ${isSuccess ? 'TOUCHE' : 'RATÉ'} MR:${mr}`)
+    console.log(`[WS] assault — roll:${rollAttaque} Seuil:${chancesDeReussite} → ${isSuccess ? 'TOUCHE' : 'RATÉ'} MR:${mr}`)
     io.to(campaignId).emit(WS.DICE_RESULT, {
       userId:            character.user_id,
       username:          tireurUsername,
@@ -3538,6 +3630,12 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
       isCriticalFail:    rollAttaque === 20,
       seed:              attackSeed,
       timestamp:         new Date().toISOString(),
+      skillLabel:        'Jet pour toucher (distance)',
+      mechanicalTotal:   skillTotal,
+      diffLabel:         chancesDeReussite - skillTotal >= 0 ? `+${chancesDeReussite - skillTotal}` : `${chancesDeReussite - skillTotal}`,
+      chancesDeReussite,
+      isSuccess,
+      mr,
     })
 
     // ── Décompte munitions ──────────────────────────────────────────────────────
@@ -3592,7 +3690,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
         socket.emit(WS.COMBAT_ATTACK_PLAYER_RESULT, {
           hit: true,
           roll: rollAttaque,
-          cdr: chancesDeReussite,
+          seuil: chancesDeReussite,
           tireurTokenId: action.token_id,
           cibleTokenId: action.target_token_id,
         })
@@ -3679,6 +3777,13 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
               if      (rollChoc <= seuils.etourdissement + shockMalus) outcome = 'ok'
               else if (rollChoc <= seuils.inconscience    + shockMalus) outcome = 'etourdi'
               else                                                       outcome = 'inconscient'
+              let stunDuration4 = null, stunUntilTurn4 = null
+              if (outcome !== 'ok' && shockAutoStun) {
+                const combatSt4 = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
+                stunDuration4 = await rollStunDuration(outcome)
+                stunUntilTurn4 = (combatSt4?.current_turn ?? 1) + stunDuration4
+                await applyStunWithDuration(io, campaignId, action.target_token_id, outcome, stunDuration4, combatSt4?.current_turn ?? 1)
+              }
               shockResult = {
                 triggered:    true,
                 roll:         rollChoc,
@@ -3687,12 +3792,8 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
                 seuilEtourdi: seuils.etourdissement + shockMalus,
                 seuilIncons:  seuils.inconscience   + shockMalus,
                 stun_applied: outcome !== 'ok' && shockAutoStun,
-              }
-              if (outcome !== 'ok' && shockAutoStun) {
-                await db('combat_roster')
-                  .where({ campaign_id: campaignId, token_id: action.target_token_id })
-                  .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })]) })
-                await applyStunStatus(io, campaignId, action.target_token_id, outcome)
+                stun_duration: stunDuration4,
+                stunned_until_turn: stunUntilTurn4,
               }
             }
           } catch (woundErr) {
@@ -3718,7 +3819,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
       socket.emit(WS.COMBAT_ATTACK_PLAYER_RESULT, {
         hit: false,
         roll: rollAttaque,
-        cdr: chancesDeReussite,
+        seuil: chancesDeReussite,
         tireurTokenId: action.token_id,
         cibleTokenId: action.target_token_id,
       })

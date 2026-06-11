@@ -1230,6 +1230,82 @@ Convention :
   flex-shrink: 0;
 }
 
+/* ── CombatDeclareLog — panneau lecteur (fond clair, texte sombre)  ───
+   Utilisé : GM → fenêtre flottante standalone / Joueur → section
+   intégrée dans CombatActionWindow (branches read-only).
+   Fond très clair pour différencier visuellement des fenêtres d'interface. */
+.combat-declare-log-body {
+  background-color: #f4f7f8;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 18px,
+    rgba(0,0,0,0.025) 18px,
+    rgba(0,0,0,0.025) 19px
+  );
+  overflow-y: auto;
+  max-height: 260px;
+}
+.combat-declare-log-empty {
+  padding: 10px 14px;
+  font-size: 10px;
+  color: #8899aa;
+  font-style: italic;
+}
+/* Rangée acteur — nom + INI sur fond légèrement distinct */
+.combat-declare-log-actor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 3px;
+  background: rgba(0,0,0,0.04);
+  border-top: 1px solid rgba(0,0,0,0.07);
+}
+.combat-declare-log-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.combat-declare-log-name {
+  font-size: 10px;
+  color: #1a2a3a;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combat-declare-log-ini {
+  font-size: 9px;
+  color: #2a6a8a;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+/* Rangée action — indentée sous l'acteur */
+.combat-declare-log-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 12px 3px 20px;
+}
+.combat-declare-log-icon {
+  font-size: 9px;
+  color: #607080;
+  flex-shrink: 0;
+  width: 10px;
+  text-align: center;
+}
+.combat-declare-log-detail {
+  font-size: 9px;
+  color: #445566;
+  flex: 1;
+}
+.combat-declare-log-detail--move  { color: #1a7a40; }
+.combat-declare-log-detail--atk   { color: #aa2020; }
+.combat-declare-log-detail--melee { color: #7a4010; }
+
 /* ── Timeline bar ─────────────────────────────────────────────────── */
 .combat-timeline-bar {
   position: absolute;

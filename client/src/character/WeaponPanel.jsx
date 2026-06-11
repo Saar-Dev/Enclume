@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import api from '../lib/api.js'
 
 const WEAPON_SLOTS = ['MG', 'MD', '2M', 'Tr']
@@ -31,13 +31,19 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
   // ammoSelected : { [weaponId]: ammoItemId (char_inventory.id) }
   const [ammoSelected, setAmmoSelected] = useState({})
 
+  const hasLoadedRef = useRef(false)
+
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    const showSpinner = !hasLoadedRef.current
+    if (showSpinner) setLoading(true)
     api.get(`/char-sheet/${characterId}/inventory`)
       .then(res => { if (!cancelled) setItems(res.data.items || []) })
       .catch(err => console.error('Erreur chargement WeaponPanel :', err))
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .finally(() => {
+        hasLoadedRef.current = true
+        if (!cancelled && showSpinner) setLoading(false)
+      })
     return () => { cancelled = true }
   }, [characterId, reloadKey])
 

@@ -267,3 +267,74 @@ export const MOVE_ZONE_DEFS = [
 En lisant ce fichier, on s'aperçoit que c'est un vieux composant de test écrit de manière très compacte (il recrée une fausse Timeline à la main avec des données écrites en dur comme Kaelen ou Maître Orsa).
 
     Le conseil Méta : Ce fichier n'est pas branché sur ton vrai store Zustand. Si Claude Code va piocher dedans par erreur pour copier des morceaux de code, il va réimporter de vieilles fonctions périmées. Tu n'as pas besoin de le modifier, tu peux dire à Claude Code de l'ignorer complètement.
+
+---
+
+## Bugs drone — Session 89 (2026-06-11) — Non résolus
+
+### Bug D1 — Menu radial "fiche" drone : rien ne s'ouvre
+
+**Symptôme** : Clic sur "fiche" dans le menu radial d'un token drone → rien ne s'ouvre. Fonctionne correctement pour les tokens humanoïdes (PJ/PNJ).
+
+**Code impliqué** : `SessionPage.jsx` — IIFE du menu radial, `characters.find(c => c.id === contextMenu.token.character_id)`.
+
+**Cause suspectée** : Ce `find` retourne `undefined` pour un token drone, alors qu'il réussit pour les humanoïdes. Piste principale : mismatch de type entre `character.id` dans le store characters (string depuis JSON API) et `token.character_id` dans le store tokens (number depuis DB via API tokens). Investigation bloquée — non reproductible en lecture seule.
+
+**Ce qui a été tenté** :
+- Architecture `openSheet` centralisée (dispatcher unique par `character.type`) — correcte mais inefficace si `character` est null
+- Les deux stores (characters, tokens) semblent cohérents en lecture de code — la discordance n'est pas visible sans debug runtime
+
+**Prochaine étape** : Ajouter un `console.warn(contextMenu.token.character_id, characters.map(c=>c.id))` temporaire dans la IIFE pour comparer types et valeurs.
+
+---
+
+### Bug D2 — Token drone : changement de GLB non fonctionnel
+
+**Symptôme** : Upload d'un nouveau GLB pour un drone via DroneWindow → token 3D ne se met pas à jour visuellement.
+
+**Code impliqué** : `Canvas3D.jsx:879` — `characters.find(c => c.id === token.character_id)` pour calculer `glbUrl`. `Canvas3D.jsx:246` — `key={glbUrl}` sur `TokenGlbErrorBoundary`.
+
+**Cause** : Même cause racine que D1. Si le drone n'est pas trouvé dans `characters`, `glbUrl = defaultTokenGlbUrl` (constante). `key` ne change jamais → pas de remontage → pas de rechargement GLB.
+
+**Fix partiel appliqué** : `key={glbUrl}` sur `TokenGlbErrorBoundary` + `updateCharacter(res.data.character)` dans `DroneWindow.SettingsTab.handleGlbUpload`. Correcte en théorie, inefficace tant que D1 n'est pas résolu.
+
+---
+
+## Bugs Session 91 — CombatDeclareLog (2026-06-11) — Non résolus
+
+### Bug CL1 — Timeline joueur : portraits PNJ non visibles
+
+**Symptôme** : Côté joueur uniquement, certains portraits dans la timeline de combat ne s'affichent pas. Exemple observé : PNJ "Soleil" sans portrait. Côté GM : OK.
+
+**Code impliqué** : `CombatTimeline.jsx` — rendu des portraits. Probable dépendance à `characters` (store characterStore) qui ne contient côté joueur que les personnages appartenant au joueur, pas les PNJ GM.
+
+**Cause suspectée** : La timeline joueur tente de résoudre le portrait via `characters.find(c => c.id === token.character_id)` — retourne `undefined` pour les PNJ non chargés dans le store joueur → fallback image absente ou non rendue.
+
+**Prochaine étape** : Lire `CombatTimeline.jsx` — vérifier comment le portrait est résolu et si un fallback visible existe pour les tokens sans `character` dans le store.
+
+---
+
+### Bug CL2 — CombatDeclareLog : design et divergence GM/joueur
+
+**Symptôme** : La fenêtre de déclarations est visuellement différente côté GM (flottant standalone) et côté joueur (intégrée dans CombatActionWindow). Design jugé mauvais dans les deux cas.
+
+**Référence visuelle** : Le rendu GM (screenshot gauche Session 91) est la référence cible — à reproduire côté joueur.
+
+**Code impliqué** :
+- `client/src/components/CombatDeclareLog.jsx` — version GM (floatante, avec header draggable, titre "DÉCLARATIONS · TOUR N")
+- `client/src/components/CombatActionWindow.jsx` — `declareLogSection` intégré (branches read-only), titre généré via `W.sectionTitle`
+- `client/src/index.css` — classes `.combat-declare-log-*`
+
+**Note architecture** : Les deux versions partagent les mêmes classes CSS mais la structure JSX diffère (header, wrapper, titre). Aligner la structure du `declareLogSection` joueur sur celle de `CombatDeclareLog` GM.
+
+---
+
+### Bug CL3 — Ghosts de déplacement d'annonce disparus
+
+**Symptôme** : Les marqueurs visuels ("ghosts") indiquant la destination de déplacement annoncée par chaque acteur ne s'affichent plus sur la carte pendant la phase ANNOUNCEMENT.
+
+**Code impliqué** : `CombatOverlay.jsx` — `announcementMarker` state + rendu des ghosts sur le canvas. `SessionPage.jsx` — handler `COMBAT_ACTION_DECLARED` qui set `announcementMarker`.
+
+**Cause suspectée** : `announcementMarker` est toujours alimenté côté `SessionPage.jsx`. La régression est probablement dans le rendu — vérifier si le composant ou la condition d'affichage du ghost a été modifié lors des sessions 88-91.
+
+**Prochaine étape** : Lire `CombatOverlay.jsx` — rechercher `announcementMarker` et la condition de rendu du ghost.
