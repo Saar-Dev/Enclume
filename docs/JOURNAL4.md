@@ -276,3 +276,164 @@ L'état décrit ci-dessus reflétait une version intermédiaire avec des bugs. C
 - **Bug CL1** — Portraits PNJ non visibles dans la timeline joueur (PNJ absent du characterStore joueur)
 - **Bug CL2** — Design CombatDeclareLog + divergence GM/joueur (référence : version GM)
 - **Bug CL3** — Ghosts déplacement d'annonce disparus (régression `announcementMarker`)
+
+---
+
+## Session 89 — Sprint Drones 2a : drone INI 12 dans la timeline — 2026-06-11
+
+**Objectif :** Drone apparaît dans la CombatTimeline à initiative 12 fixe. Fondation minimale du Sprint Drones 2.
+
+**Fichier modifié :** `server/src/socket/index.js` (4 touches)
+
+| Touch | Ligne | Changement |
+|---|---|---|
+| 1 | ~1478 | `character` fetché en premier dans COMBAT_START — branche `type==='drone'` : `base_ini: 12, forcedNotSurprised: true, continue` (PD1) |
+| 2 | ~1513 | `rosterRows.map` : destructure `forcedNotSurprised` → `is_surprised = !forcedNotSurprised && ...` |
+| 3 | ~1825 | COMBAT_ACTION_DECLARE guard étendu : `character.type === 'pnj' \|\| character.type === 'drone'` → GM obligatoire (V6) |
+| 4 | ~1930 | `isDrone` + `if (!isDrone)` wrappant tout le bloc `iniDelta` — pas de coûts de transition pour les drones |
+
+**Ce qui ne change pas :** path humanoïde PJ/PNJ intact ligne à ligne. Aucune migration.
+
+**Contrainte opérationnelle Sprint 2a :** drone reste `has_announced = false` en ANNOUNCEMENT → GM doit COMBAT_SKIP_PLAYER jusqu'à Sprint 2d (auto-announcement).
+
+**Validé ✅** — SR sans erreur. Drone visible dans CombatTimeline à INI 12.
+
+
+---
+
+## Session 92 - Sprint Drones 2b : drone comme cible - 2026-06-11
+
+**Objectif :** Un humanoide (PJ ou PNJ) attaque un drone - integrite decrementee, DroneWindow mise a jour en temps reel.
+
+### Regles LdB appliquees (§7.6 MANUELSYSCOMBAT.md)
+
+- Localisation unique fixe (`drone_sheet.localisation_ref`) - pas de jet D20
+- Armure = `drone_sheet.blindage` (valeur directe, pas `calcResistanceArmure`)
+- `rd = integrite_actuelle x 2 -> table RD LdB p.112` - semantic inverse : drone sain = plus vulnerable, drone endommage = noyau durci
+- `degats_nets = max(0, degats_bruts - blindage - rd)`
+- Pas de `character_wounds`. Pas de Test de Choc.
+- Destruction (`integrite_actuelle <= 0`) -> retrait immediat du roster
+
+### Architecture
+
+**Deux chemins d'attaque :**
+- **Cas A (PNJ->drone)** : resolution auto dans `resolveAssaultAction` - branche `cibleCharacter?.type === 'drone'`
+- **Cas B (PJ->drone)** : `COMBAT_DAMAGE_PROMPT` -> joueur lance les des -> `COMBAT_DAMAGE_CONFIRM` - branche `cibleType === 'drone'`
+
+**`cibleType` propagation :** ajoute dans `pendingDamageActions` (melee `commonPending` + ranged `pendingDamageActions.set`) pour que `COMBAT_DAMAGE_CONFIRM` detecte le drone sans acces a `cibleCharacter`.
+
+### Touches
+
+| Touch | Fichier | Changement |
+|---|---|---|
+| T0 | `server/src/db/migrations/76_combat_actions_drone.js` (NEW) | `drone_weapon_inv_id UUID REFERENCES drone_weapons(id) + XOR constraint` - fondation Sprint 2c |
+| T1 | `shared/events.js` | `DRONE_INTEGRITY_UPDATED: 'drone:integrity_updated'` |
+| T2 | `server/src/lib/charStats.js` | `export const RD_TABLE` + `export function lookupTable` |
+| T3 | `server/src/socket/index.js` | Import RD_TABLE/lookupTable + `calcDroneRD(integrite)` + `resolveDroneIntegrityLoss(...)` |
+| T4 | `server/src/socket/index.js` | `cibleType: defenderCharacter.type` dans `commonPending` (CaC path) |
+| T5 | `server/src/socket/index.js` | `cibleType: cibleCharacter?.type ?? null` dans `pendingDamageActions.set` (ranged path) |
+| T6 | `server/src/socket/index.js` | Branche drone dans `COMBAT_DAMAGE_CONFIRM` (PJ->drone) |
+| T7 | `server/src/socket/index.js` | Branche drone dans `resolveAssaultAction` PNJ (Cas A) |
+| T8 | `client/src/character/DroneWindow.jsx` | `socket` prop + useEffect souscription `DRONE_INTEGRITY_UPDATED` |
+| T9 | `client/src/pages/SessionPage.jsx` | `socket={socket}` passe a DroneWindow |
+
+### Pieges resolus
+
+- **PD3** : `RD_TABLE` et `lookupTable` etaient non exportes - export ajoute
+- **PD4** : `const damages = { ...droneSheet.damages }` - copie avant mutation JSONB
+- **PD5** : `DroneWindow.jsx` abonnement `DRONE_INTEGRITY_UPDATED` - temps reel
+- **PD8** : `drone_sheet` n'a pas de `token_id` - passe en parametre a `resolveDroneIntegrityLoss`
+- **Z1** : `COMBAT_ATTACK_RESULT` ajoute dans les deux branches drone (timeline combat)
+- **Z2** : `COMBAT_DAMAGE_RESULT` ajoute dans la branche PJ->drone (ferme `CombatDamageWindow`)
+- **Z3** : `cibleType = null` default dans destructuring `COMBAT_DAMAGE_CONFIRM` - retrocompatibilite
+
+**Valide OK** - SR sans erreur. Migration 76 appliquee automatiquement au demarrage.
+
+---
+
+## Session 93 - Fix CombatActionWindow : drone comme declarant - 2026-06-11
+
+**Symptome :** Impossible de declarer l'action d'un drone controle par un PJ - bouton "Declarer" toujours grise, aucun message d'erreur.
+
+**Cause racine :** `canDeclare = (hasAnyAction || stateChanged) && assaultValid && ...`
+- Pour un drone : aucun etat modifiable visible, `states.weapon !== 'drawn'` bloque attack + melee, `isAmmoEmpty = true` (aucune arme en `char_inventory`) -> `hasAnyAction = false`, `stateChanged = false` -> `canDeclare = false` silencieux.
+
+**Fix - `client/src/components/CombatActionWindow.jsx` uniquement, 6 touches :**
+
+| Modif | Detail |
+|---|---|
+| `const isDrone = playerChar?.type === 'drone'` | Detection drone apres isStunned |
+| POSTURE + VITESSE -> `{!isDrone && ...}` | Masques pour drones uniquement |
+| Section ARMEMENT (weapon + fire_mode) -> `{!isDrone && (...)}` | Masquee pour drones |
+| `if ((a.k === 'melee' OR a.k === 'reload') && isDrone) return null` | CaC + Recharger masques pour drones |
+| weapon guard -> `&& !isDrone` | Condition "arme au clair" desactivee pour drones |
+| Section ACTIONS RAPIDES -> `{!isDrone && (...)}` | Observer/Reperer/Phrase masques pour drones |
+| `canDeclare = isDrone ? (assaultValid && meleeValid) : (existant)` | Drone peut toujours declarer (passer) |
+
+**Ce qui reste visible pour les drones :** COUVERTURE, ACTION (Assaut grise "arme vide" -> Sprint 2c), Deplacement.
+**Ce qui NE change PAS :** humanoides PJ/PNJ - zero regression. Payload WS identique. Aucune touche serveur.
+**Sprint 2c :** branchement `drone_weapons` dans le panneau Assaut (tir) pour permettre la declaration d'attaque drone.
+
+**Valide OK** - SR sans erreur. Drone peut declarer "passer" ou "se deplacer" en Phase 1.
+
+---
+
+## Session 94 — Sprint Drones 2c : attaque drone déclarée par le GM — 2026-06-12
+
+**Objectif :** Le GM déclare manuellement l'attaque d'un drone en phase ANNOUNCEMENT. Résolution automatique côté serveur via `resolveDroneAssaultAction` en phase RESOLUTION.
+
+### Règles LdB appliquées (§7.3 MANUELSYSCOMBAT.md)
+
+- Programme armement = compétence directe (D20 ≤ niveau = succès, pas d'attributs)
+- Modificateurs situationnels identiques aux humanoïdes : portée, taille, obscurité, couverture
+- Catégorie programme : `armement_distance` (RC/RL) ou `armement_contact` (CC) selon `drone_weapons.fire_mode`
+- Résolution dommages : pipeline complet (formule, MR, localisation, armures, blessures)
+
+### Migrations
+
+| Migration | Objet |
+|---|---|
+| `76c_drone_weapons_schema.js` | ALTER TABLE drone_weapons : +name, +damage_formula, +portee, +fire_mode NOT NULL DEFAULT 'rc', +notes. `equipment_id` passe nullable (armes custom). Contrainte CHECK fire_mode IN ('cc','rc','rl'). |
+| `76d_drone_programs_categories.js` | Renomme category='armement' → 'armement_distance' dans ref_equipment + drone_programs. Prérequis résolveur resolveDroneAssaultAction (lookup par category exacte). |
+
+Les deux migrations appliquées au démarrage.
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | `char-sheet.js` GET `/drone/weapons` | INNER JOIN → LEFT JOIN + colonnes name/damage_formula/portee/fire_mode/notes + COALESCE display_name |
+| T2 | `char-sheet.js` POST `/drone/weapons` | Accepte `equipment_id` OU `name+damage_formula` (armes custom) — guard allégé |
+| T3 | `socket/index.js` COMBAT_ACTION_DECLARE | `isDrone` branch avant PC22 — valide `droneWeaponInvId` dans drone_weapons. INSERT row ajoute `drone_weapon_inv_id` (drone) ou `weapon_inv_id` (humanoïde), mutuellement exclusifs (XOR migration 76). |
+| T4 | `socket/index.js` resolveAssaultAction | Branchement `character.type === 'drone'` AVANT le guard `!weapon_inv_id` → appelle `resolveDroneAssaultAction` |
+| T5 | `socket/index.js` resolveDroneAssaultAction (NEW) | Résolution complète : programme armement (LEFT JOIN), totalModComp, roll D20, DICE_RESULT broadcast. Trois branches cible : drone (calcDroneRD + resolveDroneIntegrityLoss), PNJ (auto-résolution wounds), PJ (pendingDamageActions + COMBAT_DAMAGE_PROMPT). |
+| T6 | `CombatGmDeclareWindow.jsx` | Drones dans le roster GM (`allGmManaged`). Section ARMEMENT DRONE : sélecteur arme via GET /drone/weapons + sélecteur CIBLE + bouton DÉCLARER conditionnel. Guard `canDeclareDrone`. `handleDeclare` branche drone. |
+| T7 | `CombatModifiersWindow.jsx` | Import `getTailleCible` (shared/droneConstants.js). useEffect : si cible=drone → GET /drone → `setTaille(getTailleCible(tailleCm))`. Silencieux si cible non-drone (.catch). |
+
+### Architecture resolveDroneAssaultAction
+
+```
+Fetch drone_weapon (LEFT JOIN ref_equipment, COALESCE effective_formula/display_name)
+Fetch programme armement (WHERE category IN ('armement_distance' | 'armement_contact'))
+totalModComp ← confirmedModifiers (portée, taille, situation — identiques §7.3)
+chancesDeReussite ← programme.level + totalModComp
+Roll D20 → mr = chancesDeReussite - roll
+Broadcast DICE_RESULT (programme roll)
+  SI raté → COMBAT_ATTACK_RESULT(isSuccess:false), return
+Fetch cible (token → character)
+fetchCibleNA(charId) → calcAttributeNA FOR/CON/VOL (pattern §3247-3249)
+  SI cible=drone  → calcDroneRD + resolveDroneIntegrityLoss + broadcast auto
+  SI cible=PNJ    → rollLoc + armures + parseDice + resolveWoundInsertion + WOUND_ADDED
+  SI cible=PJ     → pendingDamageActions.set(...) + COMBAT_DAMAGE_PROMPT
+advanceSlot appelé par l'appelant (needsDefenseWait=false — pattern ranged)
+```
+
+### Pièges résolus
+
+- **PC22-D** : guard droneWeaponInvId en ANNOUNCEMENT (lookup drone_weapons, pas char_inventory)
+- **Position isDrone** : const isDrone déplacé avant le bloc attack validation (était après)
+- **XOR weapon** : `weapon_inv_id: isDrone ? null : weaponInvId` — contrainte migration 76 respectée
+- **Catégorie programme** : `fire_mode === 'cc'` → `armement_contact`, sinon `armement_distance`
+- **getTailleCible** : `drone_sheet.taille` INTEGER en cm → clé TAILLES (déjà implémenté shared/droneConstants.js)
+
+**En attente de validation fonctionnelle** — SR non exécuté cette session.

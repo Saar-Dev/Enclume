@@ -108,6 +108,9 @@ export const WS = {
   COMBAT_APPLY_STUN:             'combat:apply_stun',              // GM → serveur : appliquer is_stunned manuellement { tokenId, outcome, duration }
   COMBAT_STUN_EXPIRED:           'combat:stun_expired',            // serveur → room : étourdissement expiré en fin de tour { tokenId }
 
+  // Drones
+  DRONE_INTEGRITY_UPDATED: 'drone:integrity_updated',  // serveur → room : intégrité drone mise à jour (combat)
+
   // Jets favoris — macros compétences (PLAN 13)
   MACRO_ROLL:        'macro:roll',         // joueur → serveur : exécuter une macro
   MACRO_ROLL_RESULT: 'macro:roll_result',  // serveur → socket : résultat + message formaté

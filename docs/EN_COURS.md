@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-11 Session 87
+> Dernière mise à jour : 2026-06-12 Session 94
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -8,13 +8,14 @@
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **75 migrations stables**
+- **78 migrations appliquées** (76, 76c, 76d — 76b, 77, 77b planifiées Sprint 2d+3)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---
 
 ## En attente de validation fonctionnelle
 
+- **Sprint Drones 2c** — GM déclare attaque drone → resolveDroneAssaultAction — Session 94
 - **Sprint CaC 4b** (attaque multiple melee — 2/3 cibles, −5/−7 malus) — Session 74
 - **Sprint Test de Choc** (migration 69, shock_auto_stun) — Session 81
 
@@ -44,7 +45,7 @@
 
 ## Roadmap
 
-- **Sprint Drones 2** — Combat (initiative INI 12, jets programme, dommages intégrité, taille cible)
+- **Sprint Drones 2** — ✅ 2a (INI 12) ✅ 2b (drone cible) ✅ 2c (GM déclare attaque) → 2d (auto-announcement) → 2e (resolveDroneAutoAction) — voir `docs/PLAN_DRONESYSCOMBAT.md`
 - **Sprint Drones 3** — Télépilotage (drone lié à PJ pilote)
 - **Sprint stunned_until_turn** — durée étourdissement + purge endTurn
 - **Sprint CaC 4b** — validation fonctionnelle requise avant

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCharacterStore } from '../stores/characterStore'
+import { WS } from '../../../shared/events.js'
 import api from '../lib/api.js'
 import DroneSheet from './DroneSheet.jsx'
 
@@ -36,7 +37,7 @@ const IconEyeOff = () => (
 )
 
 // ─── Composant principal ──────────────────────────────────────────────────────
-export default function DroneWindow({ character, isGm, onClose }) {
+export default function DroneWindow({ character, isGm, onClose, socket }) {
   const { t } = useTranslation()
   const { members, removeCharacter, updateCharacter } = useCharacterStore()
 
@@ -116,6 +117,17 @@ export default function DroneWindow({ character, isGm, onClose }) {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [character.id])
+
+  // ─── Mise à jour temps réel — intégrité drone (combat) ────────────────────
+  useEffect(() => {
+    if (!socket) return
+    const handler = ({ characterId, integrite_actuelle, damages, detruit }) => {
+      if (characterId !== character.id) return
+      setDrone(prev => prev ? { ...prev, integrite_actuelle, damages } : prev)
+    }
+    socket.on(WS.DRONE_INTEGRITY_UPDATED, handler)
+    return () => socket.off(WS.DRONE_INTEGRITY_UPDATED, handler)
+  }, [socket, character.id])
 
   // ─── Resize handle bas-droite ──────────────────────────────────────────────
   const resizeState = useRef(null)

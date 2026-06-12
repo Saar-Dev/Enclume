@@ -88,6 +88,7 @@ export default function CombatActionWindow({
   const playerChar  = playerToken ? playerChars.find(c => c.id === playerToken.character_id) ?? null : null
   const rosterEntry = playerToken ? roster.find(r => r.token_id === playerToken.id) : null
   const isStunned   = rosterEntry?.state_character?.is_stunned === true
+  const isDrone     = playerChar?.type === 'drone'
 
   // --- etats tactiques (initialises depuis rosterEntry quand dispo) ----------
   const [states, setStates] = useState({
@@ -477,7 +478,9 @@ export default function CombatActionWindow({
 
   // Comparer states vs initial proprement
   const stateChanged = Object.keys(states).some(k => states[k] !== initialStates.current[k])
-  const canDeclare = (hasAnyAction || stateChanged) && assaultValid && reloadValid && meleeValid
+  const canDeclare = isDrone
+    ? (assaultValid && meleeValid)
+    : ((hasAnyAction || stateChanged) && assaultValid && reloadValid && meleeValid)
 
   // --- emit declaration ----------------------------------------------------
   const handleDeclare = () => {
@@ -835,40 +838,46 @@ export default function CombatActionWindow({
           {/* TACTIQUE */}
           <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
             <div style={W.sectionTitle}>TACTIQUE</div>
-            <StateSelector
-              stateKey="position" def={STATE_DEFS.position}
-              current={states.position} initial={initialStates.current.position}
-              onChange={v => setStates(s => ({ ...s, position: v }))}
-            />
+            {!isDrone && (
+              <StateSelector
+                stateKey="position" def={STATE_DEFS.position}
+                current={states.position} initial={initialStates.current.position}
+                onChange={v => setStates(s => ({ ...s, position: v }))}
+              />
+            )}
             <StateSelector
               stateKey="cover" def={STATE_DEFS.cover}
               current={states.cover} initial={initialStates.current.cover}
               onChange={v => setStates(s => ({ ...s, cover: v }))}
             />
-            <StateSelector
-              stateKey="vitesse" def={STATE_DEFS.vitesse}
-              current={states.vitesse} initial={initialStates.current.vitesse}
-              onChange={v => setStates(s => ({ ...s, vitesse: v }))}
-            />
+            {!isDrone && (
+              <StateSelector
+                stateKey="vitesse" def={STATE_DEFS.vitesse}
+                current={states.vitesse} initial={initialStates.current.vitesse}
+                onChange={v => setStates(s => ({ ...s, vitesse: v }))}
+              />
+            )}
           </div>
 
           {/* ARMEMENT */}
-          <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
-            <div style={W.sectionTitle}>ARMEMENT</div>
-            <StateSelector
-              stateKey="weapon" def={STATE_DEFS.weapon}
-              current={states.weapon} initial={initialStates.current.weapon}
-              onChange={v => setStates(s => ({ ...s, weapon: v }))}
-              disabled={weaponLocked}
-              highlightKey={states.weapon !== 'drawn' ? 'drawn' : undefined}
-            />
-            <StateSelector
-              stateKey="fire_mode" def={STATE_DEFS.fire_mode}
-              current={states.fire_mode} initial={initialStates.current.fire_mode}
-              onChange={v => setStates(s => ({ ...s, fire_mode: v }))}
-              availableKeys={availableFireModes}
-            />
-          </div>
+          {!isDrone && (
+            <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
+              <div style={W.sectionTitle}>ARMEMENT</div>
+              <StateSelector
+                stateKey="weapon" def={STATE_DEFS.weapon}
+                current={states.weapon} initial={initialStates.current.weapon}
+                onChange={v => setStates(s => ({ ...s, weapon: v }))}
+                disabled={weaponLocked}
+                highlightKey={states.weapon !== 'drawn' ? 'drawn' : undefined}
+              />
+              <StateSelector
+                stateKey="fire_mode" def={STATE_DEFS.fire_mode}
+                current={states.fire_mode} initial={initialStates.current.fire_mode}
+                onChange={v => setStates(s => ({ ...s, fire_mode: v }))}
+                availableKeys={availableFireModes}
+              />
+            </div>
+          )}
 
           {/* ACTION */}
           <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
@@ -877,6 +886,9 @@ export default function CombatActionWindow({
               {MAP_ACTIONS.map(a => {
                 const isActive = mapSelected.has(a.k)
                 const span2    = a.span2 ? { gridColumn: 'span 2' } : {}
+
+                // Drone : melee et reload non disponibles
+                if ((a.k === 'melee' || a.k === 'reload') && isDrone) return null
 
                 // Assaut/CaC grisé si assommé
                 if ((a.k === 'attack' || a.k === 'melee') && isStunned) {
@@ -887,8 +899,8 @@ export default function CombatActionWindow({
                   )
                 }
 
-                // Assaut/CaC bloqué si arme non au clair
-                if ((a.k === 'attack' || a.k === 'melee') && states.weapon !== 'drawn') {
+                // Assaut/CaC bloqué si arme non au clair (humanoïdes uniquement)
+                if ((a.k === 'attack' || a.k === 'melee') && states.weapon !== 'drawn' && !isDrone) {
                   return (
                     <div key={a.k} title="Arme non au clair — dégainez d'abord (section ARMEMENT)" style={{ ...W.itemGreyed, ...span2 }}>
                       <span style={W.itemLabel}>{a.l}</span>
@@ -1007,6 +1019,7 @@ export default function CombatActionWindow({
           </div>
 
           {/* ACTIONS RAPIDES */}
+          {!isDrone && (
           <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
             <div style={W.sectionTitle}>ACTIONS RAPIDES</div>
             {QUICK_ACTIONS.map(a => {
@@ -1051,6 +1064,7 @@ export default function CombatActionWindow({
               )
             })}
           </div>
+          )}
 
           {/* ---- Roster PJ (bas du panneau gauche) ---- */}
           {playerTokensInRoster.length > 1 && rosterSection}

@@ -461,3 +461,89 @@ Migrations 61 + 63 modifient un CHECK sur `combat_actions`. À vérifier : ce CH
 - SIM-U* : items UI (DroneWindow, CombatTimeline) — à traiter pendant les sprints correspondants
 
 **Plan PLAN_DRONESYSCOMBAT.md : COMPLET — prêt pour implémentation Sprint 2a.**
+
+---
+
+## Session 94 — Sprint Drones 2c — Analyse pré-implémentation — 2026-06-12
+
+### État post-Sessions 89-93 (acquis confirmés par lectures)
+
+- Sprint 2a ✅ — drone à INI 12 dans la timeline
+- Sprint 2b ✅ — drone comme cible (RD_TABLE exportée, DRONE_INTEGRITY_UPDATED dans events.js, migration 76 appliquée, resolveDroneIntegrityLoss live)
+- Fix CombatActionWindow ✅ — isDrone detection, guards, sections masquées pour drones, canDeclare drone
+
+### Findings Session 94 — Lectures effectuées
+
+**F1 — GET /drone/weapons (char-sheet.js:1766) fait INNER JOIN sur ref_equipment**
+Après migration 76c (equipment_id nullable), les armes custom (equipment_id=NULL) n'apparaîtront pas.
+De plus, les nouvelles colonnes (name, damage_formula, fire_mode, portee) ne sont pas retournées.
+Fix requis : LEFT JOIN + SELECT nouvelles colonnes + COALESCE(drone_weapons.name, ref_equipment.name) as name
+
+**F2 — POST /drone/weapons (char-sheet.js:1795) guard equipment_id obligatoire**
+Guard actuel : `if (!equipment_id) throw 400`. Incompatible Option A (arme sans ref_equipment).
+Fix requis : retirer ce guard après migration 76c.
+
+**F3 — CombatGmDeclareWindow.jsx : allPnjs filtre type='pnj' seulement**
+`allPnjs = roster.filter(...).filter(isPnj)` + `if (allPnjs.length === 0) return null`
+Si seuls des drones dans le roster → fenêtre absente → GM ne peut pas déclarer pour drone.
+Fix requis : inclure les drones dans la liste GM-managée.
+
+**F4 — Migration 76d — SQL besoin JOIN sur ref_equipment**
+drone_programs n'a pas de colonne `name` directe. Le plan SQL simplifié ne fonctionnera pas tel quel.
+Fix : sous-requête ou JOIN pour filtrer par ref_equipment.name.
+```sql
+UPDATE drone_programs SET category = 'armement_distance'
+WHERE equipment_id IN (SELECT id FROM ref_equipment WHERE name IN ('Tir', 'Bombardement'));
+```
+
+**F5 — SIM-M3 : chk_action_type CHECK — pas de problème pour Sprint 2c**
+CHECK est sur colonne `type` (pas `action_key`). Sprint 2c utilise `type='assault'` (existant). OK.
+Sprint 2d utilise `action_key='drone_auto'` (sans CHECK sur action_key). OK.
+
+**F6 — SIM-A3 confirmé hors scope : pendingDamageActions pour drone attaquant PJ**
+resolveDroneAssaultAction doit peupler pendingDamageActions avec formula + modDomAttaque pour COMBAT_DAMAGE_PROMPT vers PJ.
+Format identique au path humanoïde — seule différence : formula vient de drone_weapons, pas char_inventory.
+
+### Plan Sprint 2c — 7 fichiers + 2 nouveaux
+
+Voir section PLAN ci-dessous.
+
+### Findings Session 94 — Vérification architecture finale (handlers lus)
+
+**F7 — COMBAT_DAMAGE_CONFIRM : champs pendingDamageActions CONFIRMÉS**
+Handler lu (socket/index.js:2276-2282). Destructuring complet :
+```
+campaignId, targetTokenId, characterIdCible, cibleType, char_sheet_id_cible,
+mr, portee, fire_mode_bonus_dmg, formula,
+for_na_cible, con_na_cible, vol_na_cible,
+tireurUsername, tireurColor, userId, targetName,
+type (pendingType), modDom, combatModeBonus
+```
+Pour drone attaquant PJ : fire_mode_bonus_dmg=0, type='assault', modDom=null, combatModeBonus=null.
+Branche cibleType==='drone' présente (Sprint 2b). Branche humanoid fonctionne avec for/con/vol fetchés depuis cible.
+
+**F8 — COMBAT_ACTION_DECLARE : droneWeaponInvId absent + PC22 bloque drone (CRITIQUE)**
+Handler lu (socket/index.js:1869-1920). `mapActions.attack` destructure weaponInvId mais PAS droneWeaponInvId.
+Guard ligne 1871 : `if (!weaponInvId)` → error "Arme requise (PC22)" → drone bloqué à la déclaration.
+Fix : branchement isDrone dans le bloc attack → validation droneWeaponInvId séparée + ajout au INSERT.
+Note : isDrone déjà calculé ligne 1932 pour INI delta — peut être remonté avant le bloc attack.
+
+**F9 — resolveAssaultAction ligne 3584 : guard confirmé, branchement drone AVANT**
+Signature lue : `async function resolveAssaultAction(io, socket, campaignId, action, confirmedModifiers, character)`
+Ligne 3584 : `if (!action.weapon_inv_id || !action.target_token_id) return` → bloque drone.
+Fix : ajouter au tout début de la fonction, avant ce guard :
+  `if (character.type === 'drone') return resolveDroneAssaultAction(...)`
+char_sheet fetch ligne 3613 : `?.` → null pour drone → sheetTireur=null → bloc skillTotal sauté. Safe si branchement évite d'y arriver.
+
+**F10 — advanceSlot comportement : appel inconditionnel après assault (non-bloquant)**
+COMBAT_ACTION_CONFIRM : needsDefenseWait=false pour toute assault (resolveAssaultAction ne retourne pas un bool).
+advanceSlot appelé ligne 2259 systématiquement après assault. Comportement voulu : slot avance même si COMBAT_DAMAGE_PROMPT en attente. PJ confirme ses dégâts de façon asynchrone. Pattern identique humanoïdes ranged. ✅ Pour drone: slot avance toujours après résolution.
+
+**F11 — drone_sheet.taille confirmé (migration 71 ligne 14)**
+Colonnes drone_sheet : taille INTEGER, vitesse INTEGER, blindage INTEGER DEFAULT 0, blindage_iem INTEGER DEFAULT 0, integrite_actuelle, localisation_ref TEXT DEFAULT 'corps'.
+
+**Verdict final — 100% prêt pour Sprint 2c**
+Architecture complète, tous les handlers vérifiés, aucune zone d'ombre résiduelle.
+
+---
+

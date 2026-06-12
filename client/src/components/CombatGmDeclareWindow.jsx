@@ -92,6 +92,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [assaultVariantAB,    setAssaultVariantAB]    = useState('A')
   // CaC GM — sélection arme (null = mains nues)
   const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(null)
+  // Drone GM — arme sélectionnée + catalogue récupéré
+  const [selectedDroneWeaponId, setSelectedDroneWeaponId] = useState(null)
+  const [droneWeapons, setDroneWeapons] = useState([])
 
   const tokensRef = useRef(tokens)
   useEffect(() => { tokensRef.current = tokens }, [tokens])
@@ -111,6 +114,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setAssaultBulletCount(null)
     setAssaultVariantAB('A')
     setSelectedGmMeleeWeaponId(null)
+    setSelectedDroneWeaponId(null)
+    setDroneWeapons([])
   }, [activeTokenId])
 
   // Sync states initiaux depuis rosterEntry
@@ -144,18 +149,41 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       .catch(() => {})
   }, [battlemapId])
 
+  // ── Fetch armes drone quand le slot actif est un drone ───────────────────
+  const activeDroneCharId = (() => {
+    if (!activeTokenId) return null
+    const tok = tokens.find(t => t.id === activeTokenId)
+    if (!tok?.character_id) return null
+    const char = characters.find(c => c.id === tok.character_id)
+    return char?.type === 'drone' ? char.id : null
+  })()
+
+  useEffect(() => {
+    if (!activeDroneCharId) return
+    api.get(`/char-sheet/${activeDroneCharId}/drone/weapons`)
+      .then(r => setDroneWeapons(r.data.weapons ?? []))
+      .catch(() => setDroneWeapons([]))
+  }, [activeDroneCharId])
+
   // ── Helpers ─────────────────────────────────────────────────────────────
   const isPnj = (entry) => {
     const token = tokens.find(t => t.id === entry.token_id)
     if (!token?.character_id) return false
     return characters.find(c => c.id === token.character_id)?.type === 'pnj'
   }
+  const isDroneEntry = (entry) => {
+    const token = tokens.find(t => t.id === entry.token_id)
+    if (!token?.character_id) return false
+    return characters.find(c => c.id === token.character_id)?.type === 'drone'
+  }
+  const isGmManaged = (entry) => isPnj(entry) || isDroneEntry(entry)
+
   const getLabel = (tokenId) => tokens.find(t => t.id === tokenId)?.label ?? tokenId
   const isRanged = (tokenId) => !!equipment[tokenId]?.weapon?.ref_fire_mode
 
-  const allPnjs        = roster.filter(r => r.status === 'active').filter(isPnj)
-  const sortedPnjs     = [...allPnjs].sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))
-  const unannouncedCnt = allPnjs.filter(r => !r.has_announced).length
+  const allGmManaged   = roster.filter(r => r.status === 'active').filter(isGmManaged)
+  const sortedGmManaged= [...allGmManaged].sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))
+  const unannouncedCnt = allGmManaged.filter(r => !r.has_announced).length
 
   const { pos, onHeaderMouseDown } = useDraggable(
     'combat-gm-declare-pos',
@@ -163,15 +191,16 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     440,
   )
 
-  if (allPnjs.length === 0) return null
+  if (allGmManaged.length === 0) return null
 
-  // ── Dériver le PNJ actif (seulement si c'est un PNJ) ────────────────────
-  const isActivePnj = activePnjEntry && isPnj(activePnjEntry) && !activePnjEntry.has_announced
+  // ── Dériver l'entité active (PNJ ou drone) ────────────────────────────────
+  const isActivePnj   = activePnjEntry && isPnj(activePnjEntry)   && !activePnjEntry.has_announced
+  const isActiveDrone = activePnjEntry && isDroneEntry(activePnjEntry) && !activePnjEntry.has_announced
   const activeToken = activeTokenId ? tokens.find(t => t.id === activeTokenId) : null
 
-  // Quand le slot actif est un PJ — identifier le bloquant
-  const blockerEntry = (!isActivePnj && activePnjEntry && !activePnjEntry.has_announced) ? activePnjEntry : null
-  const blockerIsPj  = blockerEntry ? !isPnj(blockerEntry) : false
+  // Quand le slot actif est un PJ (ni PNJ ni drone) — identifier le bloquant
+  const blockerEntry = (!isActivePnj && !isActiveDrone && activePnjEntry && !activePnjEntry.has_announced) ? activePnjEntry : null
+  const blockerIsPj  = blockerEntry ? !isPnj(blockerEntry) && !isDroneEntry(blockerEntry) : false
 
   const weapon       = isActivePnj ? (equipment[activeTokenId]?.weapon ?? null) : null
   const rangedActive = isActivePnj && isRanged(activeTokenId)
@@ -242,7 +271,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   )
   // Si cible d'assaut sélectionnée, un variant doit être configuré
   const assaultValid = !assaultTarget?.targetTokenId || currentVariant !== null
-  const canDeclare = isActivePnj && (stateChanged || hasAction) && assaultValid
+  const canDeclareDrone = isActiveDrone && !!selectedDroneWeaponId && !!assaultTarget?.targetTokenId
+  const canDeclare = (isActivePnj && (stateChanged || hasAction) && assaultValid) || canDeclareDrone
 
   // ── Déplacement direct ───────────────────────────────────────────────────
   const handleStartMove = () => {
@@ -321,6 +351,22 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ── Declare ─────────────────────────────────────────────────────────────
   const handleDeclare = () => {
     if (!socket || !canDeclare || !activeTokenId) return
+
+    // Drone : payload simplifié — droneWeaponInvId + cible
+    if (isActiveDrone) {
+      socket.emit(WS.COMBAT_ACTION_DECLARE, {
+        tokenId: activeTokenId,
+        state: { position: 'standing', weapon: 'holstered', fire_mode: 'rl', cover: 'exposed', vitesse: 'normal' },
+        mapActions: {
+          attack: {
+            droneWeaponInvId: selectedDroneWeaponId,
+            targetTokenId:    assaultTarget?.targetTokenId ?? null,
+          },
+        },
+      })
+      return
+    }
+
     const meleeCaC = chargeSelection?.targetTokenId
       ? [{ targetTokenId: chargeSelection.targetTokenId, weaponInvId: weaponInvIdForMelee }]
       : meleeTargets.slice(0, effectiveMeleeCount).map(id => ({ targetTokenId: id, weaponInvId: weaponInvIdForMelee }))
@@ -367,7 +413,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       {/* HEADER */}
       <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>
         <span className="combat-win-title" style={{ flex: 1 }}>PHASE 1 — DÉCLARATION</span>
-        <span style={S.headerProgress}>{allPnjs.length - unannouncedCnt}/{allPnjs.length} déclarés</span>
+        <span style={S.headerProgress}>{allGmManaged.length - unannouncedCnt}/{allGmManaged.length} déclarés</span>
       </div>
 
       {/* BODY */}
@@ -531,8 +577,76 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             </div>
           )}
 
-          {/* Message d'attente / monitoring — slot actif = PJ */}
-          {!isActivePnj && activeTokenId && (
+          {/* DRONE — Sélection arme + cible */}
+          {isActiveDrone && (
+            <div style={S.controls}>
+              <div className="combat-win-section">
+                <span className="combat-win-section-title" style={{ color: '#30aaaa' }}>ARMEMENT DRONE</span>
+                {droneWeapons.length === 0 ? (
+                  <span style={{ color: '#607070', fontSize: 11, padding: '4px 0' }}>Aucune arme configurée</span>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {droneWeapons.map(w => (
+                      <div key={w.id}
+                        onClick={() => setSelectedDroneWeaponId(w.id)}
+                        style={{
+                          ...S.weaponOption,
+                          ...(selectedDroneWeaponId === w.id ? S.weaponOptionActive : {}),
+                        }}
+                      >
+                        <span style={S.weaponOptionLabel}>{w.display_name ?? w.ref_name ?? 'Arme drone'}</span>
+                        <span style={{ fontSize: 9, color: '#507070', fontFamily: 'monospace' }}>
+                          {w.fire_mode?.toUpperCase() ?? '?'} {w.damage_formula ?? w.ref_damage_h ?? ''}
+                        </span>
+                        <span style={{ ...S.weaponRadio, ...(selectedDroneWeaponId === w.id ? S.weaponRadioActive : {}) }} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="combat-win-section">
+                <span className="combat-win-section-title" style={{ color: '#aa8a30' }}>CIBLE</span>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button className="btn"
+                    onClick={() => {
+                      if (!onEnterTargetMode || !activeTokenId || !activeToken) return
+                      setAssaultTarget(null)
+                      onEnterTargetMode(
+                        activeTokenId,
+                        { x: activeToken.pos_x, z: activeToken.pos_y },
+                        (targetId) => setAssaultTarget({ targetTokenId: targetId }),
+                        () => {},
+                        'ranged',
+                      )
+                    }}
+                    style={{ minWidth: 70 }}
+                  >
+                    Cibler
+                  </button>
+                  {assaultTarget?.targetTokenId && (
+                    <span style={{ color: '#e07070', fontSize: 11 }}>
+                      → {getLabel(assaultTarget.targetTokenId)}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ padding: '6px 12px 10px' }}>
+                <button
+                  className="btn btn-gold"
+                  onClick={handleDeclare}
+                  disabled={!canDeclareDrone}
+                  style={{ width: '100%', opacity: canDeclareDrone ? 1 : 0.4 }}
+                >
+                  Déclarer attaque drone
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Message d'attente / monitoring — slot actif = PJ (ni PNJ ni drone) */}
+          {!isActivePnj && !isActiveDrone && activeTokenId && (
             <div style={S.waitBlock}>
               <span style={S.waitText}>
                 En attente de <strong style={{ color: '#c0c0d0' }}>{getLabel(activeTokenId)}</strong>
@@ -607,7 +721,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           {/* ROSTER */}
           <div style={S.roster}>
             <div style={S.rosterHeader}>
-              <span style={S.rosterTitle}>ROSTER — {allPnjs.length} PNJs</span>
+              <span style={S.rosterTitle}>ROSTER — {allGmManaged.length} PNJs/Drones</span>
               <button
                 onClick={() => {
                   const next = !rosterOpen
@@ -620,9 +734,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               </button>
             </div>
             {rosterOpen && <div style={S.rosterList}>
-              {sortedPnjs.map(entry => {
+              {sortedGmManaged.map(entry => {
                 const tid     = entry.token_id
-                const isAct   = tid === activeTokenId && isActivePnj
+                const isAct   = tid === activeTokenId && (isActivePnj || isActiveDrone)
                 const isDone  = entry.has_announced
                 const delta   = isDone ? null : (tid === activeTokenId ? iniDelta : null)
 

@@ -456,7 +456,7 @@ export default function SessionPage() {
     s.on(WS.CHARACTER_UPDATED, (updatedCharacter) => {
       upsertCharacter(updatedCharacter)
     })
-    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess, interactionType, mr, targetName, localisation, severity, severityColor, secret }) => {
+    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess, interactionType, mr, targetName, localisation, severity, severityColor, secret, breakdown }) => {
       addMessage({
         id: `dice-${userId}-${timestamp}`,
         type: 'dice',
@@ -483,6 +483,8 @@ export default function SessionPage() {
         severityColor,
         // Jet secret — visible uniquement par le lanceur + GM
         secret: secret || false,
+        // Breakdown modificateurs — présent si le serveur l'a enrichi
+        breakdown,
       })
       // Animation dés — jets normaux uniquement (skillLabel absent)
       // Jets d'entité (skillcheck, displacement) → pas d'animation en V1
@@ -1227,6 +1229,7 @@ export default function SessionPage() {
           character={{ ...selectedDrone, _currentUserId: user?.id }}
           isGm={isGm}
           onClose={() => setSelectedDroneId(null)}
+          socket={socket}
         />
       )}
 

@@ -4,6 +4,7 @@ import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
+import { getTailleCible } from '../../../shared/droneConstants.js'
 
 const FIRE_MODE_LABELS = { CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }
 
@@ -104,6 +105,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   const tireurToken = tokens.find(t => t.id === (assaultAction?.token_id ?? attackResult?.tireurTokenId))
   const cibleToken  = tokens.find(t => t.id === (assaultAction?.target_token_id ?? attackResult?.cibleTokenId))
   const tireurCharId = tireurToken?.character_id ?? null
+  const cibleCharId  = cibleToken?.character_id  ?? null
 
   // Reset quand un nouvel assaut passe en résolution
   useEffect(() => {
@@ -126,6 +128,20 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
       .catch(() => {})
     return () => { cancelled = true }
   }, [assaultAction?.id, tireurCharId])
+
+  // Pré-sélection taille si la cible est un drone (drone_sheet.taille en cm → clé TAILLES)
+  useEffect(() => {
+    if (!cibleCharId) return
+    let cancelled = false
+    api.get(`/char-sheet/${cibleCharId}/drone`)
+      .then(res => {
+        if (cancelled) return
+        const tailleCm = res.data?.drone?.taille
+        if (tailleCm != null) setTaille(getTailleCible(tailleCm))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [assaultAction?.id, cibleCharId])
 
   // Détection allure tireur depuis les actions annoncées
   const detectedTireurAllure = useMemo(() => {

@@ -19,6 +19,8 @@ import {
   calcSouffle,
   calcResistanceDroguesInput,
   ATTR_LABELS,
+  RD_TABLE,
+  lookupTable,
 } from '../lib/charStats.js'
 import { resolveWoundInsertion, isShockTestRequired } from '../lib/woundUtils.js'
 import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS } from '../../../shared/armorConstants.js'
@@ -80,6 +82,49 @@ function getModifier(mrTable, mr) {
     mr >= r.mr_min && (r.mr_max === null || mr <= r.mr_max)
   )
   return row?.modifier ?? 0
+}
+
+// ─── Breakdown jets de dé — tables et labels ────────────────────────────────
+const PORTEE_MOD_COMP = {
+  bout_portant: 5, courte: 0, moyenne: -5, longue: -10, extreme: -15,
+}
+const SITUATION_MODS = {
+  cible_immobile: 3,
+  cible_allure_moyenne: -3, cible_allure_rapide: -5, cible_allure_maximale: -7,
+  tireur_allure_lente: -3, tireur_allure_moyenne: -5, tireur_allure_rapide: -7, tireur_allure_maximale: -99,
+  couverture_partielle: -3, couverture_importante: -5,
+  obscurite_legere: -3, obscurite_importante: -5, obscurite_totale: -99,
+}
+const TAILLE_MODS = {
+  minuscule: -10, tres_petite: -5, petite: -3, moyenne: 0,
+  grande: 3, tres_grande: 5, enorme: 10, gigantesque: 15,
+}
+const SITUATION_LABELS = {
+  cible_immobile:        'Cible immobile',
+  cible_allure_moyenne:  'Cible allure moyenne',
+  cible_allure_rapide:   'Cible allure rapide',
+  cible_allure_maximale: 'Cible allure maximale',
+  tireur_allure_lente:   'Tireur allure lente',
+  tireur_allure_moyenne: 'Tireur allure moyenne',
+  tireur_allure_rapide:  'Tireur allure rapide',
+  couverture_partielle:  'Couverture partielle (50%)',
+  couverture_importante: 'Couverture importante (75%)',
+  obscurite_legere:      'Obscurité légère',
+  obscurite_importante:  'Obscurité importante',
+}
+const PORTEE_LABELS = {
+  bout_portant: 'À bout portant', courte: 'Portée courte',
+  moyenne:      'Portée moyenne', longue: 'Portée longue', extreme: 'Portée extrême',
+}
+const TAILLE_LABELS = {
+  minuscule:    'Cible minuscule (~30cm)', tres_petite: 'Cible très petite (~50cm)',
+  petite:       'Cible petite (~1m)',      moyenne:     'Cible taille humaine',
+  grande:       'Cible grande (~3m)',      tres_grande: 'Cible très grande (~5m)',
+  enorme:       'Cible énorme (~7m)',      gigantesque: 'Cible gigantesque (10m+)',
+}
+const COMBAT_MODE_LABELS = {
+  offensif: 'Mode offensif', charge:   'Mode charge',
+  defensif: 'Mode défensif', retraite: 'Mode retraite',
 }
 
 const initSocket = (io) => {
@@ -966,6 +1011,14 @@ const initSocket = (io) => {
           const isSuccess = diceRoll <= chancesDeReussite
           const diffLabel = totalDiffMod >= 0 ? `+${totalDiffMod}` : `${totalDiffMod}`
 
+          const breakdown = [
+            { label: formulaLabel, value: mechanicalTotal, type: 'base' },
+            ...(pending.defaultDifficulty !== 0 ? [{ label: 'Difficulté', value: pending.defaultDifficulty, type: pending.defaultDifficulty > 0 ? 'bonus' : 'malus' }] : []),
+            ...(gmModifier !== 0 ? [{ label: 'Modificateur GM', value: gmModifier, type: gmModifier > 0 ? 'bonus' : 'malus' }] : []),
+            ...(effectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' }] : []),
+            { label: 'Seuil', value: chancesDeReussite, type: 'total' },
+          ]
+
           const timestamp = new Date().toISOString()
           io.to(pending.campaignId).emit(WS.DICE_RESULT, {
             userId: pending.playerUserId,
@@ -985,6 +1038,7 @@ const initSocket = (io) => {
             effectiveMalus,
             diffLabel,
             isSuccess,
+            breakdown,
           })
 
           if (isSuccess) {
@@ -1475,6 +1529,15 @@ const initSocket = (io) => {
           let base_ini = 0
           let character = null
           try {
+            // PD1 — fetcher character en premier pour détecter le type avant d'accéder à char_sheet
+            character = await db('characters').where({ id: token.character_id }).first()
+
+            if (character?.type === 'drone') {
+              // Drone : INI 12 fixe (LdB p.320), pas de char_sheet, pas de surprise
+              rosterData.push({ token, base_ini: 12, character, is_pnj: false, forcedNotSurprised: true })
+              continue
+            }
+
             const cs = await db('char_sheet').where({ character_id: token.character_id }).first()
             if (!cs) {
               console.warn(`[COMBAT_START] char_sheet introuvable pour token ${token.id}`)
@@ -1490,7 +1553,6 @@ const initSocket = (io) => {
               const per_na = calcAttributeNA(attrs, 'PER', genotypeRow)
               base_ini = calcREA(ada_na, per_na)
             }
-            character = await db('characters').where({ id: token.character_id }).first()
           } catch (err) {
             console.warn(`[COMBAT_START] Erreur calcul INI token ${token.id}:`, err.message)
           }
@@ -1502,8 +1564,8 @@ const initSocket = (io) => {
         rosterData.sort((a, b) => b.base_ini - a.base_ini || Math.random() - 0.5)
 
         // Construction des lignes roster
-        const rosterRows = rosterData.map(({ token, base_ini, is_pnj }) => {
-          const is_surprised = surprisedTokenIds.includes(token.id)
+        const rosterRows = rosterData.map(({ token, base_ini, is_pnj, forcedNotSurprised }) => {
+          const is_surprised = !forcedNotSurprised && surprisedTokenIds.includes(token.id)
           let surprise_roll = null
           let initiative = base_ini
           // PNJ surpris : jet auto côté serveur
@@ -1814,7 +1876,7 @@ const initSocket = (io) => {
         if (!token.character_id) return
         const character = await db('characters').where({ id: token.character_id }).first()
         if (!character) return
-        if (character.type === 'pnj') {
+        if (character.type === 'pnj' || character.type === 'drone') {
           if (socket.role !== 'gm') return
         } else {
           if (character.user_id !== socket.user.id) return
@@ -1854,57 +1916,76 @@ const initSocket = (io) => {
           }
         }
 
+        const isDrone = character.type === 'drone'
+
         // PC22 — arme requise pour assaut + PC23 (TIR_AUTOMATIQUE pour RC/RL)
         let assaultWeaponRefRange = null
         if (mapActions?.attack) {
-          const { weaponInvId } = mapActions.attack
-          if (!weaponInvId) {
-            socket.emit('error', { message: 'Arme requise pour un assaut (PC22)' })
-            return
-          }
-          const weapon = await db('char_inventory')
-            .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-            .where({ 'char_inventory.id': weaponInvId, 'char_inventory.character_id': character.id })
-            .select('char_inventory.slot', 'char_inventory.ammo_remaining', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
-            .first()
-          if (!weapon) {
-            socket.emit('error', { message: "Arme introuvable dans l'inventaire (PC22)" })
-            return
-          }
-          if (!['MG', 'MD', '2M', 'Tr'].includes(weapon.slot)) {
-            socket.emit('error', { message: "L'arme doit être équipée (slot arme) (PC22)" })
-            return
-          }
-          // fire_mode vient de state.fire_mode (v2) — comparaison insensible à la casse
-          const fireMode = (state.fire_mode ?? 'cc').toUpperCase()
-          if (weapon.ref_fire_mode && !weapon.ref_fire_mode.toUpperCase().includes(fireMode)) {
-            socket.emit('error', { message: `Mode de tir ${fireMode} non disponible pour cette arme` })
-            return
-          }
-          assaultWeaponRefRange = weapon.ref_range ?? null
-          // PC23 — TIR_AUTOMATIQUE requis pour RC/RL
-          if (fireMode === 'RC' || fireMode === 'RL') {
-            const sheet = await db('char_sheet').where({ character_id: character.id }).first()
-            const autoSkill = sheet
-              ? await db('char_skills').where({ char_sheet_id: sheet.id, skill_id: 'TIR_AUTOMATIQUE' }).first()
-              : null
-            if (!autoSkill) {
-              socket.emit('error', { message: 'Compétence Tir Automatique requise (PC23)' })
+          if (isDrone) {
+            // Drone : validation droneWeaponInvId contre drone_weapons
+            const { droneWeaponInvId } = mapActions.attack
+            if (!droneWeaponInvId) {
+              socket.emit('error', { message: 'Arme drone requise pour un assaut (PC22-D)' })
               return
             }
-          }
-          // Vérification munitions ANNOUNCEMENT (MANUELSYSCOMBAT §4)
-          // ammo_remaining null = tracking désactivé (arme sans chargeur) → pas de vérification
-          const bulletCount = mapActions.attack.bulletCount ?? 1
-          if (weapon.ammo_remaining !== null && weapon.ammo_remaining < bulletCount) {
-            let pnjUnlimited = false
-            if (character.type === 'pnj') {
-              const campaign = await db('campaigns').where({ id: campaignId }).select('pnj_unlimited_ammo').first()
-              pnjUnlimited = campaign?.pnj_unlimited_ammo ?? false
-            }
-            if (!pnjUnlimited) {
-              socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Munitions insuffisantes — rechargez d'abord" })
+            const droneWeapon = await db('drone_weapons')
+              .where({ id: droneWeaponInvId, character_id: character.id })
+              .first()
+            if (!droneWeapon) {
+              socket.emit('error', { message: "Arme drone introuvable (PC22-D)" })
               return
+            }
+          } else {
+            // Humanoïde : validation char_inventory + PC23
+            const { weaponInvId } = mapActions.attack
+            if (!weaponInvId) {
+              socket.emit('error', { message: 'Arme requise pour un assaut (PC22)' })
+              return
+            }
+            const weapon = await db('char_inventory')
+              .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+              .where({ 'char_inventory.id': weaponInvId, 'char_inventory.character_id': character.id })
+              .select('char_inventory.slot', 'char_inventory.ammo_remaining', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
+              .first()
+            if (!weapon) {
+              socket.emit('error', { message: "Arme introuvable dans l'inventaire (PC22)" })
+              return
+            }
+            if (!['MG', 'MD', '2M', 'Tr'].includes(weapon.slot)) {
+              socket.emit('error', { message: "L'arme doit être équipée (slot arme) (PC22)" })
+              return
+            }
+            // fire_mode vient de state.fire_mode (v2) — comparaison insensible à la casse
+            const fireMode = (state.fire_mode ?? 'cc').toUpperCase()
+            if (weapon.ref_fire_mode && !weapon.ref_fire_mode.toUpperCase().includes(fireMode)) {
+              socket.emit('error', { message: `Mode de tir ${fireMode} non disponible pour cette arme` })
+              return
+            }
+            assaultWeaponRefRange = weapon.ref_range ?? null
+            // PC23 — TIR_AUTOMATIQUE requis pour RC/RL
+            if (fireMode === 'RC' || fireMode === 'RL') {
+              const sheet = await db('char_sheet').where({ character_id: character.id }).first()
+              const autoSkill = sheet
+                ? await db('char_skills').where({ char_sheet_id: sheet.id, skill_id: 'TIR_AUTOMATIQUE' }).first()
+                : null
+              if (!autoSkill) {
+                socket.emit('error', { message: 'Compétence Tir Automatique requise (PC23)' })
+                return
+              }
+            }
+            // Vérification munitions ANNOUNCEMENT (MANUELSYSCOMBAT §4)
+            // ammo_remaining null = tracking désactivé (arme sans chargeur) → pas de vérification
+            const bulletCount = mapActions.attack.bulletCount ?? 1
+            if (weapon.ammo_remaining !== null && weapon.ammo_remaining < bulletCount) {
+              let pnjUnlimited = false
+              if (character.type === 'pnj') {
+                const campaign = await db('campaigns').where({ id: campaignId }).select('pnj_unlimited_ammo').first()
+                pnjUnlimited = campaign?.pnj_unlimited_ammo ?? false
+              }
+              if (!pnjUnlimited) {
+                socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Munitions insuffisantes — rechargez d'abord" })
+                return
+              }
             }
           }
         }
@@ -1920,24 +2001,26 @@ const initSocket = (io) => {
         const transitionCost = (costs, from, to) => from === to ? 0 : (costs?.[from]?.[to] ?? 0)
 
         let iniDelta = 0
-        for (const key of ['position', 'weapon', 'fire_mode', 'cover', 'vitesse']) {
-          const from = entry['state_' + key]
-          const to   = state[key] ?? from
-          iniDelta += transitionCost(STATE_COSTS[key], from, to)
+        if (!isDrone) {
+          for (const key of ['position', 'weapon', 'fire_mode', 'cover', 'vitesse']) {
+            const from = entry['state_' + key]
+            const to   = state[key] ?? from
+            iniDelta += transitionCost(STATE_COSTS[key], from, to)
+          }
+          // Charge/Retraite : déplacement gratuit — override ini_mod serveur (non trusté client)
+          const freeMove = (state.combat_mode === 'charge' || state.combat_mode === 'retraite') && !!mapActions?.move
+          if (mapActions?.move)  iniDelta += freeMove ? 0 : (mapActions.move.ini_mod ?? 0)
+          if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) {
+            iniDelta += -3
+            if (mapActions.melee.length > 1) iniDelta += -5
+          }
+          if (mapActions?.attack?.cover_shot) {
+            iniDelta += state.cover === 'important' ? -5 : -3
+          }
+          iniDelta += (quick?.observer ?? 0) * -5
+          iniDelta += (quick?.reperer  ?? 0) * -5
+          if (quick?.phrase) iniDelta += -3
         }
-        // Charge/Retraite : déplacement gratuit — override ini_mod serveur (non trusté client)
-        const freeMove = (state.combat_mode === 'charge' || state.combat_mode === 'retraite') && !!mapActions?.move
-        if (mapActions?.move)  iniDelta += freeMove ? 0 : (mapActions.move.ini_mod ?? 0)
-        if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) {
-          iniDelta += -3
-          if (mapActions.melee.length > 1) iniDelta += -5
-        }
-        if (mapActions?.attack?.cover_shot) {
-          iniDelta += state.cover === 'important' ? -5 : -3
-        }
-        iniDelta += (quick?.observer ?? 0) * -5
-        iniDelta += (quick?.reperer  ?? 0) * -5
-        if (quick?.phrase) iniDelta += -3
 
         // Construction des lignes combat_actions (PC32 — sequence attribué serveur)
         const getType = (key) => {
@@ -1964,11 +2047,12 @@ const initSocket = (io) => {
         }
 
         if (mapActions?.attack) {
-          const { weaponInvId, targetTokenId, bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp } = mapActions.attack
+          const { weaponInvId, droneWeaponInvId, targetTokenId, bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp } = mapActions.attack
           actionRows.push({
             campaign_id:          campaignId, token_id: tokenId,
             action_key:           'assault', type: 'assault', sequence: 3,
-            weapon_inv_id:        weaponInvId ?? null,
+            weapon_inv_id:        isDrone ? null : (weaponInvId ?? null),
+            drone_weapon_inv_id:  isDrone ? (droneWeaponInvId ?? null) : null,
             target_token_id:      targetTokenId ?? null,
             fire_mode:            state.fire_mode ?? null,
             bullet_count:         bulletCount ?? null,
@@ -2261,7 +2345,7 @@ const initSocket = (io) => {
       pendingDamageActions.delete(tokenId)
 
       const {
-        campaignId, targetTokenId, characterIdCible, char_sheet_id_cible,
+        campaignId, targetTokenId, characterIdCible, cibleType = null, char_sheet_id_cible,
         mr, portee, fire_mode_bonus_dmg, formula,
         for_na_cible, con_na_cible, vol_na_cible,
         tireurUsername, tireurColor, userId, targetName,
@@ -2301,6 +2385,41 @@ const initSocket = (io) => {
           const modDegatsMode = isShortRange ? fire_mode_bonus_dmg : 0
           degautsBruts = rawDice + modDomAttaque + modDegatsMode
         }
+        // Branche drone — cible sans char_sheet, résistance = blindage + intégrité×2 (§7.6)
+        if (cibleType === 'drone' && characterIdCible) {
+          const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
+          if (droneSheet) {
+            const etqDrone  = droneSheet.blindage ?? 0
+            const rdDrone   = calcDroneRD(droneSheet.integrite_actuelle)
+            const degatsNetsDrone = Math.max(0, degautsBruts - etqDrone - rdDrone)
+            await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
+            socket.emit(WS.COMBAT_DAMAGE_RESULT, {
+              rollLoc: null, locLabel: null,
+              degautsBruts, degatsNets: degatsNetsDrone,
+              dmgRolls, severity: null, severityColor: tireurColor, shockResult: null,
+            })
+            const now = new Date().toISOString()
+            io.to(campaignId).emit(WS.DICE_RESULT, {
+              userId, username: tireurUsername, color: tireurColor,
+              formula, rolls: dmgRolls, total: degautsBruts,
+              isCriticalSuccess: false, isCriticalFail: false,
+              seed: dmgSeed, timestamp: now,
+              skillLabel: `Dégâts — drone`,
+              mechanicalTotal: rawDice,
+              diffLabel: `Blindage:${etqDrone} RD:${rdDrone}`,
+              chancesDeReussite: degatsNetsDrone,
+              isSuccess: degatsNetsDrone > 0,
+            })
+            io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+              tireurId: tokenId, cibleId: targetTokenId,
+              localisation: null,
+              degautsBruts, degatsNets: degatsNetsDrone,
+              severity: null, is_lethal: false, isSuccess: true, shockResult: null,
+            })
+          }
+          return
+        }
+
         const rd = calcResistanceDommages(for_na_cible, con_na_cible)
         const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
 
@@ -2473,6 +2592,14 @@ const initSocket = (io) => {
         const defenseSuccess = rollDefense  <= chanceDefense
         const hit = attackSuccess && !defenseSuccess
 
+        const modeCombatDefPj = defCombatMode === 'offensif' ? -5 : defCombatMode === 'charge' ? -7 : defCombatMode === 'defensif' ? 3 : defCombatMode === 'retraite' ? 5 : 0
+        const breakdownDefPj = [
+          { label: 'Compétence', value: defenderSkillTotal, type: 'base' },
+          ...(modeCombatDefPj !== 0 ? [{ label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDefPj, type: modeCombatDefPj > 0 ? 'bonus' : 'malus' }] : []),
+          ...((multiMalusDefenseur ?? 0) !== 0 ? [{ label: 'Multi-adversaires', value: multiMalusDefenseur, type: 'malus' }] : []),
+          ...(defenderEffectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' }] : []),
+          { label: 'Seuil', value: chanceDefense, type: 'total' },
+        ]
         console.log(`[WS] melee défense — rollAtk:${rollAttaque}/${chancesAttaque} rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
 
         // Broadcast roll défense au chat
@@ -2489,6 +2616,7 @@ const initSocket = (io) => {
           chancesDeReussite: chanceDefense,
           isSuccess:         defenseSuccess,
           mr:                chanceDefense - rollDefense,
+          breakdown:         breakdownDefPj,
         })
 
         // 3. Résultat opposition → room
@@ -3117,6 +3245,16 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
     const attackerColor    = userRow?.color    ?? '#c86030'
     const attackerUsername = userRow?.username ?? character.name ?? 'Inconnu'
 
+    const breakdownAtk = [
+      { label: 'Compétence', value: attackerSkillTotal, type: 'base' },
+      ...(attackModeBonus !== 0 ? [{ label: COMBAT_MODE_LABELS[combatModeAtk] ?? combatModeAtk, value: attackModeBonus, type: 'bonus' }] : []),
+      ...(isRushedMod !== 0 ? [{ label: 'Précipitation', value: isRushedMod, type: 'malus' }] : []),
+      ...(multiMalusAttaquant !== 0 ? [{ label: 'Multi-adversaires (attaquant)', value: multiMalusAttaquant, type: 'malus' }] : []),
+      ...(multiAttackMalus !== 0 ? [{ label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' }] : []),
+      ...(effectiveMalusAttaquant !== 0 ? [{ label: 'Malus santé / encombrement', value: effectiveMalusAttaquant, type: 'malus' }] : []),
+      ...(carenceAttaquant !== 0 ? [{ label: 'Carence armure', value: -carenceAttaquant, type: 'malus' }] : []),
+      { label: 'Seuil', value: chancesAttaque, type: 'total' },
+    ]
     console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
     io.to(campaignId).emit(WS.DICE_RESULT, {
       userId: character.user_id, username: attackerUsername, color: attackerColor,
@@ -3129,6 +3267,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
       chancesDeReussite: chancesAttaque,
       isSuccess:         rollAttaque <= chancesAttaque,
       mr:                chancesAttaque - rollAttaque,
+      breakdown:         breakdownAtk,
     })
 
     // ── 2. Cible ──────────────────────────────────────────────────────────────
@@ -3208,6 +3347,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
       modDom,
       combatModeBonus,
       characterIdCible: defenderCharacter.id,
+      cibleType: defenderCharacter.type,
       char_sheet_id_cible,
       for_na_cible,
       con_na_cible,
@@ -3235,6 +3375,14 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
       const defenseSuccess = rollDefense  <= chanceDefense
       const hit = attackSuccess && !defenseSuccess
 
+      const modeCombatDef = defCombatMode === 'offensif' ? -5 : defCombatMode === 'charge' ? -7 : defCombatMode === 'defensif' ? 3 : defCombatMode === 'retraite' ? 5 : 0
+      const breakdownDef = [
+        { label: 'Compétence', value: defenderSkillTotal, type: 'base' },
+        ...(modeCombatDef !== 0 ? [{ label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDef, type: modeCombatDef > 0 ? 'bonus' : 'malus' }] : []),
+        ...(multiMalusDefenseur !== 0 ? [{ label: 'Multi-adversaires', value: multiMalusDefenseur, type: 'malus' }] : []),
+        ...(defenderEffectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' }] : []),
+        { label: 'Seuil', value: chanceDefense, type: 'total' },
+      ]
       console.log(`[WS] melee défense PNJ — rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
 
       io.to(campaignId).emit(WS.DICE_RESULT, {
@@ -3248,6 +3396,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
         chancesDeReussite: chanceDefense,
         isSuccess:         defenseSuccess,
         mr:                chanceDefense - rollDefense,
+        breakdown:         breakdownDef,
       })
 
       io.to(campaignId).emit(WS.COMBAT_MELEE_RESULT, {
@@ -3516,22 +3665,249 @@ async function resolveReloadAction(io, socket, campaignId, character, action) {
 // Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='assault' + confirmedModifiers présents.
 // Jets : attaque 1d20 / localisation 1d20 / dégâts selon ref_damage_h.
 // Blessures : resolveWoundInsertion (promotions en cascade) + test choc si requis.
-async function resolveAssaultAction(io, socket, campaignId, action, confirmedModifiers, character) {
-  const PORTEE_MOD_COMP = {
-    bout_portant: 5, courte: 0, moyenne: -5, longue: -10, extreme: -15,
-  }
-  const SITUATION_MODS = {
-    cible_immobile: 3,
-    cible_allure_moyenne: -3, cible_allure_rapide: -5, cible_allure_maximale: -7,
-    tireur_allure_lente: -3, tireur_allure_moyenne: -5, tireur_allure_rapide: -7, tireur_allure_maximale: -99,
-    couverture_partielle: -3, couverture_importante: -5,
-    obscurite_legere: -3, obscurite_importante: -5, obscurite_totale: -99,
-  }
-  const TAILLE_MODS = {
-    minuscule: -10, tres_petite: -5, petite: -3, moyenne: 0,
-    grande: 3, tres_grande: 5, enorme: 10, gigantesque: 15,
-  }
+// ─── resolveDroneAssaultAction — résolution attaque drone (Sprint 2c) ────────
+// Appelé depuis resolveAssaultAction quand character.type === 'drone'.
+// §7.3 MANUELSYSCOMBAT : D20 ≤ programme.level, modificateurs situationnels standard,
+// pas de malus blessures/encombrement, pas de Test de Choc.
+async function resolveDroneAssaultAction(io, socket, campaignId, action, confirmedModifiers, character) {
   try {
+    // 1. Arme drone
+    const weapon = await db('drone_weapons')
+      .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
+      .where({ 'drone_weapons.id': action.drone_weapon_inv_id })
+      .select(
+        'drone_weapons.fire_mode',
+        db.raw(`COALESCE(drone_weapons.damage_formula, ref_equipment.damage_h) as effective_formula`),
+        db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
+      )
+      .first()
+
+    if (!weapon?.effective_formula) {
+      console.warn(`[WS] resolveDroneAssaultAction — arme sans formule. drone_weapon_inv_id:${action.drone_weapon_inv_id}`)
+      return
+    }
+
+    // 2. Programme armement (§7.3 — category selon fire_mode)
+    const category = weapon.fire_mode === 'cc' ? 'armement_contact' : 'armement_distance'
+    const programme = await db('drone_programs')
+      .where({ character_id: character.id, category })
+      .orderBy('level', 'desc')
+      .first()
+
+    if (!programme) {
+      console.warn(`[WS] resolveDroneAssaultAction — programme ${category} introuvable pour drone ${character.id}`)
+      return
+    }
+
+    // 3. Calcul chancesDeReussite (§7.3 — même modificateurs que humanoïdes)
+    const portee = confirmedModifiers?.portee ?? 'courte'
+    let totalModComp = PORTEE_MOD_COMP[portee] ?? 0
+    if (confirmedModifiers?.taille) totalModComp += TAILLE_MODS[confirmedModifiers.taille] ?? 0
+    for (const [k, v] of Object.entries(SITUATION_MODS)) {
+      if (confirmedModifiers?.[k]) totalModComp += v
+    }
+    const chancesDeReussite = programme.level + totalModComp
+
+    // 4. Jet D20
+    const { total: roll, rolls: attRolls, seed: attSeed } = await parseDice('1d20')
+    const isSuccess = roll <= chancesDeReussite
+    const mr        = chancesDeReussite - roll
+
+    // 5. Display data tireur
+    const userRow        = character.user_id ? await db('users').where({ id: character.user_id }).select('color', 'username').first() : null
+    const tireurColor    = userRow?.color    ?? '#888888'
+    const tireurUsername = userRow?.username ?? character.name ?? 'Drone'
+    const userId         = character.user_id ?? null
+    const now            = new Date().toISOString()
+
+    // 6. Broadcast jet programme
+    io.to(campaignId).emit(WS.DICE_RESULT, {
+      userId, username: tireurUsername, color: tireurColor,
+      formula: '1d20', rolls: attRolls, total: roll,
+      isCriticalSuccess: false, isCriticalFail: false,
+      seed: attSeed, timestamp: now,
+      skillLabel: `${weapon.display_name ?? 'Armement'} — Drone`,
+      mechanicalTotal: roll,
+      diffLabel: `${chancesDeReussite} (Prog. niv. ${programme.level})`,
+      chancesDeReussite, isSuccess,
+    })
+
+    if (!isSuccess) {
+      io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+        tireurId: action.token_id, cibleId: action.target_token_id,
+        localisation: null, degautsBruts: 0, degatsNets: 0,
+        severity: null, is_lethal: false, isSuccess: false, shockResult: null,
+      })
+      return
+    }
+
+    // 7. Identifier la cible
+    const cibleToken     = await db('tokens').where({ id: action.target_token_id }).first()
+    const cibleCharacter = cibleToken?.character_id
+      ? await db('characters').where({ id: cibleToken.character_id }).first()
+      : null
+    const formula = weapon.effective_formula.replace(/\s/g, '')
+
+    // Helper : fetch attributs NA cible avec genotype
+    const fetchCibleNA = async (charId, sheetId) => {
+      const [attrsCible, archetypeCible] = await Promise.all([
+        db('char_attributes').where({ char_sheet_id: sheetId }),
+        db('char_archetype').where({ char_sheet_id: sheetId }).first(),
+      ])
+      const genoCible = archetypeCible?.genotype_id
+        ? await db('ref_genotypes').where({ id: archetypeCible.genotype_id }).first()
+        : null
+      return {
+        for_na: calcAttributeNA(attrsCible, 'FOR', genoCible),
+        con_na: calcAttributeNA(attrsCible, 'CON', genoCible),
+        vol_na: calcAttributeNA(attrsCible, 'VOL', genoCible),
+      }
+    }
+
+    // 8a. Cible = drone (§7.6 — blindage + RD intégrité, auto-resolve)
+    if (cibleCharacter?.type === 'drone') {
+      const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
+      if (!droneSheet) return
+      const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
+      const mrTable       = await getMrTable()
+      const modDomAttaque = getModifier(mrTable, mr)
+      const degautsBruts  = rawDice + modDomAttaque
+      const etqDrone      = droneSheet.blindage ?? 0
+      const rdDrone       = calcDroneRD(droneSheet.integrite_actuelle)
+      const degatsNets    = Math.max(0, degautsBruts - etqDrone - rdDrone)
+      await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNets)
+      io.to(campaignId).emit(WS.DICE_RESULT, {
+        userId, username: tireurUsername, color: tireurColor,
+        formula, rolls: dmgRolls, total: degautsBruts,
+        isCriticalSuccess: false, isCriticalFail: false,
+        seed: dmgSeed, timestamp: now,
+        skillLabel: 'Dégâts — drone',
+        mechanicalTotal: rawDice, diffLabel: `Blindage:${etqDrone} RD:${rdDrone}`,
+        chancesDeReussite: degatsNets, isSuccess: degatsNets > 0,
+      })
+      io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+        tireurId: action.token_id, cibleId: action.target_token_id,
+        localisation: null, degautsBruts, degatsNets,
+        severity: null, is_lethal: false, isSuccess: true, shockResult: null,
+      })
+      return
+    }
+
+    // 8b. Cible = PNJ : auto-resolve
+    if (!cibleCharacter || cibleCharacter.type === 'pnj') {
+      const cibleSheet    = cibleCharacter ? await db('char_sheet').where({ character_id: cibleCharacter.id }).first() : null
+      const { for_na, con_na } = cibleSheet ? await fetchCibleNA(cibleCharacter.id, cibleSheet.id) : { for_na: 8, con_na: 8 }
+
+      const { total: rollLoc, rolls: locRolls, seed: locSeed } = await parseDice('1d20')
+      const slotCode     = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
+      const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
+
+      let etq = null
+      if (cibleSheet && cibleCharacter) {
+        const armuresCible = await db('char_inventory')
+          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+          .where({ 'char_inventory.character_id': cibleCharacter.id })
+          .whereNotNull('char_inventory.slot')
+          .select('char_inventory.slot', 'ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock')
+        const armuresSlot = armuresCible.filter(a => a.slot && ('/' + a.slot + '/').includes('/' + slotCode + '/'))
+        etq = calcResistanceArmure(armuresSlot).etq
+      }
+
+      const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
+      const mrTable       = await getMrTable()
+      const modDomAttaque = getModifier(mrTable, mr)
+      const degautsBruts  = rawDice + modDomAttaque
+      const rd            = calcResistanceDommages(for_na, con_na)
+      const degatsNets    = Math.max(0, degautsBruts - (etq ?? 0) - rd)
+
+      let severity = null, is_lethal = false
+      if      (degatsNets >= 30) { severity = 'mortelle'; is_lethal = true }
+      else if (degatsNets >= 25) { severity = 'mortelle' }
+      else if (degatsNets >= 20) { severity = 'critique' }
+      else if (degatsNets >= 15) { severity = 'grave'    }
+      else if (degatsNets >= 10) { severity = 'moyenne'  }
+      else if (degatsNets >=  5) { severity = 'legere'   }
+
+      let finalSeverity = severity
+      if (severity && cibleSheet?.id) {
+        const result = await db.transaction(trx => resolveWoundInsertion(trx, cibleSheet.id, localisation, severity))
+        io.to(campaignId).emit(WS.WOUND_ADDED, {
+          characterId: cibleCharacter.id, wound: result.wound, promoted: result.promoted,
+          shock_test_required: isShockTestRequired(result.wound.severity, result.wound.location),
+        })
+        finalSeverity = result.wound.severity
+      }
+
+      const severityColor = finalSeverity ? (SEVERITY_COLORS[finalSeverity] ?? tireurColor) : tireurColor
+
+      io.to(campaignId).emit(WS.DICE_RESULT, {
+        userId, username: tireurUsername, color: tireurColor,
+        formula: '1d20', rolls: locRolls, total: rollLoc,
+        isCriticalSuccess: false, isCriticalFail: false,
+        seed: locSeed, timestamp: now,
+        skillLabel: 'Localisation — Drone', mechanicalTotal: rollLoc, diffLabel: '',
+        chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation, isSuccess: true,
+      })
+      io.to(campaignId).emit(WS.DICE_RESULT, {
+        userId, username: tireurUsername, color: tireurColor,
+        formula, rolls: dmgRolls, total: degautsBruts,
+        isCriticalSuccess: false, isCriticalFail: false,
+        seed: dmgSeed, timestamp: now,
+        skillLabel: `Dégâts — ${LOCATION_LABELS[localisation] ?? localisation}`,
+        mechanicalTotal: rawDice, diffLabel: `Armure:${etq ?? 0} RD:${rd}`,
+        chancesDeReussite: degatsNets, isSuccess: degatsNets > 0,
+      })
+      io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+        tireurId: action.token_id, cibleId: action.target_token_id,
+        localisation, degautsBruts, degatsNets,
+        severity: finalSeverity, is_lethal, isSuccess: true, shockResult: null,
+      })
+      return
+    }
+
+    // 8c. Cible = PJ → COMBAT_DAMAGE_PROMPT
+    const cibleSheet    = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
+    const { for_na, con_na, vol_na } = cibleSheet
+      ? await fetchCibleNA(cibleCharacter.id, cibleSheet.id)
+      : { for_na: 8, con_na: 8, vol_na: 8 }
+    const targetName = cibleCharacter.name ?? 'Cible'
+
+    pendingDamageActions.set(action.token_id, {
+      campaignId,
+      targetTokenId:       action.target_token_id,
+      characterIdCible:    cibleCharacter.id,
+      cibleType:           null,
+      char_sheet_id_cible: cibleSheet?.id ?? null,
+      mr, portee,
+      fire_mode_bonus_dmg: 0,
+      formula,
+      for_na_cible:  for_na,
+      con_na_cible:  con_na,
+      vol_na_cible:  vol_na,
+      tireurUsername, tireurColor, userId, targetName,
+      type: 'assault', modDom: null, combatModeBonus: null,
+    })
+
+    const damagePayload = { tokenId: action.token_id, formula, targetName }
+    const allSockets    = await io.fetchSockets()
+    const cibleSocket   = allSockets.find(s => s.user?.id === cibleCharacter.user_id && s.campaignId === campaignId)
+    if (cibleSocket) {
+      cibleSocket.emit(WS.COMBAT_DAMAGE_PROMPT, damagePayload)
+    } else {
+      socket.emit(WS.COMBAT_DAMAGE_PROMPT, damagePayload)
+    }
+
+  } catch (err) {
+    console.error('[WS] resolveDroneAssaultAction error:', err.message)
+  }
+}
+
+async function resolveAssaultAction(io, socket, campaignId, action, confirmedModifiers, character) {
+  try {
+    // Branchement drone — avant le guard weapon_inv_id (§7 MANUELSYSCOMBAT)
+    if (character.type === 'drone') {
+      return resolveDroneAssaultAction(io, socket, campaignId, action, confirmedModifiers, character)
+    }
     if (!action.weapon_inv_id || !action.target_token_id) return
 
     const [weapon, rosterTireur] = await Promise.all([
@@ -3618,6 +3994,21 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
     const isSuccess = rollAttaque <= chancesDeReussite
     const mr = chancesDeReussite - rollAttaque
+    const breakdown = [
+      { label: 'Compétence', value: skillTotal, type: 'base' },
+      ...(porteeModComp !== 0 ? [{ label: PORTEE_LABELS[confirmedModifiers.portee] ?? confirmedModifiers.portee, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' }] : []),
+      ...(fireModeComp !== 0 ? [{ label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp, type: 'bonus' }] : []),
+      ...((confirmedModifiers.situation ?? []).reduce((acc, k) => {
+        const v = SITUATION_MODS[k] ?? 0
+        if (v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
+        return acc
+      }, [])),
+      ...(tailleModComp !== 0 ? [{ label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' }] : []),
+      ...(isRushedMod !== 0 ? [{ label: 'Précipitation', value: isRushedMod, type: 'malus' }] : []),
+      ...(effectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' }] : []),
+      ...(carenceArmure !== 0 ? [{ label: 'Carence armure', value: -carenceArmure, type: 'malus' }] : []),
+      { label: 'Seuil', value: chancesDeReussite, type: 'total' },
+    ]
     console.log(`[WS] assault — roll:${rollAttaque} Seuil:${chancesDeReussite} → ${isSuccess ? 'TOUCHE' : 'RATÉ'} MR:${mr}`)
     io.to(campaignId).emit(WS.DICE_RESULT, {
       userId:            character.user_id,
@@ -3636,6 +4027,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
       chancesDeReussite,
       isSuccess,
       mr,
+      breakdown,
     })
 
     // ── Décompte munitions ──────────────────────────────────────────────────────
@@ -3698,6 +4090,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
           campaignId,
           targetTokenId: action.target_token_id,
           characterIdCible: cibleToken?.character_id ?? null,
+          cibleType: cibleCharacter?.type ?? null,
           char_sheet_id_cible,
           mr,
           portee: confirmedModifiers.portee,
@@ -3742,6 +4135,26 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
         const modDegatsMode = isShortRange ? (action.fire_mode_bonus_dmg ?? 0) : 0
         const { total: rawDice } = await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))
         const degautsBruts = rawDice + modDomAttaque + modDegatsMode
+
+        // Branche drone — cible sans char_sheet, résistance = blindage + intégrité×2 (§7.6)
+        if (cibleCharacter?.type === 'drone') {
+          const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
+          if (droneSheet) {
+            const etqDrone  = droneSheet.blindage ?? 0
+            const rdDrone   = calcDroneRD(droneSheet.integrite_actuelle)
+            const degatsNetsDrone = Math.max(0, degautsBruts - etqDrone - rdDrone)
+            await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNetsDrone)
+            io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+              tireurId: action.token_id, cibleId: action.target_token_id,
+              localisation: null,
+              degautsBruts, degatsNets: degatsNetsDrone,
+              severity: null, is_lethal: false, isSuccess: true,
+              isPnj: true, roll: rollAttaque, chancesDeReussite, shockResult: null,
+            })
+          }
+          return
+        }
+
         const rd = calcResistanceDommages(for_na_cible, con_na_cible)
         const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
 
@@ -3842,4 +4255,59 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
   } catch (err) {
     console.error('[WS] resolveAssaultAction error:', err.message)
   }
+}
+
+// ─── Drones — fonctions de résolution ────────────────────────────────────────
+
+// RD drone : integrite × 2 → table RD LdB p.112 (même table que FOR+CON humanoïdes,
+// input direct sans calcul d'attributs). Drone sain (haute intégrité) → rd négatif → plus vulnérable.
+// Drone endommagé (faible intégrité) → rd positif → noyau durci.
+function calcDroneRD(integrite) {
+  const rdInput = (integrite ?? 0) * 2
+  return lookupTable(RD_TABLE, rdInput, 'rd') ?? 0
+}
+
+// Décrémente l'intégrité du drone après un hit, met à jour damages JSONB, broadcast.
+// tokenId requis : drone_sheet n'a pas de FK token_id (PD8).
+async function resolveDroneIntegrityLoss(io, campaignId, characterId, tokenId, droneSheet, degatsNets) {
+  const damages = { ...droneSheet.damages }  // PD4 — copier avant mutation
+
+  let severity = null
+  if      (degatsNets >= 30) severity = 'detruit'
+  else if (degatsNets >= 25) severity = 'mortelle'
+  else if (degatsNets >= 20) severity = 'critique'
+  else if (degatsNets >= 15) severity = 'grave'
+  else if (degatsNets >= 10) severity = 'moyenne'
+  else if (degatsNets >=  5) severity = 'legere'
+
+  if (severity && severity !== 'detruit' && Array.isArray(damages[severity])) {
+    const idx = damages[severity].indexOf(false)
+    if (idx !== -1) {
+      damages[severity] = [...damages[severity]]
+      damages[severity][idx] = true
+    }
+    // B4 : si idx === -1 (toutes cases pleines pour ce niveau), décrémentation quand même — sprint futur
+  }
+
+  // LdB p.82-88 : 1 hit = 1 case = integrite -= 1. 'detruit' → integrite = 0 immédiatement.
+  const newIntegrite = severity === 'detruit' ? 0 : Math.max(0, droneSheet.integrite_actuelle - 1)
+  const detruit = newIntegrite <= 0
+
+  if (detruit) damages.detruit = true
+
+  await db('drone_sheet').where({ character_id: characterId }).update({
+    damages: JSON.stringify(damages),
+    integrite_actuelle: newIntegrite,
+  })
+
+  if (detruit) {
+    await db('combat_roster').where({ campaign_id: campaignId, token_id: tokenId }).delete()
+  }
+
+  io.to(campaignId).emit(WS.DRONE_INTEGRITY_UPDATED, {
+    characterId,
+    integrite_actuelle: newIntegrite,
+    damages,
+    detruit,
+  })
 }

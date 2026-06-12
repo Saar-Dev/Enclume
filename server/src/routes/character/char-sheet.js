@@ -1767,7 +1767,7 @@ router.get('/:characterId/drone/weapons', async (req, res, next) => {
   try {
     const weapons = await db('drone_weapons')
       .where({ 'drone_weapons.character_id': req.params.characterId })
-      .join('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
+      .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
       .select(
         'drone_weapons.id',
         'drone_weapons.character_id',
@@ -1776,6 +1776,12 @@ router.get('/:characterId/drone/weapons', async (req, res, next) => {
         'drone_weapons.ammo_restant',
         'drone_weapons.sort_order',
         'drone_weapons.label_override',
+        'drone_weapons.name',
+        'drone_weapons.damage_formula',
+        'drone_weapons.portee',
+        'drone_weapons.fire_mode',
+        'drone_weapons.notes',
+        db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
         'ref_equipment.name as ref_name',
         'ref_equipment.damage_h as ref_damage_h',
         'ref_equipment.shock as ref_shock',
@@ -1796,32 +1802,47 @@ router.post('/:characterId/drone/weapons', async (req, res, next) => {
   try {
     if (!req.isGm) throw new AppError(403, 'GM role required')
 
-    const { equipment_id, contenance_chargeur = 0, label_override, sort_order = 0 } = req.body
-    if (!equipment_id) throw new AppError(400, 'equipment_id is required')
+    const {
+      equipment_id, contenance_chargeur = 0, label_override, sort_order = 0,
+      name, damage_formula, portee, fire_mode, notes,
+    } = req.body
 
-    const ref = await db('ref_equipment')
-      .where({ id: equipment_id, family: 'Armes' })
-      .first()
-    if (!ref) throw new AppError(400, 'Equipment not found or not a weapon')
+    // Arme catalogue OU arme custom (name + damage_formula obligatoires si pas de catalogue)
+    if (!equipment_id && (!name || !damage_formula)) {
+      throw new AppError(400, 'equipment_id or (name + damage_formula) required')
+    }
 
-    const autoAmmo = await resolveDroneAmmoInit(equipment_id)
+    if (equipment_id) {
+      const ref = await db('ref_equipment')
+        .where({ id: equipment_id, family: 'Armes' })
+        .first()
+      if (!ref) throw new AppError(400, 'Equipment not found or not a weapon')
+    }
+
+    const autoAmmo = equipment_id ? await resolveDroneAmmoInit(equipment_id) : null
 
     const insertData = {
       character_id: req.params.characterId,
-      equipment_id,
+      equipment_id: equipment_id ?? null,
       contenance_chargeur,
       sort_order,
     }
-    if (label_override) insertData.label_override = label_override
-    if (autoAmmo !== null) insertData.ammo_restant = autoAmmo
+    if (label_override)   insertData.label_override   = label_override
+    if (name)             insertData.name             = name
+    if (damage_formula)   insertData.damage_formula   = damage_formula
+    if (portee)           insertData.portee           = portee
+    if (fire_mode)        insertData.fire_mode        = fire_mode
+    if (notes)            insertData.notes            = notes
+    if (autoAmmo !== null) insertData.ammo_restant    = autoAmmo
 
     const [weapon] = await db('drone_weapons').insert(insertData).returning('*')
 
     const weaponWithRef = await db('drone_weapons')
       .where({ 'drone_weapons.id': weapon.id })
-      .join('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
+      .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
       .select(
         'drone_weapons.*',
+        db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
         'ref_equipment.name as ref_name',
         'ref_equipment.damage_h as ref_damage_h',
         'ref_equipment.shock as ref_shock',

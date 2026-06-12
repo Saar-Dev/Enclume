@@ -1,3 +1,14 @@
+## v94 — 2026-06-12 — Sprint Drones 2c : attaque drone (GM)
+
+### Drones — Combat
+- [add] GM peut déclarer l'attaque d'un drone en phase ANNOUNCEMENT — sélecteur arme drone + cible dans CombatGmDeclareWindow
+- [add] Résolution automatique de l'attaque drone en RESOLUTION — programme armement, modificateurs situationnels (§7.3), dommages
+- [add] Trois branches cible : drone (intégrité), PNJ (blessures auto), PJ (lancer des dégâts)
+- [add] Pré-sélection automatique de la taille cible dans CombatModifiersWindow si la cible est un drone
+- [add] Armes drone custom (sans ref_equipment) — nom + formule de dommages directs dans drone_weapons
+- [add] Migration 76c — schéma drone_weapons étendu (name, damage_formula, portee, fire_mode, notes)
+- [add] Migration 76d — catégories programmes `armement_distance` / `armement_contact` (remplace `armement` générique)
+
 ## v87 — 2026-06-11 — Correctifs combat + CombatDeclareLog
 
 ### Combat — Déclarations

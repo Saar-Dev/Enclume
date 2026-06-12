@@ -89,7 +89,8 @@ const MOD_DOM_TABLE = [
 ]
 
 // ─── Table Résistance aux Dommages — FOR+CON (LdB p.114) ─────────────────────
-const RD_TABLE = [
+// Exportée pour calcDroneRD (socket/index.js) : drones utilisent integrite × 2 comme entrée directe.
+export const RD_TABLE = [
   { min: 2,  max: 5,  rd: +6 },
   { min: 6,  max: 9,  rd: +4 },
   { min: 10, max: 13, rd: +2 },
@@ -163,7 +164,7 @@ export const SKILL_LEVEL_LABELS = [
 
 // ─── Utilitaires internes ─────────────────────────────────────────────────────
 
-function lookupTable(table, value, prop) {
+export function lookupTable(table, value, prop) {
   const row = table.find(r => value >= r.min && value <= r.max)
   return row ? row[prop] : null
 }
