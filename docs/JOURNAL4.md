@@ -440,7 +440,7 @@ advanceSlot appelé par l'appelant (needsDefenseWait=false — pattern ranged)
 
 ---
 
-## Session 95 — Breakdown détail jets de dé (chat sidebar) — 2026-06-12
+## Session 90 — Breakdown détail jets de dé (chat sidebar) — 2026-06-12
 
 **Objectif :** Afficher le détail des modificateurs composant le Seuil de chaque jet, via un bouton `⊞` dans le chat sidebar (popover à la demande).
 
@@ -471,6 +471,17 @@ advanceSlot appelé par l'appelant (needsDefenseWait=false — pattern ranged)
 - **Seuil pas CDR** : libellé `'Seuil'` dans tous les breakdowns. `chancesDeReussite` reste le nom de variable interne.
 
 **Validé fonctionnel. SR OK.**
+
+### Session 90b — Correction bug : breakdown manquant displacement + drone
+
+**Bug identifié :** Breakdown absent pour les actions de joueurs (déplacement d'entité) et les drones.
+
+| # | Fichier | Changement |
+|---|---|---|
+| B1 | `server/src/socket/index.js` — handler `ENTITY_MOVE_REQUEST` | `breakdownDisp` ajouté avant l'émission `DICE_RESULT` displacement : attributeNA + difficulté + **Seuil** |
+| B2 | `server/src/socket/index.js` — `resolveDroneAssaultAction` | `breakdownDrone` ajouté : Programme (niveau), portée, situations, taille, **Seuil**. Note : le drone utilise `confirmedModifiers?.[k]` booléen (pas un tableau) — itération `Object.entries(SITUATION_MODS)` avec guard |
+
+**SR OK — couverture V1 complète : 7 points d'émission DICE_RESULT avec breakdown.**
 
 ---
 

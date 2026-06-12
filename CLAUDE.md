@@ -98,20 +98,20 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 87 (2026-06-11)
+## ÉTAT COURANT — Session 90 (2026-06-12)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **75 migrations stables** (76, 76b, 76c, 76d, 77, 77b planifiées — Sprint Drones 2+3)
+- **78 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
 - "Changer le mode de tir" — non implémenté. Sprint dédié futur.
 
 **En attente de validation fonctionnelle :**
+- Sprint Drones 2c (cycle joueur) — Session 89
 - Sprint CaC 4b (attaque multiple melee) — Session 74
 - Sprint Test de Choc (migration 69, shock_auto_stun) — Session 81
 
-**Session 87 — Livré :**
-- PLAN_DRONESYSCOMBAT.md : prêt pour implémentation (Sprints 2a→3, migrations 76→77b)
-- 13 bugs combat corrigés (CaC, QB, flash, munitions ANNOUNCEMENT, zIndex statuts, etc.)
-- CombatDeclareLog : panneau cumulatif déclarations GM+joueurs, double fenêtre corrigée, style lecteur
+**Session 90 — Livré :**
+- Breakdown détail jets de dé : bouton ⊞ dans chat sidebar, popover modificateurs colorisé (5 points d'émission DICE_RESULT)
+- Corrections session 90b : displacement + drone (breakdown ajoutés)
 
 **Dettes actives :**
 - `is_stunned` non enforced dans `COMBAT_ACTION_DECLARE` → PC42
@@ -119,8 +119,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Bug CL1 — Portraits PNJ non visibles timeline joueur
 - Bug CL2 — Design CombatDeclareLog + divergence GM/joueur
 - Bug CL3 — Ghosts déplacement d'annonce disparus
-- Bug D1 — Menu radial "fiche" drone : rien ne s'ouvre
-- Bug D2 — Token drone : changement GLB non fonctionnel (dépend D1)
+- Bug Loc-Drone — jet localisation D20 incorrect pour cible drone (§7.6 zone unique fixe)
+- Bug Dmg-Drone — dégâts non enregistrés sur drone cible
 - `useDiceAudio.js` — sons dés
 - `.gitattributes:3` — attribut invalide
 - WorkshopPage crash import invalide (`err.response?.data?.error`)

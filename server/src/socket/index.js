@@ -1296,6 +1296,11 @@ const initSocket = (io) => {
         const timestamp = new Date().toISOString()
 
         // Broadcast DICE_RESULT — visible dans le chat pour joueur et GM
+        const breakdownDisp = [
+          { label: ATTR_LABELS[attributeId] || attributeId, value: attributeNA, type: 'base' },
+          ...(effectiveDifficulty !== 0 ? [{ label: 'Difficulté', value: effectiveDifficulty, type: effectiveDifficulty > 0 ? 'bonus' : 'malus' }] : []),
+          { label: 'Seuil', value: chancesDeReussite, type: 'total' },
+        ]
         io.to(socket.campaignId).emit(WS.DICE_RESULT, {
           userId: socket.user.id,
           username: socket.user.username,
@@ -1315,6 +1320,7 @@ const initSocket = (io) => {
           diffLabel,
           isSuccess,
           mr,
+          breakdown: breakdownDisp,
         })
 
         // ── Échec (Dmax = 0) → résultat immédiat, pas de mouvement ───────
@@ -3687,6 +3693,14 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
 
     if (!weapon?.effective_formula) {
       console.warn(`[WS] resolveDroneAssaultAction — arme sans formule. drone_weapon_inv_id:${action.drone_weapon_inv_id}`)
+      io.to(campaignId).emit(WS.DICE_RESULT, {
+        userId: null, username: character.name ?? 'Drone', color: '#30aaaa',
+        formula: '—', rolls: [], total: 0,
+        isCriticalSuccess: false, isCriticalFail: false, seed: null,
+        timestamp: new Date().toISOString(),
+        skillLabel: `Armement Drone — arme sans formule de dégâts`,
+        mechanicalTotal: 0, diffLabel: '', chancesDeReussite: 0, isSuccess: false,
+      })
       return
     }
 
@@ -3699,6 +3713,14 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
 
     if (!programme) {
       console.warn(`[WS] resolveDroneAssaultAction — programme ${category} introuvable pour drone ${character.id}`)
+      io.to(campaignId).emit(WS.DICE_RESULT, {
+        userId: null, username: character.name ?? 'Drone', color: '#30aaaa',
+        formula: '—', rolls: [], total: 0,
+        isCriticalSuccess: false, isCriticalFail: false, seed: null,
+        timestamp: new Date().toISOString(),
+        skillLabel: `Armement Drone — programme "${category}" manquant`,
+        mechanicalTotal: 0, diffLabel: 'Configurer le programme dans la fiche drone', chancesDeReussite: 0, isSuccess: false,
+      })
       return
     }
 
@@ -3724,6 +3746,18 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
     const now            = new Date().toISOString()
 
     // 6. Broadcast jet programme
+    const porteeModDrone = PORTEE_MOD_COMP[portee] ?? 0
+    const tailleModDrone = confirmedModifiers?.taille ? (TAILLE_MODS[confirmedModifiers.taille] ?? 0) : 0
+    const breakdownDrone = [
+      { label: `Programme (niv. ${programme.level})`, value: programme.level, type: 'base' },
+      ...(porteeModDrone !== 0 ? [{ label: PORTEE_LABELS[portee] ?? portee, value: porteeModDrone, type: porteeModDrone > 0 ? 'bonus' : 'malus' }] : []),
+      ...Object.entries(SITUATION_MODS).reduce((acc, [k, v]) => {
+        if (confirmedModifiers?.[k] && v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
+        return acc
+      }, []),
+      ...(tailleModDrone !== 0 ? [{ label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModDrone, type: tailleModDrone > 0 ? 'bonus' : 'malus' }] : []),
+      { label: 'Seuil', value: chancesDeReussite, type: 'total' },
+    ]
     io.to(campaignId).emit(WS.DICE_RESULT, {
       userId, username: tireurUsername, color: tireurColor,
       formula: '1d20', rolls: attRolls, total: roll,
@@ -3733,6 +3767,7 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
       mechanicalTotal: roll,
       diffLabel: `${chancesDeReussite} (Prog. niv. ${programme.level})`,
       chancesDeReussite, isSuccess,
+      breakdown: breakdownDrone,
     })
 
     if (!isSuccess) {

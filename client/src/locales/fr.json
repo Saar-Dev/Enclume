@@ -655,6 +655,8 @@
       "detection": "Détection",
       "ami_ennemi": "Ami/Ennemi",
       "armement": "Armement",
+      "armement_distance": "Armement distance",
+      "armement_contact": "Armement contact",
       "esquive": "Esquive",
       "duel_ordinateurs": "Duel d'ordinateurs",
       "securite": "Sécurité",

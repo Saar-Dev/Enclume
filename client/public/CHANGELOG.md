@@ -8,7 +8,7 @@
 - [fix] Champs NT dans la fiche drone — affichage en chiffres romains (I–VIII), édition GM en entier
 - [fix] WeaponsTab drone — suppression du concept "Chargeur" (non applicable) ; `ammo_restant = null` → `∞`
 
-## v95 — 2026-06-12 — Breakdown détail jets de dé
+## v90 — 2026-06-12 — Breakdown détail jets de dé
 
 ### Chat sidebar
 - [add] Bouton `⊞` sur chaque jet structuré (combat tir, CaC, action entité) — ouvre un popover avec le détail ligne par ligne des modificateurs composant le Seuil

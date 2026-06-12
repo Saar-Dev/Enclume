@@ -145,6 +145,9 @@ background: var(--bg-app);
 --combat-pnj-fg:        #c86030;
 --combat-pnj-bg:        #1a0a08;
 --combat-pnj-border:    #c86030;
+--combat-drone-fg:      #30aaaa;
+--combat-drone-bg:      #081414;
+--combat-drone-border:  #30aaaa;
 
 --combat-equip-ok:      #90c090;
 --combat-equip-dot:     #50c878;
@@ -1112,6 +1115,16 @@ Convention :
   color: var(--combat-pnj-fg);
   background: var(--combat-pnj-bg);
   border: 1px solid var(--combat-pnj-border);
+}
+.combat-badge-drone {
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-weight: 600;
+  color: var(--combat-drone-fg);
+  background: var(--combat-drone-bg);
+  border: 1px solid var(--combat-drone-border);
 }
 
 /* ── Chips armure T C B J ─────────────────────────────────────────── */

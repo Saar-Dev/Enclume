@@ -633,16 +633,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 </div>
               </div>
 
-              <div style={{ padding: '6px 12px 10px' }}>
-                <button
-                  className="btn btn-gold"
-                  onClick={handleDeclare}
-                  disabled={!canDeclareDrone}
-                  style={{ width: '100%', opacity: canDeclareDrone ? 1 : 0.4 }}
-                >
-                  Déclarer attaque drone
-                </button>
-              </div>
             </div>
           )}
 

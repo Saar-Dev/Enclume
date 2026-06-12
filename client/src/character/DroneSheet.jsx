@@ -128,7 +128,7 @@ function IntegritySection({ characterId, drone, isGm, onDroneUpdate }) {
 
 // ─── Section programmes ───────────────────────────────────────────────────────
 const PROGRAM_CATEGORIES = [
-  'detection', 'ami_ennemi', 'armement', 'esquive',
+  'detection', 'ami_ennemi', 'armement_distance', 'armement_contact', 'esquive',
   'securite', 'offensif', 'contre_attaque', 'rempart',
   'pilotage', 'analyse', 'medical', 'communication', 'specialise',
 ]
@@ -138,7 +138,7 @@ const PROGRAM_CATEGORIES = [
 const DISPLAY_GROUPS = [
   { key: 'detection',        categories: ['detection'] },
   { key: 'ami_ennemi',       categories: ['ami_ennemi'] },
-  { key: 'armement',         categories: ['armement'] },
+  { key: 'armement_distance', categories: ['armement_distance', 'armement_contact'] },
   { key: 'esquive',          categories: ['esquive'] },
   { key: 'duel_ordinateurs', categories: ['securite', 'offensif', 'contre_attaque', 'rempart'] },
   { key: 'pilotage',         categories: ['pilotage'] },
@@ -299,7 +299,7 @@ function ProgramsSection({ characterId, programs, isGm, onProgramsUpdate }) {
                   .map(group => (
                     <optgroup key={group.key} label={t(`drone.category.${group.key}`, group.key)} style={{ background: '#1a1a2e', color: '#5b8dee' }}>
                       {group.categories.flatMap(cat => catalog.filter(item => item.category === cat)).map(item => (
-                        <option key={item.id} value={item.id} style={{ background: '#16162a', color: '#c0c0d0' }}>{item.name}</option>
+                        <option key={item.id} value={item.id} title={item.description || ''} style={{ background: '#16162a', color: '#c0c0d0' }}>{item.name}</option>
                       ))}
                     </optgroup>
                   ))

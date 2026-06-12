@@ -187,6 +187,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
               {activeRows.map(row => {
                 const charType      = getCharType(row.tokenId)
                 const isPnj         = charType === 'pnj'
+                const isDrone       = charType === 'drone'
                 const eq            = equipment[row.tokenId]
                 const isExcl        = row.excluded
                 const rEntry        = inCombat ? roster.find(e => e.token_id === row.tokenId) : null
@@ -199,8 +200,8 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                     <td className="combat-win-td">
                       <div style={S.tokenCell}>
                         {charType && (
-                          <span className={isPnj ? 'combat-badge-pnj' : 'combat-badge-pj'}>
-                            {isPnj ? 'PN' : 'PJ'}
+                          <span className={isDrone ? 'combat-badge-drone' : isPnj ? 'combat-badge-pnj' : 'combat-badge-pj'}>
+                            {isDrone ? 'DR' : isPnj ? 'PN' : 'PJ'}
                           </span>
                         )}
                         <span style={S.tokenLabel}>{row.label}</span>
