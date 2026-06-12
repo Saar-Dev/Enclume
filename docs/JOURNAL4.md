@@ -437,3 +437,120 @@ advanceSlot appelé par l'appelant (needsDefenseWait=false — pattern ranged)
 - **getTailleCible** : `drone_sheet.taille` INTEGER en cm → clé TAILLES (déjà implémenté shared/droneConstants.js)
 
 **En attente de validation fonctionnelle** — SR non exécuté cette session.
+
+---
+
+## Session 95 — Breakdown détail jets de dé (chat sidebar) — 2026-06-12
+
+**Objectif :** Afficher le détail des modificateurs composant le Seuil de chaque jet, via un bouton `⊞` dans le chat sidebar (popover à la demande).
+
+### Architecture
+
+- **Payload `DICE_RESULT` enrichi** côté serveur : champ `breakdown: [{label, value, type}]` optionnel.
+- **`type`** : `'base'` (bleu) | `'bonus'` (vert) | `'malus'` (rouge) | `'total'` (or = ligne Seuil).
+- Pas de nouveau événement WS, pas de migration DB.
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | `server/src/socket/index.js` | Constantes `PORTEE_MOD_COMP`, `SITUATION_MODS`, `TAILLE_MODS` déplacées au module-level (retirées de `resolveAssaultAction` et `resolveDroneAssaultAction`). Ajout `SITUATION_LABELS`, `PORTEE_LABELS`, `TAILLE_LABELS`, `COMBAT_MODE_LABELS`. |
+| T2 | `server/src/socket/index.js` `resolveAssaultAction` | `breakdown` ajouté à l'émission `DICE_RESULT` : compétence, portée, mode tir, situations (boucle individuelle), taille, précipitation, malus santé/encombrement, carence armure, **Seuil**. |
+| T3 | `server/src/socket/index.js` `resolveMeleeAction` attaquant | `breakdown` : compétence, mode combat, précipitation, multi-adversaires, attaque multiple, malus santé, carence armure, **Seuil**. |
+| T4 | `server/src/socket/index.js` `resolveMeleeAction` défenseur PNJ | `breakdown` : compétence, mode combat (delta calculé séparément), multi-adversaires, malus santé, **Seuil**. |
+| T5 | `server/src/socket/index.js` `COMBAT_MELEE_DEFENSE_CONFIRM` défenseur PJ | Idem T4. `multiMalusDefenseur` présent via destructuring `pending`. |
+| T6 | `server/src/socket/index.js` `ENTITY_ACTION_RESOLVE` | `breakdown` : compétence/attribut (`formulaLabel`), difficulté (`pending.defaultDifficulty`), modificateur GM, malus santé, **Seuil**. |
+| T7 | `client/src/pages/SessionPage.jsx` | `breakdown` ajouté à la destructuration du handler `DICE_RESULT` et transmis dans `addMessage`. |
+| T8 | `client/src/components/Sidebar.jsx` | Composant `DiceBreakdownPopover` (avant Sidebar) : popover `position:fixed`, colorisation par type, positionnement haut/bas selon espace disponible. État `breakdownPopover` + `popoverRef`. useEffect click-outside + Escape. `handleOpenBreakdown` callback. Bouton `⊞` conditionnel dans diceHeader des blocs `displacement` et `skillcheck`. |
+
+### Pièges résolus
+
+- **`SITUATION_MODS` local** : était défini à l'intérieur de `resolveAssaultAction` ET `resolveDroneAssaultAction` — déplacé au module-level, les deux fonctions utilisent maintenant la référence partagée.
+- **SessionPage destructuring** : `breakdown` non transmis sans ajout explicite dans le handler `DICE_RESULT` → T7 requis.
+- **Popover `position:fixed`** : échappe l'`overflow:hidden` de la Sidebar — positionné via `getBoundingClientRect()` du bouton.
+- **Seuil pas CDR** : libellé `'Seuil'` dans tous les breakdowns. `chancesDeReussite` reste le nom de variable interne.
+
+**Validé fonctionnel. SR OK.**
+
+---
+
+## Session 89 — Sprint 2c : fixes déclaration + résolution drone joueur — 2026-06-12
+
+**Objectif :** Débloquer le cycle de combat complet pour un drone appartenant à un joueur (mode autonome). Trois séries de correctifs validés fonctionnels.
+
+### Contexte
+
+Les entrées Session 88–95 dans ce journal sont des artefacts AI non commitées. Dernier commit git = Session 87. La session réelle est 89.
+
+---
+
+### Série 1 — Déclaration joueur + WeaponsTab (validé SR précédent)
+
+**Fix COMBAT_ACTION_DECLARE — ownership drone** (`server/src/socket/index.js`)
+- Cause : `character.type === 'drone'` groupé avec PNJ dans le guard d'ownership → `if (socket.role !== 'gm') return` rejetait silencieusement le joueur propriétaire
+- Fix : condition séparée drone — autorise si `socket.role === 'gm'` OU `character.user_id === socket.user.id`
+- Validé ✅
+
+**Fix WeaponsTab — concept chargeur retiré** (`DroneWindow.jsx`)
+- Un drone n'a pas de chargeur — uniquement `ammo_restant` (balles totales disponibles)
+- Suppression de `contenance_chargeur` de l'affichage et de l'édition
+- `ammo_restant = null` → affichage `∞` (pas de suivi = infini)
+- Validé ✅
+
+---
+
+### Série 2 — 3 bugs SR (validés fonctionnels cette session)
+
+**Bug 1 — NT en chiffres romains** (`DroneSheet.jsx`)
+- Cause : `StatField` affichait `drone.nt` comme entier brut
+- Fix : `toRoman()` helper inline (I–VIII), prop `display` ajoutée à `StatField` — GM édite l'entier, joueur voit le romain
+- Fichiers : `DroneSheet.jsx` (+`toRoman`, +`display` prop, appel ligne NT)
+- Validé ✅
+
+**Bug 2 — Double fenêtre ANNOUNCEMENT pour drone joueur** (`CombatGmDeclareWindow.jsx`)
+- Cause : `isDroneEntry` vérifie uniquement `type === 'drone'` — pas la propriété joueur (`user_id`)
+- Fix : `isDroneGmManaged` — exclut les drones avec `char.user_id` non null. `isGmManaged`, `isActiveDrone`, `blockerIsPj` mis à jour.
+- Effet : GM ne voit plus la fenêtre ANNOUNCEMENT pour les drones joueurs. Si le slot actif est un drone joueur → message "En attente de <drone>" (correct).
+- Validé ✅
+
+**Bug 3 — Tour bloqué "En attente validation GM"** (deux fichiers)
+
+*Client — bouton Agir caché* (`CombatOverlay.jsx`)
+- Cause : condition `!activeAssaultAction` masquait le bouton Agir même pour un drone avec assault
+- Fix : `(!activeAssaultAction || gmActiveCharacter?.type === 'drone')`
+
+*Serveur — assault drone sans confirmedModifiers skippé* (`socket/index.js`)
+- Cause : guard `if (!confirmedModifiers)` bloquait la résolution si aucun modifier passé (drone n'a pas de CombatModifiersWindow)
+- Fix : guard contourne pour drone — `if (!confirmedModifiers && character.type !== 'drone')`
+- `resolveDroneAssaultAction` utilise des défauts (`portée ?? 'courte'`) — acceptable V1
+- Validé ✅
+
+---
+
+### Bugs identifiés en fin de session (non corrigés)
+
+**Bug Loc-Drone — localisation D20 incorrecte pour cible drone**
+- `resolveDroneAssaultAction` branche `cible=drone` exécute un jet de localisation D20 (hérité du pipeline humanoïde)
+- Règle §7.6 : drone = **une seule zone fixe** (`drone_sheet.localisation_ref`), pas de D20
+- Sprint dédié requis
+
+**Bug Dmg-Drone — dégâts non enregistrés sur drone cible**
+- Aucune modification de `integrite_actuelle` ni de `drone_sheet.damages` après un tir réussi sur un drone
+- Règle §7.6 :
+  - Armure = `blindage` direct (pas `calcResistanceArmure`)
+  - RD = `integrite_actuelle × 2` → table RD LdB p.112
+  - `degats_nets = max(0, degats_bruts − blindage − rd)`
+  - Enregistrement : `drone_sheet.damages` JSONB + décrémentation `integrite_actuelle`
+  - Pas de `character_wounds`, pas de Test de Choc
+- Sprint dédié requis
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | `socket/index.js` COMBAT_ACTION_DECLARE | Ownership drone : séparation de la condition PNJ/drone, autorisation joueur propriétaire |
+| T2 | `DroneWindow.jsx` WeaponsTab | Suppression `contenance_chargeur`, `null` → `∞` pour `ammo_restant` |
+| T3 | `DroneSheet.jsx` | `toRoman` helper, `display` prop `StatField`, affichage NT romain |
+| T4 | `CombatGmDeclareWindow.jsx` | `isDroneGmManaged` (exclut `user_id`), mise à jour `isGmManaged`/`isActiveDrone`/`blockerIsPj` |
+| T5 | `CombatOverlay.jsx` | Agir visible pour drone avec assault action |
+| T6 | `socket/index.js` COMBAT_ACTION_CONFIRM | Guard `confirmedModifiers` contourné si `character.type === 'drone'` |

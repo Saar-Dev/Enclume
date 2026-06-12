@@ -115,7 +115,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       )}
 
       {/* Phase RÉSOLUTION — panneau GM : confirmer le slot actif (hors assaut) */}
-      {isGm && phase === 'RESOLUTION' && gmActiveEntry && !activeAssaultAction && (
+      {isGm && phase === 'RESOLUTION' && gmActiveEntry && (!activeAssaultAction || gmActiveCharacter?.type === 'drone') && (
         <div style={styles.gmResolution}>
           <div style={styles.gmResolutionLabel}>
             Slot actif : <strong>{gmActiveToken?.label ?? '?'}</strong>

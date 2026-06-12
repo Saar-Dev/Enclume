@@ -547,3 +547,134 @@ Architecture complète, tous les handlers vérifiés, aucune zone d'ombre résid
 
 ---
 
+## Validation fonctionnelle Sprint 2c — 2026-06-12
+
+### Symptômes observés (SR effectué)
+
+1. **Assaut (tir) toujours grisé** — "pas d'arme équipée" dans CombatActionWindow (player-side)
+2. **Attaque multiple grisée** — affiché mais inaccessible, question : applicable aux drones ?
+3. **Interagir grisé** — affiché mais inaccessible, hors scope drones → à masquer
+4. **drone_sheet onglet arme — Aucune action possible** — UI ne permet pas de configurer les armes pour le combat
+
+---
+
+### Analyse des bugs (fichiers lus : CombatActionWindow.jsx, combatSections.js, DroneWindow.jsx)
+
+**BUG-A — CombatActionWindow.jsx ligne 912 : Assaut grisé pour drone player-side**
+
+```js
+const isAmmoEmpty = !selectedWeapon || (ammoRemaining !== null && ammoRemaining <= 0)
+// selectedWeapon vient de : assaultWeapons (filtré depuis char_inventory, slot MG/MD)
+// Un drone n'a AUCUNE entrée dans char_inventory → assaultWeapons=[] → selectedWeapon=null
+// → isAmmoEmpty = true TOUJOURS pour un drone
+
+// Guard corrigé Session 93 (weapon non au clair) :
+if ((a.k === 'attack' || a.k === 'melee') && states.weapon !== 'drawn' && !isDrone) // ligne 903
+// Ce guard ignore bien isDrone. MAIS le guard isAmmoEmpty (ligne 912) n'a PAS de bypass isDrone :
+if (a.k === 'attack' && isAmmoEmpty) { ... }  // ← bloque drone systématiquement
+```
+
+Cause racine : le fetch `char_inventory` (ligne 258-265) ne peut pas trouver d'armes pour un drone.
+Session 93 avait laissé explicitement ce bug en suspens : "Assaut grisé 'arme vide' → Sprint 2c".
+Mais Sprint 2c (côté GM) ne couvre pas CombatActionWindow (player-side).
+
+**Question de périmètre :** Sprint 2c = GM déclare. Mais un drone PJ (user_id = joueur) passerait par CombatActionWindow, pas CombatGmDeclareWindow. Ce cas reste donc non couvert.
+
+**BUG-B — CombatActionWindow.jsx ligne 942 : "Attaque multiple" affiché pour drone**
+
+```js
+// combatSections.js MAP_ACTIONS :
+{ k: 'multi', l: 'Attaque multiple', active: false }
+// → statiquement grisé (tous chars) via ligne 942-950
+// Aucun guard isDrone → visible pour drone
+
+// Règle LdB §7.3 : un drone attaque UNE FOIS par tour (INI 12 fixe, séquence Détection→Armement)
+// §6.3 (attaques multiples) = règle humanoïde, inapplicable aux drones
+// → "Attaque multiple" doit être masquée pour isDrone (identique à melee/reload)
+```
+
+**BUG-C — CombatActionWindow.jsx ligne 942 : "Interagir" affiché pour drone**
+
+```js
+// combatSections.js MAP_ACTIONS :
+{ k: 'interact', l: 'Interagir', active: false }
+// → statiquement grisé via ligne 942-950
+// Aucun guard isDrone → visible pour drone
+
+// Les drones ne peuvent pas "Interagir" (interface physique/sociale — programme non prévu)
+// → à masquer pour isDrone (identique à melee/reload)
+```
+
+**BUG-D — DroneWindow.jsx WeaponsTab : UI armes incomplète post-migration 76c**
+
+```js
+// WeaponsTab affiche (ligne 504-507) :
+<span>{t('drone.weaponDamage')} : <strong>{w.ref_damage_h || '—'}</strong></span>   // JOIN ref_equipment
+<span>{t('drone.weaponRange')} : <strong>{w.ref_range || '—'}</strong></span>        // JOIN ref_equipment
+<span>{t('drone.weaponFireMode')} : <strong>{w.ref_fire_mode || '—'}</strong></span> // JOIN ref_equipment
+// ← ces 3 colonnes viennent du JOIN ref_equipment, pas de drone_weapons direct
+
+// Migration 76c ajoute sur drone_weapons : fire_mode, damage_formula, portee, name, notes
+// char-sheet.js route GET /drone/weapons retourne maintenant aussi : w.fire_mode (drone), w.damage_formula, w.portee
+// MAIS : le WeaponsTab n'affiche PAS ces colonnes et n'a PAS d'input pour les configurer
+
+// Impact combat Sprint 2c :
+// resolveDroneAssaultAction lit weapon.fire_mode (drone_weapons.fire_mode) → détermine la catégorie programme
+// fire_mode par défaut = 'rc' (migration 76c DEFAULT) → OK pour armes à distance
+// MAIS : aucun UI pour changer ce fire_mode, ni créer une arme custom (name+damage_formula sans equipment_id)
+// → Le GM ne peut pas configurer les armes pour le combat (mode de tir, formule custom)
+```
+
+---
+
+### Run à vide — Analyse et plan
+
+**Portée réelle des bugs :**
+
+| Bug | Criticité | Scope Sprint 2c ? |
+|---|---|---|
+| BUG-A : Assaut grisé (player-side) | Haute | NON — drone player-side = sprint futur (Sprint 2c couvre GM uniquement) |
+| BUG-B : multi masquage | Basse | OUI — 1 ligne, masquer `&&!isDrone` |
+| BUG-C : interact masquage | Basse | OUI — 1 ligne, masquer `&&!isDrone` |
+| BUG-D : WeaponsTab champs manquants | Haute | OUI — sans fire_mode configurable, le GM ne peut pas préparer les armes |
+
+**BUG-A approfondi — est-ce que les drones joueurs utilisent CombatActionWindow ?**
+
+Réponse : OUI si drone.user_id = joueur (propriétaire). CombatActionWindow.jsx gère tous les tokens d'un joueur dans `playerTokensInRoster`. Un drone owned par un joueur apparaîtrait dans cette liste. Mais selon les règles Polaris §7.1 (mode autonome) : le GM gère les drones autonomes. Mode télépiloté (Sprint 3) : le propriétaire agit via son propre slot, le drone n'a pas de slot indépendant. Conclusion : dans le scope actuel (Sprint 2c, GM uniquement), un drone dans CombatActionWindow = drone propriété d'un joueur mais géré par le GM. Le bug-A est donc un problème futur Sprint 3.
+
+**BUG-D approfondi — quel minimum pour Sprint 2c ?**
+
+Pour que le GM puisse déclarer une attaque drone via CombatGmDeclareWindow :
+1. Le GM doit avoir assigné une arme au drone (via WeaponsTab)
+2. L'arme doit avoir fire_mode configuré (default 'rc' = OK pour distance standard)
+3. L'arme doit avoir une damage_formula (colonnes nouvelles 76c)
+
+Actuellement : le GM peut ajouter une arme depuis ref_equipment. La formule vient de ref_equipment.damage_h (via COALESCE). Le fire_mode default='rc'. Pour une arme standard de distance → OK fonctionnel sans UI supplémentaire.
+
+MAIS : `w.ref_fire_mode` affiché dans le WeaponsTab est le fire_mode de ref_equipment (pas drone_weapons.fire_mode). Si les deux diffèrent → confusion GM. Et pour une arme CaC (fire_mode='cc') → impossible à configurer.
+
+**Plan minimal (3 bugs à corriger, BUG-A déféré) :**
+
+BUG-B + BUG-C : `CombatActionWindow.jsx` — ajouter `&& !isDrone` au check `active === false` pour 'multi' et 'interact'. En pratique : modifier la condition du static-disabled check pour exclure ces deux actions pour drone.
+
+Ou mieux : même pattern que melee/reload (ligne 891) :
+```js
+if ((a.k === 'melee' || a.k === 'reload' || a.k === 'multi' || a.k === 'interact') && isDrone) return null
+```
+
+BUG-D : `DroneWindow.jsx WeaponsTab` — ajouter dans la ligne d'infos :
+1. Affichage `w.fire_mode` (depuis drone_weapons, pas ref_equipment) avec label "Mode de tir"
+2. Affichage `w.damage_formula` si custom
+3. Input pour modifier `fire_mode` (CC/RC/RL) via handleUpdate — indispensable pour armes CaC
+
+**BUG-A note de résolution future :**
+CombatActionWindow player-side drone : quand `isDrone`, le fetch assaultWeapons doit provenir de `/drone/weapons` pas `/inventory`. À résoudre en Sprint 3 (télépilotage) ou dans un sprint dédié "drone player-side".
+
+---
+
+### Verdict
+
+- BUG-B + BUG-C : 1-2 lignes, trivial
+- BUG-D : WeaponsTab — affichage fire_mode + input fire_mode = indispensable pour que Sprint 2c soit utilisable en jeu
+- BUG-A : hors scope Sprint 2c — à documenter comme dette Sprint 3
+

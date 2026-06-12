@@ -171,12 +171,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     if (!token?.character_id) return false
     return characters.find(c => c.id === token.character_id)?.type === 'pnj'
   }
-  const isDroneEntry = (entry) => {
+  const isDroneGmManaged = (entry) => {
     const token = tokens.find(t => t.id === entry.token_id)
     if (!token?.character_id) return false
-    return characters.find(c => c.id === token.character_id)?.type === 'drone'
+    const char = characters.find(c => c.id === token.character_id)
+    return char?.type === 'drone' && !char.user_id
   }
-  const isGmManaged = (entry) => isPnj(entry) || isDroneEntry(entry)
+  const isGmManaged = (entry) => isPnj(entry) || isDroneGmManaged(entry)
 
   const getLabel = (tokenId) => tokens.find(t => t.id === tokenId)?.label ?? tokenId
   const isRanged = (tokenId) => !!equipment[tokenId]?.weapon?.ref_fire_mode
@@ -194,13 +195,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   if (allGmManaged.length === 0) return null
 
   // ── Dériver l'entité active (PNJ ou drone) ────────────────────────────────
-  const isActivePnj   = activePnjEntry && isPnj(activePnjEntry)   && !activePnjEntry.has_announced
-  const isActiveDrone = activePnjEntry && isDroneEntry(activePnjEntry) && !activePnjEntry.has_announced
+  const isActivePnj   = activePnjEntry && isPnj(activePnjEntry)        && !activePnjEntry.has_announced
+  const isActiveDrone = activePnjEntry && isDroneGmManaged(activePnjEntry) && !activePnjEntry.has_announced
   const activeToken = activeTokenId ? tokens.find(t => t.id === activeTokenId) : null
 
   // Quand le slot actif est un PJ (ni PNJ ni drone) — identifier le bloquant
   const blockerEntry = (!isActivePnj && !isActiveDrone && activePnjEntry && !activePnjEntry.has_announced) ? activePnjEntry : null
-  const blockerIsPj  = blockerEntry ? !isPnj(blockerEntry) && !isDroneEntry(blockerEntry) : false
+  const blockerIsPj  = blockerEntry ? !isPnj(blockerEntry) && !isDroneGmManaged(blockerEntry) : false
 
   const weapon       = isActivePnj ? (equipment[activeTokenId]?.weapon ?? null) : null
   const rangedActive = isActivePnj && isRanged(activeTokenId)

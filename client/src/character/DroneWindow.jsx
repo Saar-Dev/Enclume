@@ -502,29 +502,16 @@ function WeaponsTab({ characterId, weapons, isGm, isOwner, onWeaponsUpdate }) {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '4px', fontSize: '11px', color: '#8888a8' }}>
-            <span>{t('drone.weaponDamage')} : <strong style={{ color: '#c0c0d0' }}>{w.ref_damage_h || '—'}</strong></span>
-            <span>{t('drone.weaponRange')} : <strong style={{ color: '#c0c0d0' }}>{w.ref_range || '—'}</strong></span>
-            <span>{t('drone.weaponFireMode')} : <strong style={{ color: '#c0c0d0' }}>{w.ref_fire_mode || '—'}</strong></span>
+            <span>{t('drone.weaponDamage')} : <strong style={{ color: '#c0c0d0' }}>{w.damage_formula || w.ref_damage_h || '—'}</strong></span>
+            <span>{t('drone.weaponRange')} : <strong style={{ color: '#c0c0d0' }}>{w.portee || w.ref_range || '—'}</strong></span>
+            <span>{t('drone.weaponFireMode')} : <strong style={{ color: '#c0c0d0' }}>{(w.fire_mode || w.ref_fire_mode || '—').toUpperCase()}</strong></span>
             <span>{t('drone.weaponAmmo')} : <strong style={{ color: w.ammo_restant === 0 ? '#e05c5c' : '#c0c0d0' }}>
-              {w.ammo_restant ?? '—'}
+              {w.ammo_restant ?? '∞'}
             </strong></span>
           </div>
 
           {canEdit && (
             <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '11px', color: '#8888a8' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                {t('drone.weaponMag')} :
-                <input
-                  type="number"
-                  defaultValue={w.contenance_chargeur}
-                  min={0}
-                  onBlur={e => {
-                    const val = parseInt(e.target.value, 10)
-                    if (!isNaN(val) && val !== w.contenance_chargeur) handleUpdate(w.id, 'contenance_chargeur', val)
-                  }}
-                  style={{ width: '52px', background: '#0e0e1a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#c0c0d0', fontSize: '11px', padding: '2px 6px', textAlign: 'center' }}
-                />
-              </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {t('drone.weaponAmmo')} :
                 <input
@@ -537,6 +524,18 @@ function WeaponsTab({ characterId, weapons, isGm, isOwner, onWeaponsUpdate }) {
                   }}
                   style={{ width: '52px', background: '#0e0e1a', border: '1px solid #2a2a3e', borderRadius: '4px', color: w.ammo_restant === 0 ? '#e05c5c' : '#c0c0d0', fontSize: '11px', padding: '2px 6px', textAlign: 'center' }}
                 />
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                Mode :
+                <select
+                  value={w.fire_mode || 'rc'}
+                  onChange={e => handleUpdate(w.id, 'fire_mode', e.target.value)}
+                  style={{ background: '#0e0e1a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#c0c0d0', fontSize: '11px', padding: '2px 4px' }}
+                >
+                  <option value="cc">CC</option>
+                  <option value="rc">RC</option>
+                  <option value="rl">RL</option>
+                </select>
               </label>
               {saving === w.id && <span style={{ color: '#4a4a60' }}>{t('drone.saving')}</span>}
             </div>

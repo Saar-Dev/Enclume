@@ -1876,8 +1876,11 @@ const initSocket = (io) => {
         if (!token.character_id) return
         const character = await db('characters').where({ id: token.character_id }).first()
         if (!character) return
-        if (character.type === 'pnj' || character.type === 'drone') {
+        if (character.type === 'pnj') {
           if (socket.role !== 'gm') return
+        } else if (character.type === 'drone') {
+          const isOwner = character.user_id && character.user_id === socket.user.id
+          if (socket.role !== 'gm' && !isOwner) return
         } else {
           if (character.user_id !== socket.user.id) return
         }
@@ -2300,7 +2303,7 @@ const initSocket = (io) => {
               console.log(`[WS] COMBAT_ACTION_CONFIRM — déplacement bloqué (case occupée) token:${tokenId}`)
             }
           } else if (action.type === 'assault') {
-            if (!confirmedModifiers) {
+            if (!confirmedModifiers && character.type !== 'drone') {
               console.warn(`[WS] COMBAT_ACTION_CONFIRM — assault sans confirmedModifiers. token:${tokenId}`)
             } else {
               await resolveAssaultAction(io, socket, campaignId, action, confirmedModifiers, character)

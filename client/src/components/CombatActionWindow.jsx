@@ -129,6 +129,9 @@ export default function CombatActionWindow({
   const [assaultVariantAB, setAssaultVariantAB]           = useState('A')
   const [isDualWield, setIsDualWield]             = useState(false)
   const [inMoveMode, setInMoveMode]               = useState(false)
+  // --- etat assaut drone -------------------------------------------------------
+  const [droneWeapons,          setDroneWeapons]          = useState([])
+  const [selectedDroneWeaponId, setSelectedDroneWeaponId] = useState(null)
   const [inTargetMode, setInTargetMode]           = useState(false)
   const [moveSelection, setMoveSelection]         = useState(null)
 
@@ -182,6 +185,7 @@ export default function CombatActionWindow({
     setSelectedMeleeWeaponId(null)
     setInMeleeTargetMode(false)
     setCombatMode('normal')
+    setSelectedDroneWeaponId(null)
   }, [rosterEntry?.token_id])
 
   // --- fetch allures — suit le token actif du joueur -----------------------
@@ -245,15 +249,14 @@ export default function CombatActionWindow({
       setSelectedMeleeWeaponId(null)
       setInMeleeTargetMode(false)
       setCombatMode('normal')
+      setSelectedDroneWeaponId(null)
     }
   }, [rosterEntry?.has_announced])
 
-  // --- fetch armes equipees + inventaire complet ---------------------------
-  // Dépend de phase pour se relancer à chaque nouveau tour (ANNOUNCEMENT)
-  // et obtenir ammo_remaining à jour après un rechargement en phase précédente.
+  // --- fetch armes equipees + inventaire complet (humanoïdes uniquement) ----
   useEffect(() => {
     const charId = playerToken?.character_id
-    if (!charId) return
+    if (!charId || isDrone) return
     let cancelled = false
     api.get(`/char-sheet/${charId}/inventory`).then(res => {
       if (cancelled) return
@@ -264,7 +267,19 @@ export default function CombatActionWindow({
       setAllInventoryItems(items)
     }).catch(() => {})
     return () => { cancelled = true }
-  }, [playerToken?.id, phase])
+  }, [isDrone, playerToken?.id, phase])
+
+  // --- fetch armes drone (drones uniquement) --------------------------------
+  useEffect(() => {
+    if (!isDrone) return
+    const charId = playerToken?.character_id
+    if (!charId) return
+    let cancelled = false
+    api.get(`/char-sheet/${charId}/drone/weapons`)
+      .then(res => { if (!cancelled) setDroneWeapons(res.data.weapons || []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [isDrone, playerToken?.id, phase])
 
   // --- preview GM en temps réel (debounce 150ms) ---------------------------
   // Émet COMBAT_ANNOUNCE_PREVIEW à la room quand le joueur modifie ses sélections.
@@ -379,6 +394,16 @@ export default function CombatActionWindow({
   const meleeDefensif  = combatMode === 'defensif' || combatMode === 'retraite'
   const weaponLocked   = attackSelected || meleeSelected
 
+  // --- derives drone --------------------------------------------------------
+  const selectedDroneWeapon = isDrone
+    ? (droneWeapons.find(w => w.id === selectedDroneWeaponId) ?? droneWeapons[0] ?? null)
+    : null
+  const droneAssaultValid = !attackSelected || (
+    selectedDroneWeapon != null &&
+    (selectedDroneWeapon.ammo_restant === null || selectedDroneWeapon.ammo_restant === undefined || selectedDroneWeapon.ammo_restant > 0) &&
+    assaultPendingTokenId != null
+  )
+
   // Armes de contact équipées (slots MG/MD/2M, catégorie 'Arme de contact')
   const meleeWeapons = allInventoryItems.filter(item =>
     (item.slot === 'MG' || item.slot === 'MD' || item.slot === '2M') &&
@@ -479,7 +504,7 @@ export default function CombatActionWindow({
   // Comparer states vs initial proprement
   const stateChanged = Object.keys(states).some(k => states[k] !== initialStates.current[k])
   const canDeclare = isDrone
-    ? (assaultValid && meleeValid)
+    ? droneAssaultValid
     : ((hasAnyAction || stateChanged) && assaultValid && reloadValid && meleeValid)
 
   // --- emit declaration ----------------------------------------------------
@@ -503,7 +528,11 @@ export default function CombatActionWindow({
               ini_mod: (combatMode === 'charge' || combatMode === 'retraite') ? 0 : moveSelection.ini_mod,
               action_key: moveSelection.action_key }
           : null,
-        attack: attackSelected ? {
+        attack: attackSelected ? (isDrone ? {
+          droneWeaponInvId: selectedDroneWeapon?.id ?? null,
+          targetTokenId:    assaultPendingTokenId,
+          cover_shot:       states.cover !== 'exposed',
+        } : {
           weaponInvId:        assaultWeaponId,
           targetTokenId:      assaultPendingTokenId,
           bulletCount:        currentVariant?.bulletCount ?? null,
@@ -512,7 +541,7 @@ export default function CombatActionWindow({
           isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
           dualWieldBonusComp: dualWieldBonusComp,
           cover_shot:         states.cover !== 'exposed',
-        } : null,
+        }) : null,
         // Défensif/Retraite : pas de cible — mode passif, bonus appliqué via state_combat_mode
         melee:    (meleeSelected && !meleeDefensif)
           ? meleePendingTokenIds.slice(0, effectiveMeleeCount).map(id => ({
@@ -887,8 +916,17 @@ export default function CombatActionWindow({
                 const isActive = mapSelected.has(a.k)
                 const span2    = a.span2 ? { gridColumn: 'span 2' } : {}
 
-                // Drone : melee et reload non disponibles
-                if ((a.k === 'melee' || a.k === 'reload') && isDrone) return null
+                // Drone : actions non disponibles
+                if ((a.k === 'melee' || a.k === 'reload' || a.k === 'multi' || a.k === 'interact') && isDrone) return null
+
+                // Assaut drone grisé si aucune arme configurée
+                if (a.k === 'attack' && isDrone && droneWeapons.length === 0) {
+                  return (
+                    <div key={a.k} title="Aucune arme drone configurée" style={W.itemGreyed}>
+                      <span style={W.itemLabel}>{a.l}</span>
+                    </div>
+                  )
+                }
 
                 // Assaut/CaC grisé si assommé
                 if ((a.k === 'attack' || a.k === 'melee') && isStunned) {
@@ -908,8 +946,8 @@ export default function CombatActionWindow({
                   )
                 }
 
-                // Assaut grisé dynamiquement si arme vide
-                if (a.k === 'attack' && isAmmoEmpty) {
+                // Assaut grisé dynamiquement si arme vide (humanoïdes uniquement)
+                if (a.k === 'attack' && isAmmoEmpty && !isDrone) {
                   return (
                     <div key={a.k} title="Arme vide — rechargez d'abord" style={W.itemGreyed}>
                       <span style={W.itemLabel}>{a.l}</span>
@@ -1339,8 +1377,62 @@ export default function CombatActionWindow({
           </div>
         )}
 
-        {/* ---- Panneau droit — assaut (inchange fonctionnellement) ---- */}
-        {showAssault && (
+        {/* ---- Panneau droit — assaut drone ---- */}
+        {showAssault && isDrone && (
+          <div style={W.assaultPanel}>
+            <div style={W.assaultSection}>
+              <div style={W.assaultSectionTitle}>Arme</div>
+              {droneWeapons.map(w => {
+                const isSelected = selectedDroneWeapon?.id === w.id
+                const isEmpty    = w.ammo_restant !== null && w.ammo_restant !== undefined && w.ammo_restant <= 0
+                return (
+                  <div
+                    key={w.id}
+                    onClick={() => !isEmpty && setSelectedDroneWeaponId(w.id)}
+                    title={isEmpty ? 'Arme vide' : undefined}
+                    style={{
+                      ...W.assaultOption,
+                      padding: '6px 0',
+                      borderBottom: '1px solid #1e1e2e',
+                      cursor: isEmpty ? 'not-allowed' : 'pointer',
+                      opacity: isEmpty ? 0.35 : 1,
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={W.assaultOptionLabel}>{w.display_name || w.ref_name || 'Arme'}</div>
+                      <div style={W.assaultOptionSub}>
+                        {(w.fire_mode || w.ref_fire_mode || '?').toUpperCase()} · {w.damage_formula || w.ref_damage_h || '—'}
+                        {w.ammo_restant !== null && w.ammo_restant !== undefined
+                          ? ` · ${w.ammo_restant} munitions`
+                          : ''}
+                      </div>
+                    </div>
+                    <div style={{ ...W.assaultRadio, ...(isSelected && !isEmpty ? W.assaultRadioActive : {}) }} />
+                  </div>
+                )
+              })}
+            </div>
+            <div style={W.assaultSection}>
+              <div style={W.assaultSectionTitle}>Cible</div>
+              {pendingTargetToken ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={W.assaultTargetName}>{pendingTargetToken.label ?? '?'}</span>
+                  <button style={W.changeTargetBtn} onClick={handleChooseTarget}>Changer</button>
+                </div>
+              ) : (
+                <button style={W.chooseTargetBtn} onClick={handleChooseTarget}>Choisir une cible</button>
+              )}
+            </div>
+            {droneAssaultValid && attackSelected && (
+              <div style={{ padding: '8px 14px' }}>
+                <div style={W.assaultSummaryText}>✓ Prêt à l&apos;assaut</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ---- Panneau droit — assaut humanoïde ---- */}
+        {showAssault && !isDrone && (
           <div style={W.assaultPanel}>
 
             <div style={W.assaultSection}>

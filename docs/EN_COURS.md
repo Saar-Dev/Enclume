@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-12 Session 94
+> Dernière mise à jour : 2026-06-12 Session 89
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -15,7 +15,7 @@
 
 ## En attente de validation fonctionnelle
 
-- **Sprint Drones 2c** — GM déclare attaque drone → resolveDroneAssaultAction — Session 94
+- **Sprint Drones 2c** — cycle complet drone joueur validé SR ✅ — bugs Loc-Drone + Dmg-Drone identifiés (voir dettes)
 - **Sprint CaC 4b** (attaque multiple melee — 2/3 cibles, −5/−7 malus) — Session 74
 - **Sprint Test de Choc** (migration 69, shock_auto_stun) — Session 81
 
@@ -29,6 +29,8 @@
 | `is_stunned` sans durée (LdB p.237 : 1d6 tours) | Haute | sprint `stunned_until_turn` requis |
 | Bug CL1 — Portraits PNJ non visibles dans timeline joueur | Haute | CombatTimeline.jsx — PNJ absent characterStore joueur |
 | Bug CL2 — Design CombatDeclareLog mauvais + divergence GM/joueur | Moyenne | CombatDeclareLog.jsx + declareLogSection — ref = version GM |
+| Bug Loc-Drone — jet localisation D20 incorrect pour cible drone | Haute | `resolveDroneAssaultAction` — §7.6 : zone unique fixe, pas de D20. Sprint dégâts drone |
+| Bug Dmg-Drone — dégâts non enregistrés sur drone cible | Haute | `resolveDroneAssaultAction` — blindage direct, RD integrite×2, drone_sheet.damages JSONB. Sprint dédié |
 | Bug CL3 — Ghosts déplacement d'annonce disparus | Moyenne | CombatOverlay.jsx — announcementMarker, régression Sessions 88–91 |
 | "Changer le mode de tir" — non implémenté | Moyenne | sprint dédié futur |
 | Sprint Annonce v2 — actions précédentes en lecture seule | Moyenne | GmDeclareWindow + ActionWindow |
@@ -45,7 +47,7 @@
 
 ## Roadmap
 
-- **Sprint Drones 2** — ✅ 2a (INI 12) ✅ 2b (drone cible) ✅ 2c (GM déclare attaque) → 2d (auto-announcement) → 2e (resolveDroneAutoAction) — voir `docs/PLAN_DRONESYSCOMBAT.md`
+- **Sprint Drones 2** — ✅ 2a (INI 12) ✅ 2b (drone cible) ✅ 2c (cycle joueur valide) → **Sprint Dégâts Drone** (Loc-Drone + Dmg-Drone, §7.6) → 2d (auto-announcement) → 2e (resolveDroneAutoAction) — voir `docs/PLAN_DRONESYSCOMBAT.md`
 - **Sprint Drones 3** — Télépilotage (drone lié à PJ pilote)
 - **Sprint stunned_until_turn** — durée étourdissement + purge endTurn
 - **Sprint CaC 4b** — validation fonctionnelle requise avant

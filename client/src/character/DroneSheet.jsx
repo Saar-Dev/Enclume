@@ -3,8 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { WOUND_MAX_COUNTS } from '../../../shared/woundConstants.js'
 import api from '../lib/api.js'
 
+const toRoman = n => (['I','II','III','IV','V','VI','VII','VIII'][n - 1] ?? '—')
+
 // ─── Section stats descriptives ───────────────────────────────────────────────
-function StatField({ label, value, field, isGm, onSave }) {
+function StatField({ label, value, display, field, isGm, onSave }) {
   const [editing, setEditing] = useState(false)
   const [draft,   setDraft]   = useState(value ?? '')
 
@@ -26,7 +28,7 @@ function StatField({ label, value, field, isGm, onSave }) {
           style={{ background: '#0e0e1a', border: '1px solid #1e1e2e', borderRadius: '4px', color: '#c0c0d0', fontSize: '12px', padding: '4px 8px', outline: 'none', width: '100%', boxSizing: 'border-box' }}
         />
       ) : (
-        <span style={{ fontSize: '12px', color: '#c0c0d0', padding: '4px 0' }}>{value ?? '—'}</span>
+        <span style={{ fontSize: '12px', color: '#c0c0d0', padding: '4px 0' }}>{display ?? value ?? '—'}</span>
       )}
     </div>
   )
@@ -374,7 +376,7 @@ export default function DroneSheet({ characterId, drone, programs, isGm, onDrone
           <StatField label={t('drone.fieldTaille')}        value={drone.taille}           field="taille"           isGm={isGm} onSave={handleSave} />
           <StatField label={t('drone.fieldPoids')}         value={drone.poids}            field="poids"            isGm={isGm} onSave={handleSave} />
           <StatField label={t('drone.fieldVitesse')}       value={drone.vitesse}          field="vitesse"          isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldNt')}            value={drone.nt}               field="nt"               isGm={isGm} onSave={handleSave} />
+          <StatField label={t('drone.fieldNt')}            value={drone.nt}               display={toRoman(drone.nt)} field="nt" isGm={isGm} onSave={handleSave} />
           <StatField label={t('drone.fieldSourceEnergie')} value={drone.source_energie}   field="source_energie"   isGm={isGm} onSave={handleSave} />
           <StatField label={t('drone.fieldAutonomie')}     value={drone.autonomie}        field="autonomie"        isGm={isGm} onSave={handleSave} />
           <StatField label={t('drone.fieldModeDepl')}      value={drone.mode_deplacement} field="mode_deplacement" isGm={isGm} onSave={handleSave} />

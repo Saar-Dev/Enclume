@@ -1,3 +1,21 @@
+## v89b — 2026-06-12 — Sprint 2c : cycle combat drone joueur complet
+
+### Drones — Combat
+- [fix] Joueur peut déclarer l'attaque de son drone via `COMBAT_ACTION_DECLARE` — guard ownership corrigé (drone joueur n'était pas autorisé)
+- [fix] Bouton "Agir" GM visible en RESOLUTION quand un drone a une action d'assaut déclarée
+- [fix] Résolution drone sans `confirmedModifiers` — portée défaut 'courte' si absent (modifiers non requis pour drone V1)
+- [fix] Fenêtre ANNOUNCEMENT GM ne s'affiche plus pour les drones appartenant à un joueur
+- [fix] Champs NT dans la fiche drone — affichage en chiffres romains (I–VIII), édition GM en entier
+- [fix] WeaponsTab drone — suppression du concept "Chargeur" (non applicable) ; `ammo_restant = null` → `∞`
+
+## v95 — 2026-06-12 — Breakdown détail jets de dé
+
+### Chat sidebar
+- [add] Bouton `⊞` sur chaque jet structuré (combat tir, CaC, action entité) — ouvre un popover avec le détail ligne par ligne des modificateurs composant le Seuil
+- [add] Colorisation par type : compétence (bleu), bonus (vert), malus (rouge), Seuil (or)
+- [add] Fermeture click-outside ou Escape
+- [add] Payload `DICE_RESULT` enrichi côté serveur : champ `breakdown` optionnel sur 5 points d'émission (tir distance, CaC attaquant, CaC défenseur PNJ, CaC défenseur PJ, action entité)
+
 ## v94 — 2026-06-12 — Sprint Drones 2c : attaque drone (GM)
 
 ### Drones — Combat

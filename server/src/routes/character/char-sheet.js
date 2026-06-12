@@ -1864,12 +1864,13 @@ router.put('/:characterId/drone/weapons/:weaponId', async (req, res, next) => {
     const isOwner = req.character.user_id && req.character.user_id === req.user.id
     if (!req.isGm && !isOwner) throw new AppError(403, 'GM or owner required')
 
-    const { contenance_chargeur, ammo_restant, label_override, sort_order } = req.body
+    const { contenance_chargeur, ammo_restant, label_override, sort_order, fire_mode } = req.body
     const updates = {}
     if (contenance_chargeur !== undefined) updates.contenance_chargeur = contenance_chargeur
     if (ammo_restant        !== undefined) updates.ammo_restant        = ammo_restant
     if (label_override      !== undefined) updates.label_override      = label_override
     if (sort_order          !== undefined) updates.sort_order          = sort_order
+    if (fire_mode           !== undefined) updates.fire_mode           = fire_mode
     if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
 
     const existing = await db('drone_weapons')
@@ -1881,9 +1882,10 @@ router.put('/:characterId/drone/weapons/:weaponId', async (req, res, next) => {
 
     const weapon = await db('drone_weapons')
       .where({ 'drone_weapons.id': req.params.weaponId })
-      .join('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
+      .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
       .select(
         'drone_weapons.*',
+        db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
         'ref_equipment.name as ref_name',
         'ref_equipment.damage_h as ref_damage_h',
         'ref_equipment.shock as ref_shock',
