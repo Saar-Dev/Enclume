@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-12 Session 90
+> Dernière mise à jour : 2026-06-12 Session 91b
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -32,6 +32,7 @@
 | Bug Loc-Drone — jet localisation D20 incorrect pour cible drone | Haute | `resolveDroneAssaultAction` — §7.6 : zone unique fixe, pas de D20. Sprint dégâts drone |
 | Bug Dmg-Drone — dégâts non enregistrés sur drone cible | Haute | `resolveDroneAssaultAction` — blindage direct, RD integrite×2, drone_sheet.damages JSONB. Sprint dédié |
 | Bug CL3 — Ghosts déplacement d'annonce disparus | Moyenne | CombatOverlay.jsx — announcementMarker, régression Sessions 88–91 |
+| **Sprint CaC** — drone CaC + CaC PJ (jamais testé) | Haute | DC1 + DC2 dans BUGIDENTIFIE.md. CaC PJ (Phase 2 côté joueur) jamais testé. Sprint dédié requis |
 | "Changer le mode de tir" — non implémenté | Moyenne | sprint dédié futur |
 | Sprint Annonce v2 — actions précédentes en lecture seule | Moyenne | GmDeclareWindow + ActionWindow |
 | Surprise critique (roll=1) → initiative=1 | Basse | à analyser |
@@ -47,6 +48,7 @@
 
 ## Roadmap
 
+- **Sprint CaC** — CaC humanoïde PJ (Phase 2 joueur, jamais testé) + drone CaC (DC1 §7.4) — sprint dédié
 - **Sprint Drones 2** — ✅ 2a (INI 12) ✅ 2b (drone cible) ✅ 2c (cycle joueur valide) → **Sprint Dégâts Drone** (Loc-Drone + Dmg-Drone, §7.6) → 2d (auto-announcement) → 2e (resolveDroneAutoAction) — voir `docs/PLAN_DRONESYSCOMBAT.md`
 - **Sprint Drones 3** — Télépilotage (drone lié à PJ pilote)
 - **Sprint stunned_until_turn** — durée étourdissement + purge endTurn

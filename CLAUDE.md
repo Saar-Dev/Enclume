@@ -98,7 +98,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 90 (2026-06-12)
+## ÉTAT COURANT — Session 91b (2026-06-12)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **78 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
@@ -109,11 +109,11 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Sprint CaC 4b (attaque multiple melee) — Session 74
 - Sprint Test de Choc (migration 69, shock_auto_stun) — Session 81
 
-**Session 90 — Livré :**
-- Breakdown détail jets de dé : bouton ⊞ dans chat sidebar, popover modificateurs colorisé (5 points d'émission DICE_RESULT)
-- Corrections session 90b : displacement + drone (breakdown ajoutés)
+**Session 91b — Livré :**
+- Bug 1 fire_mode drone : `CombatGmDeclareWindow` lit `droneWeapons.find(...).fire_mode` (config fiche drone, onglet Armes). Revert surcharge server-side. Non validé fonctionnellement.
 
 **Dettes actives :**
+- **Sprint CaC** — CaC PJ jamais testé + drone CaC (DC1+DC2 dans BUGIDENTIFIE.md) — sprint dédié
 - `is_stunned` non enforced dans `COMBAT_ACTION_DECLARE` → PC42
 - `is_stunned` sans durée → sprint `stunned_until_turn` requis
 - Bug CL1 — Portraits PNJ non visibles timeline joueur

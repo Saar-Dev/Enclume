@@ -565,3 +565,76 @@ Les entrées Session 88–95 dans ce journal sont des artefacts AI non commitée
 | T4 | `CombatGmDeclareWindow.jsx` | `isDroneGmManaged` (exclut `user_id`), mise à jour `isGmManaged`/`isActiveDrone`/`blockerIsPj` |
 | T5 | `CombatOverlay.jsx` | Agir visible pour drone avec assault action |
 | T6 | `socket/index.js` COMBAT_ACTION_CONFIRM | Guard `confirmedModifiers` contourné si `character.type === 'drone'` |
+
+---
+
+## Session 91b — 2026-06-12 — Bug 1 Drone fire_mode
+
+### Contexte
+
+Correction du Bug 1 identifié en Session 91 : `fire_mode` drone hardcodé en `'rl'` puis `'rc'` dans `CombatGmDeclareWindow`, ignorant le champ configuré dans la fiche drone (onglet Armes).
+
+**Bugs 2 & 3** (CaC drone + situation mods) différés au Sprint CaC (session dédiée). Documentés dans `docs/BUGIDENTIFIE.md` §"Bugs Session 91 — Sprint CaC Drone".
+
+### Livré
+
+**Bug 1 — fire_mode drone depuis la fiche drone (onglet Armes)**
+
+- `CombatGmDeclareWindow.jsx` : dans `handleDeclare`, lit `droneWeapons.find(w => w.id === selectedDroneWeaponId)?.fire_mode` et l'envoie dans `state.fire_mode`. La donnée est déjà disponible côté client (tableau `droneWeapons` chargé depuis l'API `/drone/weapons`).
+- `server/src/socket/index.js` COMBAT_ACTION_DECLARE : revert de la surcharge `droneWeaponFireMode`. Le serveur utilise `state.fire_mode` reçu pour `combat_actions.fire_mode` et `combat_roster.state_fire_mode` — identique au pipeline humanoïde. La query `droneWeapon` reste (nécessaire pour `assaultWeaponRefRange`).
+- Non validé fonctionnellement (nécessite session de test avec drone en combat).
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | `CombatGmDeclareWindow.jsx` | `handleDeclare` drone : `selectedDroneWeapon?.fire_mode ?? 'rc'` au lieu de `'rc'` hardcodé |
+| T2 | `socket/index.js` COMBAT_ACTION_DECLARE | Suppression `droneWeaponFireMode`, `fire_mode` et `state_fire_mode` uniformisés (`state.fire_mode`) |
+
+---
+
+## Session 92 — 2026-06-12 — Audit CaC + MANUELSYSCOMBAT.md complété
+
+### Contexte
+
+Session analytique : compréhension du corps à corps humanoïde ET drone. Source de vérité : `docs/Old/REGLES_Contact.md`. Objectif : corriger et compléter §6.2 de `docs/MANUELSYSCOMBAT.md`.
+
+Fichiers lus : `REGLES_Contact.md`, `MANUELSYSCOMBAT.md`, `SYSTEME/BLESSURES.md`, `SYSTEME/COMBAT.md`, `BUGIDENTIFIE.md`, `socket/index.js` (`resolveDroneAssaultAction`).
+
+Scratch pad de session : `docs/CACTEMP.md` (périssable).
+
+### Livré
+
+**1. §6.2 — Formules dégâts corrigées (deux bugs)**
+- `Dommages_Bruts` : impl V1 = `rawDice + ModDom(FOR)` (MR absent — dette Session 67 documentée)
+- `Dommages_Nets` : signe corrigé (`+` → `-`), formule exacte `max(0, Bruts - etq - rd)` avec `etq` et `rd` nommés
+
+**2. §6.2 — Sections manquantes ajoutées**
+- `#### Modes de combat` : table 5 modes (normal/offensif/charge/defensif/retraite), mods attaque + défense, contraintes, stockage DB
+- `#### Multi-adversaires` : table 2→−5 / 3→−7 / 4+→−10, appliqué attaque ET défense, `countAdversaires()` Session 72
+- `#### Allonge` : règle exacte (seul le plus grand bénéficie, bonus = différence), double tranchant, V1 client only
+
+**3. §6.9 — Arts Martiaux créé (non implémenté V1)**
+Trois familles : techniques offensives (6), techniques défensives (6), Lutte. Renvoi §6.3 (Enchaînement) et §6.6 (Saisie).
+
+**4. §7.3 + §7.4 — Drone CaC précisé**
+- §7.3 : exception `armement_contact` — portée = 0 (contact physique satisfait par définition)
+- §7.4 : note sous le tableau, référence Bug DC3
+
+**5. BUGIDENTIFIE.md — Bug DC3 ajouté (session précédente)**
+`PORTEE_MOD_COMP['bout_portant']` = +5 appliqué à tort dans `resolveDroneAssaultAction` pour `armement_contact`. Fix documenté.
+
+### Validation
+
+Session analytique + documentation — pas de validation fonctionnelle requise. Bug DC3 à corriger dans Sprint CaC Drone.
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | `docs/MANUELSYSCOMBAT.md` §6.2 | Formules Dommages_Bruts/Nets corrigées |
+| T2 | `docs/MANUELSYSCOMBAT.md` §6.2 | Modes de combat + Multi-adversaires + Allonge ajoutés |
+| T3 | `docs/MANUELSYSCOMBAT.md` §6.9 | Arts Martiaux créé (non impl V1) |
+| T4 | `docs/MANUELSYSCOMBAT.md` §7.3-7.4 | Précision armement_contact portée = 0, Bug DC3 référencé |
+| T5 | `docs/BUGIDENTIFIE.md` | DC1 corrigé (mention bout_portant incorrecte), DC3 ajouté |
+

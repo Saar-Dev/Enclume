@@ -136,9 +136,11 @@ Contrairement au combat a distance (test simple), le CaC utilise un **test d'opp
    Les deux reussissent => Meilleure marge de reussite l'emporte. Egalite = rien.
 
 [4. Dommages (si attaque passe)]
-   Dommages_Bruts = Dommages_Arme + MR + Mod_Dommages_Contact (FOR)
-   Dommages_Nets  = Dommages_Bruts + Mod_Resistance_Dommages_Defenseur
-   Gravite = par tranche de 5 points nets
+   Dommages_Bruts = rawDice + ModDom(FOR_attaquant)         ← impl V1 (règle LdB : Arme + MR + ModDom — dette Session 67)
+   Dommages_Nets  = max(0, Dommages_Bruts - etq - rd)
+     etq = calcResistanceArmure(armures équipées, localisation touchée).etq   [mille-feuille]
+     rd  = calcResistanceDommages(FOR_na_cible, CON_na_cible)                 [table RD_TABLE, positif ou négatif]
+   Gravité = par tranche de 5 points nets
 
 [5. Localisation]
    1D20 => table localisation (colonne "Contact" optionnelle du LdB)
@@ -160,6 +162,40 @@ Si la cible ne peut pas se defendre (surprise totale, inconsciente) : test simpl
 #### Deux armes (CaC)
 - Attaquant : +3 au Test de combat au contact
 - Arts martiaux permettent une attaque supplementaire gratuite avec malus -5
+
+#### Modes de combat
+
+| Mode | Mod attaque | Mod défense | Contrainte |
+|---|---|---|---|
+| `normal` | ±0 | ±0 | — |
+| `offensif` | +3 | −5 (jusqu'à prochaine action) | — |
+| `charge` | +3 attaque, +3 dommages | −7 (jusqu'à prochaine action) | dist > 3m, déplacement court gratuit, action exclusive (→ §6.4) |
+| `defensif` | pas d'attaque | +3 | action retardée obligatoire |
+| `retraite` | pas d'attaque | +5 | action retardée + recul gratuit |
+
+Stockage : `combat_roster.state_combat_mode` (TEXT). Reset à `'normal'` chaque `endTurn`. Déclaration en ANNOUNCEMENT uniquement.
+
+#### Multi-adversaires
+
+Malus appliqué à l'attaque ET à la défense du combattant qui fait face à plusieurs adversaires.
+
+| Adversaires distincts en portée CaC | Malus |
+|---|---|
+| 2 | −5 |
+| 3 | −7 |
+| 4+ | −10 |
+
+"En portée CaC" = distance ≤ 3m + allonge_max de l'adversaire. Maximum 4 adversaires simultanés (au-delà ils se gênent mutuellement, LdB p.224).
+
+**Implémentation :** `countAdversaires()` — Session 72 — appliqué dans `resolveMeleeAction`, attaque ET défense.
+
+#### Allonge
+
+Quand les deux combattants ont une allonge, seul celui avec la **plus grande** allonge bénéficie d'un bonus = `allonge_lui − allonge_adversaire`. L'autre ne gagne rien.
+
+Double tranchant : si le bénéficiaire perd le test, l'adversaire peut casser la distance (arme difficile à manœuvrer au corps à corps).
+
+**Implémentation V1 :** affichage client uniquement — pas de calcul serveur.
 
 ---
 
@@ -258,6 +294,42 @@ Le LdB dit : egalite de Reaction = **actions simultanees** (les deux attaques se
 
 ---
 
+### 6.9 Arts Martiaux — Synthèse (Non implémenté V1)
+
+**Compétence limitative** sur Combat à mains nues / Combat armé (limite le niveau utilisé). Une seule technique par Tour de combat.
+
+#### Techniques offensives
+*Condition : Initiative ≥ adversaire, mode Normal/Offensif/Charge.*
+
+| Technique | Mécanique |
+|---|---|
+| Frappe puissante | +3 dommages (+6 si Charge) |
+| Frappe incapacitante | Dommages normaux + Test Choc défenseur malus −5 (cumule si blessure déclenche aussi un Choc) |
+| Frappe précise | Malus localisation ciblée réduits de 3 |
+| Enchaînement | 2 attaques (+0/−3), 3 attaques (−3/−5/−7) — voir §6.3 |
+| Combat à deux armes | +3 + attaque supplémentaire gratuite à −5 |
+| Balayage | Succès → défenseur Test COO. Échec : perd (5 + MR) INI. Catastrophe : chute. |
+
+#### Techniques défensives
+*Condition : mode Normal/Défensif/Retraite.*
+
+| Technique | Mécanique |
+|---|---|
+| Garde de combat | Adversaire −3 au test |
+| Contre-attaque simultanée | Mode Défensif uniquement — Test −5 pour contre-attaquer dans le même mouvement |
+| Esquive | Retraite sans obligation de reculer physiquement |
+| Combat à deux armes | +3 en défense |
+| Défense multi-adversaires | Malus multi-adversaires réduits de 3 |
+| Dégagement/saisie | Test AM(Techniques déf.) pour se libérer d'une prise adverse |
+
+#### Lutte
+*Condition : modes Normal/Offensif/Défensif, corps à corps strict.*
+
+Saisie = Préparation −3 INI (déclarée en ANNOUNCEMENT) — **→ voir §6.6.**
+Si saisie réussie → choix : Clé/Immobilisation / Étranglement / Projection.
+
+---
+
 ## §7 — DRONES EN COMBAT
 
 > ⚠️ **SECTION DRONES UNIQUEMENT** (`character.type === 'drone'`). Si la tâche en cours ne concerne pas les drones, arrêter la lecture ici.
@@ -339,6 +411,8 @@ Pas d'attributs. Pas de maîtrise. Pas de calcul AN/NA. Le niveau du programme e
 
 **Modificateurs situationnels standard applicables** au Test Armement : portée, taille cible, obscurité, couverture (mêmes tables que humanoïdes).
 
+**Exception `armement_contact` :** portée = 0 — le contact physique ≤ 3m est satisfait par définition. Modificateurs légitimes : taille, obscurité, couverture uniquement.
+
 **Pas de malus blessures ni d'encombrement** — les drones n'ont pas ces mécaniques.
 
 **Mode télépiloté :** le programme du drone reste la base du Test — c'est `min(programme.level, TELEPILOTAGE_proprio)` qui s'applique. Le character propriétaire n'utilise pas sa propre compétence d'arme.
@@ -358,6 +432,8 @@ Pas d'attributs. Pas de maîtrise. Pas de calcul AN/NA. Le niveau du programme e
 | `pilotage` | Déplacement (mode autonome) | Tour du drone | Pas de test requis — déplacement selon `drone_sheet.vitesse` |
 | `medical` | Premiers soins / Chirurgie | Personnage blessé à portée | D20 ≤ niveau → soin (hors combat principalement) |
 | `reparation` | Restaurer intégrité d'un drone | Drone endommagé à portée | D20 ≤ niveau → restauration partielle |
+
+**`armement_contact` — portée :** aucun modificateur de portée applicable (contact physique ≤ 3m satisfait par définition). Modificateurs légitimes : taille, obscurité, couverture uniquement. ⚠️ **Bug DC3 actif** : `PORTEE_MOD_COMP['bout_portant']` = +5 appliqué à tort dans `resolveDroneAssaultAction` — voir BUGIDENTIFIE.md.
 
 **Sans programme `esquive` :** le drone ne peut pas se défendre contre les attaques CaC — aucun test d'opposition possible.
 

@@ -354,10 +354,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     if (!socket || !canDeclare || !activeTokenId) return
 
     // Drone : payload simplifié — droneWeaponInvId + cible
+    // fire_mode : lu depuis drone_weapons (configuré dans la fiche drone, onglet Armes)
     if (isActiveDrone) {
+      const selectedDroneWeapon = droneWeapons.find(w => w.id === selectedDroneWeaponId)
       socket.emit(WS.COMBAT_ACTION_DECLARE, {
         tokenId: activeTokenId,
-        state: { position: 'standing', weapon: 'holstered', fire_mode: 'rl', cover: 'exposed', vitesse: 'normal' },
+        state: { position: 'standing', weapon: 'holstered', fire_mode: selectedDroneWeapon?.fire_mode ?? 'rc', cover: 'exposed', vitesse: 'normal' },
         mapActions: {
           attack: {
             droneWeaponInvId: selectedDroneWeaponId,

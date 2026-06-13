@@ -1938,12 +1938,15 @@ const initSocket = (io) => {
               return
             }
             const droneWeapon = await db('drone_weapons')
-              .where({ id: droneWeaponInvId, character_id: character.id })
+              .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
+              .where({ 'drone_weapons.id': droneWeaponInvId, 'drone_weapons.character_id': character.id })
+              .select('drone_weapons.*', 'ref_equipment.range as ref_range')
               .first()
             if (!droneWeapon) {
               socket.emit('error', { message: "Arme drone introuvable (PC22-D)" })
               return
             }
+            assaultWeaponRefRange = droneWeapon.ref_range ?? null
           } else {
             // Humanoïde : validation char_inventory + PC23
             const { weaponInvId } = mapActions.attack
@@ -2138,7 +2141,7 @@ const initSocket = (io) => {
           .update({
             state_position:    state.position     ?? entry.state_position,
             state_weapon:      state.weapon       ?? entry.state_weapon,
-            state_fire_mode:   state.fire_mode    ?? entry.state_fire_mode,
+            state_fire_mode:   state.fire_mode ?? entry.state_fire_mode,
             state_cover:       state.cover        ?? entry.state_cover,
             state_vitesse:     state.vitesse      ?? entry.state_vitesse,
             state_combat_mode: state.combat_mode  ?? entry.state_combat_mode,
@@ -3725,12 +3728,12 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
     }
 
     // 3. Calcul chancesDeReussite (§7.3 — même modificateurs que humanoïdes)
-    const portee = confirmedModifiers?.portee ?? 'courte'
+    // armement_contact : toujours bout_portant — drone en contact physique, pas de fenêtre modificateurs (flow "Agir")
+    const portee = (category === 'armement_contact') ? 'bout_portant' : (confirmedModifiers?.portee ?? 'courte')
     let totalModComp = PORTEE_MOD_COMP[portee] ?? 0
     if (confirmedModifiers?.taille) totalModComp += TAILLE_MODS[confirmedModifiers.taille] ?? 0
-    for (const [k, v] of Object.entries(SITUATION_MODS)) {
-      if (confirmedModifiers?.[k]) totalModComp += v
-    }
+    const situationMods = confirmedModifiers?.situation ?? []
+    totalModComp += situationMods.reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
     const chancesDeReussite = programme.level + totalModComp
 
     // 4. Jet D20
@@ -3751,8 +3754,9 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
     const breakdownDrone = [
       { label: `Programme (niv. ${programme.level})`, value: programme.level, type: 'base' },
       ...(porteeModDrone !== 0 ? [{ label: PORTEE_LABELS[portee] ?? portee, value: porteeModDrone, type: porteeModDrone > 0 ? 'bonus' : 'malus' }] : []),
-      ...Object.entries(SITUATION_MODS).reduce((acc, [k, v]) => {
-        if (confirmedModifiers?.[k] && v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
+      ...situationMods.reduce((acc, k) => {
+        const v = SITUATION_MODS[k]
+        if (v !== undefined && v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
         return acc
       }, []),
       ...(tailleModDrone !== 0 ? [{ label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModDrone, type: tailleModDrone > 0 ? 'bonus' : 'malus' }] : []),

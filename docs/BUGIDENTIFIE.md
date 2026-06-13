@@ -338,3 +338,74 @@ En lisant ce fichier, on s'aperçoit que c'est un vieux composant de test écrit
 **Cause suspectée** : `announcementMarker` est toujours alimenté côté `SessionPage.jsx`. La régression est probablement dans le rendu — vérifier si le composant ou la condition d'affichage du ghost a été modifié lors des sessions 88-91.
 
 **Prochaine étape** : Lire `CombatOverlay.jsx` — rechercher `announcementMarker` et la condition de rendu du ghost.
+
+---
+
+## Bugs Session 91 — Sprint CaC Drone (2026-06-12) — Non résolus
+
+### Bug DC1 — Drone CaC : flow de résolution incorrect (Sprint CaC dédié)
+
+**Symptôme** : Un drone déclarant une attaque `armement_contact` (`fire_mode = 'cc'`) se voyait présenter `CombatModifiersWindow` (fenêtre distance — requiert portée), qui ne peut pas fonctionner pour un CaC.
+
+**Contexte règles** : §7.4 MANUELSYSCOMBAT — `armement_contact` = test simple D20 ≤ niveau programme. Pas de test d'opposition (contrairement au CaC humanoïde §6.2). Pas de fenêtre modificateurs portée. Pas de modificateur portée (contact physique = portée satisfaite par définition, modificateur = 0). ⚠️ Le `portee = 'bout_portant'` du travail partiel est lui-même un bug → voir **Bug DC3**.
+
+**Code impliqué** :
+- `client/src/components/CombatOverlay.jsx` — conditions d'affichage "Agir" vs `CombatModifiersWindow`
+- `server/src/socket/index.js` — `resolveDroneAssaultAction` — gestion `armement_contact`
+
+**Travail partiel effectué (non approuvé, Session 91)** :
+- `CombatOverlay.jsx` : `isDroneCaC = !!(activeAssaultAction?.drone_weapon_inv_id && activeAssaultAction?.fire_mode === 'cc')` ajouté. "Agir" affiché pour drone CaC (comme PNJ CaC humanoïde). `CombatModifiersWindow` exclu pour drone CaC.
+- `resolveDroneAssaultAction` : `portee = 'bout_portant'` pour `armement_contact`, situation mods lus depuis `confirmedModifiers?.situation ?? []`.
+
+**Prochaine étape** : Sprint CaC dédié — à démarrer dans une session séparée. Modèle à suivre : résolution CaC humanoïde PJ (Phase 2 Résolution côté joueur — jamais testé). Adapter pour drone sans copier le modèle distance.
+
+---
+
+### Bug DC2 — Drone ranged : mods de situation jamais appliqués
+
+**Symptôme** : Dans `resolveDroneAssaultAction`, les modificateurs de situation (`confirmedModifiers.situation`) n'étaient jamais pris en compte. L'ancien code itérait `SITUATION_MODS` et vérifiait `confirmedModifiers?.[k]` (propriété directe) au lieu de lire le tableau `confirmedModifiers.situation`.
+
+**Cause** : Pattern incorrect — `confirmedModifiers.situation` est un tableau de clés (`['cible_au_sol', ...]`), pas un objet avec des propriétés booléennes.
+
+**Code impliqué** : `server/src/socket/index.js` — `resolveDroneAssaultAction` (section calcul `totalModComp` et breakdown).
+
+**Travail partiel effectué (non approuvé, Session 91)** :
+```js
+// Correctif appliqué (non validé fonctionnellement) :
+const situationMods = confirmedModifiers?.situation ?? []
+totalModComp += situationMods.reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
+```
+
+**Prochaine étape** : Valider fonctionnellement lors du Sprint CaC — ce correctif concerne aussi bien les attaques distance que contact.
+
+---
+
+### Bug DC3 — Drone CaC : modificateur `bout_portant` (+5) appliqué à tort
+
+**Symptôme** : `resolveDroneAssaultAction` applique systématiquement `portee = 'bout_portant'` pour `armement_contact`, ce qui ajoute +5 à `chancesDeReussite` via `PORTEE_MOD_COMP`.
+
+**Cause** : CaC = présence physique ≤ 3m par définition — la portée n'est pas un modificateur applicable au contact physique. Le +5 est sémantiquement et mécaniquement incorrect.
+
+**Code impliqué** : `server/src/socket/index.js` — `resolveDroneAssaultAction` ligne ~3732.
+
+```js
+// Actuel (bug) :
+const portee = (category === 'armement_contact') ? 'bout_portant' : (confirmedModifiers?.portee ?? 'courte')
+let totalModComp = PORTEE_MOD_COMP[portee] ?? 0   // → +5 appliqué à tort
+
+// Correction :
+const porteeModComp = (category === 'armement_contact')
+  ? 0
+  : (PORTEE_MOD_COMP[confirmedModifiers?.portee] ?? 0)
+let totalModComp = porteeModComp
+```
+
+Retirer aussi `porteeModDrone` du breakdown (ligne ~3752) pour `armement_contact`.
+
+**Modificateurs légitimes pour `armement_contact` (§7.3 MANUELSYSCOMBAT) :**
+- Portée : **NON** (0 — contact physique)
+- Taille cible : OUI
+- Obscurité : OUI
+- Couverture : OUI
+
+**Prochaine étape** : Sprint CaC Drone — corriger avec DC1 dans la même session.

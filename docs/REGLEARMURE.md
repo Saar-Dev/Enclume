@@ -1,107 +1,30 @@
-Gestion des 
-armures_
-Dans cette partie, le terme « armure(s) » (ou « exo-armures ») 
-désigne exclusivement les armures mécanisées, des engins humanoïdes 
-lourds, blindés et isolés, dont les mouvements sont assurés par un 
-exosquelette. Ne les confondez pas avec les « armures » plus commu￾nes, telles que les gilets pare-balles ou les tenues de sécurité décrites 
-dans la partie Équipement. Techniquement, les armures mécanisées 
-sont considérées comme des véhicules à part entière : elles partagent 
-donc quelques règles en commun avec les navires et les véhicules plus 
-conventionnels, décrits page 348 et plus.
-À propos des 
-armures mécanisées
+Gestion des armures_
+Dans cette partie, le terme « armure(s) » (ou « exo-armures ») désigne exclusivement les armures mécanisées, des engins humanoïdes lourds, blindés et isolés, dont les mouvements sont assurés par un exosquelette. Ne les confondez pas avec les « armures » plus commu￾nes, telles que les gilets pare-balles ou les tenues de sécurité décrites dans la partie Équipement. 
+Techniquement, les armures mécanisées sont considérées comme des véhicules à part entière : elles partagent donc quelques règles en commun avec les navires et les véhicules plus conventionnels, décrits page 348 et plus.
+À propos des armures mécanisées
 Types d’armures
-Il existe plusieurs types d’armures, en fonction du milieu dans 
-lequel elles sont censées évoluer :
-Exo-armures sous-marines : les armures uniquement 
-sous-marines sont assez répandues, mais concernent géné-
-ralement les tenues les plus lourdes, avec lesquelles il est 
-difficile d’évoluer à l’air libre. Les armures les plus lourdes 
-sont le plus souvent stockées dans un compartiment spécial, 
-donnant directement sur l’eau. Le pilote y entre par un sas 
-hermétique, que l’on referme avant d’ouvrir un panneau 
-donnant sur l’extérieur. On peut aussi utiliser des grues 
-pour mettre à l’eau une armure ou l’en extraire, ce qui est 
-fréquent avec les armures massives.
-Exo-armures de Surface : il existe peu d’armures unique￾ment conçues pour la Surface. Ce sont, le plus souvent, des 
-armures hybrides, capables d’évoluer aussi bien en extérieur 
-que sous l’eau. Les soldats évoluant dans les souterrains ou sur 
-les terres dévastées peuvent également opter pour des tenues 
-plus classiques, isolées. Les armures exclusivement externes 
-323
-Armures mécanisées
-n’ont pas les mêmes contraintes que les armures sous-marines 
-(ou hybrides). Elles sont donc généralement plus petites et 
-moins volumineuses et présentent des formes plus fluides. Ces 
-armures restent généralement isolées et étanches et peuvent 
-même être équipées d’un dispositif amphibie, qui leur permet 
-de s’aventurer à quelques dizaines de mètres sous l’eau.
-Exo-armures hybrides : ce sont des armures assez couran￾tes (la plupart des armures sont des armures hybrides) puis￾que les habitants des stations sont souvent amenés à évoluer 
-à la fois dans l’eau et à l’air libre. On privilégie nettement 
-les armures légères ou moyennement encombrantes pour 
-les tenues hybrides. 
-Exo-armures atmosphériques : seules les armures les plus 
-légères peuvent être utilisées dans les airs.
-Exo-armures spatiales : ces armures sont assez rares et gé-
-néralement très légères, les combats dans l’espace étant re￾lativement peu fréquents. On a encore souvent recours aux 
-bonnes vieilles combinaisons spatiales. 
-Exo-armures industrielles : ces exo-armures massives sont en 
-général conçues pour un milieu et un usage très spécifique.
-Les armures sous-marines sont construites en fonction de la pro￾fondeur qu’elles peuvent atteindre. Se servir en Surface d’une armure 
-prévue pour fonctionner à -15 000 mètres afin de bénéficier de sa 
-protection est rarement une bonne idée, à cause des pénalités que 
-cela engendre. La plupart des armures existantes sont prévues pour 
-fonctionner à des profondeurs n’excédant pas 4 000 mètres. Celles 
-qui permettent d’évoluer à plus de 10 000 mètres sont extrêmement 
-rares et coûteuses. La plupart du temps, les personnages auront accès 
-à des armures permettant de descendre à des profondeurs n’excédant 
-pas 6 000 mètres. De plus, pour un aventurier ou un explorateur, il 
-est préférable d’utiliser les armures les plus légères possible, puisqu’il 
-sera souvent nécessaire de quitter le milieu liquide.
-Note : une armure conçue pour un certain milieu est difficile￾ment utilisable dans un autre. L’utilisateur ne peut que se déplacer à 
-l’Allure lente et ne peut pas effectuer d’actions physiques importan￾tes (sauter, esquiver, etc.).
+Il existe plusieurs types d’armures, en fonction du milieu dans lequel elles sont censées évoluer :
+Exo-armures sous-marines : les armures uniquement sous-marines sont assez répandues, mais concernent généralement les tenues les plus lourdes, avec lesquelles il est difficile d’évoluer à l’air libre. 
+Les armures les plus lourdes sont le plus souvent stockées dans un compartiment spécial, donnant directement sur l’eau. Le pilote y entre par un sas hermétique, que l’on referme avant d’ouvrir un panneau donnant sur l’extérieur. On peut aussi utiliser des grues pour mettre à l’eau une armure ou l’en extraire, ce qui est fréquent avec les armures massives.
+Exo-armures de Surface : il existe peu d’armures unique￾ment conçues pour la Surface. Ce sont, le plus souvent, des armures hybrides, capables d’évoluer aussi bien en extérieur que sous l’eau. Les soldats évoluant dans les souterrains ou sur les terres dévastées peuvent également opter pour des tenues plus classiques, isolées. Les armures exclusivement externes 
+Armures mécanisées n’ont pas les mêmes contraintes que les armures sous-marines (ou hybrides). Elles sont donc généralement plus petites et moins volumineuses et présentent des formes plus fluides. Ces armures restent généralement isolées et étanches et peuvent même être équipées d’un dispositif amphibie, qui leur permet de s’aventurer à quelques dizaines de mètres sous l’eau.
+Exo-armures hybrides : ce sont des armures assez couran￾tes (la plupart des armures sont des armures hybrides) puis￾que les habitants des stations sont souvent amenés à évoluer à la fois dans l’eau et à l’air libre. On privilégie nettement les armures légères ou moyennement encombrantes pour les tenues hybrides. 
+Exo-armures atmosphériques : seules les armures les plus légères peuvent être utilisées dans les airs.
+Exo-armures spatiales : ces armures sont assez rares et généralement très légères, les combats dans l’espace étant re￾lativement peu fréquents. On a encore souvent recours aux bonnes vieilles combinaisons spatiales. 
+Exo-armures industrielles : ces exo-armures massives sont en général conçues pour un milieu et un usage très spécifique.
+Les armures sous-marines sont construites en fonction de la pro￾fondeur qu’elles peuvent atteindre. Se servir en Surface d’une armure prévue pour fonctionner à -15 000 mètres afin de bénéficier de sa protection est rarement une bonne idée, à cause des pénalités que cela engendre. La plupart des armures existantes sont prévues pour fonctionner à des profondeurs n’excédant pas 4 000 mètres. Celles qui permettent d’évoluer à plus de 10 000 mètres sont extrêmement rares et coûteuses. La plupart du temps, les personnages auront accès à des armures permettant de descendre à des profondeurs n’excédant pas 6 000 mètres. 
+De plus, pour un aventurier ou un explorateur, il est préférable d’utiliser les armures les plus légères possible, puisqu’il sera souvent nécessaire de quitter le milieu liquide.
+Note : une armure conçue pour un certain milieu est difficile￾ment utilisable dans un autre. L’utilisateur ne peut que se déplacer à l’Allure lente et ne peut pas effectuer d’actions physiques importan￾tes (sauter, esquiver, etc.).
 Catégories d’armures
-Les armures peuvent également être classées en fonction de 
-leur gabarit. Il existe neuf catégories d’armures : exo-alpha, exo-0 
-à exo-6, jusqu’à exo-oméga, les plus lourdes.
-Armures légères (exo-alpha et exo-0) : Ces armures sont 
-le plus souvent constituées de pièces qui s’enfilent une à une. Elles 
-peuvent être revêtues en 10 Tours de combat et on peut les retirer 
-en 5 Tours. Un système d’urgence permet également de les retirer 
-en un seul Tour, mais dans ce cas, l’armure subit 2D10 points de 
-Dommages, localisés au hasard (ne pas tenir compte du Blindage). 
-Ces gabarits légers sont idéaux pour les armures atmosphériques, 
-de Surface ou hybrides.
-• Exo-alpha (taille moyenne : environ 1,80 m) : ce sont 
-les armures les plus légères, généralement conçues avec une 
-épaisseur de coque minimale.
-• Exo-0 (env. 1,90 m) : ce sont des armures très fines, offrant 
-peu d’espace intérieur. Elles sont moulés très près du corps 
-et ressemblent plus à une tenue de plongée rigide qu’à une 
-armure mécanisée. Les plus légères peuvent même être por￾tées sans exosquelette et avec une source d’énergie limitée.
-Armures moyennes (exo-1 à exo-3) : constituées d’une 
-seule pièce, ce sont les armures les plus communes. Elles sont rare￾ment utilisées avec une propulsion atmosphérique et sont le plus sou￾vent réservées pour l’usage hybride ou de Surface. La partie arrière 
-ou avant s’ouvre pour permettre l’accès ou pour pouvoir s’en extraire 
-en 3 Tours de combat. Si cet accès est bloqué, un système de sécurité 
-permet de démembrer l’armure : dans ce cas, elle subit 2D10 points 
-de Dommages, localisés au hasard (ne pas tenir compte du Blindage).
-• Exo-1 (env. 2,20 m) : ces armures sont souvent utilisées à 
-l’air libre, car elles restent assez légères tout en offrant une 
-bonne protection. Ici, le pilote n’occupe plus tout l’espace 
-interne comme dans les catégories plus légères : les mains et 
-les pieds de l’armure sont robotisés, (sauf pour les armures 
-exclusivement de surface, qui sont généralement plus petites 
-et comparables aux exo-0 sous-marines).
-• Exo-2 (env. 2,50 m) et exo-3 (env. 2,80 m) : ces armures, 
-qui commencent à être massives, présentent des formes plus 
-arrondies et bulbeuses, par rapport aux armures plus légè-
-res. À partir de cette catégorie, les mains, les avant-bras, les 
-chevilles et les pieds de l’armure sont souvent robotisés (sauf 
-dans les exo-2 de Surface, comparables dans ce cas aux exo-1 
-sous-marines).
-Armures lourdes (exo-4, env. 3,30 m) : ces armures im￾posantes ne sont généralement employées que sous l’eau. Certaines 
-peuvent être hybrides, mais elles consomment tellement d’énergie 
-que c’est assez rare.
+Les armures peuvent également être classées en fonction de leur gabarit. Il existe neuf catégories d’armures : exo-alpha, exo-0 à exo-6, jusqu’à exo-oméga, les plus lourdes.
+Armures légères (exo-alpha et exo-0) : Ces armures sont le plus souvent constituées de pièces qui s’enfilent une à une. Elles peuvent être revêtues en 10 Tours de combat et on peut les retirer en 5 Tours. Un système d’urgence permet également de les retirer en un seul Tour, mais dans ce cas, l’armure subit 2D10 points de Dommages, localisés au hasard (ne pas tenir compte du Blindage). 
+Ces gabarits légers sont idéaux pour les armures atmosphériques, de Surface ou hybrides.
+• Exo-alpha (taille moyenne : environ 1,80 m) : ce sont les armures les plus légères, généralement conçues avec une épaisseur de coque minimale.
+• Exo-0 (env. 1,90 m) : ce sont des armures très fines, offrant peu d’espace intérieur. Elles sont moulés très près du corps et ressemblent plus à une tenue de plongée rigide qu’à une armure mécanisée. Les plus légères peuvent même être por￾tées sans exosquelette et avec une source d’énergie limitée.
+Armures moyennes (exo-1 à exo-3) : constituées d’une seule pièce, ce sont les armures les plus communes. Elles sont rare￾ment utilisées avec une propulsion atmosphérique et sont le plus sou￾vent réservées pour l’usage hybride ou de Surface. La partie arrière ou avant s’ouvre pour permettre l’accès ou pour pouvoir s’en extraire en 3 Tours de combat. Si cet accès est bloqué, un système de sécurité permet de démembrer l’armure : dans ce cas, elle subit 2D10 points de Dommages, localisés au hasard (ne pas tenir compte du Blindage).
+• Exo-1 (env. 2,20 m) : ces armures sont souvent utilisées à l’air libre, car elles restent assez légères tout en offrant une bonne protection. Ici, le pilote n’occupe plus tout l’espace interne comme dans les catégories plus légères : les mains et les pieds de l’armure sont robotisés, (sauf pour les armures exclusivement de surface, qui sont généralement plus petites et comparables aux exo-0 sous-marines).
+• Exo-2 (env. 2,50 m) et exo-3 (env. 2,80 m) : ces armures, qui commencent à être massives, présentent des formes plus arrondies et bulbeuses, par rapport aux armures plus légères. À partir de cette catégorie, les mains, les avant-bras, les chevilles et les pieds de l’armure sont souvent robotisés (sauf dans les exo-2 de Surface, comparables dans ce cas aux exo-1 sous-marines).
+Armures lourdes (exo-4, env. 3,30 m) : ces armures im￾posantes ne sont généralement employées que sous l’eau. Certaines peuvent être hybrides, mais elles consomment tellement d’énergie que c’est assez rare.
 Armures massives (exo-5 à exo-oméga) : ces énormes 
 armures sont également conçues en priorité pour le milieu sous￾marin. Contrairement aux catégories précédentes, elles possèdent 
 un véritable poste de pilotage, auquel on accède par un sas, situé 

@@ -41,6 +41,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   const activeAssaultAction = gmActiveEntry
     ? actions.find(a => a.token_id === gmActiveEntry.token_id && a.action_key === 'assault')
     : null
+  // Drone CaC : fire_mode='cc' stocké depuis drone_weapons (serveur autorité) — suit le flow "Agir" comme le CaC humanoïde PNJ
+  const isDroneCaC = !!(activeAssaultAction?.drone_weapon_inv_id && activeAssaultAction?.fire_mode === 'cc')
 
   // Slot actif PJ — fenêtre modificateurs côté joueur
   const playerCharacter = !isGm ? characters.find(c => c.user_id === user?.id) : null
@@ -114,8 +116,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Phase RÉSOLUTION — panneau GM : confirmer le slot actif (hors assaut) */}
-      {isGm && phase === 'RESOLUTION' && gmActiveEntry && (!activeAssaultAction || gmActiveCharacter?.type === 'drone') && (
+      {/* Phase RÉSOLUTION — panneau GM : confirmer le slot actif (hors assaut distance, ou drone CaC qui suit le même flow que CaC humanoïde) */}
+      {isGm && phase === 'RESOLUTION' && gmActiveEntry && (!activeAssaultAction || isDroneCaC) && (
         <div style={styles.gmResolution}>
           <div style={styles.gmResolutionLabel}>
             Slot actif : <strong>{gmActiveToken?.label ?? '?'}</strong>
@@ -142,8 +144,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Phase RÉSOLUTION — modificateurs assaut PNJ (GM uniquement, PNJ seulement) */}
-      {isGm && phase === 'RESOLUTION' && activeAssaultAction && gmActiveEntry && gmActiveCharacter?.type === 'pnj' && (
+      {/* Phase RÉSOLUTION — modificateurs assaut distance GM (PNJ ou drone ranged — exclut drone CaC qui passe par "Agir") */}
+      {isGm && phase === 'RESOLUTION' && activeAssaultAction && !isDroneCaC && gmActiveEntry && gmActiveCharacter?.type !== 'pj' && (
         <CombatModifiersWindow
           socket={socket}
           assaultAction={activeAssaultAction}
