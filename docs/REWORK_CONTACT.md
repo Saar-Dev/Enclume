@@ -46,19 +46,18 @@ if ((rosterAtk?.state_combat_mode === 'charge') && dist2dChk <= 3) {
 
 **Problème :** `PORTEE_MOD_COMP['bout_portant']` = +5 appliqué à tort pour `armement_contact`. Contact physique = portée satisfaite par définition, modificateur = 0.
 
-**Fix :**
+**Fix — 1 seule ligne (ligne 3732 uniquement) :**
 ```js
 // Avant (bug) :
 const portee = (category === 'armement_contact') ? 'bout_portant' : (confirmedModifiers?.portee ?? 'courte')
 let totalModComp = PORTEE_MOD_COMP[portee] ?? 0
 
-// Après (fix) :
-const porteeModComp = (category === 'armement_contact')
-  ? 0
-  : (PORTEE_MOD_COMP[confirmedModifiers?.portee] ?? 0)
-let totalModComp = porteeModComp
+// Après (1 ligne changée — ligne 3732 uniquement) :
+const portee = category !== 'armement_contact' ? (confirmedModifiers?.portee ?? 'courte') : null
+let totalModComp = PORTEE_MOD_COMP[portee] ?? 0   // inchangé : PORTEE_MOD_COMP[null] ?? 0 = 0 ✅
 ```
-Retirer aussi `porteeModDrone` du breakdown si `armement_contact`.
+`porteeModDrone` (ligne 3752) = `PORTEE_MOD_COMP[null] ?? 0 = 0` → condition `porteeModDrone !== 0` → faux → `PORTEE_LABELS[null]` jamais évalué.
+**Lignes 3733 et 3752 : inchangées.**
 
 ---
 
@@ -300,22 +299,46 @@ Libellés nécessaires :
 
 ### CORR-B1 — `hand_pref` + `sheetCible` déjà disponible
 
-`char_sheet.hand_pref` — valeurs `'R'` (défaut) / `'L'`.
+`char_sheet.hand_pref` — valeurs `'R'` (défaut) / `'L'` / `'A'` (ambidextre — migration 36 ligne 49).
 
 Bonne nouvelle : `sheetCible` est **déjà fetchée** à la ligne 3308 avant le Promise.all défenseur.
 `sheetCible.hand_pref` est donc disponible sans requête supplémentaire.
 
 Slot priority :
 - `hand_pref === 'L'` → MG en premier, puis MD, puis 2M
-- Sinon → MD en premier, puis MG, puis 2M
+- Sinon (R ou A) → MD en premier, puis MG, puis 2M — `'A'` tombe dans le défaut, aucune gestion spéciale ✅
 - Fallback aucun slot occupé avec arme de contact → `COMBAT_A_MAINS_NUES`
 
-Ce qui change par rapport au plan initial :
-- Pas de requête extra pour `hand_pref` — `sheetCible` suffit.
-- Besoin de **2 requêtes supplémentaires** avant le Promise.all défenseur :
-  1. `char_inventory JOIN ref_equipment` — arme de contact par priorité de slot (`ORDER BY CASE slot WHEN dominant THEN 0 WHEN other THEN 1 ELSE 2 END`)
-  2. `ref_equipment_skill_assoc WHERE item_id = defWeapon.equipment_id` → `defSkillId`
-- Ces 2 requêtes remplacent la ligne 3318 hardcodée `'COMBAT_A_MAINS_NUES'`.
+Architecture **3 rounds parallèles** (amélioration vs. plan original qui ajoutait 2 séquentielles avant le Promise.all) :
+
+**Round 1 (parallèle) — intégrer `defContactWeapons` dans le Promise.all existant, retirer `charSkillDef`/`refSkillDef` :**
+5 branches : `attrsCible`, `archetypeCible`, `woundsCible`, `invCible`, `defContactWeapons`
+
+**JS (0 DB) — tri + détermination `defSkillId` :**
+```js
+const slotPriority = (sheetCible.hand_pref ?? 'R') === 'L' ? ['MG', 'MD', '2M'] : ['MD', 'MG', '2M']
+const defWeapon = slotPriority.map(s => defContactWeapons.find(w => w.slot === s)).find(w => w != null) ?? null
+let defSkillId = 'COMBAT_A_MAINS_NUES'
+```
+
+**Round 2 (séquentiel conditionnel) — seulement si `defWeapon` existe :**
+```js
+if (defWeapon?.equipment_id) {
+  const assoc = await db('ref_equipment_skill_assoc').where({ item_id: defWeapon.equipment_id }).first()
+  if (assoc) defSkillId = assoc.skill_id
+}
+```
+
+**Round 3 (parallèle) — `charSkillDef`, `refSkillDef`, `genoCible` :**
+```js
+const [charSkillDef, refSkillDef, genoCible] = await Promise.all([
+  db('char_skills').where({ char_sheet_id: sheetCible.id, skill_id: defSkillId }).first(),
+  db('ref_skills').where({ id: defSkillId }).first(),
+  archetypeCible?.genotype_id ? db('ref_genotypes').where({ id: archetypeCible.genotype_id }).first() : Promise.resolve(null),
+])
+```
+
+3 rounds DB max (vs. 4 avec le plan initial). La variable `genoCible` rejoint le Round 3 (parallèle) au lieu d'être séquentielle post-Promise.all.
 
 ---
 
@@ -410,7 +433,7 @@ Trois emplacements à modifier pour Étape 3 :
 2. Appel ligne 2334 : passer `confirmedModifiers`
 3. Appels récursifs lignes 2779 et 3505 : passer `confirmedModifiers`
 
-Et dans `commonPending` (ligne 3346) : ajouter `confirmedModifiers` si nécessaire pour `COMBAT_MELEE_DEFENSE_CONFIRM`.
+Et dans `commonPending` (ligne 3346) : ajouter `confirmedModifiers` — **obligatoire** pour que la ligne 2779 (multi-attaque) propage les mods à toutes les attaques de la série.
 
 ---
 
@@ -626,7 +649,7 @@ const chancesAttaque = ... + situationModComp + tailleMod + terrainInstableMod +
 **Format `breakdownAtk` confirmé** (lignes 3260–3269) : `{ label: string, value: number, type: 'base'|'bonus'|'malus'|'total' }` ✅ — pattern spread conditionnel `...(val !== 0 ? [{ label, value, type }] : [])` à réutiliser.
 
 Ajouter dans `breakdownAtk` si non nuls (même pattern que autres modificateurs).
-`confirmedModifiers` n'a **pas besoin** d'être dans `commonPending` : il est déjà intégré dans `chancesAttaque` avant le stockage.
+`confirmedModifiers` **doit être dans `commonPending`** — la ligne 2779 (récursif MELEE_DEFENSE_CONFIRM, multi-attaque) n'y a pas accès autrement. `chancesAttaque` intègre déjà les mods de l'attaque courante, mais les appels récursifs recalculent `chancesAttaque` depuis zéro → `confirmedModifiers` doit être dans `commonPending` pour propager les mods situation à toutes les attaques de la série.
 
 ---
 
@@ -634,7 +657,7 @@ Ajouter dans `breakdownAtk` si non nuls (même pattern que autres modificateurs)
 
 ```
 Étape 1 — Bugfixes serveur CaC humanoïde (B1, B2, B8, B9)
-  B1  : compétence défenseur → hand_pref → JS post-sort (2 requêtes séquentielles, PAS orderByRaw)
+  B1  : compétence défenseur → hand_pref → JS post-sort (3 rounds parallèles, PAS orderByRaw — voir CORR-B1 architecture)
   B2  : Charge guard → ligne 3234, rosterAttaquant existant
   B8  : drone défenseur → nouveau bloc `else if (type === 'drone')` entre ligne 3512 et 3514
         (test simple, damage auto pipeline drone, NO guard dans MELEE_DEFENSE_CONFIRM)
@@ -843,6 +866,7 @@ confirmedModifiers: {
 **`commonPending` — ajout :**
 ```js
 situationDef: confirmedModifiers?.situationDef ?? [],
+confirmedModifiers,   // requis pour récursif ligne 2779 (multi-attaque MELEE_DEFENSE_CONFIRM)
 ```
 
 **Calcul terrainInstableModDef (même pattern que attaquant) :**
@@ -894,3 +918,104 @@ Le modifier terrain_instable est dynamique (dépend de `acrobatieTotal`). Le lab
 }] : []),
 ```
 Même pattern pour le défenseur si Option A retenue pour commonPending.
+
+---
+
+## AUDIT SESSION 92-4 — Corrections supplémentaires identifiées en run à vide
+
+> Appender progressivement. Source : run à vide exhaustif du plan Étape 3 (lecture code + analyse scoping).
+
+---
+
+### CORR-S15 — Terrain instable DEF branche PNJ auto : `attrsCible`/`genoCible` hors scope
+
+**Problème identifié :** `attrsCible`, `archetypeCible` et `genoCible` sont déclarés avec `const` à l'intérieur du bloc `if (sheetCible)` (lignes 3333–3366). Le bloc PNJ auto (`if (defenderCharacter.type === 'pnj')`) est au même niveau lexical → ces variables ne sont **pas accessibles** dans le bloc PNJ.
+
+**Conséquence :** il n'est PAS possible de réutiliser `attrsCible`/`genoCible` pour le fetch terrain instable DEF dans la branche PNJ auto. Il faut un re-fetch.
+
+**Fix — à insérer après ligne 3422 (fin des ajustements chanceDefense mode combat), avant ligne 3423 (`mrAttaque`) :**
+```js
+// Terrain instable DEF — PNJ auto
+// attrsCible/genoCible hors scope → re-fetch conditionnel (char_sheet_id_cible disponible)
+let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
+if ((confirmedModifiers?.situationDef ?? []).includes('cac_terrain_instable') && char_sheet_id_cible) {
+  const [attrsDef, archetypeDef, acrobatieCharDef, acrobatieRefDef] = await Promise.all([
+    db('char_attributes').where({ char_sheet_id: char_sheet_id_cible }),
+    db('char_archetype').where({ char_sheet_id: char_sheet_id_cible }).first(),
+    db('char_skills').where({ char_sheet_id: char_sheet_id_cible, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
+    db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
+  ])
+  const genoDef = archetypeDef?.genotype_id
+    ? await db('ref_genotypes').where({ id: archetypeDef.genotype_id }).first() : null
+  acrobatieDefTotal = acrobatieRefDef
+    ? calcSkillTotal(attrsDef, acrobatieCharDef, acrobatieRefDef, genoDef)
+    : defenderSkillTotal
+  terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
+  chanceDefense += terrainInstableModDef
+}
+// mrAttaque, mrDefense (utilisent chanceDefense final) — ligne 3423 inchangée
+```
+
+**Variables disponibles au point d'insertion :**
+- `confirmedModifiers` — paramètre de `resolveMeleeAction` (après S2) ✓
+- `char_sheet_id_cible` — `let` déclaré avant `if (sheetCible)`, ligne 3327 ✓
+- `defenderSkillTotal` — `let` déclaré avant `if (sheetCible)` ✓
+
+**Nb queries (conditionnel) :** 4 parallèles + 1 séquentielle (genotype). Déclenché uniquement si `cac_terrain_instable` est coché pour le défenseur.
+
+---
+
+### CORR-S16 — `breakdownDef` PNJ auto : entrée terrain instable DEF
+
+Après CORR-S15, `terrainInstableModDef` et `acrobatieDefTotal` sont en scope (hoistés en `let`).
+Ajouter dans `breakdownDef` (ligne 3430–3436), avant `{ label: 'Seuil', ... }` :
+
+```js
+...(terrainInstableModDef !== 0 ? [{
+  label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`,
+  value: terrainInstableModDef,
+  type: 'malus',
+}] : []),
+```
+
+Le `{ label: 'Seuil', value: chanceDefense, type: 'total' }` utilise déjà le `chanceDefense` final (modifié par `+= terrainInstableModDef`). Aucun autre changement à `breakdownDef`. ✓
+
+Même pattern à ajouter dans `breakdownDefPj` (MELEE_DEFENSE_CONFIRM, ligne 2623-2624), avec `acrobatieDefTotal` hoistée en `let` avant le bloc conditionnel S10.
+
+---
+
+### CORR-DRONE-LOOKUP — `CombatCacModifiersWindow` : lookup action incorrect pour drone CaC
+
+**Problème :** le drone CaC a `action_key === 'assault'` (pas `'melee'`). Un lookup `actions.find(a => a.action_key === 'melee')` retourne `null` pour le drone → header `? — Corps à corps — ?`, `target_token_id` absent.
+
+**Cause :** le drone CaC passe par `resolveAssaultAction`/`resolveDroneAssaultAction`, pas `resolveMeleeAction`. L'action déclarée reste de type `assault` avec `drone_weapon_inv_id` et `fire_mode === 'cc'`.
+
+**Confirmation :** `fire_mode` est disponible dans le store `actions` — déjà utilisé ligne 45 CombatOverlay : `activeAssaultAction?.fire_mode === 'cc'`. ✓
+
+**Fix — lookup conditionnel selon `isDrone` dans `CombatCacModifiersWindow` :**
+```js
+const meleeOrAssaultAction = useMemo(() => {
+  if (!activeRosterEntry) return null
+  if (isDrone) {
+    return actions.find(a =>
+      a.token_id === activeRosterEntry.token_id &&
+      a.action_key === 'assault' && a.fire_mode === 'cc'
+    ) ?? null
+  }
+  return actions.find(a =>
+    a.token_id === activeRosterEntry.token_id && a.action_key === 'melee'
+  ) ?? null
+}, [actions, activeRosterEntry, isDrone])
+```
+
+Remplacer toutes les références à `meleeAction` dans le composant par `meleeOrAssaultAction`.
+
+---
+
+### RÉCAPITULATIF — Plan Étape 3 corrigé (16 S + 1 client fix)
+
+Plan serveur final : S1–S16 (S15 et S16 nouveaux — terrain instable DEF branche PNJ).
+Plan client final : CombatCacModifiersWindow (+ CORR-DRONE-LOOKUP), CombatOverlay C1–C6.
+
+**Ordre de travail inchangé** — S15/S16 s'insèrent naturellement dans le bloc PNJ déjà visité.
+`i18n` : aucune clé fr.json à créer — `CombatModifiersWindow.jsx` ne l'utilise pas, même pattern pour le nouveau composant.

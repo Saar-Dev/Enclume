@@ -1,3 +1,37 @@
+## v97 — 2026-06-14 — Fix split-brain slot detection
+
+### Combat — Architecture slots
+- [fix] Split-brain slot actif : `CombatOverlay` utilise désormais `activeTokenId` (absolu) au lieu de `sortedRoster[activeSlotIdx]` (index roster complet) — élimine le cas où un token non-annoncé à INI haute bloquait le combat
+- [fix] `startResolutionPhase` : premier slot envoyé depuis le roster annoncé filtré (pas le roster complet) — cohérence avec `COMBAT_ACTION_CONFIRM`
+- [fix] Actions transmises au client filtrées `status='pending'` — pas de données périmées de tours précédents
+- [fix] Guard CaC sans cible : `COMBAT_ACTION_DECLARE` refuse avec `COMBAT_DECLARE_ERROR` si aucune cible sélectionnée — `has_announced` non settée
+
+---
+
+## v96 — 2026-06-14 — Sprint CaC Étape 3 : CombatCacModifiersWindow + mods situation
+
+### Combat — Corps à corps
+- [feat] Nouvelle fenêtre modificateurs CaC (`CombatCacModifiersWindow`) — 7 mods attaquant + terrain instable défenseur + taille cible
+- [feat] Deux armes au contact : détection automatique serveur (MD + MG arme contact → +3)
+- [feat] Terrain instable : compétence limitative ACROBATIE_EQUILIBRE appliquée attaquant ET défenseur
+- [feat] 6 clés de situation CaC dans `SITUATION_MODS` (côté, au sol, espace confiné/très confiné, position avantageuse, main non directrice)
+- [feat] `confirmedModifiers` propagé sur les 4 call sites de `resolveMeleeAction` (multi-attaque inclus)
+- [feat] `breakdownAtk` / `breakdownDef` : nouvelles entrées conditionnelles visibles dans le chat
+
+---
+
+## v95 — 2026-06-14 — Sprint CaC : correctifs mécaniques (Étapes 1+2)
+
+### Combat — Corps à corps
+- [fix] B9 — Test d'opposition §6.2 complet : les deux réussissent → meilleure MR l'emporte, égalité = rien
+- [fix] B1 — Compétence défenseur selon arme équipée en main (priorité `hand_pref`), fallback Mains nues
+- [fix] B2 — Charge impossible si déjà à ≤ 3m du défenseur (LdB §6.4)
+- [fix] B8 — Drone défenseur CaC : test simple, dégâts via `calcDroneRD` + intégrité
+- [fix] LOC — Table de localisation CaC séparée (`LOC_TABLE_CONTACT`) — 3 emplacements
+
+### Combat — Drones
+- [fix] B3 — Drone CaC `armement_contact` : modificateur portée = 0 (contact physique, pas de +5 `bout_portant`)
+
 ## v89b — 2026-06-12 — Sprint 2c : cycle combat drone joueur complet
 
 ### Drones — Combat

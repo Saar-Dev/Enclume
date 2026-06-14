@@ -638,3 +638,165 @@ Session analytique + documentation — pas de validation fonctionnelle requise. 
 | T4 | `docs/MANUELSYSCOMBAT.md` §7.3-7.4 | Précision armement_contact portée = 0, Bug DC3 référencé |
 | T5 | `docs/BUGIDENTIFIE.md` | DC1 corrigé (mention bout_portant incorrecte), DC3 ajouté |
 
+---
+
+## Session 92tier — 2026-06-14 — Sprint CaC Étapes 1+2 : correctifs serveur
+
+### Contexte
+
+Suite de Session 92bis (plan `docs/REWORK_CONTACT.md` finalisé). Implémentation des Étapes 1+2.
+6 corrections préliminaires au plan apportées avant le code (architecture B1 → 3 rounds parallèles, B3 → 1 ligne `null`, `hand_pref 'A'`, `confirmedModifiers` obligatoire dans `commonPending`, threading 5e site).
+Étape 3 (CombatCacModifiersWindow + mods situation) reste à faire.
+
+Fichiers lus : `REWORK_CONTACT.md`, `MANUELSYSCOMBAT.md`, `socket/index.js` (11 sections ciblées).
+
+### Livré — validé fonctionnellement ✅
+
+**Bugfixes `resolveMeleeAction` (Étape 1)**
+- **B9** — Test d'opposition MR tie-break (LdB §6.2) : `hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)`. Corrige "les deux réussissent → rien". 2 emplacements : PNJ auto + MELEE_DEFENSE_CONFIRM.
+- **B1** — Compétence défenseur dynamique : `hand_pref` → slot priority (MD/MG/2M) → `ref_equipment_skill_assoc` → `defSkillId`. Architecture 3 rounds parallèles. Fallback `COMBAT_A_MAINS_NUES`.
+- **B2** — Guard Charge ≤ 3m : `COMBAT_DECLARE_ERROR` si `state_combat_mode === 'charge' && dist2dChk <= 3`. Validé ✅
+- **B8** — Drone défenseur : bloc `else if (defenderCharacter.type === 'drone')` — test simple, pipeline `calcDroneRD` + `resolveDroneIntegrityLoss`, slot libre immédiatement.
+- **LOC** — `LOC_TABLE_CONTACT` créée + remplacée en 3 emplacements (PNJ auto, MELEE_DEFENSE_CONFIRM PNJ, COMBAT_DAMAGE_CONFIRM conditionnel `pendingType === 'melee'`).
+
+**Bugfix `resolveDroneAssaultAction` (Étape 2)**
+- **B3** — `portee = null` pour `armement_contact` → `PORTEE_MOD_COMP[null] ?? 0 = 0`. 1 ligne. Élimine le +5 `bout_portant` illégitime.
+
+### Non livré — Étape 3
+
+`CombatCacModifiersWindow.jsx`, mods situation/taille serveur, deux armes auto, terrain instable.
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | `server/src/socket/index.js` | `LOC_TABLE_CONTACT` constante |
+| T2 | `server/src/socket/index.js` | B1 — compétence défenseur dynamique (3 rounds parallèles) |
+| T3 | `server/src/socket/index.js` | B2 — guard Charge ≤ 3m |
+| T4 | `server/src/socket/index.js` | B8 — drone défenseur CaC |
+| T5 | `server/src/socket/index.js` | B9 — MR tie-break (×2 emplacements) |
+| T6 | `server/src/socket/index.js` | LOC1/LOC2/LOC3 — LOC_TABLE_CONTACT (3 emplacements) |
+| T7 | `server/src/socket/index.js` | B3 — portee null armement_contact drone |
+| T8 | `docs/REWORK_CONTACT.md` | 6 corrections plan (B3, CORR-B1 archi, hand_pref 'A', commonPending obligatoire, threading) |
+
+
+---
+
+## Session 92-4 — 2026-06-14 — Sprint CaC Étape 3 : CombatCacModifiersWindow + mods situation
+
+### Contexte
+
+Suite de Session 92tier (Étapes 1+2 validées). Implémentation de lÉtape 3 : composant modificateurs CaC + 6 clés SITUATION_MODS + deux armes auto + terrain instable.
+
+Fichiers lus : `REWORK_CONTACT.md` (§5 + AUDIT SESSION 92-4), `MANUELSYSCOMBAT.md`, `socket/index.js` (15 sections), `CombatModifiersWindow.jsx`, `CombatOverlay.jsx`.
+
+### Livré — SR + Vite 200 ✅
+
+**Serveur `socket/index.js` — 16 modifications (S1–S16) :**
+- **S1** — `SITUATION_MODS` : 6 clés CaC ajoutées (`cac_attaquant_cote`, `cac_attaquant_au_sol`, `cac_espace_confine`, `cac_espace_tres_confine`, `cac_position_avantageuse`, `cac_main_non_directrice`) — préfixe `cac_` évite les collisions ranged
+- **S2** — `resolveMeleeAction` : paramètre `confirmedModifiers = null` ajouté
+- **S3** — `invAttaquant` select : `ref_equipment.category as ref_category` ajouté (pour détection deux armes)
+- **S4+S5** — Bloc mods CaC ATK inséré avant `chancesAttaque` : `deuxArmesBonus` (auto-détection MD+MG arme contact ≥ 2 → +3), `situationModComp` (keys filtrées hors terrain instable), `tailleMod`, `terrainInstableMod` (fetch conditionnel ACROBATIE_EQUILIBRE → Math.min limitative). `chancesAttaque` étendue
+- **S6** — `breakdownAtk` : 4 nouvelles entrées conditionnelles (Mods situation, Taille cible, Terrain instable, Deux armes au contact)
+- **S7** — `commonPending` : `confirmedModifiers` + `situationDef` ajoutés (threading vers MELEE_DEFENSE_CONFIRM)
+- **S8** — Call site 1 (COMBAT_ACTION_CONFIRM) : `confirmedModifiers` passé à `resolveMeleeAction`
+- **S9** — MELEE_DEFENSE_CONFIRM destructuring : `pendingConfirmedModifiers` + `pendingSituationDef = []` ajoutés
+- **S10** — MELEE_DEFENSE_CONFIRM : bloc terrain instable DEF PJ (fetch conditionnel ACROBATIE_EQUILIBRE → Math.min → `chanceDefense +=`)
+- **S11** — `breakdownDefPj` : entrée terrain instable DEF conditionnelle
+- **S12** — Call site 2 (MELEE_DEFENSE_CONFIRM recursive) : `pendingConfirmedModifiers` passé
+- **S13** — Call site 3 (PNJ auto recursive) : `confirmedModifiers` passé
+- **S14** — Call site 4 (drone recursive) : `confirmedModifiers` passé
+- **S15** — Bloc terrain instable DEF PNJ auto (re-fetch conditionnel — `attrsCible`/`genoCible` hors scope → CORR-S15 appliqué)
+- **S16** — `breakdownDef` PNJ auto : entrée terrain instable DEF
+
+**Client — nouveau fichier :**
+- `CombatCacModifiersWindow.jsx` : composant CaC (7 checkboxes attaquant, 1 checkbox défenseur terrain instable, sélect taille, pill compétence, lookup conditionnel isDrone). CORR-DRONE-LOOKUP appliqué.
+
+**Client — `CombatOverlay.jsx` (C1–C6) :**
+- C1 : import `CombatCacModifiersWindow`
+- C2 : `activeMeleeAction` (GM — action melee PNJ active)
+- C3 : `playerActiveMeleeAction` (PJ — action melee active)
+- C4 : `CombatActionWindow` masquée pendant CaC PJ (`!playerActiveMeleeAction`)
+- C5 : bouton "Agir" bare GM : condition `!activeAssaultAction && !activeMeleeAction` (isDroneCaC a sa propre fenêtre)
+- C6 : 3 montages `CombatCacModifiersWindow` (PNJ melee, drone CaC, PJ melee)
+
+### Non livré — validation fonctionnelle requise
+
+Test en combat réel : humanoid CaC avec mods + drone CaC avec mods.
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | `server/src/socket/index.js` | S1 — SITUATION_MODS 6 clés CaC |
+| T2 | `server/src/socket/index.js` | S2 — signature resolveMeleeAction |
+| T3 | `server/src/socket/index.js` | S3 — invAttaquant ref_category |
+| T4 | `server/src/socket/index.js` | S4+S5 — mods CaC ATK + chancesAttaque |
+| T5 | `server/src/socket/index.js` | S6 — breakdownAtk 4 entrées |
+| T6 | `server/src/socket/index.js` | S7 — commonPending confirmedModifiers + situationDef |
+| T7 | `server/src/socket/index.js` | S8 — call site 1 |
+| T8 | `server/src/socket/index.js` | S9–S11 — MELEE_DEFENSE_CONFIRM DEF PJ |
+| T9 | `server/src/socket/index.js` | S12–S14 — call sites 2/3/4 |
+| T10 | `server/src/socket/index.js` | S15–S16 — terrain instable DEF PNJ auto |
+| T11 | `client/src/components/CombatCacModifiersWindow.jsx` | NOUVEAU — composant CaC |
+| T12 | `client/src/components/CombatOverlay.jsx` | C1–C6 — montage CombatCacModifiersWindow |
+
+---
+
+## Session 93 — 2026-06-14 — Fix split-brain slot detection (PLAN_ARCHICOMBAT_SLOTS)
+
+### Contexte
+
+Session analytique + implémentation. Plan `docs/PLAN_ARCHICOMBAT_SLOTS.md` soumis à 6 runs à vide exhaustifs avant le code. Aucune ambiguïté non résolue au moment du code.
+
+Fichiers lus : `PLAN_ARCHICOMBAT_SLOTS.md`, `CombatOverlay.jsx`, `combatStore.js`, `socket/index.js` (startResolutionPhase + COMBAT_ACTION_DECLARE), `migrations/54_combat.js`. Vérification `SessionPage.jsx` (grep COMBAT_PHASE_CHANGED + COMBAT_SLOT_ADVANCED).
+
+Lecture de synthèse : `MANUELSYSCOMBAT.md` + `SYSTEME/REGLES_LdB.md` — vérification alignement règles CaC (pas de delta détecté).
+
+### Cause racine — split-brain slot detection
+
+Deux sources de vérité pour "qui est le slot actif" :
+- **Serveur** (`COMBAT_ACTION_CONFIRM`) : roster filtré `has_announced=true ORDER BY initiative DESC` + index `active_slot_idx`
+- **Client** (`CombatOverlay`) : roster complet (non filtré) + index `activeSlotIdx`
+
+Si un token non-annoncé a une INI plus haute que les annoncés → index 0 client pointe vers le mauvais token → panneau affiché faux, `tokenId` envoyé dans CONFIRM faux → CONFIRM rejeté par le serveur → **combat bloqué**.
+
+`startResolutionPhase` aggravait : envoyait `broadcastRoster[0]?.token_id` (roster complet non filtré) au lieu du 1er token annoncé.
+
+Problème tertiaire : `COMBAT_ACTION_DECLARE` settait `has_announced=true` même si CaC déclaré sans cible → token annoncé sans action en DB → slot consommé silencieusement.
+
+### Solution
+
+Le serveur envoie un `tokenId` absolu. Le client cherche par `token_id`, pas par index. `activeTokenId` existait déjà dans `combatStore` (ligne 9) et était déjà setté par `advanceSlot`. Il n'était pas consommé dans `CombatOverlay`.
+
+### Livré — en attente de validation fonctionnelle
+
+**Correction 1 — `client/src/components/CombatOverlay.jsx` (3 touches) :**
+- Ligne 20 : `activeTokenId` ajouté au destructuring `useCombatStore()`
+- Ligne 39 : `gmActiveEntry = roster.find(e => e.token_id === activeTokenId) ?? null` (était `sortedRoster[activeSlotIdx]`)
+- Lignes 56+60 : `activeTokenId === playerToken?.id` (était `sortedRoster[activeSlotIdx]?.token_id === playerToken?.id`)
+- `sortedRoster` conservé — sert à l'ordre visuel de la timeline uniquement
+
+**Correction 2 — `server/src/socket/index.js` startResolutionPhase :**
+- 2 queries → 3 queries : `announcedRoster` (filtré `has_announced=true`), `pendingActions` (filtré `status='pending'`), `fullRoster` (non filtré)
+- `COMBAT_PHASE_CHANGED` : `roster: broadcastRoster` (complet — timeline), `actions: pendingActions` (pas de données périmées)
+- `COMBAT_SLOT_ADVANCED` : `tokenId: announcedRoster[0]?.token_id` (filtré, cohérent avec COMBAT_ACTION_CONFIRM)
+
+**Correction 3 — `server/src/socket/index.js` COMBAT_ACTION_DECLARE :**
+- Guard ajouté avant le roster UPDATE : si `mapActions.melee.length > 0 && !mapActions.melee.some(m => m.targetTokenId)` → `COMBAT_DECLARE_ERROR` + `return`
+- `has_announced` non settée pour les CaC sans cible → token n'entre pas dans announcedRoster
+
+### Résiduel documenté (hors scope)
+
+`COMBAT_STATE_SYNC` (reconnexion client en RESOLUTION) : calcule encore `activeTokenId` depuis roster complet + index → même split-brain pour les reconnexions. Sprint dédié futur.
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| C1 | `client/src/components/CombatOverlay.jsx` | activeTokenId destructuring |
+| C2 | `client/src/components/CombatOverlay.jsx` | gmActiveEntry par tokenId |
+| C3 | `client/src/components/CombatOverlay.jsx` | conditions joueur par activeTokenId |
+| S1 | `server/src/socket/index.js` startResolutionPhase | 3 queries filtrées |
+| S2 | `server/src/socket/index.js` startResolutionPhase | pendingActions + announcedRoster[0] |
+| S3 | `server/src/socket/index.js` COMBAT_ACTION_DECLARE | guard melee sans cible |

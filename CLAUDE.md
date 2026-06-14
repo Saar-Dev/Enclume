@@ -98,7 +98,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 91b (2026-06-12)
+## ÉTAT COURANT — Session 93 (2026-06-14)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **78 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
@@ -106,14 +106,20 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 **En attente de validation fonctionnelle :**
 - Sprint Drones 2c (cycle joueur) — Session 89
+- Sprint CaC Étape 3 (`CombatCacModifiersWindow` + mods) — Session 92-4
+- Fix split-brain slot detection — Session 93 — voir `docs/PLAN_ARCHICOMBAT_SLOTS.md` §Procédure de validation
 - Sprint CaC 4b (attaque multiple melee) — Session 74
 - Sprint Test de Choc (migration 69, shock_auto_stun) — Session 81
 
-**Session 91b — Livré :**
-- Bug 1 fire_mode drone : `CombatGmDeclareWindow` lit `droneWeapons.find(...).fire_mode` (config fiche drone, onglet Armes). Revert surcharge server-side. Non validé fonctionnellement.
+**Session 93 — Livré ✅ (validation fonctionnelle requise) :**
+- Fix split-brain slot detection : `activeTokenId` consommé dans `CombatOverlay` (roster.find), `startResolutionPhase` → 3 queries filtrées + `announcedRoster[0]`, guard CaC sans cible → `COMBAT_DECLARE_ERROR`
+
+**Session 92tier / 92-4 — Livrés ✅ :**
+- Sprint CaC Étapes 1+2 : B1/B2/B3/B8/B9/LOC. Validé fonctionnellement.
+- Sprint CaC Étape 3 : `CombatCacModifiersWindow` + 6 clés SITUATION_MODS + deux armes auto + terrain instable. SR + Vite 200 ✅.
 
 **Dettes actives :**
-- **Sprint CaC** — CaC PJ jamais testé + drone CaC (DC1+DC2 dans BUGIDENTIFIE.md) — sprint dédié
+- **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion en RESOLUTION : calcule encore `activeTokenId` depuis roster complet + index — sprint dédié futur
 - `is_stunned` non enforced dans `COMBAT_ACTION_DECLARE` → PC42
 - `is_stunned` sans durée → sprint `stunned_until_turn` requis
 - Bug CL1 — Portraits PNJ non visibles timeline joueur

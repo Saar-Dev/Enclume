@@ -55,6 +55,15 @@ const LOC_TABLE = [
   { max: 20, slot: 'JG' },
 ]
 
+const LOC_TABLE_CONTACT = [
+  { max: 2,  slot: 'T'  },
+  { max: 8,  slot: 'C'  },
+  { max: 11, slot: 'BD' },
+  { max: 14, slot: 'BG' },
+  { max: 17, slot: 'JD' },
+  { max: 20, slot: 'JG' },
+]
+
 // Map des timers combat actifs — Map<campaignId, Map<tokenId, timeoutId>>
 // Déclarée hors de initSocket — singleton, PC16.
 // Sprint 1 : déclarée uniquement. Logique timer démarrée en Sprint 2.
@@ -94,6 +103,14 @@ const SITUATION_MODS = {
   tireur_allure_lente: -3, tireur_allure_moyenne: -5, tireur_allure_rapide: -7, tireur_allure_maximale: -99,
   couverture_partielle: -3, couverture_importante: -5,
   obscurite_legere: -3, obscurite_importante: -5, obscurite_totale: -99,
+  // CaC §6.2 — préfixe cac_ évite les collisions avec keys ranged
+  cac_attaquant_cote: -3,
+  cac_attaquant_au_sol: -5,
+  cac_espace_confine: -3,
+  cac_espace_tres_confine: -5,
+  cac_position_avantageuse: 3,
+  cac_main_non_directrice: -5,
+  // cac_terrain_instable : compétence limitative — traité séparément (Math.min)
 }
 const TAILLE_MODS = {
   minuscule: -10, tres_petite: -5, petite: -3, moyenne: 0,
@@ -2135,6 +2152,13 @@ const initSocket = (io) => {
           })
         }
 
+        // Guard : CaC déclaré sans aucune cible → has_announced non settée, erreur explicite
+        if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0
+            && !mapActions.melee.some(m => m.targetTokenId)) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Corps à corps : sélectionner une cible avant de valider.' })
+          return
+        }
+
         // UPDATE combat_roster — états + initiative + has_announced
         const [updated] = await db('combat_roster')
           .where({ campaign_id: campaignId, token_id: tokenId })
@@ -2251,6 +2275,7 @@ const initSocket = (io) => {
     // Résout les actions dans l'ordre sequence ASC, avance au slot suivant.
     // Payload : { tokenId, confirmedModifiers? }
     socket.on(WS.COMBAT_ACTION_CONFIRM, async ({ tokenId, confirmedModifiers }) => {
+      console.log(`[DBG] COMBAT_ACTION_CONFIRM — tokenId:${tokenId} mods:${JSON.stringify(confirmedModifiers ?? null)}`)
       const campaignId = socket.campaignId
       try {
         // Guard : phase = RESOLUTION
@@ -2333,7 +2358,7 @@ const initSocket = (io) => {
           }
           needsDefenseWait = await resolveMeleeAction(
             io, socket, campaignId, meleeActions[0], character,
-            meleeActions.slice(1), meleeActions.length
+            meleeActions.slice(1), meleeActions.length, confirmedModifiers
           )
         }
 
@@ -2367,7 +2392,8 @@ const initSocket = (io) => {
       try {
         // 1. Jet localisation
         const { total: rollLoc, rolls: locRolls, seed: locSeed } = await parseDice('1d20')
-        const slotCode = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
+        const locTable = pendingType === 'melee' ? LOC_TABLE_CONTACT : LOC_TABLE
+        const slotCode = (locTable.find(r => rollLoc <= r.max) ?? locTable[locTable.length - 1]).slot
         const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
 
         // 2. Armures de la cible (dépend du slotCode)
@@ -2585,6 +2611,8 @@ const initSocket = (io) => {
         targetName, userId,
         remainingMeleeActions: pendingRemainingMelee = [],
         totalMeleeCount: pendingTotalMeleeCount = 1,
+        confirmedModifiers: pendingConfirmedModifiers,
+        situationDef: pendingSituationDef = [],
       } = pending
 
       try {
@@ -2599,10 +2627,30 @@ const initSocket = (io) => {
         else if (defCombatMode === 'defensif') chanceDefense += 3
         else if (defCombatMode === 'retraite') chanceDefense += 5
 
-        // 2. Résolution Polaris : attaquant réussit ET défenseur rate → touche
+        // Terrain instable défenseur PJ — compétence limitative ACROBATIE_EQUILIBRE
+        let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
+        if (pendingSituationDef.includes('cac_terrain_instable') && char_sheet_id_cible) {
+          const [attrsCibleDef, archetypeCibleDef, acrobatieCharDef, acrobatieRefDef] = await Promise.all([
+            db('char_attributes').where({ char_sheet_id: char_sheet_id_cible }),
+            db('char_archetype').where({ char_sheet_id: char_sheet_id_cible }).first(),
+            db('char_skills').where({ char_sheet_id: char_sheet_id_cible, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
+            db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
+          ])
+          const genoCibleDef = archetypeCibleDef?.genotype_id
+            ? await db('ref_genotypes').where({ id: archetypeCibleDef.genotype_id }).first() : null
+          acrobatieDefTotal = acrobatieRefDef
+            ? calcSkillTotal(attrsCibleDef, acrobatieCharDef, acrobatieRefDef, genoCibleDef)
+            : defenderSkillTotal
+          terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
+          chanceDefense += terrainInstableModDef
+        }
+
+        // 2. Résolution Polaris §6.2 : les deux réussissent → meilleure MR l'emporte, égalité = rien
+        const mrAttaque      = chancesAttaque - rollAttaque
+        const mrDefense      = chanceDefense  - rollDefense
         const attackSuccess  = rollAttaque  <= chancesAttaque
         const defenseSuccess = rollDefense  <= chanceDefense
-        const hit = attackSuccess && !defenseSuccess
+        const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
 
         const modeCombatDefPj = defCombatMode === 'offensif' ? -5 : defCombatMode === 'charge' ? -7 : defCombatMode === 'defensif' ? 3 : defCombatMode === 'retraite' ? 5 : 0
         const breakdownDefPj = [
@@ -2610,6 +2658,7 @@ const initSocket = (io) => {
           ...(modeCombatDefPj !== 0 ? [{ label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDefPj, type: modeCombatDefPj > 0 ? 'bonus' : 'malus' }] : []),
           ...((multiMalusDefenseur ?? 0) !== 0 ? [{ label: 'Multi-adversaires', value: multiMalusDefenseur, type: 'malus' }] : []),
           ...(defenderEffectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' }] : []),
+          ...(terrainInstableModDef !== 0 ? [{ label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' }] : []),
           { label: 'Seuil', value: chanceDefense, type: 'total' },
         ]
         console.log(`[WS] melee défense — rollAtk:${rollAttaque}/${chancesAttaque} rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
@@ -2677,7 +2726,7 @@ const initSocket = (io) => {
           } else {
             // PNJ attaquant : résolution auto des dégâts
             const { total: rollLoc } = await parseDice('1d20')
-            const slotCode = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
+            const slotCode = (LOC_TABLE_CONTACT.find(r => rollLoc <= r.max) ?? LOC_TABLE_CONTACT[LOC_TABLE_CONTACT.length - 1]).slot
             const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
 
             let etq = null
@@ -2778,7 +2827,7 @@ const initSocket = (io) => {
           const waitForNext = await resolveMeleeAction(
             io, attackerSocket, meleeCampaignId,
             nextAction, attackerCharacter,
-            restActions, pendingTotalMeleeCount
+            restActions, pendingTotalMeleeCount, pendingConfirmedModifiers
           )
           if (!waitForNext) {
             const state = await db('combat_state').where({ campaign_id: meleeCampaignId }).first()
@@ -2953,24 +3002,31 @@ async function startResolutionPhase(io, campaignId) {
       .where({ campaign_id: campaignId })
       .update({ phase: 'RESOLUTION', active_slot_idx: 0, updated_at: db.fn.now() })
 
-    const [roster, actions] = await Promise.all([
-      db('combat_roster').where({ campaign_id: campaignId }).orderBy('initiative', 'desc'),
-      db('combat_actions').where({ campaign_id: campaignId }).orderBy('sequence', 'asc'),
+    const [announcedRoster, pendingActions, fullRoster] = await Promise.all([
+      db('combat_roster')
+        .where({ campaign_id: campaignId, status: 'active', has_announced: true })
+        .orderBy('initiative', 'desc'),
+      db('combat_actions')
+        .where({ campaign_id: campaignId, status: 'pending' })
+        .orderBy('sequence', 'asc'),
+      db('combat_roster')
+        .where({ campaign_id: campaignId })
+        .orderBy('initiative', 'desc'),
     ])
 
-    const broadcastRoster = roster.map(({ surprise_roll: _sr, ...rest }) => rest)
+    const broadcastRoster = fullRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
 
     combatPreviews.delete(campaignId)
 
     io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, {
       phase: 'RESOLUTION',
       roster: broadcastRoster,
-      actions,
+      actions: pendingActions,
     })
 
     io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, {
       activeSlotIdx: 0,
-      tokenId: broadcastRoster[0]?.token_id ?? null,
+      tokenId: announcedRoster[0]?.token_id ?? null,
     })
 
     console.log(`[WS] startResolutionPhase — campagne ${campaignId}`)
@@ -3136,7 +3192,7 @@ function countAdversaires(tokenPos, rosterTokens, excludeId, enemyType) {
 // ─── RÉSOLUTION RECHARGEMENT ────────────────────────────────────────────────
 // Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='melee'.
 // Retourne true si le slot doit rester bloqué (défenseur PJ en attente), false sinon.
-async function resolveMeleeAction(io, socket, campaignId, action, character, remainingMeleeActions = [], totalMeleeCount = 1) {
+async function resolveMeleeAction(io, socket, campaignId, action, character, remainingMeleeActions = [], totalMeleeCount = 1, confirmedModifiers = null) {
   try {
     const weaponInvId   = action.weapon_inv_id ?? null
     const targetTokenId = action.target_token_id
@@ -3192,7 +3248,8 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
         .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where({ 'char_inventory.character_id': character.id })
         .select('char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
-                'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str'),
+                'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str',
+                'ref_equipment.category as ref_category'),
       // Tous les tokens actifs du roster avec leur type et leur allonge max (arme de contact équipée).
       // Utilisé pour le calcul multi-adversaires (positions post-déplacement garanties).
       db('tokens as t')
@@ -3231,6 +3288,10 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
     const modDom = getModDom(for_na_attaquant)
 
     const rosterAttaquant = await db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first()
+    if (rosterAttaquant?.state_combat_mode === 'charge' && dist2dChk <= 3) {
+      socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Charge impossible — distance ≤ 3m (élan insuffisant)' })
+      return false
+    }
     const isRushedMod    = rosterAttaquant?.state_vitesse === 'rushed' ? -5 : 0
     const combatModeAtk  = rosterAttaquant?.state_combat_mode ?? 'normal'
     const attackModeBonus = (combatModeAtk === 'offensif' || combatModeAtk === 'charge') ? 3 : 0
@@ -3245,7 +3306,25 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
     // CaC 4b — malus attaque multiple (LdB p.218) : −5 pour 2 attaques, −7 pour 3+
     const multiAttackMalus = totalMeleeCount === 2 ? -5 : totalMeleeCount >= 3 ? -7 : 0
 
-    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant - carenceAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant + multiAttackMalus
+    // Mods situation CaC (§6.2)
+    const deuxArmesSlots = invAttaquant.filter(i => ['MD', 'MG'].includes(i.slot) && i.ref_category === 'Arme de contact')
+    const deuxArmesBonus = deuxArmesSlots.length >= 2 ? 3 : 0
+    const situationMods = (confirmedModifiers?.situation ?? []).filter(k => k !== 'cac_terrain_instable')
+    const situationModComp = situationMods.reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
+    const tailleMod = TAILLE_MODS[confirmedModifiers?.taille ?? 'moyenne'] ?? 0
+    let terrainInstableMod = 0, acrobatieTotal = attackerSkillTotal
+    if ((confirmedModifiers?.situation ?? []).includes('cac_terrain_instable')) {
+      const [acrobatieRefSkill, acrobatieCharSkill] = await Promise.all([
+        db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
+        db('char_skills').where({ char_sheet_id: sheetAttaquant.id, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
+      ])
+      acrobatieTotal = acrobatieRefSkill
+        ? calcSkillTotal(attrsAttaquant, acrobatieCharSkill, acrobatieRefSkill, genoAttaquant)
+        : attackerSkillTotal
+      terrainInstableMod = Math.min(0, acrobatieTotal - attackerSkillTotal)
+    }
+
+    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant - carenceAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant + multiAttackMalus + situationModComp + tailleMod + terrainInstableMod + deuxArmesBonus
 
     // Roll attaquant
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
@@ -3265,9 +3344,14 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
       ...(multiAttackMalus !== 0 ? [{ label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' }] : []),
       ...(effectiveMalusAttaquant !== 0 ? [{ label: 'Malus santé / encombrement', value: effectiveMalusAttaquant, type: 'malus' }] : []),
       ...(carenceAttaquant !== 0 ? [{ label: 'Carence armure', value: -carenceAttaquant, type: 'malus' }] : []),
+      ...(situationModComp !== 0 ? [{ label: 'Mods situation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' }] : []),
+      ...(tailleMod !== 0 ? [{ label: 'Taille cible', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' }] : []),
+      ...(terrainInstableMod !== 0 ? [{ label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieTotal})`, value: terrainInstableMod, type: 'malus' }] : []),
+      ...(deuxArmesBonus !== 0 ? [{ label: 'Deux armes au contact', value: deuxArmesBonus, type: 'bonus' }] : []),
       { label: 'Seuil', value: chancesAttaque, type: 'total' },
     ]
     console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
+    console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} carence:${-carenceAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} → seuil:${chancesAttaque}`)
     io.to(campaignId).emit(WS.DICE_RESULT, {
       userId: character.user_id, username: attackerUsername, color: attackerColor,
       formula: '1d20', rolls: attackRolls, total: rollAttaque,
@@ -3312,21 +3396,42 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
 
     if (sheetCible) {
       char_sheet_id_cible = sheetCible.id
-      const [attrsCible, archetypeCible, charSkillDef, refSkillDef, woundsCible, invCible] = await Promise.all([
+
+      // Round 1 — parallèle : données défenseur + armes de contact équipées
+      const [attrsCible, archetypeCible, woundsCible, invCible, defContactWeapons] = await Promise.all([
         db('char_attributes').where({ char_sheet_id: sheetCible.id }),
         db('char_archetype').where({ char_sheet_id: sheetCible.id }).first(),
-        db('char_skills').where({ char_sheet_id: sheetCible.id, skill_id: 'COMBAT_A_MAINS_NUES' }).first(),
-        db('ref_skills').where({ id: 'COMBAT_A_MAINS_NUES' }).first(),
         db('character_wounds').where({ char_sheet_id: sheetCible.id }),
         db('char_inventory')
           .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
           .where({ 'char_inventory.character_id': defenderCharacter.id })
           .select('char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
                   'ref_equipment.weight as ref_weight'),
+        db('char_inventory')
+          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+          .where({ 'char_inventory.character_id': defenderCharacter.id })
+          .whereIn('char_inventory.slot', ['MD', 'MG', '2M'])
+          .where('ref_equipment.category', 'Arme de contact')
+          .select('char_inventory.slot', 'char_inventory.equipment_id'),
       ])
-      const genoCible = archetypeCible?.genotype_id
-        ? await db('ref_genotypes').where({ id: archetypeCible.genotype_id }).first()
-        : null
+
+      // B1 — compétence défenseur selon arme équipée (priorité main directrice)
+      const slotPriority = (sheetCible.hand_pref ?? 'R') === 'L' ? ['MG', 'MD', '2M'] : ['MD', 'MG', '2M']
+      const defWeapon = slotPriority.map(s => defContactWeapons.find(w => w.slot === s)).find(w => w != null) ?? null
+      let defSkillId = 'COMBAT_A_MAINS_NUES'
+      if (defWeapon?.equipment_id) {
+        const assoc = await db('ref_equipment_skill_assoc').where({ item_id: defWeapon.equipment_id }).first()
+        if (assoc) defSkillId = assoc.skill_id
+      }
+
+      // Round 2 — parallèle : compétence défenseur + génotype
+      const [charSkillDef, refSkillDef, genoCible] = await Promise.all([
+        db('char_skills').where({ char_sheet_id: sheetCible.id, skill_id: defSkillId }).first(),
+        db('ref_skills').where({ id: defSkillId }).first(),
+        archetypeCible?.genotype_id
+          ? db('ref_genotypes').where({ id: archetypeCible.genotype_id }).first()
+          : Promise.resolve(null),
+      ])
 
       for_na_cible = calcAttributeNA(attrsCible, 'FOR', genoCible)
       con_na_cible = calcAttributeNA(attrsCible, 'CON', genoCible)
@@ -3370,6 +3475,8 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
       // CaC 4b — attaque multiple
       remainingMeleeActions,
       totalMeleeCount,
+      confirmedModifiers,
+      situationDef: confirmedModifiers?.situationDef ?? [],
     }
 
     // ── 4. PNJ défenseur : auto-résolution ────────────────────────────────────
@@ -3383,9 +3490,29 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
       else if (defCombatMode === 'charge')   chanceDefense -= 7
       else if (defCombatMode === 'defensif') chanceDefense += 3
       else if (defCombatMode === 'retraite') chanceDefense += 5
+      // Terrain instable défenseur PNJ — compétence limitative ACROBATIE_EQUILIBRE
+      // attrsCible/genoCible hors scope (déclarés dans if(sheetCible)) → re-fetch conditionnel
+      let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
+      if ((confirmedModifiers?.situationDef ?? []).includes('cac_terrain_instable') && char_sheet_id_cible) {
+        const [attrsDef, archetypeDef, acrobatieCharDef, acrobatieRefDef] = await Promise.all([
+          db('char_attributes').where({ char_sheet_id: char_sheet_id_cible }),
+          db('char_archetype').where({ char_sheet_id: char_sheet_id_cible }).first(),
+          db('char_skills').where({ char_sheet_id: char_sheet_id_cible, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
+          db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
+        ])
+        const genoDef = archetypeDef?.genotype_id
+          ? await db('ref_genotypes').where({ id: archetypeDef.genotype_id }).first() : null
+        acrobatieDefTotal = acrobatieRefDef
+          ? calcSkillTotal(attrsDef, acrobatieCharDef, acrobatieRefDef, genoDef)
+          : defenderSkillTotal
+        terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
+        chanceDefense += terrainInstableModDef
+      }
+      const mrAttaque      = chancesAttaque - rollAttaque
+      const mrDefense      = chanceDefense  - rollDefense
       const attackSuccess  = rollAttaque  <= chancesAttaque
       const defenseSuccess = rollDefense  <= chanceDefense
-      const hit = attackSuccess && !defenseSuccess
+      const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
 
       const modeCombatDef = defCombatMode === 'offensif' ? -5 : defCombatMode === 'charge' ? -7 : defCombatMode === 'defensif' ? 3 : defCombatMode === 'retraite' ? 5 : 0
       const breakdownDef = [
@@ -3393,6 +3520,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
         ...(modeCombatDef !== 0 ? [{ label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDef, type: modeCombatDef > 0 ? 'bonus' : 'malus' }] : []),
         ...(multiMalusDefenseur !== 0 ? [{ label: 'Multi-adversaires', value: multiMalusDefenseur, type: 'malus' }] : []),
         ...(defenderEffectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' }] : []),
+        ...(terrainInstableModDef !== 0 ? [{ label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' }] : []),
         { label: 'Seuil', value: chanceDefense, type: 'total' },
       ]
       console.log(`[WS] melee défense PNJ — rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
@@ -3420,7 +3548,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
       if (hit) {
         // Dégâts auto (même logique que PNJ dans resolveAssaultAction)
         const { total: rollLoc } = await parseDice('1d20')
-        const slotCode    = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
+        const slotCode    = (LOC_TABLE_CONTACT.find(r => rollLoc <= r.max) ?? LOC_TABLE_CONTACT[LOC_TABLE_CONTACT.length - 1]).slot
         const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
 
         let etq = null
@@ -3505,10 +3633,40 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
         return await resolveMeleeAction(
           io, socket, campaignId,
           remainingMeleeActions[0], character,
-          remainingMeleeActions.slice(1), totalMeleeCount
+          remainingMeleeActions.slice(1), totalMeleeCount, confirmedModifiers
         )
       }
       return false  // slot avance immédiatement
+    } else if (defenderCharacter.type === 'drone') {
+      // §7.4 : sans programme esquive, le drone ne peut pas se défendre — test simple
+      const hit = rollAttaque <= chancesAttaque
+      io.to(campaignId).emit(WS.COMBAT_MELEE_RESULT, {
+        attaquantId: action.token_id, defenseurId: targetTokenId,
+        rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit,
+        multiMalusAttaquant,
+      })
+      if (hit) {
+        const droneSheet = await db('drone_sheet').where({ character_id: defenderCharacter.id }).first()
+        if (droneSheet) {
+          const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
+          const degautsBruts = rawDice + (modDom ?? 0) + combatModeBonus
+          const etqDrone = droneSheet.blindage ?? 0
+          const rdDrone  = calcDroneRD(droneSheet.integrite_actuelle)
+          const degatsNetsDrone = Math.max(0, degautsBruts - etqDrone - rdDrone)
+          await resolveDroneIntegrityLoss(io, campaignId, defenderCharacter.id, targetTokenId, droneSheet, degatsNetsDrone)
+          io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+            tireurId: action.token_id, cibleId: targetTokenId,
+            localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
+            severity: null, is_lethal: false, isSuccess: true, isPnj: true,
+            roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
+          })
+        }
+      }
+      if (remainingMeleeActions.length > 0) {
+        return await resolveMeleeAction(io, socket, campaignId,
+          remainingMeleeActions[0], character, remainingMeleeActions.slice(1), totalMeleeCount, confirmedModifiers)
+      }
+      return false
     }
 
     // ── 5. PJ défenseur : bloquer le slot, émettre le prompt ─────────────────
@@ -3728,8 +3886,8 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
     }
 
     // 3. Calcul chancesDeReussite (§7.3 — même modificateurs que humanoïdes)
-    // armement_contact : toujours bout_portant — drone en contact physique, pas de fenêtre modificateurs (flow "Agir")
-    const portee = (category === 'armement_contact') ? 'bout_portant' : (confirmedModifiers?.portee ?? 'courte')
+    // armement_contact : portée = null → PORTEE_MOD_COMP[null]??0 = 0 (contact physique, pas de modificateur portée)
+    const portee = category !== 'armement_contact' ? (confirmedModifiers?.portee ?? 'courte') : null
     let totalModComp = PORTEE_MOD_COMP[portee] ?? 0
     if (confirmedModifiers?.taille) totalModComp += TAILLE_MODS[confirmedModifiers.taille] ?? 0
     const situationMods = confirmedModifiers?.situation ?? []
