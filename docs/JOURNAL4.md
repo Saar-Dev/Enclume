@@ -962,3 +962,12 @@ Aucun code écrit cette session — état du code inchangé.
 - **ST1** — Badge statut illisible (texte trop petit) → Sprint 14-2
 - **ST2** — Durée étourdissement non affichée (`stunned_until_turn` non exposé) → quick win ShockBlock + Sprint 14-2
 - **ST3** — Fenêtre STATUTS trop petite → Sprint 14-1 ou dédié
+
+### Corrections de diagnostic (run à vide)
+
+- **"PNJ, pas de stun"** → bug confirmé SHOCK1 : Test de Choc jamais affiché pour PNJ (pas des dés — le test n'est pas exécuté du tout)
+- **"PNJ is_stunned subit les bons malus"** → guard COMBAT_ACTION_DECLARE fonctionne pour PNJ ✅
+- **COMBAT_END stun résiduel** → SHK3 : badge supprimé, effet mécanique persiste — sérieux
+- **D6 durée jamais visible** → ST2 mis à jour : absence de broadcast + jamais affiché côté joueur
+- **Curseur bloqué** → CUR1 enregistré
+- **Chat F5** → CH1 enregistré

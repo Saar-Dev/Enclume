@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-15 Session 93-4
+> Dernière mise à jour : 2026-06-15 Session 95 suite 2
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -136,6 +136,8 @@ Des bugs de **sévérité différente** peuvent être dans le même cluster si l
 | **A — Socket résolution drone** | ~~B6~~ ✅ / ~~COM3~~ FAUX BUG / ~~DC2~~ ✅ / ~~DC3~~ ✅ | `server/src/socket/index.js` | ✅ Clos Session 95 suite |
 | **B — Init arme défaut** | ~~COM6~~ ✅ / ~~DR1~~ ✅ | `CombatGmDeclareWindow.jsx` | ✅ Clos Session 95 |
 | **C — Flow CaC drone** | ~~DC1~~ ✅ / ~~DR3~~ ✅ | `CombatOverlay.jsx` + `socket/index.js` | ✅ Clos Session 95 suite |
+| **J — Pipeline shock + COMBAT_END** | SHOCK1 + SHK3 | `server/src/socket/index.js` | **Haute** |
+| **K — UX curseur + chat** | CUR1 + CH1 | `CombatOverlay.jsx` + `SessionPage.jsx` | Haute |
 | **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 | composants combat + `index.css §11` | Haute |
 | **E — Arme et statuts** | COM1 + COM2 + COM4 + COM7 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
 | **F — Ghosts + portraits** | CL1 + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
@@ -560,6 +562,74 @@ Ajouter dans la IIFE du menu radial `SessionPage.jsx` avant le `find` pour compa
 
 ---
 
+## Bugs Session 95 suite 2 — Validation Sprint 14-0 (2026-06-15) — Nouveaux
+
+### Bug SHOCK1 — Test de Choc non déclenché pour cibles PNJ
+
+**Symptôme** : Attaque sur PNJ avec blessure grave → aucun Test de Choc déclenché, aucun panneau "TEST DE CHOC" affiché dans GESTION DES DÉGÂTS. Le même scénario sur un PJ déclenchait bien le Test de Choc (roll=6, seuil=1, Étourdi). La différence n'est pas due aux dés — le test n'est simplement pas exécuté.
+
+**Cause racine** [HYPOTHÈSE] : Condition de déclenchement du bloc shock dans `resolveAssaultAction` filtre `character.type === 'pj'` (ou équivalent) et exclut les PNJ. Ou le bloc shock n'est pas atteint dans le chemin d'exécution PNJ (branchement différent selon character_type avant le bloc).
+
+**[DBG-SHOCK1] suggestion** :
+```js
+console.log('[DBG-SHOCK1] shock trigger check', { characterType: character.type, finalSeverity, shockTriggered: finalSeverity !== 'legere' })
+```
+Ajouter juste avant le bloc shock dans `resolveAssaultAction`.
+
+**Code impliqué** : `server/src/socket/index.js` — `resolveAssaultAction` bloc shock (~ligne 2485).
+
+**Prochaine étape** : Cluster J — lire le bloc shock complet, identifier la condition de branchement PJ/PNJ.
+
+---
+
+### Bug SHK3 — COMBAT_END : badge supprimé mais stun mécanique résiduel sur le tour suivant
+
+**Symptôme** : Après `COMBAT_END`, le badge "Étourdi" disparaît correctement du token (token_statuses nettoyé, TOKEN_STATUS_UPDATED broadcasté). Mais lors du combat suivant, le PNJ qui était étourdi subit encore les effets mécaniques du stun (ne peut pas attaquer, allure limitée). **Bug sérieux — le stun survit au COMBAT_END.**
+
+**Cause racine** [HYPOTHÈSE] : Deux pistes :
+1. `applyStunWithDuration` écrit encore dans le JSONB `state_character` (`is_stunned: true`, `stunned_until_turn: N`) malgré Sprint 14-0. `COMBAT_END` nettoie `token_statuses` mais pas le JSONB → guard lit encore le JSONB au combat suivant.
+2. `COMBAT_END` cleanup `token_statuses` ne supprime pas réellement les rows (query silencieusement incorrecte) → badge disparaît pour une autre raison, rows restantes réactivent le guard au tour suivant.
+
+**[DBG-SHK3] suggestion** :
+```js
+// Après COMBAT_END, avant suppression roster :
+console.log('[DBG-SHK3] token_statuses avant cleanup', await db('token_statuses').whereIn('token_id', rosterTids).select())
+// Après cleanup :
+console.log('[DBG-SHK3] token_statuses après cleanup', await db('token_statuses').whereIn('token_id', rosterTids).select())
+// Et vérifier state_character du PNJ :
+console.log('[DBG-SHK3] state_character PNJ', await db('combat_roster').where({ token_id: affectedTokenId }).select('state_character'))
+```
+
+**Code impliqué** : `server/src/socket/index.js` — handler `COMBAT_END` (cleanup token_statuses). `applyStunWithDuration` — vérifier si écriture JSONB résiduelle.
+
+**Prochaine étape** : Cluster J — Phase 2b instrumentation. Reproduire : stun PNJ → COMBAT_END → nouveau combat → vérifier console [DBG-SHK3].
+
+---
+
+### Bug CUR1 — Curseur bloqué après fermeture combat en mode déplacement ou sélection cible
+
+**Symptôme** : Si le GM ferme le monde combat (ou COMBAT_END) alors qu'un token est en mode déplacement ou sélection de cible, le curseur reste bloqué dans l'état "combat" (curseur spécial déplacement/cible). La SessionPage ne revient pas au curseur normal.
+
+**Cause racine** [HYPOTHÈSE] : `combatTargetMode` et/ou `combatMoveMode` (state React SessionPage ou CombatOverlay) ne sont pas remis à `false` lors de COMBAT_END ou COMBAT_PHASE_CHANGED. Le curseur CSS est conditionné par ces states.
+
+**Code impliqué** : `client/src/pages/SessionPage.jsx` — state `combatTargetMode` / `combatMoveMode`. `client/src/components/CombatOverlay.jsx` — reset sur événements WS. `client/src/index.css` — curseur conditionné par classe CSS combat.
+
+**Prochaine étape** : Cluster K — lire les listeners `COMBAT_END` + `COMBAT_PHASE_CHANGED` dans SessionPage et CombatOverlay, vérifier si les states de mode sont réinitialisés.
+
+---
+
+### Bug CH1 — Historique chat perdu au F5
+
+**Symptôme** : L'historique des messages du chat en session ne survit pas à un rechargement de page (F5). Le chat redémarre vide.
+
+**Cause racine** [HYPOTHÈSE] : Les messages du chat sont stockés uniquement en mémoire React (useState). `SESSION_JOIN` sync ne rejoue pas l'historique des messages existants. Pas de persistance DB des messages de chat, ou pas de query "derniers N messages" au reconnect.
+
+**Code impliqué** : `client/src/pages/SessionPage.jsx` — state messages. `server/src/socket/index.js` — handler `SESSION_JOIN` (vérifier si historique chat est inclus dans le sync).
+
+**Prochaine étape** : Cluster K — vérifier si les messages sont persistés en DB (table `chat_messages` ou équivalent). Si non → sprint dédié persistance chat. Si oui → vérifier le sync `SESSION_JOIN`.
+
+---
+
 ## Bugs Session 95 suite — Statuts token (2026-06-15) — Validation Sprint 14-0 + Test de Choc
 
 ### Bug ST1 — Badge statut illisible sur token canvas
@@ -572,15 +642,18 @@ Ajouter dans la IIFE du menu radial `SessionPage.jsx` avant le `find` pour compa
 
 ---
 
-### Bug ST2 — Durée étourdissement non affichée (tours restants)
+### Bug ST2 — D6 durée étourdissement : non lancé visuellement, non broadcasté au joueur
 
-**Symptôme** : Le statut "Étourdi" expire correctement (token_statuses + COMBAT_STUN_EXPIRED) mais le nombre de tours restants n'est affiché nulle part — ni sur le badge, ni dans la fenêtre STATUTS, ni dans le panneau résultat.
+**Symptôme** : Le D6 de durée d'étourdissement est roulé automatiquement côté serveur. Le joueur ne voit jamais ce jet, ne reçoit aucune information sur la durée de son étourdissement. Aucune carte DICE_RESULT pour ce jet. Aucune ligne dans le chat.
 
-**Cause racine** [VÉRIFIÉ] : `stunned_until_turn` est calculé et stocké en DB, inclus dans le payload `shockResult`, mais aucun composant UI ne le lit pour l'afficher.
+**Cause racine** [HYPOTHÈSE] : `rollStunDuration(outcome)` est appelé dans `resolveAssaultAction` (ligne ~2497) — résultat intégré dans `shockResult.stun_duration`. Mais :
+- Le joueur ciblé ne reçoit pas `shockResult` (COMBAT_ATTACK_RESULT envoyé au GM seulement ou à la room sans filtrage)
+- Aucun `DICE_RESULT` émis pour le jet D6 de durée
+- ShockBlock côté joueur absent ou sans `stun_duration`
 
-**Code impliqué** : `CombatResultPanels.jsx` (ShockBlock — afficher "Étourdi X tours"), badge token (Sprint 14-2).
+**Code impliqué** : `server/src/socket/index.js` — `resolveAssaultAction` bloc shock (~ligne 2494-2511). `client/src/components/CombatResultPanels.jsx` — ShockBlock. `SessionPage.jsx` — listener `COMBAT_ATTACK_RESULT`.
 
-**Prochaine étape** : Quick win — ajouter `stun_duration` dans le ShockBlock résultat (ex: "Étourdi — 3 tours"). Affichage badge = Sprint 14-2.
+**Prochaine étape** : Cluster J — vérifier (1) si COMBAT_ATTACK_RESULT est reçu par le joueur cible, (2) si ShockBlock joueur affiche `stun_duration`, (3) si un DICE_RESULT doit être émis pour le D6 durée.
 
 ---
 

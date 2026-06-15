@@ -13,10 +13,10 @@
    → Tester : appliquer stun → badge tokenStore → endTurn expire → COMBAT_STUN_EXPIRED
    → Référence : `docs/ROADMAP.md` §PLAN 14 Sprint 14-0
 
-**3. Sprint Bugs Combat Session 93-4** *(nouveaux bugs identifiés — voir BUGIDENTIFIE.md §Session 93-4)*
-   → Priorité : COM8 (masquer fenêtre en sélection cible) + DC1/DC3 (drone CaC portée)
-   → ~~DR1~~ ✅ Session 95 — ~~COM6~~ ✅ Session 95
-   → Référence : `docs/BUGIDENTIFIE.md` §Bugs Session 93-4
+**3. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
+   → Cluster J : SHOCK1 (shock PNJ manquant) + SHK3 (stun résiduel COMBAT_END) — **sérieux**
+   → Cluster K : CUR1 (curseur bloqué) + CH1 (chat F5)
+   → ~~DR1~~ ✅ — ~~COM6~~ ✅ — ~~DC1/DC3~~ ✅
 
 ---
 
@@ -51,9 +51,13 @@
 | DR6 | Blindage drone non lu (0 affiché malgré DB=15) | Haute — instrumentation [DBG-DR6] requise |
 | ~~DC1 / DC3 / DR3~~ | ~~Drone CaC : flow incorrect + portée +5 illégitime~~ | ✅ Clos — Session 95 suite |
 | ~~DC2~~ | ~~Drone ranged : mods situation ignorés~~ | ✅ Clos — Session 95 suite |
+| SHOCK1 | Test de Choc non déclenché pour cibles PNJ | **Haute** |
+| SHK3 | COMBAT_END : stun mécanique résiduel (badge supprimé, effet persiste) | **Haute — sérieux** |
+| ST2 | D6 durée étourdissement : jamais visible joueur, non broadcasté | Haute |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
-| ST2 | Durée étourdissement non affichée (tours restants) — `stunned_until_turn` non exposé en UI | Haute |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
+| CUR1 | Curseur bloqué après fermeture combat en mode déplacement/cible | Haute |
+| CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
 | UI1 | Fenêtre déclaration design blanc | **Haute** |
 | COM1 | Recharger ne fait rien | **Haute** |
 | CL1 | Portraits PNJ non visibles timeline joueur | **Haute** |
