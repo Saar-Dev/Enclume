@@ -265,6 +265,11 @@ export default function CombatActionWindow({
         item => (item.slot === 'MG' || item.slot === 'MD') && item.ref_fire_mode
       ))
       setAllInventoryItems(items)
+      const firstMeleeWeapon = items.find(item =>
+        (item.slot === 'MG' || item.slot === 'MD' || item.slot === '2M') &&
+        item.ref_category === 'Arme de contact'
+      )
+      if (firstMeleeWeapon) setSelectedMeleeWeaponId(firstMeleeWeapon.id)
     }).catch(() => {})
     return () => { cancelled = true }
   }, [isDrone, playerToken?.id, phase])

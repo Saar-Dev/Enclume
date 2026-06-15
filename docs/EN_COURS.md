@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-15 Session 93-5
+> Dernière mise à jour : 2026-06-15 Session 95
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -14,7 +14,8 @@
    → Référence : `docs/ROADMAP.md` §PLAN 14 Sprint 14-0
 
 **3. Sprint Bugs Combat Session 93-4** *(nouveaux bugs identifiés — voir BUGIDENTIFIE.md §Session 93-4)*
-   → Priorité : DR1 (arme drone défaut) + COM6 (arme CaC défaut) + COM8 (masquer fenêtre en sélection cible) + DC1/DC3 (drone CaC portée)
+   → Priorité : COM8 (masquer fenêtre en sélection cible) + DC1/DC3 (drone CaC portée)
+   → ~~DR1~~ ✅ Session 95 — ~~COM6~~ ✅ Session 95
    → Référence : `docs/BUGIDENTIFIE.md` §Bugs Session 93-4
 
 ---
@@ -55,8 +56,8 @@
 | UI1 | Fenêtre déclaration design blanc | **Haute** |
 | COM1 | Recharger ne fait rien | **Haute** |
 | CL1 | Portraits PNJ non visibles timeline joueur | **Haute** |
-| COM6 | Arme CaC non pré-sélectionnée (GM + joueur) | Moyenne |
-| DR1 | Drone : arme non pré-sélectionnée | Moyenne |
+| ~~COM6~~ | ~~Arme CaC non pré-sélectionnée (GM + joueur)~~ | ✅ Clos — Session 95 |
+| ~~DR1~~ | ~~Drone : arme non pré-sélectionnée~~ | ✅ Clos — Session 95 |
 | COM8 | Fenêtre annonce visible pendant sélection cible | Moyenne |
 | COM2 | Vérif statut arme absente côté GM | Moyenne |
 | COM4 | CaC exige arme au clair (mains nues impossible) | Moyenne |

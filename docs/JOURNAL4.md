@@ -869,3 +869,35 @@ Résultat chat attendu :
 | T2 | client/src/locales/fr.json.test | Idem |
 | T3 | client/src/components/Sidebar.jsx | Conditionnel msg.cardType drone_damage → droneActionDetail |
 | T4 | server/src/socket/index.js branch 8a | skillLabel nom+intégrité, diffLabel pipeline MR/blindage/RD, cardType drone_damage |
+
+## Session 95 — 2026-06-15 — Cluster B : auto-sélection arme CaC et drone (COM6 + DR1)
+
+### Contexte
+
+Sprint correction bugs Cluster B (BUGIDENTIFIE.md §Cluster B) — deux bugs d'initialisation UI dans les fenêtres de déclaration combat : arme CaC jamais pré-sélectionnée (GM + joueur) et arme drone jamais pré-sélectionnée.
+
+Fichiers lus : `docs/BUGIDENTIFIE.md`, `docs/SYSTEME/COMBAT.md`, `docs/MANUELSYSCOMBAT.md`, `client/src/components/CombatGmDeclareWindow.jsx`, `client/src/components/CombatActionWindow.jsx`.
+
+### Cause racine
+
+Les trois états (`selectedGmMeleeWeaponId`, `selectedMeleeWeaponId`, `selectedDroneWeaponId`) étaient resetés à `null` à chaque changement de token actif ou de phase, mais jamais auto-populés avec l'arme disponible. L'utilisateur devait cliquer manuellement à chaque tour.
+
+### Solution
+
+Exploitation de l'ordre d'exécution React (`useEffect` top-to-bottom) et des callbacks asynchrones :
+
+- **COM6 GM** : nouvel `useEffect([activeTokenId, equipment])` qui lit `equipment[activeTokenId]?.weapon` (déjà chargé en cache) et sélectionne `w.inv_id` si `!w.ref_fire_mode`.
+- **COM6 Joueur** : auto-sélection dans le callback du fetch inventaire — `items.find(ref_category === 'Arme de contact' + slot MG/MD/2M)` → `setSelectedMeleeWeaponId(firstMeleeWeapon.id)`.
+- **DR1** : auto-sélection dans le callback du fetch armes drone — `setSelectedDroneWeaponId(weapons[0].id)`.
+
+Dans les trois cas, le reset (null) fire avant l'auto-sélection grâce à l'ordre React → état final cohérent.
+
+### Livré — SR ✅ — fonctionnel validé
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | client/src/components/CombatGmDeclareWindow.jsx | Drone fetch : auto-sélection weapons[0].id (DR1) |
+| T2 | client/src/components/CombatGmDeclareWindow.jsx | Nouvel useEffect([activeTokenId, equipment]) auto-sélection CaC GM (COM6) |
+| T3 | client/src/components/CombatActionWindow.jsx | Callback fetch inventaire : auto-sélection firstMeleeWeapon.id (COM6 joueur) |

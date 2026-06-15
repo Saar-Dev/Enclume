@@ -158,9 +158,20 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   useEffect(() => {
     if (!activeDroneCharId) return
     api.get(`/char-sheet/${activeDroneCharId}/drone/weapons`)
-      .then(r => setDroneWeapons(r.data.weapons ?? []))
+      .then(r => {
+        const weapons = r.data.weapons ?? []
+        setDroneWeapons(weapons)
+        if (weapons.length > 0) setSelectedDroneWeaponId(weapons[0].id)
+      })
       .catch(() => setDroneWeapons([]))
   }, [activeDroneCharId])
+
+  // Auto-sélection arme CaC GM — première arme de contact disponible pour le slot actif
+  useEffect(() => {
+    if (!activeTokenId) return
+    const w = equipment[activeTokenId]?.weapon ?? null
+    if (w && !w.ref_fire_mode) setSelectedGmMeleeWeaponId(w.inv_id)
+  }, [activeTokenId, equipment])
 
   // ── Helpers ─────────────────────────────────────────────────────────────
   const isPnj = (entry) => {
