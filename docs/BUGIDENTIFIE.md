@@ -133,9 +133,9 @@ Des bugs de **sévérité différente** peuvent être dans le même cluster si l
 
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
-| **A — Socket résolution drone** | B6 + DC2 + DC3 | `server/src/socket/index.js` | **Haute** |
-| **B — Init arme défaut** | COM6 + DR1 | `CombatGmDeclareWindow.jsx` | Haute |
-| **C — Flow CaC drone** | DC1 + DR3 | `CombatOverlay.jsx` + `socket/index.js` | Haute |
+| **A — Socket résolution drone** | ~~B6~~ ✅ / ~~COM3~~ FAUX BUG / ~~DC2~~ ✅ / ~~DC3~~ ✅ | `server/src/socket/index.js` | ✅ Clos Session 95 suite |
+| **B — Init arme défaut** | ~~COM6~~ ✅ / ~~DR1~~ ✅ | `CombatGmDeclareWindow.jsx` | ✅ Clos Session 95 |
+| **C — Flow CaC drone** | ~~DC1~~ ✅ / ~~DR3~~ ✅ | `CombatOverlay.jsx` + `socket/index.js` | ✅ Clos Session 95 suite |
 | **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 | composants combat + `index.css §11` | Haute |
 | **E — Arme et statuts** | COM1 + COM2 + COM4 + COM7 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
 | **F — Ghosts + portraits** | CL1 + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
@@ -536,72 +536,61 @@ Ajouter dans la IIFE du menu radial `SessionPage.jsx` avant le `find` pour compa
 
 ## Bugs Session 91 — Sprint CaC Drone (2026-06-12) — Non résolus
 
-### Bug DC1 — Drone CaC : flow de résolution incorrect (Sprint CaC dédié)
+### ~~Bug DC1~~ — ✅ CLOS — Session 95 suite
 
-**Symptôme** : Un drone déclarant une attaque `armement_contact` (`fire_mode = 'cc'`) se voyait présenter `CombatModifiersWindow` (fenêtre distance — requiert portée), qui ne peut pas fonctionner pour un CaC.
+**Symptôme initial** : Drone CaC présentait `CombatModifiersWindow` (fenêtre distance) au lieu de `CombatCacModifiersWindow`.
 
-**Contexte règles** : §7.4 MANUELSYSCOMBAT — `armement_contact` = test simple D20 ≤ niveau programme. Pas de test d'opposition (contrairement au CaC humanoïde §6.2). Pas de fenêtre modificateurs portée. Pas de modificateur portée (contact physique = portée satisfaite par définition, modificateur = 0). ⚠️ Le `portee = 'bout_portant'` du travail partiel est lui-même un bug → voir **Bug DC3**.
-
-**Code impliqué** :
-- `client/src/components/CombatOverlay.jsx` — conditions d'affichage "Agir" vs `CombatModifiersWindow`
-- `server/src/socket/index.js` — `resolveDroneAssaultAction` — gestion `armement_contact`
-
-**Travail partiel effectué (non approuvé, Session 91)** :
-- `CombatOverlay.jsx` : `isDroneCaC = !!(activeAssaultAction?.drone_weapon_inv_id && activeAssaultAction?.fire_mode === 'cc')` ajouté. "Agir" affiché pour drone CaC (comme PNJ CaC humanoïde). `CombatModifiersWindow` exclu pour drone CaC.
-- `resolveDroneAssaultAction` : `portee = 'bout_portant'` pour `armement_contact`, situation mods lus depuis `confirmedModifiers?.situation ?? []`.
-
-**Prochaine étape** : Sprint CaC dédié — à démarrer dans une session séparée. Modèle à suivre : résolution CaC humanoïde PJ (Phase 2 Résolution côté joueur — jamais testé). Adapter pour drone sans copier le modèle distance.
+**Verdict** : Fix déjà présent en base de code (Session 91 commité). `isDroneCaC` flag + routing `CombatCacModifiersWindow` — correct. Confusion initiale due à cache Firefox stale. Validé fonctionnellement après rechargement forcé.
 
 ---
 
-### Bug DC2 — Drone ranged : mods de situation jamais appliqués
+### ~~Bug DC2~~ — ✅ CLOS — Session 95 suite
 
-**Symptôme** : Dans `resolveDroneAssaultAction`, les modificateurs de situation (`confirmedModifiers.situation`) n'étaient jamais pris en compte. L'ancien code itérait `SITUATION_MODS` et vérifiait `confirmedModifiers?.[k]` (propriété directe) au lieu de lire le tableau `confirmedModifiers.situation`.
+**Symptôme initial** : Mods de situation non appliqués dans `resolveDroneAssaultAction`.
 
-**Cause racine** [VÉRIFIÉ] : Pattern incorrect — `confirmedModifiers.situation` est un tableau de clés (`['cible_au_sol', ...]`), pas un objet avec des propriétés booléennes.
-
-**Code impliqué** : `server/src/socket/index.js` — `resolveDroneAssaultAction` (section calcul `totalModComp` et breakdown).
-
-**Travail partiel effectué (non approuvé, Session 91)** :
-```js
-// Correctif appliqué (non validé fonctionnellement) :
-const situationMods = confirmedModifiers?.situation ?? []
-totalModComp += situationMods.reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
-```
-
-**Prochaine étape** : Valider fonctionnellement lors du Sprint CaC — ce correctif concerne aussi bien les attaques distance que contact.
+**Verdict** : Fix déjà présent — `situationMods = confirmedModifiers?.situation ?? []` en base de code (Session 91 commité). Validé fonctionnellement Session 95 suite.
 
 ---
 
-### Bug DC3 — Drone CaC : modificateur `bout_portant` (+5) appliqué à tort
+### ~~Bug DC3~~ — ✅ CLOS — Session 95 suite
 
-**Symptôme** : `resolveDroneAssaultAction` applique systématiquement `portee = 'bout_portant'` pour `armement_contact`, ce qui ajoute +5 à `chancesDeReussite` via `PORTEE_MOD_COMP`.
+**Symptôme initial** : `portee = 'bout_portant'` → +5 illégitime pour `armement_contact`.
 
-**Cause racine** [VÉRIFIÉ] : CaC = présence physique ≤ 3m par définition — la portée n'est pas un modificateur applicable au contact physique. Le +5 est sémantiquement et mécaniquement incorrect.
+**Verdict** : Fix déjà présent — `portee = null` pour `armement_contact` → `PORTEE_MOD_COMP[null] ?? 0 = 0` — en base de code (Session 91 commité). Validé fonctionnellement Session 95 suite.
 
-**Code impliqué** : `server/src/socket/index.js` — `resolveDroneAssaultAction` ligne ~3732.
+---
 
-```js
-// Actuel (bug) :
-const portee = (category === 'armement_contact') ? 'bout_portant' : (confirmedModifiers?.portee ?? 'courte')
-let totalModComp = PORTEE_MOD_COMP[portee] ?? 0   // → +5 appliqué à tort
+## Bugs Session 95 suite — Statuts token (2026-06-15) — Validation Sprint 14-0 + Test de Choc
 
-// Correction :
-const porteeModComp = (category === 'armement_contact')
-  ? 0
-  : (PORTEE_MOD_COMP[confirmedModifiers?.portee] ?? 0)
-let totalModComp = porteeModComp
-```
+### Bug ST1 — Badge statut illisible sur token canvas
 
-Retirer aussi `porteeModDrone` du breakdown (ligne ~3752) pour `armement_contact`.
+**Symptôme** : Badge hexagonal "Étourdi" (et autres statuts) visible sur le token mais texte trop petit pour être lisible en jeu.
 
-**Modificateurs légitimes pour `armement_contact` (§7.3 MANUELSYSCOMBAT) :**
-- Portée : **NON** (0 — contact physique)
-- Taille cible : OUI
-- Obscurité : OUI
-- Couverture : OUI
+**Code impliqué** : Sprint 14-2 — affichage badges SVGs sous le nom token (`Canvas3D.jsx` / Html drei).
 
-**Prochaine étape** : Sprint CaC Drone — corriger avec DC1 dans la même session.
+**Prochaine étape** : Sprint 14-2 dédié.
+
+---
+
+### Bug ST2 — Durée étourdissement non affichée (tours restants)
+
+**Symptôme** : Le statut "Étourdi" expire correctement (token_statuses + COMBAT_STUN_EXPIRED) mais le nombre de tours restants n'est affiché nulle part — ni sur le badge, ni dans la fenêtre STATUTS, ni dans le panneau résultat.
+
+**Cause racine** [VÉRIFIÉ] : `stunned_until_turn` est calculé et stocké en DB, inclus dans le payload `shockResult`, mais aucun composant UI ne le lit pour l'afficher.
+
+**Code impliqué** : `CombatResultPanels.jsx` (ShockBlock — afficher "Étourdi X tours"), badge token (Sprint 14-2).
+
+**Prochaine étape** : Quick win — ajouter `stun_duration` dans le ShockBlock résultat (ex: "Étourdi — 3 tours"). Affichage badge = Sprint 14-2.
+
+---
+
+### Bug ST3 — Fenêtre THUG STATUTS trop petite
+
+**Symptôme** : La fenêtre de statuts token (grille hexagonale) ne peut pas afficher tous les statuts disponibles — overflow non géré.
+
+**Code impliqué** : Composant fenêtre statuts token (SessionPage ou Canvas3D — menu contextuel statuts).
+
+**Prochaine étape** : Sprint 14-1 (menu contextuel) ou sprint dédié UI — rendre la fenêtre scrollable ou agrandir la grille.
 
 ---
 
@@ -733,13 +722,9 @@ Ajouter au début du handler `COMBAT_ACTION_CONFIRM` pour vérifier si le type `
 
 ---
 
-### Bug DR3 — Drone CaC : fenêtre de modificateurs "Distance" présentée à tort
+### ~~Bug DR3~~ — ✅ CLOS — Session 95 suite
 
-**Note** : Identique à Bug DC1 + DC3 déjà documentés ci-dessus. Confirmé lors du test Session 93-4.
-
-Résolution drone CaC → `CombatCacModifiersWindow` doit être utilisée (comme pour PNJ humanoïde CaC), pas `CombatModifiersWindow` (distance).
-
-**Prochaine étape** : Voir DC1 + DC3 ci-dessus.
+**Note** : Identique à DC1 + DC3. Clos avec eux — Session 95 suite.
 
 ---
 

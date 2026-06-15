@@ -901,3 +901,64 @@ Dans les trois cas, le reset (null) fire avant l'auto-sélection grâce à l'ord
 | T1 | client/src/components/CombatGmDeclareWindow.jsx | Drone fetch : auto-sélection weapons[0].id (DR1) |
 | T2 | client/src/components/CombatGmDeclareWindow.jsx | Nouvel useEffect([activeTokenId, equipment]) auto-sélection CaC GM (COM6) |
 | T3 | client/src/components/CombatActionWindow.jsx | Callback fetch inventaire : auto-sélection firstMeleeWeapon.id (COM6 joueur) |
+
+---
+
+## Session 95 suite — Audit Cluster C : DC1 / DC2 / DC3 / DR3 — 2026-06-15
+
+### Contexte
+
+Audit bugs Cluster C (BUGIDENTIFIE.md §Cluster C) : DC1 (drone CaC — flow incorrect) + DR3 (même cause) + DC2 + DC3 (impacts croisés identifiés en cours d'analyse).
+
+Fichiers lus : `docs/BUGIDENTIFIE.md`, `docs/SYSTEME/COMBAT.md`, `client/src/components/CombatOverlay.jsx`, `client/src/components/CombatCacModifiersWindow.jsx`, `server/src/socket/index.js`.
+
+### Verdict
+
+Tous les correctifs Cluster C **étaient déjà présents dans la base de code** (travail Session 91 commité) :
+
+- **DC1** : `isDroneCaC` flag (`CombatOverlay.jsx` lignes 57-58) + routing `CombatCacModifiersWindow` (lignes 186-193) — correct.
+- **DR3** : Identique à DC1 — même code, même fix.
+- **DC2** : `situationMods = confirmedModifiers?.situation ?? []` dans `resolveDroneAssaultAction` — appliqué.
+- **DC3** : `portee = null` pour `armement_contact` → `PORTEE_MOD_COMP[null] ?? 0 = 0` — appliqué.
+
+La confusion initiale (bug semblait présent) était due à une **mauvaise actualisation Firefox (cache navigateur)**. Après rechargement forcé, le code correct était bien en place.
+
+### Validation fonctionnelle
+
+SR ✅ — confirmé par l'utilisateur : "TU as totalement raison, SR et fonctionnel."
+
+### Clôtures
+
+- DC1 ✅ CLOS — Session 95 suite
+- DC2 ✅ CLOS — Session 95 suite
+- DC3 ✅ CLOS — Session 95 suite
+- DR3 ✅ CLOS — Session 95 suite
+
+Aucun code écrit cette session — état du code inchangé.
+
+---
+
+## Session 95 suite 2 — Validation Sprint Test de Choc + Sprint 14-0 — 2026-06-15
+
+### Scénario 1 — Auto-stun (shock_auto_stun = true)
+
+- Blessure grave sur PNJ → outcome `ok` (pas de stun — normal, aléatoire)
+- Blessure grave sur PJ → outcome `etourdi` → stun appliqué ✅
+- Guard `COMBAT_ACTION_DECLARE` : token étourdi bloqué en attaque + allure limitée ✅
+- Expiry : badge disparaît après N tours (endTurn purge `token_statuses`) ✅
+
+### Scénario 2 — Stun manuel (shock_auto_stun = false)
+
+- Bouton "Appliquer l'étourdissement" visible dans ShockBlock ✅
+- Clic GM → badge appliqué ✅
+
+### Clôtures
+
+- Sprint Test de Choc (migration 69, S81) ✅ CLOS
+- Sprint 14-0 (migration 79, S93-3) ✅ CLOS
+
+### Nouvelles dettes identifiées
+
+- **ST1** — Badge statut illisible (texte trop petit) → Sprint 14-2
+- **ST2** — Durée étourdissement non affichée (`stunned_until_turn` non exposé) → quick win ShockBlock + Sprint 14-2
+- **ST3** — Fenêtre STATUTS trop petite → Sprint 14-1 ou dédié

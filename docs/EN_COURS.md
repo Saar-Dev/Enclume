@@ -30,13 +30,11 @@
 
 ## En attente de validation fonctionnelle
 
-- **Sprint 14-0** — architecture statuts token_statuses (stunned/unconscious lifecycle) — Session 93-3 — SR ✅
 - **Fix DMG1+DMG2** — labels DICE_RESULT dégâts drone (Compétence/Seuil → Dés/Nets + intégrité) — SR ✅ — Session 93-5
 - **Sprint Drones 2c** — cycle complet drone joueur — SR ✅ — bugs Loc-Drone + Dmg-Drone identifiés (voir dettes)
 - **Sprint CaC Étape 3** — SR + Vite 200 ✅ — test fonctionnel requis (humanoid CaC + drone CaC avec mods)
 - **Fix split-brain slot detection** — Session 93 — test requis : 6 tokens (1 non-annoncé INI haute), 4 déclarations, vérifier slot actif correct + CaC sans cible → COMBAT_DECLARE_ERROR + cycle complet sans fantôme
 - **Sprint CaC 4b** (attaque multiple melee — 2/3 cibles, −5/−7 malus) — Session 74
-- **Sprint Test de Choc** (migration 69, shock_auto_stun) — Session 81
 
 ---
 
@@ -51,8 +49,11 @@
 | DMG1+DMG2 | Labels DICE_RESULT dégâts drone (Compétence/Seuil faux) | SR ✅ — validation fonctionnelle requise |
 | DR4 | `calcDroneRD` : RD négatif → drone plein subil dégâts suppl. | Moyenne — sprint dédié |
 | DR6 | Blindage drone non lu (0 affiché malgré DB=15) | Haute — instrumentation [DBG-DR6] requise |
-| DC1 / DC3 / DR3 | Drone CaC : flow incorrect + portée +5 illégitime | **Haute** |
-| DC2 | Drone ranged : mods situation ignorés | **Haute** |
+| ~~DC1 / DC3 / DR3~~ | ~~Drone CaC : flow incorrect + portée +5 illégitime~~ | ✅ Clos — Session 95 suite |
+| ~~DC2~~ | ~~Drone ranged : mods situation ignorés~~ | ✅ Clos — Session 95 suite |
+| ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
+| ST2 | Durée étourdissement non affichée (tours restants) — `stunned_until_turn` non exposé en UI | Haute |
+| ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
 | UI1 | Fenêtre déclaration design blanc | **Haute** |
 | COM1 | Recharger ne fait rien | **Haute** |
 | CL1 | Portraits PNJ non visibles timeline joueur | **Haute** |
