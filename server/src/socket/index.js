@@ -380,11 +380,7 @@ const initSocket = (io) => {
           })
         }
 
-        const statuses = await db('token_statuses')
-          .where({ token_id: tokenId })
-          .pluck('status_code')
-
-        io.to(socket.campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId, statuses })
+        await emitTokenStatusUpdated(io, socket.campaignId, tokenId)
       } catch (err) {
         console.error('[WS] token:status_toggle error:', err.message)
       }
@@ -1679,8 +1675,7 @@ const initSocket = (io) => {
               .delete()
             const affectedIds = [...new Set(affected.map(r => r.token_id))]
             for (const tid of affectedIds) {
-              const statuses = await db('token_statuses').where({ token_id: tid }).pluck('status_code')
-              io.to(campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId: tid, statuses })
+              await emitTokenStatusUpdated(io, campaignId, tid)
             }
           }
         }
@@ -1925,8 +1920,9 @@ const initSocket = (io) => {
           return
         }
 
-        // Stun guard (PC42 réglé) — is_stunned interdit attaque et allures rapide/max
-        if (entry.state_character?.is_stunned === true) {
+        // Stun guard — is_stunned lit depuis token_statuses (source unique post-Sprint 14-0)
+        const stunRow = await db('token_statuses').where({ token_id: tokenId, status_code: 'stunned' }).first()
+        if (stunRow) {
           if (mapActions?.attack) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Assommé — ne peut pas attaquer" })
             return
@@ -3088,21 +3084,33 @@ async function endTurn(io, campaignId) {
       })
       .returning(['action_timer_sec', 'current_turn'])
 
-    // Expiry étourdissement — purger les tokens dont stunned_until_turn <= new_turn
+    // Purge universelle — statuts expirés ce tour (stunned, unconscious, surprised…)
     const newTurn = updatedState?.current_turn ?? 1
-    const expiredStun = await db('combat_roster')
-      .where({ campaign_id: campaignId })
-      .whereRaw("state_character IS NOT NULL AND (state_character->>'stunned_until_turn') IS NOT NULL AND (state_character->>'stunned_until_turn')::int <= ?", [newTurn])
-      .select('token_id')
-    for (const { token_id } of expiredStun) {
-      await db('combat_roster')
-        .where({ campaign_id: campaignId, token_id })
-        .update({ state_character: db.raw("state_character - 'is_stunned' - 'stunned_until_turn'") })
-      await db('token_statuses').where({ token_id }).whereIn('status_code', ['stunned', 'unconscious']).delete()
-      const statuses = await db('token_statuses').where({ token_id }).pluck('status_code')
-      io.to(campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId: token_id, statuses })
-      io.to(campaignId).emit(WS.COMBAT_STUN_EXPIRED, { tokenId: token_id })
-      console.log(`[WS] endTurn — étourdissement expiré. token:${token_id} turn:${newTurn}`)
+    const rosterTids = await db('combat_roster').where({ campaign_id: campaignId }).pluck('token_id')
+    if (rosterTids.length > 0) {
+      const expiredRows = await db('token_statuses')
+        .whereIn('token_id', rosterTids)
+        .whereNotNull('expires_at_turn')
+        .where('expires_at_turn', '<=', newTurn)
+        .select('token_id', 'status_code')
+      if (expiredRows.length > 0) {
+        const expiredStunIds = [...new Set(
+          expiredRows.filter(r => r.status_code === 'stunned' || r.status_code === 'unconscious').map(r => r.token_id)
+        )]
+        const allExpiredIds = [...new Set(expiredRows.map(r => r.token_id))]
+        await db('token_statuses')
+          .whereIn('token_id', rosterTids)
+          .whereNotNull('expires_at_turn')
+          .where('expires_at_turn', '<=', newTurn)
+          .delete()
+        for (const token_id of allExpiredIds) {
+          await emitTokenStatusUpdated(io, campaignId, token_id)
+        }
+        for (const token_id of expiredStunIds) {
+          io.to(campaignId).emit(WS.COMBAT_STUN_EXPIRED, { tokenId: token_id })
+          console.log(`[WS] endTurn — étourdissement expiré. token:${token_id} turn:${newTurn}`)
+        }
+      }
     }
 
     const roster = await db('combat_roster')
@@ -3134,19 +3142,12 @@ async function endTurn(io, campaignId) {
   }
 }
 
-// ─── Helper — appliquer un statut étourdissement/inconscience sur un token ────
-// Écrit dans token_statuses (badge visuel) et broadcast TOKEN_STATUS_UPDATED.
-// Idempotent : supprime l'entrée existante avant d'insérer.
-async function applyStunStatus(io, campaignId, tokenId, outcome) {
-  try {
-    const statusCode = outcome === 'inconscient' ? 'unconscious' : 'stunned'
-    await db('token_statuses').where({ token_id: tokenId, status_code: statusCode }).delete()
-    await db('token_statuses').insert({ token_id: tokenId, status_code: statusCode, applied_by: null })
-    const statuses = await db('token_statuses').where({ token_id: tokenId }).pluck('status_code')
-    io.to(campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId, statuses })
-  } catch (err) {
-    console.error('[WS] applyStunStatus error:', err.message)
-  }
+// ─── Helper — émettre TOKEN_STATUS_UPDATED avec statuses + statusExpiries ─────
+async function emitTokenStatusUpdated(io, campaignId, tokenId) {
+  const rows = await db('token_statuses').where({ token_id: tokenId }).select('status_code', 'expires_at_turn')
+  const statuses = rows.map(r => r.status_code)
+  const statusExpiries = Object.fromEntries(rows.map(r => [r.status_code, r.expires_at_turn]))
+  io.to(campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId, statuses, statusExpiries })
 }
 
 // ─── Helper — calculer durée étourdissement (LdB p.237) ─────────────────────
@@ -3156,14 +3157,20 @@ async function rollStunDuration(outcome) {
   return outcome === 'inconscient' ? total * 10 : total
 }
 
-// ─── Helper — appliquer is_stunned avec durée dans state_character ───────────
-// Écrit stunned_until_turn dans JSONB (PC39 merge ||) + badge visuel via applyStunStatus.
+// ─── Helper — appliquer stunned/unconscious dans token_statuses avec expires_at_turn ─
+// onConflict merge : re-stun étend la durée sans dupliquer la ligne.
 async function applyStunWithDuration(io, campaignId, tokenId, outcome, stunDuration, currentTurn) {
   const stunUntil = currentTurn + stunDuration
-  await db('combat_roster')
-    .where({ campaign_id: campaignId, token_id: tokenId })
-    .update({ state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true, stunned_until_turn: stunUntil })]) })
-  await applyStunStatus(io, campaignId, tokenId, outcome)
+  const statusCode = outcome === 'inconscient' ? 'unconscious' : 'stunned'
+  try {
+    await db('token_statuses')
+      .insert({ token_id: tokenId, status_code: statusCode, expires_at_turn: stunUntil })
+      .onConflict(['token_id', 'status_code'])
+      .merge(['expires_at_turn'])
+    await emitTokenStatusUpdated(io, campaignId, tokenId)
+  } catch (err) {
+    console.error('[WS] applyStunWithDuration error:', err.message)
+  }
   console.log(`[WS] applyStunWithDuration — token:${tokenId} outcome:${outcome} duration:${stunDuration} until_turn:${stunUntil}`)
 }
 
@@ -3976,18 +3983,22 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
       const rdDrone       = calcDroneRD(droneSheet.integrite_actuelle)
       const degatsNets    = Math.max(0, degautsBruts - etqDrone - rdDrone)
       await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNets)
+      const newIntegrite = degatsNets >= 30 ? 0 : Math.max(0, droneSheet.integrite_actuelle - 1)
       io.to(campaignId).emit(WS.DICE_RESULT, {
         userId, username: tireurUsername, color: tireurColor,
         formula, rolls: dmgRolls, total: degautsBruts,
         isCriticalSuccess: false, isCriticalFail: false,
         seed: dmgSeed, timestamp: now,
-        skillLabel: 'Dégâts — drone',
-        mechanicalTotal: rawDice, diffLabel: `Blindage:${etqDrone} RD:${rdDrone}`,
-        chancesDeReussite: degatsNets, isSuccess: degatsNets > 0,
+        skillLabel: `Dégâts — ${cibleCharacter.name} · Intégrité : ${droneSheet.integrite_actuelle} → ${newIntegrite}`,
+        mechanicalTotal: rawDice,
+        diffLabel: `+${modDomAttaque} MR · −${etqDrone} blindage · RD ${rdDrone}`,
+        chancesDeReussite: degatsNets,
+        isSuccess: degatsNets > 0,
+        cardType: 'drone_damage',
       })
       io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
         tireurId: action.token_id, cibleId: action.target_token_id,
-        localisation: null, degautsBruts, degatsNets,
+        localisation: droneSheet.localisation_ref ?? 'corps', degautsBruts, degatsNets,
         severity: null, is_lethal: false, isSuccess: true, shockResult: null,
       })
       return

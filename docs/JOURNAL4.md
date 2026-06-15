@@ -800,3 +800,72 @@ Le serveur envoie un `tokenId` absolu. Le client cherche par `token_id`, pas par
 | S1 | `server/src/socket/index.js` startResolutionPhase | 3 queries filtrées |
 | S2 | `server/src/socket/index.js` startResolutionPhase | pendingActions + announcedRoster[0] |
 | S3 | `server/src/socket/index.js` COMBAT_ACTION_DECLARE | guard melee sans cible |
+
+---
+
+## Session 93-5 — 2026-06-15 — Fix labels DICE_RESULT dégâts drone (DMG1+DMG2)
+
+### Contexte
+
+Analyse pipeline dégâts drone post-validation B6. Découverte bugs d'affichage dans la carte DICE_RESULT "Dégâts — drone" : labels "Compétence" et "Seuil" sémantiquement faux, intégrité absente, pipeline illisible.
+
+Fichiers lus : `REGLEDRONE.md`, `socket/index.js` (resolveDroneAssaultAction branch 8a, calcDroneRD, resolveDroneIntegrityLoss), `charStats.js` (RD_TABLE), `migrations/71-72`, `Sidebar.jsx`, `fr.json`.
+
+### Bugs documentés (BUGIDENTIFIE.md §Session 93-5)
+
+- **COM3** — FAUX BUG confirmé (LdB `REGLES_Contact.md` p.222 : test d'opposition = les deux roulent toujours)
+- **DMG1** [VÉRIFIÉ] : `mechanicalTotal=rawDice` affiché comme "Compétence" — label i18n `entityActionDetail` réutilisé à tort dans contexte dégâts
+- **DMG2** [VÉRIFIÉ] : `chancesDeReussite=degatsNets` affiché comme "Seuil" — même cause
+- **DR4** [VÉRIFIÉ] : `calcDroneRD(15)` retourne négatif pour haute intégrité → dégâts augmentés au lieu de réduits — sprint dédié futur
+- **DR5** — RÉSOLU : colonne `resistance_dommages` supprimée en migration 72
+- **DR6** [HYPOTHÈSE] : `drone_sheet.blindage` non lu (affiche 0 malgré valeur DB=15) — [DBG-DR6] requis
+- **TODO-DRONE-1** : Tooltips blindage/armure/blindage IEM dans DroneWindow
+
+### Livré — SR ✅ — validation fonctionnelle requise
+
+Fix DMG1+DMG2 : nouvelle clé i18n `sidebar.droneActionDetail` + `cardType: 'drone_damage'` dans payload serveur. `Sidebar.jsx` route vers la clé correcte. `skillLabel` enrichi avec nom cible + intégrité avant/après.
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | `client/src/locales/fr.json` | Ajout clé `sidebar.droneActionDetail` |
+| T2 | `client/src/locales/fr.json.test` | Idem |
+| T3 | `client/src/components/Sidebar.jsx` | Conditionnel `cardType === 'drone_damage'` → `droneActionDetail` |
+| T4 | `server/src/socket/index.js` branch 8a | `skillLabel` nom+intégrité, `diffLabel` pipeline MR/blindage/RD, `cardType` |
+
+## Session 93-5 — 2026-06-15 — Fix labels DICE_RESULT dégâts drone (DMG1+DMG2)
+
+### Contexte
+
+Analyse pipeline dégâts drone post-validation B6. Découverte bugs d'affichage dans la carte DICE_RESULT  : labels  et  sémantiquement faux, intégrité absente, pipeline illisible.
+
+Fichiers lus : ,  (resolveDroneAssaultAction branch 8a, calcDroneRD, resolveDroneIntegrityLoss),  (RD_TABLE), , , .
+
+### Bugs documentés (BUGIDENTIFIE.md §Session 93-5)
+
+- **COM3** — FAUX BUG confirmé (LdB REGLES_Contact.md p.222 : test d opposition = les deux roulent toujours)
+- **DMG1** [VÉRIFIÉ] : mechanicalTotal=rawDice affiché comme  — label i18n entityActionDetail réutilisé à tort dans contexte dégâts
+- **DMG2** [VÉRIFIÉ] : chancesDeReussite=degatsNets affiché comme  — même cause
+- **DR4** [VÉRIFIÉ] : calcDroneRD(15) → rdInput=30 → RD_TABLE rd=−3 → dégâts augmentés au lieu de réduits pour drone plein — bug à corriger dans sprint dédié
+- **DR5** — RÉSOLU : resistance_dommages supprimé en migration 72, aucune action requise
+- **DR6** [HYPOTHÈSE] : drone_sheet.blindage non lu (affiche 0 malgré valeur DB=15) — instrumentation [DBG-DR6] requise
+- **TODO-DRONE-1** : Tooltips champs blindage/armure/blindage IEM dans DroneWindow
+
+### Livré — SR ✅ — validation fonctionnelle requise
+
+Fix DMG1 + DMG2 : refonte carte DICE_RESULT dégâts drone.
+
+Solution : nouvelle clé i18n  + champ  dans payload serveur. Sidebar.jsx route vers la clé correcte selon cardType. skillLabel enrichi avec nom drone cible + intégrité avant/après.
+
+Résultat chat attendu :
+
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | client/src/locales/fr.json | Ajout clé sidebar.droneActionDetail |
+| T2 | client/src/locales/fr.json.test | Idem |
+| T3 | client/src/components/Sidebar.jsx | Conditionnel msg.cardType drone_damage → droneActionDetail |
+| T4 | server/src/socket/index.js branch 8a | skillLabel nom+intégrité, diffLabel pipeline MR/blindage/RD, cardType drone_damage |

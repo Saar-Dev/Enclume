@@ -1,21 +1,37 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-14 Session 92-4
+> Dernière mise à jour : 2026-06-15 Session 93-5
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
+
+---
+
+## ⚡ PROCHAINE ÉTAPE EXACTE
+
+> Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+**1. Valider Sprint 14-0** *(livré Session 93-3, jamais testé fonctionnellement)*
+   → Tester : appliquer stun → badge tokenStore → endTurn expire → COMBAT_STUN_EXPIRED
+   → Référence : `docs/ROADMAP.md` §PLAN 14 Sprint 14-0
+
+**3. Sprint Bugs Combat Session 93-4** *(nouveaux bugs identifiés — voir BUGIDENTIFIE.md §Session 93-4)*
+   → Priorité : DR1 (arme drone défaut) + COM6 (arme CaC défaut) + COM8 (masquer fenêtre en sélection cible) + DC1/DC3 (drone CaC portée)
+   → Référence : `docs/BUGIDENTIFIE.md` §Bugs Session 93-4
 
 ---
 
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **78 migrations appliquées** (76, 76c, 76d — 76b, 77, 77b planifiées Sprint 2d+3)
+- **79 migrations appliquées** (79 = expires_at_turn token_statuses — Session 93-3)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---
 
 ## En attente de validation fonctionnelle
 
-- **Sprint Drones 2c** — cycle complet drone joueur validé SR ✅ — bugs Loc-Drone + Dmg-Drone identifiés (voir dettes)
+- **Sprint 14-0** — architecture statuts token_statuses (stunned/unconscious lifecycle) — Session 93-3 — SR ✅
+- **Fix DMG1+DMG2** — labels DICE_RESULT dégâts drone (Compétence/Seuil → Dés/Nets + intégrité) — SR ✅ — Session 93-5
+- **Sprint Drones 2c** — cycle complet drone joueur — SR ✅ — bugs Loc-Drone + Dmg-Drone identifiés (voir dettes)
 - **Sprint CaC Étape 3** — SR + Vite 200 ✅ — test fonctionnel requis (humanoid CaC + drone CaC avec mods)
 - **Fix split-brain slot detection** — Session 93 — test requis : 6 tokens (1 non-annoncé INI haute), 4 déclarations, vérifier slot actif correct + CaC sans cible → COMBAT_DECLARE_ERROR + cycle complet sans fantôme
 - **Sprint CaC 4b** (attaque multiple melee — 2/3 cibles, −5/−7 malus) — Session 74
@@ -25,35 +41,56 @@
 
 ## Dettes actives
 
-| Dette | Priorité | Contexte |
+> Détail technique de chaque bug → [`docs/BUGIDENTIFIE.md`](BUGIDENTIFIE.md)
+
+| ID | Description | Priorité |
 |---|---|---|
-| `is_stunned` non enforced dans `COMBAT_ACTION_DECLARE` | Haute | PC42 — sprint `stunned_until_turn` |
-| `is_stunned` sans durée (LdB p.237 : 1d6 tours) | Haute | sprint `stunned_until_turn` requis |
-| Bug CL1 — Portraits PNJ non visibles dans timeline joueur | Haute | CombatTimeline.jsx — PNJ absent characterStore joueur |
-| Bug CL2 — Design CombatDeclareLog mauvais + divergence GM/joueur | Moyenne | CombatDeclareLog.jsx + declareLogSection — ref = version GM |
-| Bug Loc-Drone — jet localisation D20 incorrect pour cible drone | Haute | `resolveDroneAssaultAction` — §7.6 : zone unique fixe, pas de D20. Sprint dégâts drone |
-| Bug Dmg-Drone — dégâts non enregistrés sur drone cible | Haute | `resolveDroneAssaultAction` — blindage direct, RD integrite×2, drone_sheet.damages JSONB. Sprint dédié |
-| Bug CL3 — Ghosts déplacement d'annonce disparus | Moyenne | CombatOverlay.jsx — announcementMarker, régression Sessions 88–91 |
-| **Sprint CaC Étape 3** — validation fonctionnelle | Haute | Livré Session 92-4 (SR + Vite 200). Test requis : humanoid CaC avec mods, drone CaC avec mods. Voir `docs/REWORK_CONTACT.md` |
-| "Changer le mode de tir" — non implémenté | Moyenne | sprint dédié futur |
-| Sprint Annonce v2 — actions précédentes en lecture seule | Moyenne | GmDeclareWindow + ActionWindow |
-| Surprise critique (roll=1) → initiative=1 | Basse | à analyser |
-| WorkshopPage crash `err.response?.data?.error` | Basse | extraire `.message` |
-| `useDiceAudio.js` — sons dés | Basse | — |
-| `.gitattributes:3` — attribut invalide | Basse | — |
-| `onTokenRotate` dead code Canvas3D/Scene | Basse | — |
-| `getVoxelSurfaceTop` — pas de cas slope/wedge | Basse | default y+1.0 acceptable V1 |
-| Kiwi P-SRV-5 — ports Docker non restreints à 127.0.0.1 | Infra | voir SERVEURDISTANTKIWI.md |
-| Logs debug `index.js` — conservés volontairement | Infra | à retirer avant production |
+| ~~B6~~ | ~~Loc-Drone — `localisation: null` cible drone~~ | ✅ Clos — Session 94 |
+| ~~COM3~~ | ~~CaC : jet défense déclenché si attaque ratée~~ | FAUX BUG — LdB p.222 conforme — Session 94 |
+| DMG1+DMG2 | Labels DICE_RESULT dégâts drone (Compétence/Seuil faux) | SR ✅ — validation fonctionnelle requise |
+| DR4 | `calcDroneRD` : RD négatif → drone plein subil dégâts suppl. | Moyenne — sprint dédié |
+| DR6 | Blindage drone non lu (0 affiché malgré DB=15) | Haute — instrumentation [DBG-DR6] requise |
+| DC1 / DC3 / DR3 | Drone CaC : flow incorrect + portée +5 illégitime | **Haute** |
+| DC2 | Drone ranged : mods situation ignorés | **Haute** |
+| UI1 | Fenêtre déclaration design blanc | **Haute** |
+| COM1 | Recharger ne fait rien | **Haute** |
+| CL1 | Portraits PNJ non visibles timeline joueur | **Haute** |
+| COM6 | Arme CaC non pré-sélectionnée (GM + joueur) | Moyenne |
+| DR1 | Drone : arme non pré-sélectionnée | Moyenne |
+| COM8 | Fenêtre annonce visible pendant sélection cible | Moyenne |
+| COM2 | Vérif statut arme absente côté GM | Moyenne |
+| COM4 | CaC exige arme au clair (mains nues impossible) | Moyenne |
+| COM5 | Mode combat sélectionne aussi la cible (GM) | Moyenne |
+| COM7 | Multi-attaque CaC : duplicata / bouton grisé | Moyenne |
+| CL2 | Design CombatDeclareLog + divergence GM/joueur | Moyenne |
+| CL3 | Ghosts déplacement d'annonce disparus | Moyenne |
+| D1 | Menu radial "fiche" drone ne s'ouvre pas | Moyenne |
+| — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
+| — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |
+| D2 | Token drone : changement GLB non fonctionnel | Basse |
+| DR2 | Drone : déplacement absent | Basse — sprint futur |
+| INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
+| WS1 | WorkshopPage crash `err.response?.data?.error` | Basse |
+| AU1 | `useDiceAudio.js` — sons dés | Basse |
+| TC1 | `.gitattributes:3` — attribut invalide | Très basse |
+| DCO1 | `onTokenRotate` dead code Canvas3D/Scene | Très basse |
+| VX1 | `getVoxelSurfaceTop` — pas de cas slope/wedge | Très basse |
+| B7 | Dmg-Drone — dégâts non enregistrés | ✅ Clos |
+| — | Kiwi P-SRV-5 — ports Docker non restreints | Infra |
+| — | Logs debug `index.js` — conservés volontairement | Infra |
 
 ---
 
 ## Roadmap
 
-- **Sprint CaC Étape 4** — validation `CaC 4b` (multi-attaque) — validation fonctionnelle requise
-- **Sprint Drones 2** — ✅ 2a (INI 12) ✅ 2b (drone cible) ✅ 2c (cycle joueur valide) → **Sprint Dégâts Drone** (Loc-Drone + Dmg-Drone, §7.6) → 2d (auto-announcement) → 2e (resolveDroneAutoAction) — voir `docs/PLAN_DRONESYSCOMBAT.md`
+- **Sprint Dégâts Drone** → B6 (Loc) + B7 (Dmg) → voir `docs/REWORK_CONTACT.md`
+- **Sprint Drones 2d** — auto-announcement drone → voir `docs/PLAN_DRONESYSCOMBAT.md`
+- **Sprint Drones 2e** — resolveDroneAutoAction
 - **Sprint Drones 3** — Télépilotage (drone lié à PJ pilote)
-- **Sprint stunned_until_turn** — durée étourdissement + purge endTurn
+- **Sprint PLAN 14-1** — Menu contextuel token (right-click → ajouter/retirer statuts)
+- **Sprint PLAN 14-2** — Affichage badges (SVGs `docs/Character/Statuts/`, Canvas3D)
+- **Sprint PLAN 14-3** — FIX-D + mécaniques enforced (bypass défense stunned/surprised)
+- **Sprint stunned_until_turn** — supplanté par Sprint 14-0 ✅ — voir PLAN 14
 - **Sprint CaC 4b** — validation fonctionnelle requise avant
 - **Sprint Annonce v2** — actions précédentes en lecture seule (GmDeclareWindow + ActionWindow)
 - **Sprint Tooltips Compétences** — SkillsPanel bouton ⓘ (déjà codé Session 73)

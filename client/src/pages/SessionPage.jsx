@@ -441,8 +441,8 @@ export default function SessionPage() {
       // Guard updated_at géré dans le store — événements obsolètes ignorés silencieusement
       updateToken(token)
     })
-    s.on(WS.TOKEN_STATUS_UPDATED, ({ tokenId, statuses }) => {
-      updateToken({ id: tokenId, statuses })
+    s.on(WS.TOKEN_STATUS_UPDATED, ({ tokenId, statuses, statusExpiries }) => {
+      updateToken({ id: tokenId, statuses, statusExpiries: statusExpiries ?? {} })
     })
     s.on(WS.CHAT_MESSAGE, ({ userId, username, color, text, timestamp }) => {
       addMessage({

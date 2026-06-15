@@ -311,7 +311,40 @@ Plan complet : `docs/Character/PLAN_STATUT.md`
 2. **Affichage badges** (Html drei sous le nom, SVGs, couleurs par catégorie)
 3. **Option campagne + Flux Choc PJ + Mécaniques enforced** (migration, CombatShockWindow, enforcement)
 
-Architecture V1 : `state_character.statuses[]` dans JSONB existant (pas de nouvelle table).
+**Architecture V2 — acté Session 93-2**
+
+Source unique : `token_statuses` + colonne `expires_at_turn INT NULLABLE`.
+- Actif : `expires_at_turn IS NULL OR expires_at_turn > current_turn`
+- Cleanup : `DELETE WHERE expires_at_turn <= current_turn`
+- `NULL` = permanent (clear manuel GM)
+- `UNIQUE(token_id, status_code)` existant → re-stun étend la durée (`.onConflict().merge(['expires_at_turn'])`)
+
+**Sprints PLAN 14 :**
+
+**Sprint 14-0 — Architecture statuts (prérequis tout le reste)**
+
+| Tâche | Fichier | Description |
+|---|---|---|
+| Migration 79 | `migrations/79_token_statuses_expiry.js` | `ALTER TABLE token_statuses ADD expires_at_turn INT` |
+| `applyStunWithDuration` | `socket/index.js` | Écrit dans `token_statuses` uniquement — supprime les writes JSONB `is_stunned`/`stunned_until_turn` |
+| `checkStunExpiry` | `socket/index.js` | Lit `token_statuses` + supprime rows expirés — supprime purge JSONB |
+| Stun guard `COMBAT_ACTION_DECLARE` | `socket/index.js` | Lit `token_statuses WHERE status_code='stunned'` au lieu de `state_character?.is_stunned` |
+| `COMBAT_START` surprise | `socket/index.js` | Insert `token_statuses { status_code:'surprised', expires_at_turn: current_turn+1 }` au lieu de `is_surprised=true` colonne |
+| `endTurn` | `socket/index.js` | `DELETE token_statuses WHERE expires_at_turn <= current_turn` — universel, remplace purge spécifique |
+| Nettoyage JSONB | `socket/index.js` | Retirer toute lecture/écriture `is_stunned`/`stunned_until_turn` du JSONB `state_character` |
+
+**Sprint 14-1 — Menu contextuel token** (right-click → ajouter/retirer statuts, GM + propriétaire)
+
+**Sprint 14-2 — Affichage badges** (Html drei sous le nom, SVGs `docs/Character/Statuts/`, couleurs par catégorie, overflow +N)
+
+**Sprint 14-3 — FIX-D + mécaniques enforced**
+- FIX-D : bypass défense `resolveMeleeAction` si cible `stunned`/`surprised` → test simple +5 (query unique `token_statuses`)
+- `unconscious` : passe son tour (`COMBAT_ACTION_DECLARE` guard)
+- Option campagne `status_effects_mode`
+
+**Ce qui disparaît après Sprint 14-0 :**
+- `is_stunned` + `stunned_until_turn` du JSONB `state_character`
+- `is_surprised` comme colonne gameplay (`combat_roster.is_surprised` reste uniquement pour le flow `COMBAT_SURPRISE_ROLL` — effacé après le jet)
 
 ### Chantier Arts Martiaux 🔲
 

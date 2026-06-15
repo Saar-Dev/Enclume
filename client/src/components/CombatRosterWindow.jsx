@@ -191,6 +191,9 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                 const eq            = equipment[row.tokenId]
                 const isExcl        = row.excluded
                 const rEntry        = inCombat ? roster.find(e => e.token_id === row.tokenId) : null
+                const tEntry        = tokens.find(t => t.id === row.tokenId)
+                const isStunnedEntry = tEntry?.statuses?.includes('stunned') ?? false
+                const stunnedExpiry  = tEntry?.statusExpiries?.['stunned'] ?? null
                 const initConfirmed = rEntry?.state_character?.init_state_confirmed === true
 
                 return (
@@ -205,9 +208,9 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                           </span>
                         )}
                         <span style={S.tokenLabel}>{row.label}</span>
-                        {inCombat && rEntry?.state_character?.is_stunned === true && (
+                        {inCombat && isStunnedEntry && (
                           <span title="Assommé" style={{ fontSize: 9, color: '#f5c542', marginLeft: 4, fontWeight: 600 }}>
-                            ☠ étourdi ({Math.max(0, (rEntry.state_character.stunned_until_turn ?? 0) - currentTurn)} t.)
+                            ☠ étourdi ({Math.max(0, (stunnedExpiry ?? 0) - currentTurn)} t.)
                           </span>
                         )}
                       </div>

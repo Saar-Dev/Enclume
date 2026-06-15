@@ -237,19 +237,24 @@ Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combi
 - Suppression flag : `db.raw("state_character - 'is_stunned'")`
 - **Jamais** `UPDATE SET state_character = '{"is_stunned":true}'` — écrase tous les autres flags.
 
-**PC42 — `is_stunned` : settable mais non enforced (session 66)**
+**PC42 — `is_stunned` : enforced ✅ (PC42 réglé)**
 
-`is_stunned` est posé automatiquement dans `state_character` après un Test de Choc (outcome `etourdi` ou `inconscient`) via `resolveAssaultAction` et `COMBAT_DAMAGE_CONFIRM`.
+`is_stunned` est posé automatiquement dans `state_character` après un Test de Choc (outcome `etourdi` ou `inconscient`) via `applyStunWithDuration` (helper dédié, `stunned_until_turn` stocké en JSONB).
 
-Mais : **les effets gameplay ne sont pas encore appliqués.** `COMBAT_ACTION_DECLARE` ne lit pas `is_stunned`. Le flag est présent en DB, visible via `combat_roster.state_character`, mais sans conséquence mécanique.
+**Enforcement dans `COMBAT_ACTION_DECLARE` (lignes 1928-1943) ✅ :**
+- interdit `mapActions.attack` (assaut distance)
+- interdit `mapActions.melee` (CaC)
+- interdit `move_rapide` et `move_max`
 
-**Avant d'implémenter une logique qui *lit* `is_stunned` :** vérifier que le handler `COMBAT_ACTION_DECLARE` l'enforce déjà. Si non → sprint dédié requis.
+**Purge / cycle de vie `is_stunned` :**
+- `checkStunExpiry` (appelé dans `advanceSlot`) : purge automatique quand `stunned_until_turn <= current_turn` → efface `is_stunned` + `stunned_until_turn` du JSONB + retire badge `token_statuses`.
+- `COMBAT_APPLY_STUN` : handler GM pour application manuelle avec durée.
 
-**Purge / cycle de vie :**
-- `endTurn` ne purge PAS `is_stunned` (flag non per-turn).
-- La purge naturelle = suppression de l'entrée `combat_roster` à `COMBAT_END`.
-- Si un combat est abandonné sans `COMBAT_END`, le flag persiste jusqu'au prochain combat qui réutilise le même roster (ou jusqu'à un reset manuel).
-- Pour clear manuellement : `db.raw("state_character - 'is_stunned'")` via une route GM (non implémentée).
+**`is_surprised` — lifecycle absent ⚠️**
+- Colonne directe sur `combat_roster` (PAS dans `state_character` JSONB).
+- Posée à COMBAT_START. **Jamais effacée** (`endTurn` ne la reset pas).
+- Conséquence : si utilisée comme condition gameplay (ex. bypass défense), elle s'appliquerait tous les tours — incorrect pour une surprise premier tour uniquement.
+- Fix requis : purge dans `endTurn` OU migration vers `token_statuses` avec `expires_at_turn`. Voir **PLAN 14** dans ROADMAP.md.
 
 **Mots-clés :** `is_stunned`, `stunned`, `étourdi`, `inconscient`, `Test de Choc`, `shockResult`, `purge`, `clear`, `lifecycle`, `COMBAT_END`, `enforcement`, `COMBAT_ACTION_DECLARE`.
 

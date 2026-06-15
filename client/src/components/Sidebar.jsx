@@ -1108,7 +1108,10 @@ export default function Sidebar({
                         </div>
                         {/* Détail : compétence · difficulté · seuil */}
                         <div style={{ paddingLeft: '2px', fontSize: '11px', color: '#64748b' }}>
-                          {t('sidebar.entityActionDetail', {
+                          {t(msg.cardType === 'drone_damage'
+                            ? 'sidebar.droneActionDetail'
+                            : 'sidebar.entityActionDetail',
+                          {
                             skill: msg.mechanicalTotal,
                             dif: msg.diffLabel,
                             seuil: msg.chancesDeReussite,

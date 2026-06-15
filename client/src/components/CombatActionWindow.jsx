@@ -87,7 +87,7 @@ export default function CombatActionWindow({
   const playerToken = activeStoreToken ?? playerTokensInRoster[0] ?? null
   const playerChar  = playerToken ? playerChars.find(c => c.id === playerToken.character_id) ?? null : null
   const rosterEntry = playerToken ? roster.find(r => r.token_id === playerToken.id) : null
-  const isStunned   = rosterEntry?.state_character?.is_stunned === true
+  const isStunned   = playerToken?.statuses?.includes('stunned') ?? false
   const isDrone     = playerChar?.type === 'drone'
 
   // --- etats tactiques (initialises depuis rosterEntry quand dispo) ----------

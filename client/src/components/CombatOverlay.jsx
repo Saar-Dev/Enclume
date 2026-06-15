@@ -22,6 +22,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   const [showGmPanel, setShowGmPanel] = useState(false)
   const [stunDialog, setStunDialog] = useState(null) // null | { tokenId, outcome }
   const [stunDialogDuration, setStunDialogDuration] = useState('')
+  const [combatActionError, setCombatActionError] = useState(null)
 
   // Écoute expiry étourdissement — notification simple
   useEffect(() => {
@@ -33,6 +34,17 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
     socket.on(WS.COMBAT_STUN_EXPIRED, handler)
     return () => socket.off(WS.COMBAT_STUN_EXPIRED, handler)
   }, [socket, tokens])
+
+  // Écoute COMBAT_DECLARE_ERROR en phase Résolution — bannière persistante (survit aux changements de slot)
+  useEffect(() => {
+    if (!socket) return
+    const handler = ({ message }) => {
+      setCombatActionError(message)
+      setTimeout(() => setCombatActionError(null), 6000)
+    }
+    socket.on(WS.COMBAT_DECLARE_ERROR, handler)
+    return () => socket.off(WS.COMBAT_DECLARE_ERROR, handler)
+  }, [socket])
 
   // Slot actif en RÉSOLUTION — pour le panneau GM
   const sortedRoster = [...roster].sort((a, b) => b.initiative - a.initiative)
@@ -234,6 +246,14 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         <div style={styles.gmError}>
           <span style={styles.gmErrorMsg}>⚠ {gmSocketError}</span>
           <button style={styles.gmErrorClose} onClick={onGmSocketErrorClose}>✕</button>
+        </div>
+      )}
+
+      {/* Bannière erreur action combat — hors portée CaC, etc. — survit aux changements de slot */}
+      {combatActionError && (
+        <div style={styles.gmError}>
+          <span style={styles.gmErrorMsg}>⚠ {combatActionError}</span>
+          <button style={styles.gmErrorClose} onClick={() => setCombatActionError(null)}>✕</button>
         </div>
       )}
 

@@ -289,26 +289,160 @@ Ces 2 logs permettront de savoir :
 
 ---
 
-## QUESTIONS OUVERTES (à résoudre avant Phase 2)
+## PHASE 2 — ANALYSE ARCHITECTURALE (Session 93-2 — 2026-06-14)
 
-**Q1** : Le bug "aucun jet" — après ajout des logs DIAG-1 et DIAG-2, que voit-on dans la console serveur ?
-→ Bloque Phase 2 pour la correction C.
+### Q1 résolue — Cause confirmée, logs inutiles
 
-**Q2** : Est-ce que `is_stunned`/`is_surprised` sont testés AVANT la résolution melee dans le flux actuel ?
-→ À vérifier dans COMBAT_ACTION_CONFIRM avant `resolveMeleeAction`.
+**Log confirmé Session 93-2 (analyse post-implémentation) :**
+```
+[WS] resolveMeleeAction — hors portée: 3.6m max:3m token:...
+```
+→ C'est exactement le point 3 du verdict. Q1 résolue sans logs supplémentaires.
 
-**Q3** : La carence armure défenseur est-elle volontairement absente (LdB ne la mentionne pas pour la défense CaC) ?
-→ À vérifier dans REGLES_Contact.md.
+**FIX-B (logs DIAG) :** inutile pour le diagnostic — cause identifiée. Hors scope.
+
+### Q2 résolue — COMBAT_ACTION_CONFIRM lu (lignes 2277-2372)
+
+Handler lu intégralement. Points clés :
+- Ligne 2278 : log `[DBG] COMBAT_ACTION_CONFIRM` déjà présent ✅
+- Lignes 2354-2358 : melee actions marquées `status='resolved'` **AVANT** `resolveMeleeAction`
+- Ligne 2359-2362 : `needsDefenseWait = await resolveMeleeAction(...)`
+- Lignes 2366-2368 : `if (!needsDefenseWait) await advanceSlot(...)` → **slot avance même si distance échoue**
+
+**Conséquence architecturale :** comportement serveur LÉGALEMENT CORRECT (LdB : action perdue si hors portée). Pas un bug serveur. Pas de fix serveur nécessaire pour FIX-A.
+
+### Décision architecturale FIX-A — RÉVISÉE
+
+**Ancien plan (incorrect) :** ajouter listener dans `CombatCacModifiersWindow` + afficher erreur locale.
+**Problème :** slot avance quasi-simultanément → reset effect efface l'erreur avant que l'utilisateur la lise. Bricolage de timing.
+
+**Nouveau plan (correct) :** listener dans `CombatOverlay` (parent toujours monté).
+- `CombatOverlay` est monté pendant toute la durée du combat — indépendant du cycle de vie des enfants
+- `styles.gmError` + `styles.gmErrorMsg` + `styles.gmErrorClose` existent déjà dans `CombatOverlay` (bannière `gmSocketError` lignes 232-238)
+- `CombatCacModifiersWindow` : **ZÉRO changement** — `isRolling` reset naturellement (slot advance → unmount ou reset effect)
+- `CombatActionWindow` garde son listener (ANNOUNCEMENT) — coexistence propre, sans conflit
+
+### Q3 — Carence armure défenseur (FIX-E)
+
+Non analysée cette session. À traiter dans une session dédiée (lire `docs/SYSTEME/BLESSURES.md` + code `resolveMeleeAction`).
 
 ---
 
-## PLAN PHASE 2 (simulation — après réponse à Q1)
+## PHASE 3 — PLAN D'IMPLÉMENTATION COMPLET (prêt à coder)
 
-Selon le résultat des logs :
+> Plan auto-suffisant — lisible après compact de contexte.
+> Source des numéros de ligne : lecture directe `CombatOverlay.jsx` (258 lignes) Session 93-2.
 
-**Si DIAG-1 absent** → le handler ne reçoit pas l'event → bug client (socket, WS key)
-**Si DIAG-1 présent, DIAG-2 = 0** → melee action non trouvée en DB (status résolu ?) → vérifier DB
-**Si DIAG-2 présent (N≥1), pas de "[WS] melee attaque"** → exception dans resolveMeleeAction → lire `[WS] resolveMeleeAction error` dans console
-**Si "[WS] melee attaque" présent** → bug en aval (DICE_RESULT émis mais non reçu côté client)
+---
 
-Simulation des corrections [D-BUG-1] et [E1-BUG-1] en run à vide avant Phase 3.
+### [FIX-A] — `client/src/components/CombatOverlay.jsx` — 3 touches
+
+**Contexte fichier :**
+- Ligne 1 : `import { useState, useEffect } from 'react'` — déjà importés ✅
+- Ligne 3 : `import { WS } from '../../../shared/events.js'` — déjà importé ✅
+- Lignes 22-24 : états locaux existants (`showGmPanel`, `stunDialog`, `stunDialogDuration`)
+- Lignes 27-35 : useEffect `COMBAT_STUN_EXPIRED` — **modèle exact à réutiliser**
+- Lignes 232-238 : bannière `gmSocketError` existante avec `styles.gmError` — **CSS à réutiliser**
+- Lignes 609-638 : styles `gmError`, `gmErrorMsg`, `gmErrorClose` — **inchangés, réutilisés**
+
+---
+
+**T1 — Ligne 24 — ajouter état `combatActionError` après `stunDialogDuration` :**
+
+Avant (lignes 22-24) :
+```js
+const [showGmPanel, setShowGmPanel] = useState(false)
+const [stunDialog, setStunDialog] = useState(null)
+const [stunDialogDuration, setStunDialogDuration] = useState('')
+```
+
+Après :
+```js
+const [showGmPanel, setShowGmPanel] = useState(false)
+const [stunDialog, setStunDialog] = useState(null)
+const [stunDialogDuration, setStunDialogDuration] = useState('')
+const [combatActionError, setCombatActionError] = useState(null)
+```
+
+---
+
+**T2 — Après ligne 35 — ajouter useEffect listener `COMBAT_DECLARE_ERROR` :**
+
+Insérer après la fermeture du useEffect `COMBAT_STUN_EXPIRED` (après le `}, [socket, tokens])` de la ligne 35) :
+
+```js
+// Écoute COMBAT_DECLARE_ERROR en phase Résolution — bannière persistante (survit aux changements de slot)
+useEffect(() => {
+  if (!socket) return
+  const handler = ({ message }) => {
+    setCombatActionError(message)
+    setTimeout(() => setCombatActionError(null), 6000)
+  }
+  socket.on(WS.COMBAT_DECLARE_ERROR, handler)
+  return () => socket.off(WS.COMBAT_DECLARE_ERROR, handler)
+}, [socket])
+```
+
+**Pourquoi `[socket]` et pas `[]` :** socket peut changer à la reconnexion — le listener doit être réenregistré.
+
+---
+
+**T3 — Après ligne 238 — ajouter bannière `combatActionError` :**
+
+La bannière `gmSocketError` existante (lignes 232-238) :
+```jsx
+{/* Bannière d'erreur serveur — GM uniquement */}
+{gmSocketError && (
+  <div style={styles.gmError}>
+    <span style={styles.gmErrorMsg}>⚠ {gmSocketError}</span>
+    <button style={styles.gmErrorClose} onClick={onGmSocketErrorClose}>✕</button>
+  </div>
+)}
+```
+
+Ajouter APRÈS ce bloc :
+```jsx
+{/* Bannière erreur action combat — hors portée CaC, etc. — survit aux changements de slot */}
+{combatActionError && (
+  <div style={styles.gmError}>
+    <span style={styles.gmErrorMsg}>⚠ {combatActionError}</span>
+    <button style={styles.gmErrorClose} onClick={() => setCombatActionError(null)}>✕</button>
+  </div>
+)}
+```
+
+**Note :** les deux bannières utilisent `styles.gmError` — si elles apparaissent simultanément, elles se superposent (position: absolute top:52). Cas pratiquement impossible (l'une est erreur socket, l'autre erreur domaine). Acceptable.
+
+---
+
+### Ce qui NE change PAS
+
+| Fichier | Statut |
+|---|---|
+| `CombatCacModifiersWindow.jsx` | Inchangé — zéro touche |
+| `CombatActionWindow.jsx` | Inchangé — son listener COMBAT_DECLARE_ERROR coexiste |
+| `CombatGmDeclareWindow.jsx` | Inchangé |
+| `server/src/socket/index.js` | Inchangé pour FIX-A |
+| `styles.gmError` / `styles.gmErrorMsg` / `styles.gmErrorClose` | Inchangés — réutilisés |
+
+---
+
+### Validation post-implémentation
+
+1. SR sans erreur
+2. Vite 200
+3. Scénario test : lancer un combat, ANNOUNCEMENT → 1 PNJ annonce melee sur une cible à > 3m → RESOLUTION → slot PNJ actif → GM voit `CombatCacModifiersWindow` → clique "Lancer les dés"
+4. **Attendu :** bannière rouge "⚠ hors portée: X.Xm max:3m" apparaît en haut de l'écran, disparaît après 6s ou clic ✕
+5. **Attendu :** slot avance normalement (comportement inchangé)
+6. **Attendu :** aucun régression sur les autres chemins (tir distance, CaC qui réussit, défense PJ)
+
+---
+
+### Fixes restants après FIX-A
+
+| ID | Priorité | Description | Prérequis lecture |
+|---|---|---|---|
+| **[FIX-D]** | HAUTE — bloqué PLAN 14 | Cible sans défense → test simple +5. `rosterDef` déjà fetché ligne 3486. `is_surprised` lifecycle incorrect (jamais effacé). Architecture statuts à trancher avant de coder. Voir ROADMAP.md PLAN 14. | `resolveMeleeAction` lignes 3482-3670 |
+| **[FIX-E]** | À confirmer | Carence armure défenseur PNJ non calculée | `docs/SYSTEME/BLESSURES.md` + `resolveMeleeAction` |
+| [FIX-B] | BASSE | Logs COMBAT_ACTION_CONFIRM (log existe déjà ligne 2278) | Vérifier si utile |
+| [FIX-C] | BASSE | 403 drone endpoint non-drone | — |

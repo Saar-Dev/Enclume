@@ -67,9 +67,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       .sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))[0]?.token_id ?? null
   )
 
-  const activeRosterEntry    = activeTokenId ? roster.find(r => r.token_id === activeTokenId) : null
-  const isStunnedActivePnj   = activeRosterEntry?.state_character?.is_stunned === true
-
   const [declareError, setDeclareError] = useState(null)
   const [equipment,    setEquipment]    = useState({})   // tokenId -> { characterId, weapon, armorPieces }
   const [rosterOpen,   setRosterOpen]   = useState(
@@ -175,7 +172,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     const token = tokens.find(t => t.id === entry.token_id)
     if (!token?.character_id) return false
     const char = characters.find(c => c.id === token.character_id)
-    return char?.type === 'drone' && !char.user_id
+    return char?.type === 'drone'
   }
   const isGmManaged = (entry) => isPnj(entry) || isDroneGmManaged(entry)
 
@@ -198,6 +195,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const isActivePnj   = activePnjEntry && isPnj(activePnjEntry)        && !activePnjEntry.has_announced
   const isActiveDrone = activePnjEntry && isDroneGmManaged(activePnjEntry) && !activePnjEntry.has_announced
   const activeToken = activeTokenId ? tokens.find(t => t.id === activeTokenId) : null
+  const isStunnedActivePnj = activeToken?.statuses?.includes('stunned') ?? false
 
   // Quand le slot actif est un PJ (ni PNJ ni drone) — identifier le bloquant
   const blockerEntry = (!isActivePnj && !isActiveDrone && activePnjEntry && !activePnjEntry.has_announced) ? activePnjEntry : null

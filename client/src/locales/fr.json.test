@@ -182,6 +182,7 @@
     "configColor": "Couleur",
     "configSaved": "Modifications enregistrées",
     "entityActionDetail": "Compétence : {{skill}} · Dif.{{dif}} · Seuil : {{seuil}}",
+    "droneActionDetail": "Dés : {{skill}} · {{dif}} · Nets : {{seuil}}",
     "displacementJet": "Jet de {{attr}} :",
     "displacementDetail": "Difficulté {{dif}} · Seuil : {{seuil}}",
     "displacementSuccess": "RÉUSSITE — Marge : {{mr}}",
