@@ -1,6 +1,6 @@
-# BUGIDENTIFIE.md — Registre des bugs actifs
+﻿# BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-15 Session 95 suite 2
+> Dernière mise à jour : 2026-06-15 Session 96
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -136,16 +136,87 @@ Des bugs de **sévérité différente** peuvent être dans le même cluster si l
 | **A — Socket résolution drone** | ~~B6~~ ✅ / ~~COM3~~ FAUX BUG / ~~DC2~~ ✅ / ~~DC3~~ ✅ | `server/src/socket/index.js` | ✅ Clos Session 95 suite |
 | **B — Init arme défaut** | ~~COM6~~ ✅ / ~~DR1~~ ✅ | `CombatGmDeclareWindow.jsx` | ✅ Clos Session 95 |
 | **C — Flow CaC drone** | ~~DC1~~ ✅ / ~~DR3~~ ✅ | `CombatOverlay.jsx` + `socket/index.js` | ✅ Clos Session 95 suite |
-| **J — Pipeline shock + COMBAT_END** | SHOCK1 + SHK3 | `server/src/socket/index.js` | **Haute** |
-| **K — UX curseur + chat** | CUR1 + CH1 | `CombatOverlay.jsx` + `SessionPage.jsx` | Haute |
+| **J — Pipeline shock + COMBAT_END** | ~~SHOCK1~~ ✅ / ~~SHK3~~ ✅ / ST2 | `server/src/socket/index.js` | **Haute** |
+| **K — UX curseur + chat** | CUR1 (correctif) + CH1 (sprint persistance séparé) | `CombatOverlay.jsx` + `SessionPage.jsx` | Haute |
 | **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 | composants combat + `index.css §11` | Haute |
 | **E — Arme et statuts** | COM1 + COM2 + COM4 + COM7 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
 | **F — Ghosts + portraits** | CL1 + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
 | **G — Drone store** | D1 + D2 | `SessionPage.jsx` + `Canvas3D.jsx` | Moyenne |
 | **H — Dettes techniques** | WS1 + TC1 + DCO1 + VX1 + AU1 + INI1 | divers | Basse |
-| **I — Affichage dégâts drone** | DMG1 + DMG2 + DR4 | `server/src/socket/index.js` + `charStats.js` | Moyenne |
+| **I — Affichage dégâts drone** | DR6 + DR4 + DMG1 + DMG2 | `server/src/socket/index.js` | **Haute** |
 
 **Règle d'or :** toujours finir le cluster A avant d'entamer B. Validation fonctionnelle obligatoire entre clusters.
+
+---
+
+## AUDIT ARCHITECTURAL — Pipeline Combat — Session 95-3 (2026-06-15)
+
+> Lecture de `server/src/socket/index.js` (handlers, fonctions résolution) + `charStats.js` + `woundUtils.js`.
+> **🔴 REFONTE** = ne pas corriger individuellement — reconstruire proprement.
+> **🟢 OK** = structure saine, corrections ciblées acceptables.
+> **🟡 TECH DEBT** = non bloquant V1, sprint futur.
+
+---
+
+### Fondations — `charStats.js` / `woundUtils.js` / helpers atomiques
+**🟢 OK — conserver sans toucher.**
+
+| Élément | Verdict |
+|---|---|
+| `calcSeuils`, `calcResistanceDommages`, `calcResistanceArmure` | ✅ Pures, correctes, conformes LdB |
+| `isShockTestRequired`, `getShockMalus` | ✅ Pures, conformes LdB |
+| `applyStunWithDuration` | ✅ Écrit **uniquement** dans `token_statuses` — architecture post-Sprint 14-0 conforme. Zéro écriture JSONB. |
+| `rollStunDuration` | ✅ Single-purpose, correct |
+| `resolveWoundInsertion` | ✅ Transactionnel, correct |
+| Guard stun `COMBAT_ACTION_DECLARE` (~ligne 1923) | ✅ Lit depuis `token_statuses` uniquement |
+| Schéma DB + migrations | ✅ Solide |
+
+---
+
+### Bloc Shock — `socket/index.js`
+**🔴 REFONTE TOTALE — ne pas patcher individuellement.**
+
+Le bloc shock (isShockTestRequired → calcSeuils → rollChoc → outcome → stunDuration → applyStunWithDuration → shockResult) est **copié-collé 5× avec des noms de variables différents** :
+
+| Site | Fonction | Var stun |
+|---|---|---|
+| ~2495 | COMBAT_DAMAGE_CONFIRM | `stunDuration` |
+| ~2781 | COMBAT_MELEE_DEFENSE_CONFIRM | `stunDuration2` |
+| ~3612 | resolveMeleeAction (PNJ auto) | `stunDuration3` |
+| ~4065 | resolveDroneAssaultAction 8b | `stunDuration` |
+| ~4434 | resolveAssaultAction (PNJ auto) | `stunDuration4` |
+
+**Symptômes actifs de cette structure :**
+- **SHOCK1** ✅ clos — bloc entier absent en 8b → copy-paste incomplet, corrigé en urgence Session 95-3
+- **ST2** — D6 durée sans DICE_RESULT dans les 5 copies → **ne pas patcher individuellement**
+
+**Plan refonte :** extraire un helper `resolveShockBlock(io, campaignId, { finalSeverity, localisation, for_na, con_na, vol_na, is_lethal, targetTokenId, userId, username, color })` qui retourne `shockResult`. Un seul endroit. ST2 (DICE_RESULT D6) corrigé une fois. Les 5 sites deviennent un appel d'une ligne.
+
+---
+
+### Handlers de résolution — Monolithes
+**🟡 TECH DEBT — non bloquant V1.**
+
+| Fonction | Lignes estimées | Problème |
+|---|---|---|
+| `resolveMeleeAction` | ~507 | Attaque PJ + PNJ + multi-attaque + pipeline complet inline |
+| `resolveAssaultAction` | ~367 | PJ + PNJ + setup attaquant + pipeline complet inline |
+| `COMBAT_DAMAGE_CONFIRM` handler | ~213 | Lookup DB + calcul dégâts + wound + shock + 4 émissions |
+| `COMBAT_MELEE_DEFENSE_CONFIRM` handler | ~261 | Même problème |
+
+Acceptable V1. Découpage en modules (`resolveDamage.js`, `resolveMelee.js`) = sprint dédié post-V1. **Ne pas bloquer les corrections actuelles pour ça.**
+
+---
+
+### Ordre d'exécution Cluster J — révisé
+
+| Étape | Action | Raison |
+|---|---|---|
+| 1 | **DBG-SHK3** — instrumenter + SR + lire console | SHK3 = [HYPOTHÈSE] — cause racine non confirmée |
+| 2 | **Refonte `resolveShockBlock`** — 1 commit | ST2 résolu dedans + futur-proof |
+| 3 | **Fix SHK3** — 1 commit | Après DBG confirmé uniquement |
+
+**Règle :** ST2 ne se corrige pas en 5 endroits. `resolveShockBlock` est le prérequis.
 
 ---
 
@@ -157,6 +228,7 @@ Des bugs de **sévérité différente** peuvent être dans le même cluster si l
 | `getVoxelSurfaceTop` retourne `y+1.0` pour slope/wedge | Acceptable V1 — sprint voxels v2 futur | VX1 dans ce fichier |
 | `is_stunned` non enforced dans COMBAT_ACTION_DECLARE | Dette connue PC42 — sprint dédié | `CLAUDE.md §Dettes` |
 | Jet de défense CaC toujours déclenché, même si attaque échouée | LdB p.222 — test d'opposition = **les deux roulent toujours** (4 cas). Exception = surprise/inconscient uniquement. Code `resolveMeleeAction` CONFORME. | COM3 — vérifié Session 94 via `REGLES_Contact.md` |
+| Stun mécanique résiduel après COMBAT_END (badge disparu, effet persiste) | FAUX BUG. Cleanup `COMBAT_END` correct — [DBG-SHK3] confirme `token_statuses: []` après delete. Guard COMBAT_ACTION_DECLARE lit uniquement `token_statuses`. `current_turn` repart à 1 à chaque nouveau combat. | SHK3 — vérifié Session 95-3 |
 
 > Avant de déclarer un bug, vérifier cette table. Si le comportement est ici → ne pas créer de correctif.
 
@@ -184,278 +256,6 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 **Prochaine étape** : [Action exacte à prendre — cluster, sprint, ou investigation.]
 ```
-
----
-
-## Audit des incohérences globales (Blocage d'un tour complet)1. Phase ROSTER (Initialisation & Structure des Données)L'incohérence : Absence de couplage "Roster $\leftrightarrow$ Action".La règle Polaris : L'initiative d'un personnage détermine à la fois quand il annonce et quand ses actions se résolvent.Le problème dans le code : Dans le store, le tableau roster et le tableau actions sont traités comme deux entités distinctes. En phase de Résolution, la Timeline bascule sur le tableau actions et perd le lien avec la valeur initiative du roster (votre code effectue un .find d'urgence pour récupérer l'INI, signe que la structure est découplée).Conséquence : Si un modificateur d'initiative survient pendant le tour (ex: blessure instantanée, action précipitée), la mise à jour de l'initiative dans le roster ne réordonne pas automatiquement la file des actions associées.2. Phase 1 : ANNONCE (Cinétique Tactique)L'incohérence : Absence de contrainte d'ordre sur le Store.La règle Polaris : L'ordre des annonces est strictement croissant (l'INI la plus basse parle en premier).Le problème dans le code : Votre store Zustand (combatStore.js) ne contient aucun verrou logicie ou index de slot actif pour la phase d'annonce. N'importe quel joueur peut émettre l'événement COMBAT_ACTION_DECLARE à tout moment. Le tri croissant n'est appliqué que visuellement dans le composant d'UI (CombatTimeline.jsx).Conséquence : Un joueur rapide (haute INI) peut soumettre son action avant un joueur lent, détruisant l'asymétrie tactique (l'avantage d'information) qui est le cœur du système Polaris.3. Transition ANNONCE $\rightarrow$ RÉSOLUTIONL'incohérence : Absence de pivot d'inversion automatique.La règle Polaris : Le passage à la résolution requiert la validation complète de toutes les intentions de combat, le calcul final des initiatives modifiées (ex: $+3$ pour action précipitée), et le bris des égalités par le dé caché.Le problème dans le code : Le store passe d'une phase à l'autre sans exécuter de routine de consolidation (il change simplement la chaîne phase et remet activeSlotIdx à 0).Conséquence : Les initiatives modifiées par les annonces ne sont pas figées avant d'entrer en résolution, ce qui rend l'ordre de la phase suivante instable ou faux.4. Phase 2 : RÉSOLUTION (Cinétique Physique)L'incohérence principale : Le tri à double niveau manquant.La règle Polaris : Cette phase doit exécuter les actions dans l'ordre décroissant des initiatives des personnages, ET pour un même personnage, dans l'ordre croissant de ses sous-sequences d'actions (Mouvement, puis Tir).Le problème dans le code : Le système actuel ne sait pas gérer ce double tri. Côté client, l'UI trie uniquement par séquence brute (a.sequence - b.sequence), ignorant l'initiative. Côté serveur, la progression par index unitaire (activeSlotIdx++) implique que le serveur considère que le tableau des actions est déjà parfaitement ordonné en base de données, ce qui est mathématiquement impossible sans une requête SQL avec un double ORDER BY.Conséquence : L'ordre d'exécution physique est chaotique. Un personnage lent peut blesser un personnage rapide avant que ce dernier n'ait pu déclencher son action.5. Fin de Tour (Maintenance des États)L'incohérence : L'amnésie des compteurs temporels.La règle Polaris : Les états physiques comme l'étourdissement (is_stunned) durent un nombre de tours (1d6).Le problème dans le code : La routine endTurn se contente de purger les modes éphémères du JSONB (comme is_rushed), mais ne possède pas de logique de décrémentation des compteurs numériques d'états persistants.Conséquence : Un personnage étourdi le restera indéfiniment ou devra être corrigé manuellement, car le système ne sait pas calculer l'expiration d'un effet au fil des rounds.La Spécification Mathématique d'un Tour Complet (Ce que le code doit valider)Pour qu'un tour fonctionne, l'ensemble de votre code (Moteur Serveur + Store + UI) doit s'aligner sur cette unique machine à états :[1. PHASE ROSTER]
-   │  • Chargement des acteurs présents.
-   │  • Calcul REA brute ──► Stockage dans 'base_initiative'.
-   └──► [Génération automatique du jet caché de bris d'égalité]
-         │
-         ▼
-[2. PHASE ANNONCE]
-   │  • Tri de la file : CROISSANT (base_initiative + dé caché).
-   │  • Le serveur bloque les entrées : Seul l'acteur à l'index actif peut annoncer.
-   │  • Enregistrement des modificateurs d'action (ex: Précipité = +3 INI).
-   └──► [Événement : Tous les acteurs ont 'has_announced: true']
-         │
-         ▼
-[3. TRANSITION & CONSOLIDATION]
-   │  • Calcul final : 'current_initiative' = base_initiative + modificateurs.
-   │  • Génération de la file d'actions finale ordonnée.
-         │
-         ▼
-[4. PHASE RÉSOLUTION]
-   │  • Tri de la file : DOUBLE TRI (current_initiative DÉCROISSANT, puis sequence CROISSANT).
-   │  • Déroulement pas-à-pas des slots d'actions.
-   │  • Si un acteur passe 'is_stunned' ou meurt ──► Invalidation immédiate de ses slots futurs.
-   └──► [Événement : Toutes les actions de la file sont consommées]
-         │
-         ▼
-[5. FIN DE ROUND (endTurn)]
-   │  • Incrémentation du compteur de Round.
-   │  • Décrémentation des compteurs d'états (ex: stunned_duration - 1).
-   │  • Remise à zéro des flags d'annonce et purge de la table des actions.
-   └──► Retour à la Phase 1 (Annonce) pour le Round suivant.
-   
-Analyse de conformité globale : Mécanique Polaris vs CombatTimeline.jsx
-
-L'analyse de votre code source (unique source de vérité côté client) démontre un décalage structurel profond entre l'implémentation de l'affichage et les règles de base du jeu de rôle Polaris. C'est ce décalage mathématique qui détruit l'ordre visuel et logique lors d'un tour de combat.
-1. Diagnostic de la Phase d'Annonce
-La Règle Polaris (LdB)
-
-L'ordre d'annonce est strictement croissant. L'acteur ayant le score d'Initiative le plus bas doit obligatoirement être affiché en tête de liste, car c'est lui qui parle en premier.
-Ce que fait votre code (Lignes 31 à 33)
-JavaScript
-
-if (phase === 'ANNOUNCEMENT') {
-  cards = [...roster]
-    .sort((a, b) => a.initiative - b.initiative)
-
-    Statut de conformité : CONFORME. * Comportement constaté : Le tri soustrait b de a (ascendant). L'initiative la plus basse apparaît bien à gauche de la Timeline. L'UI respecte ici la cinétique tactique du livre de règles.
-
-2. Le Nœud du Problème : La Phase de Résolution
-La Règle Polaris (LdB)
-
-À l'instant où le combat bascule en phase de Résolution, le temps physique s'inverse. L'ordre d'exécution devient strictement décroissant. L'acteur possédant la plus haute Initiative doit agir physiquement en premier, car sa vitesse lui donne l'opportunité de neutraliser un adversaire plus lent avant que ce dernier ne résolve son action.
-Ce que fait votre code (Lignes 51 à 53)
-JavaScript
-
-} else {
-  cards = [...actions]
-    .sort((a, b) => a.sequence - b.sequence)
-
-    Statut de conformité : NON CONFORME (Écart Logique Majeur).
-
-    Comportement constaté : 1. Votre code trie le tableau des actions uniquement sur la propriété .sequence (le type d'action : Mouvement avant Assaut).
-    2. Il omet totalement de trier par Initiative décroissante. Si l'action d'un personnage à l'initiative 6 (Lent) possède un identifiant ou une insertion de séquence plus ancienne en base de données que l'action d'un personnage à l'initiative 20 (Rapide), le personnage lent est affiché en premier dans la Timeline et reçoit le badge d'activation (isActive: idx === activeSlotIdx).
-
-C'est l'explication technique exacte de votre bug : la Timeline en mode Résolution n'affiche pas l'ordre temporel des acteurs, mais l'ordre d'empilement brut des lignes d'actions en base de données.
-3. L'Impact de l'Indicateur d'Activation (isActive)
-Ce que fait votre code (Ligne 66)
-JavaScript
-
-isActive:      idx === activeSlotIdx,
-
-En phase de Résolution, la carte est marquée comme active (le portrait s'agrandit et s'illumine) simplement si son index dans le tableau des actions correspond à l'index du slot géré par le serveur (activeSlotIdx).
-
-Puisque le tableau cards n'est pas trié par initiative décroissante au préalable, l'index activeSlotIdx progresse de gauche à droite sur une suite d'acteurs totalement désordonnée par rapport à leurs scores d'INI.
-Synthèse Logique de la Mécanique d'un Tour
-
-Pour qu'un tour de combat soit égal au système Polaris, le cycle de traitement de votre composant doit appliquer le modèle logique suivant :
-
-[ENTRÉE DU TOUR]
-       │
-       ├──► Phase = 'ANNOUNCEMENT' ──► Tri : a.initiative - b.initiative (Croissant)
-       │
-       └──► Phase = 'RESOLUTION'   ──► Tri Principal : b.initiative - a.initiative (Décroissant)
-                                       Tri Secondaire: a.sequence - b.sequence (Ordre Physique)
-
-Tant que le tableau de la phase de Résolution ne combine pas le tri décroissant de l'Initiative globale des personnages avec le tri croissant de leurs sous-séquences d'actions, le système visuel de la ligne de temps restera déynchronisé de la réalité mathématique des règles de Polaris.
-
-Le bug de la "Super-Vitesse" (Lignes 118 à 124)
-
-Dans ton code, il y a un composant appelé StateSelector qui permet de choisir sa vitesse (Allure : normal, rapide, etc.). Le problème est qu'à chaque changement de personnage, le code réinitialise l'allure sur "normal" par défaut.
-
-    Pourquoi c'est bloquant : Si un joueur a annoncé au tour d'avant qu'il fuyait en courant (vitesse max), le code oublie cette information au début du nouveau tour. Pire, les modificateurs d'initiative liés à la course ne seront pas transmis correctement au serveur.
-	
-	Le point bloquant n°2 : Le piège des "Actions Intouchables"
-
-Dans l'interface que tu as créée, le joueur peut cliquer sur des boutons pour choisir son action : "Assaut" (attaquer), "Se déplacer", "Recharger", etc.
-Ce que dit le jeu Polaris :
-
-Certaines actions demandent toute l'attention du personnage. Si tu décides de tirer (Assaut) ou de recharger ton arme, tu ne peux pas faire une autre action majeure en même temps. C'est ce qu'on appelle des actions exclusives.
-Le problème dans ton fichier (Lignes 14 à 16 et l'affichage des boutons) :
-
-Ton code liste bien ces actions interdites entre elles :
-JavaScript
-
-const EXCLUSIVE_ACTIONS = new Set(['attack', 'melee', 'reload', 'multi', 'interact'])
-
-Mais dans l'interface, les boutons restent cliquables. L'IA n'a pas branché la sécurité qui grise ou bloque un bouton si le joueur a déjà choisi une action incompatible.
-
-    Pourquoi c'est bloquant : Un joueur peut cocher "Assaut" ET cocher "Recharger" en même temps. L'interface va envoyer les deux au serveur. Le serveur (ou Claude Code) va s'emmêler les pinceaux car la base de données n'est pas prévue pour recevoir deux actions majeures sur un seul tour. Cela va écraser les données ou créer des lignes d'actions fantômes.
-	
-	Le point bloquant : L'arnaque de l'Armure Fantôme
-
-Dans Polaris, chaque partie du corps est protégée par une valeur d'armure spécifique (un gilet pare-balles protège le corps, mais pas la tête). Pour savoir si un personnage a mal, le jeu tire au sort une localisation, puis soustrait l'armure de cette zone aux dégâts de l'arme.
-Le problème dans ton fichier (Lignes 58 à 67) :
-
-Dans l'affichage des résultats, ton code montre deux lignes textuelles distinctes :
-
-    Dégâts bruts (la puissance de l'arme)
-
-    Absorption (la valeur de l'armure)
-
-Le problème, c'est que ton code prend une valeur magique nommée payload.absorption qui vient directement du clic de l'interface, de manière globale.
-
-    Pourquoi c'est bloquant pour le vibe coding : L'armure ne peut pas être globale. Si l'IA calcule que le tir a touché la "Tête", mais que le bouton utilise l'absorption globale du "Corps" (parce que le personnage porte une combinaison), le calcul final des dégâts nets sera totalement faux par rapport aux règles de Polaris. L'IA va appliquer des blessures graves sur des zones qui auraient dû être blindées, ou inversement.
-	
-	L'annonce prématurée de la Mort (CombatResultPanels.jsx)
-
-Dans ton code, il y a deux composants : un pour le Maître du Jeu (CombatResultGM) et un pour le Joueur (CombatResultPlayer).
-
-Regardons la ligne 211, dans la version du joueur :
-JavaScript
-
-{isSuccess
-  ? (is_lethal ? 'Vous êtes mortellement touché' : 'Vous êtes touché')
-  : 'Vous esquivez le tir'
-}
-
-Ce que dit le jeu Polaris :
-
-Dans Polaris, recevoir un tir ne signifie pas que tu meurs sur le coup, sauf si tes points de vie tombent à zéro ou si la blessure est techniquement classée comme "Mortelle" après un calcul précis.
-Le problème dans ton fichier :
-
-Ton code utilise une variable magique nommée is_lethal pour décider d'afficher "Vous êtes mortellement touché". Le problème, c'est que cette variable est lue directement depuis le résultat brut du jet de toucher.
-
-    Pourquoi c'est bloquant pour le vibe coding : L'IA confond "Faire un coup critique au dé" et "Tuer le personnage". Dans Polaris, tu peux faire un super jet d'attaque (un critique), mais si la cible a une armure énorme (comme une combinaison de combat blindée), les dégâts finaux peuvent être réduits à zéro. Le joueur verra écrit "Vous êtes mortellement touché" alors qu'en réalité, son armure a tout arrêté et il n'a rien senti.
-	
-	1. Le point bloquant dans CombatGmDeclareWindow.jsx (Le panneau du GM)
-
-Ce fichier est la copie conforme de la télécommande des joueurs, mais adaptée pour les monstres ou les PNJ gérés par le Maître du Jeu. L'IA y a laissé exactement la même erreur d'amnésie.
-L'erreur de l'état par défaut (Lignes 17 à 24)
-
-Regarde ce bloc en haut du fichier :
-JavaScript
-
-const STATE_DEFAULTS = {
-  position:  'standing',
-  weapon:    'holstered',
-  fire_mode: 'cc',
-  cover:     'exposed',
-  vitesse:   'normal',
-}
-
-    Le problème : À chaque fois que le MJ ouvre la fenêtre d'un PNJ, le code réinitialise toutes ses positions par défaut. Si un PNJ était caché derrière un mur (cover: 'hidden') ou à terre au round précédent, le code le remet debout et à découvert automatiquement.
-
-    Pourquoi c'est bloquant : Les règles de Polaris punissent sévèrement un personnage qui court à découvert. Si l'interface oublie qu'un PNJ s'est mis à l'abri, le calcul des modificateurs de tir au tour d'après sera complètement faussé.
-	
-	2. Le point bloquant dans CombatModifiersWindow.jsx (Les calculs de tirs)
-
-Ce fichier est le cerveau mathématique qui applique les malus de portée, de lumière ou de mouvement avant de lancer le dé. Et là, il y a une grosse entorse aux règles de Polaris.
-Le piège du cumul des vitesses (Lignes 19 à 24)
-
-Le fichier liste les malus selon l'allure du tireur :
-
-    Immobile : 0
-
-    Allure lente : -3
-
-    Allure moyenne : -5
-
-    Le problème : Dans Polaris, le fait de courir ou de marcher s'applique différemment selon que l'on est en phase d'Annonce ou en phase de Résolution. Ici, le composant applique un malus fixe basé uniquement sur un bouton coché dans l'UI au moment du tir.
-
-    Pourquoi c'est bloquant : Si Claude Code applique ce malus de manière statique, un personnage qui a annoncé "Je reste immobile" mais qui est forcé de bouger pendant la résolution (à cause d'une explosion ou d'une fuite) ne subira pas le bon malus. Les modificateurs doivent dépendre de l'action réelle validée par le serveur, pas du bouton sélectionné à la volée dans cette fenêtre.
-	
-	
-1. Le point bloquant dans CombatInitStateWindow.jsx (L'État Initial)
-
-Ce composant sert au moment où le combat se déclenche (Phase Roster). Il demande à chaque joueur : "Tu es debout ou allongé ? Ton arme est rangée ou sortie ?".
-Le problème de logique (Lignes 25 à 27) :
-
-Regarde comment le code va chercher l'état du personnage au chargement :
-JavaScript
-
-const [position,  setPosition]  = useState(entry?.state_position  ?? 'standing')
-const [weapon,    setWeapon]    = useState(entry?.state_weapon    ?? 'holstered')
-const [fireMode,  setFireMode]  = useState(entry?.state_fire_mode ?? 'cc')
-
-    Le problème : Ces variables utilisent des propriétés nommées state_position ou state_weapon. Or, dans tout le reste de ton application et dans le fichier des PNJ (CombatGmDeclareWindow.jsx), ces mêmes états sont stockés dans un objet unique appelé STATE_DEFAULTS avec des clés comme position ou vitesse.
-
-    Pourquoi c'est bloquant pour Claude Code : Il y a une double nomenclature. À cause de cela, l'IA va enregistrer l'état initial dans une case de la base de données, mais quand le tour va commencer (Phase d'Annonce), l'autre fenêtre ne trouvera pas l'information et remettra le personnage dans sa position par défaut. Le joueur va valider qu'il a son arme en main, et au moment de tirer, le jeu lui dira : "Désolé, ton arme est rangée".
-	
-	2. Le point bloquant dans CombatRosterWindow.jsx (Le Roster du MJ)
-
-Ce grand tableau permet au MJ de voir l'initiative de tout le monde, la santé, et quelles pièces d'armure protègent quelles zones (Tête, Corps, Bras, Jambes).
-Le piège de l'Armure Statique (Lignes 11 à 18) :
-
-Le code utilise une fonction pour extraire l'armure d'un équipement :
-JavaScript
-
-function getCoverage(location) {
-  if (!location) return {}
-  const parts = new Set(location.split('/'))
-  return { T: parts.has('T'), C: parts.has('C'), B: parts.has('B'), J: parts.has('J') }
-}
-
-    Le problème : Ce tableau liste l'armure de manière purement informative pour le MJ. Mais à aucun moment ce composant ne communique avec la fenêtre des dégâts (CombatDamageWindow.jsx) que nous avons analysée plus tôt.
-
-    Pourquoi c'est bloquant : Si le MJ utilise ce tableau pour vérifier les forces en présence, mais que Claude Code a codé la résolution des dégâts de son côté avec une logique d'armure globale, le MJ va voir qu'un PNJ a un casque (Tête protégée), mais le moteur de résolution va quand même appliquer la réduction d'armure globale sur un tir dans les jambes.
-	
-	Le point bloquant : Le conflit des "Modes de Vue"
-
-Dans Polaris, la phase d'Annonce et la phase de Résolution sont étanches (on ne fait pas la même chose dans l'une et dans l'autre).
-Le problème dans ton fichier (Lignes 37 à 57) :
-
-Regarde comment le composant décide d'afficher les fenêtres pour un joueur :
-JavaScript
-
-const showInitState = phase === 'ROSTER' && playerToken && !isGm
-const showActionWin = phase === 'ANNOUNCEMENT' && activeTokenId === playerToken?.id && !isGm
-
-Jusqu'ici tout va bien. Le problème arrive juste après, avec les fenêtres de résultats (les pop-ups comme attackResult ou damagePayload). Ces variables sont passées au fichier de manière globale, sans vérifier la phase actuelle du combat.
-
-    Pourquoi c'est bloquant pour Claude Code : Si un joueur est en train de remplir sa télécommande en phase d'Annonce (il choisit son action tranquillement), et qu'un autre joueur ou le MJ déclenche un reliquat de jet de dés de la phase précédente, le serveur va envoyer un résultat.
-    Puisque CombatOverlay.jsx ne filtre pas si le pop-up a le droit de s'ouvrir pendant l'Annonce, le bandeau de résultat va surgir au milieu de l'écran du joueur, lui coupant sa déclaration en cours.
-
-Dans Polaris, les fenêtres de résolution d'attaques et de dégâts ne doivent avoir le droit de s'ouvrir QUE si le combat est en phase RESOLUTION.
-
-1. Le point bloquant absolu dans combatStore.js (La Mémoire Vive)
-
-Ce fichier dit à ton application qui est en train de jouer et ce qu'il se passe.
-Regarde la ligne 10 :
-JavaScript
-
-activeTokenId: null,  // token_id du slot actif (ANNOUNCEMENT et RESOLUTION)
-
-    Le problème : Ton code utilise la même unique variable (activeTokenId) pour savoir qui doit parler en phase d'Annonce ET qui doit agir en phase de Résolution.
-
-    Pourquoi c'est un piège mortel pour Claude Code : Comme on l'a vu au tout début, l'Annonce va dans un sens (du moins fort au plus fort) et la Résolution va dans l'autre (du plus rapide au plus lent).
-    Si tu as une seule variable pour les deux, dès que le serveur change de phase, l'IA se mélange les pinceaux : elle applique l'index de la phase d'Annonce sur le tableau de Résolution. C'est pour ça que tes personnages s'allument en mode "C'est ton tour !" de manière complètement aléatoire.
-	
-	2. L'incohérence cachée dans combatSections.js (La Matrice des Règles)
-
-Ce fichier est super, c'est ta base de données de règles (les coûts pour dégainer, se coucher, etc.). Mais l'IA a oublié de lier ces chiffres à la réalité mathématique de Polaris.
-Regarde les Allures de déplacement (Lignes 39 à 43) :
-JavaScript
-
-export const MOVE_ZONE_DEFS = [
-  { allureKey: 'normal',  action_key: 'move_normal',   ini_mod:  0, color: '#3b82f6', label: 'Normal'  },
-  { allureKey: 'fast',    action_key: 'move_fast',     ini_mod: -2, color: '#eab308', label: 'Rapide'  },
-  { allureKey: 'max',     action_key: 'move_max',      ini_mod:  0, color: '#ef4444', label: 'Max'     },
-]
-
-    Le problème : Regarde bien les ini_mod (les modificateurs d'Initiative). L'allure Rapide donne un malus de -2. L'allure Max (courir comme un fou) donne un modificateur de 0.
-
-    Pourquoi c'est bloquant : C'est illogique. Dans Polaris, plus tu cours vite, plus tu bouscules le timing du tour (tu es plus difficile à toucher mais tu tires très mal). Mettre 0 à l'allure Max va faire croire à Claude Code que courir à fond n'a aucun impact sur l'initiative du personnage.
-	
-	3. Le nettoyage : CombatWindows.jsx (Le fichier fantôme)
-
-En lisant ce fichier, on s'aperçoit que c'est un vieux composant de test écrit de manière très compacte (il recrée une fausse Timeline à la main avec des données écrites en dur comme Kaelen ou Maître Orsa).
-
-    Le conseil Méta : Ce fichier n'est pas branché sur ton vrai store Zustand. Si Claude Code va piocher dedans par erreur pour copier des morceaux de code, il va réimporter de vieilles fonctions périmées. Tu n'as pas besoin de le modifier, tu peux dire à Claude Code de l'ignorer complètement.
 
 ---
 
@@ -564,45 +364,33 @@ Ajouter dans la IIFE du menu radial `SessionPage.jsx` avant le `find` pour compa
 
 ## Bugs Session 95 suite 2 — Validation Sprint 14-0 (2026-06-15) — Nouveaux
 
-### Bug SHOCK1 — Test de Choc non déclenché pour cibles PNJ
+### Bug SHOCK1 — Test de Choc non déclenché pour cibles PNJ ✅ Clos — Session 95-3
 
-**Symptôme** : Attaque sur PNJ avec blessure grave → aucun Test de Choc déclenché, aucun panneau "TEST DE CHOC" affiché dans GESTION DES DÉGÂTS. Le même scénario sur un PJ déclenchait bien le Test de Choc (roll=6, seuil=1, Étourdi). La différence n'est pas due aux dés — le test n'est simplement pas exécuté.
+**Symptôme** : Attaque drone sur PNJ humanoid → blessure Mortelle/Critique/Grave (Tête/Corps) → aucun Test de Choc, aucun stun.
 
-**Cause racine** [HYPOTHÈSE] : Condition de déclenchement du bloc shock dans `resolveAssaultAction` filtre `character.type === 'pj'` (ou équivalent) et exclut les PNJ. Ou le bloc shock n'est pas atteint dans le chemin d'exécution PNJ (branchement différent selon character_type avant le bloc).
+**Cause racine** [VÉRIFIÉ] : `resolveDroneAssaultAction` branche 8b (drone → PNJ). Trois défauts cumulés : `vol_na` non destructuré dans `fetchCibleNA`, bloc shock absent après `resolveWoundInsertion`, `shockResult: null` hardcodé dans `COMBAT_ATTACK_RESULT`.
 
-**[DBG-SHOCK1] suggestion** :
-```js
-console.log('[DBG-SHOCK1] shock trigger check', { characterType: character.type, finalSeverity, shockTriggered: finalSeverity !== 'legere' })
-```
-Ajouter juste avant le bloc shock dans `resolveAssaultAction`.
+**Correctif** : `server/src/socket/index.js` branche 8b — `vol_na` ajouté, bloc shock complet inséré, `shockResult` dynamique.
 
-**Code impliqué** : `server/src/socket/index.js` — `resolveAssaultAction` bloc shock (~ligne 2485).
-
-**Prochaine étape** : Cluster J — lire le bloc shock complet, identifier la condition de branchement PJ/PNJ.
+**Testé** : drone → PNJ humanoid, blessure Mortelle Corps → Test de Choc déclenché ✅, stun appliqué si outcome ≠ ok ✅
+**Non testé** : —
 
 ---
 
-### Bug SHK3 — COMBAT_END : badge supprimé mais stun mécanique résiduel sur le tour suivant
+### ~~Bug SHK3~~ — ✅ CLOS (FAUX BUG) — Session 95-3
 
-**Symptôme** : Après `COMBAT_END`, le badge "Étourdi" disparaît correctement du token (token_statuses nettoyé, TOKEN_STATUS_UPDATED broadcasté). Mais lors du combat suivant, le PNJ qui était étourdi subit encore les effets mécaniques du stun (ne peut pas attaquer, allure limitée). **Bug sérieux — le stun survit au COMBAT_END.**
+**Symptôme initial** : Après `COMBAT_END`, badge disparu mais stun mécanique persistant au combat suivant.
 
-**Cause racine** [HYPOTHÈSE] : Deux pistes :
-1. `applyStunWithDuration` écrit encore dans le JSONB `state_character` (`is_stunned: true`, `stunned_until_turn: N`) malgré Sprint 14-0. `COMBAT_END` nettoie `token_statuses` mais pas le JSONB → guard lit encore le JSONB au combat suivant.
-2. `COMBAT_END` cleanup `token_statuses` ne supprime pas réellement les rows (query silencieusement incorrecte) → badge disparaît pour une autre raison, rows restantes réactivent le guard au tour suivant.
+**Verdict [VÉRIFIÉ]** : FAUX BUG. Instrumentation [DBG-SHK3] confirme :
+- `applyStunWithDuration` → uniquement `token_statuses`, zéro JSONB ✅
+- Guard COMBAT_ACTION_DECLARE → lit uniquement `token_statuses` ✅
+- Cleanup COMBAT_END : `avant cleanup: [{ token_id, status_code:'unconscious', expires_at_turn:31 }]` → `après cleanup: []` ✅
+- Nouveau combat (`current_turn: 1` à chaque départ) → aucun guard bloquant ✅
 
-**[DBG-SHK3] suggestion** :
-```js
-// Après COMBAT_END, avant suppression roster :
-console.log('[DBG-SHK3] token_statuses avant cleanup', await db('token_statuses').whereIn('token_id', rosterTids).select())
-// Après cleanup :
-console.log('[DBG-SHK3] token_statuses après cleanup', await db('token_statuses').whereIn('token_id', rosterTids).select())
-// Et vérifier state_character du PNJ :
-console.log('[DBG-SHK3] state_character PNJ', await db('combat_roster').where({ token_id: affectedTokenId }).select('state_character'))
-```
+Le code est correct. Les deux hypothèses initiales infirmées par lecture + logs.
 
-**Code impliqué** : `server/src/socket/index.js` — handler `COMBAT_END` (cleanup token_statuses). `applyStunWithDuration` — vérifier si écriture JSONB résiduelle.
-
-**Prochaine étape** : Cluster J — Phase 2b instrumentation. Reproduire : stun PNJ → COMBAT_END → nouveau combat → vérifier console [DBG-SHK3].
+**Testé** : stun PNJ (inconscient, durée 30) → COMBAT_END → nouveau combat → déclaration attaque → non bloquée ✅
+**Non testé** : —
 
 ---
 
@@ -626,7 +414,7 @@ console.log('[DBG-SHK3] state_character PNJ', await db('combat_roster').where({ 
 
 **Code impliqué** : `client/src/pages/SessionPage.jsx` — state messages. `server/src/socket/index.js` — handler `SESSION_JOIN` (vérifier si historique chat est inclus dans le sync).
 
-**Prochaine étape** : Cluster K — vérifier si les messages sont persistés en DB (table `chat_messages` ou équivalent). Si non → sprint dédié persistance chat. Si oui → vérifier le sync `SESSION_JOIN`.
+**Prochaine étape** : Sprint persistance chat — projet non-trivial. Vérifier d'abord si table `chat_messages` existe en DB. Si non → sprint dédié (modèle, migration, API, sync SESSION_JOIN) avant tout correctif.
 
 ---
 
@@ -642,18 +430,16 @@ console.log('[DBG-SHK3] state_character PNJ', await db('combat_roster').where({ 
 
 ---
 
-### Bug ST2 — D6 durée étourdissement : non lancé visuellement, non broadcasté au joueur
+### Bug ST2 — D6 durée étourdissement : non lancé visuellement, non broadcasté au joueur ⚠️ Clos partiel — Session 95-5
 
-**Symptôme** : Le D6 de durée d'étourdissement est roulé automatiquement côté serveur. Le joueur ne voit jamais ce jet, ne reçoit aucune information sur la durée de son étourdissement. Aucune carte DICE_RESULT pour ce jet. Aucune ligne dans le chat.
+**Symptôme initial** : D6 durée roulé silencieusement serveur. Aucune carte DICE_RESULT.
 
-**Cause racine** [HYPOTHÈSE] : `rollStunDuration(outcome)` est appelé dans `resolveAssaultAction` (ligne ~2497) — résultat intégré dans `shockResult.stun_duration`. Mais :
-- Le joueur ciblé ne reçoit pas `shockResult` (COMBAT_ATTACK_RESULT envoyé au GM seulement ou à la room sans filtrage)
-- Aucun `DICE_RESULT` émis pour le jet D6 de durée
-- ShockBlock côté joueur absent ou sans `stun_duration`
+**Correctif Session 95-5** : Refonte `resolveShockBlock` — 5 blocs copiés-collés → 1 helper. DICE_RESULT D6 émis dans le helper. Carte "Durée étourdissement" visible dans sidebar chat. SR ✅
 
-**Code impliqué** : `server/src/socket/index.js` — `resolveAssaultAction` bloc shock (~ligne 2494-2511). `client/src/components/CombatResultPanels.jsx` — ShockBlock. `SessionPage.jsx` — listener `COMBAT_ATTACK_RESULT`.
+**Restant — ST2b** : côté PJ (quand le PJ est la cible), le D6 devrait être lancé par le joueur via une fenêtre interactive (pattern COMBAT_DAMAGE_PROMPT). Sprint dédié requis.
 
-**Prochaine étape** : Cluster J — vérifier (1) si COMBAT_ATTACK_RESULT est reçu par le joueur cible, (2) si ShockBlock joueur affiche `stun_duration`, (3) si un DICE_RESULT doit être émis pour le D6 durée.
+**Testé** : broadcast DICE_RESULT visible côté chat ✅
+**Non testé** : PJ comme cible → fenêtre interactive → sprint ST2b
 
 ---
 
@@ -741,7 +527,7 @@ Ajouter au début du handler `COMBAT_ACTION_CONFIRM` pour vérifier si le type `
 
 ---
 
-### Bug COM6 — Arme CaC détectée non sélectionnée par défaut (GM et joueur)
+### ~~Bug COM6~~ — ✅ CLOS — Session 95
 
 **Symptôme** : Quand une arme de corps à corps est présente dans l'équipement du personnage, elle n'est pas pré-sélectionnée par défaut dans la fenêtre de déclaration. L'utilisateur doit manuellement la choisir.
 
@@ -773,7 +559,7 @@ Ajouter au début du handler `COMBAT_ACTION_CONFIRM` pour vérifier si le type `
 
 ---
 
-### Bug DR1 — Drone : arme non sélectionnée par défaut
+### ~~Bug DR1~~ — ✅ CLOS — Session 95
 
 **Symptôme** : Dans la fenêtre de déclaration GM pour un drone, aucune arme n'est pré-sélectionnée par défaut. `selectedDroneWeaponId` reste `null` jusqu'à sélection manuelle.
 
@@ -801,22 +587,7 @@ Ajouter au début du handler `COMBAT_ACTION_CONFIRM` pour vérifier si le type `
 
 ---
 
-## Bug B6 — Drone : localisation cible null (Sessions 89/94)
-
-**Symptôme** : `resolveDroneAssaultAction` branch 8a (cible = drone) envoie `localisation: null` dans le payload de résolution. La zone d'impact n'est pas calculée.
-
-**Cause racine** [VÉRIFIÉ] : Le code ne lit pas `droneSheet.localisation_ref` pour les cibles drone.
-
-**Code impliqué** : `server/src/socket/index.js` — `resolveDroneAssaultAction` branch 8a (~ligne 3997).
-
-```js
-// Correction :
-localisation: droneSheet.localisation_ref ?? 'corps'
-```
-
-**Référence règles** : §7.6 MANUELSYSCOMBAT — drone = zone unique fixe (`localisation_ref`). Voir aussi `docs/REWORK_CONTACT.md` §B6.
-
-**Prochaine étape** : Sprint A logique combat.
+## ~~Bug B6~~ — ✅ CLOS — Session 94
 
 ---
 
@@ -899,7 +670,7 @@ console.log('[DBG-DR6]', {
 
 **Code impliqué** : `server/src/socket/index.js` — `resolveDroneAssaultAction` branch 8a (~ligne 3976-3984).
 
-**Prochaine étape** : Phase 2b — ajouter [DBG-DR6], SR, reproduire l'attaque drone → vérifier console serveur.
+**Prochaine étape** : Cluster I — Phase 2b — ajouter [DBG-DR6], SR, reproduire l'attaque drone → vérifier console serveur.
 
 ---
 

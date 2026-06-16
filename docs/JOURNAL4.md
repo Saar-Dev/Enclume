@@ -971,3 +971,133 @@ Aucun code écrit cette session — état du code inchangé.
 - **D6 durée jamais visible** → ST2 mis à jour : absence de broadcast + jamais affiché côté joueur
 - **Curseur bloqué** → CUR1 enregistré
 - **Chat F5** → CH1 enregistré
+
+---
+
+## Session 95-3 — Fix SHOCK1 : Test de Choc drone → PNJ — 2026-06-15
+
+**Cause racine [VÉRIFIÉ]** : `resolveDroneAssaultAction` branche 8b (drone → PNJ humanoid). Trois défauts cumulés :
+- `vol_na` non destructuré dans `fetchCibleNA` (nécessaire pour `calcSeuils`)
+- Aucun bloc shock après `resolveWoundInsertion`
+- `shockResult: null` hardcodé dans l'émission `COMBAT_ATTACK_RESULT`
+
+**Correctif** — `server/src/socket/index.js` branche 8b :
+- T1 : `const { for_na, con_na, vol_na }` + default `vol_na: 8`
+- T2 : `let shockResult = null` avant le bloc wound
+- T3 : bloc shock complet (symétrique à `resolveAssaultAction` PNJ auto-path)
+- T4 : `shockResult: shockResult ?? null` dans `COMBAT_ATTACK_RESULT`
+
+**Clôture SHOCK1 ✅**
+- **Testé** : drone → PNJ humanoid, blessure Mortelle Corps → Test de Choc déclenché + stun appliqué si outcome ≠ ok
+- **Non testé** : —
+
+---
+
+## Session 95-3 suite — Investigation SHK3 : FAUX BUG — 2026-06-16
+
+**Instrumentation** : 2 logs [DBG-SHK3] dans COMBAT_END handler (avant/après cleanup `token_statuses`).
+
+**Résultat console** :
+```
+[DBG-SHK3] avant cleanup: [{ token_id: 'ce71acbb...', status_code: 'unconscious', expires_at_turn: 31 }]
+[DBG-SHK3] après cleanup: []
+```
+
+**Verdict** : FAUX BUG. Code correct dans son intégralité :
+- `applyStunWithDuration` → uniquement `token_statuses`, zéro écriture JSONB
+- Guard COMBAT_ACTION_DECLARE → lit uniquement `token_statuses`
+- Cleanup COMBAT_END → delete effectif, DB propre après COMBAT_END
+- Nouveau combat (`current_turn: 1`) → aucun guard bloquant
+
+Logs DBG retirés. Hypothèses initiales infirmées.
+
+**Clôture SHK3 ✅ (faux bug)**
+- **Testé** : stun PNJ inconscient durée 30 → COMBAT_END → nouveau combat → attaque non bloquée
+- **Non testé** : —
+
+---
+
+## Session 95-5 — 2026-06-16 — Fix ST2 : Durée étourdissement broadcastée (refonte resolveShockBlock)
+
+### Contexte
+
+Bug ST2 : le D6 de durée d'étourdissement était roulé silencieusement côté serveur. Aucune carte DICE_RESULT dans le chat. Seul `ShockBlock` (déjà fonctionnel) affichait la durée dans le panneau résultat combat.
+
+Audit architectural identifié en Session 95-3 : le bloc shock était copié-collé 5× avec des noms de variables différents (`stunDuration`, `stunDuration2`, `stunDuration3`, `stunDuration4`).
+
+Fichiers lus : `docs/BUGIDENTIFIE.md`, `docs/MANUELSYSCOMBAT.md`, `server/src/socket/index.js`, `client/src/components/Sidebar.jsx`, `client/src/pages/SessionPage.jsx`, `client/src/locales/fr.json`.
+
+### Livré — SR ✅ fonctionnel
+
+**Refonte `resolveShockBlock` — `server/src/socket/index.js`**
+
+- Suppression de `rollStunDuration` (4 lignes absorbées dans le helper)
+- Nouveau helper `resolveShockBlock(io, campaignId, { finalSeverity, localisation, is_lethal, for_na, con_na, vol_na, targetTokenId, userId, username, color })` (~46 lignes)
+  - `isShockTestRequired` → early-return `null` si pas de test requis
+  - D20 choc + outcome
+  - Si stun : `parseDice('1d6')` → DICE_RESULT broadcast + `applyStunWithDuration`
+  - Retourne `shockResult` (structure identique à l'ancienne)
+- 5 blocs de ~25 lignes remplacés par 1 appel de 6 lignes chacun
+
+**Attribution DICE_RESULT D6 par site :**
+- Sites 1, 4 : `userId`, `tireurUsername`, `tireurColor`
+- Site 2 (MELEE_DEF_CONFIRM) : `userId`, `attackerUsername`, `attackerColor`
+- Sites 3, 5 (PNJ auto) : `character.user_id`, `attackerUsername`/`tireurUsername`, `attackerColor`/`tireurColor`
+
+**Net :** −~93 lignes
+
+### Clôture ST2 ✅ (partiel — côté serveur + broadcast)
+- **Testé** : SR ✅, carte "Durée étourdissement" visible dans sidebar chat après stun PNJ
+- **Non testé** : scénario PJ comme cible (fenêtre interactive PJ — sprint suivant ST2b)
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | `server/src/socket/index.js` | Suppression `rollStunDuration` |
+| T2 | `server/src/socket/index.js` | Nouveau helper `resolveShockBlock` |
+| T3 | `server/src/socket/index.js` | 5 blocs shock → 5 appels `resolveShockBlock` (sites ~2484, ~2745, ~3600, ~4032, ~4382) |
+
+## Session 95-5b — 2026-06-16 — ST2b : Fenêtre PJ pour D6 durée étourdissement
+
+### Contexte
+
+Suite de ST2. Quand la cible d'un stun est un PJ, le D6 de durée doit être lancé par le joueur lui-même via une fenêtre interactive, plutôt que résolu côté serveur. Pattern identique à `COMBAT_DAMAGE_PROMPT`.
+
+Fichiers lus : `shared/events.js`, `server/src/socket/index.js`, `client/src/components/CombatDamageWindow.jsx`, `client/src/pages/SessionPage.jsx`, `client/src/components/CombatOverlay.jsx`.
+
+### Livré
+
+**`shared/events.js`** — +2 événements WS
+- `COMBAT_STUN_PROMPT` : serveur → socket PJ cible `{ tokenId, outcome }`
+- `COMBAT_STUN_CONFIRM` : PJ → serveur `{ tokenId }`
+
+**`server/src/socket/index.js`** — 3 modifications
+- `pendingStunActions = new Map()` déclarée globalement (ligne 47)
+- `resolveShockBlock` étendu : détecte PJ vs PNJ via `tokens.character_id → characters.type`. Si PJ connecté → stocke pending + émet `COMBAT_STUN_PROMPT`. Si PJ offline → fallback auto. Si PNJ → code antérieur inchangé.
+- Handler `COMBAT_STUN_CONFIRM` : récupère pending → `parseDice('1d6')` → `DICE_RESULT` broadcast → `applyStunWithDuration`
+
+**`client/src/components/CombatStunWindow.jsx`** — nouveau composant (minimal)
+- Badge coloré outcome (jaune = étourdi, rouge = inconscient)
+- Bouton "Lancer 1D6" → emit `COMBAT_STUN_CONFIRM` + ferme immédiatement
+- Résultat affiché dans sidebar via DICE_RESULT (pas de deuxième écran)
+
+**`client/src/pages/SessionPage.jsx`** — +state `stunPayload`, +listener `COMBAT_STUN_PROMPT`, +props à CombatOverlay
+
+**`client/src/components/CombatOverlay.jsx`** — import + props + render conditionnel `{stunPayload && <CombatStunWindow ... />}`
+
+### Clôture ST2 ✅ (complet)
+- **Testé** : SR ✅ syntaxe propre — test fonctionnel requis
+- **Non testé** : scénario réel PJ cible en combat + fallback offline
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | `shared/events.js` | +2 événements WS `COMBAT_STUN_PROMPT` / `COMBAT_STUN_CONFIRM` |
+| T2 | `server/src/socket/index.js` | `pendingStunActions` Map globale |
+| T3 | `server/src/socket/index.js` | `resolveShockBlock` — branch PJ/PNJ + prompt |
+| T4 | `server/src/socket/index.js` | Handler `COMBAT_STUN_CONFIRM` |
+| T5 | `client/src/components/CombatStunWindow.jsx` | Nouveau composant |
+| T6 | `client/src/pages/SessionPage.jsx` | State + listener + props |
+| T7 | `client/src/components/CombatOverlay.jsx` | Import + props + render |

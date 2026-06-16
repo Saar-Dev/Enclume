@@ -10,13 +10,14 @@ import CombatGmDeclareWindow from './CombatGmDeclareWindow'
 import CombatModifiersWindow from './CombatModifiersWindow'
 import CombatCacModifiersWindow from './CombatCacModifiersWindow'
 import CombatDamageWindow from './CombatDamageWindow'
+import CombatStunWindow from './CombatStunWindow'
 import CombatInitStateWindow from './CombatInitStateWindow'
 import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
 import CombatDeclareLog from './CombatDeclareLog'
 
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, gmSocketError, onGmSocketErrorClose, announcementMarker, pjPreview, sidebarWidth = 0 }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, stunPayload, onStunConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, gmSocketError, onGmSocketErrorClose, announcementMarker, pjPreview, sidebarWidth = 0 }) {
   const { phase, roster, activeSlotIdx, activeTokenId, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
@@ -238,6 +239,15 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           results={damageResults}
           socket={socket}
           onConfirmed={onDamageConfirmed}
+        />
+      )}
+
+      {/* Fenêtre "Durée d'étourdissement" — PJ cible uniquement, après un Test de Choc raté */}
+      {stunPayload && (
+        <CombatStunWindow
+          payload={stunPayload}
+          socket={socket}
+          onConfirmed={onStunConfirmed}
         />
       )}
 

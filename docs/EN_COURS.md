@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-15 Session 95
+> Dernière mise à jour : 2026-06-15 Session 96
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -9,14 +9,12 @@
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-**1. Valider Sprint 14-0** *(livré Session 93-3, jamais testé fonctionnellement)*
-   → Tester : appliquer stun → badge tokenStore → endTurn expire → COMBAT_STUN_EXPIRED
-   → Référence : `docs/ROADMAP.md` §PLAN 14 Sprint 14-0
+**1. ~~Valider Sprint 14-0~~** ✅ CLOS — Session 95 suite 2
 
-**3. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
-   → Cluster J : SHOCK1 (shock PNJ manquant) + SHK3 (stun résiduel COMBAT_END) — **sérieux**
-   → Cluster K : CUR1 (curseur bloqué) + CH1 (chat F5)
-   → ~~DR1~~ ✅ — ~~COM6~~ ✅ — ~~DC1/DC3~~ ✅
+**2. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
+   → ~~Cluster J~~ ✅ : ~~SHOCK1~~ + ~~SHK3~~ + ~~ST2~~ — Clos Sessions 95-3 / 95-5 / 95-5b
+   → Cluster K : CUR1 (curseur bloqué) — CH1 (chat F5) reclassé sprint persistance (projet non-trivial)
+   → ~~DR1~~ ✅ — ~~COM6~~ ✅ — ~~DC1/DC3~~ ✅ — ~~Sprint 14-0~~ ✅ — ~~Test de Choc~~ ✅
 
 ---
 
@@ -51,9 +49,9 @@
 | DR6 | Blindage drone non lu (0 affiché malgré DB=15) | Haute — instrumentation [DBG-DR6] requise |
 | ~~DC1 / DC3 / DR3~~ | ~~Drone CaC : flow incorrect + portée +5 illégitime~~ | ✅ Clos — Session 95 suite |
 | ~~DC2~~ | ~~Drone ranged : mods situation ignorés~~ | ✅ Clos — Session 95 suite |
-| SHOCK1 | Test de Choc non déclenché pour cibles PNJ | **Haute** |
-| SHK3 | COMBAT_END : stun mécanique résiduel (badge supprimé, effet persiste) | **Haute — sérieux** |
-| ST2 | D6 durée étourdissement : jamais visible joueur, non broadcasté | Haute |
+| ~~SHOCK1~~ | Test de Choc non déclenché pour cibles PNJ (drone → PNJ) | ✅ Clos — Session 95-3 |
+| ~~SHK3~~ | ~~COMBAT_END : stun mécanique résiduel (badge supprimé, effet persiste)~~ | ✅ Clos (faux bug) — Session 95-3 |
+| ~~ST2~~ | ~~D6 durée étourdissement : jamais visible joueur, non broadcasté~~ — ✅ Clos Session 95-5b | ✅ Clos |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
 | CUR1 | Curseur bloqué après fermeture combat en mode déplacement/cible | Haute |

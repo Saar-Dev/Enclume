@@ -12,6 +12,8 @@ CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
 4. "Je code ?" une seule fois, plan complet.
 5. Relire le fichier produit en entier avant livraison.
 6. Confirmation fonctionnelle obligatoire avant étape suivante.
+7. **Un seul bug à la fois.** Plan pour un bug → validation → bug suivant. Jamais deux bugs dans le même plan ou la même réponse.
+8. **Reprise depuis un résumé de conversation = nouvelle session.** Le résumé ne remplace pas la lecture des fichiers. Exécuter le protocole de début de session complet sans exception.
 
 ---
 
@@ -44,6 +46,8 @@ Avant tout nouvel événement WS, composant, ou fonction utilitaire :
 ## PROTOCOLE
 
 ### Début de session
+> **Valable même si la conversation est reprise depuis un résumé — le résumé ne remplace jamais la lecture.**
+
 1. `docs/JOURNAL4.md` — dernier `## Session N` uniquement (jusqu'à fin fichier).
 2. `docs/ASBUILT.md` — snapshot stable.
 3. `docs/EN_COURS.md` — prochaine étape exacte.
@@ -61,6 +65,8 @@ Avant tout nouvel événement WS, composant, ou fonction utilitaire :
 
 ### Après chaque tâche confirmée fonctionnelle
 - Appender `docs/JOURNAL4.md`.
+- Mettre à jour le header date de tout fichier `.md` modifié.
+- Proposer un scénario de test (étapes + résultat attendu) avant de passer à la suite.
 - Fin de session : mettre à jour `EN_COURS.md`, `ASBUILT.md`, `ROADMAP.md`, `CLAUDE.md`.
 - Fin de session : mettre à jour `client/public/CHANGELOG.md` — `## vN — date — titre`.
 - Rappeler le push Git :
@@ -70,20 +76,32 @@ git commit -m "Session N — ..."
 git push origin master
 ```
 
+### Fermeture de bug
+Toute clôture ✅ exige :
+- **Testé :** [ce qui a été vérifié]
+- **Non testé :** [ce qui reste] → si non vide : `⚠️ clos partiel`
+
 ### Jamais
 - Coder sans confirmation.
 - Réécrire un fichier sans l'avoir relu dans cette session.
 - Avancer sans confirmation fonctionnelle.
+- Écrire "probablement / suppose / certainement" sur une cause non lue → `[INCONNU]` + `[DBG-X]`.
+- Proposer un plan couvrant plusieurs bugs simultanément → un seul bug par plan.
+- Traiter un résumé de conversation comme substitut à la lecture obligatoire des fichiers de session.
 
 ---
 
 ## DÉTECTEUR DE DÉRIVE
 
 → "rapide / suppose / probablement / certainement / évidemment / je pense que / devrait" → STOP. Tous les fichiers lus ?
+→ Diagnostic de cause racine sans lecture de code → STOP. `[INCONNU]` + `[DBG-X]`.
+→ Fermer un bug sans "Testé / Non testé" → STOP.
 → "Je code ?" pour la 2e fois sur le même sujet → STOP. Plan complet → code directement.
 → Question de diagnostic console F12 → STOP. Lisible dans le code source ?
 → Créer événement WS / composant / fonction → STOP. Existe déjà ?
 → Implémenter mécanique de combat → STOP. `docs/REGLESYSCOMBAT.md` lu dans cette session ?
+→ Conversation reprise depuis un résumé → STOP. Protocole début de session complet avant toute proposition.
+→ Plan mentionnant deux bugs ou plus → STOP. Un bug à la fois.
 
 ---
 

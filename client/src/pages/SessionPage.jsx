@@ -118,6 +118,8 @@ export default function SessionPage() {
   const [meleeResult,        setMeleeResult]        = useState(null)  // { attaquantId, defenseurId, rollAttaque, chancesAttaque, rollDefense, chanceDefense, hit }
   // gmSocketError : erreur serveur visible GM (PC22, etc.)
   const [gmSocketError, setGmSocketError] = useState(null)
+  // stunPayload : reçu via COMBAT_STUN_PROMPT { tokenId, outcome } — fenêtre D6 durée PJ cible
+  const [stunPayload, setStunPayload] = useState(null)
 
   // Fenêtre character flottante — null = fermée, sinon id du character ouvert
   // Le character est dérivé du store pour se mettre à jour automatiquement via WS
@@ -524,6 +526,9 @@ export default function SessionPage() {
     })
     s.on(WS.COMBAT_DAMAGE_PROMPT, (data) => {
       setDamagePayload(data)
+    })
+    s.on(WS.COMBAT_STUN_PROMPT, (data) => {
+      setStunPayload(data)
     })
     s.on(WS.COMBAT_DAMAGE_RESULT, (data) => {
       setDamageResults(data)
@@ -1310,6 +1315,8 @@ export default function SessionPage() {
           damagePayload={damagePayload}
           damageResults={damageResults}
           onDamageConfirmed={() => { setDamagePayload(null); setDamageResults(null); setAttackResult(null) }}
+          stunPayload={stunPayload}
+          onStunConfirmed={() => setStunPayload(null)}
           attackResult={attackResult}
           onAttackConfirmed={() => setAttackResult(null)}
           gmAttackResult={gmAttackResult}
