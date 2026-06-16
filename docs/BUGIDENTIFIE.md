@@ -136,8 +136,8 @@ Des bugs de **sévérité différente** peuvent être dans le même cluster si l
 | **A — Socket résolution drone** | ~~B6~~ ✅ / ~~COM3~~ FAUX BUG / ~~DC2~~ ✅ / ~~DC3~~ ✅ | `server/src/socket/index.js` | ✅ Clos Session 95 suite |
 | **B — Init arme défaut** | ~~COM6~~ ✅ / ~~DR1~~ ✅ | `CombatGmDeclareWindow.jsx` | ✅ Clos Session 95 |
 | **C — Flow CaC drone** | ~~DC1~~ ✅ / ~~DR3~~ ✅ | `CombatOverlay.jsx` + `socket/index.js` | ✅ Clos Session 95 suite |
-| **J — Pipeline shock + COMBAT_END** | ~~SHOCK1~~ ✅ / ~~SHK3~~ ✅ / ST2 | `server/src/socket/index.js` | **Haute** |
-| **K — UX curseur + chat** | CUR1 (correctif) + CH1 (sprint persistance séparé) | `CombatOverlay.jsx` + `SessionPage.jsx` | Haute |
+| **J — Pipeline shock + COMBAT_END** | ~~SHOCK1~~ ✅ / ~~SHK3~~ ✅ / ~~ST2~~ ✅ | `server/src/socket/index.js` | ✅ Clos Session 96 |
+| **K — UX curseur + chat** | ~~CUR1~~ ✅ + CH1 (sprint persistance séparé) | `SessionPage.jsx` | ~~CUR1~~ Clos Session 95-6 |
 | **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 | composants combat + `index.css §11` | Haute |
 | **E — Arme et statuts** | COM1 + COM2 + COM4 + COM7 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
 | **F — Ghosts + portraits** | CL1 + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
@@ -394,7 +394,7 @@ Le code est correct. Les deux hypothèses initiales infirmées par lecture + log
 
 ---
 
-### Bug CUR1 — Curseur bloqué après fermeture combat en mode déplacement ou sélection cible
+### ~~Bug CUR1~~ — ✅ CLOS — Session 95-6 — Curseur bloqué après fermeture combat
 
 **Symptôme** : Si le GM ferme le monde combat (ou COMBAT_END) alors qu'un token est en mode déplacement ou sélection de cible, le curseur reste bloqué dans l'état "combat" (curseur spécial déplacement/cible). La SessionPage ne revient pas au curseur normal.
 
@@ -438,8 +438,8 @@ Le code est correct. Les deux hypothèses initiales infirmées par lecture + log
 
 **Correctif Session 96 (REWORK-01)** : REWORK-01 `statusService.js` — PJ ciblé → `CombatStunWindow` fenêtre interactive "Lancer 1D6". PNJ → auto D6 serveur + DICE_RESULT broadcast. SR ✅ — testé drone→PNJ (inconscient, D6=6, 60 tours).
 
-**Testé** : DICE_RESULT D6 broadcast ✅ — CombatStunWindow montée PJ non testée (scénario 2 en attente)
-**Non testé** : PJ comme cible → scénario 2 ARCHI_REWORK validation requise
+**Testé** : Scénarios 1-5 ARCHI_REWORK.md tous validés — PNJ cible ✅ / PJ cible + CombatStunWindow ✅ / non-régression blessure légère ✅ / PJ offline fallback ✅ / CaC shock non-régression ✅
+**Non testé** : —
 
 ---
 
@@ -458,31 +458,25 @@ Le code est correct. Les deux hypothèses initiales infirmées par lecture + log
 
 ---
 
-### Bug SHK4 — D20 Test de Choc : non visible en chat (sprint futur)
+### ~~Bug SHK4 — D20 Test de Choc : non visible en chat~~ ✅ Clos — Session 95-7
 
 **Symptôme** : Quand un Test de Choc est déclenché, le jet D20 est résolu côté serveur mais aucune carte `DICE_RESULT` n'est émise. Les joueurs ne voient pas le résultat du test dans la sidebar chat.
 
-**Règle** : §7.2 MANUELSYSCOMBAT — Test de Choc = jet D20 visible par tous (résultat public).
+**Correctif** : `resolveShockTest` → retourne désormais `rolls` + `seed`. Nouvelle export synchrone `emitShockDiceResult` dans `statusService.js`. 5 call sites dans `index.js` appellent `emitShockDiceResult` avant `COMBAT_ATTACK_RESULT`/`COMBAT_DAMAGE_RESULT`. Sidebar : nouveau routing `cardType='shock_test'` + clé i18n `shockTestDetail`. `CombatStunWindow` : violations CSS [A1] corrigées.
 
-**Code impliqué** : `server/src/lib/statusService.js` — `resolveShockTest` — lance D20 via `parseDice('1d20')` mais n'émet pas `WS.DICE_RESULT`.
-
-**Cause racine** [VÉRIFIÉ] : `resolveShockTest` est une fonction pure (zéro broadcast, zéro DB) — design intentionnel REWORK-01. Pour broadcaster, il faudrait passer `io` et `campaignId` dans la signature, ou extraire l'émission dans `applyStun`.
-
-**Prochaine étape** : Sprint futur dédié — étendre `applyStun` pour émettre `DICE_RESULT` D20 après `resolveShockTest`. Requiert `io.to(campaignId).emit(WS.DICE_RESULT, {...})` dans le flux outcome ≠ 'ok', avec `skillLabel: 'Test de Choc'`.
+**Testé** : D20 visible chat (3 outcomes ok/étourdi/inconscient) ✅ — carte "Test de Choc" avec seuils ✅ — badge résultat ✅ — non-régression Scénarios 1-5 REWORK-01 ✅
+**Non testé** : —
 
 ---
 
-### Bug SHK5 — shock_auto_stun=false : PJ ciblé routé vers sa propre fenêtre au lieu du GM
+### ~~Bug SHK5 — shock_auto_stun=false : PJ ciblé routé vers sa propre fenêtre au lieu du GM~~ ✅ Clos — Session 95-7
 
-**Symptôme** : Quand `campaigns.shock_auto_stun = false`, l'intention est que le GM gère TOUS les lancers D6 de durée (PJ et PNJ). L'implémentation actuelle route les PJ vers leur propre `CombatStunWindow` même en mode `false`.
+**Symptôme** : Quand `campaigns.shock_auto_stun = false`, l'intention est que le GM gère TOUS les lancers D6 de durée (PJ et PNJ). L'implémentation actuelle routait les PJ vers leur propre `CombatStunWindow` même en mode `false`.
 
-**Règle design** : Cf. V1/V2 table dans `docs/ARCHI_REWORK.md` — `false` = GM gère TOUS les D6, `true` = PJ interactive + PNJ auto.
+**Correctif** : `applyStun` branche PJ — lecture `shock_auto_stun` depuis `campaigns` avant de choisir le socket cible. Si `false` → `gmSocket` + `isGmPrompt: true`. Si `true` (défaut) → `pjSocket` + `isGmPrompt: false`. Handler `COMBAT_STUN_CONFIRM` inchangé (gérait déjà `isGmPrompt: true`).
 
-**Code impliqué** : `server/src/lib/statusService.js` — `applyStun` — branche PJ : émet `COMBAT_STUN_PROMPT` vers `pjSocket` sans vérifier `shock_auto_stun`.
-
-**Cause racine** [VÉRIFIÉ] : La query `shock_auto_stun` est lue pour la branche PNJ mais pas pour la branche PJ. Quand `shock_auto_stun = false`, la branche PJ devrait rediriger vers `gmSocket` (même logique que PNJ + auto_stun=false).
-
-**Prochaine étape** : Sprint futur — dans `applyStun`, après détection `isPJ`, lire `shock_auto_stun` depuis `campaigns`. Si `false` → route vers `gmSocket` identiquement aux PNJ. Si `true` → route vers `pjSocket` (comportement actuel).
+**Testé** : `shock_auto_stun=false` → `CombatStunWindow` chez GM ✅ — PJ ne reçoit pas la fenêtre ✅ — GM lance D6 → badge stun PJ ✅ — non-régression `shock_auto_stun=true` → PJ reçoit toujours ✅
+**Non testé** : —
 
 ---
 
@@ -493,6 +487,20 @@ Le code est correct. Les deux hypothèses initiales infirmées par lecture + log
 **Code impliqué** : Composant fenêtre statuts token (SessionPage ou Canvas3D — menu contextuel statuts).
 
 **Prochaine étape** : Sprint 14-1 (menu contextuel) ou sprint dédié UI — rendre la fenêtre scrollable ou agrandir la grille.
+
+---
+
+## Bug COM9 — Viser une Localisation précise — non implémenté
+
+**Symptôme** : Dans `CombatModifiersWindow` (résolution assaut tir), aucune option ne permet de viser une localisation précise. Le D20 de localisation est toujours aléatoire.
+
+**Règle** : LdB §"Viser une Localisation précise" — Corps −3 / Jambes −5 / Tête+Bras −7.
+
+**Code impliqué** :
+- `client/src/components/CombatModifiersWindow.jsx` — section manquante + state `aimedLocation` absent
+- `server/src/socket/index.js` — `resolveAssaultAction` : pas de champ `aimedLocation` dans `confirmedModifiers`, pas de bypass du D20 localisation (branche PJ : `pendingDamageActions`, branche PNJ : L.4303). `COMBAT_DAMAGE_CONFIRM` (L.~2392) : D20 toujours joué.
+
+**Prochaine étape** : Sprint dédié — NE PAS bricoler dans un autre sprint. Voir analyse complète dans JOURNAL4.md Session 95-7.
 
 ---
 
@@ -797,3 +805,5 @@ Ajouter au point de calcul de l'initiative finale pour capturer le cas roll=1.
 **Note** : Comportement `y+1.0` acceptable pour V1.
 
 **Prochaine étape** : Sprint voxels v2 — hors scope V1.
+
+

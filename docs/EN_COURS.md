@@ -1,5 +1,5 @@
-# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-15 Session 96
+﻿# EN COURS — Dettes actives et prochaines étapes
+> Dernière mise à jour : 2026-06-16 Session 95-7
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -11,11 +11,11 @@
 
 **1. ~~Valider Sprint 14-0~~** ✅ CLOS — Session 95 suite 2
 
-**2. REWORK-01 — statusService** ✅ LIVRÉ Session 96 — SR OK — test fonctionnel requis
+**2. REWORK-01 — statusService** ✅ CLOS Session 96 — Scénarios 1-5 validés
 
 **3. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
    → ~~Cluster J~~ ✅ : ~~SHOCK1~~ + ~~SHK3~~ + ~~ST2~~ — Clos Sessions 95-3 / 95-5 / 95-5b
-   → Cluster K : CUR1 (curseur bloqué) — CH1 (chat F5) reclassé sprint persistance (projet non-trivial)
+   → ~~Cluster K~~ : ~~CUR1~~ ✅ Clos Session 95-6 — CH1 (chat F5) reclassé sprint persistance (projet non-trivial)
    → ~~DR1~~ ✅ — ~~COM6~~ ✅ — ~~DC1/DC3~~ ✅ — ~~Sprint 14-0~~ ✅ — ~~Test de Choc~~ ✅
 
 ---
@@ -54,9 +54,11 @@
 | ~~SHOCK1~~ | Test de Choc non déclenché pour cibles PNJ (drone → PNJ) | ✅ Clos — Session 95-3 |
 | ~~SHK3~~ | ~~COMBAT_END : stun mécanique résiduel (badge supprimé, effet persiste)~~ | ✅ Clos (faux bug) — Session 95-3 |
 | ~~ST2~~ | ~~D6 durée étourdissement : jamais visible joueur, non broadcasté~~ — ✅ Clos Session 95-5b | ✅ Clos |
+| ~~SHK4~~ | ~~D20 Test de Choc non visible en chat~~ | ✅ Clos — Session 95-7 |
+| ~~SHK5~~ | ~~shock_auto_stun=false : PJ routé vers lui-même au lieu du GM~~ | ✅ Clos — Session 95-7 |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
-| CUR1 | Curseur bloqué après fermeture combat en mode déplacement/cible | Haute |
+| ~~CUR1~~ | ~~Curseur bloqué après fermeture combat en mode déplacement/cible~~ | ✅ Clos — Session 95-6 |
 | CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
 | UI1 | Fenêtre déclaration design blanc | **Haute** |
 | COM1 | Recharger ne fait rien | **Haute** |
@@ -135,3 +137,4 @@
 - PL-Q2 — Quill insère la toolbar comme `previousElementSibling`, pas à l'intérieur du container — guard `classList.contains('ql-container')`
 - PL-Q3 — `containerRef.current` peut être null dans le cleanup React 19 — toujours capturer en variable locale en début d'effect
 - PL-Q4 — `editor.destroy()` n'existe pas en Quill 2.0 public API
+

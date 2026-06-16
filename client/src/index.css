@@ -1219,6 +1219,33 @@ Convention :
   box-shadow: 0 4px 24px rgba(0,0,0,0.6);
 }
 
+/* ── CombatStunWindow ─────────────────────────────────────────────── */
+.combat-stun-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1100;
+}
+.combat-stun-header-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #c0c0d0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.combat-stun-outcome-label {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.combat-stun-outcome-desc {
+  font-size: 12px;
+  color: #9090a0;
+}
+
 .combat-float-header {
   display: flex;
   align-items: center;

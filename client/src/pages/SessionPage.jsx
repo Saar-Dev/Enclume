@@ -645,6 +645,9 @@ export default function SessionPage() {
       setMode('play')
       setAttackResult(null)
       setReloadResult(null)
+      setCombatMoveMode(null)
+      setCombatTargetMode(null)
+      setPendingMoveSelection(null)
     })
     s.on(WS.COMBAT_STATE_SYNC, ({ combatState, roster, actions }) => {
       // Calculer activeTokenId depuis le roster (fallback si COMBAT_SLOT_ADVANCED non reçu)
@@ -672,6 +675,9 @@ export default function SessionPage() {
     s.on(WS.COMBAT_PHASE_CHANGED, ({ phase, roster, actions }) => {
       setAnnouncementMarker(null)
       setPjPreview(null)
+      setCombatMoveMode(null)
+      setCombatTargetMode(null)
+      setPendingMoveSelection(null)
       setPhase(phase)
       if (roster) updateRoster(roster)
       if (actions) setActions(actions)

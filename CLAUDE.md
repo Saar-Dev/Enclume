@@ -1,4 +1,4 @@
-# CLAUDE.md — Projet Enclume
+﻿# CLAUDE.md — Projet Enclume
 > Session 87 — 2026-06-10
 
 ---
@@ -116,7 +116,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 96 (2026-06-16)
+## ÉTAT COURANT — Session 95-6 (2026-06-16)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **79 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
@@ -127,13 +127,15 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Sprint CaC Étape 3 (`CombatCacModifiersWindow` + mods) — Session 92-4
 - Fix split-brain slot detection — Session 93 — voir `docs/PLAN_ARCHICOMBAT_SLOTS.md` §Procédure de validation
 - Sprint CaC 4b (attaque multiple melee) — Session 74
-- REWORK-01 statusService (Scénario 2 PJ cible + non-régressions) — Session 96
 
-**Session 96 — Livré ✅ (validation partielle) :**
+**Session 95-6 — Livré ✅ :**
+- Fix CUR1 : curseur bloqué après fermeture combat — reset `combatMoveMode` / `combatTargetMode` / `pendingMoveSelection` dans `COMBAT_ENDED` + `COMBAT_PHASE_CHANGED` (`SessionPage.jsx`)
+
+**Session 96 — Livré ✅ :**
 - REWORK-01 : `resolveShockBlock` (×5 copié-collé) → `statusService.js` (module indépendant)
 - `resolveShockTest` (pur D20) → `COMBAT_DAMAGE_RESULT` émis → `applyStun` (fire-and-forget)
-- PNJ cible → auto D6 + DICE_RESULT broadcast ✅ (testé drone→PNJ, inconscient, 60 tours)
-- PJ cible → `CombatStunWindow` fenêtre "Lancer 1D6" (non testée — Scénario 2 requis)
+- Scénarios 1-5 validés : PNJ/PJ/non-régression/offline fallback/CaC ✅
+- Fix SHK6 : `COMBAT_DAMAGE_CONFIRM` autorisation PJ cible (drone → PJ) ✅
 - SHK4 (D20 non visible en chat) + SHK5 (shock_auto_stun=false PJ) → `docs/BUGIDENTIFIE.md`
 
 **Sessions 93-95 — Livrés ✅ :**
@@ -208,3 +210,6 @@ Tout `useCallback` qui émet via socket doit inclure `socket` dans ses deps.
 - Aucune string UI hardcodée. Toujours `useTranslation` → `t('section.cle')`.
 - Source unique : `client/src/locales/fr.json`. Ajouter la clé avant de l'utiliser.
 - Combat (12) + équipement (6) : hors scope — sprint dédié futur.
+
+
+

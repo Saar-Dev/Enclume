@@ -1110,6 +1110,8 @@ export default function Sidebar({
                         <div style={{ paddingLeft: '2px', fontSize: '11px', color: '#64748b' }}>
                           {t(msg.cardType === 'drone_damage'
                             ? 'sidebar.droneActionDetail'
+                            : msg.cardType === 'shock_test'
+                            ? 'sidebar.shockTestDetail'
                             : 'sidebar.entityActionDetail',
                           {
                             skill: msg.mechanicalTotal,

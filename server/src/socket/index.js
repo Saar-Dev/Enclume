@@ -2489,6 +2489,10 @@ const initSocket = (io) => {
           })
         }
 
+        if (shockResult) {
+          statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
+        }
+
         const severityColor = finalSeverity ? (SEVERITY_COLORS[finalSeverity] ?? tireurColor) : tireurColor
 
         // 6. COMBAT_DAMAGE_RESULT → socket tireur uniquement (affichage fenêtre)
@@ -2757,6 +2761,10 @@ const initSocket = (io) => {
               } catch (woundErr) {
                 console.error('[WS] COMBAT_MELEE_DEFENSE_CONFIRM (PNJ dmg) — wound error:', woundErr.message)
               }
+            }
+
+            if (shockResult) {
+              statusService.emitShockDiceResult(io, meleeCampaignId, shockResult, userId, attackerUsername, attackerColor)
             }
 
             io.to(meleeCampaignId).emit(WS.COMBAT_ATTACK_RESULT, {
@@ -3571,6 +3579,10 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
           }
         }
 
+        if (shockResult) {
+          statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, attackerUsername, attackerColor)
+        }
+
         io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
           tireurId:    action.token_id, cibleId: targetTokenId,
           localisation, degautsBruts, degatsNets,
@@ -4004,6 +4016,10 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
         })
       }
 
+      if (shockResult) {
+        statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
+      }
+
       const severityColor = finalSeverity ? (SEVERITY_COLORS[finalSeverity] ?? tireurColor) : tireurColor
 
       io.to(campaignId).emit(WS.DICE_RESULT, {
@@ -4361,6 +4377,11 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
             console.error('[WS] resolveAssaultAction (PNJ) — wound error:', woundErr.message)
           }
         }
+
+        if (shockResult) {
+          statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, tireurUsername, tireurColor)
+        }
+
         io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
           tireurId:    action.token_id,
           cibleId:     action.target_token_id,

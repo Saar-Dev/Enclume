@@ -1,3 +1,30 @@
+## v101 — 2026-06-16 — REWORK-01 clôture : SHK4 + SHK5 + CSS [A1]
+
+### Combat — Test de Choc
+- [fix] SHK4 : D20 Test de Choc maintenant visible dans le chat (carte `shock_test` dédiée avec seuils Étourd./Inconsc.) — 5 call sites + `emitShockDiceResult` export synchrone
+- [fix] SHK5 : `shock_auto_stun=false` — `CombatStunWindow` correctement routée vers le GM pour les PJ cibles (lecture `shock_auto_stun` dans branche PJ de `applyStun`)
+- [fix] [A1] `CombatStunWindow` conventions CSS — `className="btn"`, classes `.combat-stun-*` dans `index.css §11`
+
+---
+
+## v100 — 2026-06-16 — Fix CUR1 : curseur bloqué après fermeture combat
+
+### Combat — UX
+- [fix] CUR1 : curseur / panneaux de sélection (cible, déplacement) fantômes après fermeture du combat — `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection` remis à `null` dans `COMBAT_ENDED` et `COMBAT_PHASE_CHANGED`
+
+---
+
+## v99 — 2026-06-16 — Fix SHK6 + REWORK-01 validé complet
+
+### Combat — Drone → PJ
+- [fix] SHK6 : `COMBAT_DAMAGE_CONFIRM` rejetait silencieusement le PJ cible d'un drone (drone sans `user_id` → `pending.userId = null` → auth échouait) — fenêtre dégâts débloquée
+- [fix] `targetUserId` ajouté au pending action branch 8c (`resolveDroneAssaultAction`) pour autorisation correcte
+
+### REWORK-01 — Validation complète
+- Scénarios 1-5 ARCHI_REWORK.md tous validés : PNJ cible, PJ cible (`CombatStunWindow`), non-régression, PJ offline fallback, CaC non-régression
+
+---
+
 ## v98 — 2026-06-16 — REWORK-01 : statusService (module étourdissement)
 
 ### Combat — Architecture stun

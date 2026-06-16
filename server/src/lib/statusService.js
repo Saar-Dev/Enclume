@@ -38,7 +38,7 @@ export async function resolveShockTest({ finalSeverity, localisation, is_lethal,
   if (!isShockTestRequired(finalSeverity, localisation)) return null
   const seuils     = calcSeuils(for_na, con_na, vol_na)
   const shockMalus = getShockMalus(finalSeverity, localisation, is_lethal)
-  const { total: roll } = await parseDice('1d20')
+  const { total: roll, rolls: d20Rolls, seed: d20Seed } = await parseDice('1d20')
   let outcome
   if      (roll <= seuils.etourdissement + shockMalus) outcome = 'ok'
   else if (roll <= seuils.inconscience    + shockMalus) outcome = 'etourdi'
@@ -46,6 +46,8 @@ export async function resolveShockTest({ finalSeverity, localisation, is_lethal,
   return {
     triggered:    true,
     roll,
+    rolls:        d20Rolls,
+    seed:         d20Seed,
     outcome,
     shockMalus,
     seuilEtourdi: seuils.etourdissement + shockMalus,
@@ -93,20 +95,26 @@ export async function applyStun(io, db, campaignId, pendingStunActions, {
     const currentTurn = combatSt?.current_turn ?? 1
 
     if (isPJ) {
-      const sockets   = await io.in(campaignId).fetchSockets()
-      const pjSocket  = sockets.find(s => s.data.userId === tokenRow.user_id)
-      if (pjSocket) {
+      const campaign      = await db('campaigns').where({ id: campaignId }).select('shock_auto_stun').first()
+      const shockAutoStun = campaign?.shock_auto_stun ?? true
+      const sockets       = await io.in(campaignId).fetchSockets()
+
+      const targetSocket  = shockAutoStun
+        ? sockets.find(s => s.data.userId === tokenRow.user_id)
+        : sockets.find(s => s.data.role === 'gm')
+
+      if (targetSocket) {
         pendingStunActions.set(targetTokenId, {
           campaignId, targetTokenId, outcome,
-          targetUserId: tokenRow.user_id,
+          targetUserId:  shockAutoStun ? tokenRow.user_id : null,
           userId, username, color,
           currentTurn,
-          isGmPrompt: false,
+          isGmPrompt:    !shockAutoStun,
         })
-        pjSocket.emit(WS.COMBAT_STUN_PROMPT, { tokenId: targetTokenId, outcome })
+        targetSocket.emit(WS.COMBAT_STUN_PROMPT, { tokenId: targetTokenId, outcome })
         return
       }
-      // PJ offline → fallback auto
+      // PJ offline / pas de GM → fallback auto
     } else {
       // PNJ : brancher sur shock_auto_stun
       const campaign      = await db('campaigns').where({ id: campaignId }).select('shock_auto_stun').first()
@@ -135,4 +143,26 @@ export async function applyStun(io, db, campaignId, pendingStunActions, {
   } catch (err) {
     console.error('[statusService] applyStun error:', err.message)
   }
+}
+
+// ─── emitShockDiceResult ──────────────────────────────────────────────────────
+// Synchrone — emit DICE_RESULT D20 Test de Choc vers tous les clients de la campagne.
+// Appelé après chaque resolveShockTest non-null, avant COMBAT_ATTACK_RESULT.
+export function emitShockDiceResult(io, campaignId, shockResult, userId, username, color) {
+  io.to(campaignId).emit(WS.DICE_RESULT, {
+    userId, username, color,
+    formula:           '1d20',
+    rolls:             shockResult.rolls,
+    total:             shockResult.roll,
+    isCriticalSuccess: false,
+    isCriticalFail:    false,
+    seed:              shockResult.seed,
+    timestamp:         new Date().toISOString(),
+    skillLabel:        'Test de Choc',
+    mechanicalTotal:   shockResult.seuilEtourdi,
+    diffLabel:         '',
+    chancesDeReussite: shockResult.seuilIncons,
+    isSuccess:         shockResult.outcome === 'ok',
+    cardType:          'shock_test',
+  })
 }

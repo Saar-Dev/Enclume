@@ -1,4 +1,4 @@
-# JOURNAL4 — Projet Enclume
+﻿# JOURNAL4 — Projet Enclume
 > Démarré : Session 86 (2026-06-10)
 > JOURNAL1, JOURNAL2, JOURNAL3 archivés dans `docs/Old/`
 
@@ -1175,3 +1175,95 @@ Drone → PJ : `COMBAT_DAMAGE_PROMPT` envoyé au socket PJ (via `io.fetchSockets
 ### Clôture SHK6 ✅
 - **Testé** : drone → PJ, fenêtre GESTION DES DÉGÂTS fonctionnelle, dés roulés, résultats affichés ✅
 - **Non testé** : CombatStunWindow apparaît ensuite pour le PJ si shock requis (scénario 2 REWORK-01 complet)
+
+---
+
+## Session 96 validation — REWORK-01 complet — 2026-06-16
+
+### Validation fonctionnelle Scénarios 2-5
+
+- **Scénario 2** ✅ — PJ cible, shock requis : `CombatStunWindow` apparaît chez le joueur, bouton "Lancer 1D6" fonctionnel, `DICE_RESULT` D6 visible chat, badge statut posé sur token.
+- **Scénario 3** ✅ — Non-régression blessure légère : aucune fenêtre stun, flux dégâts normal inchangé.
+- **Scénario 4** ✅ — PJ cible offline (fallback) : auto D6 serveur, comportement identique à Scénario 1.
+- **Scénario 5** ✅ — CaC avec shock non-régression : comportement identique à Scénario 1 via `resolveMeleeAction`.
+
+### DoD ARCHI_REWORK.md — complet ✅
+
+- [x] `resolveShockBlock` → 0 occurrences
+- [x] SR sans erreur
+- [x] Scénarios 1-5 tous validés fonctionnellement
+
+### Analyse qualité (dettes documentées)
+
+- **[A1]** `CombatStunWindow` : `style={}` pour valeurs visuelles statiques + bouton sans `className="btn"` — fonctionnel, non-conforme conventions CSS. Dette sprint futur.
+- **[A2]** `COMBAT_STUN_CONFIRM` : pattern incohérent `socket.data?.role` (GM) vs `socket.user.id` (PJ) — fonctionnel, cosmétique.
+- **[A3]** Payload `DICE_RESULT` D6 dupliqué (`_applyAutoStun` + handler `COMBAT_STUN_CONFIRM`) — 2 occurrences, sous seuil rework.
+
+### Clôture REWORK-01 ✅ complet
+
+- **Testé** : Scénarios 1-5 — PNJ ✅ / PJ ✅ / non-régression ✅ / offline ✅ / CaC ✅
+- **Non testé** : —
+
+
+---
+
+## Session 95-6 — Fix CUR1 : curseur bloqué après fermeture combat — 2026-06-16
+
+### Cause racine [VÉRIFIÉ]
+
+`COMBAT_ENDED` et `COMBAT_PHASE_CHANGED` listeners dans `SessionPage.jsx` n'incluaient pas de reset pour les 3 états locaux de mode curseur combat :
+- `combatMoveMode` — reste non-null → panneau "Déplacement" fantôme + curseur wireframe actif
+- `combatTargetMode` — reste non-null → panneau "Assaut — Cliquez sur la cible" fantôme
+- `pendingMoveSelection` — reste non-null → bouton "Valider" fantôme
+
+`resetCombat()` (combatStore) ne touche que `phase/roster/actions/currentTurn/activeSlotIdx` — ces états React locaux en sont indépendants.
+
+### Correctif — `client/src/pages/SessionPage.jsx`
+
+| # | Touch | Changement |
+|---|---|---|
+| T1 | `COMBAT_ENDED` listener (~l. 643) | `setCombatMoveMode(null)` + `setCombatTargetMode(null)` + `setPendingMoveSelection(null)` ajoutés |
+| T2 | `COMBAT_PHASE_CHANGED` listener (~l. 675) | Idem — reset avant `setPhase(phase)` |
+
+### Clôture CUR1 ✅
+- **Testé** : SR ✅ — mode cible actif + COMBAT_END → curseur normal ✅ — aucun panneau fantôme
+- **Non testé** : —
+
+
+---
+
+## Session 95-7 — REWORK-01 clôture : SHK4 + SHK5 + CSS [A1] — 2026-06-16
+
+### Objectif
+
+Clôturer proprement REWORK-01 : corriger les deux bugs résiduels (SHK4 + SHK5) et les violations de conventions [A1] documentées en Session 96. Journal de session : `docs/REWORK-01-CLOSURE.md` (15 pièges documentés avant implémentation).
+
+### Fichiers modifiés
+
+| Fichier | Modification |
+|---|---|
+| `server/src/lib/statusService.js` | M1 : `resolveShockTest` retourne `rolls`+`seed` — M2 : `applyStun` branche PJ lit `shock_auto_stun` — M3 : `emitShockDiceResult` (export synchrone) |
+| `server/src/socket/index.js` | 5 call sites : `emitShockDiceResult` ajouté après chaque `resolveShockTest` non-null |
+| `client/src/locales/fr.json` | `sidebar.shockTestDetail` ajouté |
+| `client/src/locales/fr.json.test` | Idem (Z10) |
+| `client/src/components/Sidebar.jsx` | Routing `cardType === 'shock_test'` → `shockTestDetail` dans ternaire |
+| `client/src/components/CombatStunWindow.jsx` | [A1] : `className="btn"`, classes `.combat-stun-*`, suppression `styles` objet |
+| `client/src/index.css §11` | Nouvelles classes `.combat-stun-overlay`, `.combat-stun-header-title`, `.combat-stun-outcome-label`, `.combat-stun-outcome-desc` |
+
+### Pièges évités (critiques)
+
+- **Z8** — Site 2 COMBAT_MELEE_DEFENSE_CONFIRM : `meleeCampaignId` pas `campaignId` — aurait broadcasté D20 dans la mauvaise room
+- **Z5** — `emitShockDiceResult` appelé si `shockResult` non-null même si `outcome='ok'` (règle publique)
+- **Z10** — `fr.json.test` mis à jour en même temps que `fr.json`
+
+### Clôture SHK4 ✅
+- **Testé** : D20 visible chat (outcomes ok/étourdi/inconscient) ✅ — carte "Test de Choc" avec seuils ✅ — non-régression Scénarios 1-5 ✅
+- **Non testé** : —
+
+### Clôture SHK5 ✅
+- **Testé** : `shock_auto_stun=false` → GM reçoit `CombatStunWindow` ✅ — PJ ne reçoit pas ✅ — non-régression `true` ✅
+- **Non testé** : —
+
+### Clôture [A1] ✅
+- **Testé** : Vite 200 ✅ — SR sans erreur ✅
+- **Non testé** : rendu visuel fin (couleur `.btn` + box-shadow dynamique) — cosmétique, non-bloquant

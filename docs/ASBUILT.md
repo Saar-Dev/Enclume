@@ -54,7 +54,7 @@ Enclume/
 â”‚   â”‚   â”‚   â””â”€â”€ useDraggable.js         # NOUVEAU 66 â€” hook partagÃ© drag+localStorage+clamp (storageKey, defaultPos, panelW)
 â”‚   â”‚   â”‚   â”œâ”€â”€ RegisterPage.jsx
 â”‚   â”‚   â”‚   â”œâ”€â”€ DashboardPage.jsx       # ModifiÃ© 45 â€” upload cover. ModifiÃ© 66 â€” layout flex+ChangelogPanel. ModifiÃ© 68 â€” formulaires inline. ModifiÃ© 69 â€” document.title 'Enclume â€” Tableau de bord'. ModifiÃ© 73 â€” deux cartes CrÃ©er/Rejoindre symÃ©triques (filigrane +/â†’, formulaires inline, refs focus, suppression actionsRow/showCreate/showJoin)
-â”‚   â”‚   â”‚   â”œâ”€â”€ SessionPage.jsx         # ModifiÃ© 64-66 â€” combat, dÃ©s. ModifiÃ© 69 â€” document.title dynamique. ModifiÃ© 70 â€” defaultTokenGlbUrl. ModifiÃ© 71 â€” +updateCharacter destructure, +3 listeners wound (WOUND_ADDED/UPDATED/REMOVED â†’ updateCharacter({id,worst_wound_severity})), +actionTimerSec prop CombatOverlay. ModifiÃ© 73 â€” setActiveCampaign(campaignId) dÃ©but useEffect socket. ModifiÃ© 76 â€” dropdown token remplacÃ© par TokenRadialMenu, contextMenuRef+useEffect click-outside supprimÃ©s, handleRemoveContextToken (sans setContextMenu), handleSetContextTokenRotation (TOKEN_SET_ROTATION). ModifiÃ© 79 â€” fix TDZ : useState statusPanel dÃ©placÃ© avant useEffect qui l'utilise. ModifiÃ© 81 â€” state announcementMarker (null|{tokenId,moveTarget,attackTargetId}), set dans COMBAT_ACTION_DECLARED, reset dans COMBAT_PHASE_CHANGED, passÃ© Ã  Canvas3D + CombatOverlay. Modifié 85 M3 — CAMPAIGN_SETTINGS_UPDATED listener (setCampaign merge)
+â”‚   â”‚   â”‚   â”œâ”€â”€ SessionPage.jsx         # ModifiÃ© 64-66 â€” combat, dÃ©s. ModifiÃ© 69 â€” document.title dynamique. ModifiÃ© 70 â€” defaultTokenGlbUrl. ModifiÃ© 71 â€” +updateCharacter destructure, +3 listeners wound (WOUND_ADDED/UPDATED/REMOVED â†’ updateCharacter({id,worst_wound_severity})), +actionTimerSec prop CombatOverlay. ModifiÃ© 73 â€” setActiveCampaign(campaignId) dÃ©but useEffect socket. ModifiÃ© 76 â€” dropdown token remplacÃ© par TokenRadialMenu, contextMenuRef+useEffect click-outside supprimÃ©s, handleRemoveContextToken (sans setContextMenu), handleSetContextTokenRotation (TOKEN_SET_ROTATION). ModifiÃ© 79 â€” fix TDZ : useState statusPanel dÃ©placÃ© avant useEffect qui l'utilise. ModifiÃ© 81 â€” state announcementMarker (null|{tokenId,moveTarget,attackTargetId}), set dans COMBAT_ACTION_DECLARED, reset dans COMBAT_PHASE_CHANGED, passÃ© Ã  Canvas3D + CombatOverlay. Modifié 85 M3 — CAMPAIGN_SETTINGS_UPDATED listener (setCampaign merge). Modifié 95-6 — reset setCombatMoveMode/setCombatTargetMode/setPendingMoveSelection dans COMBAT_ENDED + COMBAT_PHASE_CHANGED (CUR1)
 â”‚   â”‚   â”‚   â”œâ”€â”€ CampaignSettingsPage.jsx # ModifiÃ© 66 Sprint 7.5 â€” section RÃ¨gles de jeu. ModifiÃ© 68 Sprint Timer â€” +actionTimerSec. ModifiÃ© 69 â€” document.title. ModifiÃ© 70 â€” section Tokens 3D : upload/rÃ©initialiser default_token_glb_url, feedback succÃ¨s/erreur
 â”‚   â”‚   â”‚   â”œâ”€â”€ WorkshopPage.jsx        # ModifiÃ© 69 â€” canDelete (isOwner || !created_by), Export/Supprimer sÃ©parÃ©s, document.title 'Enclume â€” Atelier'
 â”‚   â”‚   â”‚   â””â”€â”€ TexturePacksPage.jsx    # CONSERVÃ‰ mais remplacÃ© par WorkshopPage
@@ -490,6 +490,8 @@ Malus encombrement : rÃ¨gle maison, s'additionne au malus santÃ©.
 | PI11 | polarisRound source unique shared/polarisUtils.js â€” jamais redÃ©fini localement |
 | PC27 | `!token.character_id` = EntitÃ© de dÃ©cor, jamais PNJ. PNJ = `character.type === 'pnj'`. EntitÃ© exclue du combat. |
 | PEF1-PEF6 | voir SYSTEME.md section 6 |
+
+
 
 
 
