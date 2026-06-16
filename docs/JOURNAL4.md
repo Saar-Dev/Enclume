@@ -1101,3 +1101,77 @@ Fichiers lus : `shared/events.js`, `server/src/socket/index.js`, `client/src/com
 | T5 | `client/src/components/CombatStunWindow.jsx` | Nouveau composant |
 | T6 | `client/src/pages/SessionPage.jsx` | State + listener + props |
 | T7 | `client/src/components/CombatOverlay.jsx` | Import + props + render |
+
+## Session 96 — REWORK-01 statusService — 2026-06-16
+
+### Contexte
+
+Suite Session 95-5b (ST2b revert). Architecture ST2b jugée trop fragile : `resolveShockBlock` appellé avant `COMBAT_DAMAGE_RESULT` → tout plantage bloquait la fenêtre dégâts joueur. Décision : réécrire le bloc stun en module de service indépendant (`statusService.js`).
+
+Spec complète rédigée dans `docs/ARCHI_REWORK.md` (REWORK-01).
+
+### Livré
+
+**`shared/events.js`** — +2 événements WS
+- `COMBAT_STUN_PROMPT` : serveur → socket PJ ou GM `{ tokenId, outcome }`
+- `COMBAT_STUN_CONFIRM` : PJ ou GM → serveur `{ tokenId }`
+
+**`server/src/lib/statusService.js`** — MODULE CRÉÉ
+- `resolveShockTest({ finalSeverity, localisation, is_lethal, for_na, con_na, vol_na })` — pure, D20 seulement, null si pas de test requis
+- `applyStun(io, db, campaignId, pendingStunActions, {...})` — PJ connecté → COMBAT_STUN_PROMPT, PNJ + shock_auto_stun=false → prompt GM, PNJ + shock_auto_stun=true → D6 auto, fallback offline
+- `applyStunWithDuration(io, db, ...)` — migré depuis index.js, db en paramètre
+- `emitTokenStatusUpdated(io, db, ...)` — migré depuis index.js, db en paramètre
+
+**`server/src/socket/index.js`** — 10 modifications
+- Import `* as statusService`
+- `const pendingStunActions = new Map()` (ligne 48)
+- 3 appels `emitTokenStatusUpdated` → `statusService.emitTokenStatusUpdated(io, db, ...)`
+- 1 appel `applyStunWithDuration` (COMBAT_APPLY_STUN handler) → `statusService.applyStunWithDuration(io, db, ...)`
+- 5 call sites `resolveShockBlock` → `statusService.resolveShockTest(...)` + `statusService.applyStun(...)` fire-and-forget APRÈS l'emit résultat
+- Suppression des 3 fonctions migrées
+- +handler `COMBAT_STUN_CONFIRM` (V1/V2 PJ/GM)
+
+**`client/src/components/CombatStunWindow.jsx`** — prop `onConfirmed` → `onClose`
+
+**`client/src/pages/SessionPage.jsx`** — `stunPayload` state + listener STUN_PROMPT + props CombatOverlay
+
+**`client/src/components/CombatOverlay.jsx`** — import CombatStunWindow + props `stunPayload/onStunConfirmed` + render conditionnel
+
+### Résultat REWORK-01
+
+- Séquençage corrigé : `resolveShockTest` (pure) → emit DAMAGE/ATTACK_RESULT → `applyStun` (fire-and-forget)
+- Plus aucun couplage entre affichage dégâts et résolution stun
+- `resolveShockBlock` : **0 occurrence** (supprimé de partout)
+
+### Clôture REWORK-01 ✅ (complet)
+- **Testé** : node --check OK + Vite 200 + SR health OK
+- **Non testé** : scénarios fonctionnels réels (PNJ cible + PJ cible + non-régression)
+
+### Touches
+
+| # | Fichier | Changement |
+|---|---|---|
+| T1 | `shared/events.js` | +COMBAT_STUN_PROMPT + COMBAT_STUN_CONFIRM |
+| T2 | `server/src/lib/statusService.js` | MODULE CRÉÉ |
+| T3 | `server/src/socket/index.js` | Import + Map + 5 call sites + 3 emitStatus + APPLY_STUN + STUN_CONFIRM handler + suppression 3 fonctions |
+| T4 | `client/src/components/CombatStunWindow.jsx` | onConfirmed → onClose |
+| T5 | `client/src/pages/SessionPage.jsx` | stunPayload state + listener + props |
+| T6 | `client/src/components/CombatOverlay.jsx` | Import + props + render conditionnel |
+
+---
+
+## Session 96 suite — Fix SHK6 : COMBAT_DAMAGE_CONFIRM autorisation PJ cible — 2026-06-16
+
+### Bug
+
+Drone → PJ : `COMBAT_DAMAGE_PROMPT` envoyé au socket PJ (via `io.fetchSockets()` + `s.user?.id` — fonctionne car pas de Redis adapter, sockets locaux). Le PJ clique "Lancer les dés" → envoie `COMBAT_DAMAGE_CONFIRM`. Handler ligne 2379 : `pending.userId` (null — drone sans user_id) ≠ `socket.user.id` (PJ) ET `socket.role !== 'gm'` → return silencieux. Aucun `COMBAT_DAMAGE_RESULT` renvoyé → fenêtre bloquée "Calcul en cours..." côté PJ.
+
+### Correctif
+
+`server/src/socket/index.js` — 2 touches :
+1. Branch 8c (~ligne 4062) : `targetUserId: cibleCharacter.user_id` ajouté au pending action
+2. Ligne 2379 : `pending.targetUserId !== socket.user.id` ajouté à la condition d'autorisation
+
+### Clôture SHK6 ✅
+- **Testé** : drone → PJ, fenêtre GESTION DES DÉGÂTS fonctionnelle, dés roulés, résultats affichés ✅
+- **Non testé** : CombatStunWindow apparaît ensuite pour le PJ si shock requis (scénario 2 REWORK-01 complet)

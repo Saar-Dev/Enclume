@@ -430,16 +430,59 @@ Le code est correct. Les deux hypothèses initiales infirmées par lecture + log
 
 ---
 
-### Bug ST2 — D6 durée étourdissement : non lancé visuellement, non broadcasté au joueur ⚠️ Clos partiel — Session 95-5
+### ~~Bug ST2~~ — ✅ CLOS — Session 96 (REWORK-01)
 
 **Symptôme initial** : D6 durée roulé silencieusement serveur. Aucune carte DICE_RESULT.
 
-**Correctif Session 95-5** : Refonte `resolveShockBlock` — 5 blocs copiés-collés → 1 helper. DICE_RESULT D6 émis dans le helper. Carte "Durée étourdissement" visible dans sidebar chat. SR ✅
+**Correctif Session 95-5** : Refonte `resolveShockBlock` → helper unique. DICE_RESULT D6 émis. Carte "Durée étourdissement" visible dans sidebar chat.
 
-**Restant — ST2b** : côté PJ (quand le PJ est la cible), le D6 devrait être lancé par le joueur via une fenêtre interactive (pattern COMBAT_DAMAGE_PROMPT). Sprint dédié requis.
+**Correctif Session 96 (REWORK-01)** : REWORK-01 `statusService.js` — PJ ciblé → `CombatStunWindow` fenêtre interactive "Lancer 1D6". PNJ → auto D6 serveur + DICE_RESULT broadcast. SR ✅ — testé drone→PNJ (inconscient, D6=6, 60 tours).
 
-**Testé** : broadcast DICE_RESULT visible côté chat ✅
-**Non testé** : PJ comme cible → fenêtre interactive → sprint ST2b
+**Testé** : DICE_RESULT D6 broadcast ✅ — CombatStunWindow montée PJ non testée (scénario 2 en attente)
+**Non testé** : PJ comme cible → scénario 2 ARCHI_REWORK validation requise
+
+---
+
+### ~~Bug SHK6~~ — ✅ CLOS — Session 96 suite — COMBAT_DAMAGE_CONFIRM : autorisation PJ cible
+
+**Symptôme** : Drone → PJ : fenêtre "GESTION DES DÉGÂTS" côté PJ bloquée à "Calcul en cours..." après clic "Lancer les dés". Aucun résultat en sidebar.
+
+**Cause racine** [VÉRIFIÉ] : `COMBAT_DAMAGE_PROMPT` envoyé au socket PJ (ligne 4065 — `io.fetchSockets()` + `s.user?.id` fonctionne en mémoire locale sans Redis adapter). Quand le PJ envoie `COMBAT_DAMAGE_CONFIRM`, la condition d'autorisation ligne 2379 échoue : `pending.userId` (null — drone sans user_id) ≠ `socket.user.id` (PJ) ET `socket.role !== 'gm'` → return silencieux, jamais de `COMBAT_DAMAGE_RESULT`.
+
+**Correctif** : `server/src/socket/index.js`
+- Branch 8c : `targetUserId: cibleCharacter.user_id` ajouté au pending action
+- Ligne 2379 : condition élargie à `pending.targetUserId !== socket.user.id`
+
+**Testé** : drone → PJ, fenêtre fonctionnelle, résultats affichés ✅
+**Non testé** : `CombatStunWindow` post-damage pour PJ si shock requis
+
+---
+
+### Bug SHK4 — D20 Test de Choc : non visible en chat (sprint futur)
+
+**Symptôme** : Quand un Test de Choc est déclenché, le jet D20 est résolu côté serveur mais aucune carte `DICE_RESULT` n'est émise. Les joueurs ne voient pas le résultat du test dans la sidebar chat.
+
+**Règle** : §7.2 MANUELSYSCOMBAT — Test de Choc = jet D20 visible par tous (résultat public).
+
+**Code impliqué** : `server/src/lib/statusService.js` — `resolveShockTest` — lance D20 via `parseDice('1d20')` mais n'émet pas `WS.DICE_RESULT`.
+
+**Cause racine** [VÉRIFIÉ] : `resolveShockTest` est une fonction pure (zéro broadcast, zéro DB) — design intentionnel REWORK-01. Pour broadcaster, il faudrait passer `io` et `campaignId` dans la signature, ou extraire l'émission dans `applyStun`.
+
+**Prochaine étape** : Sprint futur dédié — étendre `applyStun` pour émettre `DICE_RESULT` D20 après `resolveShockTest`. Requiert `io.to(campaignId).emit(WS.DICE_RESULT, {...})` dans le flux outcome ≠ 'ok', avec `skillLabel: 'Test de Choc'`.
+
+---
+
+### Bug SHK5 — shock_auto_stun=false : PJ ciblé routé vers sa propre fenêtre au lieu du GM
+
+**Symptôme** : Quand `campaigns.shock_auto_stun = false`, l'intention est que le GM gère TOUS les lancers D6 de durée (PJ et PNJ). L'implémentation actuelle route les PJ vers leur propre `CombatStunWindow` même en mode `false`.
+
+**Règle design** : Cf. V1/V2 table dans `docs/ARCHI_REWORK.md` — `false` = GM gère TOUS les D6, `true` = PJ interactive + PNJ auto.
+
+**Code impliqué** : `server/src/lib/statusService.js` — `applyStun` — branche PJ : émet `COMBAT_STUN_PROMPT` vers `pjSocket` sans vérifier `shock_auto_stun`.
+
+**Cause racine** [VÉRIFIÉ] : La query `shock_auto_stun` est lue pour la branche PNJ mais pas pour la branche PJ. Quand `shock_auto_stun = false`, la branche PJ devrait rediriger vers `gmSocket` (même logique que PNJ + auto_stun=false).
+
+**Prochaine étape** : Sprint futur — dans `applyStun`, après détection `isPJ`, lire `shock_auto_stun` depuis `campaigns`. Si `false` → route vers `gmSocket` identiquement aux PNJ. Si `true` → route vers `pjSocket` (comportement actuel).
 
 ---
 

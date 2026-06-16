@@ -107,8 +107,8 @@ export const WS = {
   COMBAT_ANNOUNCE_PREVIEW:       'combat:announce_preview',        // PJ → serveur → room : sélections en cours (éphémère, non persisté)
   COMBAT_APPLY_STUN:             'combat:apply_stun',              // GM → serveur : appliquer is_stunned manuellement { tokenId, outcome, duration }
   COMBAT_STUN_EXPIRED:           'combat:stun_expired',            // serveur → room : étourdissement expiré en fin de tour { tokenId }
-  COMBAT_STUN_PROMPT:            'combat:stun_prompt',             // serveur → socket PJ cible : invite à lancer 1D6 durée { tokenId, outcome }
-  COMBAT_STUN_CONFIRM:           'combat:stun_confirm',            // PJ → serveur : déclenche le D6 durée { tokenId }
+  COMBAT_STUN_PROMPT:            'combat:stun_prompt',             // serveur → socket PJ ou GM : prompt D6 durée { tokenId, outcome }
+  COMBAT_STUN_CONFIRM:           'combat:stun_confirm',            // PJ ou GM → serveur : lancer le D6 { tokenId }
 
   // Drones
   DRONE_INTEGRITY_UPDATED: 'drone:integrity_updated',  // serveur → room : intégrité drone mise à jour (combat)

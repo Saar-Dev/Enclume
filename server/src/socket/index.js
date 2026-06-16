@@ -23,6 +23,7 @@ import {
   lookupTable,
 } from '../lib/charStats.js'
 import { resolveWoundInsertion, isShockTestRequired } from '../lib/woundUtils.js'
+import * as statusService from '../lib/statusService.js'
 import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import {
@@ -45,7 +46,7 @@ import {
 const pendingEntityActions = new Map()
 const pendingDamageActions = new Map()
 const pendingMeleeDefense  = new Map()  // key = defenderTokenId, valeur = données attaque en attente
-const pendingStunActions   = new Map()  // key = targetTokenId, durée D6 en attente de confirmation PJ
+const pendingStunActions   = new Map()  // key = targetTokenId, valeur = données stun en attente
 
 const LOC_TABLE = [
   { max: 2,  slot: 'T'  },
@@ -381,7 +382,7 @@ const initSocket = (io) => {
           })
         }
 
-        await emitTokenStatusUpdated(io, socket.campaignId, tokenId)
+        await statusService.emitTokenStatusUpdated(io, db, socket.campaignId, tokenId)
       } catch (err) {
         console.error('[WS] token:status_toggle error:', err.message)
       }
@@ -1676,7 +1677,7 @@ const initSocket = (io) => {
               .delete()
             const affectedIds = [...new Set(affected.map(r => r.token_id))]
             for (const tid of affectedIds) {
-              await emitTokenStatusUpdated(io, campaignId, tid)
+              await statusService.emitTokenStatusUpdated(io, db, campaignId, tid)
             }
           }
         }
@@ -2375,7 +2376,7 @@ const initSocket = (io) => {
         console.warn(`[WS] COMBAT_DAMAGE_CONFIRM — pas de pending pour token:${tokenId}`)
         return
       }
-      if (pending.userId !== socket.user.id && socket.role !== 'gm') return
+      if (pending.userId !== socket.user.id && pending.targetUserId !== socket.user.id && socket.role !== 'gm') return
       pendingDamageActions.delete(tokenId)
 
       const {
@@ -2482,12 +2483,10 @@ const initSocket = (io) => {
           })
           finalSeverity = result.wound.severity  // P49
 
-          shockResult = await resolveShockBlock(io, campaignId, {
+          shockResult = await statusService.resolveShockTest({
             finalSeverity, localisation, is_lethal,
             for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
-            targetTokenId,
-            userId, username: tireurUsername, color: tireurColor,
-          }) ?? null
+          })
         }
 
         const severityColor = finalSeverity ? (SEVERITY_COLORS[finalSeverity] ?? tireurColor) : tireurColor
@@ -2503,6 +2502,14 @@ const initSocket = (io) => {
           severityColor,
           shockResult,
         })
+
+        // Stun — applyStun après l'émission pour ne pas bloquer l'affichage des dégâts
+        if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+          statusService.applyStun(io, db, campaignId, pendingStunActions, {
+            targetTokenId, outcome: shockResult.outcome,
+            userId, username: tireurUsername, color: tireurColor,
+          }).catch(err => console.error('[WS] applyStun error:', err.message))
+        }
 
         // 7. DICE_RESULT broadcast chat
         const now = new Date().toISOString()
@@ -2558,36 +2565,6 @@ const initSocket = (io) => {
         })
       } catch (err) {
         console.error('[WS] COMBAT_DAMAGE_CONFIRM error:', err.message)
-      }
-    })
-
-    // ─── COMBAT_STUN_CONFIRM — PJ cible lance son 1D6 de durée étourdissement ──
-    socket.on(WS.COMBAT_STUN_CONFIRM, async ({ tokenId }) => {
-      const pending = pendingStunActions.get(tokenId)
-      if (!pending) {
-        console.warn(`[WS] COMBAT_STUN_CONFIRM — pas de pending pour token:${tokenId}`)
-        return
-      }
-      if (pending.targetUserId !== socket.user?.id && socket.role !== 'gm') return
-      pendingStunActions.delete(tokenId)
-      const { campaignId, outcome, currentTurn, userId, username, color } = pending
-      try {
-        const { total: d6Raw, rolls: d6Rolls, seed: d6Seed } = await parseDice('1d6')
-        const stunDuration  = outcome === 'inconscient' ? d6Raw * 10 : d6Raw
-        io.to(campaignId).emit(WS.DICE_RESULT, {
-          userId, username, color,
-          formula: '1d6', rolls: d6Rolls, total: stunDuration,
-          isCriticalSuccess: false, isCriticalFail: false,
-          seed: d6Seed, timestamp: new Date().toISOString(),
-          skillLabel: 'Durée étourdissement',
-          mechanicalTotal: d6Raw,
-          diffLabel: outcome === 'inconscient' ? ' ×10 (min→tours)' : ' tour(s)',
-          chancesDeReussite: stunDuration,
-          isSuccess: true,
-        })
-        await applyStunWithDuration(io, campaignId, tokenId, outcome, stunDuration, currentTurn)
-      } catch (err) {
-        console.error('[WS] COMBAT_STUN_CONFIRM error:', err.message)
       }
     })
 
@@ -2773,12 +2750,10 @@ const initSocket = (io) => {
                   promoted: result.promoted,
                   shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
                 })
-                shockResult = await resolveShockBlock(io, meleeCampaignId, {
+                shockResult = await statusService.resolveShockTest({
                   finalSeverity, localisation, is_lethal,
                   for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
-                  targetTokenId: tokenId,
-                  userId, username: attackerUsername, color: attackerColor,
-                }) ?? null
+                })
               } catch (woundErr) {
                 console.error('[WS] COMBAT_MELEE_DEFENSE_CONFIRM (PNJ dmg) — wound error:', woundErr.message)
               }
@@ -2798,6 +2773,12 @@ const initSocket = (io) => {
               chancesDeReussite: chancesAttaque,
               shockResult,
             })
+            if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+              statusService.applyStun(io, db, meleeCampaignId, pendingStunActions, {
+                targetTokenId: tokenId, outcome: shockResult.outcome,
+                userId, username: attackerUsername, color: attackerColor,
+              }).catch(err => console.error('[WS] applyStun error:', err.message))
+            }
           }
         }
 
@@ -2834,6 +2815,35 @@ const initSocket = (io) => {
       }
     })
 
+    // ─── COMBAT_STUN_CONFIRM — PJ ou GM valide le lancer D6 durée étourdissement ─
+    socket.on(WS.COMBAT_STUN_CONFIRM, async ({ tokenId }) => {
+      const pending = pendingStunActions.get(tokenId)
+      if (!pending) return
+      const isAuthorized = pending.isGmPrompt
+        ? (socket.data?.role === 'gm')
+        : (pending.targetUserId === socket.user.id)
+      if (!isAuthorized) return
+      pendingStunActions.delete(tokenId)
+
+      const { total: d6Raw, rolls: d6Rolls, seed: d6Seed } = await parseDice('1d6')
+      const stunDuration = pending.outcome === 'inconscient' ? d6Raw * 10 : d6Raw
+
+      io.to(pending.campaignId).emit(WS.DICE_RESULT, {
+        userId: pending.userId, username: pending.username, color: pending.color,
+        formula: '1d6', rolls: d6Rolls, total: stunDuration,
+        isCriticalSuccess: false, isCriticalFail: false,
+        seed: d6Seed, timestamp: new Date().toISOString(),
+        skillLabel: 'Durée étourdissement',
+        mechanicalTotal: d6Raw,
+        diffLabel:    pending.outcome === 'inconscient' ? ' ×10 (min→tours)' : ' tour(s)',
+        chancesDeReussite: stunDuration,
+        isSuccess: true,
+      })
+      await statusService.applyStunWithDuration(
+        io, db, pending.campaignId, tokenId, pending.outcome, stunDuration, pending.currentTurn
+      )
+    })
+
     // ─── COMBAT_APPLY_STUN — GM applique manuellement is_stunned avec durée ──
     socket.on(WS.COMBAT_APPLY_STUN, async ({ tokenId, outcome, duration }) => {
       if (socket.role !== 'gm') return
@@ -2845,7 +2855,7 @@ const initSocket = (io) => {
       }
       try {
         const combatSt = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
-        await applyStunWithDuration(io, campaignId, tokenId, outcome, duration, combatSt?.current_turn ?? 1)
+        await statusService.applyStunWithDuration(io, db, campaignId, tokenId, outcome, duration, combatSt?.current_turn ?? 1)
         console.log(`[WS] COMBAT_APPLY_STUN — is_stunned posé manuellement. token:${tokenId} outcome:${outcome} duration:${duration} campaign:${campaignId}`)
       } catch (err) {
         console.error('[WS] COMBAT_APPLY_STUN error:', err.message)
@@ -3092,7 +3102,7 @@ async function endTurn(io, campaignId) {
           .where('expires_at_turn', '<=', newTurn)
           .delete()
         for (const token_id of allExpiredIds) {
-          await emitTokenStatusUpdated(io, campaignId, token_id)
+          await statusService.emitTokenStatusUpdated(io, db, campaignId, token_id)
         }
         for (const token_id of expiredStunIds) {
           io.to(campaignId).emit(WS.COMBAT_STUN_EXPIRED, { tokenId: token_id })
@@ -3127,122 +3137,6 @@ async function endTurn(io, campaignId) {
     console.log(`[WS] endTurn — campagne ${campaignId}`)
   } catch (err) {
     console.error('[WS] endTurn error:', err.message)
-  }
-}
-
-// ─── Helper — émettre TOKEN_STATUS_UPDATED avec statuses + statusExpiries ─────
-async function emitTokenStatusUpdated(io, campaignId, tokenId) {
-  const rows = await db('token_statuses').where({ token_id: tokenId }).select('status_code', 'expires_at_turn')
-  const statuses = rows.map(r => r.status_code)
-  const statusExpiries = Object.fromEntries(rows.map(r => [r.status_code, r.expires_at_turn]))
-  io.to(campaignId).emit(WS.TOKEN_STATUS_UPDATED, { tokenId, statuses, statusExpiries })
-}
-
-// ─── Helper — appliquer stunned/unconscious dans token_statuses avec expires_at_turn ─
-// onConflict merge : re-stun étend la durée sans dupliquer la ligne.
-async function applyStunWithDuration(io, campaignId, tokenId, outcome, stunDuration, currentTurn) {
-  const stunUntil = currentTurn + stunDuration
-  const statusCode = outcome === 'inconscient' ? 'unconscious' : 'stunned'
-  try {
-    await db('token_statuses')
-      .insert({ token_id: tokenId, status_code: statusCode, expires_at_turn: stunUntil })
-      .onConflict(['token_id', 'status_code'])
-      .merge(['expires_at_turn'])
-    await emitTokenStatusUpdated(io, campaignId, tokenId)
-  } catch (err) {
-    console.error('[WS] applyStunWithDuration error:', err.message)
-  }
-  console.log(`[WS] applyStunWithDuration — token:${tokenId} outcome:${outcome} duration:${stunDuration} until_turn:${stunUntil}`)
-}
-
-// ─── Helper — résoudre le bloc Test de Choc complet (D20 + D6 durée + broadcast) ──
-// Retourne shockResult ou null si pas de test requis.
-// Le D6 durée est broadcasté comme DICE_RESULT pour le rendre visible dans le chat.
-async function resolveShockBlock(io, campaignId, {
-  finalSeverity, localisation, is_lethal,
-  for_na, con_na, vol_na,
-  targetTokenId,
-  userId, username, color,
-}) {
-  if (!isShockTestRequired(finalSeverity, localisation)) return null
-  const shockCampaign = await db('campaigns').where({ id: campaignId }).select('shock_auto_stun').first()
-  const shockAutoStun = shockCampaign?.shock_auto_stun ?? true
-  const seuils     = calcSeuils(for_na, con_na, vol_na)
-  const shockMalus = getShockMalus(finalSeverity, localisation, is_lethal)
-  const { total: rollChoc } = await parseDice('1d20')
-  let outcome
-  if      (rollChoc <= seuils.etourdissement + shockMalus) outcome = 'ok'
-  else if (rollChoc <= seuils.inconscience    + shockMalus) outcome = 'etourdi'
-  else                                                       outcome = 'inconscient'
-  let stunDuration = null, stunUntilTurn = null, stunPending = false
-  if (outcome !== 'ok' && shockAutoStun) {
-    // Déterminer si la cible est un PJ → prompt interactif, sinon résolution auto
-    const targetTok  = await db('tokens').where({ id: targetTokenId }).select('character_id').first()
-    const targetChar = targetTok?.character_id
-      ? await db('characters').where({ id: targetTok.character_id }).select('user_id', 'type').first()
-      : null
-    const targetUserId = targetChar?.type === 'pj' ? targetChar.user_id : null
-
-    const combatSt   = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
-    const currentTurn = combatSt?.current_turn ?? 1
-
-    if (targetUserId) {
-      // PJ cible → lui envoyer un prompt pour qu'il lance son propre 1D6
-      pendingStunActions.set(targetTokenId, { campaignId, outcome, currentTurn, userId, username, color, targetUserId })
-      const sockets = await io.fetchSockets()
-      const pjSocket = sockets.find(s => s.campaignId === campaignId && s.user?.id === targetUserId)
-      if (pjSocket) {
-        pjSocket.emit(WS.COMBAT_STUN_PROMPT, { tokenId: targetTokenId, outcome })
-        stunPending = true
-      } else {
-        // PJ déconnecté → résolution auto côté serveur
-        pendingStunActions.delete(targetTokenId)
-        const { total: d6Raw, rolls: d6Rolls, seed: d6Seed } = await parseDice('1d6')
-        stunDuration  = outcome === 'inconscient' ? d6Raw * 10 : d6Raw
-        stunUntilTurn = currentTurn + stunDuration
-        io.to(campaignId).emit(WS.DICE_RESULT, {
-          userId, username, color,
-          formula: '1d6', rolls: d6Rolls, total: stunDuration,
-          isCriticalSuccess: false, isCriticalFail: false,
-          seed: d6Seed, timestamp: new Date().toISOString(),
-          skillLabel: 'Durée étourdissement',
-          mechanicalTotal: d6Raw,
-          diffLabel: outcome === 'inconscient' ? ' ×10 (min→tours)' : ' tour(s)',
-          chancesDeReussite: stunDuration,
-          isSuccess: true,
-        })
-        await applyStunWithDuration(io, campaignId, targetTokenId, outcome, stunDuration, currentTurn)
-      }
-    } else {
-      // PNJ cible → résolution auto
-      const { total: d6Raw, rolls: d6Rolls, seed: d6Seed } = await parseDice('1d6')
-      stunDuration  = outcome === 'inconscient' ? d6Raw * 10 : d6Raw
-      stunUntilTurn = currentTurn + stunDuration
-      io.to(campaignId).emit(WS.DICE_RESULT, {
-        userId, username, color,
-        formula: '1d6', rolls: d6Rolls, total: stunDuration,
-        isCriticalSuccess: false, isCriticalFail: false,
-        seed: d6Seed, timestamp: new Date().toISOString(),
-        skillLabel: 'Durée étourdissement',
-        mechanicalTotal: d6Raw,
-        diffLabel: outcome === 'inconscient' ? ' ×10 (min→tours)' : ' tour(s)',
-        chancesDeReussite: stunDuration,
-        isSuccess: true,
-      })
-      await applyStunWithDuration(io, campaignId, targetTokenId, outcome, stunDuration, currentTurn)
-    }
-  }
-  return {
-    triggered:    true,
-    roll:         rollChoc,
-    outcome,
-    shockMalus,
-    seuilEtourdi: seuils.etourdissement + shockMalus,
-    seuilIncons:  seuils.inconscience   + shockMalus,
-    stun_applied:       outcome !== 'ok' && shockAutoStun && !stunPending,
-    stun_pending:       stunPending,
-    stun_duration:      stunDuration,
-    stunned_until_turn: stunUntilTurn,
   }
 }
 
@@ -3668,12 +3562,10 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
               wound: result.wound, promoted: result.promoted,
               shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
             })
-            shockResult = await resolveShockBlock(io, campaignId, {
+            shockResult = await statusService.resolveShockTest({
               finalSeverity, localisation, is_lethal,
               for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
-              targetTokenId,
-              userId: character.user_id, username: attackerUsername, color: attackerColor,
-            }) ?? null
+            })
           } catch (woundErr) {
             console.error('[WS] resolveMeleeAction (PNJ dmg) — wound error:', woundErr.message)
           }
@@ -3685,6 +3577,12 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
           severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
           roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
         })
+        if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+          statusService.applyStun(io, db, campaignId, pendingStunActions, {
+            targetTokenId, outcome: shockResult.outcome,
+            userId: character.user_id, username: attackerUsername, color: attackerColor,
+          }).catch(err => console.error('[WS] applyStun error:', err.message))
+        }
       }
 
       // CaC 4b — attaque suivante si multi-attack
@@ -4100,12 +3998,10 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
           shock_test_required: isShockTestRequired(result.wound.severity, result.wound.location),
         })
         finalSeverity = result.wound.severity
-        shockResult = await resolveShockBlock(io, campaignId, {
+        shockResult = await statusService.resolveShockTest({
           finalSeverity, localisation, is_lethal,
           for_na, con_na, vol_na,
-          targetTokenId: action.target_token_id,
-          userId, username: tireurUsername, color: tireurColor,
-        }) ?? null
+        })
       }
 
       const severityColor = finalSeverity ? (SEVERITY_COLORS[finalSeverity] ?? tireurColor) : tireurColor
@@ -4132,6 +4028,12 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
         localisation, degautsBruts, degatsNets,
         severity: finalSeverity, is_lethal, isSuccess: true, shockResult: shockResult ?? null,
       })
+      if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+        statusService.applyStun(io, db, campaignId, pendingStunActions, {
+          targetTokenId: action.target_token_id, outcome: shockResult.outcome,
+          userId, username: tireurUsername, color: tireurColor,
+        }).catch(err => console.error('[WS] applyStun error:', err.message))
+      }
       return
     }
 
@@ -4156,6 +4058,7 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
       vol_na_cible:  vol_na,
       tireurUsername, tireurColor, userId, targetName,
       type: 'assault', modDom: null, combatModeBonus: null,
+      targetUserId: cibleCharacter.user_id,
     })
 
     const damagePayload = { tokenId: action.token_id, formula, targetName }
@@ -4450,12 +4353,10 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
               promoted: result.promoted,
               shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
             })
-            shockResult = await resolveShockBlock(io, campaignId, {
+            shockResult = await statusService.resolveShockTest({
               finalSeverity, localisation, is_lethal,
               for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
-              targetTokenId: action.target_token_id,
-              userId: character.user_id, username: tireurUsername, color: tireurColor,
-            }) ?? null
+            })
           } catch (woundErr) {
             console.error('[WS] resolveAssaultAction (PNJ) — wound error:', woundErr.message)
           }
@@ -4474,6 +4375,12 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
           chancesDeReussite,
           shockResult,
         })
+        if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+          statusService.applyStun(io, db, campaignId, pendingStunActions, {
+            targetTokenId: action.target_token_id, outcome: shockResult.outcome,
+            userId: character.user_id, username: tireurUsername, color: tireurColor,
+          }).catch(err => console.error('[WS] applyStun error:', err.message))
+        }
       }
     } else if (character.type === 'pj') {
       socket.emit(WS.COMBAT_ATTACK_PLAYER_RESULT, {

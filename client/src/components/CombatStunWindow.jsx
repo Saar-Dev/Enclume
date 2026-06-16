@@ -6,13 +6,13 @@ const OUTCOME_CONFIG = {
   inconscient: { label: 'Inconscient', col: '#c83030', desc: '1D6 × 10 tours' },
 }
 
-export default function CombatStunWindow({ payload, socket, onConfirmed }) {
+export default function CombatStunWindow({ payload, socket, onClose }) {
   const [isRolling, setIsRolling] = useState(false)
 
   const handleLancer = () => {
     setIsRolling(true)
     socket?.emit(WS.COMBAT_STUN_CONFIRM, { tokenId: payload.tokenId })
-    onConfirmed?.()
+    onClose?.()
   }
 
   const { label, col, desc } = OUTCOME_CONFIG[payload.outcome] ?? { label: payload.outcome, col: '#7a7a90', desc: '1D6' }

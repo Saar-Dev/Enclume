@@ -1,3 +1,15 @@
+## v98 — 2026-06-16 — REWORK-01 : statusService (module étourdissement)
+
+### Combat — Architecture stun
+- [rework] `resolveShockBlock` (bloc monolithique copié ×5) → `statusService.js` (module indépendant)
+- [feat] `resolveShockTest` : pure, D20 uniquement, zéro DB/WS — découplé de l'émission résultat
+- [feat] `applyStun` : PJ connecté → fenêtre interactive "Lancer 1D6" (`CombatStunWindow`), PNJ → D6 auto serveur
+- [feat] `CombatStunWindow` : badge coloré outcome (jaune/rouge) + bouton "Lancer 1D6" — PJ choisit quand lancer
+- [fix] Séquençage : `COMBAT_DAMAGE_RESULT` émis **avant** le stun → la fenêtre dégâts ne se bloque plus jamais si la résolution stun échoue
+- [feat] `shock_auto_stun = false` : GM reçoit le prompt D6 pour ses PNJs (V1 partiel — PJ→fenêtre joueur, correction future)
+
+---
+
 ## v97 — 2026-06-14 — Fix split-brain slot detection
 
 ### Combat — Architecture slots

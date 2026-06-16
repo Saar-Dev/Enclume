@@ -17,7 +17,7 @@ import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMel
 import CombatDeclareLog from './CombatDeclareLog'
 
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, stunPayload, onStunConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, gmSocketError, onGmSocketErrorClose, announcementMarker, pjPreview, sidebarWidth = 0 }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, announcementMarker, pjPreview, sidebarWidth = 0 }) {
   const { phase, roster, activeSlotIdx, activeTokenId, actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
   const [showGmPanel, setShowGmPanel] = useState(false)
@@ -242,12 +242,12 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Fenêtre "Durée d'étourdissement" — PJ cible uniquement, après un Test de Choc raté */}
+      {/* Fenêtre durée étourdissement — PJ cible interactif (ou GM pour PNJ si shock_auto_stun=false) */}
       {stunPayload && (
         <CombatStunWindow
           payload={stunPayload}
           socket={socket}
-          onConfirmed={onStunConfirmed}
+          onClose={() => onStunConfirmed()}
         />
       )}
 

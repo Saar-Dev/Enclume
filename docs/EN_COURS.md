@@ -11,7 +11,9 @@
 
 **1. ~~Valider Sprint 14-0~~** ✅ CLOS — Session 95 suite 2
 
-**2. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
+**2. REWORK-01 — statusService** ✅ LIVRÉ Session 96 — SR OK — test fonctionnel requis
+
+**3. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
    → ~~Cluster J~~ ✅ : ~~SHOCK1~~ + ~~SHK3~~ + ~~ST2~~ — Clos Sessions 95-3 / 95-5 / 95-5b
    → Cluster K : CUR1 (curseur bloqué) — CH1 (chat F5) reclassé sprint persistance (projet non-trivial)
    → ~~DR1~~ ✅ — ~~COM6~~ ✅ — ~~DC1/DC3~~ ✅ — ~~Sprint 14-0~~ ✅ — ~~Test de Choc~~ ✅

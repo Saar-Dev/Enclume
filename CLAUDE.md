@@ -116,10 +116,10 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 93 (2026-06-14)
+## ÉTAT COURANT — Session 96 (2026-06-16)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **78 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
+- **79 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
 - "Changer le mode de tir" — non implémenté. Sprint dédié futur.
 
 **En attente de validation fonctionnelle :**
@@ -127,24 +127,29 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Sprint CaC Étape 3 (`CombatCacModifiersWindow` + mods) — Session 92-4
 - Fix split-brain slot detection — Session 93 — voir `docs/PLAN_ARCHICOMBAT_SLOTS.md` §Procédure de validation
 - Sprint CaC 4b (attaque multiple melee) — Session 74
-- Sprint Test de Choc (migration 69, shock_auto_stun) — Session 81
+- REWORK-01 statusService (Scénario 2 PJ cible + non-régressions) — Session 96
 
-**Session 93 — Livré ✅ (validation fonctionnelle requise) :**
-- Fix split-brain slot detection : `activeTokenId` consommé dans `CombatOverlay` (roster.find), `startResolutionPhase` → 3 queries filtrées + `announcedRoster[0]`, guard CaC sans cible → `COMBAT_DECLARE_ERROR`
+**Session 96 — Livré ✅ (validation partielle) :**
+- REWORK-01 : `resolveShockBlock` (×5 copié-collé) → `statusService.js` (module indépendant)
+- `resolveShockTest` (pur D20) → `COMBAT_DAMAGE_RESULT` émis → `applyStun` (fire-and-forget)
+- PNJ cible → auto D6 + DICE_RESULT broadcast ✅ (testé drone→PNJ, inconscient, 60 tours)
+- PJ cible → `CombatStunWindow` fenêtre "Lancer 1D6" (non testée — Scénario 2 requis)
+- SHK4 (D20 non visible en chat) + SHK5 (shock_auto_stun=false PJ) → `docs/BUGIDENTIFIE.md`
 
-**Session 92tier / 92-4 — Livrés ✅ :**
-- Sprint CaC Étapes 1+2 : B1/B2/B3/B8/B9/LOC. Validé fonctionnellement.
-- Sprint CaC Étape 3 : `CombatCacModifiersWindow` + 6 clés SITUATION_MODS + deux armes auto + terrain instable. SR + Vite 200 ✅.
+**Sessions 93-95 — Livrés ✅ :**
+- Fix split-brain slot detection (Session 93)
+- Sprint CaC Étapes 1+2+3 (Sessions 92-92tier)
+- Sprint 14-0 + Test de Choc (Session 95)
+- Fix Cluster A drones, Cluster B arme défaut, Cluster C CaC drone (Session 95 suite)
 
 **Dettes actives :**
-- **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion en RESOLUTION : calcule encore `activeTokenId` depuis roster complet + index — sprint dédié futur
-- `is_stunned` non enforced dans `COMBAT_ACTION_DECLARE` → PC42
-- `is_stunned` sans durée → sprint `stunned_until_turn` requis
+- **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion en RESOLUTION — sprint dédié futur
+- Bug SHK4 — D20 Test de Choc non visible en chat → sprint futur
+- Bug SHK5 — shock_auto_stun=false : PJ routé vers sa fenêtre au lieu du GM → sprint futur
 - Bug CL1 — Portraits PNJ non visibles timeline joueur
 - Bug CL2 — Design CombatDeclareLog + divergence GM/joueur
 - Bug CL3 — Ghosts déplacement d'annonce disparus
-- Bug Loc-Drone — jet localisation D20 incorrect pour cible drone (§7.6 zone unique fixe)
-- Bug Dmg-Drone — dégâts non enregistrés sur drone cible
+- Bug CUR1 — Curseur bloqué après fermeture combat
 - `useDiceAudio.js` — sons dés
 - `.gitattributes:3` — attribut invalide
 - WorkshopPage crash import invalide (`err.response?.data?.error`)
