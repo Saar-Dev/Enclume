@@ -13,7 +13,9 @@
 
 **2. REWORK-01 — statusService** ✅ CLOS Session 96 — Scénarios 1-5 validés
 
-**3. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
+**3. REWORK-03 — woundService** ✅ CLOS Session 97 — T1 validé ⚠️ clos partiel (T2–T5 non testés)
+
+**4. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
    → ~~Cluster J~~ ✅ : ~~SHOCK1~~ + ~~SHK3~~ + ~~ST2~~ — Clos Sessions 95-3 / 95-5 / 95-5b
    → ~~Cluster K~~ : ~~CUR1~~ ✅ Clos Session 95-6 — CH1 (chat F5) reclassé sprint persistance (projet non-trivial)
    → ~~DR1~~ ✅ — ~~COM6~~ ✅ — ~~DC1/DC3~~ ✅ — ~~Sprint 14-0~~ ✅ — ~~Test de Choc~~ ✅

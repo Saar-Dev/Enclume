@@ -736,6 +736,21 @@ console.log('[DBG-DR6]', {
 
 ---
 
+## Bug DIV-1 — worst_wound_severity absent du WOUND_ADDED combat (activement reseté)
+
+**Découvert** : Session 95-8 — analyse REWORK-03.
+**Résolu** : Session 97 — REWORK-03 (`woundService.applyWound` inclut `worst_wound_severity` dans chaque WOUND_ADDED WS).
+
+**Symptôme** : Anneau de sévérité (couleur) sur token et bordure timeline disparaissent à chaque blessure reçue en combat. Valeur correcte lors du chargement initial, perdue à la première blessure combat.
+
+**Cause racine** : Les 5 call sites WS de `resolveWoundInsertion` dans `socket/index.js` n'incluaient pas `worst_wound_severity` dans le payload `WOUND_ADDED`. Le REST (`char-sheet.js`) l'incluait déjà. `SessionPage.jsx` reçoit `worst_wound_severity: undefined` et appelle `updateCharacter({ id, worst_wound_severity: undefined })`. Le spread `{ ...c, ...partial }` dans `characterStore.js` écrase activement la valeur existante avec `undefined`.
+
+**Impact** : `CombatTimeline.jsx` et `TokenRadialMenu.jsx` perdent la couleur de sévérité après chaque blessure combat. Bug actif depuis Session 71 (premières blessures WS).
+
+**Fix** : `woundService.applyWound` appelle `getWorstWoundSeverity(db, charSheetId)` après la transaction et inclut la valeur dans chaque WOUND_ADDED broadcast.
+
+---
+
 ## Bugs divers — Dette technique
 
 ### Bug INI1 — Surprise critique : roll=1 → initiative=1

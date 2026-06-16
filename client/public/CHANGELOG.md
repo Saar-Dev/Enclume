@@ -1,3 +1,11 @@
+## v102 — 2026-06-16 — REWORK-03 : woundService + fix DIV-1 couleurs sévérité combat
+
+### Serveur — Architecture
+- [rework] REWORK-03 : `resolveWoundInsertion` × 5 call sites WS → `woundService.applyWound` (module indépendant)
+- [fix] DIV-1 : `worst_wound_severity` maintenant inclus dans tous les `WOUND_ADDED` WS — couleurs sévérité (token + timeline) conservées pendant tout le combat
+
+---
+
 ## v101 — 2026-06-16 — REWORK-01 clôture : SHK4 + SHK5 + CSS [A1]
 
 ### Combat — Test de Choc

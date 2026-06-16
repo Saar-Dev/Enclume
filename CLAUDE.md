@@ -116,7 +116,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 95-6 (2026-06-16)
+## ÉTAT COURANT — Session 97 (2026-06-16)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **79 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
@@ -127,6 +127,12 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Sprint CaC Étape 3 (`CombatCacModifiersWindow` + mods) — Session 92-4
 - Fix split-brain slot detection — Session 93 — voir `docs/PLAN_ARCHICOMBAT_SLOTS.md` §Procédure de validation
 - Sprint CaC 4b (attaque multiple melee) — Session 74
+
+**Session 97 — Livré ✅ :**
+- REWORK-03 : `resolveWoundInsertion` (×5 WS) → `woundService.js` (module indépendant)
+- Fix DIV-1 : `worst_wound_severity` maintenant dans tous les `WOUND_ADDED` WS — couleurs sévérité token + timeline conservées pendant le combat
+- `getWorstWoundSeverity` exportée depuis `woundUtils.js`, supprimée de `char-sheet.js`
+- T1 validé ⚠️ clos partiel (T2–T5 non testés)
 
 **Session 95-6 — Livré ✅ :**
 - Fix CUR1 : curseur bloqué après fermeture combat — reset `combatMoveMode` / `combatTargetMode` / `pendingMoveSelection` dans `COMBAT_ENDED` + `COMBAT_PHASE_CHANGED` (`SessionPage.jsx`)

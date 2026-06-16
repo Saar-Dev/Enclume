@@ -1267,3 +1267,33 @@ Clôturer proprement REWORK-01 : corriger les deux bugs résiduels (SHK4 + SHK5)
 ### Clôture [A1] ✅
 - **Testé** : Vite 200 ✅ — SR sans erreur ✅
 - **Non testé** : rendu visuel fin (couleur `.btn` + box-shadow dynamique) — cosmétique, non-bloquant
+
+## Session 97 — REWORK-03 : woundService (wound insertion centralisée + fix DIV-1) — 2026-06-16
+
+### Objectif
+
+Extraire `resolveWoundInsertion` + broadcast `WOUND_ADDED` des 5 call sites WS inline (`socket/index.js`) vers un nouveau module `woundService.js`. Corriger DIV-1 (bug actif depuis Session 71 : `worst_wound_severity` absent des WOUND_ADDED WS → spread Zustand écrasait activement la valeur → couleurs sévérité perdues à chaque blessure combat).
+
+Journal d'analyse complet : `docs/REWORK-03.md` (11 sections, 8 pièges documentés).
+
+### Fichiers modifiés
+
+| Fichier | Modification |
+|---|---|
+| `server/src/lib/woundUtils.js` | +export `getWorstWoundSeverity(db, charSheetId)` — `WOUND_SEVERITIES.slice().reverse()` (fix PIEGE-7 ORDER hardcodé) |
+| `server/src/lib/woundService.js` | NOUVEAU — `applyWound(io, db, campaignId, { charSheetId, characterId, localisation, severity })` → `{ finalSeverity }` ou null |
+| `server/src/socket/index.js` | Import woundUtils → `import * as woundService`. 5 call sites (CS1–CS5) remplacés. Commentaire L.3783 mis à jour. |
+| `server/src/routes/character/char-sheet.js` | Import + `getWorstWoundSeverity`. Fonction locale L.630–638 supprimée. 3 appels `(db, sheet.id)`. |
+| `docs/BUGIDENTIFIE.md` | DIV-1 documenté et marqué ✅ résolu |
+
+### Pièges évités (critiques)
+
+- **PIEGE-4** — CS2 (`COMBAT_MELEE_DEFENSE_CONFIRM`) : `meleeCampaignId` pas `campaignId`
+- **PIEGE-7** — `getWorstWoundSeverity` : ordre WOUND_SEVERITIES dynamique (`.slice().reverse()`) — désynchronisation future impossible
+- **P49** — `finalSeverity = result.wound.severity` post-promotion, pas la sévérité initiale
+- **DIV-1** — `worst_wound_severity: undefined` dans WOUND_ADDED WS → spread `{ ...c, ...partial }` Zustand écrasait activement la valeur existante à chaque blessure combat
+
+### Clôture REWORK-03 ⚠️ clos partiel
+
+- **Testé** : T1 — blessure MORTELLE Bras D (PNJ Soleil, distance) → `worst_wound_severity` dans WOUND_ADDED ✅ — couleurs sévérité token + timeline ✅ — pipeline Test de Choc + stun 4 tours intact ✅
+- **Non testé** : T2 (CaC PNJ auto) — T3 (promotion en cascade) — T4 (ligne pleine sévérité max) — T5 (REST GM manuel)

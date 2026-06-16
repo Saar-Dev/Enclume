@@ -40,3 +40,11 @@ export async function resolveWoundInsertion(trx, char_sheet_id, location, severi
     .returning('*')
   return { wound, promoted: false }
 }
+
+export async function getWorstWoundSeverity(db, charSheetId) {
+  const ORDER = WOUND_SEVERITIES.slice().reverse()
+  const wounds = await db('character_wounds').where({ char_sheet_id: charSheetId }).select('severity')
+  if (!wounds.length) return null
+  wounds.sort((a, b) => ORDER.indexOf(a.severity) - ORDER.indexOf(b.severity))
+  return wounds[0].severity
+}

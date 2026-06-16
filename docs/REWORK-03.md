@@ -614,4 +614,6 @@ REWORK-03 = extraction de `resolveWoundInsertion` + WOUND_ADDED broadcast hors d
 | 2026-06-16 | 95-8 | §7 complété — imports woundService.js détaillés, interface applyWound simplifiée (retourne uniquement finalSeverity) |
 | 2026-06-16 | 95-8 | characters.js L.55 vérifié — worst_wound_severity SQL inline, indépendant du rework |
 | 2026-06-16 | 95-8 | §11 ajouté — protocole post-compact complet avec fichiers à lire, décisions prises, checklist |
+| 2026-06-16 | 97 | Implémentation complète — woundUtils + woundService + char-sheet + socket/index (5 CS) + BUGIDENTIFIE DIV-1 ✅ |
+| 2026-06-16 | 97 | T1 validé (blessure mortelle distance + couleurs sévérité ✅) — ⚠️ clos partiel (T2–T5 non testés) |
 

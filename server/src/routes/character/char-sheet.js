@@ -38,7 +38,7 @@ import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal, calcAttributeNA, calcREA, calcSeuils, calcSouffle, calcResistanceDroguesInput } from '../../lib/charStats.js'
-import { resolveWoundInsertion, isShockTestRequired } from '../../lib/woundUtils.js'
+import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from '../../lib/woundUtils.js'
 import { WS } from '../../../../shared/events.js'
 import {
   WOUND_LOCATIONS, WOUND_SEVERITIES,
@@ -625,17 +625,6 @@ router.delete('/:characterId/advantages/:id', async (req, res, next) => {
 })
 
 // ─── Helper blessures ────────────────────────────────────────────────────────
-// Retourne la sévérité la plus grave parmi les blessures d'un char_sheet.
-// Null si aucune blessure. Utilisé pour mettre à jour la timeline combat.
-async function getWorstWoundSeverity(charSheetId) {
-  const ORDER = ['mortelle', 'critique', 'grave', 'moyenne', 'legere']
-  const wounds = await db('character_wounds')
-    .where({ char_sheet_id: charSheetId })
-    .select('severity')
-  if (!wounds.length) return null
-  wounds.sort((a, b) => ORDER.indexOf(a.severity) - ORDER.indexOf(b.severity))
-  return wounds[0].severity
-}
 
 // ─── Helpers blessures — voir server/src/lib/woundUtils.js ──────────────────
 
@@ -669,7 +658,7 @@ router.post('/:characterId/wounds', async (req, res, next) => {
     )
 
     const shock_test_required = isShockTestRequired(result.wound.severity, result.wound.location)
-    const worst_wound_severity = await getWorstWoundSeverity(sheet.id)
+    const worst_wound_severity = await getWorstWoundSeverity(db, sheet.id)
 
     req.app.get('io').to(req.character.campaign_id).emit(WS.WOUND_ADDED, {
       characterId: req.params.characterId,
@@ -700,7 +689,7 @@ router.put('/:characterId/wounds/:woundId/stabilize', async (req, res, next) => 
       .update({ is_stabilized: true, updated_at: db.fn.now() })
       .returning('*')
 
-    const worst_wound_severity = await getWorstWoundSeverity(sheet.id)
+    const worst_wound_severity = await getWorstWoundSeverity(db, sheet.id)
     req.app.get('io').to(req.character.campaign_id).emit(WS.WOUND_UPDATED, {
       characterId: req.params.characterId,
       wound: updated,
@@ -724,7 +713,7 @@ router.delete('/:characterId/wounds/:woundId', async (req, res, next) => {
 
     await db('character_wounds').where({ id: req.params.woundId }).del()
 
-    const worst_wound_severity = await getWorstWoundSeverity(sheet.id)
+    const worst_wound_severity = await getWorstWoundSeverity(db, sheet.id)
     req.app.get('io').to(req.character.campaign_id).emit(WS.WOUND_REMOVED, {
       characterId: req.params.characterId,
       woundId: req.params.woundId,

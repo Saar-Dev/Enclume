@@ -264,6 +264,23 @@ Enclume/
 
 ---
 
+## woundUtils.js — Fonctions pures blessures (server/src/lib/woundUtils.js) — Session 97
+
+| Fonction | Description |
+|---|---|
+| `isShockTestRequired(severity, location)` | bool — grave/critique/mortelle corps/tête |
+| `nextSeverity(severity)` | Sévérité suivante en cascade (WOUND_SEVERITIES ascendant) |
+| `resolveWoundInsertion(trx, char_sheet_id, location, severity)` | Transaction knex — insertion avec promotion en cascade. Throw AppError si ligne pleine. |
+| `getWorstWoundSeverity(db, charSheetId)` | Sévérité la plus grave pour un char_sheet — WOUND_SEVERITIES.slice().reverse() |
+
+## woundService.js — Service blessures WS (server/src/lib/woundService.js) — Session 97
+
+| Fonction | Description |
+|---|---|
+| `applyWound(io, db, campaignId, {...})` | Transaction + WOUND_ADDED broadcast (avec worst_wound_severity). Retourne `{ finalSeverity }` ou null. |
+
+---
+
 ## Collision map Redis â€” session 39
 
 ### Architecture

@@ -22,7 +22,7 @@ import {
   RD_TABLE,
   lookupTable,
 } from '../lib/charStats.js'
-import { resolveWoundInsertion, isShockTestRequired } from '../lib/woundUtils.js'
+import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
 import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
@@ -2471,18 +2471,12 @@ const initSocket = (io) => {
         // 5. Blessure
         let finalSeverity = severity
         let shockResult = null
-        if (severity && char_sheet_id_cible) {
-          const result = await db.transaction(trx =>
-            resolveWoundInsertion(trx, char_sheet_id_cible, localisation, severity)
-          )
-          io.to(campaignId).emit(WS.WOUND_ADDED, {
-            characterId: characterIdCible,
-            wound: result.wound,
-            promoted: result.promoted,
-            shock_test_required: isShockTestRequired(result.wound.severity, result.wound.location),
-          })
-          finalSeverity = result.wound.severity  // P49
-
+        const woundResult = await woundService.applyWound(io, db, campaignId, {
+          charSheetId: char_sheet_id_cible, characterId: characterIdCible,
+          localisation, severity,
+        })
+        if (woundResult) {
+          finalSeverity = woundResult.finalSeverity
           shockResult = await statusService.resolveShockTest({
             finalSeverity, localisation, is_lethal,
             for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
@@ -2742,25 +2736,16 @@ const initSocket = (io) => {
 
             let finalSeverity = severity
             let shockResult = null
-            if (severity && char_sheet_id_cible) {
-              try {
-                const result = await db.transaction(trx =>
-                  resolveWoundInsertion(trx, char_sheet_id_cible, localisation, severity)
-                )
-                finalSeverity = result.wound.severity
-                io.to(meleeCampaignId).emit(WS.WOUND_ADDED, {
-                  characterId: characterIdCible,
-                  wound: result.wound,
-                  promoted: result.promoted,
-                  shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
-                })
-                shockResult = await statusService.resolveShockTest({
-                  finalSeverity, localisation, is_lethal,
-                  for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
-                })
-              } catch (woundErr) {
-                console.error('[WS] COMBAT_MELEE_DEFENSE_CONFIRM (PNJ dmg) — wound error:', woundErr.message)
-              }
+            const woundResult = await woundService.applyWound(io, db, meleeCampaignId, {
+              charSheetId: char_sheet_id_cible, characterId: characterIdCible,
+              localisation, severity,
+            })
+            if (woundResult) {
+              finalSeverity = woundResult.finalSeverity
+              shockResult = await statusService.resolveShockTest({
+                finalSeverity, localisation, is_lethal,
+                for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
+              })
             }
 
             if (shockResult) {
@@ -3559,24 +3544,16 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
         else if (degatsNets >=  5) { severity = 'legere'   }
 
         let finalSeverity = severity, shockResult = null
-        if (severity && char_sheet_id_cible) {
-          try {
-            const result = await db.transaction(trx =>
-              resolveWoundInsertion(trx, char_sheet_id_cible, localisation, severity)
-            )
-            finalSeverity = result.wound.severity
-            io.to(campaignId).emit(WS.WOUND_ADDED, {
-              characterId: defenderCharacter.id,
-              wound: result.wound, promoted: result.promoted,
-              shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
-            })
-            shockResult = await statusService.resolveShockTest({
-              finalSeverity, localisation, is_lethal,
-              for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
-            })
-          } catch (woundErr) {
-            console.error('[WS] resolveMeleeAction (PNJ dmg) — wound error:', woundErr.message)
-          }
+        const woundResult = await woundService.applyWound(io, db, campaignId, {
+          charSheetId: char_sheet_id_cible, characterId: defenderCharacter.id,
+          localisation, severity,
+        })
+        if (woundResult) {
+          finalSeverity = woundResult.finalSeverity
+          shockResult = await statusService.resolveShockTest({
+            finalSeverity, localisation, is_lethal,
+            for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
+          })
         }
 
         if (shockResult) {
@@ -3803,7 +3780,7 @@ async function resolveReloadAction(io, socket, campaignId, character, action) {
 // ─── RÉSOLUTION ASSAUT ──────────────────────────────────────────────────────
 // Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='assault' + confirmedModifiers présents.
 // Jets : attaque 1d20 / localisation 1d20 / dégâts selon ref_damage_h.
-// Blessures : resolveWoundInsertion (promotions en cascade) + test choc si requis.
+// Blessures : woundService.applyWound (résolution + WOUND_ADDED) + resolveShockTest caller.
 // ─── resolveDroneAssaultAction — résolution attaque drone (Sprint 2c) ────────
 // Appelé depuis resolveAssaultAction quand character.type === 'drone'.
 // §7.3 MANUELSYSCOMBAT : D20 ≤ programme.level, modificateurs situationnels standard,
@@ -4003,13 +3980,12 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
 
       let finalSeverity = severity
       let shockResult = null
-      if (severity && cibleSheet?.id) {
-        const result = await db.transaction(trx => resolveWoundInsertion(trx, cibleSheet.id, localisation, severity))
-        io.to(campaignId).emit(WS.WOUND_ADDED, {
-          characterId: cibleCharacter.id, wound: result.wound, promoted: result.promoted,
-          shock_test_required: isShockTestRequired(result.wound.severity, result.wound.location),
-        })
-        finalSeverity = result.wound.severity
+      const woundResult = await woundService.applyWound(io, db, campaignId, {
+        charSheetId: cibleSheet?.id, characterId: cibleCharacter.id,
+        localisation, severity,
+      })
+      if (woundResult) {
+        finalSeverity = woundResult.finalSeverity
         shockResult = await statusService.resolveShockTest({
           finalSeverity, localisation, is_lethal,
           for_na, con_na, vol_na,
@@ -4357,25 +4333,16 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
 
         let finalSeverity = severity
         let shockResult = null
-        if (severity && char_sheet_id_cible) {
-          try {
-            const result = await db.transaction(trx =>
-              resolveWoundInsertion(trx, char_sheet_id_cible, localisation, severity)
-            )
-            finalSeverity = result.wound.severity
-            io.to(campaignId).emit(WS.WOUND_ADDED, {
-              characterId: cibleToken.character_id,
-              wound: result.wound,
-              promoted: result.promoted,
-              shock_test_required: isShockTestRequired(finalSeverity, result.wound.location),
-            })
-            shockResult = await statusService.resolveShockTest({
-              finalSeverity, localisation, is_lethal,
-              for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
-            })
-          } catch (woundErr) {
-            console.error('[WS] resolveAssaultAction (PNJ) — wound error:', woundErr.message)
-          }
+        const woundResult = await woundService.applyWound(io, db, campaignId, {
+          charSheetId: char_sheet_id_cible, characterId: cibleToken.character_id,
+          localisation, severity,
+        })
+        if (woundResult) {
+          finalSeverity = woundResult.finalSeverity
+          shockResult = await statusService.resolveShockTest({
+            finalSeverity, localisation, is_lethal,
+            for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
+          })
         }
 
         if (shockResult) {
