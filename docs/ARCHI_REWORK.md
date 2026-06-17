@@ -1,5 +1,5 @@
 # ARCHI_REWORK.md — Reworks architecturaux
-> Créé Session 96 — 2026-06-16 | Mis à jour Session 100 — 2026-06-17
+> Créé Session 96 — 2026-06-16 | Mis à jour Session 100b — 2026-06-17
 > Rédigé par Claude Sonnet 4.6 à destination des agents Claude futurs.
 > Objectif : remplacer le bricolage incrémental par des reworks structurés, complets, et non régressifs.
 
@@ -655,13 +655,193 @@ Run à vide : `node --check server/src/socket/index.js`
 
 ---
 
+## REWORK-02 — damageService (résolution hit distance + melee PJ)
+
+### Problème
+
+Le bloc "résolution cible" (localisation D20 → armure → dégâts nets → sévérité → blessure → shock test) est dupliqué quasi-identiquement dans deux endroits :
+
+1. `COMBAT_DAMAGE_CONFIRM` L.~2344–2437 (~94 lignes) — PJ lance ses dés ; couvre assault ET melee via `pendingType`
+2. `resolveAssaultAction` branche PNJ L.~4234–4305 (~72 lignes) — PNJ auto, assault uniquement
+
+**Différences légitimes entre les deux :**
+- `degautsBruts` : calculé différemment AVANT le bloc (MR table + modDegatsMode pour assault, modDom + combatModeBonus pour melee) → le caller calcule `degautsBruts`, la fonction le reçoit en param
+- Emits : DAMAGE_CONFIRM émet `COMBAT_DAMAGE_RESULT` (socket privé) + `DICE_RESULT` ×3 ; resolveAssaultAction PNJ émet `COMBAT_ATTACK_RESULT` uniquement → emits restent dans les callers
+- `emitShockDiceResult` : 3 lignes identiques dans les deux callers — tolérable, reste dans les callers (évite de passer userId/username/color dans l'interface)
+
+**Grep de vérification avant de coder :**
+```
+grep -n "rollLoc\|parseDice('1d20')" server/src/socket/index.js
+grep -n "calcResistanceDommages" server/src/socket/index.js
+grep -n "finalSeverity = woundResult" server/src/socket/index.js
+```
+
+### État actuel
+
+Inline dans :
+- `COMBAT_DAMAGE_CONFIRM` handler (~L.2344–2437)
+- `resolveAssaultAction` PNJ branch (~L.4234–4305)
+
+Fonctions utilitaires déjà disponibles (réutilisées, non touchées) :
+- `calcResistanceArmure(armuresSlot)` — `charStats.js`
+- `calcResistanceDommages(for_na, con_na)` — `charStats.js`
+- `woundService.applyWound(io, db, campaignId, {...})` — `woundService.js` (REWORK-03)
+- `statusService.resolveShockTest({...})` — `statusService.js` (REWORK-01)
+
+### Décision architecturale
+
+**Option retenue : Service Module**
+
+Nouveau fichier `server/src/lib/damageService.js`. Les callers calculent `degautsBruts` eux-mêmes (contexte MR/modDom varie), puis délèguent toute la résolution cible.
+
+**Rejeté :** déplacer les emits dans le service — les patterns PJ et PNJ divergent trop (COMBAT_DAMAGE_RESULT vs COMBAT_ATTACK_RESULT). Chaque caller garde ses emits.
+
+### Interface cible
+
+```js
+// server/src/lib/damageService.js
+
+// Résolution complète côté cible : localisation + armure + résistance + sévérité + blessure + shock.
+// degautsBruts calculé avant l'appel par le caller (dépend du contexte MR/modDom).
+// Retourne null si cibleType === 'drone' — caller gère resolveDroneIntegrityLoss lui-même.
+// Émet WOUND_ADDED via woundService (effet DB+WS inclus).
+export async function resolveTargetHit(io, db, campaignId, {
+  degautsBruts,          // number — calculé par le caller
+  characterIdCible,      // UUID | null
+  cibleType,             // 'pj' | 'pnj' | 'drone' | null
+  char_sheet_id_cible,   // UUID | null
+  for_na_cible,          // number
+  con_na_cible,          // number
+  vol_na_cible,          // number
+})
+// → null si cibleType === 'drone'
+// → {
+//     rollLoc,         // number  — D20 localisation
+//     locRolls,        // array   — pour DICE_RESULT (caller)
+//     locSeed,         // string
+//     slotCode,        // 'T'|'C'|'BD'|'BG'|'JD'|'JG'
+//     localisation,    // 'tete'|'corps'|'bras_droit'|...
+//     etq,             // number | null
+//     rd,              // number
+//     degatsNets,      // number
+//     severity,        // string | null
+//     is_lethal,       // boolean
+//     finalSeverity,   // string | null (après promotion woundService)
+//     shockResult,     // objet resolveShockTest | null
+//   }
+```
+
+**Usage dans chaque caller :**
+```js
+// AVANT (à remplacer) :
+// ~94 lignes / ~72 lignes de calcul inline
+
+// APRÈS :
+const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+  degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
+  for_na_cible, con_na_cible, vol_na_cible,
+})
+if (hitResult === null) {
+  // cible drone — caller gère resolveDroneIntegrityLoss + return
+}
+const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
+        severity, is_lethal, finalSeverity, shockResult } = hitResult
+
+if (shockResult) {
+  statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
+}
+// puis emits spécifiques au caller (COMBAT_DAMAGE_RESULT / COMBAT_ATTACK_RESULT / DICE_RESULT)
+```
+
+### Types d'entité supportés
+
+| Type | Supporté | Note |
+|---|---|---|
+| Humanoïde (PJ + PNJ) | ✅ | Calcul complet |
+| Drone | ❌ retourne null | Caller gère resolveDroneIntegrityLoss |
+| Exo-armure | 🔜 futur | — |
+
+### Périmètre
+
+**Fichiers modifiés :**
+
+| Fichier | Modification |
+|---|---|
+| `server/src/lib/damageService.js` | NOUVEAU — `resolveTargetHit` |
+| `server/src/socket/index.js` | +import, 2 sites remplacés (DAMAGE_CONFIRM + resolveAssaultAction PNJ) |
+
+**Fichiers NON touchés :**
+- `woundService.js`, `statusService.js`, `charStats.js` — réutilisés tels quels
+- `client/`, `shared/`, routes REST — inchangés
+- `resolveMeleeAction` — hors périmètre (duplication distincte, sprint futur)
+
+### Plan d'implémentation — ordre obligatoire
+
+**Étape 1 — Lecture obligatoire avant tout code**
+Lire (pas depuis la mémoire) :
+- `COMBAT_DAMAGE_CONFIRM` complet (L.~2325–2520) — vérifier le bloc exact à extraire
+- Branche PNJ de `resolveAssaultAction` (L.~4233–4327) — idem
+- Greps de vérification (ci-dessus §Problème)
+- `server/src/lib/woundService.js` — signature exacte `applyWound`
+
+**Étape 2 — Créer `server/src/lib/damageService.js`**
+Copier le bloc DAMAGE_CONFIRM comme base (plus complet : locRolls/locSeed exposés).
+Run à vide : `node --check server/src/lib/damageService.js`
+
+**Étape 3 — Patcher `COMBAT_DAMAGE_CONFIRM` dans `index.js`**
+Remplacer le bloc L.~2344–2437 par l'appel `resolveTargetHit`.
+Conserver le drone branch existant AVANT l'appel (ou laisser `resolveTargetHit` retourner null et le caller revient sur la branche drone — vérifier l'ordre exact à la lecture).
+Run à vide : `node --check server/src/socket/index.js`
+
+**Étape 4 — Patcher `resolveAssaultAction` branche PNJ dans `index.js`**
+Remplacer le bloc L.~4234–4305 par l'appel `resolveTargetHit`.
+Run à vide : `node --check server/src/socket/index.js`
+
+**Étape 5 — SR**
+
+### Validation
+
+**Scénario 1 — Assault PNJ → PNJ (auto)**
+Setup : PNJ déclaré, slot activé — `resolveAssaultAction` appelle `resolveTargetHit`
+Attendu : `COMBAT_ATTACK_RESULT` broadcast avec dégâts, sévérité, shockResult si applicable
+
+**Scénario 2 — Assault PJ → PNJ (interactif)**
+Setup : PJ tire, touche → `COMBAT_DAMAGE_PROMPT` → PJ confirme → `COMBAT_DAMAGE_CONFIRM` appelle `resolveTargetHit`
+Attendu : `COMBAT_DAMAGE_RESULT` affiché PJ, `DICE_RESULT` ×3 broadcast, `COMBAT_ATTACK_RESULT` broadcast
+
+**Scénario 3 — Cible drone (non-régression)**
+Setup : assault vers drone
+Attendu : `resolveTargetHit` retourne null, `resolveDroneIntegrityLoss` appelé, pas de crash
+
+**Scénario 4 — Shock sur blessure grave (non-régression REWORK-01)**
+Setup : blessure grave corps/tête
+Attendu : `shockResult` non null, `emitShockDiceResult` diffusé, `applyStun` déclenché si outcome ≠ 'ok'
+
+**Scénario 5 — Melee PJ (non-régression DAMAGE_CONFIRM)**
+Setup : CaC PJ, `pendingType === 'melee'` — `degautsBruts = rawDice + modDom + combatModeBonus`
+Attendu : résolution identique à avant le rework
+
+### Definition of done
+
+- [ ] `node --check server/src/lib/damageService.js` — 0 erreur
+- [ ] `node --check server/src/socket/index.js` — 0 erreur
+- [ ] `grep -c "calcResistanceDommages" server/src/socket/index.js` → 0 (extrait partout)
+- [ ] `grep -c "finalSeverity = woundResult" server/src/socket/index.js` → 0
+- [ ] SR sans erreur
+- [ ] Scénario 1 validé
+- [ ] Scénario 2 validé
+- [ ] Scénario 3 validé (non-régression drone)
+- [ ] JOURNAL4.md appendé
+
+---
+
 ## Prochains reworks identifiés (non planifiés)
 
 Ces blocs sont candidats à un rework futur selon les mêmes principes :
 
 | ID | Bloc | Signal |
 |---|---|---|
-| REWORK-02 | Calcul dégâts distance | Dupliqué dans DAMAGE_CONFIRM + resolveAssaultAction |
+| REWORK-02 | Calcul dégâts distance | ✅ Spec complète Session 100 — voir section REWORK-02 ci-dessus |
 | REWORK-03 | Résolution blessure + wound insertion | ✅ Clos Session 97 — `woundService.applyWound` |
 | REWORK-04 | Système de combat complet | Migration vers State Machine (FSM) — sprint long terme. **Prérequis : REWORK-08** |
 | REWORK-06 | combatDeclarationStore | Staging state déclaration fragmenté en local React state (GM+Joueur). Auto-draw, default mains nues non implémentables sans débat archi. Voir REWORK-05.md §REWORK-06 |
