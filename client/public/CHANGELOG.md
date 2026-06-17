@@ -1,3 +1,11 @@
+## v105 — 2026-06-17 — REWORK-02 : damageService (résolution hit centralisée)
+
+### Serveur — Architecture
+- [refactor] Extraction du bloc "résolution cible" (localisation D20 → armure → RD → sévérité → blessure → shock) depuis 4 sites dupliqués vers `damageService.resolveTargetHit`
+- [refactor] `LOC_TABLE` déplacée vers `shared/armorConstants.js` (import partagé)
+
+---
+
 ## v104 — 2026-06-17 — REWORK-05 clôture : BUG-W1 + BUG-W2 + ERG-W1 + ERG-W2
 
 ### Combat — Fenêtre GM (CombatGmDeclareWindow)

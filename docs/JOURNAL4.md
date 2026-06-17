@@ -1441,3 +1441,58 @@ Aucun changement dans `MeleeCombatPanel` (`isWeaponDrawn={true}` conservé — P
 
 - **Testé :** 5/5 scénarios REWORK-05 ✅ — BUG-W1 ✅ — BUG-W2 (2 attaques) ✅ — ERG-W1 ✅ — ERG-W2 ✅
 - **Non testé :** 3 attaques CaC (BUG-W2) — ERG-W2 depuis `state_weapon=ready` — ERG-W1 coût `ready→drawn` (−3)
+
+---
+
+## Session 101 — REWORK-02 : damageService (résolution hit centralisée) — 2026-06-17
+
+### Objectif
+
+Extraire le bloc dupliqué "résolution cible" (localisation D20 → armure → dégâts nets → sévérité → blessure → shock test) depuis 4 sites dans `index.js` vers un nouveau `server/src/lib/damageService.js`.
+
+Prérequis identifié en analyse pre-code : `LOC_TABLE` définie inline dans `index.js` non importable → déplacée dans `shared/armorConstants.js` (Étape 0).
+
+### Périmètre réel (plan disait 2 sites — réalité : 5 trouvés, 4 traités)
+
+| Site | Localisation | Traité |
+|---|---|---|
+| 1 | `COMBAT_DAMAGE_CONFIRM` L.2344–2437 | ✅ |
+| 2 | `COMBAT_MELEE_DEFENSE_CONFIRM` branche PNJ L.2660–2702 | ✅ |
+| 3 | `resolveMeleeAction` humanoid | ❌ exclu scope |
+| 4 | `resolveDroneAssaultAction` 8b L.3906–3948 | ✅ |
+| 5 | `resolveAssaultAction` PNJ L.4234–4301 | ✅ |
+
+### Interface créée
+
+```js
+// server/src/lib/damageService.js
+export async function resolveTargetHit(io, db, campaignId, {
+  degautsBruts,          // calculé par le caller
+  characterIdCible, cibleType, char_sheet_id_cible,
+  for_na_cible, con_na_cible, vol_na_cible,
+})
+// → null si cibleType === 'drone'
+// → { rollLoc, locRolls, locSeed, slotCode, localisation, etq, rd,
+//     degatsNets, severity, is_lethal, finalSeverity, shockResult }
+```
+
+### Décisions d'architecture
+
+- `LOC_TABLE` → `shared/armorConstants.js` (Option A — même famille sémantique que `SLOT_TO_WOUND_LOCATION`)
+- `degautsBruts` calculé par le caller (contexte MR/modDom varie par site)
+- Emits conservés dans les callers (DAMAGE_RESULT vs ATTACK_RESULT divergent trop)
+- `emitShockDiceResult` + `applyStun` conservés dans les callers (ont besoin de userId/username/color du tireur)
+- DoD grep corrigé : `calcResistanceDommages → 2` (import L.13 + resolveMeleeAction exclu)
+
+### Fichiers modifiés
+
+| Fichier | Modification |
+|---|---|
+| `shared/armorConstants.js` | +`LOC_TABLE` exportée (6 lignes) |
+| `server/src/lib/damageService.js` | NOUVEAU — `resolveTargetHit` |
+| `server/src/socket/index.js` | +import armorConstants (LOC_TABLE) + import damageService — 4 blocs dupliqués → 4 appels `resolveTargetHit` — LOC_TABLE inline supprimée |
+
+### Clôture ⚠️ CLOS PARTIEL
+
+- **Testé :** SR ✅ — assault PNJ auto (Site 5) sans erreur ✅ — melee flows sans erreur ✅
+- **Non testé :** Site 1 (COMBAT_DAMAGE_CONFIRM PJ interactif) — Site 2 (MELEE_DEFENSE_CONFIRM PNJ qui touche) — Site 4 (drone assault PNJ cible)

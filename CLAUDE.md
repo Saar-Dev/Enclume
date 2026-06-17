@@ -116,10 +116,14 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 100 (2026-06-17)
+## ÉTAT COURANT — Session 101 (2026-06-17)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **79 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
+
+**Session 101 ⚠️ clos partiel :**
+- REWORK-02 : `damageService.resolveTargetHit` — 4 sites (DAMAGE_CONFIRM + MELEE_DEFENSE_CONFIRM + resolveDroneAssaultAction 8b + resolveAssaultAction PNJ) + `LOC_TABLE` → `armorConstants.js`
+- Non testé : Site 1 (PJ interactif) — Site 2 (PNJ melee hit) — Site 4 (drone assault PNJ)
 
 **Session 100 ✅ clos complet :**
 - REWORK-07 : `socketUtils` — `getUserColor` (6 call sites) + `checkTokenOwnership` (4 call sites) + `LOC_TABLE_CONTACT` supprimé

@@ -33,3 +33,12 @@ export const LOCATION_LABELS = {
   bras_gauche: 'Bras G', bras_droit: 'Bras D',
   jambe_gauche: 'Jambe G', jambe_droite: 'Jambe D',
 }
+
+export const LOC_TABLE = [
+  { max: 2,  slot: 'T'  },
+  { max: 8,  slot: 'C'  },
+  { max: 11, slot: 'BD' },
+  { max: 14, slot: 'BG' },
+  { max: 17, slot: 'JD' },
+  { max: 20, slot: 'JG' },
+]

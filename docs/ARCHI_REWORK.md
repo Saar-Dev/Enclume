@@ -823,15 +823,125 @@ Attendu : résolution identique à avant le rework
 
 ### Definition of done
 
-- [ ] `node --check server/src/lib/damageService.js` — 0 erreur
-- [ ] `node --check server/src/socket/index.js` — 0 erreur
-- [ ] `grep -c "calcResistanceDommages" server/src/socket/index.js` → 0 (extrait partout)
-- [ ] `grep -c "finalSeverity = woundResult" server/src/socket/index.js` → 0
-- [ ] SR sans erreur
-- [ ] Scénario 1 validé
-- [ ] Scénario 2 validé
+- [x] `node --check server/src/lib/damageService.js` — 0 erreur ✅ Session 101
+- [x] `node --check server/src/socket/index.js` — 0 erreur ✅ Session 101
+- [x] `grep -c "calcResistanceDommages" server/src/socket/index.js` → **2** *(L.13 import + resolveMeleeAction exclu)* ✅ Session 101
+- [x] `grep -c "finalSeverity = woundResult" server/src/socket/index.js` → **1** ✅ Session 101
+- [x] SR sans erreur ✅ Session 101
+- [x] Scénario 1 validé ✅ (assault PNJ auto Site 5 fonctionnel)
+- [ ] Scénario 2 validé (COMBAT_DAMAGE_CONFIRM PJ interactif)
 - [ ] Scénario 3 validé (non-régression drone)
-- [ ] JOURNAL4.md appendé
+- [x] JOURNAL4.md appendé ✅ Session 101
+
+**Décisions Session 101 (prises en analyse, à appliquer dès le code) :**
+- LOC_TABLE → Option A : déplacer dans `shared/armorConstants.js` (Étape 0)
+- Scope → 4 sites (1, 2, 4, 5) — `resolveMeleeAction` (site 3) exclu définitivement
+
+---
+
+### Analyse pré-code — Session 101 (2026-06-17)
+
+#### Sites réels dans index.js — 5 (plan disait 2)
+
+Grep `calcResistanceDommages server/src/socket/index.js` → 5 occurrences :
+
+| # | Ligne | Contexte | Scope plan |
+|---|---|---|---|
+| 1 | 2412 | `COMBAT_DAMAGE_CONFIRM` — PJ assault/melee | ✅ prévu |
+| 2 | 2679 | `COMBAT_MELEE_DEFENSE_CONFIRM` — branche PNJ attaquant auto | ❓ non mentionné |
+| 3 | 3488 | `resolveMeleeAction` — humanoid vs humanoid | ❌ exclu explicitement |
+| 4 | 3925 | `resolveDroneAssaultAction` — cible PNJ | ❓ non mentionné |
+| 5 | 4278 | `resolveAssaultAction` — branche PNJ auto | ✅ prévu |
+
+**Sites 2 et 4 identiques structurellement aux sites 1 et 5.** Les inclure ne touche aucun fichier supplémentaire.
+
+#### BLOCKER — LOC_TABLE non importable
+
+`LOC_TABLE` définie **inline dans `index.js`** L.52-59. Non exportée, non partagée. `damageService.js` ne peut pas l'importer en l'état.
+
+**Décision requise :**
+- **Option A (recommandée)** : déplacer vers `shared/armorConstants.js` (même famille sémantique que `SLOT_TO_WOUND_LOCATION`). Impact : +6 lignes armorConstants + remplacement définition inline par import dans index.js.
+- **Option B** : dupliquer dans `damageService.js` — simple mais crée deux copies.
+
+#### Dead code repéré — Site 1 L.2346
+
+```js
+const locTable = pendingType === 'melee' ? LOC_TABLE : LOC_TABLE  // identique des deux côtés
+```
+Dans `resolveTargetHit` : simplement `LOC_TABLE` sans branchement.
+
+#### Mapping variables par call site
+
+| Site | `characterIdCible` → | `char_sheet_id_cible` → | `campaignId` → |
+|---|---|---|---|
+| 1 | `pending.characterIdCible` | `pending.char_sheet_id_cible` | `pending.campaignId` |
+| 2 | `pending.characterIdCible` | `pending.char_sheet_id_cible` | `meleeCampaignId` |
+| 4 | `cibleCharacter.id` | `cibleSheet?.id` | `campaignId` |
+| 5 | `cibleToken.character_id` | `char_sheet_id_cible` | `campaignId` |
+
+Site 4 : `for_na/con_na/vol_na` sans suffixe `_cible` → passer en paramètre nommé : `for_na_cible: for_na, ...`
+
+#### DoD corrigé
+
+Les greps `→ 0` sont **infaisables** si scope = 2 sites ou 4 sites (resolveMeleeAction reste).
+- Scope 4 sites (recommandé) : `grep -c "calcResistanceDommages" index.js` → **1**
+- Scope 2 sites (strict) : → **3**
+
+**DoD à corriger avant de coder :**
+- `grep -c "calcResistanceDommages" server/src/socket/index.js` → **1** *(pas 0 — resolveMeleeAction exclu)*
+- `grep -c "finalSeverity = woundResult" server/src/socket/index.js` → **1**
+
+#### getMrTable / getModifier / calcDroneRD — hors service
+
+Ces fonctions calculent `degautsBruts` dans les callers. `resolveTargetHit` ne les appelle jamais. Pas de problème d'import.
+
+#### Findings run à vide — Session 101
+
+**[F1] Site 4 applyStun — CONFIRMÉ** (L.3978-3982)
+`applyStun` est bien appelé dans la branche 8b de `resolveDroneAssaultAction`. Pattern identique aux autres sites.
+
+**[F2] resolveDroneAssaultAction — 3 branches, pas 2**
+- 8a : drone cible → `resolveDroneIntegrityLoss` (hors scope — géré avant L.3906)
+- 8b : PNJ cible → auto-resolve **= Site 4** (notre périmètre)
+- 8c : PJ cible → `pendingDamageActions.set(...)` avec `cibleType: null`, résolu via `COMBAT_DAMAGE_CONFIRM` (Site 1). **Aucun site supplémentaire à prévoir.**
+
+**[F3] `cibleType: null` dans pending 8c** — quand Site 1 s'exécute après qu'un drone ait attaqué un PJ, `cibleType = null`. La guard `cibleType === 'drone'` dans `resolveTargetHit` ne se déclenche pas. ✅ Pas de risque.
+
+**[F4] cibleType guard — pas du dead code**
+Si un drone passe par erreur dans `resolveTargetHit` (cibleType='drone'), le service calculerait une blessure humanoid sur une entité qui n'en a pas (char_sheet absent). La guard protège contre ça. Nécessaire même si jamais déclenchée en pratique.
+
+**[F5] Label DICE_RESULT — incohérence existante**
+Site 1 → `diffLabel: 'ETQ:${etq} RD:${rd}'`, Site 4 → `'Armure:${etq} RD:${rd}'`. Caller-side uniquement — hors périmètre du service. À ne pas corriger dans ce sprint.
+
+**[F6] `io` requis dans `resolveTargetHit`** — nécessaire pour `woundService.applyWound` qui émet `WOUND_ADDED`. `resolveShockTest` est pur (pas d'io). ✅
+
+**[F7] `emitShockDiceResult` et `applyStun` restent dans les callers** — ils ont besoin de `userId/username/color` du tireur, qui est du contexte caller. Les mettre dans le service obligerait à passer ces champs en plus. Plan correct.
+
+**[F8] `locLabel` pas dans le return de `resolveTargetHit`** — les callers qui en ont besoin calculent `LOCATION_LABELS[localisation] ?? localisation` eux-mêmes. `LOCATION_LABELS` est déjà importé dans `index.js`. Pas à mettre dans le return.
+
+**[F9] Pas de dépendance circulaire** — `damageService` importe `woundService` et `statusService`. Ni l'un ni l'autre n'importe `damageService`. ✅
+
+#### Plan révisé — 7 étapes
+
+**Étape 0** — Prérequis : `LOC_TABLE` → `shared/armorConstants.js` + import dans `index.js`
+`node --check server/src/socket/index.js`
+
+**Étape 1** — Créer `server/src/lib/damageService.js` (base = bloc Site 1, le plus complet)
+`node --check server/src/lib/damageService.js`
+
+**Étape 2** — Patcher Site 1 (`COMBAT_DAMAGE_CONFIRM` L.2344–2437)
+`node --check server/src/socket/index.js`
+
+**Étape 3** — Patcher Site 5 (`resolveAssaultAction` L.4234–4301)
+`node --check server/src/socket/index.js`
+
+**Étape 4** — Patcher Site 2 (`COMBAT_MELEE_DEFENSE_CONFIRM` L.2660–2702)
+`node --check server/src/socket/index.js`
+
+**Étape 5** — Patcher Site 4 (`resolveDroneAssaultAction` L.3906–3948)
+`node --check server/src/socket/index.js`
+
+**Étape 6** — SR
 
 ---
 

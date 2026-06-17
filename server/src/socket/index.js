@@ -24,8 +24,9 @@ import {
 } from '../lib/charStats.js'
 import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
+import * as damageService from '../lib/damageService.js'
 import { getUserColor, checkTokenOwnership } from '../lib/socketUtils.js'
-import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS } from '../../../shared/armorConstants.js'
+import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS, LOC_TABLE } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import {
   buildCollisionMap,
@@ -49,14 +50,6 @@ const pendingDamageActions = new Map()
 const pendingMeleeDefense  = new Map()  // key = defenderTokenId, valeur = données attaque en attente
 const pendingStunActions   = new Map()  // key = targetTokenId, valeur = données stun en attente
 
-const LOC_TABLE = [
-  { max: 2,  slot: 'T'  },
-  { max: 8,  slot: 'C'  },
-  { max: 11, slot: 'BD' },
-  { max: 14, slot: 'BG' },
-  { max: 17, slot: 'JD' },
-  { max: 20, slot: 'JG' },
-]
 
 
 // Map des timers combat actifs — Map<campaignId, Map<tokenId, timeoutId>>
@@ -2341,28 +2334,7 @@ const initSocket = (io) => {
       } = pending
 
       try {
-        // 1. Jet localisation
-        const { total: rollLoc, rolls: locRolls, seed: locSeed } = await parseDice('1d20')
-        const locTable = pendingType === 'melee' ? LOC_TABLE : LOC_TABLE
-        const slotCode = (locTable.find(r => rollLoc <= r.max) ?? locTable[locTable.length - 1]).slot
-        const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
-
-        // 2. Armures de la cible (dépend du slotCode)
-        let etq = null
-        if (char_sheet_id_cible && characterIdCible) {
-          const armuresCible = await db('char_inventory')
-            .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-            .where({ 'char_inventory.character_id': characterIdCible })
-            .whereNotNull('char_inventory.slot')
-            .select('char_inventory.slot', 'ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock')
-          const armuresSlot = armuresCible.filter(a =>
-            a.slot && ('/' + a.slot + '/').includes('/' + slotCode + '/')  // PI8
-          )
-          const resistanceArmure = calcResistanceArmure(armuresSlot)
-          etq = resistanceArmure.etq
-        }
-
-        // 3. Calcul dégâts (branche melee vs assault)
+        // Calcul dégâts (branche melee vs assault)
         const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula.replace(/\s/g, ''))
         let degautsBruts
         if (pendingType === 'melee') {
@@ -2409,32 +2381,13 @@ const initSocket = (io) => {
           return
         }
 
-        const rd = calcResistanceDommages(for_na_cible, con_na_cible)
-        const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
-
-        // 4. Sévérité
-        let severity = null, is_lethal = false
-        if      (degatsNets >= 30) { severity = 'mortelle'; is_lethal = true }
-        else if (degatsNets >= 25) { severity = 'mortelle' }
-        else if (degatsNets >= 20) { severity = 'critique' }
-        else if (degatsNets >= 15) { severity = 'grave'    }
-        else if (degatsNets >= 10) { severity = 'moyenne'  }
-        else if (degatsNets >=  5) { severity = 'legere'   }
-
-        // 5. Blessure
-        let finalSeverity = severity
-        let shockResult = null
-        const woundResult = await woundService.applyWound(io, db, campaignId, {
-          charSheetId: char_sheet_id_cible, characterId: characterIdCible,
-          localisation, severity,
+        const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+          degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
+          for_na_cible, con_na_cible, vol_na_cible,
         })
-        if (woundResult) {
-          finalSeverity = woundResult.finalSeverity
-          shockResult = await statusService.resolveShockTest({
-            finalSeverity, localisation, is_lethal,
-            for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
-          })
-        }
+        if (hitResult === null) return
+        const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
+                is_lethal, finalSeverity, shockResult } = hitResult
 
         if (shockResult) {
           statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
@@ -2657,49 +2610,15 @@ const initSocket = (io) => {
             }
           } else {
             // PNJ attaquant : résolution auto des dégâts
-            const { total: rollLoc } = await parseDice('1d20')
-            const slotCode = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
-            const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
-
-            let etq = null
-            if (char_sheet_id_cible && characterIdCible) {
-              const armuresCible = await db('char_inventory')
-                .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-                .where({ 'char_inventory.character_id': characterIdCible })
-                .whereNotNull('char_inventory.slot')
-                .select('char_inventory.slot', 'ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock')
-              const armuresSlot = armuresCible.filter(a =>
-                a.slot && ('/' + a.slot + '/').includes('/' + slotCode + '/')
-              )
-              etq = calcResistanceArmure(armuresSlot).etq
-            }
-
             const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
             const degautsBruts = rawDice + (modDom ?? 0) + (combatModeBonus ?? 0)
-            const rd = calcResistanceDommages(for_na_cible, con_na_cible)
-            const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
-
-            let severity = null, is_lethal = false
-            if      (degatsNets >= 30) { severity = 'mortelle'; is_lethal = true }
-            else if (degatsNets >= 25) { severity = 'mortelle' }
-            else if (degatsNets >= 20) { severity = 'critique' }
-            else if (degatsNets >= 15) { severity = 'grave'    }
-            else if (degatsNets >= 10) { severity = 'moyenne'  }
-            else if (degatsNets >=  5) { severity = 'legere'   }
-
-            let finalSeverity = severity
-            let shockResult = null
-            const woundResult = await woundService.applyWound(io, db, meleeCampaignId, {
-              charSheetId: char_sheet_id_cible, characterId: characterIdCible,
-              localisation, severity,
+            const hitResult = await damageService.resolveTargetHit(io, db, meleeCampaignId, {
+              degautsBruts, characterIdCible, cibleType: 'pj',
+              char_sheet_id_cible,
+              for_na_cible, con_na_cible, vol_na_cible,
             })
-            if (woundResult) {
-              finalSeverity = woundResult.finalSeverity
-              shockResult = await statusService.resolveShockTest({
-                finalSeverity, localisation, is_lethal,
-                for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
-              })
-            }
+            if (hitResult === null) return
+            const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
 
             if (shockResult) {
               statusService.emitShockDiceResult(io, meleeCampaignId, shockResult, userId, attackerUsername, attackerColor)
@@ -3903,49 +3822,20 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
       const cibleSheet    = cibleCharacter ? await db('char_sheet').where({ character_id: cibleCharacter.id }).first() : null
       const { for_na, con_na, vol_na } = cibleSheet ? await fetchCibleNA(cibleCharacter.id, cibleSheet.id) : { for_na: 8, con_na: 8, vol_na: 8 }
 
-      const { total: rollLoc, rolls: locRolls, seed: locSeed } = await parseDice('1d20')
-      const slotCode     = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
-      const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
-
-      let etq = null
-      if (cibleSheet && cibleCharacter) {
-        const armuresCible = await db('char_inventory')
-          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-          .where({ 'char_inventory.character_id': cibleCharacter.id })
-          .whereNotNull('char_inventory.slot')
-          .select('char_inventory.slot', 'ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock')
-        const armuresSlot = armuresCible.filter(a => a.slot && ('/' + a.slot + '/').includes('/' + slotCode + '/'))
-        etq = calcResistanceArmure(armuresSlot).etq
-      }
-
       const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
       const mrTable       = await getMrTable()
       const modDomAttaque = getModifier(mrTable, mr)
       const degautsBruts  = rawDice + modDomAttaque
-      const rd            = calcResistanceDommages(for_na, con_na)
-      const degatsNets    = Math.max(0, degautsBruts - (etq ?? 0) - rd)
-
-      let severity = null, is_lethal = false
-      if      (degatsNets >= 30) { severity = 'mortelle'; is_lethal = true }
-      else if (degatsNets >= 25) { severity = 'mortelle' }
-      else if (degatsNets >= 20) { severity = 'critique' }
-      else if (degatsNets >= 15) { severity = 'grave'    }
-      else if (degatsNets >= 10) { severity = 'moyenne'  }
-      else if (degatsNets >=  5) { severity = 'legere'   }
-
-      let finalSeverity = severity
-      let shockResult = null
-      const woundResult = await woundService.applyWound(io, db, campaignId, {
-        charSheetId: cibleSheet?.id, characterId: cibleCharacter.id,
-        localisation, severity,
+      const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+        degautsBruts,
+        characterIdCible: cibleCharacter?.id ?? null,
+        cibleType:        cibleCharacter?.type ?? null,
+        char_sheet_id_cible: cibleSheet?.id ?? null,
+        for_na_cible: for_na, con_na_cible: con_na, vol_na_cible: vol_na,
       })
-      if (woundResult) {
-        finalSeverity = woundResult.finalSeverity
-        shockResult = await statusService.resolveShockTest({
-          finalSeverity, localisation, is_lethal,
-          for_na, con_na, vol_na,
-        })
-      }
+      if (hitResult === null) return
+      const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
+              is_lethal, finalSeverity, shockResult } = hitResult
 
       if (shockResult) {
         statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
@@ -4231,24 +4121,6 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
         })
       } else {
         // PNJ — calcul complet immédiat, invisible aux joueurs
-        const { total: rollLoc } = await parseDice('1d20')
-        const slotCode = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
-        const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
-
-        let etq = null
-        if (char_sheet_id_cible && cibleToken?.character_id) {
-          const armuresCible = await db('char_inventory')
-            .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-            .where({ 'char_inventory.character_id': cibleToken.character_id })
-            .whereNotNull('char_inventory.slot')
-            .select('char_inventory.slot', 'ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock')
-          const armuresSlot = armuresCible.filter(a =>
-            a.slot && ('/' + a.slot + '/').includes('/' + slotCode + '/')  // PI8
-          )
-          const resistanceArmure = calcResistanceArmure(armuresSlot)
-          etq = resistanceArmure.etq
-        }
-
         const mrTable = await getMrTable()
         const modDomAttaque = getModifier(mrTable, mr)
         const isShortRange = ['bout_portant', 'courte'].includes(confirmedModifiers.portee)
@@ -4275,30 +4147,15 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
           return
         }
 
-        const rd = calcResistanceDommages(for_na_cible, con_na_cible)
-        const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
-
-        let severity = null, is_lethal = false
-        if      (degatsNets >= 30) { severity = 'mortelle'; is_lethal = true }
-        else if (degatsNets >= 25) { severity = 'mortelle' }
-        else if (degatsNets >= 20) { severity = 'critique' }
-        else if (degatsNets >= 15) { severity = 'grave'    }
-        else if (degatsNets >= 10) { severity = 'moyenne'  }
-        else if (degatsNets >=  5) { severity = 'legere'   }
-
-        let finalSeverity = severity
-        let shockResult = null
-        const woundResult = await woundService.applyWound(io, db, campaignId, {
-          charSheetId: char_sheet_id_cible, characterId: cibleToken.character_id,
-          localisation, severity,
+        const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+          degautsBruts,
+          characterIdCible: cibleToken.character_id,
+          cibleType:        cibleCharacter?.type ?? null,
+          char_sheet_id_cible,
+          for_na_cible, con_na_cible, vol_na_cible,
         })
-        if (woundResult) {
-          finalSeverity = woundResult.finalSeverity
-          shockResult = await statusService.resolveShockTest({
-            finalSeverity, localisation, is_lethal,
-            for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
-          })
-        }
+        if (hitResult === null) return
+        const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
 
         if (shockResult) {
           statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, tireurUsername, tireurColor)

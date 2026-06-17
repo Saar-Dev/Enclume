@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-06-17 Session 99
+> Dernière mise à jour : 2026-06-17 Session 101
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL4.md.
@@ -135,13 +135,14 @@ Enclume/
 │   │       ├── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
 │   │       ├── statusService.js        # NOUVEAU 96 (REWORK-01) — resolveShockBlock centralisé (5 sites → 1 call), applyStun, applyStunStatus, emitShockDiceResult, resolveShockTest. resolveShockTest retourne { rolls, seed } pour DICE_RESULT.
 │   │       ├── woundUtils.js           # voir §woundUtils.js. Modifié 97 — +export getWorstWoundSeverity (utilise WOUND_SEVERITIES.slice().reverse() — PIEGE-7 évité). isShockTestRequired, nextSeverity, resolveWoundInsertion, getWorstWoundSeverity.
-│   │       └── woundService.js         # NOUVEAU 97 (REWORK-03) — applyWound(io, db, campaignId, { charSheetId, characterId, localisation, severity }) : transaction resolveWoundInsertion + getWorstWoundSeverity + WOUND_ADDED broadcast (worst_wound_severity inclus). Retourne { finalSeverity } ou null (P49 : severity post-promotion).
+│   │       ├── woundService.js         # NOUVEAU 97 (REWORK-03) — applyWound(io, db, campaignId, { charSheetId, characterId, localisation, severity }) : transaction resolveWoundInsertion + getWorstWoundSeverity + WOUND_ADDED broadcast (worst_wound_severity inclus). Retourne { finalSeverity } ou null (P49 : severity post-promotion).
+│   │       └── damageService.js        # NOUVEAU 101 (REWORK-02) — resolveTargetHit(io, db, campaignId, { degautsBruts, characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible }) : loc D20 + armures + RD + sévérité + woundService.applyWound + statusService.resolveShockTest. Retourne null si cibleType='drone'.
 │   └── index.js                        # Modifié 64-66 — resolveAssaultAction, Test de Choc, MACRO_ROLL. Modifié 67 Sprint 7.6 — resolveReloadAction. Modifié 67 Sprint CaC 1 — resolveMeleeAction, pendingMeleeDefense, COMBAT_MELEE_DEFENSE_CONFIRM. Modifié 70 — db.migrate.latest() dans startServer() (migrations auto au démarrage).
 ├── shared/
 │   ├── polarisUtils.js                 # Modifié 61 — +calcAN, calcAllureMoy, calcAllures (exports partagés PI11). Modifié 65 Sprint GM-B : +DEFAULT_PNJ_ALLURES { lente:4, moyenne:8, rapide:16, max:24 }
 │   ├── events.js                       # Modifié 64 — +COMBAT_DAMAGE_*/ATTACK_PLAYER_RESULT. Modifié 67 Sprint 7.6 — +COMBAT_RELOAD_RESULT. Modifié 67 Sprint CaC 1 — +COMBAT_MELEE_DEFENSE_PROMPT/CONFIRM/RESULT, +COMBAT_DECLARE_ERROR. Modifié 76 — +TOKEN_SET_ROTATION. Modifié 81 — +COMBAT_APPLY_STUN, +COMBAT_ANNOUNCE_PREVIEW. Modifié 85 — +CAMPAIGN_SETTINGS_UPDATED. Modifié 95-5b — +COMBAT_STUN_PROMPT/CONFIRM
 │   ├── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES/SEVERITY_COLORS
-│   └── armorConstants.js               # NOUVEAU 54 — ARMOR_CATEGORY_MALUS/LOCATION_TO_SLOT/SLOT_TO_REF_LOCATION/LOCATION_TO_SVG/LOCATION_LABELS
+│   └── armorConstants.js               # NOUVEAU 54 — ARMOR_CATEGORY_MALUS/LOCATION_TO_SLOT/SLOT_TO_REF_LOCATION/LOCATION_TO_SVG/LOCATION_LABELS. Modifié 101 — +LOC_TABLE (déplacée depuis index.js inline)
 └── docs/
 ```
 

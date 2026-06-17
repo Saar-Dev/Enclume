@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-17 Session 100
+> Dernière mise à jour : 2026-06-17 Session 101
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -20,7 +20,10 @@
 
 **5. ~~REWORK-07 — socketUtils (getUserColor + checkTokenOwnership + LOC_TABLE_CONTACT)~~** ✅ CLOS COMPLET Session 100
 
-**6. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
+**6. ~~REWORK-02 — damageService (resolveTargetHit)~~** ⚠️ Session 101 — clos partiel
+   → Non testé : Site 1 (COMBAT_DAMAGE_CONFIRM PJ interactif) — Site 2 (MELEE_DEFENSE_CONFIRM PNJ hit) — Site 4 (drone assault PNJ cible)
+
+**7. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
    → **Cluster I** — dégâts drone (DR6 + DR4 + DMG1 + DMG2) — **Haute**
    → **Cluster D** — fenêtres combat UI (UI1 + COM8) — **Haute** *(COM5 + CL2 fixés REWORK-05)*
    → **Cluster E** — arme et statuts (COM1 + COM2 + COM4 + COM7) — Moyenne
