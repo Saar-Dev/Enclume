@@ -1344,6 +1344,46 @@ Plan complet : `docs/REWORK-05.md` (9 étapes, 6 pièges documentés, run à vid
 - **Testé** : build Vite 0 erreur ✅ — SR 0 erreur ✅
 - **Non testé** : Scénario 1 (tir GM CC) — Scénario 2 (COM5) — Scénario 3 (CL2 log) — Scénario 4 (charge Joueur) — Scénario 5 (drone GM)
 
+## Session 100 — REWORK-07 : socketUtils (getUserColor + checkTokenOwnership + LOC_TABLE_CONTACT) — 2026-06-17
+
+### Objectif
+
+Extraire deux patterns copiés-collés depuis `server/src/socket/index.js` vers `server/src/lib/socketUtils.js`. Supprimer `LOC_TABLE_CONTACT` (dead code — identique à `LOC_TABLE`).
+
+### Ce qui a été fait
+
+**Nouveau module `server/src/lib/socketUtils.js` :**
+- `getUserColor(db, userId, fallback = '#5b8dee')` → string
+- `checkTokenOwnership(db, token, userId, role)` → `{ isGm, isOwner }`
+
+**Pattern A — `getUserColor` — 6 call sites remplacés :**
+DICE_ROLL (`socket.user.id`), MACRO_ROLL (`socket.user.id`, fallback `'#aa8a30'` préservé via 3e param), CHAT_MESSAGE, ENTITY_ACTION_RESOLVE (`pending.playerUserId`), ENTITY_MOVE_REQUEST, COMBAT_SURPRISE_RESULT.
+
+**Pattern B — `checkTokenOwnership` — 4 call sites remplacés :**
+TOKEN_MOVE (`socket.user.id` + `socket.emit('error', ...)` préservé), TOKEN_ROTATE (`socket.data.userId`), TOKEN_SET_ROTATION (`socket.data.userId`), TOKEN_STATUS_TOGGLE (`socket.data.userId`). Call sites L.599 et L.1850 (logique multi-type, character déjà chargé) : hors périmètre, intacts.
+
+**LOC_TABLE_CONTACT :** définition supprimée (identique à `LOC_TABLE` — confirmé lecture L.51-67). 3 usages dans handlers CaC remplacés par `LOC_TABLE`.
+
+**Note pour implémentation future table CaC :** quand la table de localisation contact distincte sera implémentée (MANUELSYSCOMBAT §6.2), grep `LOC_TABLE` dans les handlers de résolution melee pour retrouver les 3 sites.
+
+**Inconsistance documentée, non corrigée (hors périmètre) :** TOKEN_MOVE utilise `socket.user.id`, TOKEN_ROTATE/SET_ROTATION/STATUS_TOGGLE utilisent `socket.data.userId`. Désormais visible aux 4 appels `checkTokenOwnership` au lieu d'être noyée dans 4 blocs de 7 lignes.
+
+### Fichiers modifiés
+
+| Fichier | Modification |
+|---|---|
+| `server/src/lib/socketUtils.js` | NOUVEAU — `getUserColor` + `checkTokenOwnership` |
+| `server/src/socket/index.js` | +import socketUtils, −LOC_TABLE_CONTACT, −6×Pattern A, −4×Pattern B |
+| `docs/ARCHI_REWORK.md` | DoD REWORK-07 ✅ complet |
+| `docs/EN_COURS.md` | +REWORK-07 ✅ |
+
+### Clôture ✅ CLOS COMPLET
+
+- **Testé :** DICE_ROLL couleur ✅ — TOKEN_MOVE ownership ✅ — TOKEN_ROTATE ✅ — TOKEN_STATUS_TOGGLE ✅ — CHAT_MESSAGE ✅ — SR sans erreur ✅
+- **Non testé :** MACRO_ROLL fallback `'#aa8a30'` (non observable — DB toujours disponible en conditions normales)
+
+---
+
 ## Session 99 — REWORK-05 clôture + fixes post-test (BUG-W1, BUG-W2, ERG-W1, ERG-W2) — 2026-06-17
 
 ### Objectif

@@ -365,15 +365,17 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     // fire_mode : lu depuis drone_weapons (configuré dans la fiche drone, onglet Armes)
     if (isActiveDrone) {
       const selectedDroneWeapon = droneWeapons.find(w => w.id === selectedDroneWeaponId)
+      // Miroir humanoïde L.244 : !ref_fire_mode → arme de contact (couteau, arme blanche)
+      // Fallback : fire_mode explicite 'cc' pour armes custom sans ref_equipment
+      const explicitFm = selectedDroneWeapon?.fire_mode
+      const isCaC = explicitFm ? explicitFm === 'cc' : !selectedDroneWeapon?.ref_fire_mode
+      const stateFireMode = isCaC ? 'cc' : (explicitFm ?? 'rc').toLowerCase()
       socket.emit(WS.COMBAT_ACTION_DECLARE, {
         tokenId: activeTokenId,
-        state: { position: 'standing', weapon: 'holstered', fire_mode: selectedDroneWeapon?.fire_mode ?? 'rc', cover: 'exposed', vitesse: 'normal' },
-        mapActions: {
-          attack: {
-            droneWeaponInvId: selectedDroneWeaponId,
-            targetTokenId:    assaultTarget?.targetTokenId ?? null,
-          },
-        },
+        state: { position: 'standing', weapon: 'holstered', fire_mode: stateFireMode, cover: 'exposed', vitesse: 'normal' },
+        mapActions: isCaC
+          ? { melee: [{ droneWeaponInvId: selectedDroneWeaponId, targetTokenId: assaultTarget?.targetTokenId ?? null }] }
+          : { attack: { droneWeaponInvId: selectedDroneWeaponId, targetTokenId: assaultTarget?.targetTokenId ?? null } },
       })
       return
     }

@@ -47,19 +47,12 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
   const [weaponSkill, setWeaponSkill]     = useState(null)
   const [isRolling, setIsRolling]         = useState(false)
 
-  // Lookup conditionnel : drone CaC utilise action_key='assault' + fire_mode='cc'
   const meleeOrAssaultAction = useMemo(() => {
     if (!activeRosterEntry) return null
-    if (isDrone) {
-      return actions.find(a =>
-        a.token_id === activeRosterEntry.token_id &&
-        a.action_key === 'assault' && a.fire_mode === 'cc'
-      ) ?? null
-    }
     return actions.find(a =>
       a.token_id === activeRosterEntry.token_id && a.action_key === 'melee'
     ) ?? null
-  }, [actions, activeRosterEntry, isDrone])
+  }, [actions, activeRosterEntry])
 
   const attaquantToken = tokens.find(t => t.id === activeRosterEntry?.token_id)
   const cibleToken     = tokens.find(t => t.id === meleeOrAssaultAction?.target_token_id)

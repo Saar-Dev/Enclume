@@ -24,6 +24,7 @@ import {
 } from '../lib/charStats.js'
 import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
+import { getUserColor, checkTokenOwnership } from '../lib/socketUtils.js'
 import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import {
@@ -57,14 +58,6 @@ const LOC_TABLE = [
   { max: 20, slot: 'JG' },
 ]
 
-const LOC_TABLE_CONTACT = [
-  { max: 2,  slot: 'T'  },
-  { max: 8,  slot: 'C'  },
-  { max: 11, slot: 'BD' },
-  { max: 14, slot: 'BG' },
-  { max: 17, slot: 'JD' },
-  { max: 20, slot: 'JG' },
-]
 
 // Map des timers combat actifs — Map<campaignId, Map<tokenId, timeoutId>>
 // Déclarée hors de initSocket — singleton, PC16.
@@ -249,12 +242,7 @@ const initSocket = (io) => {
         if (!token) return
 
         // Vérifier les droits : GM ou propriétaire du character lié au token
-        const isGm = socket.role === 'gm'
-        let isOwner = false
-        if (token.character_id) {
-          const character = await db('characters').where({ id: token.character_id }).first()
-          isOwner = character?.user_id === socket.user.id
-        }
+        const { isGm, isOwner } = await checkTokenOwnership(db, token, socket.user.id, socket.role)
         if (!isOwner && !isGm) {
           socket.emit('error', { message: 'Access denied' })
           return
@@ -293,12 +281,7 @@ const initSocket = (io) => {
         if (!token) return
 
         // Ownership : GM ou propriétaire du character lié au token
-        const isGm = socket.role === 'gm'
-        let isOwner = false
-        if (token.character_id) {
-          const character = await db('characters').where({ id: token.character_id }).first()
-          isOwner = character?.user_id === socket.data.userId
-        }
+        const { isGm, isOwner } = await checkTokenOwnership(db, token, socket.data.userId, socket.role)
         if (!isOwner && !isGm) return
 
         // Incrément 45° modulo 8 — r = 0..7
@@ -325,12 +308,7 @@ const initSocket = (io) => {
         const token = await db('tokens').where({ id: tokenId }).first()
         if (!token) return
 
-        const isGm = socket.role === 'gm'
-        let isOwner = false
-        if (token.character_id) {
-          const character = await db('characters').where({ id: token.character_id }).first()
-          isOwner = character?.user_id === socket.data.userId
-        }
+        const { isGm, isOwner } = await checkTokenOwnership(db, token, socket.data.userId, socket.role)
         if (!isOwner && !isGm) return
 
         const [updated] = await db('tokens')
@@ -352,12 +330,7 @@ const initSocket = (io) => {
         const token = await db('tokens').where({ id: tokenId }).first()
         if (!token) return
 
-        const isGm = socket.role === 'gm'
-        let isOwner = false
-        if (token.character_id) {
-          const character = await db('characters').where({ id: token.character_id }).first()
-          isOwner = character?.user_id === socket.data.userId
-        }
+        const { isGm, isOwner } = await checkTokenOwnership(db, token, socket.data.userId, socket.role)
         if (!isOwner && !isGm) return
 
         const VALID_STATUS_CODES = new Set([
@@ -556,11 +529,7 @@ const initSocket = (io) => {
       try {
         const { rolls, total, formula: normalizedFormula, dieType, seed } = await parseDice(formula)
 
-        let color = '#5b8dee'
-        try {
-          const userRow = await db('users').where({ id: socket.user.id }).select('color').first()
-          if (userRow?.color) color = userRow.color
-        } catch (_) {}
+        const color = await getUserColor(db, socket.user.id)
 
         let isCriticalSuccess = false
         let isCriticalFail = false
@@ -630,11 +599,7 @@ const initSocket = (io) => {
         const isOwner = character.user_id === socket.user.id
         if (!isOwner && socket.role !== 'gm') return
 
-        let color = '#aa8a30'
-        try {
-          const userRow = await db('users').where({ id: socket.user.id }).select('color').first()
-          if (userRow?.color) color = userRow.color
-        } catch (_) {}
+        const color = await getUserColor(db, socket.user.id, '#aa8a30')
 
         // ── 3. Stats du personnage ─────────────────────────────────────
         const sheet = await db('char_sheet').where({ character_id: characterId }).first()
@@ -746,11 +711,7 @@ const initSocket = (io) => {
     // Payload : { text }
     socket.on(WS.CHAT_MESSAGE, async ({ text }) => {
       if (!text || !socket.campaignId) return
-      let color = '#5b8dee'
-      try {
-        const userRow = await db('users').where({ id: socket.user.id }).select('color').first()
-        if (userRow?.color) color = userRow.color
-      } catch (_) {}
+      const color = await getUserColor(db, socket.user.id)
       io.to(socket.campaignId).emit(WS.CHAT_MESSAGE, {
         userId: socket.user.id,
         username: socket.user.username,
@@ -1015,11 +976,7 @@ const initSocket = (io) => {
             else if (pending.attributeId) formulaLabel = ATTR_LABELS[pending.attributeId] || pending.attributeId
           }
 
-          let color = '#5b8dee'
-          try {
-            const userRow = await db('users').where({ id: pending.playerUserId }).select('color').first()
-            if (userRow?.color) color = userRow.color
-          } catch (_) {}
+          const color = await getUserColor(db, pending.playerUserId)
 
           const totalDiffMod = pending.defaultDifficulty + gmModifier
           const chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
@@ -1299,12 +1256,7 @@ const initSocket = (io) => {
         }
 
         // ── Couleur joueur pour DICE_RESULT ──────────────────────────────
-        let color = '#5b8dee'
-        try {
-          const userRow = await db('users')
-            .where({ id: socket.user.id }).select('color').first()
-          if (userRow?.color) color = userRow.color
-        } catch (_) {}
+        const color = await getUserColor(db, socket.user.id)
 
         const diffLabel = effectiveDifficulty >= 0
           ? `+${effectiveDifficulty}` : `${effectiveDifficulty}`
@@ -1794,11 +1746,7 @@ const initSocket = (io) => {
         const timestamp = new Date().toISOString()
 
         // Couleur joueur pour DICE_RESULT
-        let color = '#5b8dee'
-        try {
-          const userRow = await db('users').where({ id: socket.user.id }).select('color').first()
-          if (userRow?.color) color = userRow.color
-        } catch (_) {}
+        const color = await getUserColor(db, socket.user.id)
 
         // Broadcast DICE_RESULT — chat + animation dés (pas de skillLabel → animation active)
         io.to(campaignId).emit(WS.DICE_RESULT, {
@@ -2091,14 +2039,15 @@ const initSocket = (io) => {
         }
 
         // Phase 1 : intention enregistrée sans validation distance (vérifiée en Phase 2)
-        // mapActions.melee est un array : [{ targetTokenId, weaponInvId }, ...]
+        // mapActions.melee est un array : [{ targetTokenId, weaponInvId?, droneWeaponInvId? }, ...]
         if (Array.isArray(mapActions?.melee)) {
-          for (const { targetTokenId: meleeTargetId, weaponInvId: meleeWeaponId } of mapActions.melee) {
+          for (const { targetTokenId: meleeTargetId, weaponInvId: meleeWeaponId, droneWeaponInvId: meleeDroneWeaponId } of mapActions.melee) {
             if (meleeTargetId) {
               actionRows.push({
                 campaign_id: campaignId, token_id: tokenId,
                 action_key: 'melee', type: 'melee', sequence: 3,
-                weapon_inv_id: meleeWeaponId ?? null,
+                weapon_inv_id:       meleeDroneWeaponId ? null : (meleeWeaponId ?? null),
+                drone_weapon_inv_id: meleeDroneWeaponId ?? null,
                 target_token_id: meleeTargetId,
                 modifiers: JSON.stringify({ ini_mod: -3 }),
                 status: 'pending',
@@ -2354,10 +2303,14 @@ const initSocket = (io) => {
           for (const a of meleeActions) {
             await db('combat_actions').where({ id: a.id }).update({ status: 'resolved', updated_at: db.fn.now() })
           }
-          needsDefenseWait = await resolveMeleeAction(
-            io, socket, campaignId, meleeActions[0], character,
-            meleeActions.slice(1), meleeActions.length, confirmedModifiers
-          )
+          if (character.type === 'drone') {
+            await resolveDroneAssaultAction(io, socket, campaignId, meleeActions[0], confirmedModifiers, character)
+          } else {
+            needsDefenseWait = await resolveMeleeAction(
+              io, socket, campaignId, meleeActions[0], character,
+              meleeActions.slice(1), meleeActions.length, confirmedModifiers
+            )
+          }
         }
 
         // Slot bloqué si on attend le jet de défense d'un PJ
@@ -2390,7 +2343,7 @@ const initSocket = (io) => {
       try {
         // 1. Jet localisation
         const { total: rollLoc, rolls: locRolls, seed: locSeed } = await parseDice('1d20')
-        const locTable = pendingType === 'melee' ? LOC_TABLE_CONTACT : LOC_TABLE
+        const locTable = pendingType === 'melee' ? LOC_TABLE : LOC_TABLE
         const slotCode = (locTable.find(r => rollLoc <= r.max) ?? locTable[locTable.length - 1]).slot
         const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
 
@@ -2705,7 +2658,7 @@ const initSocket = (io) => {
           } else {
             // PNJ attaquant : résolution auto des dégâts
             const { total: rollLoc } = await parseDice('1d20')
-            const slotCode = (LOC_TABLE_CONTACT.find(r => rollLoc <= r.max) ?? LOC_TABLE_CONTACT[LOC_TABLE_CONTACT.length - 1]).slot
+            const slotCode = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
             const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
 
             let etq = null
@@ -3514,7 +3467,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
       if (hit) {
         // Dégâts auto (même logique que PNJ dans resolveAssaultAction)
         const { total: rollLoc } = await parseDice('1d20')
-        const slotCode    = (LOC_TABLE_CONTACT.find(r => rollLoc <= r.max) ?? LOC_TABLE_CONTACT[LOC_TABLE_CONTACT.length - 1]).slot
+        const slotCode    = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
         const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
 
         let etq = null
@@ -3792,7 +3745,8 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
       .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
       .where({ 'drone_weapons.id': action.drone_weapon_inv_id })
       .select(
-        'drone_weapons.fire_mode',
+        'drone_weapons.fire_mode as explicit_fire_mode',
+        'ref_equipment.fire_mode as ref_fire_mode',
         db.raw(`COALESCE(drone_weapons.damage_formula, ref_equipment.damage_h) as effective_formula`),
         db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
       )
@@ -3811,8 +3765,9 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
       return
     }
 
-    // 2. Programme armement (§7.3 — category selon fire_mode)
-    const category = weapon.fire_mode === 'cc' ? 'armement_contact' : 'armement_distance'
+    // 2. Programme armement — miroir humanoïde : !ref_fire_mode → contact, sinon distance
+    const isCaCWeapon = weapon.explicit_fire_mode ? weapon.explicit_fire_mode === 'cc' : !weapon.ref_fire_mode
+    const category = isCaCWeapon ? 'armement_contact' : 'armement_distance'
     const programme = await db('drone_programs')
       .where({ character_id: character.id, category })
       .orderBy('level', 'desc')

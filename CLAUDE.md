@@ -116,10 +116,13 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 97 (2026-06-16)
+## ÉTAT COURANT — Session 100 (2026-06-17)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **79 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
+
+**Session 100 ✅ clos complet :**
+- REWORK-07 : `socketUtils` — `getUserColor` (6 call sites) + `checkTokenOwnership` (4 call sites) + `LOC_TABLE_CONTACT` supprimé
 
 **Session 97 ⚠️ clos partiel :**
 - REWORK-03 : `woundService.applyWound` — 5 call sites WS centralisés + fix DIV-1 (`worst_wound_severity` dans WOUND_ADDED)

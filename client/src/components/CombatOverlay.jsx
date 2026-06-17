@@ -55,9 +55,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   const activeAssaultAction = gmActiveEntry
     ? actions.find(a => a.token_id === gmActiveEntry.token_id && a.action_key === 'assault')
     : null
-  // Drone CaC : fire_mode='cc' stocké depuis drone_weapons (serveur autorité) — suit le flow "Agir" comme le CaC humanoïde PNJ
-  const isDroneCaC = !!(activeAssaultAction?.drone_weapon_inv_id && activeAssaultAction?.fire_mode === 'cc')
-  // Action melee PNJ active (GM) — CombatCacModifiersWindow remplace le bouton "Agir" bare
+  // Action melee PNJ/drone active (GM) — CombatCacModifiersWindow remplace le bouton "Agir" bare
   const activeMeleeAction = gmActiveEntry
     ? actions.find(a => a.token_id === gmActiveEntry.token_id && a.action_key === 'melee')
     : null
@@ -166,8 +164,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Phase RÉSOLUTION — modificateurs assaut distance GM (PNJ ou drone ranged — exclut drone CaC) */}
-      {isGm && phase === 'RESOLUTION' && activeAssaultAction && !isDroneCaC && gmActiveEntry && gmActiveCharacter?.type !== 'pj' && (
+      {/* Phase RÉSOLUTION — modificateurs assaut distance GM (PNJ ou drone ranged) */}
+      {isGm && phase === 'RESOLUTION' && activeAssaultAction && gmActiveEntry && gmActiveCharacter?.type !== 'pj' && (
         <CombatModifiersWindow
           socket={socket}
           assaultAction={activeAssaultAction}
@@ -175,21 +173,12 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Phase RÉSOLUTION — CaC humanoïde PNJ (GM) */}
+      {/* Phase RÉSOLUTION — CaC humanoïde PNJ ou drone (GM) */}
       {isGm && phase === 'RESOLUTION' && activeMeleeAction && gmActiveCharacter?.type !== 'pj' && (
         <CombatCacModifiersWindow
           socket={socket}
           activeRosterEntry={gmActiveEntry}
-          isDrone={false}
-        />
-      )}
-
-      {/* Phase RÉSOLUTION — drone CaC (GM) */}
-      {isGm && phase === 'RESOLUTION' && isDroneCaC && gmActiveEntry && (
-        <CombatCacModifiersWindow
-          socket={socket}
-          activeRosterEntry={gmActiveEntry}
-          isDrone={true}
+          isDrone={gmActiveCharacter?.type === 'drone'}
         />
       )}
 

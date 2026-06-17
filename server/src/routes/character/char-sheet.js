@@ -1801,11 +1801,12 @@ router.post('/:characterId/drone/weapons', async (req, res, next) => {
       throw new AppError(400, 'equipment_id or (name + damage_formula) required')
     }
 
+    let refEquipment = null
     if (equipment_id) {
-      const ref = await db('ref_equipment')
+      refEquipment = await db('ref_equipment')
         .where({ id: equipment_id, family: 'Armes' })
         .first()
-      if (!ref) throw new AppError(400, 'Equipment not found or not a weapon')
+      if (!refEquipment) throw new AppError(400, 'Equipment not found or not a weapon')
     }
 
     const autoAmmo = equipment_id ? await resolveDroneAmmoInit(equipment_id) : null
@@ -1820,7 +1821,9 @@ router.post('/:characterId/drone/weapons', async (req, res, next) => {
     if (name)             insertData.name             = name
     if (damage_formula)   insertData.damage_formula   = damage_formula
     if (portee)           insertData.portee           = portee
+    // fire_mode : explicite → ref_equipment.fire_mode (armes catalogue) → null (custom sans mode)
     if (fire_mode)        insertData.fire_mode        = fire_mode
+    else if (refEquipment?.fire_mode) insertData.fire_mode = refEquipment.fire_mode.toLowerCase()
     if (notes)            insertData.notes            = notes
     if (autoAmmo !== null) insertData.ammo_restant    = autoAmmo
 

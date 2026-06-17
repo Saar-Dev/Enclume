@@ -1,5 +1,5 @@
 # ARCHI_REWORK.md — Reworks architecturaux
-> Créé Session 96 — 2026-06-16 | Mis à jour Session 99 — 2026-06-17
+> Créé Session 96 — 2026-06-16 | Mis à jour Session 100 — 2026-06-17
 > Rédigé par Claude Sonnet 4.6 à destination des agents Claude futurs.
 > Objectif : remplacer le bricolage incrémental par des reworks structurés, complets, et non régressifs.
 
@@ -539,6 +539,122 @@ Joueur passe `effectiveBulletCount={effectiveBulletCount ?? 1}` au panel pour le
 
 ---
 
+## REWORK-07 — Socket utilities (getUserColor + checkTokenOwnership)
+
+### Problème
+
+Deux patterns copiés-collés dans `server/src/socket/index.js`, sans abstraction.
+
+**Pattern A — couleur utilisateur** (N≥6 occurrences) :
+```js
+let color = '#5b8dee'
+try {
+  const userRow = await db('users').where({ id: socket.user.id }).select('color').first()
+  if (userRow?.color) color = userRow.color
+} catch (_) {}
+```
+Call sites connus : `DICE_ROLL`, `MACRO_ROLL`, `ENTITY_ACTION_RESOLVE`, `ENTITY_MOVE_REQUEST`, `COMBAT_SURPRISE_RESULT` — et probablement d'autres dans le bloc combat.
+Vérifier par grep avant de coder :
+```
+grep -n "select('color')" server/src/socket/index.js
+```
+
+**Pattern B — ownership token** (N≥4 occurrences) :
+```js
+const isGm = socket.role === 'gm'
+let isOwner = false
+if (token.character_id) {
+  const character = await db('characters').where({ id: token.character_id }).first()
+  isOwner = character?.user_id === socket.user.id
+}
+if (!isOwner && !isGm) return
+```
+Call sites : `TOKEN_MOVE`, `TOKEN_ROTATE`, `TOKEN_SET_ROTATION`, `TOKEN_STATUS_TOGGLE`.
+Vérifier :
+```
+grep -n "isOwner" server/src/socket/index.js
+```
+
+**Bonus — LOC_TABLE / LOC_TABLE_CONTACT (lignes 51–67)** :
+Les deux tables sont identiques. `LOC_TABLE_CONTACT` est dead code.
+
+### État actuel
+
+Inline dans chaque handler — aucune abstraction.
+
+### Décision
+
+Nouveau fichier `server/src/lib/socketUtils.js` — 2 exports synchrones + 1 correctif dead code.
+Pas de nouvelle architecture — extraction pure.
+
+### Interface cible
+
+```js
+// server/src/lib/socketUtils.js
+
+// Retourne la couleur hex de l'utilisateur.
+// Fallback '#5b8dee' si absent ou erreur DB.
+export async function getUserColor(db, userId)
+// → string
+
+// Vérifie l'ownership d'un token par rapport à un socket.
+// token doit être déjà chargé par le caller (pas de nouvelle query DB sur token).
+// Charge characters si token.character_id présent.
+export async function checkTokenOwnership(db, token, userId, role)
+// → { isGm: boolean, isOwner: boolean }
+```
+
+### Périmètre
+
+**Fichiers modifiés :**
+
+| Fichier | Modification |
+|---|---|
+| `server/src/lib/socketUtils.js` | NOUVEAU — 2 exports |
+| `server/src/socket/index.js` | +import, remplacement patterns A + B + suppression `LOC_TABLE_CONTACT` |
+
+**Fichiers NON touchés :** tout le reste — client, shared, autres lib, routes REST.
+
+### Plan
+
+**Étape 1 — Grep obligatoire avant tout code**
+```
+grep -n "select('color')" server/src/socket/index.js
+grep -n "isOwner" server/src/socket/index.js
+grep -n "LOC_TABLE_CONTACT" server/src/socket/index.js
+```
+
+**Étape 2 — Créer `server/src/lib/socketUtils.js`**
+Run à vide : `node --check server/src/lib/socketUtils.js`
+
+**Étape 3 — Remplacer Pattern A (`getUserColor`) dans tous les call sites**
+Run à vide : `node --check server/src/socket/index.js`
+
+**Étape 4 — Remplacer Pattern B (`checkTokenOwnership`) dans tous les call sites**
+Run à vide : `node --check server/src/socket/index.js`
+
+**Étape 5 — Supprimer `LOC_TABLE_CONTACT`, remplacer ses usages par `LOC_TABLE`**
+Run à vide : `node --check server/src/socket/index.js`
+
+**Étape 6 — SR**
+
+### Validation
+
+- DICE_ROLL : couleur correcte visible dans le chat (non-régression)
+- TOKEN_MOVE : joueur ne peut pas déplacer le token d'un autre joueur
+- SR sans erreur dans les logs
+
+### Definition of done
+
+- [x] `node --check server/src/lib/socketUtils.js` — 0 erreur ✅ Session 100
+- [x] `node --check server/src/socket/index.js` — 0 erreur ✅ Session 100
+- [x] `grep -c "select('color')" server/src/socket/index.js` → 0 ✅ Session 100
+- [x] `grep -c "LOC_TABLE_CONTACT" server/src/socket/index.js` → 0 ✅ Session 100
+- [x] SR sans erreur ✅ Session 100
+- [x] JOURNAL4.md appendé ✅ Session 100
+
+---
+
 ## Prochains reworks identifiés (non planifiés)
 
 Ces blocs sont candidats à un rework futur selon les mêmes principes :
@@ -547,5 +663,7 @@ Ces blocs sont candidats à un rework futur selon les mêmes principes :
 |---|---|---|
 | REWORK-02 | Calcul dégâts distance | Dupliqué dans DAMAGE_CONFIRM + resolveAssaultAction |
 | REWORK-03 | Résolution blessure + wound insertion | ✅ Clos Session 97 — `woundService.applyWound` |
-| REWORK-04 | Système de combat complet | Migration vers State Machine (FSM) — sprint long terme |
+| REWORK-04 | Système de combat complet | Migration vers State Machine (FSM) — sprint long terme. **Prérequis : REWORK-08** |
 | REWORK-06 | combatDeclarationStore | Staging state déclaration fragmenté en local React state (GM+Joueur). Auto-draw, default mains nues non implémentables sans débat archi. Voir REWORK-05.md §REWORK-06 |
+| REWORK-08 | Modularisation `socket/index.js` | 4 462 lignes — fichier dieu. Découper en `socketToken.js`, `socketVoxel.js`, `socketEntity.js`, `socketCombat.js`, `socketDice.js`. `initSocket()` devient coordinateur. **Prérequis de REWORK-04.** |
+| REWORK-09 | `SessionPage.jsx` → hooks WS dédiés | 1 509 lignes. Tous les listeners WS inline dans un `useEffect` unique. 30+ props passées à `CombatOverlay`. Cible : `useCombatSocket.js`, `useEntitySocket.js`, `useTokenSocket.js`. |

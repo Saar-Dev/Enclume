@@ -28,7 +28,7 @@
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
 | **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 | composants combat + `index.css §11` | **Haute** |
-| **E — Arme et statuts** | COM1 + COM2 + COM4 + COM7 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
+| **E — Arme et statuts** | COM1 + COM2 + COM4 + COM7 + COM10 + COM11 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
 | **F — Ghosts + portraits** | CL1 + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
 | **G — Drone store** | D1 + D2 | `SessionPage.jsx` + `Canvas3D.jsx` | Moyenne |
 | **H — Dettes techniques** | WS1 + TC1 + DCO1 + VX1 + AU1 + INI1 | divers | Basse |
@@ -309,6 +309,41 @@ Ajouter au début du handler `COMBAT_ACTION_CONFIRM` pour vérifier si le type `
 **Code impliqué** : `CombatGmDeclareWindow.jsx` — `meleeAttackCount` / `meleePendingMode`. `canDeclare` ou équivalent grisé.
 
 **Prochaine étape** : Audit règles Polaris §6.2 — si "multi-attaque" et "attaque multiple" sont identiques, supprimer le duplicata. Sinon corriger le guard `canDeclare`.
+
+---
+
+### Bug COM10 — CaC multi-attaque : sélection de la 2e cible impossible — plantage silencieux
+
+**Symptôme** : En mode multi-attaque CaC, après avoir sélectionné la 1re cible, il est impossible de sélectionner une 2e cible. Aucun message d'erreur — le système ne réagit pas ou annule silencieusement la sélection.
+
+**Cause racine** [INCONNU] : Non investigué. Pistes possibles : état `meleeTargetIds` non réinitialisé entre les sélections successives ; guard côté client bloquant la 2e sélection ; payload déclaration ne supporte pas un tableau de 2 cibles distinctes ; ou le handler serveur `COMBAT_ACTION_DECLARE` ne valide pas plusieurs `meleeTargetIds`.
+
+**[DBG-COM10] suggestion** :
+```js
+console.log('[DBG-COM10] meleeTargets', { meleeTargetIds, pendingMeleeTargets, canAddTarget })
+```
+Ajouter dans le composant de sélection de cible CaC pour observer l'état au moment du 2e clic.
+
+**Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx` et/ou `CombatActionWindow.jsx` — logique `meleeTargetIds` / mode sélection cible CaC. `server/src/socket/index.js` — `COMBAT_ACTION_DECLARE` validation `mapActions.melee`.
+
+**Prochaine étape** : Cluster E — Phase 2b — instrumenter [DBG-COM10], reproduire la sélection 2e cible, lire console.
+
+---
+
+### Bug COM11 — Assaut tir : multi-attaque non implémenté
+
+**Symptôme** : Il n'existe pas d'option dans la fenêtre de déclaration (GM et joueur) pour déclarer plusieurs attaques à distance sur des cibles distinctes en une même action. L'équivalent CaC (`meleeTargetIds[]`) existe, pas la version tir.
+
+**Règle** : À vérifier dans `docs/REGLESYSCOMBAT.md` / `docs/MANUELSYSCOMBAT.md` — règles attaque multiple distance (bonus/malus initiative, conditions).
+
+**Cause racine** [INCONNU] : Fonctionnalité non implémentée — le payload `mapActions.attack` ne supporte qu'une cible (`attackTargetId` scalaire). La résolution serveur (`resolveAssaultAction`) ne boucle pas sur plusieurs cibles.
+
+**Code impliqué** :
+- `client/src/components/CombatGmDeclareWindow.jsx` — section assaut tir (AssaultRangedPanel) : pas de multi-cible
+- `client/src/components/CombatActionWindow.jsx` — idem
+- `server/src/socket/index.js` — `COMBAT_ACTION_DECLARE` + `resolveAssaultAction` : payload `attack` scalaire
+
+**Prochaine étape** : Sprint dédié — implémenter après validation fonctionnelle REWORK-05 (les panneaux partagés `AssaultRangedPanel` doivent être stables avant d'y ajouter une mécanique).
 
 ---
 
