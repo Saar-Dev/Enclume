@@ -8,21 +8,13 @@ import api from '../lib/api.js'
 import {
   STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS,
   stateTransitionCost, calcIniDelta,
-  FIRE_MODE_VARIANTS, CC_REPS_STEPS, RL_BUTTONS,
+  CC_REPS_STEPS, RL_BUTTONS, computeFireVariant,
+  ACTION_LABELS, PURE_MOVE_TYPES,
 } from './combatSections.js'
-
-const ACTION_LABELS = {
-  assault:    'Assaut (tir)',
-  melee:      'Assaut (CaC)',
-  reload:     'Rechargement',
-  micro:      'Action',
-  move_short: 'Déplacement',
-  move_long:  'Déplacement (long)',
-  sprint:     'Sprint',
-  rush:       'Rush',
-  move:       'Déplacement',
-}
-const PURE_MOVE_TYPES = new Set(['move_short', 'move_long', 'sprint', 'rush', 'move'])
+import { DeclareLogContent } from './CombatDeclareLog.jsx'
+import DroneWeaponPanel from './DroneWeaponPanel.jsx'
+import AssaultRangedPanel from './AssaultRangedPanel.jsx'
+import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 
 // ---------------------------------------------------------------------------
 // Composant StateSelector
@@ -72,7 +64,7 @@ export default function CombatActionWindow({
   socket, user, characters, pendingSurpriseRoll, onSurpriseRolled,
   onEnterMoveMode, onEnterTargetMode,
 }) {
-  const { roster, phase, activeSlotIdx, actions, activeTokenId, announcedActions, currentTurn } = useCombatStore()
+  const { roster, phase, activeSlotIdx, actions, activeTokenId, currentTurn } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
   // Multi-personnage : tous les persos contrôlés par ce joueur
@@ -354,22 +346,9 @@ export default function CombatActionWindow({
   const currentFireMode = forceCC ? 'CC' : fireModeUpper
 
   // Variant assaut selectionne
-  let currentVariant = null
-  if (currentFireMode === 'RC') {
-    currentVariant = FIRE_MODE_VARIANTS.RC[0]
-  } else if (currentFireMode === 'CC' && assaultBulletCount) {
-    if (assaultBulletCount === 7) {
-      currentVariant = FIRE_MODE_VARIANTS.CC.find(v => v.id === (assaultVariantAB === 'B' ? 'cc_7b' : 'cc_7a'))
-    } else if (assaultBulletCount === 10) {
-      currentVariant = FIRE_MODE_VARIANTS.CC.find(v => v.id === (assaultVariantAB === 'B' ? 'cc_10b' : 'cc_10a'))
-    } else {
-      currentVariant = FIRE_MODE_VARIANTS.CC.find(v => v.bulletCount === assaultBulletCount)
-    }
-  } else if (currentFireMode === 'RL' && assaultBulletCount) {
-    currentVariant = assaultBulletCount === 'multi'
-      ? FIRE_MODE_VARIANTS.RL.find(v => v.id === 'rl_mc')
-      : FIRE_MODE_VARIANTS.RL.find(v => v.bulletCount === assaultBulletCount)
-  }
+  const { variant: currentVariant, effectiveBulletCount } = computeFireVariant(
+    currentFireMode, assaultBulletCount, assaultVariantAB
+  )
 
   // Munitions disponibles pour le rechargement — filtrées par calibre de l'arme sélectionnée
   const reloadAmmoItems = (selectedWeapon?.ref_caliber && allInventoryItems.length)
@@ -679,69 +658,16 @@ export default function CombatActionWindow({
     </div>
   )
 
-  // Panneau lecture seule déclarations — remplace rosterSection dans les 3 branches d'attente
-  const declareLogSection = (
-    <div>
-      <div style={W.sectionTitle}>Déclarations — Tour {currentTurn}</div>
-      <div className="combat-declare-log-body" style={{ maxHeight: 170 }}>
-        {announcedActions.length === 0 ? (
-          <div className="combat-declare-log-empty">Aucune déclaration pour ce tour.</div>
-        ) : (
-          announcedActions.map((entry, i) => {
-            const tok    = tokens.find(t => t.id === entry.tokenId)
-            const atkTok = entry.attackTargetId ? tokens.find(t => t.id === entry.attackTargetId) : null
-            const isPureMove = PURE_MOVE_TYPES.has(entry.actionType)
-            const moveDest = entry.moveTarget
-              ? `[${entry.moveTarget.x ?? '?'}, ${entry.moveTarget.y ?? entry.moveTarget.z ?? '?'}]`
-              : null
-            return (
-              <div key={`${entry.tokenId}-${i}`}>
-                <div className="combat-declare-log-actor">
-                  <span className="combat-declare-log-dot" style={{ background: tok?.color ?? '#5b8dee' }} />
-                  <span className="combat-declare-log-name">{tok?.label ?? '?'}</span>
-                  <span className="combat-declare-log-ini">INI {entry.initiative ?? '?'}</span>
-                </div>
-                {entry.moveTarget && !isPureMove && (
-                  <div className="combat-declare-log-line">
-                    <span className="combat-declare-log-icon">→</span>
-                    <span className="combat-declare-log-detail combat-declare-log-detail--move">
-                      Déplacement {moveDest}
-                    </span>
-                  </div>
-                )}
-                <div className="combat-declare-log-line">
-                  <span className="combat-declare-log-icon">
-                    {(entry.actionType === 'assault' || entry.actionType === 'melee') ? '⚡'
-                      : isPureMove ? '→'
-                      : entry.actionType === 'reload' ? '↺'
-                      : '◆'}
-                  </span>
-                  <span className={
-                    'combat-declare-log-detail' +
-                    (entry.actionType === 'assault' ? ' combat-declare-log-detail--atk'   : '') +
-                    (entry.actionType === 'melee'   ? ' combat-declare-log-detail--melee' : '') +
-                    (isPureMove                     ? ' combat-declare-log-detail--move'  : '')
-                  }>
-                    {ACTION_LABELS[entry.actionType] ?? (entry.actionType ?? '–')}
-                    {isPureMove && moveDest ? ` ${moveDest}` : ''}
-                    {atkTok ? ` → ${atkTok.label}` : ''}
-                  </span>
-                </div>
-              </div>
-            )
-          })
-        )}
-      </div>
-    </div>
-  )
-
   // Pas encore mon tour d'annoncer — attente du slot actuel
   if (phase === 'ANNOUNCEMENT' && !(rosterEntry?.has_announced) && !isMyTurnInAnnouncement) {
     const currentDeclarer = tokens.find(t => t.id === computedAnnounceTokenId)
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 — Déclaration d&apos;intention</div>
-        {declareLogSection}
+        <div>
+          <div style={W.sectionTitle}>Déclarations — Tour {currentTurn}</div>
+          <DeclareLogContent maxHeight="170px" />
+        </div>
         <p style={W.waitText}>
           En attente de {currentDeclarer?.label ?? '…'}…
         </p>
@@ -755,7 +681,10 @@ export default function CombatActionWindow({
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 2 — Résolution</div>
-        {declareLogSection}
+        <div>
+          <div style={W.sectionTitle}>Déclarations — Tour {currentTurn}</div>
+          <DeclareLogContent maxHeight="170px" />
+        </div>
         <p style={W.waitText}>
           {activeResolveToken ? `${activeResolveToken.label} agit…` : 'Résolution en cours…'}
         </p>
@@ -768,7 +697,10 @@ export default function CombatActionWindow({
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 - Declaration d&apos;intention</div>
-        {declareLogSection}
+        <div>
+          <div style={W.sectionTitle}>Déclarations — Tour {currentTurn}</div>
+          <DeclareLogContent maxHeight="170px" />
+        </div>
         <p style={W.waitText}>Action declaree. En attente des autres participants…</p>
       </div>
     )
@@ -1175,420 +1107,83 @@ export default function CombatActionWindow({
         {/* ---- Panneau droit — corps à corps ---- */}
         {showMelee && (
           <div style={{ ...W.assaultPanel, background: 'rgba(80,180,80,0.04)' }}>
-
-            <div style={W.assaultSection}>
-              <div style={{ ...W.assaultSectionTitle, color: '#70c070' }}>Arme</div>
-              {/* Mains nues */}
-              <div
-                onClick={() => setSelectedMeleeWeaponId(null)}
-                style={{
-                  ...W.assaultOption,
-                  padding: '6px 0',
-                  borderBottom: '1px solid #1e1e2e',
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={W.assaultOptionLabel}>Mains nues</div>
-                  <div style={W.assaultOptionSub}>1D4 + Mod.Dom.</div>
-                </div>
-                <div style={{ ...W.assaultRadio, ...(selectedMeleeWeaponId === null ? W.assaultRadioActive : {}) }} />
-              </div>
-              {/* Armes de contact équipées */}
-              {meleeWeapons.map(item => {
-                const allonge   = parseInt(item.ref_range) || 0
-                const isSelected = item.id === selectedMeleeWeaponId
-                const weaponUsable = states.weapon === 'drawn'
-                return (
-                  <div
-                    key={item.id}
-                    title={weaponUsable ? undefined : 'Mettez l\'arme "Au clair" d\'abord (−3 INI)'}
-                    onClick={() => weaponUsable && setSelectedMeleeWeaponId(isSelected ? null : item.id)}
-                    style={{
-                      ...W.assaultOption,
-                      padding: '6px 0',
-                      borderBottom: '1px solid #1e1e2e',
-                      cursor: weaponUsable ? 'pointer' : 'not-allowed',
-                      opacity: weaponUsable ? 1 : 0.35,
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <div style={W.assaultOptionLabel}>{item.custom_name || item.ref_name || 'Arme'}</div>
-                      <div style={W.assaultOptionSub}>
-                        {item.slot} · {item.ref_damage_h || '—'}
-                        {allonge > 0 ? ` · +${allonge}m allonge` : ''}
-                      </div>
-                    </div>
-                    <div style={{ ...W.assaultRadio, ...(isSelected && weaponUsable ? { ...W.assaultRadioActive, borderColor: '#70c070', background: '#70c070' } : {}) }} />
-                  </div>
-                )
-              })}
-              {meleeWeapons.length === 0 && (
-                <div style={{ ...W.assaultNoWeapon, color: '#70a070', marginTop: 4 }}>
-                  {hasMeleeInInventory
-                    ? 'Mains nues uniquement (arme rangée — équipez-la en main)'
-                    : 'Mains nues uniquement (aucune arme de contact)'
-                  }
-                </div>
-              )}
-            </div>
-
-            {/* Mode de combat */}
-            <div style={W.assaultSection}>
-              <div style={{ ...W.assaultSectionTitle, color: '#70c070' }}>Mode de combat</div>
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                {[
-                  { k: 'normal',   l: 'Normal',   tooltip: 'Mode par défaut — aucun modificateur.' },
-                  { k: 'offensif', l: 'Offensif',  tooltip: '+3 à l\'attaque / −5 à la défense si attaqué jusqu\'à la prochaine action.' },
-                  { k: 'charge',   l: 'Charge',    tooltip: '+3 attaque +3 dégâts / −7 défense / distance ≥ 3m requise + déplacement court gratuit.' },
-                  { k: 'defensif', l: 'Défensif',  tooltip: 'Aucune attaque. +3 en défense si attaqué. Retarde l\'action. (LdB p.223)' },
-                  { k: 'retraite', l: 'Retraite',  tooltip: 'Aucune attaque. +5 en défense si attaqué. Recul possible. (LdB p.223)' },
-                ].map(m => {
-                  const isDefensif = m.k === 'defensif' || m.k === 'retraite'
-                  return (
-                    <div
-                      key={m.k}
-                      title={m.tooltip}
-                      onClick={() => {
-                        if (m.k === 'charge') {
-                          handleChargeFlow()
-                        } else if (isDefensif) {
-                          setCombatMode(m.k)
-                          setMeleePendingTokenIds([])
-                          if (combatMode === 'charge') setMoveSelection(null)
-                        } else {
-                          setCombatMode(m.k)
-                          if (combatMode === 'charge') { setMoveSelection(null); setMeleePendingTokenIds([]) }
-                        }
-                      }}
-                      className={combatMode === m.k ? 'badge badge-mode' : 'badge badge-mode-off'}
-                    >
-                      {m.l}
-                    </div>
-                  )
-                })}
-              </div>
-              {combatMode === 'charge' && !moveSelection && (
-                <div style={{ fontSize: 9, color: '#c8a030', marginTop: 4 }}>
-                  ↑ Sélectionnez d&apos;abord votre déplacement
-                </div>
-              )}
-              {combatMode === 'charge' && moveSelection && (
-                <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
-                  Déplacement sélectionné (+0 INI gratuit)
-                </div>
-              )}
-              {combatMode === 'defensif' && (
-                <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
-                  Aucune attaque — +3 en défense si attaqué
-                </div>
-              )}
-              {combatMode === 'retraite' && (
-                <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
-                  Aucune attaque — +5 en défense
-                  {moveSelection
-                    ? <span style={{ color: '#70c070', marginLeft: 4 }}>· recul sélectionné (+0 INI)</span>
-                    : <span style={{ color: '#5a7a5a', marginLeft: 4 }}>· recul optionnel</span>
-                  }
-                </div>
-              )}
-            </div>
-
-            {/* Retraite : recul optionnel et gratuit */}
-            {combatMode === 'retraite' && (
-              <div style={W.assaultSection}>
-                <div style={{ ...W.assaultSectionTitle, color: '#70c070' }}>Recul (optionnel)</div>
-                <button
-                  style={{ ...W.chooseTargetBtn, borderColor: '#507050', color: '#70c070', background: 'rgba(80,180,80,0.1)' }}
-                  onClick={handleRetraiteMove}
-                >
-                  {moveSelection ? `✓ Recul sélectionné — Annuler` : 'Sélectionner la destination de recul'}
-                </button>
-              </div>
-            )}
-
-            {/* Nombre d'attaques — masqué en Défensif/Retraite/Charge */}
-            {!meleeDefensif && combatMode !== 'charge' && (
-              <div style={W.assaultSection}>
-                <div style={{ ...W.assaultSectionTitle, color: '#70c070' }}>Nombre d&apos;attaques</div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[
-                    { n: 1, label: '1 attaque', tooltip: 'Une attaque — aucun malus.' },
-                    { n: 2, label: '2 attaques −5', tooltip: '−5 à tous les jets d\'attaque (LdB p.218).' },
-                    { n: 3, label: '3 attaques −7', tooltip: '−7 à tous les jets d\'attaque (LdB p.218).' },
-                  ].map(({ n, label, tooltip }) => (
-                    <div
-                      key={n}
-                      title={tooltip}
-                      onClick={() => {
-                        setMeleeCount(n)
-                        setMeleePendingTokenIds(prev => prev.slice(0, n))
-                      }}
-                      style={{
-                        padding: '4px 8px', borderRadius: 3, cursor: 'pointer', fontSize: 10,
-                        border: `1px solid ${meleeCount === n ? '#70c070' : '#2a3a2a'}`,
-                        background: meleeCount === n ? 'rgba(112,192,112,0.15)' : 'rgba(255,255,255,0.02)',
-                        color: meleeCount === n ? '#70c070' : '#7a9a7a',
-                        fontWeight: meleeCount === n ? 600 : 400,
-                      }}
-                    >{label}</div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Sélection cibles — masquée en mode Défensif/Retraite */}
-            {!meleeDefensif && (
-              <div style={W.assaultSection}>
-                <div style={{ ...W.assaultSectionTitle, color: '#70c070' }}>
-                  {effectiveMeleeCount === 1 ? 'Cible' : `Cibles (${meleePendingTokenIds.length}/${effectiveMeleeCount})`}
-                </div>
-                {Array.from({ length: effectiveMeleeCount }, (_, i) => {
-                  const tgt = meleePendingTokenIds[i] ? tokens.find(t => t.id === meleePendingTokenIds[i]) : null
-                  return (
-                    <div key={i} style={{ marginBottom: i < effectiveMeleeCount - 1 ? 4 : 0 }}>
-                      {tgt ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {effectiveMeleeCount > 1 && (
-                            <span style={{ fontSize: 9, color: '#507050', minWidth: 12 }}>{i + 1}.</span>
-                          )}
-                          <span style={{ ...W.assaultTargetName, color: '#70c070' }}>{tgt.label}</span>
-                          <button style={W.changeTargetBtn} onClick={() => handleChooseMeleeTarget(i)}>Changer</button>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {effectiveMeleeCount > 1 && (
-                            <span style={{ fontSize: 9, color: '#507050', minWidth: 12 }}>{i + 1}.</span>
-                          )}
-                          <button
-                            style={{ ...W.chooseTargetBtn, borderColor: '#507050', color: '#70c070', background: 'rgba(80,180,80,0.1)' }}
-                            onClick={() => handleChooseMeleeTarget(i)}
-                          >Choisir l&apos;adversaire</button>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {meleeValid && !meleeDefensif && (
-              <div style={{ padding: '8px 14px' }}>
-                <div style={{ ...W.assaultSummaryText, color: '#70c070' }}>
-                  ✓ Prêt à l&apos;assaut
-                </div>
-              </div>
-            )}
+            <MeleeCombatPanel
+              availableWeapons={meleeWeapons.map(item => ({
+                id: item.id,
+                label: item.custom_name || item.ref_name || 'Arme',
+                slot: item.slot,
+                damage: item.ref_damage_h || '—',
+                allonge: parseInt(item.ref_range) || 0,
+              }))}
+              selectedWeaponId={selectedMeleeWeaponId}
+              isWeaponDrawn={states.weapon === 'drawn'}
+              hasMeleeInInventory={hasMeleeInInventory}
+              onWeaponChange={(id) => setSelectedMeleeWeaponId(id)}
+              combatMode={combatMode}
+              onModeChange={(mode) => {
+                if (mode === 'defensif' || mode === 'retraite') {
+                  setCombatMode(mode)
+                  setMeleePendingTokenIds([])
+                  if (combatMode === 'charge') setMoveSelection(null)
+                } else {
+                  setCombatMode(mode)
+                  if (combatMode === 'charge') { setMoveSelection(null); setMeleePendingTokenIds([]) }
+                }
+              }}
+              onStartCharge={handleChargeFlow}
+              onStartRetraite={handleRetraiteMove}
+              chargeMoveDest={moveSelection ?? null}
+              chargeTargetLabel={null}
+              meleeCount={meleeCount}
+              effectiveMeleeCount={effectiveMeleeCount}
+              onMeleeCountChange={(n) => { setMeleeCount(n); setMeleePendingTokenIds(prev => prev.slice(0, n)) }}
+              perSlotTargeting={true}
+              targetIds={meleePendingTokenIds}
+              isInTargetMode={false}
+              tokens={tokens}
+              onChooseTarget={(i) => handleChooseMeleeTarget(i)}
+              showReadyBadge={meleeValid && !meleeDefensif}
+            />
           </div>
         )}
 
         {/* ---- Panneau droit — assaut drone ---- */}
         {showAssault && isDrone && (
           <div style={W.assaultPanel}>
-            <div style={W.assaultSection}>
-              <div style={W.assaultSectionTitle}>Arme</div>
-              {droneWeapons.map(w => {
-                const isSelected = selectedDroneWeapon?.id === w.id
-                const isEmpty    = w.ammo_restant !== null && w.ammo_restant !== undefined && w.ammo_restant <= 0
-                return (
-                  <div
-                    key={w.id}
-                    onClick={() => !isEmpty && setSelectedDroneWeaponId(w.id)}
-                    title={isEmpty ? 'Arme vide' : undefined}
-                    style={{
-                      ...W.assaultOption,
-                      padding: '6px 0',
-                      borderBottom: '1px solid #1e1e2e',
-                      cursor: isEmpty ? 'not-allowed' : 'pointer',
-                      opacity: isEmpty ? 0.35 : 1,
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <div style={W.assaultOptionLabel}>{w.display_name || w.ref_name || 'Arme'}</div>
-                      <div style={W.assaultOptionSub}>
-                        {(w.fire_mode || w.ref_fire_mode || '?').toUpperCase()} · {w.damage_formula || w.ref_damage_h || '—'}
-                        {w.ammo_restant !== null && w.ammo_restant !== undefined
-                          ? ` · ${w.ammo_restant} munitions`
-                          : ''}
-                      </div>
-                    </div>
-                    <div style={{ ...W.assaultRadio, ...(isSelected && !isEmpty ? W.assaultRadioActive : {}) }} />
-                  </div>
-                )
-              })}
-            </div>
-            <div style={W.assaultSection}>
-              <div style={W.assaultSectionTitle}>Cible</div>
-              {pendingTargetToken ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={W.assaultTargetName}>{pendingTargetToken.label ?? '?'}</span>
-                  <button style={W.changeTargetBtn} onClick={handleChooseTarget}>Changer</button>
-                </div>
-              ) : (
-                <button style={W.chooseTargetBtn} onClick={handleChooseTarget}>Choisir une cible</button>
-              )}
-            </div>
-            {droneAssaultValid && attackSelected && (
-              <div style={{ padding: '8px 14px' }}>
-                <div style={W.assaultSummaryText}>✓ Prêt à l&apos;assaut</div>
-              </div>
-            )}
+            <DroneWeaponPanel
+              droneWeapons={droneWeapons}
+              selectedWeaponId={selectedDroneWeapon?.id ?? null}
+              assaultTargetId={assaultPendingTokenId}
+              showReadyBadge={droneAssaultValid && attackSelected}
+              onWeaponSelect={(id) => setSelectedDroneWeaponId(id)}
+              onChooseTarget={handleChooseTarget}
+              getLabel={(id) => tokens.find(t => t.id === id)?.label ?? '?'}
+            />
           </div>
         )}
 
         {/* ---- Panneau droit — assaut humanoïde ---- */}
         {showAssault && !isDrone && (
           <div style={W.assaultPanel}>
-
-            <div style={W.assaultSection}>
-              <div style={W.assaultSectionTitle}>Arme</div>
-              {selectedWeapon ? (
-                <div style={W.assaultInfoText}>
-                  {selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'}
-                  <span style={W.assaultInfoSub}> ({selectedWeapon.slot})</span>
-                  {hasTwoWeapons && weaponMd && (
-                    <span style={W.assaultInfoSub}>
-                      {' + '}{weaponMd.custom_name || weaponMd.ref_name || 'Arme'} ({weaponMd.slot})
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div style={W.assaultNoWeapon}>Aucune arme equipee (MG/MD)</div>
-              )}
-            </div>
-
-            <div style={W.assaultSection}>
-              <div style={W.assaultSectionTitle}>Cible</div>
-              {pendingTargetToken ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={W.assaultTargetName}>{pendingTargetToken.label ?? '?'}</span>
-                  <button style={W.changeTargetBtn} onClick={handleChooseTarget}>Changer</button>
-                </div>
-              ) : (
-                <button style={W.chooseTargetBtn} onClick={handleChooseTarget}>Choisir une cible</button>
-              )}
-            </div>
-
-            {hasTwoWeapons && sameFirMode && (
-              <div style={W.assaultSection}>
-                <div style={W.assaultSectionTitle}>Type de tir</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    className="seg-opt"
-                    data-active={!isDualWield}
-                    style={{ flex: 1 }}
-                    onClick={() => setIsDualWield(false)}
-                  >Simple</button>
-                  <button
-                    className="seg-opt"
-                    data-active={isDualWield}
-                    style={{ flex: 1 }}
-                    onClick={() => setIsDualWield(true)}
-                  >Double +{currentFireMode === 'RL' ? 5 : 3}</button>
-                </div>
-              </div>
-            )}
-
-            {selectedWeapon && currentFireMode && (
-              <div style={W.assaultSection}>
-                <div style={W.assaultSectionTitle}>
-                  {{ CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }[currentFireMode] ?? currentFireMode}
-                </div>
-
-                {currentFireMode === 'CC' && (
-                  <>
-                    <div style={W.assaultOption} onClick={() => { setAssaultBulletCount(1); setAssaultVariantAB('A') }}>
-                      <div>
-                        <div style={W.assaultOptionLabel}>Tir simple</div>
-                        <div style={W.assaultOptionSub}>1 balle : +0</div>
-                      </div>
-                      <div style={{ ...W.assaultRadio, ...(assaultBulletCount === 1 ? W.assaultRadioActive : {}) }} />
-                    </div>
-                    <div style={W.assaultOption} onClick={() => {
-                      if (!assaultBulletCount || assaultBulletCount === 1) setAssaultBulletCount(2)
-                    }}>
-                      <div style={W.assaultOptionLabel}>Tir a repetition</div>
-                      <div style={{ ...W.assaultRadio, ...(assaultBulletCount && assaultBulletCount !== 1 ? W.assaultRadioActive : {}) }} />
-                    </div>
-                    {assaultBulletCount && assaultBulletCount !== 1 && (
-                      <>
-                        <input
-                          type="range" min={0} max={CC_REPS_STEPS.length - 1} step={1}
-                          value={ccSliderDisplayIdx}
-                          style={W.assaultSlider}
-                          onChange={e => {
-                            const count = CC_REPS_STEPS[Number(e.target.value)]
-                            setAssaultBulletCount(count)
-                            if (count !== 7 && count !== 10) setAssaultVariantAB('A')
-                          }}
-                        />
-                        {(assaultBulletCount === 7 || assaultBulletCount === 10) && (
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button
-                              className="seg-opt"
-                              data-active={assaultVariantAB === 'A'}
-                              style={{ flex: 1 }}
-                              onClick={() => setAssaultVariantAB('A')}
-                            >+{assaultBulletCount === 7 ? 4 : 5} comp</button>
-                            <button
-                              className="seg-opt"
-                              data-active={assaultVariantAB === 'B'}
-                              style={{ flex: 1 }}
-                              onClick={() => setAssaultVariantAB('B')}
-                            >+{assaultBulletCount === 7 ? 3 : 4} comp / +3 deg</button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {assaultBulletCount && currentVariant && (
-                      <div style={W.assaultSummaryText}>
-                        {assaultBulletCount} balle{assaultBulletCount > 1 ? 's' : ''} : +{currentVariant.bonusComp + dualWieldBonusComp} test
-                        {currentVariant.bonusDmg > 0 ? ` / +${currentVariant.bonusDmg} deg` : ''}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {currentFireMode === 'RC' && (
-                  <>
-                    <div style={W.assaultOption}>
-                      <div>
-                        <div style={W.assaultOptionLabel}>Rafale courte</div>
-                        <div style={W.assaultOptionSub}>3 balles : +3 test OU +5 deg (courte portee)</div>
-                      </div>
-                      <div style={{ ...W.assaultRadio, ...W.assaultRadioActive }} />
-                    </div>
-                    <div style={W.assaultSummaryText}>
-                      3 balles : +{3 + dualWieldBonusComp} test (ou +5 deg a courte portee)
-                    </div>
-                  </>
-                )}
-
-                {currentFireMode === 'RL' && (
-                  <>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {RL_BUTTONS.map(btn => (
-                        <button
-                          key={btn.value}
-                          className="seg-opt"
-                          data-active={assaultBulletCount === btn.value}
-                          style={{ flex: 1 }}
-                          onClick={() => setAssaultBulletCount(btn.value)}
-                        >{btn.label}</button>
-                      ))}
-                    </div>
-                    {currentVariant && (
-                      <div style={W.assaultSummaryText}>
-                        {assaultBulletCount === 'multi'
-                          ? 'Multi-cibles : +0 test / zone 3m'
-                          : `${assaultBulletCount} balles : +${currentVariant.bonusComp + dualWieldBonusComp} test / +${currentVariant.bonusDmg} deg`
-                        }
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
+            <AssaultRangedPanel
+              weaponDisplay={selectedWeapon ? `${selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'} (${selectedWeapon.slot})` : null}
+              weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.custom_name || weaponMd.ref_name || 'Arme'} (${weaponMd.slot})` : null}
+              assaultTargetId={assaultPendingTokenId}
+              getLabel={(id) => tokens.find(t => t.id === id)?.label ?? '?'}
+              onChooseTarget={handleChooseTarget}
+              showDualWieldSection={hasTwoWeapons && sameFirMode}
+              isDualWield={isDualWield}
+              currentFireMode={currentFireMode}
+              onDualWieldChange={(val) => setIsDualWield(val)}
+              assaultBulletCount={assaultBulletCount}
+              effectiveBulletCount={effectiveBulletCount ?? 1}
+              assaultVariantAB={assaultVariantAB}
+              ccSliderDisplayIdx={ccSliderDisplayIdx}
+              currentVariant={currentVariant}
+              dualWieldBonusComp={dualWieldBonusComp}
+              onBulletCountChange={(count) => setAssaultBulletCount(count)}
+              onVariantABChange={(ab) => setAssaultVariantAB(ab)}
+            />
           </div>
         )}
       </div>

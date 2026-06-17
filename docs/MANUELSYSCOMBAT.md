@@ -1,84 +1,148 @@
-Manuel Technique de Référence : Système de Combat Polaris V1Ce document constitue l'unique source de vérité (SSOT) cartographiant les règles du livre de base (LdB) et leur implémentation technique sous protocole WebSockets pur, afin de figer les comportements et d'éliminer les régressions croisées.1. Modèle de Données Persistant (Schéma Relationnel PostgreSQL)Pour éviter les effets de bord lors des requêtes concurrentes, les trois tables centrales obéissent à des contraintes strictes.       +------------------+             +--------------------+
-       |   COMBAT_STATE   |             |   COMBAT_ROSTER    |
-       +------------------+             +--------------------+
-       | campaign_id (PK) |             | id (PK)            |
-       | round            | 1      0..* | campaign_id (FK)   |
-       | current_phase    |<------------| token_id           |
-       | active_slot_idx  |             | base_initiative    |
-       +------------------+             | current_initiative |
-                                        | state_position     |
-                                        | state_weapon       |
-                                        | state_character    |
-                                        +--------------------+
-                                                  | 1
-                                                  |
-                                                  | 0..*
-                                        +--------------------+
-                                        |   COMBAT_ACTIONS   |
-                                        +--------------------+
-                                        | id (PK)            |
-                                        | roster_id (FK)     |
-                                        | action_key         |
-                                        | sequence (SMALLINT)|
-                                        | payload (JSONB)    |
-                                        +--------------------+
-Table combat_stateContrainte : Une seule ligne active par campaign_id.Champs clés : current_phase ('ROSTER', 'ANNOUNCEMENT', 'RESOLUTION'), round (INT), active_slot_idx (INT).Table combat_rosterbase_initiative : Fixée au calcul initial (calcREA = ADA + PER + altérations de santé). Armure mécanisée : MIN(Reaction, Manoeuvre_armure).current_initiative : Variable d'ajustement intra-tour d'action (modifiée par les annonces).Enums strictes :state_position : 'standing', 'crouching', 'prone'.state_weapon : 'holstered', 'ready', 'drawn'.state_character (JSONB) : Stocke les flags volatils (is_rushed, is_surprised, is_stunned).Table combat_actionsContrainte d'indexation : Index composite (roster_id, sequence).sequence (SMALLINT) : Déterminée par le serveur à l'insertion pour respecter l'ordre d'exécution physique obligatoire :Mouvement (sequence = 1)Micro-actions (sequence = 2)Assaut (sequence = 3)2. Automate d'État du Tour de Combat (State Machine)Le passage d'une phase à l'autre bloque l'accès à certaines commandes WS pour garantir l'atomicité. [Phase: ROSTER] ────(COMBAT_START)────> [Phase: ANNOUNCEMENT] ────(Tous validés)────> [Phase: RESOLUTION]
-        ▲                                          │                                          │
-        └─────────────────(COMBAT_END)─────────────┴───────────(Fin de la file d'actions)─────┘
-Phase ActuelleÉvénement DéclencheurActions Serveur / Effets sur la DBSockets Émis (Broadcast)ROSTERCOMBAT_STARTCalcule base_initiative de chaque token via charStats.js. Résout la surprise via jet de Réaction. Passe la phase à 'ANNOUNCEMENT'.COMBAT_STARTED, COMBAT_SURPRISE_PROMPTANNOUNCEMENTCOMBAT_ACTION_DECLAREInsère l'action dans combat_actions. Calcule et applique immédiatement le modificateur d'initiative sur current_initiative en DB.COMBAT_ACTION_DECLARED (Mise à jour UI de la timeline)ANNOUNCEMENTValidation du dernier slotRequête de screening SQL vérifiant la complétion des déclarations. Tri final du roster et passage à 'RESOLUTION'.COMBAT_PHASE_CHANGEDRESOLUTIONCOMBAT_NEXT_SLOTSélectionne le roster_id de l'index d'initiative courant. Consomme séquentiellement ses lignes de combat_actions filtrées par sequence ASC.COMBAT_SLOT_ACTIVATEDRESOLUTIONFin de la file d'actionsSi active_slot_idx atteint le dernier élément du roster : incrémente round, purge combat_actions, exécute la routine endTurn (nettoyage sélectif du JSONB state_character), réinitialise current_initiative = base_initiative, bascule la phase à 'ANNOUNCEMENT'.COMBAT_ROUND_INCREMENTED3. Moteur d'Initiative et Modificateurs TransitoiresL'ordre d'annonce et de résolution est mathématiquement interdépendant. Toute modification de l'un impacte dynamiquement l'affichage de l'autre.Ordre d'Annonce (Croissant)Les entités ayant la plus basse initiative annoncent en premier. Les entités rapides connaissent les intentions des lentes et peuvent adapter leur déclaration.Ordre de Résolution (Décroissant)Les entités ayant la plus haute initiative résolvent en premier.Gestion des Égalités (Départage d'Initiative)Priorité 1 : Plus haut niveau de Réaction naturelle (Reaction calculée nette de blessures/fatigue).Priorité 2 : Plus haute valeur d'Adrénaline (ADA).Priorité 3 : Simultanat strict (règle LdB : les deux attaques se résolvent en parallèle sans préséance de dégâts, les deux entités pouvant s'entretuer). Le comportement V1 Math.random() - 0.5 doit être strictement encapsulé pour ne pas rompre cette simultanéité légale.Table de Mutation de l'Initiative Actuelle (current_initiative)Action Déclarée (Annonce)Modificateur d'InitiativeImpact sur la RésolutionRègle Métier AssociéePrécipiter son action$+3$Avance l'action de 3 phases.Applique un malus de $-5$ au test de compétence final.Dégainer une arme$-5$ (ou $-3$ si main sur l'arme)Retarde l'action finale.Préparation obligatoire si l'état initial de l'arme est 'holstered'.Déplacement court ($\le\text{3m}$)$-3$Retarde l'action d'assaut.Assimilé à une Préparation intégrée à l'assaut (interdit si déplacement long déclaré).Changer mode de tir$-3$Retarde l'action finale.Obligatoire pour commuter entre Coup par coup, Rafale courte, Rafale longue.Changement de posture (Hors déplacement)S'accroupir ($-3$), Se jeter à terre ($-5$), Se relever ($-10$).Retarde fortement la phase d'action active.Gratuit si le mouvement se termine à la fin d'un déplacement long.Note : Si current_initiative <= 0, l'action principale est basculée au début du tour suivant (current_initiative = max_init + 1).4. Pipeline Algorithmique de la Résolution BalistiqueLorsqu'une action de type Assaut (Combat à distance) est consommée en phase de Résolution, le serveur doit exécuter précisément les opérations suivantes sans interversion :[1. Vérifications Géospatiales & Stock]
-   ├── Ligne de vue (DDA Raycast sur Redis)
-   ├── Distance vs Chaîne de portée ("X/Y/Z/W (V)")
-   └── Contrôle Munitions (char_inventory.quantity >= requis)
-                 │
-                 ▼
-[2. Calcul des Seuils et Modificateurs]
-   ├── Modificateurs contextuels (Postures, Couvertures, Blessures)
-   └── Application malus Précipitation (-5) ou bonus visés
-                 │
-                 ▼
-[3. Résolution des Dés]
-   ├── Test d'opposition ou simple (Surprise/Sans défense: simple +5)
-   └── Marge de réussite (MR = Seuil de réussite - Jet)
-                 │
-                 ▼
-[4. Calcul des Dommages & Localisation]
-   ├── Jet de Localisation (1d20 table Distance)
-   ├── Dommages Bruts = Arme + MR
-   └── Dommages Nets = Dommages Bruts - Résistance (Armure + Naturelle)
-                 │
-                 ▼
-[5. Altérations de Santé & Contre-coups]
-   ├── Enregistrement des blessures (Paliers de 5 points nets)
-   ├── Test de Choc (Si Grave/Critique/Mortelle)
-   └── Décrémentation Munitions (char_inventory)
-Vérifications Spatiales & Stock :LOS : Raycasting 3D (algorithme DDA) sur la grille de voxels stockée dans Redis, calculé depuis source_pos_z + hauteur_posture vers target_pos_z + hauteur_posture.Portée : Extraction et parsing de ref_equipment.range. Identification du palier (Courte, Moyenne, Longue, Extrême) pour déterminer le modificateur de portée de base.Munitions : Invalidation immédiate de l'action si quantity < bullet_count (sauf flag is_infinite).Calcul des Modificateurs :Calcul de la Difficulté nette de l'attaque : Seuil = Compétence de Tir +/- Modificateurs de Portée - Malus de Blessures actuelles - Carence de Force - Malus Précipitation (-5).Si la cible est sans défense (issue d'une surprise totale réussie) : Test simple avec bonus automatique de $+5$ (pas de test d'opposition).Exécution du Jet de Combat :Calcul de la marge de réussite (MR = Seuil - Jet). Si Jet > Seuil, échec de l'action balistique $\rightarrow$ Branchement direct à l'étape de décrémentation des munitions.Détermination de la Localisation et Application de l'Armure :Jet de 1d20 sur la table de localisation à distance.Extraction de la valeur d'armure de la cible spécifiquement sur cette localisation via calcResistanceArmure.Calcul des Dégâts Nets et Gravité :Dommages_Bruts = Dommages_Arme + MR.Dommages_Nets = Dommages_Bruts - (Protection_Localisation + Modificateur_Resistance_Naturelle).La gravité de la blessure est incrémentée par tranche stricte de 5 points de dommages nets. Écriture immédiate en DB.Tests de Choc et Effets Secondaires :Si la blessure enregistrée est localisée à la Tête/Corps avec une gravité $\ge$ Grave, ou si elle est Critique/Mortelle : Déclenchement automatique d'un jet de Choc en DB. Si échec, injection du flag is_stunned dans state_character.Consommation des ressources :Mise à jour transactionnelle de char_inventory.quantity = quantity - bullet_count. Diffusion de l'événement INVENTORY_UPDATED.5. Matrice d'Isolation des Risques de RégressionPour stopper l'effet domino lors des modifications de code, respectez impérativement cette matrice de dépendance :Si vous modifiez ce fichier......cela impacte directement ces fonctionnalités......et vous devez valider ces composants via tests unitaires.charStats.jsCalcul de l'Initiative de base, de la Réactivité et des paliers de blessure.Vérifier qu'une modification des PV/Blessures recalcule immédiatement l'ordre des slots dans la timeline sans attendre le round suivant.combatStore.js (Zustand)L'affichage des anneaux de déplacement (Sprint 4) et l'activation des boutons de modale.Valider que l'état 'combat' fige les contrôles standards du canvas et que le masquage par opacité s'exécute correctement en mode édition géospatiale.Schéma combat_actions (Postgres)La file d'attente globale et l'ordre d'exécution physique en phase de Résolution.S'assurer qu'aucune insertion d'action ne peut violer la contrainte de sequence (Mouvement toujours exécuté avant l'Assaut au sein du même slot).Handler WS COMBAT_ACTION_DECLARELa mise à jour de la timeline et le calcul immédiat des malus/bonus d'initiative.Tester qu'une action "Précipitée" réordonne instantanément le roster en DB et pousse la modification à tous les clients connectés.Routine endTurn (Serveur)Le nettoyage des états de fin de round et l'incrémentation du temps.Garantir que l'opérateur de soustraction JSONB (- 'is_rushed') n'efface pas les états persistants sur plusieurs rounds comme is_stunned ou les malus de maladies.
+# Manuel Technique de Référence — Système de Combat Polaris V1
 
-1. Phase d'Initialisation (Roster & Surprise)Règle Polaris (LdB)L'entrée en combat fige l'ordre de préparation. L'Initiative de base dépend de la Réactivité naturelle ($\text{Réactivité} = \text{Adrénaline} + \text{Perception}$), diminuée par les malus de blessures existants. L'armure mécanisée sature cette valeur via la formule $\min(\text{Réactivité}, \text{Manoeuvre Armure})$. La surprise totale donne lieu à des tests simples avec un bonus de $+5$ pour les agresseurs face à des cibles sans défense. Les égalités d'initiative sont départagées par un jet masqué pour désigner l'acteur prioritaire.Implémentation Système (Plan / Store)Calcul de Base : Validé via calcREA dans charStats.js. L'état initial est correctement injecté dans roster: [] via l'événement COMBAT_START.Bris d'Égalité : Conforme. Le serveur génère un jet de dé caché qui fige l'ordonnancement de manière déterministe.Surprise : Traitée de manière asynchrone via COMBAT_SURPRISE_PROMPT. Le flag is_surprised est stocké dans le JSONB state_character pour conditionner les droits d'action.2. Phase d'Annonce (Cinétique Tactique)Règle Polaris (LdB)L'ordre des annonces est impérativement croissant. Les personnages ayant l'initiative la plus basse déclarent leurs intentions en premier. Cette mécanique est le pilier tactique de Polaris : les combattants les plus rapides (haute initiative) attendent de voir les mouvements et choix des plus lents pour adapter leur propre stratégie. L'annonce est globale et fige les choix pour le round (type d'action, cible, mode de tir).[ORDRE DES ANNONCES : CROISSANT]
-Acteur Lent (INI: 7) Déclare ──> Acteur Rapide (INI: 15) Observe et S'adapte
-Implémentation Système (Plan / Store)Structure de la File : L'état transitoire est matérialisé par has_announced: false/true dans le roster.Régression Systémique Potentielle : Pour être conforme à Polaris, le moteur de tour doit bloquer la possibilité d'émettre l'événement COMBAT_ACTION_DECLARE tant que l'index du slot actif (activeSlotIdx) n'a pas atteint le jeton du joueur concerné dans l'ordre croissant. Si le système permet une déclaration simultanée ou désordonnée (chaque joueur clique quand il veut), l'avantage tactique des hautes initiatives est détruit.3. Mutations d'Initiative (Modificateurs Intra-Tour)Règle Polaris (LdB)L'Initiative courante (current_initiative) n'est pas statique. La déclaration de certaines actions altère immédiatement le score d'action pour le round en cours :Précipiter son action (vitesse augmentée mais précision réduite) : $+3$ INI / Malus de $-5$ au jet de compétence.Dégainer ou préparer une arme : $-5$ ou $-3$ INI.Changement de mode de tir / Changement de posture : $-3$ à $-10$ INI.Règle de report : Si l'accumulation des malus fait descendre l'initiative courante à une valeur $\le 0$, l'action principale est annulée pour le round en cours et reportée au début du round suivant.Implémentation Système (Plan / Store)Calcul des Mutations : Le système intègre ces variations. L'événement COMBAT_ACTION_DECLARE recalcule instantanément current_initiative en DB et met à jour le store via updateRoster. Le flag is_rushed est correctement tracé.Écart Logique V1 : Le document de planification ne spécifie pas de structure de bascule pour le report des actions dont l'INI tombe sous le seuil de 0. Elles risquent d'être traitées en fin de boucle de résolution au lieu d'être migrées vers le round suivant.4. Phase de Résolution (Cinétique Physique)Règle Polaris (LdB)L'ordre de résolution est impérativement décroissant. L'acteur ayant la plus haute initiative résout ses actions en premier. L'ordre d'exécution physique interne à un personnage suit une séquence stricte : Déplacement court ($\le\text{3m}$) intégré à l'assaut, ou Déplacement long ($>\text{3m}$) coupant l'action principale. Les dégâts sont instantanés : si un acteur à haute initiative tue ou étourdit (is_stunned) une cible plus lente, les actions déclarées de cette cible sont modifiées ou annulées avant son slot de résolution.[ORDRE DE RÉSOLUTION : DÉCROISSANT]
-Acteur Rapide (INI: 15) Résout ──> [Impact Physique / Mort] ──> Acteur Lent (INI: 7) Annulé
-Implémentation Système (Plan / Store)Séquencement Interne : Conforme. La table combat_actions utilise la colonne sequence (SMALLINT) pour garantir l'ordre : Mouvement (1) $\rightarrow$ Micro-actions (2) $\rightarrow$ Assaut (3).Consommation des Slots : L'automate progresse via activeSlotIdx et advanceSlot dans le store. Le traitement est séquentiel.5. Clôture et Maintenance des États (Fin de Round)Règle Polaris (LdB)À la fin du round de combat (tous les slots résolus), les modifications transitoires de type comportemental (Précipitation) s'effacent. En revanche, les altérations physiques persistent sur des durées définies par des dés : l'état Étourdi (is_stunned) dure 1d6 rounds, tandis que l'Inconscience dure 1d6 minutes.Implémentation Système (Plan / Store)Routine endTurn : Le système effectue une purge. L'usage de l'opérateur JSONB (- 'is_rushed') isole correctement l'effacement de la précipitation.Conformité des Compteurs : L'introduction de variables de type 1d6 tours pour l'état is_stunned nécessite que le JSONB state_character ne stocke pas un simple booléen, mais un entier décrémenté par le serveur à chaque itération de round dans combat_state.Matrice Globale d'Adéquation Polaris (Synthèse)Étape du TourRègle Métier PolarisModélisation TechniqueStatut LogiqueInitialisationTri Réactivité + Bris d'égalité masqué.calcREA + Jet caché serveur.ConformeOrdre AnnonceTri Croissant strict (Éléments lents d'abord).Store roster, ordonnancement UI dépendant de la phase.Alerte : Risque d'inversion visuelle/applicativeMutation INIModificateurs immédiats. Report si INI $\le 0$.Événement DECLARE modifiant current_initiative.Partiel (Gestion du seuil $\le 0$ manquante)Ordre RésolutionTri Décroissant strict (Éléments rapides d'abord).Progression par activeSlotIdx décroissant en INI.ConformeSéquence d'ActionMouvement puis Action principale.Contrainte de tri sequence (1, 2, 3) en base de données.ConformeFin de RoundPurge des modes, maintien des états physiques ($X$ tours).Routine endTurn avec traitement JSONB sélectif.Conforme
+> Source de vérité unique (SSOT) — règles LdB + implémentation WS. Fige les comportements, élimine les régressions croisées.
 
 ---
 
-## 6. RÃ¨gles Omises â€” ComplÃ©ments Obligatoires
+## 1. Modèle de Données (PostgreSQL)
 
-Les sections suivantes complÃ¨tent le manuel avec les rÃ¨gles du LdB non couvertes dans la version initiale. Source : REGLESYSCOMBAT.md (LdB Polaris, source de vÃ©ritÃ© absolue).
+### combat_state — 1 ligne par campaign_id active
+| Champ | Type | Valeurs |
+|---|---|---|
+| campaign_id | PK UUID | — |
+| round | INT | — |
+| current_phase | TEXT | `'ROSTER'` / `'ANNOUNCEMENT'` / `'RESOLUTION'` |
+| active_slot_idx | INT | Index slot courant (RESOLUTION) |
+
+### combat_roster — 1 ligne par token inscrit
+| Champ | Type | Note |
+|---|---|---|
+| base_initiative | INT | Fixée au COMBAT_START via `calcREA`. Armure méca : `MIN(REA, Manœuvre_armure)`. |
+| current_initiative | INT | Variable intra-tour — modifiée par les déclarations d'annonce. |
+| state_position | ENUM | `'standing'` / `'crouching'` / `'prone'` |
+| state_weapon | ENUM | `'holstered'` / `'ready'` / `'drawn'` |
+| state_character | JSONB | Flags volatils (`is_rushed`, `is_surprised`, `is_stunned`). **Merge obligatoire — jamais remplacement.** |
+
+### combat_actions — actions séquencées pour la RESOLUTION
+| Champ | Type | Note |
+|---|---|---|
+| roster_id | FK | → combat_roster |
+| action_key | TEXT | Type d'action déclarée |
+| sequence | SMALLINT | **1** = Mouvement / **2** = Micro-actions / **3** = Assaut. Index composite (roster_id, sequence). |
+| payload | JSONB | Données spécifiques à l'action |
 
 ---
 
-### 6.1 Modificateurs de Circonstances â€” Combat Ã  Distance (LdB p.227)
+## 2. Automate d'État
+
+```
+ROSTER ──(COMBAT_START)──> ANNOUNCEMENT ──(tous validés)──> RESOLUTION
+  ▲                                                               │
+  └──────────────(COMBAT_END / fin file actions)─────────────────┘
+```
+
+| Phase | Déclencheur | Actions serveur | Émis |
+|---|---|---|---|
+| ROSTER | `COMBAT_START` | `calcREA` chaque token, résout surprise | `COMBAT_STARTED`, `COMBAT_SURPRISE_PROMPT` |
+| ANNOUNCEMENT | `COMBAT_ACTION_DECLARE` | Insère `combat_actions`, applique mod INI sur `current_initiative` | `COMBAT_ACTION_DECLARED` |
+| ANNOUNCEMENT | Dernier slot validé | Screening SQL complétion, tri final roster | `COMBAT_PHASE_CHANGED` |
+| RESOLUTION | `COMBAT_NEXT_SLOT` | Consomme `combat_actions` ORDER BY sequence ASC | `COMBAT_SLOT_ACTIVATED` |
+| RESOLUTION | Fin file actions | +round, purge `combat_actions`, `endTurn`, reset `current_initiative = base_initiative` → ANNOUNCEMENT | `COMBAT_ROUND_INCREMENTED` |
+
+> ⚠️ **Alerte conformité :** `COMBAT_ACTION_DECLARE` doit être bloqué tant que le slot actif (ordre croissant) n'a pas atteint le token du joueur. Déclaration désordonnée = destruction de l'avantage tactique des hautes initiatives.
+
+---
+
+## 3. Initiative
+
+**Ordre annonce :** croissant — lents déclarent en premier, rapides s'adaptent.
+**Ordre résolution :** décroissant — rapides résolvent en premier.
+**Départage :** 1. REA nette > 2. ADA > 3. Simultanat (`Math.random()` V1 — dette connue, acceptable VTT).
+
+> ⚠️ **Écart V1 :** `current_initiative ≤ 0` → action reportée tour suivant. Non implémenté — risque de traitement en fin de boucle de résolution au lieu de migration.
+
+### Modificateurs current_initiative (appliqués immédiatement à l'annonce)
+
+| Action déclarée | Mod INI | Effet secondaire |
+|---|---|---|
+| Précipiter | +3 | Malus −5 au jet de compétence final |
+| Dégainer | −5 (−3 si main sur arme) | Obligatoire si arme `'holstered'` |
+| Déplacement court (≤3m) | −3 | Préparation intégrée (interdit si déplacement long déclaré) |
+| Changer mode de tir | −3 | — |
+| S'accroupir | −3 | — |
+| Se jeter à terre | −5 | — |
+| Se relever | −10 | Gratuit si mouvement se termine à la fin d'un déplacement long |
+
+---
+
+## 4. Pipeline Balistique (RESOLUTION — type Assaut distance)
+
+```
+[1] Vérifications
+    LOS : DDA Raycast 3D sur Redis (source_pos_z + hauteur_posture → target_pos_z + hauteur_posture)
+    Distance : palier portée depuis ref_equipment.range (Courte/Moyenne/Longue/Extrême)
+    Munitions : quantity ≥ bullet_count (sauf is_infinite) → sinon rejet immédiat
+
+[2] Seuil
+    = compétence tir ± portée − malus blessures − carence FOR − précipitation(−5)
+    Cible sans défense (surprise totale) → test simple +5, pas d'opposition
+
+[3] Jet D20
+    MR = Seuil − jet. Si jet > Seuil → échec → step 5 (munitions)
+
+[4] Localisation & Dommages
+    1D20 → table localisation distance → calcResistanceArmure(localisation)
+    Dommages_Bruts = dommages_arme + MR
+    Dommages_Nets  = Bruts − (Protection_localisation + RD_Naturelle) → gravité par tranche de 5
+
+[5] Altérations & Ressources
+    Test de Choc si Grave(Tête/Corps) ou Critique/Mortelle → is_stunned si échec
+    char_inventory.quantity -= bullet_count → INVENTORY_UPDATED
+```
+
+---
+
+## 5. Matrice Isolation Risques de Régression
+
+| Fichier modifié | Impact direct | Valider |
+|---|---|---|
+| `charStats.js` | Initiative base, REA, paliers blessure | Recalcul INI immédiat si blessure (sans attendre round suivant) |
+| `combatStore.js` | Anneaux déplacement, boutons modale | État 'combat' fige canvas ; opacité correcte mode édition |
+| Schéma `combat_actions` | File attente, ordre résolution | Aucune insertion ne viole la contrainte sequence (1 < 2 < 3) |
+| Handler `COMBAT_ACTION_DECLARE` | Timeline, mod INI | Action précipitée reordonne roster DB + push tous clients |
+| Routine `endTurn` | Nettoyage fin de round | `- 'is_rushed'` ne supprime pas `is_stunned` ni malus multi-rounds |
+
+### Statut d'adéquation Polaris
+
+| Étape | Statut | Note |
+|---|---|---|
+| Initialisation (calcREA + bris d'égalité masqué) | ✅ Conforme | Jet caché serveur, déterministe |
+| Ordre annonce (croissant strict) | ⚠️ Alerte | Risque déclaration désordonnée si guard absent — voir §2 |
+| Mutation INI (modificateurs immédiats) | ⚠️ Partiel | Gestion seuil ≤ 0 manquante — voir §3 |
+| Ordre résolution (décroissant strict) | ✅ Conforme | `activeSlotIdx` décroissant en INI |
+| Séquence interne (Mouvement → Assaut) | ✅ Conforme | Contrainte `sequence` (1,2,3) en DB |
+| Fin de round (purge modes, états persistants) | ✅ Conforme | `endTurn` JSONB sélectif |
+
+---
+
+## 6. Règles Omises — Compléments Obligatoires
+
+Les sections suivantes complètent le manuel avec les règles du LdB non couvertes dans la version initiale. Source : REGLESYSCOMBAT.md (LdB Polaris, source de vérité absolue).
+
+---
+
+### 6.1 Modificateurs de Circonstances — Combat à Distance (LdB p.227)
 
 Le pipeline balistique doit appliquer ces modificateurs AVANT le jet de tir :
 
-#### DÃ©placement de la cible
+#### Déplacement de la cible
 | Allure cible | Modificateur |
 |---|---|
 | Allure moyenne | -3 |
 | Allure rapide | -5 |
 | Allure maximale | -7 |
 
-#### DÃ©placement du tireur
+#### Déplacement du tireur
 | Allure tireur | Modificateur |
 |---|---|
 | Allure lente | -3 |
@@ -116,7 +180,7 @@ Le pipeline balistique doit appliquer ces modificateurs AVANT le jet de tir :
 
 ---
 
-### 6.2 Pipeline Combat au Contact (CaC) â€” Test d'Opposition (LdB p.222-225)
+### 6.2 Pipeline Combat au Contact (CaC) — Test d'Opposition (LdB p.222-225)
 
 Contrairement au combat a distance (test simple), le CaC utilise un **test d'opposition** entre les deux combattants.
 
@@ -201,7 +265,7 @@ Double tranchant : si le bénéficiaire perd le test, l'adversaire peut casser l
 
 ### 6.3 Attaques Multiples par Tour (LdB p.218-219)
 
-**Regle avancee â€” doit etre annoncee lors de la declaration d'intention.**
+**Regle avancee — doit etre annoncee lors de la declaration d'intention.**
 
 - Maximum **3 attaques** par tour de combat.
 - Malus applique a **toutes** les attaques du tour :
@@ -255,7 +319,7 @@ Un joueur peut ne pas agir a sa phase d'initiative et attendre.
 
 ---
 
-### 6.6 Saisie (Lutte) â€” Preparation -3 INI (LdB p.226)
+### 6.6 Saisie (Lutte) — Preparation -3 INI (LdB p.226)
 
 Effectuer une saisie sur un adversaire necessite d'abord de **reussir un test de combat au contact**. Cette saisie est une **Preparation** qui coute **-3 points d'Initiative**.
 
@@ -286,7 +350,7 @@ Ce reset doit se faire **AVANT** le passage en phase ANNOUNCEMENT du tour suivan
 
 ---
 
-### 6.8 Simultaneite â€” Note d'Implementation (LdB p.214)
+### 6.8 Simultaneite — Note d'Implementation (LdB p.214)
 
 Le LdB dit : egalite de Reaction = **actions simultanees** (les deux attaques se resolvent en parallele, les deux peuvent s'entretuer mutuellement avant que l'une annule l'autre).
 
@@ -432,8 +496,6 @@ Pas d'attributs. Pas de maîtrise. Pas de calcul AN/NA. Le niveau du programme e
 | `pilotage` | Déplacement (mode autonome) | Tour du drone | Pas de test requis — déplacement selon `drone_sheet.vitesse` |
 | `medical` | Premiers soins / Chirurgie | Personnage blessé à portée | D20 ≤ niveau → soin (hors combat principalement) |
 | `reparation` | Restaurer intégrité d'un drone | Drone endommagé à portée | D20 ≤ niveau → restauration partielle |
-
-**`armement_contact` — portée :** aucun modificateur de portée applicable (contact physique ≤ 3m satisfait par définition). Modificateurs légitimes : taille, obscurité, couverture uniquement. ⚠️ **Bug DC3 actif** : `PORTEE_MOD_COMP['bout_portant']` = +5 appliqué à tort dans `resolveDroneAssaultAction` — voir BUGIDENTIFIE.md.
 
 **Sans programme `esquive` :** le drone ne peut pas se défendre contre les attaques CaC — aucun test d'opposition possible.
 

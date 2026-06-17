@@ -1,5 +1,5 @@
 # ARCHI_REWORK.md — Reworks architecturaux
-> Créé Session 96 — 2026-06-16
+> Créé Session 96 — 2026-06-16 | Mis à jour Session 99 — 2026-06-17
 > Rédigé par Claude Sonnet 4.6 à destination des agents Claude futurs.
 > Objectif : remplacer le bricolage incrémental par des reworks structurés, complets, et non régressifs.
 
@@ -439,6 +439,106 @@ Résultat attendu : même comportement que Scénario 1, via le call site `resolv
 
 ---
 
+## REWORK-05 — Panneaux d'action partagés (tir / CaC / drone)
+
+### Problème
+
+3 panneaux droits (Tir, CaC, Drone) et 1 bloc log (`DeclareLogContent`) copiés-collés entre `CombatGmDeclareWindow.jsx` (~1214 lignes) et `CombatActionWindow.jsx` (~1878 lignes). ~370 lignes dupliquées. Toute correction devait être appliquée deux fois manuellement.
+
+Bug COM5 (symptôme) : le handler GM dans le panneau CaC appelait `handleStartMelee()` sur click chip mode — le handler Joueur ne le faisait pas. Bug impossible à détecter sans lire les deux fichiers en parallèle.
+
+Trigger ARCHI_REWORK : même bloc dupliqué N ≥ 3 fois (compte les futurs FenetreDrone, FenetreExoArmure).
+
+### État actuel au moment du rework (Session 97)
+
+- `CombatGmDeclareWindow.jsx` L.779-916 : panneau CaC inline
+- `CombatGmDeclareWindow.jsx` L.919-1062 : panneau tir inline
+- `CombatGmDeclareWindow.jsx` L.593-648 : panneau drone inline
+- `CombatActionWindow.jsx` L.1177-1383 : panneau CaC inline
+- `CombatActionWindow.jsx` L.1440-1593 : panneau tir humanoid inline
+- `CombatActionWindow.jsx` L.1386-1436 : panneau tir drone inline
+- `CombatActionWindow.jsx` L.683-736 : `declareLogSection` inline — rendu légèrement divergent du GM
+
+### Décision architecturale
+
+Extraire 3 sous-composants partagés + 1 export de contenu log + migration de constantes vers `combatSections.js`. Les deux fenêtres parentes deviennent des orchestrateurs qui montent les panneaux.
+
+**Rejeté :** fusion GM+Joueur en un seul composant — différence structurelle réelle (navigation de slots, multi-phases, preview temps réel).
+
+### Interface cible (Session 98 — implémentée)
+
+```js
+// combatSections.js — nouveaux exports
+export const ACTION_LABELS   = { assault, melee, reload, micro, move_short, ... }
+export const PURE_MOVE_TYPES = new Set([...])
+export const COMBAT_MODE_DEFS = [{ k, l, tooltip }]  // tooltips canoniques version Joueur
+export function computeFireVariant(fireMode, rawBulletCount, variantAB, { defaultCcCount = null } = {})
+// → { variant, effectiveBulletCount }
+// defaultCcCount=1 pour GM (PNJ default tir simple) / null pour Joueur (forçage sélection explicite)
+
+// CombatDeclareLog.jsx
+export function DeclareLogContent({ maxHeight })
+// Corps seul — pas de titre (GM a titre draggable, Joueur titre inline)
+
+// AssaultRangedPanel.jsx   — couleur #e07070
+// MeleeCombatPanel.jsx     — couleur #70c070 — fix COM5 : onModeChange ne déclenche plus target mode
+// DroneWeaponPanel.jsx     — couleur #30aaaa
+```
+
+### Périmètre
+
+**Fichiers modifiés :**
+
+| Fichier | Modification |
+|---|---|
+| `combatSections.js` | +`ACTION_LABELS`, `PURE_MOVE_TYPES`, `COMBAT_MODE_DEFS`, `computeFireVariant` |
+| `CombatDeclareLog.jsx` | +`export DeclareLogContent({ maxHeight })` |
+| `AssaultRangedPanel.jsx` | NOUVEAU — panneau tir CC/RC/RL partagé |
+| `MeleeCombatPanel.jsx` | NOUVEAU — panneau CaC partagé (COM5 corrigé) |
+| `DroneWeaponPanel.jsx` | NOUVEAU — panneau drone partagé |
+| `CombatGmDeclareWindow.jsx` | Panneaux droits → 3 imports partagés. Fix COM5 : `onModeChange` ≠ `handleStartMelee`. |
+| `CombatActionWindow.jsx` | `declareLogSection` inline → `<DeclareLogContent>` (fix CL2). Panneaux droits → imports partagés. |
+
+**Fichiers NON touchés :** `server/`, `shared/events.js`, `SessionPage.jsx`, `CombatOverlay.jsx`, stores.
+
+### Pièges documentés (7)
+
+- **P1** — `DeclareLogContent` = corps seul, pas de titre
+- **P2** — `styles` prop supprimée : panneaux définissent leurs styles internes
+- **P3** — `isWeaponDrawn` ajouté à `MeleeCombatPanel` (grisage armes Joueur). ⚠ GM passait `true` hardcodé (hypothèse fausse — PNJ peut avoir arme rangée) — voir P7
+- **P4** — `chargeMoveDest` normalisé : GM passe `chargeSelection?.move ?? null`, Joueur passe `moveSelection ?? null`
+- **P5** — `handleStartMelee()` déplacée (pas supprimée) → appelée via bouton "Cibler" explicite
+- **P6** — `COMBAT_MODE_DEFS` tooltips : version Joueur = source canonique (plus complète)
+- **P7** — `state_weapon` : 3 états (`holstered`/`ready`/`drawn`), coûts INI asymétriques (holstered→drawn = −5, holstered→ready = −3, drawn→holstered = −10). Tooltip "−3 INI" dans `MeleeCombatPanel` L.138 est FAUX. → REWORK-06
+
+### computeFireVariant — subtilité GM vs Joueur
+
+**GM** passe `{ defaultCcCount: 1 }` → variant `cc_1` auto si assaultBulletCount=null (PNJ a un tir par défaut).
+**Joueur** passe rien (default null) → variant=null si assaultBulletCount=null → `rangeValid=false` (force sélection explicite).
+Joueur passe `effectiveBulletCount={effectiveBulletCount ?? 1}` au panel pour le radio visuel "Tir simple" pré-sélectionné (comportement conservé).
+
+### Validation (Session 98 — clos partiel)
+
+- **Scénario 1** — Tir GM PNJ, mode CC : non testé
+- **Scénario 2** — COM5 : mode chip GM ne déclenche plus visée auto : non testé
+- **Scénario 3** — CL2 : log Joueur = rendu identique GM : non testé
+- **Scénario 4** — Non-régression CaC Joueur mode Charge : non testé
+- **Scénario 5** — Non-régression Drone GM tir : non testé
+
+### Definition of done
+
+- [x] `npm run build` — 0 erreur Vite ✅ Session 98
+- [x] SR 0 erreur ✅ Session 98
+- [x] `grep -c "currentFireMode === 'CC'" CombatGmDeclareWindow.jsx` → 0 ✅ Session 99
+- [x] `grep -c "currentFireMode === 'CC'" CombatActionWindow.jsx` → 0 ✅ Session 99
+- [ ] Scénario 1 validé
+- [ ] Scénario 2 validé (COM5)
+- [ ] Scénario 3 validé (CL2)
+- [ ] Scénario 4 validé (non-régression)
+- [ ] Scénario 5 validé (non-régression)
+
+---
+
 ## Prochains reworks identifiés (non planifiés)
 
 Ces blocs sont candidats à un rework futur selon les mêmes principes :
@@ -446,5 +546,6 @@ Ces blocs sont candidats à un rework futur selon les mêmes principes :
 | ID | Bloc | Signal |
 |---|---|---|
 | REWORK-02 | Calcul dégâts distance | Dupliqué dans DAMAGE_CONFIRM + resolveAssaultAction |
-| REWORK-03 | Résolution blessure + wound insertion | resolveWoundInsertion appelé identiquement dans 5+ flux |
+| REWORK-03 | Résolution blessure + wound insertion | ✅ Clos Session 97 — `woundService.applyWound` |
 | REWORK-04 | Système de combat complet | Migration vers State Machine (FSM) — sprint long terme |
+| REWORK-06 | combatDeclarationStore | Staging state déclaration fragmenté en local React state (GM+Joueur). Auto-draw, default mains nues non implémentables sans débat archi. Voir REWORK-05.md §REWORK-06 |

@@ -6,10 +6,13 @@ import api from '../lib/api'
 import {
   STATE_DEFS, QUICK_ACTIONS, MAP_ACTIONS,
   calcIniDelta,
-  FIRE_MODE_VARIANTS, CC_REPS_STEPS, RL_BUTTONS,
+  CC_REPS_STEPS, computeFireVariant,
 } from './combatSections.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 import { useDraggable } from '../lib/useDraggable.js'
+import DroneWeaponPanel from './DroneWeaponPanel.jsx'
+import AssaultRangedPanel from './AssaultRangedPanel.jsx'
+import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 
 // ---------------------------------------------------------------------------
 // Etat par défaut (= DEFAULT colonne DB)
@@ -92,9 +95,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // Drone GM — arme sélectionnée + catalogue récupéré
   const [selectedDroneWeaponId, setSelectedDroneWeaponId] = useState(null)
   const [droneWeapons, setDroneWeapons] = useState([])
+  const [isSelectingOnMap, setIsSelectingOnMap] = useState(false)
 
   const tokensRef = useRef(tokens)
   useEffect(() => { tokensRef.current = tokens }, [tokens])
+
+  const isMountedRef = useRef(true)
+  useEffect(() => () => { isMountedRef.current = false }, [])
 
   // ── Reset complet quand le slot actif change ─────────────────────────────
   useEffect(() => {
@@ -113,6 +120,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setSelectedGmMeleeWeaponId(null)
     setSelectedDroneWeaponId(null)
     setDroneWeapons([])
+    setIsSelectingOnMap(false)
   }, [activeTokenId])
 
   // Sync states initiaux depuis rosterEntry
@@ -170,7 +178,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   useEffect(() => {
     if (!activeTokenId) return
     const w = equipment[activeTokenId]?.weapon ?? null
-    if (w && !w.ref_fire_mode) setSelectedGmMeleeWeaponId(w.inv_id)
+    if (w && !w.ref_fire_mode && initialStates.weapon === 'drawn') setSelectedGmMeleeWeaponId(w.inv_id)
   }, [activeTokenId, equipment])
 
   // ── Helpers ─────────────────────────────────────────────────────────────
@@ -229,6 +237,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   const meleeDefensif    = combatMode === 'defensif' || combatMode === 'retraite'
   const effectiveMeleeCount = combatMode === 'charge' ? 1 : meleeAttackCount
+  const effectiveMeleeCountRef = useRef(effectiveMeleeCount)
+  effectiveMeleeCountRef.current = effectiveMeleeCount
   // CaC — arme sélectionnée (null = mains nues, sinon inv_id)
   // Si le GM a une arme de contact disponible et l'a sélectionnée, on l'utilise
   const meleeWeaponAvailable = weapon && !weapon.ref_fire_mode ? weapon : null
@@ -239,28 +249,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     ? weapon.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
     : ['cc']
   const currentFireMode = localStates.fire_mode.toUpperCase()
-  // bulletCount effectif : CC défaut = 1 (tir simple), RC = 3 auto, RL = choix explicite
-  const effectiveBulletCount = assaultBulletCount ?? (
-    currentFireMode === 'RC' ? 3 :
-    currentFireMode === 'CC' ? 1 :
-    null
+  const { variant: currentVariant, effectiveBulletCount } = computeFireVariant(
+    currentFireMode, assaultBulletCount, assaultVariantAB, { defaultCcCount: 1 }
   )
-  let currentVariant = null
-  if (currentFireMode === 'RC') {
-    currentVariant = FIRE_MODE_VARIANTS.RC[0]
-  } else if (currentFireMode === 'CC' && effectiveBulletCount) {
-    if (effectiveBulletCount === 7) {
-      currentVariant = FIRE_MODE_VARIANTS.CC.find(v => v.id === (assaultVariantAB === 'B' ? 'cc_7b' : 'cc_7a'))
-    } else if (effectiveBulletCount === 10) {
-      currentVariant = FIRE_MODE_VARIANTS.CC.find(v => v.id === (assaultVariantAB === 'B' ? 'cc_10b' : 'cc_10a'))
-    } else {
-      currentVariant = FIRE_MODE_VARIANTS.CC.find(v => v.bulletCount === effectiveBulletCount)
-    }
-  } else if (currentFireMode === 'RL' && assaultBulletCount) {
-    currentVariant = assaultBulletCount === 'multi'
-      ? FIRE_MODE_VARIANTS.RL.find(v => v.id === 'rl_mc')
-      : FIRE_MODE_VARIANTS.RL.find(v => v.bulletCount === assaultBulletCount)
-  }
   // Slider CC répétition
   const ccSliderIdx = assaultBulletCount && assaultBulletCount !== 1
     ? CC_REPS_STEPS.indexOf(assaultBulletCount)
@@ -287,11 +278,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ── Déplacement direct ───────────────────────────────────────────────────
   const handleStartMove = () => {
     if (!onEnterMoveMode || !activeTokenId || !activeToken) return
+    setIsSelectingOnMap(true)
     onEnterMoveMode(
       DEFAULT_PNJ_ALLURES, activeTokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
-      (sel) => setPendingMove(sel),
-      () => setPendingMove(null),
+      (sel) => { setPendingMove(sel); setIsSelectingOnMap(false) },
+      () => { setPendingMove(null); setIsSelectingOnMap(false) },
     )
   }
 
@@ -299,11 +291,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const handleStartAttack = () => {
     if (!onEnterTargetMode || !activeTokenId || !activeToken) return
     setAssaultTarget(null)
+    setIsSelectingOnMap(true)
     onEnterTargetMode(
       activeTokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
-      (targetId) => setAssaultTarget({ targetTokenId: targetId }),
-      () => {},
+      (targetId) => { setAssaultTarget({ targetTokenId: targetId }); setIsSelectingOnMap(false) },
+      () => { setIsSelectingOnMap(false) },
       'ranged'
     )
   }
@@ -312,6 +305,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const handleStartMelee = () => {
     if (!onEnterTargetMode || !activeTokenId || !activeToken) return
     setMeleeTargets([])
+    setIsSelectingOnMap(true)
     // Pour N attaques, on enchaîne N sélections
     const selectNext = (idx) => {
       onEnterTargetMode(
@@ -323,9 +317,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             next[idx] = targetId
             return next
           })
-          if (idx + 1 < effectiveMeleeCount) selectNext(idx + 1)
+          if (idx + 1 < effectiveMeleeCountRef.current) {
+            setTimeout(() => { if (isMountedRef.current) selectNext(idx + 1) }, 0)
+          } else {
+            setIsSelectingOnMap(false)
+          }
         },
-        () => {},
+        () => { setIsSelectingOnMap(false) },
         'melee'
       )
     }
@@ -337,6 +335,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     if (!activeToken) return
     setCombatMode('charge')
     setChargeSelection(null)
+    setIsSelectingOnMap(true)
     const chargeAllures = {
       lente: DEFAULT_PNJ_ALLURES.lente, moyenne: DEFAULT_PNJ_ALLURES.lente,
       rapide: DEFAULT_PNJ_ALLURES.lente, max:    DEFAULT_PNJ_ALLURES.lente,
@@ -349,12 +348,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         onEnterTargetMode?.(
           activeTokenId,
           { x: activeToken.pos_x, z: activeToken.pos_y },
-          (targetId) => setChargeSelection({ move, targetTokenId: targetId }),
-          () => setCombatMode('normal'),
+          (targetId) => { setChargeSelection({ move, targetTokenId: targetId }); setIsSelectingOnMap(false) },
+          () => { setCombatMode('normal'); setIsSelectingOnMap(false) },
           'melee'
         )
       },
-      () => setCombatMode('normal'),
+      () => { setCombatMode('normal'); setIsSelectingOnMap(false) },
     )
   }
 
@@ -420,7 +419,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // RENDU
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="combat-win" style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top }}>
+    <div className="combat-win" style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: isSelectingOnMap ? 0 : 1, pointerEvents: isSelectingOnMap ? 'none' : 'auto' }}>
 
       {/* HEADER */}
       <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>
@@ -473,7 +472,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 <span className="combat-win-section-title" style={{ color: '#aa8a30' }}>ACTION</span>
                 <div style={S.actionGrid}>
                   {MAP_ACTIONS.map(a => {
-                    const disabled = (a.k === 'attack' && !rangedActive) || (isStunnedActivePnj && (a.k === 'attack' || a.k === 'melee'))
+                    const noRangedWeapon = a.k === 'attack' && !rangedActive
+                    const weaponNotDrawn = a.k === 'attack' && rangedActive && localStates.weapon !== 'drawn'
+                    const stunDisabled   = isStunnedActivePnj && (a.k === 'attack' || a.k === 'melee')
+                    const disabled = noRangedWeapon || stunDisabled
+                    const grayed   = weaponNotDrawn || disabled
                     const active   = !disabled && (
                       a.k === 'attack' ? isAttackActive :
                       a.k === 'melee'  ? isMeleeSetup   :
@@ -499,6 +502,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                               setAssaultVariantAB('A')
                               return
                             }
+                            if (localStates.weapon !== 'drawn') {
+                              setLocalStates(prev => ({ ...prev, weapon: 'drawn' }))
+                            }
                             handleStartAttack()
                           } else if (a.k === 'melee') {
                             if (isMeleeSetup) {
@@ -507,7 +513,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                               setChargeSelection(null)
                               setCombatMode('normal')
                             } else {
-                              setMeleePendingMode(true)
+                              handleStartMelee()
                             }
                           } else {
                             setMapAction(prev => prev === a.k ? null : a.k)
@@ -516,17 +522,17 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                         style={{
                           ...S.actionBtn,
                           ...(active   ? S.actionBtnActive   : {}),
-                          ...(disabled ? S.actionBtnDisabled : {}),
+                          ...(grayed ? S.actionBtnDisabled : {}),
                           ...span2,
                         }}
                       >
-                        <span style={{ ...S.actionLabel, color: active ? '#e8c870' : (disabled ? '#2a3040' : '#aaccdd') }}>
+                        <span style={{ ...S.actionLabel, color: active ? '#e8c870' : (grayed ? '#2a3040' : '#aaccdd') }}>
                           {a.l}
                         </span>
                         {a.ini && !disabled && (
                           <span style={{ ...S.actionIni, color: active ? '#e8c870' : '#5a6070' }}>{a.ini}</span>
                         )}
-                        {disabled && (
+                        {noRangedWeapon && (
                           <span style={S.actionDisabledTag}>sans arme dist.</span>
                         )}
                       </div>
@@ -592,58 +598,26 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           {/* DRONE — Sélection arme + cible */}
           {isActiveDrone && (
             <div style={S.controls}>
-              <div className="combat-win-section">
-                <span className="combat-win-section-title" style={{ color: '#30aaaa' }}>ARMEMENT DRONE</span>
-                {droneWeapons.length === 0 ? (
-                  <span style={{ color: '#607070', fontSize: 11, padding: '4px 0' }}>Aucune arme configurée</span>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {droneWeapons.map(w => (
-                      <div key={w.id}
-                        onClick={() => setSelectedDroneWeaponId(w.id)}
-                        style={{
-                          ...S.weaponOption,
-                          ...(selectedDroneWeaponId === w.id ? S.weaponOptionActive : {}),
-                        }}
-                      >
-                        <span style={S.weaponOptionLabel}>{w.display_name ?? w.ref_name ?? 'Arme drone'}</span>
-                        <span style={{ fontSize: 9, color: '#507070', fontFamily: 'monospace' }}>
-                          {w.fire_mode?.toUpperCase() ?? '?'} {w.damage_formula ?? w.ref_damage_h ?? ''}
-                        </span>
-                        <span style={{ ...S.weaponRadio, ...(selectedDroneWeaponId === w.id ? S.weaponRadioActive : {}) }} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="combat-win-section">
-                <span className="combat-win-section-title" style={{ color: '#aa8a30' }}>CIBLE</span>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <button className="btn"
-                    onClick={() => {
-                      if (!onEnterTargetMode || !activeTokenId || !activeToken) return
-                      setAssaultTarget(null)
-                      onEnterTargetMode(
-                        activeTokenId,
-                        { x: activeToken.pos_x, z: activeToken.pos_y },
-                        (targetId) => setAssaultTarget({ targetTokenId: targetId }),
-                        () => {},
-                        'ranged',
-                      )
-                    }}
-                    style={{ minWidth: 70 }}
-                  >
-                    Cibler
-                  </button>
-                  {assaultTarget?.targetTokenId && (
-                    <span style={{ color: '#e07070', fontSize: 11 }}>
-                      → {getLabel(assaultTarget.targetTokenId)}
-                    </span>
-                  )}
-                </div>
-              </div>
-
+              <DroneWeaponPanel
+                droneWeapons={droneWeapons}
+                selectedWeaponId={selectedDroneWeaponId}
+                assaultTargetId={assaultTarget?.targetTokenId ?? null}
+                showReadyBadge={false}
+                onWeaponSelect={(id) => setSelectedDroneWeaponId(id)}
+                onChooseTarget={() => {
+                  if (!onEnterTargetMode || !activeTokenId || !activeToken) return
+                  setAssaultTarget(null)
+                  setIsSelectingOnMap(true)
+                  onEnterTargetMode(
+                    activeTokenId,
+                    { x: activeToken.pos_x, z: activeToken.pos_y },
+                    (targetId) => { setAssaultTarget({ targetTokenId: targetId }); setIsSelectingOnMap(false) },
+                    () => { setIsSelectingOnMap(false) },
+                    'ranged',
+                  )
+                }}
+                getLabel={getLabel}
+              />
             </div>
           )}
 
@@ -776,288 +750,65 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         </div>
 
         {/* PANNEAU DROIT — Mode CaC */}
-        {isMeleeSetup && isActivePnj && (() => {
-          const curMode   = combatMode
-          const chargeTgt = chargeSelection?.targetTokenId ? tokens.find(t => t.id === chargeSelection.targetTokenId) : null
-          const isQueueTarget = combatTargetMode?.tokenId === activeTokenId && !chargeSelection?.targetTokenId
-          return (
-            <div style={S.meleePanelGm}>
-
-              {/* Sélection arme CaC */}
-              <div style={S.meleePanelTitle}>ARME</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
-                {/* Mains nues */}
-                <div
-                  onClick={() => setSelectedGmMeleeWeaponId(null)}
-                  style={{ ...S.weaponOption, ...(selectedGmMeleeWeaponId === null ? S.weaponOptionActive : {}) }}
-                >
-                  <span style={S.weaponOptionLabel}>Mains nues</span>
-                  <span style={{ ...S.weaponRadio, ...(selectedGmMeleeWeaponId === null ? S.weaponRadioActive : {}) }} />
-                </div>
-                {/* Arme de contact (si équipée et non-ranged) */}
-                {meleeWeaponAvailable && (
-                  <div
-                    onClick={() => setSelectedGmMeleeWeaponId(meleeWeaponAvailable.inv_id)}
-                    style={{ ...S.weaponOption, ...(selectedGmMeleeWeaponId === meleeWeaponAvailable.inv_id ? S.weaponOptionActive : {}) }}
-                  >
-                    <span style={S.weaponOptionLabel}>{meleeWeaponAvailable.name ?? 'Arme'}</span>
-                    <span style={{ fontSize: 8, color: '#507050', fontFamily: 'monospace' }}>{meleeWeaponAvailable.slot}</span>
-                    <span style={{ ...S.weaponRadio, ...(selectedGmMeleeWeaponId === meleeWeaponAvailable.inv_id ? { ...S.weaponRadioActive, borderColor: '#70c070', background: '#70c070' } : {}) }} />
-                  </div>
-                )}
-              </div>
-
-              <div style={S.meleePanelTitle}>MODE DE COMBAT</div>
-
-              {/* Chips Normal / Offensif / Charge / Défensif / Retraite */}
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>
-                {[
-                  { k: 'normal',   l: 'Normal',   tooltip: 'Mode par défaut — aucun modificateur.' },
-                  { k: 'offensif', l: 'Offensif',  tooltip: '+3 attaque / −5 défense si attaqué.' },
-                  { k: 'charge',   l: 'Charge',    tooltip: '+3 attaque, +3 dégâts / −7 défense / ≥ 3m + dépl. court gratuit.' },
-                  { k: 'defensif', l: 'Défensif',  tooltip: 'Aucune attaque. +3 défense si attaqué. (LdB p.223)' },
-                  { k: 'retraite', l: 'Retraite',  tooltip: 'Aucune attaque. +5 défense si attaqué. (LdB p.223)' },
-                ].map(m => {
-                  const isDefensif = m.k === 'defensif' || m.k === 'retraite'
-                  return (
-                    <div key={m.k} title={m.tooltip}
-                      onClick={() => {
-                        if (m.k === 'charge') { handleStartCharge() }
-                        else {
-                          setCombatMode(m.k)
-                          if (m.k !== 'charge') { setChargeSelection(null) }
-                          if (!isDefensif) handleStartMelee()
-                        }
-                      }}
-                      style={{
-                        ...S.modeChip,
-                        ...(curMode === m.k ? (isDefensif ? S.modeChipDefensif : S.modeChipActive) : {}),
-                      }}
-                    >{m.l}</div>
-                  )
-                })}
-              </div>
-
-              {/* Nombre d'attaques — masqué en Défensif/Retraite/Charge */}
-              {curMode !== 'defensif' && curMode !== 'retraite' && curMode !== 'charge' && (
-                <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-                  {[{ n: 1, label: '1' }, { n: 2, label: '2 (−5)' }, { n: 3, label: '3 (−7)' }].map(({ n, label }) => (
-                    <div key={n}
-                      onClick={() => { setMeleeAttackCount(n); setMeleeTargets(prev => prev.slice(0, n)) }}
-                      style={{
-                        padding: '3px 7px', borderRadius: 3, cursor: 'pointer', fontSize: 9,
-                        border: `1px solid ${meleeAttackCount === n ? '#70c070' : '#2a3a2a'}`,
-                        background: meleeAttackCount === n ? 'rgba(112,192,112,0.12)' : 'rgba(255,255,255,0.02)',
-                        color: meleeAttackCount === n ? '#70c070' : '#7a9a7a',
-                        fontWeight: meleeAttackCount === n ? 600 : 400,
-                      }}
-                    >{label}</div>
-                  ))}
-                  <span style={{ fontSize: 9, color: '#506050', alignSelf: 'center' }}>attaque(s)</span>
-                </div>
-              )}
-
-              {/* Feedback */}
-              {curMode === 'defensif' && (
-                <div style={{ fontSize: 9, color: '#8ab4f0', fontStyle: 'italic' }}>
-                  Aucune attaque — +3 en défense si attaqué
-                </div>
-              )}
-              {curMode === 'retraite' && (
-                <div style={{ fontSize: 9, color: '#8ab4f0', fontStyle: 'italic' }}>
-                  Aucune attaque — +5 en défense, recul possible
-                </div>
-              )}
-              {isQueueTarget && (
-                <div style={{ fontSize: 9, color: '#70c070' }}>⚔ Cliquez sur la cible CaC</div>
-              )}
-
-              {/* Cibles melee */}
-              {meleeTargets.length > 0 && !chargeSelection && (
-                <div style={{ marginTop: 4 }}>
-                  <div style={{ fontSize: 9, color: '#3a6a3a', marginBottom: 3 }}>
-                    {meleeTargets.length > 1 ? `CIBLES (${meleeTargets.length})` : 'CIBLE'}
-                  </div>
-                  {meleeTargets.map((tgtId, i) => {
-                    const t = tokens.find(tk => tk.id === tgtId)
-                    return (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
-                        {meleeTargets.length > 1 && (
-                          <span style={{ fontSize: 8, color: '#3a6a3a', minWidth: 10 }}>{i + 1}.</span>
-                        )}
-                        <span style={{ fontSize: 11, color: '#70c870', fontWeight: 600 }}>{t?.label ?? '?'}</span>
-                        <span style={{ fontSize: 8, color: '#507050', fontFamily: 'monospace' }}>
-                          {selectedGmMeleeWeaponId && meleeWeaponAvailable ? (meleeWeaponAvailable.name ?? 'arme') : 'mains nues'}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* Charge */}
-              {chargeSelection && (
-                <div style={{ marginTop: 4 }}>
-                  <div style={{ fontSize: 9, color: '#6a3a7a', marginBottom: 3 }}>CHARGE</div>
-                  <div style={{ fontSize: 10, color: '#c890e8' }}>
-                    {chargeSelection.move ? '✓ destination' : '… destination'}
-                  </div>
-                  {chargeTgt ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
-                      <span style={{ fontSize: 11, color: '#c890e8', fontWeight: 600 }}>→ {chargeTgt.label}</span>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 9, color: '#705070', marginTop: 2 }}>… cible CaC</div>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })()}
+        {isMeleeSetup && isActivePnj && (
+          <div style={S.meleePanelGm}>
+            <MeleeCombatPanel
+              availableWeapons={meleeWeaponAvailable ? [{ id: meleeWeaponAvailable.inv_id, label: meleeWeaponAvailable.name ?? 'Arme', slot: meleeWeaponAvailable.slot ?? '', damage: '', allonge: 0 }] : []}
+              selectedWeaponId={selectedGmMeleeWeaponId}
+              isWeaponDrawn={true}
+              hasMeleeInInventory={false}
+              onWeaponChange={(id) => {
+                setSelectedGmMeleeWeaponId(id)
+                if (id !== null && localStates.weapon !== 'drawn') {
+                  setLocalStates(prev => ({ ...prev, weapon: 'drawn' }))
+                } else if (id === null && localStates.weapon !== 'holstered') {
+                  setLocalStates(prev => ({ ...prev, weapon: 'holstered' }))
+                }
+              }}
+              combatMode={combatMode}
+              onModeChange={(mode) => {
+                setCombatMode(mode)
+                if (mode !== 'charge') setChargeSelection(null)
+              }}
+              onStartCharge={handleStartCharge}
+              onStartRetraite={null}
+              chargeMoveDest={chargeSelection?.move ?? null}
+              chargeTargetLabel={chargeSelection?.targetTokenId ? (tokens.find(t => t.id === chargeSelection.targetTokenId)?.label ?? null) : null}
+              meleeCount={meleeAttackCount}
+              effectiveMeleeCount={effectiveMeleeCount}
+              onMeleeCountChange={(n) => { setMeleeAttackCount(n); setMeleeTargets(prev => prev.slice(0, n)) }}
+              perSlotTargeting={false}
+              targetIds={chargeSelection?.targetTokenId ? [chargeSelection.targetTokenId] : meleeTargets}
+              isInTargetMode={combatTargetMode?.tokenId === activeTokenId && !chargeSelection?.targetTokenId}
+              tokens={tokens}
+              onChooseTarget={() => handleStartMelee()}
+              showReadyBadge={false}
+            />
+          </div>
+        )}
 
         {/* PANNEAU DROIT — Tir */}
         {isAttackActive && isActivePnj && (
           <div style={S.assaultPanelGm}>
-
-            {/* Arme — affichage seul (auto-sélectionnée pour les PNJs) */}
-            <div style={S.assaultSection}>
-              <div style={S.assaultSectionTitle}>Arme</div>
-              {weapon ? (
-                <div style={S.assaultInfoText}>
-                  {weapon.name ?? 'Arme'}
-                  <span style={S.assaultInfoSub}> ({weapon.slot})</span>
-                </div>
-              ) : (
-                <div style={S.assaultNoWeapon}>Aucune arme équipée</div>
-              )}
-            </div>
-
-            {/* Cible */}
-            <div style={S.assaultSection}>
-              <div style={S.assaultSectionTitle}>Cible</div>
-              {assaultTarget?.targetTokenId ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={S.assaultTargetName}>{getLabel(assaultTarget.targetTokenId)}</span>
-                  <button style={S.changeTargetBtn} onClick={handleStartAttack}>Changer</button>
-                </div>
-              ) : (
-                <button style={S.chooseTargetBtn} onClick={handleStartAttack}>Choisir une cible</button>
-              )}
-            </div>
-
-            {/* Mode de tir — CC / RC / RL */}
-            {weapon && currentFireMode && (
-              <div style={S.assaultSection}>
-                <div style={S.assaultSectionTitle}>
-                  {{ CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }[currentFireMode] ?? currentFireMode}
-                </div>
-
-                {currentFireMode === 'CC' && (
-                  <>
-                    <div style={S.assaultOption} onClick={() => { setAssaultBulletCount(1); setAssaultVariantAB('A') }}>
-                      <div>
-                        <div style={S.assaultOptionLabel}>Tir simple</div>
-                        <div style={S.assaultOptionSub}>1 balle : +0</div>
-                      </div>
-                      <span style={{ ...S.assaultRadio, ...(effectiveBulletCount === 1 ? S.assaultRadioActive : {}) }} />
-                    </div>
-                    <div style={S.assaultOption} onClick={() => {
-                      if (!assaultBulletCount || assaultBulletCount === 1) setAssaultBulletCount(2)
-                    }}>
-                      <div style={S.assaultOptionLabel}>Tir à répétition</div>
-                      <span style={{ ...S.assaultRadio, ...(assaultBulletCount && assaultBulletCount !== 1 ? S.assaultRadioActive : {}) }} />
-                    </div>
-                    {assaultBulletCount && assaultBulletCount !== 1 && (
-                      <>
-                        <input
-                          type="range" min={0} max={CC_REPS_STEPS.length - 1} step={1}
-                          value={ccSliderDisplayIdx}
-                          style={S.assaultSlider}
-                          onChange={e => {
-                            const count = CC_REPS_STEPS[Number(e.target.value)]
-                            setAssaultBulletCount(count)
-                            if (count !== 7 && count !== 10) setAssaultVariantAB('A')
-                          }}
-                        />
-                        {(assaultBulletCount === 7 || assaultBulletCount === 10) && (
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            {['A', 'B'].map(ab => (
-                              <div
-                                key={ab}
-                                onClick={() => setAssaultVariantAB(ab)}
-                                style={{
-                                  flex: 1, padding: '3px 6px', borderRadius: 3, cursor: 'pointer',
-                                  fontSize: 9, fontFamily: 'monospace', textAlign: 'center',
-                                  border: `1px solid ${assaultVariantAB === ab ? '#e07070' : '#2a3040'}`,
-                                  background: assaultVariantAB === ab ? 'rgba(224,112,112,0.12)' : 'rgba(255,255,255,0.02)',
-                                  color: assaultVariantAB === ab ? '#e07070' : '#7a8a9a',
-                                }}
-                              >
-                                {ab === 'A'
-                                  ? `+${assaultBulletCount === 7 ? 4 : 5} comp`
-                                  : `+${assaultBulletCount === 7 ? 3 : 4} comp / +3 dég`
-                                }
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {currentVariant && (
-                      <div style={S.assaultSummaryText}>
-                        {effectiveBulletCount} balle{effectiveBulletCount > 1 ? 's' : ''} : +{currentVariant.bonusComp} test
-                        {currentVariant.bonusDmg > 0 ? ` / +${currentVariant.bonusDmg} dég` : ''}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {currentFireMode === 'RC' && (
-                  <>
-                    <div style={S.assaultOption}>
-                      <div>
-                        <div style={S.assaultOptionLabel}>Rafale courte</div>
-                        <div style={S.assaultOptionSub}>3 balles : +3 test / +5 dég (courte portée)</div>
-                      </div>
-                      <span style={{ ...S.assaultRadio, ...S.assaultRadioActive }} />
-                    </div>
-                    <div style={S.assaultSummaryText}>3 balles : +3 test (ou +5 dég à courte portée)</div>
-                  </>
-                )}
-
-                {currentFireMode === 'RL' && (
-                  <>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {RL_BUTTONS.map(btn => (
-                        <div
-                          key={btn.value}
-                          onClick={() => setAssaultBulletCount(btn.value)}
-                          style={{
-                            flex: 1, padding: '3px 6px', borderRadius: 3, cursor: 'pointer',
-                            fontSize: 9, fontFamily: 'monospace', textAlign: 'center',
-                            border: `1px solid ${assaultBulletCount === btn.value ? '#e07070' : '#2a3040'}`,
-                            background: assaultBulletCount === btn.value ? 'rgba(224,112,112,0.12)' : 'rgba(255,255,255,0.02)',
-                            color: assaultBulletCount === btn.value ? '#e07070' : '#7a8a9a',
-                          }}
-                        >{btn.label}</div>
-                      ))}
-                    </div>
-                    {currentVariant && (
-                      <div style={S.assaultSummaryText}>
-                        {assaultBulletCount === 'multi'
-                          ? 'Multi-cibles : +0 test / zone 3m'
-                          : `${assaultBulletCount} balles : +${currentVariant.bonusComp} test / +${currentVariant.bonusDmg} dég`
-                        }
-                      </div>
-                    )}
-                    {!assaultBulletCount && (
-                      <div style={{ fontSize: 9, color: '#706050', fontStyle: 'italic' }}>Sélectionnez un volume de tir</div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
+            <AssaultRangedPanel
+              weaponDisplay={weapon ? `${weapon.name ?? 'Arme'} (${weapon.slot ?? '?'})` : null}
+              weaponMdDisplay={null}
+              assaultTargetId={assaultTarget?.targetTokenId ?? null}
+              getLabel={getLabel}
+              onChooseTarget={handleStartAttack}
+              showDualWieldSection={false}
+              isDualWield={false}
+              currentFireMode={currentFireMode}
+              onDualWieldChange={() => {}}
+              assaultBulletCount={assaultBulletCount}
+              effectiveBulletCount={effectiveBulletCount}
+              assaultVariantAB={assaultVariantAB}
+              ccSliderDisplayIdx={ccSliderDisplayIdx}
+              currentVariant={currentVariant}
+              dualWieldBonusComp={0}
+              onBulletCountChange={(count) => setAssaultBulletCount(count)}
+              onVariantABChange={(ab) => setAssaultVariantAB(ab)}
+            />
           </div>
         )}
 

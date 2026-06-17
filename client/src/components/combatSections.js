@@ -158,3 +158,51 @@ export const RL_BUTTONS = [
   { value: 20,      label: '20b'   },
   { value: 'multi', label: 'Multi' },
 ]
+
+// Labels d'action pour le log de déclarations — source unique (REWORK-05)
+export const ACTION_LABELS = {
+  assault:    'Assaut (tir)',
+  melee:      'Assaut (CaC)',
+  reload:     'Rechargement',
+  micro:      'Action',
+  move_short: 'Déplacement',
+  move_long:  'Déplacement (long)',
+  sprint:     'Sprint',
+  rush:       'Rush',
+  move:       'Déplacement',
+}
+
+export const PURE_MOVE_TYPES = new Set(['move_short', 'move_long', 'sprint', 'rush', 'move'])
+
+// Modes de combat CaC — tooltips canoniques (version Joueur, plus complets)
+export const COMBAT_MODE_DEFS = [
+  { k: 'normal',   l: 'Normal',   tooltip: 'Mode par défaut — aucun modificateur.' },
+  { k: 'offensif', l: 'Offensif', tooltip: '+3 à l\'attaque / −5 à la défense si attaqué jusqu\'à la prochaine action.' },
+  { k: 'charge',   l: 'Charge',   tooltip: '+3 attaque +3 dégâts / −7 défense / distance ≥ 3m requise + déplacement court gratuit.' },
+  { k: 'defensif', l: 'Défensif', tooltip: 'Aucune attaque. +3 en défense si attaqué. Retarde l\'action. (LdB p.223)' },
+  { k: 'retraite', l: 'Retraite', tooltip: 'Aucune attaque. +5 en défense si attaqué. Recul possible. (LdB p.223)' },
+]
+
+// Calcul variant de tir — source unique partagée entre GM et Joueur
+// defaultCcCount = 1 pour GM (PNJ default tir simple), null pour Joueur (forçage de sélection)
+export function computeFireVariant(fireMode, rawBulletCount, variantAB, { defaultCcCount = null } = {}) {
+  const effectiveBulletCount = rawBulletCount ?? (
+    fireMode === 'RC' ? 3 : fireMode === 'CC' ? defaultCcCount : null
+  )
+  let variant = null
+  if (fireMode === 'RC') {
+    variant = FIRE_MODE_VARIANTS.RC[0]
+  } else if (fireMode === 'CC' && effectiveBulletCount !== null) {
+    if (effectiveBulletCount === 7)
+      variant = FIRE_MODE_VARIANTS.CC.find(v => v.id === (variantAB === 'B' ? 'cc_7b' : 'cc_7a'))
+    else if (effectiveBulletCount === 10)
+      variant = FIRE_MODE_VARIANTS.CC.find(v => v.id === (variantAB === 'B' ? 'cc_10b' : 'cc_10a'))
+    else
+      variant = FIRE_MODE_VARIANTS.CC.find(v => v.bulletCount === effectiveBulletCount)
+  } else if (fireMode === 'RL' && rawBulletCount) {
+    variant = rawBulletCount === 'multi'
+      ? FIRE_MODE_VARIANTS.RL.find(v => v.id === 'rl_mc')
+      : FIRE_MODE_VARIANTS.RL.find(v => v.bulletCount === rawBulletCount)
+  }
+  return { variant, effectiveBulletCount }
+}

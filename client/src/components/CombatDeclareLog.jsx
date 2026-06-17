@@ -2,20 +2,7 @@ import { useState } from 'react'
 import { useDraggable } from '../lib/useDraggable.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
-
-const ACTION_LABELS = {
-  assault:    'Assaut (tir)',
-  melee:      'Assaut (CaC)',
-  reload:     'Rechargement',
-  micro:      'Action',
-  move_short: 'Déplacement',
-  move_long:  'Déplacement (long)',
-  sprint:     'Sprint',
-  rush:       'Rush',
-  move:       'Déplacement',
-}
-
-const PURE_MOVE_TYPES = new Set(['move_short', 'move_long', 'sprint', 'rush', 'move'])
+import { ACTION_LABELS, PURE_MOVE_TYPES } from './combatSections.js'
 
 function EntryLines({ entry, tokens }) {
   const tok    = tokens.find(t => t.id === entry.tokenId)
@@ -73,9 +60,26 @@ function EntryLines({ entry, tokens }) {
   )
 }
 
-export default function CombatDeclareLog() {
-  const { announcedActions, currentTurn } = useCombatStore()
+// Corps du log uniquement — pas de titre. Chaque parent gère son titre.
+export function DeclareLogContent({ maxHeight }) {
+  const { announcedActions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
+
+  return (
+    <div className="combat-declare-log-body" style={maxHeight ? { maxHeight } : undefined}>
+      {announcedActions.length === 0 ? (
+        <div className="combat-declare-log-empty">Aucune déclaration pour ce tour.</div>
+      ) : (
+        announcedActions.map((entry, i) => (
+          <EntryLines key={`${entry.tokenId}-${i}`} entry={entry} tokens={tokens} />
+        ))
+      )}
+    </div>
+  )
+}
+
+export default function CombatDeclareLog() {
+  const { currentTurn } = useCombatStore()
   const [isOpen, setIsOpen] = useState(true)
 
   const { pos, onHeaderMouseDown } = useDraggable(
@@ -105,17 +109,7 @@ export default function CombatDeclareLog() {
         </button>
       </div>
 
-      {isOpen && (
-        <div className="combat-declare-log-body">
-          {announcedActions.length === 0 ? (
-            <div className="combat-declare-log-empty">Aucune déclaration pour ce tour.</div>
-          ) : (
-            announcedActions.map((entry, i) => (
-              <EntryLines key={`${entry.tokenId}-${i}`} entry={entry} tokens={tokens} />
-            ))
-          )}
-        </div>
-      )}
+      {isOpen && <DeclareLogContent />}
     </div>
   )
 }

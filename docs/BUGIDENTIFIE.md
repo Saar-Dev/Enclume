@@ -1,131 +1,25 @@
-﻿# BUGIDENTIFIE.md — Registre des bugs actifs
+# BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-15 Session 96
+> Dernière mise à jour : 2026-06-16 Session 97
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
 
-## MÉTHODE — Comment traiter les bugs dans ce projet
+## MÉTHODE — Triage → Cluster → Fix → Validation
 
-### Principe fondateur (issu des pratiques pro)
+| Phase | Action | Règle critique |
+|---|---|---|
+| **1. Triage** (batch) | Lister tous les bugs → sévérité + priorité → identifier clusters → mettre à jour EN_COURS.md | Ne pas coder à cette étape |
+| **2. Analyse** (par cluster) | Lire les fichiers (TABLE DE ROUTING) → cause racine "5 Pourquoi" → effets de bord → plan exact | **Vérifier LdB si règle citée** — une référence fausse transforme un comportement conforme en faux bug (Leçon Session 94 — COM3) |
+| **2b. Instrumentation** (si HYPOTHÈSE/INCONNU) | Logs `[DBG-BUGID]` au point exact → SR → reproduire → confirmer → `HYPOTHÈSE → VÉRIFIÉ` | Ne jamais coder sur une cause non confirmée |
+| **3. Correctif** (par cluster) | Coder le plan validé uniquement. **1 commit par cause racine.** 2 clusters sans rapport → 2 commits | Ne jamais mixer deux clusters dans un seul commit |
+| **4. Validation** | Test fonctionnel → zones adjacentes → fermer EN_COURS.md → appender JOURNAL4.md | Fermeture sans test fonctionnel → interdit |
 
-**Ni un bug à la fois, ni tout en batch.** Le modèle professionnel est :
+**Définition cluster** : même fichier source / même cause racine / même mécanique / fix A nécessite fix B.
 
-> **Triage batch → Analyse par cluster → Fix par cluster → Validation avant le cluster suivant**
+**Labels** : `[VÉRIFIÉ]` — cause confirmée par lecture du code. `[HYPOTHÈSE]` — à confirmer par 2b. `[INCONNU]` — non investigué.
 
-Basé sur :
-- Bug triage (Atlassian, SmartBear, BrowserStack) : analyser tous les bugs ensemble pendant que le contexte est frais → meilleure priorisation, moins de re-lecture
-- Defect clustering (Functionize, TestSigma) : les bugs se regroupent naturellement par module ou cause racine. Résoudre un bug du cluster résout souvent les autres. Économie 40–60% du temps de debug vs. traitement isolé
-- Root Cause Analysis (Splunk, selementrix, TechTarget) : ne jamais patcher le symptôme. Toujours trouver la cause racine (technique des "5 Pourquoi")
-- Pragmatic Engineer : un commit par cause racine, pas par symptôme. Si 3 bugs partagent la même cause dans le même fichier → un seul fix, un seul commit
-
----
-
-### Phase 1 — TRIAGE (batch, une fois par session)
-
-1. Lister tous les bugs connus
-2. Attribuer sévérité (impact fonctionnel) + priorité (urgence pour les sessions de jeu)
-3. Identifier les **clusters** (voir définition ci-dessous)
-4. Produire l'ordre de sprint → mettre à jour `EN_COURS.md`
-
-**Ne pas coder à cette étape.**
-
----
-
-### Phase 2 — ANALYSE (par cluster, avant de coder)
-
-Pour chaque cluster, dans la même session de lecture :
-
-1. Lire tous les fichiers concernés par le cluster (TABLE DE ROUTING)
-2. Identifier la **cause racine** — pas le symptôme
-   - Technique "5 Pourquoi" : demander "pourquoi ?" jusqu'à atteindre la cause structurelle
-   - Exemple : `localisation: null` (symptôme) → "pourquoi null ?" → branche 8a ne lit pas `droneSheet` → cause racine
-   - **Si la cause racine cite une règle de jeu → vérifier la source primaire LdB avant de valider.** Une référence incorrecte dans ce fichier peut transformer un comportement CONFORME en faux bug, et un correctif planifié en régression. (Leçon Session 94 — COM3)
-3. Vérifier les **effets de bord** : le fix du bug A casse-t-il le bug B dans le même cluster ?
-4. Produire le plan exact : fichier, ligne, ce qui change, ce qui ne change pas
-
-**Run à vide obligatoire avant de coder** — anticiper pièges, ambiguïtés, effets de bord.
-
----
-
-### Phase 2b — INSTRUMENTATION (si cause HYPOTHÈSE ou INCONNU)
-
-Avant de coder le correctif, si la cause racine n'est pas **VÉRIFIÉ** :
-
-1. Ajouter des logs ciblés préfixés `[DBG-BUGID]` au point exact suspecté
-   - Serveur : `console.log('[DBG-COM3]', { attackSuccess, isSuccess })`
-   - Client : `console.warn('[DBG-D1]', token.character_id, characters.map(c => c.id))`
-2. SR — reproduire le scénario exact du bug
-3. Lire la sortie → confirmer ou infirmer la cause racine
-4. Mettre à jour le label dans ce fichier : `HYPOTHÈSE → VÉRIFIÉ` (ou réviser le diagnostic)
-5. Un log pertinent peut rester permanent — retirer uniquement les logs bruités ou redondants avant le commit
-
-**Ne jamais coder un correctif sur une cause INCONNUE ou non confirmée.**
-
----
-
-### Phase 3 — CORRECTIF (par cluster)
-
-- Coder uniquement ce qui est dans le plan validé
-- **Un commit par cluster** (pas par bug individuel si cause racine commune)
-- Si deux bugs du cluster touchent des fichiers sans rapport → deux commits séparés dans le même sprint
-- Jamais mélanger deux clusters dans un seul commit
-
----
-
-### Phase 4 — VALIDATION
-
-- Test fonctionnel du cluster avant de passer au suivant
-- Vérifier les zones adjacentes (régressions)
-- Fermer les bugs validés dans `EN_COURS.md` (✅ Clos)
-- Appender `JOURNAL4.md`
-
----
-
-### Définition d'un "cluster" pour Enclume
-
-Un cluster = bugs qui satisfont **au moins un** des critères :
-
-| Critère | Exemple |
-|---|---|
-| Même fichier source | COM3 + DC3 + DC2 → tous dans `socket/index.js` |
-| Même cause racine | DR1 + COM6 → "arme non pré-sélectionnée" → même pattern init |
-| Même mécanique de jeu | DC1 + DC3 + DR3 → flow CaC drone |
-| Fix A nécessite Fix B | B6 + DC3 → les deux dans `resolveDroneAssaultAction` |
-
-Des bugs de **sévérité différente** peuvent être dans le même cluster si la cause racine est identique.
-
----
-
-### Ce qu'il ne faut jamais faire
-
-- Coder un fix sans avoir lu les fichiers dans cette session
-- Mixer des clusters sans rapport dans le même sprint (dette de contexte)
-- Fermer un bug sur "ça semble fonctionner" — confirmation fonctionnelle obligatoire
-- Patcher un symptôme sans comprendre la cause racine → le bug reviendra
-
----
-
-*Sources : [Atlassian — Bug Triage](https://www.atlassian.com/agile/software-development/bug-triage) · [Functionize — Defect Clustering](https://www.functionize.com/blog/why-bugs-appear-in-clusters) · [selementrix — RCA](https://www.selementrix.ch/blog/how-do-we-perform-effective-root-cause-analysis-instead-of-just-patching) · [Pragmatic Engineer — Bug Management](https://newsletter.pragmaticengineer.com/p/bug-management-that-works-part-1)*
-
----
-
-## COLD START — Orientation rapide pour une nouvelle conversation
-
-> Lire ce bloc en premier si tu arrives sans contexte de session précédente.
-
-**Ce fichier est la source de vérité des bugs actifs.** Il est structuré pour qu'une IA puisse reprendre le travail à froid sans perdre de contexte.
-
-**Index de priorité** : `EN_COURS.md §Dettes actives` — tableau synthétique (ID | Description | Priorité).
-
-**Table de routing fichiers** : `CLAUDE.md §TABLE DE ROUTING` — quel fichier lire selon le domaine touché.
-
-**Labels épistémiques sur chaque bug :**
-- `[VÉRIFIÉ]` — cause confirmée par lecture du code source
-- `[HYPOTHÈSE]` — cause probable, à confirmer par instrumentation (Phase 2b)
-- `[INCONNU]` — cause non encore investiguée
-
-**Avant tout correctif :** lire les fichiers du cluster concerné dans la même session. Ne jamais coder depuis la mémoire.
+**Run à vide obligatoire** avant de coder — anticiper pièges, ambiguïtés, effets de bord.
 
 ---
 
@@ -133,30 +27,23 @@ Des bugs de **sévérité différente** peuvent être dans le même cluster si l
 
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
-| **A — Socket résolution drone** | ~~B6~~ ✅ / ~~COM3~~ FAUX BUG / ~~DC2~~ ✅ / ~~DC3~~ ✅ | `server/src/socket/index.js` | ✅ Clos Session 95 suite |
-| **B — Init arme défaut** | ~~COM6~~ ✅ / ~~DR1~~ ✅ | `CombatGmDeclareWindow.jsx` | ✅ Clos Session 95 |
-| **C — Flow CaC drone** | ~~DC1~~ ✅ / ~~DR3~~ ✅ | `CombatOverlay.jsx` + `socket/index.js` | ✅ Clos Session 95 suite |
-| **J — Pipeline shock + COMBAT_END** | ~~SHOCK1~~ ✅ / ~~SHK3~~ ✅ / ~~ST2~~ ✅ | `server/src/socket/index.js` | ✅ Clos Session 96 |
-| **K — UX curseur + chat** | ~~CUR1~~ ✅ + CH1 (sprint persistance séparé) | `SessionPage.jsx` | ~~CUR1~~ Clos Session 95-6 |
-| **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 | composants combat + `index.css §11` | Haute |
+| **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 | composants combat + `index.css §11` | **Haute** |
 | **E — Arme et statuts** | COM1 + COM2 + COM4 + COM7 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
 | **F — Ghosts + portraits** | CL1 + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
 | **G — Drone store** | D1 + D2 | `SessionPage.jsx` + `Canvas3D.jsx` | Moyenne |
 | **H — Dettes techniques** | WS1 + TC1 + DCO1 + VX1 + AU1 + INI1 | divers | Basse |
 | **I — Affichage dégâts drone** | DR6 + DR4 + DMG1 + DMG2 | `server/src/socket/index.js` | **Haute** |
+| **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
+| ~~A / B / C / J~~ | ~~B6 / COM6 / DR1 / DC1-3 / SHOCK1 / SHK3-6 / ST2~~ | — | ✅ Clos Sessions 94–97 |
 
-**Règle d'or :** toujours finir le cluster A avant d'entamer B. Validation fonctionnelle obligatoire entre clusters.
-
----
-
-## AUDIT ARCHITECTURAL — Pipeline Combat — Session 95-3 (2026-06-15)
-
-> Lecture de `server/src/socket/index.js` (handlers, fonctions résolution) + `charStats.js` + `woundUtils.js`.
-> **🔴 REFONTE** = ne pas corriger individuellement — reconstruire proprement.
-> **🟢 OK** = structure saine, corrections ciblées acceptables.
-> **🟡 TECH DEBT** = non bloquant V1, sprint futur.
+**Règle d'or :** valider le cluster A avant B, B avant C, etc. Validation fonctionnelle obligatoire entre clusters.
 
 ---
+
+## AUDIT ARCHITECTURAL — Session 95-3 (2026-06-15)
+
+> Lecture : `server/src/socket/index.js` + `charStats.js` + `woundUtils.js`.
+> 🔴 REFONTE = ne pas corriger individuellement. 🟢 OK = structure saine. 🟡 TECH DEBT = non bloquant V1.
 
 ### Fondations — `charStats.js` / `woundUtils.js` / helpers atomiques
 **🟢 OK — conserver sans toucher.**
@@ -165,34 +52,15 @@ Des bugs de **sévérité différente** peuvent être dans le même cluster si l
 |---|---|
 | `calcSeuils`, `calcResistanceDommages`, `calcResistanceArmure` | ✅ Pures, correctes, conformes LdB |
 | `isShockTestRequired`, `getShockMalus` | ✅ Pures, conformes LdB |
-| `applyStunWithDuration` | ✅ Écrit **uniquement** dans `token_statuses` — architecture post-Sprint 14-0 conforme. Zéro écriture JSONB. |
+| `applyStunWithDuration` | ✅ Écrit **uniquement** dans `token_statuses` — architecture post-Sprint 14-0 conforme |
 | `rollStunDuration` | ✅ Single-purpose, correct |
 | `resolveWoundInsertion` | ✅ Transactionnel, correct |
 | Guard stun `COMBAT_ACTION_DECLARE` (~ligne 1923) | ✅ Lit depuis `token_statuses` uniquement |
 | Schéma DB + migrations | ✅ Solide |
 
----
+### Bloc Shock — ~~REFONTE~~ ✅ CLOS — REWORK-01 Session 96 + REWORK-03 Session 97
 
-### Bloc Shock — `socket/index.js`
-**🔴 REFONTE TOTALE — ne pas patcher individuellement.**
-
-Le bloc shock (isShockTestRequired → calcSeuils → rollChoc → outcome → stunDuration → applyStunWithDuration → shockResult) est **copié-collé 5× avec des noms de variables différents** :
-
-| Site | Fonction | Var stun |
-|---|---|---|
-| ~2495 | COMBAT_DAMAGE_CONFIRM | `stunDuration` |
-| ~2781 | COMBAT_MELEE_DEFENSE_CONFIRM | `stunDuration2` |
-| ~3612 | resolveMeleeAction (PNJ auto) | `stunDuration3` |
-| ~4065 | resolveDroneAssaultAction 8b | `stunDuration` |
-| ~4434 | resolveAssaultAction (PNJ auto) | `stunDuration4` |
-
-**Symptômes actifs de cette structure :**
-- **SHOCK1** ✅ clos — bloc entier absent en 8b → copy-paste incomplet, corrigé en urgence Session 95-3
-- **ST2** — D6 durée sans DICE_RESULT dans les 5 copies → **ne pas patcher individuellement**
-
-**Plan refonte :** extraire un helper `resolveShockBlock(io, campaignId, { finalSeverity, localisation, for_na, con_na, vol_na, is_lethal, targetTokenId, userId, username, color })` qui retourne `shockResult`. Un seul endroit. ST2 (DICE_RESULT D6) corrigé une fois. Les 5 sites deviennent un appel d'une ligne.
-
----
+5 copies copier-collé → `resolveShockBlock` (REWORK-01) + `woundService.applyWound` (REWORK-03). Résolu.
 
 ### Handlers de résolution — Monolithes
 **🟡 TECH DEBT — non bloquant V1.**
@@ -204,19 +72,7 @@ Le bloc shock (isShockTestRequired → calcSeuils → rollChoc → outcome → s
 | `COMBAT_DAMAGE_CONFIRM` handler | ~213 | Lookup DB + calcul dégâts + wound + shock + 4 émissions |
 | `COMBAT_MELEE_DEFENSE_CONFIRM` handler | ~261 | Même problème |
 
-Acceptable V1. Découpage en modules (`resolveDamage.js`, `resolveMelee.js`) = sprint dédié post-V1. **Ne pas bloquer les corrections actuelles pour ça.**
-
----
-
-### Ordre d'exécution Cluster J — révisé
-
-| Étape | Action | Raison |
-|---|---|---|
-| 1 | **DBG-SHK3** — instrumenter + SR + lire console | SHK3 = [HYPOTHÈSE] — cause racine non confirmée |
-| 2 | **Refonte `resolveShockBlock`** — 1 commit | ST2 résolu dedans + futur-proof |
-| 3 | **Fix SHK3** — 1 commit | Après DBG confirmé uniquement |
-
-**Règle :** ST2 ne se corrige pas en 5 endroits. `resolveShockBlock` est le prérequis.
+Découpage en modules (`resolveDamage.js`, `resolveMelee.js`) = sprint dédié post-V1. **Ne pas bloquer les corrections actuelles.**
 
 ---
 
@@ -336,73 +192,37 @@ Ajouter dans la IIFE du menu radial `SessionPage.jsx` avant le `find` pour compa
 
 ---
 
-## Bugs Session 91 — Sprint CaC Drone (2026-06-12) — Non résolus
+## Bugs Session 91 — Sprint CaC Drone — Non résolus
 
-### ~~Bug DC1~~ — ✅ CLOS — Session 95 suite
+### Bug DR2 — Drone : aucune action de déplacement disponible
 
-**Symptôme initial** : Drone CaC présentait `CombatModifiersWindow` (fenêtre distance) au lieu de `CombatCacModifiersWindow`.
+**Symptôme** : Dans la fenêtre de déclaration GM pour un drone, il n'existe aucun bouton / option pour déclarer un déplacement. Les drones peuvent pourtant se déplacer selon les règles.
 
-**Verdict** : Fix déjà présent en base de code (Session 91 commité). `isDroneCaC` flag + routing `CombatCacModifiersWindow` — correct. Confusion initiale due à cache Firefox stale. Validé fonctionnellement après rechargement forcé.
+**Code impliqué** : `CombatGmDeclareWindow.jsx` — section rendu drone (isActiveDrone). La section drone affiche uniquement sélection arme + sélection cible, pas de déplacement.
 
----
-
-### ~~Bug DC2~~ — ✅ CLOS — Session 95 suite
-
-**Symptôme initial** : Mods de situation non appliqués dans `resolveDroneAssaultAction`.
-
-**Verdict** : Fix déjà présent — `situationMods = confirmedModifiers?.situation ?? []` en base de code (Session 91 commité). Validé fonctionnellement Session 95 suite.
+**Prochaine étape** : Sprint dédié — ajouter le déplacement drone (similaire au déplacement PNJ humanoïde, mêmes allures).
 
 ---
 
-### ~~Bug DC3~~ — ✅ CLOS — Session 95 suite
+## Bugs Session 95 suite 2 — Statuts token / Test de Choc — Non résolus
 
-**Symptôme initial** : `portee = 'bout_portant'` → +5 illégitime pour `armement_contact`.
+### Bug ST1 — Badge statut illisible sur token canvas
 
-**Verdict** : Fix déjà présent — `portee = null` pour `armement_contact` → `PORTEE_MOD_COMP[null] ?? 0 = 0` — en base de code (Session 91 commité). Validé fonctionnellement Session 95 suite.
+**Symptôme** : Badge hexagonal "Étourdi" (et autres statuts) visible sur le token mais texte trop petit pour être lisible en jeu.
 
----
+**Code impliqué** : Sprint 14-2 — affichage badges SVGs sous le nom token (`Canvas3D.jsx` / Html drei).
 
-## Bugs Session 95 suite 2 — Validation Sprint 14-0 (2026-06-15) — Nouveaux
-
-### Bug SHOCK1 — Test de Choc non déclenché pour cibles PNJ ✅ Clos — Session 95-3
-
-**Symptôme** : Attaque drone sur PNJ humanoid → blessure Mortelle/Critique/Grave (Tête/Corps) → aucun Test de Choc, aucun stun.
-
-**Cause racine** [VÉRIFIÉ] : `resolveDroneAssaultAction` branche 8b (drone → PNJ). Trois défauts cumulés : `vol_na` non destructuré dans `fetchCibleNA`, bloc shock absent après `resolveWoundInsertion`, `shockResult: null` hardcodé dans `COMBAT_ATTACK_RESULT`.
-
-**Correctif** : `server/src/socket/index.js` branche 8b — `vol_na` ajouté, bloc shock complet inséré, `shockResult` dynamique.
-
-**Testé** : drone → PNJ humanoid, blessure Mortelle Corps → Test de Choc déclenché ✅, stun appliqué si outcome ≠ ok ✅
-**Non testé** : —
+**Prochaine étape** : Sprint 14-2 dédié.
 
 ---
 
-### ~~Bug SHK3~~ — ✅ CLOS (FAUX BUG) — Session 95-3
+### Bug ST3 — Fenêtre THUG STATUTS trop petite
 
-**Symptôme initial** : Après `COMBAT_END`, badge disparu mais stun mécanique persistant au combat suivant.
+**Symptôme** : La fenêtre de statuts token (grille hexagonale) ne peut pas afficher tous les statuts disponibles — overflow non géré.
 
-**Verdict [VÉRIFIÉ]** : FAUX BUG. Instrumentation [DBG-SHK3] confirme :
-- `applyStunWithDuration` → uniquement `token_statuses`, zéro JSONB ✅
-- Guard COMBAT_ACTION_DECLARE → lit uniquement `token_statuses` ✅
-- Cleanup COMBAT_END : `avant cleanup: [{ token_id, status_code:'unconscious', expires_at_turn:31 }]` → `après cleanup: []` ✅
-- Nouveau combat (`current_turn: 1` à chaque départ) → aucun guard bloquant ✅
+**Code impliqué** : Composant fenêtre statuts token (SessionPage ou Canvas3D — menu contextuel statuts).
 
-Le code est correct. Les deux hypothèses initiales infirmées par lecture + logs.
-
-**Testé** : stun PNJ (inconscient, durée 30) → COMBAT_END → nouveau combat → déclaration attaque → non bloquée ✅
-**Non testé** : —
-
----
-
-### ~~Bug CUR1~~ — ✅ CLOS — Session 95-6 — Curseur bloqué après fermeture combat
-
-**Symptôme** : Si le GM ferme le monde combat (ou COMBAT_END) alors qu'un token est en mode déplacement ou sélection de cible, le curseur reste bloqué dans l'état "combat" (curseur spécial déplacement/cible). La SessionPage ne revient pas au curseur normal.
-
-**Cause racine** [HYPOTHÈSE] : `combatTargetMode` et/ou `combatMoveMode` (state React SessionPage ou CombatOverlay) ne sont pas remis à `false` lors de COMBAT_END ou COMBAT_PHASE_CHANGED. Le curseur CSS est conditionné par ces states.
-
-**Code impliqué** : `client/src/pages/SessionPage.jsx` — state `combatTargetMode` / `combatMoveMode`. `client/src/components/CombatOverlay.jsx` — reset sur événements WS. `client/src/index.css` — curseur conditionné par classe CSS combat.
-
-**Prochaine étape** : Cluster K — lire les listeners `COMBAT_END` + `COMBAT_PHASE_CHANGED` dans SessionPage et CombatOverlay, vérifier si les states de mode sont réinitialisés.
+**Prochaine étape** : Sprint 14-1 (menu contextuel) ou sprint dédié UI — rendre la fenêtre scrollable ou agrandir la grille.
 
 ---
 
@@ -418,93 +238,7 @@ Le code est correct. Les deux hypothèses initiales infirmées par lecture + log
 
 ---
 
-## Bugs Session 95 suite — Statuts token (2026-06-15) — Validation Sprint 14-0 + Test de Choc
-
-### Bug ST1 — Badge statut illisible sur token canvas
-
-**Symptôme** : Badge hexagonal "Étourdi" (et autres statuts) visible sur le token mais texte trop petit pour être lisible en jeu.
-
-**Code impliqué** : Sprint 14-2 — affichage badges SVGs sous le nom token (`Canvas3D.jsx` / Html drei).
-
-**Prochaine étape** : Sprint 14-2 dédié.
-
----
-
-### ~~Bug ST2~~ — ✅ CLOS — Session 96 (REWORK-01)
-
-**Symptôme initial** : D6 durée roulé silencieusement serveur. Aucune carte DICE_RESULT.
-
-**Correctif Session 95-5** : Refonte `resolveShockBlock` → helper unique. DICE_RESULT D6 émis. Carte "Durée étourdissement" visible dans sidebar chat.
-
-**Correctif Session 96 (REWORK-01)** : REWORK-01 `statusService.js` — PJ ciblé → `CombatStunWindow` fenêtre interactive "Lancer 1D6". PNJ → auto D6 serveur + DICE_RESULT broadcast. SR ✅ — testé drone→PNJ (inconscient, D6=6, 60 tours).
-
-**Testé** : Scénarios 1-5 ARCHI_REWORK.md tous validés — PNJ cible ✅ / PJ cible + CombatStunWindow ✅ / non-régression blessure légère ✅ / PJ offline fallback ✅ / CaC shock non-régression ✅
-**Non testé** : —
-
----
-
-### ~~Bug SHK6~~ — ✅ CLOS — Session 96 suite — COMBAT_DAMAGE_CONFIRM : autorisation PJ cible
-
-**Symptôme** : Drone → PJ : fenêtre "GESTION DES DÉGÂTS" côté PJ bloquée à "Calcul en cours..." après clic "Lancer les dés". Aucun résultat en sidebar.
-
-**Cause racine** [VÉRIFIÉ] : `COMBAT_DAMAGE_PROMPT` envoyé au socket PJ (ligne 4065 — `io.fetchSockets()` + `s.user?.id` fonctionne en mémoire locale sans Redis adapter). Quand le PJ envoie `COMBAT_DAMAGE_CONFIRM`, la condition d'autorisation ligne 2379 échoue : `pending.userId` (null — drone sans user_id) ≠ `socket.user.id` (PJ) ET `socket.role !== 'gm'` → return silencieux, jamais de `COMBAT_DAMAGE_RESULT`.
-
-**Correctif** : `server/src/socket/index.js`
-- Branch 8c : `targetUserId: cibleCharacter.user_id` ajouté au pending action
-- Ligne 2379 : condition élargie à `pending.targetUserId !== socket.user.id`
-
-**Testé** : drone → PJ, fenêtre fonctionnelle, résultats affichés ✅
-**Non testé** : `CombatStunWindow` post-damage pour PJ si shock requis
-
----
-
-### ~~Bug SHK4 — D20 Test de Choc : non visible en chat~~ ✅ Clos — Session 95-7
-
-**Symptôme** : Quand un Test de Choc est déclenché, le jet D20 est résolu côté serveur mais aucune carte `DICE_RESULT` n'est émise. Les joueurs ne voient pas le résultat du test dans la sidebar chat.
-
-**Correctif** : `resolveShockTest` → retourne désormais `rolls` + `seed`. Nouvelle export synchrone `emitShockDiceResult` dans `statusService.js`. 5 call sites dans `index.js` appellent `emitShockDiceResult` avant `COMBAT_ATTACK_RESULT`/`COMBAT_DAMAGE_RESULT`. Sidebar : nouveau routing `cardType='shock_test'` + clé i18n `shockTestDetail`. `CombatStunWindow` : violations CSS [A1] corrigées.
-
-**Testé** : D20 visible chat (3 outcomes ok/étourdi/inconscient) ✅ — carte "Test de Choc" avec seuils ✅ — badge résultat ✅ — non-régression Scénarios 1-5 REWORK-01 ✅
-**Non testé** : —
-
----
-
-### ~~Bug SHK5 — shock_auto_stun=false : PJ ciblé routé vers sa propre fenêtre au lieu du GM~~ ✅ Clos — Session 95-7
-
-**Symptôme** : Quand `campaigns.shock_auto_stun = false`, l'intention est que le GM gère TOUS les lancers D6 de durée (PJ et PNJ). L'implémentation actuelle routait les PJ vers leur propre `CombatStunWindow` même en mode `false`.
-
-**Correctif** : `applyStun` branche PJ — lecture `shock_auto_stun` depuis `campaigns` avant de choisir le socket cible. Si `false` → `gmSocket` + `isGmPrompt: true`. Si `true` (défaut) → `pjSocket` + `isGmPrompt: false`. Handler `COMBAT_STUN_CONFIRM` inchangé (gérait déjà `isGmPrompt: true`).
-
-**Testé** : `shock_auto_stun=false` → `CombatStunWindow` chez GM ✅ — PJ ne reçoit pas la fenêtre ✅ — GM lance D6 → badge stun PJ ✅ — non-régression `shock_auto_stun=true` → PJ reçoit toujours ✅
-**Non testé** : —
-
----
-
-### Bug ST3 — Fenêtre THUG STATUTS trop petite
-
-**Symptôme** : La fenêtre de statuts token (grille hexagonale) ne peut pas afficher tous les statuts disponibles — overflow non géré.
-
-**Code impliqué** : Composant fenêtre statuts token (SessionPage ou Canvas3D — menu contextuel statuts).
-
-**Prochaine étape** : Sprint 14-1 (menu contextuel) ou sprint dédié UI — rendre la fenêtre scrollable ou agrandir la grille.
-
----
-
-## Bug COM9 — Viser une Localisation précise — non implémenté
-
-**Symptôme** : Dans `CombatModifiersWindow` (résolution assaut tir), aucune option ne permet de viser une localisation précise. Le D20 de localisation est toujours aléatoire.
-
-**Règle** : LdB §"Viser une Localisation précise" — Corps −3 / Jambes −5 / Tête+Bras −7.
-
-**Code impliqué** :
-- `client/src/components/CombatModifiersWindow.jsx` — section manquante + state `aimedLocation` absent
-- `server/src/socket/index.js` — `resolveAssaultAction` : pas de champ `aimedLocation` dans `confirmedModifiers`, pas de bypass du D20 localisation (branche PJ : `pendingDamageActions`, branche PNJ : L.4303). `COMBAT_DAMAGE_CONFIRM` (L.~2392) : D20 toujours joué.
-
-**Prochaine étape** : Sprint dédié — NE PAS bricoler dans un autre sprint. Voir analyse complète dans JOURNAL4.md Session 95-7.
-
----
-
-## Bugs Session 93-4 — Test CaC Étape 3 (2026-06-15) — Nouveaux
+## Bugs Session 93-4 — Test CaC Étape 3 — Non résolus
 
 ### Bug UI1 — Fenêtre déclaration : design tout blanc / dégueulasse
 
@@ -544,18 +278,6 @@ Ajouter au début du handler `COMBAT_ACTION_CONFIRM` pour vérifier si le type `
 
 ---
 
-### ~~Bug COM3~~ — FAUX BUG — Jet de défense CaC (Session 94)
-
-> ⛔ **FAUX BUG — NE PAS CORRIGER.** Voir table FAUX BUGS ci-dessus.
-
-**Symptôme initial** : Jet de défense déclenché même si l'attaquant échoue.
-
-**Verdict LdB** (`REGLES_Contact.md` p.222) : test d'opposition CaC = **les deux roulent toujours**. 4 cas documentés dont "A rate, D réussit" et "Les deux ratent". La référence règle originale ("§6.2 — défense uniquement si attaque réussie") était incorrecte. Le code `resolveMeleeAction` est conforme.
-
-**Si UX confuse** (joueur PJ reçoit prompt défense alors que l'attaque a déjà raté visuellement) → créer Bug UI distinct, sprint UX dédié.
-
----
-
 ### Bug COM4 — CaC exige statut "Arme au clair" alors que mains nues possibles
 
 **Symptôme** : Le système refuse ou grise le CaC si l'arme n'est pas "au clair", alors qu'une attaque à mains nues ne requiert pas d'arme équipée.
@@ -568,23 +290,13 @@ Ajouter au début du handler `COMBAT_ACTION_CONFIRM` pour vérifier si le type `
 
 ---
 
-### Bug COM5 — Fenêtre Annonce GM, CaC : clic "mode combat" sélectionne aussi la cible (incohérence GM/Joueur)
+### Bug COM5 — Fenêtre Annonce GM, CaC : clic "mode combat" sélectionne aussi la cible
 
 **Symptôme** : Côté GM (`CombatGmDeclareWindow`), cliquer sur un mode de combat (ex: "Offensif") sélectionne simultanément la cible. Côté joueur (`CombatActionWindow`), sélection mode de combat et sélection cible sont deux gestes distincts.
 
 **Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx` — handler sélection mode combat + logique cible.
 
 **Prochaine étape** : Dissocier les deux actions côté GM — le clic sur mode combat ne doit pas auto-sélectionner une cible.
-
----
-
-### ~~Bug COM6~~ — ✅ CLOS — Session 95
-
-**Symptôme** : Quand une arme de corps à corps est présente dans l'équipement du personnage, elle n'est pas pré-sélectionnée par défaut dans la fenêtre de déclaration. L'utilisateur doit manuellement la choisir.
-
-**Code impliqué** : `CombatGmDeclareWindow.jsx` — `selectedGmMeleeWeaponId` (init à `null`). `CombatActionWindow.jsx` — équivalent joueur.
-
-**Prochaine étape** : Initialiser `selectedGmMeleeWeaponId` avec la première arme CaC disponible depuis `equipment[activeTokenId]`, après le fetch.
 
 ---
 
@@ -610,39 +322,21 @@ Ajouter au début du handler `COMBAT_ACTION_CONFIRM` pour vérifier si le type `
 
 ---
 
-### ~~Bug DR1~~ — ✅ CLOS — Session 95
+## Bug COM9 — Viser une Localisation précise — non implémenté
 
-**Symptôme** : Dans la fenêtre de déclaration GM pour un drone, aucune arme n'est pré-sélectionnée par défaut. `selectedDroneWeaponId` reste `null` jusqu'à sélection manuelle.
+**Symptôme** : Dans `CombatModifiersWindow` (résolution assaut tir), aucune option ne permet de viser une localisation précise. Le D20 de localisation est toujours aléatoire.
 
-**Lien** : Bug COM6 (même problème, version drone). `canDeclareDrone` reste `false` tant qu'aucune arme n'est choisie.
+**Règle** : LdB §"Viser une Localisation précise" — Corps −3 / Jambes −5 / Tête+Bras −7.
 
-**Code impliqué** : `CombatGmDeclareWindow.jsx` — `selectedDroneWeaponId` (init null), `droneWeapons` fetch (lines 158-163).
+**Code impliqué** :
+- `client/src/components/CombatModifiersWindow.jsx` — section manquante + state `aimedLocation` absent
+- `server/src/socket/index.js` — `resolveAssaultAction` : pas de champ `aimedLocation` dans `confirmedModifiers`, pas de bypass du D20 localisation (branche PJ : `pendingDamageActions`, branche PNJ : L.4303). `COMBAT_DAMAGE_CONFIRM` (L.~2392) : D20 toujours joué.
 
-**Prochaine étape** : Après le fetch `droneWeapons`, si `selectedDroneWeaponId === null && droneWeapons.length > 0`, setSelectedDroneWeaponId(droneWeapons[0].id).
-
----
-
-### Bug DR2 — Drone : aucune action de déplacement disponible
-
-**Symptôme** : Dans la fenêtre de déclaration GM pour un drone, il n'existe aucun bouton / option pour déclarer un déplacement. Les drones peuvent pourtant se déplacer selon les règles.
-
-**Code impliqué** : `CombatGmDeclareWindow.jsx` — section rendu drone (isActiveDrone). La section drone affiche uniquement sélection arme + sélection cible, pas de déplacement.
-
-**Prochaine étape** : Sprint dédié — ajouter le déplacement drone (similaire au déplacement PNJ humanoïde, mêmes allures).
+**Prochaine étape** : Sprint dédié — NE PAS bricoler dans un autre sprint. Voir analyse complète dans JOURNAL4.md Session 95-7.
 
 ---
 
-### ~~Bug DR3~~ — ✅ CLOS — Session 95 suite
-
-**Note** : Identique à DC1 + DC3. Clos avec eux — Session 95 suite.
-
----
-
-## ~~Bug B6~~ — ✅ CLOS — Session 94
-
----
-
-## Bugs Session 93-5 — Pipeline dégâts drone (2026-06-15)
+## Bugs Session 93-5 — Pipeline dégâts drone — Non résolus
 
 ### Bug DMG1 — DICE_RESULT dégâts drone : label "Compétence" sémantiquement faux
 
@@ -695,7 +389,7 @@ console.log('[DBG-DR4]', { integrite: droneSheet.integrite_actuelle, rdInput: dr
 
 ### Note DR5 — drone_sheet.resistance_dommages : ✅ RÉSOLU — colonne supprimée en migration 72
 
-**Migration 72** (`72_drone_sheet_fix.js`) supprime déjà `resistance_dommages` (+ `iv`, `survie_iem`, `architecture`, `structure_materiau`) — identifiés sans source LdB. Colonne absente du schéma actuel. Aucune action requise.
+Migration 72 (`72_drone_sheet_fix.js`) supprime déjà `resistance_dommages` (+ `iv`, `survie_iem`, `architecture`, `structure_materiau`) — identifiés sans source LdB. Colonne absente du schéma actuel. Aucune action requise.
 
 ---
 
@@ -736,21 +430,6 @@ console.log('[DBG-DR6]', {
 
 ---
 
-## Bug DIV-1 — worst_wound_severity absent du WOUND_ADDED combat (activement reseté)
-
-**Découvert** : Session 95-8 — analyse REWORK-03.
-**Résolu** : Session 97 — REWORK-03 (`woundService.applyWound` inclut `worst_wound_severity` dans chaque WOUND_ADDED WS).
-
-**Symptôme** : Anneau de sévérité (couleur) sur token et bordure timeline disparaissent à chaque blessure reçue en combat. Valeur correcte lors du chargement initial, perdue à la première blessure combat.
-
-**Cause racine** : Les 5 call sites WS de `resolveWoundInsertion` dans `socket/index.js` n'incluaient pas `worst_wound_severity` dans le payload `WOUND_ADDED`. Le REST (`char-sheet.js`) l'incluait déjà. `SessionPage.jsx` reçoit `worst_wound_severity: undefined` et appelle `updateCharacter({ id, worst_wound_severity: undefined })`. Le spread `{ ...c, ...partial }` dans `characterStore.js` écrase activement la valeur existante avec `undefined`.
-
-**Impact** : `CombatTimeline.jsx` et `TokenRadialMenu.jsx` perdent la couleur de sévérité après chaque blessure combat. Bug actif depuis Session 71 (premières blessures WS).
-
-**Fix** : `woundService.applyWound` appelle `getWorstWoundSeverity(db, charSheetId)` après la transaction et inclut la valeur dans chaque WOUND_ADDED broadcast.
-
----
-
 ## Bugs divers — Dette technique
 
 ### Bug INI1 — Surprise critique : roll=1 → initiative=1
@@ -763,9 +442,8 @@ console.log('[DBG-DR6]', {
 ```js
 console.log('[DBG-INI1] initiative calc', { roll, rea, hiddenDie, finalInitiative })
 ```
-Ajouter au point de calcul de l'initiative finale pour capturer le cas roll=1.
 
-**Code impliqué** : Non identifié — vérifier la logique initiative dans `server/src/socket/index.js` (calcul REA + dé caché).
+**Code impliqué** : Non identifié — vérifier la logique initiative dans `server/src/socket/index.js`.
 
 **Prochaine étape** : Investigation dédiée.
 
@@ -821,4 +499,26 @@ Ajouter au point de calcul de l'initiative finale pour capturer le cas roll=1.
 
 **Prochaine étape** : Sprint voxels v2 — hors scope V1.
 
+---
 
+## Bugs archivés (clos) — Référence rapide
+
+| ID | Description | Résolution | Session |
+|---|---|---|---|
+| B6 | Loc-Drone : `localisation: null` cible drone | Fix `resolveDroneAssaultAction` branche drone | 94 |
+| B7 | Dmg-Drone : dégâts non enregistrés | Fix pipeline drone branch 8a | 94 |
+| COM3 | CaC : jet défense déclenché si attaque ratée | FAUX BUG — LdB p.222 : les deux roulent toujours (test d'opposition 4 cas) | 94 |
+| DC1 | Drone CaC : CombatModifiersWindow au lieu de CombatCacModifiersWindow | Déjà fixé Session 91 — cache Firefox stale | 95 suite |
+| DC2 | Drone ranged : mods situation ignorés | Déjà fixé — `situationMods = confirmedModifiers?.situation ?? []` | 95 suite |
+| DC3 | `portee = 'bout_portant'` → +5 illégitime pour `armement_contact` | Déjà fixé — `portee = null` → `PORTEE_MOD_COMP[null] ?? 0 = 0` | 95 suite |
+| DR1 | Drone : arme non pré-sélectionnée | `selectedDroneWeaponId` init au premier `droneWeapons[0].id` | 95 |
+| DR3 | Identique DC1 + DC3 | Clos avec eux | 95 suite |
+| COM6 | Arme CaC non pré-sélectionnée (GM + joueur) | `selectedGmMeleeWeaponId` init au premier arme CaC dispo | 95 |
+| SHOCK1 | Test de Choc non déclenché pour cibles PNJ (drone → PNJ) | Branche 8b : `vol_na` ajouté + bloc shock complet + `shockResult` dynamique | 95-3 |
+| SHK3 | COMBAT_END : stun résiduel (badge supprimé, effet persiste) | FAUX BUG — [DBG-SHK3] confirme `token_statuses: []` après cleanup | 95-3 |
+| CUR1 | Curseur bloqué après fermeture combat en mode déplacement/cible | Reset `setCombatMoveMode/setCombatTargetMode` dans COMBAT_ENDED + COMBAT_PHASE_CHANGED | 95-6 |
+| SHK4 | D20 Test de Choc non visible en chat | `resolveShockTest` retourne `rolls+seed` + `emitShockDiceResult` — 5 call sites index.js | 95-7 |
+| SHK5 | shock_auto_stun=false : PJ routé vers lui-même | `applyStun` lit `shock_auto_stun` depuis campaigns → gmSocket si false | 95-7 |
+| ST2 | D6 durée étourdissement jamais visible joueur | REWORK-01 `resolveShockBlock` → `statusService.js` centralisé | 96 |
+| SHK6 | COMBAT_DAMAGE_CONFIRM : PJ cible bloqué à "Calcul en cours…" | Condition autorisation élargie à `pending.targetUserId` (drone sans user_id) | 96 suite |
+| DIV-1 | `worst_wound_severity` absent WOUND_ADDED combat → anneau sévérité perdu | REWORK-03 `woundService.applyWound` appelle `getWorstWoundSeverity` post-transaction | 97 |

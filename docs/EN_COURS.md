@@ -1,5 +1,5 @@
-﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-16 Session 95-7
+# EN COURS — Dettes actives et prochaines étapes
+> Dernière mise à jour : 2026-06-17 Session 99
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -11,14 +11,17 @@
 
 **1. ~~Valider Sprint 14-0~~** ✅ CLOS — Session 95 suite 2
 
-**2. REWORK-01 — statusService** ✅ CLOS Session 96 — Scénarios 1-5 validés
+**2. ~~REWORK-01 — statusService~~** ✅ CLOS Session 96 — Scénarios 1-5 validés
 
-**3. REWORK-03 — woundService** ✅ CLOS Session 97 — T1 validé ⚠️ clos partiel (T2–T5 non testés)
+**3. ~~REWORK-03 — woundService~~** ✅ Session 97 — T1 validé ⚠️ clos partiel (T2–T5 non testés)
+   → T2 : CaC PNJ auto (blessure + shock) / T3 : promotion cascade (Légère→Grave) / T4 : ligne pleine (AppError) / T5 : REST GM manuel (blessure hors combat)
 
-**4. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
-   → ~~Cluster J~~ ✅ : ~~SHOCK1~~ + ~~SHK3~~ + ~~ST2~~ — Clos Sessions 95-3 / 95-5 / 95-5b
-   → ~~Cluster K~~ : ~~CUR1~~ ✅ Clos Session 95-6 — CH1 (chat F5) reclassé sprint persistance (projet non-trivial)
-   → ~~DR1~~ ✅ — ~~COM6~~ ✅ — ~~DC1/DC3~~ ✅ — ~~Sprint 14-0~~ ✅ — ~~Test de Choc~~ ✅
+**4. ~~REWORK-05 — panneaux partagés (COM5 + CL2)~~** ✅ CLOS COMPLET Session 99 — 5/5 scénarios ✅ + BUG-W1 ✅ + BUG-W2 ✅ + ERG-W1 ✅ + ERG-W2 ✅
+
+**5. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
+   → **Cluster I** — dégâts drone (DR6 + DR4 + DMG1 + DMG2) — **Haute**
+   → **Cluster D** — fenêtres combat UI (UI1 + COM8) — **Haute** *(COM5 + CL2 fixés REWORK-05)*
+   → **Cluster E** — arme et statuts (COM1 + COM2 + COM4 + COM7) — Moyenne
 
 ---
 
@@ -46,35 +49,24 @@
 
 | ID | Description | Priorité |
 |---|---|---|
-| ~~B6~~ | ~~Loc-Drone — `localisation: null` cible drone~~ | ✅ Clos — Session 94 |
-| ~~COM3~~ | ~~CaC : jet défense déclenché si attaque ratée~~ | FAUX BUG — LdB p.222 conforme — Session 94 |
 | DMG1+DMG2 | Labels DICE_RESULT dégâts drone (Compétence/Seuil faux) | SR ✅ — validation fonctionnelle requise |
-| DR4 | `calcDroneRD` : RD négatif → drone plein subil dégâts suppl. | Moyenne — sprint dédié |
+| DR4 | `calcDroneRD` : RD négatif → drone plein subit dégâts suppl. | Moyenne — sprint dédié |
 | DR6 | Blindage drone non lu (0 affiché malgré DB=15) | Haute — instrumentation [DBG-DR6] requise |
-| ~~DC1 / DC3 / DR3~~ | ~~Drone CaC : flow incorrect + portée +5 illégitime~~ | ✅ Clos — Session 95 suite |
-| ~~DC2~~ | ~~Drone ranged : mods situation ignorés~~ | ✅ Clos — Session 95 suite |
-| ~~SHOCK1~~ | Test de Choc non déclenché pour cibles PNJ (drone → PNJ) | ✅ Clos — Session 95-3 |
-| ~~SHK3~~ | ~~COMBAT_END : stun mécanique résiduel (badge supprimé, effet persiste)~~ | ✅ Clos (faux bug) — Session 95-3 |
-| ~~ST2~~ | ~~D6 durée étourdissement : jamais visible joueur, non broadcasté~~ — ✅ Clos Session 95-5b | ✅ Clos |
-| ~~SHK4~~ | ~~D20 Test de Choc non visible en chat~~ | ✅ Clos — Session 95-7 |
-| ~~SHK5~~ | ~~shock_auto_stun=false : PJ routé vers lui-même au lieu du GM~~ | ✅ Clos — Session 95-7 |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
-| ~~CUR1~~ | ~~Curseur bloqué après fermeture combat en mode déplacement/cible~~ | ✅ Clos — Session 95-6 |
 | CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
 | UI1 | Fenêtre déclaration design blanc | **Haute** |
 | COM1 | Recharger ne fait rien | **Haute** |
 | CL1 | Portraits PNJ non visibles timeline joueur | **Haute** |
-| ~~COM6~~ | ~~Arme CaC non pré-sélectionnée (GM + joueur)~~ | ✅ Clos — Session 95 |
-| ~~DR1~~ | ~~Drone : arme non pré-sélectionnée~~ | ✅ Clos — Session 95 |
 | COM8 | Fenêtre annonce visible pendant sélection cible | Moyenne |
 | COM2 | Vérif statut arme absente côté GM | Moyenne |
 | COM4 | CaC exige arme au clair (mains nues impossible) | Moyenne |
-| COM5 | Mode combat sélectionne aussi la cible (GM) | Moyenne |
+| COM5 | ~~Mode combat sélectionne aussi la cible (GM)~~ | ✅ REWORK-05 Session 99 |
 | COM7 | Multi-attaque CaC : duplicata / bouton grisé | Moyenne |
-| CL2 | Design CombatDeclareLog + divergence GM/joueur | Moyenne |
+| CL2 | ~~Design CombatDeclareLog + divergence GM/joueur~~ | ✅ REWORK-05 Session 99 |
 | CL3 | Ghosts déplacement d'annonce disparus | Moyenne |
 | D1 | Menu radial "fiche" drone ne s'ouvre pas | Moyenne |
+| COM9 | Viser une localisation précise — non implémenté | Moyenne — sprint dédié |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
 | — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |
 | D2 | Token drone : changement GLB non fonctionnel | Basse |
@@ -85,7 +77,6 @@
 | TC1 | `.gitattributes:3` — attribut invalide | Très basse |
 | DCO1 | `onTokenRotate` dead code Canvas3D/Scene | Très basse |
 | VX1 | `getVoxelSurfaceTop` — pas de cas slope/wedge | Très basse |
-| B7 | Dmg-Drone — dégâts non enregistrés | ✅ Clos |
 | — | Kiwi P-SRV-5 — ports Docker non restreints | Infra |
 | — | Logs debug `index.js` — conservés volontairement | Infra |
 
@@ -93,14 +84,14 @@
 
 ## Roadmap
 
-- **Sprint Dégâts Drone** → B6 (Loc) + B7 (Dmg) → voir `docs/REWORK_CONTACT.md`
+- ~~**Sprint Dégâts Drone**~~ ✅ → B6 (Loc) + B7 (Dmg) — Clos Sessions 94
 - **Sprint Drones 2d** — auto-announcement drone → voir `docs/PLAN_DRONESYSCOMBAT.md`
 - **Sprint Drones 2e** — resolveDroneAutoAction
 - **Sprint Drones 3** — Télépilotage (drone lié à PJ pilote)
 - **Sprint PLAN 14-1** — Menu contextuel token (right-click → ajouter/retirer statuts)
 - **Sprint PLAN 14-2** — Affichage badges (SVGs `docs/Character/Statuts/`, Canvas3D)
 - **Sprint PLAN 14-3** — FIX-D + mécaniques enforced (bypass défense stunned/surprised)
-- **Sprint stunned_until_turn** — supplanté par Sprint 14-0 ✅ — voir PLAN 14
+- ~~**Sprint stunted_until_turn**~~ ✅ — supplanté par Sprint 14-0 — voir PLAN 14
 - **Sprint CaC 4b** — validation fonctionnelle requise avant
 - **Sprint Annonce v2** — actions précédentes en lecture seule (GmDeclareWindow + ActionWindow)
 - **Sprint Tooltips Compétences** — SkillsPanel bouton ⓘ (déjà codé Session 73)
@@ -139,4 +130,3 @@
 - PL-Q2 — Quill insère la toolbar comme `previousElementSibling`, pas à l'intérieur du container — guard `classList.contains('ql-container')`
 - PL-Q3 — `containerRef.current` peut être null dans le cleanup React 19 — toujours capturer en variable locale en début d'effect
 - PL-Q4 — `editor.destroy()` n'existe pas en Quill 2.0 public API
-

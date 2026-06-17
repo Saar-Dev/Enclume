@@ -120,44 +120,23 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **79 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
-- "Changer le mode de tir" — non implémenté. Sprint dédié futur.
+
+**Session 97 ⚠️ clos partiel :**
+- REWORK-03 : `woundService.applyWound` — 5 call sites WS centralisés + fix DIV-1 (`worst_wound_severity` dans WOUND_ADDED)
+- Non testé : CaC PNJ auto / promotion cascade / ligne pleine / REST GM manuel
 
 **En attente de validation fonctionnelle :**
 - Sprint Drones 2c (cycle joueur) — Session 89
 - Sprint CaC Étape 3 (`CombatCacModifiersWindow` + mods) — Session 92-4
-- Fix split-brain slot detection — Session 93 — voir `docs/PLAN_ARCHICOMBAT_SLOTS.md` §Procédure de validation
+- Fix split-brain slot detection — Session 93 — voir `docs/PLAN_ARCHICOMBAT_SLOTS.md`
 - Sprint CaC 4b (attaque multiple melee) — Session 74
 
-**Session 97 — Livré ✅ :**
-- REWORK-03 : `resolveWoundInsertion` (×5 WS) → `woundService.js` (module indépendant)
-- Fix DIV-1 : `worst_wound_severity` maintenant dans tous les `WOUND_ADDED` WS — couleurs sévérité token + timeline conservées pendant le combat
-- `getWorstWoundSeverity` exportée depuis `woundUtils.js`, supprimée de `char-sheet.js`
-- T1 validé ⚠️ clos partiel (T2–T5 non testés)
-
-**Session 95-6 — Livré ✅ :**
-- Fix CUR1 : curseur bloqué après fermeture combat — reset `combatMoveMode` / `combatTargetMode` / `pendingMoveSelection` dans `COMBAT_ENDED` + `COMBAT_PHASE_CHANGED` (`SessionPage.jsx`)
-
-**Session 96 — Livré ✅ :**
-- REWORK-01 : `resolveShockBlock` (×5 copié-collé) → `statusService.js` (module indépendant)
-- `resolveShockTest` (pur D20) → `COMBAT_DAMAGE_RESULT` émis → `applyStun` (fire-and-forget)
-- Scénarios 1-5 validés : PNJ/PJ/non-régression/offline fallback/CaC ✅
-- Fix SHK6 : `COMBAT_DAMAGE_CONFIRM` autorisation PJ cible (drone → PJ) ✅
-- SHK4 (D20 non visible en chat) + SHK5 (shock_auto_stun=false PJ) → `docs/BUGIDENTIFIE.md`
-
-**Sessions 93-95 — Livrés ✅ :**
-- Fix split-brain slot detection (Session 93)
-- Sprint CaC Étapes 1+2+3 (Sessions 92-92tier)
-- Sprint 14-0 + Test de Choc (Session 95)
-- Fix Cluster A drones, Cluster B arme défaut, Cluster C CaC drone (Session 95 suite)
-
 **Dettes actives :**
-- **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion en RESOLUTION — sprint dédié futur
-- Bug SHK4 — D20 Test de Choc non visible en chat → sprint futur
-- Bug SHK5 — shock_auto_stun=false : PJ routé vers sa fenêtre au lieu du GM → sprint futur
+- **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
 - Bug CL1 — Portraits PNJ non visibles timeline joueur
 - Bug CL2 — Design CombatDeclareLog + divergence GM/joueur
 - Bug CL3 — Ghosts déplacement d'annonce disparus
-- Bug CUR1 — Curseur bloqué après fermeture combat
+- "Changer le mode de tir" — non implémenté — sprint futur
 - `useDiceAudio.js` — sons dés
 - `.gitattributes:3` — attribut invalide
 - WorkshopPage crash import invalide (`err.response?.data?.error`)

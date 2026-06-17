@@ -1,3 +1,23 @@
+## v104 — 2026-06-17 — REWORK-05 clôture : BUG-W1 + BUG-W2 + ERG-W1 + ERG-W2
+
+### Combat — Fenêtre GM (CombatGmDeclareWindow)
+- [fix] BUG-W1 : arme CaC holstérée ne se sélectionne plus par défaut — "Mains nues" si arme rangée, arme équipée si "Au clair"
+- [fix] BUG-W2 : 2 attaques CaC — la sélection de cible s'enchaîne correctement (slot 1 → slot 2) — race condition `setCombatTargetMode` résolue via `setTimeout(0)`
+- [erg] ERG-W1 : "Assaut (tir)" grisé mais cliquable si arme rangée — clic déclenche auto-dégainage ("Au clair") avec coût INI automatique
+- [erg] ERG-W2 : panneau CaC — clic arme équipée → auto-dégainage / clic Mains nues → auto-rangement (coût INI selon matrice d'état)
+
+---
+
+## v103 — 2026-06-17 — REWORK-05 : panneaux combat partagés + fix COM5 + fix CL2
+
+### Combat — Architecture UI
+- [rework] REWORK-05 : panneaux droits dupliqués (`~370 lignes`) extraits en 3 composants partagés — `DroneWeaponPanel`, `AssaultRangedPanel`, `MeleeCombatPanel`
+- [rework] `ACTION_LABELS`, `PURE_MOVE_TYPES`, `COMBAT_MODE_DEFS` migrés dans `combatSections.js` — source unique
+- [fix] COM5 : chips mode de combat GM (`CombatGmDeclareWindow`) ne déclenchent plus le mode visée automatiquement — target entry via bouton "Cibler" explicite uniquement
+- [fix] CL2 : `DeclareLogContent` exporté depuis `CombatDeclareLog.jsx` — log déclarations Joueur (`CombatActionWindow`) utilise le même composant que le GM — rendu identique garanti
+
+---
+
 ## v102 — 2026-06-16 — REWORK-03 : woundService + fix DIV-1 couleurs sévérité combat
 
 ### Serveur — Architecture

@@ -1297,3 +1297,107 @@ Journal d'analyse complet : `docs/REWORK-03.md` (11 sections, 8 pièges document
 
 - **Testé** : T1 — blessure MORTELLE Bras D (PNJ Soleil, distance) → `worst_wound_severity` dans WOUND_ADDED ✅ — couleurs sévérité token + timeline ✅ — pipeline Test de Choc + stun 4 tours intact ✅
 - **Non testé** : T2 (CaC PNJ auto) — T3 (promotion en cascade) — T4 (ligne pleine sévérité max) — T5 (REST GM manuel)
+
+---
+
+## Session 98 — REWORK-05 : panneaux d'action partagés (COM5 + CL2) — 2026-06-17
+
+### Objectif
+
+Extraire 3 panneaux droits (Tir, CaC, Drone) + 1 export log (`DeclareLogContent`) dupliqués entre `CombatGmDeclareWindow` et `CombatActionWindow` (~370 lignes dupliquées). Corriger bug COM5 (mode chip GM déclenchait target mode auto) et bug CL2 (log déclarations Joueur divergeait du GM).
+
+Plan complet : `docs/REWORK-05.md` (9 étapes, 6 pièges documentés, run à vide).
+
+### Fichiers modifiés
+
+| Fichier | Modification |
+|---|---|
+| `client/src/components/combatSections.js` | +`ACTION_LABELS`, `PURE_MOVE_TYPES`, `COMBAT_MODE_DEFS` — migrés depuis les 2 fenêtres |
+| `client/src/components/CombatDeclareLog.jsx` | +`export function DeclareLogContent({ maxHeight })` — lit stores directement. Import constantes depuis combatSections. |
+| `client/src/components/DroneWeaponPanel.jsx` | NOUVEAU — panneau drone partagé (cyan #30aaaa) |
+| `client/src/components/AssaultRangedPanel.jsx` | NOUVEAU — panneau tir CC/RC/RL partagé (rouge #e07070) |
+| `client/src/components/MeleeCombatPanel.jsx` | NOUVEAU — panneau CaC partagé (vert #70c070) — fix COM5 inclus |
+| `client/src/components/CombatGmDeclareWindow.jsx` | Panneaux droits → 3 imports partagés. Fix COM5 : `onModeChange` ne déclenche plus `handleStartMelee()`. |
+| `client/src/components/CombatActionWindow.jsx` | `declareLogSection` inline → `<DeclareLogContent>` (fix CL2). Panneaux droits → 3 imports partagés. Import constantes depuis combatSections. |
+
+### Pièges évités (6 identifiés en run à vide)
+
+- **P1** — `DeclareLogContent` = corps seul, pas de titre (GM a titre draggable, Joueur titre inline)
+- **P2** — Styles prop supprimée : panneaux définissent leurs styles internes, container wrapper reste dans le parent
+- **P3** — `isWeaponDrawn` ajouté à `MeleeCombatPanel` (grisage armes Joueur)
+- **P4** — `chargeMoveDest` normalisé : GM passe `chargeSelection?.move ?? null`, Joueur passe `moveSelection ?? null`
+- **P5** — `handleStartMelee()` déplacée (pas supprimée) : retirée du chip mode → appelée via bouton "Cibler" explicite
+- **P6** — Tooltips COMBAT_MODE_DEFS : version Joueur choisie comme source canonique (plus complète)
+
+### Fix COM5
+
+**Avant :** click chip "Offensif/Normal/…" dans `CombatGmDeclareWindow` → `if (!isDefensif) handleStartMelee()` → mode visée s'ouvrait automatiquement.
+**Après :** `onModeChange(mode)` dans `MeleeCombatPanel` = mode change uniquement. Target entry = bouton "Cibler" explicite → `onChooseTarget(0)` → parent appelle `handleStartMelee()`.
+
+### Fix CL2
+
+**Avant :** `declareLogSection` — 53 lignes JSX inline dans `CombatActionWindow` avec rendu légèrement différent du GM.
+**Après :** `<DeclareLogContent maxHeight="170px" />` — lit `announcedActions` + `tokens` depuis stores directement. Rendu identique GM/Joueur.
+
+### Clôture REWORK-05 ⚠️ clos partiel
+
+- **Testé** : build Vite 0 erreur ✅ — SR 0 erreur ✅
+- **Non testé** : Scénario 1 (tir GM CC) — Scénario 2 (COM5) — Scénario 3 (CL2 log) — Scénario 4 (charge Joueur) — Scénario 5 (drone GM)
+
+## Session 99 — REWORK-05 clôture + fixes post-test (BUG-W1, BUG-W2, ERG-W1, ERG-W2) — 2026-06-17
+
+### Objectif
+
+Clôturer REWORK-05 : valider les 5 scénarios, extraire `computeFireVariant` (DoD grep), appender ARCHI_REWORK.md. Puis corriger les 2 bugs et 2 demandes ergonomiques identifiées pendant les tests.
+
+### Partie 1 — Validation REWORK-05 + computeFireVariant
+
+**Validation 5/5 scénarios :** tir GM CC, COM5, CL2, charge Joueur, drone GM. ✅
+
+**`computeFireVariant` extrait dans `combatSections.js` :**
+DoD exigeait `grep "currentFireMode === 'CC'"` = 0 dans les deux parents. 22 lignes dupliquées remplacées par un appel unique `computeFireVariant(fireMode, rawBulletCount, variantAB, { defaultCcCount })`. GM passe `{ defaultCcCount: 1 }` (PNJ default tir simple), Joueur passe rien (`null` = sélection explicite requise). `effectiveBulletCount ?? 1` dans la prop Joueur préserve la pré-sélection visuelle radio sans changer la validité du formulaire.
+
+**ARCHI_REWORK.md** : section REWORK-05 appendée. REWORK-06 (`combatDeclarationStore`) documenté.
+
+### Partie 2 — Bugs et ergonomie identifiés en test
+
+#### BUG-W1 — Arme holstérée sélectionnée par défaut dans panneau CaC
+
+**Cause :** `useEffect` ligne 175 de `CombatGmDeclareWindow` appelait `setSelectedGmMeleeWeaponId(w.inv_id)` sans vérifier `state_weapon`. Piège : `localStates.weapon` est stale dans ce contexte (update asynchrone) — il faut lire `initialStates.weapon` (dérivé inline = toujours frais au render).
+
+**Fix :** `if (w && !w.ref_fire_mode && initialStates.weapon === 'drawn') setSelectedGmMeleeWeaponId(w.inv_id)`
+
+#### BUG-W2 — 2 attaques CaC : crash silencieux sélection cible
+
+**Cause réelle :** dans `handleEnterTargetMode` (SessionPage), `wrappedSelected` appelle `onTargetSelected(targetId)` (synchrone → inclut `selectNext(1)` → `setCombatTargetMode({slot1})`), puis `setCombatTargetMode(null)`. React batch : le `null` écrase le `{slot1}` du même batch. Slot 1 jamais actif → "pas de fenêtre".
+
+Diagnostic initial (stale closure) partiellement correct mais pas la cause principale. `effectiveMeleeCountRef` ajouté quand même (couvre le cas count-change-before-call).
+
+**Fix :** `setTimeout(() => selectNext(idx + 1), 0)` — différer l'appel après que le batch `setCombatTargetMode(null)` soit appliqué. Slot 1 s'ouvre dans le tick suivant. Fenêtre invisible pendant tout l'enchaînement (`isSelectingOnMap=true`).
+
+#### ERG-W1 — "Assaut (tir)" auto-draw
+
+`disabled` splittée en `noRangedWeapon` (vrai blocage) / `weaponNotDrawn` (grisé cliquable). Click "Assaut (tir)" quand `localStates.weapon !== 'drawn'` → `setLocalStates(prev => ({...prev, weapon: 'drawn'}))` → delta INI recalculé automatiquement via `calcIniDelta`. Tag "sans arme dist." conditionné sur `noRangedWeapon` uniquement.
+
+#### ERG-W2 — CaC weapon default + auto-draw/holster
+
+`onWeaponChange` dans `CombatGmDeclareWindow` étendu :
+- `id !== null && weapon !== 'drawn'` → `setLocalStates(weapon: 'drawn')` (auto-draw, coût −3 ou −5 selon état)
+- `id === null && weapon !== 'holstered'` → `setLocalStates(weapon: 'holstered')` (auto-holster, coût −10 depuis drawn, −5 depuis ready)
+
+Aucun changement dans `MeleeCombatPanel` (`isWeaponDrawn={true}` conservé — P3/P7 hors scope, lié à REWORK-06).
+
+### Fichiers modifiés
+
+| Fichier | Modification |
+|---|---|
+| `client/src/components/combatSections.js` | +`computeFireVariant` (factorisation currentVariant depuis GM + Joueur) |
+| `client/src/components/CombatGmDeclareWindow.jsx` | BUG-W1 (init weapon) + BUG-W2 (setTimeout slot N) + ERG-W1 (auto-draw tir) + ERG-W2 (auto-draw/holster CaC) |
+| `client/src/components/CombatActionWindow.jsx` | `computeFireVariant` importé, blocs currentVariant remplacés |
+| `docs/ARCHI_REWORK.md` | +REWORK-05 section + REWORK-06 prémices |
+| `docs/REWORK-05.md` | Session 99 observations + DoD complet |
+
+### Clôture ✅ CLOS COMPLET
+
+- **Testé :** 5/5 scénarios REWORK-05 ✅ — BUG-W1 ✅ — BUG-W2 (2 attaques) ✅ — ERG-W1 ✅ — ERG-W2 ✅
+- **Non testé :** 3 attaques CaC (BUG-W2) — ERG-W2 depuis `state_weapon=ready` — ERG-W1 coût `ready→drawn` (−3)
