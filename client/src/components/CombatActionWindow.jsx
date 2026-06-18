@@ -11,7 +11,6 @@ import {
   CC_REPS_STEPS, RL_BUTTONS, computeFireVariant,
   ACTION_LABELS, PURE_MOVE_TYPES,
 } from './combatSections.js'
-import { DeclareLogContent } from './CombatDeclareLog.jsx'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
@@ -664,10 +663,6 @@ export default function CombatActionWindow({
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 — Déclaration d&apos;intention</div>
-        <div>
-          <div style={W.sectionTitle}>Déclarations — Tour {currentTurn}</div>
-          <DeclareLogContent maxHeight="170px" />
-        </div>
         <p style={W.waitText}>
           En attente de {currentDeclarer?.label ?? '…'}…
         </p>
@@ -681,10 +676,6 @@ export default function CombatActionWindow({
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 2 — Résolution</div>
-        <div>
-          <div style={W.sectionTitle}>Déclarations — Tour {currentTurn}</div>
-          <DeclareLogContent maxHeight="170px" />
-        </div>
         <p style={W.waitText}>
           {activeResolveToken ? `${activeResolveToken.label} agit…` : 'Résolution en cours…'}
         </p>
@@ -697,10 +688,6 @@ export default function CombatActionWindow({
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 - Declaration d&apos;intention</div>
-        <div>
-          <div style={W.sectionTitle}>Déclarations — Tour {currentTurn}</div>
-          <DeclareLogContent maxHeight="170px" />
-        </div>
         <p style={W.waitText}>Action declaree. En attente des autres participants…</p>
       </div>
     )

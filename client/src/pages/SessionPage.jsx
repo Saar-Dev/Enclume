@@ -12,6 +12,9 @@ import { useEntityStore } from '../stores/entityStore'
 import { useCombatStore } from '../stores/combatStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import api from '../lib/api'
+import { useTokenSocket } from '../lib/useTokenSocket'
+import { useEntitySocket } from '../lib/useEntitySocket'
+import { useCombatSocket } from '../lib/useCombatSocket'
 import Canvas3D from '../components/Canvas3D'
 import Editor3D from '../components/Editor3D'
 import Sidebar from '../components/Sidebar'
@@ -30,7 +33,7 @@ export default function SessionPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const { tokens, setTokens, addToken, removeToken, updateToken } = useTokenStore()
+  const { tokens, setTokens, addToken, removeToken } = useTokenStore()
   const { characters, isGm, setCharacters, setMembers, upsertCharacter, updateCharacter } = useCharacterStore()
   const {
     battlemap, battlemaps,
@@ -39,10 +42,10 @@ export default function SessionPage() {
   } = useMapStore()
   const {
     setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage, setActiveCampaign,
-    setPendingEntityId, clearPendingEntityId,
+    setPendingEntityId,
   } = useSessionStore()
   const { setEntities, fetchBlueprints } = useEntityStore()
-  const { setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster, advanceSlot, setActions, addAnnouncedAction, resetAnnouncedActions, phase: combatPhase } = useCombatStore()
+  const { phase: combatPhase } = useCombatStore()
   const { setDocuments, addDocument, updateDocument, removeDocument } = useLibraryStore()
 
   const [campaign, setCampaign] = useState(null)
@@ -102,21 +105,6 @@ export default function SessionPage() {
   // Passé à CharacterWindow → bumpInventoryVersion() → ArmorWoundPanel reload.
   const [woundVersions, setWoundVersions] = useState({})
 
-  // ─── Fenêtre "Gestion des dégâts" — PJ uniquement ────────────────────────
-  // damagePayload : reçu via COMBAT_DAMAGE_PROMPT { tokenId, formula, targetName }
-  // damageResults : reçu via COMBAT_DAMAGE_RESULT après que le PJ clique "Lancer les dés"
-  const [damagePayload, setDamagePayload] = useState(null)
-  const [damageResults, setDamageResults] = useState(null)
-  // attackResult : reçu via COMBAT_ATTACK_PLAYER_RESULT { hit, roll, seuil, tireurTokenId, cibleTokenId }
-  const [attackResult, setAttackResult] = useState(null)
-  // gmAttackResult : reçu via COMBAT_ATTACK_RESULT { isPnj:true, ... } — panneau résultat PNJ GM
-  const [gmAttackResult, setGmAttackResult] = useState(null)
-  // pnjAttackResult : même payload, affiché au joueur ciblé
-  const [pnjAttackResult,  setPnjAttackResult]  = useState(null)
-  const [reloadResult,       setReloadResult]       = useState(null)
-  const [meleeDefensePrompt, setMeleeDefensePrompt] = useState(null)  // { attackerName, attackerTokenId, defenderTokenId, rollAttaque, chancesAttaque }
-  const [meleeResult,        setMeleeResult]        = useState(null)  // { attaquantId, defenseurId, rollAttaque, chancesAttaque, rollDefense, chanceDefense, hit }
-  const [stunPayload,        setStunPayload]        = useState(null)  // { tokenId, outcome } — prompt D6 durée étourdissement (PJ interactif)
   // gmSocketError : erreur serveur visible GM (PC22, etc.)
   const [gmSocketError, setGmSocketError] = useState(null)
 
@@ -226,10 +214,6 @@ export default function SessionPage() {
     }
   }, [mode, combatPhase, socket, handleModeChange])
 
-  // ─── Surprise initiative — joueur surpris en attente de jet ──────────────
-  // null = inactif, sinon { tokenId } du token surpris appartenant au joueur
-  const [pendingSurpriseRoll, setPendingSurpriseRoll] = useState(null)
-
   // ─── Centrage caméra combat (Sprint 2.5) ──────────────────────────────────
   // null = inactif, sinon { x, z } coords DB (PE14) du token à centrer.
   const [combatCameraCenter, setCombatCameraCenter] = useState(null)
@@ -242,14 +226,6 @@ export default function SessionPage() {
 
   // null = inactif, sinon { tokenId, pendingTargetId, onTargetSelected, onCancel, onPendingTarget }
   const [combatTargetMode, setCombatTargetMode] = useState(null)
-
-  // Dernière déclaration reçue — ghost déplacement + ligne cible pour les spectateurs
-  // null | { tokenId, moveTarget:{x,y,z}|null, attackTargetId:uuid|null }
-  const [announcementMarker, setAnnouncementMarker] = useState(null)
-
-  // Preview éphémère de la déclaration en cours (PJ) — pour monitoring GM
-  // null | { tokenId, actions[], assaultTargetId, meleeTargetIds[], moveDestination, combatMode }
-  const [pjPreview, setPjPreview] = useState(null)
 
   // Chargement local d'une carte — GM uniquement, sans déplacer les joueurs
   // Utilisé : clic barre GM, suppression carte active
@@ -399,10 +375,23 @@ export default function SessionPage() {
     }
   }, [battlemap?.id, characters, layer])
 
+  // Hooks WS — déclarés ici, après TOUS les useState (évite TDZ sur setRadialMenu, setMoveTarget, setCombatMoveMode…)
+  const tokenSocket = useTokenSocket()
+  const entitySocket = useEntitySocket({ setRadialMenu, setMoveTarget })
+  // handleModeReset AVANT useCombatSocket — ordre P4 obligatoire
+  const handleModeReset = useCallback(() => {
+    setCombatMoveMode(null); setCombatTargetMode(null); setPendingMoveSelection(null)
+  }, [])
+  const combatSocket = useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })
+
   useEffect(() => {
     setActiveCampaign(campaignId)
     const s = io(import.meta.env.VITE_API_URL, { withCredentials: true })
     s.emit(WS.SESSION_JOIN, { campaignId })
+
+    tokenSocket.listen(s)
+    entitySocket.listen(s)
+    combatSocket.listen(s)
 
     s.on(WS.SESSION_JOINED, ({ userId, onlineUserIds = [] }) => {
       setOnlineUsers(new Set([userId, ...onlineUserIds]))
@@ -427,23 +416,6 @@ export default function SessionPage() {
     })
     s.on(WS.CAMPAIGN_SETTINGS_UPDATED, ({ campaign: updated }) => {
       setCampaign(prev => ({ ...prev, ...updated }))
-    })
-    s.on(WS.TOKEN_MOVED, ({ tokenId, pos_x, pos_y, pos_z, updated_at }) => {
-      updateToken({ id: tokenId, pos_x, pos_y, pos_z, updated_at })
-    })
-    s.on(WS.TOKEN_CREATED, ({ token }) => {
-      addToken(token)
-    })
-    s.on(WS.TOKEN_DELETED, ({ tokenId }) => {
-      removeToken(tokenId)
-    })
-    s.on(WS.TOKEN_UPDATED, ({ token }) => {
-      // Mise à jour partielle — token contient id + tous les champs modifiés (ex: r après TOKEN_ROTATE)
-      // Guard updated_at géré dans le store — événements obsolètes ignorés silencieusement
-      updateToken(token)
-    })
-    s.on(WS.TOKEN_STATUS_UPDATED, ({ tokenId, statuses, statusExpiries }) => {
-      updateToken({ id: tokenId, statuses, statusExpiries: statusExpiries ?? {} })
     })
     s.on(WS.CHAT_MESSAGE, ({ userId, username, color, text, timestamp }) => {
       addMessage({
@@ -514,36 +486,6 @@ export default function SessionPage() {
     s.on(WS.INVENTORY_REMOVED, ({ characterId }) => {
       if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
     })
-    s.on(WS.COMBAT_RELOAD_RESULT, (data) => {
-      setReloadResult(data)
-    })
-    s.on(WS.COMBAT_MELEE_DEFENSE_PROMPT, (data) => {
-      setMeleeDefensePrompt(data)
-    })
-    s.on(WS.COMBAT_MELEE_RESULT, (data) => {
-      setMeleeResult(data)
-    })
-    s.on(WS.COMBAT_DAMAGE_PROMPT, (data) => {
-      setDamagePayload(data)
-    })
-    s.on(WS.COMBAT_DAMAGE_RESULT, (data) => {
-      setDamageResults(data)
-    })
-    s.on(WS.COMBAT_STUN_PROMPT, (data) => {
-      setStunPayload(data)
-    })
-    s.on(WS.COMBAT_ATTACK_PLAYER_RESULT, (data) => {
-      setAttackResult(data)
-    })
-    s.on(WS.COMBAT_ATTACK_RESULT, (data) => {
-      if (data.isPnj) {
-        setGmAttackResult(data)
-        setPnjAttackResult(data)
-      } else if (isGm) {
-        // PJ attaquant — le GM voit aussi le résultat (dégâts + shock) sans le jet d'attaque
-        setGmAttackResult(data)
-      }
-    })
     s.on(WS.MACRO_ROLL_RESULT, ({ characterName, color, sourceLabel, rollResult, threshold, isSuccess, isCriticalSuccess, isCriticalFail, formattedMessage, secret, timestamp }) => {
       addMessage({
         id:               `macro-${timestamp}`,
@@ -568,160 +510,6 @@ export default function SessionPage() {
       console.error('[WS] Erreur serveur:', msg)
       setGmSocketError(msg)
     })
-    s.on(WS.MAP_SWITCH, ({ battlemapId, userIds }) => {
-      const concerned = userIds.length === 0 || userIds.includes(user?.id)
-      if (!concerned) return
-      api.get(`/battlemaps/${battlemapId}`)
-        .then(res => {
-          setBattlemap(res.data.battlemap)
-          setTokens(res.data.tokens || [])
-          // Charger les entités de la nouvelle carte
-          return api.get(`/battlemaps/${battlemapId}/entities`)
-        })
-        .then(res => setEntities(res.data.entities || []))
-        .catch(err => console.error('Erreur chargement carte MAP_SWITCH :', err))
-    })
-
-    // ─── Handlers entités ────────────────────────────────────────────────
-    // ENTITY_ACTION_PENDING — demande d'un joueur, reçue par le GM uniquement
-    // Ajoutée dans le fil chat avec type 'entity_action' — visible GM uniquement
-    s.on(WS.ENTITY_ACTION_PENDING, (pending) => {
-      addMessage({
-        id: `entity-action-${pending.requestId}`,
-        type: 'entity_action',
-        gmOnly: true,
-        requestId: pending.requestId,
-        playerName: pending.playerName,
-        interactionLabel: pending.interactionLabel,
-        entityLabel: pending.entityLabel,
-        skillId: pending.skillId,
-        skillTotal: pending.skillTotal,
-        defaultDifficulty: pending.defaultDifficulty,
-        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      })
-    })
-    // ENTITY_ACTION_RESULT — résultat reçu par le joueur (refus, timeout, no_gm)
-    s.on(WS.ENTITY_ACTION_RESULT, ({ requestId, isApproved, reason }) => {
-      clearPendingEntityId()
-      // Informer le joueur via un message système dans le chat
-      if (!isApproved) {
-        const reasonText = reason === 'timeout'
-          ? t('session.actionExpired')
-          : reason === 'no_gm'
-            ? t('session.noGm')
-            : t('session.actionRefused')
-        addMessage({
-          id: `entity-result-${requestId}`,
-          system: true,
-          text: reasonText,
-          time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        })
-      }
-      // Fermer le radial menu si ouvert
-      setRadialMenu(null)
-    })
-
-    // ENTITY_MOVE_RESULT — résultat jet + positions finales (9F-B2)
-    // Reçu uniquement par le joueur émetteur (socket.id ciblé côté serveur)
-    s.on(WS.ENTITY_MOVE_RESULT, ({ mr, dmax, success }) => {
-      setMoveTarget(null)
-      addMessage({
-        id: `move-result-${Date.now()}`,
-        system: true,
-        text: success
-          ? t('entity.moveSuccess', { mr, dmax })
-          : t('entity.moveFail', { mr }),
-        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      })
-    })
-
-    // ─── Handlers combat ─────────────────────────────────────────────────────
-    s.on(WS.COMBAT_STARTED, ({ roster, phase }) => {
-      setCombatState({ phase, roster, actions: [], currentTurn: 1, activeSlotIdx: 0 })
-      setMode('combat')
-    })
-    s.on(WS.COMBAT_ENDED, () => {
-      resetCombat()
-      setMode('play')
-      setAttackResult(null)
-      setReloadResult(null)
-      setCombatMoveMode(null)
-      setCombatTargetMode(null)
-      setPendingMoveSelection(null)
-    })
-    s.on(WS.COMBAT_STATE_SYNC, ({ combatState, roster, actions }) => {
-      // Calculer activeTokenId depuis le roster (fallback si COMBAT_SLOT_ADVANCED non reçu)
-      let activeTokenId = null
-      if (combatState.phase === 'ANNOUNCEMENT') {
-        activeTokenId = [...roster]
-          .filter(r => !r.has_announced && r.status === 'active')
-          .sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))[0]?.token_id ?? null
-      } else if (combatState.phase === 'RESOLUTION') {
-        activeTokenId = [...roster]
-          .sort((a, b) => b.initiative - a.initiative)[combatState.active_slot_idx]?.token_id ?? null
-      }
-      setCombatState({
-        phase: combatState.phase,
-        roster,
-        actions,
-        currentTurn: combatState.current_turn,
-        activeSlotIdx: combatState.active_slot_idx,
-        activeTokenId,
-      })
-      if (combatState.phase) setMode('combat')
-    })
-
-    // Phase changée — ANNOUNCEMENT ou RESOLUTION (avec roster et actions pour RESOLUTION)
-    s.on(WS.COMBAT_PHASE_CHANGED, ({ phase, roster, actions }) => {
-      setAnnouncementMarker(null)
-      setPjPreview(null)
-      setCombatMoveMode(null)
-      setCombatTargetMode(null)
-      setPendingMoveSelection(null)
-      setPhase(phase)
-      if (roster) updateRoster(roster)
-      if (actions) setActions(actions)
-      if (phase === 'ANNOUNCEMENT') {
-        setReloadResult(null)
-        setMeleeDefensePrompt(null)
-        setMeleeResult(null)
-        resetAnnouncedActions()
-      }
-    })
-    // Roster mis à jour — après jet de surprise (COMBAT_SURPRISE_RESULT)
-    s.on(WS.COMBAT_ROSTER_UPDATED, ({ roster }) => {
-      updateRoster(roster)
-    })
-    // Joueur surpris — afficher l'UI de jet d'initiative
-    s.on(WS.COMBAT_SURPRISE_ROLL, ({ tokenId }) => {
-      setPendingSurpriseRoll({ tokenId })
-    })
-    // Preview éphémère en cours de déclaration (PJ → serveur → room)
-    s.on(WS.COMBAT_ANNOUNCE_PREVIEW, (preview) => {
-      setPjPreview(preview)
-    })
-    // Participant a déclaré son action — initiative inclus si précipité (+3)
-    s.on(WS.COMBAT_ACTION_DECLARED, ({ tokenId, actionType, initiative, moveTarget, attackTargetId }) => {
-      markTokenAnnounced(tokenId, initiative)
-      setAnnouncementMarker({ tokenId, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
-      setPjPreview(null)   // déclaration confirmée — purge le preview
-      addAnnouncedAction({ tokenId, actionType, initiative, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
-    })
-    // Slot actif avancé (ANNOUNCEMENT et RESOLUTION)
-    s.on(WS.COMBAT_SLOT_ADVANCED, ({ activeSlotIdx, tokenId }) => {
-      advanceSlot(activeSlotIdx, tokenId)
-    })
-    // Participant passé par le GM ou timer auto-skip
-    s.on(WS.COMBAT_TURN_SKIPPED, ({ tokenId, tokenLabel }) => {
-      markTokenAnnounced(tokenId)
-      addMessage({
-        id: `combat-skip-${tokenId}-${Date.now()}`,
-        system: true,
-        text: t('session.tokenSkipped', { label: tokenLabel }),
-        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      })
-    })
-
     // ─── Reconnexion robuste — Bug C ────────────────────────────────────────
     // socket.io.on('reconnect') se déclenche UNIQUEMENT lors d'une reconnexion
     // automatique (pas à la connexion initiale) — disponible depuis socket.io v3.
@@ -865,10 +653,10 @@ export default function SessionPage() {
   // ─── Jet de surprise — joueur surpris lance son 1d20 ─────────────────────
   // P3 : socket dans les deps.
   const handleSurpriseRolled = useCallback(() => {
-    if (!socket || !pendingSurpriseRoll) return
-    socket.emit(WS.COMBAT_SURPRISE_RESULT, { tokenId: pendingSurpriseRoll.tokenId })
-    setPendingSurpriseRoll(null)
-  }, [socket, pendingSurpriseRoll])
+    if (!socket || !combatSocket.pendingSurpriseRoll) return
+    socket.emit(WS.COMBAT_SURPRISE_RESULT, { tokenId: combatSocket.pendingSurpriseRoll.tokenId })
+    combatSocket.setPendingSurpriseRoll(null)
+  }, [socket, combatSocket.pendingSurpriseRoll, combatSocket.setPendingSurpriseRoll])
 
   // ─── Mode déplacement combat : entrée, sélection, annulation ───────────────
   // allures : { lente, moyenne, rapide, max } en cases — depuis calcAllures (CombatActionWindow)
@@ -1019,7 +807,7 @@ export default function SessionPage() {
               combatMoveMode={combatMoveMode}
               pendingMoveSelection={pendingMoveSelection}
               combatTargetMode={combatTargetMode}
-              announcementMarker={announcementMarker}
+              announcementMarker={combatSocket.announcementMarker}
               defaultTokenGlbUrl={campaign?.default_token_glb_url
                 ? `${import.meta.env.VITE_API_URL}/api/assets/${campaign.default_token_glb_url}`
                 : null}
@@ -1304,8 +1092,7 @@ export default function SessionPage() {
           user={user}
           characters={characters}
           actionTimerSec={campaign?.action_timer_sec ?? 0}
-          tokens={tokens}
-          pendingSurpriseRoll={pendingSurpriseRoll}
+          pendingSurpriseRoll={combatSocket.pendingSurpriseRoll}
           onSurpriseRolled={handleSurpriseRolled}
           onEnterMoveMode={handleEnterMoveMode}
           combatMoveMode={combatMoveMode}
@@ -1315,29 +1102,28 @@ export default function SessionPage() {
           combatTargetMode={combatTargetMode}
           onEnterTargetMode={handleEnterTargetMode}
           onValidateTarget={handleValidateTarget}
-          announcementMarker={announcementMarker}
-          pjPreview={pjPreview}
-          damagePayload={damagePayload}
-          damageResults={damageResults}
-          onDamageConfirmed={() => { setDamagePayload(null); setDamageResults(null); setAttackResult(null) }}
-          attackResult={attackResult}
-          onAttackConfirmed={() => setAttackResult(null)}
-          gmAttackResult={gmAttackResult}
-          onGmAttackResultClose={() => setGmAttackResult(null)}
-          pnjAttackResult={pnjAttackResult}
-          onPnjAttackResultClose={() => setPnjAttackResult(null)}
-          reloadResult={reloadResult}
-          onReloadResultClose={() => setReloadResult(null)}
-          meleeDefensePrompt={meleeDefensePrompt}
+          pjPreview={combatSocket.pjPreview}
+          damagePayload={combatSocket.damagePayload}
+          damageResults={combatSocket.damageResults}
+          onDamageConfirmed={() => { combatSocket.setDamagePayload(null); combatSocket.setDamageResults(null); combatSocket.setAttackResult(null) }}
+          attackResult={combatSocket.attackResult}
+          onAttackConfirmed={() => combatSocket.setAttackResult(null)}
+          gmAttackResult={combatSocket.gmAttackResult}
+          onGmAttackResultClose={() => combatSocket.setGmAttackResult(null)}
+          pnjAttackResult={combatSocket.pnjAttackResult}
+          onPnjAttackResultClose={() => combatSocket.setPnjAttackResult(null)}
+          reloadResult={combatSocket.reloadResult}
+          onReloadResultClose={() => combatSocket.setReloadResult(null)}
+          meleeDefensePrompt={combatSocket.meleeDefensePrompt}
           onMeleeDefenseConfirm={() => {
-            if (!meleeDefensePrompt?.defenderTokenId || !socket) return
-            socket.emit(WS.COMBAT_MELEE_DEFENSE_CONFIRM, { tokenId: meleeDefensePrompt.defenderTokenId })
-            setMeleeDefensePrompt(null)
+            if (!combatSocket.meleeDefensePrompt?.defenderTokenId || !socket) return
+            socket.emit(WS.COMBAT_MELEE_DEFENSE_CONFIRM, { tokenId: combatSocket.meleeDefensePrompt.defenderTokenId })
+            combatSocket.setMeleeDefensePrompt(null)
           }}
-          meleeResult={meleeResult}
-          onMeleeResultClose={() => setMeleeResult(null)}
-          stunPayload={stunPayload}
-          onStunConfirmed={() => setStunPayload(null)}
+          meleeResult={combatSocket.meleeResult}
+          onMeleeResultClose={() => combatSocket.setMeleeResult(null)}
+          stunPayload={combatSocket.stunPayload}
+          onStunConfirmed={() => combatSocket.setStunPayload(null)}
           gmSocketError={gmSocketError}
           onGmSocketErrorClose={() => setGmSocketError(null)}
           sidebarWidth={sidebarVisible ? sidebarWidth : 0}

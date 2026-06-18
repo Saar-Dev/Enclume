@@ -1,57 +1,31 @@
-﻿# CLAUDE.md — Projet Enclume
-> Session 87 — 2026-06-10
+# CLAUDE.md — Projet Enclume
+> Session 106 — 2026-06-18
 
 ---
 
 ## RÈGLES ABSOLUES
 
 CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
-1. Lire le fichier SYSTEME/ concerné avant toute proposition (TABLE DE ROUTING).
+1. Lire le fichier concerné avant toute proposition.
 2. Confirmer la lecture : *"Fichier [nom] lu. Trouvé : [...]. Continuer ?"*
 3. Plan exact avant de coder — lignes touchées, ce qui change, ce qui ne change pas.
 4. "Je code ?" une seule fois, plan complet.
 5. Relire le fichier produit en entier avant livraison.
 6. Confirmation fonctionnelle obligatoire avant étape suivante.
-7. **Un seul bug à la fois.** Plan pour un bug → validation → bug suivant. Jamais deux bugs dans le même plan ou la même réponse.
-8. **Reprise depuis un résumé de conversation = nouvelle session.** Le résumé ne remplace pas la lecture des fichiers. Exécuter le protocole de début de session complet sans exception.
-
----
-
-## TABLE DE ROUTING — fichier à lire selon domaine touché
-
-| Domaine | Fichier |
-|---|---|
-| Dés, DICE_RESULT, DiceRoller | `docs/SYSTEME/DICE.md` |
-| Blessures, armures, calculs malus | `docs/SYSTEME/BLESSURES.md` |
-| Combat, resolveAssault, state_character | `docs/SYSTEME/COMBAT.md` |
-| Règles mécaniques Polaris — source absolue | `docs/REGLESYSCOMBAT.md` |
-| Spec technique combat (séquences, pipeline, modificateurs) | `docs/MANUELSYSCOMBAT.md` |
-| Bugs architecture combat identifiés | `docs/BUGIDENTIFIE.md` |
-| Tokens, entités, collision Redis, déplacement | `docs/SYSTEME/ENTITES.md` |
-| Coordonnées 3D, voxels, PE14 | `docs/SYSTEME/VOXELS.md` |
-| Auth, stores Zustand, événements WS | `docs/SYSTEME/CORE.md` |
-| Hooks React, dependency arrays, lock éditeur | `docs/SYSTEME/REACT.md` |
-| MinIO, faces entités, Atelier GM | `docs/SYSTEME/ASSETS.md` |
-| Conventions, pièges §18-§19 | `docs/SYSTEME/CONVENTIONS.md` |
-| Règles LdB Polaris (CaC, tir, actions, déplacements) | `docs/SYSTEME/REGLES_LdB.md` |
-| Ambiguïtés identifiants, termes RPG | `docs/GLOSSAIRE.md` |
-| Nouvelles strings UI React | Convention i18n — voir §CONVENTIONS |
-| Fenêtres combat, classes CSS | `client/src/index.css` Section 11 |
-
-Avant tout nouvel événement WS, composant, ou fonction utilitaire :
-→ vérifier `shared/events.js`, `client/src/`, `server/src/lib/` — existe déjà ?
+7. **Un seul bug à la fois.** Plan pour un bug → validation → bug suivant. Jamais deux bugs dans le même plan.
+8. **Reprise depuis un résumé = nouvelle session.** Exécuter le protocole complet sans exception.
 
 ---
 
 ## PROTOCOLE
 
 ### Début de session
-> **Valable même si la conversation est reprise depuis un résumé — le résumé ne remplace jamais la lecture.**
+> **Reprise depuis un résumé = nouvelle session — le résumé ne remplace jamais la lecture.**
 
-1. `docs/JOURNAL4.md` — dernier `## Session N` uniquement (jusqu'à fin fichier).
-2. `docs/ASBUILT.md` — snapshot stable.
-3. `docs/EN_COURS.md` — prochaine étape exacte.
-4. `docs/SYSTEME/` — fichiers thématiques concernés (TABLE DE ROUTING).
+- `docs/EN_COURS.md` → si la prochaine étape n'est pas claire depuis `## ÉTAT COURANT` ci-dessous.
+- `docs/ASBUILT.md` → si la tâche touche à l'architecture (nouvelles routes, migrations, nouveaux services).
+- `docs/JOURNAL4.md` (dernier `## Session N` uniquement) → si un bug précis nécessite l'historique d'une décision.
+- **Fichiers domaine → chargés automatiquement** via `.claude/rules/` quand les fichiers source sont ouverts.
 
 ### Avant de coder
 - Lire les fichiers concernés. Jamais de mémoire.
@@ -61,7 +35,7 @@ Avant tout nouvel événement WS, composant, ou fonction utilitaire :
 
 ### Pendant le développement
 - **Run à vide autocentré obligatoire** à la fin de chaque étape.
-- **Sessions analytiques (audit, investigation, debug) :** utiliser `docs/JOURNALTEMP.md` comme scratch pad de session. Appender progressivement (analyses, verdicts, plans partiels). Contenu périssable — ne jamais inclure dans la lecture obligatoire. Consolider vers JOURNAL4.md en fin de session.
+- **Sessions analytiques (audit, investigation, debug) :** utiliser `docs/JOURNALTEMP.md` comme scratch pad. Contenu périssable — ne jamais inclure dans la lecture obligatoire. Consolider vers JOURNAL4.md en fin de session.
 
 ### Après chaque tâche confirmée fonctionnelle
 - Appender `docs/JOURNAL4.md`.
@@ -87,7 +61,7 @@ Toute clôture ✅ exige :
 - Avancer sans confirmation fonctionnelle.
 - Écrire "probablement / suppose / certainement" sur une cause non lue → `[INCONNU]` + `[DBG-X]`.
 - Proposer un plan couvrant plusieurs bugs simultanément → un seul bug par plan.
-- Traiter un résumé de conversation comme substitut à la lecture obligatoire des fichiers de session.
+- Traiter un résumé de conversation comme substitut à la lecture obligatoire des fichiers.
 
 ---
 
@@ -114,34 +88,69 @@ Démarrage : `.\start.ps1` depuis `Enclume/`. Vérification : `http://localhost:
 Git — toujours depuis `Enclume/`, jamais depuis `server/` ou `client/`.
 Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md`.
 
+**Nomenclature docs :**
+| Préfixe | Rôle |
+|---|---|
+| `docs/SYSTEME/*.md` | Spécifications techniques d'implémentation (lire sur demande via rules) |
+| `docs/REGLE*.md` | Sources de vérité règles Polaris (LdB) — source absolue |
+| `docs/MANUEL*.md` | Synthèse technique des règles (séquences, pipeline) |
+| `docs/PLAN_*.md` | Planifications réalisées ou en cours |
+| `docs/ARCHI_REWORK.md` | Bible des reworks actifs |
+| `docs/ARCHI_REWORK_DONE.md` | Specs complètes des reworks achevés |
+| `.claude/rules/*.md` | Règles domaine — chargées automatiquement (path-scoped) |
+
 ---
 
-## ÉTAT COURANT — Session 101 (2026-06-17)
+## ÉTAT COURANT — Session 106 (2026-06-18)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **79 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
 
-**Session 101 ⚠️ clos partiel :**
+**Session 107 ✅ clos complet (planning) :**
+- REWORK-08 : Étape 4 corrigée (mrTable singleton-promise + imports socketDice) + Étape 5 planifiée complète (`docs/ARCHI_REWORK.md` §REWORK-08)
+- Étape 4 : bug QueryBuilder Knex → `.then(r => r)` fix, [R8-12] imports charStats confirmés, [R8-13] CHARACTER_UPDATED relique
+- Étape 5 (socketEntity) : 6 écarts Interface cible corrigés [R8-14], table substitution ×14/×5/×5/×5/×5/×2, pièges gm_only/socket.id/pending.campaignId documentés
+- Recherche Socket.IO : risque Maps combat sans cleanup disconnect → [R8-3] mis à jour, sprint dédié post-REWORK-08
+- **Prochaine étape : REWORK-08 Étape 6 (planification) — lire `ARCHI_REWORK.md` §REWORK-08 + index.js L.1464–2744**
+
+**Session 106b ⚠️ clos partiel (REWORK-10) :**
+- REWORK-10 : Étapes 1–4 codées — `CombatDeclareLogSidebar` (MacOS Terminal, sidebar fixe gauche) remplace `CombatDeclareLog` (floatant GM only)
+- SR ok — scénarios 1–8 non testés (pas de session combat disponible)
+- `top: 8px` provisoire [R10-5] dans `index.css` — à ajuster après test visuel en combat
+- Prochaine étape secondaire : valider scénarios 1–8 (`docs/PLAN_REWORK10_COMBATDECLARELOG.md`)
+
+**Session 106 ✅ clos complet (planning) :**
+- REWORK-08 : Étapes 1, 2, 3 auditées et enrichies (`docs/ARCHI_REWORK.md` §REWORK-08)
+- Étape 2 (socketToken) : imports corrigés (×2), substitution table complète, [R8-7] documenté
+- Étape 3 (socketVoxel) : imports corrigés, MAP_SWITCH détaillé (3 occurrences), [R8-8 à R8-11] documentés
+- `socketUtils.js` vérifié — `checkTokenOwnership` confirmé (`role === 'gm'`)
+
+**Session 105 ✅ clos complet (planning) :**
+- REWORK-08 : spec complet rédigé + validé (`docs/ARCHI_REWORK.md` §REWORK-08) — 7 étapes, prêt à coder
+- Architecture validée : `registerXxxHandlers(io, socket, context)` = pattern officiel Socket.IO v4
+- Fix singleton-promise intégré dans la spec `mrTable.js` (race condition résolue)
+- Bug INI2 ajouté (`BUGIDENTIFIE.md`) — initiative non recalculée après blessure
+
+**Session 104 ✅ clos complet :**
+- Réorganisation docs : `.claude/rules/` (9 fichiers path-scoped) + CLAUDE.md allégé (216 → ~175 lignes)
+
+**Session 103 ✅ clos complet :**
+- REWORK-09 : `SessionPage.jsx` 1509 → 1296 lignes — `useTokenSocket.js` + `useEntitySocket.js` + `useCombatSocket.js`
+- Fix TDZ découvert en test (hooks après tous les useState) — scénarios 1–8 validés
+
+**Session 101 ✅ clos complet :**
 - REWORK-02 : `damageService.resolveTargetHit` — 4 sites (DAMAGE_CONFIRM + MELEE_DEFENSE_CONFIRM + resolveDroneAssaultAction 8b + resolveAssaultAction PNJ) + `LOC_TABLE` → `armorConstants.js`
-- Non testé : Site 1 (PJ interactif) — Site 2 (PNJ melee hit) — Site 4 (drone assault PNJ)
 
 **Session 100 ✅ clos complet :**
 - REWORK-07 : `socketUtils` — `getUserColor` (6 call sites) + `checkTokenOwnership` (4 call sites) + `LOC_TABLE_CONTACT` supprimé
 
-**Session 97 ⚠️ clos partiel :**
+**Session 97 ✅ clos complet :**
 - REWORK-03 : `woundService.applyWound` — 5 call sites WS centralisés + fix DIV-1 (`worst_wound_severity` dans WOUND_ADDED)
-- Non testé : CaC PNJ auto / promotion cascade / ligne pleine / REST GM manuel
-
-**En attente de validation fonctionnelle :**
-- Sprint Drones 2c (cycle joueur) — Session 89
-- Sprint CaC Étape 3 (`CombatCacModifiersWindow` + mods) — Session 92-4
-- Fix split-brain slot detection — Session 93 — voir `docs/PLAN_ARCHICOMBAT_SLOTS.md`
-- Sprint CaC 4b (attaque multiple melee) — Session 74
 
 **Dettes actives :**
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
 - Bug CL1 — Portraits PNJ non visibles timeline joueur
-- Bug CL2 — Design CombatDeclareLog + divergence GM/joueur
+- Bug CL2 — Design CombatDeclareLog → REWORK-10 en cours (`docs/PLAN_REWORK10_COMBATDECLARELOG.md`)
 - Bug CL3 — Ghosts déplacement d'annonce disparus
 - "Changer le mode de tir" — non implémenté — sprint futur
 - `useDiceAudio.js` — sons dés
@@ -202,6 +211,3 @@ Tout `useCallback` qui émet via socket doit inclure `socket` dans ses deps.
 - Aucune string UI hardcodée. Toujours `useTranslation` → `t('section.cle')`.
 - Source unique : `client/src/locales/fr.json`. Ajouter la clé avant de l'utiliser.
 - Combat (12) + équipement (6) : hors scope — sprint dédié futur.
-
-
-

@@ -1,7 +1,8 @@
 # ARCHI_REWORK.md — Reworks architecturaux
-> Créé Session 96 — 2026-06-16 | Mis à jour Session 100b — 2026-06-17
+> Créé Session 96 — 2026-06-16 | Mis à jour Session 108 — 2026-06-18
 > Rédigé par Claude Sonnet 4.6 à destination des agents Claude futurs.
 > Objectif : remplacer le bricolage incrémental par des reworks structurés, complets, et non régressifs.
+> Spécifications complètes des reworks achevés → [ARCHI_REWORK_DONE.md](ARCHI_REWORK_DONE.md)
 
 ---
 
@@ -67,893 +68,693 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 
 ---
 
-## REWORK-01 — Status Service (étourdissement)
+## Reworks achevés
 
-### Problème
+> Specs complètes → [ARCHI_REWORK_DONE.md](ARCHI_REWORK_DONE.md)
 
-`resolveShockBlock` dans `server/src/socket/index.js` (~ligne 3130) fait trois choses simultanément :
-1. Test de choc D20 (calcul mécanique pur)
-2. Lancer le D6 durée (résolution aléatoire)
-3. Écriture en base + broadcast WS (effets de bord)
+**REWORK-01 ✅ Clos Session 96 — statusService (étourdissement)**
+`server/src/lib/statusService.js` : `resolveShockTest` (pur D20, zéro DB) + `applyStun` (PJ → prompt interactif, PNJ → D6 auto). Découple le stun du flux dégâts — `COMBAT_DAMAGE_RESULT` n'est plus bloqué.
 
-**Couplage accidentel :** il est appelé en séquence bloquante AVANT l'émission de `COMBAT_DAMAGE_RESULT` (appel ligne ~2484, émission résultat ligne ~2495). Toute exception dans ce bloc empêche le joueur de voir ses propres dégâts — fenêtre bloquée en "Calcul en cours...".
+**REWORK-02 ✅ Clos Session 101 — damageService (résolution hit)**
+`server/src/lib/damageService.js` : `resolveTargetHit` — loc+armure+résistance+sévérité+blessure+shock. 4 sites patché. `LOC_TABLE` déplacée dans `shared/armorConstants.js`. `resolveMeleeAction` (site 3) exclu définitivement.
 
-**Duplication :** 5 call sites identiques dans le même fichier.
+**REWORK-03 ✅ Clos partiel Session 97 — woundService**
+`server/src/lib/woundService.js` : `applyWound` centralisée — 5 call sites WS + fix `worst_wound_severity` dans WOUND_ADDED. Non testé : CaC PNJ auto / promotion cascade / ligne pleine / REST GM. Spec dans JOURNAL4.md Session 97.
 
-**Absence de logique PJ/PNJ :** le D6 durée est toujours résolu côté serveur, même quand la cible est un PJ connecté dont le joueur devrait lancer lui-même le dé (règle Polaris).
+**REWORK-05 ✅ Clos complet Session 99 — Panneaux d'action partagés**
+`AssaultRangedPanel.jsx` + `MeleeCombatPanel.jsx` + `DroneWeaponPanel.jsx` + `DeclareLogContent`. `computeFireVariant` dans `combatSections.js`. Fix COM5 + CL2. P7 (tooltip `state_weapon`) → REWORK-06.
 
-**Call sites exacts de resolveShockBlock — à vérifier par grep avant de coder :**
-```
-grep -n "resolveShockBlock" server/src/socket/index.js
-```
-Attendu : 5 lignes (~2484, ~2745, ~3600, ~4032, ~4382) + la définition (~3130)
-
-### État actuel
-
-**Fonctions dans `server/src/socket/index.js` :**
-- `emitTokenStatusUpdated(io, campaignId, tokenId)` (~ligne 3102) — query token_statuses + broadcast TOKEN_STATUS_UPDATED
-- `applyStunWithDuration(io, campaignId, tokenId, outcome, stunDuration, currentTurn)` (~ligne 3112) — INSERT/MERGE token_statuses + appel emitTokenStatusUpdated
-- `resolveShockBlock(io, campaignId, { finalSeverity, localisation, is_lethal, for_na, con_na, vol_na, targetTokenId, userId, username, color })` (~ligne 3130) — le bloc problématique à supprimer
-
-**Fonctions utilitaires pures utilisées par resolveShockBlock (à réutiliser dans le service) :**
-- `isShockTestRequired(severity, location)` → `boolean` — dans `server/src/lib/woundUtils.js` ligne 4
-- `calcSeuils(for_na, con_na, vol_na)` → `{ etourdissement, inconscience }` — dans `server/src/lib/charStats.js` ligne 238
-- `getShockMalus(severity, location, is_lethal)` → `number` — dans `server/src/lib/charStats.js` ligne 400
-
-**Événements WS dans `shared/events.js` (état post-revert session 95-5b) :**
-- `COMBAT_STUN_EXPIRED` (ligne 109) — existe déjà
-- `COMBAT_STUN_PROMPT` — absent, à créer
-- `COMBAT_STUN_CONFIRM` — absent, à créer
-
-**Maps globales dans `server/src/socket/index.js` (~ligne 45-47) :**
-```js
-const pendingEntityActions = new Map()
-const pendingDamageActions = new Map()
-const pendingMeleeDefense  = new Map()
-// pendingStunActions absent — à ajouter
-```
-
-### Décision architecturale
-
-**Option retenue : Service Module**
-
-Nouveau fichier `server/src/lib/statusService.js` encapsulant toute la logique stun. Les callers appellent une fonction simple — ils ne savent pas si la cible est PJ ou PNJ, ils ne lancent pas de dés, ils n'écrivent pas en base.
-
-**Options écartées :**
-- Bus d'événements interne : sur-ingénierie — un seul système réagit au shock pour l'instant. Pertinent quand N systèmes indépendants réagiront au même événement.
-- State machine complète : hors scope — nécessite réécriture du combat entier.
-
-### Interface cible du module
-
-```js
-// server/src/lib/statusService.js
-
-// Résolution pure du test de choc D20.
-// Lance le D20, calcule l'outcome. Aucune query DB. Aucun broadcast.
-// Retourne null si le test n'est pas requis pour cette blessure.
-export async function resolveShockTest({
-  finalSeverity,   // string : 'legere'|'moyenne'|'grave'|'critique'|'mortelle'
-  localisation,    // string : slot ('T','C','BD','BG','JD','JG')
-  is_lethal,       // boolean
-  for_na,          // number
-  con_na,          // number
-  vol_na,          // number
-})
-// → null si pas de test requis
-// → { triggered: true, outcome: 'ok'|'etourdi'|'inconscient', roll: number,
-//     shockMalus: number, seuilEtourdi: number, seuilIncons: number }
-
-// Application complète du stun après outcome ≠ 'ok'.
-// Gère PJ (prompt interactif via WS) et PNJ (D6 auto).
-// Pour PJ offline → fallback automatique identique à PNJ.
-export async function applyStun(io, db, campaignId, pendingStunActions, {
-  targetTokenId,   // string UUID
-  outcome,         // 'etourdi' | 'inconscient'
-  userId,          // string : identité broadcaster pour DICE_RESULT
-  username,        // string
-  color,           // string hex
-})
-// → void (tous les effets passent par io et db)
-```
-
-**Usage dans chaque call site (remplace l'appel à resolveShockBlock) :**
-```js
-// AVANT (à supprimer) :
-shockResult = await resolveShockBlock(io, campaignId, { ... }) ?? null
-
-// APRÈS :
-const shockTestResult = await resolveShockTest({ finalSeverity, localisation, is_lethal, for_na, con_na, vol_na })
-shockResult = shockTestResult   // passé dans COMBAT_DAMAGE_RESULT / COMBAT_ATTACK_RESULT tel quel
-if (shockTestResult?.outcome && shockTestResult.outcome !== 'ok') {
-  await applyStun(io, db, campaignId, pendingStunActions, {
-    targetTokenId, outcome: shockTestResult.outcome, userId, username, color,
-  })
-}
-```
-
-**Important :** `shockResult` retourné par `resolveShockTest` remplace l'ancien retour de `resolveShockBlock`. Vérifier que les payloads `COMBAT_DAMAGE_RESULT` et `COMBAT_ATTACK_RESULT` restent compatibles (champs : `triggered`, `roll`, `outcome`, `shockMalus`, `seuilEtourdi`, `seuilIncons`). Les champs `stun_applied`, `stun_duration`, `stunned_until_turn` disparaissent de shockResult — ils sont désormais gérés en interne par `applyStun`.
-
-### Types d'entité supportés
-
-| Type | Stun | Source |
-|---|---|---|
-| Humanoïde (PJ + PNJ) | ✅ | MANUELSYSCOMBAT §5 |
-| Drone | ❌ N/A — jamais appelé | MANUELSYSCOMBAT §7.6 |
-| Exo-armure | 🔜 futur | — |
-
-### V1 / V2 — shock_auto_stun (migration 69 existante)
-
-`campaigns.shock_auto_stun BOOLEAN DEFAULT true` — déjà en base.
-
-| Valeur | Comportement `applyStun` |
-|---|---|
-| `false` | GM gère TOUS les D6 — PJ et PNJ reçoivent le prompt via `gmSocket` (aucun joueur ne lance) |
-| `true` (défaut) | PJ → fenêtre interactive (`pjSocket`) / PNJ → auto D6 serveur (aucune fenêtre GM) |
-
-**⚠ Implémentation actuelle (Session 96) — PARTIELLE :**
-- `false` + PNJ → GM reçoit le prompt ✅
-- `false` + PJ → **BUG SHK5** — PJ reçoit la fenêtre à tort (devrait aller au GM). Sprint futur.
-- `true` + PJ → fenêtre interactive PJ ✅
-- `true` + PNJ → auto D6 serveur ✅
-
-**Détection socket :** PJ → `io.in(campaignId).fetchSockets()` → `s.data.userId === character.user_id` / GM → `s.data.role === 'gm'`
-
-### Logique interne de applyStun
-
-```
-1. Charger les données de la cible :
-   db('tokens').where({ id: targetTokenId })
-     .join('characters', 'characters.id', 'tokens.character_id')
-     .select('characters.type', 'characters.user_id')
-     .first()
-   → isPJ = character?.type === 'pj'
-
-2. Charger le tour courant :
-   db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
-
-3a. Si PNJ (ou character null — entité décor) :
-    parseDice('1d6') → d6Raw
-    stunDuration = outcome === 'inconscient' ? d6Raw * 10 : d6Raw
-    io.to(campaignId).emit(WS.DICE_RESULT, { ...payload D6... })
-    applyStunWithDuration(io, db, campaignId, targetTokenId, outcome, stunDuration, currentTurn)
-
-3b. Si PJ :
-    Chercher le socket connecté :
-      const sockets = await io.fetchSockets()
-      const pjSocket = sockets.find(s => s.user?.id === character.user_id && s.data?.campaignId === campaignId)
-    Si pjSocket trouvé :
-      pendingStunActions.set(targetTokenId, {
-        campaignId, targetTokenId, outcome,
-        targetUserId: character.user_id,
-        userId, username, color,
-        currentTurn,
-      })
-      pjSocket.emit(WS.COMBAT_STUN_PROMPT, { tokenId: targetTokenId, outcome })
-    Si pjSocket non trouvé (offline) :
-      → fallback identique à 3a
-```
-
-### Handler COMBAT_STUN_CONFIRM (à ajouter dans initSocket)
-
-```js
-socket.on(WS.COMBAT_STUN_CONFIRM, async ({ tokenId }) => {
-  const pending = pendingStunActions.get(tokenId)
-  if (!pending) return
-  if (pending.targetUserId !== socket.user.id) return
-  pendingStunActions.delete(tokenId)
-
-  const { total: d6Raw, rolls: d6Rolls, seed: d6Seed } = await parseDice('1d6')
-  const stunDuration = pending.outcome === 'inconscient' ? d6Raw * 10 : d6Raw
-
-  io.to(pending.campaignId).emit(WS.DICE_RESULT, {
-    userId: pending.userId, username: pending.username, color: pending.color,
-    formula: '1d6', rolls: d6Rolls, total: stunDuration,
-    isCriticalSuccess: false, isCriticalFail: false,
-    seed: d6Seed, timestamp: new Date().toISOString(),
-    skillLabel: 'Durée étourdissement',
-    mechanicalTotal: d6Raw,
-    diffLabel: pending.outcome === 'inconscient' ? ' ×10 (min→tours)' : ' tour(s)',
-    chancesDeReussite: stunDuration,
-    isSuccess: true,
-  })
-  await applyStunWithDuration(io, db, pending.campaignId, tokenId, pending.outcome, stunDuration, pending.currentTurn)
-})
-```
-
-### Séquençage résolu
-
-```
-AVANT (problématique) :
-  COMBAT_DAMAGE_CONFIRM
-    → resolveShockBlock (DB × 3 queries + D6 + broadcast)   ← bloquant
-    → COMBAT_DAMAGE_RESULT                                   ← bloqué si erreur ci-dessus
-
-APRÈS :
-  COMBAT_DAMAGE_CONFIRM
-    → resolveShockTest (pur : 1 parseDice, zéro DB)          ← ultra-rapide, sans risque
-    → COMBAT_DAMAGE_RESULT                                    ← émis immédiatement
-    → applyStun (async indépendant : PJ prompt ou PNJ auto)  ← si applyStun plante, les dégâts sont déjà affichés
-```
-
-### Composant client CombatStunWindow.jsx
-
-Fichier `client/src/components/CombatStunWindow.jsx` — à créer.
-
-**Interface minimale :**
-- Badge coloré outcome (jaune = étourdi / `outcome === 'etourdi'`, rouge = inconscient)
-- Bouton "Lancer 1D6" → `socket.emit(WS.COMBAT_STUN_CONFIRM, { tokenId: payload.tokenId })` → ferme la fenêtre immédiatement
-- Le résultat D6 s'affiche dans la sidebar via DICE_RESULT (pas de deuxième écran dans cette fenêtre)
-- CSS : suivre convention `combat-float-win` (voir `client/src/index.css` Section 11)
-- Pas de `style={}` visuel — uniquement classes CSS système
-
-**Montage dans SessionPage.jsx :**
-```js
-const [stunPayload, setStunPayload] = useState(null)
-// dans useEffect socket :
-s.on(WS.COMBAT_STUN_PROMPT, (data) => setStunPayload(data))
-// dans cleanup :
-s.off(WS.COMBAT_STUN_PROMPT)
-// props vers CombatOverlay :
-stunPayload={stunPayload}
-onStunConfirmed={() => setStunPayload(null)}
-```
-
-**Render dans CombatOverlay.jsx :**
-```jsx
-{stunPayload && (
-  <CombatStunWindow
-    payload={stunPayload}
-    socket={socket}
-    onClose={() => onStunConfirmed()}
-  />
-)}
-```
-
-### Périmètre
-
-**⚠ Note CombatOverlay.jsx :** `stunDialog` (ligne 23) et `stunDialogDuration` (ligne 24) existent déjà — c'est le dialog GM manuel (COMBAT_APPLY_STUN). Ne pas confondre avec `stunPayload` qui est le prompt PJ interactif. Ce sont deux mécanismes distincts.
-
-**Fichiers modifiés — numéros de ligne exacts (vérifier par grep avant de coder) :**
-
-| Fichier | Ligne | Changement |
-|---|---|---|
-| `shared/events.js` | après ligne 109 | +`COMBAT_STUN_PROMPT` et `COMBAT_STUN_CONFIRM` |
-| `server/src/lib/statusService.js` | NOUVEAU | module complet |
-| `server/src/socket/index.js` | ~47 | +`const pendingStunActions = new Map()` |
-| `server/src/socket/index.js` | ~3102 | supprimer `emitTokenStatusUpdated` (migré) |
-| `server/src/socket/index.js` | ~3110 | supprimer `applyStunWithDuration` (migré) |
-| `server/src/socket/index.js` | ~3127 | supprimer `resolveShockBlock` (remplacé) |
-| `server/src/socket/index.js` | ~2484, ~2745, ~3600, ~4032, ~4382 | 5 call sites — remplacer `resolveShockBlock` par `resolveShockTest` + `applyStun` |
-| `server/src/socket/index.js` | après handler MELEE_DEFENSE_CONFIRM (~2563) | +handler `COMBAT_STUN_CONFIRM` |
-| `client/src/components/CombatStunWindow.jsx` | NOUVEAU | composant PJ prompt D6 |
-| `client/src/pages/SessionPage.jsx` | après ligne 118 | +`const [stunPayload, setStunPayload] = useState(null)` |
-| `client/src/pages/SessionPage.jsx` | après ligne 530 | +`s.on(WS.COMBAT_STUN_PROMPT, (data) => setStunPayload(data))` |
-| `client/src/pages/SessionPage.jsx` | après ligne 1328 | +`stunPayload={stunPayload}` et `onStunConfirmed={() => setStunPayload(null)}` |
-| `client/src/components/CombatOverlay.jsx` | ligne 12 | +`import CombatStunWindow from './CombatStunWindow'` |
-| `client/src/components/CombatOverlay.jsx` | ligne 19 (signature) | +`stunPayload, onStunConfirmed` dans les props |
-| `client/src/components/CombatOverlay.jsx` | après ligne 242 | +render conditionnel `{stunPayload && <CombatStunWindow ... />}` |
-
-**Fichiers NON touchés :**
-- `server/src/lib/charStats.js` — `calcSeuils`, `getShockMalus` réutilisés tels quels
-- `server/src/lib/woundUtils.js` — `isShockTestRequired` réutilisé tel quel
-- `shared/woundConstants.js`, `shared/armorConstants.js` — inchangés
-- Toute logique interne de `resolveAssaultAction`, `resolveMeleeAction`, `resolveDroneAssaultAction` — seul le call site `resolveShockBlock` est remplacé, rien d'autre
-
-### Plan d'implémentation — ordre obligatoire
-
-L'ordre est contraint par les dépendances. Ne pas l'inverser.
-
-**Étape 1 — Lecture obligatoire avant tout code**
-Lire dans cette session (pas depuis la mémoire) :
-- `server/src/socket/index.js` : focus `resolveShockBlock` + `applyStunWithDuration` + `emitTokenStatusUpdated` + les 5 call sites (grep `resolveShockBlock`)
-- `shared/events.js` : vérifier l'absence de `COMBAT_STUN_PROMPT`/`COMBAT_STUN_CONFIRM`
-- `server/src/lib/charStats.js` : signatures exactes `calcSeuils` et `getShockMalus`
-- `server/src/lib/woundUtils.js` : signature exacte `isShockTestRequired`
-
-**Étape 2 — shared/events.js**
-Ajouter après `COMBAT_STUN_EXPIRED` (ligne 109) :
-```js
-COMBAT_STUN_PROMPT:  'combat:stun_prompt',
-COMBAT_STUN_CONFIRM: 'combat:stun_confirm',
-```
-Run à vide : vérifier que le fichier est syntaxiquement valide (pas de virgule manquante).
-
-**Étape 3 — server/src/lib/statusService.js**
-Créer le module complet :
-- Imports : `parseDice` depuis `../lib/diceParser.js`, `isShockTestRequired` depuis `./woundUtils.js`, `calcSeuils`/`getShockMalus` depuis `./charStats.js`, `WS` depuis `../../../shared/events.js`
-- Exports : `resolveShockTest`, `applyStun`, `applyStunWithDuration`, `emitTokenStatusUpdated`
-- `applyStunWithDuration` et `emitTokenStatusUpdated` : copier depuis index.js, ajouter `db` en paramètre (était capturé par fermeture)
-Run à vide : `node --check server/src/lib/statusService.js`
-
-**Étape 4 — server/src/socket/index.js**
-Dans l'ordre strict :
-1. Ajouter import stunService (en haut du fichier avec les autres imports)
-2. Ajouter `const pendingStunActions = new Map()` ligne ~48
-3. Supprimer `emitTokenStatusUpdated` (migré dans stunService)
-4. Supprimer `applyStunWithDuration` (migré dans stunService)
-5. Supprimer `resolveShockBlock` (remplacé)
-6. Mettre à jour les 5 call sites (grep pour ne pas en oublier)
-7. Ajouter handler `COMBAT_STUN_CONFIRM` après `COMBAT_MELEE_DEFENSE_CONFIRM`
-8. Vérifier que `COMBAT_APPLY_STUN` handler (GM manuel, ~ligne 2816) importe et utilise `applyStunWithDuration` depuis stunService
-Run à vide : `node --check server/src/socket/index.js`
-
-**Étape 5 — client/src/components/CombatStunWindow.jsx**
-Créer le composant minimal.
-Run à vide : vérifier syntaxe JSX.
-
-**Étape 6 — client/src/pages/SessionPage.jsx**
-Ajouter state + listener. Ne rien changer d'autre.
-Run à vide : `npm run build` côté client (vérifier Vite 200).
-
-**Étape 7 — client/src/components/CombatOverlay.jsx**
-Ajouter import + props + render conditionnel.
-Run à vide : `npm run build`.
-
-**Étape 8 — SR (Serveur Redémarré)**
-Démarrer avec `.\start.ps1`. Vérifier absence d'erreur dans les logs.
-
-### Validation
-
-**Scénario 1 — PNJ cible, shock requis**
-Setup : assaut distance PJ → PNJ, infliger ≥ 10 dégâts nets (blessure moyenne ou pire)
-Résultat attendu :
-- Fenêtre GESTION DES DÉGÂTS s'affiche et se résout normalement pour le tireur PJ
-- DICE_RESULT D20 (choc) visible dans le chat de tous les joueurs
-- Si outcome ≠ 'ok' : DICE_RESULT D6 (durée) visible dans le chat, badge statut apparu sur le token cible
-- Pas de blocage de la fenêtre dégâts
-
-**Scénario 2 — PJ cible, shock requis**
-Setup : assaut PNJ → PJ, blessure ≥ grave corps/tête ou ≥ critique
-Résultat attendu :
-- Fenêtre GESTION DES DÉGÂTS se résout côté tireur normalement
-- CombatStunWindow apparaît chez le joueur ciblé avec badge outcome coloré
-- Bouton "Lancer 1D6" présent et cliquable
-- Au clic : fenêtre se ferme, DICE_RESULT D6 visible dans le chat, badge statut posé sur le token
-
-**Scénario 3 — Shock non requis (non-régression)**
-Setup : blessure légère (< 10 dégâts) ou localisation membre avec gravité < critique
-Résultat attendu :
-- Aucune fenêtre stun côté cible
-- Aucun DICE_RESULT D6 dans le chat
-- Flux dégâts normal inchangé
-
-**Scénario 4 — PJ cible offline (fallback)**
-Setup : PJ cible déconnecté au moment de l'assaut
-Résultat attendu : comportement identique à Scénario 1 (auto D6, pas de prompt)
-
-**Scénario 5 — Assaut CaC avec shock (non-régression)**
-Setup : CaC PJ → PNJ, blessure critique
-Résultat attendu : même comportement que Scénario 1, via le call site `resolveMeleeAction`
-
-### Définition of done
-
-- [ ] `node --check server/src/lib/statusService.js` — aucune erreur
-- [ ] `node --check server/src/socket/index.js` — aucune erreur
-- [ ] `grep -c "resolveShockBlock" server/src/socket/index.js` → retourne 0 (supprimé de partout)
-- [ ] SR sans erreur dans les logs
-- [ ] Scénario 1 validé fonctionnellement
-- [ ] Scénario 2 validé fonctionnellement
-- [ ] Scénario 3 validé (non-régression)
-- [ ] JOURNAL4.md appendé
-- [ ] EN_COURS.md mis à jour : ST2 ✅ complet
+**REWORK-07 ✅ Clos complet Session 100 — socketUtils**
+`server/src/lib/socketUtils.js` : `getUserColor` (6 sites) + `checkTokenOwnership` (4 sites) + suppression `LOC_TABLE_CONTACT`.
 
 ---
 
-## REWORK-05 — Panneaux d'action partagés (tir / CaC / drone)
+## Prochains reworks
 
-### Problème
-
-3 panneaux droits (Tir, CaC, Drone) et 1 bloc log (`DeclareLogContent`) copiés-collés entre `CombatGmDeclareWindow.jsx` (~1214 lignes) et `CombatActionWindow.jsx` (~1878 lignes). ~370 lignes dupliquées. Toute correction devait être appliquée deux fois manuellement.
-
-Bug COM5 (symptôme) : le handler GM dans le panneau CaC appelait `handleStartMelee()` sur click chip mode — le handler Joueur ne le faisait pas. Bug impossible à détecter sans lire les deux fichiers en parallèle.
-
-Trigger ARCHI_REWORK : même bloc dupliqué N ≥ 3 fois (compte les futurs FenetreDrone, FenetreExoArmure).
-
-### État actuel au moment du rework (Session 97)
-
-- `CombatGmDeclareWindow.jsx` L.779-916 : panneau CaC inline
-- `CombatGmDeclareWindow.jsx` L.919-1062 : panneau tir inline
-- `CombatGmDeclareWindow.jsx` L.593-648 : panneau drone inline
-- `CombatActionWindow.jsx` L.1177-1383 : panneau CaC inline
-- `CombatActionWindow.jsx` L.1440-1593 : panneau tir humanoid inline
-- `CombatActionWindow.jsx` L.1386-1436 : panneau tir drone inline
-- `CombatActionWindow.jsx` L.683-736 : `declareLogSection` inline — rendu légèrement divergent du GM
-
-### Décision architecturale
-
-Extraire 3 sous-composants partagés + 1 export de contenu log + migration de constantes vers `combatSections.js`. Les deux fenêtres parentes deviennent des orchestrateurs qui montent les panneaux.
-
-**Rejeté :** fusion GM+Joueur en un seul composant — différence structurelle réelle (navigation de slots, multi-phases, preview temps réel).
-
-### Interface cible (Session 98 — implémentée)
-
-```js
-// combatSections.js — nouveaux exports
-export const ACTION_LABELS   = { assault, melee, reload, micro, move_short, ... }
-export const PURE_MOVE_TYPES = new Set([...])
-export const COMBAT_MODE_DEFS = [{ k, l, tooltip }]  // tooltips canoniques version Joueur
-export function computeFireVariant(fireMode, rawBulletCount, variantAB, { defaultCcCount = null } = {})
-// → { variant, effectiveBulletCount }
-// defaultCcCount=1 pour GM (PNJ default tir simple) / null pour Joueur (forçage sélection explicite)
-
-// CombatDeclareLog.jsx
-export function DeclareLogContent({ maxHeight })
-// Corps seul — pas de titre (GM a titre draggable, Joueur titre inline)
-
-// AssaultRangedPanel.jsx   — couleur #e07070
-// MeleeCombatPanel.jsx     — couleur #70c070 — fix COM5 : onModeChange ne déclenche plus target mode
-// DroneWeaponPanel.jsx     — couleur #30aaaa
-```
-
-### Périmètre
-
-**Fichiers modifiés :**
-
-| Fichier | Modification |
-|---|---|
-| `combatSections.js` | +`ACTION_LABELS`, `PURE_MOVE_TYPES`, `COMBAT_MODE_DEFS`, `computeFireVariant` |
-| `CombatDeclareLog.jsx` | +`export DeclareLogContent({ maxHeight })` |
-| `AssaultRangedPanel.jsx` | NOUVEAU — panneau tir CC/RC/RL partagé |
-| `MeleeCombatPanel.jsx` | NOUVEAU — panneau CaC partagé (COM5 corrigé) |
-| `DroneWeaponPanel.jsx` | NOUVEAU — panneau drone partagé |
-| `CombatGmDeclareWindow.jsx` | Panneaux droits → 3 imports partagés. Fix COM5 : `onModeChange` ≠ `handleStartMelee`. |
-| `CombatActionWindow.jsx` | `declareLogSection` inline → `<DeclareLogContent>` (fix CL2). Panneaux droits → imports partagés. |
-
-**Fichiers NON touchés :** `server/`, `shared/events.js`, `SessionPage.jsx`, `CombatOverlay.jsx`, stores.
-
-### Pièges documentés (7)
-
-- **P1** — `DeclareLogContent` = corps seul, pas de titre
-- **P2** — `styles` prop supprimée : panneaux définissent leurs styles internes
-- **P3** — `isWeaponDrawn` ajouté à `MeleeCombatPanel` (grisage armes Joueur). ⚠ GM passait `true` hardcodé (hypothèse fausse — PNJ peut avoir arme rangée) — voir P7
-- **P4** — `chargeMoveDest` normalisé : GM passe `chargeSelection?.move ?? null`, Joueur passe `moveSelection ?? null`
-- **P5** — `handleStartMelee()` déplacée (pas supprimée) → appelée via bouton "Cibler" explicite
-- **P6** — `COMBAT_MODE_DEFS` tooltips : version Joueur = source canonique (plus complète)
-- **P7** — `state_weapon` : 3 états (`holstered`/`ready`/`drawn`), coûts INI asymétriques (holstered→drawn = −5, holstered→ready = −3, drawn→holstered = −10). Tooltip "−3 INI" dans `MeleeCombatPanel` L.138 est FAUX. → REWORK-06
-
-### computeFireVariant — subtilité GM vs Joueur
-
-**GM** passe `{ defaultCcCount: 1 }` → variant `cc_1` auto si assaultBulletCount=null (PNJ a un tir par défaut).
-**Joueur** passe rien (default null) → variant=null si assaultBulletCount=null → `rangeValid=false` (force sélection explicite).
-Joueur passe `effectiveBulletCount={effectiveBulletCount ?? 1}` au panel pour le radio visuel "Tir simple" pré-sélectionné (comportement conservé).
-
-### Validation (Session 98 — clos partiel)
-
-- **Scénario 1** — Tir GM PNJ, mode CC : non testé
-- **Scénario 2** — COM5 : mode chip GM ne déclenche plus visée auto : non testé
-- **Scénario 3** — CL2 : log Joueur = rendu identique GM : non testé
-- **Scénario 4** — Non-régression CaC Joueur mode Charge : non testé
-- **Scénario 5** — Non-régression Drone GM tir : non testé
-
-### Definition of done
-
-- [x] `npm run build` — 0 erreur Vite ✅ Session 98
-- [x] SR 0 erreur ✅ Session 98
-- [x] `grep -c "currentFireMode === 'CC'" CombatGmDeclareWindow.jsx` → 0 ✅ Session 99
-- [x] `grep -c "currentFireMode === 'CC'" CombatActionWindow.jsx` → 0 ✅ Session 99
-- [ ] Scénario 1 validé
-- [ ] Scénario 2 validé (COM5)
-- [ ] Scénario 3 validé (CL2)
-- [ ] Scénario 4 validé (non-régression)
-- [ ] Scénario 5 validé (non-régression)
+| ID | Bloc | Problème | Ordre |
+|---|---|---|---|
+| **REWORK-09** | `SessionPage.jsx` → hooks WS dédiés | 1 509 lignes. 47 listeners WS dans un `useEffect` unique (340 lignes). 39 props vers CombatOverlay (2 mortes). | **✅ Clos Session 103** |
+| **REWORK-08** | Modularisation `socket/index.js` | 4 266 lignes — fichier dieu. Découper en `socketToken.js`, `socketVoxel.js`, `socketEntity.js`, `socketCombat.js`, `socketDice.js` + `lib/mrTable.js`. `initSocket()` devient coordinateur. **Prérequis de REWORK-04.** | **En cours — Session 105** |
+| **REWORK-06** | `combatDeclarationStore` | Staging state déclaration fragmenté en local React state (GM+Joueur). Auto-draw, default mains nues non implémentables sans débat archi. Voir REWORK-05.md §REWORK-06 | Sprint futur |
+| **REWORK-04** | Système de combat complet | Migration vers State Machine (FSM) — sprint long terme. **Prérequis : REWORK-08** | Long terme |
 
 ---
 
-## REWORK-07 — Socket utilities (getUserColor + checkTokenOwnership)
+## REWORK-08 — Modularisation socket/index.js
+
+> **Agent futur — lire en entier avant de toucher le moindre fichier.**
+> Protocole d'exécution par étape :
+> 1. Lire le spec de l'étape (ci-dessous) + les lignes source indiquées dans `server/src/socket/index.js`
+> 2. Créer le nouveau fichier
+> 3. `node --check <nouveau_fichier>` → 0 erreur
+> 4. Modifier `index.js` (suppression + import + appel dans SESSION_JOIN)
+> 5. `node --check server/src/socket/index.js` → 0 erreur
+> 6. SR sans erreur → tester le scénario de l'étape
+> 7. Confirmation fonctionnelle → étape suivante
+>
+> Jamais deux étapes dans le même commit. Un SR après chaque étape sans exception.
 
 ### Problème
 
-Deux patterns copiés-collés dans `server/src/socket/index.js`, sans abstraction.
+`server/src/socket/index.js` : **4 266 lignes**. Fichier dieu.
 
-**Pattern A — couleur utilisateur** (N≥6 occurrences) :
-```js
-let color = '#5b8dee'
-try {
-  const userRow = await db('users').where({ id: socket.user.id }).select('color').first()
-  if (userRow?.color) color = userRow.color
-} catch (_) {}
-```
-Call sites connus : `DICE_ROLL`, `MACRO_ROLL`, `ENTITY_ACTION_RESOLVE`, `ENTITY_MOVE_REQUEST`, `COMBAT_SURPRISE_RESULT` — et probablement d'autres dans le bloc combat.
-Vérifier par grep avant de coder :
-```
-grep -n "select('color')" server/src/socket/index.js
-```
+Un seul fichier contient : la logique de connexion/authentification, 4 groupes de handlers indépendants (TOKEN / VOXEL+MAP / DICE+CHAT / ENTITY), 13 handlers COMBAT, 6 helpers de phase combat, et 4 fonctions de résolution longues (~1 600 lignes cumulées). Toute modification — même un handler TOKEN de 30 lignes — expose 4 200 lignes de contexte à la régression.
 
-**Pattern B — ownership token** (N≥4 occurrences) :
-```js
-const isGm = socket.role === 'gm'
-let isOwner = false
-if (token.character_id) {
-  const character = await db('characters').where({ id: token.character_id }).first()
-  isOwner = character?.user_id === socket.user.id
-}
-if (!isOwner && !isGm) return
-```
-Call sites : `TOKEN_MOVE`, `TOKEN_ROTATE`, `TOKEN_SET_ROTATION`, `TOKEN_STATUS_TOGGLE`.
-Vérifier :
-```
-grep -n "isOwner" server/src/socket/index.js
-```
+**Preuves (socket/index.js) :**
+- L.1–134 : preamble — imports, 6 Maps globaux singletons, constantes de modificateurs, tables de labels
+- L.146–229 : SESSION_JOIN — établit `campaignId`, `user`, `isGm` via closure lazy
+- L.232–360 : 4 handlers TOKEN_*
+- L.364–513 : 5 handlers VOXEL_* + MAP_SWITCH + MAP_VIEWPORT
+- L.518–749 : DICE_ROLL + MACRO_ROLL + CHAT_MESSAGE + CHARACTER_UPDATED
+- L.753–1458 : 7 handlers ENTITY_*
+- L.1464–2731 : 13 handlers COMBAT_* + disconnect
+- L.2746–3029 : `resolveEntityState` + 5 helpers de phase (`startAnnouncementTimers`, `skipPlayer`, `startResolutionPhase`, `advanceSlot`, `endTurn`)
+- L.3033–4266 : `resolveMeleeAction` (~490L) + `resolveReloadAction` (~130L) + `resolveDroneAssaultAction` (~255L) + `resolveAssaultAction` (~300L) + `calcDroneRD` + `resolveDroneIntegrityLoss`
 
-**Bonus — LOC_TABLE / LOC_TABLE_CONTACT (lignes 51–67)** :
-Les deux tables sont identiques. `LOC_TABLE_CONTACT` est dead code.
+**Prérequis de REWORK-04** (FSM combat) : impossible de refactorer la FSM dans un fichier de 4 200 lignes.
 
 ### État actuel
 
-Inline dans chaque handler — aucune abstraction.
+```
+server/src/socket/
+  index.js          — 4 266 lignes (tout)
+  auth.js           — middleware auth WS (non touché)
+```
 
-### Décision
+6 Maps singletons déclarées hors `initSocket` (partagées inter-connexions) :
+- `pendingEntityActions` — exclusif ENTITY handlers
+- `pendingDamageActions`, `pendingMeleeDefense`, `pendingStunActions` — exclusifs COMBAT handlers
+- `combatTimers`, `combatPreviews` — exclusifs COMBAT handlers
 
-Nouveau fichier `server/src/lib/socketUtils.js` — 2 exports synchrones + 1 correctif dead code.
-Pas de nouvelle architecture — extraction pure.
+Cache MR_TABLE (`getMrTable`) utilisé dans **5 call sites** répartis sur deux modules futurs :
+- `socketEntity.js` : ENTITY_MOVE_REQUEST (L.1242) — 1 appel
+- `socketCombat.js` : COMBAT_DAMAGE_CONFIRM (L.2343) + resolveDroneAssaultAction (L.3792, L.3826) + resolveAssaultAction (L.4124) — 4 appels
+
+→ Extraction obligatoire dans `lib/mrTable.js` avant les Étapes 5 et 6.
+
+### Décision architecturale
+
+**Pattern `registerXxxHandlers(io, socket, context[, pendingMaps])`**
+
+Chaque module exporte une fonction `register*` qui enregistre ses listeners sur `socket`. Ces fonctions sont appelées **à l'intérieur de SESSION_JOIN**, après que `campaignId`, `user`, `isGm` sont établis.
+
+```js
+// index.js après rework — schéma SESSION_JOIN
+socket.on(WS.SESSION_JOIN, async ({ campaignId: cId }) => {
+  // ... validation + join room + broadcast SESSION_JOINED + combat sync
+  // (reste inline — logique non déplaçable)
+
+  const context = { campaignId, user, isGm }
+
+  registerTokenHandlers(io, socket, context)
+  registerVoxelHandlers(io, socket, context)
+  registerDiceHandlers(io, socket, context)
+  registerEntityHandlers(io, socket, context, pendingEntityActions)
+  registerCombatHandlers(io, socket, context, {
+    pendingDamageActions, pendingMeleeDefense, pendingStunActions,
+    combatTimers, combatPreviews,
+  })
+
+  socket.on('disconnect', () => {
+    console.log(`[WS] disconnect — user ${user.id} campaign ${campaignId}`)
+  })
+})
+```
+
+**Changement comportemental mineur :** les handlers sont désormais enregistrés **après** SESSION_JOIN (et non à la connexion brute). En pratique identique — aucun client n'émet un TOKEN_MOVE avant d'avoir rejoint la session. Tous les handlers guarded existants (`if (!campaignId)`) deviennent inutiles mais sont conservés tels quels (hors périmètre).
+
+**Alternatives écartées :**
+- Closure lazy (variables `let campaignId` + handlers à la connexion) → conserve le couplage, rend les modules impossibles à tester en isolation
+- Contexte mutable `const ctx = {}` passé par référence → complexité accidentelle, source de bugs de timing
+- Un module unique `socketHandlers.js` (tout regroupé) → ne résout pas le problème de taille
 
 ### Interface cible
 
 ```js
-// server/src/lib/socketUtils.js
+// ── server/src/socket/socketToken.js ────────────────────────────────────────
+export function registerTokenHandlers(io, socket, { campaignId, user, isGm })
+// Handlers : TOKEN_MOVE · TOKEN_ROTATE · TOKEN_SET_ROTATION · TOKEN_STATUS_TOGGLE
+// Imports requis : WS, db, checkTokenOwnership, collisionMoveToken (redis), statusService
 
-// Retourne la couleur hex de l'utilisateur.
-// Fallback '#5b8dee' si absent ou erreur DB.
-export async function getUserColor(db, userId)
-// → string
+// ── server/src/socket/socketVoxel.js ────────────────────────────────────────
+export function registerVoxelHandlers(io, socket, { campaignId, user, isGm })
+// Handlers : VOXEL_ADD · VOXEL_REMOVE · VOXEL_UPDATE · MAP_SWITCH · MAP_VIEWPORT
+// Imports requis : WS, db, collisionAddVoxel, collisionRemoveVoxel (redis)
+// NOTE : buildCollisionMap reste dans index.js SESSION_JOIN (L.198) — ne pas importer ici
 
-// Vérifie l'ownership d'un token par rapport à un socket.
-// token doit être déjà chargé par le caller (pas de nouvelle query DB sur token).
-// Charge characters si token.character_id présent.
-export async function checkTokenOwnership(db, token, userId, role)
-// → { isGm: boolean, isOwner: boolean }
+// ── server/src/socket/socketDice.js ─────────────────────────────────────────
+export function registerDiceHandlers(io, socket, { campaignId, user, isGm })
+// Handlers : DICE_ROLL · MACRO_ROLL · CHAT_MESSAGE · CHARACTER_UPDATED
+// Imports requis : WS, db, parseDice, getUserColor,
+//   charStats (calcSkillTotal, calcAttributeAN/NA, calcSeuils, calcWoundPenalty,
+//   calcEncumbrancePenalty, calcResistanceDroguesInput, ATTR_LABELS, lookupTable…)
+// NOTE : PORTEE_MOD_COMP · SITUATION_MODS · TAILLE_MODS · *_LABELS · COMBAT_MODE_LABELS
+//   → NON utilisées dans ce module (grep confirmé) → vont dans socketCombat.js
+
+// ── server/src/socket/socketEntity.js ───────────────────────────────────────
+export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, pendingEntityActions)
+// Handlers : ENTITY_ACTION_REQUEST · ENTITY_ACTION_RESOLVE · ENTITY_ACTION_GM_DIRECT
+//           ENTITY_CREATED · ENTITY_DELETED · ENTITY_MOVED · ENTITY_MOVE_REQUEST
+// Helper interne : resolveEntityState (non exporté) — 5 call sites dans les handlers
+// Imports requis : WS, db, parseDice, getUserColor, getMrTable, getModifier (lib/mrTable.js),
+//   charStats (calcSkillTotal, calcAttributeAN, calcAttributeNA, calcWoundPenalty,
+//   calcEncumbrancePenalty, ATTR_LABELS),
+//   redis (isCaseOccupied, collisionMoveToken, collisionMoveEntity, collisionUpdateEntityState)
+// NON importés (0 usage dans L.753–1458) : collisionAddEntity, collisionRemoveEntity, woundService
+
+// ── server/src/socket/socketCombat.js ───────────────────────────────────────
+export function registerCombatHandlers(io, socket, { campaignId, user, isGm },
+  { pendingDamageActions, pendingMeleeDefense, pendingStunActions, combatTimers, combatPreviews })
+// Handlers : COMBAT_START · COMBAT_END · COMBAT_ANNOUNCE_START · COMBAT_INIT_STATE
+//           COMBAT_SURPRISE_RESULT · COMBAT_ACTION_DECLARE · COMBAT_SKIP_PLAYER
+//           COMBAT_ANNOUNCE_PREVIEW · COMBAT_ACTION_CONFIRM · COMBAT_DAMAGE_CONFIRM
+//           COMBAT_MELEE_DEFENSE_CONFIRM · COMBAT_STUN_CONFIRM · COMBAT_APPLY_STUN
+// Helpers internes (non exportés) : startAnnouncementTimers · skipPlayer
+//   startResolutionPhase · advanceSlot · endTurn · multiAdversaryMalus · countAdversaires
+//   resolveMeleeAction · resolveReloadAction · resolveDroneAssaultAction · resolveAssaultAction
+//   calcDroneRD · resolveDroneIntegrityLoss
+// Imports requis : WS, db, getMrTable (lib/mrTable.js), charStats, getUserColor,
+//   checkTokenOwnership, woundService, statusService, damageService,
+//   armorConstants, woundConstants
+// Constantes déplacées depuis index.js (8 usages confirmés, 0 dans socketDice) :
+//   PORTEE_MOD_COMP · SITUATION_MODS · TAILLE_MODS · SITUATION_LABELS
+//   PORTEE_LABELS · TAILLE_LABELS · COMBAT_MODE_LABELS
+
+// ── server/src/lib/mrTable.js ────────────────────────────────────────────────
+// Implémentation complète (18 lignes) — copier telle quelle :
+import db from '../db/knex.js'
+
+// Singleton-promise pattern : cache la promesse, pas le résultat.
+// Garantit un seul appel DB même sous concurrence (deux handlers simultanés
+// voient la même promesse en cours de résolution).
+// ⚠️ .then(r => r) obligatoire — convertit le QueryBuilder Knex en Promise native.
+// Sans ce call, chaque await re-exécute une requête SQL (QueryBuilder Knex non réentrant).
+let mrTablePromise = null
+export function getMrTable() {
+  if (!mrTablePromise)
+    mrTablePromise = db('polaris_mr').orderBy('mr_min').then(r => r)
+  return mrTablePromise
+}
+
+// Source de vérité : LdB Polaris p.209 — migration 46.
+// Format DB : [{ mr_min, mr_max, modifier }]  ← "modifier", pas "dmax"
+// dmax = isSuccess ? modifier + 1 : 0  — calculé dans le handler appelant.
+export function getModifier(mrTable, mr) {
+  const row = mrTable.find(r =>
+    mr >= r.mr_min && (r.mr_max === null || mr <= r.mr_max)
+  )
+  return row?.modifier ?? 0
+}
 ```
 
 ### Périmètre
 
+**Nouveaux fichiers :**
+- `server/src/socket/socketToken.js`
+- `server/src/socket/socketVoxel.js`
+- `server/src/socket/socketDice.js`
+- `server/src/socket/socketEntity.js`
+- `server/src/socket/socketCombat.js`
+- `server/src/lib/mrTable.js`
+
 **Fichiers modifiés :**
+- `server/src/socket/index.js` → coordinateur uniquement (~120 lignes) :
+  - Conserver : imports globaux, 6 Maps singletons, `initSocket`, SESSION_JOIN inline
+  - Supprimer : tout le reste (handlers + helpers + resolve*)
+  - Ajouter : imports des 5 `register*` + leurs appels dans SESSION_JOIN
 
-| Fichier | Modification |
-|---|---|
-| `server/src/lib/socketUtils.js` | NOUVEAU — 2 exports |
-| `server/src/socket/index.js` | +import, remplacement patterns A + B + suppression `LOC_TABLE_CONTACT` |
-
-**Fichiers NON touchés :** tout le reste — client, shared, autres lib, routes REST.
+**NON touchés :**
+- `server/src/socket/auth.js`
+- `server/src/lib/charStats.js`
+- `server/src/lib/woundService.js`
+- `server/src/lib/statusService.js`
+- `server/src/lib/damageService.js`
+- `server/src/lib/socketUtils.js`
+- `server/src/lib/redis.js`
+- `shared/` (events.js, armorConstants.js, woundConstants.js)
+- `client/` (aucune modification)
+- DB / migrations
 
 ### Plan
 
-**Étape 1 — Grep obligatoire avant tout code**
-```
-grep -n "select('color')" server/src/socket/index.js
-grep -n "isOwner" server/src/socket/index.js
-grep -n "LOC_TABLE_CONTACT" server/src/socket/index.js
-```
+**Étape 1 — `lib/mrTable.js`**
+- Créer `server/src/lib/mrTable.js` avec le contenu exact de l'**Interface cible** ci-dessus (singleton-promise, 2 exports)
+- Différences vs. code source (L.65–82 index.js) :
+  - `let MR_TABLE` → `let mrTablePromise`
+  - `MR_TABLE = await db('polaris_mr').orderBy('mr_min')` → `mrTablePromise = db('polaris_mr').orderBy('mr_min').then(r => r)` — `.then(r => r)` convertit le QueryBuilder Knex en Promise native cachée. Sans ce call, chaque `await` re-exécute la requête (QueryBuilder Knex non réentrant).
+  - Commentaire `"Format : [{ mr_min, mr_max, dmax }]"` → corrigé en `modifier` (bug commentaire)
+  - `async function getMrTable()` → `export function getMrTable()` (sans `async` — retourne la Promise directement, plus d'`await` interne)
+  - `function getModifier` → `export function getModifier`
+- `node --check server/src/lib/mrTable.js` → 0 erreur
+- Dans `index.js` :
+  - Supprimer L.65–82 (`let MR_TABLE`, `getMrTable`, `getModifier`)
+  - Ajouter en tête des imports : `import { getMrTable, getModifier } from '../lib/mrTable.js'`
+- `node --check server/src/socket/index.js` → 0 erreur
+- SR sans erreur — tester : déplacer une entité (ENTITY_MOVE_REQUEST) + lancer un assaut CaC (les 5 call sites de getMrTable doivent fonctionner)
 
-**Étape 2 — Créer `server/src/lib/socketUtils.js`**
-Run à vide : `node --check server/src/lib/socketUtils.js`
+**Étape 2 — `socketToken.js`**
+- Créer `server/src/socket/socketToken.js` avec `registerTokenHandlers` (L.232–360 → ~130 lignes)
+- Imports exacts (vérifiés L.232–360) : `WS`, `db`, `checkTokenOwnership`, `collisionMoveToken` (redis), `statusService`
+- Substitutions obligatoires dans les handlers migrés [R8-7] :
+  | index.js (source) | socketToken.js (cible) |
+  |---|---|
+  | `socket.campaignId` | `campaignId` |
+  | `socket.user.id` | `user.id` |
+  | `socket.data.userId` | `user.id` |
+  | `socket.role` (pour checkTokenOwnership) | `isGm ? 'gm' : 'player'` |
+  | `io.to(socket.campaignId)` | `io.to(campaignId)` |
+- Dans `index.js` — ajouter **à l'intérieur** de SESSION_JOIN, après le `catch` combat sync (L.220), avant le `console.log` (L.222) :
+  ```js
+  const context = { campaignId, user: socket.user, isGm: socket.role === 'gm' }
+  registerTokenHandlers(io, socket, context)
+  ```
+  `context` est déclaré une seule fois — les Étapes 3–6 ajoutent uniquement `registerXxxHandlers(io, socket, context)` sans re-déclarer.
+- Supprimer L.229–360 (4 handlers + commentaire dead code L.357–360)
+- `node --check server/src/socket/socketToken.js` + `node --check server/src/socket/index.js` → 0 erreur
+- SR sans erreur — scénario : drag token, rotation token, toggle statut
 
-**Étape 3 — Remplacer Pattern A (`getUserColor`) dans tous les call sites**
-Run à vide : `node --check server/src/socket/index.js`
+**Étape 3 — `socketVoxel.js`**
+- Créer `server/src/socket/socketVoxel.js` avec `registerVoxelHandlers` (L.364–513 → ~150 lignes)
+- Imports exacts (vérifiés L.364–511) : `WS`, `db`, `collisionAddVoxel`, `collisionRemoveVoxel` (redis)
+- Substitutions obligatoires [R8-9] :
+  | index.js (source) | socketVoxel.js (cible) |
+  |---|---|
+  | `socket.role !== 'gm'` | `!isGm` (×5 guards — VOXEL_ADD/REMOVE/UPDATE/MAP_SWITCH/MAP_VIEWPORT) |
+  | `io.to(socket.campaignId)` | `io.to(campaignId)` (×4 : VOXEL_ADD, VOXEL_REMOVE, VOXEL_UPDATE, MAP_SWITCH broadcast) |
+  | `socket.to(socket.campaignId)` | `socket.to(campaignId)` ← MAP_VIEWPORT uniquement [R8-9] |
+  - ⚠️ MAP_SWITCH contient **3 occurrences** de `socket.campaignId` — dont 2 dans des requêtes DB (pas de `io.to`) :
+    - L.480 : `.where({ campaign_id: socket.campaignId, role: 'player' })` → `campaign_id: campaignId`
+    - L.489 : `campaign_id: socket.campaignId,` (insert player_locations) → `campaign_id: campaignId`
+    - L.498 : `io.to(socket.campaignId).emit(...)` → `io.to(campaignId)`
+    Manquer L.480 ou L.489 → `campaign_id: undefined` → liste joueurs vide, MAP_SWITCH silencieusement inopérant
+- Dans `index.js` — ajouter après `registerTokenHandlers(io, socket, context)` (context déjà déclaré) :
+  ```js
+  registerVoxelHandlers(io, socket, context)
+  ```
+- Supprimer L.361–511 (5 handlers : VOXEL_ADD, VOXEL_REMOVE, VOXEL_UPDATE, MAP_SWITCH, MAP_VIEWPORT)
+- `node --check server/src/socket/socketVoxel.js` + `node --check server/src/socket/index.js` → 0 erreur
+- SR sans erreur — scénario : ajouter voxel (GM), supprimer voxel (GM), rotation voxel (VOXEL_UPDATE), MAP_SWITCH, MAP_VIEWPORT (pan caméra GM → joueurs suivent)
 
-**Étape 4 — Remplacer Pattern B (`checkTokenOwnership`) dans tous les call sites**
-Run à vide : `node --check server/src/socket/index.js`
+**Étape 4 — `socketDice.js`**
+- Créer `server/src/socket/socketDice.js` avec `registerDiceHandlers` (4 handlers : DICE_ROLL, MACRO_ROLL, CHAT_MESSAGE, CHARACTER_UPDATED → ~232 lignes)
+- Imports exacts (grep confirmé L.518–748 — [R8-6] résolu) :
+  ```js
+  import { WS } from '../../../shared/events.js'
+  import db from '../db/knex.js'
+  import { parseDice } from '../lib/diceParser.js'
+  import { getUserColor } from '../lib/socketUtils.js'
+  import {
+    calcSkillTotal, calcAttributeNA, calcREA,
+    calcSeuils, calcSouffle, calcResistanceDroguesInput,
+  } from '../lib/charStats.js'
+  ```
+- Substitutions obligatoires [R8-12] :
+  | index.js (source) | socketDice.js (cible) | Occurrences |
+  |---|---|---|
+  | `socket.campaignId` | `campaignId` | ×10 (DICE ×4, MACRO ×3, CHAT ×2, CHAR ×1) |
+  | `socket.user.id` | `user.id` | ×6 (DICE ×2, MACRO ×2, CHAT ×2) |
+  | `socket.user.username` | `user.username` | ×5 (DICE ×3, MACRO ×1, CHAT ×1) |
+  | `socket.role !== 'gm'` | `!isGm` | ×4 (DICE ×1, MACRO ×2, CHAR ×1) |
+  | `io.to(socket.campaignId)` | `io.to(campaignId)` | ×4 (DICE, MACRO, CHAT, CHAR) |
+  | `io.in(socket.campaignId)` | `io.in(campaignId)` | ×2 (DICE secret, MACRO secret) |
+- Les constantes `PORTEE_MOD_COMP` / `SITUATION_MODS` / `TAILLE_MODS` / LABELS / `COMBAT_MODE_LABELS` restent dans `index.js` — elles migrent à l'Étape 6 (0 usage dans DICE/MACRO/CHAT/CHARACTER_UPDATED) [R8-6]
+- Dans `index.js` : ajouter `import { registerDiceHandlers } from './socketDice.js'` en tête + `registerDiceHandlers(io, socket, context)` après `registerVoxelHandlers` dans SESSION_JOIN + localiser par event name et supprimer les 4 `socket.on(WS.DICE_ROLL`, `WS.MACRO_ROLL`, `WS.CHAT_MESSAGE`, `WS.CHARACTER_UPDATED` ([R8-8])
+- `node --check server/src/socket/socketDice.js` + `node --check server/src/socket/index.js` → 0 erreur
+- SR sans erreur — scénario : jet de dé simple, macro, message chat
 
-**Étape 5 — Supprimer `LOC_TABLE_CONTACT`, remplacer ses usages par `LOC_TABLE`**
-Run à vide : `node --check server/src/socket/index.js`
+**Étape 5 — `socketEntity.js`**
+- Créer `server/src/socket/socketEntity.js` avec `registerEntityHandlers` (7 handlers : ENTITY_ACTION_REQUEST, ENTITY_ACTION_RESOLVE, ENTITY_ACTION_GM_DIRECT, ENTITY_CREATED, ENTITY_DELETED, ENTITY_MOVED, ENTITY_MOVE_REQUEST → L.753–1457 source + `resolveEntityState` helper → L.2750–2781 → ~760 lignes)
+- Inclure `resolveEntityState` comme helper interne (non exporté) — dans la source, déclarée après `export default initSocket` (L.2750), hors closure. Dans `socketEntity.js` : module-level function, déclarée **avant** `registerEntityHandlers`. Signature inchangée : `async function resolveEntityState(entityId, interactionId, campaignId, io)` — `io` reste un paramètre explicite, utilise `db` et `collisionUpdateEntityState` depuis les imports du module.
+- 5 call sites de `resolveEntityState` — répartition :
+  - `socket.campaignId` → `campaignId` (×2) : ENTITY_ACTION_REQUEST L.792 + ENTITY_ACTION_GM_DIRECT L.1028
+  - `pending.campaignId` inchangé (×3) : ENTITY_ACTION_RESOLVE L.893 (autoSuccess) + L.899 (!skillId) + L.1010 (isSuccess) — **[R8-15]**
+- Imports exacts (grep confirmé L.753–1457 + L.2750–2781 — [R8-14]) :
+  ```js
+  import { WS } from '../../../shared/events.js'
+  import db from '../db/knex.js'
+  import { parseDice } from '../lib/diceParser.js'
+  import { getUserColor } from '../lib/socketUtils.js'
+  import { getMrTable, getModifier } from '../lib/mrTable.js'
+  import {
+    calcSkillTotal, calcAttributeAN, calcAttributeNA,
+    calcWoundPenalty, calcEncumbrancePenalty,
+    ATTR_LABELS,
+  } from '../lib/charStats.js'
+  import {
+    isCaseOccupied,
+    collisionMoveToken,
+    collisionMoveEntity,
+    collisionUpdateEntityState,
+  } from '../lib/redis.js'
+  ```
+- Substitutions obligatoires [R8-14] :
+  | index.js (source) | socketEntity.js (cible) | Occurrences |
+  |---|---|---|
+  | `socket.campaignId` | `campaignId` | ×14 (guards ×4, resolveEntityState args ×2, pendingSet ×1, io.in ×2, io.to ×5) |
+  | `socket.user.id` | `user.id` | ×5 (ownership ×2, getUserColor ×1, payload ×1, pendingSet ×1) |
+  | `socket.user.username` | `user.username` | ×5 (console ×3, payload ×1, pendingSet ×1) |
+  | `socket.role !== 'gm'` | `!isGm` | ×5 (ACTION_RESOLVE, GM_DIRECT, CREATED, DELETED, MOVED) |
+  | `io.to(socket.campaignId)` | `io.to(campaignId)` | ×5 (DELETED, MOVED, MOVE_REQUEST ×3) |
+  | `io.in(socket.campaignId)` | `io.in(campaignId)` | ×2 (ACTION_REQUEST fetchSockets, CREATED fetchSockets) |
+- ⚠️ **[R8-15]** `resolveEntityState` dans ENTITY_ACTION_RESOLVE — 3 call sites (L.893, L.899, L.1010) passent `pending.campaignId`, **pas** `socket.campaignId`. Ces 3 appels ne figurent **pas** dans la table ×14 ci-dessus. Ne pas substituer : `pending.campaignId` est stocké dans la Map lors de la demande initiale (L.831), potentiellement depuis une connexion différente du GM qui résout. Confondre → ENTITY_UPDATED broadcast dans la mauvaise room, silencieux.
+- ⚠️ `io.to(pending.campaignId)` (L.881, L.988) et `io.in(pending.campaignId)` (L.865) dans ENTITY_ACTION_RESOLVE — même raison que [R8-15]. Ne pas substituer.
+- ⚠️ `socket.id` (L.819, `playerSocketId: socket.id`) — identifiant de connexion socket.io, **distinct** de `socket.user.id`. Ne **pas** substituer par `user.id`. Reste `socket.id` tel quel — utilisé à L.866 pour retrouver le socket client par son ID de connexion.
+- ⚠️ `ENTITY_CREATED` — ne pas "uniformiser" avec `io.to(campaignId).emit()`. Ce handler utilise `io.in(campaignId).fetchSockets()` + boucle individuelle + `s.emit()` pour filtrer les entités `gm_only`. Remplacer par un broadcast global casse silencieusement ce filtre — les entités GM-only apparaissent chez tous les joueurs sans erreur console.
+- ⚠️ `socket.emit(WS.ENTITY_MOVE_RESULT, ...)` dans ENTITY_MOVE_REQUEST — 3 occurrences (L.1288, L.1365, L.1435). Bare `socket.emit()` sans campaignId — envoi au joueur demandeur uniquement. Ne pas substituer, ne pas "uniformiser" avec `io.to()`.
+- Dans `index.js` : ajouter `import { registerEntityHandlers } from './socketEntity.js'` en tête + `registerEntityHandlers(io, socket, context, pendingEntityActions)` après `registerDiceHandlers` dans SESSION_JOIN + localiser par event name et supprimer les 7 `socket.on(WS.ENTITY_*` ([R8-8]) + supprimer `resolveEntityState` (L.2750–2781)
+- `node --check server/src/socket/socketEntity.js` + `node --check server/src/socket/index.js` → 0 erreur
+- SR sans erreur — scénarios : interaction entité avec jet (ENTITY_ACTION_REQUEST → ENTITY_ACTION_RESOLVE), GM direct (ENTITY_ACTION_GM_DIRECT), déplacement entité push/pull (ENTITY_MOVE_REQUEST step-by-step), ENTITY_CREATED/DELETED/MOVED
 
-**Étape 6 — SR**
+**Étape 6 — `socketCombat.js`**
+- Créer `server/src/socket/socketCombat.js` avec `registerCombatHandlers` (L.1464–4266 → ~2 750 lignes)
+- Inclure comme helpers internes (non exportés) : `startAnnouncementTimers`, `skipPlayer`, `startResolutionPhase`, `advanceSlot`, `endTurn`, `multiAdversaryMalus`, `countAdversaires`, `resolveMeleeAction`, `resolveReloadAction`, `resolveDroneAssaultAction`, `resolveAssaultAction`, `calcDroneRD`, `resolveDroneIntegrityLoss`
+- Déplacer depuis `index.js` les constantes restantes (L.85–134) : `PORTEE_MOD_COMP`, `SITUATION_MODS`, `TAILLE_MODS`, `SITUATION_LABELS`, `PORTEE_LABELS`, `TAILLE_LABELS`, `COMBAT_MODE_LABELS` — 8 usages tous dans ce module (grep confirmé, 0 dans socketDice)
+- Dans `index.js` : import + appel + suppression de tout ce qui reste (handlers + helpers + constantes L.85–134)
+- `node --check` sur les 2 fichiers → 0 erreur
+- SR sans erreur
+
+**Étape 7 — Finalisation `index.js` coordinateur**
+- Vérifier que `index.js` ne contient plus que : imports, 6 Maps singletons, `initSocket`, SESSION_JOIN inline, 5 appels `register*`, disconnect inline
+- `npm run build` → 0 erreur Vite (côté client — vérifie que rien n'a changé)
+- Compter les lignes : `wc -l server/src/socket/index.js` → doit être ≤ 150 lignes
+- SR final sans erreur — scénarios complets
+
+### Pièges documentés
+
+- **[R8-2]** SESSION_JOIN (L.146–229) contient la logique `COMBAT_STATE_SYNC` reconnexion (L.205–229) — reste inline dans `index.js`, non migré.
+- **[R8-3]** `socket.on('disconnect')` (L.2732–2744) — reste inline dans `index.js` à l'intérieur de SESSION_JOIN après les 5 appels `register*`. Contenu : `console.log` uniquement — déplacement sans risque. **Risque connu hors périmètre REWORK-08 :** les 6 Maps globales ne sont pas nettoyées au disconnect. Les Maps avec timeout auto-nettoyant (pendingEntityActions — 60s) sont tolérables. Les Maps combat sans timeout (pendingDamageActions, pendingMeleeDefense, pendingStunActions) fuient si un socket se déconnecte en milieu de résolution — bug Socket.IO documenté (#407, #3477). À adresser dans un sprint dédié post-REWORK-08 (ajouter cleanup ciblé par tokenId/campaignId dans ce handler).
+- **[R8-4]** Les guards `if (!campaignId)` dans les handlers deviennent théoriquement inutiles (handlers enregistrés après SESSION_JOIN). Ne pas les supprimer dans ce rework — hors périmètre.
+- **[R8-6]** `socketDice.js` — MACRO_ROLL (L.581–702) utilise une dizaine d'exports de `charStats.js`. Grep exhaustif obligatoire avant d'écrire les imports du module — oublier un export provoque une erreur runtime silencieuse (pas de `node --check` pour les imports manquants).
+- **[R8-7]** `socketToken.js` — `checkTokenOwnership(db, token, userId, role)` attend une string `role`. Confirmé (socketUtils.js L.15 : `const isGm = role === 'gm'`). Passer `isGm ? 'gm' : 'player'` depuis le contexte. `socket.data.userId` et `socket.user.id` sont identiques (assignés L.163 de SESSION_JOIN) — `user.id` du contexte est correct pour les deux usages.
+- **[R8-8]** Décalage numéros de ligne après chaque étape — les lignes L.364, L.518, L.753, L.1464 dans ce spec sont des guides basés sur le fichier source original (4 266 lignes). Après Étape 1 (-17L) et Étape 2 (-132L), ces numéros ne correspondent plus. Localiser les handlers par event name (`socket.on(WS.VOXEL_ADD,` etc.), jamais par numéro de ligne.
+- **[R8-9]** `socketVoxel.js` — MAP_VIEWPORT (L.507–511) est **synchrone** (pas d'`async`/`try-catch`). Utilise `socket.to(campaignId)` (pas `io.to(campaignId)`) — intentionnel : le GM n'est pas destinataire de son propre viewport. Ne pas "uniformiser" avec les autres handlers.
+- **[R8-10]** `socketVoxel.js` — `buildCollisionMap` listé dans l'Interface cible originale : **0 usage** dans les handlers voxel. Reste dans SESSION_JOIN (L.198 de index.js, non migré). Ne pas importer dans socketVoxel.js.
+- **[R8-11]** Double enregistrement si SESSION_JOIN fire deux fois sur le même socket — chaque `registerXxxHandlers` appelé une deuxième fois enregistre les listeners en double → double DB write + double broadcast. En pratique impossible : le client React crée un nouveau socket à chaque reconnect (`s.disconnect()` dans le cleanup useEffect de SessionPage), donc chaque socket ne reçoit qu'un seul SESSION_JOIN. **Mitigation garantie côté client — ne pas ajouter de guard `socket.off()` dans ce rework (hors périmètre).** Documenter si un jour SessionPage change son pattern de reconnect.
+- **[R8-12]** `socketDice.js` — Imports charStats : seuls 6 exports réellement utilisés dans L.518–748 (grep confirmé). `calcAttributeAN` **absent** malgré la mention "calcAttributeAN/NA" dans l'Interface cible — MACRO_ROLL n'utilise que `calcAttributeNA` (via `na(attrId)`). Les autres exports (`calcWoundPenalty`, `calcEncumbrancePenalty`, `ATTR_LABELS`, `lookupTable`, etc.) vont dans `socketCombat.js` uniquement. Importer uniquement les 6 listés en Étape 4.
+- **[R8-13]** `socketDice.js` — `CHARACTER_UPDATED` est marqué "relique Chantier 1" (commentaire L.718 index.js). Migrer tel quel sans modifier ni supprimer — le nettoyage est hors périmètre de REWORK-08.
+- **[R8-14]** `socketEntity.js` — 6 écarts vs. Interface cible originale (corrigés en Étape 5) :
+  1. `getModifier` manquait — utilisé L.1243 (ENTITY_MOVE_REQUEST) en tandem avec `getMrTable`.
+  2. `collisionAddEntity` / `collisionRemoveEntity` / `woundService` listés à tort — 0 usage dans L.753–1457 (routes REST uniquement). Ne pas importer.
+  3. `collisionMoveToken` manquait — ENTITY_MOVE_REQUEST déplace acteur ET entité ensemble (L.1411).
+  4. `isCaseOccupied` manquait — ×4 dans la boucle step-by-step de ENTITY_MOVE_REQUEST (L.1324, L.1335, L.1346, L.1351).
+  5. `calcAttributeAN` (L.935, ENTITY_ACTION_RESOLVE) ET `calcAttributeNA` (L.1228, ENTITY_MOVE_REQUEST) — les deux variantes nécessaires. L'Interface cible ne détaillait pas les exports charStats.
+  6. `ATTR_LABELS` — importé depuis `charStats.js`, ×6 usages dans les handlers ENTITY (libellés attributs breakdown). À ne pas confondre avec `SITUATION_LABELS`/`PORTEE_LABELS` (domaine combat → socketCombat.js).
+- **[R8-15]** `resolveEntityState` — double origine de `campaignId` dans les 5 call sites. Les 2 call sites directs (ENTITY_ACTION_REQUEST L.792, ENTITY_ACTION_GM_DIRECT L.1028) passent `socket.campaignId` → à substituer par `campaignId`. Les 3 call sites dans ENTITY_ACTION_RESOLVE (L.893 autoSuccess, L.899 !skillId, L.1010 isSuccess) passent `pending.campaignId` — valeur stockée dans `pendingEntityActions` lors de la demande initiale (L.831), potentiellement depuis la connexion du joueur (différente de celle du GM qui résout). Ne **jamais** substituer `pending.campaignId` par `campaignId` — le broadcast ENTITY_UPDATED partirait dans la room du GM, pas celle de la campaign, en cas de divergence.
 
 ### Validation
 
-- DICE_ROLL : couleur correcte visible dans le chat (non-régression)
-- TOKEN_MOVE : joueur ne peut pas déplacer le token d'un autre joueur
-- SR sans erreur dans les logs
+| # | Scénario | Résultat attendu |
+|---|---|---|
+| 1 | Drag token sur la carte | TOKEN_MOVED reçu → token se déplace en temps réel sur tous les clients |
+| 2 | Ajouter un voxel (GM) | VOXEL_ADD → voxel visible sur tous les clients + collision map Redis mise à jour |
+| 3 | GM change de carte | MAP_SWITCH → tous les joueurs voient la nouvelle carte |
+| 4 | Jet de dé standard | DICE_ROLL → DICE_RESULT visible en chat sur tous les clients |
+| 5 | Jet de macro | MACRO_ROLL → DICE_RESULT avec breakdown modificateurs correct |
+| 6 | Interaction entité | ENTITY_ACTION_REQUEST → ENTITY_ACTION_RESULT → message chat + radial fermé |
+| 7 | Déplacement entité (ENTITY_MOVE_REQUEST) | Jet 1d20 + calcul MR → ENTITY_MOVE_RESULT + animation step-by-step |
+| 8 | GM démarre le combat | COMBAT_START → COMBAT_STARTED → mode combat activé GM + joueurs |
+| 9 | Assaut tir résolu | COMBAT_DAMAGE_CONFIRM → COMBAT_DAMAGE_RESULT → blessure appliquée + WOUND_ADDED |
+| 10 | Non-régression : session sans combat | Ouvrir session, chat, drag token, interaction entité, changement carte → 0 erreur console + 0 erreur serveur |
 
 ### Definition of done
 
-- [x] `node --check server/src/lib/socketUtils.js` — 0 erreur ✅ Session 100
-- [x] `node --check server/src/socket/index.js` — 0 erreur ✅ Session 100
-- [x] `grep -c "select('color')" server/src/socket/index.js` → 0 ✅ Session 100
-- [x] `grep -c "LOC_TABLE_CONTACT" server/src/socket/index.js` → 0 ✅ Session 100
-- [x] SR sans erreur ✅ Session 100
-- [x] JOURNAL4.md appendé ✅ Session 100
+- [ ] `node --check server/src/lib/mrTable.js` → 0 erreur
+- [ ] `node --check server/src/socket/socketToken.js` → 0 erreur
+- [ ] `node --check server/src/socket/socketVoxel.js` → 0 erreur
+- [ ] `node --check server/src/socket/socketDice.js` → 0 erreur
+- [ ] `node --check server/src/socket/socketEntity.js` → 0 erreur
+- [ ] `node --check server/src/socket/socketCombat.js` → 0 erreur
+- [ ] `node --check server/src/socket/index.js` → 0 erreur
+- [ ] `npm run build` → 0 erreur Vite
+- [ ] `wc -l server/src/socket/index.js` → ≤ 150 lignes
+- [ ] SR sans erreur à chaque étape
+- [ ] Scénarios 1–10 validés
+- [ ] JOURNAL4.md appendé
+- [ ] `ARCHI_REWORK_DONE.md` mis à jour avec la spec complète
 
 ---
 
-## REWORK-02 — damageService (résolution hit distance + melee PJ)
+## REWORK-09 — SessionPage hooks WS dédiés
 
 ### Problème
 
-Le bloc "résolution cible" (localisation D20 → armure → dégâts nets → sévérité → blessure → shock test) est dupliqué quasi-identiquement dans deux endroits :
+`client/src/pages/SessionPage.jsx` : **1 509 lignes**.
 
-1. `COMBAT_DAMAGE_CONFIRM` L.~2344–2437 (~94 lignes) — PJ lance ses dés ; couvre assault ET melee via `pendingType`
-2. `resolveAssaultAction` branche PNJ L.~4234–4305 (~72 lignes) — PNJ auto, assault uniquement
+Le `useEffect` socket (L.402–741, **340 lignes**, deps `[campaignId, reconnectTrigger, loadSession]`) contient **47 listeners WS** répartis en 10 groupes sémantiques sans séparation. Le résultat : 12 `useState` déclarations pour l'état combat cohabitent avec le code UI/canvas/modal dans le même fichier.
 
-**Différences légitimes entre les deux :**
-- `degautsBruts` : calculé différemment AVANT le bloc (MR table + modDegatsMode pour assault, modDom + combatModeBonus pour melee) → le caller calcule `degautsBruts`, la fonction le reçoit en param
-- Emits : DAMAGE_CONFIRM émet `COMBAT_DAMAGE_RESULT` (socket privé) + `DICE_RESULT` ×3 ; resolveAssaultAction PNJ émet `COMBAT_ATTACK_RESULT` uniquement → emits restent dans les callers
-- `emitShockDiceResult` : 3 lignes identiques dans les deux callers — tolérable, reste dans les callers (évite de passer userId/username/color dans l'interface)
+**Preuves (SessionPage.jsx) :**
+- L.402 `useEffect` socket — unique, couvre SESSION + TOKEN + CHAT + DICE + WOUND + INVENTORY + ENTITY + MAP + COMBAT + DOC
+- L.639–723 : 10 listeners `COMBAT_*` complexes (STARTED, ENDED, STATE_SYNC, PHASE_CHANGED, ROSTER_UPDATED, SURPRISE_ROLL, ANNOUNCE_PREVIEW, ACTION_DECLARED, SLOT_ADVANCED, TURN_SKIPPED)
+- L.1300–1344 : **39 props** passées à `CombatOverlay` (2 mortes : `tokens` non destructuré L.22 CombatOverlay, `announcementMarker` destructuré mais jamais consommé)
 
-**Grep de vérification avant de coder :**
-```
-grep -n "rollLoc\|parseDice('1d20')" server/src/socket/index.js
-grep -n "calcResistanceDommages" server/src/socket/index.js
-grep -n "finalSeverity = woundResult" server/src/socket/index.js
-```
+**Couplage accidentel :** ajouter un listener combat nécessite de lire 340 lignes de useEffect pour trouver le bon endroit, et risque d'affecter les 46 autres listeners.
 
 ### État actuel
 
-Inline dans :
-- `COMBAT_DAMAGE_CONFIRM` handler (~L.2344–2437)
-- `resolveAssaultAction` PNJ branch (~L.4234–4305)
+**`client/src/pages/SessionPage.jsx` :**
+- Listeners TOKEN (5) : L.431–447
+- Listeners ENTITY + MAP_SWITCH (4) : L.571–636
+- Listeners COMBAT (18) : L.517–546 + L.639–723
+- Listeners SESSION/CHAT/DICE/WOUND/INVENTORY/DOC/ERROR/RECONNECT (20) : reste du useEffect
+- Cleanup : `return () => s.disconnect()` — pas de `s.off()` granulaires
 
-Fonctions utilitaires déjà disponibles (réutilisées, non touchées) :
-- `calcResistanceArmure(armuresSlot)` — `charStats.js`
-- `calcResistanceDommages(for_na, con_na)` — `charStats.js`
-- `woundService.applyWound(io, db, campaignId, {...})` — `woundService.js` (REWORK-03)
-- `statusService.resolveShockTest({...})` — `statusService.js` (REWORK-01)
+**Convention hooks existante :** `client/src/lib/` (cf. `useDraggable.js` — pas de dossier `hooks/` dédié).
 
 ### Décision architecturale
 
-**Option retenue : Service Module**
+**Option retenue : pattern `listen(s)` impératif**
 
-Nouveau fichier `server/src/lib/damageService.js`. Les callers calculent `degautsBruts` eux-mêmes (contexte MR/modDom varie), puis délèguent toute la résolution cible.
+Chaque hook expose une méthode `listen(socket)` appelée de manière **impérative** dans le `useEffect` de SessionPage, sur l'instance `s` avant `setSocket(s)`. Le hook gère son propre état (useState) et lit les actions de store directement depuis les stores Zustand.
 
-**Rejeté :** déplacer les emits dans le service — les patterns PJ et PNJ divergent trop (COMBAT_DAMAGE_RESULT vs COMBAT_ATTACK_RESULT). Chaque caller garde ses emits.
+```js
+// Après rework — SessionPage useEffect
+useEffect(() => {
+  const s = io(...)
+  s.emit(WS.SESSION_JOIN, { campaignId })
+
+  tokenSocket.listen(s)    // enregistre TOKEN_*
+  entitySocket.listen(s)   // enregistre ENTITY_* + MAP_SWITCH
+  combatSocket.listen(s)   // enregistre COMBAT_*
+
+  // ~20 listeners simples restants inline
+  // SESSION_JOINED, SESSION_USER_JOINED, SESSION_USER_LEFT,
+  // CAMPAIGN_SETTINGS_UPDATED, CHAT_MESSAGE, CHARACTER_UPDATED,
+  // DICE_RESULT, MACRO_ROLL_RESULT, WOUND_ADDED/UPDATED/REMOVED,
+  // INVENTORY_ADDED/UPDATED/REMOVED, DOC_CREATED/UPDATED/DELETED,
+  // 'error', s.io.on('reconnect')
+
+  setSocket(s)
+  return () => s.disconnect()   // nettoie TOUS les listeners
+}, [campaignId, reconnectTrigger, loadSession])
+```
+
+**Pourquoi `listen` n'est pas dans les deps du useEffect ?**
+`listen` est une fonction ordinaire (pas useCallback) recréée à chaque render. Elle est appelée impérativement dans l'effet, jamais utilisée comme dep. Les setters qu'elle capture (useState + Zustand) sont stables — garanti par React et Zustand.
+
+**Pourquoi pas `useCallback` pour `listen` ?**
+Pas nécessaire. La fonction n'est jamais passée comme prop ni mise en dep. `useCallback` sans raison est du bruit.
+
+**Pourquoi pas `s.off()` granulaires dans le cleanup ?**
+`s.disconnect()` nettoie tous les listeners côté socket.io. Identique au comportement actuel. Pas de régression.
+
+**Options écartées :**
+- Passer `socket` depuis le state (`useState`) aux hooks → décalage 1-render (socket null au 1er render des hooks)
+- React Context pour le socket → sur-ingénierie, 1 seul consumer par hook
+- Hooks avec leur propre `useEffect([socket])` → re-inscription asynchrone, casse la garantie de réception des events au reconnect
+- Déplacer l'état combat dans `combatStore` → hors scope, requiert modifier CombatOverlay
 
 ### Interface cible
 
 ```js
-// server/src/lib/damageService.js
+// ── client/src/lib/useTokenSocket.js ────────────────────────────────────────
+// Params : aucun — lit directement depuis tokenStore
+// State propre : aucun
+export function useTokenSocket() {
+  const { addToken, removeToken, updateToken } = useTokenStore()
+  function listen(s) {
+    s.on(WS.TOKEN_MOVED, ({ tokenId, pos_x, pos_y, pos_z, updated_at }) =>
+      updateToken({ id: tokenId, pos_x, pos_y, pos_z, updated_at }))
+    s.on(WS.TOKEN_CREATED, ({ token }) => addToken(token))
+    s.on(WS.TOKEN_DELETED, ({ tokenId }) => removeToken(tokenId))
+    s.on(WS.TOKEN_UPDATED, ({ token }) => updateToken(token))
+    s.on(WS.TOKEN_STATUS_UPDATED, ({ tokenId, statuses, statusExpiries }) =>
+      updateToken({ id: tokenId, statuses, statusExpiries: statusExpiries ?? {} }))
+  }
+  return { listen }
+}
 
-// Résolution complète côté cible : localisation + armure + résistance + sévérité + blessure + shock.
-// degautsBruts calculé avant l'appel par le caller (dépend du contexte MR/modDom).
-// Retourne null si cibleType === 'drone' — caller gère resolveDroneIntegrityLoss lui-même.
-// Émet WOUND_ADDED via woundService (effet DB+WS inclus).
-export async function resolveTargetHit(io, db, campaignId, {
-  degautsBruts,          // number — calculé par le caller
-  characterIdCible,      // UUID | null
-  cibleType,             // 'pj' | 'pnj' | 'drone' | null
-  char_sheet_id_cible,   // UUID | null
-  for_na_cible,          // number
-  con_na_cible,          // number
-  vol_na_cible,          // number
-})
-// → null si cibleType === 'drone'
-// → {
-//     rollLoc,         // number  — D20 localisation
-//     locRolls,        // array   — pour DICE_RESULT (caller)
-//     locSeed,         // string
-//     slotCode,        // 'T'|'C'|'BD'|'BG'|'JD'|'JG'
-//     localisation,    // 'tete'|'corps'|'bras_droit'|...
-//     etq,             // number | null
-//     rd,              // number
-//     degatsNets,      // number
-//     severity,        // string | null
-//     is_lethal,       // boolean
-//     finalSeverity,   // string | null (après promotion woundService)
-//     shockResult,     // objet resolveShockTest | null
-//   }
+// ── client/src/lib/useEntitySocket.js ───────────────────────────────────────
+// Params : setRadialMenu, setMoveTarget (SessionPage local state)
+// State propre : aucun — tout va aux stores ou SessionPage via callbacks
+export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
+  const { user } = useAuthStore()
+  const { clearPendingEntityId, addMessage } = useSessionStore()
+  const { setBattlemap } = useMapStore()
+  const { setTokens } = useTokenStore()
+  const { setEntities } = useEntityStore()
+  const { t } = useTranslation()
+  function listen(s) {
+    s.on(WS.MAP_SWITCH, ...) // api.get() inline + setBattlemap + setTokens + setEntities
+    s.on(WS.ENTITY_ACTION_PENDING, ...) // addMessage (gmOnly)
+    s.on(WS.ENTITY_ACTION_RESULT, ...) // clearPendingEntityId + addMessage + setRadialMenu(null)
+    s.on(WS.ENTITY_MOVE_RESULT, ...) // setMoveTarget(null) + addMessage
+  }
+  return { listen }
+}
+
+// ── client/src/lib/useCombatSocket.js ───────────────────────────────────────
+// Params : isGm (bool), setMode (setState stable), onModeReset (callback)
+// State propre : 12 états résultat combat
+export function useCombatSocket({ isGm, setMode, onModeReset }) {
+  // Stores
+  const { setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster,
+          advanceSlot, setActions, addAnnouncedAction, resetAnnouncedActions } = useCombatStore()
+  const { addMessage } = useSessionStore()
+  const { t } = useTranslation()
+  // État propre
+  const [reloadResult,        setReloadResult]        = useState(null)
+  const [damagePayload,       setDamagePayload]        = useState(null)
+  const [damageResults,       setDamageResults]        = useState(null)
+  const [attackResult,        setAttackResult]         = useState(null)
+  const [gmAttackResult,      setGmAttackResult]       = useState(null)
+  const [pnjAttackResult,     setPnjAttackResult]      = useState(null)
+  const [meleeDefensePrompt,  setMeleeDefensePrompt]   = useState(null)
+  const [meleeResult,         setMeleeResult]          = useState(null)
+  const [stunPayload,         setStunPayload]          = useState(null)
+  const [pendingSurpriseRoll, setPendingSurpriseRoll]  = useState(null)
+  const [announcementMarker,  setAnnouncementMarker]   = useState(null)
+  const [pjPreview,           setPjPreview]            = useState(null)
+
+  function listen(s) { /* 18 listeners COMBAT_* */ }
+
+  return {
+    listen,
+    reloadResult,        setReloadResult,
+    damagePayload,       setDamagePayload,
+    damageResults,       setDamageResults,
+    attackResult,        setAttackResult,
+    gmAttackResult,      setGmAttackResult,
+    pnjAttackResult,     setPnjAttackResult,
+    meleeDefensePrompt,  setMeleeDefensePrompt,
+    meleeResult,         setMeleeResult,
+    stunPayload,         setStunPayload,
+    pendingSurpriseRoll, setPendingSurpriseRoll,
+    announcementMarker,  setAnnouncementMarker,
+    pjPreview,           setPjPreview,
+  }
+}
 ```
 
-**Usage dans chaque caller :**
+**Utilisation dans SessionPage — ordre de déclaration obligatoire (P4/P48) :**
 ```js
-// AVANT (à remplacer) :
-// ~94 lignes / ~72 lignes de calcul inline
+// 1. useState SessionPage qui restent (non migrés)
+const [combatMoveMode,        setCombatMoveMode]        = useState(null)
+const [pendingMoveSelection,  setPendingMoveSelection]  = useState(null)
+const [combatTargetMode,      setCombatTargetMode]      = useState(null)
 
-// APRÈS :
-const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
-  degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
-  for_na_cible, con_na_cible, vol_na_cible,
-})
-if (hitResult === null) {
-  // cible drone — caller gère resolveDroneIntegrityLoss + return
-}
-const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
-        severity, is_lethal, finalSeverity, shockResult } = hitResult
+// 2. handleModeReset AVANT useCombatSocket (passé en param)
+const handleModeReset = useCallback(() => {
+  setCombatMoveMode(null); setCombatTargetMode(null); setPendingMoveSelection(null)
+}, [])  // deps vides — setCombat* sont des setters stables
 
-if (shockResult) {
-  statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
-}
-// puis emits spécifiques au caller (COMBAT_DAMAGE_RESULT / COMBAT_ATTACK_RESULT / DICE_RESULT)
+// 3. Hooks socket
+const tokenSocket  = useTokenSocket()
+const entitySocket = useEntitySocket({ setRadialMenu, setMoveTarget })
+const combatSocket = useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })
+
+// 4. Callbacks utilisant combatSocket APRÈS useCombatSocket (P4)
+// handleSurpriseRolled — deps P3 : socket + pendingSurpriseRoll depuis combatSocket
+const handleSurpriseRolled = useCallback(() => {
+  if (!socket || !combatSocket.pendingSurpriseRoll) return
+  socket.emit(WS.COMBAT_SURPRISE_RESULT, { tokenId: combatSocket.pendingSurpriseRoll.tokenId })
+  combatSocket.setPendingSurpriseRoll(null)
+}, [socket, combatSocket.pendingSurpriseRoll, combatSocket.setPendingSurpriseRoll])
 ```
 
-### Types d'entité supportés
+### Pièges documentés
 
-| Type | Supporté | Note |
-|---|---|---|
-| Humanoïde (PJ + PNJ) | ✅ | Calcul complet |
-| Drone | ❌ retourne null | Caller gère resolveDroneIntegrityLoss |
-| Exo-armure | 🔜 futur | — |
+- **[F-R9-1]** `onMeleeDefenseConfirm` (SessionPage L.1332) — inline `socket.emit` dans le JSX. À conserver tel quel (pas dans useCombatSocket). Non bloquant.
+- **[F-R9-2]** `tokens` prop (SessionPage L.1307 → CombatOverlay) — morte. CombatOverlay lit `tokens` depuis `useTokenStore()` (CombatOverlay L.22). Supprimer dans REWORK-09.
+- **[F-R9-3]** `announcementMarker` prop → CombatOverlay — destructuré mais jamais consommé dans le corps du composant. Supprimer dans REWORK-09.
+- **[F-R9-4]** `isGm` dans `useCombatSocket` : capturé à la création du socket (comme dans le code actuel). `isGm` n'est pas dans les deps du useEffect → valeur figée au montage. Comportement identique — pas de régression.
+- **[F-R9-5]** `loadSession` dans les deps du useEffect socket : présent dans le code actuel mais non utilisé dans le corps du useEffect. Conservé tel quel dans REWORK-09 (hors scope de modifier les deps).
+- **[F-R9-6]** `COMBAT_STATE_SYNC` appelle aussi `setMode('combat')` (SessionPage L.671) — troisième callsite de `setMode` dans `listen`, après COMBAT_STARTED et COMBAT_ENDED. À ne pas oublier lors de la migration.
+- **[F-R9-7]** `handleSurpriseRolled` — ses deps useCallback changent après migration : `pendingSurpriseRoll` et `setPendingSurpriseRoll` viennent désormais de `combatSocket`. Violer P3 (oublier `socket` dans les deps) OU omettre `combatSocket.pendingSurpriseRoll` bloquera silencieusement le jet de surprise.
 
 ### Périmètre
 
+**Fichiers nouveaux :**
+- `client/src/lib/useTokenSocket.js`
+- `client/src/lib/useEntitySocket.js`
+- `client/src/lib/useCombatSocket.js`
+
 **Fichiers modifiés :**
+- `client/src/pages/SessionPage.jsx`
+  - Supprimer : 12 `useState` combat (migré vers useCombatSocket)
+  - Supprimer : ~198 lignes de listeners du useEffect (TOKEN 17L + ENTITY+MAP 66L + COMBAT 115L) → fichier ~1 340 lignes
+  - Supprimer : `tokens={tokens}` de l'appel CombatOverlay (dead prop, [F-R9-2])
+  - Supprimer : `announcementMarker={announcementMarker}` de l'appel CombatOverlay (dead, [F-R9-3]) — reste passé à Canvas3D
+- `client/src/components/CombatOverlay.jsx` — **1 ligne uniquement**
+  - Supprimer `announcementMarker` du destructuring des props (L.20) — param dead confirmé, jamais consommé dans le corps
 
-| Fichier | Modification |
-|---|---|
-| `server/src/lib/damageService.js` | NOUVEAU — `resolveTargetHit` |
-| `server/src/socket/index.js` | +import, 2 sites remplacés (DAMAGE_CONFIRM + resolveAssaultAction PNJ) |
+**NON touchés :**
+- `client/src/stores/combatStore.js` — aucune modification
+- Tous les autres stores — aucune modification
+- `server/` — aucune modification
 
-**Fichiers NON touchés :**
-- `woundService.js`, `statusService.js`, `charStats.js` — réutilisés tels quels
-- `client/`, `shared/`, routes REST — inchangés
-- `resolveMeleeAction` — hors périmètre (duplication distincte, sprint futur)
+### Plan
 
-### Plan d'implémentation — ordre obligatoire
+**Étape 1 — useTokenSocket.js**
+- Créer `client/src/lib/useTokenSocket.js` avec les 5 listeners TOKEN_*
+- Intégrer dans SessionPage.jsx : import + `tokenSocket.listen(s)` + supprimer les 5 `s.on TOKEN_*`
+- `node --check client/src/lib/useTokenSocket.js` + `node --check client/src/pages/SessionPage.jsx` → 0 erreur
+- SR sans erreur → test scénario 1 (drag token)
 
-**Étape 1 — Lecture obligatoire avant tout code**
-Lire (pas depuis la mémoire) :
-- `COMBAT_DAMAGE_CONFIRM` complet (L.~2325–2520) — vérifier le bloc exact à extraire
-- Branche PNJ de `resolveAssaultAction` (L.~4233–4327) — idem
-- Greps de vérification (ci-dessus §Problème)
-- `server/src/lib/woundService.js` — signature exacte `applyWound`
+**Étape 2 — useEntitySocket.js**
+- Créer `client/src/lib/useEntitySocket.js` avec 4 listeners : MAP_SWITCH, ENTITY_ACTION_PENDING, ENTITY_ACTION_RESULT, ENTITY_MOVE_RESULT
+- Intégrer dans SessionPage.jsx
+- `node --check` sur les 2 fichiers → 0 erreur
+- SR sans erreur → test scénarios 3 + 4 (entité + changement carte)
 
-**Étape 2 — Créer `server/src/lib/damageService.js`**
-Copier le bloc DAMAGE_CONFIRM comme base (plus complet : locRolls/locSeed exposés).
-Run à vide : `node --check server/src/lib/damageService.js`
+**Étape 3 — useCombatSocket.js**
+- Créer `client/src/lib/useCombatSocket.js` avec 18 listeners COMBAT_*
+- Intégrer dans SessionPage.jsx dans l'ordre suivant :
+  - Supprimer les 12 `useState` combat (L.108–252)
+  - Ajouter `handleModeReset = useCallback(...)` avant les hooks socket
+  - Ajouter `combatSocket = useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })`
+  - Réécrire `handleSurpriseRolled` avec les nouvelles deps (voir [F-R9-7])
+  - Brancher `combatSocket.*` dans les props CombatOverlay (remplacer les 12 state locaux)
+  - Supprimer dead props `tokens={tokens}` et `announcementMarker={announcementMarker}` de l'appel CombatOverlay
+  - Conserver `announcementMarker={combatSocket.announcementMarker}` sur Canvas3D
+- Modifier `client/src/components/CombatOverlay.jsx` L.20 : retirer `announcementMarker` du destructuring (ligne de 38 props — édition chirurgicale, vérifier que `pjPreview` adjacent reste intact)
+- `node --check` sur les 4 fichiers + `npm run build` → 0 erreur
+- SR sans erreur
 
-**Étape 3 — Patcher `COMBAT_DAMAGE_CONFIRM` dans `index.js`**
-Remplacer le bloc L.~2344–2437 par l'appel `resolveTargetHit`.
-Conserver le drone branch existant AVANT l'appel (ou laisser `resolveTargetHit` retourner null et le caller revient sur la branche drone — vérifier l'ordre exact à la lecture).
-Run à vide : `node --check server/src/socket/index.js`
-
-**Étape 4 — Patcher `resolveAssaultAction` branche PNJ dans `index.js`**
-Remplacer le bloc L.~4234–4305 par l'appel `resolveTargetHit`.
-Run à vide : `node --check server/src/socket/index.js`
-
-**Étape 5 — SR**
+**Étape 4 — Validation fonctionnelle**
+- Scénarios 5 à 8 (COMBAT) + non-régression scénarios 1–4
 
 ### Validation
 
-**Scénario 1 — Assault PNJ → PNJ (auto)**
-Setup : PNJ déclaré, slot activé — `resolveAssaultAction` appelle `resolveTargetHit`
-Attendu : `COMBAT_ATTACK_RESULT` broadcast avec dégâts, sévérité, shockResult si applicable
-
-**Scénario 2 — Assault PJ → PNJ (interactif)**
-Setup : PJ tire, touche → `COMBAT_DAMAGE_PROMPT` → PJ confirme → `COMBAT_DAMAGE_CONFIRM` appelle `resolveTargetHit`
-Attendu : `COMBAT_DAMAGE_RESULT` affiché PJ, `DICE_RESULT` ×3 broadcast, `COMBAT_ATTACK_RESULT` broadcast
-
-**Scénario 3 — Cible drone (non-régression)**
-Setup : assault vers drone
-Attendu : `resolveTargetHit` retourne null, `resolveDroneIntegrityLoss` appelé, pas de crash
-
-**Scénario 4 — Shock sur blessure grave (non-régression REWORK-01)**
-Setup : blessure grave corps/tête
-Attendu : `shockResult` non null, `emitShockDiceResult` diffusé, `applyStun` déclenché si outcome ≠ 'ok'
-
-**Scénario 5 — Melee PJ (non-régression DAMAGE_CONFIRM)**
-Setup : CaC PJ, `pendingType === 'melee'` — `degautsBruts = rawDice + modDom + combatModeBonus`
-Attendu : résolution identique à avant le rework
+| # | Scénario | Résultat attendu |
+|---|---|---|
+| 1 | Drag token sur la carte | TOKEN_MOVED reçu → token se déplace en temps réel sur tous les clients |
+| 2 | GM crée un token (drop depuis sidebar) | TOKEN_CREATED → token visible immédiatement sur tous les clients |
+| 3 | Joueur clique une entité interactible | ENTITY_ACTION_RESULT reçu → message chat apparaît / radial fermé |
+| 4 | GM change de carte (bouton "Déplacer le groupe") | MAP_SWITCH reçu → tous les joueurs voient la nouvelle carte |
+| 5 | GM démarre le combat | COMBAT_STARTED → mode combat activé GM + joueurs |
+| 6 | Joueur déclare action | COMBAT_ACTION_DECLARED → marqueur ghost + log déclarations mis à jour |
+| 7 | Assaut PNJ résolu | COMBAT_ATTACK_RESULT → panneau résultat GM + panneau joueur ciblé |
+| 8 | Non-régression : session sans combat | Ouvrir une session, envoyer un message chat, déplacer un token, interagir avec une entité, changer de carte → 0 erreur console F12, 0 erreur serveur |
 
 ### Definition of done
 
-- [x] `node --check server/src/lib/damageService.js` — 0 erreur ✅ Session 101
-- [x] `node --check server/src/socket/index.js` — 0 erreur ✅ Session 101
-- [x] `grep -c "calcResistanceDommages" server/src/socket/index.js` → **2** *(L.13 import + resolveMeleeAction exclu)* ✅ Session 101
-- [x] `grep -c "finalSeverity = woundResult" server/src/socket/index.js` → **1** ✅ Session 101
-- [x] SR sans erreur ✅ Session 101
-- [x] Scénario 1 validé ✅ (assault PNJ auto Site 5 fonctionnel)
-- [ ] Scénario 2 validé (COMBAT_DAMAGE_CONFIRM PJ interactif)
-- [ ] Scénario 3 validé (non-régression drone)
-- [x] JOURNAL4.md appendé ✅ Session 101
-
-**Décisions Session 101 (prises en analyse, à appliquer dès le code) :**
-- LOC_TABLE → Option A : déplacer dans `shared/armorConstants.js` (Étape 0)
-- Scope → 4 sites (1, 2, 4, 5) — `resolveMeleeAction` (site 3) exclu définitivement
-
----
-
-### Analyse pré-code — Session 101 (2026-06-17)
-
-#### Sites réels dans index.js — 5 (plan disait 2)
-
-Grep `calcResistanceDommages server/src/socket/index.js` → 5 occurrences :
-
-| # | Ligne | Contexte | Scope plan |
-|---|---|---|---|
-| 1 | 2412 | `COMBAT_DAMAGE_CONFIRM` — PJ assault/melee | ✅ prévu |
-| 2 | 2679 | `COMBAT_MELEE_DEFENSE_CONFIRM` — branche PNJ attaquant auto | ❓ non mentionné |
-| 3 | 3488 | `resolveMeleeAction` — humanoid vs humanoid | ❌ exclu explicitement |
-| 4 | 3925 | `resolveDroneAssaultAction` — cible PNJ | ❓ non mentionné |
-| 5 | 4278 | `resolveAssaultAction` — branche PNJ auto | ✅ prévu |
-
-**Sites 2 et 4 identiques structurellement aux sites 1 et 5.** Les inclure ne touche aucun fichier supplémentaire.
-
-#### BLOCKER — LOC_TABLE non importable
-
-`LOC_TABLE` définie **inline dans `index.js`** L.52-59. Non exportée, non partagée. `damageService.js` ne peut pas l'importer en l'état.
-
-**Décision requise :**
-- **Option A (recommandée)** : déplacer vers `shared/armorConstants.js` (même famille sémantique que `SLOT_TO_WOUND_LOCATION`). Impact : +6 lignes armorConstants + remplacement définition inline par import dans index.js.
-- **Option B** : dupliquer dans `damageService.js` — simple mais crée deux copies.
-
-#### Dead code repéré — Site 1 L.2346
-
-```js
-const locTable = pendingType === 'melee' ? LOC_TABLE : LOC_TABLE  // identique des deux côtés
-```
-Dans `resolveTargetHit` : simplement `LOC_TABLE` sans branchement.
-
-#### Mapping variables par call site
-
-| Site | `characterIdCible` → | `char_sheet_id_cible` → | `campaignId` → |
-|---|---|---|---|
-| 1 | `pending.characterIdCible` | `pending.char_sheet_id_cible` | `pending.campaignId` |
-| 2 | `pending.characterIdCible` | `pending.char_sheet_id_cible` | `meleeCampaignId` |
-| 4 | `cibleCharacter.id` | `cibleSheet?.id` | `campaignId` |
-| 5 | `cibleToken.character_id` | `char_sheet_id_cible` | `campaignId` |
-
-Site 4 : `for_na/con_na/vol_na` sans suffixe `_cible` → passer en paramètre nommé : `for_na_cible: for_na, ...`
-
-#### DoD corrigé
-
-Les greps `→ 0` sont **infaisables** si scope = 2 sites ou 4 sites (resolveMeleeAction reste).
-- Scope 4 sites (recommandé) : `grep -c "calcResistanceDommages" index.js` → **1**
-- Scope 2 sites (strict) : → **3**
-
-**DoD à corriger avant de coder :**
-- `grep -c "calcResistanceDommages" server/src/socket/index.js` → **1** *(pas 0 — resolveMeleeAction exclu)*
-- `grep -c "finalSeverity = woundResult" server/src/socket/index.js` → **1**
-
-#### getMrTable / getModifier / calcDroneRD — hors service
-
-Ces fonctions calculent `degautsBruts` dans les callers. `resolveTargetHit` ne les appelle jamais. Pas de problème d'import.
-
-#### Findings run à vide — Session 101
-
-**[F1] Site 4 applyStun — CONFIRMÉ** (L.3978-3982)
-`applyStun` est bien appelé dans la branche 8b de `resolveDroneAssaultAction`. Pattern identique aux autres sites.
-
-**[F2] resolveDroneAssaultAction — 3 branches, pas 2**
-- 8a : drone cible → `resolveDroneIntegrityLoss` (hors scope — géré avant L.3906)
-- 8b : PNJ cible → auto-resolve **= Site 4** (notre périmètre)
-- 8c : PJ cible → `pendingDamageActions.set(...)` avec `cibleType: null`, résolu via `COMBAT_DAMAGE_CONFIRM` (Site 1). **Aucun site supplémentaire à prévoir.**
-
-**[F3] `cibleType: null` dans pending 8c** — quand Site 1 s'exécute après qu'un drone ait attaqué un PJ, `cibleType = null`. La guard `cibleType === 'drone'` dans `resolveTargetHit` ne se déclenche pas. ✅ Pas de risque.
-
-**[F4] cibleType guard — pas du dead code**
-Si un drone passe par erreur dans `resolveTargetHit` (cibleType='drone'), le service calculerait une blessure humanoid sur une entité qui n'en a pas (char_sheet absent). La guard protège contre ça. Nécessaire même si jamais déclenchée en pratique.
-
-**[F5] Label DICE_RESULT — incohérence existante**
-Site 1 → `diffLabel: 'ETQ:${etq} RD:${rd}'`, Site 4 → `'Armure:${etq} RD:${rd}'`. Caller-side uniquement — hors périmètre du service. À ne pas corriger dans ce sprint.
-
-**[F6] `io` requis dans `resolveTargetHit`** — nécessaire pour `woundService.applyWound` qui émet `WOUND_ADDED`. `resolveShockTest` est pur (pas d'io). ✅
-
-**[F7] `emitShockDiceResult` et `applyStun` restent dans les callers** — ils ont besoin de `userId/username/color` du tireur, qui est du contexte caller. Les mettre dans le service obligerait à passer ces champs en plus. Plan correct.
-
-**[F8] `locLabel` pas dans le return de `resolveTargetHit`** — les callers qui en ont besoin calculent `LOCATION_LABELS[localisation] ?? localisation` eux-mêmes. `LOCATION_LABELS` est déjà importé dans `index.js`. Pas à mettre dans le return.
-
-**[F9] Pas de dépendance circulaire** — `damageService` importe `woundService` et `statusService`. Ni l'un ni l'autre n'importe `damageService`. ✅
-
-#### Plan révisé — 7 étapes
-
-**Étape 0** — Prérequis : `LOC_TABLE` → `shared/armorConstants.js` + import dans `index.js`
-`node --check server/src/socket/index.js`
-
-**Étape 1** — Créer `server/src/lib/damageService.js` (base = bloc Site 1, le plus complet)
-`node --check server/src/lib/damageService.js`
-
-**Étape 2** — Patcher Site 1 (`COMBAT_DAMAGE_CONFIRM` L.2344–2437)
-`node --check server/src/socket/index.js`
-
-**Étape 3** — Patcher Site 5 (`resolveAssaultAction` L.4234–4301)
-`node --check server/src/socket/index.js`
-
-**Étape 4** — Patcher Site 2 (`COMBAT_MELEE_DEFENSE_CONFIRM` L.2660–2702)
-`node --check server/src/socket/index.js`
-
-**Étape 5** — Patcher Site 4 (`resolveDroneAssaultAction` L.3906–3948)
-`node --check server/src/socket/index.js`
-
-**Étape 6** — SR
-
----
-
-## Prochains reworks identifiés (non planifiés)
-
-Ces blocs sont candidats à un rework futur selon les mêmes principes :
-
-| ID | Bloc | Signal |
-|---|---|---|
-| REWORK-02 | Calcul dégâts distance | ✅ Spec complète Session 100 — voir section REWORK-02 ci-dessus |
-| REWORK-03 | Résolution blessure + wound insertion | ✅ Clos Session 97 — `woundService.applyWound` |
-| REWORK-04 | Système de combat complet | Migration vers State Machine (FSM) — sprint long terme. **Prérequis : REWORK-08** |
-| REWORK-06 | combatDeclarationStore | Staging state déclaration fragmenté en local React state (GM+Joueur). Auto-draw, default mains nues non implémentables sans débat archi. Voir REWORK-05.md §REWORK-06 |
-| REWORK-08 | Modularisation `socket/index.js` | 4 462 lignes — fichier dieu. Découper en `socketToken.js`, `socketVoxel.js`, `socketEntity.js`, `socketCombat.js`, `socketDice.js`. `initSocket()` devient coordinateur. **Prérequis de REWORK-04.** |
-| REWORK-09 | `SessionPage.jsx` → hooks WS dédiés | 1 509 lignes. Tous les listeners WS inline dans un `useEffect` unique. 30+ props passées à `CombatOverlay`. Cible : `useCombatSocket.js`, `useEntitySocket.js`, `useTokenSocket.js`. |
+- [x] `node --check client/src/lib/useTokenSocket.js` → 0 erreur
+- [x] `node --check client/src/lib/useEntitySocket.js` → 0 erreur
+- [x] `node --check client/src/lib/useCombatSocket.js` → 0 erreur
+- [x] `npm run build` → 0 erreur Vite
+- [x] SR sans erreur
+- [x] `grep -c "s\.on(" client/src/pages/SessionPage.jsx` → 18 (≤ 20)
+- [x] `grep -c "tokens={tokens}" client/src/pages/SessionPage.jsx` → 0 (dead prop retirée)
+- [x] `grep -c "announcementMarker" client/src/components/CombatOverlay.jsx` → 0 (dead param retiré du destructuring)
+- [x] Scénarios 1–8 validés
+- [x] JOURNAL4.md appendé

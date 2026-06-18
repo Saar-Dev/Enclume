@@ -5,10 +5,12 @@ import { useAuthStore } from '../stores/authStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useEntityStore } from '../stores/entityStore'
+import { useCombatStore } from '../stores/combatStore'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import LibraryPanel from './LibraryPanel.jsx'
+import { DeclareLogContent } from './CombatDeclareLog.jsx'
 
 const SIDEBAR_MIN = 220
 const SIDEBAR_MAX = 500
@@ -484,6 +486,7 @@ export default function Sidebar({
   const { messagesByCampaign, activeCampaignId, onlineUsers } = useSessionStore()
   const messages = messagesByCampaign[activeCampaignId] || []
   const { blueprints } = useEntityStore()
+  const { phase, currentTurn } = useCombatStore()
 
   const [activeTab, setActiveTab] = useState('chat')
   const [toolsOpen, setToolsOpen] = useState(false)
@@ -516,6 +519,7 @@ export default function Sidebar({
   // Animation dé — id du dernier message dé reçu, nettoyé après 800ms
   // Utilise useState (pas useRef) car doit déclencher un re-render pour l'animation CSS
   const [animatingDiceId, setAnimatingDiceId] = useState(null)
+  const [cdlOpen, setCdlOpen] = useState(true)
 
   // Popover breakdown — null ou { msgId, breakdown, rect }
   const [breakdownPopover, setBreakdownPopover] = useState(null)
@@ -935,6 +939,19 @@ export default function Sidebar({
         {/* ── Chat ── */}
         {activeTab === 'chat' && (
           <>
+            {(phase === 'ANNOUNCEMENT' || phase === 'RESOLUTION') && (
+              <div className="cdl-chat">
+                <div className="cdl-chat-header" onClick={() => setCdlOpen(v => !v)}>
+                  <span>Déclarations · Tour {currentTurn}</span>
+                  <span>{cdlOpen ? '▼' : '▶'}</span>
+                </div>
+                {cdlOpen && (
+                  <div className="cdl-chat-body">
+                    <DeclareLogContent />
+                  </div>
+                )}
+              </div>
+            )}
             <div style={styles.messages}>
               {messages.length === 0 && (
                 <p style={styles.emptyMsg}>{t('chat.placeholder')}</p>

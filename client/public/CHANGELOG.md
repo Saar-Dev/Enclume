@@ -1,3 +1,24 @@
+## v107 — 2026-06-18 — REWORK-10 : log déclarations intégré dans le chat
+
+### Client — UI Combat
+- [feature] Log déclarations combat (REWORK-10) déplacé depuis l'overlay vers le panel chat Sidebar
+- [feature] Visible en haut du tab chat pour GM + joueurs pendant ANNOUNCEMENT et RESOLUTION
+- [feature] Collapsible sur une ligne (header cliquable, état toggle persistant)
+- [refactor] Suppression du render CombatDeclareLogSidebar dans CombatOverlay
+
+---
+
+## v106 — 2026-06-18 — REWORK-09 : SessionPage hooks WS dédiés
+
+### Client — Architecture
+- [refactor] `SessionPage.jsx` 1509 → 1296 lignes — 47 listeners WS extraits vers 3 hooks dédiés
+- [refactor] `useTokenSocket.js` — 5 listeners TOKEN_* (moved, created, deleted, updated, status)
+- [refactor] `useEntitySocket.js` — 4 listeners MAP_SWITCH + ENTITY_ACTION_PENDING/RESULT + ENTITY_MOVE_RESULT
+- [refactor] `useCombatSocket.js` — 18 listeners COMBAT_* + 12 états résultat combat
+- [fix] Dead props `tokens` et `announcementMarker` supprimées de CombatOverlay
+
+---
+
 ## v105 — 2026-06-17 — REWORK-02 : damageService (résolution hit centralisée)
 
 ### Serveur — Architecture

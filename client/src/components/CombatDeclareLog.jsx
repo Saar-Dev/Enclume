@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useDraggable } from '../lib/useDraggable.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import { ACTION_LABELS, PURE_MOVE_TYPES } from './combatSections.js'
@@ -78,38 +77,19 @@ export function DeclareLogContent({ maxHeight }) {
   )
 }
 
-export default function CombatDeclareLog() {
+export default function CombatDeclareLogSidebar() {
   const { currentTurn } = useCombatStore()
   const [isOpen, setIsOpen] = useState(true)
 
-  const { pos, onHeaderMouseDown } = useDraggable(
-    'combat-declare-log-pos',
-    { top: 80, left: Math.max(0, window.innerWidth - 290) },
-    270
-  )
-
   return (
-    <div
-      className="combat-float-win"
-      style={{ position: 'fixed', left: pos.left, top: pos.top, width: 270 }}
-    >
-      <div
-        className="combat-float-header"
-        onMouseDown={onHeaderMouseDown}
-        style={{ justifyContent: 'space-between' }}
-      >
-        <span style={{ fontSize: 9, letterSpacing: '0.12em', fontWeight: 700, color: '#6080a0', textTransform: 'uppercase' }}>
-          Déclarations · Tour {currentTurn}
-        </span>
-        <button
-          onClick={() => setIsOpen(v => !v)}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5b5b7a', fontSize: 10, padding: 0, lineHeight: 1 }}
-        >
-          {isOpen ? '▲' : '▼'}
-        </button>
+    <div className="cdl-window">
+      <div className="cdl-titlebar" onClick={() => setIsOpen(v => !v)}>
+        <span className="cdl-title">Déclarations · Tour {currentTurn}</span>
+        <span className="cdl-toggle">{isOpen ? '▼' : '▶'}</span>
       </div>
-
-      {isOpen && <DeclareLogContent />}
+      <div className={`cdl-body${isOpen ? '' : ' cdl-body--hidden'}`}>
+        <DeclareLogContent />
+      </div>
     </div>
   )
 }

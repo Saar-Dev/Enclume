@@ -1,213 +1,178 @@
-# JOURNALTEMP — Session 93-2 — Correction CaC
-> 2026-06-14
+# JOURNALTEMP — Session 101 — Mémo REWORK-09
+> 2026-06-17
 > Scratch pad de session — appender progressivement. Consolider vers JOURNAL4.md en fin de session.
 
 ---
 
-## Contexte
+## Mission de la prochaine session
 
-Sprint CaC livré sur 3 étapes (Sessions 92tier / 92-4) :
-- **Étape 1** (B1/B2/B8/B9/LOC) — validé fonctionnellement ✅
-- **Étape 2** (B3/B6/B7 drone assault) — validé fonctionnellement ✅
-- **Étape 3** (CombatCacModifiersWindow + 6 mods SITUATION + terrain instable + deux armes auto) — SR + Vite 200 ✅ — **validation fonctionnelle requise**
-- **Session 93** (fix split-brain slot detection) — SR ✅ — **validation fonctionnelle requise**
-
-**Session 93-2 — Correction CaC** : bug "aucun jet, aucun dégât" diagnostiqué + plan FIX-A établi.
+**Planifier REWORK-09** : `SessionPage.jsx` → hooks WS dédiés.
+Ordre confirmé : REWORK-09 → REWORK-08 (REWORK-08 prérequis REWORK-04).
 
 ---
 
-## Fichiers lus cette session
+## Ce qui a été fait dans cette session (101)
 
-- `CLAUDE.md` ✅
-- `MANUELSYSCOMBAT.md` ✅
-- `docs/EN_COURS.md` ✅
-- `docs/JOURNAL4.md` (Session 93) ✅
-- `docs/REWORK_CONTACT.md` (complet, audit inclus) ✅
+- **REWORK-02** ✅ achevé en parallèle (damageService — par Saar, détails dans JOURNAL4.md Session 101)
+- **ARCHI_REWORK.md** réorganisé : specs complètes → `ARCHI_REWORK_DONE.md`, fichier principal réduit à ~90 lignes (résumés + table prochains reworks)
+- **EN_COURS.md** : DR4 + DR6 marqués ✅ Clos Session 101
+- **BUGIDENTIFIE.md** : cluster I mis à jour (DR4+DR6 retirés), titres §DR4/§DR6 → ✅ CLOS Session 101
+- **JOURNAL4.md** : NON appendé dans cette session (pas de code produit — session docs uniquement)
 
 ---
 
-## Findings — Rapport session précédente (analyse post-Session 93)
+## Protocole début de session suivante
 
-### Ce qui est sain ✅
-- Corrections 1+2+3 de Session 93 en place et cohérentes
-- `advanceSlot` — n'était PAS cassé (slots re-queryé avec `has_announced=true, status:'active'` aux 3 call sites lignes 2367/2838/2846)
-- `COMBAT_ACTION_CONFIRM` slots — propre depuis l'origine (lignes 2286–2289)
-- Guard DECLARE melee sans cible — ligne 2155–2160, avant tout write DB ✅
+Appliquer le protocole complet (résumé ≠ lecture) :
+1. `docs/JOURNAL4.md` — dernière session uniquement
+2. `docs/ASBUILT.md`
+3. `docs/EN_COURS.md`
+4. Puis lire les fichiers cibles REWORK-09 (ci-dessous)
 
-### FIX-A — CombatCacModifiersWindow : aucun listener COMBAT_DECLARE_ERROR
+---
 
-**Scénario :** RESOLUTION, GM clique "Lancer les dés" pour PNJ melee → `resolveMeleeAction` échoue (distance check) → émet `COMBAT_DECLARE_ERROR` → **silence**.
+## Fichiers à lire pour REWORK-09
 
-- `CombatGmDeclareWindow` a un listener (lignes 133–141) — actif en ANNOUNCEMENT seulement
-- `CombatActionWindow` a un listener (lignes 222–230) — actif PJ, inactif pour GM mode melee
-- `CombatCacModifiersWindow` — **aucun listener** → `isRolling` reste `true`, bouton "Lancer les dés" bloqué indéfiniment
+Dans cet ordre :
+1. `client/src/pages/SessionPage.jsx` — identifier tous les listeners WS (`s.on(...)`) et toutes les props passées à `CombatOverlay`
+2. `client/src/components/CombatOverlay.jsx` — inventaire exhaustif des props reçues
 
-**Fix requis :** ajouter `useEffect` listener `COMBAT_DECLARE_ERROR` dans `CombatCacModifiersWindow` → reset `isRolling = false` + affichage erreur.
+Greps utiles avant lecture :
+```
+grep -n "s\.on(" client/src/pages/SessionPage.jsx
+grep -n "s\.off(" client/src/pages/SessionPage.jsx
+grep -n "CombatOverlay" client/src/pages/SessionPage.jsx
+```
 
-### Résiduel documenté (dette future, pas cette session)
-- `COMBAT_STATE_SYNC` reconnexion en RESOLUTION : envoie `activeSlotIdx` (index entier) pas `activeTokenId` absolu → split-brain persiste pour les reconnexions. Sprint dédié futur.
+---
 
-### Erreurs à éviter (E1-E4)
-- **E1** : guard ligne 2155 doit rester AVANT le `db('combat_actions').insert()`
-- **E2** : `mapActions.melee = []` → guard inactif → token annoncé sans action melee (acceptable V1 mais edge case)
-- **E3** : `announcedRoster[0]` undefined si tous non-annoncés → `activeTokenId = null` → pas de crash mais UI morte
-- **E4** : `fullRoster` sans filtre `status='active'` → tokens 'fled' futurs dans timeline (mine future)
+## Ce qu'on sait déjà sur REWORK-09 (depuis ARCHI_REWORK.md)
 
-### Fichiers lus ✅
-- `docs/JREWORKCAC.md` — Phase 1 analyse + verdict, Phase 2 non encore faite
-- `client/src/components/CombatCacModifiersWindow.jsx` — 258 lignes, aucun listener COMBAT_DECLARE_ERROR confirmé
-- `CombatActionWindow.jsx` lignes 222–231 — pattern confirmé :
-  ```js
-  useEffect(() => {
-    if (!socket) return
-    const handler = ({ message }) => { setDeclareError(message); setTimeout(() => setDeclareError(null), 4000) }
-    socket.on(WS.COMBAT_DECLARE_ERROR, handler)
-    return () => socket.off(WS.COMBAT_DECLARE_ERROR, handler)
-  }, [socket])
-  ```
-  → Différence avec CombatCacModifiersWindow : il faut AUSSI `setIsRolling(false)` dans le handler
+**Problème** : 1 509 lignes. Tous les listeners WS inline dans un `useEffect` unique. 30+ props passées à `CombatOverlay`.
 
-### Décision architecturale FIX-A — lu COMBAT_ACTION_CONFIRM lignes 2270-2368 + CombatOverlay
+**Cible** : extraire en hooks dédiés :
+- `useCombatSocket.js` — listeners combat (COMBAT_*)
+- `useEntitySocket.js` — listeners entités/tokens
+- `useTokenSocket.js` — listeners tokens spécifiques
 
-**Comportement serveur confirmé (légalement correct) :**
-- Actions melee marquées `resolved` AVANT `resolveMeleeAction` (ligne 2356-2358)
-- Si distance échoue → `return false` → `needsDefenseWait = false` → `advanceSlot` appelé (ligne 2366-2368)
-- Slot avance systématiquement → comportement LdB correct (action perdue)
+**Format attendu de la spec** : suivre le template ARCHI_REWORK.md (Problème + État actuel + Décision + Interface cible + Périmètre + Plan + Validation + DoD).
 
-**FIX-A : écouter `COMBAT_DECLARE_ERROR` dans `CombatOverlay` (pas `CombatCacModifiersWindow`)**
-- CombatOverlay toujours monté → survit au changement de slot
-- `styles.gmError` existant réutilisé (bannière top, fermeture manuelle + timeout 6s)
-- `CombatCacModifiersWindow` : zéro changement — `isRolling` reset naturellement via reset effect ou unmount
-- `CombatActionWindow` garde son propre listener (ANNOUNCEMENT) — coexistence propre
+---
 
-**Plan : 3 touches dans CombatOverlay.jsx seulement (T1 state, T2 useEffect, T3 bannière JSX)**
+## ANALYSE — SessionPage.jsx (Session 102, lu 2026-06-17)
 
-### État des fixes
+### 1. Inventaire listeners WS (useEffect L.402–741, deps: [campaignId, reconnectTrigger, loadSession])
 
-| ID | Statut | Description |
+**Total : 47 listeners + 1 s.io.on('reconnect')**
+Cleanup : `return () => s.disconnect()` — pas de `s.off()` granulaires.
+
+| Groupe | Listeners (count) | Lignes |
 |---|---|---|
-| **FIX-A** | ⏳ CODÉ — validation fonctionnelle requise | `CombatOverlay.jsx` : state + useEffect + bannière JSX. Test impossible pour l'instant — dette validée. |
-| FIX-B | ⬇️ Hors scope | Log COMBAT_ACTION_CONFIRM ligne 2278 EXISTE DÉJÀ — inutile |
-| **FIX-D** | ⏸ Bloqué PLAN 14 | Lifecycle `is_surprised` incorrect. Architecture statuts à trancher (JSONB vs token_statuses+expires_at_turn). Voir ROADMAP.md PLAN 14. |
-| FIX-E | 🔲 À confirmer | Carence armure défenseur — lire BLESSURES.md d'abord |
-| FIX-C | 🔲 Basse | 403 drone endpoint |
+| SESSION | SESSION_JOINED, SESSION_USER_JOINED, SESSION_USER_LEFT, CAMPAIGN_SETTINGS_UPDATED | 407–430 |
+| TOKEN | TOKEN_MOVED, TOKEN_CREATED, TOKEN_DELETED, TOKEN_UPDATED, TOKEN_STATUS_UPDATED | 431–447 |
+| CHAT/DICE | CHAT_MESSAGE, CHARACTER_UPDATED, DICE_RESULT, MACRO_ROLL_RESULT | 448–563 |
+| WOUND/INVENTORY | WOUND_ADDED, WOUND_UPDATED, WOUND_REMOVED, INVENTORY_ADDED, INVENTORY_UPDATED, INVENTORY_REMOVED | 496–516 |
+| COMBAT simple | COMBAT_RELOAD_RESULT, COMBAT_MELEE_DEFENSE_PROMPT, COMBAT_MELEE_RESULT, COMBAT_DAMAGE_PROMPT, COMBAT_DAMAGE_RESULT, COMBAT_STUN_PROMPT, COMBAT_ATTACK_PLAYER_RESULT, COMBAT_ATTACK_RESULT | 517–546 |
+| ERROR + MAP | 'error', MAP_SWITCH (api call inline) | 566–583 |
+| ENTITY | ENTITY_ACTION_PENDING, ENTITY_ACTION_RESULT, ENTITY_MOVE_RESULT | 588–636 |
+| COMBAT complexe | COMBAT_STARTED, COMBAT_ENDED, COMBAT_STATE_SYNC, COMBAT_PHASE_CHANGED, COMBAT_ROSTER_UPDATED, COMBAT_SURPRISE_ROLL, COMBAT_ANNOUNCE_PREVIEW, COMBAT_ACTION_DECLARED, COMBAT_SLOT_ADVANCED, COMBAT_TURN_SKIPPED | 639–723 |
+| RECONNECT | s.io.on('reconnect') → setReconnectTrigger | 730–732 |
+| DOC | DOC_CREATED, DOC_UPDATED, DOC_DELETED | 735–737 |
 
-### Prochaine action (mise à jour Session 93-3)
+### 2. Props CombatOverlay — inventaire complet (L.1300–1344)
 
-- FIX-A : confirmé présent dans le code (3 touches CombatOverlay.jsx L.25/38-47/252-258). **Validation fonctionnelle requise.** Scénario : CaC PNJ à >3m → "Lancer les dés" → bannière rouge "hors portée: X.Xm max:3m".
-- FIX-D : **bloqué Sprint 14-3** — nécessite Sprint 14-0 (migration 79 `token_statuses.expires_at_turn` + refactor `is_surprised`/`is_stunned`). Non codable maintenant.
-- **FIX-E** : prochaine action. Lire `docs/SYSTEME/BLESSURES.md` + section défenseur `resolveMeleeAction` (lignes 3467-3623). Ajouter `calcCarenceArmure` au `chanceDefense` PNJ.
+**39 props** (pas 30+ comme estimé — 39 effectives).
 
----
-
-## Session 93-3 — 2026-06-15 — Audit mémoire + Correction CaC (FIX-E)
-
-### Fichiers lus cette session
-
-- `CLAUDE.md` ✅
-- `MANUELSYSCOMBAT.md` ✅
-- `docs/EN_COURS.md` ✅
-- `docs/ASBUILT.md` ✅
-- `docs/JOURNAL4.md` (Session 93) ✅
-- `docs/JOURNALTEMP.md` ✅
-- `docs/JREWORKCAC.md` ✅ (complet)
-- `docs/ROADMAP.md` (§PLAN 14) ✅
-- `client/src/components/CombatOverlay.jsx` (L.1-80 + L.220-270) ✅
-
-### Confirmations
-
-- **FIX-A** : présent et complet dans `CombatOverlay.jsx`. Les 3 touches sont en place. Validation fonctionnelle requise.
-- **FIX-D** : blocker architectural confirmé. ROADMAP PLAN 14 Sprint 14-3 = FIX-D, prérequis Sprint 14-0. Non codable sans migration 79.
-
-### Nettoyage mémoire
-
-- Supprimé `project_state.md` (Session 85, périmé)
-- Supprimé `TAMPON.md` (Session 65, périmé)
-- Supprimé `feedback_journal.md` (référençait JOURNAL2.md, mort)
-- Mis à jour `user_profile.md` (45+ → 93+ sessions)
-- Mis à jour `MEMORY.md` (index cohérent)
-
----
-
-## Session 93-4 — 2026-06-15 — Correction CaC (drone déclaration bug)
-
-### Fichiers lus cette session
-
-- `CLAUDE.md` ✅
-- `docs/EN_COURS.md` ✅
-- `docs/JOURNALTEMP.md` ✅
-- `client/src/stores/characterStore.js` ✅
-- `client/src/stores/tokenStore.js` ✅
-- `client/src/stores/combatStore.js` ✅
-- `client/src/components/CombatGmDeclareWindow.jsx` ✅ (complet)
-- `client/src/components/CombatRosterWindow.jsx` ✅
-- `client/src/components/CombatOverlay.jsx` ✅ (début)
-- `client/src/pages/SessionPage.jsx` ✅ (sections pertinentes)
-- `server/src/socket/index.js` ✅ (COMBAT_START + COMBAT_ACTION_DECLARE)
-- `server/src/routes/battlemaps.js` ✅ (token query)
-- `server/src/routes/characters.js` ✅
-- `server/src/routes/tokens.js` ✅
-
-### Test CaC Étape 3 — résultats
-
-1. Humanoid CaC avec mods situation ✅ — validé fonctionnellement
-2. Portée hors 3m — pathfinding transparent (pas de bannière rouge) — comportement acceptable ✅
-3. Drone CaC — **KO** — aucune fenêtre de déclaration
-
-### Bug Drone-Déclaration — Diagnostic
-
-**Symptôme :** En phase ANNONCE, avec seulement des drones GM dans le roster → `CombatGmDeclareWindow` retourne `null` immédiatement (line 192 : `if (allGmManaged.length === 0) return null`).
-
-**Chaîne :** `allGmManaged = roster.filter(r => r.status === 'active').filter(isGmManaged)` → 0 entrées.
-
-**Cause racine confirmée :** `isDroneGmManaged` (ligne 171-176) retourne `false` à cause de `!char.user_id`.
-
-```js
-// AVANT (bugué)
-const isDroneGmManaged = (entry) => {
-  const token = tokens.find(t => t.id === entry.token_id)
-  if (!token?.character_id) return false
-  const char = characters.find(c => c.id === token.character_id)
-  return char?.type === 'drone' && !char.user_id  // ← FAIL si user_id non-null
-}
+```
+socket, battlemap, isGm, user, characters, actionTimerSec, tokens,
+pendingSurpriseRoll, onSurpriseRolled,
+onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove,
+combatTargetMode, onEnterTargetMode, onValidateTarget,
+announcementMarker, pjPreview,
+damagePayload, damageResults, onDamageConfirmed,
+attackResult, onAttackConfirmed,
+gmAttackResult, onGmAttackResultClose,
+pnjAttackResult, onPnjAttackResultClose,
+reloadResult, onReloadResultClose,
+meleeDefensePrompt, onMeleeDefenseConfirm ← ALERT : inline socket.emit (L.1332)
+meleeResult, onMeleeResultClose,
+stunPayload, onStunConfirmed,
+gmSocketError, onGmSocketErrorClose,
+sidebarWidth
 ```
 
-`CombatRosterWindow.getCharType` (même chaîne token→char, mais vérifie seulement `char.type`) affiche badge 'DR' → confirme que token ET char sont bien présents dans leurs stores respectifs.
+**⚠ [F-R9-1] onMeleeDefenseConfirm contient un socket.emit inline (L.1332–1336)** — pas un useCallback, recréé chaque render, mais non bloquant.
 
-La différence : `&& !char.user_id`. Si le GM a assigné le drone à son propre compte via Sidebar (onglet Paramètres → dropdown owner), `char.user_id` est non-null → `!char.user_id = false` → `isDroneGmManaged = false`.
+### 3. Dépendances des listeners — pièges closure
 
-**Correction appliquée :** `CombatGmDeclareWindow.jsx` ligne 175 — suppression de `&& !char.user_id`.
+**Non-stables capturées dans les closures :**
+- `isGm` — dans COMBAT_ATTACK_RESULT (L.542) → routing setPnjAttackResult/setGmAttackResult selon rôle
+- `user?.id` — dans MAP_SWITCH (L.572) → filtre `userIds.includes(user?.id)`
+- `t` — dans 5 listeners (SESSION_USER_JOINED/LEFT, ENTITY_*, COMBAT_TURN_SKIPPED)
+
+**Note :** `isGm` n'est PAS dans les deps du useEffect → valeur figée à la création du socket. Comportement identique dans le rework (pas de régression créée, isGm stable en session).
+
+**Stables (store Zustand + useState setters) :** `setCombatState`, `resetCombat`, `setPhase`, `markTokenAnnounced`, `updateRoster`, `advanceSlot`, `setActions`, `addAnnouncedAction`, `resetAnnouncedActions`, `addMessage`, `updateToken`, `addToken`, `removeToken`, `upsertCharacter`, `updateCharacter`, `setWoundVersions`, `setBattlemap`, `setTokens`, `setEntities`, `clearPendingEntityId`, `addDocument`, `updateDocument`, `removeDocument`.
+
+### 4. Pattern d'intégration retenu — `listen(s)` impératif
+
+Les hooks exposent une fonction `listen(s)` appelée **de manière impérative** dans le `useEffect` de SessionPage, sur l'instance `s` avant `setSocket(s)`.
 
 ```js
-// APRÈS (corrigé)
-return char?.type === 'drone'
+// SessionPage useEffect (après rework)
+useEffect(() => {
+  const s = io(...)
+  s.emit(WS.SESSION_JOIN, { campaignId })
+
+  // Hooks dédiés — impératifs (pas dans les deps)
+  combatSocket.listen(s)
+  entitySocket.listen(s)
+  tokenSocket.listen(s)
+
+  // ~19 listeners simples restants inline (session/chat/dice/wound/doc/error/reconnect)
+
+  setSocket(s)
+  return () => s.disconnect()   // s.disconnect() nettoie TOUS les listeners — s.off() non nécessaire
+}, [campaignId, reconnectTrigger, loadSession])
 ```
 
-**Justification :** Le serveur (`COMBAT_ACTION_DECLARE` ligne 1899-1901) autorise le GM à déclarer pour TOUT drone (quel que soit le `user_id`). La restriction client-side était inutilement stricte.
+Pourquoi `listen` pas dans les deps ? → `listen` est une fonction ordinaire (pas useCallback) recréée à chaque render. Elle capture les setters stables. Pas besoin de stabilité — jamais utilisée comme dep.
 
-**Effet :** Les drones joueur apparaîtraient aussi dans la fenêtre GM si mélangés — acceptable car GM/joueur sont des sessions distinctes, pas de conflit à l'écran. Sprint 3 (Télépilotage) tranchera la UX définitive.
+### 5. Découpage retenu des hooks
 
-### État fixes session 93-4
+| Hook | Listeners pris en charge | State propre | Callbacks injectés |
+|---|---|---|---|
+| `useCombatSocket` | 18 combat (COMBAT_*) | reloadResult, damagePayload/Results, attackResult, gmAttackResult, pnjAttackResult, meleeDefensePrompt, meleeResult, stunPayload, pendingSurpriseRoll, announcementMarker, pjPreview | `isGm`, `onModeChange`, `onCombatReset`, `onPhaseReset` |
+| `useEntitySocket` | 3 entités + MAP_SWITCH | — (tout va au store ou SessionPage) | `user`, `t`, `setBattlemap`, `setTokens`, `setEntities`, `clearPendingEntityId`, `addMessage`, `setRadialMenu`, `setMoveTarget`, `addMessage` |
+| `useTokenSocket` | 5 token | — (tout au tokenStore) | — |
 
-| ID | Statut |
-|---|---|
-| **Bug Drone-Déclaration** | ✅ VALIDÉ FONCTIONNELLEMENT — SR + fenêtre ouvre |
-| **Sprint CaC Étape 3 — humanoid** | ✅ VALIDÉ FONCTIONNELLEMENT |
-| **B6** | 🔲 À coder (prochain) |
-| **B7** | ✅ Déjà implémenté (resolveDroneIntegrityLoss appelé dans branch 8a) |
+**Listeners restant dans SessionPage : ~19** (SESSION/CHAT/DICE/WOUND/INVENTORY/DOC/ERROR/RECONNECT — tous des one-liners simples).
 
-### Nouveaux bugs identifiés lors du test (→ BUGIDENTIFIE.md)
+### 6. Analyse CombatOverlay.jsx (658 lignes, lu Session 102)
 
-- **UI1** — Design fenêtre déclaration : tout blanc / dégueulasse
-- **COM1** — Recharger : action ne fait rien (humanoïde)
-- **COM2** — Vérification statut arme non copiée pour PNJ GM
-- **COM3** — Jet de défense CaC déclenché même si assaillant échoué
-- **COM4** — CaC exige "Arme au clair" alors que mains nues possibles
-- **COM5** — Fenêtre Annonce GM, CaC : clic mode combat sélectionne aussi la cible
-- **COM6** — Arme CaC non sélectionnée par défaut (GM et joueur)
-- **COM7** — Multi-attaque CaC : duplicata / "Déclarer" grisé
-- **COM8** — Fenêtre annonce non masquée lors de sélection cible
-- **DR1** — Drone : arme non sélectionnée par défaut
-- **DR2** — Drone : aucune action de déplacement disponible
-- **DR3** — Drone CaC : fenêtre modificateurs "Distance" à tort (= DC1+DC3)
+**Deux props mortes découvertes :**
 
+**⚠ [F-R9-2] `tokens` prop — morte côté CombatOverlay**
+- SessionPage L.1307 passe `tokens={tokens}`
+- CombatOverlay L.20 : `tokens` n'est PAS dans le destructuring des props
+- CombatOverlay L.22 : `const tokens = useTokenStore(s => s.tokens)` — lit directement depuis le store
+→ La prop `tokens={tokens}` dans SessionPage est du dead code. À supprimer dans REWORK-09.
+
+**⚠ [F-R9-3] `announcementMarker` — destructuré mais jamais utilisé dans CombatOverlay**
+- Destructuré L.20, mais absent de tout JSX et appel enfant dans le fichier
+- Canvas3D reçoit `announcementMarker` depuis SessionPage (correct, non touché)
+→ `announcementMarker` appartient à `useCombatSocket` state. Ne pas le passer à CombatOverlay.
+
+**CombatOverlay a ses propres listeners WS (légitimes, ne pas extraire) :**
+- L.35 : `socket.on(WS.COMBAT_STUN_EXPIRED, handler)` / `socket.off` → état local `stunDialog`
+- L.46 : `socket.on(WS.COMBAT_DECLARE_ERROR, handler)` / `socket.off` → état local `combatActionError`
+
+**Découpage final des props CombatOverlay après REWORK-09 :**
+- Props supprimées : `tokens` (morte), `announcementMarker` (morte) → 39 → 37 props
+- Aucune autre modification CombatOverlay (hors scope)
+
+**Périmètre final REWORK-09 :**
+- Nouveaux : `client/src/lib/useCombatSocket.js`, `useEntitySocket.js`, `useTokenSocket.js` (convention : hooks dans `lib/`, pas de dossier `hooks/`)
+- Modifiés : `client/src/pages/SessionPage.jsx` (listeners extraits + 2 dead props CombatOverlay nettoyées)
+- Modifiés : `client/src/components/CombatOverlay.jsx` — 1 ligne : retirer `announcementMarker` du destructuring props L.20
+- NON touchés : tous les stores, serveur

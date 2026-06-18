@@ -1496,3 +1496,261 @@ export async function resolveTargetHit(io, db, campaignId, {
 
 - **Testé :** SR ✅ — assault PNJ auto (Site 5) sans erreur ✅ — melee flows sans erreur ✅
 - **Non testé :** Site 1 (COMBAT_DAMAGE_CONFIRM PJ interactif) — Site 2 (MELEE_DEFENSE_CONFIRM PNJ qui touche) — Site 4 (drone assault PNJ cible)
+
+## Session 103 — REWORK-09 : SessionPage hooks WS dédiés — 2026-06-18
+
+### Objectif
+
+Extraire 47 listeners WS du `useEffect` monolithique de `SessionPage.jsx` (1509 lignes) vers 3 hooks dédiés dans `client/src/lib/`.
+
+### Problème résolu en cours de session
+
+**TDZ (Temporal Dead Zone)** : les appels `useEntitySocket({ setRadialMenu, setMoveTarget })` et `useCombatSocket(...)` avaient été placés avant les déclarations `useState` correspondantes. Les arguments passés directement (pas en closure) sont évalués immédiatement → ReferenceError au chargement → écran noir. Fix : déplacement des 4 déclarations de hooks juste avant le `useEffect` socket (L.379-385), après tous les `useState`.
+
+### Fichiers créés
+
+| Fichier | Contenu |
+|---|---|
+| `client/src/lib/useTokenSocket.js` | 5 listeners TOKEN_* (MOVED, CREATED, DELETED, UPDATED, STATUS_UPDATED) |
+| `client/src/lib/useEntitySocket.js` | 4 listeners : MAP_SWITCH, ENTITY_ACTION_PENDING/RESULT, ENTITY_MOVE_RESULT |
+| `client/src/lib/useCombatSocket.js` | 18 listeners COMBAT_* + 12 états résultat (reloadResult, damagePayload/Results, attackResult, gmAttackResult, pnjAttackResult, meleeDefensePrompt, meleeResult, stunPayload, pendingSurpriseRoll, announcementMarker, pjPreview) |
+
+### Fichiers modifiés
+
+| Fichier | Modification |
+|---|---|
+| `client/src/pages/SessionPage.jsx` | 1509 → 1296 lignes. Imports + hooks WS. 12 useState combat supprimés. ~198 lignes de listeners supprimées. `tokens={tokens}` (dead prop) supprimé. `combatSocket.*` branché dans props CombatOverlay + Canvas3D. `handleSurpriseRolled` réécriture deps F-R9-7. `useCombatStore` destructuring réduit à `phase: combatPhase`. `clearPendingEntityId` retiré de useSessionStore destructuring. |
+| `client/src/components/CombatOverlay.jsx` | L.20 : `announcementMarker` retiré du destructuring des props (dead param confirmé) |
+
+### DoD
+
+- [x] `node --check useTokenSocket.js` → 0 erreur
+- [x] `node --check useEntitySocket.js` → 0 erreur
+- [x] `node --check useCombatSocket.js` → 0 erreur
+- [x] `npm run build` → 0 erreur Vite
+- [x] SR sans erreur
+- [x] `grep -c "s\.on(" SessionPage.jsx` → 18 (≤ 20)
+- [x] `grep -c "tokens={tokens}" SessionPage.jsx` → 0
+- [x] `grep -c "announcementMarker" CombatOverlay.jsx` → 0
+- [x] Scénarios 1–8 validés (token drag, token create, entity action, combat complet, melee défense, fin de combat)
+
+### Clôture ✅ CLOS COMPLET
+
+- **Testé :** drag token ✅ — entity action request ✅ — combat start/announcement/resolution ✅ — melee attaque/défense ✅ — combat end ✅ — session sans combat ✅
+- **Non testé :** —
+
+## Session 105 — Validations fonctionnelles groupées — 2026-06-18
+
+### Objectif
+
+Validation en jeu réel de tous les items en attente accumulés depuis les sessions 74–101.
+
+### Validations confirmées
+
+| Item | Statut |
+|---|---|
+| REWORK-03 T2 — CaC PNJ auto (blessure + shock) | ✅ |
+| REWORK-03 T3 — Promotion cascade Légère→Grave | ✅ |
+| REWORK-03 T4 — Ligne pleine AppError | ✅ |
+| REWORK-03 T5 — REST GM manuel hors combat | ✅ |
+| REWORK-02 Site 1 — COMBAT_DAMAGE_CONFIRM PJ interactif | ✅ |
+| REWORK-02 Site 2 — MELEE_DEFENSE_CONFIRM PNJ hit | ✅ |
+| REWORK-02 Site 4 — drone assault PNJ cible | ✅ |
+| DMG1+DMG2 — Labels DICE_RESULT dégâts drone | ✅ |
+| Sprint Drones 2c — cycle complet drone joueur | ✅ |
+| Sprint CaC Étape 3 — CombatCacModifiersWindow + mods | ✅ |
+| Fix split-brain slot detection | ✅ |
+| Sprint CaC 4b — attaque multiple melee | ✅ |
+
+### Régression confirmée
+
+**DR2** — déplacement drone absent dans `CombatGmDeclareWindow` — déjà enregistré comme dette basse, sprint futur.
+
+### Clôture ✅ CLOS COMPLET
+
+- **Testé :** 12 scénarios de validation fonctionnelle ✅
+- **Non testé :** —
+
+---
+
+## Session 105b — REWORK-08 : planification complète — 2026-06-18
+
+### Objectif
+
+Planifier REWORK-08 (modularisation `socket/index.js`, 4 266 lignes) avant de coder. Session analytique pure — zéro code produit.
+
+### Travail effectué
+
+**Audit `socket/index.js` :**
+- Cartographie complète des 14 blocs (lignes exactes, handlers, helpers, resolve*)
+- 6 Maps singletons inventoriées et affectées aux modules futurs
+- 5 call sites `getMrTable` confirmés par grep (1 socketEntity + 4 socketCombat)
+- 8 usages des constantes `PORTEE_MOD_COMP` etc. confirmés : 100% dans socketCombat, 0 dans socketDice
+
+**Décisions architecturales :**
+- Pattern `registerXxxHandlers(io, socket, context)` → validé par docs officielles Socket.IO v4
+- Handlers enregistrés dans SESSION_JOIN (après contexte établi) — changement comportemental mineur, sémantiquement correct
+- Singleton-promise pattern pour `getMrTable` (cache la promesse, pas le résultat) — fix race condition
+- Constantes de modificateurs → socketCombat.js (correction d'une erreur initiale qui les plaçait dans socketDice)
+- R8-1 et R8-5 (import circulaire) : supprimés — problème n'existait pas
+
+**Spec rédigé dans `ARCHI_REWORK.md` §REWORK-08 :**
+- 7 étapes ordonnées avec lignes source, vérifications, scénarios
+- Interface cible complète (5 signatures + implémentation `mrTable.js` 18 lignes)
+- 4 pièges documentés [R8-2 à R8-4, R8-6]
+- Bloc "Agent futur" avec protocole d'exécution
+
+**Bug INI2 ajouté à `BUGIDENTIFIE.md` :** initiative non recalculée après blessure en combat — cluster H, post-REWORK-08.
+
+### Clôture ✅ CLOS COMPLET (planning)
+
+- **Testé :** spec relu + analyse critique + validation via docs officielles Socket.IO
+- **Non testé :** —
+
+---
+
+## Session 106 — REWORK-08 : planification Étapes 2 & 3 — 2026-06-18
+
+### Objectif
+
+Auditer et enrichir les specs Étape 2 (socketToken.js) et Étape 3 (socketVoxel.js) du REWORK-08. Session analytique pure — zéro code produit.
+
+### Travail effectué
+
+**Étape 2 — socketToken.js (L.232–360, 4 handlers) :**
+- Lecture source ligne par ligne — imports spec corrigés (retrait `getUserColor`, `collisionAddToken`, `collisionRemoveToken` — 0 usage ; ajout `statusService` — L.351)
+- `socketUtils.js` vérifié : `checkTokenOwnership(db, token, userId, role)` → `role === 'gm'` (L.15) → substitution `isGm ? 'gm' : 'player'` confirmée
+- Substitution table complète : `socket.campaignId/user.id/data.userId/role` → context
+- Emplacement exact `context` dans SESSION_JOIN : après catch combat sync (L.220), avant console.log (L.222)
+- Scénario de test corrigé : "créer/supprimer token" retiré (REST, pas WS)
+- [R8-7] ajouté aux pièges documentés
+
+**Étape 3 — socketVoxel.js (L.364–511, 5 handlers) :**
+- Lecture source ligne par ligne — import fantôme `buildCollisionMap` retiré (0 usage dans handlers voxel — reste SESSION_JOIN)
+- MAP_SWITCH : 3 occurrences `socket.campaignId` dont 2 en requête DB — risque d'omission documenté
+- MAP_VIEWPORT : synchrone, `socket.to()` (pas `io.to()`) — intentionnel, GM non destinataire de son viewport
+- Commentaires "Guard Bug B" et "race condition" : à préserver impérativement lors de la migration
+- Asymétrie guard `battlemapId` (VOXEL_ADD/UPDATE ont le guard, VOXEL_REMOVE non) : documentée, à migrer tel quel
+- [R8-8] à [R8-11] ajoutés aux pièges documentés
+
+**Piège architectural [R8-11] :** double enregistrement si SESSION_JOIN émis deux fois sur même socket. Risque nul en pratique (client crée nouveau socket à chaque reconnect). Documenté avec mitigation.
+
+### Clôture ✅ CLOS COMPLET (planning)
+
+- **Testé :** lecture source vérifiée ligne par ligne pour les deux étapes, run à vide ×3, analyses critiques ×3
+- **Non testé :** —
+
+## Session 106b — REWORK-10 : CombatDeclareLogSidebar — 2026-06-18
+
+### Objectif
+
+Implémenter REWORK-10 Étapes 1–4 : transformer `CombatDeclareLog` (fenêtre flottante draggable, GM uniquement) en sidebar fixe gauche style MacOS Terminal, visible GM + joueurs.
+
+### Travail effectué
+
+**Étape 1 — `index.css` (Session 105, déjà clos) :** CSS `.cdl-*` ajouté + reset `combat-declare-log-body` fond blanc ([R10-6]).
+
+**Étape 2 — `CombatDeclareLog.jsx` :**
+- Suppression `import { useDraggable }`
+- Remplacement `CombatDeclareLog` (default export, chrome floatant) par `CombatDeclareLogSidebar` (chrome `.cdl-*`, windowshade collapse)
+- `EntryLines` + `DeclareLogContent` : inchangés
+- `npm run build` → 0 erreur
+
+**Étape 3 — `CombatActionWindow.jsx` :**
+- Suppression `import { DeclareLogContent }`
+- Suppression 3 occurrences `<DeclareLogContent maxHeight="170px" />` (états attente/déclaré/résolution non-actif)
+- `DeclareLogContent` : 0 occurrence restante (grep confirmé)
+- `npm run build` → 0 erreur
+
+**Étape 4 — `CombatOverlay.jsx` :**
+- Suppression ancien render L.363 (`isGm && ... && <CombatDeclareLog />`)
+- Ajout nouveau render en 1ère position JSX (avant `CombatTimeline`) sans `isGm &&`
+- Import alias `CombatDeclareLog` inchangé — héritage `--sidebar-w` confirmé
+- SR sans erreur
+
+### Clôture ⚠️ CLOS PARTIEL
+
+- **Testé :** `npm run build` → 0 erreur (Étapes 2/3/4), SR sans erreur, greps définition of done
+- **Non testé :** Scénarios 1–8 (nécessite session de combat active), ajustement visuel `top` [R10-5]
+
+---
+
+## Session 107 — REWORK-08 : planification Étapes 4 & 5 — 2026-06-18
+
+### Objectif
+
+Session planification uniquement (0 ligne de code). Analyse critique des Étapes 4 et 5 du REWORK-08 pour enrichir `docs/ARCHI_REWORK.md` à destination des agents futurs.
+
+### Travail effectué
+
+**Étape 4 — correction spec `socketDice.js` (issue détectée en Session 106) :**
+- Imports exacts confirmés par grep L.518–748 : 6 exports charStats (`calcSkillTotal`, `calcAttributeNA`, `calcREA`, `calcSeuils`, `calcSouffle`, `calcResistanceDroguesInput`)
+- Table de substitution [R8-12] rédigée : ×10 campaignId, ×6 user.id, ×5 username, ×4 role, ×4 io.to, ×2 io.in
+- [R8-12] annoté : `calcAttributeAN` absent malgré mention "AN/NA" dans l'Interface cible — MACRO_ROLL utilise uniquement `calcAttributeNA`
+- [R8-13] ajouté : `CHARACTER_UPDATED` = relique Chantier 1 — migrer tel quel sans nettoyer
+
+**Étape 4 — correction critique `mrTable.js` (bug singleton-promise) :**
+- Diagnostic : le spec Session 105 stockait le QueryBuilder Knex (`db('polaris_mr').orderBy()`) comme `mrTablePromise` — chaque `await` re-exécute la requête SQL (QueryBuilder non réentrant)
+- Fix : `.then(r => r)` convertit le QueryBuilder en Promise native cachée
+- `async function getMrTable()` → `function getMrTable()` (plus d'`await` interne)
+- Commentaire "Format : dmax" corrigé en "modifier"
+
+**Étape 5 — planification complète `socketEntity.js` :**
+- Lecture source L.753–1458 (7 handlers ENTITY) + L.2750–2782 (resolveEntityState)
+- 6 écarts corrigés vs Interface cible originale → [R8-14] :
+  1. `getModifier` manquait (utilisé L.1243)
+  2. `collisionAddEntity` / `collisionRemoveEntity` / `woundService` listés à tort (0 usage dans L.753–1458)
+  3. `collisionMoveToken` manquait (L.1411)
+  4. `isCaseOccupied` manquait (×4, boucle step-by-step)
+  5. `calcAttributeAN` ET `calcAttributeNA` — les deux variantes nécessaires
+  6. `ATTR_LABELS` depuis charStats.js — ×6 usages
+- Table de substitution [R8-14] : ×14 campaignId, ×5 user.id, ×5 username, ×5 role, ×5 io.to, ×2 io.in
+- Notes ⚠️ ajoutées : `pending.campaignId` (ne pas substituer) + `socket.id` (ne pas substituer par user.id) + `ENTITY_CREATED` gm_only (ne pas uniformiser avec broadcast global)
+- Revue architecturale via recherche Socket.IO issues #407 / #3477 : Maps combat sans cleanup disconnect = risque réel documenté → noté dans [R8-3], sprint dédié post-REWORK-08
+- Interface cible socketEntity.js (§Interface cible du spec) mise à jour : imports corrigés inline
+
+### Pièges run à vide
+
+- `collisionMoveToken` utilise `entity.battlemap_id` (pas `token.battlemap_id`) — migrer tel quel
+- `!pending.skillId` dans ACTION_RESOLVE n'émet pas DICE_RESULT — comportement intentionnel
+- `token.pos_z + 1` dans isCaseOccupied acteur — garde anti-faux-blocage sol — ne pas supprimer
+- `normalizedFormula` variable fantôme L.905 — dead code existant, migrer tel quel
+- `s.data.role` dans ENTITY_CREATED (fetchSockets) ≠ `socket.role` du handler — ne pas substituer
+
+### Clôture ✅ CLOS COMPLET (planification)
+
+- **Testé :** spec Étape 4 et Étape 5 vérifiés ligne par ligne vs source L.518–748 + L.753–1458 + L.2750–2782
+- **Non testé :** implémentation (session suivante)
+
+---
+
+## Session 106c — REWORK-10 : CDL intégré chat Sidebar — 2026-06-18
+
+### Objectif
+
+Changer l'approche REWORK-10 suite au retour utilisateur : la sidebar fixe gauche (`CombatDeclareLogSidebar` dans `CombatOverlay`) était non déplaçable, positionnée au milieu du playground et peu utile. Nouvelle direction : intégrer le log de déclarations directement dans le panel chat de `Sidebar.jsx`, en haut du tab chat, avec collapse sur une ligne.
+
+### Travail effectué
+
+**`Sidebar.jsx` :**
+- Import `useCombatStore` + `{ DeclareLogContent }` ajoutés
+- `const { phase, currentTurn } = useCombatStore()` dans le corps du composant
+- `const [cdlOpen, setCdlOpen] = useState(true)` ajouté
+- Bloc CDL inséré en premier enfant du fragment tab 'chat', avant `<div style={styles.messages}>` :
+  - visible uniquement si `phase === 'ANNOUNCEMENT' || phase === 'RESOLUTION'`
+  - header cliquable (`cdl-chat-header`) → toggle `cdlOpen`
+  - body (`cdl-chat-body`) → `<DeclareLogContent />` quand ouvert
+
+**`CombatOverlay.jsx` :**
+- `import CombatDeclareLog` supprimé
+- `'--cdl-top'` supprimé du style de l'overlay div
+- Render `{(phase === 'ANNOUNCEMENT' || phase === 'RESOLUTION') && <CombatDeclareLog />}` supprimé
+
+**`index.css` :**
+- Nouveau bloc `.cdl-chat` / `.cdl-chat-header` / `.cdl-chat-body` ajouté après les `.cdl-*`
+- Override `.cdl-chat .combat-declare-log-body` → `background: transparent; max-height: none; overflow-y: visible`
+
+### Clôture ⚠️ CLOS PARTIEL
+
+- **Testé :** SR ok, fonctionnel confirmé par utilisateur
+- **Non testé :** Scénarios 1–8 (pas de session de combat disponible)

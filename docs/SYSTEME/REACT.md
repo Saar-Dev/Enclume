@@ -38,6 +38,11 @@ Tout `useCallback` qui émet via socket doit inclure `socket` dans ses deps.
 Si callback A appelle callback B → A déclaré APRÈS B.
 Violation → ReferenceError silencieux (hoisting pas disponible pour les const arrow functions).
 
+## P50 — TDZ : hooks WS après tous les useState (SessionPage)
+Tout appel de hook qui passe un setter `useState` directement en argument (ex. `useEntitySocket({ setRadialMenu, setMoveTarget })`) doit être déclaré APRÈS la déclaration `useState` correspondante.
+Contrairement aux closures (corps de `useCallback`), les arguments sont évalués **immédiatement** → `ReferenceError: can't access lexical declaration before initialization` → écran noir.
+**Règle SessionPage :** placer `useTokenSocket()`, `useEntitySocket(...)`, `useCombatSocket(...)` après l'ensemble des `useState` du composant.
+
 ## P40 — battlemapRef pattern
 Ref miroir d'un state/prop pour lecture stable dans `useCallback`/`useFrame` sans l'inclure dans les deps.
 ```javascript

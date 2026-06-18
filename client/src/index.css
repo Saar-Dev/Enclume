@@ -1346,6 +1346,132 @@ Convention :
 .combat-declare-log-detail--atk   { color: #aa2020; }
 .combat-declare-log-detail--melee { color: #7a4010; }
 
+/* ── CombatDeclareLogSidebar — MacOS Terminal style (REWORK-10) ───── */
+.cdl-window {
+  position: fixed;
+  left: var(--sidebar-w, 0px);
+  top: var(--cdl-top, 125px);
+  width: 240px;
+  max-height: calc(100vh - 56px);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  z-index: 2;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.cdl-titlebar {
+  background: #2a2a35;
+  border-bottom: 1px solid #3a3a48;
+  padding: 7px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.cdl-title {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: #7878a0;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.cdl-toggle {
+  background: none;
+  border: none;
+  color: #4a4a6a;
+  font-size: 9px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.cdl-body {
+  background: #0d0d12;
+  overflow-y: auto;
+  flex: 1;
+  padding: 6px 10px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a3a #0d0d12;
+}
+
+.cdl-body--hidden { display: none; }
+
+.cdl-empty {
+  font-size: 10px;
+  color: #2a2a40;
+  padding: 10px 0;
+  font-style: italic;
+}
+
+.cdl-body .combat-declare-log-actor {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #161622;
+}
+.cdl-body .combat-declare-log-actor:first-child {
+  margin-top: 4px;
+  border-top: none;
+}
+
+.cdl-body .combat-declare-log-name  { font-size: 11px; color: #e0e0f0; font-weight: 600; }
+.cdl-body .combat-declare-log-ini   { font-size: 9px;  color: #569cd6; font-variant-numeric: tabular-nums; }
+.cdl-body .combat-declare-log-icon  { font-size: 9px;  color: #4a4a6a; width: 13px; flex-shrink: 0; }
+
+.cdl-body .combat-declare-log-detail           { font-size: 10px; color: #6a8a6a; }
+.cdl-body .combat-declare-log-detail--atk      { color: #e06c6c; }
+.cdl-body .combat-declare-log-detail--melee    { color: #ce9178; }
+.cdl-body .combat-declare-log-detail--move     { color: #9cdcfe; }
+
+/* combat-declare-log-body a un fond blanc (#f4f7f8) + max-height 260px — reset obligatoire */
+.cdl-body .combat-declare-log-body {
+  background: transparent;
+  max-height: none;
+  overflow-y: visible;
+}
+
+/* ─── CDL intégré chat Sidebar (REWORK-10) ────────────────────────── */
+.cdl-chat {
+  flex-shrink: 0;
+  border-bottom: 1px solid #1a1a24;
+}
+.cdl-chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+  cursor: pointer;
+  background: #14141e;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #6a6a90;
+  text-transform: uppercase;
+  user-select: none;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.cdl-chat-header:hover { background: #1a1a28; }
+.cdl-chat-body {
+  padding: 4px 6px 6px;
+  background: #0d0d16;
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a3a #0d0d16;
+}
+.cdl-chat .combat-declare-log-body {
+  background: transparent;
+  max-height: none;
+  overflow-y: visible;
+}
+
 /* ── Timeline bar ─────────────────────────────────────────────────── */
 .combat-timeline-bar {
   position: absolute;

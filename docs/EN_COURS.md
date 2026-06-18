@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-17 Session 101
+> Dernière mise à jour : 2026-06-18 Session 106
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -13,20 +13,28 @@
 
 **2. ~~REWORK-01 — statusService~~** ✅ CLOS Session 96 — Scénarios 1-5 validés
 
-**3. ~~REWORK-03 — woundService~~** ✅ Session 97 — T1 validé ⚠️ clos partiel (T2–T5 non testés)
-   → T2 : CaC PNJ auto (blessure + shock) / T3 : promotion cascade (Légère→Grave) / T4 : ligne pleine (AppError) / T5 : REST GM manuel (blessure hors combat)
+**3. ~~REWORK-03 — woundService~~** ✅ CLOS COMPLET Session 97/105 — T1–T5 validés
 
 **4. ~~REWORK-05 — panneaux partagés (COM5 + CL2)~~** ✅ CLOS COMPLET Session 99 — 5/5 scénarios ✅ + BUG-W1 ✅ + BUG-W2 ✅ + ERG-W1 ✅ + ERG-W2 ✅
 
 **5. ~~REWORK-07 — socketUtils (getUserColor + checkTokenOwnership + LOC_TABLE_CONTACT)~~** ✅ CLOS COMPLET Session 100
 
-**6. ~~REWORK-02 — damageService (resolveTargetHit)~~** ⚠️ Session 101 — clos partiel
-   → Non testé : Site 1 (COMBAT_DAMAGE_CONFIRM PJ interactif) — Site 2 (MELEE_DEFENSE_CONFIRM PNJ hit) — Site 4 (drone assault PNJ cible)
+**6. ~~REWORK-02 — damageService (resolveTargetHit)~~** ✅ CLOS COMPLET Session 101/105 — Sites 1/2/4/5 validés
 
 **7. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
    → **Cluster I** — dégâts drone (DR6 + DR4 + DMG1 + DMG2) — **Haute**
    → **Cluster D** — fenêtres combat UI (UI1 + COM8) — **Haute** *(COM5 + CL2 fixés REWORK-05)*
    → **Cluster E** — arme et statuts (COM1 + COM2 + COM4 + COM7) — Moyenne
+
+**8. ~~REWORK-09 — SessionPage → hooks WS dédiés~~** ✅ CLOS COMPLET Session 103
+   → `useTokenSocket.js` + `useEntitySocket.js` + `useCombatSocket.js` — 1509 → 1296 lignes
+
+**9. REWORK-08 — Modularisation `socket/index.js`** *(voir `docs/ARCHI_REWORK.md` §REWORK-08)*
+   → **Étapes 1, 2, 3 planifiées (Session 106) — prêtes à coder.**
+   → Étapes 4 (socketDice), 5 (socketEntity), 6 (socketCombat) : à planifier session dédiée avant code.
+   → 7 étapes : mrTable → socketToken → socketVoxel → socketDice → socketEntity → socketCombat → index final
+   → Pattern validé : `registerXxxHandlers(io, socket, context)` — docs officielles Socket.IO v4
+   → Pièges [R8-2 à R8-11] documentés dans `ARCHI_REWORK.md` §Pièges documentés
 
 ---
 
@@ -40,11 +48,7 @@
 
 ## En attente de validation fonctionnelle
 
-- **Fix DMG1+DMG2** — labels DICE_RESULT dégâts drone (Compétence/Seuil → Dés/Nets + intégrité) — SR ✅ — Session 93-5
-- **Sprint Drones 2c** — cycle complet drone joueur — SR ✅ — bugs Loc-Drone + Dmg-Drone identifiés (voir dettes)
-- **Sprint CaC Étape 3** — SR + Vite 200 ✅ — test fonctionnel requis (humanoid CaC + drone CaC avec mods)
-- **Fix split-brain slot detection** — Session 93 — test requis : 6 tokens (1 non-annoncé INI haute), 4 déclarations, vérifier slot actif correct + CaC sans cible → COMBAT_DECLARE_ERROR + cycle complet sans fantôme
-- **Sprint CaC 4b** (attaque multiple melee — 2/3 cibles, −5/−7 malus) — Session 74
+*(vide — tous les items validés Session 105)*
 
 ---
 
@@ -54,13 +58,13 @@
 
 | ID | Description | Priorité |
 |---|---|---|
-| DMG1+DMG2 | Labels DICE_RESULT dégâts drone (Compétence/Seuil faux) | SR ✅ — validation fonctionnelle requise |
-| DR4 | `calcDroneRD` : RD négatif → drone plein subit dégâts suppl. | Moyenne — sprint dédié |
-| DR6 | Blindage drone non lu (0 affiché malgré DB=15) | Haute — instrumentation [DBG-DR6] requise |
+| ~~DMG1+DMG2~~ | ~~Labels DICE_RESULT dégâts drone (Compétence/Seuil faux)~~ | ✅ Clos Session 105 |
+| ~~DR4~~ | ~~`calcDroneRD` : RD négatif → drone plein subit dégâts suppl.~~ | ✅ Clos Session 101 |
+| ~~DR6~~ | ~~Blindage drone non lu (0 affiché malgré DB=15)~~ | ✅ Clos Session 101 |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
 | CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
-| UI1 | Fenêtre déclaration design blanc | **Haute** |
+| UI1 | ~~Fenêtre déclaration design blanc~~ | ⚠️ REWORK-10 clos partiel — CDL dans chat Sidebar, SR ok, scénarios 1–8 en attente |
 | COM1 | Recharger ne fait rien | **Haute** |
 | CL1 | Portraits PNJ non visibles timeline joueur | **Haute** |
 | COM8 | Fenêtre annonce visible pendant sélection cible | Moyenne |
@@ -77,6 +81,7 @@
 | D2 | Token drone : changement GLB non fonctionnel | Basse |
 | DR2 | Drone : déplacement absent | Basse — sprint futur |
 | INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
+| INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |
 | WS1 | WorkshopPage crash `err.response?.data?.error` | Basse |
 | AU1 | `useDiceAudio.js` — sons dés | Basse |
 | TC1 | `.gitattributes:3` — attribut invalide | Très basse |

@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-16 Session 97
+> Dernière mise à jour : 2026-06-18 Session 105
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -31,10 +31,11 @@
 | **E — Arme et statuts** | COM1 + COM2 + COM4 + COM7 + COM10 + COM11 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
 | **F — Ghosts + portraits** | CL1 + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
 | **G — Drone store** | D1 + D2 | `SessionPage.jsx` + `Canvas3D.jsx` | Moyenne |
-| **H — Dettes techniques** | WS1 + TC1 + DCO1 + VX1 + AU1 + INI1 | divers | Basse |
-| **I — Affichage dégâts drone** | DR6 + DR4 + DMG1 + DMG2 | `server/src/socket/index.js` | **Haute** |
+| **H — Dettes techniques** | WS1 + TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 | divers | Basse |
+| **I — Affichage dégâts drone** | DMG1 + DMG2 | `server/src/socket/index.js` | SR ✅ — validation fonctionnelle requise |
 | **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
 | ~~A / B / C / J~~ | ~~B6 / COM6 / DR1 / DC1-3 / SHOCK1 / SHK3-6 / ST2~~ | — | ✅ Clos Sessions 94–97 |
+| ~~I partiel~~ | ~~DR4 + DR6~~ | — | ✅ Clos Session 101 |
 
 **Règle d'or :** valider le cluster A avant B, B avant C, etc. Validation fonctionnelle obligatoire entre clusters.
 
@@ -397,7 +398,7 @@ Ajouter dans le composant de sélection de cible CaC pour observer l'état au mo
 
 ---
 
-### Bug DR4 — calcDroneRD : RD négatif pour drone en bonne santé → dégâts augmentés
+### Bug DR4 ✅ CLOS Session 101 — calcDroneRD : RD négatif pour drone en bonne santé → dégâts augmentés
 
 **Symptôme** : Un drone avec `integrite_actuelle = 15` prend 3 dégâts *supplémentaires* au lieu de bénéficier d'une résistance. Exemple : degautsBruts=44, blindage=15, RD calculé=-3 → degatsNets = 44 − 15 − (−3) = **32** au lieu de 29.
 
@@ -428,7 +429,7 @@ Migration 72 (`72_drone_sheet_fix.js`) supprime déjà `resistance_dommages` (+ 
 
 ---
 
-### Bug DR6 — Blindage drone non lu lors de la résolution (Blindage:0 affiché malgré valeur DB = 15)
+### Bug DR6 ✅ CLOS Session 101 — Blindage drone non lu lors de la résolution (Blindage:0 affiché malgré valeur DB = 15)
 
 **Symptôme** : La carte DICE_RESULT "Dégâts — drone" affiche "Blindage:0 RD:0" alors que `drone_sheet.blindage = 15` en base pour le drone ciblé. Le blindage n'est pas soustrait des dégâts.
 
@@ -466,6 +467,23 @@ console.log('[DBG-DR6]', {
 ---
 
 ## Bugs divers — Dette technique
+
+### Bug INI2 — Initiative non recalculée après blessure en combat
+
+**Symptôme** : Quand un personnage reçoit une blessure pendant le combat, son initiative affichée dans la timeline ne se met pas à jour pour les autres clients. La blessure ajoute un malus (`calcWoundPenalty`) qui devrait réduire l'initiative, mais les clients voient encore l'ancienne valeur.
+
+**Règle** : Malus blessures = `calcWoundPenalty(wounds)` — soustrait du score REA dans le calcul d'initiative. Ce malus augmente avec chaque nouvelle blessure.
+
+**Cause racine** [INCONNU] : L'initiative est pré-calculée et stockée dans `combat_roster` au moment de `COMBAT_START`. `woundService.applyWound` émet `WOUND_ADDED` mais ne recalcule pas le roster. Les clients reçoivent la blessure mais aucun event ne les informe que l'initiative a changé.
+
+**Code impliqué** :
+- `server/src/lib/woundService.js` — `applyWound` : vérifier si un recalcul roster est prévu après insertion blessure
+- `server/src/socket/index.js` — `COMBAT_START` : voir comment l'initiative est calculée et stockée dans `combat_roster`
+- `server/src/socket/index.js` — helper `endTurn` / `startResolutionPhase` : voir si roster est recalculé entre les tours
+
+**Prochaine étape** : Cluster H — investigation future (post-REWORK-08). Lire `woundService.applyWound` + calcul `combat_roster` dans `COMBAT_START` pour confirmer l'hypothèse. Fix probable : recalculer l'initiative du token blessé dans `woundService.applyWound` et broadcaster un `COMBAT_ROSTER_UPDATED` partiel.
+
+---
 
 ### Bug INI1 — Surprise critique : roll=1 → initiative=1
 
