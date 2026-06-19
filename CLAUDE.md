@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 106 — 2026-06-18
+> Session 108 — 2026-06-19
 
 ---
 
@@ -106,17 +106,24 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **79 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
 
+**Session 108 ⚠️ clos partiel (REWORK-08 Étapes 6 & 7) :**
+- REWORK-08 : `socketCombat.js` créé (13 handlers + 13 helpers + 7 constantes) — `registerCombatHandlers(io, socket, context, pendingMaps)`
+- `index.js` : 2994 → 143 lignes — imports nettoyés, handlers/helpers/constantes combat supprimés, disconnect déplacé dans SESSION_JOIN
+- `node --check` ×2, `npm run build`, 143 lignes, SR ok ✓
+- **Non testé :** Scénarios 1–17 (pas de session combat) — `ARCHI_REWORK.md` DoD ✅ sauf scénarios + ARCHI_REWORK_DONE.md
+- **Prochaine étape : valider scénarios 1–17 (combat live) + copier REWORK-08 → ARCHI_REWORK_DONE.md**
+
 **Session 107 ✅ clos complet (planning) :**
 - REWORK-08 : Étape 4 corrigée (mrTable singleton-promise + imports socketDice) + Étape 5 planifiée complète (`docs/ARCHI_REWORK.md` §REWORK-08)
 - Étape 4 : bug QueryBuilder Knex → `.then(r => r)` fix, [R8-12] imports charStats confirmés, [R8-13] CHARACTER_UPDATED relique
 - Étape 5 (socketEntity) : 6 écarts Interface cible corrigés [R8-14], table substitution ×14/×5/×5/×5/×5/×2, pièges gm_only/socket.id/pending.campaignId documentés
 - Recherche Socket.IO : risque Maps combat sans cleanup disconnect → [R8-3] mis à jour, sprint dédié post-REWORK-08
-- **Prochaine étape : REWORK-08 Étape 6 (planification) — lire `ARCHI_REWORK.md` §REWORK-08 + index.js L.1464–2744**
 
-**Session 106b ⚠️ clos partiel (REWORK-10) :**
-- REWORK-10 : Étapes 1–4 codées — `CombatDeclareLogSidebar` (MacOS Terminal, sidebar fixe gauche) remplace `CombatDeclareLog` (floatant GM only)
-- SR ok — scénarios 1–8 non testés (pas de session combat disponible)
-- `top: 8px` provisoire [R10-5] dans `index.css` — à ajuster après test visuel en combat
+**Session 106c ⚠️ clos partiel (REWORK-10) :**
+- REWORK-10 : `DeclareLogContent` intégré dans le tab chat de `Sidebar.jsx` (haut zone messages, collapsible, GM + joueurs)
+- Ancienne approche sidebar fixe gauche (`CombatDeclareLogSidebar` dans `CombatOverlay`) abandonnée — rejetée après test
+- SR ok, fonctionnel confirmé — scénarios 1–8 non testés (pas de session combat)
+- Dead code : `CombatDeclareLogSidebar` (default export `CombatDeclareLog.jsx`) + classes `.cdl-window*` — à nettoyer sprint futur
 - Prochaine étape secondaire : valider scénarios 1–8 (`docs/PLAN_REWORK10_COMBATDECLARELOG.md`)
 
 **Session 106 ✅ clos complet (planning) :**

@@ -1754,3 +1754,50 @@ Changer l'approche REWORK-10 suite au retour utilisateur : la sidebar fixe gauch
 
 - **Testé :** SR ok, fonctionnel confirmé par utilisateur
 - **Non testé :** Scénarios 1–8 (pas de session de combat disponible)
+
+---
+
+## Session 108 — REWORK-08 : Étapes 6 & 7 (socketCombat.js + index.js finalisation) — 2026-06-19
+
+### Objectif
+
+Compléter REWORK-08 : créer `server/src/socket/socketCombat.js` (~2 800 lignes — 13 handlers + 13 helpers + 7 constantes), modifier `index.js` pour appeler `registerCombatHandlers`, et finaliser `index.js` (import cleanup, ≤200 lignes).
+
+### Travail effectué
+
+**`server/src/socket/socketCombat.js` (créé) :**
+- 7 constantes : `PORTEE_MOD_COMP`, `SITUATION_MODS`, `TAILLE_MODS`, `SITUATION_LABELS`, `PORTEE_LABELS`, `TAILLE_LABELS`, `COMBAT_MODE_LABELS`
+- `export function registerCombatHandlers(io, socket, context, pendingMaps)` + destructuring `context` + `pendingMaps`
+- 13 handlers : COMBAT_START, COMBAT_END, COMBAT_ANNOUNCE_START, COMBAT_INIT_STATE, COMBAT_SURPRISE_RESULT, COMBAT_ACTION_DECLARE, COMBAT_SKIP_PLAYER, COMBAT_ANNOUNCE_PREVIEW, COMBAT_ACTION_CONFIRM, COMBAT_DAMAGE_CONFIRM, COMBAT_MELEE_DEFENSE_CONFIRM, COMBAT_STUN_CONFIRM, COMBAT_APPLY_STUN
+- 13 helpers : `startAnnouncementTimers`, `skipPlayer`, `startResolutionPhase`, `advanceSlot`, `endTurn`, `multiAdversaryMalus`, `countAdversaires`, `resolveMeleeAction`, `resolveReloadAction`, `resolveDroneAssaultAction`, `resolveAssaultAction`, `calcDroneRD`, `resolveDroneIntegrityLoss`
+- Substitutions [R8-25] appliquées : `socket.campaignId → campaignId`, `socket.role → isGm`, `socket.user.id → user.id`, `socket.user.username → user.username`
+- [R8-16] respecté : `COMBAT_DAMAGE_CONFIRM` → `pendingCampaignId`, `COMBAT_MELEE_DEFENSE_CONFIRM` → `meleeCampaignId`, `COMBAT_STUN_CONFIRM` → variable locale depuis `pending`
+- `pendingMaps` passé explicitement aux 19 call sites (7 helper→helper + 12 handler→helper)
+
+**`server/src/socket/index.js` (modifié — Étape 6) :**
+- `import { registerCombatHandlers } from './socketCombat.js'` ajouté
+- `registerCombatHandlers(io, socket, context, { pendingDamageActions, pendingMeleeDefense, pendingStunActions, combatTimers, combatPreviews })` ajouté après `registerEntityHandlers` dans SESSION_JOIN
+- `socket.on('disconnect', ...)` déplacé dans SESSION_JOIN (sans garde `if (socket.campaignId)`) — utilise `socket.user` + `campaignId` du paramètre SESSION_JOIN
+- 13 handlers COMBAT (L.222–1492) supprimés
+- Ancien disconnect (L.1494–1503) supprimé
+- 13 helpers (L.1509–2994) supprimés
+- 7 constantes (L.71–120) supprimées
+
+**`server/src/socket/index.js` (Étape 7 — finalisation) :**
+- Imports morts supprimés : `getMrTable`, `getModifier`, `parseDice`, `charStats.js` (20 exports), `woundService`, `statusService`, `damageService`, `socketUtils` (`getUserColor`, `checkTokenOwnership`), `armorConstants`, `woundConstants`, `redis.js` (10 fonctions sauf `buildCollisionMap`)
+- Import conservé : `buildCollisionMap` (SESSION_JOIN inline L.134)
+- 183 → 143 lignes
+
+**Checks :**
+- `node --check socketCombat.js` → 0 erreur ✓
+- `node --check index.js` → 0 erreur ✓
+- `wc -l index.js` → 143 lignes (≤200) ✓
+- `npm run build` → 0 erreur Vite ✓
+- SR → ok ✓
+
+**Note dette cosmétique :** Les commentaires français dans index.js ont subi un mojibake UTF-8→Latin-1 lors de la reconstruction PowerShell (`Get-Content` sans `-Encoding UTF8`). Fonctionnellement transparent (Node.js parse valide UTF-8, seuls les `console.log` de connexion affichent du texte garbled). À corriger sprint futur (simple re-écriture des commentaires concernés).
+
+### Clôture ⚠️ CLOS PARTIEL
+
+- **Testé :** SR ok, `node --check` ×2, `npm run build`, 143 lignes
+- **Non testé :** Scénarios 1–17 (pas de session de combat disponible pour valider les flux complets)

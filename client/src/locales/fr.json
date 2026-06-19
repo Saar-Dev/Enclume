@@ -588,7 +588,9 @@
     "placeholderName": "Nom du blueprint",
     "placeholderNotes": "Notes privées…",
     "saving": "Sauvegarde…",
-    "saved": "✓ Sauvegardé"
+    "saved": "✓ Sauvegardé",
+    "delete": "Supprimer l'entité",
+    "deleteConfirm": "Confirmer la suppression"
   },
   "changelog": {
     "tags": {

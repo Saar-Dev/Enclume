@@ -435,8 +435,14 @@ function Scene({
     // ─── Écoute entités temps réel ───────────────────────────────────────
     const handleEntityCreated = ({ entity }) => addEntity(entity)
     const handleEntityDeleted = ({ entityId }) => removeEntity(entityId)
-    const handleEntityUpdated = ({ entityId, current_state_id, state, updated_at }) => {
-      updateEntity({ id: entityId, current_state_id, state, updated_at })
+    const handleEntityUpdated = ({ entityId, current_state_id, state, updated_at, gm_only }) => {
+      updateEntity({
+        id: entityId,
+        ...(current_state_id !== undefined && { current_state_id }),
+        ...(state            !== undefined && { state }),
+        ...(updated_at       !== undefined && { updated_at }),
+        ...(gm_only          !== undefined && { gm_only }),
+      })
       const { pendingEntityId, clearPendingEntityId } = useSessionStore.getState()
       if (pendingEntityId === entityId) clearPendingEntityId()
     }
@@ -845,6 +851,7 @@ function Scene({
       {entities.map(entity => {
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
+        if (entity.gm_only && !isGm) return null
         return (
           <EntityMesh
             key={entity.id}

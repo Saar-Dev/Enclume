@@ -1,5 +1,21 @@
-# PLAN_REWORK10_COMBATDECLARELOG.md — Sidebar terminale journal de combat
-> Créé Session 105 — 2026-06-18
+# PLAN_REWORK10_COMBATDECLARELOG.md — Log déclarations intégré chat Sidebar
+> Créé Session 105 — 2026-06-18 | Mis à jour Session 106c — 2026-06-18
+
+## État final ⚠️ CLOS PARTIEL
+
+**Implémentation réelle :** `DeclareLogContent` intégré dans le tab chat de `Sidebar.jsx`, en haut de la zone messages, collapsible sur une ligne. Visible GM + joueurs pendant `ANNOUNCEMENT` et `RESOLUTION`.
+
+**Approche initiale abandonnée :** `CombatDeclareLogSidebar` (sidebar fixe gauche dans `CombatOverlay`) — rejetée après test : non déplaçable, positionnée au milieu du playground.
+
+**Code actuel :**
+- `Sidebar.jsx` : bloc CDL en premier enfant du fragment tab 'chat', classes `.cdl-chat*`
+- `CombatOverlay.jsx` : import + render CDL supprimés
+- `index.css` : classes `.cdl-chat` / `.cdl-chat-header` / `.cdl-chat-body` + override fond blanc
+- `CombatDeclareLogSidebar` (default export) : code conservé mais non utilisé — dead code
+
+**Scénarios 1–8 : non testés** (nécessite session de combat)
+
+---
 
 ---
 

@@ -1077,6 +1077,7 @@ export default function SessionPage() {
           x={instancePanel.x}
           y={instancePanel.y}
           onClose={() => setInstancePanel(null)}
+          socket={socket}
         />
       )}
 

@@ -31,7 +31,7 @@
 | **E — Arme et statuts** | COM1 + COM2 + COM4 + COM7 + COM10 + COM11 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
 | **F — Ghosts + portraits** | CL1 + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
 | **G — Drone store** | D1 + D2 | `SessionPage.jsx` + `Canvas3D.jsx` | Moyenne |
-| **H — Dettes techniques** | WS1 + TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 | divers | Basse |
+| **H — Dettes techniques** | WS1 + TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + TOK1 + MAP1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `server/src/socket/index.js` | SR ✅ — validation fonctionnelle requise |
 | **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
 | ~~A / B / C / J~~ | ~~B6 / COM6 / DR1 / DC1-3 / SHOCK1 / SHK3-6 / ST2~~ | — | ✅ Clos Sessions 94–97 |
@@ -529,6 +529,30 @@ console.log('[DBG-INI1] initiative calc', { roll, rea, hiddenDie, finalInitiativ
 **Code impliqué** : `.gitattributes` ligne 3.
 
 **Prochaine étape** : Corriger lors d'un commit de nettoyage.
+
+---
+
+### Bug TOK1 — Rotation token : inversion nord/sud et est/ouest
+
+**Symptôme** : La direction visuelle du token semble inversée après rotation — nord affiché côté sud et vice versa (est/ouest idem). Observé post-Étape 2 REWORK-08, mais probablement pré-existant (logique `newR = ((token.r ?? 0) + 1) % 8` non touchée lors de la migration).
+
+**Cause racine** [INCONNU] : Non investigué. Pistes : incrément `+1` devrait peut-être être `-1` pour correspondre au sens visuel ; ou `rotation.y = r * Math.PI / 4` côté client interprète le sens dans la direction opposée à l'attendu.
+
+**Code impliqué** : `server/src/socket/socketToken.js` — `TOKEN_ROTATE` handler, `newR = ((token.r ?? 0) + 1) % 8`. Client : composant Canvas3D — calcul `rotation.y`.
+
+**Note** : Signalement incertain — à confirmer en session de jeu réelle.
+
+**Prochaine étape** : Cluster H — investigation si confirmé en session.
+
+---
+
+### Dette MAP1 — MAP_VIEWPORT : pas de déclencheur UI côté GM
+
+**Symptôme** : Le handler `WS.MAP_VIEWPORT` existe côté serveur (socketVoxel.js) et côté client (réception). Mais aucun bouton / geste GM dans l'interface ne permet de l'émettre — la fonctionnalité "partager ma vue / snap caméra / verrouiller caméra" est donc inatteignable en jeu.
+
+**Code impliqué** : UI GM (SessionPage.jsx ou Canvas3D.jsx) — bouton "Partager ma vue" absent. `server/src/socket/socketVoxel.js` — handler MAP_VIEWPORT fonctionnel côté serveur.
+
+**Prochaine étape** : Sprint UI dédié — ajouter un bouton GM (ex: toolbar carte) émettant `WS.MAP_VIEWPORT` avec `{ position, target, mode: 'snap' }`.
 
 ---
 

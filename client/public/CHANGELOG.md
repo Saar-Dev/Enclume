@@ -1,3 +1,13 @@
+## v108 — 2026-06-19 — REWORK-08 : modularisation socket/index.js
+
+### Serveur — Architecture
+- [refactor] `server/src/socket/socketCombat.js` créé — 13 handlers combat + 13 helpers + 7 constantes extraits de `index.js`
+- [refactor] `server/src/socket/index.js` 2994 → 143 lignes — coordinateur pur (SESSION_JOIN + 5 appels `register*`)
+- [refactor] Imports morts supprimés de `index.js` (charStats, woundService, statusService, damageService, armorConstants, woundConstants, redis non-buildCollisionMap)
+- [refactor] `socket.on('disconnect')` déplacé dans SESSION_JOIN, sans garde `if (socket.campaignId)`
+
+---
+
 ## v107 — 2026-06-18 — REWORK-10 : log déclarations intégré dans le chat
 
 ### Client — UI Combat

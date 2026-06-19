@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
+import { WS } from '../../../shared/events.js'
 import { useEntityStore } from '../stores/entityStore'
 
 // ─── EntityInstancePanel ───────────────────────────────────────────────────────
@@ -19,9 +20,9 @@ import { useEntityStore } from '../stores/entityStore'
 const PANEL_W = 300
 const PANEL_H_EST = 420
 
-export default function EntityInstancePanel({ entity, x, y, onClose }) {
+export default function EntityInstancePanel({ entity, x, y, onClose, socket }) {
   const { t } = useTranslation()
-  const { updateEntity } = useEntityStore()
+  const { updateEntity, removeEntity } = useEntityStore()
   const panelRef = useRef(null)
   const blueprint = entity.blueprint
 
@@ -78,8 +79,10 @@ export default function EntityInstancePanel({ entity, x, y, onClose }) {
   const [currentStateId,       setCurrentStateId]       = useState(entity.current_state_id ?? 0)
   const [disabledInteractions, setDisabledInteractions] = useState(entity.disabled_interactions || [])
   const [notesGm,              setNotesGm]              = useState(entity.notes_gm || '')
-  const [saving,  setSaving]  = useState(false)
-  const [saved,   setSaved]   = useState(false)
+  const [saving,        setSaving]        = useState(false)
+  const [saved,         setSaved]         = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting,      setDeleting]      = useState(false)
 
   const toggleInteraction = (id) => {
     setDisabledInteractions(prev =>
@@ -106,6 +109,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose }) {
         notes_gm:              res.data.entity.notes_gm,
         updated_at:            res.data.entity.updated_at,
       })
+      socket?.emit(WS.ENTITY_UPDATED, { entityId: entity.id, gm_only: res.data.entity.gm_only })
       setSaved(true)
       setTimeout(() => setSaved(false), 1500)
     } catch (err) {
@@ -113,7 +117,21 @@ export default function EntityInstancePanel({ entity, x, y, onClose }) {
     } finally {
       setSaving(false)
     }
-  }, [entity.id, labelOverride, gmOnly, currentStateId, disabledInteractions, notesGm, updateEntity])
+  }, [entity.id, labelOverride, gmOnly, currentStateId, disabledInteractions, notesGm, updateEntity, socket])
+
+  const handleDelete = useCallback(async () => {
+    setDeleting(true)
+    try {
+      await api.delete(`/entities/${entity.id}`)
+      removeEntity(entity.id)
+      socket?.emit(WS.ENTITY_DELETED, { entityId: entity.id })
+      onClose()
+    } catch (err) {
+      console.error('[EntityInstancePanel] Erreur suppression :', err)
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }, [entity.id, removeEntity, socket, onClose])
 
   const interactions = blueprint?.interactions || []
 
@@ -289,6 +307,31 @@ export default function EntityInstancePanel({ entity, x, y, onClose }) {
         >
           {saving ? t('entityPanel.saving') : saved ? t('entityPanel.saved') : t('common.save')}
         </button>
+
+        {/* Suppression */}
+        {!confirmDelete ? (
+          <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
+            {t('entityPanel.delete')}
+          </button>
+        ) : (
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button
+              className="btn btn-danger"
+              style={{ flex: 1 }}
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? '…' : t('entityPanel.deleteConfirm')}
+            </button>
+            <button
+              className="btn btn-ghost"
+              style={{ flex: 1 }}
+              onClick={() => setConfirmDelete(false)}
+            >
+              {t('common.cancel')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
