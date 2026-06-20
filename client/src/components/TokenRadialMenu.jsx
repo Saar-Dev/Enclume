@@ -80,6 +80,7 @@ const SIZE = 370
 //   onOpenCharacterSheet — callback() → ouvre CharacterWindow
 //   onRemoveToken        — callback() → supprime le token (doClose gère la fermeture)
 //   onSetRotation        — callback(r: 0..7) → oriente le token
+//   onViser              — callback() → active le mode LOS (ligne de vue)
 //   onClose              — callback() → démonte le composant
 
 export default function TokenRadialMenu({
@@ -91,6 +92,7 @@ export default function TokenRadialMenu({
   onRemoveToken,
   onSetRotation,
   onOpenStatusPanel,
+  onViser,
   onClose,
 }) {
   const { t } = useTranslation()
@@ -172,7 +174,7 @@ export default function TokenRadialMenu({
     { id: 'deplacer',  label: t('tokenRadial.deplacer'),  enabled: false },
     { id: 'retirer',   label: t('tokenRadial.retirer'),   enabled: true  },
     { id: 'portee',    label: t('tokenRadial.portee'),    enabled: false },
-    { id: 'viser',     label: t('tokenRadial.viser'),     enabled: false },
+    { id: 'viser',     label: t('tokenRadial.viser'),     enabled: true  },
     { id: 'statuts',   label: t('tokenRadial.statuts'),   enabled: true  },
   ]
 
@@ -181,6 +183,7 @@ export default function TokenRadialMenu({
     if (a.id === 'fiche')   { doClose(); onOpenCharacterSheet?.() }
     if (a.id === 'retirer') { doClose(); onRemoveToken?.() }
     if (a.id === 'statuts') { doClose(); onOpenStatusPanel?.() }
+    if (a.id === 'viser')   { doClose(); onViser?.() }
   }
 
   // ─── Secteurs ─────────────────────────────────────────────────────────────

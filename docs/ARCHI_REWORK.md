@@ -1,5 +1,5 @@
 # ARCHI_REWORK.md — Reworks architecturaux
-> Créé Session 96 — 2026-06-16 | Mis à jour Session 111 — 2026-06-20
+> Créé Session 96 — 2026-06-16 | Mis à jour Session 113 — 2026-06-20
 > Rédigé par Claude Sonnet 4.6 à destination des agents Claude futurs.
 > Objectif : remplacer le bricolage incrémental par des reworks structurés, complets, et non régressifs.
 > Spécifications complètes des reworks achevés → [ARCHI_REWORK_DONE.md](ARCHI_REWORK_DONE.md)
@@ -96,13 +96,24 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 **REWORK-04 ✅ Clos complet Session 110/111 — FSM Combat (State Machine + DB persistence)**
 `server/src/lib/combatFSM.js` créé. Migrations 80 (`combat_pending`) + 81 (`sub_phase`). Guards `canTransition` dans 10 handlers `socketCombat.js`. 3 Maps in-memory remplacées par DB. `statusService.applyStun` nettoyé. `combatStore.js` + `useCombatSocket.js` propagent `subPhase`. `SESSION_JOIN` restaure les prompts sur reconnexion RESOLUTION. Spec complète → `ARCHI_REWORK_DONE.md`.
 
+**REWORK-10 ✅ Clos complet Session 106c — DeclareLogContent intégré Sidebar**
+`DeclareLogContent` intégré dans le tab chat de `Sidebar.jsx` (haut zone messages, collapsible, GM + joueurs). Ancienne approche sidebar fixe gauche (`CombatDeclareLogSidebar`) abandonnée. Dead code `CombatDeclareLogSidebar` + classes `.cdl-window*` — nettoyage sprint futur.
+
 ---
 
 ## Prochains reworks
 
+> Reworks 11–14 identifiés Session 113 — audit merge-readiness complet de `SessionPage.jsx`.
+> Déclencheur : fusion frontend imminente (confrère refond playground + éditeur).
+> Objectif commun : extraire de `SessionPage` tout ce qui peut être importé indépendamment.
+
 | ID | Bloc | Problème | Ordre |
 |---|---|---|---|
-| **REWORK-06** | `combatDeclarationStore` | Staging state déclaration fragmenté en local React state (GM+Joueur). Auto-draw, default mains nues non implémentables sans débat archi. | Sprint futur |
+| **REWORK-06** | `combatDeclarationStore` | Staging state déclaration fragmenté en local React state (GM+Joueur). Auto-draw, default mains nues non implémentables sans débat archi. | Avant fusion |
+| **REWORK-11** | `useSessionSocket` | SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, CHARACTER_UPDATED, DOC_* encore inline dans `SessionPage.jsx` — le nouveau frontend doit tout recréer. | Avant fusion |
+| **REWORK-12** | `useCharacterSocket` | WOUND_ADDED/UPDATED/REMOVED + INVENTORY_* inline dans `SessionPage.jsx`. `woundVersions` Map locale (hack reload `CharacterWindow`) à supprimer — logique doit vivre dans le hook. | Avant fusion |
+| **REWORK-13** | `useBattlemapManager` + `campaignStore` | 8 handlers CRUD carte inline (`loadMap`, `handleMapSwitch`, renommage, création, suppression, duplication, default, groupe). `campaign` objet complet en `useState` local — pas de store, pas de hook. | Avant fusion |
+| **REWORK-14** | `useCombatUIState` | `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection`, `combatCameraCenter` en `useState` local — `CombatOverlay` reçoit 28 props dont 16 viennent de `SessionPage`. | Après fusion (bloqué par REWORK-06) |
 
 ---
 

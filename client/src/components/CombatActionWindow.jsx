@@ -265,6 +265,20 @@ export default function CombatActionWindow({
     return () => { cancelled = true }
   }, [isDrone, playerToken?.id, phase])
 
+  // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
+  useEffect(() => {
+    const wMg = assaultWeapons.find(w => w.slot === 'MG') || null
+    const wMd = assaultWeapons.find(w => w.slot === 'MD') || null
+    const selected = wMg || wMd
+    if (!selected) return
+    const forceCCNow = !!(wMg && wMd) && wMg.ref_fire_mode !== wMd.ref_fire_mode
+    const modes = forceCCNow
+      ? ['cc']
+      : (selected.ref_fire_mode || 'cc').split('/').map(s => s.trim().toLowerCase()).filter(Boolean)
+    if (!modes.includes(states.fire_mode))
+      setStates(s => ({ ...s, fire_mode: modes[0] }))
+  }, [assaultWeapons])
+
   // --- fetch armes drone (drones uniquement) --------------------------------
   useEffect(() => {
     if (!isDrone) return
@@ -346,7 +360,7 @@ export default function CombatActionWindow({
 
   // Variant assaut selectionne
   const { variant: currentVariant, effectiveBulletCount } = computeFireVariant(
-    currentFireMode, assaultBulletCount, assaultVariantAB
+    currentFireMode, assaultBulletCount, assaultVariantAB, { defaultCcCount: 1 }
   )
 
   // Munitions disponibles pour le rechargement — filtrées par calibre de l'arme sélectionnée

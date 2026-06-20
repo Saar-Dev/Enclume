@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 111 — 2026-06-20
+> Session 112 — 2026-06-20
 
 ---
 
@@ -101,7 +101,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 111 (2026-06-20)
+## ÉTAT COURANT — Session 112 (2026-06-20)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
@@ -114,7 +114,18 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - `index.js` : SESSION_JOIN restaure prompts sur reconnexion RESOLUTION (C3)
 - `combatStore.js` + `useCombatSocket.js` : `subPhase` propagé (C1+C2)
 - `node --check` ×4, build client ✅
-- Prochaine étape : **valider en session réelle (V1–V12)** ou sprint suivant
+- Prochaine étape : sprint suivant (bugs actifs — voir EN_COURS.md)
+
+**Session 112 ✅ clos complet (FEAT2-A + FEAT2-C + COM12 + COM13) :**
+- `losUtils.js` créé — `checkLOS()` pure, `fast-voxel-raycast`, PE14 — eye height `pos_z+2.5`
+- Menu radial : secteur "Vue" actif + `losMode` / `losResult` dans SessionPage
+- Scene : ray 3D `<line>` natif (vert/rouge) + callback `onLosResult`
+- Bug eye height corrigé : `pos_z+0.75` → `pos_z+2.5` (pieds + 1.5, token 2-cases)
+- COM12 ✅ : `CombatGmDeclareWindow` + `CombatActionWindow` — reset `fire_mode` si invalide pour l'arme équipée
+- COM13 ✅ : `CombatActionWindow` — `computeFireVariant` + `{ defaultCcCount: 1 }` → "Tir simple" débloqué sans re-clic
+- FEAT2-C ✅ : `useCameraLOS.js` réécrit — service complet (feature-as-service) — Canvas3D.jsx : 1 appel hook, zéro logique LOS
+- Caméra "épaule droite" fonctionnelle — P-LOS13 résolu (`justHandledTargetRef` dans le service)
+- SR + fonctionnel confirmé
 
 **Session 109 ✅ clos complet (triage docs + housekeeping) :**
 - JOURNAL5.md créé — JOURNAL4.md archivé dans docs/Old/

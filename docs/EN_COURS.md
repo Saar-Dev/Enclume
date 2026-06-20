@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-20 Session 111
+> Dernière mise à jour : 2026-06-20 Session 112
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -47,7 +47,13 @@
 
 ## En attente de validation fonctionnelle
 
-*(vide — tous les items validés Session 105)*
+**FEAT2-A — LOS outil menu radial ✅ MVP clos (ligne + overlay)**
+- V1–V6 validés avant ajout caméra v2
+
+**FEAT2-C — Caméra LOS v2 (épaule droite) ✅ clos complet — Session 112**
+- `client/src/lib/useCameraLOS.js` réécrit — service complet (feature-as-service, ARCHI_REWORK.md)
+- Canvas3D.jsx : zéro logique LOS — 1 appel `useCameraLOS(...)` + 4 callables `{ losLine, onTokenClick, onPointerUp, clearLine }`
+- FEAT2-B (LOS automatique pipeline assaut) → sprint futur
 
 ---
 

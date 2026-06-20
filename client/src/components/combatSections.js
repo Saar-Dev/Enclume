@@ -184,7 +184,7 @@ export const COMBAT_MODE_DEFS = [
 ]
 
 // Calcul variant de tir — source unique partagée entre GM et Joueur
-// defaultCcCount = 1 pour GM (PNJ default tir simple), null pour Joueur (forçage de sélection)
+// defaultCcCount = 1 : tir simple sélectionné par défaut si aucun count explicite (GM + Joueur)
 export function computeFireVariant(fireMode, rawBulletCount, variantAB, { defaultCcCount = null } = {}) {
   const effectiveBulletCount = rawBulletCount ?? (
     fireMode === 'RC' ? 3 : fireMode === 'CC' ? defaultCcCount : null

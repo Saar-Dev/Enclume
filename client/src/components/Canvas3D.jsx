@@ -10,6 +10,7 @@ import { findPath, getPathColor, getActionKey } from '../lib/pathfinder.js'
 import raycastVoxels from 'fast-voxel-raycast'
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
+import { useCameraLOS } from '../lib/useCameraLOS.js'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
@@ -34,6 +35,7 @@ const DRAG_HOVER = 0.5
 
 // Amplitude max de l'inclinaison pendant le drag (radians)
 const DRAG_TILT_MAX = 0.3
+
 
 // ─── Utilitaire coordonnées ───────────────────────────────────────────────────
 // Convertit une position Three.js en champs base de données.
@@ -333,7 +335,11 @@ function Scene({
   combatTargetMode,
   announcementMarker,
   defaultTokenGlbUrl,
+  losMode,
+  onLosCancel,
+  onLosResult,
 }) {
+  const { t } = useTranslation()
   const { camera, gl } = useThree()
   const orbitRef = useRef()
   const raycaster = new THREE.Raycaster()
@@ -370,6 +376,10 @@ function Scene({
   const combatPhaseRef = useRef(null)
   combatPhaseRef.current = phase
 
+  // ─── Mode LOS — P40 : ref miroir ─────────────────────────────────────────
+  const losModeRef = useRef(null)
+  losModeRef.current = losMode
+
   // ─── Chemin pathfinding combat (Sprint Pathfinding) ──────────────────────
   const [currentPath, setCurrentPath] = useState([])
   const currentPathRef = useRef([])
@@ -377,6 +387,12 @@ function Scene({
 
   const voxelsRef = useRef(voxels)
   voxelsRef.current = voxels
+
+  // ─── LOS v2 — service complet (client/src/lib/useCameraLOS.js) ──────────
+  // Déclaré après voxelsRef et tokensRef (TDZ — déclarations const non hoistées)
+  const { losLine, onTokenClick, onPointerUp, clearLine } = useCameraLOS(
+    losMode, orbitRef, voxelsRef, tokensRef, onLosResult, onLosCancel
+  )
 
   const lastCellRef = useRef(null)
 
@@ -541,17 +557,21 @@ function Scene({
   const handleDragStart = useCallback((e, token) => {
     e.stopPropagation()
     if (e.nativeEvent.button !== 0) return
-    if (combatMoveModeRef.current) return  // mode déplacement combat — pas de drag token
+    if (combatMoveModeRef.current) return
     if (combatTargetModeRef.current) {
       combatTargetModeRef.current.onPendingTarget(token.id, e.clientX, e.clientY)
       return
     }
+    if (losModeRef.current?.active) {
+      onTokenClick(token)
+      return
+    }
+    clearLine()
 
     if (!isGm) {
       const character = characters.find(c => c.id === token.character_id)
       if (!character || character.user_id !== user?.id) return
     }
-
     dragRef.current = {
       active: true,
       tokenId: token.id,
@@ -566,7 +586,7 @@ function Scene({
       surfaceY: null,
     }
     if (orbitRef.current) orbitRef.current.enabled = false
-  }, [isGm, user, characters])
+  }, [isGm, user, characters, onTokenClick, clearLine])
 
   const handlePointerMove = useCallback((e) => {
     // ─── Mode déplacement combat — prioritaire sur tout ───────────────────────
@@ -718,6 +738,7 @@ function Scene({
       return
     }
 
+    if (onPointerUp(dragRef.current.active)) return
     if (!dragRef.current.active) return
 
     const wasMoving = dragRef.current.hasMoved
@@ -760,7 +781,7 @@ function Scene({
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel])
+  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -1030,6 +1051,20 @@ function Scene({
         )
       })()}
 
+      {/* ── Ligne de vue (LOS) — même pattern que targetLinePoints L.1003 ───────── */}
+      {losLine && (
+        <line>
+          <bufferGeometry>
+            <bufferAttribute
+              attach="attributes-position"
+              count={2}
+              array={new Float32Array([...losLine.from, ...losLine.to])}
+              itemSize={3}
+            />
+          </bufferGeometry>
+          <lineBasicMaterial color={losLine.clear ? '#70e07a' : '#e07070'} linewidth={2} />
+        </line>
+      )}
       {/* ── DiceRoller — animation dés (Dice Rework) */}
       {dicePayload && <DiceRoller payload={dicePayload} onDone={onDiceDone} />}
     </>
@@ -1043,7 +1078,7 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, announcementMarker, defaultTokenGlbUrl }) {
+export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, announcementMarker, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
@@ -1108,6 +1143,14 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [combatTargetMode])
+
+  // ─── Annulation mode LOS sur Échap ─────────────────────────────────────────
+  useEffect(() => {
+    if (!losMode) return
+    const onKeyDown = (e) => { if (e.key === 'Escape') onLosCancel?.() }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [losMode, onLosCancel])
 
   const justSelectedRef = useRef(false)
 
@@ -1237,6 +1280,9 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           combatTargetMode={combatTargetMode}
           announcementMarker={announcementMarker}
           defaultTokenGlbUrl={defaultTokenGlbUrl}
+          losMode={losMode}
+          onLosCancel={onLosCancel}
+          onLosResult={onLosResult}
         />
       )}
     </Canvas>

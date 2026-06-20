@@ -1,3 +1,24 @@
+## v114 — 2026-06-20 — FEAT2-C : Caméra LOS v2 épaule droite
+
+### Client — Nouvelle fonctionnalité
+- [feat] `client/src/lib/useCameraLOS.js` — service LOS complet (feature-as-service) : `{ losLine, onTokenClick, onPointerUp, clearLine }`
+- [feat] Caméra "épaule droite" — vue subjective src→tgt après check LOS (CAM_BACK=3, RIGHT=1.5, UP=2)
+- [refactor] `Canvas3D.jsx` — zéro logique LOS dans le composant (1 appel hook + 4 callables)
+- [fix] P-LOS13 : ligne LOS ne disparaît plus après ¼ sec (guard `justHandledTargetRef` dans le service)
+- [fix] TDZ `voxelsRef` : appel `useCameraLOS` déplacé après déclaration `voxelsRef`
+
+---
+
+## v113 — 2026-06-20 — FEAT2-A : LOS outil menu radial
+
+### Client — Nouvelle fonctionnalité
+- [feat] Menu radial token : secteur "Vue" (ex-"Viser") — outil ligne de vue
+- [feat] `client/src/lib/losUtils.js` — `checkLOS()` pure function, `fast-voxel-raycast`, PE14
+- [feat] Ray 3D vert/rouge entre tokens (`<line>` natif bufferGeometry) — persiste jusqu'au prochain check
+- [feat] Overlay DOM résultat (cliquable pour fermer) + bannière mode sélection cible
+
+---
+
 ## v112 — 2026-06-20 — REWORK-04 : FSM Combat + persistence DB
 
 ### Serveur — Architecture

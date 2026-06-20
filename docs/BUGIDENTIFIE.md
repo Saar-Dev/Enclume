@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-20 Session 111
+> Dernière mise à jour : 2026-06-20 Session 112
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -28,10 +28,10 @@
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
 | **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 | composants combat + `index.css §11` | **Haute** |
-| **E — Arme et statuts** | ~~COM1~~ + COM2 + COM4 + COM7 + COM10 + COM11 + COM12 + COM13 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
+| **E — Arme et statuts** | ~~COM1~~ + COM2 + COM4 + COM7 + COM10 + COM11 + ~~COM12~~ + ~~COM13~~ | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
 | **F — Ghosts + portraits** | ~~CL1~~ + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
 | **G — Drone store** | D1 + D2 | `SessionPage.jsx` + `Canvas3D.jsx` | Moyenne |
-| **H — Dettes techniques** | WS1 + TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + TOK1 + MAP1 | divers | Basse |
+| **H — Dettes techniques** | ~~WS1~~ + TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + TOK1 + MAP1 + COM14 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `server/src/socket/index.js` | SR ✅ — validation fonctionnelle requise |
 | **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
 | ~~A / B / C / J~~ | ~~B6 / COM6 / DR1 / DC1-3 / SHOCK1 / SHK3-6 / ST2~~ | — | ✅ Clos Sessions 94–97 |
@@ -330,33 +330,29 @@ Ajouter dans le composant de sélection de cible CaC pour observer l'état au mo
 
 ---
 
-### Bug COM12 — Mode de tir : sélection autorisée sans vérifier les modes disponibles de l'arme
+### Bug COM12 ✅ CLOS Session 112 — Mode de tir : reset au premier mode disponible si arme incompatible
 
-**Symptôme** : Toutes les fenêtres de combat (GM et joueur) affichent les chips CC / RC / RF sans vérifier si l'arme équipée supporte réellement ces modes. Un joueur peut sélectionner "Rafale" sur une arme semi-automatique sans obstacle.
-
-**Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` — sélecteur mode de tir. `ref_equipment` : colonnes `fire_mode_cc`, `fire_mode_rc`, `fire_mode_rl` — disponibilité par arme. `combatSections.js` — `FIRE_MODE_VARIANTS`.
-
-**Cause racine** [INCONNU] : Non investigué. Les chips CC/RC/RF semblent rendus sans filtrage sur les modes disponibles de l'arme courante. Il faudrait croiser l'arme sélectionnée avec ses `fire_mode_*` pour griser les modes indisponibles.
-
-**Prochaine étape** : Cluster E — lire CombatGmDeclareWindow + CombatActionWindow pour confirmer l'absence de filtre, puis vérifier quels champs de `ref_equipment` sont déjà chargés dans ce contexte.
+**Correction** : `useEffect([activeTokenId, equipment])` dans `CombatGmDeclareWindow.jsx` + `useEffect([assaultWeapons])` dans `CombatActionWindow.jsx` — reset `fire_mode` au premier mode disponible (`ref_equipment.fire_mode`) si le state sauvegardé n'est pas dans les modes de l'arme équipée. Filtrage visuel (`StateSelector` greyed / `InlineChip` cycling) déjà présent, seul le reset manquait.
+**Testé :** SR ✅, fonctionnel confirmé. **Non testé :** scénario exact state DB incompatible arme — session combat réelle requise.
 
 ---
 
-### Bug COM13 — Assaut tir joueur : "Tir simple" par défaut non validé sans re-sélection
+### Bug COM13 ✅ CLOS Session 112 — Assaut tir joueur : "Tir simple" par défaut non validé sans re-sélection
 
-**Symptôme** : Phase ANNOUNCEMENT, côté joueur (`CombatActionWindow`), action Assaut (tir) — "Tir simple" est visuellement coché par défaut, mais le bouton "Déclarer" reste bloqué jusqu'à ce que le joueur re-clique sur "Tir simple". Piège UX avéré en session.
+**Correction** : `computeFireVariant(currentFireMode, assaultBulletCount, assaultVariantAB, { defaultCcCount: 1 })` dans `CombatActionWindow.jsx` — ajout `{ defaultCcCount: 1 }` (même comportement que le GM). Quand `assaultBulletCount = null` + CC, `effectiveBulletCount = 1` → radio "Tir simple" active → `currentVariant = cc_1` → `assaultValid = true` → "Déclarer" débloqué immédiatement.
+**Testé :** SR ✅, fonctionnel confirmé.
 
-**Code impliqué** : `client/src/components/CombatActionWindow.jsx` — état initial du mode de tir (probablement `state_fire_mode` ou `selectedFireMode` initialisé à `null`/`undefined` alors que le chip affiche déjà une valeur par défaut).
+---
 
-**Cause racine** [HYPOTHÈSE] : La valeur affichée par défaut est un `defaultValue` visuel (ou valeur calculée), mais le state React `selectedFireMode` (ou équivalent) reste `null` jusqu'au premier clic. La condition `canDeclare` exige un mode de tir non-null → "Déclarer" grisé malgré l'apparence cochée.
+### Bug COM14 — Cibles combat non effacées à COMBAT_END
 
-**[DBG-COM13] suggestion** :
-```js
-console.log('[DBG-COM13]', { selectedFireMode, state_fire_mode, canDeclare })
-```
-Ajouter dans `CombatActionWindow` pour observer l'état initial au montage du composant assaut tir.
+**Symptôme** : Quand le GM termine le combat, les cibles précédemment sélectionnées (assaut tir ou CaC) restent affichées dans les fenêtres de déclaration côté GM et joueur. Plus généralement, certains états de sélection client ne sont pas nettoyés à la fin du combat.
 
-**Prochaine étape** : Cluster E — lire `CombatActionWindow.jsx` pour identifier la valeur initiale du state mode de tir. Fix probable : initialiser `selectedFireMode` à `'cc'` (ou valeur par défaut de l'arme) dès le montage, pas à null.
+**Code impliqué** : `client/src/lib/useCombatSocket.js` — handler `COMBAT_ENDED` (reset des états). `client/src/components/CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` — états `assaultTarget`, `meleeTargets`, etc.
+
+**Cause racine** [INCONNU] : Non investigué. Piste : le reset sur `COMBAT_ENDED` dans `useCombatSocket` ne couvre pas tous les états de sélection de cible dans les composants déclaration.
+
+**Prochaine étape** : Cluster H — lire `useCombatSocket.js` handler `COMBAT_ENDED` + états reset dans `CombatGmDeclareWindow` / `CombatActionWindow` pour identifier les états manquants.
 
 ---
 
@@ -480,20 +476,21 @@ console.log('[DBG-DR6]', {
 
 ## Bugs divers — Dette technique
 
-### Bug INI2 — Initiative non recalculée après blessure en combat
+### Bug INI2 — Modificateurs de blessure/soin non propagés automatiquement (initiative, malus)
 
-**Symptôme** : Quand un personnage reçoit une blessure pendant le combat, son initiative affichée dans la timeline ne se met pas à jour pour les autres clients. La blessure ajoute un malus (`calcWoundPenalty`) qui devrait réduire l'initiative, mais les clients voient encore l'ancienne valeur.
+**Symptôme** : Quand un personnage reçoit une blessure OU est soigné pendant le combat, les modificateurs dérivés du statut de blessures (`calcWoundPenalty`) ne se mettent pas à jour automatiquement pour les autres clients. L'initiative dans la timeline est l'exemple visible : elle reste à la valeur calculée au début du combat. D'autres modificateurs dépendant des blessures (malus compétences) pourraient être affectés de même.
 
-**Règle** : Malus blessures = `calcWoundPenalty(wounds)` — soustrait du score REA dans le calcul d'initiative. Ce malus augmente avec chaque nouvelle blessure.
+**Règle** : Malus blessures = `calcWoundPenalty(wounds)` — soustrait du score REA dans le calcul d'initiative, et s'applique aux jets de compétences. Ce malus change à chaque blessure reçue ou soin appliqué.
 
-**Cause racine** [INCONNU] : L'initiative est pré-calculée et stockée dans `combat_roster` au moment de `COMBAT_START`. `woundService.applyWound` émet `WOUND_ADDED` mais ne recalcule pas le roster. Les clients reçoivent la blessure mais aucun event ne les informe que l'initiative a changé.
+**Cause racine** [INCONNU] : L'initiative est pré-calculée et stockée dans `combat_roster` au moment de `COMBAT_START`. `woundService.applyWound` émet `WOUND_ADDED` mais ne recalcule pas le roster. Aucun event ne notifie les clients d'un changement de modificateur de blessure. Le sens inverse (soin → malus réduit → initiative remonte) n'est pas non plus géré.
 
 **Code impliqué** :
 - `server/src/lib/woundService.js` — `applyWound` : vérifier si un recalcul roster est prévu après insertion blessure
 - `server/src/socket/index.js` — `COMBAT_START` : voir comment l'initiative est calculée et stockée dans `combat_roster`
 - `server/src/socket/index.js` — helper `endTurn` / `startResolutionPhase` : voir si roster est recalculé entre les tours
+- Soin de blessures (endpoint REST ou WS) : vérifier si `WOUND_REMOVED` / `WOUND_HEALED` existe et propage un recalcul
 
-**Prochaine étape** : Cluster H — investigation future (post-REWORK-08). Lire `woundService.applyWound` + calcul `combat_roster` dans `COMBAT_START` pour confirmer l'hypothèse. Fix probable : recalculer l'initiative du token blessé dans `woundService.applyWound` et broadcaster un `COMBAT_ROSTER_UPDATED` partiel.
+**Prochaine étape** : Cluster H — investigation future. Lire `woundService.applyWound` + calcul `combat_roster` dans `COMBAT_START`. Fix probable : recalculer l'initiative du token après chaque changement de statut blessure et broadcaster un `COMBAT_ROSTER_UPDATED` partiel.
 
 ---
 
@@ -600,15 +597,19 @@ console.log('[DBG-INI1] initiative calc', { roll, rea, hiddenDie, finalInitiativ
 
 ---
 
-### FEAT2 — Vérification LOS (Line of Sight) avant attaque à distance
+### FEAT2 — LOS (Ligne de vue) — Session 112
 
-**Besoin** : Lors d'une déclaration d'attaque à distance, effectuer un raycast pour vérifier que la cible est effectivement atteignable (pas d'obstacle voxel entre l'attaquant et la cible).
+**Découpage :**
+- **FEAT2-A (MVP)** : Outil LOS dans le menu radial token — ✅ CLOS COMPLET Session 112
+- **FEAT2-B (automatique)** : Intégration pipeline déclaration d'assaut — sprint futur
 
-**Cause racine** [INCONNU] : Fonctionnalité non implémentée — aucun raycast LOS dans le pipeline de déclaration d'assaut.
+**FEAT2-A — Architecture (Session 112) :**
+- `client/src/lib/losUtils.js` — `checkLOS(voxels, fromToken, toToken)` pur, `fast-voxel-raycast`, PE14
+- Menu radial : secteur "Vue" (ex-"Viser") actif → `losMode { active, sourceTokenId }` dans SessionPage
+- Scene : clic token cible → `handleLosTarget` → ray 3D natif `<line>` (vert/rouge) + callback `onLosResult`
+- SessionPage : overlay DOM résultat (cliquable pour fermer)
 
-**Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` (sélection cible) — point d'entrée probable. Logique voxel : `client/src/components/Canvas3D.jsx` ou module 3D dédié.
-
-**Prochaine étape** : Sprint dédié post-stabilisation combat — nécessite une API raycast voxel côté client.
+**FEAT2-B — Code impliqué :** `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` — sprint futur.
 
 ---
 

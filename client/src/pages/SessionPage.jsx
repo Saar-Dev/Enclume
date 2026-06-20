@@ -532,6 +532,20 @@ export default function SessionPage() {
   // Ouvert au double-clic sur un token. Fermé par le composant lui-même.
   const [contextMenu, setContextMenu] = useState(null)
 
+  // ─── Mode LOS (ligne de vue) ─────────────────────────────────────────────────
+  const [losMode,   setLosMode]   = useState(null)
+  const [losResult, setLosResult] = useState(null)  // { clear: boolean } | null
+
+  const handleLosCancel = useCallback(() => setLosMode(null), [])
+  const handleLosResult = useCallback(({ clear }) => setLosResult({ clear }), [])
+
+  const handleViser = useCallback(() => {
+    if (!contextMenu) return
+    setLosResult(null)  // efface le résultat du check précédent
+    setLosMode({ active: true, sourceTokenId: contextMenu.token.id })
+    setContextMenu(null)
+  }, [contextMenu])
+
   // Ouverture — vérifie que l'utilisateur est propriétaire du token OU GM
   const handleTokenDoubleClick = useCallback((token, x, y) => {
     const character = characters.find(c => c.id === token.character_id)
@@ -808,6 +822,9 @@ export default function SessionPage() {
               pendingMoveSelection={pendingMoveSelection}
               combatTargetMode={combatTargetMode}
               announcementMarker={combatSocket.announcementMarker}
+              losMode={losMode}
+              onLosCancel={handleLosCancel}
+              onLosResult={handleLosResult}
               defaultTokenGlbUrl={campaign?.default_token_glb_url
                 ? `${import.meta.env.VITE_API_URL}/api/assets/${campaign.default_token_glb_url}`
                 : null}
@@ -893,10 +910,41 @@ export default function SessionPage() {
             onRemoveToken={handleRemoveContextToken}
             onSetRotation={handleSetContextTokenRotation}
             onOpenStatusPanel={() => setStatusPanel({ tokenId: contextMenu.token.id, x: contextMenu.x, y: contextMenu.y })}
+            onViser={handleViser}
             onClose={() => setContextMenu(null)}
           />
         )
       })()}
+
+      {/* ─── Mode LOS — banner "Sélectionnez une cible" ──────────────────── */}
+      {losMode?.active && (
+        <div style={{
+          position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 200, background: 'rgba(15,23,42,0.88)',
+          color: '#ffe066', padding: '6px 20px', borderRadius: 6,
+          border: '1px solid #ffe066', fontSize: 14, pointerEvents: 'none',
+          letterSpacing: '0.03em',
+        }}>
+          {t('los.selectTarget')}
+        </div>
+      )}
+
+      {/* ─── Mode LOS — résultat (clic sur l'overlay pour fermer) ───────── */}
+      {losResult !== null && (
+        <div
+          style={{
+            position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)',
+            zIndex: 200, background: 'rgba(15,23,42,0.88)',
+            color: losResult.clear ? '#70e07a' : '#e07070',
+            padding: '6px 20px', borderRadius: 6, cursor: 'pointer',
+            border: `1px solid ${losResult.clear ? '#70e07a' : '#e07070'}`,
+            fontSize: 14, letterSpacing: '0.03em',
+          }}
+          onClick={() => setLosResult(null)}
+        >
+          {losResult.clear ? t('los.clear') : t('los.blocked')}
+        </div>
+      )}
 
       {/* ─── Panneau statuts token ───────────────────────────────────────── */}
       {statusPanel && (() => {

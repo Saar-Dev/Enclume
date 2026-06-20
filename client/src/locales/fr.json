@@ -562,10 +562,15 @@
     "detailRetirer":  "Retirer du plateau",
     "portee":         "Portée",
     "detailPortee":   "Portée d'arme",
-    "viser":          "Viser",
+    "viser":          "Vue",
     "detailViser":    "Ligne de vue",
     "statuts":        "Statuts",
     "detailStatuts":  "Gérer les statuts"
+  },
+  "los": {
+    "clear":        "Ligne de vue dégagée",
+    "blocked":      "Ligne de vue bloquée",
+    "selectTarget": "Sélectionnez une cible"
   },
   "status": {
     "stunned":       "Étourdi",

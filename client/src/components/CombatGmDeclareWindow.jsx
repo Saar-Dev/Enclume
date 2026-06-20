@@ -181,6 +181,15 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     if (w && !w.ref_fire_mode && initialStates.weapon === 'drawn') setSelectedGmMeleeWeaponId(w.inv_id)
   }, [activeTokenId, equipment])
 
+  // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
+  useEffect(() => {
+    const w = equipment[activeTokenId]?.weapon
+    if (!w?.ref_fire_mode) return
+    const modes = w.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
+    if (!modes.includes(localStates.fire_mode))
+      setLocalStates(s => ({ ...s, fire_mode: modes[0] }))
+  }, [activeTokenId, equipment])
+
   // ── Helpers ─────────────────────────────────────────────────────────────
   const isPnj = (entry) => {
     const token = tokens.find(t => t.id === entry.token_id)
