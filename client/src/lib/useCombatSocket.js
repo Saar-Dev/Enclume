@@ -78,6 +78,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       }
       setCombatState({
         phase: combatState.phase,
+        subPhase: combatState.sub_phase ?? null,
         roster,
         actions,
         currentTurn: combatState.current_turn,

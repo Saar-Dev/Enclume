@@ -1,8 +1,8 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-06-17 Session 101
+> Dernière mise à jour : 2026-06-20 Session 111
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
-> Pour l'historique des décisions : voir JOURNAL4.md.
+> Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
 
 ---
 
@@ -40,7 +40,7 @@ Enclume/
 │   │   │   ├── EntityInstancePanel.jsx # Modifié 36 — sélecteur état actuel
 │   │   │   ├── CulledVoxelScene.jsx    # NOUVEAU 76 — rendu voxels fusionné : buildCulledMesh + BufferGeometry par (texId×physIdx) + dispose useEffect. Non-cubes → <Voxel> individuel. Modifié 77 Phase B — commentaire uniquement.
 │   │   │   ├── Voxel.jsx               # Stable 9A-5
-│   │   │   ├── Sidebar.jsx             # Modifié 64 Sprint 7.4 — +rendu interactionType='combat_damage' (dégâts colorés par sévérité). Modifié 36 — entity_action structuré. Modifié 65 Sprint DicePanel v3 — +🔒 dans diceHeader si msg.secret. Modifié 73 — messages depuis messagesByCampaign[activeCampaignId]
+│   │   │   ├── Sidebar.jsx             # Modifié 64 Sprint 7.4 — +rendu interactionType='combat_damage' (dégâts colorés par sévérité). Modifié 36 — entity_action structuré. Modifié 65 Sprint DicePanel v3 — +🔒 dans diceHeader si msg.secret. Modifié 73 — messages depuis messagesByCampaign[activeCampaignId]. Modifié 106c (REWORK-10) — +DeclareLogContent tab chat (haut zone messages, collapsible, GM+joueurs) ⚠️ scénarios 1–8 non testés
 │   │   │   ├── GeometryIcon.jsx        # Stable 9A-3
 │   │   │   ├── DicePanel.jsx           # Réécriture complète 65 Sprint DicePanel v3. Modifié 66 — favoris inline form, section MACROS (chips ★, form création 3 dropdowns, preview seuil live, fix GM effectiveCharId) — roue radiale SVG (PCBBackground, DieShape, DieButton), formule mono-type {k,n,mod}, favoris localStorage, historique local socket, JET AU MJ fonctionnel, useAuthStore direct, drag conservé
 │   │   │   ├── DiceMesh.jsx            # NOUVEAU 44 — géométries, matériaux, animation, Html overlay D10. Modifié 65 — branche D20 dédiée supprimée → D20 passe par faceNormal→D20_GLB_NORMALS (normales Blender exactes)
@@ -52,9 +52,12 @@ Enclume/
 │   │   │   ├── LoginPage.jsx           # Modifié 69 — +useEffect import + document.title 'Enclume — Connexion'
 │   │   │   └── RegisterPage.jsx        # Modifié 66 — +champ "Beta code". Modifié 69 — +useEffect import + document.title 'Enclume — Inscription'
 │   │   ├── lib/
-│   │   │   └── useDraggable.js         # NOUVEAU 66 — hook partagé drag+localStorage+clamp (storageKey, defaultPos, panelW)
+│   │   │   ├── useDraggable.js         # NOUVEAU 66 — hook partagé drag+localStorage+clamp (storageKey, defaultPos, panelW)
+│   │   │   ├── useTokenSocket.js       # NOUVEAU 103 (REWORK-09) — listeners TOKEN_MOVED/TOKEN_UPDATED/TOKEN_STATUS_*/TOKEN_SET_ROTATION
+│   │   │   ├── useEntitySocket.js      # NOUVEAU 103 (REWORK-09) — listeners ENTITY_MOVE_RESULT/ENTITY_UPDATED/DICE_RESULT(entity_action). Modifié 108b — clear pendingEntityId sur DICE_RESULT échec
+│   │   │   └── useCombatSocket.js      # NOUVEAU 103 (REWORK-09) — listeners COMBAT_*/DICE_RESULT(combat). 1509→1296 lignes SessionPage
 │   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover. Modifié 66 — layout flex+ChangelogPanel. Modifié 68 — formulaires inline. Modifié 69 — document.title 'Enclume — Tableau de bord'. Modifié 73 — deux cartes Créer/Rejoindre symétriques (filigrane +/↵, formulaires inline, refs focus, suppression actionsRow/showCreate/showJoin)
-│   │   │   ├── SessionPage.jsx         # Modifié 64-66 — combat, dés. Modifié 69 — document.title dynamique. Modifié 70 — defaultTokenGlbUrl. Modifié 71 — +updateCharacter destructure, +3 listeners wound (WOUND_ADDED/UPDATED/REMOVED → updateCharacter({id,worst_wound_severity})), +actionTimerSec prop CombatOverlay. Modifié 73 — setActiveCampaign(campaignId) début useEffect socket. Modifié 76 — dropdown token remplacé par TokenRadialMenu, contextMenuRef+useEffect click-outside supprimés, handleRemoveContextToken (sans setContextMenu), handleSetContextTokenRotation (TOKEN_SET_ROTATION). Modifié 79 — fix TDZ : useState statusPanel déplacé avant useEffect qui l'utilise. Modifié 81 — state announcementMarker (null|{tokenId,moveTarget,attackTargetId}), set dans COMBAT_ACTION_DECLARED, reset dans COMBAT_PHASE_CHANGED, passé à Canvas3D + CombatOverlay. Modifié 85 M3 — CAMPAIGN_SETTINGS_UPDATED listener (setCampaign merge). Modifié 95-6 — reset setCombatMoveMode/setCombatTargetMode/setPendingMoveSelection dans COMBAT_ENDED + COMBAT_PHASE_CHANGED (CUR1)
+│   │   │   ├── SessionPage.jsx         # Modifié 64-66 — combat, dés. Modifié 69 — document.title dynamique. Modifié 70 — defaultTokenGlbUrl. Modifié 71 — +updateCharacter destructure, +3 listeners wound (WOUND_ADDED/UPDATED/REMOVED → updateCharacter({id,worst_wound_severity})), +actionTimerSec prop CombatOverlay. Modifié 73 — setActiveCampaign(campaignId) début useEffect socket. Modifié 76 — dropdown token remplacé par TokenRadialMenu, contextMenuRef+useEffect click-outside supprimés, handleRemoveContextToken (sans setContextMenu), handleSetContextTokenRotation (TOKEN_SET_ROTATION). Modifié 79 — fix TDZ : useState statusPanel déplacé avant useEffect qui l'utilise. Modifié 81 — state announcementMarker (null|{tokenId,moveTarget,attackTargetId}), set dans COMBAT_ACTION_DECLARED, reset dans COMBAT_PHASE_CHANGED, passé à Canvas3D + CombatOverlay. Modifié 85 M3 — CAMPAIGN_SETTINGS_UPDATED listener (setCampaign merge). Modifié 95-6 — reset setCombatMoveMode/setCombatTargetMode/setPendingMoveSelection dans COMBAT_ENDED + COMBAT_PHASE_CHANGED (CUR1). Modifié 103 (REWORK-09) — useTokenSocket+useEntitySocket+useCombatSocket extraits, useEffect socket 340→~100L, total 1509→1296 lignes
 │   │   │   ├── CampaignSettingsPage.jsx # Modifié 66 Sprint 7.5 — section Règles de jeu. Modifié 68 Sprint Timer — +actionTimerSec. Modifié 69 — document.title. Modifié 70 — section Tokens 3D : upload/réinitialiser default_token_glb_url, feedback succès/erreur
 │   │   │   ├── WorkshopPage.jsx        # Modifié 69 — canDelete (isOwner || !created_by), Export/Supprimer séparés, document.title 'Enclume — Atelier'
 │   │   │   └── TexturePacksPage.jsx    # CONSERVÉ mais remplacé par WorkshopPage
@@ -62,7 +65,7 @@ Enclume/
 │   │   │   ├── authStore.js
 │   │   │   ├── tokenStore.js
 │   │   │   ├── characterStore.js       # Modifié 44 — upsertCharacter guard visible+isGm (Bug A)
-│   │   │   ├── combatStore.js          # Modifié 62 — phase/roster/actions/currentTurn/activeSlotIdx/markTokenAnnounced + setActions + advanceSlot
+│   │   │   ├── combatStore.js          # Modifié 62 — phase/roster/actions/currentTurn/activeSlotIdx/markTokenAnnounced + setActions + advanceSlot. Modifié 111 (REWORK-04) — +subPhase:null, +setCombatSubPhase, resetCombat inclut subPhase
 │   │   │   ├── mapStore.js
 │   │   │   ├── sessionStore.js         # Modifié 73 — messages[]→messagesByCampaign{}, activeCampaignId, setActiveCampaign. resetSession mis à jour (était dead code)
 │   │   │   ├── libraryStore.js         # NOUVEAU 75 — documents[], addDocument (upsert), updateDocument, removeDocument
@@ -126,14 +129,22 @@ Enclume/
 │   │   │   └── errorHandler.js
 │   │   ├── socket/
 │   │   │   ├── auth.js
-│   │   │   └── index.js                # Modifié 65 Sprint 7.6. Modifié 66 — +MACRO_ROLL, COMBAT_ACTION_DECLARE v2, COMBAT_DAMAGE_CONFIRM, resolveAssaultAction. Modifié 67 Sprint CaC 1 — +import getModDom, +pendingMeleeDefense Map, +resolveMeleeAction, +COMBAT_MELEE_DEFENSE_CONFIRM handler, COMBAT_ACTION_CONFIRM branche melee + needsDefenseWait, COMBAT_DAMAGE_CONFIRM branche type=melee (modDom vs MR table), COMBAT_DECLARE_ERROR si hors portée. Modifié 68 Sprint CaC 2 — +VALID_STATES +combat_mode, chargeMove iniDelta=0, UPDATE +state_combat_mode, resolveMeleeAction +allonge +distance Phase2 +attackModeBonus +combatModeBonus, COMBAT_MELEE_DEFENSE_CONFIRM +mode défenseur PJ, COMBAT_DAMAGE_CONFIRM +combatModeBonus, endTurn reset state_combat_mode='normal'. Modifié 70 — db.migrate.latest() dans startServer(). Modifié 72 CaC 4a — multiAdversaryMalus()+countAdversaires() module-level, multiMalusAttaquant→chancesAttaque, multiMalusDefenseur→chanceDefense, enrichissement COMBAT_MELEE_RESULT + COMBAT_MELEE_DEFENSE_PROMPT. Modifié 76 — handler TOKEN_SET_ROTATION. Modifié 81 Sprint Test de Choc — 4 blocs shock conditionnés shock_auto_stun + stun_applied dans payload, helper applyStunStatus (token_statuses + TOKEN_STATUS_UPDATED), handler COMBAT_APPLY_STUN, COMBAT_END cleanup stunned/unconscious token_statuses. Modifié 96 (REWORK-01) — +import * as statusService. resolveShockBlock → statusService.resolveShockBlock (5 sites). Modifié 97 (REWORK-03) — +import * as woundService. resolveWoundInsertion blocks → woundService.applyWound (5 sites CS1–CS5). CS2 : meleeCampaignId pas campaignId (PIEGE-4).
+│   │   │   ├── socketToken.js          # NOUVEAU 108 (REWORK-08) — registerTokenHandlers (SESSION_JOIN + TOKEN_MOVE/ROTATE/SET_ROTATION + PLAYER_LOCATION_UPDATE)
+│   │   │   ├── socketVoxel.js          # NOUVEAU 108 (REWORK-08) — registerVoxelHandlers (VOXEL_ADD/REMOVE/UPDATE + MAP_SWITCH ×3 occurrences)
+│   │   │   ├── socketDice.js           # NOUVEAU 108 (REWORK-08) — registerDiceHandlers (DICE_ROLL + MACRO_ROLL)
+│   │   │   ├── socketEntity.js         # NOUVEAU 108b (REWORK-08) — registerEntityHandlers (ENTITY_MOVE_REQUEST/INTERACT/UPDATED/DELETE + resolveEntityState helper)
+│   │   │   ├── socketCombat.js         # NOUVEAU 108 (REWORK-08) — registerCombatHandlers (13 handlers + 13 helpers + 7 constantes, pendingMaps: pendingMeleeDefense/pendingDamageActions/pendingStunActions). Modifié 111 (REWORK-04) — guards canTransition (10 handlers), pendingMeleeDefense/pendingDamageActions/pendingStunActions Maps → DB combat_pending, setFSMSubPhase appelé aux transitions
+│   │   │   └── index.js                # Modifié 65 Sprint 7.6. Modifié 66 — +MACRO_ROLL, COMBAT_ACTION_DECLARE v2, COMBAT_DAMAGE_CONFIRM, resolveAssaultAction. Modifié 67 Sprint CaC 1 — +import getModDom, +pendingMeleeDefense Map, +resolveMeleeAction, +COMBAT_MELEE_DEFENSE_CONFIRM handler, COMBAT_ACTION_CONFIRM branche melee + needsDefenseWait, COMBAT_DAMAGE_CONFIRM branche type=melee (modDom vs MR table), COMBAT_DECLARE_ERROR si hors portée. Modifié 68 Sprint CaC 2 — +VALID_STATES +combat_mode, chargeMove iniDelta=0, UPDATE +state_combat_mode, resolveMeleeAction +allonge +distance Phase2 +attackModeBonus +combatModeBonus, COMBAT_MELEE_DEFENSE_CONFIRM +mode défenseur PJ, COMBAT_DAMAGE_CONFIRM +combatModeBonus, endTurn reset state_combat_mode='normal'. Modifié 70 — db.migrate.latest() dans startServer(). Modifié 72 CaC 4a — multiAdversaryMalus()+countAdversaires() module-level, multiMalusAttaquant→chancesAttaque, multiMalusDefenseur→chanceDefense, enrichissement COMBAT_MELEE_RESULT + COMBAT_MELEE_DEFENSE_PROMPT. Modifié 76 — handler TOKEN_SET_ROTATION. Modifié 81 Sprint Test de Choc — 4 blocs shock conditionnés shock_auto_stun + stun_applied dans payload, helper applyStunStatus (token_statuses + TOKEN_STATUS_UPDATED), handler COMBAT_APPLY_STUN, COMBAT_END cleanup stunned/unconscious token_statuses. Modifié 96 (REWORK-01) — +import * as statusService. resolveShockBlock → statusService.resolveShockBlock (5 sites). Modifié 97 (REWORK-03) — +import * as woundService. resolveWoundInsertion blocks → woundService.applyWound (5 sites CS1–CS5). CS2 : meleeCampaignId pas campaignId (PIEGE-4). Modifié 100 (REWORK-07) — getUserColor+checkTokenOwnership→socketUtils. Modifié 108 (REWORK-08) — 5 modules registerXxxHandlers extraits, 4266→143 lignes. disconnect dans SESSION_JOIN. [R8-27] socket.campaignId+role dans SESSION_JOIN conservés (utilisés par socketCombat helpers).
 │   │   └── lib/
 │   │       ├── AppError.js
 │   │       ├── minio.js
 │   │       ├── diceParser.js
+│   │       ├── combatFSM.js            # NOUVEAU 111 (REWORK-04) — canTransition + nextState + setFSMSubPhase + allowedEvents. Table TRANSITIONS : 6 états FSM. Fonctions pures, zéro I/O sauf setFSMSubPhase (DB uniquement).
 │   │       ├── charStats.js            # Modifié 60 — calcVitesses→calcAllures (4 allures LdB p.221, lookup COO+Athlétisme)
 │   │       ├── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
-│   │       ├── statusService.js        # NOUVEAU 96 (REWORK-01) — resolveShockBlock centralisé (5 sites → 1 call), applyStun, applyStunStatus, emitShockDiceResult, resolveShockTest. resolveShockTest retourne { rolls, seed } pour DICE_RESULT.
+│   │       ├── socketUtils.js          # NOUVEAU 100 (REWORK-07) — getUserColor (6 call sites) + checkTokenOwnership (4 call sites, role==='gm'). LOC_TABLE_CONTACT supprimé.
+│   │       ├── mrTable.js              # NOUVEAU 108 (REWORK-08) — singleton-promise polaris_mr. getMrTable()→Promise<row[]>. Remplace cache local MR_TABLE dans index.js + socketCombat.js.
+│   │       ├── statusService.js        # NOUVEAU 96 (REWORK-01) — resolveShockBlock centralisé (5 sites → 1 call), applyStun, applyStunStatus, emitShockDiceResult, resolveShockTest. resolveShockTest retourne { rolls, seed } pour DICE_RESULT. Modifié 111 (REWORK-04) — applyStun : pendingStunActions param retiré, 2 Map.set() → db('combat_pending').insert()
 │   │       ├── woundUtils.js           # voir §woundUtils.js. Modifié 97 — +export getWorstWoundSeverity (utilise WOUND_SEVERITIES.slice().reverse() — PIEGE-7 évité). isShockTestRequired, nextSeverity, resolveWoundInsertion, getWorstWoundSeverity.
 │   │       ├── woundService.js         # NOUVEAU 97 (REWORK-03) — applyWound(io, db, campaignId, { charSheetId, characterId, localisation, severity }) : transaction resolveWoundInsertion + getWorstWoundSeverity + WOUND_ADDED broadcast (worst_wound_severity inclus). Retourne { finalSeverity } ou null (P49 : severity post-promotion).
 │   │       └── damageService.js        # NOUVEAU 101 (REWORK-02) — resolveTargetHit(io, db, campaignId, { degautsBruts, characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible }) : loc D20 + armures + RD + sévérité + woundService.applyWound + statusService.resolveShockTest. Retourne null si cibleType='drone'.
@@ -244,6 +255,8 @@ Enclume/
 | 75_ammo_caliber_names_fix | Caliber normalisé + doublons munitions fusionnés — table ref_equipment_ammo_compat nettoyée (Session 84) |
 | 76–78 | À documenter — Sessions 86–92 |
 | 79_token_statuses_expires_at_turn | token_statuses : +`expires_at_turn INTEGER` — déclencheur expiration stun par tour de combat (Session 93-3) |
+| 80_combat_pending | combat_pending : PK (campaign_id, token_id, type), JSONB payload, FK CASCADE. type CHECK ('melee_defense','damage','stun'). Remplace 3 Maps in-memory REWORK-04 (Session 111) |
+| 81_combat_state_subphase | combat_state : +`sub_phase TEXT` nullable CHECK ('SLOT_ACTIVE','AWAITING_DEFENSE','AWAITING_DAMAGE'). FSM sous-états persistés (Session 111) |
 
 ---
 

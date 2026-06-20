@@ -1797,7 +1797,50 @@ Compléter REWORK-08 : créer `server/src/socket/socketCombat.js` (~2 800 lignes
 
 **Note dette cosmétique :** Les commentaires français dans index.js ont subi un mojibake UTF-8→Latin-1 lors de la reconstruction PowerShell (`Get-Content` sans `-Encoding UTF8`). Fonctionnellement transparent (Node.js parse valide UTF-8, seuls les `console.log` de connexion affichent du texte garbled). À corriger sprint futur (simple re-écriture des commentaires concernés).
 
-### Clôture ⚠️ CLOS PARTIEL
+### Clôture ✅ CLOS COMPLET
 
-- **Testé :** SR ok, `node --check` ×2, `npm run build`, 143 lignes
-- **Non testé :** Scénarios 1–17 (pas de session de combat disponible pour valider les flux complets)
+- **Testé :** SR ok, `node --check` ×2, `npm run build`, 143 lignes, scénarios 1–17 validés ("Tests all OK")
+
+---
+
+## Session 108b — REWORK-08 Étape 5 + correctifs entités — 2026-06-19
+
+### Objectif
+
+Exécuter REWORK-08 Étape 5 (création `socketEntity.js`) et corriger 3 bugs entités découverts en test.
+
+### Travail effectué
+
+**REWORK-08 Étape 5 — `server/src/socket/socketEntity.js` (créé, ~766 lignes) :**
+- `resolveEntityState(entityId, interactionId, campaignId, io)` helper module-level (avant `registerEntityHandlers`)
+- `export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, pendingEntityActions)` — 7 handlers migrés depuis `index.js`
+- Substitutions [R8-14/R8-15] appliquées : `socket.campaignId → campaignId`, `socket.role !== 'gm' → !isGm`, `socket.user.id → user.id`, `socket.user.username → user.username` (×6 réel, non ×5 spec — code prime sur spec)
+- [R8-15] respecté : `pending.campaignId` ×6 dans ENTITY_ACTION_RESOLVE — non substitués
+- `socket.id` conservé (playerSocketId ≠ user.id)
+- `io.in(campaignId).fetchSockets()` conservé (×2 — ENTITY_ACTION_REQUEST + ENTITY_CREATED)
+- `socket.emit(WS.ENTITY_MOVE_RESULT)` ×3 conservés (vers joueur uniquement)
+- `node --check` → 0 erreur ✓
+
+**`server/src/socket/index.js` (modifié) :**
+- `import { registerEntityHandlers }` ajouté
+- `registerEntityHandlers(io, socket, context, pendingEntityActions)` dans SESSION_JOIN
+- Bloc 7 handlers entités supprimé + `resolveEntityState` supprimé
+
+**Bug 1 — gm_only "toujours visible" :**
+- `Canvas3D.jsx` : filtre `if (entity.gm_only && !isGm) return null` + `handleEntityUpdated` étendu au champ `gm_only` (spread conditionnel)
+- `socketEntity.js` : `socket.on(WS.ENTITY_UPDATED, { entityId, gm_only })` — GM only, rebroadcast room
+- `SessionPage.jsx` : `socket={socket}` ajouté à `EntityInstancePanel`
+- `EntityInstancePanel.jsx` : prop `socket` + import `WS` + emit `ENTITY_UPDATED` après save
+- Clôture ✅ — **Testé :** GM toggle gm_only → entité disparaît vue joueur / réapparaît. **Non testé :** entité créée ab initio gm_only=true mid-session sans reload
+
+**Bug 2 — delete entité impossible :**
+- `EntityInstancePanel.jsx` : bouton "Supprimer l'entité" + confirmation inline → REST DELETE `/entities/:id` + `removeEntity` store + `socket.emit(ENTITY_DELETED)` + `onClose`
+- `fr.json` : clés `entityPanel.delete` + `entityPanel.deleteConfirm` ajoutées
+- Clôture ✅ — **Testé :** suppression entité → fermeture panel + entité disparaît tous clients. **Non testé :** suppression entité gm_only
+
+**Bug 3 — sablier bloqué après échec jet :**
+- `useEntitySocket.js` : `s.on(WS.DICE_RESULT, { type })` → si `type === 'entity_action'` → `clearPendingEntityId()`
+- Cause : sur échec, `resolveEntityState` n'est pas appelé → pas d'`ENTITY_UPDATED` → `clearPendingEntityId()` jamais atteint
+- Clôture ✅ — **Testé :** jet entité échoué → sablier disparaît. **Non testé :** scénario multi-joueur simultané
+
+### Clôture ✅ CLOS COMPLET

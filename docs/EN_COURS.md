@@ -1,7 +1,7 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-18 Session 106
+> Dernière mise à jour : 2026-06-20 Session 111
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
-> Historique complet : voir `docs/JOURNAL4.md` (Sessions 86+) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
+> Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
 ---
 
@@ -29,19 +29,18 @@
 **8. ~~REWORK-09 — SessionPage → hooks WS dédiés~~** ✅ CLOS COMPLET Session 103
    → `useTokenSocket.js` + `useEntitySocket.js` + `useCombatSocket.js` — 1509 → 1296 lignes
 
-**9. REWORK-08 — Modularisation `socket/index.js`** *(voir `docs/ARCHI_REWORK.md` §REWORK-08)*
-   → **Étapes 1, 2, 3 planifiées (Session 106) — prêtes à coder.**
-   → Étapes 4 (socketDice), 5 (socketEntity), 6 (socketCombat) : à planifier session dédiée avant code.
-   → 7 étapes : mrTable → socketToken → socketVoxel → socketDice → socketEntity → socketCombat → index final
-   → Pattern validé : `registerXxxHandlers(io, socket, context)` — docs officielles Socket.IO v4
-   → Pièges [R8-2 à R8-11] documentés dans `ARCHI_REWORK.md` §Pièges documentés
+**9. ~~REWORK-08 — Modularisation `socket/index.js`~~** ✅ CLOS COMPLET Session 108
+   → 5 modules `registerXxxHandlers` + `lib/mrTable.js`. `index.js` : 4 266 → 143 lignes. Scénarios 1–17 validés.
+
+**10. ~~REWORK-04 — FSM Combat~~** ✅ CLOS COMPLET Session 110/111 — validé en session réelle ✅
+   → 12 étapes A1→C4 — `combatFSM.js` + migrations 80+81 + guards socketCombat + DB persistence + restauration reconnexion
 
 ---
 
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **79 migrations appliquées** (79 = expires_at_turn token_statuses — Session 93-3)
+- **81 migrations appliquées** (80 = combat_pending, 81 = combat_state.sub_phase — Session 111)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---
@@ -64,10 +63,12 @@
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
 | CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
-| UI1 | ~~Fenêtre déclaration design blanc~~ | ⚠️ REWORK-10 clos partiel — CDL dans chat Sidebar, SR ok, scénarios 1–8 en attente |
-| COM1 | Recharger ne fait rien | **Haute** |
-| CL1 | Portraits PNJ non visibles timeline joueur | **Haute** |
+| ~~UI1~~ | ~~Fenêtre déclaration design blanc~~ | ✅ REWORK-10 clos complet — scénarios 1–8 validés (Session 109) |
+| ~~COM1~~ | ~~Recharger ne fait rien~~ | ✅ Clos Session 109 |
+| ~~CL1~~ | ~~Portraits PNJ non visibles timeline joueur~~ | ✅ Clos Session 109 |
 | COM8 | Fenêtre annonce visible pendant sélection cible | Moyenne |
+| COM12 | Mode de tir : chips CC/RC/RF sans filtre disponibilité arme | Moyenne |
+| COM13 | Assaut tir joueur : "Tir simple" par défaut non validé sans re-clic | Moyenne |
 | COM2 | Vérif statut arme absente côté GM | Moyenne |
 | COM4 | CaC exige arme au clair (mains nues impossible) | Moyenne |
 | COM5 | ~~Mode combat sélectionne aussi la cible (GM)~~ | ✅ REWORK-05 Session 99 |
@@ -82,7 +83,7 @@
 | DR2 | Drone : déplacement absent | Basse — sprint futur |
 | INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
 | INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |
-| WS1 | WorkshopPage crash `err.response?.data?.error` | Basse |
+| ~~WS1~~ | ~~WorkshopPage crash `err.response?.data?.error`~~ | ✅ Clos Session 109 |
 | AU1 | `useDiceAudio.js` — sons dés | Basse |
 | TC1 | `.gitattributes:3` — attribut invalide | Très basse |
 | DCO1 | `onTokenRotate` dead code Canvas3D/Scene | Très basse |
@@ -95,7 +96,7 @@
 ## Roadmap
 
 - ~~**Sprint Dégâts Drone**~~ ✅ → B6 (Loc) + B7 (Dmg) — Clos Sessions 94
-- **Sprint Drones 2d** — auto-announcement drone → voir `docs/PLAN_DRONESYSCOMBAT.md`
+- **Sprint Drones 2d** — auto-announcement drone → voir `docs/Old/PLAN_DRONESYSCOMBAT.md`
 - **Sprint Drones 2e** — resolveDroneAutoAction
 - **Sprint Drones 3** — Télépilotage (drone lié à PJ pilote)
 - **Sprint PLAN 14-1** — Menu contextuel token (right-click → ajouter/retirer statuts)

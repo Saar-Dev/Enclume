@@ -93,7 +93,7 @@ export default function WorkshopPage() {
       setPacks(prev => [...prev, res.data.pack])
       setShowCreate(false)
       setCreateForm({ name: '', label: '', description: '', tile_size: '128' })
-    } catch (err) { setCreateError(err.response?.data?.error || t('texturePacks.errorCreate')) }
+    } catch (err) { setCreateError(err.response?.data?.error || err.response?.data?.message || err.message || t('texturePacks.errorCreate')) }
     finally { setCreating(false) }
   }, [createForm, t])
 
@@ -117,7 +117,7 @@ export default function WorkshopPage() {
       const res = await api.post('/texture-packs/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
       setImportSuccess(t('texturePacks.importSuccess') + ` (${res.data.textureCount} voxels)`)
       await loadPacks()
-    } catch (err) { setImportError(err.response?.data?.error || t('texturePacks.importError')) }
+    } catch (err) { setImportError(err.response?.data?.error || err.response?.data?.message || err.message || t('texturePacks.importError')) }
     finally { setImporting(false); e.target.value = '' }
   }, [t, loadPacks])
 
@@ -130,7 +130,7 @@ export default function WorkshopPage() {
       if (selectedPack?.id === packId) { setSelectedPack(null); setPackDetail(null); setPackFiles([]) }
       setDeleteConfirm(null)
     } catch (err) {
-      setError(err.response?.status === 409 ? t('texturePacks.deletePackUsed') : (err.response?.data?.error || t('common.error')))
+      setError(err.response?.status === 409 ? t('texturePacks.deletePackUsed') : (err.response?.data?.error || err.response?.data?.message || err.message || t('common.error')))
       setDeleteConfirm(null)
     } finally { setDeleting(false) }
   }, [selectedPack, t])
@@ -143,7 +143,7 @@ export default function WorkshopPage() {
       const formData = new FormData(); formData.append('file', file)
       const res = await api.post(`/texture-packs/${selectedPack.id}/files`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
       setPackFiles(prev => [...prev, res.data.file])
-    } catch (err) { setError(err.response?.data?.error || t('common.error')) }
+    } catch (err) { setError(err.response?.data?.error || err.response?.data?.message || err.message || t('common.error')) }
     finally { setUploadingFile(false); e.target.value = '' }
   }, [selectedPack, t])
 
@@ -153,7 +153,7 @@ export default function WorkshopPage() {
       await api.delete(`/texture-packs/${selectedPack.id}/files/${filePath}`)
       setPackFiles(prev => prev.filter(f => f.path !== filePath))
     } catch (err) {
-      setError(err.response?.status === 409 ? t('texturePacks.fileInUse') : (err.response?.data?.error || t('common.error')))
+      setError(err.response?.status === 409 ? t('texturePacks.fileInUse') : (err.response?.data?.error || err.response?.data?.message || err.message || t('common.error')))
     }
   }, [selectedPack, t])
 

@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-18 Session 105
+> Dernière mise à jour : 2026-06-20 Session 111
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -28,8 +28,8 @@
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
 | **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 | composants combat + `index.css §11` | **Haute** |
-| **E — Arme et statuts** | COM1 + COM2 + COM4 + COM7 + COM10 + COM11 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
-| **F — Ghosts + portraits** | CL1 + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
+| **E — Arme et statuts** | ~~COM1~~ + COM2 + COM4 + COM7 + COM10 + COM11 + COM12 + COM13 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
+| **F — Ghosts + portraits** | ~~CL1~~ + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
 | **G — Drone store** | D1 + D2 | `SessionPage.jsx` + `Canvas3D.jsx` | Moyenne |
 | **H — Dettes techniques** | WS1 + TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + TOK1 + MAP1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `server/src/socket/index.js` | SR ✅ — validation fonctionnelle requise |
@@ -154,15 +154,9 @@ Ajouter dans la IIFE du menu radial `SessionPage.jsx` avant le `find` pour compa
 
 ## Bugs Session 91 — CombatDeclareLog (2026-06-11) — Non résolus
 
-### Bug CL1 — Timeline joueur : portraits PNJ non visibles
+### Bug CL1 ✅ CLOS Session 109 — Timeline joueur : portraits PNJ non visibles
 
-**Symptôme** : Côté joueur uniquement, certains portraits dans la timeline de combat ne s'affichent pas. Exemple observé : PNJ "Soleil" sans portrait. Côté GM : OK.
-
-**Code impliqué** : `CombatTimeline.jsx` — rendu des portraits. Probable dépendance à `characters` (store characterStore) qui ne contient côté joueur que les personnages appartenant au joueur, pas les PNJ GM.
-
-**Cause racine** [HYPOTHÈSE] : La timeline joueur tente de résoudre le portrait via `characters.find(c => c.id === token.character_id)` — retourne `undefined` pour les PNJ non chargés dans le store joueur → fallback image absente ou non rendue.
-
-**Prochaine étape** : Lire `CombatTimeline.jsx` — vérifier comment le portrait est résolu et si un fallback visible existe pour les tokens sans `character` dans le store.
+**Correction** : Corrigé (confirmation Saar — Session 109). Bug de design visuel.
 
 ---
 
@@ -251,21 +245,9 @@ Ajouter dans la IIFE du menu radial `SessionPage.jsx` avant le `find` pour compa
 
 ---
 
-### Bug COM1 — Recharger : action ne fait rien (humanoïde)
+### Bug COM1 ✅ CLOS — Recharger : action ne fait rien (humanoïde)
 
-**Symptôme** : En combat humanoïde, déclarer l'action "Recharger" et la résoudre n'a aucun effet observable.
-
-**Cause racine** [INCONNU] : Non encore investigué — `resolveReloadAction` peut être absent, ou l'état `weapon_loaded` non persisté en base.
-
-**[DBG-COM1] suggestion** :
-```js
-console.log('[DBG-COM1] reload handler reached', { actionType, tokenId, weaponInvId })
-```
-Ajouter au début du handler `COMBAT_ACTION_CONFIRM` pour vérifier si le type `reload` est bien routé.
-
-**Code impliqué** : `server/src/socket/index.js` — `COMBAT_ACTION_CONFIRM` → handler reload. À vérifier : est-ce que `resolveReloadAction` (ou équivalent) est appelé ? Est-ce que l'état de l'arme (chargée/vide) est tracké en base ?
-
-**Prochaine étape** : Lire le handler reload dans `index.js`, vérifier la route et la persistance.
+**Correction** : Corrigé (confirmation Saar — Session 109). `resolveReloadAction` opérationnel.
 
 ---
 
@@ -345,6 +327,36 @@ Ajouter dans le composant de sélection de cible CaC pour observer l'état au mo
 - `server/src/socket/index.js` — `COMBAT_ACTION_DECLARE` + `resolveAssaultAction` : payload `attack` scalaire
 
 **Prochaine étape** : Sprint dédié — implémenter après validation fonctionnelle REWORK-05 (les panneaux partagés `AssaultRangedPanel` doivent être stables avant d'y ajouter une mécanique).
+
+---
+
+### Bug COM12 — Mode de tir : sélection autorisée sans vérifier les modes disponibles de l'arme
+
+**Symptôme** : Toutes les fenêtres de combat (GM et joueur) affichent les chips CC / RC / RF sans vérifier si l'arme équipée supporte réellement ces modes. Un joueur peut sélectionner "Rafale" sur une arme semi-automatique sans obstacle.
+
+**Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` — sélecteur mode de tir. `ref_equipment` : colonnes `fire_mode_cc`, `fire_mode_rc`, `fire_mode_rl` — disponibilité par arme. `combatSections.js` — `FIRE_MODE_VARIANTS`.
+
+**Cause racine** [INCONNU] : Non investigué. Les chips CC/RC/RF semblent rendus sans filtrage sur les modes disponibles de l'arme courante. Il faudrait croiser l'arme sélectionnée avec ses `fire_mode_*` pour griser les modes indisponibles.
+
+**Prochaine étape** : Cluster E — lire CombatGmDeclareWindow + CombatActionWindow pour confirmer l'absence de filtre, puis vérifier quels champs de `ref_equipment` sont déjà chargés dans ce contexte.
+
+---
+
+### Bug COM13 — Assaut tir joueur : "Tir simple" par défaut non validé sans re-sélection
+
+**Symptôme** : Phase ANNOUNCEMENT, côté joueur (`CombatActionWindow`), action Assaut (tir) — "Tir simple" est visuellement coché par défaut, mais le bouton "Déclarer" reste bloqué jusqu'à ce que le joueur re-clique sur "Tir simple". Piège UX avéré en session.
+
+**Code impliqué** : `client/src/components/CombatActionWindow.jsx` — état initial du mode de tir (probablement `state_fire_mode` ou `selectedFireMode` initialisé à `null`/`undefined` alors que le chip affiche déjà une valeur par défaut).
+
+**Cause racine** [HYPOTHÈSE] : La valeur affichée par défaut est un `defaultValue` visuel (ou valeur calculée), mais le state React `selectedFireMode` (ou équivalent) reste `null` jusqu'au premier clic. La condition `canDeclare` exige un mode de tir non-null → "Déclarer" grisé malgré l'apparence cochée.
+
+**[DBG-COM13] suggestion** :
+```js
+console.log('[DBG-COM13]', { selectedFireMode, state_fire_mode, canDeclare })
+```
+Ajouter dans `CombatActionWindow` pour observer l'état initial au montage du composant assaut tir.
+
+**Prochaine étape** : Cluster E — lire `CombatActionWindow.jsx` pour identifier la valeur initiale du state mode de tir. Fix probable : initialiser `selectedFireMode` à `'cc'` (ou valeur par défaut de l'arme) dès le montage, pas à null.
 
 ---
 
@@ -502,13 +514,11 @@ console.log('[DBG-INI1] initiative calc', { roll, rea, hiddenDie, finalInitiativ
 
 ---
 
-### Bug WS1 — WorkshopPage crash import invalide
+### Bug WS1 ✅ CLOS Session 109 — WorkshopPage crash import invalide
 
-**Symptôme** : Handler d'erreur accède `err.response?.data?.error` — structure absente sur certaines erreurs → crash ou message vide.
+**Correction appliquée** : `err.response?.data?.error || err.response?.data?.message || err.message || t('...')` — 5 catch handlers (L96, L120, L133, L146, L156).
 
-**Correction** : `err.response?.data?.message ?? err.message`.
-
-**Code impliqué** : `client/src/pages/WorkshopPage.jsx` — handler catch.
+**Code impliqué** : `client/src/pages/WorkshopPage.jsx` — handlers catch.
 
 ---
 
@@ -540,9 +550,9 @@ console.log('[DBG-INI1] initiative calc', { roll, rea, hiddenDie, finalInitiativ
 
 **Code impliqué** : `server/src/socket/socketToken.js` — `TOKEN_ROTATE` handler, `newR = ((token.r ?? 0) + 1) % 8`. Client : composant Canvas3D — calcul `rotation.y`.
 
-**Note** : Signalement incertain — à confirmer en session de jeu réelle.
+**Note Session 109** : Confirmé en session réelle. Comportement camera-dépendant — certaines orientations correctes, d'autres non selon la position de caméra. Pas une simple inversion. Logique `rotation.y = r * Math.PI / 4` (Canvas3D) à comprendre en relation avec le système de coordonnées Three.js + caméra orbitale avant tout correctif.
 
-**Prochaine étape** : Cluster H — investigation si confirmé en session.
+**Prochaine étape** : Cluster H — investigation dédiée. NE PAS bricoler (inversion `+1 → −1` insuffisant).
 
 ---
 
@@ -578,6 +588,30 @@ console.log('[DBG-INI1] initiative calc', { roll, rea, hiddenDie, finalInitiativ
 
 ---
 
+## Nouvelles fonctionnalités — Non implémentées
+
+### FEAT1 — Map2D (style Roll20)
+
+**Besoin** : Affichage alternatif 2D de la carte (vue du dessus, style Roll20) en complément de la vue 3D existante.
+
+**Cause racine** [INCONNU] : Fonctionnalité non implémentée — aucun composant 2D existant.
+
+**Prochaine étape** : Sprint dédié — spécifier l'interface (toggle 2D/3D, rendu canvas 2D, synchronisation tokens).
+
+---
+
+### FEAT2 — Vérification LOS (Line of Sight) avant attaque à distance
+
+**Besoin** : Lors d'une déclaration d'attaque à distance, effectuer un raycast pour vérifier que la cible est effectivement atteignable (pas d'obstacle voxel entre l'attaquant et la cible).
+
+**Cause racine** [INCONNU] : Fonctionnalité non implémentée — aucun raycast LOS dans le pipeline de déclaration d'assaut.
+
+**Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` (sélection cible) — point d'entrée probable. Logique voxel : `client/src/components/Canvas3D.jsx` ou module 3D dédié.
+
+**Prochaine étape** : Sprint dédié post-stabilisation combat — nécessite une API raycast voxel côté client.
+
+---
+
 ## Bugs archivés (clos) — Référence rapide
 
 | ID | Description | Résolution | Session |
@@ -599,3 +633,5 @@ console.log('[DBG-INI1] initiative calc', { roll, rea, hiddenDie, finalInitiativ
 | ST2 | D6 durée étourdissement jamais visible joueur | REWORK-01 `resolveShockBlock` → `statusService.js` centralisé | 96 |
 | SHK6 | COMBAT_DAMAGE_CONFIRM : PJ cible bloqué à "Calcul en cours…" | Condition autorisation élargie à `pending.targetUserId` (drone sans user_id) | 96 suite |
 | DIV-1 | `worst_wound_severity` absent WOUND_ADDED combat → anneau sévérité perdu | REWORK-03 `woundService.applyWound` appelle `getWorstWoundSeverity` post-transaction | 97 |
+| COM1 | Recharger ne fait rien (humanoïde) | Corrigé — confirmation Saar Session 109 | — |
+| CL1 | Portraits PNJ non visibles timeline joueur | Corrigé (design) — confirmation Saar Session 109 | 109 |

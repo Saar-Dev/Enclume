@@ -6,6 +6,7 @@ import { getUserColor } from '../lib/socketUtils.js'
 import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
+import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
 import {
   calcSkillTotal, calcAttributeNA, calcREA,
   calcWoundPenalty, calcEncumbrancePenalty,
@@ -78,8 +79,13 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
   socket.on(WS.COMBAT_START, async ({ battlemap_id, surprisedTokenIds = [], excludedTokenIds = [] }) => {
     if (!isGm) return
     try {
-      // Guard — combat déjà en cours
       const existing = await db('combat_state').where({ campaign_id: campaignId }).first()
+      const { phase: _gPhase, sub_phase: _gSubPhase } = existing ?? {}
+      if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_START')) {
+        console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_START`)
+        return
+      }
+      // Guard — combat déjà en cours
       if (existing) {
         socket.emit('error', { message: 'Combat déjà en cours pour cette campagne' })
         return
@@ -207,6 +213,11 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
   socket.on(WS.COMBAT_END, async () => {
     if (!isGm) return
     try {
+      const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
+      if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_END')) {
+        console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_END`)
+        return
+      }
       // PC19 — clearTimeout AVANT delete
       const timers = pendingMaps.combatTimers.get(campaignId)
       if (timers) {
@@ -239,6 +250,7 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
         }
       }
 
+      await db('combat_pending').where({ campaign_id: campaignId }).delete()
       await db('combat_roster').where({ campaign_id: campaignId }).delete()
       await db('combat_state').where({ campaign_id: campaignId }).delete()
 
@@ -258,8 +270,13 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
   socket.on(WS.COMBAT_ANNOUNCE_START, async () => {
     if (!isGm) return
     try {
-      // Guard phase — doit être en ROSTER
       const existing = await db('combat_state').where({ campaign_id: campaignId }).first()
+      const { phase: _gPhase, sub_phase: _gSubPhase } = existing ?? {}
+      if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_ANNOUNCE_START')) {
+        console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_ANNOUNCE_START`)
+        return
+      }
+      // Guard phase — doit être en ROSTER
       if (!existing || existing.phase !== 'ROSTER') return
 
       const [updated] = await db('combat_state')
@@ -330,6 +347,11 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
   // Payload : { tokenId }
   socket.on(WS.COMBAT_SURPRISE_RESULT, async ({ tokenId }) => {
     try {
+      const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
+      if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_SURPRISE_RESULT')) {
+        console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_SURPRISE_RESULT`)
+        return
+      }
       // Validation ownership
       const token = await db('tokens').where({ id: tokenId }).first()
       if (!token) return
@@ -412,6 +434,11 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
   // Payload v2 : { tokenId, state:{position,weapon,fire_mode,cover,vitesse}, mapActions:{move?,attack?,melee?,multi?,interact?}, quick:{observer,reperer,phrase} }
   socket.on(WS.COMBAT_ACTION_DECLARE, async ({ tokenId, state, mapActions, quick }) => {
     try {
+      const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
+      if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_ACTION_DECLARE')) {
+        console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_ACTION_DECLARE`)
+        return
+      }
       if (!tokenId || !state) return
 
       // Valeurs autorisées par état
@@ -787,6 +814,11 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
   socket.on(WS.COMBAT_SKIP_PLAYER, async ({ tokenId }) => {
     if (!isGm) return
     try {
+      const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
+      if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_SKIP_PLAYER')) {
+        console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_SKIP_PLAYER`)
+        return
+      }
       // Nettoyer le timer auto-skip si actif
       const campaignTimersMap = pendingMaps.combatTimers.get(campaignId)
       if (campaignTimersMap?.has(tokenId)) {
@@ -823,8 +855,12 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
   socket.on(WS.COMBAT_ACTION_CONFIRM, async ({ tokenId, confirmedModifiers }) => {
     console.log(`[DBG] COMBAT_ACTION_CONFIRM — tokenId:${tokenId} mods:${JSON.stringify(confirmedModifiers ?? null)}`)
     try {
-      // Guard : phase = RESOLUTION
       const state = await db('combat_state').where({ campaign_id: campaignId }).first()
+      if (!canTransition(state?.phase ?? null, state?.sub_phase ?? null, 'COMBAT_ACTION_CONFIRM')) {
+        console.warn(`[FSM] guard bloqué : ${state?.phase ?? null}|${state?.sub_phase ?? null} + COMBAT_ACTION_CONFIRM`)
+        return
+      }
+      // Guard : phase = RESOLUTION
       if (!state || state.phase !== 'RESOLUTION') return
 
       // Slots ordonnés par initiative DESC — source de vérité pour active_slot_idx
@@ -922,13 +958,20 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
 
   // ─── COMBAT_DAMAGE_CONFIRM — PJ lance les dés (calcul serveur) ────────────
   socket.on(WS.COMBAT_DAMAGE_CONFIRM, async ({ tokenId }) => {
-    const pending = pendingMaps.pendingDamageActions.get(tokenId)
-    if (!pending) {
+    const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
+    if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_DAMAGE_CONFIRM')) {
+      console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_DAMAGE_CONFIRM`)
+      return
+    }
+    const row = await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'damage' }).first()
+    if (!row) {
       console.warn(`[WS] COMBAT_DAMAGE_CONFIRM — pas de pending pour token:${tokenId}`)
       return
     }
+    const pending = row.payload
     if (pending.userId !== user.id && pending.targetUserId !== user.id && !isGm) return
-    pendingMaps.pendingDamageActions.delete(tokenId)
+    await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'damage' }).delete()
+    await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
 
     const {
       campaignId: pendingCampaignId, targetTokenId, characterIdCible, cibleType = null, char_sheet_id_cible,
@@ -1014,7 +1057,7 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
 
       // Stun — applyStun après l'émission pour ne pas bloquer l'affichage des dégâts
       if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-        statusService.applyStun(io, db, pendingCampaignId, pendingMaps.pendingStunActions, {
+        statusService.applyStun(io, db, pendingCampaignId, {
           targetTokenId, outcome: shockResult.outcome,
           userId, username: tireurUsername, color: tireurColor,
         }).catch(err => console.error('[WS] applyStun error:', err.message))
@@ -1080,13 +1123,20 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
   // ─── COMBAT_MELEE_DEFENSE_CONFIRM — défenseur PJ valide son jet ───────────
   // Résout l'opposition (rollAttaque vs rollDefense), gère les dégâts, avance le slot.
   socket.on(WS.COMBAT_MELEE_DEFENSE_CONFIRM, async ({ tokenId }) => {
-    const pending = pendingMaps.pendingMeleeDefense.get(tokenId)
-    if (!pending) {
+    const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
+    if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_MELEE_DEFENSE_CONFIRM')) {
+      console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_MELEE_DEFENSE_CONFIRM`)
+      return
+    }
+    const row = await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'melee_defense' }).first()
+    if (!row) {
       console.warn(`[WS] COMBAT_MELEE_DEFENSE_CONFIRM — pas de pending pour defender:${tokenId}`)
       return
     }
+    const pending = row.payload
     if (pending.defenderUserId !== user.id && !isGm) return
-    pendingMaps.pendingMeleeDefense.delete(tokenId)
+    await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'melee_defense' }).delete()
+    await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
 
     const {
       campaignId: meleeCampaignId,
@@ -1185,23 +1235,29 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
       if (hit) {
         if (attackerCharacter.type === 'pj') {
           // PJ attaquant : invite à lancer les dés de dégâts (CombatDamageWindow existant)
-          pendingMaps.pendingDamageActions.set(attackerTokenId, {
-            type: 'melee',
-            campaignId: meleeCampaignId,
-            targetTokenId: tokenId,
-            characterIdCible,
-            char_sheet_id_cible,
-            modDom,
-            combatModeBonus,
-            formula: damageFormula,
-            for_na_cible,
-            con_na_cible,
-            vol_na_cible,
-            tireurUsername: attackerUsername,
-            tireurColor: attackerColor,
-            userId,
-            targetName,
+          await db('combat_pending').insert({
+            campaign_id: meleeCampaignId,
+            token_id: attackerTokenId,
+            type: 'damage',
+            payload: {
+              type: 'melee',
+              campaignId: meleeCampaignId,
+              targetTokenId: tokenId,
+              characterIdCible,
+              char_sheet_id_cible,
+              modDom,
+              combatModeBonus,
+              formula: damageFormula,
+              for_na_cible,
+              con_na_cible,
+              vol_na_cible,
+              tireurUsername: attackerUsername,
+              tireurColor: attackerColor,
+              userId,
+              targetName,
+            },
           })
+          await setFSMSubPhase(db, meleeCampaignId, 'AWAITING_DAMAGE')
           // Trouver le socket de l'attaquant PJ
           const sockets = await io.fetchSockets()
           const attackerSocket = sockets.find(s =>
@@ -1244,7 +1300,7 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
             shockResult,
           })
           if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-            statusService.applyStun(io, db, meleeCampaignId, pendingMaps.pendingStunActions, {
+            statusService.applyStun(io, db, meleeCampaignId, {
               targetTokenId: tokenId, outcome: shockResult.outcome,
               userId, username: attackerUsername, color: attackerColor,
             }).catch(err => console.error('[WS] applyStun error:', err.message))
@@ -1287,13 +1343,19 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
 
   // ─── COMBAT_STUN_CONFIRM — PJ ou GM valide le lancer D6 durée étourdissement ─
   socket.on(WS.COMBAT_STUN_CONFIRM, async ({ tokenId }) => {
-    const pending = pendingMaps.pendingStunActions.get(tokenId)
-    if (!pending) return
+    const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
+    if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_STUN_CONFIRM')) {
+      console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_STUN_CONFIRM`)
+      return
+    }
+    const row = await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' }).first()
+    if (!row) return
+    const pending = row.payload
     const isAuthorized = pending.isGmPrompt
       ? isGm
       : (pending.targetUserId === user.id)
     if (!isAuthorized) return
-    pendingMaps.pendingStunActions.delete(tokenId)
+    await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' }).delete()
 
     const { total: d6Raw, rolls: d6Rolls, seed: d6Seed } = await parseDice('1d6')
     const stunDuration = pending.outcome === 'inconscient' ? d6Raw * 10 : d6Raw
@@ -1413,6 +1475,7 @@ async function startResolutionPhase(io, campaignId, pendingMaps) {
     await db('combat_state')
       .where({ campaign_id: campaignId })
       .update({ phase: 'RESOLUTION', active_slot_idx: 0, updated_at: db.fn.now() })
+    await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
 
     const [announcedRoster, pendingActions, fullRoster] = await Promise.all([
       db('combat_roster')
@@ -1534,6 +1597,7 @@ async function endTurn(io, campaignId, pendingMaps) {
       .orderBy('initiative', 'desc')
     const broadcastRoster = roster.map(({ surprise_roll: _sr, ...rest }) => rest)
 
+    await setFSMSubPhase(db, campaignId, null)
     io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT', roster: broadcastRoster })
 
     // LdB p.212 — émettre le premier slot d'annonce du nouveau tour (base_ini ASC)
@@ -1992,7 +2056,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
           roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
         })
         if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-          statusService.applyStun(io, db, campaignId, pendingMaps.pendingStunActions, {
+          statusService.applyStun(io, db, campaignId, {
             targetTokenId, outcome: shockResult.outcome,
             userId: character.user_id, username: attackerUsername, color: attackerColor,
           }).catch(err => console.error('[WS] applyStun error:', err.message))
@@ -2041,7 +2105,8 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
     }
 
     // ── 5. PJ défenseur : bloquer le slot, émettre le prompt ─────────────────
-    pendingMaps.pendingMeleeDefense.set(targetTokenId, commonPending)
+    await db('combat_pending').insert({ campaign_id: campaignId, token_id: targetTokenId, type: 'melee_defense', payload: commonPending })
+    await setFSMSubPhase(db, campaignId, 'AWAITING_DEFENSE')
 
     // Cibler le socket du défenseur PJ
     const sockets = await io.fetchSockets()
@@ -2419,7 +2484,7 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
         severity: finalSeverity, is_lethal, isSuccess: true, shockResult: shockResult ?? null,
       })
       if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-        statusService.applyStun(io, db, campaignId, pendingMaps.pendingStunActions, {
+        statusService.applyStun(io, db, campaignId, {
           targetTokenId: action.target_token_id, outcome: shockResult.outcome,
           userId, username: tireurUsername, color: tireurColor,
         }).catch(err => console.error('[WS] applyStun error:', err.message))
@@ -2434,22 +2499,28 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
       : { for_na: 8, con_na: 8, vol_na: 8 }
     const targetName = cibleCharacter.name ?? 'Cible'
 
-    pendingMaps.pendingDamageActions.set(action.token_id, {
-      campaignId,
-      targetTokenId:       action.target_token_id,
-      characterIdCible:    cibleCharacter.id,
-      cibleType:           null,
-      char_sheet_id_cible: cibleSheet?.id ?? null,
-      mr, portee,
-      fire_mode_bonus_dmg: 0,
-      formula,
-      for_na_cible:  for_na,
-      con_na_cible:  con_na,
-      vol_na_cible:  vol_na,
-      tireurUsername, tireurColor, userId, targetName,
-      type: 'assault', modDom: null, combatModeBonus: null,
-      targetUserId: cibleCharacter.user_id,
+    await db('combat_pending').insert({
+      campaign_id: campaignId,
+      token_id: action.token_id,
+      type: 'damage',
+      payload: {
+        campaignId,
+        targetTokenId:       action.target_token_id,
+        characterIdCible:    cibleCharacter.id,
+        cibleType:           null,
+        char_sheet_id_cible: cibleSheet?.id ?? null,
+        mr, portee,
+        fire_mode_bonus_dmg: 0,
+        formula,
+        for_na_cible:  for_na,
+        con_na_cible:  con_na,
+        vol_na_cible:  vol_na,
+        tireurUsername, tireurColor, userId, targetName,
+        type: 'assault', modDom: null, combatModeBonus: null,
+        targetUserId: cibleCharacter.user_id,
+      },
     })
+    await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
 
     const damagePayload = { tokenId: action.token_id, formula, targetName }
     const allSockets    = await io.fetchSockets()
@@ -2649,24 +2720,30 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
           tireurTokenId: action.token_id,
           cibleTokenId: action.target_token_id,
         })
-        pendingMaps.pendingDamageActions.set(action.token_id, {
-          campaignId,
-          targetTokenId: action.target_token_id,
-          characterIdCible: cibleToken?.character_id ?? null,
-          cibleType: cibleCharacter?.type ?? null,
-          char_sheet_id_cible,
-          mr,
-          portee: confirmedModifiers.portee,
-          fire_mode_bonus_dmg: action.fire_mode_bonus_dmg ?? 0,
-          formula: weapon.ref_damage_h,
-          for_na_cible,
-          con_na_cible,
-          vol_na_cible,
-          tireurUsername,
-          tireurColor,
-          userId: character.user_id,
-          targetName,
+        await db('combat_pending').insert({
+          campaign_id: campaignId,
+          token_id: action.token_id,
+          type: 'damage',
+          payload: {
+            campaignId,
+            targetTokenId: action.target_token_id,
+            characterIdCible: cibleToken?.character_id ?? null,
+            cibleType: cibleCharacter?.type ?? null,
+            char_sheet_id_cible,
+            mr,
+            portee: confirmedModifiers.portee,
+            fire_mode_bonus_dmg: action.fire_mode_bonus_dmg ?? 0,
+            formula: weapon.ref_damage_h,
+            for_na_cible,
+            con_na_cible,
+            vol_na_cible,
+            tireurUsername,
+            tireurColor,
+            userId: character.user_id,
+            targetName,
+          },
         })
+        await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
         socket.emit(WS.COMBAT_DAMAGE_PROMPT, {
           tokenId: action.token_id,
           formula: weapon.ref_damage_h,
@@ -2729,7 +2806,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
           shockResult,
         })
         if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-          statusService.applyStun(io, db, campaignId, pendingMaps.pendingStunActions, {
+          statusService.applyStun(io, db, campaignId, {
             targetTokenId: action.target_token_id, outcome: shockResult.outcome,
             userId: character.user_id, username: tireurUsername, color: tireurColor,
           }).catch(err => console.error('[WS] applyStun error:', err.message))

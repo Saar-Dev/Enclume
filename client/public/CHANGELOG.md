@@ -1,10 +1,53 @@
-## v108 — 2026-06-19 — REWORK-08 : modularisation socket/index.js
+## v112 — 2026-06-20 — REWORK-04 : FSM Combat + persistence DB
 
 ### Serveur — Architecture
-- [refactor] `server/src/socket/socketCombat.js` créé — 13 handlers combat + 13 helpers + 7 constantes extraits de `index.js`
-- [refactor] `server/src/socket/index.js` 2994 → 143 lignes — coordinateur pur (SESSION_JOIN + 5 appels `register*`)
-- [refactor] Imports morts supprimés de `index.js` (charStats, woundService, statusService, damageService, armorConstants, woundConstants, redis non-buildCollisionMap)
-- [refactor] `socket.on('disconnect')` déplacé dans SESSION_JOIN, sans garde `if (socket.campaignId)`
+- [refactor] `server/src/lib/combatFSM.js` — FSM combat (6 états, fonctions pures : `canTransition`, `nextState`, `setFSMSubPhase`, `allowedEvents`)
+- [refactor] Migration 80 : table `combat_pending` — remplace 3 Maps in-memory (`pendingMeleeDefense`, `pendingDamageActions`, `pendingStunActions`)
+- [refactor] Migration 81 : `combat_state.sub_phase` — sous-état FSM persisté (`SLOT_ACTIVE` / `AWAITING_DEFENSE` / `AWAITING_DAMAGE`)
+- [refactor] `socketCombat.js` — guards `canTransition` sur 10 handlers + Maps → DB
+- [refactor] `statusService.applyStun` — `pendingStunActions` Map → `combat_pending` DB
+- [fix] Reconnexion pendant RESOLUTION — prompts (`MELEE_DEFENSE`, `DAMAGE`, `STUN`) restaurés sur reconnexion joueur
+
+### Client — Architecture
+- [refactor] `combatStore.js` — `subPhase` + `setCombatSubPhase`
+- [refactor] `useCombatSocket.js` — `subPhase` propagé depuis `COMBAT_STATE_SYNC`
+
+---
+
+## v111 — 2026-06-19 — WorkshopPage : messages d'erreur plus précis
+
+### Client — Correctifs
+- [fix] Atelier GM : messages d'erreur affinés — fallback `.message` + `err.message` avant le générique i18n (5 handlers : création, import, suppression pack, upload PNG, suppression fichier)
+
+---
+
+## v110 — 2026-06-19 — Session 109 : triage docs
+
+### Documentation — Aucun impact utilisateur
+- [refactor] ARCHI_REWORK.md allégé (969 → ~100 lignes), specs archivées dans ARCHI_REWORK_DONE.md
+- [refactor] JOURNAL4.md archivé — JOURNAL5.md créé pour Sessions 109+
+- [refactor] BUGIDENTIFIE.md : +FEAT1 (Map2D) + FEAT2 (LOS raycast cible)
+
+---
+
+## v109 — 2026-06-19 — REWORK-08 Étapes 6 & 7 : socketCombat.js
+
+### Serveur — Architecture
+- [refactor] `server/src/socket/socketCombat.js` créé — 13 handlers + 13 helpers + 7 constantes combat extraits de `socket/index.js`
+- [refactor] `socket/index.js` : 2994 → 143 lignes — registre de modules uniquement
+- [refactor] Disconnect PJ déplacé dans SESSION_JOIN (cleanup systématique)
+
+---
+
+## v108 — 2026-06-19 — REWORK-08 Étape 5 + correctifs entités
+
+### Serveur — Architecture
+- [refactor] `server/src/socket/socketEntity.js` créé — 7 handlers entités extraits de `socket/index.js`
+
+### Client — Correctifs entités
+- [fix] Entité marquée "Visible GM uniquement" désormais masquée pour les joueurs en temps réel
+- [fix] Suppression d'entité possible depuis le panneau de configuration (bouton avec confirmation)
+- [fix] Sablier d'interaction entité disparaît après le jet de dés, que le jet réussisse ou échoue
 
 ---
 

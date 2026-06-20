@@ -2,6 +2,7 @@ import { create } from 'zustand'
 
 export const useCombatStore = create((set) => ({
   phase: null,          // 'ROSTER' | 'ANNOUNCEMENT' | 'RESOLUTION' | null
+  subPhase: null,       // 'SLOT_ACTIVE' | 'AWAITING_DEFENSE' | 'AWAITING_DAMAGE' | null
   roster: [],           // [{ id, token_id, base_ini, initiative, status, has_announced, has_resolved, is_surprised }]
   actions: [],          // [{ id, token_id, type, initiative_score, status, ... }]
   currentTurn: 1,
@@ -9,14 +10,17 @@ export const useCombatStore = create((set) => ({
   activeTokenId: null,  // token_id du slot actif (ANNOUNCEMENT et RESOLUTION)
   announcedActions: [], // [{ tokenId, actionType, initiative, moveTarget, attackTargetId }] — cumul du tour
 
-  setCombatState: ({ phase, roster, actions, currentTurn, activeSlotIdx, activeTokenId }) => set({
+  setCombatState: ({ phase, subPhase, roster, actions, currentTurn, activeSlotIdx, activeTokenId }) => set({
     phase,
+    subPhase: subPhase ?? null,
     roster: roster ?? [],
     actions: actions ?? [],
     currentTurn: currentTurn ?? 1,
     activeSlotIdx: activeSlotIdx ?? 0,
     activeTokenId: activeTokenId ?? null,
   }),
+
+  setCombatSubPhase: (subPhase) => set({ subPhase }),
 
   updateRoster: (updatedRoster) => set({ roster: updatedRoster }),
 
@@ -46,6 +50,7 @@ export const useCombatStore = create((set) => ({
 
   resetCombat: () => set({
     phase: null,
+    subPhase: null,
     roster: [],
     actions: [],
     currentTurn: 1,

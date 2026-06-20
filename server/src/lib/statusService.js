@@ -80,7 +80,7 @@ async function _applyAutoStun(io, db, campaignId, targetTokenId, outcome, userId
 // PNJ + shock_auto_stun=false → COMBAT_STUN_PROMPT au socket GM.
 // PNJ + shock_auto_stun=true (défaut) → D6 auto serveur.
 // PJ offline → fallback auto identique à PNJ.
-export async function applyStun(io, db, campaignId, pendingStunActions, {
+export async function applyStun(io, db, campaignId, {
   targetTokenId, outcome, userId, username, color,
 }) {
   try {
@@ -104,12 +104,11 @@ export async function applyStun(io, db, campaignId, pendingStunActions, {
         : sockets.find(s => s.data.role === 'gm')
 
       if (targetSocket) {
-        pendingStunActions.set(targetTokenId, {
-          campaignId, targetTokenId, outcome,
-          targetUserId:  shockAutoStun ? tokenRow.user_id : null,
-          userId, username, color,
-          currentTurn,
-          isGmPrompt:    !shockAutoStun,
+        await db('combat_pending').insert({
+          campaign_id: campaignId,
+          token_id:    targetTokenId,
+          type:        'stun',
+          payload:     { campaignId, targetTokenId, outcome, targetUserId: shockAutoStun ? tokenRow.user_id : null, userId, username, color, currentTurn, isGmPrompt: !shockAutoStun },
         })
         targetSocket.emit(WS.COMBAT_STUN_PROMPT, { tokenId: targetTokenId, outcome })
         return
@@ -124,12 +123,11 @@ export async function applyStun(io, db, campaignId, pendingStunActions, {
         const sockets   = await io.in(campaignId).fetchSockets()
         const gmSocket  = sockets.find(s => s.data.role === 'gm')
         if (gmSocket) {
-          pendingStunActions.set(targetTokenId, {
-            campaignId, targetTokenId, outcome,
-            targetUserId: null,
-            userId, username, color,
-            currentTurn,
-            isGmPrompt: true,
+          await db('combat_pending').insert({
+            campaign_id: campaignId,
+            token_id:    targetTokenId,
+            type:        'stun',
+            payload:     { campaignId, targetTokenId, outcome, targetUserId: null, userId, username, color, currentTurn, isGmPrompt: true },
           })
           gmSocket.emit(WS.COMBAT_STUN_PROMPT, { tokenId: targetTokenId, outcome })
           return

@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 108 — 2026-06-19
+> Session 111 — 2026-06-20
 
 ---
 
@@ -24,7 +24,7 @@ CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
 
 - `docs/EN_COURS.md` → si la prochaine étape n'est pas claire depuis `## ÉTAT COURANT` ci-dessous.
 - `docs/ASBUILT.md` → si la tâche touche à l'architecture (nouvelles routes, migrations, nouveaux services).
-- `docs/JOURNAL4.md` (dernier `## Session N` uniquement) → si un bug précis nécessite l'historique d'une décision.
+- `docs/JOURNAL5.md` (dernier `## Session N` uniquement) → si un bug précis nécessite l'historique d'une décision.
 - **Fichiers domaine → chargés automatiquement** via `.claude/rules/` quand les fichiers source sont ouverts.
 
 ### Avant de coder
@@ -35,10 +35,10 @@ CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
 
 ### Pendant le développement
 - **Run à vide autocentré obligatoire** à la fin de chaque étape.
-- **Sessions analytiques (audit, investigation, debug) :** utiliser `docs/JOURNALTEMP.md` comme scratch pad. Contenu périssable — ne jamais inclure dans la lecture obligatoire. Consolider vers JOURNAL4.md en fin de session.
+- **Sessions analytiques (audit, investigation, debug) :** utiliser `docs/JOURNALTEMP.md` comme scratch pad. Contenu périssable — ne jamais inclure dans la lecture obligatoire. Consolider vers JOURNAL5.md en fin de session.
 
 ### Après chaque tâche confirmée fonctionnelle
-- Appender `docs/JOURNAL4.md`.
+- Appender `docs/JOURNAL5.md`.
 - Mettre à jour le header date de tout fichier `.md` modifié.
 - Proposer un scénario de test (étapes + résultat attendu) avant de passer à la suite.
 - Fin de session : mettre à jour `EN_COURS.md`, `ASBUILT.md`, `ROADMAP.md`, `CLAUDE.md`.
@@ -101,17 +101,48 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 106 (2026-06-18)
+## ÉTAT COURANT — Session 111 (2026-06-20)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **79 migrations stables** (76b, 77, 77b planifiées — Sprint Drones 2d+3)
+- **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
 
-**Session 108 ⚠️ clos partiel (REWORK-08 Étapes 6 & 7) :**
-- REWORK-08 : `socketCombat.js` créé (13 handlers + 13 helpers + 7 constantes) — `registerCombatHandlers(io, socket, context, pendingMaps)`
-- `index.js` : 2994 → 143 lignes — imports nettoyés, handlers/helpers/constantes combat supprimés, disconnect déplacé dans SESSION_JOIN
-- `node --check` ×2, `npm run build`, 143 lignes, SR ok ✓
-- **Non testé :** Scénarios 1–17 (pas de session combat) — `ARCHI_REWORK.md` DoD ✅ sauf scénarios + ARCHI_REWORK_DONE.md
-- **Prochaine étape : valider scénarios 1–17 (combat live) + copier REWORK-08 → ARCHI_REWORK_DONE.md**
+**Session 111 ✅ clos complet (REWORK-04 : FSM Combat) :**
+- `server/src/lib/combatFSM.js` créé — 4 fonctions pures (`canTransition`, `nextState`, `setFSMSubPhase`, `allowedEvents`), table TRANSITIONS 6 états
+- Migrations 80 (`combat_pending`) + 81 (`combat_state.sub_phase`) appliquées
+- `socketCombat.js` : guards `canTransition` (10 handlers) + 3 Maps in-memory → DB
+- `statusService.applyStun` : `pendingStunActions` Map retiré → `combat_pending` DB
+- `index.js` : SESSION_JOIN restaure prompts sur reconnexion RESOLUTION (C3)
+- `combatStore.js` + `useCombatSocket.js` : `subPhase` propagé (C1+C2)
+- `node --check` ×4, build client ✅
+- Prochaine étape : **valider en session réelle (V1–V12)** ou sprint suivant
+
+**Session 109 ✅ clos complet (triage docs + housekeeping) :**
+- JOURNAL5.md créé — JOURNAL4.md archivé dans docs/Old/
+- ARCHI_REWORK.md : 969 → ~100 lignes — specs achevées déplacées dans ARCHI_REWORK_DONE.md
+- ARCHI_REWORK_DONE.md : REWORK-09 spec ajoutée + 2 DoD items ✅
+- BUGIDENTIFIE.md : +FEAT1 (Map2D style Roll20) + FEAT2 (LOS raycast cible)
+- EN_COURS.md : REWORK-08 ✅ clos + REWORK-04 ajouté prochaine étape architecture
+- docs/Old/ : 4 plans archivés (REWORK_CONTACT, PLAN_ARCHICOMBAT_SLOTS, PLAN_DRONE, PLAN_DRONESYSCOMBAT)
+- ASBUILT.md : mise à jour Sessions 102–108 ✅
+- WS1 ✅ clos — WorkshopPage 5 catch handlers (`err.response?.data?.error || err.response?.data?.message || err.message`)
+- REWORK-10 scénarios 1–8 ✅ validés (confirmation Saar) — UI1 clos complet
+- REWORK-03 tests ✅ validés (confirmation Saar) — clos complet
+- Prochaine étape : **REWORK-04 (FSM Combat)** — spec à rédiger avant tout code
+
+**Session 108 ✅ clos complet (REWORK-08 Étapes 6 & 7) :**
+- `socketCombat.js` créé (13 handlers + 13 helpers + 7 constantes) — `registerCombatHandlers(io, socket, context, pendingMaps)`
+- `index.js` : 2994 → 143 lignes — imports nettoyés, handlers combat supprimés, disconnect → SESSION_JOIN
+- `node --check` ×2, `npm run build`, SR ok, scénarios 1–17 validés ✓
+- REWORK-08 archivé dans ARCHI_REWORK_DONE.md — ARCHI_REWORK.md : ✅ Clos complet
+- **[R8-3] Fuite Maps combat disconnect** — pendingMaps non nettoyées si PJ déco en résolution → sprint dédié
+
+**Session 108b ✅ clos complet (REWORK-08 Étape 5 + correctifs entités) :**
+- REWORK-08 Étape 5 : `server/src/socket/socketEntity.js` créé (~766 lignes) — 7 handlers + `resolveEntityState` helper module-level
+- `registerEntityHandlers(io, socket, context, pendingEntityActions)` dans SESSION_JOIN — bloc entités `index.js` supprimé
+- Bug 1 ✅ gm_only : filtre Canvas3D + broadcast WS via nouveau `socket.on(ENTITY_UPDATED)` serveur + prop socket EntityInstancePanel
+- Bug 2 ✅ delete : bouton suppression EntityInstancePanel + REST DELETE + socket emit + store
+- Bug 3 ✅ sablier : `useEntitySocket` clear `pendingEntityId` sur `DICE_RESULT type=entity_action` (échec jet non géré)
+- **Prochaine étape : REWORK-08 Étape 6 (planification) — lire `ARCHI_REWORK.md` §REWORK-08 + index.js L.1464–2744**
 
 **Session 107 ✅ clos complet (planning) :**
 - REWORK-08 : Étape 4 corrigée (mrTable singleton-promise + imports socketDice) + Étape 5 planifiée complète (`docs/ARCHI_REWORK.md` §REWORK-08)
@@ -124,7 +155,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Ancienne approche sidebar fixe gauche (`CombatDeclareLogSidebar` dans `CombatOverlay`) abandonnée — rejetée après test
 - SR ok, fonctionnel confirmé — scénarios 1–8 non testés (pas de session combat)
 - Dead code : `CombatDeclareLogSidebar` (default export `CombatDeclareLog.jsx`) + classes `.cdl-window*` — à nettoyer sprint futur
-- Prochaine étape secondaire : valider scénarios 1–8 (`docs/PLAN_REWORK10_COMBATDECLARELOG.md`)
+- Prochaine étape secondaire : valider scénarios 1–8 (plan archivé par Saar — historique dans docs/Old/JOURNAL4.md)
 
 **Session 106 ✅ clos complet (planning) :**
 - REWORK-08 : Étapes 1, 2, 3 auditées et enrichies (`docs/ARCHI_REWORK.md` §REWORK-08)
@@ -156,13 +187,10 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 **Dettes actives :**
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
-- Bug CL1 — Portraits PNJ non visibles timeline joueur
-- Bug CL2 — Design CombatDeclareLog → REWORK-10 en cours (`docs/PLAN_REWORK10_COMBATDECLARELOG.md`)
 - Bug CL3 — Ghosts déplacement d'annonce disparus
 - "Changer le mode de tir" — non implémenté — sprint futur
 - `useDiceAudio.js` — sons dés
 - `.gitattributes:3` — attribut invalide
-- WorkshopPage crash import invalide (`err.response?.data?.error`)
 - Kiwi P-SRV-5 — ports Docker non restreints à 127.0.0.1
 - `onTokenRotate` dead code Canvas3D/Scene
 - `getVoxelSurfaceTop` — pas de cas slope/wedge
@@ -198,6 +226,9 @@ chancesDeReussite = skillTotal + totalDiffMod + effectiveMalus
 
 **P3 — socket dans les dependency arrays**
 Tout `useCallback` qui émet via socket doit inclure `socket` dans ses deps.
+
+**[R8-27] — socket.campaignId / socket.role dépendance implicite post-REWORK-08**
+`socket.campaignId` et `socket.role` restent settées dans SESSION_JOIN. Les helpers de `socketCombat.js` (`resolveMeleeAction`, `resolveReloadAction`, `COMBAT_MELEE_DEFENSE_CONFIRM`) les utilisent via `io.fetchSockets()` pour retrouver des sockets tiers. Supprimer ces deux lignes de SESSION_JOIN casse le CaC PJ↔PJ silencieusement.
 
 ---
 

@@ -74,6 +74,11 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     })
+
+    s.on(WS.DICE_RESULT, ({ type }) => {
+      if (type !== 'entity_action') return
+      clearPendingEntityId()
+    })
   }
 
   return { listen }

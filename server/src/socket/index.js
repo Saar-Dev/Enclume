@@ -12,11 +12,6 @@ import { registerCombatHandlers } from './socketCombat.js'
 // DÃ©clarÃ©e hors de initSocket â€” une seule instance, partagÃ©e entre toutes les connexions.
 // NettoyÃ©e Ã  chaque rÃ©solution (ENTITY_ACTION_RESOLVE) ou expiration (timeout 60s â€” PE12).
 const pendingEntityActions = new Map()
-const pendingDamageActions = new Map()
-const pendingMeleeDefense  = new Map()  // key = defenderTokenId, valeur = donnÃ©es attaque en attente
-const pendingStunActions   = new Map()  // key = targetTokenId, valeur = donnÃ©es stun en attente
-
-
 
 // Map des timers combat actifs â€” Map<campaignId, Map<tokenId, timeoutId>>
 // DÃ©clarÃ©e hors de initSocket â€” singleton, PC16.
@@ -110,6 +105,59 @@ const initSocket = (io) => {
             // Sync preview Ã©phÃ©mÃ¨re si un joueur est en train de dÃ©clarer
             const currentPreview = combatPreviews.get(campaignId)
             if (currentPreview) socket.emit(WS.COMBAT_ANNOUNCE_PREVIEW, currentPreview)
+
+            // C3 — restauration combat_pending sur reconnexion en phase RESOLUTION
+            if (activeCombat.phase === 'RESOLUTION') {
+              const userToken = await db('tokens')
+                .join('characters', 'tokens.character_id', 'characters.id')
+                .where({ 'tokens.campaign_id': campaignId, 'characters.user_id': socket.user.id })
+                .select('tokens.id as token_id')
+                .first()
+              const userTokenId = userToken?.token_id
+
+              if (userTokenId) {
+                const rows = await db('combat_pending')
+                  .where({ campaign_id: campaignId, token_id: userTokenId })
+                for (const row of rows) {
+                  const p = row.payload
+                  if (row.type === 'melee_defense') {
+                    socket.emit(WS.COMBAT_MELEE_DEFENSE_PROMPT, {
+                      attackerName:        p.attackerUsername,
+                      attackerTokenId:     p.attackerTokenId,
+                      defenderTokenId:     row.token_id,
+                      rollAttaque:         p.rollAttaque,
+                      chancesAttaque:      p.chancesAttaque,
+                      chanceDefenseBase:   p.defenderSkillTotal + p.defenderEffectiveMalus + p.multiMalusDefenseur,
+                      multiMalusDefenseur: p.multiMalusDefenseur,
+                    })
+                  } else if (row.type === 'damage') {
+                    socket.emit(WS.COMBAT_DAMAGE_PROMPT, {
+                      tokenId:    row.token_id,
+                      formula:    p.formula,
+                      targetName: p.targetName,
+                    })
+                  } else if (row.type === 'stun') {
+                    socket.emit(WS.COMBAT_STUN_PROMPT, {
+                      tokenId: row.token_id,
+                      outcome: p.outcome,
+                    })
+                  }
+                }
+              }
+
+              // [R4-2] drone assault -- damage prompt cible sur la cible (pas l'attaquant)
+              const pendingDmgDrone = await db('combat_pending')
+                .where({ campaign_id: campaignId, type: 'damage' })
+                .whereRaw('payload->>? = ?', ['targetUserId', socket.user.id])
+                .first()
+              if (pendingDmgDrone) {
+                socket.emit(WS.COMBAT_DAMAGE_PROMPT, {
+                  tokenId:    pendingDmgDrone.token_id,
+                  formula:    pendingDmgDrone.payload.formula,
+                  targetName: pendingDmgDrone.payload.targetName,
+                })
+              }
+            }
           }
         } catch (err) {
           console.warn('[WS] session:join â€” combat state sync error (non bloquant):', err.message)
@@ -120,7 +168,7 @@ const initSocket = (io) => {
         registerVoxelHandlers(io, socket, context)
         registerDiceHandlers(io, socket, context)
         registerEntityHandlers(io, socket, context, pendingEntityActions)
-        registerCombatHandlers(io, socket, context, { pendingDamageActions, pendingMeleeDefense, pendingStunActions, combatTimers, combatPreviews })
+        registerCombatHandlers(io, socket, context, { combatTimers, combatPreviews })
 
         socket.on('disconnect', () => {
           console.log(`[WS] Déconnecté : ${socket.user.username} (${socket.id})`)

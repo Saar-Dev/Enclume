@@ -1,178 +1,189 @@
-# JOURNALTEMP — Session 101 — Mémo REWORK-09
-> 2026-06-17
-> Scratch pad de session — appender progressivement. Consolider vers JOURNAL4.md en fin de session.
+# JOURNALTEMP — Session 110 (2026-06-20) — REWORK-04 Planning + Audit C3
+> Scratch pad analytique — périssable. Consolider vers JOURNAL5.md en fin de session.
 
 ---
 
-## Mission de la prochaine session
+## Fichiers lus cette session
 
-**Planifier REWORK-09** : `SessionPage.jsx` → hooks WS dédiés.
-Ordre confirmé : REWORK-09 → REWORK-08 (REWORK-08 prérequis REWORK-04).
-
----
-
-## Ce qui a été fait dans cette session (101)
-
-- **REWORK-02** ✅ achevé en parallèle (damageService — par Saar, détails dans JOURNAL4.md Session 101)
-- **ARCHI_REWORK.md** réorganisé : specs complètes → `ARCHI_REWORK_DONE.md`, fichier principal réduit à ~90 lignes (résumés + table prochains reworks)
-- **EN_COURS.md** : DR4 + DR6 marqués ✅ Clos Session 101
-- **BUGIDENTIFIE.md** : cluster I mis à jour (DR4+DR6 retirés), titres §DR4/§DR6 → ✅ CLOS Session 101
-- **JOURNAL4.md** : NON appendé dans cette session (pas de code produit — session docs uniquement)
+- `docs/ARCHI_REWORK.md` — bible reworks (REWORK-04 = FSM Combat, long terme)
+- `docs/EN_COURS.md` — prochaine étape = REWORK-04, spec avant tout code
+- `docs/ASBUILT.md` — architecture complète projet
+- `server/src/socket/socketCombat.js` — 2824 lignes, lu en entier
+- `client/src/stores/combatStore.js` — 56 lignes
+- `shared/events.js` — 30+ COMBAT_* events
+- Recherche web : XState v5, FSM game servers, persistent state patterns
 
 ---
 
-## Protocole début de session suivante
-
-Appliquer le protocole complet (résumé ≠ lecture) :
-1. `docs/JOURNAL4.md` — dernière session uniquement
-2. `docs/ASBUILT.md`
-3. `docs/EN_COURS.md`
-4. Puis lire les fichiers cibles REWORK-09 (ci-dessous)
-
----
-
-## Fichiers à lire pour REWORK-09
-
-Dans cet ordre :
-1. `client/src/pages/SessionPage.jsx` — identifier tous les listeners WS (`s.on(...)`) et toutes les props passées à `CombatOverlay`
-2. `client/src/components/CombatOverlay.jsx` — inventaire exhaustif des props reçues
-
-Greps utiles avant lecture :
-```
-grep -n "s\.on(" client/src/pages/SessionPage.jsx
-grep -n "s\.off(" client/src/pages/SessionPage.jsx
-grep -n "CombatOverlay" client/src/pages/SessionPage.jsx
-```
-
----
-
-## Ce qu'on sait déjà sur REWORK-09 (depuis ARCHI_REWORK.md)
-
-**Problème** : 1 509 lignes. Tous les listeners WS inline dans un `useEffect` unique. 30+ props passées à `CombatOverlay`.
-
-**Cible** : extraire en hooks dédiés :
-- `useCombatSocket.js` — listeners combat (COMBAT_*)
-- `useEntitySocket.js` — listeners entités/tokens
-- `useTokenSocket.js` — listeners tokens spécifiques
-
-**Format attendu de la spec** : suivre le template ARCHI_REWORK.md (Problème + État actuel + Décision + Interface cible + Périmètre + Plan + Validation + DoD).
-
----
-
-## ANALYSE — SessionPage.jsx (Session 102, lu 2026-06-17)
-
-### 1. Inventaire listeners WS (useEffect L.402–741, deps: [campaignId, reconnectTrigger, loadSession])
-
-**Total : 47 listeners + 1 s.io.on('reconnect')**
-Cleanup : `return () => s.disconnect()` — pas de `s.off()` granulaires.
-
-| Groupe | Listeners (count) | Lignes |
-|---|---|---|
-| SESSION | SESSION_JOINED, SESSION_USER_JOINED, SESSION_USER_LEFT, CAMPAIGN_SETTINGS_UPDATED | 407–430 |
-| TOKEN | TOKEN_MOVED, TOKEN_CREATED, TOKEN_DELETED, TOKEN_UPDATED, TOKEN_STATUS_UPDATED | 431–447 |
-| CHAT/DICE | CHAT_MESSAGE, CHARACTER_UPDATED, DICE_RESULT, MACRO_ROLL_RESULT | 448–563 |
-| WOUND/INVENTORY | WOUND_ADDED, WOUND_UPDATED, WOUND_REMOVED, INVENTORY_ADDED, INVENTORY_UPDATED, INVENTORY_REMOVED | 496–516 |
-| COMBAT simple | COMBAT_RELOAD_RESULT, COMBAT_MELEE_DEFENSE_PROMPT, COMBAT_MELEE_RESULT, COMBAT_DAMAGE_PROMPT, COMBAT_DAMAGE_RESULT, COMBAT_STUN_PROMPT, COMBAT_ATTACK_PLAYER_RESULT, COMBAT_ATTACK_RESULT | 517–546 |
-| ERROR + MAP | 'error', MAP_SWITCH (api call inline) | 566–583 |
-| ENTITY | ENTITY_ACTION_PENDING, ENTITY_ACTION_RESULT, ENTITY_MOVE_RESULT | 588–636 |
-| COMBAT complexe | COMBAT_STARTED, COMBAT_ENDED, COMBAT_STATE_SYNC, COMBAT_PHASE_CHANGED, COMBAT_ROSTER_UPDATED, COMBAT_SURPRISE_ROLL, COMBAT_ANNOUNCE_PREVIEW, COMBAT_ACTION_DECLARED, COMBAT_SLOT_ADVANCED, COMBAT_TURN_SKIPPED | 639–723 |
-| RECONNECT | s.io.on('reconnect') → setReconnectTrigger | 730–732 |
-| DOC | DOC_CREATED, DOC_UPDATED, DOC_DELETED | 735–737 |
-
-### 2. Props CombatOverlay — inventaire complet (L.1300–1344)
-
-**39 props** (pas 30+ comme estimé — 39 effectives).
+## FSM implicite actuelle (socketCombat.js)
 
 ```
-socket, battlemap, isGm, user, characters, actionTimerSec, tokens,
-pendingSurpriseRoll, onSurpriseRolled,
-onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove,
-combatTargetMode, onEnterTargetMode, onValidateTarget,
-announcementMarker, pjPreview,
-damagePayload, damageResults, onDamageConfirmed,
-attackResult, onAttackConfirmed,
-gmAttackResult, onGmAttackResultClose,
-pnjAttackResult, onPnjAttackResultClose,
-reloadResult, onReloadResultClose,
-meleeDefensePrompt, onMeleeDefenseConfirm ← ALERT : inline socket.emit (L.1332)
-meleeResult, onMeleeResultClose,
-stunPayload, onStunConfirmed,
-gmSocketError, onGmSocketErrorClose,
-sidebarWidth
+ROSTER → ANNOUNCEMENT → RESOLUTION → (ANNOUNCEMENT tour N+1) → ...
 ```
 
-**⚠ [F-R9-1] onMeleeDefenseConfirm contient un socket.emit inline (L.1332–1336)** — pas un useCallback, recréé chaque render, mais non bloquant.
+Sous-états RESOLUTION (in-memory uniquement) :
+- `SLOT_ACTIVE` — slot libre, attend COMBAT_ACTION_CONFIRM
+- `AWAITING_DEFENSE` → `pendingMeleeDefense` Map
+- `AWAITING_DAMAGE`  → `pendingDamageActions` Map
+- `AWAITING_STUN`    → `pendingStunActions` Map (non-bloquant)
 
-### 3. Dépendances des listeners — pièges closure
+pendingMaps déclarées dans `index.js`, passées à `registerCombatHandlers()`.
 
-**Non-stables capturées dans les closures :**
-- `isGm` — dans COMBAT_ATTACK_RESULT (L.542) → routing setPnjAttackResult/setGmAttackResult selon rôle
-- `user?.id` — dans MAP_SWITCH (L.572) → filtre `userIds.includes(user?.id)`
-- `t` — dans 5 listeners (SESSION_USER_JOINED/LEFT, ENTITY_*, COMBAT_TURN_SKIPPED)
+---
 
-**Note :** `isGm` n'est PAS dans les deps du useEffect → valeur figée à la création du socket. Comportement identique dans le rework (pas de régression créée, isGm stable en session).
+## Problèmes identifiés (lus dans le code)
 
-**Stables (store Zustand + useState setters) :** `setCombatState`, `resetCombat`, `setPhase`, `markTokenAnnounced`, `updateRoster`, `advanceSlot`, `setActions`, `addAnnouncedAction`, `resetAnnouncedActions`, `addMessage`, `updateToken`, `addToken`, `removeToken`, `upsertCharacter`, `updateCharacter`, `setWoundVersions`, `setBattlemap`, `setTokens`, `setEntities`, `clearPendingEntityId`, `addDocument`, `updateDocument`, `removeDocument`.
+**P1 — Split-brain RESOLUTION** (dette active)
+`COMBAT_STATE_SYNC` existe dans events.js mais ne restaure PAS le pending state.
+Joueur reconnecte pendant slot bloqué (défense/dégâts) → combat figé.
 
-### 4. Pattern d'intégration retenu — `listen(s)` impératif
+**P2 — Guards dispersés**
+`if (phase !== 'ANNOUNCEMENT') return` dupliqué dans chaque handler. Aucune source de vérité.
 
-Les hooks exposent une fonction `listen(s)` appelée **de manière impérative** dans le `useEffect` de SessionPage, sur l'instance `s` avant `setSocket(s)`.
+**P3 — Sous-états invisibles**
+DB `combat_state.phase = 'RESOLUTION'` que le slot soit libre ou bloqué.
+`combatStore` client ignore AWAITING_DEFENSE / AWAITING_DAMAGE.
 
-```js
-// SessionPage useEffect (après rework)
-useEffect(() => {
-  const s = io(...)
-  s.emit(WS.SESSION_JOIN, { campaignId })
+**P4 — Handlers qui savent trop**
+`COMBAT_MELEE_DEFENSE_CONFIRM` gère : résolution opposition + dégâts + advanceSlot + multi-melee.
 
-  // Hooks dédiés — impératifs (pas dans les deps)
-  combatSocket.listen(s)
-  entitySocket.listen(s)
-  tokenSocket.listen(s)
+---
 
-  // ~19 listeners simples restants inline (session/chat/dice/wound/doc/error/reconnect)
+## Décision architecturale (recherche pro)
 
-  setSocket(s)
-  return () => s.disconnect()   // s.disconnect() nettoie TOUS les listeners — s.off() non nécessaire
-}, [campaignId, reconnectTrigger, loadSession])
+**XState écarté** — dépendance externe, restructuration complète, overkill single-server Raspberry Pi.
+
+**Architecture retenue : FSM custom module + DB persistence**
+(pattern pro unanime : "server authority, serializable state, restore on reconnect")
+
+---
+
+## Segmentation REWORK-04 (3 paliers)
+
+### Palier 04-A — `combatFSM.js` (fonctions pures, zéro I/O)
+
+Nouveau fichier : `server/src/lib/combatFSM.js`
+
+```
+canTransition(phase, subPhase, event, context) → bool
+nextState(phase, subPhase, event) → { phase, subPhase }
 ```
 
-Pourquoi `listen` pas dans les deps ? → `listen` est une fonction ordinaire (pas useCallback) recréée à chaque render. Elle capture les setters stables. Pas besoin de stabilité — jamais utilisée comme dep.
+États explicites :
+```
+null          null               Pas de combat
+ROSTER        null               après COMBAT_START
+ANNOUNCEMENT  null               après COMBAT_ANNOUNCE_START
+ANNOUNCEMENT  AWAITING_SURPRISE  joueur surpris non résolu
+RESOLUTION    SLOT_ACTIVE        slot libre
+RESOLUTION    AWAITING_DEFENSE   PJ défenseur → COMBAT_MELEE_DEFENSE_CONFIRM
+RESOLUTION    AWAITING_DAMAGE    PJ tireur → COMBAT_DAMAGE_CONFIRM
+RESOLUTION    AWAITING_STUN      prompt D6 (non-bloquant)
+```
 
-### 5. Découpage retenu des hooks
+socketCombat.js : `combatFSM.canTransition()` injecté en guard. Logique résolution intouchée.
 
-| Hook | Listeners pris en charge | State propre | Callbacks injectés |
-|---|---|---|---|
-| `useCombatSocket` | 18 combat (COMBAT_*) | reloadResult, damagePayload/Results, attackResult, gmAttackResult, pnjAttackResult, meleeDefensePrompt, meleeResult, stunPayload, pendingSurpriseRoll, announcementMarker, pjPreview | `isGm`, `onModeChange`, `onCombatReset`, `onPhaseReset` |
-| `useEntitySocket` | 3 entités + MAP_SWITCH | — (tout va au store ou SessionPage) | `user`, `t`, `setBattlemap`, `setTokens`, `setEntities`, `clearPendingEntityId`, `addMessage`, `setRadialMenu`, `setMoveTarget`, `addMessage` |
-| `useTokenSocket` | 5 token | — (tout au tokenStore) | — |
+### Palier 04-B — Migration `combat_pending` (remplace Maps in-memory)
 
-**Listeners restant dans SessionPage : ~19** (SESSION/CHAT/DICE/WOUND/INVENTORY/DOC/ERROR/RECONNECT — tous des one-liners simples).
+```sql
+combat_pending (
+  campaign_id  UUID
+  token_id     UUID
+  type         TEXT CHECK ('melee_defense','damage','stun')
+  payload      JSONB
+  created_at   TIMESTAMPTZ
+  PRIMARY KEY (campaign_id, token_id)
+)
+```
 
-### 6. Analyse CombatOverlay.jsx (658 lignes, lu Session 102)
+Remplace : `pendingMeleeDefense` + `pendingDamageActions` + `pendingStunActions`
+`pendingMaps.combatTimers` et `combatPreviews` : restent en mémoire (intentionnel).
 
-**Deux props mortes découvertes :**
+### Palier 04-C — Fix `COMBAT_STATE_SYNC` reconnexion RESOLUTION
 
-**⚠ [F-R9-2] `tokens` prop — morte côté CombatOverlay**
-- SessionPage L.1307 passe `tokens={tokens}`
-- CombatOverlay L.20 : `tokens` n'est PAS dans le destructuring des props
-- CombatOverlay L.22 : `const tokens = useTokenStore(s => s.tokens)` — lit directement depuis le store
-→ La prop `tokens={tokens}` dans SessionPage est du dead code. À supprimer dans REWORK-09.
+```
+SESSION_JOIN → phase=RESOLUTION ?
+  → SELECT * FROM combat_pending WHERE campaign_id AND token_id = user's token
+  → réémettre prompt ciblé (COMBAT_MELEE_DEFENSE_PROMPT / COMBAT_DAMAGE_PROMPT / COMBAT_STUN_PROMPT)
+  → broadcast COMBAT_STATE_SYNC avec { phase, subPhase, activeSlotIdx, actions }
+```
 
-**⚠ [F-R9-3] `announcementMarker` — destructuré mais jamais utilisé dans CombatOverlay**
-- Destructuré L.20, mais absent de tout JSX et appel enfant dans le fichier
-- Canvas3D reçoit `announcementMarker` depuis SessionPage (correct, non touché)
-→ `announcementMarker` appartient à `useCombatSocket` state. Ne pas le passer à CombatOverlay.
+---
 
-**CombatOverlay a ses propres listeners WS (légitimes, ne pas extraire) :**
-- L.35 : `socket.on(WS.COMBAT_STUN_EXPIRED, handler)` / `socket.off` → état local `stunDialog`
-- L.46 : `socket.on(WS.COMBAT_DECLARE_ERROR, handler)` / `socket.off` → état local `combatActionError`
+## Ce qui NE change PAS
 
-**Découpage final des props CombatOverlay après REWORK-09 :**
-- Props supprimées : `tokens` (morte), `announcementMarker` (morte) → 39 → 37 props
-- Aucune autre modification CombatOverlay (hors scope)
+- `socketCombat.js` : 13 handlers conservés — injection guard uniquement
+- `shared/events.js` : aucun nouvel event
+- `combatStore.js` : reçoit `subPhase` dans COMBAT_PHASE_CHANGED (ajout champ)
+- Toute la logique résolution (assault/melee/reload/drones) : intouchée
+- `useCombatSocket.js` : modifications mineures (sub-state dans setCombatState)
 
-**Périmètre final REWORK-09 :**
-- Nouveaux : `client/src/lib/useCombatSocket.js`, `useEntitySocket.js`, `useTokenSocket.js` (convention : hooks dans `lib/`, pas de dossier `hooks/`)
-- Modifiés : `client/src/pages/SessionPage.jsx` (listeners extraits + 2 dead props CombatOverlay nettoyées)
-- Modifiés : `client/src/components/CombatOverlay.jsx` — 1 ligne : retirer `announcementMarker` du destructuring props L.20
-- NON touchés : tous les stores, serveur
+---
+
+## État spec REWORK-04 — Session 110
+
+Spec validée et affinée. Tous les amendements appliqués dans `docs/ARCHI_REWORK.md`.
+
+### Gaps résolus cette session
+
+**[R4-1] melee_defense + PNJ → FAUX POSITIF clos**
+`resolveMeleeAction` L.1874 : PNJ = auto-résolution, jamais de `COMBAT_MELEE_DEFENSE_PROMPT`.
+`combat_pending type=melee_defense` = PJ défenseurs uniquement (user_id non-null). C3 lookup correct.
+
+**[R4-2] damage distance + cible → RÉSOLU**
+`COMBAT_DAMAGE_CONFIRM` L.924 : clé lookup = token attaquant (impossible à changer sans toucher client).
+Fix : double lookup C3 — `WHERE payload->>'targetUserId' = user.id` (targetUserId déjà en L.2451).
+Prompt reconstruit : `{ tokenId: row.token_id, formula: row.payload.formula, targetName: row.payload.targetName }`.
+⚠️ `combat_pending.payload` = objet résolution complet ≠ prompt client → C3 reconstruit chaque type.
+
+**[R4-3] stun + shock_auto_stun=false + GM → DOCUMENTÉ mineur**
+`statusService.js` L.127-134. Non-bloquant, cas non-défaut. Acceptable.
+
+### Autres amendements appliqués
+
+- GAP-4 : race condition B3/B4 non-exploitable (guard bloque AWAITING_DEFENSE)
+- GAP-2 : palier 04-C atomique (C1+C2+C3+C4 en même déploiement)
+- GAP-3 : grep COMBAT_STATE_SYNC obligatoire avant C4 → JOURNALTEMP
+- GAP-5 : rollback hors périmètre (Polaris pas de previousTurn)
+
+### Fichiers lus session 110
+
+- `docs/ARCHI_REWORK.md` — spec REWORK-04 complète
+- `server/src/socket/socketCombat.js` L.1586–2071 (`resolveMeleeAction`)
+- `server/src/socket/socketCombat.js` L.923–987 (`COMBAT_DAMAGE_CONFIRM`)
+- `server/src/socket/socketCombat.js` L.1190–1220, L.2420–2466 (sites DAMAGE_PROMPT)
+- `server/src/lib/statusService.js` L.70–146 (`applyStun`)
+- `server/src/db/migrations/20260331_15_characters.js` — `user_id nullable` confirmé
+
+### État final Session 110 — spec REWORK-04 complète
+
+**C3 finalisée (Session 110, 2e partie) :**
+Code block C3 réécrit dans ARCHI_REWORK.md avec :
+- Lookup 1 : `SELECT * FROM combat_pending WHERE campaign_id AND token_id = userTokenId` → itération sur toutes les lignes → reconstruction prompt type par type
+  - `melee_defense` : shape lue socketCombat.js L.2049 + commonPending L.1842
+  - `damage` CaC/assaut PJ standard : `{ tokenId, formula, targetName }` — L.1210, L.2670
+  - `stun` : `{ tokenId, outcome }` — statusService.js L.114
+- Lookup 2 : `WHERE type='damage' AND payload->>'targetUserId' = user.id` → drone assault uniquement
+  - [R4-2] précisé : uniquement `resolveDroneAssaultAction` (L.2437) émet le prompt à la cible. Assaut PJ standard (L.2652) émet à l'attaquant → Lookup 1.
+  - `targetUserId` stocké uniquement dans drone assault payload (L.2451), pas dans assaut PJ standard.
+
+**Fichiers lus Session 110 (2e partie) :**
+- `socketCombat.js` L.1180–1230 (CaC damage prompt + payload shape)
+- `socketCombat.js` L.2020–2070 (melee_defense pending + commonPending)
+- `socketCombat.js` L.1842–1871 (commonPending definition — 24 champs)
+- `socketCombat.js` L.2420–2466 (drone assault damage prompt + payload)
+- `socketCombat.js` L.2640–2680 (assaut PJ standard — confirme pas de targetUserId)
+
+**Grep COMBAT_STATE_SYNC — fait Session 110 (2e partie) :**
+```
+server/src/socket/index.js:109  socket.emit(WS.COMBAT_STATE_SYNC, { combatState: activeCombat, roster, actions })
+```
+**1 seul site.** `activeCombat = db('combat_state').first()` = row DB entière → après migration B2, `sub_phase` dans `combatState.sub_phase` automatiquement. C4 serveur = no-op. C2 lit `combatState.sub_phase ?? null`.
+
+**useCombatSocket.js L.69–88 lu :**
+Handler existant : `setCombatState({ phase, roster, actions, currentTurn, activeSlotIdx, activeTokenId })` — pas de `subPhase`. C2 ajoute `subPhase: combatState.sub_phase ?? null`.
+
+**Spec ARCHI_REWORK.md complète — prête pour implémentation.**
+Ordre : A1 → B1 → B2 → A2 → B3 → B4 → B5 → B6 → C1 → C2 → C3 → C4(no-op serveur).
+
+⚠️ Lire `docs/REGLESYSCOMBAT.md` avant tout code combat (rule combat.md).
