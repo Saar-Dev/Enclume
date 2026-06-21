@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { checkLOS } from './losUtils.js'
+import { checkLOS } from '../../../shared/losUtils.js'
 
 const CAM_SHOULDER_BACK  = 3.0
 const CAM_SHOULDER_RIGHT = 1.5

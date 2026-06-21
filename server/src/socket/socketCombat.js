@@ -7,6 +7,7 @@ import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
+import { checkCombatLOS } from '../lib/losService.js'
 import {
   calcSkillTotal, calcAttributeNA, calcREA,
   calcWoundPenalty, calcEncumbrancePenalty,
@@ -2275,7 +2276,7 @@ async function resolveReloadAction(io, socket, campaignId, character, action) {
 // Appelé depuis resolveAssaultAction quand character.type === 'drone'.
 // §7.3 MANUELSYSCOMBAT : D20 ≤ programme.level, modificateurs situationnels standard,
 // pas de malus blessures/encombrement, pas de Test de Choc.
-async function resolveDroneAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps) {
+async function resolveDroneAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
   try {
     // 1. Arme drone
     const weapon = await db('drone_weapons')
@@ -2304,6 +2305,19 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
 
     // 2. Programme armement — miroir humanoïde : !ref_fire_mode → contact, sinon distance
     const isCaCWeapon = weapon.explicit_fire_mode ? weapon.explicit_fire_mode === 'cc' : !weapon.ref_fire_mode
+
+    // ── LOS check (distance uniquement) ────────────────────────────────────────
+    if (!isCaCWeapon && !options.skipLos) {
+      const los = await checkCombatLOS(io, db, campaignId, action, character)
+      if (los.result === 'blocked') return
+      if (los.result === 'intercepted') {
+        return resolveDroneAssaultAction(io, socket, campaignId,
+          { ...action, target_token_id: los.newTargetTokenId },
+          confirmedModifiers, character, pendingMaps, { skipLos: true })
+      }
+      options.coverageModifier = los.coverageModifier ?? 0
+    }
+
     const category = isCaCWeapon ? 'armement_contact' : 'armement_distance'
     const programme = await db('drone_programs')
       .where({ character_id: character.id, category })
@@ -2330,7 +2344,8 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
     if (confirmedModifiers?.taille) totalModComp += TAILLE_MODS[confirmedModifiers.taille] ?? 0
     const situationMods = confirmedModifiers?.situation ?? []
     totalModComp += situationMods.reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
-    const chancesDeReussite = programme.level + totalModComp
+    const coverageModifier  = options.coverageModifier ?? 0
+    const chancesDeReussite = programme.level + totalModComp + coverageModifier
 
     // 4. Jet D20
     const { total: roll, rolls: attRolls, seed: attSeed } = await parseDice('1d20')
@@ -2356,6 +2371,7 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
         return acc
       }, []),
       ...(tailleModDrone !== 0 ? [{ label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModDrone, type: tailleModDrone > 0 ? 'bonus' : 'malus' }] : []),
+      ...(coverageModifier !== 0 ? [{ label: 'Couverture cible', value: coverageModifier, type: 'malus' }] : []),
       { label: 'Seuil', value: chancesDeReussite, type: 'total' },
     ]
     io.to(campaignId).emit(WS.DICE_RESULT, {
@@ -2536,13 +2552,25 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
   }
 }
 
-async function resolveAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps) {
+async function resolveAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
   try {
     // Branchement drone — avant le guard weapon_inv_id (§7 MANUELSYSCOMBAT)
     if (character.type === 'drone') {
-      return resolveDroneAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps)
+      return resolveDroneAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps, options)
     }
     if (!action.weapon_inv_id || !action.target_token_id) return
+
+    // ── LOS check ─────────────────────────────────────────────────────────────
+    if (!options.skipLos) {
+      const los = await checkCombatLOS(io, db, campaignId, action, character)
+      if (los.result === 'blocked') return
+      if (los.result === 'intercepted') {
+        return resolveAssaultAction(io, socket, campaignId,
+          { ...action, target_token_id: los.newTargetTokenId },
+          confirmedModifiers, character, pendingMaps, { skipLos: true })
+      }
+      options.coverageModifier = los.coverageModifier ?? 0
+    }
 
     const [weapon, rosterTireur] = await Promise.all([
       db('char_inventory')
@@ -2624,7 +2652,8 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
     const fireModeComp     = action.fire_mode_bonus_comp ?? 0
     const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp
 
-    const chancesDeReussite = skillTotal + totalModComp + effectiveMalus - carenceArmure
+    const coverageModifier   = options.coverageModifier ?? 0
+    const chancesDeReussite  = skillTotal + totalModComp + effectiveMalus - carenceArmure + coverageModifier
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
     const isSuccess = rollAttaque <= chancesDeReussite
     const mr = chancesDeReussite - rollAttaque
@@ -2641,6 +2670,7 @@ async function resolveAssaultAction(io, socket, campaignId, action, confirmedMod
       ...(isRushedMod !== 0 ? [{ label: 'Précipitation', value: isRushedMod, type: 'malus' }] : []),
       ...(effectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' }] : []),
       ...(carenceArmure !== 0 ? [{ label: 'Carence armure', value: -carenceArmure, type: 'malus' }] : []),
+      ...(coverageModifier !== 0 ? [{ label: 'Couverture cible', value: coverageModifier, type: 'malus' }] : []),
       { label: 'Seuil', value: chancesDeReussite, type: 'total' },
     ]
     console.log(`[WS] assault — roll:${rollAttaque} Seuil:${chancesDeReussite} → ${isSuccess ? 'TOUCHE' : 'RATÉ'} MR:${mr}`)

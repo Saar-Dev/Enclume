@@ -185,11 +185,344 @@ Le confrère devra brancher les 28 props pour utiliser CombatOverlay tel quel.
 
 ---
 
+## FEAT2-B — LOS combat (résolution) — Spec technique
+> Session 113 — spec validée. Coder sur accord Saar.
+> Suite à compact : relire CLAUDE.md + docs/ARCHI_REWORK.md + ce fichier (section FEAT2-B) avant toute proposition.
+
+### Réponses aux questions de règles (REGLESYSCOMBAT.md lu intégralement)
+
+- **LOS en combat** : pas de règle explicite "ligne de vue" dans les règles. La mécanique proposée est une **règle maison** s'appuyant sur "couverture totale" (tir en aveugle, p.227) et "BALLES PERDUES" (optionnel, p.230).
+- **Moment du check** : à la résolution. Pas à la déclaration.
+- **LOS bloquée → échec automatique + munition gaspillée**.
+- **Cible interposée → nouveau jet attaque/défense/dégâts contre elle** (cible la plus proche sur le rayon).
+- **Options campagne** : A = annulation auto (défaut) | B = GM propose annulation au joueur (option)
+
+### `losUtils.js` → portable serveur ?
+
+`client/src/lib/losUtils.js` — imports : `fast-voxel-raycast` uniquement. Zéro React/Three.js/browser.
+→ **100% portable**. Recommandation : déplacer vers `shared/losUtils.js`.
+
+### Recommandation architecture FEAT2-B
+
+**Option recommandée : `shared/losUtils.js`** (déplacer depuis client)
+- 2 exports : `checkLOS` (existant) + `findInterceptingTokens` (nouveau)
+- Zéro duplication de la logique PE14 + eye height
+
+**`findInterceptingTokens(voxels, allTokens, srcToken, tgtToken)`**
+→ retourne tokens sur le rayon src→tgt triés par distance (excl. src et tgt)
+→ utilisé serveur uniquement (résolution combat)
+
+**Injection dans socketCombat.js :**
+- `resolveAssaultAction` (tir distance PJ/PNJ) → check LOS avant résolution
+- `resolveDroneAssaultAction` → idem
+- CaC = pas de LOS check (contact déjà établi)
+
+**Question ouverte : format voxels serveur**
+Client : `voxelsRef.current` = `{ "x:y:z": voxelObj }` (Redis → WS → store)
+Serveur : Redis HGETALL `collision_map:{campaignId}:{battlemapId}` → format à vérifier avant implémentation
+
+### Mathématiques `findInterceptingTokens` (connues, pas besoin de recherche)
+
+```js
+export function findInterceptingTokens(voxels, allTokens, srcToken, tgtToken) {
+  const fx = srcToken.pos_x+0.5, fy = srcToken.pos_z+2.5, fz = srcToken.pos_y+0.5
+  const tx = tgtToken.pos_x+0.5, ty = tgtToken.pos_z+2.5, tz = tgtToken.pos_y+0.5
+  const dx = tx-fx, dy = ty-fy, dz = tz-fz
+  const dist = Math.sqrt(dx*dx+dy*dy+dz*dz)
+  if (dist < 0.001) return []
+  const dir = [dx/dist, dy/dist, dz/dist]
+  const result = []
+  for (const t of allTokens) {
+    if (t.id === srcToken.id || t.id === tgtToken.id) continue
+    const vx = t.pos_x+0.5-fx, vy = t.pos_z+2.5-fy, vz = t.pos_y+0.5-fz
+    const proj = vx*dir[0] + vy*dir[1] + vz*dir[2]
+    if (proj < 0.5 || proj > dist-0.5) continue
+    const perpSq = (vx-proj*dir[0])**2 + (vy-proj*dir[1])**2 + (vz-proj*dir[2])**2
+    if (perpSq < 0.75**2) result.push({ token: t, dist: proj })
+  }
+  return result.sort((a,b) => a.dist - b.dist)
+}
+```
+
+### Décision architecture (Session 113 — confirmée par Saar)
+
+- **Pas de rework** — `socketCombat.js` propre (REWORK-08 + REWORK-04). Feature addition uniquement.
+- **Module indépendant** : `server/src/lib/losService.js` — principe ARCHI_REWORK.md.
+- **`socketCombat.js`** : appel minimal `checkCombatLOS(io, db, campaignId, action, character)` — zéro logique LOS dans l'appelant.
+- **`shared/losUtils.js`** : `checkLOS` + `findInterceptingTokens` — partagé client/serveur.
+- **CaC** : pas de LOS check — contact établi à la déclaration.
+- **Option campagne** : `allow_los_cancel` boolean, défaut false (migration 82).
+  - OFF (défaut) : LOS bloquée → échec auto + munition gaspillée. Interposé → redirect auto.
+  - ON : LOS bloquée ou interposée → prompt joueur pour annuler (Bloc B — sprint séparé).
+
+---
+
+### Spec FEAT2-B — `losService.js`
+
+#### Problème
+`resolveAssaultAction` (L.2539) et `resolveDroneAssaultAction` (L.2278) ne vérifient aucune LOS. Un PJ peut toucher une cible derrière un mur ou via un token interposé sans conséquence. Règle maison : "tir en aveugle" (p.227) + "BALLES PERDUES" optionnel (p.230).
+
+#### État actuel
+- `socketCombat.js` L.2539 — aucun LOS check avant la résolution
+- `socketCombat.js` L.2278 — idem
+- `client/src/lib/losUtils.js` — `checkLOS` portable (zéro React/browser) — actuellement client uniquement
+- Pas de `findInterceptingTokens` côté serveur
+- `campaigns` — pas de colonne `allow_los_cancel` (migration 82 requise)
+- Voxels serveur : `battlemaps.voxel_data` JSONB, clé `"x:y:z"` Three.js — même format que client ✅
+
+#### Interface cible — `server/src/lib/losService.js`
+
+```js
+import { WS } from '../../../shared/events.js'
+import { checkLOS, findInterceptingTokens } from '../../../shared/losUtils.js'
+
+/**
+ * Vérifie LOS et intercepteurs pour une action de tir distance.
+ * Gère les notifications chat et décompte munition si nécessaire.
+ *
+ * @param {Object} io          — Socket.io server instance (broadcasts)
+ * @param {Object} db          — Knex instance
+ * @param {string} campaignId  — UUID
+ * @param {Object} action      — { token_id, target_token_id, weapon_inv_id, bullet_count }
+ * @param {Object} character   — { user_id, name, type } — garantis par COMBAT_ACTION_CONFIRM L.879
+ * @returns {Promise<LosResult>}
+ *   { result: 'clear' }                        — LOS dégagée, résolution normale
+ *   { result: 'blocked' }                      — LOS bloquée, action terminée (caller doit return)
+ *   { result: 'intercepted', newTargetTokenId } — redirect, caller relance avec nouvelle cible
+ */
+export async function checkCombatLOS(io, db, campaignId, action, character) {
+  const [srcToken, tgtToken, campaign] = await Promise.all([
+    db('tokens').where({ id: action.token_id }).select('pos_x','pos_y','pos_z','battlemap_id').first(),
+    db('tokens').where({ id: action.target_token_id }).select('id','pos_x','pos_y','pos_z','label').first(),
+    // pnj_unlimited_ammo récupéré ici pour éviter une 2e query dans _spendAmmo
+    db('campaigns').where({ id: campaignId }).select('allow_los_cancel','pnj_unlimited_ammo').first(),
+  ])
+  if (!srcToken || !tgtToken) return { result: 'clear' }  // tokens introuvables → laisser passer
+  // P-LOS7 — cross-battlemap : pas de LOS check entre deux cartes différentes
+  if (srcToken.battlemap_id !== tgtToken.battlemap_id) return { result: 'clear' }
+
+  const bmap = await db('battlemaps').where({ id: srcToken.battlemap_id }).select('voxel_data').first()
+  const voxels = bmap?.voxel_data ?? {}
+
+  const { clear } = checkLOS(voxels, srcToken, tgtToken)
+  if (!clear) {
+    // LOS bloquée — notification + munition gaspillée
+    // Bloc B (allow_los_cancel=true) → prompt joueur — sprint séparé
+    io.to(campaignId).emit(WS.DICE_RESULT, {
+      userId: character.user_id, username: character.name ?? 'Inconnu', color: '#c86030',
+      formula: '—', rolls: [], total: 0, isCriticalSuccess: false, isCriticalFail: false, seed: null,
+      timestamp: new Date().toISOString(),
+      skillLabel: 'Tir en aveugle — cible hors de vue',
+      mechanicalTotal: 0, diffLabel: 'LOS bloquée', chancesDeReussite: 0, isSuccess: false, mr: 0, breakdown: [],
+    })
+    await _spendAmmo(db, action, character, campaign)
+    return { result: 'blocked' }
+  }
+
+  // tokens — WHERE battlemap_id uniquement (tokens n'a pas de campaign_id)
+  const allTokens = await db('tokens')
+    .where({ battlemap_id: srcToken.battlemap_id })
+    .select('id','pos_x','pos_y','pos_z','label')
+  const interceptors = findInterceptingTokens(voxels, allTokens, srcToken, tgtToken)
+  if (interceptors.length > 0) {
+    const first = interceptors[0].token
+    io.to(campaignId).emit(WS.DICE_RESULT, {
+      userId: character.user_id, username: character.name ?? 'Inconnu', color: '#c86030',
+      formula: '—', rolls: [], total: 0, isCriticalSuccess: false, isCriticalFail: false, seed: null,
+      timestamp: new Date().toISOString(),
+      skillLabel: `Cible interposée — tir redirigé vers ${first.label ?? 'token inconnu'}`,
+      mechanicalTotal: 0, diffLabel: '', chancesDeReussite: 0, isSuccess: false, mr: 0, breakdown: [],
+    })
+    return { result: 'intercepted', newTargetTokenId: first.id }
+  }
+
+  return { result: 'clear' }
+}
+
+// Miroir exact de la logique L.2671-2683 de resolveAssaultAction (pnj_unlimited_ammo inclus)
+async function _spendAmmo(db, action, character, campaign) {
+  if (!action.weapon_inv_id) return  // drones n'ont pas weapon_inv_id → safe
+  const isPnj = character.type === 'pnj'
+  if (isPnj && (campaign?.pnj_unlimited_ammo ?? true)) return  // même défaut que L.2676
+  const wAmmo = await db('char_inventory').where({ id: action.weapon_inv_id }).select('ammo_remaining').first()
+  if (wAmmo?.ammo_remaining == null) return
+  await db('char_inventory').where({ id: action.weapon_inv_id })
+    .update({ ammo_remaining: Math.max(0, wAmmo.ammo_remaining - (action.bullet_count ?? 1)) })
+}
+```
+
+#### Injection dans `socketCombat.js`
+
+> `options = {}` — paramètre serveur interne, jamais dans le payload WS `action`. Propagé en cascade.
+
+**`resolveAssaultAction` L.2539 — ajout paramètre `options = {}` + branchement drone propagé :**
+```js
+async function resolveAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
+  try {
+    if (character.type === 'drone') {
+      // options propagé pour que _skipLos survive la cascade
+      return resolveDroneAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps, options)
+    }
+    if (!action.weapon_inv_id || !action.target_token_id) return
+
+    // ── LOS check — losService.js ────────────────────────────────────────────
+    if (!options.skipLos) {
+      const los = await checkCombatLOS(io, db, campaignId, action, character)
+      if (los.result === 'blocked') return
+      if (los.result === 'intercepted') {
+        return resolveAssaultAction(io, socket, campaignId,
+          { ...action, target_token_id: los.newTargetTokenId },
+          confirmedModifiers, character, pendingMaps, { skipLos: true })
+      }
+    }
+    // ... suite inchangée
+```
+
+**`resolveDroneAssaultAction` L.2278 — ajout paramètre `options = {}` + injection après L.2306 :**
+```js
+async function resolveDroneAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
+  try {
+    // ... weapon + isCaCWeapon (L.2280-2306) inchangés ...
+
+    // ── LOS check (distance uniquement) ─────────────────────────────────────
+    if (!isCaCWeapon && !options.skipLos) {
+      const los = await checkCombatLOS(io, db, campaignId, action, character)
+      if (los.result === 'blocked') return
+      if (los.result === 'intercepted') {
+        return resolveDroneAssaultAction(io, socket, campaignId,
+          { ...action, target_token_id: los.newTargetTokenId },
+          confirmedModifiers, character, pendingMaps, { skipLos: true })
+      }
+    }
+    // ... suite inchangée
+```
+
+**Import à ajouter en tête de `socketCombat.js` :**
+```js
+import { checkCombatLOS } from '../lib/losService.js'
+```
+
+#### Périmètre
+
+**Fichiers touchés :**
+| Fichier | Opération |
+|---|---|
+| `server/src/db/migrations/82_campaigns_los.js` | créé |
+| `shared/losUtils.js` | créé (= losUtils.js client + findInterceptingTokens) |
+| `client/src/lib/losUtils.js` | supprimé |
+| `client/src/lib/useCameraLOS.js` | L.4 : import mis à jour |
+| `server/src/lib/losService.js` | créé |
+| `server/src/socket/socketCombat.js` | import + 2 injections |
+
+**Fichiers NON touchés :**
+- `resolveMeleeAction` — pas de LOS (CaC)
+- `combatFSM.js`, `combat_pending`, `shared/events.js` — Bloc B uniquement
+- Tous les autres handlers `socketCombat.js`
+- Client stores, hooks, composants — Bloc B uniquement
+
+#### Plan d'implémentation (ordre strict)
+
+0. `cd server && npm install fast-voxel-raycast` — dépendance absente de `server/package.json` (P-LOS1)
+1. Migration 82 : `allow_los_cancel` → `knex migrate:latest` ✅
+2. Créer `shared/losUtils.js` (copie + `findInterceptingTokens` + guard cross-battlemap P-LOS7)
+3. Update import `useCameraLOS.js` L.4 → build client ✅ (valide que `shared/` accessible depuis Vite)
+4. Supprimer `client/src/lib/losUtils.js` → build client ✅ (valide que l'original n'est plus référencé)
+5. Créer `server/src/lib/losService.js` → SR (node --check ne teste pas les imports — SR obligatoire)
+6. Injection `resolveAssaultAction` + import `checkCombatLOS` → SR
+7. Injection `resolveDroneAssaultAction` → SR
+8. Tests V1–V5
+
+#### Validation
+
+| # | Scénario | Résultat attendu |
+|---|---|---|
+| V1 | Tir distance, LOS dégagée, pas de token interposé | Résolution normale — aucune notification LOS |
+| V2 | Tir distance, mur entre tireur et cible | Chat "Tir en aveugle", munition gaspillée, pas de jet |
+| V3 | Tir distance, token T2 entre tireur et cible T1 | Notification redirect vers T2, résolution contre T2 |
+| V4 | CaC (resolveMeleeAction) | Aucun LOS check — résolution normale |
+| V5 | Drone distance, LOS bloquée | Même comportement que V2 |
+
+#### Definition of done — Bloc A
+
+- [ ] `fast-voxel-raycast` installé dans `server/package.json`
+- [ ] Migration 82 appliquée — `allow_los_cancel` dans `campaigns`
+- [ ] `shared/losUtils.js` créé — `checkLOS` + `findInterceptingTokens` — `node --check` OK
+- [ ] `client/src/lib/losUtils.js` supprimé — build client ✅
+- [ ] `client/src/lib/useCameraLOS.js` import mis à jour
+- [ ] `server/src/lib/losService.js` créé — `node --check` OK
+- [ ] `resolveAssaultAction` : injection après L.2545 + import `checkCombatLOS`
+- [ ] `resolveDroneAssaultAction` : injection après L.2306 (si `!isCaCWeapon`)
+- [ ] SR sans erreur
+- [ ] V1–V5 validés
+
+#### Bloc B — Option ON (sprint séparé)
+
+Quand `allow_los_cancel = true` : LOS bloquée ou interposée → prompt WS au joueur.
+Nécessite : `WS.COMBAT_LOS_BLOCKED` + `WS.COMBAT_LOS_DECISION` dans `shared/events.js`, nouveau handler `socketCombat.js`, `useCombatSocket.js` dialog, FSM sub_phase si nécessaire.
+→ **Non implémenté dans ce sprint. Branche dans `checkCombatLOS` marquée `// Bloc B`.**
+
+---
+
 ## REPRENDRE ICI — POST-COMPACT
 
-**FEAT2-C plan validé. Coder directement.**
-Protocole : lire CLAUDE.md → lire ce fichier → lire les 2 fichiers sources → implémenter le plan ci-dessous.
-NE PAS re-planifier. NE PAS poser de questions. Implémenter.
+> Contexte session 113 : FEAT2-C ✅ clos. FEAT2-B spec validée + analysée (autocritique + run à vide). Plan corrigé. Saar a donné l'accord "Je code ?" — **CODER DIRECTEMENT**, pas re-planifier.
+
+### Lectures obligatoires avant de toucher un fichier
+1. `CLAUDE.md` — méthode de travail
+2. Ce fichier section **FEAT2-B** en entier (spec + plan corrigé ci-dessus)
+3. `client/src/lib/losUtils.js` — contenu exact à copier dans `shared/`
+4. `client/src/lib/useCameraLOS.js` L.4 — import à modifier
+5. `server/src/socket/socketCombat.js` L.2539-2545 + L.2278-2310 — points d'injection exacts
+
+### Plan validé — exécuter dans cet ordre strict
+
+**Étape 0** — `cd server && npm install fast-voxel-raycast`
+→ Confirmer dans `server/package.json` que la dép est ajoutée
+
+**Étape 1** — Migration `server/src/db/migrations/82_campaigns_los.js`
+```js
+export const up = (knex) => knex.schema.table('campaigns', t => t.boolean('allow_los_cancel').defaultTo(false))
+export const down = (knex) => knex.schema.table('campaigns', t => t.dropColumn('allow_los_cancel'))
+```
+→ `knex migrate:latest` ✅
+
+**Étape 2** — Créer `shared/losUtils.js`
+= contenu exact de `client/src/lib/losUtils.js` + `findInterceptingTokens` ajouté en bas
+(code complet de `findInterceptingTokens` dans section ci-dessus "Mathématiques")
++ guard cross-battlemap intégrée dans `checkCombatLOS` (dans le service, pas dans losUtils)
+
+**Étape 3** — Update import `client/src/lib/useCameraLOS.js` L.4
+`'./losUtils.js'` → `'../../../shared/losUtils.js'`
+→ `npm run build` (client) ✅
+
+**Étape 4** — Supprimer `client/src/lib/losUtils.js`
+→ `npm run build` (client) ✅ (confirme qu'aucun autre import ne référence ce fichier)
+
+**Étape 5** — Créer `server/src/lib/losService.js`
+Interface exacte dans section "Interface cible" ci-dessus.
+Imports : `import { WS } from '../../../shared/events.js'` + `import { checkLOS, findInterceptingTokens } from '../../../shared/losUtils.js'`
+→ SR ✅
+
+**Étape 6** — `server/src/socket/socketCombat.js`
+- Ajouter en tête : `import { checkCombatLOS } from '../lib/losService.js'`
+- Modifier signature `resolveAssaultAction` → ajouter `options = {}` (8e param)
+- Propager `options` dans le branchement drone L.2542-2543
+- Injection LOS après L.2545
+→ SR ✅
+
+**Étape 7** — `server/src/socket/socketCombat.js`
+- Modifier signature `resolveDroneAssaultAction` → ajouter `options = {}` (8e param)
+- Injection LOS après L.2306 (`isCaCWeapon`), conditionnelle à `!isCaCWeapon`
+→ SR ✅
+
+**Étape 8** — Tests V1–V5 (voir tableau Validation ci-dessus)
+
+### Ce qui NE change PAS
+- `resolveMeleeAction` — aucune modification
+- FSM / combat_pending / shared/events.js — Bloc B uniquement
+- Tous les autres handlers socketCombat.js
+- Client stores, hooks, composants (Bloc B uniquement)
+- `COMBAT_ACTION_CONFIRM` call sites — `options` = `{}` par défaut, aucun changement requis
 
 ---
 

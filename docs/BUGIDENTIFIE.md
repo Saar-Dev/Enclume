@@ -140,6 +140,18 @@ Ajouter dans la IIFE du menu radial `SessionPage.jsx` avant le `find` pour compa
 
 ---
 
+### Bug D3 — Drone CaC : programme "armement_contact" absent du catalogue
+
+**Symptôme** : Drone attaque en CaC → `[WS] resolveDroneAssaultAction — programme armement_contact introuvable pour drone X`. Attaque abandonnée silencieusement côté client.
+
+**Code impliqué** : `server/src/socket/socketCombat.js` — `resolveDroneAssaultAction` L.2321 : `db('drone_programs').where({ character_id, category:'armement_contact' })` retourne null.
+
+**Cause racine** [HYPOTHÈSE] : Soit aucune UI ne permet d'assigner un programme `armement_contact`, soit `ref_drone_programs` ne contient pas ce type, soit le programme n'a pas été créé en DB pour ce drone.
+
+**Prochaine étape** : Vérifier `ref_drone_programs` + `drone_programs` en DB. Vérifier si `DroneWindow` expose une UI d'assignation de programme CaC.
+
+---
+
 ### Bug D2 — Token drone : changement de GLB non fonctionnel
 
 **Symptôme** : Upload d'un nouveau GLB pour un drone via DroneWindow → token 3D ne se met pas à jour visuellement.
@@ -344,6 +356,30 @@ Ajouter dans le composant de sélection de cible CaC pour observer l'état au mo
 
 ---
 
+### Bug COM15 — Fenêtres combat : propriétaire du slot non identifiable (GM)
+
+**Symptôme** : En phases ANNONCE et RÉSOLUTION, le GM ne peut pas identifier à quel personnage appartient la fenêtre qui vient de s'ouvrir (`CombatGmDeclareWindow`, `CombatModifiersWindow`). Problème amplifié avec plusieurs PNJ.
+
+**Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx` + `CombatModifiersWindow.jsx` — en-têtes des fenêtres.
+
+**Cause racine** [VÉRIFIÉ] : Aucun indicateur (nom, portrait, couleur) du personnage actif dans les en-têtes. Les fenêtres s'ouvrent sans contexte visuel identifiant l'acteur concerné.
+
+**Prochaine étape** : Cluster D — ajouter nom + couleur du personnage actif dans l'en-tête de chaque fenêtre combat.
+
+---
+
+### Bug COM16 — Phase ANNONCE : traits liaison attaquant↔cible disparaissent
+
+**Symptôme** : Les traits visuels reliant attaquant à sa cible déclarée (tir ou CaC) disparaissent au fur et à mesure des déclarations. À la fin de la phase ANNONCE, aucun trait n'est visible.
+
+**Code impliqué** : `client/src/components/CombatOverlay.jsx` ou `SessionPage.jsx` — rendu des annotations de déclaration.
+
+**Cause racine** [INCONNU] : Non investigué.
+
+**Prochaine étape** : Cluster F — lire `CombatOverlay.jsx` + handler `COMBAT_ACTION_DECLARED` dans `useCombatSocket.js`.
+
+---
+
 ### Bug COM14 — Cibles combat non effacées à COMBAT_END
 
 **Symptôme** : Quand le GM termine le combat, les cibles précédemment sélectionnées (assaut tir ou CaC) restent affichées dans les fenêtres de déclaration côté GM et joueur. Plus généralement, certains états de sélection client ne sont pas nettoyés à la fin du combat.
@@ -475,6 +511,30 @@ console.log('[DBG-DR6]', {
 ---
 
 ## Bugs divers — Dette technique
+
+### Bug CRASH1 — Freeze tour : drone CaC hors de portée [INCONNU]
+
+**Symptôme** : Tour complet freezé après confirmation d'action CaC drone hors de portée (première occurrence session 113). Aucun log d'erreur — gel silencieux. Les logs s'arrêtent après le `[DBG] COMBAT_ACTION_CONFIRM` du drone, avant tout log de résolution. Tour suivant (combat relancé) : fonctionnel.
+
+**Code impliqué** : `server/src/socket/socketCombat.js` — `COMBAT_ACTION_CONFIRM` handler + `resolveDroneAssaultAction`.
+
+**Cause racine** [INCONNU] : Possiblement état FSM incorrect après résolution du slot précédent, ou guard silencieux (`activeSlot.token_id !== tokenId`). Non reproduit.
+
+**Prochaine étape** : Reproduire avec log exhaustif. Vérifier `advanceSlot` + état FSM après résolution du slot précédent (96dd9b06 → c9ca043a).
+
+---
+
+### Bug RANGE1 — CaC hors de portée : aucune notification client
+
+**Symptôme** : Quand un CaC est hors de portée, le serveur log "hors portée" et retourne silencieusement. Le joueur ne reçoit aucun feedback — l'action disparaît sans explication.
+
+**Code impliqué** : `server/src/socket/socketCombat.js` — `resolveMeleeAction` ~L.1690 : `return false` sans émettre d'event WS dans la branche hors portée.
+
+**Cause racine** [VÉRIFIÉ] : Pas de `io.to(campaignId).emit(...)` dans la branche hors portée.
+
+**Prochaine étape** : Cluster H — ajouter notification WS (DICE_RESULT ou event dédié) dans `resolveMeleeAction` branche hors portée.
+
+---
 
 ### Bug INI2 — Modificateurs de blessure/soin non propagés automatiquement (initiative, malus)
 
@@ -609,7 +669,15 @@ console.log('[DBG-INI1] initiative calc', { roll, rea, hiddenDie, finalInitiativ
 - Scene : clic token cible → `handleLosTarget` → ray 3D natif `<line>` (vert/rouge) + callback `onLosResult`
 - SessionPage : overlay DOM résultat (cliquable pour fermer)
 
-**FEAT2-B — Code impliqué :** `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` — sprint futur.
+**FEAT2-B — ⚠️ Implémenté, validation en cours (session 113) :**
+- `server/src/db/migrations/82_campaigns_los.js` — `campaigns.allow_los_cancel` boolean
+- `shared/losUtils.js` — `checkLOS` + `findInterceptingTokens`
+- `server/src/lib/losService.js` — `checkCombatLOS` + `_spendAmmo`
+- `server/src/socket/socketCombat.js` — injection dans `resolveAssaultAction` + `resolveDroneAssaultAction`
+- LOS bloquée → DICE_RESULT "Tir en aveugle" émis (`io.to(campaignId)`)
+- `ce71acbb → 6c84fd12` : LOS bloquée ✅ confirmé (logs session 113)
+- **[LOS1] DICE_RESULT "Tir en aveugle" visible côté client non confirmé** — émission serveur vérifiée en code, affichage UI à valider en session
+- **Bloc B** (allow_los_cancel=true → prompt joueur) : sprint séparé
 
 ---
 
