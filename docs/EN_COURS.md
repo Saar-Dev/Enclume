@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-20 Session 112
+> Dernière mise à jour : 2026-06-21 Session 113
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -34,6 +34,12 @@
 
 **10. ~~REWORK-04 — FSM Combat~~** ✅ CLOS COMPLET Session 110/111 — validé en session réelle ✅
    → 12 étapes A1→C4 — `combatFSM.js` + migrations 80+81 + guards socketCombat + DB persistence + restauration reconnexion
+
+**11. REWORK-06 — `declarationReducer` — plan complet ✅ Session 113 — prêt à coder**
+   → `docs/PLAN_REWORK06.md` — 14 pièges (P-R06-1 à P-R06-14) — architecture décidée et documentée
+   → `useReducer` partagé — remplace 6 useState (3 par composant) sans store Zustand
+   → 3 étapes : créer `declarationReducer.js` → migrer GM → migrer Player
+   → **Prochaine action : "Je code ?" → Étape 1**
 
 ---
 

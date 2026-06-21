@@ -445,6 +445,21 @@ state: {
 // dispatch est stable (garanti par useReducer) → pas besoin d'inclure dans les deps.
 ```
 
+**P-R06-14 — `onModeChange` Player (L.1124–1131) : closure intentionnelle sur `decl.combatMode`**
+```js
+// Code cible après migration :
+onModeChange={(mode) => {
+  dispatch({ type: 'SET_COMBAT_MODE', mode })
+  if (decl.combatMode === 'charge') setMoveSelection(null)  // ← lit l'ANCIENNE valeur
+}}
+// dispatch est asynchrone (React batch) → decl.combatMode n'est PAS encore mis à jour
+// quand le if (decl.combatMode === 'charge') s'exécute. Il lit la valeur PRE-dispatch.
+// Intentionnel : la question est "étais-je en mode charge AVANT ce changement ?"
+// (pour nettoyer la sélection de déplacement si on sort de la charge).
+// Même comportement que l'actuel if (combatMode === 'charge') — combatMode était lui aussi stale
+// (useState ne se met à jour qu'au prochain render). Aucun code supplémentaire requis.
+```
+
 **P-R06-10 — `combatMode` dans les deps de l'effet COMBAT_ANNOUNCE_PREVIEW (L.315)**
 L'effet `useEffect` qui émet `COMBAT_ANNOUNCE_PREVIEW` a `combatMode` dans son tableau de deps
 à L.315 (deps gérées manuellement — `// eslint-disable-next-line react-hooks/exhaustive-deps`).
@@ -821,6 +836,8 @@ dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: modes[0] })
 //          → dispatch({ type: 'SET_COMBAT_MODE', mode })
 // L.1128 : if (combatMode === 'charge')                              → decl.combatMode
 // L.1131 : if (combatMode === 'charge')                              → decl.combatMode
+//          ⚠️ P-R06-14 : decl.combatMode lu juste après dispatch → lit l'ANCIENNE valeur.
+//          Intentionnel. Voir §PIÈGES P-R06-14 pour l'explication complète.
 
 // handleChargeFlow (L.744–773) :
 // L.745 : setCombatMode('charge')  → dispatch({ type: 'SET_COMBAT_MODE', mode: 'charge' })
