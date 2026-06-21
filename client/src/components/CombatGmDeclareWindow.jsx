@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useReducer } from 'react'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
@@ -13,6 +13,7 @@ import { useDraggable } from '../lib/useDraggable.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
+import { declarationReducer, DECLARATION_INITIAL } from '../lib/declarationReducer'
 
 // ---------------------------------------------------------------------------
 // Etat par défaut (= DEFAULT colonne DB)
@@ -77,10 +78,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   )
 
   // ── États de déclaration pour le PNJ actif ───────────────────────────────
-  const [localStates,     setLocalStates]     = useState({ ...STATE_DEFAULTS })
-  const [localQuick,      setLocalQuick]      = useState({ observer: 0, reperer: 0, phrase: false })
+  const [decl, dispatch] = useReducer(declarationReducer, DECLARATION_INITIAL)
   const [mapAction,       setMapAction]       = useState(null)     // 'reload' | 'interact' | null
-  const [combatMode,      setCombatMode]      = useState('normal')
   const [meleeAttackCount,setMeleeAttackCount]= useState(1)
   const [meleePendingMode,setMeleePendingMode]= useState(false)
   const [pendingMove,     setPendingMove]     = useState(null)     // sel ou null
@@ -105,10 +104,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   // ── Reset complet quand le slot actif change ─────────────────────────────
   useEffect(() => {
-    setLocalStates({ ...initialStates })
-    setLocalQuick({ observer: 0, reperer: 0, phrase: false })
+    dispatch({ type: 'RESET', payload: { ...initialStates } })
     setMapAction(null)
-    setCombatMode('normal')
     setMeleeAttackCount(1)
     setMeleePendingMode(false)
     setPendingMove(null)
@@ -186,8 +183,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     const w = equipment[activeTokenId]?.weapon
     if (!w?.ref_fire_mode) return
     const modes = w.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
-    if (!modes.includes(localStates.fire_mode))
-      setLocalStates(s => ({ ...s, fire_mode: modes[0] }))
+    if (!modes.includes(decl.fire_mode))
+      dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: modes[0] })
   }, [activeTokenId, equipment])
 
   // ── Helpers ─────────────────────────────────────────────────────────────
@@ -235,17 +232,17 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ── INI delta ────────────────────────────────────────────────────────────
   const iniDelta = isActivePnj ? calcIniDelta(
     initialStates,
-    localStates,
+    decl,
     {
       move:  pendingMove ?? null,
       attack: null,
       melee: meleeTargets.length > 0 ? meleeTargets : null,
     },
-    localQuick,
+    decl.quick,
   ) : 0
 
-  const meleeDefensif    = combatMode === 'defensif' || combatMode === 'retraite'
-  const effectiveMeleeCount = combatMode === 'charge' ? 1 : meleeAttackCount
+  const meleeDefensif    = decl.combatMode === 'defensif' || decl.combatMode === 'retraite'
+  const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeAttackCount
   const effectiveMeleeCountRef = useRef(effectiveMeleeCount)
   effectiveMeleeCountRef.current = effectiveMeleeCount
   // CaC — arme sélectionnée (null = mains nues, sinon inv_id)
@@ -257,7 +254,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const availableFireModes = weapon?.ref_fire_mode
     ? weapon.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
     : ['cc']
-  const currentFireMode = localStates.fire_mode.toUpperCase()
+  const currentFireMode = decl.fire_mode.toUpperCase()
   const { variant: currentVariant, effectiveBulletCount } = computeFireVariant(
     currentFireMode, assaultBulletCount, assaultVariantAB, { defaultCcCount: 1 }
   )
@@ -268,7 +265,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const ccSliderDisplayIdx = ccSliderIdx === -1 ? 0 : ccSliderIdx
 
   // ── canDeclare ───────────────────────────────────────────────────────────
-  const stateChanged = isActivePnj && Object.keys(localStates).some(k => localStates[k] !== initialStates[k])
+  const stateChanged = isActivePnj && Object.keys(initialStates).some(k => decl[k] !== initialStates[k])
   const hasAction    = isActivePnj && (
     !!assaultTarget?.targetTokenId ||
     (meleeTargets.length >= effectiveMeleeCount && !meleeDefensif) ||
@@ -276,8 +273,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     !!pendingMove ||
     !!chargeSelection?.targetTokenId ||
     !!mapAction ||
-    combatMode !== 'normal' ||
-    localQuick.observer > 0 || localQuick.reperer > 0 || localQuick.phrase
+    decl.combatMode !== 'normal' ||
+    decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase
   )
   // Si cible d'assaut sélectionnée, un variant doit être configuré
   const assaultValid = !assaultTarget?.targetTokenId || currentVariant !== null
@@ -342,7 +339,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ── Charge (move court gratuit → cible CaC) ─────────────────────────────
   const handleStartCharge = () => {
     if (!activeToken) return
-    setCombatMode('charge')
+    dispatch({ type: 'SET_COMBAT_MODE', mode: 'charge' })
     setChargeSelection(null)
     setIsSelectingOnMap(true)
     const chargeAllures = {
@@ -358,11 +355,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           activeTokenId,
           { x: activeToken.pos_x, z: activeToken.pos_y },
           (targetId) => { setChargeSelection({ move, targetTokenId: targetId }); setIsSelectingOnMap(false) },
-          () => { setCombatMode('normal'); setIsSelectingOnMap(false) },
+          () => { dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' }); setIsSelectingOnMap(false) },
           'melee'
         )
       },
-      () => { setCombatMode('normal'); setIsSelectingOnMap(false) },
+      () => { dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' }); setIsSelectingOnMap(false) },
     )
   }
 
@@ -395,7 +392,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     const movePayload = chargeSelection?.move ?? pendingMove ?? null
     socket.emit(WS.COMBAT_ACTION_DECLARE, {
       tokenId: activeTokenId,
-      state: { ...localStates, combat_mode: combatMode },
+      state: {
+        position:    decl.position,
+        weapon:      decl.weapon,
+        fire_mode:   decl.fire_mode,
+        cover:       decl.cover,
+        vitesse:     decl.vitesse,
+        combat_mode: decl.combatMode,
+      },
       mapActions: {
         move:     movePayload,
         attack:   weapon && assaultTarget?.targetTokenId ? {
@@ -412,7 +416,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         multi:    false,
         interact: mapAction === 'interact',
       },
-      quick: { ...localQuick },
+      quick: { ...decl.quick },
     })
   }
 
@@ -455,8 +459,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                   {['position', 'cover', 'vitesse'].map(k => (
                     <InlineChip key={k} stateKey={k}
                       initial={initialStates[k]}
-                      current={localStates[k]}
-                      onChange={v => setLocalStates(s => ({ ...s, [k]: v }))} />
+                      current={decl[k]}
+                      onChange={v => dispatch({ type: 'SET_FIELD', key: k, value: v })} />
                   ))}
                 </div>
               </div>
@@ -468,10 +472,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                   {['weapon', 'fire_mode'].map(k => (
                     <InlineChip key={k} stateKey={k}
                       initial={initialStates[k]}
-                      current={localStates[k]}
+                      current={decl[k]}
                       availableKeys={k === 'fire_mode' && rangedActive ? availableFireModes : undefined}
                       onChange={v => {
-                        setLocalStates(s => ({ ...s, [k]: v }))
+                        dispatch({ type: 'SET_FIELD', key: k, value: v })
                         if (k === 'fire_mode') { setAssaultBulletCount(null); setAssaultVariantAB('A') }
                       }} />
                   ))}
@@ -484,7 +488,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 <div style={S.actionGrid}>
                   {MAP_ACTIONS.map(a => {
                     const noRangedWeapon = a.k === 'attack' && !rangedActive
-                    const weaponNotDrawn = a.k === 'attack' && rangedActive && localStates.weapon !== 'drawn'
+                    const weaponNotDrawn = a.k === 'attack' && rangedActive && decl.weapon !== 'drawn'
                     const stunDisabled   = isStunnedActivePnj && (a.k === 'attack' || a.k === 'melee')
                     const disabled = noRangedWeapon || stunDisabled
                     const grayed   = weaponNotDrawn || disabled
@@ -513,16 +517,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                               setAssaultVariantAB('A')
                               return
                             }
-                            if (localStates.weapon !== 'drawn') {
-                              setLocalStates(prev => ({ ...prev, weapon: 'drawn' }))
-                            }
+                            if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
                             handleStartAttack()
                           } else if (a.k === 'melee') {
                             if (isMeleeSetup) {
                               setMeleePendingMode(false)
                               setMeleeTargets([])
                               setChargeSelection(null)
-                              setCombatMode('normal')
+                              dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
                             } else {
                               handleStartMelee()
                             }
@@ -533,7 +535,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                         style={{
                           ...S.actionBtn,
                           ...(active   ? S.actionBtnActive   : {}),
-                          ...(grayed ? S.actionBtnDisabled : {}),
+                          ...(disabled ? S.actionBtnDisabled : {}),
+                          ...(weaponNotDrawn && !disabled ? { opacity: 0.5 } : {}),
                           ...span2,
                         }}
                       >
@@ -568,19 +571,19 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 <div style={S.quickList}>
                   {QUICK_ACTIONS.map(qa => {
                     if (qa.kind === 'incremental') {
-                      const val = localQuick[qa.k] ?? 0
+                      const val = decl.quick[qa.k] ?? 0
                       return (
                         <div key={qa.k}
                           title={qa.tooltip}
                           style={{ ...S.quickRow, ...(val > 0 ? S.quickRowActive : {}) }}
-                          onClick={() => val === 0 && setLocalQuick(q => ({ ...q, [qa.k]: 1 }))}
+                          onClick={() => val === 0 && dispatch({ type: 'SET_QUICK', key: qa.k, value: 1 })}
                         >
                           <span style={S.quickLabel}>{qa.l}</span>
                           <div style={S.sliderWrap} onClick={val > 0 ? e => e.stopPropagation() : undefined}>
                             <input type="range" min={0} max={qa.max} step={1} value={val}
                               disabled={val === 0}
                               style={{ ...S.slider, opacity: val > 0 ? 1 : 0.3 }}
-                              onChange={e => setLocalQuick(q => ({ ...q, [qa.k]: Number(e.target.value) }))} />
+                              onChange={e => dispatch({ type: 'SET_QUICK', key: qa.k, value: Number(e.target.value) })} />
                             <span style={{ ...S.sliderVal, color: val > 0 ? '#5b8dee' : '#456575' }}>
                               {val > 0 ? `${val * qa.stepIni}` : '–'}
                             </span>
@@ -588,12 +591,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                         </div>
                       )
                     }
-                    const isOn = !!localQuick[qa.k]
+                    const isOn = !!decl.quick[qa.k]
                     return (
                       <div key={qa.k}
                         title={qa.tooltip}
                         style={{ ...S.quickRow, ...(isOn ? S.quickRowActive : {}) }}
-                        onClick={() => setLocalQuick(q => ({ ...q, [qa.k]: !q[qa.k] }))}
+                        onClick={() => dispatch({ type: 'SET_QUICK', key: qa.k, value: !decl.quick[qa.k] })}
                       >
                         <span style={S.quickLabel}>{qa.l}</span>
                         {qa.ini && <span style={{ color: isOn ? '#5b8dee' : '#456575', fontSize: 10 }}>{qa.ini}</span>}
@@ -770,15 +773,15 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               hasMeleeInInventory={false}
               onWeaponChange={(id) => {
                 setSelectedGmMeleeWeaponId(id)
-                if (id !== null && localStates.weapon !== 'drawn') {
-                  setLocalStates(prev => ({ ...prev, weapon: 'drawn' }))
-                } else if (id === null && localStates.weapon !== 'holstered') {
-                  setLocalStates(prev => ({ ...prev, weapon: 'holstered' }))
+                if (id !== null && decl.weapon !== 'drawn') {
+                  dispatch({ type: 'SET_FIELD', key: 'weapon', value: 'drawn' })
+                } else if (id === null && decl.weapon !== 'holstered') {
+                  dispatch({ type: 'SET_FIELD', key: 'weapon', value: 'holstered' })
                 }
               }}
-              combatMode={combatMode}
+              combatMode={decl.combatMode}
               onModeChange={(mode) => {
-                setCombatMode(mode)
+                dispatch({ type: 'SET_COMBAT_MODE', mode })
                 if (mode !== 'charge') setChargeSelection(null)
               }}
               onStartCharge={handleStartCharge}

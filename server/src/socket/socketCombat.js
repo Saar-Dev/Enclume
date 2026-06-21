@@ -570,7 +570,7 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
           if (fireMode === 'RC' || fireMode === 'RL') {
             const sheet = await db('char_sheet').where({ character_id: character.id }).first()
             const autoSkill = sheet
-              ? await db('char_skills').where({ char_sheet_id: sheet.id, skill_id: 'TIR_AUTOMATIQUE' }).first()
+              ? await db('char_skills').where({ char_sheet_id: sheet.id, skill_id: 'TIR_AUTOMATIQUES' }).first()
               : null
             if (!autoSkill) {
               socket.emit('error', { message: 'Compétence Tir Automatique requise (PC23)' })

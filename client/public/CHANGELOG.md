@@ -1,3 +1,17 @@
+## v115 — 2026-06-21 — REWORK-06 : declarationReducer + fixes combat
+
+### Client — Refactoring
+- [refactor] `client/src/lib/declarationReducer.js` créé — reducer pur partagé (`SET_FIELD`, `SET_COMBAT_MODE`, `SET_QUICK`, `SELECT_ATTACK`, `RESET`, `RESET_NEW_TURN`)
+- [refactor] `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` — 3 useState chacun → 1 `useReducer(declarationReducer, DECLARATION_INITIAL)`
+- [fix] Assaut (tir) grisé non cliquable quand arme holstered → onClick + cursor pointer
+- [fix] GM : curseur interdit sur bouton Assaut arme non au clair → opacity seule, curseur pointer
+- [fix] Mains nues CaC par défaut (suppression auto-sélection première arme de contact)
+
+### Serveur — Correctif
+- [fix] PC23 Tir Automatique (RC/RL) — typo `TIR_AUTOMATIQUE` → `TIR_AUTOMATIQUES` dans `socketCombat.js`
+
+---
+
 ## v114 — 2026-06-20 — FEAT2-C : Caméra LOS v2 épaule droite
 
 ### Client — Nouvelle fonctionnalité

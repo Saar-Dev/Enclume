@@ -59,18 +59,35 @@ Alternatives écartées :
   de slot. Zustand est pour du domain state persistant, pas du staging éphémère per-session.
 - **Laisser inline dans `SessionContent` (post-REWORK-15)** — réduit le bruit mais ne déplace
   pas la responsabilité. `SessionContent` resterait une God component pour le combat.
+- **`useReducer` à la place des 4 `useState`** — techniquement justifié : `combatMoveMode` et
+  `combatCameraCenter` changent ensemble dans `handleEnterMoveMode`/`handleEnterTargetMode` ;
+  `handleModeReset` change 3 states simultanément. tkdodo.eu ("Should I useState or useReducer?")
+  et Kent C. Dodds recommandent `useReducer` quand plusieurs états évoluent ensemble via des
+  "actions" nommées. Écarté ici : l'extraction est un refactoring 1:1 (comportement à préserver
+  à l'identique). Ajouter un reducer + action types augmente la surface de code sans gain
+  fonctionnel. React 18 batchie les mises à jour — aucune différence de performance.
+  À considérer si ce hook évolue vers plus d'états ou d'actions complexes.
+
+**⚠️ Ce hook ne résout PAS le prop drilling.**
+CombatOverlay reçoit toujours 37 props dont 8 issues de ce hook. Canvas3D reçoit toujours 4 props.
+Le hook déplace la logique hors de SessionPage — pas la distribution des props. Prop drilling :
+périmètre REWORK-15 (SocketProvider context) ou sprint dédié futur.
 
 ### Prérequis
 
-**REWORK-06 (`declarationReducer`) — obligatoire avant de coder.**
+**REWORK-06 (`declarationReducer`) — ordre pratique (pas contrainte technique).**
 
-`handleStartCharge` (CombatGmDeclareWindow) et `handleChargeFlow` (CombatActionWindow) passent
-des closures comme `onCancel`/`onMoveSelected` à `handleEnterMoveMode` et `handleEnterTargetMode`.
-Actuellement ces closures appellent `setCombatMode('normal'/'charge')` — référence instable.
+REWORK-06 refactorise la gestion déclaration dans `CombatGmDeclareWindow` et `CombatActionWindow`
+— les closures `onMoveSelected`/`onCancel` passées à `handleEnterMoveMode` /
+`handleEnterTargetMode` sont définies côté appelant. Extraire REWORK-14 après REWORK-06 évite
+de valider la compatibilité de ces callbacks deux fois (avant et après REWORK-06).
 
-Après REWORK-06, ces closures appellent `dispatch({ type: 'SET_COMBAT_MODE', mode: ... })` —
-`dispatch` est stable (garantie `useReducer`). Extraire dans `useCombatUIState` avant REWORK-06
-crée le risque de stale closures dans `combatMoveMode.onCancel` / `combatTargetMode.onCancel`.
+⚠️ **Correction par rapport à la rédaction initiale du plan :**
+La justification "stale closures → `setCombatMode` instable" était FAUSSE. Les setters `useState`
+sont STABLES entre chaque render, garantie React (react.dev, "I call my state updater … the same
+reference"). Il n'y a aucun risque stale closure pour un setter `useState`, identique en cela à
+`dispatch`. L'ordre REWORK-06 → REWORK-14 est **pratique**, pas **technique** : les deux reworks
+sont indépendants et pourraient être inversés sans casse.
 
 **REWORK-15 (`SocketProvider`) — indépendant techniquement.**
 `useCombatUIState` n'utilise pas le socket. Mais la table ARCHI_REWORK.md positionne REWORK-14
@@ -89,10 +106,15 @@ const [combatCameraCenter, setCombatCameraCenter] = useState(null)
 // L.223 — null = inactif, sinon { tokenId, allures, onMoveSelected, onCancel, onPendingMove }
 const [combatMoveMode, setCombatMoveMode] = useState(null)
 
-// L.225 — null = inactif, sinon { action_key, ini_mod, targetPosX, targetPosY, targetPosZ }
+// L.225 — null = inactif. Sinon shape complet (Canvas3D L.709–717) :
+//   { action_key, ini_mod, targetPosX, targetPosY (PE14 = Z Three.js), targetPosZ (altitude DB),
+//     screenX (clientX pour CombatOverlay L.362), screenY (clientY pour CombatOverlay L.363) }
 const [pendingMoveSelection, setPendingMoveSelection] = useState(null)
 
-// L.228 — null = inactif, sinon { tokenId, pendingTargetId, onTargetSelected, onCancel, onPendingTarget }
+// L.228 — null = inactif. Sinon shape complet :
+//   { tokenId, mode ('ranged'|'melee'), pendingTargetId, onTargetSelected, onCancel, onPendingTarget }
+//   + pendingTargetScreenPos: { x, y } | null — ajouté dynamiquement via onPendingTarget
+//   mode est lu par CombatOverlay L.198 : "Corps à corps" vs "Assaut"
 const [combatTargetMode, setCombatTargetMode] = useState(null)
 ```
 
@@ -199,6 +221,39 @@ combatMoveMode={combatMoveMode}             // L.821
 pendingMoveSelection={pendingMoveSelection}  // L.822
 combatTargetMode={combatTargetMode}         // L.823
 ```
+
+### Interactions Canvas3D ↔ hook (lu Session 113 — grep Canvas3D.jsx)
+
+Canvas3D est **bidirectionnel** : il **lit** les 4 props et **écrit** via les callbacks embarqués.
+
+**Pattern P40 — ref miroir (Canvas3D L.368–373) :**
+```js
+const combatMoveModeRef = useRef(null)
+combatMoveModeRef.current = combatMoveMode        // mis à jour chaque render
+const combatTargetModeRef = useRef(null)
+combatTargetModeRef.current = combatTargetMode    // mis à jour chaque render
+```
+`handleDragStart`, `handlePointerMove`, `handlePointerUp` sont des `useCallback(deps=[])` stables
+qui lisent les refs (pas les props directement) pour accéder à l'état courant sans être invalidés
+à chaque changement de mode. Ce pattern est interne à Canvas3D — `useCombatUIState` n'y touche pas.
+
+**Write-back depuis Canvas3D :**
+
+| Call site Canvas3D | Callback | Résultat |
+|---|---|---|
+| `handleDragStart` L.557 | `combatTargetModeRef.current.onPendingTarget(token.id, e.clientX, e.clientY)` | peuple `pendingTargetId` + `pendingTargetScreenPos` |
+| `handlePointerUp` L.709–717 | `mode.onPendingMove({ action_key, ini_mod, targetPosX, targetPosY, targetPosZ, screenX, screenY })` | peuple `pendingMoveSelection` |
+| Escape key L.1127 / L.1131 | `combatMoveMode.onCancel()` / `combatTargetMode.onCancel()` | reset mode + pendingMoveSelection via wrappedCancel |
+
+**Write-back depuis CombatOverlay (L.210) :**
+
+`combatTargetMode.onPendingTarget(null)` — bouton "Changer" — vide `pendingTargetId` et
+`pendingTargetScreenPos`. Guard `if (id === tokenId) return` ne fire **pas** pour `null`
+(`null !== tokenId` — tokenId est un entier). Résultat : `{ ...prev, pendingTargetId: null, pendingTargetScreenPos: null }`.
+
+**`pendingTargetScreenPos` — code actif (CombatOverlay L.194–196) :**
+Positionne le panneau de sélection cible (`style={{ top: screenPos.y, left: screenPos.x }}`).
+NON dead code. Provient de `e.clientX`/`e.clientY` au moment du drag sur un token ennemi.
 
 ---
 
@@ -327,9 +382,16 @@ Les state setters (`setCombatMoveMode`, `setPendingMoveSelection`, `setCombatCam
 — pas dans les deps du `useCallback`. Les wrappers se recréent à chaque appel du handler, pas
 à chaque render. Comportement identique à l'actuel `SessionPage.jsx`.
 
-**P-R14-3 — Guard self-targeting dans `onPendingTarget`**
+**P-R14-3 — Guard self-targeting dans `onPendingTarget` — double rôle**
 `if (id === tokenId) return` — L.726 de `SessionPage.jsx`. `tokenId` est capturé dans la
 closure de `handleEnterTargetMode` (paramètre de fonction). Reproduire fidèlement.
+
+Ce guard a deux call sites avec des comportements différents :
+- `Canvas3D handleDragStart` → appelle `onPendingTarget(token.id, clientX, clientY)` — le guard
+  filtre les tokens ennemis vs le token actif.
+- `CombatOverlay "Changer" L.210` → appelle `onPendingTarget(null)` — `null !== tokenId` (tokenId
+  est un entier), donc le guard **ne fire pas**. Résultat : `pendingTargetId: null`,
+  `pendingTargetScreenPos: null`. C'est le mécanisme de reset du target sélectionné.
 
 **P-R14-4 — `pendingTargetScreenPos` conditionnel**
 `screenX != null ? { x: screenX, y: screenY } : null` — L.726–727 actuel.
@@ -340,6 +402,23 @@ couvrir à la fois `null` et `undefined` comme dans l'original.
 Version actuelle (L.733) : `if (!combatTargetMode || !combatTargetMode.pendingTargetId) return`.
 Dans le hook, `combatTargetMode?.pendingTargetId` est équivalent et plus concis — les deux
 couvrent le cas `null` ET le cas `pendingTargetId` falsy.
+
+**P-R14-6 — Piège setState(fn) : fonctions stockées dans un objet d'état**
+`combatMoveMode`, `combatTargetMode` sont des **objets** contenant des callbacks (`onMoveSelected`,
+`onCancel`, `onPendingMove`, `onTargetSelected`, `onPendingTarget`).
+
+React traite tout argument fonctionnel de `setState` comme un **updater** :
+`setCombatMoveMode(fn)` → React appelle `fn(prevState)` au lieu de stocker `fn`.
+
+Conséquences :
+- `setCombatMoveMode({ tokenId, onMoveSelected: wrappedFn })` → **correct** (on passe un objet)
+- `setCombatMoveMode(wrappedFn)` → **incorrect** (React appelle `wrappedFn(prev)`)
+
+Dans le hook, toutes les mutations de ces states passent un objet literal (jamais la fonction
+directement). Vérifier tout futur ajout de callback en state : toujours envelopper dans `{}`.
+
+Référence : react.dev — "Updating state with the next value... If you pass a function, it will be
+treated as an updater function."
 
 ---
 
@@ -457,6 +536,7 @@ Run à vide : SR + `npm run build` client — zéro erreur.
 | V10 | `COMBAT_END` ou avancement de slot | `handleModeReset` via `useCombatSocket` — `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection` tous null |
 | V11 | Démarrage mode déplacement | `combatCameraCenter` peuplé avec `tokenPos`, Canvas3D centre la vue |
 | V12 | Démarrage mode cible | `combatCameraCenter` peuplé avec `tokenPos` |
+| V13 | PJ survole cible puis clique "Changer" | `pendingTargetId = null`, `pendingTargetScreenPos = null`, mode cible toujours actif |
 
 ---
 
@@ -466,6 +546,7 @@ Run à vide : SR + `npm run build` client — zéro erreur.
 
 - [ ] `client/src/lib/useCombatUIState.js` créé — 4 `useState` + 6 `useCallback`
 - [ ] `handleModeReset` : reset `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection` — deps `[]`
+  - ⚠️ `combatCameraCenter` intentionnellement NON reset (caméra reste sur la dernière position — comportement source SessionPage.jsx préservé)
 - [ ] `handleEnterMoveMode` : deps `[]` — closures wrappées créées à l'appel, setters stables
 - [ ] `handleValidateMove` : deps `[combatMoveMode, pendingMoveSelection]`
 - [ ] `handleCancelPendingMove` : deps `[]`
@@ -495,22 +576,28 @@ Run à vide : SR + `npm run build` client — zéro erreur.
 
 ## REPRENDRE ICI — POST-COMPACT
 
-**État courant : Session 113 — plan rédigé complet. En attente de "Je code ?".**
+**État courant : Session 113 — plan rédigé + analyse critique appliquée. En attente de "Je code ?".**
 
 Fichiers lus en session 113 :
 - `client/src/pages/SessionPage.jsx` — 1184L — lu intégralement
-- `client/src/components/CombatOverlay.jsx` — L.1–80 lu (signature complète + setup)
+- `client/src/components/CombatOverlay.jsx` — L.1–380 lu (signature + panels mode déplacement/cible)
+- `client/src/components/Canvas3D.jsx` — grep complet (P40 pattern + write-back callbacks)
 - `docs/PLAN_REWORK06.md` — lu intégralement (dépendance REWORK-06 confirmée)
 - `docs/ARCHI_REWORK.md` — lu intégralement (ordre reworks + prérequis confirmés)
 
-Décision architecturale : hook custom `useCombatUIState` (PAS un store Zustand).
+Décision architecturale : hook custom `useCombatUIState` (PAS un store Zustand, PAS useReducer).
 Justification : UI state éphémère, pas partagé entre composants distincts, pas de socket.
+Extraction 1:1 — comportement identique à l'actuel SessionPage.jsx.
 
-Prérequis impératif : **REWORK-06 (`declarationReducer`) livré et validé avant de coder REWORK-14.**
-Raison : closures `onCancel`/`onMoveSelected` passées à `handleEnterMoveMode` /
-`handleEnterTargetMode` depuis `CombatGmDeclareWindow` / `CombatActionWindow` utilisent
-actuellement `setCombatMode` (instable). Après REWORK-06, elles utilisent `dispatch` (stable).
+Prérequis pratique (pas technique) : **REWORK-06 (`declarationReducer`) livré et validé avant de
+coder REWORK-14.** Raison : REWORK-06 touche les call sites de `handleEnterMoveMode` /
+`handleEnterTargetMode`. Ordre pour éviter double-validation de la compatibilité callbacks.
+
+Pièges documentés : P-R14-1 (TDZ ordre hooks), P-R14-2 (deps [] valides), P-R14-3 (guard null +
+onPendingTarget(null) Changer), P-R14-4 (screenX conditionnel), P-R14-5 (?.pendingTargetId),
+P-R14-6 (setState(fn) trap pour callbacks-en-state).
 
 Prochaine étape : **"Je code ?" → Étape 1 (créer useCombatUIState.js)**
+→ ⚠️ Blocker ordre : REWORK-06 validé + fusion confrère (playground/éditeur) avant de coder.
 → Lire `SessionPage.jsx` (ou `SessionContent` post-REWORK-15) avant Étape 2.
-→ Vérifier P-R14-1 à P-R14-5 avant chaque étape.
+→ Vérifier P-R14-1 à P-R14-6 avant chaque étape.

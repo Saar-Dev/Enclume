@@ -101,7 +101,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 112 (2026-06-20)
+## ÉTAT COURANT — Session 114 (2026-06-21)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
@@ -115,6 +115,15 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - `combatStore.js` + `useCombatSocket.js` : `subPhase` propagé (C1+C2)
 - `node --check` ×4, build client ✅
 - Prochaine étape : sprint suivant (bugs actifs — voir EN_COURS.md)
+
+**Session 114 ✅ clos complet (REWORK-06 + bugs validation) :**
+- `declarationReducer.js` créé — reducer pur partagé, 6 actions
+- `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` migrés — 3 useState → 1 useReducer chacun
+- Auto-draw `SELECT_ATTACK` unifié — mains nues par défaut (COM4 ✅)
+- PC23 ✅ : typo `TIR_AUTOMATIQUE` → `TIR_AUTOMATIQUES` dans `socketCombat.js`
+- Curseur GM Assaut weaponNotDrawn : `actionBtnDisabled` → opacity seule
+- V1–V15 validés (confirmation Saar)
+- Prochaine étape : sprint suivant (voir EN_COURS.md — REWORK-15 ou bugs actifs)
 
 **Session 112 ✅ clos complet (FEAT2-A + FEAT2-C + COM12 + COM13) :**
 - `losUtils.js` créé — `checkLOS()` pure, `fast-voxel-raycast`, PE14 — eye height `pos_z+2.5`
@@ -198,6 +207,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 **Dettes actives :**
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
+- ~~COM4 ✅~~ — mains nues par défaut (REWORK-06 Session 114)
 - Bug CL3 — Ghosts déplacement d'annonce disparus
 - "Changer le mode de tir" — non implémenté — sprint futur
 - `useDiceAudio.js` — sons dés

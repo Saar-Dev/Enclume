@@ -918,62 +918,62 @@ Run à vide : SR + `npm run build` — ouvrir une session, entrer en combat, pha
 
 ### declarationReducer.js
 
-- [ ] `client/src/lib/declarationReducer.js` créé — `DECLARATION_INITIAL` + `declarationReducer` exportés
-- [ ] Actions : `SET_FIELD`, `SET_COMBAT_MODE`, `SET_QUICK`, `SELECT_ATTACK`, `RESET`, `RESET_NEW_TURN`
-- [ ] `SELECT_ATTACK` : uniquement `weapon → 'drawn'` — n'affecte pas `combatMode` ni `quick`
-- [ ] `RESET` : merge `DECLARATION_INITIAL` + payload — `combatMode` et `quick` remis à zéro systématiquement
-- [ ] `RESET_NEW_TURN` : remet uniquement `combatMode → 'normal'` + `quick → {0,0,false}` — NE touche PAS position/weapon/fire_mode/cover/vitesse
-- [ ] Aucun import React, aucun effet de bord — reducer pur testable en isolation
+- [x] `client/src/lib/declarationReducer.js` créé — `DECLARATION_INITIAL` + `declarationReducer` exportés
+- [x] Actions : `SET_FIELD`, `SET_COMBAT_MODE`, `SET_QUICK`, `SELECT_ATTACK`, `RESET`, `RESET_NEW_TURN`
+- [x] `SELECT_ATTACK` : uniquement `weapon → 'drawn'` — n'affecte pas `combatMode` ni `quick`
+- [x] `RESET` : merge `DECLARATION_INITIAL` + payload — `combatMode` et `quick` remis à zéro systématiquement
+- [x] `RESET_NEW_TURN` : remet uniquement `combatMode → 'normal'` + `quick → {0,0,false}` — NE touche PAS position/weapon/fire_mode/cover/vitesse
+- [x] Aucun import React, aucun effet de bord — reducer pur testable en isolation
 
 ### CombatGmDeclareWindow.jsx
 
-- [ ] `useState(localStates)`, `useState(localQuick)`, `useState(combatMode)` supprimés
-- [ ] `useReducer(declarationReducer, DECLARATION_INITIAL)` ajouté
-- [ ] Reset useEffect([activeTokenId]) → `dispatch({ type: 'RESET', payload: { ...initialStates } })`
-- [ ] `stateChanged` L.271 : `Object.keys(initialStates).some(k => decl[k] !== initialStates[k])` (P-R06-11)
-- [ ] Auto-draw L.516–517 : `if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })`
-- [ ] fire_mode reset useEffect L.190 → `dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: modes[0] })`
-- [ ] Chips TACTIQUE L.459 + ARMEMENT L.474 → `dispatch({ type: 'SET_FIELD', key: k, value: v })`
-- [ ] handleStartCharge L.345/361/365 : `setCombatMode` → `dispatch(SET_COMBAT_MODE)`
-- [ ] Melee deselect L.525 : `setCombatMode('normal')` → `dispatch(SET_COMBAT_MODE 'normal')`
-- [ ] Actions rapides L.576/583/596 : `setLocalQuick` → `dispatch(SET_QUICK)`
-- [ ] onWeaponChange MeleeCombatPanel L.773–776 : `localStates.weapon` → `decl.weapon`, setters → `dispatch(SET_FIELD)`
-- [ ] onModeChange MeleeCombatPanel L.781 : `setCombatMode(mode)` → `dispatch(SET_COMBAT_MODE, mode)`
-- [ ] `combatMode` prop MeleeCombatPanel L.779 → `decl.combatMode`
-- [ ] `calcIniDelta(initialStates, decl, {...}, decl.quick)` L.236–244
-- [ ] `handleDeclare` L.398 : 5 champs explicites + `combat_mode: decl.combatMode` — PAS `{ ...decl }` (P-R06-12)
-- [ ] `handleDeclare` L.415 : `quick: { ...decl.quick }`
-- [ ] `npm run build` — zéro erreur
+- [x] `useState(localStates)`, `useState(localQuick)`, `useState(combatMode)` supprimés
+- [x] `useReducer(declarationReducer, DECLARATION_INITIAL)` ajouté
+- [x] Reset useEffect([activeTokenId]) → `dispatch({ type: 'RESET', payload: { ...initialStates } })`
+- [x] `stateChanged` L.271 : `Object.keys(initialStates).some(k => decl[k] !== initialStates[k])` (P-R06-11)
+- [x] Auto-draw L.516–517 : `if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })`
+- [x] fire_mode reset useEffect L.190 → `dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: modes[0] })`
+- [x] Chips TACTIQUE L.459 + ARMEMENT L.474 → `dispatch({ type: 'SET_FIELD', key: k, value: v })`
+- [x] handleStartCharge L.345/361/365 : `setCombatMode` → `dispatch(SET_COMBAT_MODE)`
+- [x] Melee deselect L.525 : `setCombatMode('normal')` → `dispatch(SET_COMBAT_MODE 'normal')`
+- [x] Actions rapides L.576/583/596 : `setLocalQuick` → `dispatch(SET_QUICK)`
+- [x] onWeaponChange MeleeCombatPanel L.773–776 : `localStates.weapon` → `decl.weapon`, setters → `dispatch(SET_FIELD)`
+- [x] onModeChange MeleeCombatPanel L.781 : `setCombatMode(mode)` → `dispatch(SET_COMBAT_MODE, mode)`
+- [x] `combatMode` prop MeleeCombatPanel L.779 → `decl.combatMode`
+- [x] `calcIniDelta(initialStates, decl, {...}, decl.quick)` L.236–244
+- [x] `handleDeclare` L.398 : 5 champs explicites + `combat_mode: decl.combatMode` — PAS `{ ...decl }` (P-R06-12)
+- [x] `handleDeclare` L.415 : `quick: { ...decl.quick }`
+- [x] `npm run build` — zéro erreur
 
 ### CombatActionWindow.jsx
 
-- [ ] `useState(states)`, `useState(quick)`, `useState(combatMode)` supprimés
-- [ ] `useReducer(declarationReducer, DECLARATION_INITIAL)` ajouté
-- [ ] Effet L.96–105 (`setStates` seul) **supprimé** (redondant avec L.156–180)
-- [ ] Reset 1 (L.156–180, token_id) → `dispatch({ type: 'RESET', payload: snap })`
-- [ ] Reset 2 (L.225–245, has_announced) → `dispatch({ type: 'RESET_NEW_TURN' })`
-- [ ] COMBAT_ANNOUNCE_PREVIEW effect L.310/L.315 : `combatMode` → `decl.combatMode` (payload + deps)
-- [ ] Auto-sélection arme CaC L.259–263 **supprimée**
-- [ ] Blocage assaut weapon !== 'drawn' L.879–886 **supprimé**
-- [ ] `handleMapToggle` : `dispatch({ type: 'SELECT_ATTACK' })` ajouté quand `k === 'attack'` sélectionné
-- [ ] fire_mode reset useEffect → `dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: ... })`
-- [ ] Toutes les références `states.x`, `quick.x`, `combatMode` → `decl.x`, `decl.quick.x`, `decl.combatMode`
-- [ ] `stateChanged` : `Object.keys(initialStates.current).some(k => decl[k] !== initialStates.current[k])`
-- [ ] `handleDeclare` payload (L.508–558) : `states.*` → `decl.*`, `combatMode` → `decl.combatMode`, `quick.*` → `decl.quick.*`
-- [ ] `initialStates` (useRef) inchangé — non migré dans le reducer
-- [ ] `npm run build` — zéro erreur
+- [x] `useState(states)`, `useState(quick)`, `useState(combatMode)` supprimés
+- [x] `useReducer(declarationReducer, DECLARATION_INITIAL)` ajouté
+- [x] Effet L.96–105 (`setStates` seul) **supprimé** (redondant avec L.156–180)
+- [x] Reset 1 (L.156–180, token_id) → `dispatch({ type: 'RESET', payload: snap })`
+- [x] Reset 2 (L.225–245, has_announced) → `dispatch({ type: 'RESET_NEW_TURN' })`
+- [x] COMBAT_ANNOUNCE_PREVIEW effect L.310/L.315 : `combatMode` → `decl.combatMode` (payload + deps)
+- [x] Auto-sélection arme CaC L.259–263 **supprimée**
+- [x] Blocage assaut weapon !== 'drawn' L.879–886 **supprimé**
+- [x] `handleMapToggle` : `dispatch({ type: 'SELECT_ATTACK' })` ajouté quand `k === 'attack'` sélectionné
+- [x] fire_mode reset useEffect → `dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: ... })`
+- [x] Toutes les références `states.x`, `quick.x`, `combatMode` → `decl.x`, `decl.quick.x`, `decl.combatMode`
+- [x] `stateChanged` : `Object.keys(initialStates.current).some(k => decl[k] !== initialStates.current[k])`
+- [x] `handleDeclare` payload : `states.*` → `decl.*`, `combatMode` → `decl.combatMode`, `quick.*` → `decl.quick.*`
+- [x] `initialStates` (useRef) inchangé — non migré dans le reducer
+- [x] `npm run build` — zéro erreur (1.43s, Session 114)
 
 ### Documentation
 
-- [ ] Scénarios V1–V15 validés
-- [ ] `docs/ARCHI_REWORK.md` — entrée REWORK-06 mise à jour dans "Prochains reworks" + "Reworks achevés" après clos
-- [ ] `docs/JOURNAL5.md` appended
+- [x] Scénarios V1–V15 validés (Session 114 — confirmation Saar)
+- [x] `docs/ARCHI_REWORK.md` — REWORK-06 déplacé dans "Reworks achevés" (Session 114)
+- [x] `docs/JOURNAL5.md` appended (Session 114)
 
 ---
 
 ## REPRENDRE ICI — POST-COMPACT
 
-**État courant : Session 113 — plan rédigé complet. En attente de "Je code ?".**
+**État courant : Session 114 — Étape 1 ✅ clos. Prochaine : Étape 2 (CombatGmDeclareWindow).**
 
 Fichiers lus en session 113 :
 - `client/src/components/CombatGmDeclareWindow.jsx` — 975L — lu intégralement
@@ -984,7 +984,27 @@ Fichiers lus en session 113 :
 Décision architecturale : `useReducer` avec reducer partagé (PAS un store Zustand global).
 Justification documentée dans §CONTEXTE §Décision architecturale.
 
-Prochaine étape : **"Je code ?" → Étape 1 (créer declarationReducer.js)**
-→ Lire CombatGmDeclareWindow.jsx avant Étape 2.
-→ Lire CombatActionWindow.jsx avant Étape 3.
-→ Vérifier P-R06-1 à P-R06-13 avant chaque étape.
+**Étape 1 ✅ — `client/src/lib/declarationReducer.js` créé — `npm run build` ✅ zéro erreur (Session 114)**
+
+**Étape 2 ✅ — `CombatGmDeclareWindow.jsx` migré — `npm run build` ✅ zéro erreur (Session 114)**
+- 3 useState (`localStates`, `localQuick`, `combatMode`) → `useReducer(declarationReducer, DECLARATION_INITIAL)`
+- Reset → `dispatch({ type: 'RESET', payload: { ...initialStates } })`
+- Auto-draw → `dispatch({ type: 'SELECT_ATTACK' })`
+- handleDeclare : 5 champs explicites + `combat_mode: decl.combatMode` (P-R06-12 ✅)
+- stateChanged : `Object.keys(initialStates).some(...)` (P-R06-11 ✅)
+- Zéro résidu `localStates / setLocalStates / localQuick / setLocalQuick / setCombatMode` (grep vérifié)
+
+**Étape 3 ✅ — `CombatActionWindow.jsx` migré — `npm run build` ✅ zéro erreur (Session 114)**
+- 3 useState (`states`, `quick`, `combatMode`) → `useReducer(declarationReducer, DECLARATION_INITIAL)`
+- Effet L.96–105 (`setStates` seul) supprimé — P-R06-9 ✅
+- Reset 1 → `dispatch({ type: 'RESET', payload: snap })` — combatMode + quick remis à zéro automatiquement
+- Reset 2 → `dispatch({ type: 'RESET_NEW_TURN' })` — P-R06-4 ✅ position/weapon conservés
+- Auto-sélection arme CaC supprimée — P-R06-6 ✅ null = mains nues par défaut
+- Blocage assaut weapon !== drawn supprimé — remplacé par SELECT_ATTACK dans handleMapToggle
+- COMBAT_ANNOUNCE_PREVIEW : `combatMode` → `decl.combatMode` payload + deps — P-R06-10 ✅
+- stateChanged : `Object.keys(initialStates.current)` — P-R06-11 ✅
+- handleDeclare : champs explicites — P-R06-12 ✅
+- onModeChange MeleeCombatPanel : `decl.combatMode` lu avant dispatch — P-R06-14 ✅ intentionnel
+- Zéro résidu `states/setStates/quick/setQuick/combatMode/setCombatMode` (grep vérifié)
+
+Prochaine étape : **Validation V1–V15** — ouvrir une session combat, phase ANNOUNCEMENT, tester les 15 scénarios.

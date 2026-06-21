@@ -267,4 +267,56 @@ Correction : `pos_z + 2.5` = pieds (pos_z+1.0, surface voxel) + 1.5 (mi-torse to
 Fichiers modifiés : `losUtils.js` (fy, ty ×2) + `Canvas3D.jsx` `handleLosTarget` (from[1], to[1] ×2).
 
 **Testé :** SR ✅, V1–V6 validés (bannière, ray vert, ray rouge, overlay cliquable, reset sur nouvelle "Vue", annulation clic fond).
+
+---
+
+## Session 113 — 2026-06-21 — REWORK-06 : planification declarationReducer
+
+### Travail effectué
+
+Planification complète de REWORK-06 dans `docs/PLAN_REWORK06.md` :
+- Recherche documentée (tkdodo.eu, pmndrs/zustand issues, React docs, Foundry VTT) → décision `useReducer` partagé (PAS Zustand global)
+- Lecture intégrale `CombatGmDeclareWindow.jsx` (975L) + `CombatActionWindow.jsx` (1474L) + `combatStore.js`
+- 6 actions définies : `SET_FIELD`, `SET_COMBAT_MODE`, `SET_QUICK`, `SELECT_ATTACK`, `RESET`, `RESET_NEW_TURN`
+- 14 pièges identifiés (P-R06-1 à P-R06-14) — stateChanged Object.keys, RESET_NEW_TURN vs RESET, SELECT_ATTACK auto-draw, payload handleDeclare sans spread, etc.
+- 3 étapes planifiées + inventaire exhaustif par étape
+
+**Testé :** — (session planification — aucun code)
+**Non testé :** —
+
+---
+
+## Session 114 — 2026-06-21 — REWORK-06 : declarationReducer ✅ clos complet
+
+### Travail effectué
+
+**Étape 1 — `client/src/lib/declarationReducer.js` créé**
+- Reducer pur, zéro import React, zéro effet de bord
+- `DECLARATION_INITIAL` + 6 actions (`SET_FIELD`, `SET_COMBAT_MODE`, `SET_QUICK`, `SELECT_ATTACK`, `RESET`, `RESET_NEW_TURN`)
+- `npm run build` ✅
+
+**Étape 2 — `CombatGmDeclareWindow.jsx` migré**
+- 3 useState (`localStates`, `localQuick`, `combatMode`) → `useReducer(declarationReducer, DECLARATION_INITIAL)`
+- Reset → `dispatch({ type: 'RESET', payload: { ...initialStates } })`
+- Auto-draw → `dispatch({ type: 'SELECT_ATTACK' })` (P-R06-11 ✅, P-R06-12 ✅)
+- Zéro résidu grep vérifié — `npm run build` ✅
+
+**Étape 3 — `CombatActionWindow.jsx` migré**
+- 3 useState (`states`, `quick`, `combatMode`) → `useReducer(declarationReducer, DECLARATION_INITIAL)`
+- Effet L.96–105 redondant supprimé (P-R06-9 ✅)
+- Reset 2 → `RESET_NEW_TURN` (P-R06-4 ✅ — préserve position/weapon)
+- Auto-sélection arme CaC supprimée → null = mains nues (P-R06-6 ✅) — COM4 ✅ résolu
+- Blocage assaut weapon !== drawn supprimé → `SELECT_ATTACK` auto-draw dans handleMapToggle
+- `decl.combatMode` dans COMBAT_ANNOUNCE_PREVIEW payload + deps (P-R06-10 ✅)
+- `Object.keys(initialStates.current)` pour stateChanged (P-R06-11 ✅)
+- `onModeChange` lit `decl.combatMode` avant dispatch = intentionnel (P-R06-14 ✅)
+- Zéro résidu grep vérifié — `npm run build` ✅ 1.43s
+
+**Bugs corrigés pendant validation V1–V15 :**
+- Bug 1 : "Assaut (tir)" grisé non cliquable → onClick ajouté sur div `isAmmoEmpty` + `cursor: 'pointer'`
+- Bug 2 : PC23 Tir Automatique → typo `'TIR_AUTOMATIQUE'` → `'TIR_AUTOMATIQUES'` dans `socketCombat.js`
+- Bug 3 : Curseur interdit GM Assaut weaponNotDrawn → `disabled` seul déclenche `actionBtnDisabled`, `weaponNotDrawn` → opacity uniquement
+
+**Testé :** SR ✅, V1–V15 validés (confirmation Saar). COM4 ✅ mains nues. PC23 ✅ Tir Automatique RC/RL.
+**Non testé :** Transition mains nues → résolution serveur (arme null dans payload assaut CaC)
 **Non testé :** tokens sur voxels en altitude (pos_z > 0) — attendu correct par la formule.

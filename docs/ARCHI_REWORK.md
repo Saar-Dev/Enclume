@@ -1,5 +1,5 @@
 # ARCHI_REWORK.md — Reworks architecturaux
-> Créé Session 96 — 2026-06-16 | Mis à jour Session 113 — 2026-06-20
+> Créé Session 96 — 2026-06-16 | Mis à jour Session 114 — 2026-06-21
 > Rédigé par Claude Sonnet 4.6 à destination des agents Claude futurs.
 > Objectif : remplacer le bricolage incrémental par des reworks structurés, complets, et non régressifs.
 > Spécifications complètes des reworks achevés → [ARCHI_REWORK_DONE.md](ARCHI_REWORK_DONE.md)
@@ -99,6 +99,9 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 **REWORK-10 ✅ Clos complet Session 106c — DeclareLogContent intégré Sidebar**
 `DeclareLogContent` intégré dans le tab chat de `Sidebar.jsx` (haut zone messages, collapsible, GM + joueurs). Ancienne approche sidebar fixe gauche (`CombatDeclareLogSidebar`) abandonnée. Dead code `CombatDeclareLogSidebar` + classes `.cdl-window*` — nettoyage sprint futur.
 
+**REWORK-06 ✅ Clos complet Session 113/114 — declarationReducer (déclaration combat)**
+`client/src/lib/declarationReducer.js` créé — reducer pur, 6 actions (`SET_FIELD`, `SET_COMBAT_MODE`, `SET_QUICK`, `SELECT_ATTACK`, `RESET`, `RESET_NEW_TURN`). `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` : 3 useState chacun → 1 `useReducer` partagé. Auto-draw `SELECT_ATTACK` unifié. Mains nues par défaut (suppression auto-sélection). V1–V15 validés.
+
 ---
 
 ## Prochains reworks
@@ -116,8 +119,7 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 | **REWORK-11** | `useSessionSocket` | SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, CHARACTER_UPDATED, DOC_* encore inline dans `SessionPage.jsx`. | Après REWORK-15 |
 | **REWORK-12** | `useCharacterSocket` | WOUND_ADDED/UPDATED/REMOVED + INVENTORY_* inline dans `SessionPage.jsx`. `woundVersions` Map locale. | Après REWORK-15 |
 | **REWORK-13** | `useBattlemapManager` + `campaignStore` | 8 handlers CRUD carte inline. `campaign` objet complet en `useState` local — pas de store, pas de hook. | Après REWORK-15 |
-| **REWORK-06** | `combatDeclarationStore` | Staging state déclaration fragmenté en local React state (GM+Joueur). Auto-draw, default mains nues non implémentables sans débat archi. | Avant fusion |
-| **REWORK-14** | `useCombatUIState` | `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection`, `combatCameraCenter` en `useState` local — `CombatOverlay` reçoit 28 props dont 16 viennent de `SessionPage`. | Après fusion (bloqué par REWORK-06) |
+| **REWORK-14** | `useCombatUIState` | `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection`, `combatCameraCenter` en `useState` local — `CombatOverlay` reçoit 28 props dont 16 viennent de `SessionPage`. | Après fusion |
 
 ---
 

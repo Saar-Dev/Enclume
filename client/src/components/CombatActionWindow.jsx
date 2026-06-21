@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useReducer } from 'react'
+import { declarationReducer, DECLARATION_INITIAL } from '../lib/declarationReducer'
 import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
 import { calcAN, calcAllures } from '../../../shared/polarisUtils.js'
@@ -81,34 +82,13 @@ export default function CombatActionWindow({
   const isStunned   = playerToken?.statuses?.includes('stunned') ?? false
   const isDrone     = playerChar?.type === 'drone'
 
-  // --- etats tactiques (initialises depuis rosterEntry quand dispo) ----------
-  const [states, setStates] = useState({
-    position:  'standing',
-    weapon:    'holstered',
-    fire_mode: 'cc',
-    cover:     'exposed',
-    vitesse:   'normal',
-  })
+  // --- etats tactiques partagés (useReducer) --------------------------------
+  const [decl, dispatch] = useReducer(declarationReducer, DECLARATION_INITIAL)
   const prevHasAnnouncedRef    = useRef(false)  // détection nouveau tour
   const [declareError, setDeclareError] = useState(null)
 
-  // Sync depuis rosterEntry a l'entree en phase ANNOUNCEMENT
-  useEffect(() => {
-    if (!rosterEntry) return
-    setStates({
-      position:  rosterEntry.state_position  || 'standing',
-      weapon:    rosterEntry.state_weapon    || 'holstered',
-      fire_mode: rosterEntry.state_fire_mode || 'cc',
-      cover:     rosterEntry.state_cover     || 'exposed',
-      vitesse:   rosterEntry.state_vitesse   || 'normal',
-    })
-  }, [rosterEntry?.token_id]) // reset a chaque nouveau tour (token_id stable)
-
   // --- actions sur la carte (multi-select) ----------------------------------
   const [mapSelected, setMapSelected] = useState(new Set())
-
-  // --- actions rapides ------------------------------------------------------
-  const [quick, setQuick] = useState({ observer: 0, reperer: 0, phrase: false })
 
   // --- etat assaut (panneau droit) ------------------------------------------
   const [allures, setAllures]                     = useState(null)
@@ -131,7 +111,6 @@ export default function CombatActionWindow({
   const [meleeCount, setMeleeCount]                         = useState(1)    // 1|2|3
   const [selectedMeleeWeaponId, setSelectedMeleeWeaponId]   = useState(null)  // null = mains nues
   const [inMeleeTargetMode, setInMeleeTargetMode]           = useState(false)
-  const [combatMode, setCombatMode]                         = useState('normal')  // 'normal'|'offensif'|'charge'
 
   // --- roster PJ collapsible ------------------------------------------------
   const [rosterOpen, setRosterOpen] = useState(
@@ -163,9 +142,8 @@ export default function CombatActionWindow({
       vitesse:   rosterEntry.state_vitesse   || 'normal',
     }
     initialStates.current = snap
-    setStates({ ...snap })
+    dispatch({ type: 'RESET', payload: { ...snap } })
     setMapSelected(new Set())
-    setQuick({ observer: 0, reperer: 0, phrase: false })
     setAssaultPendingTokenId(null)
     setAssaultBulletCount(null)
     setAssaultVariantAB('A')
@@ -175,7 +153,6 @@ export default function CombatActionWindow({
     setMeleePendingTokenIds([])
     setSelectedMeleeWeaponId(null)
     setInMeleeTargetMode(false)
-    setCombatMode('normal')
     setSelectedDroneWeaponId(null)
   }, [rosterEntry?.token_id])
 
@@ -228,8 +205,8 @@ export default function CombatActionWindow({
     const isAnnounced  = rosterEntry.has_announced ?? false
     prevHasAnnouncedRef.current = isAnnounced
     if (wasAnnounced && !isAnnounced) {
+      dispatch({ type: 'RESET_NEW_TURN' })
       setMapSelected(new Set())
-      setQuick({ observer: 0, reperer: 0, phrase: false })
       setAssaultPendingTokenId(null)
       setAssaultBulletCount(null)
       setAssaultVariantAB('A')
@@ -239,7 +216,6 @@ export default function CombatActionWindow({
       setMeleePendingTokenIds([])
       setSelectedMeleeWeaponId(null)
       setInMeleeTargetMode(false)
-      setCombatMode('normal')
       setSelectedDroneWeaponId(null)
     }
   }, [rosterEntry?.has_announced])
@@ -256,11 +232,6 @@ export default function CombatActionWindow({
         item => (item.slot === 'MG' || item.slot === 'MD') && item.ref_fire_mode
       ))
       setAllInventoryItems(items)
-      const firstMeleeWeapon = items.find(item =>
-        (item.slot === 'MG' || item.slot === 'MD' || item.slot === '2M') &&
-        item.ref_category === 'Arme de contact'
-      )
-      if (firstMeleeWeapon) setSelectedMeleeWeaponId(firstMeleeWeapon.id)
     }).catch(() => {})
     return () => { cancelled = true }
   }, [isDrone, playerToken?.id, phase])
@@ -275,8 +246,8 @@ export default function CombatActionWindow({
     const modes = forceCCNow
       ? ['cc']
       : (selected.ref_fire_mode || 'cc').split('/').map(s => s.trim().toLowerCase()).filter(Boolean)
-    if (!modes.includes(states.fire_mode))
-      setStates(s => ({ ...s, fire_mode: modes[0] }))
+    if (!modes.includes(decl.fire_mode))
+      dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: modes[0] })
   }, [assaultWeapons])
 
   // --- fetch armes drone (drones uniquement) --------------------------------
@@ -307,12 +278,12 @@ export default function CombatActionWindow({
         moveDestination: moveSelection
           ? { x: moveSelection.targetPosX, y: moveSelection.targetPosY }
           : null,
-        combatMode,
+        combatMode: decl.combatMode,
       })
     }, 150)
     return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, phase, activeTokenId, mapSelected, assaultPendingTokenId, meleePendingTokenIds, moveSelection, combatMode])
+  }, [socket, phase, activeTokenId, mapSelected, assaultPendingTokenId, meleePendingTokenIds, moveSelection, decl.combatMode])
 
   if (playerTokensInRoster.length === 0) return null
 
@@ -355,7 +326,7 @@ export default function CombatActionWindow({
       ? (selectedWeapon.ref_fire_mode || 'cc').split('/').map(s => s.trim().toLowerCase()).filter(Boolean)
       : ['cc', 'rc', 'rl']
 
-  const fireModeUpper = states.fire_mode.toUpperCase()
+  const fireModeUpper = decl.fire_mode.toUpperCase()
   const currentFireMode = forceCC ? 'CC' : fireModeUpper
 
   // Variant assaut selectionne
@@ -388,7 +359,7 @@ export default function CombatActionWindow({
 
   const attackSelected = mapSelected.has('attack')
   const meleeSelected  = mapSelected.has('melee')
-  const meleeDefensif  = combatMode === 'defensif' || combatMode === 'retraite'
+  const meleeDefensif  = decl.combatMode === 'defensif' || decl.combatMode === 'retraite'
   const weaponLocked   = attackSelected || meleeSelected
 
   // --- derives drone --------------------------------------------------------
@@ -428,13 +399,14 @@ export default function CombatActionWindow({
           setMeleeCount(1)
           setSelectedMeleeWeaponId(null)
           setInMeleeTargetMode(false)
-          if (combatMode === 'retraite' || combatMode === 'charge') setMoveSelection(null)
-          setCombatMode('normal')
+          if (decl.combatMode === 'retraite' || decl.combatMode === 'charge') setMoveSelection(null)
+          dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
         }
         if (k === 'move') setMoveSelection(null)
         if (k === 'reload') setSelectedAmmoId(null)
       } else {
         next.add(k)
+        if (k === 'attack') dispatch({ type: 'SELECT_ATTACK' })
       }
 
       return next
@@ -470,15 +442,15 @@ export default function CombatActionWindow({
 
   // --- calcul INI total client (indicatif) ---------------------------------
   const mapActionsObj = {
-    move:   moveSelection ? { ini_mod: (combatMode === 'charge' || combatMode === 'retraite') ? 0 : moveSelection.ini_mod } : null,
-    attack: attackSelected ? { cover_shot: !!(attackSelected && states.cover !== 'exposed') } : null,
+    move:   moveSelection ? { ini_mod: (decl.combatMode === 'charge' || decl.combatMode === 'retraite') ? 0 : moveSelection.ini_mod } : null,
+    attack: attackSelected ? { cover_shot: !!(attackSelected && decl.cover !== 'exposed') } : null,
     // Défensif/Retraite : pas d'action d'attaque → pas de coût INI melee
     // Charge : toujours 1 attaque (exclusive multi-attack LdB)
     melee:  (meleeSelected && !meleeDefensif)
-      ? Array(combatMode === 'charge' ? 1 : meleeCount).fill({ targetTokenId: null, weaponInvId: null })
+      ? Array(decl.combatMode === 'charge' ? 1 : meleeCount).fill({ targetTokenId: null, weaponInvId: null })
       : null,
   }
-  const iniDelta = calcIniDelta(initialStates.current, states, mapActionsObj, quick)
+  const iniDelta = calcIniDelta(initialStates.current, decl, mapActionsObj, decl.quick)
   const iniTotal = (rosterEntry.initiative ?? 0) - iniDelta // initiative decremente par les couts
 
   // --- validite declaration ------------------------------------------------
@@ -489,17 +461,17 @@ export default function CombatActionWindow({
   )
   const reloadSelected = mapSelected.has('reload')
   const reloadValid    = !reloadSelected || attackSelected || (selectedWeapon !== null && selectedAmmoId !== null)
-  const effectiveMeleeCount = combatMode === 'charge' ? 1 : meleeCount
+  const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeCount
   const meleeValid     = !meleeSelected  || (
     meleeDefensif ||
-    (meleePendingTokenIds.length >= effectiveMeleeCount && (combatMode !== 'charge' || moveSelection != null))
+    (meleePendingTokenIds.length >= effectiveMeleeCount && (decl.combatMode !== 'charge' || moveSelection != null))
   )
   const hasAnyAction = mapSelected.size > 0 || moveSelection !== null
-    || quick.observer > 0 || quick.reperer > 0 || quick.phrase
-    || Object.values(states).some((v, i) => v !== Object.values(initialStates.current)[i])
+    || decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase
+    || Object.keys(initialStates.current).some(k => decl[k] !== initialStates.current[k])
 
-  // Comparer states vs initial proprement
-  const stateChanged = Object.keys(states).some(k => states[k] !== initialStates.current[k])
+  // Comparer états tactiques vs initial (P-R06-11 : Object.keys(initialStates.current) — 5 clés, pas 7)
+  const stateChanged = Object.keys(initialStates.current).some(k => decl[k] !== initialStates.current[k])
   const canDeclare = isDrone
     ? droneAssaultValid
     : ((hasAnyAction || stateChanged) && assaultValid && reloadValid && meleeValid)
@@ -510,25 +482,25 @@ export default function CombatActionWindow({
     socket.emit(WS.COMBAT_ACTION_DECLARE, {
       tokenId: playerToken.id,
       state: {
-        position:    states.position,
-        weapon:      states.weapon,
-        fire_mode:   states.fire_mode,
-        cover:       states.cover,
-        vitesse:     states.vitesse,
-        combat_mode: combatMode,
+        position:    decl.position,
+        weapon:      decl.weapon,
+        fire_mode:   decl.fire_mode,
+        cover:       decl.cover,
+        vitesse:     decl.vitesse,
+        combat_mode: decl.combatMode,
       },
       mapActions: {
         move:   moveSelection
           ? { targetPosX: moveSelection.targetPosX, targetPosY: moveSelection.targetPosY,
               targetPosZ: moveSelection.targetPosZ ?? 0,
               // Charge/Retraite : déplacement gratuit → ini_mod forcé à 0 côté client (confirmé serveur)
-              ini_mod: (combatMode === 'charge' || combatMode === 'retraite') ? 0 : moveSelection.ini_mod,
+              ini_mod: (decl.combatMode === 'charge' || decl.combatMode === 'retraite') ? 0 : moveSelection.ini_mod,
               action_key: moveSelection.action_key }
           : null,
         attack: attackSelected ? (isDrone ? {
           droneWeaponInvId: selectedDroneWeapon?.id ?? null,
           targetTokenId:    assaultPendingTokenId,
-          cover_shot:       states.cover !== 'exposed',
+          cover_shot:       decl.cover !== 'exposed',
         } : {
           weaponInvId:        assaultWeaponId,
           targetTokenId:      assaultPendingTokenId,
@@ -537,7 +509,7 @@ export default function CombatActionWindow({
           fireModeBonusDmg:   currentVariant?.bonusDmg ?? null,
           isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
           dualWieldBonusComp: dualWieldBonusComp,
-          cover_shot:         states.cover !== 'exposed',
+          cover_shot:         decl.cover !== 'exposed',
         }) : null,
         // Défensif/Retraite : pas de cible — mode passif, bonus appliqué via state_combat_mode
         melee:    (meleeSelected && !meleeDefensif)
@@ -551,9 +523,9 @@ export default function CombatActionWindow({
         interact: mapSelected.has('interact'),
       },
       quick: {
-        observer: quick.observer,
-        reperer:  quick.reperer,
-        phrase:   quick.phrase,
+        observer: decl.quick.observer,
+        reperer:  decl.quick.reperer,
+        phrase:   decl.quick.phrase,
       },
     })
   }
@@ -742,7 +714,7 @@ export default function CombatActionWindow({
 
   // --- Charge : move_short gratuit → chaîne automatiquement la sélection cible CaC ---
   const handleChargeFlow = () => {
-    setCombatMode('charge')
+    dispatch({ type: 'SET_COMBAT_MODE', mode: 'charge' })
     // Bug B : nettoyer tout déplacement normal pré-existant
     setMoveSelection(null)
     setMapSelected(prev => { const n = new Set(prev); n.delete('move'); return n })
@@ -768,7 +740,7 @@ export default function CombatActionWindow({
           'melee'
         )
       },
-      () => { setInMoveMode(false); setCombatMode('normal') }
+      () => { setInMoveMode(false); dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' }) }
     )
   }
 
@@ -808,20 +780,20 @@ export default function CombatActionWindow({
             {!isDrone && (
               <StateSelector
                 stateKey="position" def={STATE_DEFS.position}
-                current={states.position} initial={initialStates.current.position}
-                onChange={v => setStates(s => ({ ...s, position: v }))}
+                current={decl.position} initial={initialStates.current.position}
+                onChange={v => dispatch({ type: 'SET_FIELD', key: 'position', value: v })}
               />
             )}
             <StateSelector
               stateKey="cover" def={STATE_DEFS.cover}
-              current={states.cover} initial={initialStates.current.cover}
-              onChange={v => setStates(s => ({ ...s, cover: v }))}
+              current={decl.cover} initial={initialStates.current.cover}
+              onChange={v => dispatch({ type: 'SET_FIELD', key: 'cover', value: v })}
             />
             {!isDrone && (
               <StateSelector
                 stateKey="vitesse" def={STATE_DEFS.vitesse}
-                current={states.vitesse} initial={initialStates.current.vitesse}
-                onChange={v => setStates(s => ({ ...s, vitesse: v }))}
+                current={decl.vitesse} initial={initialStates.current.vitesse}
+                onChange={v => dispatch({ type: 'SET_FIELD', key: 'vitesse', value: v })}
               />
             )}
           </div>
@@ -832,15 +804,15 @@ export default function CombatActionWindow({
               <div style={W.sectionTitle}>ARMEMENT</div>
               <StateSelector
                 stateKey="weapon" def={STATE_DEFS.weapon}
-                current={states.weapon} initial={initialStates.current.weapon}
-                onChange={v => setStates(s => ({ ...s, weapon: v }))}
+                current={decl.weapon} initial={initialStates.current.weapon}
+                onChange={v => dispatch({ type: 'SET_FIELD', key: 'weapon', value: v })}
                 disabled={weaponLocked}
-                highlightKey={states.weapon !== 'drawn' ? 'drawn' : undefined}
+                highlightKey={decl.weapon !== 'drawn' ? 'drawn' : undefined}
               />
               <StateSelector
                 stateKey="fire_mode" def={STATE_DEFS.fire_mode}
-                current={states.fire_mode} initial={initialStates.current.fire_mode}
-                onChange={v => setStates(s => ({ ...s, fire_mode: v }))}
+                current={decl.fire_mode} initial={initialStates.current.fire_mode}
+                onChange={v => dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })}
                 availableKeys={availableFireModes}
               />
             </div>
@@ -875,19 +847,10 @@ export default function CombatActionWindow({
                   )
                 }
 
-                // Assaut/CaC bloqué si arme non au clair (humanoïdes uniquement)
-                if ((a.k === 'attack' || a.k === 'melee') && states.weapon !== 'drawn' && !isDrone) {
-                  return (
-                    <div key={a.k} title="Arme non au clair — dégainez d'abord (section ARMEMENT)" style={{ ...W.itemGreyed, ...span2 }}>
-                      <span style={W.itemLabel}>{a.l}</span>
-                    </div>
-                  )
-                }
-
                 // Assaut grisé dynamiquement si arme vide (humanoïdes uniquement)
                 if (a.k === 'attack' && isAmmoEmpty && !isDrone) {
                   return (
-                    <div key={a.k} title="Arme vide — rechargez d'abord" style={W.itemGreyed}>
+                    <div key={a.k} title="Arme vide — rechargez d'abord" style={{ ...W.itemGreyed, cursor: 'pointer' }} onClick={() => handleMapToggle(a.k)}>
                       <span style={W.itemLabel}>{a.l}</span>
                     </div>
                   )
@@ -942,7 +905,7 @@ export default function CombatActionWindow({
                       onClick={() => {
                         if (!canActivate) return
                         // Bug A : Charge/Retraite gèrent le déplacement internalement — chip 'move' inerte
-                        if (combatMode === 'charge' || combatMode === 'retraite') return
+                        if (decl.combatMode === 'charge' || decl.combatMode === 'retraite') return
                         handleMapToggle(a.k)
                         if (!mapSelected.has(a.k)) handleZoneSelectClick()
                       }}
@@ -975,7 +938,7 @@ export default function CombatActionWindow({
             </div>
 
             {/* Toggle cover_shot conditionnel (assault + cover != exposed) */}
-            {attackSelected && states.cover !== 'exposed' && (
+            {attackSelected && decl.cover !== 'exposed' && (
               <div
                 style={{
                   ...W.item,
@@ -984,11 +947,11 @@ export default function CombatActionWindow({
                   background: 'rgba(180,80,80,0.08)',
                   borderColor: '#c05050',
                 }}
-                onClick={() => {/* toggle gere via states.cover dans le payload */}}
+                onClick={() => {/* toggle gere via decl.cover dans le payload */}}
               >
                 <span style={{ ...W.itemLabel, color: '#e07070' }}>Tirer depuis ma couverture</span>
                 <span style={{ ...W.itemMod, color: '#e07070' }}>
-                  {states.cover === 'important' ? '-5' : '-3'}
+                  {decl.cover === 'important' ? '-5' : '-3'}
                 </span>
               </div>
             )}
@@ -1000,7 +963,7 @@ export default function CombatActionWindow({
             <div style={W.sectionTitle}>ACTIONS RAPIDES</div>
             {QUICK_ACTIONS.map(a => {
               const isFixed = a.kind === 'fixed'
-              const val     = isFixed ? quick.phrase : (quick[a.k] ?? 0)
+              const val     = isFixed ? decl.quick.phrase : (decl.quick[a.k] ?? 0)
               const isActive = isFixed ? !!val : val > 0
               const cost    = isFixed ? a.ini : (val * a.stepIni)
               return (
@@ -1009,9 +972,9 @@ export default function CombatActionWindow({
                     style={{ ...W.item, gridColumn: 'span 2' }}
                     onClick={() => {
                       if (isFixed) {
-                        setQuick(q => ({ ...q, phrase: !q.phrase }))
+                        dispatch({ type: 'SET_QUICK', key: 'phrase', value: !decl.quick.phrase })
                       } else {
-                        setQuick(q => ({ ...q, [a.k]: q[a.k] > 0 ? 0 : 1 }))
+                        dispatch({ type: 'SET_QUICK', key: a.k, value: decl.quick[a.k] > 0 ? 0 : 1 })
                       }
                     }}
                   >
@@ -1030,7 +993,7 @@ export default function CombatActionWindow({
                         type="range" min={1} max={a.max} step={1}
                         value={val}
                         style={{ flex: 1, accentColor: '#3a8aaa' }}
-                        onChange={e => setQuick(q => ({ ...q, [a.k]: parseInt(e.target.value) }))}
+                        onChange={e => dispatch({ type: 'SET_QUICK', key: a.k, value: parseInt(e.target.value) })}
                       />
                       <span style={{ fontSize: 9, color: '#456575' }}>{a.max}</span>
                       <span style={{ fontSize: 10, fontWeight: 600, color: '#3a8aaa', minWidth: 22 }}>{val}</span>
@@ -1117,18 +1080,18 @@ export default function CombatActionWindow({
                 allonge: parseInt(item.ref_range) || 0,
               }))}
               selectedWeaponId={selectedMeleeWeaponId}
-              isWeaponDrawn={states.weapon === 'drawn'}
+              isWeaponDrawn={decl.weapon === 'drawn'}
               hasMeleeInInventory={hasMeleeInInventory}
               onWeaponChange={(id) => setSelectedMeleeWeaponId(id)}
-              combatMode={combatMode}
+              combatMode={decl.combatMode}
               onModeChange={(mode) => {
                 if (mode === 'defensif' || mode === 'retraite') {
-                  setCombatMode(mode)
+                  dispatch({ type: 'SET_COMBAT_MODE', mode })
                   setMeleePendingTokenIds([])
-                  if (combatMode === 'charge') setMoveSelection(null)
+                  if (decl.combatMode === 'charge') setMoveSelection(null)
                 } else {
-                  setCombatMode(mode)
-                  if (combatMode === 'charge') { setMoveSelection(null); setMeleePendingTokenIds([]) }
+                  dispatch({ type: 'SET_COMBAT_MODE', mode })
+                  if (decl.combatMode === 'charge') { setMoveSelection(null); setMeleePendingTokenIds([]) }
                 }
               }}
               onStartCharge={handleChargeFlow}
