@@ -762,50 +762,42 @@ Run à vide : SR + `npm run build` — ouvrir une session, tester la barre GM.
 
 ### useBattlemapManager
 
-- [ ] `client/src/lib/useBattlemapManager.js` créé — conforme à l'interface cible
-- [ ] `useSocket()` utilisé en interne (pas de `socket` en param)
-- [ ] `mapContextMenuRef` créé dans le hook, retourné, attaché au DOM dans SessionContent
-- [ ] `useEffect` outside-click dans le hook (pas dans SessionContent)
-- [ ] `openRenameModal(bm)` et `openCreateModal()` encapsulent les séquences multi-setters
-- [ ] `handleMapSwitch` INTERNE au hook — non exposé dans le return
-- [ ] `handleMapDelete` : `battlemaps` et `battlemap?.id` lus depuis `useMapStore()` interne
-- [ ] 7 `useState` + 1 `useRef` supprimés de SessionContent
-- [ ] 8 callbacks (`loadMap`, `handleMapSwitch`, `handleMapRename`, `handleSetDefault`, `handleGroupMove`, `handleMapDuplicate`, `handleMapDelete`, `handleMapCreate`) supprimés de SessionContent
-- [ ] 1 `useEffect` outside-click supprimé de SessionContent
-- [ ] `useMapStore()` : uniquement `{ battlemap, battlemaps, setBattlemap, setBattlemaps }` dans SessionContent
-- [ ] `useBattlemapManager({ campaignId, isGm })` déclaré après tous les useState (règle TDZ)
-- [ ] JSX : 2 séquences multi-setters → `openRenameModal` + `openCreateModal`
-- [ ] Toutes autres références JSX au même nom (non impactées)
-- [ ] `npm run build` — zéro erreur après Étape 4
-- [ ] SR — zéro erreur
+- [x] `client/src/lib/useBattlemapManager.js` créé — conforme à l'interface cible
+- [x] `useSocket()` utilisé en interne (pas de `socket` en param)
+- [x] `mapContextMenuRef` créé dans le hook, retourné, attaché au DOM dans SessionContent
+- [x] `useEffect` outside-click dans le hook (pas dans SessionContent)
+- [x] `openRenameModal(bm)` et `openCreateModal()` encapsulent les séquences multi-setters
+- [x] `handleMapSwitch` INTERNE au hook — non exposé dans le return
+- [x] `handleMapDelete` : `battlemaps` et `battlemap?.id` lus depuis `useMapStore()` interne
+- [x] 7 `useState` + 1 `useRef` supprimés de SessionContent
+- [x] 8 callbacks (`loadMap`, `handleMapSwitch`, `handleMapRename`, `handleSetDefault`, `handleGroupMove`, `handleMapDuplicate`, `handleMapDelete`, `handleMapCreate`) supprimés de SessionContent
+- [x] 1 `useEffect` outside-click supprimé de SessionContent
+- [x] `useMapStore()` : uniquement `{ battlemap, battlemaps, setBattlemap, setBattlemaps }` dans SessionContent
+- [x] `useBattlemapManager({ campaignId, isGm })` déclaré après tous les useState (règle TDZ)
+- [x] JSX : 2 séquences multi-setters → `openRenameModal` + `openCreateModal`
+- [x] Toutes autres références JSX au même nom (non impactées)
+- [x] `npm run build` — zéro erreur après Étape 4
+- [x] SR — zéro erreur
 
 ### Coordination REWORK-11
 
-- [ ] Si REWORK-13 avant REWORK-11 : `docs/PLAN_REWORK11.md` mis à jour (retirer `{ setCampaign }` param)
-- [ ] Si REWORK-11 avant REWORK-13 : `client/src/lib/useSessionSocket.js` mis à jour (retirer param, utiliser `useCampaignStore`)
+- [x] REWORK-13 Étapes 1+2 AVANT REWORK-11 — `docs/PLAN_REWORK11.md` mis à jour (retirer `{ setCampaign }` param) — Session 115 suite 2
 
 ### Documentation
 
-- [ ] Scénarios V1–V14 validés
-- [ ] `docs/ARCHI_REWORK.md` — entrée REWORK-13 ajoutée dans "Reworks achevés" + spec intégrée
-- [ ] `docs/JOURNAL5.md` appended
+- [x] Scénarios V1–V14 validés (SR + fonctionnel — confirmation Saar)
+- [x] `docs/ARCHI_REWORK.md` — entrée REWORK-13 ajoutée dans "Reworks achevés" + spec intégrée
+- [x] `docs/JOURNAL5.md` appended
 
 ---
 
 ## REPRENDRE ICI — POST-COMPACT
 
-**État courant : Session 115 suite 2 — Étapes 1+2 ✅ — Étape 3 suivante.**
+**État courant : Session 115 suite 2 — ✅ REWORK-13 CLOS COMPLET (Étapes 1+2+3+4).**
 
 ### ✅ Étape 1 — `campaignStore.js` créé (Session 115 suite 2)
-- `client/src/stores/campaignStore.js` — conforme §Interface cible — build ✅
-
 ### ✅ Étape 2 — `campaign` migré dans SessionContent (Session 115 suite 2)
-- Import ajouté, `useState(null)` supprimé, `useCampaignStore()` destructuré
-- `onCampaignUpdated` → `updateCampaign(updated)` ✅
-- `handleSetDefault` → `updateCampaign({ default_battlemap_id: bm.id })` ✅
-- build ✅
+### ✅ Étape 3 — `useBattlemapManager.js` créé (Session 115 suite 2 cont.)
+### ✅ Étape 4 — SessionContent intégré (Session 115 suite 2 cont.) — V1–V14 validés
 
-### Prochaine étape : **Étape 3 — Créer `useBattlemapManager.js`**
-→ Contenu exact dans §Interface cible §useBattlemapManager ci-dessus.
-→ Aucun fichier existant modifié à cette étape — créer le fichier, `npm run build`.
-→ Puis Étape 4 : lire SessionPage.jsx avant de coder (lignes décalées post-Étapes 1+2).
+**Prochaine étape : REWORK-12 (`useCharacterSocket`) — spec dans `docs/ARCHI_REWORK.md` §REWORK-12.**

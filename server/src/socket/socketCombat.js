@@ -2334,8 +2334,8 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
       const dzChk = (myTokenPos?.pos_y ?? 0) - (targetTokenPos?.pos_y ?? 0)
       const dist2dChk = Math.sqrt(dxChk * dxChk + dzChk * dzChk)
       if (dist2dChk > 3 + allonge) {
-        console.log(`[DBG-CAC] range check REJETÉ — dist:${dist2dChk.toFixed(2)}m max:${3 + allonge}m → socket.emit COMBAT_DECLARE_ERROR`)
-        socket.emit(WS.COMBAT_DECLARE_ERROR, {
+        console.log(`[DBG-CAC] range check REJETÉ — dist:${dist2dChk.toFixed(2)}m max:${3 + allonge}m → COMBAT_DECLARE_ERROR broadcast`)
+        io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
           message: `Corps à corps impossible — distance : ${dist2dChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
         })
         return

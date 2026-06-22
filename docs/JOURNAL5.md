@@ -427,3 +427,37 @@ Drone CaC régression — investigation incomplète (CombatModifiersWindow non l
 
 ### Non testé
 - Reconnexion socket en cours de session active (cas couvert par REWORK-15 — non re-testé spécifiquement)
+
+---
+
+## Session 115 — suite 2 (cont.) — 2026-06-22 — REWORK-13 Étapes 3+4 : useBattlemapManager ✅ clos complet
+
+### Travail effectué
+
+**Étape 3 — `client/src/lib/useBattlemapManager.js` créé**
+- Params `{ campaignId, isGm }` — `socket` via `useSocket()` interne (P-R13)
+- 7 useState + 1 useRef : `mapContextMenu`, `mapContextMenuRef`, `showRenameModal`, `renameTarget`, `renameValue`, `showCreateModal`, `createMapName`
+- `useEffect` outside-click dans le hook (pas dans SessionContent)
+- Helpers modaux : `openRenameModal(bm)` (séquence 4 setters) + `openCreateModal()` (séquence 3 setters)
+- `loadMap` exposé (gmBar), `handleMapSwitch` INTERNE (appelé uniquement par `handleGroupMove`)
+- 6 callbacks CRUD : `handleMapRename`, `handleSetDefault`, `handleGroupMove`, `handleMapDuplicate`, `handleMapDelete`, `handleMapCreate`
+- `handleMapDelete` : lit `battlemaps` + `battlemap?.id` depuis `useMapStore()` interne (P-R13-3 ✅)
+- `npm run build` ✅ (39.97s)
+
+**Étape 4 — `SessionContent` intégré**
+- `useRef` retiré de l'import React
+- `import { useBattlemapManager }` ajouté
+- `useMapStore()` : `renameBattlemap`, `addBattlemap`, `removeBattlemap` retirés → internes au hook
+- `useCampaignStore()` : `updateCampaign` retiré → géré dans `useSessionSocket` (REWORK-11 déjà fait)
+- 7 useState + 1 useRef supprimés de SessionContent (L.134-140)
+- 8 callbacks supprimés : `loadMap`, `handleMapSwitch`, `handleMapRename`, `handleSetDefault`, `handleGroupMove`, `handleMapDuplicate`, `handleMapDelete`, `handleMapCreate`
+- `useEffect` outside-click supprimé
+- `useBattlemapManager({ campaignId, isGm })` déclaré après `useSessionSocket()` (règle TDZ)
+- JSX menu contextuel : 2 séquences multi-setters → `openRenameModal(mapContextMenu.bm)` + `openCreateModal()`
+- `npm run build` ✅ (1.60s — zéro erreur, zéro warning)
+
+### Testé
+SR ✅, fonctionnel confirmé (Saar). V1–V14 validés.
+
+### Non testé
+— (aucun cas identifié hors périmètre)

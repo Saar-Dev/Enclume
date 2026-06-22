@@ -52,7 +52,12 @@
 **14. ~~REWORK-11 — useSessionSocket~~** ✅ Session 115 suite 2
    → `client/src/lib/useSessionSocket.js` créé — 12 handlers WS (SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, CHARACTER_UPDATED, DOC_*)
    → `SessionContent` : 3 destructurings nettoyés, `useEffect([socket])` réduit aux 6 WOUND_*/INVENTORY_*
-   → V1–V12 validés — Prochaine étape : REWORK-13 Étapes 3+4 (`useBattlemapManager`) puis REWORK-12
+   → V1–V12 validés
+
+**15. ~~REWORK-13 Étapes 3+4 — useBattlemapManager~~** ✅ Session 115 suite 2 (cont.)
+   → `client/src/lib/useBattlemapManager.js` créé — 8 handlers CRUD + 7 useState + 1 useRef + 1 useEffect outside-click + helpers `openRenameModal` / `openCreateModal`
+   → `SessionContent` : `renameBattlemap`/`addBattlemap`/`removeBattlemap` + `updateCampaign` retirés des stores ; 8 callbacks + 7 useState + 1 useRef + 1 useEffect supprimés ; 2 séquences JSX simplifiées
+   → V1–V14 validés (SR + fonctionnel — confirmation Saar) — Prochaine étape : REWORK-12 (`useCharacterSocket`)
 
 ---
 

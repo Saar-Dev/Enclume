@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { SocketProvider, useSocket } from '../lib/SocketContext'
@@ -17,6 +17,7 @@ import { useTokenSocket } from '../lib/useTokenSocket'
 import { useEntitySocket } from '../lib/useEntitySocket'
 import { useCombatSocket } from '../lib/useCombatSocket'
 import { useSessionSocket } from '../lib/useSessionSocket'
+import { useBattlemapManager } from '../lib/useBattlemapManager'
 import Canvas3D from '../components/Canvas3D'
 import Editor3D from '../components/Editor3D'
 import Sidebar from '../components/Sidebar'
@@ -45,16 +46,12 @@ function SessionContent({ campaignId }) {
 
   const { tokens, setTokens, addToken, removeToken } = useTokenStore()
   const { characters, isGm, setCharacters, setMembers, updateCharacter } = useCharacterStore()
-  const {
-    battlemap, battlemaps,
-    setBattlemap, setBattlemaps,
-    renameBattlemap, addBattlemap, removeBattlemap,
-  } = useMapStore()
+  const { battlemap, battlemaps, setBattlemap, setBattlemaps } = useMapStore()
   const { setActiveCampaign, setPendingEntityId } = useSessionStore()
   const { setEntities, fetchBlueprints } = useEntityStore()
   const { phase: combatPhase } = useCombatStore()
   const { setDocuments } = useLibraryStore()
-  const { campaign, setCampaign, updateCampaign } = useCampaignStore()
+  const { campaign, setCampaign } = useCampaignStore()
   const [loading, setLoading] = useState(true)
   const [statusPanel, setStatusPanel] = useState(null)
 
@@ -129,15 +126,6 @@ function SessionContent({ campaignId }) {
       default:      setSelectedCharacterId(character.id)
     }
   }, [])
-
-  // Menu contextuel barre GM — clic droit sur un bouton de carte
-  const [mapContextMenu, setMapContextMenu] = useState(null) // { bm, x, y }
-  const mapContextMenuRef = useRef(null)
-  const [showRenameModal, setShowRenameModal] = useState(false)
-  const [renameTarget, setRenameTarget] = useState(null) // bm à renommer
-  const [renameValue, setRenameValue] = useState('')
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [createMapName, setCreateMapName] = useState('')
 
   // ─── Chargement session — useCallback pour réutilisation lors de la reconnexion ──
   // Déclaré AVANT le useEffect socket qui l'utilise — ordre React obligatoire.
@@ -225,129 +213,12 @@ function SessionContent({ campaignId }) {
   // null = inactif, sinon { tokenId, pendingTargetId, onTargetSelected, onCancel, onPendingTarget }
   const [combatTargetMode, setCombatTargetMode] = useState(null)
 
-  // Chargement local d'une carte — GM uniquement, sans déplacer les joueurs
-  // Utilisé : clic barre GM, suppression carte active
-  const loadMap = useCallback(async (battlemapId) => {
-    if (!isGm) return
-    try {
-      const mapRes = await api.get(`/battlemaps/${battlemapId}`)
-      setBattlemap(mapRes.data.battlemap)
-      setTokens(mapRes.data.tokens || [])
-      // Charger les entités de la nouvelle carte
-      try {
-        const entitiesRes = await api.get(`/battlemaps/${battlemapId}/entities`)
-        setEntities(entitiesRes.data.entities || [])
-      } catch (err) {
-        console.error('Erreur chargement entités :', err)
-        setEntities([])
-      }
-    } catch (err) {
-      console.error('Erreur chargement carte :', err)
-    }
-  }, [isGm])
-
-  // Déplacer tout le groupe vers une carte — charge localement + émet MAP_SWITCH
-  // Utilisé : bouton "Déplacer le groupe ici" dans le menu contextuel barre GM
-  const handleMapSwitch = useCallback(async (battlemapId) => {
-    await loadMap(battlemapId)
-    socket?.emit(WS.MAP_SWITCH, { battlemapId, userIds: [] })
-  }, [loadMap, socket])
-
   // Fermer le panneau statuts si le token est supprimé pendant qu'il est ouvert
   useEffect(() => {
     if (!statusPanel) return
     const exists = tokens.some(t => t.id === statusPanel.tokenId)
     if (!exists) setStatusPanel(null)
   }, [statusPanel, tokens])
-
-  // Fermeture menu contextuel barre GM sur clic ailleurs
-  useEffect(() => {
-    if (!mapContextMenu) return
-    const handleMouseDown = (e) => {
-      if (mapContextMenuRef.current && !mapContextMenuRef.current.contains(e.target)) {
-        setMapContextMenu(null)
-      }
-    }
-    document.addEventListener('mousedown', handleMouseDown)
-    return () => document.removeEventListener('mousedown', handleMouseDown)
-  }, [mapContextMenu])
-
-  // Renommer une carte
-  const handleMapRename = useCallback(async () => {
-    if (!renameTarget || !renameValue.trim()) return
-    try {
-      await api.put(`/battlemaps/${renameTarget.id}`, { name: renameValue.trim() })
-      renameBattlemap(renameTarget.id, renameValue.trim())
-      setShowRenameModal(false)
-      setRenameTarget(null)
-    } catch (err) {
-      console.error('Erreur renommage carte :', err)
-    }
-  }, [renameTarget, renameValue])
-
-  // Définir comme page d'accueil
-  const handleSetDefault = useCallback(async (bm) => {
-    try {
-      await api.put(`/campaigns/${campaignId}`, { default_battlemap_id: bm.id })
-      updateCampaign({ default_battlemap_id: bm.id })
-    } catch (err) {
-      console.error('Erreur définition page d\'accueil :', err)
-    }
-    setMapContextMenu(null)
-  }, [campaignId])
-
-  // Déplacer le groupe (tous joueurs + GM)
-  const handleGroupMove = useCallback(async (bm) => {
-    setMapContextMenu(null)
-    await handleMapSwitch(bm.id)
-  }, [handleMapSwitch])
-
-  // Dupliquer une carte
-  const handleMapDuplicate = useCallback(async (bm) => {
-    setMapContextMenu(null)
-    try {
-      const res = await api.post(`/battlemaps/${bm.id}/duplicate`)
-      addBattlemap(res.data.battlemap)
-    } catch (err) {
-      console.error('Erreur duplication carte :', err)
-    }
-  }, [])
-
-  // Supprimer une carte (avec confirmation)
-  const handleMapDelete = useCallback(async (bm) => {
-    setMapContextMenu(null)
-    if (!window.confirm(t('session.deleteMapConfirm', { name: bm.name }))) return
-    try {
-      await api.delete(`/battlemaps/${bm.id}`)
-      // Calculer remaining AVANT de muter le store — valeur actuelle avant suppression
-      const remaining = battlemaps.filter(m => m.id !== bm.id)
-      removeBattlemap(bm.id)
-      // Si c'était la carte active, charger la première restante
-      if (battlemap?.id === bm.id) {
-        if (remaining.length > 0) {
-          await loadMap(remaining[0].id)
-        } else {
-          setBattlemap(null)
-          setTokens([])
-        }
-      }
-    } catch (err) {
-      console.error('Erreur suppression carte :', err)
-    }
-  }, [battlemap?.id, battlemaps, loadMap, t])
-
-  // Créer une nouvelle carte
-  const handleMapCreate = useCallback(async () => {
-    if (!createMapName.trim()) return
-    try {
-      const res = await api.post(`/campaigns/${campaignId}/battlemaps`, { name: createMapName.trim() })
-      addBattlemap(res.data.battlemap)
-      setCreateMapName('')
-      setShowCreateModal(false)
-    } catch (err) {
-      console.error('Erreur création carte :', err)
-    }
-  }, [createMapName, campaignId])
 
   // Drop depuis la Sidebar — crée un token au centre de la carte
   // Le serveur broadcastera TOKEN_CREATED à toute la room — pas d'emit client.
@@ -382,6 +253,14 @@ function SessionContent({ campaignId }) {
   }, [])
   const combatSocket = useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })
   const { lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError } = useSessionSocket()
+  const {
+    loadMap,
+    mapContextMenu, setMapContextMenu, mapContextMenuRef,
+    openRenameModal, openCreateModal,
+    handleSetDefault, handleGroupMove, handleMapDuplicate, handleMapDelete,
+    showRenameModal, setShowRenameModal, renameValue, setRenameValue, handleMapRename,
+    showCreateModal, setShowCreateModal, createMapName, setCreateMapName, handleMapCreate,
+  } = useBattlemapManager({ campaignId, isGm })
   const handleDiceDone = useCallback(() => setLastDiceRoll(null), [setLastDiceRoll])
 
   useEffect(() => {
@@ -880,12 +759,7 @@ function SessionContent({ campaignId }) {
           : mapContextMenu.y
         return (
           <div ref={mapContextMenuRef} style={{ ...styles.contextMenu, left: x, top: y }}>
-            <button style={styles.contextMenuItem} onClick={() => {
-              setRenameTarget(mapContextMenu.bm)
-              setRenameValue(mapContextMenu.bm.name)
-              setShowRenameModal(true)
-              setMapContextMenu(null)
-            }}>
+            <button style={styles.contextMenuItem} onClick={() => openRenameModal(mapContextMenu.bm)}>
               {t('session.mapRename')}
             </button>
             <button style={styles.contextMenuItem} onClick={() => handleSetDefault(mapContextMenu.bm)}>
@@ -902,11 +776,7 @@ function SessionContent({ campaignId }) {
               {t('session.mapDelete')}
             </button>
             <div style={styles.contextMenuDivider} />
-            <button style={styles.contextMenuItem} onClick={() => {
-              setMapContextMenu(null)
-              setCreateMapName('')
-              setShowCreateModal(true)
-            }}>
+            <button style={styles.contextMenuItem} onClick={() => openCreateModal()}>
               {t('session.mapCreate')}
             </button>
           </div>

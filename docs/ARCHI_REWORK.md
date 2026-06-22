@@ -105,6 +105,9 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 **REWORK-15 ✅ Clos complet Session 115 — SocketProvider (fondation architecture socket)**
 `client/src/lib/SocketContext.jsx` créé — `SocketProvider` + `useSocket()`. `useTokenSocket` / `useEntitySocket` / `useCombatSocket` migrés — `listen(s)` anti-pattern supprimé. `SessionPage.jsx` splitté — `SessionPage` (wrapper) + `SessionContent`. `reconnectTrigger` supprimé — reconnexion native socket.io. V1–V7 validés.
 
+**REWORK-13 ✅ Clos complet Session 115 suite 2 — useBattlemapManager + campaignStore**
+`client/src/stores/campaignStore.js` créé (`setCampaign` + `updateCampaign` null-guard). `client/src/lib/useBattlemapManager.js` créé — 8 CRUD handlers + 7 useState + 1 useRef + outside-click useEffect + helpers `openRenameModal`/`openCreateModal`. `SessionContent` : 8 callbacks + 7 useState + 1 useRef + 1 useEffect supprimés ; `renameBattlemap`/`addBattlemap`/`removeBattlemap`/`updateCampaign` retirés des destructurings. Spec complète → `docs/PLAN_REWORK13.md`.
+
 **REWORK-11 ✅ Clos complet Session 115 suite 2 — useSessionSocket (handlers session + chat + dés)**
 `client/src/lib/useSessionSocket.js` créé — 12 handlers WS extraits de `SessionContent` (SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, CHARACTER_UPDATED, DOC_*). `lastDiceRoll` + `gmSocketError` gérés dans le hook. Asymétrie DICE_RESULT préservée (`skillLabel === undefined`). `useEffect([socket])` de SessionContent réduit à 6 handlers WOUND_*/INVENTORY_*. V1–V12 validés.
 
@@ -124,12 +127,12 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 | ~~**REWORK-15**~~ ✅ | `SocketProvider` | Socket créé inline `SessionPage`, `listen(s)` anti-pattern, `socket` prop-drillé 8 composants, P3 partout, `reconnectTrigger` workaround. | **Clos Session 115** |
 | ~~**REWORK-11**~~ ✅ | `useSessionSocket` | SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, CHARACTER_UPDATED, DOC_* encore inline dans `SessionPage.jsx`. | **Clos Session 115 suite 2** |
 | **REWORK-12** | `useCharacterSocket` | WOUND_ADDED/UPDATED/REMOVED + INVENTORY_* inline dans `SessionPage.jsx`. `woundVersions` Map locale. | Après REWORK-15 |
-| **REWORK-13** | `useBattlemapManager` + `campaignStore` | 8 handlers CRUD carte inline. `campaign` objet complet en `useState` local — pas de store, pas de hook. | Après REWORK-15 |
+| ~~**REWORK-13**~~ ✅ | `useBattlemapManager` + `campaignStore` | 8 handlers CRUD carte inline. `campaign` objet complet en `useState` local — pas de store, pas de hook. ⚠️ Plus complexe que REWORK-11 : les callbacks font REST + WS + mutations multi-store (ex: `handleMapSwitch` appelle `loadMap`). Dépendances en cascade (ordre P4). | ✅ Session 115 suite 2 — Étapes 1+2 (`campaignStore` + migration SessionContent) + Étapes 3+4 (`useBattlemapManager` — V1–V14 validés) |
 | **REWORK-14** | `useCombatUIState` | `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection`, `combatCameraCenter` en `useState` local — `CombatOverlay` reçoit 28 props dont 16 viennent de `SessionPage`. | Après fusion |
 
 ---
 
-### REWORK-15 — SocketProvider (fondation architecture socket)
+### REWORK-15 ✅ — SocketProvider (fondation architecture socket) — spec complète → ARCHI_REWORK_DONE.md
 
 **Problème** :
 Le socket est créé et géré inline dans `SessionPage.jsx` — 1 seul `useEffect` de ~140 lignes qui crée le socket, enregistre 20+ listeners, gère la reconnexion via un `useState reconnectTrigger` artificiel, et passe le socket en prop à 8 composants. Conséquences directes lues dans le code :
@@ -496,7 +499,14 @@ Events hors périmètre : `CHARACTER_UPDATED` (L.429 actuel) est extrait par REW
 
 **Plan** :
 
-> ⚠️ Numéros de ligne = code pré-REWORK-15. Après REWORK-15, `SessionPage` est restructurée en `SessionPage + SessionContent` et les lignes se décalent. Identifier les blocs par leur contenu, pas par leur numéro.
+> ⚠️ Numéros de ligne = code pré-REWORK-15 et pré-REWORK-11. Après REWORK-15 (split SessionPage/SessionContent) et REWORK-11 (suppression 12 handlers WS + 3 destructurings), les lignes ont décalé. Identifier les blocs par leur contenu, pas par leur numéro.
+>
+> **État post-REWORK-11 exact (cibles de REWORK-12) :**
+> - `const [woundVersions, setWoundVersions] = useState({})` — présent dans `SessionContent`
+> - `updateCharacter` — dans `useCharacterStore()` destructuring de `SessionContent`
+> - 6 listeners `WOUND_*/INVENTORY_*` — dans `useEffect([socket])` de `SessionContent`
+>
+> **Nuance `updateCampaign` (Session 115 suite 2)** : `updateCampaign` reste dans `useCampaignStore()` de `SessionContent` même après REWORK-11 — il est utilisé dans `handleSetDefault` (REST callback), pas seulement dans les handlers WS. Ne pas retirer lors de REWORK-12.
 
 #### Étape 1 — Créer `client/src/lib/useCharacterSocket.js`
 - Fichier exactement conforme à l'interface cible

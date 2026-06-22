@@ -1,5 +1,5 @@
 # ARCHI_REWORK_DONE.md — Spécifications des reworks achevés
-> Créé Session 101 — 2026-06-17
+> Créé Session 101 — 2026-06-17 | Mis à jour Session 115 suite 2 (cont.) — 2026-06-22
 > Archive des specs complètes (problème, décision, interface, plan, validation).
 > Pour la liste active et les reworks en cours → [ARCHI_REWORK.md](ARCHI_REWORK.md)
 
@@ -1171,3 +1171,288 @@ const handleSurpriseRolled = useCallback(() => {
 - [x] `grep -c "announcementMarker" client/src/components/CombatOverlay.jsx` → 0 (dead param retiré du destructuring)
 - [x] Scénarios 1–8 validés
 - [x] JOURNAL4.md appendé
+
+---
+
+## REWORK-11 — useSessionSocket (handlers session + chat + dés)
+
+### Problème
+
+12 handlers WS inline dans `SessionContent` (après REWORK-09 + REWORK-15) :
+`SESSION_JOINED`, `SESSION_USER_JOINED`, `SESSION_USER_LEFT`, `CAMPAIGN_SETTINGS_UPDATED`, `CHAT_MESSAGE`, `CHARACTER_UPDATED`, `DICE_RESULT`, `MACRO_ROLL_RESULT`, `'error'`, `DOC_CREATED`, `DOC_UPDATED`, `DOC_DELETED`.
+
+`lastDiceRoll` + `gmSocketError` : deux `useState` uniquement alimentés par WS — sans raison de rester dans `SessionContent`.
+
+3 destructurings surdimensionnés : `useSessionStore` (6 fonctions dont 4 WS-only), `useCharacterStore` (upsertCharacter WS-only), `useLibraryStore` (3 fonctions WS-only).
+
+### Décision
+
+Pattern `useSocket()` interne — identique aux hooks REWORK-09 après migration REWORK-15.
+
+`setCampaign` n'est **plus** passé en param (REWORK-13 Étapes 1+2 terminées avant REWORK-11) : `onCampaignUpdated` appelle `updateCampaign(updated)` depuis `useCampaignStore()` interne.
+
+`lastDiceRoll` + `gmSocketError` : `useState` internes au hook, exposés en retour (`{ lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError }`).
+
+**Asymétries préservées :**
+- `DICE_RESULT` : `skillLabel === undefined` → `addMessage` + `setLastDiceRoll` / sinon `addMessage` uniquement
+- `'error'` string brut — pas de constante `WS.ERROR` (confirmé L.508 code source)
+- `DICE_RESULT` double handler coexiste avec `useEntitySocket` — handlers nommés distincts → cleanup `socket.off(event, namedFn)` ciblé
+
+### Interface cible
+
+```js
+// client/src/lib/useSessionSocket.js
+import { useCampaignStore } from '../stores/campaignStore'  // post-REWORK-13
+
+export function useSessionSocket() {   // plus de { setCampaign } param
+  const socket = useSocket()
+  const { setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage } = useSessionStore()
+  const { upsertCharacter } = useCharacterStore()
+  const { addDocument, updateDocument, removeDocument } = useLibraryStore()
+  const { updateCampaign } = useCampaignStore()
+  const { t } = useTranslation()
+  const [lastDiceRoll, setLastDiceRoll] = useState(null)
+  const [gmSocketError, setGmSocketError] = useState(null)
+
+  useEffect(() => {
+    if (!socket) return
+    // 12 handlers nommés + cleanup symétrique
+    const onCampaignUpdated = ({ campaign: updated }) => updateCampaign(updated)
+    // ...
+    return () => { /* socket.off ×12 */ }
+  }, [socket])  // updateCampaign action Zustand stable — hors deps
+
+  return { lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError }
+}
+```
+
+### Périmètre
+
+**Fichiers touchés :**
+- `client/src/lib/useSessionSocket.js` — **créé**
+- `client/src/pages/SessionPage.jsx` (SessionContent) :
+  - `useSessionStore()` : `setOnlineUsers/addOnlineUser/removeOnlineUser/addMessage` retirés
+  - `useCharacterStore()` : `upsertCharacter` retiré
+  - `useLibraryStore()` : `addDocument/updateDocument/removeDocument` retirés
+  - `useState lastDiceRoll` + `useState gmSocketError` + `handleDiceDone useCallback` supprimés
+  - `const { lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError } = useSessionSocket()` déclaré après tous les useState (règle TDZ)
+  - `useEffect([socket])` réduit aux 6 handlers `WOUND_*/INVENTORY_*` (périmètre REWORK-12)
+
+**Fichiers NON touchés :** stores (sessionStore, characterStore, libraryStore, campaignStore), composants
+
+### Pièges
+
+**P-R11-1 — `handleDiceDone` TDZ** : `useCallback` déclaré avant `useSessionSocket()` → `setLastDiceRoll` pas encore en scope → recréer `handleDiceDone` APRÈS la déclaration du hook.
+
+**P-R11-4 — DICE_RESULT double handler** : coexiste avec `useEntitySocket.onDiceResult`. Cleanup `socket.off(event, namedFn)` obligatoire (jamais `socket.off(event)` sans handler — supprimerait tous les listeners).
+
+**P-R11-5 — `'error'` string brut** : pas de constante `WS.ERROR`. String littéral obligatoire.
+
+### Definition of done ✅ Clos Session 115 suite 2
+
+- [x] `client/src/lib/useSessionSocket.js` créé — `useSocket()` + `useCampaignStore()` + `useEffect([socket])` + 12 handlers nommés + cleanup symétrique
+- [x] `lastDiceRoll` + `gmSocketError` : `useState` internes, exposés en retour
+- [x] Asymétrie `DICE_RESULT` préservée (`skillLabel === undefined`)
+- [x] `'error'` string brut (pas `WS.ERROR`)
+- [x] 3 destructurings SessionContent nettoyés (sessionStore/characterStore/libraryStore)
+- [x] `handleDiceDone` recréé après `useSessionSocket()` (TDZ résolu)
+- [x] `useEffect([socket])` de SessionContent réduit aux 6 WOUND_*/INVENTORY_*
+- [x] `npm run build` — zéro erreur
+- [x] V1–V12 validés
+- [x] `docs/JOURNAL5.md` appendé
+
+---
+
+## REWORK-15 — SocketProvider (fondation architecture socket)
+
+### Problème
+
+Le socket est créé et géré inline dans `SessionPage.jsx` — 1 seul `useEffect` de ~140 lignes qui crée le socket, enregistre 20+ listeners, gère la reconnexion via un `useState reconnectTrigger` artificiel, et passe le socket en prop à 8 composants. Conséquences directes lues dans le code :
+
+- `listen(s)` — anti-pattern officiel Socket.io : les hooks ne doivent pas recevoir le socket en paramètre, ils doivent y accéder via contexte. Les pros passent toujours le socket via un Provider React.
+- `socket` prop-drillé à 8 composants (`Sidebar`, `Canvas3D`, `Editor3D`, `DroneWindow`, `DicePanel`, `TokenStatusPanel`, `EntityInstancePanel`, `CombatOverlay`) — couplage inutile, difficile à tracer.
+- **P3** (CLAUDE.md) : tout `useCallback` qui émet via socket doit inclure `socket` dans ses deps — 10+ occurrences dans `SessionPage.jsx`. Avec un contexte, la référence est stable : P3 disparaît.
+- `reconnectTrigger` useState (L.204) : workaround pour forcer la recréation du socket sur reconnexion. socket.io gère la reconnexion nativement via l'event `connect` — ce workaround est inutile.
+- **Bloquant pour REWORK-11/12/13** : si ces hooks sont écrits avec `listen(s)`, ils devront être réécrits quand REWORK-15 arrivera. REWORK-15 en premier évite le travail en double.
+
+Preuves :
+- `const [socket, setSocket] = useState(null)` — `SessionPage.jsx` L.203 (pré-REWORK-15)
+- `const [reconnectTrigger, setReconnectTrigger] = useState(0)` — `SessionPage.jsx` L.204 (pré-REWORK-15)
+- `tokenSocket.listen(s)` + `entitySocket.listen(s)` + `combatSocket.listen(s)` — `SessionPage.jsx` L.392–394 (pré-REWORK-15)
+- `socket={socket}` prop — 8 occurrences dans le JSX de `SessionPage.jsx` (pré-REWORK-15)
+
+### Décision
+
+Architecture retenue : **React Context + Provider** — pattern officiel Socket.io pour React.
+
+```
+SocketProvider (crée et gère le socket — ~40 lignes)
+  └── SessionContent (tout le reste — appelle useSocket())
+        ├── useTokenSocket()     → useSocket() interne
+        ├── useEntitySocket()    → useSocket() interne
+        ├── useCombatSocket()    → useSocket() interne
+        ├── useCharacterSocket() → useSocket() interne  (REWORK-12)
+        └── composants           → useSocket() interne  (REWORK-11 à 14)
+```
+
+Alternatives écartées :
+- **Singleton module** (`socketClient.js` exporté) — pas de cycle de vie React, pas de cleanup au démontage, ne fonctionne pas avec plusieurs campagnes.
+- **Zustand store** contenant le socket — les sockets ne sont pas de la state sérialisable ; les stores Zustand sont pour la domain state, pas pour les ressources réseau.
+- **Garder `listen(s)`** et ajouter un Provider qui l'appelle — hybride incohérent, résout le prop drilling mais pas l'anti-pattern.
+
+### Interface cible
+
+```js
+// client/src/lib/SocketContext.jsx
+
+import { createContext, useContext, useState, useEffect } from 'react'
+import { io } from 'socket.io-client'
+import { WS } from '../../../shared/events.js'
+
+const SocketContext = createContext(null)
+
+export function SocketProvider({ campaignId, children }) {
+  const [socket, setSocket] = useState(null)
+
+  useEffect(() => {
+    const s = io(import.meta.env.VITE_API_URL, { withCredentials: true })
+
+    // 'connect' se déclenche à la connexion initiale ET à chaque reconnexion automatique.
+    // Remplace le workaround reconnectTrigger + création d'un nouveau socket.
+    s.on('connect', () => {
+      s.emit(WS.SESSION_JOIN, { campaignId })
+    })
+
+    setSocket(s)
+    return () => s.disconnect()
+  }, [campaignId])
+
+  return (
+    <SocketContext.Provider value={socket}>
+      {children}
+    </SocketContext.Provider>
+  )
+}
+
+export function useSocket() {
+  return useContext(SocketContext)
+}
+```
+
+```js
+// Pattern hook après migration (exemple useTokenSocket) :
+export function useTokenSocket() {
+  const socket = useSocket()
+  const { addToken, removeToken, updateToken } = useTokenStore()
+
+  useEffect(() => {
+    if (!socket) return
+
+    // Handlers nommés obligatoires — socket.off(event, handler) cible ce handler uniquement.
+    // socket.off(event) sans handler supprimerait TOUS les listeners de cet event.
+    const onMoved   = ({ tokenId, pos_x, pos_y, pos_z, updated_at }) =>
+      updateToken({ id: tokenId, pos_x, pos_y, pos_z, updated_at })
+    const onCreated = ({ token }) => addToken(token)
+    const onDeleted = ({ tokenId }) => removeToken(tokenId)
+    const onUpdated = ({ token }) => updateToken(token)
+    const onStatus  = ({ tokenId, statuses, statusExpiries }) =>
+      updateToken({ id: tokenId, statuses, statusExpiries: statusExpiries ?? {} })
+
+    socket.on(WS.TOKEN_MOVED,          onMoved)
+    socket.on(WS.TOKEN_CREATED,        onCreated)
+    socket.on(WS.TOKEN_DELETED,        onDeleted)
+    socket.on(WS.TOKEN_UPDATED,        onUpdated)
+    socket.on(WS.TOKEN_STATUS_UPDATED, onStatus)
+
+    return () => {
+      socket.off(WS.TOKEN_MOVED,          onMoved)
+      socket.off(WS.TOKEN_CREATED,        onCreated)
+      socket.off(WS.TOKEN_DELETED,        onDeleted)
+      socket.off(WS.TOKEN_UPDATED,        onUpdated)
+      socket.off(WS.TOKEN_STATUS_UPDATED, onStatus)
+    }
+  }, [socket])
+  // Pas de return — le hook ne gère pas d'état UI (contrairement à useCombatSocket)
+}
+```
+
+```jsx
+// SessionPage.jsx après REWORK-15 — structure cible :
+
+export default function SessionPage() {
+  const { campaignId } = useParams()
+  // loadSession + loading/error restent ici (REST, pas socket)
+  return (
+    <SocketProvider campaignId={campaignId}>
+      <SessionContent campaignId={campaignId} />
+    </SocketProvider>
+  )
+}
+
+function SessionContent({ campaignId }) {
+  // Tout le code actuel de SessionPage — accède au socket via useSocket()
+  const socket = useSocket()  // stable — plus besoin de socket dans les deps useCallback (P3 résolu)
+  useTokenSocket()            // auto-enregistrement interne
+  useEntitySocket(...)
+  useCombatSocket(...)
+  // ... listeners inline restants (extraits dans REWORK-11 à 14)
+}
+```
+
+### Périmètre
+
+Fichiers touchés :
+- `client/src/lib/SocketContext.jsx` — **créé** (29 lignes)
+- `client/src/lib/useTokenSocket.js` — `function listen(s)` → `useEffect([socket])` interne avec handlers nommés + cleanup
+- `client/src/lib/useEntitySocket.js` — idem (params `{ setRadialMenu, setMoveTarget }` conservés)
+- `client/src/lib/useCombatSocket.js` — idem (params `{ isGm, setMode, onModeReset }` conservés, `useState` exportés conservés)
+- `client/src/pages/SessionPage.jsx` — split `SessionPage` (wrapper) + `SessionContent` (inline même fichier) ; `const [socket, setSocket]` supprimé ; `reconnectTrigger` supprimé ; `tokenSocket.listen(s)` / `entitySocket.listen(s)` / `combatSocket.listen(s)` supprimés
+
+Fichiers NON touchés (migration déférée aux REWORK-11 à 14) :
+- `Sidebar.jsx`, `Canvas3D.jsx`, `Editor3D.jsx`, `DroneWindow.jsx`, `DicePanel.jsx`, `TokenStatusPanel.jsx`, `EntityInstancePanel.jsx`, `CombatOverlay.jsx` — reçoivent encore `socket` en prop transitoirement via `const socket = useSocket()` dans `SessionContent`
+- Listeners inline restants dans `SessionContent` (`SESSION_JOINED`, `CHAT_MESSAGE`, `DICE_RESULT`, `WOUND_*`, etc.) — extraits dans REWORK-11/12/13
+- `shared/events.js` — aucun event nouveau
+- Tout le code serveur — non touché
+- Les stores Zustand — non touchés
+
+### Plan
+
+**Étape 1** — Créer `client/src/lib/SocketContext.jsx` — aucun fichier existant modifié — `npm run build`
+
+**Étape 2** — Migrer `useTokenSocket.js` — supprimer `listen(s)`, ajouter `useSocket()` + `useEffect([socket])` — `npm run build`
+
+**Étape 3** — Migrer `useEntitySocket.js` — même pattern, params UI conservés — `npm run build`
+
+**Étape 4** — Migrer `useCombatSocket.js` — même pattern, `useState` exposés conservés — `npm run build`
+
+**Étape 5** — Modifier `SessionPage.jsx` — split wrapper/SessionContent, supprimer `reconnectTrigger`, supprimer `listen(s)`, réécrire `useEffect([socket])` — SR + `npm run build`
+
+### Validation
+
+| # | Scénario | Résultat attendu |
+|---|---|---|
+| V1 | Ouverture session normale | Session charge, tokens présents, chat connecté |
+| V2 | Déconnexion réseau + reconnexion | socket.io reconnecte, `connect` ré-émet `SESSION_JOIN`, état restauré |
+| V3 | Token déplacé par un joueur | `TOKEN_MOVED` reçu, token se déplace dans le canvas |
+| V4 | Message chat envoyé | `CHAT_MESSAGE` reçu, affiché dans la sidebar |
+| V5 | Assaut combat complet | Scénarios REWORK-04 V1–V12 non régressés |
+| V6 | Changement de campagne (navigation) | Ancien socket déconnecté, nouveau socket créé pour la nouvelle campagneId |
+| V7 | `useCallback` sur une émission socket | Plus de `socket` dans les deps — aucun warning React |
+
+### Definition of done ✅ Clos Session 115
+
+- [x] `client/src/lib/SocketContext.jsx` créé — `SocketProvider` + `useSocket()` — `connect` handler émet `SESSION_JOIN`
+- [x] `useTokenSocket.js` migré — `listen(s)` supprimé, `useEffect([socket])` avec handlers nommés + cleanup
+- [x] `useEntitySocket.js` migré — idem
+- [x] `useCombatSocket.js` migré — idem, `useState` exposés conservés
+- [x] `SessionPage.jsx` splitté — `SessionPage` (wrapper REST + SocketProvider) + `SessionContent` (logique socket)
+- [x] `const [socket, setSocket] = useState(null)` supprimé de `SessionContent`
+- [x] `const [reconnectTrigger, ...] = useState(0)` supprimé de `SessionContent`
+- [x] `s.io.on('reconnect', ...)` supprimé — remplacé par `connect` dans SocketProvider
+- [x] `tokenSocket.listen(s)` / `entitySocket.listen(s)` / `combatSocket.listen(s)` supprimés
+- [x] `const socket = useSocket()` dans `SessionContent` — prop drilling maintenu vers les 8 composants (transitoire)
+- [x] Listeners inline restants dans un `useEffect([socket])` avec handlers nommés + cleanup
+- [x] `npm run build` — zéro erreur, zéro warning
+- [x] Scénarios V1–V7 validés
+- [x] P-R15-1 levé (reconnexion native socket.io)
+- [x] `docs/JOURNAL5.md` appendé

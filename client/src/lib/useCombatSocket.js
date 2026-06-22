@@ -111,6 +111,14 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     }
+    const onDeclareError = ({ message }) => {
+      addMessage({
+        id: `combat-error-${Date.now()}`,
+        system: true,
+        text: `⚠ ${message}`,
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      })
+    }
 
     socket.on(WS.COMBAT_RELOAD_RESULT,         onReloadResult)
     socket.on(WS.COMBAT_MELEE_DEFENSE_PROMPT,  onMeleeDefensePrompt)
@@ -130,6 +138,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     socket.on(WS.COMBAT_ACTION_DECLARED,       onActionDeclared)
     socket.on(WS.COMBAT_SLOT_ADVANCED,         onSlotAdvanced)
     socket.on(WS.COMBAT_TURN_SKIPPED,          onTurnSkipped)
+    socket.on(WS.COMBAT_DECLARE_ERROR,         onDeclareError)
 
     return () => {
       socket.off(WS.COMBAT_RELOAD_RESULT,        onReloadResult)
@@ -150,6 +159,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       socket.off(WS.COMBAT_ACTION_DECLARED,      onActionDeclared)
       socket.off(WS.COMBAT_SLOT_ADVANCED,        onSlotAdvanced)
       socket.off(WS.COMBAT_TURN_SKIPPED,         onTurnSkipped)
+      socket.off(WS.COMBAT_DECLARE_ERROR,        onDeclareError)
     }
   }, [socket, isGm, setMode, onModeReset])
 

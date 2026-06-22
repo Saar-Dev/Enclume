@@ -1,4 +1,4 @@
-# CLAUDE.md — Projet Enclume
+# AGENTS.md — Projet Enclume
 > Session 115 suite 2 — 2026-06-22
 
 ---
@@ -25,7 +25,7 @@ CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
 - `docs/EN_COURS.md` → si la prochaine étape n'est pas claire depuis `## ÉTAT COURANT` ci-dessous.
 - `docs/ASBUILT.md` → si la tâche touche à l'architecture (nouvelles routes, migrations, nouveaux services).
 - `docs/JOURNAL5.md` (dernier `## Session N` uniquement) → si un bug précis nécessite l'historique d'une décision.
-- **Fichiers domaine → chargés automatiquement** via `.claude/rules/` quand les fichiers source sont ouverts.
+- **Fichiers domaine → chargés automatiquement** via `.Codex/rules/` quand les fichiers source sont ouverts.
 
 ### Avant de coder
 - Lire les fichiers concernés. Jamais de mémoire.
@@ -41,7 +41,7 @@ CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
 - Appender `docs/JOURNAL5.md`.
 - Mettre à jour le header date de tout fichier `.md` modifié.
 - Proposer un scénario de test (étapes + résultat attendu) avant de passer à la suite.
-- Fin de session : mettre à jour `EN_COURS.md`, `ASBUILT.md`, `ROADMAP.md`, `CLAUDE.md`.
+- Fin de session : mettre à jour `EN_COURS.md`, `ASBUILT.md`, `ROADMAP.md`, `AGENTS.md`.
 - Fin de session : mettre à jour `client/public/CHANGELOG.md` — `## vN — date — titre`.
 - Rappeler le push Git :
 ```powershell
@@ -97,7 +97,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 | `docs/PLAN_*.md` | Planifications réalisées ou en cours |
 | `docs/ARCHI_REWORK.md` | Bible des reworks actifs |
 | `docs/ARCHI_REWORK_DONE.md` | Specs complètes des reworks achevés |
-| `.claude/rules/*.md` | Règles domaine — chargées automatiquement (path-scoped) |
+| `.Codex/rules/*.md` | Règles domaine — chargées automatiquement (path-scoped) |
 
 ---
 
@@ -107,11 +107,10 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
 
 **Session 115 suite 2 — ✅ REWORK-11 clos complet :**
-- REWORK-13 ✅ — `useBattlemapManager.js` créé + SessionContent nettoyé (8 callbacks + 7 useState + 1 useRef + 1 useEffect supprimés) — V1–V14 validés
 - REWORK-13 Étapes 1+2 ✅ — `campaignStore.js` créé + `campaign useState` migré dans SessionContent
 - REWORK-11 ✅ — `useSessionSocket.js` créé (12 handlers) + `SessionPage.jsx` nettoyé — V1–V12 validés
 - Bug RANGE1-drone + LOS1-drone : dettes actives — sprint futur
-- **Prochaine étape** : REWORK-12 (`useCharacterSocket`) — spec complète dans `ARCHI_REWORK.md` §REWORK-12
+- **Prochaine étape** : REWORK-13 Étape 3 (`useBattlemapManager.js`) → Étape 4 → puis REWORK-12
 
 **Session 115 ✅ clos complet (REWORK-15 SocketProvider) :**
 - `client/src/lib/SocketContext.jsx` créé (29L) — `SocketProvider` + `useSocket()` hook
@@ -204,7 +203,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Bug INI2 ajouté (`BUGIDENTIFIE.md`) — initiative non recalculée après blessure
 
 **Session 104 ✅ clos complet :**
-- Réorganisation docs : `.claude/rules/` (9 fichiers path-scoped) + CLAUDE.md allégé (216 → ~175 lignes)
+- Réorganisation docs : `.Codex/rules/` (9 fichiers path-scoped) + AGENTS.md allégé (216 → ~175 lignes)
 
 **Session 103 ✅ clos complet :**
 - REWORK-09 : `SessionPage.jsx` 1509 → 1296 lignes — `useTokenSocket.js` + `useEntitySocket.js` + `useCombatSocket.js`
