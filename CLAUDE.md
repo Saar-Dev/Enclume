@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 115 suite 2 — 2026-06-22
+> Session 116 — 2026-06-22
 
 ---
 
@@ -101,17 +101,15 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 115 suite 2 (2026-06-22)
+## ÉTAT COURANT — Session 116 (2026-06-22)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
 
-**Session 115 suite 2 — ✅ REWORK-11 clos complet :**
-- REWORK-13 ✅ — `useBattlemapManager.js` créé + SessionContent nettoyé (8 callbacks + 7 useState + 1 useRef + 1 useEffect supprimés) — V1–V14 validés
-- REWORK-13 Étapes 1+2 ✅ — `campaignStore.js` créé + `campaign useState` migré dans SessionContent
-- REWORK-11 ✅ — `useSessionSocket.js` créé (12 handlers) + `SessionPage.jsx` nettoyé — V1–V12 validés
+**Session 116 — ✅ REWORK-12 clos complet :**
+- REWORK-12 ✅ — `useCharacterSocket.js` créé + SessionContent nettoyé (`woundVersions` useState + `updateCharacter` destructuring + `useEffect([socket])` WOUND/INVENTORY supprimés) — V1–V8 validés
 - Bug RANGE1-drone + LOS1-drone : dettes actives — sprint futur
-- **Prochaine étape** : REWORK-12 (`useCharacterSocket`) — spec complète dans `ARCHI_REWORK.md` §REWORK-12
+- **Prochaine étape** : REWORK-14 (`useCombatUIState`) — après fusion frontend confrère
 
 **Session 115 ✅ clos complet (REWORK-15 SocketProvider) :**
 - `client/src/lib/SocketContext.jsx` créé (29L) — `SocketProvider` + `useSocket()` hook

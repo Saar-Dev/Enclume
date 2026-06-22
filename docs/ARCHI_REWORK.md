@@ -1,5 +1,5 @@
 # ARCHI_REWORK.md — Reworks architecturaux
-> Créé Session 96 — 2026-06-16 | Mis à jour Session 115 suite 2 — 2026-06-22
+> Créé Session 96 — 2026-06-16 | Mis à jour Session 116 — 2026-06-22
 > Rédigé par Claude Sonnet 4.6 à destination des agents Claude futurs.
 > Objectif : remplacer le bricolage incrémental par des reworks structurés, complets, et non régressifs.
 > Spécifications complètes des reworks achevés → [ARCHI_REWORK_DONE.md](ARCHI_REWORK_DONE.md)
@@ -105,6 +105,9 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 **REWORK-15 ✅ Clos complet Session 115 — SocketProvider (fondation architecture socket)**
 `client/src/lib/SocketContext.jsx` créé — `SocketProvider` + `useSocket()`. `useTokenSocket` / `useEntitySocket` / `useCombatSocket` migrés — `listen(s)` anti-pattern supprimé. `SessionPage.jsx` splitté — `SessionPage` (wrapper) + `SessionContent`. `reconnectTrigger` supprimé — reconnexion native socket.io. V1–V7 validés.
 
+**REWORK-12 ✅ Clos complet Session 116 — useCharacterSocket (blessures + inventaire)**
+`client/src/lib/useCharacterSocket.js` créé — `useSocket()` + `useEffect([socket])` + 6 handlers nommés + cleanup. Asymétries préservées (`WOUND_ADDED` sans guard, `INVENTORY_*` sans `updateCharacter`). `woundVersions` useState + `updateCharacter` destructuring + `useEffect([socket])` WOUND/INVENTORY supprimés de `SessionContent`. V1–V8 validés.
+
 **REWORK-13 ✅ Clos complet Session 115 suite 2 — useBattlemapManager + campaignStore**
 `client/src/stores/campaignStore.js` créé (`setCampaign` + `updateCampaign` null-guard). `client/src/lib/useBattlemapManager.js` créé — 8 CRUD handlers + 7 useState + 1 useRef + outside-click useEffect + helpers `openRenameModal`/`openCreateModal`. `SessionContent` : 8 callbacks + 7 useState + 1 useRef + 1 useEffect supprimés ; `renameBattlemap`/`addBattlemap`/`removeBattlemap`/`updateCampaign` retirés des destructurings. Spec complète → `docs/PLAN_REWORK13.md`.
 
@@ -126,7 +129,7 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 |---|---|---|---|
 | ~~**REWORK-15**~~ ✅ | `SocketProvider` | Socket créé inline `SessionPage`, `listen(s)` anti-pattern, `socket` prop-drillé 8 composants, P3 partout, `reconnectTrigger` workaround. | **Clos Session 115** |
 | ~~**REWORK-11**~~ ✅ | `useSessionSocket` | SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, CHARACTER_UPDATED, DOC_* encore inline dans `SessionPage.jsx`. | **Clos Session 115 suite 2** |
-| **REWORK-12** | `useCharacterSocket` | WOUND_ADDED/UPDATED/REMOVED + INVENTORY_* inline dans `SessionPage.jsx`. `woundVersions` Map locale. | Après REWORK-15 |
+| ~~**REWORK-12**~~ ✅ | `useCharacterSocket` | WOUND_ADDED/UPDATED/REMOVED + INVENTORY_* inline dans `SessionPage.jsx`. `woundVersions` Map locale. | **Clos Session 116** |
 | ~~**REWORK-13**~~ ✅ | `useBattlemapManager` + `campaignStore` | 8 handlers CRUD carte inline. `campaign` objet complet en `useState` local — pas de store, pas de hook. ⚠️ Plus complexe que REWORK-11 : les callbacks font REST + WS + mutations multi-store (ex: `handleMapSwitch` appelle `loadMap`). Dépendances en cascade (ordre P4). | ✅ Session 115 suite 2 — Étapes 1+2 (`campaignStore` + migration SessionContent) + Étapes 3+4 (`useBattlemapManager` — V1–V14 validés) |
 | **REWORK-14** | `useCombatUIState` | `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection`, `combatCameraCenter` en `useState` local — `CombatOverlay` reçoit 28 props dont 16 viennent de `SessionPage`. | Après fusion |
 
@@ -350,243 +353,7 @@ Fichiers NON touchés — migration déférée aux REWORK-11 à 14 :
 - [ ] `docs/PLAN_REWORK12.md` — archivé (spec complète dans `ARCHI_REWORK.md` §REWORK-12)
 - [ ] `docs/JOURNAL5.md` appended
 
----
-
-### REWORK-12 — `useCharacterSocket` (blessures + inventaire)
-
-**Prérequis : REWORK-15 (`SocketProvider`) livré et validé — `useSocket()` disponible.**
-
-**Problème** :
-6 listeners WS (`WOUND_ADDED/UPDATED/REMOVED`, `INVENTORY_ADDED/UPDATED/REMOVED`) + le `useState woundVersions` sont inline dans `SessionPage.jsx`. Le frontend concurrent doit recréer intégralement ce bloc pour l'importer — même problème que REWORK-09 réglait pour les tokens/entités/combat.
-
-Preuves :
-- `const [woundVersions, setWoundVersions] = useState({})` — `SessionPage.jsx` L.106
-- 6 listeners `s.on(WS.WOUND_*)` / `s.on(WS.INVENTORY_*)` inline dans le `useEffect` socket — `SessionPage.jsx` L.468–488
-- `woundReloadKey={woundVersions[selectedCharacter?.id] ?? 0}` — `SessionPage.jsx` L.1068 (seul consommateur)
-
-**État actuel** :
-```js
-// SessionPage.jsx L.106
-const [woundVersions, setWoundVersions] = useState({})
-
-// SessionPage.jsx L.468–488 (dans le useEffect socket)
-s.on(WS.WOUND_ADDED, ({ characterId, worst_wound_severity }) => {
-  setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-  updateCharacter({ id: characterId, worst_wound_severity })
-})
-s.on(WS.WOUND_UPDATED, ({ characterId, worst_wound_severity }) => {
-  if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-  updateCharacter({ id: characterId, worst_wound_severity })
-})
-s.on(WS.WOUND_REMOVED, ({ characterId, worst_wound_severity }) => {
-  if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-  updateCharacter({ id: characterId, worst_wound_severity })
-})
-s.on(WS.INVENTORY_ADDED,   ({ characterId }) => {
-  if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-})
-s.on(WS.INVENTORY_UPDATED, ({ characterId }) => {
-  if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-})
-s.on(WS.INVENTORY_REMOVED, ({ characterId }) => {
-  if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-})
-
-// SessionPage.jsx L.1068
-woundReloadKey={woundVersions[selectedCharacter?.id] ?? 0}
-```
-
-**Asymétries à préserver impérativement** :
-
-| Event | guard `if (characterId)` | `updateCharacter` appelé |
-|---|---|---|
-| `WOUND_ADDED` | ❌ pas de guard | ✅ oui |
-| `WOUND_UPDATED` | ✅ guard | ✅ oui (sans guard séparé) |
-| `WOUND_REMOVED` | ✅ guard | ✅ oui (sans guard séparé) |
-| `INVENTORY_ADDED` | ✅ guard | ❌ non |
-| `INVENTORY_UPDATED` | ✅ guard | ❌ non |
-| `INVENTORY_REMOVED` | ✅ guard | ❌ non |
-
-Note : `updateCharacter` dans `WOUND_UPDATED` et `WOUND_REMOVED` est appelé **sans** guard même si `setWoundVersions` a le guard — comportement existant à reproduire fidèlement.
-
-**Décision** :
-Pattern identique aux hooks REWORK-09 après migration REWORK-15 : `useSocket()` interne, `useEffect([socket])`, handlers nommés, cleanup `socket.off`. Pas de `listen(s)` exposé.
-
-Alternatives écartées :
-- **`listen(s)` impérative** (ancien `PLAN_REWORK12.md`) — anti-pattern supprimé par REWORK-15 de tous les hooks.
-- **Nouveau store `woundVersionStore` Zustand** — surdimensionné pour un compteur éphémère de UI state.
-- **Subscription Zustand directe dans `CharacterWindow`** — applicable (voir dette D12-1) mais nécessite de modifier `CharacterWindow` et `characterStore` — hors périmètre.
-
-**Interface cible** :
-
-```js
-// client/src/lib/useCharacterSocket.js
-
-import { useState, useEffect } from 'react'
-import { WS } from '../../../shared/events.js'
-import { useCharacterStore } from '../stores/characterStore'
-import { useSocket } from './SocketContext'
-
-export function useCharacterSocket() {
-  const socket = useSocket()
-  const { updateCharacter } = useCharacterStore()
-  const [woundVersions, setWoundVersions] = useState({})
-
-  useEffect(() => {
-    if (!socket) return
-
-    const onWoundAdded = ({ characterId, worst_wound_severity }) => {
-      setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-      updateCharacter({ id: characterId, worst_wound_severity })
-    }
-    const onWoundUpdated = ({ characterId, worst_wound_severity }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-      updateCharacter({ id: characterId, worst_wound_severity })
-    }
-    const onWoundRemoved = ({ characterId, worst_wound_severity }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-      updateCharacter({ id: characterId, worst_wound_severity })
-    }
-    const onInventoryAdded = ({ characterId }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-    }
-    const onInventoryUpdated = ({ characterId }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-    }
-    const onInventoryRemoved = ({ characterId }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-    }
-
-    socket.on(WS.WOUND_ADDED,       onWoundAdded)
-    socket.on(WS.WOUND_UPDATED,     onWoundUpdated)
-    socket.on(WS.WOUND_REMOVED,     onWoundRemoved)
-    socket.on(WS.INVENTORY_ADDED,   onInventoryAdded)
-    socket.on(WS.INVENTORY_UPDATED, onInventoryUpdated)
-    socket.on(WS.INVENTORY_REMOVED, onInventoryRemoved)
-
-    return () => {
-      socket.off(WS.WOUND_ADDED,       onWoundAdded)
-      socket.off(WS.WOUND_UPDATED,     onWoundUpdated)
-      socket.off(WS.WOUND_REMOVED,     onWoundRemoved)
-      socket.off(WS.INVENTORY_ADDED,   onInventoryAdded)
-      socket.off(WS.INVENTORY_UPDATED, onInventoryUpdated)
-      socket.off(WS.INVENTORY_REMOVED, onInventoryRemoved)
-    }
-  }, [socket])
-  // [socket] et non [] : socket vient du useState de SocketProvider (REWORK-15), pas d'un singleton module.
-  // null au premier render → re-run obligatoire quand SocketProvider appelle setSocket().
-  // updateCharacter (action Zustand) et setWoundVersions (setter useState) : références stables — hors deps.
-  // Même traitement que useTokenSocket migré dans la spec REWORK-15.
-
-  return { woundVersions }
-}
-```
-
-**Périmètre** :
-
-Fichiers touchés :
-- `client/src/lib/useCharacterSocket.js` — **créé**
-- `client/src/pages/SessionPage.jsx` (futur `SessionContent` post-REWORK-15) — 6 listeners supprimés du `useEffect([socket])`, `woundVersions` useState supprimé, `updateCharacter` retiré du destructuring, hook ajouté
-
-Fichiers NON touchés :
-- `client/src/character/CharacterWindow.jsx` — prop `woundReloadKey` inchangée
-- `shared/events.js` — aucun event nouveau
-- `client/src/stores/characterStore.js` — inchangé
-- `useTokenSocket.js`, `useEntitySocket.js`, `useCombatSocket.js` — non touchés
-- Tout le code serveur — non touché
-
-Events hors périmètre : `CHARACTER_UPDATED` (L.429 actuel) est extrait par REWORK-11 (`useSessionSocket`), pas par REWORK-12. Les 6 listeners de REWORK-12 sont exclusivement `WOUND_*` + `INVENTORY_*`.
-
-**Plan** :
-
-> ⚠️ Numéros de ligne = code pré-REWORK-15 et pré-REWORK-11. Après REWORK-15 (split SessionPage/SessionContent) et REWORK-11 (suppression 12 handlers WS + 3 destructurings), les lignes ont décalé. Identifier les blocs par leur contenu, pas par leur numéro.
->
-> **État post-REWORK-11 exact (cibles de REWORK-12) :**
-> - `const [woundVersions, setWoundVersions] = useState({})` — présent dans `SessionContent`
-> - `updateCharacter` — dans `useCharacterStore()` destructuring de `SessionContent`
-> - 6 listeners `WOUND_*/INVENTORY_*` — dans `useEffect([socket])` de `SessionContent`
->
-> **Nuance `updateCampaign` (Session 115 suite 2)** : `updateCampaign` reste dans `useCampaignStore()` de `SessionContent` même après REWORK-11 — il est utilisé dans `handleSetDefault` (REST callback), pas seulement dans les handlers WS. Ne pas retirer lors de REWORK-12.
-
-#### Étape 1 — Créer `client/src/lib/useCharacterSocket.js`
-- Fichier exactement conforme à l'interface cible
-- Aucun fichier existant modifié à cette étape
-- Run à vide : `npm run build` client — zéro erreur, zéro warning
-
-#### Étape 2 — Intégrer dans `SessionContent`
-
-Modifications exactes dans `SessionPage.jsx` (futur `SessionContent` post-REWORK-15) :
-
-**2a — Import** (après les imports hooks existants) :
-```js
-import { useCharacterSocket } from '../lib/useCharacterSocket'
-```
-
-**2b — Supprimer `woundVersions` useState** (L.103–106) :
-```
-// SUPPRIMER intégralement :
-const [woundVersions, setWoundVersions] = useState({})
-// + le bloc de commentaire qui le précède
-```
-
-**2c — Retirer `updateCharacter` du destructuring** (L.37) :
-```js
-// AVANT :
-const { characters, isGm, setCharacters, setMembers, upsertCharacter, updateCharacter } = useCharacterStore()
-// APRÈS :
-const { characters, isGm, setCharacters, setMembers, upsertCharacter } = useCharacterStore()
-```
-
-**2d — Déclarer le hook** (après `combatSocket`) :
-```js
-const { woundVersions } = useCharacterSocket()
-```
-Règle TDZ : après tous les `useState` de `SessionContent`.
-
-**2e — Dans le `useEffect([socket])`** de `SessionContent` — supprimer les 6 `socket.on(WS.WOUND_*)` / `socket.on(WS.INVENTORY_*)` (L.468–488 dans le code actuel) sans les remplacer. Le hook s'enregistre lui-même via son propre `useEffect([socket])`.
-
-**2f — Render `CharacterWindow`** — aucune modification JSX nécessaire. `woundVersions` garde le même nom dans le scope de `SessionContent` après `const { woundVersions } = useCharacterSocket()`.
-
-Run à vide : SR + `npm run build` client — zéro erreur.
-
-**Validation** :
-
-| # | Scénario | Résultat attendu |
-|---|---|---|
-| V1 | GM inflige une blessure à un PJ (flow normal) | `CharacterWindow` PJ recharge `ArmorWoundPanel` automatiquement |
-| V2 | GM stabilise une blessure (`WOUND_UPDATED`) | `CharacterWindow` recharge, `worst_wound_severity` mis à jour dans le store |
-| V3 | GM supprime une blessure (`WOUND_REMOVED`) | `CharacterWindow` recharge, `worst_wound_severity` mis à jour dans le store |
-| V4 | GM ajoute un item inventaire au PJ | `CharacterWindow` ouverte sur ce PJ recharge |
-| V5 | Item inventaire modifié ou supprimé | `CharacterWindow` recharge |
-| V6 | Deux `CharacterWindow` ouvertes (PJ A + PJ B) | Seule la fenêtre du PJ concerné recharge (clé par `characterId`) |
-| V7 | `CharacterWindow` fermée au moment du `WOUND_ADDED` | Pas de crash — `woundVersions` mis à jour silencieusement |
-| V8 | Reconnexion socket (SocketProvider gère nativement via `connect`) | `woundVersions` persiste dans le hook — nouveaux événements incrémentent normalement |
-
-**Definition of done** :
-
-- [ ] `client/src/lib/useCharacterSocket.js` créé — `useSocket()` + `useEffect([socket])` + handlers nommés + cleanup
-- [ ] Deps `[socket]` uniquement — cohérent avec le pattern `useTokenSocket` migré (REWORK-15 spec) : Zustand actions et setters useState stables, non listés
-- [ ] Asymétries préservées : `WOUND_ADDED` sans guard / `WOUND_UPDATED`+`WOUND_REMOVED`+`INVENTORY_*` avec guard
-- [ ] `WOUND_*` (3) appellent `updateCharacter` — `INVENTORY_*` (3) n'appellent **pas** `updateCharacter`
-- [ ] `updateCharacter` dans `WOUND_UPDATED` et `WOUND_REMOVED` appelé **sans** guard (même si `setWoundVersions` a le guard)
-- [ ] `woundVersions` useState (L.106) supprimé de `SessionContent`
-- [ ] `updateCharacter` retiré du destructuring `useCharacterStore()` dans `SessionContent`
-- [ ] 6 listeners inline (L.468–488) supprimés du `useEffect([socket])` de `SessionContent`
-- [ ] `const { woundVersions } = useCharacterSocket()` déclaré après tous les useState (règle TDZ)
-- [ ] `woundReloadKey={woundVersions[selectedCharacter?.id] ?? 0}` inchangé dans le render
-- [ ] `npm run build` client — zéro erreur
-- [ ] SR — zéro erreur
-- [ ] Scénarios V1–V8 validés
-- [ ] `docs/ARCHI_REWORK.md` — REWORK-12 déplacé dans "Reworks achevés"
-- [ ] `docs/PLAN_REWORK12.md` — archivé (pointeur vers `ARCHI_REWORK_DONE.md`)
-- [ ] `docs/JOURNAL5.md` appended
-
----
-
-### Dettes identifiées — hors périmètre REWORK-12
-
-**D12-1 — `woundVersions` → subscription Zustand directe**
-Les pros utilisent des subscriptions Zustand plutôt que des compteurs passés en prop. Simplification : `CharacterWindow` lit `character.worst_wound_severity` directement. Bloqué par les `INVENTORY_*` qui ne touchent pas `worst_wound_severity` — nécessite un champ `reloadVersion` dans `characterStore` ou signal séparé. Touche `CharacterWindow` + `characterStore` — sprint dédié.
+### REWORK-12 ✅ — useCharacterSocket — spec complète → ARCHI_REWORK_DONE.md
 
 ---
 

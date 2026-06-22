@@ -1,3 +1,11 @@
+## v118 — 2026-06-22 — REWORK-12 : useCharacterSocket — blessures + inventaire extraits
+
+### Client — Refactoring
+- [refactor] `client/src/lib/useCharacterSocket.js` créé — 6 handlers WS (`WOUND_ADDED/UPDATED/REMOVED`, `INVENTORY_ADDED/UPDATED/REMOVED`) extraits de `SessionContent`
+- [refactor] `SessionPage.jsx` — `woundVersions` useState + `updateCharacter` destructuring + `useEffect([socket])` WOUND/INVENTORY supprimés
+
+---
+
 ## v117 — 2026-06-22 — REWORK-11 : useSessionSocket — handlers session extraits
 
 ### Client — Refactoring

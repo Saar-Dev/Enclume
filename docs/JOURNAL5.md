@@ -461,3 +461,33 @@ SR ✅, fonctionnel confirmé (Saar). V1–V14 validés.
 
 ### Non testé
 — (aucun cas identifié hors périmètre)
+
+---
+
+## Session 116 — 2026-06-22 — REWORK-12 : useCharacterSocket
+
+### Travail effectué
+
+**Étape 1 — Créer `client/src/lib/useCharacterSocket.js`**
+- `useSocket()` + `useCharacterStore()` + `useState(woundVersions)`
+- `useEffect([socket])` — 6 handlers nommés + cleanup symétrique
+- Asymétries préservées : `WOUND_ADDED` sans guard / `WOUND_UPDATED`+`WOUND_REMOVED`+`INVENTORY_*` avec guard
+- `WOUND_*` appellent `updateCharacter` — `INVENTORY_*` n'appellent pas `updateCharacter`
+- `updateCharacter` dans `WOUND_UPDATED` et `WOUND_REMOVED` appelé sans guard (même si `setWoundVersions` a le guard)
+- `return { woundVersions }`
+- `npm run build` ✅
+
+**Étape 2 — Intégrer dans `SessionContent` (SessionPage.jsx)**
+- Import `useCharacterSocket` ajouté (après `useSessionSocket`)
+- `woundVersions` useState + commentaires supprimés (L.101–104)
+- `updateCharacter` retiré du destructuring `useCharacterStore()`
+- `const { woundVersions } = useCharacterSocket()` déclaré après tous les useState (règle TDZ)
+- `useEffect([socket])` WOUND_*/INVENTORY_* entier supprimé (6 listeners + cleanup)
+- `woundReloadKey={woundVersions[selectedCharacter?.id] ?? 0}` — inchangé
+- `npm run build` ✅ (1.57s — zéro erreur)
+
+### Testé
+SR ✅, V1–V8 validés (confirmation Saar) — blessures ajout/modif/suppression + inventaire + isolation par characterId + crash-free fenêtre fermée + reconnexion.
+
+### Non testé
+— (aucun cas identifié hors périmètre)

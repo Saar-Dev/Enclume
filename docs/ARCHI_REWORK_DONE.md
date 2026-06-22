@@ -1,7 +1,72 @@
 # ARCHI_REWORK_DONE.md — Spécifications des reworks achevés
-> Créé Session 101 — 2026-06-17 | Mis à jour Session 115 suite 2 (cont.) — 2026-06-22
+> Créé Session 101 — 2026-06-17 | Mis à jour Session 116 — 2026-06-22
 > Archive des specs complètes (problème, décision, interface, plan, validation).
 > Pour la liste active et les reworks en cours → [ARCHI_REWORK.md](ARCHI_REWORK.md)
+
+---
+
+## REWORK-12 — useCharacterSocket (blessures + inventaire) — Session 116
+
+### Problème
+
+6 listeners WS (`WOUND_ADDED/UPDATED/REMOVED`, `INVENTORY_ADDED/UPDATED/REMOVED`) + le `useState woundVersions` étaient inline dans `SessionPage.jsx`. Le frontend concurrent devait recréer intégralement ce bloc pour l'importer.
+
+Preuves (état pré-rework) :
+- `const [woundVersions, setWoundVersions] = useState({})` — `SessionPage.jsx` L.104
+- 6 listeners `WOUND_*/INVENTORY_*` dans `useEffect([socket])` — `SessionPage.jsx` L.271–310
+- `woundReloadKey={woundVersions[selectedCharacter?.id] ?? 0}` — seul consommateur
+
+### Décision
+
+Pattern identique aux hooks post-REWORK-15 : `useSocket()` interne, `useEffect([socket])`, handlers nommés, cleanup `socket.off`. Pas de `listen(s)` exposé.
+
+Alternatives écartées :
+- **`listen(s)` impérative** — anti-pattern supprimé par REWORK-15.
+- **Nouveau store Zustand `woundVersionStore`** — surdimensionné pour un compteur éphémère de UI state.
+- **Subscription Zustand directe dans `CharacterWindow`** — applicable (dette D12-1) mais touche `CharacterWindow` + `characterStore` — hors périmètre.
+
+### Interface
+
+```js
+// client/src/lib/useCharacterSocket.js
+export function useCharacterSocket() {
+  const socket = useSocket()
+  const { updateCharacter } = useCharacterStore()
+  const [woundVersions, setWoundVersions] = useState({})
+  useEffect(() => { ... }, [socket])
+  return { woundVersions }
+}
+```
+
+Asymétries préservées :
+
+| Event | guard `if (characterId)` | `updateCharacter` |
+|---|---|---|
+| `WOUND_ADDED` | ❌ pas de guard | ✅ oui |
+| `WOUND_UPDATED` | ✅ guard sur setWoundVersions | ✅ oui (sans guard) |
+| `WOUND_REMOVED` | ✅ guard sur setWoundVersions | ✅ oui (sans guard) |
+| `INVENTORY_ADDED/UPDATED/REMOVED` | ✅ guard | ❌ non |
+
+### Périmètre
+
+Fichiers créés : `client/src/lib/useCharacterSocket.js`
+
+Fichiers modifiés : `client/src/pages/SessionPage.jsx` (`SessionContent`) — `woundVersions` useState supprimé, `updateCharacter` retiré du destructuring `useCharacterStore()`, 6 listeners + useEffect([socket]) WOUND/INVENTORY supprimés, `const { woundVersions } = useCharacterSocket()` ajouté.
+
+Fichiers non touchés : `CharacterWindow.jsx`, `shared/events.js`, `characterStore.js`, autres hooks WS, code serveur.
+
+### Validation
+
+V1–V8 validés (confirmation Saar — Session 116) :
+- GM inflige/stabilise/supprime blessure → `CharacterWindow` recharge + `worst_wound_severity` mis à jour ✅
+- Inventaire ajouté/modifié/supprimé → `CharacterWindow` recharge ✅
+- Isolation par `characterId` (deux fenêtres ouvertes) ✅
+- Fenêtre fermée au moment du WOUND_ADDED → pas de crash ✅
+- Reconnexion socket → `woundVersions` persiste, nouveaux events incrémentent normalement ✅
+
+### Dette D12-1 — hors périmètre
+
+`woundVersions` → subscription Zustand directe dans `CharacterWindow`. Nécessite un champ `reloadVersion` dans `characterStore` ou signal séparé — sprint dédié futur.
 
 ---
 

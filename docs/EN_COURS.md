@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-22 Session 115 suite 2
+> Dernière mise à jour : 2026-06-22 Session 116
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -57,7 +57,12 @@
 **15. ~~REWORK-13 Étapes 3+4 — useBattlemapManager~~** ✅ Session 115 suite 2 (cont.)
    → `client/src/lib/useBattlemapManager.js` créé — 8 handlers CRUD + 7 useState + 1 useRef + 1 useEffect outside-click + helpers `openRenameModal` / `openCreateModal`
    → `SessionContent` : `renameBattlemap`/`addBattlemap`/`removeBattlemap` + `updateCampaign` retirés des stores ; 8 callbacks + 7 useState + 1 useRef + 1 useEffect supprimés ; 2 séquences JSX simplifiées
-   → V1–V14 validés (SR + fonctionnel — confirmation Saar) — Prochaine étape : REWORK-12 (`useCharacterSocket`)
+   → V1–V14 validés (SR + fonctionnel — confirmation Saar)
+
+**16. ~~REWORK-12 — useCharacterSocket~~** ✅ Session 116
+   → `client/src/lib/useCharacterSocket.js` créé — `useSocket()` + `useEffect([socket])` + 6 handlers nommés + cleanup
+   → `SessionContent` : `woundVersions` useState + `updateCharacter` destructuring + `useEffect([socket])` WOUND/INVENTORY supprimés
+   → V1–V8 validés (confirmation Saar) — Prochaine étape : REWORK-14 (`useCombatUIState`) après fusion frontend
 
 ---
 

@@ -17,6 +17,7 @@ import { useTokenSocket } from '../lib/useTokenSocket'
 import { useEntitySocket } from '../lib/useEntitySocket'
 import { useCombatSocket } from '../lib/useCombatSocket'
 import { useSessionSocket } from '../lib/useSessionSocket'
+import { useCharacterSocket } from '../lib/useCharacterSocket'
 import { useBattlemapManager } from '../lib/useBattlemapManager'
 import Canvas3D from '../components/Canvas3D'
 import Editor3D from '../components/Editor3D'
@@ -45,7 +46,7 @@ function SessionContent({ campaignId }) {
   const navigate = useNavigate()
 
   const { tokens, setTokens, addToken, removeToken } = useTokenStore()
-  const { characters, isGm, setCharacters, setMembers, updateCharacter } = useCharacterStore()
+  const { characters, isGm, setCharacters, setMembers } = useCharacterStore()
   const { battlemap, battlemaps, setBattlemap, setBattlemaps } = useMapStore()
   const { setActiveCampaign, setPendingEntityId } = useSessionStore()
   const { setEntities, fetchBlueprints } = useEntityStore()
@@ -96,12 +97,6 @@ function SessionContent({ campaignId }) {
   // ─── Mode visée déplacement entité ───────────────────────────────────────
   // null = inactif, sinon { entity, interaction, tokenId }
   const [moveTarget, setMoveTarget] = useState(null)
-
-
-  // ─── Reload blessures — déclenché par WOUND_ADDED (socket) ───────────────
-  // Map { characterId → counter } — incrémenté à chaque blessure reçue.
-  // Passé à CharacterWindow → bumpInventoryVersion() → ArmorWoundPanel reload.
-  const [woundVersions, setWoundVersions] = useState({})
 
 
   // Fenêtre character flottante — null = fermée, sinon id du character ouvert
@@ -253,6 +248,7 @@ function SessionContent({ campaignId }) {
   }, [])
   const combatSocket = useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })
   const { lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError } = useSessionSocket()
+  const { woundVersions } = useCharacterSocket()
   const {
     loadMap,
     mapContextMenu, setMapContextMenu, mapContextMenuRef,
@@ -266,48 +262,6 @@ function SessionContent({ campaignId }) {
   useEffect(() => {
     setActiveCampaign(campaignId)
   }, [campaignId])
-
-  useEffect(() => {
-    if (!socket) return
-
-    const onWoundAdded = ({ characterId, worst_wound_severity }) => {
-      setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-      updateCharacter({ id: characterId, worst_wound_severity })
-    }
-    const onWoundUpdated = ({ characterId, worst_wound_severity }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-      updateCharacter({ id: characterId, worst_wound_severity })
-    }
-    const onWoundRemoved = ({ characterId, worst_wound_severity }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-      updateCharacter({ id: characterId, worst_wound_severity })
-    }
-    const onInventoryAdded   = ({ characterId }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-    }
-    const onInventoryUpdated = ({ characterId }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-    }
-    const onInventoryRemoved = ({ characterId }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-    }
-
-    socket.on(WS.WOUND_ADDED,               onWoundAdded)
-    socket.on(WS.WOUND_UPDATED,             onWoundUpdated)
-    socket.on(WS.WOUND_REMOVED,             onWoundRemoved)
-    socket.on(WS.INVENTORY_ADDED,           onInventoryAdded)
-    socket.on(WS.INVENTORY_UPDATED,         onInventoryUpdated)
-    socket.on(WS.INVENTORY_REMOVED,         onInventoryRemoved)
-
-    return () => {
-      socket.off(WS.WOUND_ADDED,               onWoundAdded)
-      socket.off(WS.WOUND_UPDATED,             onWoundUpdated)
-      socket.off(WS.WOUND_REMOVED,             onWoundRemoved)
-      socket.off(WS.INVENTORY_ADDED,           onInventoryAdded)
-      socket.off(WS.INVENTORY_UPDATED,         onInventoryUpdated)
-      socket.off(WS.INVENTORY_REMOVED,         onInventoryRemoved)
-    }
-  }, [socket])
 
   // ─── Menu radial token ───────────────────────────────────────────────────────
   // Ouvert au double-clic sur un token. Fermé par le composant lui-même.
