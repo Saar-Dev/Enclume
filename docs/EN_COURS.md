@@ -62,7 +62,13 @@
 **16. ~~REWORK-12 — useCharacterSocket~~** ✅ Session 116
    → `client/src/lib/useCharacterSocket.js` créé — `useSocket()` + `useEffect([socket])` + 6 handlers nommés + cleanup
    → `SessionContent` : `woundVersions` useState + `updateCharacter` destructuring + `useEffect([socket])` WOUND/INVENTORY supprimés
-   → V1–V8 validés (confirmation Saar) — Prochaine étape : REWORK-14 (`useCombatUIState`) après fusion frontend
+   → V1–V8 validés (confirmation Saar)
+
+**17. ~~REWORK-14 — useCombatUIState~~** ✅ Session 116
+   → `client/src/lib/useCombatUIState.js` créé — 4 `useState` + 6 `useCallback`, hook UI pur (zéro socket, zéro store)
+   → `SessionContent` : 4 `useState` + `handleModeReset` + 5 handlers supprimés (~60 lignes) ; ordre `useEntitySocket` → `useCombatUIState` → `useCombatSocket` (P-R14-1)
+   → V1–V13 validés (confirmation Saar)
+   → Prochaine étape : sprint bugs actifs (RANGE1-drone, LOS1-drone) — voir dettes actives
 
 ---
 

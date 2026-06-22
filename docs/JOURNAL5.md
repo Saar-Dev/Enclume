@@ -491,3 +491,38 @@ SR ✅, V1–V8 validés (confirmation Saar) — blessures ajout/modif/suppressi
 
 ### Non testé
 — (aucun cas identifié hors périmètre)
+
+---
+
+## Session 116 suite — 2026-06-22 — REWORK-14 : useCombatUIState
+
+### Travail effectué
+
+**Analyse contrainte "Après fusion" :**
+- Branche unique (`master`), zéro merge commit dans les 20 derniers commits, zéro branche confrère en local ni remote
+- REWORK-14 ne chevauche pas l'éditeur/playground — sections L.200–209 + L.246–248 + L.414–470 de SessionPage.jsx, vs. `<Editor3D />` + `activeMaterial`/`activeBlueprint` (non touchés)
+- Contrainte levée : prudentielle, pas technique
+
+**Étape 1 — Créer `client/src/lib/useCombatUIState.js`**
+- 4 `useState` : `combatMoveMode`, `pendingMoveSelection`, `combatTargetMode`, `combatCameraCenter`
+- 6 `useCallback` : `handleModeReset` (deps []), `handleEnterMoveMode` (deps []), `handleValidateMove` (deps [combatMoveMode, pendingMoveSelection]), `handleCancelPendingMove` (deps []), `handleEnterTargetMode` (deps []), `handleValidateTarget` (deps [combatTargetMode])
+- Pièges respectés : P-R14-1 (ordre TDZ), P-R14-3 (guard self-targeting + `onPendingTarget(null)`), P-R14-4 (`screenX != null` conditionnel), P-R14-5 (`?.pendingTargetId`), P-R14-6 (setState(fn) trap — objets avec callbacks)
+- `combatCameraCenter` NON reset dans `handleModeReset` — caméra reste sur la dernière position (comportement source préservé)
+- Zéro import socket, zéro import store, zéro effet de bord WS — hook UI pur
+- `npm run build` ✅ (1.48s)
+
+**Étape 2 — Intégrer dans `SessionContent` (SessionPage.jsx)**
+- Import `useCombatUIState` ajouté après `useBattlemapManager`
+- 4 `useState` supprimés avec leurs commentaires : `combatCameraCenter`, `combatMoveMode`, `pendingMoveSelection`, `combatTargetMode`
+- `handleModeReset` useCallback supprimé — remplacé par la destructuration du hook
+- `const { combatMoveMode, pendingMoveSelection, combatTargetMode, combatCameraCenter, handleModeReset, handleEnterMoveMode, handleValidateMove, handleCancelPendingMove, handleEnterTargetMode, handleValidateTarget } = useCombatUIState()` déclaré APRÈS `useEntitySocket`, AVANT `useCombatSocket` (P-R14-1)
+- `useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })` — inchangé
+- 5 handlers supprimés (~60 lignes) : `handleEnterMoveMode`, `handleValidateMove`, `handleCancelPendingMove`, `handleEnterTargetMode`, `handleValidateTarget`
+- JSX CombatOverlay (8 props) + Canvas3D (4 props) — noms identiques, aucune modification
+- `npm run build` ✅ (1.36s)
+
+### Testé
+SR ✅, V1–V13 validés (confirmation Saar) — hors combat ✅, activation mode combat ✅, déplacement (entrée/sélection/validation/annulation) ✅, cible (survol ennemi/self-guard/validation) ✅, reset COMBAT_END via `handleModeReset` ✅, combatCameraCenter ✅, bouton "Changer" (`onPendingTarget(null)`) ✅.
+
+### Non testé
+— (aucun cas identifié hors périmètre)

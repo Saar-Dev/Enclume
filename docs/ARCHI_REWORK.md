@@ -114,6 +114,9 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 **REWORK-11 ✅ Clos complet Session 115 suite 2 — useSessionSocket (handlers session + chat + dés)**
 `client/src/lib/useSessionSocket.js` créé — 12 handlers WS extraits de `SessionContent` (SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, CHARACTER_UPDATED, DOC_*). `lastDiceRoll` + `gmSocketError` gérés dans le hook. Asymétrie DICE_RESULT préservée (`skillLabel === undefined`). `useEffect([socket])` de SessionContent réduit à 6 handlers WOUND_*/INVENTORY_*. V1–V12 validés.
 
+**REWORK-14 ✅ Clos complet Session 116 — useCombatUIState (combat UI state hook)**
+`client/src/lib/useCombatUIState.js` créé — 4 `useState` + 6 `useCallback`. `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection`, `combatCameraCenter` extraits de `SessionContent`. `handleModeReset` + 5 handlers supprimés de SessionContent (~60 lignes). Ordre P-R14-1 respecté : `useEntitySocket` → `useCombatUIState` → `useCombatSocket`. Hook UI pur — zéro socket, zéro store. `combatCameraCenter` non reset dans `handleModeReset` (comportement source préservé). V1–V13 validés.
+
 ---
 
 ## Prochains reworks
@@ -131,7 +134,7 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 | ~~**REWORK-11**~~ ✅ | `useSessionSocket` | SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, CHARACTER_UPDATED, DOC_* encore inline dans `SessionPage.jsx`. | **Clos Session 115 suite 2** |
 | ~~**REWORK-12**~~ ✅ | `useCharacterSocket` | WOUND_ADDED/UPDATED/REMOVED + INVENTORY_* inline dans `SessionPage.jsx`. `woundVersions` Map locale. | **Clos Session 116** |
 | ~~**REWORK-13**~~ ✅ | `useBattlemapManager` + `campaignStore` | 8 handlers CRUD carte inline. `campaign` objet complet en `useState` local — pas de store, pas de hook. ⚠️ Plus complexe que REWORK-11 : les callbacks font REST + WS + mutations multi-store (ex: `handleMapSwitch` appelle `loadMap`). Dépendances en cascade (ordre P4). | ✅ Session 115 suite 2 — Étapes 1+2 (`campaignStore` + migration SessionContent) + Étapes 3+4 (`useBattlemapManager` — V1–V14 validés) |
-| **REWORK-14** | `useCombatUIState` | `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection`, `combatCameraCenter` en `useState` local — `CombatOverlay` reçoit 28 props dont 16 viennent de `SessionPage`. | Après fusion |
+| ~~**REWORK-14**~~ ✅ | `useCombatUIState` | `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection`, `combatCameraCenter` en `useState` local — `CombatOverlay` reçoit 28 props dont 16 viennent de `SessionPage`. | **Clos Session 116** |
 
 ---
 

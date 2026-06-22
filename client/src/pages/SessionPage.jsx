@@ -19,6 +19,7 @@ import { useCombatSocket } from '../lib/useCombatSocket'
 import { useSessionSocket } from '../lib/useSessionSocket'
 import { useCharacterSocket } from '../lib/useCharacterSocket'
 import { useBattlemapManager } from '../lib/useBattlemapManager'
+import { useCombatUIState } from '../lib/useCombatUIState'
 import Canvas3D from '../components/Canvas3D'
 import Editor3D from '../components/Editor3D'
 import Sidebar from '../components/Sidebar'
@@ -195,19 +196,6 @@ function SessionContent({ campaignId }) {
     }
   }, [mode, combatPhase, socket, handleModeChange])
 
-  // ─── Centrage caméra combat (Sprint 2.5) ──────────────────────────────────
-  // null = inactif, sinon { x, z } coords DB (PE14) du token à centrer.
-  const [combatCameraCenter, setCombatCameraCenter] = useState(null)
-
-  // ─── Mode sélection déplacement combat (Sprint 4) ─────────────────────────
-  // null = inactif, sinon { tokenId, zones, onMoveSelected, onCancel, onPendingMove }
-  const [combatMoveMode, setCombatMoveMode] = useState(null)
-  // null = inactif, sinon sélection en attente de validation { action_key, ini_mod, targetPosX, targetPosY, targetPosZ }
-  const [pendingMoveSelection, setPendingMoveSelection] = useState(null)
-
-  // null = inactif, sinon { tokenId, pendingTargetId, onTargetSelected, onCancel, onPendingTarget }
-  const [combatTargetMode, setCombatTargetMode] = useState(null)
-
   // Fermer le panneau statuts si le token est supprimé pendant qu'il est ouvert
   useEffect(() => {
     if (!statusPanel) return
@@ -239,13 +227,15 @@ function SessionContent({ campaignId }) {
     }
   }, [battlemap?.id, characters, layer])
 
-  // Hooks WS — déclarés ici, après TOUS les useState (évite TDZ sur setRadialMenu, setMoveTarget, setCombatMoveMode…)
+  // Hooks WS — déclarés ici, après TOUS les useState (évite TDZ sur setRadialMenu, setMoveTarget…)
   useTokenSocket()
   useEntitySocket({ setRadialMenu, setMoveTarget })
-  // handleModeReset AVANT useCombatSocket — ordre P4 obligatoire
-  const handleModeReset = useCallback(() => {
-    setCombatMoveMode(null); setCombatTargetMode(null); setPendingMoveSelection(null)
-  }, [])
+  // useCombatUIState AVANT useCombatSocket — handleModeReset passé comme onModeReset (P-R14-1)
+  const {
+    combatMoveMode, pendingMoveSelection, combatTargetMode, combatCameraCenter,
+    handleModeReset, handleEnterMoveMode, handleValidateMove,
+    handleCancelPendingMove, handleEnterTargetMode, handleValidateTarget,
+  } = useCombatUIState()
   const combatSocket = useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })
   const { lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError } = useSessionSocket()
   const { woundVersions } = useCharacterSocket()
@@ -406,68 +396,6 @@ function SessionContent({ campaignId }) {
     socket.emit(WS.COMBAT_SURPRISE_RESULT, { tokenId: combatSocket.pendingSurpriseRoll.tokenId })
     combatSocket.setPendingSurpriseRoll(null)
   }, [socket, combatSocket.pendingSurpriseRoll, combatSocket.setPendingSurpriseRoll])
-
-  // ─── Mode déplacement combat : entrée, sélection, annulation ───────────────
-  // allures : { lente, moyenne, rapide, max } en cases — depuis calcAllures (CombatActionWindow)
-  // tokenPos : { x, z } coords DB (PE14) du token joueur (pour centrage caméra)
-  // onMoveSelected/onCancel : closures CombatActionWindow qui mettent à jour son état
-  const handleEnterMoveMode = useCallback((allures, tokenId, tokenPos, onMoveSelected, onCancel) => {
-    const wrappedSelected = (sel) => {
-      onMoveSelected(sel)
-      setPendingMoveSelection(null)
-      setCombatMoveMode(null)
-    }
-    const wrappedCancel = () => {
-      onCancel()
-      setPendingMoveSelection(null)
-      setCombatMoveMode(null)
-    }
-    setCombatMoveMode({
-      tokenId, allures,
-      onMoveSelected: wrappedSelected,
-      onCancel: wrappedCancel,
-      onPendingMove: (sel) => setPendingMoveSelection(sel),
-    })
-    setCombatCameraCenter(tokenPos)
-  }, [])
-
-  const handleValidateMove = useCallback(() => {
-    if (!combatMoveMode || !pendingMoveSelection) return
-    combatMoveMode.onMoveSelected(pendingMoveSelection)
-  }, [combatMoveMode, pendingMoveSelection])
-
-  const handleCancelPendingMove = useCallback(() => {
-    setPendingMoveSelection(null)
-  }, [])
-
-  // ─── Mode sélection cible combat (Sprint 7.1) ─────────────────────────────
-  const handleEnterTargetMode = useCallback((tokenId, tokenPos, onTargetSelected, onCancel, mode = 'ranged') => {
-    const wrappedSelected = (targetTokenId) => {
-      onTargetSelected(targetTokenId)
-      setCombatTargetMode(null)
-    }
-    const wrappedCancel = () => {
-      onCancel()
-      setCombatTargetMode(null)
-    }
-    setCombatTargetMode({
-      tokenId,
-      mode,
-      pendingTargetId: null,
-      onTargetSelected: wrappedSelected,
-      onCancel: wrappedCancel,
-      onPendingTarget: (id, screenX, screenY) => {
-        if (id === tokenId) return  // prevent self-targeting
-        setCombatTargetMode(prev => prev ? { ...prev, pendingTargetId: id, pendingTargetScreenPos: screenX != null ? { x: screenX, y: screenY } : null } : null)
-      },
-    })
-    setCombatCameraCenter(tokenPos)
-  }, [])
-
-  const handleValidateTarget = useCallback(() => {
-    if (!combatTargetMode || !combatTargetMode.pendingTargetId) return
-    combatTargetMode.onTargetSelected(combatTargetMode.pendingTargetId)
-  }, [combatTargetMode])
 
   // ─── Annulation mode visée — stable (deps []) ─────────────────────────────
   // useCallback stable pour ne pas recréer les listeners useEffect dans Canvas3D.

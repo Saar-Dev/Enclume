@@ -721,3 +721,50 @@ Par :
 | V4 | Clic sur fond (backdrop) | Ligne disparaît, caméra restaurée, mode annulé |
 | V5 | Drag d'un token (non-LOS) | Ligne précédente disparaît, caméra restaurée |
 | V6 | Token en altitude | LOS + caméra corrects (eye height pos_z+2.5) |
+
+---
+
+## Session 116 — Analyse contrainte "Après fusion" REWORK-14
+
+### Question posée
+
+La contrainte "Après fusion" marquée dans ARCHI_REWORK.md §REWORK-14 est-elle encore active ?
+
+### Preuves recueillies
+
+**git branch -a** :
+```
+* master
+  remotes/origin/HEAD -> origin/master
+  remotes/origin/master
+```
+→ **Une seule branche.** Pas de branche "confrère", "playground", "editor", "merge-frontend".
+
+**git log --oneline -20** :
+Commits : tous "Session N — REWORK-XX" par Saar. **Aucun merge commit.** Aucun commit étranger.
+
+**EN_COURS.md L.65** :
+"Prochaine étape : REWORK-14 (`useCombatUIState`) après fusion frontend"
+→ Note héritée de Session 116 — pas une preuve que la fusion est imminente.
+
+### Analyse du risque de conflit
+
+REWORK-14 touche exclusivement :
+- `client/src/lib/useCombatUIState.js` — **fichier nouveau** → zéro conflit possible
+- `client/src/pages/SessionPage.jsx` — suppression de blocs dans : L.200–209 (4 useState combat UI), L.246–248 (handleModeReset), L.414–470 (5 handlers combat UI)
+
+Le "confrère" travaillait sur playground + éditeur → sections SessionPage.jsx concernées :
+- `<Editor3D ... />` JSX (L.536–545) + états `activeMaterial`, `activeBlueprint`, `availableBlocks`, `activeEditorTab`
+
+**Overlap REWORK-14 ↔ éditeur/playground : ZÉRO.** Les blocs supprimés par REWORK-14 sont dans des zones complètement distinctes des états éditeur.
+
+### Conclusion
+
+| Question | Réponse |
+|---|---|
+| La fusion a-t-elle eu lieu ? | Non — aucun merge commit, branche unique |
+| Un confrère travaille-t-il activement ? | Inconnu — aucune branche visible |
+| REWORK-14 crée-t-il un risque de conflit ? | Non — sections non-overlapping |
+| Peut-on procéder maintenant ? | **Oui — sans risque technique** |
+
+La contrainte "Après fusion" était **prudentielle, pas technique**. REWORK-14 est safe à tout moment. Recommandation : procéder.
