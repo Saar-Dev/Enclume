@@ -105,6 +105,7 @@ export const WS = {
   COMBAT_MELEE_RESULT:           'combat:melee_result',            // serveur → room : résultat jets en opposition (attaque/défense)
   COMBAT_DECLARE_ERROR:          'combat:declare_error',           // serveur → socket : erreur de validation déclaration (ex: hors portée)
   COMBAT_ANNOUNCE_PREVIEW:       'combat:announce_preview',        // PJ → serveur → room : sélections en cours (éphémère, non persisté)
+  COMBAT_ACTION_PRECHECK:        'combat:action_precheck',          // client → serveur (ACK) : { tokenId, actionKey } → callback({ ok })
   COMBAT_APPLY_STUN:             'combat:apply_stun',              // GM → serveur : appliquer is_stunned manuellement { tokenId, outcome, duration }
   COMBAT_STUN_EXPIRED:           'combat:stun_expired',            // serveur → room : étourdissement expiré en fin de tour { tokenId }
   COMBAT_STUN_PROMPT:            'combat:stun_prompt',             // serveur → socket PJ ou GM : prompt D6 durée { tokenId, outcome }

@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 116 — 2026-06-22
+> Session 116 suite — 2026-06-22
 
 ---
 
@@ -101,16 +101,22 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 116 (2026-06-22)
+## ÉTAT COURANT — Session 116 suite (2026-06-22)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
 
+**Session 116 suite — REWORK-16 ✅ clos complet :**
+- Fix `resolveMeleeAction` L.1699 `socket.emit` → `io.to(campaignId).emit` (broadcast)
+- Handler ACK `COMBAT_ACTION_PRECHECK` : FSM guard + range check CaC humanoïde/drone
+- Gate `precheckOk === true` sur `CombatCacModifiersWindow` (GM + PJ) — `socket.timeout(5000)` + flag `cancelled`
+- Message rouge `error: true` + `#e05252` dans Sidebar — 8 logs `[DBG-CAC]` supprimés
+- V1–V10, V12 validés — V11 Non testé (race condition LAN)
+- **Prochaine étape** : REWORK-17 — socketCombat.js modularisation (spec dans `docs/ARCHI_REWORK.md §REWORK-17`)
+
 **Session 116 — ✅ REWORK-12 + REWORK-14 clos complets :**
 - REWORK-12 ✅ — `useCharacterSocket.js` créé + SessionContent nettoyé (`woundVersions` useState + `updateCharacter` destructuring + `useEffect([socket])` WOUND/INVENTORY supprimés) — V1–V8 validés
 - REWORK-14 ✅ — `useCombatUIState.js` créé (4 useState + 6 useCallback, hook UI pur) + SessionContent nettoyé (4 useState + handleModeReset + 5 handlers supprimés, ~60 lignes) — V1–V13 validés
-- Bug RANGE1-drone + LOS1-drone : dettes actives — sprint futur
-- **Prochaine étape** : sprint bugs actifs (RANGE1-drone + LOS1-drone) — lire `socketCombat.js` + `resolveDroneAssaultAction`
 
 **Session 115 ✅ clos complet (REWORK-15 SocketProvider) :**
 - `client/src/lib/SocketContext.jsx` créé (29L) — `SocketProvider` + `useSocket()` hook

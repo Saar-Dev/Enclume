@@ -1,5 +1,5 @@
 # ARCHI_REWORK.md — Reworks architecturaux
-> Créé Session 96 — 2026-06-16 | Mis à jour Session 116 — 2026-06-22
+> Créé Session 96 — 2026-06-16 | Mis à jour Session 116 suite — 2026-06-22
 > Rédigé par Claude Sonnet 4.6 à destination des agents Claude futurs.
 > Objectif : remplacer le bricolage incrémental par des reworks structurés, complets, et non régressifs.
 > Spécifications complètes des reworks achevés → [ARCHI_REWORK_DONE.md](ARCHI_REWORK_DONE.md)
@@ -116,6 +116,9 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 
 **REWORK-14 ✅ Clos complet Session 116 — useCombatUIState (combat UI state hook)**
 `client/src/lib/useCombatUIState.js` créé — 4 `useState` + 6 `useCallback`. `combatMoveMode`, `combatTargetMode`, `pendingMoveSelection`, `combatCameraCenter` extraits de `SessionContent`. `handleModeReset` + 5 handlers supprimés de SessionContent (~60 lignes). Ordre P-R14-1 respecté : `useEntitySocket` → `useCombatUIState` → `useCombatSocket`. Hook UI pur — zéro socket, zéro store. `combatCameraCenter` non reset dans `handleModeReset` (comportement source préservé). V1–V13 validés.
+
+**REWORK-16 ✅ Clos complet Session 116 suite — Combat Pre-validation Gate (ACK Socket.IO)**
+`COMBAT_ACTION_PRECHECK: 'combat:action_precheck'` ajouté dans `shared/events.js`. Handler ACK dans `socketCombat.js` : FSM guard + range check CaC (allonge XOR humanoïde/drone). Fix `resolveMeleeAction` L.1699 `socket.emit` → `io.to(campaignId).emit`. Gate `precheckOk` dans `CombatOverlay.jsx` (`socket.timeout(5000)` + flag `cancelled`). Message rouge `error: true` + style `#e05252` dans `Sidebar.jsx`. 8 logs `[DBG-CAC]` supprimés. V1–V10, V12 validés — V11 Non testé (race condition LAN). Spec complète → `ARCHI_REWORK_DONE.md`.
 
 ---
 

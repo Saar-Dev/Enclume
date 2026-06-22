@@ -389,6 +389,82 @@ Drone CaC régression — investigation incomplète (CombatModifiersWindow non l
 - `onCampaignUpdated` → `updateCampaign(updated)` ; deps `[socket]` au lieu de `[socket, setCampaign]`
 
 ### Testé
+SR ✅, `npm run build` ✅ — REWORK-13 Étapes 1+2 (campaignStore) validés.
+
+### Non testé
+Étapes 3+4 (useBattlemapManager) — sprint suivant.
+
+---
+
+## Session 116 — 2026-06-22 — REWORK-12 + REWORK-14
+
+### Travail effectué
+
+**REWORK-12 — `useCharacterSocket.js` créé**
+- Hook dédié blessures + inventaire : `useSocket()` interne + `useEffect([socket])` + 6 handlers nommés + cleanup
+- `SessionContent` nettoyé : `woundVersions` useState supprimé + `updateCharacter` destructuring supprimé + `useEffect([socket])` WOUND/INVENTORY supprimés
+- `npm run build` ✅
+
+**REWORK-14 — `useCombatUIState.js` créé**
+- Hook UI pur : 4 `useState` (combatMoveMode, combatTargetMode, pendingMoveSelection, combatCameraCenter) + 6 `useCallback`
+- `SessionContent` nettoyé : 4 `useState` + `handleModeReset` + 5 handlers supprimés (~60 lignes)
+- Ordre P-R14-1 respecté : `useEntitySocket` → `useCombatUIState` → `useCombatSocket`
+- `npm run build` ✅
+
+### Testé
+V1–V8 (REWORK-12) validés — V1–V13 (REWORK-14) validés (confirmation Saar).
+
+### Non testé
+Rien.
+
+---
+
+## Session 116 suite — 2026-06-22 — REWORK-16 : Combat Pre-validation Gate
+
+### Travail effectué
+
+**Étape 0 — Fix atomique `resolveMeleeAction` L.1699**
+- `socket.emit(WS.COMBAT_DECLARE_ERROR, ...)` → `io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, ...)`
+- Bug : erreur de portée CaC humanoïde n'était visible que de l'attaquant, pas broadcastée à la room
+
+**Étape 1 — `shared/events.js` + handler ACK + cleanup logs**
+- `COMBAT_ACTION_PRECHECK: 'combat:action_precheck'` ajouté dans `shared/events.js`
+- Handler `socket.on(WS.COMBAT_ACTION_PRECHECK, async ({ tokenId, actionKey }, callback))` inséré dans `socketCombat.js` (entre `COMBAT_ANNOUNCE_PREVIEW` et `COMBAT_ACTION_CONFIRM`)
+  - FSM guard : `canTransition` → `socket.emit` individuel si hors état (pas broadcast)
+  - Range check CaC : colonne `type='melee'`, allonge XOR `weapon_inv_id` (humanoïde) / `drone_weapon_inv_id` (drone)
+  - `io.to(campaignId).emit(COMBAT_DECLARE_ERROR)` si hors portée
+  - `socket.timeout(5000)` côté client — fail-closed
+- 8 logs `[DBG-CAC]` supprimés (grep = 0)
+
+**Étape 2 — `CombatOverlay.jsx` gate precheckOk**
+- `meleePrecheckId` dérivé de `activeMeleeAction?.id ?? playerActiveMeleeAction?.id`
+- `precheckOk` useState (null / true / false) + `useEffect([meleePrecheckId, socket])` avec flag `cancelled`
+- `&& precheckOk === true` ajouté sur les deux conditions `CombatCacModifiersWindow` (GM L.162 + PJ L.171)
+
+**Étape 3 — Message d'erreur rouge**
+- `useCombatSocket.js` `onDeclareError` : ajout `error: true`
+- `Sidebar.jsx` : `msg.error ? styles.msgSystemErrorText : styles.msgSystemText` + style `{ color: '#e05252', fontWeight: 600 }`
+
+**Vérifications :** `node --check socketCombat.js` ✅ — `npm run build` ✅ — SR ✅
+
+### Testé
+V1 (drone CaC hors portée — fenêtre bloquée + message rouge) ✅
+V2 (drone CaC en portée — fenêtre ouvre) ✅
+V3 (PNJ humanoïde CaC hors portée) ✅
+V4 (PJ CaC hors portée) ✅
+V5 (allonge respectée) ✅
+V6 (slot non-CaC inchangé) ✅
+V7 (nouveau slot melee — precheck relancé) ✅
+V8 (slot non-melee suivant — fenêtre fermée) ✅
+V9 (reconnexion — precheck relancé) ✅
+V10 (message système normal gris inchangé) ✅
+V12 (slot avance correctement après CaC valide) ✅
+Log confirmé : `[WS] resolveMeleeAction — hors portée: 8.0m max:3m` broadcasté.
+
+### Non testé
+V11 — race condition post-ACK (cible se déplace entre precheck et confirm) — non reproductible en dev.
+
+### Testé
 - `npm run build` ✅ — zéro erreur après Étapes 1 et 2
 
 ### Non testé

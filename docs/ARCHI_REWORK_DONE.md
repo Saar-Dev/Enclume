@@ -1,5 +1,5 @@
 # ARCHI_REWORK_DONE.md — Spécifications des reworks achevés
-> Créé Session 101 — 2026-06-17 | Mis à jour Session 116 — 2026-06-22
+> Créé Session 101 — 2026-06-17 | Mis à jour Session 116 suite — 2026-06-22
 > Archive des specs complètes (problème, décision, interface, plan, validation).
 > Pour la liste active et les reworks en cours → [ARCHI_REWORK.md](ARCHI_REWORK.md)
 
@@ -1521,3 +1521,503 @@ Fichiers NON touchés (migration déférée aux REWORK-11 à 14) :
 - [x] Scénarios V1–V7 validés
 - [x] P-R15-1 levé (reconnexion native socket.io)
 - [x] `docs/JOURNAL5.md` appendé
+
+---
+
+## REWORK-04 — FSM Combat (State Machine + DB persistence) — Session 111
+
+**Problème** :
+La FSM de combat est implicite et fragmentée en trois couches disjointes :
+1. `combat_state.phase` en DB (`ROSTER` / `ANNOUNCEMENT` / `RESOLUTION`) — seule information persistée
+2. Sous-états `AWAITING_DEFENSE` / `AWAITING_DAMAGE` / `AWAITING_STUN` — uniquement dans les Maps in-memory de `socketCombat.js`
+3. `combatStore.js` client — aucun `subPhase`, combat figé si reconnexion en slot bloqué
+
+Conséquences directes lues dans le code :
+- **Split-brain RESOLUTION** (`socketCombat.js` — dette active) : si un joueur reconnecte pendant un slot bloqué (`needsDefenseWait = true`), `COMBAT_STATE_SYNC` ne peut pas restaurer le prompt (`pendingMeleeDefense` Map vide au restart). Combat figé.
+- **Guards dispersés** : `if (phase !== 'ANNOUNCEMENT') return` dupliqué dans 13 handlers sans source de vérité centrale (`socketCombat.js` L.1–2824).
+- **Sous-états invisibles** : `combat_state.phase = 'RESOLUTION'` que le slot soit libre (`SLOT_ACTIVE`) ou bloqué (`AWAITING_DEFENSE`). Impossible de monitorer ou déboguer l'état réel sans lire les Maps.
+- **Handlers trop couplés** : `COMBAT_MELEE_DEFENSE_CONFIRM` gère résolution opposition + dégâts + `advanceSlot` + multi-melee chaining dans un seul handler.
+
+**État actuel** :
+- `server/src/socket/socketCombat.js` — 2824 lignes, 13 handlers, 13 helpers
+- `pendingMaps` : 5 Maps déclarées dans `index.js`, passées à `registerCombatHandlers(io, socket, context, pendingMaps)`
+  - `combatTimers` — timers annonce (reste in-memory intentionnellement)
+  - `combatPreviews` — ghosts déplacement (reste in-memory intentionnellement)
+  - `pendingMeleeDefense` — slot bloqué défense CaC → perd à restart
+  - `pendingDamageActions` — slot bloqué dégâts → perd à restart
+  - `pendingStunActions` — prompt D6 étourdissement → perd à restart
+- `client/src/stores/combatStore.js` — 56 lignes, `phase` uniquement, pas de `subPhase`
+- `shared/events.js` — `COMBAT_STATE_SYNC` existe mais ne transporte pas `subPhase`
+
+**Décision** :
+Architecture retenue : **module FSM pur + table `combat_pending` en DB**.
+
+Alternatives écartées :
+- **XState v5** — dépendance externe lourde, restructuration complète des 13 handlers, overkill single-server Raspberry Pi, incompatible avec le pattern `registerXxxHandlers` de REWORK-08.
+- **Redux Toolkit FSM** — idem, côté client uniquement, ne résout pas le split-brain serveur.
+- **In-memory Map améliorée** — ne résout pas le split-brain après restart serveur.
+
+Pattern retenu (consensus pro game servers) : *"server authority, serializable state, restore on reconnect"*.
+- FSM = fonctions pures sans I/O → testable en isolation sans DB ni socket
+- État pending = persisté en DB → survive au restart serveur
+- Reconnexion = requête DB → réémet les prompts ciblés
+
+**Interface cible** :
+
+```js
+// server/src/lib/combatFSM.js
+//
+// Les clés de TRANSITIONS sont les noms bruts des events (WS) ou pseudo-events internes (INT).
+// La distinction WS/INT est documentée en commentaire — elle n'est PAS dans la clé,
+// pour éviter les typos à l'appel de canTransition().
+//
+// Events WS (client → serveur via socket.on) :
+//   COMBAT_START, COMBAT_END, COMBAT_ANNOUNCE_START, COMBAT_ACTION_DECLARE,
+//   COMBAT_SURPRISE_RESULT, COMBAT_SKIP_PLAYER, COMBAT_ACTION_CONFIRM,
+//   COMBAT_MELEE_DEFENSE_CONFIRM, COMBAT_DAMAGE_CONFIRM
+//
+// Pseudo-events internes (déclenchés dans les helpers serveur) :
+//   START_RESOLUTION, NEEDS_DEFENSE, NEEDS_DAMAGE, END_TURN
+//
+// COMBAT_INIT_STATE (WS) : hors FSM — mise à jour roster uniquement, pas de changement de phase. Pas de guard.
+// COMBAT_ANNOUNCE_PREVIEW (WS) : relay éphémère combatPreviews — aucune transition. Pas de guard.
+// COMBAT_APPLY_STUN (WS) : action GM administrative sans transition. Pas de guard.
+// COMBAT_SURPRISE_RESULT (WS) : par joueur — pas de changement de phase globale.
+// AWAITING_STUN : non-bloquant — sub_phase reste SLOT_ACTIVE, stun tracké via combat_pending.
+// COMBAT_STUN_CONFIRM : dans SLOT_ACTIVE uniquement — aucun changement de sub_phase (stun non-bloquant).
+//
+// COMBAT_ACTION_CONFIRM : la transition dans TRANSITIONS sert de GUARD UNIQUEMENT.
+//   nextState() n'est pas applicable ici — l'état final (SLOT_ACTIVE ou AWAITING_DEFENSE
+//   ou AWAITING_DAMAGE) est décidé par la logique résolution dans les helpers, puis écrit
+//   directement via setFSMSubPhase(). Ne pas appeler nextState() pour cet event.
+//
+// COMBAT_END : autorisé depuis tous les états RESOLUTION (y compris AWAITING_*)
+//   pour permettre au GM de terminer le combat d'urgence.
+
+const TRANSITIONS = {
+  'null|null': {
+    'COMBAT_START':                { phase: 'ROSTER',       subPhase: null },
+  },
+  'ROSTER|null': {
+    'COMBAT_ANNOUNCE_START':       { phase: 'ANNOUNCEMENT', subPhase: null },
+    'COMBAT_END':                  { phase: null,            subPhase: null }, // GM peut annuler avant annonce
+  },
+  'ANNOUNCEMENT|null': {
+    'COMBAT_ACTION_DECLARE':       { phase: 'ANNOUNCEMENT', subPhase: null }, // reste jusqu'à count(has_announced=false)=0
+    'COMBAT_SURPRISE_RESULT':      { phase: 'ANNOUNCEMENT', subPhase: null }, // par joueur surpris
+    'COMBAT_SKIP_PLAYER':          { phase: 'ANNOUNCEMENT', subPhase: null },
+    'START_RESOLUTION':            { phase: 'RESOLUTION',   subPhase: 'SLOT_ACTIVE' }, // INT — startResolutionPhase()
+    'COMBAT_END':                  { phase: null,            subPhase: null }, // GM peut annuler pendant l'annonce
+  },
+  'RESOLUTION|SLOT_ACTIVE': {
+    'COMBAT_ACTION_CONFIRM':       { phase: 'RESOLUTION',   subPhase: 'SLOT_ACTIVE' }, // guard only — état réel fixé par helpers
+    'COMBAT_SKIP_PLAYER':          { phase: 'RESOLUTION',   subPhase: 'SLOT_ACTIVE' },
+    'NEEDS_DEFENSE':               { phase: 'RESOLUTION',   subPhase: 'AWAITING_DEFENSE' }, // INT — resolveMeleeAction
+    'NEEDS_DAMAGE':                { phase: 'RESOLUTION',   subPhase: 'AWAITING_DAMAGE' },  // INT — resolveAssaultAction
+    'END_TURN':                    { phase: 'ANNOUNCEMENT', subPhase: null },               // INT — endTurn()
+    'COMBAT_END':                  { phase: null,            subPhase: null },
+    'COMBAT_STUN_CONFIRM':         { phase: 'RESOLUTION',   subPhase: 'SLOT_ACTIVE' }, // stun non-bloquant — aucun changement de sub_phase
+  },
+  'RESOLUTION|AWAITING_DEFENSE': {
+    'COMBAT_MELEE_DEFENSE_CONFIRM': { phase: 'RESOLUTION',  subPhase: 'SLOT_ACTIVE' },
+    'COMBAT_END':                   { phase: null,           subPhase: null }, // GM peut forcer fin de combat
+  },
+  'RESOLUTION|AWAITING_DAMAGE': {
+    'COMBAT_DAMAGE_CONFIRM':        { phase: 'RESOLUTION',  subPhase: 'SLOT_ACTIVE' },
+    'COMBAT_END':                   { phase: null,           subPhase: null }, // GM peut forcer fin de combat
+  },
+}
+
+/**
+ * Vérifie si la transition est autorisée depuis (phase, subPhase) pour cet event.
+ * @param {string|null} phase
+ * @param {string|null} subPhase  — toujours normalisé via `?? null` avant appel
+ * @param {string}      event     — nom brut de l'event (ex: 'COMBAT_ACTION_CONFIRM', 'NEEDS_DEFENSE')
+ * @returns {boolean}
+ */
+export function canTransition(phase, subPhase, event) { ... }
+
+/**
+ * Retourne le prochain état après la transition.
+ * NE PAS utiliser pour COMBAT_ACTION_CONFIRM — état final non-déterministe (voir commentaire table).
+ * @returns {{ phase: string|null, subPhase: string|null } | null}
+ */
+export function nextState(phase, subPhase, event) { ... }
+
+---
+
+## REWORK-16 — Combat Pre-validation Gate (ACK Socket.IO) — Session 116 suite
+
+### Problème
+
+`CombatCacModifiersWindow` s'ouvrait côté client sur la seule base de l'état Zustand, sans validation serveur. Le check de portée n'intervenait qu'après confirmation (`COMBAT_ACTION_CONFIRM`). Conséquences :
+1. Fenêtre s'ouvrait même si le combattant était hors portée
+2. Slot avançait quand même malgré l'erreur (`advanceSlot` toujours appelé)
+3. Message d'erreur invisible (gris `#4a4a60`) et parfois non broadcasté (`socket.emit` au lieu de `io.to`)
+
+Preuves lues :
+- `CombatOverlay.jsx` L.162 + L.171 : conditions purement client
+- `socketCombat.js` L.1699 : `socket.emit(COMBAT_DECLARE_ERROR)` → non broadcasté
+- `Sidebar.jsx` L.1570 : `color: '#4a4a60'` illisible
+
+### Décision
+
+Socket.IO ACK natif v4. Avant d'ouvrir la fenêtre, le client émet `COMBAT_ACTION_PRECHECK` avec callback. Le serveur valide (FSM + portée) et répond `{ ok: boolean }`. La fenêtre n'ouvre que sur `ok === true`. Fail-closed (`socket.timeout(5000)`) + anti-stale (flag `cancelled`).
+
+### Interface
+
+```js
+// shared/events.js
+COMBAT_ACTION_PRECHECK: 'combat:action_precheck',
+// client → serveur (ACK) : { tokenId, actionKey: 'melee' } → callback({ ok: boolean })
+
+// server : FSM guard (socket.emit individuel) + range check type='melee' (allonge XOR weapon_inv_id/drone_weapon_inv_id)
+// si hors portée : io.to(campaignId).emit(COMBAT_DECLARE_ERROR) + callback({ ok: false })
+
+// client CombatOverlay.jsx
+const meleePrecheckId = activeMeleeAction?.id ?? playerActiveMeleeAction?.id ?? null
+const [precheckOk, setPrecheckOk] = useState(null)
+useEffect(() => {
+  setPrecheckOk(null)
+  if (!meleePrecheckId || !socket) return
+  let cancelled = false
+  const tokenId = activeMeleeAction?.token_id ?? playerActiveMeleeAction?.token_id
+  socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'melee' }, (err, { ok } = {}) => {
+    if (cancelled) return
+    setPrecheckOk(err ? false : (ok ?? false))
+  })
+  return () => { cancelled = true }
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [meleePrecheckId, socket])
+```
+
+### Périmètre
+
+Fichiers touchés :
+- `shared/events.js` — +1 event
+- `server/src/socket/socketCombat.js` — handler ACK + fix `resolveMeleeAction` L.1699 + 8 logs `[DBG-CAC]` supprimés
+- `client/src/components/CombatOverlay.jsx` — `precheckOk` useState + useEffect + `&& precheckOk === true` ×2
+- `client/src/lib/useCombatSocket.js` — `error: true` dans `onDeclareError`
+- `client/src/components/Sidebar.jsx` — style rouge + swap conditionnel
+
+Fichiers NON touchés : `CombatCacModifiersWindow`, guards `COMBAT_ACTION_CONFIRM`, `combatStore`, `combatFSM`.
+
+### Validation
+
+V1–V10, V12 validés (confirmation Saar Session 116 suite).
+V11 — Non testé (race condition post-ACK — non reproductible en dev).
+
+/**
+ * Écrit sub_phase dans combat_state.
+ * Nommé setFSMSubPhase pour éviter la confusion avec l'action Zustand setCombatSubPhase (client).
+ * Fonction à effets — async, void.
+ */
+export async function setFSMSubPhase(db, campaignId, subPhase) {
+  await db('combat_state')
+    .where({ campaign_id: campaignId })
+    .update({ sub_phase: subPhase, updated_at: db.fn.now() })
+}
+
+/**
+ * Debug uniquement — jamais utilisé comme guard.
+ */
+export function allowedEvents(phase, subPhase) { ... }
+```
+
+```sql
+-- Migration 80 — combat_pending
+CREATE TABLE combat_pending (
+  campaign_id  UUID         NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  token_id     UUID         NOT NULL REFERENCES tokens(id) ON DELETE CASCADE,
+  type         TEXT         NOT NULL CHECK (type IN ('melee_defense', 'damage', 'stun')),
+  payload      JSONB        NOT NULL DEFAULT '{}',
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  PRIMARY KEY  (campaign_id, token_id, type)
+);
+-- PK sur (campaign_id, token_id, type) : un token peut avoir simultanément un stun pending
+-- (non-bloquant, slot avancé) ET une melee_defense pending (slot N+1 le cible en CaC).
+-- ON DELETE CASCADE : nettoyage automatique si token ou campagne supprimés.
+-- Nettoyage fin de combat : DELETE WHERE campaign_id = ? dans handler COMBAT_END (voir A2).
+```
+
+```sql
+-- Migration 81 — colonne sub_phase dans combat_state
+ALTER TABLE combat_state ADD COLUMN sub_phase TEXT DEFAULT NULL
+  CHECK (sub_phase IN ('SLOT_ACTIVE','AWAITING_DEFENSE','AWAITING_DAMAGE'));
+-- AWAITING_STUN retiré : stun non-bloquant, sub_phase reste SLOT_ACTIVE.
+-- sub_phase = NULL uniquement pour ROSTER et ANNOUNCEMENT.
+-- startResolutionPhase() doit toujours écrire sub_phase='SLOT_ACTIVE' à l'entrée de RESOLUTION.
+```
+
+**Périmètre** :
+
+Fichiers touchés :
+- `server/src/lib/combatFSM.js` — **créé** (Palier 04-A)
+- `server/src/socket/socketCombat.js` — guard `canTransition()` injecté en tête de chaque handler (Palier 04-A). Logique résolution intouchée.
+- `server/src/socket/index.js` — `pendingMeleeDefense` / `pendingDamageActions` / `pendingStunActions` remplacés par appels DB (Palier 04-B)
+- `server/src/socket/socketCombat.js` — remplace Map lookups par `SELECT FROM combat_pending` (Palier 04-B) + `COMBAT_STUN_CONFIRM` handler (B5)
+- `server/src/lib/statusService.js` — `applyStun` : retrait param `pendingStunActions`, insert `combat_pending` (Palier 04-B étape B5)
+- `server/src/socket/index.js` (SESSION_JOIN) — restauration `combat_pending` + réémettre prompts (Palier 04-C)
+- `client/src/stores/combatStore.js` — ajout `subPhase: null` + `setSubPhase` (Palier 04-C)
+- `client/src/lib/useCombatSocket.js` — propagation `subPhase` depuis `COMBAT_STATE_SYNC` (Palier 04-C)
+- `docs/ASBUILT.md` — migration 80 + 81, nouveau module
+- `docs/EN_COURS.md` — mise à jour prochaine étape
+
+Fichiers NON touchés :
+- `shared/events.js` — aucun nouvel event (`COMBAT_STATE_SYNC` reçoit `subPhase` dans son payload existant)
+- Toute la logique résolution dans `socketCombat.js` (assault, melee, reload, drones) — intouchée
+- `useCombatSocket.js` — modifications mineures seulement (propagation `subPhase`)
+- `socketToken.js` / `socketVoxel.js` / `socketDice.js` / `socketEntity.js` — non touchés
+
+Hors périmètre :
+- Rollback de tour (`previousTurn` / `previousRound`) — les règles Polaris ne prévoient pas de retour arrière en combat. Pas de tracking `previous` state (contrairement à Foundry VTT). Toute régression de phase passe par le GM via `COMBAT_END` + relance.
+
+**Plan** :
+
+> **Ordre impératif** : A1 → B1 → B2 → A2 → B3 → B4 → B5 → B6 → C1 → C2 → C3 → C4.
+> A2 (injection guards) dépend de B2 (migration `sub_phase`) : sans la colonne en DB, `combat?.sub_phase` retourne `undefined` → clé `'RESOLUTION|undefined'` absente des TRANSITIONS → guard bloque tous les handlers RESOLUTION silencieusement.
+
+#### Palier 04-A — `combatFSM.js` (fonctions pures, zéro I/O)
+
+**Étape A1** — Créer `server/src/lib/combatFSM.js`
+- Table `TRANSITIONS` exactement telle que définie dans Interface cible (clés = noms bruts d'events)
+- `canTransition(phase, subPhase, event)` — clé `${phase}|${subPhase ?? null}`, lookup dans TRANSITIONS
+- `nextState(phase, subPhase, event)` → `{ phase, subPhase } | null`
+- `setFSMSubPhase(db, campaignId, subPhase)` — async, écrit `sub_phase` en DB (nom distinct de l'action Zustand)
+- `allowedEvents(phase, subPhase)` → `string[]` (debug uniquement — jamais utilisé comme guard)
+- Run à vide : `node --check server/src/lib/combatFSM.js`
+
+#### Palier 04-B — Migrations + guards + remplacement Maps
+
+**Étape B1** — Migration 80 : table `combat_pending`
+- Fichier `server/src/db/migrations/80_combat_pending.js` (chemin vérifié — pattern migration 79)
+- Run à vide : `node -e "require('./server/src/db').migrate.latest()"` (ou équivalent projet)
+
+**Étape B2** — Migration 81 : colonne `sub_phase` dans `combat_state`
+- Fichier `server/src/db/migrations/81_combat_state_subphase.js`
+- Run à vide : vérifier colonne présente en DB
+
+**Étape A2** — Injecter `canTransition()` dans `socketCombat.js` (dépend de B2)
+- Import `{ canTransition, setFSMSubPhase }` depuis `../lib/combatFSM.js`
+- Pour chaque handler WS : lire `combat_state` (retourne `sub_phase` grâce à B2), puis :
+  ```js
+  const { phase, sub_phase: subPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
+  if (!canTransition(phase ?? null, subPhase ?? null, 'NOM_EVENT_BRUT')) {
+    console.warn(`[FSM] guard bloqué : ${phase}|${subPhase} + NOM_EVENT_BRUT`)
+    return
+  }
+  ```
+  Remplacer `NOM_EVENT_BRUT` par le nom exact de la clé TRANSITIONS (ex: `'COMBAT_ACTION_CONFIRM'`).
+- Handler `COMBAT_END` : ajouter après la logique existante :
+  ```js
+  await db('combat_pending').where({ campaign_id: campaignId }).delete()
+  await setFSMSubPhase(db, campaignId, null)
+  ```
+- Les helpers internes (`startResolutionPhase`, `advanceSlot`, `endTurn`) n'utilisent PAS `canTransition` — ils appellent directement `setFSMSubPhase()` après leur logique
+- `startResolutionPhase` : ajouter `await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')` à l'entrée de RESOLUTION
+- `endTurn` : ajouter `await setFSMSubPhase(db, campaignId, null)` avant d'émettre la transition vers ANNOUNCEMENT
+- Run à vide : SR + scénario lancement combat (ROSTER → ANNOUNCEMENT → RESOLUTION)
+
+**Étape B3** — Remplacer `pendingMeleeDefense` Map dans `socketCombat.js`
+- `pendingMeleeDefense.set(tokenId, payload)` →
+  ```js
+  await db('combat_pending').insert({ campaign_id: campaignId, token_id: tokenId, type: 'melee_defense', payload })
+  await setFSMSubPhase(db, campaignId, 'AWAITING_DEFENSE')
+  ```
+- `pendingMeleeDefense.get(tokenId)` →
+  ```js
+  const row = await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'melee_defense' }).first()
+  // row?.payload
+  ```
+- `pendingMeleeDefense.delete(tokenId)` →
+  ```js
+  await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'melee_defense' }).delete()
+  await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
+  ```
+- Run à vide : SR + scénario CaC PJ → défense requise → confirmation défenseur
+
+> **Race condition B3/B4 — non-exploitable.** Entre `DELETE combat_pending` (await 1) et `setFSMSubPhase(SLOT_ACTIVE)` (await 2), un 2e handler concurrent lirait encore `sub_phase='AWAITING_DEFENSE'` en DB. Mais `canTransition('RESOLUTION','AWAITING_DEFENSE', X)` n'autorise que `COMBAT_MELEE_DEFENSE_CONFIRM` — qui ne peut pas arriver une 2e fois pour le même token (payload unique). Guard bloque toute autre transition. Race non-exploitable.
+
+**Étape B4** — Remplacer `pendingDamageActions` Map (même pattern, `type='damage'`, `AWAITING_DAMAGE`)
+- Delete : `WHERE type='damage'`, puis `setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')`
+- Run à vide : SR + scénario assaut distance → résolution dégâts
+
+**Étape B5** — Remplacer `pendingStunActions` Map (`type='stun'`)
+- **Différence** : stun non-bloquant → `setFSMSubPhase` NON appelé au insert (sub_phase reste `SLOT_ACTIVE`)
+- `setFSMSubPhase` NON appelé au delete non plus (slot déjà avancé, sub_phase inchangé)
+- Delete : `WHERE type='stun'` uniquement (ne touche pas les éventuelles lignes melee_defense/damage)
+
+**Périmètre B5 — deux fichiers touchés :**
+
+`server/src/lib/statusService.js` — `applyStun` :
+- Retirer `pendingStunActions` de la signature (4e paramètre)
+- Remplacer les 2 appels `pendingStunActions.set(targetTokenId, { ... })` (L.107 et L.127) par :
+  ```js
+  await db('combat_pending').insert({
+    campaign_id: campaignId,
+    token_id:    targetTokenId,
+    type:        'stun',
+    payload:     { outcome, targetUserId: ..., userId, username, color, currentTurn, isGmPrompt: ... },
+  })
+  ```
+
+`server/src/socket/socketCombat.js` :
+- `COMBAT_STUN_CONFIRM` handler (L.1289–1315) :
+  - `pendingStunActions.get(tokenId)` → `await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' }).first()` — lire `row.payload` pour `isGmPrompt`, `targetUserId`, `outcome`, `userId`, `username`, `color`, `currentTurn`
+  - `pendingStunActions.delete(tokenId)` → `await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' }).delete()`
+- 5 call sites `applyStun` (L.1017, 1247, 1995, 2422, 2732) : supprimer l'argument `pendingMaps.pendingStunActions`
+
+- Run à vide : SR + scénario étourdissement → D6 prompt
+
+**Étape B6** — Nettoyer `index.js`
+- Supprimer `pendingMeleeDefense`, `pendingDamageActions`, `pendingStunActions` de `pendingMaps`
+- `pendingMaps` conserve uniquement `{ combatTimers, combatPreviews }`
+- Mettre à jour la signature passée à `registerCombatHandlers`
+- Run à vide : SR
+
+**Validation palier 04-B :**
+- [ ] SR sans erreur
+- [ ] Scénarios CaC 1–17 non régressés
+- [ ] Guard bloque `COMBAT_ACTION_CONFIRM` en phase `ROSTER` → log warn, aucun crash, aucun effet
+- [ ] Restart serveur pendant `AWAITING_DEFENSE` → ligne `combat_pending` toujours en DB
+- [ ] Fin de slot → `combat_pending` vidé + `sub_phase = 'SLOT_ACTIVE'`
+- [ ] Stun : `sub_phase` reste `SLOT_ACTIVE` pendant D6 pending
+
+#### Palier 04-C — Fix `COMBAT_STATE_SYNC` reconnexion RESOLUTION
+
+**Étape C1** — `combatStore.js` : ajouter `subPhase: null` + action `setCombatSubPhase`
+- Nommée `setCombatSubPhase` (pas `setSubPhase`) — évite la confusion avec `setFSMSubPhase` du module serveur
+- Run à vide : `npm run build` client
+
+**Étape C2** — `useCombatSocket.js` : lire `subPhase` dans `COMBAT_STATE_SYNC` payload
+- `COMBAT_STATE_SYNC` payload = `{ combatState, roster, actions }` — `combatState` est la row DB entière (snake_case)
+- Ajouter `subPhase: combatState.sub_phase ?? null` dans le `setCombatState({ ... })` existant (L.79–86)
+- Run à vide : `npm run build` client
+
+**Étape C3** — `SESSION_JOIN` dans `index.js` : restauration pending
+```js
+// Après chargement combat_state (phase + sub_phase disponibles depuis migration 81) :
+if (phase === 'RESOLUTION') {
+  // Trouver le token du joueur qui reconnecte dans cette campagne
+  const userToken = await db('tokens')
+    .join('characters', 'tokens.character_id', 'characters.id')
+    .where({ 'tokens.campaign_id': campaignId, 'characters.user_id': user.id })
+    .select('tokens.id as token_id')
+    .first()
+  const userTokenId = userToken?.token_id
+
+  // Lookup 1 — melee_defense (PJ défenseur), damage CaC/assaut PJ (attaquant), stun PJ
+  // pending.payload ≠ prompt client — reconstruction type par type obligatoire
+  if (userTokenId) {
+    const rows = await db('combat_pending')
+      .where({ campaign_id: campaignId, token_id: userTokenId })
+    for (const row of rows) {
+      const p = row.payload
+      if (row.type === 'melee_defense') {
+        // Prompt shape : socketCombat.js L.2049 — commonPending lu en L.1842
+        socket.emit(WS.COMBAT_MELEE_DEFENSE_PROMPT, {
+          attackerName:        p.attackerUsername,
+          attackerTokenId:     p.attackerTokenId,
+          defenderTokenId:     row.token_id,
+          rollAttaque:         p.rollAttaque,
+          chancesAttaque:      p.chancesAttaque,
+          chanceDefenseBase:   p.defenderSkillTotal + p.defenderEffectiveMalus + p.multiMalusDefenseur,
+          multiMalusDefenseur: p.multiMalusDefenseur,
+        })
+      } else if (row.type === 'damage') {
+        // CaC (L.1210) et assaut PJ standard (L.2670) : prompt → attaquant, formula+targetName dans payload
+        socket.emit(WS.COMBAT_DAMAGE_PROMPT, {
+          tokenId:    row.token_id,
+          formula:    p.formula,
+          targetName: p.targetName,
+        })
+      } else if (row.type === 'stun') {
+        // Prompt shape : statusService.js L.114
+        socket.emit(WS.COMBAT_STUN_PROMPT, {
+          tokenId: row.token_id,
+          outcome: p.outcome,
+        })
+      }
+    }
+  }
+
+  // Lookup 2 — [R4-2] drone assault : key=token drone (attaquant), prompt→cible PJ
+  // resolveDroneAssaultAction (L.2437) : seul site qui émet COMBAT_DAMAGE_PROMPT à cibleSocket
+  // et seul site qui stocke targetUserId dans le payload (L.2451).
+  // Assaut PJ standard (L.2652) : pas de targetUserId dans payload, prompt → attaquant (Lookup 1).
+  const pendingDmgDrone = await db('combat_pending')
+    .where({ campaign_id: campaignId, type: 'damage' })
+    .whereRaw("payload->>'targetUserId' = ?", [user.id])
+    .first()
+  if (pendingDmgDrone) {
+    socket.emit(WS.COMBAT_DAMAGE_PROMPT, {
+      tokenId:    pendingDmgDrone.token_id,
+      formula:    pendingDmgDrone.payload.formula,
+      targetName: pendingDmgDrone.payload.targetName,
+    })
+  }
+}
+```
+- Note : si le joueur n'a pas de token dans cette campagne (GM pur sans PJ), `userToken` est null → Lookup 1 skipé, Lookup 2 seul s'exécute. `melee_defense` ne cible que des PJ défenseurs (PNJ/drone = auto-résolution `socketCombat.js` L.1874 + L.2011) → lookup correct pour ce type.
+- **[R4-2] résolu — drone assault uniquement : key=token drone, prompt→cible PJ.** `resolveDroneAssaultAction` (L.2437) est le seul site qui émet `COMBAT_DAMAGE_PROMPT` à `cibleSocket` (pas à l'attaquant). C'est aussi le seul qui stocke `targetUserId: cibleCharacter.user_id` dans le payload (L.2451). `COMBAT_DAMAGE_CONFIRM` (L.924) reçoit `{ tokenId }` = token drone → Lookup 1 ne trouve rien pour la cible. Lookup 2 : `WHERE type='damage' AND payload->>'targetUserId' = user.id` → reconstruit prompt `{ tokenId: token_drone, formula, targetName }`.
+- **[R4-3] mineur — `type=stun` + `shock_auto_stun=false` : GM ne retrouve pas le prompt.** `pendingStunActions.set(targetTokenId, { isGmPrompt: true })` avec `targetTokenId = PNJ token` (user_id=NULL, `statusService.js` L.127–134). GM reconnecte → `userToken = null` → prompt non réémi. Non-bloquant : stun non-bloquant, sub_phase reste SLOT_ACTIVE, combat continue. Acceptable pour un paramètre non-défaut (`shock_auto_stun` = true par défaut).
+- Run à vide : SR
+
+**Étape C4** — `COMBAT_STATE_SYNC` : vérification sites d'émission (grep fait — Session 110)
+- **Grep résultat : 1 seul site** — `server/src/socket/index.js` L.109 : `socket.emit(WS.COMBAT_STATE_SYNC, { combatState: activeCombat, roster, actions })`
+- **C4 serveur = no-op** : `activeCombat = await db('combat_state').where({ campaign_id }).first()` retourne la row DB entière. Après migration B2, `sub_phase` est automatiquement dans `combatState.sub_phase`. Aucun ajout serveur nécessaire.
+- Seule modification : C2 lit `combatState.sub_phase ?? null` côté client (déjà documenté en C2).
+- Run à vide : SR + reconnexion en slot bloqué → vérifier `combatStore.subPhase` peuplé côté client
+
+**Validation palier 04-C :**
+- [ ] SR sans erreur
+- [ ] Reconnexion hors combat → aucun prompt émis
+- [ ] Reconnexion en `ANNOUNCEMENT` → `COMBAT_STATE_SYNC` avec `subPhase: null` reçu côté client
+- [ ] Reconnexion en `AWAITING_DEFENSE` → prompt `COMBAT_MELEE_DEFENSE_PROMPT` réémet au socket du joueur (pas broadcast)
+- [ ] Reconnexion en `AWAITING_DAMAGE` → prompt `COMBAT_DAMAGE_PROMPT` réémet au socket du joueur
+- [ ] Reconnexion en `SLOT_ACTIVE` avec stun pending → prompt `COMBAT_STUN_PROMPT` réémet
+- [ ] GM sans token dans la campagne → aucun prompt émis (`userToken` null)
+- [ ] Scénarios 1–17 non régressés
+
+**Validation globale REWORK-04** :
+
+| # | Scénario | Résultat attendu |
+|---|---|---|
+| V1 | `COMBAT_START` → ROSTER | `phase='ROSTER'`, `sub_phase=null` en DB |
+| V2 | `COMBAT_ANNOUNCE_START` → ANNOUNCEMENT | `phase='ANNOUNCEMENT'`, `sub_phase=null` |
+| V3 | Tous déclarent → `startResolutionPhase` | `phase='RESOLUTION'`, `sub_phase='SLOT_ACTIVE'` |
+| V4 | CaC PJ→PNJ, `needsDefenseWait=true` | `sub_phase='AWAITING_DEFENSE'`, INSERT `combat_pending type=melee_defense` |
+| V5 | PNJ confirme défense | `sub_phase='SLOT_ACTIVE'`, DELETE `combat_pending`, advanceSlot |
+| V6 | Assaut distance → dégâts requis | `sub_phase='AWAITING_DAMAGE'`, INSERT `combat_pending type=damage` |
+| V7 | Confirmation dégâts | `sub_phase='SLOT_ACTIVE'`, DELETE `combat_pending`, advanceSlot |
+| V8 | Étourdissement → D6 prompt | `sub_phase='SLOT_ACTIVE'` (inchangé), INSERT `combat_pending type=stun` |
+| V9 | Restart serveur pendant V4 | `combat_pending` toujours en DB après restart |
+| V10 | Joueur reconnecte pendant V4 | `COMBAT_MELEE_DEFENSE_PROMPT` réémet au socket uniquement |
+| V11 | Event invalide en ROSTER | guard bloque, log `[FSM] guard bloqué`, aucun crash |
+| V12 | `endTurn()` → ANNOUNCEMENT | `setSubPhase(db, id, null)` + `phase='ANNOUNCEMENT'`, timers redémarrés |
+
+**Definition of done** :
+
+- [ ] `server/src/lib/combatFSM.js` créé — `node --check` OK — `canTransition` + `nextState` + `setFSMSubPhase` + `allowedEvents`
+- [ ] Table TRANSITIONS : clés = noms bruts d'events, COMBAT_END présent dans AWAITING_DEFENSE + AWAITING_DAMAGE
+- [ ] Migration 80 (`combat_pending`) appliquée — PK `(campaign_id, token_id, type)`
+- [ ] Migration 81 (`sub_phase` dans `combat_state`) appliquée — **avant** l'étape A2
+- [ ] Guard `canTransition('NOM_BRUT')` injecté dans **10 des 13 handlers** WS de `socketCombat.js` :
+  - Avec guard (10) : `COMBAT_START` (L.78), `COMBAT_END` (L.207), `COMBAT_ANNOUNCE_START` (L.258), `COMBAT_SURPRISE_RESULT` (L.331), `COMBAT_ACTION_DECLARE` (L.413), `COMBAT_SKIP_PLAYER` (L.787), `COMBAT_ACTION_CONFIRM` (L.823), `COMBAT_DAMAGE_CONFIRM` (L.924), `COMBAT_MELEE_DEFENSE_CONFIRM` (L.1082), `COMBAT_STUN_CONFIRM` (L.1289)
+  - Sans guard (3) : `COMBAT_INIT_STATE` (L.293, hors FSM — roster uniquement), `COMBAT_ANNOUNCE_PREVIEW` (L.805, relay éphémère sans transition), `COMBAT_APPLY_STUN` (L.1318, action GM administrative)
+- [ ] `COMBAT_END` handler : `DELETE FROM combat_pending WHERE campaign_id` + `setFSMSubPhase(null)` ajoutés
+- [ ] `statusService.applyStun` : param `pendingStunActions` retiré — 2 appels `.set()` remplacés par `db('combat_pending').insert()` — 5 call sites `socketCombat.js` mis à jour (L.1017, 1247, 1995, 2422, 2732)
+- [ ] `COMBAT_STUN_CONFIRM` handler (L.1289–1315) : `pendingStunActions.get/delete` → DB lookup/delete depuis `combat_pending`
+- [ ] `setFSMSubPhase()` appelé dans `startResolutionPhase` (→ SLOT_ACTIVE), `endTurn` (→ null), B3, B4 (pas B5)
+- [ ] `pendingMeleeDefense` / `pendingDamageActions` / `pendingStunActions` Maps supprimées de `index.js`
+- [ ] `pendingMaps` réduit à `{ combatTimers, combatPreviews }` dans `index.js`
+- [ ] `combatStore.js` : `subPhase: null` + action `setCombatSubPhase` ajoutés
+- [ ] `COMBAT_STATE_SYNC` transporte `subPhase` dans tous ses sites d'émission (grep vérifié avant C4)
+- [ ] `useCombatSocket.js` : `subPhase` propagé dans `setCombatState`
+- [ ] `SESSION_JOIN` : requête `userToken` (join characters) + lookup `combat_pending` + `socket.emit` ciblé
+- [ ] Scénarios V1–V12 validés
+- [ ] [R8-3] (fuite Maps combat disconnect) clos — `ON DELETE CASCADE` + cleanup `COMBAT_END`
+- [ ] `docs/ASBUILT.md` mis à jour (migrations 80+81, `combatFSM.js`)
+- [ ] `docs/EN_COURS.md` mis à jour
+- [ ] `docs/JOURNAL5.md` appended
+- [ ] Palier 04-C déployé atomiquement — C1+C2+C3+C4 en même déploiement. Entre A2 et C4, `sub_phase` existe en DB mais pas dans le payload `COMBAT_STATE_SYNC` : `combatStore.subPhase` reste null côté client. Déploiement partiel 04-C = désynchro client garantie.

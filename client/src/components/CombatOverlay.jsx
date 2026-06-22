@@ -57,6 +57,23 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
     ? actions.find(a => a.token_id === playerToken?.id && a.action_key === 'melee')
     : null
 
+  // Pre-validation CaC — REWORK-16
+  const meleePrecheckId = activeMeleeAction?.id ?? playerActiveMeleeAction?.id ?? null
+  const [precheckOk, setPrecheckOk] = useState(null) // null=en attente | true=ok | false=rejeté
+
+  useEffect(() => {
+    setPrecheckOk(null)
+    if (!meleePrecheckId || !socket) return
+    let cancelled = false
+    const tokenId = activeMeleeAction?.token_id ?? playerActiveMeleeAction?.token_id
+    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'melee' }, (err, { ok } = {}) => {
+      if (cancelled) return
+      setPrecheckOk(err ? false : (ok ?? false))
+    })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meleePrecheckId, socket])
+
   return (
     <div style={{ ...styles.overlay, '--sidebar-w': sidebarWidth + 'px' }}>
 
@@ -159,7 +176,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       )}
 
       {/* Phase RÉSOLUTION — CaC humanoïde PNJ ou drone (GM) */}
-      {isGm && phase === 'RESOLUTION' && activeMeleeAction && gmActiveCharacter?.type !== 'pj' && (
+      {isGm && phase === 'RESOLUTION' && activeMeleeAction && gmActiveCharacter?.type !== 'pj' && precheckOk === true && (
         <CombatCacModifiersWindow
           socket={socket}
           activeRosterEntry={gmActiveEntry}
@@ -168,7 +185,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       )}
 
       {/* Phase RÉSOLUTION — CaC PJ (joueur) */}
-      {!isGm && phase === 'RESOLUTION' && playerActiveMeleeAction && (
+      {!isGm && phase === 'RESOLUTION' && playerActiveMeleeAction && precheckOk === true && (
         <CombatCacModifiersWindow
           socket={socket}
           activeRosterEntry={playerRosterEntry}

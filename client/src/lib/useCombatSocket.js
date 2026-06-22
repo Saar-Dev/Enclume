@@ -115,6 +115,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       addMessage({
         id: `combat-error-${Date.now()}`,
         system: true,
+        error: true,
         text: `⚠ ${message}`,
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })

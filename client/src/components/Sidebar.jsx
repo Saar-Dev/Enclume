@@ -960,7 +960,7 @@ export default function Sidebar({
                 if (msg.system) {
                   return (
                     <div key={msg.id} style={styles.messageSystem}>
-                      <span style={styles.msgSystemText}>{msg.text}</span>
+                      <span style={msg.error ? styles.msgSystemErrorText : styles.msgSystemText}>{msg.text}</span>
                       <span style={styles.msgTime}>{msg.time}</span>
                     </div>
                   )
@@ -1571,6 +1571,12 @@ const styles = {
     fontSize: '11px',
     color: '#4a4a60',
     fontStyle: 'italic',
+  },
+  msgSystemErrorText: {
+    fontSize: '11px',
+    color: '#e05252',
+    fontStyle: 'italic',
+    fontWeight: 600,
   },
   msgUser: {
     fontSize: '12px',

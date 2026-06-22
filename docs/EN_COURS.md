@@ -68,7 +68,18 @@
    → `client/src/lib/useCombatUIState.js` créé — 4 `useState` + 6 `useCallback`, hook UI pur (zéro socket, zéro store)
    → `SessionContent` : 4 `useState` + `handleModeReset` + 5 handlers supprimés (~60 lignes) ; ordre `useEntitySocket` → `useCombatUIState` → `useCombatSocket` (P-R14-1)
    → V1–V13 validés (confirmation Saar)
-   → Prochaine étape : sprint bugs actifs (RANGE1-drone, LOS1-drone) — voir dettes actives
+
+**18. ~~REWORK-16 — Combat Pre-validation Gate (ACK Socket.IO)~~** ✅ CLOS COMPLET Session 116 suite
+   → `COMBAT_ACTION_PRECHECK` ACK — gate avant `CombatCacModifiersWindow` — range check serveur avant ouverture
+   → Fix `resolveMeleeAction` L.1699 `socket.emit` → `io.to(campaignId).emit` (broadcast)
+   → 8 logs `[DBG-CAC]` supprimés — message rouge `#e05252` dans chat
+   → V1–V10, V12 validés — V11 noté Non testé (race condition LAN)
+
+**19. REWORK-17 — socketCombat.js Modularisation** ← PROCHAINE ÉTAPE
+   → Spec complète dans `docs/ARCHI_REWORK.md §REWORK-17`
+   → Problème : monolithe 2969L — handlers, helpers, resolve functions dans une closure unique
+   → Plan : créer 4 fichiers (`socketCombatState`, `socketCombatAnnouncement`, `socketCombatResolution`, `socketCombatHelpers`) + orchestrateur `socketCombat.js` ~35L
+   → Lire `docs/ARCHI_REWORK.md §REWORK-17` avant de coder
 
 ---
 
@@ -110,8 +121,8 @@
 | COM8 | Fenêtre annonce visible pendant sélection cible | Moyenne |
 | ~~COM12~~ | ~~Mode de tir : chips CC/RC/RF sans filtre disponibilité arme~~ | ✅ REWORK-06 Session 114 |
 | ~~COM13~~ | ~~Assaut tir joueur : "Tir simple" par défaut non validé sans re-clic~~ | ✅ REWORK-06 Session 114 |
-| RANGE1-drone | Drone CaC : pas de range check → `COMBAT_DECLARE_ERROR` jamais émis → fenêtre bloquée | Haute — sprint actif |
-| LOS1-drone | Drone ranged LOS bloquée → `return` silencieux → pas de `COMBAT_DECLARE_ERROR` | Haute — même sprint |
+| RANGE1-drone | Drone CaC : fenêtre s'ouvre hors portée → REWORK-16 (spec prête, à coder) | Haute — REWORK-16 |
+| LOS1-drone | Drone ranged LOS bloquée → `return` silencieux → pas de `COMBAT_DECLARE_ERROR` | Haute — après REWORK-16 |
 | COM2 | Vérif statut arme absente côté GM | Moyenne |
 | ~~COM4~~ | ~~CaC exige arme au clair (mains nues impossible)~~ | ✅ REWORK-06 Session 114 |
 | COM5 | ~~Mode combat sélectionne aussi la cible (GM)~~ | ✅ REWORK-05 Session 99 |

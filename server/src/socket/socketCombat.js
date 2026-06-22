@@ -849,6 +849,64 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
     }
   })
 
+  // ─── COMBAT_ACTION_PRECHECK — Pre-validation gate (ACK Socket.IO v4) ─────
+  // Émis par le client AVANT d'ouvrir CombatCacModifiersWindow.
+  // Valide : FSM state + portée CaC. Répond { ok: boolean } via ACK natif.
+  // Si !ok : broadcaste COMBAT_DECLARE_ERROR avant callback.
+  socket.on(WS.COMBAT_ACTION_PRECHECK, async ({ tokenId, actionKey }, callback) => {
+    try {
+      // 1. FSM guard — socket.emit (pas io.to) : erreur de contexte individuel, pas un état partagé.
+      // Si un joueur reconnecté envoie PRECHECK hors RESOLUTION, le reste de la room ne doit pas recevoir l'erreur.
+      const state = await db('combat_state').where({ campaign_id: campaignId }).first()
+      if (!canTransition(state?.phase ?? null, state?.sub_phase ?? null, 'COMBAT_ACTION_CONFIRM')) {
+        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Action non autorisée dans cet état de combat' })
+        return callback({ ok: false })
+      }
+      // 2. Range check CaC — colonne 'type' (cohérent L.907 serveur)
+      if (actionKey === 'melee') {
+        const action = await db('combat_actions')
+          .where({ campaign_id: campaignId, token_id: tokenId, type: 'melee', status: 'pending' })
+          .first()
+        if (action?.target_token_id) {
+          // allonge XOR : weapon_inv_id (humanoïde) ou drone_weapon_inv_id (drone) — contrainte migration 76
+          let allonge = 0
+          if (action.weapon_inv_id) {
+            const w = await db('char_inventory')
+              .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+              .where({ 'char_inventory.id': action.weapon_inv_id })
+              .select('ref_equipment.range as ref_range')
+              .first()
+            allonge = parseInt(w?.ref_range) || 0
+          } else if (action.drone_weapon_inv_id) {
+            const w = await db('drone_weapons')
+              .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
+              .where({ 'drone_weapons.id': action.drone_weapon_inv_id })
+              .select('ref_equipment.range as ref_range')
+              .first()
+            allonge = parseInt(w?.ref_range) || 0
+          }
+          const [myPos, targetPos] = await Promise.all([
+            db('tokens').where({ id: tokenId }).select('pos_x', 'pos_y').first(),
+            db('tokens').where({ id: action.target_token_id }).select('pos_x', 'pos_y').first(),
+          ])
+          const dx = (myPos?.pos_x ?? 0) - (targetPos?.pos_x ?? 0)
+          const dz = (myPos?.pos_y ?? 0) - (targetPos?.pos_y ?? 0)
+          const dist = Math.sqrt(dx * dx + dz * dz)
+          if (dist > 3 + allonge) {
+            io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
+              message: `Corps à corps impossible — distance : ${dist.toFixed(1)}m, portée max : ${3 + allonge}m`,
+            })
+            return callback({ ok: false })
+          }
+        }
+      }
+      callback({ ok: true })
+    } catch (err) {
+      console.error('[WS] COMBAT_ACTION_PRECHECK erreur:', err)
+      callback({ ok: false })
+    }
+  })
+
   // ─── COMBAT_ACTION_CONFIRM — Phase Résolution ─────────────────────────
   // Joueur (ou GM pour PNJ) confirme l'exécution du slot actif.
   // Résout les actions dans l'ordre sequence ASC, avance au slot suivant.
@@ -863,7 +921,6 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
       }
       // Guard : phase = RESOLUTION
       if (!state || state.phase !== 'RESOLUTION') {
-        console.log(`[DBG-CAC] return@phase — state.phase:${state?.phase ?? null} sub_phase:${state?.sub_phase ?? null}`)
         return
       }
 
@@ -875,23 +932,19 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
 
       const activeSlot = slots[state.active_slot_idx]
       if (!activeSlot || activeSlot.token_id !== tokenId) {
-        console.log(`[DBG-CAC] return@slot — active_slot_idx:${state.active_slot_idx} slots:${JSON.stringify(slots.map(s=>s.token_id))} tokenId:${tokenId}`)
         return
       }
 
       // Guard ownership — GM peut confirmer n'importe quel slot, joueur uniquement le sien
       const token = await db('tokens').where({ id: tokenId }).first()
       if (!token) {
-        console.log(`[DBG-CAC] return@token — token null pour tokenId:${tokenId}`)
         return
       }
       if (!token.character_id) {
-        console.log(`[DBG-CAC] return@char_id — token.character_id null pour tokenId:${tokenId}`)
         return
       }
       const character = await db('characters').where({ id: token.character_id }).first()
       if (!character) {
-        console.log(`[DBG-CAC] return@character — character null pour character_id:${token.character_id}`)
         return
       }
       if (!isGm) {
@@ -1696,7 +1749,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
     const dist2dChk = Math.sqrt(dxChk * dxChk + dzChk * dzChk)
     if (dist2dChk > 3 + allonge) {
       console.warn(`[WS] resolveMeleeAction — hors portée: ${dist2dChk.toFixed(1)}m max:${3 + allonge}m token:${action.token_id}`)
-      socket.emit(WS.COMBAT_DECLARE_ERROR, {
+      io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
         message: `Corps à corps impossible — distance : ${dist2dChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
       })
       return false
@@ -2321,7 +2374,6 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
 
     // 2. Programme armement — miroir humanoïde : !ref_fire_mode → contact, sinon distance
     const isCaCWeapon = weapon.explicit_fire_mode ? weapon.explicit_fire_mode === 'cc' : !weapon.ref_fire_mode
-    console.log(`[DBG-CAC] resolveDroneAssaultAction — isCaCWeapon:${isCaCWeapon} explicit_fire_mode:${weapon.explicit_fire_mode} ref_fire_mode:${weapon.ref_fire_mode} ref_range:${weapon.ref_range}`)
 
     // ── Range check CaC drone (miroir resolveMeleeAction L.1674-1688) ──────────
     if (isCaCWeapon) {
@@ -2334,7 +2386,6 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
       const dzChk = (myTokenPos?.pos_y ?? 0) - (targetTokenPos?.pos_y ?? 0)
       const dist2dChk = Math.sqrt(dxChk * dxChk + dzChk * dzChk)
       if (dist2dChk > 3 + allonge) {
-        console.log(`[DBG-CAC] range check REJETÉ — dist:${dist2dChk.toFixed(2)}m max:${3 + allonge}m → COMBAT_DECLARE_ERROR broadcast`)
         io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
           message: `Corps à corps impossible — distance : ${dist2dChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
         })
@@ -2346,7 +2397,7 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
     if (!isCaCWeapon && !options.skipLos) {
       const los = await checkCombatLOS(io, db, campaignId, action, character)
       if (los.result === 'blocked') {
-        console.log(`[DBG-CAC] LOS bloquée — return silencieux`)
+        io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, { message: 'Tir impossible — ligne de vue bloquée' })
         return
       }
       if (los.result === 'intercepted') {
