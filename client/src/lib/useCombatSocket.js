@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSocket } from './SocketContext'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useSessionStore } from '../stores/sessionStore'
@@ -25,48 +26,38 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
   const [announcementMarker,  setAnnouncementMarker]   = useState(null)
   const [pjPreview,           setPjPreview]            = useState(null)
 
-  function listen(s) {
-    s.on(WS.COMBAT_RELOAD_RESULT, (data) => {
-      setReloadResult(data)
-    })
-    s.on(WS.COMBAT_MELEE_DEFENSE_PROMPT, (data) => {
-      setMeleeDefensePrompt(data)
-    })
-    s.on(WS.COMBAT_MELEE_RESULT, (data) => {
-      setMeleeResult(data)
-    })
-    s.on(WS.COMBAT_DAMAGE_PROMPT, (data) => {
-      setDamagePayload(data)
-    })
-    s.on(WS.COMBAT_DAMAGE_RESULT, (data) => {
-      setDamageResults(data)
-    })
-    s.on(WS.COMBAT_STUN_PROMPT, (data) => {
-      setStunPayload(data)
-    })
-    s.on(WS.COMBAT_ATTACK_PLAYER_RESULT, (data) => {
-      setAttackResult(data)
-    })
-    s.on(WS.COMBAT_ATTACK_RESULT, (data) => {
+  const socket = useSocket()
+
+  useEffect(() => {
+    if (!socket) return
+
+    const onReloadResult        = (data) => { setReloadResult(data) }
+    const onMeleeDefensePrompt  = (data) => { setMeleeDefensePrompt(data) }
+    const onMeleeResult         = (data) => { setMeleeResult(data) }
+    const onDamagePrompt        = (data) => { setDamagePayload(data) }
+    const onDamageResult        = (data) => { setDamageResults(data) }
+    const onStunPrompt          = (data) => { setStunPayload(data) }
+    const onAttackPlayerResult  = (data) => { setAttackResult(data) }
+    const onAttackResult        = (data) => {
       if (data.isPnj) {
         setGmAttackResult(data)
         setPnjAttackResult(data)
       } else if (isGm) {
         setGmAttackResult(data)
       }
-    })
-    s.on(WS.COMBAT_STARTED, ({ roster, phase }) => {
+    }
+    const onCombatStarted = ({ roster, phase }) => {
       setCombatState({ phase, roster, actions: [], currentTurn: 1, activeSlotIdx: 0 })
       setMode('combat')
-    })
-    s.on(WS.COMBAT_ENDED, () => {
+    }
+    const onCombatEnded = () => {
       resetCombat()
       setMode('play')
       setAttackResult(null)
       setReloadResult(null)
       onModeReset()
-    })
-    s.on(WS.COMBAT_STATE_SYNC, ({ combatState, roster, actions }) => {
+    }
+    const onStateSync = ({ combatState, roster, actions }) => {
       let activeTokenId = null
       if (combatState.phase === 'ANNOUNCEMENT') {
         activeTokenId = [...roster]
@@ -86,8 +77,8 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         activeTokenId,
       })
       if (combatState.phase) setMode('combat')  // F-R9-6 : troisième callsite setMode
-    })
-    s.on(WS.COMBAT_PHASE_CHANGED, ({ phase, roster, actions }) => {
+    }
+    const onPhaseChanged = ({ phase, roster, actions }) => {
       setAnnouncementMarker(null)
       setPjPreview(null)
       onModeReset()
@@ -100,26 +91,18 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         setMeleeResult(null)
         resetAnnouncedActions()
       }
-    })
-    s.on(WS.COMBAT_ROSTER_UPDATED, ({ roster }) => {
-      updateRoster(roster)
-    })
-    s.on(WS.COMBAT_SURPRISE_ROLL, ({ tokenId }) => {
-      setPendingSurpriseRoll({ tokenId })
-    })
-    s.on(WS.COMBAT_ANNOUNCE_PREVIEW, (preview) => {
-      setPjPreview(preview)
-    })
-    s.on(WS.COMBAT_ACTION_DECLARED, ({ tokenId, actionType, initiative, moveTarget, attackTargetId }) => {
+    }
+    const onRosterUpdated   = ({ roster }) => { updateRoster(roster) }
+    const onSurpriseRoll    = ({ tokenId }) => { setPendingSurpriseRoll({ tokenId }) }
+    const onAnnouncePreview = (preview) => { setPjPreview(preview) }
+    const onActionDeclared  = ({ tokenId, actionType, initiative, moveTarget, attackTargetId }) => {
       markTokenAnnounced(tokenId, initiative)
       setAnnouncementMarker({ tokenId, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
       setPjPreview(null)
       addAnnouncedAction({ tokenId, actionType, initiative, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
-    })
-    s.on(WS.COMBAT_SLOT_ADVANCED, ({ activeSlotIdx, tokenId }) => {
-      advanceSlot(activeSlotIdx, tokenId)
-    })
-    s.on(WS.COMBAT_TURN_SKIPPED, ({ tokenId, tokenLabel }) => {
+    }
+    const onSlotAdvanced = ({ activeSlotIdx, tokenId }) => { advanceSlot(activeSlotIdx, tokenId) }
+    const onTurnSkipped  = ({ tokenId, tokenLabel }) => {
       markTokenAnnounced(tokenId)
       addMessage({
         id: `combat-skip-${tokenId}-${Date.now()}`,
@@ -127,11 +110,50 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         text: t('session.tokenSkipped', { label: tokenLabel }),
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
-    })
-  }
+    }
+
+    socket.on(WS.COMBAT_RELOAD_RESULT,         onReloadResult)
+    socket.on(WS.COMBAT_MELEE_DEFENSE_PROMPT,  onMeleeDefensePrompt)
+    socket.on(WS.COMBAT_MELEE_RESULT,          onMeleeResult)
+    socket.on(WS.COMBAT_DAMAGE_PROMPT,         onDamagePrompt)
+    socket.on(WS.COMBAT_DAMAGE_RESULT,         onDamageResult)
+    socket.on(WS.COMBAT_STUN_PROMPT,           onStunPrompt)
+    socket.on(WS.COMBAT_ATTACK_PLAYER_RESULT,  onAttackPlayerResult)
+    socket.on(WS.COMBAT_ATTACK_RESULT,         onAttackResult)
+    socket.on(WS.COMBAT_STARTED,               onCombatStarted)
+    socket.on(WS.COMBAT_ENDED,                 onCombatEnded)
+    socket.on(WS.COMBAT_STATE_SYNC,            onStateSync)
+    socket.on(WS.COMBAT_PHASE_CHANGED,         onPhaseChanged)
+    socket.on(WS.COMBAT_ROSTER_UPDATED,        onRosterUpdated)
+    socket.on(WS.COMBAT_SURPRISE_ROLL,         onSurpriseRoll)
+    socket.on(WS.COMBAT_ANNOUNCE_PREVIEW,      onAnnouncePreview)
+    socket.on(WS.COMBAT_ACTION_DECLARED,       onActionDeclared)
+    socket.on(WS.COMBAT_SLOT_ADVANCED,         onSlotAdvanced)
+    socket.on(WS.COMBAT_TURN_SKIPPED,          onTurnSkipped)
+
+    return () => {
+      socket.off(WS.COMBAT_RELOAD_RESULT,        onReloadResult)
+      socket.off(WS.COMBAT_MELEE_DEFENSE_PROMPT, onMeleeDefensePrompt)
+      socket.off(WS.COMBAT_MELEE_RESULT,         onMeleeResult)
+      socket.off(WS.COMBAT_DAMAGE_PROMPT,        onDamagePrompt)
+      socket.off(WS.COMBAT_DAMAGE_RESULT,        onDamageResult)
+      socket.off(WS.COMBAT_STUN_PROMPT,          onStunPrompt)
+      socket.off(WS.COMBAT_ATTACK_PLAYER_RESULT, onAttackPlayerResult)
+      socket.off(WS.COMBAT_ATTACK_RESULT,        onAttackResult)
+      socket.off(WS.COMBAT_STARTED,              onCombatStarted)
+      socket.off(WS.COMBAT_ENDED,                onCombatEnded)
+      socket.off(WS.COMBAT_STATE_SYNC,           onStateSync)
+      socket.off(WS.COMBAT_PHASE_CHANGED,        onPhaseChanged)
+      socket.off(WS.COMBAT_ROSTER_UPDATED,       onRosterUpdated)
+      socket.off(WS.COMBAT_SURPRISE_ROLL,        onSurpriseRoll)
+      socket.off(WS.COMBAT_ANNOUNCE_PREVIEW,     onAnnouncePreview)
+      socket.off(WS.COMBAT_ACTION_DECLARED,      onActionDeclared)
+      socket.off(WS.COMBAT_SLOT_ADVANCED,        onSlotAdvanced)
+      socket.off(WS.COMBAT_TURN_SKIPPED,         onTurnSkipped)
+    }
+  }, [socket, isGm, setMode, onModeReset])
 
   return {
-    listen,
     reloadResult,        setReloadResult,
     damagePayload,       setDamagePayload,
     damageResults,       setDamageResults,

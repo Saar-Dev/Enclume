@@ -1,3 +1,20 @@
+## v117 — 2026-06-22 — REWORK-11 : useSessionSocket — handlers session extraits
+
+### Client — Refactoring
+- [refactor] `client/src/lib/useSessionSocket.js` créé — 12 handlers WS (SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, CHARACTER_UPDATED, DOC_*) extraits de `SessionContent`
+- [refactor] `SessionPage.jsx` — destructurings `useSessionStore`/`useCharacterStore`/`useLibraryStore` nettoyés, `useEffect([socket])` réduit aux 6 handlers WOUND_*/INVENTORY_*
+
+---
+
+## v116 — 2026-06-21 — REWORK-15 : SocketProvider — lifecycle socket centralisé
+
+### Client — Refactoring
+- [refactor] `client/src/lib/SocketContext.jsx` créé — `SocketProvider` Context + `useSocket()` hook
+- [refactor] `useTokenSocket`, `useEntitySocket`, `useCombatSocket` — `listen(s)` supprimé → `useSocket()` direct
+- [refactor] `SessionPage.jsx` — split `SessionPage` (wrapper) + `SessionContent` — grand useEffect → 2 useEffects nommés
+
+---
+
 ## v115 — 2026-06-21 — REWORK-06 : declarationReducer + fixes combat
 
 ### Client — Refactoring

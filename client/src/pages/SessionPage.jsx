@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { io } from 'socket.io-client'
+import { SocketProvider, useSocket } from '../lib/SocketContext'
 import { WS } from '../../../shared/events.js'
 import { useAuthStore } from '../stores/authStore'
 import { useTokenStore } from '../stores/tokenStore'
@@ -11,10 +11,12 @@ import { useSessionStore } from '../stores/sessionStore'
 import { useEntityStore } from '../stores/entityStore'
 import { useCombatStore } from '../stores/combatStore'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useCampaignStore } from '../stores/campaignStore'
 import api from '../lib/api'
 import { useTokenSocket } from '../lib/useTokenSocket'
 import { useEntitySocket } from '../lib/useEntitySocket'
 import { useCombatSocket } from '../lib/useCombatSocket'
+import { useSessionSocket } from '../lib/useSessionSocket'
 import Canvas3D from '../components/Canvas3D'
 import Editor3D from '../components/Editor3D'
 import Sidebar from '../components/Sidebar'
@@ -29,26 +31,30 @@ import CombatOverlay from '../components/CombatOverlay'
 
 export default function SessionPage() {
   const { campaignId } = useParams()
+  return (
+    <SocketProvider campaignId={campaignId}>
+      <SessionContent campaignId={campaignId} />
+    </SocketProvider>
+  )
+}
+
+function SessionContent({ campaignId }) {
   const { user } = useAuthStore()
   const { t } = useTranslation()
   const navigate = useNavigate()
 
   const { tokens, setTokens, addToken, removeToken } = useTokenStore()
-  const { characters, isGm, setCharacters, setMembers, upsertCharacter, updateCharacter } = useCharacterStore()
+  const { characters, isGm, setCharacters, setMembers, updateCharacter } = useCharacterStore()
   const {
     battlemap, battlemaps,
     setBattlemap, setBattlemaps,
     renameBattlemap, addBattlemap, removeBattlemap,
   } = useMapStore()
-  const {
-    setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage, setActiveCampaign,
-    setPendingEntityId,
-  } = useSessionStore()
+  const { setActiveCampaign, setPendingEntityId } = useSessionStore()
   const { setEntities, fetchBlueprints } = useEntityStore()
   const { phase: combatPhase } = useCombatStore()
-  const { setDocuments, addDocument, updateDocument, removeDocument } = useLibraryStore()
-
-  const [campaign, setCampaign] = useState(null)
+  const { setDocuments } = useLibraryStore()
+  const { campaign, setCampaign, updateCampaign } = useCampaignStore()
   const [loading, setLoading] = useState(true)
   const [statusPanel, setStatusPanel] = useState(null)
 
@@ -94,19 +100,12 @@ export default function SessionPage() {
   // null = inactif, sinon { entity, interaction, tokenId }
   const [moveTarget, setMoveTarget] = useState(null)
 
-  // ─── Animation dés (Dice Rework) ────────────────────────────────────────────
-  // null = pas d'animation, sinon payload DICE_RESULT du dernier jet normal.
-  // Jets d'entité (skillLabel défini) → exclus, pas d'animation.
-  const [lastDiceRoll, setLastDiceRoll] = useState(null)
-  const handleDiceDone = useCallback(() => setLastDiceRoll(null), [])
 
   // ─── Reload blessures — déclenché par WOUND_ADDED (socket) ───────────────
   // Map { characterId → counter } — incrémenté à chaque blessure reçue.
   // Passé à CharacterWindow → bumpInventoryVersion() → ArmorWoundPanel reload.
   const [woundVersions, setWoundVersions] = useState({})
 
-  // gmSocketError : erreur serveur visible GM (PC22, etc.)
-  const [gmSocketError, setGmSocketError] = useState(null)
 
   // Fenêtre character flottante — null = fermée, sinon id du character ouvert
   // Le character est dérivé du store pour se mettre à jour automatiquement via WS
@@ -200,8 +199,7 @@ export default function SessionPage() {
   }, [])
 
   // ─── Socket.io ────────────────────────────────────────────────────────────────
-  const [socket, setSocket] = useState(null)
-  const [reconnectTrigger, setReconnectTrigger] = useState(0)
+  const socket = useSocket()
 
   // Bouton gmBar "⚔ Combat" — toggle mode combat (PC15) ou COMBAT_END si combat actif
   const handleCombatToggle = useCallback(() => {
@@ -291,7 +289,7 @@ export default function SessionPage() {
   const handleSetDefault = useCallback(async (bm) => {
     try {
       await api.put(`/campaigns/${campaignId}`, { default_battlemap_id: bm.id })
-      setCampaign(prev => ({ ...prev, default_battlemap_id: bm.id }))
+      updateCampaign({ default_battlemap_id: bm.id })
     } catch (err) {
       console.error('Erreur définition page d\'accueil :', err)
     }
@@ -376,157 +374,61 @@ export default function SessionPage() {
   }, [battlemap?.id, characters, layer])
 
   // Hooks WS — déclarés ici, après TOUS les useState (évite TDZ sur setRadialMenu, setMoveTarget, setCombatMoveMode…)
-  const tokenSocket = useTokenSocket()
-  const entitySocket = useEntitySocket({ setRadialMenu, setMoveTarget })
+  useTokenSocket()
+  useEntitySocket({ setRadialMenu, setMoveTarget })
   // handleModeReset AVANT useCombatSocket — ordre P4 obligatoire
   const handleModeReset = useCallback(() => {
     setCombatMoveMode(null); setCombatTargetMode(null); setPendingMoveSelection(null)
   }, [])
   const combatSocket = useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })
+  const { lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError } = useSessionSocket()
+  const handleDiceDone = useCallback(() => setLastDiceRoll(null), [setLastDiceRoll])
 
   useEffect(() => {
     setActiveCampaign(campaignId)
-    const s = io(import.meta.env.VITE_API_URL, { withCredentials: true })
-    s.emit(WS.SESSION_JOIN, { campaignId })
+  }, [campaignId])
 
-    tokenSocket.listen(s)
-    entitySocket.listen(s)
-    combatSocket.listen(s)
+  useEffect(() => {
+    if (!socket) return
 
-    s.on(WS.SESSION_JOINED, ({ userId, onlineUserIds = [] }) => {
-      setOnlineUsers(new Set([userId, ...onlineUserIds]))
-    })
-    s.on(WS.SESSION_USER_JOINED, ({ userId, username }) => {
-      addOnlineUser(userId)
-      addMessage({
-        id: `sys-join-${userId}-${Date.now()}`,
-        system: true,
-        text: t('session.userJoined', { username }),
-        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      })
-    })
-    s.on(WS.SESSION_USER_LEFT, ({ userId, username }) => {
-      removeOnlineUser(userId)
-      addMessage({
-        id: `sys-left-${userId}-${Date.now()}`,
-        system: true,
-        text: t('session.userLeft', { username }),
-        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      })
-    })
-    s.on(WS.CAMPAIGN_SETTINGS_UPDATED, ({ campaign: updated }) => {
-      setCampaign(prev => ({ ...prev, ...updated }))
-    })
-    s.on(WS.CHAT_MESSAGE, ({ userId, username, color, text, timestamp }) => {
-      addMessage({
-        id: `${userId}-${timestamp}`,
-        user: username,
-        color,
-        text,
-        time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      })
-    })
-    s.on(WS.CHARACTER_UPDATED, (updatedCharacter) => {
-      upsertCharacter(updatedCharacter)
-    })
-    s.on(WS.DICE_RESULT, ({ userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess, interactionType, mr, targetName, localisation, severity, severityColor, secret, breakdown }) => {
-      addMessage({
-        id: `dice-${userId}-${timestamp}`,
-        type: 'dice',
-        user: username,
-        color,
-        formula,
-        rolls,
-        total,
-        isCriticalSuccess,
-        isCriticalFail,
-        time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        // Champs structurés — jets entity_action uniquement (undefined pour jets normaux)
-        skillLabel,
-        mechanicalTotal,
-        chancesDeReussite,
-        diffLabel,
-        isSuccess,
-        interactionType,
-        mr,
-        // Champs combat_damage — undefined pour tous les autres jets
-        targetName,
-        localisation,
-        severity,
-        severityColor,
-        // Jet secret — visible uniquement par le lanceur + GM
-        secret: secret || false,
-        // Breakdown modificateurs — présent si le serveur l'a enrichi
-        breakdown,
-      })
-      // Animation dés — jets normaux uniquement (skillLabel absent)
-      // Jets d'entité (skillcheck, displacement) → pas d'animation en V1
-      if (skillLabel === undefined) {
-        setLastDiceRoll({ rolls, dieType: formula.replace(/^\d+/, '').split('+')[0].split('-')[0], seed, timestamp, color })
-      }
-    })
-    s.on(WS.WOUND_ADDED, ({ characterId, worst_wound_severity }) => {
+    const onWoundAdded = ({ characterId, worst_wound_severity }) => {
       setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
       updateCharacter({ id: characterId, worst_wound_severity })
-    })
-    s.on(WS.WOUND_UPDATED, ({ characterId, worst_wound_severity }) => {
+    }
+    const onWoundUpdated = ({ characterId, worst_wound_severity }) => {
       if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
       updateCharacter({ id: characterId, worst_wound_severity })
-    })
-    s.on(WS.WOUND_REMOVED, ({ characterId, worst_wound_severity }) => {
+    }
+    const onWoundRemoved = ({ characterId, worst_wound_severity }) => {
       if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
       updateCharacter({ id: characterId, worst_wound_severity })
-    })
-    s.on(WS.INVENTORY_ADDED, ({ characterId }) => {
+    }
+    const onInventoryAdded   = ({ characterId }) => {
       if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-    })
-    s.on(WS.INVENTORY_UPDATED, ({ characterId }) => {
+    }
+    const onInventoryUpdated = ({ characterId }) => {
       if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-    })
-    s.on(WS.INVENTORY_REMOVED, ({ characterId }) => {
+    }
+    const onInventoryRemoved = ({ characterId }) => {
       if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
-    })
-    s.on(WS.MACRO_ROLL_RESULT, ({ characterName, color, sourceLabel, rollResult, threshold, isSuccess, isCriticalSuccess, isCriticalFail, formattedMessage, secret, timestamp }) => {
-      addMessage({
-        id:               `macro-${timestamp}`,
-        type:             'dice',
-        interactionType:  'macro_result',
-        characterName,
-        color,
-        sourceLabel,
-        rollResult,
-        threshold,
-        isSuccess,
-        isCriticalSuccess,
-        isCriticalFail,
-        formattedMessage,
-        secret: secret || false,
-        time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      })
-    })
+    }
 
-    s.on('error', (err) => {
-      const msg = err?.message ?? String(err)
-      console.error('[WS] Erreur serveur:', msg)
-      setGmSocketError(msg)
-    })
-    // ─── Reconnexion robuste — Bug C ────────────────────────────────────────
-    // socket.io.on('reconnect') se déclenche UNIQUEMENT lors d'une reconnexion
-    // automatique (pas à la connexion initiale) — disponible depuis socket.io v3.
-    // Incrémente reconnectTrigger → useEffect se ré-exécute → nouvelle instance
-    // socket créée, SESSION_JOIN ré-émis, loadSession rechargé.
-    s.io.on('reconnect', () => {
-      setReconnectTrigger(n => n + 1)
-    })
+    socket.on(WS.WOUND_ADDED,               onWoundAdded)
+    socket.on(WS.WOUND_UPDATED,             onWoundUpdated)
+    socket.on(WS.WOUND_REMOVED,             onWoundRemoved)
+    socket.on(WS.INVENTORY_ADDED,           onInventoryAdded)
+    socket.on(WS.INVENTORY_UPDATED,         onInventoryUpdated)
+    socket.on(WS.INVENTORY_REMOVED,         onInventoryRemoved)
 
-    // ─── Bibliothèque — documents ────────────────────────────────────────────
-    s.on(WS.DOC_CREATED, (doc) => addDocument(doc))
-    s.on(WS.DOC_UPDATED, (doc) => updateDocument(doc))
-    s.on(WS.DOC_DELETED, ({ id }) => removeDocument(id))
-
-    setSocket(s)
-    return () => s.disconnect()
-  }, [campaignId, reconnectTrigger, loadSession])
+    return () => {
+      socket.off(WS.WOUND_ADDED,               onWoundAdded)
+      socket.off(WS.WOUND_UPDATED,             onWoundUpdated)
+      socket.off(WS.WOUND_REMOVED,             onWoundRemoved)
+      socket.off(WS.INVENTORY_ADDED,           onInventoryAdded)
+      socket.off(WS.INVENTORY_UPDATED,         onInventoryUpdated)
+      socket.off(WS.INVENTORY_REMOVED,         onInventoryRemoved)
+    }
+  }, [socket])
 
   // ─── Menu radial token ───────────────────────────────────────────────────────
   // Ouvert au double-clic sur un token. Fermé par le composant lui-même.
@@ -879,7 +781,7 @@ export default function SessionPage() {
           onBlueprintSelect={setActiveBlueprint}
           campaignId={campaignId}
           socket={socket}
-          onReconnectSocket={() => setReconnectTrigger(n => n + 1)}
+          onReconnectSocket={() => {}}
           onOpenCharacter={openSheet}
           onEntityActionResolve={handleEntityActionResolve}
         />

@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 112 — 2026-06-20
+> Session 115 suite 2 — 2026-06-22
 
 ---
 
@@ -101,10 +101,23 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 114 (2026-06-21)
+## ÉTAT COURANT — Session 115 suite 2 (2026-06-22)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
+
+**Session 115 suite 2 — ✅ REWORK-11 clos complet :**
+- REWORK-13 Étapes 1+2 ✅ — `campaignStore.js` créé + `campaign useState` migré dans SessionContent
+- REWORK-11 ✅ — `useSessionSocket.js` créé (12 handlers) + `SessionPage.jsx` nettoyé — V1–V12 validés
+- Bug RANGE1-drone + LOS1-drone : dettes actives — sprint futur
+- **Prochaine étape** : REWORK-13 Étape 3 (`useBattlemapManager.js`) → Étape 4 → puis REWORK-12
+
+**Session 115 ✅ clos complet (REWORK-15 SocketProvider) :**
+- `client/src/lib/SocketContext.jsx` créé (29L) — `SocketProvider` + `useSocket()` hook
+- `useTokenSocket` / `useEntitySocket` / `useCombatSocket` — `listen(s)` supprimé → `useSocket()` direct
+- `SessionPage.jsx` — split wrapper + `SessionContent`, grand useEffect → 2 useEffects, `reconnectTrigger` supprimé
+- `onReconnectSocket` → `() => {}` (reconnexion native socket.io)
+- P-R15-1 levé — V1–V7 validés — build ✅
 
 **Session 111 ✅ clos complet (REWORK-04 : FSM Combat) :**
 - `server/src/lib/combatFSM.js` créé — 4 fonctions pures (`canTransition`, `nextState`, `setFSMSubPhase`, `allowedEvents`), table TRANSITIONS 6 états
@@ -123,7 +136,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - PC23 ✅ : typo `TIR_AUTOMATIQUE` → `TIR_AUTOMATIQUES` dans `socketCombat.js`
 - Curseur GM Assaut weaponNotDrawn : `actionBtnDisabled` → opacity seule
 - V1–V15 validés (confirmation Saar)
-- Prochaine étape : sprint suivant (voir EN_COURS.md — REWORK-15 ou bugs actifs)
+- Prochaine étape : bug Drone CaC — lire CombatModifiersWindow + CombatOverlay → plan
 
 **Session 112 ✅ clos complet (FEAT2-A + FEAT2-C + COM12 + COM13) :**
 - `losUtils.js` créé — `checkLOS()` pure, `fast-voxel-raycast`, PE14 — eye height `pos_z+2.5`
@@ -206,6 +219,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - REWORK-03 : `woundService.applyWound` — 5 call sites WS centralisés + fix DIV-1 (`worst_wound_severity` dans WOUND_ADDED)
 
 **Dettes actives :**
+- **RANGE1-drone** — `resolveDroneAssaultAction` : pas de range check CaC → fenêtre bloquée [HYPOTHÈSE] — sprint actif
+- **LOS1-drone** — drone ranged LOS bloquée → `return` silencieux → pas de `COMBAT_DECLARE_ERROR` — même sprint
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
 - ~~COM4 ✅~~ — mains nues par défaut (REWORK-06 Session 114)
 - Bug CL3 — Ghosts déplacement d'annonce disparus

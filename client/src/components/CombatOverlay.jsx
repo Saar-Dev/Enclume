@@ -38,6 +38,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   useEffect(() => {
     if (!socket) return
     const handler = ({ message }) => {
+      console.log(`[DBG-CAC] COMBAT_DECLARE_ERROR reçu client — "${message}"`)
       setCombatActionError(message)
       setTimeout(() => setCombatActionError(null), 6000)
     }

@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-21 Session 114
+> Dernière mise à jour : 2026-06-22 Session 115 suite 2
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -39,6 +39,21 @@
    → `declarationReducer.js` créé + GM + Player migrés — V1–V15 validés
    → COM4 ✅ résolu (mains nues par défaut), PC23 ✅ (typo TIR_AUTOMATIQUES)
 
+**12. ~~REWORK-15 — SocketProvider~~** ✅ CLOS COMPLET Session 115
+   → `client/src/lib/SocketContext.jsx` (29L) — `SocketProvider` + `useSocket()`
+   → `useTokenSocket` / `useEntitySocket` / `useCombatSocket` : `useSocket()` direct (plus de `listen(s)`)
+   → `SessionPage.jsx` : wrapper + `SessionContent`, grand useEffect → 2 useEffects, `reconnectTrigger` supprimé
+   → V1–V7 validés — P-R15-1 levé
+
+**13. ~~REWORK-13 Étapes 1+2 — campaignStore~~** ✅ Session 115 suite 2
+   → `client/src/stores/campaignStore.js` créé — `{ campaign, setCampaign, updateCampaign }` — null guard
+   → `SessionPage.jsx` : `campaign useState` → `useCampaignStore()` ; `updateCampaign` dans `onCampaignUpdated` + `handleSetDefault`
+
+**14. ~~REWORK-11 — useSessionSocket~~** ✅ Session 115 suite 2
+   → `client/src/lib/useSessionSocket.js` créé — 12 handlers WS (SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, CHARACTER_UPDATED, DOC_*)
+   → `SessionContent` : 3 destructurings nettoyés, `useEffect([socket])` réduit aux 6 WOUND_*/INVENTORY_*
+   → V1–V12 validés — Prochaine étape : REWORK-13 Étapes 3+4 (`useBattlemapManager`) puis REWORK-12
+
 ---
 
 ## État global
@@ -77,8 +92,10 @@
 | ~~COM1~~ | ~~Recharger ne fait rien~~ | ✅ Clos Session 109 |
 | ~~CL1~~ | ~~Portraits PNJ non visibles timeline joueur~~ | ✅ Clos Session 109 |
 | COM8 | Fenêtre annonce visible pendant sélection cible | Moyenne |
-| COM12 | Mode de tir : chips CC/RC/RF sans filtre disponibilité arme | Moyenne |
-| COM13 | Assaut tir joueur : "Tir simple" par défaut non validé sans re-clic | Moyenne |
+| ~~COM12~~ | ~~Mode de tir : chips CC/RC/RF sans filtre disponibilité arme~~ | ✅ REWORK-06 Session 114 |
+| ~~COM13~~ | ~~Assaut tir joueur : "Tir simple" par défaut non validé sans re-clic~~ | ✅ REWORK-06 Session 114 |
+| RANGE1-drone | Drone CaC : pas de range check → `COMBAT_DECLARE_ERROR` jamais émis → fenêtre bloquée | Haute — sprint actif |
+| LOS1-drone | Drone ranged LOS bloquée → `return` silencieux → pas de `COMBAT_DECLARE_ERROR` | Haute — même sprint |
 | COM2 | Vérif statut arme absente côté GM | Moyenne |
 | ~~COM4~~ | ~~CaC exige arme au clair (mains nues impossible)~~ | ✅ REWORK-06 Session 114 |
 | COM5 | ~~Mode combat sélectionne aussi la cible (GM)~~ | ✅ REWORK-05 Session 99 |

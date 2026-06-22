@@ -319,4 +319,111 @@ Planification complète de REWORK-06 dans `docs/PLAN_REWORK06.md` :
 
 **Testé :** SR ✅, V1–V15 validés (confirmation Saar). COM4 ✅ mains nues. PC23 ✅ Tir Automatique RC/RL.
 **Non testé :** Transition mains nues → résolution serveur (arme null dans payload assaut CaC)
+
+---
+
+## Session 115 — 2026-06-21 — REWORK-15 SocketProvider ✅ clos complet
+
+### Travail effectué
+
+**REWORK-15 Étape 5 — `client/src/pages/SessionPage.jsx` migré (dernière étape)**
+
+Refactoring en 6 édits :
+1. Import `io` → `import { SocketProvider, useSocket } from '../lib/SocketContext'`
+2. Split : `SessionPage` (wrapper, export default) + `SessionContent({ campaignId })` — même fichier
+3. `useState(null)` socket + `reconnectTrigger` supprimés → `const socket = useSocket()`
+4. `tokenSocket = useTokenSocket()` → `useTokenSocket()` (sans capture) ; idem `entitySocket`
+5. Grand useEffect (L.387–529, 143 lignes) → 2 useEffects : `[campaignId]` (setActiveCampaign) + `[socket]` (18 handlers nommés + cleanup symétrique)
+6. `onReconnectSocket={() => setReconnectTrigger(n => n+1)}` → `() => {}` (reconnexion native socket.io)
+
+**P-R15-1 levé** — `listen` n'est plus requis dans les hooks ; `useSocket()` suffit.
+**build** : `✓ built in 1.47s` — zéro erreur.
+
+**V1–V7 validés** (confirmation Saar) — SR ✅
+
+**Investigation bug Drone CaC régression (partielle — stoppée pour compact)**
+
+Contexte : "la fenêtre de résolution (phase 2) reste bloquée lorsque la cible est hors de portée ou non visible".
+
+Findings :
+- Handlers `COMBAT_DECLARE_ERROR` intacts côté client (CombatOverlay L.37-46, CombatGmDeclareWindow L.135-144, CombatActionWindow L.190-199) — REWORK-15 n'est PAS la cause
+- `resolveMeleeAction` (humanoid CaC) : range check present L.1682 + `socket.emit(WS.COMBAT_DECLARE_ERROR, ...)` L.1684 ✅
+- `resolveDroneAssaultAction` (drone CaC) : **pas de range check** — attaque procède sans vérification de portée
+- `checkCombatLOS` : quand LOS bloquée → émet `DICE_RESULT` "Tir en aveugle" + `return { result: 'blocked' }` → back in `resolveDroneAssaultAction` : `return` silencieux → pas de `COMBAT_DECLARE_ERROR`
+- `advanceSlot` appelé après `resolveDroneAssaultAction` (indépendant de `needsDefenseWait`) → slot avance dans tous les cas
+- Trigger exact de fermeture fenêtre [INCONNU] — `CombatModifiersWindow` non lu
+
+Fix probable (non validé) :
+- Ajouter range check drone CaC dans `resolveDroneAssaultAction` après `isCaCWeapon` → `socket.emit(WS.COMBAT_DECLARE_ERROR, ...)`
+- Ajouter `socket.emit(WS.COMBAT_DECLARE_ERROR, ...)` avant le `return` sur `los.result === 'blocked'`
+- Prochaine étape : lire `CombatModifiersWindow` + `CombatOverlay` pour confirmer trigger fermeture avant de coder
+
+### Testé
+SR ✅, V1–V7 (REWORK-15) validés.
+
+### Non testé
+Drone CaC régression — investigation incomplète (CombatModifiersWindow non lu)
 **Non testé :** tokens sur voxels en altitude (pos_z > 0) — attendu correct par la formule.
+
+---
+
+## Session 115 — suite 2 — 2026-06-22 — REWORK-13 Étapes 1+2 : campaignStore
+
+### Travail effectué
+
+**Étape 1 — `client/src/stores/campaignStore.js` créé**
+- Store Zustand séparé (domaine campagne orthogonal à mapStore + sessionStore)
+- `campaign: null` + `setCampaign` (full replace) + `updateCampaign` (merge partiel, null guard)
+- `npm run build` ✅
+
+**Étape 2 — Migration `campaign` dans SessionContent**
+- Import `useCampaignStore` ajouté (après `useLibraryStore`)
+- `const [campaign, setCampaign] = useState(null)` supprimé → `const { campaign, setCampaign, updateCampaign } = useCampaignStore()` groupé avec les stores
+- `loadSession` : `setCampaign(campaignData)` inchangé (signature compatible)
+- `onCampaignUpdated` : `setCampaign(prev => ({...prev, ...updated}))` → `updateCampaign(updated)`
+- `handleSetDefault` : `setCampaign(prev => ({...prev, default_battlemap_id: bm.id}))` → `updateCampaign({ default_battlemap_id: bm.id })`
+- `npm run build` ✅ — zéro erreur, zéro warning nouveau
+
+**`docs/PLAN_REWORK11.md` mis à jour :**
+- Interface cible `useSessionSocket` : `{ setCampaign }` param supprimé → `useCampaignStore()` interne
+- `onCampaignUpdated` → `updateCampaign(updated)` ; deps `[socket]` au lieu de `[socket, setCampaign]`
+
+### Testé
+- `npm run build` ✅ — zéro erreur après Étapes 1 et 2
+
+### Non testé
+- Validation fonctionnelle runtime (V1–V14 prévus après Étape 4)
+
+---
+
+## Session 115 — suite 2 (cont.) — 2026-06-22 — REWORK-11 : useSessionSocket ✅ clos complet
+
+### Travail effectué
+
+**Étape 1 — `client/src/lib/useSessionSocket.js` créé**
+- 12 handlers WS nommés : `onSessionJoined`, `onUserJoined`, `onUserLeft`, `onCampaignUpdated`, `onChatMessage`, `onCharacterUpdated`, `onDiceResult`, `onMacroRollResult`, `onError`, `onDocCreated`, `onDocUpdated`, `onDocDeleted`
+- `useSocket()` interne (REWORK-15), `useEffect([socket])`, cleanup symétrique (P-R11-4 ✅)
+- `updateCampaign` lu depuis `useCampaignStore()` directement — pas de param `{ setCampaign }` (écart plan corrigé — REWORK-13 Étapes 1+2 déjà faits)
+- Asymétrie DICE_RESULT préservée : `setLastDiceRoll` uniquement si `skillLabel === undefined`
+- `'error'` string brut — pas de constante WS (P-R11-5 ✅)
+- Retour : `{ lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError }`
+- `npm run build` ✅
+
+**Étape 2 — `SessionPage.jsx` (SessionContent) intégré**
+- Import `useSessionSocket` ajouté
+- `lastDiceRoll` useState + `handleDiceDone` useCallback supprimés de SessionContent (P-R11-1 ✅)
+- `gmSocketError` useState supprimé de SessionContent
+- `useSessionStore()` : réduit à `{ setActiveCampaign, setPendingEntityId }` (P-R11-3 ✅ — grep confirme usage exclusif dans les 12 handlers)
+- `useCharacterStore()` : `upsertCharacter` retiré
+- `useLibraryStore()` : réduit à `{ setDocuments }` (P-R11-2 ✅ — grep confirme usage exclusif dans DOC_* handlers)
+- `updateCampaign` conservé dans `useCampaignStore()` de SessionContent — encore utilisé dans `handleSetDefault`
+- `useSessionSocket()` déclaré après `combatSocket` + `handleDiceDone` recréé avec `[setLastDiceRoll]` en dep
+- `useEffect([socket])` de SessionContent : 12 handlers supprimés, 6 WOUND_*/INVENTORY_* conservés (périmètre REWORK-12)
+- `npm run build` ✅
+
+### Testé
+- SR ✅
+- V1–V12 validés : connexion/présence (V1–V3), campagne/chat (V4–V5), personnage (V6), dés animation (V7), jet entité sans animation (V8), macro (V9), erreur GM (V10–V11), bibliothèque (V12)
+
+### Non testé
+- Reconnexion socket en cours de session active (cas couvert par REWORK-15 — non re-testé spécifiquement)

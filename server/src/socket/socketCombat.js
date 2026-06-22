@@ -862,7 +862,10 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
         return
       }
       // Guard : phase = RESOLUTION
-      if (!state || state.phase !== 'RESOLUTION') return
+      if (!state || state.phase !== 'RESOLUTION') {
+        console.log(`[DBG-CAC] return@phase — state.phase:${state?.phase ?? null} sub_phase:${state?.sub_phase ?? null}`)
+        return
+      }
 
       // Slots ordonnés par initiative DESC — source de vérité pour active_slot_idx
       const slots = await db('combat_roster')
@@ -871,14 +874,26 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
         .select('token_id', 'initiative')
 
       const activeSlot = slots[state.active_slot_idx]
-      if (!activeSlot || activeSlot.token_id !== tokenId) return
+      if (!activeSlot || activeSlot.token_id !== tokenId) {
+        console.log(`[DBG-CAC] return@slot — active_slot_idx:${state.active_slot_idx} slots:${JSON.stringify(slots.map(s=>s.token_id))} tokenId:${tokenId}`)
+        return
+      }
 
       // Guard ownership — GM peut confirmer n'importe quel slot, joueur uniquement le sien
       const token = await db('tokens').where({ id: tokenId }).first()
-      if (!token) return
-      if (!token.character_id) return
+      if (!token) {
+        console.log(`[DBG-CAC] return@token — token null pour tokenId:${tokenId}`)
+        return
+      }
+      if (!token.character_id) {
+        console.log(`[DBG-CAC] return@char_id — token.character_id null pour tokenId:${tokenId}`)
+        return
+      }
       const character = await db('characters').where({ id: token.character_id }).first()
-      if (!character) return
+      if (!character) {
+        console.log(`[DBG-CAC] return@character — character null pour character_id:${token.character_id}`)
+        return
+      }
       if (!isGm) {
         if (character.user_id !== user.id) return
       }
@@ -2285,6 +2300,7 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
       .select(
         'drone_weapons.fire_mode as explicit_fire_mode',
         'ref_equipment.fire_mode as ref_fire_mode',
+        'ref_equipment.range as ref_range',
         db.raw(`COALESCE(drone_weapons.damage_formula, ref_equipment.damage_h) as effective_formula`),
         db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
       )
@@ -2305,11 +2321,34 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
 
     // 2. Programme armement — miroir humanoïde : !ref_fire_mode → contact, sinon distance
     const isCaCWeapon = weapon.explicit_fire_mode ? weapon.explicit_fire_mode === 'cc' : !weapon.ref_fire_mode
+    console.log(`[DBG-CAC] resolveDroneAssaultAction — isCaCWeapon:${isCaCWeapon} explicit_fire_mode:${weapon.explicit_fire_mode} ref_fire_mode:${weapon.ref_fire_mode} ref_range:${weapon.ref_range}`)
+
+    // ── Range check CaC drone (miroir resolveMeleeAction L.1674-1688) ──────────
+    if (isCaCWeapon) {
+      const allonge = parseInt(weapon?.ref_range) || 0
+      const [myTokenPos, targetTokenPos] = await Promise.all([
+        db('tokens').where({ id: action.token_id }).select('pos_x', 'pos_y').first(),
+        db('tokens').where({ id: action.target_token_id }).select('pos_x', 'pos_y').first(),
+      ])
+      const dxChk = (myTokenPos?.pos_x ?? 0) - (targetTokenPos?.pos_x ?? 0)
+      const dzChk = (myTokenPos?.pos_y ?? 0) - (targetTokenPos?.pos_y ?? 0)
+      const dist2dChk = Math.sqrt(dxChk * dxChk + dzChk * dzChk)
+      if (dist2dChk > 3 + allonge) {
+        console.log(`[DBG-CAC] range check REJETÉ — dist:${dist2dChk.toFixed(2)}m max:${3 + allonge}m → socket.emit COMBAT_DECLARE_ERROR`)
+        socket.emit(WS.COMBAT_DECLARE_ERROR, {
+          message: `Corps à corps impossible — distance : ${dist2dChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
+        })
+        return
+      }
+    }
 
     // ── LOS check (distance uniquement) ────────────────────────────────────────
     if (!isCaCWeapon && !options.skipLos) {
       const los = await checkCombatLOS(io, db, campaignId, action, character)
-      if (los.result === 'blocked') return
+      if (los.result === 'blocked') {
+        console.log(`[DBG-CAC] LOS bloquée — return silencieux`)
+        return
+      }
       if (los.result === 'intercepted') {
         return resolveDroneAssaultAction(io, socket, campaignId,
           { ...action, target_token_id: los.newTargetTokenId },

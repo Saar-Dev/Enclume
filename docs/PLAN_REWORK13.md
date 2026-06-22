@@ -751,14 +751,14 @@ Run à vide : SR + `npm run build` — ouvrir une session, tester la barre GM.
 
 ### campaignStore
 
-- [ ] `client/src/stores/campaignStore.js` créé — `{ campaign, setCampaign, updateCampaign }`
-- [ ] `updateCampaign` : no-op si `campaign` est null (null guard)
-- [ ] `campaign` `useState` (L.51) supprimé de SessionContent
-- [ ] `useCampaignStore()` destructuré dans SessionContent : `{ campaign, setCampaign, updateCampaign }`
-- [ ] `loadSession` : `setCampaign(campaignData)` inchangé (signature compatible)
-- [ ] Handler inline `CAMPAIGN_SETTINGS_UPDATED` : `updateCampaign(updated)` au lieu de `setCampaign(prev => ...)`
-- [ ] `handleSetDefault` inline (avant migration Étape 4) : `updateCampaign({ default_battlemap_id: bm.id })`
-- [ ] `npm run build` — zéro erreur après Étape 2
+- [x] `client/src/stores/campaignStore.js` créé — `{ campaign, setCampaign, updateCampaign }`
+- [x] `updateCampaign` : no-op si `campaign` est null (null guard)
+- [x] `campaign` `useState` (L.51) supprimé de SessionContent
+- [x] `useCampaignStore()` destructuré dans SessionContent : `{ campaign, setCampaign, updateCampaign }`
+- [x] `loadSession` : `setCampaign(campaignData)` inchangé (signature compatible)
+- [x] Handler inline `CAMPAIGN_SETTINGS_UPDATED` : `updateCampaign(updated)` au lieu de `setCampaign(prev => ...)`
+- [x] `handleSetDefault` inline (avant migration Étape 4) : `updateCampaign({ default_battlemap_id: bm.id })`
+- [x] `npm run build` — zéro erreur après Étape 2
 
 ### useBattlemapManager
 
@@ -794,32 +794,18 @@ Run à vide : SR + `npm run build` — ouvrir une session, tester la barre GM.
 
 ## REPRENDRE ICI — POST-COMPACT
 
-**État courant : Session 113b — plan rédigé + analyse critique + corrections appliquées. En attente de "Je code ?".**
+**État courant : Session 115 suite 2 — Étapes 1+2 ✅ — Étape 3 suivante.**
 
-Fichiers lus en session 113b :
-- `docs/ARCHI_REWORK.md` — description REWORK-13 (table)
-- `docs/PLAN_REWORK15.md` — contexte post-REWORK-15, SocketContext path confirmé : `client/src/lib/SocketContext.jsx`
-- `docs/PLAN_REWORK11.md` — impact CAMPAIGN_SETTINGS_UPDATED / setCampaign param
-- `client/src/pages/SessionPage.jsx` — lignes clés documentées ci-dessus + deps originaux vérifiés
-- `client/src/stores/mapStore.js` — API complète (5 actions)
-- `client/src/stores/sessionStore.js` — API complète
-- `client/src/lib/useEntitySocket.js` — MAP_SWITCH entrant L.19-30 (P-R13-1)
-- `shared/events.js` — MAP_SWITCH, CAMPAIGN_SETTINGS_UPDATED
-- `client/src/locales/fr.json` — `session.deleteMapConfirm` confirmé présent
+### ✅ Étape 1 — `campaignStore.js` créé (Session 115 suite 2)
+- `client/src/stores/campaignStore.js` — conforme §Interface cible — build ✅
 
-Vérifications post-analyse critique (Session 113b) :
-- `session.deleteMapConfirm` ✅ existe dans fr.json L.73
-- `setEntities([])` absent dans else branch ✅ comportement original confirmé (L.332-334) — pré-existant
-- SocketContext path ✅ `client/src/lib/SocketContext.jsx` → import `'./SocketContext'` correct
-- Deps `loadMap` corrigés : `[isGm]` (aligné sur original L.249)
-- Deps `handleMapDelete` corrigés : `[battlemap?.id, battlemaps, loadMap, t]` (aligné sur original L.339)
-- P-R13-5 clarifié : `updateCampaign` reste dans SessionContent après REWORK-13 (CAMPAIGN_SETTINGS_UPDATED encore inline)
-- Avertissement P-R15-1 retiré (ne s'applique pas à REWORK-13)
+### ✅ Étape 2 — `campaign` migré dans SessionContent (Session 115 suite 2)
+- Import ajouté, `useState(null)` supprimé, `useCampaignStore()` destructuré
+- `onCampaignUpdated` → `updateCampaign(updated)` ✅
+- `handleSetDefault` → `updateCampaign({ default_battlemap_id: bm.id })` ✅
+- build ✅
 
-Pièges validés : P-R13-1 à P-R13-5 — lire §PIÈGES avant de coder.
-Architecture validée par recherche : campaignStore séparé ✓ / hook + UI state ✓ / ref retournée ✓ / cross-store dans le hook ✓
-
-Prochaine étape : **"Je code ?" → Étape 1 (créer campaignStore.js)**
-→ Contenu exact dans §Interface cible §campaignStore ci-dessus.
-→ Relire SessionPage.jsx avant Étape 2 (lignes décalées post-REWORK-15 si celui-ci a été fait).
-→ Relire SessionPage.jsx avant Étape 4 (lignes décalées post-Étapes 2+3).
+### Prochaine étape : **Étape 3 — Créer `useBattlemapManager.js`**
+→ Contenu exact dans §Interface cible §useBattlemapManager ci-dessus.
+→ Aucun fichier existant modifié à cette étape — créer le fichier, `npm run build`.
+→ Puis Étape 4 : lire SessionPage.jsx avant de coder (lignes décalées post-Étapes 1+2).

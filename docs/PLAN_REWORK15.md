@@ -455,16 +455,23 @@ Reprendre depuis ARCHI_REWORK.md §REWORK-15 DoD (17 items), plus :
 
 ## REPRENDRE ICI — POST-COMPACT
 
-**État courant : planification Session 113 complète — implémentation non commencée.**
+**État courant : Session 114 — Étape 5 ✅ terminée. P-R15-1 levé. SR + V1–V7 requis.**
 
-Fichiers lus en session 113 (ne pas relire) :
-- `docs/ARCHI_REWORK.md` — spec REWORK-15 complète
-- `client/src/lib/useTokenSocket.js`
-- `client/src/lib/useEntitySocket.js`
-- `client/src/lib/useCombatSocket.js`
-- `client/src/pages/SessionPage.jsx` — 1296 lignes, lignes clés documentées ci-dessus
+- ✅ Étape 1 — `client/src/lib/SocketContext.jsx` créé — build ✅
+- ✅ Étape 2 — `client/src/lib/useTokenSocket.js` migré — build ✅
+- ✅ Étape 3 — `client/src/lib/useEntitySocket.js` migré — build ✅
+- ✅ Étape 4 — `client/src/lib/useCombatSocket.js` migré — build ✅ (18 handlers, pas 17)
+- ✅ Étape 5 — `client/src/pages/SessionPage.jsx` migré — build ✅
 
-Prochaine étape : **Étape 1 — créer `client/src/lib/SocketContext.jsx`**
-→ Contenu exact dans §Plan Étape 1 ci-dessus.
-→ NE PAS relire SessionPage.jsx — déjà documenté.
-→ Confirmer "Je code ?" avec Saar.
+Notes Étape 5 :
+- `SessionPage` wrapper (export default) : useParams → SocketProvider → SessionContent
+- `SessionContent({ campaignId })` : tout le code existant
+- `socket = useSocket()` en remplacement des 2 useState supprimés
+- `useTokenSocket()` + `useEntitySocket({...})` sans assignment
+- Grand useEffect (L.387-529) → 2 useEffects : `[campaignId]` + `[socket]` 18 handlers nommés
+- `onReconnectSocket={() => {}}` — noop (reconnexion native socket.io)
+- Fichier SessionPage.jsx : 1345 → ~1370 lignes après migration
+
+Prochaine étape : **SR + validation V1–V7 (voir section VALIDATION ci-dessus)**
+→ P-R15-1 levé — premier SR autorisé.
+→ Après validation : docs (ARCHI_REWORK.md, JOURNAL5.md, EN_COURS.md, ASBUILT.md, CHANGELOG.md)

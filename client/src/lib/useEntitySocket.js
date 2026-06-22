@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSocket } from './SocketContext'
 import { WS } from '../../../shared/events.js'
 import { useAuthStore } from '../stores/authStore'
 import { useSessionStore } from '../stores/sessionStore'
@@ -8,6 +10,7 @@ import { useEntityStore } from '../stores/entityStore'
 import api from './api'
 
 export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
+  const socket = useSocket()
   const { user } = useAuthStore()
   const { clearPendingEntityId, addMessage } = useSessionStore()
   const { setBattlemap } = useMapStore()
@@ -15,8 +18,10 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
   const { setEntities } = useEntityStore()
   const { t } = useTranslation()
 
-  function listen(s) {
-    s.on(WS.MAP_SWITCH, ({ battlemapId, userIds }) => {
+  useEffect(() => {
+    if (!socket) return
+
+    const onMapSwitch = ({ battlemapId, userIds }) => {
       const concerned = userIds.length === 0 || userIds.includes(user?.id)
       if (!concerned) return
       api.get(`/battlemaps/${battlemapId}`)
@@ -27,9 +32,9 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
         })
         .then(res => setEntities(res.data.entities || []))
         .catch(err => console.error('Erreur chargement carte MAP_SWITCH :', err))
-    })
+    }
 
-    s.on(WS.ENTITY_ACTION_PENDING, (pending) => {
+    const onEntityActionPending = (pending) => {
       addMessage({
         id: `entity-action-${pending.requestId}`,
         type: 'entity_action',
@@ -43,9 +48,9 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
         defaultDifficulty: pending.defaultDifficulty,
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
-    })
+    }
 
-    s.on(WS.ENTITY_ACTION_RESULT, ({ requestId, isApproved, reason }) => {
+    const onEntityActionResult = ({ requestId, isApproved, reason }) => {
       clearPendingEntityId()
       if (!isApproved) {
         const reasonText = reason === 'timeout'
@@ -61,9 +66,9 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
         })
       }
       setRadialMenu(null)
-    })
+    }
 
-    s.on(WS.ENTITY_MOVE_RESULT, ({ mr, dmax, success }) => {
+    const onEntityMoveResult = ({ mr, dmax, success }) => {
       setMoveTarget(null)
       addMessage({
         id: `move-result-${Date.now()}`,
@@ -73,13 +78,26 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
           : t('entity.moveFail', { mr }),
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
-    })
+    }
 
-    s.on(WS.DICE_RESULT, ({ type }) => {
+    const onDiceResult = ({ type }) => {
       if (type !== 'entity_action') return
       clearPendingEntityId()
-    })
-  }
+    }
 
-  return { listen }
+    socket.on(WS.MAP_SWITCH,              onMapSwitch)
+    socket.on(WS.ENTITY_ACTION_PENDING,   onEntityActionPending)
+    socket.on(WS.ENTITY_ACTION_RESULT,    onEntityActionResult)
+    socket.on(WS.ENTITY_MOVE_RESULT,      onEntityMoveResult)
+    socket.on(WS.DICE_RESULT,             onDiceResult)
+
+    return () => {
+      socket.off(WS.MAP_SWITCH,            onMapSwitch)
+      socket.off(WS.ENTITY_ACTION_PENDING, onEntityActionPending)
+      socket.off(WS.ENTITY_ACTION_RESULT,  onEntityActionResult)
+      socket.off(WS.ENTITY_MOVE_RESULT,    onEntityMoveResult)
+      socket.off(WS.DICE_RESULT,           onDiceResult)
+    }
+  }, [socket, setRadialMenu, setMoveTarget])
+  // Pas de return — aucun état exposé
 }

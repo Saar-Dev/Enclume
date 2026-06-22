@@ -30,7 +30,7 @@ Audit merge-readiness Session 113 → 28 useState locaux, 18 WS listeners inline
   - `useLibraryStore()` : `addDocument`, `updateDocument`, `removeDocument`
 
 **Ce que REWORK-11 ne change PAS :**
-- `campaign` reste un `useState` dans SessionContent (aussi setté par `loadSession` REST)
+- `campaign` est dans `useCampaignStore` depuis REWORK-13 Étapes 1+2 ✅ — le hook lit `updateCampaign` directement depuis le store (plus de param)
 - `useSessionStore()` dans SessionContent : `setActiveCampaign` et `setPendingEntityId` restent
 - `useCharacterStore()` dans SessionContent : `characters, isGm, setCharacters, setMembers, updateCharacter` restent
 - `useLibraryStore()` dans SessionContent : `setDocuments` reste (utilisé par `loadSession` REST)
@@ -185,15 +185,12 @@ const [gmSocketError, setGmSocketError] = useState(null)
 //           onGmSocketErrorClose={() => setGmSocketError(null)} → CombatOverlay (L.1177)
 ```
 
-### État partagé REST + WS (reste dans SessionContent)
+### État partagé REST + WS (dans `useCampaignStore` depuis REWORK-13)
 
 ```js
-// L.51 — campaign
-const [campaign, setCampaign] = useState(null)
-// Setté par loadSession REST (L.151) ET par CAMPAIGN_SETTINGS_UPDATED WS
-// Utilisé : campaign?.name (title L.56), campaign?.default_token_glb_url (L.828),
-//           campaign?.action_timer_sec (L.1143)
-// → setCampaign passé en param au hook
+// campaign : dans useCampaignStore depuis REWORK-13 Étapes 1+2 ✅
+// CAMPAIGN_SETTINGS_UPDATED : onCampaignUpdated appelle updateCampaign(updated) — lu depuis le store
+// setCampaign n'est PLUS passé en param à useSessionSocket
 ```
 
 ### Destructurings à nettoyer dans SessionContent
@@ -278,13 +275,12 @@ Vérifier : `client/src/lib/SocketContext.jsx` existe avant de démarrer l'Étap
 
 Pattern `useSocket()` interne — idem `useTokenSocket` / `useEntitySocket` / `useCombatSocket` après REWORK-15.
 
-- `setCampaign` passé en param : état partagé REST + WS — ne peut pas vivre dans le hook
+- `setCampaign` : était passé en param — supprimé depuis REWORK-13 Étapes 1+2 ✅. `updateCampaign` lu depuis `useCampaignStore()` interne au hook.
 - `lastDiceRoll` + `gmSocketError` : uniquement settés par WS → `useState` internes au hook, exposés en retour (idem `reloadResult`/`damagePayload` dans `useCombatSocket`)
 - `useTranslation()` : appelé directement dans le hook — `t` stable au sein d'une langue (convention projet : pas dans les deps)
-- Deps `useEffect` : `[socket, setCampaign]` — setters Zustand et `t` traités comme stables
+- Deps `useEffect` : `[socket]` — action Zustand `updateCampaign` stable, `t` stable
 
 **Alternatives écartées :**
-- `campaign` dans le hook : impossible — `loadSession` REST appelle aussi `setCampaign`. Nécessiterait d'exposer deux setters distincts (REST vs WS) — couplage inutile
 - `chatStore` Zustand pour les messages : surdimensionné — `addMessage` dans `sessionStore` suffit, pattern établi
 
 ---
@@ -293,6 +289,7 @@ Pattern `useSocket()` interne — idem `useTokenSocket` / `useEntitySocket` / `u
 
 ```js
 // client/src/lib/useSessionSocket.js
+// ⚠️ Mis à jour post-REWORK-13 : plus de param { setCampaign } — updateCampaign via useCampaignStore
 
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -301,12 +298,14 @@ import { useSocket } from './SocketContext'
 import { useSessionStore } from '../stores/sessionStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useCampaignStore } from '../stores/campaignStore'
 
-export function useSessionSocket({ setCampaign }) {
+export function useSessionSocket() {
   const socket = useSocket()
   const { setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage } = useSessionStore()
   const { upsertCharacter } = useCharacterStore()
   const { addDocument, updateDocument, removeDocument } = useLibraryStore()
+  const { updateCampaign } = useCampaignStore()
   const { t } = useTranslation()
 
   const [lastDiceRoll, setLastDiceRoll] = useState(null)
@@ -330,7 +329,7 @@ export function useSessionSocket({ setCampaign }) {
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) })
     }
     const onCampaignUpdated = ({ campaign: updated }) =>
-      setCampaign(prev => ({ ...prev, ...updated }))
+      updateCampaign(updated)
     const onChatMessage = ({ userId, username, color, text, timestamp }) =>
       addMessage({ id: `${userId}-${timestamp}`, user: username, color, text,
         time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) })
@@ -393,7 +392,7 @@ export function useSessionSocket({ setCampaign }) {
       socket.off(WS.DOC_UPDATED,              onDocUpdated)
       socket.off(WS.DOC_DELETED,              onDocDeleted)
     }
-  }, [socket, setCampaign])
+  }, [socket])
 
   return { lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError }
 }
