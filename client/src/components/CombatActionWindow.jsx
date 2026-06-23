@@ -109,7 +109,7 @@ export default function CombatActionWindow({
   // --- etat melee (panneau droit) -------------------------------------------
   const [meleePendingTokenIds, setMeleePendingTokenIds]     = useState([])   // [id1, id2?, id3?]
   const [meleeCount, setMeleeCount]                         = useState(1)    // 1|2|3
-  const [selectedMeleeWeaponId, setSelectedMeleeWeaponId]   = useState(null)  // null = mains nues
+  const [selectedMeleeWeaponId, setSelectedMeleeWeaponId]   = useState(undefined) // undefined=auto, null=mains nues, id=choix
   const [inMeleeTargetMode, setInMeleeTargetMode]           = useState(false)
 
   // --- roster PJ collapsible ------------------------------------------------
@@ -151,7 +151,7 @@ export default function CombatActionWindow({
     setMoveSelection(null)
     setSelectedAmmoId(null)
     setMeleePendingTokenIds([])
-    setSelectedMeleeWeaponId(null)
+    setSelectedMeleeWeaponId(undefined)
     setInMeleeTargetMode(false)
     setSelectedDroneWeaponId(null)
   }, [rosterEntry?.token_id])
@@ -214,7 +214,7 @@ export default function CombatActionWindow({
       setMoveSelection(null)
       setSelectedAmmoId(null)
       setMeleePendingTokenIds([])
-      setSelectedMeleeWeaponId(null)
+      setSelectedMeleeWeaponId(undefined)
       setInMeleeTargetMode(false)
       setSelectedDroneWeaponId(null)
     }
@@ -377,6 +377,12 @@ export default function CombatActionWindow({
     (item.slot === 'MG' || item.slot === 'MD' || item.slot === '2M') &&
     item.ref_category === 'Arme de contact'
   )
+  // undefined=auto, null=mains nues explicite, id=choix explicite
+  const effectiveMeleeWeaponId = decl.weapon !== 'drawn'
+    ? null
+    : selectedMeleeWeaponId === undefined
+      ? (meleeWeapons[0]?.id ?? null)
+      : selectedMeleeWeaponId
   // Armes de contact en inventaire (tous slots/containers) — pour message d'état
   const hasMeleeInInventory = allInventoryItems.some(item => item.ref_category === 'Arme de contact')
 
@@ -397,7 +403,7 @@ export default function CombatActionWindow({
         if (k === 'melee') {
           setMeleePendingTokenIds([])
           setMeleeCount(1)
-          setSelectedMeleeWeaponId(null)
+          setSelectedMeleeWeaponId(undefined)
           setInMeleeTargetMode(false)
           if (decl.combatMode === 'retraite' || decl.combatMode === 'charge') setMoveSelection(null)
           dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
@@ -515,7 +521,7 @@ export default function CombatActionWindow({
         melee:    (meleeSelected && !meleeDefensif)
           ? meleePendingTokenIds.slice(0, effectiveMeleeCount).map(id => ({
               targetTokenId: id,
-              weaponInvId:   selectedMeleeWeaponId,
+              weaponInvId:   effectiveMeleeWeaponId,
             }))
           : null,
         reload:   reloadSelected ? { weapon_inv_id: selectedWeapon?.id ?? null, ammo_item_id: selectedAmmoId } : false,
@@ -1079,7 +1085,7 @@ export default function CombatActionWindow({
                 damage: item.ref_damage_h || '—',
                 allonge: parseInt(item.ref_range) || 0,
               }))}
-              selectedWeaponId={selectedMeleeWeaponId}
+              selectedWeaponId={effectiveMeleeWeaponId}
               isWeaponDrawn={decl.weapon === 'drawn'}
               hasMeleeInInventory={hasMeleeInInventory}
               onWeaponChange={(id) => setSelectedMeleeWeaponId(id)}

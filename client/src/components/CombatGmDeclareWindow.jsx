@@ -89,8 +89,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // Tir GM — variant mode de tir (miroir PJ)
   const [assaultBulletCount,  setAssaultBulletCount]  = useState(null)   // number | 'multi' | null
   const [assaultVariantAB,    setAssaultVariantAB]    = useState('A')
-  // CaC GM — sélection arme (null = mains nues)
-  const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(null)
+  // CaC GM — sélection arme (undefined = auto-dériver, null = mains nues, id = choix explicite)
+  const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(undefined)
   // Drone GM — arme sélectionnée + catalogue récupéré
   const [selectedDroneWeaponId, setSelectedDroneWeaponId] = useState(null)
   const [droneWeapons, setDroneWeapons] = useState([])
@@ -114,7 +114,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setChargeSelection(null)
     setAssaultBulletCount(null)
     setAssaultVariantAB('A')
-    setSelectedGmMeleeWeaponId(null)
+    setSelectedGmMeleeWeaponId(undefined)
     setSelectedDroneWeaponId(null)
     setDroneWeapons([])
     setIsSelectingOnMap(false)
@@ -170,13 +170,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       })
       .catch(() => setDroneWeapons([]))
   }, [activeDroneCharId])
-
-  // Auto-sélection arme CaC GM — première arme de contact disponible pour le slot actif
-  useEffect(() => {
-    if (!activeTokenId) return
-    const w = equipment[activeTokenId]?.weapon ?? null
-    if (w && !w.ref_fire_mode && initialStates.weapon === 'drawn') setSelectedGmMeleeWeaponId(w.inv_id)
-  }, [activeTokenId, equipment])
 
   // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
   useEffect(() => {
@@ -245,10 +238,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeAttackCount
   const effectiveMeleeCountRef = useRef(effectiveMeleeCount)
   effectiveMeleeCountRef.current = effectiveMeleeCount
-  // CaC — arme sélectionnée (null = mains nues, sinon inv_id)
-  // Si le GM a une arme de contact disponible et l'a sélectionnée, on l'utilise
   const meleeWeaponAvailable = weapon && !weapon.ref_fire_mode ? weapon : null
-  const weaponInvIdForMelee  = selectedGmMeleeWeaponId  // null = mains nues
+  // undefined = pas de choix → dériver; null = mains nues explicite; id = arme choisie
+  const effectiveGmMeleeWeaponId = decl.weapon !== 'drawn'
+    ? null
+    : selectedGmMeleeWeaponId === undefined
+      ? (meleeWeaponAvailable?.inv_id ?? null)
+      : selectedGmMeleeWeaponId
+  const weaponInvIdForMelee = effectiveGmMeleeWeaponId
 
   // Tir GM — mode de tir et variant (miroir logique CombatActionWindow)
   const availableFireModes = weapon?.ref_fire_mode
@@ -438,7 +435,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
       {/* HEADER */}
       <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>
-        <span className="combat-win-title" style={{ flex: 1 }}>PHASE 1 — DÉCLARATION</span>
+        <span className="combat-win-title">PHASE 1 — DÉCLARATION</span>
+        {activeTokenId && (
+          <span style={{ ...S.headerActiveToken, ...(!isActivePnj && !isActiveDrone ? S.headerActiveTokenWait : {}) }}>
+            {getLabel(activeTokenId)}
+          </span>
+        )}
         <span style={S.headerProgress}>{allGmManaged.length - unannouncedCnt}/{allGmManaged.length} déclarés</span>
       </div>
 
@@ -768,7 +770,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           <div style={S.meleePanelGm}>
             <MeleeCombatPanel
               availableWeapons={meleeWeaponAvailable ? [{ id: meleeWeaponAvailable.inv_id, label: meleeWeaponAvailable.name ?? 'Arme', slot: meleeWeaponAvailable.slot ?? '', damage: '', allonge: 0 }] : []}
-              selectedWeaponId={selectedGmMeleeWeaponId}
+              selectedWeaponId={effectiveGmMeleeWeaponId}
               isWeaponDrawn={true}
               hasMeleeInInventory={false}
               onWeaponChange={(id) => {
@@ -828,6 +830,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
       </div>{/* fin body flex-row */}
 
+      {/* POIGNÉE BAS */}
+      <div onMouseDown={onHeaderMouseDown} style={S.bottomHandle} />
+
       {/* FOOTER */}
       <div className="combat-win-footer">
         {iniDelta !== 0 && isActivePnj && (
@@ -861,6 +866,19 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 // ---------------------------------------------------------------------------
 const S = {
   headerProgress: { fontSize: 9, color: '#5a6575', fontFamily: 'monospace' },
+  headerActiveToken: {
+    fontSize: 10, fontWeight: 700, color: '#e8c870',
+    flex: 1, textAlign: 'center',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    padding: '0 6px',
+  },
+  headerActiveTokenWait: { color: '#5a7080', fontStyle: 'italic', fontWeight: 400 },
+  bottomHandle: {
+    height: 6, flexShrink: 0,
+    background: 'rgba(90,100,120,0.12)',
+    borderTop: '1px solid rgba(90,100,120,0.18)',
+    cursor: 'ns-resize',
+  },
 
   controls: { flexShrink: 0, borderBottom: '1px solid #15212e' },
 

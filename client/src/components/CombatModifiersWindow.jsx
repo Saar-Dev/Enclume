@@ -394,6 +394,9 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
         </div>
       )}
 
+      {/* Poignée bas */}
+      <div onMouseDown={onHeaderMouseDown} style={styles.bottomHandle} />
+
       {/* Footer — 3 états : prêt / en cours / résultat */}
       <div className="combat-float-footer">
         {!attackResult && (
@@ -464,4 +467,10 @@ const styles = {
   },
   attackBannerResult: { fontSize: 14, fontWeight: 700 },
   attackBannerDetail: { fontSize: 11, opacity: 0.75 },
+  bottomHandle: {
+    height: 6, flexShrink: 0,
+    background: 'rgba(90,100,120,0.12)',
+    borderTop: '1px solid rgba(90,100,120,0.18)',
+    cursor: 'ns-resize',
+  },
 }

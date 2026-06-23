@@ -601,7 +601,8 @@
     "tags": {
       "add": "AJOUT",
       "fix": "CORRECTIF",
-      "chg": "CHANGEMENT"
+      "chg": "CHANGEMENT",
+      "refactor": "REFACTO"
     },
     "openTitle": "Afficher le changelog",
     "reduceTitle": "Réduire"

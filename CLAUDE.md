@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 117 — 2026-06-23
+> Session 118 — 2026-06-23
 
 ---
 
@@ -101,16 +101,21 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 117 (2026-06-23)
+## ÉTAT COURANT — Session 118 (2026-06-23)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
+
+**Session 118 (cont.) — Ergonomie combat UI ✅ clos complet :**
+- COM15 ✅ — `CombatGmDeclareWindow.jsx` header : nom actif en or (PNJ/Drone) / grisé italique (PJ)
+- Poignées basses draggables sur `CombatGmDeclareWindow`, `CombatModifiersWindow`, `CombatCacModifiersWindow`
+- `CombatTimeline` : fond 20% opaque, phase+flèche à gauche, collapse ▲/▼, portraits centrés
+- **Prochaine étape** : à définir (voir `docs/EN_COURS.md` + `docs/ARCHI_REWORK.md`)
 
 **Session 117 — REWORK-17 ✅ clos complet :**
 - `socketCombat.js` (3027L) → 4 modules + orchestrateur 9L
 - `socketCombatState.js` (5 handlers), `socketCombatAnnouncement.js` (3 handlers), `socketCombatResolution.js` (6 handlers), `socketCombatHelpers.js` (13 fonctions + COMBAT_MODE_LABELS)
 - `index.js` inchangé — V1–V13 validés
-- **Prochaine étape** : à définir (voir `docs/EN_COURS.md` + `docs/ARCHI_REWORK.md`)
 
 **Session 116 suite (cont.) — Bugs combat ✅ clos complet :**
 - Bug 1 fix : `CombatGmDeclareWindow.jsx` L.186 `decl.fire_mode` → `initialStates.fire_mode` (stale closure fire_mode reset effect)

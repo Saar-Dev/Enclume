@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-20 Session 112
+> Dernière mise à jour : 2026-06-23 Session 118 (cont.)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -27,11 +27,11 @@
 
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
-| **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 | composants combat + `index.css §11` | **Haute** |
-| **E — Arme et statuts** | ~~COM1~~ + COM2 + COM4 + COM7 + COM10 + COM11 + ~~COM12~~ + ~~COM13~~ | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
-| **F — Ghosts + portraits** | ~~CL1~~ + CL3 | `CombatTimeline.jsx` + `CombatOverlay.jsx` | Moyenne |
-| **G — Drone store** | D1 + D2 | `SessionPage.jsx` + `Canvas3D.jsx` | Moyenne |
-| **H — Dettes techniques** | ~~WS1~~ + TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + TOK1 + MAP1 + COM14 | divers | Basse |
+| **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 + COM15 | composants combat + `index.css §11` | **Haute** |
+| **E — Arme et statuts** | ~~COM1~~ + COM2 + COM4 + COM7 + COM10 + COM11 + ~~COM12~~ + ~~COM13~~ + ~~COM17~~ + COM18 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
+| **F — Ghosts + portraits** | ~~CL1~~ + CL3 + COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
+| **G — Drone store** | D1 + D2 + D3 | `SessionPage.jsx` + `Canvas3D.jsx` + DB `drone_programs` | Moyenne |
+| **H — Dettes techniques** | ~~WS1~~ + TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + TOK1 + MAP1 + COM14 + DASH1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `server/src/socket/index.js` | SR ✅ — validation fonctionnelle requise |
 | **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
 | ~~A / B / C / J~~ | ~~B6 / COM6 / DR1 / DC1-3 / SHOCK1 / SHK3-6 / ST2~~ | — | ✅ Clos Sessions 94–97 |
@@ -356,15 +356,10 @@ Ajouter dans le composant de sélection de cible CaC pour observer l'état au mo
 
 ---
 
-### Bug COM15 — Fenêtres combat : propriétaire du slot non identifiable (GM)
+### Bug COM15 ✅ CLOS Session 118 — Fenêtres combat : propriétaire du slot non identifiable (GM)
 
-**Symptôme** : En phases ANNONCE et RÉSOLUTION, le GM ne peut pas identifier à quel personnage appartient la fenêtre qui vient de s'ouvrir (`CombatGmDeclareWindow`, `CombatModifiersWindow`). Problème amplifié avec plusieurs PNJ.
-
-**Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx` + `CombatModifiersWindow.jsx` — en-têtes des fenêtres.
-
-**Cause racine** [VÉRIFIÉ] : Aucun indicateur (nom, portrait, couleur) du personnage actif dans les en-têtes. Les fenêtres s'ouvrent sans contexte visuel identifiant l'acteur concerné.
-
-**Prochaine étape** : Cluster D — ajouter nom + couleur du personnage actif dans l'en-tête de chaque fenêtre combat.
+**Fix** : `CombatGmDeclareWindow.jsx` — header : nom actif en or (PNJ/Drone) ou grisé italique (PJ en attente), entre le titre et le compteur déclarés. `CombatModifiersWindow` + `CombatCacModifiersWindow` déjà conformes.
+**Testé** : SR ✅ — nom affiché en session combat. **Non testé** : cas PJ actif hors session réelle.
 
 ---
 
@@ -377,6 +372,29 @@ Ajouter dans le composant de sélection de cible CaC pour observer l'état au mo
 **Cause racine** [INCONNU] : Non investigué.
 
 **Prochaine étape** : Cluster F — lire `CombatOverlay.jsx` + handler `COMBAT_ACTION_DECLARED` dans `useCombatSocket.js`.
+
+---
+
+### ~~Bug COM17~~ ✅ — Phase ANNONCE : arme par défaut = Mains nues au lieu de l'arme équipée
+
+**Symptôme** : En phase d'annonce, lorsqu'un personnage a une arme dégainée (`state_weapon = 'drawn'`), la fenêtre de déclaration (GM et joueur) sélectionne "Mains nues" par défaut.
+
+**Fix (Session 118)** : Pattern valeur dérivée — `selectedMeleeWeaponId` / `selectedGmMeleeWeaponId` passé de `null` (deux rôles ambigus) à sentinelle `undefined` (auto-dériver) / `null` (mains nues explicite) / `id` (choix). `effectiveMeleeWeaponId` / `effectiveGmMeleeWeaponId` calculées depuis `decl.weapon` + liste armes disponibles — aucun useEffect de sync.
+
+**Testé** : SR ✅ — arme CaC sélectionnée automatiquement (drawn), mains nues si rangée/main sur l'arme.
+**Non testé** : Cycle holstered→drawn→holstered, arme distance, choix explicite mains nues ré-ouverture.
+
+---
+
+### Bug COM18 — Roster PNJ : déclaration état initial arme/posture absente côté GM
+
+**Symptôme** : Côté joueur, une fenêtre permet de déclarer l'état initial (arme au clair, posture de combat) avant que le slot ne soit joué. L'équivalent pour les PNJ du GM n'existe pas — le GM ne peut pas déclarer l'état initial arme/posture de ses PNJ depuis le roster de déclaration.
+
+**Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx` — section état initial PNJ absente. Composant joueur à identifier pour référence.
+
+**Cause racine** [INCONNU] : Fonctionnalité non implémentée côté GM. Le roster GM `CombatGmDeclareWindow` n'expose pas de sélecteur d'état initial arme/posture.
+
+**Prochaine étape** : Cluster E — identifier le composant joueur gérant la déclaration initiale (probablement `CombatActionWindow` ou composant dédié), puis porter l'équivalent dans `CombatGmDeclareWindow`.
 
 ---
 
@@ -642,6 +660,18 @@ console.log('[DBG-INI1] initiative calc', { roll, rea, hiddenDie, finalInitiativ
 **Note** : Comportement `y+1.0` acceptable pour V1.
 
 **Prochaine étape** : Sprint voxels v2 — hors scope V1.
+
+---
+
+### Bug DASH1 — Dashboard : tag `changelog.tags.refactor` affiché brut (non traduit)
+
+**Symptôme** : Sur la page Dashboard, le tag "refactor" du changelog affiche la clé i18n brute `changelog.tags.refactor` au lieu du libellé traduit.
+
+**Code impliqué** : Composant Dashboard (à identifier) — affichage tags changelog. `client/src/locales/fr.json` — clé `changelog.tags.refactor` absente ou mal référencée.
+
+**Cause racine** [INCONNU] : Clé i18n manquante dans `fr.json`, ou appel `t()` incorrect dans le composant.
+
+**Prochaine étape** : Cluster H — vérifier `fr.json` (clé `changelog.tags.refactor` présente ?) + composant Dashboard (appel `t()` correct ?).
 
 ---
 

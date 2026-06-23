@@ -81,7 +81,7 @@ background: var(--bg-app);
 /* === IN-SESSION SURFACES (over 3D map — darker for contrast) === */
 --bg-session:        #0f0f1a;
 --bg-session-raised: #16162a;
---bg-session-scrim:  rgba(10,10,20,0.88);
+--bg-session-scrim:  rgba(10,10,20,0.20);
 --border-session:    #1e1e2e;
 --border-session-2:  #2a2a3e;
 

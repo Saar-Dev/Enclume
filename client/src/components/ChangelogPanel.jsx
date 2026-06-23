@@ -5,9 +5,10 @@ const ACCENT = '#3aaa6a'
 const MONO = { fontFamily: "'Share Tech Mono', monospace" }
 
 const TAGS = {
-  add: { label: 'AJOUT',      color: '#3aaa6a' },
-  fix: { label: 'CORRECTIF',  color: '#5b8dee' },
-  chg: { label: 'CHANGEMENT', color: '#f5c542' },
+  add:     { label: 'AJOUT',      color: '#3aaa6a' },
+  fix:     { label: 'CORRECTIF',  color: '#5b8dee' },
+  chg:     { label: 'CHANGEMENT', color: '#f5c542' },
+  refactor: { label: 'REFACTO',   color: '#a78bfa' },
 }
 
 function parseChangelog(text) {

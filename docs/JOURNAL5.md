@@ -669,3 +669,28 @@ SR ✅, V1–V13 validés (confirmation Saar) — SR sans erreur ✅, health 200
 
 ### Non testé
 — (déménagement pur, zéro logique modifiée)
+
+---
+
+## Session 118 — 2026-06-23 — Ergonomie combat UI (COM15 + Timeline)
+
+### Travail effectué
+
+**COM15 ✅ — Identité personnage dans les en-têtes fenêtres combat :**
+- `CombatGmDeclareWindow.jsx` — header : nom du token actif en or entre le titre et le compteur. Grisé italique si slot PJ (attente). `flex:1` déplacé du titre vers le span nom.
+- `CombatModifiersWindow.jsx` et `CombatCacModifiersWindow.jsx` : déjà conformes (noms intégrés depuis précédentes sessions).
+
+**Poignée de déplacement basse — 3 fenêtres :**
+- `CombatGmDeclareWindow.jsx`, `CombatModifiersWindow.jsx`, `CombatCacModifiersWindow.jsx` : `<div onMouseDown={onHeaderMouseDown} style={styles.bottomHandle} />` ajouté entre le body et le footer. Même `onHeaderMouseDown` que le header — drag depuis le bas fonctionne identiquement.
+
+**CombatTimeline.jsx — 4 améliorations :**
+- Fond 20% opaque : `--bg-session-scrim` → `rgba(10,10,20,0.20)` dans `index.css` (usage unique — pas d'impact collatéral).
+- Phase + flèche déplacées du panneau droit vers le `leftPanel`, sous "TOUR N".
+- Bouton collapse `▲`/`▼` ajouté dans `leftPanel` — masque/révèle le bloc `cardList`.
+- Portraits centrés : `justifyContent: 'center'` sur `cardList`.
+
+### Testé
+SR ✅ — timeline transparente ✅, phase à gauche ✅, collapse ✅, portraits centrés ✅, nom actif dans header CombatGmDeclareWindow ✅, poignées basses déplaçables curseur ↕ ✅.
+
+### Non testé
+Cycle holstered→drawn pendant une session combat réelle (nom dans header CombatGmDeclareWindow — cas PJ actif non reproductible hors session).

@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-23 Session 117
+> Dernière mise à jour : 2026-06-23 Session 118 (cont.)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -80,6 +80,12 @@
    → `socketCombat.js` réduit à 9L (orchestrateur pur) — `index.js` inchangé
    → V1–V13 validés (SR + combat complet GM + PJ)
 
+**20. REWORK-18 — socketCombatHelpers.js : séparation computation / émission** ← PROCHAINE ÉTAPE
+   → Spec préliminaire dans `docs/PLAN_REWORK18.md`
+   → Problème : `resolveMeleeAction` (~490L) + `resolveAssaultAction` (~320L) + `resolveDroneAssaultAction` (~300L) mélangent computation et `socket.emit` — non testables unitairement
+   → Cible : helpers retournent `{ ok, result }`, handlers émettent — pattern boardgame.io / Colyseus
+   → Lire `docs/PLAN_REWORK18.md` + `docs/MANUELSYSCOMBAT.md §6` avant de coder
+
 ---
 
 ## État global
@@ -117,6 +123,7 @@
 | ~~UI1~~ | ~~Fenêtre déclaration design blanc~~ | ✅ REWORK-10 clos complet — scénarios 1–8 validés (Session 109) |
 | ~~COM1~~ | ~~Recharger ne fait rien~~ | ✅ Clos Session 109 |
 | ~~CL1~~ | ~~Portraits PNJ non visibles timeline joueur~~ | ✅ Clos Session 109 |
+| ~~COM15~~ | ~~Propriétaire slot non identifiable GM~~ | ✅ Clos Session 118 |
 | COM8 | Fenêtre annonce visible pendant sélection cible | Moyenne |
 | ~~COM12~~ | ~~Mode de tir : chips CC/RC/RF sans filtre disponibilité arme~~ | ✅ REWORK-06 Session 114 |
 | ~~COM13~~ | ~~Assaut tir joueur : "Tir simple" par défaut non validé sans re-clic~~ | ✅ REWORK-06 Session 114 |
@@ -190,6 +197,8 @@
 - PC42 — `WHERE NOT col = 'val'` exclut les NULL en PostgreSQL → toujours `(col IS NULL OR col != 'val')`
 - PC43 — `orderByRaw('CASE WHEN ? IS NOT NULL ...')` : PostgreSQL ne peut pas inférer le type UUID sans cast → éviter pour les UUID, préférer le JS post-fetch
 - PC44 — `io.fetchSockets()` nécessaire quand le GM clique Agir pour un slot joueur (socket ≠ joueur)
+- PC45 — `combat_actions.type` (serveur, valeur brute) ≠ `action_key` (client, clé UI) — deux colonnes distinctes, valeurs identiques pour 'melee'. Confondre les deux → 0 résultat sur les queries
+- PC46 — `meleePrecheckId` dans `CombatOverlay` : `activeMeleeAction?.id ?? playerActiveMeleeAction?.id ?? null` — stable en RESOLUTION. `useEffect` doit inclure `[meleePrecheckId, socket]` — re-tourne à chaque reconnexion (SocketProvider crée nouvelle instance)
 - PL-Q1 — `getSemanticHTML()` Quill 2.0 retourne vide — utiliser `querySelector('.ql-editor').innerHTML`
 - PL-Q2 — Quill insère la toolbar comme `previousElementSibling`, pas à l'intérieur du container — guard `classList.contains('ql-container')`
 - PL-Q3 — `containerRef.current` peut être null dans le cleanup React 19 — toujours capturer en variable locale en début d'effect

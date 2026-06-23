@@ -204,6 +204,9 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
 
       </div>
 
+      {/* Poignée bas */}
+      <div onMouseDown={onHeaderMouseDown} style={styles.bottomHandle} />
+
       {/* Footer */}
       <div className="combat-float-footer">
         <button
@@ -247,4 +250,10 @@ const styles = {
   checkbox: { accentColor: '#f5c542', cursor: 'pointer', flexShrink: 0 },
   checkText: { fontSize: 11, color: '#c0c0d0', flex: 1, display: 'flex', justifyContent: 'space-between' },
   checkMod: { fontSize: 10, fontWeight: 700, minWidth: 32, textAlign: 'right' },
+  bottomHandle: {
+    height: 6, flexShrink: 0,
+    background: 'rgba(90,100,120,0.12)',
+    borderTop: '1px solid rgba(90,100,120,0.18)',
+    cursor: 'ns-resize',
+  },
 }

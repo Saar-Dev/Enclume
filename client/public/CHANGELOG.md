@@ -1,3 +1,12 @@
+## v121 — 2026-06-23 — Ergonomie combat UI : nom actif + poignées basses + Timeline
+
+### Client — UI
+- [fix] `CombatGmDeclareWindow.jsx` — header : nom du personnage actif (or = PNJ/Drone, grisé = attente PJ)
+- [ux] `CombatGmDeclareWindow`, `CombatModifiersWindow`, `CombatCacModifiersWindow` — poignée de déplacement en bas de chaque fenêtre (curseur ↕)
+- [ux] `CombatTimeline` — fond 20% opaque, phase + flèche déplacées à gauche sous Tour N, bouton collapse ▲/▼, portraits centrés
+
+---
+
 ## v120 — 2026-06-23 — REWORK-17 : socketCombat.js modularisation (State/Announcement/Resolution/Helpers)
 
 ### Serveur — Refactoring

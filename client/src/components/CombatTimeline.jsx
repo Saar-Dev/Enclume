@@ -13,6 +13,7 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
   // ── Timer de tour (ANNOUNCEMENT uniquement) ──────────────────────────────────
   // Se remet à zéro à chaque changement de slot actif.
   const [secondsLeft, setSecondsLeft] = useState(null)
+  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
     if (!actionTimerSec || phase !== 'ANNOUNCEMENT') {
@@ -87,63 +88,58 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
   return (
     <div className="combat-timeline-bar" style={{ top: topOffset }}>
 
-      {/* Timer + Tour N — ancrage gauche */}
+      {/* Tour N + Phase + Collapse — ancrage gauche */}
       <div style={styles.leftPanel}>
         {secondsLeft !== null && (
           <div style={styles.timer(timerColor)}>
             {secondsLeft}
           </div>
         )}
-        <div style={styles.turnLabel}>
-          Tour {currentTurn}
-        </div>
+        <div style={styles.turnLabel}>Tour {currentTurn}</div>
+        <span style={styles.phaseLabel}>{isAnnouncement ? 'Annonce' : 'Résolution'}</span>
+        <span style={styles.phaseArrow(isAnnouncement)}>{isAnnouncement ? '←' : '→'}</span>
+        <button style={styles.collapseBtn} onClick={() => setCollapsed(c => !c)}>
+          {collapsed ? '▼' : '▲'}
+        </button>
       </div>
 
       {/* Cartes */}
-      <div style={styles.cardList}>
-        <LayoutGroup>
-          <AnimatePresence initial={false}>
-            {visible.map(card => (
-              <motion.div
-                key={card.key}
-                layout
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
-                style={{ flexShrink: 0 }}
-              >
-                <TimelineCard
-                  portraitUrl={card.portraitUrl}
-                  label={card.label}
-                  initiative={card.initiative}
-                  isActive={card.isActive}
-                  hasAnnounced={card.hasAnnounced}
-                  isSurprised={card.isSurprised}
-                  worstSeverity={card.worstSeverity}
-                  isPnj={card.isPnj}
-                  isDimmed={card.isDimmed ?? false}
-                  onClick={onPortraitClick}
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </LayoutGroup>
+      {!collapsed && (
+        <div style={styles.cardList}>
+          <LayoutGroup>
+            <AnimatePresence initial={false}>
+              {visible.map(card => (
+                <motion.div
+                  key={card.key}
+                  layout
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  style={{ flexShrink: 0 }}
+                >
+                  <TimelineCard
+                    portraitUrl={card.portraitUrl}
+                    label={card.label}
+                    initiative={card.initiative}
+                    isActive={card.isActive}
+                    hasAnnounced={card.hasAnnounced}
+                    isSurprised={card.isSurprised}
+                    worstSeverity={card.worstSeverity}
+                    isPnj={card.isPnj}
+                    isDimmed={card.isDimmed ?? false}
+                    onClick={onPortraitClick}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </LayoutGroup>
 
-        {overflow > 0 && (
-          <div style={styles.overflow}>+{overflow}</div>
-        )}
-      </div>
-
-      {/* Indicateur phase + flèche — ancrage droite */}
-      <div style={styles.phaseIndicator}>
-        <span style={styles.phaseLabel}>
-          {isAnnouncement ? 'Annonce' : 'Résolution'}
-        </span>
-        <span style={styles.phaseArrow(isAnnouncement)}>
-          {isAnnouncement ? '←' : '→'}
-        </span>
-      </div>
+          {overflow > 0 && (
+            <div style={styles.overflow}>+{overflow}</div>
+          )}
+        </div>
+      )}
 
     </div>
   )
@@ -179,6 +175,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'row',
     alignItems: 'flex-end',
+    justifyContent: 'center',
     gap: 4,
     flex: 1,
   },
@@ -190,25 +187,27 @@ const styles = {
     paddingLeft: 4,
     flexShrink: 0,
   },
-  phaseIndicator: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    gap: 2,
-    paddingBottom: 6,
-    flexShrink: 0,
-  },
   phaseLabel: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#55558a',
     fontWeight: 600,
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
   },
   phaseArrow: (isAnnouncement) => ({
-    fontSize: 18,
+    fontSize: 14,
     color: isAnnouncement ? '#e0a050' : '#50c878',
     lineHeight: 1,
     fontWeight: 700,
   }),
+  collapseBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#44446a',
+    fontSize: 7,
+    cursor: 'pointer',
+    padding: '1px 2px',
+    lineHeight: 1,
+    marginTop: 2,
+  },
 }
