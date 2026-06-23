@@ -694,3 +694,23 @@ SR ✅ — timeline transparente ✅, phase à gauche ✅, collapse ✅, portrai
 
 ### Non testé
 Cycle holstered→drawn pendant une session combat réelle (nom dans header CombatGmDeclareWindow — cas PJ actif non reproductible hors session).
+
+---
+
+## Session 119 — 2026-06-23 — Bug D3 : programme armement_contact drone
+
+### Travail effectué
+
+**Bug D3 ✅ — Drone CaC : programme "armement_contact" absent du catalogue :**
+- Cause racine : migration 76d avait basculé tous les programmes `armement` → `armement_distance`. Aucun programme `armement_contact` n'existait dans `ref_equipment`.
+- Migration 83 (`83_drone_programs_rename.js`) :
+  - "Attaque" → name="Contact", category=`armement_contact`
+  - "Tir" → name="Balistique" (category `armement_distance` inchangée)
+  - "Contrôle armement" supprimé (générique sans usage mécanique distinct dans le code)
+- `DroneSheet.jsx` L.141 : group key `armement_distance` → `armement` (label "Armement" — clé `fr.json` déjà présente)
+
+### Testé
+SR ✅ — migration appliquée ✅ — fonctionnel confirmé (Saar).
+
+### Non testé
+Session combat réelle avec drone CaC assigné programme "Contact" → résolution complète (sans log `programme armement_contact introuvable`).

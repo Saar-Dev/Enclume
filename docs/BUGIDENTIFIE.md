@@ -140,15 +140,10 @@ Ajouter dans la IIFE du menu radial `SessionPage.jsx` avant le `find` pour compa
 
 ---
 
-### Bug D3 — Drone CaC : programme "armement_contact" absent du catalogue
+### Bug D3 ✅ CLOS Session 119 — Drone CaC : programme "armement_contact" absent du catalogue
 
-**Symptôme** : Drone attaque en CaC → `[WS] resolveDroneAssaultAction — programme armement_contact introuvable pour drone X`. Attaque abandonnée silencieusement côté client.
-
-**Code impliqué** : `server/src/socket/socketCombat.js` — `resolveDroneAssaultAction` L.2321 : `db('drone_programs').where({ character_id, category:'armement_contact' })` retourne null.
-
-**Cause racine** [HYPOTHÈSE] : Soit aucune UI ne permet d'assigner un programme `armement_contact`, soit `ref_drone_programs` ne contient pas ce type, soit le programme n'a pas été créé en DB pour ce drone.
-
-**Prochaine étape** : Vérifier `ref_drone_programs` + `drone_programs` en DB. Vérifier si `DroneWindow` expose une UI d'assignation de programme CaC.
+**Correction** : Migration 83 — "Attaque" → "Contact" (`armement_contact`), "Tir" → "Balistique", "Contrôle armement" supprimé. `DroneSheet.jsx` group key `armement_distance` → `armement`.
+**Testé** : SR ✅, migration ✅, fonctionnel confirmé. **Non testé** : session combat réelle avec drone CaC.
 
 ---
 

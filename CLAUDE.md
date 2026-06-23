@@ -101,10 +101,15 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 118 (2026-06-23)
+## ÉTAT COURANT — Session 119 (2026-06-23)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
+
+**Session 119 — Bug D3 ✅ clos complet :**
+- Migration 83 : "Attaque"→"Contact" (`armement_contact`), "Tir"→"Balistique", "Contrôle armement" supprimé
+- `DroneSheet.jsx` group key `armement_distance` → `armement`
+- **Prochaine étape** : bugs drone suivants (D1, D2) ou cluster suivant — voir `docs/EN_COURS.md`
 
 **Session 118 (cont.) — Ergonomie combat UI ✅ clos complet :**
 - COM15 ✅ — `CombatGmDeclareWindow.jsx` header : nom actif en or (PNJ/Drone) / grisé italique (PJ)

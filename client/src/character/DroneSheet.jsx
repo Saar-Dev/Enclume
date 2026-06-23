@@ -138,7 +138,7 @@ const PROGRAM_CATEGORIES = [
 const DISPLAY_GROUPS = [
   { key: 'detection',        categories: ['detection'] },
   { key: 'ami_ennemi',       categories: ['ami_ennemi'] },
-  { key: 'armement_distance', categories: ['armement_distance', 'armement_contact'] },
+  { key: 'armement', categories: ['armement_distance', 'armement_contact'] },
   { key: 'esquive',          categories: ['esquive'] },
   { key: 'duel_ordinateurs', categories: ['securite', 'offensif', 'contre_attaque', 'rempart'] },
   { key: 'pilotage',         categories: ['pilotage'] },

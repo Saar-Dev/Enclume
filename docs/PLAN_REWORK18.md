@@ -15,6 +15,11 @@
 | `resolveDroneAssaultAction` | L.952–1248 (~296L) | 12 |
 | `resolveAssaultAction` | L.1250–1567 (~317L) | 7 |
 
+**Preuves** — exemples de couplage computation/émission dans le code actuel :
+- `socketCombatHelpers.js:356` — `io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, ...)` au milieu d'une validation distance
+- `socketCombatHelpers.js:484` — `io.to(campaignId).emit(WS.DICE_RESULT, ...)` avant le bloc défense cible
+- `socketCombatHelpers.js:799` — `defSocket?.emit(WS.COMBAT_MELEE_DEFENSE_PROMPT, prompt)` après 400 lignes de calcul
+
 Conséquence : ces fonctions sont impossibles à tester unitairement sans mocker `io` + `socket`, et les émissions sont éparpillées dans la logique de calcul.
 
 **État actuel** : `server/src/socket/socketCombatHelpers.js` — 3 fonctions exportées, mélange computation + émission. Cartographie complète des émissions et points de sortie → section dédiée ci-dessous.
@@ -25,7 +30,7 @@ Conséquence : ces fonctions sont impossibles à tester unitairement sans mocker
 
 **Références pro :**
 - **boardgame.io** `ctx.events` — les moves accumulent des effets dans une file pendant leur exécution ; le flush se fait après le retour de la fonction, par la couche master (jamais dans la move elle-même).
-- **Colyseus Command Pattern** — `execute()` retourne une structure ; le Dispatcher est le seul responsable du transport.
+- **Colyseus Command Pattern** — `execute()` retourne des Command objects (exécutables, chaînés récursivement par le Dispatcher) ; principe validé par la communauté : *"return what should happen, don't dispatch from within."* Notre pattern retourne des data descriptors plats plutôt que des Command objects — même séparation, implémentation plus simple pour un usage jetable sans logique propre.
 - **Game Programming Patterns §Event Queue** — computation accumule `{ to, event, data }` ; dispatch séparé après calcul complet.
 
 **Raison du "partiel" :**
@@ -341,6 +346,18 @@ Hors périmètre. Les 3 fonctions lui passent toujours `io` directement — aucu
 
 **A7 — `attackerSocket` dans COMBAT_MELEE_DEFENSE_CONFIRM (L.560–568)**
 `attackerSocket` est trouvé via `io.fetchSockets()` dans le handler, puis passé comme `socket` à `flushEmissions`. Ce lookup reste nécessaire — `socket` dans ce handler est le socket du **défenseur**, mais les émissions `{ to: 'socket' }` de `resolveMeleeAction` doivent aller à l'**attaquant**. `allSockets` est passé en `preloadedSockets` à `flushEmissions` pour éviter un double `fetchSockets()`.
+
+**A8 — Snapshot obligatoire dans les descripteurs : `data:` capturé par valeur, jamais par référence**
+Source : *Game Programming Patterns §Event Queue* — *"queued events must be data-heavy: you can't trust the world still contains the state at flush time."*
+`data:` doit toujours être un littéral construit au moment du `push` — pas une référence à un objet qui peut évoluer :
+```js
+// ✅ valeurs primitives capturées au push
+emissions.push({ to: 'room', event: WS.DICE_RESULT, data: { rolls: attackRolls, total: rollAttaque, userId } })
+
+// ❌ référence mutable — si l'objet évolue entre push et flush, le descripteur émet l'état final
+emissions.push({ to: 'room', event: WS.ROSTER_UPDATE, data: roster })
+```
+Dans le code actuel, tous les `data:` sont des littéraux à valeurs primitives — safe. Contrainte à respecter à chaque ajout futur d'émission dans les 3 fonctions.
 
 ---
 
