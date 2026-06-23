@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-23 Session 116 suite (cont.)
+> Dernière mise à jour : 2026-06-23 Session 117
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -75,11 +75,10 @@
    → 8 logs `[DBG-CAC]` supprimés — message rouge `#e05252` dans chat
    → V1–V10, V12 validés — V11 noté Non testé (race condition LAN)
 
-**19. REWORK-17 — socketCombat.js Modularisation** ← PROCHAINE ÉTAPE
-   → Spec complète dans `docs/ARCHI_REWORK.md §REWORK-17`
-   → Problème : monolithe 2969L — handlers, helpers, resolve functions dans une closure unique
-   → Plan : créer 4 fichiers (`socketCombatState`, `socketCombatAnnouncement`, `socketCombatResolution`, `socketCombatHelpers`) + orchestrateur `socketCombat.js` ~35L
-   → Lire `docs/ARCHI_REWORK.md §REWORK-17` avant de coder
+**19. ~~REWORK-17 — socketCombat.js Modularisation~~** ✅ CLOS COMPLET Session 117
+   → 4 modules créés : `socketCombatState` (5 handlers), `socketCombatAnnouncement` (3 handlers), `socketCombatResolution` (6 handlers), `socketCombatHelpers` (13 fonctions + COMBAT_MODE_LABELS)
+   → `socketCombat.js` réduit à 9L (orchestrateur pur) — `index.js` inchangé
+   → V1–V13 validés (SR + combat complet GM + PJ)
 
 ---
 

@@ -626,3 +626,46 @@ SR ✅, V1–V13 validés (confirmation Saar) — hors combat ✅, activation mo
 
 ### Non testé
 — (aucun cas identifié hors périmètre)
+
+---
+
+## Session 117 — 2026-06-23 — REWORK-17 : socketCombat.js modularisation
+
+### Travail effectué
+
+**Audit pre-migration (JOURNALTEMP.md) :**
+- Grep exact lignes handlers (post-REWORK-16, décalage +58L vs plan) : COMBAT_START(80), COMBAT_END(214), COMBAT_ANNOUNCE_START(271), COMBAT_INIT_STATE(311), COMBAT_SURPRISE_RESULT(349), COMBAT_ACTION_DECLARE(436), COMBAT_SKIP_PLAYER(815), COMBAT_ANNOUNCE_PREVIEW(838), COMBAT_ACTION_PRECHECK(856), COMBAT_ACTION_CONFIRM(920), COMBAT_DAMAGE_CONFIRM(1035), COMBAT_MELEE_DEFENSE_CONFIRM(1200), COMBAT_STUN_CONFIRM(1420), COMBAT_APPLY_STUN(1455)
+- Corrections imports vs plan : A4 — `checkLOSForPrecheck` → Resolution (absent du plan original) ; A5 — `getUserColor` retiré des Helpers (usage unique L.374 → State)
+- `fetchCibleNA` confirmé local dans `resolveDroneAssaultAction` L.2503 — inclus automatiquement dans l'extraction Helpers
+
+**Étape 1 — `socketCombatHelpers.js` créé (~1600L)**
+- Tous les imports originaux moins `getUserColor` et `checkLOSForPrecheck`
+- 7 constantes — seul `COMBAT_MODE_LABELS` exporté ; 6 autres intra-Helpers
+- 13 fonctions toutes exportées — 14 exports total
+- `node --check` ✅
+
+**Étape 2 — `socketCombatState.js` créé (~360L)**
+- 5 handlers : COMBAT_START, COMBAT_END, COMBAT_ANNOUNCE_START, COMBAT_INIT_STATE, COMBAT_SURPRISE_RESULT
+- `const { campaignId, user, isGm } = context` — L.73 original inclus
+- `node --check` ✅
+
+**Étape 3 — `socketCombatAnnouncement.js` créé (~420L)**
+- 3 handlers : COMBAT_ACTION_DECLARE, COMBAT_SKIP_PLAYER, COMBAT_ANNOUNCE_PREVIEW
+- `const { campaignId, user, isGm } = context` ajouté manuellement
+- `node --check` ✅
+
+**Étape 4 — `socketCombatResolution.js` créé (~620L)**
+- 6 handlers : COMBAT_ACTION_PRECHECK, COMBAT_ACTION_CONFIRM, COMBAT_DAMAGE_CONFIRM, COMBAT_MELEE_DEFENSE_CONFIRM, COMBAT_STUN_CONFIRM, COMBAT_APPLY_STUN
+- `const { campaignId, user, isGm } = context` ajouté manuellement
+- `node --check` ✅
+
+**Étape 5 — `socketCombat.js` réécrit (9L)**
+- Orchestrateur pur : 3 imports + `registerCombatHandlers` délègue aux 3 modules
+- `grep -c "socket.on(WS" socketCombat.js` = 0 ✅ — test runtime imports ✅
+- `node --check` × 5 ✅ — `index.js` inchangé ✅
+
+### Testé
+SR ✅, V1–V13 validés (confirmation Saar) — SR sans erreur ✅, health 200 ✅, COMBAT_START ✅, COMBAT_ANNOUNCE_START ✅, COMBAT_ACTION_DECLARE ✅, COMBAT_SKIP_PLAYER ✅, COMBAT_ACTION_CONFIRM déplacement ✅, COMBAT_ACTION_CONFIRM CaC + precheck ✅, COMBAT_ACTION_CONFIRM assaut distance ✅, COMBAT_MELEE_DEFENSE_CONFIRM ✅, COMBAT_DAMAGE_CONFIRM ✅, COMBAT_END ✅, reconnexion RESOLUTION ✅.
+
+### Non testé
+— (déménagement pur, zéro logique modifiée)

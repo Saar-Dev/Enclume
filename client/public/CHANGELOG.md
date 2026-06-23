@@ -1,3 +1,14 @@
+## v120 — 2026-06-23 — REWORK-17 : socketCombat.js modularisation (State/Announcement/Resolution/Helpers)
+
+### Serveur — Refactoring
+- [refactor] `server/src/socket/socketCombatHelpers.js` créé — 13 fonctions resolve/helper + COMBAT_MODE_LABELS
+- [refactor] `server/src/socket/socketCombatState.js` créé — 5 handlers ROSTER+ANNOUNCEMENT
+- [refactor] `server/src/socket/socketCombatAnnouncement.js` créé — 3 handlers DECLARATION
+- [refactor] `server/src/socket/socketCombatResolution.js` créé — 6 handlers RESOLUTION+PRECHECK
+- [refactor] `server/src/socket/socketCombat.js` réduit à 9L (orchestrateur pur)
+
+---
+
 ## v119 — 2026-06-23 — Fix combat : fire_mode stale closure + actions store Tour 2
 
 ### Client — Bugfix

@@ -152,7 +152,6 @@ import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
 import { getMrTable, getModifier } from '../lib/mrTable.js'
-import { getUserColor } from '../lib/socketUtils.js'
 import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
@@ -172,6 +171,8 @@ Exporter (13 fonctions + 1 constante = 14 exports) :
 `export function startAnnouncementTimers(...)`, `export function skipPlayer(...)`, `export function startResolutionPhase(...)`, `export function advanceSlot(...)`, `export function endTurn(...)`, `export function multiAdversaryMalus(...)`, `export function countAdversaires(...)`, `export async function resolveMeleeAction(...)`, `export async function resolveReloadAction(...)`, `export async function resolveDroneAssaultAction(...)`, `export async function resolveAssaultAction(...)`, `export function calcDroneRD(...)`, `export async function resolveDroneIntegrityLoss(...)`, `export const COMBAT_MODE_LABELS`.
 
 Exporter uniquement `COMBAT_MODE_LABELS` parmi les constants — seule constante utilisée dans un handler file (L.1214 COMBAT_MELEE_DEFENSE_CONFIRM → socketCombatResolution.js, vérifié session 117). Les 6 autres constants (`PORTEE_MOD_COMP`, `SITUATION_MODS`, `TAILLE_MODS`, `SITUATION_LABELS`, `PORTEE_LABELS`, `TAILLE_LABELS`) restent non-exportées — utilisées uniquement dans les resolve functions (intra-Helpers).
+
+Note session 117 : `getUserColor` n'est PAS utilisé dans les Helpers (seul usage : L.374 SURPRISE_RESULT → State). Import retiré de socketCombatHelpers.js.
 
 ### `socketCombatState.js`
 ```js
@@ -202,6 +203,7 @@ import { skipPlayer, startResolutionPhase } from './socketCombatHelpers.js'
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
+import { checkLOSForPrecheck } from '../lib/losService.js'
 import { parseDice } from '../lib/diceParser.js'
 import { getMrTable, getModifier } from '../lib/mrTable.js'
 import * as statusService from '../lib/statusService.js'

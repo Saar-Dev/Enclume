@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 116 suite (cont.) — 2026-06-23
+> Session 117 — 2026-06-23
 
 ---
 
@@ -101,10 +101,16 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 116 suite (cont.) (2026-06-23)
+## ÉTAT COURANT — Session 117 (2026-06-23)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
+
+**Session 117 — REWORK-17 ✅ clos complet :**
+- `socketCombat.js` (3027L) → 4 modules + orchestrateur 9L
+- `socketCombatState.js` (5 handlers), `socketCombatAnnouncement.js` (3 handlers), `socketCombatResolution.js` (6 handlers), `socketCombatHelpers.js` (13 fonctions + COMBAT_MODE_LABELS)
+- `index.js` inchangé — V1–V13 validés
+- **Prochaine étape** : à définir (voir `docs/EN_COURS.md` + `docs/ARCHI_REWORK.md`)
 
 **Session 116 suite (cont.) — Bugs combat ✅ clos complet :**
 - Bug 1 fix : `CombatGmDeclareWindow.jsx` L.186 `decl.fire_mode` → `initialStates.fire_mode` (stale closure fire_mode reset effect)
