@@ -86,6 +86,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       if (roster) updateRoster(roster)
       if (actions) setActions(actions)
       if (phase === 'ANNOUNCEMENT') {
+        setActions([])
         setReloadResult(null)
         setMeleeDefensePrompt(null)
         setMeleeResult(null)
@@ -111,12 +112,12 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     }
-    const onDeclareError = ({ message }) => {
+    const onDeclareError = ({ message, username }) => {
       addMessage({
         id: `combat-error-${Date.now()}`,
-        system: true,
-        error: true,
-        text: `⚠ ${message}`,
+        type: 'declare_error',
+        text: message,
+        username,
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     }

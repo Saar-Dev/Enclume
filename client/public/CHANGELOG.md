@@ -1,3 +1,11 @@
+## v119 — 2026-06-23 — Fix combat : fire_mode stale closure + actions store Tour 2
+
+### Client — Bugfix
+- [fix] `CombatGmDeclareWindow.jsx` — PNJ RL-only : fire_mode ne se réinitialisait pas correctement au changement de slot (stale closure `decl.fire_mode` → `initialStates.fire_mode`)
+- [fix] `useCombatSocket.js` — "Action non autorisée" au Tour 2 : store `actions` non vidé lors du passage en ANNOUNCEMENT (ajout `setActions([])` dans `onPhaseChanged`)
+
+---
+
 ## v118 — 2026-06-22 — REWORK-12 : useCharacterSocket — blessures + inventaire extraits
 
 ### Client — Refactoring

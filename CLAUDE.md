@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 116 suite — 2026-06-22
+> Session 116 suite (cont.) — 2026-06-23
 
 ---
 
@@ -101,10 +101,15 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 116 suite (2026-06-22)
+## ÉTAT COURANT — Session 116 suite (cont.) (2026-06-23)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
+
+**Session 116 suite (cont.) — Bugs combat ✅ clos complet :**
+- Bug 1 fix : `CombatGmDeclareWindow.jsx` L.186 `decl.fire_mode` → `initialStates.fire_mode` (stale closure fire_mode reset effect)
+- Bug 2 fix : `useCombatSocket.js` `onPhaseChanged` — `setActions([])` ajouté dans le bloc ANNOUNCEMENT (store stale Tour 2+)
+- SR ✅ fonctionnel confirmé — Prochaine étape : REWORK-17
 
 **Session 116 suite — REWORK-16 ✅ clos complet :**
 - Fix `resolveMeleeAction` L.1699 `socket.emit` → `io.to(campaignId).emit` (broadcast)
@@ -225,8 +230,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - REWORK-03 : `woundService.applyWound` — 5 call sites WS centralisés + fix DIV-1 (`worst_wound_severity` dans WOUND_ADDED)
 
 **Dettes actives :**
-- **RANGE1-drone** — `resolveDroneAssaultAction` : pas de range check CaC → fenêtre bloquée [HYPOTHÈSE] — sprint actif
-- **LOS1-drone** — drone ranged LOS bloquée → `return` silencieux → pas de `COMBAT_DECLARE_ERROR` — même sprint
+- ~~**RANGE1-drone**~~ ✅ — REWORK-16 Session 116 suite
+- ~~**LOS1-drone**~~ ✅ — REWORK-16 Session 116 suite
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
 - ~~COM4 ✅~~ — mains nues par défaut (REWORK-06 Session 114)
 - Bug CL3 — Ghosts déplacement d'annonce disparus

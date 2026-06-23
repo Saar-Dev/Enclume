@@ -74,6 +74,23 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meleePrecheckId, socket])
 
+  // Pre-validation assaut distance — REWORK-16 extension
+  const assaultPrecheckId = activeAssaultAction?.id ?? playerActiveAssaultAction?.id ?? null
+  const [assaultPrecheckOk, setAssaultPrecheckOk] = useState(null)
+
+  useEffect(() => {
+    setAssaultPrecheckOk(null)
+    if (!assaultPrecheckId || !socket) return
+    let cancelled = false
+    const tokenId = activeAssaultAction?.token_id ?? playerActiveAssaultAction?.token_id
+    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'assault' }, (err, { ok } = {}) => {
+      if (cancelled) return
+      setAssaultPrecheckOk(err ? false : (ok ?? false))
+    })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assaultPrecheckId, socket])
+
   return (
     <div style={{ ...styles.overlay, '--sidebar-w': sidebarWidth + 'px' }}>
 
@@ -138,8 +155,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Phase RÉSOLUTION — panneau GM : confirmer le slot actif (hors assaut distance, ou drone CaC qui suit le même flow que CaC humanoïde) */}
-      {isGm && phase === 'RESOLUTION' && gmActiveEntry && !activeAssaultAction && !activeMeleeAction && (
+      {/* Phase RÉSOLUTION — panneau GM : confirmer le slot actif (hors assaut distance LOS ok, ou drone CaC qui suit le même flow que CaC humanoïde) */}
+      {isGm && phase === 'RESOLUTION' && gmActiveEntry && (!activeAssaultAction || assaultPrecheckOk === false) && (!activeMeleeAction || precheckOk === false) && (
         <div style={styles.gmResolution}>
           <div style={styles.gmResolutionLabel}>
             Slot actif : <strong>{gmActiveToken?.label ?? '?'}</strong>
@@ -156,7 +173,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       )}
 
       {/* Phase RÉSOLUTION — modificateurs assaut PJ (joueur résout lui-même) */}
-      {!isGm && phase === 'RESOLUTION' && (playerActiveAssaultAction || attackResult) && (
+      {!isGm && phase === 'RESOLUTION' && ((playerActiveAssaultAction && assaultPrecheckOk === true) || attackResult) && (
         <CombatModifiersWindow
           socket={socket}
           assaultAction={playerActiveAssaultAction}
@@ -166,8 +183,23 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
+      {/* Phase RÉSOLUTION — avertissement LOS bloquée (assaut distance PJ) */}
+      {!isGm && phase === 'RESOLUTION' && playerActiveAssaultAction && assaultPrecheckOk === false && (
+        <div style={styles.losBlockedWarning}>
+          <div style={styles.losBlockedTitle}>Ligne de vue bouchée</div>
+          <div style={styles.losBlockedMsg}>Vous avez tiré sans espoir d&apos;atteindre votre cible.</div>
+          <button
+            className="btn"
+            style={{ width: '100%', marginTop: 10 }}
+            onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}
+          >
+            Continuer
+          </button>
+        </div>
+      )}
+
       {/* Phase RÉSOLUTION — modificateurs assaut distance GM (PNJ ou drone ranged) */}
-      {isGm && phase === 'RESOLUTION' && activeAssaultAction && gmActiveEntry && gmActiveCharacter?.type !== 'pj' && (
+      {isGm && phase === 'RESOLUTION' && activeAssaultAction && assaultPrecheckOk === true && gmActiveEntry && gmActiveCharacter?.type !== 'pj' && (
         <CombatModifiersWindow
           socket={socket}
           assaultAction={activeAssaultAction}
@@ -645,5 +677,34 @@ const styles = {
     cursor: 'pointer',
     flexShrink: 0,
     padding: '0 2px',
+  },
+  losBlockedWarning: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: 260,
+    background: '#16162a',
+    border: '2px solid #c05050',
+    borderRadius: 8,
+    padding: '16px 16px 14px',
+    boxShadow: '0 0 40px rgba(192,80,80,0.3), 0 12px 32px rgba(0,0,0,0.7)',
+    pointerEvents: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    zIndex: 10,
+  },
+  losBlockedTitle: {
+    fontSize: 11,
+    color: '#c05050',
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    fontWeight: 600,
+  },
+  losBlockedMsg: {
+    fontSize: 13,
+    color: '#c0c0d0',
+    lineHeight: 1.4,
   },
 }

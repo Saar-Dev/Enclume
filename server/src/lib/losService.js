@@ -44,17 +44,9 @@ export async function checkCombatLOS(io, db, campaignId, action, character) {
   const { clear } = checkLOS(voxels, srcToken, tgtToken)
   console.log(`[DBG-LOS] checkLOS → clear:${clear}`)
   if (!clear) {
-    console.log(`[DBG-LOS] → BLOCKED — DICE_RESULT "Tir en aveugle" → campagne ${campaignId} userId:${character.user_id}`)
-    // Bloc B (allow_los_cancel=true) → prompt joueur — sprint séparé
-    io.to(campaignId).emit(WS.DICE_RESULT, {
-      userId: character.user_id, username: character.name ?? 'Inconnu', color: '#c86030',
-      formula: '—', rolls: [], total: 0,
-      isCriticalSuccess: false, isCriticalFail: false, seed: null,
-      timestamp: new Date().toISOString(),
-      skillLabel: 'Tir en aveugle — cible hors de vue',
-      mechanicalTotal: 0, diffLabel: 'LOS bloquée', chancesDeReussite: 0,
-      isSuccess: false, mr: 0, breakdown: [],
-    })
+    console.log(`[DBG-LOS] → BLOCKED — COMBAT_DECLARE_ERROR → campagne ${campaignId}`)
+    // Tir en aveugle (optionnel, non implémenté) — voir BUGIDENTIFIE.md
+    io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Ligne de vue bloquée' })
     await _spendAmmo(db, action, character, campaign)
     return { result: 'blocked' }
   }
@@ -83,6 +75,23 @@ export async function checkCombatLOS(io, db, campaignId, action, character) {
   const { blocked, total, modifier: coverageModifier } = checkCoverage(voxels, srcToken, tgtToken)
   console.log(`[DBG-LOS] coverage → ${blocked}/${total} bloqué → modifier:${coverageModifier}`)
   return { result: 'clear', coverageModifier }
+}
+
+/**
+ * Vérification LOS pure sans side effects — utilisée par COMBAT_ACTION_PRECHECK.
+ * Retourne true si la ligne de vue est dégagée (ou cross-battlemap → clear par convention).
+ */
+export async function checkLOSForPrecheck(db, tokenId, targetTokenId) {
+  const [srcToken, tgtToken] = await Promise.all([
+    db('tokens').where({ id: tokenId }).select('pos_x', 'pos_y', 'pos_z', 'battlemap_id').first(),
+    db('tokens').where({ id: targetTokenId }).select('pos_x', 'pos_y', 'pos_z', 'battlemap_id').first(),
+  ])
+  if (!srcToken || !tgtToken) return true
+  if (srcToken.battlemap_id !== tgtToken.battlemap_id) return true
+  const bmap = await db('battlemaps').where({ id: srcToken.battlemap_id }).select('voxel_data').first()
+  const voxels = bmap?.voxel_data ?? {}
+  const { clear } = checkLOS(voxels, srcToken, tgtToken)
+  return clear
 }
 
 // Miroir exact de la logique resolveAssaultAction (pnj_unlimited_ammo inclus)

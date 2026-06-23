@@ -183,7 +183,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     const w = equipment[activeTokenId]?.weapon
     if (!w?.ref_fire_mode) return
     const modes = w.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
-    if (!modes.includes(decl.fire_mode))
+    if (!modes.includes(initialStates.fire_mode))
       dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: modes[0] })
   }, [activeTokenId, equipment])
 

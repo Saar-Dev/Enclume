@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-22 Session 116
+> Dernière mise à jour : 2026-06-23 Session 116 suite (cont.)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -121,8 +121,8 @@
 | COM8 | Fenêtre annonce visible pendant sélection cible | Moyenne |
 | ~~COM12~~ | ~~Mode de tir : chips CC/RC/RF sans filtre disponibilité arme~~ | ✅ REWORK-06 Session 114 |
 | ~~COM13~~ | ~~Assaut tir joueur : "Tir simple" par défaut non validé sans re-clic~~ | ✅ REWORK-06 Session 114 |
-| RANGE1-drone | Drone CaC : fenêtre s'ouvre hors portée → REWORK-16 (spec prête, à coder) | Haute — REWORK-16 |
-| LOS1-drone | Drone ranged LOS bloquée → `return` silencieux → pas de `COMBAT_DECLARE_ERROR` | Haute — après REWORK-16 |
+| ~~RANGE1-drone~~ | ~~Drone CaC : fenêtre s'ouvre hors portée~~ | ✅ REWORK-16 Session 116 suite |
+| ~~LOS1-drone~~ | ~~Drone ranged LOS bloquée → pas de `COMBAT_DECLARE_ERROR`~~ | ✅ REWORK-16 Session 116 suite |
 | COM2 | Vérif statut arme absente côté GM | Moyenne |
 | ~~COM4~~ | ~~CaC exige arme au clair (mains nues impossible)~~ | ✅ REWORK-06 Session 114 |
 | COM5 | ~~Mode combat sélectionne aussi la cible (GM)~~ | ✅ REWORK-05 Session 99 |

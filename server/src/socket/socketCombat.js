@@ -7,7 +7,7 @@ import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
-import { checkCombatLOS } from '../lib/losService.js'
+import { checkCombatLOS, checkLOSForPrecheck } from '../lib/losService.js'
 import {
   calcSkillTotal, calcAttributeNA, calcREA,
   calcWoundPenalty, calcEncumbrancePenalty,
@@ -893,12 +893,18 @@ export function registerCombatHandlers(io, socket, context, pendingMaps) {
           const dz = (myPos?.pos_y ?? 0) - (targetPos?.pos_y ?? 0)
           const dist = Math.sqrt(dx * dx + dz * dz)
           if (dist > 3 + allonge) {
-            io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
-              message: `Corps à corps impossible — distance : ${dist.toFixed(1)}m, portée max : ${3 + allonge}m`,
-            })
             return callback({ ok: false })
           }
         }
+      }
+      // 3. LOS check assaut distance — validation pure, résolution via COMBAT_ACTION_CONFIRM
+      if (actionKey === 'assault') {
+        const action = await db('combat_actions')
+          .where({ campaign_id: campaignId, token_id: tokenId, type: 'assault', status: 'pending' })
+          .first()
+        if (!action?.target_token_id) return callback({ ok: true })
+        const losOk = await checkLOSForPrecheck(db, tokenId, action.target_token_id)
+        if (!losOk) return callback({ ok: false })
       }
       callback({ ok: true })
     } catch (err) {
@@ -1750,6 +1756,7 @@ async function resolveMeleeAction(io, socket, campaignId, action, character, rem
     if (dist2dChk > 3 + allonge) {
       console.warn(`[WS] resolveMeleeAction — hors portée: ${dist2dChk.toFixed(1)}m max:${3 + allonge}m token:${action.token_id}`)
       io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
+        username: character.name,
         message: `Corps à corps impossible — distance : ${dist2dChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
       })
       return false
@@ -2387,6 +2394,7 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
       const dist2dChk = Math.sqrt(dxChk * dxChk + dzChk * dzChk)
       if (dist2dChk > 3 + allonge) {
         io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
+          username: character.name,
           message: `Corps à corps impossible — distance : ${dist2dChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
         })
         return
@@ -2397,7 +2405,6 @@ async function resolveDroneAssaultAction(io, socket, campaignId, action, confirm
     if (!isCaCWeapon && !options.skipLos) {
       const los = await checkCombatLOS(io, db, campaignId, action, character)
       if (los.result === 'blocked') {
-        io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, { message: 'Tir impossible — ligne de vue bloquée' })
         return
       }
       if (los.result === 'intercepted') {

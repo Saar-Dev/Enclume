@@ -419,6 +419,30 @@ Rien.
 
 ---
 
+## Session 116 suite (cont.) — 2026-06-23 — Bugs combat : fire_mode stale closure + actions store Tour 2
+
+### Travail effectué
+
+**Bug 1 — `CombatGmDeclareWindow.jsx` L.186 : stale closure fire_mode**
+- Cause : effet `[activeTokenId, equipment]` lisait `decl.fire_mode` (closure du render précédent) au lieu de `initialStates.fire_mode` (valeur du render courant)
+- Séquence de plantage : render N-1 `decl.fire_mode='rl'`, nouveau slot, effet reset dispatche `'cc'`, effet fire_mode lit closure `'rl'` → `modes.includes('rl')` true → pas de dispatch → état bloqué `'cc'`, serveur rejette
+- Fix : `!modes.includes(decl.fire_mode)` → `!modes.includes(initialStates.fire_mode)`
+- `initialStates.fire_mode = activePnjEntry.state_fire_mode ?? 'cc'` — recalculé à chaque render déclencheur, jamais périmé
+
+**Bug 2 — `useCombatSocket.js` L.89 : store `actions` non vidé au changement de tour**
+- Cause : `onPhaseChanged` pour ANNOUNCEMENT (Tour 2+) ne vidait pas le store `actions` — `COMBAT_PHASE_CHANGED` n'inclut pas `actions` dans son payload
+- Séquence : Tour 2 ANNOUNCEMENT → `COMBAT_SLOT_ADVANCED` (drone) → `activeAssaultAction` trouvé dans actions stales Tour 1 → `assaultPrecheckId` non-null → precheck envoyé → serveur : `phase=ANNOUNCEMENT` → `canTransition` false → "Action non autorisée dans cet état de combat"
+- Fix : `setActions([])` ajouté dans le bloc `if (phase === 'ANNOUNCEMENT')` de `onPhaseChanged`
+- `onCombatStarted` vidait déjà le store au Tour 1 — ce fix rend les tours suivants cohérents
+
+### Testé
+SR ✅, fonctionnel confirmé (Saar). Bug 1 et Bug 2 résolus.
+
+### Non testé
+Rien.
+
+---
+
 ## Session 116 suite — 2026-06-22 — REWORK-16 : Combat Pre-validation Gate
 
 ### Travail effectué

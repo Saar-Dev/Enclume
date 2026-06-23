@@ -998,6 +998,21 @@ export default function Sidebar({
                     </div>
                   )
                 }
+                if (msg.type === 'declare_error') {
+                  return (
+                    <div key={msg.id} style={{ ...styles.messageDice, background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }}>
+                      <div style={styles.diceHeader}>
+                        <span style={{ ...styles.diceIcon, color: '#c05050' }}>⊗</span>
+                        {msg.username && <span style={{ ...styles.msgUser, color: '#c05050' }}>{msg.username}</span>}
+                        <span style={styles.msgTime}>{msg.username ? ` · ${msg.time}` : msg.time}</span>
+                      </div>
+                      <div style={{ paddingLeft: '2px', fontSize: 12, color: '#c0c0d0' }}>{msg.text}</div>
+                      <div style={{ paddingLeft: '2px' }}>
+                        <span className="badge badge-fail">ÉCHEC</span>
+                      </div>
+                    </div>
+                  )
+                }
                 if (msg.type === 'dice') {
                   const isAnimating = animatingDiceId === msg.id
 
