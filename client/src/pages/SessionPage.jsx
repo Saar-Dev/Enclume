@@ -719,7 +719,7 @@ function SessionContent({ campaignId }) {
           character={{ ...selectedCharacter, _currentUserId: user?.id }}
           isGm={isGm}
           onClose={() => setSelectedCharacterId(null)}
-          woundReloadKey={woundVersions[selectedCharacter?.id] ?? 0}
+          inventoryReloadKey={woundVersions[selectedCharacter?.id] ?? 0}
         />
       )}
 

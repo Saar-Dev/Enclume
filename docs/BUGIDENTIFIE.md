@@ -526,53 +526,53 @@ console.log('[DBG-DR6]', {
 
 ## Bugs Session 119 — REWORK-17/18 + Combat résolution — Non résolus
 
-### Bug RW17-1 — Régression REWORK-17 : `calcDroneRD` non importée dans `socketCombatResolution.js`
+### Bug RW17-1 ✅ CLOS Session 120 — Régression REWORK-17 : `calcDroneRD` non importée dans `socketCombatResolution.js`
 
-**Symptôme** : `COMBAT_DAMAGE_CONFIRM error: calcDroneRD is not defined` dès qu'un drone est ciblé (branche drone du handler). Résolution complète impossible.
+**Correction** : `calcDroneRD` et `calcDroneDegatsNets` déplacées dans `charStats.js` (agent précédent Session 120) — 3 call sites migrés dans `socketCombatResolution.js` + `socketCombatHelpers.js`. Import `calcDroneRD` ajouté.
+**Testé** : SR ✅, COMBAT_DAMAGE_CONFIRM cible drone fonctionnel. **Non testé** : session combat réelle complète avec drone.
 
-**Cause racine** [VÉRIFIÉ] : `calcDroneRD` est exportée depuis `socketCombatHelpers.js` (L.1568) et appelée en L.275 de `socketCombatResolution.js` (handler `COMBAT_DAMAGE_CONFIRM`, branche drone `cibleType === 'drone'`). Elle n'est pas incluse dans l'import `from './socketCombatHelpers.js'` (L.13-18). Régression silencieuse du split REWORK-17 — `COMBAT_DAMAGE_CONFIRM` n'avait pas été testé en session combat réelle avec cible drone.
+---
 
-**Code impliqué** : `server/src/socket/socketCombatResolution.js` L.13-18 — import `calcDroneRD` manquant.
+### Bug AA-1 ✅ CLOS Session 121 — Blessures combat non affichées si CharacterWindow fermée ou sur autre onglet
 
-**Fix** : Ajouter `calcDroneRD` à l'import existant :
-```js
-import {
-  advanceSlot, endTurn,
-  resolveMeleeAction, resolveReloadAction,
-  resolveDroneAssaultAction, resolveAssaultAction,
-  calcDroneRD, COMBAT_MODE_LABELS,
-} from './socketCombatHelpers.js'
-```
+**Symptôme** : Blessures infligées en combat (WS `WOUND_ADDED`) n'apparaissent dans l'onglet Matériel qu'après réouverture de la CharacterWindow. Blessures manuelles (clic) inchangées.
 
-**Prochaine étape** : Fix immédiat — 1 ligne, cause [VÉRIFIÉ]. Cluster résolution combat.
+**Cause racine** [VÉRIFIÉ] : Chaîne `WOUND_ADDED → woundVersions++ → woundReloadKey prop → useEffect → bumpInventoryVersion → reloadKey → load()` ne fonctionnait que si `ArmorWoundPanel` était monté (onglet Matériel actif). Si la fenêtre était fermée ou sur un autre onglet, WOUND_ADDED était perdu.
+
+**Correction** :
+- `characterStore.js` : `woundsByCharId` + `setWounds` — wounds persistés en store Zustand global
+- `useCharacterSocket.js` : handlers `WOUND_*` → fetch REST → `setWounds(charId, wounds)` dans le store (plus de bump `woundVersions`) — fonctionne même si ArmorWoundPanel n'est pas monté
+- `ArmorWoundPanel.jsx` : `useEffect([storeWounds])` → mise à jour locale depuis le store ; suppression du pattern `cancelled` (React 18 StrictMode — flash 250ms)
+- `CharacterWindow.jsx` + `SessionPage.jsx` : renommage `woundReloadKey` → `inventoryReloadKey` (prop ne pilote plus que les reloads `INVENTORY_*`)
+
+**Testé** : build ✅, blessure visible immédiatement à l'ouverture onglet Matériel même si CharacterWindow était fermée pendant le combat. **Non testé** : session combat réelle complète avec plusieurs joueurs simultanés.
 
 ---
 
 ### Bug RW18-1 — Régression REWORK-18 : blessures/dégâts broadcastés avant DICE_RESULT
 
-**Symptôme** : En CaC (PNJ touché) et assaut distance (PNJ touché), la mise à jour de blessure arrive sur le client **avant** DICE_RESULT / COMBAT_MELEE_RESULT / COMBAT_ATTACK_RESULT. Résultat visible : la fenêtre de fiche montre les blessures sans que le résultat de dé soit affiché ; la blessure n'apparaît qu'à la réouverture de la fenêtre si le client ignore WOUND_ADDED reçu hors-séquence.
+**Symptôme** : En CaC (PNJ touché) et assaut distance (PNJ touché), la mise à jour de blessure arrive sur le client **avant** DICE_RESULT / COMBAT_MELEE_RESULT / COMBAT_ATTACK_RESULT.
 
-**Cause racine** [VÉRIFIÉ] : REWORK-18 a transformé les émissions directes en descripteurs flushés après retour de la fonction. Mais `woundService.applyWound(io, ...)` (L.711 `resolveMeleeAction`) et `damageService.resolveTargetHit(io, ...)` (dans `resolveAssaultAction`) restent hors périmètre — ils émettent directement **pendant** l'exécution. Les descripteurs (DICE_RESULT, COMBAT_ATTACK_RESULT) ne sont flushed qu'après le return. Ordre réel post-REWORK-18 : `wound direct → (queued) DICE_RESULT → (queued) COMBAT_ATTACK_RESULT`. Avant REWORK-18 : `DICE_RESULT direct → wound direct → COMBAT_ATTACK_RESULT direct`.
+**Cause racine** [VÉRIFIÉ] : REWORK-18 a transformé les émissions directes en descripteurs flushés après retour de la fonction. Mais `woundService.applyWound(io, ...)` (L.711 `resolveMeleeAction`) et `damageService.resolveTargetHit(io, ...)` (dans `resolveAssaultAction`) restent hors périmètre — ils émettent directement **pendant** l'exécution. Ordre réel : `wound direct → (queued) DICE_RESULT → (queued) COMBAT_ATTACK_RESULT`.
+
+**Note Session 121** : AA-1 clos — le client est maintenant résilient à WOUND_ADDED reçu hors-séquence (store Zustand toujours à jour). L'impact utilisateur de RW18-1 est donc atténué. Le fix serveur reste souhaitable pour la cohérence de l'architecture FCIS.
 
 **Code impliqué** :
 - `server/src/socket/socketCombatHelpers.js` — `resolveMeleeAction` L.711 (`woundService.applyWound`) + `resolveAssaultAction` (`damageService.resolveTargetHit`)
 - `server/src/socket/socketCombatResolution.js` — `flushEmissions` (dispatché après return)
 
-**Prochaine étape** : Sprint dédié — hors périmètre REWORK-18 (services intentionnellement hors scope). Option principale : dans les handlers `socketCombatResolution.js`, appeler les services APRÈS `flushEmissions` — nécessite de retourner les paramètres des services depuis les helpers (refactor non-trivial). Alternative légère : accepter l'ordre actuel + vérifier côté client que WOUND_ADDED est traité indépendamment du state combat.
+**Prochaine étape** : Sprint dédié Bloc B — `woundService.applyWound` + `statusService.emitShockDiceResult` : flag `{ skipEmit: true }` → retourner payload → push descripteur dans `emissions` avant `COMBAT_ATTACK_RESULT`.
 
 ---
 
-### Bug STUN2 — PJ étourdi (stun reçu pendant résolution adverse) peut confirmer son action
+### Bug STUN2 ✅ CLOS Session 120 — PJ étourdi (stun reçu pendant résolution adverse) peut confirmer son action
 
-**Symptôme** : Un PJ dont l'action a été déclarée en phase ANNONCE reçoit un stun pendant la phase RÉSOLUTION (suite à une attaque adverse). Quand son slot est joué, il peut toujours confirmer son action (`COMBAT_ACTION_CONFIRM`) malgré le statut `is_stunned` actif.
-
-**Cause racine** [INCONNU] : `COMBAT_ACTION_CONFIRM` ne vérifie pas `is_stunned` avant d'exécuter l'action. Le guard existant (`COMBAT_ACTION_DECLARE` ~L.1923, PC42) couvre la phase d'annonce uniquement. Aucun guard équivalent à la confirmation.
-
-**Code impliqué** : `server/src/socket/socketCombatResolution.js` — handler `COMBAT_ACTION_CONFIRM` — guard `is_stunned` absent.
-
-**Note** : PC42 (dette connue — `COMBAT_ACTION_DECLARE`) est distinct. Ce bug couvre `COMBAT_ACTION_CONFIRM` — stun appliqué **après** la déclaration.
-
-**Prochaine étape** : Lire handler `COMBAT_ACTION_CONFIRM` dans `socketCombatResolution.js` — vérifier si `token_statuses` est consulté. Ajouter guard `is_stunned` au début du handler (même pattern que `COMBAT_ACTION_DECLARE`).
+**Cause racine** [VÉRIFIÉ] : FSM `AWAITING_DAMAGE` bloquait PRECHECK du slot suivant (pas un bug stun à proprement parler). L'overlay "Ligne de vue bouchée" s'affichait à tort pendant l'attente.
+**Correction** :
+- `socketCombatResolution.js` PRECHECK : état `AWAITING_DAMAGE` → `{ awaiting: true }` sans message d'erreur
+- `CombatOverlay.jsx` : `precheckRetryKey` state + listener `COMBAT_ATTACK_RESULT` → re-fire PRECHECK après DAMAGE_CONFIRM
+- Callbacks assault + melee PRECHECK : gestion `awaiting` → `setPrecheckOk(null)` (aucun overlay pendant attente)
+**Testé** : SR ✅, all OK (confirmation Saar). **Non testé** : session combat réelle avec drone → PJ étourdi.
 
 ---
 

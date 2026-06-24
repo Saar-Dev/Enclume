@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import api from '../lib/api.js'
+import { useCharacterStore } from '../stores/characterStore'
 import SilhouettePanel from './SilhouettePanel.jsx'
 import LocationPanel   from './LocationPanel.jsx'
 import ContainerPanel  from './ContainerPanel.jsx'
@@ -12,6 +13,14 @@ export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
   const [loading,    setLoading]    = useState(true)
   const hasLoadedRef = useRef(false)
 
+  const setStoreWounds = useCharacterStore(s => s.setWounds)
+  const storeWounds    = useCharacterStore(s => s.woundsByCharId[characterId])
+
+  // Mise à jour directe depuis le store (WOUND_* WS) — fonctionne même si le composant n'était pas monté
+  useEffect(() => {
+    if (storeWounds !== undefined) setWounds(storeWounds)
+  }, [storeWounds])
+
   const load = useCallback(async () => {
     const showSpinner = !hasLoadedRef.current
     if (showSpinner) setLoading(true)
@@ -21,6 +30,7 @@ export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
         api.get(`/char-sheet/${characterId}/inventory`),
       ])
       setWounds(wRes.data.wounds || [])
+      setStoreWounds(characterId, wRes.data.wounds || [])
       setInventory(invRes.data.items || [])
       setTotalWeight(invRes.data.total_weight ?? 0)
       setThreshold(invRes.data.threshold ?? 0)
@@ -30,12 +40,10 @@ export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
       hasLoadedRef.current = true
       if (showSpinner) setLoading(false)
     }
-  }, [characterId])
+  }, [characterId, setStoreWounds])
 
   useEffect(() => {
-    let cancelled = false
-    load().then(() => { if (cancelled) { setWounds([]); setInventory([]) } })
-    return () => { cancelled = true }
+    load()
   }, [load, reloadKey])
 
   const handleInventoryChange = useCallback((updatedItem) => {
@@ -46,10 +54,11 @@ export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
     try {
       const res = await api.get(`/char-sheet/${characterId}/wounds`)
       setWounds(res.data.wounds || [])
+      setStoreWounds(characterId, res.data.wounds || [])
     } catch (err) {
       console.error('Erreur rechargement wounds :', err)
     }
-  }, [characterId])
+  }, [characterId, setStoreWounds])
 
   if (loading) {
     return <div style={{ color: '#5a5a7a', fontSize: 12, padding: '16px 0' }}>Chargement…</div>

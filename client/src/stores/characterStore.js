@@ -51,4 +51,9 @@ export const useCharacterStore = create((set) => ({
     }
     return { characters: [...state.characters, character] }
   }),
+
+  woundsByCharId: {},
+  setWounds: (charId, wounds) => set((state) => ({
+    woundsByCharId: { ...state.woundsByCharId, [charId]: wounds },
+  })),
 }))

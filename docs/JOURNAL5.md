@@ -838,3 +838,41 @@ SR ✅, all OK (confirmation Saar)
 Scénario complet en session combat réelle avec drone → PJ étourdi (nécessite session multijoueur)
 
 ---
+
+## Session 121 — 2026-06-24 — AA-1 : blessures combat non affichées (ArmorWoundPanel)
+
+### Contexte
+
+Analyse croisée RW18-1 (ordering serveur) + bug d'affichage signalé par Saar (blessures combat non visibles si CharacterWindow fermée ou sur un autre onglet pendant le combat). Deux causes racines distinctes, fix combiné car même architecture.
+
+### Cause racine AA-1 [VÉRIFIÉ]
+
+Chaîne de propagation `WOUND_ADDED → woundVersions++ → woundReloadKey → useEffect → bumpInventoryVersion → ArmorWoundPanel.reloadKey → load()` : ne fonctionne que si `ArmorWoundPanel` est monté. Si la fenêtre est fermée ou sur l'onglet "Feuille", WOUND_ADDED est perdu. Blessures manuelles (REST direct → `onWoundsReload()`) non affectées.
+
+Deuxième bug identifié en cours de correction : pattern `cancelled` dans l'effet `[load, reloadKey]` d'ArmorWoundPanel. En React 18 StrictMode, l'effet se monte deux fois — la première exécution termine, son cleanup pose `cancelled = true`, puis `.then(if cancelled) { setWounds([]) }` efface les blessures (flash 250ms visible à chaque ouverture d'onglet).
+
+### Fix — 5 fichiers
+
+**`characterStore.js`** : `woundsByCharId: {}` + `setWounds(charId, wounds)` — store Zustand global.
+
+**`useCharacterSocket.js`** : handlers `WOUND_*` — suppression bump `woundVersions`, ajout fetch REST + `setWounds(charId, wounds)` dans le store. Fonctionne même si ArmorWoundPanel n'est pas monté. `INVENTORY_*` handlers : inchangés (continuent de bumper `woundVersions`).
+
+**`ArmorWoundPanel.jsx`** :
+- `useEffect([storeWounds])` → `setWounds(storeWounds)` — mise à jour locale depuis le store dès que le composant monte ou que le store change
+- `load()` + `handleWoundsReload()` : synchronisation store après fetch REST (`setStoreWounds(charId, wounds)`)
+- Pattern `cancelled` supprimé — `useEffect(() => { load() }, [load, reloadKey])` — React 18 ignore les state updates sur composants démontés
+
+**`CharacterWindow.jsx`** : renommage `prevWoundKeyRef` → `prevInventoryKeyRef`, `woundReloadKey` → `inventoryReloadKey` (sémantique : la clé ne pilote plus que les reloads INVENTORY_*).
+
+**`SessionPage.jsx`** : prop renommée `woundReloadKey` → `inventoryReloadKey`.
+
+### Testé
+Build ✅, blessure visible immédiatement à l'ouverture onglet Matériel même si CharacterWindow était fermée pendant le combat (confirmation Saar).
+
+### Non testé
+Session combat réelle complète avec plusieurs joueurs simultanés. Résilience INVENTORY_* reload non vérifiée en session.
+
+### RW18-1 (serveur)
+Non traité cette session. Impact utilisateur atténué par AA-1 (store Zustand résilient à WOUND_ADDED hors-séquence). Bloc B planifié : `skipEmit` sur `woundService.applyWound` + `statusService.emitShockDiceResult` → descripteurs dans la queue `emissions` avant `COMBAT_ATTACK_RESULT`.
+
+---

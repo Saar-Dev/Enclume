@@ -1,3 +1,14 @@
+## v124 — 2026-06-24 — AA-1 : blessures combat affichées sans rouvrir la fenêtre
+
+### Client — Fiches personnages
+- [fix] `ArmorWoundPanel` : blessures infligées en combat visibles immédiatement à l'ouverture de l'onglet Matériel, même si la fenêtre était fermée pendant le combat
+- [fix] Flash 250ms "blessure apparaît puis disparaît" supprimé (pattern React 18 StrictMode)
+- [refactor] `characterStore` : `woundsByCharId` + `setWounds` — état blessures global Zustand
+- [refactor] `useCharacterSocket` : `WOUND_*` → fetch REST → store (plus de propagation via `woundVersions`)
+- [refactor] `CharacterWindow` + `SessionPage` : `woundReloadKey` → `inventoryReloadKey` (sémantique)
+
+---
+
 ## v123 — 2026-06-24 — STUN2 : correction overlay LOS + AWAITING_DAMAGE PRECHECK
 
 ### Serveur — Combat

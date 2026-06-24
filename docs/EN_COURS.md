@@ -91,9 +91,13 @@
    → **STUN2** ✅ CLOS (SR + all OK) — guards PRECHECK+CONFIRM, message i18n, overlay fix (cause racine : FSM AWAITING_DAMAGE → `{ awaiting: true }` + `precheckRetryKey` + `COMBAT_ATTACK_RESULT`)
    → **RW18-1** : sprint séparé — voir BUGIDENTIFIE.md
 
-**22. ← PROCHAINE ÉTAPE : voir `docs/BUGIDENTIFIE.md` + `docs/ARCHI_REWORK.md` pour cluster suivant**
+**22. ~~AA-1 ✅ clos Session 121~~**
+   → Blessures combat affichées sans rouvrir CharacterWindow — store Zustand + fix StrictMode cancelled pattern
+   → RW17-1 ✅ et STUN2 ✅ : marqués clos dans BUGIDENTIFIE.md (étaient ouverts à tort)
+
+**23. ← PROCHAINE ÉTAPE : voir `docs/BUGIDENTIFIE.md` + `docs/ARCHI_REWORK.md` pour cluster suivant**
    → Validation STUN2 complète en session combat réelle recommandée (drone → PJ étourdi)
-   → Bugs drones (D1, D2) ou RW18-1 selon priorité
+   → RW18-1 Bloc B (serveur — `skipEmit` woundService + statusService) ou bugs drones (D1, D2) selon priorité
 
 ---
 
