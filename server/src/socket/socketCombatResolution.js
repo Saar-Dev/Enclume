@@ -1,7 +1,6 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
-import { checkLOSForPrecheck } from '../lib/losService.js'
 import { parseDice } from '../lib/diceParser.js'
 import { getMrTable, getModifier } from '../lib/mrTable.js'
 import * as statusService from '../lib/statusService.js'
@@ -119,15 +118,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           }
         }
       }
-      // 3. LOS check assaut distance — validation pure, résolution via COMBAT_ACTION_CONFIRM
-      if (actionKey === 'assault') {
-        const action = await db('combat_actions')
-          .where({ campaign_id: campaignId, token_id: tokenId, type: 'assault', status: 'pending' })
-          .first()
-        if (!action?.target_token_id) return callback({ ok: true })
-        const losOk = await checkLOSForPrecheck(db, tokenId, action.target_token_id)
-        if (!losOk) return callback({ ok: false })
-      }
+      // LOS assault : vérifié à la résolution dans resolveAssaultAction → checkCombatLOS
       callback({ ok: true })
     } catch (err) {
       console.error('[WS] COMBAT_ACTION_PRECHECK erreur:', err)

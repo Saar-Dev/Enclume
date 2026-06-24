@@ -3,6 +3,33 @@
 
 ---
 
+## Session 121 — COM22 : LOS bloquée Kiwi — diagnostic en cours
+
+### Faits confirmés
+- FEAT2-A (LOS client-side) : dégagé ✅ sur Kiwi, même battlemap
+- Combat LOS (server-side) : bloqué ❌ sur Kiwi, même battlemap, mêmes positions
+- Battlemap utilisée : `86fba530-...` length=8914 (a des voxels)
+- Battlemap vide : `38fac583-...` length=2 (`{}`)
+
+### Conclusion
+Discordance client/serveur CONFIRMÉE. Client et serveur lisent des voxels différents, OU le serveur `checkLOS` reçoit des données corrompues/différentes depuis PostgreSQL.
+
+### Prochain diagnostic (sans toucher au code)
+Inspecter le contenu réel des voxels en DB :
+```bash
+docker exec enclume-postgres-1 psql -U vtt -d vtt -c \
+  "SELECT substring(voxel_data::text, 1, 150) FROM battlemaps WHERE id = '86fba530-483d-4a7c-91b1-63a301170778';"
+```
+→ Révèle le format des clés (`:` vs `,` vs autre) et le contenu réel.
+
+### Hypothèses restantes
+A. DB a des voxels qui couvrent tout l'espace → LOS toujours bloquée (voxels mauvais/anciens)
+B. Format clés DB ≠ format attendu par checkLOS → mais ça donnerait clear:true, pas false
+C. Voxels sauvegardés depuis éditeur client jamais persistés correctement en DB Kiwi
+D. `fast-voxel-raycast` comportement différent Node v24.15.0 (Kiwi) vs local
+
+---
+
 ## Session 118 — COM17 : arme par défaut = Mains nues
 
 ### Analyse cause racine confirmée

@@ -307,6 +307,7 @@ Tout `useCallback` qui émet via socket doit inclure `socket` dans ses deps.
 **Communication :**
 - SR = Serveur Redémarré sans erreur. Si erreur → copier intégralement.
 - Félicitations ≠ validation.
+- **CaC = Corps à corps** (melee). **CC = Coup par coup** (mode de tir, tir unique distance).
 
 **CSS (Session 76) :**
 - Bouton → `className="btn"` ou variante (`.btn-ghost`, `.btn-danger`, `.btn-gold`, `.btn-icon`, `.btn-toggle`, `.btn-tool`)

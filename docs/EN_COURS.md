@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-24 Session 120 (suite)
+> Dernière mise à jour : 2026-06-24 Session 121
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -163,6 +163,26 @@
 | VX1 | `getVoxelSurfaceTop` — pas de cas slope/wedge | Très basse |
 | — | Kiwi P-SRV-5 — ports Docker non restreints | Infra |
 | — | Logs debug `index.js` — conservés volontairement | Infra |
+| **STAT1** | is-stunned / unconscious — exclusion mutuelle + refresh 10→9 | **Haute** — Cluster L |
+| **COM19** | -5 INI à Assaut (tir) | **Haute** — Cluster M |
+| **COM22** | LOS bloquée affichée pour tout le monde | **Haute** — Cluster N |
+| **KIWI2** | Import GLB token : local ✅ / Kiwi ❌ | **Haute** — Cluster R |
+| **CS3** | Arme à deux mains dans chaque main → "Main Directrice" | **Haute** — Cluster O |
+| **CS4** | Catégorie "Techniques" + liste compétences | Moyenne — Cluster O |
+| **CS5** | Compétence réservée (X) : ouverture 1 XP, reste -3 | Moyenne — Cluster O |
+| **CS6** | Force Polaris = Avantage (pas Mutation) | Moyenne — Cluster O |
+| **CS1** | Onglet Matériel : description arme manquante | Moyenne — Cluster O |
+| **CS2** | Changement d'arme : menu déroulant | Moyenne — Cluster O |
+| **DR8** | Drone arme = munitions infinies | Moyenne — Cluster P |
+| **DR9** | Logiciels drone pas à jour (BDD) | Moyenne — Cluster P |
+| **DR7** | Drone : propriétaire ne peut pas modifier | Moyenne — Cluster P |
+| **DR10** | Drone joueur : GM reçoit aussi la fenêtre | Moyenne — Cluster P |
+| **COM20** | Phase 1 : afficher arme (munitions + type) | Moyenne — Cluster N |
+| **COM21** | Collision tokens : deuxième bloqué | Moyenne — Cluster N |
+| **COM23** | Label token : fixe, ne rentre pas dans les murs | Moyenne — Cluster N |
+| **UI2** | Alignement dés | Basse — Cluster Q |
+| **UI3** | Dé 100 : affichage chat | Basse — Cluster Q |
+| **FEAT3** | Token actif : cercle de sélection | Moyenne — FEAT |
 
 ---
 

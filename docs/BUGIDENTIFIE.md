@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-24 Session 119
+> Dernière mise à jour : 2026-06-24 Session 121
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -34,6 +34,13 @@
 | **H — Dettes techniques** | ~~WS1~~ + TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + TOK1 + MAP1 + COM14 + DASH1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `server/src/socket/index.js` | SR ✅ — validation fonctionnelle requise |
 | **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
+| **L — Statuts** | STAT1 | `statusService.js` | **Haute** |
+| **M — Règles combat** | COM19 | `socketCombatAnnouncement.js` | **Haute** |
+| **N — UI combat** | COM20 + COM21 + COM22 + COM23 + FEAT3 | `Canvas3D.jsx` + `CombatActionWindow.jsx` + `losService.js` | Moyenne / Haute |
+| **O — Fiche personnage** | CS1 + CS2 + CS3 + CS4 + CS5 + CS6 | `CharacterWindow.jsx` + `SkillsPanel.jsx` + DB ref_ | Haute |
+| **P — Drones v2** | DR2 + DR7 + DR8 + DR9 + DR10 | `DroneWindow.jsx` + `socketCombatResolution.js` + DB | Moyenne |
+| **Q — UI divers** | UI2 + UI3 + ST3 | composants dés + chat | Basse |
+| **R — Infrastructure Kiwi** | KIWI2 | upload GLB + MinIO + config Kiwi | Haute |
 | ~~A / B / C / J~~ | ~~B6 / COM6 / DR1 / DC1-3 / SHOCK1 / SHK3-6 / ST2~~ | — | ✅ Clos Sessions 94–97 |
 | ~~I partiel~~ | ~~DR4 + DR6~~ | — | ✅ Clos Session 101 |
 
@@ -782,3 +789,261 @@ console.log('[DBG-INI1] initiative calc', { roll, rea, hiddenDie, finalInitiativ
 | DIV-1 | `worst_wound_severity` absent WOUND_ADDED combat → anneau sévérité perdu | REWORK-03 `woundService.applyWound` appelle `getWorstWoundSeverity` post-transaction | 97 |
 | COM1 | Recharger ne fait rien (humanoïde) | Corrigé — confirmation Saar Session 109 | — |
 | CL1 | Portraits PNJ non visibles timeline joueur | Corrigé (design) — confirmation Saar Session 109 | 109 |
+
+---
+
+## Bugs Session 121 — Triage général 2026-06-24
+
+### Bug STAT1 — Statuts is-stunned / unconscious : exclusion mutuelle non appliquée
+
+**Symptôme** : `is-stunned` et `unconscious` peuvent être actifs simultanément. Règle : durée < 10 tours = `is-stunned` ; ≥ 10 tours = `unconscious` (exclusion mutuelle). La transition 10 → 9 doit basculer `unconscious` → `is-stunned`.
+
+**Règle** : LdB — étourdissement < 10 tours = Étourdi ; ≥ 10 tours = Inconscient. Exclusion mutuelle. Refresh obligatoire à chaque décrémentation de durée.
+
+**Code impliqué** : `server/src/lib/statusService.js` — `applyStunWithDuration` + gestion durée par tour. `server/src/socket/socketCombatState.js` — décrémentation durée stun en fin de tour.
+
+**Cause racine** [INCONNU] : Non investigué.
+
+**Prochaine étape** : Cluster L — lire `statusService.js` + handler fin de tour pour trouver la décrémentation.
+
+---
+
+### Bug COM19 — Assaut (tir) : modificateur -5 INI non appliqué
+
+**Symptôme** : Déclarer une action Assaut (tir) ne déclenche pas le modificateur -5 à l'initiative du combattant.
+
+**Règle** : LdB / MANUELSYSCOMBAT — Assaut (tir) : -5 INI.
+
+**Code impliqué** : `server/src/socket/socketCombatAnnouncement.js` — handler `COMBAT_ACTION_DECLARE`, calcul INI assaut tir. Ou `socketCombatState.js` — calcul roster.
+
+**Cause racine** [INCONNU] : Non investigué.
+
+**Prochaine étape** : Cluster M — vérifier `docs/MANUELSYSCOMBAT.md` règle INI assaut tir, puis lire handler déclaration.
+
+---
+
+### Bug COM20 — Phase 1 : arme non affichée dans la fenêtre de déclaration
+
+**Symptôme** : En phase ANNONCE (Phase 1), la fenêtre de déclaration PJ/PNJ n'affiche pas l'arme courante équipée, les munitions restantes ni le type (surtout critique pour armes à deux mains).
+
+**Code impliqué** : `client/src/components/CombatActionWindow.jsx` + `CombatGmDeclareWindow.jsx` — section affichage arme absente ou incomplète.
+
+**Cause racine** [INCONNU] : Non investigué.
+
+**Prochaine étape** : Cluster N — lire les deux composants, identifier où et comment afficher l'arme.
+
+---
+
+### Bug COM21 — Collision tokens : deuxième token bloqué sans feedback
+
+**Symptôme** : Deux tokens déclarant un déplacement vers la même case — le deuxième ne peut pas s'y rendre. Pas de feedback visible côté client.
+
+**Code impliqué** : `server/src/socket/socketToken.js` ou pipeline déplacement — validation collision. Client : feedback manquant.
+
+**Cause racine** [INCONNU] : La règle est peut-être déjà appliquée serveur (rejet silencieux). Feedback client absent.
+
+**Prochaine étape** : Cluster N — vérifier si refus collision existe en serveur, puis ajouter feedback client.
+
+---
+
+### Bug COM22 — LOS bloquée affichée pour tous les joueurs
+
+**Symptôme** : Quand la ligne de vue est bloquée pour un attaquant, le résultat "LOS bloquée / Tir en aveugle" apparaît pour tous les joueurs connectés, pas uniquement pour l'attaquant concerné.
+
+**Code impliqué** : `server/src/lib/losService.js` + `server/src/socket/socketCombatResolution.js` — émission `DICE_RESULT "Tir en aveugle"` via `io.to(campaignId).emit` (broadcast global au lieu de ciblé).
+
+**Cause racine** [HYPOTHÈSE] : L'émission LOS utilise `io.to(campaignId)` (broadcast) au lieu de `socket.emit` vers l'attaquant seul.
+
+**Prochaine étape** : Cluster N — lire `losService.js` + site d'émission dans `socketCombatResolution.js`.
+
+---
+
+### Bug COM23 — Label token : pénètre dans les murs
+
+**Symptôme** : Le label nom affiché au-dessus du token suit le token en 3D et peut s'afficher à l'intérieur des murs ou du décor selon l'angle de caméra.
+
+**Code impliqué** : `client/src/components/Canvas3D.jsx` — rendu label `<Html>` drei.
+
+**Cause racine** [INCONNU] : Non investigué. Piste : `occlude` prop de `<Html>` drei non activée, ou position Y trop faible.
+
+**Prochaine étape** : Cluster N — lire rendu label HTML dans Canvas3D.
+
+---
+
+### Bug CS1 — Onglet Matériel : description arme manquante
+
+**Symptôme** : Dans la fiche personnage, onglet Matériel, les armes n'affichent pas leur description textuelle.
+
+**Code impliqué** : Composant fiche personnage onglet Matériel (à identifier — `ArmorWoundPanel.jsx` ou composant armes dédié).
+
+**Cause racine** [INCONNU] : Non investigué — champ description absent du rendu ou non chargé depuis la DB.
+
+**Prochaine étape** : Cluster O — identifier le composant onglet Matériel, vérifier si `description` est dans le payload arme.
+
+---
+
+### Bug CS2 — Fiche personnage : changement d'arme sans menu déroulant
+
+**Symptôme** : Il n'y a pas de menu déroulant permettant de choisir une arme différente depuis la fiche personnage. Le changement d'arme équipée est absent ou peu ergonomique.
+
+**Code impliqué** : Composant fiche personnage — section armes (à identifier).
+
+**Cause racine** [INCONNU] : Fonctionnalité manquante ou incomplète.
+
+**Prochaine étape** : Cluster O — identifier le composant et la section armes dans CharacterWindow.
+
+---
+
+### Bug CS3 — Arme à deux mains équipable dans chaque main
+
+**Symptôme** : Il est possible d'équiper une arme à deux mains en MG et une autre en MD simultanément. Une arme à deux mains devrait occuper les deux mains ("Main Directrice" unique).
+
+**Règle** : Arme à deux mains = une seule arme, occupe MG + MD. Changer l'UI MG/MD en "Main Directrice" pour ces armes.
+
+**Code impliqué** : Composant fiche personnage / `CharacterWindow.jsx` — logique équipement MG/MD + guard validation.
+
+**Cause racine** [INCONNU] : Pas de guard côté client/serveur vérifiant si l'arme en MG est à deux mains avant d'autoriser MD.
+
+**Prochaine étape** : Cluster O — lire logique équipement mains dans CharacterWindow.
+
+---
+
+### Bug CS4 — Catégorie compétences "Techniques" : titre et liste incorrects
+
+**Symptôme** : La catégorie s'appelle "Technique" (singulier) et sa liste de compétences est incomplète ou incorrecte. Liste attendue :
+- Analyses, sons, scans (X) — ADA/INT
+- Armes embarquées/Artillerie (X) — INT/INT
+- Électronique † (X) — INT/INT
+- Informatique † (-3) — INT/INT
+- Mécanique [ ] — INT/INT
+- Piratage informatique † (X) — INT/INT
+- Premiers soins (-3) — ADA/INT
+- Systèmes de sécurité (à compléter)
+
+**Code impliqué** : `client/src/locales/fr.json` (libellé catégorie) et/ou données DB (`ref_skills` — liste et attributs).
+
+**Cause racine** [INCONNU] : Données référentielles incorrectes en DB ou libellé i18n incorrect.
+
+**Prochaine étape** : Cluster O — vérifier `ref_skills` en DB + `fr.json` catégorie compétences.
+
+---
+
+### Bug CS5 — Compétence réservée (X) : coût ouverture incorrect
+
+**Symptôme** : Pour ouvrir une compétence réservée (notée X), le système exige 3 XP pour monter directement à 0. La règle : ouvrir = 1 XP (le score reste à -3), les points s'achètent normalement ensuite.
+
+**Règle** : LdB — compétence réservée : coût ouverture = 1 XP, score reste -3. Achat normal des points suivants.
+
+**Code impliqué** : Composant `SkillsPanel.jsx` ou équivalent — logique achat/ouverture compétences réservées.
+
+**Cause racine** [INCONNU] : Non investigué.
+
+**Prochaine étape** : Cluster O — lire SkillsPanel, logique coût ouverture compétence réservée.
+
+---
+
+### Bug CS6 — Force Polaris classée comme Mutation (devrait être Avantage)
+
+**Symptôme** : "L'accès à la force Polaris" apparaît dans la section Mutations de la fiche personnage alors que c'est un Avantage.
+
+**Règle** : LdB — force Polaris = Avantage, pas une Mutation.
+
+**Code impliqué** : Données DB — table `ref_advantages` ou `ref_mutations` — entrée "Force Polaris" mal catégorisée.
+
+**Cause racine** [INCONNU] : Donnée de référence insérée dans la mauvaise table ou avec le mauvais type.
+
+**Prochaine étape** : Cluster O — requête DB sur `ref_advantages` + `ref_mutations` pour trouver et corriger l'entrée.
+
+---
+
+### Bug DR7 — Drone : le propriétaire ne peut pas modifier la fiche
+
+**Symptôme** : Le joueur propriétaire d'un drone ne peut pas modifier sa fiche dans DroneWindow (champs grisés ou refusés).
+
+**Code impliqué** : `client/src/components/DroneWindow.jsx` — guard d'édition. Routes REST drone — vérification `role === 'gm'`.
+
+**Cause racine** [INCONNU] : Guard trop restrictif (`gm` uniquement) — propriétaire du drone non identifié ou non autorisé.
+
+**Prochaine étape** : Cluster P — lire DroneWindow + route REST drone pour identifier le guard.
+
+---
+
+### Bug DR8 — Drone : munitions arme infinies (jamais décrémentées)
+
+**Symptôme** : Les armes des drones ne consomment pas de munitions lors des attaques.
+
+**Code impliqué** : `server/src/lib/losService.js` — `_spendAmmo` ou équivalent. `server/src/socket/socketCombatResolution.js` — `resolveDroneAssaultAction`.
+
+**Cause racine** [INCONNU] : Probablement pas de branche drone dans `_spendAmmo`, ou la fonction n'est pas appelée pour les drones.
+
+**Prochaine étape** : Cluster P — lire `_spendAmmo` + `resolveDroneAssaultAction`.
+
+---
+
+### Bug DR9 — Logiciels drone : données pas à jour en BDD
+
+**Symptôme** : Les logiciels disponibles pour les drones dans la BDD ne correspondent pas aux données attendues (noms, valeurs, types incorrects ou manquants).
+
+**Code impliqué** : Table `drone_programs` — données de référence. Migration(s) correspondante(s).
+
+**Cause racine** [INCONNU] : Données de référence obsolètes ou mal migrées.
+
+**Prochaine étape** : Cluster P — comparer contenu `drone_programs` avec `docs/REGLEDRONE.md` pour identifier les écarts.
+
+---
+
+### Bug DR10 — Drone contrôlé par joueur : GM reçoit aussi la fenêtre de contrôle
+
+**Symptôme** : Quand un joueur contrôle un drone (slot drone PJ), le GM reçoit aussi la fenêtre de déclaration drone et peut agir dessus. Le GM devrait avoir une vue lecture uniquement dans ce cas.
+
+**Code impliqué** : `client/src/components/DroneWindow.jsx` ou `CombatGmDeclareWindow.jsx` — condition d'affichage / permission GM vs joueur propriétaire.
+
+**Cause racine** [INCONNU] : Non investigué.
+
+**Prochaine étape** : Cluster P — lire DroneWindow + CombatGmDeclareWindow, identifier la condition d'ouverture côté GM.
+
+---
+
+### Bug UI2 — Dés : alignement visuel incorrect
+
+**Symptôme** : Les dés ne sont pas alignés correctement dans l'interface (canvas dés ou layout résultats).
+
+**Code impliqué** : Composant dés 3D ou layout résultats — CSS/JSX (à identifier).
+
+**Cause racine** [INCONNU] : Non investigué.
+
+**Prochaine étape** : Cluster Q — identifier le composant concerné.
+
+---
+
+### Bug UI3 — Dé 100 (D100) : affichage chat incorrect
+
+**Symptôme** : Le résultat d'un lancé de D100 ne s'affiche pas correctement dans le chat de session.
+
+**Code impliqué** : Composant chat + rendu `DICE_RESULT` — cas `dieType = 'd100'` ou `dieType = 'd10x10'`.
+
+**Cause racine** [INCONNU] : Non investigué.
+
+**Prochaine étape** : Cluster Q — lire rendu DICE_RESULT dans Sidebar/chat + composant dés.
+
+---
+
+### Bug KIWI2 — Import GLB token : fonctionne en local, échoue sur Kiwi
+
+**Symptôme** : L'importation d'un modèle GLB pour les tokens fonctionne correctement en local mais échoue silencieusement ou avec erreur sur le serveur distant Kiwi.
+
+**Code impliqué** : Route REST upload GLB (à identifier) + configuration MinIO / stockage sur Kiwi. `docs/SERVEURDISTANTKIWI.md` pour la config Kiwi.
+
+**Cause racine** [INCONNU] : Non investigué. Pistes probables : chemin MinIO différent sur Kiwi, permissions bucket, variable d'env manquante, ou taille max upload différente.
+
+**Prochaine étape** : Cluster R — tenter un upload GLB sur Kiwi avec logs serveur ouverts, puis lire `SERVEURDISTANTKIWI.md` + config MinIO.
+
+---
+
+### FEAT3 — Token actif : cercle de sélection (surbrillance)
+
+**Besoin** : Le token dont c'est le tour actif doit apparaître en surbrillance (cercle ou halo de sélection) sur la carte 3D pour être immédiatement identifiable par tous les joueurs.
+
+**Code impliqué** : `client/src/components/Canvas3D.jsx` — rendu token actif. Store combat — `activeTokenId` ou équivalent disponible.
+
+**Prochaine étape** : Sprint dédié — ajouter cercle/halo R3F sous le token actif (ex: `<mesh>` disc avec `emissive`).
