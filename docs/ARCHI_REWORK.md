@@ -1,5 +1,5 @@
 # ARCHI_REWORK.md — Reworks architecturaux
-> Créé Session 96 — 2026-06-16 | Mis à jour Session 117 — 2026-06-23
+> Créé Session 96 — 2026-06-16 | Mis à jour Session 119 — 2026-06-24
 > Rédigé par Claude Sonnet 4.6 à destination des agents Claude futurs.
 > Objectif : remplacer le bricolage incrémental par des reworks structurés, complets, et non régressifs.
 > Spécifications complètes des reworks achevés → [ARCHI_REWORK_DONE.md](ARCHI_REWORK_DONE.md)
@@ -122,6 +122,9 @@ Chaque rework ajouté à ce fichier respecte cette structure. Pas de section man
 
 **REWORK-17 ✅ Clos complet Session 117 — socketCombat.js modularisation**
 `socketCombat.js` (3027L monolithe post-REWORK-16) découpé en 4 modules : `socketCombatState.js` (5 handlers — ROSTER+ANNOUNCEMENT), `socketCombatAnnouncement.js` (3 handlers — DECLARATION), `socketCombatResolution.js` (6 handlers — RESOLUTION+PRECHECK), `socketCombatHelpers.js` (13 fonctions + COMBAT_MODE_LABELS). `socketCombat.js` réduit à 9L (orchestrateur pur). `index.js` inchangé. Zéro changement logique — déménagement pur. V1–V13 validés. Spec complète → `docs/Old/PLAN_REWORK17.md`.
+
+**REWORK-18 ⚠️ Clos partiel Session 119 — socketCombatHelpers.js : Effect Queue (séparation computation/émission)**
+Pattern boardgame.io / Colyseus : `resolveMeleeAction`, `resolveDroneAssaultAction`, `resolveAssaultAction` — `socket` supprimé des 3 signatures. 30 émissions directes (`io.to().emit()` / `socket.emit()`) → descripteurs `{ to, event, data }` accumulés dans `const emissions = []`. `flushEmissions(io, socket, campaignId, emissions, preloadedSockets?)` créé dans `socketCombatResolution.js` — lookup `io.fetchSockets()` lazy (seulement si descripteur `to:'user'`). 4 call sites mis à jour. Services hors périmètre (`woundService`, `damageService`, `statusService`, `resolveDroneIntegrityLoss`) conservent `io` direct — régression ordering documentée (Bug RW18-1). `node --check` ×2 ✅. Spec complète → `docs/PLAN_REWORK18.md`. **⚠️ Partiel** : COMBAT_DAMAGE_CONFIRM bloqué par Bug RW17-1 (`calcDroneRD` non importée) — fix sprint suivant.
 
 ---
 

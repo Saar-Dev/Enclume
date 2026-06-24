@@ -17,6 +17,27 @@ import {
   COMBAT_MODE_LABELS,
 } from './socketCombatHelpers.js'
 
+async function flushEmissions(io, socket, campaignId, emissions, preloadedSockets = null) {
+  const needsLookup = emissions.some(e => e.to === 'user')
+  const allSockets = needsLookup ? (preloadedSockets ?? await io.fetchSockets()) : []
+  for (const e of emissions) {
+    if (e.to === 'room') {
+      io.to(campaignId).emit(e.event, e.data)
+    } else if (e.to === 'socket') {
+      socket.emit(e.event, e.data)
+    } else if (e.to === 'user') {
+      const s = allSockets.find(s => s.user?.id === e.userId && s.campaignId === campaignId)
+      if (s) {
+        s.emit(e.event, e.data)
+      } else if (e.fallback === 'room') {
+        io.to(campaignId).emit(e.event, e.data)
+      } else {
+        socket.emit(e.event, e.data)
+      }
+    }
+  }
+}
+
 export function registerResolutionHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
 
@@ -167,7 +188,8 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           if (!confirmedModifiers && character.type !== 'drone') {
             console.warn(`[WS] COMBAT_ACTION_CONFIRM — assault sans confirmedModifiers. token:${tokenId}`)
           } else {
-            await resolveAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps)
+            const assaultResult = await resolveAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
+            if (assaultResult) await flushEmissions(io, socket, campaignId, assaultResult.emissions)
           }
         } else if (action.type === 'reload') {
           await resolveReloadAction(io, socket, campaignId, character, action)
@@ -184,12 +206,17 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           await db('combat_actions').where({ id: a.id }).update({ status: 'resolved', updated_at: db.fn.now() })
         }
         if (character.type === 'drone') {
-          await resolveDroneAssaultAction(io, socket, campaignId, meleeActions[0], confirmedModifiers, character, pendingMaps)
+          const droneResult = await resolveDroneAssaultAction(io, campaignId, meleeActions[0], confirmedModifiers, character, pendingMaps)
+          if (droneResult) await flushEmissions(io, socket, campaignId, droneResult.emissions)
         } else {
-          needsDefenseWait = await resolveMeleeAction(
-            io, socket, campaignId, meleeActions[0], character,
+          const meleeResult = await resolveMeleeAction(
+            io, campaignId, meleeActions[0], character,
             meleeActions.slice(1), meleeActions.length, confirmedModifiers, pendingMaps
           )
+          if (meleeResult) {
+            await flushEmissions(io, socket, campaignId, meleeResult.emissions)
+            needsDefenseWait = meleeResult.suspend
+          }
         }
       }
 
@@ -561,11 +588,15 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         const attackerSocket = allSockets.find(
           s => s.campaignId === meleeCampaignId && s.user?.id === attackerCharacter.user_id
         ) || socket
-        const waitForNext = await resolveMeleeAction(
-          io, attackerSocket, meleeCampaignId,
+        const nextMeleeResult = await resolveMeleeAction(
+          io, meleeCampaignId,
           nextAction, attackerCharacter,
           restActions, pendingTotalMeleeCount, pendingConfirmedModifiers, pendingMaps
         )
+        const waitForNext = nextMeleeResult?.suspend ?? false
+        if (nextMeleeResult) {
+          await flushEmissions(io, attackerSocket, meleeCampaignId, nextMeleeResult.emissions, allSockets)
+        }
         if (!waitForNext) {
           const state = await db('combat_state').where({ campaign_id: meleeCampaignId }).first()
           const slots = await db('combat_roster')

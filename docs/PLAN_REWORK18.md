@@ -384,10 +384,13 @@ Dans le code actuel, tous les `data:` sont des littéraux à valeurs primitives 
 
 ---
 
-### Bloc 1 — Baseline + resolveDroneAssaultAction + flushEmissions + call site L.187
+### Bloc 1 ✅ — Baseline + resolveDroneAssaultAction + flushEmissions + call site L.187
 
 > **Lire avant de coder :** `socketCombatHelpers.js` L.952–1248 + `socketCombatResolution.js` L.1–30 + L.182–195.
 > **SR cible :** drone assault fonctionnel. melee/assault encore avec ancienne signature — attendu.
+> **✅ Validé Session 119** — SR ✅ — `node --check` ×2 ✅
+> **Correctif additionnel :** dead code `severityColor` (L.1174 origine) supprimé — `SEVERITY_COLORS` non importé dans `socketCombatHelpers.js` (bug pré-existant REWORK-08).
+> **Non testé :** V9/V10 session combat réelle avec drone — SR fonctionnel confirmé.
 
 **0 — Vérifications préalables**
 - `node --check server/src/socket/socketCombatHelpers.js`
@@ -429,10 +432,13 @@ return resolveDroneAssaultAction(io, campaignId, action, confirmedModifiers, cha
 
 ---
 
-### Bloc 2 — resolveMeleeAction + call sites L.189 + L.564
+### Bloc 2 ✅ — resolveMeleeAction + call sites L.189 + L.564
 
 > **Lire avant de coder :** `socketCombatHelpers.js` L.323–810 + `socketCombatResolution.js` L.182–200 + L.555–590.
 > **SR cible :** melee fonctionnel. resolveAssaultAction encore avec ancienne signature — attendu.
+> **✅ Validé Session 119** — SR ✅ — `node --check` ×2 ✅
+> **Testé :** V1 (PJ vs PNJ), V4 (multi-attaque), V5 (distance hors portée → room broadcast). Slot avance correct.
+> **Non testé :** V2 (PJ vs PJ — défense requise), V3 (défenseur offline → fallback room), V5b (charge impossible ≤ 3m → socket attaquant).
 
 **3 — resolveMeleeAction (L.323–810)**
 
@@ -470,10 +476,13 @@ return resolveDroneAssaultAction(io, campaignId, action, confirmedModifiers, cha
 
 ---
 
-### Bloc 3 — resolveAssaultAction + call site L.170
+### Bloc 3 ✅ — resolveAssaultAction + call site L.170
 
 > **Lire avant de coder :** `socketCombatHelpers.js` L.1250–1567 + `socketCombatResolution.js` L.162–178.
 > **SR cible :** tous les handlers fonctionnels — REWORK-18 complet.
+> **✅ Validé Session 119** — SR ✅ — `node --check` ×2 ✅
+> **Correctif A6 :** L.1263 LOS intercepté — `resolveAssaultAction(io, socket, campaignId, ...)` → `resolveAssaultAction(io, campaignId, ...)` — non détectable `node --check`, corrigé manuellement.
+> **Call site réel :** L.191 (pas L.170 comme prévu — décalage post-Blocs 1+2).
 
 **5 — resolveAssaultAction (L.1250–1567)**
 
@@ -497,9 +506,14 @@ return resolveDroneAssaultAction(io, campaignId, action, confirmedModifiers, cha
 
 ---
 
-### Bloc 4 — Validation finale
+### Bloc 4 ⚠️ — Validation finale
 
 `node --check` ×2 — SR — V1–V11 complets.
+
+> **`node --check` ×2 ✅ Session 119** — zéro erreur.
+> **⚠️ Clos partiel** — V5 ✅, V5b ✅, V8 ✅ (assaut raté → endTurn), V6 partiel ✅ (assaut touché → DAMAGE_PROMPT émis), V7 partiel ✅ (ATTACK_RESULT broadcast).
+> **Non testé** : V1–V4 (CaC — non joué), V6/V7 complets (DAMAGE_CONFIRM bloqué — Bug RW17-1 `calcDroneRD` non importée, pré-existant REWORK-17), V9/V10 (drone).
+> **Bug identifié hors périmètre** : RW17-1 — `calcDroneRD` absente de l'import `socketCombatResolution.js` (fix = 1 ligne). STUN2 — guard `is_stunned` absent de `COMBAT_ACTION_CONFIRM`. Détails → `docs/BUGIDENTIFIE.md`.
 
 ---
 

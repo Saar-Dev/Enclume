@@ -1,3 +1,13 @@
+## v122 — 2026-06-24 — REWORK-18 : Effect Queue (socketCombatHelpers — séparation computation/émission)
+
+### Serveur — Refactoring
+- [refactor] `socketCombatHelpers.js` — `socket` supprimé des 3 signatures resolve (`resolveMeleeAction`, `resolveDroneAssaultAction`, `resolveAssaultAction`)
+- [refactor] 30 émissions directes (`io.to().emit()` / `socket.emit()`) → descripteurs `{ to, event, data }` accumulés dans `const emissions = []`
+- [refactor] `socketCombatResolution.js` — `flushEmissions(io, socket, campaignId, emissions, preloadedSockets?)` créé — dispatch après retour de la fonction
+- [fix] A6 : récursion LOS intercepté `resolveAssaultAction` — arg `socket` parasite supprimé (non détectable `node --check`)
+
+---
+
 ## v121 — 2026-06-23 — Ergonomie combat UI : nom actif + poignées basses + Timeline
 
 ### Client — UI

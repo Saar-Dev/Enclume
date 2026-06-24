@@ -320,15 +320,16 @@ export function countAdversaires(tokenPos, rosterTokens, excludeId, enemyType) {
 // ─── RÉSOLUTION RECHARGEMENT ────────────────────────────────────────────────
 // Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='melee'.
 // Retourne true si le slot doit rester bloqué (défenseur PJ en attente), false sinon.
-export async function resolveMeleeAction(io, socket, campaignId, action, character, remainingMeleeActions = [], totalMeleeCount = 1, confirmedModifiers = null, pendingMaps) {
+export async function resolveMeleeAction(io, campaignId, action, character, remainingMeleeActions = [], totalMeleeCount = 1, confirmedModifiers = null, pendingMaps) {
   try {
+    const emissions = []
     const weaponInvId   = action.weapon_inv_id ?? null
     const targetTokenId = action.target_token_id
-    if (!targetTokenId) return false
+    if (!targetTokenId) return { suspend: false, emissions }
 
     // ── 1. Données attaquant ──────────────────────────────────────────────────
     const sheetAttaquant = await db('char_sheet').where({ character_id: character.id }).first()
-    if (!sheetAttaquant) return false
+    if (!sheetAttaquant) return { suspend: false, emissions }
 
     // Arme + formule dégâts + allonge
     let weapon = null, damageFormula = '1D4'
@@ -353,11 +354,11 @@ export async function resolveMeleeAction(io, socket, campaignId, action, charact
     const dist2dChk = Math.sqrt(dxChk * dxChk + dzChk * dzChk)
     if (dist2dChk > 3 + allonge) {
       console.warn(`[WS] resolveMeleeAction — hors portée: ${dist2dChk.toFixed(1)}m max:${3 + allonge}m token:${action.token_id}`)
-      io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
         username: character.name,
         message: `Corps à corps impossible — distance : ${dist2dChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
-      })
-      return false
+      } })
+      return { suspend: false, emissions }
     }
 
     // Skill associé à l'arme (via ref_equipment_skill_assoc) ou COMBAT_A_MAINS_NUES (mains nues)
@@ -418,8 +419,8 @@ export async function resolveMeleeAction(io, socket, campaignId, action, charact
 
     const rosterAttaquant = await db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first()
     if (rosterAttaquant?.state_combat_mode === 'charge' && dist2dChk <= 3) {
-      socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Charge impossible — distance ≤ 3m (élan insuffisant)' })
-      return false
+      emissions.push({ to: 'socket', event: WS.COMBAT_DECLARE_ERROR, data: { message: 'Charge impossible — distance ≤ 3m (élan insuffisant)' } })
+      return { suspend: false, emissions }
     }
     const isRushedMod    = rosterAttaquant?.state_vitesse === 'rushed' ? -5 : 0
     const combatModeAtk  = rosterAttaquant?.state_combat_mode ?? 'normal'
@@ -481,7 +482,7 @@ export async function resolveMeleeAction(io, socket, campaignId, action, charact
     ]
     console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
     console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} carence:${-carenceAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} → seuil:${chancesAttaque}`)
-    io.to(campaignId).emit(WS.DICE_RESULT, {
+    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId: character.user_id, username: attackerUsername, color: attackerColor,
       formula: '1d20', rolls: attackRolls, total: rollAttaque,
       isCriticalSuccess: rollAttaque === 1, isCriticalFail: rollAttaque === 20,
@@ -493,21 +494,21 @@ export async function resolveMeleeAction(io, socket, campaignId, action, charact
       isSuccess:         rollAttaque <= chancesAttaque,
       mr:                chancesAttaque - rollAttaque,
       breakdown:         breakdownAtk,
-    })
+    } })
 
     // ── 2. Cible ──────────────────────────────────────────────────────────────
     const targetToken = await db('tokens').where({ id: targetTokenId }).first()
     if (!targetToken?.character_id) {
       // Entité de décor — pas de défense ni dégâts
-      io.to(campaignId).emit(WS.COMBAT_MELEE_RESULT, {
+      emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
         attaquantId: action.token_id, defenseurId: targetTokenId,
         rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit: false,
-      })
-      return false
+      } })
+      return { suspend: false, emissions }
     }
 
     const defenderCharacter = await db('characters').where({ id: targetToken.character_id }).first()
-    if (!defenderCharacter) return false
+    if (!defenderCharacter) return { suspend: false, emissions }
 
     const targetName = defenderCharacter.name ?? targetToken.label ?? 'Cible'
 
@@ -654,7 +655,7 @@ export async function resolveMeleeAction(io, socket, campaignId, action, charact
       ]
       console.log(`[WS] melee défense PNJ — rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
 
-      io.to(campaignId).emit(WS.DICE_RESULT, {
+      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
         userId: null, username: defenderCharacter.name ?? 'PNJ', color: '#808080',
         formula: '1d20', rolls: defRolls, total: rollDefense,
         isCriticalSuccess: rollDefense === 1, isCriticalFail: rollDefense === 20,
@@ -666,13 +667,13 @@ export async function resolveMeleeAction(io, socket, campaignId, action, charact
         isSuccess:         defenseSuccess,
         mr:                chanceDefense - rollDefense,
         breakdown:         breakdownDef,
-      })
+      } })
 
-      io.to(campaignId).emit(WS.COMBAT_MELEE_RESULT, {
+      emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
         attaquantId: action.token_id, defenseurId: targetTokenId,
         rollAttaque, chancesAttaque, rollDefense, chanceDefense, hit,
         multiMalusAttaquant, multiMalusDefenseur,
-      })
+      } })
 
       if (hit) {
         // Dégâts auto (même logique que PNJ dans resolveAssaultAction)
@@ -723,12 +724,12 @@ export async function resolveMeleeAction(io, socket, campaignId, action, charact
           statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, attackerUsername, attackerColor)
         }
 
-        io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+        emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
           tireurId:    action.token_id, cibleId: targetTokenId,
           localisation, degautsBruts, degatsNets,
           severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
           roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
-        })
+        } })
         if (shockResult?.outcome && shockResult.outcome !== 'ok') {
           statusService.applyStun(io, db, campaignId, {
             targetTokenId, outcome: shockResult.outcome,
@@ -739,21 +740,22 @@ export async function resolveMeleeAction(io, socket, campaignId, action, charact
 
       // CaC 4b — attaque suivante si multi-attack
       if (remainingMeleeActions.length > 0) {
-        return await resolveMeleeAction(
-          io, socket, campaignId,
+        const nextResult = await resolveMeleeAction(
+          io, campaignId,
           remainingMeleeActions[0], character,
           remainingMeleeActions.slice(1), totalMeleeCount, confirmedModifiers, pendingMaps
         )
+        return { ...nextResult, emissions: [...emissions, ...nextResult.emissions] }
       }
-      return false  // slot avance immédiatement
+      return { suspend: false, emissions }  // slot avance immédiatement
     } else if (defenderCharacter.type === 'drone') {
       // §7.4 : sans programme esquive, le drone ne peut pas se défendre — test simple
       const hit = rollAttaque <= chancesAttaque
-      io.to(campaignId).emit(WS.COMBAT_MELEE_RESULT, {
+      emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
         attaquantId: action.token_id, defenseurId: targetTokenId,
         rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit,
         multiMalusAttaquant,
-      })
+      } })
       if (hit) {
         const droneSheet = await db('drone_sheet').where({ character_id: defenderCharacter.id }).first()
         if (droneSheet) {
@@ -763,19 +765,20 @@ export async function resolveMeleeAction(io, socket, campaignId, action, charact
           const rdDrone  = calcDroneRD(droneSheet.integrite_actuelle)
           const degatsNetsDrone = Math.max(0, degautsBruts - etqDrone - rdDrone)
           await resolveDroneIntegrityLoss(io, campaignId, defenderCharacter.id, targetTokenId, droneSheet, degatsNetsDrone)
-          io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+          emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
             tireurId: action.token_id, cibleId: targetTokenId,
             localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
             severity: null, is_lethal: false, isSuccess: true, isPnj: true,
             roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
-          })
+          } })
         }
       }
       if (remainingMeleeActions.length > 0) {
-        return await resolveMeleeAction(io, socket, campaignId,
+        const nextResult = await resolveMeleeAction(io, campaignId,
           remainingMeleeActions[0], character, remainingMeleeActions.slice(1), totalMeleeCount, confirmedModifiers, pendingMaps)
+        return { ...nextResult, emissions: [...emissions, ...nextResult.emissions] }
       }
-      return false
+      return { suspend: false, emissions }
     }
 
     // ── 5. PJ défenseur : bloquer le slot, émettre le prompt ─────────────────
@@ -783,8 +786,6 @@ export async function resolveMeleeAction(io, socket, campaignId, action, charact
     await setFSMSubPhase(db, campaignId, 'AWAITING_DEFENSE')
 
     // Cibler le socket du défenseur PJ
-    const sockets = await io.fetchSockets()
-    const defSocket = sockets.find(s => s.campaignId === campaignId && s.user?.id === defenderCharacter.user_id)
     const prompt = {
       attackerName:    attackerUsername,
       attackerTokenId: action.token_id,
@@ -795,17 +796,12 @@ export async function resolveMeleeAction(io, socket, campaignId, action, charact
       chanceDefenseBase: defenderSkillTotal + defenderEffectiveMalus + multiMalusDefenseur,
       multiMalusDefenseur,
     }
-    if (defSocket) {
-      defSocket.emit(WS.COMBAT_MELEE_DEFENSE_PROMPT, prompt)
-    } else {
-      // Fallback : broadcast à toute la room (cas GM remplaçant)
-      io.to(campaignId).emit(WS.COMBAT_MELEE_DEFENSE_PROMPT, { ...prompt, allPlayers: true })
-    }
+    emissions.push({ to: 'user', userId: defenderCharacter.user_id, event: WS.COMBAT_MELEE_DEFENSE_PROMPT, data: prompt, fallback: 'room' })
 
-    return true  // slot bloqué jusqu'à COMBAT_MELEE_DEFENSE_CONFIRM
+    return { suspend: true, emissions }  // slot bloqué jusqu'à COMBAT_MELEE_DEFENSE_CONFIRM
   } catch (err) {
     console.error('[WS] resolveMeleeAction error:', err.message)
-    return false
+    return { suspend: false, emissions: [] }
   }
 }
 
@@ -949,8 +945,9 @@ export async function resolveReloadAction(io, socket, campaignId, character, act
 // Appelé depuis resolveAssaultAction quand character.type === 'drone'.
 // §7.3 MANUELSYSCOMBAT : D20 ≤ programme.level, modificateurs situationnels standard,
 // pas de malus blessures/encombrement, pas de Test de Choc.
-export async function resolveDroneAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
+export async function resolveDroneAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
   try {
+    const emissions = []
     // 1. Arme drone
     const weapon = await db('drone_weapons')
       .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
@@ -966,15 +963,15 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
 
     if (!weapon?.effective_formula) {
       console.warn(`[WS] resolveDroneAssaultAction — arme sans formule. drone_weapon_inv_id:${action.drone_weapon_inv_id}`)
-      io.to(campaignId).emit(WS.DICE_RESULT, {
+      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
         userId: null, username: character.name ?? 'Drone', color: '#30aaaa',
         formula: '—', rolls: [], total: 0,
         isCriticalSuccess: false, isCriticalFail: false, seed: null,
         timestamp: new Date().toISOString(),
         skillLabel: `Armement Drone — arme sans formule de dégâts`,
         mechanicalTotal: 0, diffLabel: '', chancesDeReussite: 0, isSuccess: false,
-      })
-      return
+      } })
+      return { suspend: false, emissions }
     }
 
     // 2. Programme armement — miroir humanoïde : !ref_fire_mode → contact, sinon distance
@@ -991,11 +988,11 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
       const dzChk = (myTokenPos?.pos_y ?? 0) - (targetTokenPos?.pos_y ?? 0)
       const dist2dChk = Math.sqrt(dxChk * dxChk + dzChk * dzChk)
       if (dist2dChk > 3 + allonge) {
-        io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
+        emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
           username: character.name,
           message: `Corps à corps impossible — distance : ${dist2dChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
-        })
-        return
+        } })
+        return { suspend: false, emissions }
       }
     }
 
@@ -1003,10 +1000,10 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
     if (!isCaCWeapon && !options.skipLos) {
       const los = await checkCombatLOS(io, db, campaignId, action, character)
       if (los.result === 'blocked') {
-        return
+        return { suspend: false, emissions }
       }
       if (los.result === 'intercepted') {
-        return resolveDroneAssaultAction(io, socket, campaignId,
+        return resolveDroneAssaultAction(io, campaignId,
           { ...action, target_token_id: los.newTargetTokenId },
           confirmedModifiers, character, pendingMaps, { skipLos: true })
       }
@@ -1021,15 +1018,15 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
 
     if (!programme) {
       console.warn(`[WS] resolveDroneAssaultAction — programme ${category} introuvable pour drone ${character.id}`)
-      io.to(campaignId).emit(WS.DICE_RESULT, {
+      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
         userId: null, username: character.name ?? 'Drone', color: '#30aaaa',
         formula: '—', rolls: [], total: 0,
         isCriticalSuccess: false, isCriticalFail: false, seed: null,
         timestamp: new Date().toISOString(),
         skillLabel: `Armement Drone — programme "${category}" manquant`,
         mechanicalTotal: 0, diffLabel: 'Configurer le programme dans la fiche drone', chancesDeReussite: 0, isSuccess: false,
-      })
-      return
+      } })
+      return { suspend: false, emissions }
     }
 
     // 3. Calcul chancesDeReussite (§7.3 — même modificateurs que humanoïdes)
@@ -1069,7 +1066,7 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
       ...(coverageModifier !== 0 ? [{ label: 'Couverture cible', value: coverageModifier, type: 'malus' }] : []),
       { label: 'Seuil', value: chancesDeReussite, type: 'total' },
     ]
-    io.to(campaignId).emit(WS.DICE_RESULT, {
+    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId, username: tireurUsername, color: tireurColor,
       formula: '1d20', rolls: attRolls, total: roll,
       isCriticalSuccess: false, isCriticalFail: false,
@@ -1079,15 +1076,15 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
       diffLabel: `${chancesDeReussite} (Prog. niv. ${programme.level})`,
       chancesDeReussite, isSuccess,
       breakdown: breakdownDrone,
-    })
+    } })
 
     if (!isSuccess) {
-      io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
         tireurId: action.token_id, cibleId: action.target_token_id,
         localisation: null, degautsBruts: 0, degatsNets: 0,
         severity: null, is_lethal: false, isSuccess: false, shockResult: null,
-      })
-      return
+      } })
+      return { suspend: false, emissions }
     }
 
     // 7. Identifier la cible
@@ -1116,7 +1113,7 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
     // 8a. Cible = drone (§7.6 — blindage + RD intégrité, auto-resolve)
     if (cibleCharacter?.type === 'drone') {
       const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
-      if (!droneSheet) return
+      if (!droneSheet) return { suspend: false, emissions }
       const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
       const mrTable       = await getMrTable()
       const modDomAttaque = getModifier(mrTable, mr)
@@ -1126,7 +1123,7 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
       const degatsNets    = Math.max(0, degautsBruts - etqDrone - rdDrone)
       await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNets)
       const newIntegrite = degatsNets >= 30 ? 0 : Math.max(0, droneSheet.integrite_actuelle - 1)
-      io.to(campaignId).emit(WS.DICE_RESULT, {
+      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
         userId, username: tireurUsername, color: tireurColor,
         formula, rolls: dmgRolls, total: degautsBruts,
         isCriticalSuccess: false, isCriticalFail: false,
@@ -1137,13 +1134,13 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
         chancesDeReussite: degatsNets,
         isSuccess: degatsNets > 0,
         cardType: 'drone_damage',
-      })
-      io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+      } })
+      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
         tireurId: action.token_id, cibleId: action.target_token_id,
         localisation: droneSheet.localisation_ref ?? 'corps', degautsBruts, degatsNets,
         severity: null, is_lethal: false, isSuccess: true, shockResult: null,
-      })
-      return
+      } })
+      return { suspend: false, emissions }
     }
 
     // 8b. Cible = PNJ : auto-resolve
@@ -1162,7 +1159,7 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
         char_sheet_id_cible: cibleSheet?.id ?? null,
         for_na_cible: for_na, con_na_cible: con_na, vol_na_cible: vol_na,
       })
-      if (hitResult === null) return
+      if (hitResult === null) return { suspend: false, emissions }
       const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
               is_lethal, finalSeverity, shockResult } = hitResult
 
@@ -1170,17 +1167,15 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
         statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
       }
 
-      const severityColor = finalSeverity ? (SEVERITY_COLORS[finalSeverity] ?? tireurColor) : tireurColor
-
-      io.to(campaignId).emit(WS.DICE_RESULT, {
+      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
         userId, username: tireurUsername, color: tireurColor,
         formula: '1d20', rolls: locRolls, total: rollLoc,
         isCriticalSuccess: false, isCriticalFail: false,
         seed: locSeed, timestamp: now,
         skillLabel: 'Localisation — Drone', mechanicalTotal: rollLoc, diffLabel: '',
         chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation, isSuccess: true,
-      })
-      io.to(campaignId).emit(WS.DICE_RESULT, {
+      } })
+      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
         userId, username: tireurUsername, color: tireurColor,
         formula, rolls: dmgRolls, total: degautsBruts,
         isCriticalSuccess: false, isCriticalFail: false,
@@ -1188,19 +1183,19 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
         skillLabel: `Dégâts — ${LOCATION_LABELS[localisation] ?? localisation}`,
         mechanicalTotal: rawDice, diffLabel: `Armure:${etq ?? 0} RD:${rd}`,
         chancesDeReussite: degatsNets, isSuccess: degatsNets > 0,
-      })
-      io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+      } })
+      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
         tireurId: action.token_id, cibleId: action.target_token_id,
         localisation, degautsBruts, degatsNets,
         severity: finalSeverity, is_lethal, isSuccess: true, shockResult: shockResult ?? null,
-      })
+      } })
       if (shockResult?.outcome && shockResult.outcome !== 'ok') {
         statusService.applyStun(io, db, campaignId, {
           targetTokenId: action.target_token_id, outcome: shockResult.outcome,
           userId, username: tireurUsername, color: tireurColor,
         }).catch(err => console.error('[WS] applyStun error:', err.message))
       }
-      return
+      return { suspend: false, emissions }
     }
 
     // 8c. Cible = PJ → COMBAT_DAMAGE_PROMPT
@@ -1234,33 +1229,30 @@ export async function resolveDroneAssaultAction(io, socket, campaignId, action, 
     await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
 
     const damagePayload = { tokenId: action.token_id, formula, targetName }
-    const allSockets    = await io.fetchSockets()
-    const cibleSocket   = allSockets.find(s => s.user?.id === cibleCharacter.user_id && s.campaignId === campaignId)
-    if (cibleSocket) {
-      cibleSocket.emit(WS.COMBAT_DAMAGE_PROMPT, damagePayload)
-    } else {
-      socket.emit(WS.COMBAT_DAMAGE_PROMPT, damagePayload)
-    }
+    emissions.push({ to: 'user', userId: cibleCharacter.user_id, event: WS.COMBAT_DAMAGE_PROMPT, data: damagePayload, fallback: 'socket' })
+    return { suspend: false, emissions }
 
   } catch (err) {
     console.error('[WS] resolveDroneAssaultAction error:', err.message)
+    return { suspend: false, emissions: [] }
   }
 }
 
-export async function resolveAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
+export async function resolveAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
   try {
+    const emissions = []
     // Branchement drone — avant le guard weapon_inv_id (§7 MANUELSYSCOMBAT)
     if (character.type === 'drone') {
-      return resolveDroneAssaultAction(io, socket, campaignId, action, confirmedModifiers, character, pendingMaps, options)
+      return resolveDroneAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options)
     }
-    if (!action.weapon_inv_id || !action.target_token_id) return
+    if (!action.weapon_inv_id || !action.target_token_id) return { suspend: false, emissions }
 
     // ── LOS check ─────────────────────────────────────────────────────────────
     if (!options.skipLos) {
       const los = await checkCombatLOS(io, db, campaignId, action, character)
-      if (los.result === 'blocked') return
+      if (los.result === 'blocked') return { suspend: false, emissions }
       if (los.result === 'intercepted') {
-        return resolveAssaultAction(io, socket, campaignId,
+        return resolveAssaultAction(io, campaignId,
           { ...action, target_token_id: los.newTargetTokenId },
           confirmedModifiers, character, pendingMaps, { skipLos: true })
       }
@@ -1283,7 +1275,7 @@ export async function resolveAssaultAction(io, socket, campaignId, action, confi
 
     if (!weapon?.ref_damage_h) {
       console.warn(`[WS] resolveAssaultAction — arme sans damage_h. weapon_inv_id:${action.weapon_inv_id}`)
-      return
+      return { suspend: false, emissions }
     }
 
     const userRow = character.user_id
@@ -1369,7 +1361,7 @@ export async function resolveAssaultAction(io, socket, campaignId, action, confi
       { label: 'Seuil', value: chancesDeReussite, type: 'total' },
     ]
     console.log(`[WS] assault — roll:${rollAttaque} Seuil:${chancesDeReussite} → ${isSuccess ? 'TOUCHE' : 'RATÉ'} MR:${mr}`)
-    io.to(campaignId).emit(WS.DICE_RESULT, {
+    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId:            character.user_id,
       username:          tireurUsername,
       color:             tireurColor,
@@ -1387,7 +1379,7 @@ export async function resolveAssaultAction(io, socket, campaignId, action, confi
       isSuccess,
       mr,
       breakdown,
-    })
+    } })
 
     // ── Décompte munitions ──────────────────────────────────────────────────────
     // Balles consommées quel que soit le résultat (touché ou raté).
@@ -1438,13 +1430,13 @@ export async function resolveAssaultAction(io, socket, campaignId, action, confi
 
       if (character.type === 'pj') {
         // PJ — stocker paramètres bruts, le joueur lance les dés via CombatDamageWindow
-        socket.emit(WS.COMBAT_ATTACK_PLAYER_RESULT, {
+        emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
           hit: true,
           roll: rollAttaque,
           seuil: chancesDeReussite,
           tireurTokenId: action.token_id,
           cibleTokenId: action.target_token_id,
-        })
+        } })
         await db('combat_pending').insert({
           campaign_id: campaignId,
           token_id: action.token_id,
@@ -1469,11 +1461,11 @@ export async function resolveAssaultAction(io, socket, campaignId, action, confi
           },
         })
         await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
-        socket.emit(WS.COMBAT_DAMAGE_PROMPT, {
+        emissions.push({ to: 'socket', event: WS.COMBAT_DAMAGE_PROMPT, data: {
           tokenId: action.token_id,
           formula: weapon.ref_damage_h,
           targetName,
-        })
+        } })
       } else {
         // PNJ — calcul complet immédiat, invisible aux joueurs
         const mrTable = await getMrTable()
@@ -1491,15 +1483,15 @@ export async function resolveAssaultAction(io, socket, campaignId, action, confi
             const rdDrone   = calcDroneRD(droneSheet.integrite_actuelle)
             const degatsNetsDrone = Math.max(0, degautsBruts - etqDrone - rdDrone)
             await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNetsDrone)
-            io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+            emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
               tireurId: action.token_id, cibleId: action.target_token_id,
               localisation: null,
               degautsBruts, degatsNets: degatsNetsDrone,
               severity: null, is_lethal: false, isSuccess: true,
               isPnj: true, roll: rollAttaque, chancesDeReussite, shockResult: null,
-            })
+            } })
           }
-          return
+          return { suspend: false, emissions }
         }
 
         const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
@@ -1509,14 +1501,14 @@ export async function resolveAssaultAction(io, socket, campaignId, action, confi
           char_sheet_id_cible,
           for_na_cible, con_na_cible, vol_na_cible,
         })
-        if (hitResult === null) return
+        if (hitResult === null) return { suspend: false, emissions }
         const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
 
         if (shockResult) {
           statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, tireurUsername, tireurColor)
         }
 
-        io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+        emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
           tireurId:    action.token_id,
           cibleId:     action.target_token_id,
           localisation,
@@ -1529,7 +1521,7 @@ export async function resolveAssaultAction(io, socket, campaignId, action, confi
           roll:        rollAttaque,
           chancesDeReussite,
           shockResult,
-        })
+        } })
         if (shockResult?.outcome && shockResult.outcome !== 'ok') {
           statusService.applyStun(io, db, campaignId, {
             targetTokenId: action.target_token_id, outcome: shockResult.outcome,
@@ -1538,15 +1530,15 @@ export async function resolveAssaultAction(io, socket, campaignId, action, confi
         }
       }
     } else if (character.type === 'pj') {
-      socket.emit(WS.COMBAT_ATTACK_PLAYER_RESULT, {
+      emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
         hit: false,
         roll: rollAttaque,
         seuil: chancesDeReussite,
         tireurTokenId: action.token_id,
         cibleTokenId: action.target_token_id,
-      })
+      } })
     } else {
-      io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
         tireurId:         action.token_id,
         cibleId:          action.target_token_id,
         isSuccess:        false,
@@ -1559,10 +1551,12 @@ export async function resolveAssaultAction(io, socket, campaignId, action, confi
         severity:         null,
         is_lethal:        false,
         shockResult:      null,
-      })
+      } })
     }
+    return { suspend: false, emissions }
   } catch (err) {
     console.error('[WS] resolveAssaultAction error:', err.message)
+    return { suspend: false, emissions: [] }
   }
 }
 

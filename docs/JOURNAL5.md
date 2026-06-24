@@ -714,3 +714,49 @@ SR ✅ — migration appliquée ✅ — fonctionnel confirmé (Saar).
 
 ### Non testé
 Session combat réelle avec drone CaC assigné programme "Contact" → résolution complète (sans log `programme armement_contact introuvable`).
+
+## Session 119 suite — 2026-06-24 — REWORK-18 : Effect Queue (socketCombatHelpers)
+
+### Travail effectué
+
+**REWORK-18 — Bloc 1 ✅ (session précédente) : `resolveDroneAssaultAction` + `flushEmissions`**
+- `resolveDroneAssaultAction` : `socket` supprimé de la signature — 12 émissions → descripteurs — `io.fetchSockets()` supprimé — L.1009 récursion LOS args mis à jour (A6 drone) — tous les `return` → `{ suspend: false, emissions }`
+- `socketCombatResolution.js` : `flushEmissions(io, socket, campaignId, emissions, preloadedSockets?)` créé — call site L.187 mis à jour
+- `node --check` ×2 ✅ — dead code `severityColor` supprimé (bug pré-existant REWORK-08)
+
+**REWORK-18 — Bloc 2 ✅ (session précédente) : `resolveMeleeAction` + call sites L.189 + L.564**
+- `resolveMeleeAction` : `socket` supprimé — 10 émissions → descripteurs (11e supprimée, fusionnée `fallback:'room'`) — `io.fetchSockets()` supprimé — 2 récursions (L.742 + L.774) accumulent `[...emissions, ...nextResult.emissions]` — tous les `return` → `{ suspend: bool, emissions }`
+- `socketCombatResolution.js` : call sites L.189 (COMBAT_ACTION_CONFIRM) + L.564 (COMBAT_MELEE_DEFENSE_CONFIRM) mis à jour — `allSockets` passé en `preloadedSockets` (A7 — évite double `fetchSockets`)
+- `node --check` ×2 ✅ — V1 (CaC PJ vs PNJ), V4 (multi-attaque), V5 (hors portée → room) validés
+
+**REWORK-18 — Bloc 3 ✅ : `resolveAssaultAction` + call site L.191**
+- `resolveAssaultAction` : `socket` supprimé — 7 émissions → descripteurs — L.1253 `resolveDroneAssaultAction(io, campaignId, ...)` ✅ (déjà Bloc 1) — L.1263 LOS intercepté : `resolveAssaultAction(io, campaignId, ...)` (A6 — corrigé manuellement, non détectable `node --check`) — tous les `return` → `{ suspend: false, emissions }`
+- `socketCombatResolution.js` L.191 (décalage vs plan L.170) : call site mis à jour — `const assaultResult = await resolveAssaultAction(...); if (assaultResult) await flushEmissions(...)`
+- `node --check` ×2 ✅
+
+**REWORK-18 — Bloc 4 ⚠️ : Validation partielle**
+- `node --check` ×2 ✅ — V5 ✅, V5b ✅ (hors portée → DECLARE_ERROR socket), V8 ✅ (assaut raté → endTurn)
+- V6 partiel ✅ (assaut PJ touché → DICE_RESULT + DAMAGE_PROMPT émis), V7 partiel ✅ (ATTACK_RESULT broadcast)
+- Bloqué sur COMBAT_DAMAGE_CONFIRM : Bug RW17-1 — `calcDroneRD` non importée dans `socketCombatResolution.js` (régression silencieuse REWORK-17 — non testée en session combat réelle)
+- V1–V4, V9/V10 non testés (session combat réelle requise)
+
+**Bugs identifiés et enregistrés dans BUGIDENTIFIE.md :**
+- Bug RW17-1 [VÉRIFIÉ] : `calcDroneRD` exportée `socketCombatHelpers.js` L.1568, appelée `socketCombatResolution.js` L.275, absente de l'import. Fix = 1 ligne.
+- Bug STUN2 [INCONNU] : PJ étourdi (stun reçu pendant résolution adverse) peut confirmer son action — `COMBAT_ACTION_CONFIRM` pas de guard `is_stunned`.
+- Bug RW18-1 [VÉRIFIÉ] : services (`woundService`, `damageService`) émettent directement pendant l'exécution, avant `flushEmissions` — ordering inversé (wound avant DICE_RESULT).
+- FAUX BUG : "Action non autorisée" pendant AWAITING_DAMAGE = comportement FSM normal.
+
+**Documentation mise à jour :**
+- `ARCHI_REWORK.md` — REWORK-18 ajouté aux reworks achevés (⚠️ clos partiel)
+- `EN_COURS.md` — REWORK-18 ⚠️ + item 21 sprint résolution (RW17-1 + STUN2)
+- `PLAN_REWORK18.md` — Blocs 3+4 statut mis à jour
+- `BUGIDENTIFIE.md` — RW17-1 + STUN2 + FAUX BUG ajoutés (Session 119 suite)
+- `client/public/CHANGELOG.md` — v122 ajouté
+
+### Testé
+`node --check` ×2 ✅ — V5 ✅, V5b ✅, V8 ✅ — V6/V7 partiels ✅
+
+### Non testé
+V1–V4 (CaC en session réelle), V9/V10 (drone), COMBAT_DAMAGE_CONFIRM complet (bloqué RW17-1)
+
+---

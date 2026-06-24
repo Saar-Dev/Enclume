@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-23 Session 118 (cont.)
+> Dernière mise à jour : 2026-06-24 Session 119
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -84,6 +84,7 @@ Découpage en modules (`resolveDamage.js`, `resolveMelee.js`) = sprint dédié p
 | Token GM sans char_sheet → ENTITY_MOVE_REQUEST ignoré silencieusement | Comportement documenté V1 — entité de décor sans fiche | `EN_COURS.md §Points de vigilance` |
 | `getVoxelSurfaceTop` retourne `y+1.0` pour slope/wedge | Acceptable V1 — sprint voxels v2 futur | VX1 dans ce fichier |
 | `is_stunned` non enforced dans COMBAT_ACTION_DECLARE | Dette connue PC42 — sprint dédié | `CLAUDE.md §Dettes` |
+| "Action non autorisée dans cet état de combat" pendant AWAITING_DAMAGE | Comportement FSM NORMAL — autre combattant bloqué pendant qu'un PJ confirme ses dégâts. Message potentiellement confusant mais mécanique correcte. | Session 119 logs |
 | Jet de défense CaC toujours déclenché, même si attaque échouée | LdB p.222 — test d'opposition = **les deux roulent toujours** (4 cas). Exception = surprise/inconscient uniquement. Code `resolveMeleeAction` CONFORME. | COM3 — vérifié Session 94 via `REGLES_Contact.md` |
 | Stun mécanique résiduel après COMBAT_END (badge disparu, effet persiste) | FAUX BUG. Cleanup `COMBAT_END` correct — [DBG-SHK3] confirme `token_statuses: []` après delete. Guard COMBAT_ACTION_DECLARE lit uniquement `token_statuses`. `current_turn` repart à 1 à chaque nouveau combat. | SHK3 — vérifié Session 95-3 |
 
@@ -520,6 +521,58 @@ console.log('[DBG-DR6]', {
 - **Blindage IEM** = protection contre impulsions électromagnétiques
 
 **Prochaine étape** : Sprint UI dédié — ajouter tooltips ⓘ sur ces trois champs dans DroneWindow.
+
+---
+
+## Bugs Session 119 — REWORK-17/18 + Combat résolution — Non résolus
+
+### Bug RW17-1 — Régression REWORK-17 : `calcDroneRD` non importée dans `socketCombatResolution.js`
+
+**Symptôme** : `COMBAT_DAMAGE_CONFIRM error: calcDroneRD is not defined` dès qu'un drone est ciblé (branche drone du handler). Résolution complète impossible.
+
+**Cause racine** [VÉRIFIÉ] : `calcDroneRD` est exportée depuis `socketCombatHelpers.js` (L.1568) et appelée en L.275 de `socketCombatResolution.js` (handler `COMBAT_DAMAGE_CONFIRM`, branche drone `cibleType === 'drone'`). Elle n'est pas incluse dans l'import `from './socketCombatHelpers.js'` (L.13-18). Régression silencieuse du split REWORK-17 — `COMBAT_DAMAGE_CONFIRM` n'avait pas été testé en session combat réelle avec cible drone.
+
+**Code impliqué** : `server/src/socket/socketCombatResolution.js` L.13-18 — import `calcDroneRD` manquant.
+
+**Fix** : Ajouter `calcDroneRD` à l'import existant :
+```js
+import {
+  advanceSlot, endTurn,
+  resolveMeleeAction, resolveReloadAction,
+  resolveDroneAssaultAction, resolveAssaultAction,
+  calcDroneRD, COMBAT_MODE_LABELS,
+} from './socketCombatHelpers.js'
+```
+
+**Prochaine étape** : Fix immédiat — 1 ligne, cause [VÉRIFIÉ]. Cluster résolution combat.
+
+---
+
+### Bug RW18-1 — Régression REWORK-18 : blessures/dégâts broadcastés avant DICE_RESULT
+
+**Symptôme** : En CaC (PNJ touché) et assaut distance (PNJ touché), la mise à jour de blessure arrive sur le client **avant** DICE_RESULT / COMBAT_MELEE_RESULT / COMBAT_ATTACK_RESULT. Résultat visible : la fenêtre de fiche montre les blessures sans que le résultat de dé soit affiché ; la blessure n'apparaît qu'à la réouverture de la fenêtre si le client ignore WOUND_ADDED reçu hors-séquence.
+
+**Cause racine** [VÉRIFIÉ] : REWORK-18 a transformé les émissions directes en descripteurs flushés après retour de la fonction. Mais `woundService.applyWound(io, ...)` (L.711 `resolveMeleeAction`) et `damageService.resolveTargetHit(io, ...)` (dans `resolveAssaultAction`) restent hors périmètre — ils émettent directement **pendant** l'exécution. Les descripteurs (DICE_RESULT, COMBAT_ATTACK_RESULT) ne sont flushed qu'après le return. Ordre réel post-REWORK-18 : `wound direct → (queued) DICE_RESULT → (queued) COMBAT_ATTACK_RESULT`. Avant REWORK-18 : `DICE_RESULT direct → wound direct → COMBAT_ATTACK_RESULT direct`.
+
+**Code impliqué** :
+- `server/src/socket/socketCombatHelpers.js` — `resolveMeleeAction` L.711 (`woundService.applyWound`) + `resolveAssaultAction` (`damageService.resolveTargetHit`)
+- `server/src/socket/socketCombatResolution.js` — `flushEmissions` (dispatché après return)
+
+**Prochaine étape** : Sprint dédié — hors périmètre REWORK-18 (services intentionnellement hors scope). Option principale : dans les handlers `socketCombatResolution.js`, appeler les services APRÈS `flushEmissions` — nécessite de retourner les paramètres des services depuis les helpers (refactor non-trivial). Alternative légère : accepter l'ordre actuel + vérifier côté client que WOUND_ADDED est traité indépendamment du state combat.
+
+---
+
+### Bug STUN2 — PJ étourdi (stun reçu pendant résolution adverse) peut confirmer son action
+
+**Symptôme** : Un PJ dont l'action a été déclarée en phase ANNONCE reçoit un stun pendant la phase RÉSOLUTION (suite à une attaque adverse). Quand son slot est joué, il peut toujours confirmer son action (`COMBAT_ACTION_CONFIRM`) malgré le statut `is_stunned` actif.
+
+**Cause racine** [INCONNU] : `COMBAT_ACTION_CONFIRM` ne vérifie pas `is_stunned` avant d'exécuter l'action. Le guard existant (`COMBAT_ACTION_DECLARE` ~L.1923, PC42) couvre la phase d'annonce uniquement. Aucun guard équivalent à la confirmation.
+
+**Code impliqué** : `server/src/socket/socketCombatResolution.js` — handler `COMBAT_ACTION_CONFIRM` — guard `is_stunned` absent.
+
+**Note** : PC42 (dette connue — `COMBAT_ACTION_DECLARE`) est distinct. Ce bug couvre `COMBAT_ACTION_CONFIRM` — stun appliqué **après** la déclaration.
+
+**Prochaine étape** : Lire handler `COMBAT_ACTION_CONFIRM` dans `socketCombatResolution.js` — vérifier si `token_statuses` est consulté. Ajouter guard `is_stunned` au début du handler (même pattern que `COMBAT_ACTION_DECLARE`).
 
 ---
 

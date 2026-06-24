@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-23 Session 118 (cont.)
+> Dernière mise à jour : 2026-06-24 Session 119 (suite)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -80,11 +80,17 @@
    → `socketCombat.js` réduit à 9L (orchestrateur pur) — `index.js` inchangé
    → V1–V13 validés (SR + combat complet GM + PJ)
 
-**20. REWORK-18 — socketCombatHelpers.js : séparation computation / émission** ← PROCHAINE ÉTAPE
-   → Spec préliminaire dans `docs/PLAN_REWORK18.md`
-   → Problème : `resolveMeleeAction` (~490L) + `resolveAssaultAction` (~320L) + `resolveDroneAssaultAction` (~300L) mélangent computation et `socket.emit` — non testables unitairement
-   → Cible : helpers retournent `{ ok, result }`, handlers émettent — pattern boardgame.io / Colyseus
-   → Lire `docs/PLAN_REWORK18.md` + `docs/MANUELSYSCOMBAT.md §6` avant de coder
+**20. ~~REWORK-18 — socketCombatHelpers.js : séparation computation / émission~~** ⚠️ Clos partiel Session 119
+   → `socket` supprimé des 3 signatures helpers — 30 émissions → descripteurs `{ to, event, data }` — `flushEmissions` dans `socketCombatResolution.js` — 4 call sites mis à jour
+   → `node --check` ×2 ✅ — V5/V5b/V8 ✅ — V6/V7 partiels (DAMAGE_CONFIRM bloqué bug RW17-1)
+   → V1–V4, V9/V10 non testés (session combat réelle requise)
+   → Spec complète → `docs/PLAN_REWORK18.md`
+
+**21. Sprint résolution combat — bugs RW17-1 + STUN2** ← PROCHAINE ÉTAPE
+   → **RW17-1** : `calcDroneRD` non importée dans `socketCombatResolution.js` — 1 ligne — fix immédiat — débloque DAMAGE_CONFIRM + V9/V10
+   → **STUN2** : guard `is_stunned` absent de `COMBAT_ACTION_CONFIRM` — sprint dédié
+   → **RW18-1** (post-fix RW17-1) : services `woundService`/`damageService` émettent avant `flushEmissions` — ordering inversé — sprint séparé
+   → Lire `docs/BUGIDENTIFIE.md` §Session 119 avant de coder
 
 ---
 
