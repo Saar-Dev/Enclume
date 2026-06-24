@@ -119,6 +119,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         }
       }
       // LOS assault : vérifié à la résolution dans resolveAssaultAction → checkCombatLOS
+      console.log(`[DBG] PRECHECK ${actionKey} token:${tokenId} → ok:true`)
       callback({ ok: true })
     } catch (err) {
       console.error('[WS] COMBAT_ACTION_PRECHECK erreur:', err)
