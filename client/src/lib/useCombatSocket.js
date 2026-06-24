@@ -112,11 +112,16 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     }
-    const onDeclareError = ({ message, username }) => {
+    const onDeclareError = ({ message, username, stunned, statusCode }) => {
+      let text = message
+      if (stunned) {
+        const statut = statusCode === 'unconscious' ? 'inconscient' : 'étourdi'
+        text = t('session.stun_blocked', { statut })
+      }
       addMessage({
         id: `combat-error-${Date.now()}`,
         type: 'declare_error',
-        text: message,
+        text,
         username,
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })

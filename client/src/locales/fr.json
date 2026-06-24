@@ -83,6 +83,7 @@
     "noGm": "Aucun MJ connecté",
     "actionRefused": "Action refusée par le MJ",
     "tokenSkipped": "{{label}} a été passé",
+    "stun_blocked": "Action impossible, vous êtes {{statut}}",
     "combatEnd": "Terminer le combat",
     "combatMode": "Mode Combat",
     "combat": "Combat",

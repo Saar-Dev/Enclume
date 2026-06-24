@@ -89,7 +89,7 @@ const MOD_DOM_TABLE = [
 ]
 
 // ─── Table Résistance aux Dommages — FOR+CON (LdB p.114) ─────────────────────
-// Exportée pour calcDroneRD (socket/index.js) : drones utilisent integrite × 2 comme entrée directe.
+// Utilisée par calcDroneRD (ci-dessous) : drones utilisent integrite × 2 comme entrée directe.
 export const RD_TABLE = [
   { min: 2,  max: 5,  rd: +6 },
   { min: 6,  max: 9,  rd: +4 },
@@ -102,6 +102,20 @@ export const RD_TABLE = [
   { min: 34, max: 37, rd: -4 },
   { min: 38, max: 41, rd: -5 },
 ]
+
+// §7.6 — Drone : integrite × 2 → table RD. Sain (haute intégrité) → rd négatif → plus vulnérable.
+// Endommagé (faible intégrité) → rd positif → noyau durci. Plage couverte : integrite 1–20.
+export function calcDroneRD(integrite) {
+  const rdInput = (integrite ?? 0) * 2
+  return lookupTable(RD_TABLE, rdInput, 'rd') ?? 0
+}
+
+// §7.6 — Dégâts nets drone : degautsBruts − blindage − RD(intégrité). ≥ 0.
+export function calcDroneDegatsNets(droneSheet, degautsBruts) {
+  const etqDrone = droneSheet.blindage ?? 0
+  const rdDrone  = calcDroneRD(droneSheet.integrite_actuelle)
+  return { etqDrone, rdDrone, degatsNets: Math.max(0, degautsBruts - etqDrone - rdDrone) }
+}
 
 // ─── Table Résistance Naturelle (LdB p.114) ──────────────────────────────────
 const RES_NAT_TABLE = [

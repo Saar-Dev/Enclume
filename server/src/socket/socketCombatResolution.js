@@ -6,7 +6,7 @@ import { parseDice } from '../lib/diceParser.js'
 import { getMrTable, getModifier } from '../lib/mrTable.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
-import { calcSkillTotal } from '../lib/charStats.js'
+import { calcSkillTotal, calcDroneDegatsNets } from '../lib/charStats.js'
 import { isCaseOccupied, collisionMoveToken } from '../lib/redis.js'
 import { LOCATION_LABELS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
@@ -51,10 +51,40 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       // Si un joueur reconnecté envoie PRECHECK hors RESOLUTION, le reste de la room ne doit pas recevoir l'erreur.
       const state = await db('combat_state').where({ campaign_id: campaignId }).first()
       if (!canTransition(state?.phase ?? null, state?.sub_phase ?? null, 'COMBAT_ACTION_CONFIRM')) {
+        if (state?.sub_phase === 'AWAITING_DAMAGE') {
+          // Damage d'une attaque précédente en attente — pas d'erreur, client retentera après COMBAT_ATTACK_RESULT
+          return callback({ awaiting: true })
+        }
         socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Action non autorisée dans cet état de combat' })
         return callback({ ok: false })
       }
-      // 2. Range check CaC — colonne 'type' (cohérent L.907 serveur)
+      // 2. Guard stun — avant tout check LOS/range (STUN2)
+      // Si assommé : auto-skip serveur + { ok: false, stunned: true } — débloque le slot figé
+      {
+        const stunnedStatus = await db('token_statuses')
+          .where({ token_id: tokenId })
+          .whereIn('status_code', ['stunned', 'unconscious'])
+          .first()
+        const pendingStun = !stunnedStatus
+          ? await db('combat_pending')
+              .where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' })
+              .first()
+          : null
+        if (stunnedStatus || pendingStun) {
+          console.log(`[STUN2] PRECHECK token ${tokenId} assommé — auto-skip`)
+          const slots = await db('combat_roster')
+            .where({ campaign_id: campaignId, status: 'active', has_announced: true })
+            .orderBy('initiative', 'desc')
+            .select('token_id', 'initiative')
+          await db('combat_actions')
+            .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending' })
+            .update({ status: 'resolved' })
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { stunned: true, statusCode: stunnedStatus?.status_code ?? 'stunned' })
+          await advanceSlot(io, campaignId, slots, state.active_slot_idx + 1, pendingMaps)
+          return callback({ ok: false, stunned: true })
+        }
+      }
+      // 3. Range check CaC — colonne 'type' (cohérent L.907 serveur)
       if (actionKey === 'melee') {
         const action = await db('combat_actions')
           .where({ campaign_id: campaignId, token_id: tokenId, type: 'melee', status: 'pending' })
@@ -147,6 +177,28 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       }
       if (!isGm) {
         if (character.user_id !== user.id) return
+      }
+
+      // Guard is_stunned (STUN2) — filet de sécurité si PRECHECK n'a pas été émis (move/reload/micro)
+      {
+        const stunnedStatus = await db('token_statuses')
+          .where({ token_id: tokenId })
+          .whereIn('status_code', ['stunned', 'unconscious'])
+          .first()
+        const pendingStun = !stunnedStatus
+          ? await db('combat_pending')
+              .where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' })
+              .first()
+          : null
+        if (stunnedStatus || pendingStun) {
+          console.log(`[STUN2] CONFIRM token ${tokenId} assommé — slot auto-skipé`)
+          await db('combat_actions')
+            .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending' })
+            .update({ status: 'resolved' })
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { stunned: true, statusCode: stunnedStatus?.status_code ?? 'stunned' })
+          await advanceSlot(io, campaignId, slots, state.active_slot_idx + 1, pendingMaps)
+          return
+        }
       }
 
       // Lire les actions pendantes pour ce token, dans l'ordre d'exécution
@@ -271,9 +323,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       if (cibleType === 'drone' && characterIdCible) {
         const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
         if (droneSheet) {
-          const etqDrone  = droneSheet.blindage ?? 0
-          const rdDrone   = calcDroneRD(droneSheet.integrite_actuelle)
-          const degatsNetsDrone = Math.max(0, degautsBruts - etqDrone - rdDrone)
+          const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
           await resolveDroneIntegrityLoss(io, pendingCampaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
           socket.emit(WS.COMBAT_DAMAGE_RESULT, {
             rollLoc: null, locLabel: null,

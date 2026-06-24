@@ -11,7 +11,7 @@ import {
   calcSkillTotal, calcAttributeNA, calcREA,
   calcWoundPenalty, calcEncumbrancePenalty,
   calcResistanceDommages, calcResistanceArmure, calcCarenceArmure,
-  getModDom, RD_TABLE, lookupTable,
+  getModDom, calcDroneRD, calcDroneDegatsNets,
 } from '../lib/charStats.js'
 import { isCaseOccupied, collisionMoveToken } from '../lib/redis.js'
 import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS, LOC_TABLE } from '../../../shared/armorConstants.js'
@@ -761,9 +761,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
         if (droneSheet) {
           const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
           const degautsBruts = rawDice + (modDom ?? 0) + combatModeBonus
-          const etqDrone = droneSheet.blindage ?? 0
-          const rdDrone  = calcDroneRD(droneSheet.integrite_actuelle)
-          const degatsNetsDrone = Math.max(0, degautsBruts - etqDrone - rdDrone)
+          const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
           await resolveDroneIntegrityLoss(io, campaignId, defenderCharacter.id, targetTokenId, droneSheet, degatsNetsDrone)
           emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
             tireurId: action.token_id, cibleId: targetTokenId,
@@ -1118,9 +1116,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       const mrTable       = await getMrTable()
       const modDomAttaque = getModifier(mrTable, mr)
       const degautsBruts  = rawDice + modDomAttaque
-      const etqDrone      = droneSheet.blindage ?? 0
-      const rdDrone       = calcDroneRD(droneSheet.integrite_actuelle)
-      const degatsNets    = Math.max(0, degautsBruts - etqDrone - rdDrone)
+      const { etqDrone, rdDrone, degatsNets } = calcDroneDegatsNets(droneSheet, degautsBruts)
       await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNets)
       const newIntegrite = degatsNets >= 30 ? 0 : Math.max(0, droneSheet.integrite_actuelle - 1)
       emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
@@ -1479,9 +1475,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         if (cibleCharacter?.type === 'drone') {
           const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
           if (droneSheet) {
-            const etqDrone  = droneSheet.blindage ?? 0
-            const rdDrone   = calcDroneRD(droneSheet.integrite_actuelle)
-            const degatsNetsDrone = Math.max(0, degautsBruts - etqDrone - rdDrone)
+            const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
             await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNetsDrone)
             emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
               tireurId: action.token_id, cibleId: action.target_token_id,
@@ -1561,14 +1555,6 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
 }
 
 // ─── Drones — fonctions de résolution ────────────────────────────────────────
-
-// RD drone : integrite × 2 → table RD LdB p.112 (même table que FOR+CON humanoïdes,
-// input direct sans calcul d'attributs). Drone sain (haute intégrité) → rd négatif → plus vulnérable.
-// Drone endommagé (faible intégrité) → rd positif → noyau durci.
-export function calcDroneRD(integrite) {
-  const rdInput = (integrite ?? 0) * 2
-  return lookupTable(RD_TABLE, rdInput, 'rd') ?? 0
-}
 
 // Décrémente l'intégrité du drone après un hit, met à jour damages JSONB, broadcast.
 // tokenId requis : drone_sheet n'a pas de FK token_id (PD8).

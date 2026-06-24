@@ -760,3 +760,81 @@ Session combat réelle avec drone CaC assigné programme "Contact" → résoluti
 V1–V4 (CaC en session réelle), V9/V10 (drone), COMBAT_DAMAGE_CONFIRM complet (bloqué RW17-1)
 
 ---
+
+## Session 120 — 2026-06-24 — STUN2 + RW17-1 vérification
+
+### Travail effectué
+
+**RW17-1 ✅ CLOS COMPLET (vérification) :**
+- `calcDroneRD` + `calcDroneDegatsNets` exportées `charStats.js` L.106-118 par agent précédent (REWORK-DRONE-CALC)
+- `socketCombatHelpers.js` L.14 : import corrigé — local export supprimé
+- `socketCombatResolution.js` L.9 : import `calcDroneDegatsNets` depuis `charStats.js` — 3 call sites L.764/L.1119/L.1478 ✅
+
+**STUN2 — implémentation session 120 :**
+
+*Guards serveur (`socketCombatResolution.js`) :*
+- PRECHECK guard L.57-81 : double-check `token_statuses` + `combat_pending type='stun'` avant LOS/range — auto-skip + `{ ok: false, stunned: true }`
+- CONFIRM guard L.177-198 : même double-check — filet si PRECHECK non émis
+- Bugs fix : `campaign_id` absent de `token_statuses` ; signature `advanceSlot(io, campaignId, slots, nextIdx, pendingMaps)` (pas de `db`)
+
+*Message i18n :*
+- `fr.json` : `session.stun_blocked` = `"Action impossible, vous êtes {{statut}}"`
+- `socketCombatResolution.js` : `socket.emit(WS.COMBAT_DECLARE_ERROR, { stunned: true, statusCode })` dans les deux guards
+- `useCombatSocket.js` `onDeclareError` : `{ stunned, statusCode }` → `t('session.stun_blocked', { statut })`
+
+*Fix overlay "Ligne de vue bouchée" (Phase 3 — à coder) :*
+- `CombatOverlay.jsx` L.86 : callback PRECHECK ne destructure que `{ ok }` — `stunned: true` → `ok: false` → overlay LOS affiché à tort
+- Fix : `{ ok, stunned }` → si `stunned` → `setAssaultPrecheckOk(null)`
+
+**Bugs hors scope STUN2 :**
+- "Action non autorisée" au tir drone : race condition late-declaration GM (pré-existant)
+- Timer sur AGIR : feature séparée non implantée
+
+### Testé
+STUN2 CONFIRM : stun détecté ✅, auto-skip ✅, `endTurn` ✅
+
+### Non testé
+Overlay fix Phase 3 (fix à coder), message Sidebar non confirmé visuellement
+
+---
+
+## Session 120 (suite) — 2026-06-24 — STUN2 Phase 3 overlay fix
+
+### Travail effectué
+
+**Cause racine identifiée — "Ligne de vue bouchée" incorrecte :**
+- Ce n'est pas un bug stun : c'est le guard FSM `AWAITING_DAMAGE` qui bloque le PRECHECK du slot suivant
+- Séquence : drone tire PJ → `sub_phase = AWAITING_DAMAGE` → slot avance quand même → PRECHECK du combattant suivant frappe `canTransition(RESOLUTION, AWAITING_DAMAGE, COMBAT_ACTION_CONFIRM)` → false → `{ ok: false }` + "Action non autorisée dans cet état de combat" → `setAssaultPrecheckOk(false)` → overlay "Ligne de vue bouchée" (raison incorrecte)
+
+**Fix serveur — `socketCombatResolution.js` PRECHECK L.53-58 :**
+```js
+if (!canTransition(...)) {
+  if (state?.sub_phase === 'AWAITING_DAMAGE') {
+    return callback({ awaiting: true })  // pas d'erreur, client retentera après COMBAT_ATTACK_RESULT
+  }
+  socket.emit(WS.COMBAT_DECLARE_ERROR, ...)
+  return callback({ ok: false })
+}
+```
+
+**Fix client — `CombatOverlay.jsx` :**
+- `precheckRetryKey` state + listener `COMBAT_ATTACK_RESULT` (broadcast room après DAMAGE_CONFIRM)
+- Assault PRECHECK callback : `{ ok, stunned, awaiting }` — si `awaiting` → `setAssaultPrecheckOk(null)` (aucun overlay)
+- Melee PRECHECK callback : `{ ok, awaiting }` — si `awaiting` → `setPrecheckOk(null)`
+- Deps assault + melee PRECHECK : `[..., precheckRetryKey]` → re-fire après COMBAT_ATTACK_RESULT
+
+**Séquence corrigée :**
+1. Drone tire PJ → AWAITING_DAMAGE → slot avance
+2. Combattant suivant : PRECHECK → `{ awaiting: true }` → `assaultPrecheckOk = null` → aucun overlay, AGIR masqué (correct)
+3. PJ confirme dégâts → stun appliqué → `COMBAT_ATTACK_RESULT` broadcasté
+4. Tous clients : `precheckRetryKey++` → PRECHECK re-fire → stun en DB → STUN2 PRECHECK guard → auto-skip ✅
+
+**Double-fire PRECHECK (GM + PJ clients) :** idempotent — les deux calculent `nextIdx = N+1` depuis même `state.active_slot_idx`, `advanceSlot` écrit `N+1` deux fois, `COMBAT_SLOT_ADVANCED` idempotent côté client.
+
+### Testé
+SR ✅, all OK (confirmation Saar)
+
+### Non testé
+Scénario complet en session combat réelle avec drone → PJ étourdi (nécessite session multijoueur)
+
+---

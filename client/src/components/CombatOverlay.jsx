@@ -32,6 +32,14 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
     return () => socket.off(WS.COMBAT_STUN_EXPIRED, handler)
   }, [socket, tokens])
 
+  const [precheckRetryKey, setPrecheckRetryKey] = useState(0)
+  useEffect(() => {
+    if (!socket) return
+    const onAttackResult = () => setPrecheckRetryKey(k => k + 1)
+    socket.on(WS.COMBAT_ATTACK_RESULT, onAttackResult)
+    return () => socket.off(WS.COMBAT_ATTACK_RESULT, onAttackResult)
+  }, [socket])
+
   // Slot actif en RÉSOLUTION — pour le panneau GM
   const sortedRoster = [...roster].sort((a, b) => b.initiative - a.initiative)
   const gmActiveEntry = roster.find(e => e.token_id === activeTokenId) ?? null
@@ -66,13 +74,14 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
     if (!meleePrecheckId || !socket) return
     let cancelled = false
     const tokenId = activeMeleeAction?.token_id ?? playerActiveMeleeAction?.token_id
-    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'melee' }, (err, { ok } = {}) => {
+    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'melee' }, (err, { ok, awaiting } = {}) => {
       if (cancelled) return
+      if (awaiting) { setPrecheckOk(null); return }
       setPrecheckOk(err ? false : (ok ?? false))
     })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meleePrecheckId, socket])
+  }, [meleePrecheckId, socket, precheckRetryKey])
 
   // Pre-validation assaut distance — REWORK-16 extension
   const assaultPrecheckId = activeAssaultAction?.id ?? playerActiveAssaultAction?.id ?? null
@@ -83,13 +92,14 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
     if (!assaultPrecheckId || !socket) return
     let cancelled = false
     const tokenId = activeAssaultAction?.token_id ?? playerActiveAssaultAction?.token_id
-    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'assault' }, (err, { ok } = {}) => {
+    socket.timeout(5000).emit(WS.COMBAT_ACTION_PRECHECK, { tokenId, actionKey: 'assault' }, (err, { ok, stunned, awaiting } = {}) => {
       if (cancelled) return
+      if (stunned || awaiting) { setAssaultPrecheckOk(null); return }
       setAssaultPrecheckOk(err ? false : (ok ?? false))
     })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assaultPrecheckId, socket])
+  }, [assaultPrecheckId, socket, precheckRetryKey])
 
   return (
     <div style={{ ...styles.overlay, '--sidebar-w': sidebarWidth + 'px' }}>

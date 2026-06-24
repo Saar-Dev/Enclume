@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-24 Session 119 (suite)
+> Dernière mise à jour : 2026-06-24 Session 120 (suite)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -86,11 +86,14 @@
    → V1–V4, V9/V10 non testés (session combat réelle requise)
    → Spec complète → `docs/PLAN_REWORK18.md`
 
-**21. Sprint résolution combat — bugs RW17-1 + STUN2** ← PROCHAINE ÉTAPE
-   → **RW17-1** : `calcDroneRD` non importée dans `socketCombatResolution.js` — 1 ligne — fix immédiat — débloque DAMAGE_CONFIRM + V9/V10
-   → **STUN2** : guard `is_stunned` absent de `COMBAT_ACTION_CONFIRM` — sprint dédié
-   → **RW18-1** (post-fix RW17-1) : services `woundService`/`damageService` émettent avant `flushEmissions` — ordering inversé — sprint séparé
-   → Lire `docs/BUGIDENTIFIE.md` §Session 119 avant de coder
+**21. ~~Sprint résolution combat — bugs RW17-1 + STUN2~~** ✅ CLOS Session 120
+   → **RW17-1** ✅ CLOS COMPLET — `calcDroneRD`/`calcDroneDegatsNets` dans `charStats.js` (agent précédent) — 3 call sites migrés
+   → **STUN2** ✅ CLOS (SR + all OK) — guards PRECHECK+CONFIRM, message i18n, overlay fix (cause racine : FSM AWAITING_DAMAGE → `{ awaiting: true }` + `precheckRetryKey` + `COMBAT_ATTACK_RESULT`)
+   → **RW18-1** : sprint séparé — voir BUGIDENTIFIE.md
+
+**22. ← PROCHAINE ÉTAPE : voir `docs/BUGIDENTIFIE.md` + `docs/ARCHI_REWORK.md` pour cluster suivant**
+   → Validation STUN2 complète en session combat réelle recommandée (drone → PJ étourdi)
+   → Bugs drones (D1, D2) ou RW18-1 selon priorité
 
 ---
 

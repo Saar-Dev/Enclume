@@ -1,3 +1,16 @@
+## v123 — 2026-06-24 — STUN2 : correction overlay LOS + AWAITING_DAMAGE PRECHECK
+
+### Serveur — Combat
+- [fix] `socketCombatResolution.js` PRECHECK : `AWAITING_DAMAGE` → `{ awaiting: true }` sans message d'erreur (overlay "Ligne de vue bouchée" affiché à tort pendant l'attente)
+- [fix] STUN2 guards PRECHECK + CONFIRM : double-check `token_statuses` + `combat_pending type='stun'` — auto-skip slot si étourdi
+
+### Client — Combat
+- [fix] `CombatOverlay.jsx` : `precheckRetryKey` + listener `COMBAT_ATTACK_RESULT` → re-fire PRECHECK après confirmation dégâts
+- [fix] Callbacks assault + melee PRECHECK : gestion flag `awaiting` → `precheckOk = null` (aucun overlay pendant AWAITING_DAMAGE)
+- [fix] `useCombatSocket.js` `onDeclareError` : message i18n `session.stun_blocked` si `stunned: true`
+
+---
+
 ## v122 — 2026-06-24 — REWORK-18 : Effect Queue (socketCombatHelpers — séparation computation/émission)
 
 ### Serveur — Refactoring

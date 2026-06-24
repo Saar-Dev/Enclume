@@ -101,10 +101,17 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 119 (2026-06-23)
+## ÉTAT COURANT — Session 120 (2026-06-24)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
+
+**Session 120 (suite) — STUN2 ✅ clos (SR + all OK) :**
+- Cause racine overlay "Ligne de vue bouchée" : FSM `AWAITING_DAMAGE` bloquait PRECHECK du slot suivant (pas un bug stun)
+- `socketCombatResolution.js` PRECHECK : exception `AWAITING_DAMAGE` → `{ awaiting: true }` sans message d'erreur
+- `CombatOverlay.jsx` : `precheckRetryKey` state + listener `COMBAT_ATTACK_RESULT` → re-fire PRECHECK après DAMAGE_CONFIRM
+- Callbacks assault + melee PRECHECK : gestion `awaiting` → `setPrecheckOk(null)` (aucun overlay pendant attente)
+- **Prochaine étape** : validation STUN2 en session combat réelle + cluster suivant (D1/D2 ou RW18-1)
 
 **Session 119 — Bug D3 ✅ clos complet :**
 - Migration 83 : "Attaque"→"Contact" (`armement_contact`), "Tir"→"Balistique", "Contrôle armement" supprimé
