@@ -8,11 +8,10 @@ export async function getMerchants(campaignId, { isGm, userId }) {
     return db('merchants').where({ campaign_id: campaignId }).orderBy('name')
   }
 
-  // PJ : trouver tous ses character_id dans la campagne (via tokens)
+  // PJ : trouver tous ses character_id dans la campagne
   const chars = await db('characters')
-    .join('tokens', 'tokens.character_id', 'characters.id')
-    .where({ 'tokens.campaign_id': campaignId, 'characters.user_id': userId })
-    .select('characters.id')
+    .where({ campaign_id: campaignId, user_id: userId })
+    .select('id')
   const charIds = chars.map(c => c.id)
 
   if (charIds.length === 0) return []

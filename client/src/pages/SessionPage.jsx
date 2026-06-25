@@ -66,7 +66,8 @@ function SessionContent({ campaignId }) {
 
   const [mode, setMode] = useState('play')
   const [layer, setLayer] = useState('token')
-  const [tradeWindowOpen, setTradeWindowOpen] = useState(false)
+  const [tradeWindowOpen,    setTradeWindowOpen]    = useState(false)
+  const [tradeInitialContext, setTradeInitialContext] = useState(null)
   const [activeEditorTab, setActiveEditorTab] = useState('voxel') // 'voxel' | 'entity'
   // canvasVisible : false pendant la transition play↔edit — force le démontage
   // complet du Canvas actif avant que le suivant monte (évite le double contexte WebGL)
@@ -445,13 +446,6 @@ function SessionContent({ campaignId }) {
             ))}
           </div>
           <button
-            onClick={() => setTradeWindowOpen(v => !v)}
-            className={tradeWindowOpen ? 'btn btn-gold' : 'btn btn-ghost'}
-            style={{ marginLeft: 'auto', flexShrink: 0 }}
-          >
-            {t('session.trade')}
-          </button>
-          <button
             onClick={handleCombatToggle}
             className={mode === 'combat' ? 'btn btn-danger' : 'btn'}
             style={{ flexShrink: 0 }}
@@ -555,6 +549,7 @@ function SessionContent({ campaignId }) {
           onReconnectSocket={() => {}}
           onOpenCharacter={openSheet}
           onEntityActionResolve={handleEntityActionResolve}
+          onOpenTrade={() => { setTradeInitialContext(null); setTradeWindowOpen(true) }}
         />
       )}
 
@@ -584,6 +579,10 @@ function SessionContent({ campaignId }) {
             onSetRotation={handleSetContextTokenRotation}
             onOpenStatusPanel={() => setStatusPanel({ tokenId: contextMenu.token.id, x: contextMenu.x, y: contextMenu.y })}
             onViser={handleViser}
+            onOpenExchange={() => {
+              setTradeInitialContext({ mode: 'exchange', toCharId: contextMenu.token.character_id ?? null })
+              setTradeWindowOpen(true)
+            }}
             onClose={() => setContextMenu(null)}
           />
         )
@@ -851,6 +850,8 @@ function SessionContent({ campaignId }) {
           onClose={() => setTradeWindowOpen(false)}
           isGm={isGm}
           myCharId={myCharId}
+          characters={characters}
+          initialContext={tradeInitialContext}
         />
       )}
 

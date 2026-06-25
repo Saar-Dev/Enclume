@@ -1200,3 +1200,68 @@ Vue Joueur (catalogue + panier + checkout) — accessible après étape 11 (menu
 PLAN_TRADE étape 10 : `TradeWindow.jsx` vue Échange PJ↔PJ — propose + accept/decline/cancel + timer expiration
 
 ---
+
+## Session 125 — 2026-06-25 — CL3 ✅ + refonte méthode debug
+
+### CL3 ✅ — Ghosts déplacement + lignes attaque disparus en ANNOUNCEMENT
+
+**Cause racine [VÉRIFIÉ par instrumentation]** : `announcementMarker` dans `useCombatSocket.js` était un singleton écrasé à chaque `COMBAT_ACTION_DECLARED`. Données vérifiées côté serveur et client via logs `[DBG-CL3]` : payload correct, bug dans le rendu uniquement.
+
+**Fichiers modifiés**
+- `client/src/components/Canvas3D.jsx` — `Scene` : `announcedActions` ajouté au destructure `useCombatStore`. Deux blocs IIFE singleton remplacés par `.map()` sur `announcedActions` filtré, gardé par `phase === 'ANNOUNCEMENT'` :
+  - Ghosts déplacement : `filter(e => e.moveTarget)` → `<group key={tokenId}>` avec mesh + ligne + Billboard
+  - Lignes attaque : `filter(e => e.attackTargetId)` → `<line key={tokenId}>`
+
+**Testé** : SR ✅ — 3 déclarations déplacement simultanées visibles ✅ (Saar)
+
+**Non testé** : plusieurs lignes d'attaque simultanées — même mécanique
+
+---
+
+### Méthode debug — refonte BUGIDENTIFIE.md + CLAUDE.md
+
+Dérive identifiée : diagnostic labellisé [VÉRIFIÉ] sur lecture seule, fix proposé sur [HYPOTHÈSE] non instrumentée. Refonte des deux documents :
+- `docs/BUGIDENTIFIE.md` : pipeline renommé (ajout étape "Reproduire" obligatoire, "Instrumenter" toujours obligatoire), label [VÉRIFIÉ] corrigé (exige instrumentation + observation en exécution)
+- `CLAUDE.md` DÉTECTEUR DE DÉRIVE : +3 lignes ([VÉRIFIÉ] après lecture seule → STOP, fix sur [HYPOTHÈSE] → STOP, bug non reproductible → STOP)
+
+---
+
+## Session 125 (suite) — 2026-06-25 — PLAN_TRADE étapes 10–11 ✅ + bugfixes Trade
+
+### Étape 10 — TradeWindow vue Échange PJ↔PJ ✅
+
+**Fichiers modifiés**
+- `client/src/components/TradeWindow.jsx` — tab Échange joueur : sélecteur cible PJ, chargement inventaire, liste items proposés, saisie sols, `handleProposeOffer` (ACK → `outboundOffer`), `handleCancelOffer/AcceptOffer/DeclineOffer`. Timer countdown 1s sur `expiresAt`. Listeners WS : `TRADE_OFFER_RECEIVED` (switch tab auto) + ACCEPTED/DECLINED/CANCELLED. Prop `initialContext` pour pré-remplissage depuis menu radial.
+- `server/src/socket/socketTrade.js` — TRANSFER_OFFER : param `callback` optionnel + ACK `{ ok, offerId, expiresAt }`
+- `client/src/locales/fr.json` — +17 clés `trade.window.tab_catalogue/exchange`, `ex_*`
+- `client/src/pages/SessionPage.jsx` — prop `characters` transmis à TradeWindow
+
+### Étape 11 — Menu radial Échange + Sidebar Outils Marchands ✅
+
+**Fichiers modifiés**
+- `client/src/components/TokenRadialMenu.jsx` — slot 5 `portee` (disabled) → `echange` (`enabled: !isGm`) + prop `onOpenExchange` + handler case
+- `client/src/components/Sidebar.jsx` — `IconCoins` supprimé, bouton "Commerce" standalone supprimé, item "Marchands" dans dropdown "Outils" (`toolsDropdownItemEnabled`), prop `onOpenTrade`
+- `client/src/pages/SessionPage.jsx` — `tradeInitialContext` state + câblage `onOpenTrade` Sidebar + `onOpenExchange` TokenRadialMenu + `initialContext` TradeWindow
+- `client/src/locales/fr.json` — +`tokenRadial.echange`, `tokenRadial.detailEchange`, `session.commerce`
+
+**Testé** : SR ✅ — Outils → Marchands ✅ — liste marchands peuplée joueur ✅
+**Non testé** : Échange PJ↔PJ en session réelle
+
+---
+
+### Bugfixes Trade ✅
+
+**Bug T1 — liste marchands vide côté joueur**
+- Cause : `getMerchants` PJ cherchait les characters via join `tokens` — sans token placé → `charIds = []` → retour `[]`
+- Fix : `server/src/services/tradeService.js` — `WHERE campaign_id + user_id` direct, sans join tokens
+
+**Bug T2 — `TRANSFER_OFFER error: column tokens.campaign_id does not exist`**
+- Cause : 3 handlers `socketTrade.js` (L.34, L.80, L.137) utilisaient `JOIN tokens ON tokens.campaign_id` — colonne inexistante
+- Fix : `server/src/socket/socketTrade.js` — `WHERE campaign_id + id + user_id` dans les 3 handlers
+
+**Bug T3 — écran noir sur INSUFFICIENT_FUNDS**
+- Cause : `errorHandler` retourne `{ error: { status, message } }`. Client lisait `err.response?.data?.error` → objet → `text = objet` → React crash
+- Fix : `TradeWindow.jsx` L.178 → `err.response?.data?.error?.message || err.message`
+- Testé : SR ✅ — INSUFFICIENT_FUNDS → message d'erreur panier, pas d'écran noir ✅
+
+---

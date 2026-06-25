@@ -93,6 +93,7 @@ export default function TokenRadialMenu({
   onSetRotation,
   onOpenStatusPanel,
   onViser,
+  onOpenExchange,
   onClose,
 }) {
   const { t } = useTranslation()
@@ -173,7 +174,7 @@ export default function TokenRadialMenu({
     { id: 'recharger', label: t('tokenRadial.recharger'), enabled: false },
     { id: 'deplacer',  label: t('tokenRadial.deplacer'),  enabled: false },
     { id: 'retirer',   label: t('tokenRadial.retirer'),   enabled: true  },
-    { id: 'portee',    label: t('tokenRadial.portee'),    enabled: false },
+    { id: 'echange',   label: t('tokenRadial.echange'),   enabled: !isGm },
     { id: 'viser',     label: t('tokenRadial.viser'),     enabled: true  },
     { id: 'statuts',   label: t('tokenRadial.statuts'),   enabled: true  },
   ]
@@ -184,6 +185,7 @@ export default function TokenRadialMenu({
     if (a.id === 'retirer') { doClose(); onRemoveToken?.() }
     if (a.id === 'statuts') { doClose(); onOpenStatusPanel?.() }
     if (a.id === 'viser')   { doClose(); onViser?.() }
+    if (a.id === 'echange') { doClose(); onOpenExchange?.() }
   }
 
   // ─── Secteurs ─────────────────────────────────────────────────────────────

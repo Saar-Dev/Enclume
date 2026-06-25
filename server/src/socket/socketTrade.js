@@ -21,7 +21,7 @@ export function registerTradeHandlers(io, socket, context) {
   const { campaignId, user } = context
 
   // PJ A → propose une offre à PJ B
-  socket.on(WS.TRADE_TRANSFER_OFFER, async ({ fromCharId, toCharId, items = [], solsOffer = 0 }) => {
+  socket.on(WS.TRADE_TRANSFER_OFFER, async ({ fromCharId, toCharId, items = [], solsOffer = 0 }, callback) => {
     try {
       await tradeOfferLimiter.consume(user.id)
     } catch {
@@ -31,9 +31,8 @@ export function registerTradeHandlers(io, socket, context) {
     try {
       // Vérifier que fromCharId appartient bien à cet utilisateur dans cette campagne
       const fromChar = await db('characters')
-        .join('tokens', 'tokens.character_id', 'characters.id')
-        .where({ 'tokens.campaign_id': campaignId, 'characters.id': fromCharId, 'characters.user_id': user.id })
-        .select('characters.id', 'characters.name')
+        .where({ campaign_id: campaignId, id: fromCharId, user_id: user.id })
+        .select('id', 'name')
         .first()
       if (!fromChar) {
         socket.emit(WS.TRADE_ERROR, { code: 'OFFER_NOT_FOUND', message: 'Personnage introuvable' })
@@ -64,9 +63,11 @@ export function registerTradeHandlers(io, socket, context) {
           expiresAt:    offer.expires_at,
         })
       }
+      if (typeof callback === 'function') callback({ ok: true, offerId: offer.id, expiresAt: offer.expires_at })
     } catch (err) {
       console.error('[TRADE] TRANSFER_OFFER error:', err.message)
       socket.emit(WS.TRADE_ERROR, { code: 'SERVER_ERROR', message: err.message })
+      if (typeof callback === 'function') callback({ ok: false })
     }
   })
 
@@ -75,9 +76,8 @@ export function registerTradeHandlers(io, socket, context) {
     try {
       // Vérifier que acceptingCharId appartient bien à cet utilisateur dans cette campagne
       const acceptingChar = await db('characters')
-        .join('tokens', 'tokens.character_id', 'characters.id')
-        .where({ 'tokens.campaign_id': campaignId, 'characters.id': acceptingCharId, 'characters.user_id': user.id })
-        .select('characters.id')
+        .where({ campaign_id: campaignId, id: acceptingCharId, user_id: user.id })
+        .select('id')
         .first()
       if (!acceptingChar) {
         socket.emit(WS.TRADE_ERROR, { code: 'OFFER_NOT_FOUND' })
@@ -132,9 +132,8 @@ export function registerTradeHandlers(io, socket, context) {
     try {
       // Vérifier que fromCharId appartient bien à cet utilisateur
       const cancellingChar = await db('characters')
-        .join('tokens', 'tokens.character_id', 'characters.id')
-        .where({ 'tokens.campaign_id': campaignId, 'characters.id': fromCharId, 'characters.user_id': user.id })
-        .select('characters.id')
+        .where({ campaign_id: campaignId, id: fromCharId, user_id: user.id })
+        .select('id')
         .first()
       if (!cancellingChar) {
         socket.emit(WS.TRADE_ERROR, { code: 'OFFER_NOT_FOUND' })

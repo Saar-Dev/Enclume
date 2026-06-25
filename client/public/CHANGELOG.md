@@ -1,3 +1,25 @@
+## v133 — 2026-06-25 — Trade complet : échange PJ↔PJ + déclencheurs + bugfixes
+
+### Client
+- [feat] `TradeWindow.jsx` — vue Échange PJ↔PJ : proposer items/sols, timer expiration, accept/refuse/annuler, switch tab auto sur offre reçue
+- [feat] `TokenRadialMenu.jsx` — slot 5 : "Échange" (joueur uniquement, pré-remplit cible)
+- [fix] `Sidebar.jsx` — "Marchands" dans dropdown "Outils" (pas de bouton standalone)
+- [fix] `TradeWindow.jsx` — écran noir sur INSUFFICIENT_FUNDS corrigé (parsing `err.response.data.error.message`)
+
+### Serveur
+- [fix] `tradeService.js` — `getMerchants` PJ : join tokens supprimé → recherche directe par `campaign_id + user_id`
+- [fix] `socketTrade.js` — 3 handlers : join `tokens.campaign_id` inexistant → `WHERE campaign_id + id + user_id`
+- [fix] `socketTrade.js` — TRANSFER_OFFER : ACK callback `{ ok, offerId, expiresAt }` pour timer et annulation côté PJ A
+
+---
+
+## v132 — 2026-06-25 — CL3 : ghosts déplacement + lignes attaque persistants en ANNOUNCEMENT
+
+### Client
+- [fix] `Canvas3D.jsx` — ghosts déplacement et lignes d'attaque déclarées restent tous visibles simultanément pendant la phase ANNOUNCEMENT (lecture `announcedActions[]` store au lieu du singleton `announcementMarker`)
+
+---
+
 ## v131 — 2026-06-25 — Trade : TradeWindow vue Joueur (catalogue + panier + checkout)
 
 ### Client

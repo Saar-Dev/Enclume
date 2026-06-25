@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-25 Session 124
+> Dernière mise à jour : 2026-06-25 Session 125
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -127,10 +127,15 @@
    → `SessionPage.jsx` : `myCharId` derivé + condition `{tradeWindowOpen &&` + props `isGm` / `myCharId` passés
    → `fr.json` : +`session.trade` + `trade.window.*` (26 clés total)
 
-**30. ← PROCHAINE ÉTAPE : PLAN_TRADE étapes 10–11**
-   → Étape 10 : vue Échange PJ↔PJ (propose + accept/decline/cancel + expiration timer)
-   → Étape 11 : Menu radial — secteur Trade → TradeWindow (déclencheur joueur)
-   → Validation STUN2 en session réelle recommandée en parallèle
+**30. ~~PLAN_TRADE étapes 10–11 ✅ Session 125~~**
+   → Étape 10 : `TradeWindow.jsx` vue Échange PJ↔PJ — proposer/accepter/refuser/annuler + timer expiration + listeners WS
+   → Étape 11 : slot Échange dans `TokenRadialMenu` (`enabled: !isGm`) + item Marchands dans dropdown Outils `Sidebar`
+   → Bugfixes T1/T2/T3 : liste marchands vide (join tokens supprimé), `tokens.campaign_id` ×3 `socketTrade.js`, écran noir `INSUFFICIENT_FUNDS` (parsing objet → `.message`)
+   → **PLAN_TRADE complet ✅** (étapes 1–11)
+
+**31. ← PROCHAINE ÉTAPE : cluster suivant selon priorité**
+   → Validation STUN2 en session combat réelle
+   → Ou bugs actifs BUGIDENTIFIE.md
 
 ---
 
@@ -180,7 +185,7 @@
 | COM5 | ~~Mode combat sélectionne aussi la cible (GM)~~ | ✅ REWORK-05 Session 99 |
 | COM7 | Multi-attaque CaC : duplicata / bouton grisé | Moyenne |
 | CL2 | ~~Design CombatDeclareLog + divergence GM/joueur~~ | ✅ REWORK-05 Session 99 |
-| CL3 | Ghosts déplacement d'annonce disparus | Moyenne |
+| ~~CL3~~ | ~~Ghosts déplacement d'annonce disparus~~ | ✅ Clos Session 125 |
 | ~~D1~~ | ~~Menu radial "fiche" drone ne s'ouvre pas~~ | ✅ Clos Session 124 |
 | COM9 | Viser une localisation précise — non implémenté | Moyenne — sprint dédié |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |

@@ -76,6 +76,9 @@ Toute clôture ✅ exige :
 → Implémenter mécanique de combat → STOP. `docs/REGLESYSCOMBAT.md` lu dans cette session ?
 → Conversation reprise depuis un résumé → STOP. Protocole début de session complet avant toute proposition.
 → Plan mentionnant deux bugs ou plus → STOP. Un bug à la fois.
+→ Déclarer `[VÉRIFIÉ]` après lecture du code uniquement → STOP. Lire = `[HYPOTHÈSE]`. `[VÉRIFIÉ]` = instrumenté + observé en exécution.
+→ Proposer un correctif sur une cause `[HYPOTHÈSE]` non instrumentée → STOP. Étape instrumentation obligatoire d'abord.
+→ Bug non reproductible avant analyse → STOP. Documenter les conditions, ne pas analyser à l'aveugle.
 
 ---
 
@@ -101,10 +104,19 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 124 (2026-06-25)
+## ÉTAT COURANT — Session 125 (2026-06-25)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **88 migrations stables** (87 = ref_equipment.generation — Trade Session 124)
+
+**Session 125 — PLAN_TRADE étapes 10–11 ✅ + bugfixes Trade :**
+- Étape 10 : `TradeWindow.jsx` vue Échange PJ↔PJ — proposer/accepter/refuser/annuler + timer expiration + listeners WS
+- Étape 11 : slot "Échange" dans `TokenRadialMenu` (`enabled: !isGm`) + item "Marchands" dans dropdown Outils `Sidebar`
+- Bug T1 : `tradeService.getMerchants` PJ — join tokens supprimé → `WHERE campaign_id + user_id`
+- Bug T2 : `socketTrade.js` 3 handlers — `tokens.campaign_id` inexistant → `WHERE campaign_id + id + user_id`
+- Bug T3 : `TradeWindow.handleCheckout` — `err.response.data.error` objet → `.message` (écran noir corrigé)
+- **PLAN_TRADE complet ✅ (étapes 1–11)**
+- **Prochaine étape** : validation STUN2 en session réelle ou cluster bugs suivant
 
 **Session 124 — PLAN_TRADE étapes 1–9 ✅ :**
 - Migrations 84–87 : `merchants`, `trade_log`, `trade_offers`, `ref_equipment.generation`
@@ -115,7 +127,6 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - `DashboardPage.jsx` : bouton "Marchands" sur carte campagne GM
 - `TradeWindow.jsx` : vue GM lite (étape 8) + vue Joueur (étape 9) — sélecteur marchand filtré + catalogue FAM + détail inline + panier + checkout
 - `SessionPage.jsx` : `myCharId` derivé + props `isGm`/`myCharId` + condition `{tradeWindowOpen &&`
-- **Prochaine étape** : PLAN_TRADE étapes 10–11 (vue PJ↔PJ + menu radial)
 
 **Session 124 (suite) — D1 ✅ + D2 ✅ (Drone fiche + GLB upload) :**
 - D1 ✅ : menu radial "fiche" drone — clos (fix antérieur, docs mises à jour)
@@ -285,7 +296,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - ~~**LOS1-drone**~~ ✅ — REWORK-16 Session 116 suite
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
 - ~~COM4 ✅~~ — mains nues par défaut (REWORK-06 Session 114)
-- Bug CL3 — Ghosts déplacement d'annonce disparus
+- ~~Bug CL3~~ ✅ — Ghosts déplacement + lignes attaque ANNOUNCEMENT (Session 125)
 - "Changer le mode de tir" — non implémenté — sprint futur
 - `useDiceAudio.js` — sons dés
 - `.gitattributes:3` — attribut invalide

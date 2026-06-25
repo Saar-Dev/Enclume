@@ -1,23 +1,26 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-24 Session 123
+> Dernière mise à jour : 2026-06-25 Session 124
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
 
-## MÉTHODE — Triage → Cluster → Fix → Validation
+## MÉTHODE — Triage → Reproduire → Analyser → Instrumenter → Corriger → Valider
+
+> **Loi fondamentale :** Lire le code → au mieux `[HYPOTHÈSE]`. `[VÉRIFIÉ]` exige instrumentation + observation du code **en exécution**. Ce sont deux choses distinctes — ne jamais les confondre.
 
 | Phase | Action | Règle critique |
 |---|---|---|
 | **1. Triage** (batch) | Lister tous les bugs → sévérité + priorité → identifier clusters → mettre à jour EN_COURS.md | Ne pas coder à cette étape |
-| **2. Analyse** (par cluster) | Lire les fichiers (TABLE DE ROUTING) → cause racine "5 Pourquoi" → effets de bord → plan exact | **Vérifier LdB si règle citée** — une référence fausse transforme un comportement conforme en faux bug (Leçon Session 94 — COM3) |
-| **2b. Instrumentation** (si HYPOTHÈSE/INCONNU) | Logs `[DBG-BUGID]` au point exact → SR → reproduire → confirmer → `HYPOTHÈSE → VÉRIFIÉ` | Ne jamais coder sur une cause non confirmée |
-| **3. Correctif** (par cluster) | Coder le plan validé uniquement. **1 commit par cause racine.** 2 clusters sans rapport → 2 commits | Ne jamais mixer deux clusters dans un seul commit |
-| **4. Validation** | Test fonctionnel → zones adjacentes → fermer EN_COURS.md → appender JOURNAL5.md | Fermeture sans test fonctionnel → interdit |
+| **2. Reproduire** | Reproduire le bug de façon fiable et répétable. Documenter les conditions exactes (séquence d'actions, état initial, utilisateur). | **Sans reproduction confirmée, aucune analyse n'est valide.** Si non reproductible → suspendre et documenter. |
+| **3. Analyser** (par cluster) | Lire les fichiers (TABLE DE ROUTING) → formuler une hypothèse — "5 Pourquoi" → effets de bord possibles | Résultat = `[HYPOTHÈSE]` uniquement. **Vérifier LdB si règle citée** — une référence fausse transforme un comportement conforme en faux bug (Leçon Session 94 — COM3) |
+| **4. Instrumenter** | Énoncer la prédiction : "si l'hypothèse est vraie, le log doit afficher X". Ajouter `[DBG-BUGID]` au point exact → SR → reproduire → observer → `[HYPOTHÈSE] → [VÉRIFIÉ]` ou nouvelle hypothèse | **Toujours obligatoire.** Ne jamais sauter vers le correctif sans cette étape. |
+| **5. Correctif** (par cluster) | Coder le plan validé uniquement. **1 commit par cause racine.** 2 clusters sans rapport → 2 commits | Ne jamais mixer deux clusters dans un seul commit |
+| **6. Validation** | Test fonctionnel → zones adjacentes → fermer EN_COURS.md → appender JOURNAL5.md | Fermeture sans test fonctionnel → interdit |
 
 **Définition cluster** : même fichier source / même cause racine / même mécanique / fix A nécessite fix B.
 
-**Labels** : `[VÉRIFIÉ]` — cause confirmée par lecture du code. `[HYPOTHÈSE]` — à confirmer par 2b. `[INCONNU]` — non investigué.
+**Labels** : `[VÉRIFIÉ]` — cause confirmée par instrumentation + observation en exécution. `[HYPOTHÈSE]` — inférée par lecture du code, non encore instrumentée. `[INCONNU]` — non investigué.
 
 **Run à vide obligatoire** avant de coder — anticiper pièges, ambiguïtés, effets de bord.
 
@@ -132,15 +135,17 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 ---
 
-### Bug CL3 — Ghosts de déplacement d'annonce disparus
+### ~~Bug CL3~~ ✅ CLOS — Ghosts de déplacement + lignes d'attaque disparus en ANNOUNCEMENT
 
-**Symptôme** : Les marqueurs visuels ("ghosts") indiquant la destination de déplacement annoncée ne s'affichent plus sur la carte pendant la phase ANNOUNCEMENT.
+**Clos Session 125 — 2026-06-25**
 
-**Code impliqué** : `CombatOverlay.jsx` — `announcementMarker` state + rendu des ghosts. `SessionPage.jsx` — handler `COMBAT_ACTION_DECLARED`.
+**Cause racine [VÉRIFIÉ]** : `announcementMarker` dans `useCombatSocket.js` était un singleton écrasé à chaque `COMBAT_ACTION_DECLARED`. Chaque nouvelle déclaration effaçait la précédente — seul le dernier ghost restait visible. Idem pour les lignes d'attaque. Confirmé par instrumentation `[DBG-CL3]` : données serveur et client correctes, bug dans le rendu.
 
-**Cause racine** [HYPOTHÈSE] : `announcementMarker` est toujours alimenté côté `SessionPage.jsx`. Régression probablement dans le rendu — vérifier si la condition d'affichage du ghost a été modifiée lors des sessions 88-91.
+**Correctif** : `Canvas3D.jsx` — `Scene` lit désormais `announcedActions[]` depuis `useCombatStore` (déjà importé). Les deux blocs singleton IIFE remplacés par `.map()` sur `announcedActions` filtré, gardé par `phase === 'ANNOUNCEMENT'`. Tous les ghosts et lignes d'attaque du tour restent visibles simultanément.
 
-**Prochaine étape** : Lire `CombatOverlay.jsx` — rechercher `announcementMarker` et la condition de rendu du ghost.
+**Testé** : SR ✅ — 3 déclarations déplacement simultanées visibles — fonctionnel confirmé (Saar)
+
+**Non testé** : lignes d'attaque avec plusieurs assauts/CaC déclarés simultanément — même mécanique, même fix
 
 ---
 

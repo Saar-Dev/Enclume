@@ -478,6 +478,7 @@ export default function Sidebar({
   onReconnectSocket,
   onOpenCharacter,
   onEntityActionResolve,
+  onOpenTrade,
 }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
@@ -775,6 +776,9 @@ export default function Sidebar({
             <div style={styles.toolsDropdown}>
               <button style={styles.toolsDropdownItem} disabled>
                 {t('session.toolRuler')}
+              </button>
+              <button style={styles.toolsDropdownItemEnabled} onClick={() => { setToolsOpen(false); onOpenTrade?.() }}>
+                {t('session.commerce')}
               </button>
             </div>
           )}
@@ -1488,6 +1492,17 @@ const styles = {
     fontSize: '12px',
     textAlign: 'left',
     cursor: 'default',
+  },
+  toolsDropdownItemEnabled: {
+    display: 'block',
+    width: '100%',
+    padding: '8px 12px',
+    background: 'none',
+    border: 'none',
+    color: '#c0c0d0',
+    fontSize: '12px',
+    textAlign: 'left',
+    cursor: 'pointer',
   },
   palette: {
     padding: '4px 12px 8px',

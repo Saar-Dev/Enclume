@@ -1,0 +1,1353 @@
+Construire son 
+personnage
+Les étapes de la création 
+de personnage
+Chacune des étapes de la création permet de définir l’un des 
+aspects du personnage :
+1. Capacités de base : ce sont les aptitudes physiques et men￾tales essentielles du personnage, représentées par ses Attributs (prin￾cipaux et secondaires).
+2. Type génétique : le personnage peut être un humain nor￾mal, ou bien un « hybride », capable de se déplacer sous l’eau (il 
+existe trois types d’hybrides : hybride naturel, géno-hybride, techno￾hybride).
+3. Capacités spéciales : il s’agit des capacités qui sortent de 
+l’ordinaire, essentiellement le fait d’avoir des mutations, et/ou de 
+pouvoir générer un effet Polaris.
+4. Expérience préliminaire : ce sont les années d’expérience 
+que le personnage a passées dans une ou plusieurs Professions. Cette 
+expérience a une influence directe sur ses Compétences, mais aussi 
+sur ses économies, le matériel auquel il a accès, ou encore ses Avanta￾ges et ses Désavantages professionnels.
+5. Avantages et Désavantages : les Avantages sont des 
+capacités naturelles innées, ou bien des ressources et des bonus 
+divers, acquis par le personnage au cours de sa vie. Les Désavanta￾ges sont, au contraire, des défauts handicapants ou des problèmes 
+supplémentaires…
+
+--
+Points de création
+À chaque étape de la création de personnage, le joueur peut 
+dépenser des Points de création, afin d’améliorer et de person￾naliser les divers aspects de son personnage. Toute dépense de PC 
+se traduit donc par un bonus pour le personnage (amélioration des 
+Attributs, années d’expérience, Avantages divers et variés…). Vous 
+trouverez dans la description détaillée des étapes les options de 
+création disponibles, ainsi que leur coût en PC et toutes les procé-
+dures nécessaires. Nous vous proposons deux méthodes pour déter￾miner le nombre de PC dont les joueurs disposent pour chacune des 
+étapes de création : la répartition libre (une procédure précise mais 
+longue) ou la répartition automatique, après le choix d’un arché-
+type de personnage (la méthode la plus simple et la plus rapide).
+Dans tous les cas, et quelle que soit la méthode de créa￾tion choisie, le MJ est toujours libre d’interdire tel ou tel 
+choix, notamment ceux qu’il juge inappropriés dans le ca￾dre de son scénario ou de sa campagne.
+Méthode 1 : choisir un 
+archétype
+Cette méthode est recommandée si les joueurs veu￾lent commencer à créer directement leur personnage, 
+ainsi que pour les joueurs débutants. Il suffit simplement 
+de choisir l’un des archétypes présentés ci-dessous, en fonction du 
+concept du personnage que l’on souhaite créer. Chaque archétype 
+propose une répartition automatique des PC : sa description indi￾que directement le nombre de points disponibles à dépenser lors de 
+chacune des étapes de la création.
+Le personnage par défaut
+Voici un personnage équilibré, doté d’Attributs très corrects et 
+d’une expérience préliminaire de 12 années, ce qui lui assurera des 
+Compétences honorables. S’il ne possède aucun Avantage significa￾tif, il n’est pas non plus gêné par des Désavantages.
+• Capacités de base (8 PC) : 16 points d’Attributs supplé-
+mentaires, soit un total de 52 points d’attributs à répartir 
+(voir page 118) en ambiance intermédiaire.
+• Type génétique (0 PC) : humain normal.
+• Capacités spéciales (0 PC) : mutations aléatoires seule￾ment, aucune maîtrise du Polaris.
+• Expérience préliminaire (12 PC) : 12 années d’expé-
+rience professionnelle.
+• Avantages (0 PC).
+• Désavantages (0 PC).
+Le jeune premier
+Le jeune premier est un petit jeune qui compte avant tout sur ses 
+capacités naturelles pour avancer :
+• Capacités de base (7 PC) : 14 points d’Attributs supplé-
+mentaires, soit un total de 52 points d’attributs à répartir 
+(voir page 118) pour un jeu en « ambiance intermédiaire ».
+• Type génétique (0 PC) : humain normal.
+• Capacités spéciales (3 PC) : quelques mutations achetées, 
+aucune maîtrise du Polaris.
+• Expérience préliminaire (7 PC) : 7 années d’expérience 
+professionnelle.
+• Avantages (3 PC).
+• Désavantages (0 PC).
+CRÉATION COMPLÈTE OU 
+CRÉATION RAPIDE ?
+Le système de création de personnage présenté ici est 
+basé sur la construction progressive du personnage, au cours 
+des 5 étapes définies plus haut. Chacune de ces étapes per￾met une personnalisation détaillée, enrichie par de nombreu￾ses options de création. Créer un personnage par le biais de 
+ce système complet prend donc un certain temps, mais nous 
+avons aussi pensé aux joueurs pressés… Ainsi, le système des 
+« Archétypes » permet d’aborder directement la création de 
+personnage, sans passer par l’étape préliminaire de répartition 
+des Points de création (PC). D’autre part, à la fin de ce chapi￾tre se trouvent deux autres méthodes pour accélérer les choses 
+sans s’encombrer de détails. Enfin, pour ceux qui ont envie de 
+jouer sans attendre, nous avons également inclus dans ce livre 
+des personnages pré-tirés, prêts à se lancer immédiatement 
+dans l’aventure…
+117
+création des personnages création des personnages
+Le jeune héritier
+Ce personnage est peu expérimenté, mais il dispose de res￾sources confortables :
+• Capacités de base (5 PC) : 10 points d’Attributs supplé-
+mentaires, soit un total de 48 points d’attribut à répartir (voir 
+page 118) pour un jeu en « ambiance intermédiaire ».
+• Type génétique (0 PC) : humain normal.
+• Capacités spéciales (0 PC) : mutations aléatoires seule￾ment, aucune maîtrise du Polaris.
+• Expérience préliminaire (5 PC) : 5 années d’expérience 
+professionnelle.
+• Avantages (10 PC).
+• Désavantages (0 PC).
+L’hybride
+Ce personnage est doté d’une mutation rare ou de modifica￾tions et transformations corporelles lourdes lui permettant de se 
+déplacer sous l’eau sans armure de plongée (ce personnage n’a pas 
+de Désavantages, mais les apparences sont trompeuses : sa condition 
+lui impose tout de même de nombreux inconvénients, car il n’est 
+pas très à l’aise à l’air libre) :
+• Capacités de base (5 PC) : 10 points d’Attributs supplé-
+mentaires, soit un total de 48 points d’attribut à répartir (voir 
+page 118) pour un jeu en « ambiance intermédiaire ».
+• Type génétique (5 PC) : hybride naturel, géno-hybride ou 
+techno-hybride.
+• Capacités spéciales (0 PC) : mutations aléatoires seule￾ment, aucune maîtrise du Polaris.
+• Expérience préliminaire (10 PC) : 10 années d’expé-
+rience professionnelle.
+• Avantages (0 PC).
+• Désavantages (0 PC).
+Le phénomène
+Doté de capacités extraordinaires, le phénomène a sans doute 
+une ou plusieurs mutations ou la capacité de manier l’Effet Polaris 
+(notez la présence de Désavantages, sans doute dus aux réactions et 
+aux problèmes que suscitent ses capacités étranges) :
+• Capacités de base (5 PC) : 10 points d’Attributs supplé-
+mentaires, soit un total de 48 points d’attribut à répartir (voir 
+page 118) pour un jeu en « ambiance intermédiaire ».
+• Type génétique (0 PC) : humain normal.
+• Capacités spéciales (7 PC) : mutations choisies, ou maî-
+trise de la Force Polaris avec un pouvoir gratuit choisi et deux 
+pouvoirs supplémentaires déterminés aléatoirement.
+• Expérience préliminaire (12 PC) : 12 années d’expé-
+rience professionnelle.
+• Avantages (0 PC).
+• Désavantages (+4 PC).
+Le survivant
+Persévérant, le survivant a connu des hauts et des bas mais qui a 
+su garder la tête hors de l’eau malgré une existence difficile (notez la 
+présence de Désavantages, reliquats de ses années de galère) :
+• Capacités de base (7 PC) : 14 points d’Attributs supplé-
+mentaires, soit un total de 52 points d’attribut à répartir (voir 
+page 118) pour un jeu en « ambiance intermédiaire ».
+• Type génétique (0 PC) : humain normal.
+• Capacités spéciales (3 PC) : quelques mutations achetées, 
+aucune maîtrise du Polaris.
+• Expérience préliminaire (12 PC) : 12 années d’expé-
+rience professionnelle.
+• Avantages (3 PC).
+• Désavantages (+5 PC).
+Le vétéran
+Le vétéran est un gars aux capacités moyennes, compensées par 
+une grande expérience de la vie :
+• Capacités de base (3 PC) : 6 points d’Attributs supplé-
+mentaires, soit un total de 44 points d’attribut à répartir (voir 
+page 118) pour un jeu en « ambiance intermédiaire ».
+• Type génétique (0 PC) : humain normal.
+• Capacités spéciales (0 PC) : mutations aléatoires seule￾ment, aucune maîtrise du Polaris.
+• Expérience préliminaire (14 PC) : 14 années d’expé-
+rience professionnelle). Note : 1 jet automatique dans la table 
+des Revers.
+• Avantages (3 PC).
+• Désavantages (0 PC).
+Le vieux loup de mer
+Expérimenté, le vieux loup de mer a déjà beaucoup vécu (notez 
+la présence de Désavantages, sans doute de vieilles blessures ou divers 
+problèmes accumulés au cours de sa vie) :
+• Capacités de base (4 PC) : 8 points d’Attributs supplé-
+mentaires, soit un total de 46 points d’attribut à répartir (voir 
+page 118) pour un jeu en « ambiance intermédiaire ».
+• Type génétique (0 PC) : humain normal.
+• Capacités spéciales (0 PC) : mutations aléatoires seule￾ment, aucune maîtrise du Polaris.
+• Expérience préliminaire (17 PC) : 17 années d’expé-
+rience professionnelle. Note : 2 jets automatiques dans la 
+table des Revers.
+• Avantages (4 PC).
+• Désavantages (+5 PC).
+Exemple (création de Carian) : pour l’instant, le joueur 
+choisit de répartir librement ses 20 PC, en s’inspirant toutefois de 
+l’archétype « Survivant », auquel il apporte quelques modifi cations. 
+Cela donne : Capacités de base (5 PC), Type génétique (0 PC), Ca￾pacités spéciales (3 PC), Expérience préliminaire (12 PC), Avantages 
+(2 PC), Désavantages (+2 PC).
+Méthode 2 : répartition 
+libre des PC
+Chaque joueur dispose au départ de 20 Points de création 
+(PC), qu’il pourra dépenser à chaque étape pour améliorer les divers 
+aspects de son personnage : par l’achat d’options diverses, il pourra 
+ainsi construire et personnaliser son personnage de A à Z. Lors de leurs 
+premières créations de personnages, les joueurs ne doivent pas hésiter 
+à s’inspirer des archétypes présentés plus bas, ou à les modifier pour les 
+adapter à leur propre vision des choses. Donner des Désavantages au 
+personnage permet de gagner des PC, en fonction de leur importance 
+et du handicap qu’ils entraînent. Ces PC supplémentaires peuvent être 
+réinvestis ailleurs, dans l’un ou l’autre des aspects du personnage. Pren￾dre un Désavantage peut ainsi être utile si le joueur manque de points 
+pour acheter tel ou tel bonus, mais évidemment, cela entraîne aussi 
+certains inconvénients, dus à l’effet du Désavantage choisi.
+Cette méthode étant particulièrement libre, le bon sens des 
+joueurs et du MJ doit primer tout au long du processus, de manière 
+à aboutir à des personnages cohérents. Ainsi, d’une manière générale, 
+il n’est pas conseillé de dépenser plus de 15 ou 20 PC dans une seule 
+des étapes de la création : cela reste possible, mais le joueur risque 
+fort d’obtenir un personnage aux capacités déséquilibrées. Certaines 
+étapes ont de toute façon leurs propres limites et ne permettent pas 
+une telle dépense. Il est également utile de définir une limite théori￾que au nombre de Désavantages que l’on peut donner à son person￾nage : il peut en effet être dangereux de prendre plus de 7 ou 8 points 
+de Désavantages (10 devant être un maximum absolu), le risque étant 
+de créer un personnage tout simplement injouable (par exemple un 
+manchot unijambiste borgne, souffrant de plusieurs mutations débili￾tantes, et recherché pour par toutes les polices du monde…).
+création des personnages
+118
+1. Capacités de base
+Valeur de base des 
+Attributs
+Le score de base de chaque Attribut est au départ égal à 7. 
+Ensuite, chaque joueur dispose d’un certain nombre de points à 
+répartir comme il le souhaite dans les 8 Attributs de son person￾nage, en fonction du style de jeu adopté par le MJ (voir Niveau 
+de puissance, p.115) :
+AMBIANCE_ Points d’attributs
+Réaliste 30
+Intermédiaire 38
+Héroïque 46
+Vous pouvez répartir ces points d’Attributs supplémentaires 
+comme vous le souhaitez, en veillant toutefois à respecter les condi￾tions suivantes :
+• À ce stade, aucun Attribut ne peut avoir de score supé-
+rieur à 20.
+• Les niveaux 8 à 15 ont un coût normal (1 point pour 1 ni￾veau).
+• Les niveaux 16 à 18 coûtent deux fois plus cher (il faut donc 
+dépenser 12 points pour obtenir un Attribut à 17 par exem￾ple : 8 points pour acheter les niveaux 8 à 15, et 4 points pour 
+acheter les niveaux 16 et 17).
+• Les niveaux 19 et 20 coûtent trois fois plus cher.
+Le tableau ci-dessous récapitule l’ensemble des coûts, pour cha￾que niveau d’Attribut :
+NIVEAU VISÉ_ Coût en Points 
+d’attributs
+8 1
+9 2
+10 3
+11 4
+12 5
+13 6
+14 7
+15 8
+16 10
+17 12
+18 14
+19 17
+20 20
+Note : il est inutile pour l’instant de calculer la valeur des Attributs 
+secondaires, car les Attributs principaux peuvent encore évoluer.
+Exemple (création de Carian) : Carian est créé selon 
+la règle des personnages « intermédiaires ». Le joueur obtient donc 
+38 points d’Attributs à répartir, ce qui donne les scores suivants : 
+Force 12, Constitution : 13, Coordination : 12, Adaptation : 12, 
+Perception : 10, Intelligence : 10, Volonté : 14, Présence : 9.
+Amélioration des Attributs 
+principaux (méthode 2)
+Vous pouvez obtenir plus de points à répartir dans les Attributs 
+principaux de votre personnage en dépensant des PC.
+Chaque PC dépensé vous offre 2 points d’Attributs 
+supplémentaire, comme indiqué ci-dessous :
+DÉPENSE_ Amélioration
+1 PC +2 points d’Attributs
+2 PC +4 points d’Attributs
+3 PC +6 points d’Attributs
+4 PC +8 points d’Attributs
+5 PC +10 points d’Attributs
+6 PC +12 points d’Attributs
+7 PC +14 points d’Attributs
+8 PC +16 points d’Attributs
+Les conditions de répartition des points ne changent pas (voir 
+Valeur de base des Attributs, page 118). Les niveaux que vous 
+obtenez forment le profil de base du personnage, à noter dans la ligne 
+intitulée « Base », dans la section de la fiche de personnage réservée 
+aux Attributs. Par la suite, d’autres modificateurs, dus par exemple à 
+la nature génétique du personnage ou à son âge, pourront faire évo￾luer ce profil initial.
+Exemple (création de Carian) : le joueur a attribué 
+5 PC aux capacités de base de Carian, ce qui représente 10 points 
+d’Attributs supplémentaires. Il fait passer la Force du personnage à 
+14 (pour 2 points d’Attributs), sa Constitution à 14 (1 point), sa 
+Coordination à 14 (2 points), sa Perception à 12 (2 points) et son 
+Adaptation à 15 (3 points). Les autres Attributs ne bougent pas 
+(Intelligence : 10, Volonté : 14, Présence : 9).
+Valeur de base de la 
+Chance
+Voici les scores de départ, en fonction de l’ambiance de jeu 
+choisie par le MJ :
+AMBIANCE_ Chance de départ
+Réaliste 11
+Intermédiaire 13
+Héroïque 15
+Niveau de base des 
+Compétences
+À ce stade de la création, un personnage ne possède encore 
+aucun niveau de maîtrise dans ses Compétences. Celles-ci ont tou￾tefois toutes un niveau de base, qui est – rappelons-le – égal à la 
+somme des Aptitudes naturelles correspondant aux deux 
+Attributs associés (s’il n’y a qu’un seul Attribut associé, multi￾pliez l’Aptitude naturelle par deux).
+Si le niveau d’un Attribut augmente ou diminue, cela aura 
+bien évidemment une incidence sur le niveau de base des Com￾pétences auxquelles il est associé. Il faudra alors refaire le calcul, 
+et modifier le niveau de base si nécessaire. Notez qu’il est inu￾tile de calculer d’un coup le niveau de base de toutes les 
+Compétences : ne faites le calcul qu’au moment où vous avez 
+effectivement besoin de ce niveau de base (lors de l’amélioration 
+d’une Compétence, ou même, alors que la partie a commencé, 
+PERSONNAGE FÉMININ (OPTIONNEL)
+Si le meneur de jeu le souhaite, les valeurs de base des At￾tributs d’un personnage féminin peuvent être modifiées ainsi :
+• Force -2
+• Deux bonus de +1 (éventuellement cumulatifs) à ré-
+partir en Coordination ou Présence (niveau maximum : 20).
+119
+lorsque qu’il est nécessaire de procéder à un Test avec cette Com￾pétence). Vous n’avez notamment pas besoin de calculer le niveau 
+de base des Compétences réservées (notées « X ») que votre per￾sonnage ne développe pas : aucun Test ne sera jamais fait avec ces 
+Compétences.
+Exemple (création de Carian) : calculons par 
+exemple le niveau de base de quelques-unes des Compé-
+tences de Carian. Avec une Force et une Coordination de 
+14 (niveau d’aptitude naturelle de 2), le niveau de base 
+en Athlétisme de Carian sera de 4. Avec une Volonté de 14 
+et une Présence de 9 (niveau d’aptitude naturelle de 0), 
+son niveau de base en Commandement ne sera lui que de 
+2. Enfi n, avec une Intelligence de 10, Carian n’aura que 
+des connaissances très moyennes en Informatique, le niveau 
+de base de cette Compétence étant uniquement calculée à 
+partir de l’Intelligence (niveau d’aptitude naturelle de 1) 
+et qu’elle est d’autre part considérée comme diffi cile à ap￾prendre (malus de -3 au niveau de base, pour un total de 
+1+1-3= -1). Au fi nal, Carian ne peut compter que sur un 
+très faible -1 en Informatique : s’il ne développe pas cette 
+Compétence par la suite, il sera à peine capable de réaliser 
+les opérations informatiques les plus simples.
+2. Type génétique du 
+personnage
+Il y a quatre types génétiques de base proposés dans Polaris : 
+l’humain normal, le techno-hybride, le géno-hybride et l’hybride 
+naturel. Les hybrides sont des mutants ou des humains modifiés 
+capables de survivre et de respirer sous l’eau. Par défaut, tous les 
+personnages sont des humains normaux : ce type génétique est 
+gratuit et ne coûte pas de PC. Les humains normaux se confor￾ment aux règles habituelles, leurs Attributs ne sont pas modifiés 
+et ils ne possèdent bien entendu ni les Avantages, ni les Désa￾vantages spécifiques aux hybrides. Les types génétiques hybrides, 
+eux, ont un coût en PC. Leurs capacités, Avantages et Désavanta￾ges particuliers sont détaillés plus bas. Vous trouverez également 
+les modificateurs à appliquer immédiatement à leurs Attributs. 
+Ceux-ci peuvent éventuellement dépasser le score de 20 ou tom￾ber en dessous de 7.
+Note : au cours d’une campagne, un personnage humain peut 
+tout à fait être transformé en géno-hybride ou techno-hybride.
+Hybride naturel,
+ou néo-hybrides (5 PC)
+Un hybride naturel est né avec toutes les mutations nécessaires 
+pour survivre sous l’eau. De tous les hybrides, les hybrides naturels 
+sont les plus avantagés sous l’eau et les plus désavantagés au sec.
+À la création, un personnage hybride naturel doit modifier ses 
+Attributs comme suit :
+• Force +1
+• Constitution +2
+• Coordination +2
+• Adaptation +1
+• Intelligence -2
+les opérations informatiques les plus simples.
+Exemple (création de Carian) : calculons par 
+eux, ont un
+ges particu les modific Ceux-ci pe
+ber en dess
+Note :
+tout à fait ê
+g pp p j
+Compétences. Il y a q
+l’humain n
+naturel. Le
+capables de
+personnage
+gratuit et n
+ment aux r
+et ils ne p
+vantages sp
+JOUER UN HYBRIDE
+Les personnages hybrides sont certes très avantagés sous 
+l’eau, mais ont également beaucoup de restrictions à l’air libre 
+et de multiples Désavantages. De plus, pour traduire leurs ca￾pacités uniques, ils font l’objet de très nombreuses règles qui 
+leurs sont spécifiques. Pour toutes ces raisons, le meneur de 
+jeu devrait éviter de laisser des joueurs débutants incarner de 
+tels personnages.
+création des personnages
+120
+Les hybrides naturels possèdent les Avantages et les Désavan￾tages suivants :
+Compétence spéciale Hybride : les hybrides (de tout types) 
+sont les seuls à pouvoir utiliser cette Compétences spéciale, 
+qui représente leur affinité avec le milieu aquatique et la maî-
+trise de leur mutation (ou de leurs modifications dans le cas 
+des géno-hybrides et techno-hybrides). Les hybrides na￾turels possèdent d’emblée cette Compétence à un 
+niveau de maîtrise de +3, et peuvent la développer 
+à un coût normal (comme s’il s’agissait d’une Com￾pétence professionnelle). S’il le souhaite, un hybride 
+naturel peut librement utiliser cette Compétence à la place 
+de Manœuvres sous-marines ou d’Athlétisme (lorsque cette Com￾pétence est utilisée pour la natation), à condition qu’il soit 
+libre de ses mouvements et qu’il ne porte donc ni armure, 
+ni combinaison. Il peut ainsi se concentrer sur le développe￾ment d’une seule Compétence (voir aussi « Mutation évo￾lutive », plus bas). Enfin, la Compétence Hybride représente 
+aussi la résistance physiologique du personnage à la pression. 
+Elle permet donc de savoir quelle profondeur un personnage 
+peut atteindre sous l’eau. Ainsi, un hybride naturel peut 
+plonger jusqu’à une profondeur maximum de (ni￾veau global d’Hybride) x 1 000 m. un Néo-hybride ne 
+peut pas plonger à plus de 100 m tant qu’il n’a pas développé 
+son niveau global en compétence Hybride au niveau 1.
+Mutation évolutive : en s’habituant peu à peu au milieu ma￾rin, l’organisme des hybrides naturels subit des altérations. 
+Les mutants deviennent progressivement totalement imber￾bes. Ils s’amincissent, tandis que leur structure osseuse s’as￾souplit. Une légère déformation du crâne peut rapidement 
+être constatée (il a tendance à s’écraser sur les côtés). Leurs 
+doigts s’affinent et les membres ont tendance à s’allonger. 
+Leurs yeux sont de plus en plus globuleux et décolorés, et 
+leur vision est également altérée : ils voient de mieux en 
+mieux dans le spectre bleu et vert, mais deviennent aussi de 
+plus en plus vulnérables aux lumières intenses. Leur peau de￾vient plus souple et plus fragile, et ils s’égratignent très facile￾ment. Ces modifications physiques ont tendance à s’estomper 
+une fois que l’hybride sort de l’eau, mais plus il ira profond, 
+plus elles seront marquées et évidentes. On dit même qu’un 
+hybride plongeant à 15 000 mètres de profondeur ne ressem￾ble plus vraiment à un humain… Néanmoins, plus un per￾sonnage progressera dans sa Compétence Hybride et plus les 
+altérations physiques seront marquées (au-delà d’un niveau 
+de maîtrise de +10, il n’est même quasiment plus possible de 
+se tromper sur la nature du personnage). Tout cela a aussi des 
+conséquences sur les capacités de l’hybride : avec le temps, 
+il a tendance à être de plus en plus apte à survivre en milieu 
+sous-marin et de moins en moins à l’aise au sec. Ainsi, dès 
+qu’il atteint les niveaux de maîtrise +5, +7, +10, +13 et +15 
+(ne pas confondre avec le niveau global) dans leur Compé-
+tence Hybrides, il subit les modificateurs suivants :
+• Résistance aux dommages physiques : modifi￾cateur cumulatif de +1 au sec et -1 sous l’eau (par exemple, 
+au niveau de maîtrise +10, un hybride voit sa Résistance 
+aux dommages augmentée de +3 au sec, ce qui le rend plus 
+vulnérable, et réduite de -3 sous l’eau, ce qui l’avantage au 
+contraire).
+• Perception visuelle : modificateur cumulatif de -1 
+au sec et +1 sous l’eau, pour les Tests de Perception sollici￾tant directement la vue du personnage.
+Adaptation aquatique : les hybrides naturels sont parfaite￾ment adaptés au milieu aquatique et n’ont aucun mal à évo￾luer et à se déplacer sous l’eau. Leurs Compétences physi￾ques ne sont donc pas limitées par la Compétence limitative 
+Manœuvres sous-marines. De plus, leur vitesse de déplacement 
+sous l’eau est beaucoup plus rapide que celle des simples hu￾mains (voir Déplacements et mouvements, dans le cha￾pitre Combat, page 220).
+Immunité au froid (dans l’eau seulement) : les hybrides 
+naturels ne ressentent pas la température de l’eau. Ils ne su￾biront donc aucune pénalité à cause du froid s’ils se trouvent 
+dans l’eau. Hors de leur milieu naturel, cependant, ils seront 
+vulnérables comme n’importe qui.
+Sensibilité à la chaleur : en revanche, les hybrides naturels 
+tolèrent très mal la chaleur. Ils se déshydratent plus rapi￾dement que les individus normaux et sont très sensibles 
+au feu. Les dommages dus au feu ou à la chaleur sont aug￾mentés de +3 contre les hybrides naturels. S’ils se trouvent 
+dans une pièce surchauffée, près d’un radiateur ou de tout 
+autre appareil ou phénomène produisant de la chaleur, leurs 
+Tests de Fatigue souffrent d’un malus de -3. Même s’ils sont 
+au repos, ils doivent effectuer un Test de Fatigue toutes les 
+deux heures passées dans un tel environnement. Note : si le 
+MJ n’utilise pas les règles avancées de Fatigue, considérez 
+que les hybrides subissent un malus général de -2 à tous 
+leurs Tests, augmenté d’un malus cumulatif de -1 toutes les 
+deux heures passées dans cet environnement (lorsque le 
+malus est égal à -10, le MJ peut librement demander des 
+Tests de Résistance au Choc…).
+Dépendance au milieu aquatique : après un nombre 
+d’heures passé hors de l’eau égal à sa Volonté, un hybride 
+naturel doit effectuer un Test de Volonté, sans modifica￾teur. Il doit ensuite effectuer un nouveau Test toutes les 
+heures, avec un malus cumulatif de -2 par heure supplé-
+mentaire passée hors de l’eau. De plus, en raison de la Mu￾tation évolutive, ce malus passe à -3 dès que le personnage 
+atteint un niveau de maîtrise de +7 dans la Compétence 
+Hybride. En cas d’échec, il perd temporairement 1 point 
+de Force et tous ses Tests d’actions physiques (y compris 
+les Tests de Résistance à la Fatigue) subissent un malus cu￾mulatif de -1 par échec. Si son niveau de Force est réduit 
+de 50%, il devra impérativement se baigner, par tous les 
+moyens. Dès qu’il est plongé dans l’eau, il récupère ses ca￾pacités normales en 2D6 minutes. C’est pour cette raison 
+que, hors de l’eau, de nombreux hybrides sont équipés de 
+tenues hydratantes (dans ce cas, ils bénéficient d’un bonus 
+de +10 lors du Test de Volonté).
+Claustrophobie : les hybrides souffrent de claustrophobie 
+dès qu’ils sont dans un endroit plein de monde ou très 
+étroit. Cette claustrophobie leur impose une pénalité de 
+-3 à tous leurs Tests. Une armure est pour eux un véritable 
+instrument de torture, les obligeant à effectuer toutes les 
+heures un Test de Volonté, avec un malus de -2 par heure 
+passée dans l’armure. Si ce Test échoue, ils feront tout 
+pour l’ôter (si les conditions le permettent ; si un hybride 
+est à la surface, il prendra sur lui et ne retirera pas l’ar￾mure). En cas de Catastrophe, le personnage peut même 
+faire une crise de panique et rester paralysé par la peur. En 
+cas de réussite, le bonus de Réussite est ajouté au malus du 
+prochain Test. Note : les hybrides en armure subissent le 
+malus général de -2 à leurs Tests, mais celui-ci ne compte 
+pas pour le Test de Volonté.
+Blocage du Trident : un hybride naturel hésitera toujours 
+à agir contre un prêtre du Trident. Pour effectuer toute 
+action pouvant nuire, même indirectement, à un prêtre 
+du Trident ou au Culte, l’hybride naturel est obligé de 
+réussir un Test de Volonté, avec un malus de -5. S’il est 
+directement confronté à un prêtre, il doit réussir un Test 
+d’opposition contre la Volonté du membre du Culte, tou￾jours avec un malus de -5. Notez que l’hybride peut, grâce 
+à cette pénalité, découvrir si un homme qui se prétend 
+prêtre l’est véritablement ou non, mais uniquement s’il 
+doit agir contre lui. L’hybride ne peut en aucun cas 
+se montrer a priori hostile pour savoir s’il a affaire 
+à un imposteur.
+Recherché : malgré tous leurs avantages, quand ils évoluent 
+sous l’eau, n’oubliez pas que les hybrides naturels sont des 
+mutants très recherchés par tous les marchands de chair, les 
+laboratoires génétiques et les services du Culte du Trident. 
+Ils valent de l’or et il faut donc se méfier de la personne à 
+qui on adresse la parole. Un hybride naturel qui, en plus, est 
+fécond doit être doublement prudent…
+121
+création des personnages création des personnages
+Géno-hybride (5 PC)
+Un géno-hybride est un humain qui a été transformé grâce à 
+la technologie du Culte du Trident pour pouvoir survivre en milieu 
+aquatique. Il peut se mouvoir sans aucune gêne sous l’eau et sans 
+que son apparence ne soit modifiée. Le personnage souhaitant 
+être hybride doit nécessairement avoir passé au moins un 
+an au sein du Groupe spécial d’intervention du Culte du 
+Trident (voir 4. Expérience préliminaire, plus bas, et Profes￾sions, page 153). Certaines rumeurs évoqueraient des géno-hybri￾des créés par le Soleil noir.
+Note : le coût en PC de ce type génétique n’inclut pas le coût de 
+l’année d’expérience préliminaire nécessaire.
+À la création, un personnage géno-hybride doit modifier ses At￾tributs comme suit :
+• Force +1
+• Constitution +1
+• Coordination +2
+• Présence -2
+Les géno-hybrides partagent les Avantages et Désavantages sui￾vants avec les hybrides naturels, à l’identique : 
+Adaptation aquatique : les hybrides naturels sont parfai￾tement adaptés au milieu aquatique et n’ont aucun 
+mal à évoluer et à se déplacer sous l’eau. Leurs 
+Compétences physiques ne sont donc pas limi￾tées par la Compétence limitative Manœuvres 
+sous-marines. De plus, leur vitesse de dépla￾cement sous l’eau est beaucoup plus rapide 
+que celle des simples humains (voir Dépla￾cements et mouvements, dans le chapitre 
+Combat, page 220).
+Immunité au froid (dans l’eau seulement) :
+les géno-hybrides ne ressentent pas la tempéra￾ture de l’eau. Ils ne subiront donc aucune péna￾lité à cause du froid s’ils se trouvent 
+dans l’eau. Hors de leur milieu 
+naturel, cependant, ils se￾ront vulnérables comme 
+n’importe qui.
+Claustrophobie : les 
+hybrides souffrent 
+de claus￾trophobie 
+dès qu’ils 
+sont dans 
+un endroit 
+plein de 
+monde ou 
+très étroit. Cette claus￾trophobie leur impose une 
+pénalité de -3 à tous leurs 
+Tests. Une armure est pour eux 
+un véritable instrument de torture, les 
+obligeant à effectuer toutes les heures un Test de Volonté, 
+avec un malus de -2 par heure passée dans l’armure. Si ce 
+Test échoue, ils feront tout pour l’ôter (si les conditions le 
+permettent ; si un hybride est à la surface, il prendra sur 
+lui et ne retirera pas l’armure). En cas de Catastrophe, le 
+personnage peut même faire une crise de panique et rester 
+paralysé par la peur. En cas de réussite, le bonus de Réus￾site est ajouté au malus du prochain Test. Note : les hy￾brides en armure subissent le malus général de -2 à leurs 
+Tests, mais celui-ci ne compte pas pour le Test de Volonté.
+Les géno-hybrides partagent les autres traits des hybrides natu￾rels, avec les différences suivantes :
+Compétence spéciale Hybride : les géno-hybrides n’ont 
+pas de bonus naturel au niveau de maîtrise de cette Com￾pétence (qui démarre donc à +0). À la création de per￾sonnage, cette Compétence fait partie des Compétences 
+professionnelles des Hybrides du Trident et est donc 
+normalement soumise à la règle optionnelle du niveau 
+maximum des Compétences (voir 5. Expérience pré-
+liminaire), sauf avis contraire du meneur de jeu. S’il le 
+souhaite, un géno-hybride peut librement utiliser cette 
+Compétence à la place de Manœuvres sous-marines, à condi￾tion qu’il soit libre de ses mouvements et qu’il ne porte 
+donc ni armure, ni combinaison. Il peut ainsi se concen￾trer sur le développement d’une seule Compétence, mais 
+devra tout de même développer Athlétisme pour les Tests 
+de natation. Un géno-hybride peut plonger jusqu’à 
+une profondeur maximum de (niveau global 
+d’Hybride/2) x 1500 m. un géno-hybride ne peut 
+plonger à plus de 100 m tant qu’il n’a pas développé son 
+niveau global en compétence Hybride au niveau 1.
+Mutation évolutive : les géno-hybrides sont aussi sujets à la 
+Mutation évolutive, mais les effets en sont beaucoup moins 
+marqués. Les altérations physiques 
+sont plus difficiles à percevoir, 
+pour un œil non averti, même 
+si au bout d’un certain 
+temps (niveau de maîtrise 
+en Hybride de +10 et plus), 
+une observation minutieuse 
+peut permettre de découvrir 
+la véritable nature du per￾sonnage. Concernant leur 
+Résistance aux dommages 
+et leur perception visuelle, 
+les géno-hybrides subissent 
+les mêmes modificateurs 
+cumulatifs que les hybrides 
+naturels, mais seulement 
+lorsqu’ils atteignent les ni￾veaux de maîtrise +5, +10 
+et +15 dans leur Compé-
+tence Hybrides, (le modifi￾cateur maximum est donc 
+de +/-3).
+Sensibilité à la chaleur : les dom￾mages dus au feu ou à la chaleur ne 
+sont augmentés que de +2 contre les 
+géno-hybrides.
+Dépendance au milieu aqua￾tique : après un nombre d’heures 
+passé hors de l’eau égal à sa Volonté, un 
+géno-hybride doit également effectuer un 
+Test de Volonté, sans modificateur. Comme les 
+hybrides naturels, il doit ensuite tester régu￾lièrement sa Volonté, avec un malus cumulatif 
+de -2 à chaque nouveau Test, mais seulement 
+toutes les deux heures. De plus, en raison de 
+la Mutation évolutive, ce malus passe à -3 dès que 
+le personnage atteint un niveau de maîtrise de +10 
+dans la Compétence Hybride. En cas d’échec, les consé-
+quences sont les mêmes. Les tenues hydratantes apportent 
+toujours un bonus de +10 lors du Test de Volonté.
+Blocage du Trident : les géno-hybrides souffrent du même 
+blocage mental que les hybrides naturels, lorsqu’ils doivent 
+agir contre un prêtre ou le Culte du Trident. Le malus général 
+au Test de Volonté est toutefois de -7. S’il est directement
+confronté à un prêtre, le géno-hybride doit réussir un Test 
+d’opposition contre la Volonté du membre du Culte, avec le 
+même malus de -7.
+Recherché : tout comme les hybrides naturels, les géno-hy￾brides sont très recherchés par les laboratoires et les mar￾chands de chair, ce n’est donc pas toujours un avantage. 
+S’ils ne font plus partie du Culte du Trident, les géno-hy￾brides ne sont pas forcément pour autant des fugitifs. Ce 
+qui importe aux dirigeants du Trident, c’est qu’ils soient 
+passés entre leurs mains.
+ent les Avantages et Désavantages sui- , à l’identique :
+e : les hybrides naturels sont parfai￾lieu aquatique et n’ont aucun
+déplacer sous l’eau. Leurs
+es ne sont donc pas limi￾ce limitative Manœuvres
+leur vitesse de dépla￾t beaucoup plus rapide
+humains (voir Dépla￾ments, dans le chapitre
+dans l’eau seulement) :
+ressentent pas la tempéra￾biront donc aucune péna￾ils se trouvent
+ur milieu
+ils se￾mme
+laus￾se une 
+us leurs
+t pour eux
+sont
+pour
+si
+te
+en
+un
+peu
+la 
+son
+Ré
+et 
+les
+les
+cum
+na
+lo
+ve
+et
+te
+ca
+de 
+Sensibilité
+mages dus a
+sont augmen
+géno-hybrides
+Dépendance tique : après passé hors de l’ géno-hybride doi
+Test de Volonté, sans m hybrides naturels, il d
+lièrement sa Volonté, 
+de -2 à chaque nouve
+toutes les deux heur
+la Mutation évolutive, ce
+le personnage atteint un ni
+création des personnages
+122
+Techno-hybride
+(5 PC, 4 PC pour les déserteurs)
+Un techno-hybride est un individu qui a été obligé de sacrifier 
+son humanité pour pouvoir évoluer librement dans les océans. Ses At￾tributs physiques et surtout ses compétences sous-marines sont gran￾dement augmentés par rapport à ceux d’un humain normal, mais il 
+a été atrocement défiguré par les opérations. Traités de « créatures » 
+ou de « monstres », les techno-hybrides sont considérés avec beau￾coup de suspicion et doivent souvent dissimuler leur apparence pour 
+pouvoir vivre en société. Il est rare qu’un individu choisisse d’être 
+« amélioré » de la sorte : c’est souvent le résultat des modifications 
+effectuées par l’Hégémonie sur ses soldats ou sur des prisonniers. Un 
+personnage techno-hybride sera donc généralement un individu qui 
+n’a pas eu le choix…
+Les conditions requises pour devenir 
+techno-hybride sont les suivantes :
+• Le personnage doit être originaire d’Hégé-
+monie.
+• Il doit avoir passé au moins 2 ans dans la Pro￾fession Soldat/Milicien.
+• Après sa modification, il doit ensuite passer au 
+moins 1 an dans la Profession Techno-hybride.
+Note : le coût en PC de ce type génétique n’inclut pas 
+le coût des années d’expérience préliminaire nécessaires.
+À la création, un personnage techno-hybride doit 
+modifier ses Attributs comme suit :
+• Force +2
+• Constitution +3
+• Adaptation -2
+• Volonté +3
+• Présence -6 (minimum 3)
+Les techno-hybrides partagent les Avantages et Dé-
+savantages suivants avec les hybrides naturels, à l’identique
+(ils ne souffrent toutefois pas du Blocage du Trident, et 
+ne bénéficient pas non plus d’une Mutation évolutive) :
+Immunité au froid (dans l’eau seulement) :
+les hybrides naturels ne ressentent pas la tempé-
+rature de l’eau. Ils ne subiront donc aucune pé-
+nalité à cause du froid s’ils se trouvent dans l’eau. 
+Hors de leur milieu naturel, cependant, ils seront 
+vulnérables comme n’importe qui.
+Claustrophobie : les hybrides souffrent de 
+claustrophobie dès qu’ils sont dans un endroit 
+plein de monde ou très étroit. Cette claustro￾phobie leur impose une pénalité de -3 à tous 
+leurs Tests. Une armure est pour eux un vé-
+ritable instrument de torture, les obligeant à 
+effectuer toutes les heures un Test de Volonté, 
+avec un malus de -2 par heure passée dans l’ar￾mure. Si ce Test échoue, ils feront tout pour 
+l’ôter (si les conditions le permettent ; si un 
+hybride est à la surface, il prendra sur lui et ne 
+retirera pas l’armure). En cas de Catastrophe, 
+le personnage peut même faire une crise de 
+panique et rester paralysé par la peur. En cas 
+de réussite, le bonus de Réussite est ajouté au 
+malus du prochain Test. Note : les hybrides en 
+armure subissent le malus général de -2 à leurs 
+Tests, mais celui-ci ne compte pas pour le Test 
+de Volonté.
+Les techno-hybrides partagent les autres traits des 
+hybrides naturels, avec les différences suivantes :
+Compétence spéciale Hybride : les techno￾hybrides n’ont pas de bonus naturel au niveau 
+de maîtrise de cette Compétence (qui démarre 
+donc au niveau +0). À la création de person￾nage, cette Compétence fait partie des Compé-
+tences professionnelles des Techno-hybrides hégémoniens, 
+et est donc normalement soumise à la règle optionnelle du 
+niveau maximum des Compétences (voir 5. Expérience 
+préliminaire), sauf avis contraire du meneur de jeu. À la 
+différence des deux autres types d’hybrides, un techno-hy￾bride ne peut pas utiliser cette Compétence à la place de 
+Manœuvres sous-marines ou d’Athlétisme (pour la natation) : 
+il doit donc les développer à part. Un techno-hybride 
+peut naturellement plonger jusqu’à une profon￾deur maximum de 1 500 m (quel que soit son niveau 
+de Compétence), plus (niveau global d’Hybride)/2 
+x 1 500 m. Un techno-hybride ne peut pas plonger à plus 
+de 100 m tant qu’il n’a pas développé son niveau global en 
+compétence Hybride au niveau 1.
+122
+123
+création des personnages création des personnages
+Sensibilité à la chaleur : les dommages dus au feu ou à la 
+chaleur ne sont augmentés que de +2 contre les techno￾hybrides.
+Dépendance au milieu aquatique : après un nombre 
+d’heures passé hors de l’eau égal à sa Volonté, un techno￾hybride doit également effectuer un Test de Volonté, sans 
+modificateur. Comme les autres hybrides, il doit ensuite 
+tester régulièrement sa Volonté, avec un malus cumulatif de 
+-2 à chaque nouveau Test, mais seulement toutes les dix 
+heures. En cas d’échec, les conséquences sont les mêmes. 
+Les tenues hydratantes apportent toujours un bonus de +10 
+lors du Test de Volonté.
+Recherché : Les techno-hybrides sont souvent des fugitifs hé-
+gémoniens (ce genre de déserteurs sont généralement tra￾qués par le Prisme, les services secrets de l’Hégémonie…). 
+Malheureusement pour eux, ils ne passent pas inaperçus. 
+On les rencontre souvent vêtus d’une lourde combinai￾son de cuir avec une capuche pour dissimuler leur visage. 
+Pour toutes ces raisons, ce type génétique coûte 5 PC si 
+le personnage n’est pas recherché par les autorités hégé-
+moniennes (le joueur devra trouver une bonne raison pour 
+expliquer comment son personnage s’en est tiré à si bon 
+compte). Si le personnage est un déserteur, être techno￾hybride ne coûte alors que 4 PC.
+3. Capacités 
+spéciales
+« Les mutations ne sont que le résultat des expériences faites 
+par la nature pour que l’homme s’adapte à son nouvel environne￾ment. Ceux que nous considérons comme anormaux aujourd’hui sont 
+les premiers spécimens d’une nouvelle espèce d’êtres humains. »
+-- DOCTEUR LENEL, de l’Alliance Azur_
+L’étape consacrée aux capacités spéciales sert à déterminer si 
+le personnage possède des mutations ou est capable de manipuler 
+la Force Polaris.
+Table des mutations
+Vous trouverez dans cette table l’ensemble des mutations disponi￾bles. Il y a deux moyens de donner des mutations à son personnage :
+• En les achetant (coût en PC) : le joueur peut choisir li￾brement les mutations de son personnage, mais cela a un 
+coût. Voir Acheter des mutations, plus bas.
+• En faisant un jet de dé aléatoire sur la table des 
+mutations (gratuit, optionnel) : le joueur n’a aucun 
+contrôle sur le résultat et peut seulement espérer obtenir 
+une mutation aux effets favorables, mais il peut tout aussi 
+bien affubler son personnage d’une mutation défavorable. 
+Voir Mutations aléatoires, plus bas.
+La plupart des mutations sont en effet considérées soit comme 
+des Avantages, soit comme des Désavantages. Certaines d’entre elles, 
+comme Androgyne ou Asexué, sont des mutations « neutres », qui 
+n’apportent aucune faculté avantageuse et ne cause aucun désagré-
+ment (mis à part le fait de faire du personnage un mutant, ce qui ne 
+sera pas forcément bien vu partout…).
+La Table des mutations se trouve à la page suivante.
+Acheter des mutations
+Chaque mutation avantageuse a un coût en PC : un joueur qui a 
+choisi d’investir des PC dans cette étape de création peut donc ache￾ter les mutations qu’il souhaite pour son personnage, sous le strict 
+contrôle du MJ. Le coût est parfois élevé, mais le choix est libre… 
+Les mutations neutres, elles, sont gratuites. Par ailleurs, le joueur 
+peut également choisir de donner des mutations désavantageuses à 
+son personnage : ces Mutations sont alors considérées comme des 
+Désavantages, qui rapportent le nombre de PC indiqué.
+Description des mutations
+Adaptation extérieure
+Le personnage possède une résistance aux effets néfastes de la Sur￾face (radiations, acidité de l’air, altération moléculaire…). Il peut déve￾lopper la Compétence spéciale Adaptation extérieure (CON/CON, -3), 
+à un coût normal. Le niveau de cette Compétence indique le nombre 
+d’heures que le personnage peut passer à la Surface sans subir d’effets 
+secondaires. À l’issue de cette période, il doit toutefois se protéger com￾me n’importe qui. Il doit alors rester à l’abri des effets de la Surface pen￾dant une période équivalente à trois fois la durée passée à l’extérieur, 
+sans protection, avant de pouvoir à nouveau s’exposer à l’air libre.
+MUTANTS ET SOCIÉTÉ (OPTIONNEL)
+Toutes les communautés n’acceptent pas facilement les 
+mutants. Si un personnage possédant des mutations visibles 
+se trouve dans une communauté qui lui est défavorable, le 
+meneur de jeu peut tout à fait lui imposer un malus de -3 à 
+-5 sur son Attribut Présence ou à ses Compétences sociales. 
+Cela est valable aussi pour les hybrides, ou les gens capables 
+de manipuler la Force Polaris, en dehors des prêtres du 
+Culte du Trident.
+MUTATIONS ALÉATOIRES 
+(OPTIONNEL)
+Avec l’accord du MJ, un joueur qui ne veut pas acheter de 
+mutations avec ses PC (ou, plus largement, qui n’a pas investi 
+de PC dans cette étape de création) peut néanmoins, s’il le 
+souhaite, lancer 1D20 dans la table suivante :
+1D20 Résultat
+1-15 1 mutation
+16-19 2 mutations
+20 3 mutations
+Ce jet de dé est gratuit, mais les résultats sont totale￾ment aléatoires. En effet, les mutations sont ensuite détermi￾nées par un jet d’un ou plusieurs D100 dans la table des muta￾tions, plus haut. Avec de la chance, un joueur peut ainsi obtenir 
+gratuitement une mutation avantageuse pour son personnage, 
+mais, à l’inverse, il peut également tirer une mutation désavan￾tageuse, sans gagner le moindre PC en contrepartie…
+Note : un joueur souhaitant que son personnage possède 
+une mutation désavantageuse sans avoir obtenu le bon résultat 
+sur la table des mutations peut toutefois la choisir librement, 
+et gagner le nombre de PC indiqué.
+Dans tous les cas, un joueur a toujours la pos￾sibilité de supprimer une mutation (quelle qu’elle 
+soit), si le résultat du tirage aléatoire dans la table de muta￾tion ne lui convient pas. On peut ainsi supprimer une muta￾tion désavantageuse ou neutre, mais cela a un coût : le joueur 
+doit dépenser 1 PC (ou gagner 1 point de Désavantage, s’il 
+utilise la méthode 1 de répartition automatique des PC par 
+archétypes). La suppression d’une mutation avantageuse est 
+gratuite, en revanche. Il est donc en théorie possible de sup￾primer une mutation obtenue aléatoirement, pour la rem￾placer par une autre, achetée celle-ci, mais cela peut coûter 
+cher en PC dans certains cas !
+création des personnages
+124
+Table des mutations
+1D100_ Mutation Avantage * Désavantage
+01-06 Adaptation extérieure 3 PC -
+07-10 Amphibie 2 PC -
+11-13 Androgyne Neutre Neutre
+14-16 Asexué Neutre Neutre
+17-19 Autofécondation Neutre Neutre
+20-23 Caractère génétique animal (1D4) :
+1. Caractère félin
+2. Caractère canin
+3. Caractère reptilien
+4. Caractère simiesque
+2 PC -
+24-25 Contact corrosif 3 PC -
+26-27 Contagion 3 PC -
+28-30 Corne 1 PC -
+31-35 Crocs 1 PC -
+36-40 Difformités légères - +1 PC
+41-43 Difformités importantes - +3 PC
+44-46 Empathie 4 PC -
+47-49 Excroissance osseuse rétractable 3 PC -
+50-52 Griffes 2 PC -
+53 Instabilité moléculaire 4 PC -
+54-56 Métamorphe 4 PC -
+57-58 Organe sensoriel manquant (1D6) :
+1. Papilles gustatives atrophiées
+2. Nez atrophié
+3. Sens du toucher atrophié
+4. Oreille manquante
+5. Œil manquant
+(6. Relancer)
+Neutre
+-
+-
+-
+-
+Neutre
++1 PC
++1 PC
++2 PC
++3 PC
+59-60 Organe sensoriel supplémentaire ou amélioré (1D6) :
+1. Goût amélioré
+2. Odorat amélioré
+3. Toucher amélioré
+4. Oreille supplémentaire
+5. Œil supplémentaire
+(6. Relancer)
+Neutre
+1 PC
+1 PC
+2 PC
+2 PC
+Neutre
+-
+-
+-
+-
+61 Parasite(s) 1 PC -
+62-66 Peau renforcée 2 PC -
+67 Purulence - + 2 PC
+68-70 Queue 1 PC -
+71 Radiation 3 PC -
+72-75 Régénération 2 PC -
+76-80 Résistance naturelle (1D6) :
+1. Résistance au feu
+2. Résistance au froid
+3. Résistance aux drogues
+4. Résistance aux maladies
+5. Résistance aux poisons
+6. Résistance aux radiations
+1 PC
+1 PC
+1 PC
+1 PC
+1 PC
+1 PC
+-
+-
+-
+-
+-
+-
+81-85 Sixième sens 1 PC -
+86-88 Sonar 3 PC -
+89 Squelette renforcé 3 PC -
+90-92 Symbiote(s) 3 PC -
+93-95 Tentacule rétractable 1 PC -
+96-00 Vision nocturne 3 PC -
+* Seulement si la mutation est choisie par le joueur.
+
+4. Expérience 
+préliminaire
+Dans les nations sous-marines, un enfant est considéré comme 
+adulte à partir de 12 ans (à l’exception des pirates) et son apprentis￾sage commence immédiatement. Il ne peut choisir un métier qu’à 
+partir de 16 ans, l’âge minimum pour un PJ.
+Âge de départ
+L’âge de départ de votre personnage au début de sa création est 
+égal à 16 ans, ou 14+1D4 ans, au choix du joueur. Cet âge de 
+départ va être modifié en fonction :
+• des études ou de la formation de base du personnage (si 
+vous utilisez la règle optionnelle Origines, formations 
+et études, page suivante)
+• de son expérience professionnelle.
+Origines géographiques
+Note : si vous ne souhaitez pas entrer dans les détails, ou si 
+vous êtes pressé, vous pouvez simplifier cette étape, ainsi que les 
+trois suivantes (Origines sociales, Formation de base et Étu￾des supérieures). Pour plus d’informations, voir Simplifier la 
+création de personnage, à la fin de ce chapitre, page 136.
+Choisissez l’une des origines géographiques ci-dessous ou lan￾cez 1D10. Appliquez les bonus indiqués au niveau de maîtrise des 
+Compétences associées à chaque origine :
+1. Navire nomade : Manœuvres sous-marines +1, 
+Manœuvre d’armure (Armures sous-marines) +1, Pilo￾tage (navires légers) +1, Pilotage (Scooters sous-marins) 
++2, Mécanique (Navires) +1, Connaissance d’un milieu 
+naturel (Océans) +1.
+2-7. Petite station : Manœuvres sous-marines +1, Manœuvre 
+d’armure (Armures sous-marines) +1, Pilotage (Scooters 
+sous-marins) +2, Aquaculture/Élevage +2, Électronique 
++1.
+8-9. Station de taille moyenne : Manœuvres sous-ma￾rines +1, Bureaucratie +1, Manœuvre d’armure (Ar￾mures sous-marines) +1, Pilotage (Scooters sous-ma￾rins) +1, Connaissance des nations/organisations (État 
+dont dépend la station ou État le plus proche si la station 
+est indépendante) +2, Électronique +1.
+10. Grande cité : Bureaucratie +2, Connaissance des na￾tions/organisations (État dont dépend la cité) +3, Éduca￾tion/Culture générale +2.
+Origines sociales
+Choisissez l’une des origines ci-dessous, en fonction de l’ori￾gine géographique de votre personnage, ou lancez 1D10 (en 
+relançant si le résultat n’est pas applicable). Appliquez les bonus 
+sur le niveau de maîtrise des Compétences indiquées :
+1-2. Bas-fonds (grandes cités) : Intimidation +1, Combat 
+à mains nues +1, Combat armé +1, Pickpocket +2.
+3-7. Milieu ouvrier (toutes origines) : Éducation/
+Culture générale +1, Combat à mains nues +1, Manœu￾vre d’armure (Armure sous-marines) +1, Aquaculture/
+Élevage +2 ou Mécanique (au choix parmi : Généra￾teurs/Systèmes de survie, Machines industrielles, Na￾vires) +2.
+8-9. Classes moyennes (stations de taille moyenne ou 
+grandes cités) : Bureaucratie +1, Connaissance des na￾tions/organisations (État dont dépend la station/cité) +2, 
+Éducation +2.
+10. Classes supérieures (grandes cités) : Bureaucra￾tie +2 ou Connaissance des nations/organisations (État 
+dont dépend la cité) +2, Éducation +3.
+POLARIS LATENT ET NON MAÎTRISÉ 
+(RÈGLE AVANCÉE)
+Avec l’accord – indispensable ! – du MJ, le 
+joueur peut doter son personnage d’un « Polaris latent », 
+ou d’un Polaris non maîtrisé, pour 3 PC.
+Dans le premier cas, le personnage est totalement in￾conscient de ce phénomène : la Force Polaris sommeille 
+en lui et attend de se réveiller. Ce sera au MJ de décider 
+quand et dans quelles circonstances (il faut généralement 
+un traumatisme majeur). Notez que le personnage ne 
+peut en aucun cas la libérer de sa propre volonté, même 
+s’il se mutile ou tente consciemment de se soumettre à un 
+stress important.
+Dans le second cas, le personnage sait qu’il est doté 
+des pouvoirs du Polaris, mais n’a jamais réussi à maîtriser 
+cette capacité. Il peut acheter des pouvoirs (2 maximum, 
+déterminés par un tirage aléatoire dans la table de libé-
+ration accidentelle), mais n’a pas accès à la Compétence 
+Maîtrise de la Force Polaris. Par conséquent, ses pouvoirs ne 
+pourront être activés que de manière incontrôlée, ce qui 
+peut se révéler dangereux (voir le chapitre consacré à la 
+Force Polaris pour plus d’information). Notez qu’une li￾bération accidentelle est toujours possible, dans les mêmes 
+conditions que ci-dessus.
+Les conséquences et les effets d’une libération acci￾dentelle d’un Polaris latent sont toujours spectaculaires, 
+voire dramatiques parfois (souvent, en fait…). Tout repose 
+entre les mains du MJ, qui peut s’inspirer des règles de 
+libération accidentelle du chapitre consacré à la Force Po￾laris. Ce pouvoir peut aussi ne jamais être libéré directe￾ment, si le MJ le souhaite. En effet, la Force Polaris peut se 
+manifester inconsciemment, même si cela est rare. Le MJ 
+peut alors choisir de faire intervenir ce pouvoir latent de 
+manière plus subtile, par des effets mystérieux qui aideront 
+le personnage, ou qui se manifesteront de manière aléatoi￾re, sans que l’on parvienne vraiment à déterminer l’origine 
+de ces phénomènes.
+Le Polaris peut être maîtrisé, mais le personnage devra 
+obligatoirement trouver quelqu’un pour l’aider. Inutile de 
+dire que cette « quête mystique » devra être difficile et par￾semée d’embûches. Le MJ est vivement encouragé à bâtir un 
+ou plusieurs scénarios autour de cette recherche (ou même à 
+en faire l’un des thème centraux de sa campagne).
+Doter un personnage d’un Polaris latent ou non maî-
+trisé ne doit pas être décidé à la légère et doit résulter 
+d’une réelle entente entre le joueur et le MJ. Celui-ci de￾vra tenir compte de ce paramètre, qui pourrait bien avoir 
+d’importantes répercussions dans sa campagne, et orienter 
+certains scénarios. Dans tous les cas, et sauf cas exception￾nel, le MJ ne devrait pas autoriser plus d’un Polaris latent 
+ou non maîtrisé parmi les personnages.
+Exemple (création de Carian) : le joueur de 
+Carian a réservé 3 PC aux capacités spéciales et décide 
+de donner une mutation à son personnage. Il achète 
+alors Squelette renforcé, pour 3 PC.
+création des personnages
+130
+Formation de base
+Choisissez l’une des formations ci-dessous, en fonction de 
+l’origine sociale de votre personnage, ou lancez 1D10 (en relançant 
+si le résultat n’est pas applicable). Appliquez les bonus sur le niveau 
+de maîtrise des Compétences indiquées :
+1. Délinquance/Criminalité (toutes origines) : In￾timidation +1, Commerce/Trafic (au choix : Armes ou 
+Drogues) +1, Connaissance des nations/organisations (au 
+choix : Crime organisé, Contrebandiers, Pirates…) +2, 
+Combat armé +1, Combat à main nues +1, Armes de 
+poing +1, Camouflage/Dissimulation +1, Pickpoc￾ket +1, Systèmes de sécurité +1.
+2-7. Apprentissage technique (bas-fonds, milieu 
+ouvrier, classes moyennes), choisissez une spécialité :
+• Aquaculture : Manœuvres sous-marines +1, Édu￾cation/Culture générale +1, Armes sous-marines +1, 
+Analyse sonscans +1, Manœuvre d’armure (Armures 
+sous-marines) +1, Pilotage (au choix : Navires légers, 
+Véhicules de sol, Scooters sous-marins) +1, Chasse/
+Pistage +1, Connaissance d’un milieu naturel (Océans) 
++1, Aquaculture/Élevage +2.
+• Mines : Armes lourdes (contact) +2, Manœuvre d’ar￾mure (au choix : Armures sous-marines, Armures exter￾nes) +2, Pilotage (Véhicules souterrains) +1, Connais￾sance d’un milieu naturel (Souterrains) +2, Survie +1, 
+Explosifs +1, Mécanique (Véhicules) +1.
+• Usine/Atelier : Bureaucratie +1, Éducation/Culture 
+générale +1, Manœuvre d’armure (au choix : Armu￾res sous-marines, Armures externes) +1, Pilotage (2 
+Compétences au choix : Navires légers, Véhicules de 
+sol, Scooters sous-marins) +1/+1, Électronique +1, 
+Mécanique (Générateurs/Systèmes de survie, + 1 autre 
+Compétence au choix, sauf Chasseurs) +2/+2.
+8-9. Éducation scolaire (classes moyennes et supérieu￾res) : Connaissances des nations/organisations (un pays 
+au choix, différent du pays d’origine) +2, Éducation +4, 
+Sciences/Connaissances spécialisées (au choix : Histoire, 
+Géographie) +2, Langues (au choix, langues vivantes et 
+courantes seulement) +1, Informatique +1.
+10. Autodidacte (toutes origines) : répartissez 7 points 
+sur les Compétences que vous voulez, en respectant les 
+conditions ci-dessous :
+• Augmentation maximum sur une Compétence : +2
+• Chaque augmentation doit être justifiée, réaliste et co￾hérente (comment le personnage a-t-il acquis un tel 
+savoir ?).
+• L’augmentation des Compétences réservées doit être 
+validée par le MJ.
+Études supérieures
+Les Études supérieures ne sont accessibles qu’aux personnages 
+ayant reçu une Éducation scolaire (voir ci-dessus). En réalité, cela 
+ne couvre pas tout le cursus nécessaire pour devenir un véritable 
+scientifique, médecin, ingénieur, officier ou autre, mais seulement 
+les premières années d’études, qui représentent plutôt des bases 
+théoriques (dans notre monde, cela correspondrait à peu près aux 
+dernières années de lycée et/ou à une première année d’université). 
+Pour compléter sa formation, un personnage devra passer quelques 
+années dans la Profession adéquate (voir ci-dessous).
+Chaque type d’étude coûte 1 PC et ajoute 2 ans à l’âge 
+de votre personnage. Toutefois, le coût global des niveaux de 
+Compétences revient moins cher qu’avec les années d’expérience 
+professionnelle classiques (voir Profession(s), ci-après). De plus, 
+de telles formations permettent également d’ouvrir des Compé-
+tences réservées. Enfin, suivre des études supérieures est 
+obligatoire pour pouvoir accéder à certaines Professions.
+Comme lors des étapes précédentes, les bonus s’appliquent au ni￾veau de maîtrise des Compétences.
+COMMERCE/GESTION
+Bureaucratie +3, Commerce/Trafic (au choix, sauf marchan￾dises illégales) +2, Connaissance des nations/organisations (un pays 
+au choix, différent du pays d’origine) +1, Éducation/Culture géné-
+rale +3, Recherche d’informations +1, Sciences/Connaissances spé-
+cialisées (au choix Administration/Gestion ou Économie) +2, Lan￾gues (au choix) +3.
+DROIT
+Éloquence/Persuasion +1, Bureaucratie +3, Connaissance 
+des nations/organisations (une nation au choix, différent du pays 
+d’origine) +2, Éducation/Culture générale +3, Recherche d’in￾formations +1, Sciences/Connaissances spécialisées (Droit) +3, 
+Langues (au choix) +2.
+ÉCOLE D’INGÉNIEURS
+Connaissance du monde +1, Éducation/Culture généra￾le +3, Recherche d’informations +1, Génie technique (1 Com￾pétence au choix) +3, Langues (au choix) +1, Électronique +2, 
+Informatique +2, Mécanique (au choix) +2.
+ÉCOLE MILITAIRE
+Commandement +3, Connaissance des nations/organisations 
+(un pays au choix, différent du pays d’origine) +2, Éducation/
+Culture générale +3, Armes de poing ou Fusils/Armes d’épau￾le +2, Langues (au choix, si possible langue d’un pays allié ou au 
+contraire hostile) +2, Stratégie +1, Tactique (au choix) +2.
+ÉCOLE NAVALE
+Commandement +1, Cartographie +2, Connaissance des 
+nations/organisations (un pays au choix, différent du pays d’ori￾gine) +2, Éducation/Culture générale +3, Navigation +2, Ana￾lyse sonscans +1, Pilotage (Navires légers) +2, Pilotage (Navires 
+lourds) +1, Connaissance d’un milieu naturel (Océans) +1.
+MÉDECINE
+Analyse empathique +1, Bureaucratie +1, Éducation/Cultu￾re générale +3, Sciences/Connaissances spécialisées (Biologie/
+Physiologie) +3, Sciences/Connaissances spécialisées (Pharma￾cologie) +1, Médecine +3, Premiers soins +3.
+SCIENCES/SCIENCES HUMAINES
+Connaissance des nations/organisations (une nation au 
+choix parmi les grands États du monde sous-marin) +1, Éduca￾tion/Culture générale +3, Recherche d’information +1, Scien￾ces/Connaissances spécialisées (2 Compétences au choix par￾mi les sciences ou les sciences humaines) +3/+3, Langues (au 
+choix) +2, Informatique +2.
+SCIENCES POLITIQUES
+Bureaucratie +1, Connaissance des nations/organisations 
+(deux États au choix, différentes de la nation d’origine) +3/+2, 
+Éducation/Culture générale +3, Sciences/Connaissances spécia￾lisées (Sciences politiques) +2, Sciences/Connaissances spéciali￾sées (Droit ou Histoire) +1, Sciences/Connaissances spécialisées 
+(Géographie) +1, Langues (au choix) +2.
+Profession(s)
+Vous pouvez maintenant attribuer les années d’expérience pré-
+liminaire, qui vont former la carrière passée du personnage, avant 
+le début du scénario ou de la campagne. Chaque année d’expé-
+rience coûte 1 PC et donne accès aux différents avantages des Pro￾fessions. Évidemment, le personnage vieillit également d’un 
+an pour chaque année passée dans une Profession. Vous trouverez la 
+description de toutes les Professions disponibles dans le chapitre qui 
+leur est consacré, page 153.
+Pour chaque année d’expérience préliminaire passée dans une 
+Profession, un personnage obtient :
+131
+création des personnages création des personnages
+d’expérience professionnelle. En accord avec son concept de base, le 
+joueur décide de répartir ces 12 ans comme ceci : 9 ans en tant que 
+Soldat/Milicien et 3 ans en tant que Chasseur de prime.
+Amélioration des 
+Compétences
+Pour chaque année passée dans une Profession, le personnage ga￾gne 10 points de Compétence à répartir dans le niveau de maîtri￾se de ses Compétences. Les niveaux de Compétence professionnelle, 
+listée dans la description de chaque Profession, peuvent être achetés à 
+un coût normal, indiqué dans le tableau ci-dessous :
+NIVEAU DE 
+MAÎTRISE VISÉ_ Coût par niveau
+-3 * à +0 1
++1 à +5 1
++6 à +10 2
++11 3
++12 5
++13 7
+Etc. +2/niveau
+* Dépenser 1 point dans une Compétence notée « X » fait 
+passer le niveau de base de celle-ci à -3.
+Il est également possible d’acheter des Compétences « hors 
+profession » (toutes celles qui ne sont pas indiquées dans la descrip￾tion de la Profession), mais leur coût est doublé. Notez qu’un 
+Avantage spécifique, Formation, permet d’acheter des niveaux de 
+Compétence (professionnelle ou hors profession) supplémentaires, 
+pour un coût normal.
+Note sur les Compétences dues aux origines : les Compéten￾ces dues aux origines géographique et sociales, ainsi que celles que 
+le personnage a pu apprendre lors de sa Formation initiale peuvent 
+toujours être achetées à un coût normal (nous vous invitons à les 
+« cocher » sur la feuille de personnage). Néanmoins, si elles ne font 
+pas partie des Compétences professionnelles du personnage (et donc 
+indiquées dans la description de l’une ou l’autre de ses Professions), 
+leur niveau maximum est limité à +5.
+Note sur les Compétences spéciales : toutes les Compétences spé-
+ciales sont normalement inaccessibles, même à un coût doublé, à moins 
+d’être indiquées dans la description de l’une ou l’autre des Professions 
+du personnage. Le joueur peut toujours avoir recours à l’Avantage For￾mation, mais uniquement avec l’accord du meneur de jeu.
+
+COMPÉTENCES AVEC CONDITIONS 
+REQUISES (OPTIONNEL)
+Certaines Compétences, identifiées par le signe « † », ont 
+des conditions requises à leur développement, le personnage 
+devant auparavant acquérir d’autres Compétences nécessaires. 
+Celles-ci représentent en effet des aptitudes ou des connais￾sances indispensables à l’étude de la Compétence visée. Il est 
+par exemple nécessaire d’avoir étudié la Médecine pour pouvoir 
+apprendre la Chirurgie ou l’Informatique pour pouvoir utiliser 
+des techniques de Piratage informatique. En terme de jeu, le 
+personnage doit avoir atteint un certain niveau dans la (ou les) 
+Compétence(s) pré-requises, avant de pouvoir développer la 
+Compétence liée. Par exemple, un personnage doit posséder 
+un niveau en Médecine de 10, avant de pouvoir apprendre la 
+Chirurgie. Vous trouverez toutes les indications nécessaires dans 
+le chapitre Compétences, page 188.
+Cette règle n’a pas d’autre but que de donner un peu de 
+cohérence aux Compétences des personnages. Elle reste tou￾tefois optionnelle (et basée sur le bon sens !).
+• 10 points de Compétence, à répartir dans les Com￾pétences professionnelles (voyez Amélioration des 
+Compétences et Niveau maximum des Compéten￾ces, plus bas).
+• Des Avantages et des Désavantages automatiques
+(Contacts, Alliés/Fournisseurs, Opposants ou Ennemis, 
+Célébrité).
+• 5 points à répartir dans les Avantages professionnels.
+Le personnage peut également obtenir 5 points d’Avantages 
+professionnels supplémentaires, en faisant un tirage dans la ta￾ble des Revers (à la fin du chapitre Professions, page 185). 
+Note : voir aussi la règle optionnelle des Avantages profes￾sionnels aléatoires (page 154).
+• Une augmentation de ses Économies (en fonction 
+de son ancienneté). Cette somme d’argent lui permettra 
+notamment d’acquérir le matériel auquel il a droit.
+Dès la première année d’expérience préliminaire, un joueur 
+peut choisir absolument n’importe quelle Profession pour son per￾sonnage. De même, il peut décider à tout moment d’arrêter la pro￾gression de son personnage dans une Profession donnée, pour en 
+choisir une autre. Bien que cela lui permette d’avoir accès à un plus 
+grand nombre de Compétences et de cumuler certains Avantages, il 
+perd le bénéfice du cumul des années passées dans un même métier. 
+Le personnage repart en effet à l’an 1 dans sa nouvelle Profession. 
+Attention cependant, certaines Professions ont des conditions 
+requises (un certain niveau dans un ou plusieurs Attributs, un type 
+d’Études supérieures, un nombre d’années passées dans une autre 
+Profession…). Enfin, un personnage peut être amené à changer de 
+lieu de travail (soit par choix, soit par obligation) et à perdre le 
+bénéfice des années passées au même endroit. Dans tous les cas, MJ 
+et joueurs devront veiller à la cohérence de la carrière du person￾nage, en fonction de l’historique de ce dernier.
+Note : si vous ne souhaitez pas entrer dans les détails ou si vous 
+êtes pressé, vous pouvez simplifier cette étape. Pour plus d’informa￾tions, voir Simplifier la création de personnage, à la fin de ce 
+chapitre, page 136.
+Exemple (création de Carian) : le joueur de Carian choi￾sit pour ce dernier l’origine géographique Station de taille moyenne, 
+et l’origine sociale Classes moyennes. Cela lui permet d’avoir accès à 
+la formation de base Éducation scolaire. Grâce aux 12 PC investis à 
+l’étape d’Expérience préliminaire, Carian peut bénéfi cier de 12 ans 
+
+AVANTAGES PROFESSIONNELS 
+ALÉATOIRES (OPTIONNEL)
+Tous les 5 ans passés dans une Profession (soit aux années 
+5, 10, 15, etc.), le joueur peut librement choisir d’effectuer 
+un tirage dans la table des Avantages professionnels aléa￾toires (spécifique à chaque Profession), au lieu de répartir 5 
+points dans les Avantages professionnels classiques.
+PERSONNAGES EXPÉRIMENTÉS 
+(OPTIONNEL)
+Les personnages expérimentés, bénéficiant de plus de 10 
+ou 12 années d’expérience, sont souvent légèrement avantagés 
+par rapport aux personnages plus jeunes. Pour rétablir l’équi￾libre, nous vous proposons la règle suivante : tous les trois ans 
+d’expérience au-delà de la dixième année (soit aux années 
+13, 16, 19…), le joueur est obligé de faire un jet dans la ta￾ble des Revers (voir le chapitre consacré aux Professions, 
+page 185), et d’en accepter les conséquences… Sous les mers, 
+il ne fait pas bon vieillir (à ce propos, jetez aussi un œil aux 
+règles concernant les effets de l’âge, plus bas).
+
+Économies
+Pour chaque année passée dans une Profession, le personnage 
+peut économiser la somme indiquée dans la description de cette Pro￾fession (les économies se cumulent d’année en année). Comme vous le 
+voyez, cette somme augmente au fil du temps : la progression salariale 
+est l’un des avantages du temps passé dans une Profession. Un person￾nage changeant de Profession repart au bas de l’échelle des salaires…
+Les économies sont, en fait, une estimation du matériel que peut 
+obtenir un personnage et de ce qu’il a mis de côté au cours de sa vie. 
+À la fin de la création de personnage, le joueur pourra lui acheter du 
+matériel avec cette somme d’argent (voir Équipement et matériel 
+accessible, ci-dessous), ou bien en conserver une partie.
+Note : pour avoir une estimation des salaires d’une profession, il 
+suffit de considérer que le salaire indiqué pour une année est en fait 
+un salaire mensuel.
+Équipement et matériel 
+accessible
+Chaque personnage pourra dépenser de l’argent pour acquérir 
+du matériel. Ce matériel est, par défaut, du matériel standard, ce 
+qui inclut les armures de plongée exo-1, les petits véhicules sous￾marins et leurs équipements non-offensifs (pour plus d’informa￾tions, consultez le chapitre Équipement, page 272). Certaines 
+Professions bénéficient toutefois de matériel gratuit et donnent 
+accès à du matériel spécialisé. Pour du matériel très onéreux, le 
+personnage peut les obtenir en emprunt ou en location.
+Note : un personnage quittant une Profession au cours de la￾quelle il a obtenu un petit véhicule, une armure ou une arme gra￾tuite, doit rendre ce matériel. S’il ne le fait pas, il est considéré 
+comme étant coupable de vol (voire comme un fugitif ou un déser￾teur, selon les cas…).
+Perte de travail 
+et changement de 
+communauté
+Un personnage peut être contraint de quitter l’endroit où il exerce 
+pour diverses raisons (Revers) ou il peut décider d’aller voir ailleurs. 
+La perte d’emploi, ou le changement de communauté, implique que, 
+pour l’année suivante, le personnage n’obtiendra que la moitié de ce 
+qu’il aurait dû gagner (nouveau revenu réduit de moitié, 5 points de 
+Compétence et 3 points d’Avantages professionnels seulement).
+Effets de l’âge
+Au moment où le personnage commence ses aventures sous la 
+direction du joueur, son âge actuel est la somme de son âge de dé-
+part (voir Âge de départ, page 129), augmentée des années pas￾sées dans ses différentes Professions. Toutefois, l’univers sous-marin 
+de Polaris est un monde difficile qui met les capacités humaines à 
+rude épreuve. Les effets de l’âge ont donc des conséquences sur les 
+Attributs du personnage. Si l’âge actuel de celui-ci correspond aux 
+catégories suivantes, appliquez les modificateurs indiqués :
+• 30-35 ans : -1 niveau sur un Attribut à choisir parmi Force, 
+Constitution, Coordination.
+• 36-40 ans : -2 niveaux sur un ou plusieurs Attributs à choisir 
+parmi Force, Constitution, Coordination.
+• 41-45 ans : -3 niveaux sur un ou plusieurs Attributs à choi￾sir parmi Force, Constitution, Coordination, Adaptation, 
+Perception.
+• 45 ans et plus : -4 niveaux sur un ou plusieurs Attributs 
+à choisir parmi Force, Constitution, Coordination, Adapta￾tion, Perception.
+
+NIVEAU MAXIMUM DES 
+COMPÉTENCES (OPTIONNEL)
+Lors de la création, le niveau de maîtrise maximum qu’un 
+personnage peut atteindre dans une Compétence donnée dé-
+pend du nombre d’années d’expérience passé dans la Profes￾sion dont dépend la Compétence en question (prendre éga￾lement en compte les 2 ans nécessaires aux Études supérieures) :
+Expérience Niveau max.
+1 an +3
+2 ans +5
+3 à 5 ans +7
+6 à 10 ans +10
+11 à 20 ans +13
+21 ans et + +15
+Bien entendu, si une Compétence apparaît dans plusieurs 
+des Professions choisies pour le personnage, les années d’ex￾périence se cumulent.
+COMPÉTENCES À PROGRESSION 
+NATURELLE (OPTIONNEL)
+Certaines Compétences s’améliorent naturellement 
+avec le temps, car le personnage est obligé de les utiliser 
+couramment. Il s’agit essentiellement des Compétences de 
+Connaissances des nations/organisations et des Compétences de 
+langue étrangère. Ainsi, si un personnage exerce une activité 
+dans une autre nation que la sienne, il va petit à petit appren￾dre la langue et les usages locaux. En terme de jeu, un per￾sonnage gagne naturellement 1 niveau par an dans les Com￾pétences liées à la nation (ou à l’organisation) dans laquelle 
+il travaille. Notez que le niveau de maîtrise maximum 
+qu’un personnage peut atteindre par la progression 
+naturelle est de +5. Au-delà de ce niveau, il faut dépenser 
+des points de Compétence normalement.
+Note : attention au malus au niveau de base des Compé-
+tences jugées difficiles à apprendre.
+
+PERSONNAGES TRÈS JEUNES 
+(OPTIONNEL)
+Si vous souhaitez introduire un peu plus de réalisme 
+concernant les capacités des personnages particulièrement 
+jeunes, vous pouvez utiliser les modificateurs suivants, en 
+fonction de l’âge du personnage :
+• 16-17 ans : Force -3, Présence -2
+• 18 ans : Force -2, Présence -1.
+• 19 ans : Force -1.
+Ces malus ne sont pas applicables si les Attributs concer￾nés ont un niveau de 7 ou moins. De plus, ils sont temporaires 
+si vous jouez en campagne et disparaissent naturellement avec 
+le temps, lorsque le personnage prend de l’âge.
+
+5. Avantages et 
+Désavantages
+Si vous le souhaitez, vous pouvez donner des Avantages et/ou des 
+Désavantages à votre personnage, à choisir dans les listes ci-contre. 
+N’oubliez pas qu’il n’est pas recommandé de surcharger le personna￾ge en Désavantages, tout comme il peut être dangereux de dépenser 
+tous ses Points de création en Avantages… Certains Avantages ou Dé-
+savantages « uniques », c’est-à-dire qu’on ne peut les prendre qu’une 
+seule fois. Les autres peuvent être pris en plusieurs exemplaires
+
+Derniers détails
+Droitier, gaucher ou 
+ambidextre
+Lancez 2D10 et de consultez le résultat sur la table ci-dessous. 
+L’Avantage Ambidextre peut être sélectionné si un joueur veut que 
+son personnage le soit absolument et n’obtient pas le bon résultat sur 
+cette table.
+2D10_ Résultat
+2-15 Droitier
+16-19 Gaucher
+20 Ambidextre
+Sexe
+Un personnage peut être homme ou femme, s’il n’a pas subi de 
+mutation qui le dispense de ce choix. La différence entre les deux, 
+dans l’univers de Polaris, n’est pas très flagrante, sauf si le personna￾ge est fécond. Dans ce cas, il est plus que probable qu’un personnage 
+féminin fera tout pour cacher sa condition…
+Description physique
+Servez-vous des Attributs pour avoir une idée du physique du 
+personnage. Est-il fort et bien bâti ? A-t-il l’air intelligent ou charis￾matique ? Se déplace-t-il avec souplesse ? A-t-il des mutations visibles 
+qui pourraient pousser les gens à se méfier de lui et à le rejeter ? 
+Quelle est sa taille, son poids ?
+Note : les techno-hybrides sont plus lourds que les humains 
+normaux (et les géno-hybrides), tandis que les hybrides naturels 
+sont plus légers.
+Historique
+Le passé d’un personnage est très important si vous voulez 
+qu’il s’intègre bien dans l’univers de jeu. Le maître de jeu peut 
+même s’en servir pour écrire ses scénarios et pour impliquer de 
+manière plus directe le personnage dans une campagne. Un joueur 
+doit concocter une histoire cohérente en y incluant tous les détails 
+qu’il souhaite et ceux qu’il a choisis à la création de son personnage 
+(argent, Avantages, famille, Relations, etc.). Le maître de jeu sera 
+libre ensuite d’accepter ou de refuser certains éléments de cette 
+histoire. Une histoire bien faite et vraisemblable peut même per￾mettre d’obtenir automatiquement, en cours d’aventures, de nou￾veaux Alliés ou Relations, si le maître de jeu l’estime raisonnable et 
+intéressant pour l’histoire. Il ne faut pas oublier que les personnages 
+sont amenés, à plus ou moins long terme, à agir directement sur 
+l’univers de Polaris en tant que personnages notables. Il est donc 
+important qu’ils aient un passé intéressant.
+Origines géographiques
+Déterminé par l’histoire que le joueur et le maître de jeu ont 
+conçue, il est impératif de savoir où est né un personnage. Encore 
+une fois, cela aidera à construire une campagne intéressante. Tout 
+d’abord parce qu’un personnage issu de l’Hégémonie pourra obtenir 
+plus d’informations sur cette nation qu’un individu né dans une pe￾tite communauté. Un joueur peut aussi inventer une communauté de 
+toutes pièces et décider que son personnage y est né ou y a passé sa 
+vie. Les possibilités sont multiples ! De plus, cela permet de détermi￾ner la langue natale d’un personnage et si, à sa création, il a accès à un 
+matériel que l’on ne trouve que dans certaines régions du monde.
+Attributs secondaires
+Les Attributs principaux du personnage étant désormais fixés, 
+le joueur peut calculer ses Attributs secondaires. Attention aux bonus 
+ou aux malus dus aux Avantages et Désavantages qui agissent sur les 
+Attributs secondaires.

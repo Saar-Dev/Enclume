@@ -13,7 +13,7 @@ const LOG_TYPE_LABEL = {
   gm_grant:        'Don GM',
 }
 
-export default function TradeWindow({ campaignId, socket, onClose, isGm = true, myCharId = null }) {
+export default function TradeWindow({ campaignId, socket, onClose, isGm = true, myCharId = null, characters = [], initialContext = null }) {
   const { t } = useTranslation()
   const { pos, onHeaderMouseDown } = useDraggable(
     'trade-window-pos',
@@ -104,6 +104,8 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
 
   // ── Vue Joueur — état ─────────────────────────────────────────────────────
 
+  const [playerTab,       setPlayerTab]       = useState('catalogue')
+
   const [selMerchantId,   setSelMerchantId]   = useState(null)
   const [catalog,         setCatalog]         = useState([])
   const [catLoading,      setCatLoading]      = useState(false)
@@ -112,6 +114,18 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
   const [cart,            setCart]            = useState([])
   const [checkoutMsg,     setCheckoutMsg]     = useState(null)  // { ok: bool, text: string } | null
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+
+  // ── Vue Joueur — Échange PJ↔PJ ────────────────────────────────────────────
+
+  const [exTargetId,    setExTargetId]    = useState(null)
+  const [myInventory,   setMyInventory]   = useState([])
+  const [invLoading,    setInvLoading]    = useState(false)
+  const [offerItems,    setOfferItems]    = useState([])   // [{invId, equipId, name, qty}]
+  const [offerSols,     setOfferSols]     = useState(0)
+  const [outboundOffer, setOutboundOffer] = useState(null) // {offerId, toCharName, expiresAt}
+  const [incomingOffer, setIncomingOffer] = useState(null) // {offerId, fromCharName, items, solsOffer, expiresAt}
+  const [exStatusMsg,   setExStatusMsg]   = useState(null) // {ok, text}
+  const [timeLeft,      setTimeLeft]      = useState(null) // secondes
 
   const loadCatalog = useCallback(async (merchantId) => {
     if (!merchantId) { setCatalog([]); return }
@@ -161,7 +175,7 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
       setCheckoutMsg({ ok: true, text: t('trade.window.cart_success') })
       setCart([])
     } catch (err) {
-      const msg = err.response?.data?.error || err.message
+      const msg = err.response?.data?.error?.message || err.message
       const text = msg === 'INSUFFICIENT_FUNDS'  ? t('trade.window.cart_insufficient')
                  : msg === 'MERCHANT_CLOSED'      ? t('trade.window.cart_merchant_closed')
                  : msg
@@ -170,6 +184,112 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
       setCheckoutLoading(false)
     }
   }
+
+  // ── Échange — callbacks ───────────────────────────────────────────────────
+
+  const loadInventory = useCallback(async () => {
+    if (!myCharId) return
+    setInvLoading(true)
+    try {
+      const res = await api.get(`/char-sheet/${myCharId}/inventory`)
+      setMyInventory(res.data.items ?? [])
+    } catch (err) { console.error('[TradeWindow] inventory load:', err.message) }
+    finally { setInvLoading(false) }
+  }, [myCharId])
+
+  useEffect(() => {
+    if (playerTab === 'exchange' && myInventory.length === 0 && !invLoading) loadInventory()
+  }, [playerTab, myInventory.length, invLoading, loadInventory])
+
+  // Timer countdown (outbound ou incoming)
+  useEffect(() => {
+    const expiry = incomingOffer?.expiresAt ?? outboundOffer?.expiresAt
+    if (!expiry) { setTimeLeft(null); return }
+    const calc = () => Math.max(0, Math.round((new Date(expiry) - Date.now()) / 1000))
+    setTimeLeft(calc())
+    const iv = setInterval(() => { const secs = calc(); setTimeLeft(secs); if (secs === 0) clearInterval(iv) }, 1000)
+    return () => clearInterval(iv)
+  }, [incomingOffer?.expiresAt, outboundOffer?.expiresAt])
+
+  // WS listeners échange
+  useEffect(() => {
+    if (!socket) return
+    const onReceived = (data) => { setIncomingOffer(data); setPlayerTab('exchange'); setExStatusMsg(null) }
+    const onAccepted = () => {
+      setOutboundOffer(null); setIncomingOffer(null)
+      setExStatusMsg({ ok: true, text: t('trade.window.ex_accepted') })
+      setOfferItems([]); setOfferSols(0)
+      loadInventory()
+    }
+    const onDeclined  = () => { setOutboundOffer(null); setExStatusMsg({ ok: false, text: t('trade.window.ex_declined') }) }
+    const onCancelled = () => { setIncomingOffer(null); setExStatusMsg({ ok: false, text: t('trade.window.ex_cancelled') }) }
+    const onError     = ({ code }) => setExStatusMsg({ ok: false, text: code })
+    socket.on(WS.TRADE_OFFER_RECEIVED,  onReceived)
+    socket.on(WS.TRADE_OFFER_ACCEPTED,  onAccepted)
+    socket.on(WS.TRADE_OFFER_DECLINED,  onDeclined)
+    socket.on(WS.TRADE_OFFER_CANCELLED, onCancelled)
+    socket.on(WS.TRADE_ERROR,           onError)
+    return () => {
+      socket.off(WS.TRADE_OFFER_RECEIVED,  onReceived)
+      socket.off(WS.TRADE_OFFER_ACCEPTED,  onAccepted)
+      socket.off(WS.TRADE_OFFER_DECLINED,  onDeclined)
+      socket.off(WS.TRADE_OFFER_CANCELLED, onCancelled)
+      socket.off(WS.TRADE_ERROR,           onError)
+    }
+  }, [socket, t, loadInventory])
+
+  // initialContext — pré-remplissage depuis le menu radial (étape 11)
+  useEffect(() => {
+    if (initialContext?.mode === 'exchange') {
+      setPlayerTab('exchange')
+      if (initialContext.toCharId) setExTargetId(initialContext.toCharId)
+    }
+  }, [initialContext])
+
+  const toggleOfferItem = (item) => {
+    const name = item.custom_name || item.ref_name || '?'
+    setOfferItems(prev => {
+      const ex = prev.find(o => o.invId === item.id)
+      if (ex) return prev.filter(o => o.invId !== item.id)
+      return [...prev, { invId: item.id, equipId: item.equipment_id, name, qty: 1 }]
+    })
+  }
+
+  const handleProposeOffer = useCallback(() => {
+    if (!socket || !myCharId || !exTargetId || (offerItems.length === 0 && offerSols === 0)) return
+    const toChar = characters.find(c => c.id === exTargetId)
+    socket.emit(WS.TRADE_TRANSFER_OFFER, {
+      fromCharId: myCharId,
+      toCharId:   exTargetId,
+      items:      offerItems.map(o => ({ char_inventory_id: o.invId, equipment_id: o.equipId, name: o.name, qty: o.qty })),
+      solsOffer:  offerSols,
+    }, (ack) => {
+      if (ack?.ok) {
+        setOutboundOffer({ offerId: ack.offerId, toCharName: toChar?.name ?? '?', expiresAt: ack.expiresAt })
+        setExStatusMsg(null)
+      } else {
+        setExStatusMsg({ ok: false, text: t('trade.window.ex_send_error') })
+      }
+    })
+  }, [socket, myCharId, exTargetId, offerItems, offerSols, characters, t])
+
+  const handleCancelOffer = useCallback(() => {
+    if (!socket || !outboundOffer || !myCharId) return
+    socket.emit(WS.TRADE_TRANSFER_CANCELLED, { offerId: outboundOffer.offerId, fromCharId: myCharId })
+    setOutboundOffer(null)
+    setExStatusMsg({ ok: false, text: t('trade.window.ex_cancelled') })
+  }, [socket, myCharId, outboundOffer, t])
+
+  const handleAcceptOffer = useCallback(() => {
+    if (!socket || !incomingOffer || !myCharId || timeLeft === 0) return
+    socket.emit(WS.TRADE_TRANSFER_ACCEPTED, { offerId: incomingOffer.offerId, acceptingCharId: myCharId })
+  }, [socket, myCharId, incomingOffer, timeLeft])
+
+  const handleDeclineOffer = useCallback(() => {
+    if (!socket || !incomingOffer) return
+    socket.emit(WS.TRADE_TRANSFER_DECLINED, { offerId: incomingOffer.offerId })
+    setIncomingOffer(null)
+  }, [socket, incomingOffer])
 
   // Vue joueur — valeurs calculées
   const families      = [...new Set(catalog.map(i => i.family))].filter(Boolean).sort()
@@ -338,6 +458,23 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
       {!isGm && (
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
 
+          {/* Tabs Joueur */}
+          <div style={S.tabs}>
+            <button
+              className={playerTab === 'catalogue' ? 'btn btn-gold' : 'btn btn-ghost'}
+              style={S.tabBtn}
+              onClick={() => setPlayerTab('catalogue')}
+            >{t('trade.window.tab_catalogue')}</button>
+            <button
+              className={playerTab === 'exchange' ? 'btn btn-gold' : 'btn btn-ghost'}
+              style={S.tabBtn}
+              onClick={() => setPlayerTab('exchange')}
+            >{t('trade.window.tab_exchange')}</button>
+          </div>
+
+          {/* ── CATALOGUE ─────────────────────────────────────────────────── */}
+          {playerTab === 'catalogue' && <>
+
           {/* Sélecteur marchand */}
           <div style={S.playerSection}>
             <select
@@ -455,6 +592,149 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
               </p>
             )}
           </div>
+
+          </>}{/* fin playerTab === 'catalogue' */}
+
+          {/* ── ÉCHANGE PJ↔PJ ─────────────────────────────────────────────── */}
+          {playerTab === 'exchange' && (
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+
+              {/* Cas 1 — Offre entrante (PJ B) */}
+              {incomingOffer && (
+                <div style={S.exPanel}>
+                  <p style={S.exFromName}>{t('trade.window.ex_offer_from')} {incomingOffer.fromCharName}</p>
+
+                  {Array.isArray(incomingOffer.items) && incomingOffer.items.length > 0 && (
+                    <div style={S.exOfferList}>
+                      {incomingOffer.items.map((it, i) => (
+                        <div key={i} style={S.exOfferRow}>{it.name} ×{it.qty}</div>
+                      ))}
+                    </div>
+                  )}
+                  {incomingOffer.solsOffer > 0 && (
+                    <div style={S.exSolsReceived}>{incomingOffer.solsOffer} S</div>
+                  )}
+
+                  <p style={S.exTimer}>
+                    {timeLeft !== null && timeLeft > 0 ? `${timeLeft}s` : t('trade.window.ex_expired')}
+                  </p>
+
+                  <div style={S.exBtnRow}>
+                    <button
+                      className="btn btn-gold"
+                      disabled={timeLeft === 0}
+                      onClick={handleAcceptOffer}
+                    >{t('trade.window.ex_accept')}</button>
+                    <button
+                      className="btn btn-danger"
+                      onClick={handleDeclineOffer}
+                    >{t('trade.window.ex_decline')}</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Cas 2 — Offre envoyée, en attente (PJ A) */}
+              {!incomingOffer && outboundOffer && (
+                <div style={S.exPanel}>
+                  <p style={S.exFromName}>{t('trade.window.ex_offer_sent')} {outboundOffer.toCharName}…</p>
+                  <p style={S.exTimer}>
+                    {timeLeft !== null && timeLeft > 0 ? `${timeLeft}s` : t('trade.window.ex_expired')}
+                  </p>
+                  <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} onClick={handleCancelOffer}>
+                    {t('trade.window.ex_cancel')}
+                  </button>
+                </div>
+              )}
+
+              {/* Cas 3 — Composer une offre (PJ A) */}
+              {!incomingOffer && !outboundOffer && (
+                <>
+                  {/* Sélecteur cible */}
+                  <div style={S.playerSection}>
+                    <select
+                      style={S.merchantSelect}
+                      value={exTargetId ?? ''}
+                      onChange={e => setExTargetId(e.target.value || null)}
+                    >
+                      <option value="">{t('trade.window.ex_no_target')}</option>
+                      {characters
+                        .filter(c => c.type === 'pj' && c.id !== myCharId)
+                        .map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                      }
+                    </select>
+                  </div>
+
+                  {/* Mon inventaire — objets à offrir */}
+                  <div style={S.catalogList}>
+                    {invLoading && <p style={S.empty}>{t('trade.window.ex_loading_inv')}</p>}
+                    {!invLoading && myInventory.length === 0 && (
+                      <p style={S.empty}>{t('trade.window.ex_no_items')}</p>
+                    )}
+                    {myInventory.map(item => {
+                      const name = item.custom_name || item.ref_name || '?'
+                      const isOffered = offerItems.some(o => o.invId === item.id)
+                      return (
+                        <div
+                          key={item.id}
+                          style={{ ...S.catalogItem, background: isOffered ? '#1a1a2e' : 'transparent', cursor: 'pointer' }}
+                          onClick={() => toggleOfferItem(item)}
+                        >
+                          <div style={S.catalogItemHeader}>
+                            <span style={S.catalogItemName}>{name}</span>
+                            {item.quantity > 1 && (
+                              <span style={{ fontSize: '12px', color: '#888' }}>×{item.quantity}</span>
+                            )}
+                            {isOffered && <span style={{ color: '#3aaa6a', fontSize: '13px', flexShrink: 0 }}>✓</span>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Sols + recap + bouton */}
+                  <div style={S.cartSection}>
+                    <div style={S.modRow}>
+                      <span style={S.modLabel}>{t('trade.window.ex_sols_label')}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        style={{ ...S.modInput, width: '80px' }}
+                        value={offerSols}
+                        onChange={e => setOfferSols(Math.max(0, parseInt(e.target.value) || 0))}
+                      />
+                      <span style={S.modUnit}>S</span>
+                    </div>
+                    {offerItems.length > 0 && (
+                      <div style={{ marginTop: '4px' }}>
+                        {offerItems.map(o => (
+                          <div key={o.invId} style={S.cartRow}>
+                            <span style={S.cartItemName}>{o.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      className="btn btn-gold"
+                      style={{ ...S.checkoutBtn, marginTop: '8px', width: '100%' }}
+                      disabled={!exTargetId || (offerItems.length === 0 && offerSols === 0)}
+                      onClick={handleProposeOffer}
+                    >
+                      {t('trade.window.ex_propose')}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Message statut échange */}
+              {exStatusMsg && (
+                <p style={{ ...S.empty, padding: '4px 8px', color: exStatusMsg.ok ? '#3aaa6a' : '#c86030' }}>
+                  {exStatusMsg.text}
+                </p>
+              )}
+
+            </div>
+          )}
+
         </div>
       )}
     </div>
@@ -516,4 +796,13 @@ const S = {
   cartTotalLabel:    { fontSize: '12px', color: '#aaa' },
   cartTotalVal:      { flex: 1, fontSize: '13px', color: '#c8a84b', fontWeight: 600 },
   checkoutBtn:       { flexShrink: 0, fontSize: '12px', padding: '4px 12px' },
+
+  // Vue Échange
+  exPanel:        { padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  exFromName:     { fontSize: '13px', color: '#ddd', fontWeight: 600, margin: 0 },
+  exOfferList:    { display: 'flex', flexDirection: 'column', gap: '2px' },
+  exOfferRow:     { fontSize: '12px', color: '#bbb', padding: '2px 0' },
+  exSolsReceived: { fontSize: '14px', color: '#c8a84b', fontWeight: 600 },
+  exTimer:        { fontSize: '12px', color: '#888', margin: 0 },
+  exBtnRow:       { display: 'flex', gap: '8px' },
 }
