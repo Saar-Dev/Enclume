@@ -97,6 +97,7 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
   const [drone,    setDrone]    = useState(null)
   const [programs, setPrograms] = useState([])
   const [weapons,  setWeapons]  = useState([])
+  const [cargo,    setCargo]    = useState([])
   const [loading,  setLoading]  = useState(true)
 
   useEffect(() => {
@@ -106,12 +107,14 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
     Promise.all([
       api.get(`/char-sheet/${charId}/drone`),
       api.get(`/char-sheet/${charId}/drone/weapons`),
+      api.get(`/char-sheet/${charId}/drone/cargo`),
     ])
-      .then(([droneRes, weaponsRes]) => {
+      .then(([droneRes, weaponsRes, cargoRes]) => {
         if (cancelled) return
         setDrone(droneRes.data.drone)
         setPrograms(droneRes.data.programs || [])
         setWeapons(weaponsRes.data.weapons || [])
+        setCargo(cargoRes.data.items || [])
       })
       .catch(err => console.error('DroneWindow fetch:', err))
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -264,9 +267,12 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
             characterId={character.id}
             drone={drone}
             programs={programs}
+            cargo={cargo}
             isGm={isGm}
+            isOwner={isOwner}
             onDroneUpdate={setDrone}
             onProgramsUpdate={setPrograms}
+            onCargoUpdate={setCargo}
           />
         )}
 
@@ -516,8 +522,8 @@ function WeaponsTab({ characterId, weapons, isGm, isOwner, onWeaponsUpdate }) {
             <span>{t('drone.weaponRange')} : <strong style={{ color: '#c0c0d0' }}>{w.portee || w.ref_range || '—'}</strong></span>
             <span>{t('drone.weaponFireMode')} : <strong style={{ color: '#c0c0d0' }}>{(w.fire_mode || w.ref_fire_mode || '—').toUpperCase()}</strong></span>
             <span>{t('drone.weaponAmmo')} : <strong style={{ color: w.ammo_restant === 0 ? '#e05c5c' : '#c0c0d0' }}>
-              {w.ammo_restant ?? '∞'}
-            </strong></span>
+              {w.ammo_restant ?? '∞'}{w.contenance_chargeur > 0 ? `/${w.contenance_chargeur}` : ''}
+            </strong>{w.ref_caliber && <span style={{ color: '#5b8dee', marginLeft: '6px', fontWeight: 'normal' }}>{w.ref_caliber}</span>}</span>
           </div>
 
           {canEdit && (

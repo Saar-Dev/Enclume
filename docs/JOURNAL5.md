@@ -1340,3 +1340,132 @@ Implémentation VENTE PJ→GM conforme à la spec :
 - Expiration timer 120s
 
 ---
+
+## Session 125 (suite 2) — 2026-06-25 — ExchangeWindow + notification GM échange
+
+### Contexte
+
+Fenêtre d'échange PJ↔PJ/PNJ manquante (TradeWindow ne couvrait que l'échange marchand). Sujet 1 = composant standalone. Sujet 2 = notification chat GM quand un PJ propose un échange vers un PNJ GM.
+
+### Travail effectué
+
+**`client/src/components/ExchangeWindow.jsx` — nouveau composant :**
+- Fenêtre standalone ouverte depuis RadialMenu "Échange" — aucun onglet
+- Props : `campaignId, socket, onClose, myCharId, characters, initialContext`
+- 4 cas UI : A (offre envoyée + timer), B (offre reçue + Accept/Decline + timer), C (résultat), D (formulaire)
+- Listeners WS : `TRADE_OFFER_RECEIVED / ACCEPTED / DECLINED / CANCELLED / TRADE_ERROR`
+- `initialContext.incomingOffer` → pré-chargement Cas B (flux notification chat GM)
+- `handleAcceptOffer` : `incomingOffer.toCharId ?? myCharId` — GM accepte au nom du PNJ
+- Autocomplete : label "Destinataire" + trigger ≥ 3 lettres + max 3 suggestions + pas de pré-remplissage
+- Guard auto-échange : `exTargetId === myCharId` dans guard callback + bouton disabled
+
+**`client/src/pages/SessionPage.jsx` :**
+- Import `ExchangeWindow`
+- États `exchangeWindowOpen` + `exchangeContext`
+- `onOpenExchange` RadialMenu → `setExchangeContext + setExchangeWindowOpen` (TradeWindow inchangé)
+- `onOpenExchange` prop → Sidebar (flux notification chat)
+- Mount block `{exchangeWindowOpen && <ExchangeWindow ... />}`
+
+**`server/src/socket/socketTrade.js` :**
+- `findSocketByCharId` : si `char.user_id === null` (PNJ) → fallback `findGmSocket`
+- `TRADE_TRANSFER_OFFER` payload : `toCharId` ajouté à `TRADE_OFFER_RECEIVED`
+- `TRADE_TRANSFER_ACCEPTED` : guard étendu — GM peut accepter pour PNJ (`user_id=null && role=gm`)
+- Logs `[DBG-ACCEPT]` conservés (entrée + acceptingChar + ownerOk)
+
+**`client/src/lib/useEntitySocket.js` :**
+- Listener `TRADE_OFFER_RECEIVED` → `addMessage({ type: 'exchange_offer', ... })` — pattern identique à `onSellRequest`
+
+**`client/src/components/Sidebar.jsx` :**
+- Prop `onOpenExchange`
+- Ref `prevExchangeOfferCountRef`
+- Badge : compte `exchange_offer` (delta)
+- Rendu `msg.type === 'exchange_offer'` : fromCharName + itemCount + solsOffer + "Voir l'offre" → `onOpenExchange({ incomingOffer })`
+
+**`client/src/locales/fr.json` :**
+- `trade.window` : `ex_target_label`
+- `sidebar` : `exchangeOffer`, `exchangeOfferView`
+
+### Bugs résolus
+
+- **`findSocketByCharId` PNJ** : `user_id=null` → match impossible → offre jamais livrée → fallback GM socket
+- **TRANSFER_ACCEPTED GM** : `WHERE user_id=GM_id` ne matchait pas PNJ (`user_id=null`) → guard étendu avec `isGm && user_id=null`
+- **Auto-échange** : `initialContext.toCharId === myCharId` → bouton restait actif → guard `exTargetId === myCharId`
+
+### Testé
+- ExchangeWindow depuis RadialMenu → ouverture ✅
+- PJ propose échange vers PNJ GM → notification chat GM ✅
+- GM clique "Voir l'offre" → ExchangeWindow avec offre pré-chargée ✅
+- GM accepte offre PNJ → transaction ✅ (DBG-ACCEPT `ownerOk=true`)
+- Guard auto-échange (bouton disabled) ✅
+- Autocomplete : 3 lettres min + max 3 résultats ✅
+
+### Non testé
+- PJ↔PJ exchange (deux PJs connectés simultanément)
+- Expiration offre (timer 120s)
+- Decline / Cancel flow complet
+
+---
+
+## Session 126 — 2026-06-25 — Rechargement drone + cargo visible + ammo type
+
+### Contexte
+
+Continuation du système Trade : permettre au propriétaire d'un drone de lui transférer des munitions/charges depuis son propre inventaire. Visibilité du cargo sur la fiche drone. Améliorations DroneSheet.
+
+### Travail effectué
+
+**Migration 91 — `drone_sheet.charge_utile` + contrainte trade_log :**
+- `drone_sheet.charge_utile INTEGER NOT NULL DEFAULT 0` — capacité de charge en kg (0 = non configuré)
+- Contrainte `chk_trade_log_type` étendue : `'player_sell'` (existant non déclaré) + `'drone_reload'` (nouveau type)
+- Bug découvert : `tradeService.executeSell` utilisait `type='player_sell'` non listé dans la contrainte de migration 85 — corrigé dans la même migration 91
+
+**`shared/events.js` :**
+- `TRADE_DRONE_TRANSFER` + `TRADE_DRONE_TRANSFERRED` (v1 : ACK suffisant, broadcast non utilisé)
+
+**`server/src/socket/socketTrade.js` — handler `TRADE_DRONE_TRANSFER` :**
+- Guards : G1 (fromChar owner) → G2 (drone exists in campaign) → G3 (`drone.user_id === user.id`) → G4 (items non vide)
+- Transaction atomique : `UPDATE char_inventory SET character_id=droneId, container='Coffre', slot=null WHERE id=invId AND character_id=fromChar.id` — guard anti-spoofing implicite
+- `INSERT trade_log` type `'drone_reload'`
+- ACK callback, pas d'emit broadcast
+
+**`client/src/components/ExchangeWindow.jsx` :**
+- Filtre autocomplete : `c.type !== 'drone' || c.user_id === myUserId` — drones visibles uniquement par leur propriétaire
+- Flow drone : pas de sols, pas de timer, direct `TRADE_DRONE_TRANSFER` ACK
+- Bouton : `t('trade.window.drone_transfer')` si cible drone
+- Label reset Cas C : `sell_new` → `ex_new` ("Nouvel échange")
+
+**`client/src/character/DroneSheet.jsx` :**
+- StatField `charge_utile` dans grille FICHE (après échelle)
+- Section "Chargement" : liste items cargo + poids unitaire + total poids vs charge_utile — visible si `isGm || cargo.length > 0`
+- Bouton "Larguer" par item : `POST /char-sheet/:droneId/drone/cargo/:invId/drop` → retire du cargo + update state local
+- Props ajoutés : `cargo=[]`, `isOwner=false`, `onCargoUpdate`
+
+**`server/src/routes/character/char-sheet.js` :**
+- `GET /:characterId/drone/cargo` : `char_inventory LEFT JOIN ref_equipment WHERE character_id=droneId` → `{ items, total_weight }`
+- `POST /:characterId/drone/cargo/:invId/drop` : auth GM ou propriétaire → trouve PJ owner (`type='pj'`) → `getDefaultContainer` → `UPDATE char_inventory`
+- `PUT /:characterId/drone` : whitelist `charge_utile`
+
+**`client/src/character/DroneWindow.jsx` :**
+- State `cargo` + `api.get('/drone/cargo')` dans `Promise.all`
+- Props `cargo`, `isOwner`, `onCargoUpdate={setCargo}` passés à DroneSheet
+- WeaponsTab : colonne Ammo → `ammo_restant/contenance_chargeur · ref_caliber` (données déjà dans API)
+
+**`client/src/locales/fr.json` :**
+- Drone : `fieldChargeUtile`, `sectionCargo`, `cargoEmpty`, `cargoWeight`, `cargoCapacity`, `cargoDrop`, `cargoDropTitle`
+- Trade : `ex_new`, `drone_transfer`, `drone_transferred`
+
+### Testé
+- Transfert PJ → drone : item disparaît inventaire PJ, apparaît section Chargement ✅
+- Filtre autocomplete : drone non propriétaire invisible ✅
+- Flow drone : pas de champ sols, bouton "Transférer au drone" ✅
+- ACK ok → message "Transfert effectué" + rechargement inventaire ✅
+- Larguer → item revient dans sac PJ propriétaire ✅
+- Calibre + contenance visible onglet Armes ✅
+- StatField charge_utile éditable GM ✅
+- Label "Nouvel échange" dans ExchangeWindow ✅
+
+### Non testé
+- Drone sans propriétaire : guard `POST /drop` (400 côté serveur — non simulé)
+- charge_utile > 0 : dépassement de capacité non bloqué (v1 — affichage visuel seulement)
+
+---

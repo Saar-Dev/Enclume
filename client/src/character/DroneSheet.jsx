@@ -346,7 +346,7 @@ function ProgramsSection({ characterId, programs, isGm, onProgramsUpdate }) {
 }
 
 // ─── Composant principal DroneSheet ──────────────────────────────────────────
-export default function DroneSheet({ characterId, drone, programs, isGm, onDroneUpdate, onProgramsUpdate }) {
+export default function DroneSheet({ characterId, drone, programs, cargo = [], isGm, isOwner = false, onDroneUpdate, onProgramsUpdate, onCargoUpdate }) {
   const { t } = useTranslation()
 
   const handleSave = async (field, value) => {
@@ -388,6 +388,7 @@ export default function DroneSheet({ characterId, drone, programs, isGm, onDrone
           <StatField label={t('drone.fieldOrdGen')}        value={drone.ordinateur_gen}   field="ordinateur_gen"   isGm={isGm} onSave={handleSave} />
           <StatField label={t('drone.fieldOrdNt')}         value={drone.ordinateur_nt}    field="ordinateur_nt"    isGm={isGm} onSave={handleSave} />
           <StatField label={t('drone.fieldEchelle')}       value={drone.echelle}          field="echelle"          isGm={isGm} onSave={handleSave} />
+          <StatField label={t('drone.fieldChargeUtile')}  value={drone.charge_utile}     field="charge_utile"     isGm={isGm} onSave={handleSave} />
         </div>
       </section>
 
@@ -416,6 +417,57 @@ export default function DroneSheet({ characterId, drone, programs, isGm, onDrone
           onProgramsUpdate={onProgramsUpdate}
         />
       </section>
+
+      {/* Chargement (items transférés) */}
+      {(isGm || cargo.length > 0) && (
+        <section>
+          <h4 style={{ fontSize: '10px', color: '#5b8dee', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 10px', fontWeight: '600' }}>
+            {t('drone.sectionCargo')}
+          </h4>
+          {cargo.length === 0 ? (
+            <p style={{ fontSize: '12px', color: '#4a4a60', fontStyle: 'italic' }}>{t('drone.cargoEmpty')}</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {cargo.map(item => {
+                const name = item.custom_name || item.ref_name || '?'
+                const weight = item.ref_weight != null ? `${item.ref_weight * (item.quantity ?? 1)} kg` : '—'
+                const canDrop = isGm || isOwner
+                return (
+                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 0', borderBottom: '1px solid #1e1e2e', fontSize: '12px', color: '#c0c0d0' }}>
+                    <span style={{ flex: 1 }}>{name}</span>
+                    {(item.quantity ?? 1) > 1 && <span style={{ color: '#8888a8' }}>×{item.quantity}</span>}
+                    <span style={{ color: '#8888a8', flexShrink: 0 }}>{weight}</span>
+                    {canDrop && (
+                      <button
+                        className="btn-ghost"
+                        style={{ fontSize: '10px', padding: '1px 6px', flexShrink: 0 }}
+                        title={t('drone.cargoDropTitle')}
+                        onClick={async () => {
+                          try {
+                            await api.post(`/char-sheet/${characterId}/drone/cargo/${item.id}/drop`)
+                            if (onCargoUpdate) onCargoUpdate(prev => prev.filter(c => c.id !== item.id))
+                          } catch (err) { console.error('[DroneSheet] drop:', err.message) }
+                        }}
+                      >
+                        {t('drone.cargoDrop')}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '11px' }}>
+                <span style={{ color: '#8888a8' }}>{t('drone.cargoWeight')}</span>
+                <span style={{ color: '#c0c0d0', fontWeight: '600' }}>
+                  {cargo.reduce((s, i) => s + (i.ref_weight ?? 0) * (i.quantity ?? 1), 0)} kg
+                  {drone?.charge_utile > 0 && (
+                    <span style={{ color: '#4a4a60' }}> / {drone.charge_utile} kg</span>
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
     </div>
   )

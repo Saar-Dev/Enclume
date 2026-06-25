@@ -479,6 +479,7 @@ export default function Sidebar({
   onOpenCharacter,
   onEntityActionResolve,
   onOpenTrade,
+  onOpenExchange,
 }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
@@ -493,7 +494,8 @@ export default function Sidebar({
   const [toolsOpen, setToolsOpen] = useState(false)
   const [pendingActionCount, setPendingActionCount] = useState(0)
   const prevEntityActionCountRef = useRef(0)
-  const prevSellRequestCountRef = useRef(0)
+  const prevSellRequestCountRef    = useRef(0)
+  const prevExchangeOfferCountRef  = useRef(0)
   const [chatInput, setChatInput] = useState('')
   const [showHelp, setShowHelp] = useState(false)
 
@@ -603,13 +605,16 @@ export default function Sidebar({
   useEffect(() => {
     if (!isGm) return
     const entityCount = messages.filter(m => m.type === 'entity_action').length
-    const sellCount   = messages.filter(m => m.type === 'sell_request').length
+    const sellCount     = messages.filter(m => m.type === 'sell_request').length
+    const exchangeCount = messages.filter(m => m.type === 'exchange_offer').length
     let delta = 0
-    if (entityCount > prevEntityActionCountRef.current)  delta += entityCount - prevEntityActionCountRef.current
-    if (sellCount   > prevSellRequestCountRef.current)   delta += sellCount   - prevSellRequestCountRef.current
+    if (entityCount   > prevEntityActionCountRef.current)  delta += entityCount   - prevEntityActionCountRef.current
+    if (sellCount     > prevSellRequestCountRef.current)   delta += sellCount     - prevSellRequestCountRef.current
+    if (exchangeCount > prevExchangeOfferCountRef.current) delta += exchangeCount - prevExchangeOfferCountRef.current
     if (delta > 0) setPendingActionCount(prev => prev + delta)
-    prevEntityActionCountRef.current = entityCount
-    prevSellRequestCountRef.current  = sellCount
+    prevEntityActionCountRef.current   = entityCount
+    prevSellRequestCountRef.current    = sellCount
+    prevExchangeOfferCountRef.current  = exchangeCount
   }, [messages, isGm])
 
   // ─── ANIMATION dé — Option B ─────────────────────────────────────────────
@@ -1032,6 +1037,33 @@ export default function Sidebar({
                           }}
                         >
                           {t('sidebar.sellRequestView')}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                }
+                if (msg.type === 'exchange_offer') {
+                  return (
+                    <div key={msg.id} style={styles.messageAction}>
+                      <div style={styles.actionHeader}>
+                        <span style={styles.actionIcon}>🔄</span>
+                        <span style={styles.actionTitle}>
+                          {t('sidebar.exchangeOffer', { charName: msg.fromCharName })}
+                        </span>
+                        <span style={styles.msgTime}>{msg.time}</span>
+                      </div>
+                      <div style={styles.actionSub}>
+                        {msg.itemCount} objet{msg.itemCount !== 1 ? 's' : ''}{msg.solsOffer > 0 ? ` — ${msg.solsOffer} S` : ''}
+                      </div>
+                      <div style={styles.actionBtns}>
+                        <button
+                          style={styles.btnAccept}
+                          onClick={() => {
+                            setPendingActionCount(p => Math.max(0, p - 1))
+                            onOpenExchange?.({ incomingOffer: { offerId: msg.offerId, fromCharName: msg.fromCharName, items: msg.items, solsOffer: msg.solsOffer, expiresAt: msg.expiresAt, toCharId: msg.toCharId } })
+                          }}
+                        >
+                          {t('sidebar.exchangeOfferView')}
                         </button>
                       </div>
                     </div>

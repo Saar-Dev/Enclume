@@ -100,12 +100,29 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
       })
     }
 
+    // Notification échange PJ→PNJ(GM) ou PJ→PJ — routé par le serveur au destinataire
+    const onOfferReceived = ({ offerId, fromCharName, items = [], solsOffer, expiresAt, toCharId }) => {
+      addMessage({
+        id:           `exchange-offer-${offerId}`,
+        type:         'exchange_offer',
+        offerId,
+        fromCharName,
+        itemCount:    items.length,
+        items,
+        solsOffer,
+        expiresAt,
+        toCharId,
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      })
+    }
+
     socket.on(WS.MAP_SWITCH,              onMapSwitch)
     socket.on(WS.ENTITY_ACTION_PENDING,   onEntityActionPending)
     socket.on(WS.ENTITY_ACTION_RESULT,    onEntityActionResult)
     socket.on(WS.ENTITY_MOVE_RESULT,      onEntityMoveResult)
     socket.on(WS.DICE_RESULT,             onDiceResult)
     socket.on(WS.TRADE_SELL_REQUEST,      onSellRequest)
+    socket.on(WS.TRADE_OFFER_RECEIVED,    onOfferReceived)
 
     return () => {
       socket.off(WS.MAP_SWITCH,            onMapSwitch)
@@ -114,6 +131,7 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
       socket.off(WS.ENTITY_MOVE_RESULT,    onEntityMoveResult)
       socket.off(WS.DICE_RESULT,           onDiceResult)
       socket.off(WS.TRADE_SELL_REQUEST,    onSellRequest)
+      socket.off(WS.TRADE_OFFER_RECEIVED,  onOfferReceived)
     }
   }, [socket, setRadialMenu, setMoveTarget])
   // Pas de return — aucun état exposé

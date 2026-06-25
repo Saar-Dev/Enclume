@@ -14,6 +14,7 @@ const SELL_OFFER_TTL_SEC = 120
 async function findSocketByCharId(io, campaignId, charId) {
   const char = await db('characters').where({ id: charId }).select('user_id').first()
   if (!char) return null
+  if (!char.user_id) return findGmSocket(io, campaignId)
   const sockets = await io.in(campaignId).fetchSockets()
   return sockets.find(s => s.data.userId === char.user_id) ?? null
 }
@@ -26,7 +27,7 @@ async function findGmSocket(io, campaignId) {
 export function registerTradeHandlers(io, socket, context) {
   const { campaignId, user } = context
 
-  // PJ A → propose une offre à PJ B
+  // PJ A → propose une offre à PJ B (ou PNJ → GM)
   socket.on(WS.TRADE_TRANSFER_OFFER, async ({ fromCharId, toCharId, items = [], solsOffer = 0 }, callback) => {
     try {
       await tradeOfferLimiter.consume(user.id)
@@ -35,7 +36,6 @@ export function registerTradeHandlers(io, socket, context) {
       return
     }
     try {
-      // Vérifier que fromCharId appartient bien à cet utilisateur dans cette campagne
       const fromChar = await db('characters')
         .where({ campaign_id: campaignId, id: fromCharId, user_id: user.id })
         .select('id', 'name')
@@ -65,6 +65,7 @@ export function registerTradeHandlers(io, socket, context) {
           items,
           solsOffer,
           expiresAt:    offer.expires_at,
+          toCharId,
         })
       }
       if (typeof callback === 'function') callback({ ok: true, offerId: offer.id, expiresAt: offer.expires_at })
@@ -75,15 +76,20 @@ export function registerTradeHandlers(io, socket, context) {
     }
   })
 
-  // PJ B → accepte l'offre (transaction atomique)
+  // PJ B (ou GM pour PNJ) → accepte l'offre (transaction atomique)
   socket.on(WS.TRADE_TRANSFER_ACCEPTED, async ({ offerId, acceptingCharId }) => {
+    console.log(`[DBG-ACCEPT] entree — offerId=${offerId} acceptingCharId=${acceptingCharId} userId=${user.id} role=${socket.data.role}`)
     try {
-      // Vérifier que acceptingCharId appartient bien à cet utilisateur dans cette campagne
       const acceptingChar = await db('characters')
-        .where({ campaign_id: campaignId, id: acceptingCharId, user_id: user.id })
-        .select('id')
+        .where({ campaign_id: campaignId, id: acceptingCharId })
+        .select('id', 'user_id')
         .first()
-      if (!acceptingChar) {
+      console.log(`[DBG-ACCEPT] acceptingChar=${JSON.stringify(acceptingChar)}`)
+      const isGm = socket.data.role === 'gm'
+      const ownerOk = acceptingChar?.user_id === user.id || (isGm && acceptingChar?.user_id === null)
+      console.log(`[DBG-ACCEPT] isGm=${isGm} ownerOk=${ownerOk}`)
+      if (!acceptingChar || !ownerOk) {
+        console.log('[DBG-ACCEPT] → OFFER_NOT_FOUND')
         socket.emit(WS.TRADE_ERROR, { code: 'OFFER_NOT_FOUND' })
         return
       }
@@ -344,6 +350,62 @@ export function registerTradeHandlers(io, socket, context) {
     } catch (err) {
       console.error('[TRADE] SELL_DECLINED error:', err.message)
       socket.emit(WS.TRADE_ERROR, { code: 'SERVER_ERROR', message: err.message })
+    }
+  })
+
+  // PJ owner → recharger son drone (transfert immédiat, sans offre ni TTL)
+  socket.on(WS.TRADE_DRONE_TRANSFER, async ({ fromCharId, droneCharId, items = [] }, callback) => {
+    try {
+      const fromChar = await db('characters')
+        .where({ campaign_id: campaignId, id: fromCharId, user_id: user.id })
+        .select('id', 'name')
+        .first()
+      if (!fromChar) {
+        if (typeof callback === 'function') callback({ ok: false, code: 'CHAR_NOT_FOUND' })
+        return
+      }
+      const drone = await db('characters')
+        .where({ campaign_id: campaignId, id: droneCharId })
+        .select('id', 'name', 'user_id')
+        .first()
+      if (!drone) {
+        if (typeof callback === 'function') callback({ ok: false, code: 'DRONE_NOT_FOUND' })
+        return
+      }
+      if (drone.user_id !== user.id) {
+        if (typeof callback === 'function') callback({ ok: false, code: 'UNAUTHORIZED' })
+        return
+      }
+      if (items.length === 0) {
+        if (typeof callback === 'function') callback({ ok: false, code: 'EMPTY_ITEMS' })
+        return
+      }
+      await db.transaction(async (trx) => {
+        for (const invId of items) {
+          const updated = await trx('char_inventory')
+            .where({ id: invId, character_id: fromChar.id })
+            .update({ character_id: droneCharId, container: 'Coffre', slot: null })
+          if (!updated) throw new Error('ITEM_UNAVAILABLE')
+        }
+        await trx('trade_log').insert({
+          campaign_id:  campaignId,
+          type:         'drone_reload',
+          from_char_id: fromChar.id,
+          to_char_id:   drone.id,
+          sols_delta:   0,
+          items_json:   JSON.stringify(items),
+          created_at:   new Date(),
+        })
+      })
+      if (typeof callback === 'function') callback({ ok: true })
+    } catch (err) {
+      const knownCodes = ['ITEM_UNAVAILABLE', 'CHAR_NOT_FOUND', 'DRONE_NOT_FOUND', 'UNAUTHORIZED', 'EMPTY_ITEMS']
+      if (knownCodes.includes(err.message)) {
+        if (typeof callback === 'function') callback({ ok: false, code: err.message })
+      } else {
+        console.error('[TRADE] DRONE_TRANSFER error:', err.message)
+        if (typeof callback === 'function') callback({ ok: false, code: 'SERVER_ERROR' })
+      }
     }
   })
 

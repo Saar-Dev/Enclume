@@ -1596,6 +1596,7 @@ router.put('/:characterId/drone', async (req, res, next) => {
       blindage, blindage_iem, armure_materiau,
       ordinateur_gen, ordinateur_nt,
       echelle, integrite_max, equip_special, notes_gm,
+      charge_utile,
     } = req.body
 
     const updates = {
@@ -1604,6 +1605,7 @@ router.put('/:characterId/drone', async (req, res, next) => {
       blindage, blindage_iem, armure_materiau,
       ordinateur_gen, ordinateur_nt,
       echelle, integrite_max, equip_special, notes_gm,
+      charge_utile,
     }
     Object.keys(updates).forEach(k => updates[k] === undefined && delete updates[k])
     if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
@@ -1614,6 +1616,60 @@ router.put('/:characterId/drone', async (req, res, next) => {
       .returning('*')
 
     res.json({ drone })
+  } catch (err) { next(err) }
+})
+
+// GET /:characterId/drone/cargo — items transférés dans le drone (char_inventory, container Coffre)
+// Lecture ouverte à tous les membres (même règle que les autres GET drone).
+router.get('/:characterId/drone/cargo', async (req, res, next) => {
+  try {
+    const items = await db('char_inventory')
+      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .where({ 'char_inventory.character_id': req.params.characterId })
+      .select(
+        'char_inventory.id',
+        'char_inventory.equipment_id',
+        'char_inventory.quantity',
+        'char_inventory.custom_name',
+        'ref_equipment.name as ref_name',
+        'ref_equipment.family as ref_family',
+        'ref_equipment.weight as ref_weight',
+      )
+      .orderBy('char_inventory.created_at', 'asc')
+
+    const total_weight = items.reduce((sum, item) =>
+      sum + (item.ref_weight ?? 0) * (item.quantity ?? 1), 0)
+
+    res.json({ items, total_weight })
+  } catch (err) { next(err) }
+})
+
+// POST /:characterId/drone/cargo/:invId/drop — retourne un item vers le sac du propriétaire
+// Auth : GM ou propriétaire du drone (user_id).
+router.post('/:characterId/drone/cargo/:invId/drop', async (req, res, next) => {
+  try {
+    const drone = req.character
+    if (!req.isGm && (drone.user_id == null || drone.user_id !== req.user.id)) {
+      throw new AppError(403, 'Seul le propriétaire ou le GM peut larguer des items')
+    }
+    if (drone.user_id == null) {
+      throw new AppError(400, "Ce drone n'a pas de propriétaire — impossible de larguer")
+    }
+
+    const ownerChar = await db('characters')
+      .where({ campaign_id: drone.campaign_id, user_id: drone.user_id, type: 'pj' })
+      .select('id')
+      .first()
+    if (!ownerChar) throw new AppError(404, 'Personnage propriétaire introuvable')
+
+    const container = await getDefaultContainer(ownerChar.id)
+
+    const updated = await db('char_inventory')
+      .where({ id: req.params.invId, character_id: drone.id })
+      .update({ character_id: ownerChar.id, container, slot: null })
+    if (!updated) throw new AppError(404, 'Item introuvable dans le cargo')
+
+    res.json({ ok: true })
   } catch (err) { next(err) }
 })
 

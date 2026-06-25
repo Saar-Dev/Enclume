@@ -145,4 +145,7 @@ export const WS = {
   TRADE_OFFER_EXPIRED:    'trade:offer_expired',      // serveur → sockets A+B : offre expirée
   TRADE_LOG_UPDATED:      'trade:log_updated',        // serveur → GM only : nouvelle entrée trade_log
   TRADE_ERROR:            'trade:error',              // serveur → socket émetteur : erreur métier
+  // Rechargement drone (owner → drone, immédiat, sans offre)
+  TRADE_DRONE_TRANSFER:   'trade:drone_transfer',     // PJ owner → serveur
+  TRADE_DRONE_TRANSFERRED:'trade:drone_transferred',  // serveur → socket owner : confirmé (non utilisé v1 — ACK suffisant)
 }

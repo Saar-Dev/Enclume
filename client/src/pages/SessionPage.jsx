@@ -32,6 +32,7 @@ import TokenStatusPanel from '../components/TokenStatusPanel'
 import EntityInstancePanel from '../components/EntityInstancePanel'
 import CombatOverlay from '../components/CombatOverlay'
 import TradeWindow from '../components/TradeWindow'
+import ExchangeWindow from '../components/ExchangeWindow'
 
 export default function SessionPage() {
   const { campaignId } = useParams()
@@ -68,6 +69,8 @@ function SessionContent({ campaignId }) {
   const [layer, setLayer] = useState('token')
   const [tradeWindowOpen,    setTradeWindowOpen]    = useState(false)
   const [tradeInitialContext, setTradeInitialContext] = useState(null)
+  const [exchangeWindowOpen,  setExchangeWindowOpen]  = useState(false)
+  const [exchangeContext,     setExchangeContext]     = useState(null)
   const [activeEditorTab, setActiveEditorTab] = useState('voxel') // 'voxel' | 'entity'
   // canvasVisible : false pendant la transition play↔edit — force le démontage
   // complet du Canvas actif avant que le suivant monte (évite le double contexte WebGL)
@@ -550,6 +553,7 @@ function SessionContent({ campaignId }) {
           onOpenCharacter={openSheet}
           onEntityActionResolve={handleEntityActionResolve}
           onOpenTrade={(ctx) => { setTradeInitialContext(ctx ?? null); setTradeWindowOpen(true) }}
+          onOpenExchange={(ctx) => { setExchangeContext(ctx ?? null); setExchangeWindowOpen(true) }}
         />
       )}
 
@@ -580,8 +584,8 @@ function SessionContent({ campaignId }) {
             onOpenStatusPanel={() => setStatusPanel({ tokenId: contextMenu.token.id, x: contextMenu.x, y: contextMenu.y })}
             onViser={handleViser}
             onOpenExchange={() => {
-              setTradeInitialContext({ mode: 'exchange', toCharId: contextMenu.token.character_id ?? null })
-              setTradeWindowOpen(true)
+              setExchangeContext({ toCharId: contextMenu.token.character_id ?? null })
+              setExchangeWindowOpen(true)
             }}
             onClose={() => setContextMenu(null)}
           />
@@ -839,6 +843,18 @@ function SessionContent({ campaignId }) {
           gmSocketError={gmSocketError}
           onGmSocketErrorClose={() => setGmSocketError(null)}
           sidebarWidth={sidebarVisible ? sidebarWidth : 0}
+        />
+      )}
+
+      {/* ─── ExchangeWindow — fenêtre d'échange PJ↔PJ (RadialMenu) ─────── */}
+      {exchangeWindowOpen && (
+        <ExchangeWindow
+          campaignId={campaignId}
+          socket={socket}
+          onClose={() => setExchangeWindowOpen(false)}
+          myCharId={myCharId}
+          characters={characters}
+          initialContext={exchangeContext}
         />
       )}
 

@@ -1,3 +1,30 @@
+## v136 — 2026-06-25 — Rechargement drone + cargo visible
+
+### Client
+- [feat] `ExchangeWindow` — transfert vers drone : filtre destinataires (drone visible uniquement par son propriétaire), flow sans sols ni timer, bouton "Transférer au drone"
+- [feat] `DroneSheet` FICHE — champ "Charge utile (kg)" éditable GM
+- [feat] `DroneSheet` FICHE — section "Chargement" : liste items cargo + poids total vs capacité
+- [feat] `DroneSheet` FICHE — bouton "Larguer" par item → retour dans sac du propriétaire
+- [feat] `DroneWindow` Armes — ammo restant/contenance + calibre affiché par arme
+- [fix] `ExchangeWindow` — bouton reset "Nouvelle vente" renommé "Nouvel échange"
+
+### Serveur
+- [feat] `socketTrade.js` — handler `TRADE_DRONE_TRANSFER` : transfert immédiat PJ→drone (guard propriétaire + transaction atomique)
+- [feat] `char-sheet.js` — `GET /drone/cargo` : inventaire du drone (items + poids total)
+- [feat] `char-sheet.js` — `POST /drone/cargo/:invId/drop` : largage item → sac PJ propriétaire
+- [fix] Migration 91 — contrainte `trade_log.type` corrigée (`player_sell` manquant depuis migration 85)
+
+## v135 — 2026-06-25 — ExchangeWindow : fenêtre d'échange PJ↔PNJ/PJ + notification GM
+
+### Client
+- [feat] `ExchangeWindow.jsx` — fenêtre d'échange standalone (RadialMenu "Échange") : composer offre, timer, Accept/Decline, autocomplete destinataire (≥3 lettres, max 3 résultats)
+- [feat] `Sidebar.jsx` — notification chat GM lors d'une offre d'échange reçue → "Voir l'offre" ouvre ExchangeWindow
+- [fix] Guard auto-échange : impossible d'envoyer une offre à soi-même
+
+### Serveur
+- [fix] `socketTrade.js` `findSocketByCharId` — PNJ `user_id=null` → fallback socket GM (offre désormais livrée)
+- [fix] `socketTrade.js` `TRADE_TRANSFER_ACCEPTED` — GM peut accepter une offre au nom d'un PNJ
+
 ## v134 — 2026-06-25 — VENTE PJ→GM : notification GM + contre-offre + achat ×10 munitions
 
 ### Client

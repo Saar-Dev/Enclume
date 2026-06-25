@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-25 Session 125
+> Dernière mise à jour : 2026-06-25 Session 126
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -146,17 +146,25 @@
    → Testé : achat ✅, vente proposition→acceptation ✅, ×10 munitions ✅
    → Non testé : contre-offre flux complet, restauration état rechargement, expiration 120s
 
-**32. ← PROCHAINE ÉTAPE : cluster suivant selon priorité**
+**32. ~~Rechargement drone + cargo visible + ammo type ✅ Session 126~~**
+   → Migration 91 : `drone_sheet.charge_utile` + `trade_log` CHECK étendu (`player_sell` + `drone_reload`)
+   → `TRADE_DRONE_TRANSFER` handler (immédiat, guard propriétaire, transaction atomique)
+   → `ExchangeWindow` : filtre drones par owner + flow drone (no sols, no timer)
+   → `GET /drone/cargo` + `POST /drone/cargo/:invId/drop` (Larguer vers sac)
+   → DroneSheet : StatField charge_utile + section Chargement + bouton Larguer
+   → WeaponsTab : ammo_restant/contenance + calibre affiché
+
+**33. ← PROCHAINE ÉTAPE : cluster suivant selon priorité**
    → Validation STUN2 en session combat réelle
    → Contre-offre flux complet (test session réelle)
-   → Ou bugs actifs BUGIDENTIFIE.md
+   → Cluster Drone P (DR7/DR8/DR9/DR10) ou bugs actifs BUGIDENTIFIE.md
 
 ---
 
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **88 migrations appliquées** (87 = ref_equipment.generation — Session 124 Trade)
+- **91 migrations appliquées** (91 = drone_sheet.charge_utile + trade_log constraint — Session 126)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---

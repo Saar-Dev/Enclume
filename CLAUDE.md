@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 118 — 2026-06-23
+> Session 126 — 2026-06-25
 
 ---
 
@@ -104,10 +104,33 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 125 (2026-06-25)
+## ÉTAT COURANT — Session 126 (2026-06-25)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **90 migrations stables** (90 = trade_offers counter_offer — Session 125 suite)
+- **91 migrations stables** (91 = drone_sheet.charge_utile + trade_log constraint — Session 126)
+
+**Session 126 — Rechargement drone + cargo visible + calibre armes ✅ :**
+- Migration 91 : `drone_sheet.charge_utile INTEGER DEFAULT 0` + contrainte `chk_trade_log_type` corrigée (`player_sell` + `drone_reload`)
+- `shared/events.js` : +2 constantes `TRADE_DRONE_TRANSFER` / `TRADE_DRONE_TRANSFERRED`
+- `socketTrade.js` : handler `TRADE_DRONE_TRANSFER` — guards G1–G4 + transaction atomique `char_inventory` + `trade_log type='drone_reload'` + ACK
+- `char-sheet.js` : `PUT /:characterId/drone` → `charge_utile` + `GET /drone/cargo` + `POST /drone/cargo/:invId/drop`
+- `DroneSheet.jsx` : champ `charge_utile` (stats) + section Chargement (cargo + poids + bouton Larguer)
+- `DroneWindow.jsx` : fetch cargo + props `cargo`/`isOwner`/`onCargoUpdate` + WeaponsTab calibre+chargeur
+- `ExchangeWindow.jsx` : branche drone (autocomplete filtré owner) + `handleProposeOffer` drone → ACK + bouton i18n
+- `fr.json` : +7 clés `drone.*` + 3 clés `trade.window.*` (`ex_new`, `drone_transfer`, `drone_transferred`)
+- **Testé :** transfert PJ→drone ✅, larguer→sac ✅, cargo visible DroneSheet ✅, calibre armes ✅
+- **Non testé :** enforcement capacité charge_utile (v1 affichage seul)
+- **Prochaine étape** : validation STUN2 en session réelle ou cluster bugs suivant
+
+**Session 125 suite 2 — ExchangeWindow + notification GM échange ✅ :**
+- `ExchangeWindow.jsx` : nouveau composant standalone (RadialMenu "Échange") — 4 cas UI + autocomplete (≥3 lettres, max 3, label "Destinataire")
+- `SessionPage.jsx` : import + 2 états + `onOpenExchange` RadialMenu + Sidebar + mount block
+- `socketTrade.js` : `findSocketByCharId` fallback GM si PNJ `user_id=null` + `toCharId` dans payload + guard GM accepte pour PNJ + logs `[DBG-ACCEPT]` conservés
+- `useEntitySocket.js` : listener `TRADE_OFFER_RECEIVED` → `addMessage({ type: 'exchange_offer' })`
+- `Sidebar.jsx` : prop `onOpenExchange` + badge `exchange_offer` + rendu notification "Voir l'offre"
+- Guard auto-échange : `exTargetId === myCharId` → disabled
+- **Échange PJ↔PNJ GM testé ✅** — propose → notif chat → accepte
+- **Prochaine étape** : validation STUN2 en session réelle ou cluster bugs suivant
 
 **Session 125 suite — VENTE PJ→GM ✅ + achat ×10 munitions ✅ :**
 - Migration 90 : `trade_offers.counter_sols` + `merchant_id` + status `COUNTER_OFFERED`
@@ -117,7 +140,6 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - `Sidebar.jsx` : rendu notification sell_request + badge + "Voir l'offre" → TradeWindow Reventes
 - `TradeWindow.jsx` : réécriture complète — VENTE PJ + REVENTES GM (récap + contre-offre) + `+10` munitions
 - **Section Marchands complète ✅** (achat ✅, vente ✅, contre-offre architecture DB ✅)
-- **Prochaine étape** : validation STUN2 en session réelle ou cluster bugs suivant
 
 **Session 125 — PLAN_TRADE étapes 10–11 ✅ + bugfixes Trade :**
 - Étape 10 : `TradeWindow.jsx` vue Échange PJ↔PJ — proposer/accepter/refuser/annuler + timer expiration + listeners WS
