@@ -321,7 +321,9 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
 // ─── Onglet Paramètres ───────────────────────────────────────────────────────
 function SettingsTab({ character, isGm, members, removeCharacter, updateCharacter, onClose }) {
   const { t } = useTranslation()
-  const [glbUploading, setGlbUploading] = useState(false)
+  const [glbStatus, setGlbStatus] = useState(null) // null | 'uploading' | 'success' | 'error'
+  const glbTimerRef = useRef(null)
+  useEffect(() => () => clearTimeout(glbTimerRef.current), [])
 
   const handleOwnerChange = async (e) => {
     const user_id = e.target.value || null
@@ -333,16 +335,20 @@ function SettingsTab({ character, isGm, members, removeCharacter, updateCharacte
   const handleGlbUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setGlbUploading(true)
+    clearTimeout(glbTimerRef.current)
+    setGlbStatus('uploading')
     try {
       const formData = new FormData()
       formData.append('glb', file)
       const res = await api.post(`/characters/${character.id}/glb`, formData)
       updateCharacter(res.data.character)
-    } catch (err) { console.error(err) }
-    finally {
-      setGlbUploading(false)
+      setGlbStatus('success')
+    } catch (err) {
+      console.error(err)
+      setGlbStatus('error')
+    } finally {
       e.target.value = ''
+      glbTimerRef.current = setTimeout(() => setGlbStatus(null), 3000)
     }
   }
 
@@ -389,23 +395,27 @@ function SettingsTab({ character, isGm, members, removeCharacter, updateCharacte
         <label style={{
           display: 'inline-block',
           padding: '8px 14px',
-          background: 'rgba(91,141,238,0.1)',
-          border: '1px solid rgba(91,141,238,0.3)',
+          background: glbStatus === 'success' ? 'rgba(76,175,80,0.1)' : glbStatus === 'error' ? 'rgba(224,92,92,0.1)' : 'rgba(91,141,238,0.1)',
+          border: `1px solid ${glbStatus === 'success' ? 'rgba(76,175,80,0.3)' : glbStatus === 'error' ? 'rgba(224,92,92,0.3)' : 'rgba(91,141,238,0.3)'}`,
           borderRadius: '6px',
-          color: '#5b8dee',
+          color: glbStatus === 'success' ? '#4caf77' : glbStatus === 'error' ? '#e05c5c' : '#5b8dee',
           fontSize: '12px',
-          cursor: glbUploading ? 'default' : 'pointer',
-          opacity: glbUploading ? 0.5 : 1,
+          cursor: glbStatus === 'uploading' ? 'default' : 'pointer',
+          opacity: glbStatus === 'uploading' ? 0.5 : 1,
           userSelect: 'none',
           alignSelf: 'flex-start',
+          transition: 'background 0.2s, border-color 0.2s, color 0.2s',
         }}>
-          {glbUploading ? t('character.glbUploading') : t('character.glbUpload')}
+          {glbStatus === 'uploading' ? t('character.glbUploading')
+            : glbStatus === 'success' ? t('character.glbSuccess')
+            : glbStatus === 'error'   ? t('character.glbError')
+            : t('character.glbUpload')}
           <input
             type="file"
             accept=".glb"
             style={{ display: 'none' }}
             onChange={handleGlbUpload}
-            disabled={glbUploading}
+            disabled={glbStatus === 'uploading'}
           />
         </label>
       )}

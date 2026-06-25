@@ -88,7 +88,8 @@
     "combatEnd": "Terminer le combat",
     "combatMode": "Mode Combat",
     "combat": "Combat",
-    "openSidebar": "Ouvrir la sidebar"
+    "openSidebar": "Ouvrir la sidebar",
+    "trade": "Commerce"
   },
   "dice": {
     "roll": "Lancer",
@@ -231,6 +232,8 @@
     "portraitUploading": "Envoi en cours...",
     "glbUpload": "Changer le modèle 3D",
     "glbUploading": "Envoi en cours...",
+    "glbSuccess": "Modèle mis à jour ✓",
+    "glbError": "Échec de l'envoi",
     "xp": {
       "title": "Expérience",
       "total": "XP reçus",
@@ -731,6 +734,33 @@
       "errorLoad": "Impossible de charger les marchands",
       "errorSave": "Erreur lors de la sauvegarde",
       "errorDelete": "Erreur lors de la suppression"
+    },
+    "window": {
+      "title": "COMMERCE",
+      "tab_merchants": "Marchands",
+      "tab_journal": "Journal",
+      "status_open": "OUVERT",
+      "status_closed": "FERMÉ",
+      "mod_label": "mod",
+      "btn_save": "Sauv.",
+      "log_empty": "Aucune transaction",
+      "filter_all": "Tous",
+      "filter_buy": "Achat",
+      "filter_transfer": "Échange PJ",
+      "filter_grant": "Don GM",
+      "no_merchant": "— Choisissez un marchand —",
+      "catalog_loading": "Chargement...",
+      "catalog_empty": "Catalogue vide",
+      "detail_weight": "Poids",
+      "detail_nt": "NT",
+      "detail_gen": "Gén.",
+      "detail_rarity": "Rareté",
+      "cart_empty": "Panier vide",
+      "cart_total": "Total :",
+      "cart_checkout": "Acheter",
+      "cart_insufficient": "Fonds insuffisants",
+      "cart_merchant_closed": "Marchand fermé",
+      "cart_success": "Achat confirmé !"
     }
   },
   "health": {

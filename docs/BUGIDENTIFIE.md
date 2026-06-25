@@ -124,15 +124,11 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 ---
 
-### Bug D2 — Token drone : changement de GLB non fonctionnel
+### ~~Bug D2~~ ✅ CLOS — Token drone : changement de GLB non fonctionnel
 
-**Symptôme** : Upload d'un nouveau GLB pour un drone via DroneWindow → token 3D ne se met pas à jour visuellement + Ajouter une notification d'upload réussi ou échoué
-
-**Code impliqué** : `Canvas3D.jsx:879` — `characters.find(c => c.id === token.character_id)` pour calculer `glbUrl`. `Canvas3D.jsx:246` — `key={glbUrl}` sur `TokenGlbErrorBoundary`.
-
-**Cause racine** [HYPOTHÈSE] : Même cause racine que D1. Si le drone n'est pas trouvé dans `characters`, `glbUrl = defaultTokenGlbUrl` → `key` ne change jamais → pas de remontage → pas de rechargement GLB.
-
-**Fix partiel appliqué** : `key={glbUrl}` sur `TokenGlbErrorBoundary` + `updateCharacter(res.data.character)` dans `DroneWindow.SettingsTab.handleGlbUpload`. Inefficace tant que D1 n'est pas résolu.
+**Clos Session 124** :
+- Token 3D : rechargement automatique via `key={glbUrl}` L.248 Canvas3D + `updateCharacter` dans `handleGlbUpload` — opérationnel depuis fix D1 (find drone dans characters maintenant fonctionnel)
+- Notification upload : `glbStatus` (null|uploading|success|error) dans SettingsTab + timer ref cleanup + `glbSuccess/glbError` i18n + label coloré avec transition
 
 ---
 

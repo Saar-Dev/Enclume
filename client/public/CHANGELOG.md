@@ -1,3 +1,29 @@
+## v131 — 2026-06-25 — Trade : TradeWindow vue Joueur (catalogue + panier + checkout)
+
+### Client
+- [feat] `TradeWindow.jsx` — vue Joueur : sélecteur marchand (OPEN + autorisé), catalogue navigable par famille, détail item inline (poids / NT / gén / rareté), panier + bouton Acheter (débit sols + ajout inventaire)
+- [refactor] `SessionPage.jsx` — `myCharId` derivé + props `isGm` / `myCharId` transmis à TradeWindow + condition `{tradeWindowOpen &&` (préparation déclencher radial étape 11)
+- [i18n] `fr.json` — +13 clés `trade.window.*` (vue joueur)
+
+---
+
+## v130 — 2026-06-25 — Trade : TradeWindow vue GM lite
+
+### Client
+- [feat] `TradeWindow.jsx` — fenêtre flottante draggable in-session : onglet Marchands (toggle OUVERT/FERMÉ + modificateur prix à chaud) + onglet Journal (livre de compte filtrable par type, pagination)
+- [feat] `SessionPage.jsx` — bouton "Commerce" dans la barre GM (toggle)
+- [i18n] `fr.json` — +13 clés `trade.window.*`
+
+---
+
+## v129 — 2026-06-25 — Drone : notification upload GLB + rechargement token 3D
+
+### Client
+- [fix] `DroneWindow` onglet Paramètres : indicateur visuel upload GLB — "En cours..." / vert "Modèle mis à jour ✓" / rouge "Échec de l'envoi" — reset auto 3s
+- [fix] Token drone 3D se recharge automatiquement après upload GLB réussi
+
+---
+
 ## v128 — 2026-06-25 — Système Trade : marchands + échanges PJ↔PJ
 
 ### Serveur

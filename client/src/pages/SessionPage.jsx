@@ -31,6 +31,7 @@ import TokenRadialMenu from '../components/TokenRadialMenu'
 import TokenStatusPanel from '../components/TokenStatusPanel'
 import EntityInstancePanel from '../components/EntityInstancePanel'
 import CombatOverlay from '../components/CombatOverlay'
+import TradeWindow from '../components/TradeWindow'
 
 export default function SessionPage() {
   const { campaignId } = useParams()
@@ -54,6 +55,7 @@ function SessionContent({ campaignId }) {
   const { phase: combatPhase } = useCombatStore()
   const { setDocuments } = useLibraryStore()
   const { campaign, setCampaign } = useCampaignStore()
+  const myCharId = characters.find(c => c.user_id === user?.id)?.id ?? null
   const [loading, setLoading] = useState(true)
   const [statusPanel, setStatusPanel] = useState(null)
 
@@ -64,6 +66,7 @@ function SessionContent({ campaignId }) {
 
   const [mode, setMode] = useState('play')
   const [layer, setLayer] = useState('token')
+  const [tradeWindowOpen, setTradeWindowOpen] = useState(false)
   const [activeEditorTab, setActiveEditorTab] = useState('voxel') // 'voxel' | 'entity'
   // canvasVisible : false pendant la transition play↔edit — force le démontage
   // complet du Canvas actif avant que le suivant monte (évite le double contexte WebGL)
@@ -442,9 +445,16 @@ function SessionContent({ campaignId }) {
             ))}
           </div>
           <button
+            onClick={() => setTradeWindowOpen(v => !v)}
+            className={tradeWindowOpen ? 'btn btn-gold' : 'btn btn-ghost'}
+            style={{ marginLeft: 'auto', flexShrink: 0 }}
+          >
+            {t('session.trade')}
+          </button>
+          <button
             onClick={handleCombatToggle}
             className={mode === 'combat' ? 'btn btn-danger' : 'btn'}
-            style={{ marginLeft: 'auto', flexShrink: 0 }}
+            style={{ flexShrink: 0 }}
             title={mode === 'combat' && combatPhase !== null ? t('session.combatEnd') : t('session.combatMode')}
           >
             {mode === 'combat' && combatPhase !== null ? `✕ ${t('session.combat')}` : `⚔ ${t('session.combat')}`}
@@ -830,6 +840,17 @@ function SessionContent({ campaignId }) {
           gmSocketError={gmSocketError}
           onGmSocketErrorClose={() => setGmSocketError(null)}
           sidebarWidth={sidebarVisible ? sidebarWidth : 0}
+        />
+      )}
+
+      {/* ─── TradeWindow — GM lite (étape 11 : déclenché via radial menu) ── */}
+      {tradeWindowOpen && (
+        <TradeWindow
+          campaignId={campaignId}
+          socket={socket}
+          onClose={() => setTradeWindowOpen(false)}
+          isGm={isGm}
+          myCharId={myCharId}
         />
       )}
 

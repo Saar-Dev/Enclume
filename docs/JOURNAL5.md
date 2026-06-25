@@ -1088,3 +1088,115 @@ Handlers WS PJ↔PJ (pas de session combat réelle) — `buyFromMerchant` (pas d
 PLAN_TRADE étapes 8–11 : `TradeWindow.jsx` (vue GM lite + vue Joueur + vue Échange PJ↔PJ) + menu radial
 
 ---
+
+## Session 124 (suite) — D1 ✅ + D2 ✅ (Drone : fiche + GLB upload)
+
+### D1 ✅ CLOS — Menu radial "fiche" drone
+- Clos hors session (fix mismatch type `character_id` string/number dans SessionPage IIFE)
+- Docs mises à jour : BUGIDENTIFIE.md + EN_COURS.md
+
+### D2 ✅ CLOS — Token drone : changement GLB + notification upload
+**Fichiers modifiés :** `DroneWindow.jsx` (SettingsTab) + `fr.json`
+
+#### Token 3D (déjà en place, débloqué par D1)
+- `Canvas3D.jsx` L.248 : `key={glbUrl}` sur `TokenGlbErrorBoundary` — remontage forcé au changement d'URL
+- `DroneWindow.SettingsTab.handleGlbUpload` : `updateCharacter(res.data.character)` → store mis à jour → `glbUrl` recalculé → token rechargé
+
+#### Notification upload
+- `glbUploading: boolean` → `glbStatus: null | 'uploading' | 'success' | 'error'`
+- `glbTimerRef` (useRef) : stocke le timeout de reset + cleanup `useEffect(() => () => clearTimeout(...), [])`
+- `handleGlbUpload` : `clearTimeout` en début → `'uploading'` → try `'success'` / catch `'error'` → finally `e.target.value=''` + `setTimeout(null, 3000)`
+- Label coloré : null=bleu / uploading=bleu+opacity0.5 / success=vert `#4caf77` / error=rouge `#e05c5c` — transition 0.2s
+- i18n : `character.glbSuccess` "Modèle mis à jour ✓" + `character.glbError` "Échec de l'envoi"
+
+### Testé
+SR ✅ — notification "En cours..." ✅ — "Modèle mis à jour ✓" vert ✅ — retour bleu après 3s ✅ — rechargement token 3D ✅
+
+### Non testé
+Cas d'échec réseau (couleur rouge non testée en conditions réelles)
+
+### Prochaine étape
+PLAN_TRADE étapes 8–11 ou cluster suivant selon priorité
+
+---
+
+## Session 124 (suite) — PLAN_TRADE étape 8 ✅ — TradeWindow vue GM lite
+
+### Objectif
+Créer `TradeWindow.jsx` — fenêtre flottante draggable in-session pour le GM — vue lite : ajustements à chaud des marchands + livre de compte.
+
+### Fichiers créés / modifiés
+- `client/src/components/TradeWindow.jsx` — créé (~200L)
+- `client/src/pages/SessionPage.jsx` — import + `tradeWindowOpen` state + bouton "Commerce" gmBar + rendu conditionnel
+- `client/src/locales/fr.json` — +`session.trade` + section `trade.window.*` (13 clés)
+
+### Détails techniques
+**TradeWindow.jsx**
+- Shell `className="combat-win"` + `useDraggable('trade-window-pos', ...)` — panel 480px, position persistée localStorage
+- 2 tabs : `marchands` | `journal`
+
+**Tab Marchands**
+- `GET /api/campaigns/:id/merchants` au mount
+- State `drafts = { [id]: { status, mod_global } }` pour éditions locales non encore sauvegardées
+- Par marchand : nom + badge OUVERT/FERMÉ (toggle click) + input `mod_global` + bouton "Sauv." grisé si propre
+- `PUT /api/campaigns/:id/merchants/:mid` → met à jour `merchants` + supprime le draft
+
+**Tab Journal**
+- `GET /api/campaigns/:id/trade-log?page=N&type=...` chargé à l'ouverture du tab + sur changement filtre/page
+- Filtres : Tous | Achat | Échange PJ | Don GM
+- Pagination (PAGE_SIZE = 50 — aligné service)
+- Listener WS `TRADE_LOG_UPDATED` → prepend entry (pour transfers PJ↔PJ temps réel)
+
+**Intégration SessionPage.jsx**
+- Bouton "Commerce" dans la gmBar (GM only) — toggle — remplacé par menu radial en étape 11
+- `{isGm && tradeWindowOpen && <TradeWindow ... />}` après CombatOverlay
+
+### Testé
+SR ✅ — bouton Commerce visible GM ✅ — fenêtre draggable ✅ — toggle statut OUVERT/FERMÉ ✅ — mod_global éditable + sauvegardé ✅ — tab Journal avec filtres ✅
+
+### Non testé
+Livre de compte avec vraies transactions (aucune en base lors du test) — affichage "Aucune transaction" confirmé ✅
+
+### Prochaine étape
+PLAN_TRADE étape 9 : `TradeWindow.jsx` vue Joueur — sélecteur marchand + catalogue + panier + checkout
+
+---
+
+## Session 124 (suite) — PLAN_TRADE étape 9 ✅ — TradeWindow vue Joueur
+
+### Objectif
+Ajouter la vue Joueur dans `TradeWindow.jsx` : sélecteur marchand (filtré serveur), catalogue navigable (FAM→items), panneau détail inline, panier + checkout atomique.
+
+### Fichiers modifiés
+- `client/src/components/TradeWindow.jsx` — réécriture complète (+150L vue joueur)
+- `client/src/pages/SessionPage.jsx` — `myCharId` derivé + condition `{tradeWindowOpen &&` (sans `isGm &&`) + props `isGm` + `myCharId`
+- `client/src/locales/fr.json` — +13 clés `trade.window.*` (vue joueur)
+
+### Détails techniques
+
+**Nouveaux props TradeWindow**
+- `isGm = true` : détermine la branche de rendu (GM view ou Player view)
+- `myCharId = null` : transmis au catalogue (`?charId=`) et au checkout (`charId` body)
+
+**Vue Joueur — architecture**
+- `merchants` chargé par le même `useEffect([campaignId])` — serveur filtre OPEN + autorisé pour les non-GM
+- `<select>` marchand → `loadCatalog(id)` → `GET /catalog?charId=myCharId` → `catalog` array avec `catalog_price`
+- Filtres famille : extrait depuis `catalog.map(i => i.family)`, tri alpha, boutons toggle
+- Liste items scrollable (maxHeight 260px) : clic → détail inline (poids / NT / gén / rareté) + contrôles qté [−][+]
+- Panier : `cart = [{ item, qty }]` — `addToCart` / `removeFromCart` avec `setCart(prev => ...)` (pas de stale closure)
+- Checkout : `POST /:mid/buy { charId, items: [{equipmentId, qty}] }` → `checkoutMsg { ok, text }` (vert/rouge)
+
+**SessionPage.jsx**
+- `myCharId = characters.find(c => c.user_id === user?.id)?.id ?? null` — derivé sans useState
+- Condition changée : `{isGm && tradeWindowOpen &&` → `{tradeWindowOpen &&` (prépare étape 11 menu radial sans autre touche)
+
+### Testé
+SR ✅ — vue GM inchangée (tabs Marchands + Journal) ✅
+
+### Non testé
+Vue Joueur (catalogue + panier + checkout) — accessible après étape 11 (menu radial) ou en passant `isGm={false}` temporairement
+
+### Prochaine étape
+PLAN_TRADE étape 10 : `TradeWindow.jsx` vue Échange PJ↔PJ — propose + accept/decline/cancel + timer expiration
+
+---

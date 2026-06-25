@@ -116,11 +116,20 @@
    → `MerchantsPage.jsx` : Dashboard GM — CRUD marchands + arbre catalogue tri-state + joueurs autorisés
    → `DashboardPage.jsx` : bouton "Marchands" sur carte campagne GM
 
-**28. ← PROCHAINE ÉTAPE : PLAN_TRADE étapes 8–11**
-   → Étape 8 : `TradeWindow.jsx` vue GM lite (toggle OPEN/CLOSED + mod_global + livre de compte)
-   → Étape 9 : vue Joueur (catalogue + panier + checkout)
-   → Étape 10 : vue Échange PJ↔PJ (propose + accept + expiration)
-   → Étape 11 : Menu radial — secteur Trade → TradeWindow
+**28. ~~D1 + D2 ✅ Session 124~~**
+   → D1 : menu radial "fiche" drone — clos (fix mismatch type `character_id` string/number — Session antérieure)
+   → D2 : `SettingsTab` `DroneWindow.jsx` — `glbStatus` (null|uploading|success|error) + timer ref + i18n `glbSuccess/glbError` + label coloré (bleu/vert/rouge + transition 0.2s)
+   → Bonus D2 : rechargement token 3D fonctionnel grâce à `key={glbUrl}` + `updateCharacter` déjà en place (Canvas3D.jsx inchangé)
+
+**29. ~~PLAN_TRADE étapes 8–9 ✅ Session 124~~**
+   → Étape 8 : `TradeWindow.jsx` créé (~200L) — vue GM lite : tab Marchands (toggle OUVERT/FERMÉ + mod_global) + tab Journal (trade_log filtrable + pagination)
+   → Étape 9 : vue Joueur — sélecteur marchand (filtré serveur) + catalogue navigable (FAM→items) + détail inline + panier + checkout (`POST /buy` atomique)
+   → `SessionPage.jsx` : `myCharId` derivé + condition `{tradeWindowOpen &&` + props `isGm` / `myCharId` passés
+   → `fr.json` : +`session.trade` + `trade.window.*` (26 clés total)
+
+**30. ← PROCHAINE ÉTAPE : PLAN_TRADE étapes 10–11**
+   → Étape 10 : vue Échange PJ↔PJ (propose + accept/decline/cancel + expiration timer)
+   → Étape 11 : Menu radial — secteur Trade → TradeWindow (déclencheur joueur)
    → Validation STUN2 en session réelle recommandée en parallèle
 
 ---
@@ -176,7 +185,7 @@
 | COM9 | Viser une localisation précise — non implémenté | Moyenne — sprint dédié |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
 | — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |
-| D2 | Token drone : changement GLB non fonctionnel | Basse |
+| ~~D2~~ | ~~Token drone : changement GLB non fonctionnel~~ | ✅ Clos Session 124 |
 | DR2 | Drone : déplacement absent | Basse — sprint futur |
 | INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
 | INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |

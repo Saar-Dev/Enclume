@@ -106,14 +106,22 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **88 migrations stables** (87 = ref_equipment.generation — Trade Session 124)
 
-**Session 124 — PLAN_TRADE étapes 1–7 ✅ :**
+**Session 124 — PLAN_TRADE étapes 1–9 ✅ :**
 - Migrations 84–87 : `merchants`, `trade_log`, `trade_offers`, `ref_equipment.generation`
 - `shared/events.js` : +12 constantes TRADE_* (4 client→serveur + 8 serveur→client)
 - `tradeRoutes.js` + `tradeService.js` : REST CRUD + `getCatalog` (cascade FAM→CAT→ITEM) + `buyFromMerchant` (atomique) + `acceptTransfer` (forUpdate)
 - `socketTrade.js` : `registerTradeHandlers` — rate limit 3/min — 4 handlers PJ↔PJ
 - `MerchantsPage.jsx` : Dashboard GM — CRUD + arbre catalogue tri-state + héritage visuel + joueurs autorisés
 - `DashboardPage.jsx` : bouton "Marchands" sur carte campagne GM
-- **Prochaine étape** : PLAN_TRADE étapes 8–11 (`TradeWindow.jsx` vue GM + Joueur + PJ↔PJ + menu radial)
+- `TradeWindow.jsx` : vue GM lite (étape 8) + vue Joueur (étape 9) — sélecteur marchand filtré + catalogue FAM + détail inline + panier + checkout
+- `SessionPage.jsx` : `myCharId` derivé + props `isGm`/`myCharId` + condition `{tradeWindowOpen &&`
+- **Prochaine étape** : PLAN_TRADE étapes 10–11 (vue PJ↔PJ + menu radial)
+
+**Session 124 (suite) — D1 ✅ + D2 ✅ (Drone fiche + GLB upload) :**
+- D1 ✅ : menu radial "fiche" drone — clos (fix antérieur, docs mises à jour)
+- D2 ✅ : `DroneWindow.SettingsTab` — `glbStatus` (null|uploading|success|error) + `glbTimerRef` cleanup + label coloré bleu/vert/rouge + 2 clés i18n
+- Token 3D rechargé automatiquement via `key={glbUrl}` Canvas3D (débloqué par D1)
+- **Prochaine étape** : PLAN_TRADE 8–11 ou cluster bugs suivant selon priorité
 
 **Session 122 — COM19 FAUX BUG + INI Breakdown Popover ✅ :**
 - COM19 FAUX BUG : `REGLESYSCOMBAT.md` relu intégralement — règle "-5 INI assaut tir" inexistante — `socketCombatAnnouncement.js` conforme
