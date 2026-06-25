@@ -127,8 +127,17 @@ export const WS = {
   TRADE_TRANSFER_ACCEPTED:  'trade:transfer_accepted',  // PJ B → serveur : accepter l'offre
   TRADE_TRANSFER_DECLINED:  'trade:transfer_declined',  // PJ B → serveur : refuser l'offre
   TRADE_TRANSFER_CANCELLED: 'trade:transfer_cancelled', // PJ A → serveur : annuler l'offre
+  TRADE_SELL_PROPOSED:      'trade:sell_proposed',      // PJ → serveur : proposer une revente au GM
+  TRADE_SELL_ACCEPTED:      'trade:sell_accepted',      // GM → serveur : accepter la revente (+ solsFinal)
+  TRADE_SELL_DECLINED:      'trade:sell_declined',      // GM → serveur : refuser la revente
   // serveur → client
   TRADE_MERCHANT_UPDATED: 'trade:merchant_updated',   // serveur → room : marchand modifié (statut, mod_global)
+  TRADE_SELL_REQUEST:     'trade:sell_request',        // serveur → socket GM : demande de revente PJ
+  TRADE_SELL_RESULT:          'trade:sell_result',           // serveur → socket PJ : résultat (accepted/declined)
+  TRADE_SELL_COUNTER:         'trade:sell_counter',          // GM → serveur : contre-offre
+  TRADE_SELL_COUNTER_RECEIVED:'trade:sell_counter_received', // serveur → PJ : contre-offre reçue
+  TRADE_SELL_COUNTER_ACCEPTED:'trade:sell_counter_accepted', // PJ → serveur : accepter la contre-offre
+  TRADE_SELL_COUNTER_DECLINED:'trade:sell_counter_declined', // PJ → serveur : refuser la contre-offre
   TRADE_OFFER_RECEIVED:   'trade:offer_received',     // serveur → socket PJ B : offre reçue de PJ A
   TRADE_OFFER_ACCEPTED:   'trade:offer_accepted',     // serveur → sockets A+B : transaction exécutée
   TRADE_OFFER_DECLINED:   'trade:offer_declined',     // serveur → socket PJ A : PJ B a refusé

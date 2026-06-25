@@ -1265,3 +1265,78 @@ Dérive identifiée : diagnostic labellisé [VÉRIFIÉ] sur lecture seule, fix p
 - Testé : SR ✅ — INSUFFICIENT_FUNDS → message d'erreur panier, pas d'écran noir ✅
 
 ---
+
+## Session 125 (suite) — 2026-06-25 — VENTE PJ→GM + achat ×10 munitions
+
+### Contexte
+
+Implémentation VENTE PJ→GM conforme à la spec :
+- Flux : PJ propose → GM reçoit notification chat → récap avec prix boutique → Accepter / Contre-offre / Refuser
+- Contre-offre persistée en DB (pas en mémoire) — un aller-retour, PJ accepte ou refuse
+- Onglet ÉCHANGE retiré de TradeWindow (implémentation future via RadialMenu uniquement)
+
+### Travail effectué
+
+**Migration 90 — `trade_offers` counter-offer :**
+- `counter_sols INTEGER` + `merchant_id UUID REFERENCES merchants(id) ON DELETE SET NULL`
+- Contrainte `chk_trade_offer_status` étendue : `COUNTER_OFFERED` ajouté
+
+**`shared/events.js` — +4 constantes :**
+- `TRADE_SELL_COUNTER` (GM→serveur), `TRADE_SELL_COUNTER_RECEIVED` (serveur→PJ), `TRADE_SELL_COUNTER_ACCEPTED` (PJ→serveur), `TRADE_SELL_COUNTER_DECLINED` (PJ→serveur)
+
+**`server/src/services/tradeService.js` :**
+- `getMyActiveSellOffer(campaignId, charId)` — restauration état PJ au montage (PENDING ou COUNTER_OFFERED)
+- `executeSell` : `whereIn('status', ['PENDING', 'COUNTER_OFFERED'])` pour couvrir les deux états
+
+**`server/src/routes/tradeRoutes.js` :**
+- GET `/my-sell-offer?charId=` — restauration PJ après rechargement
+- GET `/sell-offers` enrichi : LEFT JOIN `merchants`, retourne `merchantName`, `status`, `counterSols`
+
+**`server/src/socket/socketTrade.js` :**
+- Constante `SELL_OFFER_TTL_SEC = 120` (remplace requête `SELECT tour_duration` inexistante)
+- `computeCatalogPrice(refPrice, modGlobal)` helper
+- Handler `TRADE_SELL_PROPOSED` : enrichissement items (ref_price + catalog_price via JOIN ref_equipment), `merchant_id` en DB, emit `TRADE_SELL_REQUEST` vers socket GM
+- Handler `TRADE_SELL_COUNTER` (GM, ACK) : UPDATE status='COUNTER_OFFERED' + counter_sols, emit `TRADE_SELL_COUNTER_RECEIVED` vers PJ
+- Handler `TRADE_SELL_COUNTER_ACCEPTED` (PJ) : lit `counter_sols` depuis DB (pas payload client), appelle `executeSell`
+- Handler `TRADE_SELL_COUNTER_DECLINED` (PJ) : UPDATE status='DECLINED', emit `TRADE_SELL_RESULT(accepted:false)`
+
+**`client/src/lib/useEntitySocket.js` :**
+- Listener `TRADE_SELL_REQUEST` toujours monté → `addMessage({ type: 'sell_request', gmOnly: true, ... })` dans Zustand sessionStore
+
+**`client/src/components/Sidebar.jsx` :**
+- Rendu bloc `msg.type === 'sell_request'` : icône + fromCharName + merchantName + "Voir l'offre" (appelle `onOpenTrade({ mode: 'reventes' })`)
+- Badge : compte sell_request + entity_action
+
+**`client/src/pages/SessionPage.jsx` :**
+- `onOpenTrade={(ctx) => { setTradeInitialContext(ctx ?? null); setTradeWindowOpen(true) }}`
+
+**`client/src/components/TradeWindow.jsx` — réécriture complète :**
+- Onglet ÉCHANGE supprimé (state/callbacks échange conservés pour implémentation future via RadialMenu)
+- Onglet VENTE (PJ) : sélecteur marchand + inventaire avec ref_price/catalog_price inline + prix demandé + `handleProposeSell` (ACK → sellOfferId + expiresAt)
+- Onglet REVENTES (GM) : récap par offre — vendeur, marchand, items avec prix ref/boutique, prix demandé, 3 boutons (Accepter/Contre-offre/Refuser), input contre-offre avec ACK
+- Cas UI PJ : en attente (Cas C) / contre-offre reçue avec Accept/Decline (Cas A) / résultat final (Cas B)
+- Restauration état depuis GET /my-sell-offer au montage (PJ uniquement)
+- `initialContext.mode === 'reventes'` → switch tab GM automatique
+
+**`client/src/locales/fr.json` :**
+- `trade.window` : `sell_counter_btn`, `sell_counter_send`, `sell_counter_received`, `sell_counter_accept`, `sell_counter_decline`, `sell_catalog_price`, `sell_merchant_label`
+- `sidebar` : `sellRequest`, `sellRequestView`
+
+**Feat — achat ×10 munitions :**
+- `TradeWindow.jsx` : `addToCart(item, qty=1)` + bouton `+10` conditionnel sur `item.family === 'Munitions'`
+
+**Bugfix VENTE KO — `tour_duration` inexistante :**
+- `socketTrade.js` L.47 + L.180 : `SELECT tour_duration FROM campaigns` → colonne inexistante → handler crashait silencieusement → "Vente refusée" direct
+- Fix : constante `SELL_OFFER_TTL_SEC = 120`, requête DB supprimée
+
+### Testé
+- Achat marchand : ✅
+- Vente PJ→GM : proposition → notification chat GM → récap avec prix boutique → Accepter ✅
+- Achat ×10 munitions : ✅
+
+### Non testé
+- Contre-offre GM → PJ accepte / refuse (flux complet)
+- Restauration état PENDING/COUNTER_OFFERED après rechargement PJ
+- Expiration timer 120s
+
+---

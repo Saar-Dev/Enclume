@@ -107,7 +107,17 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 ## ÉTAT COURANT — Session 125 (2026-06-25)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **88 migrations stables** (87 = ref_equipment.generation — Trade Session 124)
+- **90 migrations stables** (90 = trade_offers counter_offer — Session 125 suite)
+
+**Session 125 suite — VENTE PJ→GM ✅ + achat ×10 munitions ✅ :**
+- Migration 90 : `trade_offers.counter_sols` + `merchant_id` + status `COUNTER_OFFERED`
+- `shared/events.js` : +4 constantes `TRADE_SELL_COUNTER_*`
+- `socketTrade.js` : `SELL_OFFER_TTL_SEC=120` (bugfix `tour_duration` inexistante) + 4 handlers SELL_PROPOSED/COUNTER/ACCEPTED/DECLINED
+- `useEntitySocket.js` : listener `TRADE_SELL_REQUEST` → notification chat GM (toujours montée)
+- `Sidebar.jsx` : rendu notification sell_request + badge + "Voir l'offre" → TradeWindow Reventes
+- `TradeWindow.jsx` : réécriture complète — VENTE PJ + REVENTES GM (récap + contre-offre) + `+10` munitions
+- **Section Marchands complète ✅** (achat ✅, vente ✅, contre-offre architecture DB ✅)
+- **Prochaine étape** : validation STUN2 en session réelle ou cluster bugs suivant
 
 **Session 125 — PLAN_TRADE étapes 10–11 ✅ + bugfixes Trade :**
 - Étape 10 : `TradeWindow.jsx` vue Échange PJ↔PJ — proposer/accepter/refuser/annuler + timer expiration + listeners WS
@@ -116,7 +126,6 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Bug T2 : `socketTrade.js` 3 handlers — `tokens.campaign_id` inexistant → `WHERE campaign_id + id + user_id`
 - Bug T3 : `TradeWindow.handleCheckout` — `err.response.data.error` objet → `.message` (écran noir corrigé)
 - **PLAN_TRADE complet ✅ (étapes 1–11)**
-- **Prochaine étape** : validation STUN2 en session réelle ou cluster bugs suivant
 
 **Session 124 — PLAN_TRADE étapes 1–9 ✅ :**
 - Migrations 84–87 : `merchants`, `trade_log`, `trade_offers`, `ref_equipment.generation`

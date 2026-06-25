@@ -493,6 +493,7 @@ export default function Sidebar({
   const [toolsOpen, setToolsOpen] = useState(false)
   const [pendingActionCount, setPendingActionCount] = useState(0)
   const prevEntityActionCountRef = useRef(0)
+  const prevSellRequestCountRef = useRef(0)
   const [chatInput, setChatInput] = useState('')
   const [showHelp, setShowHelp] = useState(false)
 
@@ -601,11 +602,14 @@ export default function Sidebar({
   // ─── Badge GM — actions entités en attente ───────────────────────────────
   useEffect(() => {
     if (!isGm) return
-    const count = messages.filter(m => m.type === 'entity_action').length
-    if (count > prevEntityActionCountRef.current) {
-      setPendingActionCount(prev => prev + (count - prevEntityActionCountRef.current))
-    }
-    prevEntityActionCountRef.current = count
+    const entityCount = messages.filter(m => m.type === 'entity_action').length
+    const sellCount   = messages.filter(m => m.type === 'sell_request').length
+    let delta = 0
+    if (entityCount > prevEntityActionCountRef.current)  delta += entityCount - prevEntityActionCountRef.current
+    if (sellCount   > prevSellRequestCountRef.current)   delta += sellCount   - prevSellRequestCountRef.current
+    if (delta > 0) setPendingActionCount(prev => prev + delta)
+    prevEntityActionCountRef.current = entityCount
+    prevSellRequestCountRef.current  = sellCount
   }, [messages, isGm])
 
   // ─── ANIMATION dé — Option B ─────────────────────────────────────────────
@@ -997,6 +1001,37 @@ export default function Sidebar({
                         </button>
                         <button style={styles.btnRefuse} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, false, false, 0) }}>
                           {t('sidebar.actionRefuse')}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                }
+                if (msg.type === 'sell_request') {
+                  if (!isGm) return null
+                  return (
+                    <div key={msg.id} style={styles.messageAction}>
+                      <div style={styles.actionHeader}>
+                        <span style={styles.actionIcon}>🏪</span>
+                        <span style={styles.actionTitle}>
+                          {t('sidebar.sellRequest', {
+                            charName: msg.fromCharName,
+                            merchant: msg.merchantName || 'GM',
+                          })}
+                        </span>
+                        <span style={styles.msgTime}>{msg.time}</span>
+                      </div>
+                      <div style={styles.actionSub}>
+                        {msg.itemCount} objet{msg.itemCount !== 1 ? 's' : ''} — {msg.solsProposed} S
+                      </div>
+                      <div style={styles.actionBtns}>
+                        <button
+                          style={styles.btnAccept}
+                          onClick={() => {
+                            setPendingActionCount(p => Math.max(0, p - 1))
+                            onOpenTrade?.({ mode: 'reventes' })
+                          }}
+                        >
+                          {t('sidebar.sellRequestView')}
                         </button>
                       </div>
                     </div>

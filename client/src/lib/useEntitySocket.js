@@ -85,11 +85,27 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
       clearPendingEntityId()
     }
 
+    // Notification vente PJ→GM — reçue uniquement sur le socket GM (server-side guard)
+    const onSellRequest = ({ offerId, fromCharName, merchantName, items = [], solsProposed }) => {
+      addMessage({
+        id:           `sell-request-${offerId}`,
+        type:         'sell_request',
+        gmOnly:       true,
+        offerId,
+        fromCharName,
+        merchantName,
+        itemCount:    items.length,
+        solsProposed,
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      })
+    }
+
     socket.on(WS.MAP_SWITCH,              onMapSwitch)
     socket.on(WS.ENTITY_ACTION_PENDING,   onEntityActionPending)
     socket.on(WS.ENTITY_ACTION_RESULT,    onEntityActionResult)
     socket.on(WS.ENTITY_MOVE_RESULT,      onEntityMoveResult)
     socket.on(WS.DICE_RESULT,             onDiceResult)
+    socket.on(WS.TRADE_SELL_REQUEST,      onSellRequest)
 
     return () => {
       socket.off(WS.MAP_SWITCH,            onMapSwitch)
@@ -97,6 +113,7 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
       socket.off(WS.ENTITY_ACTION_RESULT,  onEntityActionResult)
       socket.off(WS.ENTITY_MOVE_RESULT,    onEntityMoveResult)
       socket.off(WS.DICE_RESULT,           onDiceResult)
+      socket.off(WS.TRADE_SELL_REQUEST,    onSellRequest)
     }
   }, [socket, setRadialMenu, setMoveTarget])
   // Pas de return — aucun état exposé

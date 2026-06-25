@@ -14,6 +14,7 @@ import {
   getCatalog,
   buyFromMerchant,
   getTradeLog,
+  getMyActiveSellOffer,
 } from '../services/tradeService.js'
 
 // ─── Helper : vérifier appartenance campagne ─────────────────────────────────
@@ -64,6 +65,45 @@ merchantsRouter.delete('/:mid', requireAuth, async (req, res) => {
   if (member.role !== 'gm') throw new AppError(403, 'GM uniquement')
   await deleteMerchant(campaignId, mid)
   res.status(204).end()
+})
+
+// GET /sell-offers — reventes PJ en attente ou contre-offertes (GM only) — doit être AVANT /:mid
+merchantsRouter.get('/sell-offers', requireAuth, async (req, res) => {
+  const { campaignId } = req.params
+  const member = await getMember(campaignId, req.user.id)
+  if (member.role !== 'gm') throw new AppError(403, 'GM uniquement')
+  const rows = await db('trade_offers')
+    .where({ 'trade_offers.campaign_id': campaignId, 'trade_offers.type': 'SELL' })
+    .whereIn('trade_offers.status', ['PENDING', 'COUNTER_OFFERED'])
+    .join('characters', 'trade_offers.from_char_id', 'characters.id')
+    .leftJoin('merchants', 'trade_offers.merchant_id', 'merchants.id')
+    .select('trade_offers.*', 'characters.name as from_char_name', 'merchants.name as merchant_name')
+    .orderBy('trade_offers.created_at', 'asc')
+  res.json(rows.map(o => ({
+    offerId:      o.id,
+    fromCharId:   o.from_char_id,
+    fromCharName: o.from_char_name,
+    merchantName: o.merchant_name ?? null,
+    status:       o.status,
+    items:        Array.isArray(o.items_json) ? o.items_json : JSON.parse(o.items_json || '[]'),
+    solsProposed: o.sols_offer,
+    counterSols:  o.counter_sols ?? null,
+    expiresAt:    o.expires_at,
+  })))
+})
+
+// GET /my-sell-offer — offre active du PJ (PENDING ou COUNTER_OFFERED) — doit être AVANT /:mid
+merchantsRouter.get('/my-sell-offer', requireAuth, async (req, res) => {
+  const { campaignId } = req.params
+  const { charId } = req.query
+  if (!charId) return res.json(null)
+  await getMember(campaignId, req.user.id)
+  const char = await db('characters')
+    .where({ id: charId, campaign_id: campaignId, user_id: req.user.id })
+    .first()
+  if (!char) return res.json(null)
+  const offer = await getMyActiveSellOffer(campaignId, charId)
+  res.json(offer)
 })
 
 // GET /:mid/catalog — catalogue filtré (stub étape 5)

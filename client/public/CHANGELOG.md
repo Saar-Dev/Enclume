@@ -1,3 +1,21 @@
+## v134 — 2026-06-25 — VENTE PJ→GM : notification GM + contre-offre + achat ×10 munitions
+
+### Client
+- [feat] `TradeWindow.jsx` — VENTE PJ→GM : sélecteur marchand + inventaire avec prix ref/boutique, proposition, en-attente, contre-offre reçue (Accepter/Refuser)
+- [feat] `TradeWindow.jsx` — REVENTES GM : récap offres avec prix boutique par item, 3 boutons (Accepter/Contre-offre/Refuser), saisie prix contre-offre
+- [feat] `Sidebar.jsx` — notification chat GM à réception d'une offre de vente PJ (bouton "Voir l'offre" → TradeWindow Reventes)
+- [feat] `TradeWindow.jsx` — achat ×10 munitions : bouton `+10` sur tous les items `family === 'Munitions'`
+- [fix] `TradeWindow.jsx` — onglet ÉCHANGE retiré (implémentation future via RadialMenu)
+
+### Serveur
+- [feat] Migration 90 : `trade_offers.counter_sols` + `merchant_id` + status `COUNTER_OFFERED`
+- [feat] `socketTrade.js` — 4 handlers : SELL_PROPOSED (enrichissement prix serveur-side) + SELL_COUNTER (GM, ACK) + SELL_COUNTER_ACCEPTED (lit counter_sols DB) + SELL_COUNTER_DECLINED
+- [feat] `tradeRoutes.js` — GET `/my-sell-offer` (restauration état PJ après rechargement)
+- [feat] `useEntitySocket.js` — listener TRADE_SELL_REQUEST → notification chat GM persistante
+- [fix] `socketTrade.js` — `SELECT tour_duration FROM campaigns` (colonne inexistante) → `SELL_OFFER_TTL_SEC = 120`
+
+---
+
 ## v133 — 2026-06-25 — Trade complet : échange PJ↔PJ + déclencheurs + bugfixes
 
 ### Client

@@ -133,8 +133,22 @@
    → Bugfixes T1/T2/T3 : liste marchands vide (join tokens supprimé), `tokens.campaign_id` ×3 `socketTrade.js`, écran noir `INSUFFICIENT_FUNDS` (parsing objet → `.message`)
    → **PLAN_TRADE complet ✅** (étapes 1–11)
 
-**31. ← PROCHAINE ÉTAPE : cluster suivant selon priorité**
+**31. ~~VENTE PJ→GM + achat ×10 munitions ✅ Session 125 suite~~**
+   → Migration 90 : `counter_sols` + `merchant_id` + status `COUNTER_OFFERED` dans `trade_offers`
+   → `shared/events.js` : +4 constantes `TRADE_SELL_COUNTER_*`
+   → `tradeService.js` : `getMyActiveSellOffer` (restauration PJ) + `executeSell` accept COUNTER_OFFERED
+   → `tradeRoutes.js` : GET `/my-sell-offer` + `sell-offers` enrichis (merchantName, status, counterSols)
+   → `socketTrade.js` : constante `SELL_OFFER_TTL_SEC=120` (bugfix `tour_duration` inexistante) + 4 handlers SELL_PROPOSED/COUNTER/COUNTER_ACCEPTED/COUNTER_DECLINED
+   → `useEntitySocket.js` : listener `TRADE_SELL_REQUEST` → notification chat GM toujours montée
+   → `Sidebar.jsx` : rendu notification sell_request + badge
+   → `TradeWindow.jsx` : réécriture complète — onglet ÉCHANGE retiré, VENTE PJ (sélecteur marchand + prix ref/boutique + contre-offre UI), REVENTES GM (récap + 3 boutons + contre-offre input)
+   → Feat : achat ×10 munitions (`addToCart(item, qty=1)` + bouton `+10` conditionnel `family === 'Munitions'`)
+   → Testé : achat ✅, vente proposition→acceptation ✅, ×10 munitions ✅
+   → Non testé : contre-offre flux complet, restauration état rechargement, expiration 120s
+
+**32. ← PROCHAINE ÉTAPE : cluster suivant selon priorité**
    → Validation STUN2 en session combat réelle
+   → Contre-offre flux complet (test session réelle)
    → Ou bugs actifs BUGIDENTIFIE.md
 
 ---

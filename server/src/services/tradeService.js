@@ -279,6 +279,76 @@ export async function acceptTransfer(campaignId, { offerId, acceptingCharId }) {
   return logEntry
 }
 
+// ─── Revente PJ→GM — transaction atomique ────────────────────────────────────
+
+export async function executeSell(campaignId, { offerId, solsFinal }) {
+  let logEntry
+  await db.transaction(async (trx) => {
+    // 1. Lock offer — vérif PENDING + non expirée
+    const offer = await trx('trade_offers')
+      .where({ id: offerId, campaign_id: campaignId, type: 'SELL' })
+      .whereIn('status', ['PENDING', 'COUNTER_OFFERED'])
+      .forUpdate()
+      .first()
+    if (!offer) throw new Error('OFFER_NOT_FOUND')
+    if (new Date(offer.expires_at) < new Date()) throw new Error('OFFER_EXPIRED')
+
+    // 2. Lock items + vérifier ownership (peuvent avoir changé depuis la proposition)
+    for (const item of offer.items_json) {
+      const inv = await trx('char_inventory')
+        .where({ id: item.char_inventory_id, character_id: offer.from_char_id })
+        .forUpdate()
+        .first()
+      if (!inv) throw new Error('ITEM_UNAVAILABLE')
+    }
+
+    // 3. Supprimer les items de l'inventaire du vendeur
+    for (const item of offer.items_json) {
+      await trx('char_inventory').where({ id: item.char_inventory_id }).delete()
+    }
+
+    // 4. Créditer le vendeur
+    if (solsFinal > 0) {
+      await trx('char_sheet').where({ character_id: offer.from_char_id }).increment('sols', solsFinal)
+    }
+
+    // 5. Clôturer l'offre
+    await trx('trade_offers').where({ id: offerId }).update({ status: 'ACCEPTED', updated_at: trx.fn.now() })
+
+    // 6. Tracer dans le livre de compte
+    const [entry] = await trx('trade_log').insert({
+      campaign_id:  campaignId,
+      type:         'player_sell',
+      from_char_id: offer.from_char_id,
+      sols_delta:   solsFinal,
+      items_json:   JSON.stringify(offer.items_json),
+      created_at:   new Date(),
+    }).returning('*')
+    logEntry = entry
+  })
+  return logEntry
+}
+
+// ─── Offre active du PJ (PENDING ou COUNTER_OFFERED) ────────────────────────
+
+export async function getMyActiveSellOffer(campaignId, charId) {
+  const offer = await db('trade_offers')
+    .where({ campaign_id: campaignId, from_char_id: charId, type: 'SELL' })
+    .whereIn('status', ['PENDING', 'COUNTER_OFFERED'])
+    .orderBy('created_at', 'desc')
+    .first()
+  if (!offer) return null
+  return {
+    offerId:      offer.id,
+    status:       offer.status,
+    items:        Array.isArray(offer.items_json) ? offer.items_json : JSON.parse(offer.items_json || '[]'),
+    solsProposed: offer.sols_offer,
+    counterSols:  offer.counter_sols ?? null,
+    expiresAt:    offer.expires_at,
+    merchantId:   offer.merchant_id ?? null,
+  }
+}
+
 // ─── Livre de compte ─────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 50

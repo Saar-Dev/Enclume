@@ -549,7 +549,7 @@ function SessionContent({ campaignId }) {
           onReconnectSocket={() => {}}
           onOpenCharacter={openSheet}
           onEntityActionResolve={handleEntityActionResolve}
-          onOpenTrade={() => { setTradeInitialContext(null); setTradeWindowOpen(true) }}
+          onOpenTrade={(ctx) => { setTradeInitialContext(ctx ?? null); setTradeWindowOpen(true) }}
         />
       )}
 
