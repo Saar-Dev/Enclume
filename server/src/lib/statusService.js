@@ -14,15 +14,19 @@ export async function emitTokenStatusUpdated(io, db, campaignId, tokenId) {
 
 // ─── applyStunWithDuration ────────────────────────────────────────────────────
 // Migré depuis server/src/socket/index.js — db ajouté en paramètre.
-// onConflict merge : re-stun étend la durée sans dupliquer la ligne.
+// Transaction : delete stunned+unconscious existants → insert nouveau. Exclusion mutuelle garantie.
 export async function applyStunWithDuration(io, db, campaignId, tokenId, outcome, stunDuration, currentTurn) {
   const stunUntil    = currentTurn + stunDuration
   const statusCode   = outcome === 'inconscient' ? 'unconscious' : 'stunned'
   try {
-    await db('token_statuses')
-      .insert({ token_id: tokenId, status_code: statusCode, expires_at_turn: stunUntil })
-      .onConflict(['token_id', 'status_code'])
-      .merge(['expires_at_turn'])
+    await db.transaction(async trx => {
+      await trx('token_statuses')
+        .where({ token_id: tokenId })
+        .whereIn('status_code', ['stunned', 'unconscious'])
+        .delete()
+      await trx('token_statuses')
+        .insert({ token_id: tokenId, status_code: statusCode, expires_at_turn: stunUntil })
+    })
     await emitTokenStatusUpdated(io, db, campaignId, tokenId)
   } catch (err) {
     console.error('[statusService] applyStunWithDuration error:', err.message)

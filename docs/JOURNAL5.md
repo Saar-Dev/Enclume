@@ -876,3 +876,215 @@ Session combat réelle complète avec plusieurs joueurs simultanés. Résilience
 Non traité cette session. Impact utilisateur atténué par AA-1 (store Zustand résilient à WOUND_ADDED hors-séquence). Bloc B planifié : `skipEmit` sur `woundService.applyWound` + `statusService.emitShockDiceResult` → descripteurs dans la queue `emissions` avant `COMBAT_ATTACK_RESULT`.
 
 ---
+
+## Session 121 (suite) — 2026-06-24 — COM22 : aucune action combat sur Kiwi
+
+### Contexte
+
+COM22 signalé en session combat réelle sur Kiwi : aucune action d'attaque (distance) ne passe en Phase 2 Résolution. Déplacement fonctionnel. Log Kiwi : `COMBAT_ACTION_CONFIRM — assault sans confirmedModifiers` pour tous les slots assault → guard serveur skippe l'assault sans résolution.
+
+### Cause racine [VÉRIFIÉ]
+
+**Kiwi spécifique** : `voxel_data` battlemap Kiwi contient des voxels décalés (map jamais sauvegardée proprement depuis l'éditeur — MinIO textures 500 en mode éditeur). `checkLOSForPrecheck` → raycast voxels incorrects → `clear = false` → PRECHECK assault `{ ok: false }` → `assaultPrecheckOk = false` → `CombatModifiersWindow` ne s'ouvre pas → bouton "Agir" → `COMBAT_ACTION_CONFIRM` sans `confirmedModifiers` → guard L.240 `!confirmedModifiers && character.type !== 'drone'` → assault skipé silencieusement.
+
+En local : voxels corrects → LOS claire → PRECHECK `{ ok: true }` → modifiers collectés → résolution complète.
+
+**CaC** : n'était pas bloqué. `resolveMeleeAction` appelé sans guard null confirmedModifiers — résolution correcte avec ou sans modifiers (confirmé par logs Kiwi : melee roll + défense PNJ + endTurn propre).
+
+### Fix — `socketCombatResolution.js`
+
+Suppression du PRECHECK LOS assault (redondant — LOS re-vérifiée à la résolution dans `resolveAssaultAction → checkCombatLOS`) :
+- Import `checkLOSForPrecheck` supprimé (L.4)
+- Bloc `if (actionKey === 'assault') { ... losOk ... }` supprimé (L.122-130)
+- Log `[DBG] PRECHECK ${actionKey} token:${tokenId} → ok:true` ajouté (diagnostic Kiwi)
+
+PRECHECK assault réduit à : FSM guard + stun guard + `callback({ ok: true })`.
+
+### Infrastructure Kiwi — fast-voxel-raycast manquant root
+
+Kiwi crashait au restart post-git-pull : `ERR_MODULE_NOT_FOUND: fast-voxel-raycast imported from shared/losUtils.js`. Package déclaré dans `Enclume/package.json` (racine) — résolution Node.js ESM depuis `shared/losUtils.js` via `Enclume/node_modules/`. `npm install` avait été lancé dans `server/` uniquement (mauvais répertoire). Fix : `npm install` à la racine `Enclume/`.
+
+### Sécurité — npm audit fix server
+
+7 vulnérabilités corrigées (`npm audit fix` dans `server/`) — 0 restantes :
+- `ws` 8.18.3 → 8.21.0 (uninitialized memory + DoS)
+- `multer` 2.1.1 → 2.2.0 (DoS nested fields)
+- `qs` 6.15.0 → 6.15.2 (DoS null entries)
+- `fast-xml-builder` 1.1.5 → 1.2.0, `engine.io` 6.6.6 → 6.6.9, `socket.io-adapter` 2.5.6 → 2.5.8, `brace-expansion` 5.0.5 → 5.0.6
+
+Root `npm audit fix` : `ws` patchée via `socket.io-client`. `xlsx *` : pas de fix disponible (SheetJS communauté) — utilisé seeds uniquement, dette active.
+
+### Testé
+- Local ✅ : assault distance résolution complète (PRECHECK → ok → modifiers → roll → résolution)
+- Kiwi ✅ : combat 3 participants, 2 assaults distance résolus (TOUCHE MR:10 + MR:5), STUN2 auto-skip validé, melee fonctionnel, endTurn propre
+
+### Non testé
+Session combat réelle Kiwi avec plusieurs joueurs simultanés (test solo GM uniquement)
+
+---
+
+## Session 123 (2026-06-24) — WeaponPanel v2 : CS1 + CS2 + CS3 ✅
+
+### Vérifications préliminaires (avant code)
+
+- `char_sheet_identity` → **n'existe pas**. `hand_pref` est colonne directe de `char_sheet` (migration 36, L.49). Plan corrigé : pas de query séparée, `sheet.hand_pref` suffit.
+- PUT inventory `char-sheet.js` L.1126 : `WEAPON_SLOTS.has()` valide MG/MD/2M/Tr. Pas de guard bloquant.
+- `getSlotInfo` : type `'Tr'` géré L.18. `available2M` incluant `'Tr'` correct.
+
+---
+
+### CS3 ✅ — WeaponPanel v2 : colonnes DIR/SEC + section DEUX MAINS
+
+**Cause racine** : UI MG/MD symétrique sans notion de main directrice. Arme 2H pouvait être équipée dans chaque main séparément.
+
+#### `server/src/routes/character/char-sheet.js`
+- GET inventory réponse : `hand_pref: sheet?.hand_pref || 'R'` ajouté (+1 ligne)
+
+#### `client/src/character/WeaponPanel.jsx` — refonte complète
+- **Supprimé** : `equipSlot`, `equipItemId`, `handleEquip()`, `handleSelectWeapon()`
+- **Ajouté** : states `handPref`, `equipDir`, `equipSec`, `equip2MId`, `equip2MSlot`
+- **Ajouté** : dérivées `isAmbi`, `dirSlot`, `secSlot`, `weaponDir`, `weaponSec`, `weapon2M`, `hasTrepied`, `available1H`, `available2M`
+- **Ajouté** : `handleEquipItem(itemId, slot)` — conflict resolution auto, `handleSelect2M(itemId)`
+- **Extrait** : sous-composant `WeaponCard` — JSX ammo/reload inchangé
+- **Layout** : `weapon2M` présent → section DEUX MAINS plein-largeur ; absent → grille 2 colonnes DIR/SEC + section DEUX MAINS en bas
+- **Inchangé** : `WEAPON_SLOTS`, `SLOT_LABELS`, `getSlotInfo`, `handleUnequip`, `handleReload`, `availableAmmoFor`, `ammoNameForRef`, `equippedWeapons`, `availableWeapons`
+
+**Testé** : V1–V7 ✅, V9 (reload régression) ✅, V10 (dropdown visible) ✅
+**Non testé** : V8 ambi — slot MD affiché sous label "MAIN GAUCHE" (comportement plan — à confirmer session combat)
+
+---
+
+### CS2 ✅ — inclus dans WeaponPanel v2
+
+Dropdown équipement intégré directement dans chaque colonne vide (DIR / SEC / 2M). Résolu par la refonte CS3.
+
+---
+
+### CS1 ✅ — Description arme : tooltip ⓘ
+
+**Cause racine** : `ref_equipment.description` absent du SELECT GET inventory.
+
+#### `server/src/routes/character/char-sheet.js`
+- SELECT GET inventory : `'ref_equipment.description as ref_description'` ajouté
+
+#### `client/src/index.css`
+- `.has-tooltip` / `.has-tooltip::after` / `.has-tooltip:hover::after` ajoutés en fin de Section 10 — CSS pur, `data-tooltip` attribute
+
+#### `client/src/character/WeaponPanel.jsx`
+- `WeaponCard` header : `{weapon.ref_description && <span className="has-tooltip" data-tooltip={...} style={s.infoIcon}>ⓘ</span>}`
+- Style `infoIcon` ajouté
+
+**Testé** : Hover ⓘ → tooltip ✅. Arme sans description → ⓘ absent ✅.
+**Non testé** : Armes avec `custom_desc` distinct de `ref_description`.
+
+---
+
+## Session 122 (2026-06-24) — COM19 FAUX BUG + INI Breakdown Popover
+
+### COM19 — Assaut (tir) : -5 INI — FAUX BUG
+
+**Investigation complète** : LdB `REGLESYSCOMBAT.md` (1784 lignes) relu en intégralité — p.213-214 (Initiative), p.216-217 (Préparations), p.226-229 (Combat à distance, Modes de tir automatique).
+
+**Conclusion** : Aucune règle "-5 INI pour assaut (tir)" dans le LdB. `MANUELSYSCOMBAT.md` §3 confirme : la table des modificateurs INI ne contient pas ce coût. Le code `socketCombatAnnouncement.js` (`STATE_COSTS` matrix + `iniDelta` L.183-203) est conforme au LdB.
+
+**Clos : FAUX BUG** — Leçon Session 94 / COM3 appliquée.
+
+---
+
+### INI Breakdown Popover — Nouveau
+
+**Objectif** : Permettre aux joueurs de comprendre pourquoi leur INI total varie. Clic sur le total INI → popover flottant avec le détail ligne par ligne.
+
+**Pattern choisi (recherche GitHub / Foundry VTT / D&D Beyond)** : Popover au clic. Impact layout = zéro (flottant absolu). Fonctionne sur tactile (Raspberry Pi). Fermeture par clic extérieur via backdrop `position: fixed`.
+
+#### `client/src/components/combatSections.js`
+- `calcIniBreakdown(prevStates, nextStates, mapActions, quick)` — export, retourne `{ label, value }[]`
+- `calcIniDelta` refactorisée : appelle `calcIniBreakdown().reduce(sum)` — source de vérité unique, plus de risque de divergence
+
+Lignes générées : transitions d'états (POSTURE, ARME, MODE DE TIR, VITESSE), déplacement (via `MOVE_ZONE_DEFS`), CaC (1ère cible -3 / supp. -5), Tirer depuis couverture (-3/-5), Observer ×N, Repérer ×N, Phrase courte.
+
+#### `client/src/components/CombatGmDeclareWindow.jsx`
+- Import `calcIniBreakdown`
+- `useState(false)` → `iniPopoverOpen` — remis à `false` dans l'effet reset `[activeTokenId]`
+- `iniBreakdown` calculé (mêmes args que `iniDelta`, `attack: null`)
+- Footer : total INI cliquable → backdrop `position:fixed` zIndex 1998 + `.ini-popover` zIndex 1999
+
+#### `client/src/components/CombatActionWindow.jsx`
+- Même pattern — `iniBreakdown` depuis `mapActionsObj` (inclut `cover_shot`)
+- `setIniPopoverOpen(false)` dans l'effet reset `[rosterEntry?.token_id]`
+
+#### `client/src/index.css`
+- `.ini-popover` / `.ini-popover-line` / `.ini-popover-label` / `.ini-bd-pos` / `.ini-bd-neg`
+
+### Testé
+Build ✅ — SR ✅ — Clic sur total INI → popover ligne par ligne ✅ — Clic extérieur ferme ✅
+
+### Non testé
+Session combat réelle multi-joueurs simultanés.
+
+---
+
+## Session 124 — 2026-06-25 — PLAN_TRADE étapes 1–7 ✅
+
+### Objectif
+Implanter le système Trade complet (marchands + échanges PJ↔PJ + livre de compte) selon `docs/PLAN_TRADE.md`.
+
+### Étape 1 — Migrations 84–87
+- `84_merchants.js` : table `merchants` (id, campaign_id, name, status CHECK OPEN/CLOSED, mod_global, nt_max, niv_max, gen_max, dispo_min, rules JSONB, allowed_char_ids TEXT[])
+- `85_trade_log.js` : table `trade_log` (type CHECK merchant_buy/player_transfer/gm_grant, from_char_id nullable, to_char_id nullable, merchant_id nullable, sols_delta, items_json JSONB)
+- `86_trade_offers.js` : table `trade_offers` (from_char_id, to_char_id, status CHECK PENDING/ACCEPTED/DECLINED/CANCELLED, items_json, sols_offer, expires_at)
+- `87_ref_equipment_generation.js` : `ALTER TABLE ref_equipment ADD COLUMN generation INTEGER` — colonne absente confirmée (P8)
+
+### Étape 2 — `shared/events.js`
++12 constantes : 4 client→serveur (`TRADE_TRANSFER_OFFER/ACCEPTED/DECLINED/CANCELLED`) + 8 serveur→client (`TRADE_MERCHANT_UPDATED`, `TRADE_OFFER_RECEIVED/ACCEPTED/DECLINED/CANCELLED/EXPIRED`, `TRADE_LOG_UPDATED`, `TRADE_ERROR`)
+
+### Étape 3 — `tradeRoutes.js` + `tradeService.js` (structure)
+- `merchantsRouter` : GET/POST/PUT/DELETE marchands + GET catalog + POST buy
+- `tradeLogRouter` : GET (GM only, paginé PAGE_SIZE=50)
+- `tradeService` : `getMerchants` (filtre allowed_char_ids via `cardinality()` + `ANY()`), `upsertMerchant`, `deleteMerchant`, `getTradeLog`
+
+### Étape 4 — `socketTrade.js`
+- `RateLimiterMemory({ points: 3, duration: 60 })` module-level
+- `findSocketByCharId(io, campaignId, charId)` via `io.in(campaignId).fetchSockets()` + `characters.user_id`
+- `findGmSocket(io, campaignId)` via `socket.data.role === 'gm'`
+- 4 handlers : `TRADE_TRANSFER_OFFER` (rate limit + INSERT trade_offers + emit RECEIVED), `TRADE_TRANSFER_ACCEPTED` (→ `acceptTransfer` + emit ACCEPTED ×2 + LOG_UPDATED GM), `TRADE_TRANSFER_DECLINED` (UPDATE DECLINED + emit), `TRADE_TRANSFER_CANCELLED` (guard from_char_id + UPDATE CANCELLED + emit)
+- `server/src/socket/index.js` : `registerTradeHandlers(io, socket, context)` après `registerCombatHandlers`
+
+### Étape 5 — `tradeService.getCatalog`
+- `passesGlobalThresholds(item, merchant)` : tech_level / max_level / generation / rarity (P5 : `isNaN(parseInt) → visible`)
+- `passesLocalThresholds(item, rule)` : même logique pour règles PARAM
+- `evaluateItem(item, merchant, rules)` → cascade `find()` FAM→CAT→ITEM — INCLUDE force visible, EXCLUDE force false, PARAM modifie seuils + mod_pct
+- Prix : `Math.round(price * (1 + (mod_global + modPct) / 100))`
+
+### Étape 6 — `tradeService.buyFromMerchant`
+Transaction `knex.transaction` :
+1. `forUpdate` marchand → vérif OPEN
+2. Fetch équipements + calcul prix via `evaluateItem`
+3. `forUpdate` char_sheet → vérif `sols >= total`
+4. `decrement('sols', total)`
+5. INSERT `char_inventory` par ligne (container='Coffre', slot=null — P9)
+6. INSERT `trade_log` (type='merchant_buy', sols_delta=-total, items_json snapshot)
+
+### Étape 7 — `MerchantsPage.jsx` + liens navigation
+- Route `/campaigns/:campaignId/merchants` dans `App.jsx`
+- Structure : colonne gauche marchands (CRUD) + détail 3 onglets
+  - **Paramètres** : status toggle OPEN/CLOSED, mod_global, nt_max, niv_max, gen_max, dispo_min
+  - **Catalogue** : arbre FAM→CAT→ITEM groupé depuis `GET /api/equipment` (lazy), tri-state badge cyclé au clic + héritage visuel `INCL↑`/`EXCL↑` (pointillé muted)
+  - **Joueurs** : checkboxes par character (allowed_char_ids, vide = tous)
+- `DashboardPage.jsx` : bouton "Marchands" sur carte campagne GM (GM only)
+
+**Bugs résolus en cours de route :**
+- Écran noir onglet Joueurs : `res.data` → `res.data.characters ?? []` (API retourne `{ characters: [...] }`)
+- `rate-limiter-flexible` installé manuellement (`npm install` dans server/)
+- Migration auto via `db.migrate.latest()` au démarrage — vérification via `knexfile.cjs`
+
+### Testé
+SR ✅ — Marchands CRUD ✅ — Catalogue tri-state + héritage ✅ — Onglet Joueurs ✅ — Bouton Dashboard GM ✅
+
+### Non testé
+Handlers WS PJ↔PJ (pas de session combat réelle) — `buyFromMerchant` (pas de UI joueur encore) — filtres catalogue avec données réelles
+
+### Prochaine étape
+PLAN_TRADE étapes 8–11 : `TradeWindow.jsx` (vue GM lite + vue Joueur + vue Échange PJ↔PJ) + menu radial
+
+---

@@ -101,10 +101,30 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 120 (2026-06-24)
+## ÉTAT COURANT — Session 124 (2026-06-25)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **81 migrations stables** (80 = combat_pending, 81 = combat_state.sub_phase — REWORK-04)
+- **88 migrations stables** (87 = ref_equipment.generation — Trade Session 124)
+
+**Session 124 — PLAN_TRADE étapes 1–7 ✅ :**
+- Migrations 84–87 : `merchants`, `trade_log`, `trade_offers`, `ref_equipment.generation`
+- `shared/events.js` : +12 constantes TRADE_* (4 client→serveur + 8 serveur→client)
+- `tradeRoutes.js` + `tradeService.js` : REST CRUD + `getCatalog` (cascade FAM→CAT→ITEM) + `buyFromMerchant` (atomique) + `acceptTransfer` (forUpdate)
+- `socketTrade.js` : `registerTradeHandlers` — rate limit 3/min — 4 handlers PJ↔PJ
+- `MerchantsPage.jsx` : Dashboard GM — CRUD + arbre catalogue tri-state + héritage visuel + joueurs autorisés
+- `DashboardPage.jsx` : bouton "Marchands" sur carte campagne GM
+- **Prochaine étape** : PLAN_TRADE étapes 8–11 (`TradeWindow.jsx` vue GM + Joueur + PJ↔PJ + menu radial)
+
+**Session 122 — COM19 FAUX BUG + INI Breakdown Popover ✅ :**
+- COM19 FAUX BUG : `REGLESYSCOMBAT.md` relu intégralement — règle "-5 INI assaut tir" inexistante — `socketCombatAnnouncement.js` conforme
+- `calcIniBreakdown` dans `combatSections.js` (source de vérité), `calcIniDelta` refactorisée
+- Popover INI : clic sur total → flottant ligne par ligne dans `CombatGmDeclareWindow` + `CombatActionWindow`
+- **Prochaine étape** : STUN2 session réelle (drone → PJ étourdi) + RW18-1 Bloc B ou cluster suivant selon priorité
+
+**Session 121 (suite) — COM22 ✅ clos (Local + Kiwi) :**
+- PRECHECK LOS assault supprimé (`socketCombatResolution.js`) — LOS restante à la résolution uniquement
+- Infrastructure Kiwi : `npm install` root (`fast-voxel-raycast` manquant `Enclume/node_modules/`)
+- `npm audit fix` server : 0 vulnérabilités — `xlsx *` dette active (SheetJS communauté, pas de fix)
 
 **Session 120 (suite) — STUN2 ✅ clos (SR + all OK) :**
 - Cause racine overlay "Ligne de vue bouchée" : FSM `AWAITING_DAMAGE` bloquait PRECHECK du slot suivant (pas un bug stun)

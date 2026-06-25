@@ -73,31 +73,47 @@ export function stateTransitionCost(def, fromKey, toKey) {
   return def.cost?.[fromKey]?.[toKey] ?? 0
 }
 
-// Calcul INI total client (indicatif -- recalcule serveur)
-export function calcIniDelta(prevStates, nextStates, mapActions, quick) {
-  let delta = 0
+// Détail INI client — retourne { label, value }[] (indicatif -- recalcule serveur)
+export function calcIniBreakdown(prevStates, nextStates, mapActions, quick) {
+  const lines = []
 
   for (const key of ['position', 'weapon', 'fire_mode', 'cover', 'vitesse']) {
-    const def = STATE_DEFS[key]
+    const def  = STATE_DEFS[key]
     const from = prevStates[key]
     const to   = nextStates[key]
-    if (from && to) delta += stateTransitionCost(def, from, to)
+    if (!from || !to || from === to) continue
+    const cost = stateTransitionCost(def, from, to)
+    if (cost === 0) continue
+    const fromLabel = def.states.find(s => s.k === from)?.l ?? from
+    const toLabel   = def.states.find(s => s.k === to)?.l ?? to
+    lines.push({ label: `${def.label} : ${fromLabel} → ${toLabel}`, value: cost })
   }
 
-  if (mapActions.move)   delta += mapActions.move.ini_mod ?? 0
+  if (mapActions.move?.ini_mod) {
+    const zone = MOVE_ZONE_DEFS.find(z => z.ini_mod === mapActions.move.ini_mod)
+    lines.push({ label: zone ? `Déplacement ${zone.label.toLowerCase()}` : 'Déplacement', value: mapActions.move.ini_mod })
+  }
   if (Array.isArray(mapActions.melee) && mapActions.melee.length > 0) {
-    delta += -3
-    if (mapActions.melee.length > 1) delta += -5
+    lines.push({ label: 'Corps à corps', value: -3 })
+    if (mapActions.melee.length > 1) lines.push({ label: 'CaC cibles supp.', value: -5 })
   }
   if (mapActions.attack?.cover_shot) {
-    delta += nextStates.cover === 'important' ? -5 : -3
+    lines.push({ label: 'Tirer depuis couverture', value: nextStates.cover === 'important' ? -5 : -3 })
   }
 
-  delta += (quick.observer ?? 0) * -5
-  delta += (quick.reperer  ?? 0) * -5
-  if (quick.phrase) delta += -3
+  const obs = quick?.observer ?? 0
+  if (obs > 0) lines.push({ label: `Observer ×${obs}`, value: obs * -5 })
+  const rep = quick?.reperer ?? 0
+  if (rep > 0) lines.push({ label: `Repérer ×${rep}`, value: rep * -5 })
+  if (quick?.phrase) lines.push({ label: 'Phrase courte', value: -3 })
 
-  return delta
+  return lines
+}
+
+// Calcul INI total client (indicatif -- recalcule serveur)
+export function calcIniDelta(prevStates, nextStates, mapActions, quick) {
+  return calcIniBreakdown(prevStates, nextStates, mapActions, quick)
+    .reduce((sum, l) => sum + l.value, 0)
 }
 
 // Actions sur la carte -- multi-selection

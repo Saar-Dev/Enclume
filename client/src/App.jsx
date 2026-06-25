@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage'
 import SessionPage from './pages/SessionPage'
 import CampaignSettingsPage from './pages/CampaignSettingsPage'
 import WorkshopPage from './pages/WorkshopPage'
+import MerchantsPage from './pages/MerchantsPage'
 import HealthPage from './pages/HealthPage'
 
 function ProtectedRoute({ children }) {
@@ -51,6 +52,9 @@ export default function App() {
         } />
         <Route path="/campaigns/:campaignId/settings" element={
           <ProtectedRoute><CampaignSettingsPage /></ProtectedRoute>
+        } />
+        <Route path="/campaigns/:campaignId/merchants" element={
+          <ProtectedRoute><MerchantsPage /></ProtectedRoute>
         } />
         <Route path="/workshop" element={
           <ProtectedRoute><WorkshopPage /></ProtectedRoute>

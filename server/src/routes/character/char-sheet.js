@@ -849,6 +849,7 @@ router.get('/:characterId/inventory', async (req, res, next) => {
         'ref_equipment.range as ref_range',
         'ref_equipment.fire_mode as ref_fire_mode',
         'ref_equipment.ammo_count as ref_ammo_count',
+        'ref_equipment.description as ref_description',
       )
       .orderBy('char_inventory.created_at', 'asc')
 
@@ -867,6 +868,7 @@ router.get('/:characterId/inventory', async (req, res, next) => {
       total_weight: totalWeight,
       ini_penalty:  iniPenalty,
       threshold,
+      hand_pref:    sheet?.hand_pref || 'R',
     })
   } catch (err) { next(err) }
 })

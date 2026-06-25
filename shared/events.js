@@ -120,4 +120,20 @@ export const WS = {
 
   // Campagne
   CAMPAIGN_SETTINGS_UPDATED: 'campaign:settings_updated',  // serveur → room : paramètres campagne modifiés
+
+  // Trade (marchands + échanges PJ↔PJ)
+  // client → serveur
+  TRADE_TRANSFER_OFFER:     'trade:transfer_offer',     // PJ A → serveur : proposer une offre
+  TRADE_TRANSFER_ACCEPTED:  'trade:transfer_accepted',  // PJ B → serveur : accepter l'offre
+  TRADE_TRANSFER_DECLINED:  'trade:transfer_declined',  // PJ B → serveur : refuser l'offre
+  TRADE_TRANSFER_CANCELLED: 'trade:transfer_cancelled', // PJ A → serveur : annuler l'offre
+  // serveur → client
+  TRADE_MERCHANT_UPDATED: 'trade:merchant_updated',   // serveur → room : marchand modifié (statut, mod_global)
+  TRADE_OFFER_RECEIVED:   'trade:offer_received',     // serveur → socket PJ B : offre reçue de PJ A
+  TRADE_OFFER_ACCEPTED:   'trade:offer_accepted',     // serveur → sockets A+B : transaction exécutée
+  TRADE_OFFER_DECLINED:   'trade:offer_declined',     // serveur → socket PJ A : PJ B a refusé
+  TRADE_OFFER_CANCELLED:  'trade:offer_cancelled',    // serveur → socket PJ B : PJ A a annulé
+  TRADE_OFFER_EXPIRED:    'trade:offer_expired',      // serveur → sockets A+B : offre expirée
+  TRADE_LOG_UPDATED:      'trade:log_updated',        // serveur → GM only : nouvelle entrée trade_log
+  TRADE_ERROR:            'trade:error',              // serveur → socket émetteur : erreur métier
 }

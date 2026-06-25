@@ -75,7 +75,7 @@ export default function TokenStatusPanel({
   }
 
   // Clamping écran
-  const W = 290, H = 220
+  const W = 320, H = 260
   const left = Math.max(8, Math.min(window.innerWidth  - W - 8, x - W / 2))
   const top  = Math.max(8, Math.min(window.innerHeight - H - 8, y - H / 2))
 
@@ -111,7 +111,7 @@ export default function TokenStatusPanel({
       {/* Grille 5×3 */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(5, 1fr)',
+        gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
         gap: 6,
       }}>
         {STATUS_LIST.map(({ code, category }) => {

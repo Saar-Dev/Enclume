@@ -7,6 +7,7 @@ import { registerVoxelHandlers } from './socketVoxel.js'
 import { registerDiceHandlers } from './socketDice.js'
 import { registerEntityHandlers } from './socketEntity.js'
 import { registerCombatHandlers } from './socketCombat.js'
+import { registerTradeHandlers } from './socketTrade.js'
 
 // Map des timers de timeout actifs â€” { requestId: { timeoutHandle, ...pendingData } }
 // DÃ©clarÃ©e hors de initSocket â€” une seule instance, partagÃ©e entre toutes les connexions.
@@ -169,6 +170,7 @@ const initSocket = (io) => {
         registerDiceHandlers(io, socket, context)
         registerEntityHandlers(io, socket, context, pendingEntityActions)
         registerCombatHandlers(io, socket, context, { combatTimers, combatPreviews })
+        registerTradeHandlers(io, socket, context)
 
         socket.on('disconnect', () => {
           console.log(`[WS] Déconnecté : ${socket.user.username} (${socket.id})`)

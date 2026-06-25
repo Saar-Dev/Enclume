@@ -5,7 +5,7 @@ import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api'
 import {
   STATE_DEFS, QUICK_ACTIONS, MAP_ACTIONS,
-  calcIniDelta,
+  calcIniDelta, calcIniBreakdown,
   CC_REPS_STEPS, computeFireVariant,
 } from './combatSections.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
@@ -95,6 +95,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [selectedDroneWeaponId, setSelectedDroneWeaponId] = useState(null)
   const [droneWeapons, setDroneWeapons] = useState([])
   const [isSelectingOnMap, setIsSelectingOnMap] = useState(false)
+  const [iniPopoverOpen, setIniPopoverOpen] = useState(false)
 
   const tokensRef = useRef(tokens)
   useEffect(() => { tokensRef.current = tokens }, [tokens])
@@ -118,6 +119,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setSelectedDroneWeaponId(null)
     setDroneWeapons([])
     setIsSelectingOnMap(false)
+    setIniPopoverOpen(false)
   }, [activeTokenId])
 
   // Sync states initiaux depuis rosterEntry
@@ -233,6 +235,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     },
     decl.quick,
   ) : 0
+  const iniBreakdown = isActivePnj ? calcIniBreakdown(
+    initialStates, decl,
+    { move: pendingMove ?? null, attack: null, melee: meleeTargets.length > 0 ? meleeTargets : null },
+    decl.quick,
+  ) : []
 
   const meleeDefensif    = decl.combatMode === 'defensif' || decl.combatMode === 'retraite'
   const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeAttackCount
@@ -836,11 +843,31 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       {/* FOOTER */}
       <div className="combat-win-footer">
         {iniDelta !== 0 && isActivePnj && (
-          <div style={S.iniRow}>
-            <span style={S.iniLabel}>INI TOTAL</span>
-            <span style={{ ...S.iniValue, color: iniDelta < -10 ? '#c83030' : (iniDelta < 0 ? '#c86030' : '#3aaa6a') }}>
-              {iniDelta > 0 ? `+${iniDelta}` : iniDelta}
-            </span>
+          <div style={{ position: 'relative' }}>
+            <div style={S.iniRow}>
+              <span style={S.iniLabel}>INI TOTAL</span>
+              <span
+                style={{ ...S.iniValue, color: iniDelta < -10 ? '#c83030' : (iniDelta < 0 ? '#c86030' : '#3aaa6a'), cursor: 'pointer' }}
+                onClick={() => setIniPopoverOpen(o => !o)}
+              >
+                {iniDelta > 0 ? `+${iniDelta}` : iniDelta}
+              </span>
+            </div>
+            {iniPopoverOpen && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 1998 }} onClick={() => setIniPopoverOpen(false)} />
+                <div className="ini-popover">
+                  {iniBreakdown.map((l, i) => (
+                    <div key={i} className="ini-popover-line">
+                      <span className="ini-popover-label">{l.label}</span>
+                      <span className={l.value >= 0 ? 'ini-bd-pos' : 'ini-bd-neg'}>
+                        {l.value > 0 ? `+${l.value}` : l.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
         {declareError && (

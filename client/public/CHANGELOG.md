@@ -1,3 +1,58 @@
+## v128 — 2026-06-25 — Système Trade : marchands + échanges PJ↔PJ
+
+### Serveur
+- [feat] Migrations 84–87 : `merchants`, `trade_log`, `trade_offers`, `ref_equipment.generation`
+- [feat] REST CRUD marchands (`/api/campaigns/:id/merchants`) — OPEN/CLOSED, règles catalogue JSONB, joueurs autorisés TEXT[]
+- [feat] `GET /:mid/catalog` : filtrage complet FAM→CAT→ITEM (INCLUDE/EXCLUDE/PARAM), seuils NT/niv/gen/rareté, prix avec mod_global
+- [feat] `POST /:mid/buy` : achat atomique (forUpdate) — débit sols + INSERT inventaire + trade_log
+- [feat] `socketTrade.js` : handlers WS PJ↔PJ — rate limit 3 offres/min — transaction forUpdate acceptTransfer
+- [feat] `GET /api/campaigns/:id/trade-log` : livre de compte paginé (GM only)
+
+### Client
+- [feat] `MerchantsPage.jsx` : Dashboard GM `/campaigns/:id/merchants` — CRUD marchands + arbre catalogue tri-state (HÉRITE/INCL/EXCL avec héritage visuel) + joueurs autorisés
+- [feat] `DashboardPage.jsx` : bouton "Marchands" sur carte campagne GM
+- [add] `shared/events.js` : +12 constantes `TRADE_*`
+
+---
+
+## v127 — 2026-06-24 — WeaponPanel v2 : armes par main + description
+
+### Client — Fiche personnage
+- [feat] `WeaponPanel.jsx` : refonte complète — colonnes MAIN DIRECTRICE / MAIN SECONDAIRE selon `hand_pref` (R/L/A), section DEUX MAINS / TRÉPIED séparée, logique 2H masque les colonnes 1H
+- [feat] Dropdown équipement intégré directement dans chaque colonne (CS2 — plus de menu global unique)
+- [fix] Arme à deux mains ne peut plus être équipée dans les deux mains séparément (CS3 — conflict resolution auto)
+- [feat] Badge −5 sur MAIN SECONDAIRE quand une arme y est équipée
+- [feat] Avertissement trépied absent / info trépied disponible dans le sac
+- [feat] Icône ⓘ sur chaque arme → tooltip CSS avec description (CS1)
+- [add] Classe CSS `.has-tooltip` générique (`data-tooltip` attribute)
+
+### Serveur
+- [fix] GET `/char-sheet/:id/inventory` : `hand_pref` et `ref_description` ajoutés à la réponse
+
+---
+
+## v126 — 2026-06-24 — INI Breakdown Popover + COM19 FAUX BUG
+
+### Client — Combat
+- [feat] Clic sur le total INI dans `CombatGmDeclareWindow` et `CombatActionWindow` → popover flottant avec détail ligne par ligne des coûts (posture, arme, déplacement, CaC, couverture, actions rapides)
+- [refactor] `combatSections.js` : `calcIniBreakdown` source de vérité — `calcIniDelta` refactorisée (appelle + somme breakdown)
+
+### Bugs
+- [faux-bug] COM19 — "-5 INI assaut tir" : règle inexistante dans LdB — code conforme
+
+---
+
+## v125 — 2026-06-24 — COM22 : correction actions combat Kiwi + sécurité serveur
+
+### Serveur — Combat
+- [fix] `socketCombatResolution.js` : suppression PRECHECK LOS assault (redondant — LOS vérifiée à la résolution) → `CombatModifiersWindow` s'ouvre toujours, `confirmedModifiers` collectés correctement
+
+### Infrastructure
+- [fix] `npm install` racine Kiwi : `fast-voxel-raycast` maintenant résolu depuis `shared/losUtils.js`
+- [fix] `npm audit fix` server : 7 vulnérabilités corrigées (ws, multer, qs, fast-xml-builder…) — 0 restantes
+
+---
+
 ## v124 — 2026-06-24 — AA-1 : blessures combat affichées sans rouvrir la fenêtre
 
 ### Client — Fiches personnages

@@ -8,7 +8,7 @@ import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
 import {
   STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS,
-  stateTransitionCost, calcIniDelta,
+  stateTransitionCost, calcIniDelta, calcIniBreakdown,
   CC_REPS_STEPS, RL_BUTTONS, computeFireVariant,
   ACTION_LABELS, PURE_MOVE_TYPES,
 } from './combatSections.js'
@@ -111,6 +111,7 @@ export default function CombatActionWindow({
   const [meleeCount, setMeleeCount]                         = useState(1)    // 1|2|3
   const [selectedMeleeWeaponId, setSelectedMeleeWeaponId]   = useState(undefined) // undefined=auto, null=mains nues, id=choix
   const [inMeleeTargetMode, setInMeleeTargetMode]           = useState(false)
+  const [iniPopoverOpen, setIniPopoverOpen]                 = useState(false)
 
   // --- roster PJ collapsible ------------------------------------------------
   const [rosterOpen, setRosterOpen] = useState(
@@ -154,6 +155,7 @@ export default function CombatActionWindow({
     setSelectedMeleeWeaponId(undefined)
     setInMeleeTargetMode(false)
     setSelectedDroneWeaponId(null)
+    setIniPopoverOpen(false)
   }, [rosterEntry?.token_id])
 
   // --- fetch allures — suit le token actif du joueur -----------------------
@@ -457,6 +459,7 @@ export default function CombatActionWindow({
       : null,
   }
   const iniDelta = calcIniDelta(initialStates.current, decl, mapActionsObj, decl.quick)
+  const iniBreakdown = calcIniBreakdown(initialStates.current, decl, mapActionsObj, decl.quick)
   const iniTotal = (rosterEntry.initiative ?? 0) - iniDelta // initiative decremente par les couts
 
   // --- validite declaration ------------------------------------------------
@@ -1167,12 +1170,33 @@ export default function CombatActionWindow({
         )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
           <div style={W.footerLeft}>
-            <span style={{
-              ...W.totalMod,
-              color: iniDelta >= 0 ? '#3aaa6a' : (iniDelta < -10 ? '#c83030' : '#c86030'),
-            }}>
-              INI : {iniDelta >= 0 ? `+${iniDelta}` : iniDelta}
-            </span>
+            <div style={{ position: 'relative' }}>
+              <span
+                style={{
+                  ...W.totalMod,
+                  color: iniDelta >= 0 ? '#3aaa6a' : (iniDelta < -10 ? '#c83030' : '#c86030'),
+                  cursor: iniDelta !== 0 ? 'pointer' : 'default',
+                }}
+                onClick={() => iniDelta !== 0 && setIniPopoverOpen(o => !o)}
+              >
+                INI : {iniDelta >= 0 ? `+${iniDelta}` : iniDelta}
+              </span>
+              {iniPopoverOpen && iniDelta !== 0 && (
+                <>
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 1998 }} onClick={() => setIniPopoverOpen(false)} />
+                  <div className="ini-popover">
+                    {iniBreakdown.map((l, i) => (
+                      <div key={i} className="ini-popover-line">
+                        <span className="ini-popover-label">{l.label}</span>
+                        <span className={l.value >= 0 ? 'ini-bd-pos' : 'ini-bd-neg'}>
+                          {l.value > 0 ? `+${l.value}` : l.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
             {moveSelection && (
               <span style={W.destination}>
                 [{moveSelection.targetPosX}, {moveSelection.targetPosY}]

@@ -207,12 +207,18 @@ export default function DashboardPage() {
 
                 {/* SETTINGS GM */}
                 {campaign.role === 'gm' && (
-                  <div style={styles.cardActions}>
+                  <div style={{ ...styles.cardActions, display: 'flex', gap: '8px' }}>
                     <button
                       className="btn btn-ghost"
                       onClick={() => navigate(`/campaigns/${campaign.id}/settings`)}
                     >
                       {t('dashboard.settings')}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => navigate(`/campaigns/${campaign.id}/merchants`)}
+                    >
+                      {t('dashboard.merchants')}
                     </button>
                   </div>
                 )}

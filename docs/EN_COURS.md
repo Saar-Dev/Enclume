@@ -1,5 +1,5 @@
 # EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-24 Session 121
+> Dernière mise à jour : 2026-06-25 Session 124
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -95,16 +95,40 @@
    → Blessures combat affichées sans rouvrir CharacterWindow — store Zustand + fix StrictMode cancelled pattern
    → RW17-1 ✅ et STUN2 ✅ : marqués clos dans BUGIDENTIFIE.md (étaient ouverts à tort)
 
-**23. ← PROCHAINE ÉTAPE : voir `docs/BUGIDENTIFIE.md` + `docs/ARCHI_REWORK.md` pour cluster suivant**
-   → Validation STUN2 complète en session combat réelle recommandée (drone → PJ étourdi)
-   → RW18-1 Bloc B (serveur — `skipEmit` woundService + statusService) ou bugs drones (D1, D2) selon priorité
+**23. ~~COM22 ✅ clos Session 121 (suite)~~**
+   → Aucune action assault Kiwi — suppression PRECHECK LOS (`socketCombatResolution.js`) + `npm install` root Kiwi (`fast-voxel-raycast`) + npm audit fix server (0 vulns)
+   → Kiwi ✅ : 2 assaults résolus, STUN2 auto-skip, melee OK
+
+**24. ~~COM19 FAUX BUG ✅ Session 122~~**
+   → LdB relu intégralement : règle "-5 INI assaut (tir)" inexistante — code conforme
+
+**25. ~~INI Breakdown Popover ✅ Session 122~~**
+   → `calcIniBreakdown` dans `combatSections.js` (source de vérité) + popover clic dans `CombatGmDeclareWindow` + `CombatActionWindow`
+
+**26. ~~CS2 + CS3 + CS1 ✅ Session 123~~**
+   → `WeaponPanel.jsx` refonte (colonnes DIR/SEC + 2M + `hand_pref`) + `ref_description` tooltip ⓘ
+
+**27. ~~PLAN_TRADE — Système Trade (étapes 1–7) ✅ Session 124~~**
+   → Migrations 84 (merchants) + 85 (trade_log) + 86 (trade_offers) + 87 (ref_equipment.generation)
+   → `shared/events.js` : +12 constantes TRADE_* (4 client→serveur + 8 serveur→client)
+   → `tradeRoutes.js` + `tradeService.js` : REST CRUD marchands + getCatalog (filtrage FAM/CAT/ITEM/seuils) + buyFromMerchant (atomique) + acceptTransfer (forUpdate)
+   → `socketTrade.js` : `registerTradeHandlers` — rate limiter 3/min — 4 handlers PJ↔PJ
+   → `MerchantsPage.jsx` : Dashboard GM — CRUD marchands + arbre catalogue tri-state + joueurs autorisés
+   → `DashboardPage.jsx` : bouton "Marchands" sur carte campagne GM
+
+**28. ← PROCHAINE ÉTAPE : PLAN_TRADE étapes 8–11**
+   → Étape 8 : `TradeWindow.jsx` vue GM lite (toggle OPEN/CLOSED + mod_global + livre de compte)
+   → Étape 9 : vue Joueur (catalogue + panier + checkout)
+   → Étape 10 : vue Échange PJ↔PJ (propose + accept + expiration)
+   → Étape 11 : Menu radial — secteur Trade → TradeWindow
+   → Validation STUN2 en session réelle recommandée en parallèle
 
 ---
 
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **81 migrations appliquées** (80 = combat_pending, 81 = combat_state.sub_phase — Session 111)
+- **88 migrations appliquées** (87 = ref_equipment.generation — Session 124 Trade)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---
@@ -148,7 +172,7 @@
 | COM7 | Multi-attaque CaC : duplicata / bouton grisé | Moyenne |
 | CL2 | ~~Design CombatDeclareLog + divergence GM/joueur~~ | ✅ REWORK-05 Session 99 |
 | CL3 | Ghosts déplacement d'annonce disparus | Moyenne |
-| D1 | Menu radial "fiche" drone ne s'ouvre pas | Moyenne |
+| ~~D1~~ | ~~Menu radial "fiche" drone ne s'ouvre pas~~ | ✅ Clos Session 124 |
 | COM9 | Viser une localisation précise — non implémenté | Moyenne — sprint dédié |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
 | — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |
@@ -164,15 +188,15 @@
 | — | Kiwi P-SRV-5 — ports Docker non restreints | Infra |
 | — | Logs debug `index.js` — conservés volontairement | Infra |
 | **STAT1** | is-stunned / unconscious — exclusion mutuelle + refresh 10→9 | **Haute** — Cluster L |
-| **COM19** | -5 INI à Assaut (tir) | **Haute** — Cluster M |
+| ~~**COM19**~~ | ~~-5 INI à Assaut (tir)~~ | ✅ FAUX BUG — Session 122 |
 | **COM22** | LOS bloquée affichée pour tout le monde | **Haute** — Cluster N |
 | **KIWI2** | Import GLB token : local ✅ / Kiwi ❌ | **Haute** — Cluster R |
-| **CS3** | Arme à deux mains dans chaque main → "Main Directrice" | **Haute** — Cluster O |
+| ~~**CS3**~~ | ~~Arme à deux mains dans chaque main → "Main Directrice"~~ | ✅ CLOS Session 123 |
 | **CS4** | Catégorie "Techniques" + liste compétences | Moyenne — Cluster O |
 | **CS5** | Compétence réservée (X) : ouverture 1 XP, reste -3 | Moyenne — Cluster O |
 | **CS6** | Force Polaris = Avantage (pas Mutation) | Moyenne — Cluster O |
-| **CS1** | Onglet Matériel : description arme manquante | Moyenne — Cluster O |
-| **CS2** | Changement d'arme : menu déroulant | Moyenne — Cluster O |
+| ~~**CS1**~~ | ~~Onglet Matériel : description arme manquante~~ | ✅ CLOS Session 123 |
+| ~~**CS2**~~ | ~~Changement d'arme : menu déroulant~~ | ✅ CLOS Session 123 |
 | **DR8** | Drone arme = munitions infinies | Moyenne — Cluster P |
 | **DR9** | Logiciels drone pas à jour (BDD) | Moyenne — Cluster P |
 | **DR7** | Drone : propriétaire ne peut pas modifier | Moyenne — Cluster P |
