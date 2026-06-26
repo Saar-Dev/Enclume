@@ -1,5 +1,5 @@
-# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-25 Session 126
+﻿# EN COURS — Dettes actives et prochaines étapes
+> Dernière mise à jour : 2026-06-26 Session 127 (suite 2)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -154,10 +154,16 @@
    → DroneSheet : StatField charge_utile + section Chargement + bouton Larguer
    → WeaponsTab : ammo_restant/contenance + calibre affiché
 
-**33. ← PROCHAINE ÉTAPE : cluster suivant selon priorité**
-   → Validation STUN2 en session combat réelle
-   → Contre-offre flux complet (test session réelle)
-   → Cluster Drone P (DR7/DR8/DR9/DR10) ou bugs actifs BUGIDENTIFIE.md
+**33. ~~Cluster Drone P (DR7/DR8/DR10) ✅ Session 127~~**
+   → DR7 ✅ : `droneIsGmOrOwner(req)` helper — garde lecture fiche drone (owner ou GM)
+   → DR10 ✅ : `isDroneGmManaged` — filtre `user_id = null` (drone joueur exclu fenêtre GM)
+   → DR8 FAUX BUG — `char_inventory` retourne bien les armes drone
+
+**34. ← PROCHAINE ÉTAPE : Cluster N (reste) + bugs actifs**
+   → COM23 ✅ Session 127 : `TokenLabel` sprite CanvasTexture — label occludé par murs
+   → FEAT3 ✅ Session 127 : `TokenActiveDisk` ring dorée — token actif combat
+   → **COM21** : Collision tokens — feedback client absent (Cluster N restant)
+   → **COM20** : Phase 1 — arme + munitions dans CombatActionWindow / CombatGmDeclareWindow
 
 ---
 
@@ -187,62 +193,33 @@
 
 | ID | Description | Priorité |
 |---|---|---|
-| ~~DMG1+DMG2~~ | ~~Labels DICE_RESULT dégâts drone (Compétence/Seuil faux)~~ | ✅ Clos Session 105 |
-| ~~DR4~~ | ~~`calcDroneRD` : RD négatif → drone plein subit dégâts suppl.~~ | ✅ Clos Session 101 |
-| ~~DR6~~ | ~~Blindage drone non lu (0 affiché malgré DB=15)~~ | ✅ Clos Session 101 |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
 | CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
-| ~~UI1~~ | ~~Fenêtre déclaration design blanc~~ | ✅ REWORK-10 clos complet — scénarios 1–8 validés (Session 109) |
-| ~~COM1~~ | ~~Recharger ne fait rien~~ | ✅ Clos Session 109 |
-| ~~CL1~~ | ~~Portraits PNJ non visibles timeline joueur~~ | ✅ Clos Session 109 |
-| ~~COM15~~ | ~~Propriétaire slot non identifiable GM~~ | ✅ Clos Session 118 |
-| COM8 | Fenêtre annonce visible pendant sélection cible | Moyenne |
-| ~~COM12~~ | ~~Mode de tir : chips CC/RC/RF sans filtre disponibilité arme~~ | ✅ REWORK-06 Session 114 |
-| ~~COM13~~ | ~~Assaut tir joueur : "Tir simple" par défaut non validé sans re-clic~~ | ✅ REWORK-06 Session 114 |
-| ~~RANGE1-drone~~ | ~~Drone CaC : fenêtre s'ouvre hors portée~~ | ✅ REWORK-16 Session 116 suite |
-| ~~LOS1-drone~~ | ~~Drone ranged LOS bloquée → pas de `COMBAT_DECLARE_ERROR`~~ | ✅ REWORK-16 Session 116 suite |
 | COM2 | Vérif statut arme absente côté GM | Moyenne |
-| ~~COM4~~ | ~~CaC exige arme au clair (mains nues impossible)~~ | ✅ REWORK-06 Session 114 |
-| COM5 | ~~Mode combat sélectionne aussi la cible (GM)~~ | ✅ REWORK-05 Session 99 |
 | COM7 | Multi-attaque CaC : duplicata / bouton grisé | Moyenne |
-| CL2 | ~~Design CombatDeclareLog + divergence GM/joueur~~ | ✅ REWORK-05 Session 99 |
-| ~~CL3~~ | ~~Ghosts déplacement d'annonce disparus~~ | ✅ Clos Session 125 |
-| ~~D1~~ | ~~Menu radial "fiche" drone ne s'ouvre pas~~ | ✅ Clos Session 124 |
 | COM9 | Viser une localisation précise — non implémenté | Moyenne — sprint dédié |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
 | — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |
-| ~~D2~~ | ~~Token drone : changement GLB non fonctionnel~~ | ✅ Clos Session 124 |
 | DR2 | Drone : déplacement absent | Basse — sprint futur |
 | INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
 | INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |
-| ~~WS1~~ | ~~WorkshopPage crash `err.response?.data?.error`~~ | ✅ Clos Session 109 |
 | AU1 | `useDiceAudio.js` — sons dés | Basse |
 | TC1 | `.gitattributes:3` — attribut invalide | Très basse |
 | DCO1 | `onTokenRotate` dead code Canvas3D/Scene | Très basse |
 | VX1 | `getVoxelSurfaceTop` — pas de cas slope/wedge | Très basse |
 | — | Kiwi P-SRV-5 — ports Docker non restreints | Infra |
 | — | Logs debug `index.js` — conservés volontairement | Infra |
-| **STAT1** | is-stunned / unconscious — exclusion mutuelle + refresh 10→9 | **Haute** — Cluster L |
-| ~~**COM19**~~ | ~~-5 INI à Assaut (tir)~~ | ✅ FAUX BUG — Session 122 |
-| **COM22** | LOS bloquée affichée pour tout le monde | **Haute** — Cluster N |
 | **KIWI2** | Import GLB token : local ✅ / Kiwi ❌ | **Haute** — Cluster R |
-| ~~**CS3**~~ | ~~Arme à deux mains dans chaque main → "Main Directrice"~~ | ✅ CLOS Session 123 |
 | **CS4** | Catégorie "Techniques" + liste compétences | Moyenne — Cluster O |
 | **CS5** | Compétence réservée (X) : ouverture 1 XP, reste -3 | Moyenne — Cluster O |
 | **CS6** | Force Polaris = Avantage (pas Mutation) | Moyenne — Cluster O |
-| ~~**CS1**~~ | ~~Onglet Matériel : description arme manquante~~ | ✅ CLOS Session 123 |
-| ~~**CS2**~~ | ~~Changement d'arme : menu déroulant~~ | ✅ CLOS Session 123 |
-| **DR8** | Drone arme = munitions infinies | Moyenne — Cluster P |
-| **DR9** | Logiciels drone pas à jour (BDD) | Moyenne — Cluster P |
-| **DR7** | Drone : propriétaire ne peut pas modifier | Moyenne — Cluster P |
-| **DR10** | Drone joueur : GM reçoit aussi la fenêtre | Moyenne — Cluster P |
 | **COM20** | Phase 1 : afficher arme (munitions + type) | Moyenne — Cluster N |
 | **COM21** | Collision tokens : deuxième bloqué | Moyenne — Cluster N |
-| **COM23** | Label token : fixe, ne rentre pas dans les murs | Moyenne — Cluster N |
+| **COM23** | ~~Label token : fixe, ne rentre pas dans les murs~~ | ✅ Session 127 |
+| **FEAT3** | ~~Token actif : cercle de sélection~~ | ✅ Session 127 |
 | **UI2** | Alignement dés | Basse — Cluster Q |
 | **UI3** | Dé 100 : affichage chat | Basse — Cluster Q |
-| **FEAT3** | Token actif : cercle de sélection | Moyenne — FEAT |
 
 ---
 

@@ -1509,6 +1509,44 @@ Début du Cluster P — Drones v2. Triage du cluster : DR8 fermé comme faux bug
 
 ---
 
+## Session 127 (suite 2) — 2026-06-26 — COM23 ✅ + FEAT3 ✅
+
+### Bug COM23 — Label token pénètre dans les murs
+
+**Cause racine [HYPOTHÈSE validée]** : `<Billboard><Text>` troika utilise shader SDF avec `transparent: true` → pass transparent → depth test dégradé à certains angles de caméra. La géométrie du texte pouvait s'afficher à l'intérieur des voxels.
+
+**Correctif — `Canvas3D.jsx`** :
+- Nouveau composant `TokenLabel` : `THREE.CanvasTexture` canvas 2D → `<sprite>` + `<spriteMaterial depthWrite={false}>`
+- `depthTest: true` (défaut SpriteMaterial hérité de Material) → depth test natif WebGL — label occludé par opaques (voxels `MeshLambertMaterial`) ✅
+- `Billboard` remplacé pour le label principal — label GM violet (`⊘ GM`) conservé en troika `<Text>`
+- `useMemo([label, color])` + `useEffect cleanup` → dispose texture GPU
+
+### Testé
+- Label token occludé par murs ✅ (SR + fonctionnel — confirmation Saar)
+
+### Non testé
+- Calibrage H3D = 0.4 (cosmétique — ajustable à l'usage)
+
+---
+
+### FEAT3 — Token actif : cercle de sélection (surbrillance)
+
+**Implémentation — `Canvas3D.jsx`** :
+- Nouveau composant `TokenActiveDisk` : ring dorée `#ffd700` (r=0.52–0.72), y=0.03 local (sol), `meshBasicMaterial depthWrite={false}`
+- Animation `useFrame` : pulsation opacité (0.3–0.9) + scale (±6%) — 3 Hz / 2 Hz
+- `activeTokenId` destructuré de `useCombatStore` dans `Scene` (UUID string — comparaison `===` correcte)
+- `isActive={activeTokenId === token.id}` → `TokenMesh` → visuellement distinct de la ring de sélection (couleur token, y=0.6)
+- Mis à jour via `onSlotAdvanced` → `advanceSlot` store — réactif aux avances de slot
+
+### Testé
+- Anneau doré visible sur token actif en combat ✅ (SR + fonctionnel — confirmation Saar)
+- Indépendant du ring de sélection (clic) ✅
+
+### Non testé
+—
+
+---
+
 ## Session 127 (suite) — 2026-06-26 — DR10 ✅
 
 ### Bug DR10 — Drone propriétaire joueur : GM recevait la fenêtre de déclaration combat

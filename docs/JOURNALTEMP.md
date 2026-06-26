@@ -3,6 +3,368 @@
 
 ---
 
+## Session 127 — REWORK DR11 : DroneDeclareSection (refactor symétrie GM/PJ)
+
+### Contexte
+DR11 a révélé que CombatGmDeclareWindow et CombatActionWindow dupliquent la logique de déclaration drone (move + attaque). Fix DR11 appliqué en bricolage (bouton Move ajouté dans CombatGmDeclareWindow). Ce rework remplace ce bricolage par une architecture partagée.
+
+### Analyse des deux composants (lus Session 127)
+
+**CombatActionWindow — drone (état actuel) :**
+- State : `droneWeapons`, `selectedDroneWeaponId`, `inTargetMode`, `moveSelection`
+- Logic : `selectedDroneWeapon` dérivé, `droneAssaultValid = !attackSelected || (weapon && ammo && target)`, `handleZoneSelectClick`, `handleChooseTarget`
+- UI : Move dans grille MAP_ACTIONS (filtrage `isDrone` sur melee/reload/multi/interact) + DroneWeaponPanel panneau droit si `attackSelected && isDrone`
+- Payload : `move: moveSelection ? {...} : null` + `attack: { droneWeaponInvId, targetTokenId, cover_shot }`
+
+**CombatGmDeclareWindow — drone après fix DR11 :**
+- State : `droneWeapons`, `selectedDroneWeaponId`, `assaultTarget`, `pendingMove` (partagé avec le move PNJ)
+- Logic : `canDeclareDrone = pendingMove || (weapon && target)`
+- UI : section ACTION (Move bouton) + DroneWeaponPanel toujours visible
+- Payload : `mapActions: { move: pendingMove ?? null, ...attackPayload }`
+
+**Différences réelles :**
+| | CombatActionWindow | CombatGmDeclareWindow |
+|---|---|---|
+| Allures move | Calculées depuis stats PJ | `DEFAULT_PNJ_ALLURES` |
+| canDeclare | `!attackSelected \|\| (weapon && ammo && target)` | `pendingMove \|\| (weapon && target)` |
+| Ammo check | Oui | Non (simplification GM) |
+| Déclencheur move | grille MAP_ACTIONS → handleZoneSelectClick | bouton standalone → handleStartMove |
+| DroneWeaponPanel | Panneau droit (conditionnel attackSelected) | Toujours visible |
+
+### Architecture cible
+
+```
+useDroneDeclare(charId, tokenId, allures, onEnterMoveMode, onEnterTargetMode)
+  → { droneWeapons, selectedDroneWeaponId, setSelectedDroneWeaponId,
+      assaultTargetId, setAssaultTargetId,
+      pendingMove, isSelectingOnMap,
+      canDeclare, buildMapActions(),
+      handleStartMove(activeToken), handleChooseTarget(activeToken) }
+
+DroneDeclareSection (UI pure)
+  Props: { pendingMove, onMoveToggle, droneWeapons, selectedWeaponId,
+           onWeaponSelect, assaultTargetId, onChooseTarget, getLabel }
+  Rendu: Move button + destination + DroneWeaponPanel
+```
+
+**CombatGmDeclareWindow** : branche `isActiveDrone` → hook + DroneDeclareSection
+**CombatActionWindow** : branche `isDrone` → hook + DroneDeclareSection (remplace grille filtrée + panneau droit conditionnel)
+
+### Plan exact — 4 étapes / 4 fichiers
+
+---
+
+#### Étape 1 — `client/src/lib/useDroneDeclare.js` (nouveau fichier)
+
+**Conventions intégrées (recherche 2026-06-26) :**
+- `useCallback` sur les callbacks retournés (évite stale closures si parent les met en dep array)
+- `cancelled` flag (convention projet — voir CombatActionWindow L.256, pas AbortController)
+- reset séparé du fetch (deux useEffect distincts, dépendances orthogonales)
+- pas de Context Provider — `allures` passé en paramètre (prop-down = convention projet)
+
+```js
+import { useState, useEffect, useCallback } from 'react'
+import api from './api.js'
+
+export function useDroneDeclare({ charId, tokenId, allures, onEnterMoveMode, onEnterTargetMode }) {
+  const [droneWeapons,          setDroneWeapons]          = useState([])
+  const [selectedDroneWeaponId, setSelectedDroneWeaponId] = useState(null)
+  const [assaultTargetId,       setAssaultTargetId]       = useState(null)
+  const [pendingMove,           setPendingMove]           = useState(null)
+  const [isSelectingOnMap,      setIsSelectingOnMap]      = useState(false)
+
+  // Fetch armes drone quand le personnage change (cancelled flag = convention projet)
+  useEffect(() => {
+    if (!charId) return
+    let cancelled = false
+    api.get(`/char-sheet/${charId}/drone/weapons`)
+      .then(r => {
+        if (cancelled) return
+        const weapons = r.data.weapons ?? []
+        setDroneWeapons(weapons)
+        if (weapons.length > 0) setSelectedDroneWeaponId(weapons[0].id)
+      })
+      .catch(() => { if (!cancelled) setDroneWeapons([]) })
+    return () => { cancelled = true }
+  }, [charId])
+
+  // Reset état déclaration quand le slot actif change (séparé du fetch)
+  useEffect(() => {
+    setSelectedDroneWeaponId(null)
+    setAssaultTargetId(null)
+    setPendingMove(null)
+    setDroneWeapons([])
+    setIsSelectingOnMap(false)
+  }, [tokenId])
+
+  const canDeclare = !!pendingMove || (!!selectedDroneWeaponId && !!assaultTargetId)
+
+  // useCallback : stable si parent utilise ces fonctions dans un dep array
+  const handleStartMove = useCallback((activeToken) => {
+    if (!onEnterMoveMode || !tokenId || !activeToken || !allures) return
+    setIsSelectingOnMap(true)
+    onEnterMoveMode(
+      allures, tokenId,
+      { x: activeToken.pos_x, z: activeToken.pos_y },
+      (sel) => { setPendingMove(sel); setIsSelectingOnMap(false) },
+      () => { setPendingMove(null); setIsSelectingOnMap(false) },
+    )
+  }, [allures, tokenId, onEnterMoveMode])
+
+  const handleChooseTarget = useCallback((activeToken) => {
+    if (!onEnterTargetMode || !tokenId || !activeToken) return
+    setAssaultTargetId(null)
+    setIsSelectingOnMap(true)
+    onEnterTargetMode(
+      tokenId,
+      { x: activeToken.pos_x, z: activeToken.pos_y },
+      (targetId) => { setAssaultTargetId(targetId); setIsSelectingOnMap(false) },
+      () => { setIsSelectingOnMap(false) },
+      'ranged',
+    )
+  }, [tokenId, onEnterTargetMode])
+
+  const clearPendingMove = useCallback(() => setPendingMove(null), [])
+
+  // Construit le fragment mapActions pour le payload COMBAT_ACTION_DECLARE
+  // Appelé au moment du declare (lecture snapshot des states courants)
+  const buildMapActions = useCallback(() => {
+    const hasAttack = !!selectedDroneWeaponId && !!assaultTargetId
+    const weapon = hasAttack ? droneWeapons.find(w => w.id === selectedDroneWeaponId) : null
+    const explicitFm = weapon?.fire_mode
+    const isCaC = explicitFm ? explicitFm === 'cc' : !weapon?.ref_fire_mode
+    const stateFireMode = hasAttack ? (isCaC ? 'cc' : (explicitFm ?? 'rc').toLowerCase()) : 'cc'
+    const attackPayload = hasAttack
+      ? (isCaC
+          ? { melee: [{ droneWeaponInvId: selectedDroneWeaponId, targetTokenId: assaultTargetId }] }
+          : { attack: { droneWeaponInvId: selectedDroneWeaponId, targetTokenId: assaultTargetId } })
+      : {}
+    return {
+      stateFireMode,
+      mapActions: {
+        move: pendingMove
+          ? { targetPosX: pendingMove.targetPosX, targetPosY: pendingMove.targetPosY,
+              targetPosZ: pendingMove.targetPosZ ?? 0, ini_mod: pendingMove.ini_mod ?? 0,
+              action_key: pendingMove.action_key }
+          : null,
+        ...attackPayload,
+      },
+    }
+  }, [selectedDroneWeaponId, assaultTargetId, droneWeapons, pendingMove])
+
+  return {
+    droneWeapons, selectedDroneWeaponId, setSelectedDroneWeaponId,
+    assaultTargetId, pendingMove, isSelectingOnMap,
+    canDeclare, buildMapActions, clearPendingMove,
+    handleStartMove, handleChooseTarget,
+  }
+}
+```
+
+---
+
+#### Étape 2 — `client/src/components/DroneDeclareSection.jsx` (nouveau fichier)
+
+UI pure — Move toggle + destination + DroneWeaponPanel.
+
+Props :
+```js
+{ pendingMove, onMoveToggle, droneWeapons, selectedWeaponId, onWeaponSelect,
+  assaultTargetId, onChooseTarget, getLabel, style }
+```
+
+Rendu :
+```jsx
+<div style={style}>
+  <div className="combat-win-section">
+    <span className="combat-win-section-title" style={{ color: '#aa8a30' }}>ACTION</span>
+    <div style={...actionGrid}>
+      <div style={...moveBtn actif si pendingMove} onClick={onMoveToggle}>
+        <span>Déplacement</span>
+        <span>−INI</span>
+      </div>
+    </div>
+    {pendingMove && <div>[{pendingMove.targetPosX}, {pendingMove.targetPosY}]</div>}
+  </div>
+  <DroneWeaponPanel
+    droneWeapons={droneWeapons}
+    selectedWeaponId={selectedWeaponId}
+    assaultTargetId={assaultTargetId}
+    showReadyBadge={false}
+    onWeaponSelect={onWeaponSelect}
+    onChooseTarget={onChooseTarget}
+    getLabel={getLabel}
+  />
+</div>
+```
+
+Styles copiés de CombatGmDeclareWindow (S.actionGrid, S.actionBtn, S.actionBtnActive, S.actionIni, S.attackTargetRow) → styles locaux dans ce fichier.
+
+---
+
+#### Étape 3 — `CombatGmDeclareWindow.jsx`
+
+**Supprimer :**
+- `useState` : `droneWeapons`, `selectedDroneWeaponId` (→ hook)
+- `useEffect` fetch drone weapons L.165-174 (→ hook)
+- `activeDroneCharId` IIFE L.157-163 (→ remplacé par prop charId au hook)
+- Bloc UI `isActiveDrone` actuel (move + DroneWeaponPanel inline) → `<DroneDeclareSection />`
+- `canDeclareDrone` L.285 → `droneDeclare.canDeclare`
+- Branche `isActiveDrone` dans `handleDeclare` → `droneDeclare.buildMapActions()`
+
+**Ajouter :**
+```js
+import { useDroneDeclare } from '../lib/useDroneDeclare.js'
+import DroneDeclareSection from './DroneDeclareSection.jsx'
+import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'  // déjà importé
+
+const droneDeclare = useDroneDeclare({
+  charId:            activeDroneCharId,
+  tokenId:           activeTokenId,
+  allures:           DEFAULT_PNJ_ALLURES,
+  onEnterMoveMode,
+  onEnterTargetMode,
+})
+```
+
+**`handleDeclare` branche drone :**
+```js
+if (isActiveDrone) {
+  const { stateFireMode, mapActions } = droneDeclare.buildMapActions()
+  socket.emit(WS.COMBAT_ACTION_DECLARE, {
+    tokenId: activeTokenId,
+    state: { position: 'standing', weapon: 'holstered', fire_mode: stateFireMode, cover: 'exposed', vitesse: 'normal' },
+    mapActions,
+  })
+  return
+}
+```
+
+**`canDeclare` L.286 :**
+```js
+const canDeclare = (isActivePnj && (stateChanged || hasAction) && assaultValid) || droneDeclare.canDeclare
+```
+
+**Bloc UI `isActiveDrone` :**
+```jsx
+{isActiveDrone && (
+  <DroneDeclareSection
+    pendingMove={droneDeclare.pendingMove}
+    onMoveToggle={() => {
+      if (droneDeclare.pendingMove) { /* setPendingMove(null) via hook */ }
+      else droneDeclare.handleStartMove(activeToken)
+    }}
+    droneWeapons={droneDeclare.droneWeapons}
+    selectedWeaponId={droneDeclare.selectedDroneWeaponId}
+    onWeaponSelect={droneDeclare.setSelectedDroneWeaponId}
+    assaultTargetId={droneDeclare.assaultTargetId}
+    onChooseTarget={() => droneDeclare.handleChooseTarget(activeToken)}
+    getLabel={getLabel}
+    style={S.controls}
+  />
+)}
+```
+
+**`isSelectingOnMap` :** utiliser `droneDeclare.isSelectingOnMap || isSelectingOnMap` dans le style opacity du wrapper.
+
+**`activeDroneCharId` :** garder l'IIFE (nécessaire pour passer au hook), ou déplacer la logique dans le hook si `tokens`/`characters` sont passés. Décision : garder l'IIFE, passer `charId`.
+
+---
+
+#### Étape 4 — `CombatActionWindow.jsx`
+
+**Supprimer :**
+- `useState` : `droneWeapons`, `selectedDroneWeaponId`, `inTargetMode` (→ hook)
+- `useEffect` fetch drone weapons L.255-265 (→ hook)
+- `selectedDroneWeapon` / `droneAssaultValid` dérivés (→ hook)
+- Conditions `isDrone` dans MAP_ACTIONS (filtrage melee/reload/multi/interact) — remplacées par `DroneDeclareSection` hors grille
+- Panneau droit drone `{showAssault && isDrone && <DroneWeaponPanel>}` — remplacé
+- `canDeclare` branche drone → `droneDeclare.canDeclare`
+- Payload drone dans `handleDeclare` → `droneDeclare.buildMapActions()`
+
+**Ajouter :**
+```js
+import { useDroneDeclare } from '../lib/useDroneDeclare.js'
+import DroneDeclareSection from './DroneDeclareSection.jsx'
+
+const droneDeclare = useDroneDeclare({
+  charId:            playerToken?.character_id ?? null,
+  tokenId:           playerToken?.id ?? null,
+  allures,           // allures calculées depuis stats PJ — ici l'asymétrie est légitime
+  onEnterMoveMode,
+  onEnterTargetMode,
+})
+```
+
+**`canDeclare` :**
+```js
+const canDeclare = isDrone
+  ? droneDeclare.canDeclare
+  : ((hasAnyAction || stateChanged) && assaultValid && reloadValid && meleeValid)
+```
+
+**Section ACTION :** quand `isDrone`, ne pas itérer MAP_ACTIONS — rendre `<DroneDeclareSection>` à la place.
+
+```jsx
+{/* ACTION */}
+<div className="combat-win-section">
+  {isDrone
+    ? <DroneDeclareSection
+        pendingMove={droneDeclare.pendingMove}
+        onMoveToggle={() => droneDeclare.pendingMove ? /* reset */ : droneDeclare.handleStartMove(playerToken)}
+        ...
+      />
+    : <div style={W.itemsGrid}>{MAP_ACTIONS.map(...)}</div>
+  }
+</div>
+```
+
+**Panneau droit :** supprimer `{showAssault && isDrone && <DroneWeaponPanel>}` — DroneWeaponPanel est déjà dans DroneDeclareSection.
+
+**`isSelectingOnMap` / `inMoveMode` :** utiliser `droneDeclare.isSelectingOnMap` pour le drone, `inMoveMode` pour le reste.
+
+---
+
+### Pièges critiques
+
+**P1 — allures asymétrie légitime**
+GM drone → `DEFAULT_PNJ_ALLURES` ; PJ drone → `allures` calculées depuis stats. C'est correct : le PJ drone a ses propres stats de déplacement. Le hook reçoit `allures` en param → aucun couplage.
+
+**P2 — reset hook vs reset parent**
+Le hook reset sur `tokenId` change. CombatGmDeclareWindow change d'`activeTokenId` → hook se reset automatiquement. CombatActionWindow : `playerToken?.id` change quand le slot avance → même comportement.
+
+**P3 — moveToggle : le hook expose setPendingMove ?**
+Non. Le hook expose `handleStartMove` (démarre sélection carte) et le toggle annulation se fait par un `clearPendingMove()` à exposer, ou en re-appelant `handleStartMove` avec un état déjà défini. Solution : exposer `clearPendingMove = () => setPendingMove(null)` depuis le hook.
+
+**P4 — `isSelectingOnMap` combiné**
+CombatGmDeclareWindow a son propre `isSelectingOnMap` (pour le PNJ). Pour le drone, utiliser `droneDeclare.isSelectingOnMap`. Le wrapper opacity doit combiner les deux : `isSelectingOnMap || droneDeclare.isSelectingOnMap`.
+
+**P5 — `activeDroneCharId` doit être stable**
+L'IIFE `activeDroneCharId` dans CombatGmDeclareWindow est recalculée à chaque render. Passer au hook → normal, le hook reçoit la valeur et useEffect dépend d'elle (stable si même valeur).
+
+**P6 — DroneDeclareSection n'émet pas**
+Le composant UI ne touche pas socket. Seul le parent émet via `handleDeclare`. Le hook fournit `buildMapActions()` → le parent construit et émet.
+
+### Validation post-rework
+
+**CombatGmDeclareWindow — drone PNJ :**
+- V1 : section Déplacement visible ✅
+- V2 : move seul → DÉCLARER activé ✅
+- V3 : attack seule → DÉCLARER activé ✅
+- V4 : move + attack → les deux dans payload ✅
+
+**CombatActionWindow — drone PJ :**
+- V5 : même UI que drone PNJ ✅
+- V6 : move seul → DÉCLARER activé ✅
+- V7 : attack seule → DÉCLARER activé ✅
+- V8 : allures PJ (calculées) utilisées pour drone PJ ✅
+
+**Régression humanoïde :**
+- V9 : PNJ humanoïde CombatGmDeclareWindow inchangé ✅
+- V10 : PJ humanoïde CombatActionWindow inchangé ✅
+
+---
+
 ## Session 127 — DR7 : Propriétaire drone = mêmes droits que GM
 
 ### Fichiers lus

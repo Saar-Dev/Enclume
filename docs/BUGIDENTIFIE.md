@@ -1,11 +1,13 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-25 Session 127
+> Dernière mise à jour : 2026-06-26 Session 127
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
 
 ## MÉTHODE — Triage → Reproduire → Analyser → Instrumenter → Corriger → Valider
+
+> **Règle d'hygiène :** Tout bug clos est **SUPPRIMÉ** de ce registre. En cas de divergence entre docs et code → vérifier le code réel.
 
 > **Loi fondamentale :** Lire le code → au mieux `[HYPOTHÈSE]`. `[VÉRIFIÉ]` exige instrumentation + observation du code **en exécution**. Ce sont deux choses distinctes — ne jamais les confondre.
 
@@ -30,17 +32,14 @@
 
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
-| **D — Fenêtres combat UI** | UI1 + COM8 + COM5 + CL2 | composants combat + `index.css §11` | **Haute** |
-| **E — Arme et statuts** | COM2 + COM7 + COM10 + COM11 + COM18 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
-| **F — Ghosts + portraits** | CL3 + COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
-| **G — Drone store** | D1 + D2 | `SessionPage.jsx` + `Canvas3D.jsx` + DB `drone_programs` | Moyenne |
+| **E — Arme et statuts** | COM2 + COM7 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
+| **F — Ghosts + portraits** | COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
 | **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + TOK1 + MAP1 + COM14 + DASH1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `socketCombatResolution.js` | SR ✅ — validation fonctionnelle requise |
 | **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
 | **N — UI combat** | COM20 + COM21 + COM23 + FEAT3 | `Canvas3D.jsx` + `CombatActionWindow.jsx` | Moyenne / Haute |
-| **P — Drones v2** | DR2 + DR9 + DR10 + DR11 | `DroneWindow.jsx` + `socketCombatResolution.js` + DB | Moyenne / **DR11 Haute** |
 | **Q — UI divers** | UI2 + UI3 + ST3 | composants dés + chat | Basse |
-| **R — Infrastructure Kiwi** | KIWI2 + KIWI3 | upload GLB + MinIO + config Kiwi / migrations manquantes | Haute |
+| **R — Infrastructure Kiwi** | KIWI2 | upload GLB + MinIO + config Kiwi | Haute |
 
 **Règle d'or :** valider le cluster A avant B, B avant C, etc. Validation fonctionnelle obligatoire entre clusters.
 
@@ -119,36 +118,6 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 ---
 
-## Bugs drone — Cluster G
-
-### ~~Bug D1~~ ✅ CLOS — Menu radial "fiche" drone : rien ne s'ouvre
-
-**Clos Session 124** — Cause racine confirmée et corrigée (mismatch type string/number `character_id`). Fiche drone s'ouvre correctement via le menu radial.
-
----
-
-### ~~Bug D2~~ ✅ CLOS — Token drone : changement de GLB non fonctionnel
-
-**Clos Session 124** :
-- Token 3D : rechargement automatique via `key={glbUrl}` L.248 Canvas3D + `updateCharacter` dans `handleGlbUpload` — opérationnel depuis fix D1 (find drone dans characters maintenant fonctionnel)
-- Notification upload : `glbStatus` (null|uploading|success|error) dans SettingsTab + timer ref cleanup + `glbSuccess/glbError` i18n + label coloré avec transition
-
----
-
-### ~~Bug CL3~~ ✅ CLOS — Ghosts de déplacement + lignes d'attaque disparus en ANNOUNCEMENT
-
-**Clos Session 125 — 2026-06-25**
-
-**Cause racine [VÉRIFIÉ]** : `announcementMarker` dans `useCombatSocket.js` était un singleton écrasé à chaque `COMBAT_ACTION_DECLARED`. Chaque nouvelle déclaration effaçait la précédente — seul le dernier ghost restait visible. Idem pour les lignes d'attaque. Confirmé par instrumentation `[DBG-CL3]` : données serveur et client correctes, bug dans le rendu.
-
-**Correctif** : `Canvas3D.jsx` — `Scene` lit désormais `announcedActions[]` depuis `useCombatStore` (déjà importé). Les deux blocs singleton IIFE remplacés par `.map()` sur `announcedActions` filtré, gardé par `phase === 'ANNOUNCEMENT'`. Tous les ghosts et lignes d'attaque du tour restent visibles simultanément.
-
-**Testé** : SR ✅ — 3 déclarations déplacement simultanées visibles — fonctionnel confirmé (Saar)
-
-**Non testé** : lignes d'attaque avec plusieurs assauts/CaC déclarés simultanément — même mécanique, même fix
-
----
-
 ## Bugs statuts / Chat — Clusters K + Q (partiel)
 
 ### Bug ST1 — Badge statut illisible sur token canvas
@@ -199,18 +168,6 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 ---
 
-### Bug COM11 — Assaut tir : multi-attaque non implémenté
-
-**Symptôme** : Pas d'option pour déclarer plusieurs attaques à distance sur cibles distinctes. L'équivalent CaC (`meleeTargetIds[]`) existe, pas la version tir.
-
-**Cause racine** [INCONNU] : Le payload `mapActions.attack` ne supporte qu'une cible (`attackTargetId` scalaire). `resolveAssaultAction` ne boucle pas sur plusieurs cibles.
-
-**Code impliqué** : `CombatGmDeclareWindow.jsx`, `CombatActionWindow.jsx` — AssaultRangedPanel. `resolveAssaultAction` serveur.
-
-**Prochaine étape** : Sprint dédié post-stabilisation panneaux partagés.
-
----
-
 ### Bug COM16 — Phase ANNONCE : traits liaison attaquant↔cible disparaissent
 
 **Symptôme** : Les traits visuels reliant attaquant à sa cible déclarée disparaissent au fur et à mesure des déclarations.
@@ -220,18 +177,6 @@ console.log('[DBG-ID]', { variable1, variable2 })
 **Cause racine** [INCONNU] : Non investigué.
 
 **Prochaine étape** : Cluster F — lire `CombatOverlay.jsx` + handler `COMBAT_ACTION_DECLARED` dans `useCombatSocket.js`.
-
----
-
-### Bug COM18 — Roster PNJ : déclaration état initial arme/posture absente côté GM
-
-**Symptôme** : Le joueur peut déclarer l'état initial (arme au clair, posture) avant son slot. L'équivalent pour les PNJ GM n'existe pas dans `CombatGmDeclareWindow`.
-
-**Cause racine** [INCONNU] : Fonctionnalité non implémentée côté GM.
-
-**Code impliqué** : `CombatGmDeclareWindow.jsx` — section état initial PNJ absente.
-
-**Prochaine étape** : Cluster E — identifier le composant joueur gérant la déclaration initiale, le porter dans `CombatGmDeclareWindow`.
 
 ---
 
@@ -297,65 +242,25 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 ---
 
-### Bug COM23 — Label token : pénètre dans les murs
+### Bug COM23 — Label token : pénètre dans les murs ✅ Session 127
 
 **Symptôme** : Le label nom affiché au-dessus du token peut s'afficher à l'intérieur des murs selon l'angle de caméra.
 
-**Code impliqué** : `Canvas3D.jsx` — rendu label `<Html>` drei. Piste : `occlude` prop non activée ou position Y trop faible.
+**Cause racine [VÉRIFIÉ]** : `<Text>` troika — shader SDF `transparent: true` → pass transparent → depth test dégradé. Remplacement par sprite CanvasTexture avec depth test natif WebGL.
 
-**Cause racine** [INCONNU] : Non investigué.
+**Correctif — `Canvas3D.jsx`** : `TokenLabel` composant — `THREE.CanvasTexture` + `<sprite><spriteMaterial depthWrite={false}>`. Voxels `MeshLambertMaterial` opaque → depth buffer rempli → sprite occludé correctement.
 
-**Prochaine étape** : Cluster N — lire rendu label HTML dans Canvas3D.
+**Testé :** label occludé par murs ✅ | **Non testé :** H3D calibrage (cosmétique)
 
 ---
 
-### FEAT3 — Token actif : cercle de sélection (surbrillance)
+### FEAT3 — Token actif : cercle de sélection (surbrillance) ✅ Session 127
 
 **Besoin** : Le token dont c'est le tour doit apparaître en surbrillance (cercle ou halo) sur la carte 3D.
 
-**Code impliqué** : `Canvas3D.jsx` — rendu token actif. `activeTokenId` disponible dans le store combat.
+**Correctif — `Canvas3D.jsx`** : `TokenActiveDisk` composant — ring dorée `#ffd700` (r=0.52–0.72, y=0.03 sol), pulsation `useFrame`. `activeTokenId` de `useCombatStore` (UUID string). Distinct de la ring de sélection (couleur token, y=0.6).
 
-**Prochaine étape** : Sprint dédié — ajouter cercle/halo R3F sous le token actif (ex: `<mesh>` disc avec `emissive`).
-
----
-
-### ~~Bug DR7~~ ✅ CLOS — Drone : le propriétaire ne peut pas modifier la fiche
-
-**Clos Session 127 — 2026-06-26**
-
-**Cause racine [VÉRIFIÉ]** : Double blocage. Serveur : 7 routes drone avec `if (!req.isGm)` — owner refusé partout. Client : `canEdit`/`isOwner` non propagés dans DroneSheet (StatField, ProgramsSection) et NotesTab.
-
-**Correctif** :
-- `char-sheet.js` : helper `droneIsGmOrOwner(req)` (ABAC) + 7 guards remplacés — `PUT /drone`, `PUT /drone/integrity`, `POST/PUT/DELETE /drone/programs`, `POST/DELETE /drone/weapons`
-- `DroneWindow.jsx` : `canEdit = isGm || isOwner` → passé à DroneSheet (`canEdit`), WeaponsTab (`isGm={canEdit}`), NotesTab (`canEdit`)
-- `DroneSheet.jsx` : prop `canEdit` + 16 StatField + ProgramsSection → `isGm={canEdit}` ; IntegritySection garde `isGm={isGm}`
-- `NotesTab` : `readOnly={!canEdit}`, `handleBlur` gate sur `canEdit` ; `{isGm && notes_gm}` inchangé
-
-**Testé** : Stats éditables owner ✅, programmes add/edit/delete ✅, armes add/delete ✅, equip_special éditable ✅, notes_gm invisible ✅, intégrité readonly ✅, non-propriétaire → tout readonly ✅
-
-**Non testé** : —
-
----
-
-### ~~Bug DR8~~ FAUX BUG — Drone : munitions infinies
-
-**Clos Session 127 — 2026-06-25**
-
-Les drones sans propriétaire (`owner_id = null`) sont traités comme PNJ — option campagne "PNJ = munitions infinies" s'applique. Comportement attendu. Aucun correctif.
-
----
-
-### ~~Bug DR10~~ ✅ CLOS — Drone contrôlé par joueur : GM reçoit aussi la fenêtre de contrôle
-
-**Clos Session 127 — 2026-06-26**
-
-**Cause racine [VÉRIFIÉ]** : `isDroneGmManaged` dans `CombatGmDeclareWindow.jsx` retournait `true` pour tout drone (`char?.type === 'drone'`) sans vérifier `char.user_id`. Résultat : les drones avec propriétaire joueur apparaissaient dans `allGmManaged` et la fenêtre GM leur permettait de déclarer.
-
-**Correctif** : `CombatGmDeclareWindow.jsx` L.191-196 — condition `&& !char.user_id` ajoutée. Drones sans propriétaire (`user_id = null`) = GM-managed. Drones avec propriétaire = player-managed via `CombatActionWindow` (déjà opérationnel).
-
-**Testé** : Drone propriétaire joueur absent du roster GM ✅ — joueur déclare via CombatActionWindow ✅ — drone PNJ (sans user_id) toujours visible GM ✅ — fonctionnel confirmé (Saar)
-
-**Non testé** : —
+**Testé :** anneau doré token actif ✅, indépendant ring sélection ✅ | **Non testé :** —
 
 ---
 
@@ -383,18 +288,6 @@ Les drones sans propriétaire (`owner_id = null`) sont traités comme PNJ — op
 
 ## Infrastructure — Cluster R
 
-### Bug KIWI3 — Kiwi : migration 83 (`armement_contact`) non appliquée
-
-**Symptôme** : Sur Kiwi, les programmes drone affichent les anciens intitulés ("Attaque", "Tir") au lieu de "Contact" / "Balistique". La migration 83 (Session 119) n'a pas été exécutée sur le serveur distant.
-
-**Code impliqué** : Migration 83 — renommage `armement_contact`. Base PostgreSQL Kiwi.
-
-**Cause racine** [HYPOTHÈSE] : `knex migrate:latest` non lancé sur Kiwi lors du déploiement Session 119.
-
-**Prochaine étape** : Cluster R — SSH Kiwi → `knex migrate:status` → appliquer migrations manquantes.
-
----
-
 ### Bug KIWI2 — Import GLB token : fonctionne en local, échoue sur Kiwi
 
 **Symptôme** : L'importation d'un modèle GLB fonctionne en local mais échoue sur Kiwi.
@@ -415,69 +308,3 @@ Les drones sans propriétaire (`owner_id = null`) sont traités comme PNJ — op
 
 **Prochaine étape** : Sprint dédié — spécifier l'interface (toggle 2D/3D, rendu canvas 2D, synchronisation tokens).
 
----
-
-## Dashboard — Cluster S
-
-### ~~Bug DASH2~~ ✅ CLOS — Bouton Édition : renommer une campagne
-
-**Clos Session 127 — 2026-06-25**
-
-**Cause racine [VÉRIFIÉ]** : Fonctionnalité absente. Route `PUT /campaigns/:id` existait déjà côté serveur. Ajout de l'édition inline côté client uniquement.
-
-**Correctif** : `DashboardPage.jsx` — 2 états (`editingId`, `editingName`) + handler `handleRenameSubmit` (PUT) + card HEADER : bouton ✏ GM → input autoFocus + Enter/Escape/blur. `fr.json` — clé `dashboard.renameError`.
-
-**Testé** : ✏ → input pré-rempli → rename → mis à jour ✅ — Escape → annulé ✅ — confirmé (Saar)
-
-**Non testé** : —
-
----
-
-### ~~Bug DASH3~~ ✅ CLOS — Changelog : tags HS (`feat`, `ux`, `rework`, etc.)
-
-**Clos Session 127 — 2026-06-25**
-
-**Cause racine [VÉRIFIÉ]** : Double désynchronisation — `const TAGS` dans `ChangelogPanel.jsx` (couleurs) et `changelog.tags` dans `fr.json` (libellés) ne couvraient que 4 tags (`add/fix/chg/refactor`). Bonus : regex `/\[(\w+)\]/` ne capturait pas `faux-bug` (tiret non `\w`).
-
-**Correctif** :
-- `ChangelogPanel.jsx` — `TAGS` : +8 entrées (`feat`, `feature`, `i18n`, `ux`, `erg`, `rework`, `perf`, `faux-bug`) avec couleurs distinctes + regex `\w+` → `[\w-]+`
-- `fr.json` — `changelog.tags` : +8 clés correspondantes
-
-**Testé** : Tags `[feat]` → FONCTIONNALITÉ ✅, `[faux-bug]` visible ✅ — confirmé (Saar)
-
-**Non testé** : —
-
----
-
-## Commerce — Cluster T
-
-### ~~Bug TR1~~ ✅ CLOS — Sidebar Outils > Commerce : onglet Échange supprimé
-
-**Clos Session 127 — 2026-06-25**
-
-**Cause racine [VÉRIFIÉ]** : Onglet ÉCHANGE présent dans la vue joueur de `TradeWindow` — redondant avec `ExchangeWindow` (radial menu). Suppression directe du bouton tab + bloc contenu `{playerTab === 'exchange' && ...}`.
-
-**Correctif** : `TradeWindow.jsx` — bouton tab ÉCHANGE (5L) + bloc JSX complet Cas A/B/C/D (130L) supprimés.
-
-**Testé** : Commerce Sidebar → CATALOGUE + VENTE uniquement ✅ — fonctionnel confirmé (Saar)
-
-**Non testé** : —
-
----
-
-## Bugs drone combat — Cluster P (suite)
-
-### Bug DR11 — Drone PNJ côté GM : fenêtre d'annonce vide (déplacement absent)
-
-**Symptôme** : Quand le GM déclare l'action d'un drone PNJ en phase ANNONCE, la fenêtre `CombatGmDeclareWindow` est vide ou ne propose pas l'option Déplacement. À vérifier également côté joueur (`CombatActionWindow`) pour un drone contrôlé par un PJ.
-
-**Code impliqué** : `CombatGmDeclareWindow.jsx` — branche drone dans le rendu options. `CombatActionWindow.jsx` — idem côté joueur. `socketCombatAnnouncement.js` — payloads acceptés pour type `drone`.
-
-**Cause racine** [INCONNU] : Non investigué. Piste : condition `character.type === 'drone'` absente ou filtrante trop tôt dans le rendu des options de déclaration.
-
-**[DBG-DR11] suggestion** :
-```js
-console.log('[DBG-DR11] activeToken type/char', { type: activeToken?.type, char: activeCharacter?.type, options: availableOptions })
-```
-
-**Prochaine étape** : Cluster P — lire `CombatGmDeclareWindow.jsx` branche drone + `CombatActionWindow.jsx` idem. Comparer avec branche PNJ humanoïde.

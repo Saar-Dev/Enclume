@@ -53,6 +53,26 @@ function getVoxelSurfaceTop(v) {
   return v.y + 1.0                                 // cube, slab_top, autres : sommet en haut de case
 }
 
+// ─── Disque combat actif ─────────────────────────────────────────────────────
+function TokenActiveDisk({ isActive }) {
+  const diskRef = useRef()
+  const t = useRef(0)
+  useFrame((_, delta) => {
+    if (!diskRef.current || !isActive) return
+    t.current += delta
+    diskRef.current.material.opacity = 0.6 + Math.sin(t.current * 3) * 0.3
+    const s = 1 + Math.sin(t.current * 2) * 0.06
+    diskRef.current.scale.set(s, 1, s)
+  })
+  if (!isActive) return null
+  return (
+    <mesh ref={diskRef} position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0.52, 0.72, 48]} />
+      <meshBasicMaterial color="#ffd700" transparent opacity={0.6} depthWrite={false} />
+    </mesh>
+  )
+}
+
 // ─── Anneau de base du token ──────────────────────────────────────────────────
 function TokenRing({ color, isSelected, isDragging, opacity }) {
   const ringRef = useRef()
@@ -185,10 +205,42 @@ const STATUS_CATEGORY = {
   hypothermia: 'chronique', infected: 'chronique', poisoned: 'chronique', irradiated: 'chronique',
 }
 
+function TokenLabel({ label, color, isGmLayer }) {
+  const H3D = 0.4
+  const { texture, aspect } = useMemo(() => {
+    const CH = 64
+    const loaded = document.fonts.check(`600 ${Math.round(CH * 0.68)}px Inter`)
+    const FONT = `600 ${Math.round(CH * 0.68)}px ${loaded ? 'Inter, ' : ''}sans-serif`
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    ctx.font = FONT
+    const w = ctx.measureText(label).width
+    canvas.width = Math.ceil(w) + 16
+    canvas.height = CH
+    ctx.font = FONT
+    ctx.lineWidth = CH * 0.14
+    ctx.strokeStyle = '#000'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.strokeText(label, canvas.width / 2, CH / 2)
+    ctx.fillStyle = color
+    ctx.fillText(label, canvas.width / 2, CH / 2)
+    const tex = new THREE.CanvasTexture(canvas)
+    return { texture: tex, aspect: canvas.width / CH }
+  }, [label, color])
+  useEffect(() => () => texture.dispose(), [texture])
+  return (
+    <sprite position={[0, 2.5, 0]} scale={[H3D * aspect, H3D, 1]}>
+      <spriteMaterial attach="material" map={texture}
+        depthWrite={false} opacity={isGmLayer ? 0.5 : 1} />
+    </sprite>
+  )
+}
+
 // Token individuel — gère drag, lerp, ring, label.
 // glbUrl : URL complète du GLB à charger (character.glb_url ou default_token_glb_url de campagne), ou null.
 // Si null → TokenFallbackBody (silhouette géométrique). Si défini → TokenGlbBody (modèle 3D).
-function TokenMesh({ token, glbUrl, isSelected, onDragStart, dragState, isGmLayer }) {
+function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState, isGmLayer }) {
   const color = token.user_color || token.color || '#4A90D9'
   const label = token.label || '?'
 
@@ -244,25 +296,14 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, dragState, isGmLaye
         onDragStart(e, token)
       }}
     >
+      <TokenActiveDisk isActive={isActive} />
       <TokenRing color={color} isSelected={isSelected} isDragging={isDragging} opacity={isGmLayer ? 0.25 : undefined} />
       <TokenGlbErrorBoundary key={glbUrl} color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ}>
         <TokenGlbBody glbUrl={glbUrl} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
       </TokenGlbErrorBoundary>
-      <Billboard>
-        <Text
-          position={[0, 2.5, 0]}
-          font={FONT_URL}
-          fontSize={0.3}
-          color={color}
-          fillOpacity={isGmLayer ? 0.5 : 1}
-          anchorX="center"
-          anchorY="bottom"
-          outlineWidth={0.04}
-          outlineColor="#000000"
-        >
-          {label}
-        </Text>
-        {isGmLayer && (
+      <TokenLabel label={label} color={color} isGmLayer={isGmLayer} />
+      {isGmLayer && (
+        <Billboard>
           <Text
             position={[0, 2.85, 0]}
             font={FONT_URL}
@@ -273,48 +314,48 @@ function TokenMesh({ token, glbUrl, isSelected, onDragStart, dragState, isGmLaye
           >
             {'\u2298 GM'}
           </Text>
-        )}
-        {(token.statuses?.length > 0) && (
-          <Html position={[0, 2.1, 0]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
-            <div style={{ display: 'flex', gap: 2 }}>
-              {(token.statuses.length > 4
-                ? token.statuses.slice(0, 3)
-                : token.statuses
-              ).map(code => {
-                const color = STATUS_CATEGORY_COLOR[STATUS_CATEGORY[code]] ?? '#888'
-                return (
-                  <img
-                    key={code}
-                    src={`/assets/status/${code}.svg`}
-                    width={14}
-                    height={14}
-                    alt={code}
-                    style={{
-                      borderRadius: 2,
-                      background: `${color}44`,
-                      outline: `1px solid ${color}99`,
-                      filter: `drop-shadow(0 0 2px ${color})`,
-                    }}
-                  />
-                )
-              })}
-              {token.statuses.length > 4 && (
-                <span style={{
-                  fontSize: 9,
-                  color: '#ccc',
-                  background: 'rgba(0,0,0,0.6)',
-                  borderRadius: 2,
-                  padding: '0 2px',
-                  lineHeight: '14px',
-                  outline: '1px solid rgba(255,255,255,0.2)',
-                }}>
-                  +{token.statuses.length - 3}
-                </span>
-              )}
-            </div>
-          </Html>
-        )}
-      </Billboard>
+        </Billboard>
+      )}
+      {(token.statuses?.length > 0) && (
+        <Html position={[0, 2.1, 0]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+          <div style={{ display: 'flex', gap: 2 }}>
+            {(token.statuses.length > 4
+              ? token.statuses.slice(0, 3)
+              : token.statuses
+            ).map(code => {
+              const color = STATUS_CATEGORY_COLOR[STATUS_CATEGORY[code]] ?? '#888'
+              return (
+                <img
+                  key={code}
+                  src={`/assets/status/${code}.svg`}
+                  width={14}
+                  height={14}
+                  alt={code}
+                  style={{
+                    borderRadius: 2,
+                    background: `${color}44`,
+                    outline: `1px solid ${color}99`,
+                    filter: `drop-shadow(0 0 2px ${color})`,
+                  }}
+                />
+              )
+            })}
+            {token.statuses.length > 4 && (
+              <span style={{
+                fontSize: 9,
+                color: '#ccc',
+                background: 'rgba(0,0,0,0.6)',
+                borderRadius: 2,
+                padding: '0 2px',
+                lineHeight: '14px',
+                outline: '1px solid rgba(255,255,255,0.2)',
+              }}>
+                +{token.statuses.length - 3}
+              </span>
+            )}
+          </div>
+        </Html>
+      )}
     </group>
   )
 }
@@ -350,7 +391,7 @@ function Scene({
   const { characters, isGm } = useCharacterStore()
   const { user } = useAuthStore()
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
-  const { phase, announcedActions } = useCombatStore()
+  const { phase, announcedActions, activeTokenId } = useCombatStore()
 
   const [dragState, setDragState] = useState(null)
 
@@ -914,6 +955,7 @@ function Scene({
             token={token}
             glbUrl={glbUrl}
             isSelected={selectedTokenId === token.id}
+            isActive={activeTokenId === token.id}
             onDragStart={handleDragStart}
             dragState={dragState?.tokenId === token.id ? dragState : null}
             isGmLayer={token.layer === 'gm'}

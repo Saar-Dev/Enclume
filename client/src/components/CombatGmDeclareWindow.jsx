@@ -14,6 +14,8 @@ import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import { declarationReducer, DECLARATION_INITIAL } from '../lib/declarationReducer'
+import { useDroneDeclare } from '../lib/useDroneDeclare.js'
+import DroneDeclareSection from './DroneDeclareSection.jsx'
 
 // ---------------------------------------------------------------------------
 // Etat par défaut (= DEFAULT colonne DB)
@@ -91,9 +93,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [assaultVariantAB,    setAssaultVariantAB]    = useState('A')
   // CaC GM — sélection arme (undefined = auto-dériver, null = mains nues, id = choix explicite)
   const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(undefined)
-  // Drone GM — arme sélectionnée + catalogue récupéré
-  const [selectedDroneWeaponId, setSelectedDroneWeaponId] = useState(null)
-  const [droneWeapons, setDroneWeapons] = useState([])
   const [isSelectingOnMap, setIsSelectingOnMap] = useState(false)
   const [iniPopoverOpen, setIniPopoverOpen] = useState(false)
 
@@ -116,8 +115,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setAssaultBulletCount(null)
     setAssaultVariantAB('A')
     setSelectedGmMeleeWeaponId(undefined)
-    setSelectedDroneWeaponId(null)
-    setDroneWeapons([])
     setIsSelectingOnMap(false)
     setIniPopoverOpen(false)
   }, [activeTokenId])
@@ -162,16 +159,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     return char?.type === 'drone' ? char.id : null
   })()
 
-  useEffect(() => {
-    if (!activeDroneCharId) return
-    api.get(`/char-sheet/${activeDroneCharId}/drone/weapons`)
-      .then(r => {
-        const weapons = r.data.weapons ?? []
-        setDroneWeapons(weapons)
-        if (weapons.length > 0) setSelectedDroneWeaponId(weapons[0].id)
-      })
-      .catch(() => setDroneWeapons([]))
-  }, [activeDroneCharId])
+  const droneDeclare = useDroneDeclare({
+    charId:           activeDroneCharId,
+    tokenId:          activeTokenId,
+    allures:          DEFAULT_PNJ_ALLURES,
+    onEnterMoveMode,
+    onEnterTargetMode,
+  })
 
   // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
   useEffect(() => {
@@ -282,8 +276,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   )
   // Si cible d'assaut sélectionnée, un variant doit être configuré
   const assaultValid = !assaultTarget?.targetTokenId || currentVariant !== null
-  const canDeclareDrone = isActiveDrone && !!selectedDroneWeaponId && !!assaultTarget?.targetTokenId
-  const canDeclare = (isActivePnj && (stateChanged || hasAction) && assaultValid) || canDeclareDrone
+  const canDeclare = (isActivePnj && (stateChanged || hasAction) && assaultValid) || (isActiveDrone && droneDeclare.canDeclare)
 
   // ── Déplacement direct ───────────────────────────────────────────────────
   const handleStartMove = () => {
@@ -371,21 +364,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const handleDeclare = () => {
     if (!socket || !canDeclare || !activeTokenId) return
 
-    // Drone : payload simplifié — droneWeaponInvId + cible
-    // fire_mode : lu depuis drone_weapons (configuré dans la fiche drone, onglet Armes)
+    // Drone : payload via hook (move optionnel + attaque optionnelle)
     if (isActiveDrone) {
-      const selectedDroneWeapon = droneWeapons.find(w => w.id === selectedDroneWeaponId)
-      // Miroir humanoïde L.244 : !ref_fire_mode → arme de contact (couteau, arme blanche)
-      // Fallback : fire_mode explicite 'cc' pour armes custom sans ref_equipment
-      const explicitFm = selectedDroneWeapon?.fire_mode
-      const isCaC = explicitFm ? explicitFm === 'cc' : !selectedDroneWeapon?.ref_fire_mode
-      const stateFireMode = isCaC ? 'cc' : (explicitFm ?? 'rc').toLowerCase()
+      const { stateFireMode, mapActions } = droneDeclare.buildMapActions()
       socket.emit(WS.COMBAT_ACTION_DECLARE, {
         tokenId: activeTokenId,
         state: { position: 'standing', weapon: 'holstered', fire_mode: stateFireMode, cover: 'exposed', vitesse: 'normal' },
-        mapActions: isCaC
-          ? { melee: [{ droneWeaponInvId: selectedDroneWeaponId, targetTokenId: assaultTarget?.targetTokenId ?? null }] }
-          : { attack: { droneWeaponInvId: selectedDroneWeaponId, targetTokenId: assaultTarget?.targetTokenId ?? null } },
+        mapActions,
       })
       return
     }
@@ -438,7 +423,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // RENDU
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="combat-win" style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: isSelectingOnMap ? 0 : 1, pointerEvents: isSelectingOnMap ? 'none' : 'auto' }}>
+    <div className="combat-win" style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap) ? 'none' : 'auto' }}>
 
       {/* HEADER */}
       <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>
@@ -618,30 +603,21 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             </div>
           )}
 
-          {/* DRONE — Sélection arme + cible */}
+          {/* DRONE — Déplacement + sélection arme + cible */}
           {isActiveDrone && (
-            <div style={S.controls}>
-              <DroneWeaponPanel
-                droneWeapons={droneWeapons}
-                selectedWeaponId={selectedDroneWeaponId}
-                assaultTargetId={assaultTarget?.targetTokenId ?? null}
-                showReadyBadge={false}
-                onWeaponSelect={(id) => setSelectedDroneWeaponId(id)}
-                onChooseTarget={() => {
-                  if (!onEnterTargetMode || !activeTokenId || !activeToken) return
-                  setAssaultTarget(null)
-                  setIsSelectingOnMap(true)
-                  onEnterTargetMode(
-                    activeTokenId,
-                    { x: activeToken.pos_x, z: activeToken.pos_y },
-                    (targetId) => { setAssaultTarget({ targetTokenId: targetId }); setIsSelectingOnMap(false) },
-                    () => { setIsSelectingOnMap(false) },
-                    'ranged',
-                  )
-                }}
-                getLabel={getLabel}
-              />
-            </div>
+            <DroneDeclareSection
+              pendingMove={droneDeclare.pendingMove}
+              onMoveToggle={() => droneDeclare.pendingMove ? droneDeclare.clearPendingMove() : droneDeclare.handleStartMove(activeToken)}
+              hasPassed={droneDeclare.hasPassed}
+              onPassToggle={() => droneDeclare.setHasPassed(p => !p)}
+              droneWeapons={droneDeclare.droneWeapons}
+              selectedWeaponId={droneDeclare.selectedDroneWeaponId}
+              onWeaponSelect={droneDeclare.setSelectedDroneWeaponId}
+              assaultTargetId={droneDeclare.assaultTargetId}
+              onChooseTarget={() => droneDeclare.handleChooseTarget(activeToken)}
+              getLabel={getLabel}
+              style={S.controls}
+            />
           )}
 
           {/* Message d'attente / monitoring — slot actif = PJ (ni PNJ ni drone) */}
