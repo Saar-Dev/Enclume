@@ -1555,6 +1555,10 @@ async function resolveDroneAmmoInit(equipmentId) {
   return n > 0 ? n : null
 }
 
+// Helper — GM ou propriétaire du drone (pattern ABAC : rôle + attribut propriété)
+const droneIsGmOrOwner = req =>
+  req.isGm || !!(req.character.user_id && req.character.user_id === req.user.id)
+
 // GET /:characterId/drone — fiche + programmes (JOIN ref_equipment pour name/description tooltip)
 router.get('/:characterId/drone', async (req, res, next) => {
   try {
@@ -1588,7 +1592,7 @@ router.get('/:characterId/drone', async (req, res, next) => {
 // localisation_ref exclu intentionnellement : changer sa valeur invaliderait damages
 router.put('/:characterId/drone', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'GM role required')
+    if (!droneIsGmOrOwner(req)) throw new AppError(403, 'GM or owner required')
 
     const {
       taille, poids, vitesse, nt,
@@ -1676,7 +1680,7 @@ router.post('/:characterId/drone/cargo/:invId/drop', async (req, res, next) => {
 // PUT /:characterId/drone/integrity — intégrité actuelle + cases dommages (GM uniquement)
 router.put('/:characterId/drone/integrity', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'GM role required')
+    if (!droneIsGmOrOwner(req)) throw new AppError(403, 'GM or owner required')
 
     const { integrite_actuelle, damages } = req.body
     const updates = {}
@@ -1699,7 +1703,7 @@ router.put('/:characterId/drone/integrity', async (req, res, next) => {
 // Validation contrainte ordinateur si ordinateur_gen/nt définis
 router.post('/:characterId/drone/programs', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'GM role required')
+    if (!droneIsGmOrOwner(req)) throw new AppError(403, 'GM or owner required')
 
     const { equipment_id, label_override, level, sort_order = 0 } = req.body
     if (!equipment_id && !label_override) throw new AppError(400, 'equipment_id ou label_override requis')
@@ -1763,7 +1767,7 @@ router.post('/:characterId/drone/programs', async (req, res, next) => {
 // equipment_id / label_override / category sont immuables.
 router.put('/:characterId/drone/programs/:programId', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'GM role required')
+    if (!droneIsGmOrOwner(req)) throw new AppError(403, 'GM or owner required')
 
     const { level, sort_order } = req.body
     const updates = {}
@@ -1799,7 +1803,7 @@ router.put('/:characterId/drone/programs/:programId', async (req, res, next) => 
 // DELETE /:characterId/drone/programs/:programId — supprimer un programme (GM uniquement)
 router.delete('/:characterId/drone/programs/:programId', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'GM role required')
+    if (!droneIsGmOrOwner(req)) throw new AppError(403, 'GM or owner required')
 
     const deleted = await db('drone_programs')
       .where({ id: req.params.programId, character_id: req.params.characterId })
@@ -1848,7 +1852,7 @@ router.get('/:characterId/drone/weapons', async (req, res, next) => {
 // POST /:characterId/drone/weapons — ajouter une arme (GM uniquement)
 router.post('/:characterId/drone/weapons', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'GM role required')
+    if (!droneIsGmOrOwner(req)) throw new AppError(403, 'GM or owner required')
 
     const {
       equipment_id, contenance_chargeur = 0, label_override, sort_order = 0,
@@ -1954,7 +1958,7 @@ router.put('/:characterId/drone/weapons/:weaponId', async (req, res, next) => {
 // DELETE /:characterId/drone/weapons/:weaponId — supprimer arme (GM uniquement)
 router.delete('/:characterId/drone/weapons/:weaponId', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'GM role required')
+    if (!droneIsGmOrOwner(req)) throw new AppError(403, 'GM or owner required')
 
     const deleted = await db('drone_weapons')
       .where({ id: req.params.weaponId, character_id: req.params.characterId })

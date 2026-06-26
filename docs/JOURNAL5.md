@@ -1469,3 +1469,65 @@ Continuation du système Trade : permettre au propriétaire d'un drone de lui tr
 - charge_utile > 0 : dépassement de capacité non bloqué (v1 — affichage visuel seulement)
 
 ---
+
+## Session 127 — 2026-06-26 — DR7 ✅ + triage cluster drones
+
+### Contexte
+
+Début du Cluster P — Drones v2. Triage du cluster : DR8 fermé comme faux bug, KIWI3 ajouté (migration manquante Kiwi). DR7 traité en premier (Haute priorité).
+
+### Travail effectué
+
+**Triage cluster P :**
+- DR8 fermé FAUX BUG : munitions infinies = comportement attendu (option campagne PNJ = munitions infinies)
+- KIWI3 ajouté : migration 83 (`armement_contact`) non appliquée sur Kiwi — diagnostic ops
+
+**Bug DR7 — Propriétaire drone = mêmes droits que GM ✅ :**
+
+`server/src/routes/character/char-sheet.js` :
+- Helper pur `droneIsGmOrOwner(req)` ajouté (pattern ABAC : rôle + attribut propriété)
+- 7 guards remplacés : `PUT /drone`, `PUT /drone/integrity`, `POST/PUT/DELETE /drone/programs`, `POST/DELETE /drone/weapons`
+
+`client/src/character/DroneWindow.jsx` :
+- `const canEdit = isGm || isOwner` calculé après `isOwner`
+- DroneSheet : prop `canEdit={canEdit}` ajoutée ; WeaponsTab : `isGm={canEdit}` ; NotesTab : `canEdit={canEdit}`
+
+`client/src/character/DroneSheet.jsx` :
+- Signature : `canEdit = false` ajouté
+- 16 StatField + ProgramsSection : `isGm={canEdit}` ; IntegritySection : `isGm={isGm}` inchangé
+
+`client/src/character/DroneWindow.jsx / NotesTab` :
+- `handleBlur` + `equip_special readOnly` : `isGm` → `canEdit` ; `notes_gm` inchangé
+
+### Testé
+- Stats éditables propriétaire ✅ — programmes add/edit/delete ✅ — armes add/delete ✅
+- equip_special éditable ✅ — notes_gm non visible ✅ — intégrité readonly ✅
+- Non-propriétaire → tout readonly ✅
+
+### Non testé
+—
+
+---
+
+## Session 127 (suite) — 2026-06-26 — DR10 ✅
+
+### Bug DR10 — Drone propriétaire joueur : GM recevait la fenêtre de déclaration combat
+
+**Cause racine [VÉRIFIÉ]** : `isDroneGmManaged` dans `CombatGmDeclareWindow.jsx` — condition `char?.type === 'drone'` sans check `char.user_id`. Tout drone, propriétaire ou non, apparaissait dans `allGmManaged` → GM pouvait déclarer pour un drone appartenant à un joueur.
+
+**Instrumentation** : `[DBG-DR10]` confirmé en exécution — `Manta-3` avec `userId` non-null → `willShowToGm: true`.
+
+**Correctif** — `CombatGmDeclareWindow.jsx` :
+- `isDroneGmManaged` : `char?.type === 'drone'` → `char?.type === 'drone' && !char.user_id`
+- Drones sans propriétaire (`user_id = null`) = GM-managed (comme PNJ)
+- Drones avec propriétaire = player-managed via `CombatActionWindow` (déjà opérationnel — `playerChars = characters.filter(c => c.user_id === user?.id)` inclut les drones)
+
+### Testé
+- Drone propriétaire joueur absent du roster GM ✅ — joueur déclare via CombatActionWindow ✅
+- Drone PNJ (user_id null) toujours visible GM (non-régression) ✅
+- Fonctionnel confirmé (Saar)
+
+### Non testé
+—
+
+---

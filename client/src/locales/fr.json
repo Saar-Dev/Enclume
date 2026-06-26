@@ -52,7 +52,8 @@
     "play": "Jouer",
     "createCardLabel": "Créer une campagne",
     "joinCard": "Rejoindre une campagne",
-    "codePlaceholder": "#code-invitation"
+    "codePlaceholder": "#code-invitation",
+    "renameError": "Erreur lors du renommage"
   },
   "session": {
     "loading": "Connexion à la session...",
@@ -614,7 +615,15 @@
       "add": "AJOUT",
       "fix": "CORRECTIF",
       "chg": "CHANGEMENT",
-      "refactor": "REFACTO"
+      "refactor": "REFACTO",
+      "feat": "FONCTIONNALITÉ",
+      "feature": "FONCTIONNALITÉ",
+      "i18n": "I18N",
+      "ux": "ERGONOMIE",
+      "erg": "ERGONOMIE",
+      "rework": "REWORK",
+      "perf": "PERF",
+      "faux-bug": "FAUX BUG"
     },
     "openTitle": "Afficher le changelog",
     "reduceTitle": "Réduire"

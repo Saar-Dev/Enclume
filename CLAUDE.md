@@ -323,11 +323,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - REWORK-03 : `woundService.applyWound` — 5 call sites WS centralisés + fix DIV-1 (`worst_wound_severity` dans WOUND_ADDED)
 
 **Dettes actives :**
-- ~~**RANGE1-drone**~~ ✅ — REWORK-16 Session 116 suite
-- ~~**LOS1-drone**~~ ✅ — REWORK-16 Session 116 suite
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
-- ~~COM4 ✅~~ — mains nues par défaut (REWORK-06 Session 114)
-- ~~Bug CL3~~ ✅ — Ghosts déplacement + lignes attaque ANNOUNCEMENT (Session 125)
 - "Changer le mode de tir" — non implémenté — sprint futur
 - `useDiceAudio.js` — sons dés
 - `.gitattributes:3` — attribut invalide

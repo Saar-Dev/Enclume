@@ -346,7 +346,7 @@ function ProgramsSection({ characterId, programs, isGm, onProgramsUpdate }) {
 }
 
 // ─── Composant principal DroneSheet ──────────────────────────────────────────
-export default function DroneSheet({ characterId, drone, programs, cargo = [], isGm, isOwner = false, onDroneUpdate, onProgramsUpdate, onCargoUpdate }) {
+export default function DroneSheet({ characterId, drone, programs, cargo = [], isGm, canEdit = false, isOwner = false, onDroneUpdate, onProgramsUpdate, onCargoUpdate }) {
   const { t } = useTranslation()
 
   const handleSave = async (field, value) => {
@@ -373,22 +373,22 @@ export default function DroneSheet({ characterId, drone, programs, cargo = [], i
           {t('drone.sectionStats')}
         </h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-          <StatField label={t('drone.fieldTaille')}        value={drone.taille}           field="taille"           isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldPoids')}         value={drone.poids}            field="poids"            isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldVitesse')}       value={drone.vitesse}          field="vitesse"          isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldNt')}            value={drone.nt}               display={toRoman(drone.nt)} field="nt" isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldSourceEnergie')} value={drone.source_energie}   field="source_energie"   isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldAutonomie')}     value={drone.autonomie}        field="autonomie"        isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldModeDepl')}      value={drone.mode_deplacement} field="mode_deplacement" isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldProfondeur')}    value={drone.profondeur_max}   field="profondeur_max"   isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldDisponibilite')} value={drone.disponibilite}    field="disponibilite"    isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldBlindag')}       value={drone.blindage}         field="blindage"         isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldBlindageIem')}   value={drone.blindage_iem}     field="blindage_iem"     isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldArmure')}        value={drone.armure_materiau}  field="armure_materiau"  isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldOrdGen')}        value={drone.ordinateur_gen}   field="ordinateur_gen"   isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldOrdNt')}         value={drone.ordinateur_nt}    field="ordinateur_nt"    isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldEchelle')}       value={drone.echelle}          field="echelle"          isGm={isGm} onSave={handleSave} />
-          <StatField label={t('drone.fieldChargeUtile')}  value={drone.charge_utile}     field="charge_utile"     isGm={isGm} onSave={handleSave} />
+          <StatField label={t('drone.fieldTaille')}        value={drone.taille}           field="taille"           isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldPoids')}         value={drone.poids}            field="poids"            isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldVitesse')}       value={drone.vitesse}          field="vitesse"          isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldNt')}            value={drone.nt}               display={toRoman(drone.nt)} field="nt" isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldSourceEnergie')} value={drone.source_energie}   field="source_energie"   isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldAutonomie')}     value={drone.autonomie}        field="autonomie"        isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldModeDepl')}      value={drone.mode_deplacement} field="mode_deplacement" isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldProfondeur')}    value={drone.profondeur_max}   field="profondeur_max"   isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldDisponibilite')} value={drone.disponibilite}    field="disponibilite"    isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldBlindag')}       value={drone.blindage}         field="blindage"         isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldBlindageIem')}   value={drone.blindage_iem}     field="blindage_iem"     isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldArmure')}        value={drone.armure_materiau}  field="armure_materiau"  isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldOrdGen')}        value={drone.ordinateur_gen}   field="ordinateur_gen"   isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldOrdNt')}         value={drone.ordinateur_nt}    field="ordinateur_nt"    isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldEchelle')}       value={drone.echelle}          field="echelle"          isGm={canEdit} onSave={handleSave} />
+          <StatField label={t('drone.fieldChargeUtile')}  value={drone.charge_utile}     field="charge_utile"     isGm={canEdit} onSave={handleSave} />
         </div>
       </section>
 
@@ -413,7 +413,7 @@ export default function DroneSheet({ characterId, drone, programs, cargo = [], i
         <ProgramsSection
           characterId={characterId}
           programs={programs}
-          isGm={isGm}
+          isGm={canEdit}
           onProgramsUpdate={onProgramsUpdate}
         />
       </section>

@@ -42,6 +42,7 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
   const { members, removeCharacter, updateCharacter } = useCharacterStore()
 
   const isOwner = character.user_id != null && character.user_id === character._currentUserId
+  const canEdit = isGm || isOwner
 
   // ─── État fenêtre ──────────────────────────────────────────────────────────
   const [pos,  setPos]  = useState(INITIAL_POS)
@@ -269,6 +270,7 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
             programs={programs}
             cargo={cargo}
             isGm={isGm}
+            canEdit={canEdit}
             isOwner={isOwner}
             onDroneUpdate={setDrone}
             onProgramsUpdate={setPrograms}
@@ -280,7 +282,7 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
           <WeaponsTab
             characterId={character.id}
             weapons={weapons}
-            isGm={isGm}
+            isGm={canEdit}
             isOwner={isOwner}
             onWeaponsUpdate={setWeapons}
           />
@@ -291,6 +293,7 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
             characterId={character.id}
             drone={drone}
             isGm={isGm}
+            canEdit={canEdit}
             onDroneUpdate={setDrone}
           />
         )}
@@ -593,13 +596,13 @@ function WeaponsTab({ characterId, weapons, isGm, isOwner, onWeaponsUpdate }) {
 }
 
 // ─── Onglet Notes ─────────────────────────────────────────────────────────────
-function NotesTab({ characterId, drone, isGm, onDroneUpdate }) {
+function NotesTab({ characterId, drone, isGm, canEdit = false, onDroneUpdate }) {
   const { t } = useTranslation()
   const [equipSpecial, setEquipSpecial] = useState(drone?.equip_special || '')
   const [notesMj,      setNotesMj]      = useState(drone?.notes_gm || '')
 
   const handleBlur = async (field, value) => {
-    if (!isGm) return
+    if (!canEdit) return
     const current = field === 'equip_special' ? drone?.equip_special : drone?.notes_gm
     if (value === (current || '')) return
     try {
@@ -618,7 +621,7 @@ function NotesTab({ characterId, drone, isGm, onDroneUpdate }) {
           value={equipSpecial}
           onChange={e => setEquipSpecial(e.target.value)}
           onBlur={e => handleBlur('equip_special', e.target.value)}
-          readOnly={!isGm}
+          readOnly={!canEdit}
           style={{ width: '100%', minHeight: '80px', background: '#16162a', border: '1px solid #1e1e2e', borderRadius: '6px', padding: '8px', color: '#c0c0d0', fontSize: '12px', resize: 'vertical', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
         />
       </div>

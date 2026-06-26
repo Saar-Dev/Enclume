@@ -18,6 +18,8 @@ export default function DashboardPage() {
 
   const [copiedId, setCopiedId] = useState(null)
   const [uploadingCoverId, setUploadingCoverId] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editingName, setEditingName] = useState('')
   const coverInputRef = useRef(null)
   const pendingCoverIdRef = useRef(null)
   const createInputRef = useRef(null)
@@ -85,6 +87,19 @@ export default function DashboardPage() {
     } finally {
       setUploadingCoverId(null)
       e.target.value = ''
+    }
+  }
+
+  const handleRenameSubmit = async (campaignId) => {
+    const trimmed = editingName.trim()
+    if (!trimmed) { setEditingId(null); return }
+    try {
+      await api.put(`/campaigns/${campaignId}`, { name: trimmed })
+      setCampaigns(prev => prev.map(c => c.id === campaignId ? { ...c, name: trimmed } : c))
+    } catch (err) {
+      setError(err.response?.data?.error?.message || t('dashboard.renameError'))
+    } finally {
+      setEditingId(null)
     }
   }
 
@@ -171,12 +186,32 @@ export default function DashboardPage() {
 
                 {/* HEADER */}
                 <div style={styles.cardHeader}>
-                  <span style={styles.cardTitle}>{campaign.name}</span>
-
+                  {campaign.role === 'gm' && editingId === campaign.id ? (
+                    <input
+                      style={{ ...styles.cardInput, flex: 1, marginRight: 8 }}
+                      value={editingName}
+                      autoFocus
+                      onChange={e => setEditingName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleRenameSubmit(campaign.id)
+                        if (e.key === 'Escape') setEditingId(null)
+                      }}
+                      onBlur={() => setEditingId(null)}
+                    />
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={styles.cardTitle}>{campaign.name}</span>
+                      {campaign.role === 'gm' && (
+                        <button
+                          className="btn-icon"
+                          style={{ fontSize: 11, padding: '2px 4px' }}
+                          onClick={() => { setEditingId(campaign.id); setEditingName(campaign.name) }}
+                        >✏</button>
+                      )}
+                    </div>
+                  )}
                   <span className={campaign.role === 'gm' ? 'badge badge-gm' : 'badge badge-player'}>
-                    {campaign.role === 'gm'
-                      ? t('dashboard.roleGM')
-                      : t('dashboard.rolePlayer')}
+                    {campaign.role === 'gm' ? t('dashboard.roleGM') : t('dashboard.rolePlayer')}
                   </span>
                 </div>
 

@@ -192,7 +192,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     const token = tokens.find(t => t.id === entry.token_id)
     if (!token?.character_id) return false
     const char = characters.find(c => c.id === token.character_id)
-    return char?.type === 'drone'
+    return char?.type === 'drone' && !char.user_id
   }
   const isGmManaged = (entry) => isPnj(entry) || isDroneGmManaged(entry)
 

@@ -5,10 +5,18 @@ const ACCENT = '#3aaa6a'
 const MONO = { fontFamily: "'Share Tech Mono', monospace" }
 
 const TAGS = {
-  add:     { label: 'AJOUT',      color: '#3aaa6a' },
-  fix:     { label: 'CORRECTIF',  color: '#5b8dee' },
-  chg:     { label: 'CHANGEMENT', color: '#f5c542' },
-  refactor: { label: 'REFACTO',   color: '#a78bfa' },
+  add:       { label: 'AJOUT',          color: '#3aaa6a' },
+  fix:       { label: 'CORRECTIF',      color: '#5b8dee' },
+  chg:       { label: 'CHANGEMENT',     color: '#f5c542' },
+  refactor:  { label: 'REFACTO',        color: '#a78bfa' },
+  feat:      { label: 'FONCTIONNALITÉ', color: '#38bdf8' },
+  feature:   { label: 'FONCTIONNALITÉ', color: '#38bdf8' },
+  i18n:      { label: 'I18N',           color: '#22d3ee' },
+  ux:        { label: 'ERGONOMIE',      color: '#fb923c' },
+  erg:       { label: 'ERGONOMIE',      color: '#fb923c' },
+  rework:    { label: 'REWORK',         color: '#c084fc' },
+  perf:      { label: 'PERF',           color: '#f87171' },
+  'faux-bug':{ label: 'FAUX BUG',       color: '#94a3b8' },
 }
 
 function parseChangelog(text) {
@@ -21,7 +29,7 @@ function parseChangelog(text) {
     const title   = parts.slice(2).join(' — ')
     const entries = lines.slice(1)
       .map(l => {
-        const m = l.match(/^- \[(\w+)\] (.+)$/)
+        const m = l.match(/^- \[([\w-]+)\] (.+)$/)
         return m ? { tag: m[1], text: m[2] } : null
       })
       .filter(Boolean)

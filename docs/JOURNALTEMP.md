@@ -3,6 +3,140 @@
 
 ---
 
+## Session 127 — DR7 : Propriétaire drone = mêmes droits que GM
+
+### Fichiers lus
+- `client/src/character/DroneWindow.jsx` ✅
+- `client/src/character/DroneSheet.jsx` ✅
+- `server/src/routes/character/char-sheet.js` (routes drone L.1540–1969) ✅
+- `SessionPage.jsx` L.730–747 ✅ — `_currentUserId: user?.id` bien passé
+
+### Diagnostic causes racines
+
+**isOwner client** — calculé correctement L.44 DroneWindow :
+```js
+const isOwner = character.user_id != null && character.user_id === character._currentUserId
+```
+`_currentUserId` = `user?.id` passé depuis SessionPage L.742. ✅ La valeur est juste.
+
+**Serveur — 7 routes bloquent l'owner :**
+| Route | Ligne | Guard actuel |
+|---|---|---|
+| `PUT /drone` (stats + notes) | L.1591 | `if (!req.isGm)` |
+| `PUT /drone/integrity` | L.1679 | `if (!req.isGm)` |
+| `POST /drone/programs` | L.1702 | `if (!req.isGm)` |
+| `PUT /drone/programs/:id` | L.1766 | `if (!req.isGm)` |
+| `DELETE /drone/programs/:id` | L.1801 | `if (!req.isGm)` |
+| `POST /drone/weapons` | L.1851 | `if (!req.isGm)` |
+| `DELETE /drone/weapons/:id` | L.1957 | `if (!req.isGm)` |
+
+`PUT /drone/weapons/:id` L.1915 → déjà `GM or owner` ✅
+
+**Client — guards sur isGm :**
+- `DroneSheet/StatField` L.23 : `{isGm ? <input> : <span>}` — toutes les stats
+- `DroneSheet/ProgramsSection` L.151 : reçoit isGm seulement — level, delete, form add
+- `DroneSheet/IntegritySection` L.56,83,110 : tout sur isGm
+- `DroneWindow/WeaponsTab` L.451,513,562 : fetch, delete btn, add btn
+- `DroneWindow/NotesTab` L.602,622 : handleBlur + readOnly equip_special
+- `DroneWindow/SettingsTab` : visibility toggle, GLB upload, delete — rester GM-only
+
+### Décision architecture
+
+**Owner = même droits que GM sur son drone** (sauf SettingsTab + visibility qui restent GM-only).
+
+**Pattern pro (RBAC+ABAC, recherche web 2024-06) :**
+Extraire un helper pur `droneIsGmOrOwner(req)` — DRY, pas de répétition inline, testable.
+
+```js
+// Ajouté en tête de la section drone routes (L.1541)
+const droneIsGmOrOwner = req =>
+  req.isGm || !!(req.character.user_id && req.character.user_id === req.user.id)
+```
+
+**Client — pattern `canEdit = isGm || isOwner` :**
+- Calculé dans DroneWindow puis passé à chaque composant enfant
+- DroneSheet : `isGm={canEdit}` → toutes les StatField + ProgramsSection héritent sans changement interne
+- IntegritySection : garde `isGm={isGm}` (état combat, GM seulement)
+- SettingsTab : garde `isGm={isGm}` (GLB, delete, ownership)
+- WeaponsTab : `isGm={canEdit}` — fetch, add btn, delete btn héritent
+- NotesTab : `isGm={canEdit}` — handleBlur + equip_special read-only héritent ; notes_gm garde `{isGm && ...}` en interne
+
+### Plan exact — 2 fichiers
+
+#### `server/src/routes/character/char-sheet.js`
+
+1. Ajouter helper avant `GET /:characterId/drone` (~L.1558) :
+```js
+const droneIsGmOrOwner = req =>
+  req.isGm || !!(req.character.user_id && req.character.user_id === req.user.id)
+```
+
+2. Remplacer dans 7 routes :
+```js
+// Avant :
+if (!req.isGm) throw new AppError(403, 'GM role required')
+// Après :
+if (!droneIsGmOrOwner(req)) throw new AppError(403, 'GM or owner required')
+```
+→ L.1591, L.1679, L.1702, L.1766, L.1801, L.1851, L.1957
+
+#### `client/src/character/DroneWindow.jsx`
+
+Dans `DroneWindow` composant principal, après L.44 :
+```js
+const canEdit = isGm || isOwner
+```
+
+Puis remplacer les props passées :
+- `DroneSheet` L.265–276 : `isGm={canEdit}` (au lieu de `isGm={isGm}`)
+- `WeaponsTab` L.280–286 : `isGm={canEdit}`
+- `NotesTab` L.289–294 : `isGm={canEdit}`
+- `SettingsTab` L.297–306 : `isGm={isGm}` (inchangé)
+
+Visibility toggle header L.210 : `{isGm && ...}` → inchangé
+
+#### `client/src/character/DroneSheet.jsx`
+
+Aucun changement interne nécessaire — `canEdit` arrive via la prop `isGm` et tout s'hérite.
+Sauf IntegritySection L.400–406 : garde `isGm={isGm}` séparément (prop supplémentaire à passer depuis DroneWindow ou extraire isGm original).
+
+**Problème à résoudre** : DroneWindow passe `isGm={canEdit}` à DroneSheet, mais DroneSheet passe `isGm={isGm}` à IntegritySection. Si DroneWindow passe `canEdit` comme `isGm`, DroneSheet reçoit `isGm=canEdit`. Or DroneSheet passe ce même `isGm` à IntegritySection → IntegritySection recevrait `canEdit` au lieu de `isGm` → MAUVAIS.
+
+**Solution** : DroneWindow passe les deux props séparément à DroneSheet :
+```jsx
+<DroneSheet
+  isGm={isGm}          // pour IntegritySection
+  canEdit={canEdit}    // pour StatField + ProgramsSection
+  ...
+/>
+```
+
+DroneSheet.jsx : ajouter `canEdit = false` dans la signature, passer `isGm={canEdit}` à StatField et ProgramsSection, garder `isGm={isGm}` pour IntegritySection.
+
+### Ce qui ne change pas
+- SettingsTab (GLB, delete drone, réassignation) → GM-only
+- Visibility toggle header → GM-only
+- IntegritySection (état combat) → GM-only
+- `PUT /drone/weapons/:id` (déjà owner-ok) → inchangé
+- `DELETE /drone/weapons/:id` → GM-only côté client même si owner peut (pas de bouton delete pour owner sur weapons? Non, WeaponsTab isGm → canEdit donc delete est visible pour owner) → OK
+
+### Scénario de test (à faire après SR)
+1. Joueur propriétaire ouvre DroneWindow → section Stats : inputs éditables ✅
+2. Ajouter programme → bouton visible + requête acceptée ✅
+3. Modifier niveau programme → input éditable ✅
+4. Supprimer programme → bouton × visible ✅
+5. Ajouter arme → bouton visible + picker ✅
+6. Supprimer arme → bouton visible ✅
+7. equip_special → éditable ✅
+8. notes_gm → non visible (GM-only) ✅
+9. Intégrité → readonly (GM-only) ✅
+10. Visibility toggle → non visible (GM-only) ✅
+11. Joueur NON-propriétaire → tout readonly (isOwner=false, isGm=false, canEdit=false) ✅
+
+
+
+---
+
 ## Session 121 — COM22 : LOS bloquée Kiwi — diagnostic en cours
 
 ### Faits confirmés
