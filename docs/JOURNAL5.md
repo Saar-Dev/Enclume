@@ -1547,6 +1547,43 @@ Début du Cluster P — Drones v2. Triage du cluster : DR8 fermé comme faux bug
 
 ---
 
+## Session 127 (suite 3) — 2026-06-27 — COM21 ✅
+
+### Bug COM21 — Collision tokens : déplacement bloqué sans feedback + superposition
+
+**Cause racine [VÉRIFIÉ]** : double bug indépendant dans `socketCombatResolution.js` L.213 :
+1. `isCaseOccupied(bm, tx, ty, tz + 1, [tokenId])` — le `+1` (PE29, espace de marche) cherche des **voxels murs** à hauteur 1. Les tokens sont stockés dans Redis à `pos_z = 0`. Token-to-token détection : **jamais déclenchée** → superposition systématique.
+2. Comportement voulu (règle Polaris) : si destination occupée → **déplacement partiel** vers la case juste avant la destination (pas blocage total).
+
+**Correctif — `socketCombatResolution.js`** :
+- Double check : `isCaseOccupied` (murs PE29, `tz+1`) **+** `db('tokens').where({ pos_x, pos_y, pos_z }).whereNot({ id: tokenId })` (tokens, DB direct — Redis non fiable pour token-token à `z=0` : voxels sol écrasent entrées tokens au même offset)
+- Helper `isCellFree(cx, cy)` : murs OU token présent → case bloquée
+- Helper `moveTokenTo(cx, cy)` : update DB + `collisionMoveToken` + `io.emit(TOKEN_MOVED)` + mutation ref locale
+- Si destination libre → `moveTokenTo(tx, ty)` (comportement existant)
+- Si destination occupée : calculer case juste avant (`tx - Math.sign(dx), ty - Math.sign(dy)`) — si libre → `moveTokenTo` partiel (`partial = true`) — sinon token reste (`steps > 1` guard)
+- `socket.emit(WS.COMBAT_RESOLVE_MOVE_BLOCKED, { tokenLabel, partial })` dans les deux cas
+
+**Correctif — `shared/events.js`** :
+- `COMBAT_RESOLVE_MOVE_BLOCKED: 'combat:resolve_move_blocked'` ajouté après `COMBAT_DECLARE_ERROR`
+
+**Correctif — `useCombatSocket.js`** :
+- Handler `onResolveMoveBlocked({ tokenLabel, partial })` → `addMessage({ type: 'resolve_move_blocked', text: partial ? 'Déplacement partiel...' : 'Déplacement bloqué...', partial })`
+- `socket.on/off` enregistrés
+
+**Correctif — `Sidebar.jsx`** :
+- Bloc rendu `resolve_move_blocked` : fond rouge, ⊗, nom token, texte, badge `{partial ? 'PARTIEL' : 'BLOQUÉ'}`
+
+### Testé
+- Superposition tokens sur même case éliminée ✅
+- Feedback Sidebar `BLOQUÉ` sur `move_short` destination occupée ✅
+- Déplacement partiel + badge `PARTIEL` sur `move_long` destination occupée ✅ (SR + fonctionnel — confirmation Saar)
+
+### Non testé
+- Drone GM-managed comme second token bloqué (guard L.170-172 correct mais pas de session dédiée)
+- Case intermédiaire du chemin aussi occupée (V1 : "une case avant" seulement — pas de fallback itératif)
+
+---
+
 ## Session 127 (suite) — 2026-06-26 — DR10 ✅
 
 ### Bug DR10 — Drone propriétaire joueur : GM recevait la fenêtre de déclaration combat

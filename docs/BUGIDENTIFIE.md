@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-06-26 Session 127
+> Dernière mise à jour : 2026-06-27 Session 127
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -37,7 +37,7 @@
 | **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + TOK1 + MAP1 + COM14 + DASH1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `socketCombatResolution.js` | SR ✅ — validation fonctionnelle requise |
 | **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
-| **N — UI combat** | COM20 + COM21 + COM23 + FEAT3 | `Canvas3D.jsx` + `CombatActionWindow.jsx` | Moyenne / Haute |
+| **N — UI combat** | COM20 | `CombatActionWindow.jsx` + `CombatGmDeclareWindow.jsx` | Moyenne / Haute |
 | **Q — UI divers** | UI2 + UI3 + ST3 | composants dés + chat | Basse |
 | **R — Infrastructure Kiwi** | KIWI2 | upload GLB + MinIO + config Kiwi | Haute |
 
@@ -230,17 +230,6 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 ---
 
-### Bug COM21 — Collision tokens : deuxième token bloqué sans feedback
-
-**Symptôme** : Deux tokens déclarant un déplacement vers la même case — le deuxième ne peut pas s'y rendre. Pas de feedback visible côté client.
-
-**Code impliqué** : `socketToken.js` ou pipeline déplacement — validation collision.
-
-**Cause racine** [INCONNU] : La règle est peut-être déjà appliquée serveur (rejet silencieux). Feedback client absent.
-
-**Prochaine étape** : Cluster N — vérifier si refus collision existe en serveur, puis ajouter feedback client.
-
----
 
 ### Bug COM23 — Label token : pénètre dans les murs ✅ Session 127
 

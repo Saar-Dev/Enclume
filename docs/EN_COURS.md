@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-26 Session 127 (suite 2)
+> Dernière mise à jour : 2026-06-27 Session 127 (suite 3)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -159,11 +159,11 @@
    → DR10 ✅ : `isDroneGmManaged` — filtre `user_id = null` (drone joueur exclu fenêtre GM)
    → DR8 FAUX BUG — `char_inventory` retourne bien les armes drone
 
-**34. ← PROCHAINE ÉTAPE : Cluster N (reste) + bugs actifs**
+**34. ~~Cluster N — UI combat~~** (en cours)
    → COM23 ✅ Session 127 : `TokenLabel` sprite CanvasTexture — label occludé par murs
    → FEAT3 ✅ Session 127 : `TokenActiveDisk` ring dorée — token actif combat
-   → **COM21** : Collision tokens — feedback client absent (Cluster N restant)
-   → **COM20** : Phase 1 — arme + munitions dans CombatActionWindow / CombatGmDeclareWindow
+   → COM21 ✅ Session 127 : collision token-token — `isCellFree` DB direct + déplacement partiel (règle Polaris)
+   → **COM20** ← PROCHAINE ÉTAPE : arme + munitions dans CombatActionWindow / CombatGmDeclareWindow
 
 ---
 

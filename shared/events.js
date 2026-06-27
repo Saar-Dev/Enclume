@@ -104,6 +104,7 @@ export const WS = {
   COMBAT_MELEE_DEFENSE_CONFIRM:  'combat:melee_defense_confirm',   // défenseur PJ → serveur : déclenche la résolution
   COMBAT_MELEE_RESULT:           'combat:melee_result',            // serveur → room : résultat jets en opposition (attaque/défense)
   COMBAT_DECLARE_ERROR:          'combat:declare_error',           // serveur → socket : erreur de validation déclaration (ex: hors portée)
+  COMBAT_RESOLVE_MOVE_BLOCKED:   'combat:resolve_move_blocked',    // serveur → socket : déplacement refusé en résolution (case occupée)
   COMBAT_ANNOUNCE_PREVIEW:       'combat:announce_preview',        // PJ → serveur → room : sélections en cours (éphémère, non persisté)
   COMBAT_ACTION_PRECHECK:        'combat:action_precheck',          // client → serveur (ACK) : { tokenId, actionKey } → callback({ ok })
   COMBAT_APPLY_STUN:             'combat:apply_stun',              // GM → serveur : appliquer is_stunned manuellement { tokenId, outcome, duration }

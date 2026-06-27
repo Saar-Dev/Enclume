@@ -127,6 +127,19 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       })
     }
 
+    const onResolveMoveBlocked = ({ tokenLabel, partial }) => {
+      addMessage({
+        id: `combat-move-blocked-${Date.now()}`,
+        type: 'resolve_move_blocked',
+        text: partial
+          ? 'Déplacement partiel — destination occupée'
+          : 'Déplacement bloqué — destination occupée',
+        username: tokenLabel,
+        partial,
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      })
+    }
+
     socket.on(WS.COMBAT_RELOAD_RESULT,         onReloadResult)
     socket.on(WS.COMBAT_MELEE_DEFENSE_PROMPT,  onMeleeDefensePrompt)
     socket.on(WS.COMBAT_MELEE_RESULT,          onMeleeResult)
@@ -146,6 +159,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     socket.on(WS.COMBAT_SLOT_ADVANCED,         onSlotAdvanced)
     socket.on(WS.COMBAT_TURN_SKIPPED,          onTurnSkipped)
     socket.on(WS.COMBAT_DECLARE_ERROR,         onDeclareError)
+    socket.on(WS.COMBAT_RESOLVE_MOVE_BLOCKED,  onResolveMoveBlocked)
 
     return () => {
       socket.off(WS.COMBAT_RELOAD_RESULT,        onReloadResult)
@@ -167,6 +181,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       socket.off(WS.COMBAT_SLOT_ADVANCED,        onSlotAdvanced)
       socket.off(WS.COMBAT_TURN_SKIPPED,         onTurnSkipped)
       socket.off(WS.COMBAT_DECLARE_ERROR,        onDeclareError)
+      socket.off(WS.COMBAT_RESOLVE_MOVE_BLOCKED, onResolveMoveBlocked)
     }
   }, [socket, isGm, setMode, onModeReset])
 

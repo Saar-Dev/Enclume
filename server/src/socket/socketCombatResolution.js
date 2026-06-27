@@ -209,12 +209,19 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           const tx = action.target_pos_x
           const ty = action.target_pos_y
           const tz = action.target_pos_z ?? 0
-          // PE29 — vérifier l'espace de marche (pos_z + 1)
-          const occupied = await isCaseOccupied(token.battlemap_id, tx, ty, tz + 1, [tokenId])
-          if (!occupied) {
+
+          // Murs (PE29, pos_z+1) + tokens (DB direct — Redis stocke tokens et voxels sol au même z=0)
+          const isCellFree = async (cx, cy) => {
+            if (await isCaseOccupied(token.battlemap_id, cx, cy, tz + 1, [tokenId])) return false
+            const occ = await db('tokens')
+              .where({ battlemap_id: token.battlemap_id, pos_x: cx, pos_y: cy, pos_z: tz })
+              .whereNot({ id: tokenId }).first()
+            return !occ
+          }
+          const moveTokenTo = async (cx, cy) => {
             const [updated] = await db('tokens')
               .where({ id: tokenId })
-              .update({ pos_x: tx, pos_y: ty, pos_z: tz, updated_at: db.fn.now() })
+              .update({ pos_x: cx, pos_y: cy, pos_z: tz, updated_at: db.fn.now() })
               .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'layer'])
             await collisionMoveToken(token.battlemap_id, token, updated)
             io.to(campaignId).emit(WS.TOKEN_MOVED, {
@@ -223,10 +230,24 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
               pos_y: updated.pos_y,
               pos_z: updated.pos_z,
             })
-            // Mettre à jour la ref locale pour les éventuelles actions suivantes
-            token.pos_x = tx; token.pos_y = ty; token.pos_z = tz
+            token.pos_x = cx; token.pos_y = cy; token.pos_z = tz
+          }
+
+          if (await isCellFree(tx, ty)) {
+            await moveTokenTo(tx, ty)
           } else {
-            console.log(`[WS] COMBAT_ACTION_CONFIRM — déplacement bloqué (case occupée) token:${tokenId}`)
+            // Déplacement partiel : case juste avant la destination déclarée (règle Polaris)
+            const dx = tx - token.pos_x
+            const dy = ty - token.pos_y
+            const steps = Math.max(Math.abs(dx), Math.abs(dy))
+            let partial = false
+            if (steps > 1) {
+              const px = tx - Math.sign(dx)
+              const py = ty - Math.sign(dy)
+              if (await isCellFree(px, py)) { await moveTokenTo(px, py); partial = true }
+            }
+            console.log(`[WS] COMBAT_ACTION_CONFIRM — déplacement ${partial ? 'partiel' : 'bloqué'} token:${tokenId}`)
+            socket.emit(WS.COMBAT_RESOLVE_MOVE_BLOCKED, { tokenLabel: token.label, partial })
           }
         } else if (action.type === 'assault') {
           if (!confirmedModifiers && character.type !== 'drone') {
