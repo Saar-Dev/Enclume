@@ -7,8 +7,7 @@ aspects du personnage :
 1. Capacités de base : ce sont les aptitudes physiques et men￾tales essentielles du personnage, représentées par ses Attributs (prin￾cipaux et secondaires).
 2. Type génétique : le personnage peut être un humain nor￾mal, ou bien un « hybride », capable de se déplacer sous l’eau (il 
 existe trois types d’hybrides : hybride naturel, géno-hybride, techno￾hybride).
-3. Capacités spéciales : il s’agit des capacités qui sortent de 
-l’ordinaire, essentiellement le fait d’avoir des mutations, et/ou de 
+3. Capacités spéciales : il s’agit des capacités qui sortent de l’ordinaire, essentiellement le fait d’avoir des mutations, et/ou de 
 pouvoir générer un effet Polaris.
 4. Expérience préliminaire : ce sont les années d’expérience 
 que le personnage a passées dans une ou plusieurs Professions. Cette 

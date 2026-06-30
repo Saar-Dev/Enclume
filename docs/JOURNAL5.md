@@ -1606,3 +1606,54 @@ Début du Cluster P — Drones v2. Triage du cluster : DR8 fermé comme faux bug
 —
 
 ---
+
+
+## Session 128 — 2026-06-30 — Wizard Phase 2 : corrections bugs B5/B6/B8/B9 + i18n + navigation
+
+### Contexte
+Continuation du sprint Wizard Phase 2 (audit JOURNALWIZARD.md). Phase 1 (Phase 0 ✅ / Phase 1 ✅ — B1, A3, Step4Summary.jsx, compteur PC temps réel) avait été complétée en Session 127 dans une fenêtre de contexte précédente.
+
+### Fixes appliqués
+
+**Clés i18n manquantes — `client/src/locales/creation.json`**
+- `wizard.step` : `"Étape {{current}} / {{total}}"` — utilisée par WizardHeader ligne 11
+- `wizard.pc_label` : `"PC disponibles"` — utilisée par WizardHeader ligne 14
+- `step3.none` : `"Aucune mutation"` — carte méthode "aucune" Step3
+- `step3.noneDesc` : `"Votre personnage ne possède aucune mutation."` — description carte
+
+**Bouton Précédent manquant Step3 — `client/src/components/creation/Step3Mutations.jsx`**
+- Bloc `!method` (sélection méthode) : aucune nav Précédent. Ajout `<div style={st.nav}>{onPrev && <button>}` identique aux blocs `chosen`/`random` (lignes 313/447).
+
+**B5 — addSkills mastery = 0 — `client/src/components/creation/CareersAllocator.jsx`**
+- `addSkills(skills, bonus = 0)` utilisait le paramètre `bonus` (toujours 0, jamais passé) au lieu de `sk.bonus`.
+- Fix : suppression paramètre `bonus`, lecture `sk.bonus ?? 0` sur chaque objet skill.
+- Backgrounds : `{ skill_id, bonus: N }` → valeurs correctes. Carrières : `{ skill_id, skill_group }` → bonus undefined → 0 (allocation manuelle via +/-). Testé fonctionnel (Saar ✅).
+
+**B6 — unicité mutations — `client/src/components/creation/Step3Mutations.jsx`**
+- `handleAdd` ne vérifiait pas `meta.is_unique`. Ajout guard ligne 57 :
+  `if (meta.is_unique && selected.some(m => m.mutation_id === mutationId)) return`
+- Couvre aussi le chemin subtype (modal ne s'ouvre qu'en passant par handleAdd). Testé fonctionnel (Saar ✅).
+
+**B8 — doublon classes_moyennes — `mockStep4Data.js` + `Step4Experience.jsx`**
+- Deux entrées `code: 'classes_moyennes'` (parent_code `station_moyenne` / `grande_cite`) — skills identiques.
+- Fix data : fusion en une entrée `parent_code: null, allowed_parents: ['station_moyenne', 'grande_cite']`.
+- Fix filtre `filteredSocialOrigins` : même pattern que `filteredTrainings` (3 cas : parent_code exact, allowed_parents.includes, null sans allowed_parents).
+
+**B9 — slider max=1 quand PC=0 — `client/src/components/creation/CareersAllocator.jsx`**
+- `max={Math.min(20, remainingPC > 0 ? remainingPC : 1)}` → slider restait actif avec max=1 quand PC épuisés.
+- Fix : `max={Math.max(1, Math.min(20, remainingPC))}` + `disabled={remainingPC <= 0}`.
+
+### Testé
+- B5 mastery backgrounds : valeurs correctes affichées ✅ (Saar)
+- B6 unicité : second ajout mutation bloqué ✅ (Saar)
+- i18n : "wizard.step" + "wizard.pc_label" déclarés, test visuel en attente
+- Bouton Précédent Step3 : déclaré, test visuel en attente
+- B8 classes_moyennes : déclaré, test fonctionnel en attente
+- B9 slider : déclaré, test fonctionnel en attente
+
+### Non testé
+- Ensemble de la session (B8, B9, i18n, nav Précédent) : tests visuels groupés à faire
+
+### Prochaine étape
+- A1 : conflit numérotation migrations 097 (PLAN_E4 et PLAN_E5 revendiquent la même migration)
+- Illustrations wizard : colonnes `image_url` dans `ref_genotypes` + `ref_mutations` (MinIO ref)

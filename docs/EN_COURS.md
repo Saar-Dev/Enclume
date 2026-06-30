@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-27 Session 127 (suite 3)
+> Dernière mise à jour : 2026-06-30 Session 128
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -158,6 +158,17 @@
    → DR7 ✅ : `droneIsGmOrOwner(req)` helper — garde lecture fiche drone (owner ou GM)
    → DR10 ✅ : `isDroneGmManaged` — filtre `user_id = null` (drone joueur exclu fenêtre GM)
    → DR8 FAUX BUG — `char_inventory` retourne bien les armes drone
+
+**35. ~~Wizard Phase 2 — corrections bugs B1/B5/B6/B8/B9 + A3 (store) ✅ Sessions 127–128~~**
+   → B1 ✅ : variable `st` écrasée Step3Mutations (st→sub dans .map)
+   → A3 ✅ : Zustand store `creationStore.js` — `getPcDispo()` dérivé, cascade null setters, PC budget temps réel
+   → B5 ✅ : `addSkills` mastery = 0 → `sk.bonus ?? 0` (CareersAllocator)
+   → B6 ✅ : unicité mutation non vérifiée → guard `meta.is_unique` dans `handleAdd`
+   → B8 ✅ : doublon `classes_moyennes` → fusion + `allowed_parents` + filtre mis à jour
+   → B9 ✅ : slider max=1 quand PC=0 → `disabled` + `max` corrigé
+   → i18n ✅ : `wizard.step`, `wizard.pc_label`, `step3.none`, `step3.noneDesc`
+   → Nav ✅ : bouton Précédent manquant dans sélection méthode Step3
+   → **A1 — conflit migrations 097** ← PROCHAINE ÉTAPE WIZARD
 
 **34. ~~Cluster N — UI combat~~** (en cours)
    → COM23 ✅ Session 127 : `TokenLabel` sprite CanvasTexture — label occludé par murs

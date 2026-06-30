@@ -10,6 +10,7 @@ import CampaignSettingsPage from './pages/CampaignSettingsPage'
 import WorkshopPage from './pages/WorkshopPage'
 import MerchantsPage from './pages/MerchantsPage'
 import HealthPage from './pages/HealthPage'
+import WizardCreationPage from './pages/WizardCreationPage'
 
 function ProtectedRoute({ children }) {
   const { user, isLoading } = useAuthStore()
@@ -62,6 +63,9 @@ export default function App() {
         <Route path="/health" element={
           <ProtectedRoute><HealthPage /></ProtectedRoute>
         } />
+		<Route path="/creation" element={
+			<ProtectedRoute><WizardCreationPage /></ProtectedRoute>
+		} />
         {/* Redirect legacy — bookmarks /texture-packs restent fonctionnels */}
         <Route path="/texture-packs" element={<Navigate to="/workshop" replace />} />
       </Routes>
