@@ -1657,3 +1657,66 @@ Continuation du sprint Wizard Phase 2 (audit JOURNALWIZARD.md). Phase 1 (Phase 0
 ### Prochaine étape
 - A1 : conflit numérotation migrations 097 (PLAN_E4 et PLAN_E5 revendiquent la même migration)
 - Illustrations wizard : colonnes `image_url` dans `ref_genotypes` + `ref_mutations` (MinIO ref)
+
+---
+
+## Session 128 (suite) — 2026-06-30 — Migrations 98 + 99 ✅ (102 migrations totales)
+
+### Contexte
+Continuation Session 128 après résumé de contexte. Objectif : écrire et appliquer les migrations 98 (`ref_backgrounds`) et 99 (`char_advantages_v2`), puis `knex migrate:latest`.
+
+### Travail effectué
+
+**Analyse préalable — Sources primaires vérifiées**
+- `.returning('id')` → `[{id: 'uuid'}]` (objet, pas scalaire) : confirmé depuis `95_seed_ref_mutations.js` ligne 9
+- `table.check('BETWEEN')` : confirmé depuis `93_ref_careers.js` ligne 137
+- `knex.raw('CREATE UNIQUE INDEX ...')` : confirmé depuis `96_char_creation_tables.js` lignes 31–42
+- `_prepInsert` undefined→NULL : confirmé depuis `server/node_modules/knex/lib/query/querycompiler.js` lignes 1317–1356
+- `table.unique([], { predicate: knex.whereRaw() })` valide en Knex 3.2.7 (v2.4.0+)
+
+**Migration 98 — `98_ref_backgrounds.js` créée**
+Source : PLAN_CREATION_E4.md, converti ESM. 4 corrections appliquées :
+- BUG U1 : `table.unique([..., knex.raw()])` → `knex.raw('CREATE UNIQUE INDEX uq_ref_bg_type_code_parent ON ref_backgrounds (type, code, COALESCE(parent_code, \'\'))')`
+- BUG M4a : `[cm2]` stocké depuis 2e insert `classes_moyennes` (parent: grande_cite) → 3 skills ajoutés pour `cm2.id`
+- BUG M4b : `[scolaire2]` stocké depuis 2e insert `education_scolaire` (parent: classes_superieures) → 6 skills en insert séparé
+- Tables créées : `ref_backgrounds`, `ref_background_skills`, `ref_setbacks`, `char_creation_snapshot`
+- Seeds : 4 origines géo, 5 origines sociales, 5 formations, 8 filières études sup, 5 revers généraux
+
+**Migration 99 — `99_char_advantages_v2.js` créée**
+Source : PLAN_CREATION_E5.md §1, converti ESM.
+- Droppe l'ancienne `char_advantages` (idempotent)
+- Crée nouvelle `char_advantages` : UUID PK, soft-delete (`removed_at`), snapshot_data JSONB, index partiel `(char_sheet_id, advantage_id) WHERE removed_at IS NULL`
+- Ajoute `pc_postcreation INTEGER DEFAULT 0` à `char_pc_ledger`
+
+**Bugs découverts et corrigés pendant knex migrate:latest**
+
+| Bug | Fichier | Symptôme | Fix |
+|---|---|---|---|
+| ESM format | migrations 92–99 | `exports is not defined` (package.json `"type":"module"`) | `exports.up/down` → `export const up/down` (PowerShell replace-all) |
+| BUG SEED1 | `95_new_ref_mutations.js` | `duplicate key ref_mutations_name_unique` (Difformités × 2, etc.) | `.unique()` sur `name` seul → index `UNIQUE(name, COALESCE(subtype, ''))` |
+| BUG VIEW | `96_char_creation_tables.js` | `column rm.mod_for does not exist` (PG lowercases unquoted idents) | `rm.mod_FOR` → `rm."mod_FOR"` + alias quotés |
+
+**Résultat final**
+```
+Found 102 Completed Migration file/files.
+No Pending Migration files Found.
+```
+Serveur : `Base de données connectée` + `Migrations à jour` ✅
+
+Tables confirmées : `ref_advantages`(76), `ref_backgrounds`(22), `ref_mutations`(45), `char_advantages`, `char_pc_ledger`, `ref_setbacks`, `char_creation_snapshot` ✅
+
+### Testé
+- `knex migrate:latest` → 0 erreur ✅
+- Comptage tables clés en DB ✅
+- Serveur démarre proprement (port 3001 déjà actif) ✅
+
+### Non testé
+- Lecture des données ref_backgrounds depuis backend
+- Application des backgrounds sur un personnage en création
+- Contrainte partielle `char_advantages` (unique actif par personnage)
+
+### Prochaine étape
+COUCHE 3 — Backend wizard. **Lectures obligatoires avant de coder :**
+1. `docs/Character/Creation/REGLE_CREATION.txt` lignes 1107–1352 (règles backgrounds)
+2. `docs/Character/Creation/REGLE_PROFESSION.md` lignes 1107–2383 (règles professions)
+3. `server/src/routes/character/char-sheet.js` (routes existantes, avant d'en ajouter)

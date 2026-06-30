@@ -1120,7 +1120,7 @@ const DISADVANTAGES = [
   }
 ];
 
-exports.up = async (knex) => {
+export const up = async (knex) => {
   await knex.schema.createTable('ref_advantages', (table) => {
     table.text('advantage_id').primary();
     table.text('name').notNullable();
@@ -1149,6 +1149,6 @@ exports.up = async (knex) => {
   await knex('ref_advantages').insert([...ADVANTAGES, ...DISADVANTAGES]);
 };
 
-exports.down = async (knex) => {
+export const down = async (knex) => {
   await knex.schema.dropTableIfExists('ref_advantages');
 };

@@ -1,14 +1,14 @@
-// 97_char_creation_core.js
-// Prérequis wizard création : ambiance campagne, règles, ledger PC, enrichissement génotypes.
-// Source : PLAN_E1+2.md §5 "MIGRATION 096" — converti ESM → CJS, renommé 097.
+﻿// 97_char_creation_core.js
+// PrÃ©requis wizard crÃ©ation : ambiance campagne, rÃ¨gles, ledger PC, enrichissement gÃ©notypes.
+// Source : PLAN_E1+2.md Â§5 "MIGRATION 096" â€” converti ESM â†’ CJS, renommÃ© 097.
 
-exports.up = async (knex) => {
+export const up = async (knex) => {
   // === campaigns : ambiance ===
   await knex.schema.alterTable('campaigns', (table) => {
     table.text('ambiance').defaultTo('INTERMEDIAIRE')
   })
 
-  // === campaign_rules : options de règles par campagne ===
+  // === campaign_rules : options de rÃ¨gles par campagne ===
   await knex.schema.createTable('campaign_rules', (table) => {
     table.uuid('campaign_id')
       .primary()
@@ -44,7 +44,7 @@ exports.up = async (knex) => {
     table.integer('pc_gained_desavantages').defaultTo(0)
   })
 
-  // === ref_genotypes : colonnes informatives wizard étape 2 ===
+  // === ref_genotypes : colonnes informatives wizard Ã©tape 2 ===
   await knex.schema.alterTable('ref_genotypes', (table) => {
     table.text('description')
     table.text('illustration_url')
@@ -53,25 +53,25 @@ exports.up = async (knex) => {
     table.boolean('has_deserter_option').defaultTo(false)
   })
 
-  // Seeds : description + coût PC + option déserteur des 4 génotypes
+  // Seeds : description + coÃ»t PC + option dÃ©serteur des 4 gÃ©notypes
   await knex('ref_genotypes').where('id', 'HUMAIN').update({
-    description: 'Humain normal. Aucune modification des Attributs. Aucun Avantage ni Désavantage spécifique.',
+    description: 'Humain normal. Aucune modification des Attributs. Aucun Avantage ni DÃ©savantage spÃ©cifique.',
     pc_cost: 0,
     has_deserter_option: false,
   })
   await knex('ref_genotypes').where('id', 'HYB_NAT').update({
-    description: "Hybride naturel. Né avec les mutations nécessaires à la survie sous-marine. Le plus avantagé sous l'eau, le plus désavantagé au sec.",
+    description: "Hybride naturel. NÃ© avec les mutations nÃ©cessaires Ã  la survie sous-marine. Le plus avantagÃ© sous l'eau, le plus dÃ©savantagÃ© au sec.",
     pc_cost: 5,
     has_deserter_option: false,
   })
   await knex('ref_genotypes').where('id', 'GEN_HYB').update({
-    description: "Géno-hybride. Humain transformé par la technologie du Culte du Trident. Apparence préservée, adaptation aquatique sans mutation visible.",
+    description: "GÃ©no-hybride. Humain transformÃ© par la technologie du Culte du Trident. Apparence prÃ©servÃ©e, adaptation aquatique sans mutation visible.",
     pc_cost: 5,
     prereq_professions: JSON.stringify([{ profession_id: 'culte_trident_gsi', years: 1 }]),
     has_deserter_option: false,
   })
   await knex('ref_genotypes').where('id', 'TEC_HYB').update({
-    description: "Techno-hybride. Individu modifié par l'Hégémonie, souvent contre son gré. Attributs physiques grandement augmentés mais atrocement défiguré.",
+    description: "Techno-hybride. Individu modifiÃ© par l'HÃ©gÃ©monie, souvent contre son grÃ©. Attributs physiques grandement augmentÃ©s mais atrocement dÃ©figurÃ©.",
     pc_cost: 5,
     prereq_professions: JSON.stringify([
       { profession_id: 'soldat_milicien', years: 2 },
@@ -81,7 +81,7 @@ exports.up = async (knex) => {
   })
 }
 
-exports.down = async (knex) => {
+export const down = async (knex) => {
   await knex.schema.alterTable('campaigns', (table) => {
     table.dropColumn('ambiance')
   })

@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-30 Session 128
+> Dernière mise à jour : 2026-06-30 Session 128 suite
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -168,7 +168,8 @@
    → B9 ✅ : slider max=1 quand PC=0 → `disabled` + `max` corrigé
    → i18n ✅ : `wizard.step`, `wizard.pc_label`, `step3.none`, `step3.noneDesc`
    → Nav ✅ : bouton Précédent manquant dans sélection méthode Step3
-   → **A1 — conflit migrations 097** ← PROCHAINE ÉTAPE WIZARD
+   → **A1 ✅ Session 128 suite** : migrations 98 + 99 appliquées — 102 migrations totales
+   → **PROCHAINE ÉTAPE WIZARD : COUCHE 3 backend** — lire REGLE_CREATION.txt (L.1107–1352) + REGLE_PROFESSION.md (L.1107–2383) + char-sheet.js avant de coder
 
 **34. ~~Cluster N — UI combat~~** (en cours)
    → COM23 ✅ Session 127 : `TokenLabel` sprite CanvasTexture — label occludé par murs
@@ -181,7 +182,7 @@
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **91 migrations appliquées** (91 = drone_sheet.charge_utile + trade_log constraint — Session 126)
+- **102 migrations appliquées** (102 = ref_backgrounds + ref_background_skills + ref_setbacks + char_creation_snapshot + char_advantages_v2 — Session 128 suite)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---

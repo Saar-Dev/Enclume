@@ -1,5 +1,5 @@
 ﻿// 094_drop_char_advantages_ref_avantages.cjs
-exports.up = async (knex) => {
+export const up = async (knex) => {
   await knex.schema.dropTableIfExists('char_advantages')
   await knex.schema.dropTableIfExists('ref_avantages')
   // DROP ancienne ref_mutations (migration 38, schema muta_numero TEXT PK).
@@ -8,7 +8,7 @@ exports.up = async (knex) => {
   await knex.raw('DROP TABLE IF EXISTS ref_mutations CASCADE')
 }
 
-exports.down = async (knex) => {
+export const down = async (knex) => {
   // ATTENTION : la reconstruction de l'ancienne ref_mutations (muta_numero TEXT PK, 33 mutations)
   // n'est pas possible ici — données irrecouvrables en rollback partiel.
   // Pour un rollback complet, restaurer depuis un backup ou ré-exécuter depuis migration 38.

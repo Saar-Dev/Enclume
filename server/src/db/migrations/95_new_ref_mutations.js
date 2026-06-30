@@ -1,12 +1,12 @@
-// 95_new_ref_mutations.js
-// Crée les 5 tables de mutations normalisées.
-// Remplace ref_mutations v1 (muta_numero TEXT PK, migration 38) supprimée par migration 94.
-// Le seed est dans 95_seed_ref_mutations.js (trie après ce fichier : 's' > 'n').
+﻿// 95_new_ref_mutations.js
+// CrÃ©e les 5 tables de mutations normalisÃ©es.
+// Remplace ref_mutations v1 (muta_numero TEXT PK, migration 38) supprimÃ©e par migration 94.
+// Le seed est dans 95_seed_ref_mutations.js (trie aprÃ¨s ce fichier : 's' > 'n').
 
-exports.up = async (knex) => {
+export const up = async (knex) => {
   await knex.schema.createTable('ref_mutations', (table) => {
     table.increments('mutation_id').primary()
-    table.string('name', 100).notNullable().unique()
+    table.string('name', 100).notNullable()
     table.string('subtype', 50).nullable()
     table.boolean('has_subtable').notNullable().defaultTo(false)
     table.integer('cost_pc').notNullable().defaultTo(0)
@@ -38,6 +38,13 @@ exports.up = async (knex) => {
     table.text('description').notNullable()
     table.timestamps(true, true)
   })
+
+  // Unicité (name, subtype) via COALESCE — même pattern que ref_backgrounds.
+  // name seul ne suffit pas : 'Difformités' existe avec subtype 'minor' et 'major'.
+  await knex.raw(`
+    CREATE UNIQUE INDEX uq_ref_mutations_name_subtype
+      ON ref_mutations (name, COALESCE(subtype, ''))
+  `)
 
   await knex.raw(`
     ALTER TABLE ref_mutations
@@ -108,7 +115,7 @@ exports.up = async (knex) => {
   `)
 }
 
-exports.down = async (knex) => {
+export const down = async (knex) => {
   await knex.schema.dropTableIfExists('ref_mutation_incompatibilities')
   await knex.schema.dropTableIfExists('ref_mutation_discounts')
   await knex.schema.dropTableIfExists('ref_mutation_skills')

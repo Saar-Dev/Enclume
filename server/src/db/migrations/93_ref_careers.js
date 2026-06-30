@@ -1,6 +1,6 @@
 ﻿// 093_ref_careers.cjs
 
-exports.up = async (knex) => {
+export const up = async (knex) => {
   // 1. Careers
   await knex.schema.createTable('ref_careers', (table) => {
     table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'))
@@ -176,7 +176,7 @@ exports.up = async (knex) => {
   })
 }
 
-exports.down = async (knex) => {
+export const down = async (knex) => {
   await knex.schema.dropTableIfExists('ref_career_point_categories')
   await knex.schema.dropTableIfExists('ref_career_equipment')
   await knex.schema.dropTableIfExists('ref_career_random_benefits')
