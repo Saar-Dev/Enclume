@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import AgeSelector from './AgeSelector'
 import BackgroundSelector from './BackgroundSelector'
 import CareersAllocator from './CareersAllocator'
 import { geoOrigins, socialOrigins, trainings, higherEds } from './mockStep4Data'
 import Step4Summary from './Step4Summary'
+import { useCreationStore } from '../../stores/creationStore'
+import api from '../../lib/api'
 
 const SUB_STEPS = {
   AGE: 'age',
@@ -18,6 +20,7 @@ const SUB_STEPS = {
 
 export default function Step4Experience({ pcDispo, onNext, onPrev }) {
   const { t } = useTranslation('creation')
+  const { sheetId } = useCreationStore()
   const [subStep, setSubStep] = useState(SUB_STEPS.AGE)
   const [age, setAge] = useState(16)
   const [originGeo, setOriginGeo] = useState(null)
@@ -28,6 +31,14 @@ export default function Step4Experience({ pcDispo, onNext, onPrev }) {
   const [geoNation, setGeoNation] = useState('')
   const [socNation, setSocNation] = useState('')
   const [careers, setCareers] = useState([])
+  const [refData, setRefData] = useState({ loading: true, careers: [] })
+
+  useEffect(() => {
+    if (!sheetId) return
+    api.get(`/creation/${sheetId}/step4/ref`)
+      .then(res => setRefData({ loading: false, careers: res.data.careers ?? [] }))
+      .catch(() => setRefData({ loading: false, careers: [] }))
+  }, [sheetId])
 
   // ─── Données filtrées ──────────────────────────────────────────
   const filteredSocialOrigins = socialOrigins.filter(s => {
@@ -56,6 +67,7 @@ export default function Step4Experience({ pcDispo, onNext, onPrev }) {
   // ─── PC calculés ───────────────────────────────────────────────
   const totalPC = (higherEd ? 1 : 0) + careers.reduce((sum, c) => sum + c.years, 0)
   const remainingPC = pcDispo - totalPC
+  const finalAge = age + (selectedHigherEdItem?.years_added ?? 0) + careers.reduce((sum, c) => sum + c.years, 0)
 
   // ─── Handlers ──────────────────────────────────────────────────
   const handleSelectGeoOrigin = (code) => {
@@ -105,17 +117,43 @@ export default function Step4Experience({ pcDispo, onNext, onPrev }) {
     setHigherEd(null)
   }
 
-  const handleAddCareer = (careerId, years) => {
-    setCareers(prev => [...prev, { career_id: careerId, years }])
+  const handleAddCareer = (careerId, careerName, careerTitles, years, skillAllocations) => {
+    setCareers(prev => [...prev, {
+      career_id: careerId,
+      career_name: careerName,
+      titles: careerTitles,
+      years,
+      skillAllocations: skillAllocations || {},
+    }])
   }
 
   const handleRemoveCareer = (index) => {
     setCareers(prev => prev.filter((_, i) => i !== index))
   }
 
-const handleSubmit = () => {
-  onNext?.({ pcSpent: totalPC })
-}
+  const buildPayload = () => {
+    const careerEntries = careers.map(c => ({
+      career_id: c.career_id,
+      years: c.years,
+      skillAllocations: c.skillAllocations || {},
+    }))
+    return {
+      age: finalAge,
+      originGeo,
+      originSoc,
+      training,
+      higherEd,
+      geoName,
+      geoNation,
+      socNation,
+      careers: careerEntries,
+      pcSpent: totalPC,
+    }
+  }
+
+  const handleSubmit = () => {
+    onNext?.(buildPayload())
+  }
 
   // ─── Navigation ────────────────────────────────────────────────
   const handleSubNext = () => {
@@ -260,6 +298,7 @@ const handleSubmit = () => {
   <CareersAllocator
     pcDispo={pcDispo - (higherEd ? 1 : 0)}
     selectedCareers={careers}
+    careers={refData.careers}
     onAdd={handleAddCareer}
     onRemove={handleRemoveCareer}
     onNext={handleSubNext}
@@ -273,7 +312,7 @@ const handleSubmit = () => {
 
       {subStep === SUB_STEPS.SUMMARY && (
   <Step4Summary
-    age={age}
+    age={finalAge}
     originGeo={originGeo}
     originSoc={originSoc}
     training={training}
@@ -282,6 +321,10 @@ const handleSubmit = () => {
     geoName={geoName}
     geoNation={geoNation}
     socNation={socNation}
+    selectedGeoItem={selectedGeoItem}
+    selectedSocItem={selectedSocItem}
+    selectedTrainingItem={selectedTrainingItem}
+    selectedHigherEdItem={selectedHigherEdItem}
     onPrev={handleSubPrev}
     onSubmit={handleSubmit}
   />

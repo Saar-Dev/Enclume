@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
+
 const MOCK_MUTATION_IDS = [1, 7, 11, 14, 17, 20]
 
 const MOCK_SUBTYPES = {
@@ -168,30 +170,45 @@ export default function Step3Mutations({ pcDispo = 20, onNext, onPrev }) {
   // ══════════════════════════════════════════════════════════════════════
   if (!method) {
     return (
-      <div style={st.container}>
-        <div style={st.methodCards}>
-          <div style={st.methodCard} onClick={() => setMethod('chosen')}>
-            <div style={st.methodIcon}>🧬</div>
-            <h2 style={st.methodName}>{t('step3.method_choose')}</h2>
-            <p style={st.methodDesc}>{t('step3.method_choose_desc')}</p>
+      <div className="wiz2-container">
+        <div className="wiz2-carousel">
+
+          <div className="wiz2-card" onClick={() => setMethod('chosen')}>
+            <img className="wiz2-card-img" src={`${ASSETS_BASE}/s2_libre.webp`} alt="" />
+            <div className="wiz2-vignette" />
+            <div className="wiz2-card-top">
+              <span className="wiz2-card-name">{t('step3.method_choose')}</span>
+            </div>
+            <div className="wiz2-card-bottom">
+              <p className="wiz2-card-summary">{t('step3.method_choose_desc')}</p>
+            </div>
           </div>
 
-          <div style={st.methodCard} onClick={() => setMethod('random')}>
-            <div style={st.methodIcon}>🎲</div>
-            <h2 style={st.methodName}>{t('step3.method_random')}</h2>
-            <p style={st.methodDesc}>{t('step3.method_random_desc')}</p>
+          <div className="wiz2-card" onClick={() => setMethod('random')}>
+            <img className="wiz2-card-img" src={`${ASSETS_BASE}/s2_aleatoire.webp`} alt="" />
+            <div className="wiz2-vignette" />
+            <div className="wiz2-card-top">
+              <span className="wiz2-card-name">{t('step3.method_random')}</span>
+            </div>
+            <div className="wiz2-card-bottom">
+              <p className="wiz2-card-summary">{t('step3.method_random_desc')}</p>
+            </div>
           </div>
 
-          <div style={st.methodCard} onClick={handleNone}>
-            <div style={st.methodIcon}>🚫</div>
-            <h2 style={st.methodName}>{t('step3.none')}</h2>
-            <p style={st.methodDesc}>{t('step3.noneDesc')}</p>
+          <div className="wiz2-card wiz2-card--text" onClick={handleNone}>
+            <div className="wiz2-card-top">
+              <span className="wiz2-card-name">{t('step3.none')}</span>
+            </div>
+            <div className="wiz2-card-bottom">
+              <p className="wiz2-card-summary">{t('step3.noneDesc')}</p>
+            </div>
           </div>
+
         </div>
 
-        <div style={st.nav}>
+        <div className="wiz2-nav">
           {onPrev && (
-            <button style={st.prevBtn} onClick={onPrev}>
+            <button className="btn btn-ghost" onClick={onPrev}>
               ← {t('step3.prev')}
             </button>
           )}
@@ -492,32 +509,6 @@ const st = {
     cursor: 'pointer',
     padding: 0,
   },
-
-  // Choix méthode
-  methodCards: {
-    display: 'flex',
-    gap: '24px',
-    justifyContent: 'center',
-    flex: 1,
-    alignItems: 'center',
-  },
-  methodCard: {
-    flex: 1,
-    maxWidth: '320px',
-    border: '1px solid #2a2a3e',
-    borderRadius: '8px',
-    padding: '24px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-    cursor: 'pointer',
-    backgroundColor: 'rgba(6,6,14,0.85)',
-    transition: 'border-color 0.2s',
-  },
-  methodIcon: { fontSize: '40px', marginBottom: '16px' },
-  methodName: { color: '#c0c0d0', fontSize: '15px', fontWeight: '700', marginBottom: '12px' },
-  methodDesc: { color: '#6a6a8a', fontSize: '11px', lineHeight: '1.7' },
 
   // Grille achat
   grid: {

@@ -1909,3 +1909,101 @@ Plan COUCHE 4a complet — en attente de code
 - Steps 1-3 (POST /step1, /step2, /step3) depuis le client — UI step4/5 non câblée
 - `finalizeCreation` (COUCHE 4b)
 - Vérification DB directe des rows créées par `startCreation`
+
+---
+
+## Session 129 suite 3 — 2026-07-01 — Wizard COUCHE 4b : câblage frontend → backend steps 4 & 5
+
+### Périmètre livré
+
+**`client/src/stores/creationStore.js`**
+- Ajout : `creationState: null`, `setCreationState(s)`, `resetCreation` inclut `creationState: null`, `setStep5Data(d)`
+
+**`client/src/components/creation/CareersAllocator.jsx`** (réécriture)
+- Import mock `careersList` supprimé → prop `careers` (depuis DB via refData)
+- `selectedCareerId` UUID-based (non plus index)
+- `allSkills` useMemo : bg non-conditionnel + carrières sélectionnées + carrière courante
+- Condition table `allSkills.length > 0` (fix : table invisible avant ajout de la 1re carrière)
+- `handleAdd` → `onAdd(career.id, career.name, career.titles, years, { ...skillAllocs })`
+- Filtre `restricted_geographic_origin` (champ DB, remplace `restricted_geo` mock)
+
+**`client/src/components/creation/Step4Summary.jsx`** (réécriture — 101 lignes, était 703)
+- Suppression des 602 lignes mortes (exports inutilisés)
+- Props : `selectedGeoItem`, `selectedSocItem`, `selectedTrainingItem`, `selectedHigherEdItem` (objets complets, pas codes)
+- Affichage carrière : `c.career_name ?? c.career_id`, titres depuis `c.titles`
+
+**`client/src/components/creation/Step4Experience.jsx`**
+- Import `useCreationStore` + `api` ajoutés
+- `const { sheetId } = useCreationStore()`
+- `useEffect` → `api.get('/creation/${sheetId}/step4/ref')` → `setRefData`
+- `handleAddCareer` : stocke `{ career_id, career_name, titles, years, skillAllocations }`
+- `buildPayload()` : envoie `originGeo/Soc/training/higherEd` comme codes (backend résout par code)
+- `<CareersAllocator careers={refData.careers} .../>` (DB, pas mock)
+- Props `selectedGeoItem/selectedSocItem/selectedTrainingItem/selectedHigherEdItem` passés à Step4Summary
+
+**`client/src/components/creation/WizardCreation.jsx`**
+- `useNavigate` + `Step5Advantages` importés
+- `creationState, setCreationState, resetCreation, setStep5Data` destructurés
+- Step4 `onNext` : async → `callStep('step4', data)` → `setCreationState('draft_step4')` → `setStep(5)`
+- Step5 : `<Step5Advantages sheetId pcDispo onNext onPrev>`
+- Step5 `onPrev` : si `creation_state === 'draft_step4'` → `DELETE /creation/${sheetId}/step4` → retour step4
+- Step5 `onNext` : `callStep('step5', data)` → `callStep('finalize', {})` → `resetCreation()` → `navigate('/')`
+
+**`client/src/components/creation/Step5Advantages.jsx`** (création — 119 lignes)
+- Fetch `GET /creation/${sheetId}/step5/ref` → ref_advantages
+- Toggle avantages/désavantages avec guard `pcRemaining`
+- Envoie `onNext({ advantages: selected })`
+
+**`server/src/routes/creation.js`**
+- Fix step5 route : `advantages.length === 0` supprimé — liste vide autorisée (personnage sans avantage)
+
+**`client/src/locales/creation.json`**
+- Clés step5 : `title`, `advantages_section`, `disadvantages_section`, `pc_remaining`, `pc_cost`, `prev`, `validate`, `loading`
+- Clé `step4.career_skills_allocated`
+
+### Testé
+- SR ✅
+- Start wizard → step0 "Commencer" ✅
+
+### Non testé ⚠️ clos partiel
+- Steps 1-3 depuis client
+- Step4 → step5 → finalize (bloqié : ref_careers vide + bug âge)
+
+---
+
+## Session 129 suite 4 — 2026-07-01 — Seed carrières + fix âge final
+
+### Périmètre livré
+
+**`server/src/db/migrations/100_seed_ref_careers.js`** (création)
+- Seed 5 carrières Polaris : artisan_artiste, assassin, barman, chasseur_primes, contrebandier
+- INSERT `ref_careers` (code, name, description, points_per_year, restricted_geographic_origin, geographic_origin_details)
+- INSERT `ref_career_skills` en batch par carrière (skill_id, skill_group, conditional)
+- INSERT `ref_career_titles` en batch par carrière (min_years, max_years, title, salary_per_year, salary_formula)
+- DOWN : DELETE ref_careers WHERE code IN (...) → CASCADE ref_career_skills + ref_career_titles
+- 103 migrations au total
+
+**`client/src/components/creation/Step4Experience.jsx`** (3 éditions)
+- `const finalAge = age + (selectedHigherEdItem?.years_added ?? 0) + careers.reduce((sum, c) => sum + c.years, 0)`
+- `buildPayload()` : `age: finalAge` (remplace calcul partiel sans études supérieures)
+- `<Step4Summary age={finalAge} ...>` (remplace `age={age}` — affichage du récap corrigé)
+
+### Cause racine du bug âge
+`buildPayload()` envoyait `age` = valeur brute AgeSelector (ex: 16) sans ajouter les années de carrière. Backend validait `age < 18 → AppError`. Par ailleurs, `selectedHigherEdItem.years_added = 2` (constante dans le mock) ≠ `pc_cost = 1` : coût PC et durée sont distincts pour les études supérieures.
+
+### Testé ✅
+- SR → migration 100 appliquée → "Migrations à jour" ✅
+- Wizard step4 → professions : 5 carrières dans la grille ✅
+- Sélection Assassin 6 ans + études supérieures + âge 19 → récap affiche 27 ans ✅
+- Soumission step4 → transition step5 ✅
+- Step5 : compteur PC header correct à l'arrivée (store mis à jour par setStep4Data à la soumission step4) ✅
+- Step5 → "Finaliser" → retour Dashboard ✅
+- Personnage créé visible dans le Dashboard ✅
+
+### Dettes identifiées en test
+- **[WIZ-1]** Personnages en état draft (creation_state ≠ 'complete') visibles dans la liste — `startCreation` crée avec `visible=false` mais la requête liste ignore peut-être ce flag
+- **[WIZ-2]** Deux compteurs PC : header (store, met à jour à la soumission step4) vs CareersAllocator (local, temps réel step4) — pas un bug fonctionnel, cosmétique
+
+### Non testé ⚠️ clos partiel
+- Steps 1-3 depuis client (dette COUCHE 4a)
+- Spécialité apprentissage_technique (non implémentée)

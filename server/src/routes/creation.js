@@ -149,8 +149,8 @@ router.post('/:sheetId/step5', async (req, res, next) => {
     }
 
     const { advantages } = req.body
-    if (!Array.isArray(advantages) || advantages.length === 0) {
-      throw new AppError(400, "Liste d'avantages requise")
+    if (!Array.isArray(advantages)) {
+      throw new AppError(400, 'Payload invalide : advantages doit être un tableau')
     }
 
     await db.transaction(async (trx) => {

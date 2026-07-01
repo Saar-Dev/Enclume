@@ -195,14 +195,19 @@ export async function getStep4RefData(sheetId) {
   const sheet = await db('char_sheet').where({ id: sheetId }).first()
   if (!sheet) throw new AppError(404, 'Fiche introuvable')
 
-  const [backgrounds, careers, careerSkills, careerTitles, careerPrereqs, careerPointCats] = await Promise.all([
+  const [backgrounds, bgSkills, careers, careerSkills, careerTitles, careerPrereqs, careerPointCats] = await Promise.all([
     db('ref_backgrounds').select('*').orderBy(['type', 'sort_order']),
+    db('ref_background_skills').select('*'),
     db('ref_careers').select('*'),
     db('ref_career_skills').select('*'),
     db('ref_career_titles').select('*'),
     db('ref_career_prerequisites').select('*'),
     db('ref_career_point_categories').select('*').orderBy('sort_order'),
   ])
+
+  const bgMap = new Map(backgrounds.map(b => [b.id, { ...b, skills: [] }]))
+  for (const sk of bgSkills) bgMap.get(sk.background_id)?.skills.push(sk)
+  const bgsWithSkills = Array.from(bgMap.values())
 
   const careersMap = new Map(
     careers.map(c => [c.id, { ...c, skills: [], titles: [], prerequisites: [], pointCategories: [] }])
@@ -212,7 +217,7 @@ export async function getStep4RefData(sheetId) {
   for (const p of careerPrereqs) careersMap.get(p.career_id)?.prerequisites.push(p)
   for (const pc of careerPointCats) careersMap.get(pc.career_id)?.pointCategories.push(pc)
 
-  const byType = (type) => backgrounds.filter(b => b.type === type)
+  const byType = (type) => bgsWithSkills.filter(b => b.type === type)
 
   return {
     geoOrigins: byType('geo_origin'),

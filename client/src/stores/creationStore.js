@@ -15,6 +15,7 @@ export const useCreationStore = create((set, get) => ({
   sheetId: null,
   characterId: null,
   campaignId: null,
+  creationState: null,
   isStarting: false,
   startError: null,
 
@@ -32,6 +33,7 @@ export const useCreationStore = create((set, get) => ({
 
   setStep: (step) => set({ step }),
   setCampaignId: (campaignId) => set({ campaignId }),
+  setCreationState: (creationState) => set({ creationState }),
 
   startCreation: async (campaignId) => {
     set({ isStarting: true, startError: null })
@@ -82,6 +84,7 @@ export const useCreationStore = create((set, get) => ({
     step0Data: null, step1Data: null, step2Data: null,
     step3Data: null, step4Data: null, step5Data: null,
     sheetId: null, characterId: null, campaignId: null,
+    creationState: null,
     isStarting: false, startError: null,
   }),
 }))

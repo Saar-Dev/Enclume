@@ -110,20 +110,19 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 ## ÉTAT COURANT — Session 129 (2026-07-01)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **102 migrations stables** (102 = ref_backgrounds + char_advantages_v2 — Session 128 suite)
+- **103 migrations stables** (103 = 100_seed_ref_careers — Session 129 suite 4)
 
-**Session 129 — Wizard COUCHE 4a : connexion frontend → backend steps 0-3 ⚠️ clos partiel :**
-- `creationService.js` : +`startCreation`, `validateAndPersistStep1/2/3`, `finalizeCreation`
-- `routes/creation.js` : +`POST /start`, `POST /:sheetId/step1/2/3`, `POST /:sheetId/finalize`
-- `creationStore.js` : réécriture — +`sheetId`, `campaignId`, `isStarting`, `startError`, `startCreation()` (axios)
-- `WizardCreation.jsx` : réécriture — `useParams` + `callStep` helper + handlers async
-- `Step1Attributes.jsx` : canNext + payload étendu
-- `App.jsx` : route `/campaigns/:campaignId/creation`
-- `DashboardPage.jsx` : bouton "Créer un personnage" par card campagne
-- **Fix** : `fetch` relatif → `api` axios (fetch partait vers Vite port 5173 → 404)
-- **Testé :** SR ✅, start ✅ (bouton "Commencer" fonctionnel)
-- **Non testé :** steps 1-3 depuis client, finalizeCreation
-- **Prochaine étape** : COUCHE 4b — CareersAllocator + step4/step5 frontend
+**Session 129 — Wizard COUCHE 4b ⚠️ clos partiel :**
+- `100_seed_ref_careers.js` : 5 carrières (artisan_artiste, assassin, barman, chasseur_primes, contrebandier)
+- `CareersAllocator.jsx` : prop `careers` DB, UUID, allSkills useMemo, condition table fixée
+- `Step4Summary.jsx` : réécriture 101L (selectedXxxItem props, career_name)
+- `Step4Experience.jsx` : fetch refData + `finalAge = base + higherEd.years_added + careerYears` (display + payload)
+- `WizardCreation.jsx` : step4/5 async, rollback DELETE step4, navigate après finalize
+- `Step5Advantages.jsx` : créé 119L — toggle avantages/désavantages, pcRemaining guard
+- `routes/creation.js` : step5 — liste avantages vide autorisée
+- **Testé :** SR ✅, 5 carrières ✅, âge final correct (19+2+6=27) ✅, step4→step5→finalize→Dashboard ✅
+- **Non testé :** steps 1-3 depuis client, personnages incomplets dans liste (voir dette ci-dessous)
+- **Prochaine étape** : wizard COUCHE 4c — deux PC counters + spécialité apprentissage technique + illustrations carrières
 
 **Dettes actives :**
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
@@ -137,6 +136,9 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Surprise critique (roll=1) → initiative=1 — à analyser
 - [DBG-C1] Owner wizard — `character.user_id` null quand GM crée pour joueur absent (steps 1-3 non implémentés)
 - `pc_spent_step5` — reçoit coûts avantages post-création aussi (rollback step5 futur à prendre en compte)
+- **[WIZ-1]** Personnages incomplets (creation_state ≠ 'complete') visibles dans la liste — à filtrer côté Dashboard/liste
+- **[WIZ-2]** Deux compteurs PC (header store vs CareersAllocator local) — cosmétique, sprint COUCHE 4c
+- **[WIZ-3]** Formation "apprentissage_technique" → choix spécialité non implémenté — sprint COUCHE 4c
 
 ---
 

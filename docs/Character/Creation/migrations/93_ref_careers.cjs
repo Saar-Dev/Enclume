@@ -1,5 +1,5 @@
 // 093_ref_careers.cjs
-
+// Note user : Il faut Ajouter une colonne à la table pour les illustration : une image par profession, toutes les illsutrations sont sur MinIO au format "assets/s4_profession.webp"
 export const up = async (knex) => {
   // 1. Careers
   await knex.schema.createTable('ref_careers', (table) => {

@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { careersList } from './mockStep4Data'
 
 export default function CareersAllocator({
   pcDispo,
   selectedCareers,
+  careers,
   onAdd,
   onRemove,
   onNext,
@@ -15,19 +15,18 @@ export default function CareersAllocator({
   selectedHigherEdItem,
 }) {
   const { t } = useTranslation('creation')
-  const [selectedCareerCode, setSelectedCareerCode] = useState(null)
+  const [selectedCareerId, setSelectedCareerId] = useState(null)
   const [years, setYears] = useState(1)
   const [filter, setFilter] = useState('all')
+  const [skillAllocs, setSkillAllocs] = useState({})
 
-  const career = careersList.find(c => c.code === selectedCareerCode) || null
+  const career = careers?.find(c => c.id === selectedCareerId) || null
 
-  // Filtrage
-  const filteredCareers = careersList.filter(c => {
+  const filteredCareers = (careers ?? []).filter(c => {
     if (filter === 'all') return true
-    return !c.restricted_geo
+    return !c.restricted_geographic_origin
   })
 
-  // Titre correspondant aux années
   const getTitleForYears = (titles, yrs) => {
     if (!titles || titles.length === 0) return null
     return titles.find(t => yrs >= t.min_years && (t.max_years === null || yrs <= t.max_years)) || titles[titles.length - 1]
@@ -35,7 +34,6 @@ export default function CareersAllocator({
 
   const currentTitle = career ? getTitleForYears(career.titles, years) : null
 
-  // Salaire formaté
   const formatSalary = (title) => {
     if (!title) return '—'
     if (title.salary_per_year) return `${title.salary_per_year}¤/an`
@@ -43,59 +41,93 @@ export default function CareersAllocator({
     return '—'
   }
 
-  // Compétences groupées
   const groupedSkills = career ? career.skills.reduce((acc, sk) => {
     if (!acc[sk.skill_group]) acc[sk.skill_group] = []
     acc[sk.skill_group].push(sk)
     return acc
   }, {}) : {}
 
-  // PC total dépensé
   const totalPC = selectedCareers.reduce((sum, c) => sum + c.years, 0)
   const remainingPC = pcDispo - totalPC
 
-  // Fusion de toutes les compétences (backgrounds + carrières)
+  const totalBudget = (career?.points_per_year ?? 0) * years
+  const totalAllocated = Object.values(skillAllocs).reduce((s, v) => s + v, 0)
+  const remainingBudget = totalBudget - totalAllocated
+
+  const currentCareerSkillIds = useMemo(
+    () => new Set((career?.skills ?? []).map(s => s.skill_id)),
+    [career]
+  )
+
   const allSkills = useMemo(() => {
     const map = new Map()
 
-    const addSkills = (skills) => {
-      skills?.forEach(sk => {
+    const addBgSkills = (skills) => {
+      ;(skills ?? []).filter(s => !s.conditional).forEach(sk => {
         const b = sk.bonus ?? 0
         const existing = map.get(sk.skill_id)
-        if (existing) {
-          existing.mastery += b
-        } else {
-          map.set(sk.skill_id, { skill_id: sk.skill_id, mastery: b })
-        }
+        if (existing) existing.mastery += b
+        else map.set(sk.skill_id, { skill_id: sk.skill_id, mastery: b })
       })
     }
 
-    addSkills(selectedGeoItem?.skills)
-    addSkills(selectedSocItem?.skills)
-    addSkills(selectedTrainingItem?.skills)
-    addSkills(selectedHigherEdItem?.skills)
+    addBgSkills(selectedGeoItem?.skills)
+    addBgSkills(selectedSocItem?.skills)
+    addBgSkills(selectedTrainingItem?.skills)
+    addBgSkills(selectedHigherEdItem?.skills)
 
     selectedCareers.forEach(c => {
-      const cData = careersList.find(cl => cl.code === c.career_id)
-      addSkills(cData?.skills)
+      const cData = careers?.find(cl => cl.id === c.career_id)
+      ;(cData?.skills ?? []).forEach(sk => {
+        if (!map.has(sk.skill_id)) map.set(sk.skill_id, { skill_id: sk.skill_id, mastery: 0 })
+      })
+      Object.entries(c.skillAllocations || {}).forEach(([skillId, delta]) => {
+        const existing = map.get(skillId)
+        if (existing) existing.mastery += delta
+        else map.set(skillId, { skill_id: skillId, mastery: delta })
+      })
     })
 
-    return Array.from(map.values())
-  }, [selectedGeoItem, selectedSocItem, selectedTrainingItem, selectedHigherEdItem, selectedCareers])
+    if (career) {
+      career.skills.forEach(sk => {
+        if (!map.has(sk.skill_id)) map.set(sk.skill_id, { skill_id: sk.skill_id, mastery: 0 })
+      })
+      Object.entries(skillAllocs).forEach(([skillId, delta]) => {
+        const existing = map.get(skillId)
+        if (existing) existing.mastery += delta
+        else map.set(skillId, { skill_id: skillId, mastery: delta })
+      })
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.skill_id.localeCompare(b.skill_id))
+  }, [selectedGeoItem, selectedSocItem, selectedTrainingItem, selectedHigherEdItem, selectedCareers, careers, career, skillAllocs])
+
+  const handlePlus = (skillId) => {
+    if (remainingBudget <= 0) return
+    setSkillAllocs(prev => ({ ...prev, [skillId]: (prev[skillId] || 0) + 1 }))
+  }
+
+  const handleMinus = (skillId) => {
+    if ((skillAllocs[skillId] || 0) <= 0) return
+    setSkillAllocs(prev => ({ ...prev, [skillId]: prev[skillId] - 1 }))
+  }
 
   const handleAdd = () => {
     if (!career) return
     if (years > remainingPC) return
-    onAdd(career.code, years)
-    setSelectedCareerCode(null)
+    onAdd(career.id, career.name, career.titles, years, { ...skillAllocs })
+    setSelectedCareerId(null)
+    setSkillAllocs({})
     setYears(1)
   }
 
-  const handleSelectCareer = (code) => {
-    if (selectedCareerCode === code) {
-      setSelectedCareerCode(null)
+  const handleSelectCareer = (id) => {
+    if (selectedCareerId === id) {
+      setSelectedCareerId(null)
+      setSkillAllocs({})
     } else {
-      setSelectedCareerCode(code)
+      setSelectedCareerId(id)
+      setSkillAllocs({})
       setYears(1)
     }
   }
@@ -129,16 +161,16 @@ export default function CareersAllocator({
       <div style={s.careersGrid}>
         {filteredCareers.map(c => (
           <div
-            key={c.code}
+            key={c.id}
             style={{
               ...s.careerCard,
-              ...(selectedCareerCode === c.code ? s.careerCardSelected : {}),
+              ...(selectedCareerId === c.id ? s.careerCardSelected : {}),
             }}
-            onClick={() => handleSelectCareer(c.code)}
+            onClick={() => handleSelectCareer(c.id)}
           >
             <span style={s.careerName}>{c.name}</span>
             <span style={s.careerPoints}>{c.points_per_year} pts/an</span>
-            {c.restricted_geo && (
+            {c.restricted_geographic_origin && (
               <span style={s.careerRestricted}>⚠️ restreint</span>
             )}
           </div>
@@ -151,8 +183,8 @@ export default function CareersAllocator({
           <h3 style={s.detailTitle}>{career.name}</h3>
           <p style={s.detailDesc}>{career.description}</p>
 
-          {career.restricted_geo && (
-            <p style={s.detailRestricted}>{career.restricted_geo}</p>
+          {career.restricted_geographic_origin && career.geographic_origin_details && (
+            <p style={s.detailRestricted}>{career.geographic_origin_details}</p>
           )}
 
           {/* Compétences */}
@@ -194,7 +226,10 @@ export default function CareersAllocator({
               min={1}
               max={Math.max(1, Math.min(20, remainingPC))}
               value={years}
-              onChange={(e) => setYears(parseInt(e.target.value, 10))}
+              onChange={(e) => {
+                setYears(parseInt(e.target.value, 10))
+                setSkillAllocs({})
+              }}
               disabled={remainingPC <= 0}
               style={s.yearsSlider}
             />
@@ -227,6 +262,13 @@ export default function CareersAllocator({
             </div>
           </div>
 
+          {/* Budget points compétences */}
+          <div style={s.recapRow}>
+            <span style={s.recapLabel}>
+              {t('step4.career_skills_allocated', { spent: totalAllocated, total: totalBudget })}
+            </span>
+          </div>
+
           {/* Bouton Ajouter */}
           <button
             style={years <= remainingPC ? s.addBtn : s.addBtnDisabled}
@@ -244,22 +286,19 @@ export default function CareersAllocator({
           <h4 style={s.selectedTitle}>
             Professions sélectionnées ({selectedCareers.length})
           </h4>
-          {selectedCareers.map((c, i) => {
-            const cData = careersList.find(cl => cl.code === c.career_id)
-            return (
-              <div key={i} style={s.selectedRow}>
-                <span style={s.selectedName}>{cData?.name || c.career_id}</span>
-                <span style={s.selectedYears}>{c.years} an(s)</span>
-                <span style={s.selectedPC}>= {c.years} PC</span>
-                <button
-                  style={s.removeBtn}
-                  onClick={() => onRemove(i)}
-                >
-                  {t('step4.career_remove')}
-                </button>
-              </div>
-            )
-          })}
+          {selectedCareers.map((c, i) => (
+            <div key={i} style={s.selectedRow}>
+              <span style={s.selectedName}>{c.career_name ?? c.career_id}</span>
+              <span style={s.selectedYears}>{c.years} an(s)</span>
+              <span style={s.selectedPC}>= {c.years} PC</span>
+              <button
+                style={s.removeBtn}
+                onClick={() => onRemove(i)}
+              >
+                {t('step4.career_remove')}
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -268,7 +307,7 @@ export default function CareersAllocator({
       )}
 
       {/* Séparateur + Tableau récapitulatif des compétences */}
-      {selectedCareers.length > 0 && allSkills.length > 0 && (
+      {allSkills.length > 0 && (
         <>
           <div style={s.separator}>
             <span style={s.separatorText}>Récapitulatif des compétences</span>
@@ -284,18 +323,30 @@ export default function CareersAllocator({
               </tr>
             </thead>
             <tbody>
-              {allSkills.map(sk => (
-                <tr key={sk.skill_id}>
-                  <td style={s.td}>{sk.skill_id}</td>
-                  <td style={s.tdBase}>attr_1/attr_2</td>
-                  <td style={s.tdMasteryCell}>
-                    <button style={s.minusBtn}>-</button>
-                    <span style={s.masteryValue}>{sk.mastery || 0}</span>
-                    <button style={s.plusBtn}>+</button>
-                  </td>
-                  <td style={s.td}>+{sk.mastery || 0}</td>
-                </tr>
-              ))}
+              {allSkills.map(sk => {
+                const allocatable = currentCareerSkillIds.has(sk.skill_id)
+                const allocated = skillAllocs[sk.skill_id] || 0
+                return (
+                  <tr key={sk.skill_id}>
+                    <td style={s.td}>{sk.skill_id}</td>
+                    <td style={s.tdBase}>—</td>
+                    <td style={s.tdMasteryCell}>
+                      <button
+                        style={s.minusBtn}
+                        onClick={() => handleMinus(sk.skill_id)}
+                        disabled={!allocatable || allocated <= 0}
+                      >-</button>
+                      <span style={s.masteryValue}>{sk.mastery || 0}</span>
+                      <button
+                        style={s.plusBtn}
+                        onClick={() => handlePlus(sk.skill_id)}
+                        disabled={!allocatable || remainingBudget <= 0}
+                      >+</button>
+                    </td>
+                    <td style={s.td}>+{sk.mastery || 0}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </>

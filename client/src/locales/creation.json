@@ -266,11 +266,19 @@
     "pc_insufficient": "PC insuffisants",
     "prev": "Précédent",
     "next": "Suivant",
-	"career_skills_title": "Compétences ({{points}} pts)",
-	"career_salary": "Salaire : {{amount}}"
+    "career_skills_title": "Compétences ({{points}} pts)",
+    "career_salary": "Salaire : {{amount}}",
+    "career_skills_allocated": "Points alloués : {{spent}} / {{total}}"
   },
   "step5": {
-    "coming_soon": "Étape 5 — Avantages et désavantages (à implémenter)"
+    "title": "Étape 5/5 — Avantages & Désavantages",
+    "advantages_section": "Avantages",
+    "disadvantages_section": "Désavantages",
+    "pc_remaining": "PC restants : {{n}}",
+    "pc_cost": "{{n}} PC",
+    "prev": "Précédent",
+    "validate": "Finaliser le personnage",
+    "loading": "Chargement..."
   },
   "wizard": {
     "step": "Étape {{current}} / {{total}}",

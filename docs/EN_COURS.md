@@ -191,11 +191,15 @@
    → **Testé** : SR ✅, start ✅ (bouton "Commencer" fonctionnel)
    → **Non testé** : steps 1-3 depuis client, finalizeCreation
 
-**38. Wizard COUCHE 4b** ← WIZARD PROCHAINE ÉTAPE
-   → `CareersAllocator.jsx` : boutons +/- → handlers réels + `skillAllocations`
-   → Step4/Step5 frontend → backend (callStep 'step4', 'step5')
-   → `finalizeCreation` déclenchée depuis Step5
-   → Spec : `docs/PLAN_COUCHE4.md` § COUCHE 4b
+**38. ~~Wizard COUCHE 4b ⚠️ clos partiel Session 129 suite 3+4~~** ← WIZARD PROCHAINE ÉTAPE
+   → `CareersAllocator.jsx` : prop `careers` DB, `selectedCareerId` UUID, `allSkills` useMemo ✅
+   → `Step4Summary.jsx` : réécriture 101L (était 703) ✅
+   → `Step4Experience.jsx` : fetch refData, `finalAge` (base + études.years_added + carrières) ✅
+   → `WizardCreation.jsx` : step4/5 async + rollback DELETE step4 ✅
+   → `Step5Advantages.jsx` : création 119L — toggle avantages/désavantages ✅
+   → `100_seed_ref_careers.js` : 5 carrières seedées (ref_careers + skills + titles) ✅ — **103 migrations**
+   → **Testé** : SR ✅, grille carrières ✅, âge final correct ✅ (19+2+6=27), step4→step5 débloqué ✅
+   → **Non testé** : step5→finalize end-to-end, steps 1-3 depuis client
 
 **34. ~~Cluster N — UI combat~~** (en cours)
    → COM23 ✅ Session 127 : `TokenLabel` sprite CanvasTexture — label occludé par murs
@@ -208,7 +212,7 @@
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **102 migrations appliquées** (102 = ref_backgrounds + ref_background_skills + ref_setbacks + char_creation_snapshot + char_advantages_v2 — Session 128 suite)
+- **103 migrations appliquées** (103 = 100_seed_ref_careers — Session 129 suite 4)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---
