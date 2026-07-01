@@ -31,6 +31,7 @@ import entitiesRouter from './routes/entities.js'
 import equipmentRouter from './routes/equipment.js'
 import documentsRouter from './routes/documents.js'
 import { merchantsRouter, tradeLogRouter } from './routes/tradeRoutes.js'
+import creationRouter from './routes/creation.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -81,6 +82,7 @@ app.use('/api/equipment', equipmentRouter)
 app.use('/api/campaigns/:campaignId/documents', documentsRouter)
 app.use('/api/campaigns/:campaignId/merchants', merchantsRouter)
 app.use('/api/campaigns/:campaignId/trade-log', tradeLogRouter)
+app.use('/api/creation', creationRouter)
 
 // Socket.io
 initSocket(io)

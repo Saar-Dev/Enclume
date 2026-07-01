@@ -1,6 +1,3 @@
-// client/src/components/creation/Step1Attributes.jsx
-// Correction : bouton Suivant désactivé si pointsRestants !== 0
-
 import { useState, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -102,40 +99,53 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
   const canCancelPc = pcAlloues > 0
   const canNext = pointsRestants === 0
 
-  return (
-    <div style={s.container}>
+  const dotColor = (i) => {
+    if (i >= pcAlloues) return { backgroundColor: 'rgba(255,255,255,.04)', borderColor: 'rgba(255,255,255,.1)' }
+    if (i >= 7) return { backgroundColor: '#e05c5c', borderColor: '#e05c5c' }
+    if (i >= 5) return { backgroundColor: '#e0a85c', borderColor: '#e0a85c' }
+    return { backgroundColor: '#2FD7FF', borderColor: '#2FD7FF' }
+  }
 
-      <div style={s.namesRow}>
-        <div style={s.nameField}>
+  const costColor = (niv) => {
+    if (COST_LOOKUP[niv] >= 10) return { color: '#e05c5c', fontWeight: '700' }
+    if (COST_LOOKUP[niv] >= 3)  return { color: '#e0a85c' }
+    return { color: '#76E8FF' }
+  }
+
+  return (
+    <div className="wiz1-container">
+
+      <div className="wiz1-names-row">
+        <div className="wiz1-name-field">
           <input
-            style={s.nameInput}
+            className="wiz1-name-input"
             value={charName}
             onChange={e => setCharName(e.target.value)}
             placeholder={t('step1.charNamePlaceholder')}
           />
-          <span style={s.nameLabel}>{t('step1.charName')}</span>
+          <span className="wiz1-name-label">{t('step1.charName')}</span>
         </div>
-        <div style={s.nameField}>
+        <div className="wiz1-name-field">
           <input
-            style={s.nameInput}
+            className="wiz1-name-input"
             value={playerName}
             onChange={e => setPlayerName(e.target.value)}
             placeholder={t('step1.playerNamePlaceholder')}
           />
-          <span style={s.nameLabel}>{t('step1.playerName')}</span>
+          <span className="wiz1-name-label">{t('step1.playerName')}</span>
         </div>
       </div>
 
-      <div style={s.block}>
-        <div style={s.blockTitle}>{t('step1.tableTitle')}</div>
-        <table style={s.attrTable}>
+      <div className="wiz1-block">
+        <div className="wiz1-block-title">{t('step1.tableTitle')}</div>
+        <table className="wiz1-table">
           <thead>
             <tr>
-              <th style={s.th}></th>
+              <th className="wiz1-th"></th>
               {ATTR_IDS.map(id => (
                 <th
                   key={id}
-                  style={{ ...s.th, cursor: 'help' }}
+                  className="wiz1-th wiz1-th-attr"
                   onMouseEnter={(e) => showTooltip(ATTR_DESCRIPTIONS[id], e)}
                   onMouseLeave={() => setTooltip(null)}
                 >
@@ -148,18 +158,18 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
 
             <tr>
               <td
-                style={{ ...s.tdLabel, cursor: 'help' }}
+                className="wiz1-td-label"
                 onMouseEnter={(e) => showTooltip(ROW_TOOLTIPS.base, e)}
                 onMouseLeave={() => setTooltip(null)}
               >
                 {t('step1.rowBase')}
               </td>
               {ATTR_IDS.map(id => (
-                <td key={id} style={s.td}>
-                  <div style={s.spinner}>
-                    <button style={s.spinBtn} onClick={() => handleChange(id, -1)}>−</button>
-                    <span style={s.spinValue}>{attributs[id]}</span>
-                    <button style={s.spinBtn} onClick={() => handleChange(id, +1)}>+</button>
+                <td key={id} className="wiz1-td">
+                  <div className="wiz1-spinner">
+                    <button className="wiz1-spin-btn" onClick={() => handleChange(id, -1)}>−</button>
+                    <span className="wiz1-spin-value">{attributs[id]}</span>
+                    <button className="wiz1-spin-btn" onClick={() => handleChange(id, +1)}>+</button>
                   </div>
                 </td>
               ))}
@@ -167,47 +177,45 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
 
             <tr>
               <td
-                style={{ ...s.tdLabel, cursor: 'help' }}
+                className="wiz1-td-label"
                 onMouseEnter={(e) => showTooltip(ROW_TOOLTIPS.modGen, e)}
                 onMouseLeave={() => setTooltip(null)}
               >
                 {t('step1.rowModGen')}
               </td>
               {ATTR_IDS.map(id => (
-                <td key={id} style={s.td}>
-                  <span style={s.readonly}>0</span>
+                <td key={id} className="wiz1-td">
+                  <span className="wiz1-readonly">0</span>
                 </td>
               ))}
             </tr>
 
-            <tr style={{ backgroundColor: 'rgba(91,141,238,0.08)' }}>
+            <tr className="wiz1-row-na">
               <td
-                style={{ ...s.tdLabel, cursor: 'help' }}
+                className="wiz1-td-label"
                 onMouseEnter={(e) => showTooltip(ROW_TOOLTIPS.na, e)}
                 onMouseLeave={() => setTooltip(null)}
               >
                 {t('step1.rowNA')}
               </td>
               {ATTR_IDS.map(id => (
-                <td key={id} style={s.td}>
-                  <span style={{ ...s.readonly, color: '#5b8dee', fontWeight: '700' }}>
-                    {naMap[id]}
-                  </span>
+                <td key={id} className="wiz1-td">
+                  <span className="wiz1-readonly wiz1-val-na">{naMap[id]}</span>
                 </td>
               ))}
             </tr>
 
-            <tr style={{ backgroundColor: 'rgba(91,141,238,0.04)' }}>
+            <tr className="wiz1-row-an">
               <td
-                style={{ ...s.tdLabel, cursor: 'help' }}
+                className="wiz1-td-label"
                 onMouseEnter={(e) => showTooltip(ROW_TOOLTIPS.an, e)}
                 onMouseLeave={() => setTooltip(null)}
               >
                 {t('step1.rowAN')}
               </td>
               {ATTR_IDS.map(id => (
-                <td key={id} style={s.td}>
-                  <span style={{ ...s.readonly, color: '#9090c8' }}>
+                <td key={id} className="wiz1-td">
+                  <span className="wiz1-readonly wiz1-val-an">
                     {calcAN(naMap[id]) >= 0 ? `+${calcAN(naMap[id])}` : calcAN(naMap[id])}
                   </span>
                 </td>
@@ -217,53 +225,43 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
           </tbody>
         </table>
 
-        <div style={s.counterRow}>
-          <span style={{
-            ...s.counter,
-            ...(pointsRestants === 0 ? s.counterOk : s.counterWarn),
-          }}>
+        <div className="wiz1-counter-row">
+          <span className={`wiz1-counter ${pointsRestants === 0 ? 'wiz1-counter-ok' : 'wiz1-counter-warn'}`}>
             {pointsRestants > 0
               ? t('step1.pointsRestants', { n: pointsRestants })
               : t('step1.pointsOk')}
           </span>
           {isFeminin && (
-            <span style={{
-              ...s.counter,
-              ...(bonusFemininUtilises <= 2 ? s.counterOk : s.counterWarn),
-            }}>
+            <span className={`wiz1-counter ${bonusFemininUtilises <= 2 ? 'wiz1-counter-ok' : 'wiz1-counter-warn'}`}>
               {t('step1.bonusFeminin', { n: 2 - bonusFemininUtilises })}
             </span>
           )}
         </div>
       </div>
 
-      <div style={s.block}>
-        <div style={s.blockTitle}>{t('step1.rulesTitle')}</div>
-        <div style={s.rulesContent}>
-          <ul style={s.rulesList}>
+      <div className="wiz1-block">
+        <div className="wiz1-block-title">{t('step1.rulesTitle')}</div>
+        <div className="wiz1-rules-content">
+          <ul className="wiz1-rules-list">
             <li>{t('step1.rule1')}</li>
             <li>{t('step1.rule2')}</li>
             <li>{t('step1.rule3')}</li>
             <li>{t('step1.rule4')}</li>
           </ul>
-          <table style={s.costTable}>
+          <table className="wiz1-cost-table">
             <thead>
               <tr>
-                <th style={s.costTh}>{t('step1.costColNiveau')}</th>
+                <th className="wiz1-cost-th wiz1-cost-td-label">{t('step1.costColNiveau')}</th>
                 {[8,9,10,11,12,13,14,15,16,17,18,19,20].map(niv => (
-                  <th key={niv} style={s.costTh}>{niv}</th>
+                  <th key={niv} className="wiz1-cost-th">{niv}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td style={s.costTdLabel}>{t('step1.costColCout')}</td>
+                <td className="wiz1-cost-td wiz1-cost-td-label">{t('step1.costColCout')}</td>
                 {[8,9,10,11,12,13,14,15,16,17,18,19,20].map(niv => (
-                  <td key={niv} style={{
-                    ...s.costTd,
-                    color: COST_LOOKUP[niv] >= 10 ? '#e05c5c' : COST_LOOKUP[niv] >= 3 ? '#e0a85c' : '#9090c8',
-                    fontWeight: COST_LOOKUP[niv] >= 10 ? '700' : '400',
-                  }}>{COST_LOOKUP[niv]}</td>
+                  <td key={niv} className="wiz1-cost-td" style={costColor(niv)}>{COST_LOOKUP[niv]}</td>
                 ))}
               </tr>
             </tbody>
@@ -271,40 +269,32 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
         </div>
       </div>
 
-      <div style={s.block}>
-        <div style={s.blockTitle}>{t('step1.pcTitle')}</div>
-        <div style={s.pcContent}>
-          <p style={s.pcDesc}>{t('step1.pcDesc')}</p>
-          <div style={s.pcControls}>
-            <span style={s.pcInfo}>
+      <div className="wiz1-block">
+        <div className="wiz1-block-title">{t('step1.pcTitle')}</div>
+        <div className="wiz1-pc-content">
+          <p className="wiz1-pc-desc">{t('step1.pcDesc')}</p>
+          <div className="wiz1-pc-controls">
+            <span className="wiz1-pc-info">
               {pcAlloues} {t('step1.pcAlloues')} = +{pcAlloues * 2} {t('step1.pointsSup')}
             </span>
-            <div style={s.pcButtons}>
+            <div className="wiz1-pc-buttons">
               <button
-                style={{ ...s.pcBtn, ...(!canCancelPc ? s.pcBtnDisabled : {}) }}
+                className={`wiz1-pc-btn${!canCancelPc ? ' wiz1-pc-btn-disabled' : ''}`}
                 disabled={!canCancelPc}
                 onClick={handleCancelPc}
               >
                 {t('step1.pcCancel')}
               </button>
               <button
-                style={{ ...s.pcBtn, ...s.pcBtnBuy, ...(!canBuyPc ? s.pcBtnDisabled : {}) }}
+                className={`wiz1-pc-btn wiz1-pc-btn-buy${!canBuyPc ? ' wiz1-pc-btn-disabled' : ''}`}
                 disabled={!canBuyPc}
                 onClick={handleBuyPc}
               >
                 −1 PC
               </button>
-              <div style={s.pcMeter}>
+              <div className="wiz1-pc-meter">
                 {[...Array(PC_MAX)].map((_, i) => (
-                  <div key={i} style={{
-                    ...s.pcMeterDot,
-                    backgroundColor: i < pcAlloues
-                      ? i >= 7 ? '#e05c5c' : i >= 5 ? '#e0a85c' : '#5b8dee'
-                      : '#1a1a2e',
-                    borderColor: i < pcAlloues
-                      ? i >= 7 ? '#e05c5c' : i >= 5 ? '#e0a85c' : '#5b8dee'
-                      : '#2a2a3e',
-                  }} />
+                  <div key={i} className="wiz1-pc-meter-dot" style={dotColor(i)} />
                 ))}
               </div>
             </div>
@@ -312,25 +302,22 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
         </div>
       </div>
 
-      <div style={s.block}>
-        <div style={s.blockTitle}>{t('step1.chcTitle')}</div>
-        <div style={s.chcRow}>
-          <span style={s.chcBadge}>{chc}</span>
-          <p style={s.chcDesc}>{t('step1.chcDesc')}</p>
+      <div className="wiz1-block">
+        <div className="wiz1-block-title">{t('step1.chcTitle')}</div>
+        <div className="wiz1-chc-row">
+          <span className="wiz1-chc-badge">{chc}</span>
+          <p className="wiz1-chc-desc">{t('step1.chcDesc')}</p>
         </div>
       </div>
 
-      <div style={s.nav}>
+      <div className="wiz1-nav">
         {onPrev && (
-          <button style={s.prevBtn} onClick={onPrev}>
+          <button className="btn btn-ghost" onClick={onPrev}>
             ← {t('step1.prev')}
           </button>
         )}
         <button
-          style={{
-            ...s.nextBtn,
-            ...(!canNext ? s.nextBtnDisabled : {}),
-          }}
+          className="wiz-btn-start"
           disabled={!canNext}
           onClick={() => onNext({ pcSpent: pcAlloues })}
         >
@@ -339,342 +326,14 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
       </div>
 
       {tooltip && (
-        <div style={{
-          ...s.tooltip,
-          top: tooltip.top,
-          left: tooltip.left,
-        }}>
+        <div
+          className="wiz1-tooltip"
+          style={{ top: tooltip.top, left: tooltip.left }}
+        >
           {tooltip.desc}
         </div>
       )}
 
     </div>
   )
-}
-
-const s = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-    padding: '16px 20px 40px',
-    maxWidth: '960px',
-    margin: '0 auto',
-    flex: 1,
-    width: '100%',
-  },
-  namesRow: {
-    display: 'flex',
-    gap: '16px',
-  },
-  nameField: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '3px',
-  },
-  nameInput: {
-    background: 'transparent',
-    border: 'none',
-    borderBottom: '1px solid #2a2a3e',
-    color: '#c0c0d0',
-    fontSize: '14px',
-    fontWeight: '600',
-    padding: '4px 0',
-    outline: 'none',
-  },
-  nameLabel: {
-    fontSize: '9px',
-    color: '#3a3a5e',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-  },
-  block: {
-    border: '1px solid #1e1e2e',
-    borderRadius: '6px',
-    overflow: 'hidden',
-    backgroundColor: 'rgba(6,6,14,0.85)',
-  },
-  blockTitle: {
-    fontSize: '11px',
-    fontWeight: '700',
-    color: '#5b8dee',
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    padding: '8px 12px',
-    backgroundColor: 'rgba(14,14,26,0.9)',
-    borderBottom: '1px solid #1e1e2e',
-  },
-  attrTable: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '11px',
-  },
-  th: {
-    padding: '6px 4px',
-    color: '#5a5a7a',
-    fontSize: '10px',
-    fontWeight: '600',
-    textAlign: 'center',
-    borderBottom: '1px solid #1e1e2e',
-    backgroundColor: 'rgba(14,14,26,0.9)',
-    whiteSpace: 'nowrap',
-  },
-  td: {
-    padding: '4px 2px',
-    textAlign: 'center',
-    borderBottom: '1px solid #1a1a2e',
-  },
-  tdLabel: {
-    padding: '4px 10px',
-    color: '#6a6a8a',
-    fontSize: '11px',
-    whiteSpace: 'nowrap',
-    borderBottom: '1px solid #1a1a2e',
-    borderRight: '1px solid #1e1e2e',
-    minWidth: '130px',
-  },
-  spinner: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-  spinBtn: {
-    width: '26px',
-    height: '26px',
-    border: '1px solid #2a2a3e',
-    borderRadius: '3px',
-    backgroundColor: '#0e0e1a',
-    color: '#9090c8',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    lineHeight: '1',
-  },
-  spinValue: {
-    display: 'inline-block',
-    minWidth: '24px',
-    color: '#c0c0d0',
-    fontSize: '13px',
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  readonly: {
-    display: 'inline-block',
-    minWidth: '24px',
-    color: '#8888a8',
-    fontSize: '12px',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  counterRow: {
-    display: 'flex',
-    gap: '10px',
-    justifyContent: 'center',
-    padding: '10px 12px',
-    borderTop: '1px solid #1e1e2e',
-  },
-  counter: {
-    display: 'inline-block',
-    padding: '6px 16px',
-    borderRadius: '4px',
-    fontSize: '12px',
-    fontWeight: '700',
-  },
-  counterWarn: {
-    color: '#e0a85c',
-    backgroundColor: 'rgba(224,168,92,0.08)',
-    border: '1px solid rgba(224,168,92,0.25)',
-  },
-  counterOk: {
-    color: '#4a9e5c',
-    backgroundColor: 'rgba(74,158,92,0.08)',
-    border: '1px solid rgba(74,158,92,0.25)',
-  },
-  rulesContent: {
-    padding: '12px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '12px',
-  },
-  rulesList: {
-    padding: '0 0 0 20px',
-    margin: 0,
-    color: '#9090c8',
-    fontSize: '11px',
-    lineHeight: '1.8',
-    alignSelf: 'flex-start',
-  },
-  costTable: {
-    borderCollapse: 'collapse',
-    fontSize: '11px',
-    width: '100%',
-    overflowX: 'auto',
-  },
-  costTh: {
-    padding: '4px 8px',
-    color: '#5a5a7a',
-    fontSize: '10px',
-    fontWeight: '600',
-    textAlign: 'center',
-    borderBottom: '1px solid #1e1e2e',
-  },
-  costTd: {
-    padding: '4px 8px',
-    color: '#9090c8',
-    textAlign: 'center',
-    borderBottom: '1px solid #1a1a2e',
-  },
-  costTdLabel: {
-    padding: '4px 10px',
-    color: '#5a5a7a',
-    fontSize: '10px',
-    fontWeight: '600',
-    textAlign: 'left',
-    borderBottom: '1px solid #1a1a2e',
-    borderRight: '1px solid #1e1e2e',
-  },
-  pcContent: {
-    padding: '12px',
-  },
-  pcDesc: {
-    color: '#9090c8',
-    fontSize: '11px',
-    lineHeight: '1.6',
-    margin: '0 0 12px 0',
-  },
-  pcControls: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '12px',
-    flexWrap: 'wrap',
-  },
-  pcInfo: {
-    color: '#5b8dee',
-    fontSize: '13px',
-    fontWeight: '700',
-  },
-  pcButtons: {
-    display: 'flex',
-    gap: '8px',
-    alignItems: 'center',
-  },
-  pcBtn: {
-    padding: '6px 16px',
-    border: '1px solid #5b8dee',
-    borderRadius: '4px',
-    backgroundColor: 'rgba(91,141,238,0.12)',
-    color: '#5b8dee',
-    fontSize: '11px',
-    fontWeight: '700',
-    cursor: 'pointer',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-  },
-  pcBtnBuy: {
-    backgroundColor: 'rgba(224,168,92,0.15)',
-    borderColor: '#e0a85c',
-    color: '#e0a85c',
-  },
-  pcBtnDisabled: {
-    borderColor: '#2a2a3e',
-    backgroundColor: '#0e0e1a',
-    color: '#3a3a5e',
-    cursor: 'not-allowed',
-  },
-  pcMeter: {
-    display: 'flex',
-    gap: '4px',
-    alignItems: 'center',
-  },
-  pcMeterDot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    border: '1px solid #2a2a3e',
-    transition: 'all 0.2s ease',
-  },
-  chcRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '16px',
-    padding: '12px',
-  },
-  chcBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '48px',
-    height: '48px',
-    border: '2px solid #5b8dee',
-    borderRadius: '50%',
-    color: '#5b8dee',
-    fontSize: '20px',
-    fontWeight: '700',
-    backgroundColor: 'rgba(91,141,238,0.08)',
-    flexShrink: 0,
-  },
-  chcDesc: {
-    color: '#6a6a8a',
-    fontSize: '11px',
-    lineHeight: '1.6',
-    margin: 0,
-  },
-  nav: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 0',
-    borderTop: '1px solid #1e1e2e',
-    marginTop: '8px',
-  },
-  prevBtn: {
-    padding: '8px 16px',
-    border: '1px solid #2a2a3e',
-    borderRadius: '4px',
-    backgroundColor: '#0e0e1a',
-    color: '#6a6a8a',
-    fontSize: '12px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  nextBtn: {
-    padding: '8px 20px',
-    border: 'none',
-    borderRadius: '4px',
-    backgroundColor: '#5b8dee',
-    color: '#fff',
-    fontSize: '12px',
-    fontWeight: '700',
-    cursor: 'pointer',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-    marginLeft: 'auto',
-  },
-  nextBtnDisabled: {
-    opacity: 0.4,
-    cursor: 'not-allowed',
-  },
-  tooltip: {
-    position: 'fixed',
-    backgroundColor: '#0a0a14',
-    border: '1px solid #2a2a4e',
-    borderRadius: '4px',
-    padding: '8px 10px',
-    fontSize: '10px',
-    color: '#b0b0c8',
-    whiteSpace: 'pre-line',
-    width: '240px',
-    zIndex: 1000,
-    lineHeight: '1.6',
-    pointerEvents: 'none',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-    transform: 'translate(-50%, calc(-100% - 8px))',
-  },
 }

@@ -32,7 +32,7 @@ export default function WizardCreation() {
   }
 
   return (
-    <div style={st.wrapper}>
+    <div className="wiz-shell">
       <WizardHeader
         step={step}
         totalSteps={5}
@@ -109,35 +109,19 @@ export default function WizardCreation() {
 }
 
 function getInfos(step, ambiance, t) {
-  if (step === 1) return <span style={st.badge}>{t('wizard.info_step1', { ambiance, pool: 38 })}</span>
-  if (step === 2) return <span style={st.badge}>{t('wizard.info_step2')}</span>
-  if (step === 3) return <span style={st.badge}>{t('wizard.info_step3')}</span>
-  if (step === 4) return <span style={st.badge}>{t('wizard.info_step4')}</span>
-  if (step === 5) return <span style={st.badge}>{t('wizard.info_step5')}</span>
+  if (step === 1) return <span className="wiz-info-badge">{t('wizard.info_step1', { ambiance, pool: 38 })}</span>
+  if (step === 2) return <span className="wiz-info-badge">{t('wizard.info_step2')}</span>
+  if (step === 3) return <span className="wiz-info-badge">{t('wizard.info_step3')}</span>
+  if (step === 4) return <span className="wiz-info-badge">{t('wizard.info_step4')}</span>
+  if (step === 5) return <span className="wiz-info-badge">{t('wizard.info_step5')}</span>
   return null
 }
 
 const st = {
-  wrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: '100vh',
-    backgroundColor: '#06060e',
-  },
   body: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-  },
-  badge: {
-    display: 'inline-block',
-    padding: '4px 10px',
-    border: '1px solid #2a2a3e',
-    borderRadius: '3px',
-    color: '#9090c8',
-    fontSize: '10px',
-    fontWeight: '600',
-    backgroundColor: '#0e0e1a',
   },
   placeholder: {
     flex: 1,

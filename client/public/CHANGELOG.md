@@ -1,3 +1,12 @@
+## v137 — 2026-07-01 — Wizard : backend création personnage (steps 4 & 5)
+
+### Serveur
+- [feat] `routes/creation.js` — 6 routes wizard montées sous `/api/creation` (step4 GET/POST/DELETE + step5 GET ref + POST batch)
+- [feat] `services/creationService.js` — validation + persistance step4 (backgrounds additifs + carrières SET + effets âge + snapshot rollback)
+- [feat] `services/advantageService.js` + `advantageConstraints.js` — avantages V2 (soft-delete, contraintes R1-R6, trx-or-db)
+- [fix] `char-sheet.js` — routes advantages V1 remplacées par V2 (`advantageService`)
+- [fix] `creationService.rollbackStep4` — purge des skills orphelins après rollback step4
+
 ## v136 — 2026-06-25 — Rechargement drone + cargo visible
 
 ### Client

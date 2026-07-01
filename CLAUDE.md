@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 126 — 2026-06-25
+> Session 129 — 2026-07-01
 
 ---
 
@@ -107,23 +107,23 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 126 (2026-06-25)
+## ÉTAT COURANT — Session 129 (2026-07-01)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **91 migrations stables** (91 = drone_sheet.charge_utile + trade_log constraint — Session 126)
+- **102 migrations stables** (102 = ref_backgrounds + char_advantages_v2 — Session 128 suite)
 
-**Session 126 — Rechargement drone + cargo visible + calibre armes ✅ :**
-- Migration 91 : `drone_sheet.charge_utile INTEGER DEFAULT 0` + contrainte `chk_trade_log_type` corrigée (`player_sell` + `drone_reload`)
-- `shared/events.js` : +2 constantes `TRADE_DRONE_TRANSFER` / `TRADE_DRONE_TRANSFERRED`
-- `socketTrade.js` : handler `TRADE_DRONE_TRANSFER` — guards G1–G4 + transaction atomique `char_inventory` + `trade_log type='drone_reload'` + ACK
-- `char-sheet.js` : `PUT /:characterId/drone` → `charge_utile` + `GET /drone/cargo` + `POST /drone/cargo/:invId/drop`
-- `DroneSheet.jsx` : champ `charge_utile` (stats) + section Chargement (cargo + poids + bouton Larguer)
-- `DroneWindow.jsx` : fetch cargo + props `cargo`/`isOwner`/`onCargoUpdate` + WeaponsTab calibre+chargeur
-- `ExchangeWindow.jsx` : branche drone (autocomplete filtré owner) + `handleProposeOffer` drone → ACK + bouton i18n
-- `fr.json` : +7 clés `drone.*` + 3 clés `trade.window.*` (`ex_new`, `drone_transfer`, `drone_transferred`)
-- **Testé :** transfert PJ→drone ✅, larguer→sac ✅, cargo visible DroneSheet ✅, calibre armes ✅
-- **Non testé :** enforcement capacité charge_utile (v1 affichage seul)
-- **Prochaine étape** : validation STUN2 en session réelle ou cluster bugs suivant
+**Session 129 — Wizard COUCHE 3 : backend steps 4 & 5 ⚠️ clos partiel :**
+- `shared/polarisUtils.js` : +`evaluateSalaryFormula`
+- `server/src/services/advantageConstraints.js` : contraintes R1-R6 + `validateAdvantage`
+- `server/src/services/advantageService.js` : `getAdvantages` + `addAdvantage` (trx-or-db) + `removeAdvantage` (soft-delete)
+- `server/src/services/creationService.js` : step4+5 service complet — snapshot-before rollback, skillAllocations SET, validations carrière, purge orphans
+- `server/src/routes/creation.js` : monté `/api/creation` — 6 routes step4+step5 — ownership guard
+- `char-sheet.js` : advantages V1 → V2 (advantageService)
+- `index.js` : mount `/api/creation`
+- **Fix rollback** : purge skills hors snapshot (`whereNotIn`)
+- **Testé :** SR ✅, import checks ✅
+- **Non testé :** aucune route step4/step5 appelée depuis client
+- **Prochaine étape** : validation fonctionnelle backend OU connexion COUCHE 4 frontend
 
 **Dettes actives :**
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
@@ -135,6 +135,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - `getVoxelSurfaceTop` — pas de cas slope/wedge
 - Sprint Annonce v2 — actions précédentes en lecture seule (GmDeclareWindow + ActionWindow)
 - Surprise critique (roll=1) → initiative=1 — à analyser
+- [DBG-C1] Owner wizard — `character.user_id` null quand GM crée pour joueur absent (steps 1-3 non implémentés)
+- `pc_spent_step5` — reçoit coûts avantages post-création aussi (rollback step5 futur à prendre en compte)
 
 ---
 

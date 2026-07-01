@@ -39,6 +39,7 @@ import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal, calcAttributeNA, calcREA, calcSeuils, calcSouffle, calcResistanceDroguesInput } from '../../lib/charStats.js'
 import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from '../../lib/woundUtils.js'
+import { getAdvantages, addAdvantage, removeAdvantage } from '../../services/advantageService.js'
 import { WS } from '../../../../shared/events.js'
 import {
   WOUND_LOCATIONS, WOUND_SEVERITIES,
@@ -520,21 +521,7 @@ router.get('/:characterId/advantages', async (req, res, next) => {
       .first()
     if (!sheet) return res.json({ advantages: [] })
 
-    const advantages = await db('char_advantages')
-      .leftJoin('ref_mutations', 'char_advantages.muta_numero', 'ref_mutations.muta_numero')
-      .where({ 'char_advantages.char_sheet_id': sheet.id })
-      .select(
-        'char_advantages.id',
-        'char_advantages.type',
-        'char_advantages.muta_numero',
-        'char_advantages.label',
-        'char_advantages.level',
-        'char_advantages.created_at',
-        'ref_mutations.nom as mutation_nom',
-        'ref_mutations.linked_skill_id',
-      )
-      .orderBy('char_advantages.created_at', 'asc')
-
+    const advantages = await getAdvantages(sheet.id)
     res.json({ advantages })
   } catch (err) {
     next(err)
@@ -549,48 +536,11 @@ router.post('/:characterId/advantages', async (req, res, next) => {
       .first()
     if (!sheet) throw new AppError(404, 'Sheet not found — create it first')
 
-    const { type, muta_numero, label } = req.body
+    const { advantage_id } = req.body
+    if (!advantage_id) throw new AppError(400, 'advantage_id is required')
 
-    if (!['MUTATION', 'OTHER'].includes(type)) {
-      throw new AppError(400, "type must be 'MUTATION' or 'OTHER'")
-    }
-
-    if (type === 'MUTATION') {
-      if (!muta_numero) throw new AppError(400, 'muta_numero is required for type MUTATION')
-      const mutation = await db('ref_mutations').where({ muta_numero }).first()
-      if (!mutation) throw new AppError(404, `Mutation ${muta_numero} not found`)
-
-      const existing = await db('char_advantages')
-        .where({ char_sheet_id: sheet.id, type: 'MUTATION', muta_numero })
-        .first()
-
-      if (existing) {
-        const [updated] = await db('char_advantages')
-          .where({ id: existing.id })
-          .update({ level: existing.level + 1 })
-          .returning('*')
-        return res.json({ advantage: updated })
-      }
-
-      const [inserted] = await db('char_advantages')
-        .insert({ char_sheet_id: sheet.id, type: 'MUTATION', muta_numero, level: 1 })
-        .returning('*')
-      return res.status(201).json({ advantage: inserted })
-    }
-
-    if (type === 'OTHER') {
-      if (!label || typeof label !== 'string' || label.trim().length === 0) {
-        throw new AppError(400, 'label is required and must be non-empty for type OTHER')
-      }
-      if (label.length > 255) {
-        throw new AppError(400, 'label must be 255 characters or less')
-      }
-
-      const [inserted] = await db('char_advantages')
-        .insert({ char_sheet_id: sheet.id, type: 'OTHER', label: label.trim() })
-        .returning('*')
-      return res.status(201).json({ advantage: inserted })
-    }
+    const advantage = await addAdvantage(sheet.id, advantage_id, 'campaign')
+    res.status(201).json({ advantage })
   } catch (err) {
     next(err)
   }
@@ -604,21 +554,9 @@ router.delete('/:characterId/advantages/:id', async (req, res, next) => {
       .first()
     if (!sheet) throw new AppError(404, 'Sheet not found')
 
-    const advantage = await db('char_advantages')
-      .where({ id: req.params.id, char_sheet_id: sheet.id })
-      .first()
-    if (!advantage) throw new AppError(404, 'Advantage not found')
-
-    if (advantage.type === 'MUTATION' && advantage.level > 1) {
-      const [updated] = await db('char_advantages')
-        .where({ id: advantage.id })
-        .update({ level: advantage.level - 1 })
-        .returning('*')
-      return res.json({ advantage: updated })
-    }
-
-    await db('char_advantages').where({ id: advantage.id }).del()
-    res.json({ deleted: true, id: advantage.id })
+    const { reason } = req.body
+    const advantage = await removeAdvantage(sheet.id, req.params.id, reason)
+    res.json({ deleted: true, advantage })
   } catch (err) {
     next(err)
   }

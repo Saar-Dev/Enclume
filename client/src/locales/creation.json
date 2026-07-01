@@ -3,11 +3,13 @@
     "title": "Création de personnage",
     "subtitle": "Choisissez votre méthode de création. La répartition libre est recommandée pour les joueurs qui souhaitent personnaliser chaque aspect de leur personnage.",
     "1": {
+      "eyebrow": "Archétype",
       "name": "Méthode 1 : Choisir un archétype",
       "desc": "Cette méthode est recommandée si les joueurs veulent commencer à créer directement leur personnage, ainsi que pour les joueurs débutants. Chaque archétype propose une répartition automatique des PC.",
       "comingsoon": "Bientôt disponible"
     },
     "2": {
+      "eyebrow": "Répartition libre",
       "name": "Méthode 2 : Répartition libre des PC",
       "desc": "Chaque joueur dispose au départ de 20 Points de création (PC), qu'il pourra dépenser à chaque étape pour améliorer les divers aspects de son personnage : par l'achat d'options diverses, il pourra ainsi construire et personnaliser son personnage de A à Z.",
       "start": "Commencer"

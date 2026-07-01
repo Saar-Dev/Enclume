@@ -166,6 +166,24 @@ export function calcTotalCost(attributs, isFeminin) {
   }, 0);
 }
 
+/**
+ * Évalue une formule de salaire aléatoire (carrières, ex. '1D6*100').
+ * [DETTE-ETAPE4-1] dés aléatoires — une version "moyenne" pourrait être ajoutée plus tard.
+ * @param {string} formula — format 'NDF*M' (N dés, F faces, multiplicateur M)
+ * @returns {number}
+ */
+export function evaluateSalaryFormula(formula) {
+  if (!formula) return 0
+  const match = formula.match(/^(\d+)D(\d+)\*(\d+)$/)
+  if (!match) return 0
+  const [, diceCount, diceFaces, multiplier] = match
+  let total = 0
+  for (let i = 0; i < parseInt(diceCount, 10); i++) {
+    total += Math.floor(Math.random() * parseInt(diceFaces, 10)) + 1
+  }
+  return total * parseInt(multiplier, 10)
+}
+
 export function validateStep1(attributs, ambiance, pcDispo, isFeminin) {
   const erreurs = [];
   const poolTotal = calcPoolTotal(ambiance, pcDispo);

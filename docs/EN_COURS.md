@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-06-30 Session 128 suite
+> Dernière mise à jour : 2026-07-01 Session 129
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -169,7 +169,17 @@
    → i18n ✅ : `wizard.step`, `wizard.pc_label`, `step3.none`, `step3.noneDesc`
    → Nav ✅ : bouton Précédent manquant dans sélection méthode Step3
    → **A1 ✅ Session 128 suite** : migrations 98 + 99 appliquées — 102 migrations totales
-   → **PROCHAINE ÉTAPE WIZARD : COUCHE 3 backend** — lire REGLE_CREATION.txt (L.1107–1352) + REGLE_PROFESSION.md (L.1107–2383) + char-sheet.js avant de coder
+
+**36. ~~Wizard COUCHE 3 — Backend steps 4 & 5 ⚠️ clos partiel Session 129~~**
+   → `advantageConstraints.js` : registre contraintes R1-R6 (exists/not_already_owned/unique/family/pc_max/sufficient)
+   → `advantageService.js` : getAdvantages + addAdvantage (trx-or-db) + removeAdvantage (soft-delete)
+   → `creationService.js` : getStep4RefData/State + validateAndPersistStep4 (snapshot + backgrounds + carrières + âge) + rollbackStep4 (snapshot-before + purge orphans) + getStep5RefData
+   → `routes/creation.js` : monté `/api/creation` — 6 routes step4 + step5 — ownership guard param
+   → `char-sheet.js` : advantages V1 → V2 (advantageService)
+   → `index.js` : mount `/api/creation`
+   → Fix rollback : purge skills hors snapshot (`whereNotIn`)
+   → **Non testé** : aucune route appelée depuis le client
+   → **PROCHAINE ÉTAPE WIZARD** : validation fonctionnelle backend (Postman) OU connexion COUCHE 4 frontend
 
 **34. ~~Cluster N — UI combat~~** (en cours)
    → COM23 ✅ Session 127 : `TokenLabel` sprite CanvasTexture — label occludé par murs

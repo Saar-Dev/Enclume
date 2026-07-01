@@ -1720,3 +1720,82 @@ COUCHE 3 — Backend wizard. **Lectures obligatoires avant de coder :**
 1. `docs/Character/Creation/REGLE_CREATION.txt` lignes 1107–1352 (règles backgrounds)
 2. `docs/Character/Creation/REGLE_PROFESSION.md` lignes 1107–2383 (règles professions)
 3. `server/src/routes/character/char-sheet.js` (routes existantes, avant d'en ajouter)
+
+---
+
+## Session 129 — 2026-07-01 — Wizard COUCHE 3 : backend steps 4 & 5
+
+### Contexte
+Backend routes + services pour les steps 4 (background/carrière) et 5 (avantages/désavantages) du wizard de création de personnage. COUCHE 1 (migrations 92-99) et COUCHE 2 (wizard UI Phase 2) déjà livrées en Sessions 127-128.
+
+### Architecture décidée en session
+
+**State machine** : `creation_state` = dernière étape complétée.
+`draft_step3 → draft_step4 → draft_step5 → complete` (finalization step = sprint futur)
+
+**Compétences background** : bonus additifs auto-appliqués (`ref_background_skills.bonus`).
+**Compétences carrière** : SET explicite via `skillAllocations { skill_id → mastery_cible }` soumis par le joueur — `ref_career_skills` n'a pas de colonne `bonus`.
+**Rollback step4** : snapshot-before (pas de replay-and-decrement — incompatible avec SET-based).
+**`pc_spent_step5`** : reçoit les coûts avantages qu'ils soient acquis en création ou en campagne — acceptable scope actuel, dette notée.
+**État final `complete`** : atteint via `POST /api/creation/:sheetId/finalize` (non implémenté — steps 1-3 backend d'abord).
+
+### Fichiers créés
+
+**`shared/polarisUtils.js`** — `evaluateSalaryFormula(formula)` ajoutée
+
+**`server/src/services/advantageConstraints.js`** — nouveau
+- Registre `CONSTRAINTS` : `exists`, `not_already_owned`, `unique_absolute`, `family_limit`, `max_desavantage_pc` (plafond 10 PC), `sufficient_pc`
+- `validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages)` → `{ valid, message }`
+
+**`server/src/services/advantageService.js`** — nouveau
+- `getAdvantages(sheetId)` — JOIN char_advantages + ref_advantages WHERE removed_at IS NULL
+- `addAdvantage(sheetId, advantageId, acquiredDuring, trxOpt)` — pattern trx-or-db, valide + insère + incrémente ledger
+- `removeAdvantage(sheetId, charAdvantageId, reason)` — soft-delete + décrémente ledger
+
+**`server/src/services/creationService.js`** — nouveau
+- `getStep4RefData(sheetId)` — backgrounds + carrières (skills/titres/prérequis/pointCategories) groupés par Map
+- `getStep4State(sheetId)` — archetype + char_careers courants
+- `validateAndPersistStep4(sheetId, data)` — transaction : snapshot → background skills additifs → validations carrière (prérequis/génotype/attributs/éducation) → insert char_careers + skillAllocations SET → effets âge → archetype → ledger → `draft_step4`
+- `rollbackStep4(sheetId)` — transaction : restoreSnapshot (skills + archetype + attributes + purge orphans) → del char_careers → reset ledger → `draft_step3`
+- `getStep5RefData()` — liste ref_advantages
+
+**`server/src/routes/creation.js`** — nouveau, monté `/api/creation`
+- `router.param('sheetId')` — ownership guard (char_sheet → characters → campaign_members)
+- `GET /:sheetId/step4/ref`, `GET /:sheetId/step4`, `POST /:sheetId/step4`, `DELETE /:sheetId/step4`
+- `GET /:sheetId/step5/ref`, `POST /:sheetId/step5` — batch avantages (transaction unique + `draft_step5`)
+
+### Fichiers modifiés
+
+**`server/src/routes/character/char-sheet.js`** — routes advantages V1 (L.515-563) remplacées par V2 utilisant advantageService
+**`server/src/index.js`** — `import creationRouter` + `app.use('/api/creation', creationRouter)`
+
+### Bug découvert et corrigé — `restoreSnapshot` orphan skills
+
+**Symptôme** : après DELETE /step4, les skills ajoutés par step4 (background ou carrière) restaient en base — rollback incomplet.
+**Cause** : `restoreSnapshot` upsertait les skills du snapshot sans supprimer les skills absents du snapshot.
+**Fix** — après la boucle d'upsert dans `restoreSnapshot` :
+```js
+await trx('char_skills')
+  .where({ char_sheet_id: sheetId })
+  .modify(qb => { if (snapshotSkillIds.length > 0) qb.whereNotIn('skill_id', snapshotSkillIds) })
+  .del()
+```
+
+### Pièges documentés
+
+- `ref_career_skills` n'a PAS de colonne `bonus` (migration 93) — skillAllocations SET-based obligatoire
+- `ref_genotypes` ✅ existe migration 33 — `validateCareerGenotype` correcte
+- `char_attributes.attr_id` ✅ TEXT court ('FOR','CON'...) — `validateCareerAttributes` correcte
+- `char_skills.skill_id` ✅ TEXT — whereNotIn correct sans cast
+
+### Décisions architecturales
+
+**Owner wizard** : `character.user_id` défini à la création (steps 1-3 non implémentés). Cas GM créant pour joueur absent → `user_id = null` = accès GM uniquement. [DBG-C1] latent — à corriger avec steps 1-3.
+**État final** : `creation_state = 'complete'` via `POST /finalize` (sprint futur) = seul état rendant un personnage visible dans la bibliothèque.
+
+### Testé
+- SR ✅ (serveur déjà actif, migrations à jour, aucune erreur démarrage)
+- Import checks node ✅ (advantageConstraints, advantageService, creation.js, creationService)
+
+### Non testé
+Aucune route step4/step5 appelée depuis le client — backend only. ⚠️ clos partiel
