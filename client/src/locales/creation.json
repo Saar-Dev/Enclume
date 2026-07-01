@@ -67,12 +67,13 @@
   "step2": {
     "deserter_label": "Déserteur (recherché par l'Hégémonie)",
     "deserter_cost": "4 PC (déserteur)",
-    "attr_after": "Vos attributs après sélection",
+    "attr_after": "Evolution des attributs",
     "title": "Type génétique",
     "free": "Gratuit",
     "back": "Retour",
     "attributesTitle": "Attributs",
     "traitsTitle": "Avantages et Désavantages",
+    "conditionsTitle": "Conditions requises",
     "select": "Sélectionner : {{name}}",
     "prev": "Précédent",
     "humain": {
@@ -86,7 +87,7 @@
       "name": "Hybride naturel",
       "summary": "Né avec des mutations aquatiques, l'hybride naturel est parfaitement adapté à la vie sous-marine. Rapide, résistant et capable de plonger à de très grandes profondeurs, il souffre en revanche de nombreuses contraintes à la surface.",
       "desc": "Un hybride naturel est né avec toutes les mutations nécessaires pour survivre sous l'eau. De tous les hybrides, les hybrides naturels sont les plus avantagés sous l'eau et les plus désavantagés au sec. Les personnages hybrides sont certes très avantagés sous l'eau, mais ont également beaucoup de restrictions à l'air libre et de multiples Désavantages. De plus, pour traduire leurs capacités uniques, ils font l'objet de très nombreuses règles qui leur sont spécifiques.",
-      "traitCompetence": "Compétence spéciale Hybride",
+      "traitCompetence": "Compétence spéciale : \"HYBRIDE\"",
       "traitCompetenceDesc": "Les hybrides sont les seuls à pouvoir utiliser cette Compétence spéciale, qui représente leur affinité avec le milieu aquatique. Les hybrides naturels possèdent d'emblée cette Compétence à un niveau de maîtrise de +3, et peuvent la développer à un coût normal. Un hybride naturel peut librement utiliser cette Compétence à la place de Manœuvres sous-marines ou d'Athlétisme (pour la natation), à condition qu'il soit libre de ses mouvements. Un hybride naturel peut plonger jusqu'à une profondeur maximum de (niveau global d'Hybride) × 1 000 m.",
       "traitMutation": "Mutation évolutive",
       "traitMutationDesc": "En s'habituant au milieu marin, l'organisme des hybrides naturels subit des altérations physiques progressives : amincissement, déformation crânienne, doigts affinés, yeux globuleux, peau fragile. Aux niveaux +5, +7, +10, +13 et +15 de la Compétence Hybride : Résistance aux dommages +1 au sec / -1 sous l'eau (cumulatif), Perception visuelle -1 au sec / +1 sous l'eau (cumulatif).",
@@ -118,7 +119,7 @@
       "traitImmuniteFroidDesc": "Les géno-hybrides ne ressentent pas la température de l'eau. Ils ne subiront donc aucune pénalité à cause du froid s'ils se trouvent dans l'eau. Hors de leur milieu naturel, ils sont vulnérables comme n'importe qui.",
       "traitClaustrophobie": "Claustrophobie",
       "traitClaustrophobieDesc": "Les hybrides souffrent de claustrophobie dans les endroits pleins de monde ou très étroits : pénalité de -3 à tous leurs Tests. Une armure oblige à un Test de Volonté toutes les heures avec un malus de -2 par heure.",
-      "traitCompetence": "Compétence spéciale Hybride",
+      "traitCompetence": "Compétence spéciale : \"HYBRIDE\"",
       "traitCompetenceDesc": "Les géno-hybrides démarrent cette Compétence à +0. À la création, elle fait partie des Compétences professionnelles des Hybrides du Trident. Un géno-hybride peut utiliser cette Compétence à la place de Manœuvres sous-marines (hors armure). Il peut plonger jusqu'à (niveau global d'Hybride/2) × 1 500 m.",
       "traitMutation": "Mutation évolutive",
       "traitMutationDesc": "Les géno-hybrides sont aussi sujets à la Mutation évolutive, mais les effets sont moins marqués. Les altérations physiques sont plus difficiles à percevoir. Modificateurs de Résistance aux dommages et Perception visuelle uniquement aux niveaux +5, +10 et +15 (maximum +/-3).",
@@ -145,7 +146,7 @@
       "traitImmuniteFroidDesc": "Les techno-hybrides ne ressentent pas la température de l'eau. Ils ne subiront donc aucune pénalité à cause du froid s'ils se trouvent dans l'eau. Hors de leur milieu naturel, ils sont vulnérables comme n'importe qui.",
       "traitClaustrophobie": "Claustrophobie",
       "traitClaustrophobieDesc": "Les hybrides souffrent de claustrophobie : pénalité de -3 à tous leurs Tests dans les endroits pleins de monde ou très étroits. Armure = Test de Volonté toutes les heures, malus de -2 par heure.",
-      "traitCompetence": "Compétence spéciale Hybride",
+      "traitCompetence": "Compétence spéciale : \"HYBRIDE\"",
       "traitCompetenceDesc": "Les techno-hybrides démarrent cette Compétence à +0. Elle fait partie des Compétences professionnelles des Techno-hybrides hégémoniens. Contrairement aux autres hybrides, un techno-hybride ne peut pas utiliser cette Compétence à la place de Manœuvres sous-marines ou d'Athlétisme. Il peut plonger jusqu'à 1 500 m + (niveau global d'Hybride)/2 × 1 500 m.",
       "traitSensibiliteChaleur": "Sensibilité à la chaleur",
       "traitSensibiliteChaleurDesc": "Les dommages dus au feu ou à la chaleur sont augmentés de +2 contre les techno-hybrides.",
@@ -287,6 +288,15 @@
     "info_step2": "Type génétique — Choisissez votre génotype",
     "info_step3": "Capacités spéciales — Mutations",
     "info_step4": "Expérience préliminaire — Origines, formation, professions",
-    "info_step5": "Avantages et désavantages"
+    "info_step5": "Avantages et désavantages",
+    "info_step6": "Vérifiez votre fiche avant de finaliser",
+    "step_label_1": "Attributs",
+    "step_label_2": "Génotype",
+    "step_label_3": "Mutations",
+    "step_label_4": "Expériences",
+    "step_label_5": "Avantages",
+    "step_label_6": "Aperçu",
+    "finalize": "Finaliser",
+    "prev": "Précédent"
   }
 }

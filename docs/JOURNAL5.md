@@ -2007,3 +2007,58 @@ Plan COUCHE 4a complet — en attente de code
 ### Non testé ⚠️ clos partiel
 - Steps 1-3 depuis client (dette COUCHE 4a)
 - Spécialité apprentissage_technique (non implémentée)
+
+---
+
+## Session 129 suite 5 — 2026-07-01 — Wizard UX (stepper + étape 6 + bugfixes UI)
+
+### Périmètre livré
+
+**`client/src/locales/creation.json`** (2 éditions)
+- S2-1 : `attr_after` → "Evolution des attributs"
+- S2-2 : `traitCompetence` → `"Compétence spéciale : \"HYBRIDE\""` (3 occurrences)
+- S3-1 : label "Aucune mutation" + description dans l'écran d'achat
+- BUG-S2-1 : `"conditionsTitle": "Conditions requises"` à la racine de `step2` (clé manquante utilisée par Step2Genotype.jsx L.234)
+- Clés stepper : `step_label_1..6`, `info_step6`, `finalize`, `prev`
+
+**`client/src/components/creation/Step3Mutations.jsx`** (édition)
+- S3-1 : "Aucune mutation" supprimé de l'écran titre → ajouté en premier dans le menu d'achat (card `.noneCard` avec styles inline)
+
+**`client/src/components/creation/Step4Summary.jsx`** (édition)
+- S4-R1 : suppression de la ligne "PC dépensés x/20" (calcul, JSX, style — 3 éléments)
+
+**`client/src/components/creation/WizardHeader.jsx`** (réécriture)
+- Remplace `<span className="wiz-header-step">ETAPE X/5</span>` par `.wiz-stepper`
+- 6 dots numérotés + 5 traits de liaison — états `done`/`active`/`future`
+- Props ajoutées : `totalSteps`, `onStepClick`
+- Dots `done` : cliquables (`cursor: pointer` + `onStepClick?.(n)`)
+
+**`client/src/components/creation/WizardCreation.jsx`** (éditions)
+- Import `CharacterSheet`
+- `[finalizing, setFinalizing]` state
+- `navigateToStep(target)` : cascade store (`setStepNData(null)`) + rollback step4 si step>=5→<=4 + `setStep(target)`
+- `handleFinalize()` : `callStep('finalize')` → `resetCreation()` → `navigate('/')`
+- Step 5 `onNext` : `setStep(6)` (plus finalize direct)
+- Étape 6 : `CharacterSheet` + bouton "Précédent" + bouton "Finaliser"
+- `getInfos(6, ...)` + `st.step6*` styles
+
+**`client/src/index.css`** (édition)
+- ~60 lignes CSS `.wiz-stepper*` ajoutées avant la section "Points HUD"
+
+**`server/src/db/migrations/101_fix_background_names_encoding.js`** (création — BUG-S4-1)
+- UPDATE 8 entrées `ref_backgrounds` dont les noms étaient corrompus (mojibake Latin-1/UTF-8 depuis migration 98)
+- Entrées corrigées : grande_cite, classes_superieures, delinquance, education_scolaire, ecole_ingenieurs, ecole_militaire, ecole_navale, medecine
+- 104 migrations au total
+
+### Testé ✅
+- SR + migration 101 appliquée ✅
+- Encodage "Délinquance/Criminalité" ✅
+- Step 2 Technohybride — label "Conditions requises" affiché ✅
+- Step 3 : "Aucune mutation" absent de l'écran titre, présent en premier dans l'écran d'achat ✅
+- Step indicator : 6 points cliquables, navigation retour fonctionnelle ✅
+- Étape 6 : fiche personnage affichée avant finalisation ✅
+- Flux complet step 1 → 6 → finalize → Dashboard ✅
+
+### Non testé ⚠️ clos partiel
+- Steps 1-3 depuis client (dette COUCHE 4a)
+- Multi-carrières avec skills partagées (S4-C3 clos partiel)

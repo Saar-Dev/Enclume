@@ -12,8 +12,6 @@ export default function Step4Summary({
   const trainingItem = selectedTrainingItem
   const higherEdItem = selectedHigherEdItem
 
-  const totalPC = (higherEd ? 1 : 0) + careers.reduce((sum, c) => sum + c.years, 0)
-
   return (
     <div style={ss.container}>
       <h2 style={ss.title}>{t('step4.summary_title')}</h2>
@@ -68,10 +66,6 @@ export default function Step4Summary({
         )}
       </div>
 
-      <div style={ss.pcRow}>
-        {t('step4.summary_pc', { spent: totalPC, total: 20 })}
-      </div>
-
       <div style={ss.nav}>
         <button style={ss.prevBtn} onClick={onPrev}>← {t('step4.prev')}</button>
         <button style={ss.submitBtn} onClick={onSubmit}>{t('step4.validate')}</button>
@@ -93,7 +87,6 @@ const ss = {
   careerName: { color: '#c0c0d0', fontSize: '12px', fontWeight: '600', flex: 1 },
   careerYears: { color: '#9090c8', fontSize: '11px' },
   careerTitle: { color: '#5b8dee', fontSize: '11px', padding: '2px 6px', border: '1px solid #5b8dee', borderRadius: '3px' },
-  pcRow: { color: '#e0a85c', fontSize: '12px', fontWeight: '600', textAlign: 'center', padding: '8px' },
   nav: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #1e1e2e', marginTop: 'auto' },
   prevBtn: { padding: '8px 16px', border: '1px solid #2a2a3e', borderRadius: '4px', backgroundColor: '#0e0e1a', color: '#6a6a8a', fontSize: '12px', fontWeight: '600', cursor: 'pointer' },
   submitBtn: { padding: '8px 20px', border: 'none', borderRadius: '4px', backgroundColor: '#5b8dee', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em' },

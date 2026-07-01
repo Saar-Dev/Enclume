@@ -191,15 +191,27 @@
    → **Testé** : SR ✅, start ✅ (bouton "Commencer" fonctionnel)
    → **Non testé** : steps 1-3 depuis client, finalizeCreation
 
-**38. ~~Wizard COUCHE 4b ⚠️ clos partiel Session 129 suite 3+4~~** ← WIZARD PROCHAINE ÉTAPE
+**38. ~~Wizard COUCHE 4b ✅ clos Session 129 suites 3–5~~**
    → `CareersAllocator.jsx` : prop `careers` DB, `selectedCareerId` UUID, `allSkills` useMemo ✅
-   → `Step4Summary.jsx` : réécriture 101L (était 703) ✅
+   → `Step4Summary.jsx` : réécriture 101L — suppression "PC dépensés x/20" ✅
    → `Step4Experience.jsx` : fetch refData, `finalAge` (base + études.years_added + carrières) ✅
-   → `WizardCreation.jsx` : step4/5 async + rollback DELETE step4 ✅
+   → `WizardCreation.jsx` : step4/5 async + rollback DELETE step4 + étape 6 (aperçu CharacterSheet) ✅
    → `Step5Advantages.jsx` : création 119L — toggle avantages/désavantages ✅
-   → `100_seed_ref_careers.js` : 5 carrières seedées (ref_careers + skills + titles) ✅ — **103 migrations**
-   → **Testé** : SR ✅, grille carrières ✅, âge final correct ✅ (19+2+6=27), step4→step5 débloqué ✅
-   → **Non testé** : step5→finalize end-to-end, steps 1-3 depuis client
+   → `WizardHeader.jsx` : stepper 6 étapes cliquables (dots + lignes + labels) ✅
+   → `Step3Mutations.jsx` : "Aucune mutation" déplacée vers menu d'achat (UX) ✅
+   → `100_seed_ref_careers.js` : 5 carrières seedées (ref_careers + skills + titles) ✅
+   → `101_fix_background_names_encoding.js` : 8 noms corrompus (mojibake) corrigés ✅ — **104 migrations**
+   → `creation.json` : S2-1 + S2-2 copy, `step2.conditionsTitle` manquant ✅
+   → `index.css` : classes `.wiz-stepper*` ajoutées ✅
+   → **Testé** : SR ✅, grille carrières ✅, âge final ✅ (19+2+6=27), step4→5→6→finalize ✅, step indicator ✅, encodage ✅
+   → **Non testé** : steps 1-3 depuis client, multi-carrières avec skills partagées
+
+**39. Wizard COUCHE 4c** ← WIZARD PROCHAINE ÉTAPE
+   → [WIZ-1] Filtrer personnages incomplets (creation_state ≠ 'complete') dans la liste Dashboard
+   → [WIZ-2] Synchroniser les deux compteurs PC (store header vs local CareersAllocator)
+   → [WIZ-3] Formation "apprentissage_technique" → choix de spécialité
+   → [S4-C1] Seeder les ~24 carrières restantes (5/29 actuellement)
+   → [S4-C2] Illustrations carrières depuis MinIO (29 webp disponibles)
 
 **34. ~~Cluster N — UI combat~~** (en cours)
    → COM23 ✅ Session 127 : `TokenLabel` sprite CanvasTexture — label occludé par murs
@@ -212,7 +224,7 @@
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **103 migrations appliquées** (103 = 100_seed_ref_careers — Session 129 suite 4)
+- **104 migrations appliquées** (104 = 101_fix_background_names_encoding — Session 129 suite 5)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---
@@ -262,6 +274,10 @@
 | **FEAT3** | ~~Token actif : cercle de sélection~~ | ✅ Session 127 |
 | **UI2** | Alignement dés | Basse — Cluster Q |
 | **UI3** | Dé 100 : affichage chat | Basse — Cluster Q |
+| **WIZ-1** | Personnages incomplets (creation_state ≠ 'complete') visibles dans la liste | Moyenne — COUCHE 4c |
+| **WIZ-2** | Deux compteurs PC (header store vs CareersAllocator local) | Basse — cosmétique |
+| **WIZ-3** | Formation "apprentissage_technique" → choix de spécialité non implémenté | Moyenne — COUCHE 4c |
+| **DBG-C1** | `character.user_id` null quand GM crée pour joueur absent (steps 1-3) | Moyenne — sprint futur |
 
 ---
 

@@ -1,3 +1,18 @@
+## v139 — 2026-07-01 — Wizard COUCHE 4b : stepper 6 étapes + aperçu fiche + bugfixes
+
+### Client
+- [feat] `WizardHeader.jsx` — stepper 6 étapes cliquables (dots + lignes + labels), remplace "ETAPE X/5"
+- [feat] `WizardCreation.jsx` — étape 6 : aperçu CharacterSheet + bouton Finaliser + navigation arrière
+- [feat] `WizardCreation.jsx` — `navigateToStep()` : navigation inter-étapes avec cascade store + rollback step4
+- [fix] `Step3Mutations.jsx` — "Aucune mutation" déplacée de l'écran titre vers le menu d'achat
+- [fix] `Step4Summary.jsx` — suppression de la ligne "PC dépensés x/20"
+- [fix] `creation.json` — `step2.conditionsTitle` manquant (label Technohybride "Conditions requises")
+- [fix] `creation.json` — copies UI : "Evolution des attributs", "Compétence spéciale : HYBRIDE"
+- [chg] `index.css` — classes `.wiz-stepper*` (dot, line, label — états done/active/future)
+
+### Serveur
+- [fix] Migration 101 — 8 noms `ref_backgrounds` corrompus (mojibake Latin-1/UTF-8) → encodage UTF-8 correct
+
 ## v138 — 2026-07-01 — Wizard COUCHE 4a : connexion frontend → backend (steps 0-3)
 
 ### Serveur

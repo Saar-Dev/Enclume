@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next'
 import AgeSelector from './AgeSelector'
 import BackgroundSelector from './BackgroundSelector'
 import CareersAllocator from './CareersAllocator'
-import { geoOrigins, socialOrigins, trainings, higherEds } from './mockStep4Data'
+import { BG_META } from './backgroundMeta'
 import Step4Summary from './Step4Summary'
 import { useCreationStore } from '../../stores/creationStore'
 import api from '../../lib/api'
+
+const enrichBg = (bg) => ({ ...bg, ...(BG_META[bg.code] ?? {}) })
 
 const SUB_STEPS = {
   AGE: 'age',
@@ -31,35 +33,35 @@ export default function Step4Experience({ pcDispo, onNext, onPrev }) {
   const [geoNation, setGeoNation] = useState('')
   const [socNation, setSocNation] = useState('')
   const [careers, setCareers] = useState([])
-  const [refData, setRefData] = useState({ loading: true, careers: [] })
+  const [refData, setRefData] = useState({ loading: true, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [] })
 
   useEffect(() => {
     if (!sheetId) return
     api.get(`/creation/${sheetId}/step4/ref`)
-      .then(res => setRefData({ loading: false, careers: res.data.careers ?? [] }))
-      .catch(() => setRefData({ loading: false, careers: [] }))
+      .then(res => setRefData({
+        loading: false,
+        geoOrigins: res.data.geoOrigins ?? [],
+        socialOrigins: res.data.socialOrigins ?? [],
+        trainings: res.data.trainings ?? [],
+        higherEds: res.data.higherEds ?? [],
+        careers: res.data.careers ?? [],
+      }))
+      .catch(() => setRefData({ loading: false, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [] }))
   }, [sheetId])
 
   // ─── Données filtrées ──────────────────────────────────────────
-  const filteredSocialOrigins = socialOrigins.filter(s => {
-    if (s.parent_code === originGeo) return true
-    if (s.allowed_parents && s.allowed_parents.includes(originGeo)) return true
-    if (s.parent_code === null && !s.allowed_parents) return true
-    return false
-  })
-
-  const filteredTrainings = trainings.filter(t => {
-  if (t.parent_code === originSoc) return true
-  if (t.parent_code === null && !t.allowed_parents) return true
-  if (t.allowed_parents && t.allowed_parents.includes(originSoc)) return true
-  return false
-})
-
+  const enrichedGeoOrigins = refData.geoOrigins.map(enrichBg)
+  const filteredSocialOrigins = refData.socialOrigins
+    .filter(s => s.parent_code === originGeo || s.parent_code === null)
+    .map(enrichBg)
+  const filteredTrainings = refData.trainings
+    .filter(t => t.parent_code === originSoc || t.parent_code === null)
+    .map(enrichBg)
   const showHigherEd = training === 'education_scolaire'
-  const filteredHigherEds = showHigherEd ? higherEds : []
+  const filteredHigherEds = showHigherEd ? refData.higherEds.map(enrichBg) : []
 
   // ─── Éléments sélectionnés (avec détails) ──────────────────────
-  const selectedGeoItem = geoOrigins.find(g => g.code === originGeo) || null
+  const selectedGeoItem = enrichedGeoOrigins.find(g => g.code === originGeo) || null
   const selectedSocItem = filteredSocialOrigins.find(s => s.code === originSoc) || null
   const selectedTrainingItem = filteredTrainings.find(t => t.code === training) || null
   const selectedHigherEdItem = filteredHigherEds.find(h => h.code === higherEd) || null
@@ -81,8 +83,9 @@ export default function Step4Experience({ pcDispo, onNext, onPrev }) {
   }
 
   const handleRandomGeoOrigin = () => {
-    const idx = Math.floor(Math.random() * geoOrigins.length)
-    handleSelectGeoOrigin(geoOrigins[idx].code)
+    if (enrichedGeoOrigins.length === 0) return
+    const idx = Math.floor(Math.random() * enrichedGeoOrigins.length)
+    handleSelectGeoOrigin(enrichedGeoOrigins[idx].code)
   }
 
   const handleSelectSocialOrigin = (code) => {
@@ -215,7 +218,7 @@ export default function Step4Experience({ pcDispo, onNext, onPrev }) {
       {subStep === SUB_STEPS.GEO_ORIGIN && (
         <BackgroundSelector
           title={t('step4.geo_origin_title')}
-          items={geoOrigins}
+          items={enrichedGeoOrigins}
           selected={originGeo}
           selectedItem={selectedGeoItem}
           onSelect={handleSelectGeoOrigin}

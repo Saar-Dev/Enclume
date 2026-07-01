@@ -1914,6 +1914,69 @@ Convention :
   letter-spacing: .04em;
 }
 
+/* ── Wizard step indicator ──────────────────────────────────────── */
+.wiz-stepper {
+  display: flex;
+  align-items: flex-start;
+}
+
+.wiz-stepper-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+
+.wiz-stepper-line {
+  width: 20px;
+  height: 2px;
+  flex-shrink: 0;
+  margin-top: 11px;
+}
+.wiz-stepper-line--done   { background: rgba(91,141,238,0.4); }
+.wiz-stepper-line--future { background: rgba(255,255,255,0.08); }
+
+.wiz-stepper-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.wiz-stepper-dot--done {
+  background: rgba(91,141,238,0.18);
+  border: 1px solid rgba(91,141,238,0.5);
+  color: #7090d8;
+}
+.wiz-stepper-dot--active {
+  background: rgba(91,141,238,0.9);
+  border: 1px solid #5b8dee;
+  color: #fff;
+  box-shadow: 0 0 8px rgba(91,141,238,0.5);
+}
+.wiz-stepper-dot--future {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.2);
+}
+
+.wiz-stepper-label {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.wiz-stepper-item--done   .wiz-stepper-label { color: #5a6a9a; }
+.wiz-stepper-item--active .wiz-stepper-label { color: #9090c8; }
+.wiz-stepper-item--future .wiz-stepper-label { color: rgba(255,255,255,0.15); }
+
 /* ── Points HUD ──────────────────────────────────────────────────── */
 .wiz1-points-hud {
   display: flex;

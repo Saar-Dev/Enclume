@@ -195,15 +195,6 @@ export default function Step3Mutations({ pcDispo = 20, onNext, onPrev }) {
             </div>
           </div>
 
-          <div className="wiz2-card wiz2-card--text" onClick={handleNone}>
-            <div className="wiz2-card-top">
-              <span className="wiz2-card-name">{t('step3.none')}</span>
-            </div>
-            <div className="wiz2-card-bottom">
-              <p className="wiz2-card-summary">{t('step3.noneDesc')}</p>
-            </div>
-          </div>
-
         </div>
 
         <div className="wiz2-nav">
@@ -232,6 +223,11 @@ export default function Step3Mutations({ pcDispo = 20, onNext, onPrev }) {
           <button style={st.backLink} onClick={handleBackToMethod}>
             ← {t('step3.back_to_method')}
           </button>
+        </div>
+
+        <div style={st.noneCard} onClick={handleNone}>
+          <span style={st.noneTitle}>{t('step3.none')}</span>
+          <p style={st.noneDesc}>{t('step3.noneDesc')}</p>
         </div>
 
         <div style={st.grid}>
@@ -509,6 +505,21 @@ const st = {
     cursor: 'pointer',
     padding: 0,
   },
+
+  // Aucune mutation
+  noneCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '10px 14px',
+    marginBottom: '12px',
+    border: '1px solid #1e1e2e',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(6,6,14,0.6)',
+    cursor: 'pointer',
+  },
+  noneTitle: { color: '#5a5a7a', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap' },
+  noneDesc: { color: '#3a3a5e', fontSize: '11px', lineHeight: '1.5', margin: 0 },
 
   // Grille achat
   grid: {

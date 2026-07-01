@@ -107,22 +107,23 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 129 (2026-07-01)
+## ÉTAT COURANT — Session 129 suite 5 (2026-07-01)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **103 migrations stables** (103 = 100_seed_ref_careers — Session 129 suite 4)
+- **104 migrations stables** (104 = 101_fix_background_names_encoding — Session 129 suite 5)
 
-**Session 129 — Wizard COUCHE 4b ⚠️ clos partiel :**
+**Session 129 — Wizard COUCHE 4b ✅ clos (suites 3–5) :**
 - `100_seed_ref_careers.js` : 5 carrières (artisan_artiste, assassin, barman, chasseur_primes, contrebandier)
-- `CareersAllocator.jsx` : prop `careers` DB, UUID, allSkills useMemo, condition table fixée
-- `Step4Summary.jsx` : réécriture 101L (selectedXxxItem props, career_name)
-- `Step4Experience.jsx` : fetch refData + `finalAge = base + higherEd.years_added + careerYears` (display + payload)
-- `WizardCreation.jsx` : step4/5 async, rollback DELETE step4, navigate après finalize
-- `Step5Advantages.jsx` : créé 119L — toggle avantages/désavantages, pcRemaining guard
-- `routes/creation.js` : step5 — liste avantages vide autorisée
-- **Testé :** SR ✅, 5 carrières ✅, âge final correct (19+2+6=27) ✅, step4→step5→finalize→Dashboard ✅
-- **Non testé :** steps 1-3 depuis client, personnages incomplets dans liste (voir dette ci-dessous)
-- **Prochaine étape** : wizard COUCHE 4c — deux PC counters + spécialité apprentissage technique + illustrations carrières
+- `101_fix_background_names_encoding.js` : 8 noms corrompus (mojibake) corrigés dans ref_backgrounds
+- `WizardHeader.jsx` : stepper 6 étapes cliquables (dots + lignes + labels) — remplace "ETAPE X/5"
+- `WizardCreation.jsx` : étape 6 (aperçu CharacterSheet + Finaliser) + `navigateToStep()` avec cascade store
+- `Step3Mutations.jsx` : "Aucune mutation" déplacée de l'écran titre vers le menu d'achat
+- `Step4Summary.jsx` : suppression ligne "PC dépensés x/20"
+- `creation.json` : S2-1/S2-2 copies UI + `step2.conditionsTitle` manquant corrigé
+- `index.css` : classes `.wiz-stepper*`
+- **Testé :** SR ✅, encodage ✅, labels ✅, stepper ✅, step4→5→6→finalize→Dashboard ✅
+- **Non testé :** steps 1-3 depuis client
+- **Prochaine étape** : wizard COUCHE 4c — WIZ-1 (filtrer drafts) + WIZ-2 (sync PC) + WIZ-3 (spécialité) + S4-C1 (seed carrières restantes)
 
 **Dettes actives :**
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur

@@ -1,107 +1,102 @@
-# JOURNALTEMP — COUCHE 4b — Plan validé prêt à coder
-> Session 129 — 2026-07-01 — Contenu périssable
+# JOURNALTEMP — Audit Wizard Session 129 suite 5
+> 2026-07-01 — Contenu périssable (scratch pad analytique)
 
-## ÉTAT : Plan complet validé — en attente de reprise post-autocompact
+---
 
-## CONTEXTE
+## TO-DO LIST — Observations terrain (à analyser un par un)
 
-COUCHE 4a clos partiel : SR OK, start OK, steps 1-3 non testés depuis client.
-COUCHE 4b = câblage complet step4 (données réelles + skillAllocations) + step5 (avantages) + finalize.
+### STEP 2 — Génotype
 
-## CONFIRMATIONS CRITIQUES
+| ID | Observation | Type |
+|---|---|---|
+| S2-1 | Modifier "Vos attributs après sélection" → "Evolution des attributs" | UI copy |
+| S2-2 | Modifier en "Compétence spéciale : HYBRIDE" (format + majuscules) | UI copy |
 
-- ref_background_skills : { id, background_id, skill_id, bonus, conditional, choice_group }
-- Codes backgrounds DB = codes mock IDENTIQUES (navire_nomade, petite_station, etc.)
-- ref_advantages.advantage_id = TEXT PK ('adv_001'), cost_pc signé
-- char_pc_ledger a pc_gained_desavantages (migration 97 ligne 44)
-- addAdvantage(sheetId, advantageId, 'creation_step5', trx) gère validation + ledger
-- nationsList dans Step4Summary.jsx = dead code (BackgroundSelector importe depuis mockStep4Data.js)
-- career_id backend = UUID — mock utilisait code string → CRITIQUE à corriger
+---
 
-## DÉCISION skillAllocations
+### STEP 3 — Mutation
 
-Frontend stocke par carrière : { skill_id: deltaPoints } (points FROM cette carrière).
-Payload builder calcule mastery cumulative avant envoi (bg_bonus + cumul deltas carrières).
-Backend fait SET → chaque carrière reçoit la mastery absolue cumulée → correct.
+| ID | Observation | Type |
+|---|---|---|
+| S3-1 | Écran titre : supprimer le choix 3 "Aucune mutation" + ajouter "Aucune mutation" en **premier choix** du menu "Achat de mutation" | UX |
+| S3-2 | Achat de mutation + Mutation aléatoire : basés sur mockup hardcodé, pas sur `ref_mutations` DB | Architecture |
 
-## PLAN 7 FICHIERS
+---
 
-### F1 — server/src/services/creationService.js (getStep4RefData lignes 194-224)
-+ db('ref_background_skills').select('*') dans Promise.all
-+ bgMap (id → { ...bg, skills: [] }), attacher skills
-+ byType pointe sur bgsWithSkills
+### STEP 4 — Origine / Milieu / Formation / Études
 
-### F2 — client/src/stores/creationStore.js
-+ creationState: null
-+ setCreationState: (s) => set({ creationState: s })
-+ resetCreation : creationState: null
+| ID | Observation | Type |
+|---|---|---|
+| S4-B1 | **Vérification** : TOUTES les compétences affichées et leurs bonus sont-ils bien reportés et appliqués en DB ? | Test/Audit |
+| S4-B2 | Mise en forme compétences : lien vers `ref_skills` pour afficher tooltips au mouseOver | UX/Feature |
+| S4-B3 | Gestion des "au choix" (choice_group) — non implémenté | Feature |
 
-### F3 — client/src/components/creation/CareersAllocator.jsx
-- Supprimer import careersList
-- + prop careers (liste réelle)
-- career.code → career.id partout
-- + state skillAllocs: {} (reset sur select/years change)
-- Boutons -/+ : setSkillAllocs avec guard budget (points_per_year * years)
-- Afficher budget dépensé / total
-- handleAdd → onAdd(career.id, career.name, career.titles, years, skillAllocs) + reset
+---
 
-### F4 — client/src/components/creation/Step4Summary.jsx
-+ props selectedGeoItem, selectedSocItem, selectedTrainingItem, selectedHigherEdItem
-- Remplacer geoOrigins.find(...)?.name → selectedGeoItem?.name etc.
-- Ligne 61 : careersList.find(...)?.name → c.career_name
-- Ligne 62 : career?.titles → c.titles (stocké dans selectedCareers)
-- Supprimer lignes 105-fin : exports mock (dead code)
+### STEP 4 — Professions (Carrières)
 
-### F5 — client/src/components/creation/Step4Experience.jsx
-- Supprimer import geoOrigins/socialOrigins/trainings/higherEds depuis mockStep4Data
-- + state refData { loading, geoOrigins:[], socialOrigins:[], trainings:[], higherEds:[], careers:[] }
-- + useEffect : api.get('/creation/${sheetId}/step4/ref') si sheetId
-- refData.X remplace refs mock dans filtres + BackgroundSelector
-- handleAddCareer(careerId, careerName, careerTitles, years, skillAllocations)
-- careers={refData.careers} à CareersAllocator
-- selectedGeoItem/selectedSocItem/selectedTrainingItem/selectedHigherEdItem à Step4Summary
-- handleSubmit → buildPayload() avec cumul mastery
+| ID | Observation | Type |
+|---|---|---|
+| S4-C1 | Importer les autres seeds carrières (actuellement : 5 sur ~29) | Data |
+| S4-C2 | Illustrations métiers uploadées dans MinIO `enclume-assets/assets/` : voir liste ci-dessous | Feature |
+| S4-C3 | Compétences à 0 dans le récapitulatif — où sont les points à répartir par le joueur ? | Bug/UX |
 
-buildPayload():
-  cumulMastery = {}
-  Pour chaque bg (geo/soc/training/higherEd) : cumulMastery[skill] += bonus
-  Pour chaque career : pour chaque [skillId, pts] de c.skillAllocations :
-    cumulMastery[skillId] += pts; skillAllocations[skillId] = cumulMastery[skillId]
-  return { age, originGeo, originSoc, training, higherEd, careers: careersPayload, appliedSkills: [], pcSpent: totalPC }
+**Assets MinIO disponibles :**
+```
+s4_archeologue.webp      s4_artisan.webp          s4_assassin.webp
+s4_barman.webp           s4_contrebandier.webp    s4_diplomate.webp
+s4_docker.webp           s4_eleveur.webp          s4_enqueteur.webp
+s4_hybride.webp          s4_marchand.webp         s4_marchanditinerant.webp
+s4_medecin.webp          s4_mercenaire.webp       s4_mineur.webp
+s4_officiermilitaire.webp s4_officiernaval.webp   s4_pilote.webp
+s4_pirate.webp           s4_pretretrident.webp    s4_prostitue.webp
+s4_scientifique.webp     s4_soldat.webp           s4_soldatelite.webp
+s4_sousmarinier.webp     s4_technicien.webp       s4_technohybride.webp
+s4_veilleur.webp         s4_voleur.webp
+```
+(29 assets total — couverture complète de toutes les carrières prévues)
 
-### F6 — client/src/components/creation/WizardCreation.jsx
-+ import useNavigate, Step5Advantages
-+ destructurer creationState, setCreationState, resetCreation
-+ const navigate = useNavigate()
+---
 
-Step4 onNext → async : callStep('step4', data) + setCreationState('draft_step4') + setStep(5)
-Step4 onPrev → async : si draft_step4 → DELETE /step4 + setCreationState('draft_step3')
-Step5 : <Step5Advantages sheetId pcDispo
-  onNext: callStep('step5') + api.post(finalize) + resetCreation() + navigate('/')
-  onPrev: setStep(4)
-/>
+### STEP 4 — Récapitulatif
 
-### F7 (NOUVEAU) — client/src/components/creation/Step5Advantages.jsx
-Props : { sheetId, pcDispo, onNext, onPrev }
-- useEffect → GET /creation/${sheetId}/step5/ref
-- state selected: [] (advantage_id strings)
-- PC restant = pcDispo - sum(cost_pc adv) + sum(|cost_pc| desadv)
-- Toggle, disabled si cost_pc > pcRemaining
-- 2 sections Avantages/Désavantages
-- className="btn" pour boutons, i18n
+| ID | Observation | Type |
+|---|---|---|
+| S4-R1 | "PC dépensés : x / 20" → à supprimer | UI |
+| S4-R2 | Selon les règles : il manque matériel, jauge ennemi/contact/alliés, etc. | Feature gap |
 
-## ORDRE LIVRAISON
+---
 
-1. creationService.js → SR (0 erreur)
-2. creationStore.js
-3. CareersAllocator.jsx
-4. Step4Summary.jsx
-5. Step4Experience.jsx
-6. WizardCreation.jsx
-7. Step5Advantages.jsx (nouveau)
-8. fr.json clés step5
-9. Test flux complet
+---
 
-## CE QUI NE CHANGE PAS
+### BUGS identifiés en test
 
-routes/creation.js, BackgroundSelector.jsx, AgeSelector.jsx, App.jsx, mockStep4Data.js
+| ID | Observation | Fichier |
+|---|---|---|
+| BUG-S2-1 | ✅ Step 2 Technohybride — label `step2.conditionsTitle` manquant | creation.json |
+| BUG-S4-1 | ✅ Step 4 "Délinquance/Criminalité" — encodage corrompu → migration 101 | 101_fix_background_names_encoding.js |
+
+---
+
+## STATUT
+
+- [x] S2-1 ✅ — copy Génotype
+- [x] S2-2 ✅ — copy Génotype
+- [x] S3-1 ✅ — UX Mutation
+- [ ] S3-2 — Architecture Mutation → ref_mutations
+- [ ] S4-B1 — Audit compétences backgrounds
+- [ ] S4-B2 — Tooltips ref_skills
+- [ ] S4-B3 — Gestion "au choix"
+- [ ] S4-C1 — Seeds carrières complètes
+- [ ] S4-C2 — Illustrations MinIO
+- [x] S4-C3 ✅ — `displayedSkills` filter (`mastery > 0 || allocatable`) — clos partiel (non testé : multi-carrières avec skills partagées)
+- [x] S4-R1 ✅ — Supprimer "PC dépensés x/20"
+- [ ] S4-R2 — Matériel + jauges au récap
+
+---
+
+## ORDRE D'ANALYSE SUGGÉRÉ (à confirmer)
+
+Les items UI copy (S2-1, S2-2, S4-R1) sont triviaux — 1 Edit chacun.
+Les items architecture (S3-2, S4-B1, S4-C1) nécessitent lecture de fichiers.
+Les items feature (S4-B2, S4-B3, S4-C2, S4-R2) sont des sprints entiers.

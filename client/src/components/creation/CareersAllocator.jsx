@@ -102,6 +102,10 @@ export default function CareersAllocator({
     return Array.from(map.values()).sort((a, b) => a.skill_id.localeCompare(b.skill_id))
   }, [selectedGeoItem, selectedSocItem, selectedTrainingItem, selectedHigherEdItem, selectedCareers, careers, career, skillAllocs])
 
+  const displayedSkills = allSkills.filter(
+    sk => sk.mastery > 0 || currentCareerSkillIds.has(sk.skill_id)
+  )
+
   const handlePlus = (skillId) => {
     if (remainingBudget <= 0) return
     setSkillAllocs(prev => ({ ...prev, [skillId]: (prev[skillId] || 0) + 1 }))
@@ -307,7 +311,7 @@ export default function CareersAllocator({
       )}
 
       {/* Séparateur + Tableau récapitulatif des compétences */}
-      {allSkills.length > 0 && (
+      {displayedSkills.length > 0 && (
         <>
           <div style={s.separator}>
             <span style={s.separatorText}>Récapitulatif des compétences</span>
@@ -323,7 +327,7 @@ export default function CareersAllocator({
               </tr>
             </thead>
             <tbody>
-              {allSkills.map(sk => {
+              {displayedSkills.map(sk => {
                 const allocatable = currentCareerSkillIds.has(sk.skill_id)
                 const allocated = skillAllocs[sk.skill_id] || 0
                 return (

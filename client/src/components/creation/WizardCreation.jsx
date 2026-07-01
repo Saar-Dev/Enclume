@@ -10,13 +10,14 @@ import Step2Genotype from './Step2Genotype'
 import Step3Mutations from './Step3Mutations'
 import Step4Experience from './Step4Experience'
 import Step5Advantages from './Step5Advantages'
+import CharacterSheet from '../../character/CharacterSheet.jsx'
 
 export default function WizardCreation() {
   const { t } = useTranslation('creation')
   const { campaignId } = useParams()
   const {
     step, setStep,
-    sheetId, isStarting, startError,
+    sheetId, characterId, isStarting, startError,
     startCreation, setCampaignId,
     creationState, setCreationState, resetCreation,
     setStep0Data, setStep1Data, setStep2Data, setStep3Data, setStep4Data, setStep5Data,
@@ -25,6 +26,7 @@ export default function WizardCreation() {
 
   const navigate = useNavigate()
   const [stepError, setStepError] = useState(null)
+  const [finalizing, setFinalizing] = useState(false)
 
   useEffect(() => {
     if (campaignId) setCampaignId(campaignId)
@@ -33,6 +35,35 @@ export default function WizardCreation() {
   const pcDispo = getPcDispo()
   const mockAmbiance = 'INTERMEDIAIRE'
   const mockIsFeminin = false
+
+  const navigateToStep = async (target) => {
+    if (target === step || target < 1 || target > step) return
+    if (step === 6 && target < 5) return
+    setStepError(null)
+    if (step >= 5 && target <= 4 && creationState === 'draft_step4') {
+      try {
+        await api.delete(`/creation/${sheetId}/step4`)
+        setCreationState(null)
+      } catch { /* on navigue quand même */ }
+    }
+    if      (target === 1) setStep1Data(null)
+    else if (target === 2) setStep2Data(null)
+    else if (target === 3) setStep3Data(null)
+    else if (target === 4) setStep4Data(null)
+    else if (target === 5) setStep5Data(null)
+    setStep(target)
+  }
+
+  const handleFinalize = async () => {
+    setFinalizing(true)
+    try {
+      await callStep('finalize', {})
+      resetCreation()
+      navigate('/')
+    } catch {
+      setFinalizing(false)
+    }
+  }
 
   const callStep = async (endpoint, body) => {
     setStepError(null)
@@ -72,9 +103,10 @@ export default function WizardCreation() {
     <div className="wiz-shell">
       <WizardHeader
         step={step}
-        totalSteps={5}
+        totalSteps={6}
         pcDispo={pcDispo}
         infos={getInfos(step, mockAmbiance, t)}
+        onStepClick={navigateToStep}
       />
 
       {stepError && (
@@ -164,9 +196,7 @@ export default function WizardCreation() {
               try {
                 await callStep('step5', data)
                 setStep5Data(data)
-                await callStep('finalize', {})
-                resetCreation()
-                navigate('/')
+                setStep(6)
               } catch { /* stepError affiché */ }
             }}
             onPrev={async () => {
@@ -180,6 +210,27 @@ export default function WizardCreation() {
             }}
           />
         )}
+        {step === 6 && (
+          <div style={st.step6}>
+            <div style={st.step6Sheet}>
+              <CharacterSheet
+                characterId={characterId}
+                isGm={false}
+                isOwner={true}
+                onSaved={() => {}}
+              />
+            </div>
+            <div style={st.step6Nav}>
+              <button className="btn btn-ghost" onClick={() => { setStepError(null); setStep5Data(null); setStep(5) }}>
+                ← {t('wizard.prev')}
+              </button>
+              <button className="btn btn-gold" onClick={handleFinalize} disabled={finalizing}>
+                {finalizing ? '…' : t('wizard.finalize')} →
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )
@@ -191,9 +242,20 @@ function getInfos(step, ambiance, t) {
   if (step === 3) return <span className="wiz-info-badge">{t('wizard.info_step3')}</span>
   if (step === 4) return <span className="wiz-info-badge">{t('wizard.info_step4')}</span>
   if (step === 5) return <span className="wiz-info-badge">{t('wizard.info_step5')}</span>
+  if (step === 6) return <span className="wiz-info-badge">{t('wizard.info_step6')}</span>
   return null
 }
 
 const st = {
-  body: { flex: 1, display: 'flex', flexDirection: 'column' },
+  body: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  step6: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  step6Sheet: { flex: 1, overflowY: 'auto', minHeight: 0 },
+  step6Nav: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 20px',
+    borderTop: '1px solid #1e1e2e',
+    flexShrink: 0,
+  },
 }
