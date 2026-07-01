@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useCreationStore } from '../../stores/creationStore'
@@ -21,6 +21,8 @@ export default function WizardCreation() {
     getPcDispo,
   } = useCreationStore()
 
+  const [stepError, setStepError] = useState(null)
+
   useEffect(() => {
     if (campaignId) setCampaignId(campaignId)
   }, [campaignId, setCampaignId])
@@ -30,8 +32,17 @@ export default function WizardCreation() {
   const mockIsFeminin = false
 
   const callStep = async (endpoint, body) => {
-    const res = await api.post(`/creation/${sheetId}/${endpoint}`, body)
-    return res.data
+    setStepError(null)
+    try {
+      const res = await api.post(`/creation/${sheetId}/${endpoint}`, body)
+      return res.data
+    } catch (err) {
+      const msg = err.response?.data?.error?.message
+        || err.response?.data?.message
+        || `Erreur ${err.response?.status ?? 'réseau'}`
+      setStepError(msg)
+      throw err
+    }
   }
 
   if (step === 0) {
@@ -63,6 +74,10 @@ export default function WizardCreation() {
         infos={getInfos(step, mockAmbiance, t)}
       />
 
+      {stepError && (
+        <div className="wiz-error">{stepError}</div>
+      )}
+
       <div style={st.body}>
         {step === 1 && (
           <Step1Attributes
@@ -70,11 +85,14 @@ export default function WizardCreation() {
             isFeminin={mockIsFeminin}
             onPcChange={(n) => setStep1Data({ pcSpent: n })}
             onNext={async (data) => {
-              await callStep('step1', data)
-              setStep1Data(data)
-              setStep(2)
+              try {
+                await callStep('step1', data)
+                setStep1Data(data)
+                setStep(2)
+              } catch { /* stepError affiché */ }
             }}
             onPrev={() => {
+              setStepError(null)
               setStep1Data(null)
               setStep(0)
             }}
@@ -84,11 +102,14 @@ export default function WizardCreation() {
         {step === 2 && (
           <Step2Genotype
             onNext={async (data) => {
-              await callStep('step2', data)
-              setStep2Data(data)
-              setStep(3)
+              try {
+                await callStep('step2', data)
+                setStep2Data(data)
+                setStep(3)
+              } catch { /* stepError affiché */ }
             }}
             onPrev={() => {
+              setStepError(null)
               setStep2Data(null)
               setStep(1)
             }}
@@ -99,12 +120,15 @@ export default function WizardCreation() {
           <Step3Mutations
             pcDispo={pcDispo}
             onNext={async (data) => {
-              await callStep('step3', data)
-              setStep3Data(data)
-              setStep(4)
+              try {
+                await callStep('step3', data)
+                setStep3Data(data)
+                setStep(4)
+              } catch { /* stepError affiché */ }
             }}
             onPrev={() => {
-              setStep3Data(null)
+              setStepError(null)
+              setStep2Data(null)  // Bug3 fix : efface coût génotype + cascade step3/4/5
               setStep(2)
             }}
           />
@@ -118,7 +142,8 @@ export default function WizardCreation() {
               setStep(5)
             }}
             onPrev={() => {
-              setStep4Data(null)
+              setStepError(null)
+              setStep3Data(null)  // Bug3 fix : efface coût mutations + cascade step4/5
               setStep(3)
             }}
           />

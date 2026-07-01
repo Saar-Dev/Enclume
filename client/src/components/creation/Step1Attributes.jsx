@@ -99,6 +99,15 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
   const canCancelPc = pcAlloues > 0
   const canNext = pointsRestants === 0 && charName.trim().length > 0
 
+  const canIncrement = (attrId) => {
+    const val = attributs[attrId]
+    return val < 20 && (COST_LOOKUP[val + 1] - COST_LOOKUP[val]) <= pointsRestants
+  }
+  const canDecrement = (attrId) => {
+    const base = (attrId === 'FOR' && isFeminin) ? 5 : 7
+    return attributs[attrId] > base
+  }
+
   const dotColor = (i) => {
     if (i >= pcAlloues) return { backgroundColor: 'rgba(255,255,255,.04)', borderColor: 'rgba(255,255,255,.1)' }
     if (i >= 7) return { backgroundColor: '#e05c5c', borderColor: '#e05c5c' }
@@ -170,9 +179,9 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
               {ATTR_IDS.map(id => (
                 <td key={id} className="wiz1-td">
                   <div className="wiz1-spinner">
-                    <button className="wiz1-spin-btn" onClick={() => handleChange(id, -1)}>−</button>
+                    <button className="wiz1-spin-btn" disabled={!canDecrement(id)} onClick={() => handleChange(id, -1)}>−</button>
                     <span className="wiz1-spin-value">{attributs[id]}</span>
-                    <button className="wiz1-spin-btn" onClick={() => handleChange(id, +1)}>+</button>
+                    <button className="wiz1-spin-btn" disabled={!canIncrement(id)} onClick={() => handleChange(id, +1)}>+</button>
                   </div>
                 </td>
               ))}

@@ -367,6 +367,18 @@ export async function getStep5RefData() {
   return db('ref_advantages').select('*').orderBy(['type', 'name'])
 }
 
+// ─── Helpers state machine ─────────────────────────────────────────────────
+
+function getStateIndex(state) {
+  const m = state?.match(/^draft_step(\d+)$/)
+  return m ? parseInt(m[1], 10) : -1
+}
+
+function assertMinState(sheet, minStepN, stepName) {
+  if (getStateIndex(sheet.creation_state) < minStepN)
+    throw new AppError(400, `État invalide pour ${stepName} : ${sheet.creation_state}`)
+}
+
 // ─── Start : création du brouillon ─────────────────────────────────────────
 
 const ATTR_IDS_START = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
@@ -400,8 +412,7 @@ export async function validateAndPersistStep1(sheetId, data) {
 
   return db.transaction(async (trx) => {
     const sheet = await trx('char_sheet').where({ id: sheetId }).first()
-    if (sheet.creation_state !== 'draft_step0')
-      throw new AppError(400, `État invalide pour step1 : ${sheet.creation_state}`)
+    assertMinState(sheet, 0, 'step1')
 
     const row = await trx('char_sheet as cs')
       .join('characters as c', 'c.id', 'cs.character_id')
@@ -435,8 +446,7 @@ export async function validateAndPersistStep2(sheetId, data) {
 
   return db.transaction(async (trx) => {
     const sheet = await trx('char_sheet').where({ id: sheetId }).first()
-    if (sheet.creation_state !== 'draft_step1')
-      throw new AppError(400, `État invalide pour step2 : ${sheet.creation_state}`)
+    assertMinState(sheet, 1, 'step2')
 
     const geno = await trx('ref_genotypes').where({ id: genotypeId }).first()
     if (!geno) throw new AppError(400, `Génotype inconnu : ${genotypeId}`)
@@ -462,8 +472,7 @@ export async function validateAndPersistStep3(sheetId, data) {
 
   return db.transaction(async (trx) => {
     const sheet = await trx('char_sheet').where({ id: sheetId }).first()
-    if (sheet.creation_state !== 'draft_step2')
-      throw new AppError(400, `État invalide pour step3 : ${sheet.creation_state}`)
+    assertMinState(sheet, 2, 'step3')
 
     await trx('char_mutations').where({ char_sheet_id: sheetId }).del()
 
