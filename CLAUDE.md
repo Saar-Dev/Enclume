@@ -112,18 +112,18 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **102 migrations stables** (102 = ref_backgrounds + char_advantages_v2 — Session 128 suite)
 
-**Session 129 — Wizard COUCHE 3 : backend steps 4 & 5 ⚠️ clos partiel :**
-- `shared/polarisUtils.js` : +`evaluateSalaryFormula`
-- `server/src/services/advantageConstraints.js` : contraintes R1-R6 + `validateAdvantage`
-- `server/src/services/advantageService.js` : `getAdvantages` + `addAdvantage` (trx-or-db) + `removeAdvantage` (soft-delete)
-- `server/src/services/creationService.js` : step4+5 service complet — snapshot-before rollback, skillAllocations SET, validations carrière, purge orphans
-- `server/src/routes/creation.js` : monté `/api/creation` — 6 routes step4+step5 — ownership guard
-- `char-sheet.js` : advantages V1 → V2 (advantageService)
-- `index.js` : mount `/api/creation`
-- **Fix rollback** : purge skills hors snapshot (`whereNotIn`)
-- **Testé :** SR ✅, import checks ✅
-- **Non testé :** aucune route step4/step5 appelée depuis client
-- **Prochaine étape** : validation fonctionnelle backend OU connexion COUCHE 4 frontend
+**Session 129 — Wizard COUCHE 4a : connexion frontend → backend steps 0-3 ⚠️ clos partiel :**
+- `creationService.js` : +`startCreation`, `validateAndPersistStep1/2/3`, `finalizeCreation`
+- `routes/creation.js` : +`POST /start`, `POST /:sheetId/step1/2/3`, `POST /:sheetId/finalize`
+- `creationStore.js` : réécriture — +`sheetId`, `campaignId`, `isStarting`, `startError`, `startCreation()` (axios)
+- `WizardCreation.jsx` : réécriture — `useParams` + `callStep` helper + handlers async
+- `Step1Attributes.jsx` : canNext + payload étendu
+- `App.jsx` : route `/campaigns/:campaignId/creation`
+- `DashboardPage.jsx` : bouton "Créer un personnage" par card campagne
+- **Fix** : `fetch` relatif → `api` axios (fetch partait vers Vite port 5173 → 404)
+- **Testé :** SR ✅, start ✅ (bouton "Commencer" fonctionnel)
+- **Non testé :** steps 1-3 depuis client, finalizeCreation
+- **Prochaine étape** : COUCHE 4b — CareersAllocator + step4/step5 frontend
 
 **Dettes actives :**
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur

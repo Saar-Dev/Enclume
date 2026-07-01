@@ -63,7 +63,7 @@ export default function App() {
         <Route path="/health" element={
           <ProtectedRoute><HealthPage /></ProtectedRoute>
         } />
-		<Route path="/creation" element={
+		<Route path="/campaigns/:campaignId/creation" element={
 			<ProtectedRoute><WizardCreationPage /></ProtectedRoute>
 		} />
         {/* Redirect legacy — bookmarks /texture-packs restent fonctionnels */}

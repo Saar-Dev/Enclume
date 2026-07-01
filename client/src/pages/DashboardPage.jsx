@@ -222,7 +222,6 @@ export default function DashboardPage() {
                     <span style={styles.inviteCode}>
                       #{campaign.invite_code}
                     </span>
-
                     <button
                       className="copy-btn"
                       onClick={(e) => handleCopy(e, campaign.invite_code, campaign.id)}
@@ -231,12 +230,20 @@ export default function DashboardPage() {
                     </button>
                   </div>
 
-                  <button
-                    className="btn"
-                    onClick={() => navigate(`/session/${campaign.id}`)}
-                  >
-                    {t('dashboard.play')}
-                  </button>
+                  <div style={styles.cardButtons}>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => navigate(`/campaigns/${campaign.id}/creation`)}
+                    >
+                      {t('dashboard.createCharacter')}
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => navigate(`/session/${campaign.id}`)}
+                    >
+                      {t('dashboard.play')}
+                    </button>
+                  </div>
 
                 </div>
 
@@ -391,8 +398,14 @@ const styles = {
 
   cardFooter: {
     display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+
+  cardButtons: {
+    display: 'flex',
+    gap: '8px',
+    justifyContent: 'flex-end',
   },
 
   cardActions: {

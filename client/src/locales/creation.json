@@ -58,6 +58,7 @@
     "chcBase": "Chance de départ",
     "chcDesc": "La Chance est un Attribut particulier qui représente la capacité du personnage à bénéficier de temps à autre d'un coup de pouce du destin. Son score dépend de l'ambiance de campagne choisie par le MJ.",
     "pointsRestants": "{{n}} points d'ATTRIBUTS restants",
+    "pointsHudLabel": "points d'attributs restants",
     "pointsOk": "Tous les points sont répartis",
     "bonusFeminin": "Bonus féminin : {{n}} restants",
     "prev": "Précédent",

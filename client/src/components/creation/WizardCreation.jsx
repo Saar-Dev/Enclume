@@ -1,5 +1,8 @@
+import { useEffect } from 'react'
+import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useCreationStore } from '../../stores/creationStore'
+import api from '../../lib/api'
 import WizardHeader from './WizardHeader'
 import Step0Method from './Step0Method'
 import Step1Attributes from './Step1Attributes'
@@ -9,25 +12,45 @@ import Step4Experience from './Step4Experience'
 
 export default function WizardCreation() {
   const { t } = useTranslation('creation')
+  const { campaignId } = useParams()
   const {
     step, setStep,
+    sheetId, isStarting, startError,
+    startCreation, setCampaignId,
     setStep0Data, setStep1Data, setStep2Data, setStep3Data, setStep4Data,
     getPcDispo,
   } = useCreationStore()
 
-  const pcDispo = getPcDispo()
+  useEffect(() => {
+    if (campaignId) setCampaignId(campaignId)
+  }, [campaignId, setCampaignId])
 
+  const pcDispo = getPcDispo()
   const mockAmbiance = 'INTERMEDIAIRE'
   const mockIsFeminin = false
 
+  const callStep = async (endpoint, body) => {
+    const res = await api.post(`/creation/${sheetId}/${endpoint}`, body)
+    return res.data
+  }
+
   if (step === 0) {
     return (
-      <Step0Method
-        onNext={() => {
-          setStep0Data({ method: 'point_buy' })
-          setStep(1)
-        }}
-      />
+      <>
+        {startError && (
+          <div className="wiz-error">{startError}</div>
+        )}
+        <Step0Method
+          onNext={async () => {
+            if (isStarting) return
+            setStep0Data({ method: 'point_buy' })
+            try {
+              await startCreation(campaignId)
+              setStep(1)
+            } catch { /* startError stocké dans le store */ }
+          }}
+        />
+      </>
     )
   }
 
@@ -46,7 +69,8 @@ export default function WizardCreation() {
             ambiance={mockAmbiance}
             isFeminin={mockIsFeminin}
             onPcChange={(n) => setStep1Data({ pcSpent: n })}
-            onNext={(data) => {
+            onNext={async (data) => {
+              await callStep('step1', data)
               setStep1Data(data)
               setStep(2)
             }}
@@ -59,7 +83,8 @@ export default function WizardCreation() {
 
         {step === 2 && (
           <Step2Genotype
-            onNext={(data) => {
+            onNext={async (data) => {
+              await callStep('step2', data)
               setStep2Data(data)
               setStep(3)
             }}
@@ -73,7 +98,8 @@ export default function WizardCreation() {
         {step === 3 && (
           <Step3Mutations
             pcDispo={pcDispo}
-            onNext={(data) => {
+            onNext={async (data) => {
+              await callStep('step3', data)
               setStep3Data(data)
               setStep(4)
             }}
@@ -118,19 +144,7 @@ function getInfos(step, ambiance, t) {
 }
 
 const st = {
-  body: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  placeholder: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderText: {
-    color: '#5a5a7a',
-    fontSize: '14px',
-  },
+  body: { flex: 1, display: 'flex', flexDirection: 'column' },
+  placeholder: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  placeholderText: { color: '#5a5a7a', fontSize: '14px' },
 }

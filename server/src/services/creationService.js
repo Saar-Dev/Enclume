@@ -366,3 +366,138 @@ export async function rollbackStep4(sheetId) {
 export async function getStep5RefData() {
   return db('ref_advantages').select('*').orderBy(['type', 'name'])
 }
+
+// ─── Start : création du brouillon ─────────────────────────────────────────
+
+const ATTR_IDS_START = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
+
+export async function startCreation(campaignId, userId) {
+  return db.transaction(async (trx) => {
+    const [character] = await trx('characters')
+      .insert({ campaign_id: campaignId, user_id: userId, name: 'Brouillon', type: 'pj', visible: false })
+      .returning(['id'])
+
+    const [sheet] = await trx('char_sheet')
+      .insert({ character_id: character.id, creation_state: 'draft_step0' })
+      .returning(['id'])
+
+    await trx('char_pc_ledger').insert({ char_sheet_id: sheet.id, pc_total: 20 })
+    await trx('char_archetype').insert({ char_sheet_id: sheet.id })
+    await trx('char_attributes').insert(
+      ATTR_IDS_START.map(attr_id => ({ char_sheet_id: sheet.id, attr_id, base_level: 7, pc_modifier: 0 }))
+    )
+
+    return { sheetId: sheet.id, characterId: character.id }
+  })
+}
+
+// ─── Step 1 : attributs + identité ─────────────────────────────────────────
+
+export async function validateAndPersistStep1(sheetId, data) {
+  const { charName, playerName, attributes, pcSpent } = data
+  if (!charName?.trim()) throw new AppError(400, 'Nom du personnage requis')
+  if (!attributes || typeof attributes !== 'object') throw new AppError(400, 'Attributs requis')
+
+  return db.transaction(async (trx) => {
+    const sheet = await trx('char_sheet').where({ id: sheetId }).first()
+    if (sheet.creation_state !== 'draft_step0')
+      throw new AppError(400, `État invalide pour step1 : ${sheet.creation_state}`)
+
+    const row = await trx('char_sheet as cs')
+      .join('characters as c', 'c.id', 'cs.character_id')
+      .where('cs.id', sheetId)
+      .select('c.id as character_id')
+      .first()
+
+    await trx('characters').where({ id: row.character_id }).update({ name: charName.trim() })
+
+    await trx('char_identity')
+      .insert({ char_sheet_id: sheetId, char_name: charName.trim(), player_name: playerName ?? '' })
+      .onConflict('char_sheet_id').merge(['char_name', 'player_name'])
+
+    for (const [attrId, level] of Object.entries(attributes)) {
+      await trx('char_attributes')
+        .where({ char_sheet_id: sheetId, attr_id: attrId })
+        .update({ base_level: level })
+    }
+
+    await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step1: pcSpent ?? 0 })
+    await trx('char_sheet').where({ id: sheetId }).update({ creation_state: 'draft_step1' })
+
+    return { creation_state: 'draft_step1' }
+  })
+}
+
+// ─── Step 2 : génotype ─────────────────────────────────────────────────────
+
+export async function validateAndPersistStep2(sheetId, data) {
+  const { genotypeId, isDeserter = false } = data
+
+  return db.transaction(async (trx) => {
+    const sheet = await trx('char_sheet').where({ id: sheetId }).first()
+    if (sheet.creation_state !== 'draft_step1')
+      throw new AppError(400, `État invalide pour step2 : ${sheet.creation_state}`)
+
+    const geno = await trx('ref_genotypes').where({ id: genotypeId }).first()
+    if (!geno) throw new AppError(400, `Génotype inconnu : ${genotypeId}`)
+    if (isDeserter && !geno.has_deserter_option)
+      throw new AppError(400, `Le génotype ${genotypeId} n'a pas d'option déserteur`)
+
+    const pcCost = isDeserter ? 4 : (geno.pc_cost ?? 0)
+
+    await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ genotype_id: genotypeId })
+    await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step2: pcCost })
+    await trx('char_sheet').where({ id: sheetId }).update({ creation_state: 'draft_step2' })
+
+    return { creation_state: 'draft_step2', pcCost }
+  })
+}
+
+// ─── Step 3 : mutations ────────────────────────────────────────────────────
+
+export async function validateAndPersistStep3(sheetId, data) {
+  const { method, mutations = [], pcSpent = 0 } = data
+  if (!['chosen', 'random', 'none'].includes(method))
+    throw new AppError(400, `Méthode de mutation invalide : ${method}`)
+
+  return db.transaction(async (trx) => {
+    const sheet = await trx('char_sheet').where({ id: sheetId }).first()
+    if (sheet.creation_state !== 'draft_step2')
+      throw new AppError(400, `État invalide pour step3 : ${sheet.creation_state}`)
+
+    await trx('char_mutations').where({ char_sheet_id: sheetId }).del()
+
+    for (const { mutation_id, subtype_id } of mutations) {
+      const mutRef = await trx('ref_mutations').where({ mutation_id }).first()
+      if (!mutRef) throw new AppError(400, `Mutation inconnue : ${mutation_id}`)
+      await trx('char_mutations').insert({
+        char_sheet_id: sheetId,
+        mutation_id,
+        subtype_id: subtype_id ?? null,
+        source: method === 'random' ? 'random' : 'chosen',
+        status: 'active',
+        count: 1,
+      })
+    }
+
+    await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step3: pcSpent })
+    await trx('char_sheet').where({ id: sheetId }).update({ creation_state: 'draft_step3' })
+
+    return { creation_state: 'draft_step3' }
+  })
+}
+
+// ─── Finalize ──────────────────────────────────────────────────────────────
+
+export async function finalizeCreation(sheetId) {
+  return db.transaction(async (trx) => {
+    const sheet = await trx('char_sheet').where({ id: sheetId }).first()
+    if (sheet.creation_state !== 'draft_step5')
+      throw new AppError(400, `État invalide pour finalize : ${sheet.creation_state}`)
+
+    await trx('characters').where({ id: sheet.character_id }).update({ visible: true })
+    await trx('char_sheet').where({ id: sheetId }).update({ creation_state: 'complete' })
+
+    return { ok: true, characterId: sheet.character_id }
+  })
+}

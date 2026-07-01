@@ -1,3 +1,16 @@
+## v138 — 2026-07-01 — Wizard COUCHE 4a : connexion frontend → backend (steps 0-3)
+
+### Serveur
+- [feat] `creationService.js` — `startCreation` (transaction : character + char_sheet + ledger + archetype + attributes×8), `validateAndPersistStep1/2/3`, `finalizeCreation`
+- [feat] `routes/creation.js` — 5 nouvelles routes : `POST /start`, `POST /:sheetId/step1/step2/step3`, `POST /:sheetId/finalize`
+
+### Client
+- [feat] `DashboardPage.jsx` — bouton "Créer un personnage" sur chaque card campagne → `/campaigns/:id/creation`
+- [feat] `creationStore.js` — `startCreation()` async (axios), `sheetId`/`campaignId`/`isStarting`/`startError`
+- [feat] `WizardCreation.jsx` — `useParams` campaignId + `callStep` helper + handlers async steps 1-3
+- [feat] `App.jsx` — route `/campaigns/:campaignId/creation` (campaignId obligatoire)
+- [fix] `creationStore.js` / `WizardCreation.jsx` — `fetch` relatif → `api` axios (évite le 404 sur port Vite)
+
 ## v137 — 2026-07-01 — Wizard : backend création personnage (steps 4 & 5)
 
 ### Serveur

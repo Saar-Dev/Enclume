@@ -1798,6 +1798,16 @@ Convention :
   }
 }
 
+/* ── Wizard — message d'erreur start ────────────────────────────── */
+.wiz-error {
+  color: #e05c5c;
+  font-size: 12px;
+  padding: 8px 16px;
+  background: rgba(224, 92, 92, 0.08);
+  border-left: 3px solid #e05c5c;
+  margin-bottom: 8px;
+}
+
 /* ── Wizard shell (steps 1-5, sans image de fond) ────────────────── */
 .wiz-shell {
   --wiz-bg-1: #061223;
@@ -1863,24 +1873,26 @@ Convention :
 
 .wiz-header-pc-block {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
 
 .wiz-header-pc-label {
   color: var(--wiz-metal-3);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .1em;
+  letter-spacing: .12em;
 }
 
 .wiz-header-pc-value {
+  font-family: 'Venus Rising', var(--font-display);
   color: #e0a85c;
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 44px;
+  font-weight: normal;
   line-height: 1;
-  text-shadow: 0 0 10px rgba(224,168,92,.4);
+  text-shadow: 0 0 18px rgba(224,168,92,.55), 0 0 40px rgba(224,168,92,.25);
 }
 
 .wiz-header-row2 {
@@ -1900,6 +1912,69 @@ Convention :
   font-weight: 600;
   background: rgba(255,255,255,.04);
   letter-spacing: .04em;
+}
+
+/* ── Points HUD ──────────────────────────────────────────────────── */
+.wiz1-points-hud {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-top: 1px solid rgba(224,168,92,.25);
+  background: rgba(224,168,92,.05);
+  transition: border-color .4s, background .4s, box-shadow .4s;
+}
+
+.wiz1-points-hud--ok {
+  border-top-color: rgba(47,215,255,.3);
+  background: rgba(47,215,255,.05);
+  box-shadow: 0 0 16px rgba(47,215,255,.1);
+  animation: wizHudOk .5s ease both;
+}
+
+.wiz1-points-hud-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.wiz1-points-hud-num {
+  font-family: 'Venus Rising', var(--font-display);
+  font-size: 30px;
+  font-weight: normal;
+  line-height: 1;
+  color: #e0a85c;
+  text-shadow: 0 0 12px rgba(224,168,92,.5);
+  transition: color .4s, text-shadow .4s;
+}
+.wiz1-points-hud--ok .wiz1-points-hud-num {
+  color: var(--wiz-blue-bright);
+  text-shadow: 0 0 16px rgba(47,215,255,.6);
+}
+
+.wiz1-points-hud-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--wiz-metal-3);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+@keyframes wizHudOk {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+/* Bouton SUIVANT qui pulse quand points = 0 */
+.wiz-btn-start--pulse {
+  animation: wizBtnPulse 2s ease-in-out infinite;
+}
+@keyframes wizBtnPulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(0,220,255,.35); }
+  50%       { box-shadow: 0 0 32px rgba(80,240,255,.65); }
 }
 
 /* ── Step 1 — container & layout ─────────────────────────────────── */
@@ -2091,6 +2166,38 @@ Convention :
   border: 1px solid rgba(74,158,92,.25);
 }
 
+/* ── Accordion règles ────────────────────────────────────────────── */
+.wiz1-accordion-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255,255,255,.03);
+  border: none;
+  border-top: 1px solid rgba(255,255,255,.07);
+  color: rgba(255,255,255,.65);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  cursor: pointer;
+  clip-path: none;
+  box-shadow: none;
+  transition: background .2s, color .2s;
+}
+.wiz1-accordion-trigger:hover { background: rgba(255,255,255,.06); color: rgba(255,255,255,.9); filter: none; }
+.wiz1-accordion-trigger--open { color: var(--wiz-blue-bright); }
+
+.wiz1-accordion-chevron { font-size: 8px; opacity: .6; }
+
+.wiz1-accordion-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .35s ease;
+}
+.wiz1-accordion-body--open { max-height: 420px; }
+
 /* ── Section règles ──────────────────────────────────────────────── */
 .wiz1-rules-content {
   padding: 14px;
@@ -2103,7 +2210,7 @@ Convention :
 .wiz1-rules-list {
   padding: 0 0 0 18px;
   margin: 0;
-  color: var(--wiz-metal-1);
+  color: rgba(255,255,255,.78);
   font-size: 11px;
   line-height: 1.9;
   align-self: flex-start;
@@ -2274,4 +2381,113 @@ Convention :
   pointer-events: none;
   box-shadow: 0 4px 16px rgba(0,0,0,.6), 0 0 12px rgba(47,215,255,.1);
   transform: translate(-50%, calc(-100% - 10px));
+}
+
+/* ── Step 2 — Genotype image cards ── */
+.wiz2-container {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px 20px;
+  max-width: 960px;
+  margin: 0 auto;
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+}
+.wiz2-carousel {
+  display: flex;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+.wiz2-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  flex: 1;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,.10);
+  background: var(--wiz-bg-2);
+  transition: border-color .25s, transform .2s, box-shadow .25s;
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+}
+.wiz2-card:hover {
+  border-color: rgba(47,215,255,.45);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 36px rgba(6,18,35,.6), 0 0 24px rgba(47,215,255,.12);
+}
+.wiz2-card-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+.wiz2-vignette {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(6,18,35,.88) 0%,
+    rgba(6,18,35,.30) 32%,
+    rgba(6,18,35,.30) 60%,
+    rgba(6,18,35,.94) 100%
+  );
+}
+.wiz2-card-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wiz2-card-name {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-shadow: 0 1px 8px rgba(0,0,0,.6);
+}
+.wiz2-card-cost {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 2px 10px;
+  border: 1px solid rgba(224,168,92,.60);
+  border-radius: 4px;
+  color: #e0a85c;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
+.wiz2-card-cost--free {
+  border-color: rgba(224,168,92,.60);
+  color: #e0a85c;
+}
+.wiz2-card-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 18px;
+}
+.wiz2-card-summary {
+  color: rgba(255,255,255,.82);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+  text-shadow: 0 1px 6px rgba(0,0,0,.5);
+}
+.wiz2-nav {
+  display: flex;
+  justify-content: flex-start;
+  padding: 12px 0 0;
+  border-top: 1px solid rgba(255,255,255,.07);
+  margin-top: 12px;
+  flex-shrink: 0;
 }

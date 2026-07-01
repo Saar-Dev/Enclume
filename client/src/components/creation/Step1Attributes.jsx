@@ -24,7 +24,6 @@ const ATTR_DESCRIPTIONS = {
 
 const ROW_TOOLTIPS = {
   base: "Niveau de base : score initial de l'Attribut avant modificateurs. Fixé à cette étape, il ne changera plus.",
-  modGen: 'Mod. Type Génétique : bonus ou malus appliqué par le type génétique du personnage (Étape 2).',
   na: "Niveau Actuel : somme du niveau de base et de tous les modificateurs. C'est la valeur réellement utilisée en jeu.",
   an: "Aptitude Naturelle : dérivée du Niveau Actuel, utilisée pour calculer le niveau de base des Compétences.",
 }
@@ -39,6 +38,7 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
     Object.fromEntries(ATTR_IDS.map(id => [id, id === 'FOR' && isFeminin ? 5 : 7]))
   )
   const [tooltip, setTooltip] = useState(null)
+  const [rulesOpen, setRulesOpen] = useState(false)
 
   const poolBase = POOL_AMBIANCE[ambiance] || 38
   const poolTotal = poolBase + (pcAlloues * 2)
@@ -97,7 +97,7 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
 
   const canBuyPc = pcAlloues < PC_MAX
   const canCancelPc = pcAlloues > 0
-  const canNext = pointsRestants === 0
+  const canNext = pointsRestants === 0 && charName.trim().length > 0
 
   const dotColor = (i) => {
     if (i >= pcAlloues) return { backgroundColor: 'rgba(255,255,255,.04)', borderColor: 'rgba(255,255,255,.1)' }
@@ -112,9 +112,12 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
     return { color: '#76E8FF' }
   }
 
+  const hudOk = pointsRestants === 0
+
   return (
     <div className="wiz1-container">
 
+      {/* ── Noms ── */}
       <div className="wiz1-names-row">
         <div className="wiz1-name-field">
           <input
@@ -136,6 +139,7 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
         </div>
       </div>
 
+      {/* ── Bloc Attributs + Règles (accordion) ── */}
       <div className="wiz1-block">
         <div className="wiz1-block-title">{t('step1.tableTitle')}</div>
         <table className="wiz1-table">
@@ -155,7 +159,6 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
             </tr>
           </thead>
           <tbody>
-
             <tr>
               <td
                 className="wiz1-td-label"
@@ -171,21 +174,6 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
                     <span className="wiz1-spin-value">{attributs[id]}</span>
                     <button className="wiz1-spin-btn" onClick={() => handleChange(id, +1)}>+</button>
                   </div>
-                </td>
-              ))}
-            </tr>
-
-            <tr>
-              <td
-                className="wiz1-td-label"
-                onMouseEnter={(e) => showTooltip(ROW_TOOLTIPS.modGen, e)}
-                onMouseLeave={() => setTooltip(null)}
-              >
-                {t('step1.rowModGen')}
-              </td>
-              {ATTR_IDS.map(id => (
-                <td key={id} className="wiz1-td">
-                  <span className="wiz1-readonly">0</span>
                 </td>
               ))}
             </tr>
@@ -221,16 +209,54 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
                 </td>
               ))}
             </tr>
-
           </tbody>
         </table>
 
-        <div className="wiz1-counter-row">
-          <span className={`wiz1-counter ${pointsRestants === 0 ? 'wiz1-counter-ok' : 'wiz1-counter-warn'}`}>
-            {pointsRestants > 0
-              ? t('step1.pointsRestants', { n: pointsRestants })
-              : t('step1.pointsOk')}
-          </span>
+        {/* Accordion règles */}
+        <button
+          className={`wiz1-accordion-trigger${rulesOpen ? ' wiz1-accordion-trigger--open' : ''}`}
+          onClick={() => setRulesOpen(o => !o)}
+        >
+          <span>{t('step1.rulesTitle')}</span>
+          <span className="wiz1-accordion-chevron">{rulesOpen ? '▲' : '▼'}</span>
+        </button>
+        <div className={`wiz1-accordion-body${rulesOpen ? ' wiz1-accordion-body--open' : ''}`}>
+          <div className="wiz1-rules-content">
+            <ul className="wiz1-rules-list">
+              <li>{t('step1.rule1')}</li>
+              <li>{t('step1.rule2')}</li>
+              <li>{t('step1.rule3')}</li>
+              <li>{t('step1.rule4')}</li>
+            </ul>
+            <table className="wiz1-cost-table">
+              <thead>
+                <tr>
+                  <th className="wiz1-cost-th wiz1-cost-td-label">{t('step1.costColNiveau')}</th>
+                  {[8,9,10,11,12,13,14,15,16,17,18,19,20].map(niv => (
+                    <th key={niv} className="wiz1-cost-th">{niv}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="wiz1-cost-td wiz1-cost-td-label">{t('step1.costColCout')}</td>
+                  {[8,9,10,11,12,13,14,15,16,17,18,19,20].map(niv => (
+                    <td key={niv} className="wiz1-cost-td" style={costColor(niv)}>{COST_LOOKUP[niv]}</td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* HUD points restants — en bas de la card Attributs */}
+        <div className={`wiz1-points-hud${hudOk ? ' wiz1-points-hud--ok' : ''}`}>
+          <div className="wiz1-points-hud-main">
+            <span className="wiz1-points-hud-num">{hudOk ? '✓' : pointsRestants}</span>
+            <span className="wiz1-points-hud-label">
+              {hudOk ? t('step1.pointsOk') : t('step1.pointsHudLabel')}
+            </span>
+          </div>
           {isFeminin && (
             <span className={`wiz1-counter ${bonusFemininUtilises <= 2 ? 'wiz1-counter-ok' : 'wiz1-counter-warn'}`}>
               {t('step1.bonusFeminin', { n: 2 - bonusFemininUtilises })}
@@ -239,36 +265,7 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
         </div>
       </div>
 
-      <div className="wiz1-block">
-        <div className="wiz1-block-title">{t('step1.rulesTitle')}</div>
-        <div className="wiz1-rules-content">
-          <ul className="wiz1-rules-list">
-            <li>{t('step1.rule1')}</li>
-            <li>{t('step1.rule2')}</li>
-            <li>{t('step1.rule3')}</li>
-            <li>{t('step1.rule4')}</li>
-          </ul>
-          <table className="wiz1-cost-table">
-            <thead>
-              <tr>
-                <th className="wiz1-cost-th wiz1-cost-td-label">{t('step1.costColNiveau')}</th>
-                {[8,9,10,11,12,13,14,15,16,17,18,19,20].map(niv => (
-                  <th key={niv} className="wiz1-cost-th">{niv}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="wiz1-cost-td wiz1-cost-td-label">{t('step1.costColCout')}</td>
-                {[8,9,10,11,12,13,14,15,16,17,18,19,20].map(niv => (
-                  <td key={niv} className="wiz1-cost-td" style={costColor(niv)}>{COST_LOOKUP[niv]}</td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
+      {/* ── Bloc PC ── */}
       <div className="wiz1-block">
         <div className="wiz1-block-title">{t('step1.pcTitle')}</div>
         <div className="wiz1-pc-content">
@@ -302,6 +299,7 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
         </div>
       </div>
 
+      {/* ── Bloc Chance ── */}
       <div className="wiz1-block">
         <div className="wiz1-block-title">{t('step1.chcTitle')}</div>
         <div className="wiz1-chc-row">
@@ -310,6 +308,7 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
         </div>
       </div>
 
+      {/* ── Navigation ── */}
       <div className="wiz1-nav">
         {onPrev && (
           <button className="btn btn-ghost" onClick={onPrev}>
@@ -317,9 +316,9 @@ export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, o
           </button>
         )}
         <button
-          className="wiz-btn-start"
+          className={`wiz-btn-start${hudOk ? ' wiz-btn-start--pulse' : ''}`}
           disabled={!canNext}
-          onClick={() => onNext({ pcSpent: pcAlloues })}
+          onClick={() => onNext({ charName: charName.trim(), playerName: playerName.trim(), attributes: attributs, pcSpent: pcAlloues })}
         >
           {t('step1.next')} →
         </button>

@@ -25,6 +25,8 @@ import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import {
   getStep4RefData, getStep4State, validateAndPersistStep4, rollbackStep4, getStep5RefData,
+  startCreation, validateAndPersistStep1, validateAndPersistStep2,
+  validateAndPersistStep3, finalizeCreation,
 } from '../services/creationService.js'
 import { addAdvantage } from '../services/advantageService.js'
 
@@ -54,6 +56,23 @@ router.param('sheetId', async (req, res, next, sheetId) => {
     req.character = character
     req.isGm = member.role === 'gm'
     next()
+  } catch (err) { next(err) }
+})
+
+// ─── Start ─────────────────────────────────────────────────────────────────────
+
+router.post('/start', async (req, res, next) => {
+  try {
+    const { campaignId } = req.body
+    if (!campaignId) return next(new AppError(400, 'campaignId requis'))
+
+    const member = await db('campaign_members')
+      .where({ campaign_id: campaignId, user_id: req.user.id })
+      .first()
+    if (!member) return next(new AppError(403, "Vous n'êtes pas membre de cette campagne"))
+
+    const result = await startCreation(campaignId, req.user.id)
+    res.json(result)
   } catch (err) { next(err) }
 })
 
@@ -87,6 +106,33 @@ router.delete('/:sheetId/step4', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ─── Step 1 ────────────────────────────────────────────────────────────────────
+
+router.post('/:sheetId/step1', async (req, res, next) => {
+  try {
+    const result = await validateAndPersistStep1(req.sheet.id, req.body)
+    res.json(result)
+  } catch (err) { next(err) }
+})
+
+// ─── Step 2 ────────────────────────────────────────────────────────────────────
+
+router.post('/:sheetId/step2', async (req, res, next) => {
+  try {
+    const result = await validateAndPersistStep2(req.sheet.id, req.body)
+    res.json(result)
+  } catch (err) { next(err) }
+})
+
+// ─── Step 3 ────────────────────────────────────────────────────────────────────
+
+router.post('/:sheetId/step3', async (req, res, next) => {
+  try {
+    const result = await validateAndPersistStep3(req.sheet.id, req.body)
+    res.json(result)
+  } catch (err) { next(err) }
+})
+
 // ─── Step 5 ────────────────────────────────────────────────────────────────────
 
 router.get('/:sheetId/step5/ref', async (req, res, next) => {
@@ -115,6 +161,15 @@ router.post('/:sheetId/step5', async (req, res, next) => {
     })
 
     res.json({ creation_state: 'draft_step5' })
+  } catch (err) { next(err) }
+})
+
+// ─── Finalize ──────────────────────────────────────────────────────────────────
+
+router.post('/:sheetId/finalize', async (req, res, next) => {
+  try {
+    const result = await finalizeCreation(req.sheet.id)
+    res.json(result)
   } catch (err) { next(err) }
 })
 

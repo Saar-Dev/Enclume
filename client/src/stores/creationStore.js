@@ -1,15 +1,22 @@
 import { create } from 'zustand'
+import api from '../lib/api'
 
 const PC_TOTAL = 20
 
 export const useCreationStore = create((set, get) => ({
   step: 0,
   step0Data: null, // { method: 'point_buy' | 'archetype' }
-  step1Data: null, // { pcSpent: number }
+  step1Data: null, // { charName, playerName, attributes, pcSpent }
   step2Data: null, // { genotypeId: string, isDeserter: boolean }
   step3Data: null, // { method: string, mutations: [], pcSpent: number }
   step4Data: null, // { age, originGeo, originSoc, training, higherEd, careers: [], pcSpent: number }
   step5Data: null, // { advantages: [] }
+
+  sheetId: null,
+  characterId: null,
+  campaignId: null,
+  isStarting: false,
+  startError: null,
 
   getPcDispo: () => {
     const s = get()
@@ -24,6 +31,21 @@ export const useCreationStore = create((set, get) => ({
   },
 
   setStep: (step) => set({ step }),
+  setCampaignId: (campaignId) => set({ campaignId }),
+
+  startCreation: async (campaignId) => {
+    set({ isStarting: true, startError: null })
+    try {
+      const res = await api.post('/creation/start', { campaignId })
+      const { sheetId, characterId } = res.data
+      set({ sheetId, characterId, isStarting: false })
+      return { sheetId, characterId }
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || err.response?.data?.message || `Erreur ${err.response?.status ?? 'réseau'}`
+      set({ startError: msg, isStarting: false })
+      throw err
+    }
+  },
 
   setStep0Data: (data) => set({ step0Data: data }),
 
@@ -57,11 +79,9 @@ export const useCreationStore = create((set, get) => ({
 
   resetCreation: () => set({
     step: 0,
-    step0Data: null,
-    step1Data: null,
-    step2Data: null,
-    step3Data: null,
-    step4Data: null,
-    step5Data: null,
+    step0Data: null, step1Data: null, step2Data: null,
+    step3Data: null, step4Data: null, step5Data: null,
+    sheetId: null, characterId: null, campaignId: null,
+    isStarting: false, startError: null,
   }),
 }))

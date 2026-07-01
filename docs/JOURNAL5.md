@@ -1799,3 +1799,113 @@ await trx('char_skills')
 
 ### Non testé
 Aucune route step4/step5 appelée depuis le client — backend only. ⚠️ clos partiel
+
+---
+
+## Session 129 suite — 2026-07-01 — COUCHE 4 : analyse + plan architecture
+
+### Contexte
+Reprise après auto-compact. Objectif : planifier COUCHE 4 (connexion frontend → backend wizard).
+
+### Problème identifié
+
+Le wizard frontend (COUCHE 2) est 100% en mémoire Zustand. Aucun `sheetId` n'existe.
+Les routes COUCHE 3 (`POST /api/creation/:sheetId/step4`, etc.) exigent un `sheetId` déjà en base.
+→ Impossible de câbler step4/step5 sans implémenter d'abord les steps 1-3 backend.
+
+Blocage supplémentaire : `characters.campaign_id NOT NULL` → le wizard doit connaître le `campaignId`.
+La route actuelle `/creation` ne reçoit aucun `campaignId`.
+
+### Pattern architectural retenu
+
+**"Draft-First"** (validé par Stripe PaymentIntent, Shopify DraftOrder, Łukasz Makuch DailyJS) :
+- `POST /api/creation/start` → crée immédiatement `character + char_sheet + char_pc_ledger + char_archetype + char_attributes×8`
+- Chaque "Next" appelle son endpoint → valide + persiste + avance `creation_state`
+- `POST /api/creation/:sheetId/finalize` → `complete` → personnage visible
+
+Ce pattern correspond exactement à la state machine déjà conçue côté backend.
+
+### Découpage COUCHE 4a (100% planifié) / 4b (à planifier)
+
+**COUCHE 4a** — steps 0-3 backend + câblage frontend steps 1-3 + store + route
+→ Résultat : wizard crée un vrai personnage en base, persisté jusqu'à `draft_step3`
+
+**COUCHE 4b** — skill allocation UI (CareersAllocator) + step4/step5 frontend + finalize
+→ Les `+/-` de CareersAllocator.jsx sont décoratifs — tâche séparée de taille comparable
+
+### Spec complète
+→ `docs/PLAN_COUCHE4.md` (créé cette session)
+
+### Points de vigilance
+- `characters.type` defaultTo('pnj') — toujours expliciter `type: 'pj'` dans le INSERT start
+- `char_archetype` doit exister dès `start` (step4 fait UPDATE sans INSERT préalable)
+- `char_pc_ledger` doit exister dès `start` (step4 lève AppError 500 si absent)
+- `career_id` dans step4 = UUID (`ref_careers.id`), pas code string — à gérer en COUCHE 4b
+- Ownership guard pour `/start` : vérifier membership via `campaign_members` (pas de sheetId param)
+
+### Statut
+Plan COUCHE 4a complet — en attente de code
+
+---
+
+## Session 129 suite 2 — 2026-07-01 — Wizard COUCHE 4a : câblage frontend → backend steps 0-3
+
+### Périmètre livré
+
+**Backend — `server/src/services/creationService.js`** (+5 fonctions, après ligne 369)
+- `startCreation(campaignId, userId)` — transaction : INSERT character (type='pj', visible=false) + char_sheet (draft_step0) + char_pc_ledger + char_archetype (blank) + char_attributes×8 (base_level=7)
+- `validateAndPersistStep1(sheetId, data)` — guard draft_step0 + UPDATE characters.name + UPSERT char_identity + UPDATE char_attributes + UPDATE pc_spent_step1 → draft_step1
+- `validateAndPersistStep2(sheetId, data)` — guard draft_step1 + validation ref_genotypes + calcul pcCost (isDeserter ? 4 : geno.pc_cost) + UPDATE char_archetype.genotype_id + pc_spent_step2 → draft_step2
+- `validateAndPersistStep3(sheetId, data)` — guard draft_step2 + DEL+INSERT char_mutations (source=chosen|random, source CHECK validé) + pc_spent_step3 → draft_step3
+- `finalizeCreation(sheetId)` — guard draft_step5 + UPDATE characters.visible=true + creation_state='complete'
+
+**Backend — `server/src/routes/creation.js`** (import étendu + 5 nouvelles routes)
+- `POST /start` — guard membership explicite (pas de `:sheetId` param) + appel `startCreation`
+- `POST /:sheetId/step1/2/3` — guard via `router.param('sheetId', ...)` + délégation service
+- `POST /:sheetId/finalize` — idem
+
+**Frontend — `client/src/stores/creationStore.js`** (réécriture)
+- Nouveaux champs : `sheetId`, `characterId`, `campaignId`, `isStarting`, `startError`
+- Nouveau setter : `setCampaignId(id)`
+- Nouvelle action async : `startCreation(campaignId)` — `api.post('/creation/start', ...)` (axios, credentials incluses)
+
+**Frontend — `client/src/components/creation/WizardCreation.jsx`** (réécriture)
+- `useParams()` → `campaignId` depuis la route
+- `useEffect` → `setCampaignId(campaignId)` au montage
+- Helper `callStep(endpoint, body)` → `api.post('/creation/${sheetId}/${endpoint}', body)`
+- Handlers step0 : async, `startCreation(campaignId)` + garde `isStarting`
+- Handlers step1/2/3 : async, `await callStep(...)` avant navigation
+- Affichage `startError` (classe `.wiz-error`)
+
+**Frontend — `client/src/components/creation/Step1Attributes.jsx`** (2 lignes)
+- `canNext` : ajout guard `charName.trim().length > 0`
+- `onNext` payload étendu : `{ charName, playerName, attributes, pcSpent }`
+
+**Frontend — `client/src/App.jsx`** (1 ligne)
+- Route `/creation` → `/campaigns/:campaignId/creation`
+
+**Frontend — `client/src/index.css`**
+- Classe `.wiz-error` ajoutée (Section 10)
+
+**Frontend — `client/src/pages/DashboardPage.jsx`**
+- Bouton "Créer un personnage" dans le footer de chaque card campagne → `navigate('/campaigns/:id/creation')`
+- Footer restructuré en colonne (invite code / boutons)
+
+**Frontend — `client/src/locales/fr.json`**
+- Clé `dashboard.createCharacter` ajoutée
+
+### Bug corrigé en cours de livraison
+
+**Fetch relatif vs axios** : `fetch('/api/creation/start')` partait vers Vite (port 5173) → 404. Remplacé par `api.post('/creation/start')` (axios avec `baseURL: VITE_API_URL/api`). Même correction dans `callStep`.
+
+### Testé
+- SR ✅ sans erreur d'import ni route
+- Import check node `creation.js` → `OK routes` ✅
+- Bouton "Créer un personnage" visible dans Dashboard ✅
+- Navigation `/campaigns/:campaignId/creation` → wizard step0 ✅
+- Bouton "Commencer" → `POST /api/creation/start` → SR fonctionnel ✅
+
+### Non testé
+- Steps 1-3 (POST /step1, /step2, /step3) depuis le client — UI step4/5 non câblée
+- `finalizeCreation` (COUCHE 4b)
+- Vérification DB directe des rows créées par `startCreation`

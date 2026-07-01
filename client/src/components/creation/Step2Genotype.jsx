@@ -4,6 +4,14 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
+const GENO_IMAGES = {
+  HUMAIN:  `${ASSETS_BASE}/s1_human.webp`,
+  HYB_NAT: `${ASSETS_BASE}/s1_hybrid.webp`,
+  GEN_HYB: `${ASSETS_BASE}/s1_geno.webp`,
+  TEC_HYB: `${ASSETS_BASE}/s1_techno.webp`,
+}
+
 const GENOTYPES = [
   {
     id: 'HUMAIN',
@@ -276,30 +284,36 @@ export default function Step2Genotype({ onNext, onPrev }) {
   }
 
   return (
-    <div style={s.container}>
+    <div className="wiz2-container">
 
-      <div style={s.carousel}>
+      <div className="wiz2-carousel">
         {GENOTYPES.map(geno => {
           const key = getGenoKey(geno.id)
           return (
             <div
               key={geno.id}
-              style={s.card}
+              className="wiz2-card"
               onClick={() => handleSelect(geno)}
             >
-              <div style={s.cardHeader}>
-                <span style={s.cardName}>{t(`step2.${key}.name`)}</span>
-                <span style={s.cardCost}>{geno.cost > 0 ? `${geno.cost} PC` : t('step2.free')}</span>
+              <img className="wiz2-card-img" src={GENO_IMAGES[geno.id]} alt="" />
+              <div className="wiz2-vignette" />
+              <div className="wiz2-card-top">
+                <span className="wiz2-card-name">{t(`step2.${key}.name`)}</span>
+                <span className={`wiz2-card-cost${geno.cost === 0 ? ' wiz2-card-cost--free' : ''}`}>
+                  {geno.cost > 0 ? `${geno.cost} PC` : t('step2.free')}
+                </span>
               </div>
-              <p style={s.cardSummary}>{t(`step2.${key}.summary`)}</p>
+              <div className="wiz2-card-bottom">
+                <p className="wiz2-card-summary">{t(`step2.${key}.summary`)}</p>
+              </div>
             </div>
           )
         })}
       </div>
 
-      <div style={s.nav}>
+      <div className="wiz2-nav">
         {onPrev && (
-          <button style={s.prevBtn} onClick={onPrev}>
+          <button className="btn btn-ghost" onClick={onPrev}>
             ← {t('step2.prev')}
           </button>
         )}
@@ -309,78 +323,6 @@ export default function Step2Genotype({ onNext, onPrev }) {
 }
 
 const s = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    padding: '16px 20px 20px',
-    maxWidth: '960px',
-    margin: '0 auto',
-    flex: 1,
-    width: '100%',
-    overflow: 'hidden',
-  },
-  carousel: {
-    display: 'flex',
-    gap: '12px',
-    flex: 1,
-    minHeight: 0,
-  },
-  card: {
-    flex: 1,
-    border: '1px solid #2a2a3e',
-    borderRadius: '8px',
-    padding: '20px',
-    backgroundColor: 'rgba(6,6,14,0.85)',
-    cursor: 'pointer',
-    transition: 'border-color 0.2s',
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '12px',
-  },
-  cardName: {
-    color: '#c0c0d0',
-    fontSize: '15px',
-    fontWeight: '700',
-  },
-  cardCost: {
-    color: '#5b8dee',
-    fontSize: '11px',
-    fontWeight: '600',
-    padding: '2px 8px',
-    border: '1px solid #5b8dee',
-    borderRadius: '3px',
-  },
-  cardSummary: {
-    color: '#6a6a8a',
-    fontSize: '12px',
-    lineHeight: '1.7',
-    margin: 0,
-    flex: 1,
-  },
-  nav: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 0 0',
-    borderTop: '1px solid #1e1e2e',
-    marginTop: '12px',
-    flexShrink: 0,
-  },
-  prevBtn: {
-    padding: '8px 16px',
-    border: '1px solid #2a2a3e',
-    borderRadius: '4px',
-    backgroundColor: '#0e0e1a',
-    color: '#6a6a8a',
-    fontSize: '12px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
   detailFull: {
     flex: 1,
     overflowY: 'auto',

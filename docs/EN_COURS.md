@@ -179,7 +179,23 @@
    → `index.js` : mount `/api/creation`
    → Fix rollback : purge skills hors snapshot (`whereNotIn`)
    → **Non testé** : aucune route appelée depuis le client
-   → **PROCHAINE ÉTAPE WIZARD** : validation fonctionnelle backend (Postman) OU connexion COUCHE 4 frontend
+
+**37. ~~Wizard COUCHE 4a — câblage frontend → backend steps 0-3 ⚠️ clos partiel Session 129 suite 2~~**
+   → `creationService.js` : +5 fonctions (`startCreation`, `validateAndPersistStep1/2/3`, `finalizeCreation`)
+   → `creation.js` : +5 routes (`POST /start`, `/:sheetId/step1/2/3`, `/:sheetId/finalize`)
+   → `creationStore.js` : réécriture — +`sheetId`, `campaignId`, `isStarting`, `startError`, `startCreation()` (axios)
+   → `WizardCreation.jsx` : réécriture — `useParams` + `callStep` helper + handlers async
+   → `Step1Attributes.jsx` : canNext + payload étendu — `App.jsx` : route path
+   → `DashboardPage.jsx` : bouton "Créer un personnage" par card campagne
+   → Fix : `fetch` relatif → `api` axios (fetch partait vers Vite port 5173 → 404)
+   → **Testé** : SR ✅, start ✅ (bouton "Commencer" fonctionnel)
+   → **Non testé** : steps 1-3 depuis client, finalizeCreation
+
+**38. Wizard COUCHE 4b** ← WIZARD PROCHAINE ÉTAPE
+   → `CareersAllocator.jsx` : boutons +/- → handlers réels + `skillAllocations`
+   → Step4/Step5 frontend → backend (callStep 'step4', 'step5')
+   → `finalizeCreation` déclenchée depuis Step5
+   → Spec : `docs/PLAN_COUCHE4.md` § COUCHE 4b
 
 **34. ~~Cluster N — UI combat~~** (en cours)
    → COM23 ✅ Session 127 : `TokenLabel` sprite CanvasTexture — label occludé par murs
