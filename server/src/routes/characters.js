@@ -64,17 +64,18 @@ router.get('/', requireAuth, async (req, res) => {
     .select(columns)
     .orderBy('characters.created_at', 'asc')
 
-  // Les joueurs ne voient pas les personnages masqués ni les brouillons du wizard
+  // Brouillons wizard (creation_state = 'draft_step0') cachés pour tout le monde
+  query.whereNotExists(function () {
+    this.select(db.raw('1'))
+      .from('char_sheet')
+      .whereRaw('char_sheet.character_id = characters.id')
+      .whereNotNull('creation_state')
+      .whereNot('creation_state', 'complete')
+  })
+
+  // Les joueurs ne voient pas non plus les personnages masqués
   if (!isGm) {
-    query
-      .where('characters.visible', true)
-      .whereNotExists(function () {
-        this.select(db.raw('1'))
-          .from('char_sheet')
-          .whereRaw('char_sheet.character_id = characters.id')
-          .whereNotNull('creation_state')
-          .whereNot('creation_state', 'complete')
-      })
+    query.where('characters.visible', true)
   }
 
   const characters = await query
