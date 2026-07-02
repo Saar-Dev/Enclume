@@ -1,3 +1,10 @@
+## v141 — 2026-07-02 — Wizard UX : navigation libre stepper + sous-étapes step4
+
+### Client
+- [feat] `WizardHeader.jsx` — état `reachable` (amber/or) : dots déjà visités mais après le curseur, cliquables — navigation directe dans les deux sens
+- [feat] `Step4Experience.jsx` — barre sous-étapes cliquable : saut direct vers toute sous-étape déjà visitée, sans spammer Précédent
+- [fix] `WizardCreation.jsx` — prop `highestStep` manquante transmise à WizardHeader
+
 ## v140 — 2026-07-02 — Wizard COUCHE 5 : architecture client-primary (navigation libre)
 
 ### Client

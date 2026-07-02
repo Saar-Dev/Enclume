@@ -91,6 +91,7 @@ export default function WizardCreation() {
       <WizardHeader
         step={step}
         totalSteps={6}
+        highestStep={highestStep}
         pcDispo={pcDispo}
         infos={getInfos(step, mockAmbiance, t)}
         onStepClick={navigateToStep}

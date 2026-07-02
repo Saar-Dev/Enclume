@@ -1934,8 +1934,9 @@ Convention :
   flex-shrink: 0;
   margin-top: 11px;
 }
-.wiz-stepper-line--done   { background: rgba(91,141,238,0.4); }
-.wiz-stepper-line--future { background: rgba(255,255,255,0.08); }
+.wiz-stepper-line--done     { background: rgba(91,141,238,0.4); }
+.wiz-stepper-line--reachable { background: rgba(224,168,92,0.25); }
+.wiz-stepper-line--future   { background: rgba(255,255,255,0.08); }
 
 .wiz-stepper-dot {
   width: 24px;
@@ -1960,6 +1961,11 @@ Convention :
   color: #fff;
   box-shadow: 0 0 8px rgba(91,141,238,0.5);
 }
+.wiz-stepper-dot--reachable {
+  background: rgba(224,168,92,0.10);
+  border: 1px solid rgba(224,168,92,0.45);
+  color: #b08040;
+}
 .wiz-stepper-dot--future {
   background: transparent;
   border: 1px solid rgba(255,255,255,0.12);
@@ -1973,9 +1979,10 @@ Convention :
   text-transform: uppercase;
   white-space: nowrap;
 }
-.wiz-stepper-item--done   .wiz-stepper-label { color: #5a6a9a; }
-.wiz-stepper-item--active .wiz-stepper-label { color: #9090c8; }
-.wiz-stepper-item--future .wiz-stepper-label { color: rgba(255,255,255,0.15); }
+.wiz-stepper-item--done     .wiz-stepper-label { color: #5a6a9a; }
+.wiz-stepper-item--active   .wiz-stepper-label { color: #9090c8; }
+.wiz-stepper-item--reachable .wiz-stepper-label { color: #7a6840; }
+.wiz-stepper-item--future   .wiz-stepper-label { color: rgba(255,255,255,0.15); }
 
 /* ── Points HUD ──────────────────────────────────────────────────── */
 .wiz1-points-hud {

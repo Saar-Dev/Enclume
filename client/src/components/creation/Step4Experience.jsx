@@ -20,10 +20,13 @@ const SUB_STEPS = {
   SUMMARY: 'summary',
 }
 
+const SUB_STEP_ORDER = Object.values(SUB_STEPS)
+
 export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }) {
   const { t } = useTranslation('creation')
   const { sheetId } = useCreationStore()
   const [subStep, setSubStep] = useState(initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
+  const [highestSubStep, setHighestSubStep] = useState(() => initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [age, setAge] = useState(initialData?.age ?? 16)
   const [originGeo, setOriginGeo] = useState(initialData?.originGeo ?? null)
   const [originSoc, setOriginSoc] = useState(initialData?.originSoc ?? null)
@@ -162,31 +165,34 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   }
 
   // ─── Navigation ────────────────────────────────────────────────
-  const handleSubNext = () => {
-    const order = Object.values(SUB_STEPS)
-    const idx = order.indexOf(subStep)
+  const advanceSubStep = (next) => {
+    setSubStep(next)
+    setHighestSubStep(prev => {
+      const nextIdx = SUB_STEP_ORDER.indexOf(next)
+      const prevIdx = SUB_STEP_ORDER.indexOf(prev)
+      return nextIdx > prevIdx ? next : prev
+    })
+  }
 
+  const handleSubNext = () => {
+    const idx = SUB_STEP_ORDER.indexOf(subStep)
     if (subStep === SUB_STEPS.TRAINING && !showHigherEd) {
-      setSubStep(SUB_STEPS.CAREERS)
+      advanceSubStep(SUB_STEPS.CAREERS)
       return
     }
-
-    if (idx < order.length - 1) {
-      setSubStep(order[idx + 1])
+    if (idx < SUB_STEP_ORDER.length - 1) {
+      advanceSubStep(SUB_STEP_ORDER[idx + 1])
     }
   }
 
   const handleSubPrev = () => {
-    const order = Object.values(SUB_STEPS)
-    const idx = order.indexOf(subStep)
-
+    const idx = SUB_STEP_ORDER.indexOf(subStep)
     if (subStep === SUB_STEPS.CAREERS && !showHigherEd) {
       setSubStep(SUB_STEPS.TRAINING)
       return
     }
-
     if (idx > 0) {
-      setSubStep(order[idx - 1])
+      setSubStep(SUB_STEP_ORDER[idx - 1])
     } else {
       onPrev()
     }
@@ -196,17 +202,24 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   return (
     <div style={s.container}>
       <div style={s.subSteps}>
-        {Object.values(SUB_STEPS).map(step => (
-          <span
-            key={step}
-            style={{
-              ...s.subStep,
-              ...(subStep === step ? s.subStepActive : {}),
-            }}
-          >
-            {t(`step4.sub_${step}`)}
-          </span>
-        ))}
+        {SUB_STEP_ORDER.map(ss => {
+          const isActive = subStep === ss
+          const isReachable = SUB_STEP_ORDER.indexOf(ss) <= SUB_STEP_ORDER.indexOf(highestSubStep)
+          const isClickable = isReachable && !isActive && (ss !== SUB_STEPS.HIGHER_ED || showHigherEd)
+          return (
+            <span
+              key={ss}
+              style={{
+                ...s.subStep,
+                ...(isActive ? s.subStepActive : isReachable ? s.subStepDone : {}),
+                cursor: isClickable ? 'pointer' : 'default',
+              }}
+              onClick={isClickable ? () => setSubStep(ss) : undefined}
+            >
+              {t(`step4.sub_${ss}`)}
+            </span>
+          )
+        })}
       </div>
 
       {subStep === SUB_STEPS.AGE && (
@@ -368,6 +381,11 @@ const s = {
     color: '#c8c8f0',
     backgroundColor: '#1a1a2e',
     borderColor: '#3a3a5e',
+  },
+  subStepDone: {
+    color: '#7a8ab8',
+    backgroundColor: 'rgba(91,141,238,0.06)',
+    borderColor: 'rgba(91,141,238,0.22)',
   },
   placeholder: {
     flex: 1,

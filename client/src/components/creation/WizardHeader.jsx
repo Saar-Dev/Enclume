@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
-export default function WizardHeader({ step, totalSteps, pcDispo, infos, onStepClick }) {
+export default function WizardHeader({ step, totalSteps, highestStep = 0, pcDispo, infos, onStepClick }) {
   const { t } = useTranslation('creation')
 
   return (
@@ -9,14 +9,14 @@ export default function WizardHeader({ step, totalSteps, pcDispo, infos, onStepC
 
         <div className="wiz-stepper">
           {Array.from({ length: totalSteps }, (_, i) => i + 1).flatMap((n) => {
-            const state = n < step ? 'done' : n === step ? 'active' : 'future'
-            const clickable = state === 'done'
+            const state = n < step ? 'done' : n === step ? 'active' : n <= highestStep ? 'reachable' : 'future'
+            const clickable = state === 'done' || state === 'reachable'
             const nodes = []
             if (n > 1) {
               nodes.push(
                 <div
                   key={`line-${n}`}
-                  className={`wiz-stepper-line wiz-stepper-line--${n <= step ? 'done' : 'future'}`}
+                  className={`wiz-stepper-line wiz-stepper-line--${n <= step ? 'done' : n <= highestStep ? 'reachable' : 'future'}`}
                 />
               )
             }
