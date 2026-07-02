@@ -28,14 +28,16 @@ const ROW_TOOLTIPS = {
   an: "Aptitude Naturelle : dérivée du Niveau Actuel, utilisée pour calculer le niveau de base des Compétences.",
 }
 
-export default function Step1Attributes({ ambiance, isFeminin, onNext, onPrev, onPcChange }) {
+export default function Step1Attributes({ initialData, ambiance, isFeminin, onNext, onPrev, onPcChange }) {
   const { t } = useTranslation('creation')
 
-  const [charName, setCharName] = useState('')
-  const [playerName, setPlayerName] = useState('')
-  const [pcAlloues, setPcAlloues] = useState(0)
+  const [charName, setCharName] = useState(initialData?.charName ?? '')
+  const [playerName, setPlayerName] = useState(initialData?.playerName ?? '')
+  const [pcAlloues, setPcAlloues] = useState(initialData?.pcSpent ?? 0)
   const [attributs, setAttributs] = useState(() =>
-    Object.fromEntries(ATTR_IDS.map(id => [id, id === 'FOR' && isFeminin ? 5 : 7]))
+    initialData?.attributes
+      ? { ...initialData.attributes }
+      : Object.fromEntries(ATTR_IDS.map(id => [id, id === 'FOR' && isFeminin ? 5 : 7]))
   )
   const [tooltip, setTooltip] = useState(null)
   const [rulesOpen, setRulesOpen] = useState(false)

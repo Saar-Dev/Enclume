@@ -24,18 +24,30 @@ const MUTATION_META = {
   20: { cost_pc: 2, is_unique: true, is_stackable: false, has_subtable: true, has_skill: false },
 }
 
-export default function Step3Mutations({ pcDispo = 20, onNext, onPrev }) {
+export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPrev }) {
   const { t } = useTranslation('creation')
 
-  const [method, setMethod] = useState(null)
-  const [selected, setSelected] = useState([])
+  // 'none' est soumis via handleNone (sans méthode explicite) — on restaure en 'chosen'
+  // pour que l'écran achat soit visible avec la carte "Aucune mutation"
+  const [method, setMethod] = useState(
+    initialData?.method === 'none' ? 'chosen' : (initialData?.method ?? null)
+  )
+  const [selected, setSelected] = useState(
+    initialData?.method === 'chosen' ? (initialData.mutations ?? []) : []
+  )
 
   // Aléatoire
-  const [d20Result, setD20Result] = useState(null)
+  const [d20Result, setD20Result] = useState(initialData?.d20Result ?? null)
   const [rollResults, setRollResults] = useState([])
-  const [kept, setKept] = useState([])
-  const [removed, setRemoved] = useState([])
-  const [pcAfterRemovals, setPcAfterRemovals] = useState(pcDispo)
+  const [kept, setKept] = useState(
+    initialData?.method === 'random' ? (initialData.kept ?? []) : []
+  )
+  const [removed, setRemoved] = useState(
+    initialData?.method === 'random' ? (initialData.removed ?? []) : []
+  )
+  const [pcAfterRemovals, setPcAfterRemovals] = useState(
+    initialData?.method === 'random' ? pcDispo - (initialData.pcSpent ?? 0) : pcDispo
+  )
 
   // Sous-type
   const [pendingSubtype, setPendingSubtype] = useState(null)
@@ -146,7 +158,7 @@ export default function Step3Mutations({ pcDispo = 20, onNext, onPrev }) {
   }
 
   const handleSubmitRandom = () => {
-    onNext?.({ method: 'random', kept, removed, pcSpent: pcDispo - pcAfterRemovals })
+    onNext?.({ method: 'random', kept, removed, d20Result, pcSpent: pcDispo - pcAfterRemovals })
   }
 
   // ─── Handler AUCUNE MUTATION ────────────────────────────────────────────

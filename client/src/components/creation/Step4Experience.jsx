@@ -20,19 +20,19 @@ const SUB_STEPS = {
   SUMMARY: 'summary',
 }
 
-export default function Step4Experience({ pcDispo, onNext, onPrev }) {
+export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }) {
   const { t } = useTranslation('creation')
   const { sheetId } = useCreationStore()
-  const [subStep, setSubStep] = useState(SUB_STEPS.AGE)
-  const [age, setAge] = useState(16)
-  const [originGeo, setOriginGeo] = useState(null)
-  const [originSoc, setOriginSoc] = useState(null)
-  const [training, setTraining] = useState(null)
-  const [higherEd, setHigherEd] = useState(null)
-  const [geoName, setGeoName] = useState('')
-  const [geoNation, setGeoNation] = useState('')
-  const [socNation, setSocNation] = useState('')
-  const [careers, setCareers] = useState([])
+  const [subStep, setSubStep] = useState(initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
+  const [age, setAge] = useState(initialData?.age ?? 16)
+  const [originGeo, setOriginGeo] = useState(initialData?.originGeo ?? null)
+  const [originSoc, setOriginSoc] = useState(initialData?.originSoc ?? null)
+  const [training, setTraining] = useState(initialData?.training ?? null)
+  const [higherEd, setHigherEd] = useState(initialData?.higherEd ?? null)
+  const [geoName, setGeoName] = useState(initialData?.geoName ?? '')
+  const [geoNation, setGeoNation] = useState(initialData?.geoNation ?? '')
+  const [socNation, setSocNation] = useState(initialData?.socNation ?? '')
+  const [careers, setCareers] = useState(initialData?.careers ?? [])
   const [refData, setRefData] = useState({ loading: true, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [] })
 
   useEffect(() => {
@@ -137,11 +137,14 @@ export default function Step4Experience({ pcDispo, onNext, onPrev }) {
   const buildPayload = () => {
     const careerEntries = careers.map(c => ({
       career_id: c.career_id,
+      career_name: c.career_name,
+      titles: c.titles,
       years: c.years,
       skillAllocations: c.skillAllocations || {},
     }))
     return {
-      age: finalAge,
+      age,         // valeur slider (baseAge) — pour hydratation et serveur
+      finalAge,    // âge calculé — pour WizardReview et affichage récap
       originGeo,
       originSoc,
       training,

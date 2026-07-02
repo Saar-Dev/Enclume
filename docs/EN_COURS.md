@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-01 Session 129
+> Dernière mise à jour : 2026-07-02 Session 130
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -206,7 +206,18 @@
    → **Testé** : SR ✅, grille carrières ✅, âge final ✅ (19+2+6=27), step4→5→6→finalize ✅, step indicator ✅, encodage ✅
    → **Non testé** : steps 1-3 depuis client, multi-carrières avec skills partagées
 
-**39. Wizard COUCHE 4c** ← WIZARD PROCHAINE ÉTAPE
+**39. ~~Wizard COUCHE 5 — architecture client-primary ✅ Session 130~~**
+   → Migration 102 : DROP `char_creation_snapshot` (FSM snapshot supprimé)
+   → `creationService.js` : réécriture ~280L — `finalizeCreation` transaction unique (step1→step5)
+   → `creation.js` : routes nettoyées — seul `POST /finalize` avec payload complet
+   → `creationStore.js` : `highestStep` + merge semantics `setStep1Data` + `pcNet` dans `getPcDispo`
+   → `WizardCreation.jsx` : `navigateToStep` (highestStep guard) + `handleFinalize` — plus d'appels FSM
+   → `WizardReview.jsx` : nouveau composant pur store (remplace CharacterSheet en étape 6)
+   → Step1/2/3/4/5 : hydratation `initialData` — retour arrière conserve les données
+   → **Testé** : SR ✅, migration 102 ✅
+   → **Non testé** : flux complet navigation retour → modifier → finaliser
+
+**40. Wizard COUCHE 4c** ← WIZARD PROCHAINE ÉTAPE
    → [WIZ-1] Filtrer personnages incomplets (creation_state ≠ 'complete') dans la liste Dashboard
    → [WIZ-2] Synchroniser les deux compteurs PC (store header vs local CareersAllocator)
    → [WIZ-3] Formation "apprentissage_technique" → choix de spécialité
@@ -224,7 +235,7 @@
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **104 migrations appliquées** (104 = 101_fix_background_names_encoding — Session 129 suite 5)
+- **105 migrations appliquées** (105 = 102_wizard_client_primary — Session 130)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---

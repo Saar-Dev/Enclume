@@ -1,22 +1,16 @@
 /**
- * creation.js — Routes wizard création de personnage (COUCHE 3).
+ * creation.js — Routes wizard création de personnage.
  *
- * Monté sous /api/creation dans index.js.
- *
- * Ownership : router.use(requireAuth) + router.param('sheetId', ...) résolvent
- * char_sheet → characters → campaign_members avant chaque handler (owner OU GM).
- * req.sheet et req.character disponibles dans toutes les routes /:sheetId.
- *
- * Scope : Step 4 (background/carrière) + Step 5 (avantages/désavantages).
- * Step 1-3 backend (ledger init, creation_state initial) : hors scope (PLAN_E1+2/E3, futur).
+ * Architecture client-primary (Session 130) :
+ * Toutes les données restent dans Zustand jusqu'au bouton "Finaliser".
+ * Un seul POST /:sheetId/finalize envoie le payload complet des 5 étapes.
  *
  * Routes :
- *   GET    /api/creation/:sheetId/step4/ref   — données de référence step4 (backgrounds + carrières)
- *   GET    /api/creation/:sheetId/step4       — état courant step4 (archetype + carrières)
- *   POST   /api/creation/:sheetId/step4       — valide et persiste step4
- *   DELETE /api/creation/:sheetId/step4       — annule step4 (replay snapshot, retour draft_step3)
- *   GET    /api/creation/:sheetId/step5/ref   — liste ref_advantages
- *   POST   /api/creation/:sheetId/step5       — ajoute un lot d'avantages/désavantages (transaction unique)
+ *   POST   /api/creation/start                  — démarre un brouillon (character + char_sheet)
+ *   GET    /api/creation/:sheetId/step4/ref     — données de référence step4 (backgrounds + carrières)
+ *   GET    /api/creation/:sheetId/step4         — état courant step4 (archetype + carrières)
+ *   GET    /api/creation/:sheetId/step5/ref     — liste ref_advantages
+ *   POST   /api/creation/:sheetId/finalize      — finalise le personnage (payload complet)
  */
 
 import { Router } from 'express'
@@ -24,11 +18,9 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import {
-  getStep4RefData, getStep4State, validateAndPersistStep4, rollbackStep4, getStep5RefData,
-  startCreation, validateAndPersistStep1, validateAndPersistStep2,
-  validateAndPersistStep3, finalizeCreation,
+  getStep4RefData, getStep4State, getStep5RefData,
+  startCreation, finalizeCreation,
 } from '../services/creationService.js'
-import { addAdvantage } from '../services/advantageService.js'
 
 const router = Router()
 
@@ -92,47 +84,6 @@ router.get('/:sheetId/step4', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-router.post('/:sheetId/step4', async (req, res, next) => {
-  try {
-    const result = await validateAndPersistStep4(req.sheet.id, req.body)
-    res.json(result)
-  } catch (err) { next(err) }
-})
-
-router.delete('/:sheetId/step4', async (req, res, next) => {
-  try {
-    const result = await rollbackStep4(req.sheet.id)
-    res.json(result)
-  } catch (err) { next(err) }
-})
-
-// ─── Step 1 ────────────────────────────────────────────────────────────────────
-
-router.post('/:sheetId/step1', async (req, res, next) => {
-  try {
-    const result = await validateAndPersistStep1(req.sheet.id, req.body)
-    res.json(result)
-  } catch (err) { next(err) }
-})
-
-// ─── Step 2 ────────────────────────────────────────────────────────────────────
-
-router.post('/:sheetId/step2', async (req, res, next) => {
-  try {
-    const result = await validateAndPersistStep2(req.sheet.id, req.body)
-    res.json(result)
-  } catch (err) { next(err) }
-})
-
-// ─── Step 3 ────────────────────────────────────────────────────────────────────
-
-router.post('/:sheetId/step3', async (req, res, next) => {
-  try {
-    const result = await validateAndPersistStep3(req.sheet.id, req.body)
-    res.json(result)
-  } catch (err) { next(err) }
-})
-
 // ─── Step 5 ────────────────────────────────────────────────────────────────────
 
 router.get('/:sheetId/step5/ref', async (req, res, next) => {
@@ -142,33 +93,15 @@ router.get('/:sheetId/step5/ref', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-router.post('/:sheetId/step5', async (req, res, next) => {
-  try {
-    if (req.sheet.creation_state !== 'draft_step4') {
-      throw new AppError(400, `État de création invalide pour step5 : ${req.sheet.creation_state}`)
-    }
-
-    const { advantages } = req.body
-    if (!Array.isArray(advantages)) {
-      throw new AppError(400, 'Payload invalide : advantages doit être un tableau')
-    }
-
-    await db.transaction(async (trx) => {
-      for (const advantageId of advantages) {
-        await addAdvantage(req.sheet.id, advantageId, 'creation_step5', trx)
-      }
-      await trx('char_sheet').where({ id: req.sheet.id }).update({ creation_state: 'draft_step5' })
-    })
-
-    res.json({ creation_state: 'draft_step5' })
-  } catch (err) { next(err) }
-})
-
 // ─── Finalize ──────────────────────────────────────────────────────────────────
 
 router.post('/:sheetId/finalize', async (req, res, next) => {
   try {
-    const result = await finalizeCreation(req.sheet.id)
+    const { step1, step2, step3, step4, step5 } = req.body
+    if (!step1 || !step2 || !step3 || !step4 || !step5) {
+      return next(new AppError(400, 'Payload finalize incomplet'))
+    }
+    const result = await finalizeCreation(req.sheet.id, { step1, step2, step3, step4, step5 })
     res.json(result)
   } catch (err) { next(err) }
 })

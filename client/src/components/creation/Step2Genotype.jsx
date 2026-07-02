@@ -112,10 +112,12 @@ const getGenoKey = (id) => {
 
 const MOCK_BASE_ATTRS = { FOR: 12, CON: 13, COO: 14, ADA: 15, PER: 12, INT: 10, VOL: 14, PRE: 9 }
 
-export default function Step2Genotype({ onNext, onPrev }) {
+export default function Step2Genotype({ initialData, onNext, onPrev }) {
   const { t } = useTranslation('creation')
-  const [selected, setSelected] = useState(null)
-  const [isDeserter, setIsDeserter] = useState(false)
+  const [selected, setSelected] = useState(() =>
+    initialData?.genotypeId ? (GENOTYPES.find(g => g.id === initialData.genotypeId) ?? null) : null
+  )
+  const [isDeserter, setIsDeserter] = useState(initialData?.isDeserter ?? false)
   const [expandedTrait, setExpandedTrait] = useState(null)
   const [expandedCondition, setExpandedCondition] = useState(false)
 

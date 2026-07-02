@@ -1,3 +1,17 @@
+## v140 — 2026-07-02 — Wizard COUCHE 5 : architecture client-primary (navigation libre)
+
+### Client
+- [feat] `WizardCreation.jsx` — architecture client-primary : toutes les données Zustand jusqu'au Finaliser — plus d'appels serveur pendant la navigation
+- [feat] `WizardReview.jsx` — nouveau composant récapitulatif pur store (step 6) — remplace CharacterSheet pré-finalize
+- [feat] `creationStore.js` — `highestStep` (dots cliquables sans effacer les données), `pcNet` (PC désavantages disponibles dès step 1 en retour), merge semantics `setStep1Data`
+- [feat] Step1/2/3/4/5 — hydratation `initialData` : retour en arrière pré-remplit les champs
+- [fix] Backward navigation : plus de cascade null — données conservées sur tout retour arrière
+
+### Serveur
+- [refactor] `creationService.js` — `finalizeCreation` transaction unique (step1→5) — suppression validateAndPersistStep1/2/3/4 + rollbackStep4 + snapshot
+- [refactor] `routes/creation.js` — POST /step1/2/3, POST/DELETE /step4, POST /step5 supprimées — `POST /finalize` accepte payload complet
+- [fix] Migration 102 — DROP `char_creation_snapshot` (FSM snapshot obsolète)
+
 ## v139 — 2026-07-01 — Wizard COUCHE 4b : stepper 6 étapes + aperçu fiche + bugfixes
 
 ### Client

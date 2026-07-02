@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../../lib/api'
 
-export default function Step5Advantages({ sheetId, pcDispo, onNext, onPrev }) {
+export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext, onPrev }) {
   const { t } = useTranslation('creation')
   const [refData, setRefData] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState([])
+  const [selected, setSelected] = useState(initialData?.advantages ?? [])
 
   useEffect(() => {
     if (!sheetId) return
@@ -41,7 +41,12 @@ export default function Step5Advantages({ sheetId, pcDispo, onNext, onPrev }) {
   }
 
   const handleNext = () => {
-    onNext?.({ advantages: selected })
+    const pcNet = pcGained - pcSpent
+    const advantagesMeta = selected.map(id => {
+      const adv = refData.find(a => a.advantage_id === id)
+      return { advantage_id: id, name: adv?.name ?? id, type: adv?.type ?? 'unknown', cost_pc: adv?.cost_pc ?? 0 }
+    })
+    onNext?.({ advantages: selected, pcNet, advantagesMeta })
   }
 
   if (loading) {

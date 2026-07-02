@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 129 — 2026-07-01
+> Session 130 — 2026-07-02
 
 ---
 
@@ -107,23 +107,22 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 129 suite 5 (2026-07-01)
+## ÉTAT COURANT — Session 130 (2026-07-02)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **104 migrations stables** (104 = 101_fix_background_names_encoding — Session 129 suite 5)
+- **105 migrations stables** (105 = 102_wizard_client_primary — Session 130)
 
-**Session 129 — Wizard COUCHE 4b ✅ clos (suites 3–5) :**
-- `100_seed_ref_careers.js` : 5 carrières (artisan_artiste, assassin, barman, chasseur_primes, contrebandier)
-- `101_fix_background_names_encoding.js` : 8 noms corrompus (mojibake) corrigés dans ref_backgrounds
-- `WizardHeader.jsx` : stepper 6 étapes cliquables (dots + lignes + labels) — remplace "ETAPE X/5"
-- `WizardCreation.jsx` : étape 6 (aperçu CharacterSheet + Finaliser) + `navigateToStep()` avec cascade store
-- `Step3Mutations.jsx` : "Aucune mutation" déplacée de l'écran titre vers le menu d'achat
-- `Step4Summary.jsx` : suppression ligne "PC dépensés x/20"
-- `creation.json` : S2-1/S2-2 copies UI + `step2.conditionsTitle` manquant corrigé
-- `index.css` : classes `.wiz-stepper*`
-- **Testé :** SR ✅, encodage ✅, labels ✅, stepper ✅, step4→5→6→finalize→Dashboard ✅
-- **Non testé :** steps 1-3 depuis client
-- **Prochaine étape** : wizard COUCHE 4c — WIZ-1 (filtrer drafts) + WIZ-2 (sync PC) + WIZ-3 (spécialité) + S4-C1 (seed carrières restantes)
+**Session 130 — Wizard COUCHE 5 ✅ clos partiel :**
+- `102_wizard_client_primary.js` : DROP `char_creation_snapshot` (FSM snapshot supprimé)
+- `creationService.js` : réécriture ~280L — `finalizeCreation` transaction unique (step1→5) + suppression validateAndPersist/rollback
+- `routes/creation.js` : routes step1/2/3/4/5 supprimées — seul `POST /finalize` avec payload complet
+- `creationStore.js` : `highestStep`, merge semantics `setStep1Data`, `pcNet` dans `getPcDispo`
+- `WizardCreation.jsx` : `navigateToStep` (highestStep guard) + `handleFinalize` — plus d'appels FSM
+- `WizardReview.jsx` : nouveau composant pur store (step 6) — remplace CharacterSheet pré-finalize
+- Step1/2/3/4/5 : hydratation `initialData` — retour arrière conserve les données
+- **Testé :** SR ✅, migration 102 ✅, `/api/health` ✅
+- **Non testé :** flux complet navigation retour → modifier → finaliser
+- **Prochaine étape** : test du flux complet → puis COUCHE 4c
 
 **Dettes actives :**
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
@@ -136,7 +135,6 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - Sprint Annonce v2 — actions précédentes en lecture seule (GmDeclareWindow + ActionWindow)
 - Surprise critique (roll=1) → initiative=1 — à analyser
 - [DBG-C1] Owner wizard — `character.user_id` null quand GM crée pour joueur absent (steps 1-3 non implémentés)
-- `pc_spent_step5` — reçoit coûts avantages post-création aussi (rollback step5 futur à prendre en compte)
 - **[WIZ-1]** Personnages incomplets (creation_state ≠ 'complete') visibles dans la liste — à filtrer côté Dashboard/liste
 - **[WIZ-2]** Deux compteurs PC (header store vs CareersAllocator local) — cosmétique, sprint COUCHE 4c
 - **[WIZ-3]** Formation "apprentissage_technique" → choix spécialité non implémenté — sprint COUCHE 4c

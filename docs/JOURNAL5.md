@@ -2062,3 +2062,100 @@ Plan COUCHE 4a complet — en attente de code
 ### Non testé ⚠️ clos partiel
 - Steps 1-3 depuis client (dette COUCHE 4a)
 - Multi-carrières avec skills partagées (S4-C3 clos partiel)
+
+---
+
+## Session 130 — 2026-07-02 — Wizard COUCHE 5 : architecture client-primary ✅
+
+### Contexte
+
+Problème fondamental du wizard FSM (COUCHE 4) : toute navigation arrière effaçait les données des étapes suivantes (cascade null setters + FSM serveur bloquant). Objectif : refactorer vers une architecture client-primary où toutes les données vivent dans Zustand jusqu'au `POST /finalize`.
+
+### Plan
+
+`docs/PLAN_WIZARD_REFACTOR.md` — créé et implémenté intégralement cette session.
+
+### Phase 1 — Migration + finalizeCreation + routes
+
+**`server/src/db/migrations/102_wizard_client_primary.js`** (création)
+- DROP TABLE `char_creation_snapshot` — suppression de l'ancien mécanisme snapshot/rollback FSM
+- DOWN recrée la table (reversible)
+- 105 migrations au total
+
+**`server/src/services/creationService.js`** (réécriture ~518 → ~280 lignes)
+- SUPPRIMÉ : `createSnapshot`, `restoreSnapshot`, `getStateIndex`, `assertMinState`, `validateAndPersistStep1/2/3/4`, `rollbackStep4`
+- CONSERVÉ : `resolveBackground`, `resolveStep4Backgrounds`, `getBackgroundSkillsToApply`, `upsertSkillBonus`, toutes les fonctions `validate*`, `getStep4RefData`, `getStep4State`, `getStep5RefData`, `startCreation`
+- AJOUTÉ : `finalizeCreation(sheetId, { step1, step2, step3, step4, step5 })` — transaction unique — ordres critiques :
+  - `char_archetype` (origins + higherEd) écrit AVANT la boucle carrières (car `validateCareerEducation` lit `higher_ed`)
+  - Écriture ledger (`pc_spent_step1..4`) AVANT boucle `addAdvantage` (car `validateAdvantage` lit le ledger)
+  - Age écrit APRÈS la boucle carrières (besoin de `totalCareerYears`)
+- Import `addAdvantage` depuis advantageService.js
+
+**`server/src/routes/creation.js`** (réécriture ~177 → ~100 lignes)
+- SUPPRIMÉES : POST step1, step2, step3, POST step4, DELETE step4, POST step5
+- CONSERVÉES : POST /start, GET /:sheetId/step4/ref, GET /:sheetId/step4, GET /:sheetId/step5/ref
+- MODIFIÉE : `POST /:sheetId/finalize` accepte `{ step1, step2, step3, step4, step5 }` complet
+
+### Phase 2 — Store
+
+**`client/src/stores/creationStore.js`** (réécriture)
+- `highestStep: 0` + `setHighestStep: (n) => Math.max(s.highestStep, n)` — remplace la cascade null
+- `setStep1Data` : merge semantics — `{ ...(s.step1Data ?? {}), ...data }` — permet `onPcChange({ pcSpent: n })` sans écraser charName/attributes
+- Autres setters indépendants (pas de cascade)
+- `getPcDispo` : `+ (s.step5Data?.pcNet ?? 0)` — PC gagnés par désavantages disponibles dès step1 en retour
+- `resetCreation` inclut `highestStep: 0`
+
+### Phase 3 — WizardCreation (orchestrateur)
+
+**`client/src/components/creation/WizardCreation.jsx`** (réécriture ~262 lignes)
+- Import `WizardReview` (remplace `CharacterSheet`)
+- `navigateToStep(target)` : `if (target > highestStep) return` — pas de cascade null
+- `handleFinalize` : `POST /finalize` avec les 5 step payloads → `resetCreation()` → `navigate('/')`
+- Handlers steps : `onNext={(data) => { setStepNData(data); setHighestStep(N+1); setStep(N+1) }}`
+- `onPrev` : `setStep(N-1)` — aucune donnée effacée
+- `canFinalize` : `!!step1Data?.charName && !!step2Data && !!step3Data && !!step4Data && !!step5Data`
+- Chaque step reçoit `initialData={stepNData}`
+
+### Phase 3b — WizardReview (nouveau composant)
+
+**`client/src/components/creation/WizardReview.jsx`** (création ~130 lignes)
+- Composant pur, aucun appel API
+- Props : `{ step1Data, step2Data, step3Data, step4Data, step5Data, pcDispo }`
+- Sections : Attributs (step1), Génotype (step2), Mutations (step3), Expérience + carrières (step4), Avantages (step5)
+- `displayAge = step4Data?.finalAge ?? step4Data?.age ?? '?'`
+- Advantages depuis `step5Data.advantagesMeta` (noms déjà stockés — pas d'API)
+- i18n : `t('step4.age_slider', { age: c.years })` — pas de "ans" hardcodé
+
+**`client/src/locales/creation.json`**
+- `wizard.review_title` ajouté
+
+### Phase 4 — Step components (hydratation initialData)
+
+**`Step1Attributes.jsx`** : `useState` hydratés depuis `initialData` (charName, playerName, pcSpent, attributes)
+
+**`Step2Genotype.jsx`** : `selected` init depuis `GENOTYPES.find(g => g.id === initialData.genotypeId)` → ouvre directement la vue détail si génotype déjà choisi
+
+**`Step3Mutations.jsx`** : tous states hydratés ; `method === 'none'` mappé à `'chosen'` (affiche menu d'achat avec "Aucune mutation")
+- Fix bug préexistant : `handleSubmitRandom` incluait pas `d20Result` dans le payload
+
+**`Step4Experience.jsx`** : `subStep` démarre à `SUB_STEPS.SUMMARY` si `initialData` existe ; tous states hydratés
+- `buildPayload()` envoie `age` (slider baseAge) + `finalAge` (calculé) — serveur reçoit le bon `age`
+
+**`Step5Advantages.jsx`** : `selected` initialisé depuis `initialData?.advantages`
+- `handleNext` construit `advantagesMeta: [{ advantage_id, name, type, cost_pc }]` pour WizardReview
+
+### Bugs corrigés
+
+- `setStep1Data` partial merge : `onPcChange` ne détruit plus charName/attributes (merge semantics)
+- `validateCareerEducation` lisait `higher_ed` stale : archetype split en 2 updates (origins+higherEd avant boucle, age après)
+- `buildPayload` envoyait `finalAge` comme `age` : deux champs distincts maintenant
+- "ans" hardcodé dans WizardReview : remplacé par `t('step4.age_slider', { age })` (i18n)
+
+### Testé ✅
+- SR → `Migrations à jour` ✅ (migration 102 appliquée, `char_creation_snapshot` dropped)
+- Serveur démarré sans erreur ✅ — `/api/health` → `{ status: "ok" }`
+
+### Non testé ⚠️ clos partiel
+- Flux complet wizard (step1 → step5 → naviguer en arrière → modifier → finaliser) — SR uniquement cette session
+- WizardReview rendu visuel complet
+- Finalize transaction complète en base

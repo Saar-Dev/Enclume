@@ -10,16 +10,18 @@ import Step2Genotype from './Step2Genotype'
 import Step3Mutations from './Step3Mutations'
 import Step4Experience from './Step4Experience'
 import Step5Advantages from './Step5Advantages'
-import CharacterSheet from '../../character/CharacterSheet.jsx'
+import WizardReview from './WizardReview'
 
 export default function WizardCreation() {
   const { t } = useTranslation('creation')
   const { campaignId } = useParams()
   const {
     step, setStep,
+    highestStep, setHighestStep,
     sheetId, characterId, isStarting, startError,
     startCreation, setCampaignId,
-    creationState, setCreationState, resetCreation,
+    resetCreation,
+    step1Data, step2Data, step3Data, step4Data, step5Data,
     setStep0Data, setStep1Data, setStep2Data, setStep3Data, setStep4Data, setStep5Data,
     getPcDispo,
   } = useCreationStore()
@@ -36,46 +38,30 @@ export default function WizardCreation() {
   const mockAmbiance = 'INTERMEDIAIRE'
   const mockIsFeminin = false
 
-  const navigateToStep = async (target) => {
-    if (target === step || target < 1 || target > step) return
-    if (step === 6 && target < 5) return
+  const canFinalize = !!step1Data?.charName && !!step2Data && !!step3Data && !!step4Data && !!step5Data
+
+  const navigateToStep = (target) => {
+    if (target === step || target < 1 || target > highestStep) return
     setStepError(null)
-    if (step >= 5 && target <= 4 && creationState === 'draft_step4') {
-      try {
-        await api.delete(`/creation/${sheetId}/step4`)
-        setCreationState(null)
-      } catch { /* on navigue quand même */ }
-    }
-    if      (target === 1) setStep1Data(null)
-    else if (target === 2) setStep2Data(null)
-    else if (target === 3) setStep3Data(null)
-    else if (target === 4) setStep4Data(null)
-    else if (target === 5) setStep5Data(null)
     setStep(target)
   }
 
   const handleFinalize = async () => {
     setFinalizing(true)
-    try {
-      await callStep('finalize', {})
-      resetCreation()
-      navigate('/')
-    } catch {
-      setFinalizing(false)
-    }
-  }
-
-  const callStep = async (endpoint, body) => {
     setStepError(null)
     try {
-      const res = await api.post(`/creation/${sheetId}/${endpoint}`, body)
-      return res.data
+      await api.post(`/creation/${sheetId}/finalize`, {
+        step1: step1Data, step2: step2Data, step3: step3Data,
+        step4: step4Data, step5: step5Data,
+      })
+      resetCreation()
+      navigate('/')
     } catch (err) {
       const msg = err.response?.data?.error?.message
         || err.response?.data?.message
         || `Erreur ${err.response?.status ?? 'réseau'}`
       setStepError(msg)
-      throw err
+      setFinalizing(false)
     }
   }
 
@@ -91,6 +77,7 @@ export default function WizardCreation() {
             setStep0Data({ method: 'point_buy' })
             try {
               await startCreation(campaignId)
+              setHighestStep(1)
               setStep(1)
             } catch { /* startError stocké dans le store */ }
           }}
@@ -116,19 +103,17 @@ export default function WizardCreation() {
       <div style={st.body}>
         {step === 1 && (
           <Step1Attributes
+            initialData={step1Data}
             ambiance={mockAmbiance}
             isFeminin={mockIsFeminin}
             onPcChange={(n) => setStep1Data({ pcSpent: n })}
-            onNext={async (data) => {
-              try {
-                await callStep('step1', data)
-                setStep1Data(data)
-                setStep(2)
-              } catch { /* stepError affiché */ }
+            onNext={(data) => {
+              setStep1Data(data)
+              setHighestStep(2)
+              setStep(2)
             }}
             onPrev={() => {
               setStepError(null)
-              setStep1Data(null)
               setStep(0)
             }}
           />
@@ -136,16 +121,14 @@ export default function WizardCreation() {
 
         {step === 2 && (
           <Step2Genotype
-            onNext={async (data) => {
-              try {
-                await callStep('step2', data)
-                setStep2Data(data)
-                setStep(3)
-              } catch { /* stepError affiché */ }
+            initialData={step2Data}
+            onNext={(data) => {
+              setStep2Data(data)
+              setHighestStep(3)
+              setStep(3)
             }}
             onPrev={() => {
               setStepError(null)
-              setStep2Data(null)
               setStep(1)
             }}
           />
@@ -153,17 +136,15 @@ export default function WizardCreation() {
 
         {step === 3 && (
           <Step3Mutations
+            initialData={step3Data}
             pcDispo={pcDispo}
-            onNext={async (data) => {
-              try {
-                await callStep('step3', data)
-                setStep3Data(data)
-                setStep(4)
-              } catch { /* stepError affiché */ }
+            onNext={(data) => {
+              setStep3Data(data)
+              setHighestStep(4)
+              setStep(4)
             }}
             onPrev={() => {
               setStepError(null)
-              setStep2Data(null)  // Bug3 fix : efface coût génotype + cascade step3/4/5
               setStep(2)
             }}
           />
@@ -171,18 +152,15 @@ export default function WizardCreation() {
 
         {step === 4 && (
           <Step4Experience
+            initialData={step4Data}
             pcDispo={pcDispo}
-            onNext={async (data) => {
-              try {
-                await callStep('step4', data)
-                setStep4Data(data)
-                setCreationState('draft_step4')
-                setStep(5)
-              } catch { /* stepError affiché */ }
+            onNext={(data) => {
+              setStep4Data(data)
+              setHighestStep(5)
+              setStep(5)
             }}
             onPrev={() => {
               setStepError(null)
-              setStep3Data(null)  // Bug3 fix : efface coût mutations + cascade step4/5
               setStep(3)
             }}
           />
@@ -190,41 +168,38 @@ export default function WizardCreation() {
 
         {step === 5 && (
           <Step5Advantages
+            initialData={step5Data}
             sheetId={sheetId}
             pcDispo={pcDispo}
-            onNext={async (data) => {
-              try {
-                await callStep('step5', data)
-                setStep5Data(data)
-                setStep(6)
-              } catch { /* stepError affiché */ }
+            onNext={(data) => {
+              setStep5Data(data)
+              setHighestStep(6)
+              setStep(6)
             }}
-            onPrev={async () => {
-              if (creationState === 'draft_step4') {
-                try {
-                  await api.delete(`/creation/${sheetId}/step4`)
-                  setCreationState(null)
-                } catch { /* ignore — on revient au step4 même si rollback échoue */ }
-              }
+            onPrev={() => {
+              setStepError(null)
               setStep(4)
             }}
           />
         )}
+
         {step === 6 && (
           <div style={st.step6}>
             <div style={st.step6Sheet}>
-              <CharacterSheet
-                characterId={characterId}
-                isGm={false}
-                isOwner={true}
-                onSaved={() => {}}
+              <WizardReview
+                step1Data={step1Data}
+                step2Data={step2Data}
+                step3Data={step3Data}
+                step4Data={step4Data}
+                step5Data={step5Data}
+                pcDispo={pcDispo}
               />
             </div>
             <div style={st.step6Nav}>
-              <button className="btn btn-ghost" onClick={() => { setStepError(null); setStep5Data(null); setStep(5) }}>
+              <button className="btn btn-ghost" onClick={() => { setStepError(null); setStep(5) }}>
                 ← {t('wizard.prev')}
               </button>
-              <button className="btn btn-gold" onClick={handleFinalize} disabled={finalizing}>
+              <button className="btn btn-gold" onClick={handleFinalize} disabled={finalizing || !canFinalize}>
                 {finalizing ? '…' : t('wizard.finalize')} →
               </button>
             </div>
