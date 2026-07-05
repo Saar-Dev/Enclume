@@ -6,6 +6,7 @@ import { calcAttributeNA, calcREA } from '../lib/charStats.js'
 import { getUserColor } from '../lib/socketUtils.js'
 import * as statusService from '../lib/statusService.js'
 import { startAnnouncementTimers, startResolutionPhase } from './socketCombatHelpers.js'
+import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 
 export function registerStateHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -31,8 +32,8 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       }
 
       // Lire le timer configuré pour cette campagne
-      const campaignRow = await db('campaigns').where({ id: campaignId }).select('action_timer_sec').first()
-      const actionTimerSec = campaignRow?.action_timer_sec ?? 0
+      const settings = await getCampaignSettings(db, campaignId)
+      const actionTimerSec = settings.action_timer_sec
 
       // Guard — tokens présents sur la carte (hors exclus GM)
       const allTokens = await db('tokens').where({ battlemap_id })

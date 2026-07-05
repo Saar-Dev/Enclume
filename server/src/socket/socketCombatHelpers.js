@@ -7,6 +7,7 @@ import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
 import { checkCombatLOS } from '../lib/losService.js'
+import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import {
   calcSkillTotal, calcAttributeNA, calcREA,
   calcWoundPenalty, calcEncumbrancePenalty,
@@ -810,10 +811,10 @@ export async function resolveReloadAction(io, socket, campaignId, character, act
   const characterId = character.id
   console.log(`[DBG] resolveReload — début. characterId:${characterId} type:${character.type} campaignId:${campaignId}`)
 
-  const campaign = await db('campaigns').where({ id: campaignId }).select('pnj_unlimited_ammo', 'reload_mode').first()
-  const pnjUnlimited = campaign?.pnj_unlimited_ammo && character.type === 'pnj'
-  const reloadMode   = campaign?.reload_mode ?? 'magazine'
-  console.log(`[DBG] resolveReload — pnj_unlimited_ammo:${campaign?.pnj_unlimited_ammo} pnjUnlimited:${pnjUnlimited} reloadMode:${reloadMode}`)
+  const settings = await getCampaignSettings(db, campaignId)
+  const pnjUnlimited = settings.pnj_unlimited_ammo && character.type === 'pnj'
+  const reloadMode   = settings.reload_mode
+  console.log(`[DBG] resolveReload — pnj_unlimited_ammo:${settings.pnj_unlimited_ammo} pnjUnlimited:${pnjUnlimited} reloadMode:${reloadMode}`)
 
   const parseCount = (s) => { const m = String(s ?? '').match(/\d+/); return m ? parseInt(m[0], 10) : 0 }
 
@@ -1385,8 +1386,8 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       const isPnj = character.type === 'pnj'
       let skipDecrement = false
       if (isPnj) {
-        const campaign = await db('campaigns').where({ id: campaignId }).select('pnj_unlimited_ammo').first()
-        skipDecrement = campaign?.pnj_unlimited_ammo ?? true
+        const settings = await getCampaignSettings(db, campaignId)
+        skipDecrement = settings.pnj_unlimited_ammo
       }
       if (!skipDecrement) {
         const bulletsFired = action.bullet_count ?? 1

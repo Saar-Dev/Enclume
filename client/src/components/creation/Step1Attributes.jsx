@@ -1,3 +1,6 @@
+// client/src/components/creation/Step1Attributes.jsx
+// Refonte Session 130 : tableau aligné fiche perso (Base lecture seule + Mod.PC spinners)
+
 import { useState, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -6,10 +9,11 @@ import {
   COST_LOOKUP,
   calcTotalCost,
   calcAN,
+  PC_MAX_ETAPE1,
+  calcPoolTotal,
 } from '../../../../shared/polarisUtils.js'
 
 const ATTR_IDS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
-const PC_MAX = 8
 
 const ATTR_DESCRIPTIONS = {
   FOR: "La Force est une mesure de la puissance brute d'un individu, sa capacité musculaire.",
@@ -23,33 +27,68 @@ const ATTR_DESCRIPTIONS = {
 }
 
 const ROW_TOOLTIPS = {
-  base: "Niveau de base : score initial de l'Attribut avant modificateurs. Fixé à cette étape, il ne changera plus.",
+  base: "Niveau de base : score initial de l'Attribut avant modificateurs. Fixé à 7 (5 en Force pour un personnage féminin).",
+  pc: "Modificateur PC : points d'Attribut achetés avec des Points de Création. 1 PC = +2 points de pool.",
   na: "Niveau Actuel : somme du niveau de base et de tous les modificateurs. C'est la valeur réellement utilisée en jeu.",
   an: "Aptitude Naturelle : dérivée du Niveau Actuel, utilisée pour calculer le niveau de base des Compétences.",
 }
 
-export default function Step1Attributes({ initialData, ambiance, isFeminin, onNext, onPrev, onPcChange }) {
+export default function Step1Attributes({ initialData, ambiance, isFeminin: _deprecated, onNext, onPrev, onPcChange }) {
   const { t } = useTranslation('creation')
 
   const [charName, setCharName] = useState(initialData?.charName ?? '')
   const [playerName, setPlayerName] = useState(initialData?.playerName ?? '')
+  const [isFeminin, setIsFeminin] = useState(initialData?.isFeminin ?? false)
   const [pcAlloues, setPcAlloues] = useState(initialData?.pcSpent ?? 0)
-  const [attributs, setAttributs] = useState(() =>
-    initialData?.attributes
-      ? { ...initialData.attributes }
-      : Object.fromEntries(ATTR_IDS.map(id => [id, id === 'FOR' && isFeminin ? 5 : 7]))
-  )
+
+  // modPC : points achetés par attribut (démarre à 0)
+  const [modPC, setModPC] = useState(() => {
+    if (initialData?.attributes) {
+      // Recalcul depuis les attributs sauvegardés
+      return Object.fromEntries(
+        ATTR_IDS.map(id => {
+          const base = (id === 'FOR' && initialData.isFeminin) ? 5 : 7
+          return [id, Math.max(0, (initialData.attributes[id] || base) - base)]
+        })
+      )
+    }
+    return Object.fromEntries(ATTR_IDS.map(id => [id, 0]))
+  })
+
   const [tooltip, setTooltip] = useState(null)
   const [rulesOpen, setRulesOpen] = useState(false)
 
+  // Recalculer modPC si on change isFeminin (réinitialise FOR)
+  const handleSetFeminin = useCallback((val) => {
+    setIsFeminin(val)
+    setModPC(prev => {
+      // Si on passe à féminin et que FOR avait des points, on les garde mais la base change
+      // Si FOR modPC ferait dépasser 20, on cap
+      const baseFOR = val ? 5 : 7
+      const maxMod = 20 - baseFOR
+      return { ...prev, FOR: Math.min(prev.FOR, maxMod) }
+    })
+  }, [])
+
+  const baseAttrs = useMemo(
+    () => Object.fromEntries(ATTR_IDS.map(id => [id, (id === 'FOR' && isFeminin) ? 5 : 7])),
+    [isFeminin]
+  )
+
+  // Attributs complets (base + modPC)
+  const attributs = useMemo(
+    () => Object.fromEntries(ATTR_IDS.map(id => [id, baseAttrs[id] + modPC[id]])),
+    [baseAttrs, modPC]
+  )
+
   const poolBase = POOL_AMBIANCE[ambiance] || 38
-  const poolTotal = poolBase + (pcAlloues * 2)
+  const poolTotal = calcPoolTotal(ambiance, pcAlloues)
   const totalCost = calcTotalCost(attributs, isFeminin)
   const pointsRestants = poolTotal - totalCost
   const chc = CHANCE_AMBIANCE[ambiance] || 13
 
   const handleBuyPc = useCallback(() => {
-    if (pcAlloues >= PC_MAX) return
+    if (pcAlloues >= PC_MAX_ETAPE1) return
     const next = pcAlloues + 1
     setPcAlloues(next)
     onPcChange?.(next)
@@ -57,30 +96,28 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin, onNe
 
   const handleCancelPc = useCallback(() => {
     if (pcAlloues <= 0) return
-    const newPoolBase = poolBase + ((pcAlloues - 1) * 2)
-    if (totalCost > newPoolBase) return
+    const newPoolTotal = calcPoolTotal(ambiance, pcAlloues - 1)
+    if (totalCost > newPoolTotal) return
     const next = pcAlloues - 1
     setPcAlloues(next)
     onPcChange?.(next)
-  }, [pcAlloues, poolBase, totalCost, onPcChange])
+  }, [pcAlloues, ambiance, totalCost, onPcChange])
 
-  const handleChange = useCallback((attrId, delta) => {
-    setAttributs(prev => {
+  const handleModPC = useCallback((attrId, delta) => {
+    setModPC(prev => {
       const current = prev[attrId]
       const next = current + delta
-      const base = (attrId === 'FOR' && isFeminin) ? 5 : 7
-      if (next < base || next > 20) return prev
-      const newAttributs = { ...prev, [attrId]: next }
+      if (next < 0) return prev
+      const base = baseAttrs[attrId]
+      if (base + next > 20) return prev
+      // Vérifier coût total
+      const newModPC = { ...prev, [attrId]: next }
+      const newAttributs = Object.fromEntries(ATTR_IDS.map(id => [id, baseAttrs[id] + newModPC[id]]))
       const newCost = calcTotalCost(newAttributs, isFeminin)
       if (newCost > poolTotal) return prev
-      if (isFeminin) {
-        const bonusCOO = Math.max(0, newAttributs['COO'] - 7)
-        const bonusPRE = Math.max(0, newAttributs['PRE'] - 7)
-        if (bonusCOO + bonusPRE > 2) return prev
-      }
-      return newAttributs
+      return newModPC
     })
-  }, [isFeminin, poolTotal])
+  }, [baseAttrs, isFeminin, poolTotal])
 
   const showTooltip = (desc, event) => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -92,22 +129,19 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin, onNe
     [attributs]
   )
 
-  const bonusFemininUtilises = useMemo(() => {
-    if (!isFeminin) return 0
-    return Math.max(0, attributs['COO'] - 7) + Math.max(0, attributs['PRE'] - 7)
-  }, [attributs, isFeminin])
-
-  const canBuyPc = pcAlloues < PC_MAX
+  const canBuyPc = pcAlloues < PC_MAX_ETAPE1
   const canCancelPc = pcAlloues > 0
   const canNext = pointsRestants === 0 && charName.trim().length > 0
 
   const canIncrement = (attrId) => {
-    const val = attributs[attrId]
-    return val < 20 && (COST_LOOKUP[val + 1] - COST_LOOKUP[val]) <= pointsRestants
+    const base = baseAttrs[attrId]
+    const currentMod = modPC[attrId]
+    const nextVal = base + currentMod + 1
+    if (nextVal > 20) return false
+    return (COST_LOOKUP[nextVal] - COST_LOOKUP[nextVal - 1]) <= pointsRestants
   }
   const canDecrement = (attrId) => {
-    const base = (attrId === 'FOR' && isFeminin) ? 5 : 7
-    return attributs[attrId] > base
+    return modPC[attrId] > 0
   }
 
   const dotColor = (i) => {
@@ -128,7 +162,7 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin, onNe
   return (
     <div className="wiz1-container">
 
-      {/* ── Noms ── */}
+      {/* ── Noms + Sexe ── */}
       <div className="wiz1-names-row">
         <div className="wiz1-name-field">
           <input
@@ -147,6 +181,18 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin, onNe
             placeholder={t('step1.playerNamePlaceholder')}
           />
           <span className="wiz1-name-label">{t('step1.playerName')}</span>
+        </div>
+        <div className="wiz1-name-field" style={{ maxWidth: '100px' }}>
+          <select
+            className="wiz1-name-input"
+            value={isFeminin ? 'F' : 'M'}
+            onChange={e => handleSetFeminin(e.target.value === 'F')}
+            style={{ cursor: 'pointer' }}
+          >
+            <option value="M">{t('step1.sexM')}</option>
+            <option value="F">{t('step1.sexF')}</option>
+          </select>
+          <span className="wiz1-name-label">{t('step1.sex')}</span>
         </div>
       </div>
 
@@ -170,6 +216,7 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin, onNe
             </tr>
           </thead>
           <tbody>
+            {/* Ligne 1 — Niveau de base (lecture seule) */}
             <tr>
               <td
                 className="wiz1-td-label"
@@ -180,15 +227,32 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin, onNe
               </td>
               {ATTR_IDS.map(id => (
                 <td key={id} className="wiz1-td">
+                  <span className="wiz1-readonly wiz1-val-base">{baseAttrs[id]}</span>
+                </td>
+              ))}
+            </tr>
+
+            {/* Ligne 2 — Mod. PC (spinners) */}
+            <tr>
+              <td
+                className="wiz1-td-label"
+                onMouseEnter={(e) => showTooltip(ROW_TOOLTIPS.pc, e)}
+                onMouseLeave={() => setTooltip(null)}
+              >
+                {t('step1.rowModPC')}
+              </td>
+              {ATTR_IDS.map(id => (
+                <td key={id} className="wiz1-td">
                   <div className="wiz1-spinner">
-                    <button className="wiz1-spin-btn" disabled={!canDecrement(id)} onClick={() => handleChange(id, -1)}>−</button>
-                    <span className="wiz1-spin-value">{attributs[id]}</span>
-                    <button className="wiz1-spin-btn" disabled={!canIncrement(id)} onClick={() => handleChange(id, +1)}>+</button>
+                    <button className="wiz1-spin-btn" disabled={!canDecrement(id)} onClick={() => handleModPC(id, -1)}>−</button>
+                    <span className="wiz1-spin-value">{modPC[id]}</span>
+                    <button className="wiz1-spin-btn" disabled={!canIncrement(id)} onClick={() => handleModPC(id, +1)}>+</button>
                   </div>
                 </td>
               ))}
             </tr>
 
+            {/* Ligne 3 — Niveau actuel (lecture seule) */}
             <tr className="wiz1-row-na">
               <td
                 className="wiz1-td-label"
@@ -204,6 +268,7 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin, onNe
               ))}
             </tr>
 
+            {/* Ligne 4 — Aptitude Naturelle (lecture seule) */}
             <tr className="wiz1-row-an">
               <td
                 className="wiz1-td-label"
@@ -260,7 +325,7 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin, onNe
           </div>
         </div>
 
-        {/* HUD points restants — en bas de la card Attributs */}
+        {/* HUD points restants */}
         <div className={`wiz1-points-hud${hudOk ? ' wiz1-points-hud--ok' : ''}`}>
           <div className="wiz1-points-hud-main">
             <span className="wiz1-points-hud-num">{hudOk ? '✓' : pointsRestants}</span>
@@ -268,11 +333,6 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin, onNe
               {hudOk ? t('step1.pointsOk') : t('step1.pointsHudLabel')}
             </span>
           </div>
-          {isFeminin && (
-            <span className={`wiz1-counter ${bonusFemininUtilises <= 2 ? 'wiz1-counter-ok' : 'wiz1-counter-warn'}`}>
-              {t('step1.bonusFeminin', { n: 2 - bonusFemininUtilises })}
-            </span>
-          )}
         </div>
       </div>
 
@@ -301,7 +361,7 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin, onNe
                 −1 PC
               </button>
               <div className="wiz1-pc-meter">
-                {[...Array(PC_MAX)].map((_, i) => (
+                {[...Array(PC_MAX_ETAPE1)].map((_, i) => (
                   <div key={i} className="wiz1-pc-meter-dot" style={dotColor(i)} />
                 ))}
               </div>
@@ -329,7 +389,13 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin, onNe
         <button
           className={`wiz-btn-start${hudOk ? ' wiz-btn-start--pulse' : ''}`}
           disabled={!canNext}
-          onClick={() => onNext({ charName: charName.trim(), playerName: playerName.trim(), attributes: attributs, pcSpent: pcAlloues })}
+          onClick={() => onNext({
+            charName: charName.trim(),
+            playerName: playerName.trim(),
+            attributes: attributs,
+            pcSpent: pcAlloues,
+            isFeminin,
+          })}
         >
           {t('step1.next')} →
         </button>

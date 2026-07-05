@@ -2,6 +2,7 @@ import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
 import { skipPlayer, startResolutionPhase } from './socketCombatHelpers.js'
+import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 
 export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -159,8 +160,8 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           if (weapon.ammo_remaining !== null && weapon.ammo_remaining < bulletCount) {
             let pnjUnlimited = false
             if (character.type === 'pnj') {
-              const campaign = await db('campaigns').where({ id: campaignId }).select('pnj_unlimited_ammo').first()
-              pnjUnlimited = campaign?.pnj_unlimited_ammo ?? false
+              const settings = await getCampaignSettings(db, campaignId)
+              pnjUnlimited = settings.pnj_unlimited_ammo
             }
             if (!pnjUnlimited) {
               socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Munitions insuffisantes — rechargez d'abord" })

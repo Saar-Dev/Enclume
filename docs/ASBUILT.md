@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-06-20 Session 111
+> Dernière mise à jour : 2026-07-05 Session 131
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -106,7 +106,7 @@ Enclume/
 │   │   │   └── knex.js
 │   │   ├── routes/
 │   │   │   ├── auth.js                 # Modifié 66 — /register : +inviteCode, timingSafeEqual, guard REGISTRATION_CODE
-│   │   │   ├── campaigns.js            # Modifié 45 — POST /:id/cover + cover_url dans GET /. Modifié 66 Sprint 7.5 — +pnj_unlimited_ammo. Modifié 67 Sprint 7.6 — +reload_mode (PUT validation + returning). Modifié 70 — import multerGlb, POST /:id/default-token (upload GLB MinIO), PUT accepte default_token_glb_url=null (réinitialisation). Modifié 81 Sprint Test de Choc — +shock_auto_stun (CRUD + returning). Modifié 85 M3 — +CAMPAIGN_SETTINGS_UPDATED broadcast après PUT /:id
+│   │   │   ├── campaigns.js            # Modifié 45 — POST /:id/cover + cover_url dans GET /. Modifié 66 Sprint 7.5 — +pnj_unlimited_ammo. Modifié 67 Sprint 7.6 — +reload_mode (PUT validation + returning). Modifié 70 — import multerGlb, POST /:id/default-token (upload GLB MinIO), PUT accepte default_token_glb_url=null (réinitialisation). Modifié 81 Sprint Test de Choc — +shock_auto_stun (CRUD + returning). Modifié 85 M3 — +CAMPAIGN_SETTINGS_UPDATED broadcast après PUT /:id. Modifié 104 — PUT /:id réécrit : body `{ settings }` remplace les 5 champs plats supprimés, validation par clé contre SETTINGS_SCHEMA (import campaignSettingsService.js), merge JSONB atomique db.raw('settings || ?::jsonb'), returning() retourne `settings` au lieu des colonnes supprimées
 │   │   │   ├── battlemaps.js           # Modifié 73 — GET /:id LEFT JOIN characters+users → user_color dans SELECT tokens
 │   │   │   ├── tokens.js               # Modifié 39 — maintenance Redis collision map
 │   │   │   ├── characters.js           # Modifié 59 — type dans GET/POST/PUT/broadcastCharacterUpdate
@@ -149,7 +149,8 @@ Enclume/
 │   │       ├── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
 │   │       ├── socketUtils.js          # NOUVEAU 100 (REWORK-07) — getUserColor (6 call sites) + checkTokenOwnership (4 call sites, role==='gm'). LOC_TABLE_CONTACT supprimé.
 │   │       ├── mrTable.js              # NOUVEAU 108 (REWORK-08) — singleton-promise polaris_mr. getMrTable()→Promise<row[]>. Remplace cache local MR_TABLE dans index.js + socketCombat.js.
-│   │       ├── statusService.js        # NOUVEAU 96 (REWORK-01) — resolveShockBlock centralisé (5 sites → 1 call), applyStun, applyStunStatus, emitShockDiceResult, resolveShockTest. resolveShockTest retourne { rolls, seed } pour DICE_RESULT. Modifié 111 (REWORK-04) — applyStun : pendingStunActions param retiré, 2 Map.set() → db('combat_pending').insert()
+│   │       ├── statusService.js        # NOUVEAU 96 (REWORK-01) — resolveShockBlock centralisé (5 sites → 1 call), applyStun, applyStunStatus, emitShockDiceResult, resolveShockTest. resolveShockTest retourne { rolls, seed } pour DICE_RESULT. Modifié 111 (REWORK-04) — applyStun : pendingStunActions param retiré, 2 Map.set() → db('combat_pending').insert(). Modifié 104 — shock_auto_stun lu via getCampaignSettings() (2 sites)
+│   │       ├── campaignSettingsService.js # NOUVEAU 104 — SETTINGS_SCHEMA (16 clés : type/default/enum) + getCampaignSettings(db, campaignId) (SELECT settings + merge defaults). Source unique de vérité, réutilisée par routes/campaigns.js (validation PUT) et 5 consommateurs combat (losService, statusService, socketCombatAnnouncement, socketCombatHelpers, socketCombatState)
 │   │       ├── woundUtils.js           # voir §woundUtils.js. Modifié 97 — +export getWorstWoundSeverity (utilise WOUND_SEVERITIES.slice().reverse() — PIEGE-7 évité). isShockTestRequired, nextSeverity, resolveWoundInsertion, getWorstWoundSeverity.
 │   │       ├── woundService.js         # NOUVEAU 97 (REWORK-03) — applyWound(io, db, campaignId, { charSheetId, characterId, localisation, severity }) : transaction resolveWoundInsertion + getWorstWoundSeverity + WOUND_ADDED broadcast (worst_wound_severity inclus). Retourne { finalSeverity } ou null (P49 : severity post-promotion).
 │   │       └── damageService.js        # NOUVEAU 101 (REWORK-02) — resolveTargetHit(io, db, campaignId, { degautsBruts, characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible }) : loc D20 + armures + RD + sévérité + woundService.applyWound + statusService.resolveShockTest. Retourne null si cibleType='drone'.
@@ -176,7 +177,7 @@ Enclume/
 | Stockage fichiers | MinIO | Bucket unique |
 | Auth | JWT httpOnly cookie | 7 jours |
 | Inscription | Code d'invitation `REGISTRATION_CODE` dans `.env` | 8 chiffres, `timingSafeEqual`, guard 500 si absent |
-| Rechargement combat | `campaigns.reload_mode` | `'magazine'` (défaut) ou `'topup'` — configurable dans CampaignSettingsPage |
+| Rechargement combat | `campaigns.settings.reload_mode` (JSONB, migration 104) | `'magazine'` (défaut) ou `'topup'` — configurable dans CampaignSettingsPage, lu via `campaignSettingsService.getCampaignSettings()` |
 
 ---
 
@@ -242,16 +243,16 @@ Enclume/
 | 57_combat_v3 | combat_actions : +fire_mode TEXT, +bullet_count SMALLINT, +fire_mode_bonus_comp SMALLINT, +fire_mode_bonus_dmg SMALLINT. combat_roster : +state_character JSONB NOT NULL DEFAULT '{}' (PC39 — merge obligatoire, jamais remplacement) |
 | 58_combat_v4 | combat_roster : +state_cover TEXT CHECK ('exposed'/'partial'/'important'), +state_fire_mode TEXT CHECK ('cc'/'rc'/'rl'), +state_vitesse TEXT CHECK ('normal'/'delayed'/'rushed'). Backfill state_vitesse='rushed' si state_character->>'is_rushed'='true' |
 | 59_character_macros | character_macros (UUID PK, char_sheet_id FK CASCADE, label, formula, skill_id, attr_id, gm_modifier, sort_order) |
-| 60_ammo_remaining | char_inventory.ammo_remaining SMALLINT nullable + campaigns.pnj_unlimited_ammo BOOLEAN NOT NULL DEFAULT false |
+| 60_ammo_remaining | char_inventory.ammo_remaining SMALLINT nullable + campaigns.pnj_unlimited_ammo BOOLEAN NOT NULL DEFAULT false (colonne migrée vers campaigns.settings JSONB par la migration 104) |
 | 61_combat_reload | combat_actions.type CHECK : ajout 'reload' |
-| 62_campaign_reload_mode | campaigns.reload_mode TEXT NOT NULL DEFAULT 'magazine' CHECK ('magazine','topup') |
+| 62_campaign_reload_mode | campaigns.reload_mode TEXT NOT NULL DEFAULT 'magazine' CHECK ('magazine','topup') (colonne migrée vers campaigns.settings JSONB par la migration 104) |
 | 63_melee | combat_actions : ajout 'melee' au CHECK constraint `chk_action_type` |
 | 64_combat_mode | combat_roster : +`state_combat_mode TEXT NOT NULL DEFAULT 'normal'` CHECK ('normal','offensif','charge','defensif','retraite') |
-| 65_action_timer | campaigns : +`action_timer_sec INTEGER NOT NULL DEFAULT 0` — 0 = infini, timer auto-skip Phase Annonce |
+| 65_action_timer | campaigns : +`action_timer_sec INTEGER NOT NULL DEFAULT 0` — 0 = infini, timer auto-skip Phase Annonce (colonne migrée vers campaigns.settings JSONB par la migration 104) |
 | 66_campaign_default_token | campaigns : +`default_token_glb_url TEXT` nullable — URL GLB token par défaut de campagne |
 | 67_campaign_documents | documents table (session 75) |
 | 68_token_statuses | token_statuses (status_code per token, session 77) |
-| 69_shock_auto_stun | campaigns : +`shock_auto_stun BOOLEAN NOT NULL DEFAULT true` |
+| 69_shock_auto_stun | campaigns : +`shock_auto_stun BOOLEAN NOT NULL DEFAULT true` (colonne migrée vers campaigns.settings JSONB par la migration 104) |
 | 70_ammo_init_on_equip | backfill ammo_remaining armes équipées sans chargeur initialisé (session 81) |
 | 71_drone_sheet | drone_sheet (character_id FK CASCADE, stats physiques + ordinateur_gen/nt, integrite_max/actuelle, localisation_ref, damages JSONB, notes_gm, equip_special) |
 | 72_drone_sheet_fix | correctifs colonnes drone_sheet (ajout profondeur_max, disponibilite) |
@@ -262,6 +263,8 @@ Enclume/
 | 79_token_statuses_expires_at_turn | token_statuses : +`expires_at_turn INTEGER` — déclencheur expiration stun par tour de combat (Session 93-3) |
 | 80_combat_pending | combat_pending : PK (campaign_id, token_id, type), JSONB payload, FK CASCADE. type CHECK ('melee_defense','damage','stun'). Remplace 3 Maps in-memory REWORK-04 (Session 111) |
 | 81_combat_state_subphase | combat_state : +`sub_phase TEXT` nullable CHECK ('SLOT_ACTIVE','AWAITING_DEFENSE','AWAITING_DAMAGE'). FSM sous-états persistés (Session 111) |
+| 82→103b | À documenter — voir migrations correspondantes |
+| 104_campaign_settings | Consolide `ambiance`, `pnj_unlimited_ammo`, `reload_mode`, `action_timer_sec`, `shock_auto_stun`, `allow_los_cancel` + 11 nouvelles options de campagne dans `campaigns.settings JSONB NOT NULL DEFAULT '{}'` (backfill puis DROP des 6 colonnes). DROP table morte `campaign_rules` (migration 97, jamais référencée). `dice_config` et `default_token_glb_url` restent des colonnes dédiées. Lecture centralisée via `server/src/lib/campaignSettingsService.js` (`SETTINGS_SCHEMA` + `getCampaignSettings(db, campaignId)`), écriture via `PUT /campaigns/:id` (merge JSONB atomique `db.raw('settings || ?::jsonb', …)`, pattern PC39) (Session 131) |
 
 ---
 

@@ -807,7 +807,7 @@ function SessionContent({ campaignId }) {
           isGm={isGm}
           user={user}
           characters={characters}
-          actionTimerSec={campaign?.action_timer_sec ?? 0}
+          actionTimerSec={campaign?.settings?.action_timer_sec ?? 0}
           pendingSurpriseRoll={combatSocket.pendingSurpriseRoll}
           onSurpriseRolled={handleSurpriseRolled}
           onEnterMoveMode={handleEnterMoveMode}

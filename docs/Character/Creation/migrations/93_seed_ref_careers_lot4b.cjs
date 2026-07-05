@@ -6,37 +6,44 @@ export const seed = async (knex) => {
   // 26-27. PILOTE DE CHASSE — skills communs
   // ============================================================
   const piloteCommonSkills = [
-    { skill_id: 'athletisme', skill_group: 'Aptitudes physiques' },
-    { skill_id: 'endurance', skill_group: 'Aptitudes physiques' },
-    { skill_id: 'combat_arme', skill_group: 'Combat (contact)' },
-    { skill_id: 'combat_mains_nues', skill_group: 'Combat (contact)' },
-    { skill_id: 'armes_poing', skill_group: 'Combat (tir)' },
-    { skill_id: 'cartographie', skill_group: 'Connaissances' },
-    { skill_id: 'connaissance_nations', skill_group: 'Connaissances' },
-    { skill_id: 'education_culture_generale', skill_group: 'Connaissances' },
-    { skill_id: 'navigation', skill_group: 'Connaissances' },
-    // Note : « langue de la communauté d'accueil » — variable
-    { skill_id: 'neo_azuran', skill_group: 'Langues' },
-    { skill_id: 'langage_signes', skill_group: 'Langues' },
-    { skill_id: 'telepilotage', skill_group: 'Pilotage' },
-    { skill_id: 'manoeuvre_armure', skill_group: 'Pilotage' },
-    { skill_id: 'pilotage', skill_group: 'Pilotage' },
-    { skill_id: 'analyse_sonscans', skill_group: 'Techniques' },
-    { skill_id: 'informatique', skill_group: 'Techniques' },
-    { skill_id: 'mecanique', skill_group: 'Techniques' },
-    { skill_id: 'electronique', skill_group: 'Techniques' }
+    { skill_id: 'ATHLETISME', skill_group: 'Aptitudes physiques' },
+    { skill_id: 'ENDURANCE', skill_group: 'Aptitudes physiques' },
+    { skill_id: 'COMBAT_ARME', skill_group: 'Combat (contact)' },
+    { skill_id: 'COMBAT_A_MAINS_NUES', skill_group: 'Combat (contact)' },
+    { skill_id: 'ARMES_DE_POING', skill_group: 'Combat (tir)' },
+    { skill_id: 'CARTOGRAPHIE', skill_group: 'Connaissances' },
+    { skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' }, // communauté d'origine
+    { skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' }, // communauté d'accueil
+    { skill_id: 'EDUCATION_CULTURE_GENERALE', skill_group: 'Connaissances' },
+    { skill_id: 'NAVIGATION', skill_group: 'Connaissances' },
+    // « langue de la communauté d'accueil » non seedable : LANGUE_ETRANGERE n'existe pas comme ID standalone dans ref_skills
+    { skill_id: 'LANGUE_ETRANGERE_NEO_AZURAN', skill_group: 'Langues' },
+    { skill_id: 'LANGAGES_SPECIFIQUES_LANGAGE_DES_SIGNES', skill_group: 'Langues' },
+    { skill_id: 'TELEPILOTAGE', skill_group: 'Pilotage' },
+    { skill_id: 'ANALYSES_SONSCANS', skill_group: 'Techniques' },
+    { skill_id: 'INFORMATIQUE', skill_group: 'Techniques' },
+    { skill_id: 'ELECTRONIQUE', skill_group: 'Techniques' }
   ]
 
   const piloteSMSkills = [
-    { skill_id: 'respiration_foe', skill_group: 'Aptitudes physiques' },
-    { skill_id: 'armes_sous_marines', skill_group: 'Combat (tir)' },
-    { skill_id: 'tactique', skill_group: 'Connaissances' }, // Combat naval
-    { skill_id: 'connaissance_milieu_naturel', skill_group: 'Survie/Extérieur' } // Océans
+    { skill_id: 'RESPIRATION_FOE', skill_group: 'Aptitudes physiques' },
+    { skill_id: 'ARMES_SOUS_MARINES', skill_group: 'Combat (tir)' },
+    { skill_id: 'TACTIQUE_COMBAT_NAVAL', skill_group: 'Connaissances' },
+    { skill_id: 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES', skill_group: 'Pilotage' },
+    { skill_id: 'PILOTAGE__CHASSEURS_SOUS_MARINS', skill_group: 'Pilotage' },
+    { skill_id: 'PILOTAGE__NAVIRES_LEGERS', skill_group: 'Pilotage' },
+    { skill_id: 'PILOTAGE__VEHICULES_DE_SOL', skill_group: 'Pilotage' },
+    { skill_id: 'CONNAISSANCE_MILIEU_NATUREL_OCEANS', skill_group: 'Survie/Extérieur' },
+    { skill_id: 'MECANIQUE_NAVIRES_CHASSEURS_SOUS_MARINS', skill_group: 'Techniques' }
   ]
 
   const piloteAtmSkills = [
-    { skill_id: 'tactique', skill_group: 'Connaissances' }, // Combat terrestre
-    { skill_id: 'connaissance_milieu_naturel', skill_group: 'Survie/Extérieur' } // Surface
+    { skill_id: 'TACTIQUE_COMBAT_TERRESTRE', skill_group: 'Connaissances' },
+    { skill_id: 'MANOEUVRE_DARMURE__ARMURES_EXTERNES', skill_group: 'Pilotage' },
+    { skill_id: 'MANOEUVRE_DARMURE__ARMURES_ATMOSPHERIQUES', skill_group: 'Pilotage' },
+    { skill_id: 'PILOTAGE__CHASSEURS_ATMOSPHERIQUES', skill_group: 'Pilotage' },
+    { skill_id: 'CONNAISSANCE_MILIEU_NATUREL_SURFACE', skill_group: 'Survie/Extérieur' },
+    { skill_id: 'MECANIQUE_CHASSEURS_ATMOSPHERIQUES', skill_group: 'Techniques' }
   ]
 
   const piloteTitles = [
@@ -172,27 +179,27 @@ export const seed = async (knex) => {
   }).returning('id')
 
   await knex('ref_career_skills').insert([
-    { career_id: pirate.id, skill_id: 'manoeuvres_sous_marines', skill_group: 'Aptitudes physiques' },
-    { career_id: pirate.id, skill_id: 'arts_martiaux', skill_group: 'Combat (contact)' },
-    { career_id: pirate.id, skill_id: 'combat_arme', skill_group: 'Combat (contact)' },
-    { career_id: pirate.id, skill_id: 'combat_mains_nues', skill_group: 'Combat (contact)' },
-    { career_id: pirate.id, skill_id: 'armes_poing', skill_group: 'Combat (tir)' },
-    { career_id: pirate.id, skill_id: 'armes_sous_marines', skill_group: 'Combat (tir)' },
-    { career_id: pirate.id, skill_id: 'fusils_armes_epaule', skill_group: 'Combat (tir)' },
-    { career_id: pirate.id, skill_id: 'tir_automatique', skill_group: 'Combat (tir)' },
-    { career_id: pirate.id, skill_id: 'intimidation', skill_group: 'Communications/Relations sociales' },
-    { career_id: pirate.id, skill_id: 'connaissance_nations', skill_group: 'Connaissances' },
-    { career_id: pirate.id, skill_id: 'jeu', skill_group: 'Connaissances' },
-    { career_id: pirate.id, skill_id: 'tactique', skill_group: 'Connaissances' },
-    { career_id: pirate.id, skill_id: 'furtivite_deplacement_silencieux', skill_group: 'Furtivité/Subterfuge' },
-    { career_id: pirate.id, skill_id: 'neo_azuran', skill_group: 'Langues' },
-    { career_id: pirate.id, skill_id: 'ithraxien', skill_group: 'Langues' },
-    { career_id: pirate.id, skill_id: 'manoeuvre_armure', skill_group: 'Pilotage' },
-    { career_id: pirate.id, skill_id: 'telepilotage', skill_group: 'Pilotage' },
-    { career_id: pirate.id, skill_id: 'connaissance_milieu_naturel', skill_group: 'Survie/Extérieur' },
-    { career_id: pirate.id, skill_id: 'observation', skill_group: 'Survie/Extérieur' },
-    { career_id: pirate.id, skill_id: 'orientation', skill_group: 'Survie/Extérieur' },
-    { career_id: pirate.id, skill_id: 'survie', skill_group: 'Survie/Extérieur' }
+    { career_id: pirate.id, skill_id: 'MANOEUVRES_SOUS_MARINES', skill_group: 'Aptitudes physiques' },
+    { career_id: pirate.id, skill_id: 'ARTS_MARTIAUX_TECHNIQUES_OFFENSIVES', skill_group: 'Combat (contact)' },
+    { career_id: pirate.id, skill_id: 'COMBAT_ARME', skill_group: 'Combat (contact)' },
+    { career_id: pirate.id, skill_id: 'COMBAT_A_MAINS_NUES', skill_group: 'Combat (contact)' },
+    { career_id: pirate.id, skill_id: 'ARMES_DE_POING', skill_group: 'Combat (tir)' },
+    { career_id: pirate.id, skill_id: 'ARMES_SOUS_MARINES', skill_group: 'Combat (tir)' },
+    { career_id: pirate.id, skill_id: 'FUSIL_ARMES_DEPAULES', skill_group: 'Combat (tir)' },
+    { career_id: pirate.id, skill_id: 'TIR_AUTOMATIQUES', skill_group: 'Combat (tir)' },
+    { career_id: pirate.id, skill_id: 'INTIMIDATION', skill_group: 'Communications/Relations sociales' },
+    { career_id: pirate.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' },
+    { career_id: pirate.id, skill_id: 'JEU', skill_group: 'Connaissances' },
+    { career_id: pirate.id, skill_id: 'TACTIQUE_OPERATIONS_COMMANDO', skill_group: 'Connaissances' },
+    { career_id: pirate.id, skill_id: 'FURTIVITE_DEPLACEMENT_SILENCIEUX', skill_group: 'Furtivité/Subterfuge' },
+    { career_id: pirate.id, skill_id: 'LANGUE_ETRANGERE_NEO_AZURAN', skill_group: 'Langues' },
+    { career_id: pirate.id, skill_id: 'LANGAGES_SPECIFIQUES_ITHRAXIEN', skill_group: 'Langues' },
+    { career_id: pirate.id, skill_id: 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES', skill_group: 'Pilotage' },
+    { career_id: pirate.id, skill_id: 'TELEPILOTAGE', skill_group: 'Pilotage' },
+    { career_id: pirate.id, skill_id: 'CONNAISSANCE_MILIEU_NATUREL_OCEANS', skill_group: 'Survie/Extérieur' },
+    { career_id: pirate.id, skill_id: 'OBSERVATION', skill_group: 'Survie/Extérieur' },
+    { career_id: pirate.id, skill_id: 'ORIENTATION', skill_group: 'Survie/Extérieur' },
+    { career_id: pirate.id, skill_id: 'SURVIE', skill_group: 'Survie/Extérieur' }
   ])
 
   await knex('ref_career_titles').insert([

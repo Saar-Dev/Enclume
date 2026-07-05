@@ -1,8 +1,10 @@
 // client/src/components/creation/Step2Genotype.jsx
-// Corrections : case Déserteur + aperçu attributs après sélection
+// Refonte Session 130 : tableau aligné fiche perso — accordéon Base+PC
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useCreationStore } from '../../stores/creationStore'
+import { calcAN } from '../../../../shared/polarisUtils.js'
 
 const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
 const GENO_IMAGES = {
@@ -10,6 +12,13 @@ const GENO_IMAGES = {
   HYB_NAT: `${ASSETS_BASE}/s1_hybrid.webp`,
   GEN_HYB: `${ASSETS_BASE}/s1_geno.webp`,
   TEC_HYB: `${ASSETS_BASE}/s1_techno.webp`,
+}
+
+const ATTR_IDS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
+
+const LABEL_TO_ID = {
+  Force: 'FOR', Constitution: 'CON', Coordination: 'COO', Adaptation: 'ADA',
+  Perception: 'PER', Intelligence: 'INT', Volonté: 'VOL', Présence: 'PRE',
 }
 
 const GENOTYPES = [
@@ -110,22 +119,42 @@ const getGenoKey = (id) => {
   }
 }
 
-const MOCK_BASE_ATTRS = { FOR: 12, CON: 13, COO: 14, ADA: 15, PER: 12, INT: 10, VOL: 14, PRE: 9 }
-
 export default function Step2Genotype({ initialData, onNext, onPrev }) {
   const { t } = useTranslation('creation')
+  const step1Data = useCreationStore(s => s.step1Data)
+
   const [selected, setSelected] = useState(() =>
     initialData?.genotypeId ? (GENOTYPES.find(g => g.id === initialData.genotypeId) ?? null) : null
   )
   const [isDeserter, setIsDeserter] = useState(initialData?.isDeserter ?? false)
   const [expandedTrait, setExpandedTrait] = useState(null)
   const [expandedCondition, setExpandedCondition] = useState(false)
+  const [tableExpanded, setTableExpanded] = useState(false)
+
+  const baseAttrs = useMemo(() => {
+    const isFeminin = step1Data?.isFeminin ?? false
+    return Object.fromEntries(ATTR_IDS.map(id => [id, (id === 'FOR' && isFeminin) ? 5 : 7]))
+  }, [step1Data?.isFeminin])
+
+  const modPCAttrs = useMemo(() => {
+    if (!step1Data?.attributes) return Object.fromEntries(ATTR_IDS.map(id => [id, 0]))
+    return Object.fromEntries(
+      ATTR_IDS.map(id => [id, Math.max(0, (step1Data.attributes[id] || baseAttrs[id]) - baseAttrs[id])])
+    )
+  }, [step1Data?.attributes, baseAttrs])
+
+  // Niveau de base + Mod.PC fusionné
+  const basePCAttrs = useMemo(
+    () => Object.fromEntries(ATTR_IDS.map(id => [id, baseAttrs[id] + modPCAttrs[id]])),
+    [baseAttrs, modPCAttrs]
+  )
 
   const handleSelect = (geno) => {
     setSelected(geno)
     setIsDeserter(false)
     setExpandedTrait(null)
     setExpandedCondition(false)
+    setTableExpanded(false)
   }
 
   const handleBack = () => {
@@ -138,6 +167,25 @@ export default function Step2Genotype({ initialData, onNext, onPrev }) {
       onNext({ genotypeId: selected.id, isDeserter })
     }
   }
+
+  const modGenMap = useMemo(() => {
+    if (!selected) return {}
+    const map = {}
+    selected.attributes.forEach(a => {
+      const id = LABEL_TO_ID[a.label]
+      if (id) map[id] = parseInt(a.value) || 0
+    })
+    return map
+  }, [selected])
+
+  const naMap = useMemo(() => {
+    return Object.fromEntries(
+      ATTR_IDS.map(id => [
+        id,
+        Math.max(3, basePCAttrs[id] + (modGenMap[id] || 0)),
+      ])
+    )
+  }, [basePCAttrs, modGenMap])
 
   if (selected) {
     const key = getGenoKey(selected.id)
@@ -179,53 +227,114 @@ export default function Step2Genotype({ initialData, onNext, onPrev }) {
             </label>
           )}
 
-          {selected.attributes.length > 0 && (
+          {/* Tableau attributs */}
+          {step1Data?.attributes && (
             <div style={s.detailSection}>
-              <h3 style={s.detailTitle}>{t('step2.attributesTitle')}</h3>
-              <div style={s.attrGrid}>
-                {selected.attributes.map(attr => (
-                  <div key={attr.label} style={s.attrItem}>
-                    <span style={s.attrLabel}>{attr.label}</span>
-                    <span style={{
-                      ...s.attrValue,
-                      color: attr.value.startsWith('+') ? '#4a9e5c' : attr.value.startsWith('-') ? '#e05c5c' : '#9090c8',
-                    }}>
-                      {attr.value}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <h3 style={s.detailTitle}>{t('step2.attrPreview')}</h3>
+              <table style={s.attrTable}>
+                <thead>
+                  <tr>
+                    <th style={s.th}></th>
+                    {ATTR_IDS.map(id => (
+                      <th key={id} style={s.th}>{t(`step1.attr${id}`)}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Niveau de base = Base + Mod.PC — accordéon */}
+                  <tr
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setTableExpanded(!tableExpanded)}
+                  >
+                    <td style={s.tdLabel}>
+                      <span>{t('step2.rowBase')}</span>
+                      <span style={{ marginLeft: '6px', color: '#5a5a7a', fontSize: '10px' }}>
+                        {tableExpanded ? '▾' : '▸'}
+                      </span>
+                    </td>
+                    {ATTR_IDS.map(id => (
+                      <td key={id} style={s.td}>
+                        <span style={{ ...s.readonly, color: '#c0c0d0', fontWeight: '700' }}>
+                          {basePCAttrs[id]}
+                        </span>
+                      </td>
+                    ))}
+                  </tr>
+
+                  {tableExpanded && (
+                    <>
+                      {/* Sous-ligne : Base brute */}
+                      <tr style={{ backgroundColor: 'rgba(14,14,26,0.5)' }}>
+                        <td style={{ ...s.tdLabel, paddingLeft: '20px', fontSize: '10px', color: '#5a5a7a' }}>
+                          {t('step2.rowBaseRaw')}
+                        </td>
+                        {ATTR_IDS.map(id => (
+                          <td key={id} style={s.td}>
+                            <span style={s.readonly}>{baseAttrs[id]}</span>
+                          </td>
+                        ))}
+                      </tr>
+                      {/* Sous-ligne : Mod. PC */}
+                      <tr style={{ backgroundColor: 'rgba(14,14,26,0.5)' }}>
+                        <td style={{ ...s.tdLabel, paddingLeft: '20px', fontSize: '10px', color: '#5a5a7a' }}>
+                          {t('step2.rowModPC')}
+                        </td>
+                        {ATTR_IDS.map(id => (
+                          <td key={id} style={s.td}>
+                            <span style={s.readonly}>
+                              {modPCAttrs[id] > 0 ? `+${modPCAttrs[id]}` : '0'}
+                            </span>
+                          </td>
+                        ))}
+                      </tr>
+                    </>
+                  )}
+
+                  {/* Mod. Type Génétique — toujours visible */}
+                  <tr>
+                    <td style={s.tdLabel}>{t('step2.rowModGen')}</td>
+                    {ATTR_IDS.map(id => {
+                      const mod = modGenMap[id] || 0
+                      return (
+                        <td key={id} style={s.td}>
+                          <span style={{
+                            ...s.readonly,
+                            color: mod > 0 ? '#4a9e5c' : mod < 0 ? '#e05c5c' : '#8888a8',
+                          }}>
+                            {mod >= 0 ? `+${mod}` : mod}
+                          </span>
+                        </td>
+                      )
+                    })}
+                  </tr>
+
+                  {/* Niveau Actuel — toujours visible */}
+                  <tr style={{ backgroundColor: 'rgba(91,141,238,0.08)' }}>
+                    <td style={s.tdLabel}>{t('step2.rowNA')}</td>
+                    {ATTR_IDS.map(id => (
+                      <td key={id} style={s.td}>
+                        <span style={{ ...s.readonly, color: '#5b8dee', fontWeight: '700' }}>
+                          {naMap[id]}
+                        </span>
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Aptitude Naturelle — toujours visible */}
+                  <tr style={{ backgroundColor: 'rgba(91,141,238,0.04)' }}>
+                    <td style={s.tdLabel}>{t('step2.rowAN')}</td>
+                    {ATTR_IDS.map(id => (
+                      <td key={id} style={s.td}>
+                        <span style={{ ...s.readonly, color: '#9090c8' }}>
+                          {calcAN(naMap[id]) >= 0 ? `+${calcAN(naMap[id])}` : calcAN(naMap[id])}
+                        </span>
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
             </div>
           )}
-
-          <div style={s.detailSection}>
-            <h3 style={s.detailTitle}>{t('step2.attr_after')}</h3>
-            <div style={s.afterGrid}>
-              {['FOR','CON','COO','ADA','PER','INT','VOL','PRE'].map(attrId => {
-                const base = MOCK_BASE_ATTRS[attrId] || 7
-                const modAttr = selected.attributes.find(a => {
-                  const map = { Force:'FOR', Constitution:'CON', Coordination:'COO', Adaptation:'ADA', Perception:'PER', Intelligence:'INT', Volonté:'VOL', Présence:'PRE' }
-                  return map[a.label] === attrId
-                })
-                const mod = modAttr ? parseInt(modAttr.value) || 0 : 0
-                const effective = base + mod
-                return (
-                  <div key={attrId} style={s.afterItem}>
-                    <span style={s.afterLabel}>{attrId}</span>
-                    <span style={s.afterCalc}>
-                      {base}{mod >= 0 ? '+' : ''}{mod}
-                    </span>
-                    <span style={{
-                      ...s.afterValue,
-                      color: effective > base ? '#4a9e5c' : effective < base ? '#e05c5c' : '#c0c0d0',
-                    }}>
-                      = {effective}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
 
           {selected.conditions && (
             <div style={s.detailSection}>
@@ -325,6 +434,12 @@ export default function Step2Genotype({ initialData, onNext, onPrev }) {
 }
 
 const s = {
+  container: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
   detailFull: {
     flex: 1,
     overflowY: 'auto',
@@ -416,58 +531,41 @@ const s = {
     borderBottom: '1px solid #1e1e2e',
     margin: 0,
   },
-  attrGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
-    gap: '1px',
-    padding: '8px',
-  },
-  attrItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '6px 10px',
-    backgroundColor: 'rgba(14,14,26,0.6)',
-    borderRadius: '3px',
-  },
-  attrLabel: {
-    color: '#5a5a7a',
+  attrTable: {
+    width: '100%',
+    borderCollapse: 'collapse',
     fontSize: '11px',
+  },
+  th: {
+    padding: '5px 4px',
+    color: '#5a5a7a',
+    fontSize: '10px',
     fontWeight: '600',
+    textAlign: 'center',
+    borderBottom: '1px solid #1e1e2e',
+    backgroundColor: '#0e0e1a',
+    whiteSpace: 'nowrap',
   },
-  attrValue: {
-    fontSize: '12px',
-    fontWeight: '700',
+  td: {
+    padding: '3px 2px',
+    textAlign: 'center',
+    borderBottom: '1px solid #1a1a2e',
   },
-  afterGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-    gap: '4px',
-    padding: '8px',
-  },
-  afterItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '6px 10px',
-    backgroundColor: 'rgba(14,14,26,0.6)',
-    borderRadius: '3px',
-  },
-  afterLabel: {
-    color: '#5a5a7a',
+  tdLabel: {
+    padding: '4px 10px',
+    color: '#6a6a8a',
     fontSize: '11px',
-    fontWeight: '700',
-    width: '32px',
+    whiteSpace: 'nowrap',
+    borderBottom: '1px solid #1a1a2e',
+    borderRight: '1px solid #1e1e2e',
   },
-  afterCalc: {
-    color: '#9090c8',
+  readonly: {
+    display: 'inline-block',
+    minWidth: '28px',
+    color: '#8888a8',
     fontSize: '12px',
     fontWeight: '600',
-    flex: 1,
-  },
-  afterValue: {
-    fontSize: '13px',
-    fontWeight: '700',
+    textAlign: 'center',
   },
   accordion: {
     borderBottom: '1px solid #1a1a2e',

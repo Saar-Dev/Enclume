@@ -7,6 +7,7 @@ import { requireRole } from '../middleware/role.js'
 import { multerUpload, multerGlb } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
 import { WS } from '../../../shared/events.js'
+import { SETTINGS_SCHEMA } from '../lib/campaignSettingsService.js'
 
 const router = Router()
 
@@ -168,7 +169,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // PUT /api/campaigns/:id — modifier une campagne
 router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
-  const { name, status, default_battlemap_id, dice_config, pnj_unlimited_ammo, reload_mode, action_timer_sec, default_token_glb_url, shock_auto_stun } = req.body
+  const { name, status, default_battlemap_id, dice_config, default_token_glb_url, settings } = req.body
   const updates = {}
   if (name !== undefined) updates.name = name
   if (status !== undefined) updates.status = status
@@ -180,28 +181,33 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
     updates.dice_config = dice_config === null ? null : JSON.stringify(dice_config)
   }
 
-  if (pnj_unlimited_ammo !== undefined) {
-    if (typeof pnj_unlimited_ammo !== 'boolean') throw new AppError(400, 'pnj_unlimited_ammo must be a boolean')
-    updates.pnj_unlimited_ammo = pnj_unlimited_ammo
-  }
-
-  if (reload_mode !== undefined) {
-    if (!['magazine', 'topup'].includes(reload_mode)) throw new AppError(400, 'reload_mode doit être "magazine" ou "topup"')
-    updates.reload_mode = reload_mode
-  }
-
-  if (action_timer_sec !== undefined) {
-    if (!Number.isInteger(action_timer_sec) || action_timer_sec < 0) throw new AppError(400, 'action_timer_sec doit être un entier ≥ 0')
-    updates.action_timer_sec = action_timer_sec
-  }
-
   if (default_token_glb_url !== undefined) {
     updates.default_token_glb_url = default_token_glb_url === null ? null : String(default_token_glb_url)
   }
 
-  if (shock_auto_stun !== undefined) {
-    if (typeof shock_auto_stun !== 'boolean') throw new AppError(400, 'shock_auto_stun must be a boolean')
-    updates.shock_auto_stun = shock_auto_stun
+  // settings — validation par clé contre SETTINGS_SCHEMA (source unique, partagée avec campaignSettingsService)
+  if (settings !== undefined) {
+    if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
+      throw new AppError(400, 'settings must be a JSON object')
+    }
+
+    for (const [key, value] of Object.entries(settings)) {
+      const schema = SETTINGS_SCHEMA[key]
+      if (!schema) throw new AppError(400, `Clé settings inconnue : ${key}`)
+
+      if (typeof value !== schema.type) {
+        throw new AppError(400, `Type invalide pour settings.${key} : attendu ${schema.type}, reçu ${typeof value}`)
+      }
+      if (schema.enum && !schema.enum.includes(value)) {
+        throw new AppError(400, `settings.${key} doit être l'une des valeurs : ${schema.enum.join(', ')}`)
+      }
+      if (key === 'action_timer_sec' && (!Number.isInteger(value) || value < 0)) {
+        throw new AppError(400, 'settings.action_timer_sec doit être un entier ≥ 0')
+      }
+    }
+
+    // Merge JSONB atomique côté DB — évite une race condition entre deux sauvegardes concurrentes (pattern PC39)
+    updates.settings = db.raw('settings || ?::jsonb', [JSON.stringify(settings)])
   }
 
   // updated_at systématique sur tout PUT
@@ -210,7 +216,7 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
   const [campaign] = await db('campaigns')
     .where({ id: req.params.id })
     .update(updates)
-    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'pnj_unlimited_ammo', 'reload_mode', 'action_timer_sec', 'default_token_glb_url', 'shock_auto_stun', 'created_at', 'updated_at'])
+    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'default_token_glb_url', 'settings', 'created_at', 'updated_at'])
   req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_SETTINGS_UPDATED, { campaign })
   res.json({ campaign })
 })

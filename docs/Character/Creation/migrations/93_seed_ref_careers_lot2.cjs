@@ -18,28 +18,33 @@ export const seed = async (knex) => {
   }).returning('id')
 
   await knex('ref_career_skills').insert([
-    { career_id: cultivateur.id, skill_id: 'endurance', skill_group: 'Aptitudes physiques' },
-    { career_id: cultivateur.id, skill_id: 'manoeuvres_sous_marines', skill_group: 'Aptitudes physiques' },
-    { career_id: cultivateur.id, skill_id: 'analyse_empathique', skill_group: 'Communications/Relations sociales' },
-    { career_id: cultivateur.id, skill_id: 'bureaucratie', skill_group: 'Connaissances' },
-    { career_id: cultivateur.id, skill_id: 'connaissance_nations', skill_group: 'Connaissances' },
-    { career_id: cultivateur.id, skill_id: 'sciences_connaissances_specialisees', skill_group: 'Connaissances' },
-    { career_id: cultivateur.id, skill_id: 'combat_arme', skill_group: 'Combat (contact)' },
-    { career_id: cultivateur.id, skill_id: 'armes_sous_marines', skill_group: 'Combat (tir)' },
-    { career_id: cultivateur.id, skill_id: 'neo_azuran', skill_group: 'Langues' },
-    { career_id: cultivateur.id, skill_id: 'exon', skill_group: 'Langues' },
-    { career_id: cultivateur.id, skill_id: 'manoeuvre_armure', skill_group: 'Pilotage' },
-    { career_id: cultivateur.id, skill_id: 'pilotage', skill_group: 'Pilotage' },
-    { career_id: cultivateur.id, skill_id: 'telepilotage', skill_group: 'Pilotage' },
-    { career_id: cultivateur.id, skill_id: 'connaissance_milieu_naturel', skill_group: 'Survie/Extérieur' },
-    { career_id: cultivateur.id, skill_id: 'survie', skill_group: 'Survie/Extérieur' },
-    { career_id: cultivateur.id, skill_id: 'observation', skill_group: 'Survie/Extérieur' },
-    { career_id: cultivateur.id, skill_id: 'orientation', skill_group: 'Survie/Extérieur' },
-    { career_id: cultivateur.id, skill_id: 'aquaculture_elevage', skill_group: 'Techniques' },
-    { career_id: cultivateur.id, skill_id: 'artisanat', skill_group: 'Techniques' },
-    { career_id: cultivateur.id, skill_id: 'dressage', skill_group: 'Techniques' },
-    { career_id: cultivateur.id, skill_id: 'informatique', skill_group: 'Techniques' },
-    { career_id: cultivateur.id, skill_id: 'premiers_soins', skill_group: 'Techniques' }
+    { career_id: cultivateur.id, skill_id: 'ENDURANCE', skill_group: 'Aptitudes physiques' },
+    { career_id: cultivateur.id, skill_id: 'MANOEUVRES_SOUS_MARINES', skill_group: 'Aptitudes physiques' },
+    { career_id: cultivateur.id, skill_id: 'ANALYSE_EMPATHIQUE', skill_group: 'Communications/Relations sociales' },
+    { career_id: cultivateur.id, skill_id: 'BUREAUCRATIE', skill_group: 'Connaissances' },
+    { career_id: cultivateur.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' },
+    // LdB : Sciences/Connaissances spécialisées (Biologie, Botanique, Zoologie) — 3 spécialités explicites
+    { career_id: cultivateur.id, skill_id: 'SCIENCES_CONNAISANCES_SPECIALISEES_BIOLOGIE_PHYSIOLOGIE', skill_group: 'Connaissances' },
+    { career_id: cultivateur.id, skill_id: 'SCIENCES_CONNAISANCES_SPECIALISEES_BOTANIQUE', skill_group: 'Connaissances' },
+    { career_id: cultivateur.id, skill_id: 'SCIENCES_CONNAISANCES_SPECIALISEES_ZOOLOGIE', skill_group: 'Connaissances' },
+    { career_id: cultivateur.id, skill_id: 'COMBAT_ARME', skill_group: 'Combat (contact)' },
+    { career_id: cultivateur.id, skill_id: 'ARMES_SOUS_MARINES', skill_group: 'Combat (tir)' },
+    { career_id: cultivateur.id, skill_id: 'LANGUE_ETRANGERE_NEO_AZURAN', skill_group: 'Langues' },
+    { career_id: cultivateur.id, skill_id: 'LANGAGES_SPECIFIQUES_EXON', skill_group: 'Langues' },
+    // LdB groupe « Pilotage » inclut aussi Premiers soins et Télé-pilotage
+    { career_id: cultivateur.id, skill_id: 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES', skill_group: 'Pilotage' },
+    { career_id: cultivateur.id, skill_id: 'PILOTAGE__VEHICULES_DE_SOL', skill_group: 'Pilotage' },
+    { career_id: cultivateur.id, skill_id: 'PILOTAGE__SCOOTERS_SOUS_MARINS', skill_group: 'Pilotage' },
+    { career_id: cultivateur.id, skill_id: 'PREMIER_SOINS', skill_group: 'Pilotage' },
+    { career_id: cultivateur.id, skill_id: 'TELEPILOTAGE', skill_group: 'Pilotage' },
+    { career_id: cultivateur.id, skill_id: 'CONNAISSANCE_MILIEU_NATUREL_OCEANS', skill_group: 'Survie/Extérieur' },
+    { career_id: cultivateur.id, skill_id: 'SURVIE', skill_group: 'Survie/Extérieur' },
+    { career_id: cultivateur.id, skill_id: 'OBSERVATION', skill_group: 'Survie/Extérieur' },
+    { career_id: cultivateur.id, skill_id: 'ORIENTATION', skill_group: 'Survie/Extérieur' },
+    { career_id: cultivateur.id, skill_id: 'AQUACULTURE_ELEVAGE', skill_group: 'Techniques' },
+    { career_id: cultivateur.id, skill_id: 'ART_ARTISANAT', skill_group: 'Techniques' },
+    { career_id: cultivateur.id, skill_id: 'DRESSAGE', skill_group: 'Techniques' },
+    { career_id: cultivateur.id, skill_id: 'INFORMATIQUE', skill_group: 'Techniques' }
   ])
 
   await knex('ref_career_titles').insert([
@@ -99,21 +104,25 @@ export const seed = async (knex) => {
   ])
 
   await knex('ref_career_skills').insert([
-    { career_id: diplomate.id, skill_id: 'armes_poing', skill_group: 'Combat (tir)' },
-    { career_id: diplomate.id, skill_id: 'analyse_empathique', skill_group: 'Communications/Relations sociales' },
-    { career_id: diplomate.id, skill_id: 'eloquence_persuasion', skill_group: 'Communications/Relations sociales' },
-    { career_id: diplomate.id, skill_id: 'enseignement', skill_group: 'Communications/Relations sociales' },
-    { career_id: diplomate.id, skill_id: 'entregent_seduction', skill_group: 'Communications/Relations sociales' },
-    { career_id: diplomate.id, skill_id: 'bureaucratie', skill_group: 'Connaissances' },
-    { career_id: diplomate.id, skill_id: 'connaissance_nations', skill_group: 'Connaissances' },
-    { career_id: diplomate.id, skill_id: 'education_culture_generale', skill_group: 'Connaissances' },
-    { career_id: diplomate.id, skill_id: 'recherche_informations', skill_group: 'Connaissances' },
-    { career_id: diplomate.id, skill_id: 'sciences_connaissances_specialisees', skill_group: 'Connaissances' },
-    { career_id: diplomate.id, skill_id: 'espionnage_surveillance', skill_group: 'Furtivité/Subterfuge' },
-    { career_id: diplomate.id, skill_id: 'neo_azuran', skill_group: 'Langues' },
-    { career_id: diplomate.id, skill_id: 'absolan', skill_group: 'Langues' },
+    { career_id: diplomate.id, skill_id: 'ARMES_DE_POING', skill_group: 'Combat (tir)' },
+    { career_id: diplomate.id, skill_id: 'ANALYSE_EMPATHIQUE', skill_group: 'Communications/Relations sociales' },
+    { career_id: diplomate.id, skill_id: 'ELOQUENCE_PERSUASION', skill_group: 'Communications/Relations sociales' },
+    { career_id: diplomate.id, skill_id: 'ENSEIGNEMENT', skill_group: 'Communications/Relations sociales' },
+    { career_id: diplomate.id, skill_id: 'ENTREGENT_SEDUCTION', skill_group: 'Communications/Relations sociales' },
+    { career_id: diplomate.id, skill_id: 'BUREAUCRATIE', skill_group: 'Connaissances' },
+    // LdB : Connaissance des nations/organisations (trois nations au choix, Milieu politique de la nation d'origine)
+    { career_id: diplomate.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances', conditional: true },
+    { career_id: diplomate.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances', conditional: true },
+    { career_id: diplomate.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances', conditional: true },
+    { career_id: diplomate.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' },
+    { career_id: diplomate.id, skill_id: 'EDUCATION_CULTURE_GENERALE', skill_group: 'Connaissances' },
+    { career_id: diplomate.id, skill_id: 'RECHERCHE_DINFORMATIONS', skill_group: 'Connaissances' },
+    { career_id: diplomate.id, skill_id: 'SCIENCES_CONNAISANCES_SPECIALISEES_SCIENCES_POLITIQUES', skill_group: 'Connaissances' },
+    { career_id: diplomate.id, skill_id: 'ESPIONNAGE_SURVEILLANCE', skill_group: 'Furtivité/Subterfuge' },
     // Note : « langue de la communauté d'accueil » + « une autre langue au choix » — variables
-    { career_id: diplomate.id, skill_id: 'bouclier_mental', skill_group: 'Compétences spéciales' }
+    { career_id: diplomate.id, skill_id: 'LANGUE_ETRANGERE_NEO_AZURAN', skill_group: 'Langues' },
+    { career_id: diplomate.id, skill_id: 'LANGAGES_SPECIFIQUES_ABSOLAN', skill_group: 'Langues' },
+    { career_id: diplomate.id, skill_id: 'BOUCLIER_MENTAL', skill_group: 'Compétences spéciales' }
   ])
 
   await knex('ref_career_titles').insert([
@@ -173,20 +182,21 @@ export const seed = async (knex) => {
   ])
 
   await knex('ref_career_skills').insert([
-    { career_id: erudit.id, skill_id: 'eloquence_persuasion', skill_group: 'Communications/Relations sociales' },
-    { career_id: erudit.id, skill_id: 'enseignement', skill_group: 'Communications/Relations sociales' },
-    { career_id: erudit.id, skill_id: 'cartographie', skill_group: 'Connaissances' },
-    { career_id: erudit.id, skill_id: 'connaissance_nations', skill_group: 'Connaissances' },
-    { career_id: erudit.id, skill_id: 'cryptographie', skill_group: 'Connaissances' },
-    { career_id: erudit.id, skill_id: 'education_culture_generale', skill_group: 'Connaissances' },
-    { career_id: erudit.id, skill_id: 'navigation', skill_group: 'Connaissances' },
-    { career_id: erudit.id, skill_id: 'recherche_informations', skill_group: 'Connaissances' },
-    { career_id: erudit.id, skill_id: 'sciences_connaissances_specialisees', skill_group: 'Connaissances' },
+    { career_id: erudit.id, skill_id: 'ELOQUENCE_PERSUASION', skill_group: 'Communications/Relations sociales' },
+    { career_id: erudit.id, skill_id: 'ENSEIGNEMENT', skill_group: 'Communications/Relations sociales' },
+    { career_id: erudit.id, skill_id: 'CARTOGRAPHIE', skill_group: 'Connaissances' },
+    { career_id: erudit.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' },
+    { career_id: erudit.id, skill_id: 'CRYPTOGRAPHIE', skill_group: 'Connaissances' },
+    { career_id: erudit.id, skill_id: 'EDUCATION_CULTURE_GENERALE', skill_group: 'Connaissances' },
+    { career_id: erudit.id, skill_id: 'NAVIGATION', skill_group: 'Connaissances' },
+    { career_id: erudit.id, skill_id: 'RECHERCHE_DINFORMATIONS', skill_group: 'Connaissances' },
+    // LdB : Sciences/Connaissances spécialisées (au choix — Archéologie, Géographie, Histoire, etc.)
+    { career_id: erudit.id, skill_id: 'SCIENCES_CONNAISANCES_SPECIALISEES', skill_group: 'Connaissances', conditional: true },
     // Note : « Langues : au choix » — variable
-    { career_id: erudit.id, skill_id: 'analyse_sonscans', skill_group: 'Techniques' },
-    { career_id: erudit.id, skill_id: 'informatique', skill_group: 'Techniques' },
-    { career_id: erudit.id, skill_id: 'bouclier_mental', skill_group: 'Compétences spéciales' },
-    { career_id: erudit.id, skill_id: 'meditation', skill_group: 'Compétences spéciales' }
+    { career_id: erudit.id, skill_id: 'ANALYSES_SONSCANS', skill_group: 'Techniques' },
+    { career_id: erudit.id, skill_id: 'INFORMATIQUE', skill_group: 'Techniques' },
+    { career_id: erudit.id, skill_id: 'BOUCLIER_MENTAL', skill_group: 'Compétences spéciales' },
+    { career_id: erudit.id, skill_id: 'MEDITATION', skill_group: 'Compétences spéciales' }
   ])
 
   await knex('ref_career_titles').insert([
@@ -239,41 +249,46 @@ export const seed = async (knex) => {
   }).returning('id')
 
   await knex('ref_career_skills').insert([
-    { career_id: espion.id, skill_id: 'acrobatie_equilibre', skill_group: 'Aptitudes physiques' },
-    { career_id: espion.id, skill_id: 'athletisme', skill_group: 'Aptitudes physiques' },
-    { career_id: espion.id, skill_id: 'escalade', skill_group: 'Aptitudes physiques' },
-    { career_id: espion.id, skill_id: 'arts_martiaux', skill_group: 'Combat (contact)' },
-    { career_id: espion.id, skill_id: 'combat_arme', skill_group: 'Combat (contact)' },
-    { career_id: espion.id, skill_id: 'combat_mains_nues', skill_group: 'Combat (contact)' },
-    { career_id: espion.id, skill_id: 'armes_poing', skill_group: 'Combat (tir)' },
-    { career_id: espion.id, skill_id: 'fusils_armes_epaule', skill_group: 'Combat (tir)' },
-    { career_id: espion.id, skill_id: 'analyse_empathique', skill_group: 'Communications/Relations sociales' },
-    { career_id: espion.id, skill_id: 'eloquence_persuasion', skill_group: 'Communications/Relations sociales' },
-    { career_id: espion.id, skill_id: 'entregent_seduction', skill_group: 'Communications/Relations sociales' },
-    { career_id: espion.id, skill_id: 'intimidation', skill_group: 'Communications/Relations sociales' },
-    { career_id: espion.id, skill_id: 'bureaucratie', skill_group: 'Connaissances' },
-    { career_id: espion.id, skill_id: 'connaissance_nations', skill_group: 'Connaissances' },
-    { career_id: espion.id, skill_id: 'cryptographie', skill_group: 'Connaissances' },
-    { career_id: espion.id, skill_id: 'education_culture_generale', skill_group: 'Connaissances' },
-    { career_id: espion.id, skill_id: 'recherche_informations', skill_group: 'Connaissances' },
-    { career_id: espion.id, skill_id: 'camouflage_dissimulation', skill_group: 'Furtivité/Subterfuge' },
-    { career_id: espion.id, skill_id: 'deguisement_imitation', skill_group: 'Furtivité/Subterfuge' },
-    { career_id: espion.id, skill_id: 'evasion', skill_group: 'Furtivité/Subterfuge' },
-    { career_id: espion.id, skill_id: 'furtivite_deplacement_silencieux', skill_group: 'Furtivité/Subterfuge' },
-    { career_id: espion.id, skill_id: 'discretion_filature', skill_group: 'Furtivité/Subterfuge' },
-    { career_id: espion.id, skill_id: 'pickpocket', skill_group: 'Furtivité/Subterfuge' },
-    // Note : « langue de la communauté d'accueil (lieu d'opération) » — variable
-    { career_id: espion.id, skill_id: 'enefid', skill_group: 'Langues' },
-    { career_id: espion.id, skill_id: 'neo_azuran', skill_group: 'Langues' },
-    // Note : « une autre langue au choix (sauf arkonien) » — variable
-    { career_id: espion.id, skill_id: 'observation', skill_group: 'Survie/Extérieur' },
-    { career_id: espion.id, skill_id: 'orientation', skill_group: 'Survie/Extérieur' },
-    { career_id: espion.id, skill_id: 'espionnage_surveillance', skill_group: 'Techniques' },
-    { career_id: espion.id, skill_id: 'falsification', skill_group: 'Techniques' },
-    { career_id: espion.id, skill_id: 'informatique', skill_group: 'Techniques' },
-    { career_id: espion.id, skill_id: 'piratage_informatique', skill_group: 'Techniques' },
-    { career_id: espion.id, skill_id: 'systemes_securite', skill_group: 'Techniques' },
-    { career_id: espion.id, skill_id: 'bouclier_mental', skill_group: 'Compétences spéciales' }
+    { career_id: espion.id, skill_id: 'ACROBATIE_EQUILIBRE', skill_group: 'Aptitudes physiques' },
+    { career_id: espion.id, skill_id: 'ATHLETISME', skill_group: 'Aptitudes physiques' },
+    { career_id: espion.id, skill_id: 'ESCALADE', skill_group: 'Aptitudes physiques' },
+    // LdB : Arts martiaux (Lutte, Techniques défensives, Techniques offensives) — 3 explicites
+    { career_id: espion.id, skill_id: 'ARTS_MARTIAUX_LUTTE', skill_group: 'Combat (contact)' },
+    { career_id: espion.id, skill_id: 'ARTS_MARTIAUX_TECHNIQUES_DEFENSIVES', skill_group: 'Combat (contact)' },
+    { career_id: espion.id, skill_id: 'ARTS_MARTIAUX_TECHNIQUES_OFFENSIVES', skill_group: 'Combat (contact)' },
+    { career_id: espion.id, skill_id: 'COMBAT_ARME', skill_group: 'Combat (contact)' },
+    { career_id: espion.id, skill_id: 'COMBAT_A_MAINS_NUES', skill_group: 'Combat (contact)' },
+    { career_id: espion.id, skill_id: 'ARMES_DE_POING', skill_group: 'Combat (tir)' },
+    { career_id: espion.id, skill_id: 'FUSIL_ARMES_DEPAULES', skill_group: 'Combat (tir)' },
+    { career_id: espion.id, skill_id: 'ANALYSE_EMPATHIQUE', skill_group: 'Communications/Relations sociales' },
+    { career_id: espion.id, skill_id: 'ELOQUENCE_PERSUASION', skill_group: 'Communications/Relations sociales' },
+    { career_id: espion.id, skill_id: 'ENTREGENT_SEDUCTION', skill_group: 'Communications/Relations sociales' },
+    { career_id: espion.id, skill_id: 'INTIMIDATION', skill_group: 'Communications/Relations sociales' },
+    { career_id: espion.id, skill_id: 'BUREAUCRATIE', skill_group: 'Connaissances' },
+    // LdB : Connaissance des nations/organisations (communauté d'origine, lieu d'opération, une autre au choix)
+    { career_id: espion.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' },
+    { career_id: espion.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' },
+    { career_id: espion.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances', conditional: true },
+    { career_id: espion.id, skill_id: 'CRYPTOGRAPHIE', skill_group: 'Connaissances' },
+    { career_id: espion.id, skill_id: 'EDUCATION_CULTURE_GENERALE', skill_group: 'Connaissances' },
+    { career_id: espion.id, skill_id: 'RECHERCHE_DINFORMATIONS', skill_group: 'Connaissances' },
+    { career_id: espion.id, skill_id: 'CAMOUFLAGE_DISSIMULATION', skill_group: 'Furtivité/Subterfuge' },
+    { career_id: espion.id, skill_id: 'DEGUISEMENT_IMITATION', skill_group: 'Furtivité/Subterfuge' },
+    { career_id: espion.id, skill_id: 'EVASION', skill_group: 'Furtivité/Subterfuge' },
+    { career_id: espion.id, skill_id: 'FURTIVITE_DEPLACEMENT_SILENCIEUX', skill_group: 'Furtivité/Subterfuge' },
+    { career_id: espion.id, skill_id: 'DISCRETION_FILATURE', skill_group: 'Furtivité/Subterfuge' },
+    { career_id: espion.id, skill_id: 'PICKPOCKET', skill_group: 'Furtivité/Subterfuge' },
+    // Note : « langue de la communauté d'accueil (lieu d'opération) » + « une autre langue au choix (sauf arkonien) » — variables
+    { career_id: espion.id, skill_id: 'LANGAGES_SPECIFIQUES_ENEFID', skill_group: 'Langues' },
+    { career_id: espion.id, skill_id: 'LANGUE_ETRANGERE_NEO_AZURAN', skill_group: 'Langues' },
+    { career_id: espion.id, skill_id: 'OBSERVATION', skill_group: 'Survie/Extérieur' },
+    { career_id: espion.id, skill_id: 'ORIENTATION', skill_group: 'Survie/Extérieur' },
+    { career_id: espion.id, skill_id: 'ESPIONNAGE_SURVEILLANCE', skill_group: 'Techniques' },
+    { career_id: espion.id, skill_id: 'FALSIFICATION', skill_group: 'Techniques' },
+    { career_id: espion.id, skill_id: 'INFORMATIQUE', skill_group: 'Techniques' },
+    { career_id: espion.id, skill_id: 'PIRATAGE_INFORMATIQUE', skill_group: 'Techniques' },
+    { career_id: espion.id, skill_id: 'SYSTEMES_DE_SECURITE', skill_group: 'Techniques' },
+    { career_id: espion.id, skill_id: 'BOUCLIER_MENTAL', skill_group: 'Compétences spéciales' }
   ])
 
   // Prérequis : sera lié après seed complet — diplomate, mercenaire, policier_enqueteur, soldat_milicien, veilleur — 3 ans
@@ -333,27 +348,33 @@ export const seed = async (knex) => {
   }).returning('id')
 
   await knex('ref_career_skills').insert([
-    { career_id: hybrideTrident.id, skill_id: 'athletisme', skill_group: 'Aptitudes physiques' },
-    { career_id: hybrideTrident.id, skill_id: 'endurance', skill_group: 'Aptitudes physiques' },
-    { career_id: hybrideTrident.id, skill_id: 'manoeuvres_sous_marines', skill_group: 'Aptitudes physiques', conditional: true },
-    { career_id: hybrideTrident.id, skill_id: 'arts_martiaux', skill_group: 'Combat (contact)' },
-    { career_id: hybrideTrident.id, skill_id: 'combat_arme', skill_group: 'Combat (contact)' },
-    { career_id: hybrideTrident.id, skill_id: 'combat_mains_nues', skill_group: 'Combat (contact)' },
-    { career_id: hybrideTrident.id, skill_id: 'armes_sous_marines', skill_group: 'Combat (tir)' },
+    { career_id: hybrideTrident.id, skill_id: 'ATHLETISME', skill_group: 'Aptitudes physiques' },
+    { career_id: hybrideTrident.id, skill_id: 'ENDURANCE', skill_group: 'Aptitudes physiques' },
+    // LdB : Manœuvres sous-marines peut être remplacée par Hybride
+    { career_id: hybrideTrident.id, skill_id: 'MANOEUVRES_SOUS_MARINES', skill_group: 'Aptitudes physiques', conditional: true },
+    // LdB : Arts martiaux (Lutte) — Lutte uniquement, pas les 3 techniques
+    { career_id: hybrideTrident.id, skill_id: 'ARTS_MARTIAUX_LUTTE', skill_group: 'Combat (contact)' },
+    { career_id: hybrideTrident.id, skill_id: 'COMBAT_ARME', skill_group: 'Combat (contact)' },
+    { career_id: hybrideTrident.id, skill_id: 'COMBAT_A_MAINS_NUES', skill_group: 'Combat (contact)' },
+    { career_id: hybrideTrident.id, skill_id: 'ARMES_SOUS_MARINES', skill_group: 'Combat (tir)' },
     // Note : « une autre Compétence d'arme au choix » — variable
-    { career_id: hybrideTrident.id, skill_id: 'analyse_empathique', skill_group: 'Communication/Relations sociales' },
-    { career_id: hybrideTrident.id, skill_id: 'connaissance_nations', skill_group: 'Connaissances' },
-    { career_id: hybrideTrident.id, skill_id: 'tactique', skill_group: 'Connaissances' },
-    { career_id: hybrideTrident.id, skill_id: 'evasion', skill_group: 'Furtivité/Subterfuge' },
-    { career_id: hybrideTrident.id, skill_id: 'furtivite_deplacement_silencieux', skill_group: 'Furtivité/Subterfuge' },
-    { career_id: hybrideTrident.id, skill_id: 'inesis', skill_group: 'Langues' },
-    { career_id: hybrideTrident.id, skill_id: 'exon', skill_group: 'Langues' },
-    { career_id: hybrideTrident.id, skill_id: 'langage_signes', skill_group: 'Langues' },
-    { career_id: hybrideTrident.id, skill_id: 'connaissance_milieu_naturel', skill_group: 'Survie/Extérieur' },
-    { career_id: hybrideTrident.id, skill_id: 'observation', skill_group: 'Survie/Extérieur' },
-    { career_id: hybrideTrident.id, skill_id: 'orientation', skill_group: 'Survie/Extérieur' },
-    { career_id: hybrideTrident.id, skill_id: 'survie', skill_group: 'Survie/Extérieur' },
-    { career_id: hybrideTrident.id, skill_id: 'hybride', skill_group: 'Compétences spéciales' }
+    { career_id: hybrideTrident.id, skill_id: 'ANALYSE_EMPATHIQUE', skill_group: 'Communication/Relations sociales' },
+    // LdB : Connaissance des nations/organisations (Équinoxe, Culte du Trident, Communauté d'origine, Veilleurs)
+    { career_id: hybrideTrident.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' },
+    { career_id: hybrideTrident.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' },
+    { career_id: hybrideTrident.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' },
+    { career_id: hybrideTrident.id, skill_id: 'CONNAISSANCE_DES_NATIONS_ORGANISATIONS', skill_group: 'Connaissances' },
+    { career_id: hybrideTrident.id, skill_id: 'TACTIQUE_OPERATIONS_COMMANDO', skill_group: 'Connaissances' },
+    { career_id: hybrideTrident.id, skill_id: 'EVASION', skill_group: 'Furtivité/Subterfuge' },
+    { career_id: hybrideTrident.id, skill_id: 'FURTIVITE_DEPLACEMENT_SILENCIEUX', skill_group: 'Furtivité/Subterfuge' },
+    { career_id: hybrideTrident.id, skill_id: 'LANGAGES_SPECIFIQUES_INESIS', skill_group: 'Langues' },
+    { career_id: hybrideTrident.id, skill_id: 'LANGAGES_SPECIFIQUES_EXON', skill_group: 'Langues' },
+    { career_id: hybrideTrident.id, skill_id: 'LANGAGES_SPECIFIQUES_LANGAGE_DES_SIGNES', skill_group: 'Langues' },
+    { career_id: hybrideTrident.id, skill_id: 'CONNAISSANCE_MILIEU_NATUREL_OCEANS', skill_group: 'Survie/Extérieur' },
+    { career_id: hybrideTrident.id, skill_id: 'OBSERVATION', skill_group: 'Survie/Extérieur' },
+    { career_id: hybrideTrident.id, skill_id: 'ORIENTATION', skill_group: 'Survie/Extérieur' },
+    { career_id: hybrideTrident.id, skill_id: 'SURVIE', skill_group: 'Survie/Extérieur' },
+    { career_id: hybrideTrident.id, skill_id: 'HYBRIDE', skill_group: 'Compétences spéciales' }
   ])
 
   await knex('ref_career_titles').insert([

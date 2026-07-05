@@ -1,5 +1,6 @@
 import { WS } from '../../../shared/events.js'
 import { checkLOS, findInterceptingTokens, checkCoverage } from '../../../shared/losUtils.js'
+import { getCampaignSettings } from './campaignSettingsService.js'
 
 /**
  * Vérifie LOS et intercepteurs pour une action de tir distance.
@@ -13,10 +14,10 @@ import { checkLOS, findInterceptingTokens, checkCoverage } from '../../../shared
  * @returns {Promise<{result: 'clear'|'blocked'|'intercepted', newTargetTokenId?: string}>}
  */
 export async function checkCombatLOS(io, db, campaignId, action, character) {
-  const [srcToken, tgtToken, campaign] = await Promise.all([
+  const [srcToken, tgtToken, settings] = await Promise.all([
     db('tokens').where({ id: action.token_id }).select('pos_x', 'pos_y', 'pos_z', 'battlemap_id').first(),
     db('tokens').where({ id: action.target_token_id }).select('id', 'pos_x', 'pos_y', 'pos_z', 'label', 'battlemap_id').first(),
-    db('campaigns').where({ id: campaignId }).select('allow_los_cancel', 'pnj_unlimited_ammo').first(),
+    getCampaignSettings(db, campaignId),
   ])
 
   if (!srcToken || !tgtToken) {
@@ -47,7 +48,7 @@ export async function checkCombatLOS(io, db, campaignId, action, character) {
     console.log(`[DBG-LOS] → BLOCKED — COMBAT_DECLARE_ERROR → campagne ${campaignId}`)
     // Tir en aveugle (optionnel, non implémenté) — voir BUGIDENTIFIE.md
     io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Ligne de vue bloquée' })
-    await _spendAmmo(db, action, character, campaign)
+    await _spendAmmo(db, action, character, settings)
     return { result: 'blocked' }
   }
 
@@ -95,10 +96,10 @@ export async function checkLOSForPrecheck(db, tokenId, targetTokenId) {
 }
 
 // Miroir exact de la logique resolveAssaultAction (pnj_unlimited_ammo inclus)
-async function _spendAmmo(db, action, character, campaign) {
+async function _spendAmmo(db, action, character, settings) {
   if (!action.weapon_inv_id) return
   const isPnj = character.type === 'pnj'
-  if (isPnj && (campaign?.pnj_unlimited_ammo ?? true)) return
+  if (isPnj && settings.pnj_unlimited_ammo) return
   const wAmmo = await db('char_inventory').where({ id: action.weapon_inv_id }).select('ammo_remaining').first()
   if (wAmmo?.ammo_remaining == null) return
   await db('char_inventory').where({ id: action.weapon_inv_id })

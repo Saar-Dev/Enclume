@@ -2,6 +2,7 @@ import { parseDice }            from './diceParser.js'
 import { isShockTestRequired }  from './woundUtils.js'
 import { calcSeuils, getShockMalus } from './charStats.js'
 import { WS }                   from '../../../shared/events.js'
+import { getCampaignSettings }  from './campaignSettingsService.js'
 
 // ─── emitTokenStatusUpdated ───────────────────────────────────────────────────
 // Migré depuis server/src/socket/index.js — db ajouté en paramètre (était closure).
@@ -99,8 +100,8 @@ export async function applyStun(io, db, campaignId, {
     const currentTurn = combatSt?.current_turn ?? 1
 
     if (isPJ) {
-      const campaign      = await db('campaigns').where({ id: campaignId }).select('shock_auto_stun').first()
-      const shockAutoStun = campaign?.shock_auto_stun ?? true
+      const settings      = await getCampaignSettings(db, campaignId)
+      const shockAutoStun = settings.shock_auto_stun
       const sockets       = await io.in(campaignId).fetchSockets()
 
       const targetSocket  = shockAutoStun
@@ -120,8 +121,8 @@ export async function applyStun(io, db, campaignId, {
       // PJ offline / pas de GM → fallback auto
     } else {
       // PNJ : brancher sur shock_auto_stun
-      const campaign      = await db('campaigns').where({ id: campaignId }).select('shock_auto_stun').first()
-      const shockAutoStun = campaign?.shock_auto_stun ?? true
+      const settings      = await getCampaignSettings(db, campaignId)
+      const shockAutoStun = settings.shock_auto_stun
       if (!shockAutoStun) {
         // shock_auto_stun = false : GM lance le D6 pour ses PNJs
         const sockets   = await io.in(campaignId).fetchSockets()

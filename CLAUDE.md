@@ -22,9 +22,9 @@ CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
 ### Début de session
 > **Reprise depuis un résumé = nouvelle session — le résumé ne remplace jamais la lecture.**
 
-- `docs/EN_COURS.md` → si la prochaine étape n'est pas claire depuis `## ÉTAT COURANT` ci-dessous.
-- `docs/ASBUILT.md` → si la tâche touche à l'architecture (nouvelles routes, migrations, nouveaux services).
-- `docs/JOURNAL5.md` (dernier `## Session N` uniquement) → si un bug précis nécessite l'historique d'une décision.
+- `docs/EN_COURS.md` [[docs/EN_COURS|EN_COURS]] → si la prochaine étape n'est pas claire depuis `## ÉTAT COURANT` ci-dessous.
+- `docs/ASBUILT.md` [[docs/ASBUILT|ASBUILT]] → si la tâche touche à l'architecture (nouvelles routes, migrations, nouveaux services).
+- `docs/JOURNAL5.md` [[JOURNAL5]] (dernier `## Session N` uniquement) → si un bug précis nécessite l'historique d'une décision.
 - **Fichiers domaine → chargés automatiquement** via `.claude/rules/` quand les fichiers source sont ouverts.
 
 ### Avant de coder
@@ -38,11 +38,11 @@ CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
 - **Sessions analytiques (audit, investigation, debug) :** utiliser `docs/JOURNALTEMP.md` comme scratch pad. Contenu périssable — ne jamais inclure dans la lecture obligatoire. Consolider vers JOURNAL5.md en fin de session.
 
 ### Après chaque tâche confirmée fonctionnelle
-- Appender `docs/JOURNAL5.md`.
+- Appender [[JOURNAL5]]
 - Mettre à jour le header date de tout fichier `.md` modifié.
 - Proposer un scénario de test (étapes + résultat attendu) avant de passer à la suite.
-- Fin de session : mettre à jour `EN_COURS.md`, `ASBUILT.md`, `ROADMAP.md`, `CLAUDE.md`.
-- Fin de session : mettre à jour `client/public/CHANGELOG.md` — `## vN — date — titre`.
+- Fin de session : mettre à jour [[docs/EN_COURS|EN_COURS]], [[docs/ROADMAP|ROADMAP]], [[docs/ASBUILT|ASBUILT]], [[CLAUDE]]
+- Fin de session : mettre à jour [[client/public/CHANGELOG|CHANGELOG]] — `## vN — date — titre`.
 - Rappeler le push Git :
 ```powershell
 git add .
