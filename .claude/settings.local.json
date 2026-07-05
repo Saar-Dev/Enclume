@@ -111,7 +111,9 @@
       "Bash(echo \"CombatActionWindow:$?\")",
       "Bash(echo \"CombatResultPanels:$?\")",
       "Bash(echo \"CombatOverlay:$?\")",
-      "Bash(echo \"SessionPage:$?\")"
+      "Bash(echo \"SessionPage:$?\")",
+      "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Select-Object Id,StartTime,Path\")",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"Name='node.exe'\\\\\" | Select-Object ProcessId,CommandLine\")"
     ]
   }
 }

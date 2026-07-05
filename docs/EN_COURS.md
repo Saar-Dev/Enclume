@@ -1,7 +1,7 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-05 Session 133
+> Dernière mise à jour : 2026-07-05 Session 134
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
-> Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
+> Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
 ---
 
@@ -9,159 +9,33 @@
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-**0. ~~MIGRATION 37-BIS (ref_skills) — migration 105~~** ✅ CLOS — Session 133 (2026-07-05). Détail complet : `docs/JOURNAL5.md` "Session 133", `docs/MIGRATION_37BIS.md`.
+**0. ~~MIGRATION 37-BIS (ref_skills) — migration 105~~** ✅ CLOS — Session 133 (2026-07-05). Détail complet : `docs/Old/JOURNAL5.md` "Session 133", `docs/MIGRATION_37BIS.md`.
+
+**1. ~~Lot 1 carrières — migration 106~~** ✅ CLOS — Session 134 (2026-07-05). 9 corrections `ref_career_skills` (voir `docs/PLAN_LOT1_CAREERS.md` + `docs/JOURNAL6.md` "Session 134"). Round-trip `up`/`down`/`up` testé byte-identique + validation fonctionnelle navigateur confirmée par Saar (wizard Step4, 5 carrières).
+
+**2. ~~Lots 2-6 carrières (32 carrières)~~ ✅ CLOS — Session 134 suite (2026-07-05)**
+   → Migrations 108 (lot2) + 112-116 (lots 3-6) : 32 carrières + illustrations incluses directement. Détail complet : `docs/PLAN_LOTS_3_6_CAREERS.md`, `docs/JOURNAL6.md` "Session 134 suite".
+   → **Effet de bord majeur** : `ref_career_skills.skill_id` n'avait aucune FK vers `ref_skills.id` (PIÈGE 1) et `skill_group` était un texte libre jamais aligné avec `ref_skills.family` (bug de fragmentation UI trouvé en cours de route). Corrigé en profondeur — voir item "2bis" ci-dessous.
+   → 2 bugs `required_genotype` trouvés et corrigés (valeurs inventées ne correspondant à aucun `ref_genotypes.id`) : `hybride_trident` → `GEN_HYB`, `techno_hybride` → `TEC_HYB`.
+   → Prérequis (espion + autres, cf. PIÈGE 7 `JOURNALCOUCHE4.md`) : **non traité**, reste à faire (voir dette ci-dessous).
+   → **Testé** : 37/37 carrières en base, 0 orphelin FK, 0 carrière sans illustration, round-trip `up`/`down`/`up` par migration, wizard Step4 confirmé fonctionnel par Saar (toutes carrières + génotypes).
+   → **Non testé** : —
+
+**2bis. ~~FK ref_career_skills.skill_id + suppression skill_group~~ ✅ CLOS — Session 134 suite (2026-07-05)**
+   → Migration 111 : `ALTER TABLE` ajoute `FOREIGN KEY (skill_id) REFERENCES ref_skills(id) ON DELETE RESTRICT` + `DROP COLUMN skill_group`. Détail : `docs/PLAN_CAREER_SKILLS_FK.md`.
+   → Backend `creationService.js:133` (`getStep4RefData`) : JOIN `ref_skills` pour récupérer `family` (remplace le texte libre).
+   → Frontend `CareersAllocator.jsx:44-46` : regroupement par `sk.family` au lieu de `sk.skill_group`.
+   → **Dette identique non traitée** : `ref_background_skills.skill_id` a le même défaut (pas de FK) — table différente, hors scope (`98_ref_backgrounds.js:49`).
+   → **Testé** : FK active (insert invalide rejeté, code Postgres `23503`), round-trip `up`/`down`/`up`, wizard Step4 confirmé fonctionnel (regroupement par famille correct).
+   → **Non testé** : —
+
+**3. Wizard Step3 Mutations — mutations réelles (`ref_mutations`) au lieu du mock — plan rédigé, session 134 suite** ← PROCHAINE ÉTAPE
+   → [[docs/PLAN_STEP4|PLAN_STEP4]] : backend (`getStep3RefData`, route `/step3/ref`), réécriture complète `Step3Mutations.jsx` (achat + tirage aléatoire réel D100/D6 équivalent, sans migration de contenu), câblage option de campagne `random_mutations`, correction collision de nom `subtype`/`subtable`.
+   → [[docs/PLAN_MUTATION|PLAN_MUTATION]] : **dépendance bloquante de PLAN_STEP4**, à traiter avant ou avec — les mutations `is_stackable` (Peau renforcée, Résistance naturelle, Squelette renforcé, Purulence, Difformités, Contact corrosif, Radiation, Régénération) font planter `finalizeCreation` si achetées/tirées deux fois (index unique partiel `char_mutations`, jamais exercé par l'ancien mock). Migration (colonne `stack_deltas` JSONB sur `ref_mutations`) + upsert `count` + réécriture `char_mutation_effects_view`.
+   → Prochaine migration disponible : **117** (108-116 désormais utilisées par le seeding carrières + FK ci-dessus).
+   → Prérequis carrières (espion, soldat_elite_*, officier_militaire_souterrain, etc.) : à traiter dans une migration dédiée après ce chantier, cf. PIÈGE 7 `JOURNALCOUCHE4.md`.
 
 ---
-
-**1. ~~Valider Sprint 14-0~~** ✅ CLOS — Session 95 suite 2
-
-**2. ~~REWORK-01 — statusService~~** ✅ CLOS Session 96 — Scénarios 1-5 validés
-
-**3. ~~REWORK-03 — woundService~~** ✅ CLOS COMPLET Session 97/105 — T1–T5 validés
-
-**4. ~~REWORK-05 — panneaux partagés (COM5 + CL2)~~** ✅ CLOS COMPLET Session 99 — 5/5 scénarios ✅ + BUG-W1 ✅ + BUG-W2 ✅ + ERG-W1 ✅ + ERG-W2 ✅
-
-**5. ~~REWORK-07 — socketUtils (getUserColor + checkTokenOwnership + LOC_TABLE_CONTACT)~~** ✅ CLOS COMPLET Session 100
-
-**6. ~~REWORK-02 — damageService (resolveTargetHit)~~** ✅ CLOS COMPLET Session 101/105 — Sites 1/2/4/5 validés
-
-**7. Sprint Bugs prioritaires** *(voir BUGIDENTIFIE.md)*
-   → **Cluster I** — dégâts drone (DR6 + DR4 + DMG1 + DMG2) — **Haute**
-   → **Cluster D** — fenêtres combat UI (UI1 + COM8) — **Haute** *(COM5 + CL2 fixés REWORK-05)*
-   → **Cluster E** — arme et statuts (COM1 + COM2 + COM4 + COM7) — Moyenne
-
-**8. ~~REWORK-09 — SessionPage → hooks WS dédiés~~** ✅ CLOS COMPLET Session 103
-   → `useTokenSocket.js` + `useEntitySocket.js` + `useCombatSocket.js` — 1509 → 1296 lignes
-
-**9. ~~REWORK-08 — Modularisation `socket/index.js`~~** ✅ CLOS COMPLET Session 108
-   → 5 modules `registerXxxHandlers` + `lib/mrTable.js`. `index.js` : 4 266 → 143 lignes. Scénarios 1–17 validés.
-
-**10. ~~REWORK-04 — FSM Combat~~** ✅ CLOS COMPLET Session 110/111 — validé en session réelle ✅
-   → 12 étapes A1→C4 — `combatFSM.js` + migrations 80+81 + guards socketCombat + DB persistence + restauration reconnexion
-
-**11. ~~REWORK-06 — `declarationReducer`~~** ✅ CLOS COMPLET Session 113/114
-   → `declarationReducer.js` créé + GM + Player migrés — V1–V15 validés
-   → COM4 ✅ résolu (mains nues par défaut), PC23 ✅ (typo TIR_AUTOMATIQUES)
-
-**12. ~~REWORK-15 — SocketProvider~~** ✅ CLOS COMPLET Session 115
-   → `client/src/lib/SocketContext.jsx` (29L) — `SocketProvider` + `useSocket()`
-   → `useTokenSocket` / `useEntitySocket` / `useCombatSocket` : `useSocket()` direct (plus de `listen(s)`)
-   → `SessionPage.jsx` : wrapper + `SessionContent`, grand useEffect → 2 useEffects, `reconnectTrigger` supprimé
-   → V1–V7 validés — P-R15-1 levé
-
-**13. ~~REWORK-13 Étapes 1+2 — campaignStore~~** ✅ Session 115 suite 2
-   → `client/src/stores/campaignStore.js` créé — `{ campaign, setCampaign, updateCampaign }` — null guard
-   → `SessionPage.jsx` : `campaign useState` → `useCampaignStore()` ; `updateCampaign` dans `onCampaignUpdated` + `handleSetDefault`
-
-**14. ~~REWORK-11 — useSessionSocket~~** ✅ Session 115 suite 2
-   → `client/src/lib/useSessionSocket.js` créé — 12 handlers WS (SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, CHARACTER_UPDATED, DOC_*)
-   → `SessionContent` : 3 destructurings nettoyés, `useEffect([socket])` réduit aux 6 WOUND_*/INVENTORY_*
-   → V1–V12 validés
-
-**15. ~~REWORK-13 Étapes 3+4 — useBattlemapManager~~** ✅ Session 115 suite 2 (cont.)
-   → `client/src/lib/useBattlemapManager.js` créé — 8 handlers CRUD + 7 useState + 1 useRef + 1 useEffect outside-click + helpers `openRenameModal` / `openCreateModal`
-   → `SessionContent` : `renameBattlemap`/`addBattlemap`/`removeBattlemap` + `updateCampaign` retirés des stores ; 8 callbacks + 7 useState + 1 useRef + 1 useEffect supprimés ; 2 séquences JSX simplifiées
-   → V1–V14 validés (SR + fonctionnel — confirmation Saar)
-
-**16. ~~REWORK-12 — useCharacterSocket~~** ✅ Session 116
-   → `client/src/lib/useCharacterSocket.js` créé — `useSocket()` + `useEffect([socket])` + 6 handlers nommés + cleanup
-   → `SessionContent` : `woundVersions` useState + `updateCharacter` destructuring + `useEffect([socket])` WOUND/INVENTORY supprimés
-   → V1–V8 validés (confirmation Saar)
-
-**17. ~~REWORK-14 — useCombatUIState~~** ✅ Session 116
-   → `client/src/lib/useCombatUIState.js` créé — 4 `useState` + 6 `useCallback`, hook UI pur (zéro socket, zéro store)
-   → `SessionContent` : 4 `useState` + `handleModeReset` + 5 handlers supprimés (~60 lignes) ; ordre `useEntitySocket` → `useCombatUIState` → `useCombatSocket` (P-R14-1)
-   → V1–V13 validés (confirmation Saar)
-
-**18. ~~REWORK-16 — Combat Pre-validation Gate (ACK Socket.IO)~~** ✅ CLOS COMPLET Session 116 suite
-   → `COMBAT_ACTION_PRECHECK` ACK — gate avant `CombatCacModifiersWindow` — range check serveur avant ouverture
-   → Fix `resolveMeleeAction` L.1699 `socket.emit` → `io.to(campaignId).emit` (broadcast)
-   → 8 logs `[DBG-CAC]` supprimés — message rouge `#e05252` dans chat
-   → V1–V10, V12 validés — V11 noté Non testé (race condition LAN)
-
-**19. ~~REWORK-17 — socketCombat.js Modularisation~~** ✅ CLOS COMPLET Session 117
-   → 4 modules créés : `socketCombatState` (5 handlers), `socketCombatAnnouncement` (3 handlers), `socketCombatResolution` (6 handlers), `socketCombatHelpers` (13 fonctions + COMBAT_MODE_LABELS)
-   → `socketCombat.js` réduit à 9L (orchestrateur pur) — `index.js` inchangé
-   → V1–V13 validés (SR + combat complet GM + PJ)
-
-**20. ~~REWORK-18 — socketCombatHelpers.js : séparation computation / émission~~** ⚠️ Clos partiel Session 119
-   → `socket` supprimé des 3 signatures helpers — 30 émissions → descripteurs `{ to, event, data }` — `flushEmissions` dans `socketCombatResolution.js` — 4 call sites mis à jour
-   → `node --check` ×2 ✅ — V5/V5b/V8 ✅ — V6/V7 partiels (DAMAGE_CONFIRM bloqué bug RW17-1)
-   → V1–V4, V9/V10 non testés (session combat réelle requise)
-   → Spec complète → `docs/PLAN_REWORK18.md`
-
-**21. ~~Sprint résolution combat — bugs RW17-1 + STUN2~~** ✅ CLOS Session 120
-   → **RW17-1** ✅ CLOS COMPLET — `calcDroneRD`/`calcDroneDegatsNets` dans `charStats.js` (agent précédent) — 3 call sites migrés
-   → **STUN2** ✅ CLOS (SR + all OK) — guards PRECHECK+CONFIRM, message i18n, overlay fix (cause racine : FSM AWAITING_DAMAGE → `{ awaiting: true }` + `precheckRetryKey` + `COMBAT_ATTACK_RESULT`)
-   → **RW18-1** : sprint séparé — voir BUGIDENTIFIE.md
-
-**22. ~~AA-1 ✅ clos Session 121~~**
-   → Blessures combat affichées sans rouvrir CharacterWindow — store Zustand + fix StrictMode cancelled pattern
-   → RW17-1 ✅ et STUN2 ✅ : marqués clos dans BUGIDENTIFIE.md (étaient ouverts à tort)
-
-**23. ~~COM22 ✅ clos Session 121 (suite)~~**
-   → Aucune action assault Kiwi — suppression PRECHECK LOS (`socketCombatResolution.js`) + `npm install` root Kiwi (`fast-voxel-raycast`) + npm audit fix server (0 vulns)
-   → Kiwi ✅ : 2 assaults résolus, STUN2 auto-skip, melee OK
-
-**24. ~~COM19 FAUX BUG ✅ Session 122~~**
-   → LdB relu intégralement : règle "-5 INI assaut (tir)" inexistante — code conforme
-
-**25. ~~INI Breakdown Popover ✅ Session 122~~**
-   → `calcIniBreakdown` dans `combatSections.js` (source de vérité) + popover clic dans `CombatGmDeclareWindow` + `CombatActionWindow`
-
-**26. ~~CS2 + CS3 + CS1 ✅ Session 123~~**
-   → `WeaponPanel.jsx` refonte (colonnes DIR/SEC + 2M + `hand_pref`) + `ref_description` tooltip ⓘ
-
-**27. ~~PLAN_TRADE — Système Trade (étapes 1–7) ✅ Session 124~~**
-   → Migrations 84 (merchants) + 85 (trade_log) + 86 (trade_offers) + 87 (ref_equipment.generation)
-   → `shared/events.js` : +12 constantes TRADE_* (4 client→serveur + 8 serveur→client)
-   → `tradeRoutes.js` + `tradeService.js` : REST CRUD marchands + getCatalog (filtrage FAM/CAT/ITEM/seuils) + buyFromMerchant (atomique) + acceptTransfer (forUpdate)
-   → `socketTrade.js` : `registerTradeHandlers` — rate limiter 3/min — 4 handlers PJ↔PJ
-   → `MerchantsPage.jsx` : Dashboard GM — CRUD marchands + arbre catalogue tri-state + joueurs autorisés
-   → `DashboardPage.jsx` : bouton "Marchands" sur carte campagne GM
-
-**28. ~~D1 + D2 ✅ Session 124~~**
-   → D1 : menu radial "fiche" drone — clos (fix mismatch type `character_id` string/number — Session antérieure)
-   → D2 : `SettingsTab` `DroneWindow.jsx` — `glbStatus` (null|uploading|success|error) + timer ref + i18n `glbSuccess/glbError` + label coloré (bleu/vert/rouge + transition 0.2s)
-   → Bonus D2 : rechargement token 3D fonctionnel grâce à `key={glbUrl}` + `updateCharacter` déjà en place (Canvas3D.jsx inchangé)
-
-**29. ~~PLAN_TRADE étapes 8–9 ✅ Session 124~~**
-   → Étape 8 : `TradeWindow.jsx` créé (~200L) — vue GM lite : tab Marchands (toggle OUVERT/FERMÉ + mod_global) + tab Journal (trade_log filtrable + pagination)
-   → Étape 9 : vue Joueur — sélecteur marchand (filtré serveur) + catalogue navigable (FAM→items) + détail inline + panier + checkout (`POST /buy` atomique)
-   → `SessionPage.jsx` : `myCharId` derivé + condition `{tradeWindowOpen &&` + props `isGm` / `myCharId` passés
-   → `fr.json` : +`session.trade` + `trade.window.*` (26 clés total)
-
-**30. ~~PLAN_TRADE étapes 10–11 ✅ Session 125~~**
-   → Étape 10 : `TradeWindow.jsx` vue Échange PJ↔PJ — proposer/accepter/refuser/annuler + timer expiration + listeners WS
-   → Étape 11 : slot Échange dans `TokenRadialMenu` (`enabled: !isGm`) + item Marchands dans dropdown Outils `Sidebar`
-   → Bugfixes T1/T2/T3 : liste marchands vide (join tokens supprimé), `tokens.campaign_id` ×3 `socketTrade.js`, écran noir `INSUFFICIENT_FUNDS` (parsing objet → `.message`)
-   → **PLAN_TRADE complet ✅** (étapes 1–11)
-
-**31. ~~VENTE PJ→GM + achat ×10 munitions ✅ Session 125 suite~~**
-   → Migration 90 : `counter_sols` + `merchant_id` + status `COUNTER_OFFERED` dans `trade_offers`
-   → `shared/events.js` : +4 constantes `TRADE_SELL_COUNTER_*`
-   → `tradeService.js` : `getMyActiveSellOffer` (restauration PJ) + `executeSell` accept COUNTER_OFFERED
-   → `tradeRoutes.js` : GET `/my-sell-offer` + `sell-offers` enrichis (merchantName, status, counterSols)
-   → `socketTrade.js` : constante `SELL_OFFER_TTL_SEC=120` (bugfix `tour_duration` inexistante) + 4 handlers SELL_PROPOSED/COUNTER/COUNTER_ACCEPTED/COUNTER_DECLINED
-   → `useEntitySocket.js` : listener `TRADE_SELL_REQUEST` → notification chat GM toujours montée
-   → `Sidebar.jsx` : rendu notification sell_request + badge
-   → `TradeWindow.jsx` : réécriture complète — onglet ÉCHANGE retiré, VENTE PJ (sélecteur marchand + prix ref/boutique + contre-offre UI), REVENTES GM (récap + 3 boutons + contre-offre input)
-   → Feat : achat ×10 munitions (`addToCart(item, qty=1)` + bouton `+10` conditionnel `family === 'Munitions'`)
-   → Testé : achat ✅, vente proposition→acceptation ✅, ×10 munitions ✅
-   → Non testé : contre-offre flux complet, restauration état rechargement, expiration 120s
-
-**32. ~~Rechargement drone + cargo visible + ammo type ✅ Session 126~~**
-   → Migration 91 : `drone_sheet.charge_utile` + `trade_log` CHECK étendu (`player_sell` + `drone_reload`)
-   → `TRADE_DRONE_TRANSFER` handler (immédiat, guard propriétaire, transaction atomique)
-   → `ExchangeWindow` : filtre drones par owner + flow drone (no sols, no timer)
-   → `GET /drone/cargo` + `POST /drone/cargo/:invId/drop` (Larguer vers sac)
-   → DroneSheet : StatField charge_utile + section Chargement + bouton Larguer
-   → WeaponsTab : ammo_restant/contenance + calibre affiché
-
-**33. ~~Cluster Drone P (DR7/DR8/DR10) ✅ Session 127~~**
-   → DR7 ✅ : `droneIsGmOrOwner(req)` helper — garde lecture fiche drone (owner ou GM)
-   → DR10 ✅ : `isDroneGmManaged` — filtre `user_id = null` (drone joueur exclu fenêtre GM)
-   → DR8 FAUX BUG — `char_inventory` retourne bien les armes drone
 
 **35. ~~Wizard Phase 2 — corrections bugs B1/B5/B6/B8/B9 + A3 (store) ✅ Sessions 127–128~~**
    → B1 ✅ : variable `st` écrasée Step3Mutations (st→sub dans .map)
@@ -235,12 +109,14 @@
    → **Testé** : SR ✅, fonctionnel ✅
    → **Prochain** : `feminin_bonus` (sélecteur Sexe toujours affiché, prop `isFeminin` ignorée `_deprecated` dans `Step1Attributes.jsx:36`)
 
-**41. Wizard COUCHE 4c** ← WIZARD PROCHAINE ÉTAPE
-   → [WIZ-1] Filtrer personnages incomplets (creation_state ≠ 'complete') dans la liste Dashboard
-   → [WIZ-2] Synchroniser les deux compteurs PC (store header vs local CareersAllocator)
-   → [WIZ-3] Formation "apprentissage_technique" → choix de spécialité
-   → [S4-C1] Seeder les ~24 carrières restantes (5/29 actuellement)
-   → [S4-C2] Illustrations carrières depuis MinIO (29 webp disponibles)
+**41. Wizard COUCHE 4c → analyse terminée (session 2026-07-05 suite) : deux dossiers distincts, à ne plus confondre**
+   → `PLAN_COUCHE4.md` (architecture wizard step-by-step, câblage frontend→backend) : confirmé **obsolète** — remplacé par COUCHE 5 (architecture client-primary, Session 130). Archivé par Saar dans `docs/Old/`.
+   → `JOURNALCOUCHE4.md` (audit seeding carrières lots 1-6) : **toujours valide et exploitable**. Déplacé dans `docs/Old/` (réorganisation documentaire) mais reste la référence du seeding — voir item "1." en tête de fichier.
+   → [WIZ-1] Filtrer personnages incomplets (creation_state ≠ 'complete') dans la liste Dashboard — dette indépendante, toujours ouverte
+   → [WIZ-2] Synchroniser les deux compteurs PC (store header vs local CareersAllocator) — dette indépendante, toujours ouverte
+   → [WIZ-3] Formation "apprentissage_technique" → choix de spécialité — dette indépendante, toujours ouverte
+   → [S4-C1] ~~Seeder les ~24 carrières restantes~~ ✅ CLOS Session 134 suite — 37/37 carrières en base
+   → [S4-C2] ~~Illustrations carrières depuis MinIO~~ ✅ CLOS Session 134 suite — 37/37 carrières ont leur illustration
 
 **34. ~~Cluster N — UI combat~~** (en cours)
    → COM23 ✅ Session 127 : `TokenLabel` sprite CanvasTexture — label occludé par murs
@@ -248,12 +124,20 @@
    → COM21 ✅ Session 127 : collision token-token — `isCellFree` DB direct + déplacement partiel (règle Polaris)
    → **COM20** ← PROCHAINE ÉTAPE : arme + munitions dans CombatActionWindow / CombatGmDeclareWindow
 
+** Notes Saar (user) :
+Projet en cours et priorité user : 
+- Wizard : seeder les careers (en cours, item "2." ci-dessus) et les mutations (planifié, item "3." ci-dessus — PLAN_STEP4 + PLAN_MUTATION)
+- Wizard : Step 4 Expérience (Origine, Milieu et formation) doivent imapcter réellement la fiche personnage
+- Wizard : Step 4 Profession : revoir l'UI intégralement pour la clarté
+- Option de campagne : Implanter les options de campagne relative au Wizard
+
+
 ---
 
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **108 migrations appliquées** (104_campaign_settings — Session 132)
+- **120 migrations appliquées** (116_seed_ref_careers_lot6 — Session 134 suite)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---
@@ -306,6 +190,9 @@
 | **WIZ-1** | Personnages incomplets (creation_state ≠ 'complete') visibles dans la liste | Moyenne — COUCHE 4c |
 | **WIZ-2** | Deux compteurs PC (header store vs CareersAllocator local) | Basse — cosmétique |
 | **WIZ-3** | Formation "apprentissage_technique" → choix de spécialité non implémenté | Moyenne — COUCHE 4c |
+| **CAR1** | Mécanisme "au choix" (`conditional:true`) non implémenté — 34 occurrences lots 2-6 | Moyenne — Step4 UI |
+| **CAR2** | `ref_background_skills.skill_id` sans FK vers `ref_skills.id` (même défaut que `ref_career_skills` avant migration 111) | Basse — pas de bug connu, préventif |
+| **CAR3** | Prérequis carrières (espion, soldat_elite_*, officier_militaire_souterrain, etc.) non insérés dans `ref_career_prerequisites` | Moyenne — migration dédiée post lots 2-6 |
 | **DBG-C1** | `character.user_id` null quand GM crée pour joueur absent (steps 1-3) | Moyenne — sprint futur |
 | **JSON1** | `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant, cassait déjà avant Session 132) | **Haute** — casse tout le fichier EN |
 | **OPT-W1** | 10/11 options de campagne (feminin_bonus, random_mutations, polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity) sans effet mécanique branché — `ambiance` ✅ câblée Session 132 suite | Moyenne — en cours un par un |

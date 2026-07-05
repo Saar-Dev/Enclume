@@ -1,3 +1,18 @@
+## v145 — 2026-07-05 — Lots 2-6 carrières (37/37) + FK ref_career_skills
+
+### Serveur
+- [feat] Migrations 108, 112-116 — seed complet des lots 2 à 6 (32 carrières), portant le total à 37/37 carrières Polaris en base, illustration incluse directement dans chaque migration
+- [fix] Migration 111 — `ref_career_skills.skill_id` gagne une vraie contrainte FK vers `ref_skills.id` (toute faute de frappe future sera rejetée par la base au lieu de s'insérer silencieusement) ; suppression de `skill_group` (texte libre jamais aligné avec la vraie catégorie `ref_skills.family`, source d'une fragmentation de l'affichage)
+- [fix] 2 carrières avaient un `required_genotype` invalide (`hybride_trident`, `techno_hybride`) — corrigés vers les vrais identifiants de `ref_genotypes`
+
+### Client
+- [fix] Regroupement des compétences par carrière dans le wizard Step4 — utilise désormais la vraie catégorie de compétence (`ref_skills.family`), qui ne se dédouble plus selon la carrière sélectionnée
+
+## v144 — 2026-07-05 — Migration 106 : correction lot 1 carrières (ref_career_skills)
+
+### Serveur
+- [fix] Migration 106 — 9 corrections de `ref_career_skills` sur les 5 carrières du lot 1 (artisan_artiste, assassin, barman, chasseur_primes, contrebandier) vs le Livre de Base : `skill_id` orphelins remplacés (ex. `TIR_PRECISION` → `TIR_DE_PRECISION`), `ARTS_MARTIAUX` de l'assassin éclaté en 3 compétences définitives, ajout de `PILOTAGE__NAVIRES_LEGERS` (chasseur de primes, contrebandier)
+
 ## v143 — 2026-07-05 — Migration 37-bis : consolidation ref_skills (catalogue Compétences)
 
 ### Serveur

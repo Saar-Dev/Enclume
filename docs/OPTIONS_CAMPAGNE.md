@@ -6,7 +6,7 @@
 
 ---
 
-## OPT-01 — Ambiance de campagne
+## OPT-01 — Ambiance de campagne - IMPLANTÉ
 
 **Règle :** Détermine le pool de points d'attributs et la Chance de départ.
 
@@ -24,7 +24,7 @@
 
 ---
 
-## OPT-02 — Bonus/Malus féminin
+## OPT-02 — Bonus/Malus féminin -IMPLANTATION BLOQUÉ PAR SEED_MUTATION (SEXE)
 
 **Règle :** Si activé, personnage féminin : FOR base = 5 (au lieu de 7), +2 bonus répartissables en COO et/ou PRE (max 20).
 

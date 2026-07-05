@@ -130,7 +130,7 @@ export async function getStep4RefData(sheetId) {
     db('ref_backgrounds').select('*').orderBy(['type', 'sort_order']),
     db('ref_background_skills').select('*'),
     db('ref_careers').select('*'),
-    db('ref_career_skills').select('*'),
+    db('ref_career_skills as rcs').join('ref_skills as rs', 'rcs.skill_id', 'rs.id').select('rcs.*', 'rs.family'),
     db('ref_career_titles').select('*'),
     db('ref_career_prerequisites').select('*'),
     db('ref_career_point_categories').select('*').orderBy('sort_order'),

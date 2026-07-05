@@ -42,8 +42,8 @@ export default function CareersAllocator({
   }
 
   const groupedSkills = career ? career.skills.reduce((acc, sk) => {
-    if (!acc[sk.skill_group]) acc[sk.skill_group] = []
-    acc[sk.skill_group].push(sk)
+    if (!acc[sk.family]) acc[sk.family] = []
+    acc[sk.family].push(sk)
     return acc
   }, {}) : {}
 
@@ -172,6 +172,13 @@ export default function CareersAllocator({
             }}
             onClick={() => handleSelectCareer(c.id)}
           >
+            {c.illustration && (
+              <img
+                src={`${import.meta.env.VITE_API_URL}/api/assets/${c.illustration}`}
+                alt={c.name}
+                style={s.careerImage}
+              />
+            )}
             <span style={s.careerName}>{c.name}</span>
             <span style={s.careerPoints}>{c.points_per_year} pts/an</span>
             {c.restricted_geographic_origin && (
@@ -185,6 +192,13 @@ export default function CareersAllocator({
       {career && (
         <div style={s.detail}>
           <h3 style={s.detailTitle}>{career.name}</h3>
+          {career.illustration && (
+            <img
+              src={`${import.meta.env.VITE_API_URL}/api/assets/${career.illustration}`}
+              alt={career.name}
+              style={s.detailImage}
+            />
+          )}
           <p style={s.detailDesc}>{career.description}</p>
 
           {career.restricted_geographic_origin && career.geographic_origin_details && (
@@ -433,6 +447,14 @@ const s = {
     flexDirection: 'column',
     gap: '4px',
   },
+  careerImage: {
+    width: '100%',
+    height: '70px',
+    objectFit: 'cover',
+    objectPosition: 'top left',
+    borderRadius: '4px',
+    marginBottom: '2px',
+  },
   careerCardSelected: {
     borderColor: '#5b8dee',
     backgroundColor: '#14142e',
@@ -464,6 +486,13 @@ const s = {
     fontSize: '16px',
     fontWeight: '700',
     margin: 0,
+  },
+  detailImage: {
+    width: '100%',
+    maxHeight: '160px',
+    objectFit: 'cover',
+    objectPosition: 'top left',
+    borderRadius: '6px',
   },
   detailDesc: {
     color: '#9090c8',
