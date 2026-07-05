@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-05 Session 131
+> Dernière mise à jour : 2026-07-05 Session 133
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -265,6 +265,7 @@ Enclume/
 | 81_combat_state_subphase | combat_state : +`sub_phase TEXT` nullable CHECK ('SLOT_ACTIVE','AWAITING_DEFENSE','AWAITING_DAMAGE'). FSM sous-états persistés (Session 111) |
 | 82→103b | À documenter — voir migrations correspondantes |
 | 104_campaign_settings | Consolide `ambiance`, `pnj_unlimited_ammo`, `reload_mode`, `action_timer_sec`, `shock_auto_stun`, `allow_los_cancel` + 11 nouvelles options de campagne dans `campaigns.settings JSONB NOT NULL DEFAULT '{}'` (backfill puis DROP des 6 colonnes). DROP table morte `campaign_rules` (migration 97, jamais référencée). `dice_config` et `default_token_glb_url` restent des colonnes dédiées. Lecture centralisée via `server/src/lib/campaignSettingsService.js` (`SETTINGS_SCHEMA` + `getCampaignSettings(db, campaignId)`), écriture via `PUT /campaigns/:id` (merge JSONB atomique `db.raw('settings || ?::jsonb', …)`, pattern PC39) (Session 131) |
+| 105_ref_skills_37bis | 3ᵉ révision consolidée de `ref_skills` (après 37/74/103/103b) — audit ligne par ligne complet dans `docs/MIGRATION_37BIS.md`. `attr_1` devient nullable + nouvelle colonne `is_category BOOLEAN NOT NULL DEFAULT false` (remplace le sentinel `attr_1='CHC'` utilisé côté client pour le regroupement UI, cf. `SkillsPanel.jsx`). Suppression de `MUTATION` (catégorie fantôme) et `ARMES_SATELLITES` (hors LdB), re-parentage des 8 `MUTATION_*` vers `CONTROLE_DES_MUTATIONS`. 113 corrections de `marker` (legacy `'S'` → vraie valeur LdB), 11 labels, 4 attrs, 1 déplacement `ref_skill_requirements`. 249 lignes finales. `up`/`down` testés en base réelle (round-trip byte-identique) (Session 133) |
 
 ---
 

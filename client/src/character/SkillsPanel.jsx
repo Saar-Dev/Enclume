@@ -193,12 +193,12 @@ export default function SkillsPanel({
     familyMap.forEach((skills, family) => {
       const blocks = []
       skills.forEach(skill => {
-        if (skill.attr_1 === 'CHC') {
+        if (skill.is_category) {
           const children = skills.filter(s => s.parent === skill.id && isVisible(s))
           if (children.length > 0) {
             blocks.push({ type: 'group', group: skill, children })
           }
-        } else if (!skill.parent || byId.get(skill.parent)?.attr_1 !== 'CHC') {
+        } else if (!skill.parent || !byId.get(skill.parent)?.is_category) {
           if (isVisible(skill)) {
             blocks.push({ type: 'skill', skill })
           }
@@ -397,19 +397,18 @@ export default function SkillsPanel({
         return (
           <div key={family} style={s.family}>
 
-            <div
-              style={{ ...s.familyTitle, cursor: 'pointer', userSelect: 'none' }}
-              onClick={() => toggleFamily(family)}
-            >
-              <span>{family}</span>
-              <span style={s.chevron}>{isCollapsed ? '▶' : '▼'}</span>
-            </div>
-
-            {!isCollapsed && (
             <table style={s.table}>
               <thead>
-                <tr>
-                  <th style={{ ...s.th, textAlign: 'left', width: '40%' }}>{t('skillsPanel.colName')}</th>
+                <tr
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => toggleFamily(family)}
+                >
+                  <th style={{ ...s.th, ...s.familyTitle, textAlign: 'left', width: '40%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>{family}</span>
+                      <span style={s.chevron}>{isCollapsed ? '▶' : '▼'}</span>
+                    </div>
+                  </th>
                   <th style={s.th}>{t('skillsPanel.colAttrs')}</th>
                   <th style={s.th}>{t('skillsPanel.colBase')}</th>
                   <th style={s.th}>{t('skillsPanel.colMastery')}</th>
@@ -419,6 +418,7 @@ export default function SkillsPanel({
                   )}
                 </tr>
               </thead>
+              {!isCollapsed && (
               <tbody>
                 {blocks.map(block => {
                   if (block.type === 'group') {
@@ -439,8 +439,8 @@ export default function SkillsPanel({
                   return renderSkillRow(block.skill)
                 })}
               </tbody>
+              )}
             </table>
-            )}
 
           </div>
         )
@@ -493,17 +493,10 @@ const s = {
     overflow: 'hidden',
   },
   familyTitle: {
-    fontSize: '10px',
     fontWeight: '700',
     color: '#5b8dee',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    padding: '6px 10px',
-    backgroundColor: '#0e0e1a',
-    borderBottom: '1px solid #1e1e2e',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
   chevron: {
     fontSize: '8px',

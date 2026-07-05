@@ -1,5 +1,19 @@
 # MIGRATION 37-BIS — Refonte ref_skills
 > Créé Session 131 suite — 2026-07-04
+> **Statut (2026-07-05, Session 133) : ✅ CLÔTURÉ — migration 105 codée, testée (round-trip DB réel) et déployée. Client (`SkillsPanel.jsx`) adapté et validé par Saar en navigateur.**
+
+---
+
+## ⚡ CLÔTURE — voir docs/JOURNAL5.md "Session 133" pour le détail complet
+
+Cette doc (audit + plan) est conservée comme référence historique de l'audit ligne par ligne. Le résultat exécuté est `server/src/db/migrations/105_ref_skills_37bis.js` (up/down testés en base réelle, byte-identique en rollback). Détail complet, effet de bord identifié (visibilité des compétences `(X)` corrigées) et dettes restantes : `docs/JOURNAL5.md`, entrée "Session 133 — Migration 105 (« 37-bis »)".
+
+**Ce qui a été livré :**
+- Schéma : `attr_1` nullable + nouvelle colonne `is_category`.
+- 2 suppressions (`MUTATION`, `ARMES_SATELLITES`) + re-parentage des 8 `MUTATION_*` vers `CONTROLE_DES_MUTATIONS`.
+- 11 labels, 4 attrs isolés, 17 lignes `is_category`, 113 markers corrigés, 1 déplacement `ref_skill_requirements`.
+- `client/src/character/SkillsPanel.jsx` : sentinel `attr_1==='CHC'` remplacé par `is_category` ; header de colonnes par famille fusionné avec le nom de la famille (contre-proposition Saar, cf. JOURNAL5).
+- 249 lignes `ref_skills` finales (251 − 2).
 
 ---
 
@@ -1326,31 +1340,59 @@ Vérifié aussi : `marker === '(X)'/'(-3)'/'PN'/'PREREQ'` sont bien des mécaniq
 
 1. **Migration 34 à amender** : `ref_skills.attr_1` est actuellement `.notNullable()` — doit devenir nullable (les catégories "variable"/sans paire fixe n'ont pas d'attribut réel à stocker). `table.text('attr_1').nullable().alter()`.
 2. **Nouvelle colonne** : `table.boolean('is_category').notNullable().defaultTo(false)`.
-3. **`is_category = true`** pour les 9 lignes actuellement flaguées par le sentinel `CHC` : `ARME_SPECIALE_CONTACT`, `ARME_SPECIALE_DISTANCE`, `MUTATION`, `EXPRESSION_ARTISTIQUE`, `PILOTAGE`, `COMMERCE_TRAFIC`, `SCIENCES_CONNAISANCES_SPECIALISEES`, `GENIE_TECHNIQUE`, `POUVOIRS_POLARIS`.
-4. **`attr_1`/`attr_2` réels** pour ces 9 lignes (remplace tout `CHC`, y compris table C ci-dessous) :
 
-| id | attr_1 | attr_2 | Source |
+**Vérification exhaustive (requête SQL sur la table entière, pas la mémoire de l'audit)** — recensement de toutes les lignes ayant réellement des enfants (`SELECT parent, COUNT(*) FROM ref_skills WHERE parent IS NOT NULL GROUP BY parent`) : **17 lignes**, pas seulement les 9 `CHC`. 8 catégories supplémentaires ont des attributs réels déjà corrects mais ne sont **pas** flaguées `CHC` — donc pas de regroupement UI aujourd'hui, rendu à plat comme n'importe quelle compétence normale : `ARTS_MARTIAUX` (3 enfants), `CONNAISSANCE_MILIEU_NATUREL` (3), `LANGAGES_SPECIFIQUES` (13), `LANGUE_ANCIENNE` (4), `LANGUE_ETRANGERE` (15), `MANOEUVRE_DARMURE` (4), `MECANIQUE` (6), `TACTIQUE` (4). **Décision Saar (2026-07-05) : même oubli, `is_category=true` pour ces 8 aussi.** Confirmé : 0 risque de nesting à 3 niveaux (vérifié — aucun enfant n'est lui-même parent d'une autre ligne).
+
+**Découverte additionnelle en creusant `CONTROLE_DES_MUTATIONS`** (`attr_1='CHC'` mais 0 enfant, donc invisible en UI aujourd'hui) : le LdB (`REGLECOMPETENCE.md:1129`) définit un en-tête réel **"Contrôle des mutations […] (X)"** — mais **aucun en-tête "Mutation" autonome n'existe dans le LdB**. Or les 8 enfants `MUTATION_*` (Agilité caudale, Contagion, Contrôle moléculaire, Empathie, Métamorphose, Purulence, Radiations, Sonar) sont rattachés à `MUTATION` (catégorie fantôme, sans base LdB, ajoutée migration 74) et non à `CONTROLE_DES_MUTATIONS` (la vraie catégorie LdB, orpheline). **Décision Saar (2026-07-05) : re-parenter les 8 enfants vers `CONTROLE_DES_MUTATIONS` et supprimer `MUTATION`.** Vérifié : `MUTATION` n'est référencée nulle part (0 ligne dans `ref_skill_requirements`, 0 dans `ref_career_skills`, 0 occurrence dans les seeds `docs/Character/Creation/migrations/*.cjs`) — suppression sans impact.
+
+3. **`is_category = true`** pour **17 lignes** au total :
+
+| id | attr_1 | attr_2 | Source / statut |
 |---|---|---|---|
-| ARME_SPECIALE_CONTACT | NULL | NULL | LdB "selon l'arme", pas de paire fixe |
-| ARME_SPECIALE_DISTANCE | NULL | NULL | idem |
-| MUTATION | NULL | NULL | pas d'entrée LdB dédiée, regroupement pur |
-| EXPRESSION_ARTISTIQUE | NULL | NULL | LdB "Attributs associés : variable" |
-| PILOTAGE | NULL | NULL | LdB "Attributs associés : variable" (revient à la décision initiale du segment 9a — sûr maintenant que le regroupement ne dépend plus de `attr_1`) |
-| COMMERCE_TRAFIC | INT | PRE | LdB "Attributs associés : INT/PRE" |
-| SCIENCES_CONNAISANCES_SPECIALISEES | INT | NULL (self-doublé) | LdB "Attributs associés : INT/INT" |
-| GENIE_TECHNIQUE | INT | NULL (self-doublé) | LdB "Attributs associés : INT/INT" |
-| POUVOIRS_POLARIS | INT | VOL | LdB "Attributs associés : INT/VOL" |
+| ARME_SPECIALE_CONTACT | NULL | NULL | LdB "selon l'arme", pas de paire fixe (déjà CHC) |
+| ARME_SPECIALE_DISTANCE | NULL | NULL | idem (déjà CHC) |
+| ARTS_MARTIAUX | COO | ADA | déjà correct, non-CHC, **oubli comblé** |
+| COMMERCE_TRAFIC | INT | PRE | LdB "Attributs associés : INT/PRE" (déjà CHC) |
+| CONNAISSANCE_MILIEU_NATUREL | ADA | INT | déjà correct, non-CHC, **oubli comblé** |
+| CONTROLE_DES_MUTATIONS | NULL | NULL | LdB ne donne pas d'attrs propres (renvoi chapitre Création perso) ; marker `(X)` conservé ; **gagne les 8 enfants MUTATION_\*** |
+| EXPRESSION_ARTISTIQUE | NULL | NULL | LdB "Attributs associés : variable" (déjà CHC) |
+| GENIE_TECHNIQUE | INT | NULL (self-doublé) | LdB "Attributs associés : INT/INT" (déjà CHC) |
+| LANGAGES_SPECIFIQUES | INT | NULL (self-doublé) | déjà correct, non-CHC, **oubli comblé** |
+| LANGUE_ANCIENNE | INT | NULL (self-doublé) | déjà correct, non-CHC, **oubli comblé** |
+| LANGUE_ETRANGERE | INT | NULL (self-doublé) | déjà correct, non-CHC, **oubli comblé** |
+| MANOEUVRE_DARMURE | COO | ADA | déjà correct, non-CHC, **oubli comblé** |
+| MECANIQUE | INT | NULL (self-doublé) | déjà correct, non-CHC, **oubli comblé** |
+| PILOTAGE | NULL | NULL | LdB "variable" (déjà CHC) |
+| POUVOIRS_POLARIS | INT | VOL | LdB "Attributs associés : INT/VOL" (déjà CHC) |
+| SCIENCES_CONNAISANCES_SPECIALISEES | INT | NULL (self-doublé) | LdB "Attributs associés : INT/INT" (déjà CHC) |
+| TACTIQUE | INT | ADA | déjà correct, non-CHC, **oubli comblé** |
 
-5. **Code client** : `SkillsPanel.jsx:196` → `if (skill.is_category)` (au lieu de `skill.attr_1 === 'CHC'`) ; ligne 201 → `!byId.get(skill.parent)?.is_category` (au lieu de `?.attr_1 !== 'CHC'`).
-6. **Code serveur vérifié** : aucune branche `attr_1 === 'CHC'` trouvée côté serveur (`server/src`) — seul `charStats.js:224` fait `if (!refSkill.attr_1) return 0`, un simple garde-fou générique sur falsy, pas spécifique à CHC. Passer `attr_1` à `NULL` pour les 5 catégories sans paire fixe déclenche ce garde-fou proprement (0 explicite) — améliore la robustesse par rapport à l'ancien comportement (calcul silencieux sur un attribut "CHC" qui, lui, existe réellement comme 9ᵉ attribut du personnage — la Chance, cf. `CharacterSheet.jsx:49` — donc ne plantait pas mais était sémantiquement trompeur : un sentinel qui emprunte l'identité d'un vrai attribut).
-7. **Portée** : ce point ajoute à 37-bis un changement de schéma (nouvelle colonne + `attr_1` nullable) et une modification de 2 lignes dans `SkillsPanel.jsx` — nécessite un test navigateur (regroupement Pouvoirs Polaris/Commerce Trafic/Sciences/Génie technique/Pilotage + les 4 autres CHC déjà existants) avant de considérer la tâche complète, en plus du test base de données.
+**`MUTATION` : supprimée** (catégorie fantôme, 0 base LdB, plus aucun enfant après re-parentage vers `CONTROLE_DES_MUTATIONS`).
 
-### A. `ref_skills` — 1 suppression
+4. **Code client** : `SkillsPanel.jsx:196` → `if (skill.is_category)` (au lieu de `skill.attr_1 === 'CHC'`) ; ligne 201 → `!byId.get(skill.parent)?.is_category` (au lieu de `?.attr_1 !== 'CHC'`).
+5. **Code serveur vérifié** : aucune branche `attr_1 === 'CHC'` trouvée côté serveur (`server/src`) — seul `charStats.js:224` fait `if (!refSkill.attr_1) return 0`, un simple garde-fou générique sur falsy, pas spécifique à CHC. Passer `attr_1` à `NULL` pour les catégories sans paire fixe déclenche ce garde-fou proprement (0 explicite) — améliore la robustesse par rapport à l'ancien comportement (calcul silencieux sur un attribut "CHC" qui, lui, existe réellement comme 9ᵉ attribut du personnage — la Chance, cf. `CharacterSheet.jsx:49` — donc ne plantait pas mais était sémantiquement trompeur : un sentinel qui emprunte l'identité d'un vrai attribut).
+6. **`ARMES_SATELLITES` — coordination avec COUCHE 4** : `docs/Character/Creation/migrations/93_seed_ref_careers_lot4a.cjs` (carrière `officier_militaire_surface`) référençait ce skill_id — **corrigé** (2026-07-05) : ligne retirée (le besoin était déjà couvert par `TACTIQUE_COMBAT_TERRESTRE`, présent dans `offMilCommonSkills`, pas de doublon ajouté). Note posée dans `docs/PLAN_COUCHE4.md` (PV7).
+7. **Dette notée, hors scope 37-bis** : `ref_career_skills.skill_id` sans FK vers `ref_skills.id` (cf. `JOURNALCOUCHE4.md`, note ajoutée sous PIÈGE 1) — à reprendre lors de COUCHE 4b, pas maintenant.
+8. **Portée** : ce point ajoute à 37-bis un changement de schéma (nouvelle colonne + `attr_1` nullable) et une modification de 2 lignes dans `SkillsPanel.jsx` — nécessite un test navigateur (regroupement des 17 catégories, notamment les 8 nouvellement corrigées + `CONTROLE_DES_MUTATIONS` avec ses enfants re-parentés) avant de considérer la tâche complète, en plus du test base de données.
+
+### A. `ref_skills` — 2 suppressions + 1 re-parentage
 
 ```sql
+-- Re-parenter AVANT de supprimer MUTATION (sinon les enfants perdent leur parent avant le UPDATE)
+UPDATE ref_skills SET parent = 'CONTROLE_DES_MUTATIONS'
+  WHERE parent = 'MUTATION';
+  -- 8 lignes : MUTATION_AGILITE_CAUDALE, MUTATION_CONTAGION, MUTATION_CONTROLE_MOLECULAIRE,
+  -- MUTATION_EMPATHIE, MUTATION_METAMORPHOSE, MUTATION_PURULENCE, MUTATION_RADIATIONS, MUTATION_SONAR
+
+DELETE FROM ref_skills WHERE id = 'MUTATION';
+-- catégorie fantôme sans base LdB (cf. bloc RUN À VIDE), 0 référence ailleurs (vérifié
+-- ref_skill_requirements, ref_career_skills, seeds .cjs) — suppression sans impact.
+
 DELETE FROM ref_skills WHERE id = 'ARMES_SATELLITES';
+-- absent du LdB comme Compétence autonome, décision Saar (segment 11a) — coordination
+-- COUCHE 4 faite (docs/Character/Creation/migrations/93_seed_ref_careers_lot4a.cjs corrigé).
 ```
-(0 ligne dans `ref_skill_requirements` y référant — vérifié §12.4 — `ON DELETE CASCADE` no-op, rien d'autre à nettoyer.)
+(0 ligne dans `ref_skill_requirements` référant `ARMES_SATELLITES` — vérifié §12.4 — `ON DELETE CASCADE` no-op sur les deux suppressions, rien d'autre à nettoyer.)
 
 ### B. `ref_skills` — corrections `label`
 
@@ -1425,15 +1467,30 @@ INSERT INTO ref_skill_requirements (skill_id, type, value, threshold) VALUES
 - Toute la famille "Aptitudes physiques" sauf ENDURANCE/ACROBATIE_EQUILIBRE ; "Combat (contact)" sauf les 3 labels ; etc. — cf. tableaux détaillés par segment ci-dessus pour la liste exhaustive des lignes NON touchées
 
 ### G. `down()`
-Restaure toutes les valeurs actuelles (pré-37-bis) listées dans les tableaux B/C/D + le bloc "RUN À VIDE" (`attr_1`/`is_category`) ci-dessus, ré-insère `ARMES_SATELLITES` (valeurs de la migration 103b), redéplace les 2 lignes `ref_skill_requirements` vers `MECANIQUE_CHASSEURS_ATMOSPHERIQUES`, et retire la colonne `is_category` + restaure `attr_1` NOT NULL (`table.text('attr_1').notNullable().alter()`, uniquement si aucune ligne `attr_1 IS NULL` ne subsiste — sinon les 5 catégories `NULL` doivent d'abord être re-basculées à `'CHC'` dans le `down()`, avant l'`alter`).
+Restaure toutes les valeurs actuelles (pré-37-bis) listées dans les tableaux B/C/D + le bloc "RUN À VIDE" (`attr_1`/`is_category`) ci-dessus, ré-insère `ARMES_SATELLITES` (valeurs de la migration 103b) et `MUTATION` (`attr_1: 'CHC'`, `marker: NULL`, `parent: NULL`), re-parente les 8 `MUTATION_*` vers `MUTATION` (avant de supprimer `CONTROLE_DES_MUTATIONS`... non — `CONTROLE_DES_MUTATIONS` existait déjà avant 37-bis, seul son `parent`-status change : down() les re-parente vers `MUTATION` et remet `CONTROLE_DES_MUTATIONS.attr_1` à `'CHC'`), redéplace les 2 lignes `ref_skill_requirements` vers `MECANIQUE_CHASSEURS_ATMOSPHERIQUES`, et retire la colonne `is_category` + restaure `attr_1` NOT NULL (`table.text('attr_1').notNullable().alter()`, uniquement si aucune ligne `attr_1 IS NULL` ne subsiste — sinon les catégories `NULL` doivent d'abord être re-basculées à `'CHC'` dans le `down()`, avant l'`alter`).
 
 ### H. Header de migration (documentation intégrée au code)
 Le fichier `105_ref_skills_37bis.js` documente en commentaire de tête : la légende `marker` réelle (X/PN/(-3)/•), le statut de `PREREQ` (convention projet, pas LdB), la nouvelle colonne `is_category` (remplace le sentinel `CHC`, cf. bloc "RUN À VIDE"), et un renvoi vers `docs/MIGRATION_37BIS.md` pour l'audit complet ligne par ligne.
 
 ### I. Changement client requis (hors migration, même PR)
-`client/src/character/SkillsPanel.jsx` lignes 196 et 201 : remplacer `skill.attr_1 === 'CHC'` par `skill.is_category`, et `byId.get(skill.parent)?.attr_1 !== 'CHC'` par `!byId.get(skill.parent)?.is_category`. **Test navigateur obligatoire après ce changement** : vérifier le regroupement correct des 9 catégories (Manœuvre d'armure/Arme spéciale contact/distance déjà OK aujourd'hui à re-tester en non-régression, + Pouvoirs Polaris/Commerce Trafic/Sciences/Génie technique/Pilotage/Mutation/Expression artistique à valider avec la nouvelle colonne) dans la fiche personnage, en mode normal et en mode Progression.
+`client/src/character/SkillsPanel.jsx` lignes 196 et 201 : remplacer `skill.attr_1 === 'CHC'` par `skill.is_category`, et `byId.get(skill.parent)?.attr_1 !== 'CHC'` par `!byId.get(skill.parent)?.is_category`. **Test navigateur obligatoire après ce changement** : vérifier le regroupement correct des **17 catégories** dans la fiche personnage (mode normal + mode Progression) — les 9 déjà groupées aujourd'hui (à re-tester en non-régression : `ARME_SPECIALE_CONTACT`, `ARME_SPECIALE_DISTANCE`, `COMMERCE_TRAFIC`, `EXPRESSION_ARTISTIQUE`, `GENIE_TECHNIQUE`, `PILOTAGE`, `POUVOIRS_POLARIS`, `SCIENCES_CONNAISANCES_SPECIALISEES`, `CONTROLE_DES_MUTATIONS` avec ses 8 enfants re-parentés) + les 8 nouvellement groupées (`ARTS_MARTIAUX`, `CONNAISSANCE_MILIEU_NATUREL`, `LANGAGES_SPECIFIQUES`, `LANGUE_ANCIENNE`, `LANGUE_ETRANGERE`, `MANOEUVRE_DARMURE`, `MECANIQUE`, `TACTIQUE`).
+
+### J. RUN À VIDE FINAL (2026-07-05) — vérifications de clôture avant code
+
+Passe de vérification exhaustive demandée par Saar ("3ᵉ révision de `ref_skills`, on veut que ce soit la dernière") — tout vérifié par requête/grep, rien laissé à la mémoire :
+
+- **Tous les consommateurs de `ref_skills` recensés** : côté client, `attr_1`/`CHC`/`is_category` n'apparaissent **que** dans `SkillsPanel.jsx` (grep `client/src` entier) — aucune logique de regroupement dupliquée ailleurs (`mockStep4Data.js` ne fait que des overrides de `marker` pour mock, sans rapport). Côté serveur, 3 routes touchent `ref_skills` : `char-sheet.js` (achat, déjà auditée), `equipment.js` (`SELECT id,label,family` pour dropdown — inerte), `character/ref.js` (`SELECT *` — inclut `is_category` automatiquement, aucun code à changer ici).
+- **`ref_mutation_skills`** (table découverte en cours de vérification) — colonnes `mutation_id, skill_name, skill_attrs, skill_base, cost_mult` : **pas de FK vers `ref_skills`** (`skill_name` est un texte libre, pas un `skill_id`). Aucun rapport avec 37-bis, aucune action.
+- **Aucun personnage existant n'a de ligne `char_skills` pour `MUTATION` ou `ARMES_SATELLITES`** (vérifié `SELECT * FROM char_skills WHERE skill_id IN (...)` → 0 ligne) — suppression des deux sans impact sur des personnages déjà créés.
+- **Famille cohérente** pour le re-parentage : les 8 `MUTATION_*` et `CONTROLE_DES_MUTATIONS` sont tous `family='Compétences Spéciales'` — aucun changement de `family` nécessaire.
+- **0 cas de nesting à 3 niveaux** sur toute la table (vérifié : aucun enfant n'est lui-même parent d'une autre ligne) — le design `is_category` (un seul niveau de regroupement) est structurellement suffisant partout, pas seulement pour les 17 cas traités.
+- **Transactions migration** : knex encapsule chaque `up()`/`down()` dans une transaction par défaut (rien dans `knexfile.cjs` ne désactive ce comportement) — le re-parentage (`UPDATE parent`) suivi de la suppression (`DELETE MUTATION`) dans le même `up()` est donc atomique sans effort supplémentaire.
+- **Total final `ref_skills`** : 251 − 1 (`MUTATION`) − 1 (`ARMES_SATELLITES`) = **249 lignes**.
+- **Reste (non bloquant, cosmétique)** : commentaire `server/src/routes/character/ref.js:38` mentionne "234 skills" — déjà obsolète avant même 37-bis (la table est à 251 aujourd'hui). Pas corrigé ici (commentaire, aucun effet fonctionnel) — à mettre à jour en même temps que le reste si on touche ce fichier un jour.
+
+**Aucun nouveau blocage trouvé.** Le plan est stable.
 
 ---
 
-**Plan mis à jour et complet. Je code ?**
+**Plan mis à jour et complet — vérifié de bout en bout. Je code ?**
 

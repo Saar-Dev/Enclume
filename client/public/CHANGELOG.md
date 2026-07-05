@@ -1,3 +1,13 @@
+## v143 — 2026-07-05 — Migration 37-bis : consolidation ref_skills (catalogue Compétences)
+
+### Serveur
+- [fix] Migration 105 — 3ᵉ révision consolidée de `ref_skills` (après 37/74/103/103b) : 113 markers corrigés (legacy `'S'` → vraie valeur LdB), 11 labels, 4 attributs, suppression de `MUTATION` (catégorie fantôme) et `ARMES_SATELLITES` (hors LdB), re-parentage des 8 mutations vers `CONTROLE_DES_MUTATIONS`, déplacement d'un prérequis mal attribué
+- [feat] Nouvelle colonne `ref_skills.is_category` — remplace le sentinel `attr_1='CHC'` utilisé pour détecter les catégories de compétences dans l'UI
+
+### Client
+- [fix] Regroupement des catégories de compétences dans la fiche personnage — 8 catégories jusqu'ici affichées à plat (Arts martiaux, Connaissance milieu naturel, Langages spécifiques, Langue ancienne, Langue étrangère, Manœuvre d'armure, Mécanique, Tactique) se replient désormais correctement sous leur en-tête
+- [fix] En-tête de colonnes des compétences — le libellé générique "Compétence" répété à chaque famille est remplacé par le nom de la famille elle-même (ex. "Aptitudes physiques"), qui reste cliquable pour replier/déplier
+
 ## v142 — 2026-07-05 — Options de campagne : settings JSONB + page paramètres
 
 ### Serveur

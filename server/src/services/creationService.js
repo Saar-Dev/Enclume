@@ -4,8 +4,9 @@
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
-import { getAgeEffects, evaluateSalaryFormula } from '../../../shared/polarisUtils.js'
+import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../shared/polarisUtils.js'
 import { addAdvantage } from './advantageService.js'
+import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 
 // ─── Résolution background avec parent nullable (single-query) ────────────────
 
@@ -192,7 +193,9 @@ export async function startCreation(campaignId, userId) {
       ATTR_IDS_START.map(attr_id => ({ char_sheet_id: sheet.id, attr_id, base_level: 7, pc_modifier: 0 }))
     )
 
-    return { sheetId: sheet.id, characterId: character.id }
+    const settings = await getCampaignSettings(trx, campaignId)
+
+    return { sheetId: sheet.id, characterId: character.id, ambiance: settings.ambiance }
   })
 }
 
@@ -206,9 +209,14 @@ export async function finalizeCreation(sheetId, { step1, step2, step3, step4, st
     const characterId = sheet.character_id
 
     // ── STEP 1 : attributs + identité ──────────────────────────────────────────
-    const { charName, playerName, attributes, pcSpent: pc1 } = step1
+    const { charName, playerName, attributes, pcSpent: pc1, isFeminin: isFeminin1 } = step1
     if (!charName?.trim()) throw new AppError(400, 'Nom du personnage requis')
     if (!attributes || typeof attributes !== 'object') throw new AppError(400, 'Attributs requis')
+
+    const { campaign_id: campaignId } = await trx('characters').where({ id: characterId }).select('campaign_id').first()
+    const settings = await getCampaignSettings(trx, campaignId)
+    const { valide, erreurs } = validateStep1(attributes, settings.ambiance, pc1 ?? 0, isFeminin1 ?? false)
+    if (!valide) throw new AppError(400, `Étape 1 invalide : ${erreurs.join(' ; ')}`)
 
     await trx('characters').where({ id: characterId }).update({ name: charName.trim() })
     await trx('char_identity')

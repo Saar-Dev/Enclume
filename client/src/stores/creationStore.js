@@ -19,6 +19,7 @@ export const useCreationStore = create((set, get) => ({
   creationState: null,
   isStarting: false,
   startError: null,
+  ambiance: null,
 
   getPcDispo: () => {
     const s = get()
@@ -43,9 +44,9 @@ export const useCreationStore = create((set, get) => ({
     set({ isStarting: true, startError: null })
     try {
       const res = await api.post('/creation/start', { campaignId })
-      const { sheetId, characterId } = res.data
-      set({ sheetId, characterId, isStarting: false })
-      return { sheetId, characterId }
+      const { sheetId, characterId, ambiance } = res.data
+      set({ sheetId, characterId, ambiance, isStarting: false })
+      return { sheetId, characterId, ambiance }
     } catch (err) {
       const msg = err.response?.data?.error?.message || err.response?.data?.message || `Erreur ${err.response?.status ?? 'réseau'}`
       set({ startError: msg, isStarting: false })
@@ -71,5 +72,6 @@ export const useCreationStore = create((set, get) => ({
     sheetId: null, characterId: null, campaignId: null,
     creationState: null,
     isStarting: false, startError: null,
+    ambiance: null,
   }),
 }))

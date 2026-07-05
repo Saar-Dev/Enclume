@@ -67,6 +67,8 @@ Fichiers sources lots 2-6 : IDs **minuscule et génériques** (`'pilotage'`, `'m
 `ref_skills` et migration 100 : IDs **UPPERCASE spécifiques** (`'PILOTAGE__NAVIRES_LEGERS'`).
 `ref_career_skills.skill_id` est `text` sans FK. Insertion silencieuse avec mauvais ID → aucune erreur levée.
 
+**Dette future notée (2026-07-05, discussion migration 37-bis)** : ajouter une FK `ref_career_skills.skill_id → ref_skills.id` transformerait cette classe d'erreur silencieuse en échec bloquant à l'insertion — éliminerait une bonne partie du travail de vérification manuelle de ce journal pour les lots futurs. **Hors scope de 37-bis** (qui ne touche que `ref_skills`/`ref_skill_requirements`) — action à reprendre lors de COUCHE 4b (migrations 104+ pour les lots 2-6), pas maintenant.
+
 ### PIÈGE 2 — IDs à double underscore vs simple underscore
 
 D'après l'audit (session 131) :

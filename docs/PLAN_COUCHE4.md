@@ -744,3 +744,5 @@ Dans `client/src/index.css` Section 10 (composants UI wizard), ajouter :
 **PV5** — Ownership guard `/start` sans `:sheetId` — guard membership explicite dans le handler ← géré ✅
 
 **PV6** — `char_creation_snapshot` attend `char_archetype` (step4 rollback) — row créée en start ✅
+
+**PV7** (2026-07-05, migration 37-bis) — ✅ **corrigé**. `ARMES_SATELLITES` n'existe pas comme Compétence dans le LdB (le texte l'attribue explicitement à `TACTIQUE_COMBAT_TERRESTRE`). Migration 105 (`105_ref_skills_37bis.js`) supprime cette ligne de `ref_skills`. `docs/Character/Creation/migrations/93_seed_ref_careers_lot4a.cjs`, carrière `officier_militaire_surface`, référençait `skill_id: 'ARMES_SATELLITES'` — ligne retirée (le besoin est déjà couvert par `TACTIQUE_COMBAT_TERRESTRE`, présent dans `offMilCommonSkills`, pas de doublon à ajouter).

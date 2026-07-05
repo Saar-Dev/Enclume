@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-05 Session 132
+> Dernière mise à jour : 2026-07-05 Session 133
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -8,6 +8,10 @@
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+**0. ~~MIGRATION 37-BIS (ref_skills) — migration 105~~** ✅ CLOS — Session 133 (2026-07-05). Détail complet : `docs/JOURNAL5.md` "Session 133", `docs/MIGRATION_37BIS.md`.
+
+---
 
 **1. ~~Valider Sprint 14-0~~** ✅ CLOS — Session 95 suite 2
 
@@ -225,6 +229,12 @@
    → **Testé** : SR ✅, combat inchangé ✅, persistance 11 options ✅, upload token non écrasé ✅, navigation onglets ✅
    → **Non testé** : effet mécanique des 11 options (stockage/lecture seulement — voir `docs/optionCampagne/JOPT.md`)
 
+**41. Options de campagne — effets mécaniques (1/11) : `ambiance` ✅ câblée — Session 132 suite** ← EN COURS, un par un
+   → Audit complet des 11 options dans `docs/optionCampagne/PLAN_OPTCAMP.md` (Niveau 1/2/3 par complexité)
+   → `ambiance` : mock supprimé (`WizardCreation.jsx`), `startCreation`/`creationStore` transmettent la vraie valeur, `finalizeCreation` revalide via `validateStep1` (code mort réactivé, `shared/polarisUtils.js:187`)
+   → **Testé** : SR ✅, fonctionnel ✅
+   → **Prochain** : `feminin_bonus` (sélecteur Sexe toujours affiché, prop `isFeminin` ignorée `_deprecated` dans `Step1Attributes.jsx:36`)
+
 **41. Wizard COUCHE 4c** ← WIZARD PROCHAINE ÉTAPE
    → [WIZ-1] Filtrer personnages incomplets (creation_state ≠ 'complete') dans la liste Dashboard
    → [WIZ-2] Synchroniser les deux compteurs PC (store header vs local CareersAllocator)
@@ -298,7 +308,7 @@
 | **WIZ-3** | Formation "apprentissage_technique" → choix de spécialité non implémenté | Moyenne — COUCHE 4c |
 | **DBG-C1** | `character.user_id` null quand GM crée pour joueur absent (steps 1-3) | Moyenne — sprint futur |
 | **JSON1** | `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant, cassait déjà avant Session 132) | **Haute** — casse tout le fichier EN |
-| **OPT-W1** | 11 options de campagne (ambiance, feminin_bonus, etc.) sans effet mécanique branché — stockage/lecture seulement | Moyenne — sprint futur |
+| **OPT-W1** | 10/11 options de campagne (feminin_bonus, random_mutations, polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity) sans effet mécanique branché — `ambiance` ✅ câblée Session 132 suite | Moyenne — en cours un par un |
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 
 ---

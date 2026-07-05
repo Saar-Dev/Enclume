@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 132 — 2026-07-05
+> Session 133 — 2026-07-05
 
 ---
 
@@ -107,22 +107,22 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 132 (2026-07-05)
+## ÉTAT COURANT — Session 133 (2026-07-05)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **108 migrations stables** (104_campaign_settings — Session 132)
+- **109 migrations stables** (105_ref_skills_37bis — Session 133)
 
-**Session 132 — Options de campagne ✅ clos :**
-- `campaignSettingsService.js` (NOUVEAU) : `SETTINGS_SCHEMA` (16 clés) + `getCampaignSettings(db, campaignId)` — source unique de vérité
-- `104_campaign_settings.js` : `campaigns.settings JSONB` — consolide 6 colonnes plates + 11 nouvelles options, DROP `campaign_rules` (table morte)
-- 5 consommateurs combat + `SessionPage.jsx` migrés vers `getCampaignSettings()` (expand/contract — jamais de lecture cassée)
-- `routes/campaigns.js` PUT réécrit — validation `SETTINGS_SCHEMA`, merge JSONB atomique (`db.raw`, pattern PC39)
-- 3 bugfixes composants (`SectionDice` closures `setTimeout`, `SectionGameRules` état manquant, `SectionTokens` désync `onChange`) + bugfix `CampaignSettingsPage` (`formRef`→`formData`, perte visuelle au changement d'onglet)
-- 7 fichiers déplacés vers `client/src/components/campaignSettings/` + i18n FR/EN complétés (31/33 clés)
-- **Testé :** SR ✅, combat inchangé (recharge PNJ/stun/timer/LOS) ✅, persistance 11 options ✅, upload token non écrasé ✅, navigation onglets ✅
-- **Non testé :** effet mécanique des 11 options (stockage/lecture seulement pour l'instant)
+**Session 133 — Migration 37-bis : consolidation ref_skills (3ᵉ révision) ✅ clos :**
+- `105_ref_skills_37bis.js` (NOUVEAU) : `attr_1` nullable + colonne `is_category` (remplace le sentinel `attr_1='CHC'`) ; 2 suppressions (`MUTATION`, `ARMES_SATELLITES`) + re-parentage 8 mutations vers `CONTROLE_DES_MUTATIONS` ; 11 labels + 4 attrs + 113 markers corrigés (legacy `'S'` → vraie valeur LdB) ; 1 déplacement `ref_skill_requirements`. 249 lignes finales (251−2).
+- `up`/`down` testés en base réelle : round-trip byte-identique vérifié (diff exit 0 sur les 251 lignes pré-migration).
+- `SkillsPanel.jsx` : sentinel `attr_1==='CHC'` → `is_category` (8 catégories rejoignent le regroupement UI : Arts martiaux, Connaissance milieu naturel, Langages spécifiques, Langue ancienne, Langue étrangère, Manœuvre d'armure, Mécanique, Tactique). En-tête de colonnes par famille fusionné avec le nom de famille (contre-proposition Saar) — remplace le libellé générique "Compétence" répété, garde repli/dépli.
+- **Effet de bord identifié et validé (pas un bug)** : les compétences `(X)` corrigées (ex-`'S'`) suivent désormais la règle de visibilité normale (masquées tant que non apprises) — comportement identique à `Pouvoirs Polaris`, confirmé voulu par Saar.
+- **Testé :** round-trip DB ✅, regroupement 17 catégories en navigateur (normal + Progression) ✅, repli/dépli en-tête fusionné ✅
+- **Non testé :** achat XP d'une compétence `(X)` nouvellement corrigée en mode Progression (logique inchangée, non re-testée explicitement)
 
 **Dettes actives :**
+- `SkillsPanel.jsx:155` (`isVisible`) — `if (skill.attr_1 === 'CHC') return false` code mort (jamais atteint vu les points d'appel actuels) — cosmétique, sans impact
+- `server/src/routes/character/ref.js:38` — commentaire "234 skills" obsolète (table à 249 lignes désormais) — cosmétique
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
 - "Changer le mode de tir" — non implémenté — sprint futur
 - `useDiceAudio.js` — sons dés

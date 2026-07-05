@@ -11,6 +11,7 @@ import Step3Mutations from './Step3Mutations'
 import Step4Experience from './Step4Experience'
 import Step5Advantages from './Step5Advantages'
 import WizardReview from './WizardReview'
+import { POOL_AMBIANCE } from '../../../../shared/polarisUtils.js'
 
 export default function WizardCreation() {
   const { t } = useTranslation('creation')
@@ -24,6 +25,7 @@ export default function WizardCreation() {
     step1Data, step2Data, step3Data, step4Data, step5Data,
     setStep0Data, setStep1Data, setStep2Data, setStep3Data, setStep4Data, setStep5Data,
     getPcDispo,
+    ambiance: storeAmbiance,
   } = useCreationStore()
 
   const navigate = useNavigate()
@@ -35,7 +37,7 @@ export default function WizardCreation() {
   }, [campaignId, setCampaignId])
 
   const pcDispo = getPcDispo()
-  const mockAmbiance = 'INTERMEDIAIRE'
+  const ambiance = storeAmbiance ?? 'INTERMEDIAIRE'
   const mockIsFeminin = false
 
   const canFinalize = !!step1Data?.charName && !!step2Data && !!step3Data && !!step4Data && !!step5Data
@@ -93,7 +95,7 @@ export default function WizardCreation() {
         totalSteps={6}
         highestStep={highestStep}
         pcDispo={pcDispo}
-        infos={getInfos(step, mockAmbiance, t)}
+        infos={getInfos(step, ambiance, t)}
         onStepClick={navigateToStep}
       />
 
@@ -105,7 +107,7 @@ export default function WizardCreation() {
         {step === 1 && (
           <Step1Attributes
             initialData={step1Data}
-            ambiance={mockAmbiance}
+            ambiance={ambiance}
             isFeminin={mockIsFeminin}
             onPcChange={(n) => setStep1Data({ pcSpent: n })}
             onNext={(data) => {
@@ -213,7 +215,7 @@ export default function WizardCreation() {
 }
 
 function getInfos(step, ambiance, t) {
-  if (step === 1) return <span className="wiz-info-badge">{t('wizard.info_step1', { ambiance, pool: 38 })}</span>
+  if (step === 1) return <span className="wiz-info-badge">{t('wizard.info_step1', { ambiance, pool: POOL_AMBIANCE[ambiance] ?? 38 })}</span>
   if (step === 2) return <span className="wiz-info-badge">{t('wizard.info_step2')}</span>
   if (step === 3) return <span className="wiz-info-badge">{t('wizard.info_step3')}</span>
   if (step === 4) return <span className="wiz-info-badge">{t('wizard.info_step4')}</span>

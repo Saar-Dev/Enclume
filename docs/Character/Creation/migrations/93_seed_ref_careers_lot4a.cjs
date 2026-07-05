@@ -189,7 +189,8 @@ export const seed = async (knex) => {
 
   const offMilSurfaceSkills = [
     { skill_id: 'CAMOUFLAGE_DISSIMULATION', skill_group: 'Furtivité' },
-    { skill_id: 'ARMES_SATELLITES', skill_group: 'Opérations militaires' },
+    // ARMES_SATELLITES retiré (2026-07-05, migration 37-bis) : n'existe pas comme Compétence LdB,
+    // l'usage est déjà couvert par TACTIQUE_COMBAT_TERRESTRE (déjà présent dans offMilCommonSkills L.171)
     { skill_id: 'CONNAISSANCE_MILIEU_NATUREL_SURFACE', skill_group: 'Survie/Extérieur' }
   ]
 
