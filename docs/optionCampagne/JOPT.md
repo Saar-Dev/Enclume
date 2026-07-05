@@ -180,6 +180,8 @@ Colonne "Serveur" = stockage/lecture (`campaignSettingsService.js` + route PUT) 
 
 **Bug préexistant découvert (hors scope, non corrigé) :** `client/src/locales/en.json` contient une erreur de syntaxe JSON antérieure à cette session — clé `deleteMapConfirm`, guillemets non échappés autour de `{{name}}`. Rend tout `en.json` invalide. À corriger séparément.
 
+**Bug fonctionnel trouvé en test (corrigé)** — `CampaignSettingsPage.jsx` : `initialData` (`useState`, rempli une fois au chargement) + `formRef` (`useRef`, jamais reflété dans le state) → changer d'onglet démonte/remonte la Section active, dont le `useState` local se réinitialise depuis `initialData` (jamais mis à jour) au lieu de la valeur éditée. La modif semblait perdue visuellement (mais restait en réalité dans `formRef.current`, donc Enregistrer fonctionnait). Correctif : `formRef` supprimé, `initialData` renommé `formData` et devient l'unique source de vérité vivante — `handleSectionChange` fait `setFormData(prev => ...)` au lieu de muter un ref. `handleSave` lit `formData` (ajouté aux deps). Testé : persistance ✅, combat (recharge PNJ/stun/timer/LOS) ✅, upload token non écrasé ✅. Non testé : navigation retour/avant entre onglets après ce correctif (en attente de confirmation).
+
 ---
 
 ## Dettes restantes après implantation de ce plan

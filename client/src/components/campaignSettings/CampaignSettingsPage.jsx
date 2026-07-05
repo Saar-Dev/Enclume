@@ -1,5 +1,5 @@
 // client/src/components/campaignSettings/CampaignSettingsPage.jsx
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../../lib/api'
@@ -19,8 +19,7 @@ export default function CampaignSettingsPage() {
   const [error, setError] = useState(null)
   const [saveStatus, setSaveStatus] = useState(null)
   const [activeSection, setActiveSection] = useState('dice')
-  const [initialData, setInitialData] = useState(null)
-  const formRef = useRef({})
+  const [formData, setFormData] = useState(null)
 
   useEffect(() => { document.title = 'Enclume — Paramètres campagne' }, [])
 
@@ -52,8 +51,7 @@ export default function CampaignSettingsPage() {
             allow_los_cancel: s.allow_los_cancel ?? false,
           },
         }
-        setInitialData(data)
-        formRef.current = { ...data }
+        setFormData(data)
         setLoading(false)
       } catch (err) {
         setError(err.response?.status === 403 ? t('settings.accessDenied') : t('settings.errorLoad'))
@@ -64,21 +62,21 @@ export default function CampaignSettingsPage() {
   }, [campaignId])
 
   const handleSectionChange = useCallback((patch) => {
-    formRef.current = {
-      ...formRef.current,
+    setFormData(prev => ({
+      ...prev,
       ...patch,
       settings: {
-        ...(formRef.current.settings || {}),
+        ...(prev.settings || {}),
         ...(patch.settings || {}),
       },
-    }
+    }))
   }, [])
 
   const handleSave = useCallback(async () => {
     setSaving(true)
     setSaveStatus(null)
     try {
-      await api.put(`/campaigns/${campaignId}`, formRef.current)
+      await api.put(`/campaigns/${campaignId}`, formData)
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
     } catch (err) {
@@ -86,7 +84,7 @@ export default function CampaignSettingsPage() {
     } finally {
       setSaving(false)
     }
-  }, [campaignId])
+  }, [campaignId, formData])
 
   if (loading) return (
     <div style={s.loadingScreen}>
@@ -142,18 +140,18 @@ export default function CampaignSettingsPage() {
         </nav>
 
         <div style={s.content}>
-          {activeSection === 'dice' && initialData && (
-            <SectionDice initialConfig={initialData.dice_config} onChange={handleSectionChange} />
+          {activeSection === 'dice' && formData && (
+            <SectionDice initialConfig={formData.dice_config} onChange={handleSectionChange} />
           )}
-          {activeSection === 'rules' && initialData && (
-            <SectionGameRules initialData={initialData.settings} onChange={(p) => handleSectionChange({ settings: p })} />
+          {activeSection === 'rules' && formData && (
+            <SectionGameRules initialData={formData.settings} onChange={(p) => handleSectionChange({ settings: p })} />
           )}
-          {activeSection === 'tokens' && initialData && (
-            <SectionTokens initialData={initialData} campaignId={campaignId} onChange={handleSectionChange} />
+          {activeSection === 'tokens' && formData && (
+            <SectionTokens initialData={formData} campaignId={campaignId} onChange={handleSectionChange} />
           )}
           {activeSection === 'players' && <SectionPlayers />}
-          {activeSection === 'sheet' && initialData && (
-            <SectionCharacterSheet initialData={initialData.settings} onChange={(p) => handleSectionChange({ settings: p })} />
+          {activeSection === 'sheet' && formData && (
+            <SectionCharacterSheet initialData={formData.settings} onChange={(p) => handleSectionChange({ settings: p })} />
           )}
         </div>
       </div>

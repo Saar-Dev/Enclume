@@ -1307,9 +1307,43 @@ Audit ligne par ligne des 94 lignes (10 lots de ≤10, `ORDER BY skill_id, type,
 
 **Principe** : migration additive de correction — ne touche pas aux fichiers 37/74/103/103b (déjà appliqués, historique immuable). `up()` = une série d'`UPDATE ... WHERE id IN (...)` groupés par valeur cible + 1 `DELETE` + 1 correction `ref_skill_requirements`. `down()` = restaure exactement les valeurs pré-37-bis (état actuellement en DB), row par row, pour rester rejouable dans les deux sens.
 
-### Incohérence `CHC`/`PILOTAGE` — résolue (décision Saar, 2026-07-05)
+### RUN À VIDE (2026-07-05) — remplacement du sentinel `CHC` par une colonne `is_category` explicite
 
-Segment 2 (Combat contact) avait établi une convention explicite : **`attr_1='CHC'` = marqueur intentionnel pour les compétences-catégories virtuelles sans paire d'attributs fixe** (`ARME_SPECIALE_CONTACT`, `ARME_SPECIALE_DISTANCE`, `MUTATION`, `EXPRESSION_ARTISTIQUE`). Le segment 9a avait décidé `PILOTAGE : attr_1 CHC→NULL/NULL` au lieu d'appliquer cette même convention (LdB "Attributs associés : **variable**", cas identique aux 4 autres). **Décision (2026-07-05) : `PILOTAGE` s'aligne sur la convention CHC comme ses 4 sœurs — `attr_1` reste `CHC`, aucun changement sur cette ligne.** La correction envisagée au segment 9a ([DBG-8] volet attrs) est annulée ; seul le reste de [DBG-8] concernant `marker='PREREQ'` (déjà jugé légitime et conservé) reste valable.
+**Constat critique trouvé avant code** : `attr_1 === 'CHC'` n'est pas qu'une convention documentaire — c'est une **branche de code active** côté client, `client/src/character/SkillsPanel.jsx:196-205` :
+```js
+if (skill.attr_1 === 'CHC') {
+  const children = skills.filter(s => s.parent === skill.id && isVisible(s))
+  if (children.length > 0) blocks.push({ type: 'group', group: skill, children })
+} else if (!skill.parent || byId.get(skill.parent)?.attr_1 !== 'CHC') {
+  if (isVisible(skill)) blocks.push({ type: 'skill', skill })
+}
+```
+C'est ce test qui décide si une ligne s'affiche en en-tête de groupe (non testable, enfants regroupés dessous) ou en ligne de compétence normale. Aligner `COMMERCE_TRAFIC`/`SCIENCES_CONNAISANCES_SPECIALISEES`/`GENIE_TECHNIQUE`/`POUVOIRS_POLARIS` sur leurs vrais attributs LdB (comme prévu par [DBG-6]/[DBG-7]/[DBG-11]/[DBG-5]) aurait cassé le regroupement de ces 4 catégories (jusqu'à 71 enfants pour Pouvoirs Polaris → 72 lignes plates).
+
+Vérifié aussi : `marker === '(X)'/'(-3)'/'PN'/'PREREQ'` sont bien des mécaniques de jeu réelles (coût XP, malus, visibilité — `char-sheet.js:439-467`, `SkillsPanel.jsx:25/161/233/261-267`), confirmé par Saar comme information déjà connue (raison d'être de l'audit complet).
+
+**Décision Saar (2026-07-05) : ne pas contourner avec `attr_1='CHC'` — créer une colonne dédiée `is_category`.** Architecture propre retenue :
+
+1. **Migration 34 à amender** : `ref_skills.attr_1` est actuellement `.notNullable()` — doit devenir nullable (les catégories "variable"/sans paire fixe n'ont pas d'attribut réel à stocker). `table.text('attr_1').nullable().alter()`.
+2. **Nouvelle colonne** : `table.boolean('is_category').notNullable().defaultTo(false)`.
+3. **`is_category = true`** pour les 9 lignes actuellement flaguées par le sentinel `CHC` : `ARME_SPECIALE_CONTACT`, `ARME_SPECIALE_DISTANCE`, `MUTATION`, `EXPRESSION_ARTISTIQUE`, `PILOTAGE`, `COMMERCE_TRAFIC`, `SCIENCES_CONNAISANCES_SPECIALISEES`, `GENIE_TECHNIQUE`, `POUVOIRS_POLARIS`.
+4. **`attr_1`/`attr_2` réels** pour ces 9 lignes (remplace tout `CHC`, y compris table C ci-dessous) :
+
+| id | attr_1 | attr_2 | Source |
+|---|---|---|---|
+| ARME_SPECIALE_CONTACT | NULL | NULL | LdB "selon l'arme", pas de paire fixe |
+| ARME_SPECIALE_DISTANCE | NULL | NULL | idem |
+| MUTATION | NULL | NULL | pas d'entrée LdB dédiée, regroupement pur |
+| EXPRESSION_ARTISTIQUE | NULL | NULL | LdB "Attributs associés : variable" |
+| PILOTAGE | NULL | NULL | LdB "Attributs associés : variable" (revient à la décision initiale du segment 9a — sûr maintenant que le regroupement ne dépend plus de `attr_1`) |
+| COMMERCE_TRAFIC | INT | PRE | LdB "Attributs associés : INT/PRE" |
+| SCIENCES_CONNAISANCES_SPECIALISEES | INT | NULL (self-doublé) | LdB "Attributs associés : INT/INT" |
+| GENIE_TECHNIQUE | INT | NULL (self-doublé) | LdB "Attributs associés : INT/INT" |
+| POUVOIRS_POLARIS | INT | VOL | LdB "Attributs associés : INT/VOL" |
+
+5. **Code client** : `SkillsPanel.jsx:196` → `if (skill.is_category)` (au lieu de `skill.attr_1 === 'CHC'`) ; ligne 201 → `!byId.get(skill.parent)?.is_category` (au lieu de `?.attr_1 !== 'CHC'`).
+6. **Code serveur vérifié** : aucune branche `attr_1 === 'CHC'` trouvée côté serveur (`server/src`) — seul `charStats.js:224` fait `if (!refSkill.attr_1) return 0`, un simple garde-fou générique sur falsy, pas spécifique à CHC. Passer `attr_1` à `NULL` pour les 5 catégories sans paire fixe déclenche ce garde-fou proprement (0 explicite) — améliore la robustesse par rapport à l'ancien comportement (calcul silencieux sur un attribut "CHC" qui, lui, existe réellement comme 9ᵉ attribut du personnage — la Chance, cf. `CharacterSheet.jsx:49` — donc ne plantait pas mais était sémantiquement trompeur : un sentinel qui emprunte l'identité d'un vrai attribut).
+7. **Portée** : ce point ajoute à 37-bis un changement de schéma (nouvelle colonne + `attr_1` nullable) et une modification de 2 lignes dans `SkillsPanel.jsx` — nécessite un test navigateur (regroupement Pouvoirs Polaris/Commerce Trafic/Sciences/Génie technique/Pilotage + les 4 autres CHC déjà existants) avant de considérer la tâche complète, en plus du test base de données.
 
 ### A. `ref_skills` — 1 suppression
 
@@ -1334,7 +1368,7 @@ DELETE FROM ref_skills WHERE id = 'ARMES_SATELLITES';
 | ARMES_SPECIALES_DISTANCE_COORDINATION_PERCEPTION | Arme spéciale à distance (COO/COO) | Arme spéciale à distance (COO/PER) |
 | MAITRISE_DE_LECHO_POLARIS | Maîtrise de l'Echo Polaris | Maîtrise de l'Écho Polaris |
 
-### C. `ref_skills` — corrections `attr_1`/`attr_2` (hors CHC, hors label déjà listé)
+### C. `ref_skills` — corrections `attr_1`/`attr_2` (hors catégories `is_category`, traitées ci-dessus)
 
 | id | attr_1 | attr_2 |
 |---|---|---|
@@ -1342,12 +1376,8 @@ DELETE FROM ref_skills WHERE id = 'ARMES_SATELLITES';
 | ACROBATIE_EQUILIBRE | — | PER→NULL |
 | ANALYSE_EMPATHIQUE | — | PRE→PER |
 | ART_ARTISANAT | — | NULL→PER |
-| COMMERCE_TRAFIC | CHC→INT | NULL→PRE |
-| SCIENCES_CONNAISANCES_SPECIALISEES | CHC→INT | — (reste NULL, self-doublé) |
-| GENIE_TECHNIQUE | CHC→INT | — (reste NULL, self-doublé) |
-| POUVOIRS_POLARIS | CHC→INT | NULL→VOL |
 
-**`PILOTAGE` : aucun changement** (décision 2026-07-05 ci-dessus — `attr_1` reste `CHC`, aligné sur la convention des compétences-catégories).
+**Les 9 lignes `is_category` (`ARME_SPECIALE_CONTACT`, `ARME_SPECIALE_DISTANCE`, `MUTATION`, `EXPRESSION_ARTISTIQUE`, `PILOTAGE`, `COMMERCE_TRAFIC`, `SCIENCES_CONNAISANCES_SPECIALISEES`, `GENIE_TECHNIQUE`, `POUVOIRS_POLARIS`) sont traitées dans le bloc "RUN À VIDE" ci-dessus**, pas ici.
 
 ### D. `ref_skills` — corrections `marker` (groupées par valeur cible finale)
 
@@ -1395,12 +1425,15 @@ INSERT INTO ref_skill_requirements (skill_id, type, value, threshold) VALUES
 - Toute la famille "Aptitudes physiques" sauf ENDURANCE/ACROBATIE_EQUILIBRE ; "Combat (contact)" sauf les 3 labels ; etc. — cf. tableaux détaillés par segment ci-dessus pour la liste exhaustive des lignes NON touchées
 
 ### G. `down()`
-Restaure toutes les valeurs actuelles (pré-37-bis) listées dans les tableaux B/C/D ci-dessus, ré-insère `ARMES_SATELLITES` (valeurs de la migration 103b), et redéplace les 2 lignes `ref_skill_requirements` vers `MECANIQUE_CHASSEURS_ATMOSPHERIQUES`.
+Restaure toutes les valeurs actuelles (pré-37-bis) listées dans les tableaux B/C/D + le bloc "RUN À VIDE" (`attr_1`/`is_category`) ci-dessus, ré-insère `ARMES_SATELLITES` (valeurs de la migration 103b), redéplace les 2 lignes `ref_skill_requirements` vers `MECANIQUE_CHASSEURS_ATMOSPHERIQUES`, et retire la colonne `is_category` + restaure `attr_1` NOT NULL (`table.text('attr_1').notNullable().alter()`, uniquement si aucune ligne `attr_1 IS NULL` ne subsiste — sinon les 5 catégories `NULL` doivent d'abord être re-basculées à `'CHC'` dans le `down()`, avant l'`alter`).
 
 ### H. Header de migration (documentation intégrée au code)
-Le fichier `105_ref_skills_37bis.js` documente en commentaire de tête : la convention `attr_1='CHC'` (catégories virtuelles), la légende `marker` réelle (X/PN/(-3)/•), le statut de `PREREQ` (convention projet, pas LdB), et un renvoi vers `docs/MIGRATION_37BIS.md` pour l'audit complet ligne par ligne.
+Le fichier `105_ref_skills_37bis.js` documente en commentaire de tête : la légende `marker` réelle (X/PN/(-3)/•), le statut de `PREREQ` (convention projet, pas LdB), la nouvelle colonne `is_category` (remplace le sentinel `CHC`, cf. bloc "RUN À VIDE"), et un renvoi vers `docs/MIGRATION_37BIS.md` pour l'audit complet ligne par ligne.
+
+### I. Changement client requis (hors migration, même PR)
+`client/src/character/SkillsPanel.jsx` lignes 196 et 201 : remplacer `skill.attr_1 === 'CHC'` par `skill.is_category`, et `byId.get(skill.parent)?.attr_1 !== 'CHC'` par `!byId.get(skill.parent)?.is_category`. **Test navigateur obligatoire après ce changement** : vérifier le regroupement correct des 9 catégories (Manœuvre d'armure/Arme spéciale contact/distance déjà OK aujourd'hui à re-tester en non-régression, + Pouvoirs Polaris/Commerce Trafic/Sciences/Génie technique/Pilotage/Mutation/Expression artistique à valider avec la nouvelle colonne) dans la fiche personnage, en mode normal et en mode Progression.
 
 ---
 
-**Ce plan est-il validé ? Une fois la question CHC/PILOTAGE tranchée, je code directement (un seul "Je code ?").**
+**Plan mis à jour et complet. Je code ?**
 

@@ -1,3 +1,15 @@
+## v142 — 2026-07-05 — Options de campagne : settings JSONB + page paramètres
+
+### Serveur
+- [feat] `campaignSettingsService.js` — `SETTINGS_SCHEMA` + `getCampaignSettings()`, source unique de vérité pour les options de campagne
+- [feat] Migration 104 — `campaigns.settings JSONB` remplace 6 colonnes plates (ambiance, pnj_unlimited_ammo, reload_mode, action_timer_sec, shock_auto_stun, allow_los_cancel) + 11 nouvelles options de campagne
+- [feat] `PUT /campaigns/:id` — validation par clé + sauvegarde JSONB atomique (sans écraser les autres clés)
+
+### Client
+- [feat] Page Paramètres de campagne — nouvel onglet "Fiche personnage" : ambiance, bonus féminin, mutations aléatoires, Polaris latent, avantages pro aléatoires, personnages expérimentés, prérequis compétences, niveau max compétences, progression naturelle, personnages jeunes, célébrité
+- [fix] Sauvegarde d'un onglet n'écrase plus les modifications non enregistrées d'un autre onglet
+- [fix] Changer d'onglet puis revenir n'efface plus visuellement une modification non enregistrée
+
 ## v141 — 2026-07-02 — Wizard UX : navigation libre stepper + sous-étapes step4
 
 ### Client

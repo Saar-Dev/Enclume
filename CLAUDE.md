@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 130 — 2026-07-02
+> Session 132 — 2026-07-05
 
 ---
 
@@ -107,22 +107,20 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 130 (2026-07-02)
+## ÉTAT COURANT — Session 132 (2026-07-05)
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **105 migrations stables** (105 = 102_wizard_client_primary — Session 130)
+- **108 migrations stables** (104_campaign_settings — Session 132)
 
-**Session 130 — Wizard COUCHE 5 ✅ clos partiel :**
-- `102_wizard_client_primary.js` : DROP `char_creation_snapshot` (FSM snapshot supprimé)
-- `creationService.js` : réécriture ~280L — `finalizeCreation` transaction unique (step1→5) + suppression validateAndPersist/rollback
-- `routes/creation.js` : routes step1/2/3/4/5 supprimées — seul `POST /finalize` avec payload complet
-- `creationStore.js` : `highestStep`, merge semantics `setStep1Data`, `pcNet` dans `getPcDispo`
-- `WizardCreation.jsx` : `navigateToStep` (highestStep guard) + `handleFinalize` — plus d'appels FSM
-- `WizardReview.jsx` : nouveau composant pur store (step 6) — remplace CharacterSheet pré-finalize
-- Step1/2/3/4/5 : hydratation `initialData` — retour arrière conserve les données
-- **Testé :** SR ✅, migration 102 ✅, `/api/health` ✅
-- **Non testé :** flux complet navigation retour → modifier → finaliser
-- **Prochaine étape** : test du flux complet → puis COUCHE 4c
+**Session 132 — Options de campagne ✅ clos :**
+- `campaignSettingsService.js` (NOUVEAU) : `SETTINGS_SCHEMA` (16 clés) + `getCampaignSettings(db, campaignId)` — source unique de vérité
+- `104_campaign_settings.js` : `campaigns.settings JSONB` — consolide 6 colonnes plates + 11 nouvelles options, DROP `campaign_rules` (table morte)
+- 5 consommateurs combat + `SessionPage.jsx` migrés vers `getCampaignSettings()` (expand/contract — jamais de lecture cassée)
+- `routes/campaigns.js` PUT réécrit — validation `SETTINGS_SCHEMA`, merge JSONB atomique (`db.raw`, pattern PC39)
+- 3 bugfixes composants (`SectionDice` closures `setTimeout`, `SectionGameRules` état manquant, `SectionTokens` désync `onChange`) + bugfix `CampaignSettingsPage` (`formRef`→`formData`, perte visuelle au changement d'onglet)
+- 7 fichiers déplacés vers `client/src/components/campaignSettings/` + i18n FR/EN complétés (31/33 clés)
+- **Testé :** SR ✅, combat inchangé (recharge PNJ/stun/timer/LOS) ✅, persistance 11 options ✅, upload token non écrasé ✅, navigation onglets ✅
+- **Non testé :** effet mécanique des 11 options (stockage/lecture seulement pour l'instant)
 
 **Dettes actives :**
 - **Résiduel split-brain** — `COMBAT_STATE_SYNC` reconnexion RESOLUTION — sprint futur
@@ -138,6 +136,9 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **[WIZ-1]** Personnages incomplets (creation_state ≠ 'complete') visibles dans la liste — à filtrer côté Dashboard/liste
 - **[WIZ-2]** Deux compteurs PC (header store vs CareersAllocator local) — cosmétique, sprint COUCHE 4c
 - **[WIZ-3]** Formation "apprentissage_technique" → choix spécialité non implémenté — sprint COUCHE 4c
+- **[JSON1]** `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant) — casse tout le fichier EN
+- **[OPT-W1]** 11 options de campagne sans effet mécanique branché (Wizard/SkillsPanel/CharSheet) — sprint futur
+- **[OPT-W2]** `style={}` visuel dans `client/src/components/campaignSettings/*` (convention CSS) — basse priorité
 
 ---
 

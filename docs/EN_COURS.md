@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-02 Session 130
+> Dernière mise à jour : 2026-07-05 Session 132
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL5.md` (Sessions 109+), `docs/Old/JOURNAL4.md` (Sessions 86–108) et `docs/Old/JOURNAL3.md` (Sessions 64–85).
 
@@ -217,7 +217,15 @@
    → **Testé** : SR ✅, migration 102 ✅
    → **Non testé** : flux complet navigation retour → modifier → finaliser
 
-**40. Wizard COUCHE 4c** ← WIZARD PROCHAINE ÉTAPE
+**40. ~~Options de campagne — migration 104 (settings JSONB) + campaignSettingsService ✅ Session 132~~**
+   → `campaignSettingsService.js` (SETTINGS_SCHEMA + getCampaignSettings) — source unique, remplace 5 lectures dupliquées
+   → Migration 104 : `campaigns.settings JSONB` — consolide 6 colonnes + 11 nouvelles options, DROP `campaign_rules`
+   → 3 bugfixes composants (`SectionDice` closures, `SectionGameRules` état manquant, `SectionTokens` désync) + bugfix `CampaignSettingsPage` (formRef→formData, onglets)
+   → 7 fichiers déplacés vers `client/src/components/campaignSettings/` + i18n FR/EN complétés
+   → **Testé** : SR ✅, combat inchangé ✅, persistance 11 options ✅, upload token non écrasé ✅, navigation onglets ✅
+   → **Non testé** : effet mécanique des 11 options (stockage/lecture seulement — voir `docs/optionCampagne/JOPT.md`)
+
+**41. Wizard COUCHE 4c** ← WIZARD PROCHAINE ÉTAPE
    → [WIZ-1] Filtrer personnages incomplets (creation_state ≠ 'complete') dans la liste Dashboard
    → [WIZ-2] Synchroniser les deux compteurs PC (store header vs local CareersAllocator)
    → [WIZ-3] Formation "apprentissage_technique" → choix de spécialité
@@ -235,7 +243,7 @@
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **105 migrations appliquées** (105 = 102_wizard_client_primary — Session 130)
+- **108 migrations appliquées** (104_campaign_settings — Session 132)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---
@@ -289,6 +297,9 @@
 | **WIZ-2** | Deux compteurs PC (header store vs CareersAllocator local) | Basse — cosmétique |
 | **WIZ-3** | Formation "apprentissage_technique" → choix de spécialité non implémenté | Moyenne — COUCHE 4c |
 | **DBG-C1** | `character.user_id` null quand GM crée pour joueur absent (steps 1-3) | Moyenne — sprint futur |
+| **JSON1** | `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant, cassait déjà avant Session 132) | **Haute** — casse tout le fichier EN |
+| **OPT-W1** | 11 options de campagne (ambiance, feminin_bonus, etc.) sans effet mécanique branché — stockage/lecture seulement | Moyenne — sprint futur |
+| **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 
 ---
 

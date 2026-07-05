@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-05-30 Session 66
+> Dernière mise à jour : 2026-07-05 Session 132
 
 ---
 
@@ -380,6 +380,13 @@ Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation doc
 | Sprint CaC 4a | Multi-adversaires (−5/−7/−10 LdB) : critère positionnel + allonge, alerte ⚠ UI | ✅ session 72 |
 | Sprint CaC 4b | Attaque multiple melee (2 ou 3 cibles, −5/−7 malus LdB p.218) — UI PJ séquentielle + GM queue étendue | ✅ session 74 |
 | Sprint Tir Multi | Attaque multiple de tir contre cibles différentes (LdB p.218) — même règle que CaC 4b mais pour le tir : 2/3 tests distincts, −5/−7 malus, cibles séparées. Distinct des modes de tir CC/RC/RL (qui ciblent une seule cible avec bonus). | 🔲 |
+
+### Chantier Options de campagne
+
+| Étape | Contenu | État |
+|---|---|---|
+| Infrastructure | Migration 104 (`campaigns.settings JSONB`), `campaignSettingsService.js`, route PUT, 7 fichiers UI (`CampaignSettingsPage` + 5 Sections + styles) | ✅ session 132 |
+| Effets mécaniques | 11 options (ambiance, feminin_bonus, random_mutations, polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity) — actuellement stockées/lues seulement, aucun effet branché dans Wizard/SkillsPanel/CharSheet | 🔲 |
 
 ### Client — Dashboard
 | Tâche | État |
