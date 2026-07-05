@@ -1,31 +1,24 @@
 // client/src/components/creation/Step3Mutations.jsx
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import api from '../../lib/api'
 
 const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
+const MAX_REROLL_ATTEMPTS = 500
 
-const MOCK_MUTATION_IDS = [1, 7, 11, 14, 17, 20]
-
-const MOCK_SUBTYPES = {
-  20: [
-    { subtype_id: 1, d4_roll: 1 },
-    { subtype_id: 2, d4_roll: 2 },
-    { subtype_id: 3, d4_roll: 3 },
-    { subtype_id: 4, d4_roll: 4 },
-  ],
-}
-
-const MUTATION_META = {
-  1: { cost_pc: 3, is_unique: true, is_stackable: false, has_subtable: false, has_skill: true },
-  7: { cost_pc: 2, is_unique: true, is_stackable: false, has_subtable: false, has_skill: true },
-  11: { cost_pc: 0, is_unique: true, is_stackable: false, has_subtable: false, has_skill: false },
-  14: { cost_pc: 0, is_unique: true, is_stackable: false, has_subtable: false, has_skill: false },
-  17: { cost_pc: 0, is_unique: true, is_stackable: false, has_subtable: false, has_skill: false },
-  20: { cost_pc: 2, is_unique: true, is_stackable: false, has_subtable: true, has_skill: false },
-}
-
-export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPrev }) {
+export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, randomMutationsEnabled, onNext, onPrev }) {
   const { t } = useTranslation('creation')
+
+  const [mutations, setMutations] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!sheetId) return
+    api.get(`/creation/${sheetId}/step3/ref`)
+      .then(res => setMutations(res.data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [sheetId])
 
   // 'none' est soumis via handleNone (sans méthode explicite) — on restaure en 'chosen'
   // pour que l'écran achat soit visible avec la carte "Aucune mutation"
@@ -55,8 +48,18 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
   // Tooltip
   const [tooltip, setTooltip] = useState(null)
 
+  // Halo de confirmation (carte cliquée avec succès)
+  const [flashId, setFlashId] = useState(null)
+  const flashCard = (mutationId) => {
+    setFlashId(mutationId)
+    window.setTimeout(() => setFlashId(prev => (prev === mutationId ? null : prev)), 600)
+  }
+
   // ─── Helpers ────────────────────────────────────────────────────────────
-  const totalCost = selected.reduce((sum, m) => sum + (MUTATION_META[m.mutation_id]?.cost_pc || 0), 0)
+  const findMutation = (mutationId) => mutations.find(m => m.mutation_id === mutationId)
+  const variantLabel = (mut) => mut?.subtype ? t(`step3.subtype_labels.${mut.subtype}`) : null
+
+  const totalCost = selected.reduce((sum, m) => sum + (findMutation(m.mutation_id)?.cost_pc || 0), 0)
   const pcLeft = pcDispo - totalCost
 
   const showTooltip = (desc, event) => {
@@ -64,28 +67,39 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
     setTooltip({ desc, top: rect.top, left: rect.left + rect.width / 2 })
   }
 
+  const buildMutationsMeta = (items) => items.map(item => {
+    const mut = findMutation(item.mutation_id)
+    return {
+      mutation_id: item.mutation_id,
+      name: mut?.name ?? item.mutation_id,
+      subtype_name: item.subtype_name ?? null,
+      cost_pc: mut?.cost_pc ?? 0,
+    }
+  })
+
   // ─── Handlers ACHAT ─────────────────────────────────────────────────────
   const handleAdd = (mutationId) => {
-    const meta = MUTATION_META[mutationId]
-    if (!meta) return
-    if (meta.is_unique && selected.some(m => m.mutation_id === mutationId)) return
+    const mut = findMutation(mutationId)
+    if (!mut) return
+    if (mut.is_unique && selected.some(m => m.mutation_id === mutationId)) return
 
-    if (meta.has_subtable) {
+    if (mut.has_subtable) {
       setPendingSubtype({ mutation_id: mutationId })
       return
     }
-    if (pcLeft < meta.cost_pc) return
-    setSelected(prev => [...prev, { mutation_id: mutationId, subtype_id: null, subtype_name: null }])
+    if (pcLeft < mut.cost_pc) return
+    setSelected(prev => [...prev, { mutation_id: mutationId, subtype_id: null, subtype_name: variantLabel(mut) }])
+    flashCard(mutationId)
   }
 
   const handleSelectSubtype = (subtype) => {
     if (!pendingSubtype) return
-    const meta = MUTATION_META[pendingSubtype.mutation_id]
     setSelected(prev => [...prev, {
       mutation_id: pendingSubtype.mutation_id,
       subtype_id: subtype.subtype_id,
-      subtype_name: t(`step3.mutations.${pendingSubtype.mutation_id}.subtypes.${subtype.subtype_id}.name`),
+      subtype_name: subtype.name,
     }])
+    flashCard(pendingSubtype.mutation_id)
     setPendingSubtype(null)
   }
 
@@ -94,44 +108,43 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
   }
 
   const handleSubmitChosen = () => {
-    onNext?.({ method: 'chosen', mutations: selected, pcSpent: totalCost })
+    onNext?.({ method: 'chosen', mutations: selected, pcSpent: totalCost, mutationsMeta: buildMutationsMeta(selected) })
   }
 
   // ─── Handlers ALÉATOIRE ─────────────────────────────────────────────────
+  const rollOneMutation = (usedUniqueIds) => {
+    for (let attempt = 0; attempt < MAX_REROLL_ATTEMPTS; attempt++) {
+      const d100 = Math.floor(Math.random() * 100) + 1
+      const pool = mutations.filter(m => d100 >= m.d100_range_start && d100 <= m.d100_range_end)
+      if (pool.length === 0) continue
+      const mut = pool[Math.floor(Math.random() * pool.length)]
+      if (mut.is_unique && usedUniqueIds.has(mut.mutation_id)) continue
+
+      let subtype = null
+      if (mut.has_subtable && mut.subtable.length > 0) {
+        subtype = mut.subtable[Math.floor(Math.random() * mut.subtable.length)]
+      }
+      if (mut.is_unique) usedUniqueIds.add(mut.mutation_id)
+
+      return {
+        mutation_id: mut.mutation_id,
+        subtype_id: subtype?.subtype_id ?? null,
+        subtype_name: subtype?.name ?? variantLabel(mut),
+        d100,
+      }
+    }
+    return null
+  }
+
   const handleRoll = () => {
     const d20 = Math.floor(Math.random() * 20) + 1
     const count = d20 <= 15 ? 1 : d20 <= 19 ? 2 : 3
 
-    const pool = [...MOCK_MUTATION_IDS]
+    const usedUniqueIds = new Set()
     const results = []
-    const used = new Set()
-
     for (let i = 0; i < count; i++) {
-      const idx = Math.floor(Math.random() * pool.length)
-      const mutationId = pool[idx]
-      if (used.has(mutationId) && used.size < pool.length) {
-        let alt = pool.find(id => !used.has(id))
-        if (alt) {
-          used.add(alt)
-          results.push({ mutation_id: alt, subtype_id: null, subtype_name: null, d100: Math.floor(Math.random() * 100) + 1 })
-          continue
-        }
-      }
-      used.add(mutationId)
-
-      const meta = MUTATION_META[mutationId]
-      let subtype = null
-      if (meta?.has_subtable) {
-        const subtypes = MOCK_SUBTYPES[mutationId] || []
-        subtype = subtypes[Math.floor(Math.random() * subtypes.length)]
-      }
-
-      results.push({
-        mutation_id: mutationId,
-        subtype_id: subtype?.subtype_id || null,
-        subtype_name: subtype ? t(`step3.mutations.${mutationId}.subtypes.${subtype.subtype_id}.name`) : null,
-        d100: Math.floor(Math.random() * 100) + 1,
-      })
+      const result = rollOneMutation(usedUniqueIds)
+      if (result) results.push(result)
     }
 
     setD20Result(d20)
@@ -149,8 +162,8 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
 
   const handleRemoveRandom = (index) => {
     const result = rollResults[index]
-    const meta = MUTATION_META[result.mutation_id]
-    const cost = meta?.cost_pc > 0 ? 0 : 1
+    const mut = findMutation(result.mutation_id)
+    const cost = mut?.cost_pc > 0 ? 0 : 1
     if (pcAfterRemovals < cost) return
     setPcAfterRemovals(prev => prev - cost)
     setRemoved(prev => [...prev, result])
@@ -158,12 +171,16 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
   }
 
   const handleSubmitRandom = () => {
-    onNext?.({ method: 'random', kept, removed, d20Result, pcSpent: pcDispo - pcAfterRemovals })
+    onNext?.({
+      method: 'random', kept, removed, d20Result,
+      pcSpent: pcDispo - pcAfterRemovals,
+      mutationsMeta: buildMutationsMeta(kept),
+    })
   }
 
   // ─── Handler AUCUNE MUTATION ────────────────────────────────────────────
   const handleNone = () => {
-    onNext?.({ method: 'none', pcSpent: 0, mutations: [] })
+    onNext?.({ method: 'none', pcSpent: 0, mutations: [], mutationsMeta: [] })
   }
 
   // ─── Reset méthode ──────────────────────────────────────────────────────
@@ -175,6 +192,14 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
     setKept([])
     setRemoved([])
     setPcAfterRemovals(pcDispo)
+  }
+
+  if (loading) {
+    return (
+      <div style={st.container}>
+        <p style={st.loadingText}>{t('step3.loading')}</p>
+      </div>
+    )
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -196,16 +221,18 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
             </div>
           </div>
 
-          <div className="wiz2-card" onClick={() => setMethod('random')}>
-            <img className="wiz2-card-img" src={`${ASSETS_BASE}/s2_aleatoire.webp`} alt="" />
-            <div className="wiz2-vignette" />
-            <div className="wiz2-card-top">
-              <span className="wiz2-card-name">{t('step3.method_random')}</span>
+          {randomMutationsEnabled !== false && (
+            <div className="wiz2-card" onClick={() => setMethod('random')}>
+              <img className="wiz2-card-img" src={`${ASSETS_BASE}/s2_aleatoire.webp`} alt="" />
+              <div className="wiz2-vignette" />
+              <div className="wiz2-card-top">
+                <span className="wiz2-card-name">{t('step3.method_random')}</span>
+              </div>
+              <div className="wiz2-card-bottom">
+                <p className="wiz2-card-summary">{t('step3.method_random_desc')}</p>
+              </div>
             </div>
-            <div className="wiz2-card-bottom">
-              <p className="wiz2-card-summary">{t('step3.method_random_desc')}</p>
-            </div>
-          </div>
+          )}
 
         </div>
 
@@ -224,10 +251,7 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
   // RENDU — Méthode ACHAT
   // ══════════════════════════════════════════════════════════════════════
   if (method === 'chosen') {
-    const availableIds = MOCK_MUTATION_IDS.filter(id => {
-      const meta = MUTATION_META[id]
-      return meta && meta.cost_pc >= 0 && meta.cost_pc <= pcLeft
-    })
+    const availableMutations = mutations.filter(m => m.cost_pc >= 0 && m.cost_pc <= pcLeft)
 
     return (
       <div style={st.container}>
@@ -243,43 +267,48 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
         </div>
 
         <div style={st.grid}>
-          {availableIds.map(id => {
-            const meta = MUTATION_META[id]
-            const hasSkill = meta?.has_skill
+          {availableMutations.map(mut => {
+            const label = variantLabel(mut)
+            const hasSkill = mut.skills.length > 0
             return (
-              <div key={id} style={st.card} onClick={() => handleAdd(id)}>
+              <div
+                key={mut.mutation_id}
+                style={st.card}
+                className={mut.mutation_id === flashId ? 'wiz3-card-flash' : undefined}
+                onClick={() => handleAdd(mut.mutation_id)}
+              >
                 <div style={st.cardHeader}>
-                  <span style={st.cardName}>{t(`step3.mutations.${id}.name`)}</span>
+                  <span style={st.cardName}>
+                    {mut.name}{label ? ` (${label})` : ''}
+                  </span>
                   <span style={{
                     ...st.cardCost,
-                    color: meta.cost_pc > 0 ? '#5b8dee' : '#888',
+                    color: mut.cost_pc > 0 ? '#5b8dee' : '#888',
                   }}>
-                    {meta.cost_pc > 0 ? `−${meta.cost_pc} PC` : t('step3.free')}
+                    {mut.cost_pc > 0 ? `−${mut.cost_pc} PC` : t('step3.free')}
                   </span>
                 </div>
-                <p style={st.cardDesc}>{t(`step3.mutations.${id}.desc`)}</p>
+                <p style={st.cardDesc}>{mut.description}</p>
 
-                {hasSkill && (
+                {hasSkill && mut.skills.map(sk => (
                   <div
+                    key={sk.skill_name}
                     style={st.skillRow}
-                    onMouseEnter={(e) => showTooltip(t(`step3.mutations.${id}.skill_desc`), e)}
+                    onMouseEnter={(e) => showTooltip(mut.special_effect, e)}
                     onMouseLeave={() => setTooltip(null)}
                   >
                     <span style={st.skillLabel}>{t('step3.skill_prefix')}</span>
-                    <span style={st.skillName}>
-                      {t(`step3.mutations.${id}.skill_name`)}
-                    </span>
+                    <span style={st.skillName}>{sk.skill_name}</span>
                     <span style={st.skillAttrs}>
-                      ({t(`step3.mutations.${id}.skill_attrs`)}
-                      {t(`step3.mutations.${id}.skill_base`) !== '0' ? `, ${t(`step3.mutations.${id}.skill_base`)}` : ''})
+                      ({sk.skill_attrs}{sk.skill_base !== 0 ? `, ${sk.skill_base}` : ''})
                     </span>
                   </div>
-                )}
+                ))}
 
                 <div style={st.cardTags}>
-                  {meta.is_unique && <span style={st.tag}>{t('step3.unique')}</span>}
-                  {meta.is_stackable && <span style={st.tag}>{t('step3.stackable', { limit: meta.stack_limit })}</span>}
-                  {meta.has_subtable && <span style={st.tag}>{t('step3.has_subtypes')}</span>}
+                  {mut.is_unique && <span style={st.tag}>{t('step3.unique')}</span>}
+                  {mut.is_stackable && <span style={st.tag}>{t('step3.stackable', { effect: mut.stack_effect })}</span>}
+                  {mut.has_subtable && <span style={st.tag}>{t('step3.has_subtypes')}</span>}
                 </div>
               </div>
             )
@@ -291,18 +320,21 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
             <h3 style={st.selectionTitle}>
               {t('step3.selection_title', { count: selected.length })}
             </h3>
-            {selected.map((m, i) => (
-              <div key={i} style={st.selectionItem}>
-                <span style={st.selectionName}>
-                  {t(`step3.mutations.${m.mutation_id}.name`)}
-                  {m.subtype_name ? ` — ${m.subtype_name}` : ''}
-                </span>
-                <span style={{ color: MUTATION_META[m.mutation_id]?.cost_pc > 0 ? '#5b8dee' : '#888', fontSize: '11px' }}>
-                  {MUTATION_META[m.mutation_id]?.cost_pc > 0 ? `−${MUTATION_META[m.mutation_id].cost_pc} PC` : t('step3.free')}
-                </span>
-                <button style={st.removeBtn} onClick={() => handleRemove(i)}>×</button>
-              </div>
-            ))}
+            {selected.map((m, i) => {
+              const mut = findMutation(m.mutation_id)
+              return (
+                <div key={i} style={st.selectionItem}>
+                  <span style={st.selectionName}>
+                    {mut?.name}
+                    {m.subtype_name ? ` — ${m.subtype_name}` : ''}
+                  </span>
+                  <span style={{ color: mut?.cost_pc > 0 ? '#5b8dee' : '#888', fontSize: '11px' }}>
+                    {mut?.cost_pc > 0 ? `−${mut.cost_pc} PC` : t('step3.free')}
+                  </span>
+                  <button style={st.removeBtn} onClick={() => handleRemove(i)}>×</button>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -311,19 +343,17 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
           <div style={st.overlay} onClick={() => setPendingSubtype(null)}>
             <div style={st.modal} onClick={e => e.stopPropagation()}>
               <h3 style={st.modalTitle}>
-                {t(`step3.mutations.${pendingSubtype.mutation_id}.name`)} — {t('step3.choose_subtype')}
+                {findMutation(pendingSubtype.mutation_id)?.name} — {t('step3.choose_subtype')}
               </h3>
-              {(MOCK_SUBTYPES[pendingSubtype.mutation_id] || []).map(sub => (
+              {(findMutation(pendingSubtype.mutation_id)?.subtable ?? []).map(sub => (
                 <div key={sub.subtype_id}>
                   <button
                     style={st.subtypeBtn}
                     onClick={() => handleSelectSubtype(sub)}
                   >
-                    {t(`step3.mutations.${pendingSubtype.mutation_id}.subtypes.${sub.subtype_id}.name`)}
+                    {sub.name}
                   </button>
-                  <p style={st.subtypeDesc}>
-                    {t(`step3.mutations.${pendingSubtype.mutation_id}.subtypes.${sub.subtype_id}.desc`)}
-                  </p>
+                  <p style={st.subtypeDesc}>{sub.description}</p>
                 </div>
               ))}
               <button style={st.cancelBtn} onClick={() => setPendingSubtype(null)}>
@@ -395,42 +425,40 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
             <div style={st.rollPending}>
               <h3 style={st.rollPendingTitle}>{t('step3.roll_pending')}</h3>
               {rollResults.map((result, i) => {
-                const meta = MUTATION_META[result.mutation_id]
-                const hasSkill = meta?.has_skill
+                const mut = findMutation(result.mutation_id)
+                const hasSkill = mut?.skills.length > 0
                 return (
                   <div key={i} style={st.rollCard}>
                     <div style={st.rollCardHeader}>
-                      <span style={st.cardName}>{t(`step3.mutations.${result.mutation_id}.name`)}</span>
+                      <span style={st.cardName}>{mut?.name}</span>
                       <span style={{ color: '#888', fontSize: '11px' }}>D100 = {result.d100}</span>
                     </div>
                     {result.subtype_name && (
                       <div style={st.rollSubtype}>→ {result.subtype_name}</div>
                     )}
-                    <p style={st.cardDesc}>{t(`step3.mutations.${result.mutation_id}.desc`)?.substring(0, 120)}…</p>
+                    <p style={st.cardDesc}>{mut?.description?.substring(0, 120)}…</p>
 
-                    {hasSkill && (
+                    {hasSkill && mut.skills.map(sk => (
                       <div
+                        key={sk.skill_name}
                         style={st.skillRow}
-                        onMouseEnter={(e) => showTooltip(t(`step3.mutations.${result.mutation_id}.skill_desc`), e)}
+                        onMouseEnter={(e) => showTooltip(mut.special_effect, e)}
                         onMouseLeave={() => setTooltip(null)}
                       >
                         <span style={st.skillLabel}>{t('step3.skill_prefix')}</span>
-                        <span style={st.skillName}>
-                          {t(`step3.mutations.${result.mutation_id}.skill_name`)}
-                        </span>
+                        <span style={st.skillName}>{sk.skill_name}</span>
                         <span style={st.skillAttrs}>
-                          ({t(`step3.mutations.${result.mutation_id}.skill_attrs`)}
-                          {t(`step3.mutations.${result.mutation_id}.skill_base`) !== '0' ? `, ${t(`step3.mutations.${result.mutation_id}.skill_base`)}` : ''})
+                          ({sk.skill_attrs}{sk.skill_base !== 0 ? `, ${sk.skill_base}` : ''})
                         </span>
                       </div>
-                    )}
+                    ))}
 
                     <div style={st.rollActions}>
                       <button style={st.keepBtn} onClick={() => handleKeep(i)}>
                         {t('step3.keep')}
                       </button>
                       <button style={st.removeRandomBtn} onClick={() => handleRemoveRandom(i)}>
-                        {meta?.cost_pc > 0
+                        {mut?.cost_pc > 0
                           ? t('step3.remove_free')
                           : t('step3.remove_cost')}
                       </button>
@@ -447,7 +475,7 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
                 <span style={st.summaryLabel}>{t('step3.kept_count', { count: kept.length })}</span>
                 {kept.map((m, i) => (
                   <span key={i} style={st.summaryName}>
-                    {t(`step3.mutations.${m.mutation_id}.name`)}
+                    {findMutation(m.mutation_id)?.name}
                     {m.subtype_name ? ` (${m.subtype_name})` : ''}
                   </span>
                 ))}
@@ -455,7 +483,7 @@ export default function Step3Mutations({ initialData, pcDispo = 20, onNext, onPr
               <div style={st.summaryItem}>
                 <span style={st.summaryLabel}>{t('step3.removed_count', { count: removed.length })}</span>
                 {removed.map((m, i) => (
-                  <span key={i} style={st.summaryName}>{t(`step3.mutations.${m.mutation_id}.name`)}</span>
+                  <span key={i} style={st.summaryName}>{findMutation(m.mutation_id)?.name}</span>
                 ))}
               </div>
               {pcAfterRemovals < pcDispo && (
@@ -505,6 +533,7 @@ const st = {
     flex: 1,
     width: '100%',
   },
+  loadingText: { color: '#5a5a7a', fontSize: '14px', textAlign: 'center', padding: '40px 0' },
   topRow: {
     marginBottom: '12px',
   },

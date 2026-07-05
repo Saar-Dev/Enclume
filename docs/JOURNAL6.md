@@ -5,7 +5,7 @@
 ---
 ## Session 133 — 2026-07-05 — Migration 105 (« 37-bis ») : consolidation ref_skills (3ᵉ révision) ✅
 
-> Aboutissement de l'audit ligne par ligne (251 lignes `ref_skills` + 94 `ref_skill_requirements`) documenté intégralement dans `docs/MIGRATION_37BIS.md`, mené sur plusieurs sessions (démarré Session 131 suite) suite à la corruption cumulée des migrations 37/74/103/103b. Objectif explicite de Saar : que ce soit la dernière révision de cette table.
+> Aboutissement de l'audit ligne par ligne (251 lignes `ref_skills` + 94 `ref_skill_requirements`) documenté intégralement dans `docs/Old/MIGRATION_37BIS.md`, mené sur plusieurs sessions (démarré Session 131 suite) suite à la corruption cumulée des migrations 37/74/103/103b. Objectif explicite de Saar : que ce soit la dernière révision de cette table.
 
 ### Bloc serveur
 - `server/src/db/migrations/105_ref_skills_37bis.js` **NOUVEAU** :
@@ -46,10 +46,10 @@
 ---
 ## Session 134 — 2026-07-05 — Migration 106 (lot 1 carrières) : correction `ref_career_skills` vs LdB ✅
 
-> Suite de `docs/PLAN_LOT1_CAREERS.md` (plan validé point par point 9/9, session précédente). Corrige les `skill_id` erronés/manquants de `100_seed_ref_careers.js` (5 carrières : artisan_artiste, assassin, barman, chasseur_primes, contrebandier) par rapport à `docs/Character/Creation/REGLE_PROFESSION.md`.
+> Suite de `docs/Old/PLAN_LOT1_CAREERS.md` (plan validé point par point 9/9, session précédente). Corrige les `skill_id` erronés/manquants de `100_seed_ref_careers.js` (5 carrières : artisan_artiste, assassin, barman, chasseur_primes, contrebandier) par rapport à `docs/Character/Creation/REGLE_PROFESSION.md`.
 
 ### Bloc serveur
-- `server/src/db/migrations/106_fix_ref_career_skills_lot1.js` **NOUVEAU** — 9 corrections (A1/A2 artisan_artiste, B1/B2/B3 assassin, C1 barman, D1/D2 chasseur_primes, E1 contrebandier) : voir table détaillée dans `PLAN_LOT1_CAREERS.md`. Aucune suppression sur `ref_careers` (id stable, évite le CASCADE `char_careers`). Garde-fou `getCareerIds` — lève une erreur explicite si une carrière ne résout pas d'id.
+- `server/src/db/migrations/106_fix_ref_career_skills_lot1.js` **NOUVEAU** — 9 corrections (A1/A2 artisan_artiste, B1/B2/B3 assassin, C1 barman, D1/D2 chasseur_primes, E1 contrebandier) : voir table détaillée dans `docs/Old/PLAN_LOT1_CAREERS.md`. Aucune suppression sur `ref_careers` (id stable, évite le CASCADE `char_careers`). Garde-fou `getCareerIds` — lève une erreur explicite si une carrière ne résout pas d'id.
 - C3 (barman "Armes de poing **ou** Fusils/Armes d'épaule") volontairement hors scope — le champ `conditional:true` n'est qu'un label texte, aucun mécanisme de choix réel n'existe dans le wizard (34 occurrences dans les lots 2-6 non appliqués). Traitement séparé requis (Step4 UI) avant refonte complète.
 - Total : 93 lignes `ref_career_skills` pour les 5 carrières (89 avant, +4 net : B1 −1+3, D2 +1, E1 +1).
 
@@ -78,8 +78,8 @@
 
 > Suite directe de la migration 106. Séquence : lot 2 → découverte incohérence `skill_group` →
 > correction architecturale FK → vérification complète lots 3-6 (demandée par Saar) → lots 3-6
-> implantés. Détail complet des plans : `docs/PLAN_LOT1_CAREERS.md` (déjà clos), `docs/PLAN_CAREER_SKILLS_FK.md`,
-> `docs/PLAN_LOTS_3_6_CAREERS.md`.
+> implantés. Détail complet des plans : `docs/Old/PLAN_LOT1_CAREERS.md` (déjà clos), `docs/Old/PLAN_CAREER_SKILLS_FK.md`,
+> `docs/Old/PLAN_LOTS_3_6_CAREERS.md`.
 
 ### Migration 107 — découverte process (non planifiée)
 - En créant le fichier de migration pour le lot 2, découverte que le numéro **107 était déjà pris**
@@ -119,7 +119,7 @@
   ref_skills(id) ON DELETE RESTRICT` (0 orphelin vérifié sur 208 lignes avant ajout) + `DROP
   COLUMN skill_group`. Backend `creationService.js:133` : JOIN `ref_skills` pour `family`.
   Frontend `CareersAllocator.jsx:44-46` : regroupement par `sk.family`. Détail complet :
-  `docs/PLAN_CAREER_SKILLS_FK.md`.
+  `docs/Old/PLAN_CAREER_SKILLS_FK.md`.
 - Effet : fusion `Communication/Relations sociales` (27 lignes, avant fragmenté 16+11), plus
   aucune faute de frappe possible sur `skill_id` (rejet DB immédiat).
 - **Dette identique non traitée** : `ref_background_skills.skill_id` a le même défaut (pas de FK)
@@ -137,7 +137,7 @@
 ### Migrations 112-116 — Lots 3 à 6 (27 carrières)
 - Vérification complète (skill_id contre `ref_skills` + fichiers illustration contre MinIO réel)
   pour les 5 lots avant tout code, à la demande explicite de Saar (vision globale). Détail :
-  `docs/PLAN_LOTS_3_6_CAREERS.md`.
+  `docs/Old/PLAN_LOTS_3_6_CAREERS.md`.
 - `112_seed_ref_careers_lot3.js` : marchand, marchand_itinerant, medecin_chirurgien, mercenaire, mineur.
 - `113_seed_ref_careers_lot4a.js` : officier_naval_civil, officier_naval_militaire,
   officier_militaire_souterrain, officier_militaire_surface, ouvrier_docker.
@@ -184,3 +184,179 @@
 - **CAR3** (nouvelle) — prérequis carrières non insérés dans `ref_career_prerequisites` — migration
   dédiée à planifier.
 - Branchement UI equipment/random_benefits/point_categories — chantier séparé futur.
+
+---
+## Session 135 — 2026-07-05 — Bug encodage `ref_mutations` (migration 108) + PLAN_MUTATION stacking (migration 109) ✅
+
+> Démarré sur [[docs/PLAN_MUTATION|PLAN_MUTATION]] (dépendance bloquante de PLAN_STEP4, jamais démarré).
+> Run à vide sur le plan a révélé un bug d'encodage réel et non lié, traité séparément (règle "un
+> seul bug à la fois") avant de revenir à PLAN_MUTATION. Plan archivé dans `docs/Old/PLAN_MUTATION.md`
+> une fois implémenté — contenu absorbé ici.
+
+### Bug découvert — corruption d'encodage `ref_mutations`/`ref_mutation_subtypes`/`ref_mutation_skills`
+- `95_seed_ref_mutations.js` insère des chaînes déjà corrompues au niveau des octets du fichier
+  source (vérifié : Node lisant le fichier en UTF-8 produit directement le texte mojibake, ex.
+  `"RÃ©sistance naturelle"`) — octets UTF-8 valides mal réinterprétés en Windows-1252 puis
+  ré-encodés en UTF-8. Différent du pattern `??` de la migration 44 (`char_fix_encoding`).
+- Périmètre vérifié en base réelle : 44/45 lignes `ref_mutations` (`name`/`description`/
+  `special_effect`/`stack_effect`), 4/4 `ref_mutation_subtypes`, 4 lignes `ref_mutation_skills`
+  (`skill_name`) — toutes indépendamment cross-vérifiées contre `docs/Character/Creation/
+  REGLE_MUTATION.md` (texte LdB correctement encodé, jamais touché par le bug).
+
+### `server/src/db/migrations/108_fix_ref_mutations_encoding.js` **NOUVEAU**
+- Transformation déterministe et réversible (table CP1252 0x80-0x9F, seule plage où Windows-1252
+  diverge d'ISO-8859-1) : `decodeMojibake()`/`encodeMojibake()`, testées avant écriture (0/201
+  colonnes en échec sur un round-trip decode→encode complet des 3 tables).
+- `up()` corrige les 3 tables ; `down()` restaure le texte corrompu d'origine à l'identique.
+
+### Incident et remédiation (à conserver — piège pour les sessions futures, voir P53 dans `CLAUDE.md`)
+- Écrire le fichier de migration a déclenché un restart `nodemon` → `db.migrate.latest()` au boot a
+  **auto-appliqué la migration correctement**, avant même mon premier test manuel (mécanisme déjà
+  connu depuis la session 134 suite, mais pas assez internalisé ici).
+- Un rappel manuel redondant de `mig.up(knex)` (test de round-trip, sans savoir que la migration
+  était déjà appliquée) a fait tourner `decodeMojibake()` une **deuxième fois** sur du texte déjà
+  correct : les caractères déjà propres (code point ≤ 0xFF, ex. `é`) sont repoussés comme octet
+  UTF-8 isolé, produisant une séquence invalide que Node remplace silencieusement par `�` (aucune
+  erreur levée) — 6 lignes endommagées (mutation_id 1,2,4,5,6,7) avant qu'un caractère non
+  mappable (`→`, jamais un octet CP1252) ne fasse enfin planter la boucle et révèle le problème.
+- Tentative de réparation par extraction regex (`src.slice(idx-200, end)`) sur le fichier source :
+  fenêtre de 200 caractères trop courte, débordait sur le bloc `ins({...})` **précédent** → la
+  `description` de 5 lignes (id 2,4,5,6,7) a reçu celle de la ligne précédente au lieu de la
+  sienne. Détecté avant application par relecture manuelle du résultat affiché (jamais écrit).
+- Réparation finale : les 5 valeurs correctes écrites en dur (texte relu ligne par ligne depuis le
+  fichier source déjà chargé en contexte, zéro extraction dynamique), cross-vérifiées contre
+  `REGLE_MUTATION.md`, appliquées avec vérification avant/après par ligne.
+- **Leçon retenue** : pour toute réparation de données textuelles, afficher le résultat calculé et
+  le comparer à une attente connue **avant** d'écrire — jamais uniquement vérifier l'absence
+  d'erreur/de caractère de remplacement (condition nécessaire mais pas suffisante).
+
+### `server/src/db/migrations/109_mutation_stacking.js` **NOUVEAU**
+- Colonne `ref_mutations.stack_deltas` (JSONB, nullable) — peuplée sur les 9 lignes à incrément
+  non-linéaire (Peau renforcée, Purulence, Squelette renforcé, Résistance naturelle ×6), matchées
+  par `name`/`subtype` (sûr désormais que l'encodage est corrigé — plus besoin de contourner via
+  colonnes structurelles comme envisagé avant la découverte du bug ci-dessus).
+- `char_mutation_effects_view` réécrite (`CREATE OR REPLACE`, mêmes colonnes/types en sortie) :
+  `SUM(base + (count-1) × COALESCE(stack_deltas->>col, base))` — linéaire par défaut pour les 42
+  mutations sans `stack_deltas`.
+- Round-trip `down()`/`up()` testé (un seul cycle, jamais deux `up()` consécutifs — leçon de
+  l'incident ci-dessus).
+
+### `server/src/services/creationService.js:245-269` (`finalizeCreation` STEP 3)
+- Mutations sans sous-type : `INSERT ... ON CONFLICT (char_sheet_id, mutation_id) WHERE
+  subtype_id IS NULL DO UPDATE SET count = count + 1` — cible explicitement l'index partiel
+  `uq_char_mut_no_sub` (Postgres l'exige pour un index avec `WHERE`).
+- Mutations à sous-type (CGA) : `insert` simple inchangé, aucun empilement possible (`is_unique`).
+
+### Piège découvert — collision de numérotation de migration (P53, voir `CLAUDE.md`)
+- `EN_COURS.md` indiquait "migration 108 disponible" au début de cette session ; en réalité, un
+  travail parallèle sur les carrières (documenté juste au-dessus, "Session 134 suite") avait déjà
+  consommé 108 et 109 **avant** cette conversation, sans que la doc partagée soit resynchronisée à
+  temps. Résultat : deux fichiers `108_*` et deux fichiers `109_*` coexistent sur disque
+  (`108_fix_ref_mutations_encoding.js`/`108_seed_ref_careers_lot2.js`, `109_mutation_stacking.js`/
+  `109_seed_ref_careers_illustration_lot2.js`). Aucune collision réelle (tables disjointes, chaque
+  fichier a un nom complet distinct, knex trace par nom complet) mais numérotation trompeuse.
+- Prochain numéro de migration réellement disponible : **117** (vérifié par `ls` direct du dossier,
+  pas par lecture d'`EN_COURS.md`).
+
+### Testé ✅
+- Formule de stacking : 3 scénarios (Peau renforcée ×2 → armure 5, Résistance naturelle feu ×3 →
+  résistance 5, Difformité légère ×2 → PRE -2 linéaire) via transaction Postgres annulée.
+- Upsert `finalizeCreation` : mutation stackable choisie 2× dans le même lot → 1 ligne `count=2`
+  (pas de violation de contrainte) ; CGA à sous-type → insert simple inchangé. Transaction annulée.
+- Migration 108 : 45/45 + 4/4 + 10/10 lignes décodées, 0 anomalie résiduelle, relecture visuelle
+  complète des 45 `name`/`description` cohérente.
+- Migration 109 : round-trip `down`/`up`, 9/9 `stack_deltas` corrects après ré-application.
+
+### Non testé
+- Parcours réel dans le wizard (Step3Mutations.jsx utilise encore le mock — confirmé par Saar,
+  attendu tant que PLAN_STEP4 n'est pas implémenté). Scénarios de test du navigateur (PLAN_MUTATION
+  §"Scénario de test") reportés à après PLAN_STEP4.
+
+### Dettes ouvertes
+- Aucune nouvelle — PLAN_STEP4 reste la prochaine étape planifiée (mutations réelles dans le
+  wizard), désormais débloqué.
+
+---
+## Session 136 — 2026-07-05 — PLAN_STEP4 : mutations réelles dans le Wizard Step3 ✅
+
+> Implémentation de [[docs/PLAN_STEP4|PLAN_STEP4]] (plan validé Session 134, débloqué Session 135
+> après la résolution de sa dépendance stacking). Avant codage, vérification directe en base réelle
+> (`node -e` + dotenv pointé sur `../.env`, racine monorepo) des 45 lignes `ref_mutations`, des 4
+> `ref_mutation_subtypes` (CGA) et des 10 `ref_mutation_skills` — aucune donnée supposée.
+
+### `server/src/db/migrations/117_ref_mutation_subtypes_description.js` **NOUVEAU**
+- Ajoute `ref_mutation_subtypes.description TEXT` (nullable) + backfill des 4 lignes CGA (félin,
+  canin, reptilien, simiesque) avec le texte déjà rédigé dans `creation.json`
+  (`step3.mutations.20.subtypes.*.desc`) — texte déplacé, aucune nouvelle rédaction.
+- Numéro confirmé libre par `ls` direct du dossier (102-116 tous occupés, cf. P53).
+
+### Bloc serveur
+- `creationService.js` : nouvelle fonction `getStep3RefData()` — `ref_mutations` + imbrication
+  `ref_mutation_subtypes` (clé `subtable`, renommée pour éviter la collision avec la colonne
+  `subtype`) + `ref_mutation_skills` (clé `skills`), pattern `Map` identique à `getStep4RefData`.
+- `startCreation()` : ajout de `randomMutationsEnabled: settings.random_mutations` au retour (même
+  emplacement que `ambiance`).
+- `routes/creation.js` : nouvelle route `GET /:sheetId/step3/ref`.
+
+### Bloc client
+- `Step3Mutations.jsx` — réécriture complète (mêmes boutons/handlers, source de données changée) :
+  suppression des mocks (`MOCK_MUTATION_IDS`/`MOCK_SUBTYPES`/`MUTATION_META`), fetch réel au montage,
+  variantes (Difformités, Organe sensoriel manquant/suppl., Résistance naturelle) affichées comme
+  cartes distinctes avec libellé de variante (13 codes DB → `step3.subtype_labels`), tirage aléatoire
+  réécrit sur un vrai D100 (filtre par plage `d100_range_start/end`, tirage uniforme si plusieurs
+  lignes partagent la plage — 3 familles concernées), relance du D100 si le résultat est `is_unique`
+  et déjà obtenu dans le lot en cours de constitution (décision maison actée Session 134, garde-fou
+  anti-boucle 500 tentatives). Tag "Cumulable" affiche désormais `stack_effect` (texte DB réel) au
+  lieu du template `{{limit}}` (`ref_mutations.stack_limit` toujours `NULL` en base — confirmé par
+  requête directe avant d'écrire le code).
+- `mutationsMeta` (`mutation_id`, `name`, `subtype_name`, `cost_pc`) construit à la soumission de
+  chaque méthode (achat/aléatoire/aucune) et envoyé dans le payload `onNext` — `WizardReview.jsx` le
+  lit directement, sans plus aucun accès aux clés i18n par mutation ni à la base.
+- `creationStore.js` + `WizardCreation.jsx` : propagation de `sheetId` et `randomMutationsEnabled`
+  vers `Step3Mutations` (manquants jusqu'ici) ; carte "Tirage aléatoire" masquée si l'option de
+  campagne `random_mutations` est désactivée.
+- `creation.json` : suppression du bloc `step3.mutations.*` (45 mutations + 4 sous-types, obsolète —
+  vérifié par grep qu'aucun autre composant ne l'utilisait), ajout `step3.loading` et
+  `step3.subtype_labels.*`.
+
+### Libellés de variantes — vérifiés contre la rulebook, pas devinés
+- Avant d'écrire les 13 libellés `step3.subtype_labels`, lecture de
+  `docs/Character/Creation/REGLE_MUTATION.md` (Difformités, L.88-94) et `REGLE_AVANTAGES.md`
+  (Sens développé/diminué, L.95-96/203-204) : confirmé **"Difformité légère"/"Difformité
+  importante"** (pas "mineure/majeure", hypothèse initiale erronée corrigée avant codage) et
+  **vue/toucher/goût/odorat/ouïe** pour les 5 sens (Organe sensoriel manquant/supplémentaire).
+
+### Correctif UX post-fonctionnel — halo de confirmation au clic
+- Après confirmation SR/fonctionnel par Saar, demande d'un retour visible manquant au clic sur une
+  carte de mutation (liste "équipées" hors champ visuel en bas de la longue grille). Choix retenu
+  (préférence explicite de Saar, arbitrage UI/UX) : halo temporaire (0.6s, cyan `#2FD7FF`) sur la
+  carte cliquée, plutôt qu'un déplacement de la liste de sélection.
+- `index.css` : nouvelle classe `.wiz3-card-flash` + `@keyframes wizCardFlash` (voisine de
+  `wizHudOk` déjà existant, même palette wizard). Animation CSS plutôt que `style={}` inline —
+  seule option pour une `@keyframes`, cohérent avec la convention CSS du projet malgré l'usage
+  d'objets `style` inline préexistant dans tout ce fichier (dette non traitée, hors scope).
+  Les animations CSS priment sur `style={}` inline pour les propriétés animées (`border-color`,
+  `box-shadow`), donc aucun conflit avec le style existant de la carte.
+- `Step3Mutations.jsx` : état `flashId` + helper `flashCard(mutationId)` (timeout 600ms),
+  déclenché uniquement sur ajout réussi (`handleAdd` direct + `handleSelectSubtype` après choix CGA
+  dans la modal) — jamais sur un clic bloqué (mutation unique déjà possédée, PC insuffisants).
+
+### Testé ✅
+- `node --check` sur les 3 fichiers serveur + la migration, `JSON.parse` sur `creation.json`,
+  ESLint sur les 3 fichiers client réécrits/modifiés (0 erreur introduite — 1 erreur préexistante
+  et hors diff sur `WizardCreation.jsx:22`, `characterId` inutilisé, vérifiée via `git diff`).
+- Confirmé SR + fonctionnel par Saar (parcours Step3 réel).
+- Halo de confirmation confirmé fonctionnel par Saar après implémentation.
+
+### Non testé
+- Round-trip `up`/`down` de la migration 117 (à faire via appel direct des fonctions du module,
+  jamais la CLI knex — P52/P54).
+- Achat d'une mutation stackable 2× dans le même lot (empilement `count`) en conditions réelles
+  navigateur (formule déjà validée en base Session 135 via transactions annulées).
+- Tirage aléatoire D20/D100 en conditions réelles, dont le cas de relance `is_unique`.
+- Toggle `random_mutations` dans les options de campagne (masquage de la carte "Tirage aléatoire").
+
+### Dettes ouvertes
+- Aucune nouvelle.
+
+Plan archivé : `docs/Old/PLAN_STEP4.md`.

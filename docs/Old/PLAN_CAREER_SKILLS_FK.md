@@ -1,5 +1,5 @@
 # PLAN_CAREER_SKILLS_FK — FK ref_career_skills.skill_id → ref_skills.id + suppression skill_group
-> Session 134 (2026-07-05) — Statut : **en cours**
+> Session 134 (2026-07-05) — Statut : **✅ CLÔTURÉ** — migration 111 appliquée, testée (round-trip, FK active), backend/frontend adaptés, validé par Saar en navigateur. Détail : `docs/JOURNAL6.md` "Session 134 suite".
 
 ---
 

@@ -1,3 +1,20 @@
+## v147 — 2026-07-05 — Wizard Step3 : mutations réelles (fin PLAN_STEP4)
+
+### Serveur
+- [feat] Migration 117 — `ref_mutation_subtypes` gagne une colonne `description` (sous-table Caractère génétique animal)
+- [feat] Nouvelle route `GET /api/creation/:sheetId/step3/ref` — expose les 45 mutations réelles (+ sous-types + compétences associées) au wizard
+
+### Client
+- [feat] Étape 3 du wizard de création (Capacités spéciales) branchée sur les vraies mutations du Livre de Base au lieu des données factices (6 mutations mockées) — achat, variantes (Difformités, Organe sensoriel, Résistance naturelle), sous-choix Caractère génétique animal, et tirage aléatoire D20/D100 fonctionnent désormais sur les 45 mutations réelles
+- [feat] Halo de confirmation visuel bref sur une carte de mutation cliquée — retour immédiat sans avoir à faire défiler jusqu'à la liste de sélection
+
+## v146 — 2026-07-05 — Stacking des mutations + correction encodage ref_mutations
+
+### Serveur
+- [fix] Migration 108 — correction de la corruption d'encodage sur `ref_mutations`/`ref_mutation_subtypes`/`ref_mutation_skills` (texte inséré mal encodé depuis le seed d'origine, ex. noms et descriptions de mutations illisibles)
+- [feat] Migration 109 — les mutations empilables (Peau renforcée, Purulence, Squelette renforcé, Résistance naturelle) peuvent désormais être achetées ou tirées plusieurs fois sans faire échouer la création de personnage ; leurs effets cumulés suivent la vraie formule du Livre de Base (incrément différent de la valeur de base pour ces 4 mutations)
+- [fix] `finalizeCreation` — achat multiple d'une même mutation empilable dans le même lot n'insère plus de doublon en base
+
 ## v145 — 2026-07-05 — Lots 2-6 carrières (37/37) + FK ref_career_skills
 
 ### Serveur

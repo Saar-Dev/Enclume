@@ -1,7 +1,7 @@
 # PLAN_LOTS_3_6_CAREERS — Vérification + implantation lots 3 à 6
-> Session 134 (2026-07-05) — Statut : **Tâche 1/2/3 terminées côté code — validation fonctionnelle navigateur en attente**
-> Migrations 112-116 appliquées et testées (round-trip up/down/up), 37/37 carrières en base,
-> 0 orphelin FK, 0 carrière sans illustration. Détail : `docs/JOURNAL6.md` "Session 134".
+> Session 134 (2026-07-05) — Statut : **✅ CLÔTURÉ** — migrations 112-116 appliquées et testées
+> (round-trip up/down/up), 37/37 carrières en base, 0 orphelin FK, 0 carrière sans illustration,
+> validé fonctionnel par Saar en navigateur. Détail : `docs/JOURNAL6.md` "Session 134 suite".
 
 ---
 
@@ -14,7 +14,7 @@ Suite lot 2 (migration 108) : vision globale demandée par Saar sur l'état des 
    (au lieu d'une migration séparée comme pour lot1/lot2)
 3. Implanter (écrire + appliquer) seulement une fois tout vérifié
 
-Grâce à la FK ajoutée en migration 111 (`docs/PLAN_CAREER_SKILLS_FK.md`), la vérification
+Grâce à la FK ajoutée en migration 111 (`docs/Old/PLAN_CAREER_SKILLS_FK.md`), la vérification
 skill_id devient une garantie DB automatique pour tout nouveau seed — un `skill_id` invalide
 sera rejeté à l'insert. Reste à vérifier manuellement les fichiers illustration MinIO (aucun
 garde-fou DB pour ça) et l'exactitude des champs libres (`required_genotype` notamment).
@@ -68,7 +68,7 @@ garde-fou DB pour ça) et l'exactitude des champs libres (`required_genotype` no
 Toutes les tables enfants peuplées pour chaque lot (skills, titres, education,
 point_categories, equipment, random_benefits, illustration) — comme au lot 2, même si
 equipment/random_benefits/point_categories restent non consommés par le code actuel
-(voir `docs/PLAN_CAREER_SKILLS_FK.md` § Décision annexe).
+(voir `docs/Old/PLAN_CAREER_SKILLS_FK.md` § Décision annexe).
 
 **Simplification actée** : `skill_group` n'existe plus dans le schéma (migration 111) —
 les migrations de seed pour lots 3-6 n'incluent PAS ce champ (il serait rejeté par

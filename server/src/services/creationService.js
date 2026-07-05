@@ -167,6 +167,22 @@ export async function getStep4State(sheetId) {
   return { archetype: archetype || null, careers }
 }
 
+// ─── Step 3 : données de référence ────────────────────────────────────────────
+
+export async function getStep3RefData() {
+  const [mutations, subtypes, skills] = await Promise.all([
+    db('ref_mutations').select('*').orderBy('mutation_id'),
+    db('ref_mutation_subtypes').select('*').orderBy(['mutation_id', 'd4_roll']),
+    db('ref_mutation_skills').select('*'),
+  ])
+
+  const mutMap = new Map(mutations.map(m => [m.mutation_id, { ...m, subtable: [], skills: [] }]))
+  for (const sub of subtypes) mutMap.get(sub.mutation_id)?.subtable.push(sub)
+  for (const sk of skills) mutMap.get(sk.mutation_id)?.skills.push(sk)
+
+  return Array.from(mutMap.values())
+}
+
 // ─── Step 5 : données de référence ────────────────────────────────────────────
 
 export async function getStep5RefData() {
@@ -195,7 +211,12 @@ export async function startCreation(campaignId, userId) {
 
     const settings = await getCampaignSettings(trx, campaignId)
 
-    return { sheetId: sheet.id, characterId: character.id, ambiance: settings.ambiance }
+    return {
+      sheetId: sheet.id,
+      characterId: character.id,
+      ambiance: settings.ambiance,
+      randomMutationsEnabled: settings.random_mutations,
+    }
   })
 }
 
@@ -244,17 +265,29 @@ export async function finalizeCreation(sheetId, { step1, step2, step3, step4, st
     }
     await trx('char_mutations').where({ char_sheet_id: sheetId }).del()
     const mutationsToInsert = step3Method === 'random' ? (step3Kept ?? []) : (step3Mutations ?? [])
+    const mutationSource = step3Method === 'random' ? 'random' : 'chosen'
     for (const { mutation_id, subtype_id } of mutationsToInsert) {
       const mutRef = await trx('ref_mutations').where({ mutation_id }).first()
       if (!mutRef) throw new AppError(400, `Mutation inconnue : ${mutation_id}`)
-      await trx('char_mutations').insert({
-        char_sheet_id: sheetId,
-        mutation_id,
-        subtype_id: subtype_id ?? null,
-        source: step3Method === 'random' ? 'random' : 'chosen',
-        status: 'active',
-        count: 1,
-      })
+      if (subtype_id == null) {
+        // Mutation is_stackable sans sous-type : incrémente count si déjà choisie dans ce lot
+        // (index partiel uq_char_mut_no_sub — cible explicite requise pour Postgres).
+        await trx.raw(`
+          INSERT INTO char_mutations (char_sheet_id, mutation_id, subtype_id, source, status, count)
+          VALUES (?, ?, NULL, ?, 'active', 1)
+          ON CONFLICT (char_sheet_id, mutation_id) WHERE subtype_id IS NULL
+          DO UPDATE SET count = char_mutations.count + 1
+        `, [sheetId, mutation_id, mutationSource])
+      } else {
+        await trx('char_mutations').insert({
+          char_sheet_id: sheetId,
+          mutation_id,
+          subtype_id,
+          source: mutationSource,
+          status: 'active',
+          count: 1,
+        })
+      }
     }
     await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step3: pc3 ?? 0 })
 

@@ -26,6 +26,7 @@ export default function WizardCreation() {
     setStep0Data, setStep1Data, setStep2Data, setStep3Data, setStep4Data, setStep5Data,
     getPcDispo,
     ambiance: storeAmbiance,
+    randomMutationsEnabled,
   } = useCreationStore()
 
   const navigate = useNavigate()
@@ -140,7 +141,9 @@ export default function WizardCreation() {
         {step === 3 && (
           <Step3Mutations
             initialData={step3Data}
+            sheetId={sheetId}
             pcDispo={pcDispo}
+            randomMutationsEnabled={randomMutationsEnabled}
             onNext={(data) => {
               setStep3Data(data)
               setHighestStep(4)

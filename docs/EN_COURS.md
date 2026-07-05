@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-05 Session 134
+> Dernière mise à jour : 2026-07-05 Session 136
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -9,12 +9,17 @@
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-**0. ~~MIGRATION 37-BIS (ref_skills) — migration 105~~** ✅ CLOS — Session 133 (2026-07-05). Détail complet : `docs/Old/JOURNAL5.md` "Session 133", `docs/MIGRATION_37BIS.md`.
+> Items "0." à "3." (seeding carrières + mutations) tous clos depuis Session 136. Aucune étape
+> unique explicitement désignée par Saar pour la suite — voir item "41." (options de campagne,
+> un par un, déjà en cours) et "Notes Saar" ci-dessous pour les pistes ouvertes (Step4 Expérience,
+> Step4 Profession UI). À clarifier avec Saar en début de prochaine session.
 
-**1. ~~Lot 1 carrières — migration 106~~** ✅ CLOS — Session 134 (2026-07-05). 9 corrections `ref_career_skills` (voir `docs/PLAN_LOT1_CAREERS.md` + `docs/JOURNAL6.md` "Session 134"). Round-trip `up`/`down`/`up` testé byte-identique + validation fonctionnelle navigateur confirmée par Saar (wizard Step4, 5 carrières).
+**0. ~~MIGRATION 37-BIS (ref_skills) — migration 105~~** ✅ CLOS — Session 133 (2026-07-05). Détail complet : `docs/Old/JOURNAL5.md` "Session 133", `docs/Old/MIGRATION_37BIS.md`.
+
+**1. ~~Lot 1 carrières — migration 106~~** ✅ CLOS — Session 134 (2026-07-05). 9 corrections `ref_career_skills` (voir `docs/Old/PLAN_LOT1_CAREERS.md` + `docs/JOURNAL6.md` "Session 134"). Round-trip `up`/`down`/`up` testé byte-identique + validation fonctionnelle navigateur confirmée par Saar (wizard Step4, 5 carrières).
 
 **2. ~~Lots 2-6 carrières (32 carrières)~~ ✅ CLOS — Session 134 suite (2026-07-05)**
-   → Migrations 108 (lot2) + 112-116 (lots 3-6) : 32 carrières + illustrations incluses directement. Détail complet : `docs/PLAN_LOTS_3_6_CAREERS.md`, `docs/JOURNAL6.md` "Session 134 suite".
+   → Migrations 108 (lot2) + 112-116 (lots 3-6) : 32 carrières + illustrations incluses directement. Détail complet : `docs/Old/PLAN_LOTS_3_6_CAREERS.md`, `docs/JOURNAL6.md` "Session 134 suite".
    → **Effet de bord majeur** : `ref_career_skills.skill_id` n'avait aucune FK vers `ref_skills.id` (PIÈGE 1) et `skill_group` était un texte libre jamais aligné avec `ref_skills.family` (bug de fragmentation UI trouvé en cours de route). Corrigé en profondeur — voir item "2bis" ci-dessous.
    → 2 bugs `required_genotype` trouvés et corrigés (valeurs inventées ne correspondant à aucun `ref_genotypes.id`) : `hybride_trident` → `GEN_HYB`, `techno_hybride` → `TEC_HYB`.
    → Prérequis (espion + autres, cf. PIÈGE 7 `JOURNALCOUCHE4.md`) : **non traité**, reste à faire (voir dette ci-dessous).
@@ -22,18 +27,33 @@
    → **Non testé** : —
 
 **2bis. ~~FK ref_career_skills.skill_id + suppression skill_group~~ ✅ CLOS — Session 134 suite (2026-07-05)**
-   → Migration 111 : `ALTER TABLE` ajoute `FOREIGN KEY (skill_id) REFERENCES ref_skills(id) ON DELETE RESTRICT` + `DROP COLUMN skill_group`. Détail : `docs/PLAN_CAREER_SKILLS_FK.md`.
+   → Migration 111 : `ALTER TABLE` ajoute `FOREIGN KEY (skill_id) REFERENCES ref_skills(id) ON DELETE RESTRICT` + `DROP COLUMN skill_group`. Détail : `docs/Old/PLAN_CAREER_SKILLS_FK.md`.
    → Backend `creationService.js:133` (`getStep4RefData`) : JOIN `ref_skills` pour récupérer `family` (remplace le texte libre).
    → Frontend `CareersAllocator.jsx:44-46` : regroupement par `sk.family` au lieu de `sk.skill_group`.
    → **Dette identique non traitée** : `ref_background_skills.skill_id` a le même défaut (pas de FK) — table différente, hors scope (`98_ref_backgrounds.js:49`).
    → **Testé** : FK active (insert invalide rejeté, code Postgres `23503`), round-trip `up`/`down`/`up`, wizard Step4 confirmé fonctionnel (regroupement par famille correct).
    → **Non testé** : —
 
-**3. Wizard Step3 Mutations — mutations réelles (`ref_mutations`) au lieu du mock — plan rédigé, session 134 suite** ← PROCHAINE ÉTAPE
-   → [[docs/PLAN_STEP4|PLAN_STEP4]] : backend (`getStep3RefData`, route `/step3/ref`), réécriture complète `Step3Mutations.jsx` (achat + tirage aléatoire réel D100/D6 équivalent, sans migration de contenu), câblage option de campagne `random_mutations`, correction collision de nom `subtype`/`subtable`.
-   → [[docs/PLAN_MUTATION|PLAN_MUTATION]] : **dépendance bloquante de PLAN_STEP4**, à traiter avant ou avec — les mutations `is_stackable` (Peau renforcée, Résistance naturelle, Squelette renforcé, Purulence, Difformités, Contact corrosif, Radiation, Régénération) font planter `finalizeCreation` si achetées/tirées deux fois (index unique partiel `char_mutations`, jamais exercé par l'ancien mock). Migration (colonne `stack_deltas` JSONB sur `ref_mutations`) + upsert `count` + réécriture `char_mutation_effects_view`.
-   → Prochaine migration disponible : **117** (108-116 désormais utilisées par le seeding carrières + FK ci-dessus).
-   → Prérequis carrières (espion, soldat_elite_*, officier_militaire_souterrain, etc.) : à traiter dans une migration dédiée après ce chantier, cf. PIÈGE 7 `JOURNALCOUCHE4.md`.
+**3. ~~Wizard Step3 Mutations — mutations réelles (`ref_mutations`) au lieu du mock~~ ✅ CLOS — Session 136 (2026-07-05)**
+   → ~~[[docs/PLAN_MUTATION|PLAN_MUTATION]]~~ ✅ CLOS — Session 135 (2026-07-05). Migration `109_mutation_stacking.js`
+     (`stack_deltas` JSONB + réécriture `char_mutation_effects_view`) + upsert `count` dans
+     `creationService.js:245-269` (`ON CONFLICT` sur l'index partiel `uq_char_mut_no_sub`). Testé (3
+     scénarios formule + upsert anti-doublon, transactions Postgres annulées). Détail complet + incident
+     lié au bug d'encodage `ref_mutations` (migration `108_fix_ref_mutations_encoding.js`, découvert et
+     corrigé en aparté) : `docs/JOURNAL6.md` "Session 135". Plan archivé : `docs/Old/PLAN_MUTATION.md`.
+   → ~~[[docs/PLAN_STEP4|PLAN_STEP4]]~~ ✅ CLOS — Session 136 (2026-07-05). Migration 117
+     (`ref_mutation_subtypes.description`) + backend (`getStep3RefData`, route `/step3/ref`,
+     `randomMutationsEnabled`) + réécriture complète `Step3Mutations.jsx` (achat + tirage aléatoire
+     réel D100, variantes libellées vs rulebook, relance D100 sur doublon `is_unique`) +
+     `mutationsMeta` pour `WizardReview.jsx` (plus d'accès i18n/DB). Correctif UX post-fonctionnel :
+     halo de confirmation au clic (`.wiz3-card-flash`, `index.css`). Détail complet :
+     `docs/JOURNAL6.md` "Session 136". Plan archivé : `docs/Old/PLAN_STEP4.md`.
+   → **Testé** : SR + fonctionnel confirmé par Saar (parcours Step3), halo de confirmation confirmé
+     fonctionnel. Lint/syntaxe validés sur tous les fichiers touchés.
+   → **Non testé** : round-trip migration 117, achat stackable 2× et tirage D20/D100 en conditions
+     réelles navigateur, toggle `random_mutations`.
+   → Prochaine migration disponible : **118** (117 consommée cette session).
+   → Prérequis carrières (espion, soldat_elite_*, officier_militaire_souterrain, etc.) : à traiter dans une migration dédiée, cf. PIÈGE 7 `JOURNALCOUCHE4.md`.
 
 ---
 
@@ -137,7 +157,9 @@ Projet en cours et priorité user :
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **120 migrations appliquées** (116_seed_ref_careers_lot6 — Session 134 suite)
+- **122 migrations appliquées** (117_ref_mutation_subtypes_description — Session 136 ;
+  109_mutation_stacking + 108_fix_ref_mutations_encoding — Session 135 ;
+  116_seed_ref_careers_lot6 — Session 134 suite ; deux numéros 108/109 distincts coexistent, voir P53)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
 
 ---
@@ -195,7 +217,7 @@ Projet en cours et priorité user :
 | **CAR3** | Prérequis carrières (espion, soldat_elite_*, officier_militaire_souterrain, etc.) non insérés dans `ref_career_prerequisites` | Moyenne — migration dédiée post lots 2-6 |
 | **DBG-C1** | `character.user_id` null quand GM crée pour joueur absent (steps 1-3) | Moyenne — sprint futur |
 | **JSON1** | `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant, cassait déjà avant Session 132) | **Haute** — casse tout le fichier EN |
-| **OPT-W1** | 10/11 options de campagne (feminin_bonus, random_mutations, polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity) sans effet mécanique branché — `ambiance` ✅ câblée Session 132 suite | Moyenne — en cours un par un |
+| **OPT-W1** | 9/11 options de campagne (feminin_bonus, polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity) sans effet mécanique branché — `ambiance` ✅ câblée Session 132 suite, `random_mutations` ✅ câblée Session 136 (masque la carte "Tirage aléatoire" Step3 si désactivée) | Moyenne — en cours un par un |
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 
 ---
@@ -250,3 +272,5 @@ Projet en cours et priorité user :
 - PL-Q2 — Quill insère la toolbar comme `previousElementSibling`, pas à l'intérieur du container — guard `classList.contains('ql-container')`
 - PL-Q3 — `containerRef.current` peut être null dans le cleanup React 19 — toujours capturer en variable locale en début d'effect
 - PL-Q4 — `editor.destroy()` n'existe pas en Quill 2.0 public API
+- P53 — nodemon auto-applique les migrations dès l'écriture du fichier + numéro "disponible" d'`EN_COURS.md` peut être obsolète (travail parallèle non resynchronisé) — détail complet dans `CLAUDE.md`
+- P54 — ne jamais rappeler `mig.up(knex)` manuellement sans vérifier `knex_migrations` au préalable (nodemon peut l'avoir déjà appliquée) — un second appel traite des données déjà correctes comme corrompues et peut les détruire silencieusement — détail complet dans `CLAUDE.md`

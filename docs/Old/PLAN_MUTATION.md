@@ -1,7 +1,9 @@
 # PLAN_MUTATION — Stacking des mutations `is_stackable` : count réel + effets corrects
-> Session 134 — 2026-07-05
-> Statut : plan validé, code non démarré
+> Session 135 — 2026-07-05
+> Statut : ✅ implémenté et testé — migration `109_mutation_stacking.js` + `creationService.js`
+> Détail complet (formule, tests, incident lié) : `docs/JOURNAL6.md` "Session 135"
 > Dépendance de [[docs/PLAN_STEP4|PLAN_STEP4]] — découvert lors du run à vide sur ce plan
+> Archivé dans `docs/Old/` — contenu absorbé par la migration + le JOURNAL, PLAN_STEP4 reste actif
 
 ---
 

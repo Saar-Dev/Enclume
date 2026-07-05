@@ -178,10 +178,11 @@
     "title_random": "Tirage aléatoire",
     "free": "Gratuit",
     "unique": "Unique",
-    "stackable": "Stackable (max {{limit}})",
+    "stackable": "Cumulable — {{effect}}",
     "has_subtypes": "Sous-types",
     "choose_subtype": "Choisir un sous-type",
     "cancel": "Annuler",
+    "loading": "Chargement des mutations...",
     "selection_title": "Sélection ({{count}})",
     "pc_display": "PC : {{current}} / {{total}}",
     "roll_desc": "Lancez 1D20 pour déterminer combien de mutations votre personnage reçoit, puis découvrez-les une par une.",
@@ -199,45 +200,20 @@
     "prev": "Précédent",
     "next": "Suivant",
     "skill_prefix": "Compétence : ",
-    "mutations": {
-      "1": {
-        "name": "Adaptation extérieure",
-        "desc": "Le personnage possède une résistance aux effets néfastes de la Surface (radiations, acidité de l'air, altération moléculaire…). Il peut développer la Compétence spéciale Adaptation extérieure (CON/CON, -3), à un coût normal. Le niveau de cette Compétence indique le nombre d'heures que le personnage peut passer à la Surface sans subir d'effets secondaires. À l'issue de cette période, il doit toutefois se protéger comme n'importe qui. Il doit alors rester à l'abri des effets de la Surface pendant une période équivalente à trois fois la durée passée à l'extérieur, sans protection, avant de pouvoir à nouveau s'exposer à l'air libre.",
-        "skill_name": "Adaptation extérieure",
-        "skill_attrs": "CON/CON",
-        "skill_base": "-3",
-        "skill_desc": "Heures dehors = niveau de compétence. Récupération = 3× durée exposition."
-      },
-      "7": {
-        "name": "Amphibie",
-        "desc": "Le personnage est doté d'une mutation similaire à celle des hybrides naturels, mais celle-ci ne s'est développée qu'imparfaitement. Il peut respirer sous l'eau et peut apprendre à supporter l'effet de la pression et du froid sous-marins, mais n'a pas les autres avantages des hybrides naturels (il n'en a pas non plus les inconvénients).",
-        "skill_name": "Hybride",
-        "skill_attrs": "CON/COO",
-        "skill_base": "-3",
-        "skill_desc": "Max niveau +0. Profondeur max = niveau×500m. Ne peut dépasser CON en mètres si niveau < 1."
-      },
-      "11": {
-        "name": "Androgyne",
-        "desc": "Physiquement, le personnage tient des deux sexes."
-      },
-      "14": {
-        "name": "Asexué",
-        "desc": "Le personnage est né sans sexe. Le personnage est donc stérile."
-      },
-      "17": {
-        "name": "Autofécondation",
-        "desc": "Un tel personnage ne possède pas d'organes reproducteurs mais peut s'autoféconder et mettre un enfant au monde."
-      },
-      "20": {
-        "name": "Caractère génétique animal",
-        "desc": "Le personnage présente un fort caractère génétique animal et son aspect trahit cet héritage génétique : morphologie altérée, peau couverte d'une légère fourrure ou de plaques écailleuses, traits animaux dans la morphologie du visage, etc.",
-        "subtypes": {
-          "1": { "name": "Caractère félin", "desc": "COO +2, pas sujet au vertige, +3 Acrobatie/Équilibre. Griffes et Vision nocturne à -1 PC." },
-          "2": { "name": "Caractère canin", "desc": "CON +1, très bon odorat (+3 Perception odorat). Crocs gratuit." },
-          "3": { "name": "Caractère reptilien", "desc": "COO +1, odorat langue bifide (+3 Perception), +3 Évasion, se faufile dans espaces étroits." },
-          "4": { "name": "Caractère simiesque", "desc": "FOR +1, COO +1, +3 Escalade. Queue gratuite." }
-        }
-      }
+    "subtype_labels": {
+      "minor": "Légère",
+      "major": "Importante",
+      "taste": "Goût",
+      "smell": "Odorat",
+      "touch": "Toucher",
+      "hearing": "Ouïe",
+      "sight": "Vue",
+      "fire": "Feu",
+      "cold": "Froid",
+      "drugs": "Drogues",
+      "disease": "Maladies",
+      "poison": "Poisons",
+      "radiation": "Radiations"
     }
   },
   "step4": {

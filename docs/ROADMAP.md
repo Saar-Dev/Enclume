@@ -388,7 +388,8 @@ Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation doc
 | Infrastructure | Migration 104 (`campaigns.settings JSONB`), `campaignSettingsService.js`, route PUT, 7 fichiers UI (`CampaignSettingsPage` + 5 Sections + styles) | ✅ session 132 |
 | Effets mécaniques — audit | Détail par option (Niveau 1/2/3) dans `docs/optionCampagne/PLAN_OPTCAMP.md` | ✅ session 132 suite |
 | Effets mécaniques — `ambiance` | Mock supprimé, vraie valeur transmise Wizard, revalidation serveur `finalizeCreation` via `validateStep1` | ✅ session 132 suite |
-| Effets mécaniques — 10 restantes | feminin_bonus, random_mutations, polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity | 🔲 en cours un par un |
+| Effets mécaniques — `random_mutations` | Carte "Tirage aléatoire" masquée en Step3 si désactivée | ✅ session 136 |
+| Effets mécaniques — 9 restantes | feminin_bonus, polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity | 🔲 en cours un par un |
 
 ### Client — Dashboard
 | Tâche | État |

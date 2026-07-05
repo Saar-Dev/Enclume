@@ -7,6 +7,7 @@
  *
  * Routes :
  *   POST   /api/creation/start                  — démarre un brouillon (character + char_sheet)
+ *   GET    /api/creation/:sheetId/step3/ref     — données de référence step3 (mutations)
  *   GET    /api/creation/:sheetId/step4/ref     — données de référence step4 (backgrounds + carrières)
  *   GET    /api/creation/:sheetId/step4         — état courant step4 (archetype + carrières)
  *   GET    /api/creation/:sheetId/step5/ref     — liste ref_advantages
@@ -18,6 +19,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import {
+  getStep3RefData,
   getStep4RefData, getStep4State, getStep5RefData,
   startCreation, finalizeCreation,
 } from '../services/creationService.js'
@@ -65,6 +67,15 @@ router.post('/start', async (req, res, next) => {
 
     const result = await startCreation(campaignId, req.user.id)
     res.json(result)
+  } catch (err) { next(err) }
+})
+
+// ─── Step 3 ────────────────────────────────────────────────────────────────────
+
+router.get('/:sheetId/step3/ref', async (req, res, next) => {
+  try {
+    const ref = await getStep3RefData()
+    res.json(ref)
   } catch (err) { next(err) }
 })
 

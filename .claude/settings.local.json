@@ -113,7 +113,22 @@
       "Bash(echo \"CombatOverlay:$?\")",
       "Bash(echo \"SessionPage:$?\")",
       "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Select-Object Id,StartTime,Path\")",
-      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"Name='node.exe'\\\\\" | Select-Object ProcessId,CommandLine\")"
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"Name='node.exe'\\\\\" | Select-Object ProcessId,CommandLine\")",
+      "Bash(mv docs/PLAN_CAREER_SKILLS_FK.md docs/Old/)",
+      "Bash(mv docs/MIGRATION_37BIS.md docs/Old/)",
+      "Bash(mv docs/PLAN_LOT1_CAREERS.md docs/Old/)",
+      "Bash(mv docs/PLAN_LOTS_3_6_CAREERS.md docs/Old/)",
+      "Bash(node -e *)",
+      "Bash(cd \"c:/Users/Nemet/Documents/Enclume\" && stat -c '%y' CLAUDE.md *)",
+      "Read(//c/Users/Nemet/Documents/Enclume/**)",
+      "Bash(ls .env*)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('client/src/locales/creation.json','utf8'\\)\\); console.log\\('creation.json OK'\\)\")",
+      "Bash(node --check server/src/routes/creation.js)",
+      "Bash(node --check server/src/db/migrations/117_ref_mutation_subtypes_description.js)",
+      "Bash(node --check client/src/stores/creationStore.js)",
+      "Bash(node_modules/.bin/eslint src/components/creation/Step3Mutations.jsx src/components/creation/WizardReview.jsx src/components/creation/WizardCreation.jsx src/stores/creationStore.js)",
+      "Bash(node_modules/.bin/eslint src/components/creation/Step3Mutations.jsx)",
+      "Bash(git mv *)"
     ]
   }
 }

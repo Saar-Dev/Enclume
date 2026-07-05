@@ -2047,6 +2047,16 @@ Convention :
   50%       { box-shadow: 0 0 32px rgba(80,240,255,.65); }
 }
 
+/* Halo temporaire de confirmation — carte de mutation cliquée (Step3Mutations) */
+.wiz3-card-flash {
+  animation: wizCardFlash .6s ease-out;
+}
+@keyframes wizCardFlash {
+  0%   { box-shadow: 0 0 0 rgba(47,215,255,0); border-color: #1e1e2e; }
+  25%  { box-shadow: 0 0 22px rgba(47,215,255,.6); border-color: #2FD7FF; }
+  100% { box-shadow: 0 0 0 rgba(47,215,255,0); border-color: #1e1e2e; }
+}
+
 /* ── Step 1 — container & layout ─────────────────────────────────── */
 .wiz1-container {
   position: relative;

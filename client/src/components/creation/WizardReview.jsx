@@ -13,9 +13,7 @@ export default function WizardReview({ step1Data, step2Data, step3Data, step4Dat
   const { t } = useTranslation('creation')
 
   const displayAge = step4Data?.finalAge ?? step4Data?.age ?? '?'
-  const mutations = step3Data?.method === 'random'
-    ? (step3Data.kept ?? [])
-    : (step3Data?.mutations ?? [])
+  const mutations = step3Data?.mutationsMeta ?? []
   const advantagesMeta = step5Data?.advantagesMeta ?? []
   const advantages = advantagesMeta.filter(a => a.type === 'advantage')
   const disadvantages = advantagesMeta.filter(a => a.type === 'disadvantage')
@@ -71,7 +69,10 @@ export default function WizardReview({ step1Data, step2Data, step3Data, step4Dat
         ) : (
           mutations.map((m, i) => (
             <div key={i} style={s.row}>
-              <span style={s.value}>{t(`step3.mutations.${m.mutation_id}.name`)}</span>
+              <span style={s.value}>
+                {m.name}
+                {m.subtype_name ? ` — ${m.subtype_name}` : ''}
+              </span>
             </div>
           ))
         )}
