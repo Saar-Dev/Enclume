@@ -140,3 +140,76 @@ flaguer, pas à imposer maintenant).
 
 **Rejeté (anti-sur-ingénierie)** : lib json-rules-engine (overkill), migration Zustand complète
 maintenant (report). **Retenu** : évaluateur `shared/` + `useReducer` local + data-driven préservé.
+
+### 11. CORRECTION (Saar) — deux pools distincts + la courbe existe déjà
+> Mon erreur initiale : (a) confusion 10 skills / 5 avantages, (b) « courbe à créer » alors qu'elle
+> existe. Cause racine : `polarisUtils.js` pas lu en entier. Corrigé ci-dessous.
+
+**DEUX pools distincts, constantes LdB (extrait Saar, « Expérience préliminaire »), par ANNÉE :**
+- **10 points de COMPÉTENCE** (skills) → répartis via la courbe de coût, plafond par années.
+- **5 points d'AVANTAGES professionnels** (Contacts/Alliés/Opposants/Ennemis/Célébrité + catégories
+  `ref_career_point_categories`) → Lot 2.
+- (+ option : 5 pts supplémentaires via tirage table des Revers — random, Lot 4.)
+Ce sont des **constantes** (10 et 5), PAS `ref_careers.points_per_year`.
+
+**⚠️ `ref_careers.points_per_year = 5` (seed) est trompeur** : le code actuel l'utilise comme budget
+SKILLS (`totalBudget = points_per_year × years`) → **budget skills faux (5 au lieu de 10)**. À
+trancher : skills = **10 × années** (constante LdB) ; que devient la colonne `points_per_year` ?
+(vestige / à repurposer avantages=5 / ignorer). → question ouverte pour le Lot 1.
+
+**La courbe de coût EXISTE DÉJÀ dans `shared/polarisUtils.js`** (à RÉUTILISER, ne rien recréer) :
+- `calcSkillCost(skillId, currentMastery, targetMastery, isPro, isLearned, refSkills)` → { cost }
+  (L81-122) : 1 jusqu'à +5, 2 pour +6-10, 3/5/7 pour +11/12/13, +2/niveau après ; **×2 hors-pro** ;
+  `(X)` réservée (1 pt → -3) ; `PN` gratuit ≤ +5.
+- `getMaxMasteryByYears(years)` (L127-134) : plafond maîtrise 3/5/7/10/13/15 selon années.
+
+**Board Lot 1** = wiring de ces fonctions (pas de 1:1) : coût d'un +1 via `calcSkillCost`, plafond via
+`getMaxMasteryByYears`, `isPro` = compétence listée par une profession retenue, markers `(X)`/`PN`
+via `refSkills`. Ces fonctions existent mais **ne sont pas câblées** dans `CareersAllocator` actuel
+(modèle naïf 1:1).
+
+**Trou de robustesse (à trancher)** : `reconcileCreation` STEP4 n'appelle pas `calcSkillCost` — il
+insère `char_skills.mastery = targetMastery` tel quel (le client fait foi). Fermer côté serveur au
+Lot 1 (validation via `calcSkillCost`) ou lot dédié ? → question ouverte.
+
+**DÉCISIONS SAAR (verrouillées) :**
+- **Q1** : `ref_careers.points_per_year` → **IGNORER** (skills = constante 10×années). Colonne laissée
+  telle quelle (dette cosmétique).
+- **Q2** : trou serveur → **CORRIGER dans le Lot 1** (`reconcileCreation` valide Σ`calcSkillCost` ≤
+  10×années par métier).
+- **Q3** : budget **PAR MÉTIER, segrégué** — chaque métier dépense **ses** 10×années (compétences)
+  sur **ses** compétences + **ses** 5×années (avantages, Lot 2) sur **ses** catégories. Pas de pool
+  global. (= déjà la sémantique per-career du composant actuel ; le board du mock reste visuel/agrégé
+  mais steppers actifs uniquement sur le métier sélectionné.)
+
+### 13. MODÈLE COMPÉTENCES CORRIGÉ (Saar + LdB confirmé) — REMPLACE mon erreur « par métier »
+`REGLE_CREATION.txt:1250-1263` (Niveau max) + 1103-1118 (coût/hors-pro). Confirme la logique Saar.
+- **UNE compétence = un niveau de maîtrise** sur la fiche. **Jamais de doublon par métier.**
+- **Coût = courbe de niveau** (`calcSkillCost`), indépendant du métier payeur (points fongibles).
+- **De profession (coût normal)** si dans la liste d'**≥1 métier retenu** ; sinon **hors-profession ×2**.
+- **Plafond** = `getMaxMasteryByYears(années CUMULÉES des métiers listant la compétence)` (+2 si études
+  sup. listent la compétence). LdB L1262-1263 : « les années se cumulent ».
+- **Pool skills = GLOBAL** = Σ(10 × années) tous métiers confondus. (≠ mon « per-métier » erroné.)
+- **PN** : gratuit ≤ +5 (déjà dans `calcSkillCost`). **`current`** = base d'origines (`bgSkills.bonus`).
+- **Avantages pro (5/an) = PAR MÉTIER** (sur les catégories du métier) — seul l'aspect per-métier subsiste.
+- **Board** = GLOBAL (comme le mock) : 1 ligne/compétence, 1 stepper, 1 compteur de points restants.
+- **Impact payload/reconcile** : `skillAllocations` devient **global** (skill_id→targetMastery) au
+  niveau step4, plus per-career. `reconcileCreation` applique + valide le coût total ≤ pool global.
+
+### 12. VÉRIFICATION Lot 1 (Étape 1 — code lu, zéro mémoire)
+- **`calcSkillCost` + `getMaxMasteryByYears` = CODE MORT** (grep repo) : jamais consommés en prod
+  (seul `COST_LOOKUP` sert dans Step1 pour les attributs). Lot 1 = **1er consommateur** → aucun
+  précédent à copier, à tester à fond isolément.
+- **`refSkills` (catalogue + markers)** : PAS dans `getStep4RefData`. Dispo via route existante
+  **`GET /api/char-ref/skills`** (`routes/character/ref.js`) — utilisée par `CharacterSheet` →
+  `SkillsPanel`. Côté wizard : n'existe qu'en **mock** (`mockStep4Data.js`). → réutiliser la route
+  (DRY) plutôt qu'un 2e catalogue.
+- **`ref_career_education`** : PAS dans `getStep4RefData` (chargé seulement dans `checkCareerEligibility`
+  serveur). → à ajouter côté careers refData pour le filtre client.
+- **`career.skills`** (getStep4RefData) = `{ skill_id(=ref_skills.id), family, conditional }` — **pas**
+  de `label` ni `marker` → besoin du catalogue `refSkills` pour afficher + `calcSkillCost`.
+- **base/current maîtrise** = `bgSkills.bonus` (origines) + carrières retenues, agrégé par `allSkills`
+  (`CareersAllocator.jsx:62-107`).
+- **`ref_skills.marker`** ∈ { `(X)`, `(-3)`, `PN`, `•`, `PREREQ`, null }.
+- **`reconcileCreation` STEP4** insère `char_skills.mastery=targetMastery` sans validation coût (trou
+  Q2 confirmé).

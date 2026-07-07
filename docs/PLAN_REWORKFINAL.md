@@ -35,6 +35,12 @@ sous-step `careers`).
 - **État d'allocation = `useReducer`** (transitions pures + sélecteurs `useMemo`), pas de useState
   éparpillés.
 - **Data-driven préservé** : rendu 100 % depuis `refData`, provenance dérivée des données.
+- **Réutiliser l'existant, ne rien recréer** : la courbe de coût compétences + le plafond par années
+  existent déjà dans `shared/polarisUtils.js` (`calcSkillCost`, `getMaxMasteryByYears`) — le board les
+  câble. Deux pools **constants** LdB par année : **10** points de compétence, **5** points
+  d'avantages professionnels (distincts ; `ref_careers.points_per_year=5` ne doit PAS servir de
+  budget skills). Contexte d'éligibilité client bâti depuis `useCreationStore` (step1 attributs,
+  step2 génotype) — pas de prop-drilling.
 - **Reporté (non imposé)** : migration des carrières vers Zustand `creationStore` (robuste à terme,
   gros refactor `Step4Experience`/`Summary` → lot dédié ultérieur si besoin).
 
@@ -58,12 +64,89 @@ sous-step `careers`).
 | Matériel accessible | `ref_career_equipment` | ❌ **à ajouter** (Lot 6) |
 
 Persistance (`char_careers`, déjà prête) : `years`, `savings` (calculé backend), `pro_advantages`
-(jsonb, Lot 2), `random_picks` (jsonb, Lot 4), `setbacks` (jsonb, réserve), + `char_skills` via
-`skillAllocations`/`openedSkills`.
+(jsonb), `random_picks` (jsonb), `setbacks` (jsonb, réserve), + `char_skills` via `skillAllocations`.
 
-Payload actuel (`Step4Experience.buildPayload`) envoie seulement : `career_id, career_name, titles,
-years, skillAllocations`. Manquent (à ajouter par lot) : `proAdvantages` (L2), `openedSkills` (L3),
-`randomPicks` (L4).
+---
+
+## 1bis. CONTRATS VERROUILLÉS (données + payload) — passe de design global
+
+> Résultat de la passe de verrouillage (Session 139). Ces 2 contrats sont figés **avant tout code**
+> des lots suivants ; chaque lot ne fait que **remplir sa tranche** sans restructurer.
+> Investigation : fiche perso (`CharacterSheet` = SkillsPanel + AdvantagesPanel, **pas** de carrières
+> ni relations), inventaire (`char_inventory` + items custom + `char_sheet.sols`), schéma `char_*`.
+
+### Contrat A — Modèle de données de bout en bout
+| Donnée | Table / colonne | État | Lot |
+|---|---|---|---|
+| Carrière retenue | `char_careers` (career_id, years) | existe | 2 |
+| Compétences (maîtrise) | `char_skills` (skill_id, mastery, is_learned) | existe | 2 (+5 openedSkills) |
+| Économies | `char_careers.savings` **+ agrégation → `char_sheet.sols`** | table existe ; agrégation à ajouter | 3 |
+| Avantages pro (répartition) | `char_careers.pro_advantages` (jsonb cat→pts) | existe | 4 |
+| Tirage 1D10 | `char_careers.random_picks` (jsonb) | existe | 6 |
+| **Relations** | **`char_relations` (NOUVELLE TABLE)** : `char_sheet_id`, `type`(contact/ally/opponent/enemy), `count`(int), `note`(text), `linked_character_id`(FK characters, null), `career_id`(FK, null) | **à créer** | 7 |
+| Matériel | `char_inventory` (equipment_id→`ref_equipment`, ou custom) | existe | 8 |
+
+→ **UNE seule migration sur tout le rework = `char_relations`** (Lot 7). Tout le reste réutilise
+l'existant. Migration conçue **une fois**, proprement (pièges P52-P54). Nouveau panneau fiche perso
+(`CharacterSheet`) pour afficher carrières + relations (Lot 7).
+
+### Contrat B — Payload `reconcile({ step4 })` (forme cible, remplie par tranches)
+```
+step4 = {
+  age, originGeo, originSoc, training, higherEd,
+  appliedSkills: [skill_id],              // choix "au choix"/background (Lot 5)
+  skillAllocations: { skill_id: target }, // GLOBAL (Lot 2) — MIGRE hors de careers[]
+  careers: [{
+    career_id, years,
+    proAdvantages: { category: pts },     // Lot 4
+    randomPicks: [ ... ],                 // Lot 6
+  }],
+  relations: [{ type, count, note, linkedCharacterId, careerId }],  // Lot 7
+  pcSpent,
+}
+```
+- **Changement structurel clé (Lot 2)** : `skillAllocations` passe de **per-career** à **global**
+  (cohérent avec le pool global + « une compétence montée une fois »). `reconcileCreation` STEP4
+  applique + valide le coût global via `shared/careerSkills.js`.
+- **Rétro-compat** : tant que Lot 2 n'est pas livré, le payload reste per-career (assistant actuel
+  intact). La bascule per-career→global se fait **dans** le Lot 2 (UI + serveur ensemble).
+- `career_name`/`titles` (envoyés aujourd'hui) : redondants avec `ref_careers` — supprimés du payload
+  au Lot 2 (le serveur relit la base).
+
+---
+
+## 1ter. DÉCISIONS VERROUILLÉES & FAITS VÉRIFIÉS (auto-suffisant — agent vierge)
+
+**Décisions Saar (verrouillées Session 139) :**
+- **Skin** : Option A (wiz premium) — classes `.wiz4-*` dans `index.css` Section 12 ; variables
+  `--wiz-*` disponibles car Step4 rendu sous `.wiz-shell` (index.css:1812-1825).
+- **Dés** : DicePanel réel (`client/src/components/DicePanel.jsx`), jamais `Math.random` (Lot 6).
+- **Q1** : `ref_careers.points_per_year` (=5) **ignoré** ; skills = constante **10/an**.
+- **Q2** : trou serveur (reconcile ne valide pas le coût skills) **corrigé au Lot 2**.
+- **Q3** : une compétence = **un** niveau (jamais de doublon) ; pool skills **GLOBAL** = Σ(10×années) ;
+  avantages pro **PAR MÉTIER** (5×années).
+- **Relations** : nouveaux champs fiche perso (jauge `count` int + `note` texte + lien PNJ optionnel)
+  → table `char_relations` (Lot 7).
+- **Matériel** : brancher `char_inventory` + `savings`→`char_sheet.sols` (Lot 8).
+
+**Modèle compétences (= LdB `REGLE_CREATION.txt:1103-1128, 1250-1263`) :**
+- Coût via `shared/polarisUtils.js` `calcSkillCost` (courbe 1/2/3/5/7…, **×2 hors-profession**,
+  `(X)` 1 pt → -3, `PN` gratuit ≤ +5).
+- Plafond via `getMaxMasteryByYears(Σ années des métiers listant la compétence, +2 si études sup.)`.
+- `isPro` = compétence dans la liste d'≥1 métier retenu. `current` = base d'origines (`bgSkills.bonus`).
+
+**Faits vérifiés (code lu Session 139) :**
+- `calcSkillCost` + `getMaxMasteryByYears` = **code mort** (jamais consommés en prod ; Lot 1 = 1er
+  consommateur → tester à fond).
+- `refSkills` (catalogue + markers) : **absent** de `getStep4RefData` ; dispo via route existante
+  `GET /api/char-ref/skills` (`routes/character/ref.js`) → **réutiliser**.
+- `ref_career_education` : **absent** de `getStep4RefData` (lu seulement côté serveur) → à ajouter (Lot 1).
+- `career.skills` = `{ skill_id, family, conditional }` (pas de label/marker → besoin du catalogue).
+- Fiche perso (`CharacterSheet`) = SkillsPanel + AdvantagesPanel **seulement** (ni carrières ni
+  relations) → nouveau panneau au Lot 7.
+- **Une seule migration** sur tout le rework = `char_relations` (Lot 7).
+- Design source : `docs/ClaudeDesign/project/Professions.dc.html` (+ README bundle : reproduire le
+  visuel, pas la structure interne du proto).
 
 ---
 
@@ -71,27 +154,147 @@ years, skillAllocations`. Manquent (à ajouter par lot) : `proAdvantages` (L2), 
 
 | Lot | Titre | Statut |
 |---|---|---|
-| 1a | Squelette layout + rail + barre d'âge + détail (onglet Métier) + nav | à planifier en détail → **prochain** |
-| 1b | Board compétences global (agrégation + provenance + stepper cap+3 + gating) | cadré |
-| 1c | Onglet Carrière & économies (table titres/salaires + cumul, lecture seule) | cadré |
-| 2 | Avantages pro (5 pts/an → `pro_advantages`) | cadré |
-| 3 | Compétences « au choix » (`conditional` → radios → `openedSkills`) | cadré |
-| 4 | Tirage 1D10 via DicePanel (`ref_career_random_benefits` → `random_picks`) | cadré |
-| 5 | Relations (champs fiche perso : entier + texte + lien PNJ + persistance) | à investiguer |
-| 6 | Matériel accessible (inventaire + menu GM création objets) | à investiguer |
+| **0** | **Fondation éligibilité** : `shared/careerEligibility.js` + rebranchement serveur | ✅ CODÉ + validé Saar |
+| **1** | **Fondation moteur de coût (invisible)** : `getStep4RefData` (+`education`), serveur **Q2** (`reconcileCreation` valide le coût via `calcSkillCost` + payload `skillAllocations` global), **tests unitaires** du modèle. Aucun UI. | à planifier → **prochain** |
+| **2** | **UI** : réécriture `CareersAllocator` (rail + barre d'âge + détail onglets + **board GLOBAL** compétences), filtre « Accessibles » réel, `useReducer`, CSS `.wiz4-*`, i18n. Économies → Lot 3. | cadré |
+| **3** | Onglet Carrière & économies (table titres/salaires + cumul, lecture seule) | cadré |
+| **4** | Avantages pro (5 pts/an **par métier** → `pro_advantages`) | cadré |
+| **5** | Compétences « au choix » (`conditional` → radios → `openedSkills`) | cadré |
+| **6** | Tirage 1D10 via DicePanel (`ref_career_random_benefits` → `random_picks`) | cadré |
+| **7** | Relations (champs fiche perso : entier + texte + lien PNJ + persistance) | à investiguer |
+| **8** | Matériel accessible (inventaire + menu GM création objets) | à investiguer |
+
+> **Re-découpage (validé Saar)** : le moteur de coût (`calcSkillCost`, jamais utilisé en prod, +
+> règle cumul + validation serveur Q2) est isolé en **fondation invisible testable** (comme le Lot 0)
+> AVANT la réécriture UI qui le consomme. Évite d'empiler un mécanisme risqué dans une grosse UI.
 
 ---
 
-## 3. LOT 1a — Squelette + rail + barre d'âge + onglet Métier  [PLAN DÉTAILLÉ]
+## 3. LOT 0 — Fondation : évaluateur d'éligibilité partagé  [PLAN DÉTAILLÉ]
+
+**Objectif** : une source unique de vérité pour « une carrière est-elle accessible à ce
+personnage ? », consommée par le serveur (validation) ET le client (filtre + bouton grisé + raisons).
+Supprime la divergence filtre géo↔finalize.
+
+**Fichiers touchés**
+- `shared/careerEligibility.js` (**NOUVEAU**) : fonction pure, aucune dépendance DB.
+  ```
+  evaluateCareerEligibility(career, context) → { eligible: bool, reasons: Reason[] }
+  Reason = { code:'prereq'|'genotype'|'attributes'|'education', ...params }
+    prereq     → { careerId, careerName, minYears }
+    genotype   → { genotypeId, genotypeLabel }
+    attributes → { failed:[{attr, have, min}] }
+    education  → { present:bool, fields:[...] }   // present=false → "nécessite des études
+                                                  // supérieures : X" ; present=true (mauvaise
+                                                  // filière) → "nécessite les études : X"
+  career  = ligne ref_careers + { prerequisites[], education[] }  (noms prérésolus par l'appelant :
+            l'évaluateur reste pur, il ne fait aucune requête — l'appelant fournit careerName/
+            genotypeLabel déjà lus en base pour que les params soient formatables)
+  context = { careers:[{career_id, years}], genotypeId, higherEd, attributes:{FOR..PRE} }
+  ```
+  **Raisons STRUCTURÉES (codes + params), jamais de texte FR** → le serveur les formate vers ses
+  messages actuels, le client les traduira via i18n (Lot 1). L'évaluateur collecte **toutes** les
+  raisons (pour le client).
+  Règles (portées des 4 validateurs actuels) : prérequis (`prerequisites[]` vs `context.careers`),
+  génotype (`required_genotype` vs `genotypeId`), attributs (`min_*` vs `attributes`),
+  études (`education[]` vs `higherEd`).
+- `server/src/services/creationService.js` : les 4 `validateCareer*` (l.61-123) + leurs 4 appels
+  (l.357-363) sont **remplacés par UNE fonction** `checkCareerEligibility(sheetId, careerId, trx)`
+  (vérifié : aucun autre appelant en prod) : un seul fetch DB (prereqs + noms, génotype+label,
+  attributs, higher_ed + education), build career+context avec **noms prérésolus**, appel évaluateur
+  pur, retour `{ valide, erreur }` formaté depuis `reasons[0]`. Le point d'appel reconcile passe de
+  4 lignes à 1.
+  **PARITÉ STRICTE** : ordre d'évaluation figé **[prereq, genotype, attributes, education]**
+  (= ordre d'appel actuel) → `reasons[0]` = message identique à aujourd'hui. Fallbacks préservés
+  (`?` attribut manquant, `label ?? id` génotype, `prereqCareer?.name`). **Dettes préservées, NON
+  corrigées** : `prerequisite_logic` et `min_attributes_logic` (AND/OR) restent ignorées comme
+  actuellement (AND implicite). Zéro changement visible.
+
+**Ce qui NE change PAS** : schéma DB, refData, UI, messages d'erreur utilisateur (identiques,
+formatés depuis `reasons[0]`).
+
+**Tests 0** (méthode **snapshot avant/après**, pas « je crois que c'est pareil ») :
+1. AVANT refactor — capturer verdict + message actuels pour les cas à contrainte : Assassin
+   (prérequis), Hybride du Trident (génotype), Soldat d'élite (attributs), Diplomate/Érudit/Médecin
+   (études), + un cas éligible.
+2. APRÈS refactor — assérer message identique pour chaque cas.
+3. Vérif directe de l'évaluateur pur (`reasons` structurées correctes, multi-échecs collectés).
+Tout via `node -e` inline (jamais de fichier dans `server/` — piège P53) ; SR ; ESLint 0 erreur.
+
+> **Note Lot 1** : `getStep4RefData` ne charge pas `ref_career_education` — à ajouter au Lot 1 pour
+> que le client puisse évaluer la contrainte études (le serveur, lui, la lit déjà en direct).
+
+---
+
+## 4. LOT 1 — Fondation moteur de coût (invisible)  [PLAN DÉTAILLÉ]
+
+**Objectif** : établir la mécanique de coût compétences correcte (helper partagé testé + données)
+AVANT l'UI qui la consomme. Invisible à l'écran, testable en isolation (pattern Lot 0). **Ne touche
+pas** le payload actuel ni `reconcileCreation` (ceux-ci changent au Lot 2 avec l'UI) → l'assistant
+actuel continue de fonctionner tel quel.
+
+**Modèle (cf. §1ter, = LdB `REGLE_CREATION.txt:1103-1128,1250-1263`)** :
+- Une compétence = un niveau. Coût = `calcSkillCost` (courbe, ×2 hors-pro, basé strictement sur
+  l'appartenance à une carrière — les études supérieures ne comptent jamais pour le coût). `isPro` =
+  dans la liste d'**≥1 métier retenu**. Pool skills = **global** = Σ(10 × années). PN gratuit ≤ +5.
+  `current` = base d'origines (`bgSkills.bonus`).
+- **Plafond (corrigé après lecture de la source, Lot 1 codé)** : DEUX cas distincts, pas une formule
+  unique — compétence **professionnelle** (listée par ≥1 métier retenu, ou par les études sup. qui
+  comptent pour +2 ans comme une profession, ligne 1254) → `getMaxMasteryByYears(Σ années + 2 si
+  études sup. la listent)` ; compétence **d'origine non-professionnelle** (géo/social/formation, pas
+  dans la liste d'un métier) → plafond **fixe +5** (ligne 1122-1128), **pas**
+  `getMaxMasteryByYears(0)=3` comme écrit initialement dans cette section.
+
+**Fichiers touchés** :
+- `shared/careerSkills.js` (**NOUVEAU**) — helper pur, réutilise `calcSkillCost`/`getMaxMasteryByYears` :
+  ```
+  computeSkillAllocation(skillAllocations, ctx) → {
+    budget, totalCost, remaining,
+    perSkill: [{ skillId, current, target, isPro, cost, cap, capped }],
+    errors: [{ code:'over_budget'|'over_cap', ... }]
+  }
+  skillAllocations = { skill_id: targetMastery }   // GLOBAL
+  ctx = { careers:[{skills:[skill_id], years}], higherEdSkills:[skill_id], baseMastery:{skill_id:n}, refSkills }
+  budget = Σ(10 × years) ; cap(skill) = getMaxMasteryByYears(Σ years listant skill (+2 études))
+  ```
+  Utilisé par le client (board : coût/restant/plafond) ET le serveur (validation) au Lot 2.
+- `server/src/services/creationService.js` `getStep4RefData` : ajouter **`education`** par carrière
+  (additif, sûr) — requis au filtre éligibilité client (Lot 2).
+- refSkills : **réutiliser** la route existante `GET /api/char-ref/skills` (pas de nouveau catalogue).
+
+**Ce qui NE change PAS** : schéma DB, payload, `reconcileCreation`, UI, Lot 0. (Aucune régression.)
+
+**Tests Lot 1** (node -e inline, jamais de fichier dans `server/` — P53) :
+- `calcSkillCost` : in-pro vs hors-pro (×2), franchissement +5→+6 (coût 1 puis 2), `(X)` (ouverture
+  -3), `PN` gratuit ≤ +5.
+- `getMaxMasteryByYears` : bornes (1→3, 2→5, 3-5→7, 6-10→10, 11-20→13, 21+→15).
+- `computeSkillAllocation` : cumul années sur compétence partagée (Barman+Assassin) → plafond cumulé ;
+  dépassement budget → `over_budget` ; dépassement plafond → `over_cap` ; cas nominal OK.
+- `getStep4RefData` renvoie `education` par carrière (vérif structure).
+- SR + ESLint (shared/server hors périmètre lint → `node --check`).
+
+---
+
+## 5. LOT 2 — UI : réécriture CareersAllocator + board global  [cadré — re-détailler au lancement]
+
+> **⚠️ CORRECTION MODÈLE (JOURNALTEMP §13)** : le board est **GLOBAL** (une ligne/compétence, un
+> compteur de points restants global), PAS « par métier ». Le texte ci-dessous écrit avant la
+> clarification Saar parle encore de steppers « métier courant » — à corriger au re-détail : les
+> steppers agissent sur la maîtrise **globale** de chaque compétence, coût/plafond via
+> `shared/careerSkills.js` (Lot 1). Les **avantages pro** (Lot 4) restent, eux, par métier.
 
 **Décisions verrouillées** : skin **Option A** (wiz premium). Classes **`.wiz4-*`** (cohérent avec
 `.wiz3-*`), dans `index.css` Section 12. Variables `--wiz-*` disponibles car Step4 est rendu sous
 `.wiz-shell` (index.css:1812-1825, déclare toutes les `--wiz-*`). Couleur d'hexagone = **HSL
-déterministe dérivée de `career.code`** (hash → teinte) — réutilisée par les tags de provenance (1b).
+déterministe dérivée de `career.code`** (hash → teinte) — réutilisée par les tags de provenance.
+État = **`useReducer`** (transitions pures). Filtre « Accessibles » = **évaluateur du Lot 0**.
+Board = **global**, coût via `shared/careerSkills.js`. Payload `skillAllocations` **global** +
+validation serveur `reconcileCreation` (Q2) via le même helper.
 
-**Objectif** : coquille visuelle + flux « sélectionner → consulter → ajouter/retirer » un métier,
-sur données déjà fonctionnelles. Pas de board d'allocation (1b), onglet Carrière = table économies
-(1c, hors 1a → coquille), onglet Avantages = coquille (Lot 2).
+**Objectif** : layout complet + flux « sélectionner → consulter → ajouter/retirer » un métier **+
+board GLOBAL d'allocation des compétences** (cœur fonctionnel). Onglet Carrière & économies =
+coquille (→ Lot 3), onglet Avantages = coquille (→ Lot 4). Économies **hors lot** (barre d'âge :
+« — » en attendant Lot 3).
 
 **Fichiers touchés**
 - `client/src/components/creation/CareersAllocator.jsx` — réécriture complète du rendu ; l'objet
@@ -121,76 +324,108 @@ Mapping couleurs : accent `#5b8dee`→`var(--wiz-blue-bright)` ; texte `--text-p
     badge `.wiz4-retenu` si retenu)
   - `.wiz4-main` :
     - `.wiz4-agebar` : Âge de départ (`baseAge`) / Années de carrière (Σ years retenus) / Âge actuel
-      (`baseAge`+Σyears, `.hi`) / Économies de départ (`.gold`, estimation via helper) + note
+      (`baseAge`+Σyears, `.hi`) / Économies de départ (`.gold`, **« — »** — calcul réel en Lot 1c)
     - `.wiz4-detail` (si `career`) : `.wiz4-illus` (img asset), titre, `.wiz4-drang`
       (débute `eco` · rang · débloque N compétences), desc, `.wiz4-dactions` (stepper années −/＋ +
       bouton Ajouter/Retirer)
     - `.wiz4-tabs` (Métier | Carrière & économies | Avantages pro)
     - `.wiz4-tabbody` : onglet Métier = `.wiz4-geo` (origine géo) + `.wiz4-groups` (par famille →
       `.wiz4-grplbl` + chips) ; onglets Carrière/Avantages = `.wiz4-note` « à venir »
+    - **`.wiz4-board`** (sous le détail) : board d'allocation — steppers actifs sur les compétences
+      **du métier sélectionné** (budget par métier, Q3) — voir sous-section ci-dessous.
     - `.wiz4-foot` : Précédent / `.wiz4-status` / Suivant
 
-**État local (`useState`)** : `filter` ('all'|'eligible'), `selectedCareerId`, `years`,
-`activeTab` ('metier'|'carriere'|'avant'), `hoverCareerId` (posé mais inerte en 1a, consommé en 1b).
+**État = `useReducer`** (reducer pur `careersReducer`, actions ci-dessous). Champs : `filter`
+('all'|'eligible'), `selectedCareerId`, `years`, `activeTab` ('metier'|'carriere'|'avant'),
+`hoverCareerId` (surbrillance provenance), `skillAllocs` (map skill_id→**targetMastery** du métier en
+cours ; le coût est dérivé via `calcSkillCost`, jamais stocké).
+Le committed (`selectedCareers`) reste piloté par les props `onAdd/onRemove` (report Zustand = lot
+ultérieur).
 
 **Helpers** :
-- `careerHexColor(code)` → `hsl(hash % 360, 55%, 55%)` déterministe.
+- `careerHexColor(code)` → `hsl(hash % 360, 55%, 55%)` déterministe (partagé rail + provenance).
 - `getTitleForYears(titles, years)` (existe déjà l.30-33, conservé) → rang courant.
-- `estimateSavings(career, years)` → Σ par bande de titre : `salary_per_year × nbAnnées` ;
-  bandes en `salary_formula` (aléatoire) marquées → note astérisque (le montant réel = backend
-  au finalize). Utilisé par la barre d'âge (1a) et l'onglet économies (1c).
+- `buildEligibilityContext(...)` → assemble le `context` pour l'évaluateur Lot 0 depuis les props
+  (attributs step1, génotype step2, études, carrières retenues). (Économies : aucun helper en Lot 1.)
 
-**Handlers (inventaire exhaustif)** :
-| Élément | Handler | Comportement |
+**Handlers (inventaire exhaustif)** — via `dispatch` sur `careersReducer` :
+| Élément | Action | Comportement |
 |---|---|---|
-| Segment Tous | `setFilter('all')` | filtre off |
-| Segment Accessibles | `setFilter('eligible')` | exclut `restricted_geographic_origin` |
-| Ligne rail (clic) | `handleSelectCareer(id)` | toggle sélection ; reset `years=1`, `activeTab='metier'` |
-| Ligne rail (hover) | `setHoverCareerId(id/null)` | inerte 1a (préparé 1b) |
-| Onglet ×3 | `setActiveTab(k)` | change onglet |
-| Stepper − / ＋ | `setYears(y∓1)` | borné 1..min(50, remainingPC) |
-| Ajouter | `handleAdd()` | `onAdd(id,name,titles,years,{})` puis reset (skillAllocs vide en 1a) |
-| Retirer | `onRemove(index)` | via props (retrait du métier retenu) |
+| Segment Tous | `SET_FILTER 'all'` | affiche toutes les carrières |
+| Segment Accessibles | `SET_FILTER 'eligible'` | garde `evaluateCareerEligibility(...).eligible` (Lot 0) |
+| Ligne rail (clic) | `SELECT_CAREER id` | toggle ; reset `years=1`, `activeTab='metier'`, `skillAllocs={}` |
+| Ligne rail (hover) | `SET_HOVER id/null` | surbrillance des compétences apportées (board) |
+| Onglet ×3 | `SET_TAB k` | change onglet |
+| Stepper − / ＋ | `SET_YEARS y∓1` | borné 1..min(50, remainingPC) ; reset `skillAllocs` |
+| Skill − / ＋ (board) | `ALLOC_SKILL {id,±1}` | borné : pool restant > 0 (＋), cap +3, allouable si métier courant |
+| Ajouter | `handleAdd()` | si éligible & pool skills du métier soldé → `onAdd(id,name,titles,years,{...skillAllocs})` puis reset |
+| Retirer | `onRemove(index)` | via props |
 | Précédent | `onPrev()` | props |
-| Suivant | `onNext()` | actif si `selectedCareers.length>0` (gating skills = 1b) |
+| Suivant | `onNext()` | actif si ≥1 métier retenu **et** points de compétence tous répartis |
+
+**Sous-section — Board d'allocation `.wiz4-board`** (cœur du Lot 1)
+- Sous le détail : agrégation de TOUTES les compétences des métiers retenus + du métier consulté,
+  groupées par famille (`.wiz4-bgrp`, label sticky).
+- Ligne `.wiz4-skill` : label, **tags de provenance** `.wiz4-provtag` (un par métier/origine
+  apportant la compétence, couleur `careerHexColor`), base (maîtrise backgrounds), stepper +/−, total.
+- Agrégation : adapter le `allSkills` (useMemo) actuel (`CareersAllocator.jsx:62-103`) — agrège déjà
+  géo/soc/formation/études + métiers retenus + métier courant.
+- **Modèle de budget = PAR MÉTIER (décision Saar Q3, segrégué)** : chaque métier retenu a **son**
+  budget = **10 × ses années** (compétences) dépensé sur **ses** compétences professionnelles, et
+  **5 × ses années** (avantages, Lot 2) sur **ses** catégories. PAS de pool global fongible. C'est
+  déjà la sémantique du composant actuel (steppers actifs seulement sur les compétences du métier
+  sélectionné, `skillAllocs` par métier, envoyé à `onAdd`).
+- **Mécanique de coût = RÉUTILISER `shared/polarisUtils.js`** (NE PAS recréer, NE PAS faire du 1:1) :
+  - Budget skills du métier = **10 × années** (constante LdB — `points_per_year`=5 **ignoré**, Q1).
+  - Coût d'un incrément via `calcSkillCost(skillId, current, target, isPro, isLearned, refSkills)`
+    (courbe 1/2/3/5/7…, ×2 hors-profession, `(X)` réservées, `PN` gratuit ≤+5).
+  - Plafond de maîtrise via `getMaxMasteryByYears(years)` (3/5/7/10/13/15) — remplace le faux « +3 ».
+  - `isPro` = compétence dans la liste professionnelle **du métier en cours** ; sinon coût ×2.
+  - Nécessite `refSkills` (markers `(X)`/`PN`) côté client → à câbler (déjà servi à SkillsPanel ; à
+    confirmer accessible au Step4 au lancement).
+- **Board `.wiz4-board`** : rendu type mock (compétences groupées par famille + tags de provenance)
+  mais steppers **actifs uniquement sur les compétences du métier sélectionné** (les autres en
+  `.locked`, display) ; `.wiz4-status` = budget restant **du métier courant** = 10×années − Σ
+  `calcSkillCost`. Survol rail → surbrillance `.wiz4-skill.hl`.
+- **Validation serveur (décision Saar Q2 — à corriger dans CE lot)** : `reconcileCreation` STEP4 doit
+  **valider** que, pour chaque métier, Σ `calcSkillCost(...)` des `skillAllocations` ≤ 10×années
+  (rejet `AppError` sinon) au lieu d'insérer `mastery` aveuglément. → fichier serveur touché en +.
 
 **Compat props** : signature `CareersAllocator` conservée + ajout `baseAge`. `pcDispo,
-selectedCareers, careers, onAdd, onRemove, onNext, onPrev, selected*Item` inchangés.
+selectedCareers, careers, onAdd, onRemove, onNext, onPrev, selected*Item` inchangés. + accès au
+contexte d'éligibilité (attributs/génotype) : à faire remonter depuis `Step4Experience` (voir §
+Fichiers touchés — prop `eligibilityContext` ou équivalent).
 
 **Clés i18n à ajouter** (`step4.*`) : `career_filter_all`, `career_filter_eligible`,
 `career_tab_metier`, `career_tab_carriere`, `career_tab_avant`, `career_tab_soon`,
 `career_age_start`, `career_age_years`, `career_age_current`, `career_age_savings`,
-`career_age_note`, `career_geo_origin`, `career_skills_pro`, `career_years_in`, `career_retained`,
-`career_restricted`, `career_starts`, `career_unlocks_skills`, `career_eco_estimate_note`.
+`career_geo_origin`, `career_skills_pro`, `career_years_in`, `career_retained`, `career_restricted`,
+`career_starts`, `career_unlocks_skills`, `career_ineligible` (préfixe raisons),
+`career_board_title`, `career_board_hint`, `career_points_remaining`, `career_status_none`,
+`career_status_skills_left`, `career_status_ok`, `career_provenance_origin`.
 (`career_add`, `career_remove`, `career_none`, `prev`, `next` existent déjà.)
 
-**Ce qui NE change PAS** : `Step4Experience` (hors ajout `baseAge`), backend, payload, autres
-sous-steps, autres composants wizard.
+**Fichiers touchés (Lot 1)** :
+- `CareersAllocator.jsx` — réécriture rendu + `useReducer` + board (calcSkillCost/getMaxMasteryByYears),
+  suppression objet `s={}`.
+- `index.css` — bloc `.wiz4-*` fin Section 12.
+- `fr.json` — clés ci-dessus.
+- `Step4Experience.jsx` — passer `baseAge` + contexte d'éligibilité (attributs step1 + génotype step2,
+  lus depuis `useCreationStore`) + `refSkills` (markers) au `CareersAllocator`.
+- `server/src/services/creationService.js` — **Q2** : `reconcileCreation` STEP4 valide le budget
+  skills par métier via `calcSkillCost` (rejet si Σcoût > 10×années) avant insert `char_skills`.
+- **Vérifier** : `getStep4RefData` charge-t-il `refSkills` (markers `(X)`/`PN`) ? sinon l'ajouter
+  (comme `ref_career_education`, cf. note Lot 1). À confirmer au lancement.
 
-**Tests 1a** : SR sans erreur ; sélection carrière (surbrillance rail + détail) ; filtre Tous/
-Accessibles (⚠ restreints masqués en Accessibles) ; stepper années borné ; Ajouter → badge Retenu +
-bouton Retirer + carrière dans `selectedCareers` ; Retirer → retour état ; onglet Métier affiche géo
-+ compétences groupées ; onglets Carrière/Avantages = coquille « à venir » ; barre d'âge cohérente ;
-nav Précédent/Suivant (Suivant actif dès 1 métier retenu) ; ESLint 0 erreur.
+**Ce qui NE change PAS** : schéma DB, autres sous-steps/composants, payload `skillAllocations`
+(structure conservée ; désormais **validée** serveur).
 
----
-
-## 4. LOT 1b — Board compétences global
-
-- Section `.wz4-board` sous le détail : agrégation de TOUTES les compétences des métiers retenus +
-  celles du métier en cours de consultation, groupées par famille (`.wz4-bgrp`, label sticky).
-- Chaque ligne `.wz4-skill` : label, **tags de provenance** `.wz4-provtag` (un par métier/origine
-  qui apporte la compétence, couleur du métier), base (maîtrise backgrounds), stepper +/- , total.
-- Logique d'agrégation : réutiliser/adapter le `allSkills` (useMemo) actuel (`CareersAllocator.jsx:
-  62-103`) — il agrège déjà géo/soc/formation/études + métiers retenus + métier courant.
-- Règles : pool = Σ(`points_per_year`×années) des métiers retenus ; **cap +3** par compétence
-  (à confirmer vs `REGLE_CREATION.txt`) ; seules les compétences du métier courant sont allouables
-  (surbrillance `.wz4-skill.hl` au survol d'un métier du rail) ; verrou `.locked` sinon.
-- **Gating** `.wz4-status` : « ajoute un métier » / « reste N pts » / « ✓ tout réparti ».
-- Clés i18n : `career_board_title`, `career_board_hint`, `career_points_remaining`,
-  `career_status_none`, `career_status_skills_left`, `career_status_ok`, `career_provenance_origin`.
-- Tests : alloc +/- respecte pool + cap ; provenance correcte ; gating bloque Suivant tant que
-  pts>0 ; retrait métier réconcilie l'alloc.
+**Tests Lot 1** : SR ; sélection (surbrillance rail + détail) ; filtre Accessibles = vraie
+éligibilité (carrière non éligible masquée/`Ajouter` grisé + raison) ; stepper années borné ;
+board : coût via `calcSkillCost` (courbe + ×2 hors-pro), plafond `getMaxMasteryByYears`, budget
+10×années **par métier**, provenance correcte, survol → surbrillance ; Ajouter → Retenu + allocs
+persistées ; Retirer → réconcilie ; onglet Métier ; coquilles Carrière/Avantages ; barre d'âge
+(économies « — ») ; gating Suivant ; **serveur rejette un budget skills dépassé (Q2)** ; ESLint 0.
 
 ---
 
@@ -263,11 +498,12 @@ nav Précédent/Suivant (Suivant actif dès 1 métier retenu) ; ESLint 0 erreur.
 
 | Lot | Plan détaillé | Codé | Testé Saar |
 |---|---|---|---|
-| 1a | — | — | — |
-| 1b | — | — | — |
-| 1c | — | — | — |
-| 2 | — | — | — |
-| 3 | — | — | — |
-| 4 | — | — | — |
-| 5 | — | — | — |
-| 6 | — | — | — |
+| 0 — Fondation éligibilité | ✅ (§3) | ✅ parité 12/12 | ✅ SR + fonctionnel |
+| 1 — Fondation moteur coût | ✅ (§4) | ✅ | ✅ SR + « Test OK » |
+| 2 — UI (board global) | partiel (§5, à re-détailler) | — | — |
+| 3 — Économies | — | — | — |
+| 4 — Avantages pro | — | — | — |
+| 5 — « Au choix » | — | — | — |
+| 6 — Tirage 1D10 | — | — | — |
+| 7 — Relations | — | — | — |
+| 8 — Matériel | — | — | — |

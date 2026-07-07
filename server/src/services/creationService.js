@@ -7,6 +7,7 @@
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../shared/polarisUtils.js'
+import { evaluateCareerEligibility } from '../../../shared/careerEligibility.js'
 import { addAdvantage } from './advantageService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 
@@ -58,68 +59,68 @@ async function upsertSkillBonus(trx, sheetId, skillId, bonus) {
 
 // ─── Validations carrière ─────────────────────────────────────────────────────
 
-async function validateCareerPrerequisites(sheetId, careerId, trx) {
-  const prereqs = await trx('ref_career_prerequisites').where({ career_id: careerId })
-  if (prereqs.length === 0) return { valide: true }
+// Formate une raison structurée (shared/careerEligibility.js) vers le message historique.
+// PARITÉ STRICTE : wording identique aux anciens validateCareer* (ne pas modifier sans raison).
+function formatEligibilityReason(r) {
+  switch (r.code) {
+    case 'prereq':
+      return `Nécessite ${r.minYears} an(s) en tant que ${r.careerName}`
+    case 'genotype':
+      return `Cette profession nécessite le génotype : ${r.genotypeLabel}`
+    case 'attributes':
+      return `Attributs insuffisants : ${r.failed.map(f => `${f.attr} ${f.have ?? '?'}/${f.min}`).join(', ')}`
+    case 'education':
+      return r.present
+        ? `Cette profession nécessite les études : ${r.fields.join(' ou ')}`
+        : `Cette profession nécessite des études supérieures : ${r.fields.join(' ou ')}`
+    default:
+      return 'Profession non accessible'
+  }
+}
 
+// Éligibilité d'une carrière (prérequis, génotype, attributs, études) — remplace les 4 anciens
+// validateCareer*. Lit la base (un seul passage), construit career+context avec noms prérésolus,
+// délègue la logique à l'évaluateur pur partagé, puis formate reasons[0] (parité stricte : ordre
+// [prereq, genotype, attributes, education], early-return préservé côté message).
+async function checkCareerEligibility(sheetId, careerId, trx) {
+  const career = await trx('ref_careers').where({ id: careerId }).first()
+
+  // Prérequis + noms de carrière prérésolus (pour la raison structurée).
+  const prereqRows = await trx('ref_career_prerequisites').where({ career_id: careerId })
+  const prerequisites = []
+  for (const p of prereqRows) {
+    const pc = await trx('ref_careers').where({ id: p.prerequisite_career_id }).first()
+    prerequisites.push({ ...p, prerequisiteCareerName: pc?.name })
+  }
+
+  // Label génotype prérésolu.
+  let requiredGenotypeLabel
+  if (career.required_genotype) {
+    const g = await trx('ref_genotypes').where({ id: career.required_genotype }).first()
+    requiredGenotypeLabel = g?.label ?? career.required_genotype
+  }
+
+  const education = await trx('ref_career_education').where({ career_id: careerId })
+
+  // Contexte personnage.
   const existingCareers = await trx('char_careers').where({ char_sheet_id: sheetId })
-  for (const prereq of prereqs) {
-    const match = existingCareers.find(c => c.career_id === prereq.prerequisite_career_id)
-    if (!match || match.years < prereq.min_years) {
-      const prereqCareer = await trx('ref_careers').where({ id: prereq.prerequisite_career_id }).first()
-      return { valide: false, erreur: `Nécessite ${prereq.min_years} an(s) en tant que ${prereqCareer?.name}` }
-    }
-  }
-  return { valide: true }
-}
-
-async function validateCareerGenotype(sheetId, careerId, trx) {
-  const career = await trx('ref_careers').where({ id: careerId }).first()
-  if (!career.required_genotype) return { valide: true }
-
   const archetype = await trx('char_archetype').where({ char_sheet_id: sheetId }).first()
-  if (!archetype || archetype.genotype_id !== career.required_genotype) {
-    const genotype = await trx('ref_genotypes').where({ id: career.required_genotype }).first()
-    return { valide: false, erreur: `Cette profession nécessite le génotype : ${genotype?.label ?? career.required_genotype}` }
-  }
-  return { valide: true }
-}
+  const attrRows = await trx('char_attributes').where({ char_sheet_id: sheetId })
+  const attributes = {}
+  for (const a of attrRows) attributes[a.attr_id] = a.base_level + a.pc_modifier
 
-async function validateCareerAttributes(sheetId, careerId, trx) {
-  const career = await trx('ref_careers').where({ id: careerId }).first()
-  const attributes = await trx('char_attributes').where({ char_sheet_id: sheetId })
-  const attrs = {}
-  for (const a of attributes) attrs[a.attr_id] = a.base_level + a.pc_modifier
-
-  const attrNames = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
-  const failed = []
-  for (const attr of attrNames) {
-    const min = career[`min_${attr.toLowerCase()}`]
-    if (min !== null && min !== undefined && (attrs[attr] ?? 0) < min) {
-      failed.push(`${attr} ${attrs[attr] ?? '?'}/${min}`)
+  const { eligible, reasons } = evaluateCareerEligibility(
+    { ...career, prerequisites, requiredGenotypeLabel, education },
+    {
+      careers: existingCareers.map(c => ({ career_id: c.career_id, years: c.years })),
+      genotypeId: archetype?.genotype_id,
+      higherEd: archetype?.higher_ed,
+      attributes,
     }
-  }
-  if (failed.length > 0) {
-    return { valide: false, erreur: `Attributs insuffisants : ${failed.join(', ')}` }
-  }
-  return { valide: true }
-}
+  )
 
-async function validateCareerEducation(sheetId, careerId, trx) {
-  const educationReqs = await trx('ref_career_education').where({ career_id: careerId })
-  if (educationReqs.length === 0) return { valide: true }
-
-  const archetype = await trx('char_archetype').where({ char_sheet_id: sheetId }).first()
-  if (!archetype?.higher_ed) {
-    const fields = educationReqs.map(e => e.field).join(' ou ')
-    return { valide: false, erreur: `Cette profession nécessite des études supérieures : ${fields}` }
-  }
-  const fieldMatch = educationReqs.some(e => e.field === archetype.higher_ed)
-  if (!fieldMatch) {
-    const fields = educationReqs.map(e => e.field).join(' ou ')
-    return { valide: false, erreur: `Cette profession nécessite les études : ${fields}` }
-  }
-  return { valide: true }
+  if (eligible) return { valide: true }
+  return { valide: false, erreur: formatEligibilityReason(reasons[0]) }
 }
 
 // ─── Step 4 : données de référence ────────────────────────────────────────────
@@ -128,7 +129,7 @@ export async function getStep4RefData(sheetId) {
   const sheet = await db('char_sheet').where({ id: sheetId }).first()
   if (!sheet) throw new AppError(404, 'Fiche introuvable')
 
-  const [backgrounds, bgSkills, careers, careerSkills, careerTitles, careerPrereqs, careerPointCats] = await Promise.all([
+  const [backgrounds, bgSkills, careers, careerSkills, careerTitles, careerPrereqs, careerPointCats, careerEducation] = await Promise.all([
     db('ref_backgrounds').select('*').orderBy(['type', 'sort_order']),
     db('ref_background_skills as rbs')
   .leftJoin('ref_skills as rs', 'rbs.skill_id', 'rs.id')
@@ -138,6 +139,7 @@ export async function getStep4RefData(sheetId) {
     db('ref_career_titles').select('*'),
     db('ref_career_prerequisites').select('*'),
     db('ref_career_point_categories').select('*').orderBy('sort_order'),
+    db('ref_career_education').select('*'),
   ])
 
   const bgMap = new Map(backgrounds.map(b => [b.id, { ...b, skills: [] }]))
@@ -145,12 +147,13 @@ export async function getStep4RefData(sheetId) {
   const bgsWithSkills = Array.from(bgMap.values())
 
   const careersMap = new Map(
-    careers.map(c => [c.id, { ...c, skills: [], titles: [], prerequisites: [], pointCategories: [] }])
+    careers.map(c => [c.id, { ...c, skills: [], titles: [], prerequisites: [], pointCategories: [], education: [] }])
   )
   for (const sk of careerSkills) careersMap.get(sk.career_id)?.skills.push(sk)
   for (const t of careerTitles) careersMap.get(t.career_id)?.titles.push(t)
   for (const p of careerPrereqs) careersMap.get(p.career_id)?.prerequisites.push(p)
   for (const pc of careerPointCats) careersMap.get(pc.career_id)?.pointCategories.push(pc)
+  for (const e of careerEducation) careersMap.get(e.career_id)?.education.push(e)
 
   const byType = (type) => bgsWithSkills.filter(b => b.type === type)
 
@@ -339,7 +342,7 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       for (const sk of bgSkillsToApply) await upsertSkillBonus(trx, sheetId, sk.skill_id, sk.bonus)
 
       // Archetype (origins + higherEd) AVANT la boucle carrières :
-      // validateCareerEducation lit char_archetype.higher_ed, il doit être à jour.
+      // checkCareerEligibility lit char_archetype.higher_ed, il doit être à jour.
       await trx('char_archetype').where({ char_sheet_id: sheetId }).update({
         origin_geo: originGeo,
         origin_soc: originSoc,
@@ -354,14 +357,8 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         if (!refCareer) throw new AppError(400, `Carrière inconnue : ${career.career_id}`)
         if (!career.years || career.years < 1) throw new AppError(400, `Années invalides pour ${refCareer.name}`)
 
-        const prereqCheck = await validateCareerPrerequisites(sheetId, career.career_id, trx)
-        if (!prereqCheck.valide) throw new AppError(400, prereqCheck.erreur)
-        const genoCheck = await validateCareerGenotype(sheetId, career.career_id, trx)
-        if (!genoCheck.valide) throw new AppError(400, genoCheck.erreur)
-        const attrCheck = await validateCareerAttributes(sheetId, career.career_id, trx)
-        if (!attrCheck.valide) throw new AppError(400, attrCheck.erreur)
-        const eduCheck = await validateCareerEducation(sheetId, career.career_id, trx)
-        if (!eduCheck.valide) throw new AppError(400, eduCheck.erreur)
+        const eligCheck = await checkCareerEligibility(sheetId, career.career_id, trx)
+        if (!eligCheck.valide) throw new AppError(400, eligCheck.erreur)
 
         const titles = await trx('ref_career_titles').where({ career_id: career.career_id }).orderBy('min_years')
         const title = titles.find(t =>

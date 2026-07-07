@@ -109,12 +109,40 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ## ÉTAT COURANT — Session 139 (2026-07-07)
 
+- **🔨 CHANTIER ACTIF : Redesign Step 4 Profession** → plan maître **`docs/PLAN_REWORKFINAL.md`**
+  (auto-suffisant ; `docs/JOURNALTEMP.md` périssable, non requis). Méthode : contrats (données +
+  payload) verrouillés globalement (`§1bis`) → implémentation incrémentale, un lot à la fois.
+  **Lot 0 (fondation éligibilité, `shared/careerEligibility.js`) ✅ codé + validé Saar.**
+  **Lot 1 (fondation moteur de coût, `shared/careerSkills.js`) ✅ codé + validé Saar.**
+  **PROCHAIN = Lot 2** (UI board global — `PLAN_REWORKFINAL §5`, à re-détailler). Décisions +
+  modèle + faits vérifiés : `§1ter`. Point d'entrée reprise : `docs/EN_COURS.md` item 44.
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **124 migrations stables** (119_char_sheet_wizard_lock — Session 139 ;
   118_fix_ref_mutations_organe_sensoriel_manquant — Session 138 ;
   117_ref_mutation_subtypes_description — Session 136 ;
   109_mutation_stacking + 108_fix_ref_mutations_encoding — Session 135 ;
   deux numéros 108/109 distincts coexistent avec le seeding carrières, voir P53)
+
+**Session 139 (suite) — Redesign Step 4 : Lot 0 (éligibilité) + Lot 1 (moteur de coût) ✅ clos :**
+- Plan maître `docs/PLAN_REWORKFINAL.md` (8 lots, contrats données+payload verrouillés `§1bis`).
+- **Lot 0** : `shared/careerEligibility.js` (évaluateur pur, raisons structurées codes+params) —
+  remplace les 4 `validateCareer*` de `creationService.js` par `checkCareerEligibility` (parité
+  stricte, `reasons[0]` formaté vers les messages historiques). Testé : parité 12/12 (node -e), SR +
+  fonctionnel confirmé Saar.
+- **Lot 1** : `shared/careerSkills.js` (`computeSkillAllocation`, réutilise `calcSkillCost`/
+  `getMaxMasteryByYears` de `polarisUtils.js` — code mort jusqu'ici, 1er consommateur) +
+  `education` ajouté à `getStep4RefData`. **Correction de modèle trouvée en lisant la source avant
+  de coder** (`REGLE_CREATION.txt:1103-1128,1250-1263`, sur demande explicite Saar "code seulement
+  si sûr à 100%") : le plafond par années cumulées (+2 études) ne s'applique qu'aux compétences
+  **professionnelles** ; une compétence d'origine (géo/social/formation) non-professionnelle a un
+  plafond **fixe +5**, pas `getMaxMasteryByYears(0)=3` comme écrit initialement dans le plan (corrigé
+  dans `PLAN_REWORKFINAL §4`). Invisible (ni payload ni UI touchés — zéro régression).
+- **Testé :** `node --check` 0 erreur, tests unitaires isolés (`node -e`, P53 respecté) sur
+  `calcSkillCost`/`getMaxMasteryByYears`/`computeSkillAllocation` (nominal, cumul années skill
+  partagé, `over_cap`, `over_budget`, plafond fixe +5, plafond via études seules), `getStep4RefData`
+  vérifié en base réelle (12/12 lignes `ref_career_education`), SR + confirmé Saar.
+- **Non testé :** intégration UI (prévue Lot 2).
+- Détail complet : `docs/JOURNAL6.md` "Session 139 (suite)".
 
 **Session 139 — Fiche personnage consultable en permanence pendant le Wizard (fenêtre "peek") ✅ clos :**
 - Plan complet rédigé en amont dans une conversation précédente : `docs/STE6_FINAL.md` (v3). Reprise

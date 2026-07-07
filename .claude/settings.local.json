@@ -145,7 +145,10 @@
       "Bash(node --check src/routes/characters.js)",
       "Bash(node --check src/db/migrations/119_char_sheet_wizard_lock.js)",
       "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('src/locales/creation.json','utf8'\\)\\); console.log\\('JSON OK'\\)\")",
-      "Bash(awk 'NR>=1 && NR<=2601 { if \\($0 ~ /^\\\\/\\\\* ={5,}/\\) { getline t; print NR\": \"t } }' client/src/index.css)"
+      "Bash(awk 'NR>=1 && NR<=2601 { if \\($0 ~ /^\\\\/\\\\* ={5,}/\\) { getline t; print NR\": \"t } }' client/src/index.css)",
+      "Bash(node -e \"try{console.log\\('root type:',require\\('/c/Users/Nemet/Documents/Enclume/package.json'\\).type||'\\(none\\)'\\)}catch\\(e\\){console.log\\('no root pkg'\\)}; try{console.log\\('client type:',require\\('/c/Users/Nemet/Documents/Enclume/client/package.json'\\).type||'\\(none\\)'\\)}catch\\(e\\){}; try{console.log\\('shared has pkg:', !!require\\('fs'\\).existsSync\\('/c/Users/Nemet/Documents/Enclume/shared/package.json'\\)\\)}catch\\(e\\){}\")",
+      "Bash(node --check shared/careerEligibility.js)",
+      "Bash(node --check shared/careerSkills.js)"
     ]
   }
 }

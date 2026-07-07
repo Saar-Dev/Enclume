@@ -9,12 +9,37 @@
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-> Items "0." à "3." (seeding carrières + mutations) tous clos depuis Session 136. Item "42." (fix
-> `cost_pc` Organe sensoriel manquant + présentation cartes Step3) clos Session 138. Item "43."
-> (fiche personnage consultable en permanence pendant le Wizard, `docs/STE6_FINAL.md`) clos
-> Session 139. Aucune étape unique explicitement désignée par Saar pour la suite — voir item "41."
-> (options de campagne, un par un, déjà en cours) et "Notes Saar" ci-dessous pour les pistes ouvertes
-> (Step4 Expérience, Step4 Profession UI). À clarifier avec Saar en début de prochaine session.
+> **CHANTIER ACTIF — REDESIGN STEP 4 PROFESSION** → plan maître : **`docs/PLAN_REWORKFINAL.md`**
+> (lire en entier ; auto-suffisant, `docs/JOURNALTEMP.md` est périssable et NON requis).
+> Méthode validée Saar : **architecture (contrats partagés) verrouillée globalement → implémentation
+> incrémentale testée, un lot à la fois** (plan ligne-à-ligne par lot, « Je code ? » unique, validation
+> fonctionnelle avant lot suivant). Les 2 contrats (modèle de données + payload) sont figés
+> (`PLAN_REWORKFINAL §1bis`). **Lot 0 (fondation éligibilité) ✅ CODÉ + validé Saar.**
+> **PROCHAIN = Lot 2 (UI : réécriture CareersAllocator + board global)** — voir `PLAN_REWORKFINAL §5`
+> (à re-détailler au lancement : contradiction signalée dans le texte, board **GLOBAL** confirmé
+> `§1ter`, pas « par métier »). Filtre « Accessibles » réel (évaluateur Lot 0) + board compétences
+> (moteur Lot 1) + `useReducer` + CSS `.wiz4-*` + i18n + validation serveur Q2.
+>
+> Autres pistes ouvertes (hors chantier actif) : item "41." (options de campagne) ; Step4 Expérience.
+
+**44. Redesign Step 4 Profession (rework multi-lots) — 🔨 EN COURS — Session 139 (2026-07-07)**
+   → Plan maître : `docs/PLAN_REWORKFINAL.md` (8 lots). Design source : `docs/ClaudeDesign/project/Professions.dc.html`.
+   → **Lot 0 ✅ CLOS** : `shared/careerEligibility.js` (évaluateur pur, raisons structurées) +
+     `creationService.js` (4 validateurs `validateCareer*` → 1 `checkCareerEligibility`, parité stricte
+     `reasons[0]`). Testé : parité 12/12 (node -e), SR + fonctionnel confirmé Saar.
+   → **Lot 1 ✅ CLOS** : `shared/careerSkills.js` (`computeSkillAllocation`, réutilise
+     `calcSkillCost`/`getMaxMasteryByYears` de polarisUtils — code mort jusqu'ici, 1er consommateur) +
+     `education` dans `getStep4RefData`. Correction de modèle trouvée en lisant `REGLE_CREATION.txt:
+     1103-1128,1250-1263` avant de coder : plafond compétence professionnelle = table par années
+     cumulées (+2 études) ; plafond compétence d'origine non-pro = **fixe +5** (pas
+     `getMaxMasteryByYears(0)=3` comme écrit initialement au plan). Invisible (ni payload ni UI).
+     Testé : `node --check`, tests unitaires isolés (node -e), `getStep4RefData` vérifié en base
+     réelle (12/12 lignes `ref_career_education`), SR + confirmé Saar.
+   → **Lot 2 (PROCHAIN)** : UI board global + filtre Accessibles réel + `useReducer`. Plan détaillé
+     (à re-détailler, contradiction signalée) : `PLAN_REWORKFINAL §5`.
+   → Lots 3-8 cadrés (économies / avantages pro / au-choix / 1D10 DicePanel / relations
+     `char_relations` + panneau fiche perso / matériel inventaire). Une seule migration =
+     `char_relations` (Lot 7). Prochaine migration disponible : **120**.
 
 **43. Fiche personnage consultable en permanence pendant le Wizard (fenêtre "peek") ✅ CLOS — Session 139 (2026-07-07)**
    → Plan complet rédigé en amont : `docs/STE6_FINAL.md`. `CharacterWindow.jsx` réutilisé inchangé

@@ -601,3 +601,72 @@ Plan archivé : `docs/Old/PLAN_STEP4.md`.
   un premier appel manuel à `lockWizard` (aucun point d'entrée actuel ne le fait pour un personnage
   déjà complet hors Wizard). Non traité car non applicable en l'état ; à surveiller si des données de
   ce type apparaissent.
+
+---
+
+## Session 139 (suite) — Redesign Step 4 Profession : cadrage rework + Lot 0
+
+Conversation longue de **cadrage** (aucun code UI). Livrable durable : `docs/PLAN_REWORKFINAL.md`
+(plan maître 8 lots, auto-suffisant). Source design : `docs/ClaudeDesign/project/Professions.dc.html`
+(bundle Claude Design importé localement, le MCP DesignSync étant inaccessible en session
+`CLAUDE_CODE_OAUTH_TOKEN` sans scopes design).
+
+### Méthode retenue (validée Saar, après remise en cause)
+« Architecture (contrats partagés) verrouillée globalement → implémentation incrémentale testée. »
+Contrats figés dans `PLAN_REWORKFINAL §1bis` : (A) modèle de données de bout en bout — **une seule
+migration sur tout le rework = `char_relations` (Lot 7)**, tout le reste réutilise l'existant ;
+(B) payload `reconcile({step4})` cible, rempli par tranches (bascule skills per-career → **global** au
+Lot 2). Décisions + modèle compétences + faits vérifiés : `§1ter`.
+
+### Découvertes clés (code lu)
+- `calcSkillCost` + `getMaxMasteryByYears` (`shared/polarisUtils.js`) = **code mort** — jamais
+  consommés en prod. Lot 1 = 1er consommateur (courbe LdB déjà implémentée, à réutiliser, pas recréer).
+- Modèle compétences = LdB `REGLE_CREATION.txt:1103-1128,1250-1263` : une compétence = un niveau
+  (pas de doublon) ; coût courbe ×2 hors-profession ; plafond par années **cumulées** entre métiers ;
+  pool skills GLOBAL = Σ(10×années) ; avantages pro 5×années PAR MÉTIER.
+- `getStep4RefData` ne renvoie ni `refSkills` (dispo via route existante `/api/char-ref/skills`) ni
+  `ref_career_education` (à ajouter Lot 1).
+- Fiche perso `CharacterSheet` = SkillsPanel + AdvantagesPanel seulement → panneau carrières/relations
+  à créer (Lot 7).
+
+### Lot 0 — Fondation éligibilité ✅ CLOS
+- `shared/careerEligibility.js` (NOUVEAU) : `evaluateCareerEligibility(career, context)` pur, renvoie
+  des **raisons structurées** (codes+params, pas de texte FR) — prérequis/génotype/attributs/études.
+- `creationService.js` : 4 fonctions `validateCareer*` + 4 appels → **1** `checkCareerEligibility`
+  (fetch DB + noms prérésolus → évaluateur → `formatEligibilityReason(reasons[0])`). **Parité stricte**
+  (ordre [prereq, genotype, attributes, education], early-return préservé, dettes AND/OR conservées).
+- **Testé** : parité 12/12 en `node -e` inline (P53 respecté), `node --check`, SR + fonctionnel
+  confirmé Saar (« métiers non proposés si prérequis manquants »). **Non testé** : —
+- Bénéfice visible reporté au Lot 2 (filtre « Accessibles » réel côté client via le même évaluateur).
+
+### Lot 1 — Fondation moteur de coût (invisible) ✅ CLOS
+- `shared/careerSkills.js` (NOUVEAU) : `computeSkillAllocation(skillAllocations, ctx)` pur, réutilise
+  `calcSkillCost`/`getMaxMasteryByYears` (`polarisUtils.js`, code mort jusqu'ici — 1er consommateur).
+- **Correction de modèle trouvée en lisant la source avant de coder** (`REGLE_CREATION.txt:1103-1128,
+  1250-1263`, demandée explicitement par Saar — « code seulement si sûr à 100% ») : le plafond
+  `getMaxMasteryByYears(années cumulées, +2 études)` du §4/§1ter ne s'applique qu'aux compétences
+  **professionnelles** (listées par ≥1 carrière retenue, ou par les études supérieures qui comptent
+  pour +2 ans comme une profession). Une compétence d'**origine** (géo/social/formation) qui n'est PAS
+  professionnelle a un plafond **fixe +5** (ligne 1122-1128), pas `getMaxMasteryByYears(0)=3` comme
+  écrit initialement dans le plan. Coût ×2 « hors profession » : basé strictement sur l'appartenance à
+  une carrière retenue — les études supérieures ne comptent que pour le plafond, jamais pour le coût.
+- `creationService.js` — `getStep4RefData` (lignes 128-165 seulement) : ajout de `ref_career_education`
+  au `Promise.all` + attaché par carrière (`career.education[]`), pattern identique aux autres
+  collections imbriquées (`skills`/`titles`/`prerequisites`/`pointCategories`).
+- **Ce qui n'a pas changé** : `reconcileCreation` (validation du budget skills = Q2, reportée au Lot 2
+  avec l'UI qui la consomme), payload, schéma DB, UI. Zéro régression possible sur l'assistant actuel.
+- **Testé** : `node --check` 0 erreur (shared/server hors périmètre ESLint) ; `calcSkillCost`/
+  `getMaxMasteryByYears` vérifiés en isolation (pro vs hors-pro ×2, palier +5→+6, `(X)`, `PN`, bornes
+  1/2/3-5/6-10/11-20/21+ — 2 hypothèses de test initiales erronées, corrigées, code existant confirmé
+  correct et non modifié) ; `computeSkillAllocation` : cas nominal, cumul années sur compétence
+  partagée (cap cumulé=7), `over_cap`, `over_budget`, plafond fixe +5 (compétence d'origine non-pro),
+  plafond via études seules (+2 ans) — tout via `node -e` inline (P53, aucun fichier dans `server/`) ;
+  `getStep4RefData` interrogé en base réelle (12/12 lignes `ref_career_education` correctement
+  attachées par carrière) ; SR + « Test OK » confirmé Saar.
+- **Non testé** : intégration UI (hors scope, prévue Lot 2).
+
+### Prochain — Lot 2 (UI : réécriture CareersAllocator + board global)
+Filtre « Accessibles » réel (Lot 0), board GLOBAL de compétences (Lot 1), `useReducer`, CSS `.wiz4-*`,
+i18n. Payload `skillAllocations` per-career → global + validation serveur (Q2). Plan à re-détailler
+au lancement (§5 du plan contient une contradiction signalée — texte « par métier » pré-clarification
+Saar à corriger vs le modèle GLOBAL confirmé `§1ter`). Détail : `PLAN_REWORKFINAL §5`.
