@@ -35,7 +35,6 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   const [geoName, setGeoName] = useState(initialData?.geoName ?? '')
   const [geoNation, setGeoNation] = useState(initialData?.geoNation ?? '')
   const [socNation, setSocNation] = useState(initialData?.socNation ?? '')
-  const [conditionalChoices, setConditionalChoices] = useState(initialData?.conditionalChoices ?? {})
   const [careers, setCareers] = useState(initialData?.careers ?? [])
   const [refData, setRefData] = useState({ loading: true, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [] })
 
@@ -77,15 +76,14 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
 
   // ─── Handlers ──────────────────────────────────────────────────
   const handleSelectGeoOrigin = (code) => {
-  setOriginGeo(code)
-  setOriginSoc(null)
-  setTraining(null)
-  setHigherEd(null)
-  setGeoName('')
-  setGeoNation('')
-  setSocNation('')
-  setConditionalChoices({})
-}
+    setOriginGeo(code)
+    setOriginSoc(null)
+    setTraining(null)
+    setHigherEd(null)
+    setGeoName('')
+    setGeoNation('')
+    setSocNation('')
+  }
 
   const handleRandomGeoOrigin = () => {
     if (enrichedGeoOrigins.length === 0) return
@@ -94,12 +92,11 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   }
 
   const handleSelectSocialOrigin = (code) => {
-  setOriginSoc(code)
-  setTraining(null)
-  setHigherEd(null)
-  setSocNation('')
-  setConditionalChoices({})
-}
+    setOriginSoc(code)
+    setTraining(null)
+    setHigherEd(null)
+    setSocNation('')
+  }
 
   const handleRandomSocialOrigin = () => {
     if (filteredSocialOrigins.length === 0) return
@@ -108,10 +105,9 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   }
 
   const handleSelectTraining = (code) => {
-  setTraining(code)
-  setHigherEd(null)
-  setConditionalChoices({})
-}
+    setTraining(code)
+    setHigherEd(null)
+  }
 
   const handleRandomTraining = () => {
     if (filteredTrainings.length === 0) return
@@ -126,18 +122,6 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   const handleSkipHigherEd = () => {
     setHigherEd(null)
   }
-  
-  const handleConditionalChoice = (compositeKey, skillId) => {
-  setConditionalChoices(prev => {
-    const next = { ...prev }
-    if (skillId === null) {
-      delete next[compositeKey]
-    } else {
-      next[compositeKey] = skillId
-    }
-    return next
-  })
-}
 
   const handleAddCareer = (careerId, careerName, careerTitles, years, skillAllocations) => {
     setCareers(prev => [...prev, {
@@ -162,19 +146,18 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
       skillAllocations: c.skillAllocations || {},
     }))
     return {
-  age,
-  finalAge,
-  originGeo,
-  originSoc,
-  training,
-  higherEd,
-  geoName,
-  geoNation,
-  socNation,
-  careers: careerEntries,
-  pcSpent: totalPC,
-  appliedSkills: Object.values(conditionalChoices),
-}
+      age,         // valeur slider (baseAge) — pour hydratation et serveur
+      finalAge,    // âge calculé — pour WizardReview et affichage récap
+      originGeo,
+      originSoc,
+      training,
+      higherEd,
+      geoName,
+      geoNation,
+      socNation,
+      careers: careerEntries,
+      pcSpent: totalPC,
+    }
   }
 
   const handleSubmit = () => {
@@ -264,8 +247,6 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
           onNameChange={setGeoName}
           nation={geoNation}
           onNationChange={setGeoNation}
-		  conditionalChoices={conditionalChoices}
-		  onConditionalChoice={handleConditionalChoice}
         />
       )}
 
@@ -284,8 +265,6 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
           nation={socNation}
           onNationChange={setSocNation}
           defaultNation={geoNation}
-		  conditionalChoices={conditionalChoices}
-		  onConditionalChoice={handleConditionalChoice}
         />
       )}
 
@@ -301,8 +280,6 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
           onPrev={handleSubPrev}
           canNext={!!training}
           randomLabel={t('step4.training_random')}
-		  conditionalChoices={conditionalChoices}
-		  onConditionalChoice={handleConditionalChoice}
         />
       )}
 
@@ -320,8 +297,6 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
             extraInfo={t('step4.higher_ed_cost')}
             skipLabel={t('step4.higher_ed_skip')}
             onSkip={handleSkipHigherEd}
-			conditionalChoices={conditionalChoices}
-		    onConditionalChoice={handleConditionalChoice}
           />
         ) : (
           <div style={s.placeholder}>

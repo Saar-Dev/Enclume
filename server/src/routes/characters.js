@@ -64,13 +64,18 @@ router.get('/', requireAuth, async (req, res) => {
     .select(columns)
     .orderBy('characters.created_at', 'asc')
 
-  // Brouillons wizard (creation_state = 'draft_step0') cachés pour tout le monde
+  // Brouillons wizard cachés pour tout le monde tant que le Wizard n'est pas verrouillé.
+  // INVARIANT (voir reconcileCreation isComplete dans creationService.js) : un personnage
+  // peut être visible=true dès la fin de l'étape 5 alors que le joueur navigue encore
+  // librement dans le Wizard (retour arrière possible) — ça ne fuit nulle part
+  // UNIQUEMENT parce que ce filtre gate sur wizard_locked_at, pas sur visible ni
+  // creation_state. Le regater sur creation_state/visible rouvrirait silencieusement
+  // cette fenêtre d'exposition (GM éditant un personnage encore en cours de construction).
   query.whereNotExists(function () {
     this.select(db.raw('1'))
       .from('char_sheet')
       .whereRaw('char_sheet.character_id = characters.id')
-      .whereNotNull('creation_state')
-      .whereNot('creation_state', 'complete')
+      .whereNull('char_sheet.wizard_locked_at')
   })
 
   // Les joueurs ne voient pas non plus les personnages masqués

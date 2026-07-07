@@ -1,6 +1,8 @@
 // creationService.js — Wizard création — Architecture client-primary (Session 130)
-// Toutes les données du wizard restent dans Zustand côté client jusqu'au bouton "Finaliser".
-// Un seul POST /finalize envoie le payload complet des 5 étapes — une seule transaction.
+// Toutes les données du wizard restent dans Zustand côté client jusqu'au bouton "Terminer".
+// reconcileCreation applique un état partiel ou complet (pattern reconciliation Kubernetes/
+// Terraform) — rejouable sans duplication à chaque ouverture de la fenêtre fiche personnage
+// pendant le Wizard (docs/STE6_FINAL.md). lockWizard verrouille définitivement après "Terminer".
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
@@ -128,7 +130,9 @@ export async function getStep4RefData(sheetId) {
 
   const [backgrounds, bgSkills, careers, careerSkills, careerTitles, careerPrereqs, careerPointCats] = await Promise.all([
     db('ref_backgrounds').select('*').orderBy(['type', 'sort_order']),
-    db('ref_background_skills').select('*'),
+    db('ref_background_skills as rbs')
+  .leftJoin('ref_skills as rs', 'rbs.skill_id', 'rs.id')
+  .select('rbs.*', 'rs.label as skill_name', 'rs.family'),
     db('ref_careers').select('*'),
     db('ref_career_skills as rcs').join('ref_skills as rs', 'rcs.skill_id', 'rs.id').select('rcs.*', 'rs.family'),
     db('ref_career_titles').select('*'),
@@ -216,179 +220,254 @@ export async function startCreation(campaignId, userId) {
       characterId: character.id,
       ambiance: settings.ambiance,
       randomMutationsEnabled: settings.random_mutations,
+      femininBonusEnabled: settings.feminin_bonus,
     }
   })
 }
 
-// ─── Finalisation : transaction unique — architecture client-primary ───────────
+// ─── Reconciliation : transaction unique, état partiel ou complet ──────────────
+// Pattern reconciler (Kubernetes/Terraform) : chaque bloc STEP n'est appliqué que si
+// l'étape correspondante est fournie. Rejouable sans duplication — chaque bloc reset
+// ses tables dérivées avant réapplication. Voir docs/STE6_FINAL.md.
 
-export async function finalizeCreation(sheetId, { step1, step2, step3, step4, step5 }) {
+export async function reconcileCreation(sheetId, { step1, step2, step3, step4, step5 }) {
   return db.transaction(async (trx) => {
     const sheet = await trx('char_sheet').where({ id: sheetId }).first()
     if (!sheet) throw new AppError(404, 'Fiche introuvable')
-    if (sheet.creation_state === 'complete') throw new AppError(400, 'Ce personnage est déjà finalisé')
+    if (sheet.wizard_locked_at) throw new AppError(400, "Cette fiche a quitté l'assistant de création — modifications via la fiche personnage uniquement")
     const characterId = sheet.character_id
 
     // ── STEP 1 : attributs + identité ──────────────────────────────────────────
-    const { charName, playerName, attributes, pcSpent: pc1, isFeminin: isFeminin1 } = step1
-    if (!charName?.trim()) throw new AppError(400, 'Nom du personnage requis')
-    if (!attributes || typeof attributes !== 'object') throw new AppError(400, 'Attributs requis')
+    if (step1) {
+      const { charName, playerName, attributes, pcSpent: pc1, isFeminin: isFeminin1 } = step1
+      if (!charName?.trim()) throw new AppError(400, 'Nom du personnage requis')
+      if (!attributes || typeof attributes !== 'object') throw new AppError(400, 'Attributs requis')
 
-    const { campaign_id: campaignId } = await trx('characters').where({ id: characterId }).select('campaign_id').first()
-    const settings = await getCampaignSettings(trx, campaignId)
-    const { valide, erreurs } = validateStep1(attributes, settings.ambiance, pc1 ?? 0, isFeminin1 ?? false)
-    if (!valide) throw new AppError(400, `Étape 1 invalide : ${erreurs.join(' ; ')}`)
+      const { campaign_id: campaignId } = await trx('characters').where({ id: characterId }).select('campaign_id').first()
+      const settings = await getCampaignSettings(trx, campaignId)
+      const femininBonusApplies = (isFeminin1 ?? false) && settings.feminin_bonus
+      const { valide, erreurs } = validateStep1(attributes, settings.ambiance, pc1 ?? 0, femininBonusApplies)
+      if (!valide) throw new AppError(400, `Étape 1 invalide : ${erreurs.join(' ; ')}`)
 
-    await trx('characters').where({ id: characterId }).update({ name: charName.trim() })
-    await trx('char_identity')
-      .insert({ char_sheet_id: sheetId, char_name: charName.trim(), player_name: playerName ?? '' })
-      .onConflict('char_sheet_id').merge(['char_name', 'player_name'])
-    for (const [attrId, level] of Object.entries(attributes)) {
-      await trx('char_attributes')
-        .where({ char_sheet_id: sheetId, attr_id: attrId })
-        .update({ base_level: level })
+      await trx('characters').where({ id: characterId }).update({ name: charName.trim() })
+      await trx('char_identity')
+        .insert({ char_sheet_id: sheetId, char_name: charName.trim(), player_name: playerName ?? '' })
+        .onConflict('char_sheet_id').merge(['char_name', 'player_name'])
+      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ sex: (isFeminin1 ?? false) ? 'femme' : 'homme' })
+      for (const [attrId, level] of Object.entries(attributes)) {
+        await trx('char_attributes')
+          .where({ char_sheet_id: sheetId, attr_id: attrId })
+          .update({ base_level: level })
+      }
+      await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step1: pc1 ?? 0 })
     }
-    await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step1: pc1 ?? 0 })
 
     // ── STEP 2 : génotype ───────────────────────────────────────────────────────
-    const { genotypeId, isDeserter = false } = step2
-    const geno = await trx('ref_genotypes').where({ id: genotypeId }).first()
-    if (!geno) throw new AppError(400, `Génotype inconnu : ${genotypeId}`)
-    const pc2 = isDeserter ? 4 : (geno.pc_cost ?? 0)
-    await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ genotype_id: genotypeId })
-    await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step2: pc2 })
+    if (step2) {
+      const { genotypeId, isDeserter = false } = step2
+      const geno = await trx('ref_genotypes').where({ id: genotypeId }).first()
+      if (!geno) throw new AppError(400, `Génotype inconnu : ${genotypeId}`)
+      const pc2 = isDeserter ? 4 : (geno.pc_cost ?? 0)
+      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ genotype_id: genotypeId })
+      await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step2: pc2 })
+    }
 
     // ── STEP 3 : mutations ──────────────────────────────────────────────────────
-    const { method: step3Method, mutations: step3Mutations, kept: step3Kept, pcSpent: pc3 } = step3
-    if (!['chosen', 'random', 'none'].includes(step3Method)) {
-      throw new AppError(400, `Méthode de mutation invalide : ${step3Method}`)
-    }
-    await trx('char_mutations').where({ char_sheet_id: sheetId }).del()
-    const mutationsToInsert = step3Method === 'random' ? (step3Kept ?? []) : (step3Mutations ?? [])
-    const mutationSource = step3Method === 'random' ? 'random' : 'chosen'
-    for (const { mutation_id, subtype_id } of mutationsToInsert) {
-      const mutRef = await trx('ref_mutations').where({ mutation_id }).first()
-      if (!mutRef) throw new AppError(400, `Mutation inconnue : ${mutation_id}`)
-      if (subtype_id == null) {
-        // Mutation is_stackable sans sous-type : incrémente count si déjà choisie dans ce lot
-        // (index partiel uq_char_mut_no_sub — cible explicite requise pour Postgres).
-        await trx.raw(`
-          INSERT INTO char_mutations (char_sheet_id, mutation_id, subtype_id, source, status, count)
-          VALUES (?, ?, NULL, ?, 'active', 1)
-          ON CONFLICT (char_sheet_id, mutation_id) WHERE subtype_id IS NULL
-          DO UPDATE SET count = char_mutations.count + 1
-        `, [sheetId, mutation_id, mutationSource])
-      } else {
-        await trx('char_mutations').insert({
-          char_sheet_id: sheetId,
-          mutation_id,
-          subtype_id,
-          source: mutationSource,
-          status: 'active',
-          count: 1,
-        })
+    if (step3) {
+      const { method: step3Method, mutations: step3Mutations, kept: step3Kept, pcSpent: pc3 } = step3
+      if (!['chosen', 'random', 'none'].includes(step3Method)) {
+        throw new AppError(400, `Méthode de mutation invalide : ${step3Method}`)
       }
+      // Reset avant réapplication — sans ça, retirer une mutation Autofécondation/le
+      // désavantage Fécondité lors d'un retravail laisserait is_fertile bloqué à true.
+      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ is_fertile: false })
+      await trx('char_mutations').where({ char_sheet_id: sheetId }).del()
+      const mutationsToInsert = step3Method === 'random' ? (step3Kept ?? []) : (step3Mutations ?? [])
+      const mutationSource = step3Method === 'random' ? 'random' : 'chosen'
+      let sexOverride = null
+      let fertilityOverride = null // null = pas d'override, sinon true/false
+      for (const { mutation_id, subtype_id } of mutationsToInsert) {
+        const mutRef = await trx('ref_mutations').where({ mutation_id }).first()
+        if (!mutRef) throw new AppError(400, `Mutation inconnue : ${mutation_id}`)
+        if (mutRef.mod_sex) sexOverride = mutRef.mod_sex
+        if (mutRef.mod_fertility) fertilityOverride = mutRef.mod_fertility === 'self_fertile'
+        if (subtype_id == null) {
+          // Mutation is_stackable sans sous-type : incrémente count si déjà choisie dans ce lot
+          // (index partiel uq_char_mut_no_sub — cible explicite requise pour Postgres).
+          await trx.raw(`
+            INSERT INTO char_mutations (char_sheet_id, mutation_id, subtype_id, source, status, count)
+            VALUES (?, ?, NULL, ?, 'active', 1)
+            ON CONFLICT (char_sheet_id, mutation_id) WHERE subtype_id IS NULL
+            DO UPDATE SET count = char_mutations.count + 1
+          `, [sheetId, mutation_id, mutationSource])
+        } else {
+          await trx('char_mutations').insert({
+            char_sheet_id: sheetId,
+            mutation_id,
+            subtype_id,
+            source: mutationSource,
+            status: 'active',
+            count: 1,
+          })
+        }
+      }
+      if (sexOverride || fertilityOverride !== null) {
+        const archetypeUpdate = {}
+        if (sexOverride) archetypeUpdate.sex = sexOverride
+        if (fertilityOverride !== null) archetypeUpdate.is_fertile = fertilityOverride
+        await trx('char_archetype').where({ char_sheet_id: sheetId }).update(archetypeUpdate)
+      }
+      await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step3: pc3 ?? 0 })
     }
-    await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step3: pc3 ?? 0 })
 
     // ── STEP 4 : expérience ─────────────────────────────────────────────────────
-    const { age: baseAge, originGeo, originSoc, training, higherEd, careers: careersData, pcSpent: pc4 } = step4
-    if (!baseAge || baseAge < 16) throw new AppError(400, 'Âge de base invalide')
-    if (!Array.isArray(careersData) || careersData.length === 0) {
-      throw new AppError(400, 'Au moins une carrière requise')
-    }
-
-    // Backgrounds → compétences
-    const bgRows = await resolveStep4Backgrounds(trx, { originGeo, originSoc, training, higherEd })
-    const bgSkillsToApply = await getBackgroundSkillsToApply(trx, bgRows, [])
-    for (const sk of bgSkillsToApply) await upsertSkillBonus(trx, sheetId, sk.skill_id, sk.bonus)
-
-    // Archetype (origins + higherEd) AVANT la boucle carrières :
-    // validateCareerEducation lit char_archetype.higher_ed, il doit être à jour.
-    await trx('char_archetype').where({ char_sheet_id: sheetId }).update({
-      origin_geo: originGeo,
-      origin_soc: originSoc,
-      training_base: training,
-      higher_ed: higherEd || null,
-    })
-
-    // Carrières
-    let totalCareerYears = 0
-    for (const career of careersData) {
-      const refCareer = await trx('ref_careers').where({ id: career.career_id }).first()
-      if (!refCareer) throw new AppError(400, `Carrière inconnue : ${career.career_id}`)
-      if (!career.years || career.years < 1) throw new AppError(400, `Années invalides pour ${refCareer.name}`)
-
-      const prereqCheck = await validateCareerPrerequisites(sheetId, career.career_id, trx)
-      if (!prereqCheck.valide) throw new AppError(400, prereqCheck.erreur)
-      const genoCheck = await validateCareerGenotype(sheetId, career.career_id, trx)
-      if (!genoCheck.valide) throw new AppError(400, genoCheck.erreur)
-      const attrCheck = await validateCareerAttributes(sheetId, career.career_id, trx)
-      if (!attrCheck.valide) throw new AppError(400, attrCheck.erreur)
-      const eduCheck = await validateCareerEducation(sheetId, career.career_id, trx)
-      if (!eduCheck.valide) throw new AppError(400, eduCheck.erreur)
-
-      const titles = await trx('ref_career_titles').where({ career_id: career.career_id }).orderBy('min_years')
-      const title = titles.find(t =>
-        career.years >= t.min_years && (t.max_years === null || career.years <= t.max_years)
-      )
-      let salary = 0
-      if (title) {
-        if (title.salary_per_year) salary = title.salary_per_year
-        else if (title.salary_formula) salary = evaluateSalaryFormula(title.salary_formula)
+    if (step4) {
+      const { age: baseAge, originGeo, originSoc, training, higherEd, careers: careersData, pcSpent: pc4 } = step4
+      if (!baseAge || baseAge < 16) throw new AppError(400, 'Âge de base invalide')
+      if (!Array.isArray(careersData) || careersData.length === 0) {
+        throw new AppError(400, 'Au moins une carrière requise')
       }
-      const savings = salary * career.years
-      totalCareerYears += career.years
 
-      await trx('char_careers').insert({
-        char_sheet_id: sheetId,
-        career_id: career.career_id,
-        years: career.years,
-        savings,
-        pro_advantages: JSON.stringify(career.proAdvantages || {}),
-        random_picks: JSON.stringify(career.randomPicks || []),
-        setbacks: JSON.stringify(career.setbacks || []),
+      // Reset avant réapplication — char_skills/char_careers ne sont écrits que par ce
+      // bloc pendant le Wizard (avant verrouillage) : wipe sûr, pas d'orphelin FK possible.
+      await trx('char_skills').where({ char_sheet_id: sheetId }).del()
+      await trx('char_careers').where({ char_sheet_id: sheetId }).del()
+
+      // Backgrounds → compétences
+      const bgRows = await resolveStep4Backgrounds(trx, { originGeo, originSoc, training, higherEd })
+      const bgSkillsToApply = await getBackgroundSkillsToApply(trx, bgRows, step4.appliedSkills || [])
+      for (const sk of bgSkillsToApply) await upsertSkillBonus(trx, sheetId, sk.skill_id, sk.bonus)
+
+      // Archetype (origins + higherEd) AVANT la boucle carrières :
+      // validateCareerEducation lit char_archetype.higher_ed, il doit être à jour.
+      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({
+        origin_geo: originGeo,
+        origin_soc: originSoc,
+        training_base: training,
+        higher_ed: higherEd || null,
       })
 
-      for (const [skillId, targetMastery] of Object.entries(career.skillAllocations || {})) {
-        const isLearned = (career.openedSkills || []).includes(skillId)
-        await trx('char_skills')
-          .insert({ char_sheet_id: sheetId, skill_id: skillId, mastery: targetMastery, is_learned: isLearned })
-          .onConflict(['char_sheet_id', 'skill_id'])
-          .merge({ mastery: targetMastery, is_learned: trx.raw('char_skills.is_learned OR ?', [isLearned]) })
+      // Carrières
+      let totalCareerYears = 0
+      for (const career of careersData) {
+        const refCareer = await trx('ref_careers').where({ id: career.career_id }).first()
+        if (!refCareer) throw new AppError(400, `Carrière inconnue : ${career.career_id}`)
+        if (!career.years || career.years < 1) throw new AppError(400, `Années invalides pour ${refCareer.name}`)
+
+        const prereqCheck = await validateCareerPrerequisites(sheetId, career.career_id, trx)
+        if (!prereqCheck.valide) throw new AppError(400, prereqCheck.erreur)
+        const genoCheck = await validateCareerGenotype(sheetId, career.career_id, trx)
+        if (!genoCheck.valide) throw new AppError(400, genoCheck.erreur)
+        const attrCheck = await validateCareerAttributes(sheetId, career.career_id, trx)
+        if (!attrCheck.valide) throw new AppError(400, attrCheck.erreur)
+        const eduCheck = await validateCareerEducation(sheetId, career.career_id, trx)
+        if (!eduCheck.valide) throw new AppError(400, eduCheck.erreur)
+
+        const titles = await trx('ref_career_titles').where({ career_id: career.career_id }).orderBy('min_years')
+        const title = titles.find(t =>
+          career.years >= t.min_years && (t.max_years === null || career.years <= t.max_years)
+        )
+        let salary = 0
+        if (title) {
+          if (title.salary_per_year) salary = title.salary_per_year
+          else if (title.salary_formula) salary = evaluateSalaryFormula(title.salary_formula)
+        }
+        const savings = salary * career.years
+        totalCareerYears += career.years
+
+        await trx('char_careers').insert({
+          char_sheet_id: sheetId,
+          career_id: career.career_id,
+          years: career.years,
+          savings,
+          pro_advantages: JSON.stringify(career.proAdvantages || {}),
+          random_picks: JSON.stringify(career.randomPicks || []),
+          setbacks: JSON.stringify(career.setbacks || []),
+        })
+
+        for (const [skillId, targetMastery] of Object.entries(career.skillAllocations || {})) {
+          const isLearned = (career.openedSkills || []).includes(skillId)
+          await trx('char_skills')
+            .insert({ char_sheet_id: sheetId, skill_id: skillId, mastery: targetMastery, is_learned: isLearned })
+            .onConflict(['char_sheet_id', 'skill_id'])
+            .merge({ mastery: targetMastery, is_learned: trx.raw('char_skills.is_learned OR ?', [isLearned]) })
+        }
       }
-    }
 
-    // finalAge = baseAge + higherEd.years_added + années de carrières
-    let higherEdYears = 0
-    if (higherEd) {
-      const heRow = await trx('ref_backgrounds').where({ type: 'higher_ed', code: higherEd }).first()
-      higherEdYears = heRow?.years_added ?? 0
-    }
-    const finalAge = baseAge + higherEdYears + totalCareerYears
+      // finalAge = baseAge + higherEd.years_added + années de carrières
+      let higherEdYears = 0
+      if (higherEd) {
+        const heRow = await trx('ref_backgrounds').where({ type: 'higher_ed', code: higherEd }).first()
+        higherEdYears = heRow?.years_added ?? 0
+      }
+      const finalAge = baseAge + higherEdYears + totalCareerYears
 
-    // Effets de l'âge sur les attributs
-    const ageEffects = getAgeEffects(finalAge)
-    for (const [attr, delta] of Object.entries(ageEffects)) {
-      await trx('char_attributes')
-        .where({ char_sheet_id: sheetId, attr_id: attr })
-        .increment('pc_modifier', delta)
+      // Effets de l'âge sur les attributs — set absolu (pas increment) : rejouer la
+      // reconciliation avec un âge final différent recalcule au lieu de cumuler les malus.
+      const ageEffects = getAgeEffects(finalAge)
+      for (const attr of ATTR_IDS_START) {
+        await trx('char_attributes')
+          .where({ char_sheet_id: sheetId, attr_id: attr })
+          .update({ pc_modifier: ageEffects[attr] ?? 0 })
+      }
+      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ age: finalAge })
+      await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step4: pc4 ?? 0 })
     }
-    await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ age: finalAge })
-    await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step4: pc4 ?? 0 })
 
     // ── STEP 5 : avantages/désavantages ────────────────────────────────────────
     // CRITIQUE : le ledger (pc_spent_step1..4) est rempli ci-dessus avant cet appel.
     // addAdvantage lit le ledger dans validateAdvantage pour vérifier sufficient_pc.
-    const { advantages = [] } = step5
-    for (const advantageId of advantages) {
-      await addAdvantage(sheetId, advantageId, 'creation_step5', trx)
+    if (step5) {
+      const { advantages = [] } = step5
+      // Reset avant réapplication — pendant le Wizard, char_advantages n'est écrit que
+      // par cette boucle : suppression directe + remise à zéro du ledger, pas de
+      // décrémentation ligne-à-ligne via removeAdvantage.
+      await trx('char_advantages').where({ char_sheet_id: sheetId }).del()
+      await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step5: 0, pc_gained_desavantages: 0 })
+      for (const advantageId of advantages) {
+        await addAdvantage(sheetId, advantageId, 'creation_step5', trx)
+      }
     }
 
     // ── FINALISATION ────────────────────────────────────────────────────────────
-    await trx('characters').where({ id: characterId }).update({ visible: true })
-    await trx('char_sheet').where({ id: sheetId }).update({ creation_state: 'complete' })
+    // isComplete=true pose characters.visible=true indépendamment du verrouillage —
+    // voir garde wizard_locked_at dans characters.js (invariant documenté à cet endroit).
+    const isComplete = !!(step1 && step2 && step3 && step4 && step5)
+    if (isComplete) {
+      await trx('characters').where({ id: characterId }).update({ visible: true })
+      await trx('char_sheet').where({ id: sheetId }).update({ creation_state: 'complete' })
+    }
 
-    return { ok: true, characterId }
+    return { ok: true, characterId, isComplete }
   })
+}
+
+// ─── Verrouillage : fin du Wizard, la fiche devient éditable en session ────────
+
+export async function lockWizard(sheetId) {
+  const sheet = await db('char_sheet').where({ id: sheetId }).first()
+  if (!sheet) throw new AppError(404, 'Fiche introuvable')
+  if (sheet.creation_state !== 'complete') throw new AppError(400, 'Personnage non finalisé — impossible de verrouiller')
+  await db('char_sheet').where({ id: sheetId }).update({ wizard_locked_at: db.fn.now() })
+  return { ok: true }
+}
+
+// ─── Preview : lecture du brouillon pendant le Wizard (fenêtre fiche personnage) ─
+// Ne réutilise pas characters.js (liste filtrée sur wizard_locked_at — cacherait le
+// brouillon à son propre créateur). Garde d'ownership : router.param('sheetId') de
+// routes/creation.js, indépendante du filtre de liste générale.
+
+export async function getCharacterPreview(characterId, isGm) {
+  const columns = [
+    'characters.id', 'characters.name', 'characters.type', 'characters.color',
+    'characters.visible', 'characters.glb_url', 'characters.portrait_url',
+    'characters.user_id', 'characters.description', 'characters.created_at',
+    'characters.updated_at', 'users.username as owner_username',
+  ]
+  if (isGm) columns.push('characters.gm_notes')
+  return db('characters')
+    .where({ 'characters.id': characterId })
+    .leftJoin('users', 'characters.user_id', 'users.id')
+    .select(columns)
+    .first()
 }

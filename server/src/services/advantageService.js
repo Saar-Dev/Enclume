@@ -32,13 +32,17 @@ export async function addAdvantage(sheetId, advantageId, acquiredDuring, trxOpt)
       .where('ca.char_sheet_id', sheetId)
       .select('ca.advantage_id', 'ra.type', 'ra.cost_pc', 'ra.family', 'ra.family_limit', 'ra.is_unique', 'ra.name')
 
-    const [ledger, allRefAdvantages] = await Promise.all([
+    const [ledger, allRefAdvantages, sterileMutation] = await Promise.all([
       trx('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
       trx('ref_advantages').select('*'),
+      trx('char_mutations as cm')
+        .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
+        .where({ 'cm.char_sheet_id': sheetId, 'cm.status': 'active', 'rm.mod_fertility': 'sterile' })
+        .first(),
     ])
     if (!ledger) throw new AppError(500, 'Ledger PC manquant — incohérence wizard')
 
-    const validation = validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages)
+    const validation = validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages, !!sterileMutation)
     if (!validation.valid) throw new AppError(400, validation.message)
 
     const refAdv = allRefAdvantages.find(a => a.advantage_id === advantageId)
@@ -62,6 +66,10 @@ export async function addAdvantage(sheetId, advantageId, acquiredDuring, trxOpt)
       await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).increment('pc_gained_desavantages', Math.abs(refAdv.cost_pc))
     }
 
+    if (advantageId === 'adv_076') {
+      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ is_fertile: true })
+    }
+
     return row
   }
 
@@ -75,7 +83,7 @@ export async function removeAdvantage(sheetId, charAdvantageId, reason) {
       .join('ref_advantages as ra', 'ra.advantage_id', 'ca.advantage_id')
       .where({ 'ca.id': charAdvantageId, 'ca.char_sheet_id': sheetId })
       .whereNull('ca.removed_at')
-      .select('ca.id', 'ra.type', 'ra.cost_pc')
+      .select('ca.id', 'ca.advantage_id', 'ra.type', 'ra.cost_pc')
       .first()
     if (!charAdv) throw new AppError(404, 'Avantage non trouvé ou déjà supprimé.')
 
@@ -88,6 +96,10 @@ export async function removeAdvantage(sheetId, charAdvantageId, reason) {
       await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).decrement('pc_spent_step5', charAdv.cost_pc)
     } else {
       await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).decrement('pc_gained_desavantages', Math.abs(charAdv.cost_pc))
+    }
+
+    if (charAdv.advantage_id === 'adv_076') {
+      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ is_fertile: false })
     }
 
     return updated

@@ -278,9 +278,7 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
                 onClick={() => handleAdd(mut.mutation_id)}
               >
                 <div style={st.cardHeader}>
-                  <span style={st.cardName}>
-                    {mut.name}{label ? ` (${label})` : ''}
-                  </span>
+                  <span style={st.cardName}>{mut.name}</span>
                   <span style={{
                     ...st.cardCost,
                     color: mut.cost_pc > 0 ? '#5b8dee' : '#888',
@@ -288,6 +286,7 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
                     {mut.cost_pc > 0 ? `−${mut.cost_pc} PC` : t('step3.free')}
                   </span>
                 </div>
+                {label && <div style={st.cardVariant}>{label}</div>}
                 <p style={st.cardDesc}>{mut.description}</p>
 
                 {hasSkill && mut.skills.map(sk => (
@@ -583,18 +582,16 @@ const st = {
   cardHeader: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   cardName: {
     color: '#c0c0d0',
     fontSize: '13px',
     fontWeight: '600',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
     flex: 1,
     marginRight: '8px',
   },
+  cardVariant: { color: '#9090c8', fontSize: '10px', marginBottom: '2px' },
   cardCost: { fontSize: '11px', fontWeight: '600', whiteSpace: 'nowrap' },
   cardDesc: { color: '#6a6a8a', fontSize: '11px', lineHeight: '1.6', margin: 0 },
   cardTags: { display: 'flex', gap: '4px', flexWrap: 'wrap' },

@@ -1,0 +1,216 @@
+/* ============================================================================
+   ENCLUME — Colors & Type foundations
+   VTT maison pour le JdR Polaris. Dark theme exclusif.
+   Source of truth: client/src/index.css (design tokens) + in-session component
+   palette (hardcoded hex in Sidebar/SessionPage/Combat windows).
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   1. FONTS
+   - Venus Rising : display / wordmark "Enclume" (local woff2)
+   - Inter        : UI body & labels (local woff + Google fallback)
+   - Share Tech Mono : dice results, numbers, invite codes, tabular data
+   - Caveat       : handwritten accents (GM notes, flavor)
+   --------------------------------------------------------------------------- */
+@font-face {
+  font-family: 'Venus Rising';
+  src: url('fonts/Venus_Rising_Rg.woff2') format('woff2'),
+       url('fonts/venus-rising.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  /* Self-hosted brand UI face (uploaded). Range claimed so it serves all UI weights. */
+  font-family: 'Inter';
+  src: url('fonts/inter.woff') format('woff');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+/* Share Tech Mono + Caveat are NOT brand-uploaded — fine to keep on Google Fonts CDN. */
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Caveat:wght@400;600&display=swap');
+
+/* ---------------------------------------------------------------------------
+   2. COLOR TOKENS
+   --------------------------------------------------------------------------- */
+:root {
+  /* === SURFACES (canonical / index.css) === */
+  --bg-app:       #0f1115;  /* app shell, deepest */
+  --bg-surface:   #151923;  /* card top of gradient */
+  --bg-panel:     #10131b;  /* card bottom / panels, headers */
+  --bg-elevated:  #1b2232;  /* raised tiles, covers */
+  --bg-input:     #0c0f16;  /* form fields */
+  --bg-button:    #121826;  /* default button */
+  --bg-button-primary: #1a2340;
+
+  /* === SURFACES (in-session / 3D overlay) — slightly cooler & darker ===
+     Used by Sidebar, floating combat windows, GM bar, radial menu.
+     These sit OVER the live 3D map so they run darker for contrast. */
+  --bg-session:        #0f0f1a;  /* sidebar / floating window body */
+  --bg-session-raised: #16162a;  /* chat input, char cards, dropdowns */
+  --bg-session-scrim:  rgba(10,10,20,0.88); /* timeline bar over the map */
+  --border-session:    #1e1e2e;  /* hairline separators in session */
+  --border-session-2:  #2a2a3e;  /* slightly stronger session border */
+
+  /* === BRAND / SEMANTIC === */
+  --color-primary:        #5b8dee;  /* Enclume blue — links, active, accents */
+  --color-primary-muted:  rgba(91,141,238,0.18);
+  --color-success:        #1dd1a1;  /* token-level success */
+  --color-success-soft:   #4caf77;  /* in-session success (player badge, hit) */
+  --color-danger:         #ff6b6b;
+  --color-danger-soft:    #e05b5b;  /* in-session danger (combat toggle) */
+  --color-warning:        #f0a04b;
+  --color-warning-soft:   #e0a050;
+  --color-gold:           #f5c542;  /* active timeline halo, crit */
+  --color-gold-muted:     #aa8a30;  /* favorite macros (★) */
+
+  /* === TEXT === */
+  --text-primary:    #e8eef7;
+  --text-secondary:  #9aa4b2;
+  --text-muted:      #6b7280;
+  /* in-session text ramp (over dark map) */
+  --text-session-hi:  #c0c0d0;
+  --text-session-mid: #9090a8;
+  --text-session-lo:  #4a4a60;
+
+  /* === BORDERS === */
+  --border-subtle: #252b3a;
+  --border-strong: #2f374a;
+
+  /* === WOUND SEVERITY (Polaris LdB) — légère→mortelle === */
+  --wound-legere:   #FFD700;
+  --wound-moyenne:  #FFA500;
+  --wound-grave:    #FF6B6B;
+  --wound-critique: #FF0000;
+  --wound-mortelle: #8B0000;
+
+  /* === STATUS-EFFECT ICON ACCENTS (hexagonal HUD badges) ===
+     4 semantic families. Badge frame is always #0a0d12 fill / #05070b outer
+     stroke; the inner stroke + glyph take the family accent. */
+  --status-dot:       #d84838;  /* dégâts continus — acide, brûlure, asphyxie, décompression, électrocution */
+  --status-env:       #38a8c8;  /* environnement / bio — hypothermie, infection, radiation, poison, déséquilibre */
+  --status-control:   #d8a838;  /* contrôle physique — agrippé, entravé */
+  --status-neuro:     #9858c8;  /* neuro / mental — étourdi, aveuglé, inconscient */
+  --status-frame:     #0a0d12;
+  --status-frame-edge:#05070b;
+
+  /* === COMBAT HUD — fenêtres tactiques flottantes ============================
+     PALETTE DISTINCTE, plus froide et plus sombre que le reste de l'UI.
+     Couvre les "50% combat" : CombatRosterWindow, CombatActionWindow,
+     CombatGmDeclareWindow, CombatModifiersWindow, CombatDamageWindow,
+     CombatResultPanels. Ces fenêtres codaient ces valeurs en dur dans leurs
+     propres objets de style — elles sont ici nommées pour devenir la source
+     de vérité du système (et permettre une future migration du code prod). */
+
+  /* structure */
+  --combat-bg:          #0d0f18;  /* corps de fenêtre */
+  --combat-header:      #080a12;  /* header + thead (sticky) */
+  --combat-border:      #1e2435;  /* bordure fenêtre + séparateurs forts */
+  --combat-section:     #1e1e2e;  /* séparateur de section (Déclaration) */
+  --combat-row-border:  #10141e;  /* hairline entre lignes de table */
+  --combat-shadow:      0 8px 32px rgba(0,0,0,0.7);
+
+  /* texte / titres */
+  --combat-title:       #3a8aaa;  /* titre fenêtre "ROSTER COMBAT" (cyan) */
+  --combat-section-lbl: #5a8aaa;  /* libellés de section "TACTIQUE" */
+  --combat-field-lbl:   #456575;  /* libellés de champ "POSTURE" */
+  --combat-text:        #c0c8d0;  /* texte de cellule */
+  --combat-text-strong: #dde7ee;  /* valeurs (INI, option active) */
+  --combat-text-dim:    #3a4a5a;  /* compteur participants, méta */
+
+  /* accents interactifs (cyan tactique) */
+  --combat-accent:        #3a8aaa;
+  --combat-accent-glow:   rgba(58,138,170,0.12); /* item/segment actif, boutons */
+  --combat-accent-border: #3a8aaa66;             /* bordure option active */
+  --combat-seg-bg:        #0a1018;  /* fond du segmented control */
+  --combat-seg-border:    #15212e;
+  --combat-seg-active:    #162028;  /* option de segment active */
+
+  /* rôles token */
+  --combat-pj-fg:   #50c878;  --combat-pj-bg:   #0a1a0a;  /* badge PJ (vert) */
+  --combat-pnj-fg:  #c86030;  --combat-pnj-bg:  #1a0a08;  /* badge PNJ (orange) */
+
+  /* états d'équipement */
+  --combat-equip-ok:    #90c090;  /* arme équipée (texte) */
+  --combat-equip-dot:   #50c878;  /* puce ● arme équipée */
+  --combat-danger-fg:   #e08080;  --combat-danger-bg: #1a0808;  --combat-danger-border: #aa3030;  /* "Choisir une arme" */
+  --combat-warn-fg:     #e0a060;  --combat-warn-bg:   #1a1208;  --combat-warn-border:   #aa6030;  /* armure manquante */
+  --combat-warn-accent: #e8a060;  /* bannière "AVANT DÉMARRAGE" */
+
+  /* chips armure T C B J */
+  --combat-chip-pj-fg:    #5a6a7a; --combat-chip-pj-bg:  #1a2030; --combat-chip-pj-border:  #2a3a4a;
+  --combat-chip-pnj-fg:   #50c878; --combat-chip-pnj-bg: #0a2010; --combat-chip-pnj-border: #2a6040;
+  --combat-chip-empty:    #2a3a4a; /* case armure vide */
+  --combat-chip-gap:      #6a2020; /* trou d'armure PNJ (bordure rouge) */
+
+  /* coûts INI (segmented controls) */
+  --combat-cost-plus:   #3aaa6a;  /* gain INI +X (vert) */
+  --combat-cost-minus:  #c86030;  /* coût INI -X (orange) */
+
+  /* === ELEVATION === */
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.2);
+  --shadow-md: 0 10px 30px rgba(0,0,0,.35);
+  --shadow-window: 0 4px 12px rgba(0,0,0,0.4);   /* floating combat windows */
+  --halo-active: 0 0 12px rgba(245,197,66,0.35); /* active token glow */
+
+  /* === RADIUS === */
+  --radius-xs: 4px;   /* chips, tiny buttons, palette swatches */
+  --radius-sm: 6px;   /* in-session buttons, cards, inputs */
+  --radius-md: 12px;  /* tokens md inputs, modals */
+  --radius-lg: 14px;  /* primary cards */
+
+  /* === SPACING (4px base) === */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+
+  /* === TYPE FAMILIES === */
+  --font-display: 'Venus Rising', 'Inter', system-ui, sans-serif;
+  --font-ui:      'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-mono:    'Share Tech Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --font-hand:    'Caveat', cursive;
+
+  /* === ICON LOGO HELPER ===
+     The anvil logo uses currentColor (gem outline) + var(--icon-secondary)
+     (anvil body). Set both when embedding the SVG. */
+  --icon-secondary: #5b8dee;
+}
+
+/* ---------------------------------------------------------------------------
+   3. SEMANTIC TYPE SCALE
+   The app is information-dense: base 14px, small UI down to 9-11px labels,
+   big monospace numbers for dice. Map abstract roles to concrete styles.
+   --------------------------------------------------------------------------- */
+:root {
+  --display:     normal 400 40px/1.05 var(--font-display);  /* wordmark / hero */
+  --h1:          500 22px/1.25 var(--font-ui);
+  --h2:          500 16px/1.3  var(--font-ui);
+  --h3:          600 13px/1.4  var(--font-ui);
+  --body:        400 14px/1.5  var(--font-ui);
+  --body-sm:     400 13px/1.45 var(--font-ui);
+  --label:       500 12px/1.4  var(--font-ui);
+  /* micro all-caps tab/section labels — the signature UI label */
+  --eyebrow:     600 10px/1.2  var(--font-ui);   /* + uppercase + 0.05em tracking */
+  --mono-lg:     700 20px/1    var(--font-mono);  /* big dice total */
+  --mono:        400 14px/1.4  var(--font-mono);  /* invite codes, stats */
+}
+
+/* Concrete helpers (optional convenience classes) ------------------------- */
+.enc-display { font: var(--display); color: var(--text-primary); letter-spacing: 0.01em; }
+.enc-h1 { font: var(--h1); color: var(--text-primary); }
+.enc-h2 { font: var(--h2); color: var(--text-primary); }
+.enc-h3 { font: var(--h3); color: var(--text-primary); }
+.enc-body { font: var(--body); color: var(--text-secondary); }
+.enc-body-sm { font: var(--body-sm); color: var(--text-secondary); }
+.enc-label { font: var(--label); color: var(--text-secondary); }
+.enc-eyebrow {
+  font: var(--eyebrow);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-session-lo);
+}
+.enc-mono { font: var(--mono); color: var(--text-session-hi); font-variant-numeric: tabular-nums; }
+.enc-mono-lg { font: var(--mono-lg); color: var(--text-primary); font-variant-numeric: tabular-nums; }

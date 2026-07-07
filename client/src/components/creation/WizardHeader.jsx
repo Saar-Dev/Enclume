@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
-export default function WizardHeader({ step, totalSteps, highestStep = 0, pcDispo, infos, onStepClick }) {
+export default function WizardHeader({ step, totalSteps, highestStep = 0, pcDispo, infos, onStepClick, hasCharacter = false, onOpenPeek, peekLoading = false }) {
   const { t } = useTranslation('creation')
 
   return (
@@ -34,6 +34,14 @@ export default function WizardHeader({ step, totalSteps, highestStep = 0, pcDisp
             return nodes
           })}
         </div>
+
+        <button
+          className="btn btn-ghost"
+          onClick={onOpenPeek}
+          disabled={!hasCharacter || peekLoading}
+        >
+          {peekLoading ? '…' : t('wizard.open_sheet')}
+        </button>
 
         <div className="wiz-header-pc-block">
           <span className="wiz-header-pc-label">{t('wizard.pc_label')}</span>

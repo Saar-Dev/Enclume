@@ -359,4 +359,245 @@
 ### Dettes ouvertes
 - Aucune nouvelle.
 
+---
+## Session 137 — 2026-07-06 — Option de campagne `feminin_bonus` + Sexe/Fécondité (Step1/3/5) ✅
+
+> Item "41." de `docs/EN_COURS.md` (options de campagne câblées une par une). Analyse initiale
+> trop étroite ("juste débrancher le sélecteur Sexe") — élargie après remarque de Saar : le Sexe
+> est choisi en Step1 mais peut être altéré par une mutation en Step3 (Asexué/Androgyne/
+> Autofécondation), ce qui touche aussi la Fécondité (désavantage `adv_076`, Step5). Plan complet
+> rédigé et validé avant codage : [[docs/PLAN_SEXE|PLAN_SEXE]].
+
+### Découverte clé (avant codage)
+- Le schéma DB existait déjà en totalité mais n'était câblé nulle part : `char_archetype.sex`/
+  `is_fertile` (migration 36, éditables seulement à la main sur la fiche perso), `ref_mutations.
+  mod_sex`/`mod_fertility` (migration 95, agrégés dans `char_mutation_effects_view` — vue jamais
+  lue par aucun code serveur), `ref_advantages.adv_076` "Fécondité" (migration 92, jamais relié à
+  `is_fertile`). **Aucune nouvelle migration nécessaire.**
+- Règle LdB (`REGLE_CREATION.txt:292-296` et `:1312-1316`) : le bonus féminin (FOR base 5, +2
+  COO/PRE) est une règle optionnelle distincte du choix de Sexe lui-même. Décision de portée :
+  `feminin_bonus` gate uniquement l'effet mécanique — le sélecteur Sexe reste toujours visible.
+
+### Bloc serveur
+- `creationService.js` : `startCreation()` renvoie `femininBonusEnabled: settings.feminin_bonus`
+  (même pattern que `ambiance`/`randomMutationsEnabled`). STEP1 : `validateStep1` reçoit
+  `(isFeminin1 ?? false) && settings.feminin_bonus` au lieu du booléen brut (évite une désynchro
+  client/serveur quand l'option est désactivée) ; écrit désormais `char_archetype.sex` (`'homme'`/
+  `'femme'`). STEP3 : la boucle d'insertion des mutations accumule `mod_sex`/`mod_fertility` du
+  `ref_mutations` de chaque mutation choisie, et met à jour `char_archetype` en conséquence après
+  la boucle (dernière mutation avec override gagne).
+- `advantageService.js` : `addAdvantage()` détecte une mutation active `mod_fertility = 'sterile'`
+  (jointure `char_mutations`/`ref_mutations`) et la transmet à `validateAdvantage` ; pose
+  `is_fertile = true` sur `char_archetype` si `adv_076` est acheté. `removeAdvantage()` repasse
+  `is_fertile = false` symétriquement (nouveau `advantage_id` ajouté au `.select()`).
+- `advantageConstraints.js` : nouvelle contrainte `not_if_sterile` (bloque l'achat de `adv_076` si
+  le personnage a déjà une mutation stérilisante) ; `validateAdvantage()` accepte un 5ᵉ paramètre
+  `isSterile`. Contrainte valable à la fois pour le Wizard (Step5) et l'achat post-création
+  (`char-sheet.js` → même fonction `addAdvantage`), un seul point de vérité.
+
+### Bloc client
+- `creationStore.js` : nouvel état `femininBonusEnabled` (même circuit que `randomMutationsEnabled`
+  — récupéré dans `startCreation()`, remis à `null` dans `resetCreation()`).
+- `WizardCreation.jsx` : suppression du mock `mockIsFeminin = false` (mort depuis toujours — la
+  prop `isFeminin` reçue par `Step1Attributes` était explicitement ignorée, `_deprecated`) ;
+  transmission de `femininBonusEnabled` réel à `Step1Attributes`.
+- `Step1Attributes.jsx` : tout le calcul mécanique (base FOR, `calcTotalCost`, cap G4) gate
+  désormais sur `isFeminin && femininBonusEnabled` au lieu de `isFeminin` seul (4 points d'appel :
+  `baseAttrs`, `handleSetFeminin`, `calcTotalCost` initial, `handleModPC`). Le `<select>` Sexe et
+  le payload `onNext` ne changent pas — le choix reste toujours visible et toujours transmis.
+  Tooltip de la ligne "Niveau de base" rendu conditionnel (mention de l'exception féminine
+  seulement si l'option est active).
+- Ajout demandé par Saar après implémentation : ligne d'explication dans l'accordéon "Règles de
+  répartition" (`step1.ruleFemininBonus`, nouvelle clé `creation.json`), affichée uniquement si
+  `femininBonusEnabled` est actif — décrit la mécanique (FOR 5, +2 COO/PRE cumulables, plafond 20)
+  pour que l'option ne soit pas invisible côté joueur.
+
+### Testé ✅ (confirmé par Saar)
+- `node --check` sur les 3 fichiers serveur modifiés, `JSON.parse` sur `creation.json`, ESLint sur
+  les 3 fichiers client modifiés (0 erreur introduite — 2 erreurs préexistantes hors diff :
+  `poolBase` inutilisé `Step1Attributes.jsx`, `characterId` inutilisé `WizardCreation.jsx`,
+  vérifiées via `git diff --stat`).
+- Parcours Wizard confirmé fonctionnel par Saar (« all ok, testé et fonctionnel »).
+
+### Non testé explicitement (détail des scénarios non confirmés un par un)
+- Les 8 scénarios détaillés dans `docs/PLAN_SEXE.md` (option ON/OFF, override Sexe/Fécondité par
+  mutation Step3, achat/retrait `adv_076`, blocage si mutation stérilisante, édition manuelle
+  post-création) n'ont pas été vérifiés un par un individuellement — validation Saar donnée sur le
+  parcours global, pas listée point par point.
+
+### Dettes ouvertes
+- `WizardReview.jsx` (écran récap Step6) n'affiche pas le Sexe/la Fécondité choisis — signalé comme
+  hors scope dans `PLAN_SEXE.md`, amélioration possible à la demande.
+- Cumul Androgyne + Asexué (deux mutations `mod_sex` sur le même personnage) non empêché — dernière
+  mutation de la boucle gagne silencieusement, pas de contrainte d'exclusion mutuelle ajoutée.
+- `char_mutation_effects_view` (migration 109) reste non lue par aucun code — dette préexistante,
+  non traitée par ce plan (celui-ci écrit directement `char_archetype`, pattern différent).
+
 Plan archivé : `docs/Old/PLAN_STEP4.md`.
+
+---
+## Session 138 — 2026-07-06 — Fix `cost_pc` « Organe sensoriel manquant » (migration 118) + présentation cartes Step3
+
+> Signalement Saar : capture d'écran de la "TABLE DES MUTATIONS" (rulebook) montrant un gain de PC
+> incorrect pour "Organe sensoriel manquant" dans le Wizard Step3. Avant tout plan, vérification
+> exhaustive des 45 lignes `ref_mutations` contre `docs/Character/Creation/REGLE_CREATION.txt:812-898`
+> (source de vérité) — demandée explicitement par Saar après un premier plan trop étroit (une seule
+> mutation vérifiée au lieu de la table complète).
+
+### Diagnostic
+- `REGLE_CREATION.txt:834-850` vs `ref_mutations` en base : sous-types `smell`/`touch` à `cost_pc=0`
+  (devrait être `1`), `hearing` à `1` (devrait être `2`), `sight` à `2` (devrait être `3`) — `taste`
+  correct (`0`). Cause : décalage d'indexation dans le seed d'origine `95_seed_ref_mutations.js:130-143`.
+- Vérification exhaustive des 45 lignes (01-06 à 96-00) : **44/45 correctes**, y compris la table
+  sœur "Organe sensoriel supplémentaire ou amélioré" (0,1,1,2,2 — exacte).
+- Incohérence distincte repérée en passant (non corrigée cette session, voir dette [MUT1]) :
+  `Purulence` (`mutation_id` 30) stockée avec `cost_pc = -2` (`95_seed_ref_mutations.js:176`,
+  intentionnel au seed d'origine), alors que `Difformités légères/importantes` — même colonne
+  "Désavantage" de la rulebook — sont stockées en positif. `Step3Mutations.jsx:254` filtre
+  `m.cost_pc >= 0`, ce qui pourrait exclure Purulence de la liste achetable en méthode libre.
+
+### Bloc serveur
+- `118_fix_ref_mutations_organe_sensoriel_manquant.js` **NOUVEAU** : `UPDATE` ciblé sur les 4 lignes
+  concernées (`WHERE name='Organe sensoriel manquant' AND subtype=...`), `down()` symétrique restaure
+  les valeurs bugguées d'origine (round-trip testable). Auto-appliquée par nodemon dès l'écriture du
+  fichier (P53) ; vérifiée en base sans rappel manuel de `up()` (P54). Round-trip `down`/`up` testé
+  via appel direct des fonctions du module — byte-identique aux deux états attendus.
+
+### Bloc client
+- `Step3Mutations.jsx` (méthode "achat", grille de cartes) : le titre était forcé sur une seule ligne
+  avec troncature (`st.cardName` — `overflow:hidden`/`textOverflow:ellipsis`/`whiteSpace:nowrap`),
+  illisible pour les noms longs (ex. "Organe sensoriel supplémentaire ou amélioré (Odorat)" → "...
+  supplémentair..."). Le libellé de variante est sorti de la concaténation du titre vers une ligne
+  dédiée sous l'en-tête (nouveau style `st.cardVariant`, même apparence que `st.rollSubtype` déjà
+  utilisé côté tirage aléatoire — pattern réutilisé, pas inventé) ; troncature retirée de `st.cardName`
+  (le nom peut désormais passer à la ligne). `st.cardHeader` : `alignItems` `center` → `flex-start`
+  (alignement propre avec un titre sur 2 lignes). Effet de bord positif : la vue "tirage aléatoire"
+  réutilise `st.cardName` et profite donc aussi de la fin de la troncature, sans modification
+  supplémentaire de ce côté.
+
+### Testé ✅
+- Valeurs `cost_pc` en base conformes à `REGLE_CREATION.txt:834-850` après migration 118.
+- Round-trip `down`/`up` migration 118 (appel direct des fonctions du module), byte-identique.
+- ESLint sur `Step3Mutations.jsx` — 0 erreur.
+- Confirmation fonctionnelle Saar (capture d'écran) : Odorat/Toucher −1 PC, Ouïe −2 PC, Vue −3 PC,
+  Goût Gratuit ; titres non tronqués, variante affichée sur sa propre ligne.
+
+### Non testé
+- Achat effectif d'une des 4 mutations corrigées en conditions réelles (dépense PC, upsert
+  `finalizeCreation`) — seul l'affichage (carte + coût) a été vérifié.
+
+### Dette ajoutée
+- **[MUT1]** `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention
+  positive utilisée par `Difformités légères/importantes` pour la même colonne "Désavantage" de la
+  rulebook ; `Step3Mutations.jsx:254` (`m.cost_pc >= 0`) pourrait exclure Purulence de la liste
+  achetable en méthode libre. Non diagnostiqué en profondeur (un seul bug à la fois) — à traiter dans
+  un plan dédié.
+
+---
+## Session 139 — 2026-07-07 — Fiche personnage consultable en permanence pendant le Wizard ✅
+
+> Plan complet rédigé en amont dans une conversation précédente : `docs/STE6_FINAL.md` (v3, révisé
+> après 2 relectures critiques + 1 run à vide + 1 passe de recherche pro). Reprise en nouvelle
+> session — protocole complet appliqué : tous les fichiers cités par le plan relus dans cette
+> session avant tout codage (le plan lui-même l'exige explicitement, du code ayant pu bouger depuis
+> son écriture — migration 118 notamment, vue non committée au moment de la rédaction du plan).
+
+### Vérification de fraîcheur du plan (avant codage)
+- Migration 118 confirmée dernière en date (`ls server/src/db/migrations/`) — **119** toujours
+  disponible, hypothèse du plan tenue.
+- `creationService.js`, `routes/creation.js`, `routes/characters.js`, `WizardCreation.jsx`,
+  `WizardHeader.jsx`, migration `36_char_sheet.js` : relus intégralement, aucune dérive vs le plan.
+- `CharacterWindow.jsx` : les lignes citées par le plan (§9) pour PARAMÈTRE étaient décalées de
+  quelques lignes (écrites avant un déplacement mineur du code) — dropdown réassignation
+  propriétaire en fait une ternaire `isGm ? <select> : <span>` (pas un simple `isGm &&`). Contenu et
+  règle à appliquer identiques, seul le repérage ligne à ligne corrigé en codant.
+- Le point "AdvantagesPanel — onglet FICHE" du plan (§9) ne correspond à aucune ligne de
+  `CharacterWindow.jsx` : ce composant est monté dans `CharacterSheet.jsx:826`, qui reçoit déjà
+  `canEdit` calculé depuis `isGm`/`isOwner` reçus en cascade — aucune ligne supplémentaire à toucher
+  pour ce point, confirmé en lisant `CharacterSheet.jsx`.
+- Vigilance §12 du plan (`SkillsPanel`/`AdvantagesPanel` respectent-ils `canEdit` ?) vérifiée :
+  `AdvantagesPanel.jsx` gate bien ses boutons avec `canEdit &&` (L229/L243). `SkillsPanel.jsx` reçoit
+  `canEdit` mais ne l'utilise jamais directement (maîtrise gatée par `isGm` seul, achat Mode
+  Progression gaté par `progressionMode`/`xpAvailable` seuls) — sans risque : le bouton qui active
+  `progressionMode` dans `CharacterSheet.jsx:510` est lui-même `disabled={!canEdit}`, donc
+  `progressionMode` ne peut jamais passer à `true` tant que `canEdit` est `false` (état local, reset
+  à chaque montage). Aucun changement nécessaire dans `SkillsPanel.jsx`.
+- **Déviation trouvée en codant (plan corrigé)** : le plan §10 demandait
+  `useCharacterStore.setCharacters([character])` pour peupler la fenêtre. En lisant
+  `CharacterWindow.jsx`, ce composant ne lit **jamais** `characters` depuis ce store (seulement
+  `members`, utilisé uniquement dans le dropdown GM — jamais affiché en `forceReadOnly` puisque
+  `effectiveIsGm` est toujours `false`). Appeler `setCharacters` aurait été sans effet utile ET
+  risqué : store **partagé** avec la session de jeu réelle (`SessionPage`) — aurait écrasé la vraie
+  liste de personnages si l'onglet avait déjà une session chargée. Omis — `character` passé
+  directement en prop suffit.
+
+### Bloc serveur
+- Migration `119_char_sheet_wizard_lock.js` **NOUVEAU** : `char_sheet.wizard_locked_at TIMESTAMPTZ`
+  nullable. Sépare propriété "assistant" (rejouable) de propriété "runtime" (fiche éditable
+  librement post-verrouillage).
+- `creationService.js` : `finalizeCreation` → `reconcileCreation` (pattern reconciliation
+  Kubernetes/Terraform — chaque bloc STEP1-5 conditionné à sa présence dans le payload, garde sur
+  `wizard_locked_at` au lieu de `creation_state === 'complete'`). Reset avant réapplication :
+  `is_fertile=false` (STEP3, avant del `char_mutations`), `char_skills`+`char_careers` (STEP4, avant
+  résolution backgrounds/boucle carrières), `char_advantages`+ledger `pc_spent_step5`/
+  `pc_gained_desavantages` (STEP5, avant boucle `addAdvantage`). Effets d'âge : `.increment` →
+  `.update` absolu (`ageEffects[attr] ?? 0`) — rejouer avec un âge final différent recalcule au lieu
+  de cumuler. `isComplete` calculé (`step1 && ... && step5`) → pose `visible=true`/
+  `creation_state='complete'` seulement si vrai. +`lockWizard(sheetId)` (pose `wizard_locked_at`,
+  exige `creation_state='complete'`). +`getCharacterPreview(characterId, isGm)` (mêmes colonnes que
+  `characters.js` liste, sans `worst_wound_severity` — duplication assumée, cf. plan §8.3).
+- `routes/creation.js` : `POST /:sheetId/finalize` (garde stricte 5 champs) → `POST
+  /:sheetId/reconcile` (payload partiel autorisé) ; +`GET /:sheetId/preview` ; +`POST
+  /:sheetId/lock`.
+- `routes/characters.js` (liste `GET /`) : filtre brouillons → `whereNotExists` gate sur
+  `char_sheet.wizard_locked_at IS NULL` (au lieu de `creation_state != 'complete'`). Invariant
+  documenté en commentaire à cet endroit (voir plan §8.1) : `reconcileCreation` pose
+  `visible=true` dès `isComplete`, indépendamment du verrou — ça ne fuit nulle part uniquement parce
+  que ce filtre gate sur `wizard_locked_at`, pas sur `visible`/`creation_state`.
+
+### Bloc client
+- `CharacterWindow.jsx` : nouvelle prop `forceReadOnly` (défaut `false`). `effectiveIsOwner`/
+  `effectiveIsGm` (`isOwner/isGm && !forceReadOnly`) remplacent `isOwner`/`isGm` dans tous les
+  calculs de permission (nom, portrait, toggle visibilité, `CharacterSheet`/`ArmorWoundPanel`/
+  `WeaponPanel`/`InventoryPanel`, dropdown propriétaire, upload GLB, suppression). Correctif trouvé
+  en relisant le fichier en entier avant livraison (hors énumération du plan, mais même principe de
+  lecture seule) : textarea "Notes MJ" n'avait aucun `readOnly` — ajouté `readOnly={!canEditDescription}`
+  (label reste visible au vrai GM, seule l'édition est bloquée pendant le peek).
+- `WizardCreation.jsx` : import `useAuthStore` (absent jusqu'ici, confirmé à la lecture) ; états
+  `peekOpen`/`peekCharacter`/`peekIsGm`/`peekLoading` ; `openPeek()` (reconcile partiel → preview →
+  ouverture, guard anti-double-clic `if (peekLoading) return`) ; `handleTerminate` remplace
+  `handleFinalize` (reconcile complet + lock) ; rendu `<CharacterWindow forceReadOnly>` monté hors du
+  switch d'étapes (persiste à travers la navigation) ; `canFinalize` supprimé (mort par construction
+  — l'étape 6 n'est atteignable qu'après validation complète des 5 étapes).
+- `WizardHeader.jsx` : +props `hasCharacter`/`onOpenPeek`/`peekLoading` — bouton "Voir ma fiche"
+  visible en permanence dès l'étape 1, grisé tant que `step1Data` est `null`.
+- `creation.json` : +clé `wizard.open_sheet`.
+- Nettoyage en passant : `characterId` déstructuré sans usage dans `WizardCreation.jsx` (préexistant
+  avant cette session, déjà signalé Session 137 — supprimé puisque le fichier était déjà réécrit ici).
+
+### Testé ✅
+- `node --check` sur les 4 fichiers serveur touchés (3 modifiés + migration 119 nouvelle).
+- ESLint sur les 3 fichiers client touchés — 0 erreur (après nettoyage `characterId`).
+- `JSON.parse` sur `creation.json`.
+- Round-trip migration 119 (`down`/`up` via appel direct des fonctions du module, jamais la CLI —
+  P52) : colonne supprimée puis recréée (`timestamptz` nullable), byte-identique à l'état
+  auto-appliqué par nodemon (P53, vérifié dans `knex_migrations` avant le test — P54). 0 personnage
+  `creation_state='complete'` en base au moment du test — aucun risque de régression sur le nouveau
+  filtre `characters.js` (les personnages déjà complets, s'il y en avait eu, auraient eu
+  `wizard_locked_at` NULL faute de backfill — vérifié non applicable ici, à surveiller si des
+  personnages complets existent lors d'un futur déploiement).
+- SR + parcours fonctionnel confirmé par Saar.
+
+### Non testé explicitement
+- Les 8 scénarios détaillés un par un dans `docs/STE6_FINAL.md` §15 (retour arrière avec
+  réouvertures régulières, tentative d'édition bloquée constatée champ par champ, GM consultant la
+  liste pendant qu'un joueur est dans le Wizard, etc.) — validation Saar donnée sur "SR et
+  fonctionnel" globalement, pas listée point par point.
+
+### Dette à surveiller (pas une dette active — condition non rencontrée cette session)
+- Si un déploiement futur applique la migration 119 sur une base contenant déjà des personnages
+  `creation_state='complete'` (aucun cas ici, vérifié), ils auraient `wizard_locked_at` NULL faute de
+  backfill dans la migration — le nouveau filtre `characters.js` les masquerait de la liste jusqu'à
+  un premier appel manuel à `lockWizard` (aucun point d'entrée actuel ne le fait pour un personnage
+  déjà complet hors Wizard). Non traité car non applicable en l'état ; à surveiller si des données de
+  ce type apparaissent.

@@ -62,11 +62,13 @@ const IconX = () => (
 )
 
 // ─── Composant principal ──────────────────────────────────────────────────────
-export default function CharacterWindow({ character, isGm, onClose, inventoryReloadKey = 0 }) {
+export default function CharacterWindow({ character, isGm, onClose, inventoryReloadKey = 0, forceReadOnly = false }) {
   const { t } = useTranslation()
   const { members, updateCharacter, removeCharacter } = useCharacterStore()
 
   const isOwner = character.user_id != null && character.user_id === character._currentUserId
+  const effectiveIsOwner = isOwner && !forceReadOnly
+  const effectiveIsGm = isGm && !forceReadOnly
 
   // ─── État fenêtre ──────────────────────────────────────────────────────────
   const [pos,  setPos]  = useState(INITIAL_POS)
@@ -281,9 +283,9 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
     finally { setGlbUploading(false); e.target.value = '' }
   }, [character.id, updateCharacter])
 
-  const canEditDescription = isGm || isOwner
-  const canUploadPortrait  = isGm || isOwner
-  const canEditName        = isGm || isOwner
+  const canEditDescription = effectiveIsGm || effectiveIsOwner
+  const canUploadPortrait  = effectiveIsGm || effectiveIsOwner
+  const canEditName        = effectiveIsGm || effectiveIsOwner
 
   // ─── Rendu ─────────────────────────────────────────────────────────────────
   return (
@@ -325,7 +327,7 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
         </div>
 
         <div style={s.headerRight}>
-          {isGm && (
+          {effectiveIsGm && (
             <button
               style={{ ...s.iconBtn, color: character.visible ? '#4caf77' : '#4a4a60' }}
               onClick={handleToggleVisible}
@@ -363,8 +365,8 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
         {activeTab === 'sheet' && (
           <CharacterSheet
             characterId={character.id}
-            isGm={isGm}
-            isOwner={isOwner}
+            isGm={effectiveIsGm}
+            isOwner={effectiveIsOwner}
             onSaved={handleSaved}
           />
         )}
@@ -374,19 +376,19 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
           <>
             <ArmorWoundPanel
               characterId={character.id}
-              canEdit={isGm || isOwner}
+              canEdit={effectiveIsGm || effectiveIsOwner}
               reloadKey={inventoryVersion}
             />
             <WeaponPanel
               characterId={character.id}
-              canEdit={isGm || isOwner}
+              canEdit={effectiveIsGm || effectiveIsOwner}
               reloadKey={inventoryVersion}
               onInventoryMutated={bumpInventoryVersion}
             />
             <InventoryPanel
               characterId={character.id}
-              canEdit={isGm || isOwner}
-              isGm={isGm}
+              canEdit={effectiveIsGm || effectiveIsOwner}
+              isGm={effectiveIsGm}
               reloadKey={inventoryVersion}
               onInventoryMutated={bumpInventoryVersion}
             />
@@ -457,6 +459,7 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
                     onChange={e => setGmNotes(e.target.value)}
                     onBlur={handleGmNotesBlur}
                     placeholder={t('character.gmNotesPlaceholder')}
+                    readOnly={!canEditDescription}
                   />
                 </>
               )}
@@ -470,7 +473,7 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
           <div style={s.settingsContent}>
             <div style={s.settingsRow}>
               <span style={s.fieldLabel}>{t('character.ownerLabel')}</span>
-              {isGm ? (
+              {effectiveIsGm ? (
                 <select
                   style={s.select}
                   value={character.user_id || ''}
@@ -499,7 +502,7 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
               )}
             </div>
 
-            {(isGm || isOwner) && (
+            {(effectiveIsGm || effectiveIsOwner) && (
               <label style={{
                 ...s.uploadBtn,
                 opacity: glbUploading ? 0.5 : 1,
@@ -516,7 +519,7 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
               </label>
             )}
 
-            {isGm && (
+            {effectiveIsGm && (
               <button style={s.deleteBtn} onClick={handleDelete}>
                 {t('character.deleteCharacter')}
               </button>

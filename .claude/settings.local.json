@@ -128,7 +128,24 @@
       "Bash(node --check client/src/stores/creationStore.js)",
       "Bash(node_modules/.bin/eslint src/components/creation/Step3Mutations.jsx src/components/creation/WizardReview.jsx src/components/creation/WizardCreation.jsx src/stores/creationStore.js)",
       "Bash(node_modules/.bin/eslint src/components/creation/Step3Mutations.jsx)",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "Bash(sed -E 's/^\\([0-9]+\\)_.*/\\\\1/')",
+      "Bash(grep -E '^[0-9]+$')",
+      "Bash(git --no-pager diff -- client/src/components/creation/Step4Experience.jsx client/src/components/creation/BackgroundSelector.jsx server/src/services/creationService.js)",
+      "Bash(node --check server/src/services/advantageService.js)",
+      "Bash(node --check server/src/services/advantageConstraints.js)",
+      "Bash(node --check src/components/creation/Step3Mutations.jsx)",
+      "Bash(npx babel *)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('client/src/locales/creation.json','utf8'\\)\\); console.log\\('JSON OK'\\)\")",
+      "Bash(grep -E '^[0-9]{1,3}_[a-z]')",
+      "Bash(awk -F'_' '{print $1, $0}')",
+      "Bash(sed 's/_.*//')",
+      "Bash(node --check src/services/creationService.js)",
+      "Bash(node --check src/routes/creation.js)",
+      "Bash(node --check src/routes/characters.js)",
+      "Bash(node --check src/db/migrations/119_char_sheet_wizard_lock.js)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('src/locales/creation.json','utf8'\\)\\); console.log\\('JSON OK'\\)\")",
+      "Bash(awk 'NR>=1 && NR<=2601 { if \\($0 ~ /^\\\\/\\\\* ={5,}/\\) { getline t; print NR\": \"t } }' client/src/index.css)"
     ]
   }
 }

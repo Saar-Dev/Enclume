@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><link rel="stylesheet" href="_ds/enclume-design-system-4ac51cea-ce7e-435c-bc33-a3d4ef961dc8/colors_and_type.css"><script src="_ds/enclume-design-system-4ac51cea-ce7e-435c-bc33-a3d4ef961dc8/_ds_bundle.js"></script><style>
+body{margin:0;background:#08080f;font-family:var(--font-ui,'Inter',sans-serif);color:var(--text-primary);display:flex;justify-content:center;padding:22px}
+*{box-sizing:border-box}
+.mono{font-family:'Share Tech Mono',monospace;font-variant-numeric:tabular-nums}
+.f1{flex:1}
+.wz-app{width:1180px;background:var(--bg-session);border:1px solid var(--border-session);border-radius:12px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.wz-h{font:600 10px/1.2 'Inter',sans-serif;text-transform:uppercase;letter-spacing:.07em;color:var(--text-session-lo)}
+.wz-cols{display:grid;grid-template-columns:296px 1fr}
+.wz-rail{border-right:1px solid var(--border-session);padding:12px 11px;max-height:748px;overflow-y:auto}
+.wz-seg{display:inline-flex;background:var(--bg-input);border:1px solid var(--border-session);border-radius:7px;padding:2px;gap:2px;width:100%;margin-bottom:11px}
+.wz-segbtn{flex:1;font:600 11px 'Inter',sans-serif;color:var(--text-session-mid);background:transparent;border:0;padding:6px 10px;border-radius:5px;cursor:pointer;transition:all .12s}
+.wz-segbtn.on{background:var(--color-primary-muted);color:#a9c4f7}
+.wz-segbtn:hover{color:#c8d2e4}
+.wz-railrow{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;border:1px solid transparent;margin-bottom:4px;transition:background .1s}
+.wz-railrow:hover{background:var(--bg-session-raised)}
+.wz-railrow.sel{background:var(--bg-session-raised);border-color:var(--color-primary);box-shadow:0 0 0 1px rgba(91,141,238,.35)}
+.wz-railrow.added{border-color:#3a6b4e}
+.wz-hex{width:40px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;font:700 13px 'Share Tech Mono',monospace;color:#fff;clip-path:polygon(50% 0,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%)}
+.wz-railbody{min-width:0;flex:1}
+.wz-railname{font:600 12px/1.2 'Inter',sans-serif;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wz-railmeta{font-size:10px;color:var(--text-session-mid);margin-top:2px;display:flex;gap:6px;align-items:center}
+.wz-railmeta .mono{color:var(--color-warning-soft)}
+.wz-restr{color:var(--color-warning);font-weight:600}
+.wz-retenu{display:inline-flex;align-items:center;gap:4px;font:600 9.5px 'Inter',sans-serif;color:#7fd8a2;background:rgba(20,44,28,.7);border:1px solid #2e5a3c;padding:2px 6px;border-radius:4px;margin-top:4px}
+
+.wz-main{display:flex;flex-direction:column;min-width:0}
+.wz-agebar{display:flex;align-items:center;gap:20px;padding:10px 18px;background:var(--bg-session-raised);border-bottom:1px solid var(--border-session)}
+.wz-ageitem{display:flex;flex-direction:column;gap:2px}
+.wz-ageitem .wz-h{color:var(--text-session-lo)}
+.wz-agev{font:700 15px 'Share Tech Mono',monospace;color:var(--text-primary)}
+.wz-agev.hi{color:var(--color-primary)}
+.wz-agev.gold{color:var(--color-warning-soft)}
+.wz-agesep{width:1px;height:26px;background:var(--border-session)}
+.wz-agenote{margin-left:auto;font:400 10.5px 'Inter',sans-serif;color:var(--text-session-lo);font-style:italic}
+
+.wz-detail{background:linear-gradient(180deg,#12121f,#0d0d18);border-bottom:1px solid var(--border-session)}
+.wz-dtop{display:flex;gap:16px;padding:16px 18px 12px}
+.wz-illus{width:132px;height:132px;flex:none;border-radius:10px;overflow:hidden;border:1px solid var(--border-session-2);position:relative}
+.wz-dinfo{flex:1;min-width:0;display:flex;flex-direction:column}
+.wz-dtitle{font:600 19px/1.1 'Inter',sans-serif;color:var(--text-primary)}
+.wz-drang{font-size:11.5px;color:var(--text-session-mid);margin-top:3px}
+.wz-drang .mono{color:var(--color-warning-soft);font-weight:700}
+.wz-ddesc{font:400 12.5px/1.55 'Inter',sans-serif;color:var(--text-secondary);margin-top:9px}
+.wz-dactions{display:flex;align-items:center;gap:14px;margin-top:auto;padding-top:12px}
+.wz-yearctl{display:flex;align-items:center;gap:8px}
+.wz-yearval{font:700 15px 'Share Tech Mono',monospace;color:var(--text-primary);min-width:52px;text-align:center}
+.wz-stepbtn{width:26px;height:26px;border-radius:6px;background:var(--bg-button);border:1px solid var(--border-session-2);color:var(--text-secondary);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.wz-stepbtn:hover{border-color:var(--color-primary);color:#a9c4f7}
+.wz-stepbtn.sm{width:22px;height:22px;font-size:13px}
+.wz-addbtn{font:600 12px 'Inter',sans-serif;color:#fff;background:var(--color-primary);border:0;padding:9px 20px;border-radius:7px;cursor:pointer;transition:filter .1s}
+.wz-addbtn:hover{filter:brightness(1.1)}
+.wz-addbtn.dis{background:rgba(20,44,28,.5);color:#7fd8a2;border:1px solid #2e5a3c;cursor:default;filter:none}
+
+.wz-tabs{display:flex;gap:2px;padding:0 18px;border-bottom:1px solid var(--border-session)}
+.wz-tab{font:600 11.5px 'Inter',sans-serif;color:var(--text-session-mid);background:transparent;border:0;border-bottom:2px solid transparent;padding:9px 14px;cursor:pointer;transition:color .12s;margin-bottom:-1px}
+.wz-tab:hover{color:#c8d2e4}
+.wz-tab.on{color:#a9c4f7;border-bottom-color:var(--color-primary)}
+.wz-tabbody{padding:14px 18px 16px}
+
+.wz-block{margin-bottom:14px}
+.wz-geo{font:400 12px/1.55 'Inter',sans-serif;color:var(--text-secondary);background:var(--bg-input);border:1px solid var(--border-session);border-radius:7px;padding:9px 11px;margin-top:6px}
+.wz-groups{display:grid;grid-template-columns:1fr 1fr;gap:6px 22px;margin-top:6px}
+.wz-grplbl{font:600 9px 'Inter',sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--text-session-lo);margin-bottom:5px}
+.wz-chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.wz-chip{font:500 10.5px 'Inter',sans-serif;color:var(--text-session-mid);background:var(--bg-input);border:1px solid var(--border-session);padding:2px 7px;border-radius:4px}
+
+.wz-prog{width:100%;border-collapse:collapse;margin-top:6px}
+.wz-prog th{font:600 9px 'Inter',sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--text-session-lo);text-align:left;padding:5px 8px;border-bottom:1px solid var(--border-session)}
+.wz-prog td{font-size:12px;color:var(--text-secondary);padding:6px 8px;border-bottom:1px solid var(--combat-row-border)}
+.wz-prog td.mono{color:var(--color-warning-soft)}
+.wz-prog tr.cur td{background:rgba(91,141,238,.09);color:var(--text-primary)}
+.wz-prog tr.cur td:first-child{box-shadow:inset 2px 0 0 var(--color-primary)}
+.wz-ecobox{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding:11px 13px;background:rgba(224,160,80,.07);border:1px solid rgba(224,160,80,.28);border-radius:8px}
+.wz-ecobig{font:700 22px 'Share Tech Mono',monospace;color:var(--color-warning-soft)}
+.wz-econote{font:400 10.5px 'Inter',sans-serif;color:var(--text-session-lo);font-style:italic;margin-top:6px}
+
+.wz-poolhead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.wz-poolrem{font:400 11px 'Inter',sans-serif;color:var(--text-session-mid)}
+.wz-poolrem .mono{font-size:14px;font-weight:700;color:var(--color-primary)}
+.wz-poolrem.ok .mono{color:var(--color-success-soft)}
+.wz-avrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 8px;border-radius:6px}
+.wz-avrow:hover{background:rgba(255,255,255,.02)}
+.wz-avname{font:500 12px 'Inter',sans-serif;color:var(--text-primary)}
+.wz-ctl{display:flex;align-items:center;gap:8px;flex:none}
+.wz-sbtn{width:22px;height:22px;border-radius:5px;background:var(--bg-button);border:1px solid var(--border-session-2);color:var(--text-secondary);font-size:13px;cursor:pointer;line-height:1}
+.wz-sbtn:hover{border-color:var(--color-primary);color:#a9c4f7}
+.wz-sbtn.dis{opacity:.3;cursor:default;pointer-events:none}
+.wz-val{font:700 13px 'Share Tech Mono',monospace;color:var(--text-primary);min-width:16px;text-align:center}
+.wz-note{font:400 12px/1.5 'Inter',sans-serif;color:var(--text-muted);font-style:italic;padding:6px 0}
+
+.wz-rel{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.wz-relcard{background:var(--bg-input);border:1px solid var(--border-session);border-radius:8px;padding:9px 10px}
+.wz-relhd{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.wz-rellbl{font:600 11px 'Inter',sans-serif;color:var(--text-primary)}
+.wz-relcnt{font:700 15px 'Share Tech Mono',monospace;color:var(--color-success-soft)}
+.wz-relin{width:100%;background:var(--bg-session);border:1px solid var(--border-session);border-radius:5px;color:var(--text-secondary);font:400 11px 'Inter',sans-serif;padding:6px 8px;resize:vertical;min-height:44px}
+.wz-relin:focus{outline:none;border-color:var(--color-primary)}
+.wz-relin::placeholder{color:var(--text-session-lo)}
+.wz-relnote{font-size:9.5px;color:var(--text-session-lo);margin-top:4px}
+.wz-random{display:flex;align-items:center;gap:12px;margin-top:14px;padding:11px 13px;background:var(--bg-input);border:1px dashed var(--border-session-2);border-radius:8px}
+.wz-randbtn{font:600 11.5px 'Inter',sans-serif;color:#fff;background:var(--status-neuro);border:0;padding:8px 16px;border-radius:6px;cursor:pointer}
+.wz-randbtn:hover{filter:brightness(1.1)}
+.wz-randbtn.dis{background:var(--bg-button);color:var(--text-session-lo);cursor:not-allowed;filter:none}
+.wz-randtxt{font:400 11px/1.45 'Inter',sans-serif;color:var(--text-session-mid);flex:1}
+.wz-randtxt b{color:var(--status-neuro)}
+
+.wz-board{border-top:1px solid var(--border-session)}
+.wz-boardhead{display:flex;align-items:center;justify-content:space-between;padding:12px 18px 8px}
+.wz-scroll{max-height:300px;overflow-y:auto;padding:0 18px 8px}
+.wz-bgrp{margin-bottom:8px}
+.wz-bgrplbl{font:600 9px 'Inter',sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--color-primary);opacity:.75;padding:6px 0 4px;position:sticky;top:0;background:var(--bg-session)}
+.wz-skill{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 8px;border-radius:6px;border:1px solid transparent}
+.wz-skill:hover{background:rgba(255,255,255,.02)}
+.wz-skill.locked{opacity:.4}
+.wz-skill.hl{background:rgba(91,141,238,.12);border-color:rgba(91,141,238,.45);opacity:1}
+.wz-skmain{display:flex;align-items:center;gap:9px;min-width:0;flex:1}
+.wz-sklabel{font:500 12px 'Inter',sans-serif;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wz-prov{display:flex;gap:4px;flex:none}
+.wz-provtag{font:600 8.5px 'Inter',sans-serif;color:#fff;padding:1px 5px;border-radius:3px;white-space:nowrap}
+.wz-base{font-size:10px;color:var(--text-session-lo);min-width:52px;text-align:right}
+.wz-total{font:400 11px 'Share Tech Mono',monospace;color:var(--color-success-soft);min-width:30px;text-align:right}
+
+.wz-foot{display:flex;align-items:center;gap:16px;padding:13px 18px;background:var(--bg-session-raised);border-top:1px solid var(--border-session)}
+.wz-prev{font:600 12px 'Inter',sans-serif;color:var(--text-secondary);background:transparent;border:1px solid var(--border-session-2);padding:9px 20px;border-radius:7px;cursor:pointer}
+.wz-prev:hover{border-color:var(--color-primary);color:#c8d2e4}
+.wz-status{flex:1;text-align:center;font:500 12px 'Inter',sans-serif;color:var(--color-warning-soft)}
+.wz-status.ok{color:var(--color-success-soft)}
+.wz-next{font:600 12px 'Inter',sans-serif;color:#fff;background:var(--color-primary);border:0;padding:9px 24px;border-radius:7px;cursor:pointer;transition:filter .1s}
+.wz-next:hover{filter:brightness(1.1)}
+.wz-next.dis{background:var(--bg-button);color:var(--text-session-lo);cursor:not-allowed}
+</style></helmet><div class="wz-app"><div class="wz-cols">
+<div class="wz-rail"><div class="wz-seg"><button class="{{v.tousCls}}" onClick="{{v.onTous}}">Tous</button><button class="{{v.accCls}}" onClick="{{v.onAcc}}">Accessibles</button></div><sc-for list="{{v.cards}}" as="c" hint-placeholder-count="10"><div class="{{c.cls}}" onClick="{{c.onSelect}}" onMouseEnter="{{c.onEnter}}" onMouseLeave="{{c.onLeave}}"><span class="wz-hex" style="{{c.hexStyle}}">{{c.initial}}</span><div class="wz-railbody"><div class="wz-railname">{{c.name}}</div><div class="wz-railmeta"><span class="mono">{{c.eco}}</span><span>{{c.rang}}</span><sc-if value="{{c.restreint}}" hint-placeholder-val="{{true}}"><span class="wz-restr">⚠</span></sc-if></div><sc-if value="{{c.added}}" hint-placeholder-val="{{true}}"><span class="wz-retenu">✓ Retenu · {{c.retenuTxt}}</span></sc-if></div></div></sc-for></div>
+<div class="wz-main">
+<div class="wz-agebar"><div class="wz-ageitem"><span class="wz-h">Âge de départ</span><span class="wz-agev mono">{{v.age.base}}</span></div><span class="wz-agesep"></span><div class="wz-ageitem"><span class="wz-h">Années de carrière</span><span class="wz-agev mono">+{{v.age.years}}</span></div><span class="wz-agesep"></span><div class="wz-ageitem"><span class="wz-h">Âge actuel</span><span class="wz-agev mono hi">{{v.age.current}} ans</span></div><span class="wz-agesep"></span><div class="wz-ageitem"><span class="wz-h">Économies de départ</span><span class="wz-agev mono gold">{{v.age.eco}}</span></div><span class="wz-agenote">Âge de départ fixé à l'étape précédente</span></div>
+<sc-if value="{{v.d.present}}" hint-placeholder-val="{{true}}"><div class="wz-detail"><div class="wz-dtop"><div class="wz-illus"><x-import component-from-global-scope="image-slot" from="./image-slot.js" id="{{v.d.slotId}}" shape="rect" fit="cover" placeholder="{{v.d.slotPh}}" hint-size="132px,132px"></x-import></div><div class="wz-dinfo"><div class="wz-dtitle">{{v.d.name}}</div><div class="wz-drang">Débute <span class="mono">{{v.d.eco}}</span> · rang {{v.d.rang}} · débloque <span class="mono">{{v.d.skillCount}}</span> compétences</div><div class="wz-ddesc">{{v.d.desc}}</div><div class="wz-dactions"><div class="wz-yearctl"><span class="wz-h">Années dans ce métier</span><button class="wz-stepbtn" onClick="{{v.d.onYearsDown}}">−</button><span class="wz-yearval mono">{{v.d.years}} an(s)</span><button class="wz-stepbtn" onClick="{{v.d.onYearsUp}}">＋</button></div><div class="f1"></div><button class="{{v.d.addCls}}" onClick="{{v.d.onAdd}}">{{v.d.addLabel}}</button><sc-if value="{{v.d.added}}" hint-placeholder-val="{{true}}"><button class="wz-prev" onClick="{{v.d.onRemove}}">Retirer</button></sc-if></div></div></div>
+<div class="wz-tabs"><button class="{{v.tabMetierCls}}" onClick="{{v.onTabMetier}}">Métier</button><button class="{{v.tabCarriereCls}}" onClick="{{v.onTabCarriere}}">Carrière &amp; économies</button><button class="{{v.tabAvantCls}}" onClick="{{v.onTabAvant}}">Avantages pro</button></div>
+<div class="wz-tabbody">
+<sc-if value="{{v.showMetier}}" hint-placeholder-val="{{true}}"><div class="wz-block"><span class="wz-h">Origine géographique</span><div class="wz-geo">{{v.d.geo}}</div></div><div class="wz-block"><span class="wz-h">Compétences professionnelles</span><div class="wz-groups"><sc-for list="{{v.d.groups}}" as="g" hint-placeholder-count="6"><div><div class="wz-grplbl">{{g.cat}}</div><div class="wz-chips"><sc-for list="{{g.skills}}" as="sk" hint-placeholder-count="3"><span class="wz-chip">{{sk}}</span></sc-for></div></div></sc-for></div></div></sc-if>
+<sc-if value="{{v.showCarriere}}" hint-placeholder-val="{{true}}"><span class="wz-h">Titres &amp; progression salariale</span><table class="wz-prog"><thead><tr><th>Années</th><th>Titre</th><th>Économies</th></tr></thead><tbody><sc-for list="{{v.d.prog}}" as="p" hint-placeholder-count="4"><tr class="{{p.cls}}"><td class="mono">{{p.years}}</td><td>{{p.title}}</td><td class="mono">{{p.eco}}</td></tr></sc-for></tbody></table><div class="wz-ecobox"><div><span class="wz-h">Économies cumulées sur {{v.d.years}} an(s)</span><div class="wz-econote">{{v.d.ecoNote}}</div></div><span class="wz-ecobig mono">{{v.d.ecoCumul}}</span></div></sc-if>
+<sc-if value="{{v.showAvant}}" hint-placeholder-val="{{true}}"><div class="wz-block"><div class="wz-poolhead"><span class="wz-h">Avantages professionnels · {{v.d.avPerYear}} pts/an</span><span class="{{v.d.avRemCls}}"><span class="mono">{{v.d.avRemaining}}</span> pt(s) à placer</span></div><sc-if value="{{v.d.avLocked}}" hint-placeholder-val="{{true}}"><div class="wz-note">Ajoute ce métier (bouton ci-dessus) pour débloquer et répartir ses points d'avantages.</div></sc-if><sc-for list="{{v.d.avCats}}" as="a" hint-placeholder-count="5"><div class="wz-avrow"><span class="wz-avname">{{a.name}}</span><div class="wz-ctl"><button class="{{a.decCls}}" onClick="{{a.onDec}}">−</button><span class="wz-val mono">{{a.pts}}</span><button class="{{a.incCls}}" onClick="{{a.onInc}}">＋</button></div></div></sc-for></div><div class="wz-block"><span class="wz-h">Relations accumulées · l'ensemble des métiers retenus · le MJ convertit ces totaux en PNJ</span><div class="wz-rel"><sc-for list="{{v.rel}}" as="r" hint-placeholder-count="4"><div class="wz-relcard"><div class="wz-relhd"><span class="wz-rellbl">{{r.label}}</span><span class="wz-relcnt mono">{{r.count}}</span></div><textarea class="wz-relin" placeholder="{{r.ph}}" value="{{r.value}}" onInput="{{r.onInput}}"></textarea><div class="wz-relnote">{{r.note}}</div></div></sc-for></div></div><div class="wz-random"><button class="{{v.rand.cls}}" onClick="{{v.rand.onRoll}}">🎲 Lancer 1D10</button><div class="wz-randtxt">{{v.rand.text}}</div></div></sc-if>
+</div></div></sc-if>
+<div class="wz-board"><div class="wz-boardhead"><span class="wz-h">Répartition des points de compétence <span style="color:var(--text-session-lo);text-transform:none;letter-spacing:0">— survole un métier à gauche pour repérer ce qu'il apporte</span></span><span class="{{v.remainCls}}"><span class="mono">{{v.remaining}}</span> pt(s) à répartir</span></div><div class="wz-scroll"><sc-for list="{{v.board.groups}}" as="g" hint-placeholder-count="6"><div class="wz-bgrp"><div class="wz-bgrplbl">{{g.cat}}</div><sc-for list="{{g.skills}}" as="s" hint-placeholder-count="4"><div class="{{s.cls}}"><div class="wz-skmain"><span class="wz-sklabel">{{s.label}}</span><div class="wz-prov"><sc-for list="{{s.prov}}" as="p" hint-placeholder-count="1"><span class="wz-provtag" style="{{p.style}}">{{p.short}}</span></sc-for></div></div><div class="wz-ctl"><span class="wz-base mono">{{s.baseTxt}}</span><button class="{{s.decCls}}" onClick="{{s.onDec}}">−</button><span class="wz-val mono">{{s.pts}}</span><button class="{{s.incCls}}" onClick="{{s.onInc}}">＋</button><span class="wz-total mono">{{s.totalTxt}}</span></div></div></sc-for></div></sc-for></div></div>
+<div class="wz-foot"><button class="wz-prev" onClick="{{v.onPrev}}">← Précédent</button><span class="{{v.statusCls}}">{{v.statusMsg}}</span><button class="{{v.nextCls}}" onClick="{{v.onNext}}">Suivant →</button></div>
+</div></div></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.CATS = {phys:'Aptitudes physiques',cac:'Combat (contact)',tir:'Combat (tir)',soc:'Communication / relations',conn:'Connaissances',furt:'Furtivité / subterfuge',lang:'Langues',surv:'Survie / extérieur',tech:'Techniques',pil:'Pilotage',spec:'Spéciales'};
+    this.CAT_ORDER = ['phys','cac','tir','soc','conn','furt','lang','surv','tech','pil','spec'];
+    const C=(id,name,short,restreint,eco,rang,color,desc,geo,skills,avCats,hasRandom)=>({id,name,short,restreint,eco,rang,color,desc,geo,skills,avCats,hasRandom});
+    this.CAREERS=[
+      C('barman','Barman','Bar',true,400,'Apprenti','#c86030','Confidents de la plupart des marins, ils connaissent beaucoup de monde. Le barman sait beaucoup de choses mais parle peu.','Les Barmen peuvent exercer dans n\u2019importe quelle communauté suffisamment importante.',{soc:['ANALYSE_EMPATHIQUE','ELOQUENCE_PERSUASION','ENTREGENT_SEDUCTION','INTIMIDATION'],conn:['CONNAISSANCE_DES_NATIONS_ORGANISATIONS','JEU','SCIENCES_SPECIALISEES'],cac:['COMBAT_ARME','COMBAT_A_MAINS_NUES'],tir:['ARMES_DE_POING','FUSIL_ARMES_DEPAULES'],lang:['LANGUE_NEO_AZURAN','LANGUE_SOLEEN']},['Bar','Stock de marchandises','Célébrité','Relations','Matériel'],true),
+      C('artisan','Artisan / Artiste','Art',true,350,'Apprenti','#d86aa8','Fabricants, décorateurs, musiciens ou plasticiens — l\u2019artisan vit de son savoir-faire manuel ou de son sens esthétique.','Ateliers et guildes des grandes communautés immergées.',{tech:['FALSIFICATION','ELECTRONIQUE','INFORMATIQUE'],soc:['ELOQUENCE_PERSUASION','ENTREGENT_SEDUCTION'],conn:['EDUCATION_CULTURE_GENERALE']},['Atelier','Réputation','Célébrité','Relations','Matériel'],false),
+      C('assassin','Assassin','As',false,700,'Novice','#e05b5b','Tueurs discrets et méthodiques, les assassins monnayent leur art de donner la mort au plus offrant.','Réseaux clandestins, guildes d\u2019ombre des grands ports.',{cac:['COMBAT_ARME','ARTS_MARTIAUX_TECHNIQUES_OFFENSIVES'],tir:['ARMES_DE_POING'],furt:['FURTIVITE_DEPLACEMENT_SILENCIEUX','CAMOUFLAGE_DISSIMULATION','PICKPOCKET'],tech:['ESPIONNAGE_SURVEILLANCE'],soc:['INTIMIDATION']},['Contrats','Équipement','Discrétion','Relations','Repaire'],true),
+      C('chasseur','Chasseur de primes','Ch',false,500,'Apprenti','#e0a050','Ils passent l\u2019essentiel de leur temps à courir après criminels, pirates, contrebandiers ou fugitifs.','Partout où il y a des primes : ports francs, colonies frontalières.',{phys:['ATHLETISME','ENDURANCE','MANOEUVRES_SOUS_MARINES'],cac:['COMBAT_ARME','COMBAT_A_MAINS_NUES','ARTS_MARTIAUX'],tir:['ARMES_DE_POING','ARMES_SOUS_MARINES','FUSIL_ARMES_DEPAULES'],soc:['ANALYSE_EMPATHIQUE','ELOQUENCE_PERSUASION','INTIMIDATION'],conn:['BUREAUCRATIE','CONNAISSANCE_DES_NATIONS_ORGANISATIONS','NAVIGATION','RECHERCHE_DINFORMATIONS'],furt:['FURTIVITE_DEPLACEMENT_SILENCIEUX','DISCRETION_FILATURE'],tech:['ESPIONNAGE_SURVEILLANCE','SYSTEMES_DE_SECURITE','PREMIER_SOINS'],pil:['PILOTAGE__NAVIRES_LEGERS','PILOTAGE__SCOOTERS_SOUS_MARINS'],surv:['OBSERVATION']},['Équipement','Célébrité','Relations','Véhicule','Licences'],true),
+      C('contrebandier','Contrebandier','Cb',false,550,'Novice','#38a8c8','Passeurs de marchandises interdites, ils connaissent les routes que personne ne surveille.','Ports francs, épaves-relais, colonies isolées.',{pil:['PILOTAGE__NAVIRES_LEGERS','PILOTAGE__SCOOTERS_SOUS_MARINS'],conn:['CONNAISSANCE_DES_NATIONS_ORGANISATIONS','NAVIGATION'],soc:['ELOQUENCE_PERSUASION','ENTREGENT_SEDUCTION'],furt:['DISCRETION_FILATURE'],tir:['ARMES_DE_POING'],tech:['FALSIFICATION']},['Stock de marchandises','Véhicule','Planques','Relations','Matériel'],true),
+      C('cultivateur','Cultivateur / Éleveur','Cu',false,300,'Apprenti','#4caf77','Aquaculteurs et éleveurs nourrissent les colonies immergées, loin des grands centres.','Fermes aquacoles et colonies agricoles des basses profondeurs.',{phys:['ENDURANCE','ATHLETISME'],surv:['OBSERVATION','ORIENTATION'],conn:['AQUACULTURE_ELEVAGE'],tech:['PREMIER_SOINS']},['Exploitation','Cheptel','Stock','Relations','Matériel'],false),
+      C('diplomate','Diplomate','Di',false,800,'Novice','#9858c8','Négociateurs et émissaires, ils dénouent les crises entre nations sans jamais tirer un coup de feu.','Ambassades et cours des grandes nations de Polaris.',{soc:['ELOQUENCE_PERSUASION','ENTREGENT_SEDUCTION','ANALYSE_EMPATHIQUE','INTIMIDATION'],conn:['BUREAUCRATIE','CONNAISSANCE_DES_NATIONS_ORGANISATIONS','EDUCATION_CULTURE_GENERALE'],lang:['LANGUE_NEO_AZURAN','LANGUE_SOLEEN']},['Immunité','Célébrité','Relations','Fonds','Réseau'],false),
+      C('erudit','Érudit / Archéologue','Ér',true,600,'Novice','#f5c542','Chercheurs et exhumeurs du passé, ils traquent les vestiges des civilisations englouties.','Universités, musées et sites de fouilles submergés.',{conn:['EDUCATION_CULTURE_GENERALE','RECHERCHE_DINFORMATIONS','CRYPTOGRAPHIE','CONNAISSANCE_DES_NATIONS_ORGANISATIONS'],lang:['LANGAGES_SPECIFIQUES'],tech:['INFORMATIQUE'],surv:['ORIENTATION']},['Laboratoire','Bibliothèque','Célébrité','Relations','Subventions'],false),
+      C('espion','Espion','Es',false,600,'Novice','#5b8dee','Agents de renseignement actifs et entraînés, appartenant à un organisme tel que le Prisme.','Recruté et déployé par un organisme (le Prisme, un service national).',{phys:['ACROBATIE_EQUILIBRE','ATHLETISME','ESCALADE'],cac:['ARTS_MARTIAUX_LUTTE','ARTS_MARTIAUX_TECHNIQUES_DEFENSIVES','COMBAT_ARME','COMBAT_A_MAINS_NUES'],tir:['ARMES_DE_POING','FUSIL_ARMES_DEPAULES'],soc:['ANALYSE_EMPATHIQUE','ELOQUENCE_PERSUASION','ENTREGENT_SEDUCTION','INTIMIDATION'],conn:['BUREAUCRATIE','CONNAISSANCE_DES_NATIONS_ORGANISATIONS','CRYPTOGRAPHIE','EDUCATION_CULTURE_GENERALE','RECHERCHE_DINFORMATIONS'],furt:['CAMOUFLAGE_DISSIMULATION','DEGUISEMENT_IMITATION','EVASION','FURTIVITE_DEPLACEMENT_SILENCIEUX','DISCRETION_FILATURE','PICKPOCKET'],lang:['LANGAGES_SPECIFIQUES','LANGUE_NEO_AZURAN'],surv:['OBSERVATION','ORIENTATION'],tech:['ESPIONNAGE_SURVEILLANCE','FALSIFICATION','INFORMATIQUE','PIRATAGE_INFORMATIQUE','SYSTEMES_DE_SECURITE'],spec:['BOUCLIER_MENTAL']},['Couverture','Équipement','Réseau','Relations','Fonds noirs'],true),
+      C('hybride','Hybride du Trident (G.S.I.)','Hy',true,650,'Novice','#3a8aaa','Modifiés pour les grands fonds, les Hybrides du Trident servent le G.S.I. dans les opérations sous-marines extrêmes.','Enrôlé et modifié par le G.S.I. ; bases militaires abyssales.',{phys:['MANOEUVRES_SOUS_MARINES','ENDURANCE'],pil:['PILOTAGE__SCOOTERS_SOUS_MARINS','MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES'],tir:['ARMES_SOUS_MARINES'],surv:['OBSERVATION'],tech:['ANALYSES_SONSCANS','PREMIER_SOINS']},['Implants','Armure','Grade','Relations','Matériel'],false)
+    ];
+    this.byId={};this.SKILL_CAT={};
+    for(const c of this.CAREERS){c.hasRandom=!!c.hasRandom;this.byId[c.id]=c;c.allSkills=[];for(const cat of Object.keys(c.skills)){for(const code of c.skills[cat]){this.SKILL_CAT[code]=cat;c.allSkills.push(code);}}}
+    this.BASE={AQUACULTURE_ELEVAGE:2,EDUCATION_CULTURE_GENERALE:2,COMBAT_A_MAINS_NUES:1,OBSERVATION:1,LANGUE_NEO_AZURAN:3,PREMIER_SOINS:1};
+    for(const code of Object.keys(this.BASE)){if(!this.SKILL_CAT[code])this.SKILL_CAT[code]='conn';}
+    this.ALL_CODES=Object.keys(this.SKILL_CAT);
+    this.PC_DISPO=20;this.CAP=3;this.PTS=5;this.AV=5;this.AGE_BASE=20;
+    // random-advantage flavor lines (Barman example, reused generically)
+    this.RAND=['Attribut augmenté : Volonté +1.','Prestation : points de compétence +2, célébrité +1.','Protection : un groupe (gang, pirates\u2026) peut être appelé en renfort.','Clientèle prestigieuse : célébrité +4, relations +2, revenus +10%.','Année faste : la paye est doublée cette année.','Dépôt de marchandises : stock +4, revenus +10%.','Réseau : relations +8.','Trafic : revenus +20%, relations +2, stock +3.','Secret : le personnage détient un secret monnayable (à définir avec le MJ).','Au choix : un avantage aléatoire OU 7 points à répartir librement.'];
+    this.state={filter:'acc',selected:'barman',tab:'metier',added:[],pending:{},alloc:{},avAlloc:{},relText:{},lastRoll:null};
+  }
+  niceLabel(code){let s=code.replace(/__/g,' · ').replace(/_/g,' ').toLowerCase();const r={'defensives':'défensives','deplacement':'déplacement','securite':'sécurité','systemes':'systèmes','specifiques':'spécifiques','dinformations':"d'informations",'darmure':"d'armure",'elevage':'élevage','equilibre':'équilibre','education':'éducation','generale':'générale','specialisees':'spécialisées','legers':'légers','a mains nues':'à mains nues','depaules':"d'épaules",'neo azuran':'néo-azuran','soleen':'soléen','sonscans':'sons/scans','langue':'langue :','langages':'langages'};for(const k of Object.keys(r))s=s.split(k).join(r[k]);return s.charAt(0).toUpperCase()+s.slice(1);}
+  prog(c){const b=c.eco;if(c.id==='barman')return[{lo:1,hi:2,t:'Apprenti',e:400},{lo:3,hi:6,t:'Barman',e:800},{lo:7,hi:14,t:'Barman',e:1010,rnd:true},{lo:15,hi:null,t:'Barman',e:5050,rnd:true}];return[{lo:1,hi:2,t:'Apprenti',e:b},{lo:3,hi:6,t:c.rang,e:Math.round(b*2/10)*10},{lo:7,hi:14,t:c.rang,e:Math.round(b*2.6/10)*10,rnd:true},{lo:15,hi:null,t:c.rang,e:Math.round(b*7/10)*10,rnd:true}];}
+  ecoCumul(c,years){const pr=this.prog(c);let tot=0,rnd=false;for(let y=1;y<=years;y++){for(const b of pr){if(y>=b.lo&&(b.hi==null||y<=b.hi)){tot+=b.e;if(b.rnd)rnd=true;break;}}}return{tot,rnd};}
+  fmt(n){return n.toLocaleString('fr-FR');}
+  set(p){this.setState(s=>({...s,...p}));}
+  getYears(id){const a=this.state.added.find(x=>x.id===id);if(a)return a.years;return this.state.pending[id]||1;}
+  setYears(id,y){y=Math.max(1,Math.min(50,y));const st=this.state;const ai=st.added.findIndex(x=>x.id===id);if(ai>=0){const na=st.added.slice();na[ai]={...na[ai],years:y};this.set({added:na});}else{this.set({pending:{...st.pending,[id]:y}});}}
+
+  renderVals(){
+    const st=this.state,self=this;
+    const cars=this.CAREERS.filter(c=>st.filter==='acc'?!c.restreint:true);
+    const addedIds=new Set(st.added.map(a=>a.id));
+    const unlocked=new Set();for(const a of st.added){for(const code of this.byId[a.id].allSkills)unlocked.add(code);}
+    const totalYears=st.added.reduce((s,a)=>s+a.years,0);
+    const ecoStart=st.added.reduce((s,a)=>s+this.ecoCumul(this.byId[a.id],a.years).tot,0);
+
+    const cards=cars.map(c=>{const sel=st.selected===c.id,added=addedIds.has(c.id);return{
+      id:c.id,name:c.name,initial:c.short.toUpperCase(),eco:this.fmt(c.eco)+' sols/an',rang:c.rang,restreint:c.restreint,
+      added,retenuTxt:this.getYears(c.id)+' an(s)',
+      hexStyle:{background:`linear-gradient(150deg, ${c.color}, ${c.color}88)`},
+      cls:'wz-railrow'+(sel?' sel':'')+(added?' added':''),
+      onSelect:()=>self.set({selected:c.id}),onEnter:()=>self.set({hover:c.id}),onLeave:()=>self.set({hover:null})
+    };});
+
+    const sc=this.byId[st.selected];let d={present:false};
+    if(sc){
+      const yrs=this.getYears(sc.id),isAdded=addedIds.has(sc.id);
+      const groups=this.CAT_ORDER.filter(k=>sc.skills[k]).map(k=>({cat:this.CATS[k],skills:sc.skills[k].map(code=>this.niceLabel(code))}));
+      const pr=this.prog(sc);const progRows=pr.map(b=>({years:b.hi==null?(b.lo+'+'):(b.lo+'–'+b.hi),title:b.t,eco:this.fmt(b.e)+' sols/an'+(b.rnd?' *':''),cls:(yrs>=b.lo&&(b.hi==null||yrs<=b.hi))?'cur':''}));
+      const ec=this.ecoCumul(sc,yrs);
+      const avPool=isAdded?this.AV*yrs:0;const avA=st.avAlloc[sc.id]||{};const avSpent=Object.values(avA).reduce((s,v)=>s+v,0);const avRem=avPool-avSpent;
+      const avCats=sc.avCats.map(name=>{const pts=avA[name]||0;const canInc=isAdded&&avRem>0;const canDec=pts>0;return{name,pts,
+        decCls:'wz-sbtn'+(canDec?'':' dis'),incCls:'wz-sbtn'+(canInc?'':' dis'),
+        onInc:()=>{if(!canInc)return;self.set({avAlloc:{...st.avAlloc,[sc.id]:{...avA,[name]:pts+1}}});},
+        onDec:()=>{if(!canDec)return;const na={...avA};if(pts-1<=0)delete na[name];else na[name]=pts-1;self.set({avAlloc:{...st.avAlloc,[sc.id]:na}});}
+      };});
+      d={present:true,name:sc.name,rang:sc.rang,eco:this.fmt(sc.eco)+' sols/an',desc:sc.desc,geo:sc.geo,skillCount:sc.allSkills.length,
+        slotId:'illus-'+sc.id,slotPh:'Illustration '+sc.name,years:yrs,groups,prog:progRows,
+        ecoCumul:this.fmt(ec.tot)+' sols',ecoNote:ec.rnd?'* années 7+ : gains aléatoires (1D100) — estimation en moyenne.':'Somme des économies annuelles par titre.',
+        avPerYear:this.AV,avRemaining:avRem,avRemCls:'wz-poolrem'+(avRem===0&&avPool>0?' ok':''),avLocked:!isAdded,avCats,
+        added:isAdded,addLabel:isAdded?'✓ Métier retenu':'+ Ajouter ce métier',addCls:'wz-addbtn'+(isAdded?' dis':''),
+        onYearsDown:()=>self.setYears(sc.id,yrs-1),onYearsUp:()=>self.setYears(sc.id,yrs+1),
+        onAdd:()=>{if(isAdded)return;self.set({added:[...st.added,{id:sc.id,years:yrs}]});},
+        onRemove:()=>{const na=st.added.filter(a=>a.id!==sc.id);const ul=new Set();for(const x of na){for(const code of this.byId[x.id].allSkills)ul.add(code);}const al={};for(const code of Object.keys(st.alloc)){if(ul.has(code))al[code]=st.alloc[code];}const av={...st.avAlloc};delete av[sc.id];self.set({added:na,alloc:al,avAlloc:av});}
+      };
+    }
+
+    // relations (global)
+    let contacts=0,allies=0,opps=0;for(const a of st.added){contacts+=2*a.years;allies+=Math.floor(a.years/2);opps+=Math.floor(a.years/4);}
+    const relDefs=[['contact','Contacts',contacts,'2 / an','Ex : « Maera, barmaid de la station Delta — informe sur les allées-venues »'],['allie','Alliés / Fournisseurs',allies,'1 tous les 2 ans','Ex : « Gang des Hauts-Fonds — soutien en cas de coup dur »'],['opp','Opposants',opps,'1 tous les 4 ans','Ex : « Inspecteur Vance — surveille le bar »'],['ennemi','Ennemis',Math.floor(opps/3),'3 opposants échangeables → 1 ennemi (au choix du MJ)','Ex : « Syndicat rival »']];
+    const rel=relDefs.map(([key,label,count,note,ph])=>({key,label,count,note,ph,value:st.relText[key]||'',onInput:e=>self.set({relText:{...st.relText,[key]:e.target.value}})}));
+
+    // random advantage
+    const canRoll=totalYears>=5&&st.added.some(a=>this.byId[a.id].hasRandom);
+    const randText=st.lastRoll?React.createElement('span',null,'Résultat 1D10 = ',React.createElement('b',null,st.lastRoll.n),' — ',st.lastRoll.txt):(canRoll?'Optionnel — tous les 5 ans, échange tes 5 points d\u2019avantages automatiques contre un jet.':'Disponible dès 5 ans de carrière dans un métier compatible.');
+    const rand={cls:'wz-randbtn'+(canRoll?'':' dis'),text:randText,onRoll:()=>{if(!canRoll)return;const n=Math.floor(Math.random()*10)+1;self.set({lastRoll:{n,txt:this.RAND[n-1]}});}};
+
+    // skill board
+    const hoverSet=st.hover?new Set(this.byId[st.hover].allSkills):null;
+    const totalSkill=st.added.length*this.PTS;const skillSpent=Object.values(st.alloc).reduce((s,v)=>s+v,0);const skillRem=totalSkill-skillSpent;
+    const codes=Array.from(new Set([...this.ALL_CODES]));const byCat={};for(const code of codes){const cat=this.SKILL_CAT[code];(byCat[cat]=byCat[cat]||[]).push(code);}
+    const provOf=code=>{const arr=[];for(const a of st.added){const c=this.byId[a.id];if(c.allSkills.includes(code))arr.push({short:c.short,style:{background:c.color}});}if(this.BASE[code])arr.push({short:'Origine',style:{background:'#5a6072'}});return arr;};
+    const bgroups=this.CAT_ORDER.filter(k=>byCat[k]).map(k=>({cat:this.CATS[k],skills:byCat[k].sort().map(code=>{const base=this.BASE[code]||0,pts=st.alloc[code]||0,isU=unlocked.has(code);const hl=hoverSet&&hoverSet.has(code);const canInc=isU&&skillRem>0&&pts<this.CAP,canDec=pts>0;return{code,label:this.niceLabel(code),pts,baseTxt:base>0?('base '+base):'—',totalTxt:'+'+(base+pts),prov:provOf(code),cls:'wz-skill'+(hl?' hl':'')+(isU?'':' locked'),decCls:'wz-sbtn'+(canDec?'':' dis'),incCls:'wz-sbtn'+(canInc?'':' dis'),onInc:()=>{if(!canInc)return;self.set({alloc:{...st.alloc,[code]:pts+1}});},onDec:()=>{if(!canDec)return;const al={...st.alloc};if(pts-1<=0)delete al[code];else al[code]=pts-1;self.set({alloc:al});}};})}));
+
+    // avantages remaining across all careers
+    let avRemAll=0;for(const a of st.added){const pool=this.AV*a.years;const aa=st.avAlloc[a.id]||{};avRemAll+=pool-Object.values(aa).reduce((s,v)=>s+v,0);}
+
+    // status / gating
+    let statusMsg,statusCls,canNext;
+    if(st.added.length===0){statusMsg='Ajoute au moins un métier pour continuer.';statusCls='wz-status';canNext=false;}
+    else if(skillRem>0){statusMsg='Il reste '+skillRem+' point(s) de compétence à répartir.';statusCls='wz-status';canNext=false;}
+    else if(avRemAll>0){statusMsg='Il reste '+avRemAll+' point(s) d\u2019avantages professionnels à placer (onglet Avantages pro).';statusCls='wz-status';canNext=false;}
+    else{statusMsg='✓ Tout est réparti — tu peux continuer.';statusCls='wz-status ok';canNext=true;}
+
+    return{v:{
+      cards,tousCls:'wz-segbtn'+(st.filter==='tous'?' on':''),accCls:'wz-segbtn'+(st.filter==='acc'?' on':''),
+      onTous:()=>self.set({filter:'tous'}),onAcc:()=>self.set({filter:'acc'}),
+      age:{base:this.AGE_BASE,years:totalYears,current:this.AGE_BASE+totalYears,eco:this.fmt(ecoStart)+' sols'},
+      d,tab:st.tab,showMetier:st.tab==='metier',showCarriere:st.tab==='carriere',showAvant:st.tab==='avant',
+      tabMetierCls:'wz-tab'+(st.tab==='metier'?' on':''),tabCarriereCls:'wz-tab'+(st.tab==='carriere'?' on':''),tabAvantCls:'wz-tab'+(st.tab==='avant'?' on':''),
+      onTabMetier:()=>self.set({tab:'metier'}),onTabCarriere:()=>self.set({tab:'carriere'}),onTabAvant:()=>self.set({tab:'avant'}),
+      rel,rand,
+      board:{groups:bgroups},remaining:skillRem,remainCls:'wz-poolrem'+(skillRem===0&&totalSkill>0?' ok':''),
+      statusMsg,statusCls,nextCls:'wz-next'+(canNext?'':' dis'),
+      onPrev:()=>{},onNext:()=>{if(canNext)self.set({});}
+    }};
+  }
+}
+</script>
+</body>
+</html>

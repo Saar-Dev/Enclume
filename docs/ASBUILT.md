@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-05 Session 133
+> Dernière mise à jour : 2026-07-07 Session 139
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -80,7 +80,7 @@ Enclume/
 │   │   │   ├── AdvantagesPanel.jsx     # Modifié 50 — rework lift-state-up, props charSkills/refSkillsPolaris/onSkillLearnedChange
 │   │   │   ├── SkillsPanel.jsx         # Modifié 73 — bouton ⓘ par compétence (si description non nulle), panel position:fixed (description LdB complet, scrollable, click-outside via useEffect+ref)
 │   │   │   ├── CharacterSheet.jsx      # Modifié 61 — import calcAN/calcAllureMoy/calcAllures shared, déf locales supprimées
-│   │   │   ├── CharacterWindow.jsx     # Modifié 55 — WeaponPanel monté entre ArmorWoundPanel et InventoryPanel
+│   │   │   ├── CharacterWindow.jsx     # Modifié 55 — WeaponPanel monté entre ArmorWoundPanel et InventoryPanel. Modifié 139 — prop `forceReadOnly` (défaut false) : `effectiveIsGm`/`effectiveIsOwner` remplacent `isGm`/`isOwner` dans tous les calculs de permission (nom, portrait, visibilité, onglets Matériel/Paramètres, `readOnly` textarea notes MJ) — utilisé par la fenêtre "peek" du Wizard (docs/STE6_FINAL.md), toujours lecture seule
 │   │   │   ├── DroneWindow.jsx         # NOUVEAU 83 — fenêtre flottante drone (drag/resize), onglets Fiche/Armes/Notes/Paramètres, WeaponsTab/NotesTab/SettingsTab
 │   │   │   └── DroneSheet.jsx          # NOUVEAU 83 — fiche drone : StatField, IntegritySection (cases dommages + intégrité actuelle GM), ProgramsSection (catalogue ref_equipment + DISPLAY_GROUPS optgroups + tooltip + mode custom)
 │   │   ├── locales/
@@ -109,7 +109,7 @@ Enclume/
 │   │   │   ├── campaigns.js            # Modifié 45 — POST /:id/cover + cover_url dans GET /. Modifié 66 Sprint 7.5 — +pnj_unlimited_ammo. Modifié 67 Sprint 7.6 — +reload_mode (PUT validation + returning). Modifié 70 — import multerGlb, POST /:id/default-token (upload GLB MinIO), PUT accepte default_token_glb_url=null (réinitialisation). Modifié 81 Sprint Test de Choc — +shock_auto_stun (CRUD + returning). Modifié 85 M3 — +CAMPAIGN_SETTINGS_UPDATED broadcast après PUT /:id. Modifié 104 — PUT /:id réécrit : body `{ settings }` remplace les 5 champs plats supprimés, validation par clé contre SETTINGS_SCHEMA (import campaignSettingsService.js), merge JSONB atomique db.raw('settings || ?::jsonb'), returning() retourne `settings` au lieu des colonnes supprimées
 │   │   │   ├── battlemaps.js           # Modifié 73 — GET /:id LEFT JOIN characters+users → user_color dans SELECT tokens
 │   │   │   ├── tokens.js               # Modifié 39 — maintenance Redis collision map
-│   │   │   ├── characters.js           # Modifié 59 — type dans GET/POST/PUT/broadcastCharacterUpdate
+│   │   │   ├── characters.js           # Modifié 59 — type dans GET/POST/PUT/broadcastCharacterUpdate. Modifié 139 — filtre brouillons wizard de GET / : gate sur `char_sheet.wizard_locked_at IS NULL` (au lieu de `creation_state != 'complete'`) — invariant documenté en commentaire (voir reconcileCreation)
 │   │   │   ├── textures.js
 │   │   │   ├── assets.js
 │   │   │   ├── users.js
@@ -120,7 +120,7 @@ Enclume/
 │   │   │   ├── entities.js             # Modifié 39 — maintenance Redis collision map
 │   │   │   ├── equipment.js            # NOUVEAU 47 — CRUD ref_equipment + junction tables. Modifié 65 Sprint GM-A : +location dans GET /equipment SELECT
 │   │   │   ├── documents.js            # NOUVEAU 75 — GET/POST/PUT/DELETE /campaigns/:id/documents (mergeParams, broadcast filtré canView, gm_notes_html retiré non-GM). Modifié 80 — +POST /upload-image (multerUpload, minio.putObject, GM only, campaigns/<id>/documents/<uuid>.<ext>, retourne {url:objectName})
-│   │   │   ├── creation.js             # NOUVEAU 129 — wizard COUCHE 3. Monté /api/creation. router.param('sheetId') ownership guard. GET/POST/DELETE /:sheetId/step4 + GET /step4/ref + GET/POST /:sheetId/step5 + GET /step5/ref. State machine draft_step3→step4→step5→complete (finalize non implémenté). Modifié 136 — +GET /:sheetId/step3/ref (getStep3RefData, mutations réelles PLAN_STEP4).
+│   │   │   ├── creation.js             # NOUVEAU 129 — wizard COUCHE 3. Monté /api/creation. router.param('sheetId') ownership guard. GET/POST/DELETE /:sheetId/step4 + GET /step4/ref + GET/POST /:sheetId/step5 + GET /step5/ref. State machine draft_step3→step4→step5→complete (finalize non implémenté). Modifié 136 — +GET /:sheetId/step3/ref (getStep3RefData, mutations réelles PLAN_STEP4). Modifié 139 — `POST /:sheetId/finalize` (payload complet obligatoire) → `POST /:sheetId/reconcile` (payload partiel autorisé, garde sur `wizard_locked_at` au lieu de `creation_state`) ; +`GET /:sheetId/preview` (lecture brouillon, fenêtre fiche personnage pendant le Wizard) ; +`POST /:sheetId/lock` (verrouille après "Terminer"). Voir docs/STE6_FINAL.md.
 │   │   │   └── character/
 │   │   │       └── char-sheet.js       # Modifié 66 Sprint A+C2 — +6 routes /macros. Modifié 66 Sprint 7.5 — +ammo_remaining + POST /reload. Modifié 71 — +helper getWorstWoundSeverity(charSheetId) + worst_wound_severity dans payloads WOUND_ADDED/UPDATED/REMOVED. Modifié 81 — +helper resolveAmmoInit(equipmentId, slot) + auto-init ammo_remaining dans PUT /inventory/:itemId + POST /inventory + POST /quick-equip. Modifié 83 — routes drone : GET LEFT JOIN ref_equipment (program_name/description), PUT fix 5 champs + profondeur_max/disponibilite, POST programs catégorie résolue serveur + validation ordinateur, PUT programs/:id level+sort_order uniquement. Modifié 97 — import getWorstWoundSeverity depuis woundUtils.js, suppression de la fonction locale dupliquée. Modifié 129 — advantages V1 (L.515-563) → V2 utilisant advantageService (getAdvantages / addAdvantage / removeAdvantage).
 │   │   ├── middleware/
@@ -139,7 +139,7 @@ Enclume/
 │   │   ├── services/
 │   │   │   ├── advantageConstraints.js # NOUVEAU 129 — registre CONSTRAINTS R1-R6 (exists/not_already_owned/unique_absolute/family_limit/max_desavantage_pc/sufficient_pc). validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages) → { valid, message }.
 │   │   │   ├── advantageService.js     # NOUVEAU 129 — getAdvantages (JOIN+soft-delete filter) + addAdvantage (trx-or-db pattern, valide+insère+ledger) + removeAdvantage (soft-delete+décrement). Utilisé par creation.js (step5 batch) et char-sheet.js (campagne).
-│   │   │   └── creationService.js      # NOUVEAU 129 — wizard steps 4+5. Snapshot-before rollback. Background skills additifs. Career skills SET via skillAllocations (ref_career_skills sans bonus). Validations carrière : prérequis/génotype/attributs/éducation. Salary depuis ref_career_titles. restoreSnapshot : upsert + purge orphans (whereNotIn). Modifié 136 — +getStep3RefData (ref_mutations + ref_mutation_subtypes/subtable + ref_mutation_skills imbriqués par mutation_id, pattern Map identique à getStep4RefData) ; startCreation +randomMutationsEnabled (settings.random_mutations).
+│   │   │   └── creationService.js      # NOUVEAU 129 — wizard steps 4+5. Snapshot-before rollback. Background skills additifs. Career skills SET via skillAllocations (ref_career_skills sans bonus). Validations carrière : prérequis/génotype/attributs/éducation. Salary depuis ref_career_titles. restoreSnapshot : upsert + purge orphans (whereNotIn). Modifié 136 — +getStep3RefData (ref_mutations + ref_mutation_subtypes/subtable + ref_mutation_skills imbriqués par mutation_id, pattern Map identique à getStep4RefData) ; startCreation +randomMutationsEnabled (settings.random_mutations). Modifié 139 — `finalizeCreation` → `reconcileCreation` (pattern reconciliation Kubernetes/Terraform, chaque bloc STEP1-5 conditionné à sa présence dans le payload, rejouable : reset `is_fertile`/`char_skills`/`char_careers`/`char_advantages`+ledger avant réapplication, effets d'âge en `update` absolu au lieu d'`increment`) ; +`lockWizard(sheetId)` (pose `char_sheet.wizard_locked_at`) ; +`getCharacterPreview(characterId, isGm)` (lecture brouillon, colonnes identiques à characters.js sans `worst_wound_severity`). Voir docs/STE6_FINAL.md.
 │   │   └── lib/
 │   │       ├── AppError.js
 │   │       ├── minio.js
@@ -274,6 +274,8 @@ Enclume/
 | 108_fix_ref_mutations_encoding | Corrige la corruption d'encodage (mojibake CP1252/UTF-8) sur `ref_mutations`/`ref_mutation_subtypes`/`ref_mutation_skills` insérée par le seed 95. Transformation déterministe et réversible (`decodeMojibake`/`encodeMojibake`, plage 0x80-0x9F). Coexiste avec `108_seed_ref_careers_lot2` (numéro dupliqué, tables disjointes, voir P53 dans `CLAUDE.md`) (Session 135) |
 | 109_mutation_stacking | `ref_mutations.stack_deltas` (JSONB nullable) sur les 9 lignes à incrément non-linéaire (Peau renforcée, Purulence, Squelette renforcé, Résistance naturelle ×6). Réécriture `char_mutation_effects_view` (`SUM(base + (count-1) × COALESCE(stack_deltas->>col, base))`). Coexiste avec `109_seed_ref_careers_illustration_lot2` (numéro dupliqué, voir P53) (Session 135) |
 | 117_ref_mutation_subtypes_description | Ajoute `ref_mutation_subtypes.description TEXT` (nullable) + backfill des 4 lignes CGA (texte déplacé depuis `creation.json`, aucune nouvelle rédaction). Débloque l'affichage réel de la sous-table CGA dans le wizard (`Step3Mutations.jsx`, voir `docs/Old/PLAN_STEP4.md`) (Session 136) |
+| 118_fix_ref_mutations_organe_sensoriel_manquant | Corrige `cost_pc` sur 4 des 5 sous-types de "Organe sensoriel manquant" (smell/touch 0→1, hearing 1→2, sight 2→3 ; taste inchangé) — décalage d'indexation dans le seed `95_seed_ref_mutations.js:130-143` vs `docs/Character/Creation/REGLE_CREATION.txt:834-850`. `up`/`down` testés via appel direct des fonctions du module (round-trip byte-identique) (Session 138) |
+| 119_char_sheet_wizard_lock | Ajoute `char_sheet.wizard_locked_at TIMESTAMPTZ` (nullable). Sépare la propriété "assistant" (rejouable, reconciliation à chaque ouverture de la fenêtre fiche personnage pendant le Wizard) de la propriété "runtime" (fiche éditable librement après verrouillage). `up`/`down` testés via appel direct des fonctions du module (round-trip confirmé) (Session 139) |
 
 ---
 

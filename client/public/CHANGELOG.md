@@ -1,3 +1,31 @@
+## v150 — 2026-07-07 — Fiche personnage consultable pendant la création du personnage
+
+### Serveur
+- [feat] Le brouillon du personnage en cours de création peut désormais être appliqué et relu à tout moment pendant l'assistant, pas seulement à la toute fin — nécessaire pour la nouvelle fenêtre de consultation côté client
+- [feat] Migration 119 — nouvelle date de verrouillage sur la fiche personnage, posée uniquement quand le joueur clique sur « Terminer »
+
+### Client
+- [feat] Un bouton « Voir ma fiche » est désormais disponible dès la fin de la première étape de l'assistant de création, et à chaque étape ensuite — il ouvre la vraie fiche personnage (attributs, compétences, avantages) en lecture seule, mise à jour au fur et à mesure de la progression
+- [fix] La zone « Notes MJ » de la fiche personnage n'était jamais protégée en lecture seule — corrigé (sans effet en session de jeu normale, uniquement pertinent pour la nouvelle fenêtre de consultation)
+
+## v149 — 2026-07-06 — Correction coût mutations « Organe sensoriel manquant » + lisibilité cartes Step3
+
+### Serveur
+- [fix] Migration 118 — le nombre de Points de Création gagnés pour les mutations « Nez atrophié », « Sens du toucher atrophié », « Oreille manquante » et « Œil manquant » (Organe sensoriel manquant) était incorrect ; il correspond désormais au Livre de Base
+
+### Client
+- [fix] Étape 3 du wizard : les titres longs de mutation (ex. « Organe sensoriel supplémentaire ou amélioré ») n'étaient plus lisibles, tronqués par « … » — le titre peut désormais passer à la ligne, la variante (Odorat, Vue, etc.) s'affiche sur sa propre ligne sous le titre
+
+## v148 — 2026-07-06 — Option de campagne « Bonus féminin » + Sexe/Fécondité
+
+### Serveur
+- [feat] Option de campagne `feminin_bonus` désormais active : le bonus mécanique (Force de base 5, +2 à répartir en Coordination/Présence) ne s'applique que si le MJ a activé l'option — le choix du Sexe reste toujours disponible pour tous les joueurs
+- [feat] Le Sexe choisi à l'étape 1 est enregistré sur la fiche personnage ; une mutation acquise à l'étape 3 (Asexué, Androgyne, Autofécondation) peut désormais l'altérer automatiquement, ainsi que la Fécondité du personnage
+- [feat] Le désavantage « Fécondité » (étape 5, ou ajouté plus tard depuis la fiche personnage) rend désormais le personnage fécond mécaniquement ; achat bloqué si le personnage a déjà une mutation le rendant stérile
+
+### Client
+- [feat] Étape 1 du wizard : une explication de l'option « Bonus féminin » apparaît dans les règles de répartition lorsque l'option est active
+
 ## v147 — 2026-07-05 — Wizard Step3 : mutations réelles (fin PLAN_STEP4)
 
 ### Serveur

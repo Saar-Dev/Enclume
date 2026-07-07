@@ -20,6 +20,8 @@ export default function BackgroundSelector({
   nation,
   onNationChange,
   defaultNation,
+  conditionalChoices,
+  onConditionalChoice,
 }) {
   const { t } = useTranslation('creation')
 
@@ -87,23 +89,71 @@ export default function BackgroundSelector({
             </div>
           )}
 
-          {/* Skills bonus */}
-          {selectedItem.skills && selectedItem.skills.length > 0 && (
-            <div style={s.skillsBox}>
-              <h3 style={s.skillsTitle}>Bonus de compétences</h3>
-              <ul style={s.skillsList}>
-                {selectedItem.skills.map((sk, i) => (
-                  <li key={i} style={s.skillItem}>
-                    <span style={s.skillName}>{sk.skill_id}</span>
-                    <span style={s.skillBonus}>+{sk.bonus}</span>
-                    {sk.conditional && (
-                      <span style={s.skillCond}> (au choix : {sk.choice_group})</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+          {/* Skills bonus (non conditionnelles) */}
+{selectedItem.skills && selectedItem.skills.filter(sk => !sk.conditional).length > 0 && (
+  <div style={s.skillsBox}>
+    <h3 style={s.skillsTitle}>Bonus de compétences</h3>
+    <ul style={s.skillsList}>
+      {selectedItem.skills.filter(sk => !sk.conditional).map((sk, i) => (
+        <li key={i} style={s.skillItem}>
+          <span style={s.skillName}>{sk.skill_name || sk.skill_id}</span>
+          <span style={s.skillBonus}>+{sk.bonus}</span>
+        </li>
+      ))}
+    </ul>
+  </div>
+)}
+
+{/* Choix conditionnels */}
+{selectedItem.skills && selectedItem.skills.some(sk => sk.conditional) && (
+  <div style={s.choicesBox}>
+    <h3 style={s.choicesTitle}>À choisir</h3>
+    {(() => {
+      // Grouper par choice_group (ou skill_id seul pour les conditionnelles sans groupe)
+      const groups = {}
+      selectedItem.skills.filter(sk => sk.conditional).forEach(sk => {
+        const key = sk.choice_group || `__solo_${sk.skill_id}`
+        if (!groups[key]) groups[key] = { skills: [], isSolo: !sk.choice_group }
+        groups[key].skills.push(sk)
+        groups[key].isSolo = groups[key].isSolo || !sk.choice_group
+      })
+      return Object.entries(groups).map(([key, { skills, isSolo }]) => {
+        const compositeKey = `${selectedItem.id}_${key}`
+        const currentChoice = conditionalChoices?.[compositeKey]
+        return (
+          <div key={key} style={s.choiceGroup}>
+            <span style={s.choiceLabel}>
+              {isSolo ? 'Optionnel' : `Choisissez un(e) ${key.replace(/_/g, ' ')}`} :
+            </span>
+            <div style={s.choiceOptions}>
+              {skills.map(sk => (
+                <label key={sk.skill_id} style={s.choiceOption}>
+                  <input
+                    type={isSolo ? 'checkbox' : 'radio'}
+                    name={`choice_${compositeKey}`}
+                    checked={isSolo ? currentChoice === sk.skill_id : currentChoice === sk.skill_id}
+                    onChange={() => {
+                      if (isSolo) {
+                        onConditionalChoice?.(
+                          compositeKey,
+                          currentChoice === sk.skill_id ? null : sk.skill_id
+                        )
+                      } else {
+                        onConditionalChoice?.(compositeKey, sk.skill_id)
+                      }
+                    }}
+                  />
+                  <span style={s.choiceSkillName}>{sk.skill_name || sk.skill_id}</span>
+                  <span style={s.skillBonus}>+{sk.bonus}</span>
+                </label>
+              ))}
             </div>
-          )}
+          </div>
+        )
+      })
+    })()}
+  </div>
+)}
 
           {selectedItem.isAutodidacte && (
             <p style={s.autodidacteInfo}>
@@ -290,6 +340,45 @@ const s = {
     fontSize: '13px',
     textAlign: 'center',
   },
+  choicesBox: {
+  backgroundColor: '#0a0a18',
+  border: '1px solid #2a2a3e',
+  borderRadius: '6px',
+  padding: '14px 18px',
+  marginTop: '4px',
+},
+choicesTitle: {
+  color: '#c0a060',
+  fontSize: '12px',
+  fontWeight: '600',
+  marginBottom: '10px',
+  textAlign: 'center',
+},
+choiceGroup: {
+  marginBottom: '8px',
+},
+choiceLabel: {
+  color: '#8080a0',
+  fontSize: '11px',
+  marginBottom: '4px',
+  display: 'block',
+},
+choiceOptions: {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+},
+choiceOption: {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  fontSize: '12px',
+  cursor: 'pointer',
+},
+choiceSkillName: {
+  color: '#a0a0c0',
+  flex: 1,
+},
   nav: {
     display: 'flex',
     gap: '12px',

@@ -47,6 +47,11 @@ export const CONSTRAINTS = {
     },
     message: (refAdv) => `PC insuffisants : ${refAdv.cost_pc} requis.`,
   },
+  not_if_sterile: {
+    applies: (refAdv) => refAdv.advantage_id === 'adv_076',
+    validate: (advantageId, currentAdvantages, refAdv, allRefAdvantages, ledger, isSterile) => !isSterile,
+    message: () => `"Fécondité" incompatible avec une mutation stérilisante (Asexué) déjà acquise.`,
+  },
 }
 
 /**
@@ -54,7 +59,7 @@ export const CONSTRAINTS = {
  * currentAdvantages doit déjà contenir type/cost_pc/family/family_limit/is_unique/name
  * (JOIN ref_advantages côté appelant).
  */
-export function validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages) {
+export function validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages, isSterile = false) {
   if (!CONSTRAINTS.exists.validate(advantageId, currentAdvantages, null, allRefAdvantages)) {
     return { valid: false, message: CONSTRAINTS.exists.message() }
   }
@@ -64,7 +69,7 @@ export function validateAdvantage(advantageId, currentAdvantages, ledger, allRef
   for (const [key, constraint] of Object.entries(CONSTRAINTS)) {
     if (key === 'exists') continue
     if (constraint.applies && !constraint.applies(refAdv)) continue
-    if (!constraint.validate(advantageId, currentAdvantages, refAdv, allRefAdvantages, ledger)) {
+    if (!constraint.validate(advantageId, currentAdvantages, refAdv, allRefAdvantages, ledger, isSterile)) {
       return { valid: false, message: constraint.message(refAdv) }
     }
   }

@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useCreationStore } from '../../stores/creationStore'
+import { useAuthStore } from '../../stores/authStore'
 import api from '../../lib/api'
+import CharacterWindow from '../../character/CharacterWindow'
 import WizardHeader from './WizardHeader'
 import Step0Method from './Step0Method'
 import Step1Attributes from './Step1Attributes'
@@ -16,10 +18,11 @@ import { POOL_AMBIANCE } from '../../../../shared/polarisUtils.js'
 export default function WizardCreation() {
   const { t } = useTranslation('creation')
   const { campaignId } = useParams()
+  const { user } = useAuthStore()
   const {
     step, setStep,
     highestStep, setHighestStep,
-    sheetId, characterId, isStarting, startError,
+    sheetId, isStarting, startError,
     startCreation, setCampaignId,
     resetCreation,
     step1Data, step2Data, step3Data, step4Data, step5Data,
@@ -27,11 +30,18 @@ export default function WizardCreation() {
     getPcDispo,
     ambiance: storeAmbiance,
     randomMutationsEnabled,
+    femininBonusEnabled,
   } = useCreationStore()
 
   const navigate = useNavigate()
   const [stepError, setStepError] = useState(null)
   const [finalizing, setFinalizing] = useState(false)
+
+  // ─── Fenêtre fiche personnage (lecture seule) ────────────────────────────
+  const [peekOpen, setPeekOpen] = useState(false)
+  const [peekCharacter, setPeekCharacter] = useState(null)
+  const [peekIsGm, setPeekIsGm] = useState(false)
+  const [peekLoading, setPeekLoading] = useState(false)
 
   useEffect(() => {
     if (campaignId) setCampaignId(campaignId)
@@ -39,9 +49,6 @@ export default function WizardCreation() {
 
   const pcDispo = getPcDispo()
   const ambiance = storeAmbiance ?? 'INTERMEDIAIRE'
-  const mockIsFeminin = false
-
-  const canFinalize = !!step1Data?.charName && !!step2Data && !!step3Data && !!step4Data && !!step5Data
 
   const navigateToStep = (target) => {
     if (target === step || target < 1 || target > highestStep) return
@@ -49,14 +56,38 @@ export default function WizardCreation() {
     setStep(target)
   }
 
-  const handleFinalize = async () => {
-    setFinalizing(true)
+  const openPeek = async () => {
+    if (peekLoading) return
+    setPeekLoading(true)
     setStepError(null)
     try {
-      await api.post(`/creation/${sheetId}/finalize`, {
+      await api.post(`/creation/${sheetId}/reconcile`, {
         step1: step1Data, step2: step2Data, step3: step3Data,
         step4: step4Data, step5: step5Data,
       })
+      const res = await api.get(`/creation/${sheetId}/preview`)
+      setPeekCharacter(res.data.character)
+      setPeekIsGm(res.data.isGm)
+      setPeekOpen(true)
+    } catch (err) {
+      const msg = err.response?.data?.error?.message
+        || err.response?.data?.message
+        || `Erreur ${err.response?.status ?? 'réseau'}`
+      setStepError(msg)
+    } finally {
+      setPeekLoading(false)
+    }
+  }
+
+  const handleTerminate = async () => {
+    setFinalizing(true)
+    setStepError(null)
+    try {
+      await api.post(`/creation/${sheetId}/reconcile`, {
+        step1: step1Data, step2: step2Data, step3: step3Data,
+        step4: step4Data, step5: step5Data,
+      })
+      await api.post(`/creation/${sheetId}/lock`)
       resetCreation()
       navigate('/')
     } catch (err) {
@@ -98,6 +129,9 @@ export default function WizardCreation() {
         pcDispo={pcDispo}
         infos={getInfos(step, ambiance, t)}
         onStepClick={navigateToStep}
+        hasCharacter={!!step1Data}
+        onOpenPeek={openPeek}
+        peekLoading={peekLoading}
       />
 
       {stepError && (
@@ -109,7 +143,7 @@ export default function WizardCreation() {
           <Step1Attributes
             initialData={step1Data}
             ambiance={ambiance}
-            isFeminin={mockIsFeminin}
+            femininBonusEnabled={femininBonusEnabled}
             onPcChange={(n) => setStep1Data({ pcSpent: n })}
             onNext={(data) => {
               setStep1Data(data)
@@ -205,7 +239,10 @@ export default function WizardCreation() {
               <button className="btn btn-ghost" onClick={() => { setStepError(null); setStep(5) }}>
                 ← {t('wizard.prev')}
               </button>
-              <button className="btn btn-gold" onClick={handleFinalize} disabled={finalizing || !canFinalize}>
+              <button className="btn btn-ghost" onClick={openPeek} disabled={peekLoading}>
+                {peekLoading ? '…' : t('wizard.open_sheet')}
+              </button>
+              <button className="btn btn-gold" onClick={handleTerminate} disabled={finalizing}>
                 {finalizing ? '…' : t('wizard.finalize')} →
               </button>
             </div>
@@ -213,6 +250,15 @@ export default function WizardCreation() {
         )}
 
       </div>
+
+      {peekOpen && peekCharacter && (
+        <CharacterWindow
+          character={{ ...peekCharacter, _currentUserId: user.id }}
+          isGm={peekIsGm}
+          forceReadOnly
+          onClose={() => setPeekOpen(false)}
+        />
+      )}
     </div>
   )
 }

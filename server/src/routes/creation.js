@@ -1,9 +1,11 @@
 /**
  * creation.js — Routes wizard création de personnage.
  *
- * Architecture client-primary (Session 130) :
- * Toutes les données restent dans Zustand jusqu'au bouton "Finaliser".
- * Un seul POST /:sheetId/finalize envoie le payload complet des 5 étapes.
+ * Architecture client-primary (Session 130) : toutes les données restent dans
+ * Zustand. POST /:sheetId/reconcile applique un état partiel ou complet (payload
+ * de 1 à 5 étapes) — rejouable à chaque ouverture de la fenêtre fiche personnage
+ * pendant le Wizard (docs/STE6_FINAL.md). POST /:sheetId/lock verrouille après
+ * "Terminer".
  *
  * Routes :
  *   POST   /api/creation/start                  — démarre un brouillon (character + char_sheet)
@@ -11,7 +13,9 @@
  *   GET    /api/creation/:sheetId/step4/ref     — données de référence step4 (backgrounds + carrières)
  *   GET    /api/creation/:sheetId/step4         — état courant step4 (archetype + carrières)
  *   GET    /api/creation/:sheetId/step5/ref     — liste ref_advantages
- *   POST   /api/creation/:sheetId/finalize      — finalise le personnage (payload complet)
+ *   GET    /api/creation/:sheetId/preview       — lecture brouillon (fenêtre fiche personnage)
+ *   POST   /api/creation/:sheetId/reconcile     — applique l'état courant (payload partiel ou complet)
+ *   POST   /api/creation/:sheetId/lock          — verrouille la fiche (fin du Wizard)
  */
 
 import { Router } from 'express'
@@ -21,7 +25,7 @@ import { requireAuth } from '../middleware/auth.js'
 import {
   getStep3RefData,
   getStep4RefData, getStep4State, getStep5RefData,
-  startCreation, finalizeCreation,
+  startCreation, reconcileCreation, lockWizard, getCharacterPreview,
 } from '../services/creationService.js'
 
 const router = Router()
@@ -104,15 +108,30 @@ router.get('/:sheetId/step5/ref', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// ─── Finalize ──────────────────────────────────────────────────────────────────
+// ─── Preview ───────────────────────────────────────────────────────────────────
 
-router.post('/:sheetId/finalize', async (req, res, next) => {
+router.get('/:sheetId/preview', async (req, res, next) => {
+  try {
+    const character = await getCharacterPreview(req.character.id, req.isGm)
+    res.json({ character, isGm: req.isGm })
+  } catch (err) { next(err) }
+})
+
+// ─── Reconcile ─────────────────────────────────────────────────────────────────
+
+router.post('/:sheetId/reconcile', async (req, res, next) => {
   try {
     const { step1, step2, step3, step4, step5 } = req.body
-    if (!step1 || !step2 || !step3 || !step4 || !step5) {
-      return next(new AppError(400, 'Payload finalize incomplet'))
-    }
-    const result = await finalizeCreation(req.sheet.id, { step1, step2, step3, step4, step5 })
+    const result = await reconcileCreation(req.sheet.id, { step1, step2, step3, step4, step5 })
+    res.json(result)
+  } catch (err) { next(err) }
+})
+
+// ─── Lock ──────────────────────────────────────────────────────────────────────
+
+router.post('/:sheetId/lock', async (req, res, next) => {
+  try {
+    const result = await lockWizard(req.sheet.id)
     res.json(result)
   } catch (err) { next(err) }
 })

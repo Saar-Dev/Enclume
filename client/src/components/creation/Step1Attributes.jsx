@@ -26,15 +26,17 @@ const ATTR_DESCRIPTIONS = {
   PRE: "La Présence est une mesure de l'aura dégagée par une personne, de son charisme. Son importance est vitale dans toutes les actions relationnelles : séduire, impressionner, commander, intimider…",
 }
 
-const ROW_TOOLTIPS = {
-  base: "Niveau de base : score initial de l'Attribut avant modificateurs. Fixé à 7 (5 en Force pour un personnage féminin).",
-  pc: "Modificateur PC : points d'Attribut achetés avec des Points de Création. 1 PC = +2 points de pool.",
-  na: "Niveau Actuel : somme du niveau de base et de tous les modificateurs. C'est la valeur réellement utilisée en jeu.",
-  an: "Aptitude Naturelle : dérivée du Niveau Actuel, utilisée pour calculer le niveau de base des Compétences.",
-}
-
-export default function Step1Attributes({ initialData, ambiance, isFeminin: _deprecated, onNext, onPrev, onPcChange }) {
+export default function Step1Attributes({ initialData, ambiance, femininBonusEnabled, onNext, onPrev, onPcChange }) {
   const { t } = useTranslation('creation')
+
+  const ROW_TOOLTIPS = {
+    base: femininBonusEnabled
+      ? "Niveau de base : score initial de l'Attribut avant modificateurs. Fixé à 7 (5 en Force pour un personnage féminin)."
+      : "Niveau de base : score initial de l'Attribut avant modificateurs. Fixé à 7.",
+    pc: "Modificateur PC : points d'Attribut achetés avec des Points de Création. 1 PC = +2 points de pool.",
+    na: "Niveau Actuel : somme du niveau de base et de tous les modificateurs. C'est la valeur réellement utilisée en jeu.",
+    an: "Aptitude Naturelle : dérivée du Niveau Actuel, utilisée pour calculer le niveau de base des Compétences.",
+  }
 
   const [charName, setCharName] = useState(initialData?.charName ?? '')
   const [playerName, setPlayerName] = useState(initialData?.playerName ?? '')
@@ -47,7 +49,7 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin: _dep
       // Recalcul depuis les attributs sauvegardés
       return Object.fromEntries(
         ATTR_IDS.map(id => {
-          const base = (id === 'FOR' && initialData.isFeminin) ? 5 : 7
+          const base = (id === 'FOR' && initialData.isFeminin && femininBonusEnabled) ? 5 : 7
           return [id, Math.max(0, (initialData.attributes[id] || base) - base)]
         })
       )
@@ -64,15 +66,15 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin: _dep
     setModPC(prev => {
       // Si on passe à féminin et que FOR avait des points, on les garde mais la base change
       // Si FOR modPC ferait dépasser 20, on cap
-      const baseFOR = val ? 5 : 7
+      const baseFOR = (val && femininBonusEnabled) ? 5 : 7
       const maxMod = 20 - baseFOR
       return { ...prev, FOR: Math.min(prev.FOR, maxMod) }
     })
-  }, [])
+  }, [femininBonusEnabled])
 
   const baseAttrs = useMemo(
-    () => Object.fromEntries(ATTR_IDS.map(id => [id, (id === 'FOR' && isFeminin) ? 5 : 7])),
-    [isFeminin]
+    () => Object.fromEntries(ATTR_IDS.map(id => [id, (id === 'FOR' && isFeminin && femininBonusEnabled) ? 5 : 7])),
+    [isFeminin, femininBonusEnabled]
   )
 
   // Attributs complets (base + modPC)
@@ -83,7 +85,7 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin: _dep
 
   const poolBase = POOL_AMBIANCE[ambiance] || 38
   const poolTotal = calcPoolTotal(ambiance, pcAlloues)
-  const totalCost = calcTotalCost(attributs, isFeminin)
+  const totalCost = calcTotalCost(attributs, isFeminin && femininBonusEnabled)
   const pointsRestants = poolTotal - totalCost
   const chc = CHANCE_AMBIANCE[ambiance] || 13
 
@@ -113,11 +115,11 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin: _dep
       // Vérifier coût total
       const newModPC = { ...prev, [attrId]: next }
       const newAttributs = Object.fromEntries(ATTR_IDS.map(id => [id, baseAttrs[id] + newModPC[id]]))
-      const newCost = calcTotalCost(newAttributs, isFeminin)
+      const newCost = calcTotalCost(newAttributs, isFeminin && femininBonusEnabled)
       if (newCost > poolTotal) return prev
       return newModPC
     })
-  }, [baseAttrs, isFeminin, poolTotal])
+  }, [baseAttrs, isFeminin, femininBonusEnabled, poolTotal])
 
   const showTooltip = (desc, event) => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -303,6 +305,7 @@ export default function Step1Attributes({ initialData, ambiance, isFeminin: _dep
               <li>{t('step1.rule2')}</li>
               <li>{t('step1.rule3')}</li>
               <li>{t('step1.rule4')}</li>
+              {femininBonusEnabled && <li>{t('step1.ruleFemininBonus')}</li>}
             </ul>
             <table className="wiz1-cost-table">
               <thead>

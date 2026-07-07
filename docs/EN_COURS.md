@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-05 Session 136
+> Dernière mise à jour : 2026-07-07 Session 139
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -9,10 +9,29 @@
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-> Items "0." à "3." (seeding carrières + mutations) tous clos depuis Session 136. Aucune étape
-> unique explicitement désignée par Saar pour la suite — voir item "41." (options de campagne,
-> un par un, déjà en cours) et "Notes Saar" ci-dessous pour les pistes ouvertes (Step4 Expérience,
-> Step4 Profession UI). À clarifier avec Saar en début de prochaine session.
+> Items "0." à "3." (seeding carrières + mutations) tous clos depuis Session 136. Item "42." (fix
+> `cost_pc` Organe sensoriel manquant + présentation cartes Step3) clos Session 138. Item "43."
+> (fiche personnage consultable en permanence pendant le Wizard, `docs/STE6_FINAL.md`) clos
+> Session 139. Aucune étape unique explicitement désignée par Saar pour la suite — voir item "41."
+> (options de campagne, un par un, déjà en cours) et "Notes Saar" ci-dessous pour les pistes ouvertes
+> (Step4 Expérience, Step4 Profession UI). À clarifier avec Saar en début de prochaine session.
+
+**43. Fiche personnage consultable en permanence pendant le Wizard (fenêtre "peek") ✅ CLOS — Session 139 (2026-07-07)**
+   → Plan complet rédigé en amont : `docs/STE6_FINAL.md`. `CharacterWindow.jsx` réutilisé inchangé
+     (prop `forceReadOnly`) — zéro nouveau composant d'affichage. `finalizeCreation` →
+     `reconcileCreation` (pattern reconciliation, payload partiel autorisé, rejouable — reset
+     `is_fertile`/`char_skills`/`char_careers`/`char_advantages`+ledger avant réapplication) +
+     `lockWizard` + `getCharacterPreview`. Migration 119 (`char_sheet.wizard_locked_at`) — sépare
+     propriété "assistant" (rejouable) de propriété "runtime" (fiche éditable post-verrouillage).
+     `routes/characters.js` : filtre liste gate désormais sur `wizard_locked_at` (au lieu de
+     `creation_state`) pour ne jamais exposer un brouillon en cours au reste de la campagne.
+   → Détail complet (déviations trouvées en codant vs le plan écrit, notamment l'appel
+     `setCharacters` du store omis car inutile et risqué) : `docs/JOURNAL6.md` "Session 139".
+   → **Testé** : `node --check`/ESLint 0 erreur, round-trip migration 119, SR + parcours fonctionnel
+     confirmé par Saar.
+   → **Non testé** : les 8 scénarios détaillés un par un de `docs/STE6_FINAL.md` §15 (validation
+     donnée sur "SR et fonctionnel" globalement).
+   → Prochaine migration disponible : **120** (119 consommée cette session).
 
 **0. ~~MIGRATION 37-BIS (ref_skills) — migration 105~~** ✅ CLOS — Session 133 (2026-07-05). Détail complet : `docs/Old/JOURNAL5.md` "Session 133", `docs/Old/MIGRATION_37BIS.md`.
 
@@ -52,8 +71,17 @@
      fonctionnel. Lint/syntaxe validés sur tous les fichiers touchés.
    → **Non testé** : round-trip migration 117, achat stackable 2× et tirage D20/D100 en conditions
      réelles navigateur, toggle `random_mutations`.
-   → Prochaine migration disponible : **118** (117 consommée cette session).
    → Prérequis carrières (espion, soldat_elite_*, officier_militaire_souterrain, etc.) : à traiter dans une migration dédiée, cf. PIÈGE 7 `JOURNALCOUCHE4.md`.
+
+**42. Fix `cost_pc` « Organe sensoriel manquant » (migration 118) + présentation cartes Step3 ✅ CLOS — Session 138 (2026-07-06)**
+   → Signalement Saar (capture rulebook) : gain de PC faux pour "Organe sensoriel manquant" dans Step3. Vérification exhaustive des 45 lignes `ref_mutations` vs `docs/Character/Creation/REGLE_CREATION.txt:812-898` demandée par Saar avant tout plan (44/45 correctes).
+   → Migration 118 : `cost_pc` corrigé sur 4 sous-types (smell/touch 0→1, hearing 1→2, sight 2→3 ; taste inchangé). Round-trip `down`/`up` byte-identique testé via appel direct des fonctions du module.
+   → `Step3Mutations.jsx` : titre de carte tronqué (`overflow`/`ellipsis`/`nowrap`) → variante déplacée sur sa propre ligne (`st.cardVariant`, pattern repris de `st.rollSubtype`), troncature retirée de `st.cardName`. Bénéficie aussi à la vue "tirage aléatoire" (même style réutilisé).
+   → **Effet de bord repéré (non corrigé, voir dette [MUT1])** : `Purulence` a `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) — pourrait l'exclure du filtre `cost_pc >= 0` en méthode achat libre.
+   → Détail complet : `docs/JOURNAL6.md` "Session 138".
+   → **Testé** : valeurs DB conformes à la rulebook, round-trip migration, ESLint 0 erreur, confirmation visuelle navigateur par Saar (coûts + titres non tronqués).
+   → **Non testé** : achat effectif d'une des 4 mutations corrigées (dépense PC réelle, `finalizeCreation`).
+   → Prochaine migration disponible : **119** (118 consommée cette session).
 
 ---
 
@@ -123,11 +151,14 @@
    → **Testé** : SR ✅, combat inchangé ✅, persistance 11 options ✅, upload token non écrasé ✅, navigation onglets ✅
    → **Non testé** : effet mécanique des 11 options (stockage/lecture seulement — voir `docs/optionCampagne/JOPT.md`)
 
-**41. Options de campagne — effets mécaniques (1/11) : `ambiance` ✅ câblée — Session 132 suite** ← EN COURS, un par un
-   → Audit complet des 11 options dans `docs/optionCampagne/PLAN_OPTCAMP.md` (Niveau 1/2/3 par complexité)
+**41. Options de campagne — effets mécaniques (3/11) : `ambiance` ✅, `random_mutations` ✅, `feminin_bonus` ✅ — Session 137** ← EN COURS, un par un
+   → Audit complet des 11 options dans `docs/Old/optionCampagne/PLAN_OPTCAMP.md` (Niveau 1/2/3 par complexité)
    → `ambiance` : mock supprimé (`WizardCreation.jsx`), `startCreation`/`creationStore` transmettent la vraie valeur, `finalizeCreation` revalide via `validateStep1` (code mort réactivé, `shared/polarisUtils.js:187`)
-   → **Testé** : SR ✅, fonctionnel ✅
-   → **Prochain** : `feminin_bonus` (sélecteur Sexe toujours affiché, prop `isFeminin` ignorée `_deprecated` dans `Step1Attributes.jsx:36`)
+   → `random_mutations` : câblée Session 136 (masque la carte "Tirage aléatoire" Step3 si désactivée)
+   → `feminin_bonus` : câblée Session 137 — élargie en cours de route à Sexe/Fécondité (Step1 pose `char_archetype.sex`, Step3 override via mutations Asexué/Androgyne/Autofécondation, Step5 désavantage Fécondité `adv_076` avec blocage si mutation stérilisante). Détail complet : `docs/PLAN_SEXE.md`, `docs/JOURNAL6.md` "Session 137".
+   → **Testé** : SR ✅, parcours Wizard confirmé fonctionnel par Saar
+   → **Non testé** : les 8 scénarios détaillés de `PLAN_SEXE.md` un par un (validation donnée sur le parcours global)
+   → **Prochain** : `skill_prerequisites` (Niveau 1 — contrôle déjà actif dans `SkillsPanel.jsx:166-170`, mais appliqué en permanence alors que le défaut documenté est OFF)
 
 **41. Wizard COUCHE 4c → analyse terminée (session 2026-07-05 suite) : deux dossiers distincts, à ne plus confondre**
    → `PLAN_COUCHE4.md` (architecture wizard step-by-step, câblage frontend→backend) : confirmé **obsolète** — remplacé par COUCHE 5 (architecture client-primary, Session 130). Archivé par Saar dans `docs/Old/`.
@@ -157,7 +188,9 @@ Projet en cours et priorité user :
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **122 migrations appliquées** (117_ref_mutation_subtypes_description — Session 136 ;
+- **124 migrations appliquées** (119_char_sheet_wizard_lock — Session 139 ;
+  118_fix_ref_mutations_organe_sensoriel_manquant — Session 138 ;
+  117_ref_mutation_subtypes_description — Session 136 ;
   109_mutation_stacking + 108_fix_ref_mutations_encoding — Session 135 ;
   116_seed_ref_careers_lot6 — Session 134 suite ; deux numéros 108/109 distincts coexistent, voir P53)
 - Migrations : voir `docs/ASBUILT.md` § Base de données
@@ -217,8 +250,9 @@ Projet en cours et priorité user :
 | **CAR3** | Prérequis carrières (espion, soldat_elite_*, officier_militaire_souterrain, etc.) non insérés dans `ref_career_prerequisites` | Moyenne — migration dédiée post lots 2-6 |
 | **DBG-C1** | `character.user_id` null quand GM crée pour joueur absent (steps 1-3) | Moyenne — sprint futur |
 | **JSON1** | `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant, cassait déjà avant Session 132) | **Haute** — casse tout le fichier EN |
-| **OPT-W1** | 9/11 options de campagne (feminin_bonus, polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity) sans effet mécanique branché — `ambiance` ✅ câblée Session 132 suite, `random_mutations` ✅ câblée Session 136 (masque la carte "Tirage aléatoire" Step3 si désactivée) | Moyenne — en cours un par un |
+| **OPT-W1** | 8/11 options de campagne (polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity) sans effet mécanique branché — `ambiance` ✅ Session 132 suite, `random_mutations` ✅ Session 136 (masque la carte "Tirage aléatoire" Step3 si désactivée), `feminin_bonus` ✅ Session 137 (Sexe/Fécondité Step1/3/5, voir `docs/PLAN_SEXE.md`) | Moyenne — en cours un par un |
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
+| **MUT1** | `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable | Basse — à investiguer |
 
 ---
 
