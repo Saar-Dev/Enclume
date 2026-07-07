@@ -1,3 +1,13 @@
+## v151 — 2026-07-07 — Nouvelle interface Professions (étape 4 de la création)
+
+### Client
+- [feat] L'écran de sélection des métiers (étape « Professions ») est entièrement repensé : liste des métiers accessibles (avec filtre), fiche détaillée par métier (compétences, salaire, rang), et un tableau unique de répartition des points de compétence commun à tous les métiers retenus
+- [feat] Le filtre « Accessibles » masque désormais réellement les métiers dont les conditions (prérequis, génotype, attributs, études) ne sont pas remplies, avec la raison affichée
+- Les onglets « Carrière & économies » et « Avantages professionnels » sont visibles mais pas encore actifs (arrivent dans une prochaine mise à jour)
+
+### Serveur
+- [fix] Le serveur vérifie désormais que la répartition des points de compétence respecte le budget disponible et les plafonds de maîtrise avant d'enregistrer un personnage
+
 ## v150 — 2026-07-07 — Fiche personnage consultable pendant la création du personnage
 
 ### Serveur

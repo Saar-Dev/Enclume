@@ -148,7 +148,12 @@
       "Bash(awk 'NR>=1 && NR<=2601 { if \\($0 ~ /^\\\\/\\\\* ={5,}/\\) { getline t; print NR\": \"t } }' client/src/index.css)",
       "Bash(node -e \"try{console.log\\('root type:',require\\('/c/Users/Nemet/Documents/Enclume/package.json'\\).type||'\\(none\\)'\\)}catch\\(e\\){console.log\\('no root pkg'\\)}; try{console.log\\('client type:',require\\('/c/Users/Nemet/Documents/Enclume/client/package.json'\\).type||'\\(none\\)'\\)}catch\\(e\\){}; try{console.log\\('shared has pkg:', !!require\\('fs'\\).existsSync\\('/c/Users/Nemet/Documents/Enclume/shared/package.json'\\)\\)}catch\\(e\\){}\")",
       "Bash(node --check shared/careerEligibility.js)",
-      "Bash(node --check shared/careerSkills.js)"
+      "Bash(node --check shared/careerSkills.js)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('client/src/locales/creation.json','utf8'\\)\\); console.log\\('JSON_OK'\\)\")",
+      "Bash(git diff *)",
+      "Bash(node --check \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\shared\\\\careerSkills.js\")",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('client/src/locales/creation.json','utf8'\\)\\)\")",
+      "Bash(echo \"exit:$?\")"
     ]
   }
 }

@@ -275,13 +275,20 @@ actuel continue de fonctionner tel quel.
 
 ---
 
-## 5. LOT 2 — UI : réécriture CareersAllocator + board global  [cadré — re-détailler au lancement]
+## 5. LOT 2 — UI : réécriture CareersAllocator + board global  [✅ CLOS]
 
-> **⚠️ CORRECTION MODÈLE (JOURNALTEMP §13)** : le board est **GLOBAL** (une ligne/compétence, un
-> compteur de points restants global), PAS « par métier ». Le texte ci-dessous écrit avant la
-> clarification Saar parle encore de steppers « métier courant » — à corriger au re-détail : les
-> steppers agissent sur la maîtrise **globale** de chaque compétence, coût/plafond via
-> `shared/careerSkills.js` (Lot 1). Les **avantages pro** (Lot 4) restent, eux, par métier.
+> **Contradiction résolue au lancement** : lecture du design source `Professions.dc.html` (logique
+> complète, pas que le CSS) → board confirmé **GLOBAL** (une ligne/compétence, un compteur de points
+> restants global), pas « par métier ». Les **avantages pro** (Lot 4) restent, eux, par métier.
+> Implémenté tel quel, testé fonctionnel Saar.
+>
+> **Découverte règle en cours de route (compétences réservées `(X)`, à retenir pour le Lot 5)** :
+> `REGLE_CREATION.txt:1129-1132` — une compétence spéciale/réservée est accessible dès qu'elle est
+> **listée par une carrière retenue**, pas seulement via un bonus d'origine ou un déblocage explicite.
+> `computeSkillAllocation` (`shared/careerSkills.js`) calcule `isLearned = isPro ||
+> openedSkills.includes(skillId) || (baseMastery[skillId] ?? 0) > 0`. Le malus « base -3 » du premier
+> point investi (ligne 1115) s'applique quand même dans tous les cas — ce n'est pas un blocage, juste
+> un coût plus élevé. Détail complet (2 bugs `-Infinity` trouvés et corrigés) : `JOURNAL6.md` "Lot 2".
 
 **Décisions verrouillées** : skin **Option A** (wiz premium). Classes **`.wiz4-*`** (cohérent avec
 `.wiz3-*`), dans `index.css` Section 12. Variables `--wiz-*` disponibles car Step4 est rendu sous
@@ -363,69 +370,45 @@ ultérieur).
 | Précédent | `onPrev()` | props |
 | Suivant | `onNext()` | actif si ≥1 métier retenu **et** points de compétence tous répartis |
 
-**Sous-section — Board d'allocation `.wiz4-board`** (cœur du Lot 1)
-- Sous le détail : agrégation de TOUTES les compétences des métiers retenus + du métier consulté,
-  groupées par famille (`.wiz4-bgrp`, label sticky).
-- Ligne `.wiz4-skill` : label, **tags de provenance** `.wiz4-provtag` (un par métier/origine
-  apportant la compétence, couleur `careerHexColor`), base (maîtrise backgrounds), stepper +/−, total.
-- Agrégation : adapter le `allSkills` (useMemo) actuel (`CareersAllocator.jsx:62-103`) — agrège déjà
-  géo/soc/formation/études + métiers retenus + métier courant.
-- **Modèle de budget = PAR MÉTIER (décision Saar Q3, segrégué)** : chaque métier retenu a **son**
-  budget = **10 × ses années** (compétences) dépensé sur **ses** compétences professionnelles, et
-  **5 × ses années** (avantages, Lot 2) sur **ses** catégories. PAS de pool global fongible. C'est
-  déjà la sémantique du composant actuel (steppers actifs seulement sur les compétences du métier
-  sélectionné, `skillAllocs` par métier, envoyé à `onAdd`).
-- **Mécanique de coût = RÉUTILISER `shared/polarisUtils.js`** (NE PAS recréer, NE PAS faire du 1:1) :
-  - Budget skills du métier = **10 × années** (constante LdB — `points_per_year`=5 **ignoré**, Q1).
-  - Coût d'un incrément via `calcSkillCost(skillId, current, target, isPro, isLearned, refSkills)`
-    (courbe 1/2/3/5/7…, ×2 hors-profession, `(X)` réservées, `PN` gratuit ≤+5).
-  - Plafond de maîtrise via `getMaxMasteryByYears(years)` (3/5/7/10/13/15) — remplace le faux « +3 ».
-  - `isPro` = compétence dans la liste professionnelle **du métier en cours** ; sinon coût ×2.
-  - Nécessite `refSkills` (markers `(X)`/`PN`) côté client → à câbler (déjà servi à SkillsPanel ; à
-    confirmer accessible au Step4 au lancement).
-- **Board `.wiz4-board`** : rendu type mock (compétences groupées par famille + tags de provenance)
-  mais steppers **actifs uniquement sur les compétences du métier sélectionné** (les autres en
-  `.locked`, display) ; `.wiz4-status` = budget restant **du métier courant** = 10×années − Σ
-  `calcSkillCost`. Survol rail → surbrillance `.wiz4-skill.hl`.
-- **Validation serveur (décision Saar Q2 — à corriger dans CE lot)** : `reconcileCreation` STEP4 doit
-  **valider** que, pour chaque métier, Σ `calcSkillCost(...)` des `skillAllocations` ≤ 10×années
-  (rejet `AppError` sinon) au lieu d'insérer `mastery` aveuglément. → fichier serveur touché en +.
+**Sous-section — Board d'allocation `.wiz4-board` [TEL QU'IMPLÉMENTÉ — le texte ci-dessus était la
+version pré-clarification GLOBAL, remplacée]**
+- Sous le détail : agrégation de TOUTES les compétences d'origine (géo/soc/formation/études) +
+  celles des métiers **retenus** (committés, pas le métier consulté seul), groupées par famille
+  (`.wiz4-bgrp`, label sticky). Steppers actifs sur **toute** ligne du board (pas de `.locked`) :
+  une compétence d'origine non-professionnelle reste allouable jusqu'à son plafond fixe +5
+  (`REGLE_CREATION.txt:1122-1128`).
+- **Modèle de budget = GLOBAL** (confirmé `§1ter`, pas par métier) : un seul pool = Σ(10 × années de
+  tous les métiers retenus), un seul compteur `.wiz4-poolrem` de points restants. Les **avantages
+  pro** (Lot 4, pas encore codé) resteront par métier (5×années chacun).
+- Coût/plafond via `shared/careerSkills.js` (`computeSkillAllocation`/`getSkillCap`, Lot 1) — **jamais
+  recalculé en JSX**. Seules les compétences **réellement touchées par le joueur**
+  (`state.skillAllocations`) sont passées à `computeSkillAllocation` ; le plafond de chaque ligne
+  (touchée ou non) vient de `getSkillCap`, calculable indépendamment du coût.
+- **Compétences réservées `(X)`** : accessibles dès qu'elles sont listées par une carrière retenue
+  (`REGLE_CREATION.txt:1129-1132`), pas seulement via un bonus d'origine — voir encart en tête de
+  section et `JOURNAL6.md` "Lot 2" pour le détail des 2 bugs `-Infinity` trouvés et corrigés.
+- Validation serveur (Q2) : `reconcileCreation` STEP4 appelle `computeSkillAllocation` sur le payload
+  global `step4.skillAllocations` (rejet `AppError` si `errors.length>0`), upsert `char_skills`
+  absolu ensuite.
 
-**Compat props** : signature `CareersAllocator` conservée + ajout `baseAge`. `pcDispo,
-selectedCareers, careers, onAdd, onRemove, onNext, onPrev, selected*Item` inchangés. + accès au
-contexte d'éligibilité (attributs/génotype) : à faire remonter depuis `Step4Experience` (voir §
-Fichiers touchés — prop `eligibilityContext` ou équivalent).
+**Compat props** : `CareersAllocator` a gagné `baseAge`, `attributes`, `genotypeId`, `higherEd`,
+`refSkills`, `initialSkillAllocations`, `onSkillAllocationsChange`. `onAdd` réduit à 4 args
+(`careerId, careerName, careerTitles, years` — `skillAllocations` n'y transite plus, il est global).
 
-**Clés i18n à ajouter** (`step4.*`) : `career_filter_all`, `career_filter_eligible`,
-`career_tab_metier`, `career_tab_carriere`, `career_tab_avant`, `career_tab_soon`,
-`career_age_start`, `career_age_years`, `career_age_current`, `career_age_savings`,
-`career_geo_origin`, `career_skills_pro`, `career_years_in`, `career_retained`, `career_restricted`,
-`career_starts`, `career_unlocks_skills`, `career_ineligible` (préfixe raisons),
-`career_board_title`, `career_board_hint`, `career_points_remaining`, `career_status_none`,
-`career_status_skills_left`, `career_status_ok`, `career_provenance_origin`.
-(`career_add`, `career_remove`, `career_none`, `prev`, `next` existent déjà.)
+**Clés i18n** : namespace réel = `client/src/locales/creation.json` (pas `fr.json` comme écrit plus
+haut dans ce plan — fichier dédié, chargé par `i18n.js`). Clés `step4.career_filter_*`,
+`career_tab_*`, `career_age_*`, `career_board_*`, `career_status_*`, `career_ineligible_*`, etc.
+ajoutées (liste complète dans le fichier).
 
-**Fichiers touchés (Lot 1)** :
-- `CareersAllocator.jsx` — réécriture rendu + `useReducer` + board (calcSkillCost/getMaxMasteryByYears),
-  suppression objet `s={}`.
-- `index.css` — bloc `.wiz4-*` fin Section 12.
-- `fr.json` — clés ci-dessus.
-- `Step4Experience.jsx` — passer `baseAge` + contexte d'éligibilité (attributs step1 + génotype step2,
-  lus depuis `useCreationStore`) + `refSkills` (markers) au `CareersAllocator`.
-- `server/src/services/creationService.js` — **Q2** : `reconcileCreation` STEP4 valide le budget
-  skills par métier via `calcSkillCost` (rejet si Σcoût > 10×années) avant insert `char_skills`.
-- **Vérifier** : `getStep4RefData` charge-t-il `refSkills` (markers `(X)`/`PN`) ? sinon l'ajouter
-  (comme `ref_career_education`, cf. note Lot 1). À confirmer au lancement.
+**Fichiers touchés (réel)** : `CareersAllocator.jsx` (réécriture complète), `index.css` (bloc
+`.wiz4-*`), `client/src/locales/creation.json`, `Step4Experience.jsx` (nouvelles props +
+`skillAllocations` state + `handleSkillAllocationsChange`), `server/src/services/creationService.js`
+(Q2), `shared/careerSkills.js` (2 fixes `(X)` + export `getSkillCap`).
 
-**Ce qui NE change PAS** : schéma DB, autres sous-steps/composants, payload `skillAllocations`
-(structure conservée ; désormais **validée** serveur).
+**Ce qui NE change PAS** : schéma DB, autres sous-steps/composants, `Step4Summary.jsx`,
+`WizardReview.jsx`, `WizardCreation.jsx`.
 
-**Tests Lot 1** : SR ; sélection (surbrillance rail + détail) ; filtre Accessibles = vraie
-éligibilité (carrière non éligible masquée/`Ajouter` grisé + raison) ; stepper années borné ;
-board : coût via `calcSkillCost` (courbe + ×2 hors-pro), plafond `getMaxMasteryByYears`, budget
-10×années **par métier**, provenance correcte, survol → surbrillance ; Ajouter → Retenu + allocs
-persistées ; Retirer → réconcilie ; onglet Métier ; coquilles Carrière/Avantages ; barre d'âge
-(économies « — ») ; gating Suivant ; **serveur rejette un budget skills dépassé (Q2)** ; ESLint 0.
+**Tests** : voir `JOURNAL6.md` "Lot 2" (Testé/Non testé complet).
 
 ---
 
@@ -500,7 +483,7 @@ persistées ; Retirer → réconcilie ; onglet Métier ; coquilles Carrière/Ava
 |---|---|---|---|
 | 0 — Fondation éligibilité | ✅ (§3) | ✅ parité 12/12 | ✅ SR + fonctionnel |
 | 1 — Fondation moteur coût | ✅ (§4) | ✅ | ✅ SR + « Test OK » |
-| 2 — UI (board global) | partiel (§5, à re-détailler) | — | — |
+| 2 — UI (board global) | ✅ re-détaillé au lancement | ✅ | ✅ SR + fonctionnel |
 | 3 — Économies | — | — | — |
 | 4 — Avantages pro | — | — | — |
 | 5 — « Au choix » | — | — | — |

@@ -1,5 +1,74 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useReducer } from 'react'
 import { useTranslation } from 'react-i18next'
+import { evaluateCareerEligibility } from '../../../../shared/careerEligibility.js'
+import { computeSkillAllocation, getSkillCap } from '../../../../shared/careerSkills.js'
+
+// Couleur déterministe (hash → HSL) — rail + tags de provenance du board.
+function careerHexColor(code) {
+  let hash = 0
+  for (let i = 0; i < (code ?? '').length; i++) hash = (hash * 31 + code.charCodeAt(i)) >>> 0
+  return `hsl(${hash % 360}, 55%, 55%)`
+}
+
+function formatReason(t, r) {
+  switch (r.code) {
+    case 'prereq':
+      return t('step4.career_ineligible_prereq', { years: r.minYears, career: r.careerName ?? r.careerId })
+    case 'genotype':
+      return t('step4.career_ineligible_genotype', { genotype: r.genotypeLabel })
+    case 'attributes':
+      return t('step4.career_ineligible_attributes', {
+        list: r.failed.map(f => `${f.attr} ${f.have ?? '?'}/${f.min}`).join(', '),
+      })
+    case 'education':
+      return r.present
+        ? t('step4.career_ineligible_education_wrong', { fields: r.fields.join(' ou ') })
+        : t('step4.career_ineligible_education_missing', { fields: r.fields.join(' ou ') })
+    default:
+      return t('step4.career_ineligible_generic')
+  }
+}
+
+const initialReducerState = (initialSkillAllocations) => ({
+  filter: 'all',
+  selectedCareerId: null,
+  years: 1,
+  activeTab: 'metier',
+  hoverCareerId: null,
+  skillAllocations: initialSkillAllocations || {},
+})
+
+function careersReducer(state, action) {
+  switch (action.type) {
+    case 'SET_FILTER':
+      return { ...state, filter: action.filter }
+    case 'SELECT_CAREER':
+      if (state.selectedCareerId === action.id) return { ...state, selectedCareerId: null }
+      return { ...state, selectedCareerId: action.id, years: action.committedYears ?? 1, activeTab: 'metier' }
+    case 'SET_HOVER':
+      return { ...state, hoverCareerId: action.id }
+    case 'SET_TAB':
+      return { ...state, activeTab: action.tab }
+    case 'SET_YEARS':
+      return { ...state, years: Math.max(1, Math.min(50, action.years)) }
+    case 'ALLOC_SKILL': {
+      const nextTarget = (state.skillAllocations[action.skillId] ?? action.base) + action.delta
+      const allocations = { ...state.skillAllocations }
+      if (nextTarget <= action.base) delete allocations[action.skillId]
+      else allocations[action.skillId] = nextTarget
+      return { ...state, skillAllocations: allocations }
+    }
+    case 'PRUNE_ALLOCATIONS': {
+      const allocations = {}
+      for (const [id, v] of Object.entries(state.skillAllocations)) {
+        if (action.validIds.has(id)) allocations[id] = v
+      }
+      return { ...state, skillAllocations: allocations }
+    }
+    default:
+      return state
+  }
+}
 
 export default function CareersAllocator({
   pcDispo,
@@ -13,785 +82,446 @@ export default function CareersAllocator({
   selectedSocItem,
   selectedTrainingItem,
   selectedHigherEdItem,
+  baseAge,
+  attributes,
+  genotypeId,
+  higherEd,
+  refSkills,
+  initialSkillAllocations,
+  onSkillAllocationsChange,
 }) {
   const { t } = useTranslation('creation')
-  const [selectedCareerId, setSelectedCareerId] = useState(null)
-  const [years, setYears] = useState(1)
-  const [filter, setFilter] = useState('all')
-  const [skillAllocs, setSkillAllocs] = useState({})
+  const [state, dispatch] = useReducer(careersReducer, initialSkillAllocations, initialReducerState)
+  const { filter, selectedCareerId, years, activeTab, hoverCareerId } = state
 
-  const career = careers?.find(c => c.id === selectedCareerId) || null
+  const careersById = useMemo(() => new Map((careers ?? []).map(c => [c.id, c])), [careers])
+  const refSkillsById = useMemo(() => new Map((refSkills ?? []).map(s => [s.id, s])), [refSkills])
+  const skillLabel = (id) => refSkillsById.get(id)?.label ?? id
 
-  const filteredCareers = (careers ?? []).filter(c => {
-    if (filter === 'all') return true
-    return !c.restricted_geographic_origin
-  })
+  const career = careersById.get(selectedCareerId) || null
+  const isAdded = career ? selectedCareers.some(c => c.career_id === career.id) : false
+  const committedEntry = career ? selectedCareers.find(c => c.career_id === career.id) : null
+  const displayYears = isAdded ? committedEntry.years : years
 
   const getTitleForYears = (titles, yrs) => {
     if (!titles || titles.length === 0) return null
-    return titles.find(t => yrs >= t.min_years && (t.max_years === null || yrs <= t.max_years)) || titles[titles.length - 1]
+    return titles.find(ti => yrs >= ti.min_years && (ti.max_years === null || yrs <= ti.max_years)) || titles[titles.length - 1]
   }
-
-  const currentTitle = career ? getTitleForYears(career.titles, years) : null
+  const currentTitle = career ? getTitleForYears(career.titles, displayYears) : null
 
   const formatSalary = (title) => {
     if (!title) return '—'
-    if (title.salary_per_year) return `${title.salary_per_year}¤/an`
-    if (title.salary_formula) return `${title.salary_formula} (aléatoire)`
+    if (title.salary_per_year) return t('step4.career_salary_amount', { amount: title.salary_per_year })
+    if (title.salary_formula) return t('step4.career_salary_random', { formula: title.salary_formula })
     return '—'
   }
 
-  const groupedSkills = career ? career.skills.reduce((acc, sk) => {
-    if (!acc[sk.family]) acc[sk.family] = []
-    acc[sk.family].push(sk)
-    return acc
-  }, {}) : {}
+  // ── Éligibilité (Lot 0) ──────────────────────────────────────────
+  const eligContext = useMemo(() => ({
+    careers: selectedCareers.map(c => ({ career_id: c.career_id, years: c.years })),
+    genotypeId,
+    higherEd,
+    attributes: attributes || {},
+  }), [selectedCareers, genotypeId, higherEd, attributes])
 
+  const eligibilityById = useMemo(() => {
+    const map = new Map()
+    for (const c of careers ?? []) {
+      const prerequisites = (c.prerequisites ?? []).map(p => ({
+        ...p,
+        prerequisiteCareerName: careersById.get(p.prerequisite_career_id)?.name,
+      }))
+      map.set(c.id, evaluateCareerEligibility(
+        { ...c, prerequisites, education: c.education ?? [] },
+        eligContext
+      ))
+    }
+    return map
+  }, [careers, careersById, eligContext])
+
+  const filteredCareers = (careers ?? []).filter(c => {
+    if (filter === 'all') return true
+    return eligibilityById.get(c.id)?.eligible ?? true
+  })
+
+  const eligibility = career ? eligibilityById.get(career.id) : null
+  const eligible = eligibility?.eligible ?? true
+
+  // ── PC (années = PC, inchangé) ───────────────────────────────────
   const totalPC = selectedCareers.reduce((sum, c) => sum + c.years, 0)
   const remainingPC = pcDispo - totalPC
 
-  const totalBudget = (career?.points_per_year ?? 0) * years
-  const totalAllocated = Object.values(skillAllocs).reduce((s, v) => s + v, 0)
-  const remainingBudget = totalBudget - totalAllocated
-
-  const currentCareerSkillIds = useMemo(
-    () => new Set((career?.skills ?? []).map(s => s.skill_id)),
-    [career]
-  )
-
-  const allSkills = useMemo(() => {
-    const map = new Map()
-
-    const addBgSkills = (skills) => {
-      ;(skills ?? []).filter(s => !s.conditional).forEach(sk => {
-        const b = sk.bonus ?? 0
-        const existing = map.get(sk.skill_id)
-        if (existing) existing.mastery += b
-        else map.set(sk.skill_id, { skill_id: sk.skill_id, mastery: b })
+  // ── Compétences d'origine (base) ─────────────────────────────────
+  const baseMastery = useMemo(() => {
+    const map = {}
+    const add = (skills) => {
+      ;(skills ?? []).filter(sk => !sk.conditional).forEach(sk => {
+        map[sk.skill_id] = (map[sk.skill_id] ?? 0) + (sk.bonus ?? 0)
       })
     }
+    add(selectedGeoItem?.skills)
+    add(selectedSocItem?.skills)
+    add(selectedTrainingItem?.skills)
+    add(selectedHigherEdItem?.skills)
+    return map
+  }, [selectedGeoItem, selectedSocItem, selectedTrainingItem, selectedHigherEdItem])
 
-    addBgSkills(selectedGeoItem?.skills)
-    addBgSkills(selectedSocItem?.skills)
-    addBgSkills(selectedTrainingItem?.skills)
-    addBgSkills(selectedHigherEdItem?.skills)
-
-    selectedCareers.forEach(c => {
-      const cData = careers?.find(cl => cl.id === c.career_id)
-      ;(cData?.skills ?? []).forEach(sk => {
-        if (!map.has(sk.skill_id)) map.set(sk.skill_id, { skill_id: sk.skill_id, mastery: 0 })
-      })
-      Object.entries(c.skillAllocations || {}).forEach(([skillId, delta]) => {
-        const existing = map.get(skillId)
-        if (existing) existing.mastery += delta
-        else map.set(skillId, { skill_id: skillId, mastery: delta })
-      })
-    })
-
-    if (career) {
-      career.skills.forEach(sk => {
-        if (!map.has(sk.skill_id)) map.set(sk.skill_id, { skill_id: sk.skill_id, mastery: 0 })
-      })
-      Object.entries(skillAllocs).forEach(([skillId, delta]) => {
-        const existing = map.get(skillId)
-        if (existing) existing.mastery += delta
-        else map.set(skillId, { skill_id: skillId, mastery: delta })
-      })
+  // ── Moteur de coût global (Lot 1) ─────────────────────────────────
+  const boardSkillIds = useMemo(() => {
+    const ids = new Set(Object.keys(baseMastery))
+    for (const c of selectedCareers) {
+      const refCareer = careersById.get(c.career_id)
+      for (const sk of refCareer?.skills ?? []) if (!sk.conditional) ids.add(sk.skill_id)
     }
+    return ids
+  }, [baseMastery, selectedCareers, careersById])
 
-    return Array.from(map.values()).sort((a, b) => a.skill_id.localeCompare(b.skill_id))
-  }, [selectedGeoItem, selectedSocItem, selectedTrainingItem, selectedHigherEdItem, selectedCareers, careers, career, skillAllocs])
+  const skillAllocationCtx = useMemo(() => ({
+    careers: selectedCareers.map(c => ({
+      skills: (careersById.get(c.career_id)?.skills ?? []).filter(sk => !sk.conditional).map(sk => sk.skill_id),
+      years: c.years,
+    })),
+    higherEdSkills: (selectedHigherEdItem?.skills ?? []).filter(sk => !sk.conditional).map(sk => sk.skill_id),
+    baseMastery,
+    refSkills: refSkills ?? [],
+    openedSkills: [],
+  }), [selectedCareers, careersById, selectedHigherEdItem, baseMastery, refSkills])
 
-  const displayedSkills = allSkills.filter(
-    sk => sk.mastery > 0 || currentCareerSkillIds.has(sk.skill_id)
+  // Seules les compétences RÉELLEMENT touchées par le joueur (state.skillAllocations) sont
+  // soumises au calcul de coût — une compétence non modifiée doit toujours coûter 0 (Lot 2 fix :
+  // passer toutes les compétences du board ici, y compris non touchées, déclenchait le blocage
+  // "(X) non ouvert" de calcSkillCost dès qu'une compétence réservée avait un bonus d'origine).
+  const allocationResult = useMemo(
+    () => computeSkillAllocation(state.skillAllocations, skillAllocationCtx),
+    [state.skillAllocations, skillAllocationCtx]
   )
 
-  const handlePlus = (skillId) => {
-    if (remainingBudget <= 0) return
-    setSkillAllocs(prev => ({ ...prev, [skillId]: (prev[skillId] || 0) + 1 }))
+  const provenanceFor = (skillId) => {
+    const tags = []
+    for (const c of selectedCareers) {
+      const refCareer = careersById.get(c.career_id)
+      if (refCareer?.skills?.some(sk => sk.skill_id === skillId && !sk.conditional)) {
+        tags.push({ key: c.career_id, label: refCareer.name.slice(0, 3), color: careerHexColor(refCareer.code) })
+      }
+    }
+    if (skillId in baseMastery) tags.push({ key: 'origin', label: t('step4.career_provenance_origin'), color: '#5a6072' })
+    return tags
   }
 
-  const handleMinus = (skillId) => {
-    if ((skillAllocs[skillId] || 0) <= 0) return
-    setSkillAllocs(prev => ({ ...prev, [skillId]: prev[skillId] - 1 }))
+  // Plafond calculé pour CHAQUE compétence du board (touchée ou non), indépendamment du coût.
+  const boardGroups = useMemo(() => {
+    const byFamily = {}
+    for (const skillId of boardSkillIds) {
+      const current = baseMastery[skillId] ?? 0
+      const target = state.skillAllocations[skillId] ?? current
+      const cap = getSkillCap(skillId, skillAllocationCtx)
+      const family = refSkillsById.get(skillId)?.family ?? '?'
+      ;(byFamily[family] ??= []).push({ skillId, current, target, cap, provenance: provenanceFor(skillId) })
+    }
+    return Object.entries(byFamily)
+      .map(([family, skills]) => ({
+        family,
+        skills: skills.sort((a, b) => skillLabel(a.skillId).localeCompare(skillLabel(b.skillId))),
+      }))
+      .sort((a, b) => a.family.localeCompare(b.family))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardSkillIds, skillAllocationCtx, state.skillAllocations, baseMastery, refSkillsById, selectedCareers, careersById])
+
+  // ── Purge des allocations orphelines (carrière retirée) ──────────
+  useEffect(() => {
+    dispatch({ type: 'PRUNE_ALLOCATIONS', validIds: boardSkillIds })
+  }, [boardSkillIds])
+
+  // ── Remontée au parent (payload global) ──────────────────────────
+  useEffect(() => {
+    onSkillAllocationsChange?.(state.skillAllocations)
+  }, [state.skillAllocations, onSkillAllocationsChange])
+
+  const handleAllocInc = (row) => {
+    if (allocationResult.remaining <= 0 || row.target >= row.cap) return
+    dispatch({ type: 'ALLOC_SKILL', skillId: row.skillId, delta: 1, base: baseMastery[row.skillId] ?? 0 })
+  }
+  const handleAllocDec = (row) => {
+    if (row.target <= (baseMastery[row.skillId] ?? 0)) return
+    dispatch({ type: 'ALLOC_SKILL', skillId: row.skillId, delta: -1, base: baseMastery[row.skillId] ?? 0 })
   }
 
   const handleAdd = () => {
-    if (!career) return
+    if (!career || isAdded || !eligible) return
     if (years > remainingPC) return
-    onAdd(career.id, career.name, career.titles, years, { ...skillAllocs })
-    setSelectedCareerId(null)
-    setSkillAllocs({})
-    setYears(1)
+    onAdd(career.id, career.name, career.titles, years)
   }
 
-  const handleSelectCareer = (id) => {
-    if (selectedCareerId === id) {
-      setSelectedCareerId(null)
-      setSkillAllocs({})
-    } else {
-      setSelectedCareerId(id)
-      setSkillAllocs({})
-      setYears(1)
-    }
+  const groupedSkills = career ? career.skills.reduce((acc, sk) => {
+    ;(acc[sk.family] ??= []).push(sk)
+    return acc
+  }, {}) : {}
+
+  const totalCareerYears = selectedCareers.reduce((sum, c) => sum + c.years, 0)
+  const currentAge = baseAge + totalCareerYears
+
+  let statusKey, statusOk
+  if (selectedCareers.length === 0) {
+    statusKey = 'career_status_none'; statusOk = false
+  } else if (allocationResult.errors.some(e => e.code === 'over_cap')) {
+    statusKey = 'career_status_cap'; statusOk = false
+  } else if (allocationResult.remaining > 0) {
+    statusKey = 'career_status_skills_left'; statusOk = false
+  } else if (allocationResult.errors.some(e => e.code === 'over_budget')) {
+    statusKey = 'career_status_cap'; statusOk = false
+  } else {
+    statusKey = 'career_status_ok'; statusOk = true
   }
+  const canNext = selectedCareers.length > 0 && allocationResult.errors.length === 0 && allocationResult.remaining === 0
 
   return (
-    <div style={s.container}>
-      {/* En-tête */}
-      <div style={s.header}>
-        <span style={s.pcRemaining}>
-          PC : {remainingPC} / {pcDispo}
-        </span>
-      </div>
-
-      {/* Filtres */}
-      <div style={s.filters}>
-        <button
-          style={filter === 'all' ? s.filterActive : s.filterBtn}
-          onClick={() => setFilter('all')}
-        >
-          Tous
-        </button>
-        <button
-          style={filter === 'eligible' ? s.filterActive : s.filterBtn}
-          onClick={() => setFilter('eligible')}
-        >
-          Accessibles
-        </button>
-      </div>
-
-      {/* Grille professions */}
-      <div style={s.careersGrid}>
-        {filteredCareers.map(c => (
-          <div
-            key={c.id}
-            style={{
-              ...s.careerCard,
-              ...(selectedCareerId === c.id ? s.careerCardSelected : {}),
-            }}
-            onClick={() => handleSelectCareer(c.id)}
+    <div className="wiz4-cols">
+      <div className="wiz4-rail">
+        <div className="wiz4-seg">
+          <button
+            className={`wiz4-segbtn${filter === 'all' ? ' on' : ''}`}
+            onClick={() => dispatch({ type: 'SET_FILTER', filter: 'all' })}
           >
-            {c.illustration && (
-              <img
-                src={`${import.meta.env.VITE_API_URL}/api/assets/${c.illustration}`}
-                alt={c.name}
-                style={s.careerImage}
-              />
-            )}
-            <span style={s.careerName}>{c.name}</span>
-            <span style={s.careerPoints}>{c.points_per_year} pts/an</span>
-            {c.restricted_geographic_origin && (
-              <span style={s.careerRestricted}>⚠️ restreint</span>
-            )}
-          </div>
-        ))}
+            {t('step4.career_filter_all')}
+          </button>
+          <button
+            className={`wiz4-segbtn${filter === 'eligible' ? ' on' : ''}`}
+            onClick={() => dispatch({ type: 'SET_FILTER', filter: 'eligible' })}
+          >
+            {t('step4.career_filter_eligible')}
+          </button>
+        </div>
+        {filteredCareers.map(c => {
+          const added = selectedCareers.some(sc => sc.career_id === c.id)
+          const committed = selectedCareers.find(sc => sc.career_id === c.id)
+          const firstTitle = getTitleForYears(c.titles, 1)
+          return (
+            <div
+              key={c.id}
+              className={`wiz4-railrow${selectedCareerId === c.id ? ' sel' : ''}${added ? ' added' : ''}`}
+              style={{ '--hex': careerHexColor(c.code) }}
+              onClick={() => dispatch({ type: 'SELECT_CAREER', id: c.id, committedYears: committed?.years })}
+              onMouseEnter={() => dispatch({ type: 'SET_HOVER', id: c.id })}
+              onMouseLeave={() => dispatch({ type: 'SET_HOVER', id: null })}
+            >
+              <span className="wiz4-hex">{c.name.slice(0, 1).toUpperCase()}</span>
+              <div className="wiz4-railbody">
+                <div className="wiz4-railname">{c.name}</div>
+                <div className="wiz4-railmeta">
+                  <span className="wiz4-mono">{formatSalary(firstTitle)}</span>
+                  <span>{firstTitle?.title}</span>
+                  {c.restricted_geographic_origin && (
+                    <span className="wiz4-restr" title={c.geographic_origin_details}>⚠</span>
+                  )}
+                </div>
+                {added && (
+                  <span className="wiz4-retenu">✓ {t('step4.career_retained')} · {committed.years} an(s)</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
 
-      {/* Détail profession */}
-      {career && (
-        <div style={s.detail}>
-          <h3 style={s.detailTitle}>{career.name}</h3>
-          {career.illustration && (
-            <img
-              src={`${import.meta.env.VITE_API_URL}/api/assets/${career.illustration}`}
-              alt={career.name}
-              style={s.detailImage}
-            />
-          )}
-          <p style={s.detailDesc}>{career.description}</p>
+      <div className="wiz4-main">
+        <div className="wiz4-agebar">
+          <div className="wiz4-ageitem">
+            <span className="wiz4-h">{t('step4.career_age_start')}</span>
+            <span className="wiz4-agev wiz4-mono">{baseAge}</span>
+          </div>
+          <span className="wiz4-agesep" />
+          <div className="wiz4-ageitem">
+            <span className="wiz4-h">{t('step4.career_age_years')}</span>
+            <span className="wiz4-agev wiz4-mono">+{totalCareerYears}</span>
+          </div>
+          <span className="wiz4-agesep" />
+          <div className="wiz4-ageitem">
+            <span className="wiz4-h">{t('step4.career_age_current')}</span>
+            <span className="wiz4-agev wiz4-mono hi">{currentAge} ans</span>
+          </div>
+          <span className="wiz4-agesep" />
+          <div className="wiz4-ageitem">
+            <span className="wiz4-h">{t('step4.career_age_savings')}</span>
+            <span className="wiz4-agev wiz4-mono gold">—</span>
+          </div>
+          <span className="wiz4-agenote">{t('step4.career_age_note')}</span>
+        </div>
 
-          {career.restricted_geographic_origin && career.geographic_origin_details && (
-            <p style={s.detailRestricted}>{career.geographic_origin_details}</p>
-          )}
+        {career && (
+          <div className="wiz4-detail">
+            <div className="wiz4-dtop">
+              {career.illustration && (
+                <img
+                  className="wiz4-illus"
+                  src={`${import.meta.env.VITE_API_URL}/api/assets/${career.illustration}`}
+                  alt={career.name}
+                />
+              )}
+              <div className="wiz4-dinfo">
+                <div className="wiz4-dtitle">{career.name}</div>
+                <div className="wiz4-drang">
+                  {t('step4.career_starts', { salary: formatSalary(currentTitle) })}
+                  {currentTitle && ` · ${t('step4.career_rank', { rang: currentTitle.title })}`}
+                  {' · '}{t('step4.career_unlocks_skills', { count: career.skills.length })}
+                </div>
+                <div className="wiz4-ddesc">{career.description}</div>
+                <div className="wiz4-dactions">
+                  {!isAdded ? (
+                    <div className="wiz4-yearctl">
+                      <span className="wiz4-h">{t('step4.career_years_in')}</span>
+                      <button
+                        className="wiz4-stepbtn"
+                        onClick={() => dispatch({ type: 'SET_YEARS', years: years - 1 })}
+                        disabled={years <= 1}
+                      >−</button>
+                      <span className="wiz4-yearval">{years} an(s)</span>
+                      <button
+                        className="wiz4-stepbtn"
+                        onClick={() => dispatch({ type: 'SET_YEARS', years: years + 1 })}
+                        disabled={years >= Math.min(50, remainingPC)}
+                      >＋</button>
+                    </div>
+                  ) : (
+                    <div className="wiz4-yearctl">
+                      <span className="wiz4-h">{t('step4.career_years_in')}</span>
+                      <span className="wiz4-yearval">{committedEntry.years} an(s)</span>
+                    </div>
+                  )}
+                  <div style={{ flex: 1 }} />
+                  {!isAdded ? (
+                    <button
+                      className={`wiz4-addbtn${!eligible || years > remainingPC ? ' dis' : ''}`}
+                      onClick={handleAdd}
+                      disabled={!eligible || years > remainingPC}
+                    >
+                      {t('step4.career_add')}
+                    </button>
+                  ) : (
+                    <>
+                      <span className="wiz4-addbtn dis">✓ {t('step4.career_retained')}</span>
+                      <button
+                        className="wiz4-prev"
+                        onClick={() => onRemove(selectedCareers.findIndex(sc => sc.career_id === career.id))}
+                      >
+                        {t('step4.career_remove')}
+                      </button>
+                    </>
+                  )}
+                </div>
+                {!isAdded && !eligible && (
+                  <p className="wiz4-note">
+                    {eligibility.reasons.map(r => formatReason(t, r)).join(' · ')}
+                  </p>
+                )}
+              </div>
+            </div>
 
-          {/* Compétences */}
-          <div style={s.skillsSection}>
-            <h4 style={s.skillsTitle}>
-              {t('step4.career_skills_title', { points: career.points_per_year })} — {career.points_per_year * years} pts à répartir
-            </h4>
-            {Object.entries(groupedSkills).map(([group, skills]) => (
-              <div key={group} style={s.skillGroup}>
-                <span style={s.skillGroupName}>{group}</span>
-                <ul style={s.skillList}>
-                  {skills.map(sk => (
-                    <li key={sk.skill_id} style={s.skillItem}>
-                      {sk.skill_id}
-                      {sk.conditional && <span style={s.skillCond}> (au choix)</span>}
-                    </li>
-                  ))}
-                </ul>
+            <div className="wiz4-tabs">
+              <button
+                className={`wiz4-tab${activeTab === 'metier' ? ' on' : ''}`}
+                onClick={() => dispatch({ type: 'SET_TAB', tab: 'metier' })}
+              >{t('step4.career_tab_metier')}</button>
+              <button
+                className={`wiz4-tab${activeTab === 'carriere' ? ' on' : ''}`}
+                onClick={() => dispatch({ type: 'SET_TAB', tab: 'carriere' })}
+              >{t('step4.career_tab_carriere')}</button>
+              <button
+                className={`wiz4-tab${activeTab === 'avant' ? ' on' : ''}`}
+                onClick={() => dispatch({ type: 'SET_TAB', tab: 'avant' })}
+              >{t('step4.career_tab_avant')}</button>
+            </div>
+            <div className="wiz4-tabbody">
+              {activeTab === 'metier' && (
+                <>
+                  {career.restricted_geographic_origin && career.geographic_origin_details && (
+                    <div className="wiz4-block">
+                      <span className="wiz4-h">{t('step4.career_geo_origin')}</span>
+                      <div className="wiz4-geo">{career.geographic_origin_details}</div>
+                    </div>
+                  )}
+                  <div className="wiz4-block">
+                    <span className="wiz4-h">{t('step4.career_skills_pro')}</span>
+                    <div className="wiz4-groups">
+                      {Object.entries(groupedSkills).map(([family, skills]) => (
+                        <div key={family}>
+                          <div className="wiz4-grplbl">{family}</div>
+                          <div className="wiz4-chips">
+                            {skills.map(sk => (
+                              <span key={sk.skill_id} className="wiz4-chip">
+                                {skillLabel(sk.skill_id)}{sk.conditional ? ` (${t('step4.career_conditional')})` : ''}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+              {activeTab === 'carriere' && <p className="wiz4-note">{t('step4.career_tab_soon')}</p>}
+              {activeTab === 'avant' && <p className="wiz4-note">{t('step4.career_tab_soon')}</p>}
+            </div>
+          </div>
+        )}
+
+        <div className="wiz4-board">
+          <div className="wiz4-boardhead">
+            <span className="wiz4-h">
+              {t('step4.career_board_title')} <span className="wiz4-boardhint">— {t('step4.career_board_hint')}</span>
+            </span>
+            <span className={`wiz4-poolrem${allocationResult.remaining === 0 && allocationResult.budget > 0 ? ' ok' : ''}`}>
+              <span className="wiz4-mono">{allocationResult.remaining}</span> {t('step4.career_points_remaining')}
+            </span>
+          </div>
+          <div className="wiz4-scroll">
+            {boardGroups.map(g => (
+              <div key={g.family} className="wiz4-bgrp">
+                <div className="wiz4-bgrplbl">{g.family}</div>
+                {g.skills.map(row => (
+                  <div
+                    key={row.skillId}
+                    className={`wiz4-skill${hoverCareerId && row.provenance.some(p => p.key === hoverCareerId) ? ' hl' : ''}`}
+                  >
+                    <div className="wiz4-skmain">
+                      <span className="wiz4-sklabel">{skillLabel(row.skillId)}</span>
+                      <div className="wiz4-prov">
+                        {row.provenance.map(p => (
+                          <span key={p.key} className="wiz4-provtag" style={{ background: p.color }}>{p.label}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="wiz4-ctl">
+                      <span className="wiz4-base">{row.current > 0 ? t('step4.career_base', { n: row.current }) : '—'}</span>
+                      <button
+                        className={`wiz4-sbtn${row.target <= (baseMastery[row.skillId] ?? 0) ? ' dis' : ''}`}
+                        onClick={() => handleAllocDec(row)}
+                        disabled={row.target <= (baseMastery[row.skillId] ?? 0)}
+                      >−</button>
+                      <span className="wiz4-val">{row.target}</span>
+                      <button
+                        className={`wiz4-sbtn${allocationResult.remaining <= 0 || row.target >= row.cap ? ' dis' : ''}`}
+                        onClick={() => handleAllocInc(row)}
+                        disabled={allocationResult.remaining <= 0 || row.target >= row.cap}
+                      >＋</button>
+                      <span className="wiz4-total">+{row.target}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
+        </div>
 
-          {/* Salaire */}
-          <div style={s.salaryRow}>
-            <span style={s.salaryLabel}>{t('step4.career_salary', { amount: '' })}</span>
-            <span style={s.salaryValue}>{formatSalary(currentTitle)}</span>
-            {currentTitle && (
-              <span style={s.salaryTitle}> — {currentTitle.title}</span>
-            )}
-          </div>
-
-          {/* Slider années */}
-          <div style={s.yearsRow}>
-            <span style={s.yearsLabel}>
-              {t('step4.career_years')} : {years}
-            </span>
-            <input
-              type="range"
-              min={1}
-              max={Math.max(1, Math.min(20, remainingPC))}
-              value={years}
-              onChange={(e) => {
-                setYears(parseInt(e.target.value, 10))
-                setSkillAllocs({})
-              }}
-              disabled={remainingPC <= 0}
-              style={s.yearsSlider}
-            />
-          </div>
-
-          {/* Récapitulatif année */}
-          <div style={s.recapBox}>
-            <div style={s.recapRow}>
-              <span style={s.recapLabel}>Compétences</span>
-              <span style={s.recapValue}>{career.points_per_year * years} pts</span>
-            </div>
-            <div style={s.recapRow}>
-              <span style={s.recapLabel}>Avantages pro</span>
-              <span style={s.recapValue}>{5 * years} pts</span>
-            </div>
-            <div style={s.recapRow}>
-              <span style={s.recapLabel}>Salaire</span>
-              <span style={s.recapValue}>
-                {currentTitle ? formatSalary(currentTitle) : '—'}
-                {currentTitle ? ` × ${years} an(s)` : ''}
-              </span>
-            </div>
-            <div style={s.recapRow}>
-              <span style={s.recapLabel}>Âge</span>
-              <span style={s.recapValue}>+{years} an(s)</span>
-            </div>
-            <div style={s.recapRowTotal}>
-              <span style={s.recapLabel}>Coût total</span>
-              <span style={s.recapValueTotal}>{years} PC</span>
-            </div>
-          </div>
-
-          {/* Budget points compétences */}
-          <div style={s.recapRow}>
-            <span style={s.recapLabel}>
-              {t('step4.career_skills_allocated', { spent: totalAllocated, total: totalBudget })}
-            </span>
-          </div>
-
-          {/* Bouton Ajouter */}
-          <button
-            style={years <= remainingPC ? s.addBtn : s.addBtnDisabled}
-            onClick={handleAdd}
-            disabled={years > remainingPC}
-          >
-            {t('step4.career_add')}
+        <div className="wiz4-foot">
+          <button className="wiz4-prev" onClick={onPrev}>{t('step4.prev')}</button>
+          <span className={`wiz4-status${statusOk ? ' ok' : ''}`}>
+            {t(`step4.${statusKey}`, { n: allocationResult.remaining })}
+          </span>
+          <button className={`wiz4-next${canNext ? '' : ' dis'}`} onClick={onNext} disabled={!canNext}>
+            {t('step4.next')}
           </button>
         </div>
-      )}
-
-      {/* Professions sélectionnées */}
-      {selectedCareers.length > 0 && (
-        <div style={s.selectedSection}>
-          <h4 style={s.selectedTitle}>
-            Professions sélectionnées ({selectedCareers.length})
-          </h4>
-          {selectedCareers.map((c, i) => (
-            <div key={i} style={s.selectedRow}>
-              <span style={s.selectedName}>{c.career_name ?? c.career_id}</span>
-              <span style={s.selectedYears}>{c.years} an(s)</span>
-              <span style={s.selectedPC}>= {c.years} PC</span>
-              <button
-                style={s.removeBtn}
-                onClick={() => onRemove(i)}
-              >
-                {t('step4.career_remove')}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {selectedCareers.length === 0 && (
-        <p style={s.noneSelected}>{t('step4.career_none')}</p>
-      )}
-
-      {/* Séparateur + Tableau récapitulatif des compétences */}
-      {displayedSkills.length > 0 && (
-        <>
-          <div style={s.separator}>
-            <span style={s.separatorText}>Récapitulatif des compétences</span>
-          </div>
-
-          <table style={s.skillsTable}>
-            <thead>
-              <tr>
-                <th style={s.th}>Compétence</th>
-                <th style={s.th}>Base</th>
-                <th style={s.th}>Maîtrise</th>
-                <th style={s.th}>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedSkills.map(sk => {
-                const allocatable = currentCareerSkillIds.has(sk.skill_id)
-                const allocated = skillAllocs[sk.skill_id] || 0
-                return (
-                  <tr key={sk.skill_id}>
-                    <td style={s.td}>{sk.skill_id}</td>
-                    <td style={s.tdBase}>—</td>
-                    <td style={s.tdMasteryCell}>
-                      <button
-                        style={s.minusBtn}
-                        onClick={() => handleMinus(sk.skill_id)}
-                        disabled={!allocatable || allocated <= 0}
-                      >-</button>
-                      <span style={s.masteryValue}>{sk.mastery || 0}</span>
-                      <button
-                        style={s.plusBtn}
-                        onClick={() => handlePlus(sk.skill_id)}
-                        disabled={!allocatable || remainingBudget <= 0}
-                      >+</button>
-                    </td>
-                    <td style={s.td}>+{sk.mastery || 0}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* Navigation */}
-      <div style={s.nav}>
-        <button style={s.backBtn} onClick={onPrev}>
-          {t('step4.prev')}
-        </button>
-        <button
-          style={selectedCareers.length > 0 ? s.nextBtn : s.nextBtnDisabled}
-          onClick={onNext}
-          disabled={selectedCareers.length === 0}
-        >
-          {t('step4.next')}
-        </button>
       </div>
     </div>
   )
-}
-
-const s = {
-  container: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    padding: '20px',
-    gap: '16px',
-    overflowY: 'auto',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-  },
-  pcRemaining: {
-    color: '#e0a85c',
-    fontSize: '16px',
-    fontWeight: '700',
-  },
-  filters: {
-    display: 'flex',
-    gap: '8px',
-    justifyContent: 'center',
-  },
-  filterBtn: {
-    padding: '6px 16px',
-    backgroundColor: 'transparent',
-    border: '1px solid #2a2a3e',
-    borderRadius: '4px',
-    color: '#8080a0',
-    cursor: 'pointer',
-    fontSize: '12px',
-  },
-  filterActive: {
-    padding: '6px 16px',
-    backgroundColor: '#1a1a2e',
-    border: '1px solid #5b8dee',
-    borderRadius: '4px',
-    color: '#c8c8f0',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600',
-  },
-  careersGrid: {
-    display: 'flex',
-    gap: '10px',
-    overflowX: 'auto',
-    paddingBottom: '4px',
-  },
-  careerCard: {
-    flex: '0 0 160px',
-    padding: '12px 14px',
-    backgroundColor: '#0e0e1a',
-    border: '1px solid #2a2a3e',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    transition: 'border-color 0.15s ease, background-color 0.15s ease',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  careerImage: {
-    width: '100%',
-    height: '70px',
-    objectFit: 'cover',
-    objectPosition: 'top left',
-    borderRadius: '4px',
-    marginBottom: '2px',
-  },
-  careerCardSelected: {
-    borderColor: '#5b8dee',
-    backgroundColor: '#14142e',
-  },
-  careerName: {
-    color: '#c8c8f0',
-    fontSize: '13px',
-    fontWeight: '600',
-  },
-  careerPoints: {
-    color: '#5a5a7a',
-    fontSize: '11px',
-  },
-  careerRestricted: {
-    color: '#c0a060',
-    fontSize: '10px',
-  },
-  detail: {
-    backgroundColor: '#0e0e1a',
-    border: '1px solid #2a2a3e',
-    borderRadius: '6px',
-    padding: '16px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  detailTitle: {
-    color: '#c8c8f0',
-    fontSize: '16px',
-    fontWeight: '700',
-    margin: 0,
-  },
-  detailImage: {
-    width: '100%',
-    maxHeight: '160px',
-    objectFit: 'cover',
-    objectPosition: 'top left',
-    borderRadius: '6px',
-  },
-  detailDesc: {
-    color: '#9090c8',
-    fontSize: '12px',
-    lineHeight: '1.6',
-    margin: 0,
-  },
-  detailRestricted: {
-    color: '#c0a060',
-    fontSize: '11px',
-    fontStyle: 'italic',
-    margin: 0,
-  },
-  skillsSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  skillsTitle: {
-    color: '#9090c8',
-    fontSize: '12px',
-    fontWeight: '600',
-    margin: 0,
-  },
-  skillGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2px',
-  },
-  skillGroupName: {
-    color: '#5a5a7a',
-    fontSize: '10px',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-  },
-  skillList: {
-    listStyle: 'none',
-    padding: '0 0 0 8px',
-    margin: 0,
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '4px 12px',
-  },
-  skillItem: {
-    color: '#a0a0c0',
-    fontSize: '11px',
-  },
-  skillCond: {
-    color: '#6a6a4a',
-    fontSize: '10px',
-  },
-  salaryRow: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: '6px',
-  },
-  salaryLabel: {
-    color: '#8080a0',
-    fontSize: '12px',
-  },
-  salaryValue: {
-    color: '#e0a85c',
-    fontSize: '14px',
-    fontWeight: '600',
-  },
-  salaryTitle: {
-    color: '#6a6a8a',
-    fontSize: '11px',
-  },
-  yearsRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-  },
-  yearsLabel: {
-    color: '#8080a0',
-    fontSize: '13px',
-  },
-  yearsSlider: {
-    flex: 1,
-    maxWidth: '200px',
-    height: '4px',
-    cursor: 'pointer',
-    accentColor: '#5b8dee',
-  },
-  recapBox: {
-    backgroundColor: '#0a0a18',
-    border: '1px solid #1e1e2e',
-    borderRadius: '4px',
-    padding: '10px 14px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  recapRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '12px',
-  },
-  recapLabel: {
-    color: '#8080a0',
-  },
-  recapValue: {
-    color: '#c8c8f0',
-    fontWeight: '600',
-  },
-  recapRowTotal: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '13px',
-    borderTop: '1px solid #1e1e2e',
-    paddingTop: '4px',
-    marginTop: '2px',
-  },
-  recapValueTotal: {
-    color: '#e0a85c',
-    fontWeight: '700',
-  },
-  addBtn: {
-    padding: '8px 20px',
-    border: 'none',
-    borderRadius: '4px',
-    backgroundColor: '#5b8dee',
-    color: '#fff',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    alignSelf: 'flex-start',
-  },
-  addBtnDisabled: {
-    padding: '8px 20px',
-    border: '1px solid #1e1e2e',
-    borderRadius: '4px',
-    backgroundColor: '#1a1a2e',
-    color: '#4a4a6a',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'not-allowed',
-    alignSelf: 'flex-start',
-  },
-  selectedSection: {
-    backgroundColor: '#0a0a18',
-    border: '1px solid #1e1e2e',
-    borderRadius: '6px',
-    padding: '12px 16px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  selectedTitle: {
-    color: '#9090c8',
-    fontSize: '12px',
-    fontWeight: '600',
-    margin: 0,
-  },
-  selectedRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '6px 0',
-    borderBottom: '1px solid #1a1a2a',
-  },
-  selectedName: {
-    color: '#c8c8f0',
-    fontSize: '13px',
-    fontWeight: '600',
-    flex: 1,
-  },
-  selectedYears: {
-    color: '#8080a0',
-    fontSize: '12px',
-  },
-  selectedPC: {
-    color: '#e0a85c',
-    fontSize: '12px',
-    fontWeight: '600',
-  },
-  removeBtn: {
-    padding: '4px 10px',
-    backgroundColor: 'transparent',
-    border: '1px solid #4a2a2a',
-    borderRadius: '3px',
-    color: '#c06060',
-    cursor: 'pointer',
-    fontSize: '11px',
-  },
-  noneSelected: {
-    color: '#5a5a7a',
-    fontSize: '13px',
-    textAlign: 'center',
-    margin: 0,
-  },
-  separator: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '8px 0',
-  },
-  separatorText: {
-    color: '#5a5a7a',
-    fontSize: '11px',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-  },
-  skillsTable: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '11px',
-  },
-  th: {
-    padding: '4px 6px',
-    color: '#5a5a7a',
-    fontSize: '10px',
-    fontWeight: '600',
-    textAlign: 'left',
-    borderBottom: '1px solid #1e1e2e',
-  },
-  td: {
-    padding: '3px 6px',
-    color: '#a0a0c0',
-    borderBottom: '1px solid #1a1a2e',
-  },
-  tdBase: {
-    padding: '3px 6px',
-    color: '#5a5a7a',
-    fontSize: '10px',
-    fontStyle: 'italic',
-    borderBottom: '1px solid #1a1a2e',
-  },
-  tdMasteryCell: {
-    padding: '3px 6px',
-    borderBottom: '1px solid #1a1a2e',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  minusBtn: {
-    padding: '1px 6px',
-    backgroundColor: 'transparent',
-    border: '1px solid #3a2a2a',
-    borderRadius: '3px',
-    color: '#c06060',
-    cursor: 'pointer',
-    fontSize: '11px',
-    lineHeight: 1,
-  },
-  plusBtn: {
-    padding: '1px 6px',
-    backgroundColor: 'transparent',
-    border: '1px solid #2a3a2a',
-    borderRadius: '3px',
-    color: '#60c060',
-    cursor: 'pointer',
-    fontSize: '11px',
-    lineHeight: 1,
-  },
-  masteryValue: {
-    color: '#c8c8f0',
-    fontSize: '12px',
-    fontWeight: '600',
-    minWidth: '20px',
-    textAlign: 'center',
-  },
-  nav: {
-    display: 'flex',
-    gap: '12px',
-    justifyContent: 'center',
-    marginTop: '8px',
-    paddingBottom: '20px',
-  },
-  backBtn: {
-    padding: '8px 18px',
-    backgroundColor: 'transparent',
-    border: '1px solid #2a2a3e',
-    borderRadius: '4px',
-    color: '#8080a0',
-    cursor: 'pointer',
-    fontSize: '13px',
-  },
-  nextBtn: {
-    padding: '8px 24px',
-    border: 'none',
-    borderRadius: '4px',
-    backgroundColor: '#5b8dee',
-    color: '#fff',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  nextBtnDisabled: {
-    padding: '8px 24px',
-    border: '1px solid #1e1e2e',
-    borderRadius: '4px',
-    backgroundColor: '#1a1a2e',
-    color: '#4a4a6a',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'not-allowed',
-  },
 }

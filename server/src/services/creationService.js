@@ -8,6 +8,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../shared/polarisUtils.js'
 import { evaluateCareerEligibility } from '../../../shared/careerEligibility.js'
+import { computeSkillAllocation } from '../../../shared/careerSkills.js'
 import { addAdvantage } from './advantageService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 
@@ -352,6 +353,7 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
 
       // Carrières
       let totalCareerYears = 0
+      const careersCtx = []
       for (const career of careersData) {
         const refCareer = await trx('ref_careers').where({ id: career.career_id }).first()
         if (!refCareer) throw new AppError(400, `Carrière inconnue : ${career.career_id}`)
@@ -382,13 +384,44 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
           setbacks: JSON.stringify(career.setbacks || []),
         })
 
-        for (const [skillId, targetMastery] of Object.entries(career.skillAllocations || {})) {
-          const isLearned = (career.openedSkills || []).includes(skillId)
-          await trx('char_skills')
-            .insert({ char_sheet_id: sheetId, skill_id: skillId, mastery: targetMastery, is_learned: isLearned })
-            .onConflict(['char_sheet_id', 'skill_id'])
-            .merge({ mastery: targetMastery, is_learned: trx.raw('char_skills.is_learned OR ?', [isLearned]) })
-        }
+        const careerSkillRows = await trx('ref_career_skills').where({ career_id: career.career_id, conditional: false })
+        careersCtx.push({ skills: careerSkillRows.map(s => s.skill_id), years: career.years })
+      }
+
+      // Q2 — validation globale du coût compétences (shared/careerSkills.js, Lot 1/2).
+      // baseMastery : agrégation des bonus d'origines déjà appliqués ci-dessus (upsertSkillBonus).
+      const baseMastery = {}
+      for (const sk of bgSkillsToApply) baseMastery[sk.skill_id] = (baseMastery[sk.skill_id] ?? 0) + sk.bonus
+
+      let higherEdSkills = []
+      if (bgRows.higherEdRow) {
+        const heSkillRows = await trx('ref_background_skills').where({ background_id: bgRows.higherEdRow.id, conditional: false })
+        higherEdSkills = heSkillRows.map(s => s.skill_id)
+      }
+
+      const refSkillsRows = await trx('ref_skills').select('*')
+
+      const allocResult = computeSkillAllocation(step4.skillAllocations || {}, {
+        careers: careersCtx,
+        higherEdSkills,
+        baseMastery,
+        refSkills: refSkillsRows,
+        openedSkills: step4.openedSkills || [],
+      })
+      if (allocResult.errors.length > 0) {
+        const err = allocResult.errors[0]
+        const msg = err.code === 'over_budget'
+          ? `Budget de compétences dépassé : ${err.totalCost} pts dépensés sur ${err.budget} disponibles`
+          : `Plafond de maîtrise dépassé pour ${err.skillId} (visé ${err.target}, max ${err.cap})`
+        throw new AppError(400, msg)
+      }
+
+      for (const [skillId, target] of Object.entries(step4.skillAllocations || {})) {
+        const isLearned = (step4.openedSkills || []).includes(skillId)
+        await trx('char_skills')
+          .insert({ char_sheet_id: sheetId, skill_id: skillId, mastery: target, is_learned: isLearned })
+          .onConflict(['char_sheet_id', 'skill_id'])
+          .merge({ mastery: target, is_learned: isLearned })
       }
 
       // finalAge = baseAge + higherEd.years_added + années de carrières

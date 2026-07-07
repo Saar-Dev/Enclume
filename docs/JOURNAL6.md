@@ -665,8 +665,62 @@ Lot 2). Décisions + modèle compétences + faits vérifiés : `§1ter`.
   attachées par carrière) ; SR + « Test OK » confirmé Saar.
 - **Non testé** : intégration UI (hors scope, prévue Lot 2).
 
-### Prochain — Lot 2 (UI : réécriture CareersAllocator + board global)
-Filtre « Accessibles » réel (Lot 0), board GLOBAL de compétences (Lot 1), `useReducer`, CSS `.wiz4-*`,
-i18n. Payload `skillAllocations` per-career → global + validation serveur (Q2). Plan à re-détailler
-au lancement (§5 du plan contient une contradiction signalée — texte « par métier » pré-clarification
-Saar à corriger vs le modèle GLOBAL confirmé `§1ter`). Détail : `PLAN_REWORKFINAL §5`.
+### Lot 2 — UI : réécriture CareersAllocator + board global ✅ CLOS
+- Re-détaillage au lancement : lecture du design source `Professions.dc.html` (logique complète, pas
+  que le visuel) a tranché la contradiction signalée au plan — board **GLOBAL** confirmé (un seul
+  compteur de points restants, pas « par métier »), avantages pro restant PAR MÉTIER (Lot 4).
+- `CareersAllocator.jsx` réécrit entièrement : rail (filtre Accessibles via `evaluateCareerEligibility`
+  Lot 0) + barre d'âge + détail (onglet Métier réel, Carrière/Avantages en coquilles) + **board global**
+  de compétences (coût/plafond via `computeSkillAllocation` Lot 1) + pied de page. `useReducer`
+  (`careersReducer`), zéro `style={}` visuel, classes `.wiz4-*` (`index.css` Section 12, après l.2058).
+- **Contrat payload restructuré (§1bis Contract B)** : `skillAllocations` passe de per-career à
+  **top-level global** dans le payload `step4` — `career_name`/`titles` restent en state client
+  (affichage `Step4Summary`/`WizardReview` inchangé) mais sortent du payload réseau (le serveur relit
+  `ref_careers`). `onAdd` simplifié à 4 args (retire `skillAllocations`).
+- `creationService.js` — `reconcileCreation` STEP4 : la boucle par carrière n'upsert plus `char_skills`
+  directement ; après la boucle, validation globale `computeSkillAllocation` (Q2, `ctx` construit
+  depuis `ref_career_skills`/`ref_background_skills`/`ref_skills` lus en base) puis upsert absolu sur
+  le payload global. Rejet `AppError(400)` si budget ou plafond dépassé.
+- **2 bugs trouvés et corrigés en test navigateur (même mécanisme, 2 manifestations)**, aucun des deux
+  couvert par les tests unitaires du Lot 1 (fixtures synthétiques sans compétence `(X)` réelle) :
+  1. **`-Infinity` (1er signalement)** : `ref_background_skills` contient de vraies compétences `(X)`
+     avec un bonus d'origine positif (45 lignes vérifiées en base, ex. `ELECTRONIQUE`,
+     `LANGUE_ETRANGERE_NEO_AZURAN`). `calcSkillCost` bloque (`Infinity`) toute compétence `(X)` si
+     `!isLearned && target>0`, or `isLearned` ne dépendait que d'`openedSkills` (Lot 5, jamais câblé).
+     Cause secondaire : `CareersAllocator.jsx` passait **toutes** les compétences du board (touchées ou
+     non) à `computeSkillAllocation` au lieu des seules compétences cliquées par le joueur (conception
+     Lot 1 d'origine). Fix : (a) `isLearned` inclut `(baseMastery[skillId] ?? 0) > 0` ; (b) le board
+     n'envoie plus que `state.skillAllocations` (compétences réellement touchées) ; le plafond par
+     ligne (touchée ou non) vient d'un nouvel export `getSkillCap(skillId, ctx)` (factorisé, DRY).
+  2. **`-Infinity` (2e signalement, cause incomplète après le 1er fix)** : compétence `(X)`
+     professionnelle (listée par une carrière retenue) mais **sans** bonus d'origine (Origine=0) —
+     toujours bloquée par le 1er fix. Lecture complémentaire de `REGLE_CREATION.txt:1129-1132`
+     (« Note sur les Compétences spéciales ») : une compétence spéciale/réservée est accessible **dès
+     qu'elle est indiquée dans la description d'une des Professions du personnage** — pas besoin d'un
+     bonus d'origine. Fix : `isLearned = isPro || openedSkills.includes(...) || (baseMastery>0)`. Le
+     malus « base -3 » du premier point investi (ligne 1115) reste appliqué normalement (règle de coût,
+     pas un blocage) : premier achat d'une `(X)` professionnelle sans origine = 1pt (ouverture -3) +
+     N pts (climb -3→cible), jamais 0 ni Infinity.
+- **Réponse à une question rulebook posée par Saar en cours de route** : le bonus « Études supérieures »
+  +2 ans (cap uniquement) ne s'applique jamais universellement, seulement aux compétences listées par
+  le cursus É.Sup. — confirmé conforme à l'implémentation existante, aucun changement nécessaire.
+- **Testé** : ESLint client 0 erreur (`CareersAllocator.jsx`), `node --check` (`creationService.js`,
+  `careerSkills.js`), JSON valide (`creation.json`), `getStep4RefData`/`ref_career_education` déjà
+  vérifiés en base (Lot 1). Reproduction exacte des 2 bugs en `node -e` inline avant/après fix
+  (`-Infinity` → coût fini correct dans les deux cas), régression complète des 9 scénarios Lot 1 (aucun
+  cassé par les 2 fixes). SR + parcours fonctionnel confirmé Saar (filtre par défaut à corriger en
+  Accessibles — voir dette [CAR-DEF] ; sélection/ajout carrières ; board avec compétence `(X)`
+  professionnelle et non-professionnelle, plafonds 5/10/13 conformes à la table par années).
+- **Non testé** : retrait d'une carrière (recalcul budget/purge allocations orphelines), parcours
+  complet jusqu'à finalisation + vérification `char_skills.mastery` en base, onglets Carrière/Avantages
+  (coquilles, Lot 3/4).
+- `Step4Experience.jsx` — hors du bug : nouveau state `skillAllocations` (remonté via callback
+  stabilisé `useCallback`), fetch `/char-ref/skills`, props `baseAge`/`attributes`/`genotypeId`/
+  `higherEd`/`refSkills`/`initialSkillAllocations`/`onSkillAllocationsChange` vers `CareersAllocator`.
+- **Dette préexistante repérée, non corrigée (hors scope)** : `Step4Experience.jsx:82` `remainingPC`
+  déclarée mais jamais utilisée (ESLint) — confirmé via `git show HEAD` antérieur à ce lot, ligne jamais
+  touchée par mes modifications.
+
+### Prochain — Lot 3 (Onglet Carrière & économies)
+Table titres/salaires (lecture seule) + encadré économies cumulées. Voir `PLAN_REWORKFINAL §5 LOT 1c`
+(anciennement numéroté, à re-détailler au lancement). Détail décisions/modèle : `PLAN_REWORKFINAL §1ter`.

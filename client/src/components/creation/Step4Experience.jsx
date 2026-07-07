@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import AgeSelector from './AgeSelector'
 import BackgroundSelector from './BackgroundSelector'
@@ -24,7 +24,7 @@ const SUB_STEP_ORDER = Object.values(SUB_STEPS)
 
 export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }) {
   const { t } = useTranslation('creation')
-  const { sheetId } = useCreationStore()
+  const { sheetId, step1Data, step2Data } = useCreationStore()
   const [subStep, setSubStep] = useState(initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [highestSubStep, setHighestSubStep] = useState(() => initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [age, setAge] = useState(initialData?.age ?? 16)
@@ -37,7 +37,11 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   const [socNation, setSocNation] = useState(initialData?.socNation ?? '')
   const [conditionalChoices, setConditionalChoices] = useState(initialData?.conditionalChoices ?? {})
   const [careers, setCareers] = useState(initialData?.careers ?? [])
+  const [skillAllocations, setSkillAllocations] = useState(initialData?.skillAllocations ?? {})
   const [refData, setRefData] = useState({ loading: true, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [] })
+  const [refSkills, setRefSkills] = useState([])
+
+  const handleSkillAllocationsChange = useCallback((next) => setSkillAllocations(next), [])
 
   useEffect(() => {
     if (!sheetId) return
@@ -51,6 +55,9 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
         careers: res.data.careers ?? [],
       }))
       .catch(() => setRefData({ loading: false, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [] }))
+    api.get('/char-ref/skills')
+      .then(res => setRefSkills(res.data.skills ?? []))
+      .catch(() => setRefSkills([]))
   }, [sheetId])
 
   // ─── Données filtrées ──────────────────────────────────────────
@@ -139,13 +146,12 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   })
 }
 
-  const handleAddCareer = (careerId, careerName, careerTitles, years, skillAllocations) => {
+  const handleAddCareer = (careerId, careerName, careerTitles, years) => {
     setCareers(prev => [...prev, {
       career_id: careerId,
       career_name: careerName,
       titles: careerTitles,
       years,
-      skillAllocations: skillAllocations || {},
     }])
   }
 
@@ -156,10 +162,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   const buildPayload = () => {
     const careerEntries = careers.map(c => ({
       career_id: c.career_id,
-      career_name: c.career_name,
-      titles: c.titles,
       years: c.years,
-      skillAllocations: c.skillAllocations || {},
     }))
     return {
   age,
@@ -172,6 +175,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   geoNation,
   socNation,
   careers: careerEntries,
+  skillAllocations,
   pcSpent: totalPC,
   appliedSkills: Object.values(conditionalChoices),
 }
@@ -351,6 +355,13 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
     selectedSocItem={selectedSocItem}
     selectedTrainingItem={selectedTrainingItem}
     selectedHigherEdItem={selectedHigherEdItem}
+    baseAge={age + (selectedHigherEdItem?.years_added ?? 0)}
+    attributes={step1Data?.attributes}
+    genotypeId={step2Data?.genotypeId}
+    higherEd={higherEd}
+    refSkills={refSkills}
+    initialSkillAllocations={skillAllocations}
+    onSkillAllocationsChange={handleSkillAllocationsChange}
   />
 )}
 

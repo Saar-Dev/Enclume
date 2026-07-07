@@ -114,8 +114,10 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   payload) verrouillés globalement (`§1bis`) → implémentation incrémentale, un lot à la fois.
   **Lot 0 (fondation éligibilité, `shared/careerEligibility.js`) ✅ codé + validé Saar.**
   **Lot 1 (fondation moteur de coût, `shared/careerSkills.js`) ✅ codé + validé Saar.**
-  **PROCHAIN = Lot 2** (UI board global — `PLAN_REWORKFINAL §5`, à re-détailler). Décisions +
-  modèle + faits vérifiés : `§1ter`. Point d'entrée reprise : `docs/EN_COURS.md` item 44.
+  **Lot 2 (UI CareersAllocator + board global) ✅ codé + validé Saar** — voir P55 (compétences
+  réservées `(X)`).
+  **PROCHAIN = Lot 3** (onglet Carrière & économies, lecture seule — `PLAN_REWORKFINAL §5 LOT 1c`).
+  Décisions + modèle + faits vérifiés : `§1ter`. Point d'entrée reprise : `docs/EN_COURS.md` item 44.
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **124 migrations stables** (119_char_sheet_wizard_lock — Session 139 ;
   118_fix_ref_mutations_organe_sensoriel_manquant — Session 138 ;
@@ -142,6 +144,21 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   partagé, `over_cap`, `over_budget`, plafond fixe +5, plafond via études seules), `getStep4RefData`
   vérifié en base réelle (12/12 lignes `ref_career_education`), SR + confirmé Saar.
 - **Non testé :** intégration UI (prévue Lot 2).
+- **Lot 2** : `CareersAllocator.jsx` réécrit entièrement (rail/agebar/detail/board **GLOBAL**/foot,
+  `useReducer`, CSS `.wiz4-*`). Payload `skillAllocations` : per-career → top-level global (Contract B
+  `§1bis`) ; `onAdd` réduit à 4 args. `creationService.js` `reconcileCreation` STEP4 valide désormais
+  le budget compétences (Q2) via `computeSkillAllocation` avant upsert `char_skills`.
+- **2 bugs `-Infinity` trouvés et corrigés (même mécanisme, 2 manifestations)**, aucun couvert par les
+  tests synthétiques du Lot 1 : une compétence réservée `(X)` dotée d'un bonus d'origine positif
+  bloquait (`isLearned` ne dépendait que du mécanisme `openedSkills`, Lot 5, jamais câblé) ; puis une
+  `(X)` professionnelle **sans** bonus d'origine bloquait encore après le 1er fix — `REGLE_CREATION.txt:
+  1129-1132` (non lue avant) précise qu'une compétence spéciale est accessible dès qu'une carrière
+  retenue la liste. Voir **P55**. Détail complet : `docs/JOURNAL6.md` "Lot 2".
+- **Testé (Lot 2) :** ESLint client 0 erreur, `node --check`, reproduction exacte des 2 bugs en
+  `node -e` avant/après fix, régression complète Lot 1 (9 scénarios), SR + fonctionnel confirmé Saar
+  (filtres, sélection, board avec compétences `(X)` pro/non-pro, plafonds 5/10/13 conformes).
+- **Non testé (Lot 2) :** retrait de carrière (recalcul budget), parcours complet jusqu'à finalisation
+  + vérification `char_skills.mastery` en base, onglets Carrière/Avantages (coquilles, Lot 3/4).
 - Détail complet : `docs/JOURNAL6.md` "Session 139 (suite)".
 
 **Session 139 — Fiche personnage consultable en permanence pendant le Wizard (fenêtre "peek") ✅ clos :**
@@ -343,6 +360,10 @@ Numéros de migration à largeur inégale (`99_...` vs `100_...`-`106_...`) trie
 
 **P54 — jamais rappeler `mig.up(knex)` manuellement sans vérifier `knex_migrations` au préalable**
 Conséquence directe de P53 : si nodemon a déjà auto-appliqué la migration entre son écriture et le test manuel, un second appel direct à `up()` traite des données **déjà correctes** comme si elles étaient corrompues. Vécu Session 135 : `decodeMojibake()` rappelée sur du texte déjà décodé — les caractères déjà propres (code point ≤ 0xFF) sont repoussés comme octet UTF-8 isolé, produisant une séquence invalide que Node remplace silencieusement par `�` (**aucune erreur levée**, donc aucun signal d'alerte avant relecture manuelle du résultat). 6 lignes `ref_mutations` endommagées avant qu'un caractère non mappable ne fasse enfin planter la boucle. **Procédure sûre** : toujours `SELECT` la table `knex_migrations` (`WHERE name = '...'`) avant tout appel manuel à `up()`/`down()` ; pour un round-trip, ne jamais enchaîner deux `up()` sans `down()` entre les deux.
+
+**P55 — Compétences réservées `(X)` : accessibilité via profession, pas seulement via bonus d'origine**
+`calcSkillCost` (`shared/polarisUtils.js`) bloque (`cost: Infinity`) toute compétence marquée `(X)` si `!isLearned && target>0`. `isLearned` doit couvrir TROIS cas, tous confirmés par la règle (aucun n'est un bug isolé, les trois manquaient dans `computeSkillAllocation` avant Session 139) : (1) `openedSkills.includes(skillId)` — déblocage explicite (Avantage Formation, Lot 5) ; (2) `(baseMastery[skillId] ?? 0) > 0` — un bonus d'origine positif prouve que le personnage la pratique déjà ; (3) **`isPro`** (listée par une carrière retenue) — `REGLE_CREATION.txt:1129-1132` : *« toutes les Compétences spéciales sont normalement inaccessibles... à moins d'être indiquées dans la description de l'une des Professions du personnage »*. Oublier le cas (3) reproduit exactement le bug Session 139 (Lot 2) : une `(X)` professionnelle sans bonus d'origine plante en `-Infinity`. Le malus « base -3 » du premier point investi (`REGLE_CREATION.txt:1115`) s'applique quand même dans les trois cas — ce n'est pas un blocage, juste un coût de départ plus élevé (1pt pour atteindre -3, avant de grimper normalement).
+**Piège wiring associé** : `computeSkillAllocation` ne doit recevoir QUE les `skill_id` réellement modifiés par le joueur — jamais un remplissage de toutes les compétences affichées (board) avec leur valeur de base, sinon le calcul est déclenché inutilement pour des compétences jamais touchées. Le plafond d'une ligne non touchée se calcule séparément via `getSkillCap(skillId, ctx)` (indépendant du coût).
 
 ---
 

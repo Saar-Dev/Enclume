@@ -18,20 +18,42 @@ import { calcSkillCost, getMaxMasteryByYears } from './polarisUtils.js'
 
 const ORIGIN_SKILL_CAP = 5
 
+function isProSkill(skillId, careers) {
+  return careers.some(c => (c.skills || []).includes(skillId))
+}
+
 /**
- * @param {object} skillAllocations - { skill_id: targetMastery } — GLOBAL (toutes carrières).
+ * Plafond de maîtrise d'une compétence — indépendant du coût, calculable pour toute
+ * compétence du board (touchée ou non par le joueur).
+ * @param {string} skillId
+ * @param {object} ctx - { careers:[{skills,years}], higherEdSkills:[skill_id] }
+ */
+export function getSkillCap(skillId, ctx) {
+  const careers = ctx.careers || []
+  const higherEdSkills = ctx.higherEdSkills || []
+  const hasHigherEd = higherEdSkills.includes(skillId)
+  if (!isProSkill(skillId, careers) && !hasHigherEd) return ORIGIN_SKILL_CAP
+  const yearsForSkill = careers
+    .filter(c => (c.skills || []).includes(skillId))
+    .reduce((sum, c) => sum + c.years, 0)
+  return getMaxMasteryByYears(yearsForSkill + (hasHigherEd ? 2 : 0))
+}
+
+/**
+ * @param {object} skillAllocations - { skill_id: targetMastery } — GLOBAL, compétences
+ *   RÉELLEMENT touchées par le joueur uniquement (pas un remplissage de toutes les compétences
+ *   du board : une compétence non modifiée doit coûter 0, jamais être soumise à calcSkillCost).
  * @param {object} ctx - {
  *   careers: [{ skills:[skill_id], years }],
  *   higherEdSkills: [skill_id],
  *   baseMastery: { skill_id: number },
  *   refSkills: object[],
- *   openedSkills?: [skill_id],   // compétences réservées (X) déjà ouvertes
+ *   openedSkills?: [skill_id],   // compétences réservées (X) déjà ouvertes explicitement (Lot 5)
  * }
  * @returns {{ budget, totalCost, remaining, perSkill: object[], errors: object[] }}
  */
 export function computeSkillAllocation(skillAllocations, ctx) {
   const careers = ctx.careers || []
-  const higherEdSkills = ctx.higherEdSkills || []
   const baseMastery = ctx.baseMastery || {}
   const openedSkills = ctx.openedSkills || []
   const refSkills = ctx.refSkills || []
@@ -44,20 +66,17 @@ export function computeSkillAllocation(skillAllocations, ctx) {
 
   for (const [skillId, target] of Object.entries(skillAllocations || {})) {
     const current = baseMastery[skillId] ?? null
-    const isPro = careers.some(c => (c.skills || []).includes(skillId))
-    const yearsForSkill = careers
-      .filter(c => (c.skills || []).includes(skillId))
-      .reduce((sum, c) => sum + c.years, 0)
-    const hasHigherEd = higherEdSkills.includes(skillId)
-
-    const cap = (isPro || hasHigherEd)
-      ? getMaxMasteryByYears(yearsForSkill + (hasHigherEd ? 2 : 0))
-      : ORIGIN_SKILL_CAP
+    const isPro = isProSkill(skillId, careers)
+    const cap = getSkillCap(skillId, ctx)
 
     const capped = target > cap
     if (capped) errors.push({ code: 'over_cap', skillId, target, cap })
 
-    const isLearned = openedSkills.includes(skillId)
+    // Une compétence (X) est déjà "ouverte" si : listée par une carrière retenue
+    // (REGLE_CREATION.txt:1129-1132 — "inaccessibles... à moins d'être indiquées dans la
+    // description de l'une des Professions"), OU dotée d'un bonus d'origine positif (l'origine
+    // l'a déjà entraînée), OU explicitement débloquée (Lot 5, Avantage Formation).
+    const isLearned = isPro || openedSkills.includes(skillId) || (baseMastery[skillId] ?? 0) > 0
     const { cost } = calcSkillCost(skillId, current, target, isPro, isLearned, refSkills)
     totalCost += cost
     perSkill.push({ skillId, current, target, isPro, cost, cap, capped })
