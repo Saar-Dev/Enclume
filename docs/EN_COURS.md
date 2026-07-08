@@ -11,15 +11,13 @@
 
 > **CHANTIER REDESIGN STEP 4 PROFESSION → ✅ TERMINÉ (8/8 lots)** — plan maître archivé :
 > **`docs/Old/PLAN_REWORKFINAL.md`**.
-> **Chantier Options de campagne (item 41) : `random_pro_advantages` (OPT-05) ✅ câblée — Session 141**
-> (4/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`). Gate le bloc
-> UI "Tirage 1D10" (`CareersAllocator.jsx`) selon le toggle campagne, même pattern que
-> `randomMutationsEnabled` — gating client-only, pas de revalidation serveur (limite assumée, identique
-> aux précédents).
-> **PROCHAINE OPTION À CÂBLER : à définir avec Saar** — voir item "41." (7/11 restantes :
-> `polaris_latent`, `revers`, `skill_prerequisites`, `skill_max_level`, `skill_natural_prog`,
-> `young_penalty`, `celebrity`). Candidat déjà repéré : `skill_prerequisites` (Niveau 1 — contrôle déjà
-> actif dans `SkillsPanel.jsx:166-170`, mais appliqué en permanence alors que le défaut documenté est OFF).
+> **Chantier Options de campagne (item 41) : `random_pro_advantages` (OPT-05) + `skill_prerequisites`
+> (OPT-07) ✅ câblées — Session 141** (5/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`,
+> `random_pro_advantages`, `skill_prerequisites`). `skill_prerequisites` diffère des précédentes :
+> s'applique sur la fiche personnage en jeu (pas le Wizard), gating **client (`SkillsPanel.jsx`) +
+> serveur (`POST /skills/buy` revalide via `calcSkillTotal`)** — demande explicite Saar "bien ET propre".
+> **PROCHAINE OPTION À CÂBLER : à définir avec Saar** — voir item "41." (6/11 restantes :
+> `polaris_latent`, `revers`, `skill_max_level`, `skill_natural_prog`, `young_penalty`, `celebrity`).
 
 **44. Redesign Step 4 Profession (rework multi-lots) — ✅ TERMINÉ (8/8 lots) — Session 139/140**
    → Plan maître (archivé) : `docs/Old/PLAN_REWORKFINAL.md` (8 lots). Design source : `docs/ClaudeDesign/project/Professions.dc.html`.
@@ -261,15 +259,16 @@
    → **Testé** : SR ✅, combat inchangé ✅, persistance 11 options ✅, upload token non écrasé ✅, navigation onglets ✅
    → **Non testé** : effet mécanique des 11 options (stockage/lecture seulement — voir `docs/optionCampagne/JOPT.md`)
 
-**41. Options de campagne — effets mécaniques (4/11) : `ambiance` ✅, `random_mutations` ✅, `feminin_bonus` ✅, `random_pro_advantages` ✅ — Session 141** ← EN COURS, un par un
+**41. Options de campagne — effets mécaniques (5/11) : `ambiance` ✅, `random_mutations` ✅, `feminin_bonus` ✅, `random_pro_advantages` ✅, `skill_prerequisites` ✅ — Session 141** ← EN COURS, un par un
    → Audit complet des 11 options dans `docs/Old/optionCampagne/PLAN_OPTCAMP.md` (Niveau 1/2/3 par complexité)
    → `ambiance` : mock supprimé (`WizardCreation.jsx`), `startCreation`/`creationStore` transmettent la vraie valeur, `finalizeCreation` revalide via `validateStep1` (code mort réactivé, `shared/polarisUtils.js:187`)
    → `random_mutations` : câblée Session 136 (masque la carte "Tirage aléatoire" Step3 si désactivée)
    → `feminin_bonus` : câblée Session 137 — élargie en cours de route à Sexe/Fécondité (Step1 pose `char_archetype.sex`, Step3 override via mutations Asexué/Androgyne/Autofécondation, Step5 désavantage Fécondité `adv_076` avec blocage si mutation stérilisante). Détail complet : `docs/PLAN_SEXE.md`, `docs/JOURNAL6.md` "Session 137".
    → `random_pro_advantages` : câblée Session 141 — gate le bloc "Tirage 1D10" (`CareersAllocator.jsx`, Lot 6 Session 140) selon le toggle, même pattern que `random_mutations`/`feminin_bonus`. Détail complet : `docs/JOURNAL6.md` "Session 141".
-   → **Testé** : SR ✅, parcours Wizard confirmé fonctionnel par Saar
-   → **Non testé** : les 8 scénarios détaillés de `PLAN_SEXE.md` un par un (validation donnée sur le parcours global) ; bascule ON→OFF en cours de wizard pour `random_pro_advantages` (non prévu par le design)
-   → **Prochain** : `skill_prerequisites` (Niveau 1 — contrôle déjà actif dans `SkillsPanel.jsx:166-170`, mais appliqué en permanence alors que le défaut documenté est OFF)
+   → `skill_prerequisites` : câblée Session 141 (suite) — conflit de source résolu (`OPTIONS_CAMPAGNE.md` vs `CHARACTER.md`, confirmé option réelle par Saar). Gate `SKILL_MIN` dans `SkillsPanel.isVisible` (client, fermé par défaut) **+ revalidation serveur `POST /skills/buy`** (réutilise `calcSkillTotal` de `charStats.js`, déjà éprouvée en combat) — première option de ce chantier à toucher la fiche personnage en jeu (pas seulement le Wizard) et à fermer le gap côté serveur. `GET /char-sheet/:characterId` renvoie désormais `settings` (canal réutilisable pour les 6 options restantes). Détail complet : `docs/JOURNAL6.md` "Session 141 (suite)".
+   → **Testé** : SR ✅, parcours Wizard confirmé fonctionnel par Saar (options Wizard) ; parcours fiche personnage (MJ, PNJ, mode Progression) confirmé Saar pour `skill_prerequisites` — cascade de prérequis (Culture générale → Électronique/Informatique/Médecine → Chirurgie) vérifiée correcte
+   → **Non testé** : les 8 scénarios détaillés de `PLAN_SEXE.md` un par un (validation donnée sur le parcours global) ; bascule ON→OFF en cours de wizard pour `random_pro_advantages` (non prévu par le design) ; rejet serveur `POST /skills/buy` par appel direct (masqué côté UI, non testé hors lecture de code)
+   → **Prochain** : à définir avec Saar (6/11 restantes)
 
 **41. Wizard COUCHE 4c → analyse terminée (session 2026-07-05 suite) : deux dossiers distincts, à ne plus confondre**
    → `PLAN_COUCHE4.md` (architecture wizard step-by-step, câblage frontend→backend) : confirmé **obsolète** — remplacé par COUCHE 5 (architecture client-primary, Session 130). Archivé par Saar dans `docs/Old/`.

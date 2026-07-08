@@ -109,14 +109,20 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ## ÉTAT COURANT — Session 141 (2026-07-08)
 
-- **Session 141 — Options de campagne : `random_pro_advantages` (OPT-05) ✅ câblée.** Gate le bloc UI
-  "Tirage 1D10" (`CareersAllocator.jsx`, Lot 6 Session 140) selon `settings.random_pro_advantages` —
-  même pattern que `randomMutationsEnabled`/`femininBonusEnabled` (4 fichiers : `creationService.js`,
-  `creationStore.js`, `Step4Experience.jsx`, `CareersAllocator.jsx`). Gating client-only, aucune
-  revalidation serveur ajoutée (limite assumée, identique aux options déjà câblées). **4/11 options
-  faites** (`ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`) — 7 restantes.
-  Testé : ESLint 0 nouvelle erreur, SR + fonctionnel confirmé Saar. Non testé : bascule ON→OFF en
-  cours de wizard (non prévu par le design). Détail complet : `docs/JOURNAL6.md` "Session 141".
+- **Session 141 — Options de campagne : `random_pro_advantages` (OPT-05) + `skill_prerequisites`
+  (OPT-07) ✅ câblées.** OPT-05 : gate le bloc UI "Tirage 1D10" (`CareersAllocator.jsx`, Lot 6 Session
+  140) selon `settings.random_pro_advantages` — même pattern que `randomMutationsEnabled`
+  (gating client-only, pas de revalidation serveur). OPT-07 : **différente des précédentes** —
+  conflit de source trouvé et résolu avant code (`OPTIONS_CAMPAGNE.md` vs `CHARACTER.md`, confirmé
+  option réelle par Saar), s'applique sur la fiche personnage en jeu (pas le Wizard), gating
+  **client (`SkillsPanel.isVisible`) + serveur (`POST /skills/buy` revalide via `calcSkillTotal`,
+  déjà éprouvée en combat)** — demande explicite Saar "bien ET propre". `GET /char-sheet/:characterId`
+  renvoie désormais `settings` (canal réutilisable pour les options restantes). **5/11 options faites**
+  (`ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`, `skill_prerequisites`) —
+  6 restantes. Testé : ESLint 0 nouvelle erreur, SR, requêtes DB réelles (chaîne de prérequis à 5
+  compétences), **parcours navigateur confirmé Saar** (MJ, PNJ, mode Progression — cascade de
+  prérequis correcte, une confusion Maîtrise/Total résolue en cours de test, pas un bug). Détail
+  complet : `docs/JOURNAL6.md` "Session 141" / "Session 141 (suite)".
 - **✅ CHANTIER TERMINÉ : Redesign Step 4 Profession (8/8 lots)** → plan maître (archivé)
   **`docs/Old/PLAN_REWORKFINAL.md`**. **Lot 6 (tirage 1D10, dernier lot) ✅ codé + validé Saar — Session
   140** — migration 122 (`ref_career_random_benefits.points_alt` + 50 lignes manquantes Lot 1),
@@ -483,7 +489,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **[WIZ-2]** Deux compteurs PC (header store vs CareersAllocator local) — cosmétique, sprint COUCHE 4c
 - **[WIZ-3]** Formation "apprentissage_technique" → choix spécialité non implémenté — sprint COUCHE 4c
 - **[JSON1]** `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant) — casse tout le fichier EN
-- **[OPT-W1]** 7/11 options de campagne sans effet mécanique branché (Wizard/SkillsPanel/CharSheet) — `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages` câblées — sprint futur, en cours un par un
+- **[OPT-W1]** 6/11 options de campagne sans effet mécanique branché (Wizard/SkillsPanel/CharSheet) — `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`, `skill_prerequisites` câblées — sprint futur, en cours un par un
 - **[OPT-W2]** `style={}` visuel dans `client/src/components/campaignSettings/*` (convention CSS) — basse priorité
 - **[MUT1]** `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable en méthode libre — non diagnostiqué en profondeur, sprint futur
 - **[HP1]** Main directrice : `socketCombatHelpers.js:550` et `char-sheet.js:810` lisent `hand_pref` sur `char_sheet` (colonne inexistante) au lieu de `char_identity.hand_pref` → toujours `'R'` par défaut en combat, quel que soit le choix réel du joueur — sprint futur

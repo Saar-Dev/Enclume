@@ -1,6 +1,6 @@
 # CHARACTER.md — Documentation technique du domaine Character
 > Domaine : Fiche personnage Polaris & modules joueur
-> Dernière mise à jour : 2026-05-09 — Session 55 (mise à jour complète)
+> Dernière mise à jour : 2026-07-08 — Session 141 (SKILL_MIN conditionné par OPT-07 `skill_prerequisites`)
 > Statut : Modules 1–6 + Module XP + Blessures + Armures + Inventaire — 51 migrations appliquées
 
 ---
@@ -130,7 +130,7 @@ app.use('/api/char-ref',   charRefRouter)
 
 | Valeur | Signification | Comportement dans SkillsPanel |
 |---|---|---|
-| `NULL` | Standard | Toujours visible (si prérequis satisfaits) |
+| `NULL` | Standard | Toujours visible (si prérequis `SKILL_MIN` satisfaits — évalué uniquement si `settings.skill_prerequisites` actif, OPT-07, défaut OFF, Session 141) |
 | `'(-3)'` | Difficile | Malus -3 au niveau de base |
 | `'(X)'` | Réservée | Masquée sauf `is_learned=true` OU mutation débloquante active (PC15) |
 | `'PN'` | Progression Naturelle | Bonus immersion automatique (max +5) |
@@ -548,13 +548,15 @@ Déblocage compétence `(X)` : coût fixe **3 PE** — `mastery` reste 0, `is_le
    - si !progressionMode → false (PC15)
    - si progressionMode  → continue (prérequis SKILL_MIN évalués normalement)
 4. Pour chaque prérequis :
-   SKILL_MIN  → calcTotal(prereq) < threshold  → false
+   SKILL_MIN  → si skillPrerequisitesEnabled === true ET calcTotal(prereq) < threshold → false
    MUTATION   → !activeMutations.has(value)    → false
    GENOTYPE   → genotypeId !== value           → false
 5. → true (visible)
 ```
 
-**Comportement mode Progression :** les compétences `(X)` non apprises deviennent visibles si leurs prérequis SKILL_MIN sont satisfaits — permettant le déblocage via achat XP (3 PE). Les compétences `(X)` à prérequis MUTATION restent masquées (filtrées à l'étape 4). Les `(X)` sans prérequis (Langue étrangère, Survie…) deviennent visibles — cohérent avec la fiction (accord MJ implicite via distribution XP).
+**OPT-07 (`settings.skill_prerequisites`, défaut OFF, câblée Session 141)** : seul le type `SKILL_MIN` est concerné — `MUTATION`/`GENOTYPE` restent des restrictions biologiques toujours actives, jamais optionnelles. Prop `skillPrerequisitesEnabled` transmise par `CharacterSheet.jsx` (lu depuis `GET /char-sheet/:characterId` → `settings`, merge défauts via `getCampaignSettings`). Revalidé indépendamment côté serveur dans `POST /skills/buy` (jamais fait confiance à un état client) via `calcSkillTotal` (`server/src/lib/charStats.js`, même fonction que le combat). Le marqueur `†` (`marker==='PREREQ'`, sous-en-tête de groupe) reste affiché quel que soit l'état de l'option — purement informatif, non lié à l'application réelle de la règle.
+
+**Comportement mode Progression :** les compétences `(X)` non apprises deviennent visibles si leurs prérequis SKILL_MIN sont satisfaits (ou si l'option est désactivée) — permettant le déblocage via achat XP (3 PE). Les compétences `(X)` à prérequis MUTATION restent masquées (filtrées à l'étape 4). Les `(X)` sans prérequis (Langue étrangère, Survie…) deviennent visibles — cohérent avec la fiction (accord MJ implicite via distribution XP).
 
 `activeMutations` = Set des `muta_numero` présents dans `charAdvantages` (type=MUTATION).
 

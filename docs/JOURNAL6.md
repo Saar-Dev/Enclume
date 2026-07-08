@@ -1112,3 +1112,63 @@ personnages, pas en cours de wizard).
 
 Options de campagne restantes (7/11) : `polaris_latent`, `revers`, `skill_prerequisites`,
 `skill_max_level`, `skill_natural_prog`, `young_penalty`, `celebrity`.
+
+---
+## Session 141 (suite) — 2026-07-08 — Options de campagne : `skill_prerequisites` (OPT-07) câblée ✅
+
+**Conflit de source trouvé avant tout code** : `docs/OPTIONS_CAMPAGNE.md` décrit `SKILL_MIN` comme une
+option de campagne (défaut OFF), mais `docs/Character/CHARACTER.md` (spec de référence de
+`SkillsPanel.jsx`, 6 pièges dédiés PC9-PC19) la décrit comme une règle **inconditionnelle**. Signalé à
+Saar avant de planifier — confirmation : c'est bien une vraie option, à câbler proprement.
+
+**Différence structurelle avec les options précédentes (demande explicite Saar "bien ET propre")** :
+contrairement à `random_mutations`/`feminin_bonus`/`random_pro_advantages` (gating Wizard, client-only,
+un seul flux), `SKILL_MIN` s'applique sur la **fiche personnage en jeu** (post-création), via
+`SkillsPanel.jsx` (affichage) ET `POST /skills/buy` (achat XP réel) — deux points d'application, pas un
+seul. Découverte clé en lisant avant de coder : `server/src/lib/charStats.js` expose déjà
+`calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)` (utilisée en combat, `weapon-skill` route)
+— réutilisable telle quelle côté serveur pour revalider un prérequis, sans écrire de nouveau calcul.
+
+**Code :**
+- `server/src/routes/character/char-sheet.js` : `GET /:characterId` renvoie désormais `settings`
+  (mergé defaults via `getCampaignSettings(db, req.character.campaign_id)`) — canal générique,
+  réutilisable par les 6 options restantes du même chantier (Wizard/SkillsPanel/CharSheet), pas
+  seulement `skill_prerequisites`. `POST /skills/buy` : revalidation serveur indépendante (jamais
+  confiance en un état client) — si `settings.skill_prerequisites`, charge les `ref_skill_requirements`
+  `SKILL_MIN` du skill acheté, calcule le Total de chaque prérequis via `calcSkillTotal` (attrs/
+  archetype/genotype chargés une seule fois hors boucle, pas par prérequis), rejette (400) si non
+  satisfait.
+- `client/src/character/CharacterSheet.jsx` : état `campaignSettings`, transmis à `SkillsPanel`.
+- `client/src/character/SkillsPanel.jsx` : prop `skillPrerequisitesEnabled` — gate le bloc `SKILL_MIN`
+  dans `isVisible` (fermé par défaut, `=== true` requis — inverse de `random_pro_advantages` dont le
+  schema par défaut est `true`). `MUTATION`/`GENOTYPE` restent toujours actifs (restrictions
+  biologiques, hors périmètre OPT-07). Le marqueur `†` (groupe `PREREQ`) reste statique, non lié à
+  l'application réelle.
+- `docs/Character/CHARACTER.md` : 2 sections corrigées (table markers l.133, algorithme de visibilité
+  l.550-557 + nouveau paragraphe OPT-07) — le PC10 existant reste vrai tel quel, non touché.
+
+**Faux bug trouvé pendant le test navigateur (Saar, MJ, PNJ, mode Progression)** : Ctrl+F ne trouvait
+ni Médecine/Chirurgie ni Électronique/Informatique. Chaîne réelle en base (vérifiée par requête directe,
+pas supposée) : Médecine `(X)` exige Biologie/Physiologie ≥7 **ET** Culture générale ≥10 ; Chirurgie
+`(X)` exige Médecine ≥10 ; Électronique `(X)` et Informatique `(-3)` exigent chacun Culture générale
+≥10 (en parallèle, pas en chaîne via Électronique comme Saar le supposait initialement). Après avoir
+remonté Culture générale, Électronique/Informatique restaient introuvables — cause réelle : Saar avait
+réglé la **Maîtrise** à 10, mais le **Total** (`Base(attributs) + Maîtrise`) valait 9 (Base attribut
+INT = -1 pour ce PNJ) — prérequis `≥10` non atteint à un point près. Comportement correct, pas un bug :
+`Total` (pas `Maîtrise` seule) est bien la valeur comparée au seuil, cohérent avec `calcTotal`/
+`calcSkillTotal` des deux côtés (client et serveur, même formule).
+
+**Testé :** `node --check` (serveur), ESLint sur les fichiers client touchés (0 nouvelle erreur,
+pré-existantes confirmées via `git stash`), `calcSkillTotal` vérifiée en isolation (`node -e` : total
+sans mastery = Base seule, avec mastery = Base+mastery), requêtes réelles en base (chaîne de
+prérequis des 5 compétences confirmée), SR (`/api/health` 200), **parcours navigateur réel confirmé
+Saar** — option ON, MJ, PNJ, mode Progression : cascade de prérequis correcte sur plusieurs
+compétences (dont certaines apparues correctement une fois leur propre prérequis satisfait), confusion
+Maîtrise/Total résolue en cours de test. **"All tests OK" (Saar).**
+**Non testé :** option repassée à OFF après validation ON (comportement attendu par construction —
+c'est l'état par défaut du schema, jamais modifié pendant ce test) ; rejet serveur `POST /skills/buy`
+en conditions réelles plutôt que par lecture de code (la visibilité masque déjà le bouton d'achat côté
+UI, donc pas testable sans appel API direct).
+
+Options de campagne restantes (6/11) : `polaris_latent`, `revers`, `skill_max_level`,
+`skill_natural_prog`, `young_penalty`, `celebrity`.

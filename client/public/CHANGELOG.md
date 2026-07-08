@@ -1,3 +1,11 @@
+## v158 — 2026-07-08 — Option de campagne : prérequis de compétences
+
+### Client
+- [feat] La fiche personnage respecte désormais l'option de campagne « prérequis de compétences » — si elle est activée, une compétence nécessitant un niveau minimum dans une autre (ex. Chirurgie nécessite Médecine) reste masquée tant que ce prérequis n'est pas atteint ; si désactivée (réglage par défaut), toutes les compétences restent accessibles librement
+
+### Serveur
+- [fix] L'achat d'une compétence par dépense d'XP vérifie désormais réellement les prérequis (quand l'option est activée), et plus seulement leur affichage à l'écran
+
 ## v157 — 2026-07-08 — Option de campagne : Tirage 1D10 des avantages professionnels
 
 ### Client

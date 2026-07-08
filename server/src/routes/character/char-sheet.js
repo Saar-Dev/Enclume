@@ -40,6 +40,7 @@ import { requireAuth } from '../../middleware/auth.js'
 import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal, calcAttributeNA, calcREA, calcSeuils, calcSouffle, calcResistanceDroguesInput } from '../../lib/charStats.js'
 import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from '../../lib/woundUtils.js'
 import { getAdvantages, addAdvantage, removeAdvantage } from '../../services/advantageService.js'
+import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
 import { WS } from '../../../../shared/events.js'
 import {
   WOUND_LOCATIONS, WOUND_SEVERITIES,
@@ -88,11 +89,12 @@ router.get('/:characterId', async (req, res, next) => {
       return res.json({ sheet: null })
     }
 
-    const [identity, archetype, attributes, skills] = await Promise.all([
+    const [identity, archetype, attributes, skills, settings] = await Promise.all([
       db('char_identity').where({ char_sheet_id: sheet.id }).first(),
       db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
       db('char_attributes').where({ char_sheet_id: sheet.id }).select('*'),
       db('char_skills').where({ char_sheet_id: sheet.id }).select('*'),
+      getCampaignSettings(db, req.character.campaign_id),
     ])
 
     res.json({
@@ -101,6 +103,7 @@ router.get('/:characterId', async (req, res, next) => {
       archetype:  archetype  || null,
       attributes: attributes || [],
       skills:     skills     || [],
+      settings,
     })
   } catch (err) {
     next(err)
@@ -465,6 +468,34 @@ router.post('/:characterId/skills/buy', async (req, res, next) => {
     const currentMastery  = charSkill?.mastery    ?? 0
     const currentLearned  = charSkill?.is_learned  ?? false
     const isXReserved     = refSkill.marker === '(X)'
+
+    // OPT-07 (skill_prerequisites, défaut OFF) : réévalué côté serveur à chaque achat — ne jamais
+    // faire confiance à un état déjà chargé côté client (GET /:characterId peut être périmé).
+    const settings = await getCampaignSettings(db, req.character.campaign_id)
+    if (settings.skill_prerequisites) {
+      const skillMinReqs = await db('ref_skill_requirements')
+        .where({ skill_id, type: 'SKILL_MIN' })
+      if (skillMinReqs.length > 0) {
+        const [attrs, archetype] = await Promise.all([
+          db('char_attributes').where({ char_sheet_id: sheet.id }).select('*'),
+          db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+        ])
+        const genotypeRow = archetype?.genotype_id
+          ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
+          : null
+
+        for (const req_ of skillMinReqs) {
+          const [prereqRefSkill, prereqCharSkill] = await Promise.all([
+            db('ref_skills').where({ id: req_.value }).first(),
+            db('char_skills').where({ char_sheet_id: sheet.id, skill_id: req_.value }).first(),
+          ])
+          const total = calcSkillTotal(attrs, prereqCharSkill, prereqRefSkill, genotypeRow)
+          if (total < req_.threshold) {
+            throw new AppError(400, `Prérequis non satisfait : ${prereqRefSkill?.label ?? req_.value} ${req_.threshold}+ requis (actuel ${total})`)
+          }
+        }
+      }
+    }
 
     let cout
     let newMastery   = currentMastery

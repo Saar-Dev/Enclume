@@ -16,6 +16,9 @@
  *   xpAvailable    — entier — XP disponibles (affiché + guard bouton +)
  *   onSkillBought  — callback({ skill_id, mastery, is_learned, xp_available })
  *                    appelé après achat réussi — mise à jour locale dans CharacterSheet
+ *   skillPrerequisitesEnabled — booléen — option de campagne OPT-07 (settings.skill_prerequisites,
+ *                    défaut false/OFF). Si !== true, le prérequis SKILL_MIN est ignoré en visibilité
+ *                    (MUTATION/GENOTYPE restent toujours actifs, non concernés par cette option).
  *
  * Règles de calcul :
  *   Base  = AN(attr_1) + AN(attr_2)   — si attr_2 null : AN(attr_1) × 2 (PC4)
@@ -24,7 +27,7 @@
  * Algorithme de visibilité (ordre strict, source CHARACTER.md) :
  *   1. marker === '(X)' ET is_learned === false → masquée
  *      SAUF si mutation débloquante satisfaite
- *   2. SKILL_MIN → Total de la prérequise < threshold → masquée
+ *   2. SKILL_MIN → si skillPrerequisitesEnabled === true ET Total de la prérequise < threshold → masquée
  *   3. MUTATION → muta_numero absent de charAdvantages → masquée
  *   4. GENOTYPE → genotypeId !== value → masquée
  *   5. Toutes conditions OK → visible
@@ -77,6 +80,7 @@ export default function SkillsPanel({
   progressionMode,
   xpAvailable,
   onSkillBought,
+  skillPrerequisitesEnabled,
 }) {
   const { t } = useTranslation()
 
@@ -164,7 +168,7 @@ export default function SkillsPanel({
     }
 
     for (const req of skill.requirements) {
-      if (req.type === 'SKILL_MIN') {
+      if (req.type === 'SKILL_MIN' && skillPrerequisitesEnabled === true) {
         const prereq = refSkills.find(s => s.id === req.value)
         if (!prereq) return false
         if (calcTotal(prereq) < req.threshold) return false
@@ -178,7 +182,7 @@ export default function SkillsPanel({
     }
 
     return true
-  }, [refSkills, learnedSet, calcTotal, genotypeId, activeMutations, progressionMode])
+  }, [refSkills, learnedSet, calcTotal, genotypeId, activeMutations, progressionMode, skillPrerequisitesEnabled])
 
   // ─── Groupement hiérarchique par famille ──────────────────────────────────
   const families = useMemo(() => {

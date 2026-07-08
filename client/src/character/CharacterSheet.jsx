@@ -148,6 +148,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   // skills — lignes char_skills du personnage
   const [charSkills, setCharSkills] = useState([])
 
+  // options de campagne — settings mergés defaults (getCampaignSettings), utilisées pour gater
+  // des mécaniques optionnelles côté fiche (ex. skill_prerequisites, OPT-07)
+  const [campaignSettings, setCampaignSettings] = useState(null)
+
   // advantages
   const [charAdvantages, setCharAdvantages] = useState([])
 
@@ -256,9 +260,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
         if (cancelled) return
 
-        const { sheet, identity, archetype, attributes, skills } = sheetRes.data
+        const { sheet, identity, archetype, attributes, skills, settings } = sheetRes.data
 
         setSheetId(sheet.id)
+        setCampaignSettings(settings ?? null)
         setChc(sheet.chc ?? 11)
         chcRef.current = sheet.chc ?? 11
 
@@ -816,6 +821,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
             progressionMode={progressionMode}
             xpAvailable={xpAvailable}
             onSkillBought={handleSkillBought}
+            skillPrerequisitesEnabled={campaignSettings?.skill_prerequisites === true}
           />
         </div>
       </div>
