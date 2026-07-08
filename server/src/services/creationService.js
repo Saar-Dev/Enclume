@@ -229,6 +229,7 @@ export async function startCreation(campaignId, userId) {
       randomMutationsEnabled: settings.random_mutations,
       femininBonusEnabled: settings.feminin_bonus,
       randomProAdvantagesEnabled: settings.random_pro_advantages,
+      skillMaxLevelEnabled: settings.skill_max_level,
     }
   })
 }
@@ -347,6 +348,11 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       if (!Array.isArray(careersData) || careersData.length === 0) {
         throw new AppError(400, 'Au moins une carrière requise')
       }
+
+      // OPT-08 (skill_max_level, défaut OFF) : revalidation serveur du plafond par années —
+      // voir shared/careerSkills.js (getSkillCap).
+      const { campaign_id: campaignId } = await trx('characters').where({ id: characterId }).select('campaign_id').first()
+      const settings = await getCampaignSettings(trx, campaignId)
 
       // Reset avant réapplication — char_skills/char_careers ne sont écrits que par ce
       // bloc pendant le Wizard (avant verrouillage) : wipe sûr, pas d'orphelin FK possible.
@@ -480,6 +486,7 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         baseMastery,
         refSkills: refSkillsRows,
         openedSkills: step4.openedSkills || [],
+        skillMaxLevelEnabled: settings.skill_max_level,
       })
       if (allocResult.errors.length > 0) {
         const err = allocResult.errors[0]

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { nationsList } from './mockStep4Data'
+import AutodidacteAllocator from './AutodidacteAllocator'
 
 export default function BackgroundSelector({
   title,
@@ -22,6 +23,9 @@ export default function BackgroundSelector({
   defaultNation,
   conditionalChoices,
   onConditionalChoice,
+  refSkills,
+  autodidacteAllocations,
+  onAutodidacteAllocationsChange,
 }) {
   const { t } = useTranslation('creation')
 
@@ -156,9 +160,11 @@ export default function BackgroundSelector({
 )}
 
           {selectedItem.isAutodidacte && (
-            <p style={s.autodidacteInfo}>
-              7 points libres à répartir (+2 max par compétence). Les compétences réservées doivent être validées par le MJ.
-            </p>
+            <AutodidacteAllocator
+              refSkills={refSkills}
+              allocations={autodidacteAllocations}
+              onChange={onAutodidacteAllocationsChange}
+            />
           )}
 
           {selectedItem.hasSpecialties && (
@@ -329,11 +335,6 @@ const s = {
   skillCond: {
     color: '#6a6a4a',
     fontSize: '11px',
-  },
-  autodidacteInfo: {
-    color: '#c0a060',
-    fontSize: '13px',
-    textAlign: 'center',
   },
   specialtyInfo: {
     color: '#c0a060',

@@ -168,6 +168,7 @@ export default function CareersAllocator({
   initialRandomPicks,
   onRandomPicksChange,
   randomProAdvantagesEnabled,
+  skillMaxLevelEnabled,
 }) {
   const { t } = useTranslation('creation')
   const socket = useSocket()
@@ -354,7 +355,8 @@ export default function CareersAllocator({
     baseMastery,
     refSkills: refSkills ?? [],
     openedSkills: state.openedSkills,
-  }), [selectedCareers, careersById, selectedHigherEdItem, baseMastery, refSkills, state.openedSkills])
+    skillMaxLevelEnabled,
+  }), [selectedCareers, careersById, selectedHigherEdItem, baseMastery, refSkills, state.openedSkills, skillMaxLevelEnabled])
 
   // Seules les compétences RÉELLEMENT touchées par le joueur (state.skillAllocations) sont
   // soumises au calcul de coût — une compétence non modifiée doit toujours coûter 0 (Lot 2 fix :

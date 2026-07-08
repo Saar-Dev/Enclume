@@ -1,3 +1,11 @@
+## v159 — 2026-07-08 — Option de campagne : niveau maximum des compétences
+
+### Client
+- [fix] Étape 4 (Profession) de l'assistant de création : le plafond de maîtrise d'une compétence professionnelle selon les années d'expérience n'est plus appliqué systématiquement — il ne s'applique désormais que si l'option de campagne correspondante est activée (réglage par défaut : désactivée, seul le budget de points limite)
+
+### Serveur
+- [fix] La validation finale de l'assistant de création applique la même règle : le plafond par années n'est revalidé que si l'option est activée
+
 ## v158 — 2026-07-08 — Option de campagne : prérequis de compétences
 
 ### Client

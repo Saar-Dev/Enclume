@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-08 Session 141
+> Dernière mise à jour : 2026-07-08 Session 141 (suite 2)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -11,13 +11,18 @@
 
 > **CHANTIER REDESIGN STEP 4 PROFESSION → ✅ TERMINÉ (8/8 lots)** — plan maître archivé :
 > **`docs/Old/PLAN_REWORKFINAL.md`**.
-> **Chantier Options de campagne (item 41) : `random_pro_advantages` (OPT-05) + `skill_prerequisites`
-> (OPT-07) ✅ câblées — Session 141** (5/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`,
-> `random_pro_advantages`, `skill_prerequisites`). `skill_prerequisites` diffère des précédentes :
-> s'applique sur la fiche personnage en jeu (pas le Wizard), gating **client (`SkillsPanel.jsx`) +
-> serveur (`POST /skills/buy` revalide via `calcSkillTotal`)** — demande explicite Saar "bien ET propre".
-> **PROCHAINE OPTION À CÂBLER : à définir avec Saar** — voir item "41." (6/11 restantes :
-> `polaris_latent`, `revers`, `skill_max_level`, `skill_natural_prog`, `young_penalty`, `celebrity`).
+> **Chantier Options de campagne (item 41) : `skill_max_level` (OPT-08) ✅ câblée — Session 141
+> (suite 2)** (6/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
+> `skill_prerequisites`, `skill_max_level`). **Conflit de source trouvé et confirmé par Saar avant
+> code** (même schéma que OPT-07) : `getSkillCap()` (`shared/careerSkills.js`) appliquait le plafond
+> par années **inconditionnellement** depuis le rework Step4 (Session 139), alors que
+> `REGLE_CREATION.txt:1250-1263` marque cette règle **« (OPTIONNEL) »** — gaté désormais par
+> `settings.skill_max_level` (défaut OFF → `Infinity`, seul le budget Q2 limite), client
+> (`CareersAllocator.jsx`) + serveur (`creationService.js` STEP4). Le plafond fixe +5 origine
+> (règle non optionnelle) reste inchangé dans les deux états. Scope Wizard uniquement (règle
+> "Lors de la création", vérifié : `POST /skills/buy` en Progression n'a déjà aucun plafond).
+> **PROCHAINE OPTION À CÂBLER : à définir avec Saar** — voir item "41." (5/11 restantes :
+> `polaris_latent`, `revers`, `skill_natural_prog`, `young_penalty`, `celebrity`).
 
 **44. Redesign Step 4 Profession (rework multi-lots) — ✅ TERMINÉ (8/8 lots) — Session 139/140**
    → Plan maître (archivé) : `docs/Old/PLAN_REWORKFINAL.md` (8 lots). Design source : `docs/ClaudeDesign/project/Professions.dc.html`.

@@ -1172,3 +1172,58 @@ UI, donc pas testable sans appel API direct).
 
 Options de campagne restantes (6/11) : `polaris_latent`, `revers`, `skill_max_level`,
 `skill_natural_prog`, `young_penalty`, `celebrity`.
+
+---
+## Session 141 (suite 2) — 2026-07-08 — Options de campagne : `skill_max_level` (OPT-08) câblée ✅
+
+**Conflit de source trouvé avant tout code (même schéma que OPT-07)** : `REGLE_CREATION.txt:1250-1263`
+titre explicitement la règle **« NIVEAU MAXIMUM DES COMPÉTENCES (OPTIONNEL) »** — le plafond de maîtrise
+par années d'expérience dans la Profession ne s'applique QUE si l'option est activée. Or `getSkillCap()`
+(`shared/careerSkills.js`, rework Step4 Lot 1, Session 139) l'applique **inconditionnellement** depuis
+sa création — client (`CareersAllocator.jsx`) et serveur (`creationService.js` STEP4 via
+`computeSkillAllocation`) plafonnaient déjà toutes les compétences professionnelles par années, sans
+jamais lire `settings.skill_max_level` (défaut OFF documenté dans `OPTIONS_CAMPAGNE.md`). Signalé à
+Saar avant de planifier — confirmation explicite : **option désactivée → aucun plafond de compétence**
+(seul le budget global Q2 limite).
+
+**Point distinct vérifié, resté inchangé** : le plafond fixe **+5** pour les compétences d'origine
+non-professionnelles (`ORIGIN_SKILL_CAP`) est une règle de base non marquée « optionnelle » dans le LdB
+(`REGLE_CREATION.txt:1122-1128`) — reste appliqué dans les deux états du toggle.
+
+**Scope vérifié avant code** : la règle est explicitement *« Lors de la création »* — vérification de
+`POST /skills/buy` (`char-sheet.js`, mode Progression) : cette route n'applique déjà **aucun** plafond,
+ni celui-ci ni même le +5 origine. `skill_max_level` ne touche donc que le Wizard Step4, jamais la
+Progression — scope cohérent avec le texte source, aucune extension de périmètre.
+
+**Analyse à charge demandée par Saar avant codage** — 3 risques identifiés et adressés :
+1. Régression comportementale invisible : toute campagne n'activant pas l'option perd un plafond
+   jusqu'ici toujours actif (et déjà validé par Saar en Session 139) — confirmé voulu par Saar.
+2. Risque d'échec silencieux (pattern déjà vécu P54/P56) : si le câblage est incomplet quelque part,
+   `ctx.skillMaxLevelEnabled` est `undefined` → `Infinity` → plafond désactivé sans la moindre erreur.
+   Testé explicitement le cas décisif (état ON, pas seulement OFF) pour écarter ce risque.
+3. Tests unitaires du Lot 1 (Session 139) rendus obsolètes en silence si rejoués tels quels (jamais
+   passé `skillMaxLevelEnabled`) — nouveaux scénarios écrits couvrant les deux états.
+
+**Code :**
+- `shared/careerSkills.js` (`getSkillCap`) : `if (!ctx.skillMaxLevelEnabled) return Infinity` inséré
+  entre le plafond origine (inchangé) et le calcul par années — commentaire d'en-tête du fichier mis à
+  jour pour ne plus décrire le plafond par années comme inconditionnel.
+- `server/src/services/creationService.js` : `startCreation` +`skillMaxLevelEnabled` (settings.
+  skill_max_level, même pattern que les 3 flags précédents) ; bloc STEP4 récupère désormais
+  `campaignId`/`settings` (pattern identique STEP1) et transmet `skillMaxLevelEnabled` au ctx de
+  `computeSkillAllocation`.
+- `client/src/stores/creationStore.js`, `Step4Experience.jsx`, `CareersAllocator.jsx` : propagation du
+  flag jusqu'à `skillAllocationCtx` (même chaîne que `randomProAdvantagesEnabled`).
+- Sélecteur GM déjà existant (`SectionCharacterSheet.jsx`, Session 130) — aucun changement UI de config.
+
+**Testé :** `node --check` (shared/serveur) 0 erreur, ESLint client 0 erreur introduite (1 erreur
+pré-existante `remainingPC` confirmée via `git stash`). Scénarios isolés `node -e` — le point décisif
+de l'analyse à charge : OFF (et champ omis) → `cap = Infinity` ; ON avec 1 an de carrière → `cap = 3`
+conforme à la table RAW ; `computeSkillAllocation` confirme `over_cap` absent en OFF et présent en ON
+pour la même cible ; plafond origine +5 inchangé dans les deux états. SR (`/api/health` 200).
+**Parcours navigateur confirmé fonctionnel par Saar.**
+**Non testé :** les 4 étapes du scénario détaillées une par une (validation donnée globalement
+"Fonctionnel") ; rejet serveur `over_cap` en conditions réelles avec option ON plutôt que via `node -e`.
+
+Options de campagne restantes (5/11) : `polaris_latent`, `revers`, `skill_natural_prog`,
+`young_penalty`, `celebrity`.

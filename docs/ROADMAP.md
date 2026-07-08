@@ -392,7 +392,8 @@ Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation doc
 | Effets mécaniques — `feminin_bonus` | Sexe/Fécondité Step1/3/5, voir `docs/PLAN_SEXE.md` | ✅ session 137 |
 | Effets mécaniques — `random_pro_advantages` | Bloc "Tirage 1D10" (Step4) masqué si désactivé | ✅ session 141 |
 | Effets mécaniques — `skill_prerequisites` | `SKILL_MIN` gaté dans SkillsPanel (client) + `POST /skills/buy` (serveur, via `calcSkillTotal`) — 1ʳᵉ option touchant la fiche perso en jeu, pas que le Wizard | ✅ session 141 |
-| Effets mécaniques — 6 restantes | polaris_latent, revers, skill_max_level, skill_natural_prog, young_penalty, celebrity | 🔲 en cours un par un |
+| Effets mécaniques — `skill_max_level` | `getSkillCap` (`shared/careerSkills.js`) gaté par `settings.skill_max_level` — plafond par années (Wizard uniquement) `Infinity` si désactivé ; conflit de source trouvé (règle marquée "(OPTIONNEL)" dans REGLE_CREATION.txt, appliquée inconditionnellement depuis le rework Step4) et confirmé par Saar avant code | ✅ session 141 (suite 2) |
+| Effets mécaniques — 5 restantes | polaris_latent, revers, skill_natural_prog, young_penalty, celebrity | 🔲 en cours un par un |
 
 ### Client — Dashboard
 | Tâche | État |

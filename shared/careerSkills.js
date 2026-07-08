@@ -5,11 +5,12 @@
 // compétences listées par carrière, compétences des études supérieures, maîtrise de base issue
 // des origines, catalogue refSkills pour les markers (X)/PN).
 //
-// Plafond (REGLE_CREATION.txt:1250-1263) : compétence professionnelle (listée par ≥1 carrière
-// retenue, ou par les études supérieures qui comptent pour +2 ans comme une profession) →
-// getMaxMasteryByYears(Σ années + 2 si études). Compétence d'origine (géo/social/formation) qui
-// n'est PAS professionnelle → plafond fixe +5 (REGLE_CREATION.txt:1122-1128), pas la table par
-// années (qui ne s'applique qu'aux compétences "dépendant d'une Profession").
+// Plafond (REGLE_CREATION.txt:1250-1263, marqué "(OPTIONNEL)" — option skill_max_level, défaut
+// OFF) : compétence professionnelle (listée par ≥1 carrière retenue, ou par les études supérieures
+// qui comptent pour +2 ans comme une profession) → getMaxMasteryByYears(Σ années + 2 si études) si
+// ctx.skillMaxLevelEnabled, sinon Infinity (seul le budget Q2 limite). Compétence d'origine
+// (géo/social/formation) qui n'est PAS professionnelle → plafond fixe +5 (REGLE_CREATION.txt:
+// 1122-1128, règle de base non optionnelle), pas la table par années.
 // Coût ×2 "hors profession" (REGLE_CREATION.txt:1117-1121) : basé uniquement sur l'appartenance
 // à une carrière retenue — les études supérieures ne comptent PAS pour le coût, seulement pour
 // le plafond.
@@ -33,6 +34,10 @@ export function getSkillCap(skillId, ctx) {
   const higherEdSkills = ctx.higherEdSkills || []
   const hasHigherEd = higherEdSkills.includes(skillId)
   if (!isProSkill(skillId, careers) && !hasHigherEd) return ORIGIN_SKILL_CAP
+  // OPT-08 (skill_max_level, défaut OFF) : plafond par années explicitement marqué
+  // "(OPTIONNEL)" par REGLE_CREATION.txt:1250-1263 — désactivé, une compétence pro/études
+  // supérieures n'a d'autre limite que le budget (Q2).
+  if (!ctx.skillMaxLevelEnabled) return Infinity
   const yearsForSkill = careers
     .filter(c => (c.skills || []).includes(skillId))
     .reduce((sum, c) => sum + c.years, 0)
