@@ -31,6 +31,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   const [originGeo, setOriginGeo] = useState(initialData?.originGeo ?? null)
   const [originSoc, setOriginSoc] = useState(initialData?.originSoc ?? null)
   const [training, setTraining] = useState(initialData?.training ?? null)
+  const [autodidacteAllocations, setAutodidacteAllocations] = useState(initialData?.autodidacteAllocations ?? {})
   const [higherEd, setHigherEd] = useState(initialData?.higherEd ?? null)
   const [geoName, setGeoName] = useState(initialData?.geoName ?? '')
   const [geoNation, setGeoNation] = useState(initialData?.geoNation ?? '')
@@ -90,6 +91,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
 
   // ─── Handlers ──────────────────────────────────────────────────
   const handleSelectGeoOrigin = (code) => {
+  if (code === originGeo) return
   setOriginGeo(code)
   setOriginSoc(null)
   setTraining(null)
@@ -98,6 +100,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   setGeoNation('')
   setSocNation('')
   setConditionalChoices({})
+  setAutodidacteAllocations({})
 }
 
   const handleRandomGeoOrigin = () => {
@@ -107,11 +110,13 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   }
 
   const handleSelectSocialOrigin = (code) => {
+  if (code === originSoc) return
   setOriginSoc(code)
   setTraining(null)
   setHigherEd(null)
   setSocNation('')
   setConditionalChoices({})
+  setAutodidacteAllocations({})
 }
 
   const handleRandomSocialOrigin = () => {
@@ -121,9 +126,11 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   }
 
   const handleSelectTraining = (code) => {
+  if (code === training) return
   setTraining(code)
   setHigherEd(null)
   setConditionalChoices({})
+  setAutodidacteAllocations({})
 }
 
   const handleRandomTraining = () => {
@@ -185,6 +192,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   careers: careerEntries,
   skillAllocations,
   openedSkills,
+  autodidacteAllocations,
   pcSpent: totalPC,
   appliedSkills: Object.values(conditionalChoices),
 }
@@ -316,6 +324,9 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
           randomLabel={t('step4.training_random')}
 		  conditionalChoices={conditionalChoices}
 		  onConditionalChoice={handleConditionalChoice}
+          refSkills={refSkills}
+          autodidacteAllocations={autodidacteAllocations}
+          onAutodidacteAllocationsChange={setAutodidacteAllocations}
         />
       )}
 

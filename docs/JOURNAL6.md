@@ -1227,3 +1227,96 @@ pour la même cible ; plafond origine +5 inchangé dans les deux états. SR (`/a
 
 Options de campagne restantes (5/11) : `polaris_latent`, `revers`, `skill_natural_prog`,
 `young_penalty`, `celebrity`.
+
+---
+## Session 141 (suite 3) — 2026-07-08 — Wizard Step 4 : Formation "Autodidacte" (7 points libres) ✅
+
+**Hors chantier "Options de campagne" (item 41)** — signalement Saar : la formation "Autodidacte"
+(sous-étape Formation, Step 4 Expérience) affiche depuis toujours le texte *"7 points libres à
+répartir (+2 max par compétence). Les compétences réservées doivent être validées par le MJ."* sans
+la moindre UI de répartition, ni application de bonus. Confirmé par lecture avant tout plan :
+`BackgroundSelector.jsx:158-162` n'était qu'un `<p>` statique (flag `isAutodidacte`,
+`backgroundMeta.js`) ; côté serveur, `ref_background_skills` ne contient aucune ligne pour ce
+background — le commentaire de `98_ref_backgrounds.js:258` l'annonçait déjà à l'époque : *"Autodidacte
+— pas de skills fixes, 7 points libres gérés côté UI"* — jamais fait.
+
+**Réflexion demandée par Saar avant tout code ("on y réfléchit sans coder")** — plusieurs tours de
+clarification :
+- Budget ≤7 points, +2 max/compétence, sous-consommation autorisée (confirmé Saar Q1).
+- Compétences éligibles : **hors `(X)` réservées ET hors compétences à prérequis `SKILL_MIN`** (le
+  "†" du LdB, légende `docs/REGLES/REGLECOMPETENCE.md:127-128` *"COMPÉTENCE PRÉ-REQUISE NÉCESSAIRE"*,
+  concept distinct du `marker` DB — confirmé par recoupement avec `docs/Old/MIGRATION_37BIS.md:544`).
+  Exclusion **plus stricte** que la lettre de la règle (`REGLE_CREATION.txt:1026-1033`, qui autorise
+  les `(X)` "sous validation MJ") — choix explicite de Saar, confirmé deux fois sans ambiguïté
+  possible : "Toute compétence HORS (X) et †". La validation MJ des `(X)` n'a donc plus d'objet
+  puisqu'aucune compétence éligible n'est concernée.
+- Vérifié en base avant de concevoir l'UI (pas supposé) : 29 compétences éligibles sur 232 leaf
+  skills, réparties sur 10 familles (la famille "Langues/langages" n'en a aucune — toutes `(X)` ou
+  `†`). Ce chiffre a fait revenir sur le choix initial d'UI (accordéon envisagé par Saar vu le volume
+  attendu "conséquent") vers une liste plate groupée par famille, sans repli/dépli — 29 lignes
+  tiennent sans qu'un accordéon se justifie.
+
+**Analyse à charge demandée par Saar sur le plan lui-même avant codage** — 1 vrai bug trouvé, 2
+correctifs mineurs, 2 points vérifiés (pas de simple affirmation) :
+- **Bug réel (fix A)** : `handleSelectGeoOrigin`/`handleSelectSocialOrigin`/`handleSelectTraining`
+  (`Step4Experience.jsx`) réinitialisent l'état en cascade sur **tout** clic de carte via
+  `onSelect(item.code)` (`BackgroundSelector.jsx:48`), y compris un re-clic sur la carte déjà
+  sélectionnée. Un joueur ayant réparti ses 7 points sur Autodidacte et re-cliquant par erreur sa
+  propre carte perdait silencieusement toute sa répartition. Défaut préexistant sur `higherEd`/
+  `conditionalChoices` (bénin, un choix à refaire coûte un clic) mais bien plus coûteux sur 7 points
+  pesés — corrigé par une garde `if (code === valeur actuelle) return` en tête des 3 handlers
+  (corrige au passage, en effet de bord positif, le défaut préexistant).
+- **Incohérence de cascade (fix B)** : `handleSelectGeoOrigin`/`handleSelectSocialOrigin`
+  réinitialisaient déjà `training`/`higherEd`/`conditionalChoices` mais pas `autodidacteAllocations`
+  — ajouté aux deux handlers pour une cascade complète.
+- **Robustesse serveur (fix C)** : `validateAutodidacteAllocations` ignore désormais les entrées à 0
+  point (artefact bénin, jamais produit par l'UI normale) au lieu de rejeter toute la réconciliation
+  Step4 pour un cas inoffensif.
+- **Garde de chargement (fix D)** : `AutodidacteAllocator` affiche un message si `refSkills` n'est
+  pas encore résolu (cas atteignable en navigant directement vers la sous-étape Formation après
+  reprise d'un Step4 déjà rempli, avant la fin du fetch `/char-ref/skills`).
+- **Vérifié plutôt qu'affirmé** : réutilisation CSS `.wiz4-*` (variables déclarées `:root`,
+  `index.css:31` — cascadent bien dans le conteneur `style={}` de `BackgroundSelector`, contrairement
+  à une simple supposition initiale) ; interaction avec le plafond d'origine fixe +5
+  (`ORIGIN_SKILL_CAP`, `careerSkills.js`) — non affectée, `computeSkillAllocation` n'évalue que les
+  compétences réellement touchées par le joueur (P55), une compétence jamais touchée n'est jamais
+  soumise au plafond même si son `baseMastery` cumulé (géo+social+Autodidacte) le dépasse.
+
+**Code :**
+- `shared/autodidacte.js` (NOUVEAU) : `AUTODIDACTE_TOTAL_POINTS`/`AUTODIDACTE_MAX_PER_SKILL`,
+  `isAutodidacteEligible`, `getAutodidacteEligibleIds`, `validateAutodidacteAllocations` — fonctions
+  pures, importées à l'identique côté client et serveur (zéro duplication de la règle d'éligibilité,
+  seulement un petit adaptateur de forme côté serveur pour reconstruire `requirements`).
+- `client/src/components/creation/AutodidacteAllocator.jsx` (NOUVEAU) : widget de répartition
+  (liste plate groupée par famille, stepper 0/1/2, compteur "X restants"), monté dans
+  `BackgroundSelector` à la place de l'ancien `<p>` statique. **Zéro nouvelle classe CSS** — réutilise
+  `.wiz4-block`/`.wiz4-boardhead`/`.wiz4-h`/`.wiz4-poolrem`/`.wiz4-note`/`.wiz4-grplbl`/`.wiz4-skill`/
+  `.wiz4-skmain`/`.wiz4-sklabel`/`.wiz4-ctl`/`.wiz4-sbtn`/`.wiz4-val` (pattern Lot 4, board Avantages
+  pro).
+- `client/src/components/creation/BackgroundSelector.jsx` : 3 nouvelles props
+  (`refSkills`/`autodidacteAllocations`/`onAutodidacteAllocationsChange`), remplacement du `<p>`
+  statique, suppression du style `autodidacteInfo` devenu mort.
+- `client/src/components/creation/Step4Experience.jsx` : state `autodidacteAllocations`, fixes A/B
+  dans les 3 handlers de sélection background, ajout au payload `buildPayload`, props transmises au
+  `<BackgroundSelector>` de la sous-étape Formation.
+- `server/src/services/creationService.js` : `resolveAutodidacteSkills` (nouvelle fonction,
+  requêtes `ref_skills`/`ref_skill_requirements` + validation) injectée dans `bgSkillsToApply` juste
+  après `getBackgroundSkillsToApply` — la boucle `upsertSkillBonus` et l'agrégation `baseMastery`
+  existantes héritent automatiquement, **aucune autre ligne du bloc STEP4 modifiée**.
+- `client/src/locales/creation.json` : 4 clés (`autodidacte_title`/`autodidacte_points_remaining`/
+  `autodidacte_rule`/`autodidacte_loading`).
+- Aucune migration DB (schéma `char_skills` déjà suffisant).
+
+**Testé :** `node --check` (`shared/autodidacte.js`, `creationService.js`) 0 erreur, `JSON.parse`
+(`creation.json`) 0 erreur, ESLint 0 erreur introduite sur `AutodidacteAllocator.jsx`/
+`BackgroundSelector.jsx` (0 erreur) et `Step4Experience.jsx` (1 erreur préexistante `remainingPC`
+ligne 89, confirmée via `git stash` avant/après mes modifications), relecture complète de chaque
+fichier produit avant livraison, SR + **parcours navigateur confirmé fonctionnel par Saar ("Test
+OK")**.
+
+**Non testé :** les 6 scénarios détaillés proposés un par un (validation donnée globalement, pas
+listée point par point) ; re-clic accidentel sur la carte Autodidacte déjà sélectionnée (fix A) en
+conditions réelles navigateur plutôt que par lecture de code ; vérification directe
+`char_skills.mastery` en base après un `reconcileCreation` réel avec des points Autodidacte
+effectivement répartis ; rendu visuel exact des 29 lignes dans le conteneur `max-width:500px` de
+`BackgroundSelector` (confirmé fonctionnel globalement par Saar, pas détaillé ligne par ligne).

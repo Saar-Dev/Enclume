@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 2) — 2026-07-08
+> Session 141 (suite 3) — 2026-07-08
 
 ---
 
@@ -107,8 +107,24 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 2) (2026-07-08)
+## ÉTAT COURANT — Session 141 (suite 3) (2026-07-08)
 
+- **Session 141 (suite 3) — Wizard Step 4 : Formation "Autodidacte" (7 points libres) ✅ câblée.**
+  Hors chantier "Options de campagne" (item 41 EN_COURS.md) — mécanique de base LdB toujours active.
+  Le sélecteur de formation affichait un texte informatif sans aucune UI de répartition ni
+  application de bonus (`ref_background_skills` sans ligne pour ce background, jamais implémenté
+  malgré le commentaire de la migration 98 l'annonçant). Réflexion préalable en plusieurs tours +
+  analyse à charge demandée par Saar avant codage : compétences éligibles restreintes par Saar à
+  hors `(X)` réservées ET hors compétences à prérequis `SKILL_MIN` (29/232 en base, 10 familles).
+  `shared/autodidacte.js` (NOUVEAU, règle pure partagée client/serveur) + `AutodidacteAllocator.jsx`
+  (NOUVEAU, zéro nouvelle classe CSS) + `creationService.js` (`resolveAutodidacteSkills`, réutilise
+  le pipeline existant des bonus d'origine sans toucher `careerSkills.js`/P55). **1 vrai bug trouvé
+  par l'analyse à charge et corrigé** : reset de la répartition sur un simple re-clic de la carte
+  déjà sélectionnée (`Step4Experience.jsx`, 3 handlers) — fix par garde `if (code === valeur
+  actuelle) return`. Testé : `node --check`/ESLint 0 erreur introduite (1 préexistante confirmée),
+  SR + fonctionnel confirmé Saar. Non testé : scénarios détaillés un par un, re-clic accidentel en
+  conditions réelles, vérification base post-`reconcileCreation`. Détail complet :
+  `docs/JOURNAL6.md` "Session 141 (suite 3)".
 - **Session 141 (suite 2) — Options de campagne : `skill_max_level` (OPT-08) ✅ câblée.** Conflit de
   source trouvé avant tout code (même schéma que OPT-07) : `REGLE_CREATION.txt:1250-1263` marque le
   plafond de maîtrise par années d'expérience comme **« (OPTIONNEL) »**, mais `getSkillCap()`

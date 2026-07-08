@@ -1,3 +1,16 @@
+## v160 — 2026-07-08 — Assistant de création : formation "Autodidacte" fonctionnelle
+
+### Client
+- [feat] Étape 4 (Expérience) de l'assistant de création : la formation "Autodidacte" permet
+  désormais de répartir réellement 7 points libres sur les compétences (2 points maximum par
+  compétence), au lieu d'un simple texte informatif sans effet
+- [fix] Sélection d'une origine géographique, sociale ou d'une formation : un second clic sur un
+  choix déjà sélectionné ne réinitialise plus les données déjà saisies plus loin dans l'étape
+
+### Serveur
+- [feat] La validation finale de l'assistant de création applique et vérifie la répartition de la
+  formation "Autodidacte" (bornes respectées, compétences autorisées)
+
 ## v159 — 2026-07-08 — Option de campagne : niveau maximum des compétences
 
 ### Client

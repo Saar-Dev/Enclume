@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-08 Session 141 (suite 2)
+> Dernière mise à jour : 2026-07-08 Session 141 (suite 3)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -23,6 +23,49 @@
 > "Lors de la création", vérifié : `POST /skills/buy` en Progression n'a déjà aucun plafond).
 > **PROCHAINE OPTION À CÂBLER : à définir avec Saar** — voir item "41." (5/11 restantes :
 > `polaris_latent`, `revers`, `skill_natural_prog`, `young_penalty`, `celebrity`).
+> **Item 46 (hors chantier options de campagne) : Formation "Autodidacte" ✅ câblée — Session 141
+> (suite 3)** — 7 points libres réellement répartissables (mécanique de base, jamais un toggle
+> campagne), voir détail ci-dessous.
+
+**46. Wizard Step 4 — Formation "Autodidacte" (7 points libres) ✅ CLOS — Session 141 (suite 3) (2026-07-08)**
+   → Hors chantier "Options de campagne" (item 41) — mécanique de base LdB toujours active, pas un
+     toggle campagne. Signalement Saar : "Autodidacte" affichait un texte informatif ("7 points
+     libres...") sans aucune UI de répartition ni application de bonus — confirmé par lecture
+     (`ref_background_skills` ne contient aucune ligne pour ce background ; le commentaire de la
+     migration `98_ref_backgrounds.js` l'annonçait déjà : "gérés côté UI", jamais fait).
+   → Réflexion préalable en plusieurs tours (clarifications + analyse à charge demandée par Saar
+     avant tout code) : budget ≤7 points/+2 max par compétence (sous-consommation autorisée),
+     compétences éligibles restreintes explicitement par Saar à **hors `(X)` réservées ET hors
+     compétences à prérequis `SKILL_MIN`** (†, `ref_skill_requirements`) — exclusion plus stricte
+     que la lettre de la règle (`REGLE_CREATION.txt:1026-1033`, qui autorise les `(X)` sous
+     validation MJ jamais outillée dans le Wizard). Vérifié en base avant de concevoir l'UI : 29
+     compétences éligibles sur 232 (10 familles) — liste plate groupée par famille retenue plutôt
+     qu'un accordéon (volume trop faible pour le justifier).
+   → `shared/autodidacte.js` (NOUVEAU) : règle pure (`isAutodidacteEligible`/
+     `getAutodidacteEligibleIds`/`validateAutodidacteAllocations`), importée à l'identique côté
+     client et serveur — zéro duplication de la règle d'éligibilité. `AutodidacteAllocator.jsx`
+     (NOUVEAU) : widget de répartition monté dans `BackgroundSelector` (sous-étape Formation), zéro
+     nouvelle classe CSS (réutilise `.wiz4-*` du board Avantages pro, Lot 4). `creationService.js` :
+     `resolveAutodidacteSkills` réutilise tel quel le pipeline existant des bonus d'origine
+     (`bgSkillsToApply`/`upsertSkillBonus`/`baseMastery`) — aucune modification de
+     `shared/careerSkills.js` (P55) nécessaire.
+   → **Analyse à charge demandée par Saar avant codage — 1 vrai bug trouvé et corrigé** :
+     `handleSelectTraining`/`handleSelectGeoOrigin`/`handleSelectSocialOrigin` (`Step4Experience.jsx`)
+     réinitialisaient l'état en cascade sur **tout** clic de carte, y compris un re-clic sur la carte
+     déjà sélectionnée — un joueur ayant réparti ses 7 points pouvait les perdre sur un simple
+     re-clic accidentel. Fix : garde `if (code === valeur actuelle) return` ajoutée aux 3 handlers
+     (corrige au passage le même défaut préexistant sur `higherEd`/`conditionalChoices`, effet de
+     bord positif). 2 correctifs mineurs additionnels : validation serveur tolérante aux entrées à 0
+     point (ignorées plutôt que rejetées, évite un blocage dur pour un artefact bénin) ; garde de
+     chargement dans `AutodidacteAllocator` si `refSkills` pas encore résolu.
+   → **Testé** : `node --check` (shared + serveur) 0 erreur, ESLint client 0 erreur introduite (1
+     erreur préexistante `Step4Experience.jsx:89` `remainingPC` confirmée via `git stash`), SR +
+     **parcours navigateur confirmé fonctionnel par Saar**.
+   → **Non testé** : les 6 scénarios détaillés un par un (validation donnée globalement "Test OK") ;
+     re-clic accidentel sur la carte Autodidacte déjà sélectionnée (fix du bug trouvé en analyse à
+     charge) en conditions réelles navigateur ; vérification directe `char_skills.mastery` en base
+     post-`reconcileCreation` réel.
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 3)".
 
 **44. Redesign Step 4 Profession (rework multi-lots) — ✅ TERMINÉ (8/8 lots) — Session 139/140**
    → Plan maître (archivé) : `docs/Old/PLAN_REWORKFINAL.md` (8 lots). Design source : `docs/ClaudeDesign/project/Professions.dc.html`.

@@ -10,6 +10,7 @@ import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../sh
 import { evaluateCareerEligibility } from '../../../shared/careerEligibility.js'
 import { computeSkillAllocation, validateChoiceGroups } from '../../../shared/careerSkills.js'
 import { computeProAdvantageAllocation, computeRandomBudgetDelta } from '../../../shared/careerAdvantages.js'
+import { getAutodidacteEligibleIds, validateAutodidacteAllocations } from '../../../shared/autodidacte.js'
 import { addAdvantage } from './advantageService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 
@@ -49,6 +50,32 @@ async function getBackgroundSkillsToApply(trx, { geoRow, socRow, trainRow, highe
   const bgIds = [geoRow?.id, socRow?.id, trainRow?.id, higherEdRow?.id].filter(Boolean)
   const bgSkills = await trx('ref_background_skills').whereIn('background_id', bgIds)
   return bgSkills.filter(s => !s.conditional || appliedSkills.includes(s.skill_id))
+}
+
+// Formation "Autodidacte" (REGLE_CREATION.txt:1026-1033) : 7 points libres choisis par le joueur,
+// +2 max/compétence, hors compétences (X) et hors compétences à prérequis SKILL_MIN — voir
+// shared/autodidacte.js pour la règle d'éligibilité (source unique, importée aussi côté client).
+async function resolveAutodidacteSkills(trx, autodidacteAllocations) {
+  const [skills, reqs] = await Promise.all([
+    trx('ref_skills').select('id', 'marker', 'is_category'),
+    trx('ref_skill_requirements').where({ type: 'SKILL_MIN' }).select('skill_id'),
+  ])
+  const prereqIds = new Set(reqs.map(r => r.skill_id))
+  const shaped = skills.map(s => ({
+    ...s,
+    requirements: prereqIds.has(s.id) ? [{ type: 'SKILL_MIN' }] : [],
+  }))
+  const eligibleIds = getAutodidacteEligibleIds(shaped)
+
+  const { errors } = validateAutodidacteAllocations(autodidacteAllocations, eligibleIds)
+  if (errors.length > 0) {
+    const err = errors[0]
+    throw new AppError(400, `Répartition Autodidacte invalide (${err.code}${err.skillId ? ' : ' + err.skillId : ''})`)
+  }
+
+  return Object.entries(autodidacteAllocations || {})
+    .filter(([, points]) => Number.isInteger(points) && points > 0)
+    .map(([skill_id, bonus]) => ({ skill_id, bonus }))
 }
 
 // Upsert additif — pour les backgrounds uniquement.
@@ -362,6 +389,9 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       // Backgrounds → compétences
       const bgRows = await resolveStep4Backgrounds(trx, { originGeo, originSoc, training, higherEd })
       const bgSkillsToApply = await getBackgroundSkillsToApply(trx, bgRows, step4.appliedSkills || [])
+      if (training === 'autodidacte') {
+        bgSkillsToApply.push(...await resolveAutodidacteSkills(trx, step4.autodidacteAllocations || {}))
+      }
       for (const sk of bgSkillsToApply) await upsertSkillBonus(trx, sheetId, sk.skill_id, sk.bonus)
 
       // Archetype (origins + higherEd) AVANT la boucle carrières :
