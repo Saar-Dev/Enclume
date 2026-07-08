@@ -166,6 +166,8 @@ export function calcTotalCost(attributs, isFeminin) {
   }, 0);
 }
 
+const SALARY_FORMULA_RE = /^(\d+)D(\d+)\*(\d+)$/
+
 /**
  * Évalue une formule de salaire aléatoire (carrières, ex. '1D6*100').
  * [DETTE-ETAPE4-1] dés aléatoires — une version "moyenne" pourrait être ajoutée plus tard.
@@ -174,7 +176,7 @@ export function calcTotalCost(attributs, isFeminin) {
  */
 export function evaluateSalaryFormula(formula) {
   if (!formula) return 0
-  const match = formula.match(/^(\d+)D(\d+)\*(\d+)$/)
+  const match = formula.match(SALARY_FORMULA_RE)
   if (!match) return 0
   const [, diceCount, diceFaces, multiplier] = match
   let total = 0
@@ -182,6 +184,22 @@ export function evaluateSalaryFormula(formula) {
     total += Math.floor(Math.random() * parseInt(diceFaces, 10)) + 1
   }
   return total * parseInt(multiplier, 10)
+}
+
+/**
+ * Estimation moyenne déterministe d'une formule de salaire, sans tirage aléatoire.
+ * Utilisée pour les aperçus lecture seule (Wizard Step4 Lot 3) — le montant réel reste déterminé
+ * par evaluateSalaryFormula() à la validation.
+ * @param {string} formula — format 'NDF*M'
+ * @returns {number}
+ */
+export function estimateSalaryFormula(formula) {
+  if (!formula) return 0
+  const match = formula.match(SALARY_FORMULA_RE)
+  if (!match) return 0
+  const [, diceCount, diceFaces, multiplier] = match
+  const avgPerDie = (parseInt(diceFaces, 10) + 1) / 2
+  return Math.round(parseInt(diceCount, 10) * avgPerDie * parseInt(multiplier, 10))
 }
 
 export function validateStep1(attributs, ambiance, pcDispo, isFeminin) {

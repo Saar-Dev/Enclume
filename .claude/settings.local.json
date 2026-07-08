@@ -153,7 +153,9 @@
       "Bash(git diff *)",
       "Bash(node --check \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\shared\\\\careerSkills.js\")",
       "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('client/src/locales/creation.json','utf8'\\)\\)\")",
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Bash(node --check shared/polarisUtils.js)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('client/src/locales/creation.json','utf8'\\)\\); console.log\\('OK_JSON'\\)\")"
     ]
   }
 }

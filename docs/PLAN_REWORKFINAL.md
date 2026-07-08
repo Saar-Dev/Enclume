@@ -1,5 +1,5 @@
 # PLAN_REWORKFINAL — Redesign Step 4 · Sous-step PROFESSIONS
-> Session 139 — 2026-07-07 · Master plan multi-lots (séquentiel)
+> Session 139 — 2026-07-08 · Master plan multi-lots (séquentiel)
 
 Source design : `docs/ClaudeDesign/project/Professions.dc.html` (bundle Claude Design).
 Analyse préparatoire complète : `docs/JOURNALTEMP.md` §1-9.
@@ -157,7 +157,7 @@ step4 = {
 | **0** | **Fondation éligibilité** : `shared/careerEligibility.js` + rebranchement serveur | ✅ CODÉ + validé Saar |
 | **1** | **Fondation moteur de coût (invisible)** : `getStep4RefData` (+`education`), serveur **Q2** (`reconcileCreation` valide le coût via `calcSkillCost` + payload `skillAllocations` global), **tests unitaires** du modèle. Aucun UI. | à planifier → **prochain** |
 | **2** | **UI** : réécriture `CareersAllocator` (rail + barre d'âge + détail onglets + **board GLOBAL** compétences), filtre « Accessibles » réel, `useReducer`, CSS `.wiz4-*`, i18n. Économies → Lot 3. | cadré |
-| **3** | Onglet Carrière & économies (table titres/salaires + cumul, lecture seule) | cadré |
+| **3** | Onglet Carrière & économies (table titres/salaires + cumul, lecture seule) | ✅ CODÉ + validé Saar |
 | **4** | Avantages pro (5 pts/an **par métier** → `pro_advantages`) | cadré |
 | **5** | Compétences « au choix » (`conditional` → radios → `openedSkills`) | cadré |
 | **6** | Tirage 1D10 via DicePanel (`ref_career_random_benefits` → `random_picks`) | cadré |
@@ -412,15 +412,30 @@ ajoutées (liste complète dans le fichier).
 
 ---
 
-## 5. LOT 1c — Onglet Carrière & économies (lecture seule)
+## 5. LOT 1c — Onglet Carrière & économies (lecture seule)  [✅ CLOS]
 
-- Table `.wz4-prog` : Années | Titre | Économies, ligne courante surlignée (`.cur`) selon `years`.
-- Encadré `.wz4-ecobox` : économies cumulées sur N années + note (formule aléatoire → astérisque).
-- Données : `career.titles[]`. Salaire : `salary_per_year` sinon `salary_formula` marquée aléatoire
-  (calcul réel = backend `evaluateSalaryFormula`, `shared/polarisUtils.js:175`, format `\d+D\d+\*\d+`).
+> **Implémenté tel que cadré**, classes finales `.wiz4-prog`/`.wiz4-ecobox` (cohérent `.wiz4-*`, pas
+> `.wz4-*` comme écrit initialement dans ce brouillon). Point de conception ajouté au lancement : le
+> serveur (`reconcileCreation` STEP4) calcule les économies persistées comme `salaire(titre courant
+> pour years) × years` (pas une accumulation par palier traversé) — le Lot 3 reproduit exactement
+> cette formule côté client, sans jamais appeler `Math.random()` (nouveau `estimateSalaryFormula()`,
+> moyenne déterministe pour les titres à `salary_formula`, marquée `*`). Détail complet + vérification
+> base réelle (scénario Saar 3500 sols) : `docs/JOURNAL6.md` "Lot 3".
+
+- Table `.wiz4-prog` : Années | Titre | Salaire/an, ligne courante surlignée (`.cur`) selon
+  `displayYears` (déjà calculé Lot 2).
+- Encadré `.wiz4-ecobox` : économies pour la durée engagée du métier consulté (`salaire titre courant
+  × displayYears`) + note fixe/aléatoire.
+- Tuile agebar « Économies de départ » (placeholder `—` depuis le Lot 2) : Σ sur les métiers **retenus**
+  du même calcul (`salaryPerYear × years` par métier), `*` si au moins une carrière utilise une formule.
+- Données : `career.titles[]`. Salaire : `salary_per_year` sinon `salary_formula` estimée
+  (`shared/polarisUtils.js` `estimateSalaryFormula`, même regex partagée que `evaluateSalaryFormula`
+  utilisée par le serveur, format `\d+D\d+\*\d+`).
 - Clés i18n : `career_prog_years`, `career_prog_title`, `career_prog_savings`, `career_eco_cumul`,
   `career_eco_note_random`, `career_eco_note_fixed`.
-- Tests : table correcte par carrière ; ligne courante suit le stepper années ; cumul cohérent.
+- **Bugfix associé (dette [CAR-DEF] repérée aux tests Lot 2)** : filtre carrières par défaut
+  `'all'` → `'eligible'` (`CareersAllocator.jsx` `initialReducerState`).
+- Tests : voir `JOURNAL6.md` "Lot 3" (Testé/Non testé complet).
 
 ---
 
@@ -484,7 +499,7 @@ ajoutées (liste complète dans le fichier).
 | 0 — Fondation éligibilité | ✅ (§3) | ✅ parité 12/12 | ✅ SR + fonctionnel |
 | 1 — Fondation moteur coût | ✅ (§4) | ✅ | ✅ SR + « Test OK » |
 | 2 — UI (board global) | ✅ re-détaillé au lancement | ✅ | ✅ SR + fonctionnel |
-| 3 — Économies | — | — | — |
+| 3 — Économies | ✅ (§5) | ✅ | ✅ SR + fonctionnel |
 | 4 — Avantages pro | — | — | — |
 | 5 — « Au choix » | — | — | — |
 | 6 — Tirage 1D10 | — | — | — |

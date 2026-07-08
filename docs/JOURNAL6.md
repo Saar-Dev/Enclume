@@ -721,6 +721,56 @@ Lot 2). Décisions + modèle compétences + faits vérifiés : `§1ter`.
   déclarée mais jamais utilisée (ESLint) — confirmé via `git show HEAD` antérieur à ce lot, ligne jamais
   touchée par mes modifications.
 
-### Prochain — Lot 3 (Onglet Carrière & économies)
-Table titres/salaires (lecture seule) + encadré économies cumulées. Voir `PLAN_REWORKFINAL §5 LOT 1c`
-(anciennement numéroté, à re-détailler au lancement). Détail décisions/modèle : `PLAN_REWORKFINAL §1ter`.
+### Lot 3 — Onglet « Carrière & économies » (lecture seule) ✅ CLOS
+
+**Objectif** : table de progression (années/titre/salaire) + encadré économies cumulées pour le métier
+consulté, plus la tuile « Économies de départ » de la barre d'âge (placeholder `—` depuis le Lot 2).
+Aucune migration, aucun changement serveur — `getStep4RefData` fournissait déjà `career.titles[]`
+(`min_years`/`max_years`/`title`/`salary_per_year`/`salary_formula`).
+
+**Point de conception clé** : le serveur (`creationService.js` `reconcileCreation` STEP4, l.365-374)
+calcule déjà les économies persistées ainsi : `salaire(titre courant pour `years`) × years` — pas une
+accumulation par palier traversé. Le Lot 3 **reproduit exactement cette formule côté client**, en
+lecture seule, sans jamais appeler `Math.random()` (aucun tirage hors DicePanel/Lot 6). Pour les
+titres à `salary_formula` (ex. `1D6*100`), ajout de `estimateSalaryFormula()` (moyenne déterministe,
+`shared/polarisUtils.js`, regex `SALARY_FORMULA_RE` extraite et partagée avec `evaluateSalaryFormula`
+sans changer son comportement aléatoire existant) — marqué `*` avec une note explicite, le montant réel
+restant déterminé par le serveur à la validation (comportement déjà existant, inchangé).
+
+**Fichiers touchés** :
+- `shared/polarisUtils.js` : `estimateSalaryFormula(formula)` (nouveau, pur, déterministe).
+- `client/src/components/creation/CareersAllocator.jsx` : helper `salaryPerYear(title)` (fixe vs
+  estimé) ; `useMemo` `savingsInfo` (Σ sur les métiers retenus, `salaire × années` par métier, comme le
+  serveur) → tuile agebar « Économies de départ ». Onglet « Carrière & économies » (placeholder « à
+  venir » depuis Lot 2) remplacé par la table `.wiz4-prog` (titres triés par `min_years`, ligne
+  courante `.cur` selon `displayYears`, déjà calculé Lot 2) + encadré `.wiz4-ecobox` (économies pour
+  la durée engagée du métier consulté, note fixe/aléatoire).
+- `client/src/index.css` : blocs `.wiz4-prog` / `.wiz4-ecobox` (Section 12, même famille visuelle que
+  `.wiz4-skill.hl` / `.wiz4-geo`).
+- `client/src/locales/creation.json` : `career_prog_years/title/savings`, `career_eco_cumul`,
+  `career_eco_note_random/fixed`.
+
+**Vérification en base (demande Saar, avant validation)** : test réel avec 3 ans Chasseur de primes +
+2 ans Cultivateur/Éleveur → 3500 sols affichés. Vérifié en base (`ref_career_titles`) : `chasseur_primes`
+palier 1-6 ans = 500¤/an, `cultivateur_eleveur` palier 2-9 ans = 1000¤/an → 3×500 + 2×1000 = 3500,
+conforme. Le « 100¤/an » mentionné par Saar dans son observation correspondait au **rail de gauche**
+(aperçu carrière toujours calculé à 1 an, comportement Lot 2 préexistant — `cultivateur_eleveur` palier
+1 an = 100¤/an), pas au taux réellement utilisé pour 2 années investies — aucun bug.
+
+**Testé** : `node --check`, ESLint 0 erreur, `estimateSalaryFormula` testé en isolation (`1D6*100`→350,
+`2D10*50`→550, entrées invalides→0), non-régression `evaluateSalaryFormula` (2000 tirages, bornes
+100-600 intactes après extraction de la regex partagée), vérification base réelle du scénario Saar
+(3500 sols conforme), SR + fonctionnel confirmé Saar.
+**Non testé** : les 8 scénarios détaillés un par un (validation donnée globalement par Saar, « ook »).
+
+### Bugfix — Filtre carrières par défaut « Tous » → « Accessibles » ✅ CLOS
+
+Dette [CAR-DEF] repérée lors des tests Lot 2 (voir ci-dessus), signalée par Saar comme source
+d'erreurs (un joueur peut sélectionner un métier non éligible par défaut). Fix d'une ligne :
+`CareersAllocator.jsx` `initialReducerState` — `filter: 'all'` → `filter: 'eligible'`. Rien d'autre
+changé (le segment « Tous » reste disponible au clic).
+**Testé** : ESLint 0 erreur.
+**Non testé** : confirmation visuelle navigateur (segment « Accessibles » actif à l'arrivée sur l'écran).
+
+### Prochain — Lot 4 (Avantages pro, 5 pts/an par métier)
+Voir `PLAN_REWORKFINAL §6`. Détail décisions/modèle : `PLAN_REWORKFINAL §1ter`.

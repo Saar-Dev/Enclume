@@ -2,6 +2,7 @@ import { useEffect, useMemo, useReducer } from 'react'
 import { useTranslation } from 'react-i18next'
 import { evaluateCareerEligibility } from '../../../../shared/careerEligibility.js'
 import { computeSkillAllocation, getSkillCap } from '../../../../shared/careerSkills.js'
+import { estimateSalaryFormula } from '../../../../shared/polarisUtils.js'
 
 // Couleur déterministe (hash → HSL) — rail + tags de provenance du board.
 function careerHexColor(code) {
@@ -30,7 +31,7 @@ function formatReason(t, r) {
 }
 
 const initialReducerState = (initialSkillAllocations) => ({
-  filter: 'all',
+  filter: 'eligible',
   selectedCareerId: null,
   years: 1,
   activeTab: 'metier',
@@ -116,6 +117,16 @@ export default function CareersAllocator({
     return '—'
   }
 
+  // Reproduit exactement la formule serveur (creationService.js reconcileCreation STEP4) :
+  // salaire du titre courant × années. Formule aléatoire → estimation moyenne déterministe (pas de
+  // Math.random en lecture seule), montant réel déterminé par le serveur à la validation.
+  const salaryPerYear = (title) => {
+    if (!title) return { amount: 0, isRandom: false }
+    if (title.salary_per_year) return { amount: title.salary_per_year, isRandom: false }
+    if (title.salary_formula) return { amount: estimateSalaryFormula(title.salary_formula), isRandom: true }
+    return { amount: 0, isRandom: false }
+  }
+
   // ── Éligibilité (Lot 0) ──────────────────────────────────────────
   const eligContext = useMemo(() => ({
     careers: selectedCareers.map(c => ({ career_id: c.career_id, years: c.years })),
@@ -150,6 +161,20 @@ export default function CareersAllocator({
   // ── PC (années = PC, inchangé) ───────────────────────────────────
   const totalPC = selectedCareers.reduce((sum, c) => sum + c.years, 0)
   const remainingPC = pcDispo - totalPC
+
+  // ── Économies (Lot 3) — Σ salaire du titre courant × années par métier retenu ─
+  const savingsInfo = useMemo(() => {
+    let total = 0
+    let isRandom = false
+    for (const c of selectedCareers) {
+      const refCareer = careersById.get(c.career_id)
+      const title = getTitleForYears(refCareer?.titles, c.years)
+      const { amount, isRandom: random } = salaryPerYear(title)
+      total += amount * c.years
+      if (random) isRandom = true
+    }
+    return { total, isRandom }
+  }, [selectedCareers, careersById])
 
   // ── Compétences d'origine (base) ─────────────────────────────────
   const baseMastery = useMemo(() => {
@@ -342,7 +367,9 @@ export default function CareersAllocator({
           <span className="wiz4-agesep" />
           <div className="wiz4-ageitem">
             <span className="wiz4-h">{t('step4.career_age_savings')}</span>
-            <span className="wiz4-agev wiz4-mono gold">—</span>
+            <span className="wiz4-agev wiz4-mono gold">
+              {selectedCareers.length > 0 ? `${savingsInfo.total}¤${savingsInfo.isRandom ? '*' : ''}` : '—'}
+            </span>
           </div>
           <span className="wiz4-agenote">{t('step4.career_age_note')}</span>
         </div>
@@ -458,7 +485,42 @@ export default function CareersAllocator({
                   </div>
                 </>
               )}
-              {activeTab === 'carriere' && <p className="wiz4-note">{t('step4.career_tab_soon')}</p>}
+              {activeTab === 'carriere' && (
+                <div className="wiz4-block">
+                  <table className="wiz4-prog">
+                    <thead>
+                      <tr>
+                        <th>{t('step4.career_prog_years')}</th>
+                        <th>{t('step4.career_prog_title')}</th>
+                        <th>{t('step4.career_prog_savings')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...career.titles].sort((a, b) => a.min_years - b.min_years).map(ti => (
+                        <tr key={ti.id} className={ti === currentTitle ? 'cur' : ''}>
+                          <td>{ti.min_years}{ti.max_years ? `–${ti.max_years}` : '+'}</td>
+                          <td>{ti.title}</td>
+                          <td>{formatSalary(ti)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="wiz4-ecobox">
+                    <span className="wiz4-h">{t('step4.career_age_savings')}</span>
+                    <span className="wiz4-agev wiz4-mono gold">
+                      {t('step4.career_eco_cumul', {
+                        years: displayYears,
+                        amount: `${salaryPerYear(currentTitle).amount * displayYears}¤`,
+                      })}
+                    </span>
+                    <p className="wiz4-note">
+                      {salaryPerYear(currentTitle).isRandom
+                        ? t('step4.career_eco_note_random')
+                        : t('step4.career_eco_note_fixed')}
+                    </p>
+                  </div>
+                </div>
+              )}
               {activeTab === 'avant' && <p className="wiz4-note">{t('step4.career_tab_soon')}</p>}
             </div>
           </div>

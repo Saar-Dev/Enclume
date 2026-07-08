@@ -1,3 +1,9 @@
+## v152 — 2026-07-08 — Onglet Carrière & économies + filtre Accessibles par défaut
+
+### Client
+- [feat] L'onglet « Carrière & économies » de l'étape Professions affiche désormais la progression réelle du métier consulté (années, titres, salaires) et les économies de départ accumulées, au lieu du message « à venir »
+- [fix] La liste des métiers s'ouvre désormais directement sur le filtre « Accessibles » (au lieu de « Tous ») pour éviter de sélectionner par erreur un métier non accessible au personnage
+
 ## v151 — 2026-07-07 — Nouvelle interface Professions (étape 4 de la création)
 
 ### Client

@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-07 Session 139
+> Dernière mise à jour : 2026-07-08 Session 139
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -14,9 +14,8 @@
 > Méthode validée Saar : **architecture (contrats partagés) verrouillée globalement → implémentation
 > incrémentale testée, un lot à la fois** (plan ligne-à-ligne par lot, « Je code ? » unique, validation
 > fonctionnelle avant lot suivant). Les 2 contrats (modèle de données + payload) sont figés
-> (`PLAN_REWORKFINAL §1bis`). **Lot 0 ✅, Lot 1 ✅, Lot 2 ✅ codés + validés Saar.**
-> **PROCHAIN = Lot 3 (Onglet Carrière & économies, lecture seule)** — voir `PLAN_REWORKFINAL §5 LOT 1c`
-> (table titres/salaires + encadré économies cumulées, à re-détailler au lancement).
+> (`PLAN_REWORKFINAL §1bis`). **Lot 0 ✅, Lot 1 ✅, Lot 2 ✅, Lot 3 ✅ codés + validés Saar.**
+> **PROCHAIN = Lot 4 (Avantages pro, 5 pts/an par métier)** — voir `PLAN_REWORKFINAL §6`.
 >
 > Autres pistes ouvertes (hors chantier actif) : item "41." (options de campagne) ; Step4 Expérience.
 
@@ -41,10 +40,23 @@
      découverte en cours de route : une `(X)` est accessible dès qu'une carrière retenue la liste).
      Détail complet : `docs/JOURNAL6.md` "Lot 2". Testé : SR + fonctionnel confirmé Saar (filtres,
      sélection, board avec compétences `(X)` pro/non-pro, plafonds 5/10/13 conformes).
-   → **Lot 3 (PROCHAIN)** : onglet Carrière & économies (lecture seule). `PLAN_REWORKFINAL §5 LOT 1c`.
-   → Lots 4-8 cadrés (avantages pro / au-choix / 1D10 DicePanel / relations
-     `char_relations` + panneau fiche perso / matériel inventaire). Une seule migration =
-     `char_relations` (Lot 7). Prochaine migration disponible : **120**.
+   → **Lot 3 ✅ CLOS** : onglet Carrière & économies (lecture seule) — table `.wiz4-prog`
+     (titres/salaires triés, ligne courante surlignée) + encadré `.wiz4-ecobox` (économies pour la
+     durée engagée) + tuile agebar « Économies de départ » (placeholder `—` remplacé). Reproduit
+     exactement la formule serveur (`salaire du titre courant × années`, déjà persistée par
+     `reconcileCreation`) — aucune migration, aucun changement serveur. `estimateSalaryFormula()`
+     (nouveau, `shared/polarisUtils.js`) : estimation moyenne déterministe pour les salaires à formule
+     aléatoire (jamais de `Math.random` en lecture seule), marquée `*`. Vérification base réelle
+     (scénario Saar : 3 ans Chasseur de primes + 2 ans Cultivateur/Éleveur = 3500 sols, conforme).
+     **Bugfix associé** : filtre carrières par défaut `'all'` → `'eligible'` (dette [CAR-DEF] repérée
+     lors des tests Lot 2, signalée par Saar). Détail complet : `docs/JOURNAL6.md` "Lot 3".
+     Testé : `node --check`/ESLint 0 erreur, `estimateSalaryFormula` isolé, non-régression
+     `evaluateSalaryFormula`, SR + fonctionnel confirmé Saar. Non testé : les 8 scénarios détaillés un
+     par un (validation globale « ook »), confirmation visuelle navigateur du bugfix filtre.
+   → **Lot 4 (PROCHAIN)** : Avantages pro (5 pts/an par métier → `pro_advantages`). `PLAN_REWORKFINAL §6`.
+   → Lots 5-8 cadrés (au-choix / 1D10 DicePanel / relations `char_relations` + panneau fiche perso /
+     matériel inventaire). Une seule migration = `char_relations` (Lot 7). Prochaine migration
+     disponible : **120**.
 
 **43. Fiche personnage consultable en permanence pendant le Wizard (fenêtre "peek") ✅ CLOS — Session 139 (2026-07-07)**
    → Plan complet rédigé en amont : `docs/STE6_FINAL.md`. `CharacterWindow.jsx` réutilisé inchangé

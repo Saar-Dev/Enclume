@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 139 — 2026-07-07
+> Session 139 — 2026-07-08
 
 ---
 
@@ -107,7 +107,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 139 (2026-07-07)
+## ÉTAT COURANT — Session 139 (2026-07-08)
 
 - **🔨 CHANTIER ACTIF : Redesign Step 4 Profession** → plan maître **`docs/PLAN_REWORKFINAL.md`**
   (auto-suffisant ; `docs/JOURNALTEMP.md` périssable, non requis). Méthode : contrats (données +
@@ -116,7 +116,10 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   **Lot 1 (fondation moteur de coût, `shared/careerSkills.js`) ✅ codé + validé Saar.**
   **Lot 2 (UI CareersAllocator + board global) ✅ codé + validé Saar** — voir P55 (compétences
   réservées `(X)`).
-  **PROCHAIN = Lot 3** (onglet Carrière & économies, lecture seule — `PLAN_REWORKFINAL §5 LOT 1c`).
+  **Lot 3 (onglet Carrière & économies, lecture seule) ✅ codé + validé Saar** — table
+  titres/salaires + encadré économies + tuile agebar, `estimateSalaryFormula()` (moyenne
+  déterministe). Bugfix associé : filtre carrières par défaut `'all'` → `'eligible'`.
+  **PROCHAIN = Lot 4** (avantages pro, 5 pts/an par métier — `PLAN_REWORKFINAL §6`).
   Décisions + modèle + faits vérifiés : `§1ter`. Point d'entrée reprise : `docs/EN_COURS.md` item 44.
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **124 migrations stables** (119_char_sheet_wizard_lock — Session 139 ;
@@ -160,6 +163,33 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **Non testé (Lot 2) :** retrait de carrière (recalcul budget), parcours complet jusqu'à finalisation
   + vérification `char_skills.mastery` en base, onglets Carrière/Avantages (coquilles, Lot 3/4).
 - Détail complet : `docs/JOURNAL6.md` "Session 139 (suite)".
+
+**Session 139 (suite 2) — Redesign Step 4 : Lot 3 (économies) + bugfix filtre carrières ✅ clos :**
+- **Lot 3** : onglet "Carrière & économies" (lecture seule) — table `.wiz4-prog` (titres/salaires
+  triés, ligne courante surlignée selon `displayYears`) + encadré `.wiz4-ecobox` (économies pour la
+  durée engagée) + tuile agebar "Économies de départ" (placeholder `—` du Lot 2, remplacé). Aucune
+  migration, aucun changement serveur — `getStep4RefData` fournissait déjà `career.titles[]`.
+- **Point de conception clé** : le serveur (`reconcileCreation` STEP4) persiste déjà les économies
+  via `salaire(titre courant pour years) × years` (pas une accumulation par palier traversé) — le
+  Lot 3 reproduit exactement cette formule côté client, sans jamais appeler `Math.random()`. Nouveau
+  `estimateSalaryFormula()` (`shared/polarisUtils.js`, regex `SALARY_FORMULA_RE` extraite et
+  partagée avec `evaluateSalaryFormula` sans changer son comportement aléatoire existant) : moyenne
+  déterministe pour les titres à `salary_formula`, marquée `*`, montant réel déterminé par le serveur
+  à la validation.
+- **Vérification base réelle demandée par Saar** : scénario 3 ans Chasseur de primes + 2 ans
+  Cultivateur/Éleveur → 3500 sols affichés. Confirmé conforme (`ref_career_titles` : 500¤/an × 3 +
+  1000¤/an × 2 = 3500). Le "100¤/an" mentionné par Saar correspondait au rail de gauche (aperçu
+  toujours calculé à 1 an, comportement Lot 2 préexistant), pas au taux réel à 2 ans investis —
+  aucun bug.
+- **Bugfix associé** : filtre carrières par défaut `'all'` → `'eligible'` (dette [CAR-DEF] repérée
+  aux tests Lot 2, signalée par Saar comme source d'erreurs — un joueur pouvait sélectionner un
+  métier non éligible par défaut). Une ligne, `CareersAllocator.jsx` `initialReducerState`.
+- **Testé :** `node --check`, ESLint 0 erreur, `estimateSalaryFormula` testé en isolation (2 formules
+  + cas invalides), non-régression `evaluateSalaryFormula` (2000 tirages), vérification base réelle
+  du scénario Saar, SR + fonctionnel confirmé Saar.
+- **Non testé :** les 8 scénarios détaillés un par un (validation globale Saar), confirmation
+  visuelle navigateur du bugfix filtre (ESLint seul vérifié).
+- Détail complet : `docs/JOURNAL6.md` "Lot 3" / "Bugfix — Filtre carrières par défaut".
 
 **Session 139 — Fiche personnage consultable en permanence pendant le Wizard (fenêtre "peek") ✅ clos :**
 - Plan complet rédigé en amont dans une conversation précédente : `docs/STE6_FINAL.md` (v3). Reprise
