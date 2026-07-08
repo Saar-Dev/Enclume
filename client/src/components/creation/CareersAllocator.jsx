@@ -167,6 +167,7 @@ export default function CareersAllocator({
   onOpenedSkillsChange,
   initialRandomPicks,
   onRandomPicksChange,
+  randomProAdvantagesEnabled,
 }) {
   const { t } = useTranslation('creation')
   const socket = useSocket()
@@ -812,7 +813,7 @@ export default function CareersAllocator({
                       pointCategories (Chasseur de primes n'a aucune catégorie mais la LdB lui accorde
                       quand même cette table — la bascule "convertir en points" reste alors masquée,
                       cf. careerAdvantages.js). */}
-                  {isAdded && (career.randomBenefits ?? []).length > 0 && Math.floor(committedEntry.years / 5) > 0 && (
+                  {randomProAdvantagesEnabled !== false && isAdded && (career.randomBenefits ?? []).length > 0 && Math.floor(committedEntry.years / 5) > 0 && (
                     <div className="wiz4-block">
                       <span className="wiz4-h">{t('step4.career_random_title')}</span>
                       {Array.from({ length: Math.floor(committedEntry.years / 5) }).map((_, blockIndex) => {

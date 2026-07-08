@@ -24,7 +24,7 @@ const SUB_STEP_ORDER = Object.values(SUB_STEPS)
 
 export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }) {
   const { t } = useTranslation('creation')
-  const { sheetId, step1Data, step2Data } = useCreationStore()
+  const { sheetId, step1Data, step2Data, randomProAdvantagesEnabled } = useCreationStore()
   const [subStep, setSubStep] = useState(initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [highestSubStep, setHighestSubStep] = useState(() => initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [age, setAge] = useState(initialData?.age ?? 16)
@@ -377,6 +377,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
     onOpenedSkillsChange={handleOpenedSkillsChange}
     initialRandomPicks={randomPicks}
     onRandomPicksChange={handleRandomPicksChange}
+    randomProAdvantagesEnabled={randomProAdvantagesEnabled}
   />
 )}
 

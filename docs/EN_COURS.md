@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-08 Session 140
+> Dernière mise à jour : 2026-07-08 Session 141
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -10,12 +10,16 @@
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
 > **CHANTIER REDESIGN STEP 4 PROFESSION → ✅ TERMINÉ (8/8 lots)** — plan maître archivé :
-> **`docs/Old/PLAN_REWORKFINAL.md`**. **Lot 6 (Tirage 1D10, dernier lot) ✅ codé + validé Saar — Session 140**
-> (migration 122, `computeRandomBudgetDelta`, socket réel dans le Wizard). Bug trouvé et corrigé dans
-> la foulée : `DICE_RESULT` n'a jamais inclus `dieType` → tout jet animé hors `SessionPage` retombe sur
-> un D6 (voir **P56**). Bonus même session : Step3 Mutations "Lancer 1D20" convertie en jet réel.
-> **PROCHAIN CHANTIER : à définir avec Saar** — voir item "41." (options de campagne, 8/11 restantes)
-> ou Lots 7/8 (Relations / Matériel accessible, `PLAN_REWORKFINAL §9-10`, jamais cadrés en détail).
+> **`docs/Old/PLAN_REWORKFINAL.md`**.
+> **Chantier Options de campagne (item 41) : `random_pro_advantages` (OPT-05) ✅ câblée — Session 141**
+> (4/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`). Gate le bloc
+> UI "Tirage 1D10" (`CareersAllocator.jsx`) selon le toggle campagne, même pattern que
+> `randomMutationsEnabled` — gating client-only, pas de revalidation serveur (limite assumée, identique
+> aux précédents).
+> **PROCHAINE OPTION À CÂBLER : à définir avec Saar** — voir item "41." (7/11 restantes :
+> `polaris_latent`, `revers`, `skill_prerequisites`, `skill_max_level`, `skill_natural_prog`,
+> `young_penalty`, `celebrity`). Candidat déjà repéré : `skill_prerequisites` (Niveau 1 — contrôle déjà
+> actif dans `SkillsPanel.jsx:166-170`, mais appliqué en permanence alors que le défaut documenté est OFF).
 
 **44. Redesign Step 4 Profession (rework multi-lots) — ✅ TERMINÉ (8/8 lots) — Session 139/140**
    → Plan maître (archivé) : `docs/Old/PLAN_REWORKFINAL.md` (8 lots). Design source : `docs/ClaudeDesign/project/Professions.dc.html`.
@@ -257,13 +261,14 @@
    → **Testé** : SR ✅, combat inchangé ✅, persistance 11 options ✅, upload token non écrasé ✅, navigation onglets ✅
    → **Non testé** : effet mécanique des 11 options (stockage/lecture seulement — voir `docs/optionCampagne/JOPT.md`)
 
-**41. Options de campagne — effets mécaniques (3/11) : `ambiance` ✅, `random_mutations` ✅, `feminin_bonus` ✅ — Session 137** ← EN COURS, un par un
+**41. Options de campagne — effets mécaniques (4/11) : `ambiance` ✅, `random_mutations` ✅, `feminin_bonus` ✅, `random_pro_advantages` ✅ — Session 141** ← EN COURS, un par un
    → Audit complet des 11 options dans `docs/Old/optionCampagne/PLAN_OPTCAMP.md` (Niveau 1/2/3 par complexité)
    → `ambiance` : mock supprimé (`WizardCreation.jsx`), `startCreation`/`creationStore` transmettent la vraie valeur, `finalizeCreation` revalide via `validateStep1` (code mort réactivé, `shared/polarisUtils.js:187`)
    → `random_mutations` : câblée Session 136 (masque la carte "Tirage aléatoire" Step3 si désactivée)
    → `feminin_bonus` : câblée Session 137 — élargie en cours de route à Sexe/Fécondité (Step1 pose `char_archetype.sex`, Step3 override via mutations Asexué/Androgyne/Autofécondation, Step5 désavantage Fécondité `adv_076` avec blocage si mutation stérilisante). Détail complet : `docs/PLAN_SEXE.md`, `docs/JOURNAL6.md` "Session 137".
+   → `random_pro_advantages` : câblée Session 141 — gate le bloc "Tirage 1D10" (`CareersAllocator.jsx`, Lot 6 Session 140) selon le toggle, même pattern que `random_mutations`/`feminin_bonus`. Détail complet : `docs/JOURNAL6.md` "Session 141".
    → **Testé** : SR ✅, parcours Wizard confirmé fonctionnel par Saar
-   → **Non testé** : les 8 scénarios détaillés de `PLAN_SEXE.md` un par un (validation donnée sur le parcours global)
+   → **Non testé** : les 8 scénarios détaillés de `PLAN_SEXE.md` un par un (validation donnée sur le parcours global) ; bascule ON→OFF en cours de wizard pour `random_pro_advantages` (non prévu par le design)
    → **Prochain** : `skill_prerequisites` (Niveau 1 — contrôle déjà actif dans `SkillsPanel.jsx:166-170`, mais appliqué en permanence alors que le défaut documenté est OFF)
 
 **41. Wizard COUCHE 4c → analyse terminée (session 2026-07-05 suite) : deux dossiers distincts, à ne plus confondre**

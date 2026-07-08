@@ -1068,3 +1068,47 @@ invalide) en conditions réelles plutôt que par lecture de code ; vérification
 tirage en cours (purge) en conditions navigateur.
 
 **Chantier Redesign Step 4 Profession terminé (8/8 lots).** Plan archivé : `docs/Old/PLAN_REWORKFINAL.md`.
+
+---
+## Session 141 — 2026-07-08 — Options de campagne : `random_pro_advantages` (OPT-05) câblée ✅
+
+Reprise en nouvelle session (protocole complet appliqué). Sujet : suite du chantier "Options de
+campagne — effets mécaniques" (item 41 EN_COURS, un par un), option choisie par Saar : OPT-05
+(Avantages pro aléatoires), la plus proche à câbler puisque son mécanisme (tirage 1D10, Lot 6) vient
+d'être codé Session 140 mais n'était gaté par aucun toggle.
+
+**Vérifications faites avant tout code (demande explicite Saar "être sûr à 100%")** :
+- Grep exhaustif `handleStartRoll`/`handleToggleRandomPoints`/`randomBenefits` dans
+  `CareersAllocator.jsx` : un seul point d'entrée chacun, tous deux imbriqués dans le bloc "Lot 6 —
+  Tirage 1D10" (`CareersAllocator.jsx:815-857`) — gater ce seul `if` suffit, pas de chemin alternatif.
+- `computeRandomBudgetDelta` (`shared/careerAdvantages.js`) retourne `0` si `picks` est vide — si le
+  bouton n'apparaît jamais, aucune donnée de jet ne peut exister, le budget retombe naturellement sur
+  `5 × années` pur (comportement "option OFF" correct par construction, pas juste cosmétique).
+- Lecture de `reconcileCreation` STEP4 (`creationService.js:392-425`) : confirmé qu'aucune revalidation
+  serveur n'est liée à `settings.random_pro_advantages` (même limite déjà acceptée pour
+  `random_mutations`/`feminin_bonus` — gating client-only assumé, pas une régression introduite ici).
+- `Step4Experience.jsx` lit déjà `useCreationStore()` directement (`sheetId, step1Data, step2Data`) —
+  plan initial (prop-drilling via `WizardCreation.jsx`) simplifié à 4 fichiers au lieu de 5, découvert
+  en lisant le fichier avant modification (règle 1).
+
+**Code (pattern identique à `randomMutationsEnabled`/`femininBonusEnabled`)** :
+- `server/src/services/creationService.js` : `startCreation` retourne `randomProAdvantagesEnabled:
+  settings.random_pro_advantages`.
+- `client/src/stores/creationStore.js` : état `randomProAdvantagesEnabled` (init/set/reset).
+- `client/src/components/creation/Step4Experience.jsx` : lu depuis le store, transmis à
+  `<CareersAllocator>`.
+- `client/src/components/creation/CareersAllocator.jsx` : prop reçue, condition du bloc Lot 6 étendue
+  `randomProAdvantagesEnabled !== false && ...` (fallback fail-open, cohérent avec `default: true` du
+  schema et le pattern `Step3Mutations.jsx:262`).
+
+**Testé :** `node --check` (fichiers serveur), ESLint sur les 3 fichiers client touchés (0 nouvelle
+erreur — 1 erreur pré-existante `remainingPC` dans `Step4Experience.jsx` confirmée identique
+avant/après via `git stash`), SR (`/api/health` 200 après rechargement nodemon), **SR + fonctionnel
+confirmé Saar** (option OFF → bloc "Tirage 1D10" absent, budget avantages pro repasse en répartition
+manuelle pure ; option ON → comportement Session 140 inchangé).
+**Non testé :** bascule ON→OFF→ON en cours de wizard sur un personnage ayant déjà des `randomPicks`
+existants (cas non prévu par le design — les campagnes changent leurs options avant la création des
+personnages, pas en cours de wizard).
+
+Options de campagne restantes (7/11) : `polaris_latent`, `revers`, `skill_prerequisites`,
+`skill_max_level`, `skill_natural_prog`, `young_penalty`, `celebrity`.

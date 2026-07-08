@@ -389,7 +389,9 @@ Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation doc
 | Effets mécaniques — audit | Détail par option (Niveau 1/2/3) dans `docs/optionCampagne/PLAN_OPTCAMP.md` | ✅ session 132 suite |
 | Effets mécaniques — `ambiance` | Mock supprimé, vraie valeur transmise Wizard, revalidation serveur `finalizeCreation` via `validateStep1` | ✅ session 132 suite |
 | Effets mécaniques — `random_mutations` | Carte "Tirage aléatoire" masquée en Step3 si désactivée | ✅ session 136 |
-| Effets mécaniques — 9 restantes | feminin_bonus, polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity | 🔲 en cours un par un |
+| Effets mécaniques — `feminin_bonus` | Sexe/Fécondité Step1/3/5, voir `docs/PLAN_SEXE.md` | ✅ session 137 |
+| Effets mécaniques — `random_pro_advantages` | Bloc "Tirage 1D10" (Step4) masqué si désactivé | ✅ session 141 |
+| Effets mécaniques — 7 restantes | polaris_latent, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity | 🔲 en cours un par un |
 
 ### Client — Dashboard
 | Tâche | État |

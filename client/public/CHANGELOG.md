@@ -1,3 +1,8 @@
+## v157 — 2026-07-08 — Option de campagne : Tirage 1D10 des avantages professionnels
+
+### Client
+- [feat] Le tirage 1D10 des avantages professionnels (étape Professions) respecte désormais l'option de campagne correspondante — si elle est désactivée, seule la répartition manuelle des points est proposée
+
 ## v156 — 2026-07-08 — Tirage 1D10 des avantages professionnels (fin du redesign Étape 4) + jets de dés réels
 
 ### Client

@@ -228,6 +228,7 @@ export async function startCreation(campaignId, userId) {
       ambiance: settings.ambiance,
       randomMutationsEnabled: settings.random_mutations,
       femininBonusEnabled: settings.feminin_bonus,
+      randomProAdvantagesEnabled: settings.random_pro_advantages,
     }
   })
 }
