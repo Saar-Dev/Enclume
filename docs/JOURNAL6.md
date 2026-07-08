@@ -1066,3 +1066,5 @@ chaque étape, **SR + fonctionnel confirmé Saar** (Lot 6 après fix dieType, pu
 invalide) en conditions réelles plutôt que par lecture de code ; vérification directe
 `char_careers.random_picks` en base après un `reconcileCreation` réel ; retrait de carrière avec
 tirage en cours (purge) en conditions navigateur.
+
+**Chantier Redesign Step 4 Profession terminé (8/8 lots).** Plan archivé : `docs/Old/PLAN_REWORKFINAL.md`.

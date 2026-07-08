@@ -9,8 +9,8 @@
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-> **CHANTIER REDESIGN STEP 4 PROFESSION → ✅ TERMINÉ (8/8 lots)** — plan maître :
-> **`docs/PLAN_REWORKFINAL.md`**. **Lot 6 (Tirage 1D10, dernier lot) ✅ codé + validé Saar — Session 140**
+> **CHANTIER REDESIGN STEP 4 PROFESSION → ✅ TERMINÉ (8/8 lots)** — plan maître archivé :
+> **`docs/Old/PLAN_REWORKFINAL.md`**. **Lot 6 (Tirage 1D10, dernier lot) ✅ codé + validé Saar — Session 140**
 > (migration 122, `computeRandomBudgetDelta`, socket réel dans le Wizard). Bug trouvé et corrigé dans
 > la foulée : `DICE_RESULT` n'a jamais inclus `dieType` → tout jet animé hors `SessionPage` retombe sur
 > un D6 (voir **P56**). Bonus même session : Step3 Mutations "Lancer 1D20" convertie en jet réel.
@@ -18,7 +18,7 @@
 > ou Lots 7/8 (Relations / Matériel accessible, `PLAN_REWORKFINAL §9-10`, jamais cadrés en détail).
 
 **44. Redesign Step 4 Profession (rework multi-lots) — ✅ TERMINÉ (8/8 lots) — Session 139/140**
-   → Plan maître : `docs/PLAN_REWORKFINAL.md` (8 lots). Design source : `docs/ClaudeDesign/project/Professions.dc.html`.
+   → Plan maître (archivé) : `docs/Old/PLAN_REWORKFINAL.md` (8 lots). Design source : `docs/ClaudeDesign/project/Professions.dc.html`.
    → **Lot 0 ✅ CLOS** : `shared/careerEligibility.js` (évaluateur pur, raisons structurées) +
      `creationService.js` (4 validateurs `validateCareer*` → 1 `checkCareerEligibility`, parité stricte
      `reasons[0]`). Testé : parité 12/12 (node -e), SR + fonctionnel confirmé Saar.
@@ -102,8 +102,9 @@
      unitaires `computeRandomBudgetDelta`, ESLint 0 erreur introduite, SR + fonctionnel confirmé Saar
      (Lot 6 après fix + D20 Step3). Non testé : les 4 rejets serveur en conditions réelles,
      `char_careers.random_picks` vérifié en base post-`reconcileCreation` réel.
-   → **Chantier Redesign Step 4 Profession terminé (8/8 lots).** Lots 7/8 (relations `char_relations`
-     + panneau fiche perso / matériel inventaire) jamais cadrés en détail (`PLAN_REWORKFINAL §9-10`) —
+   → **Chantier Redesign Step 4 Profession terminé (8/8 lots). Plan archivé : `docs/Old/PLAN_REWORKFINAL.md`.**
+     Lots 7/8 (relations `char_relations` + panneau fiche perso / matériel inventaire) jamais cadrés
+     en détail (`PLAN_REWORKFINAL §9-10`) —
      à reprendre comme chantier séparé si prioritaire. Prochaine migration disponible : **123**
      (122 consommée Session 140).
 

@@ -109,8 +109,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ## ÉTAT COURANT — Session 140 (2026-07-08)
 
-- **✅ CHANTIER TERMINÉ : Redesign Step 4 Profession (8/8 lots)** → plan maître
-  **`docs/PLAN_REWORKFINAL.md`**. **Lot 6 (tirage 1D10, dernier lot) ✅ codé + validé Saar — Session
+- **✅ CHANTIER TERMINÉ : Redesign Step 4 Profession (8/8 lots)** → plan maître (archivé)
+  **`docs/Old/PLAN_REWORKFINAL.md`**. **Lot 6 (tirage 1D10, dernier lot) ✅ codé + validé Saar — Session
   140** — migration 122 (`ref_career_random_benefits.points_alt` + 50 lignes manquantes Lot 1),
   `computeRandomBudgetDelta` (`shared/careerAdvantages.js`), `SocketProvider` monté pour la première
   fois dans le Wizard (`WizardCreation.jsx`), bloc UI + overlay `DiceRoller` réel dans

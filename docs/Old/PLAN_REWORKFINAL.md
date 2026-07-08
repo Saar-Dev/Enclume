@@ -1,5 +1,8 @@
 # PLAN_REWORKFINAL — Redesign Step 4 · Sous-step PROFESSIONS
 > Session 139 — 2026-07-08 · Master plan multi-lots (séquentiel)
+> Statut : ✅ TERMINÉ — 8/8 lots implémentés et validés Saar (Lot 6, dernier lot, clos Session 140)
+> Détail complet des 8 lots : `docs/JOURNAL6.md` "Session 139 (suite...)" à "Session 140"
+> Archivé dans `docs/Old/` — chantier clos, plus de lot restant
 
 Source design : `docs/ClaudeDesign/project/Professions.dc.html` (bundle Claude Design).
 Analyse préparatoire complète : `docs/JOURNALTEMP.md` §1-9.
