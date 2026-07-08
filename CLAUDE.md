@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 139 — 2026-07-08
+> Session 140 — 2026-07-08
 
 ---
 
@@ -107,36 +107,71 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 139 (2026-07-08)
+## ÉTAT COURANT — Session 140 (2026-07-08)
 
-- **🔨 CHANTIER ACTIF : Redesign Step 4 Profession** → plan maître **`docs/PLAN_REWORKFINAL.md`**
-  (auto-suffisant ; `docs/JOURNALTEMP.md` périssable, non requis). Méthode : contrats (données +
-  payload) verrouillés globalement (`§1bis`) → implémentation incrémentale, un lot à la fois.
-  **Lot 0 (fondation éligibilité, `shared/careerEligibility.js`) ✅ codé + validé Saar.**
-  **Lot 1 (fondation moteur de coût, `shared/careerSkills.js`) ✅ codé + validé Saar.**
-  **Lot 2 (UI CareersAllocator + board global) ✅ codé + validé Saar** — voir P55 (compétences
-  réservées `(X)`).
-  **Lot 3 (onglet Carrière & économies, lecture seule) ✅ codé + validé Saar** — table
-  titres/salaires + encadré économies + tuile agebar, `estimateSalaryFormula()` (moyenne
-  déterministe). Bugfix associé : filtre carrières par défaut `'all'` → `'eligible'`.
-  **Lot 4 (avantages pro, 5 pts/an par métier) ✅ codé + validé Saar** — `shared/careerAdvantages.js`
-  (`computeProAdvantageAllocation`) + validation serveur Q3 + onglet dédié (0 nouvelle classe CSS).
-  Migration 120 associée (fix `ref_career_point_categories` manquantes sur 4 carrières Lot 1).
-  **Lot 5 (compétences « au choix », `conditional`) ✅ codé + validé Saar** — migration 121
-  (`ref_career_skills.choice_group`, 24 lignes T3 réécrites + 4 doublons supprimés + 4 flags Soldat
-  d'élite corrigés) + `validateChoiceGroups` (`shared/careerSkills.js`) + payload `openedSkills`
-  (trou comblé côté client, déjà câblé serveur depuis Lot 2) + bloc UI "Compétences au choix"
-  (checkbox/radio, `CareersAllocator.jsx`).
-  **PROCHAIN = Lot 6** (tirage 1D10 via DicePanel — `PLAN_REWORKFINAL §8`).
-  Décisions + modèle + faits vérifiés : `§1ter`. Point d'entrée reprise : `docs/EN_COURS.md` item 44.
+- **✅ CHANTIER TERMINÉ : Redesign Step 4 Profession (8/8 lots)** → plan maître
+  **`docs/PLAN_REWORKFINAL.md`**. **Lot 6 (tirage 1D10, dernier lot) ✅ codé + validé Saar — Session
+  140** — migration 122 (`ref_career_random_benefits.points_alt` + 50 lignes manquantes Lot 1),
+  `computeRandomBudgetDelta` (`shared/careerAdvantages.js`), `SocketProvider` monté pour la première
+  fois dans le Wizard (`WizardCreation.jsx`), bloc UI + overlay `DiceRoller` réel dans
+  `CareersAllocator.jsx`. **Bug trouvé et corrigé au 1er test navigateur** : `DICE_RESULT` n'inclut
+  jamais `dieType` → tout jet animé hors `SessionPage` retombe sur un D6 — voir **P56**. Bonus même
+  session : `Step3Mutations.jsx` "Lancer 1D20" converti en jet réel (`DiceLights.jsx` extrait en
+  composant partagé). Détail complet : `docs/JOURNAL6.md` "Session 140".
+  Lots 0-5 (fondations, UI, économies, avantages pro, compétences au choix) : voir historique
+  sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
+  (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **126 migrations stables** (121_ref_career_skills_choice_groups — Session 139 ;
+- **127 migrations stables** (122_ref_career_random_benefits_lot1_and_points_alt — Session 140 ;
+  121_ref_career_skills_choice_groups — Session 139 ;
   120_fix_ref_career_point_categories_lot1 — Session 139 ;
   119_char_sheet_wizard_lock — Session 139 ;
   118_fix_ref_mutations_organe_sensoriel_manquant — Session 138 ;
   117_ref_mutation_subtypes_description — Session 136 ;
   109_mutation_stacking + 108_fix_ref_mutations_encoding — Session 135 ;
   deux numéros 108/109 distincts coexistent avec le seeding carrières, voir P53)
+
+**Session 140 — Redesign Step 4 : Lot 6 (tirage 1D10) — chantier terminé — + fix dieType + D20 réel Step3 ✅ clos :**
+- Reprise en nouvelle session sur un plan déjà rédigé (`PLAN_REWORKFINAL.md §8`) : protocole complet
+  appliqué, tous les fichiers cités relus dans cette session avant code (`DiceRoller.jsx`,
+  `DiceMesh.jsx`, `diceMath.js`, `SocketContext.jsx`, `socket/index.js`, `socketDice.js`,
+  `Canvas3D.jsx`, `CareersAllocator.jsx`, `Step4Experience.jsx`, `WizardCreation.jsx`,
+  `creationService.js`, `careerAdvantages.js`, `REGLE_PROFESSION.md`) + requêtes réelles. Le plan
+  s'est révélé exact, 2 écarts mineurs corrigés en le relisant (réf. fichier, comptage 22→32).
+- **Enquête Chasseur de primes (demandée par Saar, refus explicite d'un questionnaire simpliste)** :
+  Saar a fourni un extrait qu'il pensait être la vraie page LdB de ce métier, contredisant le constat
+  "0 catégorie légitime" de la migration 120. Vérification croisée : texte mot pour mot identique à
+  Mercenaire déjà en base — confirmé par Saar comme artefact de mise en page du livre (bavure
+  page/colonne). Conclusion inchangée (0 catégorie légitime), mais le Lot 6 dissocie "jet 1D10
+  disponible" de "conversion en points" pour respecter la table de tirage imprimée sans budget
+  automatique pour ce métier spécifique.
+- Migration `122_ref_career_random_benefits_lot1_and_points_alt.js` (NOUVEAU) : colonne `points_alt`
+  + backfill 37 lignes `roll=10` + 50 lignes manquantes (5 carrières Lot 1, texte repris du fichier de
+  référence `93_seed_ref_careers_lot1.cjs`, cross-vérifié contre `REGLE_PROFESSION.md`). Round-trip
+  byte-identique testé (320↔370 lignes). `shared/careerAdvantages.js` : `computeRandomBudgetDelta`
+  (nouveau) + `computeProAdvantageAllocation` gagne `ctx.randomBudgetDelta` (rétro-compatible).
+  `creationService.js` : validation `randomPicks` (bornes/doublon/roll/`useAsPoints`) injectée dans Q3.
+  `WizardCreation.jsx` : `SocketProvider` monté pour la 1ʳᵉ fois dans le Wizard. `CareersAllocator.jsx` :
+  reducer étendu + bloc UI + overlay `<Canvas><DiceLights/><DiceRoller/></Canvas>` piloté par socket
+  réel (jamais `Math.random`), garde anti-course sur le jet.
+- **Bug trouvé après 1er test navigateur — "Lancer 1D10" affichait un D6.** Saar a soupçonné à raison
+  une mauvaise réutilisation du système de dés existant. Cause tracée jusqu'au bout du pipeline :
+  `socketDice.js` calcule `dieType` mais ne l'a **jamais inclus** dans le payload `DICE_RESULT` émis
+  (utilisé seulement en interne pour `dice_config`) — `SessionPage` fonctionne uniquement parce que
+  `useSessionSocket.js:62` reconstruit `dieType` côté client depuis le texte de la formule, étape que
+  le commentaire (trompeur) de `DiceRoller.jsx` masquait. Fix : `dieType` forcé en dur au point
+  d'appel (formule fixe connue, pas une supposition) — voir **P56**.
+- **Bonus demandé par Saar dans la foulée** : `Step3Mutations.jsx` "Lancer 1D20" (méthode Tirage
+  aléatoire) converti de `Math.random()` vers un jet réel, même mécanique. `DiceLights.jsx` (NOUVEAU)
+  extrait en composant partagé (2 consommateurs réels désormais, `Canvas3D.jsx` toujours intact).
+- **Testé** : migration round-trip byte-identique, 8 scénarios `computeRandomBudgetDelta`/
+  `computeProAdvantageAllocation` (`node -e`, cas Chasseur de primes inclus), `getStep4RefData`
+  vérifié en base réelle, ESLint 0 erreur introduite (`git stash` pour confirmer 1 erreur
+  pré-existante non liée), SR répété, **SR + fonctionnel confirmé Saar** (Lot 6 après fix + D20 Step3).
+- **Non testé** : les 4 rejets serveur du Tirage 1D10 en conditions réelles (bornes/doublon/roll
+  inconnu/`useAsPoints` invalide), `char_careers.random_picks` vérifié en base post-`reconcileCreation`
+  réel, retrait de carrière avec tirage en cours en conditions navigateur.
+- Détail complet : `docs/JOURNAL6.md` "Session 140".
 
 **Session 139 (suite) — Redesign Step 4 : Lot 0 (éligibilité) + Lot 1 (moteur de coût) ✅ clos :**
 - Plan maître `docs/PLAN_REWORKFINAL.md` (8 lots, contrats données+payload verrouillés `§1bis`).
@@ -490,6 +525,9 @@ Conséquence directe de P53 : si nodemon a déjà auto-appliqué la migration en
 **P55 — Compétences réservées `(X)` : accessibilité via profession, pas seulement via bonus d'origine**
 `calcSkillCost` (`shared/polarisUtils.js`) bloque (`cost: Infinity`) toute compétence marquée `(X)` si `!isLearned && target>0`. `isLearned` doit couvrir TROIS cas, tous confirmés par la règle (aucun n'est un bug isolé, les trois manquaient dans `computeSkillAllocation` avant Session 139) : (1) `openedSkills.includes(skillId)` — déblocage explicite (Avantage Formation, Lot 5) ; (2) `(baseMastery[skillId] ?? 0) > 0` — un bonus d'origine positif prouve que le personnage la pratique déjà ; (3) **`isPro`** (listée par une carrière retenue) — `REGLE_CREATION.txt:1129-1132` : *« toutes les Compétences spéciales sont normalement inaccessibles... à moins d'être indiquées dans la description de l'une des Professions du personnage »*. Oublier le cas (3) reproduit exactement le bug Session 139 (Lot 2) : une `(X)` professionnelle sans bonus d'origine plante en `-Infinity`. Le malus « base -3 » du premier point investi (`REGLE_CREATION.txt:1115`) s'applique quand même dans les trois cas — ce n'est pas un blocage, juste un coût de départ plus élevé (1pt pour atteindre -3, avant de grimper normalement).
 **Piège wiring associé** : `computeSkillAllocation` ne doit recevoir QUE les `skill_id` réellement modifiés par le joueur — jamais un remplissage de toutes les compétences affichées (board) avec leur valeur de base, sinon le calcul est déclenché inutilement pour des compétences jamais touchées. Le plafond d'une ligne non touchée se calcule séparément via `getSkillCap(skillId, ctx)` (indépendant du coût).
+
+**P56 — `DICE_RESULT` n'inclut jamais `dieType` — tout consommateur hors `SessionPage` doit le fournir lui-même**
+`server/src/socket/socketDice.js` calcule `dieType` via `parseDice()` mais **ne l'a jamais inclus** dans le payload `DICE_RESULT` émis au client (`{userId, username, color, formula, rolls, total, isCriticalSuccess, isCriticalFail, seed, timestamp, secret}` — `dieType` reste server-side, utilisé uniquement pour le lookup `dice_config`/critiques). `SessionPage` fonctionne quand même parce que `client/src/lib/useSessionSocket.js:62` **reconstruit `dieType` côté client depuis le texte de la formule** avant de le passer à `DiceRoller` — étape facile à manquer si on ne lit que le commentaire de `DiceRoller.jsx` (*« payload : { rolls, dieType, seed, timestamp } depuis DICE_RESULT »*, trompeur — decrit la forme voulue, pas ce que le serveur envoie réellement). Sans `dieType`, `DiceMesh.jsx` retombe silencieusement sur `DIE_GEOMETRY['d6']` (fallback explicite `diceMath.js:27`) — **aucune erreur levée**, juste le mauvais dé affiché. Vécu Session 140 : le tirage 1D10 du Lot 6 affichait un D6, repéré par Saar au test navigateur. **Procédure sûre** : tout nouveau composant qui monte `<DiceRoller>` hors de `SessionPage`/`Canvas3D.jsx` doit ajouter `dieType` lui-même au payload reçu de `DICE_RESULT` — en dur si la formule émise à cet endroit est fixe (ex. toujours `'1d10'`), sinon en le dérivant de `formula` comme `useSessionSocket.js`.
 
 ---
 

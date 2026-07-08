@@ -1,13 +1,21 @@
 // client/src/components/creation/Step3Mutations.jsx
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Canvas } from '@react-three/fiber'
 import api from '../../lib/api'
+import { WS } from '../../../../shared/events.js'
+import { useSocket } from '../../lib/SocketContext.jsx'
+import { useAuthStore } from '../../stores/authStore.js'
+import DiceRoller from '../DiceRoller.jsx'
+import DiceLights from '../DiceLights.jsx'
 
 const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
 const MAX_REROLL_ATTEMPTS = 500
 
 export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, randomMutationsEnabled, onNext, onPrev }) {
   const { t } = useTranslation('creation')
+  const socket = useSocket()
+  const { user } = useAuthStore()
 
   const [mutations, setMutations] = useState([])
   const [loading, setLoading] = useState(true)
@@ -32,6 +40,8 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
   // Aléatoire
   const [d20Result, setD20Result] = useState(initialData?.d20Result ?? null)
   const [rollResults, setRollResults] = useState([])
+  const [awaitingRoll, setAwaitingRoll] = useState(false)
+  const [rollPayload, setRollPayload] = useState(null)
   const [kept, setKept] = useState(
     initialData?.method === 'random' ? (initialData.kept ?? []) : []
   )
@@ -136,8 +146,9 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
     return null
   }
 
-  const handleRoll = () => {
-    const d20 = Math.floor(Math.random() * 20) + 1
+  // D20 réel via socket (jamais Math.random — même mécanique que le Lot 6 CareersAllocator.jsx).
+  // Les tirages D100 par mutation (rollOneMutation) restent en Math.random(), hors scope ici.
+  const finalizeRoll = (d20) => {
     const count = d20 <= 15 ? 1 : d20 <= 19 ? 2 : 3
 
     const usedUniqueIds = new Set()
@@ -152,6 +163,31 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
     setKept([])
     setRemoved([])
     setPcAfterRemovals(pcDispo)
+  }
+
+  useEffect(() => {
+    if (!socket) return
+    const handleResult = (payload) => {
+      if (payload.userId !== user?.id) return
+      // socketDice.js n'inclut jamais dieType dans le payload DICE_RESULT — dieType:'d20' est une
+      // constante connue ici (ce bouton n'émet jamais que '1d20'), pas une supposition.
+      setRollPayload({ ...payload, dieType: 'd20' })
+    }
+    socket.on(WS.DICE_RESULT, handleResult)
+    return () => socket.off(WS.DICE_RESULT, handleResult)
+  }, [socket, user?.id])
+
+  const handleStartRoll = () => {
+    if (!socket || awaitingRoll) return
+    setAwaitingRoll(true)
+    socket.emit(WS.DICE_ROLL, { formula: '1d20' })
+  }
+
+  const handleDiceOverlayDone = () => {
+    if (!rollPayload) return
+    finalizeRoll(rollPayload.total)
+    setAwaitingRoll(false)
+    setRollPayload(null)
   }
 
   const handleKeep = (index) => {
@@ -192,6 +228,8 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
     setKept([])
     setRemoved([])
     setPcAfterRemovals(pcDispo)
+    setAwaitingRoll(false)
+    setRollPayload(null)
   }
 
   if (loading) {
@@ -402,11 +440,20 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
         </button>
       </div>
 
+      {rollPayload && (
+        <div className="wiz4-diceoverlay">
+          <Canvas camera={{ position: [15, 15, 15], fov: 60 }}>
+            <DiceLights />
+            <DiceRoller payload={rollPayload} onDone={handleDiceOverlayDone} />
+          </Canvas>
+        </div>
+      )}
+
       {!d20Result && (
         <div style={st.rollSection}>
           <p style={st.rollDesc}>{t('step3.roll_desc')}</p>
-          <button style={st.rollBtn} onClick={handleRoll}>
-            🎲 {t('step3.roll_d20')}
+          <button style={st.rollBtn} onClick={handleStartRoll} disabled={awaitingRoll}>
+            🎲 {awaitingRoll ? t('step3.roll_d20_rolling') : t('step3.roll_d20')}
           </button>
         </div>
       )}

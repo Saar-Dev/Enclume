@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-08 Session 139
+> Dernière mise à jour : 2026-07-08 Session 140
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -9,17 +9,15 @@
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-> **CHANTIER ACTIF — REDESIGN STEP 4 PROFESSION** → plan maître : **`docs/PLAN_REWORKFINAL.md`**
-> (lire en entier ; auto-suffisant, `docs/JOURNALTEMP.md` est périssable et NON requis).
-> Méthode validée Saar : **architecture (contrats partagés) verrouillée globalement → implémentation
-> incrémentale testée, un lot à la fois** (plan ligne-à-ligne par lot, « Je code ? » unique, validation
-> fonctionnelle avant lot suivant). Les 2 contrats (modèle de données + payload) sont figés
-> (`PLAN_REWORKFINAL §1bis`). **Lot 0 ✅, Lot 1 ✅, Lot 2 ✅, Lot 3 ✅, Lot 4 ✅, Lot 5 ✅ codés + validés Saar.**
-> **PROCHAIN = Lot 6 (Tirage 1D10 via DicePanel)** — voir `PLAN_REWORKFINAL §8`.
->
-> Autres pistes ouvertes (hors chantier actif) : item "41." (options de campagne) ; Step4 Expérience.
+> **CHANTIER REDESIGN STEP 4 PROFESSION → ✅ TERMINÉ (8/8 lots)** — plan maître :
+> **`docs/PLAN_REWORKFINAL.md`**. **Lot 6 (Tirage 1D10, dernier lot) ✅ codé + validé Saar — Session 140**
+> (migration 122, `computeRandomBudgetDelta`, socket réel dans le Wizard). Bug trouvé et corrigé dans
+> la foulée : `DICE_RESULT` n'a jamais inclus `dieType` → tout jet animé hors `SessionPage` retombe sur
+> un D6 (voir **P56**). Bonus même session : Step3 Mutations "Lancer 1D20" convertie en jet réel.
+> **PROCHAIN CHANTIER : à définir avec Saar** — voir item "41." (options de campagne, 8/11 restantes)
+> ou Lots 7/8 (Relations / Matériel accessible, `PLAN_REWORKFINAL §9-10`, jamais cadrés en détail).
 
-**44. Redesign Step 4 Profession (rework multi-lots) — 🔨 EN COURS — Session 139 (2026-07-07)**
+**44. Redesign Step 4 Profession (rework multi-lots) — ✅ TERMINÉ (8/8 lots) — Session 139/140**
    → Plan maître : `docs/PLAN_REWORKFINAL.md` (8 lots). Design source : `docs/ClaudeDesign/project/Professions.dc.html`.
    → **Lot 0 ✅ CLOS** : `shared/careerEligibility.js` (évaluateur pur, raisons structurées) +
      `creationService.js` (4 validateurs `validateCareer*` → 1 `checkCareerEligibility`, parité stricte
@@ -86,10 +84,28 @@
      ("All ok"). Non testé : vérification directe `char_skills.is_learned` en base post-finalisation.
    → **Nettoyage UI associé** : icône hexagonale du rail carrières retirée (`.wiz4-hex` + style inline
      `--hex`), colonne rail réduite `296px`→`246px`. `careerHexColor()` conservé (tags de provenance).
-   → Lots 6-8 cadrés (1D10 DicePanel / relations `char_relations` + panneau fiche perso / matériel
-     inventaire) — renumérotés dans `PLAN_REWORKFINAL.md` (les en-têtes disaient à tort Lot 4/5/6,
-     corrigé en 6/7/8 pour matcher §2/§11). Une seule migration = `char_relations` (Lot 7). Prochaine
-     migration disponible : **122** (121 consommée cette session).
+   → **Lot 6 ✅ CLOS — Session 140** : Tirage 1D10 (`PLAN_REWORKFINAL §8`). Migration
+     `122_ref_career_random_benefits_lot1_and_points_alt.js` (colonne `points_alt` + backfill 37
+     lignes `roll=10` + 50 lignes manquantes Lot 1). `shared/careerAdvantages.js`
+     (`computeRandomBudgetDelta`, nouveau) + `creationService.js` (validation `randomPicks` + Q3
+     étendu) + `WizardCreation.jsx` (`SocketProvider` monté pour la première fois dans le Wizard) +
+     `CareersAllocator.jsx` (bloc UI + overlay `DiceRoller` réel, jamais `Math.random`). **Enquête
+     Chasseur de primes** (demandée par Saar) : un extrait qu'il pensait être sa page LdB s'est avéré
+     être un artefact de mise en page dupliquant Mercenaire — confirmé, 0 catégorie reste légitime
+     pour ce métier ; le Lot 6 dissocie quand même "jet disponible" de "conversion en points" pour
+     respecter sa table de tirage imprimée sans budget automatique. **Bug trouvé après 1er test
+     navigateur** (Saar a soupçonné une mauvaise réutilisation du système de dés — à raison) :
+     `DICE_RESULT` n'inclut jamais `dieType` server-side, tout jet hors `SessionPage` retombait sur un
+     D6 — voir **P56**. **Bonus même session** : `Step3Mutations.jsx` "Lancer 1D20" converti en jet
+     réel (même mécanique), `DiceLights.jsx` extrait en composant partagé. Détail complet :
+     `docs/JOURNAL6.md` "Session 140". Testé : migration round-trip byte-identique, 8 scénarios
+     unitaires `computeRandomBudgetDelta`, ESLint 0 erreur introduite, SR + fonctionnel confirmé Saar
+     (Lot 6 après fix + D20 Step3). Non testé : les 4 rejets serveur en conditions réelles,
+     `char_careers.random_picks` vérifié en base post-`reconcileCreation` réel.
+   → **Chantier Redesign Step 4 Profession terminé (8/8 lots).** Lots 7/8 (relations `char_relations`
+     + panneau fiche perso / matériel inventaire) jamais cadrés en détail (`PLAN_REWORKFINAL §9-10`) —
+     à reprendre comme chantier séparé si prioritaire. Prochaine migration disponible : **123**
+     (122 consommée Session 140).
 
 **45. Wizard Step1 — Description physique + Main directrice (2D10) ✅ CLOS — Session 139 suite 5 (2026-07-08)**
    → Hors chantier Redesign Step4. Ajout au Wizard des champs de la fiche perso (taille/poids/peau/
@@ -277,7 +293,9 @@ Projet en cours et priorité user :
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **125 migrations appliquées** (120_fix_ref_career_point_categories_lot1 — Session 139 ;
+- **127 migrations appliquées** (122_ref_career_random_benefits_lot1_and_points_alt — Session 140 ;
+  121_ref_career_skills_choice_groups — Session 139 ;
+  120_fix_ref_career_point_categories_lot1 — Session 139 ;
   119_char_sheet_wizard_lock — Session 139 ;
   118_fix_ref_mutations_organe_sensoriel_manquant — Session 138 ;
   117_ref_mutation_subtypes_description — Session 136 ;
@@ -399,3 +417,4 @@ Projet en cours et priorité user :
 - PL-Q4 — `editor.destroy()` n'existe pas en Quill 2.0 public API
 - P53 — nodemon auto-applique les migrations dès l'écriture du fichier + numéro "disponible" d'`EN_COURS.md` peut être obsolète (travail parallèle non resynchronisé) — détail complet dans `CLAUDE.md`
 - P54 — ne jamais rappeler `mig.up(knex)` manuellement sans vérifier `knex_migrations` au préalable (nodemon peut l'avoir déjà appliquée) — un second appel traite des données déjà correctes comme corrompues et peut les détruire silencieusement — détail complet dans `CLAUDE.md`
+- P56 — `DICE_RESULT` (socketDice.js) n'inclut jamais `dieType` dans son payload — tout composant qui anime un jet hors `SessionPage` doit le fournir lui-même (constante si formule fixe) sous peine de retomber sur un D6 par défaut — détail complet dans `CLAUDE.md`

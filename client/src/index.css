@@ -2395,6 +2395,27 @@ Convention :
 .wiz4-poolrem .wiz4-mono { font-size: 14px; font-weight: 700; color: var(--wiz-blue-bright); }
 .wiz4-poolrem.ok .wiz4-mono { color: #4a9e5c; }
 
+/* Lot 6 — Tirage 1D10 (Avantages pro aléatoires) */
+.wiz4-randomrow { padding: 8px 0; border-top: 1px solid var(--wiz-glass-border); }
+.wiz4-randomrow:first-child { border-top: 0; }
+.wiz4-randomhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wiz4-randomlbl { font: 500 12px 'Inter', sans-serif; color: var(--wiz-white); }
+.wiz4-rollbtn {
+  font: 600 11px 'Inter', sans-serif;
+  color: rgba(255,255,255,.78);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.14);
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  clip-path: none;
+}
+.wiz4-rollbtn:hover { border-color: var(--wiz-blue-bright); color: var(--wiz-white); filter: none; }
+.wiz4-rollbtn.dis, .wiz4-rollbtn:disabled { opacity: .35; cursor: default; pointer-events: none; }
+.wiz4-randomresult { margin-top: 4px; }
+
+.wiz4-diceoverlay { position: fixed; inset: 0; z-index: 200; background: rgba(4,6,14,.72); }
+
 .wiz4-foot {
   display: flex;
   align-items: center;

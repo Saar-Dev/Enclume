@@ -40,12 +40,14 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   const [skillAllocations, setSkillAllocations] = useState(initialData?.skillAllocations ?? {})
   const [proAdvantages, setProAdvantages] = useState(initialData?.proAdvantages ?? {})
   const [openedSkills, setOpenedSkills] = useState(initialData?.openedSkills ?? [])
+  const [randomPicks, setRandomPicks] = useState(initialData?.randomPicks ?? {})
   const [refData, setRefData] = useState({ loading: true, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [] })
   const [refSkills, setRefSkills] = useState([])
 
   const handleSkillAllocationsChange = useCallback((next) => setSkillAllocations(next), [])
   const handleProAdvantagesChange = useCallback((next) => setProAdvantages(next), [])
   const handleOpenedSkillsChange = useCallback((next) => setOpenedSkills(next), [])
+  const handleRandomPicksChange = useCallback((next) => setRandomPicks(next), [])
 
   useEffect(() => {
     if (!sheetId) return
@@ -168,6 +170,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
       career_id: c.career_id,
       years: c.years,
       proAdvantages: proAdvantages[c.career_id] || {},
+      randomPicks: randomPicks[c.career_id] || [],
     }))
     return {
   age,
@@ -372,6 +375,8 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
     onProAdvantagesChange={handleProAdvantagesChange}
     initialOpenedSkills={openedSkills}
     onOpenedSkillsChange={handleOpenedSkillsChange}
+    initialRandomPicks={randomPicks}
+    onRandomPicksChange={handleRandomPicksChange}
   />
 )}
 

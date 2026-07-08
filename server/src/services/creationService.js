@@ -9,7 +9,7 @@ import { AppError } from '../lib/AppError.js'
 import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../shared/polarisUtils.js'
 import { evaluateCareerEligibility } from '../../../shared/careerEligibility.js'
 import { computeSkillAllocation, validateChoiceGroups } from '../../../shared/careerSkills.js'
-import { computeProAdvantageAllocation } from '../../../shared/careerAdvantages.js'
+import { computeProAdvantageAllocation, computeRandomBudgetDelta } from '../../../shared/careerAdvantages.js'
 import { addAdvantage } from './advantageService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 
@@ -131,7 +131,7 @@ export async function getStep4RefData(sheetId) {
   const sheet = await db('char_sheet').where({ id: sheetId }).first()
   if (!sheet) throw new AppError(404, 'Fiche introuvable')
 
-  const [backgrounds, bgSkills, careers, careerSkills, careerTitles, careerPrereqs, careerPointCats, careerEducation] = await Promise.all([
+  const [backgrounds, bgSkills, careers, careerSkills, careerTitles, careerPrereqs, careerPointCats, careerEducation, careerRandomBenefits] = await Promise.all([
     db('ref_backgrounds').select('*').orderBy(['type', 'sort_order']),
     db('ref_background_skills as rbs')
   .leftJoin('ref_skills as rs', 'rbs.skill_id', 'rs.id')
@@ -142,6 +142,7 @@ export async function getStep4RefData(sheetId) {
     db('ref_career_prerequisites').select('*'),
     db('ref_career_point_categories').select('*').orderBy('sort_order'),
     db('ref_career_education').select('*'),
+    db('ref_career_random_benefits').select('*').orderBy(['career_id', 'roll']),
   ])
 
   const bgMap = new Map(backgrounds.map(b => [b.id, { ...b, skills: [] }]))
@@ -149,13 +150,14 @@ export async function getStep4RefData(sheetId) {
   const bgsWithSkills = Array.from(bgMap.values())
 
   const careersMap = new Map(
-    careers.map(c => [c.id, { ...c, skills: [], titles: [], prerequisites: [], pointCategories: [], education: [] }])
+    careers.map(c => [c.id, { ...c, skills: [], titles: [], prerequisites: [], pointCategories: [], education: [], randomBenefits: [] }])
   )
   for (const sk of careerSkills) careersMap.get(sk.career_id)?.skills.push(sk)
   for (const t of careerTitles) careersMap.get(t.career_id)?.titles.push(t)
   for (const p of careerPrereqs) careersMap.get(p.career_id)?.prerequisites.push(p)
   for (const pc of careerPointCats) careersMap.get(pc.career_id)?.pointCategories.push(pc)
   for (const e of careerEducation) careersMap.get(e.career_id)?.education.push(e)
+  for (const rb of careerRandomBenefits) careersMap.get(rb.career_id)?.randomBenefits.push(rb)
 
   const byType = (type) => bgsWithSkills.filter(b => b.type === type)
 
@@ -387,11 +389,39 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         const savings = salary * career.years
         totalCareerYears += career.years
 
+        // Tirage 1D10 (Lot 6) : validé AVANT Q3 — le delta budgétaire qui en résulte est injecté
+        // dans computeProAdvantageAllocation ci-dessous. Ignoré (mais toujours validé en forme) pour
+        // les métiers sans ref_career_point_categories (ex. Chasseur de primes) : le jet y reste
+        // possible (narratif), sans effet sur un budget qui n'existe pas — voir careerAdvantages.js.
+        const randomPicks = career.randomPicks || []
+        const randomBenefitRows = await trx('ref_career_random_benefits').where({ career_id: career.career_id })
+        const benefitByRoll = new Map(randomBenefitRows.map(r => [r.roll, r]))
+        const maxBlocks = Math.floor(career.years / 5)
+        const seenBlocks = new Set()
+        for (const pick of randomPicks) {
+          if (!Number.isInteger(pick.blockIndex) || pick.blockIndex < 0 || pick.blockIndex >= maxBlocks) {
+            throw new AppError(400, `Tirage 1D10 invalide pour ${refCareer.name} : tranche hors bornes`)
+          }
+          if (seenBlocks.has(pick.blockIndex)) {
+            throw new AppError(400, `Tirage 1D10 invalide pour ${refCareer.name} : tranche déjà jetée`)
+          }
+          seenBlocks.add(pick.blockIndex)
+          const row = benefitByRoll.get(pick.roll)
+          if (!row) {
+            throw new AppError(400, `Tirage 1D10 invalide pour ${refCareer.name} : résultat inconnu (${pick.roll})`)
+          }
+          if (pick.useAsPoints && row.points_alt == null) {
+            throw new AppError(400, `Tirage 1D10 invalide pour ${refCareer.name} : conversion en points impossible pour ce résultat`)
+          }
+        }
+        const randomBudgetDelta = computeRandomBudgetDelta(randomPicks, randomBenefitRows)
+
         // Q3 — validation par métier du coût avantages pro (shared/careerAdvantages.js, Lot 4).
         const pointCatRows = await trx('ref_career_point_categories').where({ career_id: career.career_id })
         const advResult = computeProAdvantageAllocation(career.proAdvantages || {}, {
           categories: pointCatRows.map(c => c.category),
           years: career.years,
+          randomBudgetDelta,
         })
         if (advResult.errors.length > 0) {
           const err = advResult.errors[0]

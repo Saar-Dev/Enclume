@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-07 Session 139
+> Dernière mise à jour : 2026-07-08 Session 140
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -281,6 +281,7 @@ Enclume/
 | 119_char_sheet_wizard_lock | Ajoute `char_sheet.wizard_locked_at TIMESTAMPTZ` (nullable). Sépare la propriété "assistant" (rejouable, reconciliation à chaque ouverture de la fenêtre fiche personnage pendant le Wizard) de la propriété "runtime" (fiche éditable librement après verrouillage). `up`/`down` testés via appel direct des fonctions du module (round-trip confirmé) (Session 139) |
 | 120_fix_ref_career_point_categories_lot1 | Insère les 26 lignes `ref_career_point_categories` manquantes pour 4 des 5 carrières du lot 1 (artisan_artiste, assassin, barman, contrebandier — même angle mort que la migration 106, jamais corrigé pour cette table). `chasseur_primes` a 0 ligne légitimement (absent LdB p.156). 30/30 sections restantes de `REGLE_PROFESSION.md` vérifiées conformes. Round-trip byte-identique (Session 139) |
 | 121_ref_career_skills_choice_groups | Ajoute `ref_career_skills.choice_group TEXT` (nullable). Réécrit 24 des 44 lignes `conditional=true` (catégorie/enfant-proxy) en vrais enfants `ref_skills.parent` groupés par `choice_group` (scopé par `career_id`) ; supprime 4 doublons inertes (Diplomate ×3, Espion ×1) ; corrige 4 lignes Soldat d'élite `conditional=true`→`false` (flag erroné, texte source sans marqueur "(au choix)"). Audit exhaustif `PLAN_REWORKFINAL §7` + re-vérification directe de `REGLE_PROFESSION.md` et de la base réelle avant codage. Round-trip `down`/`up` testé en base réelle, byte-identique (Session 139) |
+| 122_ref_career_random_benefits_lot1_and_points_alt | Ajoute `ref_career_random_benefits.points_alt INTEGER` (nullable) + backfill `points_alt=7` sur les 37 lignes `roll=10` déjà seedées (texte identique vérifié 37/37) + insert des 50 lignes manquantes (5 carrières du lot 1, jamais seedées à l'origine — même angle mort que les migrations 106/120, texte repris du fichier de référence pré-migration `docs/Character/Creation/migrations/93_seed_ref_careers_lot1.cjs`, cross-vérifié contre `REGLE_PROFESSION.md`). Débloque le Lot 6 (tirage 1D10) du chantier Redesign Step 4. Round-trip `down`/`up` testé en base réelle, byte-identique (320↔370 lignes) (Session 140) |
 
 ---
 
@@ -407,6 +408,18 @@ Chargée une seule fois depuis DB au premier jet.
 - DICE_RESULT consommé deux fois en parallèle : chat + animation
 - Animation déclenchée uniquement si `!skillLabel` (jets normaux, pas jets entités)
 - `seed` du payload initialise le PRNG déterministe de l'animation
+- **`dieType` absent du payload `DICE_RESULT` (P56, trouvé Session 140)** : `socketDice.js` le calcule
+  mais ne l'émet jamais — `SessionPage` le reconstruit depuis `formula` (`useSessionSocket.js:62`).
+  Tout nouveau montage de `<DiceRoller>` hors `SessionPage`/`Canvas3D.jsx` doit ajouter `dieType`
+  lui-même (en dur si la formule émise est fixe). Consommateurs Wizard (Session 140) :
+  `CareersAllocator.jsx` (`dieType:'d10'`, Lot 6 Tirage 1D10), `Step3Mutations.jsx` (`dieType:'d20'`,
+  méthode Tirage aléatoire). `DiceLights.jsx` (`client/src/components/`, NOUVEAU) : rig lumière
+  (`ambientLight 0.8` + 2 `directionalLight`, identique à `Canvas3D.jsx:889-892`) extrait en composant
+  partagé pour ces overlays isolés — jamais consommé par `Canvas3D.jsx` lui-même (zéro modification).
+- **Wizard de création connecté en socket pour la 1ʳᵉ fois (Session 140)** : `WizardCreation.jsx`
+  enveloppe tout le `wiz-shell` dans `<SocketProvider campaignId={campaignId}>` (monté une seule fois,
+  jamais démonté entre les steps — évite le spam `SESSION_JOIN`/`SESSION_USER_JOINED`). Les composants
+  enfants consomment via `useSocket()`, aucun ne monte son propre `SocketProvider`.
 
 ### Dés supportés
 | Dé | Géométrie | Chiffre | Statut |

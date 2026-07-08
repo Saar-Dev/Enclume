@@ -1,3 +1,10 @@
+## v156 — 2026-07-08 — Tirage 1D10 des avantages professionnels (fin du redesign Étape 4) + jets de dés réels
+
+### Client
+- [feat] Chaque métier retenu à l'étape 4 (Profession) permet désormais, tous les 5 ans de carrière, de lancer un vrai 1D10 animé pour tirer un avantage professionnel aléatoire à la place de la répartition manuelle habituelle — un résultat de 10 peut être converti en points supplémentaires à répartir
+- [fix] Le bouton « Lancer 1D10 » affichait par erreur l'animation d'un D6 au lieu d'un D10 — corrigé
+- [feat] Le tirage aléatoire de mutations à l'étape 3 (bouton « Lancer 1D20 ») utilise maintenant un vrai jet de dé animé au lieu d'un tirage silencieux
+
 ## v155 — 2026-07-08 — Description physique à la création du personnage
 
 ### Client

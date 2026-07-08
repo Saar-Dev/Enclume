@@ -13,6 +13,7 @@ import Step3Mutations from './Step3Mutations'
 import Step4Experience from './Step4Experience'
 import Step5Advantages from './Step5Advantages'
 import WizardReview from './WizardReview'
+import { SocketProvider } from '../../lib/SocketContext.jsx'
 import { POOL_AMBIANCE } from '../../../../shared/polarisUtils.js'
 
 export default function WizardCreation() {
@@ -121,6 +122,7 @@ export default function WizardCreation() {
   }
 
   return (
+    <SocketProvider campaignId={campaignId}>
     <div className="wiz-shell">
       <WizardHeader
         step={step}
@@ -260,6 +262,7 @@ export default function WizardCreation() {
         />
       )}
     </div>
+    </SocketProvider>
   )
 }
 

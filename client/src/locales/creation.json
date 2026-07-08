@@ -202,6 +202,7 @@
     "pc_display": "PC : {{current}} / {{total}}",
     "roll_desc": "Lancez 1D20 pour déterminer combien de mutations votre personnage reçoit, puis découvrez-les une par une.",
     "roll_d20": "Lancer 1D20",
+    "roll_d20_rolling": "Jet en cours…",
     "roll_count": "{{count}} mutation(s) obtenue(s)",
     "roll_pending": "En attente de décision",
     "keep": "Garder",
@@ -320,7 +321,14 @@
     "career_adv_title": "Avantages professionnels",
     "career_adv_locked": "Ajoute d'abord ce métier pour répartir ses points d'avantages professionnels.",
     "career_adv_none": "Cette profession ne propose aucun avantage professionnel automatique.",
-    "career_status_adv_left": "Il reste des points d'avantages professionnels à répartir (onglet Avantages pro)."
+    "career_status_adv_left": "Il reste des points d'avantages professionnels à répartir (onglet Avantages pro).",
+    "career_random_title": "Tirage 1D10 (optionnel)",
+    "career_random_block": "Tranche {{n}} (5 ans)",
+    "career_random_roll_btn": "Lancer 1D10",
+    "career_random_rolling": "Jet en cours…",
+    "career_random_narrative_note": "Narratif — n'affecte pas automatiquement la fiche de personnage.",
+    "career_random_points_toggle": "Convertir en {{n}} points d'Avantages pro",
+    "career_random_points_label": "Points d'Avantages pro"
   },
   "step5": {
     "title": "Étape 5/5 — Avantages & Désavantages",

@@ -976,3 +976,93 @@ ligne touchée), SR + parcours fonctionnel confirmé par Saar.
 fonctionnel"), vérification directe des colonnes `char_identity` en base après un `reconcileCreation`
 réel, distribution statistique du tirage 2D10 sur un grand nombre d'essais, et bien sûr la dette HP1
 ci-dessus (nécessiterait son propre bug fix + scénario de test, hors scope ici).
+
+## Session 140 — 2026-07-08 — Lot 6 (Tirage 1D10) + fix dieType DICE_RESULT + D20 réel Step3 ✅ CLOS
+
+**Redesign Step 4 Profession — Lot 6 (dernier lot du chantier `PLAN_REWORKFINAL.md`) : Tirage 1D10
+via le vrai système de dés (jamais `Math.random`).**
+
+**Reprise en nouvelle session** : protocole complet appliqué — tous les fichiers cités par le plan
+§8 (déjà rédigé lors d'une session antérieure) relus dans cette session avant tout code :
+`DiceRoller.jsx`, `DiceMesh.jsx`, `diceMath.js`, `SocketContext.jsx`, `socket/index.js`,
+`socketDice.js`, `Canvas3D.jsx`, `CareersAllocator.jsx`, `Step4Experience.jsx`,
+`WizardCreation.jsx`, `creationService.js`, `careerAdvantages.js`, `REGLE_PROFESSION.md`,
+`shared/events.js` + requêtes réelles (`ref_career_random_benefits`, `knex_migrations`). Le plan
+s'est révélé exact sur l'architecture, avec 2 écarts mineurs (référence de fichier `SessionPage.jsx`
+→ en réalité `Canvas3D.jsx` ; comptage "22/22" lignes `roll=10` → en réalité 32/32, encore plus
+solidement vérifié).
+
+**Enquête approfondie sur Chasseur de primes (demandée explicitement par Saar, pas de questionnaire
+simpliste)** : le plan initial prévoyait de masquer le bloc 1D10 pour tout métier sans
+`ref_career_point_categories`. Saar a fourni un extrait qu'il pensait être la page Chasseur de primes
+du Livre de Base, contenant une ligne "Avantages professionnels (5 points/an) : Célébrité, Relations,
+Matériel" absente de notre base. Vérification croisée : ce texte s'est avéré être **mot pour mot
+identique** à la carrière Mercenaire déjà seedée (`REGLE_PROFESSION.md:1015-1026`) — confirmé par
+Saar comme un artefact de mise en page du livre source (bavure entre deux pages/colonnes lors d'une
+lecture/copie), pas une donnée réelle de Chasseur de primes. Conclusion : le constat initial (0
+catégorie légitime pour ce métier, migration 120) reste valide, aucune correction BDD nécessaire —
+mais le design du Lot 6 a été affiné pour dissocier "jet 1D10 disponible" (toujours vrai si
+`randomBenefits` existe) de "bascule convertir en points" (vrai seulement si `pointCategories.length
+> 0`), pour respecter le cas Chasseur de primes qui a bien sa table de tirage imprimée dans la LdB
+malgré l'absence de budget automatique.
+
+**Fichiers touchés (Lot 6)** :
+- `server/src/db/migrations/122_ref_career_random_benefits_lot1_and_points_alt.js` (NOUVEAU) :
+  colonne `points_alt` + backfill des 37 lignes `roll=10` déjà seedées (`points_alt=7`, texte
+  identique vérifié 37/37) + insert des 50 lignes manquantes (5 carrières du Lot 1 × 10, texte repris
+  de `docs/Character/Creation/migrations/93_seed_ref_careers_lot1.cjs`, cross-vérifié mot pour mot
+  contre `REGLE_PROFESSION.md`). Round-trip `down`/`up` testé en base réelle, byte-identique
+  (320↔370 lignes). 122 migrations stables.
+- `shared/careerAdvantages.js` : `computeRandomBudgetDelta(picks, benefitRows)` (nouveau, fonction
+  pure) + `computeProAdvantageAllocation` gagne `ctx.randomBudgetDelta` (défaut 0, rétro-compatible) —
+  `budget = categories.length===0 ? 0 : 5×years + randomBudgetDelta` : le delta est naturellement
+  neutralisé pour Chasseur de primes sans code spécifique supplémentaire.
+- `server/src/services/creationService.js` : `getStep4RefData` fetch `randomBenefits` par carrière
+  (pattern `pointCategories`) ; `reconcileCreation` STEP4 valide `career.randomPicks` (bornes
+  `blockIndex`, pas de doublon, `roll` existant pour la carrière, `useAsPoints` seulement si
+  `points_alt` non nul) puis injecte le delta dans Q3 avant validation du budget.
+- `client/src/components/creation/WizardCreation.jsx` : `wiz-shell` enveloppé dans
+  `<SocketProvider campaignId={campaignId}>` — le Wizard n'avait jusqu'ici aucune connexion socket.
+- `client/src/components/creation/CareersAllocator.jsx` : reducer étendu (`randomPicks`,
+  `awaitingRandomRoll` + 5 actions), nouveau bloc UI dans l'onglet Avantages pro — affiché dès
+  `isAdded && randomBenefits.length>0` (indépendamment de `pointCategories`), bascule "convertir en
+  points" gatée séparément. Overlay `<Canvas><DiceLights/><DiceRoller/></Canvas>` piloté par
+  `socket.emit(WS.DICE_ROLL,{formula:'1d10'})` / écoute `DICE_RESULT` filtrée `userId`. Garde
+  anti-course (`awaitingRandomRoll`, un seul jet en vol, careerId/blockIndex capturés au clic).
+- `client/src/index.css` : 7 nouvelles classes `.wiz4-random*`/`.wiz4-diceoverlay`.
+- `client/src/locales/creation.json` : 7 nouvelles clés `step4.career_random_*`.
+
+**Bug trouvé et corrigé après premier test navigateur — "Lancer 1D10" affichait un D6"** : Saar a
+soupçonné à raison que je n'avais pas correctement réutilisé le système de dés existant. Cause
+tracée jusqu'au bout du pipeline : `server/src/socket/socketDice.js:20-55` calcule `dieType` via
+`parseDice()` mais **ne l'a jamais inclus dans le payload `DICE_RESULT` émis au client** (utilisé
+uniquement en interne pour le lookup `dice_config`). Le système existant fonctionne dans
+`SessionPage` uniquement parce que `client/src/lib/useSessionSocket.js:62` **reconstruit `dieType`
+côté client depuis le texte de la formule** avant de le passer à `DiceRoller` — étape que je n'avais
+pas identifiée en lisant seulement le commentaire (trompeur) de `DiceRoller.jsx` ("payload: {rolls,
+dieType, seed, timestamp} depuis DICE_RESULT"). Résultat : `dieType=undefined` →
+`GLB_PATHS[undefined]` non trouvé → `DiceMeshProcedural` retombe sur `DIE_GEOMETRY['d6']`
+(fallback explicite `diceMath.js:27`) → un D6 s'affichait quel que soit le dé réellement lancé.
+**Fix** : `dieType` forcé en dur (`'d10'` dans `CareersAllocator.jsx`, `'d20'` dans
+`Step3Mutations.jsx` ci-dessous) au moment de la réception du payload — ces points d'appel ne
+lancent jamais qu'une seule formule fixe, ce n'est pas une supposition. **Voir P56.**
+
+**Bonus demandé par Saar dans la foulée — Step3Mutations.jsx, tirage D20 réel** : le bouton "Lancer
+1D20" (méthode Tirage aléatoire) utilisait `Math.random()` (accepté Session 136, explicitement écarté
+du Lot 6 initialement). Même mécanique que ci-dessus appliquée : `handleRoll` scindé en
+`finalizeRoll(d20)` (logique count/D100 inchangée) + `handleStartRoll`/`handleDiceOverlayDone`
+pilotés par socket réel. Les tirages D100 par mutation (`rollOneMutation`) restent en `Math.random()`
+(hors demande). `client/src/components/DiceLights.jsx` (NOUVEAU) : rig lumière extrait en composant
+partagé (2 consommateurs réels désormais — `CareersAllocator.jsx` + `Step3Mutations.jsx` — plus de
+raison de dupliquer une 3ᵉ fois ; `Canvas3D.jsx` toujours à zéro modification). Nouvelle clé i18n
+`step3.roll_d20_rolling`.
+
+**Testé** : migration 122 round-trip byte-identique, `computeRandomBudgetDelta`/
+`computeProAdvantageAllocation` (8 scénarios `node -e` isolés, y compris le cas Chasseur de primes),
+`getStep4RefData` vérifié en base réelle (37/37 carrières), ESLint 0 erreur introduite sur tous les
+fichiers touchés (`git stash` pour confirmer l'erreur `remainingPC` pré-existante), SR répété après
+chaque étape, **SR + fonctionnel confirmé Saar** (Lot 6 après fix dieType, puis D20 Step3).
+**Non testé** : les 4 rejets serveur du Tirage 1D10 (bornes/doublon/roll inconnu/`useAsPoints`
+invalide) en conditions réelles plutôt que par lecture de code ; vérification directe
+`char_careers.random_picks` en base après un `reconcileCreation` réel ; retrait de carrière avec
+tirage en cours (purge) en conditions navigateur.
