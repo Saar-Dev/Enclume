@@ -772,5 +772,80 @@ changé (le segment « Tous » reste disponible au clic).
 **Testé** : ESLint 0 erreur.
 **Non testé** : confirmation visuelle navigateur (segment « Accessibles » actif à l'arrivée sur l'écran).
 
-### Prochain — Lot 4 (Avantages pro, 5 pts/an par métier)
-Voir `PLAN_REWORKFINAL §6`. Détail décisions/modèle : `PLAN_REWORKFINAL §1ter`.
+### Migration 120 — Fix `ref_career_point_categories` manquantes (4 carrières Lot 1) ✅ CLOS
+
+Trouvé en préparant le Lot 4 (lecture obligatoire avant tout plan) : `artisan_artiste`, `assassin`,
+`barman`, `contrebandier` (4 des 5 carrières du Lot 1, migration `100_seed_ref_careers.js`) ont **0
+ligne** dans `ref_career_point_categories`, alors que `REGLE_PROFESSION.md` liste explicitement leurs
+catégories d'avantages pro — même angle mort que la migration 106 (`ref_career_skills`), jamais corrigé
+pour cette table-là. `chasseur_primes` (5ᵉ carrière du lot) a bien **0 ligne légitimement** : absent de
+la LdB p.156 (confirmé par un commentaire explicite dans le fichier de référence pré-migration
+`docs/Character/Creation/migrations/93_seed_ref_careers_lot1.cjs`, qui contenait déjà les inserts
+corrects pour les 4 autres — jamais transcrits dans la vraie migration).
+
+**Vérification exhaustive demandée par Saar** avant de coder : les 30 sections restantes de
+`REGLE_PROFESSION.md` (32 lignes DB en comptant les carrières à variantes multiples — officier
+naval/militaire, pilote de chasse, soldat d'élite) alignées précisément via les en-têtes `#---` de
+chaque profession (pas par déduction de contenu) contre les données DB réelles. **30/30 conformes**,
+deux normalisations cosmétiques sans impact (rulebook "Relation" singulier → DB "Relations" pluriel ;
+parenthèses explicatives du rulebook non reprises dans le libellé de catégorie, ex. "Matériel (inclus
+du matériel militaire)" → "Matériel"). Bug confirmé isolé aux 4 carrières identifiées.
+
+`server/src/db/migrations/120_fix_ref_career_point_categories_lot1.js` (NOUVEAU) : insère les 26
+lignes manquantes (5+7+5+9), valeurs croisées rulebook + fichier de référence. `down()` symétrique
+(`DELETE ... WHERE career_id IN (...)`).
+
+**Incident mineur (sans conséquence)** : nodemon a auto-appliqué la migration (P53) entre l'écriture
+du fichier et le test manuel prévu — le premier appel direct à `up()` a levé une violation de
+contrainte unique (données déjà insérées par le vrai runner, bookkeeping `knex_migrations` correcte,
+batch 86). Contrairement au piège P54 (mojibake Session 135), ici la contrainte unique a **empêché**
+toute corruption — juste un échec propre, aucune donnée touchée. Round-trip `down`/`up` refait ensuite
+en toute sécurité (bookkeeping déjà correcte, pas de second `up()` sur données saines).
+
+**Testé** : `node --check` 0 erreur, application réelle confirmée (151 lignes totales, bookkeeping
+`knex_migrations` batch 86), round-trip `down`/`up` byte-identique (125 → 151 → 125 → 151, contenu
+vérifié pour les 4 carrières), `getStep4RefData` vérifié en base réelle (26 lignes remontées côté
+`artisan_artiste`).
+**Non testé** : aucun consommateur UI à ce stade (c'est l'objet du Lot 4, ci-dessous).
+
+### Lot 4 — Avantages pro (5 pts/an par métier) ✅ CLOS
+
+**Modèle (`REGLE_CREATION.txt:1151-1159`, jamais lu avant ce lot)** : 5 pts/an à répartir librement
+dans les catégories du métier — confirme Q3 déjà verrouillé (`§1ter`), budget **par métier**
+(≠ compétences qui sont globales). Pas de plafond par catégorie (contrairement aux compétences).
+Deux mécaniques annexes explicitement **hors scope** (déjà cadrées ailleurs ou non câblées) : tirage
+aléatoire optionnel remplaçant les 5 pts classiques (Lot 6, `random_picks`) ; table des Revers p.185
+(+5 pts, aucune table/colonne dédiée trouvée — dette notée, non bloquante).
+
+**Fichiers touchés** :
+- `shared/careerAdvantages.js` (NOUVEAU) : `computeProAdvantageAllocation(allocations, ctx)`, pattern
+  identique à `careerSkills.js` (fonction pure, réutilisée client+serveur). **Cas limite trouvé en
+  relecture avant livraison** (règle 5) : un métier à 0 catégorie (`chasseur_primes`) calculait quand
+  même un budget `5×années` invendable — bloquait "Suivant" indéfiniment pour ce métier. Fix dans le
+  helper : `budget = categories.length === 0 ? 0 : 5×years`.
+- `server/src/services/creationService.js` : `reconcileCreation` STEP4, dans la boucle carrières
+  (avant l'insert `char_careers`) — fetch `ref_career_point_categories` + validation par métier (Q3),
+  `AppError` si `over_budget`/`invalid_category`/`invalid_points`.
+- `client/src/components/creation/CareersAllocator.jsx` : reducer étendu (`proAdvAllocations`,
+  actions `SET_ADV_POINTS`/`PRUNE_ADV`), onglet "Avantages pro" (placeholder "à venir" du Lot 2)
+  remplacé — verrouillé si métier non retenu, "aucun avantage" si 0 catégorie, sinon steppers +
+  compteur restant. **Zéro nouvelle classe CSS** (réutilise `.wiz4-skill`/`.wiz4-ctl`/`.wiz4-sbtn`/
+  `.wiz4-boardhead`/`.wiz4-poolrem` du board compétences). Gating "Suivant" étendu : tous les métiers
+  retenus doivent avoir leur pool d'avantages entièrement réparti.
+- `client/src/components/creation/Step4Experience.jsx` : state `proAdvantages` (map career_id→
+  {catégorie:pts}), remonté depuis `CareersAllocator`, injecté dans `careerEntries[i].proAdvantages`
+  du payload (Contract B `§1bis`, déjà prévu). Purge automatique au retrait de carrière (effect
+  `PRUNE_ADV` côté `CareersAllocator`, aucune logique supplémentaire nécessaire côté parent).
+- `client/src/locales/creation.json` : `career_adv_title/locked/none`, `career_status_adv_left`.
+
+**Testé** : `node --check`/ESLint 0 erreur (1 erreur ESLint pré-existante non liée sur
+`Step4Experience.jsx:84` `remainingPC`, confirmée via `git diff --stat` = 5 insertions seulement),
+6 scénarios unitaires isolés sur `computeProAdvantageAllocation` (nominal vide/rempli, `over_budget`,
+`invalid_category`, `invalid_points`, cas 0-catégorie), `getStep4RefData` vérifié en base réelle avec
+un vrai `sheetId`, simulation de la validation serveur Q3 (rejet correct sur les 2 cas), JSON valide,
+SR + fonctionnel confirmé Saar.
+**Non testé** : persistance `char_careers.pro_advantages` vérifiée en base après un `reconcileCreation`
+réel complet (le scénario navigateur a validé le flux UI + gating, pas une lecture SQL post-finalize).
+
+### Prochain — Lot 5 (Compétences « au choix », `conditional`)
+Voir `PLAN_REWORKFINAL §7`. Détail décisions/modèle : `PLAN_REWORKFINAL §1ter`.

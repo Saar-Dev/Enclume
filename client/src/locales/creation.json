@@ -299,7 +299,11 @@
     "career_prog_savings": "Salaire/an",
     "career_eco_cumul": "Économies après {{years}} an(s) : {{amount}}",
     "career_eco_note_random": "* estimation moyenne — le montant réel sera déterminé par un jet à la validation du personnage",
-    "career_eco_note_fixed": "Montant garanti, non aléatoire"
+    "career_eco_note_fixed": "Montant garanti, non aléatoire",
+    "career_adv_title": "Avantages professionnels",
+    "career_adv_locked": "Ajoute d'abord ce métier pour répartir ses points d'avantages professionnels.",
+    "career_adv_none": "Cette profession ne propose aucun avantage professionnel automatique.",
+    "career_status_adv_left": "Il reste des points d'avantages professionnels à répartir (onglet Avantages pro)."
   },
   "step5": {
     "title": "Étape 5/5 — Avantages & Désavantages",

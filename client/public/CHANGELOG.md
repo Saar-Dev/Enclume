@@ -1,3 +1,12 @@
+## v153 — 2026-07-08 — Onglet Avantages professionnels
+
+### Serveur
+- [fix] 4 professions (Artisan/Artiste, Assassin, Barman, Contrebandier) n'avaient aucune catégorie d'avantage professionnel enregistrée — corrigé, conforme au Livre de Base
+- [fix] Le serveur vérifie désormais que la répartition des points d'avantages professionnels respecte le budget disponible (5 points par année passée dans le métier) avant d'enregistrer un personnage
+
+### Client
+- [feat] L'onglet « Avantages professionnels » de l'étape Professions permet désormais de répartir réellement les points gagnés par métier (Célébrité, Relations, Matériel, etc.), au lieu du message « à venir »
+
 ## v152 — 2026-07-08 — Onglet Carrière & économies + filtre Accessibles par défaut
 
 ### Client

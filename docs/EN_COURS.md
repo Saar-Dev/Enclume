@@ -14,8 +14,8 @@
 > Méthode validée Saar : **architecture (contrats partagés) verrouillée globalement → implémentation
 > incrémentale testée, un lot à la fois** (plan ligne-à-ligne par lot, « Je code ? » unique, validation
 > fonctionnelle avant lot suivant). Les 2 contrats (modèle de données + payload) sont figés
-> (`PLAN_REWORKFINAL §1bis`). **Lot 0 ✅, Lot 1 ✅, Lot 2 ✅, Lot 3 ✅ codés + validés Saar.**
-> **PROCHAIN = Lot 4 (Avantages pro, 5 pts/an par métier)** — voir `PLAN_REWORKFINAL §6`.
+> (`PLAN_REWORKFINAL §1bis`). **Lot 0 ✅, Lot 1 ✅, Lot 2 ✅, Lot 3 ✅, Lot 4 ✅ codés + validés Saar.**
+> **PROCHAIN = Lot 5 (Compétences « au choix », `conditional`)** — voir `PLAN_REWORKFINAL §7`.
 >
 > Autres pistes ouvertes (hors chantier actif) : item "41." (options de campagne) ; Step4 Expérience.
 
@@ -53,10 +53,25 @@
      Testé : `node --check`/ESLint 0 erreur, `estimateSalaryFormula` isolé, non-régression
      `evaluateSalaryFormula`, SR + fonctionnel confirmé Saar. Non testé : les 8 scénarios détaillés un
      par un (validation globale « ook »), confirmation visuelle navigateur du bugfix filtre.
-   → **Lot 4 (PROCHAIN)** : Avantages pro (5 pts/an par métier → `pro_advantages`). `PLAN_REWORKFINAL §6`.
-   → Lots 5-8 cadrés (au-choix / 1D10 DicePanel / relations `char_relations` + panneau fiche perso /
-     matériel inventaire). Une seule migration = `char_relations` (Lot 7). Prochaine migration
-     disponible : **120**.
+   → **Migration 120 (fix, hors lots)** : `ref_career_point_categories` manquantes sur 4 carrières Lot 1
+     (`artisan_artiste`, `assassin`, `barman`, `contrebandier`) — trouvé en lisant avant de planifier
+     le Lot 4 (même angle mort que la migration 106, jamais corrigé pour cette table). Vérification
+     exhaustive des 30 sections restantes de `REGLE_PROFESSION.md` demandée par Saar : 30/30 conformes,
+     bug isolé aux 4 carrières identifiées. `chasseur_primes` (5ᵉ carrière du lot) a 0 ligne
+     légitimement (absent de la LdB p.156). Détail : `docs/JOURNAL6.md` "Migration 120".
+   → **Lot 4 ✅ CLOS** : Avantages pro (5 pts/an **par métier**, `REGLE_CREATION.txt:1151-1159`) —
+     `shared/careerAdvantages.js` (`computeProAdvantageAllocation`, pattern `careerSkills.js`) +
+     validation serveur Q3 (`reconcileCreation`) + onglet "Avantages pro" (steppers, réutilise les
+     classes CSS du board compétences, zéro nouvelle classe) + gating "Suivant" étendu. **Cas limite
+     trouvé en relecture avant livraison** : métier à 0 catégorie (`chasseur_primes`) bloquait
+     indéfiniment sans le fix `budget=0` si aucune catégorie. Détail complet : `docs/JOURNAL6.md`
+     "Lot 4". Testé : 6 scénarios unitaires isolés, `getStep4RefData` vérifié en base réelle, ESLint/
+     `node --check` 0 erreur (1 erreur pré-existante non liée), SR + fonctionnel confirmé Saar.
+   → **Lot 5 (PROCHAIN)** : Compétences « au choix » (`conditional` → radios → `openedSkills`).
+     `PLAN_REWORKFINAL §7`.
+   → Lots 6-8 cadrés (1D10 DicePanel / relations `char_relations` + panneau fiche perso / matériel
+     inventaire). Une seule migration = `char_relations` (Lot 7). Prochaine migration disponible :
+     **121** (120 consommée cette session).
 
 **43. Fiche personnage consultable en permanence pendant le Wizard (fenêtre "peek") ✅ CLOS — Session 139 (2026-07-07)**
    → Plan complet rédigé en amont : `docs/STE6_FINAL.md`. `CharacterWindow.jsx` réutilisé inchangé
@@ -230,7 +245,8 @@ Projet en cours et priorité user :
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **124 migrations appliquées** (119_char_sheet_wizard_lock — Session 139 ;
+- **125 migrations appliquées** (120_fix_ref_career_point_categories_lot1 — Session 139 ;
+  119_char_sheet_wizard_lock — Session 139 ;
   118_fix_ref_mutations_organe_sensoriel_manquant — Session 138 ;
   117_ref_mutation_subtypes_description — Session 136 ;
   109_mutation_stacking + 108_fix_ref_mutations_encoding — Session 135 ;

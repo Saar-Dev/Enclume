@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { evaluateCareerEligibility } from '../../../../shared/careerEligibility.js'
 import { computeSkillAllocation, getSkillCap } from '../../../../shared/careerSkills.js'
 import { estimateSalaryFormula } from '../../../../shared/polarisUtils.js'
+import { computeProAdvantageAllocation } from '../../../../shared/careerAdvantages.js'
 
 // Couleur déterministe (hash → HSL) — rail + tags de provenance du board.
 function careerHexColor(code) {
@@ -30,13 +31,14 @@ function formatReason(t, r) {
   }
 }
 
-const initialReducerState = (initialSkillAllocations) => ({
+const initialReducerState = ([initialSkillAllocations, initialProAdvantages]) => ({
   filter: 'eligible',
   selectedCareerId: null,
   years: 1,
   activeTab: 'metier',
   hoverCareerId: null,
   skillAllocations: initialSkillAllocations || {},
+  proAdvAllocations: initialProAdvantages || {},
 })
 
 function careersReducer(state, action) {
@@ -66,6 +68,19 @@ function careersReducer(state, action) {
       }
       return { ...state, skillAllocations: allocations }
     }
+    case 'SET_ADV_POINTS': {
+      const careerMap = { ...(state.proAdvAllocations[action.careerId] || {}) }
+      if (action.pts <= 0) delete careerMap[action.category]
+      else careerMap[action.category] = action.pts
+      return { ...state, proAdvAllocations: { ...state.proAdvAllocations, [action.careerId]: careerMap } }
+    }
+    case 'PRUNE_ADV': {
+      const proAdvAllocations = {}
+      for (const [id, v] of Object.entries(state.proAdvAllocations)) {
+        if (action.validIds.has(id)) proAdvAllocations[id] = v
+      }
+      return { ...state, proAdvAllocations }
+    }
     default:
       return state
   }
@@ -90,9 +105,15 @@ export default function CareersAllocator({
   refSkills,
   initialSkillAllocations,
   onSkillAllocationsChange,
+  initialProAdvantages,
+  onProAdvantagesChange,
 }) {
   const { t } = useTranslation('creation')
-  const [state, dispatch] = useReducer(careersReducer, initialSkillAllocations, initialReducerState)
+  const [state, dispatch] = useReducer(
+    careersReducer,
+    [initialSkillAllocations, initialProAdvantages],
+    initialReducerState
+  )
   const { filter, selectedCareerId, years, activeTab, hoverCareerId } = state
 
   const careersById = useMemo(() => new Map((careers ?? []).map(c => [c.id, c])), [careers])
@@ -176,6 +197,36 @@ export default function CareersAllocator({
     return { total, isRandom }
   }, [selectedCareers, careersById])
 
+  // ── Avantages pro (Lot 4) — pool PAR MÉTIER, verrouillé tant que non retenu ──
+  const advAllocation = career ? (state.proAdvAllocations[career.id] || {}) : {}
+  const advResult = career && isAdded
+    ? computeProAdvantageAllocation(advAllocation, {
+        categories: (career.pointCategories ?? []).map(c => c.category),
+        years: committedEntry.years,
+      })
+    : null
+
+  const allAdvSpent = selectedCareers.every(c => {
+    const refCareer = careersById.get(c.career_id)
+    const result = computeProAdvantageAllocation(state.proAdvAllocations[c.career_id] || {}, {
+      categories: (refCareer?.pointCategories ?? []).map(cat => cat.category),
+      years: c.years,
+    })
+    return result.remaining === 0
+  })
+
+  const handleAdvInc = (category) => {
+    if (!isAdded || !advResult || advResult.remaining <= 0) return
+    const current = advAllocation[category] ?? 0
+    dispatch({ type: 'SET_ADV_POINTS', careerId: career.id, category, pts: current + 1 })
+  }
+  const handleAdvDec = (category) => {
+    if (!isAdded) return
+    const current = advAllocation[category] ?? 0
+    if (current <= 0) return
+    dispatch({ type: 'SET_ADV_POINTS', careerId: career.id, category, pts: current - 1 })
+  }
+
   // ── Compétences d'origine (base) ─────────────────────────────────
   const baseMastery = useMemo(() => {
     const map = {}
@@ -257,10 +308,18 @@ export default function CareersAllocator({
     dispatch({ type: 'PRUNE_ALLOCATIONS', validIds: boardSkillIds })
   }, [boardSkillIds])
 
+  useEffect(() => {
+    dispatch({ type: 'PRUNE_ADV', validIds: new Set(selectedCareers.map(c => c.career_id)) })
+  }, [selectedCareers])
+
   // ── Remontée au parent (payload global) ──────────────────────────
   useEffect(() => {
     onSkillAllocationsChange?.(state.skillAllocations)
   }, [state.skillAllocations, onSkillAllocationsChange])
+
+  useEffect(() => {
+    onProAdvantagesChange?.(state.proAdvAllocations)
+  }, [state.proAdvAllocations, onProAdvantagesChange])
 
   const handleAllocInc = (row) => {
     if (allocationResult.remaining <= 0 || row.target >= row.cap) return
@@ -294,10 +353,13 @@ export default function CareersAllocator({
     statusKey = 'career_status_skills_left'; statusOk = false
   } else if (allocationResult.errors.some(e => e.code === 'over_budget')) {
     statusKey = 'career_status_cap'; statusOk = false
+  } else if (!allAdvSpent) {
+    statusKey = 'career_status_adv_left'; statusOk = false
   } else {
     statusKey = 'career_status_ok'; statusOk = true
   }
-  const canNext = selectedCareers.length > 0 && allocationResult.errors.length === 0 && allocationResult.remaining === 0
+  const canNext = selectedCareers.length > 0 && allocationResult.errors.length === 0 &&
+    allocationResult.remaining === 0 && allAdvSpent
 
   return (
     <div className="wiz4-cols">
@@ -521,7 +583,45 @@ export default function CareersAllocator({
                   </div>
                 </div>
               )}
-              {activeTab === 'avant' && <p className="wiz4-note">{t('step4.career_tab_soon')}</p>}
+              {activeTab === 'avant' && (
+                (career.pointCategories ?? []).length === 0 ? (
+                  <p className="wiz4-note">{t('step4.career_adv_none')}</p>
+                ) : !isAdded ? (
+                  <p className="wiz4-note">{t('step4.career_adv_locked')}</p>
+                ) : (
+                  <div className="wiz4-block">
+                    <div className="wiz4-boardhead">
+                      <span className="wiz4-h">{t('step4.career_adv_title')}</span>
+                      <span className={`wiz4-poolrem${advResult.remaining === 0 ? ' ok' : ''}`}>
+                        <span className="wiz4-mono">{advResult.remaining}</span> {t('step4.career_points_remaining')}
+                      </span>
+                    </div>
+                    {career.pointCategories.map(cat => {
+                      const pts = advAllocation[cat.category] ?? 0
+                      return (
+                        <div key={cat.id} className="wiz4-skill">
+                          <div className="wiz4-skmain">
+                            <span className="wiz4-sklabel">{cat.category}</span>
+                          </div>
+                          <div className="wiz4-ctl">
+                            <button
+                              className={`wiz4-sbtn${pts <= 0 ? ' dis' : ''}`}
+                              onClick={() => handleAdvDec(cat.category)}
+                              disabled={pts <= 0}
+                            >−</button>
+                            <span className="wiz4-val">{pts}</span>
+                            <button
+                              className={`wiz4-sbtn${advResult.remaining <= 0 ? ' dis' : ''}`}
+                              onClick={() => handleAdvInc(cat.category)}
+                              disabled={advResult.remaining <= 0}
+                            >＋</button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              )}
             </div>
           </div>
         )}

@@ -9,6 +9,7 @@ import { AppError } from '../lib/AppError.js'
 import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../shared/polarisUtils.js'
 import { evaluateCareerEligibility } from '../../../shared/careerEligibility.js'
 import { computeSkillAllocation } from '../../../shared/careerSkills.js'
+import { computeProAdvantageAllocation } from '../../../shared/careerAdvantages.js'
 import { addAdvantage } from './advantageService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 
@@ -373,6 +374,20 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         }
         const savings = salary * career.years
         totalCareerYears += career.years
+
+        // Q3 — validation par métier du coût avantages pro (shared/careerAdvantages.js, Lot 4).
+        const pointCatRows = await trx('ref_career_point_categories').where({ career_id: career.career_id })
+        const advResult = computeProAdvantageAllocation(career.proAdvantages || {}, {
+          categories: pointCatRows.map(c => c.category),
+          years: career.years,
+        })
+        if (advResult.errors.length > 0) {
+          const err = advResult.errors[0]
+          const msg = err.code === 'over_budget'
+            ? `Budget d'avantages professionnels dépassé pour ${refCareer.name} : ${err.totalSpent} pts sur ${err.budget} disponibles`
+            : `Catégorie d'avantage invalide pour ${refCareer.name} : ${err.category}`
+          throw new AppError(400, msg)
+        }
 
         await trx('char_careers').insert({
           char_sheet_id: sheetId,

@@ -119,10 +119,14 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   **Lot 3 (onglet Carrière & économies, lecture seule) ✅ codé + validé Saar** — table
   titres/salaires + encadré économies + tuile agebar, `estimateSalaryFormula()` (moyenne
   déterministe). Bugfix associé : filtre carrières par défaut `'all'` → `'eligible'`.
-  **PROCHAIN = Lot 4** (avantages pro, 5 pts/an par métier — `PLAN_REWORKFINAL §6`).
+  **Lot 4 (avantages pro, 5 pts/an par métier) ✅ codé + validé Saar** — `shared/careerAdvantages.js`
+  (`computeProAdvantageAllocation`) + validation serveur Q3 + onglet dédié (0 nouvelle classe CSS).
+  Migration 120 associée (fix `ref_career_point_categories` manquantes sur 4 carrières Lot 1).
+  **PROCHAIN = Lot 5** (compétences « au choix », `conditional` — `PLAN_REWORKFINAL §7`).
   Décisions + modèle + faits vérifiés : `§1ter`. Point d'entrée reprise : `docs/EN_COURS.md` item 44.
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **124 migrations stables** (119_char_sheet_wizard_lock — Session 139 ;
+- **125 migrations stables** (120_fix_ref_career_point_categories_lot1 — Session 139 ;
+  119_char_sheet_wizard_lock — Session 139 ;
   118_fix_ref_mutations_organe_sensoriel_manquant — Session 138 ;
   117_ref_mutation_subtypes_description — Session 136 ;
   109_mutation_stacking + 108_fix_ref_mutations_encoding — Session 135 ;
@@ -190,6 +194,38 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **Non testé :** les 8 scénarios détaillés un par un (validation globale Saar), confirmation
   visuelle navigateur du bugfix filtre (ESLint seul vérifié).
 - Détail complet : `docs/JOURNAL6.md` "Lot 3" / "Bugfix — Filtre carrières par défaut".
+
+**Session 139 (suite 3) — Redesign Step 4 : Migration 120 (fix data) + Lot 4 (avantages pro) ✅ clos :**
+- **Migration 120** : `ref_career_point_categories` manquantes sur 4 des 5 carrières du Lot 1
+  (`artisan_artiste`, `assassin`, `barman`, `contrebandier`) — trouvé en lisant avant de planifier le
+  Lot 4, même angle mort que la migration 106 (jamais corrigé pour cette table). `chasseur_primes`
+  (5ᵉ carrière) a 0 ligne légitimement (absent de la LdB p.156, confirmé par le fichier de référence
+  pré-migration). **Vérification exhaustive demandée par Saar** avant tout code : les 30 sections
+  restantes de `REGLE_PROFESSION.md` alignées via leurs en-têtes exactes contre les 32 lignes DB
+  (variantes officier/pilote/soldat d'élite incluses) — 30/30 conformes, 2 normalisations cosmétiques
+  sans impact. `server/src/db/migrations/120_fix_ref_career_point_categories_lot1.js` (NOUVEAU, 26
+  lignes, `down()` symétrique). Nodemon a auto-appliqué la migration avant le test manuel (P53) — le
+  1er appel direct à `up()` a levé une violation de contrainte unique (données déjà présentes,
+  bookkeeping correcte) : contrairement à P54, la contrainte a empêché toute corruption. Round-trip
+  `down`/`up` refait proprement ensuite, byte-identique.
+- **Lot 4** : Avantages pro (5 pts/an **par métier**, `REGLE_CREATION.txt:1151-1159` — jamais lu
+  avant ce lot, confirme Q3 déjà verrouillé `§1ter`). `shared/careerAdvantages.js`
+  (`computeProAdvantageAllocation`, pattern identique `careerSkills.js`) + validation serveur Q3
+  (`reconcileCreation` STEP4, par métier) + onglet "Avantages pro" (`CareersAllocator.jsx`,
+  **zéro nouvelle classe CSS** — réutilise `.wiz4-skill`/`.wiz4-ctl`/`.wiz4-sbtn` du board
+  compétences) + gating "Suivant" étendu (tous les métiers retenus doivent avoir leur pool réparti).
+- **Cas limite trouvé en relecture avant livraison** (règle 5) : un métier à 0 catégorie
+  (`chasseur_primes`) calculait un budget `5×années` invendable dans `computeProAdvantageAllocation`
+  — bloquait "Suivant" indéfiniment. Fix : `budget = 0` si aucune catégorie valide pour ce métier.
+- **Testé :** `node --check`/ESLint 0 erreur (1 erreur pré-existante non liée confirmée via
+  `git diff --stat`), 6 scénarios unitaires isolés `computeProAdvantageAllocation`, migration 120
+  vérifiée en base réelle + round-trip byte-identique, `getStep4RefData` vérifié en base réelle
+  (26 lignes remontées), simulation validation serveur Q3 (rejet correct sur 2 cas), SR + fonctionnel
+  confirmé Saar.
+- **Non testé :** persistance `char_careers.pro_advantages` vérifiée en base après un
+  `reconcileCreation` réel complet (scénario navigateur = flux UI + gating, pas lecture SQL
+  post-finalize).
+- Détail complet : `docs/JOURNAL6.md` "Migration 120" / "Lot 4".
 
 **Session 139 — Fiche personnage consultable en permanence pendant le Wizard (fenêtre "peek") ✅ clos :**
 - Plan complet rédigé en amont dans une conversation précédente : `docs/STE6_FINAL.md` (v3). Reprise

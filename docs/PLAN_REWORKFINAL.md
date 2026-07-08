@@ -158,7 +158,7 @@ step4 = {
 | **1** | **Fondation moteur de coût (invisible)** : `getStep4RefData` (+`education`), serveur **Q2** (`reconcileCreation` valide le coût via `calcSkillCost` + payload `skillAllocations` global), **tests unitaires** du modèle. Aucun UI. | à planifier → **prochain** |
 | **2** | **UI** : réécriture `CareersAllocator` (rail + barre d'âge + détail onglets + **board GLOBAL** compétences), filtre « Accessibles » réel, `useReducer`, CSS `.wiz4-*`, i18n. Économies → Lot 3. | cadré |
 | **3** | Onglet Carrière & économies (table titres/salaires + cumul, lecture seule) | ✅ CODÉ + validé Saar |
-| **4** | Avantages pro (5 pts/an **par métier** → `pro_advantages`) | cadré |
+| **4** | Avantages pro (5 pts/an **par métier** → `pro_advantages`) | ✅ CODÉ + validé Saar |
 | **5** | Compétences « au choix » (`conditional` → radios → `openedSkills`) | cadré |
 | **6** | Tirage 1D10 via DicePanel (`ref_career_random_benefits` → `random_picks`) | cadré |
 | **7** | Relations (champs fiche perso : entier + texte + lien PNJ + persistance) | à investiguer |
@@ -439,15 +439,33 @@ ajoutées (liste complète dans le fichier).
 
 ---
 
-## 6. LOT 2 — Avantages pro (5 pts/an)
+## 6. LOT 2 — Avantages pro (5 pts/an)  [✅ CLOS]
 
-- Onglet Avantages pro : liste `point_categories` du métier + stepper d'allocation ; pool =
-  5 × années ; « N pts à placer » ; verrouillé tant que le métier n'est pas ajouté.
-- Payload : ajouter `proAdvantages` (map catégorie→pts) dans `handleAddCareer` +
-  `Step4Experience.buildPayload` → `career.proAdvantages` (backend `char_careers.pro_advantages`
-  déjà géré).
-- Gating global : « reste N pts d'avantages à placer » avant Suivant.
-- Tests : alloc respecte 5×années ; persistance vérifiée en base après finalize.
+> **Implémenté tel que cadré**, plus une fondation invisible + un correctif de données trouvé en
+> lisant avant de coder (méthode Lot 0/1) :
+> - **Migration 120 (hors lot)** : 4 des 5 carrières du Lot 1 (`artisan_artiste`, `assassin`,
+>   `barman`, `contrebandier`) n'avaient **aucune** ligne `ref_career_point_categories` en base
+>   (angle mort jamais corrigé par la migration 106) — sans ce fix, leur onglet Avantages pro aurait
+>   été vide/cassé. `chasseur_primes` (5ᵉ carrière) a 0 ligne légitimement (absent de la LdB p.156).
+>   Vérification exhaustive des 30 sections restantes de `REGLE_PROFESSION.md` (30/30 conformes).
+> - `shared/careerAdvantages.js` (`computeProAdvantageAllocation`), pattern identique à
+>   `careerSkills.js` — fonction pure réutilisée client+serveur. Cas limite trouvé en relecture avant
+>   livraison : un métier à 0 catégorie calculait un budget `5×années` invendable (bloquait
+>   "Suivant" indéfiniment) — fix `budget = 0` si aucune catégorie.
+> Détail complet : `docs/JOURNAL6.md` "Migration 120" / "Lot 4".
+
+- Onglet Avantages pro : liste `point_categories` du métier (triées `sort_order`, déjà chargées par
+  `getStep4RefData`) + stepper d'allocation (réutilise les classes CSS `.wiz4-skill`/`.wiz4-ctl`/
+  `.wiz4-sbtn` du board compétences — zéro nouvelle classe) ; pool = 5 × années **du métier retenu** ;
+  verrouillé (message dédié) tant que le métier n'est pas ajouté ; message dédié si 0 catégorie.
+- Payload : `proAdvantages` (map catégorie→pts) par métier dans `careerEntries` (Contract B `§1bis`),
+  remonté par `CareersAllocator` (état `proAdvAllocations` keyed par `career_id`, purge automatique
+  au retrait de carrière) → `Step4Experience.buildPayload`. Backend `reconcileCreation` STEP4 valide
+  désormais le budget (Q3) via `computeProAdvantageAllocation` avant l'insert `char_careers`
+  (`pro_advantages` déjà géré côté colonne, jamais rempli avant ce lot).
+- Gating global : tous les métiers retenus doivent avoir leur pool d'avantages entièrement réparti
+  avant Suivant (nouveau statut `career_status_adv_left`).
+- Tests : voir `JOURNAL6.md` "Lot 4" (Testé/Non testé complet).
 
 ---
 
@@ -500,7 +518,7 @@ ajoutées (liste complète dans le fichier).
 | 1 — Fondation moteur coût | ✅ (§4) | ✅ | ✅ SR + « Test OK » |
 | 2 — UI (board global) | ✅ re-détaillé au lancement | ✅ | ✅ SR + fonctionnel |
 | 3 — Économies | ✅ (§5) | ✅ | ✅ SR + fonctionnel |
-| 4 — Avantages pro | — | — | — |
+| 4 — Avantages pro | ✅ (§6) | ✅ | ✅ SR + fonctionnel |
 | 5 — « Au choix » | — | — | — |
 | 6 — Tirage 1D10 | — | — | — |
 | 7 — Relations | — | — | — |
