@@ -1,3 +1,18 @@
+## v155 — 2026-07-08 — Description physique à la création du personnage
+
+### Client
+- [feat] L'étape 1 (Attributs) du Wizard de création propose désormais de renseigner la description physique du personnage (taille, poids, peau, corpulence, yeux, cheveux, signes particuliers) ainsi que sa main directrice, avec un bouton « Définir » qui tire au sort Droitier/Gaucher/Ambidextre selon la règle du Livre de Base — ces informations apparaissent ensuite pré-remplies dans la fiche personnage
+
+## v154 — 2026-07-08 — Compétences « au choix » des métiers
+
+### Serveur
+- [fix] Correction de données : plusieurs métiers avaient des lignes de compétences « au choix » en double ou mal renseignées (Diplomate, Espion, Soldat d'élite) — nettoyé, conforme au Livre de Base
+- [feat] Le serveur vérifie désormais qu'un seul choix est fait par groupe de compétences « au choix » avant d'enregistrer un personnage
+
+### Client
+- [feat] Les compétences « au choix » de chaque métier (ex. Arts martiaux, Sciences spécialisées) sont désormais sélectionnables directement dans l'onglet Métier, au lieu d'être listées sans possibilité de choix
+- [fix] Suppression de l'icône décorative devant chaque métier dans la liste de gauche, colonne légèrement resserrée
+
 ## v153 — 2026-07-08 — Onglet Avantages professionnels
 
 ### Serveur

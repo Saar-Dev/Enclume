@@ -87,3 +87,29 @@ export function computeSkillAllocation(skillAllocations, ctx) {
 
   return { budget, totalCost, remaining, perSkill, errors }
 }
+
+/**
+ * Valide l'exclusivité des groupes de choix "au choix" (Lot 5, ref_career_skills.choice_group).
+ * Une carrière ne peut retenir qu'UN seul skill_id par choice_group (radio, pas checkbox multiple).
+ * Les lignes conditional=true sans choice_group (T1, case à cocher isolée) n'ont aucune contrainte
+ * d'exclusivité et sont ignorées ici.
+ * @param {string[]} openedSkillIds - compétences "au choix" retenues par le joueur (step4.openedSkills)
+ * @param {object[]} careerSkillRows - lignes ref_career_skills conditional=true d'UNE carrière
+ *   (career_id implicite : l'appelant scope déjà les rows par métier)
+ * @returns {{ errors: [{code:'multiple_choice', choiceGroup, skillIds}] }}
+ */
+export function validateChoiceGroups(openedSkillIds, careerSkillRows) {
+  const opened = new Set(openedSkillIds || [])
+  const byGroup = {}
+  for (const row of careerSkillRows || []) {
+    if (!row.choice_group) continue
+    ;(byGroup[row.choice_group] ??= []).push(row.skill_id)
+  }
+
+  const errors = []
+  for (const [choiceGroup, skillIds] of Object.entries(byGroup)) {
+    const chosen = skillIds.filter(id => opened.has(id))
+    if (chosen.length > 1) errors.push({ code: 'multiple_choice', choiceGroup, skillIds: chosen })
+  }
+  return { errors }
+}

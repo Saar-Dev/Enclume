@@ -14,8 +14,8 @@
 > Méthode validée Saar : **architecture (contrats partagés) verrouillée globalement → implémentation
 > incrémentale testée, un lot à la fois** (plan ligne-à-ligne par lot, « Je code ? » unique, validation
 > fonctionnelle avant lot suivant). Les 2 contrats (modèle de données + payload) sont figés
-> (`PLAN_REWORKFINAL §1bis`). **Lot 0 ✅, Lot 1 ✅, Lot 2 ✅, Lot 3 ✅, Lot 4 ✅ codés + validés Saar.**
-> **PROCHAIN = Lot 5 (Compétences « au choix », `conditional`)** — voir `PLAN_REWORKFINAL §7`.
+> (`PLAN_REWORKFINAL §1bis`). **Lot 0 ✅, Lot 1 ✅, Lot 2 ✅, Lot 3 ✅, Lot 4 ✅, Lot 5 ✅ codés + validés Saar.**
+> **PROCHAIN = Lot 6 (Tirage 1D10 via DicePanel)** — voir `PLAN_REWORKFINAL §8`.
 >
 > Autres pistes ouvertes (hors chantier actif) : item "41." (options de campagne) ; Step4 Expérience.
 
@@ -67,11 +67,43 @@
      indéfiniment sans le fix `budget=0` si aucune catégorie. Détail complet : `docs/JOURNAL6.md`
      "Lot 4". Testé : 6 scénarios unitaires isolés, `getStep4RefData` vérifié en base réelle, ESLint/
      `node --check` 0 erreur (1 erreur pré-existante non liée), SR + fonctionnel confirmé Saar.
-   → **Lot 5 (PROCHAIN)** : Compétences « au choix » (`conditional` → radios → `openedSkills`).
-     `PLAN_REWORKFINAL §7`.
+   → **Lot 5 ✅ CLOS** : Compétences « au choix » (`PLAN_REWORKFINAL §7`). Migration
+     `121_ref_career_skills_choice_groups.js` (colonne `choice_group` + 24 lignes T3 réécrites en vrais
+     enfants `ref_skills.parent`, groupées par `choice_group` scopé `career_id` + 4 doublons inertes
+     supprimés Diplomate/Espion + 4 lignes Soldat d'élite flag corrigé `conditional=false`). **Avant
+     tout code (demande Saar « sûr à 100% »)** : re-vérification directe de `REGLE_PROFESSION.md` (pas
+     seulement du plan déjà écrit) sur les cas les plus ambigus + requêtes SQL réelles (44 lignes,
+     `is_category`/`parent`, absence de collision) — 0 écart trouvé, tout confirmé avant codage.
+     `shared/careerSkills.js` : nouvelle `validateChoiceGroups` (exclusivité par groupe). Payload
+     `openedSkills` (déjà câblé serveur/moteur de coût depuis le Lot 2, jamais envoyé par le client
+     avant ce lot) désormais rempli par `Step4Experience.jsx`. `CareersAllocator.jsx` : reducer étendu
+     (2 nouvelles actions + purge au retrait de carrière), nouveau bloc UI "Compétences au choix"
+     (checkbox T1 solo / radio T3 exclusif), verrouillé tant que le métier n'est pas retenu. **Gap
+     trouvé en relecture avant livraison** : `provenanceFor` (tag de provenance du board) ne couvrait
+     pas les compétences "au choix" ouvertes — corrigé. Détail complet : `docs/JOURNAL6.md` "Lot 5".
+     Testé : migration round-trip `down`/`up` byte-identique en base réelle, `validateChoiceGroups`
+     (6 scénarios `node -e`), `node --check`/ESLint 0 erreur introduite, SR, fonctionnel confirmé Saar
+     ("All ok"). Non testé : vérification directe `char_skills.is_learned` en base post-finalisation.
+   → **Nettoyage UI associé** : icône hexagonale du rail carrières retirée (`.wiz4-hex` + style inline
+     `--hex`), colonne rail réduite `296px`→`246px`. `careerHexColor()` conservé (tags de provenance).
    → Lots 6-8 cadrés (1D10 DicePanel / relations `char_relations` + panneau fiche perso / matériel
-     inventaire). Une seule migration = `char_relations` (Lot 7). Prochaine migration disponible :
-     **121** (120 consommée cette session).
+     inventaire) — renumérotés dans `PLAN_REWORKFINAL.md` (les en-têtes disaient à tort Lot 4/5/6,
+     corrigé en 6/7/8 pour matcher §2/§11). Une seule migration = `char_relations` (Lot 7). Prochaine
+     migration disponible : **122** (121 consommée cette session).
+
+**45. Wizard Step1 — Description physique + Main directrice (2D10) ✅ CLOS — Session 139 suite 5 (2026-07-08)**
+   → Hors chantier Redesign Step4. Ajout au Wizard des champs de la fiche perso (taille/poids/peau/
+     corpulence/yeux/cheveux/signes particuliers) + Main directrice avec bouton "Définir" (tirage 2D10
+     client, pattern identique au tirage aléatoire `Step3Mutations.jsx`). Schéma DB déjà complet
+     (`char_identity`, migration 36) — **aucune migration**. `reconcileCreation` STEP1 étendu (insert/
+     merge `char_identity`), champs optionnels/non bloquants (règle LdB confirmée narrative, pas
+     mécanique — seule la Main directrice a un vrai tirage).
+   → **Bug préexistant découvert (non corrigé, voir dette HP1)** : `hand_pref` est lu depuis `char_sheet`
+     (colonne inexistante) au lieu de `char_identity` dans `socketCombatHelpers.js` et `char-sheet.js`
+     (route inventaire) — la mécanique Main directrice retombe toujours sur `'R'` en combat.
+   → Détail complet : `docs/JOURNAL6.md` "Session 139 (suite 5)".
+   → **Testé** : `JSON.parse`/`node --check`/ESLint 0 erreur introduite, SR + fonctionnel confirmé Saar.
+   → **Non testé** : scénarios détaillés un par un, vérification base réelle post-`reconcileCreation`.
 
 **43. Fiche personnage consultable en permanence pendant le Wizard (fenêtre "peek") ✅ CLOS — Session 139 (2026-07-07)**
    → Plan complet rédigé en amont : `docs/STE6_FINAL.md`. `CharacterWindow.jsx` réutilisé inchangé
@@ -311,6 +343,7 @@ Projet en cours et priorité user :
 | **OPT-W1** | 8/11 options de campagne (polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity) sans effet mécanique branché — `ambiance` ✅ Session 132 suite, `random_mutations` ✅ Session 136 (masque la carte "Tirage aléatoire" Step3 si désactivée), `feminin_bonus` ✅ Session 137 (Sexe/Fécondité Step1/3/5, voir `docs/PLAN_SEXE.md`) | Moyenne — en cours un par un |
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 | **MUT1** | `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable | Basse — à investiguer |
+| **HP1** | Main directrice : `socketCombatHelpers.js:550` et `char-sheet.js:810` lisent `hand_pref` sur `char_sheet` (colonne inexistante) au lieu de `char_identity.hand_pref` → toujours `'R'` par défaut, quel que soit le choix réel du joueur | Moyenne — mécanique jamais appliquée en combat |
 
 ---
 

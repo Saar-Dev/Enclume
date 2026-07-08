@@ -8,7 +8,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../shared/polarisUtils.js'
 import { evaluateCareerEligibility } from '../../../shared/careerEligibility.js'
-import { computeSkillAllocation } from '../../../shared/careerSkills.js'
+import { computeSkillAllocation, validateChoiceGroups } from '../../../shared/careerSkills.js'
 import { computeProAdvantageAllocation } from '../../../shared/careerAdvantages.js'
 import { addAdvantage } from './advantageService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -244,9 +244,15 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
 
     // ── STEP 1 : attributs + identité ──────────────────────────────────────────
     if (step1) {
-      const { charName, playerName, attributes, pcSpent: pc1, isFeminin: isFeminin1 } = step1
+      const {
+        charName, playerName, attributes, pcSpent: pc1, isFeminin: isFeminin1,
+        height, weight, skin, eyes, hair, build, distinctiveSigns, handPref,
+      } = step1
       if (!charName?.trim()) throw new AppError(400, 'Nom du personnage requis')
       if (!attributes || typeof attributes !== 'object') throw new AppError(400, 'Attributs requis')
+      if (handPref != null && !['R', 'L', 'A'].includes(handPref)) {
+        throw new AppError(400, `Main directrice invalide : ${handPref}`)
+      }
 
       const { campaign_id: campaignId } = await trx('characters').where({ id: characterId }).select('campaign_id').first()
       const settings = await getCampaignSettings(trx, campaignId)
@@ -256,8 +262,14 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
 
       await trx('characters').where({ id: characterId }).update({ name: charName.trim() })
       await trx('char_identity')
-        .insert({ char_sheet_id: sheetId, char_name: charName.trim(), player_name: playerName ?? '' })
-        .onConflict('char_sheet_id').merge(['char_name', 'player_name'])
+        .insert({
+          char_sheet_id: sheetId, char_name: charName.trim(), player_name: playerName ?? '',
+          height: height ?? null, weight: weight ?? null,
+          skin: skin ?? '', eyes: eyes ?? '', hair: hair ?? '', build: build ?? '',
+          distinctive_signs: distinctiveSigns ?? '', hand_pref: handPref ?? null,
+        })
+        .onConflict('char_sheet_id')
+        .merge(['char_name', 'player_name', 'height', 'weight', 'skin', 'eyes', 'hair', 'build', 'distinctive_signs', 'hand_pref'])
       await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ sex: (isFeminin1 ?? false) ? 'femme' : 'homme' })
       for (const [attrId, level] of Object.entries(attributes)) {
         await trx('char_attributes')
@@ -399,8 +411,23 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
           setbacks: JSON.stringify(career.setbacks || []),
         })
 
-        const careerSkillRows = await trx('ref_career_skills').where({ career_id: career.career_id, conditional: false })
-        careersCtx.push({ skills: careerSkillRows.map(s => s.skill_id), years: career.years })
+        // Compétences "au choix" (Lot 5) : validées par groupe AVANT d'être traitées comme pro
+        // (une seule ouverte par choice_group, exclusivité radio — voir shared/careerSkills.js).
+        const conditionalRows = await trx('ref_career_skills').where({ career_id: career.career_id, conditional: true })
+        const { errors: choiceErrors } = validateChoiceGroups(step4.openedSkills || [], conditionalRows)
+        if (choiceErrors.length > 0) {
+          const err = choiceErrors[0]
+          throw new AppError(400, `Choix multiple invalide pour ${refCareer.name} (${err.choiceGroup})`)
+        }
+
+        const openedConditionalIds = conditionalRows
+          .filter(s => (step4.openedSkills || []).includes(s.skill_id))
+          .map(s => s.skill_id)
+        const nonConditionalRows = await trx('ref_career_skills').where({ career_id: career.career_id, conditional: false })
+        careersCtx.push({
+          skills: [...nonConditionalRows.map(s => s.skill_id), ...openedConditionalIds],
+          years: career.years,
+        })
       }
 
       // Q2 — validation globale du coût compétences (shared/careerSkills.js, Lot 1/2).

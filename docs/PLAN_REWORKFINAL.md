@@ -94,7 +94,9 @@ l'existant. Migration conçue **une fois**, proprement (pièges P52-P54). Nouvea
 ```
 step4 = {
   age, originGeo, originSoc, training, higherEd,
-  appliedSkills: [skill_id],              // choix "au choix"/background (Lot 5)
+  appliedSkills: [skill_id],              // choix "au choix" des BACKGROUNDS uniquement (déjà câblé)
+  openedSkills: [skill_id],               // choix "au choix" des CARRIÈRES (Lot 5) + futur Formation (Lot 6)
+                                           // champ déjà lu par reconcileCreation (§7.3) — jamais envoyé avant Lot 5
   skillAllocations: { skill_id: target }, // GLOBAL (Lot 2) — MIGRE hors de careers[]
   careers: [{
     career_id, years,
@@ -155,11 +157,11 @@ step4 = {
 | Lot | Titre | Statut |
 |---|---|---|
 | **0** | **Fondation éligibilité** : `shared/careerEligibility.js` + rebranchement serveur | ✅ CODÉ + validé Saar |
-| **1** | **Fondation moteur de coût (invisible)** : `getStep4RefData` (+`education`), serveur **Q2** (`reconcileCreation` valide le coût via `calcSkillCost` + payload `skillAllocations` global), **tests unitaires** du modèle. Aucun UI. | à planifier → **prochain** |
-| **2** | **UI** : réécriture `CareersAllocator` (rail + barre d'âge + détail onglets + **board GLOBAL** compétences), filtre « Accessibles » réel, `useReducer`, CSS `.wiz4-*`, i18n. Économies → Lot 3. | cadré |
+| **1** | **Fondation moteur de coût (invisible)** : `getStep4RefData` (+`education`), serveur **Q2** (`reconcileCreation` valide le coût via `calcSkillCost` + payload `skillAllocations` global), **tests unitaires** du modèle. Aucun UI. | ✅ CODÉ + validé Saar |
+| **2** | **UI** : réécriture `CareersAllocator` (rail + barre d'âge + détail onglets + **board GLOBAL** compétences), filtre « Accessibles » réel, `useReducer`, CSS `.wiz4-*`, i18n. Économies → Lot 3. | ✅ CODÉ + validé Saar |
 | **3** | Onglet Carrière & économies (table titres/salaires + cumul, lecture seule) | ✅ CODÉ + validé Saar |
 | **4** | Avantages pro (5 pts/an **par métier** → `pro_advantages`) | ✅ CODÉ + validé Saar |
-| **5** | Compétences « au choix » (`conditional` → radios → `openedSkills`) | cadré |
+| **5** | Compétences « au choix » (`conditional`, 44 lignes réelles → 6 types distincts, migration `choice_group` + corrections de données) | ✅ CODÉ + validé Saar (migration 121) |
 | **6** | Tirage 1D10 via DicePanel (`ref_career_random_benefits` → `random_picks`) | cadré |
 | **7** | Relations (champs fiche perso : entier + texte + lien PNJ + persistance) | à investiguer |
 | **8** | Matériel accessible (inventaire + menu GM création objets) | à investiguer |
@@ -469,29 +471,508 @@ ajoutées (liste complète dans le fichier).
 
 ---
 
-## 7. LOT 3 — Compétences « au choix » (`conditional`)
+## 7. LOT 5 — Compétences « au choix » (`conditional`)  [✅ CLOS]
 
-- Dette [CAR1] (34 occurrences). Groupes conditionnels → **bouton radio** pour sélectionner la
-  compétence retenue parmi les options « au choix ».
-- Payload : `openedSkills` (liste des skill_id réellement ouverts) → `reconcileCreation` (`is_learned`).
-- Tests : sélection exclusive par groupe ; skill ouverte débloque son alloc dans le board.
+> **Implémenté tel que cadré en §7.4**, après re-vérification de la source primaire (`REGLE_PROFESSION.md`)
+> et de la base réelle immédiatement avant codage (demande Saar « code seulement si sûr à 100% ») —
+> aucun écart trouvé avec l'audit ci-dessous. Migration `121_ref_career_skills_choice_groups.js`,
+> round-trip `down`/`up` testé en base réelle byte-identique. Un gap trouvé en relecture avant
+> livraison (règle 5) : `provenanceFor` (tag de provenance du board) ne couvrait pas les compétences
+> "au choix" nouvellement ouvertes — corrigé dans le même lot. Détail complet : `docs/JOURNAL6.md`
+> "Lot 5".
+
+> Dette [CAR1], réévaluée à 44 occurrences réelles (pas 34, chiffre initial approximatif). Hypothèse
+> de départ du plan (« bouton radio par métier ») **invalidée par la donnée réelle** — voir recherche
+> Foundry VTT dnd5e (Advancement System, type `Trait` : `grants[]` + `choices[]` indépendants) qui a
+> révélé l'angle mort avant tout code. Audit exhaustif des 44 lignes `ref_career_skills.conditional=true`
+> fait ligne par ligne contre `docs/Character/Creation/REGLE_PROFESSION.md` (méthode identique aux
+> migrations 106/118/120) — **aucune ligne prise au hasard, aucune supposée**.
+
+### 7.0 Constat central : `conditional` conflate 6 phénomènes différents
+
+Le flag booléen unique `ref_career_skills.conditional` a été utilisé pour au moins 6 situations
+distinctes du texte source, qui n'ont pas le même traitement mécanique possible :
+
+| Type | Définition | Traitement |
+|---|---|---|
+| **T1 — Optionnel isolé** | Une seule compétence concrète, réellement facultative selon le texte, aucune alternative énumérée | Case à cocher indépendante (`choice_group = NULL`) |
+| **T2 — Alternative fermée réelle** | Le texte dit « X **ou** Y » entre deux compétences concrètes distinctes | Radio à 2 (ou N) options fixes (`choice_group` partagé) |
+| **T3 — Catégorie/famille à développer** | La ligne DB pointe vers une catégorie (`is_category=true`) ou vers UN enfant choisi comme proxy d'un choix qui porte en réalité sur toute la famille (`ref_skills.parent`) | Remplacer par les enfants réels, `choice_group` partagé (radio) |
+| **T4 — Sous-variante de carrière non modélisée** | Le texte conditionne la compétence à un sous-type de la carrière que le schéma ne modélise pas (ex. « équipage des navires de pêche seulement », « spécialiste sécurité ») | Dégénère en T1 (case à cocher) — le joueur tranche lui-même, faute de sous-type traqué |
+| **T5 — Choix ouvert non énumérable** | Le texte autorise « toute autre Compétence liée au domaine », sans liste fermée | **Hors scope** — aucun schéma ne peut représenter un pool infini ; le composant fixe cité (s'il existe) reste sélectionnable via T3, le reste est une dette documentée |
+| **T6 — Gating par prérequis** | La compétence se débloque par années d'ancienneté et/ou capacité spéciale (Force Polaris), pas par un choix du joueur | **Hors scope Lot 5** — mécanisme de gating distinct, pas un « au choix » |
+
+**Convention retenue (tranchée à partir de la source, cas Barman)** : seul le marqueur explicite
+« **(au choix)** » (ou équivalent univoque comme « une Compétence au choix ») déclenche un traitement
+T2/T3 (choix mécanique fermé). Un simple « X **ou** Y » sans ce marqueur reste un registre descriptif
+— traité T1 (compétence optionnelle indépendante, pas de `choice_group`). Distinction vérifiée par
+contraste direct dans le texte source : Soldat/Milicien dit « Armes spéciales **(au choix)** »,
+Soldat d'élite dit juste « Armes spéciales » (sans marqueur, pour la même compétence) — le marqueur
+absent/présent est bien un signal intentionnel du texte, pas un hasard de rédaction.
+
+**Anomalies de données trouvées** (à trancher — pas des cas « au choix » du tout) :
+- **Doublons inertes** : plusieurs lignes `conditional=true` sur le **même** `skill_id` déjà rendu
+  professionnel par une autre ligne `conditional=false` du même métier → aucun effet mécanique
+  aujourd'hui ni après Lot 5 (`isProSkill` teste une appartenance booléenne, pas un compteur).
+- **Flag `conditional` contredit par le texte** : une ligne marquée conditionnelle alors que le texte
+  ne dit **pas** « au choix » pour cette carrière précise (comparaison entre variantes de la même
+  famille de carrières qui, elles, disent bien « au choix »).
+
+### 7.1 Audit ligne par ligne (44 lignes, groupées par traitement)
+
+**T1 — Case à cocher isolée (10 lignes, aucun changement de donnée nécessaire)**
+| Carrière | skill_id | Texte source |
+|---|---|---|
+| Barman | `FUSIL_ARMES_DEPAULES` | `:194` « Armes de poing **ou** Fusils/Armes d'épaule » — pas de marqueur « (au choix) » (convention §7.0) → reste un bonus optionnel indépendant, `ARMES_DE_POING` (déjà non-conditionnel) inchangé, aucune migration |
+| Marchand itinérant/Conteur | `CONNAISSANCE_DES_NATIONS_ORGANISATIONS` | `REGLE_PROFESSION.md:804` « au choix » |
+| Officier militaire (Souterrain/Surface) ×2 | `CONNAISSANCE_DES_NATIONS_ORGANISATIONS` | `:1228` « au choix » |
+| Officier naval/Navigateur (civile/militaire) ×2 | `CONNAISSANCE_DES_NATIONS_ORGANISATIONS` | `:1143` « au choix » |
+| Scientifique/Ingénieur | `CONNAISSANCE_DES_NATIONS_ORGANISATIONS` | `:1745` « au choix » |
+| Sous-marinier | `CHASSE_PISTAGE` | `:2035` « équipage des navires de pêche seulement » (T4→T1) |
+| Technicien/Mécanicien | `PIRATAGE_INFORMATIQUE` | `:2114` « pour les spécialistes de la sécurité informatique » (T4→T1) |
+| Technicien/Mécanicien | `CRYPTOGRAPHIE` | `:2108` « pour les spécialistes de la sécurité » (T4→T1) |
+
+**T3 — Catégorie/famille à développer en groupe (24 lignes, migration de données requise)**
+| Carrière | Ligne DB actuelle | Texte source | Enfants réels disponibles (`ref_skills.parent`) |
+|---|---|---|---|
+| Officier militaire (Souterrain/Surface) ×2 | `ARMES_SPECIALES_CONTACT_FORCE_COORDINATION` (enfant unique) | `:1225` « Techniques spéciales (au choix) » — **mapping confirmé correct** : `docs/REGLES/REGLECOMPETENCE.md:191-195` définit la compétence Armes spéciales comme couvrant « toutes les techniques spéciales de combat » ; décision de mapping déjà documentée `docs/Old/JOURNALCOUCHE4.md:574` | 2 enfants `ARME_SPECIALE_CONTACT` (FOR/COO, COO/COO), même groupe que Soldat/Milicien |
+| Artisan/Artiste | `COMMERCE_TRAFIC` (catégorie) | `:77-78` « Commerce/Trafic (Artisanat, Œuvres d'art…) » | 7 enfants existants (aucun ne dit littéralement Artisanat/Œuvres d'art — lacune catalogue mineure, non bloquante) |
+| Artisan/Artiste | `SCIENCES_CONNAISANCES_SPECIALISEES` (catégorie) | `:79-81` « éventuellement…Botanique, Chimie » | `BOTANIQUE`, `PHYSIQUE_CHIMIE` couvrent les exemples |
+| Chasseur de primes | `ARTS_MARTIAUX` (catégorie) | `:243-244` « une Compétence au choix » | `LUTTE`, `TECHNIQUES_DEFENSIVES`, `TECHNIQUES_OFFENSIVES` |
+| Marchand | `COMMERCE_TRAFIC` (catégorie) | `:731` « au choix » | 7 enfants |
+| Marchand itinérant | `EXPRESSION_ARTISTIQUE_COMEDIE_CONTE` (enfant unique choisi comme proxy) | `:800-801` « Expression artistique (au choix, Conte, Musique, etc.) » | `DANSE`, `CHANT`, `COMEDIE_CONTE`, `INSTRUMENT_DE_MUSIQUE` |
+| Marchand itinérant | `COMMERCE_TRAFIC` (catégorie) | `:802-803` « au choix » | 7 enfants |
+| Médecin/Chirurgien | `SCIENCES_CONNAISANCES_SPECIALISEES` (catégorie) | `:931-935` « Médecine…Biologie/Physiologie…Cybertechnologie…Génétique…Psychologie…etc. » | **Filtré par cohérence métier** (décision Saar) : `MEDECINE`, `BIOLOGIE_PHYSIOLOGIE`, `PHARMACOLOGIE`, `PSYCHOLOGIE` + `GENIE_TECHNIQUE_BIONIQUE_CYBERTECHNOLOGIE`, `_BIOTECHNOLOGIE_GENIE_GENETIQUE` (6 au total, pas les 19 enfants Sciences) |
+| Ouvrier/Docker | `MECANIQUE_GENERATEURS_SYSTEME_DE_SURVIE` (enfant unique) | `:1320-1321` « Mécanique (Générateurs…, **ou toute autre Compétence liée au domaine**) » | 6 enfants `MECANIQUE` pour la partie énumérable ; clause ouverte = T5 hors scope |
+| Prostitué(e) | `EXPRESSION_ARTISTIQUE_COMEDIE_CONTE` (enfant unique) | `:1678-1679` « au choix » | 4 enfants `EXPRESSION_ARTISTIQUE` |
+| Prêtre du Trident | `SCIENCES_CONNAISANCES_SPECIALISEES_ADMINISTRATION_GESTION` (enfant unique) | `:1601-1604` « selon spécialité : Administration/Gestion, Médecine, Psychologie, Sciences politiques » | Les 4 exemples existent tous comme enfants → groupe restreint à ces 4 |
+| Scientifique/Ingénieur | `GENIE_TECHNIQUE_ELECTRONIQUE_INFORMATIQUE` (enfant unique) | `:1749-1750` « Génie technique (au choix) » | 9 enfants `GENIE_TECHNIQUE` (tous — famille homogène 100% technique/ingénierie, aucun filtre nécessaire) |
+| Scientifique/Ingénieur | `SCIENCES_CONNAISANCES_SPECIALISEES_PHYSIQUE_CHIMIE` (enfant unique) | `:1746-1747` « au choix, en fonction du domaine de recherche ou d'activité » | **Filtré par cohérence** (justifié par le prérequis carrière `:1742` « Études supérieures Sciences/**Sciences humaines** ou École d'ingénieur » — couvre donc sciences dures ET humaines) : 14 enfants — `BIOLOGIE_PHYSIOLOGIE`, `GEOLOGIE`, `GEOGRAPHIE`, `HISTOIRE_ARCHEOLOGIE`, `PHYSIQUE_CHIMIE`, `PSYCHOLOGIE`, `SCIENCES_POLITIQUES`, `SOCIOLOGIE`, `ZOOLOGIE`, `ARMES_SYSTEMES_DARMEMENT`, `ASTROPHYSIQUE_ASTRONOMIE`, `BOTANIQUE`, `CRIMINALISTIQUE`, `ECONOMIE` — écartés : `MEDECINE`, `PHARMACOLOGIE` (turf Médecin), `ADMINISTRATION_GESTION`, `DROIT_LEGISLATIONS`, `FINANCES` (pas de la recherche) |
+| Soldat d'élite ×4 variantes | `ARTS_MARTIAUX_TECHNIQUES_OFFENSIVES` (enfant unique) | `:1911` « Arts martiaux (au choix) » | `LUTTE`, `TECHNIQUES_DEFENSIVES`, `TECHNIQUES_OFFENSIVES` |
+| Soldat/Milicien | `ARTS_MARTIAUX_LUTTE` (enfant unique) | `:1820` « Arts martiaux (au choix) » | 3 enfants `ARTS_MARTIAUX` |
+| Soldat/Milicien | `ARMES_SPECIALES_CONTACT_FORCE_COORDINATION` (enfant unique) | `:1820-1821` « Armes spéciales (au choix) » | 2 enfants `ARME_SPECIALE_CONTACT` (FOR/COO, COO/COO) — texte sous bullet « Combat (contact) », donc pas les variantes distance |
+| Technicien/Mécanicien | `SCIENCES_CONNAISANCES_SPECIALISEES_PHYSIQUE_CHIMIE` + `_GEOLOGIE` (2 lignes, même choix) | `:2106-2108` « en rapport avec le domaine, ex Chimie, Géologie, Physique » | **Fusionné en UN SEUL `choice_group`, filtré par cohérence** (profession manuelle/mécanique, pas de prérequis « sciences humaines » contrairement à Scientifique) : 3 enfants seulement — `PHYSIQUE_CHIMIE`, `GEOLOGIE`, `ARMES_SYSTEMES_DARMEMENT` (technicien d'armement plausible) — le reste (sciences humaines/médicales/administratives) écarté |
+| Technicien/Mécanicien | `MECANIQUE_NAVIRES_CHASSEURS_SOUS_MARINS` (enfant unique) | `:2112-2113` « Mécanique (au choix) » | 6 enfants `MECANIQUE` |
+| Érudit/Archéologue | `SCIENCES_CONNAISANCES_SPECIALISEES` (catégorie) | `:513-514` « au choix, en général Archéologie, Géographie, Histoire, etc. » | **Filtré par cohérence** (spécialiste de l'histoire/recherche de la connaissance, `:501-503`) : 9 enfants — `HISTOIRE_ARCHEOLOGIE`, `GEOGRAPHIE`, `SOCIOLOGIE`, `SCIENCES_POLITIQUES`, `DROIT_LEGISLATIONS`, `ECONOMIE`, `PHYSIQUE_CHIMIE`, `GEOLOGIE`, `ASTROPHYSIQUE_ASTRONOMIE` — écartés : compétences médicales (`MEDECINE`, `BIOLOGIE_PHYSIOLOGIE`, `PHARMACOLOGIE`, `PSYCHOLOGIE`), administratives (`ADMINISTRATION_GESTION`, `FINANCES`), et sans rapport (`ZOOLOGIE`, `BOTANIQUE`, `CRIMINALISTIQUE`, `ARMES_SYSTEMES_DARMEMENT`) |
+
+**T2 — Alternative fermée réelle** : aucune ligne. Barman (`:194`, « Armes de poing ou Fusils/Armes
+d'épaule ») en était l'unique candidat pressenti (dette [CAR-C3] session 134) ; reclassé T1 après
+lecture directe de la source (pas de marqueur « (au choix) », voir §7.0 et T1 ci-dessus) — décision
+prise à partir de la source, pas arbitrairement.
+
+**Anomalies de données — nettoyage (4+4 lignes)**
+| Carrière | skill_id | Constat | Action |
+|---|---|---|---|
+| Diplomate | `CONNAISSANCE_DES_NATIONS_ORGANISATIONS` ×3 conditionnelles | Texte `:439-441` « trois nations au choix » — mais une 4ᵉ ligne **non-conditionnelle** du même skill_id existe déjà pour ce métier → `isProSkill` est déjà vrai sans elles, les 3 lignes conditionnelles n'ont aujourd'hui et n'auront jamais aucun effet mécanique (le schéma ne trace pas de sous-type « nation ») | Supprimer les 3 lignes redondantes ; documenter la nuance « 3 nations » comme non modélisée |
+| Espion | `CONNAISSANCE_DES_NATIONS_ORGANISATIONS` ×1 conditionnelle | Texte `:590-592` : 2 lignes auto (« communauté d'origine », « lieu d'opération ») + « **une autre Compétence au choix** » = n'importe quelle compétence, pas spécifiquement celle-ci. Le skill est déjà pro via les 2 lignes auto → la 3ᵉ ligne conditionnelle est inerte, et en plus ne modélise pas le bon pool (elle répète le même skill_id au lieu d'un choix ouvert) | Supprimer la ligne conditionnelle ; documenter la clause comme non modélisée (T5) |
+| Soldat d'élite ×4 variantes | `ARMES_SPECIALES_CONTACT_FORCE_COORDINATION` | Texte `:1912` : « **Armes spéciales**, Combat armé... » — **sans** « (au choix) », contrairement à Soldat/Milicien (`:1820-1821`, qui lui l'a). La ligne est marquée conditionnelle par erreur (probable copie depuis Soldat/Milicien sans revérifier le texte propre à Soldat d'élite) | Repasser `conditional=false` (compétence automatique, pas un choix) |
+
+**Hors scope Lot 5 — dette documentée, pas un « au choix » (2 lignes)**
+| Carrière | skill_id | Texte source | Nature |
+|---|---|---|---|
+| Hybride du Trident | `MANOEUVRES_SOUS_MARINES` | `:658` « peut être remplacée par Hybride, voir la section génotypes » | Substitution liée au génotype, pas un choix libre — relève du système génotype/hybride, pas de Lot 5 |
+| Prêtre du Trident | `MAITRISE_DE_LA_FORCE_POLARIS` | `:1608` « à partir de la troisième année seulement » + capacité Polaris requise | Gating par prérequis (années + capacité spéciale), mécanisme distinct d'un « au choix » |
+
+### 7.2 Décisions — TOUTES RÉSOLUES (validées Saar, Session 139)
+
+- ~~Q1 — Officier militaire, mapping « Techniques spéciales »~~ **RÉSOLU** : mapping confirmé correct
+  (`docs/REGLES/REGLECOMPETENCE.md:191-195` + `docs/Old/JOURNALCOUCHE4.md:574`, voir T3 ci-dessus).
+  Rejoint le groupe `ARME_SPECIALE_CONTACT` avec Soldat/Milicien.
+- ~~Q1bis — Périmètre des corrections d'anomalies~~ **RÉSOLU (« oui »)** : les anomalies trouvées
+  (doublons Diplomate/Espion, bug `conditional` Soldat d'élite) sont corrigées **dans** la migration
+  du Lot 5, pas dans une migration séparée.
+- ~~Q2 — Payload choix de carrière~~ **RÉSOLU** : champ dédié **`openedCareerSkills`**, séparé de
+  `appliedSkills` (backgrounds). Raison validée : `appliedSkills` n'est jamais purgé (origines figées
+  après Step 4 sous-étapes géo/social/formation), alors que les choix de carrière doivent être purgés
+  au retrait d'une carrière (même pattern que `PRUNE_ALLOCATIONS`/`PRUNE_ADV` déjà dans
+  `CareersAllocator.jsx`) — un champ séparé évite tout risque qu'un nettoyage carrière efface par
+  erreur un choix d'origine sans rapport, ou inversement. Cohérent avec Foundry VTT dnd5e (chaque
+  source de choix — classe, background, race — stocke ses choix séparément, jamais fusionnés).
+- ~~Q3 — Médecin/Chirurgien, enfants hors famille~~ **RÉSOLU (« oui, on inclut »)** :
+  `GENIE_TECHNIQUE_BIONIQUE_CYBERTECHNOLOGIE` et `GENIE_TECHNIQUE_BIOTECHNOLOGIE_GENIE_GENETIQUE`
+  rejoignent le `choice_group` du Médecin malgré le changement de famille (`Techniques` au lieu de
+  `Connaissances`) — le groupe de choix n'est donc pas nécessairement composé des enfants d'UNE seule
+  famille `ref_skills.parent`, il peut piocher dans plusieurs familles si le texte LdB le justifie.
+
+### 7.3 Correction Q2 — le champ séparé existe déjà, pas besoin de l'inventer
+
+En rédigeant le plan ligne-à-ligne, lecture de `creationService.js:328-440` (bloc STEP4 de
+`reconcileCreation`) : **`step4.openedSkills` est déjà un champ de payload distinct de
+`appliedSkills`, déjà câblé serveur ET moteur de coût** :
+- `creationService.js:424` : `computeSkillAllocation(..., { ..., openedSkills: step4.openedSkills || [] })`
+- `creationService.js:435` : `isLearned = (step4.openedSkills || []).includes(skillId)` pour `char_skills.is_learned`
+- `shared/careerSkills.js:58,79` : `ctx.openedSkills` déjà consommé par `computeSkillAllocation`
+- `P55` (`CLAUDE.md`) l'anticipait déjà explicitement : *« openedSkills.includes(skillId) —
+  déblocage explicite (Avantage Formation, **Lot 5**) »*, écrit dès le Lot 2.
+
+Seul manque : **le client ne l'envoie jamais** — `Step4Experience.jsx:buildPayload()` (`:164-185`)
+n'inclut pas `openedSkills` dans l'objet retourné (seul `appliedSkills` y est). Conséquence actuelle
+(avant Lot 5) : `is_learned` est **toujours `false`** en base pour tout le monde, silencieusement —
+Lot 5 corrige ce trou au passage.
+
+**Décision Q2 confirmée, implémentation corrigée** : champ séparé = **`openedSkills`** (existant,
+pas `openedCareerSkills` à créer). `appliedSkills` reste réservé aux backgrounds (Step1-Step4
+géo/social/formation/études), `openedSkills` sert aux choix « au choix » de carrière (Lot 5) — et,
+plus tard, à l'avantage aléatoire « Formation » (Lot 6, `random_picks` → ajoute une compétence dans
+`openedSkills`). Contract B (`§1bis`) mis à jour ci-dessous pour lister les deux champs séparément
+(le commentaire original « appliedSkills : choix "au choix"/background (Lot 5) » était trompeur —
+`appliedSkills` = backgrounds uniquement, `openedSkills` = tout le reste).
+
+### 7.4 Mécanisme technique — plan ligne-à-ligne
+
+**Migration `12X_ref_career_skills_choice_groups.js` (NOUVEAU)**
+1. `ALTER TABLE ref_career_skills ADD COLUMN choice_group text NULL` (symétrique migration 98).
+2. **24 lignes T3** : DELETE la ligne catégorie/enfant-proxy actuelle, INSERT les enfants réels avec
+   `choice_group` partagé. Noms de groupe réutilisables entre métiers (scopés par `career_id` dans
+   toutes les requêtes, aucune collision possible) :
+
+   | `choice_group` | Enfants (`ref_skills.parent`) | Métiers concernés |
+   |---|---|---|
+   | `arts_martiaux_choice` | `ARTS_MARTIAUX_LUTTE`, `_TECHNIQUES_DEFENSIVES`, `_TECHNIQUES_OFFENSIVES` | Chasseur de primes, Soldat/Milicien, Soldat d'élite ×4 |
+   | `armes_speciales_choice` | `ARMES_SPECIALES_CONTACT_FORCE_COORDINATION`, `_CONTACT_COORDINATION_COORDINATION` | Officier militaire ×2, Soldat/Milicien |
+   | `commerce_choice` | 7 enfants `COMMERCE_TRAFIC` (tous) | Artisan/Artiste, Marchand, Marchand itinérant |
+   | `expression_choice` | 4 enfants `EXPRESSION_ARTISTIQUE` (tous) | Marchand itinérant, Prostitué(e) |
+   | `mecanique_choice` | 6 enfants `MECANIQUE` (tous) | Ouvrier/Docker, Technicien/Mécanicien |
+   | `genie_technique_choice` | 9 enfants `GENIE_TECHNIQUE` (tous) | Scientifique/Ingénieur |
+   | `sciences_choice` (Prêtre, liste fermée) | 4 enfants nommés (`ADMINISTRATION_GESTION`, `MEDECINE`, `PSYCHOLOGIE`, `SCIENCES_POLITIQUES`) | Prêtre du Trident |
+   | `sciences_choice` (Artisan, filtré) | `BOTANIQUE`, `PHYSIQUE_CHIMIE` | Artisan/Artiste |
+   | `sciences_choice` (Médecin, filtré) | `MEDECINE`, `BIOLOGIE_PHYSIOLOGIE`, `PHARMACOLOGIE`, `PSYCHOLOGIE` + `GENIE_TECHNIQUE_BIONIQUE_CYBERTECHNOLOGIE`, `_BIOTECHNOLOGIE_GENIE_GENETIQUE` (6) | Médecin/Chirurgien |
+   | `sciences_choice` (Érudit, filtré) | `HISTOIRE_ARCHEOLOGIE`, `GEOGRAPHIE`, `SOCIOLOGIE`, `SCIENCES_POLITIQUES`, `DROIT_LEGISLATIONS`, `ECONOMIE`, `PHYSIQUE_CHIMIE`, `GEOLOGIE`, `ASTROPHYSIQUE_ASTRONOMIE` (9) | Érudit/Archéologue |
+   | `sciences_choice` (Scientifique, filtré) | 14 enfants — `BIOLOGIE_PHYSIOLOGIE`, `GEOLOGIE`, `GEOGRAPHIE`, `HISTOIRE_ARCHEOLOGIE`, `PHYSIQUE_CHIMIE`, `PSYCHOLOGIE`, `SCIENCES_POLITIQUES`, `SOCIOLOGIE`, `ZOOLOGIE`, `ARMES_SYSTEMES_DARMEMENT`, `ASTROPHYSIQUE_ASTRONOMIE`, `BOTANIQUE`, `CRIMINALISTIQUE`, `ECONOMIE` | Scientifique/Ingénieur |
+   | `sciences_choice` (Technicien, filtré) | `PHYSIQUE_CHIMIE`, `GEOLOGIE`, `ARMES_SYSTEMES_DARMEMENT` (3) | Technicien/Mécanicien |
+
+   **Convention retenue (tranchée Saar, remplace un premier essai mécanique « etc. = tout ouvrir »)** :
+   chaque enfant candidat doit être **cohérent avec le concept du métier** (flavor text + prérequis +
+   compétences déjà listées), jamais une inclusion automatique de toute la famille `ref_skills.parent`
+   sous prétexte que le texte se termine par « etc. ». Justifications par métier :
+   - **Médecin** (`:931-935`) → spécialités cliniques + les 2 `GENIE_TECHNIQUE` nommées explicitement
+     (Cybertechnologie/Génétique) malgré le changement de famille (décision Q3).
+   - **Prêtre du Trident** (`:1601-1604`, liste fermée sans « etc. ») → strictement les 4 noms cités.
+   - **Érudit/Archéologue** (`:501-514`, « recherche de la connaissance », « spécialiste de
+     l'histoire ») → sciences humaines/historiques + sciences dures liées aux techniques de datation
+     (Physique/Chimie, Géologie) et à l'archéoastronomie ; écarté tout ce qui est clinique/médical ou
+     purement administratif.
+   - **Scientifique/Ingénieur** (`:1733-1752`) → le **seul** métier dont le prérequis (`:1742`)
+     couvre explicitement « Sciences/**Sciences humaines** ou École d'ingénieur » : justifie
+     d'inclure aussi les sciences humaines (politique, sociologie, économie), en plus des sciences
+     dures — reste le plus large des quatre, mais toujours filtré (pas de Médecine/Pharmacologie,
+     qui est le terrain du Médecin, ni d'Administration/Droit/Finances, pas de la recherche).
+   - **Technicien/Mécanicien** (`:2095-2114`) → le plus restreint : profession manuelle/mécanique
+     sans le même prérequis « sciences humaines », seules les sciences appliquées directement liées
+     à la réparation/maintenance sont retenues.
+   - `GENIE_TECHNIQUE` (Scientifique) reste non filtré : famille 100% technique/ingénierie, aucune
+     incohérence possible avec le métier.
+
+3. **4 lignes anomalies (doublons inertes)** : DELETE les 3 lignes `CONNAISSANCE_DES_NATIONS_ORGANISATIONS`
+   conditionnelles de Diplomate + la 1 ligne conditionnelle d'Espion (garder intactes les lignes
+   `conditional:false` du même skill_id pour ces métiers).
+4. **4 lignes anomalie (flag erroné)** : UPDATE les 4 lignes `ARMES_SPECIALES_CONTACT_FORCE_COORDINATION`
+   de Soldat d'élite (×4 variantes) → `conditional:false` (compétence automatique, pas un choix).
+5. **10 lignes T1** : aucune opération, `choice_group` reste `NULL` par défaut.
+6. `down()` : restaure les valeurs originales (copie exacte conservée dans le fichier, pattern
+   106/118/120) + `DROP COLUMN choice_group`. Round-trip `up`/`down`/`up` testé, byte-identique.
+
+**`shared/careerSkills.js`** : **aucun changement**. `ctx.openedSkills` déjà consommé correctement
+(ligne 79). Nouvelle fonction pure exportée **`validateChoiceGroups(openedSkillIds, careerSkillRows)
+→ { errors: [{code:'multiple_choice', choiceGroup, skillIds}] }`** — regroupe les lignes
+`conditional:true` par `choice_group` (ignore les `choice_group` null, ce sont des T1 solo sans
+contrainte d'exclusivité), rejette si `openedSkillIds` contient plus d'1 skill_id du même groupe pour
+le même métier. Fonction pure, testable en isolation (node -e, pattern Lot 1).
+
+**`server/src/services/creationService.js`**
+- `getStep4RefData` (`:130-169`) : **aucun changement de code** — `select('rcs.*')` (`:140`) remonte
+  `choice_group` automatiquement dès que la colonne existe.
+- `reconcileCreation` STEP4 (`:328-440`) :
+  - `:402-403` (`careerSkillRows = ...where({ conditional: false })`) → devient : lignes
+    `conditional:false` **OU** (`conditional:true` **ET** `skill_id` dans `step4.openedSkills`).
+    Symétrique à `getBackgroundSkillsToApply` (`:48-52`).
+  - **Nouveau** avant la boucle `char_skills` (après `:404`, avant `:406`) : pour chaque carrière
+    retenue, appeler `validateChoiceGroups(step4.openedSkills || [], toutes les lignes conditionnelles
+    de ce career_id)` → `AppError(400, ...)` si un groupe a plus d'1 choix.
+  - `:424`, `:435` : **aucun changement** (déjà corrects, cf. §7.3).
+
+**`client/src/components/creation/Step4Experience.jsx`**
+- Nouveau `useState` : `openedSkills` (array), init `initialData?.openedSkills ?? []`.
+- Nouveau `handleOpenedSkillsChange` (callback, pattern `handleSkillAllocationsChange:45`).
+- `buildPayload()` (`:164-185`) : ajouter `openedSkills` à l'objet retourné.
+- `<CareersAllocator>` (`:348-371`) : nouvelles props `initialOpenedSkills={openedSkills}`,
+  `onOpenedSkillsChange={handleOpenedSkillsChange}`.
+
+**`client/src/components/creation/CareersAllocator.jsx`**
+- Reducer (`initialReducerState`/`careersReducer`, `:34-87`) : nouveau champ `openedSkills` (array),
+  init depuis `initialOpenedSkills` (3ᵉ élément du tuple d'init, pattern `initialSkillAllocations`/
+  `initialProAdvantages`).
+- Nouvelles actions : `TOGGLE_OPENED_SKILL {skillId}` (T1 solo — toggle indépendant) et
+  `SELECT_CHOICE_GROUP_SKILL {careerId, choiceGroup, skillId}` (T3 — remplace toute sélection
+  précédente du même groupe pour ce métier, jamais deux actifs à la fois — même logique que le radio
+  natif de `BackgroundSelector.jsx:130-144`).
+- Nouveau `useEffect` de purge (pattern `:307-313`, `PRUNE_ALLOCATIONS`/`PRUNE_ADV`) :
+  `PRUNE_OPENED_SKILLS` sur changement de `selectedCareers` — retire de `state.openedSkills` tout
+  skill_id dont la ligne conditionnelle d'origine appartient à un métier retiré.
+- `boardSkillIds` (`:246-253`) et `skillAllocationCtx.careers[].skills` (`:256-260`) : le filtre
+  `!sk.conditional` devient `!sk.conditional || state.openedSkills.includes(sk.skill_id)`.
+- `skillAllocationCtx.openedSkills` (`:263`, actuellement `[]` en dur) → `state.openedSkills`.
+- Nouveaux `useEffect` de remontée payload (pattern `:316-322`) : `onOpenedSkillsChange?.(state.openedSkills)`.
+- **UI, onglet Métier** (`:522-549`, bloc `groupedSkills`) : les compétences `conditional` de
+  `groupedSkills` gagnent un contrôle interactif (au lieu du simple suffixe texte `(au choix)`
+  actuel, `:540`) — algorithme de regroupement identique à `BackgroundSelector.jsx:111-119`
+  (`choice_group || __solo_${skill_id}`), rendu radio/checkbox identique (`:129-146`).
+  **Verrouillé tant que le métier consulté n'est pas `isAdded`** (même UX que l'onglet Avantages pro,
+  `career_adv_locked`, `:589-590`) — message dédié sinon.
+
+**i18n (`client/src/locales/creation.json`)** : nouvelles clés `step4.career_choice_title`,
+`career_choice_locked`, `career_choice_solo_label` (namespace `creation`, avant usage).
+
+### 7.5 Tests prévus (une fois le point ouvert Médecin tranché)
+
+- Parité : les 10 lignes T1 + les 24 lignes T3 (après migration) donnent le même total de compétences
+  « déblocables » qu'avant, juste réorganisées en groupes cohérents.
+- Groupe radio : sélection exclusive par `choice_group`, changement de sélection libère l'ancienne.
+- Case à cocher isolée : toggle indépendant, ne dépend d'aucune autre ligne.
+- `isPro`/coût : une compétence choisie devient professionnelle (`isProSkill` vrai) et rejoint le board
+  global avec le bon plafond (`getSkillCap`), sans régression sur P55 (compétences réservées `(X)`).
+- Retrait de carrière : purge des choix orphelins (même pattern que `PRUNE_ALLOCATIONS`/`PRUNE_ADV`
+  existants).
+- Round-trip migration (`up`/`down`) byte-identique sur les 44 lignes, comme 106/118/120.
 
 ---
 
-## 8. LOT 4 — Tirage 1D10 (DicePanel réel)
+## 8. LOT 6 — Tirage 1D10 (jet réel + animation, narratif uniquement)  [PLAN DÉTAILLÉ]
 
-- Backend : `getStep4RefData` charge `ref_career_random_benefits` (roll, description) → imbriqué
-  dans `careers[].randomBenefits[]` (pattern Map identique aux autres). Route inchangée.
-- UI : bouton « Lancer 1D10 » actif si années ≥ 5 dans un métier compatible → déclenche
-  **DicePanel** (`client/src/components/DicePanel.jsx`, API à lire au début du lot) → résultat réel
-  → affiche le bénéfice correspondant → `randomPicks` dans payload (`char_careers.random_picks`).
-- Règle : optionnel, tous les 5 ans, **au lieu** des 5 pts d'avantages de la période (interaction
-  avec Lot 2 à cadrer précisément à ce moment).
-- Tests : jet réel via DicePanel ; résultat mappé ; persistance `random_picks`.
+> Cadrage fait avant code (lecture exhaustive demandée par Saar) : `DicePanel.jsx`, `DiceRoller.jsx`,
+> `DiceMesh.jsx`, `diceMath.js`, `Canvas3D.jsx`, `SocketContext.jsx`, `socket/index.js`,
+> `socketDice.js`, `CareersAllocator.jsx`, `Step4Experience.jsx`, `shared/careerAdvantages.js`,
+> `creationService.js`, `REGLE_PROFESSION.md` (table « Avantages professionnels aléatoires »),
+> migrations 93/100/108/112-116/120. Décisions Saar : (1) rendu **visuel réel** (animation du dé),
+> pas besoin du panneau flottant `DicePanel` complet puisque le dé à lancer (1D10) est fixé par le
+> code — un bouton dédié suffit ; (2) le texte du bénéfice tiré est **narratif uniquement, aucune
+> modification automatique de la fiche de personnage**, sauf l'interaction de budget explicitement
+> prévue par la règle (« au lieu de » / « ou N points ») ; (3) **aucun retour en arrière** — une fois
+> une tranche jetée, le résultat est définitif (pas d'annulation/relance), confirmé Saar.
+>
+> **Auto-critique faite avant code (relecture ciblée) — 2 défauts bloquants corrigés dans ce plan** :
+> lumière manquante sur le dé isolé (§8.0) et mauvais niveau de montage du socket (§8.0/§8.6, aurait
+> spammé `SESSION_JOIN`) ; 2 défauts importants corrigés (positionnement CSS de l'overlay, garde
+> anti-course sur le jet, §8.6) ; 1 point (`roll===10` codé en dur) rendu 100 % pilotable par la
+> donnée. Le point « sync combat au `SESSION_JOIN` » un temps signalé comme non lu a été relu en
+> entier (`socket/index.js:97-156`) : confirmé sans effet de bord (gaté sur l'existence d'un token de
+> combat, jamais le cas pour un personnage en cours de création).
+
+### 8.0 Réutilisation confirmée (aucun code d'animation à recréer)
+
+- `DiceRoller.jsx` + `DiceMesh.jsx` + `diceMath.js` sont **déjà 100 % autonomes** — zéro dépendance à
+  Canvas3D/battlemap/session de jeu, juste `@react-three/fiber` + `@react-three/drei` + GLB publics
+  (`/models/D10.glb`). `diceMath.js` est explicitement « zéro import React, zéro accès DB » (fichier
+  pur). Réutilisation : monter `<Canvas camera={{position:[15,15,15], fov:60}}><DiceRoller
+  payload={...} onDone={...}/></Canvas>` en overlay dans le Wizard — même mécanique que
+  `SessionPage.jsx:1109-1110`, sans jamais toucher à Canvas3D lui-même.
+- **Lumière — piège vérifié** : `DiceMesh.jsx` (`:336-399`) utilise `THREE.MeshStandardMaterial`
+  (PBR), qui rend plat/sombre sans lumière directionnelle. Le rendu correct dans `SessionPage` vient
+  du rig de **`Canvas3D.jsx:889-892`** (`ambientLight intensity=0.8` + **2** `directionalLight`), pas
+  du `ambientLight intensity=0.4` interne à `DiceRoller` qui n'est qu'un complément ponctuel. Le
+  `<Canvas>` isolé du Wizard doit donc reproduire ces 3 lumières — **dupliquées** (3 lignes JSX,
+  triviales) dans un petit composant propre au Wizard, **jamais extraites en composant partagé** :
+  factoriser obligerait à modifier `Canvas3D.jsx` pour qu'il consomme le composant commun, ce qui
+  contredirait « Canvas3D.jsx : zéro modification » (§8.9) — un fichier critique combat/rendu que ce
+  lot n'a aucune raison de toucher.
+- Le Wizard n'a **aucune connexion socket** aujourd'hui (`WizardCreation.jsx` n'importe pas
+  `SocketProvider`). `campaignId` y est déjà disponible (`useParams`, `WizardCreation.jsx:20`) et
+  poussé dans `useCreationStore` (`setCampaignId`, `:26,47`) — `Step4Experience.jsx` peut donc lire
+  `campaignId` directement depuis le store, sans prop-drilling depuis `WizardCreation`.
+  `SESSION_JOIN` (`socket/index.js:38-48`) ne vérifie que l'appartenance à la campagne
+  (`campaign_members`) — aucun obstacle à rejoindre la room depuis le Wizard. Sync combat au join
+  (`:97-156`, lu en entier) : émet seulement vers le socket qui rejoint, gaté sur l'existence d'un
+  token de combat pour ce personnage — jamais le cas en cours de création, confirmé sans effet de bord.
+- **Niveau de montage du `SocketProvider` — piège évité** : il doit envelopper `WizardCreation.jsx`
+  (le `<div className="wiz-shell">`, jamais démonté pendant tout le Wizard), **pas**
+  `CareersAllocator` — ce dernier est démonté/remonté à chaque va-et-vient sur le sous-step Carrières
+  (`Step4Experience.jsx` le rend conditionnellement, `:351-376`), ce qui réémettrait `SESSION_JOIN` à
+  chaque remontage (rebuild Redis + `SESSION_USER_JOINED` broadcasté aux autres membres de la
+  campagne, pour rien). `CareersAllocator` consomme le socket via `useSocket()` (contexte fourni par
+  le parent), il ne monte jamais son propre `SocketProvider`.
+- **Jamais `Math.random`** (contrairement à `Step3Mutations.jsx:117,140`, tirage D100/D20 en clair
+  côté client, accepté en Session 136 mais **explicitement écarté pour ce lot** par Saar) : le jet
+  passe par `socket.emit(WS.DICE_ROLL, { formula: '1d10' })` → le serveur (`socketDice.js:16-73`)
+  calcule seul le résultat (`parseDice`) et le broadcast (`DICE_RESULT`) — jet non trafiquable,
+  cohérent avec `docs/SYSTEME/DICE.md`.
+- **`DicePanel.jsx` n'est PAS réutilisé tel quel** (widget flottant multi-dés avec roue/favoris/macros,
+  hors-sujet pour un jet unique 1d10 imposé) — seul le mécanisme socket + `DiceRoller` (animation)
+  est repris. `DicePanel`/`socketDice.js` restent inchangés.
+
+### 8.1 Trou de données trouvé (même angle mort que la migration 120)
+
+Les **5 carrières du Lot 1** (`artisan_artiste`, `assassin`, `barman`, `chasseur_primes`,
+`contrebandier`, seedées `100_seed_ref_careers.js`) n'ont **aucune ligne** dans
+`ref_career_random_benefits` — jamais seedée à l'origine (confirmé : aucune occurrence de
+`ref_career_random_benefits` dans `100_seed_ref_careers.js` ni `106_fix_ref_career_skills_lot1.js`).
+La table « Avantages professionnels aléatoires » existe pourtant dans `REGLE_PROFESSION.md` pour
+Artisan/Artiste (lignes 99-119, déjà lues) — à vérifier de la même façon pour les 4 autres carrières
+à l'implémentation (audit exhaustif ligne à ligne, méthode 106/118/120/121).
+
+### 8.2 Règle du budget (source, vérifiée 22/22 lignes seedées + 1/1 lue en source = 23/23)
+
+`REGLE_PROFESSION.md:99-102` (et identique sur les 22 autres carrières déjà seedées, grep exhaustif) :
+*« Tous les 5 ans, le joueur peut choisir d'effectuer librement un jet d'1D10 dans la liste suivante,
+au lieu de répartir ses 5 points d'Avantages professionnels automatiques »*, et le résultat 10 dit
+toujours *« Un avantage aléatoire au choix ou **7** points à répartir sur les Avantages professionnels
+automatiques »* — texte strictement identique sur les 22 lignes `roll:10` actuellement en base
+(migrations 108/112-116) + la ligne Artisan/Artiste lue directement dans la rulebook (23/23,
+0 écart). Les 4 carrières Lot 1 restantes seront vérifiées à l'implémentation (probable mais pas
+encore lu = `[HYPOTHÈSE]`).
+
+**Conséquence mécanique retenue (seule partie non-narrative de ce lot)** : pour chaque tranche de
+5 ans d'un métier retenu (`⌊années/5⌋` tranches), le joueur peut choisir de lancer 1D10 **à la place**
+d'allouer manuellement les 5 points de cette tranche dans l'onglet Avantages pro (Lot 4). Choisir le
+jet retire 5 pts du budget `computeProAdvantageAllocation` (Lot 4) pour cette tranche ; si le résultat
+est 10 **et** que le joueur choisit explicitement l'option « points » (plutôt que le bénéfice
+narratif), la tranche rend **7** pts au lieu de 5 (net +2). Aucun autre effet du texte narratif
+(compétence, mutation, salaire, Allié/Contact/Célébrité) n'est appliqué automatiquement — ces
+notions relèvent du Lot 7 (Relations, pas encore construit) ou restent d'ordre narratif à la table.
+Le nombre de points (7) n'est **jamais** envoyé par le client : le serveur le relit dans
+`ref_career_random_benefits.points_alt` (nouvelle colonne, §8.3) pour recalculer le budget —
+principe déjà appliqué par `socketDice.js` (« le serveur est le seul responsable du calcul »).
+
+### 8.3 Migration `122_ref_career_random_benefits_lot1_and_points_alt.js` (NOUVEAU)
+
+1. `ALTER TABLE ref_career_random_benefits ADD COLUMN points_alt integer NULL` (symétrique aux
+   migrations 98/121).
+2. `UPDATE ... SET points_alt = 7 WHERE roll = 10` sur les 22 lignes déjà seedées (valeur uniforme
+   vérifiée §8.2).
+3. INSERT des ~50 lignes manquantes (5 carrières × 10, à confirmer ligne à ligne contre
+   `REGLE_PROFESSION.md` avant écriture, comme 106/118/120/121) pour `artisan_artiste`, `assassin`,
+   `barman`, `chasseur_primes`, `contrebandier`, `points_alt=7` sur leur ligne `roll=10` (à vérifier,
+   pas supposé).
+4. `down()` : `DROP COLUMN points_alt` + suppression des lignes insérées (les 22 lignes existantes ne
+   sont pas supprimées, seul `points_alt` repasse `NULL`). Round-trip `up`/`down`/`up` testé en base
+   réelle, byte-identique (P53/P54 respectés — vérifier `knex_migrations` avant tout rappel manuel).
+
+### 8.4 Backend — `server/src/services/creationService.js`
+
+- `getStep4RefData` (`:130-169`) : nouveau fetch `db('ref_career_random_benefits').select('*')
+  .orderBy(['career_id','roll'])`, nouvelle entrée `randomBenefits: []` dans `careersMap` (pattern
+  identique à `titles`/`prerequisites`/`pointCategories`), boucle de push symétrique. Route inchangée.
+- `reconcileCreation` STEP4 (zone `:378-400`, avant l'insert `char_careers`) : pour chaque carrière
+  retenue, valider `career.randomPicks` (défaut `[]`) — chaque entrée `{ blockIndex, roll,
+  useAsPoints }` : `blockIndex` entier dans `[0, ⌊years/5⌋ − 1]`, `roll` doit correspondre à une ligne
+  `ref_career_random_benefits` existante pour ce `career_id`, au plus un pick par `blockIndex`
+  (rejet sinon), `useAsPoints` autorisé seulement si la ligne trouvée a `points_alt` non nul.
+  Violation → `AppError(400, ...)`. Puis calcul de `randomBudgetDelta` via
+  `computeRandomBudgetDelta(career.randomPicks, benefitRowsDeCetteCarriere)` (§8.5), injecté dans
+  l'appel existant à `computeProAdvantageAllocation` (Q3) avant validation du budget.
+  `random_picks: JSON.stringify(career.randomPicks || [])` (déjà présent `:398`) — inchangé, mais
+  désormais persisté après validation au lieu d'être pris tel quel.
+
+### 8.5 `shared/careerAdvantages.js` — nouvelle fonction pure
+
+```js
+computeRandomBudgetDelta(picks, benefitRows) → number
+// Σ sur picks : -5 par pick valide, +row.points_alt si pick.useAsPoints && row.points_alt != null
+```
+Fonction pure sans accès DB, réutilisée client (UI live) et serveur (validation) — jamais deux
+implémentations divergentes (même pattern que `computeSkillAllocation`/`computeProAdvantageAllocation`
+existants). `computeProAdvantageAllocation` (`:11-38`) gagne un paramètre `ctx.randomBudgetDelta`
+(défaut 0) additionné à `budget` — **aucun changement** de signature pour les appelants existants qui
+ne le passent pas (rétro-compatible, Lot 4 non affecté hors carrières utilisant le Lot 6).
+
+### 8.6 Client — `CareersAllocator.jsx`
+
+- Reducer : nouveau champ `randomPicks` (map `career_id → [{blockIndex, roll, useAsPoints}]`), init
+  4ᵉ élément du tuple (`initialRandomPicks`, pattern `initialProAdvantages`/`initialOpenedSkills`).
+  Nouvelles actions `SET_RANDOM_PICK {careerId, blockIndex, roll}`, `TOGGLE_RANDOM_POINTS {careerId,
+  blockIndex}` (n'agit que si la ligne a `points_alt`), `PRUNE_RANDOM_PICKS` (purge au retrait de
+  carrière, pattern `PRUNE_ADV`). Aucune action d'annulation/relance (confirmé Saar : un jet est
+  définitif) — pas de `CLEAR_RANDOM_PICK`.
+- `advResult`/`allAdvSpent` (`:220-236`) : `ctx` de `computeProAdvantageAllocation` gagne
+  `randomBudgetDelta: computeRandomBudgetDelta(state.randomPicks[career.id] ?? [], career.
+  randomBenefits ?? [])`.
+- **Nouveau bloc UI**, dans l'onglet `avant` (`:671-709`), seulement si `(career.pointCategories ??
+  []).length > 0 && isAdded` : section « Tirage 1D10 » listant `⌊committedEntry.years/5⌋` tranches.
+  Par tranche non jetée : bouton « Lancer 1D10 ». Une fois jetée : valeur + texte narratif de
+  `career.randomBenefits` + mention fixe **« Narratif — n'affecte pas automatiquement la fiche de
+  personnage »** ; bascule « Convertir en 7 points d'Avantages pro » affichée uniquement si la ligne
+  tirée a `points_alt != null` (**jamais** un test en dur `roll===10` — 100 % piloté par la donnée, au
+  cas où une des 4 carrières Lot 1 pas encore lues placerait l'option ailleurs). Cette bascule seule
+  modifie le budget affiché immédiatement ; le texte narratif des 9 autres résultats ne modifie rien.
+- **Garde anti-course sur le jet** : nouveau champ reducer `awaitingRandomRoll` (`{careerId,
+  blockIndex}` ou `null` — dans le `useReducer`, pas un `useState` séparé, cohérent avec le reste de
+  l'état transitoire du composant, ex. `hoverCareerId`). Nouvelle action `SET_AWAITING_ROLL
+  {careerId, blockIndex}`. Au clic sur « Lancer 1D10 », tous les autres boutons de tranche (même
+  carrière et autres carrières) sont désactivés tant que `awaitingRandomRoll` n'est pas `null`, pour
+  éviter qu'un double-clic ou qu'un jet lancé ailleurs par le même joueur (autre onglet, chat `/r`) au
+  même instant ne soit attribué par erreur à la mauvaise tranche. `careerId`/`blockIndex` sont capturés
+  dans `awaitingRandomRoll` **au moment de l'émission** et jamais re-dérivés de « la carrière
+  actuellement sélectionnée » à la résolution du résultat — l'overlay plein écran (ci-dessous) bloque
+  déjà tout changement de sélection pendant l'affichage, mais la résolution reste explicitement liée à
+  la tranche capturée, pas à l'état courant de l'UI.
+- Mécanique du jet : socket obtenu via `useSocket()` (`SocketContext.jsx`, fourni par le
+  `SocketProvider` monté dans `WizardCreation.jsx` — voir §8.0, `CareersAllocator` ne monte jamais son
+  propre `SocketProvider`) — au clic : `socket.emit(WS.DICE_ROLL, { formula: '1d10' })`, écoute du
+  prochain `DICE_RESULT` pour `userId === user.id` (tant que `awaitingRandomRoll` n'est pas `null`),
+  puis monte l'overlay `<Canvas><DiceLights/><DiceRoller payload={...} onDone={...}/></Canvas>`
+  (`DiceLights` = petit composant local dupliquant les 3 lumières, voir §8.0).
+  **Overlay en `position: fixed; inset: 0` + z-index au-dessus du reste du Wizard** (le plan cliquable
+  « fermer n'importe où » de `DiceRoller` capte les clics dans les limites du `<canvas>` — doit donc
+  couvrir tout le viewport, pas juste la zone du bouton). À la fermeture (clic, comportement natif
+  `DiceRoller`), résultat mappé et persisté dans `state.randomPicks`, `awaitingBlockIndex` remis à
+  `null`.
+- Nouvelles props : `initialRandomPicks`, `onRandomPicksChange` (pas de prop `campaignId` — le socket
+  vient du contexte `SocketProvider`, pas d'un prop-drilling supplémentaire).
+
+### 8.7 Client — `WizardCreation.jsx` et `Step4Experience.jsx`
+
+- **`WizardCreation.jsx`** : enveloppe le rendu principal (`<div className="wiz-shell">`,
+  `:124-...`) dans `<SocketProvider campaignId={campaignId}>` (import `../../lib/SocketContext.jsx`).
+  Montée une seule fois pour toute la durée du Wizard (jamais démontée entre les steps/sous-steps) —
+  voir §8.0 pour la raison (éviter le spam `SESSION_JOIN` si le montage était plus bas dans l'arbre).
+  Aucun autre changement à ce fichier.
+- **`Step4Experience.jsx`** : nouveau `useState randomPicks` (init `initialData?.randomPicks ?? {}`),
+  `handleRandomPicksChange` (pattern `handleProAdvantagesChange`).
+  `buildPayload()` (`:166-188`) : `careerEntries` gagne `randomPicks: randomPicks[c.career_id] || []`.
+  `<CareersAllocator>` (`:352-375`) : nouvelles props `initialRandomPicks={randomPicks}`,
+  `onRandomPicksChange={handleRandomPicksChange}` (pas de `campaignId` à transmettre, cf. §8.6).
+
+### 8.8 i18n (`client/src/locales/creation.json`)
+
+Nouvelles clés `step4.career_random_title`, `career_random_block`, `career_random_roll_btn`,
+`career_random_rolling`, `career_random_narrative_note`, `career_random_points_toggle`,
+`career_random_points_label` (namespace `creation`, ajoutées avant usage).
+
+### 8.9 Ce qui NE change PAS
+
+Schéma `char_careers` (`random_picks` déjà présent, migration 96) ; architecture « pool plat » du
+Lot 4 (pas de sous-pools par tranche, juste un delta agrégé) ; `DicePanel.jsx`/`socketDice.js`/
+`Canvas3D.jsx` (zéro modification, réutilisés tels quels) ; onglets Métier/Carrière, board
+compétences global.
+
+**Dette documentée (pas bloquante pour ce lot)** : aucun écran fiche personnage ne relit
+`char_careers.random_picks` après la création — le texte narratif tiré est stocké mais invisible une
+fois le Wizard terminé (aucune UI ne le consomme aujourd'hui). Relève probablement du futur panneau
+« Carrières » de la fiche perso (Lot 7 ou ultérieur), pas de ce lot.
+
+### 8.10 Tests prévus
+
+- `computeRandomBudgetDelta` isolé (`node -e`) : 0 pick → 0 ; 1 pick normal → −5 ; 1 pick roll=10 +
+  `useAsPoints` → +2 (7−5) ; 2 picks → −10 ; `useAsPoints` sur une ligne sans `points_alt` → ignoré/
+  rejeté.
+- Migration 122 : round-trip `up`/`down`/`up` byte-identique (colonne + 5 carrières), vérification
+  `knex_migrations` avant tout rappel manuel (P53/P54).
+- `reconcileCreation` : rejet si `blockIndex` hors bornes, `roll` inconnu pour la carrière, doublon de
+  `blockIndex`, `useAsPoints` sans `points_alt`.
+- SR + parcours navigateur : clic bouton → animation 3D réelle du dé (lumière correcte, pas de rendu
+  terne) → overlay fermable en cliquant n'importe où sur l'écran (pas seulement sur le canvas) →
+  résultat affiché avec mention narrative → toggle points affiché seulement si `points_alt` présent →
+  budget Avantages pro recalculé visible immédiatement → purge au retrait de la carrière →
+  persistance `random_picks` vérifiée en base après `reconcileCreation` réel.
+- Navigation Précédent/Suivant entre sous-steps de Step4 pendant qu'un métier est retenu : une seule
+  connexion socket (un seul `SESSION_JOIN`/`SESSION_USER_JOINED`), pas de reconnexion à chaque
+  va-et-vient sur le sous-step Carrières (vérifie que le `SocketProvider` est bien monté dans
+  `WizardCreation`, pas plus bas).
+- Double-clic rapide sur deux boutons « Lancer 1D10 » (même carrière ou deux carrières) : un seul jet
+  en vol à la fois, les autres boutons désactivés tant que `awaitingRandomRoll` n'est pas `null`.
 
 ---
 
-## 9. LOT 5 — Relations (fiche perso)
+## 9. LOT 7 — Relations (fiche perso)
 
 - **Investigation requise** : `char_traits` (jsonb `params`) vs nouvelle table/colonnes. Décision
   Saar : jauge numérique (entier, conversion pts→PNJ à discrétion GM) + champ TEXT libre + lien
@@ -502,7 +983,7 @@ ajoutées (liste complète dans le fichier).
 
 ---
 
-## 10. LOT 6 — Matériel accessible
+## 10. LOT 8 — Matériel accessible
 
 - Backend : charger `ref_career_equipment`.
 - UI : brancher l'inventaire du personnage (`InventoryPanel.jsx`) + menu GM de création d'objets
@@ -519,7 +1000,7 @@ ajoutées (liste complète dans le fichier).
 | 2 — UI (board global) | ✅ re-détaillé au lancement | ✅ | ✅ SR + fonctionnel |
 | 3 — Économies | ✅ (§5) | ✅ | ✅ SR + fonctionnel |
 | 4 — Avantages pro | ✅ (§6) | ✅ | ✅ SR + fonctionnel |
-| 5 — « Au choix » | — | — | — |
-| 6 — Tirage 1D10 | — | — | — |
+| 5 — « Au choix » | ✅ (§7) | ✅ | ✅ SR + fonctionnel |
+| 6 — Tirage 1D10 | ✅ (§8) | — | — |
 | 7 — Relations | — | — | — |
 | 8 — Matériel | — | — | — |

@@ -122,10 +122,16 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   **Lot 4 (avantages pro, 5 pts/an par métier) ✅ codé + validé Saar** — `shared/careerAdvantages.js`
   (`computeProAdvantageAllocation`) + validation serveur Q3 + onglet dédié (0 nouvelle classe CSS).
   Migration 120 associée (fix `ref_career_point_categories` manquantes sur 4 carrières Lot 1).
-  **PROCHAIN = Lot 5** (compétences « au choix », `conditional` — `PLAN_REWORKFINAL §7`).
+  **Lot 5 (compétences « au choix », `conditional`) ✅ codé + validé Saar** — migration 121
+  (`ref_career_skills.choice_group`, 24 lignes T3 réécrites + 4 doublons supprimés + 4 flags Soldat
+  d'élite corrigés) + `validateChoiceGroups` (`shared/careerSkills.js`) + payload `openedSkills`
+  (trou comblé côté client, déjà câblé serveur depuis Lot 2) + bloc UI "Compétences au choix"
+  (checkbox/radio, `CareersAllocator.jsx`).
+  **PROCHAIN = Lot 6** (tirage 1D10 via DicePanel — `PLAN_REWORKFINAL §8`).
   Décisions + modèle + faits vérifiés : `§1ter`. Point d'entrée reprise : `docs/EN_COURS.md` item 44.
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **125 migrations stables** (120_fix_ref_career_point_categories_lot1 — Session 139 ;
+- **126 migrations stables** (121_ref_career_skills_choice_groups — Session 139 ;
+  120_fix_ref_career_point_categories_lot1 — Session 139 ;
   119_char_sheet_wizard_lock — Session 139 ;
   118_fix_ref_mutations_organe_sensoriel_manquant — Session 138 ;
   117_ref_mutation_subtypes_description — Session 136 ;
@@ -227,6 +233,39 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   post-finalize).
 - Détail complet : `docs/JOURNAL6.md` "Migration 120" / "Lot 4".
 
+**Session 139 (suite 4) — Redesign Step 4 : Lot 5 (compétences « au choix ») + nettoyage rail ✅ clos :**
+- **Lot 5** : `PLAN_REWORKFINAL §7`, audit exhaustif des 44 lignes `ref_career_skills.conditional=true`
+  déjà fait (6 phénomènes distincts sous un flag booléen unique). **Avant tout code (demande explicite
+  Saar « sûr à 100% »)** : re-vérification de la source primaire `REGLE_PROFESSION.md` (pas seulement
+  le plan déjà écrit) sur les cas les plus ambigus (marqueur « (au choix) » présent/absent) + requêtes
+  SQL réelles (44 lignes, `is_category`/`parent`, absence de collision) — 0 écart trouvé.
+- Migration `121_ref_career_skills_choice_groups.js` (NOUVEAU) : colonne `choice_group` + 24 lignes T3
+  (catégorie/enfant-proxy) réécrites en vrais enfants `ref_skills.parent` groupés par `choice_group`
+  (scopé `career_id`) + 4 doublons inertes supprimés (Diplomate ×3, Espion ×1) + 4 lignes Soldat
+  d'élite `conditional` corrigé `true→false` (texte source sans marqueur « (au choix) », contrairement
+  à Soldat/Milicien). Round-trip `down`/`up` testé en base réelle, byte-identique (P53 : nodemon avait
+  déjà auto-appliqué `up()` avant le test manuel).
+- `shared/careerSkills.js` : nouvelle `validateChoiceGroups(openedSkillIds, careerSkillRows)`
+  (exclusivité par groupe, ignore les lignes T1 sans `choice_group`).
+- `server/creationService.js` : `reconcileCreation` STEP4 valide les groupes avant de construire le
+  contexte pro ; le payload `openedSkills` (déjà câblé serveur/moteur de coût depuis le Lot 2, jamais
+  envoyé par le client) est désormais rempli par `Step4Experience.jsx`.
+- `CareersAllocator.jsx` : reducer étendu (`openedSkills`, actions `TOGGLE_OPENED_SKILL`/
+  `SELECT_CHOICE_GROUP_SKILL`, purge au retrait de carrière), nouveau bloc UI "Compétences au choix"
+  (checkbox T1 solo / radio T3 exclusif), verrouillé tant que le métier n'est pas retenu. **Gap trouvé
+  en relecture avant livraison (règle 5)** : `provenanceFor` (tag de provenance du board) ne couvrait
+  pas les compétences "au choix" nouvellement ouvertes — corrigé dans le même lot.
+- **Nettoyage UI associé (demande Saar)** : icône hexagonale du rail carrières retirée (`.wiz4-hex` +
+  style inline `--hex`, `careerHexColor()` conservé pour les tags de provenance du board), colonne
+  rail `.wiz4-cols` réduite `296px`→`246px`.
+- **Testé :** migration round-trip `down`/`up` byte-identique en base réelle, `validateChoiceGroups`
+  (6 scénarios `node -e`) + non-régression `computeSkillAllocation`, `node --check`/ESLint 0 erreur
+  introduite (1 erreur pré-existante non liée confirmée via `git stash`), SR (`/api/health` 200),
+  fonctionnel confirmé Saar ("All ok").
+- **Non testé :** vérification directe `char_skills.is_learned` en base après un `reconcileCreation`
+  réel avec un choix "au choix" sélectionné ; confirmation visuelle navigateur du nettoyage rail.
+- Détail complet : `docs/JOURNAL6.md` "Lot 5" / "Nettoyage UI — icône hexagonale du rail carrières retirée".
+
 **Session 139 — Fiche personnage consultable en permanence pendant le Wizard (fenêtre "peek") ✅ clos :**
 - Plan complet rédigé en amont dans une conversation précédente : `docs/STE6_FINAL.md` (v3). Reprise
   en nouvelle session — protocole complet appliqué : tous les fichiers cités par le plan relus dans
@@ -255,6 +294,27 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **Non testé :** les 8 scénarios détaillés un par un de `docs/STE6_FINAL.md` §15 (validation donnée
   sur "SR et fonctionnel" globalement, pas listée point par point).
 - Détail complet : `docs/JOURNAL6.md` "Session 139".
+
+**Session 139 (suite 5) — Wizard Step1 : Description physique + Main directrice (2D10) ✅ clos :**
+- Hors chantier Redesign Step4. Demande Saar : ajouter à l'Étape 1 les champs de la fiche perso
+  (taille/poids/peau/corpulence/yeux/cheveux/signes particuliers) + Main directrice, en référence au
+  Bloc 2 "Description" de `CharacterSheet.jsx`. Schéma DB déjà complet (`char_identity`, migration 36)
+  — **aucune migration**. `reconcileCreation` STEP1 n'écrivait jusqu'ici que `char_name`/`player_name`.
+- Main directrice : bouton "Définir" tirant 2D10 (`REGLE_CREATION.txt:1301-1311` : 2-15 Droitier,
+  16-19 Gaucher, 20 Ambidextre) — pattern de tirage 100% client identique à `Step3Mutations.jsx`
+  (`handleRoll`), pas un contournement (question explicite de Saar sur le risque de bricolage).
+  Vérification avant code ("sûr à 100%") : `REGLE_CREATION.txt:1317-1324` confirme la Description
+  physique purement narrative (non bloquante) — seule la Main directrice a une vraie mécanique de dé.
+- `Step1Attributes.jsx` (nouveau bloc + `handleRollHandPref`), `creationService.js` (STEP1 étend
+  l'insert/merge `char_identity` + garde `hand_pref ∈ {R,L,A}`), `creation.json` (15 clés), `index.css`
+  (6 classes `.wiz1-desc-*`, calquées sur l'existant).
+- **Bug préexistant découvert (non corrigé, voir dette HP1)** : `socketCombatHelpers.js:550` et
+  `char-sheet.js:810` lisent `hand_pref` sur `char_sheet` (colonne inexistante — seule
+  `char_identity.hand_pref` existe) → retombe toujours sur `'R'`, la mécanique Main directrice n'a
+  probablement jamais été appliquée en combat. Trouvé par lecture directe, non instrumenté.
+- **Testé :** `JSON.parse`/`node --check`/ESLint 0 erreur introduite, SR + fonctionnel confirmé Saar.
+- **Non testé :** scénarios détaillés un par un, vérification base réelle post-`reconcileCreation`.
+- Détail complet : `docs/JOURNAL6.md` "Session 139 (suite 5)".
 
 **Session 138 — Fix `cost_pc` « Organe sensoriel manquant » (migration 118) + présentation cartes Step3 ✅ clos :**
 - Signalement Saar (capture rulebook "TABLE DES MUTATIONS") : gain de PC faux pour "Organe sensoriel
@@ -382,8 +442,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **[JSON1]** `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant) — casse tout le fichier EN
 - **[OPT-W1]** 9/11 options de campagne sans effet mécanique branché (Wizard/SkillsPanel/CharSheet) — `ambiance` et `random_mutations` câblées — sprint futur
 - **[OPT-W2]** `style={}` visuel dans `client/src/components/campaignSettings/*` (convention CSS) — basse priorité
-- **[CAR1]** Mécanisme "au choix" (`conditional:true`) non implémenté dans le wizard — 34 occurrences lots 2-6 carrières, nécessite bouton radio/toggle Step4 UI (MVP) avant refonte complète
 - **[MUT1]** `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable en méthode libre — non diagnostiqué en profondeur, sprint futur
+- **[HP1]** Main directrice : `socketCombatHelpers.js:550` et `char-sheet.js:810` lisent `hand_pref` sur `char_sheet` (colonne inexistante) au lieu de `char_identity.hand_pref` → toujours `'R'` par défaut en combat, quel que soit le choix réel du joueur — sprint futur
 
 ---
 

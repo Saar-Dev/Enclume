@@ -31,7 +31,7 @@ function formatReason(t, r) {
   }
 }
 
-const initialReducerState = ([initialSkillAllocations, initialProAdvantages]) => ({
+const initialReducerState = ([initialSkillAllocations, initialProAdvantages, initialOpenedSkills]) => ({
   filter: 'eligible',
   selectedCareerId: null,
   years: 1,
@@ -39,6 +39,7 @@ const initialReducerState = ([initialSkillAllocations, initialProAdvantages]) =>
   hoverCareerId: null,
   skillAllocations: initialSkillAllocations || {},
   proAdvAllocations: initialProAdvantages || {},
+  openedSkills: initialOpenedSkills || [],
 })
 
 function careersReducer(state, action) {
@@ -81,6 +82,23 @@ function careersReducer(state, action) {
       }
       return { ...state, proAdvAllocations }
     }
+    case 'TOGGLE_OPENED_SKILL': {
+      const has = state.openedSkills.includes(action.skillId)
+      return {
+        ...state,
+        openedSkills: has
+          ? state.openedSkills.filter(id => id !== action.skillId)
+          : [...state.openedSkills, action.skillId],
+      }
+    }
+    case 'SELECT_CHOICE_GROUP_SKILL': {
+      const others = state.openedSkills.filter(id => !action.groupSkillIds.includes(id))
+      return { ...state, openedSkills: [...others, action.skillId] }
+    }
+    case 'PRUNE_OPENED_SKILLS': {
+      const openedSkills = state.openedSkills.filter(id => action.validIds.has(id))
+      return { ...state, openedSkills }
+    }
     default:
       return state
   }
@@ -107,11 +125,13 @@ export default function CareersAllocator({
   onSkillAllocationsChange,
   initialProAdvantages,
   onProAdvantagesChange,
+  initialOpenedSkills,
+  onOpenedSkillsChange,
 }) {
   const { t } = useTranslation('creation')
   const [state, dispatch] = useReducer(
     careersReducer,
-    [initialSkillAllocations, initialProAdvantages],
+    [initialSkillAllocations, initialProAdvantages, initialOpenedSkills],
     initialReducerState
   )
   const { filter, selectedCareerId, years, activeTab, hoverCareerId } = state
@@ -247,21 +267,25 @@ export default function CareersAllocator({
     const ids = new Set(Object.keys(baseMastery))
     for (const c of selectedCareers) {
       const refCareer = careersById.get(c.career_id)
-      for (const sk of refCareer?.skills ?? []) if (!sk.conditional) ids.add(sk.skill_id)
+      for (const sk of refCareer?.skills ?? []) {
+        if (!sk.conditional || state.openedSkills.includes(sk.skill_id)) ids.add(sk.skill_id)
+      }
     }
     return ids
-  }, [baseMastery, selectedCareers, careersById])
+  }, [baseMastery, selectedCareers, careersById, state.openedSkills])
 
   const skillAllocationCtx = useMemo(() => ({
     careers: selectedCareers.map(c => ({
-      skills: (careersById.get(c.career_id)?.skills ?? []).filter(sk => !sk.conditional).map(sk => sk.skill_id),
+      skills: (careersById.get(c.career_id)?.skills ?? [])
+        .filter(sk => !sk.conditional || state.openedSkills.includes(sk.skill_id))
+        .map(sk => sk.skill_id),
       years: c.years,
     })),
     higherEdSkills: (selectedHigherEdItem?.skills ?? []).filter(sk => !sk.conditional).map(sk => sk.skill_id),
     baseMastery,
     refSkills: refSkills ?? [],
-    openedSkills: [],
-  }), [selectedCareers, careersById, selectedHigherEdItem, baseMastery, refSkills])
+    openedSkills: state.openedSkills,
+  }), [selectedCareers, careersById, selectedHigherEdItem, baseMastery, refSkills, state.openedSkills])
 
   // Seules les compétences RÉELLEMENT touchées par le joueur (state.skillAllocations) sont
   // soumises au calcul de coût — une compétence non modifiée doit toujours coûter 0 (Lot 2 fix :
@@ -276,7 +300,7 @@ export default function CareersAllocator({
     const tags = []
     for (const c of selectedCareers) {
       const refCareer = careersById.get(c.career_id)
-      if (refCareer?.skills?.some(sk => sk.skill_id === skillId && !sk.conditional)) {
+      if (refCareer?.skills?.some(sk => sk.skill_id === skillId && (!sk.conditional || state.openedSkills.includes(sk.skill_id)))) {
         tags.push({ key: c.career_id, label: refCareer.name.slice(0, 3), color: careerHexColor(refCareer.code) })
       }
     }
@@ -301,7 +325,7 @@ export default function CareersAllocator({
       }))
       .sort((a, b) => a.family.localeCompare(b.family))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardSkillIds, skillAllocationCtx, state.skillAllocations, baseMastery, refSkillsById, selectedCareers, careersById])
+  }, [boardSkillIds, skillAllocationCtx, state.skillAllocations, baseMastery, refSkillsById, selectedCareers, careersById, state.openedSkills])
 
   // ── Purge des allocations orphelines (carrière retirée) ──────────
   useEffect(() => {
@@ -312,6 +336,16 @@ export default function CareersAllocator({
     dispatch({ type: 'PRUNE_ADV', validIds: new Set(selectedCareers.map(c => c.career_id)) })
   }, [selectedCareers])
 
+  // Retire des choix "au choix" tout skill_id dont la carrière conditionnelle d'origine a été retirée.
+  useEffect(() => {
+    const validIds = new Set()
+    for (const c of selectedCareers) {
+      const refCareer = careersById.get(c.career_id)
+      for (const sk of refCareer?.skills ?? []) if (sk.conditional) validIds.add(sk.skill_id)
+    }
+    dispatch({ type: 'PRUNE_OPENED_SKILLS', validIds })
+  }, [selectedCareers, careersById])
+
   // ── Remontée au parent (payload global) ──────────────────────────
   useEffect(() => {
     onSkillAllocationsChange?.(state.skillAllocations)
@@ -320,6 +354,10 @@ export default function CareersAllocator({
   useEffect(() => {
     onProAdvantagesChange?.(state.proAdvAllocations)
   }, [state.proAdvAllocations, onProAdvantagesChange])
+
+  useEffect(() => {
+    onOpenedSkillsChange?.(state.openedSkills)
+  }, [state.openedSkills, onOpenedSkillsChange])
 
   const handleAllocInc = (row) => {
     if (allocationResult.remaining <= 0 || row.target >= row.cap) return
@@ -336,10 +374,20 @@ export default function CareersAllocator({
     onAdd(career.id, career.name, career.titles, years)
   }
 
-  const groupedSkills = career ? career.skills.reduce((acc, sk) => {
+  const groupedSkills = career ? career.skills.filter(sk => !sk.conditional).reduce((acc, sk) => {
     ;(acc[sk.family] ??= []).push(sk)
     return acc
   }, {}) : {}
+
+  // Compétences "au choix" (Lot 5) — groupées par choice_group (radio exclusif) ou solo (checkbox
+  // indépendante), potentiellement multi-familles (ex. Médecin/Chirurgien : sciences + techniques).
+  const choiceGroups = career ? Object.values(
+    career.skills.filter(sk => sk.conditional).reduce((acc, sk) => {
+      const key = sk.choice_group || `__solo_${sk.skill_id}`
+      ;(acc[key] ??= { key, isSolo: !sk.choice_group, skillIds: [] }).skillIds.push(sk.skill_id)
+      return acc
+    }, {})
+  ) : []
 
   const totalCareerYears = selectedCareers.reduce((sum, c) => sum + c.years, 0)
   const currentAge = baseAge + totalCareerYears
@@ -386,12 +434,10 @@ export default function CareersAllocator({
             <div
               key={c.id}
               className={`wiz4-railrow${selectedCareerId === c.id ? ' sel' : ''}${added ? ' added' : ''}`}
-              style={{ '--hex': careerHexColor(c.code) }}
               onClick={() => dispatch({ type: 'SELECT_CAREER', id: c.id, committedYears: committed?.years })}
               onMouseEnter={() => dispatch({ type: 'SET_HOVER', id: c.id })}
               onMouseLeave={() => dispatch({ type: 'SET_HOVER', id: null })}
             >
-              <span className="wiz4-hex">{c.name.slice(0, 1).toUpperCase()}</span>
               <div className="wiz4-railbody">
                 <div className="wiz4-railname">{c.name}</div>
                 <div className="wiz4-railmeta">
@@ -537,7 +583,7 @@ export default function CareersAllocator({
                           <div className="wiz4-chips">
                             {skills.map(sk => (
                               <span key={sk.skill_id} className="wiz4-chip">
-                                {skillLabel(sk.skill_id)}{sk.conditional ? ` (${t('step4.career_conditional')})` : ''}
+                                {skillLabel(sk.skill_id)}
                               </span>
                             ))}
                           </div>
@@ -545,6 +591,45 @@ export default function CareersAllocator({
                       ))}
                     </div>
                   </div>
+
+                  {choiceGroups.length > 0 && (
+                    <div className="wiz4-block">
+                      <span className="wiz4-h">{t('step4.career_choice_title')}</span>
+                      {!isAdded ? (
+                        <p className="wiz4-note">{t('step4.career_choice_locked')}</p>
+                      ) : (
+                        <div className="wiz4-choice">
+                          {choiceGroups.map(({ key, isSolo, skillIds }) => (
+                            <div key={key} className="wiz4-choicegrp">
+                              <span className="wiz4-choicelbl">
+                                {isSolo ? t('step4.career_choice_solo_label') : t('step4.career_choice_group_label')}
+                              </span>
+                              {skillIds.map(skillId => {
+                                const checked = state.openedSkills.includes(skillId)
+                                return (
+                                  <label key={skillId} className="wiz4-choiceopt">
+                                    <input
+                                      type={isSolo ? 'checkbox' : 'radio'}
+                                      name={isSolo ? undefined : `choice_${career.id}_${key}`}
+                                      checked={checked}
+                                      onChange={() => {
+                                        if (isSolo) {
+                                          dispatch({ type: 'TOGGLE_OPENED_SKILL', skillId })
+                                        } else {
+                                          dispatch({ type: 'SELECT_CHOICE_GROUP_SKILL', skillId, groupSkillIds: skillIds })
+                                        }
+                                      }}
+                                    />
+                                    {skillLabel(skillId)}
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
               {activeTab === 'carriere' && (

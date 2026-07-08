@@ -2060,7 +2060,7 @@ Convention :
 /* ── Step 4 Carrières — board global (PLAN_REWORKFINAL Lot 2) ─────── */
 .wiz4-cols {
   display: grid;
-  grid-template-columns: 296px 1fr;
+  grid-template-columns: 246px 1fr;
   min-height: 0;
   flex: 1;
 }
@@ -2116,22 +2116,11 @@ Convention :
 }
 .wiz4-railrow.added { border-color: #3a6b4e; }
 
-.wiz4-hex {
-  width: 40px;
-  height: 44px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font: 700 13px 'Share Tech Mono', monospace;
-  color: #fff;
-  background: var(--hex, var(--wiz-blue-bright));
-  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
-}
-
 .wiz4-railbody { min-width: 0; flex: 1; }
 .wiz4-railname {
-  font: 600 12px/1.2 'Inter', sans-serif;
+  font: 600 12px/1.2 'Venus Rising', var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: .03em;
   color: var(--wiz-white);
   white-space: nowrap;
   overflow: hidden;
@@ -2292,6 +2281,23 @@ Convention :
   border: 1px solid var(--wiz-glass-border);
   padding: 2px 7px;
   border-radius: 4px;
+}
+
+.wiz4-choice { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.wiz4-choicegrp { display: flex; flex-direction: column; gap: 4px; }
+.wiz4-choicelbl {
+  font: 600 9px 'Inter', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--wiz-metal-3);
+}
+.wiz4-choiceopt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 400 12px 'Inter', sans-serif;
+  color: var(--wiz-metal-1);
+  cursor: pointer;
 }
 
 .wiz4-note {
@@ -2471,6 +2477,51 @@ Convention :
   text-transform: uppercase;
   letter-spacing: .1em;
 }
+
+/* ── Bloc Description physique ───────────────────────────────────── */
+.wiz1-desc-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px 16px;
+  padding: 14px;
+}
+
+.wiz1-desc-field {
+  grid-column: span 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wiz1-desc-field--wide { grid-column: span 6; }
+
+.wiz1-desc-label {
+  font-size: 9px;
+  color: var(--wiz-metal-3);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+.wiz1-desc-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(47,215,255,.25);
+  color: var(--wiz-white);
+  font-size: 13px;
+  padding: 5px 0;
+  outline: none;
+  transition: border-color .2s;
+  border-radius: 0;
+}
+.wiz1-desc-input:focus { border-bottom-color: var(--wiz-blue-bright); }
+
+.wiz1-desc-hand-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.wiz1-desc-hand-row .wiz1-desc-input { flex: 1; }
+.wiz1-desc-hand-row .wiz1-pc-btn { flex-shrink: 0; padding: 5px 12px; }
 
 /* ── Blocs sections (glass cards) ───────────────────────────────── */
 .wiz1-block {

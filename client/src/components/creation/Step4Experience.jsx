@@ -39,11 +39,13 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   const [careers, setCareers] = useState(initialData?.careers ?? [])
   const [skillAllocations, setSkillAllocations] = useState(initialData?.skillAllocations ?? {})
   const [proAdvantages, setProAdvantages] = useState(initialData?.proAdvantages ?? {})
+  const [openedSkills, setOpenedSkills] = useState(initialData?.openedSkills ?? [])
   const [refData, setRefData] = useState({ loading: true, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [] })
   const [refSkills, setRefSkills] = useState([])
 
   const handleSkillAllocationsChange = useCallback((next) => setSkillAllocations(next), [])
   const handleProAdvantagesChange = useCallback((next) => setProAdvantages(next), [])
+  const handleOpenedSkillsChange = useCallback((next) => setOpenedSkills(next), [])
 
   useEffect(() => {
     if (!sheetId) return
@@ -179,6 +181,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   socNation,
   careers: careerEntries,
   skillAllocations,
+  openedSkills,
   pcSpent: totalPC,
   appliedSkills: Object.values(conditionalChoices),
 }
@@ -367,6 +370,8 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
     onSkillAllocationsChange={handleSkillAllocationsChange}
     initialProAdvantages={proAdvantages}
     onProAdvantagesChange={handleProAdvantagesChange}
+    initialOpenedSkills={openedSkills}
+    onOpenedSkillsChange={handleOpenedSkillsChange}
   />
 )}
 

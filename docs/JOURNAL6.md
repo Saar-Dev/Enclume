@@ -847,5 +847,132 @@ SR + fonctionnel confirmé Saar.
 **Non testé** : persistance `char_careers.pro_advantages` vérifiée en base après un `reconcileCreation`
 réel complet (le scénario navigateur a validé le flux UI + gating, pas une lecture SQL post-finalize).
 
-### Prochain — Lot 5 (Compétences « au choix », `conditional`)
-Voir `PLAN_REWORKFINAL §7`. Détail décisions/modèle : `PLAN_REWORKFINAL §1ter`.
+### Lot 5 — Compétences « au choix » (`conditional`, migration 121) ✅ CLOS
+
+Audit exhaustif fait en amont (`PLAN_REWORKFINAL §7`, 44 lignes `conditional=true` croisées ligne à
+ligne avec `REGLE_PROFESSION.md`, 6 phénomènes distincts identifiés sous le flag booléen unique).
+**Avant tout codage (demande explicite Saar « code seulement si sûr à 100% »)** : re-vérification
+complète de la source primaire (pas seulement du plan déjà écrit) — lecture directe de
+`REGLE_PROFESSION.md` sur les cas les plus ambigus (marqueur « (au choix) » présent/absent : Officier
+militaire "Techniques spéciales", Soldat/Milicien vs Soldat d'élite "Armes spéciales", Barman "ou"
+sans marqueur, Diplomate/Espion doublons, familles Médecin/Scientifique/Érudit/Technicien) + requêtes
+SQL read-only en base réelle (44 lignes, `ref_skills.parent`/`is_category`, absence de collision avec
+des compétences déjà existantes). **Aucun écart trouvé** entre le plan verrouillé et la réalité
+code+base — tous les cas cités (y compris l'anomalie Soldat d'élite, confirmée mot pour mot absente du
+marqueur contrairement à Soldat/Milicien) confirmés avant d'écrire une ligne de code.
+
+**Fichiers touchés** :
+- `server/src/db/migrations/121_ref_career_skills_choice_groups.js` (NOUVEAU) : colonne
+  `ref_career_skills.choice_group` + 24 lignes T3 (catégorie/enfant-proxy) réécrites en vrais enfants
+  `ref_skills.parent` avec `choice_group` partagé (scopé par `career_id`, aucune collision malgré des
+  noms de groupe réutilisés entre métiers) + 4 doublons inertes supprimés (Diplomate ×3, Espion ×1) +
+  4 lignes Soldat d'élite repassées `conditional=false` (flag erroné, texte source sans marqueur).
+  `down()` symétrique. **Round-trip `down`/`up` testé en base réelle** (nodemon avait déjà
+  auto-appliqué `up()` avant le test manuel, P53) : `down()` → 44/44 lignes restaurées à l'identique
+  (vérifié Diplomate 4 lignes, Chasseur de primes 1 ligne) → `up()` ré-appliqué → état final
+  re-vérifié (Diplomate 1 ligne `conditional=false`, Soldat d'élite ×4 `conditional=false`, Chasseur
+  de primes 3 lignes `arts_martiaux_choice`, Technicien fusion 3 lignes `sciences_choice`).
+- `shared/careerSkills.js` : nouvelle fonction pure `validateChoiceGroups(openedSkillIds,
+  careerSkillRows)` — exclusivité par `choice_group` (ignore les lignes T1 sans groupe). Testée en
+  isolation (`node -e`) : conflit détecté, solo indépendant, un choix par groupe OK, entrées
+  vides/undefined. Non-régression `computeSkillAllocation` reconfirmée.
+- `server/src/services/creationService.js` : `reconcileCreation` STEP4 — `validateChoiceGroups` appelé
+  par métier avant construction du contexte de coût ; les compétences `conditional=true` dont le
+  `skill_id` est dans `step4.openedSkills` rejoignent désormais `careersCtx[].skills` (déjà
+  utilisé par `computeSkillAllocation` pour `isPro`/plafond). Le champ payload `openedSkills` existait
+  déjà côté serveur/moteur de coût depuis le Lot 2 (jamais envoyé par le client avant ce lot — trou
+  comblé, pas un nouveau champ inventé, cf. `PLAN_REWORKFINAL §7.3`).
+- `client/src/components/creation/Step4Experience.jsx` : state `openedSkills` + `buildPayload()` +
+  props `initialOpenedSkills`/`onOpenedSkillsChange` vers `CareersAllocator`.
+- `client/src/components/creation/CareersAllocator.jsx` : reducer étendu (`state.openedSkills`,
+  actions `TOGGLE_OPENED_SKILL` solo / `SELECT_CHOICE_GROUP_SKILL` radio exclusif, purge
+  `PRUNE_OPENED_SKILLS` au retrait de carrière) ; `boardSkillIds`/`skillAllocationCtx` incluent les
+  compétences conditionnelles ouvertes. **Trouvé et corrigé en relecture avant livraison (règle 5)** :
+  `provenanceFor` (tag coloré de la carrière d'origine sur le board) ne couvrait que les compétences
+  non-conditionnelles — une compétence "au choix" fraîchement ouverte apparaissait sur le board sans
+  aucun tag de provenance. Corrigé en même temps que le fix. Nouveau bloc UI "Compétences au choix"
+  dans l'onglet Métier (checkbox indépendante pour les 10 lignes T1, radio exclusif par `choice_group`
+  pour les 24 lignes T3), verrouillé tant que le métier consulté n'est pas retenu (même UX que
+  l'onglet Avantages pro).
+- `client/src/index.css` : classes `.wiz4-choice`/`.wiz4-choicegrp`/`.wiz4-choicelbl`/`.wiz4-choiceopt`.
+- `client/src/locales/creation.json` : `career_choice_title/locked/solo_label/group_label` ; suppression
+  de `career_conditional` (devenue morte, l'ancien suffixe texte "(au choix)" est remplacé par les
+  contrôles interactifs).
+
+**Testé** : migration round-trip `down`/`up` en base réelle (byte-identique), `validateChoiceGroups`
+(6 scénarios isolés `node -e`), non-régression `computeSkillAllocation`, `node --check`/ESLint 0 erreur
+introduite (1 erreur pré-existante non liée sur `Step4Experience.jsx` confirmée via `git stash`), SR
+(`/api/health` 200), parcours navigateur confirmé fonctionnel par Saar ("All ok").
+**Non testé** : vérification directe `char_skills.is_learned` en base après un `reconcileCreation` réel
+avec un choix "au choix" sélectionné (le scénario navigateur a validé le flux UI, pas une lecture SQL
+post-finalize).
+
+### Nettoyage UI — icône hexagonale du rail carrières retirée
+
+Demande Saar post-Lot 5 : les hexagones d'initiale devant chaque ligne de la liste de métiers (rail de
+gauche) alourdissaient l'affichage sans apporter d'information (juste la 1ʳᵉ lettre du nom, déjà lisible
+juste à côté). `<span className="wiz4-hex">` retiré de `CareersAllocator.jsx` (avec le style inline
+`--hex` associé, devenu inutile), règle CSS `.wiz4-hex` supprimée (morte). `careerHexColor()` conservé
+(toujours utilisé par les tags de provenance colorés du board). `.wiz4-cols` : colonne de rail réduite
+de `296px` à `246px` (largeur libérée par l'icône : 40px + 10px de gap).
+**Testé** : ESLint 0 erreur.
+**Non testé** : confirmation visuelle navigateur.
+
+### Prochain — Lot 6 (Tirage 1D10 via DicePanel)
+Voir `PLAN_REWORKFINAL §8`.
+
+---
+## Session 139 (suite 5) — 2026-07-08 — Wizard Step1 : Description physique + Main directrice (2D10) ✅ CLOS
+
+Hors chantier Redesign Step4 (item séparé, comme la fenêtre "peek" de Session 139). Demande Saar :
+ajouter à l'Étape 1 du Wizard les champs de la "première section" de la fiche personnage (taille,
+poids, peau, etc.), en référence au Bloc 2 "Description" de `CharacterSheet.jsx`.
+
+**Lecture confirmée avant plan** : le schéma DB (`char_identity`, migration 36) possédait déjà toutes
+les colonnes nécessaires (`height`/`weight`/`skin`/`eyes`/`hair`/`build`/`distinctive_signs`/
+`hand_pref`) — **aucune migration requise**. `reconcileCreation` STEP1 (`creationService.js`)
+n'écrivait jusqu'ici que `char_name`/`player_name` dans `char_identity` ; les 8 champs physiques
+n'avaient jamais été câblés côté Wizard.
+
+**Main directrice** : Saar a proposé un bouton "Définir" tirant 2D10 sur le champ (règle LdB
+`REGLE_CREATION.txt:1301-1311` : 2-15 Droitier, 16-19 Gaucher, 20 Ambidextre), en demandant
+explicitement si l'idée relevait du bricolage architectural. Vérifié : le pattern de tirage aléatoire
+100% client (`Math.random`, aucun aller-retour serveur) existe déjà dans `Step3Mutations.jsx`
+(`handleRoll`, D20/D100) — même architecture reprise à l'identique, ce n'est pas un contournement.
+
+**Vérification supplémentaire avant codage** (demande Saar "sûr à 100%") : `REGLE_CREATION.txt:
+1317-1324` confirme que la section "Description physique" (taille/poids/peau/etc.) est purement
+narrative, sans contrainte mécanique ("Servez-vous des Attributs pour avoir une idée du physique...").
+Champs conçus **optionnels et non bloquants** pour "Suivant" — seule la Main directrice a une vraie
+mécanique de dé.
+
+**Fichiers touchés** :
+- `client/src/components/creation/Step1Attributes.jsx` : nouveau bloc "Description physique" (taille,
+  poids, peau, corpulence, yeux, cheveux, signes particuliers, main directrice) entre le tableau
+  Attributs et le bloc PC. `handleRollHandPref` (2D10 client, mapping table LdB). Payload `onNext`
+  étendu avec les 8 nouveaux champs.
+- `server/src/services/creationService.js` : `reconcileCreation` STEP1 — destructure les 8 nouveaux
+  champs, garde serveur `hand_pref ∈ {R,L,A}` si fourni, étend l'insert/merge `char_identity`
+  (pattern idempotent inchangé, déjà utilisé pour `char_name`/`player_name`).
+- `client/src/locales/creation.json` : 15 nouvelles clés sous `step1` (titre section + 8 libellés +
+  4 options main directrice + placeholder + bouton "Définir").
+- `client/src/index.css` : 6 nouvelles classes `.wiz1-desc-*` (grille 6 colonnes + input transparent),
+  calquées sur `.wiz1-name-input`/`.wiz1-pc-btn` existants — aucun nouveau pattern visuel inventé.
+
+**Bug préexistant découvert en vérifiant la consommation de `hand_pref` côté combat** (non corrigé,
+hors scope de cette tâche — voir dette **HP1**) : `socketCombatHelpers.js:550` (priorité slot arme en
+défense CaC) et `char-sheet.js:810` (route inventaire) lisent tous les deux `sheetCible.hand_pref` /
+`sheet.hand_pref` sur des lignes issues de la table `char_sheet` — qui n'a **jamais eu** de colonne
+`hand_pref` (seule `char_identity.hand_pref` existe, migration 36). `(undefined ?? 'R')` retombe
+donc toujours sur `'R'` : la mécanique Main directrice n'a probablement jamais été réellement
+appliquée en combat, quel que soit le choix du joueur. Trouvé par lecture directe du code (les deux
+call sites + la définition de table), **non instrumenté/observé en exécution** — reste `[HYPOTHÈSE]`
+au sens strict du protocole, mais la colonne est absente sans ambiguïté possible.
+
+**Testé** : `JSON.parse` OK (`creation.json`), `node --check` OK (`creationService.js`), ESLint 0
+erreur introduite (1 erreur pré-existante `poolBase` non liée, confirmée via `git diff --stat` — 0
+ligne touchée), SR + parcours fonctionnel confirmé par Saar.
+**Non testé** : les 8 scénarios détaillés un par un (validation donnée globalement "SR et
+fonctionnel"), vérification directe des colonnes `char_identity` en base après un `reconcileCreation`
+réel, distribution statistique du tirage 2D10 sur un grand nombre d'essais, et bien sûr la dette HP1
+ci-dessus (nécessiterait son propre bug fix + scénario de test, hors scope ici).

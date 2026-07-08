@@ -43,6 +43,16 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
   const [isFeminin, setIsFeminin] = useState(initialData?.isFeminin ?? false)
   const [pcAlloues, setPcAlloues] = useState(initialData?.pcSpent ?? 0)
 
+  // Description physique — narrative, non bloquante (REGLE_CREATION.txt:1317-1324)
+  const [height, setHeight] = useState(initialData?.height ?? '')
+  const [weight, setWeight] = useState(initialData?.weight ?? '')
+  const [skin, setSkin] = useState(initialData?.skin ?? '')
+  const [eyes, setEyes] = useState(initialData?.eyes ?? '')
+  const [hair, setHair] = useState(initialData?.hair ?? '')
+  const [build, setBuild] = useState(initialData?.build ?? '')
+  const [distinctiveSigns, setDistinctiveSigns] = useState(initialData?.distinctiveSigns ?? '')
+  const [handPref, setHandPref] = useState(initialData?.handPref ?? '')
+
   // modPC : points achetés par attribut (démarre à 0)
   const [modPC, setModPC] = useState(() => {
     if (initialData?.attributes) {
@@ -120,6 +130,13 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
       return newModPC
     })
   }, [baseAttrs, isFeminin, femininBonusEnabled, poolTotal])
+
+  // Tirage 2D10 Main directrice (REGLE_CREATION.txt:1301-1311) — pattern client pur,
+  // identique au tirage aléatoire de Step3Mutations.jsx (Math.random, aucun aller-retour serveur).
+  const handleRollHandPref = useCallback(() => {
+    const d2d10 = (Math.floor(Math.random() * 10) + 1) + (Math.floor(Math.random() * 10) + 1)
+    setHandPref(d2d10 >= 20 ? 'A' : d2d10 >= 16 ? 'L' : 'R')
+  }, [])
 
   const showTooltip = (desc, event) => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -339,6 +356,75 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
         </div>
       </div>
 
+      {/* ── Bloc Description physique (narrative, non bloquant) ── */}
+      <div className="wiz1-block">
+        <div className="wiz1-block-title">{t('step1.descSectionTitle')}</div>
+        <div className="wiz1-desc-grid">
+          <label className="wiz1-desc-field">
+            <span className="wiz1-desc-label">{t('step1.descHeight')}</span>
+            <input
+              className="wiz1-desc-input"
+              type="number"
+              step="0.01"
+              value={height}
+              onChange={e => setHeight(e.target.value)}
+            />
+          </label>
+          <label className="wiz1-desc-field">
+            <span className="wiz1-desc-label">{t('step1.descWeight')}</span>
+            <input
+              className="wiz1-desc-input"
+              type="number"
+              step="0.1"
+              value={weight}
+              onChange={e => setWeight(e.target.value)}
+            />
+          </label>
+          <label className="wiz1-desc-field">
+            <span className="wiz1-desc-label">{t('step1.descSkin')}</span>
+            <input className="wiz1-desc-input" value={skin} onChange={e => setSkin(e.target.value)} />
+          </label>
+          <label className="wiz1-desc-field">
+            <span className="wiz1-desc-label">{t('step1.descBuild')}</span>
+            <input className="wiz1-desc-input" value={build} onChange={e => setBuild(e.target.value)} />
+          </label>
+          <label className="wiz1-desc-field">
+            <span className="wiz1-desc-label">{t('step1.descEyes')}</span>
+            <input className="wiz1-desc-input" value={eyes} onChange={e => setEyes(e.target.value)} />
+          </label>
+          <label className="wiz1-desc-field">
+            <span className="wiz1-desc-label">{t('step1.descHair')}</span>
+            <input className="wiz1-desc-input" value={hair} onChange={e => setHair(e.target.value)} />
+          </label>
+          <label className="wiz1-desc-field wiz1-desc-field--wide">
+            <span className="wiz1-desc-label">{t('step1.descSigns')}</span>
+            <input
+              className="wiz1-desc-input"
+              value={distinctiveSigns}
+              onChange={e => setDistinctiveSigns(e.target.value)}
+            />
+          </label>
+          <label className="wiz1-desc-field">
+            <span className="wiz1-desc-label">{t('step1.descHand')}</span>
+            <div className="wiz1-desc-hand-row">
+              <select
+                className="wiz1-desc-input"
+                value={handPref}
+                onChange={e => setHandPref(e.target.value)}
+              >
+                <option value="">{t('step1.handPlaceholder')}</option>
+                <option value="R">{t('step1.handRight')}</option>
+                <option value="L">{t('step1.handLeft')}</option>
+                <option value="A">{t('step1.handAmbi')}</option>
+              </select>
+              <button type="button" className="wiz1-pc-btn" onClick={handleRollHandPref}>
+                {t('step1.handRoll')}
+              </button>
+            </div>
+          </label>
+        </div>
+      </div>
+
       {/* ── Bloc PC ── */}
       <div className="wiz1-block">
         <div className="wiz1-block-title">{t('step1.pcTitle')}</div>
@@ -398,6 +484,14 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
             attributes: attributs,
             pcSpent: pcAlloues,
             isFeminin,
+            height: height === '' ? null : parseFloat(height),
+            weight: weight === '' ? null : parseFloat(weight),
+            skin: skin.trim(),
+            eyes: eyes.trim(),
+            hair: hair.trim(),
+            build: build.trim(),
+            distinctiveSigns: distinctiveSigns.trim(),
+            handPref: handPref || null,
           })}
         >
           {t('step1.next')} →
