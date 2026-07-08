@@ -11,6 +11,7 @@ import WorkshopPage from './pages/WorkshopPage'
 import MerchantsPage from './pages/MerchantsPage'
 import HealthPage from './pages/HealthPage'
 import WizardCreationPage from './pages/WizardCreationPage'
+import DiceCalibrationPage from './pages/DiceCalibrationPage' // OUTIL DEV — vérification/calibration des dés
 
 function ProtectedRoute({ children }) {
   const { user, isLoading } = useAuthStore()
@@ -62,6 +63,10 @@ export default function App() {
         } />
         <Route path="/health" element={
           <ProtectedRoute><HealthPage /></ProtectedRoute>
+        } />
+        {/* OUTIL DEV — vérification/calibration des dés (tous types) */}
+        <Route path="/dev/dice-calibration" element={
+          <ProtectedRoute><DiceCalibrationPage /></ProtectedRoute>
         } />
 		<Route path="/campaigns/:campaignId/creation" element={
 			<ProtectedRoute><WizardCreationPage /></ProtectedRoute>

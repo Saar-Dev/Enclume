@@ -58,6 +58,13 @@
    → **Testé :** dérivation référence stricte + bijection 0-9 vérifiées, ESLint 0 erreur introduite
      (2 warnings préexistants confirmés), **SR + jet D100 réel en session confirmé fonctionnel par
      Saar**. **Non testé :** scénarios limites un par un (00/100), retrait de dé en cours d'animation.
+   → **Addendum demandé par Saar une fois le bug corrigé** : l'outil de calibration rendu
+     **permanent** (`/dev/dice-calibration` reste, pas retiré) et **généralisé aux 7 dieType** —
+     `client/src/lib/devFaceClusters.js` (k-means calculé à la volée depuis la géométrie chargée,
+     zéro vecteur transcrit à la main) + `getClosestFaceValue()` (`diceMath.js`, affiche "le code
+     prévoit : X" à côté de chaque face). Limite connue non bloquante : arête/pointe parfois affichée
+     sur D8/D20 dans l'outil, **confirmée absente en jeu réel** par Saar (artefact outil, pas un bug
+     — investigué en profondeur via le vrai `GLTFLoader`, décision de ne pas creuser plus loin).
    → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 5)", `docs/PLAN_DICEREWORK3.md`.
 
 **46. Wizard Step 4 — Formation "Autodidacte" (7 points libres) ✅ CLOS — Session 141 (suite 3) (2026-07-08)**

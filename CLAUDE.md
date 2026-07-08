@@ -125,14 +125,19 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   main pour le même fichier `D10.glb` (`D10_FACE_GLB`/`D10U_FACE_GLB`, relevé par Saar) fusionnées en
   `D10_GLB_NORMALS` unique, `d10_units` dérivée automatiquement (relabeling `10→0`) au lieu d'être
   maintenue à la main ; `D10T_FACE_GLB` (D100.glb, fichier distinct) recalibrée indépendamment.
-  Harnais de calibration temporaire `/dev/dice-calibration` (composant autonome, ne dépendant pas de
-  la donnée à calibrer, pose statique + rotation "clock" pour vérifier la lisibilité) — Saar a lu les
-  20 valeurs réelles en direct sur les vrais modèles, retiré après usage. Code mort D10 procédural
-  supprimé (`D10_KITE_NORMALS`/`D10_KITE_VALUES`/`createD10Geometry()`, `DiceMesh.jsx`/`diceMath.js`).
+  Harnais de calibration `/dev/dice-calibration` (composant autonome, ne dépendant pas de la donnée
+  à calibrer, pose statique + rotation "clock" pour vérifier la lisibilité) — Saar a lu les 20
+  valeurs réelles en direct sur les vrais modèles. Code mort D10 procédural supprimé
+  (`D10_KITE_NORMALS`/`D10_KITE_VALUES`/`createD10Geometry()`, `DiceMesh.jsx`/`diceMath.js`).
   Testé : dérivation + bijection 0-9 vérifiées, ESLint 0 erreur introduite (2 warnings préexistants
   confirmés via `git stash`), **SR + jet D100 réel en session confirmé fonctionnel par Saar**. Non
-  testé : scénarios limites un par un (00/100), retrait de dé en cours d'animation. Détail complet :
-  `docs/JOURNAL6.md` "Session 141 (suite 5)", `docs/PLAN_DICEREWORK3.md`.
+  testé : scénarios limites un par un (00/100), retrait de dé en cours d'animation.
+  **Addendum post-fix (demande Saar)** : outil de calibration rendu **permanent** et généralisé aux
+  7 dieType (`devFaceClusters.js`, k-means à la volée, zéro vecteur transcrit à la main +
+  `getClosestFaceValue()` pour comparaison directe). Limite connue non bloquante : arête/pointe
+  parfois affichée sur D8/D20 dans l'outil, **confirmée absente en jeu réel** (artefact outil,
+  investigué en profondeur via le vrai `GLTFLoader`, décision Saar de ne pas creuser plus loin).
+  Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 5)", `docs/PLAN_DICEREWORK3.md`.
 - **Session 141 (suite 5) — EN COURS, pas encore codé.** `polaris_latent` (OPT-04) élargi par Saar
   en chantier de correction d'`AdvantagesPanel.jsx` : bug pré-existant trouvé (composant écrit
   avant la migration 99 "char_advantages V2", ne correspond plus au schéma réel — `hasMuta029`

@@ -1,8 +1,7 @@
 # PLAN — Dice Rework 3 : Recalibration D10 / D100
 > Session 141 (suite 5) — 2026-07-08 — Statut : ✅ TERMINÉ — SR + fonctionnel confirmé Saar
 
-**Résultat final** — valeurs réelles calibrées via harnais `/dev/dice-calibration` (Lot 2, retiré au
-Lot 4) :
+**Résultat final** — valeurs réelles calibrées via harnais `/dev/dice-calibration` :
 ```
 D10_GLB_NORMALS (d10, 1-10) : voir client/src/lib/diceMath.js
 D10T_FACE_GLB   (d10_tens, 0-90) : voir client/src/lib/diceMath.js
@@ -12,6 +11,18 @@ côtés, ESLint 0 erreur introduite sur les 3 fichiers touchés (2 warnings pré
 `git stash`), SR + jet D100 réel en session confirmé fonctionnel par Saar.
 **Non testé :** scénarios limites détaillés un par un (00/100, doublons), retrait de dé en cours
 d'animation, D12/D20 (hors scope, non retouchés).
+
+**Addendum — outil de calibration rendu permanent (post-clôture, demande Saar)** : le Lot 4
+("retirer le harnais") est **révisé** — `/dev/dice-calibration` reste dans `App.jsx`, généralisé aux
+7 dieType (k-means calculé à la volée depuis la géométrie chargée, `client/src/lib/
+devFaceClusters.js` — plus aucun vecteur transcrit à la main) + comparaison directe "code actuel
+prévoit : X" (`getClosestFaceValue`, `diceMath.js`). **Limite connue, non bloquante** : l'outil
+affiche parfois une arête/pointe (au lieu d'une face) sur D8/D20 — confirmé par Saar **absent en jeu
+réel** sur ces dés, donc un artefact de l'outil (probable interaction éclairage fixe/normal map, ou
+timing d'effet React), pas un bug de calibration. Investigué en profondeur (clustering rejoué via le
+vrai `GLTFLoader`, maths de rotation revérifiées) sans trouver de cause dans les données/calculs —
+décision Saar de ne pas creuser plus loin, hors scope de ce chantier. Détail : `docs/JOURNAL6.md`
+"Session 141 (suite 5)".
 
 ---
 

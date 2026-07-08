@@ -1439,3 +1439,27 @@ confirmés via `git stash` avant/après), aucune référence résiduelle aux ide
 **Non testé :** scénarios limites détaillés un par un (00/100, doublons `is_unique` non applicable
 ici), retrait de dé en cours d'animation, D12/D20 (hors scope, non retouchés).
 Détail complet : `docs/PLAN_DICEREWORK3.md`.
+
+**Extension demandée par Saar une fois le bug corrigé** : l'outil de calibration (Lot 2) a été
+**généralisé aux 7 dieType** (`d4`/`d6`/`d8`/`d10`/`d100`/`d12`/`d20`) au lieu d'être retiré (Lot 4
+révisé — le tool devient permanent, `/dev/dice-calibration` reste dans `App.jsx`). Changement
+d'implémentation par rapport au Lot 2 initial : plus aucun vecteur transcrit à la main — nouveau
+`client/src/lib/devFaceClusters.js` (port navigateur du k-means de `tools/inspect-glb.js`, calcule
+les clusters de normales à la volée depuis la géométrie réellement chargée, pour n'importe quel dé).
+Ajout `getClosestFaceValue(dieType, normal)` (`diceMath.js`, lookup inverse pur) — l'outil affiche
+désormais "le code actuel prévoit : X" à côté de chaque face, évite la retranscription manuelle de
+séquences.
+
+**Investigation "cassé" D8/D20 dans l'outil (pas dans le jeu)** : Saar a signalé des faces
+apparaissant en arête/pointe sur D8 (3/8) et D20 (6/20) **dans l'outil de calibration uniquement**.
+Confirmé par Saar : aucun problème en jeu réel sur ces dés — donc pas le même bug que D10/D100.
+Vérifications poussées avant d'abandonner la piste (aucune supposition non testée) :
+clustering rejoué en Node avec le **vrai `GLTFLoader`** (celui que `useGLTF` utilise réellement,
+pas une simple lecture manuelle du fichier) → résultat identique et parfaitement propre (8/8
+clusters D8 distincts, 37 triangles chacun) ; testé aussi avec l'ordre des triangles mélangé exprès
+→ toujours propre ; maths d'orientation (`setFromUnitVectors`) déjà vérifiées exactes précédemment
+(cas 176,6° inclus). Données et calculs provablement corrects jusqu'au bout de la chaîne testable
+sans navigateur. Hypothèse résiduelle **non vérifiée** [HYPOTHÈSE] : artefact visuel (normal map +
+éclairage fixe de l'outil) ou timing d'effet React propre à l'outil — **decision Saar : ne pas
+creuser plus loin**, le bug réel (D10/D100 en jeu) est clos, cet artefact reste un défaut cosmétique
+connu de l'outil de debug uniquement.

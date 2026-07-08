@@ -445,10 +445,16 @@ Chargée une seule fois depuis DB au premier jet.
 - D12 atlas `fillText` à `atlasSize * 0.397` — centroïde calculé, ne pas modifier (procédural, dead
   code désormais mais laissé en l'état)
 - **PLAN_DICEREWORK3 (Session 141 suite 5)** : `D10_GLB_NORMALS`/`D10T_FACE_GLB` (`diceMath.js`)
-  recalibrées via harnais temporaire `/dev/dice-calibration` (retiré) — les tables précédentes
-  (introduites Session 65 en même temps que les fichiers `.glb`) ne correspondaient à aucune face
-  réelle des fichiers. Code mort associé supprimé : `D10_KITE_NORMALS`/`D10_KITE_VALUES`/
-  `createD10Geometry()`.
+  recalibrées via harnais `/dev/dice-calibration` — les tables précédentes (introduites Session 65 en
+  même temps que les fichiers `.glb`) ne correspondaient à aucune face réelle des fichiers. Code mort
+  associé supprimé : `D10_KITE_NORMALS`/`D10_KITE_VALUES`/`createD10Geometry()`.
+- **Outil dev permanent `/dev/dice-calibration`** (`App.jsx`, route `ProtectedRoute`) — généralisé
+  aux 7 dieType sur demande Saar post-fix. `client/src/lib/devFaceClusters.js` : k-means calculé à
+  la volée depuis la géométrie chargée (port navigateur de `tools/inspect-glb.js`) — aucun vecteur
+  transcrit à la main. `getClosestFaceValue(dieType, normal)` (`diceMath.js`) : lookup inverse pour
+  comparer en direct "le code prévoit X" vs le rendu réel. **Limite connue** : affiche parfois une
+  arête/pointe au lieu d'une face sur D8/D20 — confirmé absent en jeu réel (artefact outil, pas un
+  bug de calibration), investigué sans trouver de cause dans les données/calculs, non prioritaire.
 
 ### V2 / todo
 - Audio — `useDiceAudio.js` — sons d'impact au rebond

@@ -258,6 +258,21 @@ export function getFaceNormal(dieType, faceValue) {
   return map[faceValue] ?? null
 }
 
+// Lookup inverse — utilisé par l'outil dev de calibration (DiceCalibrationPage) pour afficher
+// "le code actuel prévoit : X" à côté d'une normale mesurée, sans dupliquer les tables.
+// Retourne la clé (valeur de face) dont la normale enregistrée est la plus proche de `normal`.
+export function getClosestFaceValue(dieType, normal) {
+  const map = FACE_NORMALS[dieType]
+  if (!map) return null
+  const [nx, ny, nz] = normal
+  let best = null, bestDot = -Infinity
+  for (const [value, vec] of Object.entries(map)) {
+    const dot = vec[0] * nx + vec[1] * ny + vec[2] * nz
+    if (dot > bestDot) { bestDot = dot; best = value }
+  }
+  return best
+}
+
 
 
 // ─── Décomposition du payload serveur en dés individuels ─────────────────────
