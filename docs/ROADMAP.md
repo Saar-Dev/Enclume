@@ -110,13 +110,8 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 | `client/src/components/DiceRoller.jsx` — orchestrateur R3F, plan cliquable | ✅ |
 | `client/src/components/Canvas3D.jsx` — props dicePayload/onDiceDone | ✅ |
 | `client/src/pages/SessionPage.jsx` — state lastDiceRoll, filtrage skillLabel | ✅ |
-| D6 — BoxGeometry, texture par face, couleur lanceur | ✅ |
-| D4 — TetrahedronGeometry, texture par face | ✅ |
-| D8 — OctahedronGeometry, texture par face | ✅ |
-| D20 — IcosahedronGeometry, texture par face | ✅ |
-| D12 — DodecahedronGeometry, atlas 12 cases | ✅ |
-| D10/D100 — Trapezohedron custom, Html overlay V1 | ✅ V1 |
-| D10 UV texturing — modèle Blender (.glb) avec UVs kite pré-calculés | 🔲 V2 |
+| D4/D6/D8/D12/D20 — modèles `.glb` texturés (Blender), normales calibrées | ✅ |
+| D10/D100 — modèle `.glb` texturé (`D10.glb`/`D100.glb`), normales recalibrées | ✅ session 141 (PLAN_DICEREWORK3) |
 | Audio — `useDiceAudio.js` — sons d'impact au rebond | 🔲 |
 
 ### Chantier 10 — Module Équipement (Inventaire + Catalogue)
@@ -393,7 +388,8 @@ Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation doc
 | Effets mécaniques — `random_pro_advantages` | Bloc "Tirage 1D10" (Step4) masqué si désactivé | ✅ session 141 |
 | Effets mécaniques — `skill_prerequisites` | `SKILL_MIN` gaté dans SkillsPanel (client) + `POST /skills/buy` (serveur, via `calcSkillTotal`) — 1ʳᵉ option touchant la fiche perso en jeu, pas que le Wizard | ✅ session 141 |
 | Effets mécaniques — `skill_max_level` | `getSkillCap` (`shared/careerSkills.js`) gaté par `settings.skill_max_level` — plafond par années (Wizard uniquement) `Infinity` si désactivé ; conflit de source trouvé (règle marquée "(OPTIONNEL)" dans REGLE_CREATION.txt, appliquée inconditionnellement depuis le rework Step4) et confirmé par Saar avant code | ✅ session 141 (suite 2) |
-| Effets mécaniques — 5 restantes | polaris_latent, revers, skill_natural_prog, young_penalty, celebrity | 🔲 en cours un par un |
+| Effets mécaniques — `young_penalty` | `getAgeEffects` (`shared/polarisUtils.js`) gagne le malus FOR/PRE 16-19 ans (code mort jusqu'ici, pas un conflit de source), gaté par `settings.young_penalty`, non applicable par attribut si valeur de base ≤7 ; aperçu `AgeSelector.jsx` reste basé sur `baseAge` (imprécision assumée par Saar, cohérente avec le malus 30+ existant) | ✅ session 141 (suite 4) |
+| Effets mécaniques — 4 restantes | polaris_latent, revers, skill_natural_prog, celebrity | 🔲 en cours un par un |
 
 ### Client — Dashboard
 | Tâche | État |

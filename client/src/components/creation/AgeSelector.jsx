@@ -1,9 +1,9 @@
 import { useTranslation } from 'react-i18next'
 import { getAgeEffects } from '../../../../shared/polarisUtils.js'
 
-export default function AgeSelector({ age, onChange, onNext, onPrev }) {
+export default function AgeSelector({ age, onChange, attributes, youngPenaltyEnabled, onNext, onPrev }) {
   const { t } = useTranslation('creation')
-  const effects = getAgeEffects(age)
+  const effects = getAgeEffects(age, { attributes, youngPenaltyEnabled })
   const effectEntries = Object.entries(effects)
 
   const handleSliderChange = (e) => {

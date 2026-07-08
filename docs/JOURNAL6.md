@@ -1320,3 +1320,122 @@ conditions réelles navigateur plutôt que par lecture de code ; vérification d
 `char_skills.mastery` en base après un `reconcileCreation` réel avec des points Autodidacte
 effectivement répartis ; rendu visuel exact des 29 lignes dans le conteneur `max-width:500px` de
 `BackgroundSelector` (confirmé fonctionnel globalement par Saar, pas détaillé ligne par ligne).
+
+---
+## Session 141 (suite 4) — 2026-07-08 — Options de campagne : `young_penalty` (OPT-10) câblée ✅
+
+**Lecture avant plan** : `REGLE_CREATION.txt` (« PERSONNAGES TRÈS JEUNES (OPTIONNEL) »),
+`shared/polarisUtils.js` (`getAgeEffects`, ne couvrait jusqu'ici que le malus de vieillesse 30+ — code
+mort pour 16-19 ans, confirmé par `PLAN_OPTCAMP.md`), `creationService.js` (bloc STEP4, calcul
+`finalAge`), `AgeSelector.jsx` (**2ᵉ point d'appel de `getAgeEffects` non repéré au premier abord** —
+aperçu client pendant la sélection de l'âge de base), `campaignSettingsService.js` (schéma),
+`SectionCharacterSheet.jsx` (toggle GM déjà existant depuis Session 130), `char-sheet.js` (route
+`PUT /archetype` — confirmé qu'aucun mécanisme de vieillissement en cours de partie n'existe nulle
+part dans le code, donc l'aspect RAW « temporaire, disparaît avec le temps » reste hors-scope, comme
+pour le malus de vieillesse existant).
+
+**Règle exacte** : 16-17 ans → FOR -3, PRE -2 ; 18 ans → FOR -2, PRE -1 ; 19 ans → FOR -1. Non
+applicable **par attribut** si sa valeur de base est déjà ≤7 (vérifié indépendamment pour FOR et PRE).
+
+**Analyse à charge demandée par Saar avant codage — 3 points vérifiés, aucun n'a nécessité de
+changement de plan :**
+1. Aperçu `AgeSelector.jsx` structurellement désynchronisé du calcul réel (utilise `baseAge`, avant
+   ajout des années de carrière, alors que le calcul serveur utilise `finalAge`) — plus visible pour
+   cette option que pour le malus 30+ (16-19 ans est la valeur naturelle qu'un joueur choisira
+   précisément pour un personnage jeune). Décision Saar : laisser tel quel (cohérent avec l'existant,
+   le Récap final donne toujours le vrai résultat), pas de correctif supplémentaire.
+2. Risque de péremption de `char_attributes.base_level` lu côté serveur : vérifié que les 2 seuls
+   points d'appel de `/reconcile` (`openPeek`, `handleTerminate`, `WizardCreation.jsx`) envoient
+   toujours le payload accumulé complet (`step1`→`step5`) — le bloc STEP1 s'exécute donc avant STEP4
+   dans la même transaction, `char_attributes.base_level` est toujours frais au moment de la lecture.
+3. Génotype modifiant FOR/PRE directement : vérifié que STEP2 (`creationService.js`) ne touche que
+   `char_archetype.genotype_id`, jamais `char_attributes` — `base_level` est bien la seule source
+   pertinente pour le seuil ≤7, pas de modificateur caché à sommer.
+
+**Code :**
+- `shared/polarisUtils.js` (`getAgeEffects`) : signature `getAgeEffects(age, ctx = {})` — nouvelle
+  branche 16-19 ans gatée par `ctx.youngPenaltyEnabled`, malus par attribut seulement si
+  `ctx.attributes.FOR`/`.PRE` > 7. Malus de vieillesse (30+) inchangé et toujours prioritaire.
+- `server/src/services/creationService.js` : bloc STEP4 — requête `char_attributes` (FOR/PRE
+  `base_level`) juste avant l'appel à `getAgeEffects(finalAge, { attributes, youngPenaltyEnabled:
+  settings.young_penalty })` (réutilise le `settings` déjà chargé pour `skill_max_level`, aucune
+  requête settings supplémentaire) ; `startCreation` +`youngPenaltyEnabled`.
+- `client/src/stores/creationStore.js`, `Step4Experience.jsx`, `AgeSelector.jsx` : propagation du
+  flag + des attributs Step1 jusqu'à l'aperçu (même chaîne que les options précédentes).
+- `client/src/locales/creation.json` : `age_effects_none` — *"Aucun effet (moins de 30 ans)"* devenait
+  faux dès que l'option est active → simplifié en *"Aucun effet"*.
+- Sélecteur GM déjà existant (`SectionCharacterSheet.jsx`, Session 130) — aucun changement UI de config.
+
+**Testé :** `node --check` (shared/serveur) 0 erreur, JSON valide, ESLint client 0 erreur introduite
+(1 erreur préexistante `remainingPC` — `Step4Experience.jsx`, ligne décalée par le travail Autodidacte
+entre-temps mais confirmée identique). Scénarios `node -e` : OFF → `{}` ; ON 16/17 ans (FOR-3/PRE-2),
+18 ans (FOR-2/PRE-1), 19 ans (FOR-1), 20 ans → `{}` (hors plage) ; attributs ≤7 → non appliqué ; `ctx`
+omis → `{}` (fail-open documenté) ; malus de vieillesse (30, 41 ans) inchangé et prioritaire même
+option jeunesse active. SR (`/api/health` 200). **Parcours navigateur confirmé fonctionnel par Saar.**
+**Non testé :** les 4 étapes du scénario détaillées une par une (validation donnée globalement
+"Fonctionnel") ; confirmation visuelle du texte "Aucun effet" simplifié en navigateur.
+
+Options de campagne restantes (4/11) : `polaris_latent`, `revers`, `skill_natural_prog`, `celebrity`.
+
+---
+
+## Session 141 (suite 5) — 2026-07-08 — PLAN_DICEREWORK3 : recalibration D10/D100 ✅
+
+Signalement Saar : l'animation 3D du D100 n'a jamais été correcte — faces non alignées, résultat
+serveur ≠ résultat affiché (exemple vécu : serveur roll=1 → affiché "30+7"), dé des unités décrit
+comme visuellement cassé. Hors chantier "Options de campagne".
+
+**Diagnostic [VÉRIFIÉ] avant tout code** — exécution réelle de `tools/inspect-glb.js` sur les
+fichiers `.glb` commités (calcul des normales géométriques réelles par triangle + extraction de la
+texture atlas), comparé aux tables `FACE_NORMALS` de `client/src/lib/diceMath.js` : D4/D6/D8
+matchent exactement le fichier réel ; `D10_FACE_GLB`/`D10U_FACE_GLB`/`D10T_FACE_GLB` ne
+correspondaient à **aucune** face réelle de `D10.glb`/`D100.glb`, jamais recalculées correctement
+depuis leur introduction Session 65 (même commit que l'ajout des `.glb`). D12/D20 confirmés hors
+scope (D12 fonctionnel en usage réel selon Saar malgré un écart offline non fiable ; D20 déjà
+calibré manuellement Session 65, non retouché).
+
+**Recherche pro demandée par Saar avant de coder** (`docs/PLAN_DICEREWORK3.md`, section dédiée) :
+code source de `byWulf/threejs-dice` et `Dice So Nice!` (Foundry VTT) lus — confirment que notre
+pipeline de rendu (normale de face → orientation caméra via `setFromUnitVectors`) suit déjà le
+pattern standard de l'industrie, le bug étant uniquement une donnée de calibration. Piste écartée
+explicitement par Saar : réactiver le code procédural D10 (`createD10Geometry`/`D10_KITE_VALUES`,
+pattern légitime chez Dice So Nice) — rejetée car les dés procéduraux sont visuellement médiocres et
+le D20 procédural s'était avéré impossible à texturer proprement (contrainte UV), raison très
+probable du passage historique aux `.glb` (Session 65) — **décision définitive : on reste sur
+`.glb`**, le code procédural D10 est du code mort à supprimer, pas à réactiver.
+
+**Architecture (Lot 1)** : `D10_FACE_GLB`/`D10U_FACE_GLB` (deux tables dupliquées à la main pour le
+même fichier `D10.glb` — relevé par Saar) fusionnées en une seule table canonique
+`D10_GLB_NORMALS` (clés 1-10) ; `d10_units` dérive désormais de celle-ci via une table calculée une
+fois au chargement du module (relabeling `10→0`), plus de duplication manuelle. `D10T_FACE_GLB`
+(D100.glb, fichier distinct) reste une table indépendante — confirmé nécessaire (sérigraphie
+différente malgré la géométrie identique).
+
+**Calibration réelle (Lot 2/3)** : harnais temporaire `/dev/dice-calibration` (`DiceCalibrationPage`/
+`DiceCalibrationProbe`, route protégée) — composant autonome ne dépendant ni de `DiceMesh` ni de
+`getFaceNormal` (justement la donnée à calibrer), pose statique immédiate sur les 10 normales réelles
+verrouillées (calculées via `inspect-glb.js`), caméra/lumières identiques à `Canvas3D.jsx`. Bonus
+ajoutés sur demande Saar : échelle ×5, rotation additionnelle autour de l'axe de visée (même face,
+orientation du chiffre variable) pour vérifier la lisibilité sous tous les angles. Saar a lu les 20
+valeurs réelles (10 D10.glb + 10 D100.glb, bijection 0-9 vérifiée des deux côtés) — tables réécrites.
+
+**Nettoyage (Lot 1bis/4)**, fait après confirmation fonctionnelle : suppression harnais + route
+temporaire, suppression code mort D10 procédural (`D10_KITE_NORMALS`/`D10_KITE_VALUES`/
+`D10_FACE_VALUES`/`D10_UNITS_FACE_VALUES`/`D10_TENS_FACE_VALUES`, `createD10Geometry()`, branche de
+rotation D10 et cas géométrie/matériau `pentagonal_bipyramid` dans `DiceMeshProcedural` — chemin déjà
+inatteignable, `GLB_PATHS` couvrant tous les dieType). `docs/ASBUILT.md` (tableau "Dice Rework",
+obsolète depuis la bascule `.glb` Session 65) et `.claude/rules/dice.md` (PE32/PE33) mis à jour en
+conséquence.
+
+**Incident de process en cours de session** : Saar a signalé à raison une dérive — redemander la
+permission de continuer ("je continue sur le Lot 2 ?") après un plan déjà validé ("Ok go") revient à
+improviser malgré le plan. Correction : exécution directe des lots suivants sans redemander, plan
+déjà complet faisant foi.
+
+**Testé :** dérivation `d10_units`/`d10` (référence stricte `getFaceNormal`), bijection 0-9 des deux
+tables calibrées, ESLint 0 erreur introduite sur tous les fichiers touchés (2 warnings préexistants
+confirmés via `git stash` avant/après), aucune référence résiduelle aux identifiants supprimés,
+**SR + jet D100 réel en session confirmé fonctionnel par Saar** ("SR et fonctionnel").
+**Non testé :** scénarios limites détaillés un par un (00/100, doublons `is_unique` non applicable
+ici), retrait de dé en cours d'animation, D12/D20 (hors scope, non retouchés).
+Détail complet : `docs/PLAN_DICEREWORK3.md`.

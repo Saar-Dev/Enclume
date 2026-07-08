@@ -243,7 +243,7 @@
     "sub_summary": "Récap",
     "age_label": "Âge de départ",
     "age_slider": "{{age}} ans",
-    "age_effects_none": "Aucun effet (moins de 30 ans)",
+    "age_effects_none": "Aucun effet",
     "age_effects": "Effets de l'âge",
     "age_effects_desc": "Malus aux Attributs : {{effects}}",
     "geo_origin_title": "Origine géographique",

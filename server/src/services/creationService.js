@@ -257,6 +257,7 @@ export async function startCreation(campaignId, userId) {
       femininBonusEnabled: settings.feminin_bonus,
       randomProAdvantagesEnabled: settings.random_pro_advantages,
       skillMaxLevelEnabled: settings.skill_max_level,
+      youngPenaltyEnabled: settings.young_penalty,
     }
   })
 }
@@ -542,9 +543,18 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       }
       const finalAge = baseAge + higherEdYears + totalCareerYears
 
+      // OPT-10 (young_penalty, défaut OFF) : "Niveau de base" FOR/PRE (avant tout modificateur,
+      // dont celui-ci) requis pour la règle "non applicable si Attribut ≤7" — lu en base plutôt
+      // que depuis step1 (peut être absent de ce payload si déjà réconcilié précédemment).
+      const ageAttrRows = await trx('char_attributes')
+        .where({ char_sheet_id: sheetId })
+        .whereIn('attr_id', ['FOR', 'PRE'])
+        .select('attr_id', 'base_level')
+      const ageAttrs = Object.fromEntries(ageAttrRows.map(r => [r.attr_id, r.base_level]))
+
       // Effets de l'âge sur les attributs — set absolu (pas increment) : rejouer la
       // reconciliation avec un âge final différent recalcule au lieu de cumuler les malus.
-      const ageEffects = getAgeEffects(finalAge)
+      const ageEffects = getAgeEffects(finalAge, { attributes: ageAttrs, youngPenaltyEnabled: settings.young_penalty })
       for (const attr of ATTR_IDS_START) {
         await trx('char_attributes')
           .where({ char_sheet_id: sheetId, attr_id: attr })

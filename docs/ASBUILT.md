@@ -139,7 +139,7 @@ Enclume/
 │   │   ├── services/
 │   │   │   ├── advantageConstraints.js # NOUVEAU 129 — registre CONSTRAINTS R1-R6 (exists/not_already_owned/unique_absolute/family_limit/max_desavantage_pc/sufficient_pc). validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages) → { valid, message }.
 │   │   │   ├── advantageService.js     # NOUVEAU 129 — getAdvantages (JOIN+soft-delete filter) + addAdvantage (trx-or-db pattern, valide+insère+ledger) + removeAdvantage (soft-delete+décrement). Utilisé par creation.js (step5 batch) et char-sheet.js (campagne).
-│   │   │   └── creationService.js      # NOUVEAU 129 — wizard steps 4+5. Snapshot-before rollback. Background skills additifs. Career skills SET via skillAllocations (ref_career_skills sans bonus). Validations carrière : prérequis/génotype/attributs/éducation. Salary depuis ref_career_titles. restoreSnapshot : upsert + purge orphans (whereNotIn). Modifié 136 — +getStep3RefData (ref_mutations + ref_mutation_subtypes/subtable + ref_mutation_skills imbriqués par mutation_id, pattern Map identique à getStep4RefData) ; startCreation +randomMutationsEnabled (settings.random_mutations). Modifié 139 — `finalizeCreation` → `reconcileCreation` (pattern reconciliation Kubernetes/Terraform, chaque bloc STEP1-5 conditionné à sa présence dans le payload, rejouable : reset `is_fertile`/`char_skills`/`char_careers`/`char_advantages`+ledger avant réapplication, effets d'âge en `update` absolu au lieu d'`increment`) ; +`lockWizard(sheetId)` (pose `char_sheet.wizard_locked_at`) ; +`getCharacterPreview(characterId, isGm)` (lecture brouillon, colonnes identiques à characters.js sans `worst_wound_severity`). Voir docs/STE6_FINAL.md. Modifié 141 — startCreation +randomProAdvantagesEnabled (settings.random_pro_advantages) : gate le bloc UI "Tirage 1D10" (CareersAllocator.jsx) via creationStore.js/Step4Experience.jsx, même pattern que randomMutationsEnabled — aucune revalidation serveur ajoutée dans reconcileCreation (identique au précédent). Modifié 141 (suite 2) — startCreation +skillMaxLevelEnabled (settings.skill_max_level) ; bloc STEP4 récupère désormais campaignId/settings (pattern identique STEP1) et transmet skillMaxLevelEnabled au ctx de computeSkillAllocation (shared/careerSkills.js) — revalidation serveur réelle, pas client-only (contrairement à randomProAdvantagesEnabled) car le plafond était déjà appliqué en dur côté serveur avant ce fix.
+│   │   │   └── creationService.js      # NOUVEAU 129 — wizard steps 4+5. Snapshot-before rollback. Background skills additifs. Career skills SET via skillAllocations (ref_career_skills sans bonus). Validations carrière : prérequis/génotype/attributs/éducation. Salary depuis ref_career_titles. restoreSnapshot : upsert + purge orphans (whereNotIn). Modifié 136 — +getStep3RefData (ref_mutations + ref_mutation_subtypes/subtable + ref_mutation_skills imbriqués par mutation_id, pattern Map identique à getStep4RefData) ; startCreation +randomMutationsEnabled (settings.random_mutations). Modifié 139 — `finalizeCreation` → `reconcileCreation` (pattern reconciliation Kubernetes/Terraform, chaque bloc STEP1-5 conditionné à sa présence dans le payload, rejouable : reset `is_fertile`/`char_skills`/`char_careers`/`char_advantages`+ledger avant réapplication, effets d'âge en `update` absolu au lieu d'`increment`) ; +`lockWizard(sheetId)` (pose `char_sheet.wizard_locked_at`) ; +`getCharacterPreview(characterId, isGm)` (lecture brouillon, colonnes identiques à characters.js sans `worst_wound_severity`). Voir docs/STE6_FINAL.md. Modifié 141 — startCreation +randomProAdvantagesEnabled (settings.random_pro_advantages) : gate le bloc UI "Tirage 1D10" (CareersAllocator.jsx) via creationStore.js/Step4Experience.jsx, même pattern que randomMutationsEnabled — aucune revalidation serveur ajoutée dans reconcileCreation (identique au précédent). Modifié 141 (suite 2) — startCreation +skillMaxLevelEnabled (settings.skill_max_level) ; bloc STEP4 récupère désormais campaignId/settings (pattern identique STEP1) et transmet skillMaxLevelEnabled au ctx de computeSkillAllocation (shared/careerSkills.js) — revalidation serveur réelle, pas client-only (contrairement à randomProAdvantagesEnabled) car le plafond était déjà appliqué en dur côté serveur avant ce fix. Modifié 141 (suite 4) — startCreation +youngPenaltyEnabled (settings.young_penalty) ; bloc STEP4 requête char_attributes (FOR/PRE base_level) juste avant getAgeEffects(finalAge, ctx) (shared/polarisUtils.js) — réutilise le `settings` déjà chargé pour skill_max_level.
 │   │   └── lib/
 │   │       ├── AppError.js
 │   │       ├── minio.js
@@ -156,7 +156,7 @@ Enclume/
 │   │       └── damageService.js        # NOUVEAU 101 (REWORK-02) — resolveTargetHit(io, db, campaignId, { degautsBruts, characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible }) : loc D20 + armures + RD + sévérité + woundService.applyWound + statusService.resolveShockTest. Retourne null si cibleType='drone'.
 │   └── index.js                        # Modifié 64-66 — resolveAssaultAction, Test de Choc, MACRO_ROLL. Modifié 67 Sprint 7.6 — resolveReloadAction. Modifié 67 Sprint CaC 1 — resolveMeleeAction, pendingMeleeDefense, COMBAT_MELEE_DEFENSE_CONFIRM. Modifié 70 — db.migrate.latest() dans startServer() (migrations auto au démarrage).
 ├── shared/
-│   ├── polarisUtils.js                 # Modifié 61 — +calcAN, calcAllureMoy, calcAllures (exports partagés PI11). Modifié 65 Sprint GM-B : +DEFAULT_PNJ_ALLURES { lente:4, moyenne:8, rapide:16, max:24 }. Modifié 129 — +evaluateSalaryFormula(formula) pour calcul salaire wizard. calcSkillCost + getMaxMasteryByYears consommés depuis le rework Step4 Lot 1 (`shared/careerSkills.js`, chantier terminé Session 140, voir `docs/Old/PLAN_REWORKFINAL.md`) — ne sont plus du code mort. `estimateSalaryFormula` idem depuis le Lot 3 (`CareersAllocator.jsx`).
+│   ├── polarisUtils.js                 # Modifié 61 — +calcAN, calcAllureMoy, calcAllures (exports partagés PI11). Modifié 65 Sprint GM-B : +DEFAULT_PNJ_ALLURES { lente:4, moyenne:8, rapide:16, max:24 }. Modifié 129 — +evaluateSalaryFormula(formula) pour calcul salaire wizard. calcSkillCost + getMaxMasteryByYears consommés depuis le rework Step4 Lot 1 (`shared/careerSkills.js`, chantier terminé Session 140, voir `docs/Old/PLAN_REWORKFINAL.md`) — ne sont plus du code mort. `estimateSalaryFormula` idem depuis le Lot 3 (`CareersAllocator.jsx`). Modifié 141 (suite 4) — `getAgeEffects(age, ctx)` : nouveau 2ᵉ paramètre optionnel, branche 16-19 ans (option young_penalty, OPT-10) gatée par `ctx.youngPenaltyEnabled`, malus FOR/PRE non applicable par attribut si `ctx.attributes` correspondant est déjà ≤7 ; malus de vieillesse (30+) inchangé et prioritaire. 2 points d'appel : `creationService.js` (calcul réel sur `finalAge`) et `AgeSelector.jsx` (aperçu client sur `baseAge`, désynchronisation assumée).
 │   ├── careerEligibility.js            # NOUVEAU 139 (rework Step4 Lot 0) — evaluateCareerEligibility(career, context) pur : prérequis/génotype/attributs/études, raisons structurées (codes+params). Consommé serveur (checkCareerEligibility dans creationService) ; client au Lot 2.
 │   ├── careerSkills.js                 # NOUVEAU 139 (rework Step4 Lot 1) — computeSkillAllocation(skillAllocations, ctx) pur : coût via calcSkillCost/getMaxMasteryByYears (polarisUtils, ex-code mort), pool global 10×années, plafond fixe +5 hors-pro. getSkillCap exporté séparément (plafond indépendant du coût). Modifié 139 (Lot 5) — +validateChoiceGroups(openedSkillIds, careerSkillRows) : exclusivité par ref_career_skills.choice_group (radio), ignore les lignes T1 sans groupe. Modifié 141 (suite 2) — getSkillCap gaté par ctx.skillMaxLevelEnabled (option skill_max_level, OPT-08) : plafond par années → Infinity si désactivé (conflit trouvé : REGLE_CREATION.txt:1250-1263 marque ce plafond "(OPTIONNEL)", jamais gaté depuis le rework Step4 — confirmé par Saar). Plafond fixe +5 origine inchangé, non concerné par ce toggle.
 │   ├── careerAdvantages.js             # NOUVEAU 139 (rework Step4 Lot 4) — computeProAdvantageAllocation(allocations, ctx) pur : pool 5×années PAR MÉTIER (≠ compétences, globales), budget=0 si 0 catégorie (chasseur_primes).
@@ -422,19 +422,33 @@ Chargée une seule fois depuis DB au premier jet.
   enfants consomment via `useSocket()`, aucun ne monte son propre `SocketProvider`.
 
 ### Dés supportés
-| Dé | Géométrie | Chiffre | Statut |
+> Table corrigée Session 141 (suite 5) — obsolète depuis la bascule complète vers `.glb` (Session 65,
+> jamais mise à jour depuis). Les 8 dieType (`d4`/`d6`/`d8`/`d10`/`d10_units`/`d10_tens`/`d12`/`d20`)
+> ont tous une entrée `GLB_PATHS` (`diceMath.js`) → `DiceMeshProcedural` (géométrie procédurale,
+> CanvasTexture/atlas/overlay Html décrits ci-dessous) n'est plus jamais atteint en pratique, gardé
+> en fallback pur.
+
+| Dé | Géométrie réelle utilisée | Chiffre | Statut |
 |---|---|---|---|
-| D6 | BoxGeometry | Texture CanvasTexture par face | ✅ stable |
-| D4 | TetrahedronGeometry | Texture CanvasTexture par face | ✅ stable |
-| D8 | OctahedronGeometry | Texture CanvasTexture par face | ✅ stable |
+| D4 | GLB (D4_LP Blender) | Texture GLB baked | ✅ normales vérifiées |
+| D6 | GLB (D6_LP Blender) | Texture GLB baked | ✅ normales vérifiées |
+| D8 | GLB (D8_LP Blender) | Texture GLB baked | ✅ normales vérifiées |
+| D10 | GLB (D10_LP Blender) | Texture GLB baked | ✅ recalibré Session 141 (PLAN_DICEREWORK3) |
+| D10_units (moitié D100) | GLB — même fichier `D10.glb` que D10 | Texture GLB baked | ✅ recalibré Session 141 |
+| D10_tens (moitié D100) | GLB (D100_LP Blender, fichier séparé, même géométrie) | Texture GLB baked | ✅ recalibré Session 141 |
+| D12 | GLB (D12_LP Blender) | Texture GLB baked | ✅ confirmé fonctionnel Saar |
 | D20 | GLB (D20_LP Blender) | Texture GLB albedo 4096×4096 | ✅ normales exactes session 65 |
-| D12 | DodecahedronGeometry | Atlas 12 cases (fillText centroïde 0.397) | ✅ stable |
-| D10/D100 | Trapezohedron custom | Html overlay V1 `position=[0,0,0]` | ✅ V1 stable |
 
 ### Pièges actifs Dice Rework
-- `DiceMesh.useMemo` deps `[geoDef.type, color, dieType]` — dieType obligatoire (PE32)
-- D10 Html overlay `position=[0,0,0]` — ne pas déplacer (PE33)
-- D12 atlas `fillText` à `atlasSize * 0.397` — centroïde calculé, ne pas modifier
+- `DiceMesh.useMemo` deps `[geoDef.type, color, dieType]` — `dieType` désormais inutilisé dans ce
+  useMemo (warning ESLint connu, code procédural D10 retiré Session 141) — sans impact, chemin mort.
+- D12 atlas `fillText` à `atlasSize * 0.397` — centroïde calculé, ne pas modifier (procédural, dead
+  code désormais mais laissé en l'état)
+- **PLAN_DICEREWORK3 (Session 141 suite 5)** : `D10_GLB_NORMALS`/`D10T_FACE_GLB` (`diceMath.js`)
+  recalibrées via harnais temporaire `/dev/dice-calibration` (retiré) — les tables précédentes
+  (introduites Session 65 en même temps que les fichiers `.glb`) ne correspondaient à aucune face
+  réelle des fichiers. Code mort associé supprimé : `D10_KITE_NORMALS`/`D10_KITE_VALUES`/
+  `createD10Geometry()`.
 
 ### V2 / todo
 - Audio — `useDiceAudio.js` — sons d'impact au rebond

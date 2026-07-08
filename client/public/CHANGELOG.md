@@ -1,3 +1,20 @@
+## v162 — 2026-07-08 — Correction de l'affichage 3D du dé D100 (percentile)
+
+### Client
+- [fix] L'animation 3D du jet de dé D100 (percentile) affiche désormais la bonne face sur les deux
+  dés (dizaines + unités) — le résultat affiché correspond enfin au résultat annoncé dans le chat.
+  Un jet de D10 seul est également corrigé (même modèle 3D partagé).
+- [chore] Suppression du code de géométrie procédurale du D10, devenu obsolète depuis le passage aux
+  modèles 3D texturés.
+
+## v161 — 2026-07-08 — Option de campagne : personnages très jeunes
+
+### Client
+- [feat] Étape 4 (Profession) de l'assistant de création : les malus de Force/Présence liés à un personnage âgé de 16 à 19 ans respectent désormais l'option de campagne correspondante (réglage par défaut : désactivée, aucun malus) — un attribut déjà à son niveau minimum (7) n'est jamais pénalisé davantage
+
+### Serveur
+- [fix] La validation finale de l'assistant de création applique le même malus d'âge que l'aperçu, uniquement si l'option est activée
+
 ## v160 — 2026-07-08 — Assistant de création : formation "Autodidacte" fonctionnelle
 
 ### Client

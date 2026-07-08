@@ -13,13 +13,18 @@ paths:
 
 ## Pièges critiques
 
-**PE32 — DiceMesh useMemo : deps obligatoires**
-`[geoDef.type, color, dieType]` — `dieType` obligatoire.
-Oublier `dieType` → D10 jamais rendu correctement.
+**PE32 — DiceMesh useMemo deps (obsolète Session 141)**
+`dieType` dans les deps de `material` (`DiceMeshProcedural`) n'est plus utilisé dans ce useMemo
+depuis la suppression du code mort D10 procédural (PLAN_DICEREWORK3) — warning ESLint connu, sans
+impact (chemin mort : tous les dieType ont une entrée `GLB_PATHS`, `DiceMeshProcedural` n'est plus
+jamais rendu).
 
-**PE33 — D10 Html overlay : position fixe**
-`position=[0,0,0]` — ne pas déplacer.
-L'overlay est calculé depuis la géométrie, pas depuis la position du mesh.
+**D10/D10_units/D10_tens — normales GLB (recalibrées Session 141)**
+`D10_GLB_NORMALS`/`D10T_FACE_GLB` (`diceMath.js`) — calibrées via harnais `/dev/dice-calibration`
+(temporaire, retiré). Les valeurs introduites Session 65 (en même temps que les `.glb`) ne
+correspondaient à aucune face réelle — jamais recalculées correctement avant PLAN_DICEREWORK3.
+Toujours vérifier avec `tools/inspect-glb.js` avant de retoucher ces tables (voir
+`docs/PLAN_DICEREWORK3.md`).
 
 **Architecture dés (Session 44)**
 - DiceRoller monté dans Canvas3D — même contexte WebGL, pas d'overlay HTML séparé.

@@ -59,13 +59,31 @@ export const CHANCE_AMBIANCE = {
 /**
  * Effets de l'âge sur les Attributs (malus cumulatifs).
  * Règles LdB — choix parmi les attributs listés. MVP : premier(s) de la liste.
+ * Malus 16-19 ans (REGLE_CREATION.txt, "PERSONNAGES TRÈS JEUNES (OPTIONNEL)") gaté par
+ * ctx.youngPenaltyEnabled (option young_penalty, défaut OFF) — non applicable par attribut si
+ * son "Niveau de base" (ctx.attributes, avant tout modificateur) est déjà ≤7.
  * @param {number} age
- * @returns {{ FOR?: number, CON?: number, COO?: number, ADA?: number, PER?: number }}
+ * @param {object} [ctx] - { attributes?: {FOR,PRE}, youngPenaltyEnabled?: boolean }
+ * @returns {{ FOR?: number, CON?: number, COO?: number, ADA?: number, PER?: number, PRE?: number }}
  */
-export function getAgeEffects(age) {
+export function getAgeEffects(age, ctx = {}) {
   if (age >= 41) return { FOR: -1, CON: -1, COO: -1, ADA: -1, PER: -1 }
   if (age >= 36) return { FOR: -1, CON: -1 }
   if (age >= 30) return { FOR: -1 }
+  if (ctx.youngPenaltyEnabled && age >= 16 && age <= 19) {
+    const attrs = ctx.attributes || {}
+    const effects = {}
+    if (age <= 17) {
+      if ((attrs.FOR ?? 0) > 7) effects.FOR = -3
+      if ((attrs.PRE ?? 0) > 7) effects.PRE = -2
+    } else if (age === 18) {
+      if ((attrs.FOR ?? 0) > 7) effects.FOR = -2
+      if ((attrs.PRE ?? 0) > 7) effects.PRE = -1
+    } else if (age === 19) {
+      if ((attrs.FOR ?? 0) > 7) effects.FOR = -1
+    }
+    return effects
+  }
   return {}
 }
 /**

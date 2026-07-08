@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 3) — 2026-07-08
+> Session 141 (suite 5) — 2026-07-08
 
 ---
 
@@ -107,8 +107,58 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 3) (2026-07-08)
+## ÉTAT COURANT — Session 141 (suite 5) (2026-07-08)
 
+- **Session 141 (suite 5) — Correction animation 3D dé D100 (percentile) + D10 ✅ CLOS.** Interruption
+  ponctuelle hors chantier en cours (`AdvantagesPanel.jsx` ci-dessous reste la vraie suite). Signalement
+  Saar : faces non alignées, résultat serveur ≠ affiché ("30+7" pour un roll serveur de 1), dé des
+  unités visuellement cassé (arête/pointe face caméra, jamais une vraie face). Diagnostic [VÉRIFIÉ]
+  par instrumentation réelle (`tools/inspect-glb.js` sur les `.glb` commités, pas une hypothèse de
+  lecture) : `D10_FACE_GLB`/`D10U_FACE_GLB`/`D10T_FACE_GLB` (`diceMath.js`) ne correspondaient à
+  aucune face réelle de `D10.glb`/`D100.glb`, jamais recalculées correctement depuis leur
+  introduction Session 65 (même commit que l'ajout des `.glb`) — D4/D6/D8 confirmés corrects par la
+  même méthode, D12/D20 hors scope (fonctionnels/déjà calibrés). Recherche pro demandée par Saar
+  avant de coder (`byWulf/threejs-dice`, `Dice So Nice!` Foundry VTT) : confirme le pipeline de rendu
+  existant déjà standard industrie ; piste "réactiver le D10 procédural" explicitement écartée par
+  Saar (dés procéduraux médiocres, D20 procédural s'était avéré impossible à texturer proprement —
+  raison probable du passage historique aux `.glb`). Architecture : les deux tables dupliquées à la
+  main pour le même fichier `D10.glb` (`D10_FACE_GLB`/`D10U_FACE_GLB`, relevé par Saar) fusionnées en
+  `D10_GLB_NORMALS` unique, `d10_units` dérivée automatiquement (relabeling `10→0`) au lieu d'être
+  maintenue à la main ; `D10T_FACE_GLB` (D100.glb, fichier distinct) recalibrée indépendamment.
+  Harnais de calibration temporaire `/dev/dice-calibration` (composant autonome, ne dépendant pas de
+  la donnée à calibrer, pose statique + rotation "clock" pour vérifier la lisibilité) — Saar a lu les
+  20 valeurs réelles en direct sur les vrais modèles, retiré après usage. Code mort D10 procédural
+  supprimé (`D10_KITE_NORMALS`/`D10_KITE_VALUES`/`createD10Geometry()`, `DiceMesh.jsx`/`diceMath.js`).
+  Testé : dérivation + bijection 0-9 vérifiées, ESLint 0 erreur introduite (2 warnings préexistants
+  confirmés via `git stash`), **SR + jet D100 réel en session confirmé fonctionnel par Saar**. Non
+  testé : scénarios limites un par un (00/100), retrait de dé en cours d'animation. Détail complet :
+  `docs/JOURNAL6.md` "Session 141 (suite 5)", `docs/PLAN_DICEREWORK3.md`.
+- **Session 141 (suite 5) — EN COURS, pas encore codé.** `polaris_latent` (OPT-04) élargi par Saar
+  en chantier de correction d'`AdvantagesPanel.jsx` : bug pré-existant trouvé (composant écrit
+  avant la migration 99 "char_advantages V2", ne correspond plus au schéma réel — `hasMuta029`
+  toujours faux, flux d'ajout en jeu cassé depuis cette migration). Plan complet en 5 lots dans
+  **`docs/PLAN_ADVANTAGESPANEL.md`** — **Lot A détaillé ligne-à-ligne, prêt à coder** (7 fichiers
+  précis : migration `123_ref_advantages_polaris.js`, `getStep5RefData`, `advantageConstraints.js`,
+  `advantageService.js`, `AdvantagesPanel.jsx`, i18n). Dette annexe trouvée et documentée (non
+  prioritaire, backlog) : **`[CS7]`** — `SkillsPanel.jsx` a le même bug (`activeMutations` toujours
+  vide), rend 10 compétences liées aux mutations invisibles pour tout personnage. **Prochaine
+  étape pour une session neuve : ouvrir `docs/PLAN_ADVANTAGESPANEL.md`, section Lot A, et suivre
+  le protocole standard (lire les fichiers cités, confirmer, "Je code ?").**
+- **Session 141 (suite 4) — Options de campagne : `young_penalty` (OPT-10) ✅ câblée.** Malus FOR/PRE
+  16-19 ans (`REGLE_CREATION.txt` « PERSONNAGES TRÈS JEUNES (OPTIONNEL) ») — `getAgeEffects()`
+  (`shared/polarisUtils.js`) ne couvrait jusqu'ici que le malus de vieillesse 30+, jamais 16-19 ans
+  (code mort, pas un conflit de source cette fois — juste une règle jamais implémentée). Gaté par
+  `settings.young_penalty`, malus non applicable par attribut si sa valeur de base est déjà ≤7.
+  Analyse à charge demandée par Saar avant codage — 3 points vérifiés : aperçu `AgeSelector.jsx`
+  reste basé sur `baseAge` (pas `finalAge`), désynchronisation assumée par Saar (cohérente avec le
+  malus 30+ existant, jamais corrigé) ; péremption de `char_attributes.base_level` côté serveur
+  vérifiée non risquée (les 2 seuls appels `/reconcile` envoient toujours le payload complet
+  step1→step5) ; génotype ne modifie jamais `char_attributes` directement (vérifié). **7/11 options
+  faites** (`ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
+  `skill_prerequisites`, `skill_max_level`, `young_penalty`) — 4 restantes. Testé : `node --check`/
+  ESLint 0 erreur introduite, scénarios `node -e` (OFF/ON par tranche d'âge, seuil ≤7, non-interaction
+  avec le malus de vieillesse), SR, **parcours navigateur confirmé Saar ("Fonctionnel")**. Détail
+  complet : `docs/JOURNAL6.md` "Session 141 (suite 4)".
 - **Session 141 (suite 3) — Wizard Step 4 : Formation "Autodidacte" (7 points libres) ✅ câblée.**
   Hors chantier "Options de campagne" (item 41 EN_COURS.md) — mécanique de base LdB toujours active.
   Le sélecteur de formation affichait un texte informatif sans aucune UI de répartition ni
@@ -520,10 +570,11 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **[WIZ-2]** Deux compteurs PC (header store vs CareersAllocator local) — cosmétique, sprint COUCHE 4c
 - **[WIZ-3]** Formation "apprentissage_technique" → choix spécialité non implémenté — sprint COUCHE 4c
 - **[JSON1]** `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant) — casse tout le fichier EN
-- **[OPT-W1]** 5/11 options de campagne sans effet mécanique branché (Wizard/SkillsPanel/CharSheet) — `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`, `skill_prerequisites`, `skill_max_level` câblées — sprint futur, en cours un par un
+- **[OPT-W1]** 4/11 options de campagne sans effet mécanique branché (Wizard/SkillsPanel/CharSheet) — `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`, `skill_prerequisites`, `skill_max_level`, `young_penalty` câblées — sprint futur, en cours un par un
 - **[OPT-W2]** `style={}` visuel dans `client/src/components/campaignSettings/*` (convention CSS) — basse priorité
 - **[MUT1]** `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable en méthode libre — non diagnostiqué en profondeur, sprint futur
 - **[HP1]** Main directrice : `socketCombatHelpers.js:550` et `char-sheet.js:810` lisent `hand_pref` sur `char_sheet` (colonne inexistante) au lieu de `char_identity.hand_pref` → toujours `'R'` par défaut en combat, quel que soit le choix réel du joueur — sprint futur
+- **[CS7]** `SkillsPanel.jsx:135-141` (`activeMutations`) lit `charAdvantages.type==='MUTATION'`/`muta_numero` (schéma V2 n'a jamais eu ces champs, `char_advantages` a été remplacé par la migration 99) au lieu de `char_mutations` (vraie table) → Set toujours vide → **10 compétences** à prérequis `type:'MUTATION'` (dont `MAITRISE_DE_LA_FORCE_POLARIS`/`MAITRISE_DE_LECHO_POLARIS`) structurellement invisibles pour tout personnage, `[VÉRIFIÉ]` en base réelle Session 141 (suite 5) — même cause racine que `AdvantagesPanel.jsx` (`docs/PLAN_ADVANTAGESPANEL.md`), rayon d'impact plus large (10 compétences, pas seulement Polaris) — non prioritaire, ajouté au backlog
 
 ---
 

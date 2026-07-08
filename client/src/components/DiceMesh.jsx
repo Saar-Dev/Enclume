@@ -14,11 +14,6 @@ import {
   D20_FACE_VALUES,
   D12_FACE_VALUES,
   D12_FACE_NORMALS_LIST,
-  D10_KITE_NORMALS,
-  D10_KITE_VALUES,
-  D10_FACE_VALUES,
-  D10_UNITS_FACE_VALUES,
-  D10_TENS_FACE_VALUES,
   makeNoiseFunc,
   getAnimDuration,
   PHASES,
@@ -63,48 +58,6 @@ function makeDigitTexture(value, color = '#1e3a5f', fontSize = 0.45) {
 // Normales vérifiées : group0=(+X)=5, group1=(-X)=2, group2=(+Y)=1, group3=(-Y)=6, group4=(+Z)=3, group5=(-Z)=4
 // Convention dé physique : faces opposées = 7.
 const D6_MATERIAL_VALUES = [5, 2, 1, 6, 3, 4]
-
-// ─── D10 — Pentagonal Trapezohedron ──────────────────────────────────────────
-// Forme correcte d'un vrai D10 (kites, pas triangles).
-// Source : Anton Natarov (domaine public) / Andrew Aquino.
-// 12 vertices : 2 pôles + 10 équatoriaux alternés haut/bas.
-// 20 triangles (2 par kite) via PolyhedronGeometry.
-// Normales et ordre des faces vérifiés via Node.js (0 normales inverses).
-function createD10Geometry(radius = 0.85) {
-  const PI2 = Math.PI * 2
-  const PI5 = Math.PI / 5
-  const h_eq = 0.105  // hauteur équatoriale (normalisée sur rayon=1)
-
-  // 12 vertices normalisés (PolyhedronGeometry applique le radius)
-  const verts = [
-    0, 1, 0,   // v0 — pôle nord
-    0, -1, 0,  // v1 — pôle sud
-  ]
-  for (let k = 0; k < 5; k++) {
-    // Couche haute (v2,v4,v6,v8,v10)
-    verts.push(Math.cos((PI2/5)*k), h_eq, Math.sin((PI2/5)*k))
-    // Couche basse (v3,v5,v7,v9,v11) — décalée de π/5
-    verts.push(Math.cos((PI2/5)*k + PI5), -h_eq, Math.sin((PI2/5)*k + PI5))
-  }
-
-  // 20 triangles — 10 kites × 2 triangles
-  // Ordre Test B (vérifié : 0 normales inverses)
-  // Kite i (nord) : [0,b,h] + [0,hn,b]
-  // Kite i (sud)  : [1,b,hn] + [1,hn,bn]
-  // Ordre entrelacé : kite_nord[0], kite_sud[0], kite_nord[1], kite_sud[1]...
-  const faces = []
-  for (let i = 0; i < 5; i++) {
-    const h  = 2 + i * 2
-    const b  = 3 + i * 2
-    const hn = 2 + ((i + 1) % 5) * 2
-    const bn = 3 + ((i + 1) % 5) * 2
-    faces.push(0, b, h,  0, hn, b)   // kite nord i
-    faces.push(1, b, hn, 1, hn, bn)  // kite sud  i
-  }
-
-  const geo = new THREE.PolyhedronGeometry(verts, faces, radius, 0)
-  return geo
-}
 
 // ─── DiceMeshGlb — rendu via modèle .glb (géométrie + matériau baked) ────────
 // Même logique d'animation que DiceMesh procédural.
@@ -261,12 +214,6 @@ function DiceMeshProcedural({ dieType, faceValue, seed, laneX, color = '#1e3a5f'
           geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2))
         }
         break
-      case 'pentagonal_bipyramid':
-        // D10 V1 — géométrie correcte (pentagonal trapezohedron).
-        // Texturing UV reporté en V2 (nécessite Blender ou outil 3D).
-        // Chiffre affiché via overlay Html.
-        geo = createD10Geometry(0.85)
-        break
       case 'dodecahedron':
         geo = new THREE.DodecahedronGeometry(0.78, 0)
         geo.rotateX(Math.PI / 5)
@@ -358,11 +305,6 @@ function DiceMeshProcedural({ dieType, faceValue, seed, laneX, color = '#1e3a5f'
         ...base,
         map: makeDigitTexture(v, color, 0.3),
       }))
-    }
-    if (geoDef.type === 'pentagonal_bipyramid') {
-      // D10 V1 — matériau couleur unie. Chiffre via overlay Html.
-      // V2 : texturing UV par face via modèle Blender (.glb avec UVs pré-calculés).
-      return new THREE.MeshStandardMaterial({ ...base, color })
     }
     if (geoDef.type === 'dodecahedron') {
       // D12 — atlas horizontal 128×12 cases. UVs pré-décalés dans la géométrie.
@@ -476,16 +418,6 @@ function DiceMeshProcedural({ dieType, faceValue, seed, laneX, color = '#1e3a5f'
       const faceIdx = D12_FACE_VALUES.indexOf(faceValue)
       const fn = faceIdx >= 0
         ? new THREE.Vector3(...D12_FACE_NORMALS_LIST[faceIdx])
-        : new THREE.Vector3(0, 1, 0)
-      targetQ = new THREE.Quaternion().setFromUnitVectors(fn, camDir.clone().negate())
-    } else if (dieType === 'd10' || dieType === 'd10_units' || dieType === 'd10_tens') {
-      // D10 — trouver le kite portant faceValue et orienter sa normale vers la caméra
-      const faceValues = dieType === 'd10_tens'  ? D10_TENS_FACE_VALUES
-                       : dieType === 'd10_units' ? D10_UNITS_FACE_VALUES
-                       : D10_FACE_VALUES
-      const kiteIdx = faceValues.indexOf(faceValue)
-      const fn = kiteIdx >= 0
-        ? new THREE.Vector3(...D10_KITE_NORMALS[kiteIdx])
         : new THREE.Vector3(0, 1, 0)
       targetQ = new THREE.Quaternion().setFromUnitVectors(fn, camDir.clone().negate())
     } else if (faceNormal) {

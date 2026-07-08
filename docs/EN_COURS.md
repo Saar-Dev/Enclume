@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-08 Session 141 (suite 3)
+> Dernière mise à jour : 2026-07-08 Session 141 (suite 5)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -11,21 +11,54 @@
 
 > **CHANTIER REDESIGN STEP 4 PROFESSION → ✅ TERMINÉ (8/8 lots)** — plan maître archivé :
 > **`docs/Old/PLAN_REWORKFINAL.md`**.
-> **Chantier Options de campagne (item 41) : `skill_max_level` (OPT-08) ✅ câblée — Session 141
-> (suite 2)** (6/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
-> `skill_prerequisites`, `skill_max_level`). **Conflit de source trouvé et confirmé par Saar avant
-> code** (même schéma que OPT-07) : `getSkillCap()` (`shared/careerSkills.js`) appliquait le plafond
-> par années **inconditionnellement** depuis le rework Step4 (Session 139), alors que
-> `REGLE_CREATION.txt:1250-1263` marque cette règle **« (OPTIONNEL) »** — gaté désormais par
-> `settings.skill_max_level` (défaut OFF → `Infinity`, seul le budget Q2 limite), client
-> (`CareersAllocator.jsx`) + serveur (`creationService.js` STEP4). Le plafond fixe +5 origine
-> (règle non optionnelle) reste inchangé dans les deux états. Scope Wizard uniquement (règle
-> "Lors de la création", vérifié : `POST /skills/buy` en Progression n'a déjà aucun plafond).
-> **PROCHAINE OPTION À CÂBLER : à définir avec Saar** — voir item "41." (5/11 restantes :
-> `polaris_latent`, `revers`, `skill_natural_prog`, `young_penalty`, `celebrity`).
+> **PROCHAINE ACTION IMMÉDIATE — Session 141 (suite 5), en cours** : `polaris_latent` (OPT-04)
+> a été élargi par Saar en un chantier de correction plus large d'`AdvantagesPanel.jsx` (bug
+> pré-existant trouvé en cours de route : le composant date d'avant la migration 99, "char_advantages
+> V2", et ne correspond plus au schéma réel). Plan complet, découpé en 5 lots, dans
+> **`docs/PLAN_ADVANTAGESPANEL.md`** — **le Lot A est détaillé ligne-à-ligne et prêt à coder**
+> (fichiers exacts, migration, contraintes, signature de fonctions). Reprendre directement ce
+> fichier plutôt que de replanifier : lire les fichiers qu'il cite, confirmer la lecture, puis
+> "Je code ?" avant d'implémenter. Lots B (affichage liste, même fichier mais tâche séparée), C
+> ("Autres" texte libre), D ("Mutations" en jeu) restent à planifier en détail chacun leur tour.
+> Lot E (`SkillsPanel.jsx activeMutations`, dette `[CS7]`) est backlog, non prioritaire.
+> **Chantier Options de campagne (item 41) : `young_penalty` (OPT-10) ✅ câblée — Session 141
+> (suite 4)** (7/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
+> `skill_prerequisites`, `skill_max_level`, `young_penalty`). Malus FOR/PRE 16-19 ans
+> (`REGLE_CREATION.txt` « PERSONNAGES TRÈS JEUNES (OPTIONNEL) ») — `getAgeEffects()`
+> (`shared/polarisUtils.js`) ne couvrait jusqu'ici que le malus de vieillesse 30+, jamais 16-19 ans
+> (code mort, pas un conflit de source cette fois). Gaté par `settings.young_penalty`, non applicable
+> par attribut si sa valeur de base est déjà ≤7. Analyse à charge : aperçu `AgeSelector.jsx` reste basé
+> sur `baseAge` (pas `finalAge`), imprécision assumée par Saar (cohérent avec le malus 30+ existant,
+> jamais corrigé) ; péremption `char_attributes.base_level` et modificateur génotype caché tous deux
+> vérifiés non risqués. **PROCHAINE OPTION À CÂBLER : à définir avec Saar** — voir item "41." (4/11
+> restantes : `polaris_latent`, `revers`, `skill_natural_prog`, `celebrity`).
 > **Item 46 (hors chantier options de campagne) : Formation "Autodidacte" ✅ câblée — Session 141
 > (suite 3)** — 7 points libres réellement répartissables (mécanique de base, jamais un toggle
 > campagne), voir détail ci-dessous.
+> **Item 47 (hors chantier, interruption ponctuelle) : Correction dé D100/D10 3D ✅ CLOS — Session
+> 141 (suite 5)** — `PLAN_DICEREWORK3.md`, voir détail ci-dessous. Le chantier `PLAN_ADVANTAGESPANEL.md`
+> (ligne 14 ci-dessus) reste la prochaine action réelle à reprendre.
+
+**47. Correction animation 3D dé D100 (percentile) + D10 ✅ CLOS — Session 141 (suite 5) (2026-07-08)**
+   → Signalement Saar (hors chantier en cours) : faces non alignées, résultat serveur ≠ affiché
+     ("30+7" pour un roll serveur de 1), dé des unités visuellement cassé. Diagnostic [VÉRIFIÉ] par
+     instrumentation réelle (`tools/inspect-glb.js` sur les `.glb` commités) : les tables
+     `D10_FACE_GLB`/`D10U_FACE_GLB`/`D10T_FACE_GLB` (`diceMath.js`) ne correspondaient à aucune face
+     réelle, jamais recalculées correctement depuis leur introduction Session 65.
+   → Recherche pro demandée par Saar (`byWulf/threejs-dice`, `Dice So Nice!`) : confirme le pipeline
+     de rendu existant (normale → orientation caméra) déjà standard industrie ; piste "réactiver le
+     D10 procédural" explicitement écartée par Saar (dés procéduraux médiocres, D20 procédural
+     impossible à texturer proprement — raison probable du passage aux `.glb` Session 65).
+   → `D10_FACE_GLB`/`D10U_FACE_GLB` (dupliquées à la main pour le même fichier `D10.glb`, relevé par
+     Saar) fusionnées en `D10_GLB_NORMALS` unique, `d10_units` dérivée automatiquement. `D10T_FACE_GLB`
+     (D100.glb, fichier distinct) recalibrée indépendamment. Harnais de calibration temporaire
+     `/dev/dice-calibration` (composant autonome, retiré après usage) — Saar a lu les 20 valeurs
+     réelles en direct sur les vrais modèles. Code mort D10 procédural supprimé (`DiceMesh.jsx`,
+     `diceMath.js`).
+   → **Testé :** dérivation référence stricte + bijection 0-9 vérifiées, ESLint 0 erreur introduite
+     (2 warnings préexistants confirmés), **SR + jet D100 réel en session confirmé fonctionnel par
+     Saar**. **Non testé :** scénarios limites un par un (00/100), retrait de dé en cours d'animation.
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 5)", `docs/PLAN_DICEREWORK3.md`.
 
 **46. Wizard Step 4 — Formation "Autodidacte" (7 points libres) ✅ CLOS — Session 141 (suite 3) (2026-07-08)**
    → Hors chantier "Options de campagne" (item 41) — mécanique de base LdB toujours active, pas un
@@ -397,6 +430,7 @@ Projet en cours et priorité user :
 | **CS4** | Catégorie "Techniques" + liste compétences | Moyenne — Cluster O |
 | **CS5** | Compétence réservée (X) : ouverture 1 XP, reste -3 | Moyenne — Cluster O |
 | **CS6** | Force Polaris = Avantage (pas Mutation) | Moyenne — Cluster O |
+| **CS7** | `SkillsPanel.jsx:135-141` (`activeMutations`) lit `charAdvantages` (`type==='MUTATION'`/`muta_numero`, schéma V2 jamais eu ces champs) au lieu de `char_mutations` (vraie table) → Set toujours vide → **10 compétences** à prérequis `type:'MUTATION'` (`MUTATION_CONTAGION`, `MUTATION_CONTROLE_MOLECULAIRE`, `MUTATION_EMPATHIE`, `MUTATION_METAMORPHOSE`, `MUTATION_PURULENCE`, `MUTATION_RADIATIONS`, `MUTATION_SONAR`, `MUTATION_AGILITE_CAUDALE`, `MAITRISE_DE_LA_FORCE_POLARIS`, `MAITRISE_DE_LECHO_POLARIS`) structurellement invisibles pour tout personnage, quelle que soit la mutation réellement possédée — `[VÉRIFIÉ]` en base réelle Session 141 (suite 5), même cause racine que `AdvantagesPanel.jsx` (voir `docs/PLAN_ADVANTAGESPANEL.md`) mais rayon d'impact plus large (10 compétences, pas seulement Polaris) | Non prioritaire — ajouté au backlog, voir `docs/PLAN_ADVANTAGESPANEL.md` |
 | **COM20** | Phase 1 : afficher arme (munitions + type) | Moyenne — Cluster N |
 | **COM21** | Collision tokens : deuxième bloqué | Moyenne — Cluster N |
 | **COM23** | ~~Label token : fixe, ne rentre pas dans les murs~~ | ✅ Session 127 |
@@ -411,7 +445,7 @@ Projet en cours et priorité user :
 | **CAR3** | Prérequis carrières (espion, soldat_elite_*, officier_militaire_souterrain, etc.) non insérés dans `ref_career_prerequisites` | Moyenne — migration dédiée post lots 2-6 |
 | **DBG-C1** | `character.user_id` null quand GM crée pour joueur absent (steps 1-3) | Moyenne — sprint futur |
 | **JSON1** | `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant, cassait déjà avant Session 132) | **Haute** — casse tout le fichier EN |
-| **OPT-W1** | 8/11 options de campagne (polaris_latent, random_pro_advantages, revers, skill_prerequisites, skill_max_level, skill_natural_prog, young_penalty, celebrity) sans effet mécanique branché — `ambiance` ✅ Session 132 suite, `random_mutations` ✅ Session 136 (masque la carte "Tirage aléatoire" Step3 si désactivée), `feminin_bonus` ✅ Session 137 (Sexe/Fécondité Step1/3/5, voir `docs/PLAN_SEXE.md`) | Moyenne — en cours un par un |
+| **OPT-W1** | 4/11 options de campagne (polaris_latent, revers, skill_natural_prog, celebrity) sans effet mécanique branché — `ambiance` ✅ Session 132 suite, `random_mutations` ✅ Session 136, `feminin_bonus` ✅ Session 137, `random_pro_advantages`/`skill_prerequisites` ✅ Session 141, `skill_max_level` ✅ Session 141 (suite 2), `young_penalty` ✅ Session 141 (suite 4) | Moyenne — en cours un par un |
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 | **MUT1** | `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable | Basse — à investiguer |
 | **HP1** | Main directrice : `socketCombatHelpers.js:550` et `char-sheet.js:810` lisent `hand_pref` sur `char_sheet` (colonne inexistante) au lieu de `char_identity.hand_pref` → toujours `'R'` par défaut, quel que soit le choix réel du joueur | Moyenne — mécanique jamais appliquée en combat |

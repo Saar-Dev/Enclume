@@ -97,43 +97,40 @@ const D8_GLB_NORMALS = {
   7: [-0.5980, -0.5335, -0.5981],  // C8 ✓
   8: [ 0.5981,  0.5335,  0.5981],  // C7 ✓
 }
-// D10, D100 partagent la même géométrie — normals identiques
-// face 8 : -C9 (cassé fix — C10 légèrement hors axe)
-const D10_FACE_GLB = {
-   1: [-0.2171,  0.3521,  0.9104],  // C9 ✓
-   2: [-0.5699, -0.6205, -0.5387],  // C1 ✓
-   3: [ 0.6884,  0.5493, -0.4737],  // C8 ✓
-   4: [ 0.3804, -0.5588,  0.7369],  // C6 ✓
-   5: [-0.3815,  0.5576, -0.7373],  // C7 ✓
-   6: [-0.7066, -0.5506,  0.4444],  // C3 ✓
-   7: [ 0.6330,  0.6026,  0.4859],  // C2 ✓
-   8: [ 0.2171, -0.3521, -0.9104],  // -C9 ✓
-   9: [-0.8221,  0.5551,  0.1268],  // C5 ✓
-  10: [ 0.8154, -0.5631, -0.1344],  // C4 ✓
+// D10, D100 partagent la même géométrie — normals identiques (confirmé via inspect-glb.js).
+// Calibré Session 141 (PLAN_DICEREWORK3 Lot 3) — harnais /dev/dice-calibration, lecture en direct
+// sur D10.glb/D100.glb réels par Saar (10/10 valeurs, bijection 0-9 vérifiée des deux côtés).
+// Table canonique unique pour D10.glb (Lot 1) — d10_units dérive de celle-ci (0 → face "10"),
+// au lieu de dupliquer une deuxième table à la main.
+const D10_GLB_NORMALS = {
+   1: [ 0.0000,  0.5381,  0.8429],
+   2: [-0.8016, -0.5381, -0.2605],
+   3: [ 0.4955,  0.5381, -0.6819],
+   4: [ 0.4954, -0.5381,  0.6819],
+   5: [-0.4954,  0.5381, -0.6819],
+   6: [-0.4955, -0.5381,  0.6819],
+   7: [ 0.8016,  0.5381,  0.2605],
+   8: [ 0.0000, -0.5381, -0.8429],
+   9: [-0.8017,  0.5381,  0.2604],
+  10: [ 0.8017, -0.5381, -0.2604],
 }
-const D10U_FACE_GLB = {
-  0: [ 0.8154, -0.5631, -0.1344],  // C4 ✓
-  1: [-0.2171,  0.3521,  0.9104],  // C9 ✓
-  2: [-0.5699, -0.6205, -0.5387],  // C1 ✓
-  3: [ 0.6884,  0.5493, -0.4737],  // C8 ✓
-  4: [ 0.3804, -0.5588,  0.7369],  // C6 ✓
-  5: [-0.3815,  0.5576, -0.7373],  // C7 ✓
-  6: [-0.7066, -0.5506,  0.4444],  // C3 ✓
-  7: [ 0.6330,  0.6026,  0.4859],  // C2 ✓
-  8: [ 0.2171, -0.3521, -0.9104],  // -C9 ✓
-  9: [-0.8221,  0.5551,  0.1268],  // C5 ✓
-}
+// Dérivée de D10_GLB_NORMALS — jamais maintenue à la main (relabeling 10→0, même géométrie).
+const D10_UNITS_DERIVED = Object.fromEntries(
+  Object.entries(D10_GLB_NORMALS).map(([k, v]) => [k === '10' ? '0' : k, v])
+)
+// D100.glb — même géométrie que D10.glb, sérigraphie indépendante (calibrée séparément, pas
+// dérivée par hypothèse — confirmé nécessaire, l'ordre face→valeur diffère bien des unités).
 const D10T_FACE_GLB = {
-   0: [ 0.8154, -0.5631, -0.1344],  // C4 ✓
-  10: [-0.2171,  0.3521,  0.9104],  // C9 ✓
-  20: [-0.5699, -0.6205, -0.5387],  // C1 ✓
-  30: [ 0.6884,  0.5493, -0.4737],  // C8 ✓
-  40: [ 0.3804, -0.5588,  0.7369],  // C6 ✓
-  50: [-0.3815,  0.5576, -0.7373],  // C7 ✓
-  60: [-0.7066, -0.5506,  0.4444],  // C3 ✓
-  70: [ 0.6330,  0.6026,  0.4859],  // C2 ✓
-  80: [ 0.2171, -0.3521, -0.9104],  // -C9 ✓
-  90: [-0.8221,  0.5551,  0.1268],  // C5 ✓
+   0: [ 0.0000,  0.5381,  0.8429],
+  10: [-0.4955, -0.5381,  0.6819],
+  20: [ 0.8016,  0.5381,  0.2605],
+  30: [ 0.8017, -0.5381, -0.2604],
+  40: [-0.4954,  0.5381, -0.6819],
+  50: [ 0.4954, -0.5381,  0.6819],
+  60: [-0.8017,  0.5381,  0.2604],
+  70: [-0.8016, -0.5381, -0.2605],
+  80: [ 0.4955,  0.5381, -0.6819],
+  90: [ 0.0000, -0.5381, -0.8429],
 }
 const D12_GLB_NORMALS = {
    1: [-0.0539,  0.9980, -0.0340],  // C4 ✓
@@ -179,46 +176,12 @@ const FACE_NORMALS = {
   d4:        D4_GLB_NORMALS,
   d6:        D6_FACE_NORMALS,
   d8:        D8_GLB_NORMALS,
-  d10:       D10_FACE_GLB,
-  d10_units: D10U_FACE_GLB,
+  d10:       D10_GLB_NORMALS,
+  d10_units: D10_UNITS_DERIVED,
   d10_tens:  D10T_FACE_GLB,
   d12:       D12_GLB_NORMALS,
   d20:       D20_GLB_NORMALS,
 }
-
-// D10 — pentagonal trapezohedron (forme correcte d'un vrai D10)
-// Géométrie : PolyhedronGeometry, 12 vertices, 20 triangles (10 kites × 2 triangles)
-// Normales moyennes par kite calculées via Node.js après construction géométrie.
-// Paires opposées dot=-1.000 ✅ — convention D10 : opposées = 9 (valeurs 0-9)
-//
-// 3 types avec plages différentes :
-//   d10       : faceValue ∈ {1..10}
-//   d10_units : faceValue ∈ {0..9}
-//   d10_tens  : faceValue ∈ {0,10,20..90}
-//
-// Normales partagées — mapping faceValue→kiteIndex diffère selon le type.
-const D10_KITE_NORMALS = [
-  [ 0.6012,  0.6692,  0.4368],  // kite 0 → valeur 0 (d10_units) / 1 (d10) / 0 (d10_tens)
-  [ 0.2296, -0.6692,  0.7067],  // kite 1 → valeur 3
-  [-0.2296,  0.6692,  0.7067],  // kite 2 → valeur 2
-  [-0.6012, -0.6692,  0.4368],  // kite 3 → valeur 1
-  [-0.7431,  0.6692,  0.0000],  // kite 4 → valeur 4
-  [-0.6012, -0.6692, -0.4368],  // kite 5 → valeur 9
-  [-0.2296,  0.6692, -0.7067],  // kite 6 → valeur 6
-  [ 0.2296, -0.6692, -0.7067],  // kite 7 → valeur 7
-  [ 0.6012,  0.6692, -0.4368],  // kite 8 → valeur 8
-  [ 0.7431, -0.6692,  0.0000],  // kite 9 → valeur 5
-]
-// D10_KITE_VALUES[kiteIdx] = valeur 0-9 affichée (d10_units / d10_tens ×10 / d10 +1)
-// Opposées : 0↔5(=9), 1↔6(=9)... — convention physique respectée
-const D10_KITE_VALUES = [0, 3, 2, 1, 4, 9, 6, 7, 8, 5]
-
-// Mappings complets par type (index = kiteIdx, valeur = faceValue du payload)
-const D10_FACE_VALUES       = D10_KITE_VALUES.map(v => v === 0 ? 10 : v)  // d10 : 0→10
-const D10_UNITS_FACE_VALUES = D10_KITE_VALUES                              // d10_units : 0-9
-const D10_TENS_FACE_VALUES  = D10_KITE_VALUES.map(v => v * 10)            // d10_tens : 0,10..90
-
-export { D10_KITE_NORMALS, D10_KITE_VALUES, D10_FACE_VALUES, D10_UNITS_FACE_VALUES, D10_TENS_FACE_VALUES }
 
 // Export des données D4 pour DiceMesh
 export { D4_FACE_VALUES, D4_FACE_NORMALS_LIST }
