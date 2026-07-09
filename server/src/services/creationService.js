@@ -223,8 +223,13 @@ export async function getStep3RefData() {
 
 // ─── Step 5 : données de référence ────────────────────────────────────────────
 
-export async function getStep5RefData() {
-  return db('ref_advantages').select('*').orderBy(['type', 'name'])
+// OPT-04 (polaris_latent, défaut OFF) : adv_077/adv_078 masqués si l'option n'est pas
+// activée pour cette campagne. adv_079 ("Force Polaris") reste toujours visible.
+export async function getStep5RefData(campaignId) {
+  const settings = await getCampaignSettings(db, campaignId)
+  const rows = await db('ref_advantages').select('*').orderBy(['type', 'name'])
+  if (settings.polaris_latent) return rows
+  return rows.filter(r => !['adv_077', 'adv_078'].includes(r.advantage_id))
 }
 
 // ─── Start : création du brouillon ────────────────────────────────────────────

@@ -1,3 +1,15 @@
+## v163 — 2026-07-08 — Option de campagne : Force Polaris
+
+### Client
+- [fix] Le déblocage de l'onglet "Force Polaris" (fiche personnage, section Avantages) fonctionnait
+  mal depuis longtemps — il se base désormais sur le nouvel avantage "Force Polaris" au lieu d'une
+  ancienne mutation qui n'était plus jamais reconnue.
+
+### Serveur
+- [feat] Trois nouveaux avantages liés à la Force Polaris ("Polaris latent", "Polaris non maîtrisé",
+  "Force Polaris") disponibles à l'achat lors de la création de personnage. Les deux premiers ne
+  sont proposés que si l'option de campagne correspondante est activée.
+
 ## v162 — 2026-07-08 — Correction de l'affichage 3D du dé D100 (percentile)
 
 ### Client

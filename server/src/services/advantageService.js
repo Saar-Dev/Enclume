@@ -7,6 +7,7 @@
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { validateAdvantage } from './advantageConstraints.js'
+import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 
 export async function getAdvantages(sheetId) {
   return db('char_advantages as ca')
@@ -32,17 +33,24 @@ export async function addAdvantage(sheetId, advantageId, acquiredDuring, trxOpt)
       .where('ca.char_sheet_id', sheetId)
       .select('ca.advantage_id', 'ra.type', 'ra.cost_pc', 'ra.family', 'ra.family_limit', 'ra.is_unique', 'ra.name')
 
-    const [ledger, allRefAdvantages, sterileMutation] = await Promise.all([
+    const [ledger, allRefAdvantages, sterileMutation, sheetCampaign] = await Promise.all([
       trx('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
       trx('ref_advantages').select('*'),
       trx('char_mutations as cm')
         .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
         .where({ 'cm.char_sheet_id': sheetId, 'cm.status': 'active', 'rm.mod_fertility': 'sterile' })
         .first(),
+      trx('char_sheet as cs')
+        .join('characters as c', 'c.id', 'cs.character_id')
+        .where('cs.id', sheetId)
+        .select('c.campaign_id')
+        .first(),
     ])
     if (!ledger) throw new AppError(500, 'Ledger PC manquant — incohérence wizard')
 
-    const validation = validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages, !!sterileMutation)
+    const settings = await getCampaignSettings(trx, sheetCampaign.campaign_id)
+
+    const validation = validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages, !!sterileMutation, settings.polaris_latent)
     if (!validation.valid) throw new AppError(400, validation.message)
 
     const refAdv = allRefAdvantages.find(a => a.advantage_id === advantageId)

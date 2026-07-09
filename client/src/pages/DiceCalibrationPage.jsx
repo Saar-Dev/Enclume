@@ -39,20 +39,40 @@ function CameraLookAtOrigin() {
 }
 
 const CLOCK_STEP = 15
+const TILT_STEP = 15
+
+// Réglages par défaut trouvés par Saar (lecture visuelle, N-index désormais stable — voir tri
+// déterministe dans devFaceClusters.js). Appliqués automatiquement à l'arrivée sur cette face,
+// toujours ajustables manuellement ensuite. Index 0-based (N1 → index 0).
+const DEFAULT_ADJUSTMENTS = {
+  d4: [
+    { tiltDeg: -240 },  // N1 → 4
+    { clockDeg: 20 },   // N2 → 1
+    { clockDeg: 15 },   // N3 → 3
+    { clockDeg: 30 },   // N4 → 2
+  ],
+}
 
 function DiceCalibrationInner() {
   const [dieKey, setDieKey] = useState('d10')
   const [index, setIndex] = useState(0)
   const [clockDeg, setClockDeg] = useState(0)
+  const [tiltDeg, setTiltDeg] = useState(0)
 
   const { file, k, dieType } = DICE_CONFIGS[dieKey]
   const clusters = useDiceClusters(file, k)
   const current = clusters[index]
   const expected = current ? getClosestFaceValue(dieType, current.normal) : null
 
-  const selectDie = (key) => { setDieKey(key); setIndex(0); setClockDeg(0) }
-  const prev = () => setIndex(i => (i - 1 + clusters.length) % clusters.length)
-  const next = () => setIndex(i => (i + 1) % clusters.length)
+  const applyDefaults = (key, idx) => {
+    const preset = DEFAULT_ADJUSTMENTS[key]?.[idx]
+    setClockDeg(preset?.clockDeg ?? 0)
+    setTiltDeg(preset?.tiltDeg ?? 0)
+  }
+  const goTo = (idx) => { setIndex(idx); applyDefaults(dieKey, idx) }
+  const selectDie = (key) => { setDieKey(key); setIndex(0); applyDefaults(key, 0) }
+  const prev = () => goTo((index - 1 + clusters.length) % clusters.length)
+  const next = () => goTo((index + 1) % clusters.length)
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#0a0d14', position: 'relative' }}>
@@ -81,6 +101,13 @@ function DiceCalibrationInner() {
           <button onClick={() => setClockDeg(a => a + CLOCK_STEP)}>↻ +{CLOCK_STEP}°</button>
           <button onClick={() => setClockDeg(0)}>reset</button>
         </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ color: '#e89090' }}>Inclinaison axe X (dévie l'alignement exact) :</span>
+          <button onClick={() => setTiltDeg(a => a - TILT_STEP)}>↑ -{TILT_STEP}°</button>
+          <strong>{tiltDeg}°</strong>
+          <button onClick={() => setTiltDeg(a => a + TILT_STEP)}>↓ +{TILT_STEP}°</button>
+          <button onClick={() => setTiltDeg(0)}>reset</button>
+        </div>
         <div>Fichier : {file}{current ? ` — ${current.triCount} triangles sur ce cluster` : ''}</div>
         {expected !== null && (
           <div style={{ color: '#e8c870' }}>Le code actuel prévoit : <strong>{expected}</strong></div>
@@ -93,7 +120,9 @@ function DiceCalibrationInner() {
         <hemisphereLight args={['#ffffff', '#334155', 0.6]} />
         <directionalLight position={[10, 20, 10]} intensity={1.5} />
         <directionalLight position={[-10, 10, -10]} intensity={0.6} />
-        {current && <DiceCalibrationProbe glbPath={file} normal={current.normal} clockDeg={clockDeg} />}
+        {current && (
+          <DiceCalibrationProbe glbPath={file} normal={current.normal} clockDeg={clockDeg} tiltDeg={tiltDeg} />
+        )}
       </Canvas>
     </div>
   )

@@ -95,5 +95,15 @@ export function computeFaceClusters(geometry, k) {
 
   return best.centers
     .map((c, i) => ({ normal: c, triCount: counts[i] }))
-    .sort((a, b) => b.triCount - a.triCount)
+    .sort((a, b) => {
+      if (b.triCount !== a.triCount) return b.triCount - a.triCount
+      // Tri secondaire déterministe (normal arrondi, ignore le bruit flottant) — sans ça, l'ordre
+      // N1..Nk n'est pas reproductible d'un rechargement à l'autre pour les dés symétriques
+      // (D4/D6/D8/D20 : tous les clusters ont le même triCount, rien d'autre ne les départage).
+      for (let i = 0; i < 3; i++) {
+        const d = Math.round(b.normal[i] * 1000) - Math.round(a.normal[i] * 1000)
+        if (d !== 0) return d
+      }
+      return 0
+    })
 }

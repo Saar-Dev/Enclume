@@ -52,6 +52,12 @@ export const CONSTRAINTS = {
     validate: (advantageId, currentAdvantages, refAdv, allRefAdvantages, ledger, isSterile) => !isSterile,
     message: () => `"Fécondité" incompatible avec une mutation stérilisante (Asexué) déjà acquise.`,
   },
+  polaris_option_enabled: {
+    applies: (refAdv) => ['adv_077', 'adv_078'].includes(refAdv.advantage_id),
+    validate: (advantageId, currentAdvantages, refAdv, allRefAdvantages, ledger, isSterile, polarisLatentEnabled) =>
+      polarisLatentEnabled,
+    message: () => `Cette option n'est pas activée dans les réglages de cette campagne.`,
+  },
 }
 
 /**
@@ -59,7 +65,7 @@ export const CONSTRAINTS = {
  * currentAdvantages doit déjà contenir type/cost_pc/family/family_limit/is_unique/name
  * (JOIN ref_advantages côté appelant).
  */
-export function validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages, isSterile = false) {
+export function validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages, isSterile = false, polarisLatentEnabled = false) {
   if (!CONSTRAINTS.exists.validate(advantageId, currentAdvantages, null, allRefAdvantages)) {
     return { valid: false, message: CONSTRAINTS.exists.message() }
   }
@@ -69,7 +75,7 @@ export function validateAdvantage(advantageId, currentAdvantages, ledger, allRef
   for (const [key, constraint] of Object.entries(CONSTRAINTS)) {
     if (key === 'exists') continue
     if (constraint.applies && !constraint.applies(refAdv)) continue
-    if (!constraint.validate(advantageId, currentAdvantages, refAdv, allRefAdvantages, ledger, isSterile)) {
+    if (!constraint.validate(advantageId, currentAdvantages, refAdv, allRefAdvantages, ledger, isSterile, polarisLatentEnabled)) {
       return { valid: false, message: constraint.message(refAdv) }
     }
   }

@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 5) — 2026-07-08
+> Session 141 (suite 6) — 2026-07-08
 
 ---
 
@@ -107,7 +107,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 5) (2026-07-08)
+## ÉTAT COURANT — Session 141 (suite 6) (2026-07-08)
 
 - **Session 141 (suite 5) — Correction animation 3D dé D100 (percentile) + D10 ✅ CLOS.** Interruption
   ponctuelle hors chantier en cours (`AdvantagesPanel.jsx` ci-dessous reste la vraie suite). Signalement
@@ -138,17 +138,30 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   parfois affichée sur D8/D20 dans l'outil, **confirmée absente en jeu réel** (artefact outil,
   investigué en profondeur via le vrai `GLTFLoader`, décision Saar de ne pas creuser plus loin).
   Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 5)", `docs/PLAN_DICEREWORK3.md`.
-- **Session 141 (suite 5) — EN COURS, pas encore codé.** `polaris_latent` (OPT-04) élargi par Saar
-  en chantier de correction d'`AdvantagesPanel.jsx` : bug pré-existant trouvé (composant écrit
-  avant la migration 99 "char_advantages V2", ne correspond plus au schéma réel — `hasMuta029`
-  toujours faux, flux d'ajout en jeu cassé depuis cette migration). Plan complet en 5 lots dans
-  **`docs/PLAN_ADVANTAGESPANEL.md`** — **Lot A détaillé ligne-à-ligne, prêt à coder** (7 fichiers
-  précis : migration `123_ref_advantages_polaris.js`, `getStep5RefData`, `advantageConstraints.js`,
-  `advantageService.js`, `AdvantagesPanel.jsx`, i18n). Dette annexe trouvée et documentée (non
-  prioritaire, backlog) : **`[CS7]`** — `SkillsPanel.jsx` a le même bug (`activeMutations` toujours
-  vide), rend 10 compétences liées aux mutations invisibles pour tout personnage. **Prochaine
-  étape pour une session neuve : ouvrir `docs/PLAN_ADVANTAGESPANEL.md`, section Lot A, et suivre
-  le protocole standard (lire les fichiers cités, confirmer, "Je code ?").**
+- **Session 141 (suite 6) — AdvantagesPanel Lot A : Force Polaris (OPT-04) ✅ CLOS.** Reprise en
+  session neuve depuis `docs/PLAN_ADVANTAGESPANEL.md` (Lot A déjà détaillé ligne-à-ligne par une
+  session précédente, pas encore codé) : bug pré-existant confirmé — `AdvantagesPanel.jsx` écrit
+  avant la migration 99 "char_advantages V2", `hasMuta029` toujours faux en pratique. **Écart trouvé
+  avant codage, tranché avec Saar** : `docs/OPTIONS_CAMPAGNE.md` (OPT-04) mentionne une limite "1
+  Polaris latent par groupe" (campagne) que le plan Lot A n'implémentait pas (seulement
+  `family_limit:1`, par personnage) — décision Saar : hors scope, géré manuellement par le MJ.
+  Migration `123_ref_advantages_polaris.js` (NOUVEAU, 3 lignes `adv_077`/`078`/`079`) +
+  `getStep5RefData(campaignId)` (filtre 077/078 selon `settings.polaris_latent`) +
+  `advantageConstraints.js` (contrainte `polaris_option_enabled`, ciblée par ID pour ne jamais
+  bloquer `adv_079`) + `advantageService.js` (résout `campaignId` par jointure
+  `char_sheet→characters`, jamais fait jusqu'ici avec seulement `sheetId`) + `AdvantagesPanel.jsx`
+  (`hasMuta029`→`hasForcePolaris` sur `adv_079`) + `fr.json`. **8/11 options faites** (`ambiance`,
+  `random_mutations`, `feminin_bonus`, `random_pro_advantages`, `skill_prerequisites`,
+  `skill_max_level`, `young_penalty`, `polaris_latent`) — 3 restantes (`revers`,
+  `skill_natural_prog`, `celebrity`). Dette annexe non prioritaire toujours backlog : **`[CS7]`** —
+  `SkillsPanel.jsx` a le même bug racine (`activeMutations` toujours vide), rend 10 compétences
+  liées aux mutations invisibles pour tout personnage. Testé : `node --check`/ESLint 0 erreur,
+  migration vérifiée en base réelle (P53/P54 respectés), 5 scénarios `node -e` sur
+  `validateAdvantage`, SR + **parcours navigateur confirmé fonctionnel par Saar**. Non testé : achat
+  effectif de `adv_079` détaillé scénario par scénario ; dépendance PC 077/078→079
+  (`pc_postcreation` jamais crédité) reste non résolue, hors scope. **Prochaine étape : Lot B**
+  (affichage liste `AdvantagesPanel.jsx`, tâche séparée) — à planifier en détail avec Saar. Détail
+  complet : `docs/JOURNAL6.md` "Session 141 (suite 6)".
 - **Session 141 (suite 4) — Options de campagne : `young_penalty` (OPT-10) ✅ câblée.** Malus FOR/PRE
   16-19 ans (`REGLE_CREATION.txt` « PERSONNAGES TRÈS JEUNES (OPTIONNEL) ») — `getAgeEffects()`
   (`shared/polarisUtils.js`) ne couvrait jusqu'ici que le malus de vieillesse 30+, jamais 16-19 ans
@@ -222,7 +235,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **127 migrations stables** (122_ref_career_random_benefits_lot1_and_points_alt — Session 140 ;
+- **128 migrations stables** (123_ref_advantages_polaris — Session 141 (suite 6) ;
+  122_ref_career_random_benefits_lot1_and_points_alt — Session 140 ;
   121_ref_career_skills_choice_groups — Session 139 ;
   120_fix_ref_career_point_categories_lot1 — Session 139 ;
   119_char_sheet_wizard_lock — Session 139 ;

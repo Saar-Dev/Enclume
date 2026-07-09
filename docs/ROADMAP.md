@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-07-05 Session 132
+> Dernière mise à jour : 2026-07-08 Session 141 (suite 6)
 
 ---
 
@@ -389,7 +389,8 @@ Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation doc
 | Effets mécaniques — `skill_prerequisites` | `SKILL_MIN` gaté dans SkillsPanel (client) + `POST /skills/buy` (serveur, via `calcSkillTotal`) — 1ʳᵉ option touchant la fiche perso en jeu, pas que le Wizard | ✅ session 141 |
 | Effets mécaniques — `skill_max_level` | `getSkillCap` (`shared/careerSkills.js`) gaté par `settings.skill_max_level` — plafond par années (Wizard uniquement) `Infinity` si désactivé ; conflit de source trouvé (règle marquée "(OPTIONNEL)" dans REGLE_CREATION.txt, appliquée inconditionnellement depuis le rework Step4) et confirmé par Saar avant code | ✅ session 141 (suite 2) |
 | Effets mécaniques — `young_penalty` | `getAgeEffects` (`shared/polarisUtils.js`) gagne le malus FOR/PRE 16-19 ans (code mort jusqu'ici, pas un conflit de source), gaté par `settings.young_penalty`, non applicable par attribut si valeur de base ≤7 ; aperçu `AgeSelector.jsx` reste basé sur `baseAge` (imprécision assumée par Saar, cohérente avec le malus 30+ existant) | ✅ session 141 (suite 4) |
-| Effets mécaniques — 4 restantes | polaris_latent, revers, skill_natural_prog, celebrity | 🔲 en cours un par un |
+| Effets mécaniques — `polaris_latent` (OPT-04, Lot A) | Migration 123 (`adv_077`/`078`/`079`), `getStep5RefData(campaignId)` filtre 077/078 si OFF, `advantageConstraints.js` (`polaris_option_enabled`) + `advantageService.js` (résout `campaignId`/`settings`) revalident côté serveur. Corrige au passage le gate `AdvantagesPanel.jsx` cassé depuis la migration 99 (V2) — voir `docs/PLAN_ADVANTAGESPANEL.md` | ✅ session 141 (suite 6) |
+| Effets mécaniques — 3 restantes | revers, skill_natural_prog, celebrity | 🔲 en cours un par un |
 
 ### Client — Dashboard
 | Tâche | État |

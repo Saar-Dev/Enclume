@@ -11,7 +11,12 @@ import * as THREE from 'three'
 // `clockDeg` : rotation additionnelle autour de l'axe de visée (caméra→dé) — la face affichée
 // ne change pas (même normale vers la caméra), seul son "horloge" (orientation du chiffre à
 // l'écran : haut/bas/gauche/droite) varie. Sert à vérifier la lisibilité sous tous les angles.
-export default function DiceCalibrationProbe({ glbPath, normal, clockDeg = 0 }) {
+// `tiltDeg` : rotation manuelle autour de l'axe X écran (horizontal, perpendiculaire à la vue) —
+// demandé par Saar pour le D4 (convention de lecture "sommet vers le haut", pas face caméra comme
+// les autres dés). ATTENTION : contrairement à clockDeg, ceci DÉVIE la face de l'alignement exact
+// face→caméra — confort de lecture visuelle uniquement, pas une calibration précise. Reset à 0
+// pour revoir l'alignement exact calibré.
+export default function DiceCalibrationProbe({ glbPath, normal, clockDeg = 0, tiltDeg = 0 }) {
   const { camera } = useThree()
   const { nodes } = useGLTF(glbPath)
   const meshRef = useRef()
@@ -29,12 +34,16 @@ export default function DiceCalibrationProbe({ glbPath, normal, clockDeg = 0 }) 
     const camDir = new THREE.Vector3()
     camera.getWorldDirection(camDir)
     const viewAxis = camDir.clone().negate().normalize()
+    const worldUp = new THREE.Vector3(0, 1, 0)
+    const screenX = new THREE.Vector3().crossVectors(worldUp, viewAxis).normalize()
     const fn = new THREE.Vector3(...normal)
     const align = new THREE.Quaternion().setFromUnitVectors(fn, viewAxis)
     const clock = new THREE.Quaternion().setFromAxisAngle(viewAxis, THREE.MathUtils.degToRad(clockDeg))
+    const tilt = new THREE.Quaternion().setFromAxisAngle(screenX, THREE.MathUtils.degToRad(tiltDeg))
     // clock appliqué après align (même axe que la normale alignée) — ne change pas la face visible.
-    meshRef.current.quaternion.copy(clock.multiply(align))
-  }, [normal, clockDeg, camera])
+    // tilt appliqué en dernier, autour de l'axe X écran — dévie volontairement la face de la caméra.
+    meshRef.current.quaternion.copy(tilt.multiply(clock.multiply(align)))
+  }, [normal, clockDeg, tiltDeg, camera])
 
   return (
     <group scale={520}>

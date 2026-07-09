@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-08 Session 140
+> Dernière mise à jour : 2026-07-08 Session 141 (suite 6)
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -282,6 +282,7 @@ Enclume/
 | 120_fix_ref_career_point_categories_lot1 | Insère les 26 lignes `ref_career_point_categories` manquantes pour 4 des 5 carrières du lot 1 (artisan_artiste, assassin, barman, contrebandier — même angle mort que la migration 106, jamais corrigé pour cette table). `chasseur_primes` a 0 ligne légitimement (absent LdB p.156). 30/30 sections restantes de `REGLE_PROFESSION.md` vérifiées conformes. Round-trip byte-identique (Session 139) |
 | 121_ref_career_skills_choice_groups | Ajoute `ref_career_skills.choice_group TEXT` (nullable). Réécrit 24 des 44 lignes `conditional=true` (catégorie/enfant-proxy) en vrais enfants `ref_skills.parent` groupés par `choice_group` (scopé par `career_id`) ; supprime 4 doublons inertes (Diplomate ×3, Espion ×1) ; corrige 4 lignes Soldat d'élite `conditional=true`→`false` (flag erroné, texte source sans marqueur "(au choix)"). Audit exhaustif `PLAN_REWORKFINAL §7` + re-vérification directe de `REGLE_PROFESSION.md` et de la base réelle avant codage. Round-trip `down`/`up` testé en base réelle, byte-identique (Session 139) |
 | 122_ref_career_random_benefits_lot1_and_points_alt | Ajoute `ref_career_random_benefits.points_alt INTEGER` (nullable) + backfill `points_alt=7` sur les 37 lignes `roll=10` déjà seedées (texte identique vérifié 37/37) + insert des 50 lignes manquantes (5 carrières du lot 1, jamais seedées à l'origine — même angle mort que les migrations 106/120, texte repris du fichier de référence pré-migration `docs/Character/Creation/migrations/93_seed_ref_careers_lot1.cjs`, cross-vérifié contre `REGLE_PROFESSION.md`). Débloque le Lot 6 (tirage 1D10) du chantier Redesign Step 4. Round-trip `down`/`up` testé en base réelle, byte-identique (320↔370 lignes) (Session 140) |
+| 123_ref_advantages_polaris | Ajoute 3 lignes `ref_advantages` : `adv_077` "Polaris latent" (3 PC), `adv_078` "Polaris non maîtrisé" (3 PC), `adv_079` "Force Polaris" (5 PC) — `family:'Polaris'`/`family_limit:1` identique sur les 3 (exclusion mutuelle par personnage), tous `mod_*` à `null` (narratif/MJ, house-rule assumé par Saar, pas retrouvé tel quel dans la RAW). Débloque OPT-04 (`polaris_latent`) et corrige le gate cassé d'`AdvantagesPanel.jsx` (`hasMuta029` jamais vrai depuis la migration 99 V2). Voir `docs/PLAN_ADVANTAGESPANEL.md` Lot A (Session 141 suite 6) |
 
 ---
 

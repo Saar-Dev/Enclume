@@ -7,6 +7,7 @@ import {
   GLB_PATHS,
   getFinalRotation,
   getFaceNormal,
+  getFaceRollCorrection,
   D4_FACE_VALUES,
   D4_FACE_NORMALS_LIST,
   D8_FACE_VALUES,
@@ -118,7 +119,17 @@ function DiceMeshGlb({ glbPath, dieType, faceValue, seed, laneX }) {
     let targetQ
     if (faceNormal) {
       const fn = new THREE.Vector3(...faceNormal)
-      targetQ = new THREE.Quaternion().setFromUnitVectors(fn, camDir.clone().negate())
+      const viewAxis = camDir.clone().negate().normalize()
+      targetQ = new THREE.Quaternion().setFromUnitVectors(fn, viewAxis)
+      // Correction de roulis (ex. D4 face "4" — voir getFaceRollCorrection/PLAN_DICEREWORK3) :
+      // setFromUnitVectors seul ne garantit pas un résultat lisible, certaines faces ont besoin
+      // d'une inclinaison supplémentaire trouvée via /dev/dice-calibration.
+      const correction = getFaceRollCorrection(dieType, faceValue)
+      if (correction?.tiltDeg) {
+        const screenX = new THREE.Vector3().crossVectors(up, viewAxis).normalize()
+        const tilt = new THREE.Quaternion().setFromAxisAngle(screenX, THREE.MathUtils.degToRad(correction.tiltDeg))
+        targetQ.premultiply(tilt)
+      }
     } else {
       const r = getFinalRotation(seed)
       targetQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(r.rx, r.ry, r.rz))

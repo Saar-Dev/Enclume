@@ -1463,3 +1463,63 @@ sans navigateur. Hypothèse résiduelle **non vérifiée** [HYPOTHÈSE] : artefa
 éclairage fixe de l'outil) ou timing d'effet React propre à l'outil — **decision Saar : ne pas
 creuser plus loin**, le bug réel (D10/D100 en jeu) est clos, cet artefact reste un défaut cosmétique
 connu de l'outil de debug uniquement.
+
+---
+
+## Session 141 (suite 6) — 2026-07-08 — AdvantagesPanel Lot A : Force Polaris (OPT-04) câblée ✅ CLOS
+
+Reprise en session neuve depuis `docs/PLAN_ADVANTAGESPANEL.md` (rédigé lors d'une session
+précédente, Lot A détaillé ligne-à-ligne, pas encore codé). Protocole complet appliqué : les 7
+fichiers cités par le plan + les 3 références (`docs/OPTIONS_CAMPAGNE.md` OPT-04,
+`REGLE_CREATION.txt` section Polaris latent, migration `92_ref_advantages.js`) relus dans cette
+session avant tout code.
+
+**Root cause confirmée par le plan** : `AdvantagesPanel.jsx` n'a jamais été mis à jour après la
+migration `99_char_advantages_v2.js` — gate "Force Polaris" (`hasMuta029`) toujours faux en
+pratique (aucune ligne `char_advantages` n'a jamais eu `type==='MUTATION'`/`muta_numero` en V2).
+
+**Écart trouvé avant codage (tranché avec Saar)** : `docs/OPTIONS_CAMPAGNE.md` (OPT-04) mentionne
+une limite "1 seul Polaris latent/non maîtrisé **par groupe**" (campagne, tous personnages
+confondus) que le plan Lot A n'implémentait pas (seulement `family_limit:1`, exclusion **par
+personnage**). Décision Saar : hors scope, géré manuellement par le MJ — pas de code pour ça.
+
+**Codé (7 fichiers, exactement le périmètre du plan)** :
+- **NOUVEAU** `server/src/db/migrations/123_ref_advantages_polaris.js` — 3 lignes `ref_advantages`
+  (`adv_077` "Polaris latent" 3 PC, `adv_078` "Polaris non maîtrisé" 3 PC, `adv_079` "Force Polaris"
+  5 PC), `family:'Polaris'`/`family_limit:1` identique sur les 3, tous `mod_*` à `null` (narratif/MJ,
+  comme `adv_050`). House-rule assumé par Saar, pas retrouvé tel quel dans la RAW.
+- `creationService.js` : `getStep5RefData()` → `getStep5RefData(campaignId)`, filtre `adv_077`/
+  `adv_078` si `settings.polaris_latent` est OFF (`adv_079` toujours visible). Seul appelant :
+  `routes/creation.js` (vérifié avant modification).
+- `routes/creation.js` : `getStep5RefData(req.character.campaign_id)`.
+- `advantageConstraints.js` : nouvelle contrainte `polaris_option_enabled` (ciblée par ID explicite
+  `adv_077`/`adv_078`, jamais par `family` — `adv_079` doit rester achetable option OFF).
+  `validateAdvantage(...)` gagne un 6ᵉ paramètre `polarisLatentEnabled = false` (défaut `false`
+  volontaire — gate un achat, pas une restriction, fail-closed si oublié). Seul appelant :
+  `advantageService.js` (vérifié avant modification).
+- `advantageService.js` : `addAdvantage()` résout désormais `campaignId` par jointure
+  `char_sheet → characters` (aucune fonction existante ne le faisait avec seulement `sheetId`), lit
+  `settings.polaris_latent` via `getCampaignSettings` (import ajouté), le passe à `validateAdvantage`.
+- `AdvantagesPanel.jsx` : `MUTA_POLARIS`/`hasMuta029` supprimés, remplacés par `hasForcePolaris`
+  (`charAdvantages.some(a => a.advantage_id === 'adv_079')`) sur les 3 usages (disabled/onClick/
+  title/texte).
+- `fr.json` : `polarisRequired`/`typePolarisDisabled` reformulés sans référence à `muta_029`.
+
+**Testé** : `node --check` (5 fichiers serveur) 0 erreur ; ESLint client (`AdvantagesPanel.jsx`)
+0 erreur ; `fr.json` JSON valide ; migration 123 auto-appliquée par nodemon (P53), vérifiée dans
+`knex_migrations` avant tout appel manuel (P54) — 3 lignes confirmées en base réelle ;
+`getStep5RefData` vérifié contre une campagne réelle (filtre correct selon `polaris_latent`) ;
+5 scénarios `node -e` sur `validateAdvantage` (`adv_077` option OFF→rejeté, option ON→accepté,
+`adv_079` option OFF→toujours accepté, exclusion `family_limit` `adv_077`/`adv_078` toujours active,
+paramètre omis→fail-closed) ; SR + **parcours navigateur confirmé fonctionnel par Saar**.
+
+**Non testé** : achat effectif de `adv_079` en conditions réelles suivi du déblocage visuel du
+bouton "Force Polaris" dans la modale (validation donnée globalement "SR et fonctionnel", pas
+détaillée scénario par scénario) ; la dépendance PC 077/078→079 documentée comme non résolue dans
+le plan (`char_pc_ledger.pc_postcreation` jamais crédité nulle part) reste non résolue, hors scope
+de ce lot.
+
+**Prochaine étape** : Lot B (affichage de la liste `AdvantagesPanel.jsx` — `adv.label`→`adv.name`,
+badge `MUT`/`ATR` à redéfinir, `adv.level` à retirer) — tâche séparée, à planifier en détail avec
+Saar avant de coder (règle "un seul bug à la fois"). Lots C/D non cadrés, Lot E toujours backlog.
+Prochaine migration disponible : **124** (123 consommée cette session).

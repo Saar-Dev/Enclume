@@ -258,6 +258,20 @@ export function getFaceNormal(dieType, faceValue) {
   return map[faceValue] ?? null
 }
 
+// Corrections de roulis pour les faces où `setFromUnitVectors` seul ne suffit pas à afficher un
+// résultat lisible — cette fonction n'a aucun contrôle sur la rotation autour de l'axe aligné,
+// donc certaines faces peuvent tomber sur une orientation où le bon chiffre n'apparaît pas
+// clairement (D4 : chaque face porte les 3 AUTRES chiffres, jamais le sien — trouvé via
+// `/dev/dice-calibration`, confirmé en jeu par Saar sur la face "4"). `tiltDeg` : incline la face
+// hors de l'alignement exact face→caméra (nécessaire ici, pas juste un roulis) — calé sur l'angle
+// de caméra par défaut de `Canvas3D.jsx`, imparfait si le joueur a beaucoup tourné la caméra.
+export const FACE_ROLL_CORRECTIONS = {
+  d4: { 4: { tiltDeg: -240 } },
+}
+export function getFaceRollCorrection(dieType, faceValue) {
+  return FACE_ROLL_CORRECTIONS[dieType]?.[faceValue] ?? null
+}
+
 // Lookup inverse — utilisé par l'outil dev de calibration (DiceCalibrationPage) pour afficher
 // "le code actuel prévoit : X" à côté d'une normale mesurée, sans dupliquer les tables.
 // Retourne la clé (valeur de face) dont la normale enregistrée est la plus proche de `normal`.

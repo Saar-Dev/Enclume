@@ -36,9 +36,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 
-// ─── Constante : ID mutation Sensibilité au Polaris ───────────────────────────
-const MUTA_POLARIS = 'muta_029'
-
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export default function AdvantagesPanel({
@@ -64,9 +61,9 @@ export default function AdvantagesPanel({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
-  // ─── Calculer si muta_029 est active ─────────────────────────────────────
-  const hasMuta029 = useMemo(
-    () => charAdvantages.some(a => a.type === 'MUTATION' && a.muta_numero === MUTA_POLARIS),
+  // ─── Calculer si l'avantage Force Polaris (adv_079) est possédé ──────────
+  const hasForcePolaris = useMemo(
+    () => charAdvantages.some(a => a.advantage_id === 'adv_079'),
     [charAdvantages]
   )
 
@@ -274,14 +271,14 @@ export default function AdvantagesPanel({
                 </button>
 
                 <button
-                  style={{ ...s.typeBtn, ...(hasMuta029 ? {} : s.typeBtnDisabled) }}
-                  onClick={() => hasMuta029 && setStep('polaris')}
-                  disabled={!hasMuta029}
-                  title={hasMuta029 ? undefined : t('advantages.polarisRequired')}
+                  style={{ ...s.typeBtn, ...(hasForcePolaris ? {} : s.typeBtnDisabled) }}
+                  onClick={() => hasForcePolaris && setStep('polaris')}
+                  disabled={!hasForcePolaris}
+                  title={hasForcePolaris ? undefined : t('advantages.polarisRequired')}
                 >
                   <span style={s.typeBtnLabel}>{t('advantages.typePolaris')}</span>
                   <span style={s.typeBtnSub}>
-                    {hasMuta029 ? t('advantages.typePolarisSub') : t('advantages.typePolarisDisabled')}
+                    {hasForcePolaris ? t('advantages.typePolarisSub') : t('advantages.typePolarisDisabled')}
                   </span>
                 </button>
 

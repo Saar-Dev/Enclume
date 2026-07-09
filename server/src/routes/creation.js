@@ -103,7 +103,7 @@ router.get('/:sheetId/step4', async (req, res, next) => {
 
 router.get('/:sheetId/step5/ref', async (req, res, next) => {
   try {
-    const advantages = await getStep5RefData()
+    const advantages = await getStep5RefData(req.character.campaign_id)
     res.json(advantages)
   } catch (err) { next(err) }
 })

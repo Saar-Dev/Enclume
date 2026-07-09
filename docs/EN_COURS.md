@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-08 Session 141 (suite 5)
+> Dernière mise à jour : 2026-07-08 Session 141 (suite 6)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -11,33 +11,58 @@
 
 > **CHANTIER REDESIGN STEP 4 PROFESSION → ✅ TERMINÉ (8/8 lots)** — plan maître archivé :
 > **`docs/Old/PLAN_REWORKFINAL.md`**.
-> **PROCHAINE ACTION IMMÉDIATE — Session 141 (suite 5), en cours** : `polaris_latent` (OPT-04)
-> a été élargi par Saar en un chantier de correction plus large d'`AdvantagesPanel.jsx` (bug
-> pré-existant trouvé en cours de route : le composant date d'avant la migration 99, "char_advantages
-> V2", et ne correspond plus au schéma réel). Plan complet, découpé en 5 lots, dans
-> **`docs/PLAN_ADVANTAGESPANEL.md`** — **le Lot A est détaillé ligne-à-ligne et prêt à coder**
-> (fichiers exacts, migration, contraintes, signature de fonctions). Reprendre directement ce
-> fichier plutôt que de replanifier : lire les fichiers qu'il cite, confirmer la lecture, puis
-> "Je code ?" avant d'implémenter. Lots B (affichage liste, même fichier mais tâche séparée), C
-> ("Autres" texte libre), D ("Mutations" en jeu) restent à planifier en détail chacun leur tour.
-> Lot E (`SkillsPanel.jsx activeMutations`, dette `[CS7]`) est backlog, non prioritaire.
-> **Chantier Options de campagne (item 41) : `young_penalty` (OPT-10) ✅ câblée — Session 141
-> (suite 4)** (7/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
-> `skill_prerequisites`, `skill_max_level`, `young_penalty`). Malus FOR/PRE 16-19 ans
-> (`REGLE_CREATION.txt` « PERSONNAGES TRÈS JEUNES (OPTIONNEL) ») — `getAgeEffects()`
-> (`shared/polarisUtils.js`) ne couvrait jusqu'ici que le malus de vieillesse 30+, jamais 16-19 ans
-> (code mort, pas un conflit de source cette fois). Gaté par `settings.young_penalty`, non applicable
-> par attribut si sa valeur de base est déjà ≤7. Analyse à charge : aperçu `AgeSelector.jsx` reste basé
-> sur `baseAge` (pas `finalAge`), imprécision assumée par Saar (cohérent avec le malus 30+ existant,
-> jamais corrigé) ; péremption `char_attributes.base_level` et modificateur génotype caché tous deux
-> vérifiés non risqués. **PROCHAINE OPTION À CÂBLER : à définir avec Saar** — voir item "41." (4/11
-> restantes : `polaris_latent`, `revers`, `skill_natural_prog`, `celebrity`).
+> **PROCHAINE ACTION IMMÉDIATE — Session 141 (suite 6)** : Lot A d'`AdvantagesPanel.jsx`
+> (`docs/PLAN_ADVANTAGESPANEL.md`) **✅ CLOS** — migration 123 (`adv_077`/`078`/`079` "Force
+> Polaris"), `getStep5RefData(campaignId)` filtre 077/078 selon `settings.polaris_latent`,
+> `advantageConstraints.js`/`advantageService.js` revalident côté serveur, `AdvantagesPanel.jsx`
+> corrige le gate cassé depuis la migration 99 (`hasMuta029` → `hasForcePolaris` sur `adv_079`).
+> Limite "1 Polaris latent par groupe" (OPT-04) volontairement hors scope — gérée manuellement par
+> le MJ (décision Saar). Testé + SR + fonctionnel confirmé Saar. Détail complet : item "48." et
+> `docs/JOURNAL6.md` "Session 141 (suite 6)". **Prochaine étape : Lot B** (affichage liste
+> `AdvantagesPanel.jsx` — `adv.label`→`adv.name`, badge `MUT`/`ATR` à redéfinir, `adv.level` à
+> retirer) — tâche séparée à planifier en détail avec Saar avant de coder (règle "un seul bug à la
+> fois"). Lots C ("Autres" texte libre), D ("Mutations" en jeu) restent à planifier chacun leur
+> tour. Lot E (`SkillsPanel.jsx activeMutations`, dette `[CS7]`) est backlog, non prioritaire.
+> **Chantier Options de campagne (item 41) : `polaris_latent` (OPT-04) ✅ câblée — Session 141
+> (suite 6)** (8/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
+> `skill_prerequisites`, `skill_max_level`, `young_penalty`, `polaris_latent`). **PROCHAINE OPTION À
+> CÂBLER : à définir avec Saar** — voir item "41." (3/11 restantes : `revers`, `skill_natural_prog`,
+> `celebrity`).
 > **Item 46 (hors chantier options de campagne) : Formation "Autodidacte" ✅ câblée — Session 141
 > (suite 3)** — 7 points libres réellement répartissables (mécanique de base, jamais un toggle
 > campagne), voir détail ci-dessous.
 > **Item 47 (hors chantier, interruption ponctuelle) : Correction dé D100/D10 3D ✅ CLOS — Session
-> 141 (suite 5)** — `PLAN_DICEREWORK3.md`, voir détail ci-dessous. Le chantier `PLAN_ADVANTAGESPANEL.md`
-> (ligne 14 ci-dessus) reste la prochaine action réelle à reprendre.
+> 141 (suite 5)** — `PLAN_DICEREWORK3.md`, voir détail ci-dessous.
+
+**48. AdvantagesPanel Lot A — Force Polaris (OPT-04) ✅ CLOS — Session 141 (suite 6) (2026-07-08)**
+   → Reprise en session neuve depuis `docs/PLAN_ADVANTAGESPANEL.md` (Lot A déjà détaillé
+     ligne-à-ligne par une session précédente, pas encore codé). Root cause confirmée par le plan :
+     `AdvantagesPanel.jsx` n'a jamais été mis à jour après la migration `99_char_advantages_v2.js`
+     (gate "Force Polaris" `hasMuta029` toujours faux en pratique).
+   → **Écart trouvé avant codage, tranché avec Saar** : `docs/OPTIONS_CAMPAGNE.md` (OPT-04) mentionne
+     une limite "1 seul Polaris latent/non maîtrisé par groupe" (campagne) que le plan Lot A
+     n'implémentait pas (seulement `family_limit:1`, exclusion par personnage). Décision Saar : hors
+     scope, géré manuellement par le MJ.
+   → Migration `123_ref_advantages_polaris.js` (NOUVEAU) : 3 lignes `ref_advantages` (`adv_077`
+     "Polaris latent" 3 PC, `adv_078` "Polaris non maîtrisé" 3 PC, `adv_079` "Force Polaris" 5 PC),
+     `family:'Polaris'`/`family_limit:1` identique sur les 3, tous `mod_*` à `null` (narratif/MJ,
+     house-rule assumé par Saar). `creationService.js` (`getStep5RefData(campaignId)` filtre
+     077/078 si `settings.polaris_latent` OFF) + `routes/creation.js` + `advantageConstraints.js`
+     (contrainte `polaris_option_enabled`, ciblée par ID pour ne jamais bloquer `adv_079`) +
+     `advantageService.js` (résout `campaignId` par jointure `char_sheet→characters`, jamais fait
+     jusqu'ici avec seulement `sheetId`) + `AdvantagesPanel.jsx` (`hasMuta029`→`hasForcePolaris` sur
+     `adv_079`) + `fr.json` (libellés sans référence `muta_029`).
+   → **Testé :** `node --check` (5 fichiers serveur) 0 erreur, ESLint client 0 erreur, migration 123
+     vérifiée en base réelle (auto-appliquée par nodemon, P53/P54 respectés), `getStep5RefData`
+     vérifié contre une campagne réelle, 5 scénarios `node -e` sur `validateAdvantage` (option
+     ON/OFF, `adv_079` jamais gaté, exclusion `family_limit` toujours active, fail-closed si
+     paramètre omis), **SR + parcours navigateur confirmé fonctionnel par Saar**.
+   → **Non testé :** achat effectif de `adv_079` puis déblocage visuel du bouton "Force Polaris" en
+     conditions réelles détaillé scénario par scénario (validation donnée globalement) ; dépendance
+     PC 077/078→079 (`char_pc_ledger.pc_postcreation` jamais crédité) reste non résolue, hors scope.
+   → **Prochaine étape : Lot B** (affichage liste, tâche séparée) — voir plan, à planifier en détail.
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 6)".
+   → Prochaine migration disponible : **124** (123 consommée cette session).
 
 **47. Correction animation 3D dé D100 (percentile) + D10 ✅ CLOS — Session 141 (suite 5) (2026-07-08)**
    → Signalement Saar (hors chantier en cours) : faces non alignées, résultat serveur ≠ affiché
@@ -386,7 +411,8 @@ Projet en cours et priorité user :
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **127 migrations appliquées** (122_ref_career_random_benefits_lot1_and_points_alt — Session 140 ;
+- **128 migrations appliquées** (123_ref_advantages_polaris — Session 141 (suite 6) ;
+  122_ref_career_random_benefits_lot1_and_points_alt — Session 140 ;
   121_ref_career_skills_choice_groups — Session 139 ;
   120_fix_ref_career_point_categories_lot1 — Session 139 ;
   119_char_sheet_wizard_lock — Session 139 ;
@@ -452,7 +478,7 @@ Projet en cours et priorité user :
 | **CAR3** | Prérequis carrières (espion, soldat_elite_*, officier_militaire_souterrain, etc.) non insérés dans `ref_career_prerequisites` | Moyenne — migration dédiée post lots 2-6 |
 | **DBG-C1** | `character.user_id` null quand GM crée pour joueur absent (steps 1-3) | Moyenne — sprint futur |
 | **JSON1** | `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant, cassait déjà avant Session 132) | **Haute** — casse tout le fichier EN |
-| **OPT-W1** | 4/11 options de campagne (polaris_latent, revers, skill_natural_prog, celebrity) sans effet mécanique branché — `ambiance` ✅ Session 132 suite, `random_mutations` ✅ Session 136, `feminin_bonus` ✅ Session 137, `random_pro_advantages`/`skill_prerequisites` ✅ Session 141, `skill_max_level` ✅ Session 141 (suite 2), `young_penalty` ✅ Session 141 (suite 4) | Moyenne — en cours un par un |
+| **OPT-W1** | 3/11 options de campagne (revers, skill_natural_prog, celebrity) sans effet mécanique branché — `ambiance` ✅ Session 132 suite, `random_mutations` ✅ Session 136, `feminin_bonus` ✅ Session 137, `random_pro_advantages`/`skill_prerequisites` ✅ Session 141, `skill_max_level` ✅ Session 141 (suite 2), `young_penalty` ✅ Session 141 (suite 4), `polaris_latent` ✅ Session 141 (suite 6) | Moyenne — en cours un par un |
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 | **MUT1** | `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable | Basse — à investiguer |
 | **HP1** | Main directrice : `socketCombatHelpers.js:550` et `char-sheet.js:810` lisent `hand_pref` sur `char_sheet` (colonne inexistante) au lieu de `char_identity.hand_pref` → toujours `'R'` par défaut, quel que soit le choix réel du joueur | Moyenne — mécanique jamais appliquée en combat |
