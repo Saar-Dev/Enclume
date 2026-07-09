@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-08 Session 141 (suite 6)
+> Dernière mise à jour : 2026-07-08 Session 141 (suite 7)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -11,18 +11,21 @@
 
 > **CHANTIER REDESIGN STEP 4 PROFESSION → ✅ TERMINÉ (8/8 lots)** — plan maître archivé :
 > **`docs/Old/PLAN_REWORKFINAL.md`**.
-> **PROCHAINE ACTION IMMÉDIATE — Session 141 (suite 6)** : Lot A d'`AdvantagesPanel.jsx`
-> (`docs/PLAN_ADVANTAGESPANEL.md`) **✅ CLOS** — migration 123 (`adv_077`/`078`/`079` "Force
+> **PROCHAINE ACTION IMMÉDIATE — Session 141 (suite 7)** : Lots A **et** B d'`AdvantagesPanel.jsx`
+> (`docs/PLAN_ADVANTAGESPANEL.md`) **✅ CLOS**. Lot A : migration 123 (`adv_077`/`078`/`079` "Force
 > Polaris"), `getStep5RefData(campaignId)` filtre 077/078 selon `settings.polaris_latent`,
-> `advantageConstraints.js`/`advantageService.js` revalident côté serveur, `AdvantagesPanel.jsx`
-> corrige le gate cassé depuis la migration 99 (`hasMuta029` → `hasForcePolaris` sur `adv_079`).
-> Limite "1 Polaris latent par groupe" (OPT-04) volontairement hors scope — gérée manuellement par
-> le MJ (décision Saar). Testé + SR + fonctionnel confirmé Saar. Détail complet : item "48." et
-> `docs/JOURNAL6.md` "Session 141 (suite 6)". **Prochaine étape : Lot B** (affichage liste
-> `AdvantagesPanel.jsx` — `adv.label`→`adv.name`, badge `MUT`/`ATR` à redéfinir, `adv.level` à
-> retirer) — tâche séparée à planifier en détail avec Saar avant de coder (règle "un seul bug à la
-> fois"). Lots C ("Autres" texte libre), D ("Mutations" en jeu) restent à planifier chacun leur
-> tour. Lot E (`SkillsPanel.jsx activeMutations`, dette `[CS7]`) est backlog, non prioritaire.
+> `advantageConstraints.js`/`advantageService.js` revalident côté serveur, gate cassé depuis la
+> migration 99 corrigé (`hasMuta029` → `hasForcePolaris` sur `adv_079`). Lot B : bloc liste
+> `AdvantagesPanel.jsx` réparé (`adv.name` au lieu d'`adv.label` toujours `undefined`, badge
+> `AVA`/`DÉS` sur le vrai `type`, `adv.level` mort retiré). Limite "1 Polaris latent par groupe"
+> (OPT-04) volontairement hors scope — gérée manuellement par le MJ (décision Saar). Testé + SR +
+> fonctionnel confirmé Saar (les deux lots). Détail complet : items "48."/"49." et
+> `docs/JOURNAL6.md` "Session 141 (suite 6)"/"(suite 7)". **Plan `PLAN_ADVANTAGESPANEL.md` pas
+> fini** : Lot C ("Autres" texte libre — conception à trancher : `custom_label` ? catalogue
+> générique ?) et Lot D ("Mutations" ajoutées en jeu — aucune route n'existe pour un personnage
+> déjà verrouillé, le plus gros chantier restant) restent à planifier en détail avec Saar, chacun
+> sa propre session (règle "un seul bug à la fois"). Lot E (`SkillsPanel.jsx activeMutations`,
+> dette `[CS7]`) reste backlog, non prioritaire.
 > **Chantier Options de campagne (item 41) : `polaris_latent` (OPT-04) ✅ câblée — Session 141
 > (suite 6)** (8/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
 > `skill_prerequisites`, `skill_max_level`, `young_penalty`, `polaris_latent`). **PROCHAINE OPTION À
@@ -33,6 +36,27 @@
 > campagne), voir détail ci-dessous.
 > **Item 47 (hors chantier, interruption ponctuelle) : Correction dé D100/D10 3D ✅ CLOS — Session
 > 141 (suite 5)** — `PLAN_DICEREWORK3.md`, voir détail ci-dessous.
+
+**49. AdvantagesPanel Lot B — affichage de la liste ✅ CLOS — Session 141 (suite 7) (2026-07-08)**
+   → Tâche séparée du Lot A (règle "un seul bug à la fois"). Plan Lot B écrit à gros grain dans
+     `PLAN_ADVANTAGESPANEL.md` (3 puces) — plan ligne-à-ligne construit en relisant
+     `AdvantagesPanel.jsx` avant code. Confirmé avant codage contre une fiche réelle (`adv_002`
+     "Ambidextre") : l'ancien code affichait badge "ATR" + **nom vide** (`adv.label` toujours
+     `undefined` en V2).
+   → `AdvantagesPanel.jsx` (bloc liste) : `adv.type === 'MUTATION'` → `adv.type === 'advantage'`
+     (vs `'disadvantage'`) ; `adv.mutation_nom || adv.muta_numero` / `adv.label` → `adv.name` (seul
+     champ réel) ; bloc `level` supprimé (mort, `adv.level` inexistant en V2). Styles renommés
+     (`badgeMut`→`badgeAdvantage`, `badgeAtr`→`badgeDisadvantage`, même rendu visuel) + `s.level`
+     supprimé. `fr.json` : `badgeMut`("MUT")/`badgeAttr`("ATR") → `badgeAdvantage`("AVA")/
+     `badgeDisadvantage`("DÉS"). `en.json` non touché (déjà invalide, dette `[JSON1]`).
+   → **Testé** : ESLint 0 erreur, `fr.json` valide, sortie réelle de `getAdvantages()` revérifiée
+     (badge "AVA" + nom "Ambidextre" affichés correctement après fix), SR + fonctionnel confirmé Saar.
+   → **Non testé** : affichage d'un désavantage réel (`type:'disadvantage'`) — aucune ligne active
+     trouvée en base au moment du test, badge "DÉS" vérifié par lecture du code uniquement.
+   → **Plan pas fini** : Lot C ("Autres" texte libre) et Lot D ("Mutations" en jeu, aucune route
+     n'existe pour un personnage verrouillé) restent à planifier en détail, chacun sa session. Lot E
+     (`[CS7]`) reste backlog.
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 7)".
 
 **48. AdvantagesPanel Lot A — Force Polaris (OPT-04) ✅ CLOS — Session 141 (suite 6) (2026-07-08)**
    → Reprise en session neuve depuis `docs/PLAN_ADVANTAGESPANEL.md` (Lot A déjà détaillé

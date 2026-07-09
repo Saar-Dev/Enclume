@@ -91,6 +91,7 @@ export default function DiceRoller({ payload, onDone }) {
           dieType={die.dieType}
           faceValue={die.faceValue}
           seed={die.seed}
+          timestamp={payload.timestamp}
           laneX={lanePositions[i]}
           startTime={startTime.current}
           color={color}

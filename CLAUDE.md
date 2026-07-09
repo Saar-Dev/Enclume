@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 6) — 2026-07-08
+> Session 141 (suite 7) — 2026-07-08
 
 ---
 
@@ -107,7 +107,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 6) (2026-07-08)
+## ÉTAT COURANT — Session 141 (suite 7) (2026-07-08)
 
 - **Session 141 (suite 5) — Correction animation 3D dé D100 (percentile) + D10 ✅ CLOS.** Interruption
   ponctuelle hors chantier en cours (`AdvantagesPanel.jsx` ci-dessous reste la vraie suite). Signalement
@@ -162,6 +162,21 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   (`pc_postcreation` jamais crédité) reste non résolue, hors scope. **Prochaine étape : Lot B**
   (affichage liste `AdvantagesPanel.jsx`, tâche séparée) — à planifier en détail avec Saar. Détail
   complet : `docs/JOURNAL6.md` "Session 141 (suite 6)".
+- **Session 141 (suite 7) — AdvantagesPanel Lot B : affichage de la liste ✅ CLOS.** Tâche séparée
+  du Lot A (règle "un seul bug à la fois"), plan ligne-à-ligne construit en relisant
+  `AdvantagesPanel.jsx` (le plan écrit ne le détaillait qu'à gros grain). Confirmé contre une fiche
+  réelle (`adv_002` "Ambidextre") : l'ancien code affichait badge "ATR" + **nom vide** (`adv.label`
+  toujours `undefined` en V2). Fix : `adv.type === 'advantage'`/`'disadvantage'` (vraies valeurs) +
+  `adv.name` (au lieu de `adv.label`/`adv.mutation_nom` jamais définis) + suppression du bloc
+  `level` mort. Styles renommés (`badgeMut`→`badgeAdvantage`, `badgeAtr`→`badgeDisadvantage`) +
+  `fr.json` (`AVA`/`DÉS`). `en.json` non touché (déjà invalide, dette `[JSON1]`). Testé : ESLint 0
+  erreur, `fr.json` valide, sortie réelle `getAdvantages()` revérifiée (badge + nom corrects après
+  fix), SR + **parcours navigateur confirmé fonctionnel par Saar**. Non testé : affichage d'un
+  désavantage réel (aucune ligne `type:'disadvantage'` active trouvée en base, badge "DÉS" vérifié
+  par lecture du code uniquement). **`docs/PLAN_ADVANTAGESPANEL.md` pas fini** : Lots A/B clos ;
+  Lot C ("Autres" texte libre) et Lot D ("Mutations" en jeu, aucune route pour un personnage déjà
+  verrouillé) restent à planifier en détail avec Saar, chacun sa session ; Lot E (`[CS7]`) reste
+  backlog. Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 7)".
 - **Session 141 (suite 4) — Options de campagne : `young_penalty` (OPT-10) ✅ câblée.** Malus FOR/PRE
   16-19 ans (`REGLE_CREATION.txt` « PERSONNAGES TRÈS JEUNES (OPTIONNEL) ») — `getAgeEffects()`
   (`shared/polarisUtils.js`) ne couvrait jusqu'ici que le malus de vieillesse 30+, jamais 16-19 ans

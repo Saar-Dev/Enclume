@@ -585,8 +585,8 @@
   },
   "advantages": {
     "empty": "Aucun avantage ou désavantage enregistré.",
-    "badgeMut": "MUT",
-    "badgeAttr": "ATR",
+    "badgeAdvantage": "AVA",
+    "badgeDisadvantage": "DÉS",
     "removeTitle": "Retirer",
     "add": "Ajouter",
     "stepMutations": "Choisir une mutation",

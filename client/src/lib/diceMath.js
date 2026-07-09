@@ -320,6 +320,16 @@ export function calcLanePositions(nDice, totalWidth = 8) {
   return positions
 }
 
+// ─── Roulis aléatoire déterministe ────────────────────────────────────────────
+// Fait varier l'orientation affichée (pivot autour de l'axe caméra→dé) d'un jet à l'autre —
+// la face montrée reste toujours la bonne, seul son "horloge" change. Seedé (jamais
+// Math.random(), principe backtracking) : même seed serveur → même angle pour tous les clients
+// qui regardent le même jet.
+export function getRandomClockDeg(seed) {
+  const prng = createLCG(seed ^ 0xC10C)
+  return prng.next() * 360
+}
+
 // ─── Rotation finale pseudo-aléatoire (V1) ───────────────────────────────────
 // V2 : remplacer par getRotationForFace(dieType, faceValue) — quaternion exact.
 export function getFinalRotation(seed) {

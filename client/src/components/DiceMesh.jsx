@@ -6,6 +6,7 @@ import {
   DIE_GEOMETRY,
   GLB_PATHS,
   getFinalRotation,
+  getRandomClockDeg,
   getFaceNormal,
   getFaceRollCorrection,
   D4_FACE_VALUES,
@@ -63,7 +64,7 @@ const D6_MATERIAL_VALUES = [5, 2, 1, 6, 3, 4]
 // ─── DiceMeshGlb — rendu via modèle .glb (géométrie + matériau baked) ────────
 // Même logique d'animation que DiceMesh procédural.
 // Scale 104 : le D6.glb mesure ~0.0106 unités glTF, BoxGeometry actuel = 1.1 unités.
-function DiceMeshGlb({ glbPath, dieType, faceValue, seed, laneX }) {
+function DiceMeshGlb({ glbPath, dieType, faceValue, seed, timestamp, laneX }) {
   const { camera } = useThree()
   const groupRef = useRef()
   const meshRef  = useRef()
@@ -126,9 +127,20 @@ function DiceMeshGlb({ glbPath, dieType, faceValue, seed, laneX }) {
       // d'une inclinaison supplémentaire trouvée via /dev/dice-calibration.
       const correction = getFaceRollCorrection(dieType, faceValue)
       if (correction?.tiltDeg) {
+        // Face calibrée manuellement — pas de roulis aléatoire, l'orientation est câlée précisément.
         const screenX = new THREE.Vector3().crossVectors(up, viewAxis).normalize()
         const tilt = new THREE.Quaternion().setFromAxisAngle(screenX, THREE.MathUtils.degToRad(correction.tiltDeg))
         targetQ.premultiply(tilt)
+      } else {
+        // Roulis aléatoire déterministe — même face vers la caméra à chaque jet, mais orientation
+        // ("horloge") différente pour ne pas donner l'impression d'un dé figé.
+        // P57 : `seed` seul ne suffit PAS ici — pour un jet à un seul dé, `seed` = la valeur du
+        // roll elle-même (XOR d'un seul élément, voir diceParser.js) : deux jets qui tombent sur
+        // le même résultat auraient donc TOUJOURS le même roulis. `timestamp` (unique par jet,
+        // partagé par tous les clients qui regardent le même jet) casse cette dépendance.
+        const clockSeed = seed ^ (Date.parse(timestamp) || 0)
+        const randomClock = new THREE.Quaternion().setFromAxisAngle(viewAxis, THREE.MathUtils.degToRad(getRandomClockDeg(clockSeed)))
+        targetQ.premultiply(randomClock)
       }
     } else {
       const r = getFinalRotation(seed)

@@ -208,20 +208,12 @@ export default function AdvantagesPanel({
           <div key={adv.id} style={s.row}>
             <span style={{
               ...s.badge,
-              ...(adv.type === 'MUTATION' ? s.badgeMut : s.badgeAtr),
+              ...(adv.type === 'advantage' ? s.badgeAdvantage : s.badgeDisadvantage),
             }}>
-              {adv.type === 'MUTATION' ? t('advantages.badgeMut') : t('advantages.badgeAttr')}
+              {adv.type === 'advantage' ? t('advantages.badgeAdvantage') : t('advantages.badgeDisadvantage')}
             </span>
 
-            <span style={s.entryLabel}>
-              {adv.type === 'MUTATION'
-                ? adv.mutation_nom || adv.muta_numero
-                : adv.label}
-            </span>
-
-            {adv.type === 'MUTATION' && adv.level > 1 && (
-              <span style={s.level}>×{adv.level}</span>
-            )}
+            <span style={s.entryLabel}>{adv.name}</span>
 
             {canEdit && (
               <button
@@ -420,12 +412,12 @@ const s = {
     letterSpacing: '0.05em',
     flexShrink: 0,
   },
-  badgeMut: {
+  badgeAdvantage: {
     background: 'rgba(220,140,60,0.18)',
     color: '#dc8c3c',
     border: '1px solid rgba(220,140,60,0.3)',
   },
-  badgeAtr: {
+  badgeDisadvantage: {
     background: 'rgba(107,114,128,0.18)',
     color: '#9ca3af',
     border: '1px solid rgba(107,114,128,0.3)',
@@ -434,11 +426,6 @@ const s = {
     fontSize: '12px',
     color: '#b0b0c8',
     flex: 1,
-  },
-  level: {
-    fontSize: '10px',
-    color: '#dc8c3c',
-    fontWeight: '600',
   },
   removeBtn: {
     background: 'transparent',

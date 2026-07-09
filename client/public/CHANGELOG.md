@@ -1,3 +1,10 @@
+## v164 — 2026-07-08 — Liste des avantages/désavantages sur la fiche personnage
+
+### Client
+- [fix] La liste des avantages et désavantages (fiche personnage, section Avantages) affichait un
+  nom vide et une mauvaise étiquette pour chaque entrée — corrigé, le nom réel et l'étiquette
+  "Avantage"/"Désavantage" s'affichent désormais correctement.
+
 ## v163 — 2026-07-08 — Option de campagne : Force Polaris
 
 ### Client

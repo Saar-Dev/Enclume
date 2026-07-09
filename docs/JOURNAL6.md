@@ -1523,3 +1523,46 @@ de ce lot.
 badge `MUT`/`ATR` à redéfinir, `adv.level` à retirer) — tâche séparée, à planifier en détail avec
 Saar avant de coder (règle "un seul bug à la fois"). Lots C/D non cadrés, Lot E toujours backlog.
 Prochaine migration disponible : **124** (123 consommée cette session).
+
+---
+
+## Session 141 (suite 7) — 2026-07-08 — AdvantagesPanel Lot B : affichage de la liste ✅ CLOS
+
+Tâche séparée du Lot A (règle "un seul bug à la fois"), planifiée en détail avant code — le plan
+`docs/PLAN_ADVANTAGESPANEL.md` ne décrivait Lot B qu'à gros grain (3 puces), un plan ligne-à-ligne a
+été construit en relisant `AdvantagesPanel.jsx` (lignes 195-244, bloc liste) et `fr.json`.
+
+**Confirmé avant code** : `adv.label`/`adv.mutation_nom`/`adv.muta_numero`/`adv.level` ne sont
+jamais définis en V2 (seuls `adv.name`/`adv.type` ∈ {`'advantage'`,`'disadvantage'`} existent
+réellement, cf. `getAdvantages()`) — vérifié une seconde fois contre une fiche réelle
+(`adv_002` "Ambidextre") : l'ancien code affichait un badge "ATR" et un **nom vide** (`adv.label`
+toujours `undefined`), confirmant le bug avant et après fix.
+
+**Codé (1 fichier client + 1 fichier i18n)** :
+- `AdvantagesPanel.jsx` (bloc liste, lignes 207-224) : `adv.type === 'MUTATION'` → `adv.type ===
+  'advantage'` (vs `'disadvantage'`, les 2 seules valeurs réelles) ; `adv.mutation_nom ||
+  adv.muta_numero` / `adv.label` → `adv.name` (seul champ réel) ; suppression complète du bloc
+  `level` (`adv.level` inexistant en V2, mort depuis la migration 99).
+- Styles renommés pour refléter la vraie sémantique : `s.badgeMut`→`s.badgeAdvantage`,
+  `s.badgeAtr`→`s.badgeDisadvantage` (même rendu visuel) ; `s.level` supprimé (plus aucun usage).
+- `fr.json` : `advantages.badgeMut`("MUT")/`badgeAttr`("ATR") → `badgeAdvantage`("AVA")/
+  `badgeDisadvantage`("DÉS").
+- `en.json` non touché — déjà invalide/hors service (dette `[JSON1]` pré-existante), cohérent avec
+  le choix du Lot A.
+
+**Testé** : ESLint client 0 erreur, `fr.json` JSON valide, grep de contrôle confirmant zéro trace
+résiduelle des anciennes clés/styles (`badgeMut`/`badgeAtr`/`level`), sortie réelle de
+`getAdvantages()` revérifiée contre une fiche existante (`adv_002` "Ambidextre" — badge "AVA" +
+nom affiché correctement, contre badge "ATR" + nom vide avant fix), SR + **parcours navigateur
+confirmé fonctionnel par Saar**.
+
+**Non testé** : affichage d'un désavantage réel en base (aucune ligne `type:'disadvantage'` active
+trouvée lors de la vérification — badge "DÉS" non observé en conditions réelles, seulement par
+lecture du code).
+
+**État du plan `PLAN_ADVANTAGESPANEL.md`** : Lots A et B clos. **Pas fini** — Lot C ("Autres" texte
+libre, conception à trancher avec Saar : colonne `custom_label` ? catalogue générique ?) et Lot D
+("Mutations" ajoutées en jeu, aucune route n'existe pour un personnage déjà verrouillé — le plus
+gros chantier restant) ne sont pas cadrés en détail. Lot E (`SkillsPanel.jsx activeMutations`,
+dette `[CS7]`) reste backlog, non prioritaire. Chacun nécessite sa propre session de conception
+avant tout code (règle "un seul bug à la fois").
