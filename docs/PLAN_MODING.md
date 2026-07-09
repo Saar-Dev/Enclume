@@ -1,14 +1,22 @@
 # PLAN_MODING.md — Système de Moding (installation de modules sur armes)
-> Session 120 — 2026-06-24
+> Rédaction initiale : Session 120 — 2026-06-24
+> **Révisé — 2026-07-09** : plan scindé en deux phases après analyse critique (voir "Historique des
+> révisions" en bas de fichier). **Ce document ne couvre désormais que la Phase A.** La Phase B
+> (effet mécanique des mods en combat) est explicitement hors scope — à planifier ensemble dans un
+> second temps, jamais dans le même plan (règle "un sujet à la fois").
 
 ---
 
-## Objectif
+## Objectif — Phase A (ce plan)
 
-Permettre à un joueur d'**installer un module d'arme** (accessoire) sur une arme qu'il possède déjà dans son inventaire.
+Permettre à un joueur d'**installer un module d'arme** (accessoire) sur une arme qu'il possède déjà
+dans son inventaire : rangement uniquement — retrait de l'inventaire, enregistrement sur l'arme,
+affichage. **Aucun effet mécanique de jeu** (bonus de Test de tir, exclusivité entre systèmes, etc.)
+n'est appliqué par cette phase — voir "Hors scope — Phase B" plus bas.
 
-- La source du module = inventaire du personnage (famille "Armes", catégorie "Accessoires pour armes")
-- La cible = une arme dans l'inventaire (famille "Armes", catégorie ≠ "Accessoires pour armes")
+- La source du module = inventaire du personnage (`ref_equipment.family='Armes'`,
+  `category='Accessoires pour armes'`)
+- La cible = une arme dans l'inventaire (`family='Armes'`, `category≠'Accessoires pour armes'`)
 - Après installation : le module **disparaît de l'inventaire** et est **enregistré sur l'arme**
 
 ---
@@ -24,57 +32,147 @@ Permettre à un joueur d'**installer un module d'arme** (accessoire) sur une arm
 - Arme = `family="Armes"` ET `category ≠ "Accessoires pour armes"`
 - Mod installable = `category = "Accessoires pour armes"`
 - Clé unique item = `id♦name` (dans Kiwi via Google Sheets) → dans Enclume = `char_inventory.id` (UUID)
-- Les mods installés sur une arme sont stockés dans une colonne dédiée de l'inventaire (Kiwi : `InventaireModInstalles` named range)
+- Les mods installés sur une arme sont stockés dans une colonne dédiée de l'inventaire (Kiwi :
+  `InventaireModInstalles` named range)
 - Un mod déjà installé est **retiré de l'inventaire** (suppression physique de la ligne)
-- Un mod ne peut pas être installé deux fois sur la même arme
+- Un mod ne peut pas être installé deux fois sur la même arme (Phase A : dédoublonnage strict par
+  `equipment_id` — voir limite connue dans "Hors scope — Phase B")
+
+**Vérifié 2026-07-09 contre les données réelles** : `family='Armes'` + `category='Accessoires pour
+armes'` correspond exactement à **16 lignes** en base (`ref_equipment`). Le filtre Kiwi transposé
+tel quel reste valide aujourd'hui.
 
 ---
 
 ## Architecture cible (Enclume)
 
 ### Stack
-- **Backend** : Express REST + éventuellement Socket.IO pour notifier le GM
-- **Frontend** : React composant `ModingWindow.jsx` (ou onglet dans `CharacterSheet`)
-- **BDD** : une colonne supplémentaire sur `char_inventory` (migration 86)
+- **Backend** : routes ajoutées dans `server/src/routes/character/char-sheet.js` (**pas** un nouveau
+  router séparé — voir correction ci-dessous), logique métier dans `server/src/services/
+  modingService.js` (nouveau), qui dialogue avec `server/src/services/inventoryService.js`
+  (nouveau — voir **Étape 0** ci-dessous, prérequis à ce plan)
+- **Frontend** : composant `ModingWindow.jsx`, ouvert depuis un bouton **"Customisation"** dans la
+  fenêtre Inventaire existante (décidé avec Saar 2026-07-09)
+- **BDD** : nouvelle table `char_inventory_mods` (migration **124** — voir correction numérotation)
+
+### Correction — routes dans `char-sheet.js`, pas un router `/api/characters/:charId/*`
+Le plan initial esquissait `/api/characters/:charId/moding/*`. **Vérifié 2026-07-09** :
+`char-sheet.js` centralise déjà l'auth + l'ownership pour tout ce qui touche une fiche personnage :
+
+```js
+// char-sheet.js:52-76 (existant)
+router.use(requireAuth)
+router.param('characterId', async (req, res, next, characterId) => {
+  // 404 si character introuvable
+  // 403 si pas membre de la campagne
+  // req.character, req.isGm, isOwner check → 403 si ni owner ni GM ni drone
+  next()
+})
+```
+
+Monté sur `/api/char-sheet` (`server/src/index.js:76`). Réimplémenter ce guard dans un router séparé
+serait une régression (double logique d'ownership, risque de divergence). **Les routes moding vivent
+dans `char-sheet.js`, avec le même préfixe que le reste** :
+
+```
+GET  /api/char-sheet/:characterId/moding/state
+POST /api/char-sheet/:characterId/moding/install
+```
+
+(paramètre `characterId`, pas `charId`, pour matcher `router.param` existant.)
 
 ### Données existantes réutilisables
-- `char_inventory` — inventaire perso (equipment_id → ref_equipment)
-- `ref_equipment` — catalogue (family, category, name)
-- `ref_equipment.family = 'Armes'` + `ref_equipment.category = 'Accessoires pour armes'` — identifie les mods
+- `char_inventory` — inventaire perso (`equipment_id → ref_equipment`)
+- `ref_equipment` — catalogue (`family`, `category`, `name`, `bonus`, `description`)
+- Helper existant `getItemWithRef(itemId)` (`char-sheet.js:724`) — pattern de JOIN
+  `char_inventory ⋈ ref_equipment` déjà utilisé par toutes les routes inventaire, réutilisable pour
+  construire la réponse `state`.
 
 ---
 
-## Migration 86 — `char_inventory.installed_mods`
+## Étape 0 — Prérequis : extraction `inventoryService.js`
 
-Ajout d'une colonne sur `char_inventory` pour stocker les IDs de mods installés sur une arme.
+**Demandé par Saar 2026-07-09** : `char-sheet.js` fait déjà 1928 lignes. Avant d'y ajouter le
+moding, extraire la logique inventaire dans un service dédié, dont `modingService.js` deviendra
+consommateur (accès direct à `char_inventory`/`ref_equipment`, pas de duplication de requêtes).
 
-```sql
-ALTER TABLE char_inventory
-  ADD COLUMN installed_mods UUID[] DEFAULT '{}'
-```
+### Portée exacte (vérifiée en lisant `char-sheet.js` en entier le 2026-07-09)
 
-- Chaque UUID = `char_inventory.id` du mod **au moment de l'installation** (snapshot de référence)
-- Après installation, le mod est supprimé de `char_inventory` (ligne entière DELETE) → l'UUID reste dans le tableau comme trace
-- Optionnel : stocker aussi le nom du mod au moment de l'installation (pour affichage si le référentiel change)
+**Déplacé vers `server/src/services/inventoryService.js` :**
+- Constantes (lignes 698-701) : `VALID_CONTAINERS`, `VALID_SLOTS`, `ARMOR_SLOTS`, `WEAPON_SLOTS`
+  — + nouvelles constantes `WEAPON_FAMILY = 'Armes'` / `MOD_CATEGORY = 'Accessoires pour armes'`
+  (aujourd'hui des chaînes littérales répétées dans le fichier — autant les centraliser puisque
+  `modingService.js` en a besoin aussi)
+- Helpers (lignes 703-774) : `isContainerAvailable`, `getDefaultContainer`, `getItemWithRef`,
+  `resolveAmmoInit`
+- Logique métier des 6 routes suivantes (lignes 776-1328), extraite en fonctions pures DB
+  (`getInventory`, `addItem`, `updateItem`, `reloadWeapon`, `removeItem`, `quickEquip`) :
+  - GET `/:characterId/inventory`
+  - POST `/:characterId/quick-equip`
+  - POST `/:characterId/inventory`
+  - PUT `/:characterId/inventory/:itemId`
+  - POST `/:characterId/inventory/:itemId/reload`
+  - DELETE `/:characterId/inventory/:itemId`
 
-**Alternative** : table séparée `char_inventory_mods` (plus normalisée, plus flexible) :
+**Convention confirmée par `advantageService.js`** (aucun `io`/socket dans ce fichier) : le service
+reste une couche DB pure — pas de `req`/`res`, pas d'émission socket. Les routes `char-sheet.js`
+deviennent minces : parse `req` → appelle la fonction service → émet l'event socket existant → répond.
+**Aucun changement d'API** côté client (mêmes routes, mêmes payloads, mêmes events) — refactor interne
+pur, zéro régression attendue si le comportement est identique avant/après.
 
-```sql
+**Explicitement NON déplacé (vérifié, pas oublié) :**
+- `weapon-skill` (ligne 849) — calcule un total de compétence via `calcSkillTotal` (`charStats.js`),
+  touche `char_attributes`/`char_skills`/`char_archetype` — c'est un calcul de combat, pas de la
+  gestion d'inventaire. Reste dans `char-sheet.js`.
+- `sols` (ligne 888) — domaine monnaie (`SOLS_UPDATED`), pas de l'inventaire au sens `char_inventory`
+  d'objets. Reste.
+- Routes drone `cargo`/`weapons` (lignes 1597+) — tables `char_drone_*` distinctes. Hors scope.
+- **Trouvé en marge, non traité ici** : `server/src/services/tradeService.js` manipule déjà
+  `char_inventory` en direct (insert/update/delete dupliqués, lignes 196-307) et **n'émet aucun
+  event socket** sur ces mutations (dette pré-existante repérée, pas dans ce plan). Il n'est **pas**
+  migré vers `inventoryService.js` dans cette étape — feature déjà en prod, migration optionnelle à
+  part si souhaitée un jour.
+
+### Vérification de non-régression (à faire avant de considérer l'Étape 0 close)
+Comportement identique avant/après refactor sur : ajout item, équipement (slot armure 1+S+S, slot
+arme 1/2 mains), stacking quantité, recharge arme, suppression partielle/totale, quick-equip GM.
+Pas de nouveau comportement — uniquement un déplacement de code.
+
+---
+
+## Migration 124 — `char_inventory_mods`
+
+> Renumérotée : le plan initial proposait 86, **déjà pris** par `86_trade_offers.js`. Prochaine
+> migration disponible au 2026-07-09 : **124** (123 = `ref_advantages_polaris`, Session 141 suite 6).
+> À reconfirmer avec `ls server/src/db/migrations/` au moment de coder (P53 — dérive possible).
+
+Table séparée (confirmé comme le bon choix — plus normalisée que l'alternative `installed_mods
+UUID[]` évoquée en premier jet) :
+
+```js
+// 124_char_inventory_mods.js
 char_inventory_mods
-  id            UUID PK
-  weapon_inv_id UUID FK char_inventory ON DELETE CASCADE
-  equipment_id  UUID FK ref_equipment ON DELETE SET NULL  -- ref au type de mod
-  mod_name      TEXT NOT NULL                              -- snapshot nom à l'installation
+  id            UUID PK, default gen_random_uuid()
+  weapon_inv_id UUID NOT NULL, FK char_inventory(id) ON DELETE CASCADE
+  equipment_id  UUID, FK ref_equipment(id) ON DELETE SET NULL   -- réf au type de mod
+  mod_name      TEXT NOT NULL                                    -- snapshot nom à l'installation
   installed_at  TIMESTAMPTZ DEFAULT now()
 ```
 
-**Choix recommandé** : **table séparée** `char_inventory_mods` — plus propre, permet d'afficher le nom même si le mod est custom, et de lister l'historique d'installation.
+- `mod_name` snapshotté à l'installation (affichage stable même si le référentiel change plus tard)
+- `weapon_inv_id` en CASCADE : si l'arme est supprimée de l'inventaire, ses mods installés le sont
+  aussi (cohérent avec Kiwi, pas de mod orphelin affiché)
+- `equipment_id` en SET NULL : si la ligne `ref_equipment` du mod est supprimée du catalogue, on
+  garde la trace via `mod_name` (pas de perte d'historique)
 
 ---
 
 ## Composant React `ModingWindow.jsx`
 
-Fenêtre flottante ou panneau dans la fiche personnage.
+**Déclenchement tranché 2026-07-09** : bouton **"Customisation"** dans la fenêtre Inventaire
+existante (pas une entrée de menu session séparée). Ouvre `ModingWindow.jsx` par-dessus ou à côté de
+l'inventaire — mécanisme d'ouverture exact (modal/panneau) à déterminer au codage selon ce
+qu'utilise déjà la fenêtre Inventaire pour ses propres sous-vues.
 
 ### Layout (inspiré de `Crafting.html` Kiwi)
 ```
@@ -102,54 +200,77 @@ Fenêtre flottante ou panneau dans la fiche personnage.
 ## API REST
 
 ```
-GET  /api/characters/:charId/moding/state
+GET  /api/char-sheet/:characterId/moding/state
   → { weapons: [...], installableMods: [...] }
 
-POST /api/characters/:charId/moding/install
+POST /api/char-sheet/:characterId/moding/install
   body: { weaponInvId: UUID, modInvId: UUID }
   → { ok: true, weapons: [...], installableMods: [...] }
-  ou { ok: false, error: "..." }
+  ou 4xx { error: "..." } (AppError, pattern existant du fichier)
 ```
 
 ### Logique serveur `install`
 
 ```js
-// 1. Validation
-const weapon = await db('char_inventory').where({ id: weaponInvId, character_id: charId }).first()
-const mod = await db('char_inventory').where({ id: modInvId, character_id: charId }).first()
+// 1. Validation — items appartiennent bien à ce personnage
+const weapon = await db('char_inventory').where({ id: weaponInvId, character_id: characterId }).first()
+const mod    = await db('char_inventory').where({ id: modInvId,    character_id: characterId }).first()
 
-if (!weapon || !mod) throw Error('item introuvable')
+if (!weapon || !mod) throw new AppError(404, 'Item introuvable')
+if (!weapon.equipment_id || !mod.equipment_id)
+  throw new AppError(400, 'Item custom sans référentiel — non modable') // P1
 
 const weaponRef = await db('ref_equipment').where({ id: weapon.equipment_id }).first()
 const modRef    = await db('ref_equipment').where({ id: mod.equipment_id }).first()
 
 if (weaponRef.family !== 'Armes' || weaponRef.category === 'Accessoires pour armes')
-  throw Error('La cible n\'est pas une arme valide')
+  throw new AppError(400, 'La cible n\'est pas une arme valide')
 
-if (modRef.category !== 'Accessoires pour armes')
-  throw Error('L\'objet n\'est pas un accessoire d\'arme')
+if (modRef.family !== 'Armes' || modRef.category !== 'Accessoires pour armes')
+  throw new AppError(400, 'L\'objet n\'est pas un accessoire d\'arme')
 
-// 2. Vérifier que le mod n'est pas déjà installé
+// 2. Anti-doublon strict (Phase A — dédoublonnage par equipment_id uniquement,
+//    PAS l'exclusivité de sous-famille rulebook — voir Hors scope Phase B)
 const alreadyInstalled = await db('char_inventory_mods')
   .where({ weapon_inv_id: weaponInvId, equipment_id: mod.equipment_id }).first()
-
-if (alreadyInstalled) throw Error('Ce mod est déjà installé sur cette arme')
+if (alreadyInstalled) throw new AppError(409, 'Ce mod est déjà installé sur cette arme')
 
 // 3. Transaction atomique
-await db.transaction(async trx => {
-  // Enregistrer le mod installé
+const result = await db.transaction(async (trx) => {
   await trx('char_inventory_mods').insert({
     weapon_inv_id: weaponInvId,
     equipment_id: mod.equipment_id,
-    mod_name: modRef.name
+    mod_name: modRef.name,
   })
-  // Supprimer le mod de l'inventaire
   await trx('char_inventory').where({ id: modInvId }).delete()
+  return getModingState(trx, characterId)
 })
 
-// 4. Retourner le nouvel état
-return buildModingState(charId)
+// 4. Notifier la room (pattern existant char-sheet.js — WOUND_*/INVENTORY_*/SOLS_*)
+req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_REMOVED, {
+  characterId, itemId: modInvId,
+})
+
+return result
 ```
+
+**Correction — événement socket, pas optionnel.** Le plan initial classait la notification
+temps réel comme "optionnel, peut attendre". **Vérifié 2026-07-09** : dans `char-sheet.js`, *toutes*
+les routes qui modifient `char_inventory` (add/update/remove/reload) émettent déjà
+`WS.INVENTORY_ADDED/UPDATED/REMOVED` (`shared/events.js:66-68`), scopées `campaign_id`. La ligne
+`char_inventory` du mod étant physiquement supprimée, `WS.INVENTORY_REMOVED` (event existant,
+aucun nouvel event à créer) doit être émis — sinon la fiche perso reste désynchronisée pour le GM ou
+tout autre onglet ouvert, comme le serait n'importe quelle autre suppression d'item.
+
+**Tranché 2026-07-09 (Saar : aligner sur les exigences existantes)** : `shared/events.js` a un event
+dédié par domaine (`WOUND_ADDED/UPDATED/REMOVED`, `INVENTORY_ADDED/UPDATED/REMOVED`, `SOLS_UPDATED`).
+Le moding introduit un nouveau domaine (nouvelle table `char_inventory_mods`) — par cohérence avec
+cette convention, **nouvel event dédié `WS.MOD_INSTALLED`** (`{ characterId, weaponInvId, mods }`)
+plutôt que détourner `INVENTORY_UPDATED` sur une ligne d'arme qui, elle, ne change pas réellement
+(le modèle de données Phase A stocke les mods dans une table séparée). Émis en plus de
+`INVENTORY_REMOVED` (celui-ci reste nécessaire pour que la ligne du mod disparaisse bien des autres
+vues inventaire ouvertes). Ajout à faire dans `shared/events.js` au moment du codage — pas de
+`MOD_REMOVED` symétrique pour l'instant (désinstallation = Phase B, hors scope).
 
 ---
 
@@ -165,7 +286,7 @@ SELECT ci.id, ci.equipment_id, re.name, re.family, re.category,
 FROM char_inventory ci
 JOIN ref_equipment re ON re.id = ci.equipment_id
 LEFT JOIN char_inventory_mods cim ON cim.weapon_inv_id = ci.id
-WHERE ci.character_id = :charId
+WHERE ci.character_id = :characterId
   AND re.family = 'Armes'
   AND re.category != 'Accessoires pour armes'
 GROUP BY ci.id, ci.equipment_id, re.name, re.family, re.category
@@ -174,7 +295,8 @@ GROUP BY ci.id, ci.equipment_id, re.name, re.family, re.category
 SELECT ci.id, ci.equipment_id, re.name, re.category
 FROM char_inventory ci
 JOIN ref_equipment re ON re.id = ci.equipment_id
-WHERE ci.character_id = :charId
+WHERE ci.character_id = :characterId
+  AND re.family = 'Armes'
   AND re.category = 'Accessoires pour armes'
 ```
 
@@ -184,28 +306,80 @@ WHERE ci.character_id = :charId
 
 | Étape | Contenu | Dépendance |
 |---|---|---|
-| 1 | Migration 86 — `char_inventory_mods` | — |
-| 2 | Service `modingService.js` — `getState` + `installMod` | M86 |
-| 3 | Route REST GET `/moding/state` + POST `/moding/install` | Étape 2 |
-| 4 | Composant `ModingWindow.jsx` — liste armes + mods | Étape 3 |
-| 5 | Intégration dans la fiche perso ou menu session | Étape 4 |
+| 0 | Extraction `inventoryService.js` depuis `char-sheet.js` (voir portée détaillée ci-dessus) + non-régression | — |
+| 1 | Migration 124 — `char_inventory_mods` | — |
+| 2 | `modingService.js` (`getModingState`/`installMod`), consomme `inventoryService.js` | Étapes 0+1 |
+| 3 | Routes `GET .../moding/state` + `POST .../moding/install` dans `char-sheet.js` (minces, émettent `INVENTORY_REMOVED` + `MOD_INSTALLED`) | Étape 2 |
+| 4 | Ajout `WS.MOD_INSTALLED` dans `shared/events.js` | Étape 3 |
+| 5 | Composant `ModingWindow.jsx` — liste armes + mods | Étape 3 |
+| 6 | Bouton "Customisation" dans la fenêtre Inventaire → ouvre `ModingWindow.jsx` | Étape 5 |
 
 ---
 
 ## Pièges à anticiper
 
-- **P1** : `char_inventory.equipment_id` peut être NULL (item custom) → exclure de la liste armes et mods installables (JOIN inner sur ref_equipment)
-- **P2** : Un perso peut avoir plusieurs lignes `char_inventory` pour la même arme (quantity > 1) → identifier l'arme par `char_inventory.id` pas `equipment_id`
-- **P3** : La suppression du mod (DELETE char_inventory) doit être dans la même transaction que l'INSERT char_inventory_mods — sinon état incohérent
-- **P4** : Vérifier les droits : seul le propriétaire du personnage (ou le GM) peut installer un mod — même guard que pour les routes character
-- **P5** : `ref_equipment.family` et `.category` sont des `TEXT` sans contrainte de casse — normaliser avec `UPPER()` ou `ILIKE` dans les filtres
-- **P6** : Un mod déjà utilisé (clé `equipment_id` déjà dans `char_inventory_mods` pour cette arme) = refus — pas de doublon par type de mod par arme
+- **P1** : `char_inventory.equipment_id` peut être NULL (item custom) → exclure de la liste armes et
+  mods installables (JOIN inner sur `ref_equipment`), rejet explicite dans `install` (voir logique
+  serveur ci-dessus)
+- **P2** : Un perso peut avoir plusieurs lignes `char_inventory` pour la même arme (`quantity` > 1) →
+  identifier l'arme par `char_inventory.id`, pas `equipment_id`
+- **P3** : La suppression du mod (DELETE `char_inventory`) doit être dans la même transaction que
+  l'INSERT `char_inventory_mods` — sinon état incohérent
+- **P4** : ~~Vérifier les droits~~ **Résolu** — `router.param('characterId', ...)` de `char-sheet.js`
+  couvre déjà owner/GM/membre de campagne pour toute route montée dans ce fichier. Aucune logique de
+  garde supplémentaire à écrire.
+- **P5** : `ref_equipment.family`/`.category` sont des `TEXT` sans contrainte CHECK (vérifié dans la
+  migration 48) — comparaison exacte `=` suffit tant que les valeurs saisies restent cohérentes
+  (vérifié 16/16 lignes actuelles conformes à `'Armes'`/`'Accessoires pour armes'` exact), mais rester
+  vigilant si de nouvelles lignes sont saisies avec une casse différente
+- **P6** : Anti-doublon Phase A = un même `equipment_id` ne peut pas être installé deux fois sur la
+  même arme. **Ce n'est pas la règle complète du livre** (voir Hors scope — Phase B) — c'est une
+  garde-fou minimal, pas une simulation des règles de jeu.
 
 ---
 
-## Non dans le scope de ce plan
+## Hors scope — Phase B (à planifier ensemble, séparément)
 
-- Désinstallation de mod (retour en inventaire) — sprint futur
-- Limite de slots de mods par arme — sprint futur (règle Polaris à vérifier dans REGLEARMURE.md)
+**Ne pas coder dans ce plan.** Trouvé en analyse critique du 2026-07-09, documenté ici pour ne pas
+le perdre, mais traité comme un chantier à part entière avec son propre plan quand on s'y attaque :
+
+- **Effet mécanique des mods sur le Test de tir** — la majorité des 16 accessoires réels a un
+  `bonus` chiffré avec un vrai effet de règle (ex. Visée laser +2, Lunette de visée +1/niv jusqu'à
+  +10 avec coût en Initiative sur Tir visé). Tant que la Phase B n'est pas faite, "installer" un mod
+  est cosmétique — aucun impact sur `calcSkillTotal`/P51.
+- **Exclusivité par sous-famille** — "Système de tir assisté" (Cyclope PVI / Onarck P / Implant
+  palmaire / Vanguard) : 4 objets différents, non cumulables entre eux, "on prend le plus
+  performant". Le modèle de données Phase A ne distingue pas cette sous-famille (seul indice
+  aujourd'hui : un préfixe dans `ref_equipment.name`, pas structurel) — à concevoir en Phase B.
+- **Compatibilité arme↔mod** — Silencieux limité à certains types d'armes à feu ; Lunette "prévue
+  pour un type d'arme bien précis" ; Trépied lié aux armes lourdes nécessitant un support. Phase A
+  ne vérifie que `family`/`category` génériques, pas la compatibilité fine par type d'arme.
+- **Désinstallation** (retour en inventaire)
+- **Limite de slots par arme** — **correction 2026-07-09** : `REGLEARMURE.md` référencé par le plan
+  initial est **la mauvaise source** (ce fichier couvre les exo-armures/mécas, pas les armes
+  portatives). Aucune règle de quota trouvée dans les 16 descriptions réelles d'accessoires — la
+  vraie contrainte semble être l'exclusivité par sous-famille ci-dessus, pas un nombre de slots. À
+  reconfirmer en Phase B, pas de fichier `REGLE_*.md` dédié aux armes portatives (les règles vivent
+  directement dans `ref_equipment.description`, déjà en base).
 - Mod custom (sans `equipment_id`) — sprint futur
-- Notification temps réel au GM (Socket.IO) — optionnel, peut attendre
+
+---
+
+## Historique des révisions
+
+- **2026-06-24 (Session 120)** — rédaction initiale, transposition Kiwi.
+- **2026-07-09** — analyse critique demandée par Saar. Corrections apportées : migration
+  86→124 (collision `trade_offers`), routes déplacées dans `char-sheet.js` (réutilisation du guard
+  ownership existant plutôt que réimplémentation), socket `INVENTORY_REMOVED` requalifié
+  obligatoire (pattern déjà systématique sur toutes les routes inventaire), référence
+  `REGLEARMURE.md` retirée (mauvaise source — mécas, pas armes portatives), scope explicitement
+  réduit à la Phase A (rangement pur) — la Phase B (effet mécanique combat + exclusivité sous-famille)
+  extraite en section "Hors scope" dédiée, à planifier comme chantier séparé.
+- **2026-07-09 (suite)** — trois décisions de Saar intégrées : **Étape 0 ajoutée**
+  (extraction `server/src/services/inventoryService.js` depuis `char-sheet.js`, portée exacte
+  vérifiée ligne par ligne — 6 routes + 4 helpers + constantes déplacés, `weapon-skill`/`sols`/drone
+  explicitement exclus, dette `tradeService.js` repérée mais non traitée) ; **déclenchement UI**
+  tranché (bouton "Customisation" dans la fenêtre Inventaire, pas un menu séparé) ; **event socket**
+  tranché par cohérence avec la convention existante (`WS.MOD_INSTALLED` dédié, en plus
+  d'`INVENTORY_REMOVED`, plutôt que détourner `INVENTORY_UPDATED`). Aucun code écrit — session de
+  planification pure.

@@ -24,6 +24,17 @@ vrai `GLTFLoader`, maths de rotation revérifiées) sans trouver de cause dans l
 décision Saar de ne pas creuser plus loin, hors scope de ce chantier. Détail : `docs/JOURNAL6.md`
 "Session 141 (suite 5)".
 
+**Addendum 2 (Session 141 suite 8) — bug réel D4 face "4" + roulis aléatoire des dés** : l'extension
+de l'outil a révélé un **vrai bug de production** (pas juste l'outil) — capture d'écran à l'appui,
+la face "4" du D4 affichait "1,2,3" sans "4" lisible en vraie session. `getFaceRollCorrection()`
+(`diceMath.js`, NOUVEAU) appliqué dans `DiceMeshGlb` (`DiceMesh.jsx`) corrige cette face précise
+(`setFromUnitVectors` ne garantit aucun contrôle du roulis). Demande Saar dans la foulée : roulis
+aléatoire des dés (`getRandomClockDeg`, seedé) — bug trouvé en testant en jeu réel ("aucun effet") :
+`seed` d'un jet à un seul dé = la valeur du résultat elle-même (voir **P57**, `.claude/rules/
+dice.md`), corrigé en combinant `seed` au `timestamp` du jet. **Testé et confirmé fonctionnel par
+Saar en jeu réel** (D4 + roulis aléatoire). Détail complet : `docs/JOURNAL6.md`
+"Session 141 (suite 8)".
+
 ---
 
 ## Contexte

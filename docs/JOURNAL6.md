@@ -1566,3 +1566,83 @@ libre, conception à trancher avec Saar : colonne `custom_label` ? catalogue gé
 gros chantier restant) ne sont pas cadrés en détail. Lot E (`SkillsPanel.jsx activeMutations`,
 dette `[CS7]`) reste backlog, non prioritaire. Chacun nécessite sa propre session de conception
 avant tout code (règle "un seul bug à la fois").
+
+---
+
+## Session 141 (suite 8) — 2026-07-08 — Bug réel D4 face "4" + roulis aléatoire des dés ✅ CLOS
+
+Suite directe de l'item 47/PLAN_DICEREWORK3 (interruption ponctuelle hors chantier
+`AdvantagesPanel.jsx`, repris ensuite). Point de départ : Saar a demandé d'étendre l'outil de
+calibration (`/dev/dice-calibration`) à tous les dés pour "être exigeant" maintenant qu'un outil
+de vérification précis existe (auparavant contentement d'un "à peu près correct").
+
+**Bug outil #1 — ordre N1-Nk instable pour les dés symétriques.** Les relevés D4 de Saar entre deux
+rechargements de page ne concordaient pas (même chiffre, index N différent). Cause : tous les
+clusters d'un dé symétrique (D4/D6/D8/D20) ont le même nombre de triangles — le tri
+`sort((a,b) => b.triCount - a.triCount)` n'a alors aucun critère pour départager, et l'ordre dépend
+de quelle graine k-means (parmi les 12 essais) a gagné, non reproductible. Fix : tri secondaire
+déterministe sur la normale arrondie (`devFaceClusters.js`). Testé : rejoué le calcul avec l'ordre
+d'entrée original + 2 ordres mélangés différemment → résultat rigoureusement identique aux 3 essais.
+
+**Investigation "cassé" D8/D20 dans l'outil (arête/pointe au lieu d'une face).** Saar a confirmé
+l'absence de ce problème en jeu réel sur ces dés — donc pas le même type de bug que D10/D100.
+Vérifications poussées avant d'abandonner la piste : clustering rejoué en Node avec le **vrai
+`GLTFLoader`** (celui que `useGLTF` utilise réellement — reconstruction d'un `.glb` sans textures
+pour éviter les polyfills navigateur, cf. script temporaire) → résultat identique et parfaitement
+propre. Maths d'orientation (`setFromUnitVectors`) déjà revérifiées précédemment, y compris le cas
+176,6° (quasi-opposé). Hypothèse résiduelle non vérifiée (artefact éclairage/normal map ou timing
+d'effet React) — décision Saar de ne pas creuser plus loin, hors scope.
+
+**Nouveau contrôle "Inclinaison axe X"** ajouté à l'outil sur demande Saar : un vrai axe
+supplémentaire (rotation autour de l'axe X écran, perpendiculaire à la vue), distinct de la
+rotation "même face" existante (qui tourne autour de l'axe de visée et ne change jamais quelle face
+est montrée) — celui-ci **dévie volontairement** la face de l'alignement exact face→caméra, pour
+amener un sommet du D4 vers le haut de l'écran (convention de lecture réelle d'un vrai D4 : chaque
+face porte les 3 AUTRES chiffres, jamais le sien). `DEFAULT_ADJUSTMENTS` (D4CalibrationPage.jsx) :
+préréglages automatiques par face trouvés par Saar (index désormais stable grâce au fix ci-dessus).
+
+**Vrai bug de production trouvé** (pas seulement l'outil) : Saar a fourni une capture d'écran de la
+face "4" du D4 **en vraie session** montrant "1,2,3" visibles, aucun "4" lisible — confirmation
+qu'il ne s'agissait pas juste d'un confort de lecture pour l'outil. Cause : `DiceMeshGlb`
+(`DiceMesh.jsx`, code de production) fait `setFromUnitVectors(fn, camDir.negate())` **sans aucune
+correction de roulis** — exactement la même limitation que l'outil avant l'ajout de ses contrôles
+manuels. Fix : `getFaceRollCorrection(dieType, faceValue)` (`diceMath.js`, NOUVEAU) — table de
+corrections ponctuelles, appliquée dans `DiceMeshGlb` (inclinaison `-240°` axe X écran pour D4 face
+"4", réutilisant exactement les maths validées dans l'outil). Scope volontairement limité à cette
+seule face (seule signalée cassée par Saar — "un seul bug à la fois").
+
+**Demande Saar dans la foulée — roulis aléatoire des dés** : les dés semblaient toujours s'afficher
+avec la même orientation ("horloge") pour un même résultat, donnant une impression de dé figé.
+`getRandomClockDeg(seed)` (`diceMath.js`, NOUVEAU, PRNG seedé — jamais `Math.random()`, principe
+backtracking respecté) appliqué dans `DiceMeshGlb` sur toutes les faces **sauf** celles ayant une
+correction manuelle (D4 "4" — un roulis aléatoire en plus aurait décalé la lecture qui vient d'être
+corrigée, les deux rotations ne commutent pas).
+
+**Bug trouvé en testant ("aucun effet" signalé par Saar, sur le vrai playground)** : pour un jet à
+un seul dé, `seed` (`server/src/lib/diceParser.js:65`, XOR d'un seul élément) **= la valeur du
+résultat elle-même** — deux jets tombant sur le même chiffre avaient donc *toujours* le même
+roulis, aucune variation visible en relançant simplement le dé. Fix : `timestamp` du jet (jusqu'ici
+jamais transmis en tant que donnée, seulement utilisé pour la `key` React de démontage/remontage)
+propagé `DiceRoller.jsx` → `DiceMesh.jsx` (spread `{...props}`, aucun changement nécessaire côté
+routeur) → `DiceMeshGlb`, combiné à `seed` par XOR pour dériver l'angle. Voir **P57** ci-dessous.
+
+**Testé :**
+- Ordre N1-Nk stable : rejoué avec 3 ordres d'entrée différents → résultat identique.
+- D8 "cassé" : clustering rejoué via le vrai `GLTFLoader` → identique à la lecture manuelle directe.
+- Maths de correction D4 : rejouées numériquement avec le vrai `three.js` et la caméra par défaut
+  de `Canvas3D.jsx` → s'exécutent sans erreur, orientation cohérente avec ce qui a été validé dans
+  l'outil.
+- Roulis aléatoire : vérifié déterministe (même seed+timestamp → même angle) et variable (seeds ou
+  timestamps différents → angles différents) ; invariant "face toujours exactement vers la caméra
+  après rotation" reconfirmé numériquement.
+- ESLint 0 erreur introduite sur tous les fichiers touchés (`diceMath.js`, `DiceMesh.jsx`,
+  `DiceRoller.jsx`, `devFaceClusters.js`, `DiceCalibrationPage.jsx`) — 1 warning préexistant
+  confirmé sans lien (dep `dieType` inutilisée dans un `useMemo` de code mort, déjà signalé Lot 1bis).
+- **SR + D4 fonctionnel en jeu confirmé par Saar. Roulis aléatoire fonctionnel en jeu confirmé par
+  Saar** (après le fix `timestamp`).
+
+**Non testé :** confirmation visuelle des 6 autres dés (D6/D8/D10/D100/D12/D20) avec le nouveau
+roulis aléatoire ; comportement de la correction D4 "4" à un angle de caméra très différent du
+défaut (limite assumée et documentée, pas un bug caché — aucune correction n'existait avant).
+
+Détail complet du chantier initial : `docs/PLAN_DICEREWORK3.md` (addendum ajouté).

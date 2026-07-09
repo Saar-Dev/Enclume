@@ -1,3 +1,11 @@
+## v165 — 2026-07-08 — Correction du dé D4 + variation aléatoire des jets de dés
+
+### Client
+- [fix] Le dé à 4 faces (D4) affichait un résultat mal orienté pour la valeur "4", rendant le
+  chiffre difficile à lire — corrigé.
+- [feat] Les dés animés varient désormais légèrement d'orientation à chaque jet (même quand le
+  résultat est identique à un jet précédent), pour un rendu moins figé.
+
 ## v164 — 2026-07-08 — Liste des avantages/désavantages sur la fiche personnage
 
 ### Client

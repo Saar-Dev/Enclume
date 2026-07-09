@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-08 Session 141 (suite 7)
+> Dernière mise à jour : 2026-07-08 Session 141 (suite 8)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -36,6 +36,45 @@
 > campagne), voir détail ci-dessous.
 > **Item 47 (hors chantier, interruption ponctuelle) : Correction dé D100/D10 3D ✅ CLOS — Session
 > 141 (suite 5)** — `PLAN_DICEREWORK3.md`, voir détail ci-dessous.
+> **Item 50 (suite de l'item 47, via l'outil de calibration étendu) : bug réel D4 face "4" + roulis
+> aléatoire des dés ✅ CLOS — Session 141 (suite 8)** — voir détail ci-dessous.
+
+**50. Dé D4 face "4" mal orientée en jeu + roulis aléatoire des dés ✅ CLOS — Session 141 (suite 8) (2026-07-08)**
+   → Découvert via l'outil de calibration `/dev/dice-calibration` étendu à tous les dés (demande
+     Saar, suite item 47) : ordre N1-Nk instable pour les dés symétriques (D4/D6/D8/D20, tous les
+     clusters ont le même nombre de triangles, rien ne les départageait) — corrigé par un tri
+     secondaire déterministe (normale arrondie) dans `devFaceClusters.js`. Testé : rejoué avec
+     2 ordres d'entrée différents → résultat identique aux 3 essais (avant, ça pouvait changer
+     d'un rechargement à l'autre).
+   → Investigation D8/D20 "cassé" dans l'outil (arête/pointe au lieu d'une face) : confirmé absent
+     en jeu réel par Saar, clustering rejoué via le vrai `GLTFLoader` (identique, propre) — artefact
+     de l'outil, pas un bug de calibration, non prioritaire (décision Saar de ne pas creuser plus).
+   → **Vrai bug production trouvé** (pas juste l'outil) : la face "4" du D4 s'affichait mal orientée
+     en vraie session — confirmé par une capture d'écran montrant "1,2,3" visibles sans "4" lisible.
+     `getFaceRollCorrection(dieType, faceValue)` (`diceMath.js`, NOUVEAU) + application dans
+     `DiceMeshGlb` (`DiceMesh.jsx`) — `setFromUnitVectors` seul ne garantit aucun contrôle du roulis,
+     certaines faces ont besoin d'une inclinaison supplémentaire (trouvée via l'outil, confirmée en
+     jeu par Saar). Scope volontairement limité à D4 face "4" (seule face signalée cassée).
+   → **Demande Saar dans la foulée** : les dés semblaient toujours s'afficher avec le même roulis
+     (orientation du chiffre à l'écran) pour un même résultat — `getRandomClockDeg(seed)` ajouté
+     (PRNG seedé, jamais `Math.random()`), appliqué dans `DiceMeshGlb` sur toutes les faces sauf
+     celles avec une correction manuelle (D4 "4", pour ne pas casser le fix qui vient d'être fait).
+   → **Bug trouvé en testant ("aucun effet" signalé par Saar)** : pour un jet à un seul dé, `seed`
+     (`server/src/lib/diceParser.js:65`, XOR d'un seul élément) **= la valeur du résultat elle-même**
+     — deux jets tombant sur le même chiffre avaient donc toujours le même roulis. Fix : `timestamp`
+     du jet (jusqu'ici jamais transmis, seulement utilisé pour la `key` React) propagé
+     `DiceRoller.jsx` → `DiceMesh.jsx` → `DiceMeshGlb`, combiné à `seed` par XOR. Voir piège dédié
+     dans `.claude/rules/dice.md`.
+   → **Testé :** dérivation ordre stable (3 essais différents identiques), clustering D8 rejoué via
+     le vrai `GLTFLoader` (identique à la lecture manuelle), maths de correction D4 vérifiées
+     numériquement (vrai `three.js`), roulis aléatoire vérifié déterministe + variable par timestamp
+     (même seed+timestamp → même angle, seeds/timestamps différents → angles différents), ESLint
+     0 erreur introduite sur tous les fichiers touchés. **SR + D4 fonctionnel en jeu confirmé par
+     Saar, roulis aléatoire fonctionnel en jeu confirmé par Saar.**
+   → **Non testé :** confirmation visuelle des 6 autres dés (D6/D8/D10/D100/D12/D20) avec le nouveau
+     roulis aléatoire ; comportement du roulis D4 "4" à un angle de caméra très différent du défaut
+     (limite assumée, documentée).
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 8)", `docs/PLAN_DICEREWORK3.md`.
 
 **49. AdvantagesPanel Lot B — affichage de la liste ✅ CLOS — Session 141 (suite 7) (2026-07-08)**
    → Tâche séparée du Lot A (règle "un seul bug à la fois"). Plan Lot B écrit à gros grain dans

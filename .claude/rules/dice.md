@@ -33,6 +33,25 @@ parfois une arête/pointe (pas une face) sur D8/D20 — confirmé Session 141 co
 à l'outil (absent en jeu réel), pas un bug de calibration. Ne pas re-diagnostiquer sans nouvelle
 information (déjà vérifié : clustering via le vrai `GLTFLoader`, maths de rotation).
 
+**P57 — `seed` d'un jet à un seul dé = la valeur du résultat elle-même**
+`server/src/lib/diceParser.js` : `seed = rolls.reduce((a,b) => a^b, 0)` — pour un seul dé, XOR d'un
+seul élément = cet élément. **Ne jamais utiliser `seed` seul comme source de variation visuelle
+qui doit différer entre deux jets tombant sur le même résultat** (ex. roulis aléatoire
+`getRandomClockDeg`) — deux "7" auront toujours le même `seed`, donc le même rendu, même si ce sont
+deux jets différents. Combiner avec `timestamp` (unique par jet, propagé `DiceRoller.jsx` →
+`DiceMesh.jsx` → `DiceMeshGlb`, `Date.parse(timestamp) ^ seed`) pour une vraie variation par jet
+tout en restant déterministe et partagé entre tous les clients qui regardent le même jet. Vécu
+Session 141 (suite 8) : "aucun effet" du roulis aléatoire signalé par Saar en jeu réel.
+
+**Corrections de roulis par face — `getFaceRollCorrection` (Session 141 suite 8)**
+`FACE_ROLL_CORRECTIONS` (`diceMath.js`) — `setFromUnitVectors` seul ne garantit aucun contrôle du
+roulis (l'axe est aligné, la rotation autour de cet axe est arbitraire). Actuellement : D4 face "4"
+(`tiltDeg: -240`, inclinaison axe X écran — dévie volontairement du face→caméra exact, nécessaire
+pour ce dé car chaque face porte les 3 AUTRES chiffres, jamais le sien). Si une face a une
+correction ici, le roulis aléatoire (`getRandomClockDeg`) est désactivé pour elle dans
+`DiceMeshGlb` (les deux rotations ne commutent pas — un roulis aléatoire casserait la correction
+calibrée). Trouver de nouvelles corrections via `/dev/dice-calibration`, jamais à l'aveugle.
+
 **Architecture dés (Session 44)**
 - DiceRoller monté dans Canvas3D — même contexte WebGL, pas d'overlay HTML séparé.
 - DICE_RESULT consommé deux fois en parallèle : chat (Sidebar) + animation (DiceRoller).

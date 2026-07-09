@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 7) — 2026-07-08
+> Session 141 (suite 8) — 2026-07-08
 
 ---
 
@@ -107,8 +107,30 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 7) (2026-07-08)
+## ÉTAT COURANT — Session 141 (suite 8) (2026-07-08)
 
+- **Session 141 (suite 8) — Bug réel D4 face "4" + roulis aléatoire des dés ✅ CLOS.** Suite de
+  l'item 47 (ci-dessous), via l'outil de calibration étendu à tous les dés à la demande de Saar.
+  **Bug outil corrigé** : ordre N1-Nk instable pour les dés symétriques (D4/D6/D8/D20, tous les
+  clusters ont le même nombre de triangles) — tri secondaire déterministe ajouté
+  (`devFaceClusters.js`). "Cassé" D8/D20 dans l'outil investigué en profondeur (clustering rejoué
+  via le vrai `GLTFLoader`) et confirmé absent en jeu réel — artefact de l'outil, pas un bug,
+  décision Saar de ne pas creuser plus loin.
+  **Vrai bug production trouvé** (capture d'écran à l'appui — "1,2,3" visibles, "4" absent) : la
+  face "4" du D4 s'affichait mal orientée en vraie session, pas seulement dans l'outil.
+  `getFaceRollCorrection(dieType, faceValue)` (`diceMath.js`, NOUVEAU) appliqué dans `DiceMeshGlb`
+  — `setFromUnitVectors` seul ne garantit aucun contrôle du roulis ; correction scope limité à D4
+  face "4" (seule face signalée). **Demande Saar dans la foulée** : roulis aléatoire des dés
+  (`getRandomClockDeg`, PRNG seedé) — **bug trouvé en testant** : pour un jet à un seul dé, `seed`
+  = la valeur du résultat elle-même (XOR d'un seul élément, `diceParser.js`), donc deux jets sur le
+  même chiffre avaient toujours le même roulis. Fix : `timestamp` du jet propagé
+  `DiceRoller.jsx`→`DiceMesh.jsx`→`DiceMeshGlb`, combiné à `seed`. Voir piège dédié dans
+  `.claude/rules/dice.md`. Testé : ordre stable (3 essais), clustering D8 revérifié via le vrai
+  `GLTFLoader`, maths D4 vérifiées numériquement, roulis déterministe + variable par timestamp
+  confirmé, ESLint 0 erreur introduite. **SR + D4 fonctionnel en jeu confirmé Saar, roulis aléatoire
+  fonctionnel en jeu confirmé Saar.** Non testé : les 6 autres dés avec le nouveau roulis, angle de
+  caméra très différent du défaut pour la correction D4. Détail complet : `docs/JOURNAL6.md`
+  "Session 141 (suite 8)", `docs/PLAN_DICEREWORK3.md`.
 - **Session 141 (suite 5) — Correction animation 3D dé D100 (percentile) + D10 ✅ CLOS.** Interruption
   ponctuelle hors chantier en cours (`AdvantagesPanel.jsx` ci-dessous reste la vraie suite). Signalement
   Saar : faces non alignées, résultat serveur ≠ affiché ("30+7" pour un roll serveur de 1), dé des
