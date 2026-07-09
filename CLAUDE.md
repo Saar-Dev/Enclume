@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 8) — 2026-07-08
+> Session 141 (suite 9) — 2026-07-09
 
 ---
 
@@ -107,8 +107,42 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 8) (2026-07-08)
+## ÉTAT COURANT — Session 141 (suite 9) (2026-07-09)
 
+- **Session 141 (suite 9) — `docs/PLAN_ADVANTAGESPANEL.md` : Lots C+D ✅ CLOS, chantier terminé.**
+  **Lot C (notes "Autres")** : conception requise avant plan — discussion directe (pas de
+  questionnaire structuré, rappel Saar) sur pourquoi une nouvelle table plutôt que réutiliser le
+  pattern texte libre d'avant migration 99 : le schéma V1 était souple (pas de FK catalogue), la
+  migration 99 a introduit un modèle strict pour de vrais avantages mécaniques — réintroduire
+  "Autre" via une ligne catalogue générique aurait contourné la contrainte unique par
+  `advantage_id` et rendu `snapshot_data` incohérent. Précédent déjà dans le projet : `char_mutations`
+  séparée de `char_advantages` pour la même raison. Migration `124_char_advantage_notes.js`
+  (NOUVEAU) + `advantageService.js` (3 fonctions) + `char-sheet.js` (3 routes `/advantage-notes`) +
+  `AdvantagesPanel.jsx` (liste fusionnée `combinedEntries`, badge `AUT`).
+  **Correction d'une erreur de ma propre analyse à charge du Lot C** : j'avais affirmé que les
+  routes `/advantages` n'avaient aucun contrôle de propriété au-delà de `requireAuth` — **faux**,
+  `router.param('characterId', ...)` (`char-sheet.js:54-76`) l'enforce déjà sur toutes les routes
+  du fichier (pose `req.isGm`/vérifie l'appartenance à la campagne), je l'avais raté en ne lisant
+  pas assez loin. Trouvé et corrigé en recherchant pour le Lot D.
+  **Lot D (mutations octroyées en jeu)** : périmètre confirmé avec Saar avant code — MJ uniquement
+  (lecture seule joueur), aucun coût PC (octroi narratif), pas de sous-type/tirage aléatoire (le MJ
+  gère). Migration `125_char_mutations_source_campaign.js` (CHECK `source` +`'campaign'`) +
+  `mutationService.js` (NOUVEAU — upsert stackable mirrors STEP3, override sexe/fécondité,
+  soft-delete `status='removed'`) + 3 routes `/mutations` (GET public, POST/DELETE `req.isGm`,
+  réutilise le middleware existant) + `AdvantagesPanel.jsx` (badge "MUT", bouton grisé si `!isGm`).
+  **Bug MUT2 corrigé au passage** (`ref.js` — `orderBy('muta_numero')` inexistant → `mutation_id`).
+  Testé : `node --check`/ESLint 0 erreur (3 pré-existants `CharacterSheet.jsx` confirmés `git
+  stash`), migrations vérifiées en base (P53/P54), cycles complets réels (`node -e`), SR +
+  **fonctionnel confirmé Saar**.
+  **Limite trouvée par Saar en testant le Lot D** : ajouter une mutation n'applique aucun effet
+  mécanique. Vérifié `[VÉRIFIÉ]` — **gap pré-existant, vrai aussi pour le Wizard** :
+  `char_mutation_effects_view` jamais interrogée nulle part, `calcNA()` (`charStats.js`) n'a que 3
+  paramètres. Même diagnostic pour les Avantages (demandé par Saar) : 74/76 lignes `ref_advantages`
+  ont des `mod_*` déclarés mais jamais lus. **`docs/PLAN_MUTATION2.md` créé** (diagnostic complet +
+  3 pistes non tranchées, aucun code) — Lot E (`[CS7]`) **transféré** dans ce document (décision
+  Saar, même famille de problème). Saar lance une session dédiée juste après celle-ci.
+  `docs/PLAN_ADVANTAGESPANEL.md` marqué **chantier clos**. Détail complet : `docs/JOURNAL6.md`
+  "Session 141 (suite 9)".
 - **Session 141 (suite 8) — Bug réel D4 face "4" + roulis aléatoire des dés ✅ CLOS.** Suite de
   l'item 47 (ci-dessous), via l'outil de calibration étendu à tous les dés à la demande de Saar.
   **Bug outil corrigé** : ordre N1-Nk instable pour les dés symétriques (D4/D6/D8/D20, tous les
@@ -272,7 +306,9 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **128 migrations stables** (123_ref_advantages_polaris — Session 141 (suite 6) ;
+- **130 migrations stables** (125_char_mutations_source_campaign — Session 141 (suite 9) ;
+  124_char_advantage_notes — Session 141 (suite 9) ;
+  123_ref_advantages_polaris — Session 141 (suite 6) ;
   122_ref_career_random_benefits_lot1_and_points_alt — Session 140 ;
   121_ref_career_skills_choice_groups — Session 139 ;
   120_fix_ref_career_point_categories_lot1 — Session 139 ;

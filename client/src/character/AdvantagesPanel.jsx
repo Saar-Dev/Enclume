@@ -9,21 +9,26 @@
  *   onAdvantagesChange   — callback(newList) — met à jour l'état dans CharacterSheet
  *                          → déclenche aussi le recalcul de visibilité dans SkillsPanel
  *   canEdit              — booléen (isGm || isOwner)
+ *   isGm                 — booléen — gate l'ajout/retrait de mutations (MJ uniquement, Lot D :
+ *                          octroi narratif, pas un choix libre du joueur)
  *   onSaved              — callback après opération réussie (feedback ✓ CharacterWindow)
  *   charSkills           — lignes char_skills (source de vérité — géré par CharacterSheet)
  *   refSkillsPolaris     — compétences Polaris de référence (filtré depuis CharacterSheet.refSkills)
  *   onSkillLearnedChange — callback(skill_id, is_learned) après toggle pouvoir Polaris
  *
  * Flux modale :
- *   Étape 1 : choix du type → [Mutations] [Force Polaris*] [Autres]
- *             * grisé si muta_029 absente de charAdvantages
- *   Étape 2A (Mutations)     : liste ref_mutations scrollable
+ *   Étape 1 : choix du type → [Mutations*] [Force Polaris**] [Autres]
+ *             * grisé si !isGm (octroi MJ uniquement, lecture seule pour le joueur)
+ *             ** grisé si l'avantage adv_079 "Force Polaris" absent de charAdvantages
+ *   Étape 2A (Mutations)     : liste ref_mutations scrollable → POST .../mutations (char_mutations,
+ *                              table dédiée, source='campaign', aucun coût PC — voir Lot D)
  *   Étape 2B (Force Polaris) : liste POUVOIRS_POLARIS depuis refSkillsPolaris (prop)
- *   Étape 2C (Autres)        : textarea 255 chars
+ *   Étape 2C (Autres)        : textarea 255 chars → char_advantage_notes (table dédiée, pas
+ *                              char_advantages — aucun coût PC, voir Lot C)
  *
  * Affichage liste :
- *   Badge MUT (orange) | ATR (gris) + nom + level si >1 + bouton ×
- *   Ordre chronologique (created_at asc — garanti par l'API)
+ *   Liste fusionnée charAdvantages (catalogue, badge AVA/DÉS) + charMutations (badge MUT, retrait
+ *   MJ uniquement) + advantageNotes (texte libre, badge AUT), triée par ordre chronologique
  *
  * Force Polaris :
  *   Sélectionner un pouvoir Polaris → PUT /skills/toggle-learned (is_learned=true)
@@ -43,6 +48,7 @@ export default function AdvantagesPanel({
   charAdvantages,
   onAdvantagesChange,
   canEdit,
+  isGm,
   onSaved,
   charSkills,
   refSkillsPolaris,
@@ -76,6 +82,31 @@ export default function AdvantagesPanel({
     return () => { cancelled = true }
   }, [])
 
+  // ─── Notes "Autres" (texte libre, table dédiée) ──────────────────────────
+  const [advantageNotes, setAdvantageNotes] = useState([])
+
+  // Dépend de characterId : CharacterSheet n'est jamais remonté au changement de
+  // personnage (pas de key={characterId}), donc sans cette dépendance les notes du
+  // personnage précédent resteraient affichées.
+  useEffect(() => {
+    let cancelled = false
+    api.get(`/char-sheet/${characterId}/advantage-notes`)
+      .then(res => { if (!cancelled) setAdvantageNotes(res.data.notes || []) })
+      .catch(err => console.error('Erreur chargement advantage-notes :', err))
+    return () => { cancelled = true }
+  }, [characterId])
+
+  // ─── Mutations octroyées en jeu (char_mutations, table dédiée) ───────────
+  const [charMutations, setCharMutations] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    api.get(`/char-sheet/${characterId}/mutations`)
+      .then(res => { if (!cancelled) setCharMutations(res.data.mutations || []) })
+      .catch(err => console.error('Erreur chargement mutations :', err))
+    return () => { cancelled = true }
+  }, [characterId])
+
   // ─── Set des pouvoirs Polaris appris (dérivé de charSkills prop) ─────────
   const learnedPolarisSet = useMemo(() => {
     const s = new Set()
@@ -98,30 +129,23 @@ export default function AdvantagesPanel({
     setError(null)
   }
 
-  // ─── Ajouter une mutation ─────────────────────────────────────────────────
-  const handleAddMutation = useCallback(async (muta_numero) => {
+  // ─── Ajouter une mutation (MJ uniquement — serveur revalide aussi req.isGm) ─
+  const handleAddMutation = useCallback(async (mutationId) => {
     setSaving(true)
     setError(null)
     try {
-      const res = await api.post(`/char-sheet/${characterId}/advantages`, {
-        type: 'MUTATION',
-        muta_numero,
+      const res = await api.post(`/char-sheet/${characterId}/mutations`, {
+        mutation_id: mutationId,
       })
-      const raw = res.data.advantage
-      const refMut = refMutations.find(m => m.muta_numero === raw.muta_numero)
-      const updated = {
-        ...raw,
-        mutation_nom:     refMut?.nom             ?? raw.muta_numero,
-        linked_skill_id:  refMut?.linked_skill_id ?? null,
-      }
-      onAdvantagesChange(prev => {
-        const idx = prev.findIndex(a => a.id === updated.id)
+      const mutation = res.data.mutation
+      setCharMutations(prev => {
+        const idx = prev.findIndex(m => m.id === mutation.id)
         if (idx >= 0) {
           const next = [...prev]
-          next[idx] = updated
+          next[idx] = mutation
           return next
         }
-        return [...prev, updated]
+        return [...prev, mutation]
       })
       onSaved?.()
       closeModal()
@@ -131,7 +155,7 @@ export default function AdvantagesPanel({
     } finally {
       setSaving(false)
     }
-  }, [characterId, onAdvantagesChange, onSaved, refMutations, t])
+  }, [characterId, onSaved, t])
 
   // ─── Toggle pouvoir Polaris (is_learned dans char_skills) ────────────────
   const handleTogglePolaris = useCallback(async (skillId) => {
@@ -153,28 +177,27 @@ export default function AdvantagesPanel({
     }
   }, [characterId, learnedPolarisSet, onSaved, onSkillLearnedChange, t])
 
-  // ─── Ajouter un texte libre ───────────────────────────────────────────────
+  // ─── Ajouter un texte libre (table char_advantage_notes) ─────────────────
   const handleAddOther = useCallback(async () => {
     if (!otherLabel.trim()) return
     setSaving(true)
     setError(null)
     try {
-      const res = await api.post(`/char-sheet/${characterId}/advantages`, {
-        type: 'OTHER',
+      const res = await api.post(`/char-sheet/${characterId}/advantage-notes`, {
         label: otherLabel.trim(),
       })
-      onAdvantagesChange(prev => [...prev, res.data.advantage])
+      setAdvantageNotes(prev => [...prev, res.data.note])
       onSaved?.()
       closeModal()
     } catch (err) {
       setError(t('advantages.errorAdd'))
-      console.error('Erreur add other :', err)
+      console.error('Erreur add note :', err)
     } finally {
       setSaving(false)
     }
-  }, [characterId, otherLabel, onAdvantagesChange, onSaved, t])
+  }, [characterId, otherLabel, onSaved, t])
 
-  // ─── Supprimer / décrémenter ──────────────────────────────────────────────
+  // ─── Supprimer un avantage/désavantage catalogué ──────────────────────────
   const handleRemove = useCallback(async (advantage) => {
     setSaving(true)
     try {
@@ -193,6 +216,42 @@ export default function AdvantagesPanel({
     }
   }, [characterId, onAdvantagesChange, onSaved])
 
+  // ─── Supprimer une note "Autre" ────────────────────────────────────────────
+  const handleRemoveNote = useCallback(async (note) => {
+    setSaving(true)
+    try {
+      await api.delete(`/char-sheet/${characterId}/advantage-notes/${note.id}`)
+      setAdvantageNotes(prev => prev.filter(n => n.id !== note.id))
+      onSaved?.()
+    } catch (err) {
+      console.error('Erreur remove note :', err)
+    } finally {
+      setSaving(false)
+    }
+  }, [characterId, onSaved])
+
+  // ─── Supprimer une mutation (MJ uniquement — soft-delete status='removed') ─
+  const handleRemoveMutation = useCallback(async (mutation) => {
+    setSaving(true)
+    try {
+      await api.delete(`/char-sheet/${characterId}/mutations/${mutation.id}`)
+      setCharMutations(prev => prev.filter(m => m.id !== mutation.id))
+      onSaved?.()
+    } catch (err) {
+      console.error('Erreur remove mutation :', err)
+    } finally {
+      setSaving(false)
+    }
+  }, [characterId, onSaved])
+
+  // ─── Liste fusionnée : avantages + mutations + notes "Autres", tri chrono ─
+  const combinedEntries = useMemo(() => {
+    const advEntries = charAdvantages.map(a => ({ kind: 'advantage', sortAt: a.acquired_at, data: a }))
+    const mutEntries = charMutations.map(m => ({ kind: 'mutation', sortAt: m.created_at, data: m }))
+    const noteEntries = advantageNotes.map(n => ({ kind: 'note', sortAt: n.created_at, data: n }))
+    return [...advEntries, ...mutEntries, ...noteEntries].sort((a, b) => new Date(a.sortAt) - new Date(b.sortAt))
+  }, [charAdvantages, charMutations, advantageNotes])
+
   // ─── Rendu liste ──────────────────────────────────────────────────────────
 
   return (
@@ -200,30 +259,69 @@ export default function AdvantagesPanel({
 
       {/* ── Liste des entrées existantes ─────────────────────────────────── */}
       <div style={s.list}>
-        {charAdvantages.length === 0 && (
+        {combinedEntries.length === 0 && (
           <div style={s.empty}>{t('advantages.empty')}</div>
         )}
 
-        {charAdvantages.map(adv => (
-          <div key={adv.id} style={s.row}>
-            <span style={{
-              ...s.badge,
-              ...(adv.type === 'advantage' ? s.badgeAdvantage : s.badgeDisadvantage),
-            }}>
-              {adv.type === 'advantage' ? t('advantages.badgeAdvantage') : t('advantages.badgeDisadvantage')}
-            </span>
+        {combinedEntries.map(entry => (
+          <div key={entry.data.id} style={s.row}>
+            {entry.kind === 'advantage' && (
+              <>
+                <span style={{
+                  ...s.badge,
+                  ...(entry.data.type === 'advantage' ? s.badgeAdvantage : s.badgeDisadvantage),
+                }}>
+                  {entry.data.type === 'advantage' ? t('advantages.badgeAdvantage') : t('advantages.badgeDisadvantage')}
+                </span>
+                <span style={s.entryLabel}>{entry.data.name}</span>
+                {canEdit && (
+                  <button
+                    style={s.removeBtn}
+                    onClick={() => handleRemove(entry.data)}
+                    disabled={saving}
+                    title={t('advantages.removeTitle')}
+                  >
+                    ×
+                  </button>
+                )}
+              </>
+            )}
 
-            <span style={s.entryLabel}>{adv.name}</span>
+            {entry.kind === 'mutation' && (
+              <>
+                <span style={{ ...s.badge, ...s.badgeMutation }}>{t('advantages.badgeMutation')}</span>
+                <span style={s.entryLabel}>
+                  {entry.data.name}
+                  {entry.data.count > 1 && <span style={s.mutLevel}> ×{entry.data.count}</span>}
+                </span>
+                {isGm && (
+                  <button
+                    style={s.removeBtn}
+                    onClick={() => handleRemoveMutation(entry.data)}
+                    disabled={saving}
+                    title={t('advantages.removeTitle')}
+                  >
+                    ×
+                  </button>
+                )}
+              </>
+            )}
 
-            {canEdit && (
-              <button
-                style={s.removeBtn}
-                onClick={() => handleRemove(adv)}
-                disabled={saving}
-                title={t('advantages.removeTitle')}
-              >
-                ×
-              </button>
+            {entry.kind === 'note' && (
+              <>
+                <span style={{ ...s.badge, ...s.badgeNote }}>{t('advantages.badgeNote')}</span>
+                <span style={s.entryLabel}>{entry.data.label}</span>
+                {canEdit && (
+                  <button
+                    style={s.removeBtn}
+                    onClick={() => handleRemoveNote(entry.data)}
+                    disabled={saving}
+                    title={t('advantages.removeTitle')}
+                  >
+                    ×
+                  </button>
+                )}
+              </>
             )}
           </div>
         ))}
@@ -257,9 +355,16 @@ export default function AdvantagesPanel({
             {/* ── Étape 1 : choix du type ──────────────────────────────── */}
             {step === 'type' && (
               <div style={s.typeGrid}>
-                <button style={s.typeBtn} onClick={() => setStep('mutations')}>
+                <button
+                  style={{ ...s.typeBtn, ...(isGm ? {} : s.typeBtnDisabled) }}
+                  onClick={() => isGm && setStep('mutations')}
+                  disabled={!isGm}
+                  title={isGm ? undefined : t('advantages.mutationsGmOnly')}
+                >
                   <span style={s.typeBtnLabel}>{t('advantages.typeMutations')}</span>
-                  <span style={s.typeBtnSub}>{t('advantages.typeMutationsSub')}</span>
+                  <span style={s.typeBtnSub}>
+                    {isGm ? t('advantages.typeMutationsSub') : t('advantages.mutationsGmOnly')}
+                  </span>
                 </button>
 
                 <button
@@ -287,21 +392,19 @@ export default function AdvantagesPanel({
                 {refMutations.length === 0
                   ? <div style={s.loadingMsg}>{t('common.loading')}</div>
                   : refMutations.map(mut => {
-                      const existing = charAdvantages.find(
-                        a => a.type === 'MUTATION' && a.muta_numero === mut.muta_numero
-                      )
+                      const existing = charMutations.find(m => m.mutation_id === mut.mutation_id)
                       return (
                         <button
-                          key={mut.muta_numero}
+                          key={mut.mutation_id}
                           style={{ ...s.mutRow, ...(existing ? s.mutRowExisting : {}) }}
-                          onClick={() => handleAddMutation(mut.muta_numero)}
+                          onClick={() => handleAddMutation(mut.mutation_id)}
                           disabled={saving}
                           title={mut.description || ''}
                         >
-                          <span style={s.mutName}>{mut.nom}</span>
+                          <span style={s.mutName}>{mut.name}</span>
                           {existing && (
                             <span style={s.mutLevel}>
-                              {t('advantages.mutLevel', { current: existing.level, next: existing.level + 1 })}
+                              {t('advantages.mutLevel', { current: existing.count, next: existing.count + 1 })}
                             </span>
                           )}
                         </button>
@@ -422,10 +525,21 @@ const s = {
     color: '#9ca3af',
     border: '1px solid rgba(107,114,128,0.3)',
   },
+  badgeNote: {
+    background: 'rgba(91,141,238,0.18)',
+    color: '#5b8dee',
+    border: '1px solid rgba(91,141,238,0.3)',
+  },
+  badgeMutation: {
+    background: 'rgba(96,192,96,0.18)',
+    color: '#60c060',
+    border: '1px solid rgba(96,192,96,0.3)',
+  },
   entryLabel: {
     fontSize: '12px',
     color: '#b0b0c8',
     flex: 1,
+    whiteSpace: 'pre-wrap',
   },
   removeBtn: {
     background: 'transparent',

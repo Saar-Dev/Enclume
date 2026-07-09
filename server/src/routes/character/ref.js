@@ -63,14 +63,14 @@ router.get('/skills', requireAuth, async (req, res, next) => {
 })
 
 // ─── GET /api/char-ref/mutations ─────────────────────────────────────────────
-// Retourne le catalogue complet des mutations.
-// Inclut linked_skill_id — lien vers la compétence spéciale débloquée (nullable).
-// Trié par muta_numero pour un ordre d'affichage stable et prévisible.
+// Retourne le catalogue complet des mutations (bug MUT2 corrigé — docs/BUGIDENTIFIE.md :
+// muta_numero/linked_skill_id n'ont jamais existé sur le schéma réel post-migration 95).
+// Trié par mutation_id pour un ordre d'affichage stable et prévisible.
 router.get('/mutations', requireAuth, async (req, res, next) => {
   try {
     const mutations = await db('ref_mutations')
       .select('*')
-      .orderBy('muta_numero')
+      .orderBy('mutation_id')
     res.json({ mutations })
   } catch (err) {
     next(err)

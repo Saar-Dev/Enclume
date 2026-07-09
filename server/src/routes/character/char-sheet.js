@@ -39,7 +39,8 @@ import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal, calcAttributeNA, calcREA, calcSeuils, calcSouffle, calcResistanceDroguesInput } from '../../lib/charStats.js'
 import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from '../../lib/woundUtils.js'
-import { getAdvantages, addAdvantage, removeAdvantage } from '../../services/advantageService.js'
+import { getAdvantages, addAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
+import { getMutations, addMutation, removeMutation } from '../../services/mutationService.js'
 import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
 import { WS } from '../../../../shared/events.js'
 import {
@@ -588,6 +589,103 @@ router.delete('/:characterId/advantages/:id', async (req, res, next) => {
     const { reason } = req.body
     const advantage = await removeAdvantage(sheet.id, req.params.id, reason)
     res.json({ deleted: true, advantage })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── GET /api/char-sheet/:characterId/advantage-notes ─────────────────────────
+router.get('/:characterId/advantage-notes', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId })
+      .first()
+    if (!sheet) throw new AppError(404, 'Sheet not found')
+
+    const notes = await getAdvantageNotes(sheet.id)
+    res.json({ notes })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── POST /api/char-sheet/:characterId/advantage-notes ────────────────────────
+router.post('/:characterId/advantage-notes', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId })
+      .first()
+    if (!sheet) throw new AppError(404, 'Sheet not found — create it first')
+
+    const note = await addAdvantageNote(sheet.id, req.body.label)
+    res.status(201).json({ note })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── DELETE /api/char-sheet/:characterId/advantage-notes/:id ──────────────────
+router.delete('/:characterId/advantage-notes/:id', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId })
+      .first()
+    if (!sheet) throw new AppError(404, 'Sheet not found')
+
+    const result = await removeAdvantageNote(sheet.id, req.params.id)
+    res.json(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── GET /api/char-sheet/:characterId/mutations ────────────────────────────────
+router.get('/:characterId/mutations', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId })
+      .first()
+    if (!sheet) throw new AppError(404, 'Sheet not found')
+
+    const mutations = await getMutations(sheet.id)
+    res.json({ mutations })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── POST /api/char-sheet/:characterId/mutations — GM uniquement ──────────────
+router.post('/:characterId/mutations', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM uniquement')
+
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId })
+      .first()
+    if (!sheet) throw new AppError(404, 'Sheet not found — create it first')
+
+    const { mutation_id } = req.body
+    if (!mutation_id) throw new AppError(400, 'mutation_id is required')
+
+    const mutation = await addMutation(sheet.id, mutation_id)
+    res.status(201).json({ mutation })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── DELETE /api/char-sheet/:characterId/mutations/:id — GM uniquement ────────
+router.delete('/:characterId/mutations/:id', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM uniquement')
+
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId })
+      .first()
+    if (!sheet) throw new AppError(404, 'Sheet not found')
+
+    const mutation = await removeMutation(sheet.id, req.params.id)
+    res.json({ deleted: true, mutation })
   } catch (err) {
     next(err)
   }

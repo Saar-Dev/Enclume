@@ -1646,3 +1646,163 @@ roulis aléatoire ; comportement de la correction D4 "4" à un angle de caméra 
 défaut (limite assumée et documentée, pas un bug caché — aucune correction n'existait avant).
 
 Détail complet du chantier initial : `docs/PLAN_DICEREWORK3.md` (addendum ajouté).
+
+---
+
+## Session 141 (suite 9) — 2026-07-09 — AdvantagesPanel Lot C : notes "Autres" ✅ CLOS + Bug MUT2 inscrit
+
+**Lot C** — tâche séparée des Lots A/B, conception requise avant plan détaillé (signalé dans
+`docs/PLAN_ADVANTAGESPANEL.md`). Discussion directe (pas de questionnaire structuré, rappel Saar) :
+pourquoi une nouvelle table plutôt que réutiliser le pattern texte libre d'avant migration 99 ?
+Réponse tranchée avec Saar : l'ancien schéma `char_advantages` (V1) était volontairement souple
+(pas de FK catalogue, pas de contrainte unique) — la migration 99 a introduit un modèle strict
+(FK obligatoire vers `ref_advantages`, `snapshot_data`, contrainte unique par `advantage_id`) conçu
+pour de vrais avantages mécaniques. Réintroduire "Autre" via une ligne catalogue générique
+(`adv_080` + `custom_label`) contournerait ces garde-fous un par un (exception à la contrainte
+unique, `snapshot_data` incohérent avec le texte réel ailleurs). Précédent déjà dans le projet :
+`char_mutations` est une table séparée de `char_advantages` pour la même raison structurelle.
+
+**Analyse à charge demandée par Saar avant codage** — 3 points vérifiés avant de coder : (1)
+`CharacterSheet` n'a pas de `key={characterId}` (`CharacterWindow.jsx:366`) → ne remonte jamais au
+changement de personnage → `useEffect([characterId])` réellement nécessaire pour recharger les
+notes, pas une précaution superflue. (2) `Step5Advantages.jsx` (Wizard) n'a aucune notion de texte
+libre → confirme "Autre" comme 100% `CharacterSheet`/`AdvantagesPanel`, jamais le Wizard. (3) Les
+routes `/advantages` existantes n'ont aucun contrôle de propriété au-delà de `requireAuth` — les
+nouvelles routes reproduisent cette même absence pré-existante (pas une régression introduite, pas
+corrigé ici, hors scope). Flicker UX mineur accepté (notes chargées séparément de `charAdvantages`,
+pas de fusion des deux `useEffect`) et absence d'audit de suppression (pas d'enjeu PC à tracer)
+validés explicitement par Saar.
+
+**Codé** : migration `124_char_advantage_notes.js` (NOUVEAU — table dédiée, `id`/`char_sheet_id`
+FK CASCADE/`label`/`created_at`, pas de soft-delete). `advantageService.js` : 3 fonctions
+(`getAdvantageNotes`/`addAdvantageNote`/`removeAdvantageNote`, validation label non vide ≤255
+caractères). `char-sheet.js` : 3 routes `GET/POST /:characterId/advantage-notes` +
+`DELETE /:characterId/advantage-notes/:id`, même pattern exact que les routes `/advantages`
+existantes. `AdvantagesPanel.jsx` : état local `advantageNotes` + fetch dédié, liste fusionnée
+`combinedEntries` (`useMemo`, tri chronologique `acquired_at`/`created_at`) affichant avantages
+catalogués (badge AVA/DÉS) et notes (nouveau badge AUT) dans un seul flux, `handleAddOther` réécrit
+vers `/advantage-notes` (au lieu de l'ancien `POST /advantages {type:'OTHER'}` qui échouait
+toujours), nouveau `handleRemoveNote`. En-tête JSDoc du fichier corrigé au passage (resté obsolète
+depuis les Lots A/B — mentionnait encore `muta_029`/badges `MUT`/`ATR`).
+
+**Testé** : `node --check` (3 fichiers serveur) 0 erreur, ESLint client 0 erreur, `fr.json` valide,
+migration 124 vérifiée en base réelle (P53/P54 respectés), scénarios `node -e` (`addAdvantageNote`
+label vide/>255 → rejeté en transaction annulée sans résidu ; cycle complet réel add→get→remove→404
+sur double-suppression, base nettoyée après test), SR + **parcours navigateur confirmé fonctionnel
+par Saar** ("Oui, lot C testé").
+
+**Bug trouvé en testant, hors scope Lot C — MUT2 inscrit dans `docs/BUGIDENTIFIE.md`** : l'étape
+"Mutations" de la même modale (jamais touchée par Lot C) plante en 500 — `GET /char-ref/mutations`
+(`ref.js:73`) trie sur `muta_numero`, colonne inexistante (vraies colonnes `mutation_id`/`name`,
+vérifié via `columnInfo()` en base réelle). Analyse plus poussée avant de choisir patch vs
+inscription : même en corrigeant l'`orderBy`, `AdvantagesPanel.jsx` lit `mut.muta_numero`/`mut.nom`/
+`linked_skill_id` (aucun de ces champs n'existe) et `handleAddMutation` poste toujours vers
+`/advantages` avec `advantage_id` absent → 400 garanti. Un patch isolé de l'`orderBy` aurait juste
+déplacé la casse (liste avec noms vides, échec à l'ajout) sans réparer la fonctionnalité — décision
+(Saar a laissé le choix) : inscription dans `BUGIDENTIFIE.md` plutôt que correctif partiel, ce bug
+étant la porte d'entrée du **Lot D** déjà identifié comme le plus gros chantier restant.
+
+**Non testé** : affichage d'un désavantage réel (`type:'disadvantage'`) dans la liste fusionnée —
+toujours aucune ligne active trouvée en base ; note texte libre >255 caractères via un appel API
+direct (contournement du `maxLength` navigateur) — le rejet serveur existe mais n'a pas été
+déclenché en conditions réelles navigateur.
+
+**État du plan `PLAN_ADVANTAGESPANEL.md`** : Lots A/B/C clos. Lot D (le plus gros, englobe
+désormais aussi MUT2) et Lot E (`[CS7]`, backlog) restent à planifier en détail avec Saar, chacun
+sa session (règle "un seul bug à la fois").
+
+---
+
+### Suite (même session) — Lot D : mutations octroyées en jeu ✅ CLOS + `PLAN_MUTATION2.md` créé
+
+**Conception avant plan** (discussion directe, pas de questionnaire — rappel explicite de Saar en
+plein milieu de la conversation, appliqué pour la suite). Trois questions tranchées avec Saar avant
+tout code :
+1. Coût en PC ou octroi narratif pur ? → **Aucun coût.** Recherche RAW (`REGLE_MUTATION.md`) : pas
+   de règle "achat de mutation en jeu" trouvée, seulement des mutations octroyées par le MJ
+   (parasites, drogues Régé+). Le trou déjà noté au Lot A (`pc_postcreation` jamais crédité, aucune
+   route) aurait bloqué toute mutation payante de toute façon.
+2. Qui peut déclencher l'ajout ? → **MJ uniquement, lecture seule pour le joueur.**
+3. Complexité Wizard à reprendre (sous-type, tirage D100, stacking) ? → **Non, le MJ gère** —
+   version simplifiée : choisir une mutation, l'ajouter, terminé.
+
+**Correction d'une erreur de ma propre analyse à charge du Lot C**, trouvée en recherchant pour le
+Lot D : j'avais affirmé que les routes `/advantages` n'avaient aucun contrôle de propriété au-delà
+de `requireAuth` — **faux**. `router.param('characterId', ...)` (`char-sheet.js:54-76`) s'exécute
+automatiquement sur toutes les routes `:characterId` du fichier : vérifie l'appartenance à la
+campagne, pose `req.character`/`req.isGm`, bloque si ni owner ni GM. Je l'avais raté en ne lisant
+pas assez loin dans le fichier au moment du Lot C. Conséquence positive : le gate MJ du Lot D est
+une ligne (`if (!req.isGm) throw new AppError(403, ...)`, pattern déjà utilisé 3 fois ailleurs dans
+ce fichier), aucune nouvelle plomberie d'autorisation nécessaire.
+
+**Question de scope résolue** : les mutations d'un personnage n'étaient affichées **nulle part**
+dans `CharacterSheet.jsx` (vérifié — aucun bloc dédié, malgré le commentaire d'en-tête du module
+qui annonçait "mutations, Force Polaris, texte libre" depuis le début). Confirmé avec Saar : Lot D
+inclut donc aussi l'affichage en lecture seule dans la liste fusionnée (3ᵉ type, badge "MUT"), pas
+seulement la route d'ajout.
+
+**Codé** :
+- **NOUVEAU** `server/src/db/migrations/125_char_mutations_source_campaign.js` — étend le CHECK
+  `chk_char_mutations_source` avec `'campaign'` (en plus de `chosen`/`random` du Wizard), même
+  logique que `char_advantages.acquired_during`.
+- **NOUVEAU** `server/src/services/mutationService.js` — `getMutations`/`addMutation`/
+  `removeMutation`. `addMutation` mirrors l'upsert stackable de STEP3 (`creationService.js`) à
+  l'identique (raw SQL `ON CONFLICT ... WHERE ... DO UPDATE`, index partiel `uq_char_mut_no_sub`,
+  `knex.onConflict()` standard ne gère pas les index partiels) + override `char_archetype.sex`/
+  `is_fertile` si la mutation le prévoit (garantit la cohérence avec la contrainte `not_if_sterile`
+  même pour une mutation octroyée post-création). `removeMutation` = soft-delete `status='removed'`
+  (le CHECK constraint anticipait déjà ce statut, jamais exploité jusqu'ici).
+- `char-sheet.js` : 3 routes `/:characterId/mutations` (GET public, POST/DELETE `req.isGm`).
+- `ref.js` : **bug MUT2 corrigé** — `orderBy('muta_numero')` (colonne inexistante) →
+  `orderBy('mutation_id')`.
+- `AdvantagesPanel.jsx` : nouveau prop `isGm`, état `charMutations` (fetch `[characterId]`),
+  `combinedEntries` gagne un 3ᵉ type `'mutation'` (badge "MUT", retrait réservé au MJ), bouton
+  "Mutations" de l'étape 1 grisé si `!isGm`, Étape 2A réparée (`mut.name`/`mut.mutation_id` au lieu
+  des champs V1 inexistants, `existing.count` au lieu d'`existing.level`), `handleAddMutation`
+  réécrit vers `POST .../mutations`.
+- `CharacterSheet.jsx` : `isGm` descendu vers `AdvantagesPanel` (1 ligne, déjà disponible en prop).
+
+**Recherche/inspiration** (demande explicite Saar avant de coder) : pas de recherche externe —
+réutilisation de 3 patterns déjà éprouvés dans ce même projet plutôt qu'un problème algorithmique
+inédit (contrairement aux dés 3D qui avaient justifié `threejs-dice`) : l'upsert SQL brut de STEP3,
+le gate `req.isGm` déjà utilisé 3 fois, le soft-delete par `status` déjà anticipé par le schéma.
+
+**Testé** (avant de déclarer "100% sûr", conformément à la demande explicite de Saar) : `node
+--check` (4 fichiers serveur) 0 erreur, ESLint client 0 erreur introduite (3 problèmes
+pré-existants `CharacterSheet.jsx` confirmés via `git stash` — `calcAllureMoy`/`sheetId` non
+utilisés, dep manquante), migration 125 vérifiée en base réelle (P53/P54 respectés), cycle complet
+réel `addMutation`→`getMutations`→`removeMutation` (mutation simple, mutation avec override sexe/
+fécondité — Asexué testé, `is_fertile` correctement resté `false`, mutation inconnue rejetée
+proprement, soft-delete confirmé, base nettoyée après test), MUT2 revérifié corrigé (requête
+`ref_mutations` réussit), SR + **parcours navigateur confirmé fonctionnel par Saar**.
+
+**Limite trouvée par Saar en testant** : *"ajouter une mutation implique forcément d'appliquer les
+EFFETS de la mutation (accès à une compétence, perte ou gain de statistiques, etc...). Est-ce qu'on
+le gère dans le Wizard ça ?"* Réponse vérifiée par recherche exhaustive (`grep` server+client, pas
+une supposition) : **non, le Wizard ne le gère pas non plus.**
+- `char_mutation_effects_view` (migrations 96/109) agrège déjà les `mod_FOR..PRE`+résistances+
+  armure de toutes les mutations actives — **jamais interrogée nulle part dans le code**, vue morte
+  depuis sa création.
+- Plus profond : `calcNA(base_level, pc_modifier, mod_genotype)` (`charStats.js:195`) n'a que 3
+  paramètres — aucune place prévue pour un modificateur de mutation. Le calcul d'attribut n'a
+  jamais été conçu pour ça, pour personne.
+- Même diagnostic demandé et fait pour les Avantages : sur 76 lignes `ref_advantages`, seule
+  `adv_076` (Fécondité) a un effet réellement appliqué, et encore, câblé en dur par ID
+  (`if (advantageId === 'adv_076')`) plutôt que par lecture générique de `mod_identity` (qui
+  contient pourtant `{is_fertile: true}`). Les 12 colonnes de modificateurs existent sur ~74
+  avantages mais ne font jamais rien.
+
+**Décisions de clôture (Saar)** :
+- Gap **pas un blocage de clôture du Lot D** — pré-existant, aucune régression introduite, juste
+  rendu visible plus tôt par les tests.
+- **`docs/PLAN_MUTATION2.md` créé** (NOUVEAU) : diagnostic complet Mutations + Avantages, 3 pistes
+  de résolution non tranchées (agrégation à la lecture / application à l'écriture / scope réduit
+  priorisé), aucun code. Mis de côté pour une session dédiée que Saar lance juste après celle-ci.
+- **Lot E (`[CS7]`) transféré intégralement** vers `docs/PLAN_MUTATION2.md` (même famille de
+  problème — données de mutation jamais branchées jusqu'au bout) plutôt que de rester dans
+  `PLAN_ADVANTAGESPANEL.md`.
+- `docs/PLAN_ADVANTAGESPANEL.md` marqué **chantier clos** (Lots A/B/C/D faits, Lot E transféré).
+
+**Non testé** : mutation `is_stackable` ajoutée deux fois via `addMutation()` directement (testé
+seulement en SQL brut plus tôt dans la session) ; parcours navigateur du grisage bouton "Mutations"
+côté joueur vs MJ (confirmé fonctionnel globalement par Saar, pas détaillé scénario par scénario).

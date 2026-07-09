@@ -1,3 +1,22 @@
+## v167 — 2026-07-09 — Le MJ peut octroyer une mutation en jeu
+
+### Client
+- [feat] Le MJ peut désormais ajouter une mutation à un personnage directement depuis sa fiche
+  (section Avantages), même après la création — utile pour une contamination, une exposition aux
+  radiations, etc. Le joueur voit la mutation apparaître sur sa fiche mais ne peut pas en ajouter
+  lui-même.
+- [fix] L'étape "Mutations" de cette fenêtre restait bloquée sur "chargement en cours" — corrigé.
+
+### Connu
+- [limitation] Une mutation ajoutée n'applique pas encore automatiquement ses effets chiffrés
+  (bonus/malus d'attributs, résistances) — à faire dans un prochain chantier.
+
+## v166 — 2026-07-09 — Notes libres sur la fiche personnage (Avantages)
+
+### Client
+- [feat] La fiche personnage permet à nouveau d'ajouter une note libre (titre, ennemi, implant…)
+  dans la section Avantages — elle échouait systématiquement auparavant.
+
 ## v165 — 2026-07-08 — Correction du dé D4 + variation aléatoire des jets de dés
 
 ### Client

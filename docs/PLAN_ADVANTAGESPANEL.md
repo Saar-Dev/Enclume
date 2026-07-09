@@ -1,14 +1,8 @@
 # PLAN_ADVANTAGESPANEL — Correction complète de `AdvantagesPanel.jsx` + Force Polaris (OPT-04)
-> Session 141 (suite 5) — 2026-07-08
-> Statut : Lot A détaillé ligne-à-ligne ci-dessous, **prêt à coder, code pas encore commencé**.
-> Lots B-E non détaillés (voir plus bas).
->
-> **Note pour reprise en session neuve** : ce document est conçu pour être exécutable sans relire
-> la conversation d'origine. Suivre le protocole standard du projet (`CLAUDE.md`) : lire les
-> fichiers cités ci-dessous dans la session en cours, confirmer la lecture, présenter le plan
-> (celui-ci peut être repris tel quel), demander confirmation avant de coder. **Décision déjà
-> tranchée** : Lot A et Lot B restent deux tâches séparées (règle CLAUDE.md "un seul bug à la
-> fois") — ne pas les fusionner sans en reparler avec Saar.
+> Session 141 (suite 9) — 2026-07-09
+> Statut : **✅ CHANTIER CLOS** — Lots A/B/C/D faits et confirmés fonctionnels. Lot E transféré vers
+> `docs/PLAN_MUTATION2.md` (avec la limite "effets mécaniques non appliqués" du Lot D). Plus
+> d'action attendue sur ce document sauf nouvelle demande de Saar.
 
 ---
 
@@ -189,51 +183,39 @@ bug à la fois"), même si c'est le même fichier — ne pas les coder dans la m
   surcharge l'affichage) + une ligne catalogue générique (ex. `adv_080` "Autre — texte libre") ?
   Ou autre mécanisme ? — à trancher avec Saar en temps voulu.
 
-### Lot D — "Mutations" ajoutées en jeu — 🔲 À FAIRE, le plus gros chantier
+### Lot D — "Mutations" ajoutées en jeu — ✅ CLOS (bookkeeping) — Session 141 (suite 9)
 
-- Cible conceptuellement la mauvaise table : `char_mutations` existe déjà (dédiée, utilisée
-  Wizard Step3 + combat/effets, colonnes `mutation_id`/`subtype_id`/`source`/`status`/`count`),
-  pas `char_advantages`.
-- **Aucune route n'existe aujourd'hui** pour ajouter une mutation à un personnage déjà verrouillé
-  (post-Wizard, `wizard_locked_at` posé) — à construire de zéro : nouveau service (mirroring
-  partiel de la logique STEP3 de `creationService.js`, mais ajout unitaire, pas remplacement
-  complet) + nouvelle route `POST /char-sheet/:characterId/mutations`.
+Périmètre confirmé avec Saar avant code : MJ uniquement (lecture seule pour le joueur), aucun coût
+PC (octroi narratif, pas un achat), pas de sélection de sous-type/tirage aléatoire (le MJ gère la
+nuance narrative lui-même).
 
-### Lot E — `SkillsPanel.jsx` `activeMutations` (dette `[CS7]`) — 🔲 BACKLOG, non prioritaire
+- Migration 125 (`char_mutations.source` CHECK étendu avec `'campaign'`) + `mutationService.js`
+  (NOUVEAU — `getMutations`/`addMutation`/`removeMutation`, upsert stackable mirrors STEP3, override
+  sexe/fécondité, soft-delete via `status='removed'`) + 3 routes `/char-sheet/:characterId/mutations`
+  (GET public, POST/DELETE `req.isGm` uniquement — middleware `router.param('characterId')` déjà
+  existant, pas de nouvelle plomberie) + `AdvantagesPanel.jsx` (`charMutations` fetch dédié, 3ᵉ type
+  dans `combinedEntries`, badge "MUT", bouton "Mutations" grisé si `!isGm`).
+- Bug **MUT2** corrigé au passage (`ref.js` — `GET /char-ref/mutations` triait sur une colonne
+  inexistante, `docs/BUGIDENTIFIE.md`).
+- **Limite trouvée en testant, transférée vers `docs/PLAN_MUTATION2.md`** : ajouter une mutation
+  n'applique aucun effet mécanique (attributs, résistances) — vérifié **également jamais fait par
+  le Wizard**, gap architectural pré-existant bien plus large que ce lot (`calcNA` n'a même pas de
+  paramètre pour un modificateur de mutation). Diagnostic complet + pistes non tranchées dans
+  `docs/PLAN_MUTATION2.md`, session dédiée à venir — pas un blocage de clôture de ce lot.
 
-Trouvé en creusant PC14 (`docs/Character/CHARACTER.md`) pendant l'analyse du Lot A — **même
-cause racine que ce plan, rayon d'impact plus large**, mais hors sujet Force Polaris à
-proprement parler. Ajouté au backlog sur demande explicite de Saar ("pas à prioriser en
-particulier"), pas de lot en cours.
+### Lot E — `SkillsPanel.jsx` `activeMutations` (dette `[CS7]`) — ➡️ TRANSFÉRÉ
 
-- `SkillsPanel.jsx:135-141` (`activeMutations`) reproduit exactement le même bug que
-  `AdvantagesPanel.jsx` : lit `charAdvantages.type === 'MUTATION'` + `.muta_numero`, des champs
-  qui n'existent dans aucune ligne V2 réelle → Set **toujours vide**.
-- Conséquence vérifiée en base réelle (`ref_skill_requirements where type='MUTATION'`, 10 lignes) :
-  `MUTATION_CONTAGION`, `MUTATION_CONTROLE_MOLECULAIRE`, `MUTATION_EMPATHIE`,
-  `MUTATION_METAMORPHOSE`, `MUTATION_PURULENCE`, `MUTATION_RADIATIONS`, `MUTATION_SONAR`,
-  `MUTATION_AGILITE_CAUDALE`, `MAITRISE_DE_LA_FORCE_POLARIS`, `MAITRISE_DE_LECHO_POLARIS` sont
-  **structurellement invisibles pour tout personnage**, quelle que soit la mutation réellement
-  possédée dans `char_mutations` — aucune erreur, aucun signal (pattern silencieux déjà vu P54/P56).
-- Piste de correction (non détaillée, pas encore planifiée ligne à ligne) : `activeMutations`
-  doit être dérivé de `char_mutations` (déjà correctement peuplé par le Wizard Step3), pas de
-  `charAdvantages` — nécessite de faire remonter `char_mutations` jusqu'à `SkillsPanel.jsx` (à
-  vérifier si déjà disponible ailleurs dans `CharacterSheet.jsx`, pas vérifié à ce stade).
-- **Interaction à surveiller avec le Lot A** : les 2 skills `MAITRISE_DE_LA_FORCE_POLARIS`/
-  `MAITRISE_DE_LECHO_POLARIS` ont aujourd'hui un prérequis `type:'MUTATION', value:'muta_029'`
-  dans `ref_skill_requirements` — un gate distinct de celui d'`AdvantagesPanel.jsx`, actuellement
-  inopérant (Set toujours vide) mais qui redeviendrait un vrai blocage contradictoire si le Lot E
-  est corrigé sans revoir ce prérequis (un personnage avec `adv_079` mais sans `muta_029` resterait
-  bloqué sur ces 2 compétences précises). À trancher avec Saar quand ce lot sera activé.
+Décision Saar (Session 141 suite 9) : transféré intégralement vers **`docs/PLAN_MUTATION2.md`**
+("Dette transférée") — même famille de problème que les effets de mutation jamais appliqués,
+traité dans la même session dédiée future plutôt que dans ce plan.
 
 ---
 
-## Ordre d'exécution
+## Ordre d'exécution (historique — chantier clos)
 
-Lot A (thread actif, débloque OPT-04) → Lot B (petit, même fichier, corrige un bug d'affichage
-déjà visible) → Lot C et D plus tard, chacun avec sa propre confirmation de conception, un sujet
-à la fois (règle CLAUDE.md — jamais deux bugs dans le même plan). Lot E au backlog, non
-prioritaire, à réactiver sur décision de Saar.
+Lot A (Session 141 suite 6) → Lot B (suite 7) → Lot C (suite 9) → Lot D bookkeeping (suite 9,
+même session — effets mécaniques transférés vers `docs/PLAN_MUTATION2.md`). Lot E transféré vers
+le même document. Plus aucun lot actif ici.
 
 ## Ce qui ne change pas
 

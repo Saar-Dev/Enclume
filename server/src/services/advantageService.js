@@ -113,3 +113,29 @@ export async function removeAdvantage(sheetId, charAdvantageId, reason) {
     return updated
   })
 }
+
+// ─── Notes "Autres" (texte libre) — table dédiée, hors catalogue ref_advantages ─
+// Pas de coût PC, pas de contrainte de famille/unicité, pas de soft-delete (aucun
+// enjeu mécanique à auditer). Voir docs/PLAN_ADVANTAGESPANEL.md Lot C.
+
+export async function getAdvantageNotes(sheetId) {
+  return db('char_advantage_notes').where({ char_sheet_id: sheetId }).orderBy('created_at', 'asc')
+}
+
+export async function addAdvantageNote(sheetId, label) {
+  const trimmed = (label ?? '').trim()
+  if (!trimmed) throw new AppError(400, 'label requis')
+  if (trimmed.length > 255) throw new AppError(400, 'label limité à 255 caractères')
+  const [row] = await db('char_advantage_notes')
+    .insert({ char_sheet_id: sheetId, label: trimmed })
+    .returning('*')
+  return row
+}
+
+export async function removeAdvantageNote(sheetId, noteId) {
+  const deleted = await db('char_advantage_notes')
+    .where({ id: noteId, char_sheet_id: sheetId })
+    .del()
+  if (!deleted) throw new AppError(404, 'Note non trouvée')
+  return { deleted: true }
+}

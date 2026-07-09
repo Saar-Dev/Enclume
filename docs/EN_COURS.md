@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-08 Session 141 (suite 8)
+> Dernière mise à jour : 2026-07-09 Session 141 (suite 9)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -11,21 +11,20 @@
 
 > **CHANTIER REDESIGN STEP 4 PROFESSION → ✅ TERMINÉ (8/8 lots)** — plan maître archivé :
 > **`docs/Old/PLAN_REWORKFINAL.md`**.
-> **PROCHAINE ACTION IMMÉDIATE — Session 141 (suite 7)** : Lots A **et** B d'`AdvantagesPanel.jsx`
-> (`docs/PLAN_ADVANTAGESPANEL.md`) **✅ CLOS**. Lot A : migration 123 (`adv_077`/`078`/`079` "Force
-> Polaris"), `getStep5RefData(campaignId)` filtre 077/078 selon `settings.polaris_latent`,
-> `advantageConstraints.js`/`advantageService.js` revalident côté serveur, gate cassé depuis la
-> migration 99 corrigé (`hasMuta029` → `hasForcePolaris` sur `adv_079`). Lot B : bloc liste
-> `AdvantagesPanel.jsx` réparé (`adv.name` au lieu d'`adv.label` toujours `undefined`, badge
-> `AVA`/`DÉS` sur le vrai `type`, `adv.level` mort retiré). Limite "1 Polaris latent par groupe"
-> (OPT-04) volontairement hors scope — gérée manuellement par le MJ (décision Saar). Testé + SR +
-> fonctionnel confirmé Saar (les deux lots). Détail complet : items "48."/"49." et
-> `docs/JOURNAL6.md` "Session 141 (suite 6)"/"(suite 7)". **Plan `PLAN_ADVANTAGESPANEL.md` pas
-> fini** : Lot C ("Autres" texte libre — conception à trancher : `custom_label` ? catalogue
-> générique ?) et Lot D ("Mutations" ajoutées en jeu — aucune route n'existe pour un personnage
-> déjà verrouillé, le plus gros chantier restant) restent à planifier en détail avec Saar, chacun
-> sa propre session (règle "un seul bug à la fois"). Lot E (`SkillsPanel.jsx activeMutations`,
-> dette `[CS7]`) reste backlog, non prioritaire.
+> **CHANTIER `docs/PLAN_ADVANTAGESPANEL.md` → ✅ TERMINÉ (Lots A/B/C/D) — Session 141 (suite 9)**.
+> Lot A : Force Polaris (migration 123, OPT-04). Lot B : bloc liste réparé (badges `AVA`/`DÉS`).
+> Lot C : notes "Autres" (migration 124, table `char_advantage_notes` dédiée). Lot D : MJ peut
+> octroyer une mutation en jeu (migration 125, `mutationService.js`, badge "MUT", MJ uniquement) —
+> bug **MUT2** corrigé au passage (`GET /char-ref/mutations`). Testé + SR + fonctionnel confirmé
+> Saar (tous les lots). Détail complet : items "48."/"49."/"51."/"52." et `docs/JOURNAL6.md`
+> "Session 141 (suite 6)"/"(suite 7)"/"(suite 9)".
+> **Limite trouvée en testant le Lot D, transférée vers `docs/PLAN_MUTATION2.md` (NOUVEAU)** :
+> ajouter une mutation/avantage n'applique aucun effet mécanique (attributs, résistances,
+> compétences débloquées) — **vérifié aussi jamais fait par le Wizard**, gap architectural
+> pré-existant bien plus large que ce chantier (`calcNA` n'a pas de paramètre mutation, 74/76
+> lignes `ref_advantages` sans effet appliqué). Lot E (`[CS7]`) transféré au même document. Diagnostic
+> complet + 3 pistes non tranchées dans `docs/PLAN_MUTATION2.md` — **session dédiée à venir, lancée
+> par Saar juste après celle-ci.**
 > **Chantier Options de campagne (item 41) : `polaris_latent` (OPT-04) ✅ câblée — Session 141
 > (suite 6)** (8/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
 > `skill_prerequisites`, `skill_max_level`, `young_penalty`, `polaris_latent`). **PROCHAINE OPTION À
@@ -38,6 +37,75 @@
 > 141 (suite 5)** — `PLAN_DICEREWORK3.md`, voir détail ci-dessous.
 > **Item 50 (suite de l'item 47, via l'outil de calibration étendu) : bug réel D4 face "4" + roulis
 > aléatoire des dés ✅ CLOS — Session 141 (suite 8)** — voir détail ci-dessous.
+
+**52. AdvantagesPanel Lot D — mutations octroyées en jeu ✅ CLOS + PLAN_MUTATION2.md créé — Session 141 (suite 9) (2026-07-09)**
+   → Périmètre confirmé avec Saar avant code (discussion directe, pas de questionnaire) : MJ
+     uniquement (lecture seule pour le joueur), aucun coût PC (octroi narratif, pas un achat), pas
+     de sélection de sous-type/tirage aléatoire (le MJ gère la nuance lui-même).
+   → **Correction d'une erreur de ma propre analyse à charge du Lot C** : j'avais affirmé que les
+     routes `/advantages` n'avaient aucun contrôle de propriété au-delà de `requireAuth` — faux,
+     `router.param('characterId', ...)` (`char-sheet.js:54-76`) l'enforce déjà sur toutes les
+     routes du fichier (pose `req.isGm`). Gate MJ du Lot D = une ligne, réutilise ce mécanisme
+     existant (déjà utilisé 3 fois ailleurs dans le fichier).
+   → Migration `125_char_mutations_source_campaign.js` (NOUVEAU, étend le CHECK `source` avec
+     `'campaign'`) + `server/src/services/mutationService.js` (NOUVEAU — `getMutations`/
+     `addMutation`/`removeMutation`, upsert stackable mirrors STEP3 `creationService.js` à
+     l'identique, override `char_archetype.sex`/`is_fertile` si la mutation le prévoit, soft-delete
+     `status='removed'`) + 3 routes `/char-sheet/:characterId/mutations` (GET public, POST/DELETE
+     `req.isGm`) + `ref.js` (bug **MUT2** corrigé : `orderBy('muta_numero')` → `orderBy
+     ('mutation_id')`) + `AdvantagesPanel.jsx` (`charMutations` fetch dédié `[characterId]`, 3ᵉ type
+     `'mutation'` dans `combinedEntries`, badge "MUT", bouton "Mutations" grisé si `!isGm`,
+     `handleAddMutation` réécrit vers `POST .../mutations`) + `CharacterSheet.jsx` (prop `isGm`
+     descendue, 1 ligne).
+   → **Testé** : `node --check`/ESLint 0 erreur (3 problèmes pré-existants `CharacterSheet.jsx`
+     confirmés via `git stash`), migration vérifiée en base réelle (P53/P54), cycle complet réel
+     `addMutation`→`getMutations`→`removeMutation` (mutation simple, mutation avec override sexe/
+     fécondité — Asexué testé, mutation inconnue rejetée, soft-delete confirmé), MUT2 revérifié
+     corrigé, SR + **fonctionnel confirmé Saar**.
+   → **Limite trouvée par Saar en testant** : ajouter une mutation n'applique aucun effet mécanique.
+     Vérification exhaustive (`grep` server+client) : `char_mutation_effects_view` jamais
+     interrogée nulle part, `calcNA()` (`charStats.js`) n'a que 3 paramètres (aucune place pour un
+     modificateur de mutation) — **gap pré-existant, vrai aussi pour le Wizard**, pas une
+     régression du Lot D. Même diagnostic demandé et fait pour les Avantages : 74/76 lignes
+     `ref_advantages` ont des colonnes `mod_*` déclarées mais jamais lues (seule exception : `adv_076`
+     câblé en dur par ID, pas via lecture générique de `mod_identity`).
+   → **`docs/PLAN_MUTATION2.md` créé** (diagnostic + 3 pistes non tranchées, aucun code) — Saar
+     lance une session dédiée juste après celle-ci. Lot E (`[CS7]`) **transféré** dans ce document
+     (décision Saar — même famille de problème). `docs/PLAN_ADVANTAGESPANEL.md` marqué chantier
+     clos.
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 9)".
+
+**51. AdvantagesPanel Lot C — notes "Autres" ✅ CLOS — Session 141 (suite 9) (2026-07-09)**
+   → Conception requise avant plan (signalé dans `PLAN_ADVANTAGESPANEL.md`) : discussion directe
+     (pas de questionnaire structuré) sur pourquoi une nouvelle table plutôt que réutiliser le
+     pattern texte libre d'avant migration 99. Tranché : le schéma V1 était souple (pas de FK
+     catalogue) — la migration 99 a introduit un modèle strict pour de vrais avantages mécaniques,
+     réintroduire "Autre" via une ligne catalogue générique contournerait ces garde-fous. Précédent
+     déjà dans le projet : `char_mutations` séparée de `char_advantages` pour la même raison.
+   → Analyse à charge demandée par Saar avant codage — 3 points vérifiés : `CharacterSheet` n'a pas
+     de `key={characterId}` → ne remonte jamais au changement de personnage → `useEffect
+     ([characterId])` réellement nécessaire pour les notes ; `Step5Advantages.jsx` (Wizard) n'a
+     aucune notion de texte libre → confirme "Autre" 100% `CharacterSheet`, jamais le Wizard ;
+     routes `/advantages` existantes sans contrôle de propriété au-delà de `requireAuth` — les
+     nouvelles routes reproduisent cette absence pré-existante (hors scope, pas corrigé ici).
+   → Migration `124_char_advantage_notes.js` (NOUVEAU, table dédiée, pas de soft-delete) +
+     `advantageService.js` (3 fonctions) + `char-sheet.js` (3 routes `/advantage-notes`) +
+     `AdvantagesPanel.jsx` (liste fusionnée `combinedEntries`, badge `AUT`, `handleAddOther`
+     réécrit vers la nouvelle route au lieu de l'ancien `POST /advantages {type:'OTHER'}` qui
+     échouait toujours). JSDoc du fichier corrigé (resté obsolète depuis Lots A/B).
+   → **Testé** : `node --check`/ESLint 0 erreur, migration vérifiée en base réelle (P53/P54), 5
+     scénarios `node -e` (validation + cycle complet add/get/remove, base nettoyée après test), SR
+     + fonctionnel confirmé Saar.
+   → **Bug MUT2 trouvé en testant, hors scope Lot C** : étape "Mutations" de la même modale (jamais
+     touchée par Lot C) plante en 500 (`GET /char-ref/mutations` trie sur `muta_numero`, colonne
+     inexistante). Analyse avant décision : même corrigé, `AdvantagesPanel.jsx` lit des champs
+     inexistants (`mut.muta_numero`/`mut.nom`/`linked_skill_id`) et l'ajout échouerait quand même
+     (400, `advantage_id` manquant) — patch isolé rejeté, **inscrit dans `docs/BUGIDENTIFIE.md`**
+     ("Bug MUT2"), porte d'entrée du Lot D.
+   → **Non testé** : affichage d'un désavantage réel dans la liste fusionnée (aucune ligne active
+     trouvée en base) ; rejet serveur d'une note >255 caractères via appel API direct (contourne le
+     `maxLength` navigateur) en conditions réelles.
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 9)".
 
 **50. Dé D4 face "4" mal orientée en jeu + roulis aléatoire des dés ✅ CLOS — Session 141 (suite 8) (2026-07-08)**
    → Découvert via l'outil de calibration `/dev/dice-calibration` étendu à tous les dés (demande
@@ -474,7 +542,9 @@ Projet en cours et priorité user :
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **128 migrations appliquées** (123_ref_advantages_polaris — Session 141 (suite 6) ;
+- **130 migrations appliquées** (125_char_mutations_source_campaign — Session 141 (suite 9) ;
+  124_char_advantage_notes — Session 141 (suite 9) ;
+  123_ref_advantages_polaris — Session 141 (suite 6) ;
   122_ref_career_random_benefits_lot1_and_points_alt — Session 140 ;
   121_ref_career_skills_choice_groups — Session 139 ;
   120_fix_ref_career_point_categories_lot1 — Session 139 ;
@@ -526,7 +596,8 @@ Projet en cours et priorité user :
 | **CS4** | Catégorie "Techniques" + liste compétences | Moyenne — Cluster O |
 | **CS5** | Compétence réservée (X) : ouverture 1 XP, reste -3 | Moyenne — Cluster O |
 | **CS6** | Force Polaris = Avantage (pas Mutation) | Moyenne — Cluster O |
-| **CS7** | `SkillsPanel.jsx:135-141` (`activeMutations`) lit `charAdvantages` (`type==='MUTATION'`/`muta_numero`, schéma V2 jamais eu ces champs) au lieu de `char_mutations` (vraie table) → Set toujours vide → **10 compétences** à prérequis `type:'MUTATION'` (`MUTATION_CONTAGION`, `MUTATION_CONTROLE_MOLECULAIRE`, `MUTATION_EMPATHIE`, `MUTATION_METAMORPHOSE`, `MUTATION_PURULENCE`, `MUTATION_RADIATIONS`, `MUTATION_SONAR`, `MUTATION_AGILITE_CAUDALE`, `MAITRISE_DE_LA_FORCE_POLARIS`, `MAITRISE_DE_LECHO_POLARIS`) structurellement invisibles pour tout personnage, quelle que soit la mutation réellement possédée — `[VÉRIFIÉ]` en base réelle Session 141 (suite 5), même cause racine que `AdvantagesPanel.jsx` (voir `docs/PLAN_ADVANTAGESPANEL.md`) mais rayon d'impact plus large (10 compétences, pas seulement Polaris) | Non prioritaire — ajouté au backlog, voir `docs/PLAN_ADVANTAGESPANEL.md` |
+| **CS7** | `SkillsPanel.jsx:135-141` (`activeMutations`) lit `charAdvantages` (`type==='MUTATION'`/`muta_numero`, schéma V2 jamais eu ces champs) au lieu de `char_mutations` (vraie table) → Set toujours vide → **10 compétences** à prérequis `type:'MUTATION'` structurellement invisibles pour tout personnage — `[VÉRIFIÉ]` en base réelle. **Transféré vers `docs/PLAN_MUTATION2.md`** (Session 141 suite 9, même famille que les effets de mutation jamais appliqués) | Non prioritaire — session dédiée future, voir `docs/PLAN_MUTATION2.md` |
+| **MUT3** | Effets mécaniques des mutations et avantages (attributs, résistances, armure, économie) jamais appliqués nulle part — `[VÉRIFIÉ]` pour tout personnage, Wizard inclus (`char_mutation_effects_view` jamais interrogée, `calcNA` n'a pas de paramètre mutation, 74/76 lignes `ref_advantages` sans effet). Diagnostic complet + pistes non tranchées : `docs/PLAN_MUTATION2.md` | Session dédiée future (Saar) — pas urgent, gap silencieux pré-existant |
 | **COM20** | Phase 1 : afficher arme (munitions + type) | Moyenne — Cluster N |
 | **COM21** | Collision tokens : deuxième bloqué | Moyenne — Cluster N |
 | **COM23** | ~~Label token : fixe, ne rentre pas dans les murs~~ | ✅ Session 127 |

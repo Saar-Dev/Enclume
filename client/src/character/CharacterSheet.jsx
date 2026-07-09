@@ -834,6 +834,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           charAdvantages={charAdvantages}
           onAdvantagesChange={setCharAdvantages}
           canEdit={canEdit}
+          isGm={isGm}
           onSaved={onSaved}
           charSkills={charSkills}
           refSkillsPolaris={refSkillsPolaris}
