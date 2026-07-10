@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import AgeSelector from './AgeSelector'
 import BackgroundSelector from './BackgroundSelector'
 import CareersAllocator from './CareersAllocator'
+import ProAdvantagesAllocator from './ProAdvantagesAllocator'
 import SetbacksAllocator from './SetbacksAllocator'
 import { BG_META } from './backgroundMeta'
 import Step4Summary from './Step4Summary'
@@ -19,6 +20,7 @@ const SUB_STEPS = {
   TRAINING: 'training',
   HIGHER_ED: 'higher_ed',
   CAREERS: 'careers',
+  PRO_ADVANTAGES: 'pro_advantages',
   SETBACKS: 'setbacks',
   SUMMARY: 'summary',
 }
@@ -234,7 +236,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
       advanceSubStep(SUB_STEPS.CAREERS)
       return
     }
-    if (subStep === SUB_STEPS.CAREERS && !showSetbacks) {
+    if (subStep === SUB_STEPS.PRO_ADVANTAGES && !showSetbacks) {
       advanceSubStep(SUB_STEPS.SUMMARY)
       return
     }
@@ -250,7 +252,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
       return
     }
     if (subStep === SUB_STEPS.SUMMARY && !showSetbacks) {
-      setSubStep(SUB_STEPS.CAREERS)
+      setSubStep(SUB_STEPS.PRO_ADVANTAGES)
       return
     }
     if (idx > 0) {
@@ -410,14 +412,23 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
     refSkills={refSkills}
     initialSkillAllocations={skillAllocations}
     onSkillAllocationsChange={handleSkillAllocationsChange}
-    initialProAdvantages={proAdvantages}
-    onProAdvantagesChange={handleProAdvantagesChange}
     initialOpenedSkills={openedSkills}
     onOpenedSkillsChange={handleOpenedSkillsChange}
+    skillMaxLevelEnabled={skillMaxLevelEnabled}
+  />
+)}
+
+{subStep === SUB_STEPS.PRO_ADVANTAGES && (
+  <ProAdvantagesAllocator
+    selectedCareers={careers}
+    careers={refData.careers}
+    initialProAdvantages={proAdvantages}
+    onProAdvantagesChange={handleProAdvantagesChange}
     initialRandomPicks={randomPicks}
     onRandomPicksChange={handleRandomPicksChange}
     randomProAdvantagesEnabled={randomProAdvantagesEnabled}
-    skillMaxLevelEnabled={skillMaxLevelEnabled}
+    onNext={handleSubNext}
+    onPrev={handleSubPrev}
   />
 )}
 

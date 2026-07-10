@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 11) — 2026-07-09
+> Session 141 (suite 12) — 2026-07-10
 
 ---
 
@@ -107,8 +107,37 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 11) (2026-07-09)
+## ÉTAT COURANT — Session 141 (suite 12) (2026-07-10)
 
+- **Session 141 (suite 12) — Options de campagne `revers` (OPT-06) ✅ CLOS + mode développeur
+  écarté ✅ CLOS + consolidation mini-stepper Avantages pro ✅ CLOS.** Note de numérotation :
+  "suite 10"/"suite 11" déjà pris par deux sessions parallèles sans rapport (`PLAN_MUTATION2.md`/
+  `PLAN_MODING.md`), repéré avant collision — cette session prend "suite 12". **Revers** :
+  déclencheur = total d'années cumulées toutes carrières confondues (pas par métier, contrairement
+  au Tirage 1D10 Lot 6) — confirmé `REGLE_CREATION.txt:1190-1199`. Obligatoire, narratif uniquement
+  (même traitement que Force Polaris OPT-04). Table `docs/REGLES/REGLEREVERS.md` fournie par Saar
+  (27 catégories 1D100). Migration `126_ref_setbacks_revers_table.js` (NOUVEAU) + `shared/
+  careerSetbacks.js` (NOUVEAU, fichier indépendant de `careerAdvantages.js` — analyse critique
+  validée avant fusion, mécaniques trop différentes) + `SetbacksAllocator.jsx` (NOUVEAU, sous-step
+  dédiée). **Mode développeur** demandé par Saar pour accélérer les tests, puis écarté : incohérence
+  serveur trouvée (Étape 1 bloquait un budget non dépensé, Étape 4 jamais) ; Saar a proposé mieux —
+  bouton "Suivant" toujours actif, avertissement au premier clic, confirmation au second
+  (`validateStep1` G1 rendu non-bloquant, `Step1Attributes.jsx`/`CareersAllocator.jsx`, état dérivé
+  jamais `useEffect`+`setState`). **Consolidation Avantages pro** : Tirage 1D10 (Lot 6) invisible
+  dans l'onglet `CareersAllocator.jsx` — nouveau `ProAdvantagesAllocator.jsx` (répartition manuelle
+  + Tirage fusionnés par métier, règle par construction le risque de séquençage d'une conversion
+  rétroactive de jet en points), onglet "avant" retiré intégralement. **2 vrais bugs trouvés en run
+  à vide** : signature d'avertissement ne couvrant pas `randomPicks` ; sur-dépensé traité comme un
+  simple avertissement côté client alors que le serveur rejette toujours le dépassement de budget
+  — corrigé en blocage dur. **Dette `[WIZ-4]` ajoutée** (mini-stepper ne revalide jamais les
+  blocages durs au clic direct, préexistant, filet serveur en place). **Roadmap ouverte
+  (`[ADV1]`/`[ADV2]`/`[ADV3]`)** : Célébrité/Allié/Contact/revenus cumulatifs/déblocage de
+  compétence non trackés mécaniquement, confirmé avec un vrai exemple en base — chantier dédié à
+  planifier ensuite (décision Saar). Testé : couverture 1-100 vérifiée par script, `node --check`/
+  ESLint 0 erreur introduite (sweep final), SR + parcours navigateur confirmé Saar. Non testé :
+  conversion rétroactive en conditions réelles (corrigée par construction, pas re-testée
+  manuellement), finalisation complète non confirmée scénario par scénario. Détail complet :
+  `docs/JOURNAL6.md` "Session 141 (suite 12)".
 - **Session 141 (suite 11) — `docs/PLAN_MODING.md` analysé + corrigé, chantier mis EN PAUSE ✅
   CLOS.** Session analytique/planification pure, **aucun code écrit**. Plan rédigé Session 120,
   jamais commencé depuis (0% codé, vérifié). Corrigé (migration renumérotée, routes déplacées dans
@@ -336,7 +365,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **130 migrations stables** (125_char_mutations_source_campaign — Session 141 (suite 9) ;
+- **131 migrations stables** (126_ref_setbacks_revers_table — Session 141 (suite 12) ;
+  125_char_mutations_source_campaign — Session 141 (suite 9) ;
   124_char_advantage_notes — Session 141 (suite 9) ;
   123_ref_advantages_polaris — Session 141 (suite 6) ;
   122_ref_career_random_benefits_lot1_and_points_alt — Session 140 ;
@@ -697,6 +727,10 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **[MUT1]** `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable en méthode libre — non diagnostiqué en profondeur, sprint futur
 - **[HP1]** Main directrice : `socketCombatHelpers.js:550` et `char-sheet.js:810` lisent `hand_pref` sur `char_sheet` (colonne inexistante) au lieu de `char_identity.hand_pref` → toujours `'R'` par défaut en combat, quel que soit le choix réel du joueur — sprint futur
 - **[CS7]** `SkillsPanel.jsx:135-141` (`activeMutations`) lit `charAdvantages.type==='MUTATION'`/`muta_numero` (schéma V2 n'a jamais eu ces champs, `char_advantages` a été remplacé par la migration 99) au lieu de `char_mutations` (vraie table) → Set toujours vide → **10 compétences** à prérequis `type:'MUTATION'` (dont `MAITRISE_DE_LA_FORCE_POLARIS`/`MAITRISE_DE_LECHO_POLARIS`) structurellement invisibles pour tout personnage, `[VÉRIFIÉ]` en base réelle Session 141 (suite 5) — même cause racine que `AdvantagesPanel.jsx` (`docs/PLAN_ADVANTAGESPANEL.md`), rayon d'impact plus large (10 compétences, pas seulement Polaris) — non prioritaire, ajouté au backlog
+- **[ADV1]** Célébrité, Allié/Contact/Ennemi/Opposant et les autres "avantages relationnels" (`ref_career_random_benefits`, Revers, OPT-11) ne sont **trackés nulle part mécaniquement** sur la fiche personnage — aucune jauge/compteur réel. Bloque l'automatisation des tirages Avantages pro aléatoires (Lot 6) ET de Revers (OPT-06) au-delà de la simple conversion en points, qui elle est déjà automatisée. **À faire impérativement (décision Saar, Session 141 suite 12)** — chantier dédié à planifier après le mini-stepper Revers/Tirages, pas juste une note cosmétique.
+- **[ADV2]** Bénéfices de carrière type "Revenus +10%/+20%/doublés à partir de cette année" (`ref_career_random_benefits`, ex. Cultivateur/Éleveur roll 3/7/9) — aucun mécanisme pour appliquer un modificateur cumulatif aux années futures ; `evaluateSalaryFormula`/économies ne gèrent qu'un montant ponctuel. Roadmap (Session 141 suite 12).
+- **[ADV3]** Bénéfices de carrière débloquant l'accès à une compétence (ex. mutation/compétence "développée automatiquement" via un tirage) — non géré, aucun câblage vers `char_skills`/`char_mutations`. Roadmap (Session 141 suite 12).
+- **[WIZ4]** `Step4Experience.jsx` — le mini-stepper (`isClickable`) ne revalide jamais les blocages durs de la sous-step quittée : un clic direct sur une sous-step déjà "reachable" (`highestSubStep` dépassé) contourne le blocage de la sous-step courante (ex. retirer sa seule carrière sur Carrières puis cliquer directement sur "Avantages pro"/"Revers"/"Récap" via le mini-stepper). Préexistant à Session 141 (suite 12), pas une régression du chantier Revers/Avantages pro — vérifié en relisant `Step4Experience.jsx` avant le rework. Filet de sécurité serveur (`reconcileCreation` STEP4, "Au moins une carrière requise") empêche toute donnée invalide persistée — juste un rejet tardif/générique au lieu d'un blocage immédiat. Non prioritaire, concerne l'architecture de navigation entière du mini-stepper, pas une sous-step isolée.
 
 ---
 

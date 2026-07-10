@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-09 Session 141 (suite 9)
+> Dernière mise à jour : 2026-07-10 Session 141 (suite 12)
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -161,6 +161,7 @@ Enclume/
 │   ├── careerEligibility.js            # NOUVEAU 139 (rework Step4 Lot 0) — evaluateCareerEligibility(career, context) pur : prérequis/génotype/attributs/études, raisons structurées (codes+params). Consommé serveur (checkCareerEligibility dans creationService) ; client au Lot 2.
 │   ├── careerSkills.js                 # NOUVEAU 139 (rework Step4 Lot 1) — computeSkillAllocation(skillAllocations, ctx) pur : coût via calcSkillCost/getMaxMasteryByYears (polarisUtils, ex-code mort), pool global 10×années, plafond fixe +5 hors-pro. getSkillCap exporté séparément (plafond indépendant du coût). Modifié 139 (Lot 5) — +validateChoiceGroups(openedSkillIds, careerSkillRows) : exclusivité par ref_career_skills.choice_group (radio), ignore les lignes T1 sans groupe. Modifié 141 (suite 2) — getSkillCap gaté par ctx.skillMaxLevelEnabled (option skill_max_level, OPT-08) : plafond par années → Infinity si désactivé (conflit trouvé : REGLE_CREATION.txt:1250-1263 marque ce plafond "(OPTIONNEL)", jamais gaté depuis le rework Step4 — confirmé par Saar). Plafond fixe +5 origine inchangé, non concerné par ce toggle.
 │   ├── careerAdvantages.js             # NOUVEAU 139 (rework Step4 Lot 4) — computeProAdvantageAllocation(allocations, ctx) pur : pool 5×années PAR MÉTIER (≠ compétences, globales), budget=0 si 0 catégorie (chasseur_primes).
+│   ├── careerSetbacks.js               # NOUVEAU 141 (suite 12) — OPT-06 (revers). getSetbackBlockCount(totalYears) pur : floor((years-10)/3), déclencheur sur le total d'années CUMULÉES toutes carrières confondues (≠ careerAdvantages.js, par métier) — fichier délibérément indépendant (mécaniques trop différentes pour fusionner, analyse critique validée). resolveSetback(roll, setbackRows) : plage roll_min/roll_max (≠ ref_career_random_benefits, valeur exacte).
 │   ├── events.js                       # Modifié 64 — +COMBAT_DAMAGE_*/ATTACK_PLAYER_RESULT. Modifié 67 Sprint 7.6 — +COMBAT_RELOAD_RESULT. Modifié 67 Sprint CaC 1 — +COMBAT_MELEE_DEFENSE_PROMPT/CONFIRM/RESULT, +COMBAT_DECLARE_ERROR. Modifié 76 — +TOKEN_SET_ROTATION. Modifié 81 — +COMBAT_APPLY_STUN, +COMBAT_ANNOUNCE_PREVIEW. Modifié 85 — +CAMPAIGN_SETTINGS_UPDATED. Modifié 95-5b — +COMBAT_STUN_PROMPT/CONFIRM
 │   ├── woundConstants.js               # NOUVEAU 49 — WOUND_LOCATIONS/SEVERITIES/MAX_COUNTS/PENALTIES/SEVERITY_COLORS
 │   └── armorConstants.js               # NOUVEAU 54 — ARMOR_CATEGORY_MALUS/LOCATION_TO_SLOT/SLOT_TO_REF_LOCATION/LOCATION_TO_SVG/LOCATION_LABELS. Modifié 101 — +LOC_TABLE (déplacée depuis index.js inline)
@@ -286,6 +287,7 @@ Enclume/
 | 123_ref_advantages_polaris | Ajoute 3 lignes `ref_advantages` : `adv_077` "Polaris latent" (3 PC), `adv_078` "Polaris non maîtrisé" (3 PC), `adv_079` "Force Polaris" (5 PC) — `family:'Polaris'`/`family_limit:1` identique sur les 3 (exclusion mutuelle par personnage), tous `mod_*` à `null` (narratif/MJ, house-rule assumé par Saar, pas retrouvé tel quel dans la RAW). Débloque OPT-04 (`polaris_latent`) et corrige le gate cassé d'`AdvantagesPanel.jsx` (`hasMuta029` jamais vrai depuis la migration 99 V2). Voir `docs/PLAN_ADVANTAGESPANEL.md` Lot A (Session 141 suite 6) |
 | 124_char_advantage_notes | Table `char_advantage_notes` (NOUVEAU, dédiée) : `id`/`char_sheet_id` FK CASCADE/`label`/`created_at`, pas de soft-delete. Sépare les notes narratives libres ("Autre") des vrais avantages catalogués `char_advantages`/`ref_advantages` — réutiliser le catalogue via un ID générique aurait contourné la contrainte unique par `advantage_id` et incohérent `snapshot_data` (précédent architectural : `char_mutations` déjà séparée de `char_advantages` pour la même raison). Débloque `AdvantagesPanel.jsx` Lot C ("Autres" texte libre, cassé depuis la migration 99). Voir `docs/PLAN_ADVANTAGESPANEL.md` Lot C (Session 141 suite 9) |
 | 125_char_mutations_source_campaign | Étend `char_mutations` CHECK `chk_char_mutations_source` avec `'campaign'` (en plus de `chosen`/`random` du Wizard) — distingue les mutations octroyées en jeu par le MJ (`mutationService.js`, `source='campaign'`) de celles du Wizard Step3. Débloque `AdvantagesPanel.jsx` Lot D ("Mutations" ajoutées en jeu, MJ uniquement, aucun coût PC). Voir `docs/PLAN_ADVANTAGESPANEL.md` Lot D (Session 141 suite 9) |
+| 126_ref_setbacks_revers_table | Restructure `ref_setbacks` (roll exact → `roll_min`/`roll_max`, `career_id`/`category` retirés — table réellement partagée, jamais par métier) + reseed 27 catégories réelles (LdB p.185+, `docs/REGLES/REGLEREVERS.md`, couverture 1-100 vérifiée programmatiquement) remplaçant les 5 lignes placeholder (`[DETTE-ETAPE4-5]`). Ajoute `char_archetype.setback_rolls JSONB` (déclencheur Revers = total d'années cumulées, pas une carrière précise — ne peut pas vivre sur `char_careers`). Débloque OPT-06 (`revers`). Round-trip `down`/`up` restaure schéma + les 5 lignes d'origine. Voir `docs/JOURNAL6.md` Session 141 (suite 12) |
 
 ---
 
@@ -416,8 +418,12 @@ Chargée une seule fois depuis DB au premier jet.
   mais ne l'émet jamais — `SessionPage` le reconstruit depuis `formula` (`useSessionSocket.js:62`).
   Tout nouveau montage de `<DiceRoller>` hors `SessionPage`/`Canvas3D.jsx` doit ajouter `dieType`
   lui-même (en dur si la formule émise est fixe). Consommateurs Wizard (Session 140) :
-  `CareersAllocator.jsx` (`dieType:'d10'`, Lot 6 Tirage 1D10), `Step3Mutations.jsx` (`dieType:'d20'`,
-  méthode Tirage aléatoire). `DiceLights.jsx` (`client/src/components/`, NOUVEAU) : rig lumière
+  `Step3Mutations.jsx` (`dieType:'d20'`, méthode Tirage aléatoire). Modifié Session 141 (suite 12) :
+  Tirage 1D10 (Lot 6) déménagé de `CareersAllocator.jsx` vers `ProAdvantagesAllocator.jsx`
+  (`dieType:'d10'`, NOUVEAU, sous-step dédiée du mini-stepper — répartition manuelle + Tirage
+  fusionnés par métier, `CareersAllocator.jsx` n'a plus d'écouteur `DICE_RESULT`) + `SetbacksAllocator.jsx`
+  (`dieType:'d100'`, NOUVEAU, OPT-06 Revers — jet global, sous-step dédiée entre Carrières et Récap).
+  `DiceLights.jsx` (`client/src/components/`, NOUVEAU) : rig lumière
   (`ambientLight 0.8` + 2 `directionalLight`, identique à `Canvas3D.jsx:889-892`) extrait en composant
   partagé pour ces overlays isolés — jamais consommé par `Canvas3D.jsx` lui-même (zéro modification).
 - **Wizard de création connecté en socket pour la 1ʳᵉ fois (Session 140)** : `WizardCreation.jsx`

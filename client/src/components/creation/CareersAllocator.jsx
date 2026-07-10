@@ -1,15 +1,8 @@
 import { useEffect, useMemo, useReducer } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Canvas } from '@react-three/fiber'
 import { evaluateCareerEligibility } from '../../../../shared/careerEligibility.js'
 import { computeSkillAllocation, getSkillCap } from '../../../../shared/careerSkills.js'
 import { estimateSalaryFormula } from '../../../../shared/polarisUtils.js'
-import { computeProAdvantageAllocation, computeRandomBudgetDelta } from '../../../../shared/careerAdvantages.js'
-import { WS } from '../../../../shared/events.js'
-import { useSocket } from '../../lib/SocketContext.jsx'
-import { useAuthStore } from '../../stores/authStore.js'
-import DiceRoller from '../DiceRoller.jsx'
-import DiceLights from '../DiceLights.jsx'
 
 // Couleur déterministe (hash → HSL) — rail + tags de provenance du board.
 function careerHexColor(code) {
@@ -37,17 +30,14 @@ function formatReason(t, r) {
   }
 }
 
-const initialReducerState = ([initialSkillAllocations, initialProAdvantages, initialOpenedSkills, initialRandomPicks]) => ({
+const initialReducerState = ([initialSkillAllocations, initialOpenedSkills]) => ({
   filter: 'eligible',
   selectedCareerId: null,
   years: 1,
   activeTab: 'metier',
   hoverCareerId: null,
   skillAllocations: initialSkillAllocations || {},
-  proAdvAllocations: initialProAdvantages || {},
   openedSkills: initialOpenedSkills || [],
-  randomPicks: initialRandomPicks || {},
-  awaitingRandomRoll: null,
   warnedAllocSignature: null,
 })
 
@@ -78,19 +68,6 @@ function careersReducer(state, action) {
       }
       return { ...state, skillAllocations: allocations }
     }
-    case 'SET_ADV_POINTS': {
-      const careerMap = { ...(state.proAdvAllocations[action.careerId] || {}) }
-      if (action.pts <= 0) delete careerMap[action.category]
-      else careerMap[action.category] = action.pts
-      return { ...state, proAdvAllocations: { ...state.proAdvAllocations, [action.careerId]: careerMap } }
-    }
-    case 'PRUNE_ADV': {
-      const proAdvAllocations = {}
-      for (const [id, v] of Object.entries(state.proAdvAllocations)) {
-        if (action.validIds.has(id)) proAdvAllocations[id] = v
-      }
-      return { ...state, proAdvAllocations }
-    }
     case 'TOGGLE_OPENED_SKILL': {
       const has = state.openedSkills.includes(action.skillId)
       return {
@@ -108,38 +85,8 @@ function careersReducer(state, action) {
       const openedSkills = state.openedSkills.filter(id => action.validIds.has(id))
       return { ...state, openedSkills }
     }
-    case 'SET_AWAITING_ROLL':
-      return { ...state, awaitingRandomRoll: { careerId: action.careerId, blockIndex: action.blockIndex, payload: null } }
-    case 'SET_AWAITING_PAYLOAD':
-      if (!state.awaitingRandomRoll) return state
-      return { ...state, awaitingRandomRoll: { ...state.awaitingRandomRoll, payload: action.payload } }
-    case 'RESOLVE_RANDOM_ROLL': {
-      if (!state.awaitingRandomRoll) return state
-      const { careerId, blockIndex } = state.awaitingRandomRoll
-      const careerPicks = state.randomPicks[careerId] || []
-      return {
-        ...state,
-        randomPicks: {
-          ...state.randomPicks,
-          [careerId]: [...careerPicks, { blockIndex, roll: action.roll, useAsPoints: false }],
-        },
-        awaitingRandomRoll: null,
-      }
-    }
-    case 'TOGGLE_RANDOM_POINTS': {
-      const careerPicks = state.randomPicks[action.careerId] || []
-      const updated = careerPicks.map(p => p.blockIndex === action.blockIndex ? { ...p, useAsPoints: !p.useAsPoints } : p)
-      return { ...state, randomPicks: { ...state.randomPicks, [action.careerId]: updated } }
-    }
     case 'SET_ALLOC_WARNED':
       return { ...state, warnedAllocSignature: action.signature }
-    case 'PRUNE_RANDOM_PICKS': {
-      const randomPicks = {}
-      for (const [id, v] of Object.entries(state.randomPicks)) {
-        if (action.validIds.has(id)) randomPicks[id] = v
-      }
-      return { ...state, randomPicks }
-    }
     default:
       return state
   }
@@ -164,21 +111,14 @@ export default function CareersAllocator({
   refSkills,
   initialSkillAllocations,
   onSkillAllocationsChange,
-  initialProAdvantages,
-  onProAdvantagesChange,
   initialOpenedSkills,
   onOpenedSkillsChange,
-  initialRandomPicks,
-  onRandomPicksChange,
-  randomProAdvantagesEnabled,
   skillMaxLevelEnabled,
 }) {
   const { t } = useTranslation('creation')
-  const socket = useSocket()
-  const { user } = useAuthStore()
   const [state, dispatch] = useReducer(
     careersReducer,
-    [initialSkillAllocations, initialProAdvantages, initialOpenedSkills, initialRandomPicks],
+    [initialSkillAllocations, initialOpenedSkills],
     initialReducerState
   )
   const { filter, selectedCareerId, years, activeTab, hoverCareerId } = state
@@ -263,62 +203,6 @@ export default function CareersAllocator({
     }
     return { total, isRandom }
   }, [selectedCareers, careersById])
-
-  // ── Avantages pro (Lot 4) — pool PAR MÉTIER, verrouillé tant que non retenu ──
-  const advAllocation = career ? (state.proAdvAllocations[career.id] || {}) : {}
-  // ── Tirage 1D10 (Lot 6) — retire 5 pts du budget par tranche jetée, cf. careerAdvantages.js.
-  // Ignoré par computeProAdvantageAllocation si la carrière n'a aucune catégorie (Chasseur de
-  // primes) : le jet y reste possible, sans effet sur un budget qui n'existe pas.
-  const randomPicksForCareer = career ? (state.randomPicks[career.id] ?? []) : []
-  const randomBudgetDeltaForCareer = career
-    ? computeRandomBudgetDelta(randomPicksForCareer, career.randomBenefits ?? [])
-    : 0
-  const advResult = career && isAdded
-    ? computeProAdvantageAllocation(advAllocation, {
-        categories: (career.pointCategories ?? []).map(c => c.category),
-        years: committedEntry.years,
-        randomBudgetDelta: randomBudgetDeltaForCareer,
-      })
-    : null
-
-  const allAdvSpent = selectedCareers.every(c => {
-    const refCareer = careersById.get(c.career_id)
-    const delta = computeRandomBudgetDelta(state.randomPicks[c.career_id] ?? [], refCareer?.randomBenefits ?? [])
-    const result = computeProAdvantageAllocation(state.proAdvAllocations[c.career_id] || {}, {
-      categories: (refCareer?.pointCategories ?? []).map(cat => cat.category),
-      years: c.years,
-      randomBudgetDelta: delta,
-    })
-    return result.remaining === 0
-  })
-
-  const handleAdvInc = (category) => {
-    if (!isAdded || !advResult || advResult.remaining <= 0) return
-    const current = advAllocation[category] ?? 0
-    dispatch({ type: 'SET_ADV_POINTS', careerId: career.id, category, pts: current + 1 })
-  }
-  const handleAdvDec = (category) => {
-    if (!isAdded) return
-    const current = advAllocation[category] ?? 0
-    if (current <= 0) return
-    dispatch({ type: 'SET_ADV_POINTS', careerId: career.id, category, pts: current - 1 })
-  }
-
-  // ── Tirage 1D10 (Lot 6) — garde anti-course : un seul jet en vol à la fois, careerId/blockIndex
-  // capturés au clic (jamais re-dérivés de la sélection courante à la résolution).
-  const handleStartRoll = (careerId, blockIndex) => {
-    if (!socket || state.awaitingRandomRoll) return
-    dispatch({ type: 'SET_AWAITING_ROLL', careerId, blockIndex })
-    socket.emit(WS.DICE_ROLL, { formula: '1d10' })
-  }
-  const handleDiceOverlayDone = () => {
-    const payload = state.awaitingRandomRoll?.payload
-    if (!payload) return
-    dispatch({ type: 'RESOLVE_RANDOM_ROLL', roll: payload.total })
-  }
-  const handleToggleRandomPoints = (careerId, blockIndex) => {
-    dispatch({ type: 'TOGGLE_RANDOM_POINTS', careerId, blockIndex })
-  }
 
   // ── Compétences d'origine (base) ─────────────────────────────────
   const baseMastery = useMemo(() => {
@@ -406,29 +290,6 @@ export default function CareersAllocator({
     dispatch({ type: 'PRUNE_ALLOCATIONS', validIds: boardSkillIds })
   }, [boardSkillIds])
 
-  useEffect(() => {
-    dispatch({ type: 'PRUNE_ADV', validIds: new Set(selectedCareers.map(c => c.career_id)) })
-  }, [selectedCareers])
-
-  useEffect(() => {
-    dispatch({ type: 'PRUNE_RANDOM_PICKS', validIds: new Set(selectedCareers.map(c => c.career_id)) })
-  }, [selectedCareers])
-
-  // Écoute du résultat du jet en cours (Lot 6) — P3 : socket dans les deps, pattern DicePanel.jsx.
-  useEffect(() => {
-    if (!socket) return
-    const handleResult = (payload) => {
-      if (payload.userId !== user?.id) return
-      // socketDice.js n'inclut jamais dieType dans le payload DICE_RESULT (calculé côté serveur pour
-      // dice_config uniquement, jamais réémis) — SessionPage le reconstruit depuis la formule texte
-      // (useSessionSocket.js:62). Ce composant ne lance jamais que '1d10' : constante connue ici,
-      // pas une supposition — voir handleStartRoll.
-      dispatch({ type: 'SET_AWAITING_PAYLOAD', payload: { ...payload, dieType: 'd10' } })
-    }
-    socket.on(WS.DICE_RESULT, handleResult)
-    return () => socket.off(WS.DICE_RESULT, handleResult)
-  }, [socket, user?.id])
-
   // Retire des choix "au choix" tout skill_id dont la carrière conditionnelle d'origine a été retirée.
   useEffect(() => {
     const validIds = new Set()
@@ -445,16 +306,8 @@ export default function CareersAllocator({
   }, [state.skillAllocations, onSkillAllocationsChange])
 
   useEffect(() => {
-    onProAdvantagesChange?.(state.proAdvAllocations)
-  }, [state.proAdvAllocations, onProAdvantagesChange])
-
-  useEffect(() => {
     onOpenedSkillsChange?.(state.openedSkills)
   }, [state.openedSkills, onOpenedSkillsChange])
-
-  useEffect(() => {
-    onRandomPicksChange?.(state.randomPicks)
-  }, [state.randomPicks, onRandomPicksChange])
 
   const handleAllocInc = (row) => {
     if (allocationResult.remaining <= 0 || row.target >= row.cap) return
@@ -498,20 +351,20 @@ export default function CareersAllocator({
     statusKey = 'career_status_skills_left'; statusOk = false
   } else if (allocationResult.errors.some(e => e.code === 'over_budget')) {
     statusKey = 'career_status_cap'; statusOk = false
-  } else if (!allAdvSpent) {
-    statusKey = 'career_status_adv_left'; statusOk = false
   } else {
     statusKey = 'career_status_ok'; statusOk = true
   }
   // Session 141 suite 10 : seul un vrai blocage (aucun métier retenu, dépassement de budget/plafond)
-  // empêche "Suivant" — un solde non dépensé (compétences ou avantages pro) n'est qu'un
-  // avertissement, cf. Step1Attributes.jsx (même pattern, même raisonnement).
+  // empêche "Suivant" — un solde de compétences non dépensé n'est qu'un avertissement, cf.
+  // Step1Attributes.jsx (même pattern, même raisonnement). Les avantages pro (Lot 4 + Tirage 1D10)
+  // ont déménagé vers leur propre sous-step (ProAdvantagesAllocator.jsx) — plus la responsabilité
+  // de cet écran.
   const hasHardBlock = selectedCareers.length === 0 || allocationResult.errors.length > 0
-  const hasIncomplete = allocationResult.remaining > 0 || !allAdvSpent
+  const hasIncomplete = allocationResult.remaining > 0
   const canNext = !hasHardBlock
   // Dérivé (pas d'effet + setState, cf. Step1Attributes.jsx) : toute variation de la répartition
   // invalide un avertissement déjà affiché.
-  const incompleteSignature = `${allocationResult.remaining}|${allAdvSpent}`
+  const incompleteSignature = `${allocationResult.remaining}`
   const allocWarned = state.warnedAllocSignature === incompleteSignature
 
   const handleNextClick = () => {
@@ -524,15 +377,6 @@ export default function CareersAllocator({
   }
 
   return (
-    <>
-    {state.awaitingRandomRoll?.payload && (
-      <div className="wiz4-diceoverlay">
-        <Canvas camera={{ position: [15, 15, 15], fov: 60 }}>
-          <DiceLights />
-          <DiceRoller payload={state.awaitingRandomRoll.payload} onDone={handleDiceOverlayDone} />
-        </Canvas>
-      </div>
-    )}
     <div className="wiz4-cols">
       <div className="wiz4-rail">
         <div className="wiz4-seg">
@@ -683,10 +527,6 @@ export default function CareersAllocator({
                 className={`wiz4-tab${activeTab === 'carriere' ? ' on' : ''}`}
                 onClick={() => dispatch({ type: 'SET_TAB', tab: 'carriere' })}
               >{t('step4.career_tab_carriere')}</button>
-              <button
-                className={`wiz4-tab${activeTab === 'avant' ? ' on' : ''}`}
-                onClick={() => dispatch({ type: 'SET_TAB', tab: 'avant' })}
-              >{t('step4.career_tab_avant')}</button>
             </div>
             <div className="wiz4-tabbody">
               {activeTab === 'metier' && (
@@ -791,95 +631,6 @@ export default function CareersAllocator({
                   </div>
                 </div>
               )}
-              {activeTab === 'avant' && (
-                <>
-                  {(career.pointCategories ?? []).length === 0 ? (
-                    <p className="wiz4-note">{t('step4.career_adv_none')}</p>
-                  ) : !isAdded ? (
-                    <p className="wiz4-note">{t('step4.career_adv_locked')}</p>
-                  ) : (
-                    <div className="wiz4-block">
-                      <div className="wiz4-boardhead">
-                        <span className="wiz4-h">{t('step4.career_adv_title')}</span>
-                        <span className={`wiz4-poolrem${advResult.remaining === 0 ? ' ok' : ''}`}>
-                          <span className="wiz4-mono">{advResult.remaining}</span> {t('step4.career_points_remaining')}
-                        </span>
-                      </div>
-                      {career.pointCategories.map(cat => {
-                        const pts = advAllocation[cat.category] ?? 0
-                        return (
-                          <div key={cat.id} className="wiz4-skill">
-                            <div className="wiz4-skmain">
-                              <span className="wiz4-sklabel">{cat.category}</span>
-                            </div>
-                            <div className="wiz4-ctl">
-                              <button
-                                className={`wiz4-sbtn${pts <= 0 ? ' dis' : ''}`}
-                                onClick={() => handleAdvDec(cat.category)}
-                                disabled={pts <= 0}
-                              >−</button>
-                              <span className="wiz4-val">{pts}</span>
-                              <button
-                                className={`wiz4-sbtn${advResult.remaining <= 0 ? ' dis' : ''}`}
-                                onClick={() => handleAdvInc(cat.category)}
-                                disabled={advResult.remaining <= 0}
-                              >＋</button>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {/* Lot 6 — Tirage 1D10. Disponible dès qu'un métier est retenu, indépendamment de
-                      pointCategories (Chasseur de primes n'a aucune catégorie mais la LdB lui accorde
-                      quand même cette table — la bascule "convertir en points" reste alors masquée,
-                      cf. careerAdvantages.js). */}
-                  {randomProAdvantagesEnabled !== false && isAdded && (career.randomBenefits ?? []).length > 0 && Math.floor(committedEntry.years / 5) > 0 && (
-                    <div className="wiz4-block">
-                      <span className="wiz4-h">{t('step4.career_random_title')}</span>
-                      {Array.from({ length: Math.floor(committedEntry.years / 5) }).map((_, blockIndex) => {
-                        const pick = randomPicksForCareer.find(p => p.blockIndex === blockIndex)
-                        const rolledRow = pick ? (career.randomBenefits ?? []).find(r => r.roll === pick.roll) : null
-                        const isAwaitingThis = state.awaitingRandomRoll?.careerId === career.id
-                          && state.awaitingRandomRoll?.blockIndex === blockIndex
-                        return (
-                          <div key={blockIndex} className="wiz4-randomrow">
-                            <div className="wiz4-randomhead">
-                              <span className="wiz4-randomlbl">{t('step4.career_random_block', { n: blockIndex + 1 })}</span>
-                              {!pick && (
-                                <button
-                                  className={`wiz4-rollbtn${state.awaitingRandomRoll ? ' dis' : ''}`}
-                                  onClick={() => handleStartRoll(career.id, blockIndex)}
-                                  disabled={!!state.awaitingRandomRoll}
-                                >
-                                  {isAwaitingThis ? t('step4.career_random_rolling') : t('step4.career_random_roll_btn')}
-                                </button>
-                              )}
-                            </div>
-                            {pick && rolledRow && (
-                              <div className="wiz4-randomresult">
-                                <p className="wiz4-note">{rolledRow.description}</p>
-                                <p className="wiz4-note">{t('step4.career_random_narrative_note')}</p>
-                                {(career.pointCategories ?? []).length > 0 && rolledRow.points_alt != null && (
-                                  <label className="wiz4-choiceopt">
-                                    <input
-                                      type="checkbox"
-                                      checked={!!pick.useAsPoints}
-                                      onChange={() => handleToggleRandomPoints(career.id, blockIndex)}
-                                    />
-                                    {t('step4.career_random_points_toggle', { n: rolledRow.points_alt })}
-                                  </label>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
             </div>
           </div>
         )}
@@ -946,6 +697,5 @@ export default function CareersAllocator({
         )}
       </div>
     </div>
-    </>
   )
 }

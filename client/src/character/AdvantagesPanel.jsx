@@ -61,11 +61,14 @@ export default function AdvantagesPanel({
 
   // ─── État modale ──────────────────────────────────────────────────────────
   const [modalOpen, setModalOpen] = useState(false)
-  // 'type' | 'mutations' | 'polaris' | 'other'
+  // 'type' | 'mutations' | 'mutation-subtype' | 'polaris' | 'other'
   const [step, setStep] = useState('type')
   const [otherLabel, setOtherLabel] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  // Mutation en cours de sélection de sous-type (ex. "Caractère génétique animal" →
+  // félin/canin/reptilien/simiesque) — null hors de l'étape 'mutation-subtype'.
+  const [subtypeParent, setSubtypeParent] = useState(null)
 
   // ─── Calculer si l'avantage Force Polaris (adv_079) est possédé ──────────
   const hasForcePolaris = useMemo(
@@ -119,6 +122,7 @@ export default function AdvantagesPanel({
     setStep('type')
     setOtherLabel('')
     setError(null)
+    setSubtypeParent(null)
     setModalOpen(true)
   }
 
@@ -127,15 +131,17 @@ export default function AdvantagesPanel({
     setStep('type')
     setOtherLabel('')
     setError(null)
+    setSubtypeParent(null)
   }
 
   // ─── Ajouter une mutation (MJ uniquement — serveur revalide aussi req.isGm) ─
-  const handleAddMutation = useCallback(async (mutationId) => {
+  const handleAddMutation = useCallback(async (mutationId, subtypeId = null) => {
     setSaving(true)
     setError(null)
     try {
       const res = await api.post(`/char-sheet/${characterId}/mutations`, {
         mutation_id: mutationId,
+        subtype_id: subtypeId,
       })
       const mutation = res.data.mutation
       setCharMutations(prev => {
@@ -156,6 +162,17 @@ export default function AdvantagesPanel({
       setSaving(false)
     }
   }, [characterId, onSaved, t])
+
+  // ─── Choisir une mutation dans la liste — drill-down si sous-types ───────
+  // Déclarée après handleAddMutation (P4/P48, .claude/rules/react.md) : appelle handleAddMutation.
+  const handleSelectMutation = useCallback((mut) => {
+    if (mut.subtable?.length > 0) {
+      setSubtypeParent(mut)
+      setStep('mutation-subtype')
+    } else {
+      handleAddMutation(mut.mutation_id)
+    }
+  }, [handleAddMutation])
 
   // ─── Toggle pouvoir Polaris (is_learned dans char_skills) ────────────────
   const handleTogglePolaris = useCallback(async (skillId) => {
@@ -292,6 +309,7 @@ export default function AdvantagesPanel({
                 <span style={{ ...s.badge, ...s.badgeMutation }}>{t('advantages.badgeMutation')}</span>
                 <span style={s.entryLabel}>
                   {entry.data.name}
+                  {entry.data.subtype_name && ` — ${entry.data.subtype_name}`}
                   {entry.data.count > 1 && <span style={s.mutLevel}> ×{entry.data.count}</span>}
                 </span>
                 {isGm && (
@@ -342,10 +360,11 @@ export default function AdvantagesPanel({
             {/* En-tête modale */}
             <div style={s.modalHeader}>
               <span style={s.modalTitle}>
-                {step === 'type'      && t('advantages.add')}
-                {step === 'mutations' && t('advantages.stepMutations')}
-                {step === 'polaris'   && t('advantages.stepPolaris')}
-                {step === 'other'     && t('advantages.stepOther')}
+                {step === 'type'            && t('advantages.add')}
+                {step === 'mutations'       && t('advantages.stepMutations')}
+                {step === 'mutation-subtype' && (subtypeParent?.name ?? t('advantages.stepMutationSubtype'))}
+                {step === 'polaris'         && t('advantages.stepPolaris')}
+                {step === 'other'           && t('advantages.stepOther')}
               </span>
               <button style={s.closeBtn} onClick={closeModal}>×</button>
             </div>
@@ -393,15 +412,16 @@ export default function AdvantagesPanel({
                   ? <div style={s.loadingMsg}>{t('common.loading')}</div>
                   : refMutations.map(mut => {
                       const existing = charMutations.find(m => m.mutation_id === mut.mutation_id)
+                      const hasSubtable = mut.subtable?.length > 0
                       return (
                         <button
                           key={mut.mutation_id}
                           style={{ ...s.mutRow, ...(existing ? s.mutRowExisting : {}) }}
-                          onClick={() => handleAddMutation(mut.mutation_id)}
+                          onClick={() => handleSelectMutation(mut)}
                           disabled={saving}
                           title={mut.description || ''}
                         >
-                          <span style={s.mutName}>{mut.name}</span>
+                          <span style={s.mutName}>{mut.name}{hasSubtable ? ' ›' : ''}</span>
                           {existing && (
                             <span style={s.mutLevel}>
                               {t('advantages.mutLevel', { current: existing.count, next: existing.count + 1 })}
@@ -411,6 +431,23 @@ export default function AdvantagesPanel({
                       )
                     })
                 }
+              </div>
+            )}
+
+            {/* ── Étape 2A-bis : sous-type de mutation (ex. Caractère génétique animal) ── */}
+            {step === 'mutation-subtype' && subtypeParent && (
+              <div style={s.listStep}>
+                {subtypeParent.subtable.map(sub => (
+                  <button
+                    key={sub.subtype_id}
+                    style={s.mutRow}
+                    onClick={() => handleAddMutation(subtypeParent.mutation_id, sub.subtype_id)}
+                    disabled={saving}
+                    title={sub.skill_bonus || ''}
+                  >
+                    <span style={s.mutName}>{sub.name}</span>
+                  </button>
+                ))}
               </div>
             )}
 
@@ -462,9 +499,19 @@ export default function AdvantagesPanel({
               </div>
             )}
 
-            {/* Bouton retour si pas à l'étape 1 */}
+            {/* Bouton retour si pas à l'étape 1 — 'mutation-subtype' revient à 'mutations' */}
             {step !== 'type' && (
-              <button style={s.backBtn} onClick={() => setStep('type')}>
+              <button
+                style={s.backBtn}
+                onClick={() => {
+                  if (step === 'mutation-subtype') {
+                    setSubtypeParent(null)
+                    setStep('mutations')
+                  } else {
+                    setStep('type')
+                  }
+                }}
+              >
                 {t('advantages.back')}
               </button>
             )}

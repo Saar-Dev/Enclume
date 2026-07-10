@@ -1,3 +1,23 @@
+## v168 — 2026-07-10 — Revers (option de campagne) + Avantages professionnels revus
+
+### Client
+- [feat] Nouvelle option de campagne "Revers" : au-delà de 10 ans d'expérience cumulée, le
+  personnage doit tirer sur la table des Revers tous les 3 ans (règle optionnelle du livre de
+  base) — nouvelle étape dédiée et visible dans le parcours de création, avec le résultat affiché
+  en clair.
+- [feat] Le tirage aléatoire d'Avantages professionnels (1D10) n'est plus caché dans un
+  sous-onglet — il a maintenant sa propre étape dans le parcours de création, regroupée avec la
+  répartition manuelle des points, par métier.
+- [feat] Sur les écrans où il ne reste que des points non dépensés (Attributs, Avantages
+  professionnels), le bouton "Suivant" reste actif — un message prévient que ces points seront
+  perdus, un second clic permet de continuer quand même. Un vrai dépassement de budget reste
+  bloqué.
+
+### Connu
+- [limitation] Les bénéfices tirés (Revers, Avantages pro aléatoires) restent narratifs — leur
+  texte s'affiche mais ne modifie pas encore automatiquement les attributs/compteurs de la fiche
+  (Célébrité, Alliés, Contacts…) — chantier à venir.
+
 ## v167 — 2026-07-09 — Le MJ peut octroyer une mutation en jeu
 
 ### Client

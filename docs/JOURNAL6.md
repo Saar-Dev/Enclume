@@ -1809,6 +1809,74 @@ côté joueur vs MJ (confirmé fonctionnel globalement par Saar, pas détaillé 
 
 ---
 
+## Session 141 (suite 12) — 2026-07-09/10 — Options de campagne : `revers` (OPT-06) câblée ✅ CLOS + mode développeur écarté (UX à deux niveaux) + consolidation mini-stepper Avantages pro ✅ CLOS
+
+Session longue, trois volets liés (Revers → friction de test → rework UI/UX Avantages pro), documentée en une fois faute de point de coupure naturel. Note de numérotation : "suite 10" et "suite 11" étaient déjà pris par deux autres sessions parallèles (`PLAN_MUTATION2.md`/`PLAN_MODING.md`, sujets sans rapport) au moment de documenter celle-ci — repéré avant de commettre la collision, cette session prend donc "suite 12" (vérifié libre). Migration **126** consommée ici, déjà réconciliée par la session "suite 11" (voir son entrée, "Dérive de numérotation de migration confirmée en conditions réelles").
+
+### Volet 1 — Revers (OPT-06)
+
+Chantier "Options de campagne" (item 41), reprise directe (discussion, pas de questionnaire structuré). **Conception requise avant plan** : la table des Revers (LdB p.185+) n'était transcrite nulle part dans les docs — seulement 5 lignes placeholder (`[DETTE-ETAPE4-5]`). Saar a fourni le texte complet via un nouveau fichier `docs/REGLES/REGLEREVERS.md` (27 catégories 1D100, 5 avec sous-table imbriquée). Transcrit intégralement dans `docs/JOURNALTEMP.md` pour relecture avant migration — un point resté ouvert (**"Narco-dommages"**, texte présent dans la source mais sans plage 1-100 associée) confirmé par Saar comme **erreur du livre de base** (vérifié sur l'exemplaire papier), exclu des 27 lignes.
+
+**Décisions de conception, tranchées une par une avec Saar** :
+- **Déclencheur = total d'années CUMULÉES toutes carrières confondues**, pas par métier (contrairement au Tirage 1D10 Lot 6) — confirmé par relecture de `REGLE_CREATION.txt:1190-1199`, qui ne mentionne jamais "dans une Profession" contrairement à OPT-05.
+- **Obligatoire, sans refus** — contrairement au jet volontaire de base ("+5 pts via la table des Revers", `REGLE_CREATION.txt:1156-1159`, mécanique différente, **hors scope** cette session).
+- **Portée narrative uniquement** — aucune automatisation mécanique des conséquences (attribut/PC/économies), même traitement que Force Polaris OPT-04. Sous-tables (Blessure/Mutilation/Complot/Contamination/Faute lourde) intégrées en texte dans la description, jamais rejouées par le système.
+- **Fichier indépendant** (`shared/careerSetbacks.js`), jamais fusionné avec `careerAdvantages.js` malgré la ressemblance de surface (jet lié aux années) — analyse critique demandée par Saar : déclencheur global vs par-métier, table à plages vs valeur exacte, obligatoire vs optionnel, zéro effet mécanique vs budget d'avantages. Fusionner aurait recréé deux fonctions dans une seule avec des branches conditionnelles, et élargi le rayon d'impact du Lot 6 déjà en prod.
+- **Sous-step dédiée du mini-stepper** (`SetbacksAllocator.jsx`, NOUVEAU), pas un bloc dans `CareersAllocator.jsx` — Saar a insisté pour qu'Avantages pro et Revers soient "traités en même temps" (visibles, pas perdus dans un onglet) sans pour autant être mélangés dans le même code.
+
+**Implémentation** :
+- Migration `126_ref_setbacks_revers_table.js` (NOUVEAU) : `ref_setbacks` restructurée (`roll` exact → `roll_min`/`roll_max`, `career_id`/`category` retirés — jamais corrects pour cette mécanique, table réellement partagée) + 27 lignes réelles (couverture 1-100 vérifiée **programmatiquement**, pas à la main) ; `char_archetype.setback_rolls` (JSONB, nouveau) — pas `char_careers.setbacks` (colonne existante mais fausse cible maintenant que le déclencheur est global, laissée en l'état/inutilisée).
+- `shared/careerSetbacks.js` : `getSetbackBlockCount(totalYears)` (`floor((years-10)/3)`, testé aux bornes 9/10/12/13/15/16/18/19/21/22) + `resolveSetback(roll, rows)`.
+- `creationService.js` : `getStep4RefData` expose `ref_setbacks` (top-level) ; `startCreation` renvoie `reversEnabled` ; `reconcileCreation` STEP4 valide les tranches (bornes/doublons/résultat table) et rejette si obligatoire non résolu — calculé en haut du bloc STEP4 (pas après la boucle carrières, `totalCareerYears` dispo immédiatement depuis le payload).
+- `Step4Experience.jsx` : nouvelle sous-step `SETBACKS` entre `CAREERS` et `SUMMARY`, sautée si non applicable (même pattern que `HIGHER_ED`).
+
+**Bug trouvé en run à vide (avant tout test navigateur)** : un joueur revenant sur Carrières et réduisant le total d'années pouvait laisser un jet Revers orphelin (`blockIndex` devenu hors bornes), rejeté par le serveur sur un écran déjà quitté. Corrigé par état **dérivé** (`validSetbackRolls` filtré à chaque rendu) plutôt qu'un `useEffect`+`setState` — a aussi évité une seconde fois la même erreur ESLint (`react-hooks/set-state-in-effect`) rencontrée et corrigée pendant l'implémentation.
+
+**Testé** : couverture 1-100 vérifiée par script, `getSetbackBlockCount` testé aux bornes, `node --check`/ESLint 0 erreur introduite sur tous les fichiers touchés, **SR + parcours navigateur confirmé Saar** (mini-stepper se déclenche correctement, jet + résultat affiché).
+
+### Volet 2 — Mode développeur demandé, puis écarté au profit d'une UX à deux niveaux
+
+Saar a signalé la vraie friction de test : devoir tout redistribuer (Étape 1 attributs + Étape 4 compétences/avantages pro) à chaque personnage de test. Demande initiale : un "mode développeur" (flag séparé par campagne, **jamais** mélangé aux Options de campagne — analyse critique validée : ce n'est pas une règle Polaris, ça n'a rien à faire dans `SETTINGS_SCHEMA`).
+
+**Avant tout code, analyse serveur** : `validateStep1` (Étape 1) bloque un budget non totalement dépensé **côté serveur** (G1, exact) ; `computeSkillAllocation`/`computeProAdvantageAllocation` (Étape 4) ne l'ont **jamais** bloqué côté serveur (seulement le dépassement) — incohérence trouvée en creusant, pas un choix voulu. Saar a demandé si c'était l'occasion d'uniformiser plutôt que de patcher un contournement par-dessus une base incohérente.
+
+**Proposition finale de Saar (meilleure que le mode développeur)** : bouton "Suivant" **toujours opérationnel** ; un solde de points non dépensé (gâchis, pas une violation de règle) déclenche un **avertissement au premier clic**, un **second clic confirme et avance quand même**. Rend le mode développeur inutile — n'importe qui peut cliquer deux fois, pas besoin de flag de campagne, pas de migration.
+
+**Implémentation** :
+- `shared/polarisUtils.js` : `validateStep1` sépare G1 (`budgetIncomplete`, informatif) de G2/G3/G4 (`erreurs`/`valide`, vraies bornes) — testé (`node -e`, cas budget non dépensé → `valide:true`, cas hors bornes → `valide:false`).
+- `Step1Attributes.jsx` / `CareersAllocator.jsx` : même pattern — état dérivé (`warnedAtValue`/`warnedAllocSignature`, comparé à la valeur courante, jamais un `useEffect`+`setState`) pour détecter un avertissement déjà affiché et l'invalider automatiquement si l'état sous-jacent change entretemps.
+
+**Testé** : `node --check`/ESLint 0 erreur introduite, **double-clic avertissement confirmé fonctionnel par Saar en conditions réelles** (Étape 1).
+
+### Volet 3 — Consolidation du Tirage 1D10 (Avantages pro aléatoires) dans le mini-stepper
+
+Demande distincte de Saar en testant Revers : le Tirage 1D10 (Lot 6, déjà en prod depuis Session 140) est "complètement invisible si tu ne sais pas où chercher" — enterré dans l'onglet "Avantages pro" de `CareersAllocator.jsx`, jamais dans le mini-stepper malgré une demande antérieure jamais suivie d'effet.
+
+**Design, "pas de maquette mais prendre le temps d'y réfléchir" (consigne Saar)** : contrairement à Revers (global, narratif pur), le Tirage 1D10 est **par métier** et son résultat (`useAsPoints`) **modifie rétroactivement le budget d'Avantages pro**. Le sortir vers un sous-step séparé APRÈS Carrières créait un risque réel : répartir manuellement tout le budget sur l'écran Carrières, puis convertir un jet en points sur un écran différent, laissant une répartition déjà quittée en dépassement. Saar a proposé la vraie solution : **fusionner répartition manuelle (Lot 4) et Tirage (Lot 6) dans la même nouvelle sous-step**, réglant le séquençage par construction plutôt que par un garde-fou.
+
+**Recherche/inspiration évaluée avant codage (demande explicite Saar)** : machine à états (XState) écartée — aucune lib de state machine nulle part dans ce projet, en introduire une pour un seul composant aurait fragmenté l'architecture au lieu de la renforcer. Pattern "field array" (react-hook-form) retenu **dans le principe seulement** (décomposition en sous-composant par élément répété, `CareerAdvantageBlock`), sans la librairie — ce projet n'utilise aucune lib de formulaire.
+
+**Implémentation** :
+- `ProAdvantagesAllocator.jsx` (NOUVEAU) : sous-step consolidée, un bloc par métier retenu (répartition manuelle + Tirage 1D10, écouteur `DICE_RESULT`/overlay dé propres, même pattern socket que `SetbacksAllocator.jsx`).
+- `CareersAllocator.jsx` : onglet "avant" retiré intégralement (JSX + 8 actions reducer + imports `DiceRoller`/`DiceLights`/`Canvas`/`useSocket`/`useAuthStore`/`computeProAdvantageAllocation`/`computeRandomBudgetDelta`) — relu intégralement avant modification pour un plan de suppression exact, `canNext`/statut simplifiés (ne portent plus que sur les compétences).
+- `Step4Experience.jsx` : nouvelle sous-step `PRO_ADVANTAGES` entre `CAREERS` et `SETBACKS`, **toujours affichée** (pas de condition de saut — un métier retenu a toujours un budget, contrairement à Revers/Études). Logique de saut Carrières↔Revers corrigée pour tenir compte de l'étape intermédiaire (le saut se fait désormais depuis/vers `PRO_ADVANTAGES`, plus directement Carrières↔Récap).
+- `creation.json` : clé `career_tab_avant` supprimée (orpheline après le retrait de l'onglet).
+
+**Deux vrais bugs trouvés en run à vide, avant tout signalement Saar** :
+1. Signature d'avertissement basée uniquement sur `proAdvAllocations`, pas `randomPicks` — un jet relancé (sans toucher la répartition manuelle) changeait pourtant le budget via `randomBudgetDelta`, laissant un avertissement obsolète passer inaperçu. Corrigé : signature couvrant les deux.
+2. **Incohérence client/serveur sur le dépassement de budget** — `hasIncomplete` traitait sous-dépensé et sur-dépensé de façon identique (avertissement doux, contournable), alors que le serveur (`creationService.js`, `err.code==='over_budget'`) rejette **toujours** le dépassement (vraie violation de règle, pas un gâchis). Le scénario "conversion rétroactive après répartition complète" pouvait laisser un joueur "confirmer" un état que le serveur refuse de toute façon, avec un rejet générique tardif au moment de "Terminer". Corrigé : sur-dépensé (`remaining < 0`) est désormais un vrai blocage dur (cohérent avec le serveur), seul le sous-dépensé reste un avertissement.
+3. Texte de statut ("...à répartir (onglet Avantages pro)") resté périmé après le retrait de l'onglet — corrigé, trouvé en relisant une capture d'écran fournie par Saar.
+
+**Dette trouvée en testant les limites de navigation, ajoutée au backlog (`[WIZ-4]`)** : le mini-stepper ne revalide jamais les blocages durs de la sous-step quittée au clic direct (contourne par ex. "au moins une carrière requise" en retirant sa carrière puis en cliquant directement sur une sous-step déjà visitée). **Vérifié préexistant**, pas une régression de cette session — le filet de sécurité serveur empêche toute donnée invalide persistée, juste un rejet tardif au lieu d'un blocage immédiat. Non traité (élargirait le chantier à toute l'architecture de navigation).
+
+**Roadmap ouverte, décision explicite Saar ("à faire impérativement, maintenant ou sur une roadmap")** : Célébrité/Allié/Contact/Ennemi/Opposant et les autres "avantages relationnels" (Revers + Tirage 1D10) ne sont trackés nulle part mécaniquement — bloque toute automatisation au-delà de la conversion en points, déjà faite. Confirmé avec un vrai exemple lu en base (Cultivateur/Éleveur, migration 108 : "Célébrité +2", "Parcelle/Ferme +2", "Revenus +10% à partir de cette année"). Ajouté au backlog `CLAUDE.md` (`[ADV1]` jauges non trackées, `[ADV2]` modificateurs de revenus cumulatifs, `[ADV3]` déblocage de compétence via tirage) — **chantier dédié à planifier après celui-ci**, décision de Saar de ne pas le traiter maintenant.
+
+**Testé** : `node --check`/ESLint 0 erreur introduite sur l'ensemble des fichiers touchés (sweep final), couverture 1-100 vérifiée par script, tests unitaires `shared/careerSetbacks.js`, **SR + parcours navigateur confirmé Saar** (board Avantages pro + tirages affichés et fonctionnels par métier, mini-stepper Revers confirmé après un faux-positif de test de Saar lui-même).
+
+**Non testé** : le scénario "conversion rétroactive" en conditions réelles navigateur (corrigé par construction — blocage dur — suite au bug trouvé en run à vide, pas re-testé manuellement après coup) ; finalisation complète ("Terminer") avec un mélange Revers + Avantages pro non confirmée scénario par scénario (Saar : "semble ok") ; persistance `char_archetype.setback_rolls`/`char_careers.pro_advantages`/`random_picks` non vérifiée directement en base après un `reconcileCreation` réel.
+
+---
+
 ## Session 141 (suite 11) — 2026-07-09 — PLAN_MODING.md : analyse critique + correction ✅ CLOS, chantier mis en pause
 
 Session **analytique/planification pure — aucun code écrit**. Reprise à froid de

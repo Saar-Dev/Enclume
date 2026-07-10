@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-09 Session 141 (suite 11)
+> Dernière mise à jour : 2026-07-10 Session 141 (suite 12) — voir item 54 (note de numérotation, sessions parallèles)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -31,11 +31,22 @@
 > schéma V1), Lot 5 Déblocage de compétences (`[CS7]` + mapping `muta_XXX` V1→V2 à faire), Lot 6
 > Identité, Lot 7 Narratif/économie. Toujours **aucun code** — diagnostic + architecture
 > uniquement. **Prochaine étape : détailler le Lot 1 ligne-à-ligne avec Saar.**
-> **Chantier Options de campagne (item 41) : `polaris_latent` (OPT-04) ✅ câblée — Session 141
-> (suite 6)** (8/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
-> `skill_prerequisites`, `skill_max_level`, `young_penalty`, `polaris_latent`). **PROCHAINE OPTION À
-> CÂBLER : à définir avec Saar** — voir item "41." (3/11 restantes : `revers`, `skill_natural_prog`,
-> `celebrity`).
+> **Chantier Options de campagne (item 41) : `revers` (OPT-06) ✅ câblée — Session 141 (suite 12)**
+> (9/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
+> `skill_prerequisites`, `skill_max_level`, `young_penalty`, `polaris_latent`, `revers`).
+> **PROCHAINE OPTION À CÂBLER : à définir avec Saar** — voir item "41." (2/11 restantes :
+> `skill_natural_prog`, `celebrity`).
+> **Item 54 (Session 141 suite 12 — "suite 10" et "suite 11" déjà pris par deux sessions parallèles
+> sans rapport, `PLAN_MUTATION2.md`/`PLAN_MODING.md`, repéré avant de commettre la collision) :
+> Revers (OPT-06) ✅ CLOS + mode développeur écarté (UX à deux niveaux avertissement/blocage) ✅ CLOS
+> + consolidation mini-stepper Avantages pro ✅ CLOS.** Nouvelle sous-step `SetbacksAllocator.jsx`
+> (Revers, globale) et `ProAdvantagesAllocator.jsx` (Avantages pro, par métier — répartition
+> manuelle + Tirage 1D10 fusionnés, retirés de `CareersAllocator.jsx`). Deux vrais bugs trouvés et
+> corrigés en run à vide (signature d'avertissement incomplète, incohérence client/serveur sur le
+> dépassement de budget). Roadmap ouverte (`[ADV1]`/`[ADV2]`/`[ADV3]`, `CLAUDE.md`) : Célébrité/
+> Allié/Contact/revenus cumulatifs/déblocage de compétence non trackés mécaniquement — chantier
+> dédié à planifier ensuite, décision Saar. Détail complet : item "54." ci-dessous et
+> `docs/JOURNAL6.md` "Session 141 (suite 12)".
 > **Item 46 (hors chantier options de campagne) : Formation "Autodidacte" ✅ câblée — Session 141
 > (suite 3)** — 7 points libres réellement répartissables (mécanique de base, jamais un toggle
 > campagne), voir détail ci-dessous.
@@ -53,6 +64,55 @@
 > est prioritaire, à planifier avant de
 > reprendre le moding** — chantier entier mis en pause (pas seulement B2-B5). Aucun plan écrit pour
 > Tir visé pour l'instant. Voir détail ci-dessous et `docs/JOURNAL6.md` "Session 141 (suite 11)".
+
+**54. Options de campagne : `revers` (OPT-06) ✅ CLOS + mode développeur écarté ✅ CLOS + consolidation mini-stepper Avantages pro ✅ CLOS — Session 141 (suite 12) (2026-07-09/10)**
+   → Note de numérotation : "suite 10" (`docs/PLAN_MUTATION2.md`) et "suite 11" (`docs/PLAN_MODING.md`,
+     item 53 ci-dessous) étaient déjà pris par deux sessions parallèles sans rapport avec ce travail —
+     repéré avant de commettre la collision, cette session prend "suite 12" (vérifié libre). Migration
+     126 déjà réconciliée par la session "suite 11" (voir son entrée dans `docs/JOURNAL6.md`).
+   → **Revers (OPT-06)** : table `docs/REGLES/REGLEREVERS.md` fournie par Saar (27 catégories 1D100,
+     transcrites en base après relecture dans `docs/JOURNALTEMP.md` — un point ouvert, "Narco-
+     dommages", confirmé erreur du livre de base par Saar sur l'exemplaire papier, exclu). Déclencheur
+     = **total d'années cumulées toutes carrières confondues** (pas par métier, contrairement au
+     Tirage 1D10) — confirmé par lecture de `REGLE_CREATION.txt:1190-1199`. Obligatoire, sans refus,
+     narratif uniquement (même traitement que Force Polaris OPT-04). Migration `126_ref_setbacks_
+     revers_table.js` (NOUVEAU, `ref_setbacks` restructurée en plages + `char_archetype.
+     setback_rolls`), `shared/careerSetbacks.js` (NOUVEAU, fichier indépendant de `careerAdvantages.js`
+     — analyse critique validée, mécaniques trop différentes pour fusionner), `SetbacksAllocator.jsx`
+     (NOUVEAU, sous-step dédiée du mini-stepper Step4).
+   → **Mode développeur demandé puis écarté** : Saar voulait un flag séparé (jamais dans les Options
+     de campagne) pour accélérer les tests. Analyse serveur a révélé une incohérence pré-existante
+     (Étape 1 bloquait un budget non dépensé côté serveur, Étape 4 jamais). Saar a proposé mieux : bouton
+     "Suivant" toujours actif, avertissement au premier clic sur un solde non dépensé, confirmation au
+     second — rend le mode développeur inutile. `shared/polarisUtils.js` (`validateStep1` sépare G1
+     non-bloquant de G2/G3/G4), `Step1Attributes.jsx`/`CareersAllocator.jsx` (état dérivé, pas
+     `useEffect`+`setState` — piège retrouvé et corrigé deux fois pendant la session).
+   → **Consolidation Avantages pro** : Tirage 1D10 (Lot 6, déjà en prod) "invisible" dans l'onglet
+     `CareersAllocator.jsx` selon Saar. Nouveau `ProAdvantagesAllocator.jsx` (sous-step dédiée,
+     répartition manuelle + Tirage 1D10 fusionnés par métier — règle le risque de séquençage d'une
+     conversion rétroactive de jet en points par construction, pas par un garde-fou). Onglet "avant"
+     retiré intégralement de `CareersAllocator.jsx` (JSX + 8 actions reducer + imports).
+   → **2 vrais bugs trouvés en run à vide** : signature d'avertissement ne couvrant pas `randomPicks`
+     (avertissement obsolète après un jet) ; incohérence client/serveur sur le dépassement de budget
+     (sur-dépensé traité comme un simple avertissement côté client alors que le serveur rejette
+     toujours — corrigé en vrai blocage dur, cohérent avec le serveur).
+   → **Dette `[WIZ-4]` ajoutée** (`CLAUDE.md`) : le mini-stepper ne revalide jamais les blocages durs
+     de la sous-step quittée au clic direct — vérifié préexistant, pas une régression de cette
+     session, filet de sécurité serveur toujours en place.
+   → **Roadmap ouverte** (`[ADV1]`/`[ADV2]`/`[ADV3]`, `CLAUDE.md`) : Célébrité/Allié/Contact/Ennemi/
+     Opposant, revenus cumulatifs par carrière, déblocage de compétence via tirage — non trackés
+     mécaniquement nulle part, confirmé avec un vrai exemple en base (Cultivateur/Éleveur, migration
+     108). **Décision Saar : chantier dédié à faire impérativement, planifié juste après celui-ci.**
+   → **Testé** : couverture 1-100 vérifiée par script, `getSetbackBlockCount` testé aux bornes,
+     `node --check`/ESLint 0 erreur introduite (sweep final sur tous les fichiers touchés), SR +
+     double-clic avertissement confirmé Saar, mini-stepper Revers + board Avantages pro/tirages
+     confirmés fonctionnels par Saar.
+   → **Non testé** : scénario "conversion rétroactive" en conditions réelles navigateur (corrigé par
+     construction — blocage dur — pas re-testé manuellement après coup) ; finalisation complète non
+     confirmée scénario par scénario ("semble ok") ; persistance `char_archetype.setback_rolls`/
+     `char_careers.pro_advantages`/`random_picks` non vérifiée directement en base.
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 12)".
+   → Prochaine migration disponible : **127** (126 consommée cette session).
 
 **53. `docs/PLAN_MODING.md` — analyse critique + correction ✅ CLOS, chantier mis EN PAUSE — Session 141 (suite 11) (2026-07-09)**
    → Session analytique/planification pure — **aucun code écrit**. Plan rédigé Session 120

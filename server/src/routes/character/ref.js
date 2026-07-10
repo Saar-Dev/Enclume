@@ -66,12 +66,23 @@ router.get('/skills', requireAuth, async (req, res, next) => {
 // Retourne le catalogue complet des mutations (bug MUT2 corrigé — docs/BUGIDENTIFIE.md :
 // muta_numero/linked_skill_id n'ont jamais existé sur le schéma réel post-migration 95).
 // Trié par mutation_id pour un ordre d'affichage stable et prévisible.
+//
+// Chaque mutation inclut un tableau `subtable` (peut être vide) — sous-types via
+// ref_mutation_subtypes (ex. "Caractère génétique animal" → félin/canin/reptilien/simiesque).
+// Même pattern de nesting que getStep3RefData (creationService.js, Wizard Step3) — nécessaire
+// ici pour que le MJ puisse choisir un sous-type en octroyant une mutation en jeu (Lot D,
+// docs/PLAN_MUTATION2.md).
 router.get('/mutations', requireAuth, async (req, res, next) => {
   try {
-    const mutations = await db('ref_mutations')
-      .select('*')
-      .orderBy('mutation_id')
-    res.json({ mutations })
+    const [mutations, subtypes] = await Promise.all([
+      db('ref_mutations').select('*').orderBy('mutation_id'),
+      db('ref_mutation_subtypes').select('*').orderBy(['mutation_id', 'd4_roll']),
+    ])
+
+    const mutMap = new Map(mutations.map(m => [m.mutation_id, { ...m, subtable: [] }]))
+    for (const sub of subtypes) mutMap.get(sub.mutation_id)?.subtable.push(sub)
+
+    res.json({ mutations: Array.from(mutMap.values()) })
   } catch (err) {
     next(err)
   }

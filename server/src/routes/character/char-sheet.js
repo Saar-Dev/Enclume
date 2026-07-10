@@ -667,10 +667,10 @@ router.post('/:characterId/mutations', async (req, res, next) => {
       .first()
     if (!sheet) throw new AppError(404, 'Sheet not found — create it first')
 
-    const { mutation_id } = req.body
+    const { mutation_id, subtype_id } = req.body
     if (!mutation_id) throw new AppError(400, 'mutation_id is required')
 
-    const mutation = await addMutation(sheet.id, mutation_id)
+    const mutation = await addMutation(sheet.id, mutation_id, subtype_id ?? null)
     res.status(201).json({ mutation })
   } catch (err) {
     next(err)

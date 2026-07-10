@@ -596,6 +596,7 @@
     "removeTitle": "Retirer",
     "add": "Ajouter",
     "stepMutations": "Choisir une mutation",
+    "stepMutationSubtype": "Choisir une variante",
     "stepPolaris": "Pouvoirs Polaris",
     "stepOther": "Texte libre",
     "typeMutations": "Mutations",
