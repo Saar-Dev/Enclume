@@ -4,6 +4,23 @@
 > révisions" en bas de fichier). **Ce document ne couvre désormais que la Phase A.** La Phase B
 > (effet mécanique des mods en combat) est explicitement hors scope — à planifier ensemble dans un
 > second temps, jamais dans le même plan (règle "un sujet à la fois").
+>
+> **⏸ CHANTIER EN PAUSE — 2026-07-09 (décision Saar).** Phase B nécessite pour l'essentiel (lots
+> B2-B5) une mécanique combat qui n'existe pas encore dans le code : **Tir visé** (aucune référence
+> trouvée dans `server/src/socket/*`, malgré des dettes déjà connues et adjacentes — `COM9` "Viser
+> une localisation précise", "Changer le mode de tir"). Saar : Tir visé est un chantier à part
+> entière, **prioritaire**, à planifier avant de reprendre le moding — même si Phase A (rangement) et
+> le lot B1 (bonus statiques) restent techniquement indépendants et codables sans attendre. Rien n'a
+> été codé sur ce plan. Reprendre ce document seulement après que Tir visé ait son propre plan (à
+> écrire séparément, pas ici).
+>
+> **Numéro de migration à revérifier avant tout codage** : ce plan proposait 124 (2026-07-09,
+> matin) — **déjà consommée entretemps** par `124_char_advantage_notes.js`, `125_...`, et
+> `126_ref_setbacks_revers_table.js` (travail en cours sur l'option `revers`, trouvé en fin de
+> session, pas documenté dans `EN_COURS.md` au moment de la vérification — ne pas y toucher).
+> Confirme le piège **P53** en conditions réelles. Prochaine migration à reconfirmer par
+> `ls server/src/db/migrations/` le jour où ce plan est repris — ne pas se fier au numéro déjà écrit
+> plus bas dans ce document.
 
 ---
 
@@ -169,10 +186,32 @@ char_inventory_mods
 
 ## Composant React `ModingWindow.jsx`
 
-**Déclenchement tranché 2026-07-09** : bouton **"Customisation"** dans la fenêtre Inventaire
-existante (pas une entrée de menu session séparée). Ouvre `ModingWindow.jsx` par-dessus ou à côté de
-l'inventaire — mécanisme d'ouverture exact (modal/panneau) à déterminer au codage selon ce
-qu'utilise déjà la fenêtre Inventaire pour ses propres sous-vues.
+**Déclenchement tranché 2026-07-09, vérifié dans le code client.** `InventoryPanel.jsx` n'est jamais
+rendu seul — toujours à l'intérieur de `CharacterWindow.jsx` (`activeTab === 'materiel'`,
+`CharacterWindow.jsx:388`). Toutes les fenêtres autonomes du projet (`TradeWindow.jsx`,
+`ExchangeWindow.jsx`, `CharacterWindow.jsx` lui-même) portent le suffixe `Window` et flottent en
+`position:fixed` (`CharacterWindow.jsx:546-547`, `zIndex: 9000`). **`ModingWindow` suit le même
+pattern** — fenêtre flottante indépendante, pas un panneau inline dans `InventoryPanel` :
+
+- État d'ouverture (`modingOpen`) géré dans `CharacterWindow.jsx`, aux côtés de `activeTab`
+  (`CharacterWindow.jsx:182`) — nouveau `const [modingOpen, setModingOpen] = useState(false)`
+- `InventoryPanel.jsx` reçoit une nouvelle prop `onOpenModing` (callback), affiche le bouton
+  "Customisation" (à côté du bouton "Ajouter" existant, `InventoryPanel.jsx:259`), appelle
+  `onOpenModing()` au clic
+- `CharacterWindow.jsx` rend conditionnellement `<ModingWindow characterId={character.id}
+  onClose={() => setModingOpen(false)} />` en sibling. Convention CSS du projet (jamais de `zIndex`
+  visuel inline, `.claude/rules/react.md`) : nouvelle classe `.moding-window` dans `index.css`
+  (Section 10/11), `z-index: 9100` (au-dessus des 9000 de `CharacterWindow.jsx:547`, seule valeur
+  supérieure existante trouvée dans le code client — voir vérification ci-dessous).
+
+**Rafraîchissement temps réel — mécanisme exact identifié.** `client/src/lib/useCharacterSocket.js:
+36-44` écoute déjà `WS.INVENTORY_ADDED/UPDATED/REMOVED` et incrémente un compteur par personnage
+(`woundVersions`, nom trompeur — sert aussi à l'inventaire) qui remonte jusqu'à
+`CharacterWindow.jsx:170-180` (`bumpInventoryVersion`) et force `InventoryPanel`/`WeaponPanel`/
+`ArmorWoundPanel` à se recharger. **`WS.MOD_INSTALLED` doit être ajouté à ce même hook** (nouveau
+`onModInstalled` suivant exactement le pattern des 3 handlers `onInventory*` existants,
+lignes 36-44 + `socket.on`/`socket.off` lignes 49-59) — sinon l'event est émis côté serveur mais
+personne ne l'écoute côté client, et l'UI ne se rafraîchit jamais après une installation.
 
 ### Layout (inspiré de `Crafting.html` Kiwi)
 ```
@@ -235,24 +274,46 @@ const alreadyInstalled = await db('char_inventory_mods')
   .where({ weapon_inv_id: weaponInvId, equipment_id: mod.equipment_id }).first()
 if (alreadyInstalled) throw new AppError(409, 'Ce mod est déjà installé sur cette arme')
 
-// 3. Transaction atomique
-const result = await db.transaction(async (trx) => {
+// 3. Transaction atomique — consommer 1 unité du mod, PAS un DELETE inconditionnel
+//    (correction 2026-07-09 : mod.quantity peut être > 1 si stack — voir P7)
+const { removeResult, state } = await db.transaction(async (trx) => {
   await trx('char_inventory_mods').insert({
     weapon_inv_id: weaponInvId,
     equipment_id: mod.equipment_id,
     mod_name: modRef.name,
   })
-  await trx('char_inventory').where({ id: modInvId }).delete()
-  return getModingState(trx, characterId)
+  // Réutilise inventoryService.removeItem(characterId, modInvId, 1) — même sémantique que
+  // DELETE /:characterId/inventory/:itemId (char-sheet.js:1301-1318, décrément si quantity>1,
+  // suppression de la ligne seulement si le stock retombe à 0). Fonctionne identiquement que
+  // mod.quantity soit 1 ou plus, un seul code path.
+  const removeResult = await inventoryService.removeItem(characterId, modInvId, 1, trx)
+  const state = await getModingState(trx, characterId)
+  return { removeResult, state }
 })
 
-// 4. Notifier la room (pattern existant char-sheet.js — WOUND_*/INVENTORY_*/SOLS_*)
-req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_REMOVED, {
-  characterId, itemId: modInvId,
+// 4. Notifier la room — event conditionnel selon que le mod a été totalement retiré ou
+//    juste décrémenté (pattern existant char-sheet.js — WOUND_*/INVENTORY_*/SOLS_*)
+if (removeResult.deleted) {
+  req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_REMOVED, {
+    characterId, itemId: modInvId,
+  })
+} else {
+  req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, {
+    characterId, item: removeResult.item,
+  })
+}
+req.app.get('io').to(req.character.campaign_id).emit(WS.MOD_INSTALLED, {
+  characterId, weaponInvId, mods: state.weapons.find(w => w.id === weaponInvId)?.installed_mods,
 })
 
-return result
+return state
 ```
+
+**`inventoryService.removeItem` — signature retenue** (Étape 0) : `removeItem(characterId, itemId,
+qtyToRemove, trxOrDb)` → `{ deleted: boolean, item: object|null, itemId }`. Unifie les deux branches
+de la route DELETE actuelle (qui retournent aujourd'hui des formes différentes,
+`{item: updated}` vs `{deleted:true, itemId}`) sous une forme unique exploitable par les deux
+appelants (route DELETE elle-même après refactor, et `modingService.installMod`).
 
 **Correction — événement socket, pas optionnel.** Le plan initial classait la notification
 temps réel comme "optionnel, peut attendre". **Vérifié 2026-07-09** : dans `char-sheet.js`, *toutes*
@@ -306,13 +367,14 @@ WHERE ci.character_id = :characterId
 
 | Étape | Contenu | Dépendance |
 |---|---|---|
-| 0 | Extraction `inventoryService.js` depuis `char-sheet.js` (voir portée détaillée ci-dessus) + non-régression | — |
+| 0 | Extraction `inventoryService.js` depuis `char-sheet.js` (voir portée détaillée ci-dessus, y compris `removeItem` unifié — voir P7) + non-régression | — |
 | 1 | Migration 124 — `char_inventory_mods` | — |
-| 2 | `modingService.js` (`getModingState`/`installMod`), consomme `inventoryService.js` | Étapes 0+1 |
-| 3 | Routes `GET .../moding/state` + `POST .../moding/install` dans `char-sheet.js` (minces, émettent `INVENTORY_REMOVED` + `MOD_INSTALLED`) | Étape 2 |
-| 4 | Ajout `WS.MOD_INSTALLED` dans `shared/events.js` | Étape 3 |
-| 5 | Composant `ModingWindow.jsx` — liste armes + mods | Étape 3 |
-| 6 | Bouton "Customisation" dans la fenêtre Inventaire → ouvre `ModingWindow.jsx` | Étape 5 |
+| 2 | `modingService.js` (`getModingState`/`installMod`), consomme `inventoryService.removeItem` (P7) | Étapes 0+1 |
+| 3 | Ajout `WS.MOD_INSTALLED` dans `shared/events.js` | — |
+| 4 | Routes `GET .../moding/state` + `POST .../moding/install` dans `char-sheet.js` (minces, émettent `INVENTORY_REMOVED`/`INVENTORY_UPDATED` selon P7 + `MOD_INSTALLED`) | Étapes 2+3 |
+| 5 | `client/src/lib/useCharacterSocket.js` — handler `onModInstalled` (pattern lignes 36-44) | Étape 3 |
+| 6 | Composant `ModingWindow.jsx` — liste armes + mods, fenêtre flottante (pattern `TradeWindow.jsx`) | Étape 4 |
+| 7 | `CharacterWindow.jsx` (état `modingOpen`) + `InventoryPanel.jsx` (bouton "Customisation", prop `onOpenModing`) | Étape 6 |
 
 ---
 
@@ -323,8 +385,9 @@ WHERE ci.character_id = :characterId
   serveur ci-dessus)
 - **P2** : Un perso peut avoir plusieurs lignes `char_inventory` pour la même arme (`quantity` > 1) →
   identifier l'arme par `char_inventory.id`, pas `equipment_id`
-- **P3** : La suppression du mod (DELETE `char_inventory`) doit être dans la même transaction que
-  l'INSERT `char_inventory_mods` — sinon état incohérent
+- **P3** : Le retrait du mod de l'inventaire (via `inventoryService.removeItem`, voir P7 — décrément
+  ou suppression selon le stock) doit être dans la même transaction que l'INSERT
+  `char_inventory_mods` — sinon état incohérent (mod dupliqué en cas d'échec partiel)
 - **P4** : ~~Vérifier les droits~~ **Résolu** — `router.param('characterId', ...)` de `char-sheet.js`
   couvre déjà owner/GM/membre de campagne pour toute route montée dans ce fichier. Aucune logique de
   garde supplémentaire à écrire.
@@ -335,6 +398,13 @@ WHERE ci.character_id = :characterId
 - **P6** : Anti-doublon Phase A = un même `equipment_id` ne peut pas être installé deux fois sur la
   même arme. **Ce n'est pas la règle complète du livre** (voir Hors scope — Phase B) — c'est une
   garde-fou minimal, pas une simulation des règles de jeu.
+- **P7** (trouvé 2026-07-09, en planification) : un mod peut être en stack (`char_inventory.quantity
+  > 1` — ex. 2× "Visée laser" achetées, stackées par la route POST inventory existante). `install`
+  ne doit **jamais** faire un `DELETE` inconditionnel sur `modInvId` — sinon toute la pile disparaît
+  pour une seule installation. Doit passer par `inventoryService.removeItem(characterId, modInvId,
+  1, trx)` (décrément d'une unité, suppression de la ligne seulement si le stock atteint 0) et
+  émettre `INVENTORY_UPDATED` (pas `INVENTORY_REMOVED`) si la pile n'est pas épuisée — voir logique
+  serveur corrigée ci-dessus.
 
 ---
 
@@ -383,3 +453,15 @@ le perdre, mais traité comme un chantier à part entière avec son propre plan 
   tranché par cohérence avec la convention existante (`WS.MOD_INSTALLED` dédié, en plus
   d'`INVENTORY_REMOVED`, plutôt que détourner `INVENTORY_UPDATED`). Aucun code écrit — session de
   planification pure.
+- **2026-07-09 (suite 2)** — Saar : "on ne laisse rien au codage". Trois points encore ouverts
+  fermés par lecture directe du code client (toujours aucun code écrit) : **(1) bug trouvé** — la
+  logique `install` d'origine faisait un `DELETE` inconditionnel sur la ligne `char_inventory` du
+  mod, incorrect si `quantity > 1` (stack) ; corrigé en réutilisant `inventoryService.removeItem`
+  (décrément d'1 unité, même sémantique que la route DELETE existante) — nouveau piège **P7**.
+  **(2) mécanisme d'ouverture `ModingWindow`** tranché en lisant `CharacterWindow.jsx`/
+  `InventoryPanel.jsx` : fenêtre flottante (pattern `TradeWindow.jsx`, suffixe "Window" = flottant
+  dans ce projet), état `modingOpen` dans `CharacterWindow.jsx`, bouton dans `InventoryPanel.jsx`
+  via nouvelle prop `onOpenModing`. **(3) rafraîchissement temps réel** tracé jusqu'au mécanisme
+  exact : `client/src/lib/useCharacterSocket.js:36-44` (déjà existant pour `INVENTORY_*`) doit
+  gagner un handler `onModInstalled` suivant le même pattern, sans quoi `WS.MOD_INSTALLED` serait
+  émis dans le vide côté client.

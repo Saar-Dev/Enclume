@@ -6,6 +6,7 @@ import {
   calcSkillTotal, calcAttributeNA, calcREA,
   calcSeuils, calcSouffle, calcResistanceDroguesInput,
 } from '../lib/charStats.js'
+import { getMutationEffects } from '../services/mutationService.js'
 
 export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
   // ─── DICE:ROLL ─────────────────────────────────────────────────────────
@@ -95,16 +96,17 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
       const sheet = await db('char_sheet').where({ character_id: characterId }).first()
       if (!sheet) return
 
-      const [attrs, archetype] = await Promise.all([
+      const [attrs, archetype, mutationEffects] = await Promise.all([
         db('char_attributes').where({ char_sheet_id: sheet.id }),
         db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+        getMutationEffects(sheet.id),
       ])
       const genotypeRow = archetype?.genotype_id
         ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
         : null
 
       // ── 4. Seuil (somme des sources + modificateur fixe) ──────────
-      const na = (attrId) => calcAttributeNA(attrs, attrId, genotypeRow)
+      const na = (attrId) => calcAttributeNA(attrs, attrId, genotypeRow, mutationEffects)
 
       const secondaryValue = (key) => {
         switch (key) {
@@ -126,7 +128,7 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
             db('char_skills').where({ char_sheet_id: sheet.id, skill_id: src.ref_id }).first(),
             db('ref_skills').where({ id: src.ref_id }).first(),
           ])
-          baseThreshold += calcSkillTotal(attrs, charSkill, refSkill, genotypeRow)
+          baseThreshold += calcSkillTotal(attrs, charSkill, refSkill, genotypeRow, mutationEffects)
         } else if (src.type === 'secondary') {
           baseThreshold += secondaryValue(src.ref_id)
         }

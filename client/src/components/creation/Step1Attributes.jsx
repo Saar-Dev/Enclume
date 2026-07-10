@@ -69,6 +69,12 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
 
   const [tooltip, setTooltip] = useState(null)
   const [rulesOpen, setRulesOpen] = useState(false)
+  // Session 141 suite 10 : budget non dépensé = avertissement, pas un blocage dur (G1 non
+  // bloquant, shared/polarisUtils.js). Premier clic sur "Suivant" avec du budget restant affiche
+  // l'avertissement ; un second clic confirme et avance quand même (points perdus). Dérivé de
+  // pointsRestants (pas un booléen + effet) : tout changement de répartition invalide
+  // automatiquement un avertissement déjà affiché, sans cascade de rendu.
+  const [warnedAtValue, setWarnedAtValue] = useState(null)
 
   // Recalculer modPC si on change isFeminin (réinitialise FOR)
   const handleSetFeminin = useCallback((val) => {
@@ -150,7 +156,33 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
 
   const canBuyPc = pcAlloues < PC_MAX_ETAPE1
   const canCancelPc = pcAlloues > 0
-  const canNext = pointsRestants === 0 && charName.trim().length > 0
+  // Seul le nom est un vrai blocage dur — le budget non dépensé n'est qu'un avertissement
+  // (voir budgetWarned/handleNextClick, et validateStep1 côté serveur).
+  const canNext = charName.trim().length > 0
+  const budgetWarned = warnedAtValue === pointsRestants
+
+  const handleNextClick = () => {
+    if (!canNext) return
+    if (pointsRestants !== 0 && !budgetWarned) {
+      setWarnedAtValue(pointsRestants)
+      return
+    }
+    onNext({
+      charName: charName.trim(),
+      playerName: playerName.trim(),
+      attributes: attributs,
+      pcSpent: pcAlloues,
+      isFeminin,
+      height: height === '' ? null : parseFloat(height),
+      weight: weight === '' ? null : parseFloat(weight),
+      skin: skin.trim(),
+      eyes: eyes.trim(),
+      hair: hair.trim(),
+      build: build.trim(),
+      distinctiveSigns: distinctiveSigns.trim(),
+      handPref: handPref || null,
+    })
+  }
 
   const canIncrement = (attrId) => {
     const base = baseAttrs[attrId]
@@ -478,25 +510,17 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
         <button
           className={`wiz-btn-start${hudOk ? ' wiz-btn-start--pulse' : ''}`}
           disabled={!canNext}
-          onClick={() => onNext({
-            charName: charName.trim(),
-            playerName: playerName.trim(),
-            attributes: attributs,
-            pcSpent: pcAlloues,
-            isFeminin,
-            height: height === '' ? null : parseFloat(height),
-            weight: weight === '' ? null : parseFloat(weight),
-            skin: skin.trim(),
-            eyes: eyes.trim(),
-            hair: hair.trim(),
-            build: build.trim(),
-            distinctiveSigns: distinctiveSigns.trim(),
-            handPref: handPref || null,
-          })}
+          onClick={handleNextClick}
         >
           {t('step1.next')} →
         </button>
       </div>
+
+      {budgetWarned && pointsRestants !== 0 && (
+        <p className="wiz1-budget-warning">
+          {t('step1.budget_warning', { n: pointsRestants })}
+        </p>
+      )}
 
       {tooltip && (
         <div

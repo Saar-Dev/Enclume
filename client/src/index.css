@@ -2437,6 +2437,7 @@ Convention :
 .wiz4-prev:hover { border-color: var(--wiz-blue-bright); color: var(--wiz-white); filter: none; }
 .wiz4-status { flex: 1; text-align: center; font: 500 12px 'Inter', sans-serif; color: #e0a85c; }
 .wiz4-status.ok { color: #4a9e5c; }
+.wiz4-alloc-warning { text-align: center; font: 500 12px 'Inter', sans-serif; color: var(--color-warning); margin: 6px 0 0; }
 .wiz4-next {
   font: 600 12px 'Inter', sans-serif;
   color: #fff;
@@ -2882,6 +2883,13 @@ Convention :
   padding: 14px 0;
   border-top: 1px solid rgba(255,255,255,.07);
   margin-top: 4px;
+}
+
+.wiz1-budget-warning {
+  text-align: right;
+  font: 500 12px 'Inter', sans-serif;
+  color: var(--color-warning);
+  margin: 0;
 }
 
 /* ── Tooltip ─────────────────────────────────────────────────────── */

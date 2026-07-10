@@ -40,7 +40,7 @@ import { requireAuth } from '../../middleware/auth.js'
 import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal, calcAttributeNA, calcREA, calcSeuils, calcSouffle, calcResistanceDroguesInput } from '../../lib/charStats.js'
 import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from '../../lib/woundUtils.js'
 import { getAdvantages, addAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
-import { getMutations, addMutation, removeMutation } from '../../services/mutationService.js'
+import { getMutations, addMutation, removeMutation, getMutationEffects } from '../../services/mutationService.js'
 import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
 import { WS } from '../../../../shared/events.js'
 import {
@@ -90,12 +90,13 @@ router.get('/:characterId', async (req, res, next) => {
       return res.json({ sheet: null })
     }
 
-    const [identity, archetype, attributes, skills, settings] = await Promise.all([
+    const [identity, archetype, attributes, skills, settings, mutationEffects] = await Promise.all([
       db('char_identity').where({ char_sheet_id: sheet.id }).first(),
       db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
       db('char_attributes').where({ char_sheet_id: sheet.id }).select('*'),
       db('char_skills').where({ char_sheet_id: sheet.id }).select('*'),
       getCampaignSettings(db, req.character.campaign_id),
+      getMutationEffects(sheet.id),
     ])
 
     res.json({
@@ -105,6 +106,7 @@ router.get('/:characterId', async (req, res, next) => {
       attributes: attributes || [],
       skills:     skills     || [],
       settings,
+      mutationEffects,
     })
   } catch (err) {
     next(err)
@@ -477,9 +479,10 @@ router.post('/:characterId/skills/buy', async (req, res, next) => {
       const skillMinReqs = await db('ref_skill_requirements')
         .where({ skill_id, type: 'SKILL_MIN' })
       if (skillMinReqs.length > 0) {
-        const [attrs, archetype] = await Promise.all([
+        const [attrs, archetype, mutationEffects] = await Promise.all([
           db('char_attributes').where({ char_sheet_id: sheet.id }).select('*'),
           db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+          getMutationEffects(sheet.id),
         ])
         const genotypeRow = archetype?.genotype_id
           ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
@@ -490,7 +493,7 @@ router.post('/:characterId/skills/buy', async (req, res, next) => {
             db('ref_skills').where({ id: req_.value }).first(),
             db('char_skills').where({ char_sheet_id: sheet.id, skill_id: req_.value }).first(),
           ])
-          const total = calcSkillTotal(attrs, prereqCharSkill, prereqRefSkill, genotypeRow)
+          const total = calcSkillTotal(attrs, prereqCharSkill, prereqRefSkill, genotypeRow, mutationEffects)
           if (total < req_.threshold) {
             throw new AppError(400, `Prérequis non satisfait : ${prereqRefSkill?.label ?? req_.value} ${req_.threshold}+ requis (actuel ${total})`)
           }
@@ -879,10 +882,20 @@ router.get('/:characterId/inventory', async (req, res, next) => {
     const sheet = await db('char_sheet').where({ character_id: characterId }).first()
     if (!sheet) return res.json({ items: [], sols: 0, total_weight: 0, ini_penalty: 0, threshold: 0 })
 
-    const forAttr = await db('char_attributes')
-      .where({ char_sheet_id: sheet.id, attr_id: 'FOR' })
-      .first()
-    const forValue = (forAttr?.base_level ?? 7) + (forAttr?.pc_modifier ?? 0)
+    // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations), pas la valeur brute
+    // — corrige PI4 (docs/PLAN_MUTATION2.md Lot 1). encumbrance_enabled/multiplier : options de
+    // campagne, la mécanique existait déjà sans gate (défauts true/3 = comportement préservé).
+    const [attrs, archetype, mutationEffects, settings] = await Promise.all([
+      db('char_attributes').where({ char_sheet_id: sheet.id }).select('*'),
+      db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+      getMutationEffects(sheet.id),
+      getCampaignSettings(db, req.character.campaign_id),
+    ])
+    const genotypeRow = archetype?.genotype_id
+      ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
+      : null
+    const forValue = calcAttributeNA(attrs, 'FOR', genotypeRow, mutationEffects)
+    const multiplier = settings.encumbrance_multiplier
 
     const items = await db('char_inventory')
       .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
@@ -927,8 +940,10 @@ router.get('/:characterId/inventory', async (req, res, next) => {
       return sum + item.ref_weight * item.quantity
     }, 0)
 
-    const threshold  = forValue * 3
-    const iniPenalty = calcEncumbrancePenalty(totalWeight, forValue)
+    const threshold  = forValue * multiplier
+    const iniPenalty = settings.encumbrance_enabled
+      ? calcEncumbrancePenalty(totalWeight, forValue, multiplier)
+      : 0
 
     res.json({
       items,
@@ -965,17 +980,18 @@ router.get('/:characterId/weapon-skill/:weaponInvId', async (req, res, next) => 
     const sheet = await db('char_sheet').where({ character_id: characterId }).first()
     if (!sheet) return res.json(empty)
 
-    const [attrs, charSkill, archetype] = await Promise.all([
+    const [attrs, charSkill, archetype, mutationEffects] = await Promise.all([
       db('char_attributes').where({ char_sheet_id: sheet.id }).select('*'),
       db('char_skills').where({ char_sheet_id: sheet.id, skill_id: skillAssoc.skill_id }).first(),
       db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+      getMutationEffects(sheet.id),
     ])
 
     const genotypeRow = archetype?.genotype_id
       ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
       : null
 
-    const skillTotal = calcSkillTotal(attrs, charSkill, refSkill, genotypeRow)
+    const skillTotal = calcSkillTotal(attrs, charSkill, refSkill, genotypeRow, mutationEffects)
 
     res.json({ skillId: refSkill.id, skillLabel: refSkill.label, skillTotal })
   } catch (err) { next(err) }
@@ -1563,15 +1579,16 @@ router.post('/:characterId/macro-preview', async (req, res, next) => {
     const sheet = await db('char_sheet').where({ character_id: req.params.characterId }).first()
     if (!sheet) return res.json({ threshold: Number(modifier) })
 
-    const [attrs, archetype] = await Promise.all([
+    const [attrs, archetype, mutationEffects] = await Promise.all([
       db('char_attributes').where({ char_sheet_id: sheet.id }),
       db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+      getMutationEffects(sheet.id),
     ])
     const genotypeRow = archetype?.genotype_id
       ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
       : null
 
-    const na = (attrId) => calcAttributeNA(attrs, attrId, genotypeRow)
+    const na = (attrId) => calcAttributeNA(attrs, attrId, genotypeRow, mutationEffects)
 
     const secondaryValue = (key) => {
       switch (key) {
@@ -1594,7 +1611,7 @@ router.post('/:characterId/macro-preview', async (req, res, next) => {
           db('char_skills').where({ char_sheet_id: sheet.id, skill_id: src.ref_id }).first(),
           db('ref_skills').where({ id: src.ref_id }).first(),
         ])
-        baseThreshold += calcSkillTotal(attrs, charSkill, refSkill, genotypeRow)
+        baseThreshold += calcSkillTotal(attrs, charSkill, refSkill, genotypeRow, mutationEffects)
       } else if (src.type === 'secondary') {
         baseThreshold += secondaryValue(src.ref_id)
       }

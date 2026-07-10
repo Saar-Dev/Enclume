@@ -8,6 +8,13 @@
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 
+// Agrégat mod_FOR..PRE + résistances + identité de toutes les mutations actives d'un personnage —
+// char_mutation_effects_view fait déjà la somme + le stacking (migration 109). Null si aucune
+// mutation active (pas de ligne GROUP BY). Voir docs/PLAN_MUTATION2.md Lot 1.
+export async function getMutationEffects(sheetId) {
+  return (await db('char_mutation_effects_view').where({ char_sheet_id: sheetId }).first()) ?? null
+}
+
 export async function getMutations(sheetId) {
   return db('char_mutations as cm')
     .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')

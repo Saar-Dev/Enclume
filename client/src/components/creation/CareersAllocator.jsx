@@ -48,6 +48,7 @@ const initialReducerState = ([initialSkillAllocations, initialProAdvantages, ini
   openedSkills: initialOpenedSkills || [],
   randomPicks: initialRandomPicks || {},
   awaitingRandomRoll: null,
+  warnedAllocSignature: null,
 })
 
 function careersReducer(state, action) {
@@ -130,6 +131,8 @@ function careersReducer(state, action) {
       const updated = careerPicks.map(p => p.blockIndex === action.blockIndex ? { ...p, useAsPoints: !p.useAsPoints } : p)
       return { ...state, randomPicks: { ...state.randomPicks, [action.careerId]: updated } }
     }
+    case 'SET_ALLOC_WARNED':
+      return { ...state, warnedAllocSignature: action.signature }
     case 'PRUNE_RANDOM_PICKS': {
       const randomPicks = {}
       for (const [id, v] of Object.entries(state.randomPicks)) {
@@ -500,8 +503,25 @@ export default function CareersAllocator({
   } else {
     statusKey = 'career_status_ok'; statusOk = true
   }
-  const canNext = selectedCareers.length > 0 && allocationResult.errors.length === 0 &&
-    allocationResult.remaining === 0 && allAdvSpent
+  // Session 141 suite 10 : seul un vrai blocage (aucun métier retenu, dépassement de budget/plafond)
+  // empêche "Suivant" — un solde non dépensé (compétences ou avantages pro) n'est qu'un
+  // avertissement, cf. Step1Attributes.jsx (même pattern, même raisonnement).
+  const hasHardBlock = selectedCareers.length === 0 || allocationResult.errors.length > 0
+  const hasIncomplete = allocationResult.remaining > 0 || !allAdvSpent
+  const canNext = !hasHardBlock
+  // Dérivé (pas d'effet + setState, cf. Step1Attributes.jsx) : toute variation de la répartition
+  // invalide un avertissement déjà affiché.
+  const incompleteSignature = `${allocationResult.remaining}|${allAdvSpent}`
+  const allocWarned = state.warnedAllocSignature === incompleteSignature
+
+  const handleNextClick = () => {
+    if (hasHardBlock) return
+    if (hasIncomplete && !allocWarned) {
+      dispatch({ type: 'SET_ALLOC_WARNED', signature: incompleteSignature })
+      return
+    }
+    onNext()
+  }
 
   return (
     <>
@@ -917,10 +937,13 @@ export default function CareersAllocator({
           <span className={`wiz4-status${statusOk ? ' ok' : ''}`}>
             {t(`step4.${statusKey}`, { n: allocationResult.remaining })}
           </span>
-          <button className={`wiz4-next${canNext ? '' : ' dis'}`} onClick={onNext} disabled={!canNext}>
+          <button className={`wiz4-next${canNext ? '' : ' dis'}`} onClick={handleNextClick} disabled={!canNext}>
             {t('step4.next')}
           </button>
         </div>
+        {allocWarned && hasIncomplete && (
+          <p className="wiz4-alloc-warning">{t('step4.career_alloc_warning')}</p>
+        )}
       </div>
     </div>
     </>

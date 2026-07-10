@@ -10,6 +10,7 @@ import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../sh
 import { evaluateCareerEligibility } from '../../../shared/careerEligibility.js'
 import { computeSkillAllocation, validateChoiceGroups } from '../../../shared/careerSkills.js'
 import { computeProAdvantageAllocation, computeRandomBudgetDelta } from '../../../shared/careerAdvantages.js'
+import { getSetbackBlockCount, resolveSetback } from '../../../shared/careerSetbacks.js'
 import { getAutodidacteEligibleIds, validateAutodidacteAllocations } from '../../../shared/autodidacte.js'
 import { addAdvantage } from './advantageService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -158,7 +159,7 @@ export async function getStep4RefData(sheetId) {
   const sheet = await db('char_sheet').where({ id: sheetId }).first()
   if (!sheet) throw new AppError(404, 'Fiche introuvable')
 
-  const [backgrounds, bgSkills, careers, careerSkills, careerTitles, careerPrereqs, careerPointCats, careerEducation, careerRandomBenefits] = await Promise.all([
+  const [backgrounds, bgSkills, careers, careerSkills, careerTitles, careerPrereqs, careerPointCats, careerEducation, careerRandomBenefits, setbacks] = await Promise.all([
     db('ref_backgrounds').select('*').orderBy(['type', 'sort_order']),
     db('ref_background_skills as rbs')
   .leftJoin('ref_skills as rs', 'rbs.skill_id', 'rs.id')
@@ -170,6 +171,7 @@ export async function getStep4RefData(sheetId) {
     db('ref_career_point_categories').select('*').orderBy('sort_order'),
     db('ref_career_education').select('*'),
     db('ref_career_random_benefits').select('*').orderBy(['career_id', 'roll']),
+    db('ref_setbacks').select('*').orderBy('roll_min'),
   ])
 
   const bgMap = new Map(backgrounds.map(b => [b.id, { ...b, skills: [] }]))
@@ -194,6 +196,7 @@ export async function getStep4RefData(sheetId) {
     trainings: byType('training'),
     higherEds: byType('higher_ed'),
     careers: Array.from(careersMap.values()),
+    setbacks,
   }
 }
 
@@ -261,6 +264,7 @@ export async function startCreation(campaignId, userId) {
       randomMutationsEnabled: settings.random_mutations,
       femininBonusEnabled: settings.feminin_bonus,
       randomProAdvantagesEnabled: settings.random_pro_advantages,
+      reversEnabled: settings.revers,
       skillMaxLevelEnabled: settings.skill_max_level,
       youngPenaltyEnabled: settings.young_penalty,
     }
@@ -387,6 +391,32 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       const { campaign_id: campaignId } = await trx('characters').where({ id: characterId }).select('campaign_id').first()
       const settings = await getCampaignSettings(trx, campaignId)
 
+      // OPT-06 (revers, défaut OFF) — REGLE_CREATION.txt:1190-1199 : déclencheur sur le total
+      // d'années CUMULÉES toutes carrières confondues (pas par métier, contrairement au Tirage
+      // 1D10 d'OPT-05/Lot 6) — calculable immédiatement depuis le payload d'entrée, pas besoin
+      // d'attendre la boucle carrières ci-dessous. Obligatoire (pas de refus) : rejet si une
+      // tranche due n'a pas été jetée. shared/careerSetbacks.js.
+      const totalCareerYears = careersData.reduce((sum, c) => sum + (c.years || 0), 0)
+      const setbackRolls = step4.setbackRolls || []
+      const maxSetbackBlocks = getSetbackBlockCount(totalCareerYears)
+      const setbackRows = await trx('ref_setbacks').select('*')
+      const seenSetbackBlocks = new Set()
+      for (const sb of setbackRolls) {
+        if (!Number.isInteger(sb.blockIndex) || sb.blockIndex < 0 || sb.blockIndex >= maxSetbackBlocks) {
+          throw new AppError(400, 'Revers invalide : tranche hors bornes')
+        }
+        if (seenSetbackBlocks.has(sb.blockIndex)) {
+          throw new AppError(400, 'Revers invalide : tranche déjà jetée')
+        }
+        seenSetbackBlocks.add(sb.blockIndex)
+        if (!resolveSetback(sb.roll, setbackRows)) {
+          throw new AppError(400, `Revers invalide : résultat de jet hors table (${sb.roll})`)
+        }
+      }
+      if (settings.revers && seenSetbackBlocks.size < maxSetbackBlocks) {
+        throw new AppError(400, `Revers obligatoire non résolu : ${maxSetbackBlocks - seenSetbackBlocks.size} tirage(s) manquant(s)`)
+      }
+
       // Reset avant réapplication — char_skills/char_careers ne sont écrits que par ce
       // bloc pendant le Wizard (avant verrouillage) : wipe sûr, pas d'orphelin FK possible.
       await trx('char_skills').where({ char_sheet_id: sheetId }).del()
@@ -407,10 +437,11 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         origin_soc: originSoc,
         training_base: training,
         higher_ed: higherEd || null,
+        setback_rolls: JSON.stringify(setbackRolls),
       })
 
       // Carrières
-      let totalCareerYears = 0
+      // totalCareerYears calculé plus haut (validation Revers) — même somme, réutilisée ici.
       const careersCtx = []
       for (const career of careersData) {
         const refCareer = await trx('ref_careers').where({ id: career.career_id }).first()
@@ -430,7 +461,6 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
           else if (title.salary_formula) salary = evaluateSalaryFormula(title.salary_formula)
         }
         const savings = salary * career.years
-        totalCareerYears += career.years
 
         // Tirage 1D10 (Lot 6) : validé AVANT Q3 — le delta budgétaire qui en résulte est injecté
         // dans computeProAdvantageAllocation ci-dessous. Ignoré (mais toujours validé en forme) pour

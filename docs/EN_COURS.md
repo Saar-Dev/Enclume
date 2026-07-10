@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-09 Session 141 (suite 9)
+> Dernière mise à jour : 2026-07-09 Session 141 (suite 11)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -18,13 +18,19 @@
 > bug **MUT2** corrigé au passage (`GET /char-ref/mutations`). Testé + SR + fonctionnel confirmé
 > Saar (tous les lots). Détail complet : items "48."/"49."/"51."/"52." et `docs/JOURNAL6.md`
 > "Session 141 (suite 6)"/"(suite 7)"/"(suite 9)".
-> **Limite trouvée en testant le Lot D, transférée vers `docs/PLAN_MUTATION2.md` (NOUVEAU)** :
+> **Limite trouvée en testant le Lot D, transférée vers `docs/PLAN_MUTATION2.md`** :
 > ajouter une mutation/avantage n'applique aucun effet mécanique (attributs, résistances,
 > compétences débloquées) — **vérifié aussi jamais fait par le Wizard**, gap architectural
 > pré-existant bien plus large que ce chantier (`calcNA` n'a pas de paramètre mutation, 74/76
-> lignes `ref_advantages` sans effet appliqué). Lot E (`[CS7]`) transféré au même document. Diagnostic
-> complet + 3 pistes non tranchées dans `docs/PLAN_MUTATION2.md` — **session dédiée à venir, lancée
-> par Saar juste après celle-ci.**
+> lignes `ref_advantages` sans effet appliqué). Lot E (`[CS7]`) transféré au même document.
+> **Session 141 (suite 10) — plan affiné avec Saar** : mutations et avantages sont la même famille
+> de problème (moteur d'application unique, deux sources normalisées vers la même forme),
+> découpage retenu en **7 lots par type d'effet** (pas par catalogue source) — Lot 1 Attributs
+> primaires, Lot 2 Attributs secondaires, Lot 3 Résistances, Lot 4 Armure/arme naturelle (le plus
+> lourd — V2 n'a plus de colonnes structurées pour l'arme naturelle, contrairement à l'ancien
+> schéma V1), Lot 5 Déblocage de compétences (`[CS7]` + mapping `muta_XXX` V1→V2 à faire), Lot 6
+> Identité, Lot 7 Narratif/économie. Toujours **aucun code** — diagnostic + architecture
+> uniquement. **Prochaine étape : détailler le Lot 1 ligne-à-ligne avec Saar.**
 > **Chantier Options de campagne (item 41) : `polaris_latent` (OPT-04) ✅ câblée — Session 141
 > (suite 6)** (8/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
 > `skill_prerequisites`, `skill_max_level`, `young_penalty`, `polaris_latent`). **PROCHAINE OPTION À
@@ -37,6 +43,49 @@
 > 141 (suite 5)** — `PLAN_DICEREWORK3.md`, voir détail ci-dessous.
 > **Item 50 (suite de l'item 47, via l'outil de calibration étendu) : bug réel D4 face "4" + roulis
 > aléatoire des dés ✅ CLOS — Session 141 (suite 8)** — voir détail ci-dessous.
+> **Item 53 (hors chantiers ci-dessus) : `docs/PLAN_MODING.md` analysé + corrigé, chantier mis EN
+> PAUSE — Session 141 (suite 11)**. Plan jamais commencé (0% codé) depuis sa rédaction Session 120.
+> Corrigé et scindé en Phase A (rangement inventaire, plan complet, prêt à coder) / Phase B (effet
+> mécanique sur le Test de tir, découpée en 5 lots B1-B5). **B2-B5 dépendent de Tir visé, mécanique
+> combat qui n'existe pas dans le code** (0 référence trouvée). **Nouvelle dette distincte** de
+> `COM9`("Localisation précise") et de "Changer le mode de tir" (mécaniques voisines dans
+> `REGLESYSCOMBAT.md`, mais différentes — vérifié, pas la même règle). **Décision Saar : Tir visé
+> est prioritaire, à planifier avant de
+> reprendre le moding** — chantier entier mis en pause (pas seulement B2-B5). Aucun plan écrit pour
+> Tir visé pour l'instant. Voir détail ci-dessous et `docs/JOURNAL6.md` "Session 141 (suite 11)".
+
+**53. `docs/PLAN_MODING.md` — analyse critique + correction ✅ CLOS, chantier mis EN PAUSE — Session 141 (suite 11) (2026-07-09)**
+   → Session analytique/planification pure — **aucun code écrit**. Plan rédigé Session 120
+     (2026-06-24), jamais commencé depuis (vérifié : 0 migration, 0 service, 0 route, 0 trace
+     `char_inventory_mods`).
+   → **Corrections apportées au plan** : migration renumérotée (86 déjà pris par `trade_offers`) ;
+     routes déplacées dans `char-sheet.js` (réutilise le guard ownership existant au lieu de le
+     réimplémenter) ; référence `REGLEARMURE.md` retirée (mauvaise source — mécas, pas armes
+     portatives, aucune règle de quota trouvée) ; socket `INVENTORY_*` requalifié obligatoire (pas
+     optionnel) ; scope réduit à une **Phase A** (rangement pur, plan complet et corrigé, **prêt à
+     coder**) — **Phase B** (effet mécanique combat) extraite séparément.
+   → **Étape 0 ajoutée à la Phase A** (demande Saar) : extraction `inventoryService.js` depuis
+     `char-sheet.js` (~1900 lignes) avant d'y ajouter le moding — portée exacte vérifiée ligne par
+     ligne (6 routes + 4 helpers), `weapon-skill`/`sols`/drone explicitement exclus, dette
+     `tradeService.js` (duplique déjà `char_inventory` sans socket) repérée mais non traitée.
+   → **"On ne laisse rien au codage" (Saar) — 3 points fermés par lecture directe du code** : bug réel
+     trouvé (DELETE inconditionnel du mod cassait si stack `quantity>1` — nouveau piège **P7**,
+     corrigé via `inventoryService.removeItem`) ; mécanisme d'ouverture `ModingWindow` tranché
+     (fenêtre flottante, pattern `TradeWindow.jsx`) ; rafraîchissement temps réel tracé jusqu'au
+     fichier exact (`useCharacterSocket.js:36-44`, nouveau handler `onModInstalled`).
+   → **Phase B découpée en 5 lots** après recherche dans `REGLESYSCOMBAT.md` + le code combat
+     (`socketCombatHelpers.js:1340`) : seul **Lot B1** (bonus statiques Visée laser + exclusivité
+     "Système de tir assisté") est sans dépendance manquante. **B2 (Lunette de visée) dépend de Tir
+     visé — 0 référence trouvée dans tout `server/src/socket/*`**, nouvelle dette distincte de
+     `COM9`("Localisation précise") et "Changer le mode de tir" (mécaniques voisines dans
+     `REGLESYSCOMBAT.md`, vérifié différentes, pas la même règle). B3 (Analyseur tactique, état par combat), B4
+     (Projecteur de mouvement, malus cible en mouvement inexistant), B5 (Mémoire de cibles/Système
+     réactif autonome, hors sujet moding) également bloqués ou hors scope.
+   → **Décision Saar : Tir visé jugé prioritaire, à planifier comme chantier à part entière avant de
+     reprendre le moding** — `docs/PLAN_MODING.md` mis en pause dans son ensemble (pas seulement les
+     lots dépendants). Aucun plan écrit pour Tir visé pour l'instant.
+   → **Testé** : sans objet (aucun code touché). **Non testé** : sans objet.
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 11)", `docs/PLAN_MODING.md`.
 
 **52. AdvantagesPanel Lot D — mutations octroyées en jeu ✅ CLOS + PLAN_MUTATION2.md créé — Session 141 (suite 9) (2026-07-09)**
    → Périmètre confirmé avec Saar avant code (discussion directe, pas de questionnaire) : MJ
@@ -582,6 +631,7 @@ Projet en cours et priorité user :
 | COM7 | Multi-attaque CaC : duplicata / bouton grisé | Moyenne |
 | COM9 | Viser une localisation précise — non implémenté | Moyenne — sprint dédié |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
+| **TIRVISE** | Tir visé (`REGLESYSCOMBAT.md:1487-1492`, bonus +1/2 pts Initiative sacrifiés, max +5) — non implémenté, **0 référence dans `server/src/socket/*`**. Bloque le Lot B2 de `docs/PLAN_MODING.md` (Lunette de visée). Distinct de `COM9` et de "Changer le mode de tir" — trois mécaniques voisines mais différentes | **Haute — priorité affirmée par Saar, Session 141 (suite 11)** |
 | — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |
 | DR2 | Drone : déplacement absent | Basse — sprint futur |
 | INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
@@ -621,6 +671,9 @@ Projet en cours et priorité user :
 
 ## Roadmap
 
+- **Sprint Tir visé** (`TIRVISE`) — **priorité affirmée par Saar, Session 141 (suite 11)** :
+  mécanique absente du code (`REGLESYSCOMBAT.md:1487-1492`), bloque le Lot B2 de
+  `docs/PLAN_MODING.md`. Aucun plan écrit — à faire avant de reprendre le moding.
 - ~~**Sprint Dégâts Drone**~~ ✅ → B6 (Loc) + B7 (Dmg) — Clos Sessions 94
 - **Sprint Drones 2d** — auto-announcement drone → voir `docs/Old/PLAN_DRONESYSCOMBAT.md`
 - **Sprint Drones 2e** — resolveDroneAutoAction

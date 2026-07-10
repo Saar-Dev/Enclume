@@ -1806,3 +1806,94 @@ une supposition) : **non, le Wizard ne le gère pas non plus.**
 **Non testé** : mutation `is_stackable` ajoutée deux fois via `addMutation()` directement (testé
 seulement en SQL brut plus tôt dans la session) ; parcours navigateur du grisage bouton "Mutations"
 côté joueur vs MJ (confirmé fonctionnel globalement par Saar, pas détaillé scénario par scénario).
+
+---
+
+## Session 141 (suite 11) — 2026-07-09 — PLAN_MODING.md : analyse critique + correction ✅ CLOS, chantier mis en pause
+
+Session **analytique/planification pure — aucun code écrit**. Reprise à froid de
+`docs/PLAN_MODING.md` (rédigé Session 120, 2026-06-24, jamais commencé depuis).
+
+**Vérification d'implémentation demandée par Saar** : 0% du plan existant en base/code — aucune
+migration 86 (le numéro proposé est déjà pris par `86_trade_offers.js`), aucun `modingService.js`,
+aucune route `/moding/*`, aucune trace de `char_inventory_mods`/`installed_mods`. Plan resté à l'état
+papier depuis sa rédaction.
+
+**Analyse critique du plan lui-même (demandée par Saar)** — corrections apportées avant tout code :
+- Migration renumérotée (86 → 124 au moment de l'analyse, puis re-décalée en fin de session — voir
+  plus bas).
+- Routes déplacées dans `char-sheet.js` (réutilise le guard ownership `router.param('characterId', ...)`
+  déjà existant) au lieu d'un router séparé qui l'aurait réimplémenté.
+- `REGLEARMURE.md`, cité par le plan initial pour une éventuelle limite de slots, est **la mauvaise
+  source** (mécas/exo-armures, pas armes portatives) — retiré. Aucune règle de quota trouvée dans les
+  16 lignes réelles `ref_equipment` (family=Armes, category=Accessoires pour armes).
+- Notification socket requalifiée obligatoire (pas "optionnelle" comme écrit initialement) — vérifié
+  que toutes les routes touchant `char_inventory` dans `char-sheet.js` émettent déjà
+  `WS.INVENTORY_*`.
+- **Scope explicitement réduit à une Phase A** (rangement pur — installer/retirer un mod de
+  l'inventaire, aucun effet de jeu) — la **Phase B** (effet mécanique sur le Test de tir) extraite en
+  section dédiée, à planifier séparément (règle "un seul bug/sujet à la fois").
+
+**Étape 0 ajoutée à la Phase A, à la demande de Saar** : `char-sheet.js` fait ~1900 lignes — extraction
+d'un `inventoryService.js` dédié avant d'y ajouter le moding. Portée exacte vérifiée ligne par ligne
+(6 routes + 4 helpers + constantes déplacés ; `weapon-skill`/`sols`/drone explicitement exclus ;
+dette `tradeService.js` — duplique déjà `char_inventory` sans jamais émettre de socket — repérée mais
+non traitée, feature déjà en prod).
+
+**"On ne laisse rien au codage" (Saar)** — trois points encore flous fermés par lecture directe du
+code, pas par supposition :
+1. **Bug réel trouvé** dans ma propre proposition : la logique `install` faisait un `DELETE`
+   inconditionnel sur la ligne `char_inventory` du mod — incorrect si le mod est en stack
+   (`quantity > 1`, ex. 2 "Visée laser" achetées). Corrigé via `inventoryService.removeItem`
+   (décrément d'1 unité, réutilise la sémantique déjà existante de la route DELETE) — nouveau piège
+   **P7** dans le plan.
+2. **Mécanisme d'ouverture `ModingWindow`** tranché en lisant `CharacterWindow.jsx`/
+   `InventoryPanel.jsx` : fenêtre flottante (convention du projet — suffixe "Window" = flottant),
+   état `modingOpen` dans `CharacterWindow.jsx`, bouton "Customisation" dans `InventoryPanel.jsx`
+   (nouvelle prop `onOpenModing`).
+3. **Rafraîchissement temps réel** tracé jusqu'au mécanisme exact : `client/src/lib/
+   useCharacterSocket.js:36-44` (déjà existant pour `INVENTORY_*`) doit gagner un handler
+   `onModInstalled` suivant le même pattern pour le nouvel event `WS.MOD_INSTALLED`.
+
+**Découpage de la Phase B, avec recherche dans `REGLESYSCOMBAT.md` + le code combat existant** :
+formule du Test de tir à distance déjà localisée (`socketCombatHelpers.js:1340`,
+`chancesDeReussite = skillTotal + totalModComp + effectiveMalus - carenceArmure + coverageModifier`,
+`totalModComp` = tableau de modificateurs déjà réutilisable). Mais la majorité des 16 accessoires
+réels dépend de mécaniques absentes du code :
+- **Lot B1** (seul lot sans dépendance manquante) : bonus statiques (Visée laser +2) + exclusivité de
+  sous-famille "Système de tir assisté" (Cyclope PVI/Onarck P/Implant palmaire/Vanguard, 4 objets,
+  on prend le max) — s'accroche directement à `totalModComp`.
+- **Lot B2** (Lunette de visée) : dépend du **Tir visé**, dont **aucune trace n'existe dans
+  `server/src/socket/*`** (grep exhaustif, 0 résultat) — **nouvelle dette, distincte** de `COM9`
+  ("Localisation précise") et de "Changer le mode de tir" : trois mécaniques voisines dans
+  `REGLESYSCOMBAT.md` mais différentes (vérifié par lecture directe, pas une supposition), aucune
+  des trois implémentée.
+- **Lot B3** (Analyseur tactique) : bonus escaladant round par round contre une cible verrouillée —
+  état persistant par combat, pas un modificateur statique.
+- **Lot B4** (Projecteur de mouvement) : réduit un "malus de cible en mouvement" qui n'existe pas non
+  plus dans le calcul actuel (vérifié).
+- **Lot B5** (Mémoire de cibles, Système réactif autonome) : verrouillage IFF / tir automatique sans
+  joueur — mécaniques hors sujet moding.
+- Silencieux/Trépied/Calculateur laser/Harnais mécanisé : aucun bonus de Test de tir — narratif,
+  couvert par le rangement Phase A, rien à faire en Phase B.
+
+**Décision de clôture (Saar)** : Tir visé est un chantier à part entière, **jugé prioritaire par
+Saar** — à planifier et implémenter avant de reprendre le moding, même si Phase A et le Lot B1
+restent techniquement indépendants. **Le chantier `PLAN_MODING.md` est mis en pause dans son
+ensemble** (décision explicite de Saar, pas seulement les lots dépendants). Aucun plan écrit pour Tir
+visé pour l'instant — seulement identifié comme prérequis réel, en plus d'être une dette déjà connue
+(`COM9`, "Changer le mode de tir").
+
+**Dérive de numérotation de migration confirmée en conditions réelles (P53)** : au moment de refermer
+cette session, `124_char_advantage_notes.js`/`125_char_mutations_source_campaign.js`/
+`126_ref_setbacks_revers_table.js` avaient déjà consommé les numéros proposés par le plan quelques
+heures plus tôt dans la même journée (travail parallèle sur `PLAN_ADVANTAGESPANEL.md` Lots C/D et sur
+l'option de campagne `revers`) — `docs/PLAN_MODING.md` mis à jour pour ne pas laisser un numéro de
+migration obsolète, avec rappel explicite de revérifier `ls server/src/db/migrations/` avant tout
+codage futur.
+
+**Testé** : rien à tester — session 100% documentaire/planification, zéro fichier de code touché.
+
+**Non testé** : sans objet.
+
+Détail complet du plan corrigé : `docs/PLAN_MODING.md` (section "Historique des révisions").

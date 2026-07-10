@@ -10,11 +10,15 @@ export default function SectionGameRules({ initialData, onChange }) {
   const [reloadMode, setReloadMode] = useState(initialData.reload_mode ?? 'magazine')
   const [actionTimerSec, setActionTimerSec] = useState(initialData.action_timer_sec ?? 0)
   const [shockAutoStun, setShockAutoStun] = useState(initialData.shock_auto_stun ?? true)
+  const [encumbranceEnabled, setEncumbranceEnabled] = useState(initialData.encumbrance_enabled ?? true)
+  const [encumbranceMultiplier, setEncumbranceMultiplier] = useState(initialData.encumbrance_multiplier ?? 3)
 
   const handlePnjUnlimitedAmmo = (val) => { setPnjUnlimitedAmmo(val); onChange({ pnj_unlimited_ammo: val }) }
   const handleReloadMode = (val) => { setReloadMode(val); onChange({ reload_mode: val }) }
   const handleActionTimerSec = (val) => { setActionTimerSec(val); onChange({ action_timer_sec: val }) }
   const handleShockAutoStun = (val) => { setShockAutoStun(val); onChange({ shock_auto_stun: val }) }
+  const handleEncumbranceEnabled = (val) => { setEncumbranceEnabled(val); onChange({ encumbrance_enabled: val }) }
+  const handleEncumbranceMultiplier = (val) => { setEncumbranceMultiplier(val); onChange({ encumbrance_multiplier: val }) }
 
   return (
     <section style={styles.section}>
@@ -68,6 +72,28 @@ export default function SectionGameRules({ initialData, onChange }) {
         <span style={styles.toggleLabel}>{t('settings.shockAutoStunLabel')}</span>
         <span style={styles.toggleHint}>{t('settings.shockAutoStunHint')}</span>
       </label>
+
+      <label style={{ ...styles.toggleRow, marginTop: 12 }}>
+        <input type="checkbox" checked={encumbranceEnabled}
+          onChange={e => handleEncumbranceEnabled(e.target.checked)}
+          style={styles.checkbox} />
+        <span style={styles.toggleLabel}>{t('settings.encumbranceEnabledLabel')}</span>
+        <span style={styles.toggleHint}>{t('settings.encumbranceEnabledHint')}</span>
+      </label>
+
+      <div style={{ marginTop: 12 }}>
+        <span style={styles.toggleLabel}>{t('settings.encumbranceMultiplierLabel')}</span>
+        <span style={styles.toggleHint}>{t('settings.encumbranceMultiplierHint')}</span>
+        <div style={{ marginTop: 6 }}>
+          <input type="number" min={0.5} step={0.5} value={encumbranceMultiplier}
+            disabled={!encumbranceEnabled}
+            onChange={e => {
+              const val = parseFloat(e.target.value)
+              handleEncumbranceMultiplier(isNaN(val) || val <= 0 ? 3 : val)
+            }}
+            style={{ ...styles.numInput, width: '80px' }} />
+        </div>
+      </div>
     </section>
   )
 }

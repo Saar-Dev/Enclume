@@ -31,7 +31,10 @@ import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import SkillsPanel from './SkillsPanel.jsx'
 import AdvantagesPanel from './AdvantagesPanel.jsx'
-import { polarisRound, calcAN, calcAllureMoy, calcAllures } from '../../../shared/polarisUtils.js'
+import {
+  polarisRound, calcAN, calcAllureMoy, calcAllures,
+  calcNA, getGenotypeModForAttr, getMutationModForAttr,
+} from '../../../shared/polarisUtils.js'
 
 // ─── Constantes métier ────────────────────────────────────────────────────────
 
@@ -68,8 +71,8 @@ const MOD_DOM_TABLE = [
 ]
 
 // ─── Fonctions de calcul ──────────────────────────────────────────────────────
-
-const calcNA = (base, pc, modGen) => Math.max(3, (base || 0) + (pc || 0) + (modGen || 0))
+// calcNA/getGenotypeModForAttr/getMutationModForAttr importées depuis shared/polarisUtils.js —
+// source de calcul unique partagée avec le serveur (docs/PLAN_MUTATION2.md Lot 1).
 
 const calcModDom = (forNA) => {
   if (forNA > 21) return 5 + Math.floor((forNA - 21) / 2)
@@ -155,6 +158,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   // advantages
   const [charAdvantages, setCharAdvantages] = useState([])
 
+  // Agrégat mod_FOR..PRE des mutations actives (char_mutation_effects_view, chargé avec le sheet) —
+  // null si aucune mutation active. Voir docs/PLAN_MUTATION2.md Lot 1.
+  const [mutationEffects, setMutationEffects] = useState(null)
+
   // ─── XP ────────────────────────────────────────────────────────────────────
   const [xpTotal,     setXpTotal]     = useState(0)
   const [xpAvailable, setXpAvailable] = useState(0)
@@ -172,15 +179,20 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   )
 
   const getModGen = useCallback(
-    (attrId) => genotypeData[`mod_${attrId.toLowerCase()}`] || 0,
+    (attrId) => getGenotypeModForAttr(genotypeData, attrId),
     [genotypeData]
+  )
+
+  const getModMut = useCallback(
+    (attrId) => getMutationModForAttr(mutationEffects, attrId),
+    [mutationEffects]
   )
 
   const naMap = useMemo(
     () => Object.fromEntries(
-      ATTR_IDS.map(id => [id, calcNA(attrs[id]?.base, attrs[id]?.pc, getModGen(id))])
+      ATTR_IDS.map(id => [id, calcNA(attrs[id]?.base, attrs[id]?.pc, getModGen(id), getModMut(id))])
     ),
-    [attrs, getModGen]
+    [attrs, getModGen, getModMut]
   )
 
   const anMap = useMemo(
@@ -260,10 +272,11 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
         if (cancelled) return
 
-        const { sheet, identity, archetype, attributes, skills, settings } = sheetRes.data
+        const { sheet, identity, archetype, attributes, skills, settings, mutationEffects } = sheetRes.data
 
         setSheetId(sheet.id)
         setCampaignSettings(settings ?? null)
+        setMutationEffects(mutationEffects ?? null)
         setChc(sheet.chc ?? 11)
         chcRef.current = sheet.chc ?? 11
 

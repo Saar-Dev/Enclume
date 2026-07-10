@@ -23,6 +23,7 @@ export const useCreationStore = create((set, get) => ({
   randomMutationsEnabled: null,
   femininBonusEnabled: null,
   randomProAdvantagesEnabled: null,
+  reversEnabled: null,
   skillMaxLevelEnabled: null,
   youngPenaltyEnabled: null,
 
@@ -49,9 +50,9 @@ export const useCreationStore = create((set, get) => ({
     set({ isStarting: true, startError: null })
     try {
       const res = await api.post('/creation/start', { campaignId })
-      const { sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled, skillMaxLevelEnabled, youngPenaltyEnabled } = res.data
-      set({ sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, isStarting: false })
-      return { sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled, skillMaxLevelEnabled, youngPenaltyEnabled }
+      const { sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled } = res.data
+      set({ sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, isStarting: false })
+      return { sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled }
     } catch (err) {
       const msg = err.response?.data?.error?.message || err.response?.data?.message || `Erreur ${err.response?.status ?? 'réseau'}`
       set({ startError: msg, isStarting: false })
@@ -81,6 +82,7 @@ export const useCreationStore = create((set, get) => ({
     randomMutationsEnabled: null,
     femininBonusEnabled: null,
     randomProAdvantagesEnabled: null,
+    reversEnabled: null,
     skillMaxLevelEnabled: null,
     youngPenaltyEnabled: null,
   }),

@@ -23,6 +23,34 @@ export function calcAN(na) {
   return entry ? entry.an : -4
 }
 
+// ─── Résolution des modificateurs d'attribut (génotype / mutation) ───────────
+// Point de calcul unique partagé client/serveur — voir docs/PLAN_MUTATION2.md Lot 1.
+// ADA/PER absents de ATTR_TO_MUTATION_MOD : aucune mutation ne cible ces deux attributs.
+export const ATTR_TO_GENOTYPE_MOD = { FOR: 'mod_for', CON: 'mod_con', COO: 'mod_coo', ADA: 'mod_ada', PER: 'mod_per', INT: 'mod_int', VOL: 'mod_vol', PRE: 'mod_pre' }
+export const ATTR_TO_MUTATION_MOD = { FOR: 'mod_FOR', CON: 'mod_CON', COO: 'mod_COO', INT: 'mod_INT', VOL: 'mod_VOL', PRE: 'mod_PRE' }
+
+export function getGenotypeModForAttr(genotypeRow, attrId) {
+  if (!genotypeRow) return 0
+  const col = ATTR_TO_GENOTYPE_MOD[attrId]
+  return col ? (genotypeRow[col] ?? 0) : 0
+}
+
+export function getMutationModForAttr(mutationEffectsRow, attrId) {
+  if (!mutationEffectsRow) return 0
+  const col = ATTR_TO_MUTATION_MOD[attrId]
+  return col ? (mutationEffectsRow[col] ?? 0) : 0
+}
+
+// TOTAL_MALUS = 0 en V1 — historique XP non implémenté (voir server/src/lib/charStats.js).
+const TOTAL_MALUS = 0
+
+// Niveau d'Attribut net (na) — plancher 3. Source de vérité pour calcAttributeAN/NA (serveur)
+// et pour l'affichage fiche/combat (client) — un seul calcul, deux consommateurs indépendants.
+export function calcNA(base_level, pc_modifier, mod_genotype, mod_mutation) {
+  const raw = (base_level ?? 7) + (pc_modifier ?? 0) + (mod_genotype ?? 0) + (mod_mutation ?? 0) - TOTAL_MALUS
+  return Math.max(3, raw)
+}
+
 // Allures de déplacement (LdB p.221)
 export function calcAllureMoy(val) {
   if (val <= 5)  return 6
@@ -225,10 +253,10 @@ export function validateStep1(attributs, ambiance, pcDispo, isFeminin) {
   const poolTotal = calcPoolTotal(ambiance, pcDispo);
   const totalCost = calcTotalCost(attributs, isFeminin);
 
-  // G1 : Budget exact
-  if (totalCost !== poolTotal) {
-    erreurs.push(`Budget incorrect : ${totalCost} dépensés sur ${poolTotal} disponibles`);
-  }
+  // G1 : Budget exact — NON bloquant (UI Session 141 suite 10) : un budget non totalement dépensé
+  // ne viole aucune règle (les points restants sont juste perdus), contrairement à G2/G3/G4 qui
+  // sont de vraies bornes de règle. Signalé via budgetIncomplete, jamais dans `erreurs`/`valide`.
+  const budgetIncomplete = totalCost !== poolTotal;
 
   // G2 : PC max
   if (pcDispo > PC_MAX_ETAPE1) {
@@ -261,6 +289,7 @@ export function validateStep1(attributs, ambiance, pcDispo, isFeminin) {
   return {
     valide: erreurs.length === 0,
     erreurs,
+    budgetIncomplete,
     totalCost,
     poolTotal,
   };

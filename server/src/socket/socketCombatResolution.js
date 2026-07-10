@@ -6,6 +6,7 @@ import { getMrTable, getModifier } from '../lib/mrTable.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
 import { calcSkillTotal, calcDroneDegatsNets } from '../lib/charStats.js'
+import { getMutationEffects } from '../services/mutationService.js'
 import { isCaseOccupied, collisionMoveToken } from '../lib/redis.js'
 import { LOCATION_LABELS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
@@ -506,16 +507,17 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       // Terrain instable défenseur PJ — compétence limitative ACROBATIE_EQUILIBRE
       let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
       if (pendingSituationDef.includes('cac_terrain_instable') && char_sheet_id_cible) {
-        const [attrsCibleDef, archetypeCibleDef, acrobatieCharDef, acrobatieRefDef] = await Promise.all([
+        const [attrsCibleDef, archetypeCibleDef, acrobatieCharDef, acrobatieRefDef, mutationEffectsCibleDef] = await Promise.all([
           db('char_attributes').where({ char_sheet_id: char_sheet_id_cible }),
           db('char_archetype').where({ char_sheet_id: char_sheet_id_cible }).first(),
           db('char_skills').where({ char_sheet_id: char_sheet_id_cible, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
           db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
+          getMutationEffects(char_sheet_id_cible),
         ])
         const genoCibleDef = archetypeCibleDef?.genotype_id
           ? await db('ref_genotypes').where({ id: archetypeCibleDef.genotype_id }).first() : null
         acrobatieDefTotal = acrobatieRefDef
-          ? calcSkillTotal(attrsCibleDef, acrobatieCharDef, acrobatieRefDef, genoCibleDef)
+          ? calcSkillTotal(attrsCibleDef, acrobatieCharDef, acrobatieRefDef, genoCibleDef, mutationEffectsCibleDef)
           : defenderSkillTotal
         terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
         chanceDefense += terrainInstableModDef

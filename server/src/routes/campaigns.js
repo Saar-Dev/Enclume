@@ -204,6 +204,9 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
       if (key === 'action_timer_sec' && (!Number.isInteger(value) || value < 0)) {
         throw new AppError(400, 'settings.action_timer_sec doit être un entier ≥ 0')
       }
+      if (key === 'encumbrance_multiplier' && !(value > 0)) {
+        throw new AppError(400, 'settings.encumbrance_multiplier doit être > 0')
+      }
     }
 
     // Merge JSONB atomique côté DB — évite une race condition entre deux sauvegardes concurrentes (pattern PC39)

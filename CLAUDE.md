@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 9) — 2026-07-09
+> Session 141 (suite 11) — 2026-07-09
 
 ---
 
@@ -107,8 +107,38 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 9) (2026-07-09)
+## ÉTAT COURANT — Session 141 (suite 11) (2026-07-09)
 
+- **Session 141 (suite 11) — `docs/PLAN_MODING.md` analysé + corrigé, chantier mis EN PAUSE ✅
+  CLOS.** Session analytique/planification pure, **aucun code écrit**. Plan rédigé Session 120,
+  jamais commencé depuis (0% codé, vérifié). Corrigé (migration renumérotée, routes déplacées dans
+  `char-sheet.js` — réutilise le guard ownership existant, `REGLEARMURE.md` retiré — mauvaise
+  source, mécas pas armes portatives, socket `INVENTORY_*` requalifié obligatoire) et scindé en
+  **Phase A** (rangement inventaire, plan complet, prêt à coder — Étape 0 ajoutée : extraction
+  `inventoryService.js` depuis `char-sheet.js`, portée vérifiée ligne par ligne) / **Phase B** (effet
+  mécanique sur le Test de tir, découpée en 5 lots). "On ne laisse rien au codage" (Saar) : 1 vrai
+  bug trouvé dans ma propre proposition (DELETE inconditionnel du mod cassait en cas de stack —
+  piège **P7**, corrigé), mécanisme d'ouverture `ModingWindow` et rafraîchissement temps réel
+  tranchés par lecture directe du code client. **Phase B** : seul le Lot B1 (bonus statiques) est
+  sans dépendance manquante — B2 (Lunette de visée) dépend de **Tir visé**, mécanique combat
+  totalement absente du code (0 référence, nouvelle dette **TIRVISE**, distincte de `COM9` et
+  "Changer le mode de tir" malgré la proximité dans `REGLESYSCOMBAT.md`). **Décision Saar : Tir visé
+  est prioritaire, chantier moding mis en pause dans son ensemble** en attendant. Détail complet :
+  `docs/JOURNAL6.md` "Session 141 (suite 11)", `docs/PLAN_MODING.md`.
+- **Session 141 (suite 10) — `docs/PLAN_MUTATION2.md` affiné avec Saar (diagnostic + architecture,
+  aucun code).** Décision : mutations et avantages sont la même famille de problème (moteur
+  d'application unique, deux catalogues normalisés vers la même forme), découpage retenu en
+  **7 lots par type d'effet** — Lot 1 Attributs primaires, Lot 2 Attributs secondaires, Lot 3
+  Résistances, Lot 4 Armure/arme naturelle, Lot 5 Déblocage de compétences (`[CS7]`), Lot 6
+  Identité, Lot 7 Narratif/économie. Recherche approfondie cette session : `ref_advantages.
+  mod_attribute` ne cible jamais un attribut primaire (seulement `reaction`/`breath`, des
+  attributs secondaires) — le recoupement mutations/avantages n'est donc réel que sur les
+  résistances (`damage`/`shock`) ; le schéma V2 `ref_mutations` (migration 95) n'a plus de colonnes
+  structurées pour l'arme naturelle (contrairement à l'ancien V1) — Lot 4 est le plus lourd du
+  plan ; `ref_skill_requirements.type='MUTATION'` référence encore d'anciens identifiants V1
+  (`muta_XXX`), un mapping vers les `mutation_id` V2 sera nécessaire pour le Lot 5 (`[CS7]`).
+  **Prochaine étape : détailler le Lot 1 ligne-à-ligne avec Saar.** Détail complet :
+  `docs/PLAN_MUTATION2.md`.
 - **Session 141 (suite 9) — `docs/PLAN_ADVANTAGESPANEL.md` : Lots C+D ✅ CLOS, chantier terminé.**
   **Lot C (notes "Autres")** : conception requise avant plan — discussion directe (pas de
   questionnaire structuré, rappel Saar) sur pourquoi une nouvelle table plutôt que réutiliser le

@@ -18,6 +18,11 @@ export const SETTINGS_SCHEMA = {
   action_timer_sec:      { type: 'number',  default: 0 },
   shock_auto_stun:       { type: 'boolean', default: true },
   allow_los_cancel:      { type: 'boolean', default: false },
+  // Encombrement (règle maison, docs/PLAN_MUTATION2.md Lot 1) — défauts à true/3 : la mécanique
+  // est déjà active sans aucun gate aujourd'hui, un défaut différent changerait silencieusement
+  // le comportement de toutes les campagnes existantes.
+  encumbrance_enabled:    { type: 'boolean', default: true },
+  encumbrance_multiplier: { type: 'number',  default: 3 },
 }
 
 const DEFAULT_SETTINGS = Object.fromEntries(

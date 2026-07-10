@@ -8,6 +8,7 @@ import * as damageService from '../lib/damageService.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
 import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
+import { getMutationEffects } from '../services/mutationService.js'
 import {
   calcSkillTotal, calcAttributeNA, calcREA,
   calcWoundPenalty, calcEncumbrancePenalty,
@@ -369,7 +370,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       if (skillAssoc) skillId = skillAssoc.skill_id
     }
 
-    const [attrsAttaquant, archetypeAttaquant, charSkill, refSkill, woundsAttaquant, invAttaquant, rosterTokens] = await Promise.all([
+    const [attrsAttaquant, archetypeAttaquant, charSkill, refSkill, woundsAttaquant, invAttaquant, rosterTokens, mutationEffectsAttaquant, settings] = await Promise.all([
       db('char_attributes').where({ char_sheet_id: sheetAttaquant.id }),
       db('char_archetype').where({ char_sheet_id: sheetAttaquant.id }).first(),
       db('char_skills').where({ char_sheet_id: sheetAttaquant.id, skill_id: skillId }).first(),
@@ -400,20 +401,24 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
           'c.type as char_type',
           db.raw(`COALESCE(MAX(CASE WHEN re.range ~ '^[0-9]+$' THEN re.range::INTEGER ELSE 0 END), 0) as max_allonge`)
         ),
+      getMutationEffects(sheetAttaquant.id),
+      getCampaignSettings(db, campaignId),
     ])
     const genoAttaquant = archetypeAttaquant?.genotype_id
       ? await db('ref_genotypes').where({ id: archetypeAttaquant.genotype_id }).first()
       : null
 
-    const attackerSkillTotal = refSkill ? calcSkillTotal(attrsAttaquant, charSkill, refSkill, genoAttaquant) : 0
+    const attackerSkillTotal = refSkill ? calcSkillTotal(attrsAttaquant, charSkill, refSkill, genoAttaquant, mutationEffectsAttaquant) : 0
     const woundPenalty = calcWoundPenalty(woundsAttaquant)
-    const forAttr = attrsAttaquant.find(a => a.attr_id === 'FOR')
-    const forValue = (forAttr?.base_level ?? 7) + (forAttr?.pc_modifier ?? 0)
+    // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations) — corrige PI4
+    // (docs/PLAN_MUTATION2.md Lot 1), calculée une fois et réutilisée (modDom/carenceArmure/encombrement).
+    const for_na_attaquant = calcAttributeNA(attrsAttaquant, 'FOR', genoAttaquant, mutationEffectsAttaquant)
     const totalWeight = invAttaquant.reduce((sum, i) =>
       (i.container === 'Coffre' || i.ref_weight == null) ? sum : sum + i.ref_weight * i.quantity, 0
     )
-    const effectiveMalusAttaquant = woundPenalty - calcEncumbrancePenalty(totalWeight, forValue)
-    const for_na_attaquant = calcAttributeNA(attrsAttaquant, 'FOR', genoAttaquant)
+    const effectiveMalusAttaquant = woundPenalty - (settings.encumbrance_enabled
+      ? calcEncumbrancePenalty(totalWeight, for_na_attaquant, settings.encumbrance_multiplier)
+      : 0)
     const equippedAttaquant = invAttaquant.filter(i => i.slot != null)
     const carenceAttaquant  = calcCarenceArmure(equippedAttaquant, for_na_attaquant)
     const modDom = getModDom(for_na_attaquant)
@@ -450,7 +455,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
         db('char_skills').where({ char_sheet_id: sheetAttaquant.id, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
       ])
       acrobatieTotal = acrobatieRefSkill
-        ? calcSkillTotal(attrsAttaquant, acrobatieCharSkill, acrobatieRefSkill, genoAttaquant)
+        ? calcSkillTotal(attrsAttaquant, acrobatieCharSkill, acrobatieRefSkill, genoAttaquant, mutationEffectsAttaquant)
         : attackerSkillTotal
       terrainInstableMod = Math.min(0, acrobatieTotal - attackerSkillTotal)
     }
@@ -529,7 +534,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       char_sheet_id_cible = sheetCible.id
 
       // Round 1 — parallèle : données défenseur + armes de contact équipées
-      const [attrsCible, archetypeCible, woundsCible, invCible, defContactWeapons] = await Promise.all([
+      const [attrsCible, archetypeCible, woundsCible, invCible, defContactWeapons, mutationEffectsCible] = await Promise.all([
         db('char_attributes').where({ char_sheet_id: sheetCible.id }),
         db('char_archetype').where({ char_sheet_id: sheetCible.id }).first(),
         db('character_wounds').where({ char_sheet_id: sheetCible.id }),
@@ -544,6 +549,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
           .whereIn('char_inventory.slot', ['MD', 'MG', '2M'])
           .where('ref_equipment.category', 'Arme de contact')
           .select('char_inventory.slot', 'char_inventory.equipment_id'),
+        getMutationEffects(sheetCible.id),
       ])
 
       // B1 — compétence défenseur selon arme équipée (priorité main directrice)
@@ -564,19 +570,20 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
           : Promise.resolve(null),
       ])
 
-      for_na_cible = calcAttributeNA(attrsCible, 'FOR', genoCible)
-      con_na_cible = calcAttributeNA(attrsCible, 'CON', genoCible)
-      vol_na_cible = calcAttributeNA(attrsCible, 'VOL', genoCible)
+      for_na_cible = calcAttributeNA(attrsCible, 'FOR', genoCible, mutationEffectsCible)
+      con_na_cible = calcAttributeNA(attrsCible, 'CON', genoCible, mutationEffectsCible)
+      vol_na_cible = calcAttributeNA(attrsCible, 'VOL', genoCible, mutationEffectsCible)
 
-      if (refSkillDef) defenderSkillTotal = calcSkillTotal(attrsCible, charSkillDef, refSkillDef, genoCible)
+      if (refSkillDef) defenderSkillTotal = calcSkillTotal(attrsCible, charSkillDef, refSkillDef, genoCible, mutationEffectsCible)
 
       const woundPenaltyDef = calcWoundPenalty(woundsCible)
-      const forAttrDef = attrsCible.find(a => a.attr_id === 'FOR')
-      const forValueDef = (forAttrDef?.base_level ?? 7) + (forAttrDef?.pc_modifier ?? 0)
+      // for_na_cible déjà calculé ci-dessus (calcAttributeNA) — corrige PI4, plus de valeur brute séparée
       const totalWeightDef = invCible.reduce((sum, i) =>
         (i.container === 'Coffre' || i.ref_weight == null) ? sum : sum + i.ref_weight * i.quantity, 0
       )
-      defenderEffectiveMalus = woundPenaltyDef - calcEncumbrancePenalty(totalWeightDef, forValueDef)
+      defenderEffectiveMalus = woundPenaltyDef - (settings.encumbrance_enabled
+        ? calcEncumbrancePenalty(totalWeightDef, for_na_cible, settings.encumbrance_multiplier)
+        : 0)
     }
 
     const commonPending = {
@@ -625,16 +632,17 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       // attrsCible/genoCible hors scope (déclarés dans if(sheetCible)) → re-fetch conditionnel
       let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
       if ((confirmedModifiers?.situationDef ?? []).includes('cac_terrain_instable') && char_sheet_id_cible) {
-        const [attrsDef, archetypeDef, acrobatieCharDef, acrobatieRefDef] = await Promise.all([
+        const [attrsDef, archetypeDef, acrobatieCharDef, acrobatieRefDef, mutationEffectsDef] = await Promise.all([
           db('char_attributes').where({ char_sheet_id: char_sheet_id_cible }),
           db('char_archetype').where({ char_sheet_id: char_sheet_id_cible }).first(),
           db('char_skills').where({ char_sheet_id: char_sheet_id_cible, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
           db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
+          getMutationEffects(char_sheet_id_cible),
         ])
         const genoDef = archetypeDef?.genotype_id
           ? await db('ref_genotypes').where({ id: archetypeDef.genotype_id }).first() : null
         acrobatieDefTotal = acrobatieRefDef
-          ? calcSkillTotal(attrsDef, acrobatieCharDef, acrobatieRefDef, genoDef)
+          ? calcSkillTotal(attrsDef, acrobatieCharDef, acrobatieRefDef, genoDef, mutationEffectsDef)
           : defenderSkillTotal
         terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
         chanceDefense += terrainInstableModDef
@@ -1093,19 +1101,20 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       : null
     const formula = weapon.effective_formula.replace(/\s/g, '')
 
-    // Helper : fetch attributs NA cible avec genotype
+    // Helper : fetch attributs NA cible avec genotype + mutations
     const fetchCibleNA = async (charId, sheetId) => {
-      const [attrsCible, archetypeCible] = await Promise.all([
+      const [attrsCible, archetypeCible, mutationEffectsCible] = await Promise.all([
         db('char_attributes').where({ char_sheet_id: sheetId }),
         db('char_archetype').where({ char_sheet_id: sheetId }).first(),
+        getMutationEffects(sheetId),
       ])
       const genoCible = archetypeCible?.genotype_id
         ? await db('ref_genotypes').where({ id: archetypeCible.genotype_id }).first()
         : null
       return {
-        for_na: calcAttributeNA(attrsCible, 'FOR', genoCible),
-        con_na: calcAttributeNA(attrsCible, 'CON', genoCible),
-        vol_na: calcAttributeNA(attrsCible, 'VOL', genoCible),
+        for_na: calcAttributeNA(attrsCible, 'FOR', genoCible, mutationEffectsCible),
+        con_na: calcAttributeNA(attrsCible, 'CON', genoCible, mutationEffectsCible),
+        vol_na: calcAttributeNA(attrsCible, 'VOL', genoCible, mutationEffectsCible),
       }
     }
 
@@ -1287,8 +1296,12 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       ? await db('char_sheet').where({ character_id: character.id }).first()
       : null
 
+    // Options de campagne — fetch unique réutilisé pour l'encombrement (ci-dessous) et le
+    // décompte munitions PNJ (plus loin dans cette fonction, évite un second fetch identique).
+    const settings = await getCampaignSettings(db, campaignId)
+
     if (sheetTireur) {
-      const [attrsTireur, archetypeTireur, skillAssoc, woundsTireur, invTireur] = await Promise.all([
+      const [attrsTireur, archetypeTireur, skillAssoc, woundsTireur, invTireur, mutationEffectsTireur] = await Promise.all([
         db('char_attributes').where({ char_sheet_id: sheetTireur.id }),
         db('char_archetype').where({ char_sheet_id: sheetTireur.id }).first(),
         db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first(),
@@ -1300,6 +1313,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
             'char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
             'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str',
           ),
+        getMutationEffects(sheetTireur.id),
       ])
 
       const genoTireur = archetypeTireur?.genotype_id
@@ -1311,19 +1325,20 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           db('ref_skills').where({ id: skillAssoc.skill_id }).first(),
           db('char_skills').where({ char_sheet_id: sheetTireur.id, skill_id: skillAssoc.skill_id }).first(),
         ])
-        if (refSkill) skillTotal = calcSkillTotal(attrsTireur, charSkill, refSkill, genoTireur)
+        if (refSkill) skillTotal = calcSkillTotal(attrsTireur, charSkill, refSkill, genoTireur, mutationEffectsTireur)
       }
 
       const woundPenalty = calcWoundPenalty(woundsTireur)
-      const forAttr = attrsTireur.find(a => a.attr_id === 'FOR')
-      const forValue = (forAttr?.base_level ?? 7) + (forAttr?.pc_modifier ?? 0)  // PI4
+      // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations) — corrige PI4
+      const for_na_tireur = calcAttributeNA(attrsTireur, 'FOR', genoTireur, mutationEffectsTireur)
       const totalWeight = invTireur.reduce((sum, i) => {
         if (i.container === 'Coffre' || i.ref_weight == null) return sum
         return sum + i.ref_weight * i.quantity
       }, 0)
-      effectiveMalus = woundPenalty - calcEncumbrancePenalty(totalWeight, forValue)
+      effectiveMalus = woundPenalty - (settings.encumbrance_enabled
+        ? calcEncumbrancePenalty(totalWeight, for_na_tireur, settings.encumbrance_multiplier)
+        : 0)
 
-      const for_na_tireur = calcAttributeNA(attrsTireur, 'FOR', genoTireur)
       const equippedTireur = invTireur.filter(i => i.slot != null)
       carenceArmure = calcCarenceArmure(equippedTireur, for_na_tireur)
     }
@@ -1384,11 +1399,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // Skip pour les PNJ si pnj_unlimited_ammo = true (option campagne).
     if (action.weapon_inv_id && weapon.ammo_remaining !== null && weapon.ammo_remaining !== undefined) {
       const isPnj = character.type === 'pnj'
-      let skipDecrement = false
-      if (isPnj) {
-        const settings = await getCampaignSettings(db, campaignId)
-        skipDecrement = settings.pnj_unlimited_ammo
-      }
+      const skipDecrement = isPnj && settings.pnj_unlimited_ammo
       if (!skipDecrement) {
         const bulletsFired = action.bullet_count ?? 1
         const newRemaining = Math.max(0, weapon.ammo_remaining - bulletsFired)
@@ -1409,16 +1420,17 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           const sheetCible = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
           if (sheetCible) {
             char_sheet_id_cible = sheetCible.id
-            const [attrsCible, archetypeCible] = await Promise.all([
+            const [attrsCible, archetypeCible, mutationEffectsCible] = await Promise.all([
               db('char_attributes').where({ char_sheet_id: sheetCible.id }),
               db('char_archetype').where({ char_sheet_id: sheetCible.id }).first(),
+              getMutationEffects(sheetCible.id),
             ])
             const genoCible = archetypeCible?.genotype_id
               ? await db('ref_genotypes').where({ id: archetypeCible.genotype_id }).first()
               : null
-            for_na_cible = calcAttributeNA(attrsCible, 'FOR', genoCible)
-            con_na_cible = calcAttributeNA(attrsCible, 'CON', genoCible)
-            vol_na_cible = calcAttributeNA(attrsCible, 'VOL', genoCible)
+            for_na_cible = calcAttributeNA(attrsCible, 'FOR', genoCible, mutationEffectsCible)
+            con_na_cible = calcAttributeNA(attrsCible, 'CON', genoCible, mutationEffectsCible)
+            vol_na_cible = calcAttributeNA(attrsCible, 'VOL', genoCible, mutationEffectsCible)
           }
         }
       }

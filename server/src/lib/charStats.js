@@ -12,12 +12,9 @@
  */
 
 import { WOUND_PENALTIES } from '../../../shared/woundConstants.js'
-import { polarisRound } from '../../../shared/polarisUtils.js'
-
-// ─── Constante V1 ─────────────────────────────────────────────────────────────
-// TOTAL_MALUS = 0 en V1 — le système d'historique XP n'est pas implémenté.
-// PC2 : toujours passer cette constante explicitement dans calcNA.
-const TOTAL_MALUS = 0
+import {
+  polarisRound, calcAN, getGenotypeModForAttr, getMutationModForAttr, calcNA,
+} from '../../../shared/polarisUtils.js'
 
 // ─── Labels complets des attributs (LdB p.112-113) ───────────────────────────
 // Utilisés pour l'affichage dans le chat (jets de dés, résultats interactions).
@@ -45,34 +42,7 @@ export const ATTR_DESCRIPTIONS = {
   PRE: "La Présence (PRE) est une mesure de l'aura dégagée par une personne, de son charisme.",
 }
 
-// ─── Mapping attr_id → colonne mod_* dans ref_genotypes ──────────────────────
-// Permet de lire le modificateur génotype pour un attribut donné.
-const ATTR_TO_GENOTYPE_MOD = {
-  FOR: 'mod_for',
-  CON: 'mod_con',
-  COO: 'mod_coo',
-  ADA: 'mod_ada',
-  PER: 'mod_per',
-  INT: 'mod_int',
-  VOL: 'mod_vol',
-  PRE: 'mod_pre',
-}
-
-// ─── Table Aptitude Naturelle (LdB p.114) ────────────────────────────────────
-const AN_TABLE = [
-  { min: -Infinity, max: 2,  an: -4 },
-  { min: 3,  max: 3,  an: -4 },
-  { min: 4,  max: 4,  an: -3 },
-  { min: 5,  max: 5,  an: -2 },
-  { min: 6,  max: 7,  an: -1 },
-  { min: 8,  max: 9,  an:  0 },
-  { min: 10, max: 12, an:  1 },
-  { min: 13, max: 15, an:  2 },
-  { min: 16, max: 18, an:  3 },
-  { min: 19, max: 21, an:  4 },
-  { min: 22, max: 24, an:  5 },
-  { min: 25, max: Infinity, an: 6 },
-]
+// ATTR_TO_GENOTYPE_MOD / AN_TABLE importées depuis shared/polarisUtils.js (source unique).
 
 // ─── Table Modificateur de Dommages — corps à corps (LdB p.113) ──────────────
 const MOD_DOM_TABLE = [
@@ -184,48 +154,35 @@ export function lookupTable(table, value, prop) {
 }
 
 // ─── Calculs attributs ────────────────────────────────────────────────────────
+// getGenotypeModForAttr / calcNA / calcAN importées depuis shared/polarisUtils.js —
+// source de calcul unique partagée avec le client (docs/PLAN_MUTATION2.md Lot 1).
 
-export function getGenotypeModForAttr(genotypeRow, attrId) {
-  if (!genotypeRow) return 0
-  const col = ATTR_TO_GENOTYPE_MOD[attrId]
-  if (!col) return 0
-  return genotypeRow[col] ?? 0
-}
-
-export function calcNA(base_level, pc_modifier, mod_genotype) {
-  const raw = (base_level ?? 7) + (pc_modifier ?? 0) + (mod_genotype ?? 0) - TOTAL_MALUS
-  return Math.max(3, raw)
-}
-
-export function calcAN(na) {
-  const result = lookupTable(AN_TABLE, na, 'an')
-  return result ?? 0
-}
-
-export function calcAttributeAN(attrs, attrId, genotypeRow) {
+export function calcAttributeAN(attrs, attrId, genotypeRow, mutationEffectsRow) {
   const attrRow = (attrs || []).find(a => a.attr_id === attrId)
   if (!attrRow) return 0
   const modGen = getGenotypeModForAttr(genotypeRow, attrId)
-  const na = calcNA(attrRow.base_level, attrRow.pc_modifier, modGen)
+  const modMut = getMutationModForAttr(mutationEffectsRow, attrId)
+  const na = calcNA(attrRow.base_level, attrRow.pc_modifier, modGen, modMut)
   return calcAN(na)
 }
 
-export function calcAttributeNA(attrs, attrId, genotypeRow) {
+export function calcAttributeNA(attrs, attrId, genotypeRow, mutationEffectsRow) {
   const attrRow = (attrs || []).find(a => a.attr_id === attrId)
   if (!attrRow) return 3
   const modGen = getGenotypeModForAttr(genotypeRow, attrId)
-  return calcNA(attrRow.base_level, attrRow.pc_modifier, modGen)
+  const modMut = getMutationModForAttr(mutationEffectsRow, attrId)
+  return calcNA(attrRow.base_level, attrRow.pc_modifier, modGen, modMut)
 }
 
 // ─── Calcul compétences ───────────────────────────────────────────────────────
 
-export function calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow) {
+export function calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow, mutationEffectsRow) {
   if (!refSkill) return 0
   if (!refSkill.attr_1) return 0
 
-  const an1 = calcAttributeAN(attrs, refSkill.attr_1, genotypeRow)
+  const an1 = calcAttributeAN(attrs, refSkill.attr_1, genotypeRow, mutationEffectsRow)
   const an2 = refSkill.attr_2
-    ? calcAttributeAN(attrs, refSkill.attr_2, genotypeRow)
+    ? calcAttributeAN(attrs, refSkill.attr_2, genotypeRow, mutationEffectsRow)
     : an1
 
   const base = an1 + an2
@@ -367,13 +324,18 @@ export function calcWoundPenalty(wounds) {
 
 /**
  * Malus INI encombrement — chaque kg au-dessus du seuil réduit l'initiative de 1.
- * Seuil = FOR × 3. Items dans 'Coffre' exclus du calcul.
+ * Seuil = FOR nette × multiplier (option de campagne encumbrance_multiplier, défaut 3).
+ * Items dans 'Coffre' exclus du calcul. Voir docs/PLAN_MUTATION2.md Lot 1 (option
+ * encumbrance_enabled — gérée par l'appelant, pas ici : si désactivée, ne pas appeler cette
+ * fonction et utiliser 0 directement).
  * @param {number} totalWeight — poids total porté (kg)
- * @param {number} forValue    — valeur FOR nette (base_level + pc_modifier)
+ * @param {number} forValue    — valeur FOR nette (calcAttributeNA — base_level + pc_modifier +
+ *                                mod_genotype + mod_mutation)
+ * @param {number} [multiplier=3] — settings.encumbrance_multiplier de la campagne
  * @returns {number} malus positif (à soustraire de l'INI)
  */
-export function calcEncumbrancePenalty(totalWeight, forValue) {
-  const threshold = forValue * 3
+export function calcEncumbrancePenalty(totalWeight, forValue, multiplier = 3) {
+  const threshold = forValue * multiplier
   return Math.max(0, Math.ceil(totalWeight - threshold))
 }
 

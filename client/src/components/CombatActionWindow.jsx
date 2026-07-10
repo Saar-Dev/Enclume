@@ -2,7 +2,9 @@ import { useState, useEffect, useRef, useReducer } from 'react'
 import { declarationReducer, DECLARATION_INITIAL } from '../lib/declarationReducer'
 import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
-import { calcAN, calcAllures } from '../../../shared/polarisUtils.js'
+import {
+  calcAN, calcAllures, calcNA, getGenotypeModForAttr, getMutationModForAttr,
+} from '../../../shared/polarisUtils.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
@@ -177,14 +179,17 @@ export default function CombatActionWindow({
           api.get('/char-ref/genotypes'),
         ])
         if (cancelled) return
-        const { archetype, attributes, skills } = sheetRes.data
-        const genotype = genoRes.data.genotypes?.find(g => g.id === archetype?.genotype_id) || {}
-        const findAttr = (id) => attributes?.find(a => a.attr_id === id) || {}
-        const calcNA = (id, modField) => Math.max(3,
-          (findAttr(id).base_level ?? 7) + (findAttr(id).pc_modifier ?? 0) + (genotype[modField] || 0)
+        const { archetype, attributes, skills, mutationEffects } = sheetRes.data
+        const genotype = genoRes.data.genotypes?.find(g => g.id === archetype?.genotype_id) || null
+        const findAttr = (id) => attributes?.find(a => a.attr_id === id)
+        const attrNA = (id) => calcNA(
+          findAttr(id)?.base_level,
+          findAttr(id)?.pc_modifier,
+          getGenotypeModForAttr(genotype, id),
+          getMutationModForAttr(mutationEffects, id)
         )
-        const coo_na = calcNA('COO', 'mod_coo')
-        const for_na = calcNA('FOR', 'mod_for')
+        const coo_na = attrNA('COO')
+        const for_na = attrNA('FOR')
         const mastery = skills?.find(s => s.skill_id === 'ATHLETISME')?.mastery ?? 0
         const athletisme_total = calcAN(for_na) + calcAN(coo_na) + mastery
         if (!cancelled) setAllures(calcAllures(coo_na, athletisme_total))

@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next'
 import AgeSelector from './AgeSelector'
 import BackgroundSelector from './BackgroundSelector'
 import CareersAllocator from './CareersAllocator'
+import SetbacksAllocator from './SetbacksAllocator'
 import { BG_META } from './backgroundMeta'
 import Step4Summary from './Step4Summary'
 import { useCreationStore } from '../../stores/creationStore'
+import { getSetbackBlockCount } from '../../../../shared/careerSetbacks.js'
 import api from '../../lib/api'
 
 const enrichBg = (bg) => ({ ...bg, ...(BG_META[bg.code] ?? {}) })
@@ -17,6 +19,7 @@ const SUB_STEPS = {
   TRAINING: 'training',
   HIGHER_ED: 'higher_ed',
   CAREERS: 'careers',
+  SETBACKS: 'setbacks',
   SUMMARY: 'summary',
 }
 
@@ -24,7 +27,7 @@ const SUB_STEP_ORDER = Object.values(SUB_STEPS)
 
 export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }) {
   const { t } = useTranslation('creation')
-  const { sheetId, step1Data, step2Data, randomProAdvantagesEnabled, skillMaxLevelEnabled, youngPenaltyEnabled } = useCreationStore()
+  const { sheetId, step1Data, step2Data, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled } = useCreationStore()
   const [subStep, setSubStep] = useState(initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [highestSubStep, setHighestSubStep] = useState(() => initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [age, setAge] = useState(initialData?.age ?? 16)
@@ -42,13 +45,15 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   const [proAdvantages, setProAdvantages] = useState(initialData?.proAdvantages ?? {})
   const [openedSkills, setOpenedSkills] = useState(initialData?.openedSkills ?? [])
   const [randomPicks, setRandomPicks] = useState(initialData?.randomPicks ?? {})
-  const [refData, setRefData] = useState({ loading: true, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [] })
+  const [setbackRolls, setSetbackRolls] = useState(initialData?.setbackRolls ?? [])
+  const [refData, setRefData] = useState({ loading: true, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [], setbacks: [] })
   const [refSkills, setRefSkills] = useState([])
 
   const handleSkillAllocationsChange = useCallback((next) => setSkillAllocations(next), [])
   const handleProAdvantagesChange = useCallback((next) => setProAdvantages(next), [])
   const handleOpenedSkillsChange = useCallback((next) => setOpenedSkills(next), [])
   const handleRandomPicksChange = useCallback((next) => setRandomPicks(next), [])
+  const handleSetbackRollsChange = useCallback((next) => setSetbackRolls(next), [])
 
   useEffect(() => {
     if (!sheetId) return
@@ -60,8 +65,9 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
         trainings: res.data.trainings ?? [],
         higherEds: res.data.higherEds ?? [],
         careers: res.data.careers ?? [],
+        setbacks: res.data.setbacks ?? [],
       }))
-      .catch(() => setRefData({ loading: false, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [] }))
+      .catch(() => setRefData({ loading: false, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [], setbacks: [] }))
     api.get('/char-ref/skills')
       .then(res => setRefSkills(res.data.skills ?? []))
       .catch(() => setRefSkills([]))
@@ -85,9 +91,18 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   const selectedHigherEdItem = filteredHigherEds.find(h => h.code === higherEd) || null
 
   // ─── PC calculés ───────────────────────────────────────────────
-  const totalPC = (higherEd ? 1 : 0) + careers.reduce((sum, c) => sum + c.years, 0)
+  const totalCareerYears = careers.reduce((sum, c) => sum + c.years, 0)
+  const totalPC = (higherEd ? 1 : 0) + totalCareerYears
   const remainingPC = pcDispo - totalPC
-  const finalAge = age + (selectedHigherEdItem?.years_added ?? 0) + careers.reduce((sum, c) => sum + c.years, 0)
+  const finalAge = age + (selectedHigherEdItem?.years_added ?? 0) + totalCareerYears
+
+  // ─── OPT-06 (revers) — total cumulé, pas par carrière (shared/careerSetbacks.js) ───
+  const setbackBlockCount = getSetbackBlockCount(totalCareerYears)
+  const showSetbacks = !!reversEnabled && setbackBlockCount > 0
+  // Dérivé (pas d'effet + setState) : si le joueur revient sur Carrières et réduit le total
+  // d'années, une tranche déjà jetée peut devenir hors bornes — filtrée ici plutôt que purgée en
+  // état, SetbacksAllocator se remonte avec cette valeur à chaque retour sur la sous-step.
+  const validSetbackRolls = setbackRolls.filter(r => r.blockIndex < setbackBlockCount)
 
   // ─── Handlers ──────────────────────────────────────────────────
   const handleSelectGeoOrigin = (code) => {
@@ -193,6 +208,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   skillAllocations,
   openedSkills,
   autodidacteAllocations,
+  setbackRolls: validSetbackRolls,
   pcSpent: totalPC,
   appliedSkills: Object.values(conditionalChoices),
 }
@@ -218,6 +234,10 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
       advanceSubStep(SUB_STEPS.CAREERS)
       return
     }
+    if (subStep === SUB_STEPS.CAREERS && !showSetbacks) {
+      advanceSubStep(SUB_STEPS.SUMMARY)
+      return
+    }
     if (idx < SUB_STEP_ORDER.length - 1) {
       advanceSubStep(SUB_STEP_ORDER[idx + 1])
     }
@@ -227,6 +247,10 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
     const idx = SUB_STEP_ORDER.indexOf(subStep)
     if (subStep === SUB_STEPS.CAREERS && !showHigherEd) {
       setSubStep(SUB_STEPS.TRAINING)
+      return
+    }
+    if (subStep === SUB_STEPS.SUMMARY && !showSetbacks) {
+      setSubStep(SUB_STEPS.CAREERS)
       return
     }
     if (idx > 0) {
@@ -243,7 +267,9 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
         {SUB_STEP_ORDER.map(ss => {
           const isActive = subStep === ss
           const isReachable = SUB_STEP_ORDER.indexOf(ss) <= SUB_STEP_ORDER.indexOf(highestSubStep)
-          const isClickable = isReachable && !isActive && (ss !== SUB_STEPS.HIGHER_ED || showHigherEd)
+          const isClickable = isReachable && !isActive
+            && (ss !== SUB_STEPS.HIGHER_ED || showHigherEd)
+            && (ss !== SUB_STEPS.SETBACKS || showSetbacks)
           return (
             <span
               key={ss}
@@ -392,6 +418,17 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
     onRandomPicksChange={handleRandomPicksChange}
     randomProAdvantagesEnabled={randomProAdvantagesEnabled}
     skillMaxLevelEnabled={skillMaxLevelEnabled}
+  />
+)}
+
+{subStep === SUB_STEPS.SETBACKS && (
+  <SetbacksAllocator
+    totalYears={totalCareerYears}
+    setbackRows={refData.setbacks}
+    initialRolls={validSetbackRolls}
+    onRollsChange={handleSetbackRollsChange}
+    onNext={handleSubNext}
+    onPrev={handleSubPrev}
   />
 )}
 

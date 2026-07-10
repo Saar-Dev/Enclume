@@ -8,6 +8,8 @@ import {
   calcWoundPenalty, calcEncumbrancePenalty,
   ATTR_LABELS,
 } from '../lib/charStats.js'
+import { getMutationEffects } from '../services/mutationService.js'
+import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import {
   isCaseOccupied,
   collisionMoveToken,
@@ -220,7 +222,7 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
           : null
 
         if (sheet) {
-          const [attrs, archetype, charSkillRow, refSkill] = await Promise.all([
+          const [attrs, archetype, charSkillRow, refSkill, mutationEffects, settings] = await Promise.all([
             db('char_attributes').where({ char_sheet_id: sheet.id }),
             db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
             pending.skillId
@@ -229,6 +231,8 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
             pending.skillId
               ? db('ref_skills').where({ id: pending.skillId }).first()
               : Promise.resolve(null),
+            getMutationEffects(sheet.id),
+            getCampaignSettings(db, pending.campaignId),
           ])
 
           const genotypeRow = archetype?.genotype_id
@@ -236,10 +240,10 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
             : null
 
           if (pending.skillId && refSkill) {
-            mechanicalTotal = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)
+            mechanicalTotal = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow, mutationEffects)
             formulaLabel = refSkill.label || pending.skillId
           } else if (pending.attributeId) {
-            mechanicalTotal = calcAttributeAN(attrs, pending.attributeId, genotypeRow)
+            mechanicalTotal = calcAttributeAN(attrs, pending.attributeId, genotypeRow, mutationEffects)
             formulaLabel = ATTR_LABELS[pending.attributeId] || pending.attributeId
           }
 
@@ -248,8 +252,8 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
             const wounds = await db('character_wounds').where({ char_sheet_id: sheet.id })
             const woundPenalty = calcWoundPenalty(wounds)
 
-            const forAttr = attrs.find(a => a.attr_id === 'FOR')
-            const forValue = (forAttr?.base_level ?? 7) + (forAttr?.pc_modifier ?? 0)
+            // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations), corrige PI4
+            const forValue = calcAttributeNA(attrs, 'FOR', genotypeRow, mutationEffects)
 
             const invItems = await db('char_inventory')
               .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
@@ -262,7 +266,9 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
               return sum + item.ref_weight * item.quantity
             }, 0)
 
-            const encumbrancePenalty = calcEncumbrancePenalty(totalWeight, forValue)
+            const encumbrancePenalty = settings.encumbrance_enabled
+              ? calcEncumbrancePenalty(totalWeight, forValue, settings.encumbrance_multiplier)
+              : 0
             effectiveMalus = woundPenalty - encumbrancePenalty
 
             if (effectiveMalus < 0) console.log(`[DBG] entity:action_resolve — malus actif ${effectiveMalus} pour character ${pending.characterId}`)
@@ -522,9 +528,10 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
         .where({ character_id: token.character_id }).first()
       if (!sheet) return
 
-      const [attrs, archetype] = await Promise.all([
+      const [attrs, archetype, mutationEffects] = await Promise.all([
         db('char_attributes').where({ char_sheet_id: sheet.id }),
         db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+        getMutationEffects(sheet.id),
       ])
       const genotypeRow = archetype?.genotype_id
         ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
@@ -532,7 +539,7 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
 
       // attribute_id depuis l'interaction (configurable — ex: 'FOR')
       const attributeId = interaction.attribute_id || 'FOR'
-      const attributeNA = calcAttributeNA(attrs, attributeId, genotypeRow)
+      const attributeNA = calcAttributeNA(attrs, attributeId, genotypeRow, mutationEffects)
 
       // ── Jet 1d20 ────────────────────────────────────────────────────
       const { rolls, total: diceRoll, seed } = await parseDice('1d20')
