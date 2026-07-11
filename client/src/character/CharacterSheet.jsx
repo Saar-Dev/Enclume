@@ -16,7 +16,7 @@
  * Règles de calcul (source : journal chantier + FichePerso_v4) :
  *   na  = base + pc + mod_gen  (plancher 3)
  *   AN  = table de correspondance na → AN
- *   REA = floor((ADA_na + PER_na) / 2 + 0.4)   — arrondi Polaris 0.5→bas
+ *   REA = floor((ADA_na + PER_na) / 2 + 0.4) + mod_avantage   — arrondi Polaris 0.5→bas
  *   Seuil_Étour = floor((FOR_na + CON_na + VOL_na) / 3 + 0.4)
  *   Seuil_Incons = Seuil_Étour + 10
  *   Allures (LdB p.221) : lookup table par COO_na (Lente/Moyenne/Rapide) et Athlétisme total (Max)
@@ -34,6 +34,7 @@ import AdvantagesPanel from './AdvantagesPanel.jsx'
 import {
   polarisRound, calcAN, calcAllureMoy, calcAllures,
   calcNA, getGenotypeModForAttr, getMutationModForAttr,
+  calcREA, getAdvantageModForAttr,
 } from '../../../shared/polarisUtils.js'
 
 // ─── Constantes métier ────────────────────────────────────────────────────────
@@ -80,14 +81,14 @@ const calcModDom = (forNA) => {
   return entry ? entry.val : -6
 }
 
-const calcSecondary = (naMap) => {
+const calcSecondary = (naMap, charAdvantages) => {
   const FOR = naMap['FOR'] || 3
   const CON = naMap['CON'] || 3
   const ADA = naMap['ADA'] || 3
   const PER = naMap['PER'] || 3
   const VOL = naMap['VOL'] || 3
 
-  const rea         = polarisRound((ADA + PER) / 2)
+  const rea         = calcREA(ADA, PER, getAdvantageModForAttr(charAdvantages, 'reaction'))
   const initiative  = rea
   const seuilEtour  = polarisRound((FOR + CON + VOL) / 3)
   const seuilIncons = seuilEtour + 10
@@ -200,7 +201,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     [naMap]
   )
 
-  const secondary = useMemo(() => calcSecondary(naMap), [naMap])
+  const secondary = useMemo(() => calcSecondary(naMap, charAdvantages), [naMap, charAdvantages])
 
   const effectiveMalus = woundPenalty - encumbrancePenalty
 

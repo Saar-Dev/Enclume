@@ -4,8 +4,10 @@ import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { requireRole } from '../middleware/role.js'
 import { multerUpload, uploadToMinio } from '../middleware/upload.js'
-import { calcAttributeNA, calcREA } from '../lib/charStats.js'
+import { calcAttributeNA } from '../lib/charStats.js'
+import { calcREA, getAdvantageModForAttr } from '../../../shared/polarisUtils.js'
 import { removeTokens } from '../lib/tokenLifecycle.js'
+import { getAdvantages } from '../services/advantageService.js'
 
 const router = Router({ mergeParams: true })
 
@@ -67,16 +69,18 @@ router.get('/:id/combat-ini', requireAuth, async (req, res) => {
     try {
       const cs = await db('char_sheet').where({ character_id: token.character_id }).first()
       if (cs) {
-        const [attrs, archetype] = await Promise.all([
+        const [attrs, archetype, advantages] = await Promise.all([
           db('char_attributes').where({ char_sheet_id: cs.id }),
           db('char_archetype').where({ char_sheet_id: cs.id }).first(),
+          getAdvantages(cs.id),
         ])
         const genotypeRow = archetype?.genotype_id
           ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
           : null
         base_ini = calcREA(
           calcAttributeNA(attrs, 'ADA', genotypeRow),
-          calcAttributeNA(attrs, 'PER', genotypeRow)
+          calcAttributeNA(attrs, 'PER', genotypeRow),
+          getAdvantageModForAttr(advantages, 'reaction')
         )
       }
     } catch (_) {}
@@ -104,13 +108,12 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
   for (const token of tokens) {
     if (!token.character_id) continue
 
-    const [weaponRow, armorRows] = await Promise.all([
+    const [weaponRows, armorRows] = await Promise.all([
       db('char_inventory')
         .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where('char_inventory.character_id', token.character_id)
         .whereIn('char_inventory.slot', ['MG', 'MD', '2M', 'Tr'])
-        .select('char_inventory.id as inv_id', 'ref_equipment.name', 'char_inventory.slot', 'ref_equipment.fire_mode as ref_fire_mode')
-        .first(),
+        .select('char_inventory.id as inv_id', 'ref_equipment.name', 'char_inventory.slot', 'ref_equipment.fire_mode as ref_fire_mode'),
 
       db('char_inventory')
         .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
@@ -121,9 +124,14 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
         .select('char_inventory.id as inv_id', 'ref_equipment.name', 'ref_equipment.location'),
     ])
 
+    const weaponMg = weaponRows.find(w => w.slot === 'MG') ?? null
+    const weaponMd = weaponRows.find(w => w.slot === 'MD') ?? null
+
     equipment[token.id] = {
       characterId:  token.character_id,
-      weapon:       weaponRow ?? null,
+      weapon:       weaponMg ?? weaponMd ?? weaponRows[0] ?? null,
+      weaponMg,
+      weaponMd,
       armorPieces:  armorRows,
     }
   }

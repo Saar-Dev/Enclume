@@ -2420,3 +2420,65 @@ clic réel, faute de temps) ; contenu non-personnage du Coffre (hors scope expli
 début, extension future prévue).
 
 Détail complet, étape par étape avec tous les tests : `docs/PLAN_VAULT.md`.
+
+## Session 141 (suite 16) — 2026-07-11 — Audit combat (rapports d'agents externes) + `ref_equipment_skill_assoc` reconstruite (migration 135) ✅ CLOS
+
+- Point de départ : deux lots de rapports d'agents externes signalant 4 problèmes potentiels côté
+  combat/résistances ("on a tout pété" — Saar). Chaque affirmation vérifiée indépendamment (requêtes
+  DB réelles + lecture de code + historique Git), aucune prise pour argent comptant.
+- **1 bug majeur réel, confirmé et élargi** : `ref_equipment_skill_assoc` (table "compétence
+  d'utilisation", distincte de `ref_equipment_skills` "compétences boostées/requises" — même schéma,
+  jamais fusionnées) n'a **jamais été peuplée par aucun seed/migration** depuis sa création
+  (migration 48, Session 47). Recherche Git exhaustive (`git log -S`) : aucun commit n'a jamais
+  inséré de données dedans. Les 25 lignes trouvées en base provenaient de tests manuels ponctuels via
+  l'API admin (`routes/equipment.js`, jamais reliée à aucune UI client — aucun composant
+  `client/src` ne l'appelle). Trou confirmé bien plus large que rapporté : pas seulement "Armes de
+  poing" (1/20), mais la quasi-totalité des catégories d'armes (Arme de contact 2/39, Arme d'épaule
+  6/20, Lanceur 1/6, Armes étourdissantes 1/11 — seule "Arme à énergie" 13/13 complète, et de façon
+  non uniforme : 6 compétences différentes dans cette seule catégorie, jugement arme par arme, pas
+  une règle catégorie→compétence).
+- **2 fausses pistes écartées après vérification** : `calcCarenceArmure` non gaté par
+  `encumbrance_enabled` — infirmé, ce sont deux mécaniques distinctes (carence = règle de base LdB
+  Session 56, encombrement = règle maison explicitement étiquetée comme telle) jamais liées dans
+  aucune source du projet. "Résistances naturelles"/Choc — constats exacts mais **déjà documentés**
+  dans `docs/PLAN_MUTATION2.md` Lot 3 (ouvert le même jour), bloqués sur un `[INCONNU]`
+  documentaire réel, chantier séparé non touché ici.
+- **Correction** : Saar a fourni `docs/ExtractCOMP.md` (extraction de la vraie colonne "Compétence
+  associée" du Google Sheet source, 139 armes — distincte de la colonne "Compétences / Attributs"
+  qui alimente déjà `ref_equipment_skills`, confusion initiale entre les deux colonnes clarifiée en
+  cours de route). Migration `135_ref_equipment_skill_assoc_weapons.js` (NOUVEAU) : 130 nouvelles
+  paires (item, compétence) + 3 corrections confirmées par Saar sur des items hors périmètre du
+  fichier (TMP II : Fusil/Armes d'épaules erroné → Armes lourdes + Tir automatique ; Canon à
+  infrasons : Arme spéciale distance générique → Armes lourdes ; **Lance-flammes** : Arme spéciale de
+  CONTACT FOR/COO → Arme spéciale de DISTANCE COO/PER — erreur trouvée par Saar lui-même en
+  proposant "contact" de mémoire puis corrigée après vérification croisée avec
+  `REGLECOMPETENCE.md` p.191, qui cite littéralement le lance-flamme comme exemple de la compétence
+  distance, jamais contact — confirmé aussi par le texte même de
+  `ref_skills.description` pour `ARMES_SPECIALES_DISTANCE_COORDINATION_PERCEPTION`).
+- **Rigueur de vérification demandée explicitement par Saar** ("la faiblesse d'un LLM c'est sa
+  mémoire... vérification exigée x3, ligne à ligne") : aucune donnée retapée à la main — un premier
+  script générateur en `node -e` inline a produit une **vraie erreur de citation shell** (message
+  d'erreur tronqué dans le fichier généré, backtick interprété par bash avant JS), détectée et
+  écartée avant écriture, régénérée proprement via un script fichier (hors `server/`, zéro risque
+  d'échappement). Migration écrite = extraite mécaniquement d'`ExtractCOMP.md`, jamais transcrite.
+  Cas "Dague neurale Brain" absent de la liste vérifié explicitement (déjà correct en base
+  auparavant, pas un oubli). nodemon a auto-appliqué la migration dès l'écriture du fichier (P53
+  documenté, confirmé en action) — un premier diff post-écriture comparait un état déjà post-migration
+  contre lui-même (faux négatif de ma part, corrigé). **État final vérifié : 154/154 paires
+  attendues, 0 écart.** Round-trip réel `down()`→25 (état pré-migration exact, items corrigés
+  restaurés à leur ancienne valeur)→`up()`→154, par appel direct des fonctions du module (P52).
+- **Dette notée** (question de Saar sur le doublon apparent des deux tables) : `ref_equipment_skills`
+  (8 items, 33 lignes) n'est consommée **nulle part** en logique de jeu — seulement écrite/relue par
+  l'API admin (`routes/equipment.js`). Donnée morte, jamais appliquée à un calcul. 1 seul item
+  présent dans les deux tables (TMP II), dont l'entrée `ref_equipment_skills` (`ANALYSE_EMPATHIQUE`
+  sur une arme) est visiblement une erreur de saisie ancienne sans rapport. Fusion possible mais non
+  prioritaire (toucherait le moteur combat pour un gain cosmétique) — voir dette `[EQSKILLS1]`
+  `CLAUDE.md`.
+- **Testé** : triple recoupement automatisé (nom↔base 139/139, libellé↔`ref_skills.id` 11/11,
+  proposé↔existant), état final vs attendu 154/154 (0 écart), round-trip `down`/`up` réel.
+- **Non testé** : parcours combat réel en navigateur (assaut à l'arme de poing/CaC avec un
+  personnage réel) — la correction porte sur la donnée consommée par
+  `resolveAssaultAction`/`resolveMeleeAction`, déjà vérifiées correctes par ailleurs (piège `BUG C`
+  `.claude/rules/combat.md`), mais le calcul de bout en bout n'a pas été rejoué en session live.
+- Détail complet de l'investigation (recherche Git, admin API, outil `EditeurEQ.html`, distinction
+  des deux tables) : cette conversation, `server/src/db/migrations/135_ref_equipment_skill_assoc_weapons.js`.

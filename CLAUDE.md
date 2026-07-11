@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 15) — 2026-07-11
+> Session 141 (suite 16) — 2026-07-11
 
 ---
 
@@ -107,8 +107,47 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 15) (2026-07-11)
+## ÉTAT COURANT — Session 141 (suite 16) (2026-07-11)
 
+- **Session 141 (suite 16) — Audit combat suite à 4 signalements d'agents externes + `ref_equipment_
+  skill_assoc` reconstruite ✅ CLOS.** Point de départ : deux lots de rapports d'agents externes
+  signalant 4 problèmes potentiels côté combat/résistances ("on a tout pété" — Saar). Chaque
+  affirmation vérifiée indépendamment (requêtes DB réelles + lecture de code + historique Git),
+  aucune prise pour argent comptant. **1 bug majeur réel, confirmé et élargi** : `ref_equipment_
+  skill_assoc` (table "compétence d'utilisation" consommée par `resolveAssaultAction`/
+  `resolveMeleeAction`, distincte de `ref_equipment_skills` "compétences boostées/requises" — même
+  schéma, jamais fusionnées, jamais consommée en jeu, voir dette `[EQSKILLS1]`) n'avait **jamais été
+  peuplée par aucun seed/migration** depuis sa création (migration 48, Session 47) — recherche Git
+  exhaustive (`git log -S`) : aucun commit n'a jamais inséré de données dedans, les 25 lignes en base
+  provenaient de tests manuels ponctuels via l'API admin (`routes/equipment.js`, jamais reliée à
+  aucune UI client). Trou bien plus large que rapporté : quasi-totalité des catégories d'armes
+  touchée (pas seulement "Armes de poing"), et non uniforme (6 compétences différentes dans la seule
+  catégorie déjà complète "Arme à énergie", jugement arme par arme, jamais une règle catégorie→
+  compétence). **2 fausses pistes écartées après vérification** : `calcCarenceArmure` non gaté par
+  `encumbrance_enabled` — infirmé, deux mécaniques distinctes (carence = règle de base LdB Session
+  56, encombrement = règle maison explicitement étiquetée comme telle), jamais liées dans aucune
+  source du projet. "Résistances naturelles"/Choc — constats exacts mais **déjà documentés** dans
+  `docs/PLAN_MUTATION2.md` Lot 3 (ouvert le même jour), bloqués sur un `[INCONNU]` documentaire réel,
+  chantier séparé non touché ici. **Correction** : Saar a fourni `docs/ExtractCOMP.md` (extraction de
+  la vraie colonne "Compétence associée" du Google Sheet source, 139 armes — distincte de la colonne
+  "Compétences / Attributs" qui alimente déjà `ref_equipment_skills`, confusion initiale entre les
+  deux colonnes clarifiée en cours de route). Migration `135_ref_equipment_skill_assoc_weapons.js`
+  (NOUVEAU) : 130 nouvelles paires + 3 corrections confirmées Saar hors périmètre du fichier (TMP II,
+  Canon à infrasons, et **Lance-flammes** : Arme spéciale CONTACT FOR/COO → Arme spéciale DISTANCE
+  COO/PER, erreur de mémoire proposée par Saar lui-même puis corrigée après recoupement avec
+  `REGLECOMPETENCE.md` p.191, qui cite littéralement le lance-flamme comme exemple de la compétence
+  distance). **Rigueur de vérification ×3 exigée explicitement par Saar** ("la faiblesse d'un LLM
+  c'est sa mémoire") : aucune donnée retapée à la main — un premier script générateur en `node -e`
+  inline a produit une vraie erreur de citation shell (backtick interprété par bash avant JS),
+  détectée et écartée avant écriture, régénérée proprement via un script fichier (hors `server/`).
+  Triple recoupement automatisé (nom↔base 139/139, libellé↔`ref_skills.id` 11/11, proposé↔existant),
+  nodemon a auto-appliqué la migration dès l'écriture (P53 confirmé en action, faux négatif de
+  diagnostic corrigé en cours de route), **état final vérifié 154/154 paires, 0 écart**, round-trip
+  `down()`→25→`up()`→154 réel par appel direct des fonctions du module (P52). **Dette `[EQSKILLS1]`
+  ajoutée** : `ref_equipment_skills` jamais consommée en logique de jeu (seulement écrite/relue par
+  l'API admin), 1 item (TMP II) avec une entrée visiblement erronée. Testé : recoupements
+  automatisés + round-trip réel. Non testé : parcours combat réel en navigateur (assaut arme de
+  poing/CaC avec un personnage réel). Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 16)".
 - **Session 141 (suite 15) — `docs/PLAN_VAULT.md` : Coffre (Vault) personnel ✅ TERMINÉ, Étapes 0
   à 7 codées et testées.** Conversation dédiée entière (analyse critique demandée deux fois par
   Saar avant tout code, recherche pro systématique — Roll20 Character Vault, Foundry Compendium
@@ -446,8 +485,11 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **138 migrations stables** (133_char_sheet_wizard_locked_backfill — Session 141 (suite 14) ;
+- **141 migrations stables** (135_ref_equipment_skill_assoc_weapons — Session 141 (suite 16) ;
+  134_combat_actions_aim_bonus_comp — Tir visé, session parallèle ;
+  133_char_sheet_wizard_locked_backfill — Session 141 (suite 14) ;
   132_char_sheet_dedupe_and_unique — Session 141 (suite 14) ;
+  131_split_equippable_stacks — session parallèle ;
   130_vault_transfer_requests — Session 141 (suite 15) ;
   129_vaults — Session 141 (suite 15) ;
   128_char_mutation_effects_view_int_cast — Session 141 (suite 13) ;
@@ -819,6 +861,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **[ADV3]** Bénéfices de carrière débloquant l'accès à une compétence (ex. mutation/compétence "développée automatiquement" via un tirage) — non géré, aucun câblage vers `char_skills`/`char_mutations`. Roadmap (Session 141 suite 12).
 - **[WIZ4]** `Step4Experience.jsx` — le mini-stepper (`isClickable`) ne revalide jamais les blocages durs de la sous-step quittée : un clic direct sur une sous-step déjà "reachable" (`highestSubStep` dépassé) contourne le blocage de la sous-step courante (ex. retirer sa seule carrière sur Carrières puis cliquer directement sur "Avantages pro"/"Revers"/"Récap" via le mini-stepper). Préexistant à Session 141 (suite 12), pas une régression du chantier Revers/Avantages pro — vérifié en relisant `Step4Experience.jsx` avant le rework. Filet de sécurité serveur (`reconcileCreation` STEP4, "Au moins une carrière requise") empêche toute donnée invalide persistée — juste un rejet tardif/générique au lieu d'un blocage immédiat. Non prioritaire, concerne l'architecture de navigation entière du mini-stepper, pas une sous-step isolée.
 - **[WIZLOCK1]** (Session 141 suite 14) — 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé ("Mr STEP6 Final", "jeune") avant le correctif d'atomicité de cette session. Cause probable identifiée mais non re-vérifiée a posteriori sur ces 2 cas précis : `handleTerminate` (`WizardCreation.jsx`) faisait 2 appels réseau séparés (`reconcile` puis `lock`) — toute coupure entre les deux laissait la fiche dans cet état bloqué. Corrigé pour les finalisations futures (`reconcileCreation` gagne `finalize`, un seul appel atomique) — cette dette ne documente que l'historique, pas un risque encore actif.
+- **[EQSKILLS1]** (Session 141 suite 16) — `ref_equipment_skills` ("compétences boostées/requises" : accessoires/implants/outils requérant ou boostant une compétence, ex. lunette de visée → Tir de précision) n'est consommée **nulle part** en logique de jeu — seulement écrite/relue par l'API admin `routes/equipment.js` (aucun composant `client/src` ne l'appelle, vérifié par grep). Donnée morte, jamais appliquée à un calcul. À distinguer de `ref_equipment_skill_assoc` (table jumelle au schéma identique, "compétence d'utilisation" — celle-là bien vivante, consommée par `resolveAssaultAction`/`resolveMeleeAction`), source de la confusion initiale de Saar sur un possible doublon. 1 seul item présent dans les deux tables (TMP II), dont l'entrée `ref_equipment_skills` (`ANALYSE_EMPATHIQUE` sur une arme) est visiblement une erreur de saisie ancienne. Fusion des deux tables possible mais non prioritaire (toucherait le moteur combat pour un gain cosmétique, aucun consommateur réel à préserver côté `ref_equipment_skills`).
 
 ---
 

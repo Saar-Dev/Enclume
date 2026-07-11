@@ -201,10 +201,9 @@ export function getModDom(for_na) {
 }
 
 // ─── Attributs secondaires ────────────────────────────────────────────────────
-
-export function calcREA(ada_na, per_na) {
-  return polarisRound((ada_na + per_na) / 2)
-}
+// calcREA déménagée vers shared/polarisUtils.js (source de calcul unique partagée avec le client,
+// docs/PLAN_MUTATION2.md Lot 2) — les appelants l'importent directement depuis shared/, pas via
+// ce fichier (aucun usage interne ici).
 
 export function calcSeuils(for_na, con_na, vol_na) {
   const etourdissement = polarisRound((for_na + con_na + vol_na) / 3)
@@ -255,8 +254,8 @@ export function calcResistanceDroguesInput(con_na, vol_na) {
   return polarisRound((con_na + vol_na) / 2)
 }
 
-export function calcSouffle(con_na, vol_na) {
-  return polarisRound((con_na + vol_na) / 2)
+export function calcSouffle(con_na, vol_na, mod_advantage) {
+  return polarisRound((con_na + vol_na) / 2) + (mod_advantage ?? 0)
 }
 
 // ─── Coût XP — dépense de compétences (LdB) ──────────────────────────────────

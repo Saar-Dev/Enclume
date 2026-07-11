@@ -1,10 +1,12 @@
 # PLAN_MUTATION2 — Effets mécaniques des Mutations et Avantages jamais appliqués
-> Session 141 (suite 14) — 2026-07-11 (Lot 2 détaillé ligne-à-ligne, pas encore codé — Lot 1 clos
-> Session 141 suite 13, voir aussi suite 10, diagnostic/architecture initiale)
-> Statut : **DIAGNOSTIC + ARCHITECTURE**. Lot 1 codé et clos. Lot 2 planifié en détail (recherche
-> Foundry VTT Active Effects à l'appui), **pas de code écrit**. Découpé en 7 lots (mécanique visée,
-> pas catalogue source). Chaque lot est détaillé ligne-à-ligne au moment de l'attaquer (règle "un
-> sujet à la fois") — les lots non encore attaqués ne fixent que le périmètre et l'ordre.
+> Session 141 (suite 14) — 2026-07-11 (Lot 2 codé, en attente de confirmation fonctionnelle Saar —
+> Lot 1 clos Session 141 suite 13, voir aussi suite 10, diagnostic/architecture initiale)
+> Statut : **DIAGNOSTIC + ARCHITECTURE**. Lot 1 codé et clos. **Lot 2 codé** (recherche Foundry VTT
+> Active Effects + PF2e StatisticModifier à l'appui, analyse à charge + run à vide + instrumentation
+> base réelle avant code, section K) — testé au niveau code (lint + scénarios + transaction réelle
+> annulée), **parcours navigateur non encore confirmé par Saar**. Découpé en 7 lots (mécanique
+> visée, pas catalogue source). Chaque lot est détaillé ligne-à-ligne au moment de l'attaquer (règle
+> "un sujet à la fois") — les lots non encore attaqués ne fixent que le périmètre et l'ordre.
 
 ---
 
@@ -605,20 +607,109 @@ dans le document** :
 Statut Lot 2 : **plan complet, corrigé deux fois (analyse à charge + run à vide), toujours aucun
 code écrit.**
 
+**J. Instrumentation base réelle (2026-07-11) — les `[VÉRIFIÉ]` ci-dessus reposaient sur la
+lecture des migrations, pas sur une exécution réelle (`CLAUDE.md` DÉTECTEUR DE DÉRIVE : "Lire =
+`[HYPOTHÈSE]`. `[VÉRIFIÉ]` = instrumenté + observé en exécution"). Corrigé par requêtes read-only
+sur la vraie base de dev (`node --input-type=module -e`, aucune écriture, P53/P54 respectés) :**
+- `ref_advantages` interrogée en direct : **exactement 3 lignes** `mod_attribute` non-null en base
+  réelle, valeurs identiques à la migration (`adv_006` reaction +3, `adv_058` reaction -3, `adv_021`
+  breath +10) — aucune migration postérieure à la 92 ne les touche (`[VÉRIFIÉ]` grep migrations).
+  Plus une `[HYPOTHÈSE]` : `[VÉRIFIÉ]` pour de vrai.
+- `information_schema.columns` : `ref_advantages.mod_value` est bien `data_type: integer` en base
+  réelle (pas juste déclaré ainsi dans le fichier de migration) — confirme la neutralité de l'ordre
+  addition/arrondi (point I.2).
+- `pg_indexes` sur `char_advantages` : l'index unique partiel `(char_sheet_id, advantage_id) WHERE
+  removed_at IS NULL` existe réellement en base — confirme le choix "pas de stacking, pas de VIEW
+  SQL" (section C) sur la vraie contrainte, pas sur la lecture du code qui la crée.
+- Simulation réelle de la requête `getAdvantages()` étendue (`mod_attribute`/`mod_value` ajoutés au
+  `.select()`) exécutée contre un `char_sheet_id` réel existant : **0 erreur SQL**, résultat cohérent
+  (`adv_002` Ambidextre, `mod_attribute: null` — comportement attendu pour un avantage hors
+  périmètre de ce lot).
+- **Point pratique trouvé pour le plan de test** : aucun personnage réel en base ne détient
+  actuellement `adv_006`/`adv_058`/`adv_021` — le scénario de test fonctionnel (section G) devra
+  passer par un octroi de test via l'UI (Wizard Step5 ou `AdvantagesPanel`), pas par un personnage
+  existant déjà pourvu de l'un de ces avantages.
+
+**K. Codé (2026-07-11)** — sections A-E appliquées exactement comme documenté, un écart trouvé et
+corrigé en cours de code (non anticipé par le plan écrit) : `calcREA` déménagé vers
+`shared/polarisUtils.js` n'était plus utilisé nulle part en interne dans `charStats.js` une fois
+son import ajouté là — import mort. Corrigé en important `calcREA` **directement depuis
+`shared/polarisUtils.js`** aux 4 sites serveur (`char-sheet.js`, `socketDice.js`,
+`socketCombatState.js`, `battlemaps.js`) au lieu de le faire transiter par `charStats.js` — cohérent
+avec le client (section E), qui l'importait déjà directement depuis `shared/`.
+- **Testé** : `node --check` 0 erreur sur les 7 fichiers serveur/partagés touchés ; ESLint client
+  0 nouvelle erreur (`CharacterSheet.jsx` — 2 erreurs/1 warning préexistants confirmés déjà présents
+  dans `HEAD` via `git show HEAD:...` avant tout changement de ce lot, sans lien avec Lot 2) ;
+  6 scénarios unitaires purs (`getAdvantageModForAttr`/`calcREA`, aucun avantage / `adv_006` seul /
+  `adv_058` seul / les deux / `adv_021` sur la mauvaise clé / avantage sans `mod_attribute`) ; test
+  bout-en-bout en base réelle (transaction annulée, jamais committée) : insertion temporaire de
+  `adv_006`+`adv_021` sur un `char_sheet_id` réel, requête identique à `getAdvantages()` étendue,
+  `getAdvantageModForAttr`→`calcREA`/`calcSouffle` corrects (REA 10→13, Souffle 10→20), rollback
+  vérifié effectif (0 ligne résiduelle après coup).
+- **Non testé** : parcours navigateur (octroi réel via `AdvantagesPanel`/Wizard Step5, affichage
+  fiche + `COMBAT_START` + `CombatRosterWindow`) — confirmation fonctionnelle Saar requise avant de
+  considérer ce lot clos, cf. protocole. `encumbrance_*`/PI4 non concernés par ce lot (Lot 1 déjà clos).
+- **Incident de session sans rapport avec le code** : une collision `git stash`/`git stash pop`
+  s'est produite en cours de vérification (session parallèle active sur le même dépôt au même
+  moment). Aucune perte de données — `git stash list` vide après coup, `git diff` sur chaque fichier
+  du Lot 2 relu intégralement et confirmé ne contenir que les changements prévus. Aucune action
+  destructive (`reset`/`checkout`/`clean`) tentée.
+
 ### Lot 3 — Résistances (recoupement réel mutations + avantages)
-- Source : `ref_mutations.mod_res_damage/shock/drugs/disease/poison/radiation` **et**
-  `ref_advantages.mod_resistance ∈ {"damage","shock"}` / `mod_res_value`.
-- Calcul visé : `calcResistanceDommages(for_na, con_na)` (table lookup — ajouter un bonus plat
-  post-lookup) ; `res_shock`/"Résistance Choc" à vérifier `[INCONNU]` **avant de coder** — recherche
-  exhaustive faite cette session : `calcResistanceNaturelle()` existe dans `charStats.js` mais
-  n'est appelé **nulle part** en combat, et `mod_res_shock`/`res_shock` n'apparaissent que dans les
-  migrations, jamais dans la résolution de combat. Il est possible que "Résistance Choc" soit un
-  concept mort mécaniquement, pas seulement débranché des mutations/avantages — à confirmer contre
-  `docs/REGLESYSCOMBAT.md`/`docs/REGLEARMURE.md` avant de coder ce lot. **Toujours non tranché au
-  bilan du 2026-07-11** — reste la première chose à faire à l'ouverture de ce lot.
-- `drugs`/`disease`/`poison`/`radiation` (mutations uniquement) : aucune résolution de jet
-  correspondante trouvée non plus (`resistance_drogues` existe côté macro/dé mais calcule un seuil
-  brut CON/VOL, sans bonus de résistance) — même vérification requise.
+
+**Ouverture du lot (2026-07-11) — scope corrigé + `[INCONNU]` confirmé, pas encore détaillable
+ligne-à-ligne.**
+
+- **Erreur de scope héritée corrigée** : le stub disait `ref_advantages.mod_resistance ∈
+  {"damage","shock"}` — **faux**, `[VÉRIFIÉ]` par lecture complète de `92_ref_advantages.js` :
+  `mod_resistance` prend en réalité **6 valeurs** — `"damage"` (1 ligne), `"shock"` (1 ligne,
+  `adv_030` "Résistance à la douleur"), et surtout `"poison"`/`"disease"`/`"radiation"`/`"drug"`
+  (`adv_031-034` "Résistance naturelle augmentée" +2, `adv_051-054` "Faiblesse naturelle" +2 aussi
+  — **désavantage avec un `mod_res_value` positif**, signe non trivial à interpréter, cf. point
+  ouvert ci-dessous). Source : `ref_mutations.mod_res_damage/shock/drugs/disease/poison/radiation`
+  reste correcte côté mutations.
+**Clarification Saar (LdB p.114, liste officielle des ATTRIBUTS SECONDAIRES + extrait texte) —
+débloque une partie du lot, en confirme une autre comme hors scope :**
+
+Liste canonique des 7 attributs secondaires : Choc (→ Seuil étourdissement + Seuil inconscience),
+Modif. de dommage au contact (→ `getModDom`), Réaction (→ Lot 2, clos), Résistance aux dommages,
+Résistances naturelles (Drogues / Maladies+poisons+radiations — **un seul sous-attribut pour les
+3**, pas 3 séparés), Souffle (→ Lot 2, clos).
+
+- **"Choc" `[RÉSOLU]`** — ce n'est PAS une mécanique séparée introuvable : "Choc" **est** le Seuil
+  d'étourdissement/inconscience (`calcSeuils`), déjà pleinement actif dans `resolveShockTest`.
+  `adv_030` "+2 Résistance au Choc" se branche donc très probablement sur `calcSeuils` (+2 aux deux
+  seuils) — même gap que Lot 2 avant correction : `calcSeuils` n'a aujourd'hui **aucun paramètre
+  modificateur**. Sous-lot bien défini, à détailler.
+- **"Résistance aux Dommages" `[VÉRIFIÉ]` solide** — formule LdB p.114 (FOR+CON, table à 10 paliers
+  puis -1/4 niveaux) correspond **exactement** à `calcResistanceDommages(for_na, con_na)`/`RD_TABLE`
+  déjà codée. Confirmé activement consommée en combat réel : `socketCombatHelpers.js:708` et
+  `damageService.js:43`. Sous-lot le plus propre du lot, même forme que Lot 2.
+- **"Résistances naturelles" (drogues/maladies+poisons+radiations) — confirmé `[INCONNU]` par
+  validation croisée indépendante, PAS un manque de recherche.** Un second agent, sur une session
+  distincte (audit `ref_equipment_skill_assoc`, sans rapport avec ce chantier), est arrivé
+  indépendamment aux mêmes 3 constats (`calcSeuils` sans modificateur — désormais résolu ci-dessus ;
+  `calcResistanceNaturelle`/`RES_NAT_TABLE` jamais appelés ; poison/maladie/radiation absents du
+  code) et conclut à un `[INCONNU]` documentaire réel, "en attente d'arbitrage du MJ" — même
+  conclusion atteinte indépendamment, sans avoir vu ce document. Décision Saar (ce jour) :
+  **"Résistances naturelles" devient un chantier distinct, hors du Lot 3** — pas de code ici tant
+  que la mécanique exacte (quel Test consomme le modificateur RES_NAT_TABLE une fois calculé) n'est
+  pas tranchée. `resistance_drogues` (macro existante) reste tel quel pour l'instant (bug
+  pré-existant plus large que ce lot — expose la valeur brute CON+VOL/2 sans jamais l'avoir passée
+  par `RES_NAT_TABLE`, gap dans l'attribut lui-même, pas seulement dans le branchement
+  mutations/avantages — hors périmètre "effets jamais appliqués" de ce document).
+- **Signe non trivial resté ouvert, à trancher pour les 2 sous-lots retenus** : `adv_051-054`
+  "Faiblesse naturelle" (désavantage) a `mod_res_value: 2` — positif, comme l'avantage équivalent.
+  Contrairement à `reaction`/`breath` (Lot 2, signe déjà correct dans `mod_value`), le signe ici
+  semble dépendre de `type` (`advantage` vs `disadvantage`). **Ne pas réutiliser
+  `getAdvantageModForAttr` tel quel sans vérifier ce point pour "Résistance aux Dommages"/"Choc"** —
+  à vérifier ligne par ligne sur les lignes réellement concernées (`adv_030` seule pour `shock` ;
+  chercher les lignes `mod_resistance:"damage"` pour ce point).
+
+**Conclusion d'ouverture** : Lot 3 **recentré sur "Résistance aux Dommages" + "Choc"** — les deux
+mécaniques confirmées vivantes et bien comprises, prêtes à détailler ligne-à-ligne. "Résistances
+naturelles" extrait en chantier séparé, en attente d'arbitrage Saar sur la mécanique LdB — ne
+bloque plus l'avancement de ce lot.
 
 ### Lot 4 — Armure naturelle + arme naturelle (mutations uniquement — nouveau mécanisme combat)
 - `natural_armor` : colonne structurée (entier), utilisable en théorie pour s'ajouter à

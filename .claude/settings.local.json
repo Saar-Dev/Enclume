@@ -160,7 +160,19 @@
       "Bash(node --check src/db/migrations/132_char_sheet_dedupe_and_unique.js)",
       "Bash(node --check src/db/migrations/133_char_sheet_wizard_locked_backfill.js)",
       "Bash(curl -s -X POST http://localhost:3001/api/creation/5d1baa0a-d42b-440a-b8b8-3e0edd01f6b9/reconcile -H 'Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImM0NmY4ZTdmLTlkNzQtNDQ5OS1iOTg0LWExNWFiOTY2NmQwZCIsImlhdCI6MTc4Mzc2MzI0N30.IGVzdXOZOx7gziK5vNcBpxwSAoTO3lY8KoS64kROnoQ' -H 'Content-Type: application/json' -d '{\"finalize\":true}' -w '\\\\nHTTP_STATUS:%{http_code}\\\\n')",
-      "Bash(node check5c.mjs)"
+      "Bash(node check5c.mjs)",
+      "Bash(node check6.mjs)",
+      "Bash(node --check server/src/routes/battlemaps.js)",
+      "Bash(node --check src/socket/socketCombatHelpers.js)",
+      "Bash(node --check shared/combatExclusiveActions.js)",
+      "Bash(node --check server/src/db/migrations/134_combat_actions_aim_bonus_comp.js)",
+      "Bash(node -e \"require\\('dotenv'\\).config\\(\\); console.log\\(JSON.stringify\\({DATABASE_URL: process.env.DATABASE_URL ? '[set]' : undefined, PGHOST: process.env.PGHOST, PGDATABASE: process.env.PGDATABASE, PGUSER: process.env.PGUSER, PGPORT: process.env.PGPORT}\\)\\)\")",
+      "Bash(git -C .. log --oneline -- server/src/routes/equipment.js)",
+      "Bash(git -C .. ls-files server/src/routes/equipment.js)",
+      "Bash(rm -f gen_migration_data.json matched_rows_tmp.json proposed_pairs_tmp.json *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Nemet\\Documents\\Enclume\\server"
     ]
   }
 }

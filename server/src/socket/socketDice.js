@@ -3,10 +3,12 @@ import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
 import { getUserColor } from '../lib/socketUtils.js'
 import {
-  calcSkillTotal, calcAttributeNA, calcREA,
+  calcSkillTotal, calcAttributeNA,
   calcSeuils, calcSouffle, calcResistanceDroguesInput,
 } from '../lib/charStats.js'
+import { calcREA, getAdvantageModForAttr } from '../../../shared/polarisUtils.js'
 import { getMutationEffects } from '../services/mutationService.js'
+import { getAdvantages } from '../services/advantageService.js'
 
 export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
   // ─── DICE:ROLL ─────────────────────────────────────────────────────────
@@ -96,10 +98,11 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
       const sheet = await db('char_sheet').where({ character_id: characterId }).first()
       if (!sheet) return
 
-      const [attrs, archetype, mutationEffects] = await Promise.all([
+      const [attrs, archetype, mutationEffects, advantages] = await Promise.all([
         db('char_attributes').where({ char_sheet_id: sheet.id }),
         db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
         getMutationEffects(sheet.id),
+        getAdvantages(sheet.id),
       ])
       const genotypeRow = archetype?.genotype_id
         ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
@@ -110,10 +113,10 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
 
       const secondaryValue = (key) => {
         switch (key) {
-          case 'rea':                return calcREA(na('ADA'), na('PER'))
+          case 'rea':                return calcREA(na('ADA'), na('PER'), getAdvantageModForAttr(advantages, 'reaction'))
           case 'seuil_etourdi':      return calcSeuils(na('FOR'), na('CON'), na('VOL')).etourdissement
           case 'seuil_incons':       return calcSeuils(na('FOR'), na('CON'), na('VOL')).inconscience
-          case 'souffle':            return calcSouffle(na('CON'), na('VOL'))
+          case 'souffle':            return calcSouffle(na('CON'), na('VOL'), getAdvantageModForAttr(advantages, 'breath'))
           case 'resistance_drogues': return calcResistanceDroguesInput(na('CON'), na('VOL'))
           default:                   return 0
         }

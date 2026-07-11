@@ -1,7 +1,9 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-11 — Session 141 (suite 14) : cascade suppression token + char_sheet
-> dédoublonné/UNIQUE + atomicité Wizard + bonus féminin corrigé (item 56) ; Coffre (Vault) terminé,
-> Étapes 0-7 (item 57)
+> Dernière mise à jour : 2026-07-11 — Session 141 (suite 16) : `ref_equipment_skill_assoc` reconstruite
+> (migration 135, 154 paires arme↔compétence, trou de seed jamais peuplé depuis l'origine) suite à
+> un audit de 4 signalements d'agents externes (item 58) ; Session 141 (suite 14) : cascade
+> suppression token + char_sheet dédoublonné/UNIQUE + atomicité Wizard + bonus féminin corrigé
+> (item 56) ; Coffre (Vault) terminé, Étapes 0-7 (item 57)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -10,6 +12,26 @@
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 58 (Session 141 suite 16) — Audit combat suite à 4 signalements d'agents externes
+> ("on a tout pété") + `ref_equipment_skill_assoc` reconstruite ✅ CLOS.** Chaque signalement vérifié
+> indépendamment (DB réelle + code + Git) avant action — 1 seul bug majeur réel, 1 fausse alerte
+> (`calcCarenceArmure` non gaté par `encumbrance_enabled` — deux mécaniques distinctes, jamais liées
+> dans aucune source), 2 constats exacts mais déjà tracés dans `docs/PLAN_MUTATION2.md` Lot 3 (non
+> touchés ici). **Bug réel** : `ref_equipment_skill_assoc` (table "compétence d'utilisation" pour
+> résoudre un jet de combat, distincte de `ref_equipment_skills` "compétences boostées/requises",
+> jamais consommée en jeu — voir dette `[EQSKILLS1]`) n'avait **jamais été peuplée par aucun
+> seed/migration** depuis sa création (migration 48) — 25 lignes seulement en base, saisies à la main
+> via l'API admin, jamais reliées à la source. Trou touchant la quasi-totalité des catégories d'armes
+> (pas seulement "Armes de poing" comme initialement rapporté). Migration `135` (NOUVEAU) : 130
+> nouvelles paires arme↔compétence sourcées depuis `docs/ExtractCOMP.md` (vraie colonne "Compétence
+> associée" du Google Sheet) + 3 corrections confirmées Saar après recoupement `REGLECOMPETENCE.md`
+> (dont Lance-flammes : contact→distance, erreur de mémoire de Saar lui-même corrigée avant codage).
+> **Vérification ×3 exigée par Saar** ("la faiblesse d'un LLM c'est sa mémoire") : triple recoupement
+> automatisé (nom↔base, libellé↔catalogue, proposé↔existant), état final 154/154 paires (0 écart),
+> round-trip `down`/`up` réel confirmé. **Testé** : recoupements automatisés + round-trip. **Non
+> testé** : parcours combat réel en navigateur (assaut arme de poing/CaC). Détail complet :
+> `docs/JOURNAL6.md` "Session 141 (suite 16)".
 
 > **Item 56 (Session 141 suite 14) — 4 correctifs enchaînés, chacun trouvé en testant le précédent :**
 > (1) suppression d'un character/battlemap ne supprimait jamais ses tokens (`tokenLifecycle.js`,
@@ -810,7 +832,14 @@ Projet en cours et priorité user :
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **130 migrations appliquées** (125_char_mutations_source_campaign — Session 141 (suite 9) ;
+- **135 migrations appliquées** (135_ref_equipment_skill_assoc_weapons — Session 141 (suite 16) ;
+  134_combat_actions_aim_bonus_comp — Tir visé, session parallèle ;
+  133_char_sheet_wizard_locked_backfill — Session 141 (suite 14) ;
+  132_char_sheet_dedupe_and_unique — Session 141 (suite 14) ;
+  131_split_equippable_stacks — session parallèle ;
+  130_vault_transfer_requests / 129_vaults — Session 141 (suite 15) ;
+  126_ref_setbacks_revers_table — Session 141 (suite 12) ;
+  125_char_mutations_source_campaign — Session 141 (suite 9) ;
   124_char_advantage_notes — Session 141 (suite 9) ;
   123_ref_advantages_polaris — Session 141 (suite 6) ;
   122_ref_career_random_benefits_lot1_and_points_alt — Session 140 ;
@@ -843,6 +872,7 @@ Projet en cours et priorité user :
 
 | ID | Description | Priorité |
 |---|---|---|
+| EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
 | CH1 | Historique chat perdu au F5 (rechargement page) | Haute |

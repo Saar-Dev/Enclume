@@ -20,6 +20,8 @@ export default function DashboardPage() {
   const [uploadingCoverId, setUploadingCoverId] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editingName, setEditingName] = useState('')
+  const [showCreateChar, setShowCreateChar] = useState(false)
+  const [createCharCampaignId, setCreateCharCampaignId] = useState('')
   const coverInputRef = useRef(null)
   const pendingCoverIdRef = useRef(null)
   const createInputRef = useRef(null)
@@ -171,6 +173,42 @@ export default function DashboardPage() {
               <div style={styles.cardHeader}>
                 <span style={styles.cardTitle}>{t('dashboard.vaultCard')}</span>
               </div>
+              <div style={styles.cardFooter} onClick={e => e.stopPropagation()}>
+                {showCreateChar ? (
+                  <>
+                    <select
+                      style={styles.cardInput}
+                      value={createCharCampaignId}
+                      onChange={e => setCreateCharCampaignId(e.target.value)}
+                    >
+                      <option value="">{t('vault.selectCampaignPlaceholder')}</option>
+                      {campaigns.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <div style={styles.cardButtons}>
+                      <button className="btn btn-ghost" onClick={() => { setShowCreateChar(false); setCreateCharCampaignId('') }}>
+                        {t('common.cancel')}
+                      </button>
+                      <button
+                        className="btn"
+                        disabled={!createCharCampaignId}
+                        onClick={() => navigate(`/campaigns/${createCharCampaignId}/creation`)}
+                      >
+                        {t('dashboard.createCharacter')}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    className="btn btn-ghost"
+                    style={{ width: '100%' }}
+                    onClick={() => setShowCreateChar(true)}
+                  >
+                    {t('dashboard.createCharacter')}
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* CAMPAIGNS */}
@@ -239,12 +277,6 @@ export default function DashboardPage() {
                   </div>
 
                   <div style={styles.cardButtons}>
-                    <button
-                      className="btn btn-ghost"
-                      onClick={() => navigate(`/campaigns/${campaign.id}/creation`)}
-                    >
-                      {t('dashboard.createCharacter')}
-                    </button>
                     <button
                       className="btn"
                       onClick={() => navigate(`/session/${campaign.id}`)}

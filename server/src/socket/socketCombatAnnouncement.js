@@ -3,6 +3,7 @@ import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
 import { skipPlayer, startResolutionPhase } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
+import { getAimBonusComp, getAimIniCost, isAimEligible } from '../../../shared/combatExclusiveActions.js'
 
 export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -181,6 +182,10 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
       const transitionCost = (costs, from, to) => from === to ? 0 : (costs?.[from]?.[to] ?? 0)
 
+      // Tir visé (LdB p.227-228, docs/PLAN_TIRVISE.md) — calculé une fois, réutilisé pour
+      // iniDelta ci-dessous ET pour la ligne combat_actions (aim_bonus_comp) plus bas.
+      const aimTranches = mapActions?.attack?.aimTranches ?? 0
+
       let iniDelta = 0
       if (!isDrone) {
         for (const key of ['position', 'weapon', 'fire_mode', 'cover', 'vitesse']) {
@@ -197,6 +202,22 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         }
         if (mapActions?.attack?.cover_shot) {
           iniDelta += state.cover === 'important' ? -5 : -3
+        }
+        // Tir visé — validé/recalculé serveur, jamais confiance au client. isAimEligible bloque
+        // déjà toute combinaison avec le CaC ou une transition d'état (règle "aucune autre action
+        // ce tour", isExclusiveDeclaration/shared/combatExclusiveActions.js reste disponible pour
+        // Charge/Rafale longue le jour où leur éligibilité, plus permissive, en aura besoin).
+        if (aimTranches > 0) {
+          const aimOk = isAimEligible({
+            mapActions, state, quick, entry,
+            isDualWield: !!mapActions?.attack?.isDualWield,
+            bulletCount: mapActions?.attack?.bulletCount ?? null,
+          })
+          if (!aimOk) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Tir visé : aucune autre action ni transition d'état ce tour, arme déjà au clair, tir simple, une seule arme requise" })
+            return
+          }
+          iniDelta += getAimIniCost(aimTranches)
         }
         iniDelta += (quick?.observer ?? 0) * -5
         iniDelta += (quick?.reperer  ?? 0) * -5
@@ -239,6 +260,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           bullet_count:         bulletCount ?? null,
           fire_mode_bonus_comp: fireModeBonusComp ?? null,
           fire_mode_bonus_dmg:  fireModeBonusDmg ?? null,
+          aim_bonus_comp:       isDrone ? null : (getAimBonusComp(aimTranches) || null),
           modifiers:            JSON.stringify({ ini_mod: 0, ref_range: assaultWeaponRefRange, dual_wield: isDualWield ?? false, dual_wield_bonus_comp: dualWieldBonusComp ?? 0 }),
           status:               'pending',
         })

@@ -2,11 +2,13 @@ import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
 import { parseDice } from '../lib/diceParser.js'
-import { calcAttributeNA, calcREA } from '../lib/charStats.js'
+import { calcAttributeNA } from '../lib/charStats.js'
+import { calcREA, getAdvantageModForAttr } from '../../../shared/polarisUtils.js'
 import { getUserColor } from '../lib/socketUtils.js'
 import * as statusService from '../lib/statusService.js'
 import { startAnnouncementTimers, startResolutionPhase } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
+import { getAdvantages } from '../services/advantageService.js'
 
 export function registerStateHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -67,16 +69,17 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
           if (!cs) {
             console.warn(`[COMBAT_START] char_sheet introuvable pour token ${token.id}`)
           } else {
-            const [attrs, archetype] = await Promise.all([
+            const [attrs, archetype, advantages] = await Promise.all([
               db('char_attributes').where({ char_sheet_id: cs.id }),
               db('char_archetype').where({ char_sheet_id: cs.id }).first(),
+              getAdvantages(cs.id),
             ])
             const genotypeRow = archetype?.genotype_id
               ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
               : null
             const ada_na = calcAttributeNA(attrs, 'ADA', genotypeRow)
             const per_na = calcAttributeNA(attrs, 'PER', genotypeRow)
-            base_ini = calcREA(ada_na, per_na)
+            base_ini = calcREA(ada_na, per_na, getAdvantageModForAttr(advantages, 'reaction'))
           }
         } catch (err) {
           console.warn(`[COMBAT_START] Erreur calcul INI token ${token.id}:`, err.message)

@@ -37,7 +37,8 @@ import { Router } from 'express'
 import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
-import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal, calcAttributeNA, calcREA, calcSeuils, calcSouffle, calcResistanceDroguesInput } from '../../lib/charStats.js'
+import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal, calcAttributeNA, calcSeuils, calcSouffle, calcResistanceDroguesInput } from '../../lib/charStats.js'
+import { calcREA, getAdvantageModForAttr } from '../../../../shared/polarisUtils.js'
 import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from '../../lib/woundUtils.js'
 import { getAdvantages, addAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
 import { getMutations, addMutation, removeMutation, getMutationEffects } from '../../services/mutationService.js'
@@ -1639,10 +1640,11 @@ router.post('/:characterId/macro-preview', async (req, res, next) => {
     const sheet = await db('char_sheet').where({ character_id: req.params.characterId }).first()
     if (!sheet) return res.json({ threshold: Number(modifier) })
 
-    const [attrs, archetype, mutationEffects] = await Promise.all([
+    const [attrs, archetype, mutationEffects, advantages] = await Promise.all([
       db('char_attributes').where({ char_sheet_id: sheet.id }),
       db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
       getMutationEffects(sheet.id),
+      getAdvantages(sheet.id),
     ])
     const genotypeRow = archetype?.genotype_id
       ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
@@ -1652,10 +1654,10 @@ router.post('/:characterId/macro-preview', async (req, res, next) => {
 
     const secondaryValue = (key) => {
       switch (key) {
-        case 'rea':                return calcREA(na('ADA'), na('PER'))
+        case 'rea':                return calcREA(na('ADA'), na('PER'), getAdvantageModForAttr(advantages, 'reaction'))
         case 'seuil_etourdi':      return calcSeuils(na('FOR'), na('CON'), na('VOL')).etourdissement
         case 'seuil_incons':       return calcSeuils(na('FOR'), na('CON'), na('VOL')).inconscience
-        case 'souffle':            return calcSouffle(na('CON'), na('VOL'))
+        case 'souffle':            return calcSouffle(na('CON'), na('VOL'), getAdvantageModForAttr(advantages, 'breath'))
         case 'resistance_drogues': return calcResistanceDroguesInput(na('CON'), na('VOL'))
         default:                   return 0
       }

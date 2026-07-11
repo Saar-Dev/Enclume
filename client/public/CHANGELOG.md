@@ -1,3 +1,11 @@
+## v171 — 2026-07-11 — Correctif : jets de combat au pistolet, à l'arme blanche et à l'arc
+
+### Serveur
+- [fix] La plupart des armes (armes de poing, armes de contact, arcs/arbalètes, armes de jet, armes
+  lourdes, armes sous-marines...) n'avaient jamais leur compétence de tir/combat correctement liée en
+  base : un assaut avec ces armes retombait systématiquement sur un total de compétence à 0,
+  faisant échouer le jet quasi systématiquement. Corrigé pour l'ensemble du catalogue.
+
 ## v170 — 2026-07-11 — Le Coffre : stocker ses personnages hors campagne
 
 ### Client

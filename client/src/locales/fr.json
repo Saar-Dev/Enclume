@@ -55,10 +55,10 @@
     "joinCard": "Rejoindre une campagne",
     "codePlaceholder": "#code-invitation",
     "renameError": "Erreur lors du renommage",
-    "vaultCard": "Coffre"
+    "vaultCard": "Mon Coffre"
   },
   "vault": {
-    "pageTitle": "Coffre",
+    "pageTitle": "Mon Coffre",
     "back": "Retour",
     "empty": "Votre Coffre est vide. Envoyez un personnage depuis une campagne pour le retrouver ici.",
     "typePj": "Personnage",

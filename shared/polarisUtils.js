@@ -41,6 +41,20 @@ export function getMutationModForAttr(mutationEffectsRow, attrId) {
   return col ? (mutationEffectsRow[col] ?? 0) : 0
 }
 
+// ─── Résolution des modificateurs d'avantage (paire générique clé/valeur) ────
+// Contrairement aux mutations (colonnes fixes par attribut), les avantages ciblent leur effet via
+// mod_attribute (texte) + mod_value (nombre) — une liste de lignes actives à filtrer/réduire, pas
+// une colonne à indexer. Voir docs/PLAN_MUTATION2.md Lot 2. mod_value porte déjà son signe (jamais
+// inspecter `type` pour l'inverser — piège documenté dans le plan).
+function sumModByKey(rows, keyField, valueField, targetKey) {
+  if (!rows || !rows.length) return 0
+  return rows.reduce((sum, r) => r[keyField] === targetKey ? sum + (r[valueField] ?? 0) : sum, 0)
+}
+
+export function getAdvantageModForAttr(advantageRows, attrKey) {
+  return sumModByKey(advantageRows, 'mod_attribute', 'mod_value', attrKey)
+}
+
 // TOTAL_MALUS = 0 en V1 — historique XP non implémenté (voir server/src/lib/charStats.js).
 const TOTAL_MALUS = 0
 
@@ -49,6 +63,13 @@ const TOTAL_MALUS = 0
 export function calcNA(base_level, pc_modifier, mod_genotype, mod_mutation) {
   const raw = (base_level ?? 7) + (pc_modifier ?? 0) + (mod_genotype ?? 0) + (mod_mutation ?? 0) - TOTAL_MALUS
   return Math.max(3, raw)
+}
+
+// Réactivité (REA) — consolidée ici (ex-duplicata charStats.js serveur + calcSecondary client) :
+// source de calcul unique, voir docs/PLAN_MUTATION2.md Lot 2. mod_advantage est un entier garanti
+// par le schéma DB (ref_advantages.mod_value) — ajouté après polarisRound, neutre mathématiquement.
+export function calcREA(ada_na, per_na, mod_advantage) {
+  return polarisRound((ada_na + per_na) / 2) + (mod_advantage ?? 0)
 }
 
 // Allures de déplacement (LdB p.221)

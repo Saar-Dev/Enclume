@@ -10,7 +10,7 @@ import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import {
-  calcSkillTotal, calcAttributeNA, calcREA,
+  calcSkillTotal, calcAttributeNA,
   calcWoundPenalty, calcEncumbrancePenalty,
   calcResistanceDommages, calcResistanceArmure, calcCarenceArmure,
   getModDom, calcDroneRD, calcDroneDegatsNets,
@@ -1350,7 +1350,8 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const isRushedMod      = rosterTireur?.state_vitesse === 'rushed' ? -5 : 0
     const fireModeComp     = action.fire_mode_bonus_comp ?? 0
     const dualWieldComp    = action.modifiers?.dual_wield_bonus_comp ?? 0
-    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + dualWieldComp
+    const aimBonusComp     = action.aim_bonus_comp ?? 0
+    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp
 
     const coverageModifier   = options.coverageModifier ?? 0
     const chancesDeReussite  = skillTotal + totalModComp + effectiveMalus - carenceArmure + coverageModifier
@@ -1360,8 +1361,9 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const breakdown = [
       { label: 'Compétence', value: skillTotal, type: 'base' },
       ...(porteeModComp !== 0 ? [{ label: PORTEE_LABELS[confirmedModifiers.portee] ?? confirmedModifiers.portee, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' }] : []),
-      ...(fireModeComp !== 0 ? [{ label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp, type: 'bonus' }] : []),
+      ...(fireModeComp - dualWieldComp !== 0 ? [{ label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp - dualWieldComp, type: 'bonus' }] : []),
       ...(dualWieldComp !== 0 ? [{ label: 'Deux armes', value: dualWieldComp, type: 'bonus' }] : []),
+      ...(aimBonusComp !== 0 ? [{ label: 'Tir visé', value: aimBonusComp, type: 'bonus' }] : []),
       ...((confirmedModifiers.situation ?? []).reduce((acc, k) => {
         const v = SITUATION_MODS[k] ?? 0
         if (v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })

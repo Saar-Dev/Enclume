@@ -175,14 +175,22 @@ export function getAimIniCost(aimTranches) {
 // mapAction). `entry` = ligne `combat_roster` AVANT cette déclaration (état persisté, jamais le
 // payload client) — c'est elle qui fait foi pour "aucun changement".
 export function isAimEligible({ mapActions, state, quick, entry, isDualWield, bulletCount }) {
-  if (state?.fire_mode !== 'cc') return false
   if (bulletCount !== 1) return false
   if (isDualWield) return false
-  if (entry?.state_weapon !== 'drawn') return false          // arme déjà au clair, pas de dégainer ce tour
-  if (state?.position !== entry?.state_position) return false
-  if (state?.weapon   !== entry?.state_weapon)   return false
-  if (state?.cover    !== entry?.state_cover)    return false
-  if (state?.vitesse  !== entry?.state_vitesse)  return false // exclut Précipiter de facto
+  // Préconditions intrinsèques Tir visé : arme déjà au clair + déjà en coup par coup AVANT ce
+  // tour (pas de transition pour y arriver — dégainer/changer de mode compte comme "faire autre
+  // chose", cf. règle "tu ne vises que si tu ne fais que ça").
+  if (entry?.state_weapon    !== 'drawn') return false
+  if (entry?.state_fire_mode !== 'cc')    return false
+  // Aucune transition d'état ce tour, sur AUCUN état (uniforme — fire_mode inclus, corrige un
+  // trou trouvé en relisant le plan avant codage : vérifier `state.fire_mode === 'cc'` seul
+  // n'excluait pas une transition depuis 'rl'/'rc' vers 'cc' le même tour).
+  if (state?.position  !== entry?.state_position)  return false
+  if (state?.weapon    !== entry?.state_weapon)    return false
+  if (state?.fire_mode !== entry?.state_fire_mode) return false
+  if (state?.cover     !== entry?.state_cover)     return false
+  if (state?.vitesse   !== entry?.state_vitesse)   return false // exclut Précipiter de facto
+  // Aucune autre mapAction / quick action ce tour.
   if (mapActions?.move)     return false
   if (mapActions?.interact) return false
   if (mapActions?.reload)   return false                      // exclut Rechargement de facto
@@ -206,12 +214,12 @@ export function isExclusiveDeclaration({ mapActions }) {
 }
 ```
 
-### Migration (NOUVEAU, numéro à reconfirmer — voir Piège P1)
+### Migration `134_combat_actions_aim_bonus_comp.js` (NOUVEAU — reconfirmé `ls` le 2026-07-10, 133 déjà pris)
 
 ```js
 export const up = async (knex) => {
   await knex.schema.alterTable('combat_actions', (table) => {
-    table.integer('aim_bonus_comp')   // miroir fire_mode_bonus_comp — nullable, pas de backfill
+    table.smallint('aim_bonus_comp').nullable()   // miroir exact fire_mode_bonus_comp (57_combat_v3.js)
   })
 }
 
@@ -294,10 +302,10 @@ Nouvelles clés : label du stepper, tooltip (texte de règle résumé), message 
 
 ## Pièges à anticiper
 
-- **P1** : numéro de migration à reconfirmer via `ls server/src/db/migrations/` au moment de coder,
-  pas depuis ce plan — **126** déjà pris (chantier Revers en cours, voir `EN_COURS.md`). Prochain
-  numéro probable au 2026-07-10 : **127**, à revérifier (P53 — nodemon peut avoir fait avancer la
-  numérotation entre-temps).
+- **P1 — RÉSOLU au codage (2026-07-10)** : `ls server/src/db/migrations/` reconfirmé juste avant
+  d'écrire le code, pas depuis une estimation du plan — **133** était en réalité déjà pris
+  (chantiers Revers/Vault ont consommé 127-133 entre l'écriture de ce plan et le codage, exactement
+  le piège P53 anticipé). Numéro retenu : **134**.
 - **P2** : ne jamais faire confiance à `aimTranches` envoyé par le client pour le bonus final —
   toujours revalider `Number.isInteger` + clamp 0-5 côté serveur avant tout calcul.
 - **P3** : la garde exclusivité (rejet si CaC + Tir visé combinés) doit s'exécuter **avant**

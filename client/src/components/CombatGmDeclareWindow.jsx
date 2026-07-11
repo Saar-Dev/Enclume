@@ -74,7 +74,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   )
 
   const [declareError, setDeclareError] = useState(null)
-  const [equipment,    setEquipment]    = useState({})   // tokenId -> { characterId, weapon, armorPieces }
+  const [equipment,    setEquipment]    = useState({})   // tokenId -> { characterId, weapon, weaponMg, weaponMd, armorPieces }
   const [rosterOpen,   setRosterOpen]   = useState(
     () => localStorage.getItem('gm-roster-open') !== 'false'
   )
@@ -91,6 +91,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // Tir GM — variant mode de tir (miroir PJ)
   const [assaultBulletCount,  setAssaultBulletCount]  = useState(null)   // number | 'multi' | null
   const [assaultVariantAB,    setAssaultVariantAB]    = useState('A')
+  const [isDualWield,         setIsDualWield]         = useState(false)
   // CaC GM — sélection arme (undefined = auto-dériver, null = mains nues, id = choix explicite)
   const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(undefined)
   const [isSelectingOnMap, setIsSelectingOnMap] = useState(false)
@@ -114,6 +115,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setChargeSelection(null)
     setAssaultBulletCount(null)
     setAssaultVariantAB('A')
+    setIsDualWield(false)
     setSelectedGmMeleeWeaponId(undefined)
     setIsSelectingOnMap(false)
     setIniPopoverOpen(false)
@@ -217,6 +219,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   const weapon       = isActivePnj ? (equipment[activeTokenId]?.weapon ?? null) : null
   const rangedActive = isActivePnj && isRanged(activeTokenId)
+  const weaponMg      = isActivePnj ? (equipment[activeTokenId]?.weaponMg ?? null) : null
+  const weaponMd      = isActivePnj ? (equipment[activeTokenId]?.weaponMd ?? null) : null
+  const hasTwoWeapons = !!(weaponMg && weaponMd)
+  const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
 
   // ── INI delta ────────────────────────────────────────────────────────────
   const iniDelta = isActivePnj ? calcIniDelta(
@@ -256,6 +262,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const { variant: currentVariant, effectiveBulletCount } = computeFireVariant(
     currentFireMode, assaultBulletCount, assaultVariantAB, { defaultCcCount: 1 }
   )
+  const dualWieldBonusComp = (isDualWield && hasTwoWeapons && sameFirMode)
+    ? (currentFireMode === 'RL' ? 5 : 3)
+    : 0
   // Slider CC répétition
   const ccSliderIdx = assaultBulletCount && assaultBulletCount !== 1
     ? CC_REPS_STEPS.indexOf(assaultBulletCount)
@@ -395,10 +404,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           weaponInvId:        weapon.inv_id,
           targetTokenId:      assaultTarget.targetTokenId,
           bulletCount:        currentVariant?.bulletCount ?? null,
-          fireModeBonusComp:  currentVariant?.bonusComp   ?? 0,
+          fireModeBonusComp:  currentVariant ? (currentVariant.bonusComp + dualWieldBonusComp) : 0,
           fireModeBonusDmg:   currentVariant?.bonusDmg    ?? 0,
-          isDualWield:        false,
-          dualWieldBonusComp: 0,
+          isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
+          dualWieldBonusComp: dualWieldBonusComp,
         } : null,
         melee:    meleeCaC.length > 0 ? meleeCaC : null,
         reload:   mapAction === 'reload',
@@ -791,20 +800,20 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           <div style={S.assaultPanelGm}>
             <AssaultRangedPanel
               weaponDisplay={weapon ? `${weapon.name ?? 'Arme'} (${weapon.slot ?? '?'})` : null}
-              weaponMdDisplay={null}
+              weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.name ?? 'Arme'} (${weaponMd.slot ?? '?'})` : null}
               assaultTargetId={assaultTarget?.targetTokenId ?? null}
               getLabel={getLabel}
               onChooseTarget={handleStartAttack}
-              showDualWieldSection={false}
-              isDualWield={false}
+              showDualWieldSection={hasTwoWeapons && sameFirMode}
+              isDualWield={isDualWield}
               currentFireMode={currentFireMode}
-              onDualWieldChange={() => {}}
+              onDualWieldChange={(val) => setIsDualWield(val)}
               assaultBulletCount={assaultBulletCount}
               effectiveBulletCount={effectiveBulletCount}
               assaultVariantAB={assaultVariantAB}
               ccSliderDisplayIdx={ccSliderDisplayIdx}
               currentVariant={currentVariant}
-              dualWieldBonusComp={0}
+              dualWieldBonusComp={dualWieldBonusComp}
               onBulletCountChange={(count) => setAssaultBulletCount(count)}
               onVariantABChange={(ab) => setAssaultVariantAB(ab)}
             />
