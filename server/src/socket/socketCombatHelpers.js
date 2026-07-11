@@ -12,7 +12,7 @@ import { getMutationEffects } from '../services/mutationService.js'
 import {
   calcSkillTotal, calcAttributeNA,
   calcWoundPenalty, calcEncumbrancePenalty,
-  calcResistanceDommages, calcResistanceArmure, calcCarenceArmure,
+  calcResistanceDommages, calcResistanceArmure,
   getModDom, calcDroneRD, calcDroneDegatsNets,
 } from '../lib/charStats.js'
 import { isCaseOccupied, collisionMoveToken } from '../lib/redis.js'
@@ -411,7 +411,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
     const attackerSkillTotal = refSkill ? calcSkillTotal(attrsAttaquant, charSkill, refSkill, genoAttaquant, mutationEffectsAttaquant) : 0
     const woundPenalty = calcWoundPenalty(woundsAttaquant)
     // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations) — corrige PI4
-    // (docs/PLAN_MUTATION2.md Lot 1), calculée une fois et réutilisée (modDom/carenceArmure/encombrement).
+    // (docs/PLAN_MUTATION2.md Lot 1), calculée une fois et réutilisée (modDom/encombrement).
     const for_na_attaquant = calcAttributeNA(attrsAttaquant, 'FOR', genoAttaquant, mutationEffectsAttaquant)
     const totalWeight = invAttaquant.reduce((sum, i) =>
       (i.container === 'Coffre' || i.ref_weight == null) ? sum : sum + i.ref_weight * i.quantity, 0
@@ -419,8 +419,6 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
     const effectiveMalusAttaquant = woundPenalty - (settings.encumbrance_enabled
       ? calcEncumbrancePenalty(totalWeight, for_na_attaquant, settings.encumbrance_multiplier)
       : 0)
-    const equippedAttaquant = invAttaquant.filter(i => i.slot != null)
-    const carenceAttaquant  = calcCarenceArmure(equippedAttaquant, for_na_attaquant)
     const modDom = getModDom(for_na_attaquant)
 
     const rosterAttaquant = await db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first()
@@ -460,7 +458,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       terrainInstableMod = Math.min(0, acrobatieTotal - attackerSkillTotal)
     }
 
-    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant - carenceAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant + multiAttackMalus + situationModComp + tailleMod + terrainInstableMod + deuxArmesBonus
+    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant + multiAttackMalus + situationModComp + tailleMod + terrainInstableMod + deuxArmesBonus
 
     // Roll attaquant
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
@@ -479,7 +477,6 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       ...(multiMalusAttaquant !== 0 ? [{ label: 'Multi-adversaires (attaquant)', value: multiMalusAttaquant, type: 'malus' }] : []),
       ...(multiAttackMalus !== 0 ? [{ label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' }] : []),
       ...(effectiveMalusAttaquant !== 0 ? [{ label: 'Malus santé / encombrement', value: effectiveMalusAttaquant, type: 'malus' }] : []),
-      ...(carenceAttaquant !== 0 ? [{ label: 'Carence armure', value: -carenceAttaquant, type: 'malus' }] : []),
       ...(situationModComp !== 0 ? [{ label: 'Mods situation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' }] : []),
       ...(tailleMod !== 0 ? [{ label: 'Taille cible', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' }] : []),
       ...(terrainInstableMod !== 0 ? [{ label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieTotal})`, value: terrainInstableMod, type: 'malus' }] : []),
@@ -487,7 +484,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       { label: 'Seuil', value: chancesAttaque, type: 'total' },
     ]
     console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
-    console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} carence:${-carenceAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} → seuil:${chancesAttaque}`)
+    console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} → seuil:${chancesAttaque}`)
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId: character.user_id, username: attackerUsername, color: attackerColor,
       formula: '1d20', rolls: attackRolls, total: rollAttaque,
@@ -1290,7 +1287,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const tireurColor    = userRow?.color    ?? '#c86030'
     const tireurUsername = userRow?.username ?? character.name ?? 'Inconnu'
 
-    let skillTotal = 0, effectiveMalus = 0, carenceArmure = 0
+    let skillTotal = 0, effectiveMalus = 0
 
     const sheetTireur = character?.id
       ? await db('char_sheet').where({ character_id: character.id }).first()
@@ -1338,9 +1335,6 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       effectiveMalus = woundPenalty - (settings.encumbrance_enabled
         ? calcEncumbrancePenalty(totalWeight, for_na_tireur, settings.encumbrance_multiplier)
         : 0)
-
-      const equippedTireur = invTireur.filter(i => i.slot != null)
-      carenceArmure = calcCarenceArmure(equippedTireur, for_na_tireur)
     }
 
     const porteeModComp    = PORTEE_MOD_COMP[confirmedModifiers.portee] ?? 0
@@ -1354,7 +1348,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp
 
     const coverageModifier   = options.coverageModifier ?? 0
-    const chancesDeReussite  = skillTotal + totalModComp + effectiveMalus - carenceArmure + coverageModifier
+    const chancesDeReussite  = skillTotal + totalModComp + effectiveMalus + coverageModifier
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
     const isSuccess = rollAttaque <= chancesDeReussite
     const mr = chancesDeReussite - rollAttaque
@@ -1372,7 +1366,6 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       ...(tailleModComp !== 0 ? [{ label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' }] : []),
       ...(isRushedMod !== 0 ? [{ label: 'Précipitation', value: isRushedMod, type: 'malus' }] : []),
       ...(effectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' }] : []),
-      ...(carenceArmure !== 0 ? [{ label: 'Carence armure', value: -carenceArmure, type: 'malus' }] : []),
       ...(coverageModifier !== 0 ? [{ label: 'Couverture cible', value: coverageModifier, type: 'malus' }] : []),
       { label: 'Seuil', value: chancesDeReussite, type: 'total' },
     ]

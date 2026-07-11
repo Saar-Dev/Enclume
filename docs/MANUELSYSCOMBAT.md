@@ -291,15 +291,26 @@ Double tranchant : si le bénéficiaire perd le test, l'adversaire peut casser l
 
 Certaines actions n'autorisent **qu'une seule attaque** par tour :
 
-| Action | Type | Regle |
-|---|---|---|
-| Charge | CaC | Exclusive. Necessite elan (deplacement court gratuit minimum). +3 attaque, +3 dommages, -7 defense jusqu'a prochaine action. |
-| Tir vise | Distance | Exclusive. Immobile obligatoire. +1 test par tranche de 2 INI sacrifies (max +5). |
-| Rafale longue | Distance | Exclusive. 5 a 20 balles. +2 test et +2 dommages par groupe de 5 balles. |
-| Tir de suppression | Distance | Exclusive. Zone 3m de base, +3m ou +2 test par groupe de 5 balles. Test de Chance pour chaque cible dans la zone. |
-| Rafale longue multi-adversaires | Distance | Exclusive. Un groupe de 5 balles par cible. Ecart max 3m entre cibles. |
+| Action | Type | Regle | Statut |
+|---|---|---|---|
+| Charge | CaC | Exclusive. Necessite elan (deplacement court gratuit minimum). +3 attaque, +3 dommages, -7 defense jusqu'a prochaine action. | Bonus/malus implementes (`socketCombatHelpers.js`) — **exclusivite non enforced** (rien n'empeche de charger ET tirer le meme tour) |
+| Tir vise | Distance | Exclusive. Immobile obligatoire. +1 test par tranche de 2 INI sacrifies (max +5). | ✅ Implemente — Session 141 (suite 17), `docs/PLAN_TIRVISE.md` |
+| Rafale longue | Distance | Exclusive. 5 a 20 balles. +2 test et +2 dommages par groupe de 5 balles. | Bonus implementes (`FIRE_MODE_VARIANTS.RL`) — **exclusivite non enforced** |
+| Tir de suppression | Distance | Exclusive. Zone 3m de base, +3m ou +2 test par groupe de 5 balles. Test de Chance pour chaque cible dans la zone. | Absent — fonctionnalite entiere a construire (ciblage de zone), pas juste un flag |
+| Rafale longue multi-adversaires | Distance | Exclusive. Un groupe de 5 balles par cible. Ecart max 3m entre cibles. | Absent |
 
-**Regle de coherence :** `EXCLUSIVE_ACTIONS` dans combatSections.js doit correspondre exactement a cette liste. Une action exclusive detectee dans le payload bloque toute ligne `combat_actions` supplementaire pour ce token au meme tour.
+**Regle de coherence — CORRIGE (Session 141 suite 17) :** l'ancienne mention d'un `EXCLUSIVE_ACTIONS` dans
+`combatSections.js` decrivait une architecture jamais construite. L'implementation reelle vit dans
+`shared/combatExclusiveActions.js` (evaluateur pur, importe identique client + serveur — pattern
+`shared/careerEligibility.js`) : `isExclusiveDeclaration({ mapActions })` est le registre extensible
+(peuple pour Tir vise uniquement ; Charge/Rafale longue le rejoindront chacun dans sa propre session
+future, leurs bonus mecaniques existant deja) ; `isAimEligible`/`getAimIneligibilityReasons` portent la
+regle specifique a Tir vise ("aucune transition d'etat ni autre action ce tour", strictement plus stricte
+que la seule notion d'exclusivite generique — voir Piege ci-dessous).
+
+**Piege trouve en implementant Tir vise :** "exclusive" (au sens generique, LdB) ne signifie PAS
+"immobile" — Charge *exige* un deplacement, donc un flag "exclusive ⇒ pas de move" casserait Charge.
+Immobilite est une contrainte propre a Tir vise, geree separement de l'exclusivite generique.
 
 ---
 

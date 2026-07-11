@@ -1,3 +1,24 @@
+## v173 — 2026-07-11 — Combat : bonus deux armes à distance + retrait de la carence armure
+
+### Serveur
+- [fix] Le bonus "Deux armes" pour un tir à distance (+3, ou +5 en rafale longue) est désormais
+  réellement appliqué au Test de tir — la case à cocher existait déjà mais son effet n'était jamais
+  pris en compte à la résolution du jet.
+- [feat] Le double-arme à distance est maintenant disponible pour les PNJ contrôlés par le MJ
+  (auparavant réservé aux joueurs).
+- [chg] Retrait du malus "Carence armure" (déficit de Force face au poids d'une arme/armure) —
+  mécanique sans source retrouvée dans le Livre de Base après recherche exhaustive.
+
+## v172 — 2026-07-11 — Combat : Tir visé
+
+### Client
+- [feat] Nouvelle option "Tir visé" lors d'un assaut à distance (coup par coup) : sacrifiez de
+  l'Initiative par tranches de 2 points pour gagner jusqu'à +5 à votre Test de tir. Nécessite d'être
+  immobile, arme déjà en main, une seule balle — disponible pour les joueurs comme pour le MJ (PNJ).
+
+### Serveur
+- [feat] Le bonus de Tir visé est désormais validé et appliqué au jet de tir en résolution de combat.
+
 ## v171 — 2026-07-11 — Correctif : jets de combat au pistolet, à l'arme blanche et à l'arc
 
 ### Serveur

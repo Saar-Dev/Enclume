@@ -1,3 +1,5 @@
+import { getAimIniCost } from '../../../shared/combatExclusiveActions.js'
+
 // Definitions d'etats -- matrices de transition INI
 // stateTransitionCost(def, from, to) -> delta INI (0 si from === to)
 
@@ -99,6 +101,10 @@ export function calcIniBreakdown(prevStates, nextStates, mapActions, quick) {
   }
   if (mapActions.attack?.cover_shot) {
     lines.push({ label: 'Tirer depuis couverture', value: nextStates.cover === 'important' ? -5 : -3 })
+  }
+  const aimTranches = mapActions.attack?.aimTranches ?? 0
+  if (aimTranches > 0) {
+    lines.push({ label: `Tir visé ×${aimTranches}`, value: getAimIniCost(aimTranches) })
   }
 
   const obs = quick?.observer ?? 0

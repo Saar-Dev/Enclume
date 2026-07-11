@@ -1,5 +1,5 @@
 # STRUCTURE_SYSCOMBAT.md — Logique complète d'un tour de combat
-> Session 120 — 2026-06-24
+> Session 120 — 2026-06-24 (mise à jour Session 141 suite 16 — correction : `calcCarenceArmure` effacée)
 > Reconstruction depuis le code. Source : socketCombatState.js, socketCombatAnnouncement.js,
 > socketCombatHelpers.js, socketCombatResolution.js, statusService.js, combatFSM.js
 
@@ -240,7 +240,6 @@ Si !needsDefenseWait → advanceSlot(slots, active_slot_idx + 1)
     skillId via ref_equipment_skill_assoc.item_id = equipment_id  [BUG C]
     skillTotal     = calcSkillTotal(attrs, charSkill, refSkill, genotype)
     effectiveMalus = calcWoundPenalty(wounds) - calcEncumbrancePenalty(weight, FOR)
-    carenceArmure  = calcCarenceArmure(equippedItems, for_na)
 
 [6] Modificateurs
     porteeModComp    = PORTEE_MOD_COMP[portee]
@@ -258,7 +257,7 @@ Si !needsDefenseWait → advanceSlot(slots, active_slot_idx + 1)
     coverageModifier = depuis LOS check
 
     chancesDeReussite = skillTotal + porteeModComp + situationModComp + tailleModComp
-                      + isRushedMod + fireModeComp + effectiveMalus - carenceArmure + coverageModifier
+                      + isRushedMod + fireModeComp + effectiveMalus + coverageModifier
 
 [7] Jet 1D20
     isSuccess = roll ≤ chancesDeReussite
@@ -358,7 +357,6 @@ Si !needsDefenseWait → advanceSlot(slots, active_slot_idx + 1)
 [7] Calcul seuil attaque
     attackerSkillTotal   = calcSkillTotal(...)
     effectiveMalus       = woundPenalty - encumbrancePenalty(weight, FOR)
-    carenceAttaquant     = calcCarenceArmure(equipped, for_na)
     modDom               = getModDom(for_na_attaquant)   [table ModDom → bonus dégâts FOR]
     isRushedMod          = -5 si state_vitesse='rushed'
     attackModeBonus      = +3 si offensif ou charge
@@ -371,7 +369,7 @@ Si !needsDefenseWait → advanceSlot(slots, active_slot_idx + 1)
     tailleMod            = TAILLE_MODS[taille]
     terrainInstableMod   = min(0, acrobatieTotal - attackerSkillTotal)  [compétence limitative]
 
-    chancesAttaque = attackerSkillTotal + effectiveMalus - carenceAttaquant
+    chancesAttaque = attackerSkillTotal + effectiveMalus
                    + isRushedMod + attackModeBonus + multiMalusAttaquant + multiAttackMalus
                    + situationModComp + tailleMod + terrainInstableMod + deuxArmesBonus
 

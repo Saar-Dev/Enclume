@@ -1,9 +1,10 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-11 — Session 141 (suite 16) : `ref_equipment_skill_assoc` reconstruite
-> (migration 135, 154 paires arme↔compétence, trou de seed jamais peuplé depuis l'origine) suite à
-> un audit de 4 signalements d'agents externes (item 58) ; Session 141 (suite 14) : cascade
-> suppression token + char_sheet dédoublonné/UNIQUE + atomicité Wizard + bonus féminin corrigé
-> (item 56) ; Coffre (Vault) terminé, Étapes 0-7 (item 57)
+> Dernière mise à jour : 2026-07-11 — Session 141 (suite 17) : Tir visé (LdB p.227-228) + framework
+> Actions Exclusives, `shared/combatExclusiveActions.js` (item 59) ; Session 141 (suite 16) :
+> `ref_equipment_skill_assoc` reconstruite (migration 135, 154 paires arme↔compétence, trou de seed
+> jamais peuplé depuis l'origine) suite à un audit de 4 signalements d'agents externes (item 58) ;
+> Session 141 (suite 14) : cascade suppression token + char_sheet dédoublonné/UNIQUE + atomicité
+> Wizard + bonus féminin corrigé (item 56) ; Coffre (Vault) terminé, Étapes 0-7 (item 57)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -13,11 +14,39 @@
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
+> **Item 59 (Session 141 suite 17) — Tir visé (LdB p.227-228) + framework Actions Exclusives ✅ CLOS.**
+> Chantier lancé par une demande de planification pure ("fonctionnalité qui semble manquer"), mené en
+> plusieurs passes validées une à une : recherche externe (Nystrom *Game Programming Patterns*, trait
+> "Flourish" Pathfinder 2e) → plan → 2 analyses critiques (7 puis 3 points corrigés avant tout code) →
+> backend → client. `shared/combatExclusiveActions.js` (NOUVEAU) : évaluateur pur, pattern
+> `careerEligibility.js` — `getAimIneligibilityReasons` (liste de raisons, pour le tooltip UI) dont
+> `isAimEligible` dérive (jamais dupliqué) + `isExclusiveDeclaration` (registre générique, peuplé pour
+> Tir visé seul — Charge/Rafale longue le rejoindront dans leurs propres sessions, leurs bonus
+> mécaniques existant déjà). Règle centrale : *"tu ne vises que si tu ne fais que ça"* — aucune
+> transition d'état (`state_*` sur `combat_roster`) ni autre action ce tour, résout mécaniquement en
+> une fois l'immobilité/Précipiter/Rechargement. Migration `134` (`combat_actions.aim_bonus_comp`) +
+> `socketCombatAnnouncement.js`/`socketCombatHelpers.js` (validation + Seuil). Client (×2 fenêtres
+> PJ/MJ) : nouvelle option "Tir visé" dans `AssaultRangedPanel.jsx` (3ᵉ choix entre Tir simple/Tir à
+> répétition), grisée avec tooltip listant les raisons d'inéligibilité. **1 correctif annexe** :
+> commentaire JSDoc faux sur `isDualWield` MJ (jamais un bug réel, câblage déjà fonctionnel).
+> **Trouvaille hors scope confirmée avec Saar** : "Viser une Localisation précise" (LdB p.229-230) est
+> une règle distincte (malus pour choisir la zone touchée, pas de lien avec Tir visé) — déjà tracée
+> sous `COM9` (`BUGIDENTIFIE.md`), suite possible non tranchée. **Dette `INI3` ajoutée**
+> (`current_initiative` ≤ 0 non géré, gap systémique pré-existant, pas spécifique à Tir visé). Testé :
+> 10 scénarios unitaires + test réel `resolveAssaultAction` (fixture jetable, nettoyage vérifié) +
+> round-trip migration + ESLint (0 nouvelle erreur) + **SR + parcours navigateur confirmé fonctionnel
+> par Saar**. Non testé : scénarios de rejet `COMBAT_DECLARE_ERROR` en conditions réelles navigateur.
+> Détail complet : `docs/PLAN_TIRVISE.md`, `docs/JOURNAL6.md` "Session 141 (suite 17)".
+
 > **Item 58 (Session 141 suite 16) — Audit combat suite à 4 signalements d'agents externes
 > ("on a tout pété") + `ref_equipment_skill_assoc` reconstruite ✅ CLOS.** Chaque signalement vérifié
-> indépendamment (DB réelle + code + Git) avant action — 1 seul bug majeur réel, 1 fausse alerte
-> (`calcCarenceArmure` non gaté par `encumbrance_enabled` — deux mécaniques distinctes, jamais liées
-> dans aucune source), 2 constats exacts mais déjà tracés dans `docs/PLAN_MUTATION2.md` Lot 3 (non
+> indépendamment (DB réelle + code + Git) avant action — 1 seul bug majeur réel, 1 piste d'abord
+> classée fausse alerte puis réouverte et confirmée (`calcCarenceArmure` — d'abord jugé règle de base
+> LdB Session 56 sur la foi d'un tag `(LdB)` non sourcé dans `docs/Old/JOURNAL2.md:5053`, sans page
+> citée ; recherche exhaustive relancée sur exigence Saar dans tout `docs/REGLES/*` → zéro trace
+> textuelle trouvée → mécanique jugée non sourcée et **effacée entièrement** — fonction, 2 sites
+> d'appel, breakdown, doc ; colonne `ref_equipment.min_str` conservée, donnée brute indépendante du
+> calcul fabriqué), 2 constats exacts mais déjà tracés dans `docs/PLAN_MUTATION2.md` Lot 3 (non
 > touchés ici). **Bug réel** : `ref_equipment_skill_assoc` (table "compétence d'utilisation" pour
 > résoudre un jet de combat, distincte de `ref_equipment_skills` "compétences boostées/requises",
 > jamais consommée en jeu — voir dette `[EQSKILLS1]`) n'avait **jamais été peuplée par aucun
@@ -29,9 +58,10 @@
 > (dont Lance-flammes : contact→distance, erreur de mémoire de Saar lui-même corrigée avant codage).
 > **Vérification ×3 exigée par Saar** ("la faiblesse d'un LLM c'est sa mémoire") : triple recoupement
 > automatisé (nom↔base, libellé↔catalogue, proposé↔existant), état final 154/154 paires (0 écart),
-> round-trip `down`/`up` réel confirmé. **Testé** : recoupements automatisés + round-trip. **Non
-> testé** : parcours combat réel en navigateur (assaut arme de poing/CaC). Détail complet :
-> `docs/JOURNAL6.md` "Session 141 (suite 16)".
+> round-trip `down`/`up` réel confirmé. **Testé** : recoupements automatisés + round-trip +
+> **parcours combat réel en navigateur confirmé fonctionnel par Saar** (assaut arme de poing/CaC,
+> effacement `calcCarenceArmure` inclus — "SR, fonctionnel, test OK"). Détail complet :
+> `docs/JOURNAL6.md` "Session 141 (suite 16)" et "(suite 16 — correction)".
 
 > **Item 56 (Session 141 suite 14) — 4 correctifs enchaînés, chacun trouvé en testant le précédent :**
 > (1) suppression d'un character/battlemap ne supprimait jamais ses tokens (`tokenLifecycle.js`,

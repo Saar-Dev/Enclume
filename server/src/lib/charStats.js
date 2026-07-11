@@ -356,18 +356,6 @@ export function calcResistanceArmure(equippedItems) {
   return { etq: compute('ref_protection'), prt: compute('ref_protection_shock') }
 }
 
-/**
- * Calcule la carence de Force pour l'ensemble des armures équipées.
- * Malus = -1 par point de FOR manquant, appliqué à tous les jets.
- * @param {Array} equippedItems — tous les items équipés (slot non null)
- * @param {number} forNA — valeur nette FOR du personnage
- * @returns {number} carence (≥ 0)
- */
-export function calcCarenceArmure(equippedItems, forNA) {
-  const worstMinStr = equippedItems.reduce((acc, i) => Math.max(acc, i.ref_min_str ?? 0), 0)
-  return Math.max(0, worstMinStr - forNA)
-}
-
 // ─── Test de Choc — LdB p.239 ────────────────────────────────────────────────
 // is_lethal = dégâts nets >= 30 (blessure mortelle par impact direct — membre détruit)
 const MEMBER_LOCATIONS = ['bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche']

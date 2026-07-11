@@ -22,25 +22,41 @@ export function getAimIniCost(aimTranches) {
 // Règle unique : aucune transition d'état ce tour + aucune autre mapAction/quick action.
 // `entry` = ligne combat_roster AVANT cette déclaration (état persisté, jamais reconstruit depuis
 // le payload client).
-export function isAimEligible({ mapActions, state, quick, entry, isDualWield, bulletCount }) {
-  if (bulletCount !== 1) return false
-  if (isDualWield) return false
+//
+// Implémentation en une seule fonction (getAimIneligibilityReasons), source unique de vérité :
+// isAimEligible (utilisé serveur, juste besoin d'un pass/fail) en dérive directement — évite de
+// dupliquer les conditions entre un booléen et une liste de raisons.
+
+// Retourne la liste des raisons d'inéligibilité (vide = éligible). Raisons en français direct,
+// pas de clé i18n — le domaine Combat est explicitement hors périmètre i18n dans ce projet
+// (.claude/rules/react.md : "Combat (12) + équipement (6) : hors scope — sprint dédié futur"),
+// cohérent avec les tooltips combat existants déjà en dur (ex. "Assommé — ne peut pas attaquer").
+export function getAimIneligibilityReasons({ mapActions, state, quick, entry, isDualWield, bulletCount }) {
+  const reasons = []
+  if (bulletCount !== 1) reasons.push('tir non simple (répétition ou rafale)')
+  if (isDualWield) reasons.push('deux armes')
   // Préconditions intrinsèques : arme déjà au clair + déjà en coup par coup AVANT ce tour.
-  if (entry?.state_weapon !== 'drawn') return false
-  if (entry?.state_fire_mode !== 'cc') return false
+  if (entry?.state_weapon !== 'drawn') reasons.push('arme pas encore au clair')
+  if (entry?.state_fire_mode !== 'cc') reasons.push('pas encore en coup par coup')
   // Aucune transition d'état ce tour, sur aucun état.
-  if (state?.position !== entry?.state_position) return false
-  if (state?.weapon !== entry?.state_weapon) return false
-  if (state?.fire_mode !== entry?.state_fire_mode) return false
-  if (state?.cover !== entry?.state_cover) return false
-  if (state?.vitesse !== entry?.state_vitesse) return false
+  if (state?.position !== entry?.state_position) reasons.push('changement de posture')
+  if (state?.weapon !== entry?.state_weapon) reasons.push('changement d\'arme')
+  if (state?.fire_mode !== entry?.state_fire_mode) reasons.push('changement de mode de tir')
+  if (state?.cover !== entry?.state_cover) reasons.push('changement de couverture')
+  if (state?.vitesse !== entry?.state_vitesse) reasons.push('précipitation')
   // Aucune autre mapAction / quick action ce tour.
-  if (mapActions?.move) return false
-  if (mapActions?.interact) return false
-  if (mapActions?.reload) return false
-  if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) return false
-  if ((quick?.observer ?? 0) > 0 || (quick?.reperer ?? 0) > 0 || quick?.phrase) return false
-  return true
+  if (mapActions?.move) reasons.push('déplacement')
+  if (mapActions?.interact) reasons.push('interaction')
+  if (mapActions?.reload) reasons.push('rechargement')
+  if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) reasons.push('corps à corps')
+  if ((quick?.observer ?? 0) > 0) reasons.push('observation')
+  if ((quick?.reperer ?? 0) > 0) reasons.push('repérage')
+  if (quick?.phrase) reasons.push('phrase prononcée')
+  return reasons
+}
+
+export function isAimEligible(args) {
+  return getAimIneligibilityReasons(args).length === 0
 }
 
 // Déclaration exclusive ? (registre — Charge/Rafale longue/Tir de suppression rejoindront cette

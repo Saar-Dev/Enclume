@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 16) — 2026-07-11
+> Session 141 (suite 17) — 2026-07-11
 
 ---
 
@@ -107,8 +107,58 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 16) (2026-07-11)
+## ÉTAT COURANT — Session 141 (suite 17) (2026-07-11)
 
+- **Session 141 (suite 17) — Tir visé (LdB p.227-228) + framework Actions Exclusives ✅ CLOS.**
+  Chantier ouvert par une demande de planification pure ("fonctionnalité qui semble manquer"), mené
+  en passes validées une à une : recherche externe (Bob Nystrom, *Game Programming Patterns* — la
+  légalité d'une action doit être encapsulée dans sa propre définition ; trait "Flourish" de
+  Pathfinder 2e/Foundry VTT — même mécanique, confirme qu'un registre léger est le bon dimensionnement,
+  **pas** un moteur de règles généraliste type "Rule Elements" PF2e, qui existe spécifiquement pour du
+  contenu communautaire — pas notre cas) → plan (`docs/PLAN_TIRVISE.md`) → **2 analyses critiques
+  demandées par Saar avant tout code** (7 puis 3 points trouvés et corrigés : mauvais numéro de
+  migration prévisionnel, type de colonne faux, gap `[INCONNU]` sur `current_initiative ≤ 0` non géré
+  — dette `INI3` ajoutée séparément, duplication de check entre deux fonctions) → backend → client.
+  `shared/combatExclusiveActions.js` (NOUVEAU) : évaluateur pur, pattern `careerEligibility.js` —
+  `getAimIneligibilityReasons` (liste de raisons, alimente le tooltip UI) dont `isAimEligible` dérive
+  (jamais dupliqué) + `isExclusiveDeclaration` (registre générique d'actions exclusives, peuplé pour
+  Tir visé seul — Charge/Rafale longue le rejoindront dans leurs propres sessions futures, leurs
+  bonus mécaniques existant déjà, seule l'exclusivité manque). **Règle centrale, trouvée en
+  discussion avec Saar** : *"tu ne vises que si tu ne fais que ça"* — dégainer/changer de mode de tir
+  est une transition d'état au même titre qu'un déplacement, résout mécaniquement en une seule règle
+  l'immobilité, l'incompatibilité avec Précipiter et avec Rechargement (au lieu de trois cas
+  particuliers séparés). **Piège explicitement évité** : "exclusive" (générique) ≠ "immobile" — Charge
+  exige un déplacement, un flag générique aurait cassé Charge à sa correction future — gardés
+  séparés par construction. Migration `134` (`combat_actions.aim_bonus_comp`, smallint nullable,
+  miroir `fire_mode_bonus_comp`) + `socketCombatAnnouncement.js`/`socketCombatHelpers.js` (validation
+  serveur + Seuil). **Collision évitée avec un agent concurrent** : codage de `resolveAssaultAction`
+  suspendu en trouvant `totalModComp`/`breakdown` en cours de modification non committée par un autre
+  agent (correctif double-comptage bonus double-arme), repris seulement après confirmation Saar.
+  Client (×2 fenêtres PJ `CombatActionWindow.jsx` + MJ `CombatGmDeclareWindow.jsx`) : inventaire UI
+  exhaustif fait avant codage (demande explicite Saar) — nouvelle option "Tir visé" dans
+  `AssaultRangedPanel.jsx` (3ᵉ choix entre "Tir simple"/"Tir à répétition"), grisée avec tooltip
+  listant les raisons précises d'inéligibilité (demande Saar : *"Action impossible car - X"*).
+  **1 correctif annexe trouvé en chemin** : commentaire JSDoc faux prétendant `isDualWield` figé à
+  `false` côté MJ — vérifié faux par lecture du code réel, câblage déjà pleinement fonctionnel,
+  seule la documentation était obsolète (corrigée, zéro changement de comportement).
+  **Trouvaille finale de Saar, hors scope confirmé** : *"le Tir visé, ça fonctionne sur une
+  localisation visée ?!"* — "Viser une Localisation précise" (LdB p.229-230) est une règle
+  **distincte** (malus pour choisir la zone touchée au lieu du 1D20 aléatoire, aucun lien mécanique
+  avec Tir visé), déjà documentée et jamais implémentée sous l'identifiant **`COM9`**
+  (`docs/BUGIDENTIFIE.md`) — suite possible, non tranchée à la clôture de cette session.
+  **Dette `INI3` ajoutée** (`docs/BUGIDENTIFIE.md`, cluster H) : `current_initiative ≤ 0` non géré
+  côté serveur (gap systémique pré-existant, documenté par `MANUELSYSCOMBAT.md` §3, Tir visé
+  augmente juste la probabilité de le déclencher — pas corrigé dans ce chantier).
+  **Testé** : `node --check` (backend), 10 scénarios unitaires `isAimEligible`/
+  `getAimIneligibilityReasons`, test réel de bout en bout sur `resolveAssaultAction` (fixture
+  jetable en base réelle, nettoyage vérifié — la fonction n'acceptant pas de transaction), round-trip
+  migration réel (P52/P53/P54 respectés), ESLint client (`git stash`/`pop` : 14 problèmes
+  pré-existants confirmés inchangés, 0 nouvelle erreur), **SR + parcours navigateur confirmé
+  fonctionnel par Saar**. **Non testé** : scénarios de rejet `COMBAT_DECLARE_ERROR` en conditions
+  réelles navigateur (fonction pure et cas nominal seuls vérifiés en direct) ; combinaisons Tir
+  visé + Précipiter/Rechargement en conditions réelles (couvertes par construction, pas re-testées
+  manuellement scénario par scénario). Détail complet : `docs/PLAN_TIRVISE.md`,
+  `docs/JOURNAL6.md` "Session 141 (suite 17)", `docs/MANUELSYSCOMBAT.md` §6.4 (mis à jour).
 - **Session 141 (suite 16) — Audit combat suite à 4 signalements d'agents externes + `ref_equipment_
   skill_assoc` reconstruite ✅ CLOS.** Point de départ : deux lots de rapports d'agents externes
   signalant 4 problèmes potentiels côté combat/résistances ("on a tout pété" — Saar). Chaque
@@ -123,10 +173,17 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   aucune UI client). Trou bien plus large que rapporté : quasi-totalité des catégories d'armes
   touchée (pas seulement "Armes de poing"), et non uniforme (6 compétences différentes dans la seule
   catégorie déjà complète "Arme à énergie", jugement arme par arme, jamais une règle catégorie→
-  compétence). **2 fausses pistes écartées après vérification** : `calcCarenceArmure` non gaté par
-  `encumbrance_enabled` — infirmé, deux mécaniques distinctes (carence = règle de base LdB Session
-  56, encombrement = règle maison explicitement étiquetée comme telle), jamais liées dans aucune
-  source du projet. "Résistances naturelles"/Choc — constats exacts mais **déjà documentés** dans
+  compétence). **1 fausse piste initialement écartée, puis réouverte et confirmée** : `calcCarenceArmure`
+  non gaté par `encumbrance_enabled` — d'abord classé "infirmé" (carence présentée comme règle de
+  base LdB Session 56, distincte de l'encombrement, règle maison étiquetée comme telle) sur la seule
+  foi d'un tag `(LdB)` non sourcé dans `docs/Old/JOURNAL2.md:5053` (aucune page citée, contrairement
+  à la quasi-totalité des autres entrées de ce journal). Recherche exhaustive relancée sur exigence
+  Saar (grep complet `docs/REGLES/*` — REGLESYSCOMBAT.md, REGLEARMURE.md, REGLE_CREATION.txt,
+  REGLECOMPETENCE.md) : **zéro citation, zéro page, aucune trace textuelle** de "carence"/"min_str"/
+  "Force minimum" dans le LdB. Mécanique jugée non sourcée → **`calcCarenceArmure` effacée
+  entièrement** (fonction, 2 sites d'appel CaC+distance, breakdown, logs debug, doc associée) —
+  colonne `ref_equipment.min_str` conservée (donnée brute réutilisable, indépendante du calcul
+  fabriqué). "Résistances naturelles"/Choc — constats exacts mais **déjà documentés** dans
   `docs/PLAN_MUTATION2.md` Lot 3 (ouvert le même jour), bloqués sur un `[INCONNU]` documentaire réel,
   chantier séparé non touché ici. **Correction** : Saar a fourni `docs/ExtractCOMP.md` (extraction de
   la vraie colonne "Compétence associée" du Google Sheet source, 139 armes — distincte de la colonne
@@ -486,7 +543,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **141 migrations stables** (135_ref_equipment_skill_assoc_weapons — Session 141 (suite 16) ;
-  134_combat_actions_aim_bonus_comp — Tir visé, session parallèle ;
+  134_combat_actions_aim_bonus_comp — Tir visé, Session 141 (suite 17) ;
   133_char_sheet_wizard_locked_backfill — Session 141 (suite 14) ;
   132_char_sheet_dedupe_and_unique — Session 141 (suite 14) ;
   131_split_equippable_stacks — session parallèle ;

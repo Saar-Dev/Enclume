@@ -1,4 +1,5 @@
 import { CC_REPS_STEPS, RL_BUTTONS } from './combatSections.js'
+import { AIM_MAX_TRANCHES, getAimBonusComp } from '../../../shared/combatExclusiveActions.js'
 
 const P = {
   section: {
@@ -61,6 +62,7 @@ const P = {
   radioActive: { borderColor: '#e07070', background: '#e07070' },
   slider:      { width: '100%', accentColor: '#e07070', cursor: 'pointer' },
   summaryText: { fontSize: 11, color: '#e07070', fontWeight: 600, fontStyle: 'italic' },
+  optionDisabled: { opacity: 0.4, cursor: 'not-allowed' },
 }
 
 export default function AssaultRangedPanel({
@@ -70,9 +72,9 @@ export default function AssaultRangedPanel({
   getLabel,             // (tokenId) => string
   onChooseTarget,       // () => void
   showDualWieldSection, // bool — hasTwoWeapons && sameFirMode
-  isDualWield,          // bool (false pour GM)
+  isDualWield,          // bool — état réel, câblé identique PJ (CombatActionWindow) et MJ (CombatGmDeclareWindow)
   currentFireMode,      // 'CC' | 'RC' | 'RL'
-  onDualWieldChange,    // (bool) => void (no-op pour GM)
+  onDualWieldChange,    // (bool) => void — setter réel des deux côtés
   assaultBulletCount,   // number | 'multi' | null
   effectiveBulletCount, // number — assaultBulletCount ?? 1 (calculé par le parent)
   assaultVariantAB,     // 'A' | 'B'
@@ -81,6 +83,9 @@ export default function AssaultRangedPanel({
   dualWieldBonusComp,   // number (0 pour GM)
   onBulletCountChange,  // (count) => void
   onVariantABChange,    // (ab) => void
+  aimTranches,          // number 0-5 — Tir visé (0 = non utilisé)
+  onAimTranchesChange,  // (n) => void
+  aimIneligibilityReasons, // string[] — vide = éligible (shared/combatExclusiveActions.js)
 }) {
   const fireModeLabel = { CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }[currentFireMode] ?? currentFireMode
 
@@ -144,18 +149,57 @@ export default function AssaultRangedPanel({
             <>
               <div
                 style={P.option}
-                onClick={() => { onBulletCountChange(1); onVariantABChange('A') }}
+                onClick={() => { onBulletCountChange(1); onVariantABChange('A'); onAimTranchesChange(0) }}
               >
                 <div>
                   <div style={P.optionLabel}>Tir simple</div>
                   <div style={P.optionSub}>1 balle : +0</div>
                 </div>
-                <span style={{ ...P.radio, ...(effectiveBulletCount === 1 ? P.radioActive : {}) }} />
+                <span style={{ ...P.radio, ...(effectiveBulletCount === 1 && !aimTranches ? P.radioActive : {}) }} />
               </div>
+
+              {/* Tir visé (LdB p.227-228, docs/PLAN_TIRVISE.md) — action exclusive, immobile,
+                  1 balle. Grisé + tooltip listant les raisons tant qu'inéligible
+                  (shared/combatExclusiveActions.js, source unique client + serveur). */}
+              {(() => {
+                const aimDisabled = aimIneligibilityReasons.length > 0
+                return (
+                  <div
+                    style={{ ...P.option, ...(aimDisabled ? P.optionDisabled : {}) }}
+                    title={aimDisabled ? `Action impossible car : ${aimIneligibilityReasons.join(', ')}` : undefined}
+                    onClick={() => {
+                      if (aimDisabled) return
+                      onBulletCountChange(1); onVariantABChange('A')
+                      onAimTranchesChange(aimTranches > 0 ? aimTranches : 1)
+                    }}
+                  >
+                    <div>
+                      <div style={P.optionLabel}>Tir visé</div>
+                      <div style={P.optionSub}>1 balle, immobile — +1 test / 2 INI sacrifiés (max +5)</div>
+                    </div>
+                    <span style={{ ...P.radio, ...(aimTranches > 0 ? P.radioActive : {}) }} />
+                  </div>
+                )
+              })()}
+              {aimTranches > 0 && (
+                <>
+                  <input
+                    type="range" min={1} max={AIM_MAX_TRANCHES} step={1}
+                    value={aimTranches}
+                    style={P.slider}
+                    onChange={e => onAimTranchesChange(Number(e.target.value))}
+                  />
+                  <div style={P.summaryText}>
+                    {aimTranches} tranche{aimTranches > 1 ? 's' : ''} (-{aimTranches * 2} INI) : +{getAimBonusComp(aimTranches)} test
+                  </div>
+                </>
+              )}
+
               <div
                 style={P.option}
                 onClick={() => {
                   if (!assaultBulletCount || assaultBulletCount === 1) onBulletCountChange(2)
+                  onAimTranchesChange(0)
                 }}
               >
                 <div style={P.optionLabel}>Tir à répétition</div>

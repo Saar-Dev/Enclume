@@ -106,9 +106,6 @@ const skillTotal   = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)
 | Fonction | Paramètres | Retour | Notes |
 |---|---|---|---|
 | `calcResistanceArmure(equippedItems)` | items filtrés par slot | `{ etq, prt }` (minuscules, null si pas d'armure) | Mille-feuille : max + rest/2 |
-| `calcCarenceArmure(equippedItems, forNA)` | tous items équipés + FOR_na | déficit armure (entier **≥ 0**) | `max(0, worstMinStr - forNA)` — à soustraire du skill total |
-
-⚠️ **`calcCarenceArmure` retourne ≥ 0 (déficit positif), pas un malus signé.** Utilisation : `skillTotal - calcCarenceArmure(...)`.
 
 ### Blessures & encombrement
 
@@ -142,13 +139,13 @@ Maîtrise cible 15 : 11 PE
 ## Données nécessaires par rôle en combat
 
 **Tireur :**
-- `char_attributes` + `char_archetype → ref_genotypes` → pour `calcSkillTotal` + `calcCarenceArmure`
+- `char_attributes` + `char_archetype → ref_genotypes` → pour `calcSkillTotal`
 - Compétence arme :
   `weapon_inv_id → char_inventory.equipment_id → ref_equipment_skill_assoc WHERE item_id = equipment_id → skill_id`
   → `char_skills WHERE { char_sheet_id, skill_id }` + `ref_skills WHERE id = skill_id`
   **ATTENTION : `ref_equipment_skill_assoc.item_id` est FK vers `ref_equipment.id`, pas `char_inventory.id`**
 - `char_inventory` :
-  - arme snapshot (`ref_damage_h`, `ref_range`) + armures équipées slot MG/MD → `calcCarenceArmure`
+  - arme snapshot (`ref_damage_h`, `ref_range`)
   - **TOUS les items `container != 'Coffre'`** → `totalWeight` pour `calcEncumbrancePenalty` (fetch séparé)
 - `character_wounds` → pour `calcWoundPenalty`
 - `combat_roster.state_character` → `is_rushed` pour le malus −5 Compétence
@@ -411,7 +408,7 @@ COMBAT_MELEE_DEFENSE_CONFIRM (défenseur PJ clique "Défendre") :
 skillTotal = calcAN(for_na) + calcAN(coo_na) + mastery  // COMBAT_A_MAINS_NUES / COMBAT_ARME : attr FOR+COO
 
 // Chances de réussite attaque
-chancesAttaque = skillTotal + effectiveMalus - carenceArmure + isRushedMod
+chancesAttaque = skillTotal + effectiveMalus + isRushedMod
 
 // Chances de réussite défense
 chanceDefense = defenderSkillTotal + defenderEffectiveMalus

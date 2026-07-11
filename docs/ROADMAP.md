@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-07-08 Session 141 (suite 6)
+> Dernière mise à jour : 2026-07-11 Session 141 (suite 16 — correction)
 
 ---
 
@@ -222,9 +222,10 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
 
 - **Arrondi mille-feuille** — Résolu session 56 : `polarisRound(rest / 2)`. `calcResistanceArmure` dans `charStats.js`. `calcMillefeuille` client synchronisé.
 
-- **Carence FOR côté serveur** — Résolu session 56 : `calcCarenceArmure(equippedItems, forNA)` dans `charStats.js`. Malus = −1 par point de FOR manquant, appliqué à tous les jets (LdB).
-
-- **Affichage carence FOR (fiche perso)** — Reporté Chantier 11 sprint 3. `ref_min_str` disponible dans le SELECT GET /inventory. L'affichage rouge (FOR < min_str) nécessite `forNA` dans `ArmorWoundPanel` — logiquement groupé avec la résolution dommages en combat.
+- **Carence FOR côté serveur** — Implémentée session 56 (`calcCarenceArmure`), **effacée session 141
+  (suite 16)** : aucune trace textuelle trouvée dans `docs/REGLES/*` malgré recherche exhaustive, le
+  tag `(LdB)` d'origine n'a jamais cité de page. Colonne `ref_equipment.min_str` conservée (donnée
+  brute), calcul et application retirés du pipeline combat.
 
 - **DSL effets armes/munitions (Étape 2 Module Armes)** — `ref_equipment.effects` contient un DSL type `DMG_H=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Syntaxe : `TYPE=ACTION(VALEUR)` séparés par `;`. Actions : `SET` (écrase), `ADD` (ajoute), `TXT=FX=` (tag qualitatif). Chargement d'une munition → override des stats de l'arme via ce parseur. Fail-safe : si DSL malformé → console.warn + stats de base de l'arme.
 
@@ -432,7 +433,7 @@ Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation doc
 ## Chantiers futurs — à analyser
 
 ### Audit localisation (blessures)
-Le système de localisation des blessures est implanté (LOC_TABLE D20, `character_wounds` avec `wound_location`, `ArmorWoundPanel`, `LocationPanel`) mais le suivi a été négligé ou mal fait. Faire un point complet : vérifier que les localisations sont bien enregistrées, affichées et prises en compte dans tous les flux (assaut PJ + PNJ, shock test, carence FOR). Sprint d'audit avant toute extension.
+Le système de localisation des blessures est implanté (LOC_TABLE D20, `character_wounds` avec `wound_location`, `ArmorWoundPanel`, `LocationPanel`) mais le suivi a été négligé ou mal fait. Faire un point complet : vérifier que les localisations sont bien enregistrées, affichées et prises en compte dans tous les flux (assaut PJ + PNJ, shock test). Sprint d'audit avant toute extension.
 
 ### Environnement de carte 2D (Redis)
 Alternative à la carte 3D voxel — mode "Roll20-like" : image en fond, quadrillage 2D, tokens 2D.

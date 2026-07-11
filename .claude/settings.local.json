@@ -169,7 +169,9 @@
       "Bash(node -e \"require\\('dotenv'\\).config\\(\\); console.log\\(JSON.stringify\\({DATABASE_URL: process.env.DATABASE_URL ? '[set]' : undefined, PGHOST: process.env.PGHOST, PGDATABASE: process.env.PGDATABASE, PGUSER: process.env.PGUSER, PGPORT: process.env.PGPORT}\\)\\)\")",
       "Bash(git -C .. log --oneline -- server/src/routes/equipment.js)",
       "Bash(git -C .. ls-files server/src/routes/equipment.js)",
-      "Bash(rm -f gen_migration_data.json matched_rows_tmp.json proposed_pairs_tmp.json *)"
+      "Bash(rm -f gen_migration_data.json matched_rows_tmp.json proposed_pairs_tmp.json *)",
+      "Bash(node --check client/src/components/combatSections.js)",
+      "Bash(echo \"grep exit: $?\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\Nemet\\Documents\\Enclume\\server"

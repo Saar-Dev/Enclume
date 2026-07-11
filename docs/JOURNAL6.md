@@ -2482,3 +2482,152 @@ Détail complet, étape par étape avec tous les tests : `docs/PLAN_VAULT.md`.
   `.claude/rules/combat.md`), mais le calcul de bout en bout n'a pas été rejoué en session live.
 - Détail complet de l'investigation (recherche Git, admin API, outil `EditeurEQ.html`, distinction
   des deux tables) : cette conversation, `server/src/db/migrations/135_ref_equipment_skill_assoc_weapons.js`.
+
+## Session 141 (suite 17) — 2026-07-10/11 — Tir visé (LdB p.227-228) + framework Actions Exclusives ✅ CLOS
+
+- Point de départ : Saar a demandé la planification d'une mécanique "qui semble manquer" — Tir visé
+  était confirmé absent (`docs/REGLES/REGLESYSCOMBAT.md` transcrit mais jamais câblé, aucune trace
+  dans `MANUELSYSCOMBAT.md` §6.4 au-delà d'une ligne "à implémenter"). Session longue, en plusieurs
+  passes : recherche externe → plan → 2 analyses critiques successives → codage backend → codage
+  client, chaque étape validée par Saar avant la suivante (règle "un sujet à la fois" respectée sur
+  toute la session malgré son ampleur).
+- **Recherche externe demandée explicitement par Saar** avant de figer l'architecture (*"trouver des
+  dépôts GitHub inspirants... s'assurer que l'architecture est robuste et dynamique"*) :
+  [*A Turn-Based Game Loop*](https://journal.stuffwithstuff.com/2014/07/15/a-turn-based-game-loop/)
+  (Bob Nystrom) — la légalité d'une action doit être encapsulée dans sa propre définition, pas
+  dispersée ; trait **"Flourish"** de Pathfinder 2e (Foundry VTT) — même mécanique ("une seule action
+  à trait Flourish par tour") confirmant qu'un registre léger est la solution standard, **pas** un
+  moteur de règles généraliste type "Rule Elements" (PF2e en a un, mais spécifiquement parce qu'il
+  doit supporter du contenu communautaire non-développeur — pas notre cas, ensemble d'actions
+  exclusives fixe et développeur-authored).
+- **Architecture retenue** : `shared/combatExclusiveActions.js` (NOUVEAU) — évaluateur pur, pattern
+  déjà éprouvé `shared/careerEligibility.js` (une seule source de vérité, importée identique client +
+  serveur). `getAimIneligibilityReasons({mapActions, state, quick, entry, isDualWield, bulletCount})`
+  = implémentation réelle (liste de raisons d'échec, pour le tooltip UI) ; `isAimEligible` en dérive
+  (`reasons.length === 0`) — jamais dupliqué entre un booléen serveur et une liste de raisons client.
+  `isExclusiveDeclaration` = registre générique séparé, peuplé pour Tir visé seul (décision Saar :
+  construire le framework maintenant car Charge/Rafale longue en auront besoin — leurs bonus
+  mécaniques existent déjà, seule l'exclusivité manque — mais ne pas coder leurs déclencheurs dans ce
+  chantier, chacun sa session).
+- **Règle métier centrale, trouvée en discussion avec Saar (pas dans le LdB littéralement, mais
+  cohérente avec lui)** : *"tu ne vises que si tu ne fais que ça"* — dégainer son arme ou changer de
+  mode de tir est une transition d'état au même titre qu'un déplacement (`state_position`/
+  `state_weapon`/`state_fire_mode`/`state_cover`/`state_vitesse` sur `combat_roster`, tous égaux).
+  Cette règle unique résout mécaniquement, sans code séparé, trois questions initialement traitées
+  comme indépendantes : immobilité (déplacement = transition interdite), incompatibilité avec
+  Précipiter (vitesse doit rester inchangée), incompatibilité avec Rechargement (aucune autre
+  mapAction autorisée). **Piège explicitement évité** : "exclusive" (générique) ≠ "immobile" — Charge
+  *exige* un déplacement, un flag générique "exclusive ⇒ pas de move" aurait cassé Charge le jour de
+  sa correction. Les deux notions gardées séparées par construction.
+- **2 analyses critiques du plan, demandées par Saar avant tout code** (*"analyse critique de ta
+  proposition"*, puis *"analyse critique de ton plan"*) — 7 + 3 points trouvés et corrigés avant
+  codage, aucun après : mauvais numéro de migration prévisionnel (127 au lieu de 134, dérive P53
+  anticipée puis confirmée en conditions réelles) ; type de colonne prévisionnel faux (`integer` au
+  lieu de `smallint`, corrigé en relisant `57_combat_v3.js` avant d'écrire la migration) ; interaction
+  avec le gap systémique connu "`current_initiative` ≤ 0 non géré" (`MANUELSYSCOMBAT.md` §3) — Tir
+  visé (jusqu'à -10 INI) augmente fortement la probabilité de le déclencher, documenté séparément
+  (**Dette INI3**, `docs/BUGIDENTIFIE.md`, non corrigé ici) ; duplication du check CaC entre
+  `isAimEligible` et `isExclusiveDeclaration` — responsabilités séparées après correction (légalité
+  intrinsèque de l'action vs combinaison avec d'autres attaques ce tour).
+- **Codage backend (Étapes 0-3), vérifié à trois niveaux avant tout passage au client** : migration
+  `134_combat_actions_aim_bonus_comp.js` (NOUVEAU, colonne `smallint nullable`, miroir exact de
+  `fire_mode_bonus_comp`) — round-trip `down()`/`up()` réel testé en base (P52/P53/P54 respectés,
+  numéro reconfirmé par `ls` au moment de coder : 133 déjà pris entre-temps par les chantiers
+  Revers/Vault, comme anticipé). `socketCombatAnnouncement.js` (validation `aimTranches` recalculée
+  serveur, jamais confiance au client) + `socketCombatHelpers.js` (`resolveAssaultAction`,
+  `aim_bonus_comp` ajouté à `totalModComp` + ligne `breakdown`). **10 scénarios unitaires** sur
+  `isAimEligible`/`getAimIneligibilityReasons` (node -e) + **test réel de bout en bout** sur
+  `resolveAssaultAction` (fixture jetable en base réelle — campagne/personnage/battlemap/token/
+  roster/arme créés puis explicitement supprimés, `resolveAssaultAction` n'acceptant pas de
+  transaction, contrairement au reste du pipeline serveur) : Seuil et breakdown vérifiés corrects
+  (nominal +3, contrôle négatif 0/absent), nettoyage confirmé après coup.
+- **Collision évitée avec un travail concurrent non committé** : avant de toucher
+  `socketCombatHelpers.js` pour l'Étape 3, `git diff` a révélé que `totalModComp`/`breakdown`
+  (exactement la zone visée) étaient en cours de modification par un autre agent (correctif
+  double-comptage du bonus double-arme, HEAD committé avait déjà une régression que la copie de
+  travail était en train de corriger) — codage suspendu, signalé à Saar, repris seulement après
+  confirmation explicite ("les autres agents sont en pause").
+- **Inventaire UI exhaustif demandé par Saar avant tout code client** (*"tu as planifié... ou tu fais
+  à l'arrache ?"*) — lecture complète de `AssaultRangedPanel.jsx` (composant partagé PJ/MJ) avant de
+  proposer un emplacement. Placement confirmé : 3ᵉ option radio dans la section "Type de tir" (mode
+  coup par coup), entre "Tir simple" et "Tir à répétition", mutuellement exclusive avec la
+  répétition. **Tooltip par raison demandé par Saar** (*"Action impossible car - déplacement"*) —
+  `getAimIneligibilityReasons` étendue en conséquence (liste de raisons françaises en dur, domaine
+  Combat explicitement exempté de la règle i18n par `.claude/rules/react.md`, cohérent avec les
+  tooltips combat existants).
+- **Question de Saar ayant révélé un faux problème** : *"pourquoi `isDualWield` est figé à faux côté
+  MJ ?"* — vérifié faux en lisant le code réel (`CombatGmDeclareWindow.jsx:94,808,810`), c'était un
+  commentaire JSDoc obsolète dans `AssaultRangedPanel.jsx`, le câblage MJ était déjà pleinement
+  fonctionnel et identique au joueur. Corrigé (documentation uniquement, zéro changement de
+  comportement).
+- **Codage client (Étapes 4-6, ×2 fenêtres PJ + MJ/PNJ)** : `combatSections.js` (affichage indicatif
+  du coût INI) ; `AssaultRangedPanel.jsx` (option "Tir visé" + slider 0-5 tranches + grisage/tooltip
+  par raison) ; `CombatActionWindow.jsx` et `CombatGmDeclareWindow.jsx` (état `aimTranches`,
+  reconstruction de l'objet `mapActions`/`state`/`entry` pour l'éligibilité — **`entry` = `rosterEntry`/
+  `activePnjEntry` (clés `state_*` préfixées, forme brute DB), pas `initialStates.current` comme
+  supposé initialement dans le plan** — écart trouvé en relisant le code avant de coder, corrigé ;
+  payload, `assaultValid` étendu). `git stash`/`pop` : 14 problèmes ESLint pré-existants confirmés
+  inchangés (0 nouvelle erreur introduite).
+- **Découverte finale de Saar, hors scope confirmé** : *"le TIR VISÉ, ça fonctionne sur une
+  localisation VISÉE non ?!"* — vérifié en lisant la suite non encore lue de `REGLESYSCOMBAT.md`
+  (p.229-230) : "Viser une Localisation précise" est une règle **entièrement distincte** (malus au
+  Test pour choisir la zone touchée au lieu du 1D20 aléatoire, Corps -3/Jambes -5/Tête-Bras -7/zone
+  spécifique -7 à -10), sans lien mécanique avec Tir visé (bonus au Test via sacrifice d'INI, aucune
+  incidence sur la localisation). Déjà documentée et jamais implémentée sous l'identifiant **COM9**
+  (`docs/BUGIDENTIFIE.md`, retrouvée telle quelle) — confirmée hors scope de ce chantier, proposée
+  comme suite possible, non tranchée par Saar à la clôture de cette session.
+- **Testé** : `node --check` (backend), 10 scénarios `isAimEligible`/`getAimIneligibilityReasons`,
+  test réel `resolveAssaultAction` (fixture jetable + nettoyage vérifié), round-trip migration,
+  ESLint client (0 nouvelle erreur vs baseline `git stash`), **SR + parcours navigateur confirmé
+  fonctionnel par Saar** ("Fonctionnel").
+- **Non testé** : scénarios de rejet (`COMBAT_DECLARE_ERROR`) en conditions réelles navigateur —
+  seule la fonction pure sous-jacente et le cas nominal ont été vérifiés en direct ; combinaison Tir
+  visé + Précipiter/Rechargement en conditions réelles (couverte par construction via la règle "zéro
+  transition", pas re-testée manuellement scénario par scénario).
+- **Dette ajoutée** : `docs/BUGIDENTIFIE.md` — **INI3** (`current_initiative` ≤ 0 non géré, gap
+  systémique pré-existant, pas spécifique à Tir visé).
+- Détail complet : `docs/PLAN_TIRVISE.md` (architecture, décisions, pièges, historique complet des
+  révisions), `docs/BUGIDENTIFIE.md` "Dette INI3", `docs/MANUELSYSCOMBAT.md` §6.4 (mis à jour).
+
+---
+
+## Session 141 (suite 16 — correction) — `calcCarenceArmure` effacée (réouverture item 58) ✅ CLOS
+
+- Suite directe de l'item 58 (audit combat 4 signalements) : la conclusion "fausse alerte" sur
+  `calcCarenceArmure` non gaté par `encumbrance_enabled` a été réexaminée à la demande de Saar après
+  qu'un agent signalant le point a relevé que l'infirmation reposait uniquement sur `ASBUILT.md`/
+  `fr.json`/l'historique des options de campagne — jamais sur le texte LdB lui-même.
+- **Recherche exhaustive relancée** : grep complet de `docs/REGLES/REGLESYSCOMBAT.md`,
+  `REGLEARMURE.md` (confirmé mauvaise source — mécas/exosquelettes uniquement, pas les protections
+  humaines), `REGLE_CREATION.txt`, `REGLECOMPETENCE.md` → **zéro citation, zéro page, aucune trace
+  textuelle** de "carence"/"min_str"/"Force minimum". Seule trace : `docs/Old/JOURNAL2.md:5053`
+  (Session 56, implémentation d'origine), taguée `(LdB)` **sans numéro de page** — contrairement à la
+  quasi-totalité des autres entrées du même journal qui citent systématiquement une page précise.
+- **Décision Saar** : "Sans justification, on comprend les mécanismes pour les écraser proprement" —
+  effacement complet, pas un simple débranchement. Analyse préalable exhaustive (aucune écriture)
+  confirmée par Saar avant tout code, avec double vérification explicite de ma confiance (100%)
+  demandée avant chaque étape.
+- **Décision sur `ref_equipment.min_str`** : conservée. Traitée comme donnée brute ordinaire dans
+  l'admin (`equipment.js`, même liste que `price`/`protection`/`tech_level`), pas comme un artefact du
+  calcul fabriqué — seule l'application en malus manquait de source, pas la donnée elle-même. Une
+  vraie règle LdB sur la force minimale par arme pourrait exister dans un chapitre du livre non
+  encore extrait dans `docs/REGLES/` ; supprimer la colonne aurait été irréversible pour zéro gain de
+  propreté (donnée inerte = pas de dette, contrairement à du code d'application non sourcé).
+- **Effacé** : `calcCarenceArmure` (`server/src/lib/charStats.js`, fonction + JSDoc entière) ; les 2
+  sites d'appel dans `server/src/socket/socketCombatHelpers.js` (CaC attaquant + distance tireur —
+  chacun avec sa variable `equipped*` dédiée, utilisée nulle part ailleurs) ; les termes dans
+  `chancesAttaque`/`chancesDeReussite` ; les 2 entrées de breakdown "Carence armure" ; le segment
+  `carence:` du log debug CaC. Import nettoyé. Confirmé : le défenseur (CaC comme distance) n'a
+  jamais appliqué cette carence — asymétrie déjà voulue par construction, rien à harmoniser.
+- **Documentation mise à jour pour un effacement propre** (pas seulement le code) :
+  `docs/SYSTEME/COMBAT.md` (5 endroits), `docs/ASBUILT.md`, `docs/STRUCTURE_SYSCOMBAT.md`
+  (4 endroits), `.claude/rules/blessures.md` (piège retiré), `CLAUDE.md` (entrée item 58 corrigée),
+  `docs/EN_COURS.md` (item 58 corrigé), `docs/ROADMAP.md` (3 endroits, dont un item roadmap devenu
+  obsolète retiré), `docs/PLAN_MUTATION2.md` et `docs/PLAN_TIRVISE.md` (chantiers actifs distincts,
+  formules/références mises à jour). `docs/Old/JOURNAL2.md` laissé inchangé (convention historique
+  déjà validée avec Saar — seule cette nouvelle entrée documente la correction).
+- **Testé** : `node --check` sur les 2 fichiers serveur modifiés (0 erreur), grep exhaustif de tout
+  le dépôt (hors `docs/Old/` et `Enclume-codex/`, chantier séparé) confirmant zéro référence
+  résiduelle à "carence"/`calcCarenceArmure`.
+  **SR + parcours combat réel confirmé fonctionnel par Saar** ("SR, fonctionnel, test OK").
+- Détail complet : cette entrée. Origine : item 58 (`docs/JOURNAL6.md` "Session 141 (suite 16)").

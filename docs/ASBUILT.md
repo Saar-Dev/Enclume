@@ -311,7 +311,6 @@ Enclume/
 | `calcWoundPenalty` | Malus blessures — pire gravité seule |
 | `calcEncumbrancePenalty` | Malus encombrement kg > FOR×3 |
 | `calcResistanceArmure` | Mille-feuille ETQ/PRT par slot (session 56) |
-| `calcCarenceArmure` | Carence FOR = pire min_str − forNA (session 56) |
 
 ---
 

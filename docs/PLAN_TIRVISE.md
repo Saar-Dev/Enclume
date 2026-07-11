@@ -1,6 +1,16 @@
-# PLAN_TIRVISE.md — Action "Tir visé" + framework Actions Exclusives
-> Rédaction initiale — 2026-07-10. Session de planification pure, aucun code écrit.
+# PLAN_TIRVISE.md — Action "Tir visé" + framework Actions Exclusives ✅ CLOS — Session 141 (suite 17)
+> Rédaction initiale — 2026-07-10. Clos — 2026-07-11, fonctionnel confirmé Saar.
 > Suite d'une discussion directe avec Saar (pas de questionnaire structuré) + recherche externe.
+
+**Testé** : 10 scénarios unitaires (`isAimEligible`/`getAimIneligibilityReasons`), test réel de bout
+en bout `resolveAssaultAction` (fixture jetable en base réelle, nettoyage vérifié), round-trip
+migration 134 (P52/P53/P54), ESLint client (0 nouvelle erreur vs baseline `git stash`), SR + parcours
+navigateur confirmé fonctionnel par Saar.
+**Non testé** : scénarios de rejet `COMBAT_DECLARE_ERROR` en conditions réelles navigateur (fonction
+pure et cas nominal seuls vérifiés en direct) ; combinaisons Tir visé + Précipiter/Rechargement en
+conditions réelles (couvertes par construction, pas re-testées manuellement scénario par scénario).
+**Suite possible, non tranchée** : `COM9` "Viser une Localisation précise" (`docs/BUGIDENTIFIE.md`),
+règle distincte trouvée en clôturant cette session — voir `docs/JOURNAL6.md` "Session 141 (suite 17)".
 
 ---
 
@@ -78,7 +88,7 @@ de projets pro avant de figer l'architecture.
 
 ```js
 totalModComp    = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp
-chancesDeReussite = skillTotal + totalModComp + effectiveMalus - carenceArmure + coverageModifier
+chancesDeReussite = skillTotal + totalModComp + effectiveMalus + coverageModifier
 ```
 
 `fireModeComp = action.fire_mode_bonus_comp ?? 0` (ligne 1336) — colonne réelle sur `combat_actions`,
@@ -267,22 +277,50 @@ const totalModComp = porteeModComp + situationModComp + tailleModComp + isRushed
 - `calcIniBreakdown` : ligne "Tir visé" informative si `aimTranches > 0` (pattern déjà utilisé pour
   `observer`/`reperer`).
 
-### Client — `CombatActionWindow.jsx`
+### Client — `AssaultRangedPanel.jsx` (composant partagé PJ + MJ/PNJ)
 
-- Nouveau contrôle stepper (0 à `AIM_MAX_TRANCHES`), pattern `QUICK_ACTIONS` incrémental — visible
-  seulement si `attackSelected && isAimEligible(...)` avec l'état courant. `entry` côté client =
-  `initialStates.current` (objet déjà présent, ligne ~151, qui capture l'état `combat_roster` au
-  début de la déclaration — même rôle que `entry` côté serveur, une seule vérité pour les deux).
-- Retour visuel croisé immédiat (même évaluateur `shared/` réutilisé) : dès que `aimTranches > 0`,
-  griser tout changement d'état (position/arme/couverture/vitesse), le déplacement, le CaC, le
-  rechargement et les actions rapides ; à l'inverse, dès qu'un de ces éléments est modifié, griser
-  le stepper Tir visé. Pas d'attente d'un aller-retour serveur pour ce feedback (même confort UX que
-  `careerEligibility.js` côté Wizard).
-- Payload envoyé : `mapActions.attack.aimTranches`.
+**Inventaire exhaustif (2026-07-11, avant codage)** — vérifié par lecture réelle de
+`AssaultRangedPanel.jsx` + `CombatActionWindow.jsx` + `CombatGmDeclareWindow.jsx`, pas depuis ce
+plan seul :
 
-### i18n (`fr.json`, namespace combat)
+- **Placement confirmé avec Saar** : dans la section "Type de tir" (bloc `currentFireMode === 'CC'`
+  existant, `AssaultRangedPanel.jsx:143-201`), **3ᵉ option radio** à côté de "Tir simple"/"Tir à
+  répétition" — mutuellement exclusive avec "Tir à répétition" (Tir visé impose `bulletCount=1`).
+  Sélection → révèle un slider 0-5 tranches (même esprit que le slider `CC_REPS_STEPS` existant).
+- **Grisage + tooltip par raison (décision Saar)** : Tir visé grisé/désactivé (pattern déjà utilisé
+  dans ce fichier pour `isStunned`/`isAmmoEmpty`) tant que `getAimIneligibilityReasons(...)` renvoie
+  une liste non vide — tooltip = `"Action impossible car : " + reasons.join(', ')` (ex. "Action
+  impossible car : déplacement, corps à corps"). Pas de reset automatique des autres choix du
+  joueur — c'est Tir visé qui cède la place, jamais l'inverse.
+- **MJ/PNJ confirmé avec Saar** : même traitement, `CombatGmDeclareWindow.jsx` reçoit exactement le
+  même nouveau bloc (composant `AssaultRangedPanel` partagé, mêmes props à ajouter des deux côtés).
+- **Trouvaille en cours de route (non liée à Tir visé, corrigée séparément)** : la doc JSDoc de
+  `AssaultRangedPanel.jsx` prétendait `isDualWield`/`onDualWieldChange` "false/no-op pour GM" —
+  **vérifié faux**, le MJ a un vrai state (`CombatGmDeclareWindow.jsx:94,808,810`) identique au
+  joueur. Commentaire corrigé (doc uniquement, zéro changement de comportement) le 2026-07-11.
+- **Nouvel état local** (×2 fichiers, même niveau que `assaultBulletCount`/`isDualWield`) :
+  `aimTranches` (0-5).
+- **Calcul d'éligibilité** (×2 fichiers) : reconstruire `mapActions`/`state`/`quick`/`entry` depuis
+  l'état local dispersé (`moveSelection`/`pendingMove`, sélection CaC, `reload` sélectionné,
+  `decl.quick`, `decl`, `initialStates.current`) pour appeler `getAimIneligibilityReasons` à chaque
+  rendu — **`entry` côté client = `initialStates.current`** (déjà présent dans les deux fichiers,
+  capture l'état `combat_roster` au début de la déclaration, même rôle que `entry` serveur).
+- **Payload** (×2 fichiers, handler de soumission) : ajout de `aimTranches` dans l'objet
+  `attack: {...}`.
+- **`assaultValid`** (×2 fichiers) : bloquer "Déclarer" côté client si `aimTranches > 0 &&
+  !isAimEligible(...)` — défense en profondeur, évite un aller-retour serveur pour rien.
+- **Pas de nouvelle classe CSS** — réutilise les styles inline `P.option`/`P.radio`/`P.slider`/
+  `P.summaryText` déjà définis dans `AssaultRangedPanel.jsx` (convention déjà dérogatoire à la règle
+  `style={}` visuel dans ce fichier précis, préexistante, pas introduite par ce chantier).
 
-Nouvelles clés : label du stepper, tooltip (texte de règle résumé), message d'erreur exclusivité.
+### i18n — CORRECTION (pas de nouvelles clés)
+
+**Erreur dans la version précédente de ce plan** : `.claude/rules/react.md` exempte explicitement
+le domaine Combat de la règle i18n (*"Combat (12) + équipement (6) : hors scope — sprint dédié
+futur"*) — cohérent avec tous les tooltips combat existants déjà en dur dans ce fichier (ex.
+"Assommé — ne peut pas attaquer", "Tirer depuis ma couverture"). Les libellés Tir visé (option,
+tooltip de raison, résumé slider) suivent donc la même convention — **texte français en dur**, pas
+de clés `fr.json`.
 
 ---
 
@@ -294,9 +332,9 @@ Nouvelles clés : label du stepper, tooltip (texte de règle résumé), message 
 | 1 | Migration — `combat_actions.aim_bonus_comp` | — |
 | 2 | `socketCombatAnnouncement.js` — validation `aimTranches` + garde exclusivité (melee) + `iniDelta` + insert `aim_bonus_comp` | Étapes 0+1 |
 | 3 | `resolveAssaultAction` (`socketCombatHelpers.js`) — lecture `aim_bonus_comp`, ajout au Seuil + breakdown | Étape 2 |
-| 4 | `combatSections.js` — réexport évaluateur + `calcIniBreakdown` (affichage informatif) | Étape 0 |
-| 5 | `CombatActionWindow.jsx` — stepper UI + désactivation croisée move/melee | Étapes 0+4 |
-| 6 | i18n `fr.json` | Étape 5 |
+| 4 | `combatSections.js` — `calcIniBreakdown` (affichage informatif, import direct `shared/combatExclusiveActions.js`, pas de réexport) | Étape 0 |
+| 5 | `AssaultRangedPanel.jsx` — option "Tir visé" + slider + grisage/tooltip par raison | Étapes 0+4 |
+| 6 | `CombatActionWindow.jsx` **et** `CombatGmDeclareWindow.jsx` — état `aimTranches`, calcul éligibilité, payload, `assaultValid` (×2, PJ et MJ/PNJ) | Étape 5 |
 
 ---
 

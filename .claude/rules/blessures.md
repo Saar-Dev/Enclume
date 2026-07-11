@@ -28,10 +28,6 @@ Ne jamais ajouter la wound localement — la promotion peut avoir changé la sé
 Pire blessure seule retenue. `calcEncumbrancePenalty` est cumulatif (règle maison).
 `effectiveMalus = calcWoundPenalty - calcEncumbrancePenalty` (≤ 0)
 
-**calcCarenceArmure — retourne ≥ 0 (déficit positif, pas un malus signé)**
-Utilisation : `skillTotal - calcCarenceArmure(equippedItems, forNA)`.
-`max(0, worstMinStr - forNA)` — à soustraire, pas à additionner.
-
 **Mille-feuille ETQ/PRT — calcResistanceArmure**
 max + reste/2 par slot. Filtrer les items par slot = localisation touchée uniquement.
 `{ etq, prt }` retournés en minuscules, null si pas d'armure équipée sur ce slot.

@@ -8,6 +8,7 @@ import {
   calcIniDelta, calcIniBreakdown,
   CC_REPS_STEPS, computeFireVariant,
 } from './combatSections.js'
+import { getAimIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
@@ -92,6 +93,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [assaultBulletCount,  setAssaultBulletCount]  = useState(null)   // number | 'multi' | null
   const [assaultVariantAB,    setAssaultVariantAB]    = useState('A')
   const [isDualWield,         setIsDualWield]         = useState(false)
+  const [aimTranches,         setAimTranches]         = useState(0)
   // CaC GM — sélection arme (undefined = auto-dériver, null = mains nues, id = choix explicite)
   const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(undefined)
   const [isSelectingOnMap, setIsSelectingOnMap] = useState(false)
@@ -116,6 +118,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setAssaultBulletCount(null)
     setAssaultVariantAB('A')
     setIsDualWield(false)
+    setAimTranches(0)
     setSelectedGmMeleeWeaponId(undefined)
     setIsSelectingOnMap(false)
     setIniPopoverOpen(false)
@@ -271,6 +274,19 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     : 0
   const ccSliderDisplayIdx = ccSliderIdx === -1 ? 0 : ccSliderIdx
 
+  // Tir visé — éligibilité recalculée à chaque rendu, source unique shared/combatExclusiveActions.js
+  // (même évaluateur que le serveur et que CombatActionWindow.jsx PJ — retour visuel immédiat)
+  const aimIneligibilityReasons = getAimIneligibilityReasons({
+    mapActions: {
+      move:     pendingMove ?? chargeSelection?.move ?? null,
+      melee:    meleeTargets.length > 0 ? meleeTargets : null,
+      reload:   mapAction === 'reload'   ? {} : null,
+      interact: mapAction === 'interact' ? {} : null,
+    },
+    state: decl, quick: decl.quick, entry: activePnjEntry,
+    isDualWield, bulletCount: effectiveBulletCount ?? null,
+  })
+
   // ── canDeclare ───────────────────────────────────────────────────────────
   const stateChanged = isActivePnj && Object.keys(initialStates).some(k => decl[k] !== initialStates[k])
   const hasAction    = isActivePnj && (
@@ -283,8 +299,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     decl.combatMode !== 'normal' ||
     decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase
   )
-  // Si cible d'assaut sélectionnée, un variant doit être configuré
-  const assaultValid = !assaultTarget?.targetTokenId || currentVariant !== null
+  // Si cible d'assaut sélectionnée, un variant doit être configuré (+ Tir visé éligible si utilisé)
+  const assaultValid = !assaultTarget?.targetTokenId || (
+    currentVariant !== null && (aimTranches === 0 || aimIneligibilityReasons.length === 0)
+  )
   const canDeclare = (isActivePnj && (stateChanged || hasAction) && assaultValid) || (isActiveDrone && droneDeclare.canDeclare)
 
   // ── Déplacement direct ───────────────────────────────────────────────────
@@ -408,6 +426,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           fireModeBonusDmg:   currentVariant?.bonusDmg    ?? 0,
           isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
           dualWieldBonusComp: dualWieldBonusComp,
+          aimTranches:        aimTranches,
         } : null,
         melee:    meleeCaC.length > 0 ? meleeCaC : null,
         reload:   mapAction === 'reload',
@@ -479,7 +498,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                       availableKeys={k === 'fire_mode' && rangedActive ? availableFireModes : undefined}
                       onChange={v => {
                         dispatch({ type: 'SET_FIELD', key: k, value: v })
-                        if (k === 'fire_mode') { setAssaultBulletCount(null); setAssaultVariantAB('A') }
+                        if (k === 'fire_mode') { setAssaultBulletCount(null); setAssaultVariantAB('A'); setAimTranches(0) }
                       }} />
                   ))}
                 </div>
@@ -518,6 +537,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                               setAssaultTarget(null)
                               setAssaultBulletCount(null)
                               setAssaultVariantAB('A')
+                              setAimTranches(0)
                               return
                             }
                             if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
@@ -816,6 +836,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               dualWieldBonusComp={dualWieldBonusComp}
               onBulletCountChange={(count) => setAssaultBulletCount(count)}
               onVariantABChange={(ab) => setAssaultVariantAB(ab)}
+              aimTranches={aimTranches}
+              onAimTranchesChange={(n) => setAimTranches(n)}
+              aimIneligibilityReasons={aimIneligibilityReasons}
             />
           </div>
         )}

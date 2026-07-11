@@ -14,6 +14,7 @@ import {
   CC_REPS_STEPS, RL_BUTTONS, computeFireVariant,
   ACTION_LABELS, PURE_MOVE_TYPES,
 } from './combatSections.js'
+import { getAimIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
@@ -103,6 +104,7 @@ export default function CombatActionWindow({
   const [assaultBulletCount, setAssaultBulletCount]       = useState(null)
   const [assaultVariantAB, setAssaultVariantAB]           = useState('A')
   const [isDualWield, setIsDualWield]             = useState(false)
+  const [aimTranches, setAimTranches]             = useState(0)
   const [inMoveMode, setInMoveMode]               = useState(false)
   // --- etat assaut drone -------------------------------------------------------
   const [inTargetMode, setInTargetMode]           = useState(false)
@@ -390,6 +392,7 @@ export default function CombatActionWindow({
           setAssaultBulletCount(null)
           setAssaultVariantAB('A')
           setIsDualWield(false)
+          setAimTranches(0)
           setInTargetMode(false)
         }
         if (k === 'melee') {
@@ -439,26 +442,35 @@ export default function CombatActionWindow({
   }
 
   // --- calcul INI total client (indicatif) ---------------------------------
+  const reloadSelected = mapSelected.has('reload')
   const mapActionsObj = {
     move:   moveSelection ? { ini_mod: (decl.combatMode === 'charge' || decl.combatMode === 'retraite') ? 0 : moveSelection.ini_mod } : null,
-    attack: attackSelected ? { cover_shot: !!(attackSelected && decl.cover !== 'exposed') } : null,
+    attack: attackSelected ? { cover_shot: !!(attackSelected && decl.cover !== 'exposed'), aimTranches } : null,
     // Défensif/Retraite : pas d'action d'attaque → pas de coût INI melee
     // Charge : toujours 1 attaque (exclusive multi-attack LdB)
     melee:  (meleeSelected && !meleeDefensif)
       ? Array(decl.combatMode === 'charge' ? 1 : meleeCount).fill({ targetTokenId: null, weaponInvId: null })
       : null,
+    reload: reloadSelected ? {} : null,
   }
   const iniDelta = calcIniDelta(initialStates.current, decl, mapActionsObj, decl.quick)
   const iniBreakdown = calcIniBreakdown(initialStates.current, decl, mapActionsObj, decl.quick)
   const iniTotal = (rosterEntry.initiative ?? 0) - iniDelta // initiative decremente par les couts
 
+  // Tir visé — éligibilité recalculée à chaque rendu, source unique shared/combatExclusiveActions.js
+  // (même évaluateur que le serveur — retour visuel immédiat, jamais d'aller-retour pour ce feedback)
+  const aimIneligibilityReasons = getAimIneligibilityReasons({
+    mapActions: mapActionsObj, state: decl, quick: decl.quick, entry: rosterEntry,
+    isDualWield, bulletCount: effectiveBulletCount ?? null,
+  })
+
   // --- validite declaration ------------------------------------------------
   const assaultValid = !attackSelected || (
     assaultWeaponId != null &&
     assaultPendingTokenId != null &&
-    currentVariant != null
+    currentVariant != null &&
+    (aimTranches === 0 || aimIneligibilityReasons.length === 0)
   )
-  const reloadSelected = mapSelected.has('reload')
   const reloadValid    = !reloadSelected || attackSelected || (selectedWeapon !== null && selectedAmmoId !== null)
   const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeCount
   const meleeValid     = !meleeSelected  || (
@@ -517,6 +529,7 @@ export default function CombatActionWindow({
           isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
           dualWieldBonusComp: dualWieldBonusComp,
           cover_shot:         decl.cover !== 'exposed',
+          aimTranches:        aimTranches,
         } : null,
         // Défensif/Retraite : pas de cible — mode passif, bonus appliqué via state_combat_mode
         melee:    (meleeSelected && !meleeDefensif)
@@ -1141,6 +1154,9 @@ export default function CombatActionWindow({
               dualWieldBonusComp={dualWieldBonusComp}
               onBulletCountChange={(count) => setAssaultBulletCount(count)}
               onVariantABChange={(ab) => setAssaultVariantAB(ab)}
+              aimTranches={aimTranches}
+              onAimTranchesChange={(n) => setAimTranches(n)}
+              aimIneligibilityReasons={aimIneligibilityReasons}
             />
           </div>
         )}
