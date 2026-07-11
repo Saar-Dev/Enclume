@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 14) — 2026-07-11
+> Session 141 (suite 15) — 2026-07-11
 
 ---
 
@@ -107,8 +107,40 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 14) (2026-07-11)
+## ÉTAT COURANT — Session 141 (suite 15) (2026-07-11)
 
+- **Session 141 (suite 15) — `docs/PLAN_VAULT.md` : Coffre (Vault) personnel ✅ TERMINÉ, Étapes 0
+  à 7 codées et testées.** Conversation dédiée entière (analyse critique demandée deux fois par
+  Saar avant tout code, recherche pro systématique — Roll20 Character Vault, Foundry Compendium
+  Packs, motif SQL "exclusive arc"). Nouvel espace personnel de stockage de personnages,
+  indépendant de toute campagne : transfert = **copie**, jamais un déplacement. Migrations `129`
+  (`vaults` + `characters.vault_id`, invariant XOR imposé par contrainte SQL) / `130`
+  (`vault_transfer_requests`, index unique partiel anti-doublon). `vaultService.js` :
+  `COMPANION_REGISTRY` (extensible par type — PJ/PNJ partagent l'arbre `char_sheet`, drone son
+  propre arbre, prêt pour exo-armure/vaisseau plus tard sans réécrire le clonage) + garde-fou
+  anti-dérive (compare la liste codée en dur à une vraie requête `information_schema` à chaque
+  clonage — toute future table liée à un personnage non enregistrée casse bruyamment au lieu de
+  perdre une donnée en silence). Routes `/api/vault/*` + 1 route dans `char-sheet.js`. UI complète
+  (Étape 7, 4 lots) : carte "Coffre" en première position de la grille Dashboard, page dédiée,
+  bouton d'envoi dans les fenêtres personnage/drone, sélecteur de campagne + badge "En attente",
+  onglet "Joueurs" de `CampaignSettingsPage.jsx` enfin rempli (désactivé depuis Session 131).
+  **4 vrais bugs trouvés et corrigés avant tout impact utilisateur**, aucun via une simple relecture
+  passive : le garde-fou anti-dérive avait lui-même un angle mort (cherchait des colonnes nommées
+  `character_id`, aurait raté une vraie FK nommée différemment) ; `characters.type` a 3 valeurs
+  (pj/pnj/drone), pas 2 — un forçage en dur aurait corrompu un drone cloné ; un personnage Wizard
+  non finalisé ne doit pas pouvoir rejoindre le Coffre (resterait bloqué sans mécanisme de reprise) ;
+  un clone importé en campagne doit être explicitement reverrouillé (`wizard_locked_at`), sans quoi
+  invisible dans la liste sans aucune erreur. **Testé à chaque étape** : scénarios en base réelle
+  (transactions annulées) puis, pour l'UI, par un vrai navigateur piloté (Playwright, JWT signé,
+  cookie réel, captures d'écran) — parcours complet confirmé de bout en bout. Nettoyage systématique
+  vérifié après chaque test ; activité concurrente réelle détectée en fin de session (brouillons
+  créés en temps réel) — non touchée, seuls les artefacts de test identifiés avec certitude
+  supprimés. **Dette `[CSPLAYERSTAB]` ajoutée** (avertissement React préexistant, cosmétique, sans
+  rapport avec ce chantier). **Non testé** : bouton "Refuser" pas recliqué séparément (symétrique à
+  "Approuver", déjà testé côté service) ; parcours équivalent sur `DroneWindow.jsx` (code identique
+  à `CharacterWindow.jsx`, vérifié par lecture + lint seulement) ; contenu non-personnage du Coffre
+  (hors scope, extension future prévue). Détail complet : `docs/PLAN_VAULT.md` (toutes les étapes
+  avec leurs tests), item "57." `docs/EN_COURS.md`, `docs/JOURNAL6.md` "Session Coffre (Vault)".
 - **Session 141 (suite 14) — 4 correctifs enchaînés, chacun trouvé en testant le précédent.**
   Point de départ : bug signalé par Saar — supprimer un character ne supprimait jamais ses tokens
   sur les battlemaps, ils restaient en combat sans fiche liée. **(1) `server/src/lib/
@@ -414,8 +446,10 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **135 migrations stables** (133_char_sheet_wizard_locked_backfill — Session 141 (suite 14) ;
+- **138 migrations stables** (133_char_sheet_wizard_locked_backfill — Session 141 (suite 14) ;
   132_char_sheet_dedupe_and_unique — Session 141 (suite 14) ;
+  130_vault_transfer_requests — Session 141 (suite 15) ;
+  129_vaults — Session 141 (suite 15) ;
   128_char_mutation_effects_view_int_cast — Session 141 (suite 13) ;
   127_char_mutation_effects_view_subtypes — Session 141 (suite 13) ;
   126_ref_setbacks_revers_table — Session 141 (suite 12) ;

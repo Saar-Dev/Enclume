@@ -1,6 +1,7 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
 > Dernière mise à jour : 2026-07-11 — Session 141 (suite 14) : cascade suppression token + char_sheet
-> dédoublonné/UNIQUE + atomicité Wizard + bonus féminin corrigé (item 56)
+> dédoublonné/UNIQUE + atomicité Wizard + bonus féminin corrigé (item 56) ; Coffre (Vault) terminé,
+> Étapes 0-7 (item 57)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -103,6 +104,73 @@
 > est prioritaire, à planifier avant de
 > reprendre le moding** — chantier entier mis en pause (pas seulement B2-B5). Aucun plan écrit pour
 > Tir visé pour l'instant. Voir détail ci-dessous et `docs/JOURNAL6.md` "Session 141 (suite 11)".
+
+> **Item 57 (hors chantiers ci-dessus, conversation dédiée) : `docs/PLAN_VAULT.md` — Coffre
+> personnel (Vault) ✅ TERMINÉ, Étapes 0 à 7 codées et testées — 2026-07-10/11.** Nouvel espace de
+> stockage de personnages indépendant des campagnes (inspiré Roll20 Character Vault/Foundry
+> Compendium Packs, recherche faite avant conception) : transfert = copie, jamais un déplacement.
+> Migrations `129`/`130` (table `vaults`, `characters.vault_id`, `vault_transfer_requests`),
+> `vaultService.js` (registre extensible par type de compagnon PJ/PNJ/drone + garde-fou anti-dérive
+> qui détecte automatiquement toute future table liée à un personnage non prise en compte), routes
+> `/api/vault/*` + 1 route dans `char-sheet.js`, UI complète (carte "Coffre" sur le Dashboard, page
+> dédiée, bouton d'envoi dans les fenêtres personnage/drone, onglet "Joueurs" de
+> `CampaignSettingsPage.jsx` enfin rempli — texte placeholder "Phase 3" qui y dormait depuis Session
+> 131, confirmé sans rapport avec un autre projet). **Testé à chaque étape par de vraies requêtes
+> HTTP puis par un vrai navigateur piloté (Playwright)**, jamais seulement par lecture de code.
+> **Dette ajoutée `[CSPLAYERSTAB]`** : avertissement React préexistant (mélange `background`/
+> `backgroundColor` dans les styles d'onglets de `CampaignSettingsPage.jsx`), repéré en testant ce
+> chantier mais antérieur à lui et sans rapport — cosmétique, non corrigé. Détail complet :
+> `docs/PLAN_VAULT.md` (toutes les étapes documentées avec leurs tests), `docs/JOURNAL6.md` "Session
+> Coffre (Vault)".
+
+**57. `docs/PLAN_VAULT.md` — Coffre personnel (Vault) ✅ TERMINÉ — Étapes 0-7 (2026-07-10/11)**
+   → Demande initiale Saar : stocker des personnages hors campagne pour les faire circuler entre
+     parties sans les recréer. Recherche pro faite avant conception (Roll20 Character Vault,
+     Foundry Compendium Packs) — décision "copie, jamais déplacement" directement inspirée de ces
+     deux précédents. Relecture critique demandée deux fois par Saar avant tout code — un vrai trou
+     trouvé à chaque passe (voir `docs/PLAN_VAULT.md` "Pièges à anticiper" P6/P7).
+   → **Étape 0** : audit exhaustif des tables filles de `characters`/`char_sheet` (16 tables à
+     cloner, 3 à exclure) — croisé avec une requête `information_schema` réelle, pas seulement
+     lu à l'œil. **Étapes 1-2** : migrations `129_vaults.js`/`130_vault_transfer_requests.js`
+     (invariant "un personnage a une campagne XOR un Coffre, jamais les deux" imposé par contrainte
+     SQL réelle, motif reconnu "exclusive arc" — validé par recherche externe demandée par Saar).
+   → **Étape 3** : `vaultService.js` — `COMPANION_REGISTRY` (extensible par type de personnage, PJ/
+     PNJ partagent l'arbre `char_sheet`, drone son propre arbre) + garde-fou anti-dérive (compare la
+     liste codée en dur à la réalité de `information_schema` à chaque clonage — toute future table
+     liée à un personnage non enregistrée casse bruyamment au lieu de perdre une donnée en silence).
+     Modification ciblée de `creationService.lockWizard` (paramètre `trxOpt` ajouté, rétrocompatible)
+     — nécessaire pour que le clonage reste atomique en transaction.
+   → **Étapes 4-6** : routes `/api/vault/*` + 1 route dans `char-sheet.js`. **Étape 7 (UI, 4 lots)** :
+     carte "Coffre" en première position de la grille Dashboard (illustration fixe non modifiable,
+     nom tranché avec Saar : "Coffre" plutôt que "Vault"/"Sas") ; page dédiée (liste/renommage/
+     suppression) ; bouton d'envoi dans `CharacterWindow.jsx`/`DroneWindow.jsx` (texte pédagogique
+     "copie, pas déplacement") ; sélecteur de campagne + badge "En attente" ; onglet "Joueurs" de
+     `CampaignSettingsPage.jsx` enfin rempli (désactivé depuis Session 131, texte "Phase 3" confirmé
+     sans rapport avec un autre projet via historique Git avant réutilisation).
+   → **Bugs réels trouvés et corrigés avant tout impact utilisateur** : le garde-fou anti-dérive lui
+     -même avait un angle mort (cherchait des colonnes nommées `character_id`, aurait raté
+     `vault_transfer_requests.vault_character_id`) — corrigé pour chercher par vraie contrainte FK ;
+     `characters.type` a 3 valeurs (`pj`/`pnj`/`drone`), pas 2 comme supposé une 1ʳᵉ fois — un
+     forçage en dur aurait corrompu un drone cloné ; un personnage Wizard non finalisé ne peut pas
+     être envoyé au Coffre (resterait bloqué sans mécanisme de reprise) ; un clone importé en
+     campagne doit être explicitement "verrouillé" (`wizard_locked_at`), sans quoi il resterait
+     invisible dans la liste des personnages sans aucune erreur.
+   → **Testé à chaque étape** : scénarios en base réelle (transactions annulées) puis, pour l'Étape 7,
+     par un vrai navigateur piloté (Playwright, JWT signé, cookie réel) — parcours complet
+     clone-to-vault → liste → renommage → suppression → demande de transfert → approbation MJ,
+     captures d'écran à l'appui. Nettoyage systématique vérifié après chaque test (aucune donnée
+     réelle laissée en base). Activité concurrente réelle détectée en fin de test (brouillons créés
+     en temps réel pendant les tests) — non touchée, seuls les artefacts de test identifiés avec
+     certitude ont été supprimés.
+   → **Dette ajoutée `[CSPLAYERSTAB]`** : avertissement React préexistant dans
+     `CampaignSettingsPage.jsx` (mélange `background`/`backgroundColor` entre `s.navItem` et
+     `s.navItemActive`) — présent sur les 4 onglets déjà actifs avant ce chantier, repéré seulement
+     maintenant car l'onglet "Joueurs" était le seul désactivé. Cosmétique, non corrigé.
+   → **Non testé** : bouton "Refuser" côté MJ pas recliqué séparément (symétrique à "Approuver",
+     déjà testé côté service) ; parcours équivalent sur `DroneWindow.jsx` (code identique à
+     `CharacterWindow.jsx`, vérifié par lecture + lint, pas par un clic réel) ; contenu non-personnage
+     du Coffre (hors scope, prévu comme extension future).
+   → Détail complet, étape par étape avec tous les tests : `docs/PLAN_VAULT.md`.
 
 **55. PLAN_MUTATION2 Lot 1 — attributs primaires mutations ✅ CLOS — Session 141 (suite 13) (2026-07-10)**
    → Suite directe de "suite 10" (diagnostic + architecture, item ci-dessus) — conversation continue,
@@ -785,6 +853,7 @@ Projet en cours et priorité user :
 | **TIRVISE** | Tir visé (`REGLESYSCOMBAT.md:1487-1492`, bonus +1/2 pts Initiative sacrifiés, max +5) — non implémenté, **0 référence dans `server/src/socket/*`**. Bloque le Lot B2 de `docs/PLAN_MODING.md` (Lunette de visée). Distinct de `COM9` et de "Changer le mode de tir" — trois mécaniques voisines mais différentes | **Haute — priorité affirmée par Saar, Session 141 (suite 11)** |
 | — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |
 | DR2 | Drone : déplacement absent | Basse — sprint futur |
+| **CSPLAYERSTAB** | `CampaignSettingsPage.jsx` — avertissement React (mélange `background`/`backgroundColor` entre `s.navItem`/`s.navItemActive`) sur les onglets de réglages campagne — préexistant, repéré en testant `docs/PLAN_VAULT.md` Lot 4 (onglet "Joueurs"). Cosmétique, aucun impact fonctionnel | Très basse |
 | INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
 | INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |
 | AU1 | `useDiceAudio.js` — sons dés | Basse |

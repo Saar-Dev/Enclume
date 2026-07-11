@@ -1,3 +1,20 @@
+## v170 — 2026-07-11 — Le Coffre : stocker ses personnages hors campagne
+
+### Client
+- [feat] Nouveau "Coffre" personnel, accessible depuis le tableau de bord (première carte de la
+  grille) : un espace indépendant de toute campagne pour y ranger ses personnages et les faire
+  circuler d'une partie à l'autre sans les recréer.
+- [feat] Bouton "Envoyer vers le Coffre" dans la fenêtre d'un personnage (ou d'un drone) — crée une
+  copie dans votre Coffre ; le personnage original reste inchangé dans sa campagne.
+- [feat] Depuis le Coffre, demande de transfert d'un personnage vers une de vos campagnes — le MJ de
+  cette campagne doit approuver la demande avant que le personnage n'y apparaisse.
+- [feat] Nouvel onglet "Joueurs" dans les réglages de campagne : le MJ y voit et traite les demandes
+  de transfert en attente.
+
+### Serveur
+- [feat] Nouvelles routes `/api/vault/*` pour gérer le Coffre (liste, renommage, suppression,
+  demandes de transfert).
+
 ## v169 — 2026-07-10 — Les mutations ont enfin un effet réel sur les attributs
 
 ### Client

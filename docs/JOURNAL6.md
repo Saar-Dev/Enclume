@@ -2304,3 +2304,119 @@ fichiers (Vault/Tir visé), édition concurrente risquée. À consolider par Saa
 Détail complet : ce document, section ci-dessus.
 
 Détail complet : CLAUDE.md "Session 141 (suite 14)", docs/EN_COURS.md item 56.
+
+---
+
+## Session 141 (suite 15) — 2026-07-10/11 — Coffre (Vault) personnel ✅ TERMINÉ, Étapes 0-7
+
+Conversation dédiée entière, hors les chantiers ci-dessus (session parallèle indépendante — voir
+note de l'entrée précédente sur l'édition concurrente de ces mêmes fichiers). Demande initiale
+Saar : permettre à un joueur de stocker ses personnages dans un espace personnel, indépendant de
+toute campagne, pour les faire circuler entre parties sans les recréer.
+
+**Méthode de travail, demandée explicitement par Saar plusieurs fois dans cette conversation** :
+"analyse critique du plan", recherche de bonnes pratiques pro avant de coder, ne jamais coder de
+zéro. Deux relectures critiques distinctes demandées avant tout code (une sur l'architecture
+générale, une sur le détail de la migration Étape 1) — **chacune a trouvé un vrai trou**, pas
+seulement des broutilles :
+- 1ʳᵉ relecture : un précédent cité (`modingService.js`) n'existait pas ; surtout, aucune gestion de
+  `wizard_locked_at` sur les clones — un import Vault→campagne serait resté invisible sans erreur
+  (Piège **P6**).
+- Audit Étape 0 (liste exhaustive des tables à cloner) : 5 tables absentes de l'esquisse initiale ;
+  `characters.type` a 3 valeurs (`pj`/`pnj`/`drone`), pas 2 comme supposé — une confirmation
+  précédente de ma part ("type fixé à 'pj' en dur") s'est révélée fausse, corrigée avant impact.
+
+**Recherche pro faite à chaque étape, pas une fois pour la forme** :
+- Architecture générale : Roll20 Character Vault + Foundry VTT Compendium Packs — confirme "copie,
+  jamais déplacement" comme le standard de l'industrie pour ce problème exact.
+- Invariant "un personnage a une campagne XOR un Coffre" : motif SQL reconnu ("exclusive arc"),
+  validé par une source dédiée comme le bon choix quand l'ensemble des parents possibles est fini
+  et stable (le cas ici — comparé explicitement à l'alternative polymorphe à la Rails, écartée car
+  elle perd la contrainte FK réelle).
+- Robustesse dans le temps (garde-fou anti-dérive) : comparé aux gemmes Rails `amoeba`/
+  `deep_cloneable` (référence mature du même problème "cloner une fiche + toutes ses données
+  liées") — confirme que la liste explicite de tables à copier est la bonne pratique, pas une copie
+  générique par réflexion.
+
+**Périmètre élargi en cours de route (décision Saar)** : pas seulement les PJ classiques — les
+drones (déjà dans le jeu) et, à terme, les exo-armures/vaisseaux (aucun des deux n'existe encore).
+Conséquence architecturale : `COMPANION_REGISTRY` dans `vaultService.js`, un registre par type de
+personnage plutôt qu'un cas spécial "drone" codé en dur — ajouter un futur type de compagnon devient
+une entrée de registre, jamais une réécriture du service de clonage.
+
+**Étapes 0-2 (schéma)** : audit exhaustif (16 tables à cloner, 3 à exclure, croisé avec une requête
+`information_schema` réelle) ; migrations `129_vaults.js` (table `vaults` + `characters.vault_id` +
+`campaign_id` rendu nullable via SQL brut — jamais le générateur knex sur une colonne avec FK,
+2 précédents réels du projet suivis) + `130_vault_transfer_requests.js` (+ `CHECK` de statut +
+index unique partiel anti-doublon, ajout non prévu dans l'esquisse initiale).
+
+**Étape 3 (`vaultService.js`, cœur du mécanisme)** : `cloneCharacterDeep` générique (helper
+`cloneRows` : omet toujours une éventuelle colonne `id` pour laisser la base en régénérer une, sans
+effet sur les tables sans `id` séparé) + garde-fou anti-dérive (`information_schema` interrogée à
+chaque clonage, comparée à l'union du registre + une liste d'exclusion explicite — **corrigé en run
+à vide** : la 1ʳᵉ version cherchait des colonnes nommées `character_id`, aurait raté
+`vault_transfer_requests.vault_character_id`, une vraie FK nommée différemment). Modification
+ciblée de `creationService.lockWizard` (paramètre `trxOpt` ajouté, pattern trx-or-db déjà établi par
+`advantageService.addAdvantage`, rétrocompatible) — sans ça, l'appeler depuis la transaction de
+clonage aurait tenté de lire une ligne fraîchement insérée via une connexion différente, invisible
+avant commit.
+
+**Étapes 4-6 (routes)** : `POST /char-sheet/:characterId/clone-to-vault` (réutilise le
+`router.param` existant de `char-sheet.js`, mais `cloneToVault` applique sa propre règle plus
+stricte — propriétaire uniquement, un MJ qui peut consulter la fiche d'un joueur ne doit pas
+pouvoir la faire atterrir dans son propre Coffre) + `vault.js` (nouveau router, ownership seule,
+pas de notion de `campaign_members`).
+
+**Étape 7 (UI, 4 lots, conception confiée à une réflexion UI/UX dédiée avant codage)** :
+- Lot 1 : carte "Coffre" en première position de la grille Dashboard (`.campaign-grid` déjà
+  existante — proposition de Saar, meilleure que ma 1ʳᵉ idée de bouton séparé dans l'en-tête),
+  illustration fixe non modifiable, nom tranché avec Saar ("Coffre" plutôt que "Vault" ou "Sas" —
+  plus thématique mais jugé trop ambigu pour un premier contact). Page dédiée `VaultPage.jsx`
+  (liste/renommage/suppression).
+- Lot 2 : bouton "Envoyer vers le Coffre" dans `CharacterWindow.jsx`/`DroneWindow.jsx` (onglet
+  Paramètres) — écart trouvé en lisant le code : le plan disait "à côté du bouton Supprimer" en
+  supposant la même règle de visibilité, or Supprimer est réservé au MJ tandis que ce bouton est
+  réservé au propriétaire — deux règles différentes, pas superposables. Confirmation pédagogique
+  ("copie, pas déplacement") plutôt qu'un simple oui/non.
+- Lot 3 : sélecteur de campagne + badge "En attente" dans `VaultPage.jsx`. `listVaultCharacters`
+  étendue côté service pour indiquer si une demande est déjà en cours.
+- Lot 4 : onglet "Joueurs" de `CampaignSettingsPage.jsx` enfin rempli — désactivé depuis sa création
+  Session 131 (texte placeholder générique "Phase 3", jamais un vrai projet documenté ailleurs —
+  vérifié par historique Git avant de le réutiliser, questionné par Saar qui ne le reconnaissait
+  plus). Nouvelle route `GET /vault/campaigns/:campaignId/transfer-requests` (réservée au MJ).
+
+**Testé à chaque étape, jamais seulement par lecture de code** :
+- Étapes 0-3 : scénarios en transactions Postgres réelles systématiquement annulées (jamais
+  commitées) — clone complet d'un vrai personnage (14 tables comparées une à une, row count
+  identique), clone vers un Coffre temporaire, rejet d'un personnage non finalisé, remise à neuf
+  d'un drone endommagé.
+- Étapes 4-6 : vraies requêtes HTTP contre le serveur en marche (JWT signé localement avec le même
+  secret que l'application, cookie réel) — parcours complet clone→liste→renommage→suppression→
+  demande→approbation/refus, tous les refus attendus vérifiés (mauvais propriétaire, non-membre,
+  non-MJ, doublon, déjà traité), **défense en profondeur confirmée en conditions réelles** (un MJ
+  authentifié ne peut pas vaulter le personnage d'un joueur).
+- Étape 7 : **vrai navigateur piloté** (Playwright, `channel: 'chrome'` sur le Chrome déjà installé
+  — pas de téléchargement de binaire —, cookie JWT injecté directement dans le contexte du
+  navigateur), captures d'écran prises et regardées à chaque étape clé, pas seulement "ça n'a pas
+  planté". Incident de test isolé sans rapport avec le code livré (jeton JWT corrompu par une sortie
+  stdout de `dotenv` dans un script bash, corrigé côté outillage uniquement).
+- Nettoyage systématique vérifié après chaque test (comptage de personnages/Coffres/demandes avant/
+  après). Activité concurrente réelle détectée en fin de session (personnages "Brouillon" créés en
+  temps réel, artefacts d'une autre session utilisant le même personnage de test "COO" — voir entrée
+  précédente de ce journal, migration `131_split_equippable_stacks.js`) — non touchée, seuls les
+  artefacts identifiés avec certitude comme les miens ont été supprimés.
+
+**Bug préexistant trouvé en testant, sans rapport avec le Coffre, non corrigé** : avertissement React
+("mixing shorthand and non-shorthand background properties") en changeant d'onglet dans les
+Réglages de campagne — root cause identifiée avec certitude par lecture du diff (`s.navItem`
+utilise `background`, `s.navItemActive` utilise `backgroundColor`, fusionnés dans le même objet
+style) — présent sur les 4 onglets déjà actifs avant ce chantier, jamais remarqué car "Joueurs"
+était le seul désactivé. Cosmétique, dette `[CSPLAYERSTAB]` ajoutée.
+
+**Non testé** : bouton "Refuser" pas recliqué séparément dans le navigateur (chemin de code
+strictement symétrique à "Approuver", déjà testé côté service) ; parcours équivalent sur
+`DroneWindow.jsx` (code identique à `CharacterWindow.jsx`, vérifié par lecture + lint, pas par un
+clic réel, faute de temps) ; contenu non-personnage du Coffre (hors scope explicite depuis le
+début, extension future prévue).
+
+Détail complet, étape par étape avec tous les tests : `docs/PLAN_VAULT.md`.

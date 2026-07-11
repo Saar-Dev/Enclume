@@ -418,17 +418,39 @@ résout exactement ce problème avant de coder.
   `ref_advantages`** (paire clé/valeur générique plutôt qu'une colonne par avantage). Confirme que
   la forme choisie il y a longtemps dans ce projet suit déjà le pattern standard, sans le savoir —
   ce lot ne fait qu'écrire le moteur d'application qui manquait encore.
-- **Conséquence directe sur la conception** : mode `ADD` uniquement (somme simple) est le bon choix
-  par défaut pour ce lot — les 3 lignes ci-dessus sont toutes des bonus/malus plats ("+3 à sa
-  Réaction", "-3 à sa Réaction", "+10 à son Attribut Souffle", texte LdB `92_ref_advantages.js`).
-  Un champ `mode` générique (ADD/OVERRIDE/MULTIPLY, comme Foundry) **n'est pas construit
-  maintenant** — prématuré : la seule donnée déjà connue qui ne serait pas un ADD est `mod_identity`
-  (Lot 6, `{hand_pref:"A"}` — une **assignation**, pas une accumulation numérique), catégorie
-  différente à concevoir quand le Lot 6 sera détaillé à son tour (jamais deux lots à la fois).
-  Corrobore la décision déjà prise dans `docs/PLAN_TIRVISE.md` (session parallèle, même
-  raisonnement appliqué à un autre sous-système) : un moteur de règles généraliste façon PF2e
-  "Rule Elements" ne se justifie que pour de l'authoring homebrew non-développeur — pas notre cas,
-  catalogue fixe et fermé (76 lignes, jamais écrites par un joueur).
+- **Pathfinder 2e (Foundry) — `StatisticModifier`/`ModifierPF2e`** ([source `modifiers.ts`](https://github.com/foundryvtt/pf2e/blob/master/src/module/actor/modifiers.ts)) :
+  le système de RPG le plus abouti sur Foundry pour ce problème précis. Chaque modificateur y porte
+  `{label, type, modifier, enabled, source, predicate}` (pas juste un nombre), et
+  `applyStackingRules()` **ne fait pas une simple somme** : par `type` (`circumstance`/`item`/
+  `status`/`untyped`/...), un seul bonus (le plus élevé) et un seul malus (le plus bas) s'appliquent
+  — seuls les modificateurs `untyped` s'additionnent librement. Objectivement une architecture plus
+  aboutie qu'une somme brute. **Vérifié contre la source de vérité avant d'adopter quoi que ce soit
+  de ce pattern** : recherche `[VÉRIFIÉ]` dans `docs/SYSTEME/REGLES_LdB.md`/
+  `docs/REGLES/REGLECOMPETENCE.md`/`REGLEARMURE.md`/`REGLEDRONE.md` (tous les fichiers `REGLE*.md`
+  mentionnant "cumul") — **aucune notion de catégorie de bonus n'existe dans Polaris LdB**, chaque
+  occurrence de "se cumule(nt)" trouvée est une règle narrative isolée et spécifique (malus de
+  précipitation + Attaques multiples, Tests de Choc répétés, bonus de respiration +1/tentative),
+  jamais un système générique de types de bonus qui s'excluent. Adopter `StatisticModifier` ici
+  résoudrait un problème que **ce jeu de règles n'a pas** — la vraie robustesse consiste à ne pas
+  importer une complexité non justifiée par la source de vérité, pas à copier le système le plus
+  sophistiqué trouvé. Le champ `source`/`label` du modèle PF2e reste néanmoins une bonne idée de
+  traçabilité pour un usage futur (ex. tooltip "Réaction +3 grâce à Bons réflexes") — **pas besoin
+  de l'ajouter à `getAdvantageModForAttr` pour ça** : la donnée source (`advantageRows`, avec `name`)
+  est déjà entièrement disponible chez l'appelant (`charAdvantages` en `CharacterSheet.jsx`), qui
+  peut filtrer lui-même par `mod_attribute` s'il a un jour besoin d'un détail — pas de redesign
+  nécessaire pour garder cette porte ouverte.
+- **Conséquence directe sur la conception** : mode `ADD` uniquement (somme simple, sans catégorie de
+  type) est le bon choix — pas un raccourci, une conclusion vérifiée contre la source de vérité des
+  règles, pas seulement contre la donnée actuelle du catalogue. Les 3 lignes concernées sont toutes
+  des bonus/malus plats ("+3 à sa Réaction", "-3 à sa Réaction", "+10 à son Attribut Souffle", texte
+  LdB `92_ref_advantages.js`). Un champ `mode` générique (ADD/OVERRIDE/MULTIPLY, comme Foundry
+  Active Effects) **n'est pas construit maintenant** — prématuré : la seule donnée déjà connue qui
+  ne serait pas un ADD est `mod_identity` (Lot 6, `{hand_pref:"A"}` — une **assignation**, pas une
+  accumulation numérique), catégorie différente à concevoir quand le Lot 6 sera détaillé à son tour
+  (jamais deux lots à la fois). Corrobore la décision déjà prise dans `docs/PLAN_TIRVISE.md`
+  (session parallèle, même raisonnement appliqué à un autre sous-système) : un moteur de règles
+  généraliste façon PF2e "Rule Elements" ne se justifie que pour de l'authoring homebrew
+  non-développeur — pas notre cas, catalogue fixe et fermé (76 lignes, jamais écrites par un joueur).
 
 **A. `shared/polarisUtils.js` — résolveur générique + consolidation `calcREA`**
 
@@ -444,10 +466,18 @@ function sumModByKey(rows, keyField, valueField, targetKey) {
   return rows.reduce((sum, r) => r[keyField] === targetKey ? sum + (r[valueField] ?? 0) : sum, 0)
 }
 
-export function getAdvantageAttrMod(advantageRows, attrKey) {
+export function getAdvantageModForAttr(advantageRows, attrKey) {
   return sumModByKey(advantageRows, 'mod_attribute', 'mod_value', attrKey)
 }
 ```
+**Piège explicite (trouvé en analyse à charge, avant tout code)** : `mod_value` porte déjà son
+signe (`adv_006` type `advantage` → `+3`, `adv_058` type `disadvantage` → `-3`, `adv_021` type
+`advantage` → `+10`, `[VÉRIFIÉ]` `92_ref_advantages.js`) — `sumModByKey`/`getAdvantageModForAttr` ne
+doivent **jamais** inspecter `type` pour inverser un signe. Une implémentation qui ferait
+`type === 'disadvantage' ? -mod_value : mod_value` doublerait silencieusement le malus de
+`adv_058` (`-3` → `+3`). Aucun test unitaire ne l'aurait révélé sans un scénario dédié — couvert en
+section G ci-dessous.
+
 `calcREA` **déménage ici** (actuellement dupliqué : `charStats.js:205-207` côté serveur ET en dur
 dans `calcSecondary` de `CharacterSheet.jsx:90` côté client — même dette que `calcNA` au Lot 1 ;
 nécessaire ici, pas cosmétique : sans ça la fiche client n'afficherait jamais le bonus d'avantage,
@@ -457,6 +487,13 @@ export function calcREA(ada_na, per_na, mod_advantage) {
   return polarisRound((ada_na + per_na) / 2) + (mod_advantage ?? 0)
 }
 ```
+**Ordre addition/arrondi — vérifié non-ambigu (run à vide)** : le bonus est ajouté *après*
+`polarisRound`, pas dans la moyenne avant arrondi. Mathématiquement équivalent uniquement parce que
+`mod_value` est garanti **entier** par le schéma (`table.integer('mod_value')`, migration 92 ligne
+1135 — `floor(x + entier) = floor(x) + entier`, toujours vrai). Cette garantie vient du type de
+colonne DB, pas d'une propriété de `polarisRound` elle-même — à revérifier si une future donnée
+`mod_value` décimale apparaissait un jour (aucune actuellement).
+
 `calcSouffle` **reste dans `charStats.js`** — pas de duplicata client à corriger, "Souffle" n'est
 affiché nulle part sur la fiche aujourd'hui (`[VÉRIFIÉ]` grep), seulement consommé par les macros
 serveur. Gagne juste un 3ᵉ paramètre sur place, aucun déménagement à faire.
@@ -485,21 +522,28 @@ aujourd'hui, aucun n'importe encore `shared/polarisUtils.js` directement)**
 
 | Fichier | Lignes | Contexte | Changement |
 |---|---|---|---|
-| `char-sheet.js` | 1642-1658 (`POST /macro-preview`) | `rea`/`souffle` via `secondaryValue()` | Ajoute `getAdvantages(sheet.id)` au `Promise.all` (déjà importée ligne 42) ; nouvel import `getAdvantageAttrMod` depuis `shared/polarisUtils.js` (absent aujourd'hui) ; passe `getAdvantageAttrMod(advantages,'reaction'/'breath')` |
-| `socketDice.js` | 99-116 (jet macro) | idem, duplique le pattern | Idem : nouvel import `getAdvantages` (`advantageService.js`, absent) + `getAdvantageAttrMod` (`shared/polarisUtils.js`, absent) dans le `Promise.all` existant |
+| `char-sheet.js` | 1642-1658 (`POST /macro-preview`) | `rea`/`souffle` via `secondaryValue()` | Ajoute `getAdvantages(sheet.id)` au `Promise.all` (déjà importée ligne 42) ; nouvel import `getAdvantageModForAttr` depuis `shared/polarisUtils.js` (absent aujourd'hui) ; passe `getAdvantageModForAttr(advantages,'reaction'/'breath')` |
+| `socketDice.js` | 99-116 (jet macro) | idem, duplique le pattern | Idem : nouvel import `getAdvantages` (`advantageService.js`, absent) + `getAdvantageModForAttr` (`shared/polarisUtils.js`, absent) dans le `Promise.all` existant |
 | `socketCombatState.js` | 66-80 (`COMBAT_START`, `base_ini` par token) | `calcREA(ada_na, per_na)` | Ajoute `getAdvantages(cs.id)` dans le même bloc que `attrs`/`archetype` (seulement si `cs` existe — même garde que l'existant) ; passe le mod à `calcREA` |
 | `battlemaps.js` | 66-80 (`GET /:id/combat-ini`, aperçu `CombatRosterWindow`) | idem | Même changement — nouvel import `getAdvantages` (seul `calcAttributeNA`/`calcREA` importés aujourd'hui) |
+
+**Limite connue et acceptée (run à vide)** : `socketCombatState.js` boucle sur les tokens en
+`await` séquentiel (pas de parallélisation), déjà 2 requêtes par token (`attrs`, `archetype`) avant
+ce lot. Ajouter `getAdvantages` en fait 3 — latence de `COMBAT_START` en légère hausse pour un
+roster nombreux (linéaire au nombre de tokens, pas une nouvelle classe de problème, juste plus de
+la même chose qui existait déjà). Non bloquant, pas retenu comme un défaut à corriger dans ce lot —
+noté explicitement pour que ce ne soit pas une surprise si `COMBAT_START` est chronométré plus tard.
 
 Point de vigilance identique au Lot 1 : oublier un site ne fait rien planter — juste un REA/Souffle
 silencieusement non boosté à cet endroit précis. Le plan de test (section G) compare les 4 sites
 entre eux pour un même personnage, pas seulement chacun isolément.
 
 **E. Client — `CharacterSheet.jsx`**
-- Import `calcREA`/`getAdvantageAttrMod` depuis `shared/polarisUtils.js` (déjà importé ligne 34
+- Import `calcREA`/`getAdvantageModForAttr` depuis `shared/polarisUtils.js` (déjà importé ligne 34
   pour `calcNA`/`calcAN`/`getGenotypeModForAttr`/`getMutationModForAttr` — même ligne étendue).
 - `calcSecondary(naMap)` (83-97) → `calcSecondary(naMap, charAdvantages)` : remplace
   `const rea = polarisRound((ADA + PER) / 2)` par
-  `const rea = calcREA(ADA, PER, getAdvantageAttrMod(charAdvantages, 'reaction'))`.
+  `const rea = calcREA(ADA, PER, getAdvantageModForAttr(charAdvantages, 'reaction'))`.
   `initiative = rea` inchangé (déjà aliasé, aucun changement séparé nécessaire).
 - Call site ligne 203 : `useMemo(() => calcSecondary(naMap, charAdvantages), [naMap, charAdvantages])`.
 - Aucun nouveau fetch : `charAdvantages` déjà chargé (lignes 325-326) — contiendra
@@ -519,10 +563,11 @@ entre eux pour un même personnage, pas seulement chacun isolément.
   aucun avantage à fetcher — chemin déjà exclu du calcul REA, inchangé.
 
 **G. Cas limites à tester**
-- Personnage sans avantage actif → `getAdvantageAttrMod([], 'reaction') = 0` → REA/Souffle
+- Personnage sans avantage actif → `getAdvantageModForAttr([], 'reaction') = 0` → REA/Souffle
   identiques à avant (non-régression) aux 4 sites serveur + fiche client.
 - `adv_006` seul (+3 reaction) → REA/initiative +3 partout, Souffle inchangé.
-- `adv_058` seul (-3 reaction) → REA -3.
+- `adv_058` seul (-3 reaction) → REA **-3 exactement** (pas +3 — vérifie explicitement l'absence de
+  double-inversion de signe via `type`, cf. piège explicité en section A).
 - `adv_006` + `adv_058` en même temps (pas de contrainte qui l'empêche, vérifié) → somme algébrique
   0 (comportement "addition simple" assumé, cf. recherche Foundry ci-dessus).
 - `adv_021` seul (+10 breath) → Souffle +10, REA inchangé (colonnes filtrées indépendamment par clé).
@@ -532,6 +577,33 @@ entre eux pour un même personnage, pas seulement chacun isolément.
   doivent produire le même REA pour un même personnage.
 - Non-régression : `getAdvantages()` avec les 2 colonnes en plus ne casse pas `AdvantagesPanel.jsx`
   (champs additionnels ignorés par l'affichage, pas de select strict côté composant).
+
+**H. Analyse à charge (2026-07-11, avant tout code) — 3 risques vérifiés, plan confirmé**
+1. `adv_006`+`adv_058` réellement cumulables ? Vérifié contre `advantageConstraints.js` (non lu
+   avant la rédaction initiale du plan) : aucune des 6 contraintes (`unique_absolute`,
+   `family_limit`, etc.) ne les lie — `family: null` sur les deux. Hypothèse confirmée.
+2. `CombatRosterWindow.jsx` a-t-il son propre calcul REA dupliqué (3ᵉ duplicata caché, en plus de
+   `charStats.js`/`CharacterSheet.jsx`) ? Vérifié : composant 100% lecture seule, affiche `base_ini`
+   reçu de `GET /combat-ini` (`battlemaps.js`, déjà dans le tableau D). Pas de site caché.
+3. Un renfort rejoignant un combat déjà démarré recalcule-t-il l'initiative ailleurs qu'à
+   `COMBAT_START` ? Grep exhaustif `server/src/socket/` : `calcREA`/`base_ini =` n'apparaît qu'une
+   fois, dans `socketCombatState.js:79`. Tableau D confirmé exhaustif (4 sites, pas 5).
+Aucune correction nécessaire suite à cette analyse — un seul point implicite rendu explicite (signe
+déjà porté par `mod_value`, piège documenté en section A + test dédié en section G).
+
+**I. Run à vide (2026-07-11, réflexion libre, avant tout code) — 3 points trouvés, tous corrigés
+dans le document** :
+1. Incohérence de nommage : `getAdvantageAttrMod` ne suivait pas le gabarit `get[Source]ModForAttr`
+   déjà posé par le Lot 1 (`getMutationModForAttr`/`getGenotypeModForAttr`) — renommé
+   `getAdvantageModForAttr` partout dans ce document avant que le Lot 3 ne copie le mauvais gabarit.
+2. Ordre addition/arrondi dans `calcREA` (bonus après `polarisRound`, pas dans la moyenne avant
+   arrondi) — vérifié mathématiquement neutre uniquement parce que `mod_value` est un entier garanti
+   par le schéma DB (section A) ; explicité pour ne pas laisser un futur lecteur se poser la question.
+3. Coût supplémentaire dans la boucle séquentielle de `COMBAT_START` (3ᵉ requête par token) — pas un
+   bug, mais une limite de performance connue et acceptée, désormais écrite noir sur blanc (section D)
+   plutôt que découverte plus tard sur un roster nombreux.
+Statut Lot 2 : **plan complet, corrigé deux fois (analyse à charge + run à vide), toujours aucun
+code écrit.**
 
 ### Lot 3 — Résistances (recoupement réel mutations + avantages)
 - Source : `ref_mutations.mod_res_damage/shock/drugs/disease/poison/radiation` **et**

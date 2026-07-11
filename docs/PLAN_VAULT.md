@@ -798,6 +798,44 @@ visibles) — cohérent avec "chaque lot testable indépendamment, pas de sur-in
 seulement que la demande existe correctement en base, pas son traitement complet de bout en bout
 depuis l'interface.
 
+### Lot 4 — codé et testé (traitement MJ) — dernier lot du plan
+
+**Fichiers** : `vaultService.js` (nouvelle `listPendingRequestsForCampaign`, réservée au MJ de la
+campagne), `vault.js` (route `GET /campaigns/:campaignId/transfer-requests`),
+`CampaignSettingsPage.jsx` (onglet "Joueurs" activé — `enabled: false → true`, `campaignId` transmis
+à `SectionPlayers`), `SectionPlayers.jsx` (réécrit intégralement — remplace le placeholder "Phase 3"
+par la vraie liste + boutons Approuver/Refuser), section `settings.*` étendue dans `fr.json`.
+
+**Testé — via un vrai navigateur, jusqu'au bout** :
+- Personnage réel envoyé au Coffre + demande de transfert créée (mêmes routes déjà testées).
+- Onglet "Joueurs" (jusqu'ici grisé, inaccessible) → **la vraie demande apparaît**, avec le nom du
+  personnage, son type, et qui l'a demandée.
+- Clic "Approuver" → demande disparaît de la liste, **vérifié en base** : `status='approved'`,
+  `created_character_id` renseigné, le nouveau personnage existe bien dans la campagne cible.
+- Nettoyage effectué avec prudence : d'autres personnages/demandes trouvés en base pendant le
+  nettoyage n'appartenaient pas à ce test (activité réelle concurrente détectée — plusieurs
+  brouillons de personnage créés en temps réel pendant les tests, plus une demande antérieure d'une
+  autre session vers une autre campagne) — seuls mes propres artefacts identifiés avec certitude ont
+  été supprimés, le reste laissé intact plutôt que de risquer d'effacer un travail en cours d'un
+  autre poste.
+- **Effet de bord trouvé, hors sujet Vault, non corrigé** : avertissement console React
+  ("mixing shorthand and non-shorthand background properties") en changeant d'onglet dans les
+  Réglages de campagne — root cause identifiée avec certitude (`s.navItem` utilise `background`,
+  `s.navItemActive` utilise `backgroundColor`, fusionnés dans le même objet style) : bug
+  **préexistant** dans `CampaignSettingsPage.jsx`, présent sur les 4 onglets déjà actifs avant ce
+  chantier (jamais remarqué car l'onglet "Joueurs" était le seul désactivé) — confirmé par lecture
+  du diff, aucune ligne touchée par le Lot 4 dans ces styles. Cosmétique (avertissement dev
+  uniquement, aucun impact fonctionnel) — non corrigé ici, hors scope Vault, à inscrire en dette.
+- `eslint` : 0 nouvelle erreur sur les fichiers touchés (2 problèmes préexistants de
+  `CampaignSettingsPage.jsx`, sans rapport, confirmés identiques via `git stash`).
+
+**Non testé** : le bouton "Refuser" n'a pas été recliqué séparément dans le navigateur (chemin de
+code strictement symétrique à "Approuver", déjà testé côté service à l'Étape 3 — `rejectImport`).
+
+**Les 4 lots de l'Étape 7 sont maintenant codés et testés. Le plan PLAN_VAULT.md (Étapes 0 à 7) est
+complet.** Reste hors scope, comme prévu depuis le début : le contenu non-personnage du Coffre
+(skins de dés, etc.) et la notification temps réel des demandes en attente pour le MJ.
+
 ---
 
 ## Pièges à anticiper
