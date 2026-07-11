@@ -3,7 +3,7 @@ import {
   WOUND_SEVERITIES, WOUND_MAX_COUNTS, SEVERITY_COLORS,
 } from '../../../shared/woundConstants.js'
 import {
-  ARMOR_CATEGORY_MALUS, LOCATION_TO_SLOT, LOCATION_LABELS, SLOT_TO_REF_LOCATION,
+  ARMOR_CATEGORY_MALUS, LOCATION_TO_SLOT, LOCATION_LABELS, SLOT_TO_REF_LOCATION, SYMMETRIC_SLOT_PAIRS,
 } from '../../../shared/armorConstants.js'
 import { polarisRound } from '../../../shared/polarisUtils.js'
 import api from '../lib/api.js'
@@ -44,10 +44,16 @@ export default function LocationPanel({
   const equippedItems = items.filter(i => i.slot?.split('/')?.includes(slotCode))
   const hasNonS       = equippedItems.some(i => i.ref_malus_cat && i.ref_malus_cat !== 'S')
 
+  // P58 : un item à ref_location simple (brassard, jambière...) ne couvre qu'un seul côté à la
+  // fois — s'il est déjà équipé sur le slot symétrique (BG↔BD, JG↔JD), il ne réapparaît pas ici.
+  // Un item à ref_location composée (armure intégrale) reste proposé des deux côtés (légitime).
+  const pairSlot = SYMMETRIC_SLOT_PAIRS[slotCode]
+
   const availableItems = items.filter(i =>
     i.ref_location?.split('/').includes(refCode) &&
     i.container === 'Sac' &&
     !(i.slot?.split('/')?.includes(slotCode)) &&
+    !(pairSlot && !i.ref_location.includes('/') && i.slot?.split('/')?.includes(pairSlot)) &&
     (!hasNonS || i.ref_malus_cat === 'S' || i.ref_malus_cat == null),
   )
 

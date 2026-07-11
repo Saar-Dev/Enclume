@@ -103,7 +103,7 @@ export default function CampaignSettingsPage() {
     { key: 'dice', label: t('settings.sectionDice'), enabled: true },
     { key: 'rules', label: t('settings.sectionRules'), enabled: true },
     { key: 'tokens', label: t('settings.sectionTokens'), enabled: true },
-    { key: 'players', label: t('settings.sectionPlayers'), enabled: false },
+    { key: 'players', label: t('settings.sectionPlayers'), enabled: true },
     { key: 'sheet', label: t('settings.sectionSheet'), enabled: true },
   ]
 
@@ -149,7 +149,7 @@ export default function CampaignSettingsPage() {
           {activeSection === 'tokens' && formData && (
             <SectionTokens initialData={formData} campaignId={campaignId} onChange={handleSectionChange} />
           )}
-          {activeSection === 'players' && <SectionPlayers />}
+          {activeSection === 'players' && <SectionPlayers campaignId={campaignId} />}
           {activeSection === 'sheet' && formData && (
             <SectionCharacterSheet initialData={formData.settings} onChange={(p) => handleSectionChange({ settings: p })} />
           )}

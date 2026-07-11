@@ -1,5 +1,6 @@
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
+import { isEquippableLocation } from '../lib/inventoryRules.js'
 
 // ─── Marchands ────────────────────────────────────────────────────────────────
 
@@ -162,7 +163,7 @@ export async function buyFromMerchant(campaignId, { merchantId, charId, items = 
     const equipmentIds = [...new Set(items.map(i => i.equipmentId))]
     const equipmentRows = await trx('ref_equipment')
       .whereIn('id', equipmentIds)
-      .select('id', 'price', 'name', 'family', 'category', 'tech_level', 'max_level', 'generation', 'rarity')
+      .select('id', 'price', 'name', 'family', 'category', 'tech_level', 'max_level', 'generation', 'rarity', 'location')
 
     const rules = Array.isArray(merchant.rules) ? merchant.rules : JSON.parse(merchant.rules || '[]')
     const modGlobal = merchant.mod_global ?? 0
@@ -194,16 +195,23 @@ export async function buyFromMerchant(campaignId, { merchantId, charId, items = 
     await trx('char_sheet').where({ character_id: charId }).decrement('sols', total)
 
     // 6. INSERT char_inventory — un INSERT par ligne de panier
+    // P57 : un item équipable ne stacke jamais — qty devient qty lignes quantity=1
+    // (chaque arme/protection reste un exemplaire indépendant, équipable séparément).
     for (const { equipmentId, qty = 1 } of items) {
-      await trx('char_inventory').insert({
+      const eq = equipmentRows.find(e => e.id === equipmentId)
+      const equippable = isEquippableLocation(eq?.location ?? null)
+      const rowCount = equippable ? qty : 1
+      const rowQty   = equippable ? 1 : qty
+      const rows = Array.from({ length: rowCount }, () => ({
         character_id: charId,
         equipment_id: equipmentId,
-        quantity:     qty,
+        quantity:     rowQty,
         container:    'Coffre',
         slot:         null,
         created_at:   new Date(),
         updated_at:   new Date(),
-      })
+      }))
+      await trx('char_inventory').insert(rows)
     }
 
     // 7. INSERT trade_log

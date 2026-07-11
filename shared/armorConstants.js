@@ -16,6 +16,13 @@ export const SLOT_TO_REF_LOCATION = {
   '2M': 'M', Tr: 'M',
 }
 
+// Slots symétriques gauche/droite partageant le même ref_location générique (SLOT_TO_REF_LOCATION).
+// Un item à ref_location simple (ex. 'B' — brassard) ne couvre qu'un seul côté à la fois : un
+// second exemplaire est nécessaire pour l'autre côté. Un item à ref_location composée (ex.
+// 'T/C/B/J' — combinaison intégrale) peut légitimement accumuler les deux côtés sous un même
+// exemplaire (une seule combinaison protège les deux bras).
+export const SYMMETRIC_SLOT_PAIRS = { BG: 'BD', BD: 'BG', JG: 'JD', JD: 'JG' }
+
 export const SLOT_TO_WOUND_LOCATION = {
   T: 'tete', C: 'corps',
   BD: 'bras_droit', BG: 'bras_gauche',

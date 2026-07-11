@@ -121,8 +121,8 @@ router.get('/:sheetId/preview', async (req, res, next) => {
 
 router.post('/:sheetId/reconcile', async (req, res, next) => {
   try {
-    const { step1, step2, step3, step4, step5 } = req.body
-    const result = await reconcileCreation(req.sheet.id, { step1, step2, step3, step4, step5 })
+    const { step1, step2, step3, step4, step5, finalize } = req.body
+    const result = await reconcileCreation(req.sheet.id, { step1, step2, step3, step4, step5, finalize })
     res.json(result)
   } catch (err) { next(err) }
 })

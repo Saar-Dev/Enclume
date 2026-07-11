@@ -155,7 +155,12 @@
       "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('client/src/locales/creation.json','utf8'\\)\\)\")",
       "Bash(echo \"exit:$?\")",
       "Bash(node --check shared/polarisUtils.js)",
-      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('client/src/locales/creation.json','utf8'\\)\\); console.log\\('OK_JSON'\\)\")"
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('client/src/locales/creation.json','utf8'\\)\\); console.log\\('OK_JSON'\\)\")",
+      "Bash(grep -rn \"creation/\\\\${.*}/reconcile\\\\|/reconcile\" client/src/ server/src/routes/)",
+      "Bash(node --check src/db/migrations/132_char_sheet_dedupe_and_unique.js)",
+      "Bash(node --check src/db/migrations/133_char_sheet_wizard_locked_backfill.js)",
+      "Bash(curl -s -X POST http://localhost:3001/api/creation/5d1baa0a-d42b-440a-b8b8-3e0edd01f6b9/reconcile -H 'Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImM0NmY4ZTdmLTlkNzQtNDQ5OS1iOTg0LWExNWFiOTY2NmQwZCIsImlhdCI6MTc4Mzc2MzI0N30.IGVzdXOZOx7gziK5vNcBpxwSAoTO3lY8KoS64kROnoQ' -H 'Content-Type: application/json' -d '{\"finalize\":true}' -w '\\\\nHTTP_STATUS:%{http_code}\\\\n')",
+      "Bash(node check5c.mjs)"
     ]
   }
 }

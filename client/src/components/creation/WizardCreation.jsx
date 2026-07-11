@@ -87,8 +87,8 @@ export default function WizardCreation() {
       await api.post(`/creation/${sheetId}/reconcile`, {
         step1: step1Data, step2: step2Data, step3: step3Data,
         step4: step4Data, step5: step5Data,
+        finalize: true,
       })
-      await api.post(`/creation/${sheetId}/lock`)
       resetCreation()
       navigate('/')
     } catch (err) {

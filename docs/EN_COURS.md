@@ -1,5 +1,6 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-10 Session 141 (suite 13) — voir item 55 (note de numérotation, sessions parallèles)
+> Dernière mise à jour : 2026-07-11 — Session 141 (suite 14) : cascade suppression token + char_sheet
+> dédoublonné/UNIQUE + atomicité Wizard + bonus féminin corrigé (item 56)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -8,6 +9,28 @@
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 56 (Session 141 suite 14) — 4 correctifs enchaînés, chacun trouvé en testant le précédent :**
+> (1) suppression d'un character/battlemap ne supprimait jamais ses tokens (`tokenLifecycle.js`,
+> NOUVEAU) ✅ CLOS fonctionnel confirmé (tests HTTP réels) ; (2) 9 personnages de "Camp LOCALE"
+> avaient 2 lignes `char_sheet` chacun (bug historique, aucune contrainte `UNIQUE` depuis toujours)
+> — migration `132` dédoublonne + ajoute la contrainte ✅ CLOS ; (3) `handleTerminate` faisait 2
+> appels réseau non-atomiques (`reconcile` puis `lock`), laissant des personnages `complete` mais
+> jamais verrouillés si le 2ᵉ échouait — fusionnés en un seul appel atomique (`reconcileCreation`
+> gagne `finalize`) ✅ CLOS, testé (rejet + rollback complet en conditions réelles) mais **parcours
+> complet navigateur jusqu'à "Terminer" jamais confirmé par Saar** (interrompu par (4)) ; (4) bonus
+> féminin Coordination/Présence : plafonnait la valeur finale au lieu de remiser le coût PC (bug
+> Session 137, jamais vu jusqu'ici) — remplacé par une remise forfaitaire dans `calcTotalCost`
+> (`shared/polarisUtils.js`), **zéro nouvel état/UI** (proposition Saar, vérifiée mathématiquement
+> équivalente à un décalage de base par attribut) ✅ CLOS **fonctionnel confirmé Saar**.
+> Migration `133` (backfill `wizard_locked_at` pour 20 fiches historiques pré-Wizard) ✅ CLOS.
+> **Dette `[WIZLOCK1]` ajoutée** (`CLAUDE.md`) : pourquoi 2 fiches `complete` n'avaient jamais été
+> verrouillées avant ce correctif — cause probable identifiée (le double-appel réseau non-atomique
+> ci-dessus), pas re-vérifiée a posteriori sur ces 2 cas précis.
+> **Non testé / à confirmer par Saar** : parcours Wizard complet réel jusqu'à "Terminer" (le
+> mécanisme d'atomicité est vérifié en isolation, pas le chemin heureux bout en bout) ; suppression
+> réelle d'un character/battlemap en session live via l'UI (testé en HTTP direct uniquement).
+> Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 14)".
 
 > **CHANTIER REDESIGN STEP 4 PROFESSION → ✅ TERMINÉ (8/8 lots)** — plan maître archivé :
 > **`docs/Old/PLAN_REWORKFINAL.md`**.
@@ -39,8 +62,14 @@
 > retourné comme chaîne par `node-pg` (jamais casté en `::integer`) qui corrompait le calcul par
 > concaténation de chaîne au lieu d'addition (`10 + '2'` → `102` au lieu de `12`). Détail complet :
 > item "55." et `docs/JOURNAL6.md` "Session 141 (suite 13)", `docs/PLAN_MUTATION2.md` section Lot 1.
+> **Bilan/run à vide fait le 2026-07-11** (`docs/PLAN_MUTATION2.md` section "Bilan / run à vide",
+> aucun code) : point resté ouvert non retesté — **aperçu Wizard ("peek") après fermeture/
+> réouverture explicite, hypothèse jamais confirmée par Saar** (même cause présumée que le bug de
+> rafraîchissement client du Lot 1) ; piège à surveiller pour tous les lots suivants — caster
+> `::integer` tout nouvel agrégat SQL avant consommation JS (leçon du bug bigint-as-string).
 > **Prochaine étape : détailler le Lot 2 (Attributs secondaires) ligne-à-ligne avec Saar, même
-> méthode que le Lot 1 (jamais deux lots à la fois).**
+> méthode que le Lot 1 (jamais deux lots à la fois) — vérifier d'abord le point Wizard peek ouvert
+> ci-dessus si l'occasion se présente.**
 > **Chantier Options de campagne (item 41) : `revers` (OPT-06) ✅ câblée — Session 141 (suite 12)**
 > (9/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
 > `skill_prerequisites`, `skill_max_level`, `young_penalty`, `polaris_latent`, `revers`).

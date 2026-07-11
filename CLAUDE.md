@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 13) — 2026-07-10
+> Session 141 (suite 14) — 2026-07-11
 
 ---
 
@@ -107,8 +107,41 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 13) (2026-07-10)
+## ÉTAT COURANT — Session 141 (suite 14) (2026-07-11)
 
+- **Session 141 (suite 14) — 4 correctifs enchaînés, chacun trouvé en testant le précédent.**
+  Point de départ : bug signalé par Saar — supprimer un character ne supprimait jamais ses tokens
+  sur les battlemaps, ils restaient en combat sans fiche liée. **(1) `server/src/lib/
+  tokenLifecycle.js` (NOUVEAU)** : `removeTokens()` centralise nettoyage Redis + suppression DB +
+  broadcast `TOKEN_DELETED`, réutilisé par `characters.js`/`tokens.js`/`battlemaps.js` (2ᵉ trou
+  identique trouvé en vérifiant : la suppression de battlemap avait le même angle mort) — testé par
+  vraies requêtes HTTP contre le serveur réel (JWT signé), Redis + `combat_roster` (CASCADE)
+  vérifiés avant/après. **(2) Migration `132`** : en testant, Saar a signalé des tokens visibles sur
+  la carte sans fiche personnage dans la sidebar — investigation a révélé que 9 personnages de
+  "Camp LOCALE" avaient chacun **2 lignes `char_sheet`** (bug historique, `character_id` n'a jamais
+  eu de contrainte `UNIQUE` depuis la migration 36) avec des données réellement divergentes
+  (attributs, compétences, sols). Dédoublonnage déterministe (règle uniforme, données de dev — pas
+  d'arbitrage au cas par cas, décision Saar) + contrainte `UNIQUE` ajoutée. **(3) `reconcileCreation`
+  gagne `finalize`** : la vraie cause de la disparition en sidebar — `handleTerminate` faisait 2
+  appels réseau non-atomiques (`reconcile` puis `lock`), toute coupure entre les deux laissait la
+  fiche `complete` mais jamais verrouillée pour toujours. Fusionnés en un seul appel atomique
+  (réutilise `lockWizard(sheetId, trx)`, déjà construit pour le Coffre — jamais recodé de zéro).
+  **Migration `133`** : backfill `wizard_locked_at` pour 20 fiches historiques (critère dérivé du
+  code : `creation_state IS NULL` ou `'complete'`, jamais les vrais brouillons `draft_step0`).
+  **(4) Bonus féminin Coordination/Présence** : dernier test navigateur de Saar a bloqué toute
+  répartition en Présence — investigation a révélé un bug de Session 137 jamais vu jusqu'ici, la
+  règle plafonnait la **valeur finale** de COO/PRE au lieu de remiser le **coût PC** (mauvaise
+  lecture de "les valeurs de base... modifiées", `REGLE_CREATION.txt:293-296`). Saar a proposé de ne
+  pas ajouter de nouvelle UI (comme pour Force) — vérifié mathématiquement qu'une remise forfaitaire
+  dans `calcTotalCost` est équivalente à un décalage de base par attribut pour toute répartition :
+  **zéro nouvel état, zéro nouvelle UI**, les 3 éditions précédentes sur `Step1Attributes.jsx`
+  annulées intégralement. **✅ CLOS, fonctionnel confirmé Saar** (item 4 seul confirmé en navigateur
+  réel — items 1-3 testés par instrumentation directe, jamais par un parcours navigateur complet).
+  **Dette `[WIZLOCK1]` ajoutée** (2 fiches trouvées bloquées avant le correctif (3), cause
+  probable identifiée non re-vérifiée sur ces cas précis). **Non testé** : suppression de
+  character/battlemap via l'UI réelle (testé HTTP direct uniquement) ; parcours Wizard complet
+  jusqu'à "Terminer" en conditions réelles navigateur. Détail complet : `docs/JOURNAL6.md`
+  "Session 141 (suite 14)".
 - **Session 141 (suite 13) — `docs/PLAN_MUTATION2.md` Lot 1 (attributs primaires mutations) ✅
   CLOS, fonctionnel confirmé Saar.** Suite directe de "suite 10" (diagnostic/architecture).
   Consolidation `calcNA`/`calcAN` vers `shared/polarisUtils.js` (fin de la triple duplication
@@ -381,7 +414,9 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **133 migrations stables** (128_char_mutation_effects_view_int_cast — Session 141 (suite 13) ;
+- **135 migrations stables** (133_char_sheet_wizard_locked_backfill — Session 141 (suite 14) ;
+  132_char_sheet_dedupe_and_unique — Session 141 (suite 14) ;
+  128_char_mutation_effects_view_int_cast — Session 141 (suite 13) ;
   127_char_mutation_effects_view_subtypes — Session 141 (suite 13) ;
   126_ref_setbacks_revers_table — Session 141 (suite 12) ;
   125_char_mutations_source_campaign — Session 141 (suite 9) ;
@@ -749,6 +784,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **[ADV2]** Bénéfices de carrière type "Revenus +10%/+20%/doublés à partir de cette année" (`ref_career_random_benefits`, ex. Cultivateur/Éleveur roll 3/7/9) — aucun mécanisme pour appliquer un modificateur cumulatif aux années futures ; `evaluateSalaryFormula`/économies ne gèrent qu'un montant ponctuel. Roadmap (Session 141 suite 12).
 - **[ADV3]** Bénéfices de carrière débloquant l'accès à une compétence (ex. mutation/compétence "développée automatiquement" via un tirage) — non géré, aucun câblage vers `char_skills`/`char_mutations`. Roadmap (Session 141 suite 12).
 - **[WIZ4]** `Step4Experience.jsx` — le mini-stepper (`isClickable`) ne revalide jamais les blocages durs de la sous-step quittée : un clic direct sur une sous-step déjà "reachable" (`highestSubStep` dépassé) contourne le blocage de la sous-step courante (ex. retirer sa seule carrière sur Carrières puis cliquer directement sur "Avantages pro"/"Revers"/"Récap" via le mini-stepper). Préexistant à Session 141 (suite 12), pas une régression du chantier Revers/Avantages pro — vérifié en relisant `Step4Experience.jsx` avant le rework. Filet de sécurité serveur (`reconcileCreation` STEP4, "Au moins une carrière requise") empêche toute donnée invalide persistée — juste un rejet tardif/générique au lieu d'un blocage immédiat. Non prioritaire, concerne l'architecture de navigation entière du mini-stepper, pas une sous-step isolée.
+- **[WIZLOCK1]** (Session 141 suite 14) — 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé ("Mr STEP6 Final", "jeune") avant le correctif d'atomicité de cette session. Cause probable identifiée mais non re-vérifiée a posteriori sur ces 2 cas précis : `handleTerminate` (`WizardCreation.jsx`) faisait 2 appels réseau séparés (`reconcile` puis `lock`) — toute coupure entre les deux laissait la fiche dans cet état bloqué. Corrigé pour les finalisations futures (`reconcileCreation` gagne `finalize`, un seul appel atomique) — cette dette ne documente que l'historique, pas un risque encore actif.
 
 ---
 

@@ -302,6 +302,7 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
           <SettingsTab
             character={character}
             isGm={isGm}
+            isOwner={isOwner}
             members={members}
             removeCharacter={removeCharacter}
             updateCharacter={updateCharacter}
@@ -328,9 +329,10 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
 }
 
 // ─── Onglet Paramètres ───────────────────────────────────────────────────────
-function SettingsTab({ character, isGm, members, removeCharacter, updateCharacter, onClose }) {
+function SettingsTab({ character, isGm, isOwner, members, removeCharacter, updateCharacter, onClose }) {
   const { t } = useTranslation()
   const [glbStatus, setGlbStatus] = useState(null) // null | 'uploading' | 'success' | 'error'
+  const [sendingToVault, setSendingToVault] = useState(false)
   const glbTimerRef = useRef(null)
   useEffect(() => () => clearTimeout(glbTimerRef.current), [])
 
@@ -368,6 +370,20 @@ function SettingsTab({ character, isGm, members, removeCharacter, updateCharacte
       removeCharacter(character.id)
       onClose()
     } catch (err) { console.error(err) }
+  }
+
+  // ─── Envoi vers le Coffre (PLAN_VAULT.md Étape 7, Lot 2) — copie, jamais un déplacement ───
+  const handleSendToVault = async () => {
+    if (!window.confirm(t('character.sendToVaultConfirm'))) return
+    setSendingToVault(true)
+    try {
+      await api.post(`/char-sheet/${character.id}/clone-to-vault`)
+      window.alert(t('character.sendToVaultSuccess'))
+    } catch (err) {
+      window.alert(err.response?.data?.error?.message || t('character.sendToVaultError'))
+    } finally {
+      setSendingToVault(false)
+    }
   }
 
   return (
@@ -427,6 +443,18 @@ function SettingsTab({ character, isGm, members, removeCharacter, updateCharacte
             disabled={glbStatus === 'uploading'}
           />
         </label>
+      )}
+
+      {/* Envoi vers le Coffre */}
+      {isOwner && (
+        <button
+          className="btn-ghost"
+          onClick={handleSendToVault}
+          disabled={sendingToVault}
+          style={{ alignSelf: 'flex-start', marginTop: '8px', opacity: sendingToVault ? 0.5 : 1 }}
+        >
+          {sendingToVault ? t('common.loading') : t('character.sendToVault')}
+        </button>
       )}
 
       {/* Suppression */}

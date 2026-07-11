@@ -2068,3 +2068,239 @@ cause que le bug 3 ci-dessus, la fonction refait un `reconcile`+`preview` comple
 autre que "Caractère félin" ; retrait d'une mutation stackée (`count` > 1) en conditions réelles.
 
 Détail complet (plan, ligne-à-ligne, analyse à charge) : `docs/PLAN_MUTATION2.md` section Lot 1.
+
+---
+
+## Session 141 (suite 14) — 2026-07-11
+
+### Contexte
+
+Suite directe de "suite 13" dans la même conversation (pas une reprise de résumé). Point de départ :
+Saar signale un bug qu'un utilisateur ne devrait jamais rencontrer — supprimer un character ne
+supprime jamais ses tokens sur les battlemaps, ils restent visibles et participent au combat sans
+fiche de statistiques liée. Quatre correctifs se sont enchaînés, chacun trouvé en testant le
+précédent avec Saar — jamais planifiés à l'avance comme un seul chantier.
+
+### (1) Cascade de suppression token — `server/src/lib/tokenLifecycle.js` (NOUVEAU)
+
+Root cause vérifiée par lecture : `tokens.character_id` a une FK `ON DELETE SET NULL` (migration
+`20260331_16_tokens_character_id.js`, commentaire d'origine "le token reste sur la carte" — choix
+voulu à l'époque, faux pour le cas combat) et `DELETE /api/characters/:id` ne nettoyait jamais les
+tokens du character supprimé.
+
+Recherche demandée par Saar avant codage ("architecture sérieuse ou bricolage ?") : Foundry VTT ne
+supprime pas non plus automatiquement les tokens liés en supprimant un Actor (limitation connue,
+comblée par des modules communautaires) — pas un bon modèle à copier, Polaris a une contrainte plus
+stricte (combat sans fiche = vrai problème mécanique). Principe retenu : encapsuler le mécanisme de
+suppression en un seul endroit (Nystrom, Game Programming Patterns, déjà cité dans
+`PLAN_TIRVISE.md`) plutôt que dupliquer le triplet Redis/DB/socket à chaque nouveau point de
+suppression.
+
+`removeTokens(io, tokens, campaignId)` (nettoyage Redis `collisionRemoveToken` + suppression DB en
+lot + broadcast `TOKEN_DELETED` par token) — appelé par :
+- `tokens.js DELETE /:id` — refactorée, comportement strictement inchangé.
+- `characters.js DELETE /:id` — le bug signalé, corrigé.
+- `battlemaps.js DELETE /:id` — 2e occurrence du même trou trouvée en vérifiant (comptait
+  uniquement sur le `ON DELETE CASCADE` SQL, aucun nettoyage Redis/socket) — incluse dans le même
+  chantier après validation explicite de Saar (question posée : bug séparé ou inclus maintenant).
+
+Testé : `node --check`/ESLint 0 erreur introduite (`poolBase` pré-existant confirmé `git stash`),
+`combat_roster`/`combat_actions` confirmés `ON DELETE CASCADE` via `information_schema` réel (pas
+supposé), scénario complet en fixtures réelles (character + 2 tokens sur 2 battlemaps + entrée
+`combat_roster`) via `removeTokens()` direct, puis 2 vraies requêtes HTTP contre le serveur réel
+(JWT signé, cookie `token=`) sur `DELETE /characters/:id` et `DELETE /battlemaps/:id` — tokens
+supprimés, Redis nettoyé, `combat_roster` cascadé, résidu vérifié à zéro après nettoyage.
+Non testé : suppression via l'UI réelle en navigateur (HTTP direct uniquement).
+
+### (2) Migration 132 — char_sheet.character_id dédoublonné + UNIQUE
+
+En testant (1), Saar signale que Thug/Deep/Soleil/Mr Sourire ont des tokens visibles sur la carte
+sans fiche dans la sidebar. Investigation (pas de suppression à l'aveugle) : ces personnages
+existent toujours en base (visible=true pour 3/4), pas de vraie suppression — le vrai symptôme
+était une absence de la liste sidebar, cause distincte.
+
+Trouvé en creusant : `char_sheet` n'a jamais eu de contrainte UNIQUE sur `character_id` (migration
+36, origine du projet). 9 personnages de "Camp LOCALE" ont chacun 2 lignes `char_sheet`, créées à
+quelques millisecondes d'écart (double-soumission classique, code aujourd'hui disparu —
+`startCreation` actuel est atomique, 1 transaction, character_id toujours neuf). Sur les persos
+activement joués (Deep, BaBar, Mr sourire, Soleil), les données ont réellement divergé entre les
+2 lignes (attributs custom vs défaut, compétences, sols — jusqu'à -49364 sur une ligne vs 50635 sur
+l'autre pour Mr sourire) : le jeu écrivait au hasard sur l'une ou l'autre selon les sessions.
+
+Saar, interrogé sur l'arbitrage ligne A/B via AskUserQuestion : refusé — "on est en phase de
+développement, ces données sont peu importantes... ce qui est vital c'est de profiter de ce bug pour
+corriger PROPREMENT l'architecture." Dédoublonnage réglé par une règle uniforme et déterministe
+(score = compétences+carrières+mutations+avantages+blessures, tie-break updated_at puis created_at
+puis id), pas un choix au cas par cas.
+
+`132_char_sheet_dedupe_and_unique.js` : dédoublonne (13 tables filles confirmées ON DELETE CASCADE
+via information_schema réel, pas la liste supposée de la doc de migration 36) puis
+ADD CONSTRAINT uq_char_sheet_character_id UNIQUE (character_id).
+
+Testé : dry-run complet en transaction annulée contre les 9 vrais personnages avant d'écrire la
+migration (résultat vérifié ligne par ligne) ; migration exécutée réellement (auto-appliquée
+nodemon) — 0 doublon restant, contrainte présente, les 4 personnages vérifiés individuellement (bon
+survivant conservé, identique au dry-run).
+
+### (3) Atomicité Wizard — reconcileCreation gagne finalize
+
+En testant (2), Saar demande "architecture SÛRE, ROBUSTE et COMPLÈTE ou on repart en analyse" —
+poussé à creuser la vraie cause de la disparition sidebar plutôt que de se contenter d'un backfill.
+Trouvé : `routes/characters.js` (liste sidebar) exclut tout personnage dont un char_sheet a
+wizard_locked_at IS NULL (migration 119, Session 139) — mais `handleTerminate`
+(`WizardCreation.jsx`) faisait 2 appels réseau séparés (POST .../reconcile puis POST .../lock).
+Toute coupure entre les deux (réseau, onglet fermé, redémarrage serveur) laisse la fiche
+creation_state='complete' mais wizard_locked_at jamais posé — invisible pour toujours, sans retry
+possible. "jeune" (créé 3 jours avant ce test) prouvait que ce n'était pas un incident historique
+clos.
+
+Fusion en un seul appel atomique, réutilise lockWizard(sheetId, trxOpt) — déjà construit pour
+vaultService.cloneCharacterDeep (pattern trx-or-db), pas recodé de zéro. Dans reconcileCreation :
+si finalize est demandé, rejet immédiat (AppError 400) si isComplete est faux, sinon appel de
+lockWizard(sheetId, trx) dans la même transaction. `WizardCreation.jsx` : handleTerminate envoie
+finalize: true dans son unique appel reconcile, supprime le second appel /lock. openPeek (seul
+autre appelant de /reconcile, vérifié) ne passe jamais finalize, comportement inchangé.
+
+`133_char_sheet_wizard_locked_backfill.js` : backfill wizard_locked_at pour les fiches historiques
+concernées — critère dérivé du code (creation_state IS NULL = antérieur au système Wizard lui-même,
+structurellement pas un brouillon en cours ; 'complete' = Wizard fini mais jamais verrouillé, bug
+(3) ci-dessus) — jamais les vraies draft_step0 (58 lignes, vérifié intactes après coup). Exécutée
+après (2), un seul character_id par ligne concernée.
+
+Testé : lockWizard(sheetId, trx) vérifié dans une transaction manuelle sur "jeune" (vrai cas cassé),
+rollback confirmé ; migrations 132/133 exécutées réellement — Deep/BaBar/Mr sourire/Soleil/Conan/
+Civil/Bobar/Koko/Mr Sourire/jeune/Mr STEP6 Final réapparaissent tous dans la requête sidebar réelle ;
+rejet + rollback complet de la transaction vérifié sur un vrai brouillon (step1 valide envoyé avec
+finalize sur données incomplètes → aucune trace de char_identity créée malgré le step1 valide) via
+appel direct du service ET vraie requête HTTP (400 avec le message attendu).
+Dette [WIZLOCK1] ajoutée (CLAUDE.md) — cause probable de "Mr STEP6 Final"/"jeune" jamais verrouillés
+identifiée (ce bug), pas re-vérifiée a posteriori sur ces 2 cas précis.
+Non testé : parcours Wizard complet réel jusqu'au clic "Terminer" (le mécanisme d'atomicité est
+vérifié en isolation — transaction + rollback — pas observé bout en bout en navigateur).
+
+### (4) Bonus féminin Coordination/Présence — shared/polarisUtils.js
+
+Test navigateur de Saar sur (3) interrompu : erreur "Étape 1 invalide : Bonus féminin dépassé : 5 > 2
+(COO: +5, PRE: +0)" à l'étape 6 (Terminer), pour un problème d'étape 1 — signalé "incompréhensible
+sans mon explication". Vérifié dans REGLE_CREATION.txt:293-296 : la règle est correcte
+(bonusCOO+bonusPRE ≤ 2), mais surgit trop tard (aucune UI ne l'empêche avant la finalisation).
+
+1er correctif (abandonné après relecture critique) : blocage live des spinners Mod.PC COO/PRE au
+plafond, règle centralisée dans shared/polarisUtils.js (getFemininBonusTotal). Testé et fonctionnel
+en isolation, mais casse un cas réel signalé par Saar juste après : "je ne peux mettre aucun point
+en Présence" dès que Coordination avait déjà consommé le quota. Cause racine réexaminée :
+REGLE_CREATION.txt dit "les valeurs DE BASE... modifiées" — un décalage de base (comme Force -2),
+pas un plafond sur la valeur finale achetée en PC. Le code (Session 137, jamais revu jusqu'ici)
+traitait COO-7 comme si c'était TOUT du bonus gratuit, bloquant aussi l'achat PC normal au-delà —
+bug présent depuis l'origine de cette option, masqué jusqu'ici car jamais vérifié qu'à la toute fin
+(step 6).
+
+Saar propose une simplification ("comme Force, sans UI supplémentaire ?") plutôt que mon plan initial
+(nouvel état de répartition + mini-stepper dédié, jugé trop complexe). Vérifié mathématiquement
+(6 scénarios node -e, y compris le cas exact signalé) : une remise forfaitaire (coût des 2 premiers
+points investis en COO+PRE combinés, peu importe la répartition) est algébriquement identique à un
+décalage de base par attribut, car COST_LOOKUP[7]=0 rend l'algèbre équivalente pour tout split.
+Résultat : zéro nouvel état, zéro nouvelle UI — le spinner Mod.PC existant suffit.
+
+shared/polarisUtils.js : calcTotalCost applique la remise (getFemininBonusDiscount, nouveau,
+remplace getFemininBonusTotal du 1er correctif abandonné) ; G4 (validateStep1) supprimée
+entièrement — la remise s'auto-limite à 2 par construction, plus rien à rejeter. Step1Attributes.jsx
+: les 3 éditions du 1er correctif (canIncrement/handleModPC/handleSetFeminin) intégralement
+annulées, fichier revenu identique à sa version d'avant ce chantier. creation.json :
+ruleFemininBonus réécrite pour expliquer la remise (demande initiale de Saar : rendre la règle
+compréhensible dans l'accordéon).
+
+Testé : node --check/ESLint 0 nouvelle erreur, creation.json validé, 7 scénarios node -e (cas Saar
+original n'est plus rejeté, nouveau cas COO-a-tout-pris n'est plus bloqué, coût exact vérifié 1 PC
+au lieu de 3, remise plafonnée à 2 même avec investissement massif, remise nulle si rien investi,
+G2/G3 non régressées), SR + fonctionnel confirmé Saar en navigateur réel.
+
+### Testé (ensemble de la session) / Non testé
+
+Testé : voir chaque sous-section — combinaison d'instrumentation directe (transactions réelles,
+appels de service directs, vraies requêtes HTTP avec JWT signé) et de tests unitaires purs sur les
+fonctions partagées. Item (4) seul confirmé par un parcours navigateur réel de Saar.
+Non testé : suppression de character/battlemap via l'UI réelle (items 1-2, HTTP direct uniquement) ;
+parcours Wizard complet jusqu'à "Terminer" en conditions réelles navigateur (item 3, mécanisme
+vérifié en isolation).
+
+## Session 141 (suite 15) — Dual-wield armes identiques + emplacements armure pairés ✅ CLOS
+> Note de numérotation : "suite 15" choisi comme prochain numéro apparemment libre — une session
+> parallèle semble active sur un autre chantier (Vault/Tir visé, fichiers non journalisés vus dans
+> `git status` : `docs/PLAN_TIRVISE.md`, `vaultService.js`, migrations 129-133) ; si collision,
+> reconcilier à la prochaine relecture.
+
+Signalement Saar : deux armes identiques (même `equipment_id`) ne pouvaient pas être équipées une
+dans chaque main — deux armes différentes fonctionnaient. **3 bugs empilés, trouvés et corrigés
+en testant chacun avant de passer au suivant (règle "un seul bug à la fois" respectée par
+itération, pas par plan groupé).**
+
+**(1) Cause racine — stacking d'items équipables.** `char_inventory` fusionnait deux armes
+identiques en une seule ligne `quantity=2` (POST /inventory + achat marchand `tradeService.js`) —
+un seul exemplaire physique ne peut pas être dans deux mains à la fois. Recherche externe (pattern
+industrie jeu vidéo/inventaire : "les objets à identité unique ne doivent jamais stacker, à traiter
+dans l'architecture, pas en rustine") + preuve interne (armes déjà stateful par exemplaire —
+`current_ammo`/`ammo_remaining`) confirmant que l'ancienne approche (split réactif au moment
+d'équiper, proposée puis rejetée) aurait été du bricolage. **Solution retenue : un item équipable
+(`ref_equipment.location` hors `null`/`'D'`/`'Ce'`) n'a jamais `quantity>1`, invariant posé à
+l'écriture.** `server/src/lib/inventoryRules.js` (NOUVEAU, `isEquippableLocation`) +
+`char-sheet.js` (`POST /inventory` insère N lignes indépendantes si équipable+quantity>1, `PUT
+/inventory/:itemId` rejette `quantity≠1` sur un item équipable) + `tradeService.js` (achat
+marchand, même invariant). Migration `131_split_equippable_stacks.js` (NOUVEAU) : corrige 3 lignes
+déjà corrompues trouvées en base réelle (dont un "Scorpion" `quantity=2 slot='MG'` — exactement le
+bug signalé, personnage réel). Round-trip `down`/`up` vérifié (P52/P53/P54 respectés — migration
+déjà auto-appliquée par nodemon avant test manuel, `knex_migrations` vérifiée avant tout appel).
+
+**(2) `WeaponPanel.jsx` — liste "armes disponibles" n'excluait pas les armes déjà équipées.**
+Une fois (1) corrigé, le menu déroulant "Équiper" de CHAQUE main piochait dans `availableWeapons`,
+qui ne filtrait jamais `i.slot` — l'arme déjà en main gauche réapparaissait dans le menu de la main
+droite (même nom, indiscernable). La sélectionner déplaçait la ligne au lieu d'en équiper une
+seconde — symptôme exact rapporté par Saar après le fix (1) seul. Fix : `&& !i.slot` ajouté au
+filtre (complète un prédicat qui portait déjà ce nom sans le respecter — même règle que
+`equippedWeapons` juste au-dessus, qui l'avait déjà).
+
+**(3) `LocationPanel.jsx` — même classe de bug pour l'armure, trouvé en vérifiant s'il existait un
+cas jumeau (demande Saar "architecture robuste ?").** BG/BD et JG/JD partagent le même
+`ref_location` générique ('B'/'J', `SLOT_TO_REF_LOCATION`) — un item déjà équipé à gauche
+réapparaissait dans le menu de droite. Différent de (2) dans ses conséquences : `handleEquip`
+additionne le nouveau code au `slot` existant plutôt que de le remplacer (mécanisme voulu pour une
+armure intégrale couvrant plusieurs zones à la fois, ex. combinaison `T/C/B/J`) — sélectionner
+l'item par erreur ne le déplaçait donc pas, mais lui faisait couvrir les deux bras/jambes à la fois
+depuis un seul exemplaire, laissant le second exemplaire identique inutilisé. **Lecture de
+`docs/REGLES/REGLEARMURE.md` avant tout code** (référence dans `.claude/rules/blessures.md`) :
+mauvaise source confirmée (exo-armures/véhicules, pas protections corporelles — écart déjà noté
+Session 141 suite 11 pour Moding, revérifié ici) ; doc technique pertinente
+`docs/SYSTEME/BLESSURES.md` (PI6/PI7) documentait le mapping mais pas ce cas précis. Règle
+retenue, dérivée de la structure des données elle-même (pas une supposition) : un item à
+`ref_location` **simple** (ex. `'B'` seul) ne couvre qu'un seul côté ; un item à `ref_location`
+**composée** (contient `/`) peut légitimement accumuler les deux côtés. `shared/armorConstants.js`
+(`SYMMETRIC_SLOT_PAIRS`, NOUVEAU) + `char-sheet.js` (`PUT /inventory/:itemId`, branche armure,
+rejette 409 l'extension d'un item simple vers le slot pairé — fait autorité, même principe que (1))
++ `LocationPanel.jsx` (`availableItems` exclut l'item du menu pairé si non composé). Aucune donnée
+déjà corrompue trouvée en base pour ce cas précis (vérifié avant code) — pas de migration requise.
+
+**Testé** : `node --check`/ESLint 0 erreur sur tous les fichiers touchés. **Scénarios réels via
+l'API HTTP du serveur en marche** (3 fixtures jetables — user/campagne/personnage — créées puis
+supprimées, aucune donnée de campagne réelle touchée) : (1) 2 Scorpions identiques → 2 lignes
+indépendantes, équipées MG+MD simultanément, `ammo_remaining` indépendant (24/24 chacune) ;
+tentative `quantity:2` sur arme équipée → rejetée 400. (2) confirmé via (1) — plus de
+téléportation, dropdown correct (prédicat rejoué directement sur les données réelles retournées par
+le serveur). (3) 5 scénarios : item simple posé à gauche → OK ; extension vers la droite → rejetée
+409 ; second exemplaire posé à droite → OK indépendant ; item composé posé à gauche → OK ;
+extension du même exemplaire composé vers la droite → OK (couverture double bras légitime).
+Personnage réel `357d64d8…` (celui qui avait le bug en base avant fix) revérifié après migration
+131 : "Scorpion" bien scindé en 2 lignes indépendantes. **SR + parcours navigateur confirmé
+fonctionnel par Saar** (les 3 correctifs).
+
+**Non testé** : achat marchand (`tradeService.js`) non rejoué en conditions réelles (nécessite un
+marchand configuré) — logique identique au POST validé, revue de code uniquement. Les 6 autres
+slots armure (Tête/Corps/Jambes) non re-testés individuellement au-delà du cas Bras utilisé pour la
+vérification (même code partagé, pas de raison de diverger).
+
+**Documentation** : `docs/EN_COURS.md`/`CLAUDE.md`/`client/public/CHANGELOG.md` non mis à jour
+dans cette session — une session parallèle semble en cours d'écriture active sur ces mêmes
+fichiers (Vault/Tir visé), édition concurrente risquée. À consolider par Saar ou en session dédiée.
+
+Détail complet : ce document, section ci-dessus.
+
+Détail complet : CLAUDE.md "Session 141 (suite 14)", docs/EN_COURS.md item 56.

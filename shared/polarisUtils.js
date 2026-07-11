@@ -206,10 +206,11 @@ export function calcAttributCost(valeurCible, baseInitiale = 7) {
 // baseInitiale = 7 (standard) ou 5 (FOR d'un personnage féminin)
 
 export function calcTotalCost(attributs, isFeminin) {
-  return Object.entries(attributs).reduce((total, [attr, valeur]) => {
+  const raw = Object.entries(attributs).reduce((total, [attr, valeur]) => {
     const base = (attr === 'FOR' && isFeminin) ? 5 : 7;
     return total + calcAttributCost(valeur, base);
   }, 0);
+  return isFeminin ? raw - getFemininBonusDiscount(attributs) : raw;
 }
 
 const SALARY_FORMULA_RE = /^(\d+)D(\d+)\*(\d+)$/
@@ -248,6 +249,23 @@ export function estimateSalaryFormula(formula) {
   return Math.round(parseInt(diceCount, 10) * avgPerDie * parseInt(multiplier, 10))
 }
 
+// Bonus féminin (REGLE_CREATION.txt:293-296) : "Deux bonus de +1 (éventuellement cumulatifs)
+// à répartir en Coordination ou Présence" — les 2 premiers points investis en Coordination et/ou
+// Présence (combinés, peu importe la répartition) ne coûtent rien. Remise forfaitaire plutôt
+// qu'une base décalée par attribut (comme Force) — mathématiquement identique pour toute
+// répartition (COST_LOOKUP[7]=0 rend l'algèbre équivalente, vérifié), mais ne nécessite ni état
+// ni UI supplémentaire : le spinner Mod.PC existant pour COO/PRE reste inchangé, la remise
+// s'applique silencieusement dans le budget (comme la base 5 de Force). Aucune règle à rejeter :
+// la remise s'auto-limite à 2 par construction (Math.min), jamais de dépassement possible.
+export const FEMININ_BONUS_MAX = 2;
+
+export function getFemininBonusDiscount(attributs) {
+  const investedCOO = Math.max(0, attributs['COO'] - 7);
+  const investedPRE = Math.max(0, attributs['PRE'] - 7);
+  const freePoints = Math.min(FEMININ_BONUS_MAX, investedCOO + investedPRE);
+  return calcAttributCost(7 + freePoints, 7);
+}
+
 export function validateStep1(attributs, ambiance, pcDispo, isFeminin) {
   const erreurs = [];
   const poolTotal = calcPoolTotal(ambiance, pcDispo);
@@ -276,15 +294,8 @@ export function validateStep1(attributs, ambiance, pcDispo, isFeminin) {
     }
   }
 
-  // G4 : Bonus féminin (si actif)
-  if (isFeminin) {
-    const bonusCOO = Math.max(0, attributs['COO'] - 7);
-    const bonusPRE = Math.max(0, attributs['PRE'] - 7);
-    const bonusTotal = bonusCOO + bonusPRE;
-    if (bonusTotal > 2) {
-      erreurs.push(`Bonus féminin dépassé : ${bonusTotal} > 2 (COO: +${bonusCOO}, PRE: +${bonusPRE})`);
-    }
-  }
+  // G4 (bonus féminin) supprimée : remise forfaitaire dans calcTotalCost, s'auto-limite à 2,
+  // rien à rejeter — voir getFemininBonusDiscount ci-dessus.
 
   return {
     valide: erreurs.length === 0,

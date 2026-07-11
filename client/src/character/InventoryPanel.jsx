@@ -140,11 +140,14 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
         container:    addContainer,
         quantity:     addQty,
       })
-      const newItem = res.data.item
+      const newItems = res.data.items || [res.data.item]
       setItems(prev => {
-        const existing = prev.find(i => i.id === newItem.id)
-        if (existing) return prev.map(i => i.id === newItem.id ? newItem : i)
-        return [...prev, newItem]
+        let next = prev
+        for (const newItem of newItems) {
+          const existing = next.find(i => i.id === newItem.id)
+          next = existing ? next.map(i => i.id === newItem.id ? newItem : i) : [...next, newItem]
+        }
+        return next
       })
       // Recalculer les stats côté client (simple refresh)
       const inv = await api.get(`/char-sheet/${characterId}/inventory`)

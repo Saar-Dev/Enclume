@@ -3,7 +3,8 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { WS } from '../../../shared/events.js'
-import { collisionAddToken, collisionRemoveToken, collisionMoveToken } from '../lib/redis.js'
+import { collisionAddToken, collisionMoveToken } from '../lib/redis.js'
+import { removeTokens } from '../lib/tokenLifecycle.js'
 
 const router = Router({ mergeParams: true })
 
@@ -185,14 +186,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
   if (!isGm && !isOwner) throw new AppError(403, 'You can only delete your own token')
 
-  // Maintenance collision map Redis AVANT suppression — position encore disponible
-  await collisionRemoveToken(token.battlemap_id, token)
-
-  await db('tokens').where({ id: req.params.id }).delete()
-
-  // Broadcaster TOKEN_DELETED à toute la room — le serveur est seul émetteur
+  // Nettoyage Redis + suppression DB + broadcast TOKEN_DELETED — centralisé (tokenLifecycle.js)
   const io = req.app.get('io')
-  io.to(battlemap.campaign_id).emit(WS.TOKEN_DELETED, { tokenId: token.id })
+  await removeTokens(io, [token], battlemap.campaign_id)
 
   res.json({ success: true })
 })

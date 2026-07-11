@@ -34,7 +34,7 @@
 |---|---|---|---|
 | **E — Arme et statuts** | COM2 + COM7 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
 | **F — Ghosts + portraits** | COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
-| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + TOK1 + MAP1 + COM14 + DASH1 | divers | Basse |
+| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `socketCombatResolution.js` | SR ✅ — validation fonctionnelle requise |
 | **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
 | **N — UI combat** | COM20 | `CombatActionWindow.jsx` + `CombatGmDeclareWindow.jsx` | Moyenne / Haute |
@@ -213,6 +213,34 @@ console.log('[DBG-ID]', { variable1, variable2 })
 **Note** : Acceptable V1.
 
 **Prochaine étape** : Sprint voxels v2 — hors scope V1.
+
+---
+
+### Dette INI3 — current_initiative ≤ 0 : report au tour suivant non implémenté
+
+**Symptôme** : Aucun cas observé en jeu à ce jour — gap trouvé par lecture de la règle, pas encore
+rencontré en pratique (les Préparations existantes ne descendent pas assez bas pour le déclencher
+systématiquement).
+
+**Règle** : `docs/REGLES/REGLESYSCOMBAT.md:354-357` — *"si une Préparation réduit l'Initiative du
+personnage à 0 ou moins, l'Action... est reportée au Tour suivant. Le personnage agit en premier et
+son Action bénéficie de la Préparation."* Déjà noté comme écart V1 dans `MANUELSYSCOMBAT.md` §3
+(*"current_initiative ≤ 0 → action reportée tour suivant. Non implémenté — risque de traitement en
+fin de boucle de résolution au lieu de migration."*)
+
+**Code impliqué** : `server/src/socket/socketCombatAnnouncement.js` (calcul `iniDelta`/
+`initiative`) + `server/src/socket/socketCombatHelpers.js` (boucle RESOLUTION, `activeSlotIdx`).
+
+**Cause racine** [HYPOTHÈSE] : rien dans le pipeline RESOLUTION ne détecte `initiative ≤ 0` pour
+reporter l'action au tour suivant — comportement actuel non instrumenté.
+
+**Trouvé pendant** : planification `docs/PLAN_TIRVISE.md` (Tir visé peut sacrifier jusqu'à -10 INI
+en un coup, plus qu'aucune Préparation existante — augmente fortement la probabilité de déclencher
+ce cas).
+
+**Prochaine étape** : à investiguer avant ou en parallèle du chantier Tir visé (décision Saar) —
+instrumenter `[DBG-INI3]` sur un scénario réel (Préparations cumulées ramenant `initiative` ≤ 0)
+avant de coder un correctif.
 
 ---
 

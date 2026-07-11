@@ -8,6 +8,7 @@ import getMinioClient, { BUCKET } from '../lib/minio.js'
 import { WS } from '../../../shared/events.js'
 import { WOUND_MAX_COUNTS } from '../../../shared/woundConstants.js'
 import { initDamages } from '../../../shared/droneConstants.js'
+import { removeTokens } from '../lib/tokenLifecycle.js'
 
 // ─── Router imbriqué ──────────────────────────────────────────────────────────
 // Monté sous /api/campaigns/:campaignId/characters
@@ -235,6 +236,16 @@ actionsRouter.delete('/:id', requireAuth, async (req, res) => {
     .first()
   if (!member || member.role !== 'gm') {
     throw new AppError(403, 'GM role required to delete a character')
+  }
+
+  // Supprimer d'abord les tokens de ce character sur tous les battlemaps (sinon ils restent
+  // sur la carte sans fiche liée, char_id passé à NULL par la FK, mais toujours dans combat_roster)
+  const tokens = await db('tokens')
+    .select('id', 'battlemap_id', 'pos_x', 'pos_y', 'pos_z', 'layer')
+    .where({ character_id: req.params.id })
+  if (tokens.length) {
+    const io = req.app.get('io')
+    await removeTokens(io, tokens, character.campaign_id)
   }
 
   await db('characters').where({ id: req.params.id }).delete()

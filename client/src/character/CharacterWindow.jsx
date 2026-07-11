@@ -189,6 +189,7 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
 
   const [portraitUploading, setPortraitUploading] = useState(false)
   const [glbUploading,      setGlbUploading]      = useState(false)
+  const [sendingToVault,    setSendingToVault]    = useState(false)
 
   // Sync si le character change depuis le store (WS CHARACTER_UPDATED)
   useEffect(() => { setNameInput(character.name) },                [character.name])
@@ -268,6 +269,22 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
       onClose()
     } catch (err) { console.error('Erreur suppression character :', err) }
   }, [character.id, removeCharacter, onClose, t])
+
+  // ─── Handler envoi vers le Coffre (PLAN_VAULT.md Étape 7, Lot 2) ───────────
+  // Copie, jamais un déplacement — le personnage d'origine (celui affiché dans cette fenêtre)
+  // n'est jamais modifié par cette action.
+  const handleSendToVault = useCallback(async () => {
+    if (!window.confirm(t('character.sendToVaultConfirm'))) return
+    setSendingToVault(true)
+    try {
+      await api.post(`/char-sheet/${character.id}/clone-to-vault`)
+      window.alert(t('character.sendToVaultSuccess'))
+    } catch (err) {
+      window.alert(err.response?.data?.error?.message || t('character.sendToVaultError'))
+    } finally {
+      setSendingToVault(false)
+    }
+  }, [character.id, t])
 
   // ─── Handler upload GLB ───────────────────────────────────────────────────
   const handleGlbUpload = useCallback(async (e) => {
@@ -517,6 +534,15 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
                   onChange={handleGlbUpload}
                 />
               </label>
+            )}
+
+            {effectiveIsOwner && (
+              <button
+                style={{ ...s.uploadBtn, marginTop: '8px', opacity: sendingToVault ? 0.5 : 1, pointerEvents: sendingToVault ? 'none' : 'auto' }}
+                onClick={handleSendToVault}
+              >
+                {sendingToVault ? t('common.loading') : t('character.sendToVault')}
+              </button>
             )}
 
             {effectiveIsGm && (

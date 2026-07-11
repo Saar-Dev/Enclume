@@ -1,8 +1,10 @@
 # PLAN_MUTATION2 — Effets mécaniques des Mutations et Avantages jamais appliqués
-> Session 141 (suite 13) — 2026-07-10 (Lot 1 clos — voir aussi suite 10, diagnostic/architecture initiale)
-> Statut : **DIAGNOSTIC + ARCHITECTURE — pas de code**. Découpé en 7 lots (mécanique visée, pas
-> catalogue source). Chaque lot sera détaillé ligne-à-ligne au moment de l'attaquer (règle "un
-> sujet à la fois") — ce document ne fixe que le périmètre et l'ordre.
+> Session 141 (suite 14) — 2026-07-11 (Lot 2 détaillé ligne-à-ligne, pas encore codé — Lot 1 clos
+> Session 141 suite 13, voir aussi suite 10, diagnostic/architecture initiale)
+> Statut : **DIAGNOSTIC + ARCHITECTURE**. Lot 1 codé et clos. Lot 2 planifié en détail (recherche
+> Foundry VTT Active Effects à l'appui), **pas de code écrit**. Découpé en 7 lots (mécanique visée,
+> pas catalogue source). Chaque lot est détaillé ligne-à-ligne au moment de l'attaquer (règle "un
+> sujet à la fois") — les lots non encore attaqués ne fixent que le périmètre et l'ordre.
 
 ---
 
@@ -355,11 +357,181 @@ jamais branchées de bout en bout)** :
   les 6 autres attributs primaires avec une mutation autre que "Caractère félin".
 - Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 13)".
 
-### Lot 2 — Attributs secondaires (avantages uniquement en pratique)
-- Source : `ref_advantages.mod_attribute ∈ {"reaction", "breath"}` / `mod_value`.
-- Calcul visé : `calcREA`, `calcSouffle`.
-- Recoupement avec Lot 1 : les deux consomment le même agrégat (point 1 de l'architecture) mais des
-  champs différents — peut réutiliser l'infrastructure posée au Lot 1 sans la dupliquer.
+---
+
+## Bilan / run à vide — 2026-07-11
+
+État consolidé après clôture du Lot 1, avant d'attaquer le Lot 2.
+
+**Non testé du Lot 1 — reste ouvert, à garder à l'esprit** (repris de la clôture ci-dessus, pas
+retesté depuis) : effet en résolution de combat réelle (jet de compétence, vérifié seulement par
+`node -e`) ; bascule `encumbrance_enabled`/`encumbrance_multiplier` en navigateur ; **aperçu Wizard
+("peek") après fermeture/réouverture explicite — hypothèse posée (même cause que le bug de
+rafraîchissement client) mais jamais confirmée par un test dédié de Saar**, à vérifier avant de
+considérer le sujet clos plutôt que de le découvrir en plein Lot 3/4 ; les 6 autres attributs
+primaires avec une mutation autre que "Caractère félin" ; retrait d'une mutation stackée (`count`
+> 1) en conditions réelles.
+
+**Piège à ne pas répéter, valable pour tous les lots suivants** : toute nouvelle requête `SUM()`/
+agrégat SQL (vue ou requête directe) doit être castée `::integer` (ou vérifiée par `typeof` en
+sortie) avant d'être consommée en arithmétique JS — c'est le bug le plus coûteux du Lot 1
+(`bigint`→string node-pg→concaténation silencieuse), resté invisible jusqu'à la première vraie
+consommation. Vérifier ce point systématiquement dès qu'un Lot introduit un nouvel agrégat.
+
+### Lot 2 — Attributs secondaires (avantages uniquement en pratique) : détail ligne-à-ligne
+
+**Périmètre exact `[VÉRIFIÉ]`** — lecture exhaustive des 76 lignes `92_ref_advantages.js`, aucune
+supposition : seulement **3 lignes** ont `mod_attribute` non-null, aucune autre variante n'existe.
+
+| `advantage_id` | Nom | `mod_attribute` | `mod_value` | `family_limit` |
+|---|---|---|---|---|
+| `adv_006` | Bons réflexes | `"reaction"` | `+3` | `null` |
+| `adv_058` | Lent à réagir | `"reaction"` | `-3` | `null` |
+| `adv_021` | Homo delphinus | `"breath"` | `+10` | `null` |
+
+Aucune n'est liée par `family_limit` — rien n'empêche mécaniquement `adv_006`+`adv_058`
+simultanément (contradictoire narrativement, mais pas interdit en base) : la somme algébrique doit
+rester correcte dans ce cas plutôt que de nécessiter une exclusion mutuelle ad hoc.
+Calculs visés : `calcREA` (reaction), `calcSouffle` (breath). **Aucune migration nécessaire** —
+les colonnes existent depuis la migration 92. Prochain numéro libre si besoin futur : **134**
+(129-133 déjà consommés par une session parallèle sur `docs/PLAN_VAULT.md`, vérifié `ls` avant
+d'écrire ce chiffre — jamais se fier à `EN_COURS.md` seul, cf. P53).
+
+**Recherche préalable (2026-07-11)** — demande explicite Saar : ne pas inventer d'architecture
+maison pour agréger des modificateurs génériques `{cible, valeur}`, vérifier comment un projet pro
+résout exactement ce problème avant de coder.
+- **Foundry VTT — système "Active Effects"** ([doc officielle](https://foundryvtt.com/article/active-effects/),
+  [API v14](https://foundryvtt.com/api/classes/foundry.documents.ActiveEffect.html)) : standard de
+  facto des VTT pour appliquer des bonus provenant de sources multiples (objets, dons, conditions)
+  à une statistique dérivée. Modèle exact : chaque effet déclare un triplet **`{key, mode, value}`**
+  — `key` = chemin de la statistique cible, `mode` = comment combiner (`ADD` le plus courant),
+  `value` = le nombre. *"Adds the provided value to a number... used to both add and subtract from
+  a particular value."* Le moteur applique tous les effets actifs sur la donnée dérivée, jamais sur
+  la donnée de base (pas de mutation destructive — cohérent avec le pattern déjà en place ici,
+  "recompute à la lecture", jamais d'écriture, cf. section "Décision d'architecture" plus haut).
+- **Wiki `foundryvtt/dnd5e`** ([Active Effect Guide](https://github.com/foundryvtt/dnd5e/wiki/Active-Effect-Guide)) :
+  exemples concrets pour un bonus d'Initiative (`system.attributes.init.bonus`, mode `Add`,
+  formule/valeur) — structurellement identique à `mod_attribute:"reaction"` / `mod_value`. Le wiki
+  formule explicitement la raison de ce choix : *"Rather than building custom logic per feature,
+  creators define which stat to modify and by how much, allowing the engine to handle application
+  uniformly across all items and effects."* — **exactement l'architecture déjà retenue dans
+  `ref_advantages`** (paire clé/valeur générique plutôt qu'une colonne par avantage). Confirme que
+  la forme choisie il y a longtemps dans ce projet suit déjà le pattern standard, sans le savoir —
+  ce lot ne fait qu'écrire le moteur d'application qui manquait encore.
+- **Conséquence directe sur la conception** : mode `ADD` uniquement (somme simple) est le bon choix
+  par défaut pour ce lot — les 3 lignes ci-dessus sont toutes des bonus/malus plats ("+3 à sa
+  Réaction", "-3 à sa Réaction", "+10 à son Attribut Souffle", texte LdB `92_ref_advantages.js`).
+  Un champ `mode` générique (ADD/OVERRIDE/MULTIPLY, comme Foundry) **n'est pas construit
+  maintenant** — prématuré : la seule donnée déjà connue qui ne serait pas un ADD est `mod_identity`
+  (Lot 6, `{hand_pref:"A"}` — une **assignation**, pas une accumulation numérique), catégorie
+  différente à concevoir quand le Lot 6 sera détaillé à son tour (jamais deux lots à la fois).
+  Corrobore la décision déjà prise dans `docs/PLAN_TIRVISE.md` (session parallèle, même
+  raisonnement appliqué à un autre sous-système) : un moteur de règles généraliste façon PF2e
+  "Rule Elements" ne se justifie que pour de l'authoring homebrew non-développeur — pas notre cas,
+  catalogue fixe et fermé (76 lignes, jamais écrites par un joueur).
+
+**A. `shared/polarisUtils.js` — résolveur générique + consolidation `calcREA`**
+
+Forme différente de `getMutationModForAttr` (Lot 1) : les mutations ont des **colonnes fixes**
+(`mod_FOR`, `mod_COO`...) sur une ligne agrégée par vue SQL ; les avantages stockent leur cible via
+une **paire générique** (`mod_attribute` texte + `mod_value` nombre) sur une liste de lignes actives
+— il faut filtrer/réduire côté JS, pas indexer une colonne. Petit factoring interne pour éviter de
+dupliquer le même `reduce` deux fois (ce lot + Lot 3 `mod_resistance`/`mod_res_value`, forme
+identique déjà visible dans le schéma actuel — pas une extrapolation hypothétique) :
+```js
+function sumModByKey(rows, keyField, valueField, targetKey) {
+  if (!rows || !rows.length) return 0
+  return rows.reduce((sum, r) => r[keyField] === targetKey ? sum + (r[valueField] ?? 0) : sum, 0)
+}
+
+export function getAdvantageAttrMod(advantageRows, attrKey) {
+  return sumModByKey(advantageRows, 'mod_attribute', 'mod_value', attrKey)
+}
+```
+`calcREA` **déménage ici** (actuellement dupliqué : `charStats.js:205-207` côté serveur ET en dur
+dans `calcSecondary` de `CharacterSheet.jsx:90` côté client — même dette que `calcNA` au Lot 1 ;
+nécessaire ici, pas cosmétique : sans ça la fiche client n'afficherait jamais le bonus d'avantage,
+seule la résolution serveur en bénéficierait) :
+```js
+export function calcREA(ada_na, per_na, mod_advantage) {
+  return polarisRound((ada_na + per_na) / 2) + (mod_advantage ?? 0)
+}
+```
+`calcSouffle` **reste dans `charStats.js`** — pas de duplicata client à corriger, "Souffle" n'est
+affiché nulle part sur la fiche aujourd'hui (`[VÉRIFIÉ]` grep), seulement consommé par les macros
+serveur. Gagne juste un 3ᵉ paramètre sur place, aucun déménagement à faire.
+
+**B. `server/src/lib/charStats.js`**
+- Supprime la définition locale de `calcREA` (205-207), l'importe depuis `shared/polarisUtils.js`
+  (déjà importé lignes 16-17 pour `calcNA`/`calcAN` — même import étendu).
+- `calcSouffle(con_na, vol_na, mod_advantage)` (258-260) : `+ (mod_advantage ?? 0)`.
+- `calcSeuils`/`getModDom` : **inchangés** — aucun avantage ne cible FOR/CON/VOL de cette façon
+  (`[VÉRIFIÉ]` sur les 76 lignes), hors périmètre de ce lot.
+
+**C. `server/src/services/advantageService.js`**
+- `getAdvantages(sheetId)` (12-22) : ajoute `'ra.mod_attribute', 'ra.mod_value'` au `.select(...)`.
+  Une ligne. Cette fonction sert déjà l'affichage `AdvantagesPanel` (champs ignorés côté UI) — elle
+  sert désormais aussi la résolution mécanique aux 4 sites du tableau D, pas de nouvelle fonction.
+- **Choix délibéré : pas de VIEW SQL dédiée façon `char_mutation_effects_view`.** Les mutations ont
+  une vue parce qu'elles **stackent** (colonne `count`, `stack_deltas`) — l'agrégation doit se faire
+  côté SQL pour rester correcte. Les avantages **ne stackent jamais** (contrainte unique partielle
+  `char_sheet_id`+`advantage_id` sur les lignes actives, `[VÉRIFIÉ]` `advantageService.js`) : une
+  poignée de lignes (`~10` au grand maximum pour un personnage), réduction en JS strictement
+  équivalente et plus simple — pas un raccourci, une vraie différence de forme de données entre les
+  deux catalogues (déjà notée dans "Recoupement réel" en tête de ce document).
+
+**D. Sites serveur à rebrancher (4, tous `[VÉRIFIÉ]` par lecture — aucun ne fetch les avantages
+aujourd'hui, aucun n'importe encore `shared/polarisUtils.js` directement)**
+
+| Fichier | Lignes | Contexte | Changement |
+|---|---|---|---|
+| `char-sheet.js` | 1642-1658 (`POST /macro-preview`) | `rea`/`souffle` via `secondaryValue()` | Ajoute `getAdvantages(sheet.id)` au `Promise.all` (déjà importée ligne 42) ; nouvel import `getAdvantageAttrMod` depuis `shared/polarisUtils.js` (absent aujourd'hui) ; passe `getAdvantageAttrMod(advantages,'reaction'/'breath')` |
+| `socketDice.js` | 99-116 (jet macro) | idem, duplique le pattern | Idem : nouvel import `getAdvantages` (`advantageService.js`, absent) + `getAdvantageAttrMod` (`shared/polarisUtils.js`, absent) dans le `Promise.all` existant |
+| `socketCombatState.js` | 66-80 (`COMBAT_START`, `base_ini` par token) | `calcREA(ada_na, per_na)` | Ajoute `getAdvantages(cs.id)` dans le même bloc que `attrs`/`archetype` (seulement si `cs` existe — même garde que l'existant) ; passe le mod à `calcREA` |
+| `battlemaps.js` | 66-80 (`GET /:id/combat-ini`, aperçu `CombatRosterWindow`) | idem | Même changement — nouvel import `getAdvantages` (seul `calcAttributeNA`/`calcREA` importés aujourd'hui) |
+
+Point de vigilance identique au Lot 1 : oublier un site ne fait rien planter — juste un REA/Souffle
+silencieusement non boosté à cet endroit précis. Le plan de test (section G) compare les 4 sites
+entre eux pour un même personnage, pas seulement chacun isolément.
+
+**E. Client — `CharacterSheet.jsx`**
+- Import `calcREA`/`getAdvantageAttrMod` depuis `shared/polarisUtils.js` (déjà importé ligne 34
+  pour `calcNA`/`calcAN`/`getGenotypeModForAttr`/`getMutationModForAttr` — même ligne étendue).
+- `calcSecondary(naMap)` (83-97) → `calcSecondary(naMap, charAdvantages)` : remplace
+  `const rea = polarisRound((ADA + PER) / 2)` par
+  `const rea = calcREA(ADA, PER, getAdvantageAttrMod(charAdvantages, 'reaction'))`.
+  `initiative = rea` inchangé (déjà aliasé, aucun changement séparé nécessaire).
+- Call site ligne 203 : `useMemo(() => calcSecondary(naMap, charAdvantages), [naMap, charAdvantages])`.
+- Aucun nouveau fetch : `charAdvantages` déjà chargé (lignes 325-326) — contiendra
+  `mod_attribute`/`mod_value` dès que le point C est fait côté serveur.
+- `calcModDom` (77-81, doublon local de `getModDom` serveur — même famille de dette que `calcREA`
+  avant ce lot) : **non touché**, hors périmètre (aucun avantage ne le cible, vérifié).
+
+**F. Ce qui ne change PAS**
+- `char_advantages`/`ref_advantages` : aucune écriture, lecture seule ajoutée.
+- `AdvantagesPanel.jsx` `handleRemove` : filtre déjà `charAdvantages` côté client sans re-fetch — la
+  fiche recalculera automatiquement REA via le nouveau `useMemo` (dépendance `charAdvantages`),
+  rien à changer dans ce fichier.
+- Wizard (`Step5Advantages.jsx`/`WizardReview.jsx`) : ne calcule/affiche REA ni Souffle nulle part,
+  `[VÉRIFIÉ]` grep — rien à toucher.
+- `CombatActionWindow.jsx` : ne consomme pas REA/Souffle, `[VÉRIFIÉ]` grep.
+- Drones (INI fixe 12, branche dédiée `socketCombatState.js:60-64`) : aucun `char_sheet`, donc
+  aucun avantage à fetcher — chemin déjà exclu du calcul REA, inchangé.
+
+**G. Cas limites à tester**
+- Personnage sans avantage actif → `getAdvantageAttrMod([], 'reaction') = 0` → REA/Souffle
+  identiques à avant (non-régression) aux 4 sites serveur + fiche client.
+- `adv_006` seul (+3 reaction) → REA/initiative +3 partout, Souffle inchangé.
+- `adv_058` seul (-3 reaction) → REA -3.
+- `adv_006` + `adv_058` en même temps (pas de contrainte qui l'empêche, vérifié) → somme algébrique
+  0 (comportement "addition simple" assumé, cf. recherche Foundry ci-dessus).
+- `adv_021` seul (+10 breath) → Souffle +10, REA inchangé (colonnes filtrées indépendamment par clé).
+- Retrait d'un avantage via `AdvantagesPanel` → REA redescend immédiatement sur la fiche (pas de
+  rechargement nécessaire, `charAdvantages` déjà dans les deps du `useMemo`).
+- Fiche (`CharacterSheet.jsx`) et résolution combat (`socketCombatState.js`/`battlemaps.js`)
+  doivent produire le même REA pour un même personnage.
+- Non-régression : `getAdvantages()` avec les 2 colonnes en plus ne casse pas `AdvantagesPanel.jsx`
+  (champs additionnels ignorés par l'affichage, pas de select strict côté composant).
 
 ### Lot 3 — Résistances (recoupement réel mutations + avantages)
 - Source : `ref_mutations.mod_res_damage/shock/drugs/disease/poison/radiation` **et**
@@ -370,7 +542,8 @@ jamais branchées de bout en bout)** :
   n'est appelé **nulle part** en combat, et `mod_res_shock`/`res_shock` n'apparaissent que dans les
   migrations, jamais dans la résolution de combat. Il est possible que "Résistance Choc" soit un
   concept mort mécaniquement, pas seulement débranché des mutations/avantages — à confirmer contre
-  `docs/REGLESYSCOMBAT.md`/`docs/REGLEARMURE.md` avant de coder ce lot.
+  `docs/REGLESYSCOMBAT.md`/`docs/REGLEARMURE.md` avant de coder ce lot. **Toujours non tranché au
+  bilan du 2026-07-11** — reste la première chose à faire à l'ouverture de ce lot.
 - `drugs`/`disease`/`poison`/`radiation` (mutations uniquement) : aucune résolution de jet
   correspondante trouvée non plus (`resistance_drogues` existe côté macro/dé mais calcule un seuil
   brut CON/VOL, sans bonus de résistance) — même vérification requise.

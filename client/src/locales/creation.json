@@ -48,7 +48,7 @@
     "rule2": "Les niveaux 8 à 15 ont un coût normal (1 point pour 1 niveau).",
     "rule3": "Les niveaux 16 à 18 coûtent deux fois plus cher.",
     "rule4": "Les niveaux 19 et 20 coûtent trois fois plus cher.",
-    "ruleFemininBonus": "Option de campagne « Bonus féminin » active : un personnage féminin a une Force de base de 5 (au lieu de 7), mais bénéficie de 2 points bonus (cumulables) à répartir librement en Coordination et/ou Présence (plafond de 20).",
+    "ruleFemininBonus": "Option de campagne « Bonus féminin » active : un personnage féminin a une Force de base de 5 (au lieu de 7). En contrepartie, les 2 premiers points investis en Coordination et/ou Présence (dans n'importe quelle répartition) ne coûtent aucun point — le budget affiché en tient déjà compte automatiquement.",
     "costColNiveau": "Niveau visé",
     "costColCout": "Coût",
     "pcTitle": "Amélioration des Attributs principaux",

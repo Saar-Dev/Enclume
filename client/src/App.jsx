@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage'
 import SessionPage from './pages/SessionPage'
 import CampaignSettingsPage from './components/campaignSettings/CampaignSettingsPage'
 import WorkshopPage from './pages/WorkshopPage'
+import VaultPage from './pages/VaultPage'
 import MerchantsPage from './pages/MerchantsPage'
 import HealthPage from './pages/HealthPage'
 import WizardCreationPage from './pages/WizardCreationPage'
@@ -60,6 +61,9 @@ export default function App() {
         } />
         <Route path="/workshop" element={
           <ProtectedRoute><WorkshopPage /></ProtectedRoute>
+        } />
+        <Route path="/vault" element={
+          <ProtectedRoute><VaultPage /></ProtectedRoute>
         } />
         <Route path="/health" element={
           <ProtectedRoute><HealthPage /></ProtectedRoute>

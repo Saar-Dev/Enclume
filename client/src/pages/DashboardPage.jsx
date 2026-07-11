@@ -165,6 +165,14 @@ export default function DashboardPage() {
             ) : (
               <div className="campaign-grid">
 
+            {/* COFFRE (Vault) — illustration fixe non modifiable, toujours en première position */}
+            <div className="card campaign-card" onClick={() => navigate('/vault')}>
+              <div className="vault-cover" />
+              <div style={styles.cardHeader}>
+                <span style={styles.cardTitle}>{t('dashboard.vaultCard')}</span>
+              </div>
+            </div>
+
             {/* CAMPAIGNS */}
             {campaigns.map(campaign => (
               <div key={campaign.id} className="card campaign-card">

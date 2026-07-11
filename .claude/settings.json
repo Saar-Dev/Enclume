@@ -1,7 +1,31 @@
 {
   "permissions": {
     "allow": [
-      "Bash(psql \"postgresql://vtt:vttpass@localhost:5432/vtt\" -c \"SELECT COUNT\\(*\\), family FROM ref_equipment GROUP BY family ORDER BY family;\")"
+      "Bash(psql \"postgresql://vtt:vttpass@localhost:5432/vtt\" -c \"SELECT COUNT\\(*\\), family FROM ref_equipment GROUP BY family ORDER BY family;\")",
+      "Bash(node --check server/src/db/migrations/128_char_mutation_effects_view_int_cast.js)",
+      "Bash(node --input-type=module -e ' *)",
+      "WebFetch(domain:journal.stuffwithstuff.com)",
+      "Bash(gh search *)",
+      "Bash(curl -s \"https://api.github.com/search/code?q=flourish+repo:foundryvtt/pf2e\" -H \"Accept: application/vnd.github+json\")",
+      "WebFetch(domain:grep.app)",
+      "WebFetch(domain:waymondo.com)",
+      "WebFetch(domain:sourcegraph.com)",
+      "Bash(curl -s http://localhost:3001/api/health/detailed)",
+      "Bash(node -e ' *)",
+      "Bash(grep -c \"DATABASE_URL\" server/.env)",
+      "Bash(grep -rn \"dotenv\" server/src/db/knex.js server/src/index.js server/knexfile.cjs)",
+      "Bash(node --check server/src/services/vaultService.js)",
+      "Bash(node --check server/src/routes/vault.js)",
+      "Bash(curl -s -i -X POST http://localhost:3001/api/char-sheet/__TRACKED_VAR__/clone-to-vault -H 'Cookie: token=__TRACKED_VAR__' --max-time 10)",
+      "Bash(curl -s -i http://localhost:3001/api/char-sheet/__TRACKED_VAR__ -H 'Cookie: token=__TRACKED_VAR__' --max-time 10)",
+      "Bash(curl -s -X POST http://localhost:3001/api/char-sheet/__TRACKED_VAR__/clone-to-vault -H 'Cookie: token=__CMDSUB_OUTPUT__' --max-time 10)",
+      "Bash(curl -s http://localhost:3001/api/vault/characters -H 'Cookie: token=__CMDSUB_OUTPUT__' --max-time 10)",
+      "Bash(curl -s http://localhost:3001/api/vault/characters/__TRACKED_VAR__ -H 'Cookie: token=__CMDSUB_OUTPUT__' --max-time 10)",
+      "Bash(grep -E '^[0-9]+$')",
+      "Bash(curl -s -w '\\\\nSTATUS:%{http_code}\\\\n' -X POST http://localhost:3001/api/char-sheet/__TRACKED_VAR__/clone-to-vault -H 'Cookie: token=__CMDSUB_OUTPUT__' --max-time 10)",
+      "Bash(curl -s -w \"\\\\nSTATUS:%{http_code}\\\\n\" \"http://localhost:3001/api/vault/characters\" --max-time 10)",
+      "Bash(curl -s -X POST http://localhost:3001/api/char-sheet/55b00248-125e-423c-ac60-546f25d37b8a/inventory -H 'Content-Type: application/json' -H 'Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEyY2E1N2QzLTkzYmQtNGQ4MS1iNzdjLTc5ODk2YTE3YWE3ZSIsImlhdCI6MTc4MzcwNzE2OCwiZXhwIjoxNzgzNzEwNzY4fQ.gSepwtYGNfaHhzOH8NhmBAlwtoQRR5k4Qz5da7KgdmY' -d '{\"equipment_id\":\"82c39296-3f03-4529-bd54-cf9224d4cbed\",\"container\":\"Sac\",\"quantity\":2}')",
+      "Bash(curl -s -X POST http://localhost:3001/api/char-sheet/55b00248-125e-423c-ac60-546f25d37b8a/inventory -H 'Content-Type: application/json' -H 'Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEyY2E1N2QzLTkzYmQtNGQ4MS1iNzdjLTc5ODk2YTE3YWE3ZSIsImlhdCI6MTc4MzcwNzE2OCwiZXhwIjoxNzgzNzEwNzY4fQ.gSepwtYGNfaHhzOH8NhmBAlwtoQRR5k4Qz5da7KgdmY' -d '{\"equipment_id\":\"82c39296-3f03-4529-bd54-cf9224d4cbed\",\"container\":\"Coffre\",\"quantity\":2}')"
     ]
   }
 }

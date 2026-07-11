@@ -276,7 +276,7 @@ export async function startCreation(campaignId, userId) {
 // l'étape correspondante est fournie. Rejouable sans duplication — chaque bloc reset
 // ses tables dérivées avant réapplication. Voir docs/STE6_FINAL.md.
 
-export async function reconcileCreation(sheetId, { step1, step2, step3, step4, step5 }) {
+export async function reconcileCreation(sheetId, { step1, step2, step3, step4, step5, finalize }) {
   return db.transaction(async (trx) => {
     const sheet = await trx('char_sheet').where({ id: sheetId }).first()
     if (!sheet) throw new AppError(404, 'Fiche introuvable')
@@ -623,17 +623,30 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       await trx('char_sheet').where({ id: sheetId }).update({ creation_state: 'complete' })
     }
 
+    // finalize : verrouille dans la MÊME transaction que la réconciliation — évite la fenêtre où
+    // creation_state passe à 'complete' sans que wizard_locked_at soit posé si le 2e appel réseau
+    // séparé échoue (coupure, onglet fermé). Un seul appel client atomique pour "Terminer".
+    if (finalize) {
+      if (!isComplete) throw new AppError(400, 'Personnage incomplet — impossible de terminer le Wizard')
+      await lockWizard(sheetId, trx)
+    }
+
     return { ok: true, characterId, isComplete }
   })
 }
 
 // ─── Verrouillage : fin du Wizard, la fiche devient éditable en session ────────
 
-export async function lockWizard(sheetId) {
-  const sheet = await db('char_sheet').where({ id: sheetId }).first()
+// trxOpt : permet l'appel depuis une transaction externe (ex. vaultService.cloneCharacterDeep,
+// qui vient d'insérer la ligne char_sheet dans la même transaction — sur la connexion `db` seule,
+// cette ligne pas encore commitée serait invisible) ; sinon ouvre sa propre requête sur `db`
+// (pattern trx-or-db, identique à advantageService.addAdvantage).
+export async function lockWizard(sheetId, trxOpt) {
+  const exec = trxOpt || db
+  const sheet = await exec('char_sheet').where({ id: sheetId }).first()
   if (!sheet) throw new AppError(404, 'Fiche introuvable')
   if (sheet.creation_state !== 'complete') throw new AppError(400, 'Personnage non finalisé — impossible de verrouiller')
-  await db('char_sheet').where({ id: sheetId }).update({ wizard_locked_at: db.fn.now() })
+  await exec('char_sheet').where({ id: sheetId }).update({ wizard_locked_at: db.fn.now() })
   return { ok: true }
 }
 

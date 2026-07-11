@@ -48,6 +48,7 @@ import { WS } from '../../../../shared/events.js'
 import {
   WOUND_LOCATIONS, WOUND_SEVERITIES,
 } from '../../../../shared/woundConstants.js'
+import { SYMMETRIC_SLOT_PAIRS } from '../../../../shared/armorConstants.js'
 
 const router = Router()
 
@@ -1291,10 +1292,23 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
         // Codes nouvellement ajoutés (absents du slot actuel de l'item)
         const existingParts = new Set(existing.slot ? existing.slot.split('/') : [])
         const addedCodes = newParts.filter(c => !existingParts.has(c))
-        // malus_cat de l'item (commun à tous les slots)
-        const newItemCat = existing.equipment_id
-          ? (await db('ref_equipment').where({ id: existing.equipment_id }).select('malus_cat').first())?.malus_cat ?? null
+        // malus_cat + location de l'item (malus_cat commun à tous les slots, location pour P58)
+        const newItemRef = existing.equipment_id
+          ? await db('ref_equipment').where({ id: existing.equipment_id }).select('malus_cat', 'location').first()
           : null
+        const newItemCat = newItemRef?.malus_cat ?? null
+        // P58 : un item à ref_location simple (ex. 'B') ne peut couvrir qu'un seul côté d'une paire
+        // symétrique (BG/BD, JG/JD) — seul un item à ref_location composée (armure intégrale) peut
+        // légitimement accumuler les deux côtés sous un même exemplaire.
+        const isCompoundLocation = (newItemRef?.location ?? '').includes('/')
+        if (!isCompoundLocation) {
+          for (const code of addedCodes) {
+            const pairCode = SYMMETRIC_SLOT_PAIRS[code]
+            if (pairCode && newParts.includes(pairCode)) {
+              throw new AppError(409, `Cet exemplaire ne peut couvrir qu'un seul côté (${code}/${pairCode}) — équipez un second exemplaire de l'autre côté`)
+            }
+          }
+        }
         // 1+S+S : vérifier chaque code nouvellement ajouté
         for (const code of addedCodes) {
           const existingAtSlot = await db('char_inventory')

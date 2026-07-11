@@ -148,7 +148,8 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
       i.ref_family === 'Armes' &&
       i.ref_location &&
       ['M', '2M', 'Tr'].some(loc => i.ref_location.split('/').includes(loc)) &&
-      i.container !== 'Coffre',
+      i.container !== 'Coffre' &&
+      !i.slot,
     ),
     [items],
   )

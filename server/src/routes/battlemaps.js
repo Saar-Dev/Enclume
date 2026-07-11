@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth.js'
 import { requireRole } from '../middleware/role.js'
 import { multerUpload, uploadToMinio } from '../middleware/upload.js'
 import { calcAttributeNA, calcREA } from '../lib/charStats.js'
+import { removeTokens } from '../lib/tokenLifecycle.js'
 
 const router = Router({ mergeParams: true })
 
@@ -219,6 +220,17 @@ router.delete('/:id', requireAuth, async (req, res) => {
     .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id, role: 'gm' })
     .first()
   if (!member) throw new AppError(403, 'GM only')
+
+  // Supprimer d'abord les tokens de cette carte (nettoyage Redis + broadcast TOKEN_DELETED) —
+  // sans quoi le CASCADE SQL efface les lignes mais laisse la collision map Redis et les clients
+  // connectés désynchronisés (même trou que la suppression de character, tokenLifecycle.js)
+  const tokens = await db('tokens')
+    .select('id', 'battlemap_id', 'pos_x', 'pos_y', 'pos_z', 'layer')
+    .where({ battlemap_id: req.params.id })
+  if (tokens.length) {
+    const io = req.app.get('io')
+    await removeTokens(io, tokens, battlemap.campaign_id)
+  }
 
   await db('battlemaps').where({ id: req.params.id }).delete()
 

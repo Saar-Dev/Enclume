@@ -640,6 +640,29 @@ DASHBOARD EXTENSION
   z-index: 1;
   margin-bottom: 12px;
 }
+
+/* VAULT CARD — carte "Coffre" du Dashboard, illustration fixe non modifiable (PLAN_VAULT.md Étape 7) */
+.vault-cover {
+  width: 100%;
+  height: 110px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(135deg, #2a2010, #14100a);
+}
+
+.vault-cover::before {
+  content: "🔒";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* ENTITY PENDING — sablier animé au-dessus de l'entité en attente du GM */
 @keyframes hourglass-flip {
   0%, 40%  { transform: rotate(0deg); }
