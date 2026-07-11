@@ -1,5 +1,5 @@
 # PLAN_MUTATION2 — Effets mécaniques des Mutations et Avantages jamais appliqués
-> Session 141 (suite 10) — 2026-07-09
+> Session 141 (suite 13) — 2026-07-10 (Lot 1 clos — voir aussi suite 10, diagnostic/architecture initiale)
 > Statut : **DIAGNOSTIC + ARCHITECTURE — pas de code**. Découpé en 7 lots (mécanique visée, pas
 > catalogue source). Chaque lot sera détaillé ligne-à-ligne au moment de l'attaquer (règle "un
 > sujet à la fois") — ce document ne fixe que le périmètre et l'ordre.
@@ -307,6 +307,54 @@ Hint`.
   exactement les mêmes valeurs qu'avant sur toute la plage -∞..25+ (vérifiable par un test croisé
   avant suppression de la copie `charStats.js`).
 
+**Lot 1 ✅ CLOS — Session 141 (suite 13) (2026-07-10).** Codé comme détaillé ci-dessus (consolidation
+`shared/polarisUtils.js`, PI4 corrigé sur les 5 sites réels, option `encumbrance_enabled`/
+`_multiplier`, ~20 sites serveur+client rebranchés). **4 bugs supplémentaires trouvés en testant
+avec Saar, tous corrigés dans la foulée (même chantier, cause commune : mutations à sous-table
+jamais branchées de bout en bout)** :
+- **Vue aveugle aux sous-types** — `char_mutation_effects_view` ne lisait que `ref_mutations`,
+  jamais `ref_mutation_subtypes` : "Caractère génétique animal" (seule mutation `has_subtable`,
+  migration 95) porte tous ses `mod_FOR..PRE` sur la table enfant, pas la ligne parente (à 0 par
+  défaut) — la vue retournait donc toujours 0 pour cette mutation, quel que soit le sous-type
+  choisi. Migration `127_char_mutation_effects_view_subtypes.js` (`LEFT JOIN
+  ref_mutation_subtypes`).
+- **Sélecteur de sous-type manquant côté Lot D** — `AdvantagesPanel.jsx` n'avait jamais eu de
+  sélecteur de sous-type (`handleAddMutation` n'envoyait aucun `subtype_id`). Ajout d'une étape de
+  drill-down (`step: 'mutation-subtype'`) + `mutationService.addMutation(sheetId, mutationId,
+  subtypeId)` (upsert sur le bon index partiel selon présence du sous-type — deux arbiters
+  distincts, Postgres l'exige) + `ref.js`/`getMutations()` exposent désormais `subtable`/
+  `subtype_name`.
+- **État client jamais rafraîchi** — `AdvantagesPanel` notifiait `onSaved` (simple ✓ visuel dans
+  `CharacterWindow.jsx`, ne recharge rien) après un ajout/retrait de mutation — `CharacterSheet.jsx`
+  ne redemandait jamais `mutationEffects`, resté figé jusqu'à fermeture/réouverture complète.
+  Nouvelle route légère `GET /char-sheet/:characterId/mutation-effects` + callback dédié
+  `onMutationsChanged` (distinct d'`onSaved`) appelé après ajout/retrait.
+- **Bug le plus sérieux — `bigint` retourné comme `string` par `node-pg`** : `SUM()` sur une colonne
+  `integer` produit un `bigint` en PostgreSQL, que le driver parse en **chaîne JS** (pas un nombre),
+  latent dans la vue depuis sa création (jamais consommée avant ce lot). `calcNA` faisait
+  `10 + 0 + 0 + '2'` → concaténation de chaîne (`'102'`) au lieu d'une addition (`12`) — cause exacte
+  du "COO Niveau Actuel = 110" signalé par Saar. **Erreur de vérification de ma part** : j'avais vu
+  `mod_COO: '2'` entre guillemets dans mes propres tests et ne l'avais pas identifié comme un
+  problème de type. Migration `128_char_mutation_effects_view_int_cast.js` (cast `::integer` sur
+  les 13 colonnes numériques — `CREATE OR REPLACE VIEW` refuse de changer un type de colonne
+  existant, `DROP`+`CREATE` obligatoire, piège Postgres documenté dans la migration). Audit du reste
+  du code pour le même risque : un seul autre endroit trouvé (`char-sheet.js` potentiel drone),
+  déjà protégé correctement (`Number(row.total)`) — pas d'autre cas caché.
+- **Testé** : `node --check` 0 erreur sur tous les fichiers serveur/partagés touchés, ESLint 0
+  nouvelle erreur (client, confirmé `git stash` avant/après sur chaque fichier), `fr.json` valide,
+  scénarios `node -e` (non-régression `calcAN`/`calcNA`, `calcEncumbrancePenalty` avec/sans
+  multiplicateur), **plusieurs vérifications instrumentées en base réelle en transaction annulée**
+  (jamais de donnée réelle modifiée hors du flux normal de l'app) confirmant chaque correctif avant
+  et après (vue sans/avec sous-type, type `bigint`→`integer`, upsert sous-type). **SR + parcours
+  navigateur confirmé fonctionnel par Saar** (Lot D avec sélection de sous-type, effet COO+2 visible
+  immédiatement sur la fiche sans rechargement).
+- **Non testé** : effet en résolution de combat réelle (jet de compétence COO reflétant le bonus,
+  vérifié seulement par lecture/scénarios `node -e`, pas par un jet réel en session) ; bascule
+  `encumbrance_enabled`/`encumbrance_multiplier` en navigateur ; aperçu Wizard ("peek") après
+  fermeture/réouverture explicite (hypothèse : même cause que le Lot D, non confirmée par Saar) ;
+  les 6 autres attributs primaires avec une mutation autre que "Caractère félin".
+- Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 13)".
+
 ### Lot 2 — Attributs secondaires (avantages uniquement en pratique)
 - Source : `ref_advantages.mod_attribute ∈ {"reaction", "breath"}` / `mod_value`.
 - Calcul visé : `calcREA`, `calcSouffle`.
@@ -387,6 +435,7 @@ fonctionnalité, pas un bug qui casse quelque chose de fonctionnel.
 
 ## Prochaine étape
 
-**Lot 1 détaillé ligne-à-ligne ci-dessus — prêt à coder, en attente du feu vert de Saar.** Aucun
-code écrit dans cette session (règle "tu rédiges, tu ne codes pas"). Lot 2 (Attributs secondaires)
-à détailler seulement une fois le Lot 1 confirmé fonctionnel.
+**Lot 1 ✅ CLOS — Session 141 (suite 13), fonctionnel confirmé Saar** (voir détail de clôture en fin
+de section Lot 1 ci-dessus). **Lot 2 (Attributs secondaires) à détailler ligne-à-ligne avec Saar
+quand il voudra enchaîner** — même méthode que le Lot 1 (plan écrit, analyse à charge, vérification
+instrumentée en base réelle avant tout code, jamais deux lots à la fois).

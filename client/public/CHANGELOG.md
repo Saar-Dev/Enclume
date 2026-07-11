@@ -1,3 +1,22 @@
+## v169 — 2026-07-10 — Les mutations ont enfin un effet réel sur les attributs
+
+### Client
+- [fix] Une mutation qui modifie un attribut (ex. "Caractère félin" → +2 Coordination) l'applique
+  désormais réellement sur la fiche et en jeu — jusqu'ici, l'effet était calculé mais jamais
+  répercuté, quel que soit le moyen d'obtention (création de personnage ou octroi par le MJ en
+  cours de partie).
+- [fix] "Caractère génétique animal" propose maintenant le choix de la variante (félin/canin/
+  reptilien/simiesque) quand le MJ l'octroie en jeu — ce choix manquait auparavant.
+- [fix] Ajouter ou retirer une mutation en jeu met à jour la fiche immédiatement, sans qu'il soit
+  nécessaire de fermer et rouvrir la fenêtre du personnage.
+- [feat] Nouvelle option de campagne "Limite de poids porté" (Règles de jeu) : peut être désactivée,
+  et son multiplicateur (par défaut Force ×3) est désormais réglable.
+
+### Serveur
+- [fix] Correction d'un bug de calcul où certaines valeurs remontées de la base de données étaient
+  traitées comme du texte au lieu de nombres, faussant le résultat de certains attributs dans de
+  rares cas.
+
 ## v168 — 2026-07-10 — Revers (option de campagne) + Avantages professionnels revus
 
 ### Client

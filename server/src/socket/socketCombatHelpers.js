@@ -1349,7 +1349,8 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const tailleModComp    = TAILLE_MODS[confirmedModifiers.taille] ?? 0
     const isRushedMod      = rosterTireur?.state_vitesse === 'rushed' ? -5 : 0
     const fireModeComp     = action.fire_mode_bonus_comp ?? 0
-    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp
+    const dualWieldComp    = action.modifiers?.dual_wield_bonus_comp ?? 0
+    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + dualWieldComp
 
     const coverageModifier   = options.coverageModifier ?? 0
     const chancesDeReussite  = skillTotal + totalModComp + effectiveMalus - carenceArmure + coverageModifier
@@ -1360,6 +1361,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       { label: 'Compétence', value: skillTotal, type: 'base' },
       ...(porteeModComp !== 0 ? [{ label: PORTEE_LABELS[confirmedModifiers.portee] ?? confirmedModifiers.portee, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' }] : []),
       ...(fireModeComp !== 0 ? [{ label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp, type: 'bonus' }] : []),
+      ...(dualWieldComp !== 0 ? [{ label: 'Deux armes', value: dualWieldComp, type: 'bonus' }] : []),
       ...((confirmedModifiers.situation ?? []).reduce((acc, k) => {
         const v = SITUATION_MODS[k] ?? 0
         if (v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })

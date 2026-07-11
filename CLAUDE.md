@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 12) — 2026-07-10
+> Session 141 (suite 13) — 2026-07-10
 
 ---
 
@@ -107,8 +107,24 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 12) (2026-07-10)
+## ÉTAT COURANT — Session 141 (suite 13) (2026-07-10)
 
+- **Session 141 (suite 13) — `docs/PLAN_MUTATION2.md` Lot 1 (attributs primaires mutations) ✅
+  CLOS, fonctionnel confirmé Saar.** Suite directe de "suite 10" (diagnostic/architecture).
+  Consolidation `calcNA`/`calcAN` vers `shared/polarisUtils.js` (fin de la triple duplication
+  serveur/client), PI4 (encombrement) réellement corrigé sur 5 sites + option de campagne
+  `encumbrance_enabled`/`encumbrance_multiplier`, ~20 sites serveur/client rebranchés.
+  **4 bugs trouvés et corrigés en testant avec Saar** (migrations 127/128) : vue
+  `char_mutation_effects_view` aveugle aux sous-types de mutation (`ref_mutation_subtypes` jamais
+  jointe — "Caractère génétique animal" toujours à 0) ; sélecteur de sous-type manquant côté Lot D
+  (`AdvantagesPanel.jsx`) ; état client (`CharacterSheet.jsx`) jamais rafraîchi après ajout/retrait
+  d'une mutation (`onSaved` = simple ✓ visuel, ne recharge rien) ; **bug le plus sérieux** —
+  `SUM()` Postgres sur colonne `integer` retourne un `bigint`, que `node-pg` parse en **chaîne JS**
+  (jamais casté) — `calcNA` concaténait au lieu d'additionner (`10+'2'`→`102` au lieu de `12`),
+  cause exacte du "COO Niveau Actuel = 110" signalé par Saar. Chaque correctif vérifié par
+  **instrumentation en base réelle** (transactions systématiquement annulées), pas seulement par
+  lecture de code. Détail complet : item "55." `docs/EN_COURS.md` et `docs/JOURNAL6.md`
+  "Session 141 (suite 13)". Prochaine étape : Lot 2 (Attributs secondaires).
 - **Session 141 (suite 12) — Options de campagne `revers` (OPT-06) ✅ CLOS + mode développeur
   écarté ✅ CLOS + consolidation mini-stepper Avantages pro ✅ CLOS.** Note de numérotation :
   "suite 10"/"suite 11" déjà pris par deux sessions parallèles sans rapport (`PLAN_MUTATION2.md`/
@@ -365,7 +381,9 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **131 migrations stables** (126_ref_setbacks_revers_table — Session 141 (suite 12) ;
+- **133 migrations stables** (128_char_mutation_effects_view_int_cast — Session 141 (suite 13) ;
+  127_char_mutation_effects_view_subtypes — Session 141 (suite 13) ;
+  126_ref_setbacks_revers_table — Session 141 (suite 12) ;
   125_char_mutations_source_campaign — Session 141 (suite 9) ;
   124_char_advantage_notes — Session 141 (suite 9) ;
   123_ref_advantages_polaris — Session 141 (suite 6) ;

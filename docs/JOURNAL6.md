@@ -1965,3 +1965,106 @@ codage futur.
 **Non testé** : sans objet.
 
 Détail complet du plan corrigé : `docs/PLAN_MODING.md` (section "Historique des révisions").
+
+---
+
+## Session 141 (suite 13) — 2026-07-10 — PLAN_MUTATION2 Lot 1 : attributs primaires mutations ✅ CLOS
+
+Suite directe de la session "suite 10" (diagnostic + architecture `docs/PLAN_MUTATION2.md`, aucun
+code) — reprise en conversation continue, pas une nouvelle session résumée. Note de numérotation :
+"suite 11"/"suite 12" déjà pris par deux sessions parallèles sans rapport (`PLAN_MODING.md`, Revers
+OPT-06) au moment de refermer celle-ci — "suite 13" vérifié libre avant d'écrire.
+
+**Décisions Saar avant codage** : (1) l'AN/NA reste calculé dynamiquement des deux côtés
+(client+serveur), jamais stocké — confirmé préservé, recherche faite (pattern "derived data" de
+Foundry VTT, monorepo `shared/` déjà établi sur ce projet) à la demande explicite de Saar avant de
+coder quoi que ce soit. (2) Aucun bricolage toléré : le calcul dupliqué à 3 endroits (serveur +
+2 client) et la convention PI4 (encombrement ignorant génotype/mutations) sont de vrais gaps à
+corriger, pas des choix à présenter comme options équivalentes à une rustine — mémoire
+`feedback_no_hacks.md` renforcée suite à un premier brouillon qui présentait par erreur un
+"correctif rapide" comme une alternative valable.
+
+**Codé (~20 fichiers, 240+ lignes)** :
+- `shared/polarisUtils.js` : nouveau point de calcul unique — `calcNA`, `getGenotypeModForAttr`,
+  `getMutationModForAttr`, `ATTR_TO_GENOTYPE_MOD`/`ATTR_TO_MUTATION_MOD`.
+- `server/src/lib/charStats.js` : supprime ses 5 doublons (`AN_TABLE`, `calcAN`,
+  `ATTR_TO_GENOTYPE_MOD`, `getGenotypeModForAttr`, `calcNA`), importe depuis `shared/`.
+  `calcAttributeAN`/`calcAttributeNA`/`calcSkillTotal` gagnent un paramètre `mutationEffectsRow`.
+  `calcEncumbrancePenalty` gagne un paramètre `multiplier`.
+- `mutationService.js` : `getMutationEffects(sheetId)` (lit `char_mutation_effects_view`).
+- `campaignSettingsService.js`/`routes/campaigns.js` : options `encumbrance_enabled`/
+  `encumbrance_multiplier` (défauts `true`/`3` — comportement actuel préservé).
+- **PI4 réellement corrigé** (pas documenté comme exclusion, décision explicite Saar) : 5 sites
+  trouvés après analyse à charge (2 manqués au premier passage) — `char-sheet.js` (`GET
+  /inventory`), `socketCombatHelpers.js` ×3 (attaquant/défenseur CaC, tireur), `socketEntity.js` —
+  utilisent désormais `calcAttributeNA` (génotype + mutation inclus) au lieu du calcul brut.
+- 15 sites de calcul d'attribut/compétence rebranchés (`char-sheet.js`, `socketEntity.js`,
+  `socketCombatHelpers.js`, `socketCombatResolution.js`, `socketDice.js`) + `CharacterSheet.jsx`/
+  `CombatActionWindow.jsx` (suppriment leurs réimplémentations locales de `calcNA`).
+- `SectionGameRules.jsx`/`fr.json` : UI des 2 nouvelles options de campagne.
+
+**4 bugs supplémentaires trouvés en testant avec Saar, tous corrigés dans le même chantier** (même
+cause profonde : les mutations à sous-table n'avaient jamais été branchées de bout en bout) :
+
+1. **Vue aveugle aux sous-types** — `char_mutation_effects_view` ne lisait que `ref_mutations`,
+   jamais `ref_mutation_subtypes`. "Caractère génétique animal" (seule mutation `has_subtable` du
+   catalogue) porte ses `mod_FOR..PRE` sur la table enfant, pas la ligne parente (0 par défaut) —
+   la vue retournait donc toujours 0, quel que soit le sous-type choisi (félin/canin/reptilien/
+   simiesque). Migration `127_char_mutation_effects_view_subtypes.js` (`LEFT JOIN
+   ref_mutation_subtypes`).
+2. **Sélecteur de sous-type manquant côté Lot D** — `AdvantagesPanel.jsx` n'avait jamais eu de
+   sélecteur (`handleAddMutation` n'envoyait aucun `subtype_id`, gap pré-existant de la session
+   "suite 9", pas introduit ici). Ajout d'une étape de drill-down (`step: 'mutation-subtype'`) +
+   `mutationService.addMutation(sheetId, mutationId, subtypeId)` (upsert sur le bon index partiel
+   selon présence du sous-type — deux arbiters distincts, Postgres l'exige, ne permet pas de cibler
+   les deux dans une seule clause `ON CONFLICT`) + `ref.js`/`getMutations()` exposent `subtable`/
+   `subtype_name`.
+3. **État client jamais rafraîchi** — `AdvantagesPanel` notifiait `onSaved` (simple ✓ visuel dans
+   `CharacterWindow.jsx`, confirmé par lecture de toute la chaîne d'appel — ne recharge rien) après
+   un ajout/retrait de mutation. `CharacterSheet.jsx` ne redemandait jamais `mutationEffects`,
+   figé jusqu'à démontage/remontage complet de la fenêtre. Nouvelle route légère `GET
+   /char-sheet/:characterId/mutation-effects` + callback dédié `onMutationsChanged` (distinct
+   d'`onSaved`) appelé après ajout/retrait.
+4. **Bug le plus sérieux — `bigint` retourné comme `string` par `node-pg`** : `SUM()` sur une
+   colonne `integer` produit un `bigint` en PostgreSQL, que le driver parse en **chaîne JS** par
+   défaut (évite la perte de précision au-delà de 2^53) — latent dans la vue depuis sa création
+   (jamais consommée avant ce lot). `calcNA` faisait `10 + 0 + 0 + '2'` → concaténation de chaîne
+   (`'102'`) au lieu d'une addition (`12`) — cause exacte du "COO Niveau Actuel = 110" signalé par
+   Saar (`IMPROVISATION NON TOLÉRÉE` — réaction justifiée). **Erreur de vérification de ma part** :
+   j'avais vu `mod_COO: '2'` entre guillemets dans mes propres tests instrumentés plus tôt dans la
+   session et je ne l'avais pas identifié comme un problème de type — je l'ai reconnu explicitement
+   auprès de Saar plutôt que de minimiser. Migration `128_char_mutation_effects_view_int_cast.js`
+   (cast `::integer` sur les 13 colonnes numériques). **Piège Postgres trouvé en corrigeant** :
+   `CREATE OR REPLACE VIEW` refuse de changer le type d'une colonne existante (erreur `42P16`,
+   `bigint`→`integer`) — `DROP VIEW` + `CREATE` obligatoire, contrairement aux migrations 109/127
+   qui ne changeaient que la formule, jamais le type. Audit du reste du code pour le même risque :
+   un seul autre endroit trouvé (`char-sheet.js`, potentiel drone), déjà protégé correctement
+   (`Number(row.total)`) — pas d'autre cas caché.
+
+**Méthode de vérification (demande explicite Saar "on n'est pas pressés, on veut être sûr")** :
+recherche de bonnes pratiques avant architecture (pattern Foundry VTT/monorepo), analyse à charge
+répétée à chaque étape (3 sites d'encombrement manqués retrouvés en revérifiant systématiquement),
+et surtout **vérification instrumentée en base réelle** à chaque correctif — connexion effective à
+la DB de développement (`.env` du dossier racine, pas `server/`), requêtes réelles en transactions
+systématiquement annulées (`ROLLBACK`/`throw` dans le callback knex), jamais de donnée réelle
+modifiée hors du flux normal de l'app. Chaque bug a été reproduit puis corrigé avec preuve
+avant/après (valeur erronée → valeur correcte), pas seulement déduit par lecture de code.
+
+**Testé** : `node --check` 0 erreur sur tous les fichiers serveur/partagés touchés, ESLint 0
+nouvelle erreur sur tous les fichiers client touchés (confirmé `git stash` avant/après à plusieurs
+reprises), `fr.json` valide, scénarios `node -e` (non-régression `calcAN` sur toute la plage,
+`calcNA`/`calcAttributeAN`/`calcAttributeNA` avec/sans mutation, `calcEncumbrancePenalty` avec/sans
+multiplicateur personnalisé), vérifications instrumentées en base réelle (transactions annulées)
+pour chacun des 4 bugs. **SR + parcours navigateur confirmé fonctionnel par Saar** : ajout d'une
+mutation à sous-type via le Lot D avec sélection félin/canin/reptilien/simiesque, effet COO+2
+visible immédiatement sur la fiche sans fermeture/réouverture de la fenêtre.
+
+**Non testé** : effet en résolution de combat réelle (jet de compétence reflétant le bonus de
+mutation — vérifié par lecture/scénarios `node -e`, pas par un jet réel en session) ; bascule
+`encumbrance_enabled`/`encumbrance_multiplier` en navigateur ; aperçu Wizard ("peek",
+`WizardCreation.jsx openPeek`) après fermeture/réouverture explicite (hypothèse formulée : même
+cause que le bug 3 ci-dessus, la fonction refait un `reconcile`+`preview` complet à chaque ouverture
+— non confirmée par un test dédié de Saar) ; les 6 autres attributs primaires avec une mutation
+autre que "Caractère félin" ; retrait d'une mutation stackée (`count` > 1) en conditions réelles.
+
+Détail complet (plan, ligne-à-ligne, analyse à charge) : `docs/PLAN_MUTATION2.md` section Lot 1.

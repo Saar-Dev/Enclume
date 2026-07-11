@@ -12,6 +12,9 @@
  *   isGm                 — booléen — gate l'ajout/retrait de mutations (MJ uniquement, Lot D :
  *                          octroi narratif, pas un choix libre du joueur)
  *   onSaved              — callback après opération réussie (feedback ✓ CharacterWindow)
+ *   onMutationsChanged   — callback() après ajout/retrait d'une mutation — recharge
+ *                          mutationEffects dans CharacterSheet (naMap sinon périmé tant que la
+ *                          fenêtre n'est pas remontée, docs/PLAN_MUTATION2.md Lot 1)
  *   charSkills           — lignes char_skills (source de vérité — géré par CharacterSheet)
  *   refSkillsPolaris     — compétences Polaris de référence (filtré depuis CharacterSheet.refSkills)
  *   onSkillLearnedChange — callback(skill_id, is_learned) après toggle pouvoir Polaris
@@ -50,6 +53,7 @@ export default function AdvantagesPanel({
   canEdit,
   isGm,
   onSaved,
+  onMutationsChanged,
   charSkills,
   refSkillsPolaris,
   onSkillLearnedChange,
@@ -154,6 +158,7 @@ export default function AdvantagesPanel({
         return [...prev, mutation]
       })
       onSaved?.()
+      onMutationsChanged?.()
       closeModal()
     } catch (err) {
       setError(t('advantages.errorAdd'))
@@ -161,7 +166,7 @@ export default function AdvantagesPanel({
     } finally {
       setSaving(false)
     }
-  }, [characterId, onSaved, t])
+  }, [characterId, onSaved, onMutationsChanged, t])
 
   // ─── Choisir une mutation dans la liste — drill-down si sous-types ───────
   // Déclarée après handleAddMutation (P4/P48, .claude/rules/react.md) : appelle handleAddMutation.
@@ -254,12 +259,13 @@ export default function AdvantagesPanel({
       await api.delete(`/char-sheet/${characterId}/mutations/${mutation.id}`)
       setCharMutations(prev => prev.filter(m => m.id !== mutation.id))
       onSaved?.()
+      onMutationsChanged?.()
     } catch (err) {
       console.error('Erreur remove mutation :', err)
     } finally {
       setSaving(false)
     }
-  }, [characterId, onSaved])
+  }, [characterId, onSaved, onMutationsChanged])
 
   // ─── Liste fusionnée : avantages + mutations + notes "Autres", tri chrono ─
   const combinedEntries = useMemo(() => {

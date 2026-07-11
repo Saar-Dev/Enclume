@@ -400,6 +400,17 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     } catch (err) { console.error('Erreur save XP :', err) }
   }, [characterId, onSaved])
 
+  // Callback appelé par AdvantagesPanel après ajout/retrait d'une mutation (Lot D) — recharge
+  // uniquement mutationEffects (endpoint léger dédié), pas toute la fiche. Sans ça, naMap reste
+  // basé sur l'agrégat chargé au montage et le bonus n'apparaît qu'après fermeture/réouverture
+  // de la fenêtre (docs/PLAN_MUTATION2.md Lot 1).
+  const handleMutationsChanged = useCallback(async () => {
+    try {
+      const res = await api.get(`/char-sheet/${characterId}/mutation-effects`)
+      setMutationEffects(res.data.mutationEffects ?? null)
+    } catch (err) { console.error('Erreur rechargement mutation-effects :', err) }
+  }, [characterId])
+
   // Callback appelé par SkillsPanel après un achat réussi.
   // Met à jour charSkills et xpAvailable localement — pas de rechargement réseau.
   const handleSkillBought = useCallback(({ skill_id, mastery, is_learned, xp_available }) => {
@@ -849,6 +860,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           canEdit={canEdit}
           isGm={isGm}
           onSaved={onSaved}
+          onMutationsChanged={handleMutationsChanged}
           charSkills={charSkills}
           refSkillsPolaris={refSkillsPolaris}
           onSkillLearnedChange={handlePolarisToggled}

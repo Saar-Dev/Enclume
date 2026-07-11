@@ -41,7 +41,9 @@ import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWou
 import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from '../../lib/woundUtils.js'
 import { getAdvantages, addAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
 import { getMutations, addMutation, removeMutation, getMutationEffects } from '../../services/mutationService.js'
+import { cloneToVault } from '../../services/vaultService.js'
 import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
+import { isEquippableLocation } from '../../lib/inventoryRules.js'
 import { WS } from '../../../../shared/events.js'
 import {
   WOUND_LOCATIONS, WOUND_SEVERITIES,
@@ -657,6 +659,24 @@ router.get('/:characterId/mutations', async (req, res, next) => {
   }
 })
 
+// ─── GET /api/char-sheet/:characterId/mutation-effects ────────────────────────
+// Endpoint léger — uniquement l'agrégat char_mutation_effects_view, pas toute la fiche.
+// Utilisé par CharacterSheet.jsx pour rafraîchir naMap après un ajout/retrait de mutation
+// depuis AdvantagesPanel (Lot D), sans recharger identity/archetype/attributes/skills.
+router.get('/:characterId/mutation-effects', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId })
+      .first()
+    if (!sheet) return res.json({ mutationEffects: null })
+
+    const mutationEffects = await getMutationEffects(sheet.id)
+    res.json({ mutationEffects })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // ─── POST /api/char-sheet/:characterId/mutations — GM uniquement ──────────────
 router.post('/:characterId/mutations', async (req, res, next) => {
   try {
@@ -1072,6 +1092,11 @@ router.post('/:characterId/inventory', async (req, res, next) => {
       throw new AppError(400, 'quantity doit être un entier positif')
     }
 
+    const equipRef = equipment_id
+      ? await db('ref_equipment').where({ id: equipment_id }).select('location', 'malus_cat').first()
+      : null
+    const equippable = isEquippableLocation(equipRef?.location ?? null)
+
     let container
     if (containerIn !== undefined) {
       if (!VALID_CONTAINERS.includes(containerIn)) {
@@ -1129,10 +1154,7 @@ router.post('/:characterId/inventory', async (req, res, next) => {
           .whereRaw("'/' || COALESCE(char_inventory.slot, '') || '/' LIKE ?", [`%/${resolvedSlot}/%`])
           .select('char_inventory.id as id', 'ref_equipment.malus_cat as malus_cat')
         if (existingAtSlot.length >= 3) throw new AppError(409, 'Slot complet — maximum 3 couches')
-        const newItemRef = equipment_id
-          ? await db('ref_equipment').where({ id: equipment_id }).select('malus_cat').first()
-          : null
-        const newItemCat = newItemRef?.malus_cat ?? null
+        const newItemCat = equipRef?.malus_cat ?? null
         const existingNonS = existingAtSlot.filter(i => i.malus_cat && i.malus_cat !== 'S')
         if (newItemCat && newItemCat !== 'S' && existingNonS.length >= 1) {
           throw new AppError(409, 'Slot déjà occupé par une armure principale (règle 1+S+S)')
@@ -1142,7 +1164,8 @@ router.post('/:characterId/inventory', async (req, res, next) => {
     }
 
     // Stacking : même equipment_id + même container + slot IS NULL
-    if (equipment_id && resolvedSlot === null) {
+    // Jamais pour un item équipable (P57) — chaque exemplaire reste une ligne indépendante.
+    if (equipment_id && resolvedSlot === null && !equippable) {
       const existing = await db('char_inventory')
         .where({ character_id: characterId, equipment_id, container })
         .whereNull('slot')
@@ -1173,6 +1196,22 @@ router.post('/:characterId/inventory', async (req, res, next) => {
     if (resolvedSlot && equipment_id) {
       const autoAmmo = await resolveAmmoInit(equipment_id, resolvedSlot)
       if (autoAmmo !== null) insertData.ammo_remaining = autoAmmo
+    }
+
+    // P57 : un item équipable n'a jamais quantity > 1 — chaque exemplaire devient sa
+    // propre ligne (seul le 1er reçoit le slot demandé, les suivants restent non équipés).
+    if (equippable && quantity > 1) {
+      const rows = Array.from({ length: quantity }, (_, i) => ({
+        ...insertData,
+        quantity: 1,
+        slot: i === 0 ? resolvedSlot : null,
+      }))
+      const inserted = await db('char_inventory').insert(rows).returning('*')
+      const items = await Promise.all(inserted.map(r => getItemWithRef(r.id)))
+      for (const item of items) {
+        req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_ADDED, { characterId, item })
+      }
+      return res.status(201).json({ item: items[0], items })
     }
 
     const [inserted] = await db('char_inventory').insert(insertData).returning('*')
@@ -1293,6 +1332,13 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
     if (updates.quantity !== undefined) {
       if (!Number.isInteger(updates.quantity) || updates.quantity < 1) {
         throw new AppError(400, 'quantity doit être un entier positif')
+      }
+      // P57 : un item équipable ne stacke jamais — quantity reste toujours 1.
+      const ref = existing.equipment_id
+        ? await db('ref_equipment').where({ id: existing.equipment_id }).select('location').first()
+        : null
+      if (isEquippableLocation(ref?.location ?? null) && updates.quantity !== 1) {
+        throw new AppError(400, 'Un item équipable ne peut pas avoir une quantité différente de 1')
       }
     }
 
@@ -2050,6 +2096,21 @@ router.delete('/:characterId/drone/weapons/:weaponId', async (req, res, next) =>
     if (!deleted) throw new AppError(404, 'Weapon not found')
 
     res.json({ message: 'Weapon deleted' })
+  } catch (err) { next(err) }
+})
+
+// ─── POST /api/char-sheet/:characterId/clone-to-vault ───────────────────────
+// PLAN_VAULT.md Étape 4 — transfert libre "vers le Vault" (Décision 3). Réutilise le
+// router.param('characterId') existant (ownership OU GM, via campaign_members) pour l'accès à la
+// route, mais cloneToVault() applique sa propre règle plus stricte (propriétaire uniquement, pas
+// GM) — un MJ qui consulte la fiche d'un joueur ne doit pas pouvoir la faire atterrir dans SON
+// propre Vault. Rejette aussi un personnage non finalisé (Piège P6) et les drones/pnj hors scope
+// pour cette route précise ne sont pas bloqués ici : cloneToVault gère tous les types via le
+// registre, un MJ pourrait vouloir vaulter "son" drone s'il en est owner (rare mais cohérent).
+router.post('/:characterId/clone-to-vault', async (req, res, next) => {
+  try {
+    const character = await cloneToVault(req.character.id, req.user.id)
+    res.status(201).json({ character })
   } catch (err) { next(err) }
 })
 

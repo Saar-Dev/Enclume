@@ -1,5 +1,5 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-10 Session 141 (suite 12) — voir item 54 (note de numérotation, sessions parallèles)
+> Dernière mise à jour : 2026-07-10 Session 141 (suite 13) — voir item 55 (note de numérotation, sessions parallèles)
 > Contenu : dettes actives + roadmap + points de vigilance permanents.
 > Historique complet : voir `docs/JOURNAL6.md`, `docs/Old/JOURNAL5.md et `docs/Old/JOURNAL4.md` et `docs/Old/JOURNAL3.md`
 
@@ -29,8 +29,18 @@
 > primaires, Lot 2 Attributs secondaires, Lot 3 Résistances, Lot 4 Armure/arme naturelle (le plus
 > lourd — V2 n'a plus de colonnes structurées pour l'arme naturelle, contrairement à l'ancien
 > schéma V1), Lot 5 Déblocage de compétences (`[CS7]` + mapping `muta_XXX` V1→V2 à faire), Lot 6
-> Identité, Lot 7 Narratif/économie. Toujours **aucun code** — diagnostic + architecture
-> uniquement. **Prochaine étape : détailler le Lot 1 ligne-à-ligne avec Saar.**
+> Identité, Lot 7 Narratif/économie.
+> **Lot 1 (Attributs primaires) ✅ CLOS — Session 141 (suite 13), fonctionnel confirmé Saar.**
+> Consolidation `calcNA`/`calcAN` vers `shared/polarisUtils.js`, PI4 (encombrement) réellement
+> corrigé + option de campagne `encumbrance_enabled`/`_multiplier`, ~20 sites serveur+client
+> rebranchés. **4 bugs supplémentaires trouvés et corrigés en testant** (migrations 127/128) : vue
+> `char_mutation_effects_view` aveugle aux sous-types de mutation, sélecteur de sous-type manquant
+> côté Lot D, état client jamais rafraîchi après ajout/retrait, et surtout un `bigint` Postgres
+> retourné comme chaîne par `node-pg` (jamais casté en `::integer`) qui corrompait le calcul par
+> concaténation de chaîne au lieu d'addition (`10 + '2'` → `102` au lieu de `12`). Détail complet :
+> item "55." et `docs/JOURNAL6.md` "Session 141 (suite 13)", `docs/PLAN_MUTATION2.md` section Lot 1.
+> **Prochaine étape : détailler le Lot 2 (Attributs secondaires) ligne-à-ligne avec Saar, même
+> méthode que le Lot 1 (jamais deux lots à la fois).**
 > **Chantier Options de campagne (item 41) : `revers` (OPT-06) ✅ câblée — Session 141 (suite 12)**
 > (9/11 faites : `ambiance`, `random_mutations`, `feminin_bonus`, `random_pro_advantages`,
 > `skill_prerequisites`, `skill_max_level`, `young_penalty`, `polaris_latent`, `revers`).
@@ -64,6 +74,58 @@
 > est prioritaire, à planifier avant de
 > reprendre le moding** — chantier entier mis en pause (pas seulement B2-B5). Aucun plan écrit pour
 > Tir visé pour l'instant. Voir détail ci-dessous et `docs/JOURNAL6.md` "Session 141 (suite 11)".
+
+**55. PLAN_MUTATION2 Lot 1 — attributs primaires mutations ✅ CLOS — Session 141 (suite 13) (2026-07-10)**
+   → Suite directe de "suite 10" (diagnostic + architecture, item ci-dessus) — conversation continue,
+     pas une nouvelle session résumée. Note de numérotation : "suite 11"/"suite 12" déjà pris par deux
+     sessions parallèles sans rapport (`PLAN_MODING.md`, Revers OPT-06, items "53."/"54.") au moment de
+     refermer celle-ci — "suite 13" vérifié libre avant d'écrire.
+   → **Décisions Saar avant codage** : AN/NA reste calculé dynamiquement des deux côtés (jamais
+     stocké) — confirmé préservé, recherche faite (pattern "derived data" Foundry VTT, monorepo
+     `shared/`) à sa demande explicite avant tout code. Aucun bricolage toléré : duplication de calcul
+     (3 endroits) et convention PI4 (encombrement) sont de vrais gaps à corriger, pas des options
+     équivalentes à une rustine — mémoire `feedback_no_hacks.md` renforcée après un premier brouillon
+     fautif sur ce point précis.
+   → Consolidation `calcNA`/`calcAN`/résolveurs de modificateur vers `shared/polarisUtils.js`
+     (`charStats.js` importe, supprime ses 5 doublons) + PI4 réellement corrigé (5 sites, 2 manqués au
+     premier passage, retrouvés en analyse à charge) + option de campagne `encumbrance_enabled`/
+     `encumbrance_multiplier` (défauts `true`/`3`, comportement préservé) + ~20 sites serveur/client
+     rebranchés (`char-sheet.js`, `socketEntity.js`, `socketCombatHelpers.js`,
+     `socketCombatResolution.js`, `socketDice.js`, `CharacterSheet.jsx`, `CombatActionWindow.jsx`).
+   → **4 bugs supplémentaires trouvés en testant avec Saar, tous corrigés dans le même chantier**
+     (même cause profonde : mutations à sous-table jamais branchées de bout en bout) :
+     1. Vue `char_mutation_effects_view` aveugle aux sous-types (`ref_mutation_subtypes` jamais
+        jointe) — "Caractère génétique animal" (seule mutation `has_subtable`) retournait toujours 0.
+        Migration `127_char_mutation_effects_view_subtypes.js`.
+     2. Sélecteur de sous-type manquant côté Lot D (`AdvantagesPanel.jsx`, gap pré-existant de la
+        session "suite 9") — ajout d'une étape de drill-down + `addMutation(sheetId, mutationId,
+        subtypeId)` (upsert sur le bon index partiel, deux arbiters distincts).
+     3. État client jamais rafraîchi après ajout/retrait (`onSaved` = simple ✓ visuel, ne recharge
+        rien) — nouvelle route légère `GET /mutation-effects` + callback dédié `onMutationsChanged`.
+     4. **Le plus sérieux** : `SUM()` Postgres sur colonne `integer` → `bigint` → retourné comme
+        **chaîne JS** par `node-pg` (jamais casté) — `calcNA` concaténait au lieu d'additionner
+        (`10+'2'` → `102` au lieu de `12`), cause exacte du "COO Niveau Actuel = 110" signalé par
+        Saar. **Erreur de vérification reconnue** : la chaîne entre guillemets était visible dans mes
+        propres tests plus tôt dans la session, pas identifiée comme un problème de type sur le
+        moment. Migration `128_char_mutation_effects_view_int_cast.js` (cast `::integer` sur les 13
+        colonnes). Piège Postgres trouvé en corrigeant : `CREATE OR REPLACE VIEW` refuse de changer
+        le type d'une colonne existante (`DROP`+`CREATE` obligatoire). Audit du reste du code : un
+        seul autre endroit à risque trouvé, déjà protégé correctement (`Number(...)`).
+   → **Méthode** : chaque correctif vérifié par **instrumentation en base réelle** (connexion directe
+     à la DB de dev, transactions systématiquement annulées — jamais de donnée réelle modifiée hors
+     du flux normal de l'app), pas seulement déduit par lecture de code.
+   → **Testé** : `node --check`/ESLint 0 nouvelle erreur (confirmé `git stash` à plusieurs reprises),
+     `fr.json` valide, scénarios `node -e` (non-régression `calcAN`/`calcNA`/`calcEncumbrancePenalty`),
+     vérifications instrumentées en base réelle (transactions annulées) pour chacun des 4 bugs,
+     **SR + parcours navigateur confirmé fonctionnel par Saar** (Lot D sélection de sous-type félin,
+     effet COO+2 visible immédiatement sans rechargement).
+   → **Non testé** : effet en résolution de combat réelle (jet de compétence, vérifié seulement par
+     scénarios `node -e`) ; bascule des options d'encombrement en navigateur ; aperçu Wizard ("peek")
+     après fermeture/réouverture explicite (hypothèse même cause que bug 3, non confirmée par Saar) ;
+     les 6 autres attributs primaires avec une mutation autre que "Caractère félin" ; retrait d'une
+     mutation stackée en conditions réelles.
+   → **Prochaine étape : Lot 2 (Attributs secondaires)**, à détailler ligne-à-ligne avec Saar.
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 13)", `docs/PLAN_MUTATION2.md` section Lot 1.
 
 **54. Options de campagne : `revers` (OPT-06) ✅ CLOS + mode développeur écarté ✅ CLOS + consolidation mini-stepper Avantages pro ✅ CLOS — Session 141 (suite 12) (2026-07-09/10)**
    → Note de numérotation : "suite 10" (`docs/PLAN_MUTATION2.md`) et "suite 11" (`docs/PLAN_MODING.md`,
