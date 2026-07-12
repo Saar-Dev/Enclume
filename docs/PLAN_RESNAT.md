@@ -288,4 +288,50 @@ drogue -1, Souffle 12, pour un personnage avec CON=10/VOL=14).
 **Suite immédiate (même session)** : Saar demande une passe UI/UX sur le bloc "ATTRIBUTS SECONDAIRES"
 (actuel = grille plate non groupée, "fonctionnel mais moche"), en s'inspirant du regroupement de la
 fiche papier officielle (Choc/Résistances naturelles en sous-groupes). Traité séparément (question de
-design, pas un bug) — voir `docs/JOURNAL6.md` "Session 141 (suite 18)" pour le suivi.
+design, pas un bug).
+
+## Passe UI/UX — accordéon + regroupement Attributs secondaires ✅ CLOS — 2026-07-12
+
+**Itération 1** : mockup interactif (Artifact) proposant 2 pistes (cartes groupées / liste dense).
+Saar choisit un hybride : Réaction/Initiative en cartes, liste dense pour Choc/Dommages/Résistances
+naturelles/Souffle, Allures en cartes en bas. `SecondaryField`/nouveau `SecondaryListRow` partagent
+leur logique de tooltip via un hook extrait `useSecondaryTooltip` (évite la duplication).
+
+**Itération 2** : après capture d'écran de la fiche réelle complète, Saar signale qu'elle est "encore
+plus massive" avec les nouveaux champs — vraie cause identifiée : le bloc Compétences (~60 lignes),
+pas les Attributs secondaires. Décision : **accordéon sur 6 blocs** (XP, Description, Attributs,
+Attributs secondaires, Compétences, Avantages — "En-tête" reste toujours visible, ancre non repliée)
++ **mémorisation par TYPE de fiche** (`localStorage` clés `charSheetAccordion:owned`/`:other`,
+sélectionnées via la prop `isOwner` déjà disponible — pas par personnage, demande explicite : "mes
+fiches perso ne s'affichent pas pareil que les autres") + **Attributs secondaires en 2 colonnes** pour
+la partie liste (gauche : Choc + Dommages ; droite : Résistances naturelles + Souffle — deux listes
+indépendantes et sémantiquement cohérentes, écart assumé par rapport à la maquette qui entrelaçait les
+lignes une à une, jugé moins lisible). Nouveau composant `CollapsibleBlock` (en-tête cliquable +
+chevron rotatif). `blockOpen` rechargé via `useEffect([isOwner, characterId])` — le composant ne
+remonte pas entre deux personnages (dette connue depuis Session 141 suite 9), sans quoi l'accordéon
+resterait figé sur le premier profil chargé au montage.
+
+**Itération 3** : Saar demande de regrouper les Allures avec Réaction/Initiative dans la même rangée
+de cartes ("gagner un max de place"), avec un séparateur discret entre les deux groupes. Nouveau prop
+`separator` sur `SecondaryField` (trait vertical + marge, attaché à la carte "Allure lente" plutôt
+qu'un élément flex autonome — reste correct même si `flexWrap` renvoie la carte à la ligne).
+
+**Testé (les 3 itérations)** : ESLint 0 nouvelle erreur à chaque étape (3 problèmes pré-existants
+confirmés identiques via `git stash`), `fr.json` valide, serveur sain (`/api/health` 200, changements
+client uniquement). **Parcours navigateur confirmé fonctionnel par Saar à chaque itération**
+("Presque parfait" → "Conforme" final).
+**Non testé** : bascule effective entre profil `owned`/`other` sur deux personnages réels différents
+en conditions live (mécanisme confirmé fonctionnel en général, pas vérifié spécifiquement
+personnage-par-personnage avec capture) ; comportement en fenêtre très étroite (le `flexWrap` de la
+rangée de cartes Réaction/Initiative/Allures n'a pas été testé à une largeur extrême) ; parcours
+navigateur des macros `resistance_poison`/etc. (seule la fiche a été vérifiée visuellement, jamais
+`/macro-preview`/`MACRO_ROLL`).
+
+## Chantier suivant
+
+`docs/PLAN_MUTATION2.md` **Lot 3** (Résistance aux Dommages + Choc) reste ouvert — scope déjà
+recentré (section "Ouverture du lot"), pas encore détaillé ligne à ligne. Rappel du point de vigilance
+posé pendant ce chantier (section F ci-dessus) : "Résistance aux dommages" et "Choc" affichés sur la
+fiche en valeur de base seulement (sans mutation/avantage) précisément parce que ce Lot 3 n'est pas
+codé — le coder complètera à la fois le calcul ET l'affichage déjà en place, sans nouveau chantier
+fiche séparé.

@@ -60,10 +60,18 @@
 > résolution de combat réelle ne les consomme pas encore, Lot 3 non traité). Testé : round-trip
 > migration réel, 9 scénarios unitaires, test bout-en-bout base réelle (transaction annulée),
 > non-régression numérique, ESLint 0 nouvelle erreur, SR + **parcours navigateur confirmé fonctionnel
-> par Saar** (capture d'écran fiche réelle). Non testé : parcours navigateur des macros. **Suite
-> immédiate : passe UI/UX demandée par Saar sur le bloc "ATTRIBUTS SECONDAIRES"** (grille plate
-> actuelle jugée "fonctionnelle mais moche"), inspirée du regroupement de la fiche papier officielle —
-> en cours. Détail complet : `docs/PLAN_RESNAT.md`, `docs/JOURNAL6.md` "Session 141 (suite 19)".
+> par Saar** (capture d'écran fiche réelle). Non testé : parcours navigateur des macros. **Passe UI/UX
+> même session ✅ CLOS (3 itérations)** : mockup interactif → hybride cartes/liste choisi ; capture
+> fiche complète → vraie cause de la longueur identifiée (bloc Compétences ~60 lignes, pas les
+> Attributs secondaires) → **accordéon sur 6 blocs** (En-tête reste ancre fixe) + **mémorisation par
+> TYPE de fiche** (`localStorage` `owned`/`other` via `isOwner`, pas par personnage — demande explicite
+> "mes fiches perso ne s'affichent pas pareil que les autres") + **Attributs secondaires en 2 colonnes**
+> (2 listes indépendantes, écart assumé vs maquette entrelacée) ; puis Allures regroupées avec
+> Réaction/Initiative + séparateur discret. **Parcours navigateur confirmé fonctionnel par Saar à
+> chaque itération** ("Conforme" final). Non testé : bascule owned/other avec capture dédiée, fenêtre
+> très étroite, macros via `/macro-preview`. **Chantier suivant identifié : `PLAN_MUTATION2.md` Lot 3**
+> (Résistance aux Dommages + Choc — scope déjà recentré, pas détaillé ligne à ligne). Détail complet :
+> `docs/PLAN_RESNAT.md`, `docs/JOURNAL6.md` "Session 141 (suite 19)".
 
 > **Item 60 (Session 141 suite 18) — Point documentaire ✅ CLOS.** Demande Saar : trier les chantiers
 > terminés, évaluer la qualité de la doc, reset `JOURNALTEMP.md`, décider de l'usage de

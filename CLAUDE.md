@@ -168,10 +168,20 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   non-régression numérique des 5 fonctions déplacées, ESLint client 0 nouvelle erreur (confirmé
   `git stash`), SR (`/api/health` 200). **Parcours navigateur confirmé fonctionnel par Saar**
   (capture d'écran fiche réelle : 6 nouveaux champs corrects). **Non testé** : parcours navigateur des
-  macros (`resistance_poison`/etc.) — seule la fiche a été vérifiée visuellement. **Suite immédiate** :
-  passe UI/UX demandée par Saar sur le bloc "ATTRIBUTS SECONDAIRES" (grille plate actuelle jugée
-  "fonctionnelle mais moche"), inspirée du regroupement de la fiche papier officielle. Détail complet :
-  `docs/JOURNAL6.md` "Session 141 (suite 19)".
+  macros (`resistance_poison`/etc.) — seule la fiche a été vérifiée visuellement. **Passe UI/UX même
+  session ✅ CLOS (3 itérations, toutes confirmées par Saar)** : mockup interactif → hybride
+  cartes/liste choisi ; capture fiche complète → vraie cause de la longueur identifiée (bloc
+  Compétences ~60 lignes, pas les Attributs secondaires) → **accordéon sur 6 blocs** (En-tête reste
+  ancre fixe) + **mémorisation par TYPE de fiche** (`localStorage` `owned`/`other` via `isOwner`, pas
+  par personnage — "mes fiches perso ne s'affichent pas pareil que les autres") + **Attributs
+  secondaires en 2 colonnes** (2 listes indépendantes, écart assumé vs maquette entrelacée, jugé plus
+  lisible) ; puis Allures regroupées avec Réaction/Initiative + séparateur discret (`separator` sur
+  `SecondaryField`, robuste au retour à la ligne). `blockOpen` rechargé via
+  `useEffect([isOwner, characterId])` (composant sans `key={characterId}`, dette Session 141 suite 9).
+  Testé à chaque itération : ESLint 0 nouvelle erreur, `fr.json` valide, SR + **parcours navigateur
+  confirmé fonctionnel par Saar** ("Conforme"). **Chantier suivant identifié : `PLAN_MUTATION2.md`
+  Lot 3** (Résistance aux Dommages + Choc — scope déjà recentré, pas détaillé ligne à ligne). Détail
+  complet : `docs/PLAN_RESNAT.md`, `docs/JOURNAL6.md` "Session 141 (suite 19)".
 - **Session 141 (suite 17) — Tir visé (LdB p.227-228) + framework Actions Exclusives ✅ CLOS.**
   Chantier ouvert par une demande de planification pure ("fonctionnalité qui semble manquer"), mené
   en passes validées une à une : recherche externe (Bob Nystrom, *Game Programming Patterns* — la

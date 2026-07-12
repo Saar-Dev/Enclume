@@ -865,6 +865,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
             tooltip={iniTooltip}
             valueStyle={effectiveMalus < 0 ? { color: '#e05c5c' } : undefined}
           />
+          <SecondaryField separator label={t('charSheet.secondary.allureLente')}   value={`${allures.lente} m/t`}   tooltip={t('charSheet.tooltip.allureLente')} />
+          <SecondaryField label={t('charSheet.secondary.allureMoyenne')} value={`${allures.moyenne} m/t`} tooltip={t('charSheet.tooltip.allureMoyenne')} />
+          <SecondaryField label={t('charSheet.secondary.allureRapide')}  value={`${allures.rapide} m/t`}  tooltip={t('charSheet.tooltip.allureRapide')} />
+          <SecondaryField label={t('charSheet.secondary.allureMax')}     value={`${allures.max} m/t`}     tooltip={t('charSheet.tooltip.allureMax')} />
         </div>
 
         <div style={s.secondaryColumns}>
@@ -912,13 +916,6 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
               tooltip={t('charSheet.tooltip.souffle')}
             />
           </div>
-        </div>
-
-        <div style={s.secondaryCards}>
-          <SecondaryField label={t('charSheet.secondary.allureLente')}   value={`${allures.lente} m/t`}   tooltip={t('charSheet.tooltip.allureLente')} />
-          <SecondaryField label={t('charSheet.secondary.allureMoyenne')} value={`${allures.moyenne} m/t`} tooltip={t('charSheet.tooltip.allureMoyenne')} />
-          <SecondaryField label={t('charSheet.secondary.allureRapide')}  value={`${allures.rapide} m/t`}  tooltip={t('charSheet.tooltip.allureRapide')} />
-          <SecondaryField label={t('charSheet.secondary.allureMax')}     value={`${allures.max} m/t`}     tooltip={t('charSheet.tooltip.allureMax')} />
         </div>
       </CollapsibleBlock>
 
@@ -1027,12 +1024,14 @@ function SecondaryTooltip({ tipPos, tooltip }) {
   )
 }
 
-function SecondaryField({ label, value, tooltip, valueStyle }) {
+// `separator` = trait discret à gauche de la carte, pour marquer un sous-groupe (ex. Allures) dans
+// une même rangée sans casser la mise en page si le flex-wrap renvoie la carte à la ligne.
+function SecondaryField({ label, value, tooltip, valueStyle, separator }) {
   const { ref, tipPos, handleMouseEnter, handleMouseLeave } = useSecondaryTooltip(tooltip)
   return (
     <div
       ref={ref}
-      style={{ ...s.secondaryItem, cursor: tooltip ? 'help' : 'default' }}
+      style={{ ...s.secondaryItem, ...(separator ? s.secondaryItemSeparator : null), cursor: tooltip ? 'help' : 'default' }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -1392,6 +1391,11 @@ const s = {
     background: '#0e0e1a',
     borderRadius: '4px',
     minWidth: '80px',
+  },
+  secondaryItemSeparator: {
+    marginLeft: '8px',
+    paddingLeft: '18px',
+    borderLeft: '1px solid #2a2a4e',
   },
   secondaryValue: {
     fontSize: '14px',

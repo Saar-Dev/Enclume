@@ -1,3 +1,13 @@
+## v176 — 2026-07-12 — Fiche personnage : blocs repliables + Attributs secondaires réorganisés
+
+### Client
+- [feat] Chaque bloc de la fiche personnage (Description, Attributs, Attributs secondaires,
+  Compétences, Avantages, Expérience) peut désormais être replié/déplié individuellement.
+- [feat] L'état replié/déplié est mémorisé séparément pour vos propres personnages et pour les
+  fiches des autres.
+- [chg] Bloc "Attributs secondaires" réorganisé : Réaction/Initiative/Allures regroupées en cartes,
+  Choc/Résistances/Souffle en liste sur 2 colonnes.
+
 ## v175 — 2026-07-12 — Bonus féminin : règle fixe (Force -2 / Coordination +1 / Présence +1)
 
 ### Client

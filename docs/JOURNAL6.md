@@ -2679,8 +2679,32 @@ Détail complet, étape par étape avec tous les tests : `docs/PLAN_VAULT.md`.
   confirmé fonctionnel par Saar** (capture d'écran fiche réelle : 6 nouveaux champs corrects).
 - **Non testé** : parcours navigateur des macros (`resistance_poison`/etc. via `/macro-preview` et
   `MACRO_ROLL` réel) — seule la fiche a été vérifiée visuellement.
-- **Suite immédiate** : Saar demande une passe UI/UX sur le bloc "ATTRIBUTS SECONDAIRES" (grille plate
-  actuelle jugée "fonctionnelle mais moche"), inspirée du regroupement de la fiche papier officielle.
+- **Suite immédiate — passe UI/UX (même session) ✅ CLOS, 3 itérations, toutes confirmées par Saar** :
+  1. Mockup interactif (Artifact) proposant cartes groupées vs liste dense — Saar choisit un hybride
+     (Réaction/Initiative en cartes, liste dense pour Choc/Dommages/Résistances naturelles/Souffle,
+     Allures en cartes). `useSecondaryTooltip` extrait pour partager la logique de tooltip entre
+     `SecondaryField` (cartes) et le nouveau `SecondaryListRow` (liste).
+  2. Capture d'écran de la fiche réelle complète → Saar signale qu'elle est "encore plus massive" —
+     vraie cause : le bloc Compétences (~60 lignes), pas les Attributs secondaires. **Accordéon sur
+     6 blocs** (XP/Description/Attributs/Attributs secondaires/Compétences/Avantages — "En-tête" reste
+     ancre fixe) + **mémorisation par TYPE de fiche**, pas par personnage (`localStorage`
+     `charSheetAccordion:owned`/`:other` via la prop `isOwner` déjà disponible — demande explicite :
+     "mes fiches perso ne s'affichent pas pareil que les autres") + **Attributs secondaires en 2
+     colonnes** (gauche Choc+Dommages, droite Résistances naturelles+Souffle — deux listes indépendantes
+     plutôt que l'entrelacement ligne-à-ligne de la maquette, jugé moins lisible, écart assumé et
+     documenté). Nouveau `CollapsibleBlock`. `blockOpen` rechargé via `useEffect([isOwner,
+     characterId])` — composant sans `key={characterId}` (dette Session 141 suite 9), sans quoi
+     l'accordéon resterait figé sur le premier profil chargé.
+  3. Regroupement Allures + Réaction/Initiative dans une même rangée de cartes ("gagner un max de
+     place") avec séparateur discret (`separator` sur `SecondaryField`, trait attaché à la carte
+     plutôt qu'un élément flex autonome — robuste au retour à la ligne).
+  Testé à chaque itération : ESLint 0 nouvelle erreur (3 pré-existants confirmés `git stash`), `fr.json`
+  valide, SR. **Parcours navigateur confirmé fonctionnel par Saar à chaque itération** ("Presque
+  parfait" → "Conforme"). Non testé : bascule owned/other sur deux personnages réels avec capture
+  dédiée ; fenêtre très étroite ; macros `resistance_*` via `/macro-preview`/`MACRO_ROLL`.
+- **Chantier suivant identifié** : `docs/PLAN_MUTATION2.md` Lot 3 (Résistance aux Dommages + Choc) —
+  scope déjà recentré, pas encore détaillé ligne à ligne. Le coder complétera aussi l'affichage fiche
+  déjà en place (actuellement valeur de base seule, sans mutation/avantage, par construction).
 - Détail complet : `docs/PLAN_RESNAT.md`.
 
 ## Session 141 (suite 20) — 2026-07-12 — Bonus féminin : règle fixe -2 FOR/+1 COO/+1 PRE + revalidation du bascule Sexe ✅ CLOS
