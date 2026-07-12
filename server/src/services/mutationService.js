@@ -25,6 +25,7 @@ export async function getMutations(sheetId) {
     .select(
       'cm.id', 'cm.mutation_id', 'cm.subtype_id', 'cm.source', 'cm.count', 'cm.created_at',
       'rm.name', 'rm.description', 'rmst.name as subtype_name',
+      'rm.natural_weapon_formula', 'rm.natural_weapon_requires_grapple',
     )
     .orderBy('cm.created_at', 'asc')
 }

@@ -1,3 +1,23 @@
+## v181 — 2026-07-12 — Mutations : armure naturelle et attaques naturelles (Griffes, Crocs, Corne...)
+
+### Serveur
+- [feat] Les mutations d'armure naturelle (ex. Peau renforcée) augmentent désormais réellement la
+  Résistance aux Dommages, en combat comme sur la fiche.
+- [feat] Les mutations d'arme naturelle (Griffes, Crocs, Corne, Excroissance osseuse rétractable)
+  peuvent désormais être utilisées comme arme de corps à corps, avec leurs propres dégâts. Crocs et
+  Corne nécessitent que la cible soit préalablement saisie.
+
+### Client
+- [feat] Le panneau de corps à corps propose désormais les armes naturelles actives du personnage,
+  aux côtés des mains nues et des armes tenues (joueur et MJ/PNJ).
+
+## v180 — 2026-07-12 — Fiche personnage : détail du calcul en survol des attributs secondaires
+
+### Client
+- [feat] Survoler Réactivité, Souffle, Choc, Résistance aux Dommages ou une Résistance naturelle
+  affiche désormais le détail du calcul (valeur de base, avantages nommés, mutations) quand un
+  bonus/malus est actif — plus seulement le total.
+
 ## v179 — 2026-07-12 — Résistance aux Dommages/Choc : mutations et avantages enfin appliqués
 
 ### Serveur

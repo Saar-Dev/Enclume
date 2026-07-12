@@ -539,7 +539,10 @@
       "resistanceMaladie": "La Résistance aux maladies dépend du niveau de Constitution (LdB p.114). S'oppose à l'Intensité de la maladie lors d'un Test de résistance naturelle.",
       "resistanceRadiation": "La Résistance aux radiations dépend du niveau de Constitution (LdB p.114). S'oppose à l'Intensité de la radiation lors d'un Test de résistance naturelle.",
       "resistanceDrogues": "La Résistance aux drogues dépend de la moyenne Constitution/Volonté (LdB p.114). S'oppose à l'Intensité de la drogue lors d'un Test de résistance naturelle.",
-      "souffle": "Le Souffle représente la capacité à retenir sa respiration ou à résister à l'essoufflement. Calculé : (CON+VOL)/2."
+      "souffle": "Le Souffle représente la capacité à retenir sa respiration ou à résister à l'essoufflement. Calculé : (CON+VOL)/2.",
+      "breakdownBase": "Base :",
+      "breakdownMutations": "Mutations :",
+      "breakdownTotal": "Total :"
     }
   },
   "builder": {

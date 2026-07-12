@@ -108,7 +108,7 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
   for (const token of tokens) {
     if (!token.character_id) continue
 
-    const [weaponRows, armorRows] = await Promise.all([
+    const [weaponRows, armorRows, naturalWeaponRows] = await Promise.all([
       db('char_inventory')
         .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where('char_inventory.character_id', token.character_id)
@@ -122,17 +122,28 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
         .whereNotNull('char_inventory.slot')
         .whereNotIn('char_inventory.slot', ['MG', 'MD', '2M', 'Tr', 'D', 'Ce'])
         .select('char_inventory.id as inv_id', 'ref_equipment.name', 'ref_equipment.location'),
+
+      // Armes naturelles actives (mutations) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Bridge
+      // character_id → char_sheet.id, contrairement à char_inventory qui a directement character_id.
+      db('char_mutations as cm')
+        .join('char_sheet as cs', 'cs.id', 'cm.char_sheet_id')
+        .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
+        .where('cs.character_id', token.character_id)
+        .where('cm.status', 'active')
+        .whereNotNull('rm.natural_weapon_formula')
+        .select('cm.id', 'rm.name', 'rm.natural_weapon_formula', 'rm.natural_weapon_requires_grapple'),
     ])
 
     const weaponMg = weaponRows.find(w => w.slot === 'MG') ?? null
     const weaponMd = weaponRows.find(w => w.slot === 'MD') ?? null
 
     equipment[token.id] = {
-      characterId:  token.character_id,
-      weapon:       weaponMg ?? weaponMd ?? weaponRows[0] ?? null,
+      characterId:    token.character_id,
+      weapon:         weaponMg ?? weaponMd ?? weaponRows[0] ?? null,
       weaponMg,
       weaponMd,
-      armorPieces:  armorRows,
+      armorPieces:    armorRows,
+      naturalWeapons: naturalWeaponRows,
     }
   }
 

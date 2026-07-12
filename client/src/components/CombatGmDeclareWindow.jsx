@@ -96,6 +96,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [aimTranches,         setAimTranches]         = useState(0)
   // CaC GM — sélection arme (undefined = auto-dériver, null = mains nues, id = choix explicite)
   const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(undefined)
+  // Arme naturelle (mutation PNJ) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B.
+  const [selectedGmMeleeNaturalWeaponId, setSelectedGmMeleeNaturalWeaponId] = useState(null)
   const [isSelectingOnMap, setIsSelectingOnMap] = useState(false)
   const [iniPopoverOpen, setIniPopoverOpen] = useState(false)
 
@@ -256,6 +258,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       ? (meleeWeaponAvailable?.inv_id ?? null)
       : selectedGmMeleeWeaponId
   const weaponInvIdForMelee = effectiveGmMeleeWeaponId
+  // Armes naturelles (mutations) du PNJ actif — batché par /combat-equipment (docs/PLAN_MUTATION2.md
+  // Lot 4 sous-lot B), jamais un fetch par PNJ (évite le N+1 que ce batch existant évite déjà).
+  const naturalWeaponsAvailable = isActivePnj ? (equipment[activeTokenId]?.naturalWeapons ?? []) : []
+  const naturalWeaponIdForMelee = selectedGmMeleeNaturalWeaponId
 
   // Tir GM — mode de tir et variant (miroir logique CombatActionWindow)
   const availableFireModes = weapon?.ref_fire_mode
@@ -403,8 +409,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     }
 
     const meleeCaC = chargeSelection?.targetTokenId
-      ? [{ targetTokenId: chargeSelection.targetTokenId, weaponInvId: weaponInvIdForMelee }]
-      : meleeTargets.slice(0, effectiveMeleeCount).map(id => ({ targetTokenId: id, weaponInvId: weaponInvIdForMelee }))
+      ? [{ targetTokenId: chargeSelection.targetTokenId, weaponInvId: weaponInvIdForMelee, naturalWeaponCharMutationId: naturalWeaponIdForMelee }]
+      : meleeTargets.slice(0, effectiveMeleeCount).map(id => ({ targetTokenId: id, weaponInvId: weaponInvIdForMelee, naturalWeaponCharMutationId: naturalWeaponIdForMelee }))
     const movePayload = chargeSelection?.move ?? pendingMove ?? null
     socket.emit(WS.COMBAT_ACTION_DECLARE, {
       tokenId: activeTokenId,
@@ -787,12 +793,25 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               hasMeleeInInventory={false}
               onWeaponChange={(id) => {
                 setSelectedGmMeleeWeaponId(id)
+                setSelectedGmMeleeNaturalWeaponId(null)
                 if (id !== null && decl.weapon !== 'drawn') {
                   dispatch({ type: 'SET_FIELD', key: 'weapon', value: 'drawn' })
                 } else if (id === null && decl.weapon !== 'holstered') {
                   dispatch({ type: 'SET_FIELD', key: 'weapon', value: 'holstered' })
                 }
               }}
+              naturalWeapons={naturalWeaponsAvailable.map(m => ({
+                id: m.id, label: m.name,
+                formula: m.natural_weapon_formula, requiresGrapple: m.natural_weapon_requires_grapple,
+              }))}
+              selectedNaturalWeaponId={naturalWeaponIdForMelee}
+              onNaturalWeaponChange={(id) => {
+                setSelectedGmMeleeNaturalWeaponId(id)
+                setSelectedGmMeleeWeaponId(null)
+              }}
+              targetIsGrappled={
+                tokens.find(t => t.id === meleeTargets[0])?.statuses?.includes('grappled') ?? false
+              }
               combatMode={decl.combatMode}
               onModeChange={(mode) => {
                 dispatch({ type: 'SET_COMBAT_MODE', mode })

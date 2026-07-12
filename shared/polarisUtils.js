@@ -46,13 +46,24 @@ export function getMutationModForAttr(mutationEffectsRow, attrId) {
 // mod_attribute (texte) + mod_value (nombre) — une liste de lignes actives à filtrer/réduire, pas
 // une colonne à indexer. Voir docs/PLAN_MUTATION2.md Lot 2. mod_value porte déjà son signe (jamais
 // inspecter `type` pour l'inverser — piège documenté dans le plan).
+function filterModByKey(rows, keyField, targetKey) {
+  if (!rows || !rows.length) return []
+  return rows.filter(r => r[keyField] === targetKey)
+}
+
 function sumModByKey(rows, keyField, valueField, targetKey) {
-  if (!rows || !rows.length) return 0
-  return rows.reduce((sum, r) => r[keyField] === targetKey ? sum + (r[valueField] ?? 0) : sum, 0)
+  return filterModByKey(rows, keyField, targetKey).reduce((sum, r) => sum + (r[valueField] ?? 0), 0)
 }
 
 export function getAdvantageModForAttr(advantageRows, attrKey) {
   return sumModByKey(advantageRows, 'mod_attribute', 'mod_value', attrKey)
+}
+
+// Variante "liste nommée" (pas juste la somme) — pour un détail de calcul affichable (ex. tooltip
+// fiche perso), chaque avantage contributeur avec son nom (`ra.name`, déjà sélectionné par
+// advantageService.getAdvantages).
+export function getAdvantageRowsForAttr(advantageRows, attrKey) {
+  return filterModByKey(advantageRows, 'mod_attribute', attrKey)
 }
 
 // Même principe pour mod_resistance/mod_res_value (Résistances — voir docs/PLAN_RESNAT.md).
@@ -60,6 +71,10 @@ export function getAdvantageModForAttr(advantageRows, attrKey) {
 // source, jamais inspecter `type` pour l'inverser — même règle que ci-dessus).
 export function getAdvantageModForResistance(advantageRows, resistanceKey) {
   return sumModByKey(advantageRows, 'mod_resistance', 'mod_res_value', resistanceKey)
+}
+
+export function getAdvantageRowsForResistance(advantageRows, resistanceKey) {
+  return filterModByKey(advantageRows, 'mod_resistance', resistanceKey)
 }
 
 // Pendant mutation de getAdvantageModForResistance ci-dessus : char_mutation_effects_view a des
@@ -75,6 +90,14 @@ export function getMutationModForResistance(mutationEffectsRow, resistanceKey) {
   if (!mutationEffectsRow) return 0
   const col = RESISTANCE_TO_MUTATION_MOD[resistanceKey]
   return col ? (mutationEffectsRow[col] ?? 0) : 0
+}
+
+// Armure naturelle (ex. "Peau renforcée") — décision Saar (docs/PLAN_MUTATION2.md Lot 4 sous-lot A) :
+// constante toujours active, indépendante de l'armure portée, qui modifie directement la Résistance
+// aux dommages (pas le mille-feuille ETQ de calcResistanceArmure). Colonne à part de mod_res_damage
+// (les deux cumulent, ne pas fusionner dans getMutationModForResistance).
+export function getNaturalArmorMod(mutationEffectsRow) {
+  return mutationEffectsRow?.natural_armor ?? 0
 }
 
 // TOTAL_MALUS = 0 en V1 — historique XP non implémenté (voir server/src/lib/charStats.js).

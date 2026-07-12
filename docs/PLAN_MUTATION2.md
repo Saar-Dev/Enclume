@@ -1,12 +1,11 @@
 # PLAN_MUTATION2 — Effets mécaniques des Mutations et Avantages jamais appliqués
-> Session 141 (suite 14) — 2026-07-11 (Lot 2 codé, en attente de confirmation fonctionnelle Saar —
-> Lot 1 clos Session 141 suite 13, voir aussi suite 10, diagnostic/architecture initiale)
-> Statut : **DIAGNOSTIC + ARCHITECTURE**. Lot 1 codé et clos. **Lot 2 codé** (recherche Foundry VTT
-> Active Effects + PF2e StatisticModifier à l'appui, analyse à charge + run à vide + instrumentation
-> base réelle avant code, section K) — testé au niveau code (lint + scénarios + transaction réelle
-> annulée), **parcours navigateur non encore confirmé par Saar**. Découpé en 7 lots (mécanique
-> visée, pas catalogue source). Chaque lot est détaillé ligne-à-ligne au moment de l'attaquer (règle
-> "un sujet à la fois") — les lots non encore attaqués ne fixent que le périmètre et l'ordre.
+> Session 141 (suite 25) — 2026-07-12 (Lot 4 : plan complet écrit, aucun code — Lot 3 clos suite 23,
+> Lot 2 clos suite 6/RESNAT, Lot 1 clos suite 13, voir aussi suite 10, diagnostic/architecture initiale)
+> Statut : **DIAGNOSTIC + ARCHITECTURE**. Lots 1-3 codés et clos, fonctionnels confirmés Saar. **Lot 4
+> planifié** (2 sous-lots, 3 décisions d'architecture actées avec Saar — voir section Lot 4), prêt
+> pour code à la prochaine reprise. Découpé en 7 lots (mécanique visée, pas catalogue source). Chaque
+> lot est détaillé ligne-à-ligne au moment de l'attaquer (règle "un sujet à la fois") — les lots non
+> encore attaqués ne fixent que le périmètre et l'ordre.
 
 ---
 
@@ -711,7 +710,8 @@ mécaniques confirmées vivantes et bien comprises, prêtes à détailler ligne-
 naturelles" extrait en chantier séparé, en attente d'arbitrage Saar sur la mécanique LdB — ne
 bloque plus l'avancement de ce lot.
 
-**Lot 3 ✅ CLOS PARTIEL — Session 141 (suite 23) (2026-07-12).** Bug préalable trouvé et corrigé en
+**Lot 3 ✅ CLOS — Session 141 (suite 23) (2026-07-12), fonctionnel confirmé Saar en navigateur.**
+Bug préalable trouvé et corrigé en
 ouvrant ce lot : `degatsNets` soustrayait RD au lieu de l'ajouter (suite 22, `[VÉRIFIÉ]` par
 exécution réelle, corrigé aux 2 sites réels avant tout code de mods). Codé : `getMutationModForResistance`
 (symétrique à `getAdvantageModForResistance`), `calcResistanceDommages`/`calcSeuils` étendues (2 params,
@@ -723,22 +723,313 @@ coder** (analyse critique demandée par Saar) : la branche PNJ auto-résolution 
 macro `resistance_dommages`. `CharacterSheet.jsx` rebranchée dans la même passe (fiche = résolution
 combat, plus d'écart). **Testé** : 11 scénarios purs, `node --check`, ESLint 0 nouvelle erreur, grep
 de sweep, vérification en base réelle (personnage réel "Squelette renforcé", delta +2 RD/+3 seuil
-confirmé), SR. **Non testé** : parcours combat réel en navigateur. Détail complet :
+confirmé), SR. **Testé en navigateur, fonctionnel confirmé Saar.** Détail complet :
 `docs/JOURNAL6.md` "Session 141 (suite 23)".
 
-### Lot 4 — Armure naturelle + arme naturelle (mutations uniquement — nouveau mécanisme combat)
-- `natural_armor` : colonne structurée (entier), utilisable en théorie pour s'ajouter à
-  `calcResistanceArmure`/l'armure portée — mais **aucune stacking rule armure naturelle + portée
-  n'existe actuellement**, à concevoir.
-- **Arme naturelle — écart trouvé cette session, plus large que prévu** : contrairement à l'ancien
-  schéma V1 (migration 38, `nom_arme_naturelle`/`degats_physiques`/`degats_choc`), le schéma V2
-  actuel (migration 95) **n'a aucune colonne structurée pour les dégâts d'arme naturelle**. Les
-  dégâts ("Griffes" : *"Dégâts: 1D10+3 + mod CaC..."*) sont entièrement en texte libre dans
-  `special_effect`. Utiliser une arme naturelle en combat (Griffes/Crocs/Corne/Excroissance
-  osseuse) nécessiterait soit une nouvelle migration (colonnes structurées, réintroduisant l'info
-  perdue à la migration 94), soit un nouveau mécanisme combat pour un "type d'attaque" jamais prévu
-  aujourd'hui (`ref_equipment`/`ref_equipment_skill_assoc` sont pensés pour du matériel, pas des
-  attributs de personnage). **Lot le plus lourd du plan** — à confirmer en priorité basse.
+### Lot 4 — Armure naturelle → Résistance aux dommages + Arme naturelle (mutations uniquement)
+
+**Ouverture du lot (Session 141 suite 25, 2026-07-12) — 2 sous-lots indépendants, décisions Saar
+actées avant détail ligne-à-ligne, plan complet ci-dessous, aucun code écrit.**
+
+#### Sous-lot A — Armure naturelle → Résistance aux dommages
+
+**Décision Saar** : `natural_armor` n'est **pas** une pièce d'armure de plus dans le mille-feuille
+`max + reste/2` de `calcResistanceArmure` — c'est une **constante toujours active**, indépendante
+de l'armure portée (aucun conflit/stacking avec elle), qui modifie directement l'attribut
+secondaire **Résistance aux dommages** (RD), pas l'ETQ. Décision qui évite d'inventer une règle de
+cumul armure naturelle/portée non sourcée (aucune trouvée dans `REGLEARMURE.md`/`REGLESYSCOMBAT.md`
+— seule occurrence hors sujet, un implant qui exclut la carapace d'un seuil NT).
+
+`[VÉRIFIÉ]` : `natural_armor` déjà agrégé + stické correctement par `char_mutation_effects_view`
+depuis le Lot 1/migration 109 (`Peau renforcée` base 3, `stack_deltas:{natural_armor:2}` par stack
+supplémentaire) — **aucune migration nécessaire pour ce sous-lot**, seulement du câblage.
+
+**A. `shared/polarisUtils.js`** — nouveau résolveur, symétrique aux autres `get*Mod*` du fichier :
+```js
+export function getNaturalArmorMod(mutationEffectsRow) {
+  return mutationEffectsRow?.natural_armor ?? 0
+}
+```
+Pas fusionné dans `getMutationModForResistance` (qui reste générique par clé `mod_res_*`) —
+`natural_armor` est une colonne à part, distincte de `mod_res_damage` : un personnage avec "Peau
+renforcée" **et** "Squelette renforcé" doit cumuler les deux sources dans le même total RD, pas
+que l'une masque l'autre.
+
+**B. 4 sites à rebrancher** (tous les appelants actuels de `calcResistanceDommages`, `[VÉRIFIÉ]`
+grep exhaustif — aucun autre site n'existe hors `Enclume-codex/` qui est un submodule séparé, non
+concerné) :
+
+| Fichier | Ligne | Contexte |
+|---|---|---|
+| `server/src/lib/damageService.js` | 58-62 | `resolveTargetHit` — seul point d'insertion combat (Lot 3) |
+| `server/src/socket/socketDice.js` | 120 | macro `resistance_dommages` |
+| `server/src/routes/character/char-sheet.js` | 1176 | `POST /macro-preview`, même macro |
+| `client/src/character/CharacterSheet.jsx` | 103, 150 | `calcSecondary` (fiche) + `rdBase` (tooltip détail, item 66) |
+
+Chaque site : `getMutationModForResistance(mutationEffects, 'damage')` devient
+`getMutationModForResistance(mutationEffects, 'damage') + getNaturalArmorMod(mutationEffects)`. Le
+tooltip (`CharacterSheet.jsx:157`, item 66 déjà codé et clos) n'a rien à changer structurellement —
+`natural_armor` rejoint simplement le total "Mutations" déjà affiché en agrégat (décision item 66,
+cohérente avec celle-ci).
+
+**C. Cas limites à tester**
+- "Peau renforcée" seule (`natural_armor=3`) → RD +3 aux 4 sites, sans armure portée.
+- "Peau renforcée" ×2 stack (+2 via `stack_deltas`, total `natural_armor=5`) → RD +5.
+- "Peau renforcée" + armure portée équipée → RD +3 (natural_armor) **et** ETQ inchangée par ce lot
+  (les deux mécanismes ne se touchent pas — décision Saar : constante indépendante).
+- "Peau renforcée" + "Squelette renforcé" (`mod_res_damage`) simultanés → somme des deux sources
+  correcte, pas d'écrasement mutuel.
+- Non-régression : personnage sans mutation → comportement identique à avant (Lot 3), aux 4 sites.
+
+#### Sous-lot B — Arme naturelle
+
+**Décisions Saar actées** :
+1. Colonnes structurées sur `ref_mutations` (migration) — pas de texte libre `special_effect`
+   parsé à la volée, cohérence avec le reste du schéma mutations.
+2. Le gate "après saisie" (Crocs/Corne) réutilise le statut `grappled` déjà existant et **pleinement
+   fonctionnel** (`token_statuses`, `TOKEN_STATUS_TOGGLE` — `socketToken.js:100-134` —,
+   `TokenStatusPanel.jsx`, `fr.json:702` "Saisi") — lecture DB réelle sur le token **cible** (celui
+   qui subit la saisie, sens confirmé par le libellé), pas de confiance narrative. Ce lot ne
+   construit pas le Test d'opposition Lutte qui pose ce statut automatiquement (reste manuel,
+   MJ/joueur via l'UI de statuts existante) — même limite de portée que Lot 3/Résistances
+   naturelles : la brique de lecture est prête, le Test qui l'alimente reste un chantier séparé.
+   Limite acceptée : pas de traçage de *qui* a saisi, seulement *si* la cible est saisie (correct en
+   1 contre 1, ambigu en mêlée à plusieurs — non bloquant pour ce lot).
+3. Sélection de l'arme naturelle = option radio de plus dans le sélecteur d'arme CaC existant
+   (`MeleeCombatPanel.jsx`), gratuite comme "Mains nues"/armes d'inventaire — `[VÉRIFIÉ]` le choix
+   d'arme au CaC est déjà sans coût d'Initiative, resélectionnable à chaque déclaration
+   (`MeleeCombatPanel.jsx:118-152`). Le seul coût existant (`isWeaponDrawn`, −3/−5 Init) concerne le
+   dégainer d'une arme d'inventaire pas encore au clair — aucune des 4 mutations n'a de coût de
+   préparation dans le texte LdB. Pas de nouveau mécanisme "changer d'arme, action complète".
+
+**Périmètre confirmé `[VÉRIFIÉ]`** (`docs/Character/Creation/REGLE_MUTATION.md`) — 4 mutations,
+aucune autre n'a de texte de dégâts structuré :
+
+| Mutation | Formule dégâts | Compétence | Précondition |
+|---|---|---|---|
+| Griffes | `1D10+3` | `COMBAT_A_MAINS_NUES` (déjà le skill par défaut mains nues — inchangé) | aucune |
+| Excroissance osseuse rétractable | `2D10` | `COMBAT_A_MAINS_NUES` (explicite dans le texte LdB) | aucune |
+| Crocs | `1D10+3` | `COMBAT_A_MAINS_NUES` | cible doit porter le statut `grappled` |
+| Corne | `1D10` | `COMBAT_A_MAINS_NUES` | cible doit porter le statut `grappled` |
+
+**Point vérifié avant d'écrire ce tableau** : le Modificateur de dommages au corps à corps
+(`modDom`/`getModDom(for_na)`) est déjà ajouté automatiquement et uniformément à **tout** dégât de
+corps à corps par le pipeline existant (`socketCombatHelpers.js:421,690,743` —
+`degautsBruts = rawDice + (modDom ?? 0) + combatModeBonus`) — les formules ci-dessus n'incluent donc
+**pas** modCaC (il ne doit jamais être doublé dans la donnée stockée), exactement comme
+`ref_equipment.damage_h` pour les armes normales aujourd'hui. Le "+3" de Griffes/Crocs est un bonus
+fixe propre à la mutation, distinct de modCaC.
+
+**Gap trouvé en vérifiant Corne, explicitement hors périmètre de ce lot** : le texte LdB donne un
+bonus "+1D6 dommages de Choc si le coup porte à la tête". `[VÉRIFIÉ]` par lecture :
+`calcResistanceArmure` (`charStats.js:290-299`) calcule déjà un `prt` (protection_shock) en plus de
+`etq`, mais `damageService.js:50` ne déstructure et n'utilise **que** `etq` — `prt` est calculé puis
+jeté, aucune notion de "dommages de Choc" distincte des dégâts physiques n'existe nulle part dans
+le pipeline de résolution actuel. Câbler le bonus de Corne proprement demanderait d'abord de brancher
+ce pool de Choc, chantier séparé et non trivial, hors scope. **Décision de scope** : Corne est
+câblée dans ce lot pour ses dégâts physiques de base (`1D10`) uniquement ; le bonus "+1D6 Choc si
+tête" est documenté comme gap différé (nouvelle dette **`[CHOC1]`**), pas silencieusement perdu.
+
+**Analyse critique (2026-07-12, avant tout code) — recherche externe demandée par Saar, 4 sources,
+confirme 3 décisions et en corrige 1 :**
+- **PF2e (Foundry)** — [issue #14837](https://github.com/foundryvtt/pf2e/issues/14837) : mains
+  nues/armes naturelles et armes tenues partagent la **même** structure "Strike" (formule de
+  dégâts + stat d'attaque), jamais deux mécanismes parallèles — confirme le choix de garder
+  `skillId` inchangé et de ne faire varier que la formule. Leur bug documenté : référencer les
+  Strikes par **position dans un tableau** casse dès que l'équipement change ; ils demandent un
+  identifiant stable à la place. `natural_weapon_char_mutation_id` (id de ligne `char_mutations`,
+  jamais une position) évite déjà cet écueil — confirmé, pas fortuit.
+- **Open5e** (schéma d'attaques de créatures D&D5e) : `damage_dice` est une **chaîne plate**
+  (`"2d4"`), pas une structure décomposée — confirme `natural_weapon_formula VARCHAR` au lieu d'un
+  format éclaté, cohérent avec `ref_equipment.damage_h` déjà en place.
+- **D&D5e/PF2e — saisie** : dans les deux références, "Grappled" est une simple condition
+  booléenne sur la cible, jamais un lien "saisi par tel token précis" — le choix de réutiliser le
+  statut `grappled` existant (sans tracer qui a saisi) est le standard de l'industrie, pas un
+  raccourci de scope.
+- **Correction trouvée** : le plan initial mettait le gate "cible saisie" en booléens inline dans
+  `resolveMeleeAction`. Ce projet a déjà le bon patron pour "action éligible seulement si condition
+  X" — `shared/combatExclusiveActions.js` (Tir visé) : `get<Action>IneligibilityReasons(...) →
+  string[]` (source unique, alimente tooltip client **et** rejet serveur) dont
+  `is<Action>Eligible()` dérive. Réinventer une paire de booléens ad hoc aurait dupliqué une
+  architecture déjà validée. Section D/E ci-dessous corrigées en conséquence.
+
+**Vérification finale demandée par Saar ("sûr à 100%, aucune zone d'ombre") — tracé du pipeline
+déclaration→persistance→résolution avant tout code, un vrai trou trouvé** : `weapon_inv_id` n'est
+**pas** transmis en direct à `resolveMeleeAction` — c'est une colonne réelle de `combat_actions`
+(`54_combat.js:55-56`, FK vers `char_inventory`), écrite en Phase 1 (déclaration) par
+`socketCombatAnnouncement.js:271-283` depuis `mapActions.melee[].weaponInvId` (payload client,
+`CombatActionWindow.jsx:535-539`/`CombatGmDeclareWindow.jsx` côté MJ), puis relue en Phase 2 pour
+alimenter `action.weapon_inv_id` dans `resolveMeleeAction`. Le plan initial ("Nouveau champ
+`action.natural_weapon_char_mutation_id`") sautait cette chaîne à 4 maillons — corrigé ci-dessous,
+**une 3ᵉ colonne** est nécessaire (pas seulement les 2 sur `ref_mutations`).
+
+**A. Migration `138_ref_mutations_natural_weapon.js`** (NOUVEAU — prochain numéro libre, vérifié
+`ls server/src/db/migrations` avant d'écrire ce chiffre, 136/137 déjà pris par une session
+parallèle, cf. P53) — 3 colonnes, 2 tables :
+```js
+// ref_mutations
+table.string('natural_weapon_formula', 20).nullable()        // '1D10+3' | '2D10' | '1D10' — NULL = pas une arme naturelle
+table.boolean('natural_weapon_requires_grapple').notNullable().defaultTo(false)
+
+// combat_actions — même rôle que weapon_inv_id (54_combat.js:55-56) / aim_bonus_comp (migration 134)
+table.uuid('natural_weapon_char_mutation_id').nullable()
+  .references('id').inTable('char_mutations').onDelete('SET NULL')
+```
+Backfill des 4 lignes `ref_mutations` par `name` (Griffes / Excroissance osseuse rétractable /
+Crocs / Corne) selon le tableau ci-dessus. `down()` : `dropColumn` des trois colonnes — aucune
+donnée préexistante à préserver (colonnes nouvelles).
+
+**B. `server/src/services/mutationService.js`** — `getMutations(sheetId)` (lignes 20-30) : ajoute
+`'rm.natural_weapon_formula', 'rm.natural_weapon_requires_grapple'` au `.select()`. Un seul point de
+lecture, réutilisé par le client (liste des armes naturelles actives) **et** par la validation
+serveur (point D) — pas de nouvelle fonction.
+
+**C. `GET /char-sheet/:characterId/mutations`** (route déjà existante, Lot D `AdvantagesPanel.jsx`)
+— aucun changement de route nécessaire, les 2 nouvelles colonnes transitent automatiquement via B.
+
+**D. `shared/naturalWeapons.js`** (NOUVEAU) — même patron que `combatExclusiveActions.js`
+(évaluateur pur, importé identique client + serveur, pattern `shared/careerEligibility.js`) :
+```js
+export function getNaturalWeaponIneligibilityReasons({ mutation, targetIsGrappled }) {
+  const reasons = []
+  if (mutation?.natural_weapon_requires_grapple && !targetIsGrappled) reasons.push('cible non saisie')
+  return reasons
+}
+export function isNaturalWeaponEligible(args) {
+  return getNaturalWeaponIneligibilityReasons(args).length === 0
+}
+```
+Pas de registre `isExclusiveDeclaration` à étendre — vérifié `[VÉRIFIÉ]` : aucune des 4 mutations
+n'est une action exclusive au sens LdB (contrairement à Charge/Rafale longue), une arme naturelle
+est une simple option d'attaque parmi d'autres, compatible avec Attaques multiples comme n'importe
+quelle arme.
+
+**E. Pipeline déclaration → persistance (les 3 maillons trouvés au tracé) :**
+1. **`client/src/components/CombatActionWindow.jsx`** — nouveau `useEffect` (miroir exact de celui
+   de `allInventoryItems`, lignes 241-249) : `GET /char-sheet/:charId/mutations` (route existante) →
+   `setNaturalWeapons(res.data.filter(m => m.natural_weapon_formula != null))`. Nouvel état
+   `selectedMeleeNaturalWeaponId` (même convention `undefined`/`null`/`id` que
+   `selectedMeleeWeaponId`, ligne 375-379) ; sélectionner une arme naturelle réinitialise
+   `selectedMeleeWeaponId` à `null` et réciproquement (mutuellement exclusifs, comme "Mains nues"
+   remet déjà `weaponInvId` à `null` aujourd'hui). Emit (ligne 535-540) :
+   `melee: meleePendingTokenIds.slice(0, effectiveMeleeCount).map(id => ({ targetTokenId: id,
+   weaponInvId: effectiveMeleeWeaponId, naturalWeaponCharMutationId: effectiveMeleeNaturalWeaponId }))`.
+2. **`client/src/components/CombatGmDeclareWindow.jsx`** — symétrique côté MJ/PNJ : `[VÉRIFIÉ]` un
+   PNJ peut porter une mutation au même titre qu'un PJ (`char_mutations`/`ref_mutations` ne
+   distinguent pas le type de personnage) — pas de raison de limiter ce lot aux PJ. **Architecture
+   différente du point 1, trouvée en traçant le fetch existant** : ce composant ne fait pas un fetch
+   par personnage — il charge `GET /battlemaps/:id/combat-equipment` (`useEffect` ligne 150-156) en
+   un seul appel batché pour **tous** les tokens du roster (`equipment[token.id]`, construit par
+   `server/src/routes/battlemaps.js:96-136`), consommé ensuite par token actif (`meleeWeaponAvailable`,
+   ligne 251). Ajouter un fetch séparé par PNJ aurait réintroduit le N+1 que ce batch évite déjà.
+   **Extension cohérente** : `battlemaps.js` (route `/combat-equipment`) gagne, par token, une
+   requête `char_mutations JOIN char_sheet JOIN ref_mutations WHERE char_sheet.character_id =
+   token.character_id AND cm.status='active' AND rm.natural_weapon_formula IS NOT NULL` → nouveau
+   champ `naturalWeapons: [...]` dans `equipment[token.id]` (même niveau que `weapon`/`armorPieces`
+   existants). `CombatGmDeclareWindow.jsx` dérive `meleeNaturalWeaponsAvailable =
+   equipment[activeTokenId]?.naturalWeapons ?? []`, même niveau que `meleeWeaponAvailable`
+   (ligne 251). Même champ `naturalWeaponCharMutationId` dans l'emit que le point 1.
+3. **`server/src/socket/socketCombatAnnouncement.js`** (271-283, `mapActions.melee` loop) :
+   destructure `naturalWeaponCharMutationId` en plus de `weaponInvId`/`droneWeaponInvId` ; ajoute
+   `natural_weapon_char_mutation_id: meleeDroneWeaponId ? null : (meleeNaturalWeaponId ?? null)` à
+   la ligne insérée dans `combat_actions` (même garde "drone toujours null" que `weapon_inv_id`
+   aujourd'hui — un drone n'a pas de mutations).
+
+**F. `server/src/socket/socketCombatHelpers.js` — `resolveMeleeAction`** (324-370) — lit
+`action.natural_weapon_char_mutation_id` directement depuis la ligne `combat_actions` relue en
+Phase 2 (même mécanisme que `action.weapon_inv_id` aujourd'hui, désormais alimenté par le point E) :
+- Si présent : requête `char_mutations JOIN ref_mutations WHERE char_mutations.id = ... AND
+  char_sheet_id = sheetAttaquant.id AND status = 'active'` (revalidation serveur — ne jamais faire
+  confiance au client sur l'appartenance de la mutation, même principe que tout autre payload
+  d'action). `targetIsGrappled` résolu par lecture `token_statuses` de `targetTokenId`
+  (`status_code = 'grappled'`), puis `isNaturalWeaponEligible({ mutation, targetIsGrappled })` —
+  sinon rejet `COMBAT_DECLARE_ERROR` (même pattern que Tir visé, message construit depuis
+  `getNaturalWeaponIneligibilityReasons` : *"Action impossible car — cible non saisie"*). Comme
+  `resolveMeleeAction` est appelée une fois par cible déclarée (une ligne `combat_actions` par
+  cible, boucle côté point E.3), l'éligibilité est revalidée **cible par cible** — pas de risque
+  qu'une cible non saisie profite d'une autre cible saisie dans la même déclaration multi-attaque.
+- `damageFormula = mutation.natural_weapon_formula` (remplace le `'1D4'` par défaut au point
+  `336-345`). `skillId` reste `'COMBAT_A_MAINS_NUES'` — **aucun changement** à cette variable (déjà
+  la valeur par défaut mains nues, cf. tableau ci-dessus, les 4 mutations confirmées utilisent ce
+  skill — cohérent avec le modèle "Strike" unifié PF2e ci-dessus).
+
+**G. Client — `MeleeCombatPanel.jsx`** :
+- Nouvelle prop `naturalWeapons` (liste `naturalWeapons` du point E.1/E.2, filtrée
+  `natural_weapon_formula != null` en amont — passée telle quelle, même niveau que
+  `availableWeapons` aujourd'hui).
+- Rendu : même bloc radio que les armes d'inventaire (117-152), juste après "Mains nues" — grisé si
+  `!isNaturalWeaponEligible({ mutation: item, targetIsGrappled })` (import direct de
+  `shared/naturalWeapons.js`, même fonction que le serveur — pas de logique dupliquée),
+  `targetIsGrappled` dérivé côté appelant via `tokens.find(t => t.id === <cible sélectionnée>)
+  ?.statuses?.includes('grappled')` — même pattern déjà utilisé pour `isStunned`
+  (`CombatActionWindow.jsx:87`), aucune nouvelle plomberie de statuts à construire. Multi-cibles :
+  vérifié contre la **première** cible sélectionnée (`meleePendingTokenIds[0]`) pour le retour
+  visuel — le serveur (point F) revalide chaque cible individuellement, ce raccourci client est
+  purement un indicateur, jamais la source de vérité. Tooltip listant
+  `getNaturalWeaponIneligibilityReasons(...)` (même patron d'affichage que Tir visé "Action
+  impossible car - X").
+- `onWeaponChange` doit distinguer 3 cas (mains nues `null` / arme d'inventaire `weapon_inv_id` /
+  arme naturelle `natural_weapon_char_mutation_id`) — un seul sélectionné à la fois, radio group déjà
+  exclusif par construction, juste étendre l'union de types portée par `selectedWeaponId`.
+
+**H. Cas limites à tester**
+- Griffes seules, pas de saisie nécessaire → dégâts `1D10+3+modCaC` corrects, skill mains nues
+  inchangé.
+- Round-trip complet déclaration → `combat_actions.natural_weapon_char_mutation_id` peuplé → lu par
+  `resolveMeleeAction` (vérifié en base réelle, pas seulement par lecture de code — cf. P54/piège
+  "lire = hypothèse").
+- PNJ avec mutation Griffes déclaré par le MJ (`CombatGmDeclareWindow.jsx`) → même résolution que
+  côté PJ, formule correcte.
+- `getNaturalWeaponIneligibilityReasons` pur (`node -e`) : sans grapple requis → toujours éligible ;
+  grapple requis + `targetIsGrappled=false` → `['cible non saisie']` ; grapple requis +
+  `targetIsGrappled=true` → `[]`.
+- Crocs sans cible saisie → rejet serveur `COMBAT_DECLARE_ERROR`, même si sélectionné côté client
+  (revalidation, pas de confiance client — le client et le serveur appellent la même fonction pure,
+  mais le serveur ne fait jamais confiance à l'état client).
+- Crocs avec cible réellement saisie (`token_statuses` vérifié en base) → attaque résolue
+  normalement.
+- Personnage avec Griffes **et** Excroissance osseuse simultanément → 2 options radio distinctes,
+  formule associée à chacune correcte (pas de confusion d'ID).
+- Personnage sans mutation d'arme naturelle → liste `naturalWeapons` vide, aucun changement visuel
+  (non-régression Mains nues/armes d'inventaire).
+- `natural_weapon_char_mutation_id` forgé côté client pour une mutation appartenant à un **autre**
+  personnage → rejet serveur (vérification `char_sheet_id` au point F).
+- Non-régression : `deuxArmesBonus`/multi-armes (`socketCombatHelpers.js:443-444`) ne voit pas les
+  armes naturelles (elles ne sont pas dans `char_inventory`) — comportement inchangé, pas de bonus
+  "deux armes" avec une arme naturelle dans ce lot (non sourcé, pas traité).
+
+**Lot 4 ✅ CLOS — Session 141 (suite 25), fonctionnel confirmé Saar en navigateur.** Codé exactement
+comme détaillé ci-dessus (aucun écart
+trouvé en codant, plan tracé jusqu'au bout avant tout code). Sous-lot A : `getNaturalArmorMod` +
+4 sites RD rebranchés. Sous-lot B : migration `138` (2 colonnes `ref_mutations` + 1 colonne
+`combat_actions`, miroir `aim_bonus_comp`), `shared/naturalWeapons.js` (nouveau, pattern
+`combatExclusiveActions.js`), `mutationService.getMutations()` étendu, `battlemaps.js`
+(`/combat-equipment` gagne `naturalWeapons` par token — évite le N+1 qu'aurait introduit un fetch
+par PNJ), `resolveMeleeAction` (gate + formule), `socketCombatAnnouncement.js` (persistance),
+`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` (fetch + état + emit, PJ et MJ/PNJ),
+`MeleeCombatPanel.jsx` (radios + tooltip).
+**Testé** : `node --check` 0 erreur (10 fichiers serveur/partagés) ; ESLint client 0 nouvelle erreur
+(`git stash` avant/après — 10 erreurs/8 warnings préexistants confirmés identiques, +1 warning
+`exhaustive-deps` sur le nouveau fetch mutations, même classe que 5 warnings déjà existants sur le
+fetch inventaire jumeau, pas une nouvelle catégorie) ; round-trip migration 138 réel (`down`→0
+colonne→`up`→3 colonnes + 4 lignes backfillées, byte-identique, P53 respecté — nodemon avait déjà
+auto-appliqué avant le test manuel) ; 8 scénarios purs (`getNaturalWeaponIneligibilityReasons`/
+`isNaturalWeaponEligible`/`getNaturalArmorMod`/non-régression `calcResistanceDommages`) ; 3 scénarios
+en base réelle transaction annulée (shape `getMutations()`/requête `battlemaps.js` sur une vraie
+mutation Griffes insérée temporairement, gate ownership `resolveMeleeAction` avec **rejet confirmé**
+sur un `char_sheet_id` forgé, lecture `token_statuses` réelle) ; SR (`/api/health` 200, serveur
+resté up tout du long malgré les redémarrages nodemon successifs).
+**SR + parcours navigateur confirmé fonctionnel par Saar** (scénario proposé : Griffes utilisables
+librement, Crocs grisées tant que la cible n'a pas le statut "Saisi" puis débloquées une fois posé,
+Résistance aux dommages +3 sur la fiche avec "Peau renforcée", vérifié côté PJ et côté MJ/PNJ).
+**Point de règle soulevé par Saar en cours de validation, tranché** : le texte LdB (`REGLE_MUTATION.
+md`) conditionne explicitement Corne/Crocs à *"après avoir effectué une saisie"* — aucune autre
+mécanique d'usage n'est décrite pour ces deux mutations dans le texte source, contrairement à
+Griffes/Excroissance osseuse (aucune précondition). Lecture RAW confirmée correcte et conservée
+telle quelle (pas de house-rule demandée).
+**Non testé** : les 6 cas limites listés en section H un par un (validation donnée sur le parcours
+global, pas listée point par point) ; bonus "deux armes"/Attaques multiples avec une arme naturelle
+en conditions réelles (couvert par construction, pas re-testé manuellement).
 
 ### Lot 5 — Déblocage de compétences (`[CS7]` mutations + généralisation avantages)
 - Mutations : `SkillsPanel.jsx:135-141` (`activeMutations`) lit `charAdvantages.type==='MUTATION'`/
@@ -787,9 +1078,9 @@ fonctionnalité, pas un bug qui casse quelque chose de fonctionnel.
 ## Prochaine étape
 
 **Lot 1 ✅ CLOS — Session 141 (suite 13)** / **Lot 2 ✅ CLOS — Session 141 (suite 6/RESNAT)** /
-**Lot 3 ✅ CLOS PARTIEL — Session 141 (suite 23)**, non testé = parcours navigateur (voir détail de
-clôture en fin de section Lot 3 ci-dessus). **Lot 4 (Armure naturelle + arme naturelle) à détailler
-avec Saar quand il voudra enchaîner** — même méthode (plan écrit, analyse à charge, vérification
-instrumentée avant tout code, jamais deux lots à la fois) ; noter que Lot 4 a un vrai trou
-d'architecture non tranché (schéma V2 sans colonnes structurées pour l'arme naturelle) à résoudre
-avant de pouvoir détailler ligne-à-ligne.
+**Lot 3 ✅ CLOS — Session 141 (suite 23)** / **Lot 4 ✅ CLOS — Session 141 (suite 25), fonctionnel
+confirmé Saar en navigateur** (voir détail de clôture en fin de section Lot 4 ci-dessus). Gap
+différé documenté en cours de route : **`[CHOC1]`** (bonus Choc de Corne si tête — pool de dommages
+de Choc `prt` jamais consommé, hors scope de ce lot). **Lot 5 (Déblocage de compétences, `[CS7]`) à
+détailler avec Saar quand il voudra enchaîner** — même méthode (plan ligne-à-ligne, analyse à
+charge, vérification instrumentée avant tout code).

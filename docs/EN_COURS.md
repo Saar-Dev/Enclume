@@ -1,6 +1,9 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-12 — Session 141 (suite 23) : `PLAN_MUTATION2.md` Lot 3 (RD + Choc)
-> câblés, consolidation resolveTargetHit, ⚠️ clos partiel (item 65) ; Session 141 (suite 22) : Bug RD (Résistance aux Dommages)
+> Dernière mise à jour : 2026-07-12 — Session 141 (suite 25) : `PLAN_MUTATION2.md` Lot 4 (armure/arme
+> naturelle) — ✅ clos, fonctionnel confirmé Saar en navigateur (item 67) ; Session 141 (suite 24) :
+> détail de calcul en tooltip pour les
+> attributs secondaires de la fiche perso (item 66) ; Session 141 (suite 23) : `PLAN_MUTATION2.md` Lot 3 (RD + Choc)
+> câblés, consolidation resolveTargetHit, ✅ clos (item 65) ; Session 141 (suite 22) : Bug RD (Résistance aux Dommages)
 > signe inversé corrigé, ⚠️ clos partiel (item 64) ; Session 141 (suite 21) : `docs/PLAN_MODING.md` — pause levée
 > (Tir visé clos, dette `TIRVISE` close) + **Étape 0 codée et testée** (item 63) ; Session 141
 > (suite 20) : Bonus féminin — règle fixe
@@ -24,8 +27,42 @@
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
+> **Item 67 (Session 141 suite 25) — `docs/PLAN_MUTATION2.md` Lot 4 : Armure naturelle → RD + Arme
+> naturelle codées ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Suite du Lot 3
+> (item 65, clos). Plan écrit ligne-à-ligne, analyse critique (recherche externe PF2e/Open5e/D&D5e)
+> et vérification finale du pipeline déclaration→persistance→résolution avant tout code (2 vrais trous
+> trouvés et corrigés à ce stade : colonne `combat_actions` manquante, architecture batch de la
+> fenêtre MJ différente de la fenêtre PJ). **A. Armure naturelle → Résistance aux dommages** (décision
+> Saar : `natural_armor` est une constante toujours active qui modifie directement RD, pas une pièce
+> de plus dans le mille-feuille ETQ de l'armure portée) — aucune migration, nouveau
+> `getNaturalArmorMod` (`shared/polarisUtils.js`) + 4 sites rebranchés (`damageService.js`,
+> `socketDice.js`, `char-sheet.js`, `CharacterSheet.jsx`). **B. Arme naturelle** (Griffes/
+> Excroissance osseuse/Crocs/Corne) : migration `138` (2 colonnes `ref_mutations` +
+> `combat_actions.natural_weapon_char_mutation_id`, miroir `aim_bonus_comp`) ; `shared/
+> naturalWeapons.js` (NOUVEAU, pattern `combatExclusiveActions.js` — gate "après saisie" réutilise le
+> statut `grappled` déjà pleinement fonctionnel, lecture DB réelle) ; pipeline complet rebranché : 
+> `mutationService.getMutations()`, `battlemaps.js` (`/combat-equipment` gagne `naturalWeapons` par
+> token — MJ/PNJ), `socketCombatAnnouncement.js` (persistance), `resolveMeleeAction` (gate + formule,
+> revalidation serveur complète), `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` (PJ et MJ),
+> `MeleeCombatPanel.jsx` (radios + tooltip). **Gap trouvé et différé, nouvelle dette `[CHOC1]`** :
+> bonus "+1D6 Choc si tête" de Corne non câblé — `calcResistanceArmure` calcule déjà un `prt`
+> (protection_shock) mais `damageService.js:50` ne l'utilise jamais, aucun pool de "dommages de Choc"
+> distinct des dégâts physiques n'existe dans le pipeline actuel ; hors scope de ce lot. **Testé** :
+> `node --check` 0 erreur (10 fichiers), ESLint client 0 nouvelle erreur (`git stash`, +1 warning
+> `exhaustive-deps` même classe qu'un pattern déjà existant), round-trip migration 138 réel
+> (byte-identique), 8 scénarios purs + 3 scénarios en base réelle (transaction annulée, incluant un
+> **rejet confirmé** sur une mutation forgée appartenant à un autre personnage), SR, **parcours
+> navigateur confirmé fonctionnel par Saar** (PJ et MJ/PNJ, Griffes libres, Crocs grisées/débloquées
+> selon le statut "Saisi", RD +3 avec "Peau renforcée"). **Point de règle soulevé par Saar en
+> validant, tranché** : texte LdB relu (`REGLE_MUTATION.md`) — Corne/Crocs conditionnées à "après
+> avoir effectué une saisie" (aucune autre mécanique décrite pour ces deux mutations), Griffes/
+> Excroissance osseuse sans précondition — lecture RAW confirmée correcte, conservée telle quelle.
+> **Non testé** : les cas limites listés en section H un par un (validation globale) ; bonus "deux
+> armes" avec une arme naturelle en conditions réelles. Détail complet : `docs/JOURNAL6.md`
+> "Session 141 (suite 25)".
+
 > **Item 65 (Session 141 suite 23) — `docs/PLAN_MUTATION2.md` Lot 3 : Résistance aux Dommages +
-> Choc câblés ⚠️ CLOS PARTIEL.** Suite du correctif RD (item 64). `shared/polarisUtils.js` :
+> Choc câblés ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Suite du correctif RD (item 64). `shared/polarisUtils.js` :
 > `getMutationModForResistance` (symétrique à `getAdvantageModForResistance`) + `calcResistanceDommages`/
 > `calcSeuils` gagnent chacune 2 paramètres (mutation/avantage, addition directe). **Consolidation
 > trouvée avant de coder** : la branche PNJ auto-résolution CaC (`socketCombatHelpers.js`,
@@ -40,6 +77,19 @@
 > réelle** (personnage réel avec mutation "Squelette renforcé" — delta +2 RD/+3 seuil confirmé), SR.
 > **Non testé** : parcours combat réel en navigateur — laissé de côté sur la même logique que le bug
 > RD (item 64). Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 23)".
+
+> **Item 66 (Session 141 suite 24) — Fiche perso : détail de calcul en tooltip pour les attributs
+> secondaires ✅ CLOS.** Suite du Lot 3 (item 65, confirmé fonctionnel). Réutilise le pattern déjà en
+> prod `iniTooltip` (texte multi-lignes `\n`, CSS `pre-line` déjà en place) — pas de nouveau
+> mécanisme. `shared/polarisUtils.js` : `getAdvantageRowsForAttr`/`getAdvantageRowsForResistance`
+> (variante "liste nommée", refactor `sumModByKey` sur un `filterModByKey` partagé, comportement
+> inchangé). **Décision Saar** : mutations affichées en total agrégé (pas nommées — éviterait un
+> fetch supplémentaire pour un gain jugé secondaire), avantages affichés nommés (déjà disponibles).
+> `CharacterSheet.jsx` : `buildSecondaryTooltips` + 2 helpers locaux (attribut / résistance), 9
+> tooltips concernés (reaction, souffle, seuilEtour, seuilIncons, resistanceDommages + 4 résistances
+> naturelles). `fr.json` : 3 clés génériques réutilisées. **Testé** : 4 scénarios réels, non-régression
+> des fonctions refactorées, `node --check`, ESLint 0 nouvelle erreur, SR. **Non testé** : parcours
+> navigateur (hover réel). Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 24)".
 
 > **Item 64 (Session 141 suite 22) — Bug RD (Résistance aux Dommages) : signe inversé corrigé
 > ⚠️ CLOS PARTIEL.** Trouvé en ouvrant `docs/PLAN_MUTATION2.md` Lot 3 (lecture obligatoire de

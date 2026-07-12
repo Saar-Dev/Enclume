@@ -1,4 +1,5 @@
 import { COMBAT_MODE_DEFS } from './combatSections.js'
+import { getNaturalWeaponIneligibilityReasons, isNaturalWeaponEligible } from '../../../shared/naturalWeapons.js'
 
 const P = {
   section: {
@@ -85,6 +86,13 @@ export default function MeleeCombatPanel({
   hasMeleeInInventory, // bool — hint Joueur (false pour GM)
   onWeaponChange,      // (id | null) => void
 
+  // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Exclusive avec
+  // selectedWeaponId (radio group commun), gérée séparément par le parent.
+  naturalWeapons = [],       // [{ id, label, formula, requiresGrapple }]
+  selectedNaturalWeaponId,   // uuid | null
+  onNaturalWeaponChange,     // (id | null) => void
+  targetIsGrappled = false,  // bool — statut réel de la 1ʳᵉ cible sélectionnée (indicatif client)
+
   // Mode de combat — FIX COM5 : onModeChange seul, pas de target auto
   combatMode,          // 'normal'|'offensif'|'charge'|'defensif'|'retraite'
   onModeChange,        // (mode) => void
@@ -164,6 +172,34 @@ export default function MeleeCombatPanel({
               : 'Mains nues uniquement (aucune arme de contact)'}
           </div>
         )}
+        {/* Armes naturelles (mutations) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B */}
+        {naturalWeapons.map(item => {
+          const isSelected = item.id === selectedNaturalWeaponId
+          const eligibilityArgs = { mutation: { natural_weapon_requires_grapple: item.requiresGrapple }, targetIsGrappled }
+          const reasons  = getNaturalWeaponIneligibilityReasons(eligibilityArgs)
+          const eligible = isNaturalWeaponEligible(eligibilityArgs)
+          return (
+            <div
+              key={item.id}
+              title={eligible ? undefined : `Action impossible car — ${reasons.join(', ')}`}
+              onClick={() => eligible && onNaturalWeaponChange(isSelected ? null : item.id)}
+              style={{
+                ...P.option,
+                cursor: eligible ? 'pointer' : 'not-allowed',
+                opacity: eligible ? 1 : 0.35,
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={P.optionLabel}>{item.label}</div>
+                <div style={P.optionSub}>{item.formula}</div>
+              </div>
+              <div style={{
+                ...P.radio,
+                ...(isSelected && eligible ? P.radioActive : {}),
+              }} />
+            </div>
+          )
+        })}
       </div>
 
       {/* Section Mode de combat — FIX COM5 : onModeChange ne déclenche PAS de target auto */}

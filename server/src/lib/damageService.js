@@ -1,7 +1,7 @@
 import { parseDice }                        from './diceParser.js'
 import { calcResistanceArmure }             from './charStats.js'
 import {
-  calcResistanceDommages, getMutationModForResistance, getAdvantageModForResistance,
+  calcResistanceDommages, getMutationModForResistance, getAdvantageModForResistance, getNaturalArmorMod,
 } from '../../../shared/polarisUtils.js'
 import { getMutationEffects }               from '../services/mutationService.js'
 import { getAdvantages }                    from '../services/advantageService.js'
@@ -57,7 +57,7 @@ export async function resolveTargetHit(io, db, campaignId, {
   // (REGLESYSCOMBAT.md ~1612 : "il faut ensuite ajouter le modificateur de Résistance aux Dommages").
   const rd        = calcResistanceDommages(
     for_na_cible, con_na_cible,
-    getMutationModForResistance(mutationEffectsCible, 'damage'),
+    getMutationModForResistance(mutationEffectsCible, 'damage') + getNaturalArmorMod(mutationEffectsCible),
     getAdvantageModForResistance(advantagesCible, 'damage'),
   )
   const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) + rd)

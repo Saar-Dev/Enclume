@@ -35,6 +35,7 @@ import {
   calcAN, calcAllureMoy, calcAllures,
   calcNA, getGenotypeModForAttr, getMutationModForAttr,
   calcREA, getAdvantageModForAttr, getAdvantageModForResistance, getMutationModForResistance,
+  getAdvantageRowsForAttr, getAdvantageRowsForResistance, getNaturalArmorMod,
   calcResistanceDommages, calcResistanceNaturelle, calcResistanceDroguesInput, calcSouffle, calcSeuils,
 } from '../../../shared/polarisUtils.js'
 
@@ -99,7 +100,7 @@ const calcSecondary = (naMap, charAdvantages, mutationEffects) => {
   const seuilEtour  = seuils.etourdissement
   const seuilIncons = seuils.inconscience
   const modDom      = calcModDom(FOR)
-  const resistanceDommages = calcResistanceDommages(FOR, CON, getMutationModForResistance(mutationEffects, 'damage'), getAdvantageModForResistance(charAdvantages, 'damage'))
+  const resistanceDommages = calcResistanceDommages(FOR, CON, getMutationModForResistance(mutationEffects, 'damage') + getNaturalArmorMod(mutationEffects), getAdvantageModForResistance(charAdvantages, 'damage'))
   const resistancePoison    = calcResistanceNaturelle(CON) + getMutationModForResistance(mutationEffects, 'poison') + getAdvantageModForResistance(charAdvantages, 'poison')
   const resistanceMaladie   = calcResistanceNaturelle(CON) + getMutationModForResistance(mutationEffects, 'disease') + getAdvantageModForResistance(charAdvantages, 'disease')
   const resistanceRadiation = calcResistanceNaturelle(CON) + getMutationModForResistance(mutationEffects, 'radiation') + getAdvantageModForResistance(charAdvantages, 'radiation')
@@ -109,6 +110,55 @@ const calcSecondary = (naMap, charAdvantages, mutationEffects) => {
   return {
     rea, initiative, seuilEtour, seuilIncons, modDom, resistanceDommages,
     resistancePoison, resistanceMaladie, resistanceRadiation, resistanceDrogues, souffle,
+  }
+}
+
+// Détail de calcul en tooltip (Base / avantages nommés / mutations en total / Total) — même pattern
+// que iniTooltip (useMemo dans le composant, plus bas). Mutations affichées en total agrégé
+// (char_mutation_effects_view ne conserve pas le détail par mutation côté client, contrairement aux
+// avantages qui sont déjà des lignes individuelles nommées). Description conservée telle quelle si
+// aucun avantage/mutation actif (pas de breakdown trivial Base=Total).
+const formatMod = (v) => (v > 0 ? `+${v}` : `${v}`)
+
+function attrBreakdownTooltip(description, base, advantageRows, total, t) {
+  if (!advantageRows.length) return description
+  const lines = [description, '', `${t('charSheet.tooltip.breakdownBase')} ${base}`]
+  for (const row of advantageRows) lines.push(`${row.name} : ${formatMod(row.mod_value)}`)
+  lines.push(`${t('charSheet.tooltip.breakdownTotal')} ${total}`)
+  return lines.join('\n')
+}
+
+function resistanceBreakdownTooltip(description, base, advantageRows, mutationMod, total, t) {
+  if (!advantageRows.length && !mutationMod) return description
+  const lines = [description, '', `${t('charSheet.tooltip.breakdownBase')} ${base}`]
+  for (const row of advantageRows) lines.push(`${row.name} : ${formatMod(row.mod_res_value)}`)
+  if (mutationMod) lines.push(`${t('charSheet.tooltip.breakdownMutations')} ${formatMod(mutationMod)}`)
+  lines.push(`${t('charSheet.tooltip.breakdownTotal')} ${total}`)
+  return lines.join('\n')
+}
+
+function buildSecondaryTooltips(naMap, charAdvantages, mutationEffects, secondary, t) {
+  const FOR = naMap['FOR'] || 3
+  const CON = naMap['CON'] || 3
+  const ADA = naMap['ADA'] || 3
+  const PER = naMap['PER'] || 3
+  const VOL = naMap['VOL'] || 3
+
+  const reaBase     = calcREA(ADA, PER, 0)
+  const souffleBase = calcSouffle(CON, VOL, 0)
+  const seuilsBase  = calcSeuils(FOR, CON, VOL, 0, 0)
+  const rdBase      = calcResistanceDommages(FOR, CON, 0, 0)
+
+  return {
+    reaction: attrBreakdownTooltip(t('charSheet.tooltip.reaction'), reaBase, getAdvantageRowsForAttr(charAdvantages, 'reaction'), secondary.rea, t),
+    souffle:  attrBreakdownTooltip(t('charSheet.tooltip.souffle'), souffleBase, getAdvantageRowsForAttr(charAdvantages, 'breath'), secondary.souffle, t),
+    seuilEtour:  resistanceBreakdownTooltip(t('charSheet.tooltip.seuilEtour'), seuilsBase.etourdissement, getAdvantageRowsForResistance(charAdvantages, 'shock'), getMutationModForResistance(mutationEffects, 'shock'), secondary.seuilEtour, t),
+    seuilIncons: resistanceBreakdownTooltip(t('charSheet.tooltip.seuilIncons'), seuilsBase.inconscience, getAdvantageRowsForResistance(charAdvantages, 'shock'), getMutationModForResistance(mutationEffects, 'shock'), secondary.seuilIncons, t),
+    resistanceDommages: resistanceBreakdownTooltip(t('charSheet.tooltip.resistanceDommages'), rdBase, getAdvantageRowsForResistance(charAdvantages, 'damage'), getMutationModForResistance(mutationEffects, 'damage') + getNaturalArmorMod(mutationEffects), secondary.resistanceDommages, t),
+    resistancePoison:    resistanceBreakdownTooltip(t('charSheet.tooltip.resistancePoison'), calcResistanceNaturelle(CON), getAdvantageRowsForResistance(charAdvantages, 'poison'), getMutationModForResistance(mutationEffects, 'poison'), secondary.resistancePoison, t),
+    resistanceMaladie:   resistanceBreakdownTooltip(t('charSheet.tooltip.resistanceMaladie'), calcResistanceNaturelle(CON), getAdvantageRowsForResistance(charAdvantages, 'disease'), getMutationModForResistance(mutationEffects, 'disease'), secondary.resistanceMaladie, t),
+    resistanceRadiation: resistanceBreakdownTooltip(t('charSheet.tooltip.resistanceRadiation'), calcResistanceNaturelle(CON), getAdvantageRowsForResistance(charAdvantages, 'radiation'), getMutationModForResistance(mutationEffects, 'radiation'), secondary.resistanceRadiation, t),
+    resistanceDrogues:   resistanceBreakdownTooltip(t('charSheet.tooltip.resistanceDrogues'), calcResistanceNaturelle(calcResistanceDroguesInput(CON, VOL)), getAdvantageRowsForResistance(charAdvantages, 'drugs'), getMutationModForResistance(mutationEffects, 'drugs'), secondary.resistanceDrogues, t),
   }
 }
 
@@ -254,6 +304,11 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   const secondary = useMemo(
     () => calcSecondary(naMap, charAdvantages, mutationEffects),
     [naMap, charAdvantages, mutationEffects]
+  )
+
+  const secondaryTooltips = useMemo(
+    () => buildSecondaryTooltips(naMap, charAdvantages, mutationEffects, secondary, t),
+    [naMap, charAdvantages, mutationEffects, secondary, t]
   )
 
   const effectiveMalus = woundPenalty - encumbrancePenalty
@@ -858,7 +913,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
       <CollapsibleBlock id="secondary" title={t('charSheet.sectionSecondary')} open={blockOpen.secondary} onToggle={toggleBlock}>
 
         <div style={s.secondaryCards}>
-          <SecondaryField label={t('charSheet.secondary.reaction')} value={secondary.rea} tooltip={t('charSheet.tooltip.reaction')} />
+          <SecondaryField label={t('charSheet.secondary.reaction')} value={secondary.rea} tooltip={secondaryTooltips.reaction} />
           <SecondaryField
             label={t('charSheet.secondary.initiative')}
             value={iniValue}
@@ -874,8 +929,8 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
         <div style={s.secondaryColumns}>
           <div style={s.secondaryList}>
             <SecondaryListRow headerOnly label={t('charSheet.secondary.choc')} />
-            <SecondaryListRow sub label={t('charSheet.secondary.seuilEtour')}  value={secondary.seuilEtour}  tooltip={t('charSheet.tooltip.seuilEtour')} />
-            <SecondaryListRow sub label={t('charSheet.secondary.seuilIncons')} value={secondary.seuilIncons} tooltip={t('charSheet.tooltip.seuilIncons')} />
+            <SecondaryListRow sub label={t('charSheet.secondary.seuilEtour')}  value={secondary.seuilEtour}  tooltip={secondaryTooltips.seuilEtour} />
+            <SecondaryListRow sub label={t('charSheet.secondary.seuilIncons')} value={secondary.seuilIncons} tooltip={secondaryTooltips.seuilIncons} />
             <SecondaryListRow
               label={t('charSheet.secondary.modDom')}
               value={secondary.modDom >= 0 ? `+${secondary.modDom}` : secondary.modDom}
@@ -884,7 +939,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
             <SecondaryListRow
               label={t('charSheet.secondary.resistanceDommages')}
               value={secondary.resistanceDommages >= 0 ? `+${secondary.resistanceDommages}` : secondary.resistanceDommages}
-              tooltip={t('charSheet.tooltip.resistanceDommages')}
+              tooltip={secondaryTooltips.resistanceDommages}
             />
           </div>
 
@@ -893,27 +948,27 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
             <SecondaryListRow
               sub label={t('charSheet.secondary.resistancePoison')}
               value={secondary.resistancePoison >= 0 ? `+${secondary.resistancePoison}` : secondary.resistancePoison}
-              tooltip={t('charSheet.tooltip.resistancePoison')}
+              tooltip={secondaryTooltips.resistancePoison}
             />
             <SecondaryListRow
               sub label={t('charSheet.secondary.resistanceMaladie')}
               value={secondary.resistanceMaladie >= 0 ? `+${secondary.resistanceMaladie}` : secondary.resistanceMaladie}
-              tooltip={t('charSheet.tooltip.resistanceMaladie')}
+              tooltip={secondaryTooltips.resistanceMaladie}
             />
             <SecondaryListRow
               sub label={t('charSheet.secondary.resistanceRadiation')}
               value={secondary.resistanceRadiation >= 0 ? `+${secondary.resistanceRadiation}` : secondary.resistanceRadiation}
-              tooltip={t('charSheet.tooltip.resistanceRadiation')}
+              tooltip={secondaryTooltips.resistanceRadiation}
             />
             <SecondaryListRow
               sub label={t('charSheet.secondary.resistanceDrogues')}
               value={secondary.resistanceDrogues >= 0 ? `+${secondary.resistanceDrogues}` : secondary.resistanceDrogues}
-              tooltip={t('charSheet.tooltip.resistanceDrogues')}
+              tooltip={secondaryTooltips.resistanceDrogues}
             />
             <SecondaryListRow
               label={t('charSheet.secondary.souffle')}
               value={secondary.souffle}
-              tooltip={t('charSheet.tooltip.souffle')}
+              tooltip={secondaryTooltips.souffle}
             />
           </div>
         </div>

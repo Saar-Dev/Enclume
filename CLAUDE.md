@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 23) — 2026-07-12
+> Session 141 (suite 25) — 2026-07-12
 
 ---
 
@@ -112,10 +112,71 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 23) (2026-07-12)
+## ÉTAT COURANT — Session 141 (suite 25) (2026-07-12)
 
+- **Session 141 (suite 25) — `docs/PLAN_MUTATION2.md` Lot 4 : Armure naturelle → Résistance aux
+  dommages + Arme naturelle ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Suite du Lot 3
+  (suite 23, clos). **Décisions Saar actées avant code** : `natural_armor` est une constante toujours
+  active qui modifie directement RD, jamais une pièce de plus dans le mille-feuille ETQ de l'armure
+  portée (aucune règle LdB sourcée pour combiner les deux — même logique que la suppression de
+  `calcCarenceArmure`, suite 16) ; le gate "après saisie" (Crocs/Corne) réutilise le statut `grappled`
+  déjà pleinement fonctionnel (`token_statuses`), "pas de narratif" (demande explicite Saar) ; la
+  sélection d'arme naturelle est une option radio gratuite de plus (le choix d'arme au CaC est déjà
+  sans coût par déclaration) — pas de nouveau mécanisme "changer d'arme" contrairement à la première
+  proposition de Saar, corrigée après vérification du code réel. **Analyse critique demandée par
+  Saar (recherche externe — PF2e Foundry, Open5e, D&D5e) avant tout code** : 3 décisions confirmées
+  (Strikes mains-nues/naturelles/armes unifiés dans PF2e — confirme `skillId` inchangé ; schéma
+  Open5e en chaîne plate — confirme `natural_weapon_formula VARCHAR` ; Grappled = condition booléenne
+  sur la cible en D&D5e/PF2e — confirme l'absence de traçage du grappler) et **1 correction réelle** :
+  le gate "cible saisie" a été déplacé de booléens inline vers `shared/naturalWeapons.js` (NOUVEAU),
+  même patron que `shared/combatExclusiveActions.js` (Tir visé) — une seule fonction pure réutilisée
+  client (tooltip) et serveur (rejet), pas de duplication d'une architecture déjà validée dans ce
+  projet. **Vérification finale du pipeline avant tout code (exigée par Saar — "sûr à 100%") : 2 vrais
+  trous trouvés et corrigés avant d'écrire une ligne de code** — `weapon_inv_id` n'est jamais transmis
+  en direct à `resolveMeleeAction`, c'est une colonne réelle de `combat_actions` écrite en Phase 1 et
+  relue en Phase 2 (le plan initial sautait cette chaîne à 4 maillons, corrigé par une 3ᵉ colonne
+  `combat_actions.natural_weapon_char_mutation_id` + plomberie complète) ; la fenêtre MJ n'a pas la
+  même architecture que la fenêtre PJ (endpoint batché `/combat-equipment` pour tout le roster, pas
+  un fetch par personnage — un fetch par PNJ aurait réintroduit le N+1 que ce batch évite déjà,
+  corrigé en étendant ce même endpoint). **Codé** : `getNaturalArmorMod` + 4 sites RD rebranchés ;
+  migration `138` (2 colonnes `ref_mutations` + 1 colonne `combat_actions`, backfill des 4
+  mutations) ; `shared/naturalWeapons.js` (NOUVEAU) ; `mutationService.getMutations()` étendu ;
+  `battlemaps.js` (`/combat-equipment` + `naturalWeapons` par token) ; `resolveMeleeAction` (gate +
+  formule, revalidation serveur complète) ; `socketCombatAnnouncement.js` (persistance) ;
+  `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` (PJ et MJ/PNJ) ; `MeleeCombatPanel.jsx`
+  (radios + tooltip). **Dette `[CHOC1]` ajoutée** : bonus LdB "+1D6 Choc si tête" de Corne non câblé
+  — `calcResistanceArmure` calcule déjà un `prt` (protection_shock) jamais consommé par
+  `damageService.js`, aucun pool de "dommages de Choc" distinct des dégâts physiques n'existe dans le
+  pipeline actuel, chantier séparé hors scope de ce lot. **Point de règle soulevé par Saar en
+  validant le parcours navigateur** (*"peut-on frapper avec Cornes/Griffes sans saisir
+  l'adversaire ?"*) : texte LdB (`REGLE_MUTATION.md`) relu directement pour trancher — Corne/Crocs
+  conditionnées à "après avoir effectué une saisie" (aucune autre mécanique décrite pour ces deux
+  mutations dans le texte source), Griffes/Excroissance osseuse rétractable sans précondition.
+  Lecture RAW confirmée correcte (déjà ce qui était codé), conservée telle quelle. **Testé** :
+  `node --check` 0 erreur (10 fichiers), ESLint client 0 nouvelle erreur (`git stash`, +1 warning
+  `exhaustive-deps` même classe qu'un pattern déjà existant), round-trip migration 138 réel en base
+  réelle (byte-identique, P53/P54 respectés — `knex_migrations` vérifiée avant tout appel manuel), 8
+  scénarios purs, 3 scénarios en base réelle en transaction annulée (dont un **rejet confirmé** sur
+  une mutation forgée appartenant à un autre personnage), SR, **parcours navigateur confirmé
+  fonctionnel par Saar** (PJ et MJ/PNJ). **Non testé** : cas limites de la section H un par un
+  (validation globale) ; bonus "deux armes" combiné à une arme naturelle en conditions réelles
+  (couvert par construction, pas re-testé manuellement). Détail complet : item "67."
+  `docs/EN_COURS.md`, `docs/JOURNAL6.md` "Session 141 (suite 25)", `docs/PLAN_MUTATION2.md` Lot 4.
+- **Session 141 (suite 24) — Fiche perso : détail de calcul en tooltip pour les attributs
+  secondaires ✅ CLOS.** Suite du Lot 3 (suite 23, confirmé fonctionnel navigateur). Réutilise le
+  pattern déjà en prod `iniTooltip` (texte multi-lignes `\n`, CSS `pre-line` déjà en place). `shared/
+  polarisUtils.js` : `getAdvantageRowsForAttr`/`getAdvantageRowsForResistance` (variante "liste
+  nommée", refactor `sumModByKey` sur un `filterModByKey` partagé, comportement inchangé). **Décision
+  Saar (question posée)** : mutations en total agrégé (pas nommées — éviterait un fetch
+  supplémentaire), avantages nommés (déjà disponibles côté client). `CharacterSheet.jsx` :
+  `buildSecondaryTooltips` + 2 helpers locaux (attribut/résistance, pas un moteur générique pour 9
+  stats fixes), 9 tooltips concernés (reaction, souffle, seuilEtour, seuilIncons,
+  resistanceDommages + 4 résistances naturelles). `fr.json` : 3 clés génériques réutilisées. **Testé**
+  : 4 scénarios réels, non-régression des fonctions refactorées, `node --check`, ESLint 0 nouvelle
+  erreur, SR. **Non testé** : parcours navigateur (hover réel). Détail complet : item "66."
+  `docs/EN_COURS.md`, `docs/JOURNAL6.md` "Session 141 (suite 24)".
 - **Session 141 (suite 23) — `docs/PLAN_MUTATION2.md` Lot 3 : Résistance aux Dommages + Choc câblés
-  ⚠️ CLOS PARTIEL.** Suite du correctif RD (suite 22, ci-dessous). `shared/polarisUtils.js` :
+  ✅ CLOS, fonctionnel confirmé Saar en navigateur.** `shared/polarisUtils.js` :
   `getMutationModForResistance` (symétrique à `getAdvantageModForResistance`) + `calcResistanceDommages`/
   `calcSeuils` étendues (mutation + avantage, addition directe — correcte grâce au correctif du bug
   RD). **Consolidation trouvée avant de coder (analyse critique demandée par Saar)** : la branche PNJ
@@ -126,8 +187,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   Macros `seuil_etourdi`/`seuil_incons` complétées + nouvelle macro `resistance_dommages` (décision
   Saar). `CharacterSheet.jsx` rebranchée dans la même passe (fiche = résolution combat). **Testé** :
   11 scénarios purs, `node --check`, ESLint 0 nouvelle erreur, grep de sweep, vérification en base
-  réelle (personnage réel "Squelette renforcé", delta +2 RD/+3 seuil confirmé), SR. **Non testé** :
-  parcours combat réel en navigateur. **Incident git signalé, sans rapport avec le code** : ce
+  réelle (personnage réel "Squelette renforcé", delta +2 RD/+3 seuil confirmé), SR, **parcours combat
+  réel en navigateur confirmé fonctionnel par Saar**. **Incident git signalé, sans rapport avec le code** : ce
   correctif et celui de suite 22 ont été committés sous le message "Moding Phase A" (session
   parallèle, `git add -A` sur dépôt partagé) — contenu vérifié intact, historique déjà poussé non
   réécrit. Détail complet : item "65." `docs/EN_COURS.md`, `docs/JOURNAL6.md` "Session 141 (suite 23)".
@@ -676,7 +737,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **142 migrations stables** (137_char_inventory_mods — Moding Phase A, Session 141 (suite 21) ;
+- **143 migrations stables** (138_ref_mutations_natural_weapon — Session 141 (suite 25) ;
+  137_char_inventory_mods — Moding Phase A, Session 141 (suite 21) ;
   136_fix_ref_resistance_naturelle_sign — session parallèle ;
   135_ref_equipment_skill_assoc_weapons — Session 141 (suite 16) ;
   134_combat_actions_aim_bonus_comp — Tir visé, Session 141 (suite 17) ;
@@ -1057,6 +1119,7 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **[EQSKILLS1]** (Session 141 suite 16) — `ref_equipment_skills` ("compétences boostées/requises" : accessoires/implants/outils requérant ou boostant une compétence, ex. lunette de visée → Tir de précision) n'est consommée **nulle part** en logique de jeu — seulement écrite/relue par l'API admin `routes/equipment.js` (aucun composant `client/src` ne l'appelle, vérifié par grep). Donnée morte, jamais appliquée à un calcul. À distinguer de `ref_equipment_skill_assoc` (table jumelle au schéma identique, "compétence d'utilisation" — celle-là bien vivante, consommée par `resolveAssaultAction`/`resolveMeleeAction`), source de la confusion initiale de Saar sur un possible doublon. 1 seul item présent dans les deux tables (TMP II), dont l'entrée `ref_equipment_skills` (`ANALYSE_EMPATHIQUE` sur une arme) est visiblement une erreur de saisie ancienne. Fusion des deux tables possible mais non prioritaire (toucherait le moteur combat pour un gain cosmétique, aucun consommateur réel à préserver côté `ref_equipment_skills`).
 - **[DOC1]** (Session 141 suite 18) — `docs/VOCABULARY.md` était un squelette vide (toutes sections `(...)`) depuis sa création, jamais réellement adopté par le protocole. Peuplé cette session avec un premier seed réel (concepts métier, ambiguïtés, acronymes, pièges historiques) en remplacement de `docs/GLOSSAIRE.md` (référencé par `.claude/rules/conventions.md` mais absent de ce repo — n'existe que dans le submodule `Enclume-codex/`, référence corrigée). Reste à enrichir au fil des sessions, jamais réécrit de zéro.
 - **[DOC2]** (Session 141 suite 18) — `docs/SYSTEME/REGLES_LdB.md` : dump brut d'extraction LdB avec encodage mojibake par endroits, mal placé selon `docs/RegleDocumentaire.md` Règle 8 (dossier `REGLES/` réservé aux extraits LdB, pas `SYSTEME/`), doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md`. Bandeau d'avertissement ajouté en tête de fichier ; vérification ligne-à-ligne + suppression/déplacement à faire en session dédiée — non fait ici (décision Saar, hors scope de cette passe).
+- **[CHOC1]** (Session 141 suite 25, `docs/PLAN_MUTATION2.md` Lot 4 sous-lot B) — la mutation Corne a un bonus LdB "+1D6 dommages de Choc si le coup porte à la tête", non câblé. `calcResistanceArmure` (`charStats.js:290-299`) calcule déjà un `prt` (protection_shock) en plus de `etq`, mais `damageService.js:50` ne déstructure/utilise que `etq` — `prt` est calculé puis jeté. Aucun pool de "dommages de Choc" distinct des dégâts physiques n'existe dans le pipeline de résolution combat actuel. Corne câblée pour ses dégâts physiques de base (`1D10`) uniquement dans le Lot 4 ; le bonus tête reste différé jusqu'à ce que le pool `prt` soit branché (chantier séparé, non trivial).
 
 ---
 

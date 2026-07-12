@@ -16,6 +16,7 @@ import {
 } from '../lib/charStats.js'
 import { isCaseOccupied, collisionMoveToken } from '../lib/redis.js'
 import { LOCATION_LABELS } from '../../../shared/armorConstants.js'
+import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
 
 
 // ─── Breakdown jets de dé — tables et labels ────────────────────────────────
@@ -343,6 +344,35 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
         .first()
       if (weapon?.ref_damage_h) damageFormula = weapon.ref_damage_h
     }
+
+    // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Exclusif avec weaponInvId
+    // (radio unique côté client). Revalidation serveur complète : appartenance de la mutation au
+    // personnage attaquant + éligibilité (statut `grappled` réel de la cible pour Crocs/Corne).
+    const naturalWeaponCharMutationId = action.natural_weapon_char_mutation_id ?? null
+    if (naturalWeaponCharMutationId) {
+      const naturalWeaponMutation = await db('char_mutations as cm')
+        .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
+        .where({ 'cm.id': naturalWeaponCharMutationId, 'cm.char_sheet_id': sheetAttaquant.id, 'cm.status': 'active' })
+        .select('rm.natural_weapon_formula', 'rm.natural_weapon_requires_grapple')
+        .first()
+      if (naturalWeaponMutation?.natural_weapon_formula) {
+        const targetGrappledStatus = await db('token_statuses')
+          .where({ token_id: targetTokenId, status_code: 'grappled' })
+          .first()
+        const ineligibilityReasons = getNaturalWeaponIneligibilityReasons({
+          mutation: naturalWeaponMutation, targetIsGrappled: !!targetGrappledStatus,
+        })
+        if (ineligibilityReasons.length) {
+          emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+            username: character.name,
+            message: `Action impossible car — ${ineligibilityReasons.join(', ')}`,
+          } })
+          return { suspend: false, emissions }
+        }
+        damageFormula = naturalWeaponMutation.natural_weapon_formula
+      }
+    }
+
     const allonge = parseInt(weapon?.ref_range) || 0
 
     // Validation distance Phase 2 — positions post-déplacement (PE14)

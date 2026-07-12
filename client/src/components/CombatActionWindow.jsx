@@ -114,6 +114,10 @@ export default function CombatActionWindow({
   const [meleePendingTokenIds, setMeleePendingTokenIds]     = useState([])   // [id1, id2?, id3?]
   const [meleeCount, setMeleeCount]                         = useState(1)    // 1|2|3
   const [selectedMeleeWeaponId, setSelectedMeleeWeaponId]   = useState(undefined) // undefined=auto, null=mains nues, id=choix
+  // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Exclusif avec
+  // selectedMeleeWeaponId (un seul choix radio) : sélectionner l'un remet l'autre à null.
+  const [naturalWeapons, setNaturalWeapons]                 = useState([])
+  const [selectedMeleeNaturalWeaponId, setSelectedMeleeNaturalWeaponId] = useState(null)
   const [inMeleeTargetMode, setInMeleeTargetMode]           = useState(false)
   const [iniPopoverOpen, setIniPopoverOpen]                 = useState(false)
 
@@ -251,6 +255,19 @@ export default function CombatActionWindow({
     return () => { cancelled = true }
   }, [isDrone, playerToken?.id, phase])
 
+  // --- fetch mutations (armes naturelles) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B ------------
+  useEffect(() => {
+    const charId = playerToken?.character_id
+    if (!charId || isDrone) return
+    let cancelled = false
+    api.get(`/char-sheet/${charId}/mutations`).then(res => {
+      if (cancelled) return
+      const mutations = res.data.mutations || []
+      setNaturalWeapons(mutations.filter(m => m.natural_weapon_formula != null))
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [isDrone, playerToken?.id, phase])
+
   // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
   useEffect(() => {
     const wMg = assaultWeapons.find(w => w.slot === 'MG') || null
@@ -377,6 +394,10 @@ export default function CombatActionWindow({
     : selectedMeleeWeaponId === undefined
       ? (meleeWeapons[0]?.id ?? null)
       : selectedMeleeWeaponId
+  // Arme naturelle — jamais auto-sélectionnée (contrairement à l'arme d'inventaire ci-dessus),
+  // choix explicite uniquement, mutuellement exclusive avec effectiveMeleeWeaponId (géré dans
+  // onWeaponChange du MeleeCombatPanel, docs/PLAN_MUTATION2.md Lot 4 sous-lot B).
+  const effectiveMeleeNaturalWeaponId = selectedMeleeNaturalWeaponId
   // Armes de contact en inventaire (tous slots/containers) — pour message d'état
   const hasMeleeInInventory = allInventoryItems.some(item => item.ref_category === 'Arme de contact')
 
@@ -536,6 +557,7 @@ export default function CombatActionWindow({
           ? meleePendingTokenIds.slice(0, effectiveMeleeCount).map(id => ({
               targetTokenId: id,
               weaponInvId:   effectiveMeleeWeaponId,
+              naturalWeaponCharMutationId: effectiveMeleeNaturalWeaponId,
             }))
           : null,
         reload:   reloadSelected ? { weapon_inv_id: selectedWeapon?.id ?? null, ammo_item_id: selectedAmmoId } : false,
@@ -1104,7 +1126,16 @@ export default function CombatActionWindow({
               selectedWeaponId={effectiveMeleeWeaponId}
               isWeaponDrawn={decl.weapon === 'drawn'}
               hasMeleeInInventory={hasMeleeInInventory}
-              onWeaponChange={(id) => setSelectedMeleeWeaponId(id)}
+              onWeaponChange={(id) => { setSelectedMeleeWeaponId(id); setSelectedMeleeNaturalWeaponId(null) }}
+              naturalWeapons={naturalWeapons.map(m => ({
+                id: m.id, label: m.name,
+                formula: m.natural_weapon_formula, requiresGrapple: m.natural_weapon_requires_grapple,
+              }))}
+              selectedNaturalWeaponId={effectiveMeleeNaturalWeaponId}
+              onNaturalWeaponChange={(id) => { setSelectedMeleeNaturalWeaponId(id); setSelectedMeleeWeaponId(null) }}
+              targetIsGrappled={
+                tokens.find(t => t.id === meleePendingTokenIds[0])?.statuses?.includes('grappled') ?? false
+              }
               combatMode={decl.combatMode}
               onModeChange={(mode) => {
                 if (mode === 'defensif' || mode === 'retraite') {

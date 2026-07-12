@@ -269,13 +269,19 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // Phase 1 : intention enregistrée sans validation distance (vérifiée en Phase 2)
       // mapActions.melee est un array : [{ targetTokenId, weaponInvId?, droneWeaponInvId? }, ...]
       if (Array.isArray(mapActions?.melee)) {
-        for (const { targetTokenId: meleeTargetId, weaponInvId: meleeWeaponId, droneWeaponInvId: meleeDroneWeaponId } of mapActions.melee) {
+        for (const {
+          targetTokenId: meleeTargetId, weaponInvId: meleeWeaponId, droneWeaponInvId: meleeDroneWeaponId,
+          naturalWeaponCharMutationId: meleeNaturalWeaponId,
+        } of mapActions.melee) {
           if (meleeTargetId) {
             actionRows.push({
               campaign_id: campaignId, token_id: tokenId,
               action_key: 'melee', type: 'melee', sequence: 3,
               weapon_inv_id:       meleeDroneWeaponId ? null : (meleeWeaponId ?? null),
               drone_weapon_inv_id: meleeDroneWeaponId ?? null,
+              // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Un drone n'a
+              // pas de mutations, toujours null dans cette branche (même garde que weapon_inv_id).
+              natural_weapon_char_mutation_id: meleeDroneWeaponId ? null : (meleeNaturalWeaponId ?? null),
               target_token_id: meleeTargetId,
               modifiers: JSON.stringify({ ini_mod: -3 }),
               status: 'pending',

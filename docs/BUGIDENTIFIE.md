@@ -317,6 +317,34 @@ avant de coder un correctif.
 
 ---
 
+## Bugs marchands / catalogue
+
+### Bug EQ1 — `ref_equipment.price_modifier` jamais lu, prix formulés facturés au prix de base
+
+**Symptôme** : un item dont le prix dépend d'une formule (ex. Lunette de visée,
+`price=1000` + `price_modifier="x (niv x niv)"`, prix réel attendu 1000×niv² selon le niveau visé)
+est facturé au prix de base brut (1000 sols, quel que soit le niveau) lors d'un achat marchand —
+la colonne `price_modifier` n'est jamais interprétée.
+
+**Règle** : catalogue LdB — prix variable selon niveau d'objet (`niv`), déjà capturé en base au
+moment du seed (`ref_equipment.price_modifier`) mais jamais exploité en aval.
+
+**Code impliqué** : `server/src/services/tradeService.js` / `server/src/routes/equipment.js` —
+grep confirmé, `price_modifier` n'apparaît que dans les migrations/seeds (`48_ref_equipment.js`,
+`2_seed_equipment.js`, `73_drone_programs_catalog.js`, `83_drone_programs_rename.js`), jamais dans
+un chemin de lecture/achat.
+
+**Cause racine [VÉRIFIÉ]** : colonne présente en base, aucun consommateur — trouvé en recherchant
+comment modéliser le prix de la Lunette de visée pour `docs/PLAN_MODING_PHASEB.md` Groupe 2
+(Session 141 suite 21 suite, 2026-07-12).
+
+**Prochaine étape** : sprint dédié marchands/catalogue — hors scope du chantier Moding en cours
+(la Lunette de visée sera modélisée en 10 lignes catalogue distinctes avec prix littéral précalculé,
+contournement propre pour Groupe 2 sans dépendre de ce correctif). Vérifier l'étendue réelle : quels
+autres items du catalogue ont un `price_modifier` non-null et sont donc potentiellement concernés.
+
+---
+
 ## Nouvelles fonctionnalités
 
 ### FEAT1 — Map2D (style Roll20)
