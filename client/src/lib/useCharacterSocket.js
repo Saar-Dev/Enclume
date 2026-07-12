@@ -42,6 +42,11 @@ export function useCharacterSocket() {
     const onInventoryRemoved = ({ characterId }) => {
       if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
     }
+    // docs/PLAN_MODING.md — sans ce handler, WS.MOD_INSTALLED serait émis dans le vide côté client
+    // (même mécanisme de rafraîchissement que les 3 events INVENTORY_* ci-dessus).
+    const onModInstalled = ({ characterId }) => {
+      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
+    }
 
     socket.on(WS.WOUND_ADDED,       onWoundAdded)
     socket.on(WS.WOUND_UPDATED,     onWoundUpdated)
@@ -49,6 +54,7 @@ export function useCharacterSocket() {
     socket.on(WS.INVENTORY_ADDED,   onInventoryAdded)
     socket.on(WS.INVENTORY_UPDATED, onInventoryUpdated)
     socket.on(WS.INVENTORY_REMOVED, onInventoryRemoved)
+    socket.on(WS.MOD_INSTALLED,     onModInstalled)
 
     return () => {
       socket.off(WS.WOUND_ADDED,       onWoundAdded)
@@ -57,6 +63,7 @@ export function useCharacterSocket() {
       socket.off(WS.INVENTORY_ADDED,   onInventoryAdded)
       socket.off(WS.INVENTORY_UPDATED, onInventoryUpdated)
       socket.off(WS.INVENTORY_REMOVED, onInventoryRemoved)
+      socket.off(WS.MOD_INSTALLED,     onModInstalled)
     }
   }, [socket])
   // [socket] uniquement — updateCharacter, setWounds (Zustand actions) et setWoundVersions (setter useState)

@@ -1,21 +1,14 @@
 # PLAN_MODING.md — Système de Moding (installation de modules sur armes)
 > Rédaction initiale : Session 120 — 2026-06-24
-> **Révisé — 2026-07-12** : analyse critique (contrainte UNIQUE anti-doublon ajoutée — voir
-> "Historique des révisions" en bas de fichier). Blocage Tir visé levé (Session 141 suite 17 clos),
-> pause à lever formellement dans `EN_COURS.md` avant reprise.
+> **✅ PHASE A TERMINÉE — Session 141 (suite 21), 2026-07-12.** Pause levée (Tir visé clos Session
+> 141 suite 17, dette `TIRVISE` close) → 8/8 étapes codées et testées (service : 10 scénarios réels
+> + contrainte UNIQUE anti-doublon vérifiée directement en base ; HTTP réel ; navigateur réel via
+> Playwright, capture d'écran avant/après confirmant l'installation + le rafraîchissement temps réel
+> de l'inventaire). Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 21)".
 > **Révisé — 2026-07-09** : plan scindé en deux phases après analyse critique (voir "Historique des
 > révisions" en bas de fichier). **Ce document ne couvre désormais que la Phase A.** La Phase B
 > (effet mécanique des mods en combat) est explicitement hors scope — à planifier ensemble dans un
 > second temps, jamais dans le même plan (règle "un sujet à la fois").
->
-> **⏸ CHANTIER EN PAUSE — 2026-07-09 (décision Saar).** Phase B nécessite pour l'essentiel (lots
-> B2-B5) une mécanique combat qui n'existe pas encore dans le code : **Tir visé** (aucune référence
-> trouvée dans `server/src/socket/*`, malgré des dettes déjà connues et adjacentes — `COM9` "Viser
-> une localisation précise", "Changer le mode de tir"). Saar : Tir visé est un chantier à part
-> entière, **prioritaire**, à planifier avant de reprendre le moding — même si Phase A (rangement) et
-> le lot B1 (bonus statiques) restent techniquement indépendants et codables sans attendre. Rien n'a
-> été codé sur ce plan. Reprendre ce document seulement après que Tir visé ait son propre plan (à
-> écrire séparément, pas ici).
 >
 > **Numéro de migration à revérifier avant tout codage** : ce plan proposait 124 (2026-07-09,
 > matin) — **déjà consommée entretemps** par `124_char_advantage_notes.js`, `125_...`, et
@@ -518,3 +511,13 @@ le perdre, mais traité comme un chantier à part entière avec son propre plan 
   l'unification des deux formes de retour de la route DELETE — vérifié que `InventoryPanel.jsx:87`
   ignore la réponse HTTP (rafraîchissement 100% socket), aucun risque réel, note ajoutée au plan pour
   ne pas relaisser planer le doute. Aucun code écrit — session d'analyse pure.
+- **2026-07-12 (suite, même session) — Phase A codée intégralement, 8/8 étapes.** Étape 0
+  (extraction `inventoryService.js`) confirmée fonctionnelle par Saar avant de poursuivre (règle "un
+  seul bug/étape à la fois", confirmation obligatoire). Étapes 1-7 enchaînées ensuite sur "go" Saar :
+  migration `137` (136 pris entretemps par une session parallèle), `modingService.js`, event
+  `WS.MOD_INSTALLED`, routes serveur, handler socket client, `ModingWindow.jsx`, wiring
+  "Customisation". Écart trouvé en codant (corrigé, pas dans le plan initial) : le bouton
+  "Customisation" est gaté par `canEdit` (owner OU GM), **pas** `isGm` seul comme le bloc "Ajouter"
+  d'à côté — un joueur doit pouvoir installer un mod sur sa propre arme. Testé à 3 niveaux (service,
+  HTTP réel, navigateur réel via Playwright avec capture d'écran) — voir `docs/JOURNAL6.md`
+  "Session 141 (suite 21)" pour le détail complet des scénarios. Chantier Phase A clos.

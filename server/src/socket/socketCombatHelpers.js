@@ -703,8 +703,9 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
 
         const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
         const degautsBruts = rawDice + (modDom ?? 0) + combatModeBonus
+        // RD ajouté aux dégâts (pas soustrait) — voir damageService.js:resolveTargetHit, même formule
         const rd = calcResistanceDommages(for_na_cible, con_na_cible)
-        const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
+        const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) + rd)
 
         let severity = null, is_lethal = false
         if      (degatsNets >= 30) { severity = 'mortelle'; is_lethal = true }

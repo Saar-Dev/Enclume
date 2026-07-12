@@ -1,5 +1,8 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-12 — Session 141 (suite 20) : Bonus féminin — règle fixe
+> Dernière mise à jour : 2026-07-12 — Session 141 (suite 22) : Bug RD (Résistance aux Dommages)
+> signe inversé corrigé, ⚠️ clos partiel (item 64) ; Session 141 (suite 21) : `docs/PLAN_MODING.md` — pause levée
+> (Tir visé clos, dette `TIRVISE` close) + **Étape 0 codée et testée** (item 63) ; Session 141
+> (suite 20) : Bonus féminin — règle fixe
 > -2 FOR/+1 COO/+1 PRE + revalidation du bascule Sexe via `validateStep1` (item 62) ; Session 141
 > (suite 19) : Résistances naturelles (poison/
 > maladie/radiation/drogue) câblées + Attributs secondaires manquants ajoutés sur la fiche perso
@@ -19,6 +22,65 @@
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 64 (Session 141 suite 22) — Bug RD (Résistance aux Dommages) : signe inversé corrigé
+> ⚠️ CLOS PARTIEL.** Trouvé en ouvrant `docs/PLAN_MUTATION2.md` Lot 3 (lecture obligatoire de
+> `docs/REGLES/REGLESYSCOMBAT.md` avant mécanique combat) : la règle dit d'**ajouter** le modificateur
+> de Résistance aux Dommages aux dégâts ("un personnage fort et résistant va réduire les dégâts,
+> faible... aggravés"), le code (`damageService.js`/`socketCombatHelpers.js`) le **soustrayait** —
+> l'inverse. `RD_TABLE`/`calcResistanceDommages` (`shared/polarisUtils.js`) ne sont pas en cause,
+> croisées correctes contre la table brute LdB (`docs/Old/AttributsTooltips.md`) — le bug est dans la
+> formule de consommation, pas la donnée. `[VÉRIFIÉ]` par exécution réelle avant/après (`node -e`,
+> 3 profils) : formule fautive donnait un personnage fort (FOR/CON 18/18) plus touché (14) qu'un
+> faible (FOR/CON 4/4, 6) à dégâts bruts identiques — corrigé, désormais fort=6/faible=14, conforme
+> à la règle. Corrigé aux 2 sites réels (`degautsBruts - etq - rd` → `+ rd`), doc alignée
+> (`docs/SYSTEME/COMBAT.md`, `docs/MANUELSYSCOMBAT.md`, `docs/STRUCTURE_SYSCOMBAT.md`). Effet de bord
+> positif : lève le "signe non trivial" ouvert dans `PLAN_MUTATION2.md` Lot 3 pour
+> `adv_018`/`adv_030`/`adv_060` — le résolveur générique déjà construit pour les Résistances
+> naturelles s'applique désormais tel quel à RD, sans inversion par `type`. **Testé** :
+> instrumentation réelle avant/après, `node --check`, grep de sweep (aucun 3ᵉ site), SR. **Non
+> testé** : parcours combat réel en navigateur — laissé non testé sur décision explicite de Saar pour
+> enchaîner directement sur le Lot 3. Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 22)".
+
+> **Item 63 (Session 141 suite 21) — `docs/PLAN_MODING.md` Phase A : ✅ TERMINÉE (8/8 étapes,
+> Étape 0 confirmée fonctionnelle par Saar, Étapes 1-7 codées et testées dans la foulée).** Pause du 2026-07-09 levée : Tir
+> visé (bloquant Phase B) clos Session 141 (suite 17), dette `TIRVISE` close. Analyse critique du
+> 2026-07-12 (contrainte UNIQUE anti-doublon) déjà intégrée au plan avant ce codage. **Étape 0**
+> (extraction `server/src/services/inventoryService.js` depuis `char-sheet.js`) codée : les 6 routes
+> (`getInventory`/`quickEquip`/`addItem`/`updateItem`/`reloadWeapon`/`removeItem`) + 4 helpers +
+> 4 constantes déplacés à l'identique, routes `char-sheet.js` réduites à de purs wrappers
+> (parse req → service → socket → réponse). **Dérive trouvée en cours de route** (le plan datait du
+> 2026-07-09, le fichier avait grossi de 1928 à 2133 lignes entretemps) : une session parallèle
+> (migration 131, dual-wield) avait ajouté `isEquippableLocation`/`SYMMETRIC_SLOT_PAIRS` (logique
+> armure 1+S+S + paires symétriques BG/BD, JG/JD) au milieu des routes à extraire — déjà proprement
+> modularisés par cette session (`lib/inventoryRules.js`/`shared/armorConstants.js`), simplement
+> importés dans `inventoryService.js` plutôt que redéfinis. **1 site d'appel hors des 6 routes
+> trouvé et corrigé** : `getDefaultContainer` était aussi utilisé par la route drone `cargo/:invId/
+> drop` (hors scope Étape 0, non déplacée) — rebranché vers `inventoryService.getDefaultContainer`.
+> `removeItem` accepte un `trxOrDb` optionnel (P7, réutilisé par le futur `modingService.installMod`
+> à l'Étape 2). **Testé** : `node --check` 0 erreur (pas d'ESLint côté serveur — confirmé, seul
+> `client/eslint.config.js` existe dans ce repo), 13 scénarios réels en base (fixture jetable,
+> cascade `ON DELETE CASCADE` vérifiée pour le nettoyage) — stacking munitions, conflit "mains déjà
+> occupées" (409), split P57 (arme équipable ×2 sans slot → 2 lignes indépendantes), armure 1+S+S,
+> reload avec consommation totale de munitions, retrait partiel (décrément) et total, quick-equip,
+> `getInventory` sur fiche vide — tous passés. SR confirmé (`/api/health` 200). **Non testé** :
+> parcours navigateur détaillé scénario par scénario (ajout/équipement/recharge/suppression via
+> l'UI Inventaire) — **SR + tests Étape 0 confirmés fonctionnels par Saar**. **Étapes 1-7 codées et
+> testées ensuite (migration `137_char_inventory_mods` + contrainte UNIQUE, `modingService.js`,
+> event `WS.MOD_INSTALLED`, routes `GET/POST .../moding/*`, handler socket client
+> `onModInstalled`, `ModingWindow.jsx` NOUVEAU, wiring bouton "Customisation" dans
+> `InventoryPanel.jsx`/`CharacterWindow.jsx`)** — testées à 3 niveaux : service (10 scénarios réels,
+> dont vérification directe que la contrainte UNIQUE rejette bien un insert brut en double, `23505`),
+> HTTP réel (JWT signé), **et navigateur réel (Playwright headless, parcours complet avec capture
+> d'écran avant/après — installation d'un mod confirmée visuellement, inventaire rafraîchi en temps
+> réel sans reload)**. **Non testé par Saar en direct** (testé par instrumentation seulement) : le
+> parcours navigateur Étapes 1-7 n'a pas encore été rejoué par Saar lui-même, seulement par
+> l'automate Playwright — un dernier passage manuel en session reste recommandé avant de considérer
+> le chantier définitivement clos. **Phase A du plan 8/8 étapes codées.** Phase B (effet mécanique
+> des mods en combat) reste hors scope, à planifier séparément si voulu. Détail complet :
+> `docs/PLAN_MODING.md`, `docs/JOURNAL6.md` "Session 141 (suite 21)",
+> `server/src/services/inventoryService.js`/`modingService.js` (NOUVEAUX),
+> `client/src/character/ModingWindow.jsx` (NOUVEAU).
 
 > **Item 62 (Session 141 suite 20) — Bonus féminin : règle fixe ✅ CLOS.** Signalement Saar : la
 > mécanique `feminin_bonus` (remise forfaitaire invisible sur COO/PRE, Session 141 suite 14) n'est
@@ -1033,7 +1095,7 @@ Projet en cours et priorité user :
 | COM7 | Multi-attaque CaC : duplicata / bouton grisé | Moyenne |
 | COM9 | Viser une localisation précise — non implémenté | Moyenne — sprint dédié |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
-| **TIRVISE** | Tir visé (`REGLESYSCOMBAT.md:1487-1492`, bonus +1/2 pts Initiative sacrifiés, max +5) — non implémenté, **0 référence dans `server/src/socket/*`**. Bloque le Lot B2 de `docs/PLAN_MODING.md` (Lunette de visée). Distinct de `COM9` et de "Changer le mode de tir" — trois mécaniques voisines mais différentes | **Haute — priorité affirmée par Saar, Session 141 (suite 11)** |
+| ~~**TIRVISE**~~ | ~~Tir visé — non implémenté, bloquait le Lot B2 de `docs/PLAN_MODING.md`~~ | ✅ Session 141 (suite 17) |
 | — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |
 | DR2 | Drone : déplacement absent | Basse — sprint futur |
 | **CSPLAYERSTAB** | `CampaignSettingsPage.jsx` — avertissement React (mélange `background`/`backgroundColor` entre `s.navItem`/`s.navItemActive`) sur les onglets de réglages campagne — préexistant, repéré en testant `docs/PLAN_VAULT.md` Lot 4 (onglet "Joueurs"). Cosmétique, aucun impact fonctionnel | Très basse |
@@ -1074,9 +1136,8 @@ Projet en cours et priorité user :
 
 ## Roadmap
 
-- **Sprint Tir visé** (`TIRVISE`) — **priorité affirmée par Saar, Session 141 (suite 11)** :
-  mécanique absente du code (`REGLESYSCOMBAT.md:1487-1492`), bloque le Lot B2 de
-  `docs/PLAN_MODING.md`. Aucun plan écrit — à faire avant de reprendre le moding.
+- ~~**Sprint Tir visé**~~ ✅ → Session 141 (suite 17), `shared/combatExclusiveActions.js` — déblocage
+  du Lot B2 `docs/PLAN_MODING.md` confirmé, pause levée Session 141 (suite 21).
 - ~~**Sprint Dégâts Drone**~~ ✅ → B6 (Loc) + B7 (Dmg) — Clos Sessions 94
 - **Sprint Drones 2d** — auto-announcement drone → voir `docs/Old/PLAN_DRONESYSCOMBAT.md`
 - **Sprint Drones 2e** — resolveDroneAutoAction

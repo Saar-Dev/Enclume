@@ -769,7 +769,7 @@ const hasTirAuto = tirAutoRow?.is_learned === true
 ```
 degautsBruts = rawDice + modDomAttaque(mr) + modDegatsMode
 modDegatsMode = fire_mode_bonus_dmg si portée ∈ {bout_portant, courte}, sinon 0
-degatsNets = max(0, degautsBruts - etq - rd)
+degatsNets = max(0, degautsBruts - etq + rd)
 rd = calcResistanceDommages(for_na_cible, con_na_cible)
 ```
 ⚠️ **`fire_mode_bonus_dmg` n'est appliqué qu'en portée courte/bout portant.**

@@ -2766,3 +2766,148 @@ Détail complet, étape par étape avec tous les tests : `docs/PLAN_VAULT.md`.
   résolution par décrément) — validé uniquement par instrumentation directe (`node -e`) et vérification
   en base, pas par un clic réel dans le Wizard.
 - Détail complet : cette entrée.
+
+## Session 141 (suite 21) — 2026-07-12 — `docs/PLAN_MODING.md` : pause levée + Étape 0 (extraction inventoryService.js) ✅ CLOS
+
+- Reprise de `docs/PLAN_MODING.md`, en pause depuis Session 141 (suite 11) — 2026-07-09 dans l'attente
+  de Tir visé (bloquant pour la Phase B, lots B2-B5). Tir visé clos entretemps (Session 141 suite 17).
+  **Évaluation de reprise demandée par Saar** avant tout code : blocage confirmé levé (dette
+  `TIRVISE` close ci-dessous), mais dérive P53 reconfirmée — migration 124 déjà consommée (124-135
+  tous pris depuis, prochain numéro libre 136), `char-sheet.js` passé de 1928 à 2133 lignes depuis
+  l'écriture du plan. **Vérifié sans impact** : la migration parallèle `131_split_equippable_stacks`
+  (dual-wield, session concurrente) ne touche aucun des 16 accessoires de moding
+  (`ref_equipment.location = NULL` pour tous, exclus du filtre de cette migration) — piège P7 du plan
+  toujours valide tel quel.
+- **Analyse critique demandée par Saar avant de reprendre le codage** : 1 vrai gap trouvé — l'anti-
+  doublon `char_inventory_mods` (règle "un mod ne peut pas être installé deux fois sur la même arme")
+  n'était protégé que par un `SELECT` applicatif hors transaction, pas par une contrainte DB. Fenêtre
+  de course réelle avec un mod en stack ×2+ (pas seulement un double-clic) : deux requêtes
+  concurrentes passent toutes deux le check avant que la première ne commite. Corrigé dans le plan :
+  `UNIQUE(weapon_inv_id, equipment_id)` ajoutée au schéma + logique `install` catch la violation de
+  contrainte (`23505`) en 409 — même précédent que `uq_char_mut_no_sub` (migration 109, char_mutations).
+  1 point vérifié et écarté (contradiction apparente sur le contrat HTTP de la route DELETE après
+  unification `removeItem` — `InventoryPanel.jsx:87` ignore la réponse, rafraîchissement 100% socket,
+  aucun risque réel). Plan corrigé avant tout codage (contrainte + note ajoutées, historique des
+  révisions daté).
+- **Pause levée** : `docs/EN_COURS.md` — dette `TIRVISE` marquée close, roadmap "Sprint Tir visé"
+  barrée, bandeau `PLAN_MODING.md` passé de "⏸ EN PAUSE" à "▶ REPRISE".
+- **Étape 0 codée** : `server/src/services/inventoryService.js` (NOUVEAU) — extraction depuis
+  `char-sheet.js` des 6 routes inventaire (`getInventory`/`quickEquip`/`addItem`/`updateItem`/
+  `reloadWeapon`/`removeItem`) + 4 helpers (`isContainerAvailable`/`getDefaultContainer`/
+  `getItemWithRef`/`resolveAmmoInit`) + 4 constantes (`VALID_CONTAINERS`/`VALID_SLOTS`/
+  `ARMOR_SLOTS`/`WEAPON_SLOTS`) + 2 nouvelles constantes moding (`WEAPON_FAMILY`/`MOD_CATEGORY`,
+  centralisées pour `modingService.js` à l'Étape 2). Convention `advantageService.js`/
+  `mutationService.js` respectée : fonctions pures DB, pas de `req`/`res`/socket. Routes
+  `char-sheet.js` réduites à parse req → service → socket → réponse, contrat HTTP externe strictement
+  préservé (vérifié pour chaque route, notamment les 3 branches de POST /inventory et les 2 formes de
+  retour de DELETE).
+- **Dérive trouvée et gérée en lisant le code avant d'extraire** (pas dans le plan du 2026-07-09,
+  fichier grossi entretemps par une session parallèle) : la logique dual-wield/armure
+  (`isEquippableLocation`, `SYMMETRIC_SLOT_PAIRS` — 1+S+S, paires symétriques BG/BD et JG/JD) s'était
+  entretemps insérée au milieu des routes à extraire. Déjà proprement modularisée par cette session
+  parallèle (`server/src/lib/inventoryRules.js`, `shared/armorConstants.js`) — simplement importée
+  dans `inventoryService.js`, pas redéfinie. **1 site d'appel externe trouvé et corrigé** :
+  `getDefaultContainer` était aussi utilisé par la route drone `POST /:characterId/drone/cargo/:invId/
+  drop` (hors scope Étape 0, non déplacée) — rebranché vers `inventoryService.getDefaultContainer`.
+  `removeItem` accepte un `trxOrDb` optionnel (P7 du plan, réutilisé par `modingService.installMod` à
+  l'Étape 2). 3 imports devenus morts dans `char-sheet.js` nettoyés (`isEquippableLocation`,
+  `SYMMETRIC_SLOT_PAIRS`, `calcEncumbrancePenalty`).
+- **Testé** : `node --check` 0 erreur sur les deux fichiers (pas d'ESLint côté serveur dans ce repo —
+  confirmé, seul `client/eslint.config.js` existe). 13 scénarios réels en base (fixture jetable,
+  cascade `ON DELETE CASCADE` sur `char_inventory.character_id` vérifiée pour le nettoyage) : stacking
+  munitions (single→stack), conflit "mains déjà occupées" sur 2ᵉ arme 2M (409), split P57 (arme
+  équipable ×2 sans slot → 2 lignes indépendantes quantity=1), armure 1+S+S (équipement slot C),
+  reload avec consommation totale de munitions (ammo supprimée, arme rechargée), retrait partiel
+  (décrément sur stack) et total, quick-equip GM, `getInventory` sur fiche vide — tous passés. SR
+  confirmé (`/api/health` 200). **SR + tests confirmés fonctionnels par Saar.**
+- **Non testé** : parcours navigateur réel (ajout/équipement/recharge/suppression via l'UI Inventaire)
+  — seule la couche service a été exercée directement en base, pas cliqué dans l'UI.
+- **Étapes 1-7 codées et testées dans la foulée (même session, "go" Saar) — Phase A ✅ TERMINÉE.**
+  Migration `137_char_inventory_mods.js` (NOUVEAU — 136 pris entretemps par une session parallèle,
+  P53 reconfirmé une 3ᵉ fois ; `.primary()` pas `.primaryKey()`, corrigé après vérification du style
+  des migrations récentes) : table + `UNIQUE(weapon_inv_id, equipment_id)`, round-trip `down`/`up`
+  réel vérifié (4 contraintes recréées à l'identique). `server/src/services/modingService.js`
+  (NOUVEAU) : `getModingState`/`installMod`, réutilise `WEAPON_FAMILY`/`MOD_CATEGORY`/`removeItem`
+  d'`inventoryService.js`. `shared/events.js` : `WS.MOD_INSTALLED` ajouté. Routes `GET/POST
+  /:characterId/moding/state|install` dans `char-sheet.js` (minces, pattern identique aux routes
+  inventaire). `client/src/lib/useCharacterSocket.js` : handler `onModInstalled` (même pattern que
+  les 3 `onInventory*`). `client/src/character/ModingWindow.jsx` (NOUVEAU) : fenêtre flottante
+  (pattern `TradeWindow.jsx`/`useDraggable`, classes `.combat-win-*` Palette A réutilisées + 7
+  nouvelles classes `.moding-*` ajoutées à `index.css` pour le layout 2 colonnes — aucune existante
+  ne couvrait ce besoin). `InventoryPanel.jsx` : bouton "Customisation" (visible `canEdit` — owner
+  OU GM, **pas** `isGm` seul comme le bloc "Ajouter" voisin, correction du plan en codant : un joueur
+  doit pouvoir installer un mod sur sa propre arme). `CharacterWindow.jsx` : état `modingOpen`,
+  return passé en Fragment pour rendre `<ModingWindow>` en sibling (pas dans l'onglet Matériel — reste
+  ouvert si on change d'onglet).
+- **1 correctif trouvé en écrivant le composant** : `.btn-icon` (réservé aux icônes utilitaires ×/?/➤
+  par sa propre doc CSS) utilisé par erreur sur le bouton texte "Installer" — retiré avant tout test.
+- **Testé service (10 scénarios réels, fixture jetable + cascade vérifiée)** : `getModingState`
+  (arme listée, mod en installable), `installMod` (décrément stock sans suppression si stack > 1,
+  mod apparaît dans `installed_mods`), anti-doublon applicatif (409), **contrainte UNIQUE réelle
+  vérifiée en base** (insert brut en double directement en SQL → violation `23505` interceptée,
+  preuve que le correctif de l'analyse critique du 2026-07-12 fonctionne, pas seulement en théorie),
+  P1 (item custom → 400), incohérence arme=mod (→400), stock épuisé sur 2ᵉ arme → suppression ligne.
+  **Testé HTTP réel** (JWT signé, cookie réel, utilisateur GM réel) : `GET .../moding/state` et
+  `POST .../moding/install` end-to-end, 404 correct sur tentative de réinstallation d'un mod déjà
+  entièrement consommé. **Testé navigateur réel (Playwright headless, chromium déjà installé en
+  local — pas de téléchargement)** : session ouverte via cookie JWT injecté, navigation
+  `/session/:campaignId` → onglet PERSOS → personnage test → onglet Matériel → bouton
+  "Customisation" → fenêtre ouverte (arme "Cougar" listée, mod "Poignée d'identification"
+  installable) → clic "Installer" → **capture d'écran confirmant** : compteur d'en-tête passé à
+  "0 mod installable", arme affichée "Cougar (1)", mod déplacé vers "Mods installés", **et
+  l'inventaire (panneau du dessous) rafraîchi en temps réel sans reload** — la ligne "Poignée
+  d'identification" disparaît du Sac entre les deux captures, preuve que `WS.MOD_INSTALLED` +
+  le handler `onModInstalled` (Étape 5) fonctionnent réellement de bout en bout, pas seulement en
+  isolation. **1 erreur console notée et investiguée** : 500 sur l'onglet "Fiche" (CharacterSheet,
+  ouvert par défaut avant le clic sur Matériel) — confirmé sans rapport avec ce chantier (route
+  `GET /:characterId` intacte depuis Session 141 suite 20, le personnage de test minimal n'a jamais
+  eu de `char_attributes`/`char_archetype` — artefact de fixture, pas une régression). SR confirmé
+  (`/api/health` 200) après chaque étape. Fixtures nettoyées (cascade `ON DELETE CASCADE` vérifiée
+  à chaque fois, 0 résidu).
+- **Non testé** : désinstallation (hors scope Phase A par construction), parcours avec plusieurs
+  mods/armes simultanés, comportement joueur non-GM (testé uniquement avec un compte GM — le bouton
+  "Customisation" et la route serveur n'ont pas de garde `isGm`, seulement `canEdit`/ownership
+  standard du fichier, mais pas re-vérifié avec un compte joueur réel).
+- Détail complet : `docs/PLAN_MODING.md`.
+
+## Session 141 (suite 22) — 2026-07-12 — Bug RD (Résistance aux Dommages) : signe inversé corrigé ⚠️ CLOS PARTIEL
+
+- Trouvé en préparant `docs/PLAN_MUTATION2.md` Lot 3 (Résistance aux Dommages + Choc) : avant de
+  détailler le lot ligne-à-ligne, lecture de `docs/REGLES/REGLESYSCOMBAT.md` (obligatoire avant toute
+  mécanique combat) — le texte dit explicitement *"il faut ensuite **ajouter** le modificateur de
+  Résistance aux Dommages... un personnage fort et résistant va ainsi **réduire** les dégâts, alors
+  que ceux-ci seront peut-être **aggravés** chez un personnage plus faible."* Le code
+  (`damageService.js`/`socketCombatHelpers.js`, duplicata inline) faisait
+  `degatsNets = degautsBruts - etq - rd` — **soustrayait** `rd` au lieu de l'ajouter.
+- **`RD_TABLE`/`calcResistanceDommages` (`shared/polarisUtils.js`) ne sont PAS en cause** — croisées
+  contre la table brute transcrite du LdB p.114 (`docs/Old/AttributsTooltips.md:81-95`, valeurs
+  identiques : FOR+CON 2-5→+6 ... 38-41→-5), la table est une transcription fidèle. Le bug est
+  uniquement dans la formule d'application, pas dans la donnée — même principe que la correction des
+  Résistances naturelles (suite 19) : corriger la pièce qui diverge de la source, jamais celle qui
+  est déjà vérifiée.
+- **`[VÉRIFIÉ]` par exécution réelle avant tout correctif** (pas seulement une lecture, conforme au
+  protocole) : script `node -e` appelant `calcResistanceDommages` + les deux formules sur 3 profils
+  (faible/moyen/fort) — la formule alors en place donnait bien un personnage faible (FOR/CON 4/4)
+  moins touché (6 dégâts nets) qu'un personnage fort (FOR/CON 18/18, 14 dégâts nets) à dégâts bruts
+  identiques (10) — l'inverse de la règle. **Saar a demandé une confirmation explicite sur la
+  robustesse de la solution avant codage** (pas de bricolage) : confirmé que le correctif doit vivre
+  dans la formule de consommation (pas dans la table, qui reste la seule pièce vérifiable contre le
+  livre et aussi utilisée en affichage lecture-seule sur la fiche, `CharacterSheet.jsx:102`).
+- **Corrigé** : `degautsBruts - (etq ?? 0) - rd` → `+ rd`, aux 2 sites réels (`damageService.js`
+  `resolveTargetHit`, `socketCombatHelpers.js` branche PNJ auto-résolution de `resolveMeleeAction` —
+  duplicata inline connu, non consolidé dans ce correctif, dette signalée mais hors scope "un bug à
+  la fois"). Doc alignée sur le nouveau signe : `docs/SYSTEME/COMBAT.md`, `docs/MANUELSYSCOMBAT.md`,
+  `docs/STRUCTURE_SYSCOMBAT.md`.
+- **Effet de bord positif, pas fortuit** : ce correctif lève le "signe non trivial" resté ouvert dans
+  `docs/PLAN_MUTATION2.md` Lot 3 pour `adv_018`/`adv_030`/`adv_060` — une fois la formule corrigée
+  (addition directe), le résolveur générique déjà construit pour les Résistances naturelles
+  (`getAdvantageModForResistance`) s'applique tel quel à RD, sans inversion conditionnelle par
+  `type`. Débloque un Lot 3 propre.
+- **Testé** : instrumentation réelle avant ET après correctif (3 profils, `node -e`,
+  `calcResistanceDommages` exécutée directement), `node --check` sur les 2 fichiers serveur touchés,
+  grep de sweep confirmant l'absence d'un 3ᵉ site avec l'ancien signe, SR (`/api/health` 200).
+- **Non testé** : parcours combat réel en navigateur (CaC ou tir, personnage fort vs faible à dégâts
+  bruts identiques) — scénario proposé à Saar, **explicitement laissé non testé sur sa décision**
+  pour enchaîner directement sur le Lot 3.
+- Détail complet : cette entrée. Pas de fichier `PLAN_*.md` dédié — correctif ponctuel trouvé et
+  traité en ouvrant le Lot 3.

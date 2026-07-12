@@ -22,6 +22,7 @@ import CharacterSheet from './CharacterSheet.jsx'
 import ArmorWoundPanel from './ArmorWoundPanel.jsx'
 import WeaponPanel from './WeaponPanel.jsx'
 import InventoryPanel from './InventoryPanel.jsx'
+import ModingWindow from './ModingWindow.jsx'
 
 // ─── Constantes fenêtre ───────────────────────────────────────────────────────
 const WIN_INIT_W = 720
@@ -169,6 +170,7 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
   // ─── État UI ───────────────────────────────────────────────────────────────
   const [inventoryVersion, setInventoryVersion] = useState(0)
   const bumpInventoryVersion = useCallback(() => setInventoryVersion(v => v + 1), [])
+  const [modingOpen, setModingOpen] = useState(false) // docs/PLAN_MODING.md Phase A
 
   // Reload ArmorWoundPanel/WeaponPanel/InventoryPanel quand INVENTORY_* arrive via SessionPage
   const prevInventoryKeyRef = useRef(0)
@@ -306,6 +308,7 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
 
   // ─── Rendu ─────────────────────────────────────────────────────────────────
   return (
+    <>
     <div
       style={{ ...s.window, left: pos.x, top: pos.y, width: size.w, height: size.h }}
       onPointerDown={e => e.stopPropagation()}
@@ -408,6 +411,7 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
               isGm={effectiveIsGm}
               reloadKey={inventoryVersion}
               onInventoryMutated={bumpInventoryVersion}
+              onOpenModing={() => setModingOpen(true)}
             />
           </>
         )}
@@ -563,6 +567,18 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
       />
 
     </div>
+
+    {/* docs/PLAN_MODING.md Phase A — fenêtre flottante indépendante, sibling (pas dans un onglet) */}
+    {modingOpen && (
+      <ModingWindow
+        characterId={character.id}
+        canEdit={effectiveIsGm || effectiveIsOwner}
+        onClose={() => setModingOpen(false)}
+        reloadKey={inventoryVersion}
+        onInventoryMutated={bumpInventoryVersion}
+      />
+    )}
+    </>
   )
 }
 

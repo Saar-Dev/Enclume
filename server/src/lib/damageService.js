@@ -39,9 +39,11 @@ export async function resolveTargetHit(io, db, campaignId, {
     etq = calcResistanceArmure(armuresSlot).etq
   }
 
-  // 3. RD + dégâts nets
+  // 3. RD + dégâts nets — RD_TABLE encode le modificateur tel qu'imprimé au LdB p.114 (positif pour
+  // un personnage faible, négatif pour un personnage fort) ; la règle dit de l'AJOUTER aux dégâts
+  // (REGLESYSCOMBAT.md ~1612 : "il faut ensuite ajouter le modificateur de Résistance aux Dommages").
   const rd        = calcResistanceDommages(for_na_cible, con_na_cible)
-  const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) - rd)
+  const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) + rd)
 
   // 4. Sévérité
   let severity = null, is_lethal = false

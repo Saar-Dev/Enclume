@@ -404,7 +404,7 @@ Si hit :
   rawDice = parseDice(damageFormula)
   degautsBruts = rawDice + modDom + combatModeBonus
   rd = calcResistanceDommages(for_na, con_na)
-  degatsNets = max(0, degautsBruts - etq - rd)
+  degatsNets = max(0, degautsBruts - etq + rd)
   severity (tranches de 5 : legere/moyenne/grave/critique/mortelle/mortelle+)
   woundService.applyWound()
   resolveShockTest() → shockResult

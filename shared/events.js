@@ -68,6 +68,10 @@ export const WS = {
   INVENTORY_REMOVED: 'inventory:removed',  // serveur → room : item supprimé
   SOLS_UPDATED:      'sols:updated',       // serveur → room : solde sols modifié
 
+  // Moding (docs/PLAN_MODING.md Phase A) — event dédié plutôt que détourner INVENTORY_UPDATED sur
+  // une ligne d'arme qui, elle, ne change pas réellement (les mods vivent dans une table séparée)
+  MOD_INSTALLED: 'mod:installed',  // serveur → room : mod installé sur une arme { characterId, weaponInvId, mods }
+
   // Combat (Chantier 11 — Sprint 1+)
   // Démarrage / arrêt
   COMBAT_START:          'combat:start',           // GM → serveur

@@ -1,3 +1,27 @@
+## v178 — 2026-07-12 — Customisation d'armes : installer un module depuis l'inventaire
+
+### Client
+- [feat] Nouveau bouton "Customisation" dans l'inventaire d'un personnage (visible par son
+  propriétaire ou le MJ) : ouvre une fenêtre listant les armes et les modules (accessoires) en
+  stock, avec un bouton "Installer" par module disponible sur l'arme sélectionnée.
+- [feat] Un module installé disparaît de l'inventaire et s'affiche dans la liste des mods de l'arme,
+  rafraîchie en temps réel pour tous les onglets ouverts.
+
+### Serveur
+- [feat] Nouvelle table `char_inventory_mods` (modules installés sur une arme, protégée par une
+  contrainte d'unicité arme+module en base).
+- [refactor] Logique inventaire (`char-sheet.js`) extraite dans `services/inventoryService.js` —
+  aucun changement de comportement, préparation pour la fonctionnalité de customisation.
+- [note] Effet purement cosmétique/rangement pour l'instant — les bonus mécaniques des modules
+  seront branchés dans un chantier séparé (Phase B).
+
+## v177 — 2026-07-12 — Correctif : Résistance aux Dommages appliquée à l'envers en combat
+
+### Serveur
+- [fix] Le modificateur de Résistance aux Dommages (RD, calculé depuis Force+Constitution) était
+  soustrait des dégâts au lieu d'être ajouté — un personnage fort/résistant encaissait donc PLUS de
+  dégâts qu'un personnage faible, l'inverse de la règle. Corrigé en corps à corps et à distance.
+
 ## v176 — 2026-07-12 — Fiche personnage : blocs repliables + Attributs secondaires réorganisés
 
 ### Client

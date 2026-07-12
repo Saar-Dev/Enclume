@@ -1118,6 +1118,65 @@ Convention :
   font-weight: 600;
 }
 
+/* ── Moding (docs/PLAN_MODING.md) — fenêtre flottante, réutilise Palette A ──── */
+.moding-window {
+  position: fixed;
+  z-index: 9100; /* au-dessus de CharacterWindow (9000) */
+}
+
+.moding-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.moding-weapons {
+  flex: 0 0 40%;
+  overflow-y: auto;
+  border-right: 1px solid var(--combat-border);
+}
+
+.moding-weapon-row {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--combat-cell);
+  border-bottom: 1px solid var(--combat-row);
+  cursor: pointer;
+}
+.moding-weapon-row:hover     { background: var(--combat-header); }
+.moding-weapon-row-active    { background: var(--combat-header); color: var(--combat-title); font-weight: 600; }
+
+.moding-detail {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 12px 10px;
+  min-width: 0;
+}
+
+.moding-mod-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 11px;
+  color: var(--combat-cell);
+  border-bottom: 1px solid var(--combat-sep);
+}
+
+.moding-empty {
+  color: var(--combat-field);
+  font-size: 11px;
+  padding: 10px 0;
+  text-align: center;
+}
+
+.moding-error {
+  color: var(--combat-alert-fg);
+  font-size: 10px;
+  padding: 4px 0;
+}
+
 /* ── Badges rôle PJ / PNJ ─────────────────────────────────────────── */
 .combat-badge-pj {
   font-size: 9px;

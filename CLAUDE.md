@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 20) — 2026-07-12
+> Session 141 (suite 22) — 2026-07-12
 
 ---
 
@@ -112,8 +112,52 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 20) (2026-07-12)
+## ÉTAT COURANT — Session 141 (suite 22) (2026-07-12)
 
+- **Session 141 (suite 21) — `docs/PLAN_MODING.md` Phase A (Customisation d'armes) ✅ TERMINÉE,
+  8/8 étapes.** Chantier repris après levée de la pause du 2026-07-09 (Tir visé, bloquant pour la
+  Phase B, clos Session 141 suite 17 — dette `TIRVISE` close). Analyse critique demandée par Saar
+  avant codage : gap trouvé (anti-doublon `char_inventory_mods` protégé seulement côté applicatif,
+  fenêtre de course avec un mod en stack ×2+) corrigé par une contrainte `UNIQUE(weapon_inv_id,
+  equipment_id)`, précédent direct `uq_char_mut_no_sub` (migration 109). Étape 0 (extraction
+  `server/src/services/inventoryService.js` depuis `char-sheet.js` — 6 routes + 4 helpers, aucun
+  changement de comportement) codée et **confirmée fonctionnelle par Saar** avant de poursuivre.
+  Étapes 1-7 enchaînées ensuite : migration `137_char_inventory_mods` (136 déjà pris par une
+  session parallèle, P53 reconfirmé une 3ᵉ fois), `modingService.js` (`getModingState`/`installMod`),
+  `WS.MOD_INSTALLED`, routes `GET/POST /:characterId/moding/*`, handler socket client
+  `onModInstalled`, `ModingWindow.jsx` (NOUVEAU, fenêtre flottante pattern `TradeWindow.jsx`), bouton
+  "Customisation" dans `InventoryPanel.jsx` (gaté `canEdit` — owner OU GM, pas `isGm` seul comme le
+  bloc "Ajouter" voisin, correction faite en codant). **Testé à 3 niveaux** : service (10 scénarios
+  réels, dont vérification directe que la contrainte UNIQUE rejette un insert brut en double —
+  `23505`), HTTP réel (JWT signé), **navigateur réel (Playwright headless piloté, capture d'écran
+  avant/après)** — installation d'un mod confirmée visuellement, inventaire rafraîchi en temps réel
+  sans reload. Aucune régression trouvée sur le reste de l'inventaire (13 scénarios non-régression
+  Étape 0). **Non testé** : parcours navigateur rejoué manuellement par Saar (Étapes 1-7 validées
+  par l'automate seulement), compte joueur non-GM. Détail complet : `docs/PLAN_MODING.md`,
+  `docs/JOURNAL6.md` "Session 141 (suite 21)".
+- **Session 141 (suite 22) — Bug RD (Résistance aux Dommages) : signe inversé corrigé
+  ⚠️ CLOS PARTIEL.** Trouvé en ouvrant `docs/PLAN_MUTATION2.md` Lot 3 : lecture obligatoire de
+  `docs/REGLES/REGLESYSCOMBAT.md` avant mécanique combat — la règle dit d'**ajouter** le modificateur
+  de Résistance aux Dommages aux dégâts ("un personnage fort et résistant va réduire les dégâts,
+  faible... aggravés"), le code (`damageService.js`/`socketCombatHelpers.js`, duplicata inline) le
+  **soustrayait**. `RD_TABLE`/`calcResistanceDommages` (`shared/polarisUtils.js`) hors de cause —
+  croisées correctes contre la table brute LdB (`docs/Old/AttributsTooltips.md`), le bug est dans la
+  formule de consommation, pas la donnée (même principe que la correction Résistances naturelles,
+  suite 19 : corriger la pièce qui diverge de la source vérifiée). **`[VÉRIFIÉ]` par exécution réelle
+  avant/après** (`node -e`, 3 profils FOR/CON) : formule fautive donnait un personnage fort (18/18)
+  plus touché (14 dégâts nets) qu'un faible (4/4, 6 dégâts) à dégâts bruts identiques — corrigé,
+  désormais fort=6/faible=14, conforme à la règle. **Saar a explicitement demandé confirmation de la
+  robustesse de la solution avant codage** (pas de bricolage) — confirmé que le correctif doit vivre
+  dans la formule (pas la table, seule pièce vérifiable contre le livre et utilisée en affichage
+  fiche lecture-seule). Corrigé aux 2 sites réels (`degautsBruts - etq - rd` → `+ rd`), doc alignée
+  (`docs/SYSTEME/COMBAT.md`, `docs/MANUELSYSCOMBAT.md`, `docs/STRUCTURE_SYSCOMBAT.md`). **Effet de
+  bord positif** : lève le "signe non trivial" ouvert dans `PLAN_MUTATION2.md` Lot 3 pour
+  `adv_018`/`adv_030`/`adv_060` — le résolveur générique déjà construit pour les Résistances
+  naturelles (`getAdvantageModForResistance`) s'applique désormais tel quel à RD, sans inversion par
+  `type`. Testé : instrumentation réelle avant/après, `node --check`, grep de sweep (aucun 3ᵉ site),
+  SR. **Non testé** : parcours combat réel en navigateur — laissé non testé sur décision explicite de
+  Saar pour enchaîner directement sur le Lot 3. Détail complet : item "64." `docs/EN_COURS.md`,
+  `docs/JOURNAL6.md` "Session 141 (suite 22)".
 - **Session 141 (suite 20) — Bonus féminin : règle fixe -2 FOR/+1 COO/+1 PRE + revalidation du
   bascule Sexe ✅ CLOS.** Demande Saar : la mécanique `feminin_bonus` (remise forfaitaire invisible
   sur COO/PRE, Session 141 suite 14) n'est pas compréhensible — simplification en règle fixe, sans
@@ -615,7 +659,9 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **141 migrations stables** (135_ref_equipment_skill_assoc_weapons — Session 141 (suite 16) ;
+- **142 migrations stables** (137_char_inventory_mods — Moding Phase A, Session 141 (suite 21) ;
+  136_fix_ref_resistance_naturelle_sign — session parallèle ;
+  135_ref_equipment_skill_assoc_weapons — Session 141 (suite 16) ;
   134_combat_actions_aim_bonus_comp — Tir visé, Session 141 (suite 17) ;
   133_char_sheet_wizard_locked_backfill — Session 141 (suite 14) ;
   132_char_sheet_dedupe_and_unique — Session 141 (suite 14) ;

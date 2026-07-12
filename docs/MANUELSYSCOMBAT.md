@@ -201,7 +201,7 @@ Contrairement au combat a distance (test simple), le CaC utilise un **test d'opp
 
 [4. Dommages (si attaque passe)]
    Dommages_Bruts = rawDice + ModDom(FOR_attaquant)         ← impl V1 (règle LdB : Arme + MR + ModDom — dette Session 67)
-   Dommages_Nets  = max(0, Dommages_Bruts - etq - rd)
+   Dommages_Nets  = max(0, Dommages_Bruts - etq + rd)
      etq = calcResistanceArmure(armures équipées, localisation touchée).etq   [mille-feuille]
      rd  = calcResistanceDommages(FOR_na_cible, CON_na_cible)                 [table RD_TABLE, positif ou négatif]
    Gravité = par tranche de 5 points nets
