@@ -32,10 +32,10 @@ import api from '../lib/api.js'
 import SkillsPanel from './SkillsPanel.jsx'
 import AdvantagesPanel from './AdvantagesPanel.jsx'
 import {
-  polarisRound, calcAN, calcAllureMoy, calcAllures,
+  calcAN, calcAllureMoy, calcAllures,
   calcNA, getGenotypeModForAttr, getMutationModForAttr,
-  calcREA, getAdvantageModForAttr, getAdvantageModForResistance,
-  calcResistanceDommages, calcResistanceNaturelle, calcResistanceDroguesInput, calcSouffle,
+  calcREA, getAdvantageModForAttr, getAdvantageModForResistance, getMutationModForResistance,
+  calcResistanceDommages, calcResistanceNaturelle, calcResistanceDroguesInput, calcSouffle, calcSeuils,
 } from '../../../shared/polarisUtils.js'
 
 // ─── Constantes métier ────────────────────────────────────────────────────────
@@ -82,11 +82,10 @@ const calcModDom = (forNA) => {
   return entry ? entry.val : -6
 }
 
-// Résistances naturelles (poison/maladie/radiation/drogue) : attribut(table LdB p.114) + mutation +
-// avantage, même pipeline que le serveur (docs/PLAN_RESNAT.md). Résistance aux dommages : base
-// uniquement (FOR+CON), sans mutation/avantage — resolveTargetHit/resolveMeleeAction (résolution
-// réelle des dégâts) ne les consomment pas encore (Lot 3 de docs/PLAN_MUTATION2.md, non traité ici) ;
-// les inclure ici créerait un écart fiche/résolution (affichage optimiste jamais appliqué en jeu).
+// Résistance aux Dommages + Choc (Seuils) + Résistances naturelles : attribut (table LdB p.114) +
+// mutation + avantage, même pipeline que le serveur (docs/PLAN_RESNAT.md, docs/PLAN_MUTATION2.md
+// Lot 3). RD/Choc désormais rebranchés à la résolution de combat réelle (resolveTargetHit via
+// damageService.js) dans la même passe que la fiche — plus d'écart fiche/résolution.
 const calcSecondary = (naMap, charAdvantages, mutationEffects) => {
   const FOR = naMap['FOR'] || 3
   const CON = naMap['CON'] || 3
@@ -94,16 +93,17 @@ const calcSecondary = (naMap, charAdvantages, mutationEffects) => {
   const PER = naMap['PER'] || 3
   const VOL = naMap['VOL'] || 3
 
-  const rea         = calcREA(ADA, PER, getAdvantageModForAttr(charAdvantages, 'reaction'))
-  const initiative  = rea
-  const seuilEtour  = polarisRound((FOR + CON + VOL) / 3)
-  const seuilIncons = seuilEtour + 10
+  const rea    = calcREA(ADA, PER, getAdvantageModForAttr(charAdvantages, 'reaction'))
+  const initiative = rea
+  const seuils = calcSeuils(FOR, CON, VOL, getMutationModForResistance(mutationEffects, 'shock'), getAdvantageModForResistance(charAdvantages, 'shock'))
+  const seuilEtour  = seuils.etourdissement
+  const seuilIncons = seuils.inconscience
   const modDom      = calcModDom(FOR)
-  const resistanceDommages = calcResistanceDommages(FOR, CON)
-  const resistancePoison    = calcResistanceNaturelle(CON) + (mutationEffects?.mod_res_poison ?? 0) + getAdvantageModForResistance(charAdvantages, 'poison')
-  const resistanceMaladie   = calcResistanceNaturelle(CON) + (mutationEffects?.mod_res_disease ?? 0) + getAdvantageModForResistance(charAdvantages, 'disease')
-  const resistanceRadiation = calcResistanceNaturelle(CON) + (mutationEffects?.mod_res_radiation ?? 0) + getAdvantageModForResistance(charAdvantages, 'radiation')
-  const resistanceDrogues   = calcResistanceNaturelle(calcResistanceDroguesInput(CON, VOL)) + (mutationEffects?.mod_res_drugs ?? 0) + getAdvantageModForResistance(charAdvantages, 'drugs')
+  const resistanceDommages = calcResistanceDommages(FOR, CON, getMutationModForResistance(mutationEffects, 'damage'), getAdvantageModForResistance(charAdvantages, 'damage'))
+  const resistancePoison    = calcResistanceNaturelle(CON) + getMutationModForResistance(mutationEffects, 'poison') + getAdvantageModForResistance(charAdvantages, 'poison')
+  const resistanceMaladie   = calcResistanceNaturelle(CON) + getMutationModForResistance(mutationEffects, 'disease') + getAdvantageModForResistance(charAdvantages, 'disease')
+  const resistanceRadiation = calcResistanceNaturelle(CON) + getMutationModForResistance(mutationEffects, 'radiation') + getAdvantageModForResistance(charAdvantages, 'radiation')
+  const resistanceDrogues   = calcResistanceNaturelle(calcResistanceDroguesInput(CON, VOL)) + getMutationModForResistance(mutationEffects, 'drugs') + getAdvantageModForResistance(charAdvantages, 'drugs')
   const souffle = calcSouffle(CON, VOL, getAdvantageModForAttr(charAdvantages, 'breath'))
 
   return {

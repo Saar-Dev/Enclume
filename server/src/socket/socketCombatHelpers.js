@@ -12,12 +12,10 @@ import { getMutationEffects } from '../services/mutationService.js'
 import {
   calcSkillTotal, calcAttributeNA,
   calcWoundPenalty, calcEncumbrancePenalty,
-  calcResistanceArmure,
   getModDom, calcDroneRD, calcDroneDegatsNets,
 } from '../lib/charStats.js'
-import { calcResistanceDommages } from '../../../shared/polarisUtils.js'
 import { isCaseOccupied, collisionMoveToken } from '../lib/redis.js'
-import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS, LOC_TABLE } from '../../../shared/armorConstants.js'
+import { LOCATION_LABELS } from '../../../shared/armorConstants.js'
 
 
 // ─── Breakdown jets de dé — tables et labels ────────────────────────────────
@@ -683,66 +681,40 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       } })
 
       if (hit) {
-        // Dégâts auto (même logique que PNJ dans resolveAssaultAction)
-        const { total: rollLoc } = await parseDice('1d20')
-        const slotCode    = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
-        const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
-
-        let etq = null
-        if (char_sheet_id_cible && defenderCharacter.id) {
-          const armuresCible = await db('char_inventory')
-            .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-            .where({ 'char_inventory.character_id': defenderCharacter.id })
-            .whereNotNull('char_inventory.slot')
-            .select('char_inventory.slot', 'ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock')
-          const armuresSlot = armuresCible.filter(a =>
-            a.slot && ('/' + a.slot + '/').includes('/' + slotCode + '/')
-          )
-          etq = calcResistanceArmure(armuresSlot).etq
-        }
-
+        // Dégâts auto (même logique que PNJ dans resolveAssaultAction) — délègue entièrement à
+        // damageService.resolveTargetHit (localisation/armure/RD/sévérité/blessure/shock), qui
+        // fetch désormais aussi mutations/avantages pour RD/Choc (docs/PLAN_MUTATION2.md Lot 3).
+        // Ancien duplicata inline retiré — c'est exactement la duplication qui avait nécessité un
+        // 2ᵉ correctif lors du bug de signe RD (Session 141 suite 22).
         const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
         const degautsBruts = rawDice + (modDom ?? 0) + combatModeBonus
-        // RD ajouté aux dégâts (pas soustrait) — voir damageService.js:resolveTargetHit, même formule
-        const rd = calcResistanceDommages(for_na_cible, con_na_cible)
-        const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) + rd)
-
-        let severity = null, is_lethal = false
-        if      (degatsNets >= 30) { severity = 'mortelle'; is_lethal = true }
-        else if (degatsNets >= 25) { severity = 'mortelle' }
-        else if (degatsNets >= 20) { severity = 'critique' }
-        else if (degatsNets >= 15) { severity = 'grave'    }
-        else if (degatsNets >= 10) { severity = 'moyenne'  }
-        else if (degatsNets >=  5) { severity = 'legere'   }
-
-        let finalSeverity = severity, shockResult = null
-        const woundResult = await woundService.applyWound(io, db, campaignId, {
-          charSheetId: char_sheet_id_cible, characterId: defenderCharacter.id,
-          localisation, severity,
+        const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+          degautsBruts,
+          characterIdCible: defenderCharacter.id,
+          cibleType:        defenderCharacter.type,
+          char_sheet_id_cible,
+          for_na_cible, con_na_cible, vol_na_cible,
         })
-        if (woundResult) {
-          finalSeverity = woundResult.finalSeverity
-          shockResult = await statusService.resolveShockTest({
-            finalSeverity, localisation, is_lethal,
-            for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
-          })
-        }
 
-        if (shockResult) {
-          statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, attackerUsername, attackerColor)
-        }
+        if (hitResult) {
+          const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
 
-        emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-          tireurId:    action.token_id, cibleId: targetTokenId,
-          localisation, degautsBruts, degatsNets,
-          severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
-          roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
-        } })
-        if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-          statusService.applyStun(io, db, campaignId, {
-            targetTokenId, outcome: shockResult.outcome,
-            userId: character.user_id, username: attackerUsername, color: attackerColor,
-          }).catch(err => console.error('[WS] applyStun error:', err.message))
+          if (shockResult) {
+            statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, attackerUsername, attackerColor)
+          }
+
+          emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+            tireurId:    action.token_id, cibleId: targetTokenId,
+            localisation, degautsBruts, degatsNets,
+            severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
+            roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
+          } })
+          if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+            statusService.applyStun(io, db, campaignId, {
+              targetTokenId, outcome: shockResult.outcome,
+              userId: character.user_id, username: attackerUsername, color: attackerColor,
+            }).catch(err => console.error('[WS] applyStun error:', err.message))
+          }
         }
       }
 

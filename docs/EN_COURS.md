@@ -73,14 +73,17 @@
 > dont vérification directe que la contrainte UNIQUE rejette bien un insert brut en double, `23505`),
 > HTTP réel (JWT signé), **et navigateur réel (Playwright headless, parcours complet avec capture
 > d'écran avant/après — installation d'un mod confirmée visuellement, inventaire rafraîchi en temps
-> réel sans reload)**. **Non testé par Saar en direct** (testé par instrumentation seulement) : le
-> parcours navigateur Étapes 1-7 n'a pas encore été rejoué par Saar lui-même, seulement par
-> l'automate Playwright — un dernier passage manuel en session reste recommandé avant de considérer
-> le chantier définitivement clos. **Phase A du plan 8/8 étapes codées.** Phase B (effet mécanique
-> des mods en combat) reste hors scope, à planifier séparément si voulu. Détail complet :
-> `docs/PLAN_MODING.md`, `docs/JOURNAL6.md` "Session 141 (suite 21)",
-> `server/src/services/inventoryService.js`/`modingService.js` (NOUVEAUX),
-> `client/src/character/ModingWindow.jsx` (NOUVEAU).
+> réel sans reload)**. **Incident post-livraison résolu** : Saar a d'abord signalé le bouton
+> "Customisation" invisible — diagnostic par instrumentation (commit `dfc1283` vérifié complet
+> ligne par ligne, fichier `InventoryPanel.jsx` relu sur disque, Vite confirmé servant
+> `ModingWindow.jsx` sans erreur de compilation) a écarté toute régression de code ; cause retenue :
+> onglet navigateur resté ouvert pendant le codage (HMR Vite n'a pas propagé le changement de
+> structure de `CharacterWindow.jsx`, return passé en Fragment). **Rechargement complet (Ctrl+Shift+R)
+> → confirmé fonctionnel par Saar.** **Phase A du plan 8/8 étapes codées et testées de bout en bout,
+> parcours navigateur confirmé par Saar.** Phase B (effet mécanique des mods en combat) reste hors
+> scope, à planifier séparément si voulu. Détail complet : `docs/PLAN_MODING.md`,
+> `docs/JOURNAL6.md` "Session 141 (suite 21)", `server/src/services/inventoryService.js`/
+> `modingService.js` (NOUVEAUX), `client/src/character/ModingWindow.jsx` (NOUVEAU).
 
 > **Item 62 (Session 141 suite 20) — Bonus féminin : règle fixe ✅ CLOS.** Signalement Saar : la
 > mécanique `feminin_bonus` (remise forfaitaire invisible sur COO/PRE, Session 141 suite 14) n'est

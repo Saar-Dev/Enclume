@@ -2864,6 +2864,16 @@ Détail complet, étape par étape avec tous les tests : `docs/PLAN_VAULT.md`.
   eu de `char_attributes`/`char_archetype` — artefact de fixture, pas une régression). SR confirmé
   (`/api/health` 200) après chaque étape. Fixtures nettoyées (cascade `ON DELETE CASCADE` vérifiée
   à chaque fois, 0 résidu).
+- **Incident post-livraison, résolu même session** : Saar signale le bouton "Customisation" invisible
+  en session réelle après le commit. Diagnostic par instrumentation (pas de supposition) : commit
+  `dfc1283` (fait par Saar, `git add . && git commit` suivant le rappel de fin de tâche) vérifié
+  complet — les 23 fichiers attendus dont `CharacterWindow.jsx`/`InventoryPanel.jsx` sont bien dedans ;
+  `InventoryPanel.jsx` relu sur disque, code du bouton intact et correctement gaté `canEdit` ; Vite
+  confirmé servant `ModingWindow.jsx` sans erreur de compilation (`curl` direct sur le module, 200).
+  Cause retenue (pas de régression code) : onglet navigateur resté ouvert pendant le codage — le HMR
+  Vite n'a pas propagé le changement structurel de `CharacterWindow.jsx` (return transformé en
+  Fragment pour accueillir `<ModingWindow>` en sibling). **Rechargement complet (Ctrl+Shift+R) →
+  confirmé fonctionnel par Saar.**
 - **Non testé** : désinstallation (hors scope Phase A par construction), parcours avec plusieurs
   mods/armes simultanés, comportement joueur non-GM (testé uniquement avec un compte GM — le bouton
   "Customisation" et la route serveur n'ont pas de garde `isGm`, seulement `canEdit`/ownership

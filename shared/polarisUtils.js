@@ -62,6 +62,21 @@ export function getAdvantageModForResistance(advantageRows, resistanceKey) {
   return sumModByKey(advantageRows, 'mod_resistance', 'mod_res_value', resistanceKey)
 }
 
+// Pendant mutation de getAdvantageModForResistance ci-dessus : char_mutation_effects_view a des
+// colonnes fixes par résistance (pas une liste à filtrer) — même différence de forme que
+// ATTR_TO_MUTATION_MOD/getMutationModForAttr (Lot 1) vs getAdvantageModForAttr (Lot 2).
+export const RESISTANCE_TO_MUTATION_MOD = {
+  damage: 'mod_res_damage', shock: 'mod_res_shock',
+  poison: 'mod_res_poison', disease: 'mod_res_disease',
+  radiation: 'mod_res_radiation', drugs: 'mod_res_drugs',
+}
+
+export function getMutationModForResistance(mutationEffectsRow, resistanceKey) {
+  if (!mutationEffectsRow) return 0
+  const col = RESISTANCE_TO_MUTATION_MOD[resistanceKey]
+  return col ? (mutationEffectsRow[col] ?? 0) : 0
+}
+
 // TOTAL_MALUS = 0 en V1 — historique XP non implémenté (voir server/src/lib/charStats.js).
 const TOTAL_MALUS = 0
 
@@ -116,23 +131,23 @@ function lookupTable(table, value, prop) {
   return row ? row[prop] : null
 }
 
-// Pas de mod_advantage ici (contrairement à calcREA/calcSouffle) : adv_030/adv_060 (Résistance au
-// Choc) ne sont pas encore consommés en résolution réelle (resolveShockTest, socketDice/char-sheet
-// macros) — Lot 3 de docs/PLAN_MUTATION2.md, non traité ici. Ajouter le paramètre sans rebrancher
-// tous les appelants réels créerait un écart fiche/résolution (affichage optimiste, jamais appliqué
-// en jeu) — reporté au Lot 3, qui devra toucher affichage ET résolution ensemble.
-export function calcSeuils(for_na, con_na, vol_na) {
-  const etourdissement = polarisRound((for_na + con_na + vol_na) / 3)
+// mod_mutation (mod_res_shock, char_mutation_effects_view) + mod_advantage (adv_030/adv_060,
+// mod_resistance='shock') — addition directe sur les deux seuils (docs/PLAN_MUTATION2.md Lot 3).
+// Rebranché aux 2 points de résolution réels (resolveTargetHit/resolveMeleeAction via
+// statusService.resolveShockTest) ET à la fiche (CharacterSheet.jsx) dans la même passe.
+export function calcSeuils(for_na, con_na, vol_na, mod_mutation, mod_advantage) {
+  const etourdissement = polarisRound((for_na + con_na + vol_na) / 3) + (mod_mutation ?? 0) + (mod_advantage ?? 0)
   return { etourdissement, inconscience: etourdissement + 10 }
 }
 
-// Pas de mod_mutation/mod_advantage ici, même raison que calcSeuils ci-dessus : resolveTargetHit/
-// resolveMeleeAction (résolution de dégâts réelle) n'appellent aujourd'hui calcResistanceDommages
-// qu'avec (for_na, con_na) — Lot 3, non traité ici.
-export function calcResistanceDommages(for_na, con_na) {
+// mod_mutation (mod_res_damage) + mod_advantage (adv_018, mod_resistance='damage') — addition
+// directe sur RD (docs/PLAN_MUTATION2.md Lot 3). Le signe de base (table LdB, ajoutée aux dégâts —
+// voir le correctif du bug RD, Session 141 suite 22) rend cette addition directe correcte sans
+// inversion, symétrique à getAdvantageModForResistance/getMutationModForResistance ci-dessus.
+export function calcResistanceDommages(for_na, con_na, mod_mutation, mod_advantage) {
   const sum = for_na + con_na
-  if (sum > 41) return -5 - Math.floor((sum - 41) / 4)
-  return lookupTable(RD_TABLE, sum, 'rd') ?? 0
+  const base = sum > 41 ? -5 - Math.floor((sum - 41) / 4) : (lookupTable(RD_TABLE, sum, 'rd') ?? 0)
+  return base + (mod_mutation ?? 0) + (mod_advantage ?? 0)
 }
 
 export function calcResistanceNaturelle(result_na) {

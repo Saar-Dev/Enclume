@@ -39,8 +39,8 @@ import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { getCoutAugmentation, getCoutDeblocageX, calcWoundPenalty, calcSkillTotal, calcAttributeNA } from '../../lib/charStats.js'
 import {
-  calcREA, getAdvantageModForAttr, getAdvantageModForResistance,
-  calcSeuils, calcSouffle, calcResistanceDroguesInput, calcResistanceNaturelle,
+  calcREA, getAdvantageModForAttr, getAdvantageModForResistance, getMutationModForResistance,
+  calcSeuils, calcSouffle, calcResistanceDroguesInput, calcResistanceNaturelle, calcResistanceDommages,
 } from '../../../../shared/polarisUtils.js'
 import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from '../../lib/woundUtils.js'
 import { getAdvantages, addAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
@@ -1133,6 +1133,7 @@ router.get('/:characterId/macro-options', async (req, res, next) => {
       { id: 'seuil_etourdi',      label: 'Seuil Étourdissement' },
       { id: 'seuil_incons',       label: 'Seuil Inconscience' },
       { id: 'souffle',            label: 'Souffle' },
+      { id: 'resistance_dommages',  label: 'Résistance aux dommages' },
       { id: 'resistance_drogues',   label: 'Résistance aux drogues' },
       { id: 'resistance_poison',    label: 'Résistance aux poisons' },
       { id: 'resistance_maladie',   label: 'Résistance aux maladies' },
@@ -1169,13 +1170,14 @@ router.post('/:characterId/macro-preview', async (req, res, next) => {
     const secondaryValue = (key) => {
       switch (key) {
         case 'rea':                return calcREA(na('ADA'), na('PER'), getAdvantageModForAttr(advantages, 'reaction'))
-        case 'seuil_etourdi':      return calcSeuils(na('FOR'), na('CON'), na('VOL')).etourdissement
-        case 'seuil_incons':       return calcSeuils(na('FOR'), na('CON'), na('VOL')).inconscience
+        case 'seuil_etourdi':      return calcSeuils(na('FOR'), na('CON'), na('VOL'), getMutationModForResistance(mutationEffects, 'shock'), getAdvantageModForResistance(advantages, 'shock')).etourdissement
+        case 'seuil_incons':       return calcSeuils(na('FOR'), na('CON'), na('VOL'), getMutationModForResistance(mutationEffects, 'shock'), getAdvantageModForResistance(advantages, 'shock')).inconscience
         case 'souffle':            return calcSouffle(na('CON'), na('VOL'), getAdvantageModForAttr(advantages, 'breath'))
-        case 'resistance_drogues':   return calcResistanceNaturelle(calcResistanceDroguesInput(na('CON'), na('VOL'))) + (mutationEffects?.mod_res_drugs ?? 0) + getAdvantageModForResistance(advantages, 'drugs')
-        case 'resistance_poison':    return calcResistanceNaturelle(na('CON')) + (mutationEffects?.mod_res_poison ?? 0) + getAdvantageModForResistance(advantages, 'poison')
-        case 'resistance_maladie':   return calcResistanceNaturelle(na('CON')) + (mutationEffects?.mod_res_disease ?? 0) + getAdvantageModForResistance(advantages, 'disease')
-        case 'resistance_radiation': return calcResistanceNaturelle(na('CON')) + (mutationEffects?.mod_res_radiation ?? 0) + getAdvantageModForResistance(advantages, 'radiation')
+        case 'resistance_dommages':  return calcResistanceDommages(na('FOR'), na('CON'), getMutationModForResistance(mutationEffects, 'damage'), getAdvantageModForResistance(advantages, 'damage'))
+        case 'resistance_drogues':   return calcResistanceNaturelle(calcResistanceDroguesInput(na('CON'), na('VOL'))) + getMutationModForResistance(mutationEffects, 'drugs') + getAdvantageModForResistance(advantages, 'drugs')
+        case 'resistance_poison':    return calcResistanceNaturelle(na('CON')) + getMutationModForResistance(mutationEffects, 'poison') + getAdvantageModForResistance(advantages, 'poison')
+        case 'resistance_maladie':   return calcResistanceNaturelle(na('CON')) + getMutationModForResistance(mutationEffects, 'disease') + getAdvantageModForResistance(advantages, 'disease')
+        case 'resistance_radiation': return calcResistanceNaturelle(na('CON')) + getMutationModForResistance(mutationEffects, 'radiation') + getAdvantageModForResistance(advantages, 'radiation')
         default:                   return 0
       }
     }
