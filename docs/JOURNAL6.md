@@ -3092,3 +3092,178 @@ Détail complet, étape par étape avec tous les tests : `docs/PLAN_VAULT.md`.
   conditions réelles (couvert par construction — armes naturelles absentes de `char_inventory`,
   jamais comptées dans `deuxArmesBonus` — pas re-testé manuellement).
 - Détail complet : `docs/PLAN_MUTATION2.md` Lot 4 (sous-lots A et B).
+
+## Session 141 (suite 26) — 2026-07-12 — `docs/PLAN_MUTATION2.md` Lot 5 : Déblocage de compétences (`[CS7]`) ✅ CLOS
+
+- Diagnostic `[VÉRIFIÉ]` par requêtes réelles : `SkillsPanel.jsx` (`activeMutations`) lisait
+  `charAdvantages.type==='MUTATION'`/`.muta_numero` — champs inexistants en V2 (`char_advantages` n'a
+  jamais eu ces colonnes depuis migration 99) → Set toujours vide → 10 compétences à prérequis
+  MUTATION structurellement invisibles pour **100% des personnages**, sans exception (la boucle
+  finale de `isVisible` exige le prérequis inconditionnellement, y compris pour un `is_learned=true`
+  déjà acquis — vérifié en base, voir plus bas).
+- **Correction de donnée trouvée et confirmée par Saar** : 8 des 10 lignes `ref_skill_requirements`
+  référençaient encore l'ancien identifiant V1 (`muta_XXX`, table `ref_mutations` V1 migration 38,
+  supprimée migration 94) — remappées par correspondance de nom (sans ambiguïté) vers le
+  `mutation_id` V2 réel. Les 2 lignes restantes (`MAITRISE_DE_LA_FORCE_POLARIS`/
+  `MAITRISE_DE_LECHO_POLARIS`) référençaient `muta_029` — **erreur confirmée par Saar : cette
+  mutation n'aurait jamais dû exister** ("Sensibilité au Polaris" V1, aucune ligne V2 ne s'en
+  approche). L'accès réel passe par l'Avantage `adv_079` "Force Polaris" (déjà seedé migration 123,
+  texte LdB déjà en base confirmant ce gate). Migration `139_fix_ref_skill_requirements_mutations.js`
+  (NOUVEAU) : remap des 8 valeurs + bascule des 2 lignes Polaris vers un nouveau type de prérequis
+  `ADVANTAGE` (aucune contrainte DB ne l'empêchait, `type` est `text` libre).
+- **2ᵉ trou trouvé en traçant `POST /skills/buy`** : seul `SKILL_MIN` était revalidé côté serveur.
+  MUTATION/GENOTYPE n'étaient vérifiés nulle part — sans conséquence tant que le Set client restait
+  vide, mais une fois la visibilité corrigée un POST forgé aurait pu acheter une compétence sans
+  posséder la mutation/l'avantage. Fermé dans le même lot (revalidation serveur MUTATION/ADVANTAGE,
+  toujours active, même esprit que SKILL_MIN).
+- **Hors scope, transféré en dette séparée** (`docs/BUGIDENTIFIE.md` POL1, décision Saar) :
+  `adv_078` "Polaris non maîtrisé" doit déclencher un tirage aléatoire de 2 pouvoirs Polaris sans
+  jamais débloquer les 2 compétences Maîtrise — mécanique jamais construite, session dédiée future.
+- Codé : `shared`/migration 139 ; `SkillsPanel.jsx` (nouvelle prop `charMutations`, `activeMutations`
+  reconstruit depuis la vraie source, nouveau `activeAdvantageIds`, branche `ADVANTAGE` symétrique à
+  MUTATION aux 2 sites de `isVisible`) ; `CharacterSheet.jsx` (état + fetch `charMutations`,
+  `handleMutationsChanged` recharge désormais aussi cette liste, prop passée à `SkillsPanel`) ;
+  `char-sheet.js` (`POST /skills/buy` — revalidation serveur MUTATION/ADVANTAGE toujours active).
+- **Analyse critique demandée par Saar avant confirmation navigateur** — 3 points vérifiés en base
+  réelle, aucun bloquant : (1) confirmé que les 10 compétences étaient invisibles pour 100% des
+  personnages avant le fix (aucun risque de faire disparaître une compétence actuellement visible) ;
+  (2) anomalie de donnée pré-existante trouvée — le personnage "Mr sourire" avait déjà
+  `MAITRISE_DE_LA_FORCE_POLARIS` avec `is_learned=true, mastery=2` sans jamais avoir possédé
+  `adv_079` ni aucune mutation (déjà invisible pour lui avant le fix à cause du même bug, reste
+  cohérent avec la vraie règle après) ; (3) confirmé que `shared/careerSkills.js` (moteur Wizard) ne
+  lit jamais `ref_skill_requirements` — gap pré-existant distinct, non aggravé, hors scope.
+- **Test réel effectué avec du vrai personnage** (Saar : *"aucune donnée précieuse en dev"*) :
+  "Mr sourire" utilisé comme personnage de test — `adv_079` octroyé via un insert direct
+  `char_advantages` (le service `addAdvantage()` s'est révélé exiger un `char_pc_ledger` que ce
+  personnage n'a pas — écart noté, pas creusé, hors scope) ; mutation "Contagion" octroyée via le
+  vrai `mutationService.addMutation()`. **Parcours navigateur confirmé fonctionnel par Saar** :
+  "Contagion" et "Maîtrise de la Force Polaris" (déjà apprise, mastery 2) visibles ; les 7 autres
+  compétences mutation-gated + "Maîtrise de l'Écho Polaris" restent masquées comme attendu.
+- **2 problèmes trouvés par Saar en testant, tous deux hors scope de ce lot** (règle "un bug à la
+  fois") : (1) "Mr sourire" (humain) a accès à la compétence "Hybride", réservée aux génotypes
+  hybride naturel/génohybride/technohybride — bug GENOTYPE distinct, à investiguer séparément ;
+  (2) aucune interface ne permet d'ajouter un Avantage/Désavantage générique depuis le bloc
+  "AVANTAGES & DÉSAVANTAGES" (le bouton "+" existant ne couvre que Mutations/Force Polaris/Autres,
+  confirmé — la route serveur `POST /advantages` existe mais n'a jamais eu de UI). Les deux repris
+  en sessions séparées.
+- **Testé** : `node --check` 0 erreur (migration + route), ESLint client 0 nouvelle erreur (`git
+  stash`/`pop` — 3 erreurs/2 warnings préexistants confirmés identiques sur les 2 fichiers touchés),
+  round-trip migration 139 réel (`down()`→10 valeurs V1 dont `muta_029`→`up()`→8 valeurs V2 + 2
+  lignes `ADVANTAGE`, byte-identique, P53/P54 respectés), 5 scénarios en base réelle en transaction
+  annulée (sans mutation/avantage → rejet ; avec → satisfait ; avantage `removed_at` posé → rejet,
+  confirme le filtre soft-delete), SR (`/api/health` 200 tout du long), **parcours navigateur
+  confirmé fonctionnel par Saar**.
+- **Non testé** : achat effectif via le bouton "+" en mode Progression pour les 8 mutations restantes
+  et pour `MAITRISE_DE_LECHO_POLARIS` (seule "Contagion" et l'état déjà-appris de "Maîtrise de la
+  Force Polaris" ont été vérifiés visuellement) ; rejet serveur `AppError` en conditions réelles
+  (POST forgé) — vérifié seulement en transaction directe, pas via une vraie requête HTTP.
+- Détail complet : `docs/PLAN_MUTATION2.md` Lot 5.
+
+## Session 141 (suite 27) — 2026-07-12 — Bug GENOTYPE : compétence "Hybride" visible pour un personnage Humain ✅ CLOS
+
+- Trouvé par Saar en testant le Lot 5 (`docs/PLAN_MUTATION2.md`), hors périmètre de ce lot, traité en
+  session séparée (règle "un bug à la fois").
+- **Diagnostic `[VÉRIFIÉ]`** : `ref_skills.HYBRIDE` avait **zéro ligne** dans
+  `ref_skill_requirements` — jamais gaté depuis sa création, visible pour tout le monde. Recherche
+  élargie : `type='GENOTYPE'` avait **zéro ligne dans toute la table**, ce mécanisme n'a jamais été
+  alimenté malgré son support déjà codé dans `SkillsPanel.jsx`. Les 232 descriptions de compétences
+  vérifiées : `HYBRIDE` est la seule à mentionner une restriction de génotype/mutation — cas isolé,
+  pas un audit à refaire ailleurs. Texte LdB embarqué dans la description : accessible aux génotypes
+  `HYB_NAT`/`GEN_HYB`/`TEC_HYB` **OU** à la mutation Amphibie (`mutation_id=2`) — 4 alternatives (OR).
+- **Point d'architecture central** : le moteur existant (`isVisible`) traite toutes les lignes d'une
+  compétence en ET — insuffisant ici (ajouter naïvement 4 lignes aurait rendu la compétence
+  définitivement inachetable, personne n'ayant 3 génotypes à la fois). **Recherche externe demandée
+  par Saar avant tout code** ("aucun bricolage toléré") : 5etools (compendium D&D5e figé, situation
+  la plus proche d'Enclume) modélise ses prérequis de dons en **2 niveaux** — tableau externe = ET,
+  valeur en tableau imbriqué = OU — schéma qui sert tout le contenu 5e depuis des années sans plus de
+  profondeur. PF2e (Foundry) a un système `Predicate` **récursif** (`{or:[...]}`/`{and:[...]}`,
+  imbrication illimitée), mais conçu pour du contenu communautaire arbitraire ("Rule Elements") — déjà
+  écarté pour ce projet dans `docs/PLAN_TIRVISE.md`/Lot 2 de ce même plan (catalogue fixe, jamais
+  écrit par un joueur). Décision : modèle à 2 niveaux (5etools), prouvé suffisant par les données
+  réelles (`HYBRIDE` = seul cas, un seul niveau d'imbrication requis).
+- **Codé** : migration `140_ref_skill_requirements_or_group.js` (NOUVEAU) — colonne
+  `ref_skill_requirements.or_group` (text nullable, même convention que
+  `ref_career_skills.choice_group`, migration 121) + 4 lignes `HYBRIDE` partageant
+  `or_group:'HYBRIDE_ORIGIN'`. `shared/skillRequirements.js` (NOUVEAU) : `areRequirementsSatisfied
+  (requirements, matchFn)` — évaluateur pur unique, pattern `naturalWeapons.js`/
+  `combatExclusiveActions.js` (une seule fonction, client + serveur, aucune logique dupliquée).
+  `SkillsPanel.jsx` : `isVisible` généralisé — MUTATION/ADVANTAGE/GENOTYPE passent tous par le même
+  évaluateur ET/OU (SKILL_MIN reste séparé, forme différente : option de campagne + calcul de seuil).
+  `char-sheet.js` (`POST /skills/buy`) : revalidation serveur étendue à GENOTYPE (même trou fermé au
+  Lot 5, recouvert aussi pour ce cas — fetch `char_archetype.genotype_id` ajouté). `ref.js` expose
+  `or_group`.
+- **Bug ESLint auto-corrigé en cours de route** : `isIdentityReqSatisfied` non mémoïsé causait un
+  warning `exhaustive-deps` sur `isVisible` — corrigé en l'enveloppant dans son propre `useCallback`
+  (mêmes 3 dépendances : `activeMutations`/`activeAdvantageIds`/`genotypeId`), 0 nouveau warning.
+- **Testé** : `node --check` 0 erreur (migration + 2 routes + shared), ESLint client 0 nouvelle
+  erreur (retour exact aux 2 problèmes préexistants), round-trip migration 140 byte-identique, 9
+  scénarios purs sur `areRequirementsSatisfied` (dont non-régression du cas Lot 5 à ligne isolée, et
+  un cas à 2 groupes indépendants — ET entre groupes confirmé), 2 scénarios en base réelle en
+  transaction annulée sur "Mr sourire" (Humain sans Amphibie → rejeté ; avec Amphibie ajoutée
+  temporairement → satisfait, résidu 0 après rollback), SR (`/api/health` 200), **parcours
+  navigateur confirmé fonctionnel par Saar** ("Hybride" disparue de la fiche de "Mr sourire").
+- **Non testé** : cas positif en navigateur (génotype `HYB_NAT`/`GEN_HYB`/`TEC_HYB` réel rendant
+  "Hybride" visible) — vérifié seulement par transaction directe, pas par un personnage réel de ce
+  génotype en session ; achat forgé rejeté via une vraie requête HTTP (vérifié en transaction
+  directe uniquement).
+- Détail complet : ce fichier uniquement (bug isolé, hors `docs/PLAN_MUTATION2.md`).
+
+## Session 141 (suite 28) — 2026-07-12 — `docs/PLAN_MODING_PHASEB.md` Groupe 1 : bonus fixes optique + architecture des slots exclusifs ✅ CLOS
+
+Reprise du plan déjà entièrement rédigé et analysé en amont (architecture des slots validée Saar +
+analyse critique passée). Session de codage pure — tous les fichiers concernés relus avant code
+(`modingService.js`, `socketCombatHelpers.js:1239-1437`, `socketCombatAnnouncement.js`,
+`combatExclusiveActions.js`, `inventoryService.js`, `ModingWindow.jsx`, `useCharacterSocket.js`) +
+vérification en base réelle des 16 lignes `ref_equipment` (family='Armes', category='Accessoires
+pour armes') avant d'écrire la migration.
+
+**Gap trouvé pendant la vérification finale ("sûr à 100%" demandé par Saar), corrigé avant code** :
+les 2 mods déjà installés en prod (Phase A) auraient eu `mod_slot = NULL` après l'`ALTER TABLE` sans
+backfill explicite — le garde-fou d'exclusivité (contrainte UNIQUE) ne les aurait jamais vus lors
+d'un swap futur, laissant deux mods du même slot coexister silencieusement (exactement le bug que
+l'architecture doit empêcher). Migration corrigée pour backfiller `char_inventory_mods.mod_slot`
+via jointure sur `ref_equipment`, en plus des 16 lignes catalogue. Vérifié aussi : apostrophes
+typographiques (`’` U+2019, pas `'`) sur 4 des 16 noms — inspection des code points un par un avant
+d'écrire les `WHERE name = ...` (silencieux sinon, aucune exception levée sur un `UPDATE` à 0 ligne
+matchée) ; unicité globale des 16 noms dans toute la table confirmée (aucune collision hors
+périmètre) ; `ref_equipment.location` NULL pour les 16 lignes confirmé (P57 — stacking légitime pour
+le retour en inventaire lors d'un swap, aucun de ces accessoires n'est équipable).
+
+**Incident de numérotation en cours de route (P53)** : le numéro 140 a été pris entre-temps par une
+session parallèle (`140_ref_skill_requirements_or_group.js`, batch 105, déjà appliquée) — ma propre
+migration, auto-appliquée par nodemon sous le même préfixe "140" mais un nom de fichier différent
+(batch 106), a été renommée `141_ref_equipment_mod_slots.js` après coup, `knex_migrations` corrigé
+par `UPDATE` ciblé (id 189, batch 106) pour refléter le renommage sans déclencher de ré-exécution —
+même remédiation que l'incident P52 (Session 134).
+
+**Codé** : migration `141_ref_equipment_mod_slots.js` (NOUVEAU) — `ref_equipment.mod_slot`/
+`mod_requires_aim` (16 lignes catalogue réparties en 4 slots `optique`/`logiciel`/`canon`/`poignee`,
+3 items hors Phase B laissés à `NULL`) + `char_inventory_mods.mod_slot` (snapshotté, backfillé) +
+`UNIQUE(weapon_inv_id, mod_slot) WHERE mod_slot IS NOT NULL` (index partiel, pattern
+`uq_char_mut_no_sub`/migration 96). `modingService.js` : `installMod` swap le slot dans la même
+transaction (retour en inventaire via nouvelle fonction `returnModToInventory`, Coffre, stacking
+P57 ; edge case catalogue supprimé loggé et skip proprement) ; nouvelle fonction pure
+`calcWeaponModBonus(installedMods)` (Groupe 1 — cherche l'unique item `mod_slot='optique'` non
+`mod_requires_aim`, bonus entier valide sinon `{total:0}`). `socketCombatHelpers.js`
+(`resolveAssaultAction`, humanoïdes uniquement — pas le chemin drone) : fetch mods installés ajouté
+au `Promise.all` existant, `weaponModComp` ajouté à `totalModComp`, entrée `breakdown` nommant
+l'item précis. Aucun changement client : `MOD_INSTALLED` (déjà émis) déclenche déjà un refetch
+complet de l'inventaire chez tous les clients connectés (`useCharacterSocket.js`, même mécanisme
+que `INVENTORY_ADDED/UPDATED/REMOVED`), et l'acteur voit le swap directement dans la réponse HTTP de
+`installMod` (`state.installableMods`, calculée après le swap dans la même transaction).
+
+**Testé** : migration round-trip `down`/`up` byte-identique (16/16 lignes `mod_slot` correctes,
+2/2 mods déjà installés backfillés, index restauré) ; 6 scénarios en base réelle (fixture jetable
+sur un personnage réel, nettoyage vérifié à 0 résidu) — sans mod (`0`), 1 mod optique (`+4` exact),
+swap vers un 2ᵉ mod optique (ancien revenu en inventaire, un seul actif, `+2`), mod `logiciel`
+installé en parallèle (jamais compté, slot différent), swap vers la Lunette `mod_requires_aim=true`
+(`0`, jamais confondu avec un bonus plat), contrainte UNIQUE rejetant une insertion brute
+concurrente (`23505`) ; `node --check` 0 erreur sur les 3 fichiers ; SR (`/api/health` 200) ;
+**fonctionnel confirmé Saar** ("All tests OK").
+**Non testé** : parcours navigateur réel (Test de tir en combat avec un mod optique installé,
+aucun changement client dans ce lot donc rien de visuel à observer hormis le breakdown du jet) —
+scénario proposé, validé par Saar sur la base des tests service + DB réels, pas rejoué manuellement
+en session de jeu.
+**Reste à faire** : Groupe 2 (Lunette de visée — refonte du calcul Tir visé, `AIM_MAX_TRANCHES`,
+plage UI `AssaultRangedPanel.jsx`), Groupe 4 (slot `logiciel`, 4 mécaniques à détailler
+individuellement) — voir `docs/PLAN_MODING_PHASEB.md`.

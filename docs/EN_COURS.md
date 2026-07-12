@@ -1,5 +1,7 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-12 — Session 141 (suite 25) : `PLAN_MUTATION2.md` Lot 4 (armure/arme
+> Dernière mise à jour : 2026-07-12 — Session 141 (suite 28) : `docs/PLAN_MODING_PHASEB.md` Groupe 1
+> (bonus fixes optique) + architecture des slots exclusifs — ✅ clos, fonctionnel confirmé Saar
+> (item 68) ; Session 141 (suite 25) : `PLAN_MUTATION2.md` Lot 4 (armure/arme
 > naturelle) — ✅ clos, fonctionnel confirmé Saar en navigateur (item 67) ; Session 141 (suite 24) :
 > détail de calcul en tooltip pour les
 > attributs secondaires de la fiche perso (item 66) ; Session 141 (suite 23) : `PLAN_MUTATION2.md` Lot 3 (RD + Choc)
@@ -26,6 +28,22 @@
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 68 (Session 141 suite 28) — `docs/PLAN_MODING_PHASEB.md` Groupe 1 (bonus fixes optique) +
+> architecture des slots exclusifs ✅ CLOS, fonctionnel confirmé Saar.** Migration
+> `141_ref_equipment_mod_slots.js` (numérotée 141 — collision de numéro 140 avec une session
+> parallèle, renommée après coup, `knex_migrations` corrigé) : `ref_equipment.mod_slot`/
+> `mod_requires_aim` (16 lignes catalogue) + `char_inventory_mods.mod_slot` (snapshotté, backfillé)
+> + `UNIQUE(weapon_inv_id, mod_slot) WHERE mod_slot IS NOT NULL`. `modingService.js` :
+> `installMod` swap le slot dans la même transaction (retour en inventaire), nouvelle fonction pure
+> `calcWeaponModBonus`. `socketCombatHelpers.js` (`resolveAssaultAction`) : bonus branché dans
+> `totalModComp` + breakdown. Aucun changement client (MOD_INSTALLED déclenche déjà un refetch
+> complet côté tous les clients). Testé : migration round-trip byte-identique, 6 scénarios réels en
+> base (fixture jetable, 0 résidu), SR, fonctionnel confirmé Saar. Non testé : parcours navigateur
+> réel (rien de visuel à observer hors le breakdown du jet, aucun changement client dans ce lot).
+> **Prochain chantier : Groupe 2 (Lunette de visée) — `docs/PLAN_MODING_PHASEB.md`, entièrement
+> tranché, réutilise l'architecture de slots déjà livrée.** Détail complet :
+> `docs/JOURNAL6.md` "Session 141 (suite 28)".
 
 > **Item 67 (Session 141 suite 25) — `docs/PLAN_MUTATION2.md` Lot 4 : Armure naturelle → RD + Arme
 > naturelle codées ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Suite du Lot 3
@@ -388,6 +406,41 @@
 > chantier mais antérieur à lui et sans rapport — cosmétique, non corrigé. Détail complet :
 > `docs/PLAN_VAULT.md` (toutes les étapes documentées avec leurs tests), `docs/JOURNAL6.md` "Session
 > Coffre (Vault)".
+
+**68. `docs/PLAN_MODING_PHASEB.md` Groupe 1 : bonus fixes optique + architecture des slots exclusifs ✅ CLOS — Session 141 (suite 28) (2026-07-12)**
+   → Suite de `docs/PLAN_MODING.md` Phase A (item 63, terminée) — plan Phase B déjà entièrement
+     rédigé et analysé en amont (architecture des slots + analyse critique validées Saar avant cette
+     session de codage).
+   → **Gap trouvé pendant la vérification finale ("sûr à 100%" demandé par Saar), corrigé avant
+     code** : les 2 mods déjà installés en prod (Phase A) auraient eu `mod_slot = NULL` après
+     l'`ALTER TABLE` sans backfill explicite — le garde-fou d'exclusivité ne les aurait jamais vus
+     lors d'un swap futur. Migration corrigée pour backfiller `char_inventory_mods.mod_slot` en plus
+     des 16 lignes catalogue. Vérifié aussi : apostrophes typographiques (`’` vs `'`) sur 4 des 16
+     noms (inspection code point par code point), unicité globale des 16 noms, `ref_equipment.
+     location` NULL confirmé (P57 — stacking légitime au retour en inventaire lors d'un swap).
+   → **Incident de numérotation (P53)** : le numéro 140 pris entre-temps par une session parallèle
+     (`140_ref_skill_requirements_or_group.js`) — ma migration renommée `141_ref_equipment_mod_slots.js`
+     après coup, `knex_migrations` corrigé par UPDATE ciblé (même remédiation que l'incident P52,
+     Session 134).
+   → Migration `141` : `ref_equipment.mod_slot`/`mod_requires_aim` (16 lignes, 4 slots `optique`/
+     `logiciel`/`canon`/`poignee`) + `char_inventory_mods.mod_slot` (snapshotté, backfillé) +
+     `UNIQUE(weapon_inv_id, mod_slot) WHERE mod_slot IS NOT NULL`. `modingService.js` : swap de slot
+     dans `installMod` (retour en inventaire via nouvelle `returnModToInventory`, stacking P57) +
+     nouvelle fonction pure `calcWeaponModBonus`. `socketCombatHelpers.js` (`resolveAssaultAction`,
+     humanoïdes) : bonus branché dans `totalModComp` + breakdown nommant l'item précis. Aucun
+     changement client — `MOD_INSTALLED` (déjà émis) déclenche déjà un refetch complet côté tous les
+     clients connectés.
+   → **Testé** : migration round-trip `down`/`up` byte-identique, 6 scénarios en base réelle (fixture
+     jetable sur un personnage réel, nettoyage vérifié 0 résidu) — sans mod, 1 mod optique (+4 exact),
+     swap vers un 2ᵉ mod optique (ancien revenu en inventaire), mod `logiciel` coexistant (jamais
+     compté), swap vers la Lunette `mod_requires_aim=true` (0, jamais confondu avec un bonus plat),
+     contrainte UNIQUE rejetant une insertion concurrente (`23505`). `node --check` 0 erreur, SR,
+     **fonctionnel confirmé Saar** ("All tests OK").
+   → **Non testé** : parcours navigateur réel (aucun changement client dans ce lot, rien de visuel à
+     observer hormis le breakdown du jet de Test de tir).
+   → **Prochain chantier : Groupe 2 (Lunette de visée)** — `docs/PLAN_MODING_PHASEB.md`, entièrement
+     tranché, réutilise l'architecture de slots déjà livrée (aucun nouveau prérequis).
+   → Détail complet : `docs/PLAN_MODING_PHASEB.md`, `docs/JOURNAL6.md` "Session 141 (suite 28)".
 
 **62. Bonus féminin : règle fixe -2 FOR/+1 COO/+1 PRE + revalidation du bascule Sexe ✅ CLOS — Session 141 (suite 20) (2026-07-12)**
    → Demande Saar : la mécanique `feminin_bonus` (remise forfaitaire invisible sur les 2 premiers

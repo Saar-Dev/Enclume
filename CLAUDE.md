@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 25) — 2026-07-12
+> Session 141 (suite 28) — 2026-07-12
 
 ---
 
@@ -112,8 +112,53 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 25) (2026-07-12)
+## ÉTAT COURANT — Session 141 (suite 28) (2026-07-12)
 
+- **Session 141 (suite 28) — `docs/PLAN_MODING_PHASEB.md` Groupe 1 : bonus fixes optique +
+  architecture des slots exclusifs ✅ CLOS, fonctionnel confirmé Saar.** Suite de `docs/PLAN_MODING.md`
+  Phase A (item 63, terminée) — plan Phase B déjà entièrement rédigé et analysé en amont (architecture
+  des slots + analyse critique déjà validées Saar avant cette session de codage). **Gap trouvé pendant
+  la vérification finale ("sûr à 100%" demandé par Saar), corrigé avant code** : les 2 mods déjà
+  installés en prod (Phase A) auraient eu `mod_slot = NULL` après l'`ALTER TABLE` sans backfill
+  explicite — le garde-fou d'exclusivité ne les aurait jamais vus lors d'un swap futur, laissant deux
+  mods du même slot coexister silencieusement (exactement le bug que l'architecture doit empêcher).
+  Migration corrigée pour backfiller `char_inventory_mods.mod_slot` via jointure, en plus des 16
+  lignes catalogue. Vérifié aussi avant d'écrire les `WHERE name = ...` : apostrophes typographiques
+  (`’` U+2019, pas `'`) sur 4 des 16 noms (inspection code point par code point — un `UPDATE` à 0
+  ligne matchée ne lève aucune exception) ; unicité globale des 16 noms dans toute la table
+  (aucune collision hors périmètre) ; `ref_equipment.location` NULL confirmé pour les 16 lignes
+  (P57 — stacking légitime au retour en inventaire lors d'un swap, aucun accessoire équipable).
+  **Incident de numérotation en cours de route (P53)** : le numéro 140 pris entre-temps par une
+  session parallèle (`140_ref_skill_requirements_or_group.js`, batch 105, déjà appliquée) — ma
+  migration, auto-appliquée par nodemon sous le même préfixe "140" mais un nom de fichier différent
+  (batch 106), renommée `141_ref_equipment_mod_slots.js` après coup, `knex_migrations` corrigé par
+  UPDATE ciblé pour refléter le renommage sans déclencher de ré-exécution — même remédiation que
+  l'incident P52 (Session 134). **Codé** : migration `141` — `ref_equipment.mod_slot`/
+  `mod_requires_aim` (16 lignes catalogue, 4 slots `optique`/`logiciel`/`canon`/`poignee`, 3 items
+  hors Phase B laissés à `NULL`) + `char_inventory_mods.mod_slot` (snapshotté, backfillé) +
+  `UNIQUE(weapon_inv_id, mod_slot) WHERE mod_slot IS NOT NULL` (index partiel, pattern
+  `uq_char_mut_no_sub`). `modingService.js` : `installMod` swap le slot dans la même transaction
+  (retour en inventaire via nouvelle `returnModToInventory`, Coffre, stacking P57 ; edge case
+  catalogue supprimé loggé et skip proprement) ; nouvelle fonction pure `calcWeaponModBonus`
+  (Groupe 1 — cherche l'unique item `mod_slot='optique'` non `mod_requires_aim`, bonus entier valide
+  sinon `{total:0}`). `socketCombatHelpers.js` (`resolveAssaultAction`, humanoïdes uniquement, pas le
+  chemin drone) : fetch mods installés ajouté au `Promise.all` existant, `weaponModComp` ajouté à
+  `totalModComp`, entrée `breakdown` nommant l'item précis. **Aucun changement client** : `MOD_
+  INSTALLED` (déjà émis par la route existante) déclenche déjà un refetch complet de l'inventaire
+  chez tous les clients connectés (`useCharacterSocket.js`, même mécanisme que
+  `INVENTORY_ADDED/UPDATED/REMOVED`), et l'acteur voit le swap directement dans la réponse HTTP de
+  `installMod`. **Testé** : migration round-trip `down`/`up` byte-identique (16/16 lignes `mod_slot`
+  correctes, 2/2 mods déjà installés backfillés, index restauré) ; 6 scénarios en base réelle
+  (fixture jetable sur un personnage réel, nettoyage vérifié à 0 résidu) — sans mod (`0`), 1 mod
+  optique (`+4` exact), swap vers un 2ᵉ mod optique (ancien revenu en inventaire, un seul actif,
+  `+2`), mod `logiciel` installé en parallèle (jamais compté, slot différent), swap vers la Lunette
+  `mod_requires_aim=true` (`0`, jamais confondu avec un bonus plat), contrainte UNIQUE rejetant une
+  insertion brute concurrente (`23505`) ; `node --check` 0 erreur, SR, **fonctionnel confirmé Saar**
+  ("All tests OK"). **Non testé** : parcours navigateur réel (aucun changement client dans ce lot,
+  rien de visuel à observer hormis le breakdown du jet). **Prochain chantier : Groupe 2 (Lunette de
+  visée)** — `docs/PLAN_MODING_PHASEB.md`, entièrement tranché, réutilise l'architecture de slots
+  déjà livrée (aucun nouveau prérequis). Détail complet : item "68." `docs/EN_COURS.md`,
+  `docs/JOURNAL6.md` "Session 141 (suite 28)", `docs/PLAN_MODING_PHASEB.md`.
 - **Session 141 (suite 25) — `docs/PLAN_MUTATION2.md` Lot 4 : Armure naturelle → Résistance aux
   dommages + Arme naturelle ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Suite du Lot 3
   (suite 23, clos). **Décisions Saar actées avant code** : `natural_armor` est une constante toujours
@@ -737,7 +782,10 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **143 migrations stables** (138_ref_mutations_natural_weapon — Session 141 (suite 25) ;
+- **146 migrations stables** (141_ref_equipment_mod_slots — Moding Phase B Groupe 1,
+  Session 141 (suite 28) ; 140_ref_skill_requirements_or_group — session parallèle ;
+  139_fix_ref_skill_requirements_mutations — session parallèle ;
+  138_ref_mutations_natural_weapon — Session 141 (suite 25) ;
   137_char_inventory_mods — Moding Phase A, Session 141 (suite 21) ;
   136_fix_ref_resistance_naturelle_sign — session parallèle ;
   135_ref_equipment_skill_assoc_weapons — Session 141 (suite 16) ;
@@ -1110,7 +1158,6 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **[OPT-W2]** `style={}` visuel dans `client/src/components/campaignSettings/*` (convention CSS) — basse priorité
 - **[MUT1]** `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable en méthode libre — non diagnostiqué en profondeur, sprint futur
 - **[HP1]** Main directrice : `socketCombatHelpers.js:550` et `char-sheet.js:810` lisent `hand_pref` sur `char_sheet` (colonne inexistante) au lieu de `char_identity.hand_pref` → toujours `'R'` par défaut en combat, quel que soit le choix réel du joueur — sprint futur
-- **[CS7]** `SkillsPanel.jsx:135-141` (`activeMutations`) lit `charAdvantages.type==='MUTATION'`/`muta_numero` (schéma V2 n'a jamais eu ces champs, `char_advantages` a été remplacé par la migration 99) au lieu de `char_mutations` (vraie table) → Set toujours vide → **10 compétences** à prérequis `type:'MUTATION'` (dont `MAITRISE_DE_LA_FORCE_POLARIS`/`MAITRISE_DE_LECHO_POLARIS`) structurellement invisibles pour tout personnage, `[VÉRIFIÉ]` en base réelle Session 141 (suite 5) — même cause racine que `AdvantagesPanel.jsx` (`docs/PLAN_ADVANTAGESPANEL.md`), rayon d'impact plus large (10 compétences, pas seulement Polaris) — non prioritaire, ajouté au backlog
 - **[ADV1]** Célébrité, Allié/Contact/Ennemi/Opposant et les autres "avantages relationnels" (`ref_career_random_benefits`, Revers, OPT-11) ne sont **trackés nulle part mécaniquement** sur la fiche personnage — aucune jauge/compteur réel. Bloque l'automatisation des tirages Avantages pro aléatoires (Lot 6) ET de Revers (OPT-06) au-delà de la simple conversion en points, qui elle est déjà automatisée. **À faire impérativement (décision Saar, Session 141 suite 12)** — chantier dédié à planifier après le mini-stepper Revers/Tirages, pas juste une note cosmétique.
 - **[ADV2]** Bénéfices de carrière type "Revenus +10%/+20%/doublés à partir de cette année" (`ref_career_random_benefits`, ex. Cultivateur/Éleveur roll 3/7/9) — aucun mécanisme pour appliquer un modificateur cumulatif aux années futures ; `evaluateSalaryFormula`/économies ne gèrent qu'un montant ponctuel. Roadmap (Session 141 suite 12).
 - **[ADV3]** Bénéfices de carrière débloquant l'accès à une compétence (ex. mutation/compétence "développée automatiquement" via un tirage) — non géré, aucun câblage vers `char_skills`/`char_mutations`. Roadmap (Session 141 suite 12).

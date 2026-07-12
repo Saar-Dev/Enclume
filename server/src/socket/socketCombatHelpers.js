@@ -9,6 +9,7 @@ import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
 import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getMutationEffects } from '../services/mutationService.js'
+import { calcWeaponModBonus } from '../services/modingService.js'
 import {
   calcSkillTotal, calcAttributeNA,
   calcWoundPenalty, calcEncumbrancePenalty,
@@ -1266,7 +1267,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       options.coverageModifier = los.coverageModifier ?? 0
     }
 
-    const [weapon, rosterTireur] = await Promise.all([
+    const [weapon, rosterTireur, installedMods] = await Promise.all([
       db('char_inventory')
         .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where({ 'char_inventory.id': action.weapon_inv_id })
@@ -1278,6 +1279,13 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         )
         .first(),
       db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first(),
+      // Groupe 1 (docs/PLAN_MODING_PHASEB.md) — mods installés sur l'arme utilisée, jointure fraîche
+      // ref_equipment (pas le mod_slot snapshotté sur char_inventory_mods, qui ne sert qu'à la
+      // contrainte UNIQUE d'exclusivité).
+      db('char_inventory_mods as cim')
+        .join('ref_equipment as re', 'cim.equipment_id', 're.id')
+        .where({ 'cim.weapon_inv_id': action.weapon_inv_id })
+        .select('re.name', 're.bonus', 're.mod_slot', 're.mod_requires_aim'),
     ])
 
     if (!weapon?.ref_damage_h) {
@@ -1349,7 +1357,8 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const fireModeComp     = action.fire_mode_bonus_comp ?? 0
     const dualWieldComp    = action.modifiers?.dual_wield_bonus_comp ?? 0
     const aimBonusComp     = action.aim_bonus_comp ?? 0
-    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp
+    const { total: weaponModComp, breakdown: weaponModBreakdown } = calcWeaponModBonus(installedMods)
+    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp
 
     const coverageModifier   = options.coverageModifier ?? 0
     const chancesDeReussite  = skillTotal + totalModComp + effectiveMalus + coverageModifier
@@ -1362,6 +1371,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       ...(fireModeComp - dualWieldComp !== 0 ? [{ label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp - dualWieldComp, type: 'bonus' }] : []),
       ...(dualWieldComp !== 0 ? [{ label: 'Deux armes', value: dualWieldComp, type: 'bonus' }] : []),
       ...(aimBonusComp !== 0 ? [{ label: 'Tir visé', value: aimBonusComp, type: 'bonus' }] : []),
+      ...(weaponModComp !== 0 ? weaponModBreakdown.map(b => ({ label: b.name, value: b.value, type: 'bonus' })) : []),
       ...((confirmedModifiers.situation ?? []).reduce((acc, k) => {
         const v = SITUATION_MODS[k] ?? 0
         if (v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })

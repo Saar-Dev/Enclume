@@ -36,9 +36,45 @@ export async function getModingState(characterId, trxOrDb = db) {
   return { weapons: weaponsRaw.rows, installableMods }
 }
 
+// Retourne un mod swappé (remplacé par un nouveau du même slot) en inventaire — même logique de
+// stacking que addItem (P57 : aucun de ces accessoires n'est équipable, ref_equipment.location
+// toujours NULL pour cette catégorie, vérifié en base réelle 2026-07-12). Container Coffre :
+// toujours disponible (isContainerAvailable), pas de dépendance à un Sac déjà équipé.
+async function returnModToInventory(characterId, equipmentId, trx) {
+  const existing = await trx('char_inventory')
+    .where({ character_id: characterId, equipment_id: equipmentId, container: 'Coffre' })
+    .whereNull('slot')
+    .first()
+  if (existing) {
+    await trx('char_inventory').where({ id: existing.id })
+      .update({ quantity: existing.quantity + 1, updated_at: trx.fn.now() })
+  } else {
+    await trx('char_inventory').insert({
+      character_id: characterId, equipment_id: equipmentId, container: 'Coffre', slot: null, quantity: 1,
+    })
+  }
+}
+
+// Groupe 1 (docs/PLAN_MODING_PHASEB.md) — bonus fixe au Test de tir. L'exclusivité de slot étant
+// garantie à l'installation (au plus un item mod_slot='optique' actif par arme), pas de "grouper
+// puis prendre le max" : il n'y a jamais qu'un seul candidat à examiner. `installedMods` = lignes
+// char_inventory_mods jointes à ref_equipment (name, bonus, mod_slot, mod_requires_aim) pour une
+// arme donnée — voir resolveAssaultAction.
+export function calcWeaponModBonus(installedMods) {
+  const optic = installedMods.find(m => m.mod_slot === 'optique')
+  if (!optic || optic.mod_requires_aim || optic.bonus == null) return { total: 0, breakdown: [] }
+  const value = Number(optic.bonus)
+  if (!Number.isInteger(value)) return { total: 0, breakdown: [] } // ex. "niv" (Lunette générique)
+  return { total: value, breakdown: [{ name: optic.name, value }] }
+}
+
 // POST .../moding/install — body { weaponInvId, modInvId }
-// Retourne { removeResult, state } — la route dérive le payload MOD_INSTALLED de `state` et émet
-// INVENTORY_REMOVED/UPDATED selon `removeResult.deleted` (même pattern que le DELETE inventaire).
+// Retourne { removeResult, state, swappedOut } — la route dérive le payload MOD_INSTALLED de
+// `state` et émet INVENTORY_REMOVED/UPDATED selon `removeResult.deleted` (même pattern que le
+// DELETE inventaire). `swappedOut` (docs/PLAN_MODING_PHASEB.md — architecture des slots) : mod
+// remplacé automatiquement s'il occupait déjà le même slot exclusif sur cette arme, sinon null —
+// déjà reflété dans `state.installableMods` (retourné en inventaire dans la même transaction),
+// aucun event socket dédié nécessaire (MOD_INSTALLED déclenche déjà un refetch complet côté client).
 export async function installMod(characterId, weaponInvId, modInvId) {
   const weapon = await db('char_inventory').where({ id: weaponInvId, character_id: characterId }).first()
   const mod    = await db('char_inventory').where({ id: modInvId,    character_id: characterId }).first()
@@ -70,16 +106,38 @@ export async function installMod(characterId, weaponInvId, modInvId) {
 
   try {
     return await db.transaction(async (trx) => {
+      // Exclusivité de slot (docs/PLAN_MODING_PHASEB.md) — au plus un item actif par mod_slot sur
+      // une arme donnée. Installer un 2ᵉ item du même slot remplace automatiquement l'ancien (retour
+      // en inventaire), même transaction. La contrainte UNIQUE(weapon_inv_id, mod_slot) reste la
+      // vraie garde contre la course (catch 23505 ci-dessous) ; ce check est l'optimisation du cas
+      // normal, pas la protection elle-même.
+      let swappedOut = null
+      if (modRef.mod_slot) {
+        const occupant = await trx('char_inventory_mods')
+          .where({ weapon_inv_id: weaponInvId, mod_slot: modRef.mod_slot })
+          .first()
+        if (occupant) {
+          if (occupant.equipment_id) {
+            await returnModToInventory(characterId, occupant.equipment_id, trx)
+          } else {
+            console.warn(`[moding] swap — occupant ${occupant.id} sans equipment_id (catalogue supprimé), perte propre sans retour inventaire`)
+          }
+          await trx('char_inventory_mods').where({ id: occupant.id }).del()
+          swappedOut = occupant
+        }
+      }
+
       await trx('char_inventory_mods').insert({
         weapon_inv_id: weaponInvId,
         equipment_id:  mod.equipment_id,
         mod_name:      modRef.name,
+        mod_slot:      modRef.mod_slot ?? null,
       })
       // Consomme 1 unité du mod — jamais un DELETE inconditionnel (P7 : mod.quantity peut être
       // > 1 si stack). removeItem décrémente, ne supprime la ligne que si le stock atteint 0.
       const removeResult = await removeItem(characterId, modInvId, 1, trx)
       const state = await getModingState(characterId, trx)
-      return { removeResult, state }
+      return { removeResult, state, swappedOut }
     })
   } catch (err) {
     if (err.code === '23505') { // unique_violation — course gagnée par une autre requête

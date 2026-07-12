@@ -1,3 +1,12 @@
+## v182 — 2026-07-12 — Customisation d'armes : les systèmes de tir assisté ont enfin un effet en combat
+
+### Serveur
+- [feat] Les systèmes de tir assisté installés sur une arme (Cyclope PVI, Implant palmaire, Visières
+  Onarck P/Vanguard, Visée laser) donnent désormais leur bonus réel au Test de tir, visible dans le
+  détail du jet.
+- [feat] Installer un second accessoire du même type (optique, logiciel, canon, poignée) sur une arme
+  remplace automatiquement l'ancien — il retourne dans l'inventaire, un seul actif à la fois.
+
 ## v181 — 2026-07-12 — Mutations : armure naturelle et attaques naturelles (Griffes, Crocs, Corne...)
 
 ### Serveur
