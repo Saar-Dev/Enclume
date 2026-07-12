@@ -504,13 +504,21 @@
     "secondary": {
       "reaction": "Réaction",
       "initiative": "Initiative",
-      "seuilEtour": "Seuil Étourdissement",
-      "seuilIncons": "Seuil Inconscience",
+      "seuilEtour": "Étourdissement",
+      "seuilIncons": "Inconscience",
       "allureLente": "Allure lente",
       "allureMoyenne": "Allure moyenne",
       "allureRapide": "Allure rapide",
       "allureMax": "Allure maximale",
-      "modDom": "Mod. Dommages (contact)"
+      "choc": "Choc",
+      "modDom": "Modif. dommages",
+      "resistanceDommages": "Rés. dommages",
+      "resistancesNaturelles": "Résistances naturelles",
+      "resistancePoison": "Poisons",
+      "resistanceMaladie": "Maladies",
+      "resistanceRadiation": "Radiations",
+      "resistanceDrogues": "Drogues",
+      "souffle": "Souffle"
     },
     "tooltip": {
       "allureLente": "Allure lente : c'est l'Allure d'un personnage dont les mouvements sont ralentis par un terrain difficile (décombres, terrain glissant, boue épaisse, végétation dense, passage étroit, eau jusqu'à la taille, etc.). Le personnage peut aussi choisir de se déplacer prudemment, en raison d'un terrain dangereux (mines, pièges, équilibre instable, débris de tôle tranchante, etc.). L'Allure lente est également recommandée pour les personnages désirant se déplacer silencieusement (pas de malus au Test de Furtivité/Déplacement silencieux). (LdB p.220)",
@@ -525,7 +533,13 @@
       "reaction": "La Réaction représente la rapidité de réaction d'un personnage, notamment en combat (score d'Initiative) et face aux événements soudains et inattendus. Calculée comme (ADA+PER)/2.",
       "seuilEtour": "Le Seuil d'Étourdissement représente la résistance au choc traumatique. En dessous de ce seuil, le personnage est étourdi. Calculé : (FOR+CON+VOL)/3.",
       "seuilIncons": "Le Seuil d'Inconscience est atteint lorsque le total de dommages dépasse cette valeur — le personnage tombe inconscient. Égal au Seuil d'Étourdissement +10.",
-      "modDom": "Le Modificateur de Dommages en corps à corps s'applique aux dommages infligés à mains nues ou avec une arme blanche. Dépend du niveau d'Aptitude naturelle (NA) de la Force."
+      "modDom": "Le Modificateur de Dommages en corps à corps s'applique aux dommages infligés à mains nues ou avec une arme blanche. Dépend du niveau d'Aptitude naturelle (NA) de la Force.",
+      "resistanceDommages": "La Résistance aux Dommages modifie la somme de dommages reçus. Dépend de la Force et de la Constitution (LdB p.114).",
+      "resistancePoison": "La Résistance aux poisons dépend du niveau de Constitution (LdB p.114). S'oppose à l'Intensité du poison lors d'un Test de résistance naturelle.",
+      "resistanceMaladie": "La Résistance aux maladies dépend du niveau de Constitution (LdB p.114). S'oppose à l'Intensité de la maladie lors d'un Test de résistance naturelle.",
+      "resistanceRadiation": "La Résistance aux radiations dépend du niveau de Constitution (LdB p.114). S'oppose à l'Intensité de la radiation lors d'un Test de résistance naturelle.",
+      "resistanceDrogues": "La Résistance aux drogues dépend de la moyenne Constitution/Volonté (LdB p.114). S'oppose à l'Intensité de la drogue lors d'un Test de résistance naturelle.",
+      "souffle": "Le Souffle représente la capacité à retenir sa respiration ou à résister à l'essoufflement. Calculé : (CON+VOL)/2."
     }
   },
   "builder": {

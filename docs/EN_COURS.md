@@ -1,5 +1,11 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-11 — Session 141 (suite 17) : Tir visé (LdB p.227-228) + framework
+> Dernière mise à jour : 2026-07-12 — Session 141 (suite 20) : Bonus féminin — règle fixe
+> -2 FOR/+1 COO/+1 PRE + revalidation du bascule Sexe via `validateStep1` (item 62) ; Session 141
+> (suite 19) : Résistances naturelles (poison/
+> maladie/radiation/drogue) câblées + Attributs secondaires manquants ajoutés sur la fiche perso
+> (item 61) ; Session 141 (suite 18) : Point documentaire — archivage de 8
+> PLAN_*.md terminés, VOCABULARY.md peuplé, dettes `[DOC1]`/`[DOC2]` (item 60) ; Session 141
+> (suite 17) : Tir visé (LdB p.227-228) + framework
 > Actions Exclusives, `shared/combatExclusiveActions.js` (item 59) ; Session 141 (suite 16) :
 > `ref_equipment_skill_assoc` reconstruite (migration 135, 154 paires arme↔compétence, trou de seed
 > jamais peuplé depuis l'origine) suite à un audit de 4 signalements d'agents externes (item 58) ;
@@ -13,6 +19,73 @@
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 62 (Session 141 suite 20) — Bonus féminin : règle fixe ✅ CLOS.** Signalement Saar : la
+> mécanique `feminin_bonus` (remise forfaitaire invisible sur COO/PRE, Session 141 suite 14) n'est
+> pas compréhensible — demande de simplification en règle fixe et lisible, sans choix de répartition :
+> Femme = FOR -2, COO +1, PRE +1. **Antécédent relu avant de coder** (Session 141 suite 14) : un 1er
+> correctif direct sur COO/PRE avait déjà été abandonné (plafonnait le spinner, cassait l'achat PC
+> normal au-delà du bonus) — vérifié que la répartition fixe demandée par Saar élimine cette source de
+> complexité, aucun plafond de spinner recréé. **Vrai bug trouvé en testant le plan (captures Saar)** :
+> basculer Sexe M↔F après avoir déjà réparti des points changeait silencieusement le budget sans jamais
+> revalider — `Step1Attributes.jsx` ne passait jamais par `validateStep1` (le serveur seul l'appelait),
+> et `validateStep1` lui-même ne rejetait jamais un budget dépassé (G1 traitait "dépassé" et "non
+> dépensé" pareil). `shared/polarisUtils.js` : `getAttributeBase(attrId, isFeminin)` (remplace
+> `getFemininBonusDiscount`) + G1bis (budget dépassé = erreur dure). `Step1Attributes.jsx` : gate
+> "Suivant" alignée sur le pattern déjà établi par `CareersAllocator.jsx`/Étape 4 (`validation =
+> useMemo(() => validateStep1(...))`), `handleSetFeminin` redevenu trivial. **Bug trouvé en testant ma
+> propre correction** : valeur hors bornes (>20 après bascule) → `COST_LOOKUP` sans entrée → `NaN` dans
+> le HUD — corrigé (`—` affiché). `Step2Genotype.jsx` : angle mort fermé au passage (ignorait
+> `femininBonusEnabled`). Testé : lint 0 nouvelle erreur, scénarios `node -e` (G1bis + G3 sur bascule),
+> **vérification en base réelle** (64 fiches non verrouillées, 0 en dépassement ; 0 personnage féminin
+> en cours avec l'option active actuellement). SR + **fonctionnel confirmé Saar**. Non testé : parcours
+> navigateur réel du bascule Sexe. Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 20)".
+
+> **Item 61 (Session 141 suite 19) — Résistances naturelles (poison/maladie/radiation/drogue)
+> câblées ✅ CLOS.** `docs/PLAN_RESNAT.md` — chantier issu du carve-out "Résistances naturelles" hors
+> Lot 3 de `PLAN_MUTATION2.md`. Recherche pro (Foundry Active Effects, PF2e IWR) demandée par Saar
+> avant tout code a fait rejeter un premier plan (inversion de signe à l'exécution) au profit d'une
+> correction à la source. **Bug de données réel trouvé** : 6 lignes `ref_advantages`/`ref_mutations`
+> stockaient un delta positif pour un effet censé améliorer la résistance — avec `Seuil = Intensité −
+> Modificateur` (confirmé par Saar), ça dégradait le Seuil au lieu de l'améliorer (cas le plus
+> parlant : "Contagion", immunité totale, aurait rendu un personnage immunisé **systématiquement en
+> échec**). Migration `136` (NOUVEAU) corrige les 6 lignes + normalise `"drug"`/`"drugs"`. 0 personnage
+> réel concerné — zéro régression. `getAdvantageModForResistance` (`shared/polarisUtils.js`, aucune
+> inspection de `type`) + 4 sources de macro (`resistance_poison/maladie/radiation` + fix de
+> `resistance_drogues`, buggée depuis toujours). **Addendum même session** : Saar signale l'absence de
+> Résistance aux dommages/Résistances naturelles/Souffle sur la fiche perso (vs liste LdB p.114) —
+> 5 fonctions consolidées de `charStats.js` vers `shared/polarisUtils.js` (même principe que `calcREA`
+> Lot 2), 6 nouveaux champs ajoutés à `CharacterSheet.jsx` (rien retiré). Décision de scope :
+> "Résistance aux dommages" affichée en valeur de base seulement (pas de mutation/avantage — la
+> résolution de combat réelle ne les consomme pas encore, Lot 3 non traité). Testé : round-trip
+> migration réel, 9 scénarios unitaires, test bout-en-bout base réelle (transaction annulée),
+> non-régression numérique, ESLint 0 nouvelle erreur, SR + **parcours navigateur confirmé fonctionnel
+> par Saar** (capture d'écran fiche réelle). Non testé : parcours navigateur des macros. **Suite
+> immédiate : passe UI/UX demandée par Saar sur le bloc "ATTRIBUTS SECONDAIRES"** (grille plate
+> actuelle jugée "fonctionnelle mais moche"), inspirée du regroupement de la fiche papier officielle —
+> en cours. Détail complet : `docs/PLAN_RESNAT.md`, `docs/JOURNAL6.md` "Session 141 (suite 19)".
+
+> **Item 60 (Session 141 suite 18) — Point documentaire ✅ CLOS.** Demande Saar : trier les chantiers
+> terminés, évaluer la qualité de la doc, reset `JOURNALTEMP.md`, décider de l'usage de
+> `FOUNDATION.md`/`VOCABULARY.md`. **8 fichiers `docs/PLAN_*.md` archivés** vers `docs/Old/`
+> (`PLAN_TIRVISE`, `PLAN_VAULT`, `PLAN_ADVANTAGESPANEL`, `PLAN_DICEREWORK3`, `PLAN_SEXE`, `PLAN_MOVE`,
+> `PLAN_RAYCAST`, `PLAN_WIZARD_REFACTOR` — code vérifié en place pour chacun avant archivage, pas
+> seulement le statut écrit dans le fichier). Restent actifs : `PLAN_LOS.md` (Phases 1-3 ouvertes),
+> `PLAN_GEOMETRIE.md` (0% codé), `PLAN_EXPORTPDF.md` (proposition), `PLAN_MUTATION2.md` (Lot 2+),
+> `PLAN_MODING.md` (en pause). **Trouvailles qualité doc** : `docs/GLOSSAIRE.md` référencé par
+> `.claude/rules/conventions.md` mais absent du repo (n'existe que dans le submodule
+> `Enclume-codex/`) — référence corrigée vers `docs/VOCABULARY.md` ; `docs/SYSTEME/REGLES_LdB.md`
+> = dump brut LdB à l'encodage cassé, mal placé selon `docs/RegleDocumentaire.md` Règle 8, doublon
+> probable de `docs/REGLES/REGLESYSCOMBAT.md` — bandeau d'avertissement ajouté, suppression différée
+> (dette `[DOC2]`). **Recadrage Saar en cours de session** : "ces docs sont rédigées pour toi" — bascule
+> d'une simple passivité "table de référence" vers un **wiring actif** façon DÉTECTEUR DE DÉRIVE.
+> `docs/VOCABULARY.md` (squelette vide depuis sa création) peuplé avec un premier seed réel (concepts
+> métier, ambiguïtés déjà connues, acronymes, pièges historiques — dette `[DOC1]`, à enrichir en
+> continu). `CLAUDE.md` : table Nomenclature docs étendue (FOUNDATION/VOCABULARY/RegleDocumentaire),
+> 2 nouveaux triggers DÉTECTEUR DE DÉRIVE (nouveau terme métier → VOCABULARY.md à jour ? / nouvelle
+> doc → responsabilité unique définie ?). `docs/JOURNALTEMP.md` reset (contenu confirmé consolidé
+> ailleurs avant effacement). **Testé** : sans objet (session documentaire pure, aucun code touché).
+> Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 18)".
 
 > **Item 59 (Session 141 suite 17) — Tir visé (LdB p.227-228) + framework Actions Exclusives ✅ CLOS.**
 > Chantier lancé par une demande de planification pure ("fonctionnalité qui semble manquer"), mené en
@@ -174,6 +247,48 @@
 > chantier mais antérieur à lui et sans rapport — cosmétique, non corrigé. Détail complet :
 > `docs/PLAN_VAULT.md` (toutes les étapes documentées avec leurs tests), `docs/JOURNAL6.md` "Session
 > Coffre (Vault)".
+
+**62. Bonus féminin : règle fixe -2 FOR/+1 COO/+1 PRE + revalidation du bascule Sexe ✅ CLOS — Session 141 (suite 20) (2026-07-12)**
+   → Demande Saar : la mécanique `feminin_bonus` (remise forfaitaire invisible sur les 2 premiers
+     points investis en COO/PRE, Session 141 suite 14) n'est pas compréhensible. Simplification
+     demandée : règle fixe, sans choix de répartition — Femme = FOR -2, COO +1, PRE +1.
+   → **Antécédent relu avant tout code** : une 1ʳᵉ tentative de correctif direct sur COO/PRE (avant la
+     remise forfaitaire) avait été abandonnée — elle plafonnait le spinner Mod.PC au quota, cassant
+     l'achat PC normal au-delà du bonus. Vérifié que la répartition fixe demandée par Saar élimine
+     cette source de complexité par construction (plus de choix joueur à arbitrer) — le nouveau
+     correctif ne recrée aucun plafond de spinner, juste un décalage de base symétrique à FOR.
+   → **Vrai bug trouvé en testant le plan (captures d'écran Saar)** : basculer Sexe M↔F après avoir
+     déjà réparti des points changeait silencieusement le budget total sans jamais revalider l'état —
+     `Step1Attributes.jsx` recalculait `pointsRestants`/`canNext` à la main, jamais via
+     `validateStep1` (jusqu'ici appelé seulement côté serveur). Deuxième trouvaille en creusant
+     `validateStep1` : G1 traitait "budget dépassé" et "budget non dépensé" comme un seul
+     avertissement contournable — un dépassement n'était en réalité jamais rejeté, ni client ni
+     serveur, ce qui aurait laissé passer un personnage sur-doté en Attributs via un simple appel API
+     direct.
+   → `shared/polarisUtils.js` : `getAttributeBase(attrId, isFeminin)` (FOR:5, COO:8, PRE:8, sinon 7)
+     remplace `getFemininBonusDiscount`/`FEMININ_BONUS_MAX` (supprimés). `validateStep1` gagne **G1bis**
+     (`totalCost > poolTotal` → erreur dure, distincte du simple solde non dépensé).
+   → `Step1Attributes.jsx` : `validation = useMemo(() => validateStep1(...))` remplace le calcul
+     maison — aligné sur le pattern déjà établi et éprouvé par `CareersAllocator.jsx`/Étape 4 (Lot 2,
+     Session 139), pas un nouveau pattern inventé. `handleSetFeminin` redevenu trivial (plus de clamp
+     spécial au bascule — toute invalidité est désormais détectée génériquement).
+   → **Bug trouvé en testant ma propre correction (`node -e`)** : une valeur hors bornes (>20, possible
+     juste après un bascule qui décale la base) fait sortir `COST_LOOKUP[valeur]` de la table (aucune
+     entrée au-delà de 20) → `totalCost`/`pointsRestants` deviennent `NaN`, affichés littéralement
+     dans le HUD. Corrigé (`—` affiché tant que `!validation.valide`).
+   → `Step2Genotype.jsx` : angle mort fermé au passage (conséquence directe de la généralisation, pas
+     une chasse au bug séparée) — son propre recalcul de base ignorait `femininBonusEnabled`.
+   → **Testé** : `node --check`/ESLint 0 nouvelle erreur (`poolBase` non utilisé confirmé
+     pré-existant via `git stash`), `creation.json` validé JSON, scénarios `node -e` (G1bis déclenché
+     par recherche systématique, G3 déclenché sur 2 scénarios de bascule construits à la main).
+     **Vérification en base réelle** (demande explicite Saar) : sur les 64 fiches non verrouillées
+     existantes, aucune ne serait bloquée par le nouveau G1bis ; 0 personnage féminin en cours avec
+     l'option active actuellement (test du nouveau plancher COO/PRE=8 vacuous faute de candidat, mais
+     mécanisme validé synthétiquement par ailleurs). SR + **fonctionnel confirmé Saar**.
+   → **Non testé** : parcours navigateur réel du bascule Sexe M↔F↔M après répartition (blocage dur +
+     résolution par décrément) — validé uniquement par instrumentation directe et vérification en
+     base, pas par un clic réel dans le Wizard.
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 20)".
 
 **57. `docs/PLAN_VAULT.md` — Coffre personnel (Vault) ✅ TERMINÉ — Étapes 0-7 (2026-07-10/11)**
    → Demande initiale Saar : stocker des personnages hors campagne pour les faire circuler entre

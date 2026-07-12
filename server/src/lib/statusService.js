@@ -1,8 +1,9 @@
 import { parseDice }            from './diceParser.js'
 import { isShockTestRequired }  from './woundUtils.js'
-import { calcSeuils, getShockMalus } from './charStats.js'
+import { getShockMalus }        from './charStats.js'
 import { WS }                   from '../../../shared/events.js'
 import { getCampaignSettings }  from './campaignSettingsService.js'
+import { calcSeuils }           from '../../../shared/polarisUtils.js'
 
 // ─── emitTokenStatusUpdated ───────────────────────────────────────────────────
 // Migré depuis server/src/socket/index.js — db ajouté en paramètre (était closure).

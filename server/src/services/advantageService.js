@@ -17,7 +17,7 @@ export async function getAdvantages(sheetId) {
     .select(
       'ca.id', 'ca.advantage_id', 'ca.acquired_at', 'ca.acquired_during',
       'ra.name', 'ra.type', 'ra.description', 'ra.cost_pc', 'ra.special_rule',
-      'ra.mod_attribute', 'ra.mod_value',
+      'ra.mod_attribute', 'ra.mod_value', 'ra.mod_resistance', 'ra.mod_res_value',
     )
     .orderBy('ca.acquired_at', 'asc')
 }

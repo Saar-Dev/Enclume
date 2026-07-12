@@ -1,7 +1,7 @@
 # Options de campagne — Création de personnage
 
 > Source : LdB Polaris — chapitre Création de personnage
-> Date : 2026-07-03 — Session 130
+> Date : 2026-07-12 — Session 141 (suite 20)
 > Statut : inventaire exhaustif
 
 ---
@@ -24,14 +24,19 @@
 
 ---
 
-## OPT-02 — Bonus/Malus féminin -IMPLANTATION BLOQUÉ PAR SEED_MUTATION (SEXE)
+## OPT-02 — Bonus/Malus féminin — IMPLANTÉ (`feminin_bonus`)
 
-**Règle :** Si activé, personnage féminin : FOR base = 5 (au lieu de 7), +2 bonus répartissables en COO et/ou PRE (max 20).
+**Règle (simplifiée sur demande Saar, Session 141 suite 20 — fixe, sans choix de répartition,
+contrairement au LdB qui laisse répartir 2 points librement entre COO/PRE) :** si activé, personnage
+féminin : FOR base = 5, COO base = 8, PRE base = 8 (au lieu de 7 chacun) — décalage direct des
+valeurs de base, symétrique pour les 3 attributs.
 
 **Impact code :**
-- `Step1Attributes` : conditionner l'affichage du toggle Sexe et l'application de FOR=5 + limite COO/PRE
-- `validateStep1` : règle G4 déjà codée dans `polarisUtils.js`
-- `Step2Genotype` : `baseAttrs` déjà réactif à `isFeminin`
+- `shared/polarisUtils.js` : `getAttributeBase(attrId, isFeminin)` — source unique du décalage,
+  consommée par `calcTotalCost`/`validateStep1` (client + serveur)
+- `Step1Attributes.jsx` : toggle Sexe + tableau Base/Mod.PC ; la validité est revalidée via
+  `validateStep1` à chaque rendu (bascule Sexe inclus)
+- `Step2Genotype.jsx` : `baseAttrs` réactif à `isFeminin` + `femininBonusEnabled`
 
 **Défaut :** OFF
 

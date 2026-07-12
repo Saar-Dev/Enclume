@@ -1,3 +1,12 @@
+> ⚠️ CONTENU BRUT NON FIABLE — extraction OCR/copier-coller du LdB jamais nettoyée, encodage mojibake
+> par endroits (ex. « ra￾lentissent »). Doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md` (dossier
+> officiel des extraits LdB selon `docs/RegleDocumentaire.md` Règle 8). Ne pas citer comme source —
+> vérifier d'abord `docs/REGLES/REGLESYSCOMBAT.md`. Dette `[DOC2]` (`CLAUDE.md`) : vérification
+> ligne-à-ligne + suppression à faire en session dédiée.
+> — Session 141 (suite 18), 2026-07-11.
+
+---
+
 Agir en combat : 
 les Actions_
 Types d’Actions

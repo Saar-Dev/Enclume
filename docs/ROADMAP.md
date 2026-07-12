@@ -1,5 +1,6 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-07-11 Session 141 (suite 16 — correction)
+> Dernière mise à jour : 2026-07-11 Session 141 (suite 18) — point documentaire, voir `CLAUDE.md`
+> dettes `[DOC1]`/`[DOC2]` pour le suivi (archivage PLAN_*.md, VOCABULARY.md, REGLES_LdB.md)
 
 ---
 

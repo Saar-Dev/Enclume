@@ -1,3 +1,24 @@
+## v175 — 2026-07-12 — Bonus féminin : règle fixe (Force -2 / Coordination +1 / Présence +1)
+
+### Client
+- [fix] Option de campagne « Bonus féminin » : règle simplifiée en décalage fixe et lisible des
+  valeurs de base (Force -2, Coordination +1, Présence +1), au lieu d'une remise de coût invisible.
+- [fix] Basculer le Sexe pendant la répartition des Attributs (Étape 1) revalide désormais
+  correctement le budget — un bascule pouvait auparavant laisser une répartition invalide sans
+  aucun avertissement.
+
+## v174 — 2026-07-12 — Résistances naturelles + Attributs secondaires manquants sur la fiche
+
+### Serveur
+- [fix] Correction d'un bug de signe dans les données de 6 avantages/mutations "Résistance naturelle"
+  (poison/maladie/radiation/drogue) — un effet censé améliorer la résistance la dégradait en réalité.
+- [feat] Résistance aux poisons/maladies/radiations/drogues désormais calculée (attribut + mutations
+  + avantages), exposée comme nouvelles sources de macro personnage.
+
+### Client
+- [feat] La fiche personnage affiche désormais Résistance aux dommages, Résistance aux poisons/
+  maladies/radiations/drogues et Souffle dans le bloc "Attributs secondaires" (absents jusqu'ici).
+
 ## v173 — 2026-07-11 — Combat : bonus deux armes à distance + retrait de la carence armure
 
 ### Serveur

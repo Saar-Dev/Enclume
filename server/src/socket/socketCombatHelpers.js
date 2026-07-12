@@ -12,9 +12,10 @@ import { getMutationEffects } from '../services/mutationService.js'
 import {
   calcSkillTotal, calcAttributeNA,
   calcWoundPenalty, calcEncumbrancePenalty,
-  calcResistanceDommages, calcResistanceArmure,
+  calcResistanceArmure,
   getModDom, calcDroneRD, calcDroneDegatsNets,
 } from '../lib/charStats.js'
+import { calcResistanceDommages } from '../../../shared/polarisUtils.js'
 import { isCaseOccupied, collisionMoveToken } from '../lib/redis.js'
 import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS, LOC_TABLE } from '../../../shared/armorConstants.js'
 

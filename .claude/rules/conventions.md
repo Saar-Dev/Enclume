@@ -3,7 +3,7 @@
 ---
 # Conventions & Glossaire
 
-**Ambiguïtés termes → `docs/GLOSSAIRE.md`** | **Conventions détail → `docs/SYSTEME/CONVENTIONS.md`**
+**Ambiguïtés termes → `docs/VOCABULARY.md`** | **Conventions détail → `docs/SYSTEME/CONVENTIONS.md`**
 
 - SR = Serveur Redémarré sans erreur. Si erreur → copier intégralement.
 - Félicitations ≠ validation. `[INCONNU]` + `[DBG-X]` pour toute cause non lue.

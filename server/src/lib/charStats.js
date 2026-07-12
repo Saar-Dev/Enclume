@@ -13,7 +13,7 @@
 
 import { WOUND_PENALTIES } from '../../../shared/woundConstants.js'
 import {
-  polarisRound, calcAN, getGenotypeModForAttr, getMutationModForAttr, calcNA,
+  polarisRound, calcAN, getGenotypeModForAttr, getMutationModForAttr, calcNA, RD_TABLE,
 } from '../../../shared/polarisUtils.js'
 
 // ─── Labels complets des attributs (LdB p.112-113) ───────────────────────────
@@ -58,20 +58,8 @@ const MOD_DOM_TABLE = [
   { min: 20, max: 21, mod: +5 },
 ]
 
-// ─── Table Résistance aux Dommages — FOR+CON (LdB p.114) ─────────────────────
-// Utilisée par calcDroneRD (ci-dessous) : drones utilisent integrite × 2 comme entrée directe.
-export const RD_TABLE = [
-  { min: 2,  max: 5,  rd: +6 },
-  { min: 6,  max: 9,  rd: +4 },
-  { min: 10, max: 13, rd: +2 },
-  { min: 14, max: 17, rd: +1 },
-  { min: 18, max: 21, rd:  0 },
-  { min: 22, max: 25, rd: -1 },
-  { min: 26, max: 29, rd: -2 },
-  { min: 30, max: 33, rd: -3 },
-  { min: 34, max: 37, rd: -4 },
-  { min: 38, max: 41, rd: -5 },
-]
+// RD_TABLE importée depuis shared/polarisUtils.js (source unique, docs/PLAN_RESNAT.md) — utilisée
+// par calcDroneRD (ci-dessous) : drones utilisent integrite × 2 comme entrée directe.
 
 // §7.6 — Drone : integrite × 2 → table RD. Sain (haute intégrité) → rd négatif → plus vulnérable.
 // Endommagé (faible intégrité) → rd positif → noyau durci. Plage couverte : integrite 1–20.
@@ -86,20 +74,6 @@ export function calcDroneDegatsNets(droneSheet, degautsBruts) {
   const rdDrone  = calcDroneRD(droneSheet.integrite_actuelle)
   return { etqDrone, rdDrone, degatsNets: Math.max(0, degautsBruts - etqDrone - rdDrone) }
 }
-
-// ─── Table Résistance Naturelle (LdB p.114) ──────────────────────────────────
-const RES_NAT_TABLE = [
-  { min: 1,  max: 2,  res: +6 },
-  { min: 3,  max: 4,  res: +4 },
-  { min: 5,  max: 6,  res: +2 },
-  { min: 7,  max: 8,  res: +1 },
-  { min: 9,  max: 11, res:  0 },
-  { min: 12, max: 13, res: -1 },
-  { min: 14, max: 15, res: -2 },
-  { min: 16, max: 17, res: -3 },
-  { min: 18, max: 19, res: -4 },
-  { min: 20, max: 21, res: -5 },
-]
 
 // ─── Table des modificateurs de difficulté (LdB p.404) ───────────────────────
 export const DIFFICULTY_MOD_TABLE = [
@@ -201,17 +175,10 @@ export function getModDom(for_na) {
 }
 
 // ─── Attributs secondaires ────────────────────────────────────────────────────
-// calcREA déménagée vers shared/polarisUtils.js (source de calcul unique partagée avec le client,
-// docs/PLAN_MUTATION2.md Lot 2) — les appelants l'importent directement depuis shared/, pas via
-// ce fichier (aucun usage interne ici).
-
-export function calcSeuils(for_na, con_na, vol_na) {
-  const etourdissement = polarisRound((for_na + con_na + vol_na) / 3)
-  return {
-    etourdissement,
-    inconscience: etourdissement + 10,
-  }
-}
+// calcREA/calcSeuils/calcResistanceDommages/calcResistanceNaturelle/calcResistanceDroguesInput/
+// calcSouffle déménagées vers shared/polarisUtils.js (source de calcul unique partagée avec le
+// client, docs/PLAN_MUTATION2.md Lot 2 + docs/PLAN_RESNAT.md) — les appelants les importent
+// directement depuis shared/, pas via ce fichier (aucun usage interne ici).
 
 function calcAllureMoy(val) {
   if (val <= 5)  return 6
@@ -231,31 +198,6 @@ export function calcAllures(coo_na, athletisme_total) {
     rapide:  moy * 2,
     max:     maxMoy * 4,
   }
-}
-
-export function calcResistanceDommages(for_na, con_na) {
-  const sum = for_na + con_na
-  if (sum > 41) {
-    return -5 - Math.floor((sum - 41) / 4)
-  }
-  const result = lookupTable(RD_TABLE, sum, 'rd')
-  return result ?? 0
-}
-
-export function calcResistanceNaturelle(result_na) {
-  if (result_na > 21) {
-    return -5 - Math.floor((result_na - 21) / 2)
-  }
-  const result = lookupTable(RES_NAT_TABLE, result_na, 'res')
-  return result ?? 0
-}
-
-export function calcResistanceDroguesInput(con_na, vol_na) {
-  return polarisRound((con_na + vol_na) / 2)
-}
-
-export function calcSouffle(con_na, vol_na, mod_advantage) {
-  return polarisRound((con_na + vol_na) / 2) + (mod_advantage ?? 0)
 }
 
 // ─── Coût XP — dépense de compétences (LdB) ──────────────────────────────────

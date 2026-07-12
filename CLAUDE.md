@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 17) — 2026-07-11
+> Session 141 (suite 20) — 2026-07-12
 
 ---
 
@@ -81,6 +81,8 @@ Toute clôture ✅ exige :
 → Proposer un correctif sur une cause `[HYPOTHÈSE]` non instrumentée → STOP. Étape instrumentation obligatoire d'abord.
 → Bug non reproductible avant analyse → STOP. Documenter les conditions, ne pas analyser à l'aveugle.
 → Solution "temporaire" / "pour l'instant" / "patch rapide" proposée → STOP. Concevoir pour la durée dès le départ.
+→ Nouveau terme métier / concept Enclume introduit (mécanique, table, pattern nommé) → STOP. `docs/VOCABULARY.md` vérifié/mis à jour ?
+→ Créer un nouveau fichier `docs/*.md` → STOP. Quelle est sa responsabilité unique (`docs/RegleDocumentaire.md` Règle 14) ? Une info déjà documentée ailleurs → référencer, jamais dupliquer.
 
 ---
 
@@ -97,18 +99,79 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 **Nomenclature docs :**
 | Préfixe | Rôle |
 |---|---|
+| `docs/FOUNDATION.md` | Hiérarchie des sources de vérité (LdB > FOUNDATION > VOCABULARY > SYSTEM > DOMAIN > MANUEL > PLAN) — lire si un conflit entre deux docs doit être arbitré |
+| `docs/VOCABULARY.md` | Dictionnaire officiel (concepts métier, ambiguïtés, acronymes) — lire/mettre à jour dès qu'un terme métier ou concept Enclume est ambigu ou nouveau |
+| `docs/RegleDocumentaire.md` | Contrat de classement documentaire (où ranger une nouvelle doc, règle "une responsabilité par document") — lire avant de créer un nouveau fichier `docs/*.md` |
 | `docs/SYSTEME/*.md` | Spécifications techniques d'implémentation (lire sur demande via rules) |
 | `docs/REGLE*.md` | Sources de vérité règles Polaris (LdB) — source absolue |
 | `docs/MANUEL*.md` | Synthèse technique des règles (séquences, pipeline) |
-| `docs/PLAN_*.md` | Planifications réalisées ou en cours |
+| `docs/PLAN_*.md` | Planifications réalisées ou en cours — temporaire, archivé vers `docs/Old/` une fois le chantier clos (`RegleDocumentaire.md` Règle 10) |
 | `docs/ARCHI_REWORK.md` | Bible des reworks actifs |
 | `docs/ARCHI_REWORK_DONE.md` | Specs complètes des reworks achevés |
 | `.claude/rules/*.md` | Règles domaine — chargées automatiquement (path-scoped) |
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 17) (2026-07-11)
+## ÉTAT COURANT — Session 141 (suite 20) (2026-07-12)
 
+- **Session 141 (suite 20) — Bonus féminin : règle fixe -2 FOR/+1 COO/+1 PRE + revalidation du
+  bascule Sexe ✅ CLOS.** Demande Saar : la mécanique `feminin_bonus` (remise forfaitaire invisible
+  sur COO/PRE, Session 141 suite 14) n'est pas compréhensible — simplification en règle fixe, sans
+  choix de répartition. **Antécédent relu avant tout code** : une 1ʳᵉ tentative de correctif direct
+  sur COO/PRE (avant la remise) avait été abandonnée (plafonnait le spinner, cassait l'achat PC
+  normal au-delà du bonus) — vérifié que la répartition fixe demandée par Saar élimine cette source
+  de complexité, aucun plafond de spinner recréé. **Vrai bug trouvé en testant le plan (captures
+  Saar)** : basculer Sexe M↔F après avoir déjà réparti des points changeait silencieusement le
+  budget sans jamais revalider — `Step1Attributes.jsx` ne passait jamais par `validateStep1` (le
+  serveur seul l'appelait), et `validateStep1` lui-même ne rejetait jamais un budget dépassé (G1
+  traitait "dépassé" et "non dépensé" pareil). `shared/polarisUtils.js` :
+  `getAttributeBase(attrId, isFeminin)` (FOR:5, COO:8, PRE:8) remplace `getFemininBonusDiscount` +
+  **G1bis** (budget dépassé = erreur dure). `Step1Attributes.jsx` : gate "Suivant" alignée sur le
+  pattern déjà établi par `CareersAllocator.jsx`/Étape 4 (`validation = useMemo(() =>
+  validateStep1(...))`), `handleSetFeminin` redevenu trivial. **Bug trouvé en testant ma propre
+  correction** : valeur hors bornes (>20 après bascule) → `COST_LOOKUP` sans entrée → `NaN` dans le
+  HUD — corrigé (`—` affiché). `Step2Genotype.jsx` : angle mort fermé au passage (ignorait
+  `femininBonusEnabled`). Testé : lint 0 nouvelle erreur, scénarios `node -e` (G1bis + G3 sur
+  bascule), **vérification en base réelle** (64 fiches non verrouillées, 0 en dépassement ; 0
+  personnage féminin en cours avec l'option active actuellement). SR + **fonctionnel confirmé
+  Saar**. Non testé : parcours navigateur réel du bascule Sexe. Détail complet : item "62."
+  `docs/EN_COURS.md`, `docs/JOURNAL6.md` "Session 141 (suite 20)".
+- **Session 141 (suite 19) — Résistances naturelles (poison/maladie/radiation/drogue) câblées +
+  Attributs secondaires manquants ajoutés sur la fiche perso ✅ CLOS.** `docs/PLAN_RESNAT.md`.
+  Recherche pro exigée par Saar (Foundry Active Effects, PF2e IWR) avant tout code a fait rejeter un
+  premier plan (inversion de signe à l'exécution selon `type`, rustine) au profit d'une correction à
+  la source. **Bug de données réel trouvé en base, croisé avec le texte LdB exact** : 6 lignes
+  `ref_advantages`/`ref_mutations` ("Résistance naturelle augmentée", "Résistance naturelle" ×4,
+  "Purulence", "Contagion") stockaient un delta positif pour un effet censé améliorer la résistance —
+  avec `Seuil = Intensité − Modificateur` (formule confirmée par Saar, Test différé à un chantier
+  futur), ça dégradait le Seuil au lieu de l'améliorer. Cas le plus parlant : "Contagion" (immunité
+  totale, sentinelle 9999) aurait rendu un personnage immunisé **systématiquement en échec**, l'exact
+  opposé de la règle. Migration `136` (NOUVEAU) corrige les 6 lignes + normalise la divergence de clé
+  `"drug"`(avantages)/`"drugs"`(mutations). 0 personnage réel n'avait jamais acquis ces lignes — zéro
+  régression. `shared/polarisUtils.js` : `getAdvantageModForResistance` (résolveur générique,
+  symétrique à `getAdvantageModForAttr` du Lot 2, aucune inspection de `type` — la donnée porte son
+  signe). 4 nouvelles sources de macro (`resistance_poison/maladie/radiation` + fix de
+  `resistance_drogues`, buggée depuis toujours — exposait le NA brut au lieu du modificateur réel).
+  **Addendum même session** : Saar signale l'absence de Résistance aux dommages/Résistances
+  naturelles/Souffle sur la fiche perso (vs liste LdB p.114 attributs secondaires) — 5 fonctions
+  (`calcResistanceDommages`/`calcResistanceNaturelle`/`calcResistanceDroguesInput`/`calcSeuils`/
+  `calcSouffle`) consolidées de `charStats.js` (serveur seul) vers `shared/polarisUtils.js` (même
+  principe que `calcREA` Lot 2), tous les appelants serveur redirigés (jamais de transit par
+  `charStats.js`, leçon Lot 2). `CharacterSheet.jsx` : 6 nouveaux `<SecondaryField>` ajoutés **après**
+  l'existant (rien retiré, consigne explicite Saar). **Décision de scope délibérée** : "Résistance aux
+  dommages" affichée en valeur de base seulement (FOR+CON, sans mutation/avantage) — la résolution de
+  combat réelle (`resolveTargetHit`/`resolveMeleeAction`) ne les consomme pas encore (Lot 3 de
+  `docs/PLAN_MUTATION2.md`, non traité) ; même raison pour ne pas toucher au modificateur d'avantage
+  sur "Choc" (`adv_030`/`adv_060`). **Testé** : round-trip migration réel (byte-identique), 9
+  scénarios unitaires purs, test bout-en-bout en base réelle (personnage existant, transaction
+  annulée, 0 résidu — mutation+avantage combinés donnent bien un Seuil amélioré, stacking vérifié),
+  non-régression numérique des 5 fonctions déplacées, ESLint client 0 nouvelle erreur (confirmé
+  `git stash`), SR (`/api/health` 200). **Parcours navigateur confirmé fonctionnel par Saar**
+  (capture d'écran fiche réelle : 6 nouveaux champs corrects). **Non testé** : parcours navigateur des
+  macros (`resistance_poison`/etc.) — seule la fiche a été vérifiée visuellement. **Suite immédiate** :
+  passe UI/UX demandée par Saar sur le bloc "ATTRIBUTS SECONDAIRES" (grille plate actuelle jugée
+  "fonctionnelle mais moche"), inspirée du regroupement de la fiche papier officielle. Détail complet :
+  `docs/JOURNAL6.md` "Session 141 (suite 19)".
 - **Session 141 (suite 17) — Tir visé (LdB p.227-228) + framework Actions Exclusives ✅ CLOS.**
   Chantier ouvert par une demande de planification pure ("fonctionnalité qui semble manquer"), mené
   en passes validées une à une : recherche externe (Bob Nystrom, *Game Programming Patterns* — la
@@ -919,6 +982,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 - **[WIZ4]** `Step4Experience.jsx` — le mini-stepper (`isClickable`) ne revalide jamais les blocages durs de la sous-step quittée : un clic direct sur une sous-step déjà "reachable" (`highestSubStep` dépassé) contourne le blocage de la sous-step courante (ex. retirer sa seule carrière sur Carrières puis cliquer directement sur "Avantages pro"/"Revers"/"Récap" via le mini-stepper). Préexistant à Session 141 (suite 12), pas une régression du chantier Revers/Avantages pro — vérifié en relisant `Step4Experience.jsx` avant le rework. Filet de sécurité serveur (`reconcileCreation` STEP4, "Au moins une carrière requise") empêche toute donnée invalide persistée — juste un rejet tardif/générique au lieu d'un blocage immédiat. Non prioritaire, concerne l'architecture de navigation entière du mini-stepper, pas une sous-step isolée.
 - **[WIZLOCK1]** (Session 141 suite 14) — 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé ("Mr STEP6 Final", "jeune") avant le correctif d'atomicité de cette session. Cause probable identifiée mais non re-vérifiée a posteriori sur ces 2 cas précis : `handleTerminate` (`WizardCreation.jsx`) faisait 2 appels réseau séparés (`reconcile` puis `lock`) — toute coupure entre les deux laissait la fiche dans cet état bloqué. Corrigé pour les finalisations futures (`reconcileCreation` gagne `finalize`, un seul appel atomique) — cette dette ne documente que l'historique, pas un risque encore actif.
 - **[EQSKILLS1]** (Session 141 suite 16) — `ref_equipment_skills` ("compétences boostées/requises" : accessoires/implants/outils requérant ou boostant une compétence, ex. lunette de visée → Tir de précision) n'est consommée **nulle part** en logique de jeu — seulement écrite/relue par l'API admin `routes/equipment.js` (aucun composant `client/src` ne l'appelle, vérifié par grep). Donnée morte, jamais appliquée à un calcul. À distinguer de `ref_equipment_skill_assoc` (table jumelle au schéma identique, "compétence d'utilisation" — celle-là bien vivante, consommée par `resolveAssaultAction`/`resolveMeleeAction`), source de la confusion initiale de Saar sur un possible doublon. 1 seul item présent dans les deux tables (TMP II), dont l'entrée `ref_equipment_skills` (`ANALYSE_EMPATHIQUE` sur une arme) est visiblement une erreur de saisie ancienne. Fusion des deux tables possible mais non prioritaire (toucherait le moteur combat pour un gain cosmétique, aucun consommateur réel à préserver côté `ref_equipment_skills`).
+- **[DOC1]** (Session 141 suite 18) — `docs/VOCABULARY.md` était un squelette vide (toutes sections `(...)`) depuis sa création, jamais réellement adopté par le protocole. Peuplé cette session avec un premier seed réel (concepts métier, ambiguïtés, acronymes, pièges historiques) en remplacement de `docs/GLOSSAIRE.md` (référencé par `.claude/rules/conventions.md` mais absent de ce repo — n'existe que dans le submodule `Enclume-codex/`, référence corrigée). Reste à enrichir au fil des sessions, jamais réécrit de zéro.
+- **[DOC2]** (Session 141 suite 18) — `docs/SYSTEME/REGLES_LdB.md` : dump brut d'extraction LdB avec encodage mojibake par endroits, mal placé selon `docs/RegleDocumentaire.md` Règle 8 (dossier `REGLES/` réservé aux extraits LdB, pas `SYSTEME/`), doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md`. Bandeau d'avertissement ajouté en tête de fichier ; vérification ligne-à-ligne + suppression/déplacement à faire en session dédiée — non fait ici (décision Saar, hors scope de cette passe).
 
 ---
 

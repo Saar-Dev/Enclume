@@ -1,5 +1,8 @@
 # PLAN_MODING.md — Système de Moding (installation de modules sur armes)
 > Rédaction initiale : Session 120 — 2026-06-24
+> **Révisé — 2026-07-12** : analyse critique (contrainte UNIQUE anti-doublon ajoutée — voir
+> "Historique des révisions" en bas de fichier). Blocage Tir visé levé (Session 141 suite 17 clos),
+> pause à lever formellement dans `EN_COURS.md` avant reprise.
 > **Révisé — 2026-07-09** : plan scindé en deux phases après analyse critique (voir "Historique des
 > révisions" en bas de fichier). **Ce document ne couvre désormais que la Phase A.** La Phase B
 > (effet mécanique des mods en combat) est explicitement hors scope — à planifier ensemble dans un
@@ -174,6 +177,8 @@ char_inventory_mods
   equipment_id  UUID, FK ref_equipment(id) ON DELETE SET NULL   -- réf au type de mod
   mod_name      TEXT NOT NULL                                    -- snapshot nom à l'installation
   installed_at  TIMESTAMPTZ DEFAULT now()
+
+  UNIQUE (weapon_inv_id, equipment_id)   -- ajouté 2026-07-12, voir analyse critique
 ```
 
 - `mod_name` snapshotté à l'installation (affichage stable même si le référentiel change plus tard)
@@ -181,6 +186,14 @@ char_inventory_mods
   aussi (cohérent avec Kiwi, pas de mod orphelin affiché)
 - `equipment_id` en SET NULL : si la ligne `ref_equipment` du mod est supprimée du catalogue, on
   garde la trace via `mod_name` (pas de perte d'historique)
+- **`UNIQUE(weapon_inv_id, equipment_id)`** (ajouté suite à analyse critique 2026-07-12) : le check
+  anti-doublon applicatif (P6) seul laisse une fenêtre de course (deux requêtes concurrentes passent
+  toutes deux le `SELECT` avant que la première n'ait commité — cas plausible avec un mod en stack
+  ×2+, pas juste un double-clic accidentel). Pas besoin d'index **partiel** comme `uq_char_mut_no_sub`
+  (migration 109) : ici un nouvel `install` exige toujours un `equipment_id` non nul (P1), seules les
+  lignes historiques dont le catalogue a été supprimé après coup portent `equipment_id = NULL`, et
+  Postgres ne fait jamais collisionner deux NULL sur une contrainte UNIQUE — donc sans risque de faux
+  rejet.
 
 ---
 
@@ -268,28 +281,40 @@ if (weaponRef.family !== 'Armes' || weaponRef.category === 'Accessoires pour arm
 if (modRef.family !== 'Armes' || modRef.category !== 'Accessoires pour armes')
   throw new AppError(400, 'L\'objet n\'est pas un accessoire d\'arme')
 
-// 2. Anti-doublon strict (Phase A — dédoublonnage par equipment_id uniquement,
-//    PAS l'exclusivité de sous-famille rulebook — voir Hors scope Phase B)
+// 2. Anti-doublon — check applicatif en pré-vol (évite un aller-retour DB raté dans le cas
+//    normal), PAS la vraie garde — voir contrainte UNIQUE (3) qui protège la vraie course
 const alreadyInstalled = await db('char_inventory_mods')
   .where({ weapon_inv_id: weaponInvId, equipment_id: mod.equipment_id }).first()
 if (alreadyInstalled) throw new AppError(409, 'Ce mod est déjà installé sur cette arme')
 
 // 3. Transaction atomique — consommer 1 unité du mod, PAS un DELETE inconditionnel
 //    (correction 2026-07-09 : mod.quantity peut être > 1 si stack — voir P7)
-const { removeResult, state } = await db.transaction(async (trx) => {
-  await trx('char_inventory_mods').insert({
-    weapon_inv_id: weaponInvId,
-    equipment_id: mod.equipment_id,
-    mod_name: modRef.name,
-  })
-  // Réutilise inventoryService.removeItem(characterId, modInvId, 1) — même sémantique que
-  // DELETE /:characterId/inventory/:itemId (char-sheet.js:1301-1318, décrément si quantity>1,
-  // suppression de la ligne seulement si le stock retombe à 0). Fonctionne identiquement que
-  // mod.quantity soit 1 ou plus, un seul code path.
-  const removeResult = await inventoryService.removeItem(characterId, modInvId, 1, trx)
-  const state = await getModingState(trx, characterId)
-  return { removeResult, state }
-})
+//    La vraie garde anti-doublon est ici : UNIQUE(weapon_inv_id, equipment_id) sur
+//    char_inventory_mods (ajouté 2026-07-12) — le check (2) seul laisse une fenêtre de course
+//    entre deux requêtes concurrentes (ex. mod en stack ×2+, les deux passent le SELECT avant
+//    que la première ne commite). L'INSERT ci-dessous peut donc lever une violation de
+//    contrainte même après un check (2) positif — attrapée et traduite en 409 identique.
+let removeResult, state
+try {
+  ;({ removeResult, state } = await db.transaction(async (trx) => {
+    await trx('char_inventory_mods').insert({
+      weapon_inv_id: weaponInvId,
+      equipment_id: mod.equipment_id,
+      mod_name: modRef.name,
+    })
+    // Réutilise inventoryService.removeItem(characterId, modInvId, 1) — même sémantique que
+    // DELETE /:characterId/inventory/:itemId (char-sheet.js:1301-1318, décrément si quantity>1,
+    // suppression de la ligne seulement si le stock retombe à 0). Fonctionne identiquement que
+    // mod.quantity soit 1 ou plus, un seul code path.
+    const removeResult = await inventoryService.removeItem(characterId, modInvId, 1, trx)
+    const state = await getModingState(trx, characterId)
+    return { removeResult, state }
+  }))
+} catch (err) {
+  if (err.code === '23505') // unique_violation Postgres — course gagnée par une autre requête
+    throw new AppError(409, 'Ce mod est déjà installé sur cette arme')
+  throw err
+}
 
 // 4. Notifier la room — event conditionnel selon que le mod a été totalement retiré ou
 //    juste décrémenté (pattern existant char-sheet.js — WOUND_*/INVENTORY_*/SOLS_*)
@@ -314,6 +339,12 @@ qtyToRemove, trxOrDb)` → `{ deleted: boolean, item: object|null, itemId }`. Un
 de la route DELETE actuelle (qui retournent aujourd'hui des formes différentes,
 `{item: updated}` vs `{deleted:true, itemId}`) sous une forme unique exploitable par les deux
 appelants (route DELETE elle-même après refactor, et `modingService.installMod`).
+
+**Vérifié 2026-07-12 (analyse critique)** : cette unification interne ne casse aucun contrat HTTP
+externe — `InventoryPanel.jsx:87` (seul appelant de la route DELETE) ignore complètement la réponse
+(`await api.delete(...)`, pas de lecture du body), le rafraîchissement passe uniquement par l'event
+socket (`INVENTORY_REMOVED`/`UPDATED`). Aucun client ne dépend de la forme exacte du JSON retourné —
+"Aucun changement d'API" (ligne 137-138 plus haut) confirmé, pas juste supposé.
 
 **Correction — événement socket, pas optionnel.** Le plan initial classait la notification
 temps réel comme "optionnel, peut attendre". **Vérifié 2026-07-09** : dans `char-sheet.js`, *toutes*
@@ -397,7 +428,11 @@ WHERE ci.character_id = :characterId
   vigilant si de nouvelles lignes sont saisies avec une casse différente
 - **P6** : Anti-doublon Phase A = un même `equipment_id` ne peut pas être installé deux fois sur la
   même arme. **Ce n'est pas la règle complète du livre** (voir Hors scope — Phase B) — c'est une
-  garde-fou minimal, pas une simulation des règles de jeu.
+  garde-fou minimal, pas une simulation des règles de jeu. **Garde-fou renforcé 2026-07-12** : la
+  contrainte `UNIQUE(weapon_inv_id, equipment_id)` sur `char_inventory_mods` est la vraie protection
+  (le SELECT applicatif seul laissait une fenêtre de course entre deux requêtes concurrentes,
+  plausible avec un mod en stack ×2+, pas juste un double-clic) — voir logique serveur `install`
+  corrigée ci-dessus.
 - **P7** (trouvé 2026-07-09, en planification) : un mod peut être en stack (`char_inventory.quantity
   > 1` — ex. 2× "Visée laser" achetées, stackées par la route POST inventory existante). `install`
   ne doit **jamais** faire un `DELETE` inconditionnel sur `modInvId` — sinon toute la pile disparaît
@@ -465,3 +500,21 @@ le perdre, mais traité comme un chantier à part entière avec son propre plan 
   exact : `client/src/lib/useCharacterSocket.js:36-44` (déjà existant pour `INVENTORY_*`) doit
   gagner un handler `onModInstalled` suivant le même pattern, sans quoi `WS.MOD_INSTALLED` serait
   émis dans le vide côté client.
+- **2026-07-12** — évaluation de reprise + analyse critique demandée par Saar (chantier toujours
+  listé "en pause" dans `EN_COURS.md` malgré la clôture de Tir visé, Session 141 suite 17 — dette
+  `TIRVISE` pas encore mise à jour, à faire au moment de lever la pause). **Dérive P53 reconfirmée** :
+  migration 124 déjà consommée (124-135 tous pris depuis, prochain numéro libre 136 au 2026-07-12,
+  à reconfirmer une fois de plus au codage) ; `char-sheet.js` passé de 1928 à 2133 lignes — les 6
+  routes + 4 helpers ciblés par l'Étape 0 existent toujours, contigus, juste décalés (non
+  re-numérotés dans ce document, à refaire au moment de coder). **Vérifié sans impact** : la
+  migration parallèle `131_split_equippable_stacks` (dual-wield) ne touche aucun des 16 accessoires
+  (`ref_equipment.location = NULL` pour tous, exclus du filtre de cette migration) — le piège P7
+  (mods empilés) reste valide tel quel. **Analyse critique — 1 vrai gap trouvé et corrigé** : aucune
+  contrainte DB sur l'anti-doublon `char_inventory_mods`, seulement un `SELECT` applicatif hors
+  transaction (P6) — fenêtre de course réelle avec un mod en stack ×2+ (pas qu'un double-clic).
+  Corrigé : `UNIQUE(weapon_inv_id, equipment_id)` ajoutée au schéma + logique `install` catch la
+  violation de contrainte (`23505`) en 409, même précédent que `uq_char_mut_no_sub` (migration 109).
+  **1 point vérifié et écarté** : contradiction apparente entre "Aucun changement d'API" et
+  l'unification des deux formes de retour de la route DELETE — vérifié que `InventoryPanel.jsx:87`
+  ignore la réponse HTTP (rafraîchissement 100% socket), aucun risque réel, note ajoutée au plan pour
+  ne pas relaisser planer le doute. Aucun code écrit — session d'analyse pure.

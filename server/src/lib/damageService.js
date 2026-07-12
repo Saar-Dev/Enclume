@@ -1,6 +1,6 @@
 import { parseDice }                        from './diceParser.js'
-import { calcResistanceDommages,
-         calcResistanceArmure }             from './charStats.js'
+import { calcResistanceArmure }             from './charStats.js'
+import { calcResistanceDommages }           from '../../../shared/polarisUtils.js'
 import * as woundService                    from './woundService.js'
 import * as statusService                   from './statusService.js'
 import { LOC_TABLE, SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'

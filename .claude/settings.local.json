@@ -171,7 +171,13 @@
       "Bash(git -C .. ls-files server/src/routes/equipment.js)",
       "Bash(rm -f gen_migration_data.json matched_rows_tmp.json proposed_pairs_tmp.json *)",
       "Bash(node --check client/src/components/combatSections.js)",
-      "Bash(echo \"grep exit: $?\")"
+      "Bash(echo \"grep exit: $?\")",
+      "Bash(Select-String -Pattern \"95|96|109|127|128\")",
+      "Bash(node --check server/src/db/migrations/136_fix_ref_resistance_naturelle_sign.js)",
+      "Bash(node --check client/src/character/CharacterSheet.jsx)",
+      "Skill(artifact-design)",
+      "Skill(artifact-design:*)",
+      "Bash(node --check client/src/components/creation/Step1Attributes.jsx)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Nemet\\Documents\\Enclume\\server"

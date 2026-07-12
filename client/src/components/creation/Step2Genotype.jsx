@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCreationStore } from '../../stores/creationStore'
-import { calcAN } from '../../../../shared/polarisUtils.js'
+import { calcAN, getAttributeBase } from '../../../../shared/polarisUtils.js'
 
 const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
 const GENO_IMAGES = {
@@ -122,6 +122,7 @@ const getGenoKey = (id) => {
 export default function Step2Genotype({ initialData, onNext, onPrev }) {
   const { t } = useTranslation('creation')
   const step1Data = useCreationStore(s => s.step1Data)
+  const femininBonusEnabled = useCreationStore(s => s.femininBonusEnabled)
 
   const [selected, setSelected] = useState(() =>
     initialData?.genotypeId ? (GENOTYPES.find(g => g.id === initialData.genotypeId) ?? null) : null
@@ -132,9 +133,9 @@ export default function Step2Genotype({ initialData, onNext, onPrev }) {
   const [tableExpanded, setTableExpanded] = useState(false)
 
   const baseAttrs = useMemo(() => {
-    const isFeminin = step1Data?.isFeminin ?? false
-    return Object.fromEntries(ATTR_IDS.map(id => [id, (id === 'FOR' && isFeminin) ? 5 : 7]))
-  }, [step1Data?.isFeminin])
+    const isFeminin = (step1Data?.isFeminin ?? false) && femininBonusEnabled
+    return Object.fromEntries(ATTR_IDS.map(id => [id, getAttributeBase(id, isFeminin)]))
+  }, [step1Data?.isFeminin, femininBonusEnabled])
 
   const modPCAttrs = useMemo(() => {
     if (!step1Data?.attributes) return Object.fromEntries(ATTR_IDS.map(id => [id, 0]))

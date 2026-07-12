@@ -2,11 +2,11 @@ import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
 import { getUserColor } from '../lib/socketUtils.js'
+import { calcSkillTotal, calcAttributeNA } from '../lib/charStats.js'
 import {
-  calcSkillTotal, calcAttributeNA,
-  calcSeuils, calcSouffle, calcResistanceDroguesInput,
-} from '../lib/charStats.js'
-import { calcREA, getAdvantageModForAttr } from '../../../shared/polarisUtils.js'
+  calcREA, getAdvantageModForAttr, getAdvantageModForResistance,
+  calcSeuils, calcSouffle, calcResistanceDroguesInput, calcResistanceNaturelle,
+} from '../../../shared/polarisUtils.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { getAdvantages } from '../services/advantageService.js'
 
@@ -117,7 +117,10 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
           case 'seuil_etourdi':      return calcSeuils(na('FOR'), na('CON'), na('VOL')).etourdissement
           case 'seuil_incons':       return calcSeuils(na('FOR'), na('CON'), na('VOL')).inconscience
           case 'souffle':            return calcSouffle(na('CON'), na('VOL'), getAdvantageModForAttr(advantages, 'breath'))
-          case 'resistance_drogues': return calcResistanceDroguesInput(na('CON'), na('VOL'))
+          case 'resistance_drogues':   return calcResistanceNaturelle(calcResistanceDroguesInput(na('CON'), na('VOL'))) + (mutationEffects?.mod_res_drugs ?? 0) + getAdvantageModForResistance(advantages, 'drugs')
+          case 'resistance_poison':    return calcResistanceNaturelle(na('CON')) + (mutationEffects?.mod_res_poison ?? 0) + getAdvantageModForResistance(advantages, 'poison')
+          case 'resistance_maladie':   return calcResistanceNaturelle(na('CON')) + (mutationEffects?.mod_res_disease ?? 0) + getAdvantageModForResistance(advantages, 'disease')
+          case 'resistance_radiation': return calcResistanceNaturelle(na('CON')) + (mutationEffects?.mod_res_radiation ?? 0) + getAdvantageModForResistance(advantages, 'radiation')
           default:                   return 0
         }
       }

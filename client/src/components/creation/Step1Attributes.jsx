@@ -11,6 +11,8 @@ import {
   calcAN,
   PC_MAX_ETAPE1,
   calcPoolTotal,
+  getAttributeBase,
+  validateStep1,
 } from '../../../../shared/polarisUtils.js'
 
 const ATTR_IDS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
@@ -31,7 +33,7 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
 
   const ROW_TOOLTIPS = {
     base: femininBonusEnabled
-      ? "Niveau de base : score initial de l'Attribut avant modificateurs. Fixé à 7 (5 en Force pour un personnage féminin)."
+      ? "Niveau de base : score initial de l'Attribut avant modificateurs. Fixé à 7 (5 en Force, 8 en Coordination et Présence pour un personnage féminin)."
       : "Niveau de base : score initial de l'Attribut avant modificateurs. Fixé à 7.",
     pc: "Modificateur PC : points d'Attribut achetés avec des Points de Création. 1 PC = +2 points de pool.",
     na: "Niveau Actuel : somme du niveau de base et de tous les modificateurs. C'est la valeur réellement utilisée en jeu.",
@@ -59,7 +61,7 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
       // Recalcul depuis les attributs sauvegardés
       return Object.fromEntries(
         ATTR_IDS.map(id => {
-          const base = (id === 'FOR' && initialData.isFeminin && femininBonusEnabled) ? 5 : 7
+          const base = getAttributeBase(id, initialData.isFeminin && femininBonusEnabled)
           return [id, Math.max(0, (initialData.attributes[id] || base) - base)]
         })
       )
@@ -76,20 +78,14 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
   // automatiquement un avertissement déjà affiché, sans cascade de rendu.
   const [warnedAtValue, setWarnedAtValue] = useState(null)
 
-  // Recalculer modPC si on change isFeminin (réinitialise FOR)
+  // Le changement de base (FOR/COO/PRE) est revalidé génériquement par `validation` (voir plus bas,
+  // basé sur validateStep1) — aucun traitement spécial du bascule nécessaire ici.
   const handleSetFeminin = useCallback((val) => {
     setIsFeminin(val)
-    setModPC(prev => {
-      // Si on passe à féminin et que FOR avait des points, on les garde mais la base change
-      // Si FOR modPC ferait dépasser 20, on cap
-      const baseFOR = (val && femininBonusEnabled) ? 5 : 7
-      const maxMod = 20 - baseFOR
-      return { ...prev, FOR: Math.min(prev.FOR, maxMod) }
-    })
-  }, [femininBonusEnabled])
+  }, [])
 
   const baseAttrs = useMemo(
-    () => Object.fromEntries(ATTR_IDS.map(id => [id, (id === 'FOR' && isFeminin && femininBonusEnabled) ? 5 : 7])),
+    () => Object.fromEntries(ATTR_IDS.map(id => [id, getAttributeBase(id, isFeminin && femininBonusEnabled)])),
     [isFeminin, femininBonusEnabled]
   )
 
@@ -100,8 +96,15 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
   )
 
   const poolBase = POOL_AMBIANCE[ambiance] || 38
-  const poolTotal = calcPoolTotal(ambiance, pcAlloues)
-  const totalCost = calcTotalCost(attributs, isFeminin && femininBonusEnabled)
+  // Validateur partagé (identique à celui appelé côté serveur à la réconciliation, pattern déjà
+  // établi par CareersAllocator.jsx/Étape 4) : source unique de vérité, revalidée automatiquement à
+  // chaque rendu — y compris après un bascule Sexe, qui peut décaler FOR/COO/PRE et invalider une
+  // répartition déjà faite (trouvé en testant le bonus féminin).
+  const validation = useMemo(
+    () => validateStep1(attributs, ambiance, pcAlloues, isFeminin && femininBonusEnabled),
+    [attributs, ambiance, pcAlloues, isFeminin, femininBonusEnabled]
+  )
+  const { poolTotal, totalCost } = validation
   const pointsRestants = poolTotal - totalCost
   const chc = CHANCE_AMBIANCE[ambiance] || 13
 
@@ -156,14 +159,14 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
 
   const canBuyPc = pcAlloues < PC_MAX_ETAPE1
   const canCancelPc = pcAlloues > 0
-  // Seul le nom est un vrai blocage dur — le budget non dépensé n'est qu'un avertissement
-  // (voir budgetWarned/handleNextClick, et validateStep1 côté serveur).
-  const canNext = charName.trim().length > 0
+  // Blocage dur = nom vide OU répartition invalide (validation.valide — budget dépassé, borne >20,
+  // etc.). Le budget non dépensé (budgetIncomplete) n'est qu'un avertissement contournable en 2 clics.
+  const canNext = charName.trim().length > 0 && validation.valide
   const budgetWarned = warnedAtValue === pointsRestants
 
   const handleNextClick = () => {
     if (!canNext) return
-    if (pointsRestants !== 0 && !budgetWarned) {
+    if (validation.budgetIncomplete && !budgetWarned) {
       setWarnedAtValue(pointsRestants)
       return
     }
@@ -208,7 +211,10 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
     return { color: '#76E8FF' }
   }
 
-  const hudOk = pointsRestants === 0
+  // validation.valide d'abord : une valeur hors bornes (>20, possible juste après un bascule Sexe)
+  // rend totalCost/pointsRestants NaN (COST_LOOKUP n'a pas d'entrée au-delà de 20) — jamais afficher
+  // ce NaN brut, le message de blocage dur (validation.erreurs) est la seule info pertinente ici.
+  const hudOk = validation.valide && pointsRestants === 0
 
   return (
     <div className="wiz1-container">
@@ -380,7 +386,7 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
         {/* HUD points restants */}
         <div className={`wiz1-points-hud${hudOk ? ' wiz1-points-hud--ok' : ''}`}>
           <div className="wiz1-points-hud-main">
-            <span className="wiz1-points-hud-num">{hudOk ? '✓' : pointsRestants}</span>
+            <span className="wiz1-points-hud-num">{hudOk ? '✓' : validation.valide ? pointsRestants : '—'}</span>
             <span className="wiz1-points-hud-label">
               {hudOk ? t('step1.pointsOk') : t('step1.pointsHudLabel')}
             </span>
@@ -516,7 +522,13 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
         </button>
       </div>
 
-      {budgetWarned && pointsRestants !== 0 && (
+      {!validation.valide && (
+        <p className="wiz1-budget-warning">
+          {t('step1.hard_block_warning')}
+        </p>
+      )}
+
+      {validation.valide && budgetWarned && pointsRestants !== 0 && (
         <p className="wiz1-budget-warning">
           {t('step1.budget_warning', { n: pointsRestants })}
         </p>

@@ -2631,3 +2631,114 @@ Détail complet, étape par étape avec tous les tests : `docs/PLAN_VAULT.md`.
   résiduelle à "carence"/`calcCarenceArmure`.
   **SR + parcours combat réel confirmé fonctionnel par Saar** ("SR, fonctionnel, test OK").
 - Détail complet : cette entrée. Origine : item 58 (`docs/JOURNAL6.md` "Session 141 (suite 16)").
+
+## Session 141 (suite 19) — 2026-07-12 — Résistances naturelles (poison/maladie/radiation/drogue) ✅ CLOS
+
+- Suite de la session Lot 2 (`docs/PLAN_MUTATION2.md`, Attributs secondaires REA/Souffle) : chantier
+  distinct `docs/PLAN_RESNAT.md` — brancher la Résistance naturelle (LdB p.114), jamais consommée
+  nulle part (`calcResistanceNaturelle`/`RES_NAT_TABLE` codées mais orphelines depuis toujours).
+  Décision Saar : construire le calcul mécanique correct (attribut+mutations+avantages) maintenant,
+  le Test de jeu lui-même (MJ déclare une Intensité, Seuil=Intensité−Modificateur, jet 1d20) différé
+  à un chantier futur — aucun mécanisme "MJ déclare un Test hors combat" n'existe dans le code
+  (vérifié exhaustivement).
+- **Recherche pro exigée par Saar avant tout code** (Foundry Active Effects, PF2e système IWR) —
+  a fait rejeter un premier plan (v1) qui inversait le signe à l'exécution selon `type` (rustine) au
+  profit d'une correction à la source : **v2**.
+- **Bug de données réel trouvé en base + croisé avec le texte LdB exact** (`REGLE_MUTATION.md`) : 6
+  lignes (`ref_advantages` adv_031-034 "Résistance naturelle augmentée" ; `ref_mutations` "Résistance
+  naturelle"×4, "Purulence", "Contagion") stockaient un delta **positif** pour un effet censé
+  améliorer la résistance — avec `Seuil = Intensité − Modificateur`, ça dégradait le Seuil au lieu de
+  l'améliorer. Cas le plus parlant : "Contagion" (immunité totale, sentinelle 9999) aurait rendu un
+  personnage immunisé **systématiquement en échec**, l'exact opposé de la règle. Migration `136`
+  (NOUVEAU) corrige les 6 lignes + normalise la divergence de clé `"drug"`(avantages)/`"drugs"`
+  (mutations). 0 personnage réel n'avait jamais acquis ces lignes — zéro régression.
+- `shared/polarisUtils.js` : `getAdvantageModForResistance` (résolveur générique, symétrique à
+  `getAdvantageModForAttr` du Lot 2, aucune inspection de `type` — la donnée porte son signe).
+  `advantageService.getAdvantages()` étend son `.select()`. 4 nouvelles sources de macro
+  (`resistance_poison`/`maladie`/`radiation` + fix de `resistance_drogues`, buggée depuis toujours —
+  exposait le NA brut au lieu du modificateur réel) aux 2 sites dupliqués (`char-sheet.js`,
+  `socketDice.js`).
+- **Addendum même session** : Saar signale l'absence de Résistance aux dommages/Résistances
+  naturelles/Souffle sur la fiche personnage (vs liste LdB p.114 attributs secondaires). Consolidation
+  de 5 fonctions (`calcResistanceDommages`/`calcResistanceNaturelle`/`calcResistanceDroguesInput`/
+  `calcSeuils`/`calcSouffle`) de `charStats.js` (serveur seul) vers `shared/polarisUtils.js` — même
+  principe que `calcREA` (Lot 2), consommées désormais des deux côtés, tous les appelants serveur
+  redirigés (`statusService.js`, `damageService.js`, `socketCombatHelpers.js`, `char-sheet.js`,
+  `socketDice.js` — jamais de transit par `charStats.js`, leçon Lot 2). `CharacterSheet.jsx` :
+  `calcSecondary` gagne `mutationEffects`, 6 nouveaux `<SecondaryField>` ajoutés **après** l'existant
+  (rien retiré, consigne explicite Saar). **Décision de scope délibérée** : "Résistance aux dommages"
+  affichée en valeur de base seulement (FOR+CON) — `resolveTargetHit`/`resolveMeleeAction` ne
+  consomment pas encore mutation/avantage (Lot 3 de `PLAN_MUTATION2.md`, non traité) — les inclure
+  côté fiche seulement aurait affiché un bonus jamais appliqué en jeu. Même raison pour ne pas toucher
+  au modificateur d'avantage sur "Choc" (`adv_030`/`adv_060`).
+- **Testé** : `node --check` (tous fichiers serveur), round-trip migration 136 réel (byte-identique),
+  9 scénarios unitaires purs, test bout-en-bout en base réelle (personnage existant, transaction
+  annulée, 0 résidu — mutation+avantage combinés donnent bien un Seuil **amélioré**, stacking
+  vérifié), non-régression numérique des 5 fonctions déplacées, ESLint client 0 nouvelle erreur
+  (3 problèmes pré-existants confirmés via `git stash`), SR (`/api/health` 200). **Parcours navigateur
+  confirmé fonctionnel par Saar** (capture d'écran fiche réelle : 6 nouveaux champs corrects).
+- **Non testé** : parcours navigateur des macros (`resistance_poison`/etc. via `/macro-preview` et
+  `MACRO_ROLL` réel) — seule la fiche a été vérifiée visuellement.
+- **Suite immédiate** : Saar demande une passe UI/UX sur le bloc "ATTRIBUTS SECONDAIRES" (grille plate
+  actuelle jugée "fonctionnelle mais moche"), inspirée du regroupement de la fiche papier officielle.
+- Détail complet : `docs/PLAN_RESNAT.md`.
+
+## Session 141 (suite 20) — 2026-07-12 — Bonus féminin : règle fixe -2 FOR/+1 COO/+1 PRE + revalidation du bascule Sexe ✅ CLOS
+
+- Signalement Saar : la mécanique `feminin_bonus` (remise forfaitaire invisible sur COO/PRE, Session
+  141 suite 14) n'est pas compréhensible. Demande de simplification en règle fixe et lisible :
+  Femme = FOR -2, COO +1, PRE +1 (abandon du choix de répartition libre que permet le LdB entre
+  COO/PRE), avec exigence explicite de propreté ("pas de bricolage").
+- **Antécédent retrouvé avant de coder (Session 141 suite 14, relu dans cette session)** : une
+  première tentative de correctif direct sur COO/PRE avait déjà été abandonnée — elle plafonnait le
+  spinner Mod.PC au quota, cassant l'achat PC normal au-delà du bonus. C'est ce qui avait motivé la
+  remise forfaitaire. Vérifié que la simplification demandée par Saar (répartition fixe, plus de
+  choix joueur) élimine structurellement cette source de complexité — aucun plafond de spinner n'est
+  recréé, le mécanisme redevient un simple décalage de base, symétrique à FOR (jamais cassé depuis
+  son introduction).
+- **Vrai bug trouvé en testant le plan (captures Saar)** : basculer Sexe M↔F après avoir déjà réparti
+  des points changeait silencieusement le total dépensé (base FOR/COO/PRE décalée) sans jamais
+  revalider l'état — `Step1Attributes.jsx` recalculait `pointsRestants`/`canNext` à la main, jamais
+  via `validateStep1` (seul le serveur l'appelait). Le garde-fou des spinners (`handleModPC`) empêche
+  bien tout dépassement de budget au clic, mais le bascule Sexe le contournait entièrement. Deuxième
+  trouvaille en creusant `validateStep1` lui-même : G1 traitait "budget dépassé" et "budget non
+  dépensé" comme un seul avertissement contournable — un dépassement de budget n'était en réalité
+  jamais rejeté, ni client ni serveur.
+- **Vérifié contre le pattern déjà établi** (`CareersAllocator.jsx`/Étape 4, Lot 2, Session 139) :
+  `useMemo` sur un validateur partagé, `canNext = !hasHardBlock`, erreur dure vs avertissement doux
+  séparés — confirmé qu'aligner `Step1Attributes.jsx` dessus n'invente rien, referme juste un
+  déphasage architectural entre les deux étapes déjà noté (Session 141 suite 12, "trouvé en creusant,
+  pas un choix voulu" à propos d'Étape 4 vs Étape 1).
+- `shared/polarisUtils.js` : `getAttributeBase(attrId, isFeminin)` (FOR:5, COO:8, PRE:8, sinon 7) —
+  remplace `getFemininBonusDiscount`/`FEMININ_BONUS_MAX` (supprimés). `calcTotalCost` simplifié.
+  `validateStep1` gagne **G1bis** (`totalCost > poolTotal` → erreur dure, distincte du simple solde
+  non dépensé G1) ; G3 généralisé via `getAttributeBase`.
+- `Step1Attributes.jsx` : `validation = useMemo(() => validateStep1(...))` remplace le calcul maison
+  — `canNext = nom && validation.valide`, avertissement doux uniquement si `validation.valide` et
+  `budgetIncomplete`. `handleSetFeminin` redevient un simple `setIsFeminin(val)` (plus de clamp
+  spécial — toute invalidité issue du bascule est désormais détectée génériquement). Nouveau message
+  i18n (`hard_block_warning`) affiché si `!validation.valide`.
+- **Bug trouvé en testant ma propre correction (`node -e`)** : une valeur hors bornes (>20, possible
+  juste après un bascule Sexe qui décale la base) fait sortir `COST_LOOKUP[valeur]` de la table
+  (aucune entrée au-delà de 20) → `totalCost`/`pointsRestants` deviennent `NaN`, affiché littéralement
+  dans le HUD. Corrigé : HUD affiche `—` au lieu du nombre tant que `!validation.valide`.
+- `Step2Genotype.jsx` : angle mort fermé au passage (conséquence directe de la généralisation, pas une
+  chasse au bug séparée) — son propre recalcul de `baseAttrs` ignorait `femininBonusEnabled` (aurait
+  affiché une base FOR à 5 même option désactivée) ; utilise désormais `getAttributeBase` + lit
+  `femininBonusEnabled` du store (déjà disponible, jamais consommé ici).
+- `client/src/locales/creation.json` : `ruleFemininBonus` réécrit (règle fixe, plus de mention de
+  répartition) + nouvelle clé `hard_block_warning`. `docs/OPTIONS_CAMPAGNE.md` OPT-02 mis à jour.
+- **Testé** : `node --check` (`polarisUtils.js`, `creationService.js` inchangé), ESLint sur les 2
+  fichiers React — 0 nouvelle erreur (`poolBase` non utilisé confirmé pré-existant via `git stash`),
+  `creation.json` validé JSON. Scénarios `node -e` : `getAttributeBase` (3 bases), `validateStep1`
+  déclenche G1bis correctement (recherche systématique k=9 à 12), déclenche G3 correctement sur les 2
+  scénarios de bascule (COO maxée + bascule féminin → 21 rejeté ; FOR maxée + bascule masculin → 22
+  rejeté). **Vérification en base réelle** (demande explicite Saar, pas seulement en théorie) : sur
+  les 64 fiches de personnages non verrouillées existantes, aucune ne serait bloquée par le nouveau
+  G1bis ; 0 personnage féminin en cours avec l'option active actuellement (test du nouveau plancher
+  COO/PRE=8 vacuous faute de candidat, mais mécanisme validé synthétiquement). **SR + fonctionnel
+  confirmé Saar.**
+- **Non testé** : parcours navigateur réel du bascule Sexe M↔F↔M après répartition (blocage dur +
+  résolution par décrément) — validé uniquement par instrumentation directe (`node -e`) et vérification
+  en base, pas par un clic réel dans le Wizard.
+- Détail complet : cette entrée.

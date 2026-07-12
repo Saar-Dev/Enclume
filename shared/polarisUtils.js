@@ -55,6 +55,13 @@ export function getAdvantageModForAttr(advantageRows, attrKey) {
   return sumModByKey(advantageRows, 'mod_attribute', 'mod_value', attrKey)
 }
 
+// Même principe pour mod_resistance/mod_res_value (Résistances — voir docs/PLAN_RESNAT.md).
+// mod_res_value porte déjà son signe final depuis la migration 136 (bug de données corrigé à la
+// source, jamais inspecter `type` pour l'inverser — même règle que ci-dessus).
+export function getAdvantageModForResistance(advantageRows, resistanceKey) {
+  return sumModByKey(advantageRows, 'mod_resistance', 'mod_res_value', resistanceKey)
+}
+
 // TOTAL_MALUS = 0 en V1 — historique XP non implémenté (voir server/src/lib/charStats.js).
 const TOTAL_MALUS = 0
 
@@ -70,6 +77,77 @@ export function calcNA(base_level, pc_modifier, mod_genotype, mod_mutation) {
 // par le schéma DB (ref_advantages.mod_value) — ajouté après polarisRound, neutre mathématiquement.
 export function calcREA(ada_na, per_na, mod_advantage) {
   return polarisRound((ada_na + per_na) / 2) + (mod_advantage ?? 0)
+}
+
+// ─── Attributs secondaires — Choc / Résistance aux Dommages / Résistances naturelles / Souffle ───
+// Consolidées ici (ex-charStats.js serveur uniquement) : désormais affichées sur la fiche client
+// (docs/PLAN_RESNAT.md) — un seul point de calcul, comme calcREA ci-dessus.
+
+// Table Résistance aux Dommages — FOR+CON (LdB p.114)
+export const RD_TABLE = [
+  { min: 2,  max: 5,  rd: +6 },
+  { min: 6,  max: 9,  rd: +4 },
+  { min: 10, max: 13, rd: +2 },
+  { min: 14, max: 17, rd: +1 },
+  { min: 18, max: 21, rd:  0 },
+  { min: 22, max: 25, rd: -1 },
+  { min: 26, max: 29, rd: -2 },
+  { min: 30, max: 33, rd: -3 },
+  { min: 34, max: 37, rd: -4 },
+  { min: 38, max: 41, rd: -5 },
+]
+
+// Table Résistance Naturelle — poison/maladie/radiation/drogue (LdB p.114)
+export const RES_NAT_TABLE = [
+  { min: 1,  max: 2,  res: +6 },
+  { min: 3,  max: 4,  res: +4 },
+  { min: 5,  max: 6,  res: +2 },
+  { min: 7,  max: 8,  res: +1 },
+  { min: 9,  max: 11, res:  0 },
+  { min: 12, max: 13, res: -1 },
+  { min: 14, max: 15, res: -2 },
+  { min: 16, max: 17, res: -3 },
+  { min: 18, max: 19, res: -4 },
+  { min: 20, max: 21, res: -5 },
+]
+
+function lookupTable(table, value, prop) {
+  const row = table.find(r => value >= r.min && value <= r.max)
+  return row ? row[prop] : null
+}
+
+// Pas de mod_advantage ici (contrairement à calcREA/calcSouffle) : adv_030/adv_060 (Résistance au
+// Choc) ne sont pas encore consommés en résolution réelle (resolveShockTest, socketDice/char-sheet
+// macros) — Lot 3 de docs/PLAN_MUTATION2.md, non traité ici. Ajouter le paramètre sans rebrancher
+// tous les appelants réels créerait un écart fiche/résolution (affichage optimiste, jamais appliqué
+// en jeu) — reporté au Lot 3, qui devra toucher affichage ET résolution ensemble.
+export function calcSeuils(for_na, con_na, vol_na) {
+  const etourdissement = polarisRound((for_na + con_na + vol_na) / 3)
+  return { etourdissement, inconscience: etourdissement + 10 }
+}
+
+// Pas de mod_mutation/mod_advantage ici, même raison que calcSeuils ci-dessus : resolveTargetHit/
+// resolveMeleeAction (résolution de dégâts réelle) n'appellent aujourd'hui calcResistanceDommages
+// qu'avec (for_na, con_na) — Lot 3, non traité ici.
+export function calcResistanceDommages(for_na, con_na) {
+  const sum = for_na + con_na
+  if (sum > 41) return -5 - Math.floor((sum - 41) / 4)
+  return lookupTable(RD_TABLE, sum, 'rd') ?? 0
+}
+
+export function calcResistanceNaturelle(result_na) {
+  if (result_na > 21) {
+    return -5 - Math.floor((result_na - 21) / 2)
+  }
+  return lookupTable(RES_NAT_TABLE, result_na, 'res') ?? 0
+}
+
+export function calcResistanceDroguesInput(con_na, vol_na) {
+  return polarisRound((con_na + vol_na) / 2)
+}
+
+export function calcSouffle(con_na, vol_na, mod_advantage) {
+  return polarisRound((con_na + vol_na) / 2) + (mod_advantage ?? 0)
 }
 
 // Allures de déplacement (LdB p.221)
@@ -224,14 +302,22 @@ export function calcPoolTotal(ambiance, pcDispo) {
 export function calcAttributCost(valeurCible, baseInitiale = 7) {
   return COST_LOOKUP[valeurCible] - COST_LOOKUP[baseInitiale];
 }
-// baseInitiale = 7 (standard) ou 5 (FOR d'un personnage féminin)
+// baseInitiale = 7 (standard) — voir getAttributeBase() pour les décalages féminins (FOR/COO/PRE)
+
+// Bonus féminin (REGLE_CREATION.txt:293-296) simplifié sur demande Saar : règle fixe, sans choix de
+// répartition (contrairement au LdB qui laisse répartir 2 points librement entre COO/PRE) — décalage
+// direct des valeurs de base, symétrique au traitement de FOR, pas une remise sur le coût.
+export function getAttributeBase(attrId, isFeminin) {
+  if (!isFeminin) return 7;
+  if (attrId === 'FOR') return 5;
+  if (attrId === 'COO' || attrId === 'PRE') return 8;
+  return 7;
+}
 
 export function calcTotalCost(attributs, isFeminin) {
-  const raw = Object.entries(attributs).reduce((total, [attr, valeur]) => {
-    const base = (attr === 'FOR' && isFeminin) ? 5 : 7;
-    return total + calcAttributCost(valeur, base);
+  return Object.entries(attributs).reduce((total, [attr, valeur]) => {
+    return total + calcAttributCost(valeur, getAttributeBase(attr, isFeminin));
   }, 0);
-  return isFeminin ? raw - getFemininBonusDiscount(attributs) : raw;
 }
 
 const SALARY_FORMULA_RE = /^(\d+)D(\d+)\*(\d+)$/
@@ -270,32 +356,23 @@ export function estimateSalaryFormula(formula) {
   return Math.round(parseInt(diceCount, 10) * avgPerDie * parseInt(multiplier, 10))
 }
 
-// Bonus féminin (REGLE_CREATION.txt:293-296) : "Deux bonus de +1 (éventuellement cumulatifs)
-// à répartir en Coordination ou Présence" — les 2 premiers points investis en Coordination et/ou
-// Présence (combinés, peu importe la répartition) ne coûtent rien. Remise forfaitaire plutôt
-// qu'une base décalée par attribut (comme Force) — mathématiquement identique pour toute
-// répartition (COST_LOOKUP[7]=0 rend l'algèbre équivalente, vérifié), mais ne nécessite ni état
-// ni UI supplémentaire : le spinner Mod.PC existant pour COO/PRE reste inchangé, la remise
-// s'applique silencieusement dans le budget (comme la base 5 de Force). Aucune règle à rejeter :
-// la remise s'auto-limite à 2 par construction (Math.min), jamais de dépassement possible.
-export const FEMININ_BONUS_MAX = 2;
-
-export function getFemininBonusDiscount(attributs) {
-  const investedCOO = Math.max(0, attributs['COO'] - 7);
-  const investedPRE = Math.max(0, attributs['PRE'] - 7);
-  const freePoints = Math.min(FEMININ_BONUS_MAX, investedCOO + investedPRE);
-  return calcAttributCost(7 + freePoints, 7);
-}
-
 export function validateStep1(attributs, ambiance, pcDispo, isFeminin) {
   const erreurs = [];
   const poolTotal = calcPoolTotal(ambiance, pcDispo);
   const totalCost = calcTotalCost(attributs, isFeminin);
 
-  // G1 : Budget exact — NON bloquant (UI Session 141 suite 10) : un budget non totalement dépensé
-  // ne viole aucune règle (les points restants sont juste perdus), contrairement à G2/G3/G4 qui
-  // sont de vraies bornes de règle. Signalé via budgetIncomplete, jamais dans `erreurs`/`valide`.
+  // G1 : Budget non dépensé — NON bloquant (UI Session 141 suite 10) : un solde non dépensé
+  // ne viole aucune règle (les points restants sont juste perdus), contrairement à G1bis/G2/G3
+  // qui sont de vraies bornes de règle. Signalé via budgetIncomplete, jamais dans `erreurs`/`valide`.
   const budgetIncomplete = totalCost !== poolTotal;
+
+  // G1bis : Budget dépassé — vraie violation (dépenser plus de points que le budget alloué),
+  // contrairement au simple solde non dépensé ci-dessus. Sans ce garde-fou, un changement de
+  // base après coup (ex. bascule Sexe, qui décale FOR/COO/PRE) peut rendre une répartition déjà
+  // faite invalide sans qu'aucune règle ne le détecte (trouvé en testant le bonus féminin).
+  if (totalCost > poolTotal) {
+    erreurs.push(`Budget dépassé : ${totalCost} > ${poolTotal}`);
+  }
 
   // G2 : PC max
   if (pcDispo > PC_MAX_ETAPE1) {
@@ -306,7 +383,7 @@ export function validateStep1(attributs, ambiance, pcDispo, isFeminin) {
   const ATTRS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE'];
   for (const attr of ATTRS) {
     const valeur = attributs[attr];
-    const base = (attr === 'FOR' && isFeminin) ? 5 : 7;
+    const base = getAttributeBase(attr, isFeminin);
     if (valeur < base) {
       erreurs.push(`${attr} : ${valeur} < base minimum ${base}`);
     }
@@ -314,9 +391,6 @@ export function validateStep1(attributs, ambiance, pcDispo, isFeminin) {
       erreurs.push(`${attr} : ${valeur} > 20`);
     }
   }
-
-  // G4 (bonus féminin) supprimée : remise forfaitaire dans calcTotalCost, s'auto-limite à 2,
-  // rien à rejeter — voir getFemininBonusDiscount ci-dessus.
 
   return {
     valide: erreurs.length === 0,

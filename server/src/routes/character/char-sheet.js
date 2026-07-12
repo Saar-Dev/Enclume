@@ -37,8 +37,11 @@ import { Router } from 'express'
 import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
-import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal, calcAttributeNA, calcSeuils, calcSouffle, calcResistanceDroguesInput } from '../../lib/charStats.js'
-import { calcREA, getAdvantageModForAttr } from '../../../../shared/polarisUtils.js'
+import { getCoutAugmentation, getCoutDeblocageX, calcEncumbrancePenalty, calcWoundPenalty, calcSkillTotal, calcAttributeNA } from '../../lib/charStats.js'
+import {
+  calcREA, getAdvantageModForAttr, getAdvantageModForResistance,
+  calcSeuils, calcSouffle, calcResistanceDroguesInput, calcResistanceNaturelle,
+} from '../../../../shared/polarisUtils.js'
 import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from '../../lib/woundUtils.js'
 import { getAdvantages, addAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
 import { getMutations, addMutation, removeMutation, getMutationEffects } from '../../services/mutationService.js'
@@ -1622,7 +1625,10 @@ router.get('/:characterId/macro-options', async (req, res, next) => {
       { id: 'seuil_etourdi',      label: 'Seuil Étourdissement' },
       { id: 'seuil_incons',       label: 'Seuil Inconscience' },
       { id: 'souffle',            label: 'Souffle' },
-      { id: 'resistance_drogues', label: 'Résistance aux drogues' },
+      { id: 'resistance_drogues',   label: 'Résistance aux drogues' },
+      { id: 'resistance_poison',    label: 'Résistance aux poisons' },
+      { id: 'resistance_maladie',   label: 'Résistance aux maladies' },
+      { id: 'resistance_radiation', label: 'Résistance aux radiations' },
     ]
 
     res.json({ attributes, skills, secondary })
@@ -1658,7 +1664,10 @@ router.post('/:characterId/macro-preview', async (req, res, next) => {
         case 'seuil_etourdi':      return calcSeuils(na('FOR'), na('CON'), na('VOL')).etourdissement
         case 'seuil_incons':       return calcSeuils(na('FOR'), na('CON'), na('VOL')).inconscience
         case 'souffle':            return calcSouffle(na('CON'), na('VOL'), getAdvantageModForAttr(advantages, 'breath'))
-        case 'resistance_drogues': return calcResistanceDroguesInput(na('CON'), na('VOL'))
+        case 'resistance_drogues':   return calcResistanceNaturelle(calcResistanceDroguesInput(na('CON'), na('VOL'))) + (mutationEffects?.mod_res_drugs ?? 0) + getAdvantageModForResistance(advantages, 'drugs')
+        case 'resistance_poison':    return calcResistanceNaturelle(na('CON')) + (mutationEffects?.mod_res_poison ?? 0) + getAdvantageModForResistance(advantages, 'poison')
+        case 'resistance_maladie':   return calcResistanceNaturelle(na('CON')) + (mutationEffects?.mod_res_disease ?? 0) + getAdvantageModForResistance(advantages, 'disease')
+        case 'resistance_radiation': return calcResistanceNaturelle(na('CON')) + (mutationEffects?.mod_res_radiation ?? 0) + getAdvantageModForResistance(advantages, 'radiation')
         default:                   return 0
       }
     }

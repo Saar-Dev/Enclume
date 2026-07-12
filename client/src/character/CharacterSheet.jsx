@@ -34,7 +34,8 @@ import AdvantagesPanel from './AdvantagesPanel.jsx'
 import {
   polarisRound, calcAN, calcAllureMoy, calcAllures,
   calcNA, getGenotypeModForAttr, getMutationModForAttr,
-  calcREA, getAdvantageModForAttr,
+  calcREA, getAdvantageModForAttr, getAdvantageModForResistance,
+  calcResistanceDommages, calcResistanceNaturelle, calcResistanceDroguesInput, calcSouffle,
 } from '../../../shared/polarisUtils.js'
 
 // ─── Constantes métier ────────────────────────────────────────────────────────
@@ -81,7 +82,12 @@ const calcModDom = (forNA) => {
   return entry ? entry.val : -6
 }
 
-const calcSecondary = (naMap, charAdvantages) => {
+// Résistances naturelles (poison/maladie/radiation/drogue) : attribut(table LdB p.114) + mutation +
+// avantage, même pipeline que le serveur (docs/PLAN_RESNAT.md). Résistance aux dommages : base
+// uniquement (FOR+CON), sans mutation/avantage — resolveTargetHit/resolveMeleeAction (résolution
+// réelle des dégâts) ne les consomment pas encore (Lot 3 de docs/PLAN_MUTATION2.md, non traité ici) ;
+// les inclure ici créerait un écart fiche/résolution (affichage optimiste jamais appliqué en jeu).
+const calcSecondary = (naMap, charAdvantages, mutationEffects) => {
   const FOR = naMap['FOR'] || 3
   const CON = naMap['CON'] || 3
   const ADA = naMap['ADA'] || 3
@@ -93,8 +99,39 @@ const calcSecondary = (naMap, charAdvantages) => {
   const seuilEtour  = polarisRound((FOR + CON + VOL) / 3)
   const seuilIncons = seuilEtour + 10
   const modDom      = calcModDom(FOR)
+  const resistanceDommages = calcResistanceDommages(FOR, CON)
+  const resistancePoison    = calcResistanceNaturelle(CON) + (mutationEffects?.mod_res_poison ?? 0) + getAdvantageModForResistance(charAdvantages, 'poison')
+  const resistanceMaladie   = calcResistanceNaturelle(CON) + (mutationEffects?.mod_res_disease ?? 0) + getAdvantageModForResistance(charAdvantages, 'disease')
+  const resistanceRadiation = calcResistanceNaturelle(CON) + (mutationEffects?.mod_res_radiation ?? 0) + getAdvantageModForResistance(charAdvantages, 'radiation')
+  const resistanceDrogues   = calcResistanceNaturelle(calcResistanceDroguesInput(CON, VOL)) + (mutationEffects?.mod_res_drugs ?? 0) + getAdvantageModForResistance(charAdvantages, 'drugs')
+  const souffle = calcSouffle(CON, VOL, getAdvantageModForAttr(charAdvantages, 'breath'))
 
-  return { rea, initiative, seuilEtour, seuilIncons, modDom }
+  return {
+    rea, initiative, seuilEtour, seuilIncons, modDom, resistanceDommages,
+    resistancePoison, resistanceMaladie, resistanceRadiation, resistanceDrogues, souffle,
+  }
+}
+
+// ─── Accordéon des blocs ────────────────────────────────────────────────────
+// Mémorisation par TYPE de fiche (propriétaire vs autres), pas par personnage — demande explicite
+// Saar : "mes fiches perso ne s'affichent pas pareil que les autres". Le composant ne remonte pas
+// entre deux personnages (pas de key={characterId}, dette connue depuis Session 141 suite 9) —
+// l'état est donc rechargé via useEffect([isOwner, characterId]), pas seulement à l'init.
+const ACCORDION_BLOCK_IDS = ['xp', 'description', 'attributes', 'secondary', 'skills', 'advantages']
+const DEFAULT_ACCORDION_STATE = Object.fromEntries(ACCORDION_BLOCK_IDS.map(id => [id, true]))
+
+function getAccordionStorageKey(isOwner) {
+  return isOwner ? 'charSheetAccordion:owned' : 'charSheetAccordion:other'
+}
+
+function loadAccordionState(isOwner) {
+  try {
+    const raw = localStorage.getItem(getAccordionStorageKey(isOwner))
+    if (!raw) return { ...DEFAULT_ACCORDION_STATE }
+    return { ...DEFAULT_ACCORDION_STATE, ...JSON.parse(raw) }
+  } catch {
+    return { ...DEFAULT_ACCORDION_STATE }
+  }
 }
 
 // ─── Composant principal ──────────────────────────────────────────────────────
@@ -106,6 +143,19 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
   const [sheetId,  setSheetId]  = useState(null)
+
+  // ─── Accordéon ─────────────────────────────────────────────────────────────
+  const [blockOpen, setBlockOpen] = useState(() => loadAccordionState(isOwner))
+  useEffect(() => {
+    setBlockOpen(loadAccordionState(isOwner))
+  }, [isOwner, characterId])
+  const toggleBlock = (id) => {
+    setBlockOpen(prev => {
+      const next = { ...prev, [id]: !prev[id] }
+      try { localStorage.setItem(getAccordionStorageKey(isOwner), JSON.stringify(next)) } catch { /* stockage indisponible — état en mémoire seul */ }
+      return next
+    })
+  }
 
   // ─── Données référence ─────────────────────────────────────────────────────
   const [genotypes,  setGenotypes]  = useState([])
@@ -201,7 +251,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     [naMap]
   )
 
-  const secondary = useMemo(() => calcSecondary(naMap, charAdvantages), [naMap, charAdvantages])
+  const secondary = useMemo(
+    () => calcSecondary(naMap, charAdvantages, mutationEffects),
+    [naMap, charAdvantages, mutationEffects]
+  )
 
   const effectiveMalus = woundPenalty - encumbrancePenalty
 
@@ -498,8 +551,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
       </div>
 
       {/* ══ BLOC XP — EXPÉRIENCE ══════════════════════════════════════════ */}
-      <div style={s.block}>
-        <div style={s.blockTitle}>{t('character.xp.title')}</div>
+      <CollapsibleBlock id="xp" title={t('character.xp.title')} open={blockOpen.xp} onToggle={toggleBlock}>
         <div style={s.xpBlock}>
 
           {/* XP total reçus — lecture seule pour tous (valeur mémoire cumulée) */}
@@ -544,11 +596,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           </button>
 
         </div>
-      </div>
+      </CollapsibleBlock>
 
       {/* ══ BLOC 2 — DESCRIPTION ══════════════════════════════════════════ */}
-      <div style={s.block}>
-        <div style={s.blockTitle}>{t('charSheet.sectionDesc')}</div>
+      <CollapsibleBlock id="description" title={t('charSheet.sectionDesc')} open={blockOpen.description} onToggle={toggleBlock}>
         <div style={s.descGrid}>
 
           <Field label={t('charSheet.descHeight')} style={{ gridColumn: 'span 1' }}>
@@ -664,11 +715,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           </Field>
 
         </div>
-      </div>
+      </CollapsibleBlock>
 
       {/* ══ BLOC 3 — ATTRIBUTS PRIMAIRES ══════════════════════════════════ */}
-      <div style={s.block}>
-        <div style={s.blockTitle}>{t('charSheet.sectionAttrs')}</div>
+      <CollapsibleBlock id="attributes" title={t('charSheet.sectionAttrs')} open={blockOpen.attributes} onToggle={toggleBlock}>
         <table style={s.attrTable}>
           <thead>
             <tr>
@@ -802,36 +852,78 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
           </tbody>
         </table>
-      </div>
+      </CollapsibleBlock>
 
       {/* ══ BLOC 4 — ATTRIBUTS SECONDAIRES ═══════════════════════════════ */}
-      <div style={s.block}>
-        <div style={s.blockTitle}>{t('charSheet.sectionSecondary')}</div>
-        <div style={s.secondaryGrid}>
-          <SecondaryField label={t('charSheet.secondary.reaction')}    value={secondary.rea}          tooltip={t('charSheet.tooltip.reaction')} />
+      <CollapsibleBlock id="secondary" title={t('charSheet.sectionSecondary')} open={blockOpen.secondary} onToggle={toggleBlock}>
+
+        <div style={s.secondaryCards}>
+          <SecondaryField label={t('charSheet.secondary.reaction')} value={secondary.rea} tooltip={t('charSheet.tooltip.reaction')} />
           <SecondaryField
             label={t('charSheet.secondary.initiative')}
             value={iniValue}
             tooltip={iniTooltip}
             valueStyle={effectiveMalus < 0 ? { color: '#e05c5c' } : undefined}
           />
-          <SecondaryField label={t('charSheet.secondary.seuilEtour')}  value={secondary.seuilEtour}  tooltip={t('charSheet.tooltip.seuilEtour')} />
-          <SecondaryField label={t('charSheet.secondary.seuilIncons')} value={secondary.seuilIncons} tooltip={t('charSheet.tooltip.seuilIncons')} />
+        </div>
+
+        <div style={s.secondaryColumns}>
+          <div style={s.secondaryList}>
+            <SecondaryListRow headerOnly label={t('charSheet.secondary.choc')} />
+            <SecondaryListRow sub label={t('charSheet.secondary.seuilEtour')}  value={secondary.seuilEtour}  tooltip={t('charSheet.tooltip.seuilEtour')} />
+            <SecondaryListRow sub label={t('charSheet.secondary.seuilIncons')} value={secondary.seuilIncons} tooltip={t('charSheet.tooltip.seuilIncons')} />
+            <SecondaryListRow
+              label={t('charSheet.secondary.modDom')}
+              value={secondary.modDom >= 0 ? `+${secondary.modDom}` : secondary.modDom}
+              tooltip={t('charSheet.tooltip.modDom')}
+            />
+            <SecondaryListRow
+              label={t('charSheet.secondary.resistanceDommages')}
+              value={secondary.resistanceDommages >= 0 ? `+${secondary.resistanceDommages}` : secondary.resistanceDommages}
+              tooltip={t('charSheet.tooltip.resistanceDommages')}
+            />
+          </div>
+
+          <div style={s.secondaryList}>
+            <SecondaryListRow headerOnly label={t('charSheet.secondary.resistancesNaturelles')} />
+            <SecondaryListRow
+              sub label={t('charSheet.secondary.resistancePoison')}
+              value={secondary.resistancePoison >= 0 ? `+${secondary.resistancePoison}` : secondary.resistancePoison}
+              tooltip={t('charSheet.tooltip.resistancePoison')}
+            />
+            <SecondaryListRow
+              sub label={t('charSheet.secondary.resistanceMaladie')}
+              value={secondary.resistanceMaladie >= 0 ? `+${secondary.resistanceMaladie}` : secondary.resistanceMaladie}
+              tooltip={t('charSheet.tooltip.resistanceMaladie')}
+            />
+            <SecondaryListRow
+              sub label={t('charSheet.secondary.resistanceRadiation')}
+              value={secondary.resistanceRadiation >= 0 ? `+${secondary.resistanceRadiation}` : secondary.resistanceRadiation}
+              tooltip={t('charSheet.tooltip.resistanceRadiation')}
+            />
+            <SecondaryListRow
+              sub label={t('charSheet.secondary.resistanceDrogues')}
+              value={secondary.resistanceDrogues >= 0 ? `+${secondary.resistanceDrogues}` : secondary.resistanceDrogues}
+              tooltip={t('charSheet.tooltip.resistanceDrogues')}
+            />
+            <SecondaryListRow
+              label={t('charSheet.secondary.souffle')}
+              value={secondary.souffle}
+              tooltip={t('charSheet.tooltip.souffle')}
+            />
+          </div>
+        </div>
+
+        <div style={s.secondaryCards}>
           <SecondaryField label={t('charSheet.secondary.allureLente')}   value={`${allures.lente} m/t`}   tooltip={t('charSheet.tooltip.allureLente')} />
           <SecondaryField label={t('charSheet.secondary.allureMoyenne')} value={`${allures.moyenne} m/t`} tooltip={t('charSheet.tooltip.allureMoyenne')} />
           <SecondaryField label={t('charSheet.secondary.allureRapide')}  value={`${allures.rapide} m/t`}  tooltip={t('charSheet.tooltip.allureRapide')} />
           <SecondaryField label={t('charSheet.secondary.allureMax')}     value={`${allures.max} m/t`}     tooltip={t('charSheet.tooltip.allureMax')} />
-          <SecondaryField
-            label={t('charSheet.secondary.modDom')}
-            value={secondary.modDom >= 0 ? `+${secondary.modDom}` : secondary.modDom}
-            tooltip={t('charSheet.tooltip.modDom')}
-          />
         </div>
-      </div>
+      </CollapsibleBlock>
 
       {/* ══ BLOC 5 — COMPÉTENCES ══════════════════════════════════════════ */}
-      <div style={s.block}>
-        <div style={s.blockTitle}>{t('charSheet.sectionSkills')}</div>
+      <CollapsibleBlock id="skills" title={t('charSheet.sectionSkills')} open={blockOpen.skills} onToggle={toggleBlock}>
         <div style={{ padding: '8px' }}>
           <SkillsPanel
             refSkills={refSkills}
@@ -849,11 +941,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
             skillPrerequisitesEnabled={campaignSettings?.skill_prerequisites === true}
           />
         </div>
-      </div>
+      </CollapsibleBlock>
 
       {/* ══ BLOC 6 — AVANTAGES & DÉSAVANTAGES ════════════════════════════ */}
-      <div style={s.block}>
-        <div style={s.blockTitle}>{t('charSheet.sectionAdvantages')}</div>
+      <CollapsibleBlock id="advantages" title={t('charSheet.sectionAdvantages')} open={blockOpen.advantages} onToggle={toggleBlock}>
         <AdvantagesPanel
           characterId={characterId}
           charAdvantages={charAdvantages}
@@ -866,7 +957,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           refSkillsPolaris={refSkillsPolaris}
           onSkillLearnedChange={handlePolarisToggled}
         />
-      </div>
+      </CollapsibleBlock>
 
       {/* ─── Tooltip hover attribut ───────────────────────────────────────── */}
       {attrTooltip && (
@@ -895,35 +986,83 @@ function Field({ label, children, style }) {
   )
 }
 
-function SecondaryField({ label, value, tooltip, valueStyle }) {
+// Bloc repliable (accordéon) — en-tête cliquable + chevron, contenu masqué si fermé.
+// `open`/`onToggle` viennent de l'état `blockOpen` du composant principal (mémorisé par type de
+// fiche, owned/autres — voir loadAccordionState).
+function CollapsibleBlock({ id, title, open, onToggle, children }) {
+  return (
+    <div style={s.block}>
+      <div style={s.blockHeadRow} onClick={() => onToggle(id)}>
+        <span style={s.blockTitle}>{title}</span>
+        <span style={{ ...s.blockChevron, transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+      </div>
+      {open && children}
+    </div>
+  )
+}
+
+// Position/affichage de tooltip partagés par SecondaryField (cartes) et SecondaryListRow (liste).
+function useSecondaryTooltip(tooltip) {
   const ref = useRef(null)
   const [tipPos, setTipPos] = useState(null)
-
   const handleMouseEnter = () => {
     if (!tooltip || !ref.current) return
     const rect = ref.current.getBoundingClientRect()
     setTipPos({ top: rect.top, left: rect.left + rect.width / 2 })
   }
+  return { ref, tipPos, handleMouseEnter, handleMouseLeave: () => setTipPos(null) }
+}
 
+function SecondaryTooltip({ tipPos, tooltip }) {
+  if (!tipPos) return null
+  return (
+    <div style={{
+      ...s.tooltip,
+      top: tipPos.top,
+      left: tipPos.left,
+      transform: 'translate(-50%, calc(-100% - 8px))',
+    }}>
+      {tooltip}
+    </div>
+  )
+}
+
+function SecondaryField({ label, value, tooltip, valueStyle }) {
+  const { ref, tipPos, handleMouseEnter, handleMouseLeave } = useSecondaryTooltip(tooltip)
   return (
     <div
       ref={ref}
       style={{ ...s.secondaryItem, cursor: tooltip ? 'help' : 'default' }}
       onMouseEnter={handleMouseEnter}
-      onMouseLeave={() => setTipPos(null)}
+      onMouseLeave={handleMouseLeave}
     >
       <span style={{ ...s.secondaryValue, ...valueStyle }}>{value}</span>
       <span style={s.secondaryLabel}>{label}</span>
-      {tipPos && (
-        <div style={{
-          ...s.tooltip,
-          top: tipPos.top,
-          left: tipPos.left,
-          transform: 'translate(-50%, calc(-100% - 8px))',
-        }}>
-          {tooltip}
-        </div>
-      )}
+      <SecondaryTooltip tipPos={tipPos} tooltip={tooltip} />
+    </div>
+  )
+}
+
+// Ligne de la liste dense (Choc/Résistances/Souffle) — `headerOnly` = ligne de catégorie sans valeur,
+// `sub` = sous-valeur indentée (ex. Seuil d'étourdissement sous "Choc").
+function SecondaryListRow({ label, value, tooltip, sub, headerOnly, valueStyle }) {
+  const { ref, tipPos, handleMouseEnter, handleMouseLeave } = useSecondaryTooltip(tooltip)
+  const nameStyle = headerOnly ? s.listNameHeader : sub ? s.listNameSub : s.listName
+  return (
+    <div
+      ref={ref}
+      style={{
+        ...s.listRow,
+        ...(sub ? s.listRowSub : null),
+        ...(headerOnly ? s.listRowHeader : null),
+        cursor: tooltip ? 'help' : 'default',
+      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <span style={nameStyle}>{sub ? '— ' : ''}{label}</span>
+      {!headerOnly && <span style={{ ...s.listValue, ...valueStyle }}>{value}</span>}
+      <SecondaryTooltip tipPos={tipPos} tooltip={tooltip} />
     </div>
   )
 }
@@ -955,15 +1094,31 @@ const s = {
     borderRadius: '6px',
     overflow: 'hidden',
   },
+  blockHeadRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '6px 10px',
+    backgroundColor: '#0e0e1a',
+    borderBottom: '1px solid #1e1e2e',
+    cursor: 'pointer',
+  },
   blockTitle: {
     fontSize: '10px',
     fontWeight: '700',
     color: '#5b8dee',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    padding: '6px 10px',
-    backgroundColor: '#0e0e1a',
-    borderBottom: '1px solid #1e1e2e',
+  },
+  blockChevron: {
+    fontSize: '9px',
+    color: '#6a6a88',
+    transition: 'transform 0.15s ease',
+  },
+  secondaryColumns: {
+    display: 'flex',
+    gap: '8px',
+    margin: '0 10px 8px',
   },
 
   // Bloc en-tête
@@ -1169,12 +1324,64 @@ const s = {
     padding: '4px',
   },
 
-  // Attributs secondaires
-  secondaryGrid: {
+  // Attributs secondaires — cartes (Réaction/Initiative, Allures)
+  secondaryCards: {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '1px',
+    gap: '6px',
     padding: '8px 10px',
+  },
+  // Attributs secondaires — liste dense (Choc, Dommages, Résistances naturelles, Souffle)
+  secondaryList: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1px',
+    background: '#1c1c38',
+    border: '1px solid #1c1c38',
+    borderRadius: '5px',
+    overflow: 'hidden',
+  },
+  listRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '6px 10px',
+    gap: '12px',
+    background: '#0e0e1a',
+  },
+  listRowSub: {
+    paddingLeft: '22px',
+    background: '#14152a',
+  },
+  listRowHeader: {
+    background: '#14152a',
+    paddingTop: '5px',
+    paddingBottom: '5px',
+  },
+  listName: {
+    fontSize: '11.5px',
+    color: '#c8c8e0',
+    fontWeight: '600',
+  },
+  listNameSub: {
+    fontSize: '11px',
+    color: '#9494b8',
+    fontWeight: '400',
+  },
+  listNameHeader: {
+    fontSize: '9.5px',
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    color: '#6a6a88',
+    fontWeight: '700',
+  },
+  listValue: {
+    fontSize: '13.5px',
+    fontWeight: '700',
+    color: '#5b8dee',
+    minWidth: '22px',
+    textAlign: 'right',
   },
   secondaryItem: {
     display: 'flex',
