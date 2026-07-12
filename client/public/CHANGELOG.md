@@ -1,3 +1,15 @@
+## v179 — 2026-07-12 — Résistance aux Dommages/Choc : mutations et avantages enfin appliqués
+
+### Serveur
+- [feat] Les mutations et avantages qui modifient la Résistance aux Dommages ou la Résistance au
+  Choc (ex. Squelette renforcé, Dur à cuire, Résistance à la douleur) sont désormais réellement
+  appliqués en combat (corps à corps et à distance) — ils n'avaient jusqu'ici aucun effet.
+
+### Client
+- [feat] La fiche personnage affiche désormais la Résistance aux Dommages et les Seuils de Choc
+  avec les bonus/malus de mutations et avantages inclus, cohérente avec le combat réel.
+- [feat] Nouvelle macro « Résistance aux dommages » disponible pour les jets personnalisés.
+
 ## v178 — 2026-07-12 — Customisation d'armes : installer un module depuis l'inventaire
 
 ### Client

@@ -2921,3 +2921,53 @@ Détail complet, étape par étape avec tous les tests : `docs/PLAN_VAULT.md`.
   pour enchaîner directement sur le Lot 3.
 - Détail complet : cette entrée. Pas de fichier `PLAN_*.md` dédié — correctif ponctuel trouvé et
   traité en ouvrant le Lot 3.
+
+## Session 141 (suite 23) — 2026-07-12 — `docs/PLAN_MUTATION2.md` Lot 3 : Résistance aux Dommages + Choc câblés ✅ CLOS PARTIEL
+
+- Suite directe du correctif RD (suite 22). Plan détaillé ligne-à-ligne, **analyse critique demandée
+  par Saar avant tout code** (recherche pro, robustesse) : le pattern "résolveur générique, addition
+  directe" (Foundry Active Effects, validé Lot 2/RESNAT) restait valable sans nouvelle recherche —
+  la vraie trouvaille de l'analyse critique a été de niveau architecture interne, pas externe.
+- **Consolidation trouvée en relisant le plan initial avant de coder** : la branche PNJ
+  auto-résolution CaC (`socketCombatHelpers.js`, `resolveMeleeAction`) était un duplicata quasi
+  identique de `damageService.resolveTargetHit` (jet de localisation, armure, RD, sévérité,
+  blessure, test de Choc) — mon plan initial proposait d'y dupliquer une 2ᵉ fois le fetch
+  mutations/avantages (même erreur que celle qui avait nécessité 2 correctifs pour le bug RD).
+  Remplacé à la place par un seul appel à `resolveTargetHit` : ~50 lignes dupliquées → ~30 lignes,
+  4 imports devenus morts retirés (`calcResistanceArmure`, `calcResistanceDommages`, `LOC_TABLE`,
+  `SLOT_TO_WOUND_LOCATION`). Plus qu'un seul endroit calcule RD/Choc en résolution de combat.
+- `shared/polarisUtils.js` : `RESISTANCE_TO_MUTATION_MOD` + `getMutationModForResistance` (symétrique
+  à `getMutationModForAttr` Lot 1, colonnes fixes `char_mutation_effects_view` vs liste à réduire
+  côté avantages) — couvre les 6 clés (damage/shock/poison/disease/radiation/drugs) pour rester
+  cohérent avec `getAdvantageModForResistance`, même si Lot 3 n'en consomme que 2. `calcResistanceDommages`/
+  `calcSeuils` gagnent chacune 2 paramètres (`mod_mutation`, `mod_advantage`), addition directe —
+  correcte sans inversion grâce au correctif du bug RD (suite 22).
+- `statusService.js` (`resolveShockTest`) + `damageService.js` (`resolveTargetHit`, **seul point
+  d'insertion** pour les 4 appelants réels + la branche CaC consolidée) : fetch `getMutationEffects`/
+  `getAdvantages` de la cible en parallèle avec le fetch armure existant (même garde
+  `char_sheet_id_cible && characterIdCible`).
+- `socketDice.js`/`char-sheet.js` (macros) : `seuil_etourdi`/`seuil_incons` complétées avec les mods
+  (déjà câblées mais jamais avec RD/Choc) + **nouvelle macro `resistance_dommages`** (absente jusqu'ici
+  — décision Saar de la construire dans cette passe, complète le parallèle avec les 4 macros
+  résistances naturelles). Les 4 cases résistances naturelles refactorées pour utiliser
+  `getMutationModForResistance` au lieu de `mutationEffects?.mod_res_X ?? 0` inline (petit nettoyage
+  de cohérence, même helper).
+- `CharacterSheet.jsx` : `calcSecondary` récupère RD/Choc avec mods désormais (fiche ET résolution
+  combat rebranchées dans la même passe, plus d'écart) ; `seuilEtour`/`seuilIncons` recalculés via
+  `calcSeuils` importé au lieu d'un duplicata inline jamais consolidé jusqu'ici ; import `polarisRound`
+  devenu mort, retiré.
+- **Testé** : 11 scénarios purs `node -e` (RD/Choc sans mod, mutation seule, avantage seul, cumul,
+  `null`/liste vide, dérivation seuil inconscience), `node --check` sur les 5 fichiers serveur, ESLint
+  client 0 nouvelle erreur (`git stash`/`pop`, 3 problèmes pré-existants confirmés inchangés), grep de
+  sweep (aucun appel resté sur l'ancienne signature), **vérification en base réelle** (lecture seule,
+  personnage réel porteur de la mutation "Squelette renforcé" — delta exact +2 RD / +3 seuil
+  d'étourdissement confirmé), SR (`/api/health` 200).
+- **Non testé** : parcours combat réel en navigateur (CaC/distance avec mutation/avantage RD ou Choc
+  actif) — non demandé dans cette passe (cohérent avec le bug RD, suite 22, resté aussi non testé en
+  navigateur sur décision Saar).
+- **Incident git (sans rapport avec le code)** : mes fichiers de travail (correctif RD + code Lot 3)
+  ont été balayés par un commit de la session parallèle Moding (`git add -A` sur un dépôt partagé),
+  committés sous le message "Moding Phase A" (`dfc1283`/`17ac8bd`, déjà poussés). Contenu vérifié
+  intact fichier par fichier — aucune perte, seuls les messages de commit ne décrivent pas ce
+  contenu. Historique déjà poussé non réécrit (règle du projet).
+- Détail complet : cette entrée, `docs/PLAN_MUTATION2.md` Lot 3 (à marquer clos).

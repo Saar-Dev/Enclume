@@ -1,5 +1,6 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-12 — Session 141 (suite 22) : Bug RD (Résistance aux Dommages)
+> Dernière mise à jour : 2026-07-12 — Session 141 (suite 23) : `PLAN_MUTATION2.md` Lot 3 (RD + Choc)
+> câblés, consolidation resolveTargetHit, ⚠️ clos partiel (item 65) ; Session 141 (suite 22) : Bug RD (Résistance aux Dommages)
 > signe inversé corrigé, ⚠️ clos partiel (item 64) ; Session 141 (suite 21) : `docs/PLAN_MODING.md` — pause levée
 > (Tir visé clos, dette `TIRVISE` close) + **Étape 0 codée et testée** (item 63) ; Session 141
 > (suite 20) : Bonus féminin — règle fixe
@@ -22,6 +23,23 @@
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 65 (Session 141 suite 23) — `docs/PLAN_MUTATION2.md` Lot 3 : Résistance aux Dommages +
+> Choc câblés ⚠️ CLOS PARTIEL.** Suite du correctif RD (item 64). `shared/polarisUtils.js` :
+> `getMutationModForResistance` (symétrique à `getAdvantageModForResistance`) + `calcResistanceDommages`/
+> `calcSeuils` gagnent chacune 2 paramètres (mutation/avantage, addition directe). **Consolidation
+> trouvée avant de coder** : la branche PNJ auto-résolution CaC (`socketCombatHelpers.js`,
+> `resolveMeleeAction`) dupliquait presque intégralement `damageService.resolveTargetHit` — remplacée
+> par un seul appel (au lieu d'y dupliquer une 2ᵉ fois le fetch mutations/avantages, même erreur que
+> celle ayant nécessité 2 correctifs pour le bug RD). `resolveTargetHit` devient le seul point
+> d'insertion RD/Choc pour toute la résolution de combat (4 appelants + branche CaC consolidée).
+> Macros `seuil_etourdi`/`seuil_incons` complétées + nouvelle macro `resistance_dommages` (décision
+> Saar). `CharacterSheet.jsx` : fiche et résolution combat rebranchées dans la même passe (plus
+> d'écart), duplicata inline `seuilEtour`/`seuilIncons` remplacé par `calcSeuils` importé. **Testé** :
+> 11 scénarios purs, `node --check`, ESLint 0 nouvelle erreur, grep de sweep, **vérification en base
+> réelle** (personnage réel avec mutation "Squelette renforcé" — delta +2 RD/+3 seuil confirmé), SR.
+> **Non testé** : parcours combat réel en navigateur — laissé de côté sur la même logique que le bug
+> RD (item 64). Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 23)".
 
 > **Item 64 (Session 141 suite 22) — Bug RD (Résistance aux Dommages) : signe inversé corrigé
 > ⚠️ CLOS PARTIEL.** Trouvé en ouvrant `docs/PLAN_MUTATION2.md` Lot 3 (lecture obligatoire de

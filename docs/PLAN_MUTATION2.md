@@ -711,6 +711,21 @@ mécaniques confirmées vivantes et bien comprises, prêtes à détailler ligne-
 naturelles" extrait en chantier séparé, en attente d'arbitrage Saar sur la mécanique LdB — ne
 bloque plus l'avancement de ce lot.
 
+**Lot 3 ✅ CLOS PARTIEL — Session 141 (suite 23) (2026-07-12).** Bug préalable trouvé et corrigé en
+ouvrant ce lot : `degatsNets` soustrayait RD au lieu de l'ajouter (suite 22, `[VÉRIFIÉ]` par
+exécution réelle, corrigé aux 2 sites réels avant tout code de mods). Codé : `getMutationModForResistance`
+(symétrique à `getAdvantageModForResistance`), `calcResistanceDommages`/`calcSeuils` étendues (2 params,
+addition directe), `damageService.resolveTargetHit` devient le seul point d'insertion (fetch
+mutations/avantages cible, réutilisé par les 4 appelants réels). **Consolidation trouvée avant de
+coder** (analyse critique demandée par Saar) : la branche PNJ auto-résolution CaC dupliquait
+`resolveTargetHit` presque à l'identique — remplacée par un seul appel plutôt que d'y dupliquer une
+2ᵉ fois le fetch mutations/avantages. Macros `seuil_etourdi`/`seuil_incons` complétées + nouvelle
+macro `resistance_dommages`. `CharacterSheet.jsx` rebranchée dans la même passe (fiche = résolution
+combat, plus d'écart). **Testé** : 11 scénarios purs, `node --check`, ESLint 0 nouvelle erreur, grep
+de sweep, vérification en base réelle (personnage réel "Squelette renforcé", delta +2 RD/+3 seuil
+confirmé), SR. **Non testé** : parcours combat réel en navigateur. Détail complet :
+`docs/JOURNAL6.md` "Session 141 (suite 23)".
+
 ### Lot 4 — Armure naturelle + arme naturelle (mutations uniquement — nouveau mécanisme combat)
 - `natural_armor` : colonne structurée (entier), utilisable en théorie pour s'ajouter à
   `calcResistanceArmure`/l'armure portée — mais **aucune stacking rule armure naturelle + portée
@@ -771,7 +786,10 @@ fonctionnalité, pas un bug qui casse quelque chose de fonctionnel.
 
 ## Prochaine étape
 
-**Lot 1 ✅ CLOS — Session 141 (suite 13), fonctionnel confirmé Saar** (voir détail de clôture en fin
-de section Lot 1 ci-dessus). **Lot 2 (Attributs secondaires) à détailler ligne-à-ligne avec Saar
-quand il voudra enchaîner** — même méthode que le Lot 1 (plan écrit, analyse à charge, vérification
-instrumentée en base réelle avant tout code, jamais deux lots à la fois).
+**Lot 1 ✅ CLOS — Session 141 (suite 13)** / **Lot 2 ✅ CLOS — Session 141 (suite 6/RESNAT)** /
+**Lot 3 ✅ CLOS PARTIEL — Session 141 (suite 23)**, non testé = parcours navigateur (voir détail de
+clôture en fin de section Lot 3 ci-dessus). **Lot 4 (Armure naturelle + arme naturelle) à détailler
+avec Saar quand il voudra enchaîner** — même méthode (plan écrit, analyse à charge, vérification
+instrumentée avant tout code, jamais deux lots à la fois) ; noter que Lot 4 a un vrai trou
+d'architecture non tranché (schéma V2 sans colonnes structurées pour l'arme naturelle) à résoudre
+avant de pouvoir détailler ligne-à-ligne.

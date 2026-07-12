@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 22) — 2026-07-12
+> Session 141 (suite 23) — 2026-07-12
 
 ---
 
@@ -112,8 +112,25 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 22) (2026-07-12)
+## ÉTAT COURANT — Session 141 (suite 23) (2026-07-12)
 
+- **Session 141 (suite 23) — `docs/PLAN_MUTATION2.md` Lot 3 : Résistance aux Dommages + Choc câblés
+  ⚠️ CLOS PARTIEL.** Suite du correctif RD (suite 22, ci-dessous). `shared/polarisUtils.js` :
+  `getMutationModForResistance` (symétrique à `getAdvantageModForResistance`) + `calcResistanceDommages`/
+  `calcSeuils` étendues (mutation + avantage, addition directe — correcte grâce au correctif du bug
+  RD). **Consolidation trouvée avant de coder (analyse critique demandée par Saar)** : la branche PNJ
+  auto-résolution CaC (`socketCombatHelpers.js`) dupliquait presque à l'identique
+  `damageService.resolveTargetHit` — remplacée par un seul appel plutôt que d'y dupliquer une 2ᵉ fois
+  le fetch mutations/avantages (même erreur que celle ayant nécessité 2 correctifs pour le bug RD).
+  `resolveTargetHit` devient le seul point d'insertion RD/Choc pour toute la résolution de combat.
+  Macros `seuil_etourdi`/`seuil_incons` complétées + nouvelle macro `resistance_dommages` (décision
+  Saar). `CharacterSheet.jsx` rebranchée dans la même passe (fiche = résolution combat). **Testé** :
+  11 scénarios purs, `node --check`, ESLint 0 nouvelle erreur, grep de sweep, vérification en base
+  réelle (personnage réel "Squelette renforcé", delta +2 RD/+3 seuil confirmé), SR. **Non testé** :
+  parcours combat réel en navigateur. **Incident git signalé, sans rapport avec le code** : ce
+  correctif et celui de suite 22 ont été committés sous le message "Moding Phase A" (session
+  parallèle, `git add -A` sur dépôt partagé) — contenu vérifié intact, historique déjà poussé non
+  réécrit. Détail complet : item "65." `docs/EN_COURS.md`, `docs/JOURNAL6.md` "Session 141 (suite 23)".
 - **Session 141 (suite 21) — `docs/PLAN_MODING.md` Phase A (Customisation d'armes) ✅ TERMINÉE,
   8/8 étapes.** Chantier repris après levée de la pause du 2026-07-09 (Tir visé, bloquant pour la
   Phase B, clos Session 141 suite 17 — dette `TIRVISE` close). Analyse critique demandée par Saar
