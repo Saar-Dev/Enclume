@@ -146,19 +146,20 @@ function SelectionPreview({ selection, surfaceTool }) {
   )
 }
 
-function SelectedRoomOverlay({ room }) {
+function SelectedRoomOverlay({ room, roomLookup }) {
   if (!room) return null
   const baseY = getRoomBaseY(room)
   const height = getRoomHeightLevels(room) * STORY_HEIGHT
   const rectangles = roomFootprintRectangles(room)
-  const walls = roomWallSegments(room)
+  const walls = roomWallSegments(room, roomLookup)
   const material = () => <meshBasicMaterial color="#fbbf24" transparent opacity={0.36} depthWrite={false} />
 
   return (
     <group renderOrder={30}>
-      {Array.isArray(room.boundaryArcs) && room.boundaryArcs.length > 0 ? [
-        <RoomSelectionShape key="curved-floor" room={room} y={baseY + 0.08} />,
-        <RoomSelectionShape key="curved-ceiling" room={room} y={baseY + height + 0.08} />,
+      {(Array.isArray(room.boundaryArcs) && room.boundaryArcs.length > 0)
+        || (Array.isArray(room.geometryClipRoomIds) && room.geometryClipRoomIds.length > 0) ? [
+        <RoomSelectionShape key="curved-floor" room={room} roomLookup={roomLookup} y={baseY + 0.08} />,
+        <RoomSelectionShape key="curved-ceiling" room={room} roomLookup={roomLookup} y={baseY + height + 0.08} />,
       ] : rectangles.flatMap(rectangle => [
         <mesh key={`floor:${rectangle.minX}:${rectangle.minZ}`} position={[rectangle.minX + rectangle.width / 2, baseY + 0.06, rectangle.minZ + rectangle.depth / 2]}>
           <boxGeometry args={[rectangle.width, 0.04, rectangle.depth]} />
@@ -183,29 +184,46 @@ function SelectedRoomOverlay({ room }) {
   )
 }
 
-function RoomSelectionShape({ room, y }) {
-  const geometry = useMemo(() => {
-    const contours = roomBoundaryContours(room)
-    const outer = contours.find(contour => !contour.isHole && contour.points.length >= 3)
-    if (!outer) return null
-    const outerPoints = outer.points.map(value => new THREE.Vector2(value.x, -value.z))
+function roomSelectionShapes(room, roomLookup) {
+  const contours = roomBoundaryContours(room, roomLookup)
+  const polygons = new Map()
+  for (const contour of contours) {
+    if (!polygons.has(contour.polygonIndex)) polygons.set(contour.polygonIndex, { outer: null, holes: [] })
+    const polygon = polygons.get(contour.polygonIndex)
+    if (contour.isHole) polygon.holes.push(contour)
+    else polygon.outer = contour
+  }
+  return [...polygons.values()].flatMap(polygon => {
+    if (!polygon.outer || polygon.outer.points.length < 3) return []
+    const outerPoints = polygon.outer.points.map(value => new THREE.Vector2(value.x, -value.z))
     if (!THREE.ShapeUtils.isClockWise(outerPoints)) outerPoints.reverse()
     const shape = new THREE.Shape(outerPoints)
-    for (const contour of contours.filter(item => item.isHole && item.points.length >= 3)) {
+    for (const contour of polygon.holes) {
+      if (contour.points.length < 3) continue
       const holePoints = contour.points.map(value => new THREE.Vector2(value.x, -value.z))
       if (THREE.ShapeUtils.isClockWise(holePoints)) holePoints.reverse()
       shape.holes.push(new THREE.Path(holePoints))
     }
-    const result = new THREE.ShapeGeometry(shape)
-    result.rotateX(-Math.PI / 2)
-    return result
-  }, [room])
-  useEffect(() => () => geometry?.dispose(), [geometry])
-  if (!geometry) return null
+    return [shape]
+  })
+}
+
+function RoomSelectionShape({ room, roomLookup, y }) {
+  const geometries = useMemo(() => roomSelectionShapes(room, roomLookup).map(shape => {
+    const geometry = new THREE.ShapeGeometry(shape)
+    geometry.rotateX(-Math.PI / 2)
+    return geometry
+  }), [room, roomLookup])
+  useEffect(() => () => geometries.forEach(geometry => geometry.dispose()), [geometries])
+  if (geometries.length === 0) return null
   return (
-    <mesh geometry={geometry} position={[0, y, 0]}>
-      <meshBasicMaterial color="#fbbf24" transparent opacity={0.36} depthWrite={false} side={THREE.DoubleSide} />
-    </mesh>
+    <>
+      {geometries.map((geometry, index) => (
+        <mesh key={`selection:${index}`} geometry={geometry} position={[0, y, 0]}>
+          <meshBasicMaterial color="#fbbf24" transparent opacity={0.36} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      ))}
+    </>
   )
 }
 
@@ -979,7 +997,9 @@ export default function SurfaceEditorScene({
         runtimeFeatureStates={runtimeFeatureStates}
       />
       <RuntimeEffectRegions regions={runtimeEffectRegions} surfaceData={surfaceData} displayLevel={displayLevel} />
-      {selectedRooms.map(room => <SelectedRoomOverlay key={room.id} room={room} />)}
+      {selectedRooms.map(room => (
+        <SelectedRoomOverlay key={room.id} room={room} roomLookup={surfaceData.rooms} />
+      ))}
       {surfaceTool?.roomWallEdit && selectedRooms.length === 1 && (
         <>
           <RoomWallSelectionOverlay

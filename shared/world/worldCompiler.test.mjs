@@ -94,6 +94,46 @@ test('un arrondi de salle compile les mêmes segments pour collision et ligne de
   ))))
 })
 
+test('un mur exterieur supprime ne compile plus de collision ni de ligne de vue', () => {
+  const openedRoom = { ...room('opened', 0, 0), cells: ['0:0'] }
+  openedRoom.openWallEdgeKeys = roomBoundaryWallRuns(openedRoom)
+    .find(wall => wall.side === 'north')
+    .edgeKeys
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-opened-room',
+    surfaceData: emptySurface({ version: 7, rooms: { opened: openedRoom } }),
+  })
+
+  const walls = snapshot.spatial.barriers.filter(item => item.kind === 'wall')
+  assert.equal(walls.length, 3)
+  assert.equal(snapshot.spatial.colliders.filter(item => item.kind === 'wall').length, 3)
+  assert.equal(snapshot.spatial.occluders.filter(item => item.kind === 'wall').length, 3)
+})
+
+test('deux salles decoupees partagent un unique mur courbe physique', () => {
+  const rounded = {
+    ...room('rounded', 0, 1, 0, 1),
+    cells: ['0:0', '1:0', '0:1', '1:1'],
+  }
+  const selected = roomBoundaryWallRuns(rounded).filter(wall => ['west', 'north'].includes(wall.side))
+  rounded.boundaryArcs = [makeRoomBoundaryArc(rounded, selected.flatMap(wall => wall.edgeKeys), 90).arc]
+  const adjacent = {
+    ...room('adjacent', 0, 1, 0, 1),
+    cells: ['0:0', '1:0', '0:1', '1:1'],
+    geometryClipRoomIds: ['rounded'],
+  }
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-clipped-room',
+    surfaceData: emptySurface({ version: 7, rooms: { rounded, adjacent } }),
+  })
+
+  const sharedCurves = snapshot.spatial.barriers.filter(item => (
+    item.kind === 'wall' && item.axis === 'segment' && item.sourceIds?.length === 2
+  ))
+  assert.ok(sharedCurves.length > 4)
+  assert.ok(sharedCurves.every(item => item.blocks.movement && item.blocks.sight))
+})
+
 test('une salle imbriquee compile deux empreintes exclusives et leur contour commun', () => {
   const outerCells = []
   for (let z = 0; z < 4; z += 1) {

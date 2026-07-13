@@ -113,7 +113,7 @@ Phase 1, pas d'un oubli de la Phase 0.
 
 ### Livré le 2026-07-13
 
-- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v6, attribue des UUID
+- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v7, attribue des UUID
   stables et produit le `WorldDocument` canonique ;
 - `shared/world/worldCompiler.js` compile salles, dalles, murs partagés, portes découpées, escaliers,
   ascenseurs désactivés en attente de leur contrôleur, colliders, occluders et compartiments ;
@@ -525,7 +525,41 @@ Phase 7.
 
 ---
 
-## 14. Matrice de non-régression minimale
+## 14. Phase 11 — suppression, fusion et priorité géométrique ✅
+
+### Contrat `surface_data` v7
+
+- `room.openWallEdgeKeys` décrit les murs extérieurs supprimés sans supprimer les dalles ;
+- `room.geometryClipRoomIds` forme un graphe acyclique de différences polygonales. Une salle créée
+  après une salle courbe soustrait la géométrie de celle-ci et épouse sa frontière exacte ;
+- les `cells` restent l'index discret et le broadphase. Dans une case partiellement coupée par une
+  courbe, le multipolygone effectif est l'autorité d'occupation ;
+- les documents v1 à v6 restent lisibles. La migration v6 détecte les recouvrements avec une salle
+  arrondie plus ancienne et ajoute les découpes requises.
+
+### Éditeur et fusion
+
+- un ou plusieurs murs complets sélectionnés peuvent être supprimés ;
+- une frontière extérieure devient une ouverture physique ;
+- une frontière entre deux salles de même base et de même hauteur fusionne les volumes. La salle
+  active conserve son `worldId`, ses matériaux et réglages ;
+- portes sur la frontière supprimée, références de salles des connecteurs et dépendances de découpe
+  sont nettoyées ou remappées atomiquement ;
+- supprimer une frontière courbe retire aussi l'arc séparateur.
+
+### Géométrie et physique
+
+- `shared/world/roomGeometry.js` calcule différence, intersection, aire, multipolygone, appartenance
+  d'un point et segments à partir d'une seule géométrie effective ;
+- les dalles prennent en charge plusieurs polygones et leurs trous ;
+- les murs courbes communs sont dédupliqués en un panneau physique partagé ;
+- rendu, sélection, compilateur, collisions et LOS consomment les mêmes segments ;
+- 92 tests monde/combat et 12 tests client Surface passent, ESLint ciblé ne remonte aucune erreur et
+  le build Vite est validé.
+
+---
+
+## 15. Matrice de non-régression minimale
 
 Chaque phase doit conserver ou ajouter ces scénarios :
 
@@ -547,7 +581,7 @@ Chaque phase doit conserver ou ajouter ces scénarios :
 
 ---
 
-## 15. Définition de fini du chantier
+## 16. Définition de fini du chantier
 
 Le moteur de monde est considéré terminé lorsque :
 

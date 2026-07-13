@@ -8,6 +8,7 @@
     "fast-voxel-raycast": "^0.1.1",
     "image-size": "^2.0.2",
     "jszip": "^3.10.1",
+    "polygon-clipping": "^0.15.7",
     "socket.io-client": "^4.8.3",
     "xlsx": "^0.18.5"
   }

@@ -4,9 +4,15 @@ import {
 } from './proceduralMaterials.js'
 import {
   makeRoomBoundaryArc,
+  migrateRoomGeometryClips,
   roomBoundaryEdges,
   roomBoundaryWallRuns,
   roomBoundarySegments as geometryRoomBoundarySegments,
+  roomEffectiveGridCells,
+  roomGeometryArea,
+  roomGeometryContainsPoint,
+  roomGeometryIntersectionArea,
+  roomHasEffectiveBoundaryEdge,
   selectedRoomBoundaryChain,
 } from '../../../shared/world/roomGeometry.js'
 
@@ -20,7 +26,7 @@ const DEFAULT_FLOOR_THICKNESS = 0.25
 const DEFAULT_CEILING_HEIGHT = 2.5
 const STAIR_STEPS_PER_CELL = 4
 export const DEFAULT_SURFACE_DATA = {
-  version: 6,
+  version: 7,
   fine: SURFACE_FINE,
   storyHeight: STORY_HEIGHT,
   rooms: {},
@@ -320,11 +326,14 @@ export function parseCeilingKey(id, ceiling) {
 
 export function normalizeSurfaceData(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return { ...DEFAULT_SURFACE_DATA }
+  const rooms = data.rooms && typeof data.rooms === 'object' && !Array.isArray(data.rooms) ? data.rooms : {}
   return {
-    version: Math.max(6, data.version || 2),
+    version: Math.max(7, data.version || 2),
     fine: data.fine || SURFACE_FINE,
     storyHeight: data.storyHeight || STORY_HEIGHT,
-    rooms: data.rooms && typeof data.rooms === 'object' && !Array.isArray(data.rooms) ? data.rooms : {},
+    rooms: Number(data.version || 2) < 7
+      ? migrateRoomGeometryClips(rooms, Number(data.storyHeight) || STORY_HEIGHT)
+      : rooms,
     floors: data.floors && typeof data.floors === 'object' && !Array.isArray(data.floors) ? data.floors : {},
     walls: data.walls && typeof data.walls === 'object' && !Array.isArray(data.walls) ? data.walls : {},
     ceilings: data.ceilings && typeof data.ceilings === 'object' && !Array.isArray(data.ceilings) ? data.ceilings : {},
@@ -332,6 +341,30 @@ export function normalizeSurfaceData(data) {
     connectors: data.connectors && typeof data.connectors === 'object' && !Array.isArray(data.connectors) ? data.connectors : {},
   }
 }
+
+function roomHasGeometryConstraint(room) {
+  return (Array.isArray(room?.boundaryArcs) && room.boundaryArcs.length > 0)
+    || (Array.isArray(room?.geometryClipRoomIds) && room.geometryClipRoomIds.length > 0)
+}
+
+function roomsShareVerticalVolume(left, right) {
+  const leftBase = yToLevel(getRoomBaseY(left))
+  const leftTop = leftBase + getRoomHeightLevels(left) - 1
+  const rightBase = yToLevel(getRoomBaseY(right))
+  const rightTop = rightBase + getRoomHeightLevels(right) - 1
+  return leftTop >= rightBase && rightTop >= leftBase
+}
+
+function addGeometryClip(rooms, targetRoomId, clipRoomId) {
+  if (!targetRoomId || !clipRoomId || targetRoomId === clipRoomId) return rooms
+  const target = rooms[targetRoomId]
+  if (!target || !rooms[clipRoomId]) return rooms
+  const current = new Set(target.geometryClipRoomIds || [])
+  if (current.has(clipRoomId)) return rooms
+  current.add(clipRoomId)
+  return { ...rooms, [targetRoomId]: { ...target, geometryClipRoomIds: [...current] } }
+}
+
 
 export function hasSurfaceContent(data) {
   const surface = normalizeSurfaceData(data)
@@ -905,8 +938,12 @@ export function findRoomAtCell(data, cell, level = null) {
   const matches = []
 
   for (const [id, room] of Object.entries(surface.rooms)) {
-    if (!roomIncludesCell(room, cell.x, cell.z)) continue
-    const footprint = getRoomFootprintCells(room)
+    const identifiedRoom = { id, ...room }
+    if (!roomGeometryContainsPoint(
+      identifiedRoom,
+      { x: Number(cell.x) + 0.5, z: Number(cell.z) + 0.5 },
+      surface.rooms,
+    )) continue
 
     const roomLevel = yToLevel(getRoomBaseY(room))
     const heightLevels = getRoomHeightLevels(room)
@@ -914,8 +951,8 @@ export function findRoomAtCell(data, cell, level = null) {
 
     matches.push({
       id,
-      room: { id, ...room },
-      area: footprint.length,
+      room: identifiedRoom,
+      area: roomGeometryArea(identifiedRoom, surface.rooms),
     })
   }
 
@@ -1206,8 +1243,11 @@ function makeRoomFromSelection(_surfaceData, selection, tool, activeMaterial, av
   }
 }
 
-export function roomWallSegments(room) {
-  return roomsWallSegments(room ? { [room.id || 'room']: room } : {})
+export function roomWallSegments(room, roomLookup = null) {
+  if (!room) return []
+  const roomId = room.id || 'room'
+  const rooms = roomLookup || { [roomId]: room }
+  return roomsWallSegments(rooms).filter(wall => wall.roomIds?.includes(roomId))
 }
 
 function setWallFace(wall, face, source) {
@@ -1335,7 +1375,7 @@ export function roomsWallSegments(rooms) {
       setWallFace(wall, 'back', sameDirection ? backSource : frontSource)
     }
 
-    const boundary = geometryRoomBoundarySegments(room)
+    const boundary = geometryRoomBoundarySegments(room, rooms)
 
     for (let offset = 0; offset < heightLevels; offset += 1) {
       const y = baseY + offset * STORY_HEIGHT
@@ -1544,7 +1584,7 @@ export function applyDoorConnector(surfaceData, wallPoint, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 6,
+    version: 7,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1619,7 +1659,7 @@ export function applyElevatorConnector(surfaceData, cell, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 6,
+    version: 7,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1684,7 +1724,7 @@ export function applyLadderConnector(surfaceData, cell, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 6,
+    version: 7,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1699,7 +1739,7 @@ export function expandRoomsToSurface(data) {
   const walls = { ...surface.walls }
 
   for (const room of Object.values(surface.rooms)) {
-    const footprint = getRoomFootprintCells(room)
+    const footprint = roomEffectiveGridCells(room, surface.rooms)
     const baseY = getRoomBaseY(room)
     const topY = getRoomTopY(room)
     const blocking = {
@@ -1807,6 +1847,13 @@ function roomWithFootprint(room, id, cells, keepWorldId) {
       && !selectedRoomBoundaryChain(next, arc.edgeKeys).error
     ))
   }
+  if (Array.isArray(next.openWallEdgeKeys)) {
+    const edgeKeys = new Set(roomBoundaryEdges(next).map(edge => edge.key))
+    next.openWallEdgeKeys = [...new Set(next.openWallEdgeKeys)].filter(key => edgeKeys.has(key))
+  }
+  if (Array.isArray(next.geometryClipRoomIds)) {
+    next.geometryClipRoomIds = [...new Set(next.geometryClipRoomIds)].filter(roomId => roomId !== id)
+  }
   if (!keepWorldId) delete next.worldId
   return next
 }
@@ -1815,10 +1862,32 @@ function roomIdsForBoundaryEdge(rooms, edgeKey, baseY) {
   return Object.entries(rooms || {})
     .filter(([, room]) => (
       sameLevel(getRoomBaseY(room), baseY)
-      && roomBoundaryEdges(room).some(edge => edge.key === edgeKey)
+      && roomHasEffectiveBoundaryEdge(room, edgeKey, rooms)
     ))
     .map(([id]) => id)
     .sort()
+}
+
+function clipIntersectingRoomsAgainstOwners(inputRooms, ownerRoomIds) {
+  let rooms = inputRooms
+  const owners = new Set(ownerRoomIds || [])
+  for (const ownerId of owners) {
+    const owner = rooms[ownerId]
+    if (!owner) continue
+    for (const [targetId, target] of Object.entries(rooms)) {
+      if (owners.has(targetId) || targetId === ownerId) continue
+      if (!roomsShareVerticalVolume(owner, target)) continue
+      if ((owner.geometryClipRoomIds || []).includes(targetId)) continue
+      if ((target.geometryClipRoomIds || []).includes(ownerId)) continue
+      if (roomGeometryIntersectionArea(
+        { id: ownerId, ...owner },
+        { id: targetId, ...target },
+        rooms,
+      ) <= 1e-6) continue
+      rooms = addGeometryClip(rooms, targetId, ownerId)
+    }
+  }
+  return rooms
 }
 
 function doorConnectorTouchesBoundaryEdges(connector, room, selectedEdges) {
@@ -1879,15 +1948,16 @@ export function applyRoomBoundaryArc(surfaceData, roomId, edgeKeys, angleDegrees
   }
 
   const arc = { ...built.arc, ownerRoomId: roomId }
-  const rooms = { ...next.rooms }
+  let rooms = { ...next.rooms }
   for (const targetRoomId of targetRoomIds) {
     const targetRoom = rooms[targetRoomId]
     const boundaryArcs = (Array.isArray(targetRoom.boundaryArcs) ? targetRoom.boundaryArcs : [])
       .filter(existing => !(existing?.edgeKeys || []).some(key => selectedKeySet.has(key)))
     rooms[targetRoomId] = { ...targetRoom, boundaryArcs: [...boundaryArcs, arc] }
   }
+  rooms = clipIntersectingRoomsAgainstOwners(rooms, targetRoomIds)
   return {
-    surfaceData: { ...next, version: 6, rooms },
+    surfaceData: { ...next, version: 7, rooms },
     error: null,
     roomIds: targetRoomIds,
     arc,
@@ -1912,7 +1982,144 @@ export function removeRoomBoundaryArcs(surfaceData, roomId, edgeKeys) {
     changed = true
     return [id, { ...room, boundaryArcs }]
   }))
-  return changed ? { ...next, version: 6, rooms } : surfaceData
+  return changed ? { ...next, version: 7, rooms } : surfaceData
+}
+
+function validateWholeWallSelection(room, edgeKeys) {
+  const selected = new Set((edgeKeys || []).map(String))
+  const runs = roomBoundaryWallRuns(room)
+  const touched = runs.filter(run => run.edgeKeys.some(key => selected.has(key)))
+  if (touched.length === 0) return { error: 'Sélectionne au moins un mur.' }
+  if (touched.some(run => !run.edgeKeys.every(key => selected.has(key)))) {
+    return { error: 'Sélectionne les murs entiers entre deux angles.' }
+  }
+  const validKeys = new Set(touched.flatMap(run => run.edgeKeys))
+  if ([...selected].some(key => !validKeys.has(key))) {
+    return { error: 'La sélection contient un segment qui n’appartient pas au contour.' }
+  }
+  return { selected, runs: touched }
+}
+
+function sameRoomVerticalSpan(left, right) {
+  return sameLevel(getRoomBaseY(left), getRoomBaseY(right))
+    && getRoomHeightLevels(left) === getRoomHeightLevels(right)
+}
+
+function uniqueObjectsById(items) {
+  return [...new Map(items.filter(Boolean).map(item => [item.id, item])).values()]
+}
+
+export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
+  const next = normalizeSurfaceData(surfaceData)
+  const selectedRoom = next.rooms?.[roomId]
+  if (!selectedRoom) return { surfaceData, error: 'La salle sélectionnée n’existe plus.' }
+  const validation = validateWholeWallSelection(selectedRoom, edgeKeys)
+  if (validation.error) return { surfaceData, error: validation.error }
+
+  const selectedKeys = [...validation.selected]
+  const selectedEdges = roomBoundaryEdges(selectedRoom).filter(edge => validation.selected.has(edge.key))
+  const ownerships = selectedKeys.map(key => roomIdsForBoundaryEdge(
+    next.rooms,
+    key,
+    getRoomBaseY(selectedRoom),
+  ))
+  const signature = ownerships[0]?.join('|') || ''
+  if (!signature || ownerships.some(ids => ids.join('|') !== signature)) {
+    return { surfaceData, error: 'Les murs supprimés doivent border le même extérieur ou la même salle voisine.' }
+  }
+  const ownerIds = ownerships[0]
+  if (!ownerIds.includes(roomId)) return { surfaceData, error: 'La sélection ne fait pas partie de cette salle.' }
+  if (ownerIds.length > 2) return { surfaceData, error: 'Cette frontière appartient à trop de salles pour être supprimée.' }
+
+  const removedDoorIds = new Set(Object.entries(next.connectors || {})
+    .filter(([, connector]) => doorConnectorTouchesBoundaryEdges(connector, selectedRoom, selectedEdges))
+    .map(([id]) => id))
+
+  if (ownerIds.length === 1) {
+    const openWallEdgeKeys = [...new Set([
+      ...(selectedRoom.openWallEdgeKeys || []),
+      ...selectedKeys,
+    ])]
+    const connectors = Object.fromEntries(Object.entries(next.connectors || {})
+      .filter(([id]) => !removedDoorIds.has(id)))
+    return {
+      surfaceData: {
+        ...next,
+        version: 7,
+        rooms: {
+          ...next.rooms,
+          [roomId]: { ...selectedRoom, openWallEdgeKeys },
+        },
+        connectors,
+      },
+      error: null,
+      roomId,
+      mergedRoomIds: [],
+    }
+  }
+
+  const absorbedId = ownerIds.find(id => id !== roomId)
+  const absorbedRoom = next.rooms[absorbedId]
+  if (!absorbedRoom || !sameRoomVerticalSpan(selectedRoom, absorbedRoom)) {
+    return { surfaceData, error: 'Deux salles doivent avoir le même sol et la même hauteur pour être fusionnées.' }
+  }
+
+  const mergedCells = sortRoomCells(new Map([
+    ...getRoomFootprintCells(selectedRoom),
+    ...getRoomFootprintCells(absorbedRoom),
+  ].map(cell => [roomCellKey(cell.x, cell.z), cell])).values())
+  const boundaryArcs = uniqueObjectsById([
+    ...(selectedRoom.boundaryArcs || []),
+    ...(absorbedRoom.boundaryArcs || []),
+  ])
+    .filter(arc => !(arc.edgeKeys || []).some(key => validation.selected.has(key)))
+    .map(arc => ({ ...arc, ownerRoomId: roomId }))
+  const openWallEdgeKeys = [...new Set([
+    ...(selectedRoom.openWallEdgeKeys || []),
+    ...(absorbedRoom.openWallEdgeKeys || []),
+  ])]
+  const geometryClipRoomIds = [...new Set([
+    ...(selectedRoom.geometryClipRoomIds || []),
+    ...(absorbedRoom.geometryClipRoomIds || []),
+  ])].filter(id => !ownerIds.includes(id))
+  const mergedRoom = roomWithFootprint({
+    ...selectedRoom,
+    boundaryArcs,
+    openWallEdgeKeys,
+    geometryClipRoomIds,
+  }, roomId, mergedCells, true)
+
+  let rooms = Object.fromEntries(Object.entries(next.rooms)
+    .filter(([id]) => id !== absorbedId)
+    .map(([id, room]) => {
+      if (id === roomId) return [id, mergedRoom]
+      const clips = [...new Set((room.geometryClipRoomIds || [])
+        .map(clipId => clipId === absorbedId ? roomId : clipId))]
+        .filter(clipId => clipId !== id)
+      return [id, clips.length > 0 || room.geometryClipRoomIds ? { ...room, geometryClipRoomIds: clips } : room]
+    }))
+  rooms = clipIntersectingRoomsAgainstOwners(rooms, [roomId])
+
+  const connectors = Object.fromEntries(Object.entries(next.connectors || {})
+    .filter(([id]) => !removedDoorIds.has(id))
+    .map(([id, connector]) => {
+      const replace = value => value === absorbedId ? roomId : value
+      const roomIds = connector.roomIds
+        ? [...new Set(connector.roomIds.map(replace))]
+        : null
+      return [id, {
+        ...connector,
+        ...(connector.roomId ? { roomId: replace(connector.roomId) } : {}),
+        ...(roomIds ? { roomIds } : {}),
+      }]
+    }))
+
+  return {
+    surfaceData: { ...next, version: 7, rooms, connectors },
+    error: null,
+    roomId,
+    mergedRoomIds: [absorbedId],
+  }
 }
 
 function connectorAnchorCell(connector) {
@@ -1946,6 +2153,10 @@ export function applyRoomSelection(surfaceData, selection, tool, activeMaterial,
     const existingTopLevel = existingBaseLevel + getRoomHeightLevels(existingRoom) - 1
     if (existingTopLevel < roomBaseLevel || roomTopLevel < existingBaseLevel) continue
 
+    // Une frontière courbe est prioritaire sur une nouvelle empreinte rectangulaire. Les deux
+    // broadphases peuvent partager des cases ; geometryClipRoomIds garantit l'exclusivité réelle.
+    if (roomHasGeometryConstraint(existingRoom)) continue
+
     const existingCells = getRoomFootprintCells(existingRoom)
     const remainingCells = existingCells.filter(cell => !claimedKeys.has(roomCellKey(cell.x, cell.z)))
     if (remainingCells.length === existingCells.length) continue
@@ -1966,7 +2177,23 @@ export function applyRoomSelection(surfaceData, selection, tool, activeMaterial,
     replacementRooms.set(existingId, replacements)
   }
 
-  rooms[room.id] = room
+  const geometryClipRoomIds = []
+  const lookupWithCandidate = { ...rooms, [room.id]: room }
+  for (const [existingId, existingRoom] of Object.entries(rooms)) {
+    if (!roomHasGeometryConstraint(existingRoom)) continue
+    if (!roomsShareVerticalVolume(room, existingRoom)) continue
+    if (roomGeometryIntersectionArea(
+      { id: room.id, ...room },
+      { id: existingId, ...existingRoom },
+      lookupWithCandidate,
+    ) > 1e-6) geometryClipRoomIds.push(existingId)
+  }
+  const createdRoom = geometryClipRoomIds.length > 0
+    ? { ...room, geometryClipRoomIds }
+    : room
+  const finalRoomLookup = { ...rooms, [room.id]: createdRoom }
+  if (roomGeometryArea({ id: room.id, ...createdRoom }, finalRoomLookup) <= 1e-6) return surfaceData
+  rooms[room.id] = createdRoom
   const connectors = Object.fromEntries(Object.entries(next.connectors).map(([id, connector]) => {
     const anchor = connectorAnchorCell(connector)
     const replaceRoomId = currentId => {
@@ -1988,7 +2215,7 @@ export function applyRoomSelection(surfaceData, selection, tool, activeMaterial,
 
   return {
     ...next,
-    version: 6,
+    version: 7,
     rooms,
     connectors,
   }
@@ -2091,7 +2318,7 @@ export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, a
 
   return {
     ...next,
-    version: 6,
+    version: 7,
     rooms: {
       ...next.rooms,
       [roomId]: updated,

@@ -447,7 +447,7 @@ function CeilingTile({ id, ceiling, textureMaterials, opacity, showDetails = tru
   )
 }
 
-function RoomSlab({ room, kind, textureMaterials, opacity = 1, showDetails = true }) {
+function RoomSlab({ room, roomLookup, kind, textureMaterials, opacity = 1, showDetails = true }) {
   const rectangles = roomFootprintRectangles(room)
   const isCeiling = kind === 'ceiling'
   const y = isCeiling ? getRoomTopY(room) : getRoomBaseY(room)
@@ -466,11 +466,13 @@ function RoomSlab({ room, kind, textureMaterials, opacity = 1, showDetails = tru
   const relief = showDetails ? (topProcedural?.relief || reliefAt(textureMaterials, topTex)) : null
   if (!top) return null
 
-  const hasCurvedBoundary = Array.isArray(room.boundaryArcs) && room.boundaryArcs.length > 0
+  const hasCurvedBoundary = (Array.isArray(room.boundaryArcs) && room.boundaryArcs.length > 0)
+    || (Array.isArray(room.geometryClipRoomIds) && room.geometryClipRoomIds.length > 0)
   if (hasCurvedBoundary) {
     return (
       <CurvedRoomSlab
         room={room}
+        roomLookup={roomLookup}
         kind={kind}
         y={y}
         thickness={thickness}
@@ -526,21 +528,35 @@ function RoomSlab({ room, kind, textureMaterials, opacity = 1, showDetails = tru
   )
 }
 
-function CurvedRoomSlab({ room, kind, y, thickness, capMaterial, sideMaterial, opacity }) {
-  const isCeiling = kind === 'ceiling'
-  const geometry = useMemo(() => {
-    const contours = roomBoundaryContours(room)
-    const outer = contours.find(contour => !contour.isHole && contour.points.length >= 3)
-    if (!outer) return null
-    const outerPoints = outer.points.map(value => new THREE.Vector2(value.x, -value.z))
+function shapesFromRoomContours(contours) {
+  const polygons = new Map()
+  for (const contour of contours) {
+    if (!polygons.has(contour.polygonIndex)) polygons.set(contour.polygonIndex, { outer: null, holes: [] })
+    const polygon = polygons.get(contour.polygonIndex)
+    if (contour.isHole) polygon.holes.push(contour)
+    else polygon.outer = contour
+  }
+  return [...polygons.values()].flatMap(polygon => {
+    if (!polygon.outer || polygon.outer.points.length < 3) return []
+    const outerPoints = polygon.outer.points.map(value => new THREE.Vector2(value.x, -value.z))
     if (!THREE.ShapeUtils.isClockWise(outerPoints)) outerPoints.reverse()
     const shape = new THREE.Shape(outerPoints)
-    for (const contour of contours.filter(item => item.isHole && item.points.length >= 3)) {
+    for (const contour of polygon.holes) {
+      if (contour.points.length < 3) continue
       const holePoints = contour.points.map(value => new THREE.Vector2(value.x, -value.z))
       if (THREE.ShapeUtils.isClockWise(holePoints)) holePoints.reverse()
       shape.holes.push(new THREE.Path(holePoints))
     }
-    const result = new THREE.ExtrudeGeometry(shape, {
+    return [shape]
+  })
+}
+
+function CurvedRoomSlab({ room, roomLookup, kind, y, thickness, capMaterial, sideMaterial, opacity }) {
+  const isCeiling = kind === 'ceiling'
+  const geometries = useMemo(() => shapesFromRoomContours(
+    roomBoundaryContours(room, roomLookup),
+  ).map(shape => {
+    const geometry = new THREE.ExtrudeGeometry(shape, {
       depth: thickness,
       bevelEnabled: false,
       steps: 1,
@@ -548,23 +564,28 @@ function CurvedRoomSlab({ room, kind, y, thickness, capMaterial, sideMaterial, o
       material: 0,
       extrudeMaterial: 1,
     })
-    result.translate(0, 0, -thickness / 2)
-    result.rotateX(-Math.PI / 2)
-    result.computeVertexNormals()
-    return result
-  }, [room, thickness])
+    geometry.translate(0, 0, -thickness / 2)
+    geometry.rotateX(-Math.PI / 2)
+    geometry.computeVertexNormals()
+    return geometry
+  }), [room, roomLookup, thickness])
 
-  useEffect(() => () => geometry?.dispose(), [geometry])
-  if (!geometry) return null
+  useEffect(() => () => geometries.forEach(geometry => geometry.dispose()), [geometries])
+  if (geometries.length === 0) return null
   return (
-    <mesh
-      geometry={geometry}
-      position={[0, y, 0]}
-      material={withOpacity([capMaterial, sideMaterial], opacity)}
-      castShadow
-      receiveShadow
-      userData={isCeiling ? undefined : { worldSupport: true }}
-    />
+    <>
+      {geometries.map((geometry, index) => (
+        <mesh
+          key={`${kind}:polygon:${index}`}
+          geometry={geometry}
+          position={[0, y, 0]}
+          material={withOpacity([capMaterial, sideMaterial], opacity)}
+          castShadow
+          receiveShadow
+          userData={isCeiling ? undefined : { worldSupport: true }}
+        />
+      ))}
+    </>
   )
 }
 
@@ -1394,12 +1415,13 @@ function useOccludedWallIds(walls, surface, displayLevel) {
   return occludedIds
 }
 
-function RoomVolume({ room, textureMaterials, ceilingOpacity, showFloor, showCeiling, showDetails }) {
+function RoomVolume({ room, roomLookup, textureMaterials, ceilingOpacity, showFloor, showCeiling, showDetails }) {
   return (
     <>
       {showFloor && room.floorEnabled !== false && (
         <RoomSlab
           room={room}
+          roomLookup={roomLookup}
           kind="floor"
           textureMaterials={textureMaterials}
           opacity={1}
@@ -1409,6 +1431,7 @@ function RoomVolume({ room, textureMaterials, ceilingOpacity, showFloor, showCei
       {showCeiling && room.ceilingEnabled !== false && (
         <RoomSlab
           room={room}
+          roomLookup={roomLookup}
           kind="ceiling"
           textureMaterials={textureMaterials}
           opacity={ceilingOpacity}
@@ -1508,6 +1531,7 @@ function SurfaceDungeonScene({
           <RoomVolume
             key={id}
             room={{ id, ...room }}
+            roomLookup={surface.rooms}
             textureMaterials={textureMaterials}
             ceilingOpacity={ceilingOpacity}
             showFloor

@@ -1,11 +1,15 @@
 // shared/world/surfaceDocument.js
-// Frontière de compatibilité entre surface_data v6 (empreintes et arcs de salles) et le document canonique du
+// Frontière de compatibilité entre surface_data v7 (contours partagés, ouvertures et arcs) et le document canonique du
 // moteur de monde. Les clés legacy restent lisibles ; worldId devient l'identité physique stable.
 
 import { createWorldDocument } from './worldContracts.js'
-import { selectedRoomBoundaryChain } from './roomGeometry.js'
+import {
+  migrateRoomGeometryClips,
+  roomBoundaryEdges,
+  selectedRoomBoundaryChain,
+} from './roomGeometry.js'
 
-export const SURFACE_DATA_VERSION = 6
+export const SURFACE_DATA_VERSION = 7
 export const SURFACE_FINE_DEFAULT = 4
 export const SURFACE_STORY_HEIGHT_DEFAULT = 2.5
 
@@ -170,6 +174,27 @@ function validateFeature(collection, id, item, errors) {
         }
       }
     }
+    if (item.openWallEdgeKeys != null) {
+      if (!Array.isArray(item.openWallEdgeKeys) || item.openWallEdgeKeys.some(key => typeof key !== 'string')) {
+        errors.push(`${path}.openWallEdgeKeys doit être un tableau de murs`)
+      } else {
+        const unique = new Set(item.openWallEdgeKeys)
+        if (unique.size !== item.openWallEdgeKeys.length) errors.push(`${path}.openWallEdgeKeys contient des doublons`)
+        const boundaryKeys = new Set(roomBoundaryEdges(item).map(edge => edge.key))
+        for (const key of unique) {
+          if (!boundaryKeys.has(key)) errors.push(`${path}.openWallEdgeKeys contient un mur absent du contour`)
+        }
+      }
+    }
+    if (item.geometryClipRoomIds != null) {
+      if (!Array.isArray(item.geometryClipRoomIds) || item.geometryClipRoomIds.some(value => typeof value !== 'string')) {
+        errors.push(`${path}.geometryClipRoomIds doit être un tableau d’identifiants de salles`)
+      } else if (new Set(item.geometryClipRoomIds).size !== item.geometryClipRoomIds.length) {
+        errors.push(`${path}.geometryClipRoomIds contient des doublons`)
+      } else if (item.geometryClipRoomIds.includes(id)) {
+        errors.push(`${path}.geometryClipRoomIds ne peut pas référencer la salle elle-même`)
+      }
+    }
   } else if (collection === 'floors') {
     const [keyX, keyZ, keyY = 0] = String(id).split(':')
     const x = item.x ?? keyX
@@ -236,6 +261,26 @@ export function validateSurfaceData(input) {
     }
     for (const [id, item] of Object.entries(record)) validateFeature(collection, id, item, errors)
   }
+  const rooms = isPlainObject(input.rooms) ? input.rooms : {}
+  for (const [id, room] of Object.entries(rooms)) {
+    for (const clipId of Array.isArray(room?.geometryClipRoomIds) ? room.geometryClipRoomIds : []) {
+      if (!rooms[clipId]) errors.push(`$.rooms.${id}.geometryClipRoomIds référence la salle absente ${clipId}`)
+    }
+  }
+  const visiting = new Set()
+  const visited = new Set()
+  const visitRoom = id => {
+    if (visiting.has(id)) {
+      errors.push(`$.rooms.${id}.geometryClipRoomIds forme un cycle de découpe`)
+      return
+    }
+    if (visited.has(id) || !rooms[id]) return
+    visiting.add(id)
+    for (const clipId of rooms[id].geometryClipRoomIds || []) visitRoom(clipId)
+    visiting.delete(id)
+    visited.add(id)
+  }
+  for (const id of Object.keys(rooms)) visitRoom(id)
   return validationResult(errors)
 }
 
@@ -255,6 +300,9 @@ export function normalizeSurfaceDataDocument(input) {
   }
   for (const collection of SURFACE_COLLECTIONS) {
     normalized[collection] = cloneValue(input[collection] ?? {})
+  }
+  if (Number(input.version ?? SURFACE_DATA_VERSION) < 7) {
+    normalized.rooms = migrateRoomGeometryClips(normalized.rooms, normalized.storyHeight)
   }
   return normalized
 }

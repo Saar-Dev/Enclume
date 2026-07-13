@@ -3,10 +3,13 @@ import assert from 'node:assert/strict'
 
 import {
   makeRoomBoundaryArc,
+  migrateRoomGeometryClips,
   roomBoundaryContours,
   roomBoundaryEdges,
   roomBoundarySegments,
   roomBoundaryWallRuns,
+  roomGeometryArea,
+  roomGeometryIntersectionArea,
   sampleRoomBoundaryArc,
   selectedRoomBoundaryChain,
 } from './roomGeometry.js'
@@ -23,6 +26,55 @@ test('les arêtes de contour sont stables et excluent les séparations internes'
   const edges = roomBoundaryEdges(square)
   assert.equal(edges.length, 8)
   assert.equal(new Set(edges.map(edge => edge.key)).size, 8)
+})
+
+test('une salle decoupee epouse exactement le mur courbe de la salle prioritaire', () => {
+  const selectedKeys = roomBoundaryWallRuns(square)
+    .filter(wall => ['west', 'north'].includes(wall.side))
+    .flatMap(wall => wall.edgeKeys)
+  const { arc } = makeRoomBoundaryArc(square, selectedKeys, 90)
+  const rounded = { id: 'rounded', ...square, boundaryArcs: [arc] }
+  const adjacent = { id: 'adjacent', ...square, geometryClipRoomIds: ['rounded'] }
+  const rooms = { rounded, adjacent }
+
+  assert.ok(roomGeometryArea(rounded, rooms) > 0)
+  assert.ok(roomGeometryArea(adjacent, rooms) > 0)
+  assert.ok(Math.abs(roomGeometryArea(rounded, rooms) + roomGeometryArea(adjacent, rooms) - 4) < 1e-5)
+  assert.equal(roomGeometryIntersectionArea(rounded, adjacent, rooms), 0)
+
+  const segmentKey = segment => {
+    const start = `${segment.x0}:${segment.z0}`
+    const end = `${segment.x1}:${segment.z1}`
+    return start.localeCompare(end) <= 0 ? `${start}|${end}` : `${end}|${start}`
+  }
+  const roundedCurves = new Set(roomBoundarySegments(rounded, rooms)
+    .filter(segment => segment.axis === 'segment')
+    .map(segmentKey))
+  const sharedCurves = roomBoundarySegments(adjacent, rooms)
+    .filter(segment => segment.axis === 'segment' && roundedCurves.has(segmentKey(segment)))
+  assert.ok(sharedCurves.length > 4)
+})
+
+test('la migration v6 donne la priorite a la premiere salle arrondie', () => {
+  const selectedKeys = roomBoundaryWallRuns(square)
+    .filter(wall => ['west', 'north'].includes(wall.side))
+    .flatMap(wall => wall.edgeKeys)
+  const { arc } = makeRoomBoundaryArc(square, selectedKeys, 90)
+  const migrated = migrateRoomGeometryClips({
+    rounded: { ...square, boundaryArcs: [arc] },
+    adjacent: { ...square },
+  })
+
+  assert.deepEqual(migrated.adjacent.geometryClipRoomIds, ['rounded'])
+})
+
+test('ouvrir un mur exterieur retire tous ses segments physiques', () => {
+  const northKeys = roomBoundaryWallRuns(square)
+    .find(wall => wall.side === 'north')
+    .edgeKeys
+  const opened = { ...square, openWallEdgeKeys: northKeys }
+
+  assert.equal(roomBoundarySegments(opened).length, roomBoundarySegments(square).length - northKeys.length)
 })
 
 test('les arêtes colinéaires sont regroupées en murs sélectionnables', () => {

@@ -1,6 +1,6 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-13 — empreintes exclusives et arrondis structurés de salles.
+> Dernière mise à jour : 2026-07-13 — suppression/fusion des murs et priorité des contours courbes.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -9,14 +9,16 @@
 
 ## Statut au 2026-07-13
 
-L'éditeur Surface/Salle et son rendu existent. `surface_data` version 6 sait décrire des salles,
+L'éditeur Surface/Salle et son rendu existent. `surface_data` version 7 sait décrire des salles,
 sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
 navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
 le lisent également ; depuis la Phase 7, la FSM combat lui délègue aussi déplacements, distances,
 portées, interactions et terrain instable. Depuis la Phase 8, l'affichage isole strictement l'étage
 courant. Depuis la Phase 10, les murs courbes de salle sont des arcs structurés de leur contour,
-partagés par le rendu, les collisions et la LOS.
+partagés par le rendu, les collisions et la LOS. Depuis la Phase 11, supprimer un mur ouvre la
+salle ou fusionne ses deux volumes, et une nouvelle salle est découpée par les contours courbes
+déjà présents au lieu de superposer ses murs.
 
 Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit le moteur commun qui compile
 ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une
@@ -28,7 +30,9 @@ Le mode Salle repose sur `surface_data.rooms`.
 
 Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
 
-- cases propriétaires : `cells`, sous forme de clés `x:z` uniques ;
+- cases de grille et broadphase : `cells`, sous forme de clés `x:z` uniques. Elles restent
+  suffisantes pour une salle orthogonale, mais peuvent se chevaucher dans une case traversée par
+  une courbe ;
 - enveloppe de recherche : `minX`, `maxX`, `minZ`, `maxZ`, jamais utilisée comme propriété
   implicite ;
 - étage de base : `level` / `y` ;
@@ -38,13 +42,20 @@ Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
   composés de segments orientés issus d'une courbe quadratique ;
 - arrondis de salle : `boundaryArcs`, chacun lié à une chaîne d'arêtes du contour avec un angle et
   un côté ;
+- découpes géométriques : `geometryClipRoomIds` soustrait le contour effectif de salles prioritaires
+  au contour brut de la salle. Le graphe de dépendances est acyclique ;
+- murs supprimés vers l'extérieur : `openWallEdgeKeys` retire les panneaux, colliders et occluders
+  concernés sans supprimer le sol ni le plafond ;
 - connecteurs : portes, escaliers, échelles, passerelles et ascenseurs entre salles/étages.
 
-Lorsqu'une nouvelle salle recouvre une salle existante à une hauteur commune, ses cases sont
-transférées : elles sont ajoutées à la nouvelle empreinte et retirées de l'ancienne. Les arêtes de
-ces empreintes produisent le nouveau contour et le mur commun. Si l'ancienne empreinte est coupée
-en plusieurs îlots non reliés, chaque îlot devient une salle distincte. Des salles empilées sans
-chevauchement vertical conservent en revanche les mêmes coordonnées `x:z`.
+Lorsqu'une nouvelle salle recouvre une salle orthogonale existante à une hauteur commune, ses cases
+sont transférées : elles sont ajoutées à la nouvelle empreinte et retirées de l'ancienne. Si une
+salle déjà présente possède un arc ou une découpe, son contour effectif est prioritaire : la nouvelle
+salle conserve ses cases de broadphase mais soustrait cette géométrie avec `geometryClipRoomIds`.
+Les deux dalles et leurs murs se rejoignent alors exactement sur la courbe, sans intersection
+physique. Si l'ancienne empreinte orthogonale est coupée en plusieurs îlots non reliés, chaque îlot
+devient une salle distincte. Des salles empilées sans chevauchement vertical conservent en revanche
+les mêmes coordonnées `x:z`.
 
 Une salle `heightLevels > 1` existe dans chaque tranche verticale qu'elle traverse et décrit un seul
 volume ouvert. Depuis une tranche haute, son sol de base, ses murs descendants et le contenu situé
@@ -54,10 +65,12 @@ cette emprise restent absentes. Une future trappe doit être portée par un conn
 typiquement une échelle — avec son propre état ouvert/fermé ; elle ne révèle jamais l'étage inférieur
 entier.
 
-Les dalles et les murs rendus ne doivent pas devenir la source de vérité. Les salles sans arc
-peuvent regrouper leurs cases en rectangles de rendu. Les salles arrondies extrudent le contour
-exact, trous compris. Le même contour fournit murs, sélection, colliders et occluders ; les cases
-restent l'autorité des supports praticables et des coûts de déplacement.
+Les dalles et les murs rendus ne doivent pas devenir la source de vérité. Les salles sans contrainte
+géométrique peuvent regrouper leurs cases en rectangles de rendu. Les salles arrondies ou découpées
+extrudent leur contour effectif exact, trous et polygones disjoints compris. Le même contour fournit
+dalles, murs, sélection, colliders, occluders et compartiments. Une case de grille ne suffit donc
+plus à revendiquer tout son carré lorsqu'une courbe la traverse ; le contour effectif départage les
+salles et le centre de case reste l'ancrage discret du graphe de navigation actuel.
 
 Pendant la migration, `surface_data` reste le nom de stockage du document statique. Les changements
 survenus en partie — porte ouverte, ascenseur en déplacement, passerelle détruite, feu, gaz, huile ou
@@ -106,6 +119,11 @@ Tracer une salle dans une salle existante ou contre une salle existante ne doit 
 
 Le générateur fabrique un seul panneau par frontière physique, puis fusionne les contributions des salles. Les dalles déjà couvertes par une salle englobante peuvent être ignorées, mais les murs manquants restent ajoutés pour permettre les sous-salles, cloisons et pièces adjacentes.
 
+Une AABB rectangulaire n'est jamais une preuve de collision avec une salle arrondie. La différence
+polygonale est calculée sur les contours effectifs : si un arc sort de l'ancienne empreinte de cases
+ou coupe une case voisine, toute nouvelle salle intersectée est découpée sur cet arc. Les segments
+communs sont dédupliqués ensuite en un seul mur physique portant les deux identités de salle.
+
 ## Sélection, dessin et modification
 
 L’outil Salle est l’outil de référence.
@@ -124,6 +142,13 @@ L’outil Salle est l’outil de référence.
   **Remettre droit** retire l'arc touché.
 - Les sélections disjointes, les murs partiels, le contour fermé entier et les chaînes séparant des
   voisins différents sont refusés.
+- **Supprimer les murs** accepte un ou plusieurs murs complets. Vers l'extérieur, le volume reste
+  une salle unique mais la frontière devient ouverte. Entre deux salles de même sol et de même
+  hauteur, les deux salles sont fusionnées ; la salle actuellement sélectionnée survit et conserve
+  ses matériaux, réglages et `worldId`, tandis que les connecteurs de la salle absorbée sont
+  remappés. Une porte posée sur la séparation supprimée disparaît avec celle-ci.
+- Supprimer une séparation courbe retire également l'arc qui la portait. Le contour fusionné est
+  recalculé depuis l'union des empreintes au lieu de conserver une frontière invisible.
 
 Les anciens outils Dalle, Mur et Escalier peuvent rester temporairement visibles comme aides de test,
 mais aucune compatibilité de carte ne justifie de dupliquer le nouveau modèle. La conception cible

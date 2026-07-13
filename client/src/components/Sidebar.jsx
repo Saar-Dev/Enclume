@@ -1500,7 +1500,27 @@ export default function Sidebar({
                           >
                             Remettre droit
                           </button>
+                          <button
+                            type="button"
+                            disabled={surfaceToolState.selectedRoomWallCount < 1}
+                            onClick={() => updateSurfaceTool({
+                              roomArcAction: 'delete',
+                              roomArcActionId: Date.now(),
+                              roomArcError: null,
+                            })}
+                            style={{
+                              ...styles.roomToolModeBtn,
+                              color: '#fb7185',
+                              borderColor: 'rgba(251,113,133,0.5)',
+                              ...(surfaceToolState.selectedRoomWallCount < 1 ? styles.undoBtnDisabled : {}),
+                            }}
+                          >
+                            Supprimer les murs
+                          </button>
                         </div>
+                        <small style={{ color: '#8b8ba7' }}>
+                          Entre deux salles, la suppression les fusionne. La salle sélectionnée conserve ses matériaux et ses réglages.
+                        </small>
                         {surfaceToolState.roomArcError && (
                           <small style={{ color: '#fb7185' }}>{surfaceToolState.roomArcError}</small>
                         )}

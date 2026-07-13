@@ -5,6 +5,7 @@ import {
   applyRoomBoundaryArc,
   applyRoomSelection,
   computeSurfaceWaterCells,
+  deleteRoomBoundaryWalls,
   expandRoomsToSurface,
   findRoomAtCell,
   getRoomFootprintCells,
@@ -15,6 +16,10 @@ import {
   roomFootprintRectangles,
   roomsWallSegments,
 } from './surfaceData.js'
+import {
+  roomGeometryArea,
+  roomGeometryIntersectionArea,
+} from '../../../shared/world/roomGeometry.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -108,7 +113,7 @@ test('une nouvelle salle transfere ses cases et redessine le contour de la salle
   )
   const nestedId = 'room:1:1:2:2:0:1'
 
-  assert.equal(result.version, 6)
+  assert.equal(result.version, 7)
   assert.equal(getRoomFootprintCells(result.rooms.outer).length, 12)
   assert.equal(getRoomFootprintCells(result.rooms[nestedId]).length, 4)
   assert.equal(findRoomAtCell(result, { x: 1, z: 1 }, 0).id, nestedId)
@@ -127,7 +132,7 @@ test('un arrondi de salle remplace une chaîne de murs dans le rendu de la salle
   const result = applyRoomBoundaryArc(surface, 'rounded', selected.flatMap(wall => wall.edgeKeys), 90)
 
   assert.equal(result.error, null)
-  assert.equal(result.surfaceData.version, 6)
+  assert.equal(result.surfaceData.version, 7)
   assert.equal(result.surfaceData.rooms.rounded.boundaryArcs.length, 1)
   assert.ok(roomsWallSegments(result.surfaceData.rooms).some(wall => wall.axis === 'segment'))
 })
@@ -175,4 +180,100 @@ test('deux salles superposees sur des etages distincts conservent chacune leurs 
   assert.equal(getRoomFootprintCells(result.rooms.ground).length, 9)
   assert.equal(findRoomAtCell(result, { x: 1, z: 1 }, 0).id, 'ground')
   assert.equal(findRoomAtCell(result, { x: 1, z: 1 }, 1).id, 'room:1:1:1:1:1:1')
+})
+
+test('supprimer un mur exterieur ouvre la salle sans supprimer son sol', () => {
+  const baseRoom = { ...room('roomA', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const north = getRoomBoundaryWallRuns(baseRoom).find(wall => wall.side === 'north')
+  const before = roomsWallSegments({ roomA: baseRoom })
+  const result = deleteRoomBoundaryWalls(
+    emptySurface({ rooms: { roomA: baseRoom } }),
+    'roomA',
+    north.edgeKeys,
+  )
+
+  assert.equal(result.error, null)
+  assert.deepEqual(result.surfaceData.rooms.roomA.openWallEdgeKeys.sort(), [...north.edgeKeys].sort())
+  assert.equal(getRoomFootprintCells(result.surfaceData.rooms.roomA).length, 4)
+  assert.equal(roomsWallSegments(result.surfaceData.rooms).length, before.length - north.edgeKeys.length)
+})
+
+test('supprimer un mur commun fusionne les deux salles et conserve la salle active', () => {
+  const roomA = { ...room('roomA', 0), maxX: 0, maxZ: 0, cells: ['0:0'], floorTopTex: 101 }
+  const roomB = { ...room('roomB', 0), minX: 1, maxX: 1, maxZ: 0, cells: ['1:0'], floorTopTex: 202 }
+  const sharedWall = getRoomBoundaryWallRuns(roomA).find(wall => wall.side === 'east')
+  const result = deleteRoomBoundaryWalls(emptySurface({
+    rooms: { roomA, roomB },
+    connectors: {
+      door: { id: 'door', type: 'door', axis: 'z', x0: 4, x1: 4, z0: 0, z1: 4, y: 0 },
+      ladder: { id: 'ladder', type: 'ladder', roomId: 'roomB', roomIds: ['roomB'], x: 1, z: 0 },
+    },
+  }), 'roomA', sharedWall.edgeKeys)
+
+  assert.equal(result.error, null)
+  assert.deepEqual(Object.keys(result.surfaceData.rooms), ['roomA'])
+  assert.deepEqual(getRoomFootprintCells(result.surfaceData.rooms.roomA), [{ x: 0, z: 0 }, { x: 1, z: 0 }])
+  assert.equal(result.surfaceData.rooms.roomA.floorTopTex, 101)
+  assert.equal(result.surfaceData.connectors.door, undefined)
+  assert.equal(result.surfaceData.connectors.ladder.roomId, 'roomA')
+  assert.deepEqual(result.surfaceData.connectors.ladder.roomIds, ['roomA'])
+  assert.equal(roomsWallSegments(result.surfaceData.rooms).length, 6)
+})
+
+test('une nouvelle salle decoupe son volume sur la salle courbe deja presente', () => {
+  const rounded = { ...room('rounded', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const selected = getRoomBoundaryWallRuns(rounded)
+    .filter(wall => ['west', 'north'].includes(wall.side))
+    .flatMap(wall => wall.edgeKeys)
+  const curved = applyRoomBoundaryArc(
+    emptySurface({ rooms: { rounded } }),
+    'rounded',
+    selected,
+    90,
+  ).surfaceData
+  const result = applyRoomSelection(
+    curved,
+    { start: { x: 0, z: 0 }, end: { x: 1, z: 1 } },
+    { level: 0, roomHeightLevels: 1, wallHeightLevels: 1 },
+    null,
+    [],
+  )
+  const createdId = 'room:0:0:1:1:0:1'
+
+  assert.deepEqual(result.rooms[createdId].geometryClipRoomIds, ['rounded'])
+  assert.equal(roomGeometryIntersectionArea(
+    { id: 'rounded', ...result.rooms.rounded },
+    { id: createdId, ...result.rooms[createdId] },
+    result.rooms,
+  ), 0)
+  assert.ok(roomsWallSegments(result.rooms).some(wall => wall.axis === 'segment' && wall.roomIds.length === 2))
+})
+
+test('supprimer une separation courbe fusionne les volumes sans conserver un arc fantome', () => {
+  const rounded = { ...room('rounded', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const selected = getRoomBoundaryWallRuns(rounded)
+    .filter(wall => ['west', 'north'].includes(wall.side))
+    .flatMap(wall => wall.edgeKeys)
+  const curved = applyRoomBoundaryArc(
+    emptySurface({ rooms: { rounded } }),
+    'rounded',
+    selected,
+    90,
+  ).surfaceData
+  const split = applyRoomSelection(
+    curved,
+    { start: { x: 0, z: 0 }, end: { x: 1, z: 1 } },
+    { level: 0, roomHeightLevels: 1, wallHeightLevels: 1 },
+    null,
+    [],
+  )
+  const merged = deleteRoomBoundaryWalls(split, 'rounded', selected)
+
+  assert.equal(merged.error, null)
+  assert.deepEqual(Object.keys(merged.surfaceData.rooms), ['rounded'])
+  assert.deepEqual(merged.surfaceData.rooms.rounded.boundaryArcs, [])
+  assert.equal(roomGeometryArea(
+    { id: 'rounded', ...merged.surfaceData.rooms.rounded },
+    merged.surfaceData.rooms,
+  ), 4)
 })

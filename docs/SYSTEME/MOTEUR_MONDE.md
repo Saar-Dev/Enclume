@@ -54,7 +54,7 @@ Principes obligatoires :
 
 ### 2.1 Éditeur Surface `[EXISTANT]`
 
-`battlemaps.surface_data` version 6 contient actuellement :
+`battlemaps.surface_data` version 7 contient actuellement :
 
 - `rooms`, `floors`, `walls`, `ceilings`, `stairs`, `connectors` ;
 - les drapeaux `walkable`, `blocksMovement`, `blocksSight` ;
@@ -63,7 +63,7 @@ Principes obligatoires :
 - un calcul client d'étanchéité utilisé pour le rendu de l'eau.
 
 Cet ensemble reste normalisé et rendu côté client par `client/src/lib/surfaceData.js`. À la
-sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 6 et
+sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 7 et
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
@@ -461,21 +461,41 @@ plus la courbe libre comme outil de création de salle.
 
 ### 7.3 Empreinte et propriété d'une salle
 
-Depuis `surface_data` v5, `room.cells` est l'autorité de propriété horizontale. En v6,
-`room.boundaryArcs` peut remplacer des chaînes du contour sans changer la propriété logique des
-cases. `minX`, `maxX`,
-`minZ`, `maxZ` décrivent uniquement l'AABB de broadphase. Une case absente de `cells` n'appartient
-pas à la salle, même si elle se trouve dans cette AABB.
+Depuis `surface_data` v5, `room.cells` décrit l'empreinte orthogonale. En v6,
+`room.boundaryArcs` remplace des chaînes du contour. En v7, une courbe peut partager une case entre
+deux salles : `cells` devient alors la graine de grille et de broadphase, tandis que le contour
+effectif est l'autorité géométrique. `room.geometryClipRoomIds` soustrait les contours prioritaires
+et `room.openWallEdgeKeys` transforme une frontière extérieure en ouverture. `minX`, `maxX`,
+`minZ`, `maxZ` restent uniquement une AABB de broadphase.
 
-Créer une salle transfère les cases recouvertes de toute salle dont le volume vertical intersecte
-le sien. Les murs sont ensuite dérivés des arêtes qui séparent une case possédée d'une case absente :
-l'ancienne salle adopte donc réellement un contour en L, en C ou avec une cour intérieure. Si les
-cases restantes forment plusieurs composantes connexes, elles deviennent plusieurs salles et
-plusieurs compartiments. Deux étages sans intersection verticale ne se retirent aucune case.
+Créer une salle transfère les cases recouvertes des salles orthogonales dont le volume vertical
+intersecte le sien. Face à une salle déjà courbe ou découpée, la salle existante est prioritaire et
+la nouvelle reçoit une différence polygonale : elle épouse la frontière réelle même lorsque l'arc
+dépasse sa boîte de cases. Les murs sont ensuite dérivés du contour effectif. Si les cases restantes
+forment plusieurs composantes connexes, elles deviennent plusieurs salles et plusieurs
+compartiments. Deux étages sans intersection verticale ne se retirent aucune case.
 
-Les dalles droites peuvent être regroupées en rectangles. Dès qu'un arc existe, la dalle et le
-plafond utilisent le contour extrudé exact, trous compris. Les supports et coûts de déplacement
-restent attachés aux cases propriétaires ; murs, collisions et LOS suivent le contour géométrique.
+Les dalles droites peuvent être regroupées en rectangles. Dès qu'un arc ou une découpe existe, la
+dalle et le plafond utilisent le multipolygone extrudé exact, trous compris. Murs, collisions, LOS
+et compartiments suivent ce même contour. Le graphe actuel attache ses supports discrets aux centres
+de cases contenus par la géométrie effective ; une évolution vers des supports polygonaux pourra se
+faire sans changer l'autorité du contour.
+
+### 7.4 Suppression et fusion de murs
+
+La suppression porte sur un mur complet entre deux angles, jamais sur un fragment implicite :
+
+- si une seule salle possède la frontière, ses clés sont ajoutées à `openWallEdgeKeys` ; le sol et
+  le plafond restent présents, mais aucun mur, collider ou occluder n'est compilé ;
+- si deux salles de même base et de même hauteur possèdent la frontière, elles sont fusionnées. La
+  salle active conserve son identité physique, ses matériaux et ses réglages ; la salle absorbée et
+  les portes de la séparation disparaissent, et les autres connecteurs sont remappés ;
+- les arcs touchant la séparation sont retirés avant de reconstruire l'union, afin qu'une ancienne
+  frontière courbe ne survive pas comme limite fantôme ;
+- toute différence géométrique qui référençait la salle absorbée est réécrite vers la survivante.
+
+Le compilateur consomme ces mêmes données pour les canaux mouvement, vision, eau et gaz. Une
+ouverture supprimée dans l'éditeur ne peut donc pas rester bloquante dans le snapshot serveur.
 
 ---
 

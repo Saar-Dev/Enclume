@@ -72,7 +72,7 @@ Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statiq
 
 ## Moteur de monde — Phase 1 ✅
 
-- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v6, UUID physiques
+- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v7, UUID physiques
   stables, adaptation vers le document canonique ;
 - `shared/world/worldCompiler.js` — compilation déterministe des sols, plafonds, murs partagés,
   découpes de porte, escaliers, barrières multi-canaux, colliders, occluders et compartiments ;
@@ -262,6 +262,26 @@ moteur ; sinon elles doivent être supprimées.
 - colliders et occluders de segments inclinés conservent une AABB de broadphase mais utilisent un
   prisme orienté en narrow phase, supprimant les faux positifs de collision et de LOS ;
 - 85 tests monde/combat et le build Vite passent ; ESLint ciblé ne remonte aucune erreur.
+
+---
+
+## Moteur de monde — Phase 11 ✅
+
+- `surface_data` v7 ajoute `openWallEdgeKeys` pour les ouvertures extérieures et
+  `geometryClipRoomIds` pour les différences polygonales acycliques entre salles ;
+- le MJ peut supprimer les murs complets sélectionnés. Une frontière extérieure s'ouvre ; une
+  frontière partagée fusionne les salles de même sol et de même hauteur ;
+- la salle active survit à la fusion avec son identité, ses matériaux et ses réglages. Les portes de
+  la séparation sont supprimées et les autres connecteurs/références sont remappés ;
+- les arcs de séparation supprimés ne survivent pas à la fusion ;
+- une nouvelle salle intersectant une salle courbe existante est découpée sur son multipolygone
+  effectif : dalle, plafond et mur épousent la courbe même si elle dépasse l'ancienne AABB ;
+- `polygon-clipping` fournit les opérations robustes de différence/intersection. Les conversions et
+  règles métier restent centralisées dans `shared/world/roomGeometry.js` ;
+- le renderer gère multipolygones et trous ; le compilateur, les collisions et la LOS réutilisent les
+  mêmes segments de frontière ;
+- 92 tests monde/combat et 12 tests Surface passent ; ESLint ciblé ne remonte aucune erreur et le
+  build Vite est validé.
 
 ---
 

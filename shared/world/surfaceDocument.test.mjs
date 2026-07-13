@@ -153,3 +153,39 @@ test('le générateur d’identité est stable pour un même triplet', () => {
     deterministicWorldId('map-a', 'rooms', 'room:legacy'),
   )
 })
+
+test('la v7 valide les murs ouverts et les dependances geometriques', () => {
+  const surface = surfaceFixture()
+  surface.version = 7
+  surface.rooms['room:legacy'].openWallEdgeKeys = ['edge:0:0|1:0']
+  surface.rooms.adjacent = {
+    id: 'adjacent',
+    minX: 0,
+    maxX: 0,
+    minZ: 0,
+    maxZ: 0,
+    geometryClipRoomIds: ['room:legacy'],
+  }
+
+  assert.equal(validateSurfaceData(surface).valid, true)
+})
+
+test('la v7 refuse une dependance absente ou un cycle de decoupe', () => {
+  const missing = surfaceFixture()
+  missing.version = 7
+  missing.rooms['room:legacy'].geometryClipRoomIds = ['missing']
+  assert.equal(validateSurfaceData(missing).valid, false)
+
+  const cyclic = surfaceFixture()
+  cyclic.version = 7
+  cyclic.rooms.other = {
+    id: 'other',
+    minX: 1,
+    maxX: 1,
+    minZ: 0,
+    maxZ: 0,
+    geometryClipRoomIds: ['room:legacy'],
+  }
+  cyclic.rooms['room:legacy'].geometryClipRoomIds = ['other']
+  assert.equal(validateSurfaceData(cyclic).valid, false)
+})

@@ -15,6 +15,7 @@ import CulledVoxelScene from './CulledVoxelScene.jsx'
 import {
   applyRoomBoundaryArc,
   applyRoomToolUpdate,
+  deleteRoomBoundaryWalls,
   expandRoomsToSurface,
   getFloorTopY,
   getWallRenderBox,
@@ -1509,7 +1510,7 @@ export default function Editor3D({
 
     handleSurfaceDataChange({
       ...currentSurfaceData,
-      version: 6,
+      version: 7,
       connectors: {
         ...(currentSurfaceData.connectors || {}),
         [connectorId]: {
@@ -1550,8 +1551,10 @@ export default function Editor3D({
     const roomId = surfaceTool?.selectedRoomId
     const edgeKeys = surfaceTool?.selectedRoomWallKeys || []
     const result = surfaceTool?.roomArcAction === 'remove'
-      ? { surfaceData: removeRoomBoundaryArcs(surfaceDataRef.current, roomId, edgeKeys), error: null }
-      : applyRoomBoundaryArc(
+      ? { surfaceData: removeRoomBoundaryArcs(surfaceDataRef.current, roomId, edgeKeys), error: null, roomId }
+      : surfaceTool?.roomArcAction === 'delete'
+        ? deleteRoomBoundaryWalls(surfaceDataRef.current, roomId, edgeKeys)
+        : applyRoomBoundaryArc(
           surfaceDataRef.current,
           roomId,
           edgeKeys,
@@ -1572,6 +1575,8 @@ export default function Editor3D({
     onSurfaceToolChange?.({
       ...surfaceTool,
       mode: 'select',
+      selectedRoomId: result.roomId || roomId,
+      selectedRoomIds: [result.roomId || roomId],
       roomWallEdit: true,
       selectedRoomWallKeys: [],
       selectedRoomWallCount: 0,

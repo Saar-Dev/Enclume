@@ -13,7 +13,11 @@ import {
   normalizeElevatorDefinition,
   normalizeElevatorState,
 } from './elevatorRuntime.js'
-import { roomBoundarySegments } from './roomGeometry.js'
+import {
+  roomBoundarySegments,
+  roomEffectiveGridCells,
+  roomGeometryBounds,
+} from './roomGeometry.js'
 
 const EPSILON = 1e-6
 
@@ -95,37 +99,8 @@ function roomCellKey(x, z) {
   return `${Math.trunc(number(x))}:${Math.trunc(number(z))}`
 }
 
-function roomCells(room) {
-  if (Array.isArray(room.cells) && room.cells.length > 0) {
-    const unique = new Map()
-    for (const value of room.cells) {
-      const [rawX, rawZ] = typeof value === 'string'
-        ? value.split(':')
-        : [value?.x, value?.z]
-      const x = Number(rawX)
-      const z = Number(rawZ)
-      if (Number.isInteger(x) && Number.isInteger(z)) unique.set(roomCellKey(x, z), { x, z })
-    }
-    if (unique.size > 0) return [...unique.values()].sort((left, right) => left.z - right.z || left.x - right.x)
-  }
-
-  const area = rawRoomBounds(room)
-  const cells = []
-  for (let z = area.minZ; z <= area.maxZ; z++) {
-    for (let x = area.minX; x <= area.maxX; x++) cells.push({ x, z })
-  }
-  return cells
-}
-
-function roomBounds(room) {
-  const cells = roomCells(room)
-  if (cells.length === 0) return rawRoomBounds(room)
-  return {
-    minX: Math.min(...cells.map(cell => cell.x)),
-    maxX: Math.max(...cells.map(cell => cell.x)),
-    minZ: Math.min(...cells.map(cell => cell.z)),
-    maxZ: Math.max(...cells.map(cell => cell.z)),
-  }
+function roomBounds(room, roomLookup = {}) {
+  return roomGeometryBounds(room, roomLookup) || rawRoomBounds(room)
 }
 
 function roomBaseY(room, storyHeight) {
@@ -143,7 +118,7 @@ function roomFloorEntries(surface, battlemapId) {
   const entries = new Map(Object.entries(surface.floors))
   for (const [roomLegacyId, room] of Object.entries(surface.rooms)) {
     if (room.floorEnabled === false) continue
-    const cells = roomCells(room)
+    const cells = roomEffectiveGridCells({ id: roomLegacyId, ...room }, surface.rooms)
     const y = roomBaseY(room, surface.storyHeight)
     for (const { x, z } of cells) {
         const key = `${x}:${z}:${y}`
@@ -171,7 +146,7 @@ function roomCeilingEntries(surface, battlemapId) {
   const entries = new Map(Object.entries(surface.ceilings))
   for (const [roomLegacyId, room] of Object.entries(surface.rooms)) {
     if (room.ceilingEnabled === false) continue
-    const cells = roomCells(room)
+    const cells = roomEffectiveGridCells({ id: roomLegacyId, ...room }, surface.rooms)
     const baseY = roomBaseY(room, surface.storyHeight)
     const y = baseY + roomHeightLevels(room, surface.storyHeight) * surface.storyHeight
     for (const { x, z } of cells) {
@@ -237,7 +212,7 @@ function roomWallCandidates(surface, battlemapId) {
     const baseY = roomBaseY(room, surface.storyHeight)
     const levels = roomHeightLevels(room, surface.storyHeight)
     const thickness = positive(room.wallThickness, 1) / surface.fine
-    const boundary = roomBoundarySegments(room)
+    const boundary = roomBoundarySegments(room, surface.rooms)
     for (let offset = 0; offset < levels; offset++) {
       const y = baseY + offset * surface.storyHeight
       for (const segment of boundary) {
@@ -755,16 +730,17 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
 }
 
 function addCompartments(surface, spatial) {
-  for (const room of Object.values(surface.rooms)) {
-    const area = roomBounds(room)
-    const cells = roomCells(room)
+  for (const [roomId, room] of Object.entries(surface.rooms)) {
+    const identifiedRoom = { id: roomId, ...room }
+    const area = roomBounds(identifiedRoom, surface.rooms)
+    const cells = roomEffectiveGridCells(identifiedRoom, surface.rooms)
     const baseY = roomBaseY(room, surface.storyHeight)
     const topY = baseY + roomHeightLevels(room, surface.storyHeight) * surface.storyHeight
     spatial.compartments.push({
       id: `compartment:${room.worldId}`,
       sourceId: room.worldId,
       kind: 'room',
-      bounds: bounds(area.minX, baseY, area.minZ, area.maxX + 1, topY, area.maxZ + 1),
+      bounds: bounds(area.minX, baseY, area.minZ, area.maxX, topY, area.maxZ),
       footprint: cells.map(cell => roomCellKey(cell.x, cell.z)),
       sealedByDefault: room.blocksWater !== false,
     })

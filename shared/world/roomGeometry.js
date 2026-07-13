@@ -1,3 +1,5 @@
+import polygonClipping from 'polygon-clipping'
+
 const EPSILON = 1e-7
 
 function clean(value) {
@@ -367,7 +369,7 @@ function contourForLoop(loop, room) {
   return points
 }
 
-export function roomBoundaryContours(room) {
+function rawRoomBoundaryContours(room) {
   return roomBoundaryLoops(room).map(loop => {
     const points = contourForLoop(loop, room)
     return {
@@ -379,8 +381,279 @@ export function roomBoundaryContours(room) {
   })
 }
 
-export function roomBoundarySegments(room) {
-  return roomBoundaryContours(room).flatMap((contour, loopIndex) => (
+function pointInRing(target, ring) {
+  let inside = false
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index, index += 1) {
+    const current = ring[index]
+    const before = ring[previous]
+    const crosses = (current.z > target.z) !== (before.z > target.z)
+      && target.x < ((before.x - current.x) * (target.z - current.z)) / (before.z - current.z) + current.x
+    if (crosses) inside = !inside
+  }
+  return inside
+}
+
+function closedCoordinateRing(points) {
+  if (!Array.isArray(points) || points.length < 3) return null
+  const coordinates = points.map(value => [clean(value.x), clean(value.z)])
+  const first = coordinates[0]
+  const last = coordinates.at(-1)
+  if (first[0] !== last[0] || first[1] !== last[1]) coordinates.push([...first])
+  return coordinates
+}
+
+function contoursToMultiPolygon(contours) {
+  const outers = contours.filter(contour => !contour.isHole && contour.points.length >= 3)
+  const holes = contours.filter(contour => contour.isHole && contour.points.length >= 3)
+  return outers.map(outer => {
+    const outerRing = closedCoordinateRing(outer.points)
+    const containedHoles = holes
+      .filter(hole => pointInRing(hole.points[0], outer.points))
+      .map(hole => closedCoordinateRing(hole.points))
+      .filter(Boolean)
+    return [outerRing, ...containedHoles]
+  }).filter(polygon => polygon[0])
+}
+
+function multiPolygonToContours(multiPolygon) {
+  return (Array.isArray(multiPolygon) ? multiPolygon : []).flatMap((polygon, polygonIndex) => (
+    (Array.isArray(polygon) ? polygon : []).map((ring, ringIndex) => {
+      const points = (Array.isArray(ring) ? ring : [])
+        .slice(0, -1)
+        .map(value => point(value?.[0], value?.[1]))
+      return {
+        id: `polygon:${polygonIndex}:ring:${ringIndex}`,
+        polygonIndex,
+        ringIndex,
+        points,
+        area: signedArea(points),
+        isHole: ringIndex > 0,
+      }
+    }).filter(contour => contour.points.length >= 3)
+  ))
+}
+
+export function roomBoundaryMultiPolygon(room, roomLookup = {}, visitedRoomIds = new Set()) {
+  const subject = contoursToMultiPolygon(rawRoomBoundaryContours(room))
+  if (subject.length === 0) return []
+  const currentId = String(room?.id || '')
+  const visited = new Set(visitedRoomIds)
+  if (currentId) visited.add(currentId)
+  const clips = []
+  for (const clipId of [...new Set(room?.geometryClipRoomIds || [])]) {
+    if (!clipId || visited.has(String(clipId))) continue
+    const clipRoom = roomLookup?.[clipId]
+    if (!clipRoom) continue
+    const clipGeometry = roomBoundaryMultiPolygon(
+      { id: clipId, ...clipRoom },
+      roomLookup,
+      visited,
+    )
+    if (clipGeometry.length > 0) clips.push(clipGeometry)
+  }
+  return clips.length > 0 ? polygonClipping.difference(subject, ...clips) : subject
+}
+
+export function roomBoundaryContours(room, roomLookup = {}) {
+  return multiPolygonToContours(roomBoundaryMultiPolygon(room, roomLookup))
+}
+
+function multiPolygonArea(multiPolygon) {
+  return multiPolygonToContours(multiPolygon).reduce((sum, contour) => (
+    sum + (contour.isHole ? -Math.abs(contour.area) : Math.abs(contour.area))
+  ), 0)
+}
+
+export function roomGeometryArea(room, roomLookup = {}) {
+  return clean(multiPolygonArea(roomBoundaryMultiPolygon(room, roomLookup)))
+}
+
+export function roomGeometryIntersectionArea(leftRoom, rightRoom, roomLookup = {}) {
+  const left = roomBoundaryMultiPolygon(leftRoom, roomLookup)
+  const right = roomBoundaryMultiPolygon(rightRoom, roomLookup)
+  if (left.length === 0 || right.length === 0) return 0
+  return clean(multiPolygonArea(polygonClipping.intersection(left, right)))
+}
+
+function roomVerticalSpan(room, storyHeight) {
+  const baseY = Number.isFinite(Number(room?.y))
+    ? Number(room.y)
+    : (Number(room?.level) || 0) * storyHeight
+  const levels = Math.max(1, Number.parseInt(room?.heightLevels, 10)
+    || Math.round((Number(room?.height) || storyHeight) / storyHeight)
+    || 1)
+  return { baseY, topY: baseY + levels * storyHeight }
+}
+
+function roomsOverlapVertically(left, right, storyHeight) {
+  const a = roomVerticalSpan(left, storyHeight)
+  const b = roomVerticalSpan(right, storyHeight)
+  return a.topY > b.baseY + EPSILON && b.topY > a.baseY + EPSILON
+}
+
+export function migrateRoomGeometryClips(inputRooms, storyHeight = 2.5) {
+  let rooms = { ...(inputRooms || {}) }
+  const roomIds = Object.keys(rooms)
+  for (let ownerIndex = 0; ownerIndex < roomIds.length; ownerIndex += 1) {
+    const ownerId = roomIds[ownerIndex]
+    const owner = rooms[ownerId]
+    if (!Array.isArray(owner?.boundaryArcs) || owner.boundaryArcs.length === 0) continue
+    for (let targetIndex = ownerIndex + 1; targetIndex < roomIds.length; targetIndex += 1) {
+      const targetId = roomIds[targetIndex]
+      const target = rooms[targetId]
+      if (!roomsOverlapVertically(owner, target, storyHeight)) continue
+      if ((owner.geometryClipRoomIds || []).includes(targetId)) continue
+      if (roomGeometryIntersectionArea(
+        { id: ownerId, ...owner },
+        { id: targetId, ...target },
+        rooms,
+      ) <= EPSILON) continue
+      rooms = {
+        ...rooms,
+        [targetId]: {
+          ...target,
+          geometryClipRoomIds: [...new Set([...(target.geometryClipRoomIds || []), ownerId])],
+        },
+      }
+    }
+  }
+  return rooms
+}
+
+export function roomGeometryContainsPoint(room, target, roomLookup = {}) {
+  const contours = roomBoundaryContours(room, roomLookup)
+  const polygons = new Map()
+  for (const contour of contours) {
+    if (!polygons.has(contour.polygonIndex)) polygons.set(contour.polygonIndex, { outer: null, holes: [] })
+    const polygon = polygons.get(contour.polygonIndex)
+    if (contour.isHole) polygon.holes.push(contour.points)
+    else polygon.outer = contour.points
+  }
+  return [...polygons.values()].some(polygon => (
+    polygon.outer
+    && pointInRing(target, polygon.outer)
+    && !polygon.holes.some(hole => pointInRing(target, hole))
+  ))
+}
+
+export function roomGeometryBounds(room, roomLookup = {}) {
+  const points = roomBoundaryContours(room, roomLookup).flatMap(contour => contour.points)
+  if (points.length === 0) return null
+  return {
+    minX: Math.min(...points.map(value => value.x)),
+    maxX: Math.max(...points.map(value => value.x)),
+    minZ: Math.min(...points.map(value => value.z)),
+    maxZ: Math.max(...points.map(value => value.z)),
+  }
+}
+
+export function roomEffectiveGridCells(room, roomLookup = {}) {
+  const bounds = roomGeometryBounds(room, roomLookup)
+  if (!bounds) return []
+  const cells = []
+  for (let z = Math.floor(bounds.minZ); z < Math.ceil(bounds.maxZ); z += 1) {
+    for (let x = Math.floor(bounds.minX); x < Math.ceil(bounds.maxX); x += 1) {
+      if (roomGeometryContainsPoint(room, { x: x + 0.5, z: z + 0.5 }, roomLookup)) {
+        cells.push({ x, z })
+      }
+    }
+  }
+  return cells
+}
+
+function segmentCoveredByStraightEdges(segment, edges) {
+  if (!['x', 'z'].includes(segment.axis)) return false
+  const line = segment.axis === 'x' ? segment.z0 : segment.x0
+  const start = segment.axis === 'x' ? Math.min(segment.x0, segment.x1) : Math.min(segment.z0, segment.z1)
+  const end = segment.axis === 'x' ? Math.max(segment.x0, segment.x1) : Math.max(segment.z0, segment.z1)
+  const intervals = edges
+    .filter(edge => edge.axis === segment.axis)
+    .filter(edge => Math.abs((edge.axis === 'x' ? edge.from.z : edge.from.x) - line) <= EPSILON)
+    .map(edge => edge.axis === 'x'
+      ? [Math.min(edge.from.x, edge.to.x), Math.max(edge.from.x, edge.to.x)]
+      : [Math.min(edge.from.z, edge.to.z), Math.max(edge.from.z, edge.to.z)])
+    .sort((left, right) => left[0] - right[0])
+  let coveredUntil = start
+  for (const interval of intervals) {
+    if (interval[1] < coveredUntil - EPSILON) continue
+    if (interval[0] > coveredUntil + EPSILON) return false
+    coveredUntil = Math.max(coveredUntil, interval[1])
+    if (coveredUntil >= end - EPSILON) return true
+  }
+  return false
+}
+
+function openArcSegmentKeys(room, openKeys) {
+  const keys = new Set()
+  for (const arc of Array.isArray(room?.boundaryArcs) ? room.boundaryArcs : []) {
+    if (!(arc?.edgeKeys || []).some(key => openKeys.has(key))) continue
+    const points = sampleRoomBoundaryArc(arc)
+    for (let index = 0; index < points.length - 1; index += 1) {
+      keys.add(roomBoundaryEdgeKey(points[index], points[index + 1]))
+    }
+  }
+  return keys
+}
+
+function contourSegmentKeys(room, roomLookup) {
+  const keys = new Set()
+  for (const contour of roomBoundaryContours(room, roomLookup)) {
+    for (let index = 0; index < contour.points.length; index += 1) {
+      keys.add(roomBoundaryEdgeKey(
+        contour.points[index],
+        contour.points[(index + 1) % contour.points.length],
+      ))
+    }
+  }
+  return keys
+}
+
+export function roomHasEffectiveBoundaryEdge(room, edgeKey, roomLookup = {}) {
+  const directArc = (room?.boundaryArcs || []).find(arc => (arc.edgeKeys || []).includes(edgeKey))
+  if (directArc) return true
+
+  const baseEdge = roomBoundaryEdges(room).find(edge => edge.key === edgeKey)
+  if (baseEdge) {
+    const segment = {
+      axis: baseEdge.axis,
+      x0: baseEdge.from.x,
+      z0: baseEdge.from.z,
+      x1: baseEdge.to.x,
+      z1: baseEdge.to.z,
+    }
+    const contourEdges = roomBoundaryContours(room, roomLookup).flatMap(contour => (
+      contour.points.map((from, index) => {
+        const to = contour.points[(index + 1) % contour.points.length]
+        return {
+          axis: Math.abs(to.z - from.z) <= EPSILON ? 'x' : Math.abs(to.x - from.x) <= EPSILON ? 'z' : 'segment',
+          from,
+          to,
+        }
+      })
+    ))
+    if (segmentCoveredByStraightEdges(segment, contourEdges)) return true
+  }
+
+  const ownContourKeys = contourSegmentKeys(room, roomLookup)
+  for (const clipId of room?.geometryClipRoomIds || []) {
+    const clipRoom = roomLookup?.[clipId]
+    if (!clipRoom) continue
+    for (const arc of clipRoom.boundaryArcs || []) {
+      if (!(arc.edgeKeys || []).includes(edgeKey)) continue
+      const points = sampleRoomBoundaryArc(arc)
+      for (let index = 0; index < points.length - 1; index += 1) {
+        if (ownContourKeys.has(roomBoundaryEdgeKey(points[index], points[index + 1]))) return true
+      }
+    }
+  }
+  return false
+}
+
+export function roomBoundarySegments(room, roomLookup = {}) {
+  const openKeys = new Set(Array.isArray(room?.openWallEdgeKeys) ? room.openWallEdgeKeys : [])
+  const openEdges = roomBoundaryEdges(room).filter(edge => openKeys.has(edge.key))
+  const openArcKeys = openArcSegmentKeys(room, openKeys)
+  return roomBoundaryContours(room, roomLookup).flatMap((contour, loopIndex) => (
     contour.points.map((from, index) => {
       const to = contour.points[(index + 1) % contour.points.length]
       const dx = to.x - from.x
@@ -396,5 +669,11 @@ export function roomBoundarySegments(room) {
         z1: to.z,
       }
     })
+  )).filter(segment => (
+    !openArcKeys.has(roomBoundaryEdgeKey(
+      point(segment.x0, segment.z0),
+      point(segment.x1, segment.z1),
+    ))
+    && !segmentCoveredByStraightEdges(segment, openEdges)
   ))
 }
