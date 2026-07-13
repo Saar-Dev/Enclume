@@ -1,6 +1,6 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-13 — murs courbes canoniques, portes tangentes et accessoires plaqués sur l'arc.
+> Dernière mise à jour : 2026-07-13 — sélection directe et sobre des murs canoniques.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -145,10 +145,16 @@ L’outil Salle est l’outil de référence.
 - Après création d’une salle, l’éditeur reste en dessin de salle pour permettre d’enchaîner plusieurs pièces.
 - Le retour au mode sélection se fait uniquement par clic explicite sur “Sélection”.
 - Modifier les options du panneau applique les changements à la salle sélectionnée : hauteur en étages, épaisseurs, blocage, textures ou matériaux procéduraux.
-- **Arrondir des murs** regroupe les arêtes colinéaires : tout le côté compris entre deux angles se
-  sélectionne en un clic.
+- La sélection d'une salle affiche uniquement une teinte légère sur son sol courant et un trait sur
+  son contour effectif. Les murs, plafond et autres composants ne reçoivent pas chacun leur propre
+  surbrillance.
+- Une fois la salle sélectionnée, ses murs sont cliquables directement, sans activer un sous-mode.
+  Un mur reste sans surimpression au repos, devient turquoise au survol puis reçoit un unique trait
+  orange lorsqu'il est sélectionné.
+- Les arêtes colinéaires forment un mur droit sélectionnable. Un arc canonique entier forme également
+  un seul mur sélectionnable, quelle que soit sa tessellation de rendu.
 - Deux murs voisins ou plus forment une chaîne ouverte. Une réglette de 5° à 175° affiche l'arc en
-  direct ; **Inverser le côté** change son sens, **Appliquer l'arrondi** modifie le contour et
+  direct ; **Inverser la courbure** change son sens, **Appliquer l'arrondi** modifie le contour et
   **Remettre droit** retire l'arc touché.
 - Les sélections disjointes, les murs partiels, le contour fermé entier et les chaînes séparant des
   voisins différents sont refusés.
@@ -159,6 +165,7 @@ L’outil Salle est l’outil de référence.
   remappés. Une porte posée sur la séparation supprimée disparaît avec celle-ci.
 - Supprimer une séparation courbe retire également l'arc qui la portait. Le contour fusionné est
   recalculé depuis l'union des empreintes au lieu de conserver une frontière invisible.
+- Un mur déjà ouvert ne conserve aucune zone de sélection invisible.
 
 Les anciens outils Dalle, Mur et Escalier peuvent rester temporairement visibles comme aides de test,
 mais aucune compatibilité de carte ne justifie de dupliquer le nouveau modèle. La conception cible

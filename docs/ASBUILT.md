@@ -301,6 +301,12 @@ moteur ; sinon elles doivent être supprimées.
 - le cadre et les vantaux restent tangents et rigides. Les groupes de boîtiers/claviers avant et
   arrière sont, eux, replacés sur le cercle au niveau de leur déport latéral et orientés selon sa
   tangente locale ; le boîtier intérieur n'est plus absorbé par la face concave du mur ;
+- la sélection de salle a été ramenée à une légère teinte de sol et un contour unique. Les murs sont
+  directement cliquables sans bouton d'activation, invisibles au repos, turquoise au survol et
+  soulignés en orange lorsqu'ils sont choisis ;
+- `roomSelectableWallRuns(...)` regroupe un arc canonique en une seule cible logique et retire les
+  frontières déjà ouvertes des volumes cliquables. Les actions d'arrondi, de remise à plat et de
+  suppression sont exposées ensemble dans **Murs de la salle** ;
 - l'ouverture partage l'arc canonique en portions avant/après et linteau, même si elle traverse
   plusieurs subdivisions de rendu ;
 - la sauvegarde Surface retourne désormais réellement toutes les colonnes de révision. Après un
@@ -308,7 +314,7 @@ moteur ; sinon elles doivent être supprimées.
   une modification concurrente est signalée et conservée sans écrasement ;
 - un test reproduit le round-trip salle carrée → mur arrondi → sortie/rechargement, y compris le cas
   d'une réponse précédente ayant laissé la révision locale obsolète ;
-- 98 tests monde/combat et 20 tests Surface/persistance/géométrie passent ; ESLint ciblé ne remonte aucune erreur et le
+- 100 tests monde/combat et 20 tests Surface/persistance/géométrie passent ; ESLint ciblé ne remonte aucune erreur et le
   build Vite est validé.
 
 ---

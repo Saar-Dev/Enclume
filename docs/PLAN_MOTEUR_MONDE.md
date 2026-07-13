@@ -585,6 +585,17 @@ Phase 7.
   comme adaptateur interne du narrow phase ;
 - un mur courbe commun reste un unique obstacle dédupliqué pour les deux salles.
 
+### Sélection dans l'éditeur
+
+- une salle sélectionnée reçoit une teinte de sol légère et un seul contour, sans recouvrir en jaune
+  chacun de ses murs, son plafond et ses dalles ;
+- ses murs deviennent immédiatement cliquables en mode sélection. Les volumes de hit restent
+  invisibles au repos ; seul le mur survolé ou sélectionné porte un trait ;
+- `roomSelectableWallRuns(...)` expose la même unité logique à l'interface : un côté droit continu
+  vaut un mur et un arc canonique complet vaut un mur, indépendamment de ses subdivisions ;
+- les commandes d'arrondi, de remise à plat et de suppression restent visibles dès la sélection de
+  la salle. Une frontière déjà ouverte est absente des cibles de clic.
+
 ### Validation
 
 - porte sur arc : point sur le rayon, tangente et normale unitaires orthogonales, rotation stable ;
@@ -592,7 +603,7 @@ Phase 7.
 - collision et LOS sur `wall-arc` sans faux obstacle hors de la courbe ;
 - sauvegarde round-trip d'une salle arrondie, récupération sûre d'une révision locale obsolète et
   refus d'écraser une vraie modification concurrente ;
-- 98 tests monde/combat et 20 tests client Surface/persistance/géométrie passent ; ESLint ciblé ne remonte aucune erreur
+- 100 tests monde/combat et 20 tests client Surface/persistance/géométrie passent ; ESLint ciblé ne remonte aucune erreur
   et le build Vite est validé.
 
 ---

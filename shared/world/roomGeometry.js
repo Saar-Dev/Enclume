@@ -197,6 +197,35 @@ export function roomBoundaryWallRuns(room) {
   })
 }
 
+export function roomSelectableWallRuns(room) {
+  const openKeys = new Set((room?.openWallEdgeKeys || []).map(String))
+  const coveredByArc = new Set()
+  const arcs = []
+
+  for (const arc of Array.isArray(room?.boundaryArcs) ? room.boundaryArcs : []) {
+    const edgeKeys = [...new Set((arc?.edgeKeys || []).map(String))]
+    const geometry = describeRoomBoundaryArc(arc)
+    if (!geometry || edgeKeys.length === 0) continue
+    for (const key of edgeKeys) coveredByArc.add(key)
+    if (edgeKeys.every(key => openKeys.has(key))) continue
+    arcs.push({
+      id: `selectable-arc:${arc.id}`,
+      axis: 'arc',
+      from: geometry.start,
+      to: geometry.end,
+      edgeKeys,
+      points: sampleRoomBoundaryArc(arc),
+      arcId: arc.id,
+    })
+  }
+
+  const straight = roomBoundaryWallRuns(room).filter(run => (
+    !run.edgeKeys.some(key => coveredByArc.has(key))
+    && !run.edgeKeys.every(key => openKeys.has(key))
+  ))
+  return [...straight, ...arcs]
+}
+
 function locateSelectedRun(loop, selectedKeys) {
   const selected = new Set(selectedKeys)
   const count = loop.edges.filter(edge => selected.has(edge.key)).length

@@ -9,6 +9,7 @@ import {
   roomBoundaryPaths,
   roomBoundarySegments,
   roomBoundaryWallRuns,
+  roomSelectableWallRuns,
   roomGeometryArea,
   roomGeometryIntersectionArea,
   sampleRoomBoundaryArc,
@@ -96,6 +97,26 @@ test('deux murs adjacents deviennent un arc circulaire à 90 degrés', () => {
   assert.deepEqual(points.at(-1), result.arc.end)
   assert.ok(points.length > 4)
   assert.ok(points.slice(1, -1).some(point => point.x > 0 && point.z > 0))
+})
+
+test('un arc canonique devient un seul mur sélectionnable à la place de ses anciens côtés', () => {
+  const selected = roomBoundaryWallRuns(square).filter(wall => ['west', 'north'].includes(wall.side))
+  const selectedKeys = selected.flatMap(wall => wall.edgeKeys)
+  const { arc } = makeRoomBoundaryArc(square, selectedKeys, 90)
+  const walls = roomSelectableWallRuns({ ...square, boundaryArcs: [arc] })
+  const curvedWall = walls.find(wall => wall.axis === 'arc')
+
+  assert.equal(walls.length, 3)
+  assert.deepEqual(curvedWall.edgeKeys.sort(), selectedKeys.sort())
+  assert.ok(curvedWall.points.length > 4)
+})
+
+test('un mur ouvert ne conserve pas de zone de sélection invisible', () => {
+  const north = roomBoundaryWallRuns(square).find(wall => wall.side === 'north')
+  const walls = roomSelectableWallRuns({ ...square, openWallEdgeKeys: north.edgeKeys })
+
+  assert.equal(walls.length, 3)
+  assert.equal(walls.some(wall => wall.side === 'north'), false)
 })
 
 test('une sélection disjointe est refusée', () => {

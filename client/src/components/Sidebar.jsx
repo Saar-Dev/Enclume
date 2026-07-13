@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
@@ -511,7 +511,10 @@ export default function Sidebar({
   const { user, setUser } = useAuthStore()
   const { characters, members, isGm, addCharacter } = useCharacterStore()
   const { messagesByCampaign, activeCampaignId, onlineUsers } = useSessionStore()
-  const messages = messagesByCampaign[activeCampaignId] || []
+  const messages = useMemo(
+    () => messagesByCampaign[activeCampaignId] || [],
+    [activeCampaignId, messagesByCampaign],
+  )
   const { blueprints, refreshBuiltinModels } = useEntityStore()
   const { phase, currentTurn } = useCombatStore()
   const surfaceToolState = {
@@ -1412,32 +1415,18 @@ export default function Sidebar({
                 )}
                 {surfaceToolState.selectedRoomId && (
                   <>
-                    <div style={styles.roomToolSectionTitle}>Contour de la salle</div>
-                    <div style={styles.roomToolModes}>
-                      <button
-                        type="button"
-                        onClick={() => updateSurfaceTool({
-                          mode: 'select',
-                          roomWallEdit: !surfaceToolState.roomWallEdit,
-                          selectedRoomWallKeys: [],
-                          selectedRoomWallCount: 0,
-                          roomArcError: null,
-                        })}
-                        style={{
-                          ...styles.roomToolModeBtn,
-                          ...(surfaceToolState.roomWallEdit ? styles.roomToolModeBtnActive : {}),
-                        }}
-                      >
-                        Arrondir des murs
-                      </button>
-                    </div>
-                    {surfaceToolState.roomWallEdit && (
-                      <div style={styles.connectorPicker}>
-                        <small style={{ color: '#8b8ba7' }}>
-                          Clique au moins deux murs voisins du même contour. Ils deviendront un seul arc continu.
-                        </small>
-                        <div style={styles.roomToolSelection}>
-                          <span>{surfaceToolState.selectedRoomWallCount || 0} mur(s) sélectionné(s)</span>
+                    <div style={styles.roomToolSectionTitle}>Murs de la salle</div>
+                    <div style={styles.connectorPicker}>
+                      <small style={{ color: '#8b8ba7' }}>
+                        Clique directement sur un mur. Il apparaît en turquoise au survol et en orange une fois sélectionné.
+                      </small>
+                      <div style={styles.roomToolSelection}>
+                        <span>
+                          {surfaceToolState.selectedRoomWallCount > 0
+                            ? `${surfaceToolState.selectedRoomWallCount} mur${surfaceToolState.selectedRoomWallCount > 1 ? 's' : ''} sélectionné${surfaceToolState.selectedRoomWallCount > 1 ? 's' : ''}`
+                            : 'Aucun mur sélectionné'}
+                        </span>
+                        {(surfaceToolState.selectedRoomWallKeys || []).length > 0 && (
                           <button
                             type="button"
                             onClick={() => updateSurfaceTool({
@@ -1447,9 +1436,11 @@ export default function Sidebar({
                             })}
                             style={styles.roomToolSmallBtn}
                           >
-                            Effacer
+                            Désélectionner
                           </button>
-                        </div>
+                        )}
+                      </div>
+                      {surfaceToolState.selectedRoomWallCount >= 2 && (
                         <label style={styles.roomToolLabel}>
                           <span>Angle : {Number(surfaceToolState.roomArcAngle || 90).toFixed(0)}°</span>
                           <input
@@ -1462,14 +1453,17 @@ export default function Sidebar({
                             style={{ width: '100%' }}
                           />
                         </label>
-                        <div style={styles.roomToolModes}>
+                      )}
+                      <div style={styles.roomToolModes}>
+                        {surfaceToolState.selectedRoomWallCount >= 2 && (
                           <button
                             type="button"
                             onClick={() => updateSurfaceTool({ roomArcSide: Number(surfaceToolState.roomArcSide) < 0 ? 1 : -1, roomArcError: null })}
                             style={styles.roomToolModeBtn}
                           >
-                            Inverser le côté
+                            Inverser la courbure
                           </button>
+                        )}
                           <button
                             type="button"
                             disabled={surfaceToolState.selectedRoomWallCount < 2}
@@ -1487,7 +1481,7 @@ export default function Sidebar({
                           </button>
                           <button
                             type="button"
-                            disabled={surfaceToolState.selectedRoomWallKeys.length === 0}
+                            disabled={(surfaceToolState.selectedRoomWallKeys || []).length === 0}
                             onClick={() => updateSurfaceTool({
                               roomArcAction: 'remove',
                               roomArcActionId: Date.now(),
@@ -1495,7 +1489,7 @@ export default function Sidebar({
                             })}
                             style={{
                               ...styles.roomToolModeBtn,
-                              ...(surfaceToolState.selectedRoomWallKeys.length === 0 ? styles.undoBtnDisabled : {}),
+                              ...((surfaceToolState.selectedRoomWallKeys || []).length === 0 ? styles.undoBtnDisabled : {}),
                             }}
                           >
                             Remettre droit
@@ -1515,17 +1509,16 @@ export default function Sidebar({
                               ...(surfaceToolState.selectedRoomWallCount < 1 ? styles.undoBtnDisabled : {}),
                             }}
                           >
-                            Supprimer les murs
+                            {surfaceToolState.selectedRoomWallCount > 1 ? 'Supprimer les murs' : 'Supprimer le mur'}
                           </button>
-                        </div>
-                        <small style={{ color: '#8b8ba7' }}>
-                          Entre deux salles, la suppression les fusionne. La salle sélectionnée conserve ses matériaux et ses réglages.
-                        </small>
-                        {surfaceToolState.roomArcError && (
-                          <small style={{ color: '#fb7185' }}>{surfaceToolState.roomArcError}</small>
-                        )}
                       </div>
-                    )}
+                      <small style={{ color: '#8b8ba7' }}>
+                        Supprimer un mur extérieur ouvre la salle. Entre deux salles, la suppression les fusionne et conserve les réglages de la salle sélectionnée.
+                      </small>
+                      {surfaceToolState.roomArcError && (
+                        <small style={{ color: '#fb7185' }}>{surfaceToolState.roomArcError}</small>
+                      )}
+                    </div>
                     <div style={styles.roomToolSectionTitle}>{t('surfaceEditor.connectors')}</div>
                     <div style={styles.roomToolModes}>
                       <button
