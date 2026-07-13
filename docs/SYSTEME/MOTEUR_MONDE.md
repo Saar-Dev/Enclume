@@ -1,8 +1,8 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-13 — Phase 3, visibilité et matériaux multi-canaux.
+> Dernière mise à jour : 2026-07-13 — Phase 4, structures verticales et passerelles.
 >
-> Statut : **architecture cible validée ; Phases 0 à 3 implémentées, phases 4 à 7 non implémentées**. Les sections marquées
+> Statut : **architecture cible validée ; Phases 0 à 4 implémentées, phases 5 à 7 non implémentées**. Les sections marquées
 > `[EXISTANT]` décrivent le code livré. Les sections `[CIBLE]` sont le contrat à respecter pendant
 > la reconstruction.
 >
@@ -141,7 +141,7 @@ Le dossier `shared/world/` fournit désormais :
 - `index.js` : point d'entrée commun client/serveur ;
 - `spatialIndex.js` et `navigation.js` : index statique, occupation dynamique, graphe 3D pondéré et
   planification autoritaire ;
-- quarante-huit tests Node, dont Jon, les portes, les occupants multiples, les budgets partiels, le
+- cinquante tests Node, dont Jon, les portes, les occupants multiples, les budgets partiels, le
   placement sur support, les canaux de matériaux, la couverture et les occluders dynamiques.
 
 La route Surface compile le document avant de le valider en base et
@@ -342,7 +342,7 @@ type téléportation.
 
 ---
 
-## 6. Connecteurs verticaux `[CIBLE]`
+## 6. Connecteurs verticaux `[EXISTANT, SAUF ASCENSEUR MOBILE]`
 
 Un connecteur possède :
 
@@ -383,6 +383,23 @@ Plateforme ou cabine mobile avec :
 
 L'ascenseur n'est pas une téléportation entre connecteurs. Sa définition est statique ; son automate
 et sa cabine appartiennent à l'état runtime.
+
+### Implémentation Phase 4
+
+- `surface_data.stairs` et les connecteurs `ladder` deviennent des traversées explicites du
+  snapshot avec leurs points d'entrée/sortie physiques et leur multiplicateur MJ ;
+- les ancrages d'une échelle sont espacés par défaut de 0,5 unité monde et le graphe respecte cette
+  granularité ;
+- une position déjà située sur une traversée crée un nœud transitoire au point exact sauvegardé,
+  puis scinde l'arête : reprendre au tour suivant ne donne aucun déplacement gratuit ;
+- `bridge` est une dalle de support structurelle. Son UUID est l'identité utilisée par l'état
+  runtime pour la désactiver ou la marquer détruite sans réécrire sa définition ;
+- l'éditeur construit la physique depuis des outils dédiés. Le rendu générique d'une échelle ou un
+  futur GLB n'est qu'une apparence ;
+- les labels du chemin présentent `distance × facteur = coût` pour les segments pondérés.
+
+Un ascenseur compilé demeure volontairement non navigable avec
+`requiresRuntimeController: true` jusqu'à la Phase 6.
 
 ---
 

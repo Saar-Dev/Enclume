@@ -180,10 +180,53 @@ test('un escalier compile une traversée fractionnable entre deux hauteurs', () 
     }),
   })
   const traversal = snapshot.spatial.traversals.find(item => item.kind === 'stairs')
-  assert.deepEqual(traversal.from, { x: 0, y: 0, z: 0.5 })
-  assert.deepEqual(traversal.to, { x: 2, y: 2.5, z: 0.5 })
+  assert.deepEqual(traversal.from, { x: 0, y: 0.125, z: 0.5 })
+  assert.deepEqual(traversal.to, { x: 2, y: 2.625, z: 0.5 })
   assert.equal(traversal.allowPartial, true)
   assert.equal(traversal.movementMultiplier, 1.5)
+})
+
+test('une échelle compile une traversée climb fractionnable avec des ancrages fins', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-ladder',
+    surfaceData: emptySurface({
+      connectors: {
+        ladderA: {
+          id: 'ladderA', type: 'ladder', x: 2, z: 3,
+          fromY: 0.125, toY: 5.125, anchorSpacing: 0.5,
+          movementMultiplier: 2,
+        },
+      },
+    }),
+  })
+  const traversal = snapshot.spatial.traversals.find(item => item.kind === 'ladder')
+  assert.deepEqual(traversal.from, { x: 2.5, y: 0.125, z: 3.5 })
+  assert.deepEqual(traversal.to, { x: 2.5, y: 5.125, z: 3.5 })
+  assert.equal(traversal.mode, 'climb')
+  assert.equal(traversal.allowPartial, true)
+  assert.equal(traversal.anchorSpacing, 0.5)
+  assert.equal(traversal.movementMultiplier, 2)
+})
+
+test('une passerelle détruite ne compile plus son support', () => {
+  const surfaceData = emptySurface({
+    floors: {
+      '0:0:2.5': {
+        id: 'bridgeA', kind: 'bridge', runtimeSupport: true,
+        x: 0, z: 0, y: 2.5, thickness: 0.25, walkable: true,
+      },
+    },
+  })
+  const active = compileSurfaceWorld({ battlemapId: 'map-bridge', surfaceData })
+  const bridge = active.spatial.supports.find(item => item.kind === 'bridge')
+  assert.ok(bridge)
+  const destroyed = compileSurfaceWorld({
+    battlemapId: 'map-bridge',
+    surfaceData,
+    runtimeState: { featureStates: { [bridge.sourceId]: { state: 'destroyed' } } },
+  })
+  assert.equal(destroyed.spatial.supports.some(item => item.sourceId === bridge.sourceId), false)
+  assert.equal(destroyed.spatial.colliders.some(item => item.sourceId === bridge.sourceId), false)
 })
 
 test('un ascenseur n’est pas transformé en téléportation avant son contrôleur runtime', () => {

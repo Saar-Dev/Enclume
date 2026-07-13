@@ -536,6 +536,11 @@ export default function Sidebar({
     wallThickness: 1,
     wallHeight: 2.5,
     stairRise: 2.5,
+    movementMultiplier: 1,
+    ladderAxis: 'x',
+    ladderWidth: 0.7,
+    ladderDepth: 0.12,
+    ladderAnchorSpacing: 0.5,
     surfaceBlocking: 'solid',
     floorPackId: null,
     stairPackId: null,
@@ -623,14 +628,28 @@ export default function Sidebar({
         || text.includes('lift')
     })
     .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+  const ladderConnectorBlueprints = connectorBlueprints
+    .filter(blueprint => {
+      const text = normalizedBlueprintText(blueprint)
+      return text.includes('echelle')
+        || text.includes('ladder')
+    })
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
   const genericElevatorChoice = {
     id: '__generic_elevator__',
     label: t('surfaceEditor.genericElevator'),
     category: 'surface_connectors',
   }
+  const genericLadderChoice = {
+    id: '__generic_ladder__',
+    label: 'Échelle structurelle',
+    category: 'surface_connectors',
+  }
   const connectorChoices = surfaceToolState.connectorType === 'door'
     ? doorConnectorBlueprints
-    : [...elevatorConnectorBlueprints, genericElevatorChoice]
+    : surfaceToolState.connectorType === 'ladder'
+      ? [...ladderConnectorBlueprints, genericLadderChoice]
+      : [...elevatorConnectorBlueprints, genericElevatorChoice]
   const selectedConnectorChoice = connectorChoices.find(choice => String(choice.id) === String(surfaceToolState.connectorBlueprintId))
     || connectorChoices[0]
     || null
@@ -1042,6 +1061,41 @@ export default function Sidebar({
                   </button>
                   <button
                     type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'stair' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'stair' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    Escalier
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'bridge' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'bridge' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    Passerelle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({
+                      mode: 'connector',
+                      connectorType: 'ladder',
+                      connectorToLevel: Number(surfaceToolState.level || 0) + 1,
+                      ...connectorModelPatch(surfaceToolState.connectorType === 'ladder' ? selectedConnectorChoice : (ladderConnectorBlueprints[0] || genericLadderChoice)),
+                    })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    Échelle
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => updateSurfaceTool({ mode: 'erase' })}
                     style={{
                       ...styles.roomToolModeBtn,
@@ -1051,6 +1105,50 @@ export default function Sidebar({
                     {t('surfaceEditor.erase')}
                   </button>
                 </div>
+                {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' && (
+                  <div style={styles.roomToolGrid}>
+                    <label style={styles.roomToolLabel}>
+                      <span>Étage d’arrivée</span>
+                      <select
+                        value={surfaceToolState.connectorToLevel}
+                        onChange={e => updateSurfaceTool({ connectorToLevel: Number(e.target.value) })}
+                        style={styles.roomToolSelect}
+                      >
+                        {[-2, -1, 0, 1, 2, 3, 4, 5, 6].map(level => (
+                          <option key={level} value={level}>{level}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label style={styles.roomToolLabel}>
+                      <span>Orientation</span>
+                      <select
+                        value={surfaceToolState.ladderAxis || 'x'}
+                        onChange={e => updateSurfaceTool({ ladderAxis: e.target.value })}
+                        style={styles.roomToolSelect}
+                      >
+                        <option value="x">Est / Ouest</option>
+                        <option value="z">Nord / Sud</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
+                {(surfaceToolState.selectedRoomId
+                  || ['room', 'floor', 'stair', 'bridge', 'connector'].includes(surfaceToolState.mode)) && (
+                  <label style={styles.roomToolLabel}>
+                    <span>Coût de déplacement (multiplicateur)</span>
+                    <input
+                      type="number"
+                      min="0.05"
+                      max="100"
+                      step="0.25"
+                      value={surfaceToolState.movementMultiplier}
+                      onChange={e => updateSurfaceTool({
+                        movementMultiplier: Math.max(0.05, Math.min(100, Number(e.target.value) || 1)),
+                      })}
+                      style={styles.roomToolInput}
+                    />
+                  </label>
+                )}
                 {surfaceToolState.selectedRoomId && (
                   <div style={styles.roomToolSelection}>
                     <span>{t('surfaceEditor.selectedRoom')}</span>
@@ -1108,6 +1206,21 @@ export default function Sidebar({
                       >
                         {t('surfaceEditor.addElevator')}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => updateSurfaceTool({
+                          mode: 'connector',
+                          connectorType: 'ladder',
+                          connectorToLevel: Number(surfaceToolState.level || 0) + 1,
+                          ...connectorModelPatch(surfaceToolState.connectorType === 'ladder' ? selectedConnectorChoice : (ladderConnectorBlueprints[0] || genericLadderChoice)),
+                        })}
+                        style={{
+                          ...styles.roomToolModeBtn,
+                          ...(surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' ? styles.roomToolModeBtnActive : {}),
+                        }}
+                      >
+                        Échelle
+                      </button>
                     </div>
                     {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator' && (
                       <label style={styles.roomToolLabel}>
@@ -1128,7 +1241,9 @@ export default function Sidebar({
                         <div style={styles.connectorPickerTitle}>
                           {surfaceToolState.connectorType === 'door'
                             ? t('surfaceEditor.doorModel')
-                            : t('surfaceEditor.elevatorModel')}
+                            : surfaceToolState.connectorType === 'ladder'
+                              ? 'Modèle d’échelle'
+                              : t('surfaceEditor.elevatorModel')}
                         </div>
                         {connectorChoices.length === 0 ? (
                           <div style={styles.connectorPickerEmpty}>{t('surfaceEditor.noConnectorModels')}</div>
@@ -1409,7 +1524,9 @@ export default function Sidebar({
                   {surfaceToolState.mode === 'connector'
                     ? (surfaceToolState.connectorType === 'door'
                         ? t('surfaceEditor.hintDoorConnector')
-                        : t('surfaceEditor.hintElevatorConnector'))
+                        : surfaceToolState.connectorType === 'ladder'
+                          ? 'Cliquez une case pour relier verticalement les deux étages. Le token pourra finir son tour entre les barreaux.'
+                          : t('surfaceEditor.hintElevatorConnector'))
                     : surfaceToolState.mode === 'select'
                       ? t('surfaceEditor.hintSelect')
                     : surfaceToolState.mode === 'wall'
@@ -1418,6 +1535,8 @@ export default function Sidebar({
                       ? t('surfaceEditor.hintRoom')
                     : surfaceToolState.mode === 'stair'
                       ? t('surfaceEditor.hintStairs')
+                    : surfaceToolState.mode === 'bridge'
+                      ? 'Tracez une surface praticable suspendue. Elle peut être détruite ou recevoir des états dynamiques.'
                     : surfaceToolState.mode === 'erase'
                       ? t('surfaceEditor.hintErase')
                       : t('surfaceEditor.hintSlab')}

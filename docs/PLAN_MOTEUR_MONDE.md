@@ -2,7 +2,7 @@
 
 > Dernière mise à jour : 2026-07-13 — plan issu de l'audit croisé combat/monde.
 >
-> Statut : **Phases 0 à 3 codées et vérifiées ; phases 4 à 7 planifiées**.
+> Statut : **Phases 0 à 4 codées et vérifiées ; phases 5 à 7 planifiées**.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.
@@ -229,7 +229,7 @@ Ajouter les cas couverture debout, accroupi et couché dès que la pose canoniqu
 
 ---
 
-## 7. Phase 4 — étages, escaliers, échelles et passerelles
+## 7. Phase 4 — étages, escaliers, échelles et passerelles ✅
 
 ### Livrables
 
@@ -249,6 +249,25 @@ Ajouter les cas couverture debout, accroupi et couché dès que la pose canoniqu
 - retirer/détruire une passerelle invalide le chemin et la surface de support ;
 - aucune liaison verticale n'est créée entre deux étages sans connecteur explicite ;
 - portée et ligne de vue fonctionnent entre étages.
+
+### Livré le 2026-07-13
+
+- les escaliers compilent leurs extrémités au sommet réel des dalles et restent fractionnables ;
+- les échelles sont des connecteurs structurels `climb`, indépendants de leur apparence, avec
+  ancrages fins et reprise exacte d'un déplacement commencé au tour précédent ;
+- le graphe crée un nœud transitoire lorsqu'un token est déjà au milieu d'une traversée : aucun
+  retour gratuit à un palier et aucune téléportation à l'étage suivant ;
+- l'éditeur expose Escalier, Échelle et Passerelle ainsi qu'un multiplicateur libre `×0,05` à
+  `×100` sur les surfaces et connecteurs ;
+- une passerelle est un support statique identifié, compilable ou supprimable par état runtime ;
+- l'échelle générique rend rails et barreaux praticables sans faire du GLB une autorité physique ;
+- la prévisualisation du trajet affiche pour chaque segment son mode, sa distance, son facteur et
+  son coût en mètres ;
+- 50 tests monde passent et le build client Vite passe.
+
+Limite volontaire : l'ascenseur reste désactivé tant que l'automate et la cabine mobile de Phase 6
+ne sont pas présents. Les états runtime persistants et les effets environnementaux arrivent en
+Phase 5.
 
 ---
 

@@ -725,7 +725,15 @@ function Scene({
       const path = [{ ...result.snappedFrom, spentM: 0 }]
       for (const segment of result.plan.segments) {
         spentM += Number(segment.costM) || 0
-        path.push({ ...segment.to, spentM, mode: segment.mode, partial: segment.partial })
+        path.push({
+          ...segment.to,
+          spentM,
+          mode: segment.mode,
+          partial: segment.partial,
+          distanceM: Number(segment.distanceM) || 0,
+          segmentCostM: Number(segment.costM) || 0,
+          factor: Number(segment.factor) || 1,
+        })
       }
       currentPathRef.current = path
       setCurrentPath(path)
@@ -1132,19 +1140,31 @@ function Scene({
       {/* Bleu = lente, vert = moyenne, orange = rapide, rouge = max          */}
       {/* Les points sont exprimés dans l'espace monde canonique (pieds).     */}
       {combatMoveMode && currentPath.map((cell, i) => (
-        <mesh
-          key={`path-${i}`}
-          position={[cell.x, cell.y + 0.05, cell.z]}
-          rotation={[-Math.PI / 2, 0, 0]}
-        >
-          <planeGeometry args={[0.9, 0.9]} />
-          <meshBasicMaterial
-            color={getPathColor(cell.spentM, combatMoveMode.allures)}
-            transparent
-            opacity={0.5}
-            depthWrite={false}
-          />
-        </mesh>
+        <group key={`path-${i}`} position={[cell.x, cell.y + 0.05, cell.z]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[0.9, 0.9]} />
+            <meshBasicMaterial
+              color={getPathColor(cell.spentM, combatMoveMode.allures)}
+              transparent
+              opacity={0.5}
+              depthWrite={false}
+            />
+          </mesh>
+          {i > 0 && (
+            <Billboard position={[0, 0.32, 0]} follow>
+              <Text
+                fontSize={0.12}
+                color="#ffffff"
+                outlineWidth={0.018}
+                outlineColor="#0f172a"
+                anchorX="center"
+                anchorY="middle"
+              >
+                {`${cell.mode === 'climb' ? 'grimpe' : cell.mode === 'stairs' ? 'esc.' : 'sol'} ${cell.factor !== 1 ? `${cell.distanceM.toFixed(1)} m ×${cell.factor.toFixed(2)} = ` : ''}${cell.segmentCostM.toFixed(1)} m`}
+              </Text>
+            </Billboard>
+          )}
+        </group>
       ))}
 
       {/* ── Cursor wireframe case survolée en mode déplacement combat ────── */}

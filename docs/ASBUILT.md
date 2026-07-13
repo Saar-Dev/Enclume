@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 3 ; Session 141 (suite 29) conservée.
+> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 4 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -84,6 +84,24 @@ combat encore à rebrancher. Elles ne décrivent plus l'autorité de déplacemen
 
 `shared/losUtils.js` n'a plus de consommateur et sera supprimé avec les derniers chemins voxel en
 Phase 7. Le service de combat conserve uniquement ses effets métier (munition et messages).
+
+---
+
+## Moteur de monde — Phase 4 ✅
+
+- l'escalier relie les sommets physiques des supports et autorise les arrêts intermédiaires ;
+- le connecteur Échelle possède une traversée `climb`, des ancrages persistables et une géométrie
+  structurelle générique ;
+- une position sauvegardée au milieu d'une échelle ou d'un escalier est réinjectée dans le graphe
+  comme nœud transitoire exact au tour suivant ;
+- la Passerelle est un support canonique avec identité runtime, supprimé du snapshot lorsqu'il est
+  désactivé ou détruit ;
+- l'éditeur expose ces trois outils et un multiplicateur de déplacement libre sur chaque surface ou
+  connecteur ;
+- le chemin de session détaille le coût segment par segment ;
+- validation : 50 tests monde et build Vite.
+
+L'ascenseur reste expressément non navigable avant son automate de Phase 6.
 
 ---
 

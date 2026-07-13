@@ -142,6 +142,18 @@ test('une traversée de grimpe reste fractionnable et applique le facteur ×2', 
   assert.equal(climbSegment.factor, 4)
   assert.equal(result.status, 'budget')
   assert.equal(result.plan.end.y > 0 && result.plan.end.y < 4, true)
+
+  const continuation = planWorldPath({
+    snapshot,
+    graph,
+    from: result.plan.end,
+    to: { x: 0.5, y: 4, z: 0.5 },
+    budgetM: 100,
+  })
+  assert.deepEqual(continuation.snappedFrom, result.plan.end)
+  assert.deepEqual(continuation.plan.segments[0].from, result.plan.end)
+  assert.equal(continuation.status, 'destination')
+  assert.ok(Math.abs(continuation.routeCostM - (27.75 - result.plan.spentM)) < 1e-9)
 })
 
 test('un occupant dynamique bloque une destination sans écraser les autres occupants', () => {

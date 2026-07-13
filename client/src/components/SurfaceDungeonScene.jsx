@@ -930,6 +930,65 @@ function ConnectorSegment({ connector, opacity = 1, selected = false, onPointerS
     )
   }
 
+  if (connector.type === 'ladder') {
+    const y = Number(connector.y) || 0
+    const topY = Number(connector.topY) || y + STORY_HEIGHT
+    const height = Math.max(0.2, topY - y)
+    const width = Math.max(0.2, Number(connector.width) || 0.7)
+    const depth = Math.max(0.05, Number(connector.depth) || 0.12)
+    const spacing = Math.max(0.1, Number(connector.anchorSpacing) || 0.5)
+    const railThickness = Math.min(0.08, Math.max(0.035, width * 0.09))
+    const rungCount = Math.min(128, Math.max(2, Math.floor(height / spacing) + 1))
+    const centerX = Number(connector.x) + 0.5
+    const centerZ = Number(connector.z) + 0.5
+    const alongX = connector.axis !== 'z'
+    const railGeometry = alongX
+      ? [railThickness, height, depth]
+      : [depth, height, railThickness]
+    const rungGeometry = alongX
+      ? [width, railThickness, depth]
+      : [depth, railThickness, width]
+
+    return (
+      <group renderOrder={30} {...pointerProps}>
+        {[-1, 1].map(side => (
+          <mesh
+            key={`rail-${side}`}
+            position={[
+              centerX + (alongX ? side * width / 2 : 0),
+              y + height / 2,
+              centerZ + (alongX ? 0 : side * width / 2),
+            ]}
+            castShadow
+          >
+            <boxGeometry args={railGeometry} />
+            <meshStandardMaterial color="#94a3b8" transparent opacity={Math.min(0.95, opacity)} />
+          </mesh>
+        ))}
+        {Array.from({ length: rungCount }, (_, index) => {
+          const ratio = rungCount === 1 ? 0 : index / (rungCount - 1)
+          return (
+            <mesh
+              key={`rung-${index}`}
+              position={[centerX, y + ratio * height, centerZ]}
+              castShadow
+              userData={{ worldSupport: true, worldFeatureId: connector.worldId || connector.id }}
+            >
+              <boxGeometry args={rungGeometry} />
+              <meshStandardMaterial color="#cbd5e1" transparent opacity={Math.min(0.95, opacity)} />
+            </mesh>
+          )
+        })}
+        {selected && (
+          <mesh position={[centerX, y + height / 2, centerZ]}>
+            <boxGeometry args={alongX ? [width + 0.08, height + 0.08, depth + 0.08] : [depth + 0.08, height + 0.08, width + 0.08]} />
+            <meshBasicMaterial color="#f97316" wireframe depthTest={false} />
+          </mesh>
+        )}
+      </group>
+    )
+  }
+
   if (connector.type === 'elevator') {
     const y = Number(connector.y) || 0
     const topY = Number(connector.topY) || y + STORY_HEIGHT

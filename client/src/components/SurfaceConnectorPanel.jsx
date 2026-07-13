@@ -7,7 +7,7 @@ import {
 } from '../lib/modelMaterialSlots.js'
 
 const PANEL_W = 310
-const PANEL_H_EST = 380
+const PANEL_H_EST = 450
 
 const MODEL_SLOT_LABELS = {
   SLOT_01: 'Métal principal',
@@ -18,11 +18,11 @@ const MODEL_SLOT_LABELS = {
 }
 
 function connectorBlockingForState(type, state) {
-  if (type === 'elevator') {
+  if (type === 'elevator' || type === 'ladder') {
     return {
       blocksSight: false,
       blocksMovement: false,
-      blocksWater: true,
+      blocksWater: type === 'elevator',
       barrierType: 'connector',
     }
   }
@@ -33,6 +33,13 @@ function connectorBlockingForState(type, state) {
     blocksWater: !open,
     barrierType: open ? 'open-door' : 'door',
   }
+}
+
+function connectorTypeLabel(type) {
+  if (type === 'door') return 'Porte'
+  if (type === 'elevator') return 'Ascenseur'
+  if (type === 'ladder') return 'Échelle'
+  return type
 }
 
 function clampPanelPosition(x, y) {
@@ -79,9 +86,9 @@ export default function SurfaceConnectorPanel({ connector, x, y, onPatch, onClos
       <div style={S.body}>
         <div style={S.infoGrid}>
           <span>Type</span>
-          <strong>{connector.type === 'door' ? 'Porte' : connector.type === 'elevator' ? 'Ascenseur' : connector.type}</strong>
+          <strong>{connectorTypeLabel(connector.type)}</strong>
           <span>Étage</span>
-          <strong>{connector.level ?? 0}</strong>
+          <strong>{connector.fromLevel !== undefined && connector.toLevel !== undefined ? `${connector.fromLevel} → ${connector.toLevel}` : connector.level ?? 0}</strong>
           <span>Dimensions</span>
           <strong>{connector.width ?? connector.modelGeometry?.width ?? 1} × {connector.depth ?? connector.modelGeometry?.depth ?? 1} × {connector.height ?? connector.modelGeometry?.height ?? 1} m</strong>
         </div>
@@ -96,6 +103,22 @@ export default function SurfaceConnectorPanel({ connector, x, y, onPatch, onClos
             </select>
           </label>
         )}
+
+        <label style={S.field}>
+          <span style={S.label}>Coût de déplacement</span>
+          <input
+            type="number"
+            min="0.05"
+            max="100"
+            step="0.25"
+            value={Math.max(0.05, Number(connector.movementMultiplier) || 1)}
+            onChange={e => onPatch?.(connector.id, {
+              movementMultiplier: Math.max(0.05, Math.min(100, Number(e.target.value) || 1)),
+            })}
+            style={S.input}
+          />
+          <span style={S.hint}>×1 normal, ×2 deux fois plus coûteux, jusqu’à ×100.</span>
+        </label>
 
         {materialSlots.length > 0 ? (
           <div style={S.field}>

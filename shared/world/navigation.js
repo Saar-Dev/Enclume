@@ -133,12 +133,12 @@ export function buildNavigationGraph(snapshot, { actorProfile = {}, traversalFac
     supportNodes.push(node)
   }
 
-  const sampleSpacing = Number(snapshot.metrics.worldUnitsPerCell || 1)
   for (const traversal of snapshot.spatial.traversals) {
     if (traversal.enabled === false) continue
     const from = normalizeWorldPoint(traversal.from, `${traversal.id}.from`)
     const to = normalizeWorldPoint(traversal.to, `${traversal.id}.to`)
     const distanceWorld = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z)
+    const sampleSpacing = Number(traversal.anchorSpacing || snapshot.metrics.worldUnitsPerCell || 1)
     const sampleCount = Math.max(1, Math.ceil(distanceWorld / sampleSpacing))
     const group = []
     for (let index = 0; index <= sampleCount; index++) {
@@ -332,6 +332,89 @@ function nearestNode(nodes, point, blocked, maxDistance = 1.25) {
   return best.node
 }
 
+function projectedPointOnSegment(point, from, to) {
+  const delta = { x: to.x - from.x, y: to.y - from.y, z: to.z - from.z }
+  const lengthSquared = delta.x ** 2 + delta.y ** 2 + delta.z ** 2
+  if (lengthSquared <= EPSILON) return null
+  const relative = { x: point.x - from.x, y: point.y - from.y, z: point.z - from.z }
+  const ratio = Math.max(0, Math.min(1, (
+    relative.x * delta.x + relative.y * delta.y + relative.z * delta.z
+  ) / lengthSquared))
+  const projected = pointAtRatio(from, to, ratio)
+  return {
+    point: projected,
+    ratio,
+    distance: Math.hypot(point.x - projected.x, point.y - projected.y, point.z - projected.z),
+  }
+}
+
+function graphWithTransientTraversalPoint(graph, requestedPoint, suffix) {
+  if (graph.nodes.some(node => Math.hypot(
+    node.point.x - requestedPoint.x,
+    node.point.y - requestedPoint.y,
+    node.point.z - requestedPoint.z,
+  ) <= EPSILON)) return graph
+
+  let selected = null
+  for (const edge of graph.edges) {
+    if (!edge.allowPartial || edge.mode === 'walk') continue
+    const projection = projectedPointOnSegment(requestedPoint, edge.fromPoint, edge.toPoint)
+    if (!projection || projection.ratio <= EPSILON || projection.ratio >= 1 - EPSILON) continue
+    const tolerance = Math.max(0.15, Number(graph.actorProfile?.radius || 0.35) + 0.1)
+    if (projection.distance > tolerance || (selected && projection.distance >= selected.projection.distance)) continue
+    selected = { edge, projection }
+  }
+  if (!selected) return graph
+
+  const nodeById = new Map(graph.nodes.map(node => [node.id, node]))
+  const transient = deepFreeze({
+    id: `nav:transient:${suffix}`,
+    point: normalizeWorldPoint(selected.projection.point),
+    kind: 'traversal',
+    sourceId: selected.edge.sourceId,
+    mode: selected.edge.mode,
+    stable: true,
+    transient: true,
+  })
+  const edgePair = new Set([
+    `${selected.edge.from}>${selected.edge.to}`,
+    `${selected.edge.to}>${selected.edge.from}`,
+  ])
+  const additions = []
+  for (const edge of graph.edges) {
+    if (!edgePair.has(`${edge.from}>${edge.to}`)) continue
+    const fromNode = nodeById.get(edge.from)
+    const toNode = nodeById.get(edge.to)
+    const first = makeEdge({
+      id: `${edge.id}:to-${suffix}`,
+      fromNode,
+      toNode: transient,
+      mode: edge.mode,
+      allowPartial: edge.allowPartial,
+      sourceId: edge.sourceId,
+      metrics: graph.metrics,
+      factors: edge.factors,
+    })
+    const second = makeEdge({
+      id: `${edge.id}:from-${suffix}`,
+      fromNode: transient,
+      toNode,
+      mode: edge.mode,
+      allowPartial: edge.allowPartial,
+      sourceId: edge.sourceId,
+      metrics: graph.metrics,
+      factors: edge.factors,
+    })
+    if (first) additions.push(deepFreeze(first))
+    if (second) additions.push(deepFreeze(second))
+  }
+  return {
+    ...graph,
+    nodes: [...graph.nodes, transient],
+    edges: [...graph.edges, ...additions],
+  }
+}
+
 export function findNavigationPath(graph, {
   from,
   to,
@@ -341,29 +424,31 @@ export function findNavigationPath(graph, {
 } = {}) {
   const requestedFrom = normalizeWorldPoint(from, 'from')
   const requestedTo = normalizeWorldPoint(to, 'to')
+  const transientStartGraph = graphWithTransientTraversalPoint(graph, requestedFrom, 'start')
+  const workingGraph = graphWithTransientTraversalPoint(transientStartGraph, requestedTo, 'destination')
   const blocked = new Set()
-  for (const node of graph.nodes) {
-    if (!occupancy.canOccupy(node.point, graph.actorProfile, { excludeIds: excludeOccupantIds })) {
+  for (const node of workingGraph.nodes) {
+    if (!occupancy.canOccupy(node.point, workingGraph.actorProfile, { excludeIds: excludeOccupantIds })) {
       blocked.add(node.id)
     }
   }
-  const start = nearestNode(graph.nodes, requestedFrom, blocked, maxSnapDistance)
-  const destination = nearestNode(graph.nodes, requestedTo, blocked, maxSnapDistance)
+  const start = nearestNode(workingGraph.nodes, requestedFrom, blocked, maxSnapDistance)
+  const destination = nearestNode(workingGraph.nodes, requestedTo, blocked, maxSnapDistance)
   if (!start || !destination) return null
   if (start.id === destination.id) return deepFreeze({ start, destination, nodes: [start], edges: [], costM: 0 })
 
   const outgoing = new Map()
-  for (const edge of graph.edges) {
+  for (const edge of workingGraph.edges) {
     if (blocked.has(edge.to)) continue
     const list = outgoing.get(edge.from) || []
     list.push(edge)
     outgoing.set(edge.from, list)
   }
-  const nodeById = new Map(graph.nodes.map(node => [node.id, node]))
-  const minFactor = graph.edges.length
-    ? Math.min(...graph.edges.map(edge => edge.costM / edge.distanceM))
+  const nodeById = new Map(workingGraph.nodes.map(node => [node.id, node]))
+  const minFactor = workingGraph.edges.length
+    ? Math.min(...workingGraph.edges.map(edge => edge.costM / edge.distanceM))
     : 1
-  const heuristic = node => distanceBetweenWorldPointsM(node.point, destination.point, graph.metrics) * minFactor
+  const heuristic = node => distanceBetweenWorldPointsM(node.point, destination.point, workingGraph.metrics) * minFactor
   const heap = new MinHeap()
   const costs = new Map([[start.id, 0]])
   const previous = new Map()

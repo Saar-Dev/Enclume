@@ -343,7 +343,7 @@ function addBarrierOutputs(spatial, barrier) {
   }
 }
 
-function addSlabs(surface, battlemapId, spatial) {
+function addSlabs(surface, runtimeStates, battlemapId, spatial) {
   for (const [legacyId, floor] of roomFloorEntries(surface, battlemapId)) {
     const parsed = parseFloor(legacyId, floor)
     const thickness = positive(floor.thickness, 0.25)
@@ -352,10 +352,13 @@ function addSlabs(surface, battlemapId, spatial) {
       parsed.x + 1, parsed.y + thickness / 2, parsed.z + 1,
     )
     const sourceId = floor.worldId
+    const runtime = runtimeStates[sourceId]
+    if (floor.runtimeSupport && (runtime?.enabled === false || runtime?.state === 'destroyed')) continue
+    const kind = floor.kind || 'floor'
     spatial.supports.push({
       id: `support:${sourceId}`,
       sourceId,
-      kind: floor.kind || 'floor',
+      kind,
       bounds: slabBounds,
       y: clean(parsed.y + thickness / 2),
       walkable: floor.walkable !== false,
@@ -364,7 +367,7 @@ function addSlabs(surface, battlemapId, spatial) {
     addBarrierOutputs(spatial, {
       id: `barrier:floor:${sourceId}`,
       sourceId,
-      kind: 'floor',
+      kind,
       axis: 'horizontal',
       bounds: slabBounds,
       blocks: blockingChannels(floor),
@@ -460,6 +463,7 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
 
 function addVerticalTraversals(surface, runtimeStates, spatial) {
   for (const stair of Object.values(surface.stairs)) {
+    const supportOffset = positive(stair.supportThickness, 0.25) / 2
     const centerCross = stair.axis === 'x'
       ? (number(stair.minZ) + number(stair.maxZ) + 1) / 2
       : (number(stair.minX) + number(stair.maxX) + 1) / 2
@@ -470,11 +474,11 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
       ? (number(stair.dir, 1) >= 0 ? number(stair.maxX) + 1 : number(stair.minX))
       : (number(stair.dir, 1) >= 0 ? number(stair.maxZ) + 1 : number(stair.minZ))
     const from = stair.axis === 'x'
-      ? point(startAlong, number(stair.y), centerCross)
-      : point(centerCross, number(stair.y), startAlong)
+      ? point(startAlong, number(stair.y) + supportOffset, centerCross)
+      : point(centerCross, number(stair.y) + supportOffset, startAlong)
     const to = stair.axis === 'x'
-      ? point(endAlong, number(stair.topY), centerCross)
-      : point(centerCross, number(stair.topY), endAlong)
+      ? point(endAlong, number(stair.topY) + supportOffset, centerCross)
+      : point(centerCross, number(stair.topY) + supportOffset, endAlong)
     spatial.traversals.push({
       id: `traversal:stairs:${stair.worldId}`,
       sourceId: stair.worldId,
@@ -502,6 +506,23 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
   }
 
   for (const connector of Object.values(surface.connectors)) {
+    if (connector.type === 'ladder') {
+      const state = runtimeStates[connector.worldId]
+      const center = point(number(connector.x) + 0.5, 0, number(connector.z) + 0.5)
+      spatial.traversals.push({
+        id: `traversal:ladder:${connector.worldId}`,
+        sourceId: connector.worldId,
+        kind: 'ladder',
+        mode: 'climb',
+        from: point(center.x, number(connector.fromY, connector.y), center.z),
+        to: point(center.x, number(connector.toY, connector.topY), center.z),
+        enabled: state?.enabled !== false && state?.state !== 'destroyed',
+        allowPartial: true,
+        movementMultiplier: movementMultiplier(connector),
+        anchorSpacing: positive(connector.anchorSpacing, 0.5),
+      })
+      continue
+    }
     if (connector.type !== 'elevator') continue
     const state = runtimeStates[connector.worldId]?.state || connector.state || 'ready'
     const x = number(connector.x) + positive(connector.width, 1) / 2
@@ -556,7 +577,7 @@ export function compileSurfaceWorld({
     regions: [],
   }
 
-  addSlabs(surface, battlemapId, spatial)
+  addSlabs(surface, runtimeStates, battlemapId, spatial)
   addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, prepared.worldDocument)
   addVerticalTraversals(surface, runtimeStates, spatial)
   addCompartments(surface, spatial)

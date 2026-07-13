@@ -80,6 +80,10 @@ export function getToolStairRise(tool) {
   return clampNumber(tool?.stairRise, 0.25, 12, 2.5)
 }
 
+export function getToolMovementMultiplier(tool) {
+  return clampNumber(tool?.movementMultiplier ?? tool?.movementCostMultiplier, 0.05, 100, 1)
+}
+
 export function getFloorThickness(floor) {
   return Math.max(0.05, Number(floor?.thickness) || DEFAULT_FLOOR_THICKNESS)
 }
@@ -488,6 +492,7 @@ export function applyFloorSelection(surfaceData, selection, tool, activeMaterial
         level: yToLevel(y),
         thickness,
         walkable: true,
+        movementMultiplier: getToolMovementMultiplier(tool),
         ...surfaceBlockingForTool(tool),
       }
       changed = true
@@ -495,6 +500,30 @@ export function applyFloorSelection(surfaceData, selection, tool, activeMaterial
   }
 
   return changed ? { ...next, floors } : surfaceData
+}
+
+export function applyBridgeSelection(surfaceData, selection, tool, activeMaterial, availableBlocks) {
+  const area = normalizeCellSelection(selection)
+  if (!area) return surfaceData
+  const withFloors = applyFloorSelection(surfaceData, selection, tool, activeMaterial, availableBlocks)
+  if (withFloors === surfaceData) return surfaceData
+  const next = normalizeSurfaceData(withFloors)
+  const floors = { ...next.floors }
+  const y = getToolElevation(tool)
+  for (let x = area.minX; x <= area.maxX; x += 1) {
+    for (let z = area.minZ; z <= area.maxZ; z += 1) {
+      const key = floorKey(x, z, y)
+      if (!floors[key]) continue
+      floors[key] = {
+        ...floors[key],
+        kind: 'bridge',
+        structuralKind: 'bridge',
+        runtimeSupport: true,
+        movementMultiplier: getToolMovementMultiplier(tool),
+      }
+    }
+  }
+  return { ...next, floors }
 }
 
 export function applyCeilingSelection(surfaceData, selection, tool, activeMaterial, availableBlocks) {
@@ -835,6 +864,7 @@ export function roomToSurfaceToolPatch(room) {
     floorThickness: getRoomFloorThickness(room),
     ceilingThickness: getRoomCeilingThickness(room),
     wallThickness: Math.max(1, Number(room.wallThickness) || 1),
+    movementMultiplier: Math.max(0.05, Number(room.movementMultiplier) || 1),
     surfaceBlocking: room.barrierType || 'solid',
     materialFace: 'top',
     floorPackId: null,
@@ -943,6 +973,7 @@ function makeRoomFromSelection(surfaceData, selection, tool, activeMaterial, ava
     floorThickness: getToolFloorThickness(tool),
     ceilingThickness: getToolCeilingThickness(tool),
     wallThickness: getToolWallThicknessFine(tool),
+    movementMultiplier: getToolMovementMultiplier(tool),
     ...blocking,
     floorTopTex: floorTop.tex,
     floorBottomTex: floorBottom.tex,
@@ -1151,6 +1182,14 @@ function connectorCommonBlocking(type, state = 'closed') {
       barrierType: 'connector',
     }
   }
+  if (type === 'ladder') {
+    return {
+      blocksSight: false,
+      blocksMovement: false,
+      blocksWater: false,
+      barrierType: 'connector',
+    }
+  }
   const open = state === 'open'
   return {
     blocksSight: !open,
@@ -1299,6 +1338,7 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
     roomId: selectedRoomId || panel.roomIds?.[0] || null,
     roomIds: panel.roomIds || [],
     state,
+    movementMultiplier: getToolMovementMultiplier(tool),
     ...connectorModelFromTool(tool),
     ...connectorCommonBlocking('door', state),
   }
@@ -1355,6 +1395,7 @@ export function makeElevatorConnectorFromCell(surfaceData, cell, tool = {}) {
     width: 1,
     depth: 1,
     state: 'ready',
+    movementMultiplier: getToolMovementMultiplier(tool),
     ...connectorModelFromTool(tool),
     ...connectorCommonBlocking('elevator'),
   }
@@ -1362,6 +1403,71 @@ export function makeElevatorConnectorFromCell(surfaceData, cell, tool = {}) {
 
 export function applyElevatorConnector(surfaceData, cell, tool = {}) {
   const connector = makeElevatorConnectorFromCell(surfaceData, cell, tool)
+  if (!connector) return surfaceData
+  const next = normalizeSurfaceData(surfaceData)
+  return {
+    ...next,
+    version: 4,
+    connectors: {
+      ...next.connectors,
+      [connector.id]: connector,
+    },
+  }
+}
+
+function supportTopAt(surface, cell, level, fallbackThickness) {
+  const roomHit = findRoomAtCell(surface, cell, level)
+  if (roomHit?.room) return levelToY(level) + getRoomFloorThickness(roomHit.room) / 2
+  const floor = surface.floors?.[floorKey(cell.x, cell.z, levelToY(level))]
+  return levelToY(level) + (floor ? getFloorThickness(floor) : fallbackThickness) / 2
+}
+
+export function makeLadderConnectorFromCell(surfaceData, cell, tool = {}) {
+  if (!cell) return null
+  const surface = normalizeSurfaceData(surfaceData)
+  const fromLevel = getToolLevel(tool)
+  const toLevel = Number.isFinite(Number(tool?.connectorToLevel))
+    ? Math.trunc(Number(tool.connectorToLevel))
+    : fromLevel + 1
+  if (toLevel === fromLevel) return null
+  const fallbackThickness = getToolFloorThickness(tool)
+  const fromY = supportTopAt(surface, cell, fromLevel, fallbackThickness)
+  const toY = supportTopAt(surface, cell, toLevel, fallbackThickness)
+  const roomHit = findRoomAtCell(surface, cell, fromLevel)
+  const minLevel = Math.min(fromLevel, toLevel)
+  const maxLevel = Math.max(fromLevel, toLevel)
+  const id = `connector:ladder:${cell.x}:${cell.z}:${minLevel}:${maxLevel}`
+  return {
+    id,
+    type: 'ladder',
+    roomId: roomHit?.id || null,
+    roomIds: roomHit?.id ? [roomHit.id] : [],
+    x: cell.x,
+    z: cell.z,
+    level: fromLevel,
+    fromLevel,
+    toLevel,
+    fromY,
+    toY,
+    y: Math.min(fromY, toY),
+    topY: Math.max(fromY, toY),
+    width: Math.max(0.2, Number(tool?.ladderWidth) || 0.7),
+    depth: Math.max(0.05, Number(tool?.ladderDepth) || 0.12),
+    height: Math.abs(toY - fromY),
+    axis: tool?.ladderAxis === 'z' ? 'z' : 'x',
+    state: 'ready',
+    walkable: true,
+    movementMode: 'climb',
+    movementMultiplier: getToolMovementMultiplier(tool),
+    allowPartial: true,
+    anchorSpacing: Math.max(0.1, Number(tool?.ladderAnchorSpacing) || 0.5),
+    ...connectorModelFromTool(tool),
+    ...connectorCommonBlocking('ladder'),
+  }
+}
+
+export function applyLadderConnector(surfaceData, cell, tool = {}) {
+  const connector = makeLadderConnectorFromCell(surfaceData, cell, tool)
   if (!connector) return surfaceData
   const next = normalizeSurfaceData(surfaceData)
   return {
@@ -1528,6 +1634,7 @@ export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, a
     floorThickness: getToolFloorThickness(tool),
     ceilingThickness: getToolCeilingThickness(tool),
     wallThickness: getToolWallThicknessFine(tool),
+    movementMultiplier: getToolMovementMultiplier(tool),
     ...blocking,
     floorTopTex: floorTop.tex,
     floorBottomTex: floorBottom.tex,
@@ -1629,6 +1736,7 @@ export function makeStairFromSelection(selection, tool, activeMaterial, availabl
     walkable: true,
     connectsLevels: true,
     movementMode: 'stairs',
+    movementMultiplier: getToolMovementMultiplier(tool),
     ...surfaceBlockingForTool(tool),
     ...(tex ? { tex } : {}),
     ...(material ? { material } : {}),

@@ -31,6 +31,25 @@
 
 ---
 
+## CHANTIER PARALLÈLE — MOTEUR DE MONDE
+
+Branche `codex/world-engine-integration`, sans modification du dépôt de l'autre développeur.
+
+- Phases 0 à 4 terminées : contrat métrique, document canonique, compilateur, navigation serveur,
+  LOS/couverture, escaliers, échelles, passerelles et coûts éditables.
+- Les anciennes cartes voxel ne sont pas une cible de compatibilité. Elles peuvent seulement servir
+  de fixtures et peuvent être supprimées si elles gênent le modèle canonique.
+- L'ascenseur est encore volontairement désactivé dans le graphe : ne pas le remplacer par une
+  téléportation.
+- Prochaine étape exacte : Phase 5 de `docs/PLAN_MOTEUR_MONDE.md`, registre d'effets, instances
+  runtime persistantes, régions, hooks et propagation par compartiments.
+- Ne rebrancher le combat historique qu'en Phase 7, via les services de monde et sans réintroduire
+  une lecture directe de `voxel_data`.
+
+Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
+
+---
+
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.

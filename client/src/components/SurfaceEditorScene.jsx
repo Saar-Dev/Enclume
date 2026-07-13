@@ -6,10 +6,12 @@ import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
 import {
   SURFACE_FINE,
   STORY_HEIGHT,
+  applyBridgeSelection,
   applyCeilingSelection,
   applyDoorConnector,
   applyElevatorConnector,
   applyFloorSelection,
+  applyLadderConnector,
   applyRoomSelection,
   applyStairSelection,
   applyWallDrag,
@@ -29,6 +31,7 @@ import {
   makeStairFromSelection,
   makeDoorConnectorFromWallPoint,
   makeElevatorConnectorFromCell,
+  makeLadderConnectorFromCell,
   makeWallsFromDrag,
   normalizeSurfaceData,
   parseFloorKey,
@@ -229,7 +232,9 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
   if (!drag) return null
   const connector = surfaceTool?.connectorType === 'door'
     ? makeDoorConnectorFromWallPoint(surfaceData, drag.end, surfaceTool)
-    : makeElevatorConnectorFromCell(surfaceData, drag.end, surfaceTool)
+    : surfaceTool?.connectorType === 'ladder'
+      ? makeLadderConnectorFromCell(surfaceData, drag.end, surfaceTool)
+      : makeElevatorConnectorFromCell(surfaceData, drag.end, surfaceTool)
   if (!connector) return null
 
   if (connector.type === 'door') {
@@ -404,7 +409,7 @@ export default function SurfaceEditorScene({
           minZ = Math.min(Number(connector.z0), Number(connector.z1)) / SURFACE_FINE
           maxZ = Math.max(Number(connector.z0), Number(connector.z1)) / SURFACE_FINE
         }
-      } else if (connector?.type === 'elevator') {
+      } else if (connector?.type === 'elevator' || connector?.type === 'ladder') {
         minX = Number(connector.x)
         maxX = minX + 1
         minZ = Number(connector.z)
@@ -628,7 +633,9 @@ export default function SurfaceEditorScene({
       if (mode === 'connector') {
         const nextData = surfaceTool?.connectorType === 'door'
           ? applyDoorConnector(surfaceData, finalDrag.end, surfaceTool)
-          : applyElevatorConnector(surfaceData, finalDrag.end, surfaceTool)
+          : surfaceTool?.connectorType === 'ladder'
+            ? applyLadderConnector(surfaceData, finalDrag.end, surfaceTool)
+            : applyElevatorConnector(surfaceData, finalDrag.end, surfaceTool)
         if (nextData !== surfaceData) onSurfaceDataChange(nextData)
         onSurfaceToolChange?.({ ...surfaceTool, mode: 'select' })
         setHoverPreview(null)
@@ -641,6 +648,8 @@ export default function SurfaceEditorScene({
         ? applyWallDrag(surfaceData, finalDrag.start, finalDrag.end, surfaceTool, activeMaterial, availableBlocks)
         : mode === 'stair'
           ? applyStairSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
+        : mode === 'bridge'
+          ? applyBridgeSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
         : mode === 'ceiling'
           ? applyCeilingSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
         : mode === 'erase'
