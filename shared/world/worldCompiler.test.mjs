@@ -108,6 +108,32 @@ test('une porte ouverte découpe le mur et crée un portail non bloquant', () =>
   assert.equal(snapshot.spatial.colliders.some(item => item.sourceId === doorBarrier.sourceId), false)
 })
 
+test('mur plein, verre et grille compilent des canaux physiques indépendants', () => {
+  const cases = [
+    ['solid', { movement: true, sight: true, water: true, gas: true }, true],
+    ['glass', { movement: true, sight: false, water: true, gas: true }, false],
+    ['grate', { movement: true, sight: false, water: false, gas: false }, false],
+  ]
+  for (const [barrierType, expectedBlocks, hasOccluder] of cases) {
+    const descriptor = room(`room-${barrierType}`, 0, 0)
+    descriptor.barrierType = barrierType
+    delete descriptor.blocksMovement
+    delete descriptor.blocksSight
+    delete descriptor.blocksWater
+    const snapshot = compileSurfaceWorld({
+      battlemapId: `map-${barrierType}`,
+      surfaceData: emptySurface({ rooms: { roomA: descriptor } }),
+    })
+    const wall = snapshot.spatial.barriers.find(item => item.kind === 'wall')
+    assert.deepEqual(wall.blocks, expectedBlocks)
+    assert.equal(
+      snapshot.spatial.occluders.some(item => item.sourceId === wall.sourceId),
+      hasOccluder,
+    )
+    assert.equal(snapshot.spatial.colliders.some(item => item.sourceId === wall.sourceId), true)
+  }
+})
+
 test('la découpe physique d’une porte suit le cadre et non le seul panneau mobile', () => {
   const snapshot = compileSurfaceWorld({
     battlemapId: 'map-door-frame',

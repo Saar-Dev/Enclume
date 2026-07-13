@@ -12,8 +12,8 @@
 L'éditeur Surface/Salle et son rendu existent. `surface_data` version 4 sait décrire des salles,
 sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
-navigation de session lisent ce snapshot ; la LOS et la résolution complète du combat attendent les
-Phases 3 et 7.
+navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
+le lisent également ; le branchement spatial complet de la FSM combat reste en Phase 7.
 
 Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit la cible commune qui compilera
 ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une

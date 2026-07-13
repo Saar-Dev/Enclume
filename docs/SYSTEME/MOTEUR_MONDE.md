@@ -1,8 +1,8 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-13 — Phase 2, navigation et déplacements autoritaires.
+> Dernière mise à jour : 2026-07-13 — Phase 3, visibilité et matériaux multi-canaux.
 >
-> Statut : **architecture cible validée ; Phases 0 à 2 implémentées, phases 3 à 7 non implémentées**. Les sections marquées
+> Statut : **architecture cible validée ; Phases 0 à 3 implémentées, phases 4 à 7 non implémentées**. Les sections marquées
 > `[EXISTANT]` décrivent le code livré. Les sections `[CIBLE]` sont le contrat à respecter pendant
 > la reconstruction.
 >
@@ -95,18 +95,21 @@ Le chemin déclaré n'est ni stocké ni revalidé.
 Le déplacement direct `TOKEN_MOVE` n'accepte plus de coordonnées imposées. Il reçoit une destination
 et une allure, puis le serveur calcule le budget, replanifie et diffuse uniquement le point atteint.
 
-### 2.4 Ligne de vue `[EXISTANT, TRANSITOIRE]`
+### 2.4 Ligne de vue voxel `[LEGACY RETIRÉ DES CONSOMMATEURS]`
 
-`shared/losUtils.js` et `server/src/lib/losService.js` raycastent uniquement `voxel_data`. La hauteur
-d'œil est fixée à `pos_z + 2.5` et la couverture repose sur quatre rayons d'un personnage debout.
+`shared/losUtils.js` reste un fichier historique sans consommateur. `server/src/lib/losService.js` et
+la caméra appellent désormais le moteur de visibilité du snapshot.
 
-Ne participent pas encore au calcul :
+Le calcul Phase 3 prend désormais en compte :
 
 - murs, portes et plafonds issus de `surface_data` ;
-- volumes réels des entités ;
-- verre, grille et matériaux semi-transparents ;
-- fumée, gaz et autres effets volumiques ;
-- posture physique canonique du token.
+- volumes et rotation des entités ;
+- transparence du verre/de la grille et opacité cumulée des volumes ;
+- postures debout, accroupie et couchée ;
+- couverture par quatre rayons anatomiques et acteurs interposés.
+
+La persistance et la propagation de fumée/gaz arrivent en Phase 5 ; le moteur sait déjà recevoir ces
+volumes comme occluders dynamiques atténuants.
 
 ### 2.5 Unités `[RÉSOLU POUR LE MOTEUR DE MONDE — PHASE 2]`
 
@@ -138,8 +141,8 @@ Le dossier `shared/world/` fournit désormais :
 - `index.js` : point d'entrée commun client/serveur ;
 - `spatialIndex.js` et `navigation.js` : index statique, occupation dynamique, graphe 3D pondéré et
   planification autoritaire ;
-- trente-neuf tests Node, dont Jon, les portes, les occupants multiples, les budgets partiels et le
-  placement sur support.
+- quarante-huit tests Node, dont Jon, les portes, les occupants multiples, les budgets partiels, le
+  placement sur support, les canaux de matériaux, la couverture et les occluders dynamiques.
 
 La route Surface compile le document avant de le valider en base et
 `GET /api/battlemaps/:id/world-snapshot` expose le résultat mis en cache par carte/révision. La

@@ -584,7 +584,7 @@ function Scene({
   // ─── LOS v2 — service complet (client/src/lib/useCameraLOS.js) ──────────
   // Déclaré après voxelsRef et tokensRef (TDZ — déclarations const non hoistées)
   const { losLine, onTokenClick, onPointerUp, clearLine } = useCameraLOS(
-    losMode, orbitRef, voxelsRef, tokensRef, onLosResult, onLosCancel
+    losMode, orbitRef, tokensRef, battlemapId, onLosResult, onLosCancel
   )
 
   const lastCellRef = useRef(null)

@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 2 ; Session 141 (suite 29) conservée.
+> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 3 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -67,6 +67,23 @@ pour les déplacements de session ; la LOS et la résolution combat restent à m
 
 Les anciennes sections Redis/pathfinder plus bas sont conservées comme documentation historique du
 combat encore à rebrancher. Elles ne décrivent plus l'autorité de déplacement des tokens.
+
+---
+
+## Moteur de monde — Phase 3 ✅
+
+- `shared/world/visibility.js` — LOS 3D, profils de posture, transmittance, couverture anatomique et
+  acteurs interposés ;
+- `server/src/services/worldVisibilityService.js` — assemblage snapshot + entités dynamiques + tokens ;
+- route `world-visibility` pour la prévisualisation autorisée ;
+- `useCameraLOS` et `server/src/lib/losService.js` consomment le même résultat serveur ;
+- verre et grille restent des colliders sans être des occluders par défaut ; mur plein et porte
+  fermée bloquent la vue ; les canaux eau/gaz restent indépendants ;
+- volumes atténuants et `sightOpacity` prêts pour les effets de Phase 5 ;
+- validation : 48 tests, checks Node et build Vite.
+
+`shared/losUtils.js` n'a plus de consommateur et sera supprimé avec les derniers chemins voxel en
+Phase 7. Le service de combat conserve uniquement ses effets métier (munition et messages).
 
 ---
 

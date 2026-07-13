@@ -1,7 +1,9 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { checkLOS } from '../../../shared/losUtils.js'
+import api from './api.js'
+import { dbPositionToWorldPoint } from '../../../shared/world/worldMetrics.js'
+import { actorEyePoint } from '../../../shared/world/visibility.js'
 
 const CAM_SHOULDER_BACK  = 3.0
 const CAM_SHOULDER_RIGHT = 1.5
@@ -12,7 +14,7 @@ const CAM_SHOULDER_UP    = 2.0
  * Canvas3D.jsx n'expose que les 4 callables retournés — zéro logique LOS dans le composant.
  * Doit être appelé depuis l'intérieur du contexte R3F (<Canvas>) — useThree() requis.
  */
-export function useCameraLOS(losMode, orbitRef, voxelsRef, tokensRef, onLosResult, onLosCancel) {
+export function useCameraLOS(losMode, orbitRef, tokensRef, battlemapId, onLosResult, onLosCancel) {
   const { camera } = useThree()
 
   const savedCameraRef = useRef(null)
@@ -48,9 +50,10 @@ export function useCameraLOS(losMode, orbitRef, voxelsRef, tokensRef, onLosResul
   // P4 — moveCameraToShoulder déclaré avant onTokenClick
   const moveCameraToShoulder = useCallback((src, tgt) => {
     if (!savedCameraRef.current || !orbitRef.current) return
-    // PE14 — eye height = pos_z + 2.5 (pieds pos_z+1.0 + mi-torse 1.5, token 2-cases)
-    const srcEye = new THREE.Vector3(src.pos_x + 0.5, src.pos_z + 2.5, src.pos_y + 0.5)
-    const tgtEye = new THREE.Vector3(tgt.pos_x + 0.5, tgt.pos_z + 2.5, tgt.pos_y + 0.5)
+    const source = actorEyePoint(dbPositionToWorldPoint(src))
+    const target = actorEyePoint(dbPositionToWorldPoint(tgt))
+    const srcEye = new THREE.Vector3(source.x, source.y, source.z)
+    const tgtEye = new THREE.Vector3(target.x, target.y, target.z)
     const fwd   = tgtEye.clone().sub(srcEye).normalize()
     const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize()
     const camPos = srcEye.clone()
@@ -72,19 +75,34 @@ export function useCameraLOS(losMode, orbitRef, voxelsRef, tokensRef, onLosResul
   }, [camera, orbitRef])
 
   // P4 — onTokenClick déclaré après moveCameraToShoulder
-  const onTokenClick = useCallback((tgt) => {
+  const onTokenClick = useCallback(async (tgt) => {
     const src = tokensRef.current.find(t => t.id === losModeRef.current?.sourceTokenId)
     if (!src || !tgt) { onLosCancelRef.current?.(); return }
     if (tgt.id === src.id) return  // P-LOS5 — clic sur soi-même
-    const { clear } = checkLOS(voxelsRef.current, src, tgt)
-    const from = [src.pos_x + 0.5, src.pos_z + 2.5, src.pos_y + 0.5]
-    const to   = [tgt.pos_x + 0.5, tgt.pos_z + 2.5, tgt.pos_y + 0.5]
-    setLosLine({ from, to, clear })
-    onLosResultRef.current?.({ clear })
-    justHandledTargetRef.current = true  // AVANT onLosCancel — sinon le guard est inutile
-    onLosCancelRef.current?.()
-    moveCameraToShoulder(src, tgt)
-  }, [moveCameraToShoulder, tokensRef, voxelsRef])
+    justHandledTargetRef.current = true
+    try {
+      const res = await api.post(`/battlemaps/${battlemapId}/world-visibility`, {
+        source_token_id: src.id,
+        target_token_id: tgt.id,
+      })
+      const visibility = res.data?.visibility
+      if (!visibility?.line) return
+      const from = [visibility.line.from.x, visibility.line.from.y, visibility.line.from.z]
+      const to = [visibility.line.to.x, visibility.line.to.y, visibility.line.to.z]
+      setLosLine({ from, to, clear: visibility.line.clear })
+      onLosResultRef.current?.({
+        clear: visibility.line.clear,
+        coverageModifier: visibility.coverage?.modifier ?? 0,
+        interceptors: visibility.interceptors ?? [],
+      })
+      onLosCancelRef.current?.()
+      moveCameraToShoulder(src, tgt)
+    } catch (error) {
+      console.error('Erreur ligne de vue monde :', error)
+      setLosLine(null)
+      onLosCancelRef.current?.()
+    }
+  }, [battlemapId, moveCameraToShoulder, tokensRef])
 
   // P4 — clearLine déclaré après restoreCamera
   const clearLine = useCallback(() => {

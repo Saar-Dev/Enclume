@@ -29,6 +29,7 @@ import {
   planBattlemapTokenMovement,
 } from '../services/worldMovementService.js'
 import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
+import { evaluateBattlemapVisibility } from '../services/worldVisibilityService.js'
 import { WS } from '../../../shared/events.js'
 
 const router = Router({ mergeParams: true })
@@ -329,6 +330,53 @@ router.post('/:id/world-move', requireAuth, async (req, res, next) => {
       budget,
       coordinateSpace: 'world-feet',
     })
+  } catch (error) {
+    next(error)
+  }
+})
+
+// POST /api/battlemaps/:id/world-visibility — LOS, couverture et interposition sur le snapshot.
+router.post('/:id/world-visibility', requireAuth, async (req, res, next) => {
+  try {
+    const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
+    if (!battlemap) throw new AppError(404, 'Battlemap not found')
+    const member = await db('campaign_members')
+      .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id })
+      .first()
+    if (!member) throw new AppError(403, 'Access denied')
+
+    const { source_token_id, target_token_id, source_posture, target_posture } = req.body
+    const [sourceToken, targetToken] = await Promise.all([
+      db('tokens').where({ id: source_token_id, battlemap_id: battlemap.id }).first(),
+      db('tokens').where({ id: target_token_id, battlemap_id: battlemap.id }).first(),
+    ])
+    if (!sourceToken || !targetToken) throw new AppError(404, 'Source or target token not found')
+    if (member.role !== 'gm') {
+      const character = sourceToken.character_id
+        ? await db('characters').where({ id: sourceToken.character_id }).first()
+        : null
+      if (character?.user_id !== req.user.id) throw new AppError(403, 'You do not own the source token')
+    }
+
+    let visibility
+    try {
+      visibility = await evaluateBattlemapVisibility({
+        battlemap,
+        sourceToken,
+        targetToken,
+        sourceProfile: { posture: source_posture },
+        targetProfile: { posture: target_posture },
+      })
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        throw new AppError(400, error.message)
+      }
+      throw error
+    }
+    if (visibility.status === 'legacy-position') {
+      throw new AppError(409, 'Legacy token positions are not converted to the new world engine')
+    }
+    res.json({ visibility, coordinateSpace: 'world-feet' })
   } catch (error) {
     next(error)
   }

@@ -2,7 +2,7 @@
 
 > Dernière mise à jour : 2026-07-13 — plan issu de l'audit croisé combat/monde.
 >
-> Statut : **Phases 0 à 2 codées et vérifiées ; phases 3 à 7 planifiées**.
+> Statut : **Phases 0 à 3 codées et vérifiées ; phases 4 à 7 planifiées**.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.
@@ -183,7 +183,7 @@ Phases 3 et 7. Le flux de mouvement du monde, lui, ne possède plus de bypass cl
 
 ---
 
-## 6. Phase 3 — lignes de vue et matériaux
+## 6. Phase 3 — lignes de vue et matériaux ✅
 
 ### Livrables
 
@@ -204,6 +204,26 @@ Phases 3 et 7. Le flux de mouvement du monde, lui, ne possède plus de bypass cl
 | Grille | bloqué | visible | configurable |
 | Porte ouverte | permis | visible | configurable |
 | Fumée | permis | atténuée/bloquée selon densité | sans objet |
+
+### Livré le 2026-07-13
+
+- `shared/world/visibility.js` fournit profils de posture, yeux canoniques, raycast AABB 3D,
+  transmittance, couverture multi-échantillons et interposition des acteurs ;
+- `server/src/services/worldVisibilityService.js` combine occluders statiques, volumes d'entités,
+  tokens et snapshot courant ;
+- `POST /api/battlemaps/:id/world-visibility` expose le même calcul à la prévisualisation client ;
+- `useCameraLOS` ne raycaste plus les voxels : il affiche les points et le résultat renvoyés par le
+  serveur ;
+- `server/src/lib/losService.js` conserve les effets métier du combat mais délègue désormais LOS,
+  couverture et interposition au moteur de monde ;
+- murs pleins, verre et grilles ont des canaux mouvement/vision/eau/gaz vérifiés séparément ;
+- les entités peuvent fournir `blocksSight`/`blocks_sight`, un collider/occluder dimensionné, une
+  rotation et une opacité ;
+- les positions legacy sont refusées et la LOS entre étages utilise les plafonds/murs du snapshot ;
+- 48 tests passent et le build Vite passe.
+
+Limite assumée : les volumes atténuants sont déjà supportés par le service pur, mais leur persistance
+et leur propagation (fumée, gaz, feu) relèvent de la Phase 5.
 
 Ajouter les cas couverture debout, accroupi et couché dès que la pose canonique existe.
 
