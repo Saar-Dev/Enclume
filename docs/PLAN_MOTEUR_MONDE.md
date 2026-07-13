@@ -433,8 +433,9 @@ Phase 7.
 - un objet d'un étage inférieur ne peut plus intercepter un clic ni servir de support dans l'éditeur
   de l'étage courant, sauf s'il est visible au fond du même volume multniveau ; même visible, il ne
   remplace jamais le plan de placement de l'étage courant ;
-- l'outil **Mur** propose `Droit` ou `Courbe`. Une courbe quadratique réglable est tessellée en
-  segments orientés courts ; rendu, collision, LOS et étanchéité consomment ces mêmes segments ;
+- l'éditeur expose directement **Mur droit** et **Mur courbe**. Une courbe quadratique réglable est
+  tessellée en segments orientés courts ; rendu, collision, LOS et étanchéité consomment ces mêmes
+  segments ;
 - les portes restent attachées aux portions droites. Une porte courbe exigerait un modèle et une
   découpe dédiés, elle n'est donc pas simulée approximativement.
 

@@ -182,7 +182,8 @@ moteur ; sinon elles doivent être supprimées.
 - l'eau extérieure utilise une hauteur globale unique égale au sommet construit de la carte ;
 - l'éditeur donne la priorité au blueprint actif et ignore les entités des autres étages lors du
   placement ;
-- le nouvel outil Mur crée des murs droits ou des courbes quadratiques à courbure signée ;
+- les boutons directs **Mur droit** et **Mur courbe** rendent les deux modes immédiatement
+  accessibles ; le second crée des courbes quadratiques à courbure signée ;
 - chaque courbe est tessellée en segments orientés courts partagés par le renderer, le compilateur,
   les collisions, la LOS et l'étanchéité ; les portes restent limitées aux portions droites ;
 - la future trappe est documentée comme capacité d'un connecteur vertical lié, le plus souvent, à

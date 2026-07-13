@@ -1128,13 +1128,37 @@ export default function Sidebar({
                   </button>
                   <button
                     type="button"
-                    onClick={() => updateSurfaceTool({ mode: 'wall', selectedRoomId: null, selectedRoomIds: [] })}
+                    onClick={() => updateSurfaceTool({
+                      mode: 'wall',
+                      wallShape: 'straight',
+                      selectedRoomId: null,
+                      selectedRoomIds: [],
+                    })}
                     style={{
                       ...styles.roomToolModeBtn,
-                      ...(surfaceToolState.mode === 'wall' ? styles.roomToolModeBtnActive : {}),
+                      ...(surfaceToolState.mode === 'wall' && surfaceToolState.wallShape !== 'curve'
+                        ? styles.roomToolModeBtnActive
+                        : {}),
                     }}
                   >
-                    Mur
+                    Mur droit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({
+                      mode: 'wall',
+                      wallShape: 'curve',
+                      selectedRoomId: null,
+                      selectedRoomIds: [],
+                    })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'wall' && surfaceToolState.wallShape === 'curve'
+                        ? styles.roomToolModeBtnActive
+                        : {}),
+                    }}
+                  >
+                    Mur courbe
                   </button>
                   <button
                     type="button"
@@ -1591,17 +1615,6 @@ export default function Sidebar({
                 </div>
                 {surfaceToolState.mode === 'wall' && (
                   <div style={styles.roomToolGrid}>
-                    <label style={styles.roomToolLabel}>
-                      <span>Forme</span>
-                      <select
-                        value={surfaceToolState.wallShape || 'straight'}
-                        onChange={e => updateSurfaceTool({ wallShape: e.target.value })}
-                        style={styles.roomToolSelect}
-                      >
-                        <option value="straight">Droit</option>
-                        <option value="curve">Courbe</option>
-                      </select>
-                    </label>
                     <label style={styles.roomToolLabel}>
                       <span>Epaisseur</span>
                       <input
