@@ -161,7 +161,7 @@ export default function EntityBuilderTab({
             attribute_id:     i.attribute_id  || 'FOR',
             difficulty_dc:    i.difficulty_dc ?? 0,
             dmax_override:    i.dmax_override ?? null,
-            range:            i.range         ?? 1,
+            range:            i.range         ?? 1.5,
             required_state_ids: i.required_state_ids || [],
           }
         }
@@ -712,7 +712,7 @@ export default function EntityBuilderTab({
                                   attribute_id:       it.attribute_id || 'FOR',
                                   difficulty_dc:      it.difficulty_dc ?? 0,
                                   dmax_override:      null,
-                                  range:              1,
+                                  range:              1.5,
                                   required_state_ids: it.required_state_ids || [],
                                 }
                               }
@@ -790,7 +790,7 @@ export default function EntityBuilderTab({
                           disabled={!isOwner} />
                       </div>
                       <div style={S.fieldGroup}>
-                        <label style={S.fieldHint}>{t('builder.fieldRange')}</label>
+                        <label style={S.fieldHint}>{t('builder.fieldRange')} (m)</label>
                         <input type="number" step="0.5" style={{ ...S.input, fontSize: '11px' }}
                           value={inter.range ?? 1.5}
                           onChange={e => updateInteraction(idx, 'range', Number(e.target.value))}
@@ -848,7 +848,7 @@ export default function EntityBuilderTab({
                       <div style={S.fieldGroup}>
                         <label style={S.fieldHint}>{t('builder.fieldRange')}</label>
                         <input type="number" step="0.5" style={{ ...S.input, fontSize: '11px' }}
-                          value={inter.range ?? 1}
+                          value={inter.range ?? 1.5}
                           onChange={e => updateInteraction(idx, 'range', Number(e.target.value))}
                           disabled={!isOwner} />
                       </div>

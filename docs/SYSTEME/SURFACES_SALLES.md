@@ -13,9 +13,10 @@ L'éditeur Surface/Salle et son rendu existent. `surface_data` version 4 sait d�
 sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
 navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
-le lisent également ; le branchement spatial complet de la FSM combat reste en Phase 7.
+le lisent également ; depuis la Phase 7, la FSM combat lui délègue aussi déplacements, distances,
+portées, interactions et terrain instable.
 
-Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit la cible commune qui compilera
+Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit le moteur commun qui compile
 ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une
 seconde logique physique directement dans le renderer pour contourner cette migration.
 
@@ -30,7 +31,7 @@ Une salle est un objet métier rectangulaire :
 - hauteur : `heightLevels`, exprimée en étages, pas en mètres ;
 - dalles : sol et plafond, avec textures ou matériaux séparés pour dessus/dessous ;
 - murs : une face intérieure et une face extérieure ;
-- connecteurs : portes, ascenseurs et futurs passages entre salles/étages.
+- connecteurs : portes, escaliers, échelles, passerelles et ascenseurs entre salles/étages.
 
 Les dalles et les murs rendus ne doivent pas devenir la source de vérité. Ils sont dérivés depuis les salles au moment du rendu ou des calculs d’étanchéité.
 

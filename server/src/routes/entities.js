@@ -2,12 +2,7 @@ import { Router } from 'express'
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
-import {
-  collisionAddEntity,
-  collisionRemoveEntity,
-  collisionMoveEntity,
-  collisionUpdateEntityState,
-} from '../lib/redis.js'
+import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
 
 // mergeParams : true — nécessaire pour accéder à req.params.id (battlemap_id)
 // quand monté sous /api/battlemaps/:id/entities
@@ -149,9 +144,9 @@ router.post('/', requireAuth, async (req, res, next) => {
         state: JSON.stringify(initialState),
       })
       .returning('*')
+    await bumpBattlemapRuntimeRevision(req.params.id)
 
-    // Maintenance collision map Redis — incluse si is_blocking dans état initial (id=0)
-    await collisionAddEntity(req.params.id, entity, blueprint)
+    // L'occupation dynamique sera relue depuis PostgreSQL par le moteur monde.
 
     // Retourner l'instance avec son blueprint embarqué
     res.status(201).json({
@@ -174,7 +169,7 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
     const { member } = await getMember(entity.battlemap_id, req.user.id)
     if (member.role !== 'gm') throw new AppError(403, 'GM uniquement')
 
-    // Lire le blueprint une seule fois — nécessaire pour la maintenance Redis
+    // Lire le blueprint pour valider le mode de placement et retourner la ressource complète.
     const blueprint = await db('entity_blueprints').where({ id: entity.blueprint_id }).first()
 
     const {
@@ -212,20 +207,7 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
       .where({ id: req.params.entityId })
       .update(updates)
       .returning('*')
-
-    // ── Maintenance collision map Redis ────────────────────────────────────
-    // Deux cas indépendants : changement de position ET/OU changement d'état
-
-    const positionChanged = pos_x !== undefined || pos_y !== undefined || pos_z !== undefined
-    const stateChanged = current_state_id !== undefined
-
-    if (positionChanged && blueprint) {
-      // Déplacement : hdel ancienne case + hset nouvelle si is_blocking
-      await collisionMoveEntity(entity.battlemap_id, entity, updated, blueprint)
-    } else if (stateChanged && blueprint) {
-      // Changement d'état uniquement : hdel ou hset selon is_blocking du nouvel état
-      await collisionUpdateEntityState(entity.battlemap_id, entity, blueprint, updated.current_state_id)
-    }
+    await bumpBattlemapRuntimeRevision(entity.battlemap_id)
 
     res.json({ entity: { ...updated, blueprint } })
   } catch (err) {
@@ -243,10 +225,10 @@ router.delete('/:entityId', requireAuth, async (req, res, next) => {
     const { member } = await getMember(entity.battlemap_id, req.user.id)
     if (member.role !== 'gm') throw new AppError(403, 'GM uniquement')
 
-    // Maintenance collision map Redis AVANT suppression — position encore disponible
-    await collisionRemoveEntity(entity.battlemap_id, entity)
+    // La suppression invalide la révision runtime ; aucun cache collision secondaire n'existe.
 
     await db('entities').where({ id: req.params.entityId }).delete()
+    await bumpBattlemapRuntimeRevision(entity.battlemap_id)
 
     res.json({ ok: true })
   } catch (err) {

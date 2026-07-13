@@ -1,9 +1,7 @@
 import { WS } from '../../../shared/events.js'
 import socketAuth from './auth.js'
 import db from '../db/knex.js'
-import { buildCollisionMap } from '../lib/redis.js'
 import { registerTokenHandlers } from './socketToken.js'
-import { registerVoxelHandlers } from './socketVoxel.js'
 import { registerDiceHandlers } from './socketDice.js'
 import { registerEntityHandlers } from './socketEntity.js'
 import { registerCombatHandlers } from './socketCombat.js'
@@ -78,22 +76,6 @@ const initSocket = (io) => {
           role: member.role,
         })
 
-        // â”€â”€ Collision map Redis â€” reconstruction (PE23) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        // Reconstruite Ã  chaque SESSION_JOIN, pas au dÃ©marrage serveur.
-        // NÃ©cessite la battlemap courante du joueur via player_locations.
-        // Si pas de player_location â†’ joueur sans carte, skip (normal Ã  la premiÃ¨re connexion).
-        try {
-          const playerLocation = await db('player_locations')
-            .where({ campaign_id: campaignId, user_id: socket.user.id })
-            .first()
-          if (playerLocation?.battlemap_id) {
-            await buildCollisionMap(playerLocation.battlemap_id)
-          }
-        } catch (err) {
-          // Non bloquant â€” la collision map sera reconstruite au prochain SESSION_JOIN
-          console.warn('[WS] session:join â€” buildCollisionMap error (non bloquant):', err.message)
-        }
-
         // â”€â”€ Combat state sync â€” reconnexion en cours de combat (PC14) â”€â”€â”€â”€â”€â”€â”€â”€
         try {
           const activeCombat = await db('combat_state').where({ campaign_id: campaignId }).first()
@@ -166,7 +148,6 @@ const initSocket = (io) => {
 
         const context = { campaignId, user: socket.user, isGm: socket.role === 'gm' }
         registerTokenHandlers(io, socket, context)
-        registerVoxelHandlers(io, socket, context)
         registerDiceHandlers(io, socket, context)
         registerEntityHandlers(io, socket, context, pendingEntityActions)
         registerCombatHandlers(io, socket, context, { combatTimers, combatPreviews })

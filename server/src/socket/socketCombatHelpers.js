@@ -10,13 +10,14 @@ import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { calcWeaponModBonus } from '../services/modingService.js'
+import { measureBattlemapTokenDistance, tokenDistanceM } from '../services/worldSpatialQueryService.js'
 import { getLunetteNiveau, getEffectiveAimBonus } from '../../../shared/combatExclusiveActions.js'
+import { resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import {
   calcSkillTotal, calcAttributeNA,
   calcWoundPenalty, calcEncumbrancePenalty,
   getModDom, calcDroneRD, calcDroneDegatsNets,
 } from '../lib/charStats.js'
-import { isCaseOccupied, collisionMoveToken } from '../lib/redis.js'
 import { LOCATION_LABELS } from '../../../shared/armorConstants.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
 
@@ -309,14 +310,13 @@ export function multiAdversaryMalus(n) {
 // Compte les tokens ennemis actifs (enemyType) dans le roster à portée de tokenPos.
 // Portée = 3m + allonge maximale de l'adversaire (arme de contact équipée).
 // excludeId : token à exclure (soi-même).
-export function countAdversaires(tokenPos, rosterTokens, excludeId, enemyType) {
+export function countAdversaires(tokenPos, rosterTokens, excludeId, enemyType, metrics) {
   let count = 0
   for (const t of rosterTokens) {
     if (t.char_type !== enemyType || t.token_id === excludeId) continue
-    const dx = (tokenPos.pos_x ?? 0) - (t.pos_x ?? 0)
-    const dz = (tokenPos.pos_y ?? 0) - (t.pos_y ?? 0)
+    if (t.position_space !== 'world-feet') continue
     const maxAllonge = parseInt(t.max_allonge) || 0
-    if (Math.sqrt(dx * dx + dz * dz) <= 3 + maxAllonge) count++
+    if (tokenDistanceM(tokenPos, t, metrics) <= 3 + maxAllonge) count++
   }
   return count
 }
@@ -378,18 +378,25 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
     const allonge = parseInt(weapon?.ref_range) || 0
 
     // Validation distance Phase 2 — positions post-déplacement (PE14)
-    const [myTokenPos, targetTokenPos] = await Promise.all([
-      db('tokens').where({ id: action.token_id }).select('pos_x','pos_y').first(),
-      db('tokens').where({ id: targetTokenId }).select('pos_x','pos_y').first(),
-    ])
-    const dxChk = (myTokenPos?.pos_x ?? 0) - (targetTokenPos?.pos_x ?? 0)
-    const dzChk = (myTokenPos?.pos_y ?? 0) - (targetTokenPos?.pos_y ?? 0)
-    const dist2dChk = Math.sqrt(dxChk * dxChk + dzChk * dzChk)
-    if (dist2dChk > 3 + allonge) {
-      console.warn(`[WS] resolveMeleeAction — hors portée: ${dist2dChk.toFixed(1)}m max:${3 + allonge}m token:${action.token_id}`)
+    const measurement = await measureBattlemapTokenDistance({
+      sourceTokenId: action.token_id,
+      targetTokenId,
+    })
+    if (measurement.status !== 'ok') {
       emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
         username: character.name,
-        message: `Corps à corps impossible — distance : ${dist2dChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
+        message: 'Corps a corps impossible - position incompatible avec le moteur de monde',
+      } })
+      return { suspend: false, emissions }
+    }
+    const myTokenPos = measurement.sourceToken
+    const targetTokenPos = measurement.targetToken
+    const distanceMChk = measurement.distanceM
+    if (distanceMChk > 3 + allonge) {
+      console.warn(`[WS] resolveMeleeAction — hors portée: ${distanceMChk.toFixed(1)}m max:${3 + allonge}m token:${action.token_id}`)
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name,
+        message: `Corps à corps impossible — distance : ${distanceMChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
       } })
       return { suspend: false, emissions }
     }
@@ -424,11 +431,13 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
           db.raw(`re.id = ci.equipment_id AND re.category = 'Arme de contact'`))
         .where('cr.campaign_id', campaignId)
         .where('cr.status', 'active')
-        .groupBy('t.id', 't.pos_x', 't.pos_y', 'c.type')
+        .groupBy('t.id', 't.pos_x', 't.pos_y', 't.pos_z', 't.position_space', 'c.type')
         .select(
           't.id as token_id',
           't.pos_x',
           't.pos_y',
+          't.pos_z',
+          't.position_space',
           'c.type as char_type',
           db.raw(`COALESCE(MAX(CASE WHEN re.range ~ '^[0-9]+$' THEN re.range::INTEGER ELSE 0 END), 0) as max_allonge`)
         ),
@@ -453,7 +462,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
     const modDom = getModDom(for_na_attaquant)
 
     const rosterAttaquant = await db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first()
-    if (rosterAttaquant?.state_combat_mode === 'charge' && dist2dChk <= 3) {
+    if (rosterAttaquant?.state_combat_mode === 'charge' && distanceMChk <= 3) {
       emissions.push({ to: 'socket', event: WS.COMBAT_DECLARE_ERROR, data: { message: 'Charge impossible — distance ≤ 3m (élan insuffisant)' } })
       return { suspend: false, emissions }
     }
@@ -465,7 +474,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
     // Multi-adversaires : malus si l'attaquant est lui-même entouré d'ennemis
     const atkEnemyType = character.type === 'pj' ? 'pnj' : 'pj'
     const multiMalusAttaquant = multiAdversaryMalus(
-      countAdversaires(myTokenPos, rosterTokens, action.token_id, atkEnemyType)
+      countAdversaires(myTokenPos, rosterTokens, action.token_id, atkEnemyType, measurement.metrics)
     )
 
     // CaC 4b — malus attaque multiple (LdB p.218) : −5 pour 2 attaques, −7 pour 3+
@@ -474,11 +483,18 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
     // Mods situation CaC (§6.2)
     const deuxArmesSlots = invAttaquant.filter(i => ['MD', 'MG'].includes(i.slot) && i.ref_category === 'Arme de contact')
     const deuxArmesBonus = deuxArmesSlots.length >= 2 ? 3 : 0
+    const footingRequiresBalance = measurement.sourceEffectRegions.some(region => (
+      region.hooks.some(hook => (
+        hook.event === 'traverse' && hook.type === 'test' && hook.testKey === 'balance'
+      ))
+    ))
+    const terrainInstable = footingRequiresBalance
+      || (confirmedModifiers?.situation ?? []).includes('cac_terrain_instable')
     const situationMods = (confirmedModifiers?.situation ?? []).filter(k => k !== 'cac_terrain_instable')
     const situationModComp = situationMods.reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
     const tailleMod = TAILLE_MODS[confirmedModifiers?.taille ?? 'moyenne'] ?? 0
     let terrainInstableMod = 0, acrobatieTotal = attackerSkillTotal
-    if ((confirmedModifiers?.situation ?? []).includes('cac_terrain_instable')) {
+    if (terrainInstable) {
       const [acrobatieRefSkill, acrobatieCharSkill] = await Promise.all([
         db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
         db('char_skills').where({ char_sheet_id: sheetAttaquant.id, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
@@ -549,7 +565,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
     // Multi-adversaires : malus si le défenseur est entouré d'ennemis (positions post-déplacement)
     const defEnemyType = defenderCharacter.type === 'pj' ? 'pnj' : 'pj'
     const multiMalusDefenseur = multiAdversaryMalus(
-      countAdversaires(targetTokenPos, rosterTokens, targetTokenId, defEnemyType)
+      countAdversaires(targetTokenPos, rosterTokens, targetTokenId, defEnemyType, measurement.metrics)
     )
 
     // ── 3. Données défenseur ──────────────────────────────────────────────────
@@ -986,24 +1002,44 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
 
     // 2. Programme armement — miroir humanoïde : !ref_fire_mode → contact, sinon distance
     const isCaCWeapon = weapon.explicit_fire_mode ? weapon.explicit_fire_mode === 'cc' : !weapon.ref_fire_mode
+    let authoritativeRangeBand = null
 
     // ── Range check CaC drone (miroir resolveMeleeAction L.1674-1688) ──────────
     if (isCaCWeapon) {
       const allonge = parseInt(weapon?.ref_range) || 0
-      const [myTokenPos, targetTokenPos] = await Promise.all([
-        db('tokens').where({ id: action.token_id }).select('pos_x', 'pos_y').first(),
-        db('tokens').where({ id: action.target_token_id }).select('pos_x', 'pos_y').first(),
-      ])
-      const dxChk = (myTokenPos?.pos_x ?? 0) - (targetTokenPos?.pos_x ?? 0)
-      const dzChk = (myTokenPos?.pos_y ?? 0) - (targetTokenPos?.pos_y ?? 0)
-      const dist2dChk = Math.sqrt(dxChk * dxChk + dzChk * dzChk)
-      if (dist2dChk > 3 + allonge) {
+      const measurement = await measureBattlemapTokenDistance({
+        sourceTokenId: action.token_id,
+        targetTokenId: action.target_token_id,
+      })
+      if (measurement.status !== 'ok' || measurement.distanceM > 3 + allonge) {
         emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
           username: character.name,
-          message: `Corps à corps impossible — distance : ${dist2dChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
+          message: measurement.status === 'ok'
+            ? `Corps à corps impossible — distance : ${measurement.distanceM.toFixed(1)}m, portée max : ${3 + allonge}m`
+            : 'Corps à corps impossible — position incompatible avec le moteur de monde',
         } })
         return { suspend: false, emissions }
       }
+    }
+
+    if (!isCaCWeapon) {
+      const measurement = await measureBattlemapTokenDistance({
+        sourceTokenId: action.token_id,
+        targetTokenId: action.target_token_id,
+      })
+      const range = measurement.status === 'ok'
+        ? resolveWeaponRangeBand(measurement.distanceM, weapon.ref_range)
+        : { status: measurement.status, band: null }
+      if (range.status !== 'ok') {
+        emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+          username: character.name,
+          message: range.status === 'out-of-range'
+            ? `Tir impossible — cible hors de portée (${measurement.distanceM.toFixed(1)} m)`
+            : 'Tir impossible — portée ou position incompatible avec le moteur de monde',
+        } })
+        return { suspend: false, emissions }
+      }
+      authoritativeRangeBand = range.band
     }
 
     // ── LOS check (distance uniquement) ────────────────────────────────────────
@@ -1041,7 +1077,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
 
     // 3. Calcul chancesDeReussite (§7.3 — même modificateurs que humanoïdes)
     // armement_contact : portée = null → PORTEE_MOD_COMP[null]??0 = 0 (contact physique, pas de modificateur portée)
-    const portee = category !== 'armement_contact' ? (confirmedModifiers?.portee ?? 'courte') : null
+    const portee = category !== 'armement_contact' ? authoritativeRangeBand : null
     let totalModComp = PORTEE_MOD_COMP[portee] ?? 0
     if (confirmedModifiers?.taille) totalModComp += TAILLE_MODS[confirmedModifiers.taille] ?? 0
     const situationMods = confirmedModifiers?.situation ?? []
@@ -1277,6 +1313,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           'char_inventory.equipment_id',
           'char_inventory.ammo_remaining',
           'ref_equipment.ammo_count as ref_ammo_count',
+          'ref_equipment.range as ref_range',
         )
         .first(),
       db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first(),
@@ -1293,6 +1330,24 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       console.warn(`[WS] resolveAssaultAction — arme sans damage_h. weapon_inv_id:${action.weapon_inv_id}`)
       return { suspend: false, emissions }
     }
+
+    const measurement = await measureBattlemapTokenDistance({
+      sourceTokenId: action.token_id,
+      targetTokenId: action.target_token_id,
+    })
+    const range = measurement.status === 'ok'
+      ? resolveWeaponRangeBand(measurement.distanceM, weapon.ref_range)
+      : { status: measurement.status, band: null }
+    if (range.status !== 'ok') {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name,
+        message: range.status === 'out-of-range'
+          ? `Tir impossible — cible hors de portée (${measurement.distanceM.toFixed(1)} m)`
+          : 'Tir impossible — portée ou position incompatible avec le moteur de monde',
+      } })
+      return { suspend: false, emissions }
+    }
+    const authoritativeRangeBand = range.band
 
     const userRow = character.user_id
       ? await db('users').where({ id: character.user_id }).select('color', 'username').first()
@@ -1350,7 +1405,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         : 0)
     }
 
-    const porteeModComp    = PORTEE_MOD_COMP[confirmedModifiers.portee] ?? 0
+    const porteeModComp    = PORTEE_MOD_COMP[authoritativeRangeBand] ?? 0
     const situationModComp = (confirmedModifiers.situation ?? [])
       .reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
     const tailleModComp    = TAILLE_MODS[confirmedModifiers.taille] ?? 0
@@ -1361,7 +1416,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // (Phase 1, portee alors inconnue) est clampé ici selon la portée désormais confirmée
     // (Phase 2 Résolution). Réutilise installedMods déjà fetché pour Groupe 1 (même arme).
     const lunetteNiveau    = getLunetteNiveau(installedMods)
-    const aimBonusComp     = getEffectiveAimBonus(action.aim_bonus_comp ?? 0, { lunetteNiveau, portee: confirmedModifiers.portee })
+    const aimBonusComp     = getEffectiveAimBonus(action.aim_bonus_comp ?? 0, { lunetteNiveau, portee: authoritativeRangeBand })
     const { total: weaponModComp, breakdown: weaponModBreakdown } = calcWeaponModBonus(installedMods)
     const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp
 
@@ -1372,7 +1427,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const mr = chancesDeReussite - rollAttaque
     const breakdown = [
       { label: 'Compétence', value: skillTotal, type: 'base' },
-      ...(porteeModComp !== 0 ? [{ label: PORTEE_LABELS[confirmedModifiers.portee] ?? confirmedModifiers.portee, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' }] : []),
+      ...(porteeModComp !== 0 ? [{ label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' }] : []),
       ...(fireModeComp - dualWieldComp !== 0 ? [{ label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp - dualWieldComp, type: 'bonus' }] : []),
       ...(dualWieldComp !== 0 ? [{ label: 'Deux armes', value: dualWieldComp, type: 'bonus' }] : []),
       ...(aimBonusComp !== 0 ? [{ label: 'Tir visé', value: aimBonusComp, type: 'bonus' }] : []),
@@ -1473,7 +1528,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
             cibleType: cibleCharacter?.type ?? null,
             char_sheet_id_cible,
             mr,
-            portee: confirmedModifiers.portee,
+            portee: authoritativeRangeBand,
             fire_mode_bonus_dmg: action.fire_mode_bonus_dmg ?? 0,
             formula: weapon.ref_damage_h,
             for_na_cible,
@@ -1495,7 +1550,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         // PNJ — calcul complet immédiat, invisible aux joueurs
         const mrTable = await getMrTable()
         const modDomAttaque = getModifier(mrTable, mr)
-        const isShortRange = ['bout_portant', 'courte'].includes(confirmedModifiers.portee)
+        const isShortRange = ['bout_portant', 'courte'].includes(authoritativeRangeBand)
         const modDegatsMode = isShortRange ? (action.fire_mode_bonus_dmg ?? 0) : 0
         const { total: rawDice } = await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))
         const degautsBruts = rawDice + modDomAttaque + modDegatsMode

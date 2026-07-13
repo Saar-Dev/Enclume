@@ -7,7 +7,9 @@ import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
 import { calcSkillTotal, calcDroneDegatsNets } from '../lib/charStats.js'
 import { getMutationEffects } from '../services/mutationService.js'
-import { isCaseOccupied, collisionMoveToken } from '../lib/redis.js'
+import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
+import { executeBattlemapTokenMovement } from '../services/worldMovementService.js'
+import { measureBattlemapTokenDistance } from '../services/worldSpatialQueryService.js'
 import { LOCATION_LABELS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import {
@@ -107,14 +109,11 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
               .first()
             allonge = parseInt(w?.ref_range) || 0
           }
-          const [myPos, targetPos] = await Promise.all([
-            db('tokens').where({ id: tokenId }).select('pos_x', 'pos_y').first(),
-            db('tokens').where({ id: action.target_token_id }).select('pos_x', 'pos_y').first(),
-          ])
-          const dx = (myPos?.pos_x ?? 0) - (targetPos?.pos_x ?? 0)
-          const dz = (myPos?.pos_y ?? 0) - (targetPos?.pos_y ?? 0)
-          const dist = Math.sqrt(dx * dx + dz * dz)
-          if (dist > 3 + allonge) {
+          const measurement = await measureBattlemapTokenDistance({
+            sourceTokenId: tokenId,
+            targetTokenId: action.target_token_id,
+          })
+          if (measurement.status !== 'ok' || measurement.distanceM > 3 + allonge) {
             return callback({ ok: false })
           }
         }
@@ -207,48 +206,74 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       let needsDefenseWait = false
       for (const action of nonMeleeActions) {
         if (action.type === 'move_short' || action.type === 'move_long') {
-          const tx = action.target_pos_x
-          const ty = action.target_pos_y
-          const tz = action.target_pos_z ?? 0
-
-          // Murs (PE29, pos_z+1) + tokens (DB direct — Redis stocke tokens et voxels sol au même z=0)
-          const isCellFree = async (cx, cy) => {
-            if (await isCaseOccupied(token.battlemap_id, cx, cy, tz + 1, [tokenId])) return false
-            const occ = await db('tokens')
-              .where({ battlemap_id: token.battlemap_id, pos_x: cx, pos_y: cy, pos_z: tz })
-              .whereNot({ id: tokenId }).first()
-            return !occ
-          }
-          const moveTokenTo = async (cx, cy) => {
-            const [updated] = await db('tokens')
-              .where({ id: tokenId })
-              .update({ pos_x: cx, pos_y: cy, pos_z: tz, updated_at: db.fn.now() })
-              .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'layer'])
-            await collisionMoveToken(token.battlemap_id, token, updated)
-            io.to(campaignId).emit(WS.TOKEN_MOVED, {
-              tokenId: updated.id,
-              pos_x: updated.pos_x,
-              pos_y: updated.pos_y,
-              pos_z: updated.pos_z,
-            })
-            token.pos_x = cx; token.pos_y = cy; token.pos_z = tz
-          }
-
-          if (await isCellFree(tx, ty)) {
-            await moveTokenTo(tx, ty)
-          } else {
-            // Déplacement partiel : case juste avant la destination déclarée (règle Polaris)
-            const dx = tx - token.pos_x
-            const dy = ty - token.pos_y
-            const steps = Math.max(Math.abs(dx), Math.abs(dy))
-            let partial = false
-            if (steps > 1) {
-              const px = tx - Math.sign(dx)
-              const py = ty - Math.sign(dy)
-              if (await isCellFree(px, py)) { await moveTokenTo(px, py); partial = true }
+          let outcome = null
+          try {
+            if (!action.destination_world || !action.movement_gait) {
+              throw new RangeError('Intention de déplacement antérieure au moteur de monde')
             }
+            const budget = await getCharacterMovementBudget(character.id, action.movement_gait)
+            outcome = await executeBattlemapTokenMovement({
+              battlemapId: token.battlemap_id,
+              tokenId,
+              destination: action.destination_world,
+              authorizedBudgetM: budget.budgetM,
+            })
+          } catch (error) {
+            console.warn(`[WS] déplacement combat refusé token:${tokenId} — ${error.message}`)
+          }
+
+          const worldChanged = Boolean(outcome) && (
+            Number(action.planned_world_revision) !== Number(outcome.result?.worldRevision)
+            || Number(action.planned_runtime_revision) !== Number(outcome.evaluatedRuntimeRevision)
+          )
+          if (outcome?.moved || outcome?.elevatorRuntime?.changed) {
+            io.to(campaignId).emit(WS.WORLD_RUNTIME_UPDATED, {
+              battlemapId: token.battlemap_id,
+              runtimeRevision: outcome.runtimeRevision || outcome.elevatorRuntime.runtimeRevision,
+              kind: outcome.moved ? 'combat-movement' : 'elevator-clock',
+            })
+          }
+          for (const passenger of outcome?.elevatorPassengerTokens || []) {
+            io.to(campaignId).emit(WS.TOKEN_MOVED, {
+              tokenId: passenger.id,
+              pos_x: passenger.pos_x,
+              pos_y: passenger.pos_y,
+              pos_z: passenger.pos_z,
+              position_space: passenger.position_space,
+              updated_at: passenger.updated_at,
+              worldMovement: { kind: 'elevator-passenger' },
+            })
+          }
+          if (outcome?.moved) {
+            io.to(campaignId).emit(WS.TOKEN_MOVED, {
+              tokenId: outcome.token.id,
+              pos_x: outcome.token.pos_x,
+              pos_y: outcome.token.pos_y,
+              pos_z: outcome.token.pos_z,
+              position_space: outcome.token.position_space,
+              updated_at: outcome.token.updated_at,
+              worldMovement: {
+                kind: 'combat-resolution',
+                pathId: outcome.result.plan.pathId,
+                spentM: outcome.result.plan.spentM,
+                stopReason: outcome.result.plan.stopReason,
+                worldChanged,
+                replanned: true,
+                effectEvents: outcome.effectEvents,
+              },
+            })
+            Object.assign(token, outcome.token)
+          }
+          const partial = outcome?.result?.status === 'budget'
+          if (!outcome?.moved || partial) {
             console.log(`[WS] COMBAT_ACTION_CONFIRM — déplacement ${partial ? 'partiel' : 'bloqué'} token:${tokenId}`)
-            socket.emit(WS.COMBAT_RESOLVE_MOVE_BLOCKED, { tokenLabel: token.label, partial })
+            socket.emit(WS.COMBAT_RESOLVE_MOVE_BLOCKED, {
+              tokenLabel: token.label,
+              partial,
+              worldChanged,
+              reason: outcome?.status || 'invalid-world-plan',
+              reached: outcome?.result?.plan?.end || null,
+            })
           }
         } else if (action.type === 'assault') {
           if (!confirmedModifiers && character.type !== 'drone') {

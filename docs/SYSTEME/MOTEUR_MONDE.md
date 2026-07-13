@@ -1,10 +1,9 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-13 — Phase 6, cabine d'ascenseur mobile.
+> Dernière mise à jour : 2026-07-13 — Phase 7, combat et interactions branchés au monde.
 >
-> Statut : **architecture cible validée ; Phases 0 à 5 implémentées, phases 6 et 7 non implémentées**. Les sections marquées
-> `[EXISTANT]` décrivent le code livré. Les sections `[CIBLE]` sont le contrat à respecter pendant
-> la reconstruction.
+> Statut : **Phases 0 à 7 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
+> la session et du combat.**
 >
 > Lire pour : tout travail touchant le monde 3D, les coordonnées, les surfaces praticables, les
 > collisions, les déplacements, les connecteurs, les lignes de vue, les zones ou les effets
@@ -68,37 +67,33 @@ sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le norma
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
-### 2.2 Collisions Redis `[LEGACY, NON AUTORITAIRE]`
+### 2.2 Collisions et occupation `[EXISTANT — PHASE 7]`
 
-`server/src/lib/redis.js` construit un hash Redis `collision:{battlemapId}` indexé par clé
-`x:y:z`. Il contient les tokens, les entités bloquantes et les voxels.
+Redis et son hash de collision ont été supprimés. `shared/world/spatialIndex.js` sépare :
 
-Limites vérifiées :
+- les colliders statiques compilés depuis le document monde ;
+- les tokens et entités volumiques relus depuis PostgreSQL ;
+- les supports praticables et les traversées ;
+- les exclusions temporaires nécessaires à un mouvement atomique.
 
-- une seule valeur par cellule : une écriture peut masquer un autre occupant ;
-- une entité bloquante est réduite à sa cellule d'origine, sans dimensions ni rotation ;
-- les salles, sols, murs et connecteurs de `surface_data` sont absents ;
-- les positions flottantes ne correspondent pas naturellement aux clés exactes de cellule ;
-- Redis mélange cache de géométrie statique et occupation dynamique.
+Plusieurs occupants peuvent partager un bucket d'index sans s'écraser. Toute création,
+suppression, mutation d'état ou déplacement dynamique incrémente `runtime_revision`.
 
-### 2.3 Déplacement historique `[LEGACY COMBAT UNIQUEMENT]`
+### 2.3 Déplacement de combat `[EXISTANT — PHASE 7]`
 
-`client/src/lib/pathfinder.js` contient encore l'ancien A* Chebyshev pour le code de combat qui n'a
-pas encore été retiré. `Canvas3D` ne l'utilise plus pour prévisualiser ni appliquer un déplacement
-du monde : ces opérations passent par le service serveur de Phase 2.
+La déclaration ne stocke plus une simple case finale : elle conserve destination monde, allure
+dérivée, plan explicable, budget en mètres et révisions observées. Le client peut demander une
+destination, mais ne choisit ni le coût, ni l'allure suffisante, ni le modificateur d'initiative.
 
-Pendant un combat, le client envoie encore la destination, `action_key` et `ini_mod`. Le serveur
-persiste ces valeurs sans recalculer le chemin ni son coût. À la résolution, il contrôle la case
-d'arrivée et, si elle est occupée, essaie seulement la case située directement avant la destination.
-Le chemin déclaré n'est ni stocké ni revalidé.
-
-Le déplacement direct `TOKEN_MOVE` n'accepte plus de coordonnées imposées. Il reçoit une destination
-et une allure, puis le serveur calcule le budget, replanifie et diffuse uniquement le point atteint.
+À la résolution, `executeBattlemapTokenMovement` verrouille la battlemap, réconcilie l'ascenseur,
+recharge les occupants et effets, puis recalcule le chemin. Le token s'arrête exactement au budget
+ou au dernier point stable. Le plan annoncé sert à expliquer un changement de monde, jamais à
+contourner l'état courant.
 
 ### 2.4 Ligne de vue voxel `[LEGACY RETIRÉ DES CONSOMMATEURS]`
 
-`shared/losUtils.js` reste un fichier historique sans consommateur. `server/src/lib/losService.js` et
-la caméra appellent désormais le moteur de visibilité du snapshot.
+`shared/losUtils.js` a été supprimé. `server/src/lib/losService.js` et la caméra appellent le moteur
+de visibilité du snapshot.
 
 Le calcul Phase 3 prend désormais en compte :
 
@@ -111,14 +106,11 @@ Le calcul Phase 3 prend désormais en compte :
 La persistance et la propagation de fumée/gaz arrivent en Phase 5 ; le moteur sait déjà recevoir ces
 volumes comme occluders dynamiques atténuants.
 
-### 2.5 Unités `[RÉSOLU POUR LE MOTEUR DE MONDE — PHASE 2]`
+### 2.5 Unités `[RÉSOLU — PHASE 7]`
 
-`shared/polarisUtils.js::calcAllures()` retourne des distances Polaris en mètres. Le pathfinder et
-plusieurs interfaces de combat les utilisent comme un nombre de cases. Avec une case voulue à
-1,5 m, 15 m peuvent donc devenir 15 cases, soit 22,5 m.
-
-Le nouveau graphe convertit chaque segment avec `WorldMetrics` et compare ses coûts aux allures en
-mètres. Les écrans de combat non encore migrés restent explicitement une dette de Phase 7.
+Allures, chemins, portées d'arme, corps à corps, encerclement et interactions d'entité sont
+exprimés en mètres. Les adaptateurs `pos_x/pos_y/pos_z` restent confinés à la frontière DB ; une
+distance de règle passe toujours par `WorldMetrics` et utilise les trois axes.
 
 ### 2.6 Index des textures `[RÉSOLU — PHASE 1]`
 
@@ -141,13 +133,13 @@ Le dossier `shared/world/` fournit désormais :
 - `index.js` : point d'entrée commun client/serveur ;
 - `spatialIndex.js` et `navigation.js` : index statique, occupation dynamique, graphe 3D pondéré et
   planification autoritaire ;
-- cinquante tests Node, dont Jon, les portes, les occupants multiples, les budgets partiels, le
+- soixante-dix-sept tests Node, dont Jon, les portes, les occupants multiples, les budgets partiels, le
   placement sur support, les canaux de matériaux, la couverture et les occluders dynamiques.
 
 La route Surface compile le document avant de le valider en base et
 `GET /api/battlemaps/:id/world-snapshot` expose le résultat mis en cache par carte/révision. La
-navigation de session et les tokens n'utilisent plus Redis ni le pathfinder voxel. La LOS et la
-résolution complète du combat restent historiques jusqu'aux Phases 3 et 7.
+navigation de session, la LOS, les interactions physiques et le combat utilisent ces services. Les
+anciens fichiers Redis, pathfinder client et LOS voxel ont été supprimés.
 
 ### 2.8 Persistance et révisions `[EXISTANT — PHASE 1]`
 
@@ -185,7 +177,7 @@ pour des comparaisons, mais ne doivent provoquer ni adaptateur approximatif ni d
 
 ---
 
-## 3. Sources de vérité `[CIBLE]`
+## 3. Sources de vérité `[EXISTANT]`
 
 ### 3.1 Document statique du monde
 
@@ -232,20 +224,19 @@ Le snapshot contient au minimum :
 - régions et effets actifs ;
 - index spatiaux nécessaires aux requêtes rapides.
 
-PostgreSQL reste la source durable. Redis peut mettre en cache un snapshot ou ses tuiles, jamais
-devenir son autorité.
+PostgreSQL reste la source durable. Aucun cache Redis de collision, de navigation ou de snapshot
+n'est utilisé par le moteur du monde.
 
 Le compilateur doit être une logique pure partageable : le client peut l'utiliser pour la
 prévisualisation de l'éditeur, mais le serveur compile ou vérifie la version autoritaire.
 
-Implémentation Phase 1 : le snapshot contient déjà `supports`, `barriers`, `traversals`, `colliders`,
-`occluders` et `compartments`. `regions` est réservé à la Phase 5. Une traversée d'ascenseur est
-émise désactivée avec `requiresRuntimeController: true` : le compilateur refuse donc d'inventer une
-téléportation avant l'automate de la Phase 6.
+Implémentation actuelle : le snapshot contient `supports`, `barriers`, `traversals`, `colliders`,
+`occluders`, `compartments` et `regions`. L'ascenseur est compilé comme une cabine physique mobile ;
+il ne crée jamais d'arête verticale ni de téléportation entre paliers.
 
 ---
 
-## 4. Unités et coordonnées `[CIBLE]`
+## 4. Unités et coordonnées `[EXISTANT]`
 
 Un module unique `WorldMetrics` fournit :
 
@@ -266,7 +257,7 @@ physique canonique, même si le renderer applique ensuite un facteur visuel.
 
 ---
 
-## 5. Navigation et coût du déplacement `[CIBLE]`
+## 5. Navigation et coût du déplacement `[EXISTANT]`
 
 ### 5.1 Représentation
 
@@ -307,7 +298,7 @@ Sol :     3 m × 1 = 3 m.
 Total :   15 m ; Jon s'arrête sur l'échelle après 3 m de montée.
 ```
 
-Ce scénario constitue un test doré du futur moteur.
+Ce scénario constitue un test doré permanent du moteur.
 
 ### 5.3 Plan de déplacement
 
@@ -419,7 +410,7 @@ et sa cabine appartiennent à l'état runtime.
 
 ---
 
-## 7. Collisions, occupation et entités `[CIBLE]`
+## 7. Collisions, occupation et entités `[EXISTANT]`
 
 La topologie statique et l'occupation dynamique sont deux couches différentes.
 
@@ -436,7 +427,7 @@ les propriétés déclarées.
 
 ---
 
-## 8. Vision et couverture `[CIBLE]`
+## 8. Vision et couverture `[EXISTANT]`
 
 `VisibilityService` interroge le snapshot compilé :
 
@@ -503,8 +494,10 @@ chemin traversé, pas seulement la case finale.
 - l'ancienne table `zones`, sans consommateur actif, est archivée par la migration 154. Aucun
   adaptateur approximatif n'est maintenu.
 
-Le combat de Phase 7 consommera les hooks déclaratifs déjà produits. Il décidera de la résolution
-Polaris d'un `test` ou d'un `damage`, sans réimplémenter la détection spatiale.
+Le combat consomme déjà les régions pour les coûts, la visibilité et les tests de terrain instable,
+et les traversées résolues sont journalisées. La traduction détaillée des hooks `test` ou `damage`
+en règles Polaris reste une frontière métier future ; elle réutilisera la détection spatiale
+existante sans la réimplémenter.
 
 ---
 
@@ -522,7 +515,7 @@ propriétés et son état.
 
 ---
 
-## 11. Contrat avec le combat `[CIBLE]`
+## 11. Contrat avec le combat `[EXISTANT — PHASE 7]`
 
 La machine à états de combat existante reste l'orchestrateur. Elle appelle :
 
@@ -533,6 +526,16 @@ La machine à états de combat existante reste l'orchestrateur. Elle appelle :
 
 Le combat ne duplique aucune formule spatiale. Portée, couverture et effets sont recalculés après la
 position réellement atteinte.
+
+À la déclaration, le client fournit uniquement une destination. Le serveur planifie le trajet avec
+le budget maximal autorisé, dérive l'allure minimale suffisante et conserve le plan ainsi que les
+révisions du monde. À la résolution, le trajet est recalculé sous verrou et peut s'arrêter avant la
+destination si le budget, un obstacle, une porte, un effet ou l'état runtime l'impose.
+
+Les distances de contact, charge, portée d'arme, proximité d'adversaires et interaction avec une
+entité sont des distances 3D en mètres. Les bandes de portée proviennent de la portée de l'arme et
+de la position réellement atteinte ; une valeur `confirmedModifiers.portee` envoyée par le client
+n'est jamais une autorité de règle.
 
 Les modificateurs dérivés sont calculés par le serveur. Une dérogation du MJ, si elle existe, est
 explicite, auditée et accompagnée d'une raison ; elle ne remplace pas silencieusement le résultat du

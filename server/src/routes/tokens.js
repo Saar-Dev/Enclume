@@ -4,6 +4,7 @@ import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { WS } from '../../../shared/events.js'
 import { removeTokens } from '../lib/tokenLifecycle.js'
+import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
 import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
 import { resolveBattlemapPlacement } from '../services/worldMovementService.js'
 
@@ -87,10 +88,16 @@ router.post('/', requireAuth, async (req, res) => {
       color: color || null,
     })
     .returning('*')
+  const runtimeRevision = await bumpBattlemapRuntimeRevision(battlemap.id)
 
   // Broadcaster TOKEN_CREATED à toute la room — le serveur est seul émetteur
   const io = req.app.get('io')
   io.to(battlemap.campaign_id).emit(WS.TOKEN_CREATED, { token })
+  io.to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+    battlemapId: battlemap.id,
+    runtimeRevision,
+    kind: 'token-created',
+  })
 
   res.status(201).json({ token })
 })
@@ -245,7 +252,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
   if (!isGm && !isOwner) throw new AppError(403, 'You can only delete your own token')
 
-  // Nettoyage Redis + suppression DB + broadcast TOKEN_DELETED — centralisé (tokenLifecycle.js)
+  // Suppression DB, invalidation runtime et broadcast centralisés.
   const io = req.app.get('io')
   await removeTokens(io, [token], battlemap.campaign_id)
 

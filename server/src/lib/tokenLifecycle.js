@@ -1,18 +1,21 @@
 import db from '../db/knex.js'
 import { WS } from '../../../shared/events.js'
-import { collisionRemoveToken } from './redis.js'
+import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
 
-// Suppression atomique d'un lot de tokens : nettoyage Redis + DB + notification socket.
-// Point unique pour tout appelant qui supprime des tokens en cascade (character, battlemap...) —
-// évite la duplication ad hoc du triplet Redis/DB/socket à chaque nouveau point de suppression.
+// Suppression atomique d'un lot de tokens : DB + notification socket.
+// Le moteur monde relit l'occupation dynamique depuis PostgreSQL.
 export async function removeTokens(io, tokens, campaignId) {
-  for (const token of tokens) {
-    await collisionRemoveToken(token.battlemap_id, token)
-  }
-
   const ids = tokens.map((t) => t.id)
   if (ids.length) {
     await db('tokens').whereIn('id', ids).delete()
+    for (const battlemapId of new Set(tokens.map(token => token.battlemap_id).filter(Boolean))) {
+      const runtimeRevision = await bumpBattlemapRuntimeRevision(battlemapId)
+      io.to(campaignId).emit(WS.WORLD_RUNTIME_UPDATED, {
+        battlemapId,
+        runtimeRevision,
+        kind: 'token-deleted',
+      })
+    }
   }
 
   for (const token of tokens) {

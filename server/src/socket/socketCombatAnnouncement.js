@@ -4,6 +4,35 @@ import { canTransition } from '../lib/combatFSM.js'
 import { skipPlayer, startResolutionPhase } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAimBonusComp, getAimIniCost, isAimEligible, getLunetteNiveau } from '../../../shared/combatExclusiveActions.js'
+import { combatDestinationFromPayload, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
+import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
+import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
+import { planBattlemapTokenMovement } from '../services/worldMovementService.js'
+
+async function planCombatWorldMovement(token, character, move) {
+  if (token.position_space !== 'world-feet') throw new RangeError('Le token utilise encore une position legacy')
+  const battlemap = await db('battlemaps').where({ id: token.battlemap_id }).first()
+  if (!battlemap) throw new RangeError('Battlemap introuvable')
+  const destination = combatDestinationFromPayload(move)
+  const maximum = await getCharacterMovementBudget(character.id, 'max')
+  const preview = await planBattlemapTokenMovement({
+    battlemap,
+    token,
+    destination,
+    authorizedBudgetM: maximum.budgetM,
+  })
+  if (!preview.plan || preview.status === 'unreachable') throw new RangeError('Destination inaccessible')
+  const movement = selectCombatMovementForCost(preview.routeCostM, maximum.allures)
+  if (!movement) throw new RangeError('Destination hors de portée maximale pour ce tour')
+  return Object.freeze({
+    ...movement,
+    destination: preview.snappedTo,
+    dbDestination: worldPointToDbPosition(preview.snappedTo),
+    worldPlan: Object.freeze({ ...preview.plan, budgetM: movement.budgetM }),
+    worldRevision: preview.worldRevision,
+    runtimeRevision: preview.runtimeRevision,
+  })
+}
 
 export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -33,12 +62,12 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         if (state[k] && !vals.includes(state[k])) return
       }
 
-      // PC33 — coordonnées déplacement obligatoires si move (coords DB PE14)
+      // La forme PE14 du payload n'est qu'un adaptateur client ; les décimales monde sont valides.
       if (mapActions?.move) {
-        const px = parseInt(mapActions.move.targetPosX)
-        const py = parseInt(mapActions.move.targetPosY)
-        const pz = parseInt(mapActions.move.targetPosZ ?? 0)
-        if (isNaN(px) || isNaN(py) || isNaN(pz)) {
+        const px = Number(mapActions.move.targetPosX)
+        const py = Number(mapActions.move.targetPosY)
+        const pz = Number(mapActions.move.targetPosZ)
+        if (![px, py, pz].every(Number.isFinite)) {
           socket.emit('error', { message: 'Coordonnées de déplacement invalides (PC33)' })
           return
         }
@@ -77,6 +106,16 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         return
       }
 
+      let movementDeclaration = null
+      if (mapActions?.move) {
+        try {
+          movementDeclaration = await planCombatWorldMovement(token, character, mapActions.move)
+        } catch (error) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: error.message })
+          return
+        }
+      }
+
       // Stun guard — is_stunned lit depuis token_statuses (source unique post-Sprint 14-0)
       const stunRow = await db('token_statuses').where({ token_id: tokenId, status_code: 'stunned' }).first()
       if (stunRow) {
@@ -88,8 +127,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Assommé — ne peut pas attaquer au corps à corps" })
           return
         }
-        const ak = mapActions?.move?.action_key
-        if (ak === 'move_rapide' || ak === 'move_max') {
+        if (movementDeclaration && ['rapide', 'max'].includes(movementDeclaration.gait)) {
           socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Assommé — allure maximale : Moyenne" })
           return
         }
@@ -199,7 +237,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         }
         // Charge/Retraite : déplacement gratuit — override ini_mod serveur (non trusté client)
         const freeMove = (state.combat_mode === 'charge' || state.combat_mode === 'retraite') && !!mapActions?.move
-        if (mapActions?.move)  iniDelta += freeMove ? 0 : (mapActions.move.ini_mod ?? 0)
+        if (movementDeclaration) iniDelta += freeMove ? 0 : movementDeclaration.initiativeModifier
         if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) {
           iniDelta += -3
           if (mapActions.melee.length > 1) iniDelta += -5
@@ -237,25 +275,24 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
 
       // Construction des lignes combat_actions (PC32 — sequence attribué serveur)
-      const getType = (key) => {
-        if (key === 'assault') return 'assault'
-        if (key === 'move_lente') return 'move_short'
-        if (key.startsWith('move_')) return 'move_long'
-        return 'micro'
-      }
-
       const actionRows = []
 
       if (mapActions?.move) {
-        const px = parseInt(mapActions.move.targetPosX)
-        const py = parseInt(mapActions.move.targetPosY)
-        const pz = parseInt(mapActions.move.targetPosZ ?? 0)
-        const ak = mapActions.move.action_key
         actionRows.push({
           campaign_id: campaignId, token_id: tokenId,
-          action_key: ak, type: getType(ak), sequence: 1,
-          target_pos_x: px, target_pos_y: py, target_pos_z: pz,
-          modifiers: JSON.stringify({ ini_mod: mapActions.move.ini_mod ?? 0 }),
+          action_key: movementDeclaration.actionKey,
+          type: movementDeclaration.actionType,
+          sequence: 1,
+          target_pos_x: movementDeclaration.dbDestination.pos_x,
+          target_pos_y: movementDeclaration.dbDestination.pos_y,
+          target_pos_z: movementDeclaration.dbDestination.pos_z,
+          movement_gait: movementDeclaration.gait,
+          destination_world: movementDeclaration.destination,
+          world_plan: movementDeclaration.worldPlan,
+          planned_world_revision: movementDeclaration.worldRevision,
+          planned_runtime_revision: movementDeclaration.runtimeRevision,
+          planned_budget_m: movementDeclaration.budgetM,
+          modifiers: JSON.stringify({ ini_mod: movementDeclaration.initiativeModifier }),
           status: 'pending',
         })
       }
@@ -375,7 +412,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // Dériver actionType pour le broadcast
       let actionType = 'micro'
       if (mapActions?.attack)      actionType = 'assault'
-      else if (mapActions?.move)   actionType = getType(mapActions.move.action_key)
+      else if (movementDeclaration) actionType = movementDeclaration.actionType
       else if (mapActions?.melee)  actionType = 'melee'
       else if (mapActions?.reload) actionType = 'reload'
 
@@ -385,8 +422,12 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         initiative_score: updatedInitiative,
         initiative:       updatedInitiative,
         // Coords PE14 destination déplacement (pour ghost spectateurs)
-        moveTarget: mapActions?.move
-          ? { x: mapActions.move.targetPosX, y: mapActions.move.targetPosY, z: mapActions.move.targetPosZ }
+        moveTarget: movementDeclaration
+          ? {
+            x: movementDeclaration.dbDestination.pos_x,
+            y: movementDeclaration.dbDestination.pos_y,
+            z: movementDeclaration.dbDestination.pos_z,
+          }
           : null,
         // Token cible (tir ou CaC, pour ligne d'annonce spectateurs)
         attackTargetId: mapActions?.attack?.targetTokenId

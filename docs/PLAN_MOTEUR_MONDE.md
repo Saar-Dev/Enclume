@@ -2,7 +2,7 @@
 
 > Dernière mise à jour : 2026-07-13 — plan issu de l'audit croisé combat/monde.
 >
-> Statut : **Phases 0 à 5 codées et vérifiées ; phases 6 et 7 planifiées**.
+> Statut : **Phases 0 à 7 codées et vérifiées ; moteur monde autoritaire branché au combat**.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.
@@ -362,7 +362,7 @@ Phase 7.
 
 ---
 
-## 10. Phase 7 — branchement complet du combat et retrait du legacy
+## 10. Phase 7 — branchement complet du combat et retrait du legacy ✅
 
 ### Livrables
 
@@ -383,6 +383,30 @@ Phase 7.
 - portée, couverture et effets sont identiques côté prévisualisation et résolution serveur ;
 - aucun payload client ne permet d'imposer une distance ou un modificateur favorable ;
 - aucune dépendance runtime au format voxel historique.
+
+### Livré le 2026-07-13
+
+- `shared/combatMovement.js` devient le registre unique des allures, actions, couleurs et coûts
+  d'initiative. Le serveur choisit l'allure minimale depuis le coût réel du chemin ; les valeurs
+  `action_key` et `ini_mod` du payload ne sont plus une autorité ;
+- la migration 156 stocke l'intention canonique (`destination_world`, allure, plan, budget et
+  révisions). Une ancienne action pendante est invalidée plutôt que convertie en faux trajet 3D ;
+- à la résolution, le chemin est toujours recalculé sous verrou. Une modification de structure,
+  de cabine, d'effet ou d'occupation entre annonce et résolution produit un arrêt partiel ou un
+  refus explicite, jamais une téléportation vers l'ancienne destination ;
+- `worldSpatialQueryService.js` mesure corps à corps, encerclement, interactions et tirs en 3D et
+  en mètres. `shared/combatRange.js` déduit la bande Polaris depuis la distance et la portée de
+  l'arme ; le choix client de la bande est ignoré ;
+- LOS, couverture, interposition, terrain instable et huile/glissant proviennent du snapshot et des
+  régions d'effet. Les traversées sont journalisées et renvoyées avec le mouvement de combat ;
+- `worldForcedMovementService.js` remplace la collision Redis du pousser/tirer : le token et l'objet
+  forment une paire rigide qui s'arrête au dernier support libre ;
+- la migration 157 convertit les portées d'interaction historiques de cases vers les mètres ;
+- `redis.js`, `socketVoxel.js`, `client/src/lib/pathfinder.js` et `shared/losUtils.js` sont supprimés.
+  L'onglet principal de l'éditeur s'appelle désormais **Monde**. Le rendu optionnel d'anciens voxels
+  peut rester une fixture visuelle, sans participer à une décision physique ;
+- validation : 77 tests monde/combat purs, deux migrations `up/down` sur PostgreSQL, checks Node,
+  build Vite et recherche globale sans consommateur Redis/pathfinder/LOS voxel.
 
 ---
 

@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 6 ; Session 141 (suite 29) conservée.
+> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 7 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -43,8 +43,8 @@ Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statiq
 - éditeur : files de sauvegarde séparées, contrôle des erreurs HTTP et révisions monotones ;
 - validation : 27 tests, checks Node, build Vite et migration/rollback sur PostgreSQL isolé.
 
-Cette photographie décrit la sortie de Phase 1. La Phase 2 ci-dessous rend le snapshot autoritaire
-pour les déplacements de session ; la LOS et la résolution combat restent à migrer.
+Cette photographie décrit la sortie de Phase 1. Les Phases 2, 3 et 7 ont depuis rendu le snapshot
+autoritaire pour les déplacements, la LOS, la couverture et les mesures spatiales du combat.
 
 ---
 
@@ -82,8 +82,8 @@ combat encore à rebrancher. Elles ne décrivent plus l'autorité de déplacemen
 - volumes atténuants et `sightOpacity` prêts pour les effets de Phase 5 ;
 - validation : 48 tests, checks Node et build Vite.
 
-`shared/losUtils.js` n'a plus de consommateur et sera supprimé avec les derniers chemins voxel en
-Phase 7. Le service de combat conserve uniquement ses effets métier (munition et messages).
+`shared/losUtils.js` a été supprimé en Phase 7 avec les derniers chemins voxel autoritaires. Le
+service de combat conserve ses effets métier et délègue les décisions spatiales au moteur du monde.
 
 ---
 
@@ -137,6 +137,37 @@ L'ascenseur reste expressément non navigable avant son automate de Phase 6.
 
 Les cartes historiques ne constituent pas une cible de migration. Elles ne sont conservées comme
 fixtures que si elles n'ajoutent aucun adaptateur ni branche conditionnelle au moteur canonique.
+
+---
+
+## Moteur de monde — Phase 7 ✅
+
+- `shared/combatMovement.js` est le registre unique des allures de combat ; le serveur choisit
+  l'allure minimale suffisante à partir du coût réel du trajet et ignore toute allure imposée par
+  le client ;
+- migration 156 — plan de monde durable dans `combat_actions`, coordonnées décimales, révisions
+  planifiées et invalidation volontaire des anciens déplacements en attente ;
+- la résolution replanifie sous verrou avec la révision courante et persiste la position réellement
+  atteinte, y compris un arrêt au milieu d'un escalier ou d'une échelle ;
+- `worldSpatialQueryService.js` fournit distance 3D en mètres, proximité, régions d'effets et
+  mesures token-entité après réconciliation des ascenseurs ;
+- `shared/combatRange.js` dérive la bande de portée depuis la distance réelle et la portée de l'arme.
+  `confirmedModifiers.portee` n'est plus une autorité de règle ;
+- la LOS, la couverture, le contact, la charge, les adversaires proches et les interactions
+  consomment tous les mêmes coordonnées canoniques ;
+- `worldForcedMovementService.js` déplace ensemble acteur et objet, vérifie supports, colliders et
+  occupants, puis s'arrête au dernier point libre ;
+- migration 157 — conversion des portées d'interaction historiques de cases en mètres ;
+- les changements de tokens, entités, effets, passerelles et ascenseurs alimentent une même
+  `runtime_revision` ;
+- suppression des autorités historiques `server/src/lib/redis.js`, `socketVoxel.js`,
+  `client/src/lib/pathfinder.js` et `shared/losUtils.js` ;
+- validation : 77 tests monde/combat, migrations 156 et 157 `up/down` sur PostgreSQL, checks Node et
+  build Vite.
+
+Il n'existe aucune garantie de rétrocompatibilité des cartes historiques. Elles peuvent servir de
+fixtures de diagnostic tant qu'elles n'imposent ni adaptateur, ni branche de règles, ni double
+moteur ; sinon elles doivent être supprimées.
 
 ---
 

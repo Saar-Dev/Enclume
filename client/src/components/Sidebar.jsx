@@ -1052,10 +1052,10 @@ export default function Sidebar({
           {/* ── Onglets éditeur : Voxels / Entités ── */}
           <div style={styles.editorTabs}>
             <button
-              style={{ ...styles.editorTab, ...(activeEditorTab === 'voxel' ? styles.editorTabActive : {}) }}
-              onClick={() => onEditorTabChange?.('voxel')}
+              style={{ ...styles.editorTab, ...(activeEditorTab === 'world' ? styles.editorTabActive : {}) }}
+              onClick={() => onEditorTabChange?.('world')}
             >
-              {t('sidebar.editorTabVoxels')}
+              Monde
             </button>
             <button
               style={{ ...styles.editorTab, ...(activeEditorTab === 'entity' ? styles.editorTabActive : {}) }}
@@ -1092,7 +1092,7 @@ export default function Sidebar({
           </div>
 
           {/* ── Palette voxels — visible uniquement en onglet Voxels ── */}
-          {activeEditorTab === 'voxel' && (
+          {activeEditorTab === 'world' && (
             <>
               <div style={{ ...styles.paletteTitle, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
                 <span>{t('sidebar.paletteTextures')}</span>

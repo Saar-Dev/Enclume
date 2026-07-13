@@ -10,17 +10,14 @@ import {
 } from '../lib/charStats.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
-import {
-  isCaseOccupied,
-  collisionMoveToken,
-  collisionMoveEntity,
-  collisionUpdateEntityState,
-} from '../lib/redis.js'
+import { measureBattlemapTokenEntityDistance } from '../services/worldSpatialQueryService.js'
+import { executeBattlemapRigidPairMovement } from '../services/worldForcedMovementService.js'
+import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
 
 // ─── Helper — résolution état entité après succès ─────────────────────────────
 // Lit target_state_id de l'interaction, met à jour current_state_id en base,
 // broadcaster ENTITY_UPDATED à toute la room,
-// et maintient la collision map Redis selon is_blocking du nouvel état.
+// puis invalide la révision runtime dont dépendent collision, navigation et visibilité.
 async function resolveEntityState(entityId, interactionId, campaignId, io) {
   try {
     const entity = await db('entities').where({ id: entityId }).first()
@@ -39,15 +36,18 @@ async function resolveEntityState(entityId, interactionId, campaignId, io) {
         updated_at: db.fn.now(),
       })
       .returning(['id', 'current_state_id', 'state', 'updated_at', 'pos_x', 'pos_y', 'pos_z', 'battlemap_id'])
-
-    // Maintenance collision map Redis — is_blocking peut changer selon le nouvel état
-    await collisionUpdateEntityState(updated.battlemap_id, entity, blueprint, updated.current_state_id)
+    const runtimeRevision = await bumpBattlemapRuntimeRevision(updated.battlemap_id)
 
     io.to(campaignId).emit(WS.ENTITY_UPDATED, {
       entityId: updated.id,
       current_state_id: updated.current_state_id,
       state: updated.state,
       updated_at: updated.updated_at,
+    })
+    io.to(campaignId).emit(WS.WORLD_RUNTIME_UPDATED, {
+      battlemapId: updated.battlemap_id,
+      runtimeRevision,
+      kind: 'entity-state',
     })
   } catch (err) {
     console.error('[WS] resolveEntityState error:', err.message)
@@ -347,7 +347,7 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
   // ─── ENTITY:CREATED ────────────────────────────────────────────────────
   // Le GM vient de poser une entité (après POST REST réussi).
   // Payload : { entityId }
-  // La maintenance Redis collision est faite dans POST /entities (REST).
+  // POST /entities invalide directement la révision runtime du monde.
   // Ce handler gère uniquement le broadcast ciblé (gm_only).
   socket.on(WS.ENTITY_CREATED, async ({ entityId }) => {
     try {
@@ -401,7 +401,7 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
 
   // ─── ENTITY:DELETED ────────────────────────────────────────────────────
   // Le GM a supprimé une entité (après DELETE REST réussi).
-  // La maintenance Redis collision est faite dans DELETE /entities/:id (REST).
+  // DELETE /entities/:id invalide directement la révision runtime du monde.
   // Ce handler gère uniquement le broadcast.
   // Payload : { entityId }
   socket.on(WS.ENTITY_DELETED, async ({ entityId }) => {
@@ -415,7 +415,7 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
 
   // ─── ENTITY:MOVED ──────────────────────────────────────────────────────
   // Le GM a déplacé une entité dans l'éditeur (après PUT REST réussi).
-  // La maintenance Redis collision est faite dans PUT /entities/:id (REST).
+  // PUT /entities/:id invalide directement la révision runtime du monde.
   // Ce handler gère uniquement le broadcast.
   // Payload : { entityId, pos_x, pos_y, pos_z, r }
   socket.on(WS.ENTITY_MOVED, async ({ entityId, pos_x, pos_y, pos_z, r }) => {
@@ -430,7 +430,7 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
   // ─── ENTITY:MOVE_REQUEST ───────────────────────────────────────────────
   // Un joueur demande à déplacer une entité (push/pull orthogonal — 9F-B).
   // Le serveur est source de vérité : il recalcule l'attribut, le jet, le Dmax,
-  // et exécute le step-by-step en consultant la collision map Redis.
+  // et exécute le déplacement dans le WorldSnapshot autoritaire.
   //
   // Payload : { entityId, tokenId, interactionId, moveType, destX, destZ }
   //   moveType = 'push'|'pull' — calculé client par dot(AE,AD), revalidé serveur (PE27)
@@ -488,12 +488,12 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
         return
       }
 
-      // ── Valider la portée — distance Tchebychev 3D ─────────────────
-      const rangeDist = Math.max(
-        Math.abs(entity.pos_x - token.pos_x),
-        Math.abs(entity.pos_y - token.pos_y),
-        Math.abs(entity.pos_z - token.pos_z),
-      )
+      // ── Valider la portée dans les métriques 3D du monde ──────────────
+      const measurement = await measureBattlemapTokenEntityDistance({ tokenId, entityId })
+      if (measurement.status !== 'ok') { console.log(`[DBG] RETURN — mesure monde:${measurement.status}`); return }
+      Object.assign(token, measurement.token)
+      Object.assign(entity, measurement.entity)
+      const rangeDist = measurement.distanceM
       const overrides = entity.interaction_overrides?.[interactionId] || {}
       const effectiveRange    = overrides.range         ?? interaction.range         ?? 1.5
       const effectiveDifficulty = overrides.difficulty_dc ?? interaction.difficulty_dc ?? 0
@@ -509,9 +509,6 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
 
       const isDiagonal = dPosX !== 0 && dPosY !== 0
       if (isDiagonal && Math.abs(dPosX) !== Math.abs(dPosY)) { console.log(`[DBG] RETURN — diagonal invalide |dPosX|:${Math.abs(dPosX)} |dPosY|:${Math.abs(dPosY)}`); return }
-
-      const dirPosX = Math.sign(dPosX)
-      const dirPosY = Math.sign(dPosY)
 
       // ── Détermination et validation moveType par vecteur dot(AE, AD) — PE27 ──
       const AE = { x: entity.pos_x - token.pos_x, y: entity.pos_y - token.pos_y }
@@ -612,66 +609,16 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
       }
 
       // ── Step-by-step ────────────────────────────────────────────────
-      // excludeIds : token et entité s'excluent mutuellement (tunnel de swap — PE22)
-      const excludeIds = [tokenId, entityId]
+      // Le couple acteur/objet s'exclut lui-même des contrôles d'occupation.
+      const movement = await executeBattlemapRigidPairMovement({
+        battlemapId: entity.battlemap_id,
+        tokenId,
+        entityId,
+        destination: { x: Number(destX), y: Number(entity.pos_z), z: Number(destZ) },
+        maxSteps: dmax,
+      })
 
-      // Distance Tchebychev jusqu'à la destination choisie par le joueur.
-      // Le joueur clique sur une case précise — l'entité s'arrête là si possible.
-      // dmax = plafond MR, stepsTarget = intention du joueur.
-      // On prend le minimum des deux — Option A (design session 43).
-      const stepsTarget = Math.max(
-        Math.abs(destX - entity.pos_x),
-        Math.abs(destZ - entity.pos_y)   // destZ = pos_y base (PE14)
-      )
-      const stepsMax = Math.min(dmax, stepsTarget)
-
-      let stepsCompleted = 0
-      for (let k = 1; k <= stepsMax; k++) {
-        const nextEntityPosX = entity.pos_x + dirPosX * k
-        const nextEntityPosY = entity.pos_y + dirPosY * k   // pos_y = profondeur (PE14)
-        const nextActorPosX  = token.pos_x  + dirPosX * k
-        const nextActorPosY  = token.pos_y  + dirPosY * k
-
-        console.log(`[DBG] step k=${k} entité-next:(${nextEntityPosX},${nextEntityPosY},${entity.pos_z}) acteur-next:(${nextActorPosX},${nextActorPosY},${token.pos_z})`)
-
-        // Vérifier collision entité (altitude pos_z inchangée — déplacement horizontal)
-        const entityBlocked = await isCaseOccupied(
-          entity.battlemap_id,
-          nextEntityPosX, nextEntityPosY, entity.pos_z,
-          excludeIds
-        )
-        if (entityBlocked) { console.log(`[DBG] entityBlocked à (${nextEntityPosX},${nextEntityPosY},${entity.pos_z})`); break }
-
-        // Vérifier collision acteur
-        // token.pos_z = altitude des pieds (même niveau que le sol).
-        // On vérifie pos_z+1 = espace de marche — standard industrie VTT.
-        // Évite le faux blocage avec les voxels sol (pos_z=0).
-        const actorBlocked = await isCaseOccupied(
-          entity.battlemap_id,
-          nextActorPosX, nextActorPosY, token.pos_z + 1,
-          excludeIds
-        )
-        if (actorBlocked) { console.log(`[DBG] actorBlocked à (${nextActorPosX},${nextActorPosY},${token.pos_z + 1})`); break }
-
-        // Validation diagonale — règle D&D (PLAN_ENTITY.md §9)
-        // Les deux cases adjacentes au coin diagonal sont vérifiées.
-        // BLOQUÉ seulement si les DEUX sont occupées — libre si au moins UNE est libre.
-        if (isDiagonal) {
-          const cornerA = await isCaseOccupied(
-            entity.battlemap_id,
-            nextEntityPosX, entity.pos_y + dirPosY * (k - 1), entity.pos_z,
-            excludeIds
-          )
-          const cornerB = await isCaseOccupied(
-            entity.battlemap_id,
-            entity.pos_x + dirPosX * (k - 1), nextEntityPosY, entity.pos_z,
-            excludeIds
-          )
-          if (cornerA && cornerB) break
-        }
-
-        stepsCompleted = k
-      }
+      const stepsCompleted = movement.result?.stepsCompleted || 0
 
       // Guard : 0 pas complétés = entité bloquée dès le premier pas (collision)
       // Malgré un Dmax > 0, la case (k=1) est occupée — pas de mouvement.
@@ -689,44 +636,26 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
       }
 
       // Positions finales (stepsCompleted ≥ 1)
-      const finalEntityPosX = entity.pos_x + dirPosX * stepsCompleted
-      const finalEntityPosY = entity.pos_y + dirPosY * stepsCompleted
-      const finalActorPosX  = token.pos_x  + dirPosX * stepsCompleted
-      const finalActorPosY  = token.pos_y  + dirPosY * stepsCompleted
-
       // ── Update DB ────────────────────────────────────────────────────
-      const [updatedEntity] = await db('entities')
-        .where({ id: entityId })
-        .update({
-          pos_x: finalEntityPosX,
-          pos_y: finalEntityPosY,
-          // pos_z inchangé — déplacement horizontal uniquement
-          updated_at: db.fn.now(),
-        })
-        .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'battlemap_id', 'current_state_id', 'updated_at'])
+      const updatedEntity = movement.entity
+      const updatedToken = movement.token
 
-      const [updatedToken] = await db('tokens')
-        .where({ id: tokenId })
-        .update({
-          pos_x: finalActorPosX,
-          pos_y: finalActorPosY,
-          // pos_z inchangé
-          updated_at: db.fn.now(),
+      io.to(campaignId).emit(WS.WORLD_RUNTIME_UPDATED, {
+        battlemapId: entity.battlemap_id,
+        runtimeRevision: movement.runtimeRevision,
+        kind: 'forced-movement',
+      })
+      for (const passenger of movement.elevatorPassengerTokens || []) {
+        io.to(campaignId).emit(WS.TOKEN_MOVED, {
+          tokenId: passenger.id,
+          pos_x: passenger.pos_x,
+          pos_y: passenger.pos_y,
+          pos_z: passenger.pos_z,
+          position_space: passenger.position_space,
+          updated_at: passenger.updated_at,
+          worldMovement: { kind: 'elevator-passenger' },
         })
-        .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'layer', 'updated_at'])
-
-      // ── Maintenance collision map Redis ──────────────────────────────
-      await collisionMoveEntity(
-        entity.battlemap_id,
-        entity,        // oldEntity — positions de départ
-        updatedEntity, // newEntity — positions finales + current_state_id inchangé
-        blueprint
-      )
-      await collisionMoveToken(
-        entity.battlemap_id,
-        token,        // oldToken — positions de départ + layer original
-        updatedToken  // newToken — positions finales + layer original (retourné par returning)
-      )
+      }
 
       // ── Broadcasts room ──────────────────────────────────────────────
       io.to(campaignId).emit(WS.ENTITY_MOVED, {
@@ -735,6 +664,7 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
         pos_y: updatedEntity.pos_y,
         pos_z: updatedEntity.pos_z,
         updated_at: updatedEntity.updated_at,
+        worldMovement: { kind: 'forced', stepsCompleted },
       })
 
       io.to(campaignId).emit(WS.TOKEN_MOVED, {
@@ -742,7 +672,13 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
         pos_x: updatedToken.pos_x,
         pos_y: updatedToken.pos_y,
         pos_z: updatedToken.pos_z,
+        position_space: updatedToken.position_space,
         updated_at: updatedToken.updated_at,
+        worldMovement: {
+          kind: 'forced',
+          stepsCompleted,
+          effectEvents: movement.effectEvents,
+        },
       })
 
       // ── Résultat vers joueur uniquement ──────────────────────────────

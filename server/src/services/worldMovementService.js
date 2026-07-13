@@ -224,6 +224,7 @@ export async function executeBattlemapTokenMovement({
     }))
 
     const runtimeContext = await loadBattlemapRuntimeContext(battlemap, trx)
+    const evaluatedRuntimeRevision = runtimeContext.runtimeRevision
     const snapshot = runtimeContext.snapshot
     const graph = getBattlemapNavigationGraph(battlemap, actorProfile, runtimeContext)
     const result = planWorldPath({
@@ -242,6 +243,7 @@ export async function executeBattlemapTokenMovement({
         status: 'unreachable', moved: false, result,
         elevatorPassengerTokens: elevatorRuntime.passengerTokens,
         elevatorRuntime: elevatorMeta,
+        evaluatedRuntimeRevision,
       })
     }
 
@@ -259,6 +261,7 @@ export async function executeBattlemapTokenMovement({
         runtimeRevision: Number(battlemap.runtime_revision || 0),
         elevatorPassengerTokens: elevatorRuntime.passengerTokens,
         elevatorRuntime: elevatorMeta,
+        evaluatedRuntimeRevision,
       })
     }
 
@@ -298,6 +301,7 @@ export async function executeBattlemapTokenMovement({
         ...elevatorMeta,
         runtimeRevision: runtime.runtime_revision,
       }),
+      evaluatedRuntimeRevision,
     })
   })
 }

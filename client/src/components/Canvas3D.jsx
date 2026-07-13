@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
 import api from '../lib/api.js'
-import { getPathColor, getActionKey } from '../lib/pathfinder.js'
+import { getCombatPathColor, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { useCameraLOS } from '../lib/useCameraLOS.js'
@@ -491,7 +491,7 @@ function ThirdPersonCamera({ token, enabled, onTokenSetRotation, updateToken }) 
 }
 
 function Scene({
-  voxels, setVoxels, surfaceData, textureMaterials, entityTextureMaterials, runtimeEffectRegions, runtimeFeatureStates, socket, battlemapId,
+  voxels, surfaceData, textureMaterials, entityTextureMaterials, runtimeEffectRegions, runtimeFeatureStates, socket, battlemapId,
   selectedSurfaceConnectorId, onSurfaceConnectorSelect,
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
@@ -614,34 +614,9 @@ function Scene({
     prevWorldZ: null,
   })
 
-  const getVoxelKey = (x, y, z) => `${x}:${y}:${z}`
-
-  // ─── Écoute voxels temps réel ──────────────────────────────────────────────
+  // ─── Écoute entités temps réel ─────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return
-
-    const handleVoxelAdded = ({ x, y, z, tex, geo, r }) => {
-      const key = getVoxelKey(x, y, z)
-      setVoxels(prev => ({ ...prev, [key]: { x, y, z, tex, geo, r } }))
-    }
-
-    const handleVoxelRemoved = ({ x, y, z }) => {
-      const key = getVoxelKey(x, y, z)
-      setVoxels(prev => { const next = { ...prev }; delete next[key]; return next })
-    }
-
-    const handleVoxelUpdated = ({ battlemapId: incomingId, x, y, z, r }) => {
-      if (incomingId !== battlemapId) return
-      const key = getVoxelKey(x, y, z)
-      setVoxels(prev => {
-        if (!prev[key]) return prev
-        return { ...prev, [key]: { ...prev[key], r } }
-      })
-    }
-
-    socket.on(WS.VOXEL_ADDED, handleVoxelAdded)
-    socket.on(WS.VOXEL_REMOVED, handleVoxelRemoved)
-    socket.on(WS.VOXEL_UPDATED, handleVoxelUpdated)
 
     // ─── Écoute entités temps réel ───────────────────────────────────────
     const handleEntityCreated = ({ entity }) => addEntity(entity)
@@ -667,9 +642,6 @@ function Scene({
     socket.on(WS.ENTITY_MOVED, handleEntityMoved)
 
     return () => {
-      socket.off(WS.VOXEL_ADDED, handleVoxelAdded)
-      socket.off(WS.VOXEL_REMOVED, handleVoxelRemoved)
-      socket.off(WS.VOXEL_UPDATED, handleVoxelUpdated)
       socket.off(WS.ENTITY_CREATED, handleEntityCreated)
       socket.off(WS.ENTITY_DELETED, handleEntityDeleted)
       socket.off(WS.ENTITY_UPDATED, handleEntityUpdated)
@@ -892,12 +864,12 @@ function Scene({
       const path = currentPathRef.current
       if (!path || path.length < 2) return  // inaccessible ou destination = départ
       const dest = path[path.length - 1]
-      const result = getActionKey(dest.spentM, mode.allures)
+      const result = selectCombatMovementForCost(dest.spentM, mode.allures)
       if (!result) return  // hors portée max
       // Le payload de combat conserve les noms DB PE14, mais contient des mètres monde exacts.
       mode.onPendingMove({
-        action_key:  result.action_key,
-        ini_mod:     result.ini_mod,
+        action_key:  result.actionKey,
+        ini_mod:     result.initiativeModifier,
         targetPosX:  dest.x,
         targetPosY:  dest.z,
         targetPosZ:  dest.y,
@@ -1171,7 +1143,7 @@ function Scene({
           <mesh rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[0.9, 0.9]} />
             <meshBasicMaterial
-              color={getPathColor(cell.spentM, combatMoveMode.allures)}
+              color={getCombatPathColor(cell.spentM, combatMoveMode.allures)}
               transparent
               opacity={0.5}
               depthWrite={false}
@@ -1586,7 +1558,6 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
       {blocksReady && (
         <Scene
           voxels={voxels}
-          setVoxels={setVoxels}
           surfaceData={surfaceData}
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}

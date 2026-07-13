@@ -34,6 +34,7 @@ import CombatOverlay from '../components/CombatOverlay'
 import TradeWindow from '../components/TradeWindow'
 import ExchangeWindow from '../components/ExchangeWindow'
 import { DEFAULT_SURFACE_MATERIAL_PRESET } from '../lib/proceduralMaterials.js'
+import { createWorldMetrics } from '../../../shared/world/worldMetrics.js'
 
 export default function SessionPage() {
   const { campaignId } = useParams()
@@ -72,7 +73,7 @@ function SessionContent({ campaignId }) {
   const [tradeInitialContext, setTradeInitialContext] = useState(null)
   const [exchangeWindowOpen,  setExchangeWindowOpen]  = useState(false)
   const [exchangeContext,     setExchangeContext]     = useState(null)
-  const [activeEditorTab, setActiveEditorTab] = useState('voxel') // 'voxel' | 'entity'
+  const [activeEditorTab, setActiveEditorTab] = useState('world') // 'world' | 'entity'
   // canvasVisible : false pendant la transition play↔edit — force le démontage
   // complet du Canvas actif avant que le suivant monte (évite le double contexte WebGL)
   const [canvasVisible, setCanvasVisible] = useState(true)
@@ -933,6 +934,10 @@ function SessionContent({ campaignId }) {
             onClose={() => setRadialMenu(null)}
             actorToken={actorToken}
             entity={entity}
+            worldMetrics={createWorldMetrics({
+              metersPerCell: battlemap?.surface_data?.metersPerCell ?? 1.5,
+              storyHeightWorld: battlemap?.surface_data?.storyHeight ?? 2.5,
+            })}
           />
         )
       })()}

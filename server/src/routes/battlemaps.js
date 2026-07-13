@@ -272,16 +272,27 @@ router.post('/:id/world-path-preview', requireAuth, async (req, res, next) => {
     if (!member) throw new AppError(403, 'Access denied')
 
     const { token_id, destination, budget_m } = req.body
-    const budgetM = Number(budget_m)
-    if (!Number.isFinite(budgetM) || budgetM < 0) {
-      throw new AppError(400, 'budget_m must be a non-negative number')
-    }
     const token = await db('tokens')
       .where({ id: token_id, battlemap_id: req.params.id })
       .first()
     if (!token) throw new AppError(404, 'Token not found on this battlemap')
     if (token.position_space !== 'world-feet') {
       throw new AppError(409, 'Legacy token positions are not converted to the new world engine')
+    }
+
+    let budgetM
+    let budgetAuthority
+    if (token.character_id) {
+      const budget = await getCharacterMovementBudget(token.character_id, 'max')
+      budgetM = budget.budgetM
+      budgetAuthority = 'character-max-server'
+    } else {
+      if (member.role !== 'gm') throw new AppError(403, 'GM role required for a free preview')
+      budgetM = Number(budget_m)
+      if (!Number.isFinite(budgetM) || budgetM < 0) {
+        throw new AppError(400, 'budget_m must be a non-negative number')
+      }
+      budgetAuthority = 'gm-preview'
     }
 
     if (member.role !== 'gm') {
@@ -309,7 +320,8 @@ router.post('/:id/world-path-preview', requireAuth, async (req, res, next) => {
 
     res.json({
       result,
-      budgetAuthority: 'preview-only',
+      budgetAuthority,
+      authorizedBudgetM: budgetM,
       coordinateSpace: 'world-feet',
     })
   } catch (error) {
