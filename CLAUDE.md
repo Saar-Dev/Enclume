@@ -30,6 +30,7 @@ Ce projet dure depuis 64+ sessions. Chaque piège documenté représente des **h
 | Combat, resolveAssault, state_character | `docs/SYSTEME/COMBAT.md` |
 | Tokens, entités, collision Redis, déplacement | `docs/SYSTEME/ENTITES.md` |
 | Coordonnées 3D, voxels, PE14 | `docs/SYSTEME/VOXELS.md` |
+| Editeur Salle, `surface_data.rooms`, murs intérieur/extérieur | `docs/SYSTEME/SURFACES_SALLES.md` |
 | Auth, stores Zustand, événements WS | `docs/SYSTEME/CORE.md` |
 | Hooks React, dependency arrays, lock éditeur | `docs/SYSTEME/REACT.md` |
 | MinIO, faces entités, Atelier GM | `docs/SYSTEME/ASSETS.md` |

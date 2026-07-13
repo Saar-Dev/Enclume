@@ -277,6 +277,73 @@ router.put('/:id/voxels', requireAuth, async (req, res, next) => {
   }
 })
 
+// PUT /api/battlemaps/:id/surface — mettre à jour les surfaces du nouveau moteur
+router.put('/:id/surface', requireAuth, async (req, res, next) => {
+  try {
+    const { surface_data } = req.body
+    if (!surface_data || typeof surface_data !== 'object' || Array.isArray(surface_data)) {
+      throw new AppError(400, 'surface_data must be an object')
+    }
+
+    const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
+    if (!battlemap) throw new AppError(404, 'Battlemap not found')
+
+    const member = await db('campaign_members')
+      .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id, role: 'gm' })
+      .first()
+    if (!member) throw new AppError(403, 'GM only')
+
+    await db('battlemaps')
+      .where({ id: req.params.id })
+      .update({ surface_data: JSON.stringify(surface_data), updated_at: db.fn.now() })
+
+    const usedTexIds = new Set()
+    for (const floor of Object.values(surface_data.floors || {})) {
+      if (floor?.tex) usedTexIds.add(floor.tex)
+      if (floor?.topTex) usedTexIds.add(floor.topTex)
+      if (floor?.bottomTex) usedTexIds.add(floor.bottomTex)
+    }
+    for (const wall of Object.values(surface_data.walls || {})) {
+      if (wall?.frontTex) usedTexIds.add(wall.frontTex)
+      if (wall?.backTex) usedTexIds.add(wall.backTex)
+      if (wall?.topTex) usedTexIds.add(wall.topTex)
+    }
+    for (const ceiling of Object.values(surface_data.ceilings || {})) {
+      if (ceiling?.tex) usedTexIds.add(ceiling.tex)
+    }
+    for (const stair of Object.values(surface_data.stairs || {})) {
+      if (stair?.tex) usedTexIds.add(stair.tex)
+    }
+    for (const room of Object.values(surface_data.rooms || {})) {
+      if (room?.floorTopTex) usedTexIds.add(room.floorTopTex)
+      if (room?.floorBottomTex) usedTexIds.add(room.floorBottomTex)
+      if (room?.ceilingTopTex) usedTexIds.add(room.ceilingTopTex)
+      if (room?.ceilingBottomTex) usedTexIds.add(room.ceilingBottomTex)
+      if (room?.wallInteriorTex) usedTexIds.add(room.wallInteriorTex)
+      if (room?.wallExteriorTex) usedTexIds.add(room.wallExteriorTex)
+      if (room?.wallFrontTex) usedTexIds.add(room.wallFrontTex)
+      if (room?.wallBackTex) usedTexIds.add(room.wallBackTex)
+      if (room?.wallTopTex) usedTexIds.add(room.wallTopTex)
+    }
+
+    await db('battlemap_texture_usage')
+      .where({ battlemap_id: req.params.id })
+      .delete()
+    if (usedTexIds.size > 0) {
+      await db('battlemap_texture_usage').insert(
+        [...usedTexIds].map(texId => ({
+          battlemap_id: req.params.id,
+          voxel_texture_id: texId,
+        }))
+      )
+    }
+
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // POST /api/battlemaps/:id/duplicate — dupliquer une carte
 router.post('/:id/duplicate', requireAuth, async (req, res) => {
   const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
@@ -297,6 +364,7 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
       grid_enabled: battlemap.grid_enabled,
       grid_opacity: battlemap.grid_opacity,
       voxel_data: battlemap.voxel_data ? JSON.stringify(battlemap.voxel_data) : null,
+      surface_data: battlemap.surface_data ? JSON.stringify(battlemap.surface_data) : '{}',
       // image_url et cover_image_url non copiés — la carte est nouvelle
     })
     .returning('*')

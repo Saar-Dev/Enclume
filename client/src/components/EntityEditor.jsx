@@ -159,8 +159,8 @@ function EntityEditorScene({
     if (!orbitRef.current) return
     orbitRef.current.mouseButtons = {
       LEFT: null,
-      MIDDLE: THREE.MOUSE.PAN,
-      RIGHT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.ROTATE,
+      RIGHT: THREE.MOUSE.PAN,
     }
     orbitRef.current.listenToKeyEvents(window)
     orbitRef.current.keyPanSpeed = 20
@@ -177,7 +177,7 @@ function EntityEditorScene({
 
       <MapControls
         ref={orbitRef}
-        mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE }}
+        mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }}
         enableDamping
         dampingFactor={0.05}
         maxPolarAngle={Math.PI / 2}

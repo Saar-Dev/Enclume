@@ -1,0 +1,442 @@
+import { useMemo } from 'react'
+import * as THREE from 'three'
+import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
+import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
+import {
+  computeSurfaceWaterCells,
+  getCeilingThickness,
+  getFloorThickness,
+  getWallRenderBox,
+  normalizeSurfaceData,
+  parseCeilingKey,
+  parseFloorKey,
+  stairStepBoxes,
+} from '../lib/surfaceData.js'
+
+const FACE = {
+  east: 0,
+  west: 1,
+  top: 2,
+  bottom: 3,
+  south: 4,
+  north: 5,
+}
+
+const proceduralSurfaceMaterialCache = new Map()
+const BOLT_RADIUS = 0.055
+const BOLT_HEIGHT = 0.035
+const BOLT_EDGE_OFFSET = 0.14
+const BOLT_WALL_VERTICAL_OFFSET = 0.22
+const BOLT_FACE_GAP = 0.006
+const BOLT_SEGMENTS = 24
+const BOLT_MATERIAL = new THREE.MeshStandardMaterial({
+  color: '#9aa4a8',
+  roughness: 0.52,
+  metalness: 0.45,
+})
+
+function proceduralMaterialKey(descriptor) {
+  if (!descriptor || typeof descriptor !== 'object') return null
+  return JSON.stringify({
+    type: descriptor.type,
+    version: descriptor.version,
+    material: descriptor.material,
+    paint: descriptor.paint,
+    pattern: descriptor.pattern,
+    wear: descriptor.wear,
+    dirt: descriptor.dirt,
+    relief: descriptor.relief,
+    realRelief: descriptor.realRelief,
+    seed: descriptor.seed,
+  })
+}
+
+function makeDataTexture(dataUrl, color = true) {
+  const texture = new THREE.TextureLoader().load(dataUrl)
+  texture.colorSpace = color ? THREE.SRGBColorSpace : (THREE.NoColorSpace || '')
+  texture.magFilter = THREE.NearestFilter
+  texture.minFilter = THREE.NearestFilter
+  texture.wrapS = THREE.RepeatWrapping
+  texture.wrapT = THREE.RepeatWrapping
+  return texture
+}
+
+function pbrForProcedural(materialId) {
+  switch (materialId) {
+    case 'steel':
+      return { roughness: 0.55, metalness: 0.42 }
+    case 'plastic':
+      return { roughness: 0.62, metalness: 0.02 }
+    case 'wood':
+      return { roughness: 0.78, metalness: 0.02 }
+    case 'concrete':
+      return { roughness: 0.88, metalness: 0.01 }
+    default:
+      return { roughness: 0.72, metalness: 0.08 }
+  }
+}
+
+function proceduralMaterialAt(descriptor) {
+  const key = proceduralMaterialKey(descriptor)
+  if (!key) return null
+  if (proceduralSurfaceMaterialCache.has(key)) return proceduralSurfaceMaterialCache.get(key)
+
+  const generated = generateProceduralMaterialTexture({ ...descriptor, size: 128 })
+  const map = makeDataTexture(generated.albedoDataUrl, true)
+  const normalMap = makeDataTexture(generated.normalDataUrl, false)
+  const pbr = pbrForProcedural(generated.material?.id)
+  const reliefStrength = Math.max(0, Math.min(1, Number(descriptor.relief) / 100 || 0))
+  const material = new THREE.MeshStandardMaterial({
+    map,
+    normalMap,
+    normalScale: new THREE.Vector2(0.8 + reliefStrength * 0.7, 0.8 + reliefStrength * 0.7),
+    color: 0xffffff,
+    roughness: pbr.roughness,
+    metalness: pbr.metalness,
+  })
+  const entry = {
+    faceMaterials: [material, material, material, material, material, material],
+    relief: generated.procedural,
+  }
+  proceduralSurfaceMaterialCache.set(key, entry)
+  return entry
+}
+
+function materialAt(textureMaterials, texId, face, fallbackFace = FACE.top) {
+  return textureMaterials[texId]?.faceMaterials[face]
+    || textureMaterials[texId]?.faceMaterials[fallbackFace]
+    || null
+}
+
+function reliefAt(textureMaterials, texId) {
+  return textureMaterials[texId]?.relief || null
+}
+
+function withOpacity(materials, opacity) {
+  if (opacity >= 0.999) return materials
+  return materials.map((material) => {
+    const clone = material.clone()
+    clone.transparent = true
+    clone.opacity = opacity
+    clone.depthWrite = false
+    return clone
+  })
+}
+
+function usesBoltHeads(descriptor) {
+  return descriptor?.type === 'procedural-material' && descriptor.pattern === 'metal_panels'
+}
+
+function pairOffsets(size, margin) {
+  if (size <= margin * 2.4) return [0]
+  return [-size / 2 + margin, size / 2 - margin]
+}
+
+function BoltHead({ position, rotation = [0, 0, 0] }) {
+  return (
+    <mesh position={position} rotation={rotation} material={BOLT_MATERIAL} castShadow receiveShadow>
+      <cylinderGeometry args={[BOLT_RADIUS, BOLT_RADIUS, BOLT_HEIGHT, BOLT_SEGMENTS]} />
+    </mesh>
+  )
+}
+
+function TopBoltHeads({ id, descriptor, x, z, topY }) {
+  if (!usesBoltHeads(descriptor)) return null
+
+  const margin = BOLT_EDGE_OFFSET
+  const points = [
+    [x + margin, z + margin],
+    [x + 1 - margin, z + margin],
+    [x + margin, z + 1 - margin],
+    [x + 1 - margin, z + 1 - margin],
+  ]
+  const y = topY + BOLT_HEIGHT / 2 + BOLT_FACE_GAP
+
+  return (
+    <>
+      {points.map(([px, pz], index) => (
+        <BoltHead key={`${id}:bolt:${index}`} position={[px, y, pz]} />
+      ))}
+    </>
+  )
+}
+
+function WallBoltHeads({ wall, box }) {
+  if (!box) return null
+
+  const heads = []
+  const [width, height, depth] = box.args
+  const [cx, cy, cz] = box.position
+  const yOffsets = pairOffsets(height, BOLT_WALL_VERTICAL_OFFSET)
+
+  const addHead = (key, position, rotation) => {
+    heads.push(<BoltHead key={key} position={position} rotation={rotation} />)
+  }
+
+  if (wall.axis === 'x') {
+    const xOffsets = pairOffsets(width, BOLT_EDGE_OFFSET)
+    if (usesBoltHeads(wall.frontMaterial || wall.material)) {
+      for (const lx of xOffsets) {
+        for (const ly of yOffsets) {
+          addHead(`front:${lx}:${ly}`, [cx + lx, cy + ly, cz + depth / 2 + BOLT_HEIGHT / 2 + BOLT_FACE_GAP], [Math.PI / 2, 0, 0])
+        }
+      }
+    }
+    if (usesBoltHeads(wall.backMaterial || wall.frontMaterial || wall.material)) {
+      for (const lx of xOffsets) {
+        for (const ly of yOffsets) {
+          addHead(`back:${lx}:${ly}`, [cx + lx, cy + ly, cz - depth / 2 - BOLT_HEIGHT / 2 - BOLT_FACE_GAP], [-Math.PI / 2, 0, 0])
+        }
+      }
+    }
+  } else {
+    const zOffsets = pairOffsets(depth, BOLT_EDGE_OFFSET)
+    if (usesBoltHeads(wall.frontMaterial || wall.material)) {
+      for (const lz of zOffsets) {
+        for (const ly of yOffsets) {
+          addHead(`front:${lz}:${ly}`, [cx + width / 2 + BOLT_HEIGHT / 2 + BOLT_FACE_GAP, cy + ly, cz + lz], [0, 0, -Math.PI / 2])
+        }
+      }
+    }
+    if (usesBoltHeads(wall.backMaterial || wall.frontMaterial || wall.material)) {
+      for (const lz of zOffsets) {
+        for (const ly of yOffsets) {
+          addHead(`back:${lz}:${ly}`, [cx - width / 2 - BOLT_HEIGHT / 2 - BOLT_FACE_GAP, cy + ly, cz + lz], [0, 0, Math.PI / 2])
+        }
+      }
+    }
+  }
+
+  return heads.length ? <>{heads}</> : null
+}
+
+function FloorTile({ id, floor, textureMaterials }) {
+  const { x, z, y } = parseFloorKey(id, floor)
+  const procedural = proceduralMaterialAt(floor.material)
+  const top = procedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, floor.tex, FACE.top)
+  if (!top) return null
+
+  const side = procedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, floor.tex, FACE.south, FACE.top) || top
+  const bottom = procedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, floor.tex, FACE.bottom, FACE.top) || top
+  const relief = procedural?.relief || reliefAt(textureMaterials, floor.tex)
+  const thickness = getFloorThickness(floor)
+  const materials = [side, side, top, bottom, side, side]
+  return (
+    <>
+      <mesh position={[x + 0.5, y, z + 0.5]} material={materials} castShadow receiveShadow>
+        <ReliefBoxGeometry
+          args={[1, thickness, 1]}
+          faceProfiles={[null, null, relief, null, null, null]}
+          faceMask={[false, false, true, false, false, false]}
+        />
+      </mesh>
+      <TopBoltHeads id={`floor:${id}`} descriptor={floor.material} x={x} z={z} topY={y + thickness / 2} />
+    </>
+  )
+}
+
+function CeilingTile({ id, ceiling, textureMaterials, opacity }) {
+  const { x, z, y } = parseCeilingKey(id, ceiling)
+  const procedural = proceduralMaterialAt(ceiling.material)
+  const bottom = procedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, ceiling.tex, FACE.bottom, FACE.top)
+    || materialAt(textureMaterials, ceiling.tex, FACE.top)
+  if (!bottom) return null
+
+  const top = procedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, ceiling.tex, FACE.top, FACE.bottom) || bottom
+  const side = procedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, ceiling.tex, FACE.south, FACE.top) || bottom
+  const relief = procedural?.relief || reliefAt(textureMaterials, ceiling.tex)
+  const thickness = getCeilingThickness(ceiling)
+  const materials = withOpacity([side, side, top, bottom, side, side], opacity)
+  return (
+    <mesh position={[x + 0.5, y, z + 0.5]} material={materials} castShadow receiveShadow>
+      <ReliefBoxGeometry
+        args={[1, thickness, 1]}
+        faceProfiles={[null, null, null, relief, null, null]}
+        faceMask={[false, false, false, true, false, false]}
+      />
+    </mesh>
+  )
+}
+
+function WallSegment({ wall, textureMaterials }) {
+  const frontProcedural = proceduralMaterialAt(wall.frontMaterial || wall.material)
+  const backProcedural = proceduralMaterialAt(wall.backMaterial || wall.frontMaterial || wall.material)
+  const front = frontProcedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, wall.frontTex, FACE.south)
+  const back = backProcedural?.faceMaterials[FACE.north] || materialAt(textureMaterials, wall.backTex, FACE.north, FACE.south) || front
+  if (!front || !back) return null
+
+  const top = frontProcedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, wall.frontTex, FACE.top, FACE.south) || front
+  const side = front
+  const bottom = top
+  const frontRelief = frontProcedural?.relief || reliefAt(textureMaterials, wall.frontTex)
+  const backRelief = backProcedural?.relief || reliefAt(textureMaterials, wall.backTex)
+  const box = getWallRenderBox(wall)
+  if (!box) return null
+
+  let materials
+  let faceProfiles
+  let faceMask
+  if (wall.axis === 'x') {
+    materials = [side, side, top, bottom, front, back]
+    faceProfiles = [null, null, null, null, frontRelief, backRelief]
+    faceMask = [false, false, false, false, true, true]
+  } else {
+    materials = [front, back, top, bottom, side, side]
+    faceProfiles = [frontRelief, backRelief, null, null, null, null]
+    faceMask = [true, true, false, false, false, false]
+  }
+
+  return (
+    <>
+      <mesh position={box.position} material={materials} castShadow receiveShadow>
+        <ReliefBoxGeometry args={box.args} faceProfiles={faceProfiles} faceMask={faceMask} />
+      </mesh>
+      <WallBoltHeads wall={wall} box={box} />
+    </>
+  )
+}
+
+function StairSegment({ stair, textureMaterials }) {
+  const procedural = proceduralMaterialAt(stair.material)
+  const top = procedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, stair.tex, FACE.top)
+  if (!top) return null
+
+  const side = procedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, stair.tex, FACE.south, FACE.top) || top
+  const bottom = procedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, stair.tex, FACE.bottom, FACE.top) || top
+  const relief = procedural?.relief || reliefAt(textureMaterials, stair.tex)
+  const materials = [side, side, top, bottom, side, side]
+
+  return (
+    <>
+      {stairStepBoxes(stair).map((step, index) => (
+        <mesh key={index} position={step.position} material={materials} castShadow receiveShadow>
+          <ReliefBoxGeometry
+            args={step.args}
+            faceProfiles={[null, null, relief, null, null, null]}
+            faceMask={[false, false, true, false, false, false]}
+          />
+        </mesh>
+      ))}
+    </>
+  )
+}
+
+function mergeWaterCells(waterCells) {
+  const groups = new Map()
+  for (const cell of waterCells) {
+    const key = `${Math.round(cell.baseY * 1000)}:${Math.round(cell.topY * 1000)}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(cell)
+  }
+
+  const rectangles = []
+  for (const cells of groups.values()) {
+    const cellMap = new Map(cells.map(cell => [`${cell.x}:${cell.z}`, cell]))
+    const used = new Set()
+    const sorted = [...cells].sort((a, b) => a.z - b.z || a.x - b.x)
+
+    for (const cell of sorted) {
+      const startKey = `${cell.x}:${cell.z}`
+      if (used.has(startKey)) continue
+
+      let width = 1
+      while (cellMap.has(`${cell.x + width}:${cell.z}`) && !used.has(`${cell.x + width}:${cell.z}`)) {
+        width += 1
+      }
+
+      let depth = 1
+      let canExtend = true
+      while (canExtend) {
+        const nextZ = cell.z + depth
+        for (let dx = 0; dx < width; dx += 1) {
+          const key = `${cell.x + dx}:${nextZ}`
+          if (!cellMap.has(key) || used.has(key)) {
+            canExtend = false
+            break
+          }
+        }
+        if (canExtend) depth += 1
+      }
+
+      for (let dz = 0; dz < depth; dz += 1) {
+        for (let dx = 0; dx < width; dx += 1) {
+          used.add(`${cell.x + dx}:${cell.z + dz}`)
+        }
+      }
+
+      rectangles.push({
+        x: cell.x,
+        z: cell.z,
+        width,
+        depth,
+        baseY: cell.baseY,
+        topY: cell.topY,
+      })
+    }
+  }
+
+  return rectangles
+}
+
+function WaterSheets({ waterCells, opacity = 0.16 }) {
+  const rectangles = useMemo(() => mergeWaterCells(waterCells), [waterCells])
+
+  return (
+    <>
+      {rectangles.map((rect, index) => {
+        return (
+          <mesh
+            key={`${rect.baseY}:${rect.topY}:${rect.x}:${rect.z}:${index}`}
+            position={[rect.x + rect.width / 2, rect.topY - 0.02, rect.z + rect.depth / 2]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            renderOrder={20}
+          >
+            <planeGeometry args={[rect.width, rect.depth]} />
+            <meshBasicMaterial
+              color="#1fb6d8"
+              transparent
+              opacity={opacity}
+              depthWrite={false}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+        )
+      })}
+    </>
+  )
+}
+
+export default function SurfaceDungeonScene({
+  surfaceData,
+  textureMaterials,
+  showWater = true,
+  waterOpacity = 0.16,
+  ceilingOpacity = 1,
+}) {
+  const surface = useMemo(() => normalizeSurfaceData(surfaceData), [surfaceData])
+  const water = useMemo(() => computeSurfaceWaterCells(surface), [surface])
+
+  return (
+    <>
+      {Object.entries(surface.floors).map(([id, floor]) => (
+        <FloorTile key={id} id={id} floor={floor} textureMaterials={textureMaterials} />
+      ))}
+      {Object.entries(surface.walls).map(([id, wall]) => (
+        <WallSegment key={id} wall={wall} textureMaterials={textureMaterials} />
+      ))}
+      {Object.entries(surface.ceilings).map(([id, ceiling]) => (
+        <CeilingTile
+          key={id}
+          id={id}
+          ceiling={ceiling}
+          textureMaterials={textureMaterials}
+          opacity={ceilingOpacity}
+        />
+      ))}
+      {Object.entries(surface.stairs).map(([id, stair]) => (
+        <StairSegment key={id} stair={stair} textureMaterials={textureMaterials} />
+      ))}
+      {showWater && <WaterSheets waterCells={water.waterCells} opacity={waterOpacity} />}
+    </>
+  )
+}

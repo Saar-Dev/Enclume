@@ -78,6 +78,26 @@ function validateDiceConfig(config) {
   }
 }
 
+async function removeCampaignAssets(campaignId) {
+  const client = getMinioClient()
+  const bucket = BUCKET()
+  const prefix = `campaigns/${campaignId}/`
+  const objectNames = []
+
+  await new Promise((resolve, reject) => {
+    const stream = client.listObjectsV2(bucket, prefix, true)
+    stream.on('data', obj => {
+      if (obj?.name) objectNames.push(obj.name)
+    })
+    stream.on('error', reject)
+    stream.on('end', resolve)
+  })
+
+  if (objectNames.length > 0) {
+    await client.removeObjects(bucket, objectNames)
+  }
+}
+
 // GET /api/campaigns — liste des campagnes de l'utilisateur
 router.get('/', requireAuth, async (req, res) => {
   const campaigns = await db('campaigns')
@@ -211,6 +231,42 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
     .update(updates)
     .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'pnj_unlimited_ammo', 'reload_mode', 'action_timer_sec', 'default_token_glb_url', 'shock_auto_stun', 'created_at', 'updated_at'])
   res.json({ campaign })
+})
+
+// DELETE /api/campaigns/:id — supprimer définitivement une campagne
+// GM uniquement. Les données liées en base sont supprimées par cascade.
+router.delete('/:id', requireAuth, requireRole('gm'), async (req, res) => {
+  const campaignId = req.params.id
+
+  const campaign = await db.transaction(async (trx) => {
+    const existing = await trx('campaigns')
+      .where({ id: campaignId })
+      .select('id', 'name')
+      .first()
+    if (!existing) throw new AppError(404, 'Campaign not found')
+
+    // Coupe la référence circulaire campagne → battlemap d'accueil avant
+    // suppression. Les battlemaps et leurs enfants partent ensuite en cascade.
+    await trx('campaigns')
+      .where({ id: campaignId })
+      .update({ default_battlemap_id: null })
+
+    await trx('campaigns')
+      .where({ id: campaignId })
+      .del()
+
+    return existing
+  })
+
+  // Nettoyage MinIO best-effort : la campagne est déjà supprimée en base,
+  // un éventuel échec de stockage ne doit pas bloquer l'action utilisateur.
+  try {
+    await removeCampaignAssets(campaignId)
+  } catch (err) {
+    console.warn(`[campaigns] assets cleanup failed for ${campaignId}:`, err.message)
+  }
+
+  res.json({ ok: true, campaign })
 })
 
 // POST /api/campaigns/join — rejoindre via invite_code

@@ -51,6 +51,19 @@ export const useEntityStore = create((set, get) => ({
     }
   },
 
+  refreshBuiltinModels: async () => {
+    const res = await api.post('/entity-blueprints/refresh-builtins')
+    const fetched = res.data.blueprints || []
+    const builtinBlueprints = Object.fromEntries(fetched.map(bp => [bp.id, bp]))
+    set(state => ({
+      blueprints: {
+        ...Object.fromEntries(Object.entries(state.blueprints).filter(([, bp]) => !bp.builtin_key)),
+        ...builtinBlueprints,
+      },
+    }))
+    return fetched.length
+  },
+
   // ─── Ajout d'une entité (WS ENTITY_CREATED) ───────────────────────────────
   // Guard doublon — même pattern que tokenStore.addToken.
   addEntity: (entity) => {

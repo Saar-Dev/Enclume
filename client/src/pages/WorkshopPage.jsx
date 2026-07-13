@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import api from '../lib/api'
+import MaterialGeneratorTab from '../components/MaterialGeneratorTab'
 import VoxelBuilderTab from '../components/VoxelBuilderTab'
 import EntityBuilderTab from '../components/EntityBuilderTab'
 
@@ -225,6 +226,9 @@ export default function WorkshopPage() {
                 <button style={{ ...S.tab, ...(activeTab === 'files' ? S.tabActive : {}) }} onClick={() => setActiveTab('files')}>
                   {t('workshop.tabTextures')}{packFiles.length > 0 ? ` (${packFiles.length})` : ''}
                 </button>
+                <button style={{ ...S.tab, ...(activeTab === 'generator' ? S.tabActive : {}) }} onClick={() => setActiveTab('generator')}>
+                  Generateur
+                </button>
                 <button style={{ ...S.tab, ...(activeTab === 'voxels' ? S.tabActive : {}) }} onClick={() => setActiveTab('voxels')}>
                   {t('workshop.tabMaterials')}{packDetail ? ` (${packDetail.textures.length})` : ''}
                 </button>
@@ -248,6 +252,16 @@ export default function WorkshopPage() {
               )}
 
               {/* ─── Onglet Éléments interactifs ───────────────────────────── */}
+              {!detailLoading && activeTab === 'generator' && packDetail && (
+                <MaterialGeneratorTab
+                  selectedPack={selectedPack}
+                  setPackDetail={setPackDetail}
+                  setPacks={setPacks}
+                  setPackFiles={setPackFiles}
+                  isOwner={isOwner}
+                />
+              )}
+
               {!detailLoading && activeTab === 'entities' && packDetail && (
                 <EntityBuilderTab
                   selectedPack={selectedPack}

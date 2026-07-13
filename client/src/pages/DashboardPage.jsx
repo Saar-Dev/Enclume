@@ -6,7 +6,7 @@ import api from '../lib/api'
 import ChangelogPanel from '../components/ChangelogPanel'
 
 export default function DashboardPage() {
-  const { user, clearUser, setUser } = useAuthStore()
+  const { user, clearUser } = useAuthStore()
   const navigate = useNavigate()
   const { t } = useTranslation()
 
@@ -18,6 +18,7 @@ export default function DashboardPage() {
 
   const [copiedId, setCopiedId] = useState(null)
   const [uploadingCoverId, setUploadingCoverId] = useState(null)
+  const [deletingCampaignId, setDeletingCampaignId] = useState(null)
   const coverInputRef = useRef(null)
   const pendingCoverIdRef = useRef(null)
   const createInputRef = useRef(null)
@@ -30,7 +31,7 @@ export default function DashboardPage() {
       .then(res => setCampaigns(res.data.campaigns))
       .catch(() => setError(t('dashboard.errorLoad')))
       .finally(() => setLoading(false))
-  }, [])
+  }, [t])
 
   // Vrai si l'utilisateur est GM dans au moins une campagne
   const isGmAnywhere = campaigns.some(c => c.role === 'gm')
@@ -94,7 +95,26 @@ export default function DashboardPage() {
       await navigator.clipboard.writeText(code)
       setCopiedId(id)
       setTimeout(() => setCopiedId(null), 1500)
-    } catch {}
+    } catch {
+      setError(t('dashboard.copyError'))
+    }
+  }
+
+  const handleDeleteCampaign = async (campaign) => {
+    if (!campaign?.id) return
+    const confirmed = window.confirm(t('settings.deleteCampaignConfirm', { name: campaign.name }))
+    if (!confirmed) return
+
+    setDeletingCampaignId(campaign.id)
+    setError(null)
+    try {
+      await api.delete(`/campaigns/${campaign.id}`)
+      setCampaigns(prev => prev.filter(c => c.id !== campaign.id))
+    } catch (err) {
+      setError(err.response?.data?.error?.message || t('settings.deleteCampaignError'))
+    } finally {
+      setDeletingCampaignId(null)
+    }
   }
 
   return (
@@ -213,6 +233,14 @@ export default function DashboardPage() {
                       onClick={() => navigate(`/campaigns/${campaign.id}/settings`)}
                     >
                       {t('dashboard.settings')}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      style={styles.cardDeleteBtn}
+                      onClick={() => handleDeleteCampaign(campaign)}
+                      disabled={deletingCampaignId === campaign.id}
+                    >
+                      {deletingCampaignId === campaign.id ? t('settings.deletingCampaign') : t('settings.deleteCampaign')}
                     </button>
                   </div>
                 )}
@@ -355,8 +383,15 @@ const styles = {
   },
 
   cardActions: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: '8px',
     borderTop: '1px solid var(--border-subtle)',
     paddingTop: '12px',
+  },
+  cardDeleteBtn: {
+    color: 'var(--color-danger)',
+    borderColor: 'rgba(224,92,92,0.45)',
   },
 
   inviteCode: {

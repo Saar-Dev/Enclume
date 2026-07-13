@@ -23,6 +23,7 @@ import TokenRadialMenu from '../components/TokenRadialMenu'
 import TokenStatusPanel from '../components/TokenStatusPanel'
 import EntityInstancePanel from '../components/EntityInstancePanel'
 import CombatOverlay from '../components/CombatOverlay'
+import { DEFAULT_SURFACE_MATERIAL_PRESET } from '../lib/proceduralMaterials.js'
 
 export default function SessionPage() {
   const { campaignId } = useParams()
@@ -41,7 +42,7 @@ export default function SessionPage() {
     setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage, setActiveCampaign,
     setPendingEntityId, clearPendingEntityId,
   } = useSessionStore()
-  const { setEntities, fetchBlueprints } = useEntityStore()
+  const { entities, setEntities, fetchBlueprints } = useEntityStore()
   const { setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster, advanceSlot, setActions, phase: combatPhase } = useCombatStore()
   const { setDocuments, addDocument, updateDocument, removeDocument } = useLibraryStore()
 
@@ -79,6 +80,70 @@ export default function SessionPage() {
   const [activeMaterial, setActiveMaterial] = useState(null)
   const [activeBlueprint, setActiveBlueprint] = useState(null)
   const [availableBlocks, setAvailableBlocks] = useState([])
+  const [displayLevel, setDisplayLevel] = useState(0)
+  const [surfaceTool, setSurfaceTool] = useState({
+    mode: 'select',
+    level: 0,
+    elevation: 0,
+    selectedRoomId: null,
+    selectedRoomIds: [],
+    connectorType: null,
+    connectorToLevel: 1,
+    connectorBlueprintId: null,
+    connectorModelLabel: null,
+    connectorModelCategory: null,
+    connectorModelGlbUrl: null,
+    connectorModelBuiltinKey: null,
+    connectorModelGeometry: null,
+    connectorMaterialOverrides: {},
+    roomHeightLevels: 1,
+    wallHeightLevels: 1,
+    floorThickness: 0.25,
+    ceilingThickness: 0.25,
+    ceilingHeight: 2.5,
+    wallThickness: 1,
+    wallHeight: 2.5,
+    stairRise: 2.5,
+    surfaceBlocking: 'solid',
+    floorPackId: null,
+    ceilingPackId: null,
+    stairPackId: null,
+    wallInteriorPackId: null,
+    wallExteriorPackId: null,
+    wallFrontPackId: null,
+    wallBackPackId: null,
+    floorTexId: null,
+    ceilingTexId: null,
+    stairTexId: null,
+    wallInteriorTexId: null,
+    wallExteriorTexId: null,
+    wallFrontTexId: null,
+    wallBackTexId: null,
+    autoVariants: true,
+    surfaceMaterialMode: 'procedural',
+    materialFace: 'top',
+    materialProfiles: {
+      top: { ...DEFAULT_SURFACE_MATERIAL_PRESET },
+      bottom: { ...DEFAULT_SURFACE_MATERIAL_PRESET, paint: '#6b7280' },
+      wallInterior: { ...DEFAULT_SURFACE_MATERIAL_PRESET },
+      wallExterior: { ...DEFAULT_SURFACE_MATERIAL_PRESET },
+    },
+    materialPreset: DEFAULT_SURFACE_MATERIAL_PRESET,
+  })
+  const [surfaceUndoRequest, setSurfaceUndoRequest] = useState(0)
+  const [surfaceRedoRequest, setSurfaceRedoRequest] = useState(0)
+  const [canSurfaceUndo, setCanSurfaceUndo] = useState(false)
+  const [canSurfaceRedo, setCanSurfaceRedo] = useState(false)
+
+  const handleDisplayLevelChange = useCallback((value) => {
+    const nextLevel = Math.max(-8, Math.min(16, Number.parseInt(value, 10) || 0))
+    setDisplayLevel(nextLevel)
+    setSurfaceTool(prev => ({ ...prev, level: nextLevel, elevation: nextLevel * 2.5 }))
+  }, [])
+
+  useEffect(() => {
+    handleDisplayLevelChange(0)
+  }, [battlemap?.id, handleDisplayLevelChange])
 
   // ─── Radial menu entité ───────────────────────────────────────────────────
   // Ouvert au clic sur l'icône ⚙ d'une entité dans Canvas3D.
@@ -86,6 +151,13 @@ export default function SessionPage() {
   const [radialMenu, setRadialMenu] = useState(null)
   // ─── Panneau config instance GM ───────────────────────────────────────────
   const [instancePanel, setInstancePanel] = useState(null)
+  const handleEditorEntitySelect = useCallback((entity, x, y) => {
+    if (!entity?.id) {
+      setInstancePanel(null)
+      return
+    }
+    setInstancePanel({ entityId: entity.id, x, y })
+  }, [])
 
   // ─── Mode visée déplacement entité ───────────────────────────────────────
   // null = inactif, sinon { entity, interaction, tokenId }
@@ -181,7 +253,7 @@ export default function SessionPage() {
       const docsRes = await api.get(`/campaigns/${campaignId}/documents`)
       setDocuments(docsRes.data.documents || [])
 
-    } catch (err) {
+    } catch {
       setError(t('session.connectionError'))
     } finally {
       setLoading(false)
@@ -830,6 +902,10 @@ export default function SessionPage() {
     socket?.emit(WS.TOKEN_ROTATE, { tokenId })
   }, [socket])
 
+  const handleTokenSetRotation = useCallback((tokenId, r) => {
+    socket?.emit(WS.TOKEN_SET_ROTATION, { tokenId, r })
+  }, [socket])
+
   // ─── Jet de surprise — joueur surpris lance son 1d20 ─────────────────────
   // P3 : socket dans les deps.
   const handleSurpriseRolled = useCallback(() => {
@@ -915,12 +991,26 @@ export default function SessionPage() {
   if (error) return (
     <div style={styles.loading}>
       <p>{error}</p>
-      <button onClick={() => navigate('/dashboard')}>{t('settings.back')}</button>
+      <button onClick={() => navigate('/dashboard')}>{t('settings.home')}</button>
     </div>
   )
 
   return (
     <div style={styles.container}>
+      <div style={styles.sessionHeader}>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => navigate('/dashboard')}
+          style={styles.homeBtn}
+        >
+          {t('settings.home')}
+        </button>
+        <div style={styles.sessionTitle}>
+          <span style={styles.sessionTitleLabel}>{t('dashboard.title')}</span>
+          <strong style={styles.sessionTitleName}>{campaign?.name || 'Campagne'}</strong>
+        </div>
+      </div>
 
       {/* ─── Barre GM supérieure ─────────────────────────────────────────── */}
       {isGm && (
@@ -973,12 +1063,24 @@ export default function SessionPage() {
               onBlocksLoaded={setAvailableBlocks}
               activeEditorTab={activeEditorTab}
               activeBlueprint={activeBlueprint}
+              surfaceTool={surfaceTool}
+              onSurfaceToolChange={setSurfaceTool}
+              surfaceUndoRequest={surfaceUndoRequest}
+              surfaceRedoRequest={surfaceRedoRequest}
+              onSurfaceUndoStateChange={setCanSurfaceUndo}
+              onSurfaceRedoStateChange={setCanSurfaceRedo}
+              displayLevel={displayLevel}
+              selectedEntityId={instancePanel?.entityId || null}
+              onEntitySelect={handleEditorEntitySelect}
+              onBlueprintPlaced={() => setActiveBlueprint(null)}
             />
           : <Canvas3D
+              mode={mode}
               onTokenDoubleClick={handleTokenDoubleClick}
               socket={socket}
               onEntityClick={handleEntityClick}
               onTokenRotate={handleTokenRotate}
+              onTokenSetRotation={handleTokenSetRotation}
               moveTarget={moveTarget}
               onMoveCancel={handleMoveCancel}
               dicePayload={lastDiceRoll}
@@ -990,6 +1092,7 @@ export default function SessionPage() {
               defaultTokenGlbUrl={campaign?.default_token_glb_url
                 ? `${import.meta.env.VITE_API_URL}/api/assets/${campaign.default_token_glb_url}`
                 : null}
+              displayLevel={displayLevel}
             />
         )}
         {!canvasVisible && (
@@ -1021,6 +1124,37 @@ export default function SessionPage() {
             />
           </div>
         )}
+        <div className="level-selector">
+          <span className="level-selector__label">{t('surfaceEditor.displayLevel')}</span>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => handleDisplayLevelChange(displayLevel - 1)}
+            disabled={displayLevel <= -8}
+            title={t('surfaceEditor.previousLevel')}
+          >
+            −
+          </button>
+          <select
+            value={displayLevel}
+            onChange={e => handleDisplayLevelChange(e.target.value)}
+            className="level-selector__select"
+            aria-label={t('surfaceEditor.displayLevel')}
+          >
+            {Array.from({ length: 25 }, (_, index) => index - 8).map(level => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => handleDisplayLevelChange(displayLevel + 1)}
+            disabled={displayLevel >= 16}
+            title={t('surfaceEditor.nextLevel')}
+          >
+            +
+          </button>
+        </div>
       </div>
 
       {sidebarVisible && (
@@ -1039,6 +1173,12 @@ export default function SessionPage() {
           availableBlocks={availableBlocks}
           activeBlueprint={activeBlueprint}
           onBlueprintSelect={setActiveBlueprint}
+          surfaceTool={surfaceTool}
+          onSurfaceToolChange={setSurfaceTool}
+          canSurfaceUndo={canSurfaceUndo && activeEditorTab !== 'entity'}
+          canSurfaceRedo={canSurfaceRedo && activeEditorTab !== 'entity'}
+          onSurfaceUndo={() => setSurfaceUndoRequest(n => n + 1)}
+          onSurfaceRedo={() => setSurfaceRedoRequest(n => n + 1)}
           campaignId={campaignId}
           socket={socket}
           onReconnectSocket={() => setReconnectTrigger(n => n + 1)}
@@ -1245,7 +1385,7 @@ export default function SessionPage() {
             }}
             onGmConfig={() => {
               setRadialMenu(null)
-              setInstancePanel({ entity, x: radialMenu.x, y: radialMenu.y })
+              setInstancePanel({ entityId: entity.id, x: radialMenu.x, y: radialMenu.y })
             }}
             onClose={() => setRadialMenu(null)}
             actorToken={actorToken}
@@ -1255,14 +1395,21 @@ export default function SessionPage() {
       })()}
 
       {/* ─── Panneau config instance GM ──────────────────────────────────────── */}
-      {instancePanel && (
-        <EntityInstancePanel
-          entity={instancePanel.entity}
-          x={instancePanel.x}
-          y={instancePanel.y}
-          onClose={() => setInstancePanel(null)}
-        />
-      )}
+      {instancePanel && (() => {
+        const entity = entities.find(item => item.id === instancePanel.entityId)
+        if (!entity) return null
+        return (
+          <EntityInstancePanel
+            key={entity.id}
+            entity={entity}
+            x={instancePanel.x}
+            y={instancePanel.y}
+            socket={socket}
+            editorMode={mode === 'edit'}
+            onClose={() => setInstancePanel(null)}
+          />
+        )
+      })()}
 
       {/* ─── DicePanel — flottant, hors canvas, hors Sidebar ─────────────── */}
       <DicePanel socket={socket} mode={mode} sidebarVisible={sidebarVisible} sidebarWidth={sidebarWidth} />
@@ -1327,6 +1474,43 @@ const styles = {
     background: '#0a0a0f',
     overflow: 'hidden',
   },
+  sessionHeader: {
+    height: '38px',
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+    padding: '0 16px',
+    backgroundColor: '#090914',
+    borderBottom: '1px solid #1e1e2e',
+    zIndex: 120,
+  },
+  homeBtn: {
+    flexShrink: 0,
+    padding: '6px 10px',
+  },
+  sessionTitle: {
+    minWidth: 0,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    color: '#64748b',
+    fontSize: '12px',
+  },
+  sessionTitleLabel: {
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    fontSize: '10px',
+    color: '#475569',
+  },
+  sessionTitleName: {
+    color: '#cbd5e1',
+    fontSize: '13px',
+    fontWeight: 600,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   gmBar: {
     display: 'flex',
     alignItems: 'center',
@@ -1377,6 +1561,7 @@ const styles = {
     flex: 1,
     height: '100%',
     minWidth: 0,
+    position: 'relative',
   },
   loading: {
     width: '100vw',

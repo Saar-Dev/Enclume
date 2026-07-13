@@ -1,16 +1,16 @@
 {
   "name": "server",
   "version": "1.0.0",
+  "type": "module",
   "description": "",
   "main": "index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon --exec 'node --env-file=../.env --es-module-specifier-resolution=node' src/index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "module",
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cookie": "^1.1.1",
@@ -18,12 +18,14 @@
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "image-size": "^2.0.2",
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
-    "knex": "^3.2.7",
+    "jszip": "^3.10.1",
+    "knex": "^3.2.10",
     "minio": "^8.0.7",
     "multer": "^2.1.1",
-    "pg": "^8.20.0",
+    "pg": "^8.11.3",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {

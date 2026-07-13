@@ -1,0 +1,480 @@
+{
+    "placement_mode_default":  "free",
+    "origin_default":  "floor-center",
+    "unit":  "meters",
+    "style":  "cartoon futuristic post-apocalyptic underwater station",
+    "pack":  "information technology, electrical and ventilation technical blocks",
+    "blend":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\submarine_postapo_technical_blocks_pack.blend",
+    "combined_glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\submarine_postapo_technical_blocks_pack.glb",
+    "preview_png":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\submarine_postapo_technical_blocks_preview.png",
+    "assets":  [
+                   {
+                       "name":  "01_it_sealed_server_rack_0p8x0p9x2m",
+                       "label":  "Baie de serveurs étanche",
+                       "category":  "information_technology",
+                       "footprint_width_m":  0.8,
+                       "footprint_depth_m":  0.9,
+                       "height_m":  2.0,
+                       "features":  "nine server blades, status lights, transparent sealed service door and top cooling vent",
+                       "animation":  "front_service_door",
+                       "animation_frame_start":  1,
+                       "animation_frame_end":  60,
+                       "color_slots":  [
+                                           {
+                                               "slot":  "shell",
+                                               "material":  "01_it_sealed_server_rack_0p8x0p9x2m__SLOT_SHELL__shell"
+                                           },
+                                           {
+                                               "slot":  "panel",
+                                               "material":  "01_it_sealed_server_rack_0p8x0p9x2m__SLOT_PANEL__panel"
+                                           },
+                                           {
+                                               "slot":  "dark",
+                                               "material":  "01_it_sealed_server_rack_0p8x0p9x2m__SLOT_DARK__dark"
+                                           },
+                                           {
+                                               "slot":  "steel",
+                                               "material":  "01_it_sealed_server_rack_0p8x0p9x2m__SLOT_STEEL__steel"
+                                           },
+                                           {
+                                               "slot":  "rubber",
+                                               "material":  "01_it_sealed_server_rack_0p8x0p9x2m__SLOT_RUBBER__rubber"
+                                           },
+                                           {
+                                               "slot":  "hazard",
+                                               "material":  "01_it_sealed_server_rack_0p8x0p9x2m__SLOT_HAZARD__hazard"
+                                           },
+                                           {
+                                               "slot":  "oxide",
+                                               "material":  "01_it_sealed_server_rack_0p8x0p9x2m__SLOT_OXIDE__oxide"
+                                           },
+                                           {
+                                               "slot":  "cable",
+                                               "material":  "01_it_sealed_server_rack_0p8x0p9x2m__SLOT_CABLE__cable"
+                                           },
+                                           {
+                                               "slot":  "glass",
+                                               "material":  "01_it_sealed_server_rack_0p8x0p9x2m__SLOT_GLASS__smoked_glass"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Baie de serveurs étanche.glb",
+                       "catalog_file":  "Baie de serveurs étanche.glb"
+                   },
+                   {
+                       "name":  "02_it_network_distribution_cabinet_1p15x0p48x1p35m",
+                       "label":  "Armoire de distribution réseau",
+                       "category":  "information_technology",
+                       "footprint_width_m":  1.15,
+                       "footprint_depth_m":  0.48,
+                       "height_m":  1.35,
+                       "features":  "forty network ports, diagnostic screen, status indicators and sealed lower cooling grille",
+                       "animation":  "static",
+                       "animation_frame_start":  1,
+                       "animation_frame_end":  null,
+                       "color_slots":  [
+                                           {
+                                               "slot":  "shell",
+                                               "material":  "02_it_network_distribution_cabinet_1p15x0p48x1p35m__SLOT_SHELL__shell"
+                                           },
+                                           {
+                                               "slot":  "panel",
+                                               "material":  "02_it_network_distribution_cabinet_1p15x0p48x1p35m__SLOT_PANEL__panel"
+                                           },
+                                           {
+                                               "slot":  "dark",
+                                               "material":  "02_it_network_distribution_cabinet_1p15x0p48x1p35m__SLOT_DARK__dark"
+                                           },
+                                           {
+                                               "slot":  "steel",
+                                               "material":  "02_it_network_distribution_cabinet_1p15x0p48x1p35m__SLOT_STEEL__steel"
+                                           },
+                                           {
+                                               "slot":  "rubber",
+                                               "material":  "02_it_network_distribution_cabinet_1p15x0p48x1p35m__SLOT_RUBBER__rubber"
+                                           },
+                                           {
+                                               "slot":  "hazard",
+                                               "material":  "02_it_network_distribution_cabinet_1p15x0p48x1p35m__SLOT_HAZARD__hazard"
+                                           },
+                                           {
+                                               "slot":  "oxide",
+                                               "material":  "02_it_network_distribution_cabinet_1p15x0p48x1p35m__SLOT_OXIDE__oxide"
+                                           },
+                                           {
+                                               "slot":  "cable",
+                                               "material":  "02_it_network_distribution_cabinet_1p15x0p48x1p35m__SLOT_CABLE__cable"
+                                           },
+                                           {
+                                               "slot":  "glass",
+                                               "material":  "02_it_network_distribution_cabinet_1p15x0p48x1p35m__SLOT_GLASS__smoked_glass"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Armoire de distribution réseau.glb",
+                       "catalog_file":  "Armoire de distribution réseau.glb"
+                   },
+                   {
+                       "name":  "03_it_data_core_console_1p7x0p78x1p45m",
+                       "label":  "Console de contrôle informatique",
+                       "category":  "information_technology",
+                       "footprint_width_m":  1.7,
+                       "footprint_depth_m":  0.78,
+                       "height_m":  1.45,
+                       "features":  "three luminous displays, integrated keyboard deck, armored base and front maintenance markings",
+                       "animation":  "static",
+                       "animation_frame_start":  1,
+                       "animation_frame_end":  null,
+                       "color_slots":  [
+                                           {
+                                               "slot":  "shell",
+                                               "material":  "03_it_data_core_console_1p7x0p78x1p45m__SLOT_SHELL__shell"
+                                           },
+                                           {
+                                               "slot":  "panel",
+                                               "material":  "03_it_data_core_console_1p7x0p78x1p45m__SLOT_PANEL__panel"
+                                           },
+                                           {
+                                               "slot":  "dark",
+                                               "material":  "03_it_data_core_console_1p7x0p78x1p45m__SLOT_DARK__dark"
+                                           },
+                                           {
+                                               "slot":  "steel",
+                                               "material":  "03_it_data_core_console_1p7x0p78x1p45m__SLOT_STEEL__steel"
+                                           },
+                                           {
+                                               "slot":  "rubber",
+                                               "material":  "03_it_data_core_console_1p7x0p78x1p45m__SLOT_RUBBER__rubber"
+                                           },
+                                           {
+                                               "slot":  "hazard",
+                                               "material":  "03_it_data_core_console_1p7x0p78x1p45m__SLOT_HAZARD__hazard"
+                                           },
+                                           {
+                                               "slot":  "oxide",
+                                               "material":  "03_it_data_core_console_1p7x0p78x1p45m__SLOT_OXIDE__oxide"
+                                           },
+                                           {
+                                               "slot":  "cable",
+                                               "material":  "03_it_data_core_console_1p7x0p78x1p45m__SLOT_CABLE__cable"
+                                           },
+                                           {
+                                               "slot":  "glass",
+                                               "material":  "03_it_data_core_console_1p7x0p78x1p45m__SLOT_GLASS__smoked_glass"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Console de contrôle informatique.glb",
+                       "catalog_file":  "Console de contrôle informatique.glb"
+                   },
+                   {
+                       "name":  "04_electrical_power_distribution_cabinet_1x0p58x1p9m",
+                       "label":  "Armoire de distribution électrique",
+                       "category":  "electrical",
+                       "footprint_width_m":  1.0,
+                       "footprint_depth_m":  0.58,
+                       "height_m":  1.9,
+                       "features":  "twenty-four breakers, master diagnostic display, hazard rail and armored sealed enclosure",
+                       "animation":  "static",
+                       "animation_frame_start":  1,
+                       "animation_frame_end":  null,
+                       "color_slots":  [
+                                           {
+                                               "slot":  "shell",
+                                               "material":  "04_electrical_power_distribution_cabinet_1x0p58x1p9m__SLOT_SHELL__shell"
+                                           },
+                                           {
+                                               "slot":  "panel",
+                                               "material":  "04_electrical_power_distribution_cabinet_1x0p58x1p9m__SLOT_PANEL__panel"
+                                           },
+                                           {
+                                               "slot":  "dark",
+                                               "material":  "04_electrical_power_distribution_cabinet_1x0p58x1p9m__SLOT_DARK__dark"
+                                           },
+                                           {
+                                               "slot":  "steel",
+                                               "material":  "04_electrical_power_distribution_cabinet_1x0p58x1p9m__SLOT_STEEL__steel"
+                                           },
+                                           {
+                                               "slot":  "rubber",
+                                               "material":  "04_electrical_power_distribution_cabinet_1x0p58x1p9m__SLOT_RUBBER__rubber"
+                                           },
+                                           {
+                                               "slot":  "hazard",
+                                               "material":  "04_electrical_power_distribution_cabinet_1x0p58x1p9m__SLOT_HAZARD__hazard"
+                                           },
+                                           {
+                                               "slot":  "oxide",
+                                               "material":  "04_electrical_power_distribution_cabinet_1x0p58x1p9m__SLOT_OXIDE__oxide"
+                                           },
+                                           {
+                                               "slot":  "cable",
+                                               "material":  "04_electrical_power_distribution_cabinet_1x0p58x1p9m__SLOT_CABLE__cable"
+                                           },
+                                           {
+                                               "slot":  "glass",
+                                               "material":  "04_electrical_power_distribution_cabinet_1x0p58x1p9m__SLOT_GLASS__smoked_glass"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Armoire de distribution électrique.glb",
+                       "catalog_file":  "Armoire de distribution électrique.glb"
+                   },
+                   {
+                       "name":  "05_electrical_transformer_rectifier_1p3x0p82x1p25m",
+                       "label":  "Bloc transformateur redresseur",
+                       "category":  "electrical",
+                       "footprint_width_m":  1.3,
+                       "footprint_depth_m":  0.82,
+                       "height_m":  1.25,
+                       "features":  "three exposed armored coil stacks, ceramic insulators, cooling grille and hazard-marked base",
+                       "animation":  "static",
+                       "animation_frame_start":  1,
+                       "animation_frame_end":  null,
+                       "color_slots":  [
+                                           {
+                                               "slot":  "shell",
+                                               "material":  "05_electrical_transformer_rectifier_1p3x0p82x1p25m__SLOT_SHELL__shell"
+                                           },
+                                           {
+                                               "slot":  "panel",
+                                               "material":  "05_electrical_transformer_rectifier_1p3x0p82x1p25m__SLOT_PANEL__panel"
+                                           },
+                                           {
+                                               "slot":  "dark",
+                                               "material":  "05_electrical_transformer_rectifier_1p3x0p82x1p25m__SLOT_DARK__dark"
+                                           },
+                                           {
+                                               "slot":  "steel",
+                                               "material":  "05_electrical_transformer_rectifier_1p3x0p82x1p25m__SLOT_STEEL__steel"
+                                           },
+                                           {
+                                               "slot":  "rubber",
+                                               "material":  "05_electrical_transformer_rectifier_1p3x0p82x1p25m__SLOT_RUBBER__rubber"
+                                           },
+                                           {
+                                               "slot":  "hazard",
+                                               "material":  "05_electrical_transformer_rectifier_1p3x0p82x1p25m__SLOT_HAZARD__hazard"
+                                           },
+                                           {
+                                               "slot":  "oxide",
+                                               "material":  "05_electrical_transformer_rectifier_1p3x0p82x1p25m__SLOT_OXIDE__oxide"
+                                           },
+                                           {
+                                               "slot":  "cable",
+                                               "material":  "05_electrical_transformer_rectifier_1p3x0p82x1p25m__SLOT_CABLE__cable"
+                                           },
+                                           {
+                                               "slot":  "glass",
+                                               "material":  "05_electrical_transformer_rectifier_1p3x0p82x1p25m__SLOT_GLASS__smoked_glass"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Bloc transformateur redresseur.glb",
+                       "catalog_file":  "Bloc transformateur redresseur.glb"
+                   },
+                   {
+                       "name":  "06_electrical_backup_battery_bank_1p45x0p7x1p45m",
+                       "label":  "Banc de batteries de secours",
+                       "category":  "electrical",
+                       "footprint_width_m":  1.45,
+                       "footprint_depth_m":  0.7,
+                       "height_m":  1.45,
+                       "features":  "twelve replaceable battery cells, visible terminals, charge display and armored floor enclosure",
+                       "animation":  "static",
+                       "animation_frame_start":  1,
+                       "animation_frame_end":  null,
+                       "color_slots":  [
+                                           {
+                                               "slot":  "shell",
+                                               "material":  "06_electrical_backup_battery_bank_1p45x0p7x1p45m__SLOT_SHELL__shell"
+                                           },
+                                           {
+                                               "slot":  "panel",
+                                               "material":  "06_electrical_backup_battery_bank_1p45x0p7x1p45m__SLOT_PANEL__panel"
+                                           },
+                                           {
+                                               "slot":  "dark",
+                                               "material":  "06_electrical_backup_battery_bank_1p45x0p7x1p45m__SLOT_DARK__dark"
+                                           },
+                                           {
+                                               "slot":  "steel",
+                                               "material":  "06_electrical_backup_battery_bank_1p45x0p7x1p45m__SLOT_STEEL__steel"
+                                           },
+                                           {
+                                               "slot":  "rubber",
+                                               "material":  "06_electrical_backup_battery_bank_1p45x0p7x1p45m__SLOT_RUBBER__rubber"
+                                           },
+                                           {
+                                               "slot":  "hazard",
+                                               "material":  "06_electrical_backup_battery_bank_1p45x0p7x1p45m__SLOT_HAZARD__hazard"
+                                           },
+                                           {
+                                               "slot":  "oxide",
+                                               "material":  "06_electrical_backup_battery_bank_1p45x0p7x1p45m__SLOT_OXIDE__oxide"
+                                           },
+                                           {
+                                               "slot":  "cable",
+                                               "material":  "06_electrical_backup_battery_bank_1p45x0p7x1p45m__SLOT_CABLE__cable"
+                                           },
+                                           {
+                                               "slot":  "glass",
+                                               "material":  "06_electrical_backup_battery_bank_1p45x0p7x1p45m__SLOT_GLASS__smoked_glass"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Banc de batteries de secours.glb",
+                       "catalog_file":  "Banc de batteries de secours.glb"
+                   },
+                   {
+                       "name":  "07_ventilation_filter_air_handler_1p35x0p78x1p9m",
+                       "label":  "Module de filtration de l air",
+                       "category":  "ventilation",
+                       "footprint_width_m":  1.35,
+                       "footprint_depth_m":  0.78,
+                       "height_m":  1.9,
+                       "features":  "three removable filter cassettes, large intake louvre, top duct collar and integrated pressure control pod",
+                       "animation":  "static",
+                       "animation_frame_start":  1,
+                       "animation_frame_end":  null,
+                       "color_slots":  [
+                                           {
+                                               "slot":  "shell",
+                                               "material":  "07_ventilation_filter_air_handler_1p35x0p78x1p9m__SLOT_SHELL__shell"
+                                           },
+                                           {
+                                               "slot":  "panel",
+                                               "material":  "07_ventilation_filter_air_handler_1p35x0p78x1p9m__SLOT_PANEL__panel"
+                                           },
+                                           {
+                                               "slot":  "dark",
+                                               "material":  "07_ventilation_filter_air_handler_1p35x0p78x1p9m__SLOT_DARK__dark"
+                                           },
+                                           {
+                                               "slot":  "steel",
+                                               "material":  "07_ventilation_filter_air_handler_1p35x0p78x1p9m__SLOT_STEEL__steel"
+                                           },
+                                           {
+                                               "slot":  "rubber",
+                                               "material":  "07_ventilation_filter_air_handler_1p35x0p78x1p9m__SLOT_RUBBER__rubber"
+                                           },
+                                           {
+                                               "slot":  "hazard",
+                                               "material":  "07_ventilation_filter_air_handler_1p35x0p78x1p9m__SLOT_HAZARD__hazard"
+                                           },
+                                           {
+                                               "slot":  "oxide",
+                                               "material":  "07_ventilation_filter_air_handler_1p35x0p78x1p9m__SLOT_OXIDE__oxide"
+                                           },
+                                           {
+                                               "slot":  "cable",
+                                               "material":  "07_ventilation_filter_air_handler_1p35x0p78x1p9m__SLOT_CABLE__cable"
+                                           },
+                                           {
+                                               "slot":  "glass",
+                                               "material":  "07_ventilation_filter_air_handler_1p35x0p78x1p9m__SLOT_GLASS__smoked_glass"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Module de filtration de l air.glb",
+                       "catalog_file":  "Module de filtration de l air.glb"
+                   },
+                   {
+                       "name":  "08_ventilation_heat_exchanger_1p75x0p82x1p35m",
+                       "label":  "Échangeur thermique de ventilation",
+                       "category":  "ventilation",
+                       "footprint_width_m":  1.75,
+                       "footprint_depth_m":  0.82,
+                       "height_m":  1.35,
+                       "features":  "two visible copper-colored exchanger cores, twin top ducts, service manifolds and central regulator",
+                       "animation":  "static",
+                       "animation_frame_start":  1,
+                       "animation_frame_end":  null,
+                       "color_slots":  [
+                                           {
+                                               "slot":  "shell",
+                                               "material":  "08_ventilation_heat_exchanger_1p75x0p82x1p35m__SLOT_SHELL__shell"
+                                           },
+                                           {
+                                               "slot":  "panel",
+                                               "material":  "08_ventilation_heat_exchanger_1p75x0p82x1p35m__SLOT_PANEL__panel"
+                                           },
+                                           {
+                                               "slot":  "dark",
+                                               "material":  "08_ventilation_heat_exchanger_1p75x0p82x1p35m__SLOT_DARK__dark"
+                                           },
+                                           {
+                                               "slot":  "steel",
+                                               "material":  "08_ventilation_heat_exchanger_1p75x0p82x1p35m__SLOT_STEEL__steel"
+                                           },
+                                           {
+                                               "slot":  "rubber",
+                                               "material":  "08_ventilation_heat_exchanger_1p75x0p82x1p35m__SLOT_RUBBER__rubber"
+                                           },
+                                           {
+                                               "slot":  "hazard",
+                                               "material":  "08_ventilation_heat_exchanger_1p75x0p82x1p35m__SLOT_HAZARD__hazard"
+                                           },
+                                           {
+                                               "slot":  "oxide",
+                                               "material":  "08_ventilation_heat_exchanger_1p75x0p82x1p35m__SLOT_OXIDE__oxide"
+                                           },
+                                           {
+                                               "slot":  "cable",
+                                               "material":  "08_ventilation_heat_exchanger_1p75x0p82x1p35m__SLOT_CABLE__cable"
+                                           },
+                                           {
+                                               "slot":  "glass",
+                                               "material":  "08_ventilation_heat_exchanger_1p75x0p82x1p35m__SLOT_GLASS__smoked_glass"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Échangeur thermique de ventilation.glb",
+                       "catalog_file":  "Échangeur thermique de ventilation.glb"
+                   },
+                   {
+                       "name":  "09_ventilation_emergency_extractor_1p15x0p9x1p75m",
+                       "label":  "Extracteur d urgence blindé",
+                       "category":  "ventilation",
+                       "footprint_width_m":  1.15,
+                       "footprint_depth_m":  0.9,
+                       "height_m":  1.75,
+                       "features":  "guarded animated impeller, reinforced intake frame, vertical exhaust stack and attached emergency controller",
+                       "animation":  "fan_rotation",
+                       "animation_frame_start":  1,
+                       "animation_frame_end":  60,
+                       "color_slots":  [
+                                           {
+                                               "slot":  "shell",
+                                               "material":  "09_ventilation_emergency_extractor_1p15x0p9x1p75m__SLOT_SHELL__shell"
+                                           },
+                                           {
+                                               "slot":  "panel",
+                                               "material":  "09_ventilation_emergency_extractor_1p15x0p9x1p75m__SLOT_PANEL__panel"
+                                           },
+                                           {
+                                               "slot":  "dark",
+                                               "material":  "09_ventilation_emergency_extractor_1p15x0p9x1p75m__SLOT_DARK__dark"
+                                           },
+                                           {
+                                               "slot":  "steel",
+                                               "material":  "09_ventilation_emergency_extractor_1p15x0p9x1p75m__SLOT_STEEL__steel"
+                                           },
+                                           {
+                                               "slot":  "rubber",
+                                               "material":  "09_ventilation_emergency_extractor_1p15x0p9x1p75m__SLOT_RUBBER__rubber"
+                                           },
+                                           {
+                                               "slot":  "hazard",
+                                               "material":  "09_ventilation_emergency_extractor_1p15x0p9x1p75m__SLOT_HAZARD__hazard"
+                                           },
+                                           {
+                                               "slot":  "oxide",
+                                               "material":  "09_ventilation_emergency_extractor_1p15x0p9x1p75m__SLOT_OXIDE__oxide"
+                                           },
+                                           {
+                                               "slot":  "cable",
+                                               "material":  "09_ventilation_emergency_extractor_1p15x0p9x1p75m__SLOT_CABLE__cable"
+                                           },
+                                           {
+                                               "slot":  "glass",
+                                               "material":  "09_ventilation_emergency_extractor_1p15x0p9x1p75m__SLOT_GLASS__smoked_glass"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Extracteur d urgence blindé.glb",
+                       "catalog_file":  "Extracteur d urgence blindé.glb"
+                   }
+               ]
+}

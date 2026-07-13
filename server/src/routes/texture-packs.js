@@ -29,12 +29,19 @@ const multerZip = multer({
 // Autorise uniquement : <categorie>/<fichier>.png ou <fichier>.png (racine du pack)
 const SAFE_PATH_RE = /^[a-zA-Z0-9_\-]+(?:\/[a-zA-Z0-9_\-]+)?\.png$/
 function assertSafePath(p) {
+  if (typeof p !== 'string') {
+    throw new AppError(400, `Chemin non autorise dans le manifest : "${String(p)}"`)
+  }
   if (!SAFE_PATH_RE.test(p)) {
     throw new AppError(400, `Chemin non autorisé dans le manifest : "${p}"`)
   }
 }
 
 // Collecte tous les objets sous un préfixe MinIO (stream événementiel)
+function isFaceMetadataEntry(faceName) {
+  return String(faceName).startsWith('__') || faceName === 'procedural'
+}
+
 function listObjects(client, bucket, prefix) {
   return new Promise((resolve, reject) => {
     const objects = []
@@ -366,7 +373,7 @@ router.post('/import', requireAuth, multerZip.single('zip'), async (req, res, ne
       const faces = tex.faces || {}
       for (const [faceName, facePath] of Object.entries(faces)) {
         if (faceName === 'side') continue // alias rétrocompat P33 — ignoré à l'écriture
-        assertSafePath(facePath)
+        if (!isFaceMetadataEntry(faceName)) assertSafePath(facePath)
       }
     }
 

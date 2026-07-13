@@ -153,8 +153,11 @@ export default function CampaignSettingsPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState(null)
+  const [deleteError, setDeleteError] = useState(null)
   const [saveStatus, setSaveStatus] = useState(null) // 'saved' | 'error' | null
+  const [campaign, setCampaign] = useState(null)
 
   // ─── État section dés ──────────────────────────────────────────────────────
   const [diceEnabled, setDiceEnabled] = useState(false)
@@ -185,6 +188,7 @@ export default function CampaignSettingsPage() {
       try {
         const res = await api.get(`/campaigns/${campaignId}`)
         const { campaign } = res.data
+        setCampaign(campaign)
 
         // Guard GM : la vérification stricte est faite côté serveur (requireRole('gm') sur PUT).
         // Le GET /:id retourne 403 si l'utilisateur n'est pas membre — suffisant pour bloquer l'accès.
@@ -212,7 +216,7 @@ export default function CampaignSettingsPage() {
       }
     }
     load()
-  }, [campaignId])
+  }, [campaignId, t])
 
   // ─── Sauvegarde ───────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
@@ -232,7 +236,7 @@ export default function CampaignSettingsPage() {
       await api.put(`/campaigns/${campaignId}`, { dice_config, pnj_unlimited_ammo: pnjUnlimitedAmmo, reload_mode: reloadMode, action_timer_sec: actionTimerSec, shock_auto_stun: shockAutoStun })
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
-    } catch (err) {
+    } catch {
       setSaveStatus('error')
     } finally {
       setSaving(false)
@@ -240,6 +244,27 @@ export default function CampaignSettingsPage() {
   }, [campaignId, diceEnabled, expertMode, expertRows, successActive, successOn, failActive, failOn, pnjUnlimitedAmmo, reloadMode, actionTimerSec, shockAutoStun])
 
   // ─── Bascule mode expert → simple ─────────────────────────────────────────
+  const handleGoHome = useCallback(() => {
+    navigate('/dashboard')
+  }, [navigate])
+
+  const handleDeleteCampaign = useCallback(async () => {
+    const campaignName = campaign?.name || t('settings.thisCampaign')
+    if (!window.confirm(t('settings.deleteCampaignConfirm', { name: campaignName }))) return
+
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await api.delete(`/campaigns/${campaignId}`)
+      navigate('/dashboard', { replace: true })
+    } catch (err) {
+      console.error('Erreur suppression campagne :', err)
+      setDeleteError(err.response?.data?.error?.message || t('settings.deleteCampaignError'))
+    } finally {
+      setDeleting(false)
+    }
+  }, [campaign?.name, campaignId, navigate, t])
+
   const handleSwitchToSimple = useCallback(() => {
     // Les réglages par dé sont perdus — comportement documenté et confirmé
     setExpertMode(false)
@@ -323,8 +348,8 @@ export default function CampaignSettingsPage() {
   if (error) return (
     <div style={styles.loadingScreen}>
       <p style={{ color: 'var(--color-danger)', marginBottom: '16px' }}>{error}</p>
-      <button style={styles.btnGhost} onClick={() => navigate('/dashboard')}>
-        {t('settings.back')}
+      <button style={styles.btnGhost} onClick={handleGoHome}>
+        {t('settings.home')}
       </button>
     </div>
   )
@@ -333,8 +358,8 @@ export default function CampaignSettingsPage() {
     <div style={styles.container}>
       {/* ─── Header ──────────────────────────────────────────────────────── */}
       <div style={styles.header}>
-        <button style={styles.backBtn} onClick={() => navigate('/dashboard')}>
-          {t('settings.back')}
+        <button style={styles.backBtn} onClick={handleGoHome}>
+          {t('settings.home')}
         </button>
         <h1 style={styles.pageTitle}>{t('settings.pageTitle')}</h1>
         <div style={styles.headerRight}>
@@ -344,7 +369,7 @@ export default function CampaignSettingsPage() {
           {saveStatus === 'error' && (
             <span style={styles.saveError}>{t('settings.errorSave')}</span>
           )}
-          <button style={styles.btnPrimary} onClick={handleSave} disabled={saving}>
+          <button style={styles.btnPrimary} onClick={handleSave} disabled={saving || deleting}>
             {saving ? t('settings.saving') : t('common.save')}
           </button>
         </div>
@@ -736,6 +761,23 @@ export default function CampaignSettingsPage() {
             <h2 style={styles.sectionTitle}>{t('settings.sectionSheet')}</h2>
             <p style={styles.placeholderText}>{t('settings.sectionSheetPlaceholder')}</p>
           </section>
+
+          <section style={{ ...styles.section, ...styles.dangerSection }}>
+            <div style={styles.dangerRow}>
+              <div>
+                <h2 style={{ ...styles.sectionTitle, marginBottom: '8px' }}>{t('settings.dangerTitle')}</h2>
+                <p style={styles.dangerText}>{t('settings.deleteCampaignHint')}</p>
+              </div>
+              <button
+                style={styles.btnDangerSolid}
+                onClick={handleDeleteCampaign}
+                disabled={deleting || saving}
+              >
+                {deleting ? t('settings.deletingCampaign') : t('settings.deleteCampaign')}
+              </button>
+            </div>
+            {deleteError && <p style={styles.deleteError}>{deleteError}</p>}
+          </section>
         </div>
       </div>
     </div>
@@ -854,6 +896,27 @@ const styles = {
   },
   sectionPlaceholder: {
     opacity: 0.5,
+  },
+  dangerSection: {
+    borderColor: 'rgba(224,92,92,0.45)',
+    backgroundColor: 'rgba(224,92,92,0.05)',
+  },
+  dangerRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '18px',
+  },
+  dangerText: {
+    color: 'var(--text-muted)',
+    fontSize: '13px',
+    lineHeight: 1.45,
+    margin: 0,
+  },
+  deleteError: {
+    color: 'var(--color-danger)',
+    fontSize: '13px',
+    margin: '14px 0 0',
   },
   sectionTitle: {
     fontSize: '15px',
@@ -1129,6 +1192,17 @@ const styles = {
     fontWeight: '500',
     fontSize: '13px',
     cursor: 'pointer',
+  },
+  btnDangerSolid: {
+    backgroundColor: 'var(--color-danger)',
+    border: '1px solid var(--color-danger)',
+    borderRadius: '6px',
+    color: 'white',
+    padding: '8px 16px',
+    fontWeight: '600',
+    fontSize: '13px',
+    cursor: 'pointer',
+    flexShrink: 0,
   },
   btnPrimary: {
     backgroundColor: 'var(--color-primary)',

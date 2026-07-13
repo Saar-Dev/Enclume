@@ -1,19 +1,135 @@
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { Suspense, useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { MapControls, Grid } from '@react-three/drei'
+import { Edges, MapControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
+import raycastVoxels from 'fast-voxel-raycast'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import Voxel from './Voxel.jsx'
 import EntityMesh from './EntityMesh.jsx'
+import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
+import SurfaceEditorScene from './SurfaceEditorScene.jsx'
+import SurfaceDungeonScene, { cutWallsForDoorConnectors } from './SurfaceDungeonScene.jsx'
+import CulledVoxelScene from './CulledVoxelScene.jsx'
+import {
+  applyRoomToolUpdate,
+  expandRoomsToSurface,
+  getFloorTopY,
+  getWallRenderBox,
+  hasSurfaceContent,
+  levelToY,
+  normalizeSurfaceData,
+  parseFloorKey,
+  roomsWallSegments,
+  SURFACE_FINE,
+  yToLevel,
+} from '../lib/surfaceData.js'
 import { useMapStore } from '../stores/mapStore'
 import { useEntityStore } from '../stores/entityStore'
 // ─── Constantes — identiques à Canvas3D ──────────────────────────────────────
 const GRID_SIZE = 50
+const ROOM_DEFAULTS = {
+  enabled: false,
+  wallHeight: 2,
+  floorTexId: null,
+  wallTexId: null,
+}
 
 // ─── Utilitaire clé voxel ────────────────────────────────────────────────────
 const getVoxelKey = (x, y, z) => `${x}:${y}:${z}`
+const cloneSurfaceData = (data) => JSON.parse(JSON.stringify(data))
+const blueprintPlacementMode = (blueprint) => (
+  blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
+)
+const clampInt = (value, min, max, fallback) => {
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+const normalizeRoomSelection = (selection) => {
+  if (!selection?.start || !selection?.end) return null
+  const minX = Math.min(selection.start.x, selection.end.x)
+  const maxX = Math.max(selection.start.x, selection.end.x)
+  const minZ = Math.min(selection.start.z, selection.end.z)
+  const maxZ = Math.max(selection.start.z, selection.end.z)
+  return {
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    y: selection.start.y,
+    width: maxX - minX + 1,
+    depth: maxZ - minZ + 1,
+  }
+}
+const buildRoomVoxels = (selection, roomTool, activeMaterial) => {
+  const area = normalizeRoomSelection(selection)
+  if (!area) return []
+
+  const tool = { ...ROOM_DEFAULTS, ...roomTool }
+  const wallHeight = clampInt(tool.wallHeight, 1, 6, ROOM_DEFAULTS.wallHeight)
+  const floorTex = tool.floorTexId || activeMaterial?.texId
+  const wallTex = tool.wallTexId || activeMaterial?.texId
+  if (!floorTex || !wallTex) return []
+
+  const voxels = new Map()
+  const put = (x, y, z, tex) => {
+    if (Math.abs(x) > GRID_SIZE / 2 || Math.abs(z) > GRID_SIZE / 2 || y < 0 || y > 7) return
+    voxels.set(getVoxelKey(x, y, z), { x, y, z, tex, geo: 'cube', r: 0 })
+  }
+
+  for (let x = area.minX; x <= area.maxX; x += 1) {
+    for (let z = area.minZ; z <= area.maxZ; z += 1) {
+      put(x, area.y, z, floorTex)
+    }
+  }
+
+  for (let y = area.y + 1; y <= area.y + wallHeight; y += 1) {
+    for (let x = area.minX - 1; x <= area.maxX + 1; x += 1) {
+      put(x, y, area.minZ - 1, wallTex)
+      put(x, y, area.maxZ + 1, wallTex)
+    }
+    for (let z = area.minZ; z <= area.maxZ; z += 1) {
+      put(area.minX - 1, y, z, wallTex)
+      put(area.maxX + 1, y, z, wallTex)
+    }
+  }
+
+  return [...voxels.values()]
+}
+
+function RoomSelectionGhost({ selection, roomTool }) {
+  const area = normalizeRoomSelection(selection)
+  if (!area) return null
+
+  const wallHeight = clampInt(roomTool?.wallHeight, 1, 6, ROOM_DEFAULTS.wallHeight)
+  const wallY = area.y + 1 + wallHeight / 2
+  return (
+    <group>
+      <mesh position={[area.minX + area.width / 2, area.y + 0.04, area.minZ + area.depth / 2]}>
+        <boxGeometry args={[area.width, 0.08, area.depth]} />
+        <meshLambertMaterial color="#5b8dee" transparent opacity={0.32} depthWrite={false} />
+      </mesh>
+      <mesh position={[area.minX + area.width / 2, wallY, area.minZ - 0.5]}>
+        <boxGeometry args={[area.width + 2, wallHeight, 1]} />
+        <meshLambertMaterial color="#5b8dee" transparent opacity={0.16} depthWrite={false} />
+      </mesh>
+      <mesh position={[area.minX + area.width / 2, wallY, area.maxZ + 1.5]}>
+        <boxGeometry args={[area.width + 2, wallHeight, 1]} />
+        <meshLambertMaterial color="#5b8dee" transparent opacity={0.16} depthWrite={false} />
+      </mesh>
+      <mesh position={[area.minX - 0.5, wallY, area.minZ + area.depth / 2]}>
+        <boxGeometry args={[1, wallHeight, area.depth]} />
+        <meshLambertMaterial color="#5b8dee" transparent opacity={0.16} depthWrite={false} />
+      </mesh>
+      <mesh position={[area.maxX + 1.5, wallY, area.minZ + area.depth / 2]}>
+        <boxGeometry args={[1, wallHeight, area.depth]} />
+        <meshLambertMaterial color="#5b8dee" transparent opacity={0.16} depthWrite={false} />
+      </mesh>
+    </group>
+  )
+}
 
 // ─── Ghost voxel — preview avant pose ────────────────────────────────────────
 // Mesh semi-transparent sous le curseur, géométrie du bloc actif.
@@ -51,31 +167,143 @@ function GhostVoxel({ position, geometry, rotation }) {
 }
 
 // ─── Ghost entité — preview avant pose ───────────────────────────────────────
-function GhostEntity({ position, blueprint, r }) {
+function GhostEntityBounds({ position, blueprint, r }) {
   if (!position || !blueprint) return null
   const { x, y, z } = position
   const rot = r * (Math.PI / 2)
-  const width  = blueprint.geometry?.width  ?? 1
+  const width = blueprint.geometry?.width ?? 1
   const height = blueprint.geometry?.height ?? 1
-  const depth  = blueprint.geometry?.depth  ?? 1
+  const depth = blueprint.geometry?.depth ?? 1
+  const authoredOrigin = blueprint.geometry?.origin === 'floor-center' || blueprint.geometry?.origin === 'wall-back-center'
   return (
-    <mesh position={[x + width / 2, y + height / 2, z + depth / 2]} rotation={[0, rot, 0]}>
-      <boxGeometry args={[width, height, depth]} />
-      <meshLambertMaterial color="#5b8dee" transparent opacity={0.45} depthWrite={false} />
-    </mesh>
+    <group position={[authoredOrigin ? x : x + width / 2, y, authoredOrigin ? z : z + depth / 2]} rotation={[0, rot, 0]}>
+      <mesh position={[0, height / 2, 0]}>
+        <boxGeometry args={[width, height, depth]} />
+        <meshBasicMaterial color="#5b8dee" transparent opacity={0.18} depthWrite={false} />
+        <Edges color="#7fb0ff" transparent opacity={0.9} />
+      </mesh>
+    </group>
+  )
+}
+
+function GhostEntity({ position, blueprint, r }) {
+  if (!position || !blueprint) return null
+  const entity = {
+    id: `preview:${blueprint.id}`,
+    blueprint_id: blueprint.id,
+    pos_x: position.x,
+    pos_y: position.z,
+    pos_z: position.y,
+    r,
+    state: {},
+    current_state_id: 0,
+  }
+  return (
+    <Suspense fallback={<GhostEntityBounds position={position} blueprint={blueprint} r={r} />}>
+      <EntityMesh
+        entity={entity}
+        blueprint={blueprint}
+        entityTextureMaterials={null}
+        sceneOpacity={1}
+        isPreview
+        isSelected
+      />
+    </Suspense>
   )
 }
 
 // ─── Scène éditeur entités ────────────────────────────────────────────────────
-function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, socket, battlemapId, activeBlueprint }) {
+function EntityEditorScene({
+  voxels,
+  surfaceData,
+  textureMaterials,
+  entityTextureMaterials,
+  socket,
+  battlemapId,
+  activeBlueprint,
+  displayLevel = 0,
+  selectedEntityId = null,
+  onEntitySelect,
+  onBlueprintPlaced,
+}) {
   const { camera, gl, scene } = useThree()
   const orbitRef = useRef()
+  const previousDisplayLevelRef = useRef(displayLevel)
   const raycaster = new THREE.Raycaster()
   const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
   const mousePosRef = useRef({ x: 0, y: 0 })
-  const { entities, blueprints, addEntity, removeEntity } = useEntityStore()
+  const entityDragRef = useRef(null)
+  const moveGhostRef = useRef(null)
+  const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
   const [ghostPos, setGhostPos] = useState(null)
   const [ghostR, setGhostR] = useState(0)
+  const [moveGhost, setMoveGhost] = useState(null)
+
+  useEffect(() => {
+    setGhostPos(null)
+    setGhostR(0)
+  }, [activeBlueprint?.id])
+
+  useEffect(() => {
+    const previousLevel = previousDisplayLevelRef.current
+    previousDisplayLevelRef.current = displayLevel
+    if (previousLevel === displayLevel || !orbitRef.current) return
+    const deltaY = levelToY(displayLevel) - levelToY(previousLevel)
+    const controls = orbitRef.current
+    controls.object.position.y += deltaY
+    controls.target.y += deltaY
+    controls.update()
+  }, [displayLevel])
+
+  const expandedSurface = useMemo(() => expandRoomsToSurface(surfaceData), [surfaceData])
+  const displayedFloorSupports = useMemo(() => {
+    const supports = new Map()
+    for (const [id, floor] of Object.entries(expandedSurface.floors || {})) {
+      const parsed = parseFloorKey(id, floor)
+      if (yToLevel(parsed.y) !== displayLevel) continue
+      const key = `${parsed.x}:${parsed.z}`
+      const top = getFloorTopY(id, floor)
+      supports.set(key, Math.max(supports.get(key) ?? -Infinity, top))
+    }
+    return supports
+  }, [displayLevel, expandedSurface.floors])
+
+  const displayedWallSupports = useMemo(() => {
+    const surface = normalizeSurfaceData(surfaceData)
+    const walls = cutWallsForDoorConnectors([
+      ...roomsWallSegments(surface.rooms),
+      ...Object.entries(surface.walls || {}).map(([id, wall]) => ({ ...wall, id: wall?.id || id })),
+    ], surface.connectors)
+    return walls.flatMap(wall => {
+      if (!wall?.id || !wall?.axis || yToLevel(wall.y) !== displayLevel) return []
+      const renderBox = getWallRenderBox(wall)
+      if (!renderBox) return []
+      const [width, height, depth] = renderBox.args
+      const [x, y, z] = renderBox.position
+      const min = new THREE.Vector3(x - width / 2, y - height / 2, z - depth / 2)
+      const max = new THREE.Vector3(x + width / 2, y + height / 2, z + depth / 2)
+      return [{
+        wall,
+        renderBox,
+        box3: new THREE.Box3(min, max),
+        minAlong: wall.axis === 'x' ? min.x : min.z,
+        maxAlong: wall.axis === 'x' ? max.x : max.z,
+        line: wall.axis === 'x' ? z : x,
+        baseY: min.y,
+        topY: max.y,
+      }]
+    })
+  }, [displayLevel, surfaceData])
+
+  const columnTops = useMemo(() => {
+    const tops = {}
+    for (const voxel of Object.values(voxels)) {
+      const key = `${voxel.x}:${voxel.z}`
+      const top = voxel.y + (voxel.geo === 'slab_bottom' ? 0.5 : 1)
+      if (tops[key] === undefined || top > tops[key]) tops[key] = top
+    }
+    return tops
+  }, [voxels])
 
   const calcEntityPos = useCallback((clientX, clientY) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -85,22 +313,25 @@ function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, s
     )
     raycaster.setFromCamera(mouse, camera)
 
-    // Raycasting voxels en priorité — pose sur la face supérieure d'un voxel existant
-    const meshes = []
-    scene.traverse(obj => { if (obj.userData.isVoxel && obj.isMesh) meshes.push(obj) })
-    const hits = raycaster.intersectObjects(meshes, false)
-    if (hits.length > 0) {
-      const hit = hits[0]
-      const normal = hit.face.normal.clone().applyQuaternion(hit.object.getWorldQuaternion(new THREE.Quaternion())).round()
-      // Pour les entités : on pose sur le sol au pied du voxel touché, pas sur la face
-      // La coordonnée Y = face supérieure du voxel (top face uniquement)
-      const [vx, vy, vz] = hit.object.userData.position
-      const ny = vy + Math.round(normal.y)  // 0 si face latérale, vy+1 si face top
-      const finalY = Math.max(0, normal.y > 0 ? ny : vy)
-      const x = Math.round(hit.point.x)
-      const z = Math.round(hit.point.z)
+    // Traversée directe de la grille : coût proportionnel à la longueur du rayon,
+    // jamais au nombre de triangles de la carte fusionnée.
+    const hitPos = [0, 0, 0]
+    const hitNorm = [0, 0, 0]
+    const origin = raycaster.ray.origin
+    const direction = raycaster.ray.direction
+    const hit = raycastVoxels(
+      (x, y, z) => !!voxels[`${x}:${y}:${z}`],
+      [origin.x, origin.y, origin.z],
+      [direction.x, direction.y, direction.z],
+      100,
+      hitPos,
+      hitNorm
+    )
+    if (hit) {
+      const x = Math.floor(hitPos[0] - hitNorm[0] * 0.01)
+      const z = Math.floor(hitPos[2] - hitNorm[2] * 0.01)
       if (Math.abs(x) > GRID_SIZE / 2 || Math.abs(z) > GRID_SIZE / 2) return null
-      return { x, y: finalY, z }
+      return { x, y: columnTops[`${x}:${z}`] ?? 0, z }
     }
 
     // Fallback — intersection avec le sol Y=0
@@ -111,7 +342,160 @@ function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, s
     const z = Math.round(target.z)
     if (Math.abs(x) > GRID_SIZE / 2 || Math.abs(z) > GRID_SIZE / 2) return null
     return { x, y: 0, z }
-  }, [camera, gl, scene])
+  }, [camera, gl, voxels, columnTops])
+
+  const calcPreciseEntityPos = useCallback((clientX, clientY, blueprint, rotation = 0) => {
+    if (!blueprint) return null
+    const rect = gl.domElement.getBoundingClientRect()
+    const mouse = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    raycaster.setFromCamera(mouse, camera)
+
+    if (blueprintPlacementMode(blueprint) === 'wall') {
+      let selected = null
+      let selectedPoint = null
+      let selectedDistance = Infinity
+      for (const support of displayedWallSupports) {
+        const point = raycaster.ray.intersectBox(support.box3, new THREE.Vector3())
+        if (!point) continue
+        const distance = point.distanceToSquared(raycaster.ray.origin)
+        if (distance < selectedDistance) {
+          selected = support
+          selectedPoint = point
+          selectedDistance = distance
+        }
+      }
+      if (!selected || !selectedPoint) return null
+
+      const sameLine = displayedWallSupports.filter(support => (
+        support.wall.axis === selected.wall.axis
+        && Math.abs(support.line - selected.line) < 0.001
+        && Math.abs(support.baseY - selected.baseY) < 0.001
+        && Math.abs(support.topY - selected.topY) < 0.001
+      ))
+      let connectedMin = selected.minAlong
+      let connectedMax = selected.maxAlong
+      let connected = [selected]
+      let changed = true
+      while (changed) {
+        changed = false
+        for (const support of sameLine) {
+          if (connected.includes(support)) continue
+          if (support.maxAlong < connectedMin - 0.001 || support.minAlong > connectedMax + 0.001) continue
+          connected.push(support)
+          connectedMin = Math.min(connectedMin, support.minAlong)
+          connectedMax = Math.max(connectedMax, support.maxAlong)
+          changed = true
+        }
+      }
+
+      const width = Math.max(0.05, Number(blueprint.geometry?.width) || 1)
+      const height = Math.max(0.05, Number(blueprint.geometry?.height) || 1)
+      if (width > connectedMax - connectedMin + 0.001 || height > selected.topY - selected.baseY + 0.001) return null
+
+      const positiveFace = selected.wall.axis === 'x'
+        ? camera.position.z >= selected.line
+        : camera.position.x >= selected.line
+      const wallFace = positiveFace ? 'front' : 'back'
+      const wallSide = selected.wall[`${wallFace}Role`] || wallFace
+      const wallMount = blueprint.geometry?.wallMount || blueprint.geometry?.wall_mount || {}
+      if (wallSide === 'interior' && wallMount.allowInterior === false) return null
+      if (wallSide === 'exterior' && wallMount.allowExterior === false) return null
+
+      const snap = value => Math.round(value * SURFACE_FINE) / SURFACE_FINE
+      const halfWidth = width / 2
+      const rawAlong = selected.wall.axis === 'x' ? selectedPoint.x : selectedPoint.z
+      const along = Math.max(connectedMin + halfWidth, Math.min(connectedMax - halfWidth, snap(rawAlong)))
+      const rawBottom = selectedPoint.y - height / 2
+      const bottom = Math.max(selected.baseY, Math.min(selected.topY - height, snap(rawBottom)))
+      const normal = selected.wall.axis === 'x'
+        ? [0, 0, positiveFace ? 1 : -1]
+        : [positiveFace ? 1 : -1, 0, 0]
+      const surfaceCoordinate = selected.wall.axis === 'x'
+        ? (positiveFace ? selected.box3.max.z : selected.box3.min.z)
+        : (positiveFace ? selected.box3.max.x : selected.box3.min.x)
+      const offset = 0.006
+      const x = selected.wall.axis === 'x' ? along : surfaceCoordinate + normal[0] * offset
+      const z = selected.wall.axis === 'x' ? surfaceCoordinate + normal[2] * offset : along
+      const r = selected.wall.axis === 'x'
+        ? (positiveFace ? 0 : 2)
+        : (positiveFace ? 1 : 3)
+      const precise = value => Math.round(value * 10000) / 10000
+      return {
+        x: precise(x),
+        y: precise(bottom),
+        z: precise(z),
+        r,
+        placement: {
+          mode: 'wall',
+          wallId: selected.wall.id,
+          wallIds: connected.map(support => support.wall.id),
+          wallAxis: selected.wall.axis,
+          wallFace,
+          wallSide,
+          level: displayLevel,
+          along: precise(along),
+          bottomHeight: precise(bottom - selected.baseY),
+          normal,
+        },
+      }
+    }
+
+    let centerX
+    let centerZ
+    let supportY = levelToY(displayLevel)
+
+    if (hasSurfaceContent(surfaceData)) {
+      const placementPlane = new THREE.Plane(
+        new THREE.Vector3(0, 1, 0),
+        -(levelToY(displayLevel) + 0.125),
+      )
+      const target = new THREE.Vector3()
+      const hit = raycaster.ray.intersectPlane(placementPlane, target)
+      if (!hit) return null
+      centerX = target.x
+      centerZ = target.z
+      supportY = displayedFloorSupports.get(`${Math.floor(centerX)}:${Math.floor(centerZ)}`) ?? supportY
+    } else {
+      const target = new THREE.Vector3()
+      const placementPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -levelToY(displayLevel))
+      const hit = raycaster.ray.intersectPlane(placementPlane, target)
+      if (!hit) {
+        const legacy = calcEntityPos(clientX, clientY)
+        if (!legacy) return null
+        centerX = legacy.x + 0.5
+        centerZ = legacy.z + 0.5
+        supportY = legacy.y
+      } else {
+        centerX = target.x
+        centerZ = target.z
+        const cellX = Math.floor(centerX)
+        const cellZ = Math.floor(centerZ)
+        supportY = columnTops[`${cellX}:${cellZ}`] ?? supportY
+      }
+    }
+
+    const snappedCenterX = Math.round(centerX * SURFACE_FINE) / SURFACE_FINE
+    const snappedCenterZ = Math.round(centerZ * SURFACE_FINE) / SURFACE_FINE
+    if (Math.abs(snappedCenterX) > GRID_SIZE / 2 || Math.abs(snappedCenterZ) > GRID_SIZE / 2) return null
+
+    const width = Number(blueprint.geometry?.width) || 1
+    const depth = Number(blueprint.geometry?.depth) || 1
+    const quarterTurn = Math.abs(Number(rotation) || 0) % 2 === 1
+    const footprintWidth = quarterTurn ? depth : width
+    const footprintDepth = quarterTurn ? width : depth
+    const floorCentered = blueprint.geometry?.origin === 'floor-center'
+    const precise = value => Math.round(value * 10000) / 10000
+    return {
+      x: precise(floorCentered ? snappedCenterX : snappedCenterX - footprintWidth / 2),
+      y: precise(supportY),
+      z: precise(floorCentered ? snappedCenterZ : snappedCenterZ - footprintDepth / 2),
+      r: rotation,
+      placement: { mode: 'free', level: displayLevel },
+    }
+  }, [calcEntityPos, camera, columnTops, displayLevel, displayedFloorSupports, displayedWallSupports, gl, surfaceData])
 
   const getEntityUnderCursor = useCallback((clientX, clientY) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -130,32 +514,115 @@ function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, s
     const canvas = gl.domElement
     const onMove = (e) => {
       mousePosRef.current = { x: e.clientX, y: e.clientY }
+      const drag = entityDragRef.current
+      if (drag) {
+        const distance = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY)
+        if (distance >= 4) drag.moved = true
+        if (drag.moved) {
+          const entity = entities.find(item => item.id === drag.entityId)
+          const blueprint = entity ? blueprints[entity.blueprint_id] : null
+          const next = calcPreciseEntityPos(e.clientX, e.clientY, blueprint, entity?.r || 0)
+          if (next && entity && blueprint) {
+            const preview = { entityId: entity.id, position: next, blueprint, r: next.r ?? entity.r ?? 0 }
+            moveGhostRef.current = preview
+            setMoveGhost(preview)
+          }
+        }
+        return
+      }
       if (!activeBlueprint?.id) { setGhostPos(null); return }
-      setGhostPos(calcEntityPos(e.clientX, e.clientY))
+      const next = calcPreciseEntityPos(e.clientX, e.clientY, activeBlueprint, ghostR)
+      setGhostPos(prev => (
+        prev?.x === next?.x
+          && prev?.y === next?.y
+          && prev?.z === next?.z
+          && prev?.r === next?.r
+          && prev?.placement?.wallId === next?.placement?.wallId
+          && prev?.placement?.wallFace === next?.placement?.wallFace
+          ? prev
+          : next
+      ))
     }
     canvas.addEventListener('mousemove', onMove)
     return () => canvas.removeEventListener('mousemove', onMove)
-  }, [gl, activeBlueprint?.id, calcEntityPos])
+  }, [gl, activeBlueprint, blueprints, calcPreciseEntityPos, entities, ghostR])
 
   useEffect(() => {
     const canvas = gl.domElement
     const onMouseDown = async (e) => {
       if (e.button !== 0) return
-      if (!activeBlueprint?.id || !battlemapId) return
-      const pos = calcEntityPos(e.clientX, e.clientY)
+      const entityId = getEntityUnderCursor(e.clientX, e.clientY)
+      if (entityId) {
+        const entity = entities.find(item => item.id === entityId)
+        if (!entity) return
+        onEntitySelect?.(entity, e.clientX, e.clientY)
+        entityDragRef.current = {
+          entityId,
+          startX: e.clientX,
+          startY: e.clientY,
+          moved: false,
+        }
+        setGhostPos(null)
+        e.preventDefault()
+        return
+      }
+      if (!activeBlueprint?.id || !battlemapId) {
+        onEntitySelect?.(null, e.clientX, e.clientY)
+        return
+      }
+      const pos = calcPreciseEntityPos(e.clientX, e.clientY, activeBlueprint, ghostR)
       if (!pos) return
       try {
         const res = await api.post(`/battlemaps/${battlemapId}/entities`, {
           blueprint_id: activeBlueprint.id,
-          pos_x: pos.x, pos_y: pos.z, pos_z: pos.y, r: ghostR, // PE14
+          pos_x: pos.x, pos_y: pos.z, pos_z: pos.y, r: pos.r ?? ghostR, // PE14
+          state: { placement: pos.placement || { mode: 'free', level: displayLevel } },
         })
         addEntity(res.data.entity)   // mise à jour store locale immédiate
         socket?.emit(WS.ENTITY_CREATED, { entityId: res.data.entity.id })
+        setGhostPos(null)
+        onBlueprintPlaced?.(res.data.entity)
       } catch (err) { console.error('[EntityEditor] Erreur pose entité :', err) }
     }
     canvas.addEventListener('mousedown', onMouseDown)
     return () => canvas.removeEventListener('mousedown', onMouseDown)
-  }, [gl, activeBlueprint?.id, battlemapId, ghostR, calcEntityPos, socket])
+  }, [gl, activeBlueprint, battlemapId, displayLevel, ghostR, calcPreciseEntityPos, socket, entities, getEntityUnderCursor, onEntitySelect, onBlueprintPlaced, addEntity])
+
+  useEffect(() => {
+    const onMouseUp = async () => {
+      const drag = entityDragRef.current
+      const preview = moveGhostRef.current
+      entityDragRef.current = null
+      moveGhostRef.current = null
+      setMoveGhost(null)
+      if (!drag?.moved || !preview || preview.entityId !== drag.entityId) return
+      try {
+        const res = await api.put(`/entities/${drag.entityId}`, {
+          pos_x: preview.position.x,
+          pos_y: preview.position.z,
+          pos_z: preview.position.y,
+          r: preview.r,
+          state: {
+            ...(entities.find(entity => entity.id === drag.entityId)?.state || {}),
+            placement: preview.position.placement,
+          },
+        })
+        updateEntity(res.data.entity)
+        socket?.emit(WS.ENTITY_MOVED, {
+          entityId: drag.entityId,
+          pos_x: res.data.entity.pos_x,
+          pos_y: res.data.entity.pos_y,
+          pos_z: res.data.entity.pos_z,
+          r: res.data.entity.r,
+          updated_at: res.data.entity.updated_at,
+        })
+      } catch (err) {
+        console.error('[EntityEditor] Erreur deplacement :', err)
+      }
+    }
+    window.addEventListener('mouseup', onMouseUp)
+    return () => window.removeEventListener('mouseup', onMouseUp)
+  }, [entities, socket, updateEntity])
 
   useEffect(() => {
     const onKey = (e) => {
@@ -164,20 +631,27 @@ function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, s
       if (entityId) {
         const entity = entities.find(en => en.id === entityId)
         if (!entity) return
+        const blueprint = blueprints[entity.blueprint_id]
+        if (blueprintPlacementMode(blueprint) === 'wall') return
         const newR = (entity.r + 1) % 4
         api.put(`/entities/${entityId}`, { r: newR })
-          .then(res => socket?.emit(WS.ENTITY_MOVED, {
-            entityId, pos_x: res.data.entity.pos_x,
-            pos_y: res.data.entity.pos_y, pos_z: res.data.entity.pos_z, r: newR,
-          }))
+          .then(res => {
+            updateEntity(res.data.entity)
+            socket?.emit(WS.ENTITY_MOVED, {
+              entityId, pos_x: res.data.entity.pos_x,
+              pos_y: res.data.entity.pos_y, pos_z: res.data.entity.pos_z, r: newR,
+              updated_at: res.data.entity.updated_at,
+            })
+          })
           .catch(err => console.error('[EntityEditor] Erreur rotation :', err))
       } else {
+        if (blueprintPlacementMode(activeBlueprint) === 'wall') return
         setGhostR(prev => (prev + 1) % 4)
       }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [entities, getEntityUnderCursor, socket, battlemapId])
+  }, [activeBlueprint, blueprints, entities, getEntityUnderCursor, socket, updateEntity])
 
   // ─── Suppression entité — touche Delete/Backspace ───────────────────────
   // Entité sous le curseur → DELETE REST → removeEntity + WS.
@@ -189,12 +663,13 @@ function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, s
       try {
         await api.delete(`/entities/${entityId}`)
         removeEntity(entityId)
+        if (selectedEntityId === entityId) onEntitySelect?.(null)
         socket?.emit(WS.ENTITY_DELETED, { entityId })
       } catch (err) { console.error('[EntityEditor] Erreur suppression entité :', err) }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [getEntityUnderCursor, removeEntity, socket])
+  }, [getEntityUnderCursor, onEntitySelect, removeEntity, selectedEntityId, socket])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -205,7 +680,7 @@ function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, s
 
   useEffect(() => {
     if (!orbitRef.current) return
-    orbitRef.current.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE }
+    orbitRef.current.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }
     orbitRef.current.listenToKeyEvents(window)
     orbitRef.current.keyPanSpeed = 20
   }, [])
@@ -217,29 +692,44 @@ function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, s
       <directionalLight position={[10, 20, 10]} intensity={1.5} castShadow />
       <directionalLight position={[-10, 10, -10]} intensity={0.6} />
       <MapControls ref={orbitRef}
-        mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE }}
+        mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }}
         enableDamping dampingFactor={0.05} maxPolarAngle={Math.PI / 2}
       />
-      <Grid args={[GRID_SIZE, GRID_SIZE]} position={[0, 0, 0]}
+      <Grid args={[GRID_SIZE, GRID_SIZE]} position={[0, levelToY(displayLevel) + 0.01, 0]}
         cellColor="#334155" sectionColor="#475569" fadeDistance={80}
       />
-      {Object.values(voxels).map(v => (
-        <Voxel key={getVoxelKey(v.x, v.y, v.z)}
-          position={[v.x, v.y, v.z]} textureMaterials={textureMaterials[v.tex]}
-          geometry={v.geo} rotation={v.r}
+      <Grid args={[GRID_SIZE, GRID_SIZE * SURFACE_FINE]} position={[0, levelToY(displayLevel) + 0.02, 0]}
+        cellColor="#233044" sectionColor="#233044" fadeDistance={45}
+      />
+      {hasSurfaceContent(surfaceData) ? (
+        <SurfaceDungeonScene
+          surfaceData={surfaceData}
+          textureMaterials={textureMaterials}
+          showWater={false}
+          ceilingOpacity={0.35}
+          displayLevel={displayLevel}
         />
-      ))}
+      ) : (
+        <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
+      )}
       {entities.map(entity => {
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
+        if (yToLevel(entity.pos_z) > displayLevel) return null
+        const isMoving = moveGhost?.entityId === entity.id
         return (
           <EntityMesh key={entity.id} entity={entity} blueprint={blueprint}
             entityTextureMaterials={entityTextureMaterials} altPressed={false} isGmOnly={entity.gm_only}
+            sceneOpacity={isMoving ? 0.22 : 1}
+            isSelected={selectedEntityId === entity.id}
           />
         )
       })}
-      {ghostPos && activeBlueprint && blueprints[activeBlueprint.id] && (
-        <GhostEntity position={ghostPos} blueprint={blueprints[activeBlueprint.id]} r={ghostR} />
+      {ghostPos && activeBlueprint && (
+        <GhostEntity position={ghostPos} blueprint={activeBlueprint} r={ghostPos.r ?? ghostR} />
+      )}
+      {moveGhost && (
+        <GhostEntity position={moveGhost.position} blueprint={moveGhost.blueprint} r={moveGhost.r} />
       )}
     </>
   )
@@ -250,6 +740,7 @@ function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, s
 function EditorScene({
   voxels, setVoxels, textureMaterials,
   activeMaterial, onActiveMaterialChange,
+  roomTool,
   socket, battlemapId,
   isDirty,
 }) {
@@ -263,6 +754,8 @@ function EditorScene({
 
   // Position du ghost voxel — null = pas affiché
   const [ghostPos, setGhostPos] = useState(null)
+  const [roomDrag, setRoomDrag] = useState(null)
+  const roomDragRef = useRef(null)
 
   // ─── Pan clavier proportionnel à la hauteur caméra ──────────────────────
   // Remplace listenToKeyEvents + keyPanSpeed de MapControls.
@@ -351,6 +844,23 @@ function EditorScene({
     return { x, y: 0, z }
   }, [camera, gl, scene])
 
+  const calcRoomGridPos = useCallback((clientX, clientY) => {
+    const rect = gl.domElement.getBoundingClientRect()
+    const mouse = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    )
+    raycaster.setFromCamera(mouse, camera)
+
+    const target = new THREE.Vector3()
+    const hit = raycaster.ray.intersectPlane(groundPlane, target)
+    if (!hit) return null
+    const x = Math.round(target.x)
+    const z = Math.round(target.z)
+    if (Math.abs(x) > GRID_SIZE / 2 || Math.abs(z) > GRID_SIZE / 2) return null
+    return { x, y: 0, z }
+  }, [camera, gl])
+
   // ─── Raycasting voxel existant à une position souris ───────────────────
   // Retourne la position { x, y, z } du voxel touché ou null.
   const getVoxelUnderCursor = useCallback((clientX, clientY) => {
@@ -376,6 +886,16 @@ function EditorScene({
 
     const handleMouseMove = (e) => {
       mousePosRef.current = { x: e.clientX, y: e.clientY }
+      if (roomTool?.enabled) {
+        const pos = calcRoomGridPos(e.clientX, e.clientY)
+        setGhostPos(pos)
+        if (pos && roomDragRef.current) {
+          const nextDrag = { ...roomDragRef.current, end: pos }
+          roomDragRef.current = nextDrag
+          setRoomDrag(nextDrag)
+        }
+        return
+      }
       if (!activeMaterial) { setGhostPos(null); return }
       const pos = calcGhostPos(e.clientX, e.clientY)
       setGhostPos(pos)
@@ -383,7 +903,7 @@ function EditorScene({
 
     canvas.addEventListener('mousemove', handleMouseMove)
     return () => canvas.removeEventListener('mousemove', handleMouseMove)
-  }, [gl, activeMaterial, calcGhostPos])
+  }, [gl, activeMaterial, roomTool, calcGhostPos, calcRoomGridPos])
 
   // ─── Mouse down — pose gauche + mémorisation position droit ────────────
   // Clic gauche : pose immédiate du bloc actif.
@@ -400,6 +920,16 @@ function EditorScene({
 
       // Clic gauche — pose du bloc actif
       if (e.button === 0) {
+        if (roomTool?.enabled) {
+          const pos = calcRoomGridPos(e.clientX, e.clientY)
+          if (!pos) return
+          const drag = { start: pos, end: pos }
+          roomDragRef.current = drag
+          setRoomDrag(drag)
+          setGhostPos(pos)
+          e.preventDefault()
+          return
+        }
         if (!activeMaterial) return
         const pos = calcGhostPos(e.clientX, e.clientY)
         if (!pos) return
@@ -415,7 +945,7 @@ function EditorScene({
 
     canvas.addEventListener('mousedown', handleMouseDown)
     return () => canvas.removeEventListener('mousedown', handleMouseDown)
-  }, [gl, activeMaterial, calcGhostPos, setVoxels, socket, battlemapId, isDirty])
+  }, [gl, activeMaterial, roomTool, calcGhostPos, calcRoomGridPos, setVoxels, socket, battlemapId, isDirty])
 
   // ─── Mouse up droit — suppression si clic court (pas un drag caméra) ────
   // Si la souris a bougé de moins de 4px depuis le mousedown → clic court → suppression.
@@ -425,6 +955,31 @@ function EditorScene({
     const DRAG_THRESHOLD = 4
 
     const handleMouseUp = (e) => {
+      if (e.button === 0 && roomTool?.enabled) {
+        const drag = roomDragRef.current
+        if (!drag) return
+        const end = calcRoomGridPos(e.clientX, e.clientY) || drag.end
+        const selection = { start: drag.start, end }
+        roomDragRef.current = null
+        setRoomDrag(null)
+
+        const roomVoxels = buildRoomVoxels(selection, roomTool, activeMaterial)
+        if (roomVoxels.length === 0) return
+        setVoxels(prev => {
+          const next = { ...prev }
+          for (const voxel of roomVoxels) {
+            next[getVoxelKey(voxel.x, voxel.y, voxel.z)] = voxel
+          }
+          return next
+        })
+        isDirty.current = true
+        if (!battlemapId) return
+        for (const voxel of roomVoxels) {
+          socket?.emit(WS.VOXEL_ADD, { battlemapId, ...voxel })
+        }
+        return
+      }
+
       if (e.button !== 2) return
       if (!rightDownRef.current) return
       const dx = Math.abs(e.clientX - rightDownRef.current.x)
@@ -446,7 +1001,7 @@ function EditorScene({
 
     canvas.addEventListener('mouseup', handleMouseUp)
     return () => canvas.removeEventListener('mouseup', handleMouseUp)
-  }, [gl, getVoxelUnderCursor, voxels, setVoxels, socket, battlemapId, isDirty])
+  }, [gl, roomTool, activeMaterial, calcRoomGridPos, getVoxelUnderCursor, voxels, setVoxels, socket, battlemapId, isDirty])
 
   // ─── Contextmenu prevent — clic droit sans menu browser ─────────────────
   useEffect(() => {
@@ -496,10 +1051,14 @@ function EditorScene({
     if (!orbitRef.current) return
     orbitRef.current.mouseButtons = {
       LEFT: null,
-      MIDDLE: THREE.MOUSE.PAN,
-      RIGHT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.ROTATE,
+      RIGHT: THREE.MOUSE.PAN,
     }
   }, [])
+
+  const roomSelection = roomTool?.enabled
+    ? roomDrag || (ghostPos ? { start: ghostPos, end: ghostPos } : null)
+    : null
 
   return (
     <>
@@ -510,7 +1069,7 @@ function EditorScene({
 
       <MapControls
         ref={orbitRef}
-        mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE }}
+        mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }}
         enableDamping
         dampingFactor={0.05}
         maxPolarAngle={Math.PI / 2}
@@ -535,12 +1094,15 @@ function EditorScene({
         />
       ))}
 
-      {/* Ghost voxel — preview pose */}
-      <GhostVoxel
-        position={ghostPos ? [ghostPos.x, ghostPos.y, ghostPos.z] : null}
-        geometry={activeMaterial?.geo || 'cube'}
-        rotation={activeMaterial?.r || 0}
-      />
+      {roomTool?.enabled ? (
+        <RoomSelectionGhost selection={roomSelection} roomTool={roomTool} />
+      ) : (
+        <GhostVoxel
+          position={ghostPos ? [ghostPos.x, ghostPos.y, ghostPos.z] : null}
+          geometry={activeMaterial?.geo || 'cube'}
+          rotation={activeMaterial?.r || 0}
+        />
+      )}
     </>
   )
 }
@@ -562,20 +1124,43 @@ export default function Editor3D({
   onBlocksLoaded,
   activeEditorTab,
   activeBlueprint,
+  surfaceTool,
+  onSurfaceToolChange,
+  surfaceUndoRequest = 0,
+  surfaceRedoRequest = 0,
+  onSurfaceUndoStateChange,
+  onSurfaceRedoStateChange,
+  displayLevel = 0,
+  selectedEntityId = null,
+  onEntitySelect,
+  onBlueprintPlaced,
 }) {
   const { battlemap, setBattlemap } = useMapStore()
   const { entities } = useEntityStore()
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
 
   const [voxels, setVoxels] = useState({})
+  const [surfaceData, setSurfaceData] = useState(() => normalizeSurfaceData(null))
+  const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [textureMaterials, setTextureMaterials] = useState({})
   const [blocksReady, setBlocksReady] = useState(false)
 
   const isDirty = useRef(false)
+  const isSurfaceDirty = useRef(false)
   const saveTimer = useRef(null)
+  const surfaceUndoStackRef = useRef([])
+  const surfaceRedoStackRef = useRef([])
+  const surfaceSaveQueueRef = useRef(Promise.resolve())
+  const surfaceSaveRevisionRef = useRef(0)
+  const [surfaceUndoDepth, setSurfaceUndoDepth] = useState(0)
+  const [surfaceRedoDepth, setSurfaceRedoDepth] = useState(0)
+  const surfaceUndoRequestRef = useRef(surfaceUndoRequest)
+  const surfaceRedoRequestRef = useRef(surfaceRedoRequest)
   // voxelsRef — miroir de voxels pour accès dans le cleanup useEffect (évite le stale closure)
   const voxelsRef = useRef(voxels)
   useEffect(() => { voxelsRef.current = voxels }, [voxels])
+  const surfaceDataRef = useRef(surfaceData)
+  useEffect(() => { surfaceDataRef.current = surfaceData }, [surfaceData])
   // battlemapRef — miroir de battlemap pour saveFireAndForget stable (pas de recréation du timer)
   const battlemapRef = useRef(battlemap)
   useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
@@ -592,6 +1177,25 @@ export default function Editor3D({
     }
     setVoxels(map)
   }, [battlemap?.id])
+
+  useEffect(() => {
+    setSurfaceData(normalizeSurfaceData(battlemap?.surface_data))
+  }, [battlemap?.id, battlemap?.surface_data])
+
+  useEffect(() => {
+    surfaceUndoStackRef.current = []
+    surfaceRedoStackRef.current = []
+    setSurfaceUndoDepth(0)
+    setSurfaceRedoDepth(0)
+  }, [battlemap?.id])
+
+  useEffect(() => {
+    onSurfaceUndoStateChange?.(surfaceUndoDepth > 0)
+  }, [onSurfaceUndoStateChange, surfaceUndoDepth])
+
+  useEffect(() => {
+    onSurfaceRedoStateChange?.(surfaceRedoDepth > 0)
+  }, [onSurfaceRedoStateChange, surfaceRedoDepth])
 
   // ─── Chargement voxel_textures — TOUTES les textures (palette complète) ──
   // Editor3D charge toutes les textures non-deprecated pour la palette,
@@ -686,30 +1290,39 @@ export default function Editor3D({
       .catch(err => console.error('[Editor3D] Sauvegarde échouée :', err))
   }, [setBattlemap])
 
+  const saveSurfaceFireAndForget = useCallback((currentSurfaceData) => {
+    const bm = battlemapRef.current
+    if (!isSurfaceDirty.current || !bm?.id) return
+    const battlemapId = bm.id
+    const revision = surfaceSaveRevisionRef.current + 1
+    surfaceSaveRevisionRef.current = revision
+
+    surfaceSaveQueueRef.current = surfaceSaveQueueRef.current
+      .catch(() => {})
+      .then(() => fetch(`${import.meta.env.VITE_API_URL}/api/battlemaps/${battlemapId}/surface`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ surface_data: currentSurfaceData }),
+      }))
+      .then(() => {
+        if (revision !== surfaceSaveRevisionRef.current) return
+        isSurfaceDirty.current = false
+        setBattlemap({ ...battlemapRef.current, surface_data: currentSurfaceData })
+      })
+      .catch(err => console.error('[Editor3D] Sauvegarde surfaces échouée :', err))
+  }, [setBattlemap])
+
   // ─── save() async — pour les saves explicites futures (undo/redo) ────────
   // Payload format : { "x:y:z": { tex, geo, r } } — P_voxel_save_payload
-  const save = useCallback(async (currentVoxels) => {
-    if (!isDirty.current || !battlemap?.id) return
-    try {
-      const payload = {}
-      for (const [key, v] of Object.entries(currentVoxels)) {
-        payload[key] = { tex: v.tex, geo: v.geo, r: v.r }
-      }
-      await api.put(`/battlemaps/${battlemap.id}/voxels`, { voxel_data: payload })
-      isDirty.current = false
-      setBattlemap({ ...battlemap, voxel_data: payload })
-    } catch (err) {
-      console.error('[Editor3D] Erreur sauvegarde voxels :', err)
-    }
-  }, [battlemap, setBattlemap])
-
   // ─── Auto-save toutes les 60s si dirty ──────────────────────────────────
   useEffect(() => {
     saveTimer.current = setInterval(() => {
       saveFireAndForget(voxelsRef.current)
+      saveSurfaceFireAndForget(surfaceDataRef.current)
     }, 60000)
     return () => clearInterval(saveTimer.current)
-  }, [saveFireAndForget])
+  }, [saveFireAndForget, saveSurfaceFireAndForget])
 
   // ─── Save au démontage (toggle retour mode jeu) ──────────────────────────
   // Utilise saveFireAndForget — le cleanup useEffect ne peut pas await une Promise.
@@ -718,8 +1331,158 @@ export default function Editor3D({
   useEffect(() => {
     return () => {
       saveFireAndForget(voxelsRef.current)
+      saveSurfaceFireAndForget(surfaceDataRef.current)
     }
-  }, [saveFireAndForget])
+  }, [saveFireAndForget, saveSurfaceFireAndForget])
+
+  const handleSurfaceDataChange = useCallback((nextSurfaceData) => {
+    if (nextSurfaceData === surfaceDataRef.current) return
+    surfaceUndoStackRef.current = [
+      ...surfaceUndoStackRef.current.slice(-49),
+      cloneSurfaceData(surfaceDataRef.current),
+    ]
+    surfaceRedoStackRef.current = []
+    setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
+    setSurfaceRedoDepth(0)
+    setSurfaceData(nextSurfaceData)
+    isSurfaceDirty.current = true
+    saveSurfaceFireAndForget(nextSurfaceData)
+  }, [saveSurfaceFireAndForget])
+
+  const selectedSurfaceConnector = useMemo(() => {
+    const connectorId = surfaceConnectorPanel?.connectorId
+    if (!connectorId) return null
+    const connector = surfaceData.connectors?.[connectorId]
+    return connector ? { id: connectorId, ...connector } : null
+  }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
+
+  const handleSurfaceConnectorSelect = useCallback((connectorId, clientX, clientY) => {
+    if (!connectorId) return
+    setSurfaceConnectorPanel({ connectorId, x: clientX, y: clientY })
+  }, [])
+
+  const handleSurfaceConnectorPatch = useCallback((connectorId, patch) => {
+    if (!connectorId || !patch) return
+    const currentSurfaceData = surfaceDataRef.current
+    const connector = currentSurfaceData.connectors?.[connectorId]
+    if (!connector) return
+
+    handleSurfaceDataChange({
+      ...currentSurfaceData,
+      version: 4,
+      connectors: {
+        ...(currentSurfaceData.connectors || {}),
+        [connectorId]: {
+          ...connector,
+          ...patch,
+        },
+      },
+    })
+  }, [handleSurfaceDataChange])
+
+  const closeSurfaceConnectorPanel = useCallback(() => {
+    setSurfaceConnectorPanel(null)
+    if (!surfaceTool?.selectedConnectorId) return
+    onSurfaceToolChange?.({
+      ...surfaceTool,
+      selectedConnectorId: null,
+    })
+  }, [onSurfaceToolChange, surfaceTool])
+
+  useEffect(() => {
+    const connectorId = surfaceConnectorPanel?.connectorId
+    if (!connectorId) return
+    if (surfaceData.connectors?.[connectorId]) return
+    setSurfaceConnectorPanel(null)
+  }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
+
+  useEffect(() => {
+    if (!surfaceConnectorPanel) return
+    if (surfaceTool?.mode === 'select') return
+    setSurfaceConnectorPanel(null)
+  }, [surfaceConnectorPanel, surfaceTool?.mode])
+
+  useEffect(() => {
+    const roomId = surfaceTool?.selectedRoomId
+    if (!roomId) return
+    if (surfaceTool?.mode === 'room' || surfaceTool?.mode === 'connector') return
+    const nextSurfaceData = applyRoomToolUpdate(
+      surfaceDataRef.current,
+      roomId,
+      surfaceTool,
+      activeMaterial,
+      availableBlocks,
+    )
+    if (nextSurfaceData === surfaceDataRef.current) return
+    handleSurfaceDataChange(nextSurfaceData)
+  }, [surfaceTool, activeMaterial, availableBlocks, handleSurfaceDataChange])
+
+  const handleSurfaceUndo = useCallback(() => {
+    const previousSurfaceData = surfaceUndoStackRef.current.pop()
+    if (!previousSurfaceData) return false
+    surfaceRedoStackRef.current = [
+      ...surfaceRedoStackRef.current.slice(-49),
+      cloneSurfaceData(surfaceDataRef.current),
+    ]
+    setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
+    setSurfaceRedoDepth(surfaceRedoStackRef.current.length)
+    setSurfaceData(previousSurfaceData)
+    isSurfaceDirty.current = true
+    saveSurfaceFireAndForget(previousSurfaceData)
+    return true
+  }, [saveSurfaceFireAndForget])
+
+  const handleSurfaceRedo = useCallback(() => {
+    const nextSurfaceData = surfaceRedoStackRef.current.pop()
+    if (!nextSurfaceData) return false
+    surfaceUndoStackRef.current = [
+      ...surfaceUndoStackRef.current.slice(-49),
+      cloneSurfaceData(surfaceDataRef.current),
+    ]
+    setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
+    setSurfaceRedoDepth(surfaceRedoStackRef.current.length)
+    setSurfaceData(nextSurfaceData)
+    isSurfaceDirty.current = true
+    saveSurfaceFireAndForget(nextSurfaceData)
+    return true
+  }, [saveSurfaceFireAndForget])
+
+  useEffect(() => {
+    if (surfaceUndoRequest === surfaceUndoRequestRef.current) return
+    surfaceUndoRequestRef.current = surfaceUndoRequest
+    handleSurfaceUndo()
+  }, [surfaceUndoRequest, handleSurfaceUndo])
+
+  useEffect(() => {
+    if (surfaceRedoRequest === surfaceRedoRequestRef.current) return
+    surfaceRedoRequestRef.current = surfaceRedoRequest
+    handleSurfaceRedo()
+  }, [surfaceRedoRequest, handleSurfaceRedo])
+
+  useEffect(() => {
+    const handleUndoKeyDown = (e) => {
+      if (activeEditorTab === 'entity') return
+      const target = e.target
+      const isTextInput = target?.tagName === 'INPUT'
+        || target?.tagName === 'TEXTAREA'
+        || target?.tagName === 'SELECT'
+        || target?.isContentEditable
+      if (isTextInput) return
+
+      const key = e.key.toLowerCase()
+      const isModifier = e.ctrlKey || e.metaKey
+      const isUndo = isModifier && !e.shiftKey && key === 'z'
+      const isRedo = isModifier && (key === 'y' || (e.shiftKey && key === 'z'))
+      if (!isUndo && !isRedo) return
+
+      const didChange = isRedo ? handleSurfaceRedo() : handleSurfaceUndo()
+      if (!didChange) return
+      e.preventDefault()
+    }
+
+    document.addEventListener('keydown', handleUndoKeyDown)
+    return () => document.removeEventListener('keydown', handleUndoKeyDown)
+  }, [activeEditorTab, handleSurfaceRedo, handleSurfaceUndo])
 
   // ─── Raccourcis Digit1-5 — sélection géométrie ──────────────────────────
   // Digit1=cube, Digit2=slab_bottom, Digit3=slab_top, Digit4=slope, Digit5=wedge.
@@ -748,33 +1511,52 @@ export default function Editor3D({
   }, [availableBlocks, onActiveMaterialChange, activeMaterial])
 
   return (
-    <Canvas
-      camera={{ position: [15, 15, 15], fov: 60 }}
-      style={{ background: '#0f172a' }}
-      onCreated={({ gl }) => { gl.shadowMap.enabled = true }}
-    >
-      {blocksReady && activeEditorTab === 'entity' && (
-        <EntityEditorScene
-          voxels={voxels}
-          textureMaterials={textureMaterials}
-          entityTextureMaterials={entityTextureMaterials}
-          socket={socket}
-          battlemapId={battlemap?.id}
-          activeBlueprint={activeBlueprint}
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <Canvas
+        camera={{ position: [15, 15, 15], fov: 60 }}
+        style={{ width: '100%', height: '100%', background: '#0f172a' }}
+        onCreated={({ gl }) => { gl.shadowMap.enabled = true }}
+      >
+        {blocksReady && activeEditorTab === 'entity' && (
+          <EntityEditorScene
+            voxels={voxels}
+            surfaceData={surfaceData}
+            textureMaterials={textureMaterials}
+            entityTextureMaterials={entityTextureMaterials}
+            socket={socket}
+            battlemapId={battlemap?.id}
+            activeBlueprint={activeBlueprint}
+            displayLevel={displayLevel}
+            selectedEntityId={selectedEntityId}
+            onEntitySelect={onEntitySelect}
+            onBlueprintPlaced={onBlueprintPlaced}
+          />
+        )}
+        {blocksReady && activeEditorTab !== 'entity' && (
+          <SurfaceEditorScene
+            surfaceData={surfaceData}
+            onSurfaceDataChange={handleSurfaceDataChange}
+            textureMaterials={textureMaterials}
+            activeMaterial={activeMaterial}
+            surfaceTool={surfaceTool}
+            onSurfaceToolChange={onSurfaceToolChange}
+            availableBlocks={availableBlocks}
+            displayLevel={displayLevel}
+            selectedConnectorId={surfaceConnectorPanel?.connectorId || surfaceTool?.selectedConnectorId || null}
+            onSurfaceConnectorSelect={handleSurfaceConnectorSelect}
+          />
+        )}
+      </Canvas>
+
+      {surfaceConnectorPanel && selectedSurfaceConnector && (
+        <SurfaceConnectorPanel
+          connector={selectedSurfaceConnector}
+          x={surfaceConnectorPanel.x}
+          y={surfaceConnectorPanel.y}
+          onPatch={handleSurfaceConnectorPatch}
+          onClose={closeSurfaceConnectorPanel}
         />
       )}
-      {blocksReady && activeEditorTab !== 'entity' && (
-        <EditorScene
-          voxels={voxels}
-          setVoxels={setVoxels}
-          textureMaterials={textureMaterials}
-          activeMaterial={activeMaterial}
-          onActiveMaterialChange={onActiveMaterialChange}
-          socket={socket}
-          battlemapId={battlemap?.id}
-          isDirty={isDirty}
-        />
-      )}
-    </Canvas>
+    </div>
   )
 }

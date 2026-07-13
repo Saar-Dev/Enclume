@@ -15,6 +15,11 @@ const EMPTY_FORM = {
   width: 1,
   height: 1,
   depth: 1,
+  placementMode: 'free',
+  wallDefaultBottomHeight: 1,
+  wallAllowInterior: true,
+  wallAllowExterior: true,
+  geometryExtras: {},
   faces: {},
   states: [],
   interactions: [],
@@ -26,7 +31,6 @@ function RotatingEntity({ textureMaterials, width, height, depth }) {
   const w = width || 1
   const h = height || 1
   const d = depth || 1
-  const FACE_ORDER_3D = ['east', 'west', 'top', 'bottom', 'south', 'north']
 
   useFrame((_, delta) => {
     if (groupRef.current) groupRef.current.rotation.y += delta * 0.8
@@ -34,13 +38,8 @@ function RotatingEntity({ textureMaterials, width, height, depth }) {
   if (!textureMaterials) return null
   return (
     <group ref={groupRef} position={[-w/2, -h/2, -d/2]}>
-      <mesh>
+      <mesh material={textureMaterials.faceMaterials}>
         <boxGeometry args={[w, h, d]} />
-        {FACE_ORDER_3D.map((faceName, i) => {
-          const mat = textureMaterials?.faceMaterials?.[i]
-          if (!mat) return <meshBasicMaterial key={i} attach={`material-${i}`} color={0x334155} />
-          return <meshLambertMaterial key={i} attach={`material-${i}`} {...mat} />
-        })}
       </mesh>
     </group>
   )
@@ -139,6 +138,11 @@ export default function EntityBuilderTab({
       width:      bp.geometry?.width  ?? 1,
       height:     bp.geometry?.height ?? 1,
       depth:      bp.geometry?.depth  ?? 1,
+      placementMode: bp.geometry?.placementMode || bp.geometry?.placement_mode || 'free',
+      wallDefaultBottomHeight: bp.geometry?.wallMount?.defaultBottomHeight ?? 1,
+      wallAllowInterior: bp.geometry?.wallMount?.allowInterior !== false,
+      wallAllowExterior: bp.geometry?.wallMount?.allowExterior !== false,
+      geometryExtras: { ...(bp.geometry || {}) },
       faces:      { ...(bp.geometry?.faces || {}) },
       states: (bp.states || []).map(s => ({
         id:           s.id,
@@ -286,10 +290,24 @@ export default function EntityBuilderTab({
     setSaving(true); setBpError(null)
     try {
       const geometry = {
+        ...form.geometryExtras,
         width:  Number(form.width)  || 1,
         height: Number(form.height) || 1,
         depth:  Number(form.depth)  || 1,
         faces:  form.appearance === 'voxel' ? form.faces : {},
+        placementMode: form.placementMode === 'wall' ? 'wall' : 'free',
+        origin: form.placementMode === 'wall' ? 'wall-back-center' : 'floor-center',
+      }
+      if (geometry.placementMode === 'wall') {
+        geometry.wallMount = {
+          defaultBottomHeight: Number.isFinite(Number(form.wallDefaultBottomHeight))
+            ? Number(form.wallDefaultBottomHeight)
+            : 1,
+          allowInterior: form.wallAllowInterior !== false,
+          allowExterior: form.wallAllowExterior !== false,
+        }
+      } else {
+        delete geometry.wallMount
       }
       const states = form.states.map(s => ({
         id: s.id, name: s.name,
@@ -475,12 +493,42 @@ export default function EntityBuilderTab({
               {[{ field: 'width', labelKey: 'builder.width' }, { field: 'height', labelKey: 'builder.height' }, { field: 'depth', labelKey: 'builder.depth' }].map(({ field, labelKey }) => (
                 <div key={field} style={{ ...S.fieldGroup, flex: 1 }}>
                   <label style={S.fieldLabel}>{t(labelKey)}</label>
-                  <input type="number" min="1" max="10" step="1" style={S.input}
+                  <input type="number" min="0.05" max="20" step="0.05" style={S.input}
                     value={form[field]}
                     onChange={e => setForm(p => ({ ...p, [field]: Number(e.target.value) || 1 }))}
                     disabled={!isOwner} />
                 </div>
               ))}
+            </div>
+
+            {/* ── Mode de pose ──────────────────────────────────────────── */}
+            <div style={S.fieldGroup}>
+              <label style={S.fieldLabel}>Mode de pose</label>
+              <select
+                style={S.input}
+                value={form.placementMode}
+                onChange={e => setForm(p => ({ ...p, placementMode: e.target.value }))}
+                disabled={!isOwner}
+              >
+                <option value="free">Libre — posé sur le sol</option>
+                <option value="wall">Mural — accroché obligatoirement à un mur</option>
+              </select>
+              {form.placementMode === 'wall' && (
+                <>
+                  <label style={{ ...S.fieldLabel, marginTop: '6px' }}>Hauteur basse conseillée</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="15"
+                    step="0.25"
+                    style={S.input}
+                    value={form.wallDefaultBottomHeight}
+                    onChange={e => setForm(p => ({ ...p, wallDefaultBottomHeight: e.target.value }))}
+                    disabled={!isOwner}
+                  />
+                  <p style={S.fieldHint}>Le pivot du GLB doit être au centre du dos, au niveau de son bord inférieur.</p>
+                </>
+              )}
             </div>
 
             {/* ── Apparence ──────────────────────────────────────────────── */}

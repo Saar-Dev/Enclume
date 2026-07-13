@@ -1,12 +1,62 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
 import { useSessionStore } from '../stores/sessionStore';
+import {
+  createFlowSheetGeometry,
+  createWaterMaterial,
+  isContainedWaterMesh,
+  isFlowMeshName,
+  isWaterMeshName,
+  isWaterSurfaceMesh,
+  updateWaterMaterial,
+} from '../lib/waterMaterials';
+import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js';
 
 // --- Constantes ---
 const ICON_INTERACTION = '⚙';
+
+const ENTITY_FACE_ORDER = ['east', 'west', 'top', 'bottom', 'south', 'north'];
+const PREVIEW_OPACITY = 0.42;
+const DISABLE_RAYCAST = () => null;
+
+function emitEntityClick(event, entity, onEntityClick) {
+  if (!onEntityClick) return;
+  event.stopPropagation();
+  const pointerEvent = event.nativeEvent || event;
+  onEntityClick(
+    entity,
+    pointerEvent.clientX ?? event.clientX ?? 0,
+    pointerEvent.clientY ?? event.clientY ?? 0,
+  );
+}
+
+function EntitySelectionOutline({ width, height, depth, y = 0 }) {
+  return (
+    <mesh
+      position={[0, y, 0]}
+      renderOrder={1000}
+      raycast={DISABLE_RAYCAST}
+    >
+      <boxGeometry args={[
+        Math.max(0.05, width) + 0.06,
+        Math.max(0.05, height) + 0.06,
+        Math.max(0.05, depth) + 0.06,
+      ]} />
+      <meshBasicMaterial
+        color="#ffb547"
+        wireframe
+        transparent
+        opacity={0.95}
+        depthTest={false}
+        depthWrite={false}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+}
 
 // --- EntityMesh (composant principal) ---
 export default function EntityMesh({
@@ -17,6 +67,9 @@ export default function EntityMesh({
   isGmOnly = false,
   onHover,
   onEntityClick,
+  sceneOpacity = 1,
+  isPreview = false,
+  isSelected = false,
 }) {
   if (!blueprint) return null;
 
@@ -25,11 +78,20 @@ export default function EntityMesh({
   const currentState = stateList[entity.current_state_id] ?? stateList[0] ?? null;
 
   // Coordonnées (PE14)
-  const posX = (entity.pos_x ?? 0) + (geometry?.width ?? 1) / 2;
-  const posY = (entity.pos_z ?? 0) + (geometry?.height ?? 1) / 2;
-  const posZ = (entity.pos_y ?? 0) + (geometry?.depth ?? 1) / 2;
+  const preservesAuthoredOrigin = geometry?.origin === 'floor-center' || geometry?.origin === 'wall-back-center';
+  const posX = preservesAuthoredOrigin
+    ? (entity.pos_x ?? 0)
+    : (entity.pos_x ?? 0) + (geometry?.width ?? 1) / 2;
+  const posY = preservesAuthoredOrigin
+    ? (entity.pos_z ?? 0)
+    : (entity.pos_z ?? 0) + (geometry?.height ?? 1) / 2;
+  const posZ = preservesAuthoredOrigin
+    ? (entity.pos_y ?? 0)
+    : (entity.pos_y ?? 0) + (geometry?.depth ?? 1) / 2;
   const rot = (entity.r || 0) * (Math.PI / 2);
-  const stateOpacity = currentState?.visual_override?.opacity ?? 1.0;
+  const stateOpacity = (currentState?.visual_override?.opacity ?? 1.0)
+    * sceneOpacity
+    * (isPreview ? PREVIEW_OPACITY : 1);
 
   // URL absolue pour useGLTF
   const glbUrl = glb_url
@@ -45,12 +107,15 @@ export default function EntityMesh({
       width={geometry?.width ?? 1}
       height={geometry?.height ?? 1}
       depth={geometry?.depth ?? 1}
+      currentState={currentState}
       rot={rot}
       stateOpacity={stateOpacity}
       altPressed={altPressed}
       isGmOnly={isGmOnly}
       onHover={onHover}
       onEntityClick={onEntityClick}
+      isPreview={isPreview}
+      isSelected={isSelected}
     />
   ) : (
     <EntityMeshVoxel
@@ -68,6 +133,8 @@ export default function EntityMesh({
       isGmOnly={isGmOnly}
       onHover={onHover}
       onEntityClick={onEntityClick}
+      isPreview={isPreview}
+      isSelected={isSelected}
     />
   );
 }
@@ -78,9 +145,10 @@ function EntityMeshGlb({
   blueprint,
   glbUrl,
   posX, posY, posZ,
-  width, height, depth, rot,
+  width, height, depth, currentState, rot,
   stateOpacity, altPressed, isGmOnly,
   onHover, onEntityClick,
+  isPreview, isSelected,
 }) {
   const hasInteractions = (blueprint.interactions || []).length > 0;
   const { pendingEntityId } = useSessionStore();
@@ -89,7 +157,63 @@ function EntityMeshGlb({
   const leaveTimerRef = useRef(null);
 
   // Chargement du GLB avec l'URL absolue
-  const { scene } = useGLTF(glbUrl);
+  const { scene: sourceScene } = useGLTF(glbUrl);
+  const materialSlots = useMemo(() => normalizeModelMaterialSlots(blueprint?.geometry), [blueprint?.geometry]);
+  const materialOverrides = useMemo(() => ({
+    ...(currentState?.visual_override?.materialOverrides || currentState?.visual_override?.material_overrides || {}),
+    ...(entity?.state?.materialOverrides || entity?.state?.material_overrides || {}),
+  }), [
+    currentState?.visual_override?.materialOverrides,
+    currentState?.visual_override?.material_overrides,
+    entity.state?.materialOverrides,
+    entity.state?.material_overrides,
+  ]);
+  const scene = useMemo(() => {
+    const clone = SkeletonUtils.clone(sourceScene);
+    clone.traverse((child) => {
+      if (!child.isMesh) return;
+      child.userData = {
+        ...child.userData,
+        isEntity: true,
+        entityId: entity.id,
+      };
+      if (isPreview) child.raycast = DISABLE_RAYCAST;
+      if (!child.material) return;
+      const cloneMaterial = (material) => applyMaterialSlotOverrides(material.clone(), materialSlots, materialOverrides);
+      child.material = Array.isArray(child.material)
+        ? child.material.map(cloneMaterial)
+        : cloneMaterial(child.material);
+    });
+    return clone;
+  }, [sourceScene, materialSlots, materialOverrides, entity.id, isPreview]);
+  const waterMaterials = useMemo(() => {
+    const materials = [];
+    scene.traverse((child) => {
+      if (!child.isMesh || !isWaterMeshName(child)) return;
+      const material = createWaterMaterial({
+        algae: child.userData?.editor_water_medium === 'algae'
+          || /algae/i.test(child.name)
+          || /algue/i.test(blueprint.name || ''),
+        flow: isFlowMeshName(child),
+        contained: isContainedWaterMesh(child),
+      });
+      if (isWaterSurfaceMesh(child)) {
+        child.geometry = createFlowSheetGeometry(child.geometry);
+        child.userData.runtimeWaterGeometry = true;
+      }
+      child.material = material;
+      child.renderOrder = 15;
+      materials.push(material);
+    });
+    return materials;
+  }, [scene, blueprint.name]);
+
+  useEffect(() => () => {
+    waterMaterials.forEach(material => material.dispose());
+    scene.traverse((child) => {
+      if (child.isMesh && child.userData?.runtimeWaterGeometry) child.geometry.dispose();
+    });
+  }, [scene, waterMaterials]);
 
   // Applique les modifications d'opacité DIRECTEMENT sur la scène chargée
   useEffect(() => {
@@ -97,11 +221,37 @@ function EntityMeshGlb({
     scene.traverse((child) => {
       if (child.isMesh) {
         if (child.material) {
-          child.material.needsUpdate = true; // ✅ Force la mise à jour des textures
-          if (isGmOnly || stateOpacity < 1) {
-            child.material.transparent = true;
-            child.material.opacity = stateOpacity * (isGmOnly ? 0.5 : 1);
+          if (Array.isArray(child.material)) {
+            const opacity = stateOpacity * (isGmOnly ? 0.5 : 1);
+            child.material.forEach((material) => {
+              if (material.userData?.runtimeWater) {
+                material.transparent = true;
+                material.depthWrite = false;
+                if (material.uniforms?.uOpacity) {
+                  material.uniforms.uOpacity.value = (material.userData.baseWaterOpacity ?? 0.58) * opacity;
+                }
+                return;
+              }
+              material.needsUpdate = true;
+              material.transparent = opacity < 0.999;
+              material.opacity = opacity;
+              material.depthWrite = opacity >= 0.999;
+            });
+            return;
           }
+          child.material.needsUpdate = true; // ✅ Force la mise à jour des textures
+          const opacity = stateOpacity * (isGmOnly ? 0.5 : 1);
+          if (child.material.userData?.runtimeWater) {
+            child.material.transparent = true;
+            child.material.depthWrite = false;
+            if (child.material.uniforms?.uOpacity) {
+              child.material.uniforms.uOpacity.value = (child.material.userData.baseWaterOpacity ?? 0.58) * opacity;
+            }
+            return;
+          }
+          child.material.transparent = opacity < 0.999;
+          child.material.opacity = opacity;
+          child.material.depthWrite = opacity >= 0.999;
         }
       }
     });
@@ -112,15 +262,19 @@ function EntityMeshGlb({
   const groupRef = useRef();
   const lerpPos = useRef({ x: posX, y: posY, z: posZ });
   const targetRef = useRef({ x: posX, y: posY, z: posZ });
-  targetRef.current = { x: posX, y: posY, z: posZ };
 
-  useFrame((_, delta) => {
+  useEffect(() => {
+    targetRef.current = { x: posX, y: posY, z: posZ };
+  }, [posX, posY, posZ]);
+
+  useFrame((state, delta) => {
     if (!groupRef.current) return;
     const alpha = 1 - Math.exp(-delta / 0.1);
     lerpPos.current.x += (targetRef.current.x - lerpPos.current.x) * alpha;
     lerpPos.current.y += (targetRef.current.y - lerpPos.current.y) * alpha;
     lerpPos.current.z += (targetRef.current.z - lerpPos.current.z) * alpha;
     groupRef.current.position.set(lerpPos.current.x, lerpPos.current.y, lerpPos.current.z);
+    waterMaterials.forEach(material => updateWaterMaterial(material, state.clock.elapsedTime));
   });
 
   if (!scene) return null;
@@ -129,12 +283,13 @@ function EntityMeshGlb({
     <group
       ref={groupRef}
       rotation={[0, rot, 0]}
-      onPointerEnter={() => {
+      onClick={!isPreview && onEntityClick ? event => emitEntityClick(event, entity, onEntityClick) : undefined}
+      onPointerEnter={isPreview ? undefined : () => {
         if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
         setHovered(true);
         onHover?.(entity, true);
       }}
-      onPointerLeave={() => {
+      onPointerLeave={isPreview ? undefined : () => {
         leaveTimerRef.current = setTimeout(() => {
           setHovered(false);
           onHover?.(entity, false);
@@ -144,13 +299,18 @@ function EntityMeshGlb({
       <primitive object={scene} />
 
       {/* Hitbox invisible */}
-      <mesh position={[0, 0.4, 0]} visible={false}>
+      <mesh
+        position={[0, 0.4, 0]}
+        visible={false}
+        userData={{ isEntity: true, entityId: entity.id }}
+        raycast={isPreview ? DISABLE_RAYCAST : undefined}
+      >
         <boxGeometry args={[width * 1.4, height + 0.8, depth * 1.4]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
       {/* Liseré Alt */}
-      {altPressed && (
+      {!isPreview && altPressed && (
         <mesh scale={[1.05, 1.05, 1.05]}>
           <boxGeometry args={[width, height, depth]} />
           <meshBasicMaterial color="#00ffff" side={THREE.BackSide} />
@@ -158,18 +318,27 @@ function EntityMeshGlb({
       )}
 
       {/* Overlay GM */}
-      {isGmOnly && (
+      {!isPreview && isGmOnly && (
         <mesh scale={[1.03, 1.03, 1.03]}>
           <boxGeometry args={[width, height, depth]} />
           <meshBasicMaterial color="#a855f7" side={THREE.BackSide} wireframe />
         </mesh>
       )}
 
+      {!isPreview && isSelected && (
+        <EntitySelectionOutline
+          width={width}
+          height={height}
+          depth={depth}
+          y={blueprint.geometry?.origin === 'floor-center' || blueprint.geometry?.origin === 'wall-back-center' ? height / 2 : 0}
+        />
+      )}
+
       {/* Icône Html */}
-      {hasInteractions && (
+      {!isPreview && hasInteractions && (
         <HoverIcon entity={entity} height={height} hovered={hovered} onEntityClick={onEntityClick} />
       )}
-      <PendingWaitIcon height={height} isPending={isPending} />
+      {!isPreview && <PendingWaitIcon height={height} isPending={isPending} />}
     </group>
   );
 }
@@ -179,6 +348,7 @@ function EntityMeshVoxel({
   entity, blueprint, entityTextureMaterials, currentState,
   posX, posY, posZ, width, height, depth, rot,
   stateOpacity, altPressed, isGmOnly, onHover, onEntityClick,
+  isPreview, isSelected,
 }) {
   const hasInteractions = (blueprint.interactions || []).length > 0;
   const { pendingEntityId } = useSessionStore();
@@ -206,7 +376,10 @@ function EntityMeshVoxel({
   const groupRef = useRef();
   const lerpPos = useRef({ x: posX, y: posY, z: posZ });
   const targetRef = useRef({ x: posX, y: posY, z: posZ });
-  targetRef.current = { x: posX, y: posY, z: posZ };
+
+  useEffect(() => {
+    targetRef.current = { x: posX, y: posY, z: posZ };
+  }, [posX, posY, posZ]);
 
   useFrame((_, delta) => {
     if (!groupRef.current) return;
@@ -223,55 +396,54 @@ function EntityMeshVoxel({
     ? (buckets?.states?.[currentState.id] ?? buckets?.base)
     : buckets?.base;
 
-  const faceOrder = ['east', 'west', 'top', 'bottom', 'south', 'north'];
+  const geometryFaces = blueprint.geometry?.faces;
+  const faceMaterials = useMemo(() => {
+    const opacity = stateOpacity * (isGmOnly ? 0.5 : 1);
+    return ENTITY_FACE_ORDER.map((faceName, i) => {
+      const baseFaceVal = geometryFaces?.[faceName];
+      if (baseFaceVal === null) {
+        return new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
+      }
+
+      const source = mats?.faceMaterials?.[i];
+      if (!source) {
+        return new THREE.MeshBasicMaterial({
+          color: 0xff00ff,
+          transparent: true,
+          opacity,
+        });
+      }
+
+      const material = source.clone();
+      material.transparent = true;
+      material.opacity = opacity;
+      material.depthWrite = opacity >= 0.999;
+      return material;
+    });
+  }, [geometryFaces, mats, stateOpacity, isGmOnly]);
+
+  useEffect(() => () => {
+    faceMaterials.forEach(material => material.dispose());
+  }, [faceMaterials]);
 
   return (
     <group
       ref={groupRef}
       rotation={[0, rot, 0]}
-      onPointerEnter={handlePointerEnter}
-      onPointerLeave={handlePointerLeave}
+      onClick={!isPreview && onEntityClick ? event => emitEntityClick(event, entity, onEntityClick) : undefined}
+      onPointerEnter={isPreview ? undefined : handlePointerEnter}
+      onPointerLeave={isPreview ? undefined : handlePointerLeave}
     >
-      <mesh userData={{ isEntity: true, entityId: entity.id }}>
+      <mesh
+        userData={{ isEntity: true, entityId: entity.id }}
+        material={faceMaterials}
+        raycast={isPreview ? DISABLE_RAYCAST : undefined}
+      >
         <boxGeometry args={[width, height, depth]} />
-        {faceOrder.map((faceName, i) => {
-          const baseFaceVal = blueprint.geometry?.faces?.[faceName];
-          if (baseFaceVal === null) {
-            return (
-              <meshBasicMaterial
-                key={i}
-                attach={`material-${i}`}
-                transparent
-                opacity={0}
-              />
-            );
-          }
-          const mat = mats?.faceMaterials?.[i];
-          if (!mat) {
-            return (
-              <meshBasicMaterial
-                key={i}
-                attach={`material-${i}`}
-                color={0xFF00FF}
-                transparent
-                opacity={stateOpacity * (isGmOnly ? 0.5 : 1)}
-              />
-            );
-          }
-          return (
-            <meshLambertMaterial
-              key={i}
-              attach={`material-${i}`}
-              {...mat}
-              transparent={true}
-              opacity={stateOpacity * (isGmOnly ? 0.5 : 1)}
-            />
-          );
-        })}
       </mesh>
 
       {/* Liseré Alt */}
-      {altPressed && (
+      {!isPreview && altPressed && (
         <mesh scale={[1.05, 1.05, 1.05]}>
           <boxGeometry args={[width, height, depth]} />
           <meshBasicMaterial color="#00ffff" side={THREE.BackSide} />
@@ -279,7 +451,7 @@ function EntityMeshVoxel({
       )}
 
       {/* Overlay GM */}
-      {isGmOnly && (
+      {!isPreview && isGmOnly && (
         <mesh scale={[1.03, 1.03, 1.03]}>
           <boxGeometry args={[width, height, depth]} />
           <meshBasicMaterial color="#a855f7" side={THREE.BackSide} wireframe />
@@ -291,16 +463,21 @@ function EntityMeshVoxel({
         position={[0, 0.4, 0]}
         visible={false}
         userData={{ isEntity: true, entityId: entity.id }}
+        raycast={isPreview ? DISABLE_RAYCAST : undefined}
       >
         <boxGeometry args={[width * 1.4, height + 0.8, depth * 1.4]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
+      {!isPreview && isSelected && (
+        <EntitySelectionOutline width={width} height={height} depth={depth} />
+      )}
+
       {/* Icône Html */}
-      {hasInteractions && (
+      {!isPreview && hasInteractions && (
         <HoverIcon entity={entity} height={height} hovered={hovered} onEntityClick={onEntityClick} />
       )}
-      <PendingWaitIcon height={height} isPending={isPending} />
+      {!isPreview && <PendingWaitIcon height={height} isPending={isPending} />}
     </group>
   );
 }

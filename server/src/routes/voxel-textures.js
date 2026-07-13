@@ -17,6 +17,29 @@ const uploadFaces = multerUpload.fields(
   VALID_FACES.map(name => ({ name, maxCount: 1 }))
 )
 
+async function resolveCategoryId(packId, categoryId, categoryLabel) {
+  if (categoryId) return categoryId
+  const label = String(categoryLabel || '').trim()
+  if (!label) return null
+
+  const existing = await db('texture_pack_categories')
+    .where({ pack_id: packId, label })
+    .first()
+  if (existing) return existing.id
+
+  const [{ count }] = await db('texture_pack_categories')
+    .where({ pack_id: packId })
+    .count('id as count')
+  const [created] = await db('texture_pack_categories')
+    .insert({
+      pack_id: packId,
+      label,
+      sort_order: Number(count) * 10,
+    })
+    .returning('*')
+  return created.id
+}
+
 // ─── GET /api/voxel-textures ──────────────────────────────────────────────────
 // GET /api/voxel-textures — toutes les textures non deprecated (palette éditeur)
 // GET /api/voxel-textures?ids=1,3,7 — textures par IDs (Canvas3D au chargement battlemap)
@@ -37,8 +60,10 @@ router.get('/', requireAuth, async (req, res, next) => {
         'voxel_textures.deprecated',
         'voxel_textures.sort_order',
         'voxel_textures.category_id',
+        'voxel_textures.variant_weight',
         'voxel_textures.usage_hint',        // ← ajout 9D — hint de tri Atelier GM (PE17)
         'texture_packs.name as pack_name',
+        'texture_packs.label as pack_label',
         'texture_packs.tile_size',
         'texture_pack_categories.label as category_label',
         'texture_pack_categories.sort_order as category_sort_order',
@@ -71,7 +96,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 // Ordre d'écriture : MinIO AVANT base (P25).
 router.post('/', requireAuth, uploadFaces, async (req, res, next) => {
   try {
-    const { pack_id, label, category_id, allowed_geometries, sort_order } = req.body
+    const { pack_id, label, category_id, category_label, allowed_geometries, sort_order } = req.body
 
     if (!pack_id) throw new AppError(400, 'pack_id requis')
     if (!label)   throw new AppError(400, 'label requis')
@@ -136,11 +161,13 @@ router.post('/', requireAuth, uploadFaces, async (req, res, next) => {
     }
 
     // INSERT en base — après upload MinIO réussi (P25)
+    const resolvedCategoryId = await resolveCategoryId(pack_id, category_id, category_label)
+
     const [texture] = await db('voxel_textures').insert({
       pack_id,
       label,
       faces: JSON.stringify(faces),
-      category_id:         category_id || null,
+      category_id:         resolvedCategoryId,
       allowed_geometries:  parsedGeometries ? JSON.stringify(parsedGeometries) : null,
       sort_order:          sort_order ? Number(sort_order) : 0,
       deprecated:          false,
@@ -241,7 +268,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
 // Ownership : seul le créateur du pack peut créer des voxels.
 router.post('/from-paths', requireAuth, async (req, res, next) => {
   try {
-    const { pack_id, label, faces, allowed_geometries, category_id, sort_order } = req.body
+    const { pack_id, label, faces, allowed_geometries, category_id, category_label, sort_order, usage_hint } = req.body
 
     if (!pack_id)    throw new AppError(400, 'pack_id requis')
     if (!label)      throw new AppError(400, 'label requis')
@@ -267,13 +294,16 @@ router.post('/from-paths', requireAuth, async (req, res, next) => {
       }
     }
 
+    const resolvedCategoryId = await resolveCategoryId(pack_id, category_id, category_label)
+
     const [texture] = await db('voxel_textures').insert({
       pack_id,
       label,
       faces:              JSON.stringify(faces),
-      category_id:        category_id || null,
+      category_id:        resolvedCategoryId,
       allowed_geometries: parsedGeometries ? JSON.stringify(parsedGeometries) : null,
       sort_order:         sort_order ? Number(sort_order) : 0,
+      usage_hint:         usage_hint || null,
       deprecated:         false,
     }).returning('*')
 
