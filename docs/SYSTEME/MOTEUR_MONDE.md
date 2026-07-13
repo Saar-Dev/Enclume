@@ -1,8 +1,8 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-13 — audit du moteur de monde et intégration de l'éditeur Surface.
+> Dernière mise à jour : 2026-07-13 — Phase 1, document canonique et compilateur serveur.
 >
-> Statut : **architecture cible validée ; Phase 0 implémentée, phases 1 à 7 non implémentées**. Les sections marquées
+> Statut : **architecture cible validée ; Phases 0 et 1 implémentées, phases 2 à 7 non implémentées**. Les sections marquées
 > `[EXISTANT]` décrivent le code livré. Les sections `[CIBLE]` sont le contrat à respecter pendant
 > la reconstruction.
 >
@@ -63,10 +63,10 @@ Principes obligatoires :
 - une hauteur d'étage d'éditeur (`STORY_HEIGHT`) et une grille fine (`SURFACE_FINE`) ;
 - un calcul client d'étanchéité utilisé pour le rendu de l'eau.
 
-Cet ensemble est actuellement normalisé, compilé et rendu côté client par
-`client/src/lib/surfaceData.js`. La route `PUT /api/battlemaps/:id/surface` vérifie seulement que la
-racine reçue est un objet JSON puis la stocke. Il n'existe pas encore de validation de schéma ni de
-compilation serveur.
+Cet ensemble reste normalisé et rendu côté client par `client/src/lib/surfaceData.js`. À la
+sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 4 et
+persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
+physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
 ### 2.2 Collisions `[EXISTANT, TRANSITOIRE]`
 
@@ -117,13 +117,13 @@ plusieurs interfaces de combat les utilisent comme un nombre de cases. Avec une 
 
 Cette dette doit être corrigée avant toute nouvelle mécanique verticale.
 
-### 2.6 Index des textures `[DETTE CONNUE]`
+### 2.6 Index des textures `[RÉSOLU — PHASE 1]`
 
-Les routes de sauvegarde voxel et surface suppriment chacune toutes les lignes
-`battlemap_texture_usage` de la carte puis réinsèrent uniquement les textures de leur propre
-document. Sauvegarder une représentation peut donc effacer l'index d'utilisation de l'autre.
+Les deux routes appellent désormais `syncBattlemapTextureUsage(...)` dans leur transaction. L'index
+est recalculé comme l'union de `voxel_data` et `surface_data` ; sauvegarder une représentation ne
+peut plus effacer les usages de l'autre.
 
-### 2.7 Socle partagé `[EXISTANT — PHASE 0]`
+### 2.7 Socle partagé et compilation `[EXISTANT — PHASES 0 ET 1]`
 
 Le dossier `shared/world/` fournit désormais :
 
@@ -131,11 +131,35 @@ Le dossier `shared/world/` fournit désormais :
 - `movementCost.js` : facteurs explicables, segments pondérés et arrêt à budget épuisé ;
 - `worldContracts.js` : contrats versionnés et immuables `WorldDocument`, `WorldRuntimeState` et
   `WorldSnapshot` ;
+- `surfaceDocument.js` : validation de schéma, normalisation v4, UUID physiques stables et adaptation
+  de `surface_data` vers `WorldDocument` ;
+- `worldCompiler.js` : compilation pure des supports, barrières, portails, colliders, occluders,
+  traversées verticales et compartiments ;
 - `index.js` : point d'entrée commun client/serveur ;
-- treize tests Node, dont le scénario doré de Jon sur l'échelle.
+- vingt-sept tests Node, dont le scénario doré de Jon sur l'échelle, les murs partagés, la découpe de
+  porte, les révisions documentaires et l'union des textures.
 
-Ce socle est volontairement pur et sans I/O. Il n'est pas encore consommé par les routes, le
-pathfinder, Redis, la LOS ou le combat : ce branchement commence en Phase 1.
+La route Surface compile le document avant de le valider en base et
+`GET /api/battlemaps/:id/world-snapshot` expose le résultat mis en cache par carte/révision. Le
+pathfinder, Redis, la LOS et le combat restent encore sur les chemins historiques jusqu'aux Phases 2
+et 3.
+
+### 2.8 Persistance et révisions `[EXISTANT — PHASE 1]`
+
+La migration 152 ajoute trois compteurs :
+
+- `world_revision` change après toute modification d'une source physique ;
+- `surface_revision` protège uniquement les éditions de `surface_data` ;
+- `voxel_revision` protège uniquement les éditions de `voxel_data`.
+
+Cette séparation est obligatoire tant que l'éditeur sauvegarde les deux documents via deux requêtes
+distinctes. Utiliser seulement `world_revision` pour l'optimistic locking ferait entrer en conflit
+les deux autosauvegardes d'un même éditeur. Chaque route verrouille la ligne `battlemaps`, compare sa
+révision documentaire, met à jour données/révisions/index texture dans une seule transaction, puis
+invalide ou remplit le cache du snapshot.
+
+La duplication d'une carte réattribue tous les UUID physiques : deux cartes copiées ne doivent
+jamais pointer vers le même futur état runtime.
 
 ---
 
@@ -191,6 +215,11 @@ devenir son autorité.
 
 Le compilateur doit être une logique pure partageable : le client peut l'utiliser pour la
 prévisualisation de l'éditeur, mais le serveur compile ou vérifie la version autoritaire.
+
+Implémentation Phase 1 : le snapshot contient déjà `supports`, `barriers`, `traversals`, `colliders`,
+`occluders` et `compartments`. `regions` est réservé à la Phase 5. Une traversée d'ascenseur est
+émise désactivée avec `requiresRuntimeController: true` : le compilateur refuse donc d'inventer une
+téléportation avant l'automate de la Phase 6.
 
 ---
 

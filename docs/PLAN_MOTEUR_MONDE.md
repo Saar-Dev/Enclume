@@ -2,7 +2,7 @@
 
 > Dernière mise à jour : 2026-07-13 — plan issu de l'audit croisé combat/monde.
 >
-> Statut : **Phase 0 codée et vérifiée ; phases 1 à 7 planifiées**.
+> Statut : **Phases 0 et 1 codées et vérifiées ; phases 2 à 7 planifiées**.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.
@@ -88,7 +88,7 @@ Phase 1, pas d'un oubli de la Phase 0.
 
 ---
 
-## 4. Phase 1 — document monde et compilateur serveur
+## 4. Phase 1 — document monde et compilateur serveur ✅
 
 ### Livrables
 
@@ -109,6 +109,26 @@ Phase 1, pas d'un oubli de la Phase 0.
 - enregistrer les surfaces ne supprime pas l'usage des textures voxel et inversement ;
 - une édition concurrente sur une ancienne révision est refusée ou fusionnée explicitement ;
 - recompiler deux fois la même entrée produit le même snapshot.
+
+### Livré le 2026-07-13
+
+- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v4, attribue des UUID
+  stables et produit le `WorldDocument` canonique ;
+- `shared/world/worldCompiler.js` compile salles, dalles, murs partagés, portes découpées, escaliers,
+  ascenseurs désactivés en attente de leur contrôleur, colliders, occluders et compartiments ;
+- `GET /api/battlemaps/:id/world-snapshot` expose le snapshot serveur mis en cache par carte et
+  `world_revision` ;
+- migration 152 : `world_revision`, `surface_revision`, `voxel_revision` et backfill des UUID ;
+- sauvegardes voxel/surface transactionnelles avec verrou de ligne et optimistic locking propre à
+  chaque document ;
+- `battlemap_texture_usage` est désormais l'union atomique des textures voxel et Surface ;
+- la duplication d'une carte recrée les UUID physiques pour ne pas partager son futur état runtime ;
+- 27 tests passent, le build client passe et la migration `up/down` a été validée sur une base
+  PostgreSQL isolée.
+
+Limites assumées à la sortie de Phase 1 : le renderer de l'éditeur continue d'afficher directement
+`surface_data`, les voxels ne sont pas encore compilés dans le snapshot et les consommateurs de jeu
+historiques ne lisent pas encore ce snapshot. Ces branchements relèvent des Phases 2 et 3.
 
 ---
 

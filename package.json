@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test:world": "node --test shared/world/*.test.mjs"
+    "test:world": "node --test shared/world/*.test.mjs server/src/services/*World*.test.mjs"
   },
   "dependencies": {
     "csv-parse": "^6.2.1",

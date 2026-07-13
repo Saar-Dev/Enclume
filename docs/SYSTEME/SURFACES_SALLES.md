@@ -10,9 +10,10 @@
 ## Statut au 2026-07-13
 
 L'éditeur Surface/Salle et son rendu existent. `surface_data` version 4 sait décrire des salles,
-sols, murs, plafonds, escaliers et connecteurs. En revanche, ces données ne sont pas encore la
-source des collisions serveur, du pathfinding de combat ou des lignes de vue : ces systèmes lisent
-encore principalement `voxel_data`.
+sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
+validé et compilé côté serveur en snapshot physique. Les collisions de jeu, le pathfinding de
+combat et les lignes de vue ne consomment toutefois pas encore ce snapshot : ils lisent encore
+principalement `voxel_data` jusqu'aux Phases 2 et 3.
 
 Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit la cible commune qui compilera
 ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une
@@ -37,6 +38,25 @@ Pendant la migration, `surface_data` reste le nom de stockage du document statiq
 survenus en partie — porte ouverte, ascenseur en déplacement, passerelle détruite, feu, gaz, huile ou
 inondation — doivent à terme vivre dans un état runtime séparé. Une sauvegarde de l'éditeur ne doit
 jamais écraser cet état.
+
+### Contrat de sauvegarde Phase 1
+
+- chaque feature de `rooms`, `floors`, `walls`, `ceilings`, `stairs` et `connectors` reçoit un
+  `worldId` UUID stable au premier backfill ou à la première sauvegarde ;
+- la clé de collection historique reste une clé de compatibilité, jamais l'identité runtime ;
+- `PUT /api/battlemaps/:id/surface` valide le document complet avant écriture et retourne la version
+  normalisée avec ses UUID ;
+- `surface_revision` détecte une sauvegarde fondée sur une ancienne version de Surface sans entrer
+  en conflit avec une sauvegarde voxel ;
+- `world_revision` invalide tous les snapshots dès qu'une source physique change ;
+- `GET /api/battlemaps/:id/world-snapshot` fournit le snapshot compilé correspondant à cette
+  révision ;
+- dupliquer une carte réattribue ses `worldId`, afin que ses futurs états de porte, passerelle ou
+  ascenseur restent indépendants.
+
+Les erreurs HTTP de sauvegarde ne sont plus assimilées à un succès par l'éditeur. Les requêtes sont
+sérialisées par document et les compteurs renvoyés par le serveur restent monotones même si les
+réponses voxel et Surface arrivent dans un ordre différent.
 
 ## Grille et échelle
 

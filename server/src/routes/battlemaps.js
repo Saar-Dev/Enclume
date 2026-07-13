@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { randomUUID } from 'node:crypto'
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
@@ -8,6 +9,21 @@ import { calcAttributeNA } from '../lib/charStats.js'
 import { calcREA, getAdvantageModForAttr } from '../../../shared/polarisUtils.js'
 import { removeTokens } from '../lib/tokenLifecycle.js'
 import { getAdvantages } from '../services/advantageService.js'
+import {
+  SurfaceDocumentError,
+  prepareSurfaceData,
+} from '../../../shared/world/surfaceDocument.js'
+import { compileSurfaceWorld } from '../../../shared/world/worldCompiler.js'
+import {
+  hasRevisionConflict,
+  parseExpectedRevision,
+  syncBattlemapTextureUsage,
+} from '../services/battlemapWorldPersistence.js'
+import {
+  cacheBattlemapWorldSnapshot,
+  getBattlemapWorldSnapshot,
+  invalidateBattlemapWorld,
+} from '../services/worldService.js'
 
 const router = Router({ mergeParams: true })
 
@@ -20,7 +36,10 @@ router.get('/', requireAuth, async (req, res) => {
 
   const battlemaps = await db('battlemaps')
     .where({ campaign_id: req.params.id })
-    .select('id', 'name', 'folder', 'image_url', 'grid_size', 'grid_enabled', 'scale_label', 'created_at')
+    .select(
+      'id', 'name', 'folder', 'image_url', 'grid_size', 'grid_enabled', 'scale_label',
+      'world_revision', 'surface_revision', 'voxel_revision', 'created_at',
+    )
     .orderBy('created_at', 'asc')
   res.json({ battlemaps })
 })
@@ -161,6 +180,19 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
   res.json({ equipment })
 })
 
+// GET /api/battlemaps/:id/world-snapshot — monde physique compilé et immuable
+router.get('/:id/world-snapshot', requireAuth, async (req, res) => {
+  const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
+  if (!battlemap) throw new AppError(404, 'Battlemap not found')
+
+  const member = await db('campaign_members')
+    .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id })
+    .first()
+  if (!member) throw new AppError(403, 'Access denied')
+
+  res.json({ snapshot: getBattlemapWorldSnapshot(battlemap) })
+})
+
 // GET /api/battlemaps/:id — carte complète avec tokens
 router.get('/:id', requireAuth, async (req, res) => {
   const battlemap = await db('battlemaps')
@@ -263,6 +295,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 
   await db('battlemaps').where({ id: req.params.id }).delete()
+  invalidateBattlemapWorld(req.params.id)
 
   // Fallback : si c'était la carte d'accueil, on assigne la plus ancienne restante
   const campaign = await db('campaigns').where({ id: battlemap.campaign_id }).first()
@@ -282,7 +315,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 // PUT /api/battlemaps/:id/voxels — mettre à jour les données voxel
 router.put('/:id/voxels', requireAuth, async (req, res, next) => {
   try {
-    const { voxel_data } = req.body
+    const { voxel_data, voxel_revision } = req.body
     if (!voxel_data || typeof voxel_data !== 'object' || Array.isArray(voxel_data)) {
       throw new AppError(400, 'voxel_data must be an object')
     }
@@ -295,25 +328,35 @@ router.put('/:id/voxels', requireAuth, async (req, res, next) => {
       .first()
     if (!member) throw new AppError(403, 'GM only')
 
-    await db('battlemaps')
-      .where({ id: req.params.id })
-      .update({ voxel_data: JSON.stringify(voxel_data), updated_at: db.fn.now() })
+    const expectedRevision = parseExpectedRevision(voxel_revision, 'voxel_revision')
+    let updated
+    await db.transaction(async trx => {
+      const current = await trx('battlemaps').where({ id: req.params.id }).forUpdate().first()
+      if (!current) throw new AppError(404, 'Battlemap not found')
+      if (hasRevisionConflict(current.voxel_revision, expectedRevision)) {
+        throw new AppError(409, 'Voxel data changed since the editor loaded it')
+      }
 
-    // Recalcul battlemap_texture_usage — index des textures utilisées (O(1) pour DELETE /voxel-textures/:id)
-    const usedTexIds = [...new Set(Object.values(voxel_data).map(v => v.tex))]
-    await db('battlemap_texture_usage')
-      .where({ battlemap_id: req.params.id })
-      .delete()
-    if (usedTexIds.length > 0) {
-      await db('battlemap_texture_usage').insert(
-        usedTexIds.map(texId => ({
-          battlemap_id: req.params.id,
-          voxel_texture_id: texId,
-        }))
+      ;[updated] = await trx('battlemaps')
+        .where({ id: req.params.id })
+        .update({
+          voxel_data: JSON.stringify(voxel_data),
+          voxel_revision: Number(current.voxel_revision || 0) + 1,
+          world_revision: Number(current.world_revision || 0) + 1,
+          updated_at: trx.fn.now(),
+        })
+        .returning('id', 'world_revision', 'surface_revision', 'voxel_revision')
+
+      await syncBattlemapTextureUsage(
+        trx,
+        req.params.id,
+        voxel_data,
+        current.surface_data || {},
       )
-    }
+    })
 
-    res.json({ ok: true })
+    invalidateBattlemapWorld(req.params.id)
+    res.json({ ok: true, ...updated })
   } catch (err) {
     next(err)
   }
@@ -322,7 +365,7 @@ router.put('/:id/voxels', requireAuth, async (req, res, next) => {
 // PUT /api/battlemaps/:id/surface — mettre à jour les surfaces du nouveau moteur
 router.put('/:id/surface', requireAuth, async (req, res, next) => {
   try {
-    const { surface_data } = req.body
+    const { surface_data, surface_revision } = req.body
     if (!surface_data || typeof surface_data !== 'object' || Array.isArray(surface_data)) {
       throw new AppError(400, 'surface_data must be an object')
     }
@@ -335,52 +378,51 @@ router.put('/:id/surface', requireAuth, async (req, res, next) => {
       .first()
     if (!member) throw new AppError(403, 'GM only')
 
-    await db('battlemaps')
-      .where({ id: req.params.id })
-      .update({ surface_data: JSON.stringify(surface_data), updated_at: db.fn.now() })
-
-    const usedTexIds = new Set()
-    for (const floor of Object.values(surface_data.floors || {})) {
-      if (floor?.tex) usedTexIds.add(floor.tex)
-      if (floor?.topTex) usedTexIds.add(floor.topTex)
-      if (floor?.bottomTex) usedTexIds.add(floor.bottomTex)
-    }
-    for (const wall of Object.values(surface_data.walls || {})) {
-      if (wall?.frontTex) usedTexIds.add(wall.frontTex)
-      if (wall?.backTex) usedTexIds.add(wall.backTex)
-      if (wall?.topTex) usedTexIds.add(wall.topTex)
-    }
-    for (const ceiling of Object.values(surface_data.ceilings || {})) {
-      if (ceiling?.tex) usedTexIds.add(ceiling.tex)
-    }
-    for (const stair of Object.values(surface_data.stairs || {})) {
-      if (stair?.tex) usedTexIds.add(stair.tex)
-    }
-    for (const room of Object.values(surface_data.rooms || {})) {
-      if (room?.floorTopTex) usedTexIds.add(room.floorTopTex)
-      if (room?.floorBottomTex) usedTexIds.add(room.floorBottomTex)
-      if (room?.ceilingTopTex) usedTexIds.add(room.ceilingTopTex)
-      if (room?.ceilingBottomTex) usedTexIds.add(room.ceilingBottomTex)
-      if (room?.wallInteriorTex) usedTexIds.add(room.wallInteriorTex)
-      if (room?.wallExteriorTex) usedTexIds.add(room.wallExteriorTex)
-      if (room?.wallFrontTex) usedTexIds.add(room.wallFrontTex)
-      if (room?.wallBackTex) usedTexIds.add(room.wallBackTex)
-      if (room?.wallTopTex) usedTexIds.add(room.wallTopTex)
+    let prepared
+    try {
+      prepared = prepareSurfaceData(surface_data, { battlemapId: req.params.id })
+    } catch (error) {
+      if (error instanceof SurfaceDocumentError) throw new AppError(400, error.message)
+      throw error
     }
 
-    await db('battlemap_texture_usage')
-      .where({ battlemap_id: req.params.id })
-      .delete()
-    if (usedTexIds.size > 0) {
-      await db('battlemap_texture_usage').insert(
-        [...usedTexIds].map(texId => ({
-          battlemap_id: req.params.id,
-          voxel_texture_id: texId,
-        }))
+    const expectedRevision = parseExpectedRevision(surface_revision, 'surface_revision')
+    let updated
+    let snapshot
+    await db.transaction(async trx => {
+      const current = await trx('battlemaps').where({ id: req.params.id }).forUpdate().first()
+      if (!current) throw new AppError(404, 'Battlemap not found')
+      if (hasRevisionConflict(current.surface_revision, expectedRevision)) {
+        throw new AppError(409, 'Surface data changed since the editor loaded it')
+      }
+
+      const nextWorldRevision = Number(current.world_revision || 0) + 1
+      snapshot = compileSurfaceWorld({
+        battlemapId: req.params.id,
+        worldRevision: nextWorldRevision,
+        surfaceData: prepared.surfaceData,
+      })
+
+      ;[updated] = await trx('battlemaps')
+        .where({ id: req.params.id })
+        .update({
+          surface_data: JSON.stringify(prepared.surfaceData),
+          surface_revision: Number(current.surface_revision || 0) + 1,
+          world_revision: nextWorldRevision,
+          updated_at: trx.fn.now(),
+        })
+        .returning('id', 'world_revision', 'surface_revision', 'voxel_revision')
+
+      await syncBattlemapTextureUsage(
+        trx,
+        req.params.id,
+        current.voxel_data || {},
+        prepared.surfaceData,
       )
-    }
+    })
 
-    res.json({ ok: true })
+    cacheBattlemapWorldSnapshot(updated, snapshot)
+    res.json({ ok: true, ...updated, surface_data: prepared.surfaceData })
   } catch (err) {
     next(err)
   }
@@ -396,20 +438,36 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
     .first()
   if (!member) throw new AppError(403, 'GM only')
 
-  const [duplicated] = await db('battlemaps')
-    .insert({
-      campaign_id: battlemap.campaign_id,
-      name: `${battlemap.name} (copie)`,
-      folder: battlemap.folder,
-      scale_label: battlemap.scale_label,
-      grid_size: battlemap.grid_size,
-      grid_enabled: battlemap.grid_enabled,
-      grid_opacity: battlemap.grid_opacity,
-      voxel_data: battlemap.voxel_data ? JSON.stringify(battlemap.voxel_data) : null,
-      surface_data: battlemap.surface_data ? JSON.stringify(battlemap.surface_data) : '{}',
-      // image_url et cover_image_url non copiés — la carte est nouvelle
-    })
-    .returning('*')
+  const duplicatedId = randomUUID()
+  const duplicatedSurface = prepareSurfaceData(battlemap.surface_data || {}, {
+    battlemapId: duplicatedId,
+    reseedWorldIds: true,
+  }).surfaceData
+  let duplicated
+  await db.transaction(async trx => {
+    ;[duplicated] = await trx('battlemaps')
+      .insert({
+        id: duplicatedId,
+        campaign_id: battlemap.campaign_id,
+        name: `${battlemap.name} (copie)`,
+        folder: battlemap.folder,
+        scale_label: battlemap.scale_label,
+        grid_size: battlemap.grid_size,
+        grid_enabled: battlemap.grid_enabled,
+        grid_opacity: battlemap.grid_opacity,
+        voxel_data: battlemap.voxel_data ? JSON.stringify(battlemap.voxel_data) : null,
+        surface_data: JSON.stringify(duplicatedSurface),
+        // image_url et cover_image_url non copiés — la carte est nouvelle
+      })
+      .returning('*')
+
+    await syncBattlemapTextureUsage(
+      trx,
+      duplicatedId,
+      battlemap.voxel_data || {},
+      duplicatedSurface,
+    )
+  })
 
   res.status(201).json({ battlemap: duplicated })
 })

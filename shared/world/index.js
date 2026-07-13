@@ -1,3 +1,5 @@
 export * from './worldMetrics.js'
 export * from './movementCost.js'
 export * from './worldContracts.js'
+export * from './surfaceDocument.js'
+export * from './worldCompiler.js'

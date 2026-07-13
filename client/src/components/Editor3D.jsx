@@ -1145,6 +1145,8 @@ export default function Editor3D({
   const saveTimer = useRef(null)
   const surfaceUndoStackRef = useRef([])
   const surfaceRedoStackRef = useRef([])
+  const voxelSaveQueueRef = useRef(Promise.resolve())
+  const voxelSaveRevisionRef = useRef(0)
   const surfaceSaveQueueRef = useRef(Promise.resolve())
   const surfaceSaveRevisionRef = useRef(0)
   const [surfaceUndoDepth, setSurfaceUndoDepth] = useState(0)
@@ -1268,19 +1270,47 @@ export default function Editor3D({
   const saveFireAndForget = useCallback((currentVoxels) => {
     const bm = battlemapRef.current
     if (!isDirty.current || !bm?.id) return
+    const battlemapId = bm.id
+    const revision = voxelSaveRevisionRef.current + 1
+    voxelSaveRevisionRef.current = revision
     const payload = {}
     for (const [key, v] of Object.entries(currentVoxels)) {
       payload[key] = { tex: v.tex, geo: v.geo, r: v.r }
     }
-    fetch(`${import.meta.env.VITE_API_URL}/api/battlemaps/${bm.id}/voxels`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ voxel_data: payload }),
-    })
+
+    voxelSaveQueueRef.current = voxelSaveQueueRef.current
+      .catch(() => {})
       .then(() => {
-        isDirty.current = false
-        setBattlemap({ ...battlemapRef.current, voxel_data: payload })
+        const currentBattlemap = battlemapRef.current
+        return fetch(`${import.meta.env.VITE_API_URL}/api/battlemaps/${battlemapId}/voxels`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            voxel_data: payload,
+            voxel_revision: currentBattlemap?.voxel_revision ?? 0,
+          }),
+        })
+      })
+      .then(async response => {
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error || `Sauvegarde voxels HTTP ${response.status}`)
+        return data
+      })
+      .then(data => {
+        const isLatest = revision === voxelSaveRevisionRef.current
+        const nextBattlemap = {
+          ...battlemapRef.current,
+          world_revision: Math.max(
+            Number(battlemapRef.current?.world_revision || 0),
+            Number(data.world_revision || 0),
+          ),
+          voxel_revision: data.voxel_revision,
+          ...(isLatest ? { voxel_data: payload } : {}),
+        }
+        battlemapRef.current = nextBattlemap
+        setBattlemap(nextBattlemap)
+        if (isLatest) isDirty.current = false
       })
       .catch(err => console.error('[Editor3D] Sauvegarde échouée :', err))
   }, [setBattlemap])
@@ -1294,16 +1324,37 @@ export default function Editor3D({
 
     surfaceSaveQueueRef.current = surfaceSaveQueueRef.current
       .catch(() => {})
-      .then(() => fetch(`${import.meta.env.VITE_API_URL}/api/battlemaps/${battlemapId}/surface`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ surface_data: currentSurfaceData }),
-      }))
       .then(() => {
-        if (revision !== surfaceSaveRevisionRef.current) return
-        isSurfaceDirty.current = false
-        setBattlemap({ ...battlemapRef.current, surface_data: currentSurfaceData })
+        const currentBattlemap = battlemapRef.current
+        return fetch(`${import.meta.env.VITE_API_URL}/api/battlemaps/${battlemapId}/surface`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            surface_data: currentSurfaceData,
+            surface_revision: currentBattlemap?.surface_revision ?? 0,
+          }),
+        })
+      })
+      .then(async response => {
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error || `Sauvegarde surfaces HTTP ${response.status}`)
+        return data
+      })
+      .then(data => {
+        const isLatest = revision === surfaceSaveRevisionRef.current
+        const nextBattlemap = {
+          ...battlemapRef.current,
+          world_revision: Math.max(
+            Number(battlemapRef.current?.world_revision || 0),
+            Number(data.world_revision || 0),
+          ),
+          surface_revision: data.surface_revision,
+          ...(isLatest ? { surface_data: data.surface_data } : {}),
+        }
+        battlemapRef.current = nextBattlemap
+        setBattlemap(nextBattlemap)
+        if (isLatest) isSurfaceDirty.current = false
       })
       .catch(err => console.error('[Editor3D] Sauvegarde surfaces échouée :', err))
   }, [setBattlemap])

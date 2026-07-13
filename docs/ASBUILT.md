@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-13 — Moteur Monde Phase 0 ; Session 141 (suite 29) conservée.
+> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 et 1 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -20,9 +20,32 @@ Socle pur partagé ajouté sur `codex/world-engine-integration`, sans branchemen
 - `npm run test:world` — commande de validation dédiée.
 
 Important : le pathfinder, les collisions Redis, la LOS et le combat utilisent encore leur moteur
-voxel historique. Le branchement commence en Phase 1 de `docs/PLAN_MOTEUR_MONDE.md`.
+voxel historique. La Phase 1 branche la persistance et le compilateur ; leur remplacement commence
+en Phase 2 de `docs/PLAN_MOTEUR_MONDE.md`.
 
 Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statique/runtime/snapshot.
+
+---
+
+## Moteur de monde — Phase 1 ✅
+
+- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v4, UUID physiques
+  stables, adaptation vers le document canonique ;
+- `shared/world/worldCompiler.js` — compilation déterministe des sols, plafonds, murs partagés,
+  découpes de porte, escaliers, barrières multi-canaux, colliders, occluders et compartiments ;
+- `server/src/services/worldService.js` — cache borné des snapshots par carte et
+  `world_revision` ;
+- `GET /api/battlemaps/:id/world-snapshot` — lecture membre de campagne du snapshot immuable ;
+- migration 152 — backfill des UUID et compteurs `world_revision`, `surface_revision`,
+  `voxel_revision` ;
+- sauvegardes Surface/voxel atomiques, révisionnées et protégées contre les écritures obsolètes ;
+- index texture corrigé : union persistée des usages Surface et voxel ;
+- duplication de carte : nouvelles identités physiques, sans partage futur d'état runtime ;
+- éditeur : files de sauvegarde séparées, contrôle des erreurs HTTP et révisions monotones ;
+- validation : 27 tests, checks Node, build Vite et migration/rollback sur PostgreSQL isolé.
+
+Le snapshot n'est pas encore l'autorité des mouvements, de Redis ou de la LOS. Cette limite est
+explicite et ouvre la Phase 2 ; l'ancien combat reste fonctionnel pendant cette transition.
 
 ---
 
