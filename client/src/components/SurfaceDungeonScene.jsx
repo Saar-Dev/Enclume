@@ -397,7 +397,13 @@ function FloorTile({ id, floor, textureMaterials, opacity = 1, showDetails = tru
   if (!top) return null
   return (
     <>
-      <mesh position={[x + 0.5, y, z + 0.5]} material={materials} castShadow receiveShadow>
+      <mesh
+        position={[x + 0.5, y, z + 0.5]}
+        material={materials}
+        castShadow
+        receiveShadow
+        userData={{ worldSupport: true }}
+      >
         <ReliefBoxGeometry
           args={[1, thickness, 1]}
           faceProfiles={[null, null, topRelief, null, null, null]}
@@ -483,6 +489,7 @@ function RoomSlab({ room, kind, textureMaterials, opacity = 1, showDetails = tru
       material={materials}
       castShadow
       receiveShadow
+      userData={isCeiling ? undefined : { worldSupport: true }}
     >
       <ReliefBoxGeometry
         args={[width, thickness, depth]}
@@ -956,7 +963,14 @@ function StairSegment({ stair, textureMaterials, opacity = 1, showDetails = true
   return (
     <>
       {stairStepBoxes(stair).map((step, index) => (
-        <mesh key={index} position={step.position} material={materials} castShadow receiveShadow>
+        <mesh
+          key={index}
+          position={step.position}
+          material={materials}
+          castShadow
+          receiveShadow
+          userData={{ worldSupport: true }}
+        >
           <ReliefBoxGeometry
             args={step.args}
             faceProfiles={[null, null, relief, null, null, null]}

@@ -10,8 +10,8 @@ export function useTokenSocket() {
   useEffect(() => {
     if (!socket) return
 
-    const onMoved   = ({ tokenId, pos_x, pos_y, pos_z, updated_at }) =>
-      updateToken({ id: tokenId, pos_x, pos_y, pos_z, updated_at })
+    const onMoved = ({ tokenId, pos_x, pos_y, pos_z, position_space, updated_at }) =>
+      updateToken({ id: tokenId, pos_x, pos_y, pos_z, position_space, updated_at })
     const onCreated = ({ token }) => addToken(token)
     const onDeleted = ({ tokenId }) => removeToken(tokenId)
     const onUpdated = ({ token }) => updateToken(token)

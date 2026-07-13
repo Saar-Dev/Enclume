@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 et 1 ; Session 141 (suite 29) conservée.
+> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 2 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -19,9 +19,8 @@ Socle pur partagé ajouté sur `codex/world-engine-integration`, sans branchemen
 - `shared/world/*.test.mjs` — 13 tests, dont `3 + 3×2×2 = 15 m` pour Jon sur une échelle ;
 - `npm run test:world` — commande de validation dédiée.
 
-Important : le pathfinder, les collisions Redis, la LOS et le combat utilisent encore leur moteur
-voxel historique. La Phase 1 branche la persistance et le compilateur ; leur remplacement commence
-en Phase 2 de `docs/PLAN_MOTEUR_MONDE.md`.
+À la sortie de cette Phase 0, le runtime était encore voxel. Ce paragraphe est historique : la
+Phase 2 a depuis remplacé le déplacement et l'occupation des tokens.
 
 Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statique/runtime/snapshot.
 
@@ -44,8 +43,30 @@ Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statiq
 - éditeur : files de sauvegarde séparées, contrôle des erreurs HTTP et révisions monotones ;
 - validation : 27 tests, checks Node, build Vite et migration/rollback sur PostgreSQL isolé.
 
-Le snapshot n'est pas encore l'autorité des mouvements, de Redis ou de la LOS. Cette limite est
-explicite et ouvre la Phase 2 ; l'ancien combat reste fonctionnel pendant cette transition.
+Cette photographie décrit la sortie de Phase 1. La Phase 2 ci-dessous rend le snapshot autoritaire
+pour les déplacements de session ; la LOS et la résolution combat restent à migrer.
+
+---
+
+## Moteur de monde — Phase 2 ✅
+
+- `shared/world/spatialIndex.js` — index AABB statique et occupation volumique multi-occupants ;
+- `shared/world/navigation.js` — graphe 3D, A*, coûts en mètres, portes, surfaces pondérées et arrêts
+  partiels sur traversées ;
+- `server/src/services/worldMovementService.js` — cache de graphes, replanning transactionnel,
+  placement et persistance du seul point atteint ;
+- `server/src/services/movementBudgetService.js` — allures Polaris calculées depuis la fiche serveur ;
+- routes `world-path-preview`, `world-move` et `tokens/:id/teleport` ;
+- `TOKEN_MOVE` devenu une intention `{ destination, gait }`, ancien payload direct rejeté ;
+- migration 153 — `runtime_revision`, `tokens.position_space` (`legacy-cell`/`world-feet`) ;
+- `Canvas3D` — raycast des supports Surface, preview serveur, rendu des pieds canoniques et drag
+  joueur/MJ séparé ;
+- création de token sur support stable libre, sans ajout au hash collision Redis historique ;
+- aucune promesse de rétrocompatibilité des cartes voxel ; elles restent éventuellement des fixtures ;
+- validation : 39 tests, checks Node, build Vite et migration/rollback PostgreSQL isolé.
+
+Les anciennes sections Redis/pathfinder plus bas sont conservées comme documentation historique du
+combat encore à rebrancher. Elles ne décrivent plus l'autorité de déplacement des tokens.
 
 ---
 
@@ -222,7 +243,7 @@ Enclume/
 | Backend | Node.js + Express + Socket.io | Port 3001 dev (8194 Kiwi) |
 | Serveur Alpha "Kiwi" | Debian 13, systemd, box Bouygues | `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md` |
 | Base de données | PostgreSQL | Knex migrations |
-| Cache/collisions | Redis + ioredis | Collision map par battlemap — branché session 39 |
+| Cache legacy | Redis + ioredis | Collision voxel/entités historique ; non autoritaire pour les tokens depuis la Phase 2 |
 | Stockage fichiers | MinIO | Bucket unique |
 | Auth | JWT httpOnly cookie | 7 jours |
 | Inscription | Code d'invitation `REGISTRATION_CODE` dans `.env` | 8 chiffres, `timingSafeEqual`, guard 500 si absent |
@@ -265,6 +286,16 @@ Enclume/
 | POST | /battlemaps/:id/entities | Poser une instance — GM uniquement + collisionAddEntity |
 | PUT | /entities/:entityId | Modifier position/rotation/state/overrides — GM uniquement + maintenance Redis |
 | DELETE | /entities/:entityId | Supprimer instance — GM uniquement + collisionRemoveEntity AVANT delete |
+
+### Routes REST — Moteur de monde
+
+| Méthode | Route | Description |
+|---|---|---|
+| GET | /battlemaps/:id/world-snapshot | Snapshot physique immuable de la révision courante |
+| POST | /battlemaps/:id/world-path-preview | Aperçu de chemin ; budget numérique autorisé uniquement pour l'aperçu |
+| POST | /battlemaps/:id/world-move | Intention `{ token_id, destination, gait }`, budget et résultat calculés serveur |
+| POST | /tokens/:id/teleport | Placement administratif `world-feet`, MJ uniquement |
+| POST | /battlemaps/:id/tokens | Création calée sur un support stable libre près de `destination` |
 
 ---
 
@@ -336,6 +367,8 @@ Enclume/
 | *(136-138 : migrations d'une session parallèle + `PLAN_MUTATION2.md` Lot 4 — non détaillées ici, voir `docs/JOURNAL6.md` "Session 141 (suite 25)")* | |
 | 139_fix_ref_skill_requirements_mutations | `docs/PLAN_MUTATION2.md` Lot 5 (`[CS7]`) — `ref_skill_requirements.value` (type MUTATION) référençait encore 8 anciens identifiants V1 (`muta_XXX`, table supprimée migration 94) — remappés vers le `mutation_id` V2 réel par correspondance de nom. 2 lignes (`MAITRISE_DE_LA_FORCE_POLARIS`/`MAITRISE_DE_LECHO_POLARIS`) référençaient `muta_029` ("Sensibilité au Polaris") — mutation confirmée par Saar comme n'ayant jamais dû exister en V2 — basculées vers un nouveau type de prérequis `ADVANTAGE`/`adv_079` ("Force Polaris", déjà seedé migration 123). `down`/`up` round-trip byte-identique. Voir `docs/JOURNAL6.md` Session 141 (suite 26) |
 | 140_ref_skill_requirements_or_group | Bug GENOTYPE trouvé par Saar (item 70) : `ref_skills.HYBRIDE` avait zéro ligne `ref_skill_requirements`, jamais gaté — texte LdB : accessible à 3 génotypes OU la mutation Amphibie (OR), alors que le moteur existant traite tout en ET. Nouvelle colonne `or_group` (text nullable, même convention que `ref_career_skills.choice_group` migration 121) — lignes partageant le même `(skill_id, or_group)` liées en OU. 4 lignes insérées pour `HYBRIDE`. Recherche externe (5etools 2-niveaux ET/OU retenu, PF2e `Predicate` récursif écarté — pensé pour du contenu homebrew). `down`/`up` round-trip byte-identique. Voir `docs/JOURNAL6.md` Session 141 (suite 27) |
+| 152_world_document_revisions | `battlemaps.world_revision/surface_revision/voxel_revision`, backfill UUID physiques, sauvegardes documentaires indépendantes. |
+| 153_world_runtime_positions | `battlemaps.runtime_revision`, `tokens.position_space` avec CHECK `legacy-cell/world-feet`; anciennes lignes marquées legacy sans conversion approximative. |
 
 ---
 
@@ -378,7 +411,11 @@ Enclume/
 
 ---
 
-## Collision map Redis — session 39
+## Collision map Redis — session 39 `[LEGACY]`
+
+Depuis la Phase 2, ce hash ne valide plus la création ni le déplacement des tokens. Les lignes
+ci-dessous documentent le comportement historique encore utilisé par des flux voxel/entités en
+attendant leur retrait, pas l'architecture à étendre.
 
 ### Architecture
 ```
@@ -400,8 +437,8 @@ Non bloquante si joueur sans `player_location` (première connexion).
 ### Maintenance temps réel
 | Événement | Handler | Action Redis |
 |---|---|---|
-| Token créé | `POST /tokens` (REST) | `collisionAddToken` |
-| Token déplacé | `PUT /tokens/:id` (REST) + `TOKEN_MOVE` (WS) | `collisionMoveToken` |
+| Token créé | Retiré en Phase 2 | aucune maintenance Redis |
+| Token déplacé | `world-move` / `TOKEN_MOVE` intention | graphe et occupation PostgreSQL, pas Redis |
 | Token supprimé | `DELETE /tokens/:id` (REST) | `collisionRemoveToken` AVANT delete |
 | Token rotate | `TOKEN_ROTATE` (WS) | aucune — position inchangée |
 | Entité créée | `POST /entities` (REST) | `collisionAddEntity` |

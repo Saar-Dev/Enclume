@@ -6,8 +6,7 @@ import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
 import api from '../lib/api.js'
-import { findPath, getPathColor, getActionKey } from '../lib/pathfinder.js'
-import raycastVoxels from 'fast-voxel-raycast'
+import { getPathColor, getActionKey } from '../lib/pathfinder.js'
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { useCameraLOS } from '../lib/useCameraLOS.js'
@@ -56,12 +55,15 @@ function yawToTokenRotation(yaw) {
 
 
 // ─── Utilitaire coordonnées ───────────────────────────────────────────────────
-// Convertit une position Three.js en champs base de données.
-// Three.js : X = droite, Y = haut, Z = profondeur
-// Base      : pos_x = X, pos_y = Z Three.js, pos_z = Y Three.js (altitude)
-// NE PAS FAIRE CE MAPPING INLINE — toujours passer par cette fonction.
-function threeToDb(tx, ty, tz) {
-  return { pos_x: tx, pos_y: tz, pos_z: ty }
+// Un token canonique stocke directement le point de contact de ses pieds dans le monde.
+// Les anciens tokens conservent leur décalage visuel historique tant qu'un MJ ne les replace pas.
+function tokenFeetPoint(token) {
+  const legacyOffset = token?.position_space === 'world-feet' ? 0 : 0.5
+  return {
+    x: (Number(token?.pos_x) || 0) + legacyOffset,
+    y: (Number(token?.pos_z) || 0) + legacyOffset,
+    z: (Number(token?.pos_y) || 0) + legacyOffset,
+  }
 }
 
 // Hauteur réelle du sommet d'un voxel en Three.js Y selon sa géométrie.
@@ -265,14 +267,12 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
   const color = token.user_color || token.color || '#4A90D9'
   const label = token.label || '?'
 
-  const baseX = token.pos_x ?? 0
-  const baseY = token.pos_z ?? 0
-  const baseZ = token.pos_y ?? 0
+  const feet = tokenFeetPoint(token)
 
   const isDragging = dragState !== null
-  const x = isDragging ? dragState.x + 0.5 : baseX + 0.5
-  const y = isDragging ? dragState.y : baseY + 0.5
-  const z = isDragging ? dragState.z + 0.5 : baseZ + 0.5
+  const x = isDragging ? dragState.x : feet.x
+  const y = isDragging ? dragState.y : feet.y
+  const z = isDragging ? dragState.z : feet.z
 
   const tiltX = isDragging ? dragState.tiltX : 0
   const tiltZ = isDragging ? dragState.tiltZ : 0
@@ -283,7 +283,7 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
 
   // ── Lerp 300ms — P40 : position via ref, jamais via state dans useFrame ──
   const groupRef = useRef()
-  const lerpPos = useRef({ x: baseX + 0.5, y: baseY + 0.5, z: baseZ + 0.5 })
+  const lerpPos = useRef({ ...feet })
   const targetRef = useRef({ x, y, z })
   targetRef.current = { x, y, z }
   const isDraggingRef = useRef(isDragging)
@@ -470,11 +470,8 @@ function ThirdPersonCamera({ token, enabled, onTokenSetRotation, updateToken }) 
   useFrame(() => {
     if (!enabled || !tokenRef.current) return
     const currentToken = tokenRef.current
-    const target = new THREE.Vector3(
-      (Number(currentToken.pos_x) || 0) + 0.5,
-      (Number(currentToken.pos_z) || 0) + 1.35,
-      (Number(currentToken.pos_y) || 0) + 0.5
-    )
+    const feet = tokenFeetPoint(currentToken)
+    const target = new THREE.Vector3(feet.x, feet.y + 1.35, feet.z)
     const distance = distanceRef.current
     const pitch = pitchRef.current
     const horizontal = Math.cos(pitch) * distance
@@ -512,11 +509,11 @@ function Scene({
   displayLevel = 0,
 }) {
   const { t } = useTranslation()
-  const { camera, gl } = useThree()
+  const { camera, gl, scene } = useThree()
   const orbitRef = useRef()
   const previousDisplayLevelRef = useRef(displayLevel)
-  const raycaster = new THREE.Raycaster()
-  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+  const raycaster = useMemo(() => new THREE.Raycaster(), [])
+  const groundPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), [])
 
   // Lecture des stores — pas de props pour ces données
   const { tokens, updateToken, removeToken } = useTokenStore()
@@ -579,6 +576,7 @@ function Scene({
   const [currentPath, setCurrentPath] = useState([])
   const currentPathRef = useRef([])
   currentPathRef.current = currentPath
+  const previewRequestRef = useRef(0)
 
   const voxelsRef = useRef(voxels)
   voxelsRef.current = voxels
@@ -689,53 +687,55 @@ function Scene({
     return hit ? target : null
   }, [camera, gl])
 
-  // Raycast précis à travers la grille voxel — pour le mode déplacement combat.
-  // Retourne { x, z, isVoid } avec x/z en coordonnées entières Three.js (colonne).
-  // isVoid=true : aucun voxel touché (zone vide) — GM autorisé, joueur bloqué.
-  // Technique : Amanatides/Woo + décalage 0.5 dans la normale → case adjacente ouverte.
-  const raycastVoxelColumn = useCallback((clientX, clientY) => {
+  const raycastWorldSupport = useCallback((clientX, clientY) => {
+    if (!hasSurfaceContent(surfaceData)) return null
     const rect = gl.domElement.getBoundingClientRect()
     const mouse = new THREE.Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -((clientY - rect.top) / rect.height) * 2 + 1
     )
     raycaster.setFromCamera(mouse, camera)
-
-    const origin = raycaster.ray.origin
-    const dir    = raycaster.ray.direction
-    const hitPos  = [0, 0, 0]
-    const hitNorm = [0, 0, 0]
-
-    const getVoxel = (x, y, z) => !!voxelsRef.current[`${x}:${y}:${z}`]
-
-    const hit = raycastVoxels(
-      getVoxel,
-      [origin.x, origin.y, origin.z],
-      [dir.x,    dir.y,    dir.z],
-      100,
-      hitPos,
-      hitNorm
-    )
-
-    if (hit) {
-      const adjX = hitPos[0] + hitNorm[0] * 0.5
-      const adjZ = hitPos[2] + hitNorm[2] * 0.5
-      return {
-        x: Math.floor(adjX),
-        z: Math.floor(adjZ),
-        rawX: adjX,
-        rawZ: adjZ,
-        isVoid: false,
-      }
+    const normalMatrix = new THREE.Matrix3()
+    for (const hit of raycaster.intersectObjects(scene.children, true)) {
+      if (!hit.object?.userData?.worldSupport || !hit.face) continue
+      normalMatrix.getNormalMatrix(hit.object.matrixWorld)
+      const normal = hit.face.normal.clone().applyNormalMatrix(normalMatrix)
+      if (normal.y < 0.5) continue
+      return { x: hit.point.x, y: hit.point.y, z: hit.point.z }
     }
+    return null
+  }, [camera, gl, raycaster, scene, surfaceData])
 
-    // Aucun voxel touché — fallback plan y=0
-    const target = new THREE.Vector3()
-    const groundPlane0 = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const fallback = raycaster.ray.intersectPlane(groundPlane0, target)
-    if (!fallback) return null
-    return { x: Math.floor(target.x), z: Math.floor(target.z), rawX: target.x, rawZ: target.z, isVoid: true }
-  }, [camera, gl])
+  const requestWorldPathPreview = useCallback(async (mode, destination) => {
+    const requestId = ++previewRequestRef.current
+    try {
+      const res = await api.post(`/battlemaps/${battlemapId}/world-path-preview`, {
+        token_id: mode.tokenId,
+        destination,
+        budget_m: Number(mode.allures?.max) || 0,
+      })
+      if (requestId !== previewRequestRef.current) return
+      const result = res.data?.result
+      if (!result?.plan) {
+        currentPathRef.current = []
+        setCurrentPath([])
+        return
+      }
+      let spentM = 0
+      const path = [{ ...result.snappedFrom, spentM: 0 }]
+      for (const segment of result.plan.segments) {
+        spentM += Number(segment.costM) || 0
+        path.push({ ...segment.to, spentM, mode: segment.mode, partial: segment.partial })
+      }
+      currentPathRef.current = path
+      setCurrentPath(path)
+    } catch (error) {
+      if (requestId !== previewRequestRef.current) return
+      currentPathRef.current = []
+      setCurrentPath([])
+      if (error?.response?.status !== 409) console.error('Erreur preview déplacement monde :', error)
+    }
+  }, [battlemapId])
 
   // Index colonne → hauteur réelle de surface (Three.js Y). Reconstruit uniquement quand voxels change.
   // O(1) par lookup vs O(N) par frame pour le getColumnTopY précédent.
@@ -776,9 +776,7 @@ function Scene({
       hasMoved: false,
       prevWorldX: null,
       prevWorldZ: null,
-      snappedX: null,
-      snappedZ: null,
-      surfaceY: null,
+      destination: null,
     }
     if (orbitRef.current) orbitRef.current.enabled = false
   }, [isGm, user, characters, onTokenClick, clearLine])
@@ -786,21 +784,14 @@ function Scene({
   const handlePointerMove = useCallback((e) => {
     // ─── Mode déplacement combat — prioritaire sur tout ───────────────────────
     if (combatMoveModeRef.current) {
-      const cell = raycastVoxelColumn(e.clientX, e.clientY)
-      if (!cell) return
-      if (cell.isVoid && !isGm) return  // joueur : interdit de marcher dans le vide
-      // Throttle : ne recalculer que si la case change
-      if (cell.x !== lastCellRef.current?.x || cell.z !== lastCellRef.current?.z) {
-        lastCellRef.current = cell
-        setCombatCursorPos(cell)
+      const destination = raycastWorldSupport(e.clientX, e.clientY)
+      if (!destination) return
+      const key = `${Math.round(destination.x * 4)}:${Math.round(destination.y * 4)}:${Math.round(destination.z * 4)}`
+      if (key !== lastCellRef.current) {
+        lastCellRef.current = key
+        setCombatCursorPos(destination)
         const mode = combatMoveModeRef.current
-        const actorToken = tokensRef.current.find(t => t.id === mode.tokenId)
-        if (actorToken) {
-          const from = { x: actorToken.pos_x, z: actorToken.pos_y, posZ: actorToken.pos_z }
-          const path = findPath(voxelsRef.current, tokensRef.current, [], from, cell, mode.allures, { excludeTokenId: mode.tokenId })
-          currentPathRef.current = path ?? []
-          setCurrentPath(path ?? [])
-        }
+        void requestWorldPathPreview(mode, destination)
       }
       return
     }
@@ -858,36 +849,30 @@ function Scene({
       dragRef.current.hasMoved = true
     }
 
-    const cell = raycastVoxelColumn(e.clientX, e.clientY)
-    if (!cell) return
-
-    const snappedX = Math.floor(cell.rawX)
-    const snappedZ = Math.floor(cell.rawZ)
-    const surfaceY = colTopSurface[`${snappedX}:${snappedZ}`] ?? 0
+    const destination = raycastWorldSupport(e.clientX, e.clientY)
+    if (!destination) return
 
     let tiltX = 0
     let tiltZ = 0
     if (dragRef.current.prevWorldX !== null) {
-      const deltaX = cell.rawX - dragRef.current.prevWorldX
-      const deltaZ = cell.rawZ - dragRef.current.prevWorldZ
+      const deltaX = destination.x - dragRef.current.prevWorldX
+      const deltaZ = destination.z - dragRef.current.prevWorldZ
       tiltX = Math.max(-DRAG_TILT_MAX, Math.min(DRAG_TILT_MAX, -deltaZ * 2))
       tiltZ = Math.max(-DRAG_TILT_MAX, Math.min(DRAG_TILT_MAX, deltaX * 2))
     }
-    dragRef.current.prevWorldX = cell.rawX
-    dragRef.current.prevWorldZ = cell.rawZ
-    dragRef.current.snappedX = snappedX
-    dragRef.current.snappedZ = snappedZ
-    dragRef.current.surfaceY = surfaceY
+    dragRef.current.prevWorldX = destination.x
+    dragRef.current.prevWorldZ = destination.z
+    dragRef.current.destination = destination
 
     setDragState({
       tokenId: dragRef.current.tokenId,
-      x: snappedX,
-      y: Math.max(0, surfaceY - 0.5) + DRAG_HOVER,
-      z: snappedZ,
+      x: destination.x,
+      y: destination.y + DRAG_HOVER,
+      z: destination.z,
       tiltX,
       tiltZ,
     })
-  }, [raycastGround, raycastVoxelColumn, colTopSurface, moveTarget, isGm])
+  }, [raycastGround, raycastWorldSupport, moveTarget, isGm, requestWorldPathPreview])
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(async (e) => {
@@ -897,16 +882,15 @@ function Scene({
       const path = currentPathRef.current
       if (!path || path.length < 2) return  // inaccessible ou destination = départ
       const dest = path[path.length - 1]
-      const result = getActionKey(path.length - 1, mode.allures)
+      const result = getActionKey(dest.spentM, mode.allures)
       if (!result) return  // hors portée max
-      // PE14 : targetPosY = Z Three.js (profondeur)
-      // Bug 2 fix : targetPosZ = Math.round(feetGridY/2) - 1 (pieds → altitude DB)
+      // Le payload de combat conserve les noms DB PE14, mais contient des mètres monde exacts.
       mode.onPendingMove({
         action_key:  result.action_key,
         ini_mod:     result.ini_mod,
         targetPosX:  dest.x,
         targetPosY:  dest.z,
-        targetPosZ:  Math.round(dest.feetGridY / 2) - 1,
+        targetPosZ:  dest.y,
         screenX:     e.clientX,
         screenY:     e.clientY,
       })
@@ -960,23 +944,23 @@ function Scene({
 
     // Position du drop = là où le token ghost était affiché pendant le drag,
     // PAS là où pointe le curseur (qui est souvent caché sous le token).
-    const snappedX = dragRef.current.snappedX
-    const snappedZ = dragRef.current.snappedZ
-    const surfaceY = dragRef.current.surfaceY
-    if (snappedX === null || snappedZ === null || surfaceY === null) return
-
-    if (!isGm && surfaceY === 0) return  // joueur : interdit de poser dans le vide
-    if (Math.abs(snappedX) > GRID_SIZE / 2 || Math.abs(snappedZ) > GRID_SIZE / 2) return
-
-    const dbPos = threeToDb(snappedX, surfaceY - 1.0, snappedZ)
+    const destination = dragRef.current.destination
+    if (!destination) return
 
     try {
-      const res = await api.put(`/tokens/${token.id}`, dbPos)
-      updateToken(res.data.token)
+      const res = isGm
+        ? await api.post(`/tokens/${token.id}/teleport`, { destination })
+        : await api.post(`/battlemaps/${battlemapId}/world-move`, {
+            token_id: token.id,
+            destination,
+            gait: 'moyenne',
+          })
+      const updated = res.data?.token || res.data?.outcome?.token
+      if (updated) updateToken(updated)
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp])
+  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -1038,10 +1022,11 @@ function Scene({
     const myToken = tokensRef.current.find(t => t.id === combatTargetMode.tokenId)
     const tgtToken = tokensRef.current.find(t => t.id === combatTargetMode.pendingTargetId)
     if (!myToken || !tgtToken) return null
-    // PE14 + PE34 : Three.js coords — pieds + 0.5 hauteur token
+    const source = tokenFeetPoint(myToken)
+    const target = tokenFeetPoint(tgtToken)
     return new Float32Array([
-      myToken.pos_x + 0.5,  myToken.pos_z + 1.5,  myToken.pos_y + 0.5,
-      tgtToken.pos_x + 0.5, tgtToken.pos_z + 1.5, tgtToken.pos_y + 0.5,
+      source.x, source.y + 1.5, source.z,
+      target.x, target.y + 1.5, target.z,
     ])
   }, [combatTargetMode?.pendingTargetId])
 
@@ -1145,16 +1130,16 @@ function Scene({
       {/* ── Chemin déplacement combat (Sprint Pathfinding) ──────────────── */}
       {/* Cases colorées par allure sur le chemin A* vers le curseur.         */}
       {/* Bleu = lente, vert = moyenne, orange = rapide, rouge = max          */}
-      {/* feetGridY / 2 = hauteur Three.js des pieds sur cette case           */}
+      {/* Les points sont exprimés dans l'espace monde canonique (pieds).     */}
       {combatMoveMode && currentPath.map((cell, i) => (
         <mesh
           key={`path-${i}`}
-          position={[cell.x + 0.5, cell.feetGridY / 2 + 0.05, cell.z + 0.5]}
+          position={[cell.x, cell.y + 0.05, cell.z]}
           rotation={[-Math.PI / 2, 0, 0]}
         >
           <planeGeometry args={[0.9, 0.9]} />
           <meshBasicMaterial
-            color={getPathColor(cell.distFromStart, combatMoveMode.allures)}
+            color={getPathColor(cell.spentM, combatMoveMode.allures)}
             transparent
             opacity={0.5}
             depthWrite={false}
@@ -1164,11 +1149,9 @@ function Scene({
 
       {/* ── Cursor wireframe case survolée en mode déplacement combat ────── */}
       {combatMoveMode && combatCursorPos && (() => {
-        const curToken = tokensRef.current.find(t => t.id === combatMoveMode.tokenId)
-        const cursorY = curToken ? curToken.pos_z + 1.0 + 0.05 : 0.1
         return (
           <mesh
-            position={[combatCursorPos.x + 0.5, cursorY, combatCursorPos.z + 0.5]}
+            position={[combatCursorPos.x, combatCursorPos.y + 0.05, combatCursorPos.z]}
             rotation={[-Math.PI / 2, 0, 0]}
           >
             <planeGeometry args={[1, 1]} />
@@ -1179,11 +1162,13 @@ function Scene({
 
       {/* ── Case destination sélectionnée — surbrillance bleue (Bug B) ─────── */}
       {combatMoveMode && pendingMoveSelection && (() => {
-        const curToken = tokensRef.current.find(t => t.id === combatMoveMode.tokenId)
-        const y = curToken ? curToken.pos_z + 1.0 + 0.06 : 0.1
         return (
           <mesh
-            position={[pendingMoveSelection.targetPosX + 0.5, y, pendingMoveSelection.targetPosY + 0.5]}
+            position={[
+              pendingMoveSelection.targetPosX,
+              pendingMoveSelection.targetPosZ + 0.06,
+              pendingMoveSelection.targetPosY,
+            ]}
             rotation={[-Math.PI / 2, 0, 0]}
           >
             <planeGeometry args={[1, 1]} />

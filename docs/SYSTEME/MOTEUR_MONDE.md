@@ -1,8 +1,8 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-13 — Phase 1, document canonique et compilateur serveur.
+> Dernière mise à jour : 2026-07-13 — Phase 2, navigation et déplacements autoritaires.
 >
-> Statut : **architecture cible validée ; Phases 0 et 1 implémentées, phases 2 à 7 non implémentées**. Les sections marquées
+> Statut : **architecture cible validée ; Phases 0 à 2 implémentées, phases 3 à 7 non implémentées**. Les sections marquées
 > `[EXISTANT]` décrivent le code livré. Les sections `[CIBLE]` sont le contrat à respecter pendant
 > la reconstruction.
 >
@@ -68,7 +68,7 @@ sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le norma
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
-### 2.2 Collisions `[EXISTANT, TRANSITOIRE]`
+### 2.2 Collisions Redis `[LEGACY, NON AUTORITAIRE]`
 
 `server/src/lib/redis.js` construit un hash Redis `collision:{battlemapId}` indexé par clé
 `x:y:z`. Il contient les tokens, les entités bloquantes et les voxels.
@@ -81,20 +81,19 @@ Limites vérifiées :
 - les positions flottantes ne correspondent pas naturellement aux clés exactes de cellule ;
 - Redis mélange cache de géométrie statique et occupation dynamique.
 
-### 2.3 Déplacement `[EXISTANT, TRANSITOIRE]`
+### 2.3 Déplacement historique `[LEGACY COMBAT UNIQUEMENT]`
 
-`client/src/lib/pathfinder.js` exécute un A* Chebyshev : huit directions et coût uniforme de `1`
-par case. Il lit les voxels et les tokens ; les appelants passent actuellement une liste d'entités
-vide. Il ne connaît ni multiplicateur de surface, ni escalier structurel, ni échelle, ni passerelle,
-ni ascenseur.
+`client/src/lib/pathfinder.js` contient encore l'ancien A* Chebyshev pour le code de combat qui n'a
+pas encore été retiré. `Canvas3D` ne l'utilise plus pour prévisualiser ni appliquer un déplacement
+du monde : ces opérations passent par le service serveur de Phase 2.
 
 Pendant un combat, le client envoie encore la destination, `action_key` et `ini_mod`. Le serveur
 persiste ces valeurs sans recalculer le chemin ni son coût. À la résolution, il contrôle la case
 d'arrivée et, si elle est occupée, essaie seulement la case située directement avant la destination.
 Le chemin déclaré n'est ni stocké ni revalidé.
 
-Le déplacement direct `TOKEN_MOVE` accepte également des coordonnées après contrôle de propriété,
-sans interroger une physique commune du monde.
+Le déplacement direct `TOKEN_MOVE` n'accepte plus de coordonnées imposées. Il reçoit une destination
+et une allure, puis le serveur calcule le budget, replanifie et diffuse uniquement le point atteint.
 
 ### 2.4 Ligne de vue `[EXISTANT, TRANSITOIRE]`
 
@@ -109,13 +108,14 @@ Ne participent pas encore au calcul :
 - fumée, gaz et autres effets volumiques ;
 - posture physique canonique du token.
 
-### 2.5 Unités `[DETTE CRITIQUE]`
+### 2.5 Unités `[RÉSOLU POUR LE MOTEUR DE MONDE — PHASE 2]`
 
 `shared/polarisUtils.js::calcAllures()` retourne des distances Polaris en mètres. Le pathfinder et
 plusieurs interfaces de combat les utilisent comme un nombre de cases. Avec une case voulue à
 1,5 m, 15 m peuvent donc devenir 15 cases, soit 22,5 m.
 
-Cette dette doit être corrigée avant toute nouvelle mécanique verticale.
+Le nouveau graphe convertit chaque segment avec `WorldMetrics` et compare ses coûts aux allures en
+mètres. Les écrans de combat non encore migrés restent explicitement une dette de Phase 7.
 
 ### 2.6 Index des textures `[RÉSOLU — PHASE 1]`
 
@@ -136,13 +136,15 @@ Le dossier `shared/world/` fournit désormais :
 - `worldCompiler.js` : compilation pure des supports, barrières, portails, colliders, occluders,
   traversées verticales et compartiments ;
 - `index.js` : point d'entrée commun client/serveur ;
-- vingt-sept tests Node, dont le scénario doré de Jon sur l'échelle, les murs partagés, la découpe de
-  porte, les révisions documentaires et l'union des textures.
+- `spatialIndex.js` et `navigation.js` : index statique, occupation dynamique, graphe 3D pondéré et
+  planification autoritaire ;
+- trente-neuf tests Node, dont Jon, les portes, les occupants multiples, les budgets partiels et le
+  placement sur support.
 
 La route Surface compile le document avant de le valider en base et
-`GET /api/battlemaps/:id/world-snapshot` expose le résultat mis en cache par carte/révision. Le
-pathfinder, Redis, la LOS et le combat restent encore sur les chemins historiques jusqu'aux Phases 2
-et 3.
+`GET /api/battlemaps/:id/world-snapshot` expose le résultat mis en cache par carte/révision. La
+navigation de session et les tokens n'utilisent plus Redis ni le pathfinder voxel. La LOS et la
+résolution complète du combat restent historiques jusqu'aux Phases 3 et 7.
 
 ### 2.8 Persistance et révisions `[EXISTANT — PHASE 1]`
 
@@ -160,6 +162,23 @@ invalide ou remplit le cache du snapshot.
 
 La duplication d'une carte réattribue tous les UUID physiques : deux cartes copiées ne doivent
 jamais pointer vers le même futur état runtime.
+
+### 2.9 Navigation et positions runtime `[EXISTANT — PHASE 2]`
+
+- `tokens.position_space` vaut `world-feet` pour toute nouvelle position ; une ligne historique vaut
+  `legacy-cell` et ne peut pas se déplacer tant qu'un MJ ne l'a pas replacée explicitement ;
+- `battlemaps.runtime_revision` change après mouvement ou téléportation ;
+- le point stocké est le contact des pieds dans le monde : `pos_x = X`, `pos_y = profondeur Z`,
+  `pos_z = altitude Y` ;
+- `POST /api/battlemaps/:id/world-path-preview` ne fait qu'un aperçu ;
+- `POST /api/battlemaps/:id/world-move` dérive le budget de la fiche, verrouille le monde et persiste
+  la position atteinte ;
+- `POST /api/tokens/:id/teleport` est le bypass MJ explicite ;
+- les créations de token se calent sur le support stable libre le plus proche à 1,25 unité monde ;
+- le client raycaste les meshes marqués `worldSupport` et ne choisit jamais une case vide.
+
+La compatibilité des anciennes cartes n'est pas un objectif. Leurs données peuvent rester présentes
+pour des comparaisons, mais ne doivent provoquer ni adaptateur approximatif ni double moteur.
 
 ---
 
@@ -477,7 +496,7 @@ moteur.
 7. Le client peut prévisualiser, jamais imposer un résultat de règle.
 8. Tous les consommateurs utilisent le même snapshot et la même révision.
 9. Tout objet structurel possède une identité stable.
-10. Toute migration reste compatible avec les cartes voxels jusqu'à validation du remplacement.
+10. Une carte voxel historique ne doit jamais imposer une contrainte au moteur canonique.
 
 ---
 

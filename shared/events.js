@@ -8,6 +8,7 @@ export const WS = {
   // Tokens
   TOKEN_MOVE:    'token:move',
   TOKEN_MOVED:   'token:moved',
+  TOKEN_MOVE_REJECTED: 'token:move_rejected',
   TOKEN_CREATED: 'token:created',
   TOKEN_DELETED: 'token:deleted',
   TOKEN_UPDATED: 'token:updated',

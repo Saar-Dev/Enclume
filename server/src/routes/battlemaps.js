@@ -24,6 +24,12 @@ import {
   getBattlemapWorldSnapshot,
   invalidateBattlemapWorld,
 } from '../services/worldService.js'
+import {
+  executeBattlemapTokenMovement,
+  planBattlemapTokenMovement,
+} from '../services/worldMovementService.js'
+import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
+import { WS } from '../../../shared/events.js'
 
 const router = Router({ mergeParams: true })
 
@@ -191,6 +197,141 @@ router.get('/:id/world-snapshot', requireAuth, async (req, res) => {
   if (!member) throw new AppError(403, 'Access denied')
 
   res.json({ snapshot: getBattlemapWorldSnapshot(battlemap) })
+})
+
+// POST /api/battlemaps/:id/world-path-preview — prévisualisation sur la physique serveur.
+// Le budget reçu sert uniquement à l'éditeur/preview. Un flux de jeu doit appeler le service avec
+// un authorizedBudgetM calculé côté serveur depuis les règles de l'acteur.
+router.post('/:id/world-path-preview', requireAuth, async (req, res, next) => {
+  try {
+    const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
+    if (!battlemap) throw new AppError(404, 'Battlemap not found')
+
+    const member = await db('campaign_members')
+      .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id })
+      .first()
+    if (!member) throw new AppError(403, 'Access denied')
+
+    const { token_id, destination, budget_m } = req.body
+    const budgetM = Number(budget_m)
+    if (!Number.isFinite(budgetM) || budgetM < 0) {
+      throw new AppError(400, 'budget_m must be a non-negative number')
+    }
+    const token = await db('tokens')
+      .where({ id: token_id, battlemap_id: req.params.id })
+      .first()
+    if (!token) throw new AppError(404, 'Token not found on this battlemap')
+    if (token.position_space !== 'world-feet') {
+      throw new AppError(409, 'Legacy token positions are not converted to the new world engine')
+    }
+
+    if (member.role !== 'gm') {
+      const character = token.character_id
+        ? await db('characters').where({ id: token.character_id }).first()
+        : null
+      if (character?.user_id !== req.user.id) throw new AppError(403, 'You do not own this token')
+    }
+
+    let result
+    try {
+      result = await planBattlemapTokenMovement({
+        battlemap,
+        token,
+        destination,
+        authorizedBudgetM: budgetM,
+      })
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        throw new AppError(400, error.message)
+      }
+      throw error
+    }
+
+    res.json({
+      result,
+      budgetAuthority: 'preview-only',
+      coordinateSpace: 'world-feet',
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+// POST /api/battlemaps/:id/world-move — déplacement de jeu autoritaire.
+// Le client choisit une allure, jamais un budget numérique ni un chemin imposé.
+router.post('/:id/world-move', requireAuth, async (req, res, next) => {
+  try {
+    const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
+    if (!battlemap) throw new AppError(404, 'Battlemap not found')
+    const member = await db('campaign_members')
+      .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id })
+      .first()
+    if (!member) throw new AppError(403, 'Access denied')
+
+    const { token_id, destination, gait = 'moyenne' } = req.body
+    const token = await db('tokens')
+      .where({ id: token_id, battlemap_id: req.params.id })
+      .first()
+    if (!token) throw new AppError(404, 'Token not found on this battlemap')
+    if (!token.character_id) throw new AppError(400, 'A character token is required for game movement')
+    if (token.position_space !== 'world-feet') {
+      throw new AppError(409, 'Legacy token positions are not converted to the new world engine')
+    }
+    if (member.role !== 'gm') {
+      const character = await db('characters').where({ id: token.character_id }).first()
+      if (character?.user_id !== req.user.id) throw new AppError(403, 'You do not own this token')
+    }
+
+    let budget
+    try {
+      budget = await getCharacterMovementBudget(token.character_id, gait)
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        throw new AppError(400, error.message)
+      }
+      throw error
+    }
+
+    const outcome = await executeBattlemapTokenMovement({
+      battlemapId: req.params.id,
+      tokenId: token.id,
+      destination,
+      authorizedBudgetM: budget.budgetM,
+    })
+    if (outcome.status === 'unreachable') throw new AppError(409, 'Destination unreachable')
+    if (outcome.status === 'legacy-position') {
+      throw new AppError(409, 'Legacy token positions are not converted to the new world engine')
+    }
+    if (outcome.status === 'battlemap-not-found' || outcome.status === 'token-not-found') {
+      throw new AppError(409, 'World state changed before movement resolution')
+    }
+
+    if (outcome.moved) {
+      req.app.get('io').to(battlemap.campaign_id).emit(WS.TOKEN_MOVED, {
+        tokenId: outcome.token.id,
+        pos_x: outcome.token.pos_x,
+        pos_y: outcome.token.pos_y,
+        pos_z: outcome.token.pos_z,
+        position_space: outcome.token.position_space,
+        updated_at: outcome.token.updated_at,
+        worldMovement: {
+          pathId: outcome.result.plan.pathId,
+          worldRevision: outcome.result.worldRevision,
+          runtimeRevision: outcome.runtimeRevision,
+          spentM: outcome.result.plan.spentM,
+          stopReason: outcome.result.plan.stopReason,
+        },
+      })
+    }
+
+    res.json({
+      outcome,
+      budget,
+      coordinateSpace: 'world-feet',
+    })
+  } catch (error) {
+    next(error)
+  }
 })
 
 // GET /api/battlemaps/:id — carte complète avec tokens

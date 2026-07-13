@@ -2,7 +2,7 @@
 
 > Dernière mise à jour : 2026-07-13 — plan issu de l'audit croisé combat/monde.
 >
-> Statut : **Phases 0 et 1 codées et vérifiées ; phases 2 à 7 planifiées**.
+> Statut : **Phases 0 à 2 codées et vérifiées ; phases 3 à 7 planifiées**.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.
@@ -34,9 +34,10 @@ sont conservées puis rebranchées sur les nouveaux services.
 - Travailler uniquement sur la branche/worktree d'intégration.
 - Ne jamais modifier le dépôt de l'autre développeur.
 - Aucun basculement des services actifs avant validation explicite.
-- Conserver les cartes voxel lisibles pendant toute la migration.
+- Les cartes voxel existantes peuvent servir de fixtures de comparaison, sans objectif de
+  rétrocompatibilité. Elles ne doivent jamais contraindre le nouveau modèle.
 - Chaque phase doit être livrable et réversible indépendamment.
-- Ne supprimer un ancien chemin que lorsque les scénarios équivalents passent sur le nouveau.
+- Supprimer un ancien chemin dès qu'il contourne ou fragilise l'autorité du nouveau moteur.
 - Ne pas mélanger état de l'éditeur et état runtime.
 - Ne pas utiliser Redis comme source durable.
 - Tout changement de schéma reçoit une migration `up/down` testée sur une base clonée.
@@ -132,7 +133,7 @@ historiques ne lisent pas encore ce snapshot. Ces branchements relèvent des Pha
 
 ---
 
-## 5. Phase 2 — collisions et navigation autoritaires
+## 5. Phase 2 — collisions et navigation autoritaires ✅
 
 ### Livrables
 
@@ -141,10 +142,10 @@ historiques ne lisent pas encore ce snapshot. Ces branchements relèvent des Pha
 - graphe de navigation 3D pondéré ;
 - multiplicateur de déplacement sur toute surface praticable et tout connecteur ;
 - endpoint/service de planification serveur ;
-- chemin complet et `world_revision` persistés avec une intention de déplacement ;
+- chemin recalculé sous transaction avec `world_revision` et `runtime_revision` ;
 - troncature à la dernière position atteignable ;
 - commande MJ de téléportation distincte du déplacement normal ;
-- mode de comparaison silencieuse avec l'ancien pathfinder pour les cartes voxel.
+- coordonnées canoniques `world-feet` distinctes des positions `legacy-cell`.
 
 ### Tests de sortie
 
@@ -154,6 +155,31 @@ historiques ne lisent pas encore ce snapshot. Ces branchements relèvent des Pha
 - deux occupants indexés au même endroit ne s'écrasent pas ;
 - changer une porte après la déclaration provoque revalidation, replanning ou troncature ;
 - déplacement libre et déplacement de combat obtiennent le même chemin pour le même profil.
+
+### Livré le 2026-07-13
+
+- `shared/world/spatialIndex.js` sépare colliders statiques et occupants dynamiques volumétriques ;
+- `shared/world/navigation.js` construit le graphe 3D pondéré et applique A*, portes, supports,
+  multiplicateurs de surface, traversées fractionnables et arrêts stables ;
+- `server/src/services/worldMovementService.js` met en cache les graphes, charge l'occupation,
+  replanifie sous verrous et ne persiste que le point réellement atteint ;
+- `server/src/services/movementBudgetService.js` calcule les allures depuis la fiche Polaris côté
+  serveur ; le client choisit une allure, jamais un budget libre pour un déplacement de jeu ;
+- `POST /world-path-preview`, `POST /world-move` et `POST /tokens/:id/teleport` séparent aperçu,
+  déplacement autoritaire et dérogation MJ ;
+- `TOKEN_MOVE` transporte une intention `{ destination, gait }` et rejette l'ancien déplacement par
+  coordonnées directes ;
+- la migration 153 ajoute `runtime_revision` et `tokens.position_space`. Les lignes existantes sont
+  marquées `legacy-cell` sans conversion approximative ; toute nouvelle position est `world-feet` ;
+- le canvas sélectionne les supports Surface, affiche le chemin serveur et rend les coordonnées
+  canoniques sans décalage de demi-case ;
+- les tokens nouvellement créés sont calés sur un support stable libre ; la collision token n'est
+  plus maintenue dans le hash Redis historique ;
+- 39 tests passent, le build Vite passe et la migration 153 `up/down` a été vérifiée sur PostgreSQL
+  isolé.
+
+Limite assumée : la FSM de résolution du combat et la LOS restent sur leur ancien chemin jusqu'aux
+Phases 3 et 7. Le flux de mouvement du monde, lui, ne possède plus de bypass client direct.
 
 ---
 
@@ -262,7 +288,7 @@ Ajouter les cas couverture debout, accroupi et couché dès que la pose canoniqu
 - terrain instable et suppression branchés sur les régions et chemins ;
 - métriques et preview client alignées ;
 - télémétrie de comparaison retirée après validation ;
-- anciens chemins collision/pathfinder/LOS voxel supprimés ou limités à l'import de cartes legacy ;
+- anciens chemins collision/pathfinder/LOS voxel supprimés ;
 - documentation `ASBUILT`, `SYSTEME/COMBAT` et manuel mise à jour à la clôture.
 
 ### Tests de sortie
@@ -272,7 +298,7 @@ Ajouter les cas couverture debout, accroupi et couché dès que la pose canoniqu
 - attaque après escalier utilise la position réellement atteinte ;
 - portée, couverture et effets sont identiques côté prévisualisation et résolution serveur ;
 - aucun payload client ne permet d'imposer une distance ou un modificateur favorable ;
-- campagne voxel legacy jouable jusqu'à sa migration volontaire.
+- aucune dépendance runtime au format voxel historique.
 
 ---
 
@@ -280,7 +306,7 @@ Ajouter les cas couverture debout, accroupi et couché dès que la pose canoniqu
 
 Chaque phase doit conserver ou ajouter ces scénarios :
 
-1. carte voxel simple ;
+1. ancienne carte voxel, fixture facultative de comparaison uniquement ;
 2. salle Surface simple ;
 3. salles adjacentes avec porte ;
 4. plusieurs étages sans connexion ;
@@ -311,4 +337,5 @@ Le moteur de monde est considéré terminé lorsque :
 - l'ascenseur persiste son état et transporte réellement ses passagers ;
 - le combat ne lit plus directement `voxel_data` pour ses décisions spatiales ;
 - les scénarios de la matrice passent ;
-- l'ancien moteur est retiré seulement après migration validée des cartes.
+- l'ancien moteur est retiré dès que les consommateurs restants sont rebranchés ; aucune migration
+  des cartes historiques n'est requise.

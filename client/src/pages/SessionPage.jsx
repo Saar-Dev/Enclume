@@ -294,9 +294,7 @@ function SessionContent({ campaignId }) {
       const res = await api.post(`/battlemaps/${battlemap.id}/tokens`, {
         character_id: characterId,
         label: character.name,
-        pos_x: 0,
-        pos_y: 0,
-        pos_z: 0,
+        destination: { x: 0, y: 0, z: 0 },
         color: character.color,
         layer,
       })

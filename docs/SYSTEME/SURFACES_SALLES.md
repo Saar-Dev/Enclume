@@ -11,9 +11,9 @@
 
 L'éditeur Surface/Salle et son rendu existent. `surface_data` version 4 sait décrire des salles,
 sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
-validé et compilé côté serveur en snapshot physique. Les collisions de jeu, le pathfinding de
-combat et les lignes de vue ne consomment toutefois pas encore ce snapshot : ils lisent encore
-principalement `voxel_data` jusqu'aux Phases 2 et 3.
+validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
+navigation de session lisent ce snapshot ; la LOS et la résolution complète du combat attendent les
+Phases 3 et 7.
 
 Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit la cible commune qui compilera
 ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une
@@ -93,7 +93,9 @@ L’outil Salle est l’outil de référence.
 - Le retour au mode sélection se fait uniquement par clic explicite sur “Sélection”.
 - Modifier les options du panneau applique les changements à la salle sélectionnée : hauteur en étages, épaisseurs, blocage, textures ou matériaux procéduraux.
 
-Les anciens outils Dalle, Mur et Escalier peuvent rester temporairement visibles pour compatibilité d’interface, mais la conception cible passe par des objets Salle et, plus tard, par des connecteurs d’étages.
+Les anciens outils Dalle, Mur et Escalier peuvent rester temporairement visibles comme aides de test,
+mais aucune compatibilité de carte ne justifie de dupliquer le nouveau modèle. La conception cible
+passe par des objets Salle et des connecteurs d'étages.
 
 ## Connecteurs
 
