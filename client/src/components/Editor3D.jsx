@@ -6,6 +6,7 @@ import raycastVoxels from 'fast-voxel-raycast'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
+import { persistSurfaceDocument } from '../lib/surfacePersistence.js'
 import Voxel from './Voxel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
@@ -1159,6 +1160,7 @@ export default function Editor3D({
 
   const [voxels, setVoxels] = useState({})
   const [surfaceData, setSurfaceData] = useState(() => normalizeSurfaceData(null))
+  const [surfaceSaveError, setSurfaceSaveError] = useState(null)
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
   const [runtimeElevatorStates, setRuntimeElevatorStates] = useState({})
@@ -1182,6 +1184,7 @@ export default function Editor3D({
   const voxelsRef = useRef(voxels)
   useEffect(() => { voxelsRef.current = voxels }, [voxels])
   const surfaceDataRef = useRef(surfaceData)
+  const surfaceQueuedBaseRef = useRef(normalizeSurfaceData(null))
   const processedRoomArcActionRef = useRef(null)
   useEffect(() => { surfaceDataRef.current = surfaceData }, [surfaceData])
   // battlemapRef — miroir de battlemap pour saveFireAndForget stable (pas de recréation du timer)
@@ -1202,7 +1205,11 @@ export default function Editor3D({
   }, [battlemap?.id])
 
   useEffect(() => {
-    setSurfaceData(normalizeSurfaceData(battlemap?.surface_data))
+    const normalized = normalizeSurfaceData(battlemap?.surface_data)
+    surfaceQueuedBaseRef.current = cloneSurfaceData(normalized)
+    surfaceDataRef.current = normalized
+    setSurfaceData(normalized)
+    setSurfaceSaveError(null)
   }, [battlemap?.id, battlemap?.surface_data])
 
   const refreshRuntimeEffects = useCallback(async () => {
@@ -1400,27 +1407,30 @@ export default function Editor3D({
     const revision = surfaceSaveRevisionRef.current + 1
     surfaceSaveRevisionRef.current = revision
 
+    const baseSurfaceData = cloneSurfaceData(surfaceQueuedBaseRef.current)
+    surfaceQueuedBaseRef.current = cloneSurfaceData(currentSurfaceData)
     surfaceSaveQueueRef.current = surfaceSaveQueueRef.current
       .catch(() => {})
-      .then(() => {
+      .then(async () => {
         const currentBattlemap = battlemapRef.current
-        return fetch(`${import.meta.env.VITE_API_URL}/api/battlemaps/${battlemapId}/surface`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            surface_data: currentSurfaceData,
-            surface_revision: currentBattlemap?.surface_revision ?? 0,
-          }),
+        return persistSurfaceDocument({
+          apiBaseUrl: import.meta.env.VITE_API_URL,
+          battlemapId,
+          surfaceData: currentSurfaceData,
+          expectedRevision: currentBattlemap?.surface_revision,
+          baseSurfaceData,
         })
       })
-      .then(async response => {
-        const data = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(data.error || `Sauvegarde surfaces HTTP ${response.status}`)
-        return data
-      })
-      .then(data => {
+      .then(({ data, remoteBattlemap }) => {
+        if (remoteBattlemap) {
+          battlemapRef.current = {
+            ...battlemapRef.current,
+            world_revision: remoteBattlemap.world_revision,
+            surface_revision: remoteBattlemap.surface_revision,
+          }
+        }
         const isLatest = revision === surfaceSaveRevisionRef.current
+        if (isLatest) surfaceQueuedBaseRef.current = cloneSurfaceData(data.surface_data)
         const nextBattlemap = {
           ...battlemapRef.current,
           world_revision: Math.max(
@@ -1432,9 +1442,13 @@ export default function Editor3D({
         }
         battlemapRef.current = nextBattlemap
         setBattlemap(nextBattlemap)
+        setSurfaceSaveError(null)
         if (isLatest) isSurfaceDirty.current = false
       })
-      .catch(err => console.error('[Editor3D] Sauvegarde surfaces échouée :', err))
+      .catch(err => {
+        setSurfaceSaveError(err.message || 'La sauvegarde Surface a échoué.')
+        console.error('[Editor3D] Sauvegarde surfaces échouée :', err)
+      })
   }, [setBattlemap])
 
   // ─── save() async — pour les saves explicites futures (undo/redo) ────────
@@ -1611,6 +1625,7 @@ export default function Editor3D({
     ]
     setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
     setSurfaceRedoDepth(surfaceRedoStackRef.current.length)
+    surfaceDataRef.current = previousSurfaceData
     setSurfaceData(previousSurfaceData)
     isSurfaceDirty.current = true
     saveSurfaceFireAndForget(previousSurfaceData)
@@ -1626,6 +1641,7 @@ export default function Editor3D({
     ]
     setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
     setSurfaceRedoDepth(surfaceRedoStackRef.current.length)
+    surfaceDataRef.current = nextSurfaceData
     setSurfaceData(nextSurfaceData)
     isSurfaceDirty.current = true
     saveSurfaceFireAndForget(nextSurfaceData)
@@ -1736,6 +1752,28 @@ export default function Editor3D({
           />
         )}
       </Canvas>
+
+      {surfaceSaveError && (
+        <div
+          role="alert"
+          style={{
+            position: 'absolute',
+            left: 16,
+            right: 16,
+            bottom: 16,
+            zIndex: 50,
+            padding: '10px 14px',
+            border: '1px solid #ef4444',
+            borderRadius: 8,
+            background: 'rgba(69, 10, 10, 0.96)',
+            color: '#fee2e2',
+            fontSize: 13,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
+          }}
+        >
+          Sauvegarde du monde impossible : {surfaceSaveError}
+        </div>
+      )}
 
       {surfaceConnectorPanel && selectedSurfaceConnector && (
         <SurfaceConnectorPanel

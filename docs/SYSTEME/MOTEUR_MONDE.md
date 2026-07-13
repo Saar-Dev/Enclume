@@ -155,6 +155,13 @@ les deux autosauvegardes d'un même éditeur. Chaque route verrouille la ligne `
 révision documentaire, met à jour données/révisions/index texture dans une seule transaction, puis
 invalide ou remplit le cache du snapshot.
 
+La réponse d'écriture doit contenir les trois colonnes de révision demandées à PostgreSQL ; elles
+sont passées à Knex sous forme de tableau, jamais comme arguments positionnels ambigus. Sur un
+conflit `surface_revision`, l'éditeur compare le document courant du serveur à la dernière base qu'il
+a effectivement reçue. Il peut reprendre automatiquement une réponse perdue, mais refuse d'écraser
+une modification concurrente réelle. `boundaryArcs` est inclus dans ce round-trip au même titre que
+le reste de `surface_data`.
+
 La duplication d'une carte réattribue tous les UUID physiques : deux cartes copiées ne doivent
 jamais pointer vers le même futur état runtime.
 

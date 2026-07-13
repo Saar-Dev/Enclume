@@ -1,5 +1,12 @@
 import { collectSurfaceTextureIds } from '../../../shared/world/surfaceDocument.js'
 
+export const BATTLEMAP_DOCUMENT_REVISION_COLUMNS = Object.freeze([
+  'id',
+  'world_revision',
+  'surface_revision',
+  'voxel_revision',
+])
+
 function addTextureId(ids, value) {
   if (value == null || value === '') return
   ids.add(value)

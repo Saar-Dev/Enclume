@@ -300,7 +300,12 @@ moteur ; sinon elles doivent être supprimées.
   sa découpe du mur et sa traversée partagent le même repère local ;
 - l'ouverture partage l'arc canonique en portions avant/après et linteau, même si elle traverse
   plusieurs subdivisions de rendu ;
-- 97 tests monde/combat et 13 tests Surface passent ; ESLint ciblé ne remonte aucune erreur et le
+- la sauvegarde Surface retourne désormais réellement toutes les colonnes de révision. Après un
+  `409`, le client rebase seulement si le document distant correspond encore à sa dernière base ;
+  une modification concurrente est signalée et conservée sans écrasement ;
+- un test reproduit le round-trip salle carrée → mur arrondi → sortie/rechargement, y compris le cas
+  d'une réponse précédente ayant laissé la révision locale obsolète ;
+- 98 tests monde/combat et 17 tests Surface/persistance passent ; ESLint ciblé ne remonte aucune erreur et le
   build Vite est validé.
 
 ---

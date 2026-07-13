@@ -98,6 +98,14 @@ Les erreurs HTTP de sauvegarde ne sont plus assimilées à un succès par l'édi
 sérialisées par document et les compteurs renvoyés par le serveur restent monotones même si les
 réponses voxel et Surface arrivent dans un ordre différent.
 
+Depuis le correctif de persistance v8, la route retourne explicitement `world_revision`,
+`surface_revision` et `voxel_revision` avec le document Surface réellement écrit. Si une réponse a
+été perdue et que la révision locale est devenue obsolète, le client relit la carte et ne rebase sa
+sauvegarde que si le document serveur est encore identique à sa dernière base connue. Une vraie
+édition concurrente n'est jamais écrasée silencieusement et produit une alerte visible dans
+l'éditeur. Le scénario salle carrée → arrondi → sortie de l'éditeur → rechargement fait partie des
+tests de non-régression.
+
 ## Grille et échelle
 
 La grille de l’éditeur reste la référence visuelle. Une case de grille représente 1,5 m côté intention de jeu.

@@ -15,6 +15,7 @@ import {
 } from '../../../shared/world/surfaceDocument.js'
 import { compileSurfaceWorld } from '../../../shared/world/worldCompiler.js'
 import {
+  BATTLEMAP_DOCUMENT_REVISION_COLUMNS,
   hasRevisionConflict,
   parseExpectedRevision,
   syncBattlemapTextureUsage,
@@ -760,7 +761,7 @@ router.put('/:id/voxels', requireAuth, async (req, res, next) => {
           world_revision: Number(current.world_revision || 0) + 1,
           updated_at: trx.fn.now(),
         })
-        .returning('id', 'world_revision', 'surface_revision', 'voxel_revision')
+        .returning(BATTLEMAP_DOCUMENT_REVISION_COLUMNS)
 
       await syncBattlemapTextureUsage(
         trx,
@@ -826,7 +827,7 @@ router.put('/:id/surface', requireAuth, async (req, res, next) => {
           world_revision: nextWorldRevision,
           updated_at: trx.fn.now(),
         })
-        .returning('id', 'world_revision', 'surface_revision', 'voxel_revision')
+        .returning(BATTLEMAP_DOCUMENT_REVISION_COLUMNS)
 
       await syncBattlemapTextureUsage(
         trx,

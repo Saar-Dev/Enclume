@@ -587,7 +587,9 @@ Phase 7.
 - porte sur arc : point sur le rayon, tangente et normale unitaires orthogonales, rotation stable ;
 - découpe d'arc et traversée dans le sens de la normale ;
 - collision et LOS sur `wall-arc` sans faux obstacle hors de la courbe ;
-- 97 tests monde/combat et 13 tests client Surface passent ; ESLint ciblé ne remonte aucune erreur
+- sauvegarde round-trip d'une salle arrondie, récupération sûre d'une révision locale obsolète et
+  refus d'écraser une vraie modification concurrente ;
+- 98 tests monde/combat et 17 tests client Surface/persistance passent ; ESLint ciblé ne remonte aucune erreur
   et le build Vite est validé.
 
 ---

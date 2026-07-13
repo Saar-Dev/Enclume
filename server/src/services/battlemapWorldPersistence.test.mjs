@@ -2,10 +2,20 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  BATTLEMAP_DOCUMENT_REVISION_COLUMNS,
   collectBattlemapTextureIds,
   hasRevisionConflict,
   parseExpectedRevision,
 } from './battlemapWorldPersistence.js'
+
+test('les écritures documentaires demandent explicitement toutes les révisions à PostgreSQL', () => {
+  assert.deepEqual(BATTLEMAP_DOCUMENT_REVISION_COLUMNS, [
+    'id',
+    'world_revision',
+    'surface_revision',
+    'voxel_revision',
+  ])
+})
 
 test('les usages texture réunissent voxels et surfaces sans s’effacer mutuellement', () => {
   const ids = collectBattlemapTextureIds(
