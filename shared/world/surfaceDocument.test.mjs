@@ -156,6 +156,35 @@ test('la v9 valide le profil vertical canonique et ses murs par tranche', () => 
   assert.equal(validateSurfaceData(surface).valid, false)
 })
 
+test('la préparation redérive la hauteur depuis les tranches canoniques', () => {
+  const surface = surfaceFixture()
+  surface.version = 10
+  const footprint = [[[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]]
+  surface.rooms['room:legacy'] = {
+    ...surface.rooms['room:legacy'],
+    heightLevels: 1,
+    height: 2.5,
+    verticalProfile: {
+      slices: [0, 1, 2].map(offset => ({
+        offset,
+        footprint,
+        wallPaths: [
+          { axis: 'x', x0: 0, z0: 0, x1: 1, z1: 0 },
+          { axis: 'z', x0: 1, z0: 0, x1: 1, z1: 1 },
+          { axis: 'x', x0: 1, z0: 1, x1: 0, z1: 1 },
+          { axis: 'z', x0: 0, z0: 1, x1: 0, z1: 0 },
+        ],
+      })),
+    },
+  }
+
+  assert.equal(validateSurfaceData(surface).valid, false)
+  const prepared = prepareSurfaceData(surface, { battlemapId: 'map-height-repair' })
+  assert.equal(prepared.surfaceData.rooms['room:legacy'].heightLevels, 3)
+  assert.equal(prepared.surfaceData.rooms['room:legacy'].height, 7.5)
+  assert.equal(prepared.surfaceData.rooms['room:legacy'].verticalProfile.slices.length, 3)
+})
+
 test('la v10 valide les profils verticaux paramétriques des faces de mur', () => {
   const surface = surfaceFixture()
   surface.version = 10

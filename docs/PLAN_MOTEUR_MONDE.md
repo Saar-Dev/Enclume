@@ -546,6 +546,9 @@ Phase 7.
   active conserve son `worldId`, ses matériaux et réglages ;
 - une fusion en chaîne redérive `heightLevels` et `height` du nombre de tranches canoniques avant
   sauvegarde ; les métadonnées de l'ancienne salle active ne peuvent pas survivre par erreur ;
+- la normalisation pré-`PUT` du client et la préparation canonique du serveur répètent cette
+  dérivation. Les tranches contiguës restent l'autorité même face à une sauvegarde locale mise en
+  file pendant une fusion ; la validation brute demeure stricte pour détecter les documents cassés ;
 - portes sur la frontière supprimée, références de salles des connecteurs et dépendances de découpe
   sont nettoyées ou remappées atomiquement ;
 - supprimer une frontière courbe retire aussi l'arc séparateur.
@@ -655,7 +658,9 @@ Phase 7.
 - les raccords sont des intersections volumétriques dérivées par face et par salle à chaque hauteur.
   Ils ferment aussi le cas d'un unique mur profilé, de profondeurs différentes et d'une jonction en
   T où les deux faces d'un mur mitoyen rejoignent des voisins distincts ; le loft et le padding
-  collision/LOS prolongent les côtés concernés. Un arc horizontal conserve son profil vertical.
+  collision/LOS prolongent les côtés concernés. Le mur droit voisin reprend la grille verticale du
+  profil qui le rejoint afin de partager les sommets intermédiaires. Un arc horizontal conserve son
+  profil vertical.
 
 ### Interface
 
@@ -671,7 +676,7 @@ Phase 7.
 
 ### Validation
 
-- 112 tests du moteur/serveur et 29 tests client Surface/persistance passent ;
+- 113 tests du moteur/serveur et 30 tests client Surface/persistance passent ;
 - ESLint ciblé des fichiers Surface ne remonte aucune erreur ;
 - build Vite de production validé.
 

@@ -19,6 +19,7 @@ import {
   roomFootprintRectangles,
   roomsWallRenderPaths,
   roomsWallSegments,
+  wallProfileVerticalProgresses,
 } from './surfaceData.js'
 import {
   multiPolygonGridCells,
@@ -123,6 +124,16 @@ test('un mur profile se raccorde aussi a ses voisins restes verticaux', () => {
   assert.equal(result.error, null)
   assert.equal(joins.length, 2)
   assert.ok(joins.every(join => join.neighbor.elevationProfileMode === undefined))
+  const straightNeighbor = walls.find(wall => (
+    !wall.elevationProfileMode
+    && [wall.profileJoinStart, wall.profileJoinEnd].some(join => (
+      join?.front?.neighbor?.elevationProfileMode
+      || join?.back?.neighbor?.elevationProfileMode
+    ))
+  ))
+  const neighborLevels = wallProfileVerticalProgresses(straightNeighbor)
+  assert.ok(neighborLevels.length > 2)
+  assert.ok(neighborLevels.includes(0.5))
 })
 
 test('le profil vers l intérieur garde la même orientation sur tout le contour', () => {

@@ -335,14 +335,26 @@ export function parseCeilingKey(id, ceiling) {
 
 export function normalizeSurfaceData(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return { ...DEFAULT_SURFACE_DATA }
-  const rooms = data.rooms && typeof data.rooms === 'object' && !Array.isArray(data.rooms) ? data.rooms : {}
+  const storyHeight = Number(data.storyHeight) || STORY_HEIGHT
+  const sourceRooms = data.rooms && typeof data.rooms === 'object' && !Array.isArray(data.rooms) ? data.rooms : {}
+  const migratedRooms = Number(data.version || 2) < 7
+    ? migrateRoomGeometryClips(sourceRooms, storyHeight)
+    : sourceRooms
+  const rooms = Object.fromEntries(Object.entries(migratedRooms).map(([id, room]) => {
+    const slices = room?.verticalProfile?.slices
+    if (!Array.isArray(slices) || slices.length === 0) return [id, room]
+    if (!slices.every((slice, index) => Number(slice?.offset) === index)) return [id, room]
+    const heightLevels = slices.length
+    const height = heightLevels * storyHeight
+    return Number(room.heightLevels) === heightLevels && Number(room.height) === height
+      ? [id, room]
+      : [id, { ...room, heightLevels, height }]
+  }))
   return {
     version: Math.max(10, data.version || 2),
     fine: data.fine || SURFACE_FINE,
-    storyHeight: data.storyHeight || STORY_HEIGHT,
-    rooms: Number(data.version || 2) < 7
-      ? migrateRoomGeometryClips(rooms, Number(data.storyHeight) || STORY_HEIGHT)
-      : rooms,
+    storyHeight,
+    rooms,
     floors: data.floors && typeof data.floors === 'object' && !Array.isArray(data.floors) ? data.floors : {},
     walls: data.walls && typeof data.walls === 'object' && !Array.isArray(data.walls) ? data.walls : {},
     ceilings: data.ceilings && typeof data.ceilings === 'object' && !Array.isArray(data.ceilings) ? data.ceilings : {},
@@ -1590,6 +1602,33 @@ export function roomsWallRenderPaths(rooms) {
     }
   }
   return withWallCornerJoins([...straight, ...arcs], wall => wall.roomIds)
+}
+
+export function wallProfileVerticalProgresses(wall, start = 0, end = 1) {
+  const neighbors = [
+    wall?.profileJoinStart?.front?.neighbor,
+    wall?.profileJoinStart?.back?.neighbor,
+    wall?.profileJoinEnd?.front?.neighbor,
+    wall?.profileJoinEnd?.back?.neighbor,
+    wall?.profileJoinStart?.neighbor,
+    wall?.profileJoinEnd?.neighbor,
+  ].filter(Boolean)
+  const influences = [wall, ...neighbors]
+  const profileTypes = influences.flatMap(item => [
+    item?.elevationProfile?.type,
+    item?.frontElevationProfile?.type,
+    item?.backElevationProfile?.type,
+  ])
+  const from = Math.max(0, Math.min(1, Number(start) || 0))
+  const to = Math.max(from, Math.min(1, Number(end) || 0))
+  const curveLevelCount = Math.max(2, Math.ceil((to - from) * 12) + 1)
+  const levels = profileTypes.includes('curved')
+    ? Array.from({ length: curveLevelCount }, (_, index) => (
+        from + (to - from) * index / Math.max(1, curveLevelCount - 1)
+      ))
+    : [from, to]
+  if (profileTypes.includes('faceted') && from < 0.5 && to > 0.5) levels.push(0.5)
+  return [...new Set(levels)].sort((left, right) => left - right)
 }
 
 function connectorCommonBlocking(type, state = 'closed') {

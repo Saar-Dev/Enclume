@@ -61,12 +61,13 @@ export async function persistSurfaceDocument({
 
   const surfaceUrl = `${apiBaseUrl}/api/battlemaps/${battlemapId}/surface`
   const battlemapUrl = `${apiBaseUrl}/api/battlemaps/${battlemapId}`
+  const normalizedSurfaceData = normalizeSurfaceData(surfaceData)
   const put = revision => fetchImpl(surfaceUrl, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({
-      surface_data: surfaceData,
+      surface_data: normalizedSurfaceData,
       surface_revision: Number.isFinite(Number(revision)) ? Number(revision) : 0,
     }),
   })

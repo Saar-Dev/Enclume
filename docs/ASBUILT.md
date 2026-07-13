@@ -277,6 +277,9 @@ moteur ; sinon elles doivent être supprimées.
   la séparation sont supprimées et les autres connecteurs/références sont remappés ;
 - `heightLevels` et `height` sont redérivés des tranches canoniques après chaque fusion, y compris
   lorsqu'une salle déjà multiniveau est fusionnée à nouveau ;
+- les tranches contiguës sont aussi l'autorité à la frontière de persistance : le client normalise
+  juste avant le `PUT` et le serveur redérive ces métadonnées avant sa validation stricte. Une
+  sauvegarde intermédiaire mise en file ne peut donc plus envoyer une ancienne hauteur ;
 - les arcs de séparation supprimés ne survivent pas à la fusion ;
 - une nouvelle salle intersectant une salle courbe existante est découpée sur son multipolygone
   effectif : dalle, plafond et mur épousent la courbe même si elle dépasse l'ancienne AABB ;
@@ -368,10 +371,12 @@ moteur ; sinon elles doivent être supprimées.
 - les angles utilisent désormais l'intersection réelle des volumes, par face et par salle, à chaque
   niveau du loft. Le raccord ferme aussi un mur profilé isolé, des profondeurs différentes et les
   jonctions en T d'un mur mitoyen, en prolongeant le bon voisin pour chaque face. La compilation redérive les mêmes
-  extensions pour la collision et la LOS. Un mur peut être arrondi dans le plan avant ou après son
+  extensions pour la collision et la LOS. Un mur droit raccordé hérite également des niveaux de
+  subdivision du profil voisin : leurs sommets coïncident sur toute la hauteur, pas seulement au sol
+  et au plafond. Un mur peut être arrondi dans le plan avant ou après son
   profil vertical sans perdre celui-ci ;
 - la validation v10, les cas extérieur/mitoyen et le narrow phase profilé possèdent des tests purs.
-- état validé : 112 tests monde/serveur, 29 tests client Surface/persistance et build Vite de
+- état validé : 113 tests monde/serveur, 30 tests client Surface/persistance et build Vite de
   production passent ; ESLint ciblé des fichiers Surface ne remonte aucune erreur.
 
 ---

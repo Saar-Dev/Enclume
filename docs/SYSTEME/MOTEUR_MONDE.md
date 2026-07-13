@@ -517,6 +517,10 @@ La suppression porte sur un mur complet entre deux angles, jamais sur un fragmen
 - le nombre et la hauteur des niveaux sont redérivés de ces tranches après chaque fusion. Une salle
   déjà fusionnée peut donc être fusionnée à nouveau sans désynchroniser `heightLevels`, `height` et
   `verticalProfile.slices` ;
+- la même dérivation est appliquée juste avant le `PUT` client puis avant la validation serveur. Les
+  tranches contiguës sont l'autorité ; `heightLevels` et `height` sont des métadonnées dérivées. Le
+  validateur brut reste strict, tandis que la frontière canonique répare uniquement ce décalage
+  déterministe ;
 - les arcs touchant la séparation sont retirés avant de reconstruire l'union, afin qu'une ancienne
   frontière courbe ne survive pas comme limite fantôme ;
 - toute différence géométrique qui référençait la salle absorbée est réécrite vers la survivante.
@@ -562,7 +566,9 @@ Chaque face conserve les identifiants des salles dont elle est l'intérieur, pui
 portant la même salle. Une jonction en T au bout d'un mur mitoyen peut ainsi employer un voisin
 différent pour chaque face. Le maillage recalcule à chaque hauteur l'intersection des volumes et ne
 suppose plus que les deux murs ont le même profil : un mur vertical adjacent est lofté à son
-extrémité si son voisin est profilé. Le snapshot ne
+extrémité si son voisin est profilé. Il reprend les niveaux verticaux du profil voisin afin que
+l'intersection soit matérialisée par des sommets communs à chaque hauteur, y compris au milieu de la
+courbe. Le snapshot ne
 persiste pas cette finition ; le compilateur la redérive et transforme les mêmes intersections en
 paddings longitudinaux sur les deux murs. Le narrow phase les applique seulement au premier ou au
 dernier segment d'un arc tessellé. Rendu, mouvement et LOS ferment ainsi le même coin.

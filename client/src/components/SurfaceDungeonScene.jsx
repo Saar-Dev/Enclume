@@ -36,6 +36,7 @@ import {
   roomFootprintRectangles,
   roomsWallRenderPaths,
   stairStepBoxes,
+  wallProfileVerticalProgresses,
   yToLevel,
 } from '../lib/surfaceData.js'
 
@@ -610,8 +611,8 @@ function CurvedRoomSlab({ room, roomLookup, contours = null, kind, y, thickness,
   )
 }
 
-function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }) {
-  const joinNeighbors = [
+function wallProfileJoinNeighbors(wall) {
+  const neighbors = [
     wall.profileJoinStart?.front?.neighbor,
     wall.profileJoinStart?.back?.neighbor,
     wall.profileJoinEnd?.front?.neighbor,
@@ -619,6 +620,14 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
     wall.profileJoinStart?.neighbor,
     wall.profileJoinEnd?.neighbor,
   ].filter(Boolean)
+  return [...new Map(neighbors.map((neighbor, index) => [
+    neighbor.id || `${index}:${neighbor.normal?.x}:${neighbor.normal?.z}`,
+    neighbor,
+  ])).values()]
+}
+
+function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }) {
+  const joinNeighbors = wallProfileJoinNeighbors(wall)
   const joinsProfiledNeighbor = Boolean(
     joinNeighbors.some(neighbor => neighbor.elevationProfileMode),
   )
@@ -765,20 +774,8 @@ function profiledWallVerticalLevels(wall) {
   const span = Math.max(0.01, Number(wall.elevationProfileHeight) || (top - bottom))
   const start = Math.max(0, Math.min(1, (bottom - origin) / span))
   const end = Math.max(0, Math.min(1, (top - origin) / span))
-  const hasCurve = wall.elevationProfile?.type === 'curved'
-    || wall.frontElevationProfile?.type === 'curved'
-    || wall.backElevationProfile?.type === 'curved'
-  const curveLevelCount = Math.max(2, Math.ceil((end - start) * 12) + 1)
-  const levels = hasCurve
-    ? Array.from({ length: curveLevelCount }, (_, index) => (
-        start + (end - start) * index / Math.max(1, curveLevelCount - 1)
-      ))
-    : [start, end]
-  const hasFacet = wall.elevationProfile?.type === 'faceted'
-    || wall.frontElevationProfile?.type === 'faceted'
-    || wall.backElevationProfile?.type === 'faceted'
-  if (hasFacet && start < 0.5 && end > 0.5) levels.push(0.5)
-  return [...new Set(levels)].sort((left, right) => left - right).map(t => ({ t, y: origin + t * span }))
+  return wallProfileVerticalProgresses(wall, start, end)
+    .map(t => ({ t, y: origin + t * span }))
 }
 
 function profiledWallFaceDistances(wall, progress) {

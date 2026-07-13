@@ -384,16 +384,35 @@ export function assertSurfaceData(input) {
   return input
 }
 
+function canonicalizeDerivedRoomMetadata(input) {
+  if (!isPlainObject(input) || !isPlainObject(input.rooms)) return input
+  const storyHeight = positiveNumber(input.storyHeight, SURFACE_STORY_HEIGHT_DEFAULT)
+  let changed = false
+  const rooms = Object.fromEntries(Object.entries(input.rooms).map(([id, room]) => {
+    const slices = room?.verticalProfile?.slices
+    if (!Array.isArray(slices) || slices.length === 0) return [id, room]
+    const contiguous = slices.every((slice, index) => Number(slice?.offset) === index)
+    if (!contiguous) return [id, room]
+    const heightLevels = slices.length
+    const height = heightLevels * storyHeight
+    if (Number(room.heightLevels) === heightLevels && Number(room.height) === height) return [id, room]
+    changed = true
+    return [id, { ...room, heightLevels, height }]
+  }))
+  return changed ? { ...input, rooms } : input
+}
+
 export function normalizeSurfaceDataDocument(input) {
-  assertSurfaceData(input)
+  const canonicalInput = canonicalizeDerivedRoomMetadata(input)
+  assertSurfaceData(canonicalInput)
   const normalized = {
-    ...cloneValue(input),
+    ...cloneValue(canonicalInput),
     version: SURFACE_DATA_VERSION,
-    fine: positiveNumber(input.fine, SURFACE_FINE_DEFAULT),
-    storyHeight: positiveNumber(input.storyHeight, SURFACE_STORY_HEIGHT_DEFAULT),
+    fine: positiveNumber(canonicalInput.fine, SURFACE_FINE_DEFAULT),
+    storyHeight: positiveNumber(canonicalInput.storyHeight, SURFACE_STORY_HEIGHT_DEFAULT),
   }
   for (const collection of SURFACE_COLLECTIONS) {
-    normalized[collection] = cloneValue(input[collection] ?? {})
+    normalized[collection] = cloneValue(canonicalInput[collection] ?? {})
   }
   if (Number(input.version ?? SURFACE_DATA_VERSION) < 7) {
     normalized.rooms = migrateRoomGeometryClips(normalized.rooms, normalized.storyHeight)
@@ -460,14 +479,17 @@ function toWorldDocument(surfaceData, battlemapId) {
 }
 
 export function prepareSurfaceData(input, { battlemapId = null, reseedWorldIds = false } = {}) {
-  const normalized = normalizeSurfaceDataDocument(input)
+  const canonicalInput = canonicalizeDerivedRoomMetadata(input)
+  const normalized = normalizeSurfaceDataDocument(canonicalInput)
   const identified = withWorldIds(normalized, battlemapId, reseedWorldIds)
   assertSurfaceData(identified.surfaceData)
   const worldDocument = toWorldDocument(identified.surfaceData, battlemapId)
   return deepFreeze({
     surfaceData: identified.surfaceData,
     worldDocument,
-    changed: identified.changed || Number(input.version ?? SURFACE_DATA_VERSION) !== SURFACE_DATA_VERSION,
+    changed: identified.changed
+      || canonicalInput !== input
+      || Number(input.version ?? SURFACE_DATA_VERSION) !== SURFACE_DATA_VERSION,
   })
 }
 

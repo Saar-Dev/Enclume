@@ -110,3 +110,38 @@ test('l’ordre des clés JSONB ne crée pas un faux conflit', () => {
   }
   assert.equal(sameSurfaceDocument(square, reordered), true)
 })
+
+test('une sauvegarde redérive la hauteur depuis les tranches avant le PUT', async () => {
+  const calls = []
+  const footprint = [[[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]]
+  const staleHeight = {
+    ...square,
+    version: 10,
+    rooms: {
+      room: {
+        ...square.rooms.room,
+        heightLevels: 1,
+        height: 2.5,
+        verticalProfile: {
+          slices: [0, 1, 2].map(offset => ({ offset, footprint, wallPaths: [] })),
+        },
+      },
+    },
+  }
+  await persistSurfaceDocument({
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options })
+      const sent = JSON.parse(options.body).surface_data
+      return response(200, { surface_data: sent, surface_revision: 2, world_revision: 4 })
+    },
+    battlemapId: 'map',
+    surfaceData: staleHeight,
+    expectedRevision: 1,
+    baseSurfaceData: square,
+  })
+
+  const sentRoom = JSON.parse(calls[0].options.body).surface_data.rooms.room
+  assert.equal(sentRoom.heightLevels, 3)
+  assert.equal(sentRoom.height, 7.5)
+  assert.equal(sentRoom.verticalProfile.slices.length, 3)
+})
