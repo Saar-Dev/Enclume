@@ -1,6 +1,7 @@
 # SYSTEME/ASSETS.md — MinIO, textures, faces entités, Atelier GM
 > Source : SYSTEME.md §5–§6–§9
 > Lire pour : uploads MinIO, textures voxel/entité, WorkshopPage, chemins assets
+> Guide de fabrication GLB : `CREATION_OBJETS_3D.md`
 
 ---
 
@@ -100,11 +101,36 @@ cover_url campaign = "campaigns/<campaign_id>/cover"
 portrait_url char  = "characters/<id>/illustration"
 glb_url char       = "characters/<id>/model3D?v=<timestamp>"
 glb_url blueprint  = "glb/<blueprint_id>.glb?v=<timestamp>"
+glb_url builtin    = "builtin-models/<pack>/glb/<file>.glb?v=<mtime>-<size>"
 textures pack      = "textures/<pack_uuid>/<fichier>.png"
 URL client         : ${VITE_API_URL}/api/assets/${cover_url}
 URL client         : ${VITE_API_URL}/api/assets/${glb_url}
 URL textures       : ${VITE_API_URL}/api/textures/${pack_id}/${path}
 ```
+
+### Modèles 3D intégrés
+Les packs sous `output/<pack>/manifest.json` sont synchronisés au démarrage serveur via `syncBuiltinModels()`.
+Les fichiers sont servis par Express sous `/api/assets/builtin-models/...`, pas par MinIO.
+Le catalogue ajoute automatiquement `?v=<mtime>-<size>` à `glb_url` pour forcer le rechargement navigateur/useGLTF quand un GLB intégré est retouché.
+
+Le contrat complet de fabrication, le manifeste canonique, les conventions de pivot et la commande de validation sont dans `docs/SYSTEME/CREATION_OBJETS_3D.md`.
+
+### Slots couleur GLB
+Les modèles intégrés peuvent exposer `editor_color_slots` dans leur manifest. Le serveur les copie dans `blueprint.geometry.materialSlots`.
+
+Convention recommandée dans les matériaux GLB :
+
+```text
+<asset>__SLOT_01__Primary_Painted_Metal
+<asset>__SLOT_05__Transparent_Glass
+<asset>__FIXED__Fixed_Control_Screen_Text
+```
+
+- `SLOT_xx` = composant recolorable par l'éditeur.
+- `FIXED` = composant verrouillé : le client ne recolore pas ces matériaux.
+- Les overrides d'instance sont stockés par code de slot (`SLOT_01`, `SLOT_02`, etc.).
+- Pour les portes/salles : `surface_data.connectors[*].modelMaterialOverrides`.
+- Pour les entités GLB libres : `entities.state.materialOverrides`.
 
 ### Convention arborescence campagne (actée session 45)
 Tous les assets d'une campagne ont `campaigns/<campaign_id>/` comme racine MinIO :

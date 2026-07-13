@@ -12,7 +12,7 @@ import api from '../lib/api.js'
 // Les entités sont reçues avec leur blueprint embarqué (JOIN serveur).
 // setBlueprintsFromEntities extrait et stocke tous les blueprints d'un batch.
 
-export const useEntityStore = create((set, get) => ({
+export const useEntityStore = create((set) => ({
   entities: [],
   blueprints: {},   // { [blueprintId]: blueprint }
 
@@ -49,6 +49,19 @@ export const useEntityStore = create((set, get) => ({
     } catch (err) {
       console.error('Erreur fetchBlueprints :', err)
     }
+  },
+
+  refreshBuiltinModels: async () => {
+    const res = await api.post('/entity-blueprints/refresh-builtins')
+    const fetched = res.data.blueprints || []
+    const builtinBlueprints = Object.fromEntries(fetched.map(bp => [bp.id, bp]))
+    set(state => ({
+      blueprints: {
+        ...Object.fromEntries(Object.entries(state.blueprints).filter(([, bp]) => !bp.builtin_key)),
+        ...builtinBlueprints,
+      },
+    }))
+    return fetched.length
   },
 
   // ─── Ajout d'une entité (WS ENTITY_CREATED) ───────────────────────────────

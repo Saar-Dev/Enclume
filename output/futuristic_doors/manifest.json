@@ -1,0 +1,635 @@
+{
+  "placement_mode_default": "connector",
+  "origin_default": "floor-center",
+  "unit": "meters",
+  "style": "cartoon futuristic post-apocalyptic underwater station",
+  "blend": "E:\\Codex\\Enclume-master\\output\\futuristic_doors\\submarine_postapo_futuristic_doors_pack.blend",
+  "combined_glb": "E:\\Codex\\Enclume-master\\output\\futuristic_doors\\glb\\submarine_postapo_futuristic_doors_pack.glb",
+  "preview_png": "E:\\Codex\\Enclume-master\\output\\futuristic_doors\\submarine_postapo_futuristic_doors_preview.png",
+  "assets": [
+    {
+      "name": "01_standard_hatch_1p5x2m",
+      "label": "Porte de sas standard",
+      "door_panel_width_m": 1.5,
+      "door_panel_height_m": 2.0,
+      "footprint_width_m": 1.5,
+      "footprint_height_m": 2.0,
+      "wall_cut_width_m": 1.5,
+      "wall_cut_height_m": 2.0,
+      "static_frame_within_footprint": true,
+      "control_box_overhang_allowed": true,
+      "opening": "manual_wheel_unlock_then_swing_left_100deg",
+      "controls": "electronic control blocks on front and back",
+      "editor_color_slots": [
+        {
+          "id": "slot_01_primary_paint",
+          "code": "SLOT_01",
+          "label": "Primary painted metal",
+          "asset": "01_standard_hatch_1p5x2m",
+          "default_hex": "#14596B",
+          "material_keys": [
+            "metal_a"
+          ],
+          "material_names": [
+            "01_standard_hatch_1p5x2m__SLOT_01__Primary_Painted_Metal"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_02_secondary_paint",
+          "code": "SLOT_02",
+          "label": "Secondary painted panels",
+          "asset": "01_standard_hatch_1p5x2m",
+          "default_hex": "#217D8F",
+          "material_keys": [
+            "metal_b"
+          ],
+          "material_names": [
+            "01_standard_hatch_1p5x2m__SLOT_02__Secondary_Painted_Panels"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_03_dark_hardware",
+          "code": "SLOT_03",
+          "label": "Dark frame and hardware",
+          "asset": "01_standard_hatch_1p5x2m",
+          "default_hex": "#090F12",
+          "material_keys": [
+            "metal_dark",
+            "rubber",
+            "button"
+          ],
+          "material_names": [
+            "01_standard_hatch_1p5x2m__SLOT_03__Dark_Frame_Metal",
+            "01_standard_hatch_1p5x2m__SLOT_03__Dark_Rubber_Seals",
+            "01_standard_hatch_1p5x2m__SLOT_03__Dark_Control_Buttons"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_04_accent",
+          "code": "SLOT_04",
+          "label": "Accent color",
+          "asset": "01_standard_hatch_1p5x2m",
+          "default_hex": "#FFA61F",
+          "material_keys": [
+            "yellow"
+          ],
+          "material_names": [
+            "01_standard_hatch_1p5x2m__SLOT_04__Accent_Color"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_05_transparent_glass",
+          "code": "SLOT_05",
+          "label": "Transparent glass",
+          "asset": "01_standard_hatch_1p5x2m",
+          "default_hex": "#26D1FF",
+          "material_keys": [
+            "glass"
+          ],
+          "material_names": [
+            "01_standard_hatch_1p5x2m__SLOT_05__Transparent_Glass"
+          ],
+          "transparent": true
+        }
+      ],
+      "catalog_file": "Porte de sas standard.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_doors\\glb\\Porte de sas standard.glb"
+    },
+    {
+      "name": "02_airlock_door_1p5x2m",
+      "label": "Porte de sas etanche",
+      "door_panel_width_m": 1.5,
+      "door_panel_height_m": 2.0,
+      "footprint_width_m": 1.5,
+      "footprint_height_m": 2.0,
+      "wall_cut_width_m": 1.5,
+      "wall_cut_height_m": 2.0,
+      "static_frame_within_footprint": true,
+      "control_box_overhang_allowed": true,
+      "opening": "manual_wheel_unlock_then_pressure_swing_left_95deg",
+      "controls": "electronic control blocks on front and back",
+      "editor_color_slots": [
+        {
+          "id": "slot_01_primary_paint",
+          "code": "SLOT_01",
+          "label": "Primary painted metal",
+          "asset": "02_airlock_door_1p5x2m",
+          "default_hex": "#14596B",
+          "material_keys": [
+            "metal_a"
+          ],
+          "material_names": [
+            "02_airlock_door_1p5x2m__SLOT_01__Primary_Painted_Metal"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_02_secondary_paint",
+          "code": "SLOT_02",
+          "label": "Secondary painted panels",
+          "asset": "02_airlock_door_1p5x2m",
+          "default_hex": "#217D8F",
+          "material_keys": [
+            "metal_b"
+          ],
+          "material_names": [
+            "02_airlock_door_1p5x2m__SLOT_02__Secondary_Painted_Panels"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_03_dark_hardware",
+          "code": "SLOT_03",
+          "label": "Dark frame and hardware",
+          "asset": "02_airlock_door_1p5x2m",
+          "default_hex": "#090F12",
+          "material_keys": [
+            "metal_dark",
+            "rubber",
+            "button"
+          ],
+          "material_names": [
+            "02_airlock_door_1p5x2m__SLOT_03__Dark_Frame_Metal",
+            "02_airlock_door_1p5x2m__SLOT_03__Dark_Rubber_Seals",
+            "02_airlock_door_1p5x2m__SLOT_03__Dark_Control_Buttons"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_04_accent",
+          "code": "SLOT_04",
+          "label": "Accent color",
+          "asset": "02_airlock_door_1p5x2m",
+          "default_hex": "#FFA61F",
+          "material_keys": [
+            "yellow"
+          ],
+          "material_names": [
+            "02_airlock_door_1p5x2m__SLOT_04__Accent_Color"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_05_transparent_glass",
+          "code": "SLOT_05",
+          "label": "Transparent glass",
+          "asset": "02_airlock_door_1p5x2m",
+          "default_hex": "#26D1FF",
+          "material_keys": [
+            "glass"
+          ],
+          "material_names": [
+            "02_airlock_door_1p5x2m__SLOT_05__Transparent_Glass"
+          ],
+          "transparent": true
+        }
+      ],
+      "catalog_file": "Porte de sas etanche.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_doors\\glb\\Porte de sas etanche.glb"
+    },
+    {
+      "name": "03_sliding_door_1p5x2m",
+      "label": "Porte coulissante",
+      "door_panel_width_m": 1.5,
+      "door_panel_height_m": 2.0,
+      "footprint_width_m": 1.5,
+      "footprint_height_m": 2.0,
+      "wall_cut_width_m": 1.5,
+      "wall_cut_height_m": 2.0,
+      "static_frame_within_footprint": true,
+      "control_box_overhang_allowed": true,
+      "opening": "double_slide_x",
+      "controls": "electronic control blocks on front and back",
+      "editor_color_slots": [
+        {
+          "id": "slot_01_primary_paint",
+          "code": "SLOT_01",
+          "label": "Primary painted metal",
+          "asset": "03_sliding_door_1p5x2m",
+          "default_hex": "#14596B",
+          "material_keys": [
+            "metal_a"
+          ],
+          "material_names": [
+            "03_sliding_door_1p5x2m__SLOT_01__Primary_Painted_Metal"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_02_secondary_paint",
+          "code": "SLOT_02",
+          "label": "Secondary painted panels",
+          "asset": "03_sliding_door_1p5x2m",
+          "default_hex": "#217D8F",
+          "material_keys": [
+            "metal_b"
+          ],
+          "material_names": [
+            "03_sliding_door_1p5x2m__SLOT_02__Secondary_Painted_Panels"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_03_dark_hardware",
+          "code": "SLOT_03",
+          "label": "Dark frame and hardware",
+          "asset": "03_sliding_door_1p5x2m",
+          "default_hex": "#090F12",
+          "material_keys": [
+            "metal_dark",
+            "rubber",
+            "button"
+          ],
+          "material_names": [
+            "03_sliding_door_1p5x2m__SLOT_03__Dark_Frame_Metal",
+            "03_sliding_door_1p5x2m__SLOT_03__Dark_Rubber_Seals",
+            "03_sliding_door_1p5x2m__SLOT_03__Dark_Control_Buttons"
+          ],
+          "transparent": false
+        }
+      ],
+      "catalog_file": "Porte coulissante.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_doors\\glb\\Porte coulissante.glb"
+    },
+    {
+      "name": "04_glass_door_1p5x2m",
+      "label": "Porte vitree",
+      "door_panel_width_m": 1.5,
+      "door_panel_height_m": 2.0,
+      "footprint_width_m": 1.5,
+      "footprint_height_m": 2.0,
+      "wall_cut_width_m": 1.5,
+      "wall_cut_height_m": 2.0,
+      "static_frame_within_footprint": true,
+      "control_box_overhang_allowed": true,
+      "opening": "glass_swing_left_100deg",
+      "controls": "electronic control blocks on front and back",
+      "editor_color_slots": [
+        {
+          "id": "slot_01_primary_paint",
+          "code": "SLOT_01",
+          "label": "Primary painted metal",
+          "asset": "04_glass_door_1p5x2m",
+          "default_hex": "#14596B",
+          "material_keys": [
+            "metal_a"
+          ],
+          "material_names": [
+            "04_glass_door_1p5x2m__SLOT_01__Primary_Painted_Metal"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_02_secondary_paint",
+          "code": "SLOT_02",
+          "label": "Secondary painted panels",
+          "asset": "04_glass_door_1p5x2m",
+          "default_hex": "#217D8F",
+          "material_keys": [
+            "metal_b"
+          ],
+          "material_names": [
+            "04_glass_door_1p5x2m__SLOT_02__Secondary_Painted_Panels"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_03_dark_hardware",
+          "code": "SLOT_03",
+          "label": "Dark frame and hardware",
+          "asset": "04_glass_door_1p5x2m",
+          "default_hex": "#090F12",
+          "material_keys": [
+            "metal_dark",
+            "rubber",
+            "button"
+          ],
+          "material_names": [
+            "04_glass_door_1p5x2m__SLOT_03__Dark_Frame_Metal",
+            "04_glass_door_1p5x2m__SLOT_03__Dark_Rubber_Seals",
+            "04_glass_door_1p5x2m__SLOT_03__Dark_Control_Buttons"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_04_accent",
+          "code": "SLOT_04",
+          "label": "Accent color",
+          "asset": "04_glass_door_1p5x2m",
+          "default_hex": "#FFA61F",
+          "material_keys": [
+            "yellow"
+          ],
+          "material_names": [
+            "04_glass_door_1p5x2m__SLOT_04__Accent_Color"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_05_transparent_glass",
+          "code": "SLOT_05",
+          "label": "Transparent glass",
+          "asset": "04_glass_door_1p5x2m",
+          "default_hex": "#26D1FF",
+          "material_keys": [
+            "glass"
+          ],
+          "material_names": [
+            "04_glass_door_1p5x2m__SLOT_05__Transparent_Glass"
+          ],
+          "transparent": true
+        }
+      ],
+      "catalog_file": "Porte vitree.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_doors\\glb\\Porte vitree.glb"
+    },
+    {
+      "name": "05_glass_sliding_door_1p5x2m",
+      "label": "Porte vitree coulissante",
+      "door_panel_width_m": 1.5,
+      "door_panel_height_m": 2.0,
+      "footprint_width_m": 1.5,
+      "footprint_height_m": 2.0,
+      "wall_cut_width_m": 1.5,
+      "wall_cut_height_m": 2.0,
+      "static_frame_within_footprint": true,
+      "control_box_overhang_allowed": true,
+      "opening": "double_glass_slide_x",
+      "controls": "electronic control blocks on front and back",
+      "editor_color_slots": [
+        {
+          "id": "slot_01_primary_paint",
+          "code": "SLOT_01",
+          "label": "Primary painted metal",
+          "asset": "05_glass_sliding_door_1p5x2m",
+          "default_hex": "#14596B",
+          "material_keys": [
+            "metal_a"
+          ],
+          "material_names": [
+            "05_glass_sliding_door_1p5x2m__SLOT_01__Primary_Painted_Metal"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_02_secondary_paint",
+          "code": "SLOT_02",
+          "label": "Secondary painted panels",
+          "asset": "05_glass_sliding_door_1p5x2m",
+          "default_hex": "#217D8F",
+          "material_keys": [
+            "metal_b"
+          ],
+          "material_names": [
+            "05_glass_sliding_door_1p5x2m__SLOT_02__Secondary_Painted_Panels"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_03_dark_hardware",
+          "code": "SLOT_03",
+          "label": "Dark frame and hardware",
+          "asset": "05_glass_sliding_door_1p5x2m",
+          "default_hex": "#090F12",
+          "material_keys": [
+            "metal_dark",
+            "rubber",
+            "button"
+          ],
+          "material_names": [
+            "05_glass_sliding_door_1p5x2m__SLOT_03__Dark_Frame_Metal",
+            "05_glass_sliding_door_1p5x2m__SLOT_03__Dark_Rubber_Seals",
+            "05_glass_sliding_door_1p5x2m__SLOT_03__Dark_Control_Buttons"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_05_transparent_glass",
+          "code": "SLOT_05",
+          "label": "Transparent glass",
+          "asset": "05_glass_sliding_door_1p5x2m",
+          "default_hex": "#26D1FF",
+          "material_keys": [
+            "glass"
+          ],
+          "material_names": [
+            "05_glass_sliding_door_1p5x2m__SLOT_05__Transparent_Glass"
+          ],
+          "transparent": true
+        }
+      ],
+      "catalog_file": "Porte vitree coulissante.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_doors\\glb\\Porte vitree coulissante.glb"
+    },
+    {
+      "name": "06_large_hangar_door_4x3m",
+      "label": "Grande porte de hangar",
+      "door_panel_width_m": 4.0,
+      "door_panel_height_m": 3.0,
+      "footprint_width_m": 4.0,
+      "footprint_height_m": 3.0,
+      "wall_cut_width_m": 4.0,
+      "wall_cut_height_m": 3.0,
+      "static_frame_within_footprint": true,
+      "control_box_overhang_allowed": true,
+      "opening": "large_vertical_lift_z",
+      "controls": "electronic control blocks on front and back",
+      "editor_color_slots": [
+        {
+          "id": "slot_01_primary_paint",
+          "code": "SLOT_01",
+          "label": "Primary painted metal",
+          "asset": "06_large_hangar_door_4x3m",
+          "default_hex": "#14596B",
+          "material_keys": [
+            "metal_a"
+          ],
+          "material_names": [
+            "06_large_hangar_door_4x3m__SLOT_01__Primary_Painted_Metal"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_02_secondary_paint",
+          "code": "SLOT_02",
+          "label": "Secondary painted panels",
+          "asset": "06_large_hangar_door_4x3m",
+          "default_hex": "#217D8F",
+          "material_keys": [
+            "metal_b"
+          ],
+          "material_names": [
+            "06_large_hangar_door_4x3m__SLOT_02__Secondary_Painted_Panels"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_03_dark_hardware",
+          "code": "SLOT_03",
+          "label": "Dark frame and hardware",
+          "asset": "06_large_hangar_door_4x3m",
+          "default_hex": "#090F12",
+          "material_keys": [
+            "metal_dark",
+            "rubber",
+            "button"
+          ],
+          "material_names": [
+            "06_large_hangar_door_4x3m__SLOT_03__Dark_Frame_Metal",
+            "06_large_hangar_door_4x3m__SLOT_03__Dark_Rubber_Seals",
+            "06_large_hangar_door_4x3m__SLOT_03__Dark_Control_Buttons"
+          ],
+          "transparent": false
+        }
+      ],
+      "catalog_file": "Grande porte de hangar.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_doors\\glb\\Grande porte de hangar.glb"
+    },
+    {
+      "name": "07_large_glass_hangar_door_4x3m",
+      "label": "Grande porte vitree de hangar",
+      "door_panel_width_m": 4.0,
+      "door_panel_height_m": 3.0,
+      "footprint_width_m": 4.0,
+      "footprint_height_m": 3.0,
+      "wall_cut_width_m": 4.0,
+      "wall_cut_height_m": 3.0,
+      "static_frame_within_footprint": true,
+      "control_box_overhang_allowed": true,
+      "opening": "large_glass_lift_z",
+      "controls": "electronic control blocks on front and back",
+      "editor_color_slots": [
+        {
+          "id": "slot_01_primary_paint",
+          "code": "SLOT_01",
+          "label": "Primary painted metal",
+          "asset": "07_large_glass_hangar_door_4x3m",
+          "default_hex": "#14596B",
+          "material_keys": [
+            "metal_a"
+          ],
+          "material_names": [
+            "07_large_glass_hangar_door_4x3m__SLOT_01__Primary_Painted_Metal"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_02_secondary_paint",
+          "code": "SLOT_02",
+          "label": "Secondary painted panels",
+          "asset": "07_large_glass_hangar_door_4x3m",
+          "default_hex": "#217D8F",
+          "material_keys": [
+            "metal_b"
+          ],
+          "material_names": [
+            "07_large_glass_hangar_door_4x3m__SLOT_02__Secondary_Painted_Panels"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_03_dark_hardware",
+          "code": "SLOT_03",
+          "label": "Dark frame and hardware",
+          "asset": "07_large_glass_hangar_door_4x3m",
+          "default_hex": "#090F12",
+          "material_keys": [
+            "metal_dark",
+            "rubber",
+            "button"
+          ],
+          "material_names": [
+            "07_large_glass_hangar_door_4x3m__SLOT_03__Dark_Frame_Metal",
+            "07_large_glass_hangar_door_4x3m__SLOT_03__Dark_Rubber_Seals",
+            "07_large_glass_hangar_door_4x3m__SLOT_03__Dark_Control_Buttons"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_05_transparent_glass",
+          "code": "SLOT_05",
+          "label": "Transparent glass",
+          "asset": "07_large_glass_hangar_door_4x3m",
+          "default_hex": "#26D1FF",
+          "material_keys": [
+            "glass"
+          ],
+          "material_names": [
+            "07_large_glass_hangar_door_4x3m__SLOT_05__Transparent_Glass"
+          ],
+          "transparent": true
+        }
+      ],
+      "catalog_file": "Grande porte vitree de hangar.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_doors\\glb\\Grande porte vitree de hangar.glb"
+    },
+    {
+      "name": "08_three_part_triangular_door_1p5x2m",
+      "label": "Porte triangulaire en trois parties",
+      "door_panel_width_m": 1.5,
+      "door_panel_height_m": 2.0,
+      "footprint_width_m": 1.5,
+      "footprint_height_m": 2.0,
+      "wall_cut_width_m": 1.5,
+      "wall_cut_height_m": 2.0,
+      "static_frame_within_footprint": true,
+      "control_box_overhang_allowed": true,
+      "opening": "three_curved_propeller_blades_corner_anchor_rotate",
+      "controls": "electronic control blocks on front and back",
+      "editor_color_slots": [
+        {
+          "id": "slot_01_primary_paint",
+          "code": "SLOT_01",
+          "label": "Primary painted metal",
+          "asset": "08_three_part_triangular_door_1p5x2m",
+          "default_hex": "#14596B",
+          "material_keys": [
+            "metal_a"
+          ],
+          "material_names": [
+            "08_three_part_triangular_door_1p5x2m__SLOT_01__Primary_Painted_Metal"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_02_secondary_paint",
+          "code": "SLOT_02",
+          "label": "Secondary painted panels",
+          "asset": "08_three_part_triangular_door_1p5x2m",
+          "default_hex": "#217D8F",
+          "material_keys": [
+            "metal_b"
+          ],
+          "material_names": [
+            "08_three_part_triangular_door_1p5x2m__SLOT_02__Secondary_Painted_Panels"
+          ],
+          "transparent": false
+        },
+        {
+          "id": "slot_03_dark_hardware",
+          "code": "SLOT_03",
+          "label": "Dark frame and hardware",
+          "asset": "08_three_part_triangular_door_1p5x2m",
+          "default_hex": "#090F12",
+          "material_keys": [
+            "metal_dark",
+            "rubber",
+            "button"
+          ],
+          "material_names": [
+            "08_three_part_triangular_door_1p5x2m__SLOT_03__Dark_Frame_Metal",
+            "08_three_part_triangular_door_1p5x2m__SLOT_03__Dark_Rubber_Seals",
+            "08_three_part_triangular_door_1p5x2m__SLOT_03__Dark_Control_Buttons"
+          ],
+          "transparent": false
+        }
+      ],
+      "catalog_file": "Porte triangulaire en trois parties.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_doors\\glb\\Porte triangulaire en trois parties.glb"
+    }
+  ]
+}

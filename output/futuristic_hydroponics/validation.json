@@ -1,0 +1,169 @@
+{
+  "asset_count": 23,
+  "individual_glb_count": 23,
+  "combined_glb_exists": true,
+  "checks": [
+    {
+      "asset": "01_sealed_grow_cabinet",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 5,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "02_wall_hydroponic_rack",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 5,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "03_double_sided_central_rack",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 5,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "04_small_culture_table",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "05_medium_culture_table",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "06_large_culture_table",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "07_double_sided_culture_table",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "08_deep_water_culture_basin",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "09_vertical_grow_tower",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "10_germination_table",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 5,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "11_nutrient_mixing_reservoir",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 3,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "12_automatic_dosing_station",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "13_filtration_pump_block",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "14_compact_autonomous_module",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 5,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "15_harvest_maintenance_bench",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 3,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "16_large_hydroponic_basin",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "17_xl_hydroponic_basin",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 5,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "18_industrial_double_hydro_basin",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 5,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "19_small_algae_culture_vat",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "20_medium_aerated_algae_vat",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "21_large_industrial_algae_vat",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "22_three_stage_algae_cascade",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 3,
+      "root_at_floor_before_layout": true
+    },
+    {
+      "asset": "23_uv_algae_propagation_vat",
+      "glb_exists": true,
+      "glb_non_empty": true,
+      "color_slot_count": 4,
+      "root_at_floor_before_layout": true
+    }
+  ],
+  "passed": true
+}

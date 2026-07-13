@@ -1,6 +1,7 @@
 import { useMemo, useEffect } from 'react'
 import * as THREE from 'three'
 import { buildCulledMesh } from '../lib/buildCulledMesh.js'
+import { createReliefGeometryFromQuadData } from '../lib/reliefGeometry.js'
 import Voxel from './Voxel.jsx'
 
 // CulledVoxelScene — remplace la boucle Object.values(voxels).map(<Voxel>) dans Canvas3D.
@@ -27,15 +28,24 @@ export default function CulledVoxelScene({ voxels, textureMaterials }) {
     const map = {}
     for (const [key, g] of Object.entries(groups)) {
       if (g.indices.length === 0) continue
-      const geo = new THREE.BufferGeometry()
-      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(g.positions), 3))
-      geo.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(g.normals),   3))
-      geo.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array(g.uvs),        2))
-      geo.setIndex(new THREE.BufferAttribute(new Uint32Array(g.indices), 1))
+      const reliefGeo = createReliefGeometryFromQuadData({
+        positions: g.positions,
+        normals: g.normals,
+        uvs: g.uvs,
+        indices: g.indices,
+        profile: textureMaterials[g.texId]?.relief,
+      })
+      const geo = reliefGeo || new THREE.BufferGeometry()
+      if (!reliefGeo) {
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(g.positions), 3))
+        geo.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(g.normals),   3))
+        geo.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array(g.uvs),        2))
+        geo.setIndex(new THREE.BufferAttribute(new Uint32Array(g.indices), 1))
+      }
       map[key] = { geo, texId: g.texId, physIdx: g.physIdx }
     }
     return map
-  }, [groups])
+  }, [groups, textureMaterials])
 
   // Dispose explicite — R3F n'auto-dispose pas quand geometry prop change sur un mesh monté
   useEffect(() => {
@@ -49,7 +59,7 @@ export default function CulledVoxelScene({ voxels, textureMaterials }) {
       {Object.entries(geometryMap).map(([key, { geo, texId, physIdx }]) => {
         const material = textureMaterials[texId]?.faceMaterials[physIdx]
         if (!material) return null
-        return <mesh key={key} geometry={geo} material={material} />
+        return <mesh key={key} geometry={geo} material={material} userData={{ isCulledVoxel: true }} />
       })}
 
       {nonCubeVoxels.map(v => (

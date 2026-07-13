@@ -3128,3 +3128,36 @@ Convention :
 .wiz2-card--text .wiz2-card-summary {
   color: rgba(255,255,255,.45);
 }
+
+/* === LEVEL SELECTOR ======================================================== */
+.level-selector {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: rgba(10, 10, 20, 0.88);
+  backdrop-filter: blur(6px);
+}
+
+.level-selector__label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.level-selector__select {
+  min-width: 54px;
+  height: 30px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  text-align: center;
+}

@@ -4,6 +4,7 @@ import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { multerGlb } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
+import { syncBuiltinModels } from '../lib/builtinModelCatalog.js'
 
 const router = Router()
 
@@ -35,6 +36,21 @@ router.get('/all', requireAuth, async (req, res, next) => {
       query = query.where({ pack_id: req.query.pack_id })
     }
     const blueprints = await query
+    res.json({ blueprints })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// Rescanne output/*/manifest.json et met la bibliothèque 3D système à jour.
+router.post('/refresh-builtins', requireAuth, async (req, res, next) => {
+  try {
+    await syncBuiltinModels()
+    const blueprints = await db('entity_blueprints')
+      .whereNotNull('builtin_key')
+      .where({ deprecated: false })
+      .select('*')
+      .orderBy([{ column: 'category', order: 'asc' }, { column: 'label', order: 'asc' }])
     res.json({ blueprints })
   } catch (err) {
     next(err)

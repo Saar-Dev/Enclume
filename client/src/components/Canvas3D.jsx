@@ -12,8 +12,11 @@ import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { useCameraLOS } from '../lib/useCameraLOS.js'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
+import DungeonTerrainScene from './DungeonTerrainScene.jsx'
+import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
+import { hasSurfaceContent, levelToY, normalizeSurfaceData, surfaceTextureIds, yToLevel } from '../lib/surfaceData.js'
 import { useTokenStore } from '../stores/tokenStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { useAuthStore } from '../stores/authStore'
@@ -26,6 +29,7 @@ import { useCombatStore } from '../stores/combatStore'
 const GRID_SIZE = 50
 const FONT_URL = '/fonts/inter.woff'
 const HARDCODED_DEFAULT_TOKEN_URL = '/models/default.glb'
+const USE_DIORAMA_TERRAIN = true
 
 // Seuil en pixels pour distinguer clic court (sélection) de drag
 const DRAG_THRESHOLD = 4
@@ -35,6 +39,20 @@ const DRAG_HOVER = 0.5
 
 // Amplitude max de l'inclinaison pendant le drag (radians)
 const DRAG_TILT_MAX = 0.3
+const THIRD_PERSON_MIN_DISTANCE = 2.2
+const THIRD_PERSON_MAX_DISTANCE = 12
+const THIRD_PERSON_ROTATE_SPEED = 0.008
+const THIRD_PERSON_PITCH_SPEED = 0.006
+const THIRD_PERSON_MIN_PITCH = 0.12
+const THIRD_PERSON_MAX_PITCH = 1.15
+
+function mod(value, divisor) {
+  return ((value % divisor) + divisor) % divisor
+}
+
+function yawToTokenRotation(yaw) {
+  return mod(Math.round((yaw + Math.PI) / (Math.PI / 4)), 8)
+}
 
 
 // ─── Utilitaire coordonnées ───────────────────────────────────────────────────
@@ -120,8 +138,8 @@ class TokenGlbErrorBoundary extends Component {
   }
   render() {
     if (this.state.hasError) {
-      const { color, isGmLayer, tiltX, tiltZ } = this.props
-      return <TokenFallbackBody color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
+      const { color, isGmLayer, tiltX, tiltZ, sceneOpacity } = this.props
+      return <TokenFallbackBody color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} sceneOpacity={sceneOpacity} />
     }
     return this.props.children
   }
@@ -130,7 +148,7 @@ class TokenGlbErrorBoundary extends Component {
 // Corps GLB — appelé uniquement quand glbUrl est défini.
 // useGLTF suspend le composant le temps du chargement (géré nativement par Canvas R3F).
 // useGLTF met en cache par URL — plusieurs tokens partageant la même URL ne téléchargent qu'une fois.
-function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ }) {
+function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 }) {
   const { scene: gltfScene } = useGLTF(glbUrl)
 
   const clonedScene = useMemo(() => {
@@ -146,9 +164,11 @@ function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ }) {
             m.map.colorSpace = THREE.SRGBColorSpace
             m.map.needsUpdate = true
           }
-          if (isGmLayer) {
+          const opacity = sceneOpacity * (isGmLayer ? 0.5 : 1)
+          if (opacity < 0.999) {
             m.transparent = true
-            m.opacity = 0.5
+            m.opacity = opacity
+            m.depthWrite = false
           }
           m.needsUpdate = true
           return m
@@ -161,7 +181,7 @@ function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ }) {
       }
     })
     return clone
-  }, [gltfScene, isGmLayer])
+  }, [gltfScene, isGmLayer, sceneOpacity])
 
   if (!clonedScene) return null
 
@@ -177,15 +197,16 @@ function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ }) {
 
 // Corps fallback — silhouette capsule colorée, aucun appel réseau.
 // Rendu quand le personnage n'a pas de glb_url et qu'aucun token par défaut de campagne n'est défini.
-function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ }) {
+function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 }) {
   return (
     <group position={[0, Y_OFFSET, 0]} rotation={[tiltX, 0, tiltZ]}>
       <mesh position={[0, 0.8, 0]}>
         <capsuleGeometry args={[0.28, 1.0, 4, 8]} />
         <meshLambertMaterial
           color={color}
-          transparent={!!isGmLayer}
-          opacity={isGmLayer ? 0.5 : 1}
+          transparent={isGmLayer || sceneOpacity < 0.999}
+          opacity={sceneOpacity * (isGmLayer ? 0.5 : 1)}
+          depthWrite={sceneOpacity >= 0.999}
         />
       </mesh>
     </group>
@@ -240,7 +261,7 @@ function TokenLabel({ label, color, isGmLayer }) {
 // Token individuel — gère drag, lerp, ring, label.
 // glbUrl : URL complète du GLB à charger (character.glb_url ou default_token_glb_url de campagne), ou null.
 // Si null → TokenFallbackBody (silhouette géométrique). Si défini → TokenGlbBody (modèle 3D).
-function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState, isGmLayer }) {
+function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState, isGmLayer, sceneOpacity = 1 }) {
   const color = token.user_color || token.color || '#4A90D9'
   const label = token.label || '?'
 
@@ -292,14 +313,15 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
       rotation={[0, rotationY, 0]}
       userData={{ isToken: true, tokenId: token.id }}
       onPointerDown={(e) => {
+        if (sceneOpacity < 0.999) return
         e.stopPropagation()
         onDragStart(e, token)
       }}
     >
       <TokenActiveDisk isActive={isActive} />
-      <TokenRing color={color} isSelected={isSelected} isDragging={isDragging} opacity={isGmLayer ? 0.25 : undefined} />
-      <TokenGlbErrorBoundary key={glbUrl} color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ}>
-        <TokenGlbBody glbUrl={glbUrl} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
+      <TokenRing color={color} isSelected={isSelected} isDragging={isDragging} opacity={sceneOpacity * (isGmLayer ? 0.25 : 0.5)} />
+      <TokenGlbErrorBoundary key={glbUrl} color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} sceneOpacity={sceneOpacity}>
+        <TokenGlbBody glbUrl={glbUrl} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} sceneOpacity={sceneOpacity} />
       </TokenGlbErrorBoundary>
       <TokenLabel label={label} color={color} isGmLayer={isGmLayer} />
       {isGmLayer && (
@@ -363,11 +385,118 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
 // ─── Scène principale ─────────────────────────────────────────────────────────
 // Lecture seule voxels + tokens + entités + WS listeners.
 // La logique d'édition (pose, suppression, rotation) est dans Editor3D.
+function ThirdPersonCamera({ token, enabled, onTokenSetRotation, updateToken }) {
+  const { camera, gl } = useThree()
+  const yawRef = useRef(Math.PI)
+  const pitchRef = useRef(0.42)
+  const distanceRef = useRef(6)
+  const dragRef = useRef({ active: false, x: 0, y: 0 })
+  const tokenRef = useRef(token)
+  const lastRotationRef = useRef(null)
+
+  useEffect(() => {
+    tokenRef.current = token
+    if (token?.id && lastRotationRef.current === null) {
+      const r = Number(token.r) || 0
+      yawRef.current = r * Math.PI / 4 - Math.PI
+      lastRotationRef.current = r
+    }
+  }, [token])
+
+  const applyTokenRotation = useCallback(() => {
+    const currentToken = tokenRef.current
+    if (!enabled || !currentToken) return
+    const nextR = yawToTokenRotation(yawRef.current)
+    if (nextR === lastRotationRef.current && nextR === (Number(currentToken.r) || 0)) return
+    lastRotationRef.current = nextR
+    updateToken?.({ id: currentToken.id, r: nextR })
+    onTokenSetRotation?.(currentToken.id, nextR)
+  }, [enabled, onTokenSetRotation, updateToken])
+
+  useEffect(() => {
+    if (!enabled) return undefined
+    const canvas = gl.domElement
+
+    const preventContextMenu = (e) => e.preventDefault()
+    const handlePointerDown = (e) => {
+      if (e.button !== 1 && e.button !== 2) return
+      dragRef.current = { active: true, x: e.clientX, y: e.clientY }
+      canvas.setPointerCapture?.(e.pointerId)
+      e.preventDefault()
+    }
+    const handlePointerMove = (e) => {
+      if (!dragRef.current.active) return
+      const dx = e.clientX - dragRef.current.x
+      const dy = e.clientY - dragRef.current.y
+      dragRef.current = { active: true, x: e.clientX, y: e.clientY }
+      yawRef.current -= dx * THIRD_PERSON_ROTATE_SPEED
+      pitchRef.current = Math.max(
+        THIRD_PERSON_MIN_PITCH,
+        Math.min(THIRD_PERSON_MAX_PITCH, pitchRef.current + dy * THIRD_PERSON_PITCH_SPEED)
+      )
+      applyTokenRotation()
+      e.preventDefault()
+    }
+    const handlePointerUp = (e) => {
+      if (!dragRef.current.active) return
+      dragRef.current.active = false
+      canvas.releasePointerCapture?.(e.pointerId)
+      e.preventDefault()
+    }
+    const handleWheel = (e) => {
+      distanceRef.current = Math.max(
+        THIRD_PERSON_MIN_DISTANCE,
+        Math.min(THIRD_PERSON_MAX_DISTANCE, distanceRef.current + e.deltaY * 0.01)
+      )
+      e.preventDefault()
+    }
+
+    canvas.addEventListener('contextmenu', preventContextMenu)
+    canvas.addEventListener('pointerdown', handlePointerDown)
+    canvas.addEventListener('pointermove', handlePointerMove)
+    canvas.addEventListener('pointerup', handlePointerUp)
+    canvas.addEventListener('pointerleave', handlePointerUp)
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
+    return () => {
+      canvas.removeEventListener('contextmenu', preventContextMenu)
+      canvas.removeEventListener('pointerdown', handlePointerDown)
+      canvas.removeEventListener('pointermove', handlePointerMove)
+      canvas.removeEventListener('pointerup', handlePointerUp)
+      canvas.removeEventListener('pointerleave', handlePointerUp)
+      canvas.removeEventListener('wheel', handleWheel)
+    }
+  }, [enabled, gl, applyTokenRotation])
+
+  useFrame(() => {
+    if (!enabled || !tokenRef.current) return
+    const currentToken = tokenRef.current
+    const target = new THREE.Vector3(
+      (Number(currentToken.pos_x) || 0) + 0.5,
+      (Number(currentToken.pos_z) || 0) + 1.35,
+      (Number(currentToken.pos_y) || 0) + 0.5
+    )
+    const distance = distanceRef.current
+    const pitch = pitchRef.current
+    const horizontal = Math.cos(pitch) * distance
+    const y = Math.sin(pitch) * distance
+    const yaw = yawRef.current
+
+    camera.position.set(
+      target.x + Math.sin(yaw) * horizontal,
+      target.y + y,
+      target.z + Math.cos(yaw) * horizontal
+    )
+    camera.lookAt(target)
+  })
+
+  return null
+}
+
 function Scene({
-  voxels, setVoxels, textureMaterials, entityTextureMaterials, socket, battlemapId,
+  voxels, setVoxels, surfaceData, textureMaterials, entityTextureMaterials, socket, battlemapId,
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
-  altPressed, onEntityClick, onTokenRotate,
+  altPressed, onEntityClick, onTokenRotate, onTokenSetRotation,
   moveTarget, onMoveCancel, moveLabels,
   dicePayload, onDiceDone,
   combatCameraCenter,
@@ -379,10 +508,13 @@ function Scene({
   losMode,
   onLosCancel,
   onLosResult,
+  cameraMode,
+  displayLevel = 0,
 }) {
   const { t } = useTranslation()
   const { camera, gl } = useThree()
   const orbitRef = useRef()
+  const previousDisplayLevelRef = useRef(displayLevel)
   const raycaster = new THREE.Raycaster()
   const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
 
@@ -395,6 +527,17 @@ function Scene({
 
   const [dragState, setDragState] = useState(null)
 
+  useEffect(() => {
+    const previousLevel = previousDisplayLevelRef.current
+    previousDisplayLevelRef.current = displayLevel
+    if (previousLevel === displayLevel || !orbitRef.current) return
+    const deltaY = levelToY(displayLevel) - levelToY(previousLevel)
+    const controls = orbitRef.current
+    controls.object.position.y += deltaY
+    controls.target.y += deltaY
+    controls.update()
+  }, [displayLevel])
+
   // ─── Mode visée déplacement — states + refs ───────────────────────────────
   // ghostPos/dotResult : states pour le rendu JSX du ghost
   // ghostRef : ref miroir pour lecture stable dans handlePointerUp (pattern P40)
@@ -404,6 +547,17 @@ function Scene({
   const ghostRef = useRef({ ghostPos: null, dotResult: 0 })
   const tokensRef = useRef(tokens)
   tokensRef.current = tokens
+
+  const followToken = useMemo(() => {
+    const owned = tokens.find(token =>
+      characters.some(character => character.id === token.character_id && character.user_id === user?.id)
+    )
+    if (owned) return owned
+    if (selectedTokenId) return tokens.find(token => token.id === selectedTokenId) || null
+    if (!isGm) return tokens.find(token => token.layer !== 'gm') || null
+    return null
+  }, [tokens, characters, user?.id, selectedTokenId, isGm])
+  const thirdPersonCameraActive = cameraMode === 'play' && !!followToken
 
   // ─── Mode déplacement combat — P40 : ref miroir pour handlers stables ─────
   const combatMoveModeRef = useRef(null)
@@ -834,6 +988,13 @@ function Scene({
     }
   }, [handlePointerMove, handlePointerUp, gl])
 
+  useEffect(() => {
+    const canvas = gl.domElement
+    const prevent = (e) => e.preventDefault()
+    canvas.addEventListener('contextmenu', prevent)
+    return () => canvas.removeEventListener('contextmenu', prevent)
+  }, [gl])
+
   // ─── Suppression token (touche Suppr) — GM uniquement ─────────────────────
   useEffect(() => {
     const handleKeyDown = async (e) => {
@@ -855,8 +1016,8 @@ function Scene({
     if (!orbitRef.current) return
     orbitRef.current.mouseButtons = {
       LEFT: null,
-      MIDDLE: THREE.MOUSE.PAN,
-      RIGHT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.ROTATE,
+      RIGHT: THREE.MOUSE.PAN,
     }
     orbitRef.current.listenToKeyEvents(window)
     orbitRef.current.keyPanSpeed = 20
@@ -867,9 +1028,9 @@ function Scene({
   // Retour à null (annulation) → guard bloque → caméra reste où elle est (PC36)
   useEffect(() => {
     if (!combatCameraCenter || !orbitRef.current) return
-    orbitRef.current.target.set(combatCameraCenter.x + 0.5, 0, combatCameraCenter.z + 0.5)
+    orbitRef.current.target.set(combatCameraCenter.x + 0.5, levelToY(displayLevel), combatCameraCenter.z + 0.5)
     orbitRef.current.update()
-  }, [combatCameraCenter])
+  }, [combatCameraCenter, displayLevel])
 
   // ─── Ligne de visée assaut — segment joueur→cible en attente (Sprint 7.1) ──
   const targetLinePoints = useMemo(() => {
@@ -891,29 +1052,45 @@ function Scene({
       <directionalLight position={[10, 20, 10]} intensity={1.5} castShadow />
       <directionalLight position={[-10, 10, -10]} intensity={0.6} />
 
-      <MapControls
-        ref={orbitRef}
-        mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE }}
-        enableDamping
-        dampingFactor={0.05}
-        maxPolarAngle={Math.PI / 2}
-      />
+      {thirdPersonCameraActive ? (
+        <ThirdPersonCamera
+          token={followToken}
+          enabled={thirdPersonCameraActive}
+          onTokenSetRotation={onTokenSetRotation}
+          updateToken={updateToken}
+        />
+      ) : (
+        <MapControls
+          ref={orbitRef}
+          mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }}
+          enableDamping
+          dampingFactor={0.05}
+          maxPolarAngle={Math.PI / 2}
+        />
+      )}
 
       <Grid
         args={[GRID_SIZE, GRID_SIZE]}
-        position={[0, 0, 0]}
+        position={[0, levelToY(displayLevel), 0]}
         cellColor="#334155"
         sectionColor="#475569"
         fadeDistance={80}
       />
 
-      <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
+      {hasSurfaceContent(surfaceData) ? (
+        <SurfaceDungeonScene surfaceData={surfaceData} textureMaterials={textureMaterials} displayLevel={displayLevel} />
+      ) : USE_DIORAMA_TERRAIN ? (
+        <DungeonTerrainScene voxels={voxels} textureMaterials={textureMaterials} />
+      ) : (
+        <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
+      )}
 
       {/* ── Entités interactables — entre voxels et tokens ────────────────── */}
       {entities.map(entity => {
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
         if (entity.gm_only && !isGm) return null
+        if (yToLevel(entity.pos_z) > displayLevel) return null
         return (
           <EntityMesh
             key={entity.id}
@@ -923,6 +1100,7 @@ function Scene({
             altPressed={altPressed}
             isGmOnly={entity.gm_only && isGm}
             onEntityClick={onEntityClick}
+            sceneOpacity={1}
           />
         )
       })}
@@ -944,7 +1122,7 @@ function Scene({
         )
       })()}
 
-      {tokens.filter(token => isGm || token.layer !== 'gm').map(token => {
+      {tokens.filter(token => (isGm || token.layer !== 'gm') && yToLevel(token.pos_z) <= displayLevel).map(token => {
         const character = characters.find(c => c.id === token.character_id)
         const glbUrl = character?.glb_url
           ? `${import.meta.env.VITE_API_URL}/api/assets/${character.glb_url}`
@@ -959,6 +1137,7 @@ function Scene({
             onDragStart={handleDragStart}
             dragState={dragState?.tokenId === token.id ? dragState : null}
             isGmLayer={token.layer === 'gm'}
+            sceneOpacity={1}
           />
         )
       })}
@@ -1119,7 +1298,7 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, announcementMarker, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult }) {
+export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenRotate, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, announcementMarker, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0 }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
@@ -1132,6 +1311,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
   }
 
   const [voxels, setVoxels] = useState({})
+  const surfaceData = normalizeSurfaceData(battlemap?.surface_data)
   const [textureMaterials, setTextureMaterials] = useState({})
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
   const [blocksReady, setBlocksReady] = useState(false)
@@ -1216,12 +1396,14 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
       const voxelTexIds = battlemap?.voxel_data
         ? [...new Set(Object.values(battlemap.voxel_data).map(v => v.tex))]
         : []
+      const surfaceTexIds = surfaceTextureIds(battlemap?.surface_data)
+      const textureIds = [...new Set([...voxelTexIds, ...surfaceTexIds])]
 
-      if (voxelTexIds.length === 0) {
+      if (textureIds.length === 0) {
         setTextureMaterials({})
       } else {
         try {
-          const { data } = await api.get(`/voxel-textures?ids=${voxelTexIds.join(',')}`)
+          const { data } = await api.get(`/voxel-textures?ids=${textureIds.join(',')}`)
           const loaded = await loadVoxelTextures(data.textures)
           setTextureMaterials(loaded)
         } catch (err) {
@@ -1281,7 +1463,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
 
     loadBlocks()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [battlemap?.id, battlemap?.voxel_data, blueprintIds])
+  }, [battlemap?.id, battlemap?.voxel_data, battlemap?.surface_data, blueprintIds])
 
   const handleCanvasClick = useCallback(() => {
     if (justSelectedRef.current) { justSelectedRef.current = false; return }
@@ -1299,6 +1481,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
         <Scene
           voxels={voxels}
           setVoxels={setVoxels}
+          surfaceData={surfaceData}
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}
           socket={socket}
@@ -1310,6 +1493,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           altPressed={altPressed}
           onEntityClick={onEntityClick}
           onTokenRotate={onTokenRotate}
+          onTokenSetRotation={onTokenSetRotation}
           moveTarget={moveTarget}
           onMoveCancel={onMoveCancel}
           moveLabels={moveLabels}
@@ -1324,6 +1508,8 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           losMode={losMode}
           onLosCancel={onLosCancel}
           onLosResult={onLosResult}
+          cameraMode={mode}
+          displayLevel={displayLevel}
         />
       )}
     </Canvas>

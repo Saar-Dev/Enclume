@@ -33,6 +33,7 @@ import documentsRouter from './routes/documents.js'
 import { merchantsRouter, tradeLogRouter } from './routes/tradeRoutes.js'
 import creationRouter from './routes/creation.js'
 import vaultRouter from './routes/vault.js'
+import { BUILTIN_MODELS_ROOT, syncBuiltinModels } from './lib/builtinModelCatalog.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -51,9 +52,14 @@ app.set('io', io)
 
 // Middlewares de base
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }))
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
 app.use(cookieParser())
 app.use(express.static(path.join(__dirname, '..', 'public')))
+app.use('/api/assets/builtin-models', express.static(BUILTIN_MODELS_ROOT, {
+  immutable: true,
+  maxAge: '1d',
+  fallthrough: false,
+}))
 app.use('/api/textures', texturesRouter)
 app.use('/api/assets', assetsRouter)
 
@@ -103,6 +109,7 @@ const startServer = async () => {
 
     // Migrations — applique toutes les migrations en attente au démarrage
     await db.migrate.latest()
+    await syncBuiltinModels()
     console.log('Migrations à jour')
 
     // Vérification MinIO — bucket accessible

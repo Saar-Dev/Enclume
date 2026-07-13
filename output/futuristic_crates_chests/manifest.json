@@ -1,0 +1,494 @@
+{
+  "placement_mode_default": "free",
+  "origin_default": "floor-center",
+  "unit": "meters",
+  "style": "cartoon futuristic post-apocalyptic underwater station",
+  "materials_note": "No wood. Assets use iron/steel, rubber, molded plastic, composite and sealed fabric materials.",
+  "construction_note": "Standalone containers use hollow shells with visible interior floors and walls.",
+  "blend": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\submarine_postapo_crates_chests_pack.blend",
+  "combined_glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\submarine_postapo_crates_chests_pack.glb",
+  "preview_png": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\submarine_postapo_crates_chests_preview.png",
+  "assets": [
+    {
+      "name": "01_crate_shallow_parts_bin",
+      "label": "Bac \u00e0 petites pi\u00e8ces",
+      "category": "crate",
+      "size_class": "small",
+      "format": "shallow_wide",
+      "footprint_width_m": 0.48,
+      "footprint_depth_m": 0.34,
+      "height_m": 0.245,
+      "capacity_liters": 15.2,
+      "features": "low-profile parts bin with two-panel lid folding and stowing against the rear wall",
+      "interior": "hollow",
+      "animation": "bifold_stow",
+      "animation_frame_closed": 1,
+      "animation_frame_open": 60,
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CRATE_SHALLOW__SLOT_SHELL__sage_plastic_shell",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CRATE_SHALLOW__SLOT_LID__pale_grey_lid",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CRATE_SHALLOW__SLOT_INTERIOR__deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CRATE_SHALLOW__SLOT_HARDWARE__brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CRATE_SHALLOW__SLOT_FEET__black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "catalog_file": "Bac a petites pieces.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Bac a petites pieces.glb"
+    },
+    {
+      "name": "02_crate_medium_deep_stackable",
+      "label": "Caisse empilable profonde",
+      "category": "crate",
+      "size_class": "medium",
+      "format": "deep_rectangular",
+      "footprint_width_m": 0.7,
+      "footprint_depth_m": 0.5,
+      "height_m": 0.49,
+      "capacity_liters": 97.4,
+      "features": "deep stackable crate with twin gullwing lids, corner frame and visible cavity",
+      "interior": "hollow",
+      "animation": "gullwing",
+      "animation_frame_closed": 1,
+      "animation_frame_open": 60,
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CRATE_DEEP__SLOT_SHELL__olive_composite_shell",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CRATE_DEEP__SLOT_LID__graphite_lid_panels",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CRATE_DEEP__SLOT_INTERIOR__deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CRATE_DEEP__SLOT_HARDWARE__brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CRATE_DEEP__SLOT_FEET__black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "catalog_file": "Caisse empilable profonde.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Caisse empilable profonde.glb"
+    },
+    {
+      "name": "03_crate_tall_narrow_supply",
+      "label": "Caisse haute de ravitaillement",
+      "category": "crate",
+      "size_class": "large",
+      "format": "tall_narrow",
+      "footprint_width_m": 0.44,
+      "footprint_depth_m": 0.4,
+      "height_m": 0.755,
+      "capacity_liters": 72.0,
+      "features": "upright supply crate with telescopic vertical-lift lid and deep empty interior",
+      "interior": "hollow",
+      "animation": "vertical_lift",
+      "animation_frame_closed": 1,
+      "animation_frame_open": 60,
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CRATE_TALL__SLOT_SHELL__warm_grey_shell",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CRATE_TALL__SLOT_LID__smoke_green_lid",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CRATE_TALL__SLOT_INTERIOR__deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CRATE_TALL__SLOT_HARDWARE__dark_iron_bands",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CRATE_TALL__SLOT_FEET__black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "catalog_file": "Caisse haute de ravitaillement.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Caisse haute de ravitaillement.glb"
+    },
+    {
+      "name": "04_crate_long_low_cargo",
+      "label": "Caisse longue de fret",
+      "category": "crate",
+      "size_class": "large",
+      "format": "long_low",
+      "footprint_width_m": 1.24,
+      "footprint_depth_m": 0.5,
+      "height_m": 0.47,
+      "capacity_liters": 168.3,
+      "features": "taller long cargo case with six telescopic shutter panels and compact landscape electronic lock",
+      "interior": "hollow",
+      "animation": "telescopic_shutter",
+      "animation_frame_closed": 1,
+      "animation_frame_open": 60,
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CRATE_LONG__SLOT_SHELL__desaturated_red_shell",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CRATE_LONG__SLOT_LID__muted_steel_lid",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CRATE_LONG__SLOT_INTERIOR__deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CRATE_LONG__SLOT_HARDWARE__dark_iron_bands",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CRATE_LONG__SLOT_FEET__black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [
+        "CRATE_LONG__FIXED__control_housing",
+        "CRATE_LONG__FIXED__control_keypad_plate",
+        "CRATE_LONG__FIXED__control_buttons",
+        "CRATE_LONG__FIXED__control_screen_unlocked_green",
+        "CRATE_LONG__FIXED__control_screen_locked_red",
+        "CRATE_LONG__FIXED__control_screen_text"
+      ],
+      "catalog_file": "Caisse longue de fret.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Caisse longue de fret.glb"
+    },
+    {
+      "name": "05_crate_large_bulk_square",
+      "label": "Grande caisse de stockage",
+      "category": "crate",
+      "size_class": "extra_large",
+      "format": "wide_deep",
+      "footprint_width_m": 1.08,
+      "footprint_depth_m": 0.92,
+      "height_m": 0.805,
+      "capacity_liters": 557.9,
+      "features": "enlarged bulk storage crate with continuous reinforced rear hinge and large empty interior",
+      "interior": "hollow",
+      "animation": "reinforced_hinge",
+      "animation_frame_closed": 1,
+      "animation_frame_open": 60,
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CRATE_BULK__SLOT_SHELL__dusty_green_shell",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CRATE_BULK__SLOT_LID__soft_grey_lid",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CRATE_BULK__SLOT_INTERIOR__deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CRATE_BULK__SLOT_HARDWARE__brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CRATE_BULK__SLOT_FEET__black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "catalog_file": "Grande caisse de stockage.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Grande caisse de stockage.glb"
+    },
+    {
+      "name": "06_chest_compact_lockbox",
+      "label": "Coffre compact s\u00e9curis\u00e9",
+      "category": "chest",
+      "size_class": "small",
+      "format": "compact_lockbox",
+      "footprint_width_m": 0.52,
+      "footprint_depth_m": 0.36,
+      "height_m": 0.31,
+      "capacity_liters": 24.1,
+      "features": "compact secured lockbox with fixed landscape electronic controller and empty lined interior",
+      "interior": "hollow",
+      "animation": "rear_hinge",
+      "animation_frame_closed": 1,
+      "animation_frame_open": 60,
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CHEST_LOCK__SLOT_SHELL__smoke_green_body",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CHEST_LOCK__SLOT_LID__off_white_lid",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CHEST_LOCK__SLOT_INTERIOR__deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CHEST_LOCK__SLOT_HARDWARE__brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CHEST_LOCK__SLOT_FEET__black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [
+        "CHEST_LOCK__FIXED__control_housing",
+        "CHEST_LOCK__FIXED__control_keypad_plate",
+        "CHEST_LOCK__FIXED__control_buttons",
+        "CHEST_LOCK__FIXED__control_screen_unlocked_green",
+        "CHEST_LOCK__FIXED__control_screen_locked_red",
+        "CHEST_LOCK__FIXED__control_screen_text"
+      ],
+      "catalog_file": "Coffre compact securise.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Coffre compact securise.glb"
+    },
+    {
+      "name": "07_chest_reinforced_tool_case",
+      "label": "Coffre \u00e0 outils renforc\u00e9",
+      "category": "chest",
+      "size_class": "medium",
+      "format": "workshop_tool_case",
+      "footprint_width_m": 0.92,
+      "footprint_depth_m": 0.54,
+      "height_m": 0.43,
+      "capacity_liters": 118.2,
+      "features": "important maintenance tool chest with flat armored lid, internal tool board, organizer tray and twin front drawers",
+      "interior": "hollow",
+      "animation": "tool_case_hinge",
+      "animation_frame_closed": 1,
+      "animation_frame_open": 60,
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CHEST_TOOL__SLOT_SHELL__maintenance_green_body",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CHEST_TOOL__SLOT_LID__graphite_armored_lid",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CHEST_TOOL__SLOT_INTERIOR__deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CHEST_TOOL__SLOT_HARDWARE__brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CHEST_TOOL__SLOT_FEET__black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "catalog_file": "Coffre a outils renforce.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Coffre a outils renforce.glb"
+    },
+    {
+      "name": "08_chest_long_reinforced_trunk",
+      "label": "Malle longue renforc\u00e9e",
+      "category": "chest",
+      "size_class": "extra_large",
+      "format": "long_trunk",
+      "footprint_width_m": 1.48,
+      "footprint_depth_m": 0.6,
+      "height_m": 0.605,
+      "capacity_liters": 338.6,
+      "features": "taller clean reinforced trunk with twin gullwing panels and compact landscape electronic lock",
+      "interior": "hollow",
+      "animation": "split_gullwing",
+      "animation_frame_closed": 1,
+      "animation_frame_open": 60,
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CHEST_TRUNK__SLOT_SHELL__dark_graphite_body",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CHEST_TRUNK__SLOT_LID__muted_red_lid",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CHEST_TRUNK__SLOT_INTERIOR__deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CHEST_TRUNK__SLOT_HARDWARE__brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CHEST_TRUNK__SLOT_FEET__black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [
+        "CHEST_TRUNK__FIXED__control_housing",
+        "CHEST_TRUNK__FIXED__control_keypad_plate",
+        "CHEST_TRUNK__FIXED__control_buttons",
+        "CHEST_TRUNK__FIXED__control_screen_unlocked_green",
+        "CHEST_TRUNK__FIXED__control_screen_locked_red",
+        "CHEST_TRUNK__FIXED__control_screen_text"
+      ],
+      "catalog_file": "Malle longue renforcee.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Malle longue renforcee.glb"
+    },
+    {
+      "name": "09_chest_tall_supply_vault",
+      "label": "Coffre haut de ravitaillement",
+      "category": "chest",
+      "size_class": "large",
+      "format": "tall_deep",
+      "footprint_width_m": 0.7,
+      "footprint_depth_m": 0.58,
+      "height_m": 0.82,
+      "capacity_liters": 210.8,
+      "features": "tall supply vault with clean front, side-mounted parallel-linkage lid and deep vertical cavity",
+      "interior": "hollow",
+      "animation": "parallel_linkage",
+      "animation_frame_closed": 1,
+      "animation_frame_open": 60,
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CHEST_TALL__SLOT_SHELL__pale_steel_body",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CHEST_TALL__SLOT_LID__deep_green_lid",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CHEST_TALL__SLOT_INTERIOR__deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CHEST_TALL__SLOT_HARDWARE__dark_iron_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "feet",
+          "material": "CHEST_TALL__SLOT_FEET__black_rubber_contact",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "catalog_file": "Coffre haut de ravitaillement.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Coffre haut de ravitaillement.glb"
+    },
+    {
+      "name": "10_crate_pack_mixed_formats",
+      "label": "Pack de caisses sous b\u00e2che",
+      "category": "crate_pack",
+      "size_class": "set",
+      "format": "messy_tarped_stack",
+      "footprint_width_m": 2.2,
+      "footprint_depth_m": 0.92,
+      "height_m": 0.86,
+      "capacity_liters": 0.0,
+      "features": "messy stacked crate pile with partial sealed tarp; only two exposed top crates open",
+      "interior": "hollow",
+      "animation": "open_top_lids",
+      "animation_frame_closed": 1,
+      "animation_frame_open": 60,
+      "color_slots": [
+        {
+          "slot": "shell",
+          "material": "CRATE_PACK__SLOT_SHELL__mixed_sage_shell",
+          "recolorable": true
+        },
+        {
+          "slot": "lid",
+          "material": "CRATE_PACK__SLOT_LID__mixed_warm_grey_lids",
+          "recolorable": true
+        },
+        {
+          "slot": "interior",
+          "material": "CRATE_PACK__SLOT_INTERIOR__deep_graphite_empty_interior",
+          "recolorable": true
+        },
+        {
+          "slot": "hardware",
+          "material": "CRATE_PACK__SLOT_HARDWARE__brushed_steel_hardware",
+          "recolorable": true
+        },
+        {
+          "slot": "tarp",
+          "material": "CRATE_PACK__SLOT_TARP__sealed_dark_green_tarp",
+          "recolorable": true
+        }
+      ],
+      "fixed_materials": [],
+      "catalog_file": "Pack de caisses.glb",
+      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_crates_chests\\glb\\Pack de caisses.glb"
+    }
+  ]
+}

@@ -13,6 +13,23 @@ import {
 // quand monté sous /api/battlemaps/:id/entities
 const router = Router({ mergeParams: true })
 
+function entityPlacementMode(blueprint) {
+  const mode = blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
+  return ['free', 'wall', 'connector'].includes(mode) ? mode : 'free'
+}
+
+function plainEntityState(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+function assertWallPlacementState(blueprint, state) {
+  if (entityPlacementMode(blueprint) !== 'wall') return
+  const placement = plainEntityState(state).placement
+  if (!placement || placement.mode !== 'wall' || !placement.wallId || !placement.wallAxis || !placement.wallFace) {
+    throw new AppError(400, 'Un objet mural doit être ancré à un mur valide')
+  }
+}
+
 // ─── Helper — vérification membre campagne ────────────────────────────────────
 // Retourne le membre ou lève une AppError.
 async function getMember(battlemapId, userId) {
@@ -98,7 +115,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     const {
       blueprint_id, pos_x, pos_y, pos_z, r,
-      gm_only, label_override,
+      gm_only, label_override, state,
     } = req.body
 
     if (!blueprint_id) throw new AppError(400, 'blueprint_id est obligatoire')
@@ -109,6 +126,12 @@ router.post('/', requireAuth, async (req, res, next) => {
     // Vérifier que le blueprint existe
     const blueprint = await db('entity_blueprints').where({ id: blueprint_id }).first()
     if (!blueprint) throw new AppError(404, 'Blueprint introuvable')
+    const placementMode = entityPlacementMode(blueprint)
+    if (placementMode === 'connector') {
+      throw new AppError(400, 'Ce modèle est un connecteur de salle et ne peut pas être posé comme objet 3D libre')
+    }
+    const initialState = plainEntityState(state)
+    assertWallPlacementState(blueprint, initialState)
 
     const [entity] = await db('entities')
       .insert({
@@ -123,7 +146,7 @@ router.post('/', requireAuth, async (req, res, next) => {
         current_state_id: 0,
         interaction_overrides: JSON.stringify({}),
         disabled_interactions: db.raw('ARRAY[]::TEXT[]'),
-        state: JSON.stringify({}),
+        state: JSON.stringify(initialState),
       })
       .returning('*')
 
@@ -160,6 +183,10 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
       interaction_overrides, disabled_interactions,
       state, notes_gm,
     } = req.body
+
+    if (state !== undefined || pos_x !== undefined || pos_y !== undefined || pos_z !== undefined || r !== undefined) {
+      assertWallPlacementState(blueprint, state !== undefined ? state : entity.state)
+    }
 
     const updates = {}
     if (pos_x !== undefined) updates.pos_x = pos_x
