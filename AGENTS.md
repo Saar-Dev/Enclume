@@ -1,5 +1,5 @@
 # AGENTS.md — Projet Enclume
-> Session 115 suite 2 — 2026-06-22
+> Mise à jour 2026-07-13 — documentation Moteur Monde ; socle historique Session 115 suite 2.
 
 ---
 
@@ -24,6 +24,9 @@ CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
 
 - `docs/EN_COURS.md` → si la prochaine étape n'est pas claire depuis `## ÉTAT COURANT` ci-dessous.
 - `docs/ASBUILT.md` → si la tâche touche à l'architecture (nouvelles routes, migrations, nouveaux services).
+- `docs/SYSTEME/MOTEUR_MONDE.md` + `docs/SYSTEME/SURFACES_SALLES.md` → si la tâche touche au monde,
+  aux surfaces, coordonnées, déplacements, collisions, connecteurs, lignes de vue, zones ou effets.
+- `docs/PLAN_MOTEUR_MONDE.md` → avant d'implémenter un lot de reconstruction du monde.
 - `docs/JOURNAL5.md` (dernier `## Session N` uniquement) → si un bug précis nécessite l'historique d'une décision.
 - **Fichiers domaine → chargés automatiquement** via `.Codex/rules/` quand les fichiers source sont ouverts.
 
@@ -92,6 +95,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 | Préfixe | Rôle |
 |---|---|
 | `docs/SYSTEME/*.md` | Spécifications techniques d'implémentation (lire sur demande via rules) |
+| `docs/SYSTEME/MOTEUR_MONDE.md` | Architecture commune monde/navigation/collision/LOS/effets |
+| `docs/PLAN_MOTEUR_MONDE.md` | Migration ordonnée du moteur voxel vers le moteur de monde |
 | `docs/REGLE*.md` | Sources de vérité règles Polaris (LdB) — source absolue |
 | `docs/MANUEL*.md` | Synthèse technique des règles (séquences, pipeline) |
 | `docs/PLAN_*.md` | Planifications réalisées ou en cours |

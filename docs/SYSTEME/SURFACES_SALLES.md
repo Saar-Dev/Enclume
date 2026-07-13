@@ -1,6 +1,22 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
+> Dernière mise à jour : 2026-07-13 — distinction éditeur, moteur physique et état runtime.
+
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
+
+> Architecture physique complète : `docs/SYSTEME/MOTEUR_MONDE.md`.
+> Ordre de migration : `docs/PLAN_MOTEUR_MONDE.md`.
+
+## Statut au 2026-07-13
+
+L'éditeur Surface/Salle et son rendu existent. `surface_data` version 4 sait décrire des salles,
+sols, murs, plafonds, escaliers et connecteurs. En revanche, ces données ne sont pas encore la
+source des collisions serveur, du pathfinding de combat ou des lignes de vue : ces systèmes lisent
+encore principalement `voxel_data`.
+
+Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit la cible commune qui compilera
+ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une
+seconde logique physique directement dans le renderer pour contourner cette migration.
 
 ## Source de vérité
 
@@ -16,6 +32,11 @@ Une salle est un objet métier rectangulaire :
 - connecteurs : portes, ascenseurs et futurs passages entre salles/étages.
 
 Les dalles et les murs rendus ne doivent pas devenir la source de vérité. Ils sont dérivés depuis les salles au moment du rendu ou des calculs d’étanchéité.
+
+Pendant la migration, `surface_data` reste le nom de stockage du document statique. Les changements
+survenus en partie — porte ouverte, ascenseur en déplacement, passerelle détruite, feu, gaz, huile ou
+inondation — doivent à terme vivre dans un état runtime séparé. Une sauvegarde de l'éditeur ne doit
+jamais écraser cet état.
 
 ## Grille et échelle
 
@@ -66,9 +87,16 @@ Ils appartiennent à `surface_data.connectors`, car ils portent des règles de s
 - état futur : ouvert/fermé/verrouillé/étanche ;
 - règles de collision, vue, déplacement et eau.
 
+Chaque connecteur doit recevoir un UUID stable. Les identifiants dérivés de ses coordonnées sont
+acceptables uniquement comme compatibilité temporaire : déplacer le connecteur ne doit pas lui
+faire perdre son état runtime.
+
 Une porte se pose depuis la configuration d’une salle sélectionnée. Elle doit être forcée sur un mur de cette salle. Si le mur est partagé par deux salles, le connecteur peut référencer les deux salles.
 
-Un ascenseur se pose depuis la configuration d’une salle sélectionnée. Il connecte l’étage courant à un étage d’arrivée.
+Un ascenseur se pose depuis la configuration d’une salle sélectionnée. Sa définition référence une
+cabine et plusieurs arrêts. Son étage courant, ses portes et son déplacement appartiendront à un
+automate runtime ; l'ascenseur ne doit pas être réduit à une téléportation vers un unique étage
+d'arrivée.
 
 Les modèles 3D de portes/ascenseurs sont choisis depuis la configuration de la salle, pas depuis l’onglet des objets libres. Ils sont attachés au connecteur comme apparence (`modelBlueprintId`, label, catégorie, GLB), mais ils ne doivent pas redevenir la source de vérité.
 
@@ -105,3 +133,19 @@ Les escaliers doivent évoluer vers de vrais connecteurs entre étages :
 - règles de collision et de navigation.
 
 Les ascenseurs suivront la même logique de connecteur vertical, avec un volume et des arrêts d’étage, plutôt qu’un simple décor posé sur la carte.
+
+Les escaliers et échelles doivent exposer des ancrages intermédiaires. Un token dont le budget est
+épuisé termine son déplacement sur le connecteur, et non automatiquement à sa sortie.
+
+Une passerelle fixe est une surface praticable en hauteur. Une passerelle mobile ou destructible est
+une feature runtime possédant une capacité de support praticable ; son modèle 3D reste une apparence.
+
+## Coût de déplacement et effets
+
+Toute surface praticable et tout connecteur doivent accepter un multiplicateur de déplacement MJ,
+par défaut `1`. Ce multiplicateur statique représente par exemple des débris permanents ou un
+escalier très endommagé.
+
+Les événements de partie, comme de l'huile répandue, un incendie, du gaz ou une inondation, sont des
+instances d'effet superposées à la surface. Ils ne doivent pas réécrire son multiplicateur de base.
+La formule et les règles de cumul sont définies dans `docs/SYSTEME/MOTEUR_MONDE.md`.
