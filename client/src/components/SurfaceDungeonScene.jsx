@@ -17,8 +17,10 @@ import {
   getRoomBounds,
   getRoomCeilingThickness,
   getRoomFloorThickness,
+  getRoomHeightLevels,
   getRoomTopY,
   getWallRenderBox,
+  isWorldPointVisibleAtLevel,
   normalizeSurfaceData,
   parseCeilingKey,
   parseFloorKey,
@@ -332,7 +334,7 @@ function TopBoltHeads({ id, descriptor, x, z, topY }) {
 }
 
 function WallBoltHeads({ wall, box, frontDescriptor, backDescriptor }) {
-  if (!box) return null
+  if (!box || wall.axis === 'segment') return null
 
   const heads = []
   const [width, height, depth] = box.args
@@ -343,7 +345,7 @@ function WallBoltHeads({ wall, box, frontDescriptor, backDescriptor }) {
     heads.push(<BoltHead key={key} position={position} rotation={rotation} />)
   }
 
-  if (wall.axis === 'x') {
+  if (wall.axis === 'x' || wall.axis === 'segment') {
     const xOffsets = pairOffsets(width, BOLT_EDGE_OFFSET)
     if (usesBoltHeads(frontDescriptor)) {
       for (const lx of xOffsets) {
@@ -527,7 +529,7 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
   let materials = []
   let faceProfiles
   let faceMask
-  if (wall.axis === 'x') {
+  if (wall.axis === 'x' || wall.axis === 'segment') {
     const sideEast = withUvTransform(frontBase, faceUvTransforms[0])
     const sideWest = withUvTransform(frontBase, faceUvTransforms[1])
     const top = withUvTransform(topBase, faceUvTransforms[2])
@@ -556,6 +558,7 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
     <>
       <mesh
         position={box.position}
+        rotation={[0, box.rotationY || 0, 0]}
         material={visibleMaterials}
         castShadow={opacity >= 0.999}
         receiveShadow
@@ -901,7 +904,7 @@ function DoorConnectorModel({ connector, opacity = 1 }) {
   )
 }
 
-function ConnectorSegment({ connector, opacity = 1, selected = false, onPointerSelect = null }) {
+function ConnectorSegment({ connector, opacity = 1, selected = false, onPointerSelect = null, displayLevel = null }) {
   const handlePointerDown = useCallback((event) => {
     if (!onPointerSelect || !connector?.id) return
     event.stopPropagation()
@@ -952,8 +955,15 @@ function ConnectorSegment({ connector, opacity = 1, selected = false, onPointerS
   }
 
   if (connector.type === 'ladder') {
-    const y = Number(connector.y) || 0
-    const topY = Number(connector.topY) || y + STORY_HEIGHT
+    const fullY = Number(connector.y) || 0
+    const fullTopY = Number(connector.topY) || fullY + STORY_HEIGHT
+    const sliceBottom = displayLevel === null ? -Infinity : displayLevel * STORY_HEIGHT
+    const sliceTop = displayLevel === null ? Infinity : sliceBottom + STORY_HEIGHT
+    const y = Math.max(fullY, sliceBottom)
+    let topY = Math.min(fullTopY, sliceTop)
+    if (topY <= y && displayLevel !== null && Math.abs(fullTopY - sliceBottom) < 0.01) {
+      topY = y + 0.12
+    }
     const height = Math.max(0.2, topY - y)
     const width = Math.max(0.2, Number(connector.width) || 0.7)
     const depth = Math.max(0.05, Number(connector.depth) || 0.12)
@@ -1035,8 +1045,16 @@ function ConnectorSegment({ connector, opacity = 1, selected = false, onPointerS
     const z = Number(connector.z) || 0
     const centerX = x + width / 2
     const centerZ = z + depth / 2
-    const shaftBottom = Math.min(...stops.map(stop => Number(stop.y) || 0))
-    const shaftTop = Math.max(...stops.map(stop => Number(stop.y) || 0)) + cabinHeight
+    const fullShaftBottom = Math.min(...stops.map(stop => Number(stop.y) || 0))
+    const fullShaftTop = Math.max(...stops.map(stop => Number(stop.y) || 0)) + cabinHeight
+    const sliceBottom = displayLevel === null ? fullShaftBottom : displayLevel * STORY_HEIGHT
+    const sliceTop = displayLevel === null ? fullShaftTop : sliceBottom + STORY_HEIGHT
+    const shaftBottom = Math.max(fullShaftBottom, sliceBottom)
+    const shaftTop = Math.min(fullShaftTop, sliceTop)
+    const visibleStops = stops.filter(stop => displayLevel === null || yToLevel(stop.y) === displayLevel)
+    const cabinDisplayY = elevatorDisplayY(runtimeState, floorY)
+    const cabinVisible = displayLevel === null
+      || (cabinDisplayY < sliceTop && cabinDisplayY + cabinHeight > sliceBottom)
     const doorAxis = connector.doorAxis === 'x' ? 'x' : 'z'
     const doorSide = Number(connector.doorSide) < 0 ? -1 : 1
     const faces = [
@@ -1058,7 +1076,7 @@ function ConnectorSegment({ connector, opacity = 1, selected = false, onPointerS
           <boxGeometry args={[width + wallThickness * 2, shaftTop - shaftBottom, depth + wallThickness * 2]} />
           <meshBasicMaterial color="#7c3aed" wireframe transparent opacity={Math.min(0.2, opacity * 0.2)} depthWrite={false} />
         </mesh>
-        {stops.map(stop => {
+        {visibleStops.map(stop => {
           const open = doorsOpen && stop.id === runtimeState.currentStopId
           if (open) return null
           const face = { axis: doorAxis, side: doorSide }
@@ -1070,7 +1088,7 @@ function ConnectorSegment({ connector, opacity = 1, selected = false, onPointerS
             </mesh>
           )
         })}
-        <AnimatedElevatorCabin state={runtimeState} fallbackY={floorY}>
+        {cabinVisible && <AnimatedElevatorCabin state={runtimeState} fallbackY={floorY}>
           <mesh position={[centerX, -floorThickness / 2, centerZ]} receiveShadow>
             <boxGeometry args={[width, floorThickness, depth]} />
             <meshStandardMaterial color="#a78bfa" metalness={0.55} roughness={0.38} transparent opacity={Math.min(0.96, opacity)} />
@@ -1096,7 +1114,7 @@ function ConnectorSegment({ connector, opacity = 1, selected = false, onPointerS
               <meshBasicMaterial color="#fbbf24" wireframe transparent opacity={0.95} depthWrite={false} />
             </mesh>
           )}
-        </AnimatedElevatorCabin>
+        </AnimatedElevatorCabin>}
       </group>
     )
   }
@@ -1245,7 +1263,7 @@ function sameStringSet(left, right) {
 }
 
 function wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel) {
-  if (!wall || displayLevel === null || yToLevel(wallOpacityY(wall)) !== displayLevel) return false
+  if (!wall || wall.axis === 'segment' || displayLevel === null || yToLevel(wallOpacityY(wall)) !== displayLevel) return false
   const box = getWallRenderBox(wall)
   if (!box || floorCells.size === 0) return false
 
@@ -1316,10 +1334,10 @@ function useOccludedWallIds(walls, surface, displayLevel) {
   return occludedIds
 }
 
-function RoomVolume({ room, textureMaterials, ceilingOpacity, showCeiling, showDetails }) {
+function RoomVolume({ room, textureMaterials, ceilingOpacity, showFloor, showCeiling, showDetails }) {
   return (
     <>
-      {room.floorEnabled !== false && (
+      {showFloor && room.floorEnabled !== false && (
         <RoomSlab
           room={room}
           kind="floor"
@@ -1374,28 +1392,71 @@ function SurfaceDungeonScene({
     [roomWallSegments, surfaceWallSegments],
   )
   const occludedWallIds = useOccludedWallIds(allWallSegments, surface, displayLevel)
-  const ownerIsVisible = (y) => displayLevel === null || yToLevel(y) <= displayLevel
+  const structureIsVisible = (y) => displayLevel === null || yToLevel(y) === displayLevel
+  const worldPointIsVisible = (x, z, y) => (
+    isWorldPointVisibleAtLevel(surface, displayLevel, x, z, y)
+  )
+  const roomDepthIncludesLevel = (room, itemLevel) => {
+    if (!room || displayLevel === null || getRoomHeightLevels(room) < 2) return false
+    const baseLevel = yToLevel(getRoomBaseY(room))
+    const topLevel = baseLevel + getRoomHeightLevels(room) - 1
+    return itemLevel >= baseLevel && itemLevel <= displayLevel && displayLevel <= topLevel
+  }
+  const roomWallIsVisible = wall => structureIsVisible(wallOpacityY(wall))
+    || (wall?.roomIds || []).some(roomId => (
+      roomDepthIncludesLevel(surface.rooms[roomId], yToLevel(wallOpacityY(wall)))
+    ))
+  const roomSlice = room => {
+    const baseLevel = yToLevel(getRoomBaseY(room))
+    const topLevel = baseLevel + getRoomHeightLevels(room) - 1
+    return displayLevel === null || (displayLevel >= baseLevel && displayLevel <= topLevel)
+  }
+  const connectorIsVisible = connector => {
+    if (displayLevel === null) return true
+    if (connector?.type === 'door' || connector?.type === 'legacy-door-placeholder') {
+      const centerX = Number.isFinite(Number(connector?.x))
+        ? Number(connector.x)
+        : ((Number(connector?.x0) || 0) + (Number(connector?.x1) || 0)) / (2 * SURFACE_FINE)
+      const centerZ = Number.isFinite(Number(connector?.z))
+        ? Number(connector.z)
+        : ((Number(connector?.z0) || 0) + (Number(connector?.z1) || 0)) / (2 * SURFACE_FINE)
+      return worldPointIsVisible(centerX, centerZ, connector?.y)
+    }
+    const levels = []
+    if (Array.isArray(connector?.stops)) {
+      levels.push(...connector.stops.map(stop => yToLevel(stop?.y)))
+    }
+    if (Number.isFinite(Number(connector?.fromLevel))) levels.push(Number(connector.fromLevel))
+    if (Number.isFinite(Number(connector?.toLevel))) levels.push(Number(connector.toLevel))
+    if (Number.isFinite(Number(connector?.y))) levels.push(yToLevel(connector.y))
+    if (Number.isFinite(Number(connector?.topY))) levels.push(yToLevel(connector.topY))
+    if (levels.length === 0) return false
+    return displayLevel >= Math.min(...levels) && displayLevel <= Math.max(...levels)
+  }
   const visibleWaterCells = useMemo(
-    () => (water?.waterCells || []).filter(cell => displayLevel === null || yToLevel(cell.baseY) <= displayLevel),
-    [displayLevel, water?.waterCells],
+    () => water?.waterCells || [],
+    [water?.waterCells],
   )
 
   return (
     <>
       {Object.entries(surface.rooms).map(([id, room]) => {
-        if (!ownerIsVisible(getRoomBaseY(room))) return null
+        if (!roomSlice(room)) return null
+        const baseLevel = yToLevel(getRoomBaseY(room))
+        const topLevel = baseLevel + getRoomHeightLevels(room) - 1
         return (
           <RoomVolume
             key={id}
             room={{ id, ...room }}
             textureMaterials={textureMaterials}
             ceilingOpacity={ceilingOpacity}
-            showCeiling={ownerIsVisible(getRoomTopY(room))}
+            showFloor
+            showCeiling={displayLevel === null || displayLevel === topLevel}
             showDetails={showDetails}
           />
         )
       })}
-      {roomWallSegments.map(wall => ownerIsVisible(wallOpacityY(wall)) ? (
+      {roomWallSegments.map(wall => roomWallIsVisible(wall) ? (
         <WallSegment
           key={wall.id}
           wall={wall}
@@ -1406,21 +1467,26 @@ function SurfaceDungeonScene({
       ) : null)}
       {Object.entries(surface.floors).map(([id, floor]) => {
         const parsed = parseFloorKey(id, floor)
-        if (!ownerIsVisible(parsed.y)) return null
+        if (!worldPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.y)) return null
         return <FloorTile key={id} id={id} floor={floor} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
       })}
-      {surfaceWallSegments.map(wall => ownerIsVisible(wallOpacityY(wall)) ? (
-        <WallSegment
-          key={wall.id}
-          wall={wall}
-          textureMaterials={textureMaterials}
-          opacity={occludedWallIds.has(wall.id) ? OCCLUDED_WALL_OPACITY : 1}
-          showDetails={showDetails}
-        />
-      ) : null)}
+      {surfaceWallSegments.map(wall => {
+        const box = getWallRenderBox(wall)
+        const visible = structureIsVisible(wallOpacityY(wall))
+          || (box && worldPointIsVisible(box.position[0], box.position[2], wallOpacityY(wall)))
+        return visible ? (
+          <WallSegment
+            key={wall.id}
+            wall={wall}
+            textureMaterials={textureMaterials}
+            opacity={occludedWallIds.has(wall.id) ? OCCLUDED_WALL_OPACITY : 1}
+            showDetails={showDetails}
+          />
+        ) : null
+      })}
       {Object.entries(surface.ceilings).map(([id, ceiling]) => {
         const parsed = parseCeilingKey(id, ceiling)
-        if (!ownerIsVisible(parsed.y)) return null
+        if (!worldPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.baseY)) return null
         return (
           <CeilingTile
             key={id}
@@ -1432,10 +1498,21 @@ function SurfaceDungeonScene({
           />
         )
       })}
-      {Object.entries(surface.stairs).map(([id, stair]) => ownerIsVisible(stair?.y) ? (
+      {Object.entries(surface.stairs).map(([id, stair]) => {
+        const fromLevel = yToLevel(stair?.y)
+        const toLevel = yToLevel(stair?.topY)
+        const visible = displayLevel === null
+          || (displayLevel >= Math.min(fromLevel, toLevel) && displayLevel <= Math.max(fromLevel, toLevel))
+          || worldPointIsVisible(
+            (Number(stair?.minX) + Number(stair?.maxX) + 1) / 2,
+            (Number(stair?.minZ) + Number(stair?.maxZ) + 1) / 2,
+            stair?.y,
+          )
+        return visible ? (
         <StairSegment key={id} stair={stair} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
-      ) : null)}
-      {Object.entries(surface.connectors).map(([id, connector]) => ownerIsVisible(connector?.y) ? (
+        ) : null
+      })}
+      {Object.entries(surface.connectors).map(([id, connector]) => connectorIsVisible(connector) ? (
         <ConnectorSegment
           key={id}
           connector={{
@@ -1446,6 +1523,7 @@ function SurfaceDungeonScene({
           opacity={1}
           selected={id === selectedConnectorId || connector?.id === selectedConnectorId}
           onPointerSelect={onConnectorSelect}
+          displayLevel={displayLevel}
         />
       ) : null)}
       {showWater && visibleWaterCells.length > 0 && <WaterSheets waterCells={visibleWaterCells} opacity={waterOpacity} />}

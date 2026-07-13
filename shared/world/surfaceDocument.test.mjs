@@ -64,6 +64,21 @@ test('les escaliers legacy deviennent des connecteurs canoniques', () => {
   assert.equal(prepared.worldDocument.features.connectors[stairId].sourceCollection, 'stairs')
 })
 
+test('un segment orienté est un mur canonique valide', () => {
+  const surface = surfaceFixture()
+  surface.walls.curve = {
+    axis: 'segment',
+    x0: 0,
+    z0: 0,
+    x1: 1.5,
+    z1: 2.5,
+    y: 0,
+    height: 2.5,
+    thickness: 1,
+  }
+  assert.equal(validateSurfaceData(surface).valid, true)
+})
+
 test('les versions futures et les coordonnées corrompues sont refusées', () => {
   const future = surfaceFixture()
   future.version = 99

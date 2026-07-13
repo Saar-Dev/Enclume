@@ -24,9 +24,11 @@ import {
   getToolFloorThickness,
   getRoomBaseY,
   getRoomBounds,
+  getRoomHeightLevels,
   getToolRoomHeightLevels,
   getToolWallThicknessFine,
   getWallRenderBox,
+  isWorldPointVisibleAtLevel,
   levelToY,
   makeStairFromSelection,
   makeDoorConnectorFromWallPoint,
@@ -38,6 +40,7 @@ import {
   normalizeCellSelection,
   roomToSurfaceToolPatch,
   stairStepBoxes,
+  yToLevel,
 } from '../lib/surfaceData.js'
 
 const GRID_SIZE = 50
@@ -205,15 +208,24 @@ function EffectVolumePreview({ selection, surfaceTool }) {
   )
 }
 
-function RuntimeEffectRegions({ regions = [] }) {
+function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0 }) {
   return regions.map(region => {
     const bounds = region?.bounds
+    const sliceBottom = levelToY(displayLevel)
+    const sliceTop = levelToY(displayLevel + 1)
     if (!bounds) return null
+    const centerX = (bounds.min.x + bounds.max.x) / 2
+    const centerZ = (bounds.min.z + bounds.max.z) / 2
+    const intersectsSlice = bounds.max.y > sliceBottom && bounds.min.y < sliceTop
+    const visibleInOpenRoom = bounds.max.y <= sliceBottom
+      && yToLevel(bounds.min.y) < displayLevel
+      && isWorldPointVisibleAtLevel(surfaceData, displayLevel, centerX, centerZ, bounds.min.y)
+    if (!intersectsSlice && !visibleInOpenRoom) return null
     const size = [bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y, bounds.max.z - bounds.min.z]
     const center = [
-      (bounds.min.x + bounds.max.x) / 2,
+      centerX,
       (bounds.min.y + bounds.max.y) / 2,
-      (bounds.min.z + bounds.max.z) / 2,
+      centerZ,
     ]
     return (
       <mesh key={region.id} position={center} renderOrder={20}>
@@ -234,7 +246,7 @@ function WallPreview({ drag, surfaceTool, activeMaterial, availableBlocks }) {
         const box = getWallRenderBox(wall)
         if (!box) return null
         return (
-          <mesh key={wall.id} position={box.position}>
+          <mesh key={wall.id} position={box.position} rotation={[0, box.rotationY || 0, 0]}>
             <boxGeometry args={box.args} />
             <meshBasicMaterial color="#5b8dee" transparent opacity={0.28} depthWrite={false} />
           </mesh>
@@ -760,7 +772,11 @@ export default function SurfaceEditorScene({
       : []
   const selectedRooms = selectedRoomIds
     .map(id => (normalizedSurface.rooms?.[id] ? { id, ...normalizedSurface.rooms[id] } : null))
-    .filter(Boolean)
+    .filter(room => {
+      if (!room) return false
+      const baseLevel = Math.round(getRoomBaseY(room) / STORY_HEIGHT)
+      return displayLevel >= baseLevel && displayLevel < baseLevel + getRoomHeightLevels(room)
+    })
   const connectorPreview = drag?.mode === 'connector'
     ? drag
     : surfaceTool?.mode === 'connector' && hoverPreview?.mode === 'connector'
@@ -805,7 +821,7 @@ export default function SurfaceEditorScene({
         onConnectorSelect={surfaceTool?.mode === 'select' ? handleConnectorPointerSelect : null}
         runtimeFeatureStates={runtimeFeatureStates}
       />
-      <RuntimeEffectRegions regions={runtimeEffectRegions} />
+      <RuntimeEffectRegions regions={runtimeEffectRegions} surfaceData={surfaceData} displayLevel={displayLevel} />
       {selectedRooms.map(room => <SelectedRoomOverlay key={room.id} room={room} />)}
       {drag?.mode === 'wall' ? (
         <WallPreview drag={drag} surfaceTool={surfaceTool} activeMaterial={activeMaterial} availableBlocks={availableBlocks} />

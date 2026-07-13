@@ -16,7 +16,14 @@ import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
 import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
-import { hasSurfaceContent, levelToY, normalizeSurfaceData, surfaceTextureIds, yToLevel } from '../lib/surfaceData.js'
+import {
+  hasSurfaceContent,
+  isWorldPointVisibleAtLevel,
+  levelToY,
+  normalizeSurfaceData,
+  surfaceTextureIds,
+  yToLevel,
+} from '../lib/surfaceData.js'
 import { useTokenStore } from '../stores/tokenStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { useAuthStore } from '../stores/authStore'
@@ -1061,12 +1068,21 @@ function Scene({
 
       {(runtimeEffectRegions || []).map(region => {
         const bounds = region?.bounds
-        if (!bounds || bounds.min.y > levelToY(displayLevel + 1)) return null
+        const sliceBottom = levelToY(displayLevel)
+        const sliceTop = levelToY(displayLevel + 1)
+        if (!bounds) return null
+        const centerX = (bounds.min.x + bounds.max.x) / 2
+        const centerZ = (bounds.min.z + bounds.max.z) / 2
+        const intersectsSlice = bounds.max.y > sliceBottom && bounds.min.y < sliceTop
+        const visibleInOpenRoom = bounds.max.y <= sliceBottom
+          && yToLevel(bounds.min.y) < displayLevel
+          && isWorldPointVisibleAtLevel(surfaceData, displayLevel, centerX, centerZ, bounds.min.y)
+        if (!intersectsSlice && !visibleInOpenRoom) return null
         const size = [bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y, bounds.max.z - bounds.min.z]
         const center = [
-          (bounds.min.x + bounds.max.x) / 2,
+          centerX,
           (bounds.min.y + bounds.max.y) / 2,
-          (bounds.min.z + bounds.max.z) / 2,
+          centerZ,
         ]
         const color = region.definitionKey === 'gas' ? '#a3e635' : region.definitionKey === 'flooded' ? '#38bdf8' : '#fb7185'
         return (
@@ -1082,7 +1098,13 @@ function Scene({
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
         if (entity.gm_only && !isGm) return null
-        if (yToLevel(entity.pos_z) > displayLevel) return null
+        if (!isWorldPointVisibleAtLevel(
+          surfaceData,
+          displayLevel,
+          (Number(entity.pos_x) || 0) + 0.5,
+          (Number(entity.pos_y) || 0) + 0.5,
+          entity.pos_z,
+        )) return null
         return (
           <EntityMesh
             key={entity.id}
@@ -1114,7 +1136,16 @@ function Scene({
         )
       })()}
 
-      {tokens.filter(token => (isGm || token.layer !== 'gm') && yToLevel(token.pos_z) <= displayLevel).map(token => {
+      {tokens.filter(token => (
+        (isGm || token.layer !== 'gm')
+        && isWorldPointVisibleAtLevel(
+          surfaceData,
+          displayLevel,
+          (Number(token.pos_x) || 0) + 0.5,
+          (Number(token.pos_y) || 0) + 0.5,
+          token.pos_z,
+        )
+      )).map(token => {
         const character = characters.find(c => c.id === token.character_id)
         const glbUrl = character?.glb_url
           ? `${import.meta.env.VITE_API_URL}/api/assets/${character.glb_url}`

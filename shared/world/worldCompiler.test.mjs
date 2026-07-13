@@ -69,6 +69,40 @@ test('deux salles adjacentes partagent un seul mur physique', () => {
   assert.equal(walls.filter(item => item.sourceIds?.length === 2).length, 1)
 })
 
+test('un segment de mur courbe compile les mêmes canaux physiques que son rendu', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-curved-wall',
+    surfaceData: emptySurface({
+      walls: {
+        curveA: {
+          worldId: '11111111-1111-4111-8111-111111111111',
+          axis: 'segment',
+          x0: 0,
+          z0: 0,
+          x1: 4,
+          z1: 4,
+          y: 0,
+          height: 2.5,
+          thickness: 1,
+          barrierType: 'solid',
+          blocksMovement: true,
+          blocksSight: true,
+          blocksWater: true,
+        },
+      },
+    }),
+  })
+
+  const barrier = snapshot.spatial.barriers.find(item => item.sourceIds?.includes('11111111-1111-4111-8111-111111111111'))
+  assert.equal(barrier.axis, 'segment')
+  assert.deepEqual(barrier.bounds, {
+    min: { x: -0.125, y: 0, z: -0.125 },
+    max: { x: 1.125, y: 2.5, z: 1.125 },
+  })
+  assert.equal(snapshot.spatial.colliders.some(item => item.sourceId === barrier.sourceId), true)
+  assert.equal(snapshot.spatial.occluders.some(item => item.sourceId === barrier.sourceId), true)
+})
+
 test('une porte ouverte découpe le mur et crée un portail non bloquant', () => {
   const snapshot = compileSurfaceWorld({
     battlemapId: 'map-door',

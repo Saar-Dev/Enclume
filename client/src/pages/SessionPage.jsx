@@ -119,6 +119,8 @@ function SessionContent({ campaignId }) {
     ceilingHeight: 2.5,
     wallThickness: 1,
     wallHeight: 2.5,
+    wallShape: 'straight',
+    wallCurveOffset: 1.5,
     stairRise: 2.5,
     movementMultiplier: 1,
     ladderAxis: 'x',

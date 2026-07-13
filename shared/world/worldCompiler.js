@@ -164,7 +164,9 @@ function roomCeilingEntries(surface, battlemapId) {
 function wallKey(wall) {
   const values = wall.axis === 'x'
     ? [wall.axis, Math.min(wall.x0, wall.x1), Math.max(wall.x0, wall.x1), wall.z0, wall.y, wall.height]
-    : [wall.axis, wall.x0, Math.min(wall.z0, wall.z1), Math.max(wall.z0, wall.z1), wall.y, wall.height]
+    : wall.axis === 'z'
+      ? [wall.axis, wall.x0, Math.min(wall.z0, wall.z1), Math.max(wall.z0, wall.z1), wall.y, wall.height]
+      : [wall.axis, wall.x0, wall.z0, wall.x1, wall.z1, wall.y, wall.height]
   return values.map(value => typeof value === 'number' ? clean(value) : value).join(':')
 }
 
@@ -241,6 +243,14 @@ function roomWallCandidates(surface, battlemapId) {
 }
 
 function wallPieceFromCandidate(wall) {
+  if (wall.axis === 'segment') {
+    return {
+      ...wall,
+      bottom: wall.y,
+      top: wall.y + wall.height,
+      suffix: 'full',
+    }
+  }
   return {
     ...wall,
     alongMin: wall.axis === 'x' ? Math.min(wall.x0, wall.x1) : Math.min(wall.z0, wall.z1),
@@ -323,6 +333,16 @@ function wallPieceBounds(piece) {
   const half = piece.thickness / 2
   if (piece.axis === 'x') {
     return bounds(piece.alongMin, piece.bottom, piece.line - half, piece.alongMax, piece.top, piece.line + half)
+  }
+  if (piece.axis === 'segment') {
+    return bounds(
+      Math.min(piece.x0, piece.x1) - half,
+      piece.bottom,
+      Math.min(piece.z0, piece.z1) - half,
+      Math.max(piece.x0, piece.x1) + half,
+      piece.top,
+      Math.max(piece.z0, piece.z1) + half,
+    )
   }
   return bounds(piece.line - half, piece.bottom, piece.alongMin, piece.line + half, piece.top, piece.alongMax)
 }

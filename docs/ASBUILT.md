@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 7 ; Session 141 (suite 29) conservée.
+> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 8 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -168,6 +168,25 @@ fixtures que si elles n'ajoutent aucun adaptateur ni branche conditionnelle au m
 Il n'existe aucune garantie de rétrocompatibilité des cartes historiques. Elles peuvent servir de
 fixtures de diagnostic tant qu'elles n'imposent ni adaptateur, ni branche de règles, ni double
 moteur ; sinon elles doivent être supprimées.
+
+---
+
+## Moteur de monde — Phase 8 ✅
+
+- chaque étage affiché est une tranche isolée : aucun objet, token, effet ou support inférieur sans
+  rapport ne reste rendu ou cliquable ;
+- les salles multi-hauteurs constituent l'exception structurelle : leur fond réel, leurs surfaces
+  et parois basses, leurs objets, tokens et effets restent visibles depuis les tranches supérieures
+  du même volume, sans révéler les autres salles inférieures et sans plancher intermédiaire ;
+- échelles, escaliers et ascenseurs sont affichés sur les tranches qu'ils relient ;
+- l'eau extérieure utilise une hauteur globale unique égale au sommet construit de la carte ;
+- l'éditeur donne la priorité au blueprint actif et ignore les entités des autres étages lors du
+  placement ;
+- le nouvel outil Mur crée des murs droits ou des courbes quadratiques à courbure signée ;
+- chaque courbe est tessellée en segments orientés courts partagés par le renderer, le compilateur,
+  les collisions, la LOS et l'étanchéité ; les portes restent limitées aux portions droites ;
+- la future trappe est documentée comme capacité d'un connecteur vertical lié, le plus souvent, à
+  une échelle.
 
 ---
 

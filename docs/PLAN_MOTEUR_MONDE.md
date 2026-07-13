@@ -2,7 +2,7 @@
 
 > Dernière mise à jour : 2026-07-13 — plan issu de l'audit croisé combat/monde.
 >
-> Statut : **Phases 0 à 7 codées et vérifiées ; moteur monde autoritaire branché au combat**.
+> Statut : **Phases 0 à 8 codées et vérifiées ; moteur monde autoritaire branché au combat**.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.
@@ -410,7 +410,45 @@ Phase 7.
 
 ---
 
-## 11. Matrice de non-régression minimale
+## 11. Phase 8 — tranches d'étage, eau et murs courbes ✅
+
+### Règle de tranche
+
+- afficher l'étage N retire du renderer et des interactions les sols, murs, tokens, entités et
+  effets appartenant aux autres étages ;
+- une salle haute de plusieurs étages est un volume ouvert local : depuis chaque tranche qu'elle
+  traverse, son vrai sol inférieur, ses parois descendantes et son contenu plus bas restent
+  visibles, sans plancher intermédiaire inventé ; son plafond appartient à sa dernière tranche ;
+- cette exception est bornée par l'emprise horizontale et verticale de la salle. Elle ne révèle
+  jamais une salle inférieure voisine ou superposée qui n'appartient pas à ce volume ;
+- escaliers, échelles et ascenseurs restent présents uniquement sur leur portion ou palier pertinent
+  pour la tranche courante ;
+- une future trappe sera une capacité d'un connecteur vertical, généralement liée à une échelle,
+  et non une raison de réafficher l'étage inférieur.
+
+### Corrections et géométrie
+
+- la surface extérieure de l'eau prend le sommet global de la carte et n'empile plus une nappe au
+  plafond de chaque étage ;
+- un objet d'un étage inférieur ne peut plus intercepter un clic ni servir de support dans l'éditeur
+  de l'étage courant, sauf s'il est visible au fond du même volume multniveau ; même visible, il ne
+  remplace jamais le plan de placement de l'étage courant ;
+- l'outil **Mur** propose `Droit` ou `Courbe`. Une courbe quadratique réglable est tessellée en
+  segments orientés courts ; rendu, collision, LOS et étanchéité consomment ces mêmes segments ;
+- les portes restent attachées aux portions droites. Une porte courbe exigerait un modèle et une
+  découpe dédiés, elle n'est donc pas simulée approximativement.
+
+### Validation
+
+- tests purs de hauteur d'eau, de visibilité bornée d'un volume multniveau et de génération de
+  courbe ;
+- validation du document canonique pour les segments orientés ;
+- compilation des colliders et occluders d'un mur courbe ;
+- suite monde complète et build Vite.
+
+---
+
+## 12. Matrice de non-régression minimale
 
 Chaque phase doit conserver ou ajouter ces scénarios :
 
@@ -432,7 +470,7 @@ Chaque phase doit conserver ou ajouter ces scénarios :
 
 ---
 
-## 12. Définition de fini du chantier
+## 13. Définition de fini du chantier
 
 Le moteur de monde est considéré terminé lorsque :
 

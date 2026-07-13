@@ -130,6 +130,15 @@ export function getWallFineBounds(wall) {
   const z0 = Number.isFinite(rawZ0) ? rawZ0 : 0
   const z1 = Number.isFinite(rawZ1) ? rawZ1 : z0
 
+  if (wall.axis === 'segment') {
+    return {
+      minX: Math.min(x0, x1) - half,
+      maxX: Math.max(x0, x1) + half,
+      minZ: Math.min(z0, z1) - half,
+      maxZ: Math.max(z0, z1) + half,
+    }
+  }
+
   if (wall.axis === 'x') {
     const capStart = wall.capStart !== false
     const capEnd = wall.capEnd !== false
@@ -152,12 +161,37 @@ export function getWallFineBounds(wall) {
 }
 
 export function getWallRenderBox(wall) {
-  const bounds = getWallFineBounds(wall)
-  if (!bounds) return null
-
   const fine = SURFACE_FINE
   const height = Math.max(0.5, Number(wall.height) || 2.5)
   const baseY = getWallBaseY(wall)
+
+  if (wall.axis === 'segment') {
+    const x0 = Number(wall.x0) / fine
+    const x1 = Number(wall.x1) / fine
+    const z0 = Number(wall.z0) / fine
+    const z1 = Number(wall.z1) / fine
+    const dx = x1 - x0
+    const dz = z1 - z0
+    const length = Math.hypot(dx, dz)
+    if (!Number.isFinite(length) || length < 0.001) return null
+    const thickness = getWallThicknessFine(wall) / fine
+    const capStart = wall.capStart !== false ? thickness / 2 : 0
+    const capEnd = wall.capEnd !== false ? thickness / 2 : 0
+    const ux = dx / length
+    const uz = dz / length
+    const startX = x0 - ux * capStart
+    const startZ = z0 - uz * capStart
+    const endX = x1 + ux * capEnd
+    const endZ = z1 + uz * capEnd
+    return {
+      position: [(startX + endX) / 2, baseY + height / 2, (startZ + endZ) / 2],
+      args: [length + capStart + capEnd, height, thickness],
+      rotationY: -Math.atan2(dz, dx),
+    }
+  }
+
+  const bounds = getWallFineBounds(wall)
+  if (!bounds) return null
 
   return {
     position: [
@@ -612,6 +646,50 @@ export function makeWallsFromDrag(start, end, tool, activeMaterial, availableBlo
     : Math.max(0.5, Math.min(15, Number(tool?.wallHeight) || STORY_HEIGHT))
   const segments = []
 
+  if (tool?.wallShape === 'curve') {
+    const distanceFine = Math.hypot(dx, dz)
+    if (distanceFine < 0.01) return []
+    const distanceWorld = distanceFine / fine
+    const curveOffsetWorld = Math.max(-12, Math.min(12, Number(tool?.wallCurveOffset) || 0))
+    const perpendicularX = -dz / distanceFine
+    const perpendicularZ = dx / distanceFine
+    const controlX = (start.fx + end.fx) / 2 + perpendicularX * curveOffsetWorld * fine
+    const controlZ = (start.fz + end.fz) / 2 + perpendicularZ * curveOffsetWorld * fine
+    const sampleCount = Math.max(2, Math.min(96, Math.ceil((distanceWorld + Math.abs(curveOffsetWorld)) * 4)))
+    const pointAt = t => {
+      const inverse = 1 - t
+      return {
+        x: Math.round((inverse * inverse * start.fx + 2 * inverse * t * controlX + t * t * end.fx) * 10000) / 10000,
+        z: Math.round((inverse * inverse * start.fz + 2 * inverse * t * controlZ + t * t * end.fz) * 10000) / 10000,
+      }
+    }
+
+    for (let index = 0; index < sampleCount; index += 1) {
+      const from = pointAt(index / sampleCount)
+      const to = pointAt((index + 1) / sampleCount)
+      const wall = makeWallSegment({
+        axis: 'segment',
+        x0: from.x,
+        x1: to.x,
+        z0: from.z,
+        z1: to.z,
+        thickness,
+        height,
+        capStart: true,
+        capEnd: true,
+        curve: {
+          kind: 'quadratic',
+          index,
+          count: sampleCount,
+          controlX,
+          controlZ,
+        },
+      }, tool, activeMaterial, availableBlocks)
+      if (wall) segments.push(wall)
+    }
+    return segments
+  }
+
   if (axis === 'x') {
     const xStart = Math.min(start.fx, end.fx)
     let xEnd = Math.max(start.fx, end.fx)
@@ -660,17 +738,31 @@ export function makeWallsFromDrag(start, end, tool, activeMaterial, availableBlo
 function wallCoversPanel(existing, candidate) {
   if (!existing || !candidate || existing.axis !== candidate.axis) return false
   const epsilon = 0.01
+  if (candidate.axis === 'segment') {
+    const sameDirection = Math.abs(Number(existing.x0) - Number(candidate.x0)) < epsilon
+      && Math.abs(Number(existing.z0) - Number(candidate.z0)) < epsilon
+      && Math.abs(Number(existing.x1) - Number(candidate.x1)) < epsilon
+      && Math.abs(Number(existing.z1) - Number(candidate.z1)) < epsilon
+    const reverseDirection = Math.abs(Number(existing.x0) - Number(candidate.x1)) < epsilon
+      && Math.abs(Number(existing.z0) - Number(candidate.z1)) < epsilon
+      && Math.abs(Number(existing.x1) - Number(candidate.x0)) < epsilon
+      && Math.abs(Number(existing.z1) - Number(candidate.z0)) < epsilon
+    if (!sameDirection && !reverseDirection) return false
+  }
   const sameLine = candidate.axis === 'x'
     ? Math.abs(Number(existing.z0) - Number(candidate.z0)) < epsilon
-    : Math.abs(Number(existing.x0) - Number(candidate.x0)) < epsilon
+    : candidate.axis === 'z'
+      ? Math.abs(Number(existing.x0) - Number(candidate.x0)) < epsilon
+      : true
   if (!sameLine) return false
 
   const existingStart = candidate.axis === 'x' ? Number(existing.x0) : Number(existing.z0)
   const existingEnd = candidate.axis === 'x' ? Number(existing.x1) : Number(existing.z1)
   const candidateStart = candidate.axis === 'x' ? Number(candidate.x0) : Number(candidate.z0)
   const candidateEnd = candidate.axis === 'x' ? Number(candidate.x1) : Number(candidate.z1)
-  const horizontalCovered = Math.min(existingStart, existingEnd) <= Math.min(candidateStart, candidateEnd) + epsilon
-    && Math.max(existingStart, existingEnd) >= Math.max(candidateStart, candidateEnd) - epsilon
+  const horizontalCovered = candidate.axis === 'segment'
+    || (Math.min(existingStart, existingEnd) <= Math.min(candidateStart, candidateEnd) + epsilon
+      && Math.max(existingStart, existingEnd) >= Math.max(candidateStart, candidateEnd) - epsilon)
   if (!horizontalCovered) return false
 
   const existingBottom = getWallBaseY(existing)
@@ -788,6 +880,36 @@ export function getRoomBaseY(room) {
 
 export function getRoomHeightLevels(room) {
   return Math.max(1, Math.min(12, Number.parseInt(room?.heightLevels, 10) || Math.round((Number(room?.height) || STORY_HEIGHT) / STORY_HEIGHT) || 1))
+}
+
+export function isWorldPointVisibleAtLevel(data, displayLevel, x, z, y) {
+  if (displayLevel === null || displayLevel === undefined) return true
+
+  const itemLevel = yToLevel(y)
+  if (itemLevel === displayLevel) return true
+  if (itemLevel > displayLevel) return false
+
+  const worldX = Number(x)
+  const worldZ = Number(z)
+  if (!Number.isFinite(worldX) || !Number.isFinite(worldZ)) return false
+
+  const rooms = data?.rooms && typeof data.rooms === 'object' && !Array.isArray(data.rooms)
+    ? data.rooms
+    : {}
+  return Object.values(rooms).some(room => {
+    const heightLevels = getRoomHeightLevels(room)
+    if (heightLevels < 2) return false
+
+    const baseLevel = yToLevel(getRoomBaseY(room))
+    const topLevel = baseLevel + heightLevels - 1
+    if (itemLevel < baseLevel || itemLevel > displayLevel || displayLevel > topLevel) return false
+
+    const bounds = getRoomBounds(room)
+    return worldX >= bounds.minX
+      && worldX < bounds.maxX + 1
+      && worldZ >= bounds.minZ
+      && worldZ < bounds.maxZ + 1
+  })
 }
 
 export function getRoomHeight(room) {
@@ -2015,6 +2137,21 @@ function wallIntervalCovers(start, end, min, max) {
   return low <= min + epsilon && high >= max - epsilon
 }
 
+function segmentsIntersect2d(a, b, c, d) {
+  const epsilon = 0.01
+  if (Math.max(a.x, b.x) + epsilon < Math.min(c.x, d.x)
+    || Math.max(c.x, d.x) + epsilon < Math.min(a.x, b.x)
+    || Math.max(a.z, b.z) + epsilon < Math.min(c.z, d.z)
+    || Math.max(c.z, d.z) + epsilon < Math.min(a.z, b.z)) return false
+
+  const cross = (p, q, r) => (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x)
+  const abC = cross(a, b, c)
+  const abD = cross(a, b, d)
+  const cdA = cross(c, d, a)
+  const cdB = cross(c, d, b)
+  return abC * abD <= epsilon && cdA * cdB <= epsilon
+}
+
 function wallMatchesWaterEdge(wall, x, z, direction) {
   if (!surfaceBlocksWater(wall)) return false
 
@@ -2023,6 +2160,24 @@ function wallMatchesWaterEdge(wall, x, z, direction) {
   const maxX = (x + 1) * fine
   const minZ = z * fine
   const maxZ = (z + 1) * fine
+
+  if (wall.axis === 'segment') {
+    const edge = direction === 'north' || direction === 'south'
+      ? [
+          { x: minX, z: (direction === 'north' ? z : z + 1) * fine },
+          { x: maxX, z: (direction === 'north' ? z : z + 1) * fine },
+        ]
+      : [
+          { x: (direction === 'west' ? x : x + 1) * fine, z: minZ },
+          { x: (direction === 'west' ? x : x + 1) * fine, z: maxZ },
+        ]
+    return segmentsIntersect2d(
+      { x: Number(wall.x0), z: Number(wall.z0) },
+      { x: Number(wall.x1), z: Number(wall.z1) },
+      edge[0],
+      edge[1],
+    )
+  }
 
   if (direction === 'north' || direction === 'south') {
     if (wall.axis !== 'x') return false
@@ -2116,8 +2271,15 @@ export function computeSurfaceWaterCells(data, margin = 2) {
     }
   }
 
+  // La nappe extérieure représente la surface de l'eau autour de toute la
+  // carte, pas le plafond de chaque étage pris séparément.
+  const mapTopY = Math.max(
+    ...[...levels.values()].map(level => level.topY),
+    0,
+  )
+
   const dryCellKeys = new Set()
-  const waterCells = []
+  const waterCellsByPosition = new Map()
 
   for (const [levelId, level] of levels) {
     const sourceCells = [...level.cells.values()]
@@ -2177,15 +2339,17 @@ export function computeSurfaceWaterCells(data, margin = 2) {
           dryCellKeys.add(`${levelId}:${key}`)
           continue
         }
-        waterCells.push({
+        const waterKey = cellKey(x, z)
+        const existing = waterCellsByPosition.get(waterKey)
+        waterCellsByPosition.set(waterKey, {
           x,
           z,
-          baseY: level.baseY,
-          topY: candidate?.ceilingY || level.topY,
+          baseY: Math.min(existing?.baseY ?? level.baseY, level.baseY),
+          topY: mapTopY,
         })
       }
     }
   }
 
-  return { dryCellKeys, waterCells }
+  return { dryCellKeys, waterCells: [...waterCellsByPosition.values()] }
 }

@@ -536,6 +536,8 @@ export default function Sidebar({
     ceilingHeight: 2.5,
     wallThickness: 1,
     wallHeight: 2.5,
+    wallShape: 'straight',
+    wallCurveOffset: 1.5,
     stairRise: 2.5,
     movementMultiplier: 1,
     ladderAxis: 'x',
@@ -1126,6 +1128,16 @@ export default function Sidebar({
                   </button>
                   <button
                     type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'wall', selectedRoomId: null, selectedRoomIds: [] })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'wall' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    Mur
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => updateSurfaceTool({ mode: 'stair' })}
                     style={{
                       ...styles.roomToolModeBtn,
@@ -1318,7 +1330,7 @@ export default function Sidebar({
                   </div>
                 )}
                 {(surfaceToolState.selectedRoomId
-                  || ['room', 'floor', 'stair', 'bridge', 'connector'].includes(surfaceToolState.mode)) && (
+                  || ['room', 'floor', 'wall', 'stair', 'bridge', 'connector'].includes(surfaceToolState.mode)) && (
                   <label style={styles.roomToolLabel}>
                     <span>Coût de déplacement (multiplicateur)</span>
                     <input
@@ -1580,6 +1592,17 @@ export default function Sidebar({
                 {surfaceToolState.mode === 'wall' && (
                   <div style={styles.roomToolGrid}>
                     <label style={styles.roomToolLabel}>
+                      <span>Forme</span>
+                      <select
+                        value={surfaceToolState.wallShape || 'straight'}
+                        onChange={e => updateSurfaceTool({ wallShape: e.target.value })}
+                        style={styles.roomToolSelect}
+                      >
+                        <option value="straight">Droit</option>
+                        <option value="curve">Courbe</option>
+                      </select>
+                    </label>
+                    <label style={styles.roomToolLabel}>
                       <span>Epaisseur</span>
                       <input
                         type="number"
@@ -1602,6 +1625,21 @@ export default function Sidebar({
                         ))}
                       </select>
                     </label>
+                    {surfaceToolState.wallShape === 'curve' && (
+                      <label style={{ ...styles.roomToolLabel, gridColumn: '1 / -1' }}>
+                        <span>Courbure : {Number(surfaceToolState.wallCurveOffset || 0).toFixed(2)} case</span>
+                        <input
+                          type="range"
+                          min="-8"
+                          max="8"
+                          step="0.25"
+                          value={surfaceToolState.wallCurveOffset || 0}
+                          onChange={e => updateSurfaceTool({ wallCurveOffset: Number(e.target.value) })}
+                          style={{ width: '100%' }}
+                        />
+                        <small style={{ color: '#8b8ba7' }}>Le signe inverse le côté. Les portes se placent sur une portion droite.</small>
+                      </label>
+                    )}
                   </div>
                 )}
                 {(surfaceToolState.mode === 'room' || surfaceToolState.selectedRoomId) && surfaceToolState.mode !== 'erase' && surfaceToolState.mode !== 'connector' && (

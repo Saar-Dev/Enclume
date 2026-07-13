@@ -18,6 +18,7 @@ import {
   getFloorTopY,
   getWallRenderBox,
   hasSurfaceContent,
+  isWorldPointVisibleAtLevel,
   levelToY,
   normalizeSurfaceData,
   parseFloorKey,
@@ -270,7 +271,7 @@ function EntityEditorScene({
       ...Object.entries(surface.walls || {}).map(([id, wall]) => ({ ...wall, id: wall?.id || id })),
     ], surface.connectors)
     return walls.flatMap(wall => {
-      if (!wall?.id || !wall?.axis || yToLevel(wall.y) !== displayLevel) return []
+      if (!wall?.id || !wall?.axis || wall.axis === 'segment' || yToLevel(wall.y) !== displayLevel) return []
       const renderBox = getWallRenderBox(wall)
       if (!renderBox) return []
       const [width, height, depth] = renderBox.args
@@ -502,8 +503,19 @@ function EntityEditorScene({
     const meshes = []
     scene.traverse(obj => { if (obj.userData.isEntity && obj.isMesh) meshes.push(obj) })
     const hits = raycaster.intersectObjects(meshes, false)
-    return hits.length > 0 ? hits[0].object.userData.entityId : null
-  }, [camera, gl, scene])
+    for (const hit of hits) {
+      const entityId = hit.object.userData.entityId
+      const entity = entities.find(item => item.id === entityId)
+      if (entity && isWorldPointVisibleAtLevel(
+        surfaceData,
+        displayLevel,
+        (Number(entity.pos_x) || 0) + 0.5,
+        (Number(entity.pos_y) || 0) + 0.5,
+        entity.pos_z,
+      )) return entityId
+    }
+    return null
+  }, [camera, displayLevel, entities, gl, scene, surfaceData])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -546,7 +558,9 @@ function EntityEditorScene({
     const canvas = gl.domElement
     const onMouseDown = async (e) => {
       if (e.button !== 0) return
-      const entityId = getEntityUnderCursor(e.clientX, e.clientY)
+      // Quand un blueprint est actif, le clic sert d'abord à le poser. Un
+      // objet visible à un étage inférieur ne doit jamais voler ce clic.
+      const entityId = activeBlueprint?.id ? null : getEntityUnderCursor(e.clientX, e.clientY)
       if (entityId) {
         const entity = entities.find(item => item.id === entityId)
         if (!entity) return
@@ -710,7 +724,13 @@ function EntityEditorScene({
       {entities.map(entity => {
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
-        if (yToLevel(entity.pos_z) > displayLevel) return null
+        if (!isWorldPointVisibleAtLevel(
+          surfaceData,
+          displayLevel,
+          (Number(entity.pos_x) || 0) + 0.5,
+          (Number(entity.pos_y) || 0) + 0.5,
+          entity.pos_z,
+        )) return null
         const isMoving = moveGhost?.entityId === entity.id
         return (
           <EntityMesh key={entity.id} entity={entity} blueprint={blueprint}

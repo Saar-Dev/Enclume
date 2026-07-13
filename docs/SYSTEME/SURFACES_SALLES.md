@@ -14,7 +14,8 @@ sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de m
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
 navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
 le lisent également ; depuis la Phase 7, la FSM combat lui délègue aussi déplacements, distances,
-portées, interactions et terrain instable.
+portées, interactions et terrain instable. Depuis la Phase 8, l'affichage isole strictement l'étage
+courant et l'outil Mur sait produire des courbes physiques tessellées.
 
 Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit le moteur commun qui compile
 ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une
@@ -30,8 +31,17 @@ Une salle est un objet métier rectangulaire :
 - étage de base : `level` / `y` ;
 - hauteur : `heightLevels`, exprimée en étages, pas en mètres ;
 - dalles : sol et plafond, avec textures ou matériaux séparés pour dessus/dessous ;
-- murs : une face intérieure et une face extérieure ;
+- murs : une face intérieure et une face extérieure ; les murs libres peuvent être droits ou
+  composés de segments orientés issus d'une courbe quadratique ;
 - connecteurs : portes, escaliers, échelles, passerelles et ascenseurs entre salles/étages.
+
+Une salle `heightLevels > 1` existe dans chaque tranche verticale qu'elle traverse et décrit un seul
+volume ouvert. Depuis une tranche haute, son sol de base, ses murs descendants et le contenu situé
+plus bas dans sa propre emprise restent visibles : un puits profond doit donc paraître profond.
+Aucun plancher intermédiaire n'est créé automatiquement et les pièces inférieures extérieures à
+cette emprise restent absentes. Une future trappe doit être portée par un connecteur vertical —
+typiquement une échelle — avec son propre état ouvert/fermé ; elle ne révèle jamais l'étage inférieur
+entier.
 
 Les dalles et les murs rendus ne doivent pas devenir la source de vérité. Ils sont dérivés depuis les salles au moment du rendu ou des calculs d’étanchéité.
 

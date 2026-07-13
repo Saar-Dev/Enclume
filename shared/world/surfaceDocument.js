@@ -112,7 +112,7 @@ function validateFeature(collection, id, item, errors) {
       errors.push(`${path} doit fournir des coordonnées x/z/baseY/y valides`)
     }
   } else if (collection === 'walls') {
-    if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
+    if (!['x', 'z', 'segment'].includes(item.axis)) errors.push(`${path}.axis doit valoir x, z ou segment`)
     validateFiniteFields(item, ['x0', 'x1', 'z0', 'z1'], path, errors)
   } else if (collection === 'stairs') {
     if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
@@ -281,4 +281,3 @@ export function collectSurfaceTextureIds(input) {
   }
   return Object.freeze([...ids])
 }
-

@@ -1,8 +1,8 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-13 — Phase 7, combat et interactions branchés au monde.
+> Dernière mise à jour : 2026-07-13 — Phase 8, tranches d'étage et murs courbes.
 >
-> Statut : **Phases 0 à 7 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
+> Statut : **Phases 0 à 8 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
 >
 > Lire pour : tout travail touchant le monde 3D, les coordonnées, les surfaces praticables, les
@@ -425,6 +425,29 @@ Une entité 3D est composée de capacités indépendantes : apparence, collider,
 praticable, perméabilité, danger, déclencheur. Le GLB n'est jamais la source physique : il visualise
 les propriétés déclarées.
 
+### 7.1 Tranche d'étage affichée
+
+`displayLevel = N` signifie que la scène interactive ne contient que la tranche N. Les géométries,
+entités, tokens et régions des niveaux inférieurs ou supérieurs ne sont ni rendus, ni raycastés, ni
+utilisés comme supports de placement, sauf dans un volume ouvert explicitement décrit.
+
+Une salle haute de plusieurs étages est un tel volume. Depuis une tranche supérieure, le renderer
+conserve son véritable sol de base, toutes ses parois jusqu'au fond, ainsi que les entités, tokens et
+régions plus bas dont le point monde se trouve dans son emprise horizontale et verticale. Cette
+exception est locale : une salle basse adjacente ou empilée n'est pas révélée. Aucun plancher
+intermédiaire n'est inventé et le plafond n'existe que dans la tranche supérieure. Les connecteurs
+verticaux sont découpés par tranche ou exposent uniquement leur palier courant.
+
+### 7.2 Murs courbes
+
+Une courbe éditée est une courbe quadratique à courbure signée, tessellée avec une longueur cible de
+segment de 0,25 unité monde. Chaque segment `axis: segment` possède sa propre boîte orientée de rendu
+et alimente le compilateur avec les mêmes extrémités. Les index physiques utilisent une AABB courte
+par segment : l'approximation reste bornée par la tessellation et ne crée pas une seconde géométrie.
+
+Les portes exigent actuellement un mur X/Z droit. Les placer sur une courbe est refusé jusqu'à ce
+qu'un contrat de découpe et un modèle de porte orientée soient définis.
+
 ---
 
 ## 8. Vision et couverture `[EXISTANT]`
@@ -555,6 +578,9 @@ moteur.
 8. Tous les consommateurs utilisent le même snapshot et la même révision.
 9. Tout objet structurel possède une identité stable.
 10. Une carte voxel historique ne doit jamais imposer une contrainte au moteur canonique.
+11. Un étage masqué ne peut être ni cliquable ni support de placement dans la tranche courante.
+12. Une salle multi-hauteur traverse ses tranches sans recevoir de plancher implicite et révèle son
+    propre fond, jamais le reste des étages inférieurs.
 
 ---
 
