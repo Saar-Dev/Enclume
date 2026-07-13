@@ -113,7 +113,7 @@ Phase 1, pas d'un oubli de la Phase 0.
 
 ### Livré le 2026-07-13
 
-- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v7, attribue des UUID
+- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v8, attribue des UUID
   stables et produit le `WorldDocument` canonique ;
 - `shared/world/worldCompiler.js` compile salles, dalles, murs partagés, portes découpées, escaliers,
   ascenseurs désactivés en attente de leur contrôleur, colliders, occluders et compartiments ;
@@ -559,7 +559,40 @@ Phase 7.
 
 ---
 
-## 15. Matrice de non-régression minimale
+## 15. Phase 12 — murs courbes canoniques et portes tangentes ✅
+
+### Contrat `surface_data` v8
+
+- `room.boundaryArcs` reste la définition éditée ; `roomBoundaryPaths(...)` en dérive un chemin
+  canonique avec centre, rayon, angle initial, balayage, longueur et identité de courbe ;
+- un arrondi n'est plus représenté par une collection de petits murs dans le snapshot : le
+  compilateur émet une géométrie `wall-arc` unique ;
+- une porte courbe conserve son abscisse curviligne, son ancrage exact, sa tangente et sa normale.
+  Le sens du connecteur est ainsi indépendant de l'ordre de tessellation ;
+- la découpe d'une porte partage l'arc en intervalles avant/après et linteau, sans perdre son
+  identité ni limiter l'ouverture à une subdivision visuelle.
+
+### Rendu et physique
+
+- le renderer génère un mesh continu pour chaque portion d'arc visible ; les normales analytiques
+  suivent le rayon et les UV suivent la longueur, ce qui garantit la continuité des textures ;
+- le nombre de subdivisions du mesh est uniquement un niveau de détail. Il n'est jamais sauvegardé
+  comme structure du mur ;
+- broadphase, collision et LOS consomment `wall-arc`. Une tessellation locale est permise uniquement
+  comme adaptateur interne du narrow phase ;
+- un mur courbe commun reste un unique obstacle dédupliqué pour les deux salles.
+
+### Validation
+
+- porte sur arc : point sur le rayon, tangente et normale unitaires orthogonales, rotation stable ;
+- découpe d'arc et traversée dans le sens de la normale ;
+- collision et LOS sur `wall-arc` sans faux obstacle hors de la courbe ;
+- 97 tests monde/combat et 13 tests client Surface passent ; ESLint ciblé ne remonte aucune erreur
+  et le build Vite est validé.
+
+---
+
+## 16. Matrice de non-régression minimale
 
 Chaque phase doit conserver ou ajouter ces scénarios :
 
@@ -581,7 +614,7 @@ Chaque phase doit conserver ou ajouter ces scénarios :
 
 ---
 
-## 16. Définition de fini du chantier
+## 17. Définition de fini du chantier
 
 Le moteur de monde est considéré terminé lorsque :
 

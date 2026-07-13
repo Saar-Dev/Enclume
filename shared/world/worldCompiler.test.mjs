@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { compileSurfaceWorld } from './worldCompiler.js'
-import { makeRoomBoundaryArc, roomBoundaryWallRuns } from './roomGeometry.js'
+import { makeRoomBoundaryArc, roomBoundaryPaths, roomBoundaryWallRuns } from './roomGeometry.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -70,7 +70,7 @@ test('deux salles adjacentes partagent un seul mur physique', () => {
   assert.equal(walls.filter(item => item.sourceIds?.length === 2).length, 1)
 })
 
-test('un arrondi de salle compile les mêmes segments pour collision et ligne de vue', () => {
+test('un arrondi de salle reste un arc canonique pour collision et ligne de vue', () => {
   const roundedRoom = {
     ...room('rounded', 0, 1, 0, 1),
     cells: ['0:0', '1:0', '0:1', '1:1'],
@@ -81,17 +81,82 @@ test('un arrondi de salle compile les mêmes segments pour collision et ligne de
     battlemapId: 'map-rounded-room',
     surfaceData: emptySurface({ rooms: { rounded: roundedRoom } }),
   })
-  const curved = snapshot.spatial.barriers.filter(item => item.kind === 'wall' && item.axis === 'segment')
+  const curved = snapshot.spatial.barriers.filter(item => item.kind === 'wall' && item.axis === 'arc')
 
-  assert.ok(curved.length > 4)
+  assert.equal(curved.length, 1)
   assert.ok(curved.every(item => item.blocks.movement && item.blocks.sight && item.blocks.water))
-  assert.ok(curved.every(item => item.geometry?.type === 'wall-segment'))
+  assert.ok(curved.every(item => item.geometry?.type === 'wall-arc'))
   assert.ok(curved.every(item => snapshot.spatial.colliders.some(collider => (
-    collider.sourceId === item.sourceId && collider.geometry?.type === 'wall-segment'
+    collider.sourceId === item.sourceId && collider.geometry?.type === 'wall-arc'
   ))))
   assert.ok(curved.every(item => snapshot.spatial.occluders.some(occluder => (
-    occluder.sourceId === item.sourceId && occluder.geometry?.type === 'wall-segment'
+    occluder.sourceId === item.sourceId && occluder.geometry?.type === 'wall-arc'
   ))))
+})
+
+test('une porte courbe découpe l arc et compile son portail selon la normale locale', () => {
+  const roundedRoom = {
+    ...room('rounded', 0, 1, 0, 1),
+    cells: ['0:0', '1:0', '0:1', '1:1'],
+  }
+  const selected = roomBoundaryWallRuns(roundedRoom).filter(wall => ['west', 'north'].includes(wall.side))
+  const arc = makeRoomBoundaryArc(roundedRoom, selected.flatMap(wall => wall.edgeKeys), 90).arc
+  roundedRoom.boundaryArcs = [{ ...arc, ownerRoomId: 'rounded' }]
+  const path = roomBoundaryPaths({ id: 'rounded', ...roundedRoom }, { rounded: roundedRoom })
+    .find(item => item.axis === 'arc')
+  const curveOffset = (path.curveOffset0 + path.curveOffset1) / 2
+  const angle = path.startAngle + path.sweep / 2
+  const sweepSign = Math.sign(path.sweep)
+  const tangentX = -Math.sin(angle) * sweepSign
+  const tangentZ = Math.cos(angle) * sweepSign
+  const normalX = -tangentZ
+  const normalZ = tangentX
+  const anchorX = path.centerX + Math.cos(angle) * path.radius
+  const anchorZ = path.centerZ + Math.sin(angle) * path.radius
+  const width = 0.8
+  const surface = emptySurface({
+    rooms: { rounded: roundedRoom },
+    connectors: {
+      curvedDoor: {
+        id: 'curvedDoor',
+        type: 'door',
+        axis: 'segment',
+        level: 0,
+        y: 0,
+        x0: (anchorX - tangentX * width / 2) * 4,
+        z0: (anchorZ - tangentZ * width / 2) * 4,
+        x1: (anchorX + tangentX * width / 2) * 4,
+        z1: (anchorZ + tangentZ * width / 2) * 4,
+        anchorX,
+        anchorZ,
+        tangentX,
+        tangentZ,
+        normalX,
+        normalZ,
+        rotationY: -Math.atan2(tangentZ, tangentX),
+        curveId: path.curveId,
+        curveOffset,
+        width,
+        depth: 0.2,
+        height: 2,
+        thickness: 1,
+        roomId: 'rounded',
+        roomIds: ['rounded'],
+        state: 'open',
+      },
+    },
+  })
+  const snapshot = compileSurfaceWorld({ battlemapId: 'map-curved-door', surfaceData: surface })
+  const arcWalls = snapshot.spatial.barriers.filter(item => item.kind === 'wall' && item.axis === 'arc')
+  const traversal = snapshot.spatial.traversals.find(item => item.kind === 'door')
+
+  assert.equal(arcWalls.length, 3)
+  assert.ok(arcWalls.every(item => item.geometry?.type === 'wall-arc'))
+  assert.ok(traversal.enabled)
+  const traversalDx = traversal.to.x - traversal.from.x
+  const traversalDz = traversal.to.z - traversal.from.z
+  assert.ok(Math.abs(traversalDx * tangentX + traversalDz * tangentZ) < 1e-6)
+  assert.ok(Math.hypot(traversalDx, traversalDz) > 0.2)
 })
 
 test('un mur exterieur supprime ne compile plus de collision ni de ligne de vue', () => {
@@ -101,7 +166,7 @@ test('un mur exterieur supprime ne compile plus de collision ni de ligne de vue'
     .edgeKeys
   const snapshot = compileSurfaceWorld({
     battlemapId: 'map-opened-room',
-    surfaceData: emptySurface({ version: 7, rooms: { opened: openedRoom } }),
+    surfaceData: emptySurface({ version: 8, rooms: { opened: openedRoom } }),
   })
 
   const walls = snapshot.spatial.barriers.filter(item => item.kind === 'wall')
@@ -124,13 +189,13 @@ test('deux salles decoupees partagent un unique mur courbe physique', () => {
   }
   const snapshot = compileSurfaceWorld({
     battlemapId: 'map-clipped-room',
-    surfaceData: emptySurface({ version: 7, rooms: { rounded, adjacent } }),
+    surfaceData: emptySurface({ version: 8, rooms: { rounded, adjacent } }),
   })
 
   const sharedCurves = snapshot.spatial.barriers.filter(item => (
-    item.kind === 'wall' && item.axis === 'segment' && item.sourceIds?.length === 2
+    item.kind === 'wall' && item.axis === 'arc' && item.sourceIds?.length === 2
   ))
-  assert.ok(sharedCurves.length > 4)
+  assert.equal(sharedCurves.length, 1)
   assert.ok(sharedCurves.every(item => item.blocks.movement && item.blocks.sight))
 })
 

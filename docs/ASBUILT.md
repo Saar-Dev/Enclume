@@ -72,7 +72,7 @@ Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statiq
 
 ## Moteur de monde — Phase 1 ✅
 
-- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v7, UUID physiques
+- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v8, UUID physiques
   stables, adaptation vers le document canonique ;
 - `shared/world/worldCompiler.js` — compilation déterministe des sols, plafonds, murs partagés,
   découpes de porte, escaliers, barrières multi-canaux, colliders, occluders et compartiments ;
@@ -228,8 +228,9 @@ moteur ; sinon elles doivent être supprimées.
   placement ;
 - **Mur droit** reste l'outil de panneau libre ; l'ancien bouton de courbe libre a été remplacé par
   l'arrondi structuré du contour de salle décrit en Phase 10 ;
-- chaque courbe est tessellée en segments orientés courts partagés par le renderer, le compilateur,
-  les collisions, la LOS et l'étanchéité ; les portes restent limitées aux portions droites ;
+- à cette phase, chaque courbe était tessellée en segments orientés courts et les portes restaient
+  limitées aux portions droites. La Phase 12 remplace explicitement cette représentation transitoire
+  par un arc canonique et des portes tangentes ;
 - la future trappe est documentée comme capacité d'un connecteur vertical lié, le plus souvent, à
   une échelle.
 
@@ -278,9 +279,28 @@ moteur ; sinon elles doivent être supprimées.
   effectif : dalle, plafond et mur épousent la courbe même si elle dépasse l'ancienne AABB ;
 - `polygon-clipping` fournit les opérations robustes de différence/intersection. Les conversions et
   règles métier restent centralisées dans `shared/world/roomGeometry.js` ;
-- le renderer gère multipolygones et trous ; le compilateur, les collisions et la LOS réutilisent les
-  mêmes segments de frontière ;
+- le renderer gère multipolygones et trous ; le compilateur, les collisions et la LOS réutilisent la
+  même frontière (segments en v7, chemin canonique depuis la v8) ;
 - 92 tests monde/combat et 12 tests Surface passent ; ESLint ciblé ne remonte aucune erreur et le
+  build Vite est validé.
+
+---
+
+## Moteur de monde — Phase 12 ✅
+
+- `surface_data` v8 fait des arrondis de salle de vrais chemins de murs canoniques : centre, rayon,
+  angle initial, balayage, longueur et identité stable remplacent la collection de petits panneaux ;
+- `shared/world/roomGeometry.js` dérive ces chemins depuis `room.boundaryArcs`, tout en conservant un
+  échantillonnage interne pour les consommateurs qui en ont réellement besoin ;
+- le renderer crée un mesh courbe continu, avec normales analytiques et UV calculées sur la longueur
+  de l'arc. Les textures ne redémarrent plus à chaque subdivision ;
+- le compilateur produit `wall-arc`. Le broadphase utilise son AABB exacte et les narrow phases de
+  collision/LOS sont les seuls endroits autorisés à l'échantillonner temporairement ;
+- une porte sur arc est ancrée par distance curviligne, point, tangente et normale exacts. Son modèle,
+  sa découpe du mur et sa traversée partagent le même repère local ;
+- l'ouverture partage l'arc canonique en portions avant/après et linteau, même si elle traverse
+  plusieurs subdivisions de rendu ;
+- 97 tests monde/combat et 13 tests Surface passent ; ESLint ciblé ne remonte aucune erreur et le
   build Vite est validé.
 
 ---

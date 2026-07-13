@@ -70,6 +70,34 @@ test('la LOS respecte le prisme orienté d’un mur courbe', () => {
   }).clear, false)
 })
 
+test('la LOS consomme directement une primitive mur-arc canonique', () => {
+  const arc = {
+    id: 'arc', kind: 'wall', opacity: 1,
+    bounds: { min: { x: -0.05, y: 0, z: -0.05 }, max: { x: 1.05, y: 2.5, z: 1.05 } },
+    geometry: {
+      type: 'wall-arc',
+      center: { x: 0, z: 0 },
+      radius: 1,
+      startAngle: 0,
+      sweep: Math.PI / 2,
+      minY: 0,
+      maxY: 2.5,
+      thickness: 0.1,
+    },
+  }
+
+  assert.equal(traceVisibility({
+    snapshot: snapshot([arc]),
+    from: { x: 0.1, y: 1, z: 0.5 },
+    to: { x: 0.3, y: 1, z: 0.5 },
+  }).clear, true)
+  assert.equal(traceVisibility({
+    snapshot: snapshot([arc]),
+    from: { x: 0.1, y: 1, z: 0.5 },
+    to: { x: 1.2, y: 1, z: 0.5 },
+  }).clear, false)
+})
+
 test('des volumes atténuants dynamiques se cumulent de façon déterministe', () => {
   const smoke = index => ({
     id: `smoke-${index}`, kind: 'smoke', opacity: 0.8,

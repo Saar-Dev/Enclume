@@ -282,13 +282,13 @@ export function makeRoomBoundaryArc(room, edgeKeys, angleDegrees = 90, sideMulti
   }
 }
 
-export function sampleRoomBoundaryArc(arc, density = 8) {
+export function describeRoomBoundaryArc(arc) {
   const start = point(arc?.start?.x, arc?.start?.z)
   const end = point(arc?.end?.x, arc?.end?.z)
   const dx = end.x - start.x
   const dz = end.z - start.z
   const chord = Math.hypot(dx, dz)
-  if (chord <= EPSILON) return [start, end]
+  if (chord <= EPSILON) return null
 
   const angle = Math.max(5, Math.min(175, Number(arc?.angleDegrees) || 90)) * Math.PI / 180
   const side = Number(arc?.side) < 0 ? -1 : 1
@@ -302,18 +302,40 @@ export function sampleRoomBoundaryArc(arc, density = 8) {
   )
   const startAngle = Math.atan2(start.z - center.z, start.x - center.x)
   const sweep = -side * angle
-  const sampleCount = Math.max(4, Math.min(128, Math.ceil(radius * angle * Math.max(2, Number(density) || 8))))
-  const points = []
-  for (let index = 0; index <= sampleCount; index += 1) {
-    const progress = index / sampleCount
-    const currentAngle = startAngle + sweep * progress
-    points.push(point(
-      center.x + Math.cos(currentAngle) * radius,
-      center.z + Math.sin(currentAngle) * radius,
-    ))
+  return {
+    center,
+    radius: clean(radius),
+    startAngle,
+    sweep,
+    length: clean(Math.abs(radius * sweep)),
+    start,
+    end,
   }
-  points[0] = start
-  points[points.length - 1] = end
+}
+
+export function sampleWallArcGeometry(geometry, density = 8) {
+  const centerX = Number(geometry?.center?.x ?? geometry?.centerX)
+  const centerZ = Number(geometry?.center?.z ?? geometry?.centerZ)
+  const radius = Number(geometry?.radius)
+  const startAngle = Number(geometry?.startAngle)
+  const sweep = Number(geometry?.sweep)
+  if (![centerX, centerZ, radius, startAngle, sweep].every(Number.isFinite) || radius <= EPSILON) return []
+  const sampleCount = Math.max(2, Math.min(256, Math.ceil(
+    Math.abs(radius * sweep) * Math.max(2, Number(density) || 8),
+  )))
+  return Array.from({ length: sampleCount + 1 }, (_, index) => {
+    const angle = startAngle + sweep * (index / sampleCount)
+    return point(centerX + Math.cos(angle) * radius, centerZ + Math.sin(angle) * radius)
+  })
+}
+
+export function sampleRoomBoundaryArc(arc, density = 8) {
+  const geometry = describeRoomBoundaryArc(arc)
+  if (!geometry) return [point(arc?.start?.x, arc?.start?.z), point(arc?.end?.x, arc?.end?.z)]
+  const points = sampleWallArcGeometry(geometry, density)
+  if (points.length < 2) return [geometry.start, geometry.end]
+  points[0] = geometry.start
+  points[points.length - 1] = geometry.end
   return points
 }
 
@@ -595,6 +617,48 @@ function openArcSegmentKeys(room, openKeys) {
   return keys
 }
 
+function collectCurveSegmentMetadata(room, roomLookup, result = new Map(), visitedRoomIds = new Set()) {
+  const roomId = String(room?.id || '')
+  if (roomId && visitedRoomIds.has(roomId)) return result
+  const visited = new Set(visitedRoomIds)
+  if (roomId) visited.add(roomId)
+
+  for (const arc of Array.isArray(room?.boundaryArcs) ? room.boundaryArcs : []) {
+    const geometry = describeRoomBoundaryArc(arc)
+    if (!geometry) continue
+    const points = sampleRoomBoundaryArc(arc)
+    const offsets = points.map((_, index) => geometry.length * index / Math.max(1, points.length - 1))
+    const curveId = `${arc.ownerRoomId || roomId || 'room'}:${arc.id}`
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const from = points[index]
+      const to = points[index + 1]
+      const key = roomBoundaryEdgeKey(from, to)
+      if (result.has(key)) continue
+      result.set(key, {
+        curveId,
+        curveArcId: arc.id,
+        curveOffset0: clean(offsets[index]),
+        curveOffset1: clean(offsets[index + 1]),
+        curveLength: geometry.length,
+        curveCenterX: geometry.center.x,
+        curveCenterZ: geometry.center.z,
+        curveRadius: geometry.radius,
+        curveStartAngle: geometry.startAngle,
+        curveSweep: geometry.sweep,
+        curveFrom: from,
+        curveTo: to,
+      })
+    }
+  }
+
+  for (const clipId of room?.geometryClipRoomIds || []) {
+    const clipRoom = roomLookup?.[clipId]
+    if (!clipRoom) continue
+    collectCurveSegmentMetadata({ id: clipId, ...clipRoom }, roomLookup, result, visited)
+  }
+  return result
+}
+
 function contourSegmentKeys(room, roomLookup) {
   const keys = new Set()
   for (const contour of roomBoundaryContours(room, roomLookup)) {
@@ -653,11 +717,14 @@ export function roomBoundarySegments(room, roomLookup = {}) {
   const openKeys = new Set(Array.isArray(room?.openWallEdgeKeys) ? room.openWallEdgeKeys : [])
   const openEdges = roomBoundaryEdges(room).filter(edge => openKeys.has(edge.key))
   const openArcKeys = openArcSegmentKeys(room, openKeys)
+  const curveMetadata = collectCurveSegmentMetadata(room, roomLookup)
   return roomBoundaryContours(room, roomLookup).flatMap((contour, loopIndex) => (
     contour.points.map((from, index) => {
       const to = contour.points[(index + 1) % contour.points.length]
       const dx = to.x - from.x
       const dz = to.z - from.z
+      const curve = curveMetadata.get(roomBoundaryEdgeKey(from, to))
+      const sameCurveDirection = curve && samePoint(from, curve.curveFrom)
       return {
         id: `boundary:${loopIndex}:${index}:${from.x}:${from.z}:${to.x}:${to.z}`,
         loopIndex,
@@ -667,6 +734,18 @@ export function roomBoundarySegments(room, roomLookup = {}) {
         z0: from.z,
         x1: to.x,
         z1: to.z,
+        ...(curve ? {
+          curveId: curve.curveId,
+          curveArcId: curve.curveArcId,
+          curveOffset0: sameCurveDirection ? curve.curveOffset0 : curve.curveOffset1,
+          curveOffset1: sameCurveDirection ? curve.curveOffset1 : curve.curveOffset0,
+          curveLength: curve.curveLength,
+          curveCenterX: curve.curveCenterX,
+          curveCenterZ: curve.curveCenterZ,
+          curveRadius: curve.curveRadius,
+          curveStartAngle: curve.curveStartAngle,
+          curveSweep: curve.curveSweep,
+        } : {}),
       }
     })
   )).filter(segment => (
@@ -676,4 +755,67 @@ export function roomBoundarySegments(room, roomLookup = {}) {
     ))
     && !segmentCoveredByStraightEdges(segment, openEdges)
   ))
+}
+
+export function roomBoundaryPaths(room, roomLookup = {}) {
+  const segments = roomBoundarySegments(room, roomLookup)
+  const straight = segments.filter(segment => !segment.curveId)
+  const curves = new Map()
+  for (const segment of segments.filter(item => item.curveId)) {
+    if (!curves.has(segment.curveId)) curves.set(segment.curveId, [])
+    curves.get(segment.curveId).push(segment)
+  }
+
+  const arcs = []
+  for (const [curveId, items] of curves) {
+    const first = items[0]
+    const curveLength = Number(first.curveLength)
+    if (!Number.isFinite(curveLength) || curveLength <= EPSILON) {
+      straight.push(...items)
+      continue
+    }
+    const intervals = items
+      .map(item => [
+        Math.min(Number(item.curveOffset0), Number(item.curveOffset1)),
+        Math.max(Number(item.curveOffset0), Number(item.curveOffset1)),
+      ])
+      .filter(interval => interval.every(Number.isFinite))
+      .sort((left, right) => left[0] - right[0])
+    const runs = []
+    for (const interval of intervals) {
+      const current = runs.at(-1)
+      if (current && interval[0] <= current[1] + 1e-5) current[1] = Math.max(current[1], interval[1])
+      else runs.push([...interval])
+    }
+    for (const [offsetStart, offsetEnd] of runs) {
+      const startProgress = offsetStart / curveLength
+      const endProgress = offsetEnd / curveLength
+      const startAngle = Number(first.curveStartAngle) + Number(first.curveSweep) * startProgress
+      const sweep = Number(first.curveSweep) * (endProgress - startProgress)
+      const x0 = Number(first.curveCenterX) + Math.cos(startAngle) * Number(first.curveRadius)
+      const z0 = Number(first.curveCenterZ) + Math.sin(startAngle) * Number(first.curveRadius)
+      const endAngle = startAngle + sweep
+      const x1 = Number(first.curveCenterX) + Math.cos(endAngle) * Number(first.curveRadius)
+      const z1 = Number(first.curveCenterZ) + Math.sin(endAngle) * Number(first.curveRadius)
+      arcs.push({
+        id: `arc:${curveId}:${clean(offsetStart)}:${clean(offsetEnd)}`,
+        axis: 'arc',
+        curveId,
+        curveArcId: first.curveArcId,
+        curveOffset0: clean(offsetStart),
+        curveOffset1: clean(offsetEnd),
+        curveLength: clean(curveLength),
+        centerX: Number(first.curveCenterX),
+        centerZ: Number(first.curveCenterZ),
+        radius: Number(first.curveRadius),
+        startAngle,
+        sweep,
+        x0: clean(x0),
+        z0: clean(z0),
+        x1: clean(x1),
+        z1: clean(z1),
+      })
+    }
+  }
+  return [...straight, ...arcs]
 }

@@ -189,3 +189,30 @@ test('la v7 refuse une dependance absente ou un cycle de decoupe', () => {
   cyclic.rooms['room:legacy'].geometryClipRoomIds = ['other']
   assert.equal(validateSurfaceData(cyclic).valid, false)
 })
+
+test('la v8 valide une porte ancree dans le repere parametrique d un arc', () => {
+  const surface = surfaceFixture()
+  surface.version = 8
+  surface.connectors.curvedDoor = {
+    type: 'door',
+    axis: 'segment',
+    x0: 0,
+    z0: 0,
+    x1: 2,
+    z1: 2,
+    y: 0,
+    anchorX: 0.25,
+    anchorZ: 0.25,
+    tangentX: Math.SQRT1_2,
+    tangentZ: Math.SQRT1_2,
+    normalX: -Math.SQRT1_2,
+    normalZ: Math.SQRT1_2,
+    rotationY: -Math.PI / 4,
+    curveId: 'room:legacy:arc:test',
+    curveOffset: 1.2,
+  }
+  assert.equal(validateSurfaceData(surface).valid, true)
+
+  delete surface.connectors.curvedDoor.curveOffset
+  assert.equal(validateSurfaceData(surface).valid, false)
+})

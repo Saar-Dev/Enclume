@@ -14,7 +14,7 @@ import {
   normalizeElevatorState,
 } from './elevatorRuntime.js'
 import {
-  roomBoundarySegments,
+  roomBoundaryPaths,
   roomEffectiveGridCells,
   roomGeometryBounds,
 } from './roomGeometry.js'
@@ -171,7 +171,9 @@ function roomCeilingEntries(surface, battlemapId) {
 }
 
 function wallKey(wall) {
-  const values = wall.axis === 'x'
+  const values = wall.axis === 'arc'
+    ? [wall.axis, wall.curveId, wall.curveOffset0, wall.curveOffset1, wall.y, wall.height]
+    : wall.axis === 'x'
     ? [wall.axis, Math.min(wall.x0, wall.x1), Math.max(wall.x0, wall.x1), wall.z0, wall.y, wall.height]
     : wall.axis === 'z'
       ? [wall.axis, wall.x0, Math.min(wall.z0, wall.z1), Math.max(wall.z0, wall.z1), wall.y, wall.height]
@@ -212,7 +214,7 @@ function roomWallCandidates(surface, battlemapId) {
     const baseY = roomBaseY(room, surface.storyHeight)
     const levels = roomHeightLevels(room, surface.storyHeight)
     const thickness = positive(room.wallThickness, 1) / surface.fine
-    const boundary = roomBoundarySegments(room, surface.rooms)
+    const boundary = roomBoundaryPaths(room, surface.rooms)
     for (let offset = 0; offset < levels; offset++) {
       const y = baseY + offset * surface.storyHeight
       for (const segment of boundary) {
@@ -245,7 +247,7 @@ function roomWallCandidates(surface, battlemapId) {
 }
 
 function wallPieceFromCandidate(wall) {
-  if (wall.axis === 'segment') {
+  if (wall.axis === 'segment' || wall.axis === 'arc') {
     return {
       ...wall,
       bottom: wall.y,
@@ -266,26 +268,62 @@ function wallPieceFromCandidate(wall) {
 
 function doorGeometry(connector, surface, runtimeState) {
   const axis = connector.axis
-  const alongStart = axis === 'x' ? number(connector.x0) : number(connector.z0)
-  const alongEnd = axis === 'x' ? number(connector.x1) : number(connector.z1)
-  const centerFine = Number.isFinite(Number(connector.alongCenter))
-    ? Number(connector.alongCenter)
-    : (alongStart + alongEnd) / 2
   const geometry = connector.modelGeometry || {}
   const explicitOpening = number(geometry.openingWidth || geometry.doorPanelWidth || geometry.door_panel_width_m)
   const explicitCut = number(geometry.wallCutWidth || geometry.footprintWidth || geometry.footprint_width_m)
-  const storedWidth = Math.abs(alongEnd - alongStart) / surface.fine
+  const storedWidth = Math.hypot(
+    number(connector.x1) - number(connector.x0),
+    number(connector.z1) - number(connector.z0),
+  ) / surface.fine
   const cutWidth = positive(explicitCut, positive(storedWidth, positive(connector.width, positive(geometry.width, 1))))
   const openingWidth = positive(explicitOpening, Math.max(0.25, cutWidth - 0.02))
-  const center = centerFine / surface.fine
   const state = runtimeState?.state || connector.state || 'closed'
-  const line = (axis === 'x' ? number(connector.z0) : number(connector.x0)) / surface.fine
   const bottom = number(connector.y)
   const height = positive(geometry.height, positive(connector.height, 2))
   const thickness = Math.max(
     positive(connector.thickness, 1) / surface.fine,
     positive(connector.depth, 0.25),
   )
+  if (axis === 'segment') {
+    const anchorX = number(connector.anchorX, (number(connector.x0) + number(connector.x1)) / (2 * surface.fine))
+    const anchorZ = number(connector.anchorZ, (number(connector.z0) + number(connector.z1)) / (2 * surface.fine))
+    const tangentLength = Math.hypot(number(connector.tangentX), number(connector.tangentZ)) || 1
+    const tangentX = number(connector.tangentX, 1) / tangentLength
+    const tangentZ = number(connector.tangentZ) / tangentLength
+    const normalLength = Math.hypot(number(connector.normalX), number(connector.normalZ)) || 1
+    const normalX = number(connector.normalX, -tangentZ) / normalLength
+    const normalZ = number(connector.normalZ, tangentX) / normalLength
+    const curveOffset = number(connector.curveOffset)
+    return {
+      connector,
+      worldId: connector.worldId,
+      axis,
+      curveId: connector.curveId,
+      curveOffset,
+      alongMin: curveOffset - openingWidth / 2,
+      alongMax: curveOffset + openingWidth / 2,
+      cutAlongMin: curveOffset - cutWidth / 2,
+      cutAlongMax: curveOffset + cutWidth / 2,
+      anchorX,
+      anchorZ,
+      tangentX,
+      tangentZ,
+      normalX,
+      normalZ,
+      bottom,
+      top: bottom + height,
+      thickness,
+      state,
+    }
+  }
+
+  const alongStart = axis === 'x' ? number(connector.x0) : number(connector.z0)
+  const alongEnd = axis === 'x' ? number(connector.x1) : number(connector.z1)
+  const centerFine = Number.isFinite(Number(connector.alongCenter))
+    ? Number(connector.alongCenter)
+    : (alongStart + alongEnd) / 2
+  const center = centerFine / surface.fine
+  const line = (axis === 'x' ? number(connector.z0) : number(connector.x0)) / surface.fine
   return {
     connector,
     worldId: connector.worldId,
@@ -303,6 +341,15 @@ function doorGeometry(connector, surface, runtimeState) {
 }
 
 function doorMatchesWall(door, wall) {
+  if (door.axis === 'segment' && wall.axis === 'arc') {
+    const wallMin = Math.min(number(wall.curveOffset0), number(wall.curveOffset1))
+    const wallMax = Math.max(number(wall.curveOffset0), number(wall.curveOffset1))
+    return door.curveId === wall.curveId
+      && door.top > wall.bottom + EPSILON
+      && door.bottom < wall.top - EPSILON
+      && door.cutAlongMax > wallMin + EPSILON
+      && door.cutAlongMin < wallMax - EPSILON
+  }
   return door.axis === wall.axis
     && Math.abs(door.line - wall.line) <= EPSILON
     && door.top > wall.bottom + EPSILON
@@ -313,6 +360,52 @@ function doorMatchesWall(door, wall) {
 
 function splitWallPiece(piece, door) {
   if (!doorMatchesWall(door, piece)) return [piece]
+  if (piece.axis === 'arc') {
+    const wallOffset0 = number(piece.curveOffset0)
+    const wallOffset1 = number(piece.curveOffset1)
+    const wallMin = Math.min(wallOffset0, wallOffset1)
+    const wallMax = Math.max(wallOffset0, wallOffset1)
+    const openingMin = Math.max(wallMin, door.cutAlongMin)
+    const openingMax = Math.min(wallMax, door.cutAlongMax)
+    const openingBottom = Math.max(piece.bottom, door.bottom)
+    const openingTop = Math.min(piece.top, door.top)
+    if (openingMax <= openingMin + EPSILON || openingTop <= openingBottom + EPSILON) return [piece]
+    const rawT0 = (openingMin - wallOffset0) / (wallOffset1 - wallOffset0)
+    const rawT1 = (openingMax - wallOffset0) / (wallOffset1 - wallOffset0)
+    const fromT = Math.max(0, Math.min(rawT0, rawT1))
+    const toT = Math.min(1, Math.max(rawT0, rawT1))
+    const patchArc = (startT, endT) => {
+      const startAngle = number(piece.startAngle) + number(piece.sweep) * startT
+      const sweep = number(piece.sweep) * (endT - startT)
+      const endAngle = startAngle + sweep
+      return {
+        startAngle,
+        sweep,
+        curveOffset0: wallOffset0 + (wallOffset1 - wallOffset0) * startT,
+        curveOffset1: wallOffset0 + (wallOffset1 - wallOffset0) * endT,
+        x0: number(piece.centerX) + Math.cos(startAngle) * number(piece.radius),
+        z0: number(piece.centerZ) + Math.sin(startAngle) * number(piece.radius),
+        x1: number(piece.centerX) + Math.cos(endAngle) * number(piece.radius),
+        z1: number(piece.centerZ) + Math.sin(endAngle) * number(piece.radius),
+      }
+    }
+    const parts = []
+    const pushArc = (suffix, startT, endT, bottom, top) => {
+      if (endT <= startT + EPSILON || top <= bottom + EPSILON) return
+      parts.push({
+        ...piece,
+        ...patchArc(startT, endT),
+        suffix: `${piece.suffix}:${suffix}`,
+        bottom,
+        top,
+      })
+    }
+    pushArc('before', 0, fromT, piece.bottom, piece.top)
+    pushArc('after', toT, 1, piece.bottom, piece.top)
+    pushArc('below', fromT, toT, piece.bottom, openingBottom)
+    pushArc('above', fromT, toT, openingTop, piece.top)
+    return parts
+  }
   const openingMin = Math.max(piece.alongMin, door.cutAlongMin)
   const openingMax = Math.min(piece.alongMax, door.cutAlongMax)
   const openingBottom = Math.max(piece.bottom, door.bottom)
@@ -333,6 +426,33 @@ function splitWallPiece(piece, door) {
 
 function wallPieceBounds(piece) {
   const half = piece.thickness / 2
+  if (piece.axis === 'arc') {
+    const start = number(piece.startAngle)
+    const sweep = number(piece.sweep)
+    const normalizeAngle = value => ((value % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
+    const progressForAngle = angle => {
+      if (Math.abs(sweep) <= EPSILON) return null
+      const delta = sweep > 0
+        ? normalizeAngle(angle - start)
+        : normalizeAngle(start - angle)
+      return delta / Math.abs(sweep)
+    }
+    const angles = [start, start + sweep]
+    for (const angle of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+      const progress = progressForAngle(angle)
+      if (progress !== null && progress >= -EPSILON && progress <= 1 + EPSILON) angles.push(angle)
+    }
+    const xs = angles.map(angle => number(piece.centerX) + Math.cos(angle) * number(piece.radius))
+    const zs = angles.map(angle => number(piece.centerZ) + Math.sin(angle) * number(piece.radius))
+    return bounds(
+      Math.min(...xs) - half,
+      piece.bottom,
+      Math.min(...zs) - half,
+      Math.max(...xs) + half,
+      piece.top,
+      Math.max(...zs) + half,
+    )
+  }
   if (piece.axis === 'x') {
     return bounds(piece.alongMin, piece.bottom, piece.line - half, piece.alongMax, piece.top, piece.line + half)
   }
@@ -350,6 +470,18 @@ function wallPieceBounds(piece) {
 }
 
 function wallPieceGeometry(piece) {
+  if (piece.axis === 'arc') {
+    return {
+      type: 'wall-arc',
+      center: { x: clean(piece.centerX), z: clean(piece.centerZ) },
+      radius: clean(piece.radius),
+      startAngle: clean(piece.startAngle),
+      sweep: clean(piece.sweep),
+      minY: clean(piece.bottom),
+      maxY: clean(piece.top),
+      thickness: clean(piece.thickness),
+    }
+  }
   if (piece.axis !== 'segment') return null
   return {
     type: 'wall-segment',
@@ -484,7 +616,28 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
       ? { movement: false, sight: false, water: false, gas: false }
       : blockingChannels(connector, 'door')
     const half = door.thickness / 2
-    const doorBounds = door.axis === 'x'
+    const doorFrom = door.axis === 'segment'
+      ? {
+          x: door.anchorX - door.tangentX * (door.alongMax - door.alongMin) / 2,
+          z: door.anchorZ - door.tangentZ * (door.alongMax - door.alongMin) / 2,
+        }
+      : null
+    const doorTo = door.axis === 'segment'
+      ? {
+          x: door.anchorX + door.tangentX * (door.alongMax - door.alongMin) / 2,
+          z: door.anchorZ + door.tangentZ * (door.alongMax - door.alongMin) / 2,
+        }
+      : null
+    const doorBounds = door.axis === 'segment'
+      ? bounds(
+          Math.min(doorFrom.x, doorTo.x) - half,
+          door.bottom,
+          Math.min(doorFrom.z, doorTo.z) - half,
+          Math.max(doorFrom.x, doorTo.x) + half,
+          door.top,
+          Math.max(doorFrom.z, doorTo.z) + half,
+        )
+      : door.axis === 'x'
       ? bounds(door.alongMin, door.bottom, door.line - half, door.alongMax, door.top, door.line + half)
       : bounds(door.line - half, door.bottom, door.alongMin, door.line + half, door.top, door.alongMax)
     addBarrierOutputs(spatial, {
@@ -494,16 +647,30 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
       axis: door.axis,
       state: door.state,
       bounds: doorBounds,
+      ...(door.axis === 'segment' ? {
+        geometry: {
+          type: 'wall-segment',
+          from: { x: clean(doorFrom.x), z: clean(doorFrom.z) },
+          to: { x: clean(doorTo.x), z: clean(doorTo.z) },
+          minY: clean(door.bottom),
+          maxY: clean(door.top),
+          thickness: clean(door.thickness),
+        },
+      } : {}),
       blocks,
     })
 
     const center = (door.alongMin + door.alongMax) / 2
     const feetY = door.bottom
     const margin = half + 0.05
-    const from = door.axis === 'x'
+    const from = door.axis === 'segment'
+      ? point(door.anchorX - door.normalX * margin, feetY, door.anchorZ - door.normalZ * margin)
+      : door.axis === 'x'
       ? point(center, feetY, door.line - margin)
       : point(door.line - margin, feetY, center)
-    const to = door.axis === 'x'
+    const to = door.axis === 'segment'
+      ? point(door.anchorX + door.normalX * margin, feetY, door.anchorZ + door.normalZ * margin)
+      : door.axis === 'x'
       ? point(center, feetY, door.line + margin)
       : point(door.line + margin, feetY, center)
     spatial.traversals.push({

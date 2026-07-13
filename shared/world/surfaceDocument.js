@@ -1,5 +1,5 @@
 // shared/world/surfaceDocument.js
-// Frontière de compatibilité entre surface_data v7 (contours partagés, ouvertures et arcs) et le document canonique du
+// Frontière de compatibilité entre surface_data v8 (murs paramétriques, ouvertures et arcs) et le document canonique du
 // moteur de monde. Les clés legacy restent lisibles ; worldId devient l'identité physique stable.
 
 import { createWorldDocument } from './worldContracts.js'
@@ -9,7 +9,7 @@ import {
   selectedRoomBoundaryChain,
 } from './roomGeometry.js'
 
-export const SURFACE_DATA_VERSION = 7
+export const SURFACE_DATA_VERSION = 8
 export const SURFACE_FINE_DEFAULT = 4
 export const SURFACE_STORY_HEIGHT_DEFAULT = 2.5
 
@@ -218,8 +218,13 @@ function validateFeature(collection, id, item, errors) {
   } else if (collection === 'connectors') {
     if (typeof item.type !== 'string' || !item.type.trim()) errors.push(`${path}.type est obligatoire`)
     if (item.type === 'door') {
-      if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
+      if (!['x', 'z', 'segment'].includes(item.axis)) errors.push(`${path}.axis doit valoir x, z ou segment`)
       validateFiniteFields(item, ['x0', 'x1', 'z0', 'z1', 'y'], path, errors)
+      if (item.axis === 'segment') {
+        validateFiniteFields(item, ['anchorX', 'anchorZ', 'tangentX', 'tangentZ', 'normalX', 'normalZ', 'rotationY'], path, errors)
+        if (typeof item.curveId !== 'string' || !item.curveId) errors.push(`${path}.curveId est obligatoire sur un mur courbe`)
+        if (!Number.isFinite(Number(item.curveOffset))) errors.push(`${path}.curveOffset doit être un nombre fini`)
+      }
     } else if (item.type === 'elevator') {
       validateFiniteFields(item, ['x', 'z', 'fromLevel', 'toLevel'], path, errors)
     }

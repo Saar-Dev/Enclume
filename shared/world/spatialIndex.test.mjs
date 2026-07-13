@@ -84,3 +84,30 @@ test('un collider incliné utilise son prisme orienté et non toute sa boîte en
   assert.equal(index.isSegmentClear({ x: 0.1, y: 0, z: 0.9 }, { x: 0.2, y: 0, z: 0.9 }, actor), true)
   assert.equal(index.isSegmentClear({ x: 0, y: 0, z: 1 }, { x: 1, y: 0, z: 0 }, actor), false)
 })
+
+test('un collider en arc tesselle la primitive canonique seulement pour le narrow phase', () => {
+  const geometry = {
+    type: 'wall-arc',
+    center: { x: 0, z: 0 },
+    radius: 1,
+    startAngle: 0,
+    sweep: Math.PI / 2,
+    minY: 0,
+    maxY: 2.5,
+    thickness: 0.1,
+  }
+  const curved = createWorldSnapshot({
+    spatial: {
+      supports: [], barriers: [], traversals: [], occluders: [], compartments: [], regions: [],
+      colliders: [{
+        id: 'arc', sourceId: 'arc', kind: 'wall', geometry,
+        bounds: { min: { x: -0.05, y: 0, z: -0.05 }, max: { x: 1.05, y: 2.5, z: 1.05 } },
+      }],
+    },
+  })
+  const index = createSpatialIndex(curved)
+  const actor = { radius: 0.02, height: 1.8, maxStepHeight: 0.5 }
+
+  assert.equal(index.isSegmentClear({ x: 0.1, y: 0, z: 0.5 }, { x: 0.3, y: 0, z: 0.5 }, actor), true)
+  assert.equal(index.isSegmentClear({ x: 0.1, y: 0, z: 0.5 }, { x: 1.2, y: 0, z: 0.5 }, actor), false)
+})

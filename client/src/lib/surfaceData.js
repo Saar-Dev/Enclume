@@ -26,7 +26,7 @@ const DEFAULT_FLOOR_THICKNESS = 0.25
 const DEFAULT_CEILING_HEIGHT = 2.5
 const STAIR_STEPS_PER_CELL = 4
 export const DEFAULT_SURFACE_DATA = {
-  version: 7,
+  version: 8,
   fine: SURFACE_FINE,
   storyHeight: STORY_HEIGHT,
   rooms: {},
@@ -328,7 +328,7 @@ export function normalizeSurfaceData(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return { ...DEFAULT_SURFACE_DATA }
   const rooms = data.rooms && typeof data.rooms === 'object' && !Array.isArray(data.rooms) ? data.rooms : {}
   return {
-    version: Math.max(7, data.version || 2),
+    version: Math.max(8, data.version || 2),
     fine: data.fine || SURFACE_FINE,
     storyHeight: data.storyHeight || STORY_HEIGHT,
     rooms: Number(data.version || 2) < 7
@@ -1285,6 +1285,16 @@ function ensureRoomWallPanel(panels, key, data) {
       x1: data.x1,
       z0: data.z0,
       z1: data.z1,
+      curveId: data.curveId || null,
+      curveArcId: data.curveArcId || null,
+      curveOffset0: data.curveOffset0,
+      curveOffset1: data.curveOffset1,
+      curveLength: data.curveLength,
+      curveCenterX: data.curveCenterX,
+      curveCenterZ: data.curveCenterZ,
+      curveRadius: data.curveRadius,
+      curveStartAngle: data.curveStartAngle,
+      curveSweep: data.curveSweep,
       frontTex: null,
       backTex: null,
       topTex: roomWallInteriorTex(data.room) || roomWallExteriorTex(data.room),
@@ -1355,7 +1365,7 @@ export function roomsWallSegments(rooms) {
       material: roomWallExteriorMaterial(room),
     }
 
-    const addPanel = ({ axis, x0, x1, z0, z1, frontSource, backSource, y }) => {
+    const addPanel = ({ axis, x0, x1, z0, z1, frontSource, backSource, y, ...geometryMetadata }) => {
       const key = panelKey(axis, x0, z0, x1, z1, y)
       const wall = ensureRoomWallPanel(panels, key, {
         room,
@@ -1366,6 +1376,7 @@ export function roomsWallSegments(rooms) {
         x1,
         z0,
         z1,
+        ...geometryMetadata,
       })
       const sameDirection = Math.abs(Number(wall.x0) - Number(x0)) < 0.001
         && Math.abs(Number(wall.z0) - Number(z0)) < 0.001
@@ -1399,12 +1410,101 @@ export function roomsWallSegments(rooms) {
           frontSource: frontIsInterior ? interior : exterior,
           backSource: frontIsInterior ? exterior : interior,
           y,
+          curveId: segment.curveId,
+          curveArcId: segment.curveArcId,
+          curveOffset0: segment.curveOffset0,
+          curveOffset1: segment.curveOffset1,
+          curveLength: segment.curveLength,
+          curveCenterX: segment.curveCenterX,
+          curveCenterZ: segment.curveCenterZ,
+          curveRadius: segment.curveRadius,
+          curveStartAngle: segment.curveStartAngle,
+          curveSweep: segment.curveSweep,
         })
       }
     }
   }
 
   return [...panels.values()].map(completeRoomWallPanel)
+}
+
+function curveWallStyleKey(wall) {
+  return JSON.stringify({
+    curveId: wall.curveId,
+    y: wall.y,
+    height: wall.height,
+    thickness: wall.thickness,
+    frontTex: wall.frontTex,
+    backTex: wall.backTex,
+    topTex: wall.topTex,
+    frontMaterial: wall.frontMaterial,
+    backMaterial: wall.backMaterial,
+    material: wall.material,
+  })
+}
+
+export function roomsWallRenderPaths(rooms) {
+  const panels = roomsWallSegments(rooms)
+  const straight = panels.filter(panel => !panel.curveId)
+  const curveGroups = new Map()
+  for (const panel of panels.filter(item => item.curveId)) {
+    const key = curveWallStyleKey(panel)
+    if (!curveGroups.has(key)) curveGroups.set(key, [])
+    curveGroups.get(key).push(panel)
+  }
+
+  const arcs = []
+  for (const panelsForCurve of curveGroups.values()) {
+    const first = panelsForCurve[0]
+    const curveLength = Number(first.curveLength)
+    if (!Number.isFinite(curveLength) || curveLength <= 1e-7) {
+      straight.push(...panelsForCurve)
+      continue
+    }
+    const intervals = panelsForCurve
+      .map(panel => ({
+        min: Math.min(Number(panel.curveOffset0), Number(panel.curveOffset1)),
+        max: Math.max(Number(panel.curveOffset0), Number(panel.curveOffset1)),
+        panel,
+      }))
+      .filter(item => Number.isFinite(item.min) && Number.isFinite(item.max))
+      .sort((left, right) => left.min - right.min)
+    const runs = []
+    for (const interval of intervals) {
+      const current = runs.at(-1)
+      if (current && interval.min <= current.max + 1e-5) {
+        current.max = Math.max(current.max, interval.max)
+        current.roomIds.push(...(interval.panel.roomIds || []))
+      } else {
+        runs.push({ min: interval.min, max: interval.max, roomIds: [...(interval.panel.roomIds || [])] })
+      }
+    }
+    for (const run of runs) {
+      const startProgress = run.min / curveLength
+      const endProgress = run.max / curveLength
+      const startAngle = Number(first.curveStartAngle) + Number(first.curveSweep) * startProgress
+      const sweep = Number(first.curveSweep) * (endProgress - startProgress)
+      const endAngle = startAngle + sweep
+      arcs.push({
+        ...first,
+        id: `room-wall:arc:${first.curveId}:${formatLevel(run.min)}:${formatLevel(run.max)}:${formatLevel(first.y)}`,
+        axis: 'arc',
+        curveOffset0: run.min,
+        curveOffset1: run.max,
+        roomIds: [...new Set(run.roomIds)],
+        centerX: Number(first.curveCenterX),
+        centerZ: Number(first.curveCenterZ),
+        radius: Number(first.curveRadius),
+        startAngle,
+        sweep,
+        x0: (Number(first.curveCenterX) + Math.cos(startAngle) * Number(first.curveRadius)) * SURFACE_FINE,
+        z0: (Number(first.curveCenterZ) + Math.sin(startAngle) * Number(first.curveRadius)) * SURFACE_FINE,
+        x1: (Number(first.curveCenterX) + Math.cos(endAngle) * Number(first.curveRadius)) * SURFACE_FINE,
+        z1: (Number(first.curveCenterZ) + Math.sin(endAngle) * Number(first.curveRadius)) * SURFACE_FINE,
+      })
+    }
+  }
+  return [...straight, ...arcs]
 }
 
 function connectorCommonBlocking(type, state = 'closed') {
@@ -1500,18 +1600,32 @@ function wallPointDistanceToPanel(wallPoint, panel) {
   const fz = Number(wallPoint.fz)
   if (!Number.isFinite(fx) || !Number.isFinite(fz)) return null
 
-  const epsilon = SURFACE_FINE * 0.35
-  if (panel.axis === 'x') {
-    const min = Math.min(Number(panel.x0), Number(panel.x1))
-    const max = Math.max(Number(panel.x0), Number(panel.x1))
-    if (fx < min - epsilon || fx > max + epsilon) return null
-    return Math.abs(fz - Number(panel.z0))
+  const x0 = Number(panel.x0)
+  const z0 = Number(panel.z0)
+  const x1 = Number(panel.x1)
+  const z1 = Number(panel.z1)
+  const dx = x1 - x0
+  const dz = z1 - z0
+  const lengthSquared = dx * dx + dz * dz
+  if (![x0, z0, x1, z1].every(Number.isFinite) || lengthSquared <= 1e-8) return null
+  const rawT = ((fx - x0) * dx + (fz - z0) * dz) / lengthSquared
+  const endMargin = SURFACE_FINE * 0.35 / Math.sqrt(lengthSquared)
+  if (rawT < -endMargin || rawT > 1 + endMargin) return null
+  const t = Math.max(0, Math.min(1, rawT))
+  const projectedFx = x0 + dx * t
+  const projectedFz = z0 + dz * t
+  return {
+    distance: Math.hypot(fx - projectedFx, fz - projectedFz),
+    t,
+    projectedFx,
+    projectedFz,
   }
+}
 
-  const min = Math.min(Number(panel.z0), Number(panel.z1))
-  const max = Math.max(Number(panel.z0), Number(panel.z1))
-  if (fz < min - epsilon || fz > max + epsilon) return null
-  return Math.abs(fx - Number(panel.x0))
+function normalizeDoorRotation(value) {
+  const halfTurn = Math.PI
+  const normalized = ((Number(value) % halfTurn) + halfTurn) % halfTurn
+  return Math.abs(normalized - halfTurn) < 1e-8 ? 0 : normalized
 }
 
 export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}) {
@@ -1525,10 +1639,10 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
   for (const panel of roomsWallSegments(surface.rooms)) {
     if (!sameLevel(panel.y, y)) continue
     if (selectedRoomId && !panel.roomIds?.includes(selectedRoomId)) continue
-    const distance = wallPointDistanceToPanel(wallPoint, panel)
-    if (distance === null || distance > SURFACE_FINE * 0.5) continue
-    if (best && distance >= best.distance) continue
-    best = { panel, distance }
+    const projection = wallPointDistanceToPanel(wallPoint, panel)
+    if (!projection || projection.distance > SURFACE_FINE * 0.5) continue
+    if (best && projection.distance >= best.distance) continue
+    best = { panel, ...projection }
   }
 
   if (!best?.panel) return null
@@ -1539,6 +1653,70 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
   const modelDepth = Math.max(0.05, Number(modelGeometry.depth) || 0.25)
   const modelHeight = Math.max(0.5, Number(modelGeometry.height) || Math.min(2, STORY_HEIGHT * 0.9))
   const doorLengthFine = modelWidth * SURFACE_FINE
+  if (panel.axis === 'segment') {
+    const curveOffset = Number.isFinite(Number(panel.curveOffset0)) && Number.isFinite(Number(panel.curveOffset1))
+      ? Number(panel.curveOffset0) + (Number(panel.curveOffset1) - Number(panel.curveOffset0)) * best.t
+      : null
+    const hasCanonicalArc = curveOffset !== null
+      && Number.isFinite(Number(panel.curveLength))
+      && Number(panel.curveLength) > 1e-8
+      && [panel.curveCenterX, panel.curveCenterZ, panel.curveRadius, panel.curveStartAngle, panel.curveSweep]
+        .every(value => Number.isFinite(Number(value)))
+    const curveAngle = hasCanonicalArc
+      ? Number(panel.curveStartAngle) + Number(panel.curveSweep) * (curveOffset / Number(panel.curveLength))
+      : null
+    const sweepSign = Math.sign(Number(panel.curveSweep)) || 1
+    const rawDx = hasCanonicalArc ? -Math.sin(curveAngle) * sweepSign : Number(panel.x1) - Number(panel.x0)
+    const rawDz = hasCanonicalArc ? Math.cos(curveAngle) * sweepSign : Number(panel.z1) - Number(panel.z0)
+    const rotationY = normalizeDoorRotation(-Math.atan2(rawDz, rawDx))
+    const tangentX = Math.cos(rotationY)
+    const tangentZ = -Math.sin(rotationY)
+    const normalX = -tangentZ
+    const normalZ = tangentX
+    const centerX = hasCanonicalArc
+      ? (Number(panel.curveCenterX) + Math.cos(curveAngle) * Number(panel.curveRadius)) * SURFACE_FINE
+      : best.projectedFx
+    const centerZ = hasCanonicalArc
+      ? (Number(panel.curveCenterZ) + Math.sin(curveAngle) * Number(panel.curveRadius)) * SURFACE_FINE
+      : best.projectedFz
+    const x0 = centerX - tangentX * doorLengthFine / 2
+    const x1 = centerX + tangentX * doorLengthFine / 2
+    const z0 = centerZ - tangentZ * doorLengthFine / 2
+    const z1 = centerZ + tangentZ * doorLengthFine / 2
+    const id = `connector:door:segment:${formatLevel(centerX)}:${formatLevel(centerZ)}:${formatLevel(panel.y)}`
+    return {
+      id,
+      type: 'door',
+      level,
+      y: panel.y,
+      axis: 'segment',
+      x0,
+      x1,
+      z0,
+      z1,
+      anchorX: centerX / SURFACE_FINE,
+      anchorZ: centerZ / SURFACE_FINE,
+      tangentX,
+      tangentZ,
+      normalX,
+      normalZ,
+      rotationY,
+      curveId: panel.curveId || null,
+      curveArcId: panel.curveArcId || null,
+      curveOffset,
+      curveLength: panel.curveLength,
+      thickness: panel.thickness,
+      width: modelWidth,
+      depth: modelDepth,
+      height: modelHeight,
+      roomId: selectedRoomId || panel.roomIds?.[0] || null,
+      roomIds: panel.roomIds || [],
+      state,
+      movementMultiplier: getToolMovementMultiplier(tool),
+      ...connectorModelFromTool(tool),
+      ...connectorCommonBlocking('door', state),
+    }
+  }
   const panelMin = panel.axis === 'x'
     ? Math.min(Number(panel.x0), Number(panel.x1))
     : Math.min(Number(panel.z0), Number(panel.z1))
@@ -1584,7 +1762,7 @@ export function applyDoorConnector(surfaceData, wallPoint, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 7,
+    version: 8,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1659,7 +1837,7 @@ export function applyElevatorConnector(surfaceData, cell, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 7,
+    version: 8,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1724,7 +1902,7 @@ export function applyLadderConnector(surfaceData, cell, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 7,
+    version: 8,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1898,6 +2076,13 @@ function doorConnectorTouchesBoundaryEdges(connector, room, selectedEdges) {
   if (!Number.isFinite(doorY) || doorY < roomBaseY || doorY >= roomTopY) return false
 
   const axis = connector.axis
+  if (axis === 'segment') {
+    const selectedKeys = new Set(selectedEdges.map(edge => edge.key))
+    return (room.boundaryArcs || []).some(arc => (
+      (!connector.curveArcId || connector.curveArcId === arc.id)
+      && (arc.edgeKeys || []).some(key => selectedKeys.has(key))
+    ))
+  }
   if (axis !== 'x' && axis !== 'z') return false
   const line = (axis === 'x' ? Number(connector.z0) : Number(connector.x0)) / SURFACE_FINE
   const alongStart = (axis === 'x' ? Number(connector.x0) : Number(connector.z0)) / SURFACE_FINE
@@ -1957,7 +2142,7 @@ export function applyRoomBoundaryArc(surfaceData, roomId, edgeKeys, angleDegrees
   }
   rooms = clipIntersectingRoomsAgainstOwners(rooms, targetRoomIds)
   return {
-    surfaceData: { ...next, version: 7, rooms },
+    surfaceData: { ...next, version: 8, rooms },
     error: null,
     roomIds: targetRoomIds,
     arc,
@@ -1982,7 +2167,7 @@ export function removeRoomBoundaryArcs(surfaceData, roomId, edgeKeys) {
     changed = true
     return [id, { ...room, boundaryArcs }]
   }))
-  return changed ? { ...next, version: 7, rooms } : surfaceData
+  return changed ? { ...next, version: 8, rooms } : surfaceData
 }
 
 function validateWholeWallSelection(room, edgeKeys) {
@@ -2045,7 +2230,7 @@ export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
     return {
       surfaceData: {
         ...next,
-        version: 7,
+        version: 8,
         rooms: {
           ...next.rooms,
           [roomId]: { ...selectedRoom, openWallEdgeKeys },
@@ -2115,7 +2300,7 @@ export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
     }))
 
   return {
-    surfaceData: { ...next, version: 7, rooms, connectors },
+    surfaceData: { ...next, version: 8, rooms, connectors },
     error: null,
     roomId,
     mergedRoomIds: [absorbedId],
@@ -2215,7 +2400,7 @@ export function applyRoomSelection(surfaceData, selection, tool, activeMaterial,
 
   return {
     ...next,
-    version: 7,
+    version: 8,
     rooms,
     connectors,
   }
@@ -2318,7 +2503,7 @@ export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, a
 
   return {
     ...next,
-    version: 7,
+    version: 8,
     rooms: {
       ...next.rooms,
       [roomId]: updated,

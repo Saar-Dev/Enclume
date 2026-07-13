@@ -1,6 +1,6 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-13 — suppression/fusion des murs et priorité des contours courbes.
+> Dernière mise à jour : 2026-07-13 — murs courbes canoniques, portes tangentes et rendu continu.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -9,7 +9,7 @@
 
 ## Statut au 2026-07-13
 
-L'éditeur Surface/Salle et son rendu existent. `surface_data` version 7 sait décrire des salles,
+L'éditeur Surface/Salle et son rendu existent. `surface_data` version 8 sait décrire des salles,
 sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
 navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
@@ -18,7 +18,9 @@ portées, interactions et terrain instable. Depuis la Phase 8, l'affichage isole
 courant. Depuis la Phase 10, les murs courbes de salle sont des arcs structurés de leur contour,
 partagés par le rendu, les collisions et la LOS. Depuis la Phase 11, supprimer un mur ouvre la
 salle ou fusionne ses deux volumes, et une nouvelle salle est découpée par les contours courbes
-déjà présents au lieu de superposer ses murs.
+déjà présents au lieu de superposer ses murs. Depuis la Phase 12, un mur arrondi reste un arc
+paramétrique unique dans le document, le renderer et le snapshot physique. Sa tessellation n'est
+plus une autorité enregistrée ni une collection de petits murs.
 
 Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit le moteur commun qui compile
 ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une
@@ -38,10 +40,10 @@ Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
 - étage de base : `level` / `y` ;
 - hauteur : `heightLevels`, exprimée en étages, pas en mètres ;
 - dalles : sol et plafond, avec textures ou matériaux séparés pour dessus/dessous ;
-- murs : une face intérieure et une face extérieure ; les murs libres peuvent être droits ou
-  composés de segments orientés issus d'une courbe quadratique ;
+- murs : une face intérieure et une face extérieure ; les murs libres sont droits ou restent des
+  données historiques, tandis que les arrondis de salle sont de vrais chemins circulaires ;
 - arrondis de salle : `boundaryArcs`, chacun lié à une chaîne d'arêtes du contour avec un angle et
-  un côté ;
+  un côté. Le chemin canonique dérivé conserve centre, rayon, angle initial, balayage et longueur ;
 - découpes géométriques : `geometryClipRoomIds` soustrait le contour effectif de salles prioritaires
   au contour brut de la salle. Le graphe de dépendances est acyclique ;
 - murs supprimés vers l'extérieur : `openWallEdgeKeys` retire les panneaux, colliders et occluders
@@ -171,9 +173,11 @@ acceptables uniquement comme compatibilité temporaire : déplacer le connecteur
 faire perdre son état runtime.
 
 Une porte se pose depuis la configuration d’une salle sélectionnée. Elle doit être forcée sur un mur
-droit de cette salle. Si le mur est partagé par deux salles, le connecteur peut référencer les deux
-salles. Courber une chaîne qui porte déjà une porte est refusé, y compris si cette porte se trouve à
-un autre niveau d'une salle multi-hauteur.
+de cette salle, droit ou arrondi. Sur un arc, le connecteur conserve son abscisse curviligne, son
+point d'ancrage exact, la tangente et la normale locales. La porte rigide s'aligne sur la tangente et
+s'ouvre du côté de la normale ; elle ne dépend donc ni d'une corde d'approximation ni du sens dans
+lequel les anciens petits segments auraient été générés. Si le mur est partagé par deux salles, le
+connecteur peut référencer les deux salles.
 
 Un ascenseur se pose depuis la configuration d’une salle sélectionnée. Sa définition référence une
 cabine et plusieurs arrêts. Son étage courant, ses portes et son déplacement appartiennent à un
@@ -199,6 +203,8 @@ Une porte ne supprime pas un panneau de mur complet. Elle crée une ouverture li
 - position centrée sur le point cliqué, contrainte dans le panneau de mur ;
 - découpe en morceaux : mur à gauche, mur à droite et linteau au-dessus si la hauteur du mur le permet ;
 - une ouverture peut traverser plusieurs panneaux de mur voisins : le panneau cliqué ne doit pas limiter la largeur de découpe ;
+- sur un mur arrondi, la largeur est convertie en intervalle curviligne et découpe l'arc canonique en
+  portions avant, après et linteau sans réintroduire de petits murs comme données métier ;
 - les morceaux gauche/droite ne gardent pas de cap côté ouverture, sinon ils débordent dans le cadre de porte ;
 - le linteau reste rattaché à l’étage propriétaire du mur pour l’affichage par étage, même si son `y` de rendu est au-dessus de la porte.
 
@@ -206,7 +212,14 @@ Le modèle 3D de porte est aligné par sa boîte englobante : centré horizontal
 
 La découpe latérale suit `wallCutWidth` (ou `openingWidth` en secours pour les anciens connecteurs) et reste centrée sur le connecteur. Le boîtier/clavier ne participe jamais à la largeur de découpe. Le mur peut seulement recouvrir le cadre de façon minime et symétrique pour éviter un filet de jour, sans compensation spéciale selon le côté.
 
-Important : la découpe de porte doit être appliquée à toutes les familles de murs rendues (`roomsWallSegments(...)` et `surface.walls`). Sinon un mur persistant non découpé peut rester affiché derrière le connecteur et donner l’impression que le trou n’a pas changé.
+Le mesh d'un mur arrondi est continu sur toute la portion visible : ses normales suivent le rayon et
+ses UV avancent selon la longueur de l'arc. Une texture traverse ainsi la courbe sans recommencer à
+chaque ancien segment. Le nombre de subdivisions du mesh reste un détail de rendu réglable et ne
+change jamais la géométrie du monde.
+
+Important : la découpe de porte doit être appliquée à toutes les familles de murs rendues
+(`roomsWallRenderPaths(...)` et `surface.walls`). Sinon un mur persistant non découpé peut rester
+affiché derrière le connecteur et donner l’impression que le trou n’a pas changé.
 
 ## Connecteurs d’étages longs
 

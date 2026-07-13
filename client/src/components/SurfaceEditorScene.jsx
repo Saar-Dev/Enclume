@@ -416,13 +416,21 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
     const x1 = Number(connector.x1) / fine
     const z0 = Number(connector.z0) / fine
     const z1 = Number(connector.z1) / fine
-    const width = connector.axis === 'x' ? Math.max(0.2, Math.abs(x1 - x0)) : wallDepth
-    const depth = connector.axis === 'z' ? Math.max(0.2, Math.abs(z1 - z0)) : wallDepth
-    const x = connector.axis === 'x' ? (x0 + x1) / 2 : x0
-    const z = connector.axis === 'z' ? (z0 + z1) / 2 : z0
+    const segmentLength = Math.hypot(x1 - x0, z1 - z0)
+    const width = connector.axis === 'segment'
+      ? Math.max(0.2, segmentLength)
+      : connector.axis === 'x' ? Math.max(0.2, Math.abs(x1 - x0)) : wallDepth
+    const depth = connector.axis === 'segment'
+      ? wallDepth
+      : connector.axis === 'z' ? Math.max(0.2, Math.abs(z1 - z0)) : wallDepth
+    const x = connector.axis === 'segment' || connector.axis === 'x' ? (x0 + x1) / 2 : x0
+    const z = connector.axis === 'segment' || connector.axis === 'z' ? (z0 + z1) / 2 : z0
+    const rotationY = connector.axis === 'segment'
+      ? Number(connector.rotationY) || -Math.atan2(z1 - z0, x1 - x0)
+      : 0
     const height = Number(connector.height) || 2
     return (
-      <mesh position={[x, connector.y + height / 2, z]} renderOrder={35}>
+      <mesh position={[x, connector.y + height / 2, z]} rotation={[0, rotationY, 0]} renderOrder={35}>
         <boxGeometry args={[width, height, depth]} />
         <meshBasicMaterial color="#f97316" transparent opacity={0.55} depthWrite={false} />
       </mesh>
@@ -537,6 +545,25 @@ export default function SurfaceEditorScene({
         const max = Math.max(Number(panel.z0), Number(panel.z1)) / SURFACE_FINE
         const value = Number(panel.x0) / SURFACE_FINE
         considerEdges([{ line: 'x', value, min, max, distance: Math.abs(point.x - value), along: point.z }])
+      } else if (panel.axis === 'segment') {
+        const x0 = Number(panel.x0) / SURFACE_FINE
+        const z0 = Number(panel.z0) / SURFACE_FINE
+        const x1 = Number(panel.x1) / SURFACE_FINE
+        const z1 = Number(panel.z1) / SURFACE_FINE
+        const dx = x1 - x0
+        const dz = z1 - z0
+        const lengthSquared = dx * dx + dz * dz
+        if (lengthSquared <= 1e-8) continue
+        const t = Math.max(0, Math.min(1, ((point.x - x0) * dx + (point.z - z0) * dz) / lengthSquared))
+        const x = x0 + dx * t
+        const z = z0 + dz * t
+        const distance = Math.hypot(point.x - x, point.z - z)
+        if (distance > WALL_STICKY_THRESHOLD || (best && distance >= best.distance)) continue
+        best = {
+          distance,
+          fx: x * SURFACE_FINE,
+          fz: z * SURFACE_FINE,
+        }
       }
     }
 
@@ -579,7 +606,12 @@ export default function SurfaceEditorScene({
           Number(connector?.modelGeometry?.depth) || Number(connector?.depth) || (Number(connector?.thickness) || 1) / SURFACE_FINE,
         )
         const margin = depth / 2 + 0.16
-        if (connector.axis === 'x') {
+        if (connector.axis === 'segment') {
+          minX = Math.min(Number(connector.x0), Number(connector.x1)) / SURFACE_FINE - margin
+          maxX = Math.max(Number(connector.x0), Number(connector.x1)) / SURFACE_FINE + margin
+          minZ = Math.min(Number(connector.z0), Number(connector.z1)) / SURFACE_FINE - margin
+          maxZ = Math.max(Number(connector.z0), Number(connector.z1)) / SURFACE_FINE + margin
+        } else if (connector.axis === 'x') {
           minX = Math.min(Number(connector.x0), Number(connector.x1)) / SURFACE_FINE
           maxX = Math.max(Number(connector.x0), Number(connector.x1)) / SURFACE_FINE
           const z = Number(connector.z0) / SURFACE_FINE

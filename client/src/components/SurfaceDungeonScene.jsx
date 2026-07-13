@@ -7,7 +7,7 @@ import { createWaterMaterial, updateWaterMaterial } from '../lib/waterMaterials'
 import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
-import { roomBoundaryContours } from '../../../shared/world/roomGeometry.js'
+import { roomBoundaryContours, sampleWallArcGeometry } from '../../../shared/world/roomGeometry.js'
 import {
   SURFACE_FINE,
   STORY_HEIGHT,
@@ -26,7 +26,7 @@ import {
   parseCeilingKey,
   parseFloorKey,
   roomFootprintRectangles,
-  roomsWallSegments,
+  roomsWallRenderPaths,
   stairStepBoxes,
   yToLevel,
 } from '../lib/surfaceData.js'
@@ -590,6 +590,9 @@ function CurvedRoomSlab({ room, roomLookup, kind, y, thickness, capMaterial, sid
 }
 
 function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }) {
+  if (wall.axis === 'arc') {
+    return <CurvedWallSegment wall={wall} textureMaterials={textureMaterials} opacity={opacity} showDetails={showDetails} />
+  }
   const frontProcedural = surfaceMaterialAt(wall.frontMaterial || wall.material, showDetails)
   const backProcedural = surfaceMaterialAt(wall.backMaterial || wall.frontMaterial || wall.material, showDetails)
   const frontRelief = showDetails ? (frontProcedural?.relief || reliefAt(textureMaterials, wall.frontTex)) : null
@@ -668,6 +671,145 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
   )
 }
 
+function addCurvedWallQuad(positions, normals, uvs, geometry, materialIndex, points, faceNormals, faceUvs) {
+  const start = positions.length / 3
+  const order = [0, 1, 2, 0, 2, 3]
+  for (const index of order) {
+    const value = points[index]
+    positions.push(value[0], value[1], value[2])
+    const normal = faceNormals[index]
+    normals.push(normal[0], normal[1], normal[2])
+    uvs.push(faceUvs[index][0], faceUvs[index][1])
+  }
+  geometry.addGroup(start, 6, materialIndex)
+}
+
+function makeCurvedWallGeometry(wall) {
+  const path = sampleWallArcGeometry({
+    centerX: wall.centerX,
+    centerZ: wall.centerZ,
+    radius: wall.radius,
+    startAngle: wall.startAngle,
+    sweep: wall.sweep,
+  }, 16)
+  if (path.length < 2) return null
+  const bottom = Number(wall.y) || 0
+  const top = bottom + Math.max(0.01, Number(wall.height) || STORY_HEIGHT)
+  const half = Math.max(1, Number(wall.thickness) || 1) / (2 * SURFACE_FINE)
+  const sweepSign = Math.sign(Number(wall.sweep)) || 1
+  const cumulative = [0]
+  for (let index = 0; index < path.length - 1; index += 1) {
+    cumulative.push(cumulative[index] + Math.hypot(
+      path[index + 1].x - path[index].x,
+      path[index + 1].z - path[index].z,
+    ))
+  }
+  const total = Math.max(1e-6, cumulative.at(-1))
+  const sides = path.map(value => {
+    const radialX = (value.x - Number(wall.centerX)) / Number(wall.radius)
+    const radialZ = (value.z - Number(wall.centerZ)) / Number(wall.radius)
+    const normalX = -sweepSign * radialX
+    const normalZ = -sweepSign * radialZ
+    return {
+      front: [value.x + normalX * half, value.z + normalZ * half],
+      back: [value.x - normalX * half, value.z - normalZ * half],
+      normal: [normalX, normalZ],
+    }
+  })
+  const geometry = new THREE.BufferGeometry()
+  const positions = []
+  const normals = []
+  const uvs = []
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const u0 = cumulative[index] / total
+    const u1 = cumulative[index + 1] / total
+    const a = sides[index]
+    const b = sides[index + 1]
+    addCurvedWallQuad(positions, normals, uvs, geometry, 0, [
+      [a.front[0], bottom, a.front[1]], [b.front[0], bottom, b.front[1]],
+      [b.front[0], top, b.front[1]], [a.front[0], top, a.front[1]],
+    ], [
+      [a.normal[0], 0, a.normal[1]], [b.normal[0], 0, b.normal[1]],
+      [b.normal[0], 0, b.normal[1]], [a.normal[0], 0, a.normal[1]],
+    ], [[u0, 0], [u1, 0], [u1, 1], [u0, 1]])
+    addCurvedWallQuad(positions, normals, uvs, geometry, 1, [
+      [b.back[0], bottom, b.back[1]], [a.back[0], bottom, a.back[1]],
+      [a.back[0], top, a.back[1]], [b.back[0], top, b.back[1]],
+    ], [
+      [-b.normal[0], 0, -b.normal[1]], [-a.normal[0], 0, -a.normal[1]],
+      [-a.normal[0], 0, -a.normal[1]], [-b.normal[0], 0, -b.normal[1]],
+    ], [[1 - u1, 0], [1 - u0, 0], [1 - u0, 1], [1 - u1, 1]])
+    addCurvedWallQuad(positions, normals, uvs, geometry, 2, [
+      [a.front[0], top, a.front[1]], [b.front[0], top, b.front[1]],
+      [b.back[0], top, b.back[1]], [a.back[0], top, a.back[1]],
+    ], [[0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0]], [[u0, 0], [u1, 0], [u1, 1], [u0, 1]])
+    addCurvedWallQuad(positions, normals, uvs, geometry, 3, [
+      [a.back[0], bottom, a.back[1]], [b.back[0], bottom, b.back[1]],
+      [b.front[0], bottom, b.front[1]], [a.front[0], bottom, a.front[1]],
+    ], [[0, -1, 0], [0, -1, 0], [0, -1, 0], [0, -1, 0]], [[u0, 0], [u1, 0], [u1, 1], [u0, 1]])
+  }
+  for (const index of [0, path.length - 1]) {
+    const side = sides[index]
+    const reverse = index === 0
+    const vertices = reverse ? [
+      [side.back[0], bottom, side.back[1]], [side.front[0], bottom, side.front[1]],
+      [side.front[0], top, side.front[1]], [side.back[0], top, side.back[1]],
+    ] : [
+      [side.front[0], bottom, side.front[1]], [side.back[0], bottom, side.back[1]],
+      [side.back[0], top, side.back[1]], [side.front[0], top, side.front[1]],
+    ]
+    const neighbor = index === 0 ? path[1] : path[path.length - 2]
+    const tangentX = path[index].x - neighbor.x
+    const tangentZ = path[index].z - neighbor.z
+    const tangentLength = Math.hypot(tangentX, tangentZ) || 1
+    const capNormal = [tangentX / tangentLength, 0, tangentZ / tangentLength]
+    addCurvedWallQuad(
+      positions,
+      normals,
+      uvs,
+      geometry,
+      2,
+      vertices,
+      [capNormal, capNormal, capNormal, capNormal],
+      [[0, 0], [1, 0], [1, 1], [0, 1]],
+    )
+  }
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  geometry.computeBoundingBox()
+  geometry.computeBoundingSphere()
+  return geometry
+}
+
+function CurvedWallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }) {
+  const frontProcedural = surfaceMaterialAt(wall.frontMaterial || wall.material, showDetails)
+  const backProcedural = surfaceMaterialAt(wall.backMaterial || wall.frontMaterial || wall.material, showDetails)
+  const frontBase = frontProcedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, wall.frontTex, FACE.south)
+  const backBase = backProcedural?.faceMaterials[FACE.north]
+    || materialAt(textureMaterials, wall.backTex, FACE.north, FACE.south)
+    || frontBase
+  const topBase = frontProcedural?.faceMaterials[FACE.top]
+    || materialAt(textureMaterials, wall.topTex || wall.frontTex, FACE.top, FACE.south)
+    || frontBase
+  const geometry = useMemo(() => makeCurvedWallGeometry(wall), [wall])
+  useEffect(() => () => geometry?.dispose(), [geometry])
+  if (!geometry || !frontBase || !backBase || !topBase) return null
+  const length = Math.max(0.05, Math.abs(Number(wall.radius) * Number(wall.sweep)))
+  const height = Math.max(0.05, Number(wall.height) || STORY_HEIGHT)
+  const thickness = Math.max(1, Number(wall.thickness) || 1) / SURFACE_FINE
+  const offset = Number(wall.curveOffset0) || 0
+  const materials = withOpacity([
+    withRepeat(frontBase, length, height, offset, Number(wall.y) || 0),
+    withRepeat(backBase, -length, height, -offset - length, Number(wall.y) || 0),
+    withRepeat(topBase, length, thickness, offset, 0),
+    withRepeat(topBase, length, thickness, offset, 0),
+  ], opacity)
+  return (
+    <mesh geometry={geometry} material={materials} castShadow={opacity >= 0.999} receiveShadow />
+  )
+}
+
 function clampValue(value, min, max) {
   return Math.max(min, Math.min(max, value))
 }
@@ -729,12 +871,45 @@ function doorOpeningInterval(connector, center) {
 }
 
 function doorOpeningForConnector(connector, wall) {
-  if (!connector || connector.type !== 'door' || !wall || connector.axis !== wall.axis) return null
+  if (!connector || connector.type !== 'door' || !wall) return null
   const connectorLevel = Number.isFinite(Number(connector.level))
     ? Math.trunc(Number(connector.level))
     : yToLevel(connector.y)
   const wallLevel = yToLevel(wallOpacityY(wall))
   if (connectorLevel !== wallLevel) return null
+
+  if (wall.axis === 'arc') {
+    if (connector.axis !== 'segment' || !connector.curveId || connector.curveId !== wall.curveId) return null
+    const wallOffset0 = Number(wall.curveOffset0)
+    const wallOffset1 = Number(wall.curveOffset1)
+    const connectorOffset = Number(connector.curveOffset)
+    if (![wallOffset0, wallOffset1, connectorOffset].every(Number.isFinite)) return null
+    const opening = doorOpeningInterval(connector, connectorOffset)
+    const wallMin = Math.min(wallOffset0, wallOffset1)
+    const wallMax = Math.max(wallOffset0, wallOffset1)
+    const min = Math.max(wallMin, opening.min)
+    const max = Math.min(wallMax, opening.max)
+    if (max <= min + 1e-6) return null
+    const wallBottom = Number(wall.y) || 0
+    const wallHeight = Math.max(0.5, Number(wall.height) || STORY_HEIGHT)
+    const wallTop = wallBottom + wallHeight
+    const doorBottom = Number(connector.y) || wallBottom
+    const modelGeometry = connector.modelGeometry || {}
+    const modelHeight = Number(modelGeometry.height) || Number(connector.height) || 2
+    const doorTop = clampValue(doorBottom + Math.max(0.5, modelHeight), wallBottom, wallTop)
+    return {
+      curve: true,
+      min,
+      max,
+      startT: (min - wallOffset0) / (wallOffset1 - wallOffset0),
+      endT: (max - wallOffset0) / (wallOffset1 - wallOffset0),
+      bottom: wallBottom,
+      top: doorTop,
+      wallTop,
+    }
+  }
+
+  if (connector.axis !== wall.axis) return null
 
   const fine = SURFACE_FINE
   const alongStart = wall.axis === 'x' ? Number(wall.x0) : Number(wall.z0)
@@ -783,6 +958,39 @@ function doorOpeningForConnector(connector, wall) {
 function splitWallForDoorConnector(wall, connector) {
   const opening = doorOpeningForConnector(connector, wall)
   if (!opening) return [wall]
+
+  if (opening.curve) {
+    const fromT = Math.max(0, Math.min(opening.startT, opening.endT))
+    const toT = Math.min(1, Math.max(opening.startT, opening.endT))
+    const curvePatch = (startT, endT) => {
+      const startAngle = Number(wall.startAngle) + Number(wall.sweep) * startT
+      const sweep = Number(wall.sweep) * (endT - startT)
+      const endAngle = startAngle + sweep
+      return {
+        startAngle,
+        sweep,
+        curveOffset0: Number(wall.curveOffset0) + (Number(wall.curveOffset1) - Number(wall.curveOffset0)) * startT,
+        curveOffset1: Number(wall.curveOffset0) + (Number(wall.curveOffset1) - Number(wall.curveOffset0)) * endT,
+        x0: (Number(wall.centerX) + Math.cos(startAngle) * Number(wall.radius)) * SURFACE_FINE,
+        z0: (Number(wall.centerZ) + Math.sin(startAngle) * Number(wall.radius)) * SURFACE_FINE,
+        x1: (Number(wall.centerX) + Math.cos(endAngle) * Number(wall.radius)) * SURFACE_FINE,
+        z1: (Number(wall.centerZ) + Math.sin(endAngle) * Number(wall.radius)) * SURFACE_FINE,
+      }
+    }
+    const pieces = []
+    const epsilon = 1e-6
+    if (fromT > epsilon) pieces.push(cloneWallPiece(wall, `before:${opening.min}`, curvePatch(0, fromT)))
+    if (toT < 1 - epsilon) pieces.push(cloneWallPiece(wall, `after:${opening.max}`, curvePatch(toT, 1)))
+    if (opening.wallTop > opening.top + 0.01 && toT > fromT + epsilon) {
+      pieces.push(cloneWallPiece(wall, `top:${opening.min}:${opening.max}`, {
+        ...curvePatch(fromT, toT),
+        opacityY: opening.bottom,
+        y: opening.top,
+        height: opening.wallTop - opening.top,
+      }))
+    }
+    return pieces
+  }
 
   const alongStart = wall.axis === 'x' ? Number(wall.x0) : Number(wall.z0)
   const alongEnd = wall.axis === 'x' ? Number(wall.x1) : Number(wall.z1)
@@ -846,16 +1054,17 @@ function connectorDoorBox(connector) {
   const z1 = Number(connector.z1) / fine
   const geometryWidth = Number(modelGeometry.width) || null
   const geometryDepth = Number(modelGeometry.depth) || null
+  const segmentLength = Math.hypot(x1 - x0, z1 - z0)
   const alongLength = Math.max(
     0.2,
-    geometryWidth || Number(connector.width) || (connector.axis === 'x' ? Math.abs(x1 - x0) : Math.abs(z1 - z0)),
+    geometryWidth || Number(connector.width) || segmentLength,
   )
   const modelDepth = Math.max(0.05, geometryDepth || Number(connector.depth) || wallDepth)
   const fallbackDepth = Math.max(wallDepth, modelDepth)
-  const width = connector.axis === 'x' ? alongLength : fallbackDepth
-  const depth = connector.axis === 'z' ? alongLength : fallbackDepth
-  const x = connector.axis === 'x' ? (x0 + x1) / 2 : x0
-  const z = connector.axis === 'z' ? (z0 + z1) / 2 : z0
+  const width = connector.axis === 'segment' || connector.axis === 'x' ? alongLength : fallbackDepth
+  const depth = connector.axis === 'segment' ? fallbackDepth : connector.axis === 'z' ? alongLength : fallbackDepth
+  const x = connector.axis === 'segment' || connector.axis === 'x' ? (x0 + x1) / 2 : x0
+  const z = connector.axis === 'segment' || connector.axis === 'z' ? (z0 + z1) / 2 : z0
   const height = Math.max(0.5, Number(modelGeometry.height) || Number(connector.height) || 2)
   return {
     position: [x, (Number(connector.y) || 0) + height / 2, z],
@@ -865,7 +1074,9 @@ function connectorDoorBox(connector) {
     modelDepth,
     fallbackDepth,
     wallDepth,
-    rotationY: connector.axis === 'z' ? Math.PI / 2 : 0,
+    rotationY: connector.axis === 'segment'
+      ? Number(connector.rotationY) || -Math.atan2(z1 - z0, x1 - x0)
+      : connector.axis === 'z' ? Math.PI / 2 : 0,
   }
 }
 
@@ -883,7 +1094,7 @@ function DoorConnectorFallback({ connector, opacity = 1 }) {
   const box = connectorDoorBox(connector)
   if (!box) return null
   return (
-    <mesh position={box.position} renderOrder={30}>
+    <mesh position={box.position} rotation={[0, box.rotationY, 0]} renderOrder={30}>
       <boxGeometry args={box.args} />
       <meshBasicMaterial color="#f97316" transparent opacity={Math.min(0.92, opacity)} depthWrite={opacity >= 0.95} />
     </mesh>
@@ -1344,7 +1555,7 @@ function sameStringSet(left, right) {
 }
 
 function wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel) {
-  if (!wall || wall.axis === 'segment' || displayLevel === null || yToLevel(wallOpacityY(wall)) !== displayLevel) return false
+  if (!wall || !['x', 'z'].includes(wall.axis) || displayLevel === null || yToLevel(wallOpacityY(wall)) !== displayLevel) return false
   const box = getWallRenderBox(wall)
   if (!box || floorCells.size === 0) return false
 
@@ -1460,7 +1671,7 @@ function SurfaceDungeonScene({
     [showWater, surface],
   )
   const roomWallSegments = useMemo(
-    () => cutWallsForDoorConnectors(roomsWallSegments(surface.rooms), surface.connectors),
+    () => cutWallsForDoorConnectors(roomsWallRenderPaths(surface.rooms), surface.connectors),
     [surface.rooms, surface.connectors],
   )
   const surfaceWallSegments = useMemo(

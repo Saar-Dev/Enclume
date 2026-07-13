@@ -12,8 +12,10 @@ import {
   getRoomBoundaryWallRuns,
   getWallRenderBox,
   isWorldPointVisibleAtLevel,
+  makeDoorConnectorFromWallPoint,
   makeWallsFromDrag,
   roomFootprintRectangles,
+  roomsWallRenderPaths,
   roomsWallSegments,
 } from './surfaceData.js'
 import {
@@ -113,7 +115,7 @@ test('une nouvelle salle transfere ses cases et redessine le contour de la salle
   )
   const nestedId = 'room:1:1:2:2:0:1'
 
-  assert.equal(result.version, 7)
+  assert.equal(result.version, 8)
   assert.equal(getRoomFootprintCells(result.rooms.outer).length, 12)
   assert.equal(getRoomFootprintCells(result.rooms[nestedId]).length, 4)
   assert.equal(findRoomAtCell(result, { x: 1, z: 1 }, 0).id, nestedId)
@@ -132,7 +134,7 @@ test('un arrondi de salle remplace une chaîne de murs dans le rendu de la salle
   const result = applyRoomBoundaryArc(surface, 'rounded', selected.flatMap(wall => wall.edgeKeys), 90)
 
   assert.equal(result.error, null)
-  assert.equal(result.surfaceData.version, 7)
+  assert.equal(result.surfaceData.version, 8)
   assert.equal(result.surfaceData.rooms.rounded.boundaryArcs.length, 1)
   assert.ok(roomsWallSegments(result.surfaceData.rooms).some(wall => wall.axis === 'segment'))
 })
@@ -276,4 +278,39 @@ test('supprimer une separation courbe fusionne les volumes sans conserver un arc
     { id: 'rounded', ...merged.surfaceData.rooms.rounded },
     merged.surfaceData.rooms,
   ), 4)
+})
+
+test('une porte sur un arc utilise le point, la tangente et la normale du mur canonique', () => {
+  const rounded = { ...room('rounded', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const selected = getRoomBoundaryWallRuns(rounded)
+    .filter(wall => ['west', 'north'].includes(wall.side))
+    .flatMap(wall => wall.edgeKeys)
+  const surface = applyRoomBoundaryArc(
+    emptySurface({ rooms: { rounded } }),
+    'rounded',
+    selected,
+    90,
+  ).surfaceData
+  const curvePanel = roomsWallSegments(surface.rooms).find(wall => wall.curveId)
+  const wallPoint = {
+    fx: (Number(curvePanel.x0) + Number(curvePanel.x1)) / 2,
+    fz: (Number(curvePanel.z0) + Number(curvePanel.z1)) / 2,
+  }
+  const door = makeDoorConnectorFromWallPoint(surface, wallPoint, {
+    selectedRoomId: 'rounded',
+    level: 0,
+    connectorModelGeometry: { width: 0.8, depth: 0.2, height: 2 },
+  })
+
+  assert.equal(door.axis, 'segment')
+  assert.equal(door.curveId, curvePanel.curveId)
+  assert.ok(Number.isFinite(door.curveOffset))
+  assert.ok(Math.abs(Math.hypot(door.tangentX, door.tangentZ) - 1) < 1e-6)
+  assert.ok(Math.abs(Math.hypot(door.normalX, door.normalZ) - 1) < 1e-6)
+  assert.ok(Math.abs(door.tangentX * door.normalX + door.tangentZ * door.normalZ) < 1e-6)
+  assert.ok(Math.abs(Math.hypot(
+    door.anchorX - Number(curvePanel.curveCenterX),
+    door.anchorZ - Number(curvePanel.curveCenterZ),
+  ) - Number(curvePanel.curveRadius)) < 1e-6)
+  assert.equal(roomsWallRenderPaths(surface.rooms).filter(wall => wall.axis === 'arc').length, 1)
 })

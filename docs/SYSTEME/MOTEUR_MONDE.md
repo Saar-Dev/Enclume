@@ -1,8 +1,8 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-13 — Phase 8, tranches d'étage et murs courbes.
+> Dernière mise à jour : 2026-07-13 — Phase 12, chemins de murs courbes canoniques.
 >
-> Statut : **Phases 0 à 8 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
+> Statut : **Phases 0 à 12 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
 >
 > Lire pour : tout travail touchant le monde 3D, les coordonnées, les surfaces praticables, les
@@ -54,7 +54,7 @@ Principes obligatoires :
 
 ### 2.1 Éditeur Surface `[EXISTANT]`
 
-`battlemaps.surface_data` version 7 contient actuellement :
+`battlemaps.surface_data` version 8 contient actuellement :
 
 - `rooms`, `floors`, `walls`, `ceilings`, `stairs`, `connectors` ;
 - les drapeaux `walkable`, `blocksMovement`, `blocksSight` ;
@@ -63,7 +63,7 @@ Principes obligatoires :
 - un calcul client d'étanchéité utilisé pour le rendu de l'eau.
 
 Cet ensemble reste normalisé et rendu côté client par `client/src/lib/surfaceData.js`. À la
-sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 7 et
+sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 8 et
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
@@ -450,14 +450,22 @@ sélectionne au moins deux murs voisins, règle l'angle de 5° à 175° avec un 
 inverser le côté de l'arc, puis applique ou retire l'arrondi. Une sélection disjointe, un contour
 fermé entier ou des murs ne partageant pas le même voisin sont refusés.
 
-L'arc circulaire est tessellé en segments orientés courts. Leur AABB ne sert qu'au broadphase ; le
-narrow phase de déplacement et la LOS intersectent le prisme orienté réel de chaque segment. Le
-rendu, les colliders et les occluders utilisent donc les mêmes extrémités et la même épaisseur.
+Depuis `surface_data` v8, l'arc circulaire est également l'autorité du mur. Le chemin canonique porte
+son centre, son rayon, son angle initial, son balayage et sa longueur. Le renderer en fabrique un seul
+mesh continu, avec normales radiales lissées et coordonnées UV calculées sur la longueur réelle de
+l'arc. Une texture ne recommence donc pas à chaque subdivision visuelle.
 
-Une porte reste attachée à un mur X/Z droit. Courber une chaîne portant déjà une porte, y compris à
-un autre niveau d'une salle multi-hauteur, est refusé avec une erreur explicite. Les anciens murs
-libres `axis: segment` restent lisibles pour les cartes et tests existants, mais l'éditeur ne propose
-plus la courbe libre comme outil de création de salle.
+Le compilateur produit un collider/occluder canonique `wall-arc`. Son AABB exacte sert au broadphase.
+Le déplacement et la LOS peuvent échantillonner l'arc à l'intérieur de leur narrow phase, mais ces
+segments temporaires ne sont jamais persistés et ne deviennent jamais l'autorité du monde. Modifier
+la finesse du rendu ou du test étroit ne change donc ni l'identité du mur ni ses ouvertures.
+
+Une porte peut être attachée à un mur X/Z droit ou à un arc. Sur un arc, son ancrage contient
+l'abscisse curviligne, le point exact, la tangente et la normale locales. Le panneau de porte, qui
+reste rigide, est tangent à la courbe ; son sens et les traversées utilisent la normale. L'ouverture
+découpe le chemin canonique en portions d'arc avant/après et en linteau, même si elle aurait traversé
+plusieurs anciennes subdivisions. Les anciens murs libres `axis: segment` restent lisibles, mais ne
+sont pas le modèle d'un arrondi de salle.
 
 ### 7.3 Empreinte et propriété d'une salle
 
@@ -467,6 +475,10 @@ deux salles : `cells` devient alors la graine de grille et de broadphase, tandis
 effectif est l'autorité géométrique. `room.geometryClipRoomIds` soustrait les contours prioritaires
 et `room.openWallEdgeKeys` transforme une frontière extérieure en ouverture. `minX`, `maxX`,
 `minZ`, `maxZ` restent uniquement une AABB de broadphase.
+
+La v8 ne change pas cette propriété du sol : elle rend le chemin de frontière canonique jusque dans
+le mur compilé. `cells` reste l'index discret, le multipolygone reste l'autorité d'occupation et
+`wall-arc` devient l'autorité continue pour collision, visibilité, rendu et ancrage des portes.
 
 Créer une salle transfère les cases recouvertes des salles orthogonales dont le volume vertical
 intersecte le sien. Face à une salle déjà courbe ou découpée, la salle existante est prioritaire et

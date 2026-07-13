@@ -1510,7 +1510,7 @@ export default function Editor3D({
 
     handleSurfaceDataChange({
       ...currentSurfaceData,
-      version: 7,
+      version: 8,
       connectors: {
         ...(currentSurfaceData.connectors || {}),
         [connectorId]: {

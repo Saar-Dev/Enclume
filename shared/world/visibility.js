@@ -128,7 +128,7 @@ export function traceVisibility({
   const intersections = []
   for (const occluder of occluders) {
     if (excluded.has(occluder.id) || occluder.opacity <= EPSILON) continue
-    const rawInterval = occluder.geometry?.type === 'wall-segment'
+    const rawInterval = occluder.geometry?.type === 'wall-segment' || occluder.geometry?.type === 'wall-arc'
       ? segmentGeometryInterval(start, end, occluder.geometry)
       : segmentBoundsInterval(start, end, occluder.bounds)
     const interval = rawInterval && rawInterval.far > EPSILON && rawInterval.near < 1 - EPSILON

@@ -6,6 +6,7 @@ import {
   migrateRoomGeometryClips,
   roomBoundaryContours,
   roomBoundaryEdges,
+  roomBoundaryPaths,
   roomBoundarySegments,
   roomBoundaryWallRuns,
   roomGeometryArea,
@@ -119,4 +120,18 @@ test('le même arc remplace la chaîne dans le contour et dans les segments phys
     segment.x0 === edge.from.x && segment.z0 === edge.from.z
       && segment.x1 === edge.to.x && segment.z1 === edge.to.z
   ))), false)
+})
+
+test('un arrondi reste une primitive canonique unique malgré sa tessellation physique', () => {
+  const selected = roomBoundaryWallRuns(square).filter(wall => ['west', 'north'].includes(wall.side))
+  const { arc } = makeRoomBoundaryArc(square, selected.flatMap(wall => wall.edgeKeys), 90)
+  const paths = roomBoundaryPaths({ id: 'rounded', ...square, boundaryArcs: [{ ...arc, ownerRoomId: 'rounded' }] })
+  const curved = paths.filter(path => path.axis === 'arc')
+
+  assert.equal(curved.length, 1)
+  assert.equal(curved[0].curveId, `rounded:${arc.id}`)
+  assert.ok(curved[0].radius > 0)
+  assert.ok(Math.abs(curved[0].radius * curved[0].sweep) > 1)
+  assert.ok(Math.abs(curved[0].curveLength - Math.abs(curved[0].radius * curved[0].sweep)) < 1e-5)
+  assert.ok(roomBoundarySegments({ id: 'rounded', ...square, boundaryArcs: [arc] }).filter(segment => segment.curveId).length > 4)
 })

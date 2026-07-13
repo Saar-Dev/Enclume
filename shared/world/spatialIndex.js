@@ -3,6 +3,7 @@
 
 import { assertWorldSnapshot } from './worldContracts.js'
 import { normalizeWorldPoint } from './worldMetrics.js'
+import { sampleWallArcGeometry } from './roomGeometry.js'
 
 const EPSILON = 1e-9
 
@@ -156,6 +157,24 @@ function wallSegmentGeometryInterval(from, to, geometry, {
 }
 
 export function segmentGeometryInterval(from, to, geometry, options = {}) {
+  if (geometry?.type === 'wall-arc') {
+    const points = sampleWallArcGeometry(geometry, 16)
+    const intervals = points.slice(0, -1).map((wallFrom, index) => (
+      wallSegmentGeometryInterval(from, to, {
+        type: 'wall-segment',
+        from: wallFrom,
+        to: points[index + 1],
+        minY: geometry.minY,
+        maxY: geometry.maxY,
+        thickness: geometry.thickness,
+      }, options)
+    )).filter(Boolean)
+    if (intervals.length === 0) return null
+    return {
+      near: Math.min(...intervals.map(interval => interval.near)),
+      far: Math.max(...intervals.map(interval => interval.far)),
+    }
+  }
   return wallSegmentGeometryInterval(from, to, geometry, options)
 }
 
@@ -249,7 +268,7 @@ export function createSpatialIndex(snapshot, options = {}) {
           z: collider.bounds.max.z + actor.radius,
         },
       }
-      if (collider.geometry?.type === 'wall-segment') {
+      if (collider.geometry?.type === 'wall-segment' || collider.geometry?.type === 'wall-arc') {
         return !!segmentGeometryInterval(start, end, collider.geometry, {
           horizontalPadding: actor.radius,
           verticalBottomPadding: actor.height - EPSILON,
