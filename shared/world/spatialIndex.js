@@ -96,6 +96,69 @@ export function segmentIntersectsBounds(from, to, value) {
   return far >= 0 && near <= 1
 }
 
+function wallSegmentGeometryInterval(from, to, geometry, {
+  horizontalPadding = 0,
+  verticalBottomPadding = 0,
+  verticalTopInset = 0,
+} = {}) {
+  if (geometry?.type !== 'wall-segment') return null
+  const start = normalizeWorldPoint(from, 'segment.from')
+  const end = normalizeWorldPoint(to, 'segment.to')
+  const wallFromX = finiteNumber(geometry.from?.x, 'geometry.from.x')
+  const wallFromZ = finiteNumber(geometry.from?.z, 'geometry.from.z')
+  const wallToX = finiteNumber(geometry.to?.x, 'geometry.to.x')
+  const wallToZ = finiteNumber(geometry.to?.z, 'geometry.to.z')
+  const dx = wallToX - wallFromX
+  const dz = wallToZ - wallFromZ
+  const length = Math.hypot(dx, dz)
+  if (length <= EPSILON) return null
+  const alongX = dx / length
+  const alongZ = dz / length
+  const normalX = -alongZ
+  const normalZ = alongX
+  const half = positiveNumber(geometry.thickness, 'geometry.thickness') / 2 + horizontalPadding
+  const ranges = [
+    {
+      start: (start.x - wallFromX) * alongX + (start.z - wallFromZ) * alongZ,
+      end: (end.x - wallFromX) * alongX + (end.z - wallFromZ) * alongZ,
+      min: -horizontalPadding,
+      max: length + horizontalPadding,
+    },
+    {
+      start: (start.x - wallFromX) * normalX + (start.z - wallFromZ) * normalZ,
+      end: (end.x - wallFromX) * normalX + (end.z - wallFromZ) * normalZ,
+      min: -half,
+      max: half,
+    },
+    {
+      start: start.y,
+      end: end.y,
+      min: finiteNumber(geometry.minY, 'geometry.minY') - verticalBottomPadding,
+      max: finiteNumber(geometry.maxY, 'geometry.maxY') - verticalTopInset,
+    },
+  ]
+  let near = 0
+  let far = 1
+  for (const range of ranges) {
+    const delta = range.end - range.start
+    if (Math.abs(delta) <= EPSILON) {
+      if (range.start < range.min || range.start > range.max) return null
+      continue
+    }
+    let axisNear = (range.min - range.start) / delta
+    let axisFar = (range.max - range.start) / delta
+    if (axisNear > axisFar) [axisNear, axisFar] = [axisFar, axisNear]
+    near = Math.max(near, axisNear)
+    far = Math.min(far, axisFar)
+    if (near > far) return null
+  }
+  return far >= 0 && near <= 1 ? { near: Math.max(0, near), far: Math.min(1, far) } : null
+}
+
+export function segmentGeometryInterval(from, to, geometry, options = {}) {
+  return wallSegmentGeometryInterval(from, to, geometry, options)
+}
+
 function bucketRange(bounds, bucketSize) {
   const range = {}
   for (const axis of ['x', 'y', 'z']) {
@@ -185,6 +248,13 @@ export function createSpatialIndex(snapshot, options = {}) {
           y: collider.bounds.max.y - EPSILON,
           z: collider.bounds.max.z + actor.radius,
         },
+      }
+      if (collider.geometry?.type === 'wall-segment') {
+        return !!segmentGeometryInterval(start, end, collider.geometry, {
+          horizontalPadding: actor.radius,
+          verticalBottomPadding: actor.height - EPSILON,
+          verticalTopInset: EPSILON,
+        })
       }
       return segmentIntersectsBounds(start, end, expanded)
     }))

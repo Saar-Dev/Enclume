@@ -13,6 +13,7 @@ import SurfaceEditorScene from './SurfaceEditorScene.jsx'
 import SurfaceDungeonScene, { cutWallsForDoorConnectors } from './SurfaceDungeonScene.jsx'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
 import {
+  applyRoomBoundaryArc,
   applyRoomToolUpdate,
   expandRoomsToSurface,
   getFloorTopY,
@@ -22,6 +23,7 @@ import {
   levelToY,
   normalizeSurfaceData,
   parseFloorKey,
+  removeRoomBoundaryArcs,
   roomsWallSegments,
   SURFACE_FINE,
   yToLevel,
@@ -1179,6 +1181,7 @@ export default function Editor3D({
   const voxelsRef = useRef(voxels)
   useEffect(() => { voxelsRef.current = voxels }, [voxels])
   const surfaceDataRef = useRef(surfaceData)
+  const processedRoomArcActionRef = useRef(null)
   useEffect(() => { surfaceDataRef.current = surfaceData }, [surfaceData])
   // battlemapRef — miroir de battlemap pour saveFireAndForget stable (pas de recréation du timer)
   const battlemapRef = useRef(battlemap)
@@ -1464,6 +1467,7 @@ export default function Editor3D({
     surfaceRedoStackRef.current = []
     setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
     setSurfaceRedoDepth(0)
+    surfaceDataRef.current = nextSurfaceData
     setSurfaceData(nextSurfaceData)
     isSurfaceDirty.current = true
     saveSurfaceFireAndForget(nextSurfaceData)
@@ -1505,7 +1509,7 @@ export default function Editor3D({
 
     handleSurfaceDataChange({
       ...currentSurfaceData,
-      version: 5,
+      version: 6,
       connectors: {
         ...(currentSurfaceData.connectors || {}),
         [connectorId]: {
@@ -1539,8 +1543,48 @@ export default function Editor3D({
   }, [surfaceConnectorPanel, surfaceTool?.mode])
 
   useEffect(() => {
+    const actionId = surfaceTool?.roomArcActionId
+    if (!actionId || processedRoomArcActionRef.current === actionId) return
+    processedRoomArcActionRef.current = actionId
+
+    const roomId = surfaceTool?.selectedRoomId
+    const edgeKeys = surfaceTool?.selectedRoomWallKeys || []
+    const result = surfaceTool?.roomArcAction === 'remove'
+      ? { surfaceData: removeRoomBoundaryArcs(surfaceDataRef.current, roomId, edgeKeys), error: null }
+      : applyRoomBoundaryArc(
+          surfaceDataRef.current,
+          roomId,
+          edgeKeys,
+          surfaceTool?.roomArcAngle,
+          surfaceTool?.roomArcSide,
+        )
+
+    if (result.error) {
+      onSurfaceToolChange?.({
+        ...surfaceTool,
+        roomArcActionId: null,
+        roomArcAction: null,
+        roomArcError: result.error,
+      })
+      return
+    }
+    if (result.surfaceData !== surfaceDataRef.current) handleSurfaceDataChange(result.surfaceData)
+    onSurfaceToolChange?.({
+      ...surfaceTool,
+      mode: 'select',
+      roomWallEdit: true,
+      selectedRoomWallKeys: [],
+      selectedRoomWallCount: 0,
+      roomArcActionId: null,
+      roomArcAction: null,
+      roomArcError: null,
+    })
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool])
+
+  useEffect(() => {
     const roomId = surfaceTool?.selectedRoomId
     if (!roomId) return
+    if (surfaceTool?.roomArcActionId) return
     if (['room', 'connector', 'stair', 'bridge', 'effect', 'erase'].includes(surfaceTool?.mode)) return
     const nextSurfaceData = applyRoomToolUpdate(
       surfaceDataRef.current,

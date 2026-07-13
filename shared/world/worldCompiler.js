@@ -13,6 +13,7 @@ import {
   normalizeElevatorDefinition,
   normalizeElevatorState,
 } from './elevatorRuntime.js'
+import { roomBoundarySegments } from './roomGeometry.js'
 
 const EPSILON = 1e-6
 
@@ -199,7 +200,13 @@ function wallKey(wall) {
     ? [wall.axis, Math.min(wall.x0, wall.x1), Math.max(wall.x0, wall.x1), wall.z0, wall.y, wall.height]
     : wall.axis === 'z'
       ? [wall.axis, wall.x0, Math.min(wall.z0, wall.z1), Math.max(wall.z0, wall.z1), wall.y, wall.height]
-      : [wall.axis, wall.x0, wall.z0, wall.x1, wall.z1, wall.y, wall.height]
+      : (() => {
+          const start = `${clean(wall.x0)}:${clean(wall.z0)}`
+          const end = `${clean(wall.x1)}:${clean(wall.z1)}`
+          return start.localeCompare(end) <= 0
+            ? [wall.axis, wall.x0, wall.z0, wall.x1, wall.z1, wall.y, wall.height]
+            : [wall.axis, wall.x1, wall.z1, wall.x0, wall.z0, wall.y, wall.height]
+        })()
   return values.map(value => typeof value === 'number' ? clean(value) : value).join(':')
 }
 
@@ -227,14 +234,13 @@ function roomWallCandidates(surface, battlemapId) {
   const walls = new Map()
   for (const room of Object.values(surface.rooms)) {
     if (room.wallEnabled === false) continue
-    const cells = roomCells(room)
-    const cellKeys = new Set(cells.map(cell => roomCellKey(cell.x, cell.z)))
     const baseY = roomBaseY(room, surface.storyHeight)
     const levels = roomHeightLevels(room, surface.storyHeight)
     const thickness = positive(room.wallThickness, 1) / surface.fine
+    const boundary = roomBoundarySegments(room)
     for (let offset = 0; offset < levels; offset++) {
       const y = baseY + offset * surface.storyHeight
-      for (const { x, z } of cells) {
+      for (const segment of boundary) {
         const addBoundary = wall => addWallCandidate(walls, {
           ...room,
           ...wall,
@@ -243,18 +249,7 @@ function roomWallCandidates(surface, battlemapId) {
           thickness,
           sourceWorldIds: [room.worldId],
         }, battlemapId)
-        if (!cellKeys.has(roomCellKey(x, z - 1))) {
-          addBoundary({ axis: 'x', x0: x, x1: x + 1, z0: z, z1: z })
-        }
-        if (!cellKeys.has(roomCellKey(x, z + 1))) {
-          addBoundary({ axis: 'x', x0: x, x1: x + 1, z0: z + 1, z1: z + 1 })
-        }
-        if (!cellKeys.has(roomCellKey(x - 1, z))) {
-          addBoundary({ axis: 'z', x0: x, x1: x, z0: z, z1: z + 1 })
-        }
-        if (!cellKeys.has(roomCellKey(x + 1, z))) {
-          addBoundary({ axis: 'z', x0: x + 1, x1: x + 1, z0: z, z1: z + 1 })
-        }
+        addBoundary(segment)
       }
     }
   }
@@ -379,6 +374,18 @@ function wallPieceBounds(piece) {
   return bounds(piece.line - half, piece.bottom, piece.alongMin, piece.line + half, piece.top, piece.alongMax)
 }
 
+function wallPieceGeometry(piece) {
+  if (piece.axis !== 'segment') return null
+  return {
+    type: 'wall-segment',
+    from: { x: clean(piece.x0), z: clean(piece.z0) },
+    to: { x: clean(piece.x1), z: clean(piece.z1) },
+    minY: clean(piece.bottom),
+    maxY: clean(piece.top),
+    thickness: clean(piece.thickness),
+  }
+}
+
 function addBarrierOutputs(spatial, barrier) {
   spatial.barriers.push(barrier)
   if (barrier.blocks.movement) {
@@ -387,6 +394,7 @@ function addBarrierOutputs(spatial, barrier) {
       sourceId: barrier.sourceId,
       kind: barrier.kind,
       bounds: barrier.bounds,
+      ...(barrier.geometry ? { geometry: barrier.geometry } : {}),
     })
   }
   if (barrier.blocks.sight) {
@@ -395,6 +403,7 @@ function addBarrierOutputs(spatial, barrier) {
       sourceId: barrier.sourceId,
       kind: barrier.kind,
       bounds: barrier.bounds,
+      ...(barrier.geometry ? { geometry: barrier.geometry } : {}),
       opacity: 1,
     })
   }
@@ -486,6 +495,7 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
         kind: 'wall',
         axis: wall.axis,
         bounds: wallPieceBounds(piece),
+        geometry: wallPieceGeometry(piece),
         blocks: wall.blocks,
       })
     }

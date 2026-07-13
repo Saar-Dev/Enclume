@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { compileSurfaceWorld } from './worldCompiler.js'
+import { makeRoomBoundaryArc, roomBoundaryWallRuns } from './roomGeometry.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -69,6 +70,30 @@ test('deux salles adjacentes partagent un seul mur physique', () => {
   assert.equal(walls.filter(item => item.sourceIds?.length === 2).length, 1)
 })
 
+test('un arrondi de salle compile les mêmes segments pour collision et ligne de vue', () => {
+  const roundedRoom = {
+    ...room('rounded', 0, 1, 0, 1),
+    cells: ['0:0', '1:0', '0:1', '1:1'],
+  }
+  const selected = roomBoundaryWallRuns(roundedRoom).filter(wall => ['west', 'north'].includes(wall.side))
+  roundedRoom.boundaryArcs = [makeRoomBoundaryArc(roundedRoom, selected.flatMap(wall => wall.edgeKeys), 90).arc]
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-rounded-room',
+    surfaceData: emptySurface({ rooms: { rounded: roundedRoom } }),
+  })
+  const curved = snapshot.spatial.barriers.filter(item => item.kind === 'wall' && item.axis === 'segment')
+
+  assert.ok(curved.length > 4)
+  assert.ok(curved.every(item => item.blocks.movement && item.blocks.sight && item.blocks.water))
+  assert.ok(curved.every(item => item.geometry?.type === 'wall-segment'))
+  assert.ok(curved.every(item => snapshot.spatial.colliders.some(collider => (
+    collider.sourceId === item.sourceId && collider.geometry?.type === 'wall-segment'
+  ))))
+  assert.ok(curved.every(item => snapshot.spatial.occluders.some(occluder => (
+    occluder.sourceId === item.sourceId && occluder.geometry?.type === 'wall-segment'
+  ))))
+})
+
 test('une salle imbriquee compile deux empreintes exclusives et leur contour commun', () => {
   const outerCells = []
   for (let z = 0; z < 4; z += 1) {
@@ -121,6 +146,14 @@ test('un segment de mur courbe compile les mêmes canaux physiques que son rendu
   assert.deepEqual(barrier.bounds, {
     min: { x: -0.125, y: 0, z: -0.125 },
     max: { x: 1.125, y: 2.5, z: 1.125 },
+  })
+  assert.deepEqual(barrier.geometry, {
+    type: 'wall-segment',
+    from: { x: 0, z: 0 },
+    to: { x: 1, z: 1 },
+    minY: 0,
+    maxY: 2.5,
+    thickness: 0.25,
   })
   assert.equal(snapshot.spatial.colliders.some(item => item.sourceId === barrier.sourceId), true)
   assert.equal(snapshot.spatial.occluders.some(item => item.sourceId === barrier.sourceId), true)

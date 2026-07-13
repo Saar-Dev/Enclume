@@ -113,7 +113,7 @@ Phase 1, pas d'un oubli de la Phase 0.
 
 ### Livré le 2026-07-13
 
-- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v5, attribue des UUID
+- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v6, attribue des UUID
   stables et produit le `WorldDocument` canonique ;
 - `shared/world/worldCompiler.js` compile salles, dalles, murs partagés, portes découpées, escaliers,
   ascenseurs désactivés en attente de leur contrôleur, colliders, occluders et compartiments ;
@@ -433,9 +433,8 @@ Phase 7.
 - un objet d'un étage inférieur ne peut plus intercepter un clic ni servir de support dans l'éditeur
   de l'étage courant, sauf s'il est visible au fond du même volume multniveau ; même visible, il ne
   remplace jamais le plan de placement de l'étage courant ;
-- l'éditeur expose directement **Mur droit** et **Mur courbe**. Une courbe quadratique réglable est
-  tessellée en segments orientés courts ; rendu, collision, LOS et étanchéité consomment ces mêmes
-  segments ;
+- l'éditeur expose **Mur droit** pour les panneaux libres. Les anciens murs courbes restent lisibles,
+  mais les arrondis de salle sont désormais une transformation structurée de contour (Phase 10) ;
 - les portes restent attachées aux portions droites. Une porte courbe exigerait un modèle et une
   découpe dédiés, elle n'est donc pas simulée approximativement.
 
@@ -484,7 +483,49 @@ Phase 7.
 
 ---
 
-## 13. Matrice de non-régression minimale
+## 13. Phase 10 — arrondis structurés de salles ✅
+
+### Contrat `surface_data` v6
+
+- `room.boundaryArcs` décrit un arc circulaire par ses arêtes remplacées, ses extrémités, son angle
+  central et son côté ;
+- `shared/world/roomGeometry.js` est l'autorité pure pour les boucles, murs droits regroupés, chaînes
+  sélectionnées, échantillonnage des arcs, contours et segments physiques ;
+- un arrondi appartient à la salle et, lorsqu'un contour est partagé, à toutes les salles voisines
+  du même étage. Une salle empilée aux mêmes coordonnées n'est jamais modifiée ;
+- les cases restent l'autorité logique des supports et du coût de déplacement. L'arc transforme la
+  géométrie du plancher, du plafond et des murs sans inventer de nouvelle propriété de case.
+
+### Éditeur
+
+- après sélection d'une salle, **Arrondir des murs** rend chaque portion droite entre deux angles
+  cliquable comme un seul mur ;
+- au moins deux murs contigus sont requis ; la réglette 5°–175° affiche l'arc en direct et le côté
+  peut être inversé ;
+- **Remettre droit** retire l'arc touchant la sélection ;
+- une porte déjà posée sur la chaîne bloque la transformation, à tous les niveaux d'une salle haute ;
+- l'ancien bouton de courbe libre est retiré de l'éditeur de salle.
+
+### Géométrie et physique
+
+- les dalles et plafonds courbes sont extrudés depuis le même contour, avec prise en charge des cours
+  intérieures ;
+- les murs sont compilés depuis les mêmes segments que le rendu ;
+- les AABB restent l'index de broadphase, mais déplacement et visibilité utilisent un prisme orienté
+  par segment pour éviter les faux obstacles dans les coins de la boîte englobante ;
+- collision, étanchéité et LOS conservent leurs canaux indépendants (`solid`, `glass`, `grate`).
+
+### Validation
+
+- regroupement des arêtes colinéaires et refus des sélections disjointes ou partielles ;
+- contour, rendu et compilation dérivés du même arc ;
+- isolation des étages superposés et refus d'une porte portée par la chaîne ;
+- tests dédiés de narrow phase orientée pour collision et LOS ;
+- 85 tests monde/combat, ESLint ciblé sans erreur et build Vite validés.
+
+---
+
+## 14. Matrice de non-régression minimale
 
 Chaque phase doit conserver ou ajouter ces scénarios :
 
@@ -506,7 +547,7 @@ Chaque phase doit conserver ou ajouter ces scénarios :
 
 ---
 
-## 14. Définition de fini du chantier
+## 15. Définition de fini du chantier
 
 Le moteur de monde est considéré terminé lorsque :
 

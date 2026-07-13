@@ -59,3 +59,28 @@ test('l’occupation dynamique conserve plusieurs occupants dans un même volume
     { excludeIds: ['token-a', 'token-b'] },
   ), true)
 })
+
+test('un collider incliné utilise son prisme orienté et non toute sa boîte englobante', () => {
+  const geometry = {
+    type: 'wall-segment',
+    from: { x: 0, z: 0 },
+    to: { x: 1, z: 1 },
+    minY: 0,
+    maxY: 2.5,
+    thickness: 0.1,
+  }
+  const diagonal = createWorldSnapshot({
+    spatial: {
+      supports: [], barriers: [], traversals: [], occluders: [], compartments: [], regions: [],
+      colliders: [{
+        id: 'diagonal', sourceId: 'diagonal', kind: 'wall', geometry,
+        bounds: { min: { x: -0.05, y: 0, z: -0.05 }, max: { x: 1.05, y: 2.5, z: 1.05 } },
+      }],
+    },
+  })
+  const index = createSpatialIndex(diagonal)
+  const actor = { radius: 0.05, height: 1.8, maxStepHeight: 0.5 }
+
+  assert.equal(index.isSegmentClear({ x: 0.1, y: 0, z: 0.9 }, { x: 0.2, y: 0, z: 0.9 }, actor), true)
+  assert.equal(index.isSegmentClear({ x: 0, y: 0, z: 1 }, { x: 1, y: 0, z: 0 }, actor), false)
+})

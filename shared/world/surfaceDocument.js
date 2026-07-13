@@ -1,10 +1,11 @@
 // shared/world/surfaceDocument.js
-// Frontière de compatibilité entre surface_data v5 (empreintes de salles) et le document canonique du
+// Frontière de compatibilité entre surface_data v6 (empreintes et arcs de salles) et le document canonique du
 // moteur de monde. Les clés legacy restent lisibles ; worldId devient l'identité physique stable.
 
 import { createWorldDocument } from './worldContracts.js'
+import { selectedRoomBoundaryChain } from './roomGeometry.js'
 
-export const SURFACE_DATA_VERSION = 5
+export const SURFACE_DATA_VERSION = 6
 export const SURFACE_FINE_DEFAULT = 4
 export const SURFACE_STORY_HEIGHT_DEFAULT = 2.5
 
@@ -118,6 +119,54 @@ function validateFeature(collection, id, item, errors) {
           if (x < Number(item.minX) || x > Number(item.maxX) || z < Number(item.minZ) || z > Number(item.maxZ)) {
             errors.push(`${path}.cells.${index} sort des bornes de la salle`)
           }
+        }
+      }
+    }
+    if (item.boundaryArcs != null) {
+      if (!Array.isArray(item.boundaryArcs)) {
+        errors.push(`${path}.boundaryArcs doit être un tableau`)
+      } else {
+        const arcIds = new Set()
+        for (const [index, arc] of item.boundaryArcs.entries()) {
+          const arcPath = `${path}.boundaryArcs.${index}`
+          if (!isPlainObject(arc)) {
+            errors.push(`${arcPath} doit être un objet`)
+            continue
+          }
+          if (typeof arc.id !== 'string' || !arc.id.trim()) errors.push(`${arcPath}.id est obligatoire`)
+          else if (arcIds.has(arc.id)) errors.push(`${path}.boundaryArcs contient deux fois ${arc.id}`)
+          else arcIds.add(arc.id)
+          const edgeKeysValid = Array.isArray(arc.edgeKeys)
+            && arc.edgeKeys.length >= 2
+            && arc.edgeKeys.every(key => typeof key === 'string')
+          if (!edgeKeysValid) {
+            errors.push(`${arcPath}.edgeKeys doit contenir au moins deux murs`)
+          } else if (new Set(arc.edgeKeys).size !== arc.edgeKeys.length) {
+            errors.push(`${arcPath}.edgeKeys contient des murs en double`)
+          } else {
+            const chain = selectedRoomBoundaryChain(item, arc.edgeKeys)
+            if (chain.error) {
+              errors.push(`${arcPath}.edgeKeys ne forme pas une chaîne valide : ${chain.error}`)
+            } else {
+              const closePoint = (left, right) => (
+                Math.abs(Number(left?.x) - Number(right?.x)) <= 1e-6
+                && Math.abs(Number(left?.z) - Number(right?.z)) <= 1e-6
+              )
+              const endpointsMatch = (
+                closePoint(arc.start, chain.start) && closePoint(arc.end, chain.end)
+              ) || (
+                closePoint(arc.start, chain.end) && closePoint(arc.end, chain.start)
+              )
+              if (!endpointsMatch) errors.push(`${arcPath} ne rejoint pas les extrémités de sa chaîne`)
+            }
+          }
+          validateFiniteFields(arc.start || {}, ['x', 'z'], `${arcPath}.start`, errors)
+          validateFiniteFields(arc.end || {}, ['x', 'z'], `${arcPath}.end`, errors)
+          const angle = Number(arc.angleDegrees)
+          if (!Number.isFinite(angle) || angle < 5 || angle > 175) {
+            errors.push(`${arcPath}.angleDegrees doit être compris entre 5 et 175`)
+          }
+          if (![1, -1].includes(Number(arc.side))) errors.push(`${arcPath}.side doit valoir 1 ou -1`)
         }
       }
     }

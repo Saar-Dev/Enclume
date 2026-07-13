@@ -44,6 +44,32 @@ test('verre et grille sans occluder laissent la vue tout en restant des collider
   assert.equal(result.transmittance, 1)
 })
 
+test('la LOS respecte le prisme orienté d’un mur courbe', () => {
+  const diagonal = {
+    id: 'diagonal', kind: 'wall', opacity: 1,
+    bounds: { min: { x: -0.05, y: 0, z: -0.05 }, max: { x: 1.05, y: 2.5, z: 1.05 } },
+    geometry: {
+      type: 'wall-segment',
+      from: { x: 0, z: 0 },
+      to: { x: 1, z: 1 },
+      minY: 0,
+      maxY: 2.5,
+      thickness: 0.1,
+    },
+  }
+
+  assert.equal(traceVisibility({
+    snapshot: snapshot([diagonal]),
+    from: { x: 0.1, y: 1, z: 0.9 },
+    to: { x: 0.2, y: 1, z: 0.9 },
+  }).clear, true)
+  assert.equal(traceVisibility({
+    snapshot: snapshot([diagonal]),
+    from: { x: 0, y: 1, z: 1 },
+    to: { x: 1, y: 1, z: 0 },
+  }).clear, false)
+})
+
 test('des volumes atténuants dynamiques se cumulent de façon déterministe', () => {
   const smoke = index => ({
     id: `smoke-${index}`, kind: 'smoke', opacity: 0.8,

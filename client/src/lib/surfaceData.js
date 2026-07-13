@@ -2,16 +2,25 @@ import {
   DEFAULT_SURFACE_MATERIAL_PRESET,
   makeProceduralMaterialDescriptor,
 } from './proceduralMaterials.js'
+import {
+  makeRoomBoundaryArc,
+  roomBoundaryEdges,
+  roomBoundaryWallRuns,
+  roomBoundarySegments as geometryRoomBoundarySegments,
+  selectedRoomBoundaryChain,
+} from '../../../shared/world/roomGeometry.js'
 
 export const SURFACE_FINE = 4
 export const STORY_HEIGHT = 2.5
+export const getRoomBoundaryEdges = roomBoundaryEdges
+export const getRoomBoundaryWallRuns = roomBoundaryWallRuns
 const STATION_USED_PACK_ID = '6f3916a6-7c7b-45f7-a020-7d63b7a74176'
 const STATION_USED_SPECIAL_RATE = 12
 const DEFAULT_FLOOR_THICKNESS = 0.25
 const DEFAULT_CEILING_HEIGHT = 2.5
 const STAIR_STEPS_PER_CELL = 4
 export const DEFAULT_SURFACE_DATA = {
-  version: 5,
+  version: 6,
   fine: SURFACE_FINE,
   storyHeight: STORY_HEIGHT,
   rooms: {},
@@ -312,7 +321,7 @@ export function parseCeilingKey(id, ceiling) {
 export function normalizeSurfaceData(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return { ...DEFAULT_SURFACE_DATA }
   return {
-    version: Math.max(5, data.version || 2),
+    version: Math.max(6, data.version || 2),
     fine: data.fine || SURFACE_FINE,
     storyHeight: data.storyHeight || STORY_HEIGHT,
     rooms: data.rooms && typeof data.rooms === 'object' && !Array.isArray(data.rooms) ? data.rooms : {},
@@ -1277,12 +1286,20 @@ function completeRoomWallPanel(wall) {
 export function roomsWallSegments(rooms) {
   const panels = new Map()
 
+  const panelKey = (axis, x0, z0, x1, z1, y) => {
+    if (axis === 'x') return `room-wall:x:${Math.min(x0, x1)}:${z0}:${Math.max(x0, x1)}:${z1}:${formatLevel(y)}`
+    if (axis === 'z') return `room-wall:z:${x0}:${Math.min(z0, z1)}:${x1}:${Math.max(z0, z1)}:${formatLevel(y)}`
+    const start = `${formatLevel(x0)}:${formatLevel(z0)}`
+    const end = `${formatLevel(x1)}:${formatLevel(z1)}`
+    return start.localeCompare(end) <= 0
+      ? `room-wall:segment:${start}:${end}:${formatLevel(y)}`
+      : `room-wall:segment:${end}:${start}:${formatLevel(y)}`
+  }
+
   for (const [roomId, rawRoom] of Object.entries(rooms || {})) {
     const room = { id: roomId, ...rawRoom }
     if (!room || room.wallEnabled === false) continue
 
-    const footprint = getRoomFootprintCells(room)
-    const footprintKeys = new Set(footprint.map(cell => roomCellKey(cell.x, cell.z)))
     const fine = SURFACE_FINE
     const heightLevels = getRoomHeightLevels(room)
     const baseY = getRoomBaseY(room)
@@ -1298,8 +1315,8 @@ export function roomsWallSegments(rooms) {
       material: roomWallExteriorMaterial(room),
     }
 
-    const addPanel = ({ side, axis, x0, x1, z0, z1, frontSource, backSource, y }) => {
-      const key = `room-wall:${axis}:${x0}:${z0}:${x1}:${z1}:${formatLevel(y)}`
+    const addPanel = ({ axis, x0, x1, z0, z1, frontSource, backSource, y }) => {
+      const key = panelKey(axis, x0, z0, x1, z1, y)
       const wall = ensureRoomWallPanel(panels, key, {
         room,
         axis,
@@ -1310,44 +1327,39 @@ export function roomsWallSegments(rooms) {
         z0,
         z1,
       })
-      setWallFace(wall, 'front', frontSource)
-      setWallFace(wall, 'back', backSource)
-      wall.side = wall.side || side
+      const sameDirection = Math.abs(Number(wall.x0) - Number(x0)) < 0.001
+        && Math.abs(Number(wall.z0) - Number(z0)) < 0.001
+        && Math.abs(Number(wall.x1) - Number(x1)) < 0.001
+        && Math.abs(Number(wall.z1) - Number(z1)) < 0.001
+      setWallFace(wall, 'front', sameDirection ? frontSource : backSource)
+      setWallFace(wall, 'back', sameDirection ? backSource : frontSource)
     }
+
+    const boundary = geometryRoomBoundarySegments(room)
 
     for (let offset = 0; offset < heightLevels; offset += 1) {
       const y = baseY + offset * STORY_HEIGHT
 
-      for (const { x, z } of footprint) {
-        const x0 = x * fine
-        const x1 = (x + 1) * fine
-        const z0 = z * fine
-        const z1 = (z + 1) * fine
-
-        if (!footprintKeys.has(roomCellKey(x, z - 1))) {
-          addPanel({
-            side: 'north', axis: 'x', x0, x1, z0, z1: z0,
-            frontSource: interior, backSource: exterior, y,
-          })
-        }
-        if (!footprintKeys.has(roomCellKey(x, z + 1))) {
-          addPanel({
-            side: 'south', axis: 'x', x0, x1, z0: z1, z1,
-            frontSource: exterior, backSource: interior, y,
-          })
-        }
-        if (!footprintKeys.has(roomCellKey(x - 1, z))) {
-          addPanel({
-            side: 'west', axis: 'z', x0, x1: x0, z0, z1,
-            frontSource: interior, backSource: exterior, y,
-          })
-        }
-        if (!footprintKeys.has(roomCellKey(x + 1, z))) {
-          addPanel({
-            side: 'east', axis: 'z', x0: x1, x1, z0, z1,
-            frontSource: exterior, backSource: interior, y,
-          })
-        }
+      for (const segment of boundary) {
+        const x0 = segment.x0 * fine
+        const x1 = segment.x1 * fine
+        const z0 = segment.z0 * fine
+        const z1 = segment.z1 * fine
+        const frontIsInterior = segment.axis === 'x'
+          ? x1 >= x0
+          : segment.axis === 'z'
+            ? z1 <= z0
+            : true
+        addPanel({
+          axis: segment.axis,
+          x0,
+          x1,
+          z0,
+          z1,
+          frontSource: frontIsInterior ? interior : exterior,
+          backSource: frontIsInterior ? exterior : interior,
+          y,
+        })
       }
     }
   }
@@ -1532,7 +1544,7 @@ export function applyDoorConnector(surfaceData, wallPoint, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 5,
+    version: 6,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1607,7 +1619,7 @@ export function applyElevatorConnector(surfaceData, cell, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 5,
+    version: 6,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1672,7 +1684,7 @@ export function applyLadderConnector(surfaceData, cell, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 5,
+    version: 6,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1786,8 +1798,121 @@ function roomWithFootprint(room, id, cells, keepWorldId) {
     shape: 'footprint',
     cells: cells.map(cell => roomCellKey(cell.x, cell.z)),
   }
+  if (Array.isArray(next.boundaryArcs)) {
+    const edgeKeys = new Set(roomBoundaryEdges(next).map(edge => edge.key))
+    next.boundaryArcs = next.boundaryArcs.filter(arc => (
+      Array.isArray(arc?.edgeKeys)
+      && arc.edgeKeys.length >= 2
+      && arc.edgeKeys.every(key => edgeKeys.has(key))
+      && !selectedRoomBoundaryChain(next, arc.edgeKeys).error
+    ))
+  }
   if (!keepWorldId) delete next.worldId
   return next
+}
+
+function roomIdsForBoundaryEdge(rooms, edgeKey, baseY) {
+  return Object.entries(rooms || {})
+    .filter(([, room]) => (
+      sameLevel(getRoomBaseY(room), baseY)
+      && roomBoundaryEdges(room).some(edge => edge.key === edgeKey)
+    ))
+    .map(([id]) => id)
+    .sort()
+}
+
+function doorConnectorTouchesBoundaryEdges(connector, room, selectedEdges) {
+  if (connector?.type !== 'door') return false
+  const doorY = Number(connector.y)
+  const roomBaseY = getRoomBaseY(room)
+  const roomTopY = roomBaseY + getRoomHeightLevels(room) * STORY_HEIGHT
+  if (!Number.isFinite(doorY) || doorY < roomBaseY || doorY >= roomTopY) return false
+
+  const axis = connector.axis
+  if (axis !== 'x' && axis !== 'z') return false
+  const line = (axis === 'x' ? Number(connector.z0) : Number(connector.x0)) / SURFACE_FINE
+  const alongStart = (axis === 'x' ? Number(connector.x0) : Number(connector.z0)) / SURFACE_FINE
+  const alongEnd = (axis === 'x' ? Number(connector.x1) : Number(connector.z1)) / SURFACE_FINE
+  if (![line, alongStart, alongEnd].every(Number.isFinite)) return false
+  const alongCenter = (alongStart + alongEnd) / 2
+  const epsilon = 1e-4
+
+  return selectedEdges.some(edge => {
+    if (edge.axis !== axis) return false
+    const edgeLine = axis === 'x' ? edge.from.z : edge.from.x
+    if (Math.abs(edgeLine - line) > epsilon) return false
+    const edgeStart = axis === 'x' ? edge.from.x : edge.from.z
+    const edgeEnd = axis === 'x' ? edge.to.x : edge.to.z
+    return alongCenter >= Math.min(edgeStart, edgeEnd) - epsilon
+      && alongCenter <= Math.max(edgeStart, edgeEnd) + epsilon
+  })
+}
+
+export function applyRoomBoundaryArc(surfaceData, roomId, edgeKeys, angleDegrees = 90, sideMultiplier = 1) {
+  const next = normalizeSurfaceData(surfaceData)
+  const room = next.rooms?.[roomId]
+  if (!room) return { surfaceData, error: 'La salle sélectionnée n’existe plus.' }
+  const selectedKeys = [...new Set((edgeKeys || []).map(String))]
+  const built = makeRoomBoundaryArc({ id: roomId, ...room }, selectedKeys, angleDegrees, sideMultiplier)
+  if (built.error) return { surfaceData, error: built.error }
+
+  const selectedKeySet = new Set(selectedKeys)
+  const selectedEdges = roomBoundaryEdges(room).filter(edge => selectedKeySet.has(edge.key))
+  const doorOnSelection = Object.values(next.connectors || {})
+    .some(connector => doorConnectorTouchesBoundaryEdges(connector, room, selectedEdges))
+  if (doorOnSelection) {
+    return { surfaceData, error: 'Déplace ou supprime d’abord la porte placée sur ces murs.' }
+  }
+
+  const ownerships = selectedKeys.map(key => roomIdsForBoundaryEdge(next.rooms, key, getRoomBaseY(room)))
+  const signature = ownerships[0]?.join('|') || ''
+  if (!signature || ownerships.some(ids => ids.join('|') !== signature)) {
+    return { surfaceData, error: 'Tous les murs doivent séparer la même salle voisine, ou le même extérieur.' }
+  }
+  const targetRoomIds = ownerships[0]
+  if (!targetRoomIds.includes(roomId)) return { surfaceData, error: 'La sélection ne fait pas partie de cette salle.' }
+  for (const targetRoomId of targetRoomIds) {
+    const targetRoom = next.rooms[targetRoomId]
+    if (selectedRoomBoundaryChain(targetRoom, selectedKeys).error) {
+      return { surfaceData, error: 'Le contour partagé ne permet pas un arrondi continu.' }
+    }
+  }
+
+  const arc = { ...built.arc, ownerRoomId: roomId }
+  const rooms = { ...next.rooms }
+  for (const targetRoomId of targetRoomIds) {
+    const targetRoom = rooms[targetRoomId]
+    const boundaryArcs = (Array.isArray(targetRoom.boundaryArcs) ? targetRoom.boundaryArcs : [])
+      .filter(existing => !(existing?.edgeKeys || []).some(key => selectedKeySet.has(key)))
+    rooms[targetRoomId] = { ...targetRoom, boundaryArcs: [...boundaryArcs, arc] }
+  }
+  return {
+    surfaceData: { ...next, version: 6, rooms },
+    error: null,
+    roomIds: targetRoomIds,
+    arc,
+  }
+}
+
+export function removeRoomBoundaryArcs(surfaceData, roomId, edgeKeys) {
+  const next = normalizeSurfaceData(surfaceData)
+  const selectedRoom = next.rooms?.[roomId]
+  if (!selectedRoom) return surfaceData
+  const selected = new Set((edgeKeys || []).map(String))
+  if (selected.size === 0) return surfaceData
+  const targetRoomIds = new Set([...selected].flatMap(key => (
+    roomIdsForBoundaryEdge(next.rooms, key, getRoomBaseY(selectedRoom))
+  )))
+  let changed = false
+  const rooms = Object.fromEntries(Object.entries(next.rooms).map(([id, room]) => {
+    if (!targetRoomIds.has(id)) return [id, room]
+    const current = Array.isArray(room.boundaryArcs) ? room.boundaryArcs : []
+    const boundaryArcs = current.filter(arc => !(arc?.edgeKeys || []).some(key => selected.has(key)))
+    if (boundaryArcs.length === current.length) return [id, room]
+    changed = true
+    return [id, { ...room, boundaryArcs }]
+  }))
+  return changed ? { ...next, version: 6, rooms } : surfaceData
 }
 
 function connectorAnchorCell(connector) {
@@ -1863,7 +1988,7 @@ export function applyRoomSelection(surfaceData, selection, tool, activeMaterial,
 
   return {
     ...next,
-    version: 5,
+    version: 6,
     rooms,
     connectors,
   }
@@ -1966,7 +2091,7 @@ export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, a
 
   return {
     ...next,
-    version: 5,
+    version: 6,
     rooms: {
       ...next.rooms,
       [roomId]: updated,

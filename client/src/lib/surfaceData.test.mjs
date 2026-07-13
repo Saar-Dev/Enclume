@@ -2,11 +2,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  applyRoomBoundaryArc,
   applyRoomSelection,
   computeSurfaceWaterCells,
   expandRoomsToSurface,
   findRoomAtCell,
   getRoomFootprintCells,
+  getRoomBoundaryWallRuns,
   getWallRenderBox,
   isWorldPointVisibleAtLevel,
   makeWallsFromDrag,
@@ -106,7 +108,7 @@ test('une nouvelle salle transfere ses cases et redessine le contour de la salle
   )
   const nestedId = 'room:1:1:2:2:0:1'
 
-  assert.equal(result.version, 5)
+  assert.equal(result.version, 6)
   assert.equal(getRoomFootprintCells(result.rooms.outer).length, 12)
   assert.equal(getRoomFootprintCells(result.rooms[nestedId]).length, 4)
   assert.equal(findRoomAtCell(result, { x: 1, z: 1 }, 0).id, nestedId)
@@ -116,6 +118,31 @@ test('une nouvelle salle transfere ses cases et redessine le contour de la salle
   const expanded = expandRoomsToSurface(result)
   assert.equal(Object.keys(expanded.floors).length, 16)
   assert.equal(roomsWallSegments(result.rooms).filter(wall => wall.roomIds.length === 2).length, 8)
+})
+
+test('un arrondi de salle remplace une chaîne de murs dans le rendu de la salle', () => {
+  const baseRoom = { ...room('rounded', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const surface = emptySurface({ rooms: { rounded: baseRoom } })
+  const selected = getRoomBoundaryWallRuns(baseRoom).filter(wall => ['west', 'north'].includes(wall.side))
+  const result = applyRoomBoundaryArc(surface, 'rounded', selected.flatMap(wall => wall.edgeKeys), 90)
+
+  assert.equal(result.error, null)
+  assert.equal(result.surfaceData.version, 6)
+  assert.equal(result.surfaceData.rooms.rounded.boundaryArcs.length, 1)
+  assert.ok(roomsWallSegments(result.surfaceData.rooms).some(wall => wall.axis === 'segment'))
+})
+
+test('une porte existante empêche de courber son mur porteur', () => {
+  const baseRoom = { ...room('rounded', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const selected = getRoomBoundaryWallRuns(baseRoom).filter(wall => ['west', 'north'].includes(wall.side))
+  const result = applyRoomBoundaryArc(emptySurface({
+    rooms: { rounded: baseRoom },
+    connectors: {
+      door: { type: 'door', axis: 'x', x0: 0, x1: 4, z0: 0, z1: 0, y: 0 },
+    },
+  }), 'rounded', selected.flatMap(wall => wall.edgeKeys), 90)
+
+  assert.match(result.error, /porte/)
 })
 
 test('une coupe qui separe une ancienne salle cree des composantes independantes', () => {

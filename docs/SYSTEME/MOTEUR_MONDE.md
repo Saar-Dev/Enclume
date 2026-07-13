@@ -54,7 +54,7 @@ Principes obligatoires :
 
 ### 2.1 Éditeur Surface `[EXISTANT]`
 
-`battlemaps.surface_data` version 5 contient actuellement :
+`battlemaps.surface_data` version 6 contient actuellement :
 
 - `rooms`, `floors`, `walls`, `ceilings`, `stairs`, `connectors` ;
 - les drapeaux `walkable`, `blocksMovement`, `blocksSight` ;
@@ -63,7 +63,7 @@ Principes obligatoires :
 - un calcul client d'étanchéité utilisé pour le rendu de l'eau.
 
 Cet ensemble reste normalisé et rendu côté client par `client/src/lib/surfaceData.js`. À la
-sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 5 et
+sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 6 et
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
@@ -126,7 +126,7 @@ Le dossier `shared/world/` fournit désormais :
 - `movementCost.js` : facteurs explicables, segments pondérés et arrêt à budget épuisé ;
 - `worldContracts.js` : contrats versionnés et immuables `WorldDocument`, `WorldRuntimeState` et
   `WorldSnapshot` ;
-- `surfaceDocument.js` : validation de schéma, normalisation v5, UUID physiques stables et adaptation
+- `surfaceDocument.js` : validation de schéma, normalisation v6, UUID physiques stables et adaptation
   de `surface_data` vers `WorldDocument` ;
 - `worldCompiler.js` : compilation pure des supports, barrières, portails, colliders, occluders,
   traversées verticales et compartiments ;
@@ -438,19 +438,32 @@ exception est locale : une salle basse adjacente ou empilée n'est pas révélé
 intermédiaire n'est inventé et le plafond n'existe que dans la tranche supérieure. Les connecteurs
 verticaux sont découpés par tranche ou exposent uniquement leur palier courant.
 
-### 7.2 Murs courbes
+### 7.2 Murs courbes et contours de salles
 
-Une courbe éditée est une courbe quadratique à courbure signée, tessellée avec une longueur cible de
-segment de 0,25 unité monde. Chaque segment `axis: segment` possède sa propre boîte orientée de rendu
-et alimente le compilateur avec les mêmes extrémités. Les index physiques utilisent une AABB courte
-par segment : l'approximation reste bornée par la tessellation et ne crée pas une seconde géométrie.
+Depuis `surface_data` v6, une courbe de salle est stockée dans `room.boundaryArcs`. Un arc référence
+les arêtes logiques remplacées, ses deux extrémités, son angle central et son côté. Ce n'est pas un
+mur décoratif superposé : `shared/world/roomGeometry.js` reconstruit un contour unique consommé par
+les dalles, plafonds, murs, sélection et compilation physique.
 
-Les portes exigent actuellement un mur X/Z droit. Les placer sur une courbe est refusé jusqu'à ce
-qu'un contrat de découpe et un modèle de porte orientée soient définis.
+Dans l'éditeur, les arêtes colinéaires sont regroupées en murs complets entre deux angles. Le MJ
+sélectionne au moins deux murs voisins, règle l'angle de 5° à 175° avec un aperçu direct, peut
+inverser le côté de l'arc, puis applique ou retire l'arrondi. Une sélection disjointe, un contour
+fermé entier ou des murs ne partageant pas le même voisin sont refusés.
+
+L'arc circulaire est tessellé en segments orientés courts. Leur AABB ne sert qu'au broadphase ; le
+narrow phase de déplacement et la LOS intersectent le prisme orienté réel de chaque segment. Le
+rendu, les colliders et les occluders utilisent donc les mêmes extrémités et la même épaisseur.
+
+Une porte reste attachée à un mur X/Z droit. Courber une chaîne portant déjà une porte, y compris à
+un autre niveau d'une salle multi-hauteur, est refusé avec une erreur explicite. Les anciens murs
+libres `axis: segment` restent lisibles pour les cartes et tests existants, mais l'éditeur ne propose
+plus la courbe libre comme outil de création de salle.
 
 ### 7.3 Empreinte et propriété d'une salle
 
-Depuis `surface_data` v5, `room.cells` est l'autorité de propriété horizontale. `minX`, `maxX`,
+Depuis `surface_data` v5, `room.cells` est l'autorité de propriété horizontale. En v6,
+`room.boundaryArcs` peut remplacer des chaînes du contour sans changer la propriété logique des
+cases. `minX`, `maxX`,
 `minZ`, `maxZ` décrivent uniquement l'AABB de broadphase. Une case absente de `cells` n'appartient
 pas à la salle, même si elle se trouve dans cette AABB.
 
@@ -460,8 +473,9 @@ l'ancienne salle adopte donc réellement un contour en L, en C ou avec une cour 
 cases restantes forment plusieurs composantes connexes, elles deviennent plusieurs salles et
 plusieurs compartiments. Deux étages sans intersection verticale ne se retirent aucune case.
 
-Les dalles peuvent être regroupées en rectangles pour le rendu, mais sélection, eau, supports,
-barrières et compartiments consomment toujours l'empreinte exacte.
+Les dalles droites peuvent être regroupées en rectangles. Dès qu'un arc existe, la dalle et le
+plafond utilisent le contour extrudé exact, trous compris. Les supports et coûts de déplacement
+restent attachés aux cases propriétaires ; murs, collisions et LOS suivent le contour géométrique.
 
 ---
 

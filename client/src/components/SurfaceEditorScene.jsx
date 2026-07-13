@@ -23,6 +23,7 @@ import {
   getToolElevation,
   getToolFloorThickness,
   getRoomBaseY,
+  getRoomBoundaryWallRuns,
   getRoomHeightLevels,
   getToolRoomHeightLevels,
   getToolWallThicknessFine,
@@ -44,6 +45,11 @@ import {
   stairStepBoxes,
   yToLevel,
 } from '../lib/surfaceData.js'
+import {
+  makeRoomBoundaryArc,
+  roomBoundaryContours,
+  sampleRoomBoundaryArc,
+} from '../../../shared/world/roomGeometry.js'
 
 const GRID_SIZE = 50
 const WALL_STICKY_THRESHOLD = 0.18
@@ -150,7 +156,10 @@ function SelectedRoomOverlay({ room }) {
 
   return (
     <group renderOrder={30}>
-      {rectangles.flatMap(rectangle => [
+      {Array.isArray(room.boundaryArcs) && room.boundaryArcs.length > 0 ? [
+        <RoomSelectionShape key="curved-floor" room={room} y={baseY + 0.08} />,
+        <RoomSelectionShape key="curved-ceiling" room={room} y={baseY + height + 0.08} />,
+      ] : rectangles.flatMap(rectangle => [
         <mesh key={`floor:${rectangle.minX}:${rectangle.minZ}`} position={[rectangle.minX + rectangle.width / 2, baseY + 0.06, rectangle.minZ + rectangle.depth / 2]}>
           <boxGeometry args={[rectangle.width, 0.04, rectangle.depth]} />
           {material()}
@@ -172,6 +181,113 @@ function SelectedRoomOverlay({ room }) {
       })}
     </group>
   )
+}
+
+function RoomSelectionShape({ room, y }) {
+  const geometry = useMemo(() => {
+    const contours = roomBoundaryContours(room)
+    const outer = contours.find(contour => !contour.isHole && contour.points.length >= 3)
+    if (!outer) return null
+    const outerPoints = outer.points.map(value => new THREE.Vector2(value.x, -value.z))
+    if (!THREE.ShapeUtils.isClockWise(outerPoints)) outerPoints.reverse()
+    const shape = new THREE.Shape(outerPoints)
+    for (const contour of contours.filter(item => item.isHole && item.points.length >= 3)) {
+      const holePoints = contour.points.map(value => new THREE.Vector2(value.x, -value.z))
+      if (THREE.ShapeUtils.isClockWise(holePoints)) holePoints.reverse()
+      shape.holes.push(new THREE.Path(holePoints))
+    }
+    const result = new THREE.ShapeGeometry(shape)
+    result.rotateX(-Math.PI / 2)
+    return result
+  }, [room])
+  useEffect(() => () => geometry?.dispose(), [geometry])
+  if (!geometry) return null
+  return (
+    <mesh geometry={geometry} position={[0, y, 0]}>
+      <meshBasicMaterial color="#fbbf24" transparent opacity={0.36} depthWrite={false} side={THREE.DoubleSide} />
+    </mesh>
+  )
+}
+
+function RoomWallSelectionOverlay({ room, displayLevel, selectedKeys, onToggle }) {
+  if (!room) return null
+  const selected = new Set(selectedKeys || [])
+  const y = levelToY(displayLevel)
+  const thickness = Math.max(2, Number(room.wallThickness) || 1)
+  return getRoomBoundaryWallRuns(room).map(wallRun => {
+    const wall = {
+      axis: wallRun.axis,
+      x0: wallRun.from.x * SURFACE_FINE,
+      x1: wallRun.to.x * SURFACE_FINE,
+      z0: wallRun.from.z * SURFACE_FINE,
+      z1: wallRun.to.z * SURFACE_FINE,
+      y,
+      height: STORY_HEIGHT,
+      thickness,
+    }
+    const box = getWallRenderBox(wall)
+    const active = wallRun.edgeKeys.every(key => selected.has(key))
+    return (
+      <mesh
+        key={wallRun.id}
+        position={box.position}
+        rotation={[0, box.rotationY || 0, 0]}
+        renderOrder={42}
+        onPointerDown={event => {
+          event.stopPropagation()
+          onToggle(wallRun.edgeKeys, event)
+        }}
+      >
+        <boxGeometry args={[box.args[0], box.args[1], Math.max(box.args[2], 0.12)]} />
+        <meshBasicMaterial
+          color={active ? '#fb923c' : '#22d3ee'}
+          transparent
+          opacity={active ? 0.72 : 0.24}
+          depthWrite={false}
+        />
+      </mesh>
+    )
+  })
+}
+
+function RoomArcPreview({ room, displayLevel, selectedKeys, angleDegrees, sideMultiplier }) {
+  const preview = useMemo(() => {
+    const built = makeRoomBoundaryArc(room, selectedKeys, angleDegrees, sideMultiplier)
+    if (built.error) return null
+    const points = sampleRoomBoundaryArc(built.arc)
+    return points.slice(0, -1).map((from, index) => ({
+      from,
+      to: points[index + 1],
+    }))
+  }, [angleDegrees, room, selectedKeys, sideMultiplier])
+  if (!preview) return null
+
+  const y = levelToY(displayLevel)
+  const thickness = Math.max(2, Number(room.wallThickness) || 1)
+  return preview.map((segment, index) => {
+    const box = getWallRenderBox({
+      axis: 'segment',
+      x0: segment.from.x * SURFACE_FINE,
+      x1: segment.to.x * SURFACE_FINE,
+      z0: segment.from.z * SURFACE_FINE,
+      z1: segment.to.z * SURFACE_FINE,
+      y,
+      height: STORY_HEIGHT,
+      thickness,
+    })
+    if (!box) return null
+    return (
+      <mesh
+        key={`room-arc-preview:${index}`}
+        position={box.position}
+        rotation={[0, box.rotationY || 0, 0]}
+        renderOrder={44}
+      >
+        <boxGeometry args={box.args} />
+        <meshBasicMaterial color="#fb923c" transparent opacity={0.58} depthWrite={false} />
+      </mesh>
+    )
+  })
 }
 
 function CeilingPreview({ selection, surfaceTool }) {
@@ -489,9 +605,36 @@ export default function SurfaceEditorScene({
       selectedRoomId: null,
       selectedRoomIds: [],
       selectedConnectorId: connectorId,
+      roomWallEdit: false,
+      selectedRoomWallKeys: [],
+      selectedRoomWallCount: 0,
+      roomArcError: null,
     })
     onSurfaceConnectorSelect?.(connectorId, clientX, clientY, connector)
   }, [onSurfaceConnectorSelect, onSurfaceToolChange, surfaceTool])
+
+  const handleRoomWallPointerSelect = useCallback((edgeKeys, event) => {
+    if (!edgeKeys?.length || !surfaceTool?.roomWallEdit || !surfaceTool?.selectedRoomId) return
+    skipNextCanvasMouseDownRef.current = true
+    const selected = new Set(surfaceTool?.selectedRoomWallKeys || [])
+    const remove = edgeKeys.every(key => selected.has(key))
+    for (const key of edgeKeys) {
+      if (remove) selected.delete(key)
+      else selected.add(key)
+    }
+    const room = surfaceData.rooms?.[surfaceTool.selectedRoomId]
+    const selectedRoomWallCount = room
+      ? getRoomBoundaryWallRuns(room).filter(run => run.edgeKeys.every(key => selected.has(key))).length
+      : 0
+    onSurfaceToolChange?.({
+      ...surfaceTool,
+      mode: 'select',
+      selectedRoomWallKeys: [...selected],
+      selectedRoomWallCount,
+      roomArcError: null,
+    })
+    event?.stopPropagation?.()
+  }, [onSurfaceToolChange, surfaceData.rooms, surfaceTool])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -622,6 +765,10 @@ export default function SurfaceEditorScene({
               selectedRoomId: null,
               selectedRoomIds: [],
               selectedConnectorId: connectorHit.id,
+              roomWallEdit: false,
+              selectedRoomWallKeys: [],
+              selectedRoomWallCount: 0,
+              roomArcError: null,
             })
             onSurfaceConnectorSelect?.(connectorHit.id, e.clientX, e.clientY)
             e.preventDefault()
@@ -644,6 +791,10 @@ export default function SurfaceEditorScene({
               selectedRoomId: hits[0].id,
               selectedRoomIds: [hits[0].id],
               selectedConnectorId: null,
+              roomWallEdit: false,
+              selectedRoomWallKeys: [],
+              selectedRoomWallCount: 0,
+              roomArcError: null,
             })
           }
         } else {
@@ -653,6 +804,10 @@ export default function SurfaceEditorScene({
             selectedRoomId: null,
             selectedRoomIds: hits.map(hit => hit.id),
             selectedConnectorId: null,
+            roomWallEdit: false,
+            selectedRoomWallKeys: [],
+            selectedRoomWallCount: 0,
+            roomArcError: null,
           })
         }
         e.preventDefault()
@@ -825,6 +980,25 @@ export default function SurfaceEditorScene({
       />
       <RuntimeEffectRegions regions={runtimeEffectRegions} surfaceData={surfaceData} displayLevel={displayLevel} />
       {selectedRooms.map(room => <SelectedRoomOverlay key={room.id} room={room} />)}
+      {surfaceTool?.roomWallEdit && selectedRooms.length === 1 && (
+        <>
+          <RoomWallSelectionOverlay
+            room={selectedRooms[0]}
+            displayLevel={displayLevel}
+            selectedKeys={surfaceTool?.selectedRoomWallKeys}
+            onToggle={handleRoomWallPointerSelect}
+          />
+          {(surfaceTool?.selectedRoomWallCount || 0) >= 2 && (
+            <RoomArcPreview
+              room={selectedRooms[0]}
+              displayLevel={displayLevel}
+              selectedKeys={surfaceTool?.selectedRoomWallKeys}
+              angleDegrees={surfaceTool?.roomArcAngle}
+              sideMultiplier={surfaceTool?.roomArcSide}
+            />
+          )}
+        </>
+      )}
       {drag?.mode === 'wall' ? (
         <WallPreview drag={drag} surfaceTool={surfaceTool} activeMaterial={activeMaterial} availableBlocks={availableBlocks} />
       ) : drag?.mode === 'stair' ? (

@@ -1,0 +1,70 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+
+import {
+  makeRoomBoundaryArc,
+  roomBoundaryContours,
+  roomBoundaryEdges,
+  roomBoundarySegments,
+  roomBoundaryWallRuns,
+  sampleRoomBoundaryArc,
+  selectedRoomBoundaryChain,
+} from './roomGeometry.js'
+
+const square = {
+  minX: 0,
+  maxX: 1,
+  minZ: 0,
+  maxZ: 1,
+  cells: ['0:0', '1:0', '0:1', '1:1'],
+}
+
+test('les arêtes de contour sont stables et excluent les séparations internes', () => {
+  const edges = roomBoundaryEdges(square)
+  assert.equal(edges.length, 8)
+  assert.equal(new Set(edges.map(edge => edge.key)).size, 8)
+})
+
+test('les arêtes colinéaires sont regroupées en murs sélectionnables', () => {
+  const walls = roomBoundaryWallRuns(square)
+
+  assert.equal(walls.length, 4)
+  assert.ok(walls.every(wall => wall.edgeKeys.length === 2))
+})
+
+test('deux murs adjacents deviennent un arc circulaire à 90 degrés', () => {
+  const northWest = roomBoundaryWallRuns(square).filter(wall => ['west', 'north'].includes(wall.side))
+  const result = makeRoomBoundaryArc(square, northWest.flatMap(wall => wall.edgeKeys), 90)
+
+  assert.equal(result.error, undefined)
+  assert.equal(result.arc.edgeKeys.length, 4)
+  const points = sampleRoomBoundaryArc(result.arc)
+  assert.deepEqual(points[0], result.arc.start)
+  assert.deepEqual(points.at(-1), result.arc.end)
+  assert.ok(points.length > 4)
+  assert.ok(points.slice(1, -1).some(point => point.x > 0 && point.z > 0))
+})
+
+test('une sélection disjointe est refusée', () => {
+  const walls = roomBoundaryWallRuns(square)
+  const selected = walls.filter(wall => ['north', 'south'].includes(wall.side)).flatMap(wall => wall.edgeKeys)
+  assert.match(selectedRoomBoundaryChain(square, selected).error, /continue/)
+})
+
+test('le même arc remplace la chaîne dans le contour et dans les segments physiques', () => {
+  const selected = roomBoundaryWallRuns(square).filter(wall => ['west', 'north'].includes(wall.side))
+  const selectedKeys = selected.flatMap(wall => wall.edgeKeys)
+  const selectedEdges = roomBoundaryEdges(square).filter(edge => selectedKeys.includes(edge.key))
+  const { arc } = makeRoomBoundaryArc(square, selectedKeys, 90)
+  const curved = { ...square, boundaryArcs: [arc] }
+  const contours = roomBoundaryContours(curved)
+  const segments = roomBoundarySegments(curved)
+
+  assert.equal(contours.length, 1)
+  assert.ok(contours[0].points.length > 8)
+  assert.ok(segments.some(segment => segment.axis === 'segment'))
+  assert.equal(segments.some(segment => selectedEdges.some(edge => (
+    segment.x0 === edge.from.x && segment.z0 === edge.from.z
+      && segment.x1 === edge.to.x && segment.z1 === edge.to.z
+  ))), false)
+})

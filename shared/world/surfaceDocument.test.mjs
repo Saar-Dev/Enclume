@@ -79,9 +79,9 @@ test('un segment orienté est un mur canonique valide', () => {
   assert.equal(validateSurfaceData(surface).valid, true)
 })
 
-test('une empreinte de salle v5 exige des cases entières uniques dans ses bornes', () => {
+test('une empreinte de salle v6 exige des cases entières uniques dans ses bornes', () => {
   const surface = surfaceFixture()
-  surface.version = 5
+  surface.version = 6
   surface.rooms['room:legacy'] = {
     ...surface.rooms['room:legacy'],
     minX: 0,
@@ -94,6 +94,40 @@ test('une empreinte de salle v5 exige des cases entières uniques dans ses borne
   assert.equal(validateSurfaceData(surface).valid, true)
 
   surface.rooms['room:legacy'].cells.push('0:0', '4:4')
+  assert.equal(validateSurfaceData(surface).valid, false)
+})
+
+test('un arc de contour v6 est validé comme géométrie de salle', () => {
+  const surface = surfaceFixture()
+  surface.version = 6
+  surface.rooms['room:legacy'] = {
+    ...surface.rooms['room:legacy'],
+    minX: 0,
+    maxX: 1,
+    minZ: 0,
+    maxZ: 1,
+    cells: ['0:0', '1:0', '0:1', '1:1'],
+  }
+  surface.rooms['room:legacy'].boundaryArcs = [{
+    id: 'arc:test',
+    edgeKeys: [
+      'edge:0:0|0:1',
+      'edge:0:1|0:2',
+      'edge:0:0|1:0',
+      'edge:1:0|2:0',
+    ],
+    start: { x: 0, z: 2 },
+    end: { x: 2, z: 0 },
+    angleDegrees: 90,
+    side: 1,
+  }]
+  assert.equal(validateSurfaceData(surface).valid, true)
+
+  surface.rooms['room:legacy'].boundaryArcs[0].angleDegrees = 190
+  assert.equal(validateSurfaceData(surface).valid, false)
+
+  surface.rooms['room:legacy'].boundaryArcs[0].angleDegrees = 90
+  surface.rooms['room:legacy'].boundaryArcs[0].end = { x: 9, z: 9 }
   assert.equal(validateSurfaceData(surface).valid, false)
 })
 

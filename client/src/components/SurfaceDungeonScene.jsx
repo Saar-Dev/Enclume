@@ -7,6 +7,7 @@ import { createWaterMaterial, updateWaterMaterial } from '../lib/waterMaterials'
 import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
+import { roomBoundaryContours } from '../../../shared/world/roomGeometry.js'
 import {
   SURFACE_FINE,
   STORY_HEIGHT,
@@ -465,6 +466,21 @@ function RoomSlab({ room, kind, textureMaterials, opacity = 1, showDetails = tru
   const relief = showDetails ? (topProcedural?.relief || reliefAt(textureMaterials, topTex)) : null
   if (!top) return null
 
+  const hasCurvedBoundary = Array.isArray(room.boundaryArcs) && room.boundaryArcs.length > 0
+  if (hasCurvedBoundary) {
+    return (
+      <CurvedRoomSlab
+        room={room}
+        kind={kind}
+        y={y}
+        thickness={thickness}
+        capMaterial={isCeiling ? bottom : top}
+        sideMaterial={side}
+        opacity={opacity}
+      />
+    )
+  }
+
   return (
     <>
       {rectangles.map(rectangle => {
@@ -507,6 +523,48 @@ function RoomSlab({ room, kind, textureMaterials, opacity = 1, showDetails = tru
         )
       })}
     </>
+  )
+}
+
+function CurvedRoomSlab({ room, kind, y, thickness, capMaterial, sideMaterial, opacity }) {
+  const isCeiling = kind === 'ceiling'
+  const geometry = useMemo(() => {
+    const contours = roomBoundaryContours(room)
+    const outer = contours.find(contour => !contour.isHole && contour.points.length >= 3)
+    if (!outer) return null
+    const outerPoints = outer.points.map(value => new THREE.Vector2(value.x, -value.z))
+    if (!THREE.ShapeUtils.isClockWise(outerPoints)) outerPoints.reverse()
+    const shape = new THREE.Shape(outerPoints)
+    for (const contour of contours.filter(item => item.isHole && item.points.length >= 3)) {
+      const holePoints = contour.points.map(value => new THREE.Vector2(value.x, -value.z))
+      if (THREE.ShapeUtils.isClockWise(holePoints)) holePoints.reverse()
+      shape.holes.push(new THREE.Path(holePoints))
+    }
+    const result = new THREE.ExtrudeGeometry(shape, {
+      depth: thickness,
+      bevelEnabled: false,
+      steps: 1,
+      curveSegments: 1,
+      material: 0,
+      extrudeMaterial: 1,
+    })
+    result.translate(0, 0, -thickness / 2)
+    result.rotateX(-Math.PI / 2)
+    result.computeVertexNormals()
+    return result
+  }, [room, thickness])
+
+  useEffect(() => () => geometry?.dispose(), [geometry])
+  if (!geometry) return null
+  return (
+    <mesh
+      geometry={geometry}
+      position={[0, y, 0]}
+      material={withOpacity([capMaterial, sideMaterial], opacity)}
+      castShadow
+      receiveShadow
+      userData={isCeiling ? undefined : { worldSupport: true }}
+    />
   )
 }
 

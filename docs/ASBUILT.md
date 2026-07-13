@@ -72,7 +72,7 @@ Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statiq
 
 ## Moteur de monde — Phase 1 ✅
 
-- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v5, UUID physiques
+- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v6, UUID physiques
   stables, adaptation vers le document canonique ;
 - `shared/world/worldCompiler.js` — compilation déterministe des sols, plafonds, murs partagés,
   découpes de porte, escaliers, barrières multi-canaux, colliders, occluders et compartiments ;
@@ -226,8 +226,8 @@ moteur ; sinon elles doivent être supprimées.
 - l'eau extérieure utilise une hauteur globale unique égale au sommet construit de la carte ;
 - l'éditeur donne la priorité au blueprint actif et ignore les entités des autres étages lors du
   placement ;
-- les boutons directs **Mur droit** et **Mur courbe** rendent les deux modes immédiatement
-  accessibles ; le second crée des courbes quadratiques à courbure signée ;
+- **Mur droit** reste l'outil de panneau libre ; l'ancien bouton de courbe libre a été remplacé par
+  l'arrondi structuré du contour de salle décrit en Phase 10 ;
 - chaque courbe est tessellée en segments orientés courts partagés par le renderer, le compilateur,
   les collisions, la LOS et l'étanchéité ; les portes restent limitées aux portions droites ;
 - la future trappe est documentée comme capacité d'un connecteur vertical lié, le plus souvent, à
@@ -245,6 +245,23 @@ moteur ; sinon elles doivent être supprimées.
 - rendu, sélection, dalles, plafonds, murs communs, eau, supports, barrières et compartiments
   compilés consomment tous cette même empreinte ;
 - les bornes rectangulaires ne servent plus que de broadphase.
+
+---
+
+## Moteur de monde — Phase 10 ✅
+
+- `surface_data` v6 ajoute `room.boundaryArcs` sans modifier l'autorité logique de `room.cells` ;
+- `shared/world/roomGeometry.js` centralise boucles de contour, regroupement des murs colinéaires,
+  validation des chaînes, arcs circulaires, contours avec trous et segments compilés ;
+- dans l'éditeur, le MJ sélectionne une salle puis au moins deux murs complets voisins, règle l'angle
+  de 5° à 175° avec aperçu en direct, inverse éventuellement le côté et applique l'arrondi ;
+- les dalles et plafonds utilisent une extrusion du contour exact ; murs, sélection et physique
+  utilisent ce même contour ;
+- un contour partagé est mis à jour des deux côtés au même étage, sans toucher les salles empilées ;
+- une porte existante sur la chaîne interdit l'arrondi tant qu'elle n'est pas déplacée ou supprimée ;
+- colliders et occluders de segments inclinés conservent une AABB de broadphase mais utilisent un
+  prisme orienté en narrow phase, supprimant les faux positifs de collision et de LOS ;
+- 85 tests monde/combat et le build Vite passent ; ESLint ciblé ne remonte aucune erreur.
 
 ---
 

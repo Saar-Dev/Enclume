@@ -1,6 +1,6 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-13 — distinction éditeur, moteur physique et état runtime.
+> Dernière mise à jour : 2026-07-13 — empreintes exclusives et arrondis structurés de salles.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -9,13 +9,14 @@
 
 ## Statut au 2026-07-13
 
-L'éditeur Surface/Salle et son rendu existent. `surface_data` version 5 sait décrire des salles,
+L'éditeur Surface/Salle et son rendu existent. `surface_data` version 6 sait décrire des salles,
 sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
 navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
 le lisent également ; depuis la Phase 7, la FSM combat lui délègue aussi déplacements, distances,
 portées, interactions et terrain instable. Depuis la Phase 8, l'affichage isole strictement l'étage
-courant et l'outil Mur sait produire des courbes physiques tessellées.
+courant. Depuis la Phase 10, les murs courbes de salle sont des arcs structurés de leur contour,
+partagés par le rendu, les collisions et la LOS.
 
 Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit le moteur commun qui compile
 ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une
@@ -35,6 +36,8 @@ Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
 - dalles : sol et plafond, avec textures ou matériaux séparés pour dessus/dessous ;
 - murs : une face intérieure et une face extérieure ; les murs libres peuvent être droits ou
   composés de segments orientés issus d'une courbe quadratique ;
+- arrondis de salle : `boundaryArcs`, chacun lié à une chaîne d'arêtes du contour avec un angle et
+  un côté ;
 - connecteurs : portes, escaliers, échelles, passerelles et ascenseurs entre salles/étages.
 
 Lorsqu'une nouvelle salle recouvre une salle existante à une hauteur commune, ses cases sont
@@ -51,7 +54,10 @@ cette emprise restent absentes. Une future trappe doit être portée par un conn
 typiquement une échelle — avec son propre état ouvert/fermé ; elle ne révèle jamais l'étage inférieur
 entier.
 
-Les dalles et les murs rendus ne doivent pas devenir la source de vérité. Ils sont dérivés depuis les salles au moment du rendu ou des calculs d’étanchéité.
+Les dalles et les murs rendus ne doivent pas devenir la source de vérité. Les salles sans arc
+peuvent regrouper leurs cases en rectangles de rendu. Les salles arrondies extrudent le contour
+exact, trous compris. Le même contour fournit murs, sélection, colliders et occluders ; les cases
+restent l'autorité des supports praticables et des coûts de déplacement.
 
 Pendant la migration, `surface_data` reste le nom de stockage du document statique. Les changements
 survenus en partie — porte ouverte, ascenseur en déplacement, passerelle détruite, feu, gaz, huile ou
@@ -111,6 +117,13 @@ L’outil Salle est l’outil de référence.
 - Après création d’une salle, l’éditeur reste en dessin de salle pour permettre d’enchaîner plusieurs pièces.
 - Le retour au mode sélection se fait uniquement par clic explicite sur “Sélection”.
 - Modifier les options du panneau applique les changements à la salle sélectionnée : hauteur en étages, épaisseurs, blocage, textures ou matériaux procéduraux.
+- **Arrondir des murs** regroupe les arêtes colinéaires : tout le côté compris entre deux angles se
+  sélectionne en un clic.
+- Deux murs voisins ou plus forment une chaîne ouverte. Une réglette de 5° à 175° affiche l'arc en
+  direct ; **Inverser le côté** change son sens, **Appliquer l'arrondi** modifie le contour et
+  **Remettre droit** retire l'arc touché.
+- Les sélections disjointes, les murs partiels, le contour fermé entier et les chaînes séparant des
+  voisins différents sont refusés.
 
 Les anciens outils Dalle, Mur et Escalier peuvent rester temporairement visibles comme aides de test,
 mais aucune compatibilité de carte ne justifie de dupliquer le nouveau modèle. La conception cible
@@ -132,7 +145,10 @@ Chaque connecteur doit recevoir un UUID stable. Les identifiants dérivés de se
 acceptables uniquement comme compatibilité temporaire : déplacer le connecteur ne doit pas lui
 faire perdre son état runtime.
 
-Une porte se pose depuis la configuration d’une salle sélectionnée. Elle doit être forcée sur un mur de cette salle. Si le mur est partagé par deux salles, le connecteur peut référencer les deux salles.
+Une porte se pose depuis la configuration d’une salle sélectionnée. Elle doit être forcée sur un mur
+droit de cette salle. Si le mur est partagé par deux salles, le connecteur peut référencer les deux
+salles. Courber une chaîne qui porte déjà une porte est refusé, y compris si cette porte se trouve à
+un autre niveau d'une salle multi-hauteur.
 
 Un ascenseur se pose depuis la configuration d’une salle sélectionnée. Sa définition référence une
 cabine et plusieurs arrêts. Son étage courant, ses portes et son déplacement appartiennent à un

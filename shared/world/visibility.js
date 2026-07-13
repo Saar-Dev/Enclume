@@ -3,7 +3,7 @@
 
 import { assertWorldSnapshot } from './worldContracts.js'
 import { distanceBetweenWorldPointsM, normalizeWorldPoint } from './worldMetrics.js'
-import { normalizeBounds } from './spatialIndex.js'
+import { normalizeBounds, segmentGeometryInterval } from './spatialIndex.js'
 
 const EPSILON = 1e-7
 
@@ -128,7 +128,12 @@ export function traceVisibility({
   const intersections = []
   for (const occluder of occluders) {
     if (excluded.has(occluder.id) || occluder.opacity <= EPSILON) continue
-    const interval = segmentBoundsInterval(start, end, occluder.bounds)
+    const rawInterval = occluder.geometry?.type === 'wall-segment'
+      ? segmentGeometryInterval(start, end, occluder.geometry)
+      : segmentBoundsInterval(start, end, occluder.bounds)
+    const interval = rawInterval && rawInterval.far > EPSILON && rawInterval.near < 1 - EPSILON
+      ? { near: Math.max(EPSILON, rawInterval.near), far: Math.min(1 - EPSILON, rawInterval.far) }
+      : null
     if (interval) intersections.push({ occluder, ...interval })
   }
   intersections.sort((a, b) => a.near - b.near || a.occluder.id.localeCompare(b.occluder.id))
