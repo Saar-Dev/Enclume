@@ -9,6 +9,8 @@ import {
   normalizeVisibilityProfile,
 } from '../../../shared/world/visibility.js'
 import { getBattlemapWorldSnapshot } from './worldService.js'
+import { effectOccludersFromRegions } from '../../../shared/world/worldEffects.js'
+import { loadBattlemapRuntimeContext } from './worldEffectService.js'
 
 function stateAt(entity) {
   return entity.states?.[entity.current_state_id] ?? entity.states?.[0] ?? null
@@ -71,6 +73,7 @@ export function evaluateWorldVisibility({
   sourceProfile = {},
   targetProfile = {},
   profileByTokenId = {},
+  effectRegions = [],
 } = {}) {
   if (sourceToken?.position_space !== 'world-feet' || targetToken?.position_space !== 'world-feet') {
     return Object.freeze({ status: 'legacy-position', line: null, coverage: null, interceptors: [] })
@@ -79,7 +82,10 @@ export function evaluateWorldVisibility({
   const targetFeet = dbPositionToWorldPoint(targetToken)
   const normalizedSource = normalizeVisibilityProfile(sourceProfile)
   const normalizedTarget = normalizeVisibilityProfile(targetProfile)
-  const dynamicOccluders = dynamicOccludersFromEntities(entities)
+  const dynamicOccluders = Object.freeze([
+    ...dynamicOccludersFromEntities(entities),
+    ...effectOccludersFromRegions(effectRegions),
+  ])
   const line = checkWorldLineOfSight({
     snapshot,
     sourceFeet,
@@ -120,7 +126,7 @@ export async function evaluateBattlemapVisibility({
   targetProfile = {},
   database = db,
 } = {}) {
-  const [tokens, entityRows] = await Promise.all([
+  const [tokens, entityRows, runtimeContext] = await Promise.all([
     database('tokens').where({ battlemap_id: battlemap.id }),
     database('entities')
       .where({ 'entities.battlemap_id': battlemap.id })
@@ -129,13 +135,15 @@ export async function evaluateBattlemapVisibility({
         'entities.id', 'entities.pos_x', 'entities.pos_y', 'entities.pos_z', 'entities.r',
         'entities.current_state_id', 'entity_blueprints.states', 'entity_blueprints.geometry',
       ),
+    loadBattlemapRuntimeContext(battlemap, database),
   ])
   return evaluateWorldVisibility({
-    snapshot: getBattlemapWorldSnapshot(battlemap),
+    snapshot: runtimeContext?.snapshot || getBattlemapWorldSnapshot(battlemap),
     sourceToken,
     targetToken,
     tokens,
     entities: entityRows,
+    effectRegions: runtimeContext?.regions || [],
     sourceProfile,
     targetProfile,
   })

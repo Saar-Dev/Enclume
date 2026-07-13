@@ -490,7 +490,7 @@ function ThirdPersonCamera({ token, enabled, onTokenSetRotation, updateToken }) 
 }
 
 function Scene({
-  voxels, setVoxels, surfaceData, textureMaterials, entityTextureMaterials, socket, battlemapId,
+  voxels, setVoxels, surfaceData, textureMaterials, entityTextureMaterials, runtimeEffectRegions, socket, battlemapId,
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
   altPressed, onEntityClick, onTokenRotate, onTokenSetRotation,
@@ -1078,6 +1078,24 @@ function Scene({
         <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
       )}
 
+      {(runtimeEffectRegions || []).map(region => {
+        const bounds = region?.bounds
+        if (!bounds || bounds.min.y > levelToY(displayLevel + 1)) return null
+        const size = [bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y, bounds.max.z - bounds.min.z]
+        const center = [
+          (bounds.min.x + bounds.max.x) / 2,
+          (bounds.min.y + bounds.max.y) / 2,
+          (bounds.min.z + bounds.max.z) / 2,
+        ]
+        const color = region.definitionKey === 'gas' ? '#a3e635' : region.definitionKey === 'flooded' ? '#38bdf8' : '#fb7185'
+        return (
+          <mesh key={region.id} position={center} renderOrder={19}>
+            <boxGeometry args={size} />
+            <meshBasicMaterial color={color} transparent opacity={0.1} depthWrite={false} />
+          </mesh>
+        )
+      })}
+
       {/* ── Entités interactables — entre voxels et tokens ────────────────── */}
       {entities.map(entity => {
         const blueprint = blueprints[entity.blueprint_id]
@@ -1319,8 +1337,30 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const surfaceData = normalizeSurfaceData(battlemap?.surface_data)
   const [textureMaterials, setTextureMaterials] = useState({})
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
+  const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
   const [blocksReady, setBlocksReady] = useState(false)
   const [selectedTokenId, setSelectedTokenId] = useState(null)
+
+  const refreshRuntimeEffects = useCallback(async () => {
+    if (!battlemap?.id) return setRuntimeEffectRegions([])
+    try {
+      const { data } = await api.get(`/battlemaps/${battlemap.id}/world-effects`)
+      setRuntimeEffectRegions(data.worldEffects?.regions || [])
+    } catch (error) {
+      console.error('[Canvas3D] Erreur chargement effets monde :', error)
+    }
+  }, [battlemap?.id])
+
+  useEffect(() => { refreshRuntimeEffects() }, [refreshRuntimeEffects])
+
+  useEffect(() => {
+    if (!socket || !battlemap?.id) return undefined
+    const handleRuntimeUpdate = event => {
+      if (String(event?.battlemapId) === String(battlemap.id)) refreshRuntimeEffects()
+    }
+    socket.on(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
+    return () => socket.off(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
+  }, [socket, battlemap?.id, refreshRuntimeEffects])
 
   // ─── Liseré surbrillance entités (touche Alt) ─────────────────────────────
   // PE16 : e.code obligatoire (invariant AZERTY/QWERTY)
@@ -1489,6 +1529,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           surfaceData={surfaceData}
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}
+          runtimeEffectRegions={runtimeEffectRegions}
           socket={socket}
           battlemapId={battlemap?.id}
           selectedTokenId={selectedTokenId}

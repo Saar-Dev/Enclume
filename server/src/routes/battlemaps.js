@@ -30,9 +30,37 @@ import {
 } from '../services/worldMovementService.js'
 import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
 import { evaluateBattlemapVisibility } from '../services/worldVisibilityService.js'
+import {
+  createCustomWorldEffectDefinition,
+  createPropagatedWorldEffectInstances,
+  createWorldEffectInstance,
+  deleteWorldEffectInstance,
+  listBattlemapWorldEffects,
+  setWorldFeatureState,
+  updateWorldEffectInstance,
+} from '../services/worldEffectService.js'
 import { WS } from '../../../shared/events.js'
 
 const router = Router({ mergeParams: true })
+
+async function battlemapAndMember(battlemapId, userId) {
+  const battlemap = await db('battlemaps').where({ id: battlemapId }).first()
+  if (!battlemap) throw new AppError(404, 'Battlemap not found')
+  const member = await db('campaign_members')
+    .where({ campaign_id: battlemap.campaign_id, user_id: userId })
+    .first()
+  if (!member) throw new AppError(403, 'Access denied')
+  return { battlemap, member }
+}
+
+function requireBattlemapGm(member) {
+  if (member.role !== 'gm') throw new AppError(403, 'GM role required')
+}
+
+function runtimeInputError(error) {
+  if (error instanceof TypeError || error instanceof RangeError) return new AppError(400, error.message)
+  return error
+}
 
 // GET /api/campaigns/:id/battlemaps — liste des cartes
 router.get('/', requireAuth, async (req, res) => {
@@ -379,6 +407,128 @@ router.post('/:id/world-visibility', requireAuth, async (req, res, next) => {
     res.json({ visibility, coordinateSpace: 'world-feet' })
   } catch (error) {
     next(error)
+  }
+})
+
+// Registre et instances runtime. Les membres lisent ; seul le MJ modifie.
+router.get('/:id/world-effects', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap } = await battlemapAndMember(req.params.id, req.user.id)
+    res.json({ worldEffects: await listBattlemapWorldEffects(battlemap) })
+  } catch (error) {
+    next(runtimeInputError(error))
+  }
+})
+
+router.post('/:id/world-effects/definitions', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap, member } = await battlemapAndMember(req.params.id, req.user.id)
+    requireBattlemapGm(member)
+    const definition = await createCustomWorldEffectDefinition({
+      campaignId: battlemap.campaign_id,
+      input: req.body,
+      userId: req.user.id,
+    })
+    res.status(201).json({ definition })
+  } catch (error) {
+    if (error?.code === '23505') return next(new AppError(409, 'Effect key already exists'))
+    next(runtimeInputError(error))
+  }
+})
+
+router.post('/:id/world-effects/instances', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap, member } = await battlemapAndMember(req.params.id, req.user.id)
+    requireBattlemapGm(member)
+    const outcome = await createWorldEffectInstance({
+      battlemapId: battlemap.id,
+      input: req.body,
+      userId: req.user.id,
+    })
+    req.app.get('io').to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+      battlemapId: battlemap.id, runtimeRevision: outcome.runtimeRevision, kind: 'effect-created',
+    })
+    res.status(201).json(outcome)
+  } catch (error) {
+    next(runtimeInputError(error))
+  }
+})
+
+router.patch('/:id/world-effects/instances/:instanceId', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap, member } = await battlemapAndMember(req.params.id, req.user.id)
+    requireBattlemapGm(member)
+    const outcome = await updateWorldEffectInstance({
+      battlemapId: battlemap.id,
+      instanceId: req.params.instanceId,
+      patch: req.body,
+    })
+    req.app.get('io').to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+      battlemapId: battlemap.id, runtimeRevision: outcome.runtimeRevision, kind: 'effect-updated',
+    })
+    res.json(outcome)
+  } catch (error) {
+    next(runtimeInputError(error))
+  }
+})
+
+router.delete('/:id/world-effects/instances/:instanceId', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap, member } = await battlemapAndMember(req.params.id, req.user.id)
+    requireBattlemapGm(member)
+    const outcome = await deleteWorldEffectInstance({
+      battlemapId: battlemap.id,
+      instanceId: req.params.instanceId,
+    })
+    req.app.get('io').to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+      battlemapId: battlemap.id, runtimeRevision: outcome.runtimeRevision, kind: 'effect-deleted',
+    })
+    res.json(outcome)
+  } catch (error) {
+    next(runtimeInputError(error))
+  }
+})
+
+router.post('/:id/world-effects/propagate', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap, member } = await battlemapAndMember(req.params.id, req.user.id)
+    requireBattlemapGm(member)
+    const outcome = await createPropagatedWorldEffectInstances({
+      battlemapId: battlemap.id,
+      definitionKey: req.body.definitionKey,
+      originCompartmentId: req.body.originCompartmentId,
+      channel: req.body.channel,
+      intensity: req.body.intensity,
+      attenuation: req.body.attenuation,
+      source: req.body.source,
+      userId: req.user.id,
+    })
+    req.app.get('io').to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+      battlemapId: battlemap.id, runtimeRevision: outcome.runtimeRevision, kind: 'effect-propagated',
+    })
+    res.status(201).json(outcome)
+  } catch (error) {
+    next(runtimeInputError(error))
+  }
+})
+
+router.patch('/:id/world-features/:featureId/state', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap, member } = await battlemapAndMember(req.params.id, req.user.id)
+    requireBattlemapGm(member)
+    const outcome = await setWorldFeatureState({
+      battlemapId: battlemap.id,
+      featureId: req.params.featureId,
+      state: req.body.state,
+      userId: req.user.id,
+    })
+    req.app.get('io').to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+      battlemapId: battlemap.id, runtimeRevision: outcome.runtimeRevision, kind: 'feature-state',
+      featureId: req.params.featureId,
+    })
+    res.json(outcome)
+  } catch (error) {
+    next(runtimeInputError(error))
   }
 })
 

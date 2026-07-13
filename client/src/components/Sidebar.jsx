@@ -498,6 +498,7 @@ export default function Sidebar({
   onSurfaceUndo,
   onSurfaceRedo,
   campaignId,
+  battlemapId,
   socket,
   onReconnectSocket,
   onOpenCharacter,
@@ -541,6 +542,9 @@ export default function Sidebar({
     ladderWidth: 0.7,
     ladderDepth: 0.12,
     ladderAnchorSpacing: 0.5,
+    effectDefinitionKey: 'fire',
+    effectIntensity: 1,
+    effectHeight: 2.5,
     surfaceBlocking: 'solid',
     floorPackId: null,
     stairPackId: null,
@@ -674,6 +678,62 @@ export default function Sidebar({
     connectorType: surfaceToolState.connectorType || 'door',
     ...connectorModelPatch(blueprint),
   })
+
+  const [worldEffects, setWorldEffects] = useState({ definitions: [], instances: [] })
+  const [customEffectOpen, setCustomEffectOpen] = useState(false)
+  const [customEffectDraft, setCustomEffectDraft] = useState({ key: '', label: '', movementMultiplier: 1, note: '' })
+
+  const refreshWorldEffects = useCallback(async () => {
+    if (!battlemapId) return setWorldEffects({ definitions: [], instances: [] })
+    try {
+      const { data } = await api.get(`/battlemaps/${battlemapId}/world-effects`)
+      setWorldEffects(data.worldEffects || { definitions: [], instances: [] })
+    } catch (error) {
+      console.error('[Sidebar] Erreur chargement effets monde :', error)
+    }
+  }, [battlemapId])
+
+  useEffect(() => { refreshWorldEffects() }, [refreshWorldEffects])
+
+  useEffect(() => {
+    if (!socket || !battlemapId) return undefined
+    const onRuntimeUpdate = event => {
+      if (String(event?.battlemapId) === String(battlemapId)) refreshWorldEffects()
+    }
+    socket.on(WS.WORLD_RUNTIME_UPDATED, onRuntimeUpdate)
+    return () => socket.off(WS.WORLD_RUNTIME_UPDATED, onRuntimeUpdate)
+  }, [socket, battlemapId, refreshWorldEffects])
+
+  const createCustomEffect = async () => {
+    if (!battlemapId || !customEffectDraft.key.trim() || !customEffectDraft.label.trim()) return
+    try {
+      const { data } = await api.post(`/battlemaps/${battlemapId}/world-effects/definitions`, {
+        key: customEffectDraft.key.trim().toLowerCase(),
+        label: customEffectDraft.label.trim(),
+        note: customEffectDraft.note,
+        modifiers: { movementMultiplier: Number(customEffectDraft.movementMultiplier) || 1 },
+        hooks: customEffectDraft.note
+          ? [{ event: 'traverse', type: 'note', label: customEffectDraft.label.trim(), note: customEffectDraft.note }]
+          : [],
+      })
+      await refreshWorldEffects()
+      updateSurfaceTool({ effectDefinitionKey: data.definition.key, mode: 'effect' })
+      setCustomEffectDraft({ key: '', label: '', movementMultiplier: 1, note: '' })
+      setCustomEffectOpen(false)
+    } catch (error) {
+      console.error('[Sidebar] Création effet personnalisé refusée :', error)
+    }
+  }
+
+  const deleteRuntimeEffect = async instanceId => {
+    if (!battlemapId) return
+    try {
+      await api.delete(`/battlemaps/${battlemapId}/world-effects/instances/${instanceId}`)
+      await refreshWorldEffects()
+    } catch (error) {
+      console.error('[Sidebar] Suppression effet refusée :', error)
+    }
+  }
 
   const [activeTab, setActiveTab] = useState('chat')
   const [toolsOpen, setToolsOpen] = useState(false)
@@ -1081,6 +1141,16 @@ export default function Sidebar({
                   </button>
                   <button
                     type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'effect' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'effect' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    Zone / effet
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => updateSurfaceTool({
                       mode: 'connector',
                       connectorType: 'ladder',
@@ -1130,6 +1200,116 @@ export default function Sidebar({
                         <option value="z">Nord / Sud</option>
                       </select>
                     </label>
+                  </div>
+                )}
+                {surfaceToolState.mode === 'effect' && (
+                  <div style={styles.connectorPicker}>
+                    <div style={styles.connectorPickerTitle}>Région environnementale</div>
+                    <div style={styles.roomToolGrid}>
+                      <label style={styles.roomToolLabel}>
+                        <span>Effet</span>
+                        <select
+                          value={surfaceToolState.effectDefinitionKey || 'fire'}
+                          onChange={e => updateSurfaceTool({ effectDefinitionKey: e.target.value })}
+                          style={styles.roomToolSelect}
+                        >
+                          {(worldEffects.definitions || []).map(definition => (
+                            <option key={definition.key} value={definition.key}>
+                              {definition.label}{definition.builtin ? '' : ' (MJ)'}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Intensité</span>
+                        <input
+                          type="number"
+                          min="0.01"
+                          max="100"
+                          step="0.25"
+                          value={surfaceToolState.effectIntensity}
+                          onChange={e => updateSurfaceTool({ effectIntensity: Math.max(0.01, Number(e.target.value) || 1) })}
+                          style={styles.roomToolInput}
+                        />
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Hauteur du volume</span>
+                        <input
+                          type="number"
+                          min="0.1"
+                          max="100"
+                          step="0.25"
+                          value={surfaceToolState.effectHeight}
+                          onChange={e => updateSurfaceTool({ effectHeight: Math.max(0.1, Number(e.target.value) || 2.5) })}
+                          style={styles.roomToolInput}
+                        />
+                      </label>
+                    </div>
+                    <button type="button" onClick={() => setCustomEffectOpen(open => !open)} style={styles.roomToolSmallBtn}>
+                      {customEffectOpen ? 'Fermer' : 'Nouvel effet MJ'}
+                    </button>
+                    {customEffectOpen && (
+                      <div style={styles.connectorColorList}>
+                        <label style={styles.roomToolLabel}>
+                          <span>Clé technique</span>
+                          <input
+                            value={customEffectDraft.key}
+                            onChange={e => setCustomEffectDraft(draft => ({ ...draft, key: e.target.value }))}
+                            placeholder="debris-lourds"
+                            style={styles.roomToolInput}
+                          />
+                        </label>
+                        <label style={styles.roomToolLabel}>
+                          <span>Nom</span>
+                          <input
+                            value={customEffectDraft.label}
+                            onChange={e => setCustomEffectDraft(draft => ({ ...draft, label: e.target.value }))}
+                            placeholder="Débris lourds"
+                            style={styles.roomToolInput}
+                          />
+                        </label>
+                        <label style={styles.roomToolLabel}>
+                          <span>Multiplicateur de déplacement</span>
+                          <input
+                            type="number"
+                            min="0.05"
+                            max="100"
+                            step="0.25"
+                            value={customEffectDraft.movementMultiplier}
+                            onChange={e => setCustomEffectDraft(draft => ({ ...draft, movementMultiplier: Number(e.target.value) || 1 }))}
+                            style={styles.roomToolInput}
+                          />
+                        </label>
+                        <label style={styles.roomToolLabel}>
+                          <span>Note / règle MJ</span>
+                          <textarea
+                            value={customEffectDraft.note}
+                            onChange={e => setCustomEffectDraft(draft => ({ ...draft, note: e.target.value }))}
+                            rows={3}
+                            style={styles.roomToolInput}
+                          />
+                        </label>
+                        <button type="button" onClick={createCustomEffect} style={styles.roomToolSmallBtn}>
+                          Créer et sélectionner
+                        </button>
+                      </div>
+                    )}
+                    {(worldEffects.instances || []).length > 0 && (
+                      <div style={styles.connectorColorList}>
+                        <div style={styles.connectorPickerTitle}>Effets actifs</div>
+                        {worldEffects.instances.map(instance => {
+                          const definition = worldEffects.definitions.find(item => item.key === instance.definitionKey)
+                          return (
+                            <div key={instance.id} style={styles.roomToolSelection}>
+                              <span>{definition?.label || instance.definitionKey} ×{instance.intensity}</span>
+                              <button type="button" onClick={() => deleteRuntimeEffect(instance.id)} style={styles.roomToolSmallBtn}>
+                                Supprimer
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
                 {(surfaceToolState.selectedRoomId
@@ -1537,6 +1717,8 @@ export default function Sidebar({
                       ? t('surfaceEditor.hintStairs')
                     : surfaceToolState.mode === 'bridge'
                       ? 'Tracez une surface praticable suspendue. Elle peut être détruite ou recevoir des états dynamiques.'
+                    : surfaceToolState.mode === 'effect'
+                      ? 'Tracez le volume touché. L’effet reste un état de partie séparé de la surface éditée.'
                     : surfaceToolState.mode === 'erase'
                       ? t('surfaceEditor.hintErase')
                       : t('surfaceEditor.hintSlab')}

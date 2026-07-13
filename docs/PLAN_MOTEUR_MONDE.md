@@ -2,7 +2,7 @@
 
 > Dernière mise à jour : 2026-07-13 — plan issu de l'audit croisé combat/monde.
 >
-> Statut : **Phases 0 à 4 codées et vérifiées ; phases 5 à 7 planifiées**.
+> Statut : **Phases 0 à 5 codées et vérifiées ; phases 6 et 7 planifiées**.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.
@@ -271,7 +271,7 @@ Phase 5.
 
 ---
 
-## 8. Phase 5 — régions et effets environnementaux
+## 8. Phase 5 — régions et effets environnementaux ✅
 
 ### Livrables
 
@@ -291,6 +291,32 @@ Phase 5.
 - un effet personnalisé peut fournir un multiplicateur et une note sans exécuter de code arbitraire ;
 - le passage du chemin dans une zone déclenche l'effet même si la destination est hors de la zone ;
 - feu/gaz/eau utilisent le même graphe de compartiments que les portes.
+
+### Livré le 2026-07-13
+
+- `shared/world/worldEffects.js` définit le registre commun, le cumul par catégorie, les régions,
+  les hooks sûrs et les occluders atténuants ;
+- effets intégrés initiaux : Feu, Inondé, Gaz, Huile/glissant et Terrain instable ;
+- un effet personnalisé accepte nom, icône, note, multiplicateur, opacité et hooks déclaratifs
+  (`note`, `test`, `damage`, `restriction`) sans jamais exécuter de script MJ ;
+- les instances ciblent volume, support, feature, compartiment, entité ou token ;
+- le graphe A* applique les facteurs environnementaux pendant la recherche, pas après le choix du
+  chemin, et les événements sont calculés sur les segments réellement parcourus ;
+- la LOS reçoit les mêmes volumes Feu/Gaz comme occluders dynamiques atténuants ;
+- les hooks `enter`, `exit`, `traverse`, `turnStart` et `turnEnd` sont exposés aux consommateurs ;
+- la propagation eau/gaz suit les compartiments et les canaux des portes ;
+- migration 154 : définitions de campagne, états de features, instances, journal d'événements et
+  archivage de l'ancienne table `zones` sous `legacy_zones` ;
+- routes GM de création, modification, suppression et propagation ; lecture membre et événement
+  temps réel `WORLD_RUNTIME_UPDATED` ;
+- l'éditeur peint des volumes runtime, affiche les régions, crée un effet MJ inconnu et supprime une
+  instance active ; la session affiche les mêmes volumes ;
+- 57 tests monde passent, le build Vite passe et la migration 154 `up/down` a été vérifiée dans une
+  transaction PostgreSQL annulée.
+
+Les valeurs intégrées sont des défauts système explicites ; une campagne peut les compléter par un
+effet personnalisé. Les conséquences Polaris finales des hooks restent consommées par le combat en
+Phase 7.
 
 ---
 

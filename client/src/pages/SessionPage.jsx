@@ -124,6 +124,9 @@ function SessionContent({ campaignId }) {
     ladderWidth: 0.7,
     ladderDepth: 0.12,
     ladderAnchorSpacing: 0.5,
+    effectDefinitionKey: 'fire',
+    effectIntensity: 1,
+    effectHeight: 2.5,
     surfaceBlocking: 'solid',
     floorPackId: null,
     ceilingPackId: null,
@@ -691,6 +694,7 @@ function SessionContent({ campaignId }) {
           onSurfaceUndo={() => setSurfaceUndoRequest(n => n + 1)}
           onSurfaceRedo={() => setSurfaceRedoRequest(n => n + 1)}
           campaignId={campaignId}
+          battlemapId={battlemap?.id}
           socket={socket}
           onReconnectSocket={() => {}}
           onOpenCharacter={openSheet}

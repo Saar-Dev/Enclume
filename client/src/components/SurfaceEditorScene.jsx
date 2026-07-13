@@ -192,6 +192,38 @@ function CeilingPreview({ selection, surfaceTool }) {
   )
 }
 
+function EffectVolumePreview({ selection, surfaceTool }) {
+  const area = normalizeCellSelection(selection)
+  if (!area) return null
+  const baseY = getToolElevation(surfaceTool)
+  const height = Math.max(0.1, Number(surfaceTool?.effectHeight) || STORY_HEIGHT)
+  return (
+    <mesh position={[area.minX + area.width / 2, baseY + height / 2, area.minZ + area.depth / 2]} renderOrder={36}>
+      <boxGeometry args={[area.width, height, area.depth]} />
+      <meshBasicMaterial color="#fb7185" transparent opacity={0.2} depthWrite={false} />
+    </mesh>
+  )
+}
+
+function RuntimeEffectRegions({ regions = [] }) {
+  return regions.map(region => {
+    const bounds = region?.bounds
+    if (!bounds) return null
+    const size = [bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y, bounds.max.z - bounds.min.z]
+    const center = [
+      (bounds.min.x + bounds.max.x) / 2,
+      (bounds.min.y + bounds.max.y) / 2,
+      (bounds.min.z + bounds.max.z) / 2,
+    ]
+    return (
+      <mesh key={region.id} position={center} renderOrder={20}>
+        <boxGeometry args={size} />
+        <meshBasicMaterial color={region.definitionKey === 'gas' ? '#a3e635' : region.definitionKey === 'flooded' ? '#38bdf8' : '#fb7185'} transparent opacity={0.13} depthWrite={false} />
+      </mesh>
+    )
+  })
+}
+
 function WallPreview({ drag, surfaceTool, activeMaterial, availableBlocks }) {
   const walls = makeWallsFromDrag(drag?.start, drag?.end, surfaceTool, activeMaterial, availableBlocks)
   if (!walls?.length) return null
@@ -277,6 +309,8 @@ export default function SurfaceEditorScene({
   displayLevel = 0,
   selectedConnectorId = null,
   onSurfaceConnectorSelect,
+  runtimeEffectRegions = [],
+  onRuntimeEffectCreate,
 }) {
   const { camera, gl } = useThree()
   const orbitRef = useRef()
@@ -644,6 +678,28 @@ export default function SurfaceEditorScene({
         return
       }
 
+      if (mode === 'effect') {
+        const area = normalizeCellSelection(finalDrag)
+        if (area) {
+          const baseY = getToolElevation(surfaceTool)
+          const height = Math.max(0.1, Number(surfaceTool?.effectHeight) || STORY_HEIGHT)
+          onRuntimeEffectCreate?.({
+            definitionKey: surfaceTool?.effectDefinitionKey || 'fire',
+            targetKind: 'volume',
+            volume: {
+              min: { x: area.minX, y: baseY, z: area.minZ },
+              max: { x: area.maxX + 1, y: baseY + height, z: area.maxZ + 1 },
+            },
+            intensity: Math.max(0.01, Number(surfaceTool?.effectIntensity) || 1),
+            source: { kind: 'editor' },
+          })
+        }
+        setHoverPreview(null)
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+
       const nextData = mode === 'wall'
         ? applyWallDrag(surfaceData, finalDrag.start, finalDrag.end, surfaceTool, activeMaterial, availableBlocks)
         : mode === 'stair'
@@ -676,6 +732,7 @@ export default function SurfaceEditorScene({
     activeMaterial,
     availableBlocks,
     findConnectorAtWorldPoint,
+    onRuntimeEffectCreate,
     getFloorCell,
     getWallPoint,
     getWorldPoint,
@@ -746,6 +803,7 @@ export default function SurfaceEditorScene({
         selectedConnectorId={selectedConnectorId || surfaceTool?.selectedConnectorId}
         onConnectorSelect={surfaceTool?.mode === 'select' ? handleConnectorPointerSelect : null}
       />
+      <RuntimeEffectRegions regions={runtimeEffectRegions} />
       {selectedRooms.map(room => <SelectedRoomOverlay key={room.id} room={room} />)}
       {drag?.mode === 'wall' ? (
         <WallPreview drag={drag} surfaceTool={surfaceTool} activeMaterial={activeMaterial} availableBlocks={availableBlocks} />
@@ -753,6 +811,8 @@ export default function SurfaceEditorScene({
         <StairPreview drag={drag} surfaceTool={surfaceTool} activeMaterial={activeMaterial} availableBlocks={availableBlocks} />
       ) : drag?.mode === 'ceiling' ? (
         <CeilingPreview selection={drag} surfaceTool={surfaceTool} />
+      ) : drag?.mode === 'effect' ? (
+        <EffectVolumePreview selection={drag} surfaceTool={surfaceTool} />
       ) : drag?.mode === 'room' ? (
         <RoomPreview selection={drag} surfaceTool={surfaceTool} />
       ) : drag?.mode === 'select' ? (

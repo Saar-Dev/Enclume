@@ -9,6 +9,11 @@ import {
 import { buildNavigationGraph, planWorldPath } from '../../../shared/world/navigation.js'
 import { createOccupancyIndex } from '../../../shared/world/spatialIndex.js'
 import { getBattlemapWorldSnapshot } from './worldService.js'
+import {
+  loadBattlemapRuntimeContext,
+  pathEffectEvents,
+  persistWorldEffectEvents,
+} from './worldEffectService.js'
 
 const MAX_GRAPH_CACHE_ENTRIES = 32
 const graphCache = new Map()
@@ -17,6 +22,7 @@ function graphKey(battlemap, actorProfile) {
   return [
     battlemap.id,
     Number(battlemap.world_revision || 0),
+    Number(battlemap.runtime_revision || 0),
     Number(actorProfile.radius || 0.35),
     Number(actorProfile.height || 1.8),
     Number(actorProfile.maxStepHeight || 0.5),
@@ -29,12 +35,15 @@ function trimGraphCache() {
   }
 }
 
-export function getBattlemapNavigationGraph(battlemap, actorProfile = {}) {
+export function getBattlemapNavigationGraph(battlemap, actorProfile = {}, runtimeContext = null) {
   const key = graphKey(battlemap, actorProfile)
   const cached = graphCache.get(key)
   if (cached) return cached
-  const snapshot = getBattlemapWorldSnapshot(battlemap)
-  const graph = buildNavigationGraph(snapshot, { actorProfile })
+  const snapshot = runtimeContext?.snapshot || getBattlemapWorldSnapshot(battlemap)
+  const graph = buildNavigationGraph(snapshot, {
+    actorProfile,
+    effectRegions: runtimeContext?.regions || snapshot.spatial.regions,
+  })
   graphCache.set(key, graph)
   trimGraphCache()
   return graph
@@ -135,10 +144,11 @@ export async function planBattlemapTokenMovement({
   authorizedBudgetM,
   actorProfile = {},
 } = {}) {
-  const snapshot = getBattlemapWorldSnapshot(battlemap)
-  const graph = getBattlemapNavigationGraph(battlemap, actorProfile)
+  const runtimeContext = await loadBattlemapRuntimeContext(battlemap)
+  const snapshot = runtimeContext.snapshot
+  const graph = getBattlemapNavigationGraph(battlemap, actorProfile, runtimeContext)
   const occupants = await loadBattlemapDynamicOccupants(battlemap.id)
-  return planWorldPath({
+  const result = planWorldPath({
     snapshot,
     graph,
     from: dbPositionToWorldPoint(token),
@@ -148,6 +158,12 @@ export async function planBattlemapTokenMovement({
     occupants,
     excludeOccupantIds: [token.id],
     pathId: randomUUID(),
+  })
+  if (!result.plan) return result
+  return Object.freeze({
+    ...result,
+    runtimeRevision: runtimeContext.runtimeRevision,
+    effectEvents: pathEffectEvents(runtimeContext.regions, result.plan),
   })
 }
 
@@ -180,8 +196,9 @@ export async function executeBattlemapTokenMovement({
       states: blueprintById.get(entity.blueprint_id)?.states || [],
     }))
 
-    const snapshot = getBattlemapWorldSnapshot(battlemap)
-    const graph = getBattlemapNavigationGraph(battlemap, actorProfile)
+    const runtimeContext = await loadBattlemapRuntimeContext(battlemap, trx)
+    const snapshot = runtimeContext.snapshot
+    const graph = getBattlemapNavigationGraph(battlemap, actorProfile, runtimeContext)
     const result = planWorldPath({
       snapshot,
       graph,
@@ -198,6 +215,7 @@ export async function executeBattlemapTokenMovement({
     }
 
     const end = result.plan.end || result.snappedFrom
+    const effectEvents = pathEffectEvents(runtimeContext.regions, result.plan)
     const current = dbPositionToWorldPoint(token)
     const moved = end && (
       Math.abs(end.x - current.x) > 1e-9
@@ -205,7 +223,7 @@ export async function executeBattlemapTokenMovement({
       || Math.abs(end.z - current.z) > 1e-9
     )
     if (!moved) {
-      return Object.freeze({ status: result.status, moved: false, token, result })
+      return Object.freeze({ status: result.status, moved: false, token, result, effectEvents })
     }
 
     const [updatedToken] = await trx('tokens')
@@ -216,11 +234,19 @@ export async function executeBattlemapTokenMovement({
       .where({ id: battlemapId })
       .update({ runtime_revision: Number(battlemap.runtime_revision || 0) + 1 })
       .returning('runtime_revision')
+    await persistWorldEffectEvents({
+      trx,
+      battlemapId,
+      tokenId: token.id,
+      runtimeRevision: runtime.runtime_revision,
+      events: effectEvents,
+    })
     return Object.freeze({
       status: result.status,
       moved: true,
       token: updatedToken,
       result,
+      effectEvents,
       runtimeRevision: runtime.runtime_revision,
     })
   })

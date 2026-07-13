@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 4 ; Session 141 (suite 29) conservée.
+> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 5 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -102,6 +102,21 @@ Phase 7. Le service de combat conserve uniquement ses effets métier (munition e
 - validation : 50 tests monde et build Vite.
 
 L'ascenseur reste expressément non navigable avant son automate de Phase 6.
+
+---
+
+## Moteur de monde — Phase 5 ✅
+
+- `shared/world/worldEffects.js` — registre intégré/personnalisé, régions AABB, cumul, hooks,
+  propagation et occluders ;
+- Feu, Inondé, Gaz, Huile/glissant et Terrain instable sont prévus par le système ;
+- un effet MJ inconnu reste possible avec des modificateurs et notes déclaratifs sûrs ;
+- `server/src/services/worldEffectService.js` sépare définitions, instances, états de features et
+  journal d'événements ;
+- migration 154 et routes `world-effects`/`world-features` ;
+- navigation et LOS consomment les mêmes régions runtime et la même `runtime_revision` ;
+- éditeur de volumes environnementaux, création d'effet personnalisé et affichage session ;
+- validation : 57 tests monde, build Vite, migration `up/down` transactionnelle PostgreSQL.
 
 ---
 

@@ -1,8 +1,8 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-13 — Phase 4, structures verticales et passerelles.
+> Dernière mise à jour : 2026-07-13 — Phase 5, régions et effets runtime.
 >
-> Statut : **architecture cible validée ; Phases 0 à 4 implémentées, phases 5 à 7 non implémentées**. Les sections marquées
+> Statut : **architecture cible validée ; Phases 0 à 5 implémentées, phases 6 et 7 non implémentées**. Les sections marquées
 > `[EXISTANT]` décrivent le code livré. Les sections `[CIBLE]` sont le contrat à respecter pendant
 > la reconstruction.
 >
@@ -444,7 +444,7 @@ doit pas exister uniquement dans `combat_roster` si elle affecte le monde physiq
 
 ---
 
-## 9. Surfaces, régions et effets `[CIBLE]`
+## 9. Surfaces, régions et effets `[EXISTANT — PHASE 5]`
 
 Toute surface praticable accepte un multiplicateur statique libre saisi par le MJ. `1` signifie
 aucun malus ; la valeur doit être strictement positive. Une valeur élevée, par exemple `5`, permet
@@ -471,9 +471,28 @@ de tour. Il ne doit pas y avoir une seconde table de correspondance propre à ch
 Les zones spatiales servent aussi aux mécaniques telles que la suppression : le moteur teste le
 chemin traversé, pas seulement la case finale.
 
+### Implémentation Phase 5
+
+- `world_effect_definitions` contient les définitions personnalisées d'une campagne ; les cinq
+  définitions intégrées vivent dans le registre versionné du code ;
+- `world_effect_instances` est l'état durable d'une partie et cible un volume, une feature, un
+  compartiment, une entité ou un token ;
+- `world_feature_states` porte notamment l'état détruit/désactivé d'une passerelle et portera
+  l'automate d'ascenseur ;
+- `world_effect_events` journalise les entrées, sorties et traversées effectivement résolues ;
+- le cumul `max` choisit le facteur le plus contraignant d'une catégorie ; `multiply` conserve des
+  facteurs séparés et explicables entre catégories ;
+- le renderer affiche les régions mais leur AABB déclaré, et non le mesh translucide, reste
+  l'autorité physique ;
+- l'ancienne table `zones`, sans consommateur actif, est archivée par la migration 154. Aucun
+  adaptateur approximatif n'est maintenu.
+
+Le combat de Phase 7 consommera les hooks déclaratifs déjà produits. Il décidera de la résolution
+Polaris d'un `test` ou d'un `damage`, sans réimplémenter la détection spatiale.
+
 ---
 
-## 10. Eau, gaz et compartiments `[CIBLE]`
+## 10. Eau, gaz et compartiments `[EXISTANT — PROPAGATION PHASE 5]`
 
 Le calcul d'eau actuel de l'éditeur constitue une preuve de concept topologique, pas une simulation
 runtime autoritaire.

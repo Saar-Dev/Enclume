@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { compileSurfaceWorld } from './worldCompiler.js'
 import { createWorldSnapshot } from './worldContracts.js'
 import { buildNavigationGraph, planWorldPath } from './navigation.js'
+import { compileEffectRegions } from './worldEffects.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -71,6 +72,35 @@ test('le multiplicateur MJ de la surface pondère l’entrée sur la case', () =
   })
   assert.equal(result.routeCostM, 7.5)
   assert.equal(result.plan.spentM, 7.5)
+})
+
+test('un effet volumique pondère A* et le plan avec la même catégorie environnement', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-effect-cost',
+    surfaceData: emptySurface({
+      floors: {
+        '0:0:0': { x: 0, z: 0, y: 0, thickness: 0.25 },
+        '1:0:0': { x: 1, z: 0, y: 0, thickness: 0.25 },
+      },
+    }),
+  })
+  const effectRegions = compileEffectRegions(snapshot, {
+    instances: [{
+      id: 'oil-path',
+      definitionKey: 'oil',
+      targetKind: 'volume',
+      volume: { min: { x: 1, y: 0, z: 0 }, max: { x: 2, y: 1, z: 1 } },
+    }],
+  })
+  const result = planWorldPath({
+    snapshot,
+    effectRegions,
+    from: { x: 0.5, y: 0.125, z: 0.5 },
+    to: { x: 1.5, y: 0.125, z: 0.5 },
+    budgetM: 10,
+  })
+  assert.equal(result.routeCostM, 2.25)
+  assert.equal(result.plan.segments[0].factors.environment[0].value, 1.5)
 })
 
 function adjacentRoomsWithDoor(state) {

@@ -32,6 +32,7 @@ export const WS = {
   // Battlemap
   MAP_SWITCH:   'map:switch',
   MAP_VIEWPORT: 'map:viewport',
+  WORLD_RUNTIME_UPDATED: 'world:runtime_updated',
 
   // Documents
   DOC_SHARED:  'doc:shared',

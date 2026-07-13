@@ -11,6 +11,7 @@ import {
   createSpatialIndex,
   normalizeActorProfile,
 } from './spatialIndex.js'
+import { effectMovementFactorsForSegment } from './worldEffects.js'
 
 const EPSILON = 1e-9
 const DEFAULT_TRAVERSAL_FACTORS = Object.freeze({
@@ -79,10 +80,14 @@ function edgeFactors(mode, surfaceMultiplier = 1, traversalMultiplier = null) {
   }
 }
 
-function makeEdge({ id, fromNode, toNode, mode, allowPartial, sourceId, metrics, factors }) {
+function makeEdge({ id, fromNode, toNode, mode, allowPartial, sourceId, metrics, factors, effectRegions = [] }) {
   const distanceM = distanceBetweenWorldPointsM(fromNode.point, toNode.point, metrics)
   if (distanceM <= EPSILON) return null
-  const movement = calculateMovementCost(distanceM, factors)
+  const environment = effectMovementFactorsForSegment(effectRegions, fromNode.point, toNode.point)
+  const resolvedFactors = environment.length > 0
+    ? { ...factors, environment: [...(factors.environment || []), ...environment] }
+    : factors
+  const movement = calculateMovementCost(distanceM, resolvedFactors)
   return {
     id,
     from: fromNode.id,
@@ -93,12 +98,16 @@ function makeEdge({ id, fromNode, toNode, mode, allowPartial, sourceId, metrics,
     allowPartial,
     sourceId,
     distanceM,
-    factors,
+    factors: movement.factors,
     costM: movement.costM,
   }
 }
 
-export function buildNavigationGraph(snapshot, { actorProfile = {}, traversalFactors = {} } = {}) {
+export function buildNavigationGraph(snapshot, {
+  actorProfile = {},
+  traversalFactors = {},
+  effectRegions = snapshot?.spatial?.regions || [],
+} = {}) {
   const actor = normalizeActorProfile(actorProfile)
   const spatialIndex = createSpatialIndex(snapshot)
   const nodes = []
@@ -161,7 +170,7 @@ export function buildNavigationGraph(snapshot, { actorProfile = {}, traversalFac
   const addEdge = descriptor => {
     const key = `${descriptor.fromNode.id}>${descriptor.toNode.id}:${descriptor.mode}:${descriptor.sourceId || ''}`
     if (edgeKeys.has(key)) return
-    const edge = makeEdge({ ...descriptor, metrics: snapshot.metrics })
+    const edge = makeEdge({ ...descriptor, metrics: snapshot.metrics, effectRegions })
     if (!edge) return
     edgeKeys.add(key)
     edges.push(deepFreeze(edge))
@@ -270,6 +279,7 @@ export function buildNavigationGraph(snapshot, { actorProfile = {}, traversalFac
     worldRevision: snapshot.worldRevision,
     metrics: snapshot.metrics,
     actorProfile: actor,
+    effectRegions,
     nodes,
     edges,
   })
@@ -500,9 +510,10 @@ export function planWorldPath({
   occupants = [],
   excludeOccupantIds = [],
   traversalFactors = {},
+  effectRegions = snapshot?.spatial?.regions || [],
   pathId = null,
 } = {}) {
-  const navigationGraph = graph || buildNavigationGraph(snapshot, { actorProfile, traversalFactors })
+  const navigationGraph = graph || buildNavigationGraph(snapshot, { actorProfile, traversalFactors, effectRegions })
   const route = findNavigationPath(navigationGraph, {
     from,
     to,

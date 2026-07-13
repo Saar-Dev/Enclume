@@ -1137,6 +1137,7 @@ export default function Editor3D({
   const [voxels, setVoxels] = useState({})
   const [surfaceData, setSurfaceData] = useState(() => normalizeSurfaceData(null))
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
+  const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
   const [textureMaterials, setTextureMaterials] = useState({})
   const [blocksReady, setBlocksReady] = useState(false)
 
@@ -1178,6 +1179,30 @@ export default function Editor3D({
   useEffect(() => {
     setSurfaceData(normalizeSurfaceData(battlemap?.surface_data))
   }, [battlemap?.id, battlemap?.surface_data])
+
+  const refreshRuntimeEffects = useCallback(async () => {
+    if (!battlemap?.id) {
+      setRuntimeEffectRegions([])
+      return
+    }
+    try {
+      const { data } = await api.get(`/battlemaps/${battlemap.id}/world-effects`)
+      setRuntimeEffectRegions(data.worldEffects?.regions || [])
+    } catch (error) {
+      console.error('[Editor3D] Erreur chargement effets runtime :', error)
+    }
+  }, [battlemap?.id])
+
+  useEffect(() => { refreshRuntimeEffects() }, [refreshRuntimeEffects])
+
+  useEffect(() => {
+    if (!socket || !battlemap?.id) return undefined
+    const handleRuntimeUpdate = event => {
+      if (String(event?.battlemapId) === String(battlemap.id)) refreshRuntimeEffects()
+    }
+    socket.on(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
+    return () => socket.off(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
+  }, [socket, battlemap?.id, refreshRuntimeEffects])
 
   useEffect(() => {
     surfaceUndoStackRef.current = []
@@ -1395,6 +1420,16 @@ export default function Editor3D({
     saveSurfaceFireAndForget(nextSurfaceData)
   }, [saveSurfaceFireAndForget])
 
+  const handleRuntimeEffectCreate = useCallback(async input => {
+    if (!battlemap?.id) return
+    try {
+      await api.post(`/battlemaps/${battlemap.id}/world-effects/instances`, input)
+      await refreshRuntimeEffects()
+    } catch (error) {
+      console.error('[Editor3D] Création effet runtime refusée :', error)
+    }
+  }, [battlemap?.id, refreshRuntimeEffects])
+
   const selectedSurfaceConnector = useMemo(() => {
     const connectorId = surfaceConnectorPanel?.connectorId
     if (!connectorId) return null
@@ -1451,7 +1486,7 @@ export default function Editor3D({
   useEffect(() => {
     const roomId = surfaceTool?.selectedRoomId
     if (!roomId) return
-    if (surfaceTool?.mode === 'room' || surfaceTool?.mode === 'connector') return
+    if (['room', 'connector', 'stair', 'bridge', 'effect', 'erase'].includes(surfaceTool?.mode)) return
     const nextSurfaceData = applyRoomToolUpdate(
       surfaceDataRef.current,
       roomId,
@@ -1591,6 +1626,8 @@ export default function Editor3D({
             displayLevel={displayLevel}
             selectedConnectorId={surfaceConnectorPanel?.connectorId || surfaceTool?.selectedConnectorId || null}
             onSurfaceConnectorSelect={handleSurfaceConnectorSelect}
+            runtimeEffectRegions={runtimeEffectRegions}
+            onRuntimeEffectCreate={handleRuntimeEffectCreate}
           />
         )}
       </Canvas>
