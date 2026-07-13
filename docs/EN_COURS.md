@@ -1,4 +1,20 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-13 — transition instance Codex** : ajout des marqueurs de migrations historiques
+> 75-83 et idempotence des migrations 143/149. Objectif : basculer l'instance de test 8293 de
+> l'ancien dépôt monde vers `codex/world-engine-integration` sans perdre la base existante. La
+> procédure impose une sauvegarde PostgreSQL + MinIO + code, puis une répétition complète sur une
+> base jetable avant le redémarrage réel.
+> Première répétition : défaut de découverte corrigé, les fichiers `*.test.mjs` ne sont plus
+> chargés comme migrations par `NaturalMigrationSource`.
+> Deuxième contrôle : les noms datés sont désormais classés selon leur numéro interne afin que
+> 154-157 suivent réellement 153, y compris lors d'une installation vide.
+> **Dette distincte découverte** : une base entièrement vide atteint correctement la migration
+> 135, puis celle-ci exige l'équipement `TMP II`, normalement fourni par le seed historique. Le
+> serveur exécutant les migrations avant les seeds, une installation neuve sans base restaurée
+> reste à corriger dans le chantier catalogue combat. La montée de la base Codex existante n'est
+> pas concernée : répétition réussie avec 86 migrations, comptes de lignes inchangés et démarrage
+> serveur validé.
+
 > Dernière mise à jour : 2026-07-13 — Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 > (Lunette de visée) — ✅ clos, fonctionnel confirmé Saar (item 72) ; Session 141 (suite 29) : Interface d'ajout Avantage/
 > Désavantage (octroi MJ narratif) + bug DELETE 500 pré-existant corrigé — ✅ clos, fonctionnel

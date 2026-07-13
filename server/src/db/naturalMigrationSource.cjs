@@ -3,21 +3,24 @@ const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 
 const MIGRATION_EXTENSION = /\.(?:js|cjs|mjs)$/i
-const LEGACY_TIMESTAMP = /^20\d{6}[_ ]/
+const MIGRATION_TEST = /\.test\.(?:js|cjs|mjs)$/i
+const TIMESTAMPED_NUMBERED_MIGRATION = /^20\d{6}[_ ]+(\d+)[_ ]/i
 const NUMBERED_MIGRATION = /^(\d+)([a-z]*)[_ ]/i
 
 function migrationOrder(file) {
-  // Les migrations datees 20260329... constituent le socle historique et
-  // doivent toujours preceder la serie courte 21_..., 22_..., etc.
-  if (LEGACY_TIMESTAMP.test(file)) return [0, file]
+  // Les migrations datees conservent leur nom historique, mais leur nombre
+  // interne reste la source de verite pour l'ordre : 20260330_13 avant 21,
+  // 20260713_154 apres 153.
+  const timestampedMatch = file.match(TIMESTAMPED_NUMBERED_MIGRATION)
+  if (timestampedMatch) return [1, Number(timestampedMatch[1]), '', file]
 
   const match = file.match(NUMBERED_MIGRATION)
   if (match) {
     return [1, Number(match[1]), match[2].toLowerCase(), file]
   }
 
-  // Un fichier futur sans prefixe connu reste charge, mais apres l'historique
-  // explicite afin de ne jamais devancer une migration numerotee.
+  // Un fichier futur sans prefixe connu reste charge apres l'historique
+  // numerote afin de ne jamais devancer une migration de schema.
   return [2, file]
 }
 
@@ -41,7 +44,7 @@ class NaturalMigrationSource {
   async getMigrations() {
     const files = await fs.readdir(this.directory)
     return files
-      .filter(file => MIGRATION_EXTENSION.test(file))
+      .filter(file => MIGRATION_EXTENSION.test(file) && !MIGRATION_TEST.test(file))
       .sort((left, right) => compareParts(migrationOrder(left), migrationOrder(right)))
   }
 

@@ -7,12 +7,16 @@
  */
 
 export const up = async (knex) => {
+  if (await knex.schema.hasColumn('battlemaps', 'surface_data')) return
+
   await knex.schema.alterTable('battlemaps', (table) => {
     table.jsonb('surface_data').notNullable().defaultTo('{}')
   })
 }
 
 export const down = async (knex) => {
+  if (!(await knex.schema.hasColumn('battlemaps', 'surface_data'))) return
+
   await knex.schema.alterTable('battlemaps', (table) => {
     table.dropColumn('surface_data')
   })

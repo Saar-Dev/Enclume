@@ -1,4 +1,29 @@
 # ASBUILT — Ce qui est codé et stable
+
+## Bascule de l'instance Codex vers le moteur monde intégré (2026-07-13)
+
+La base de l'ancienne branche monde avait déjà appliqué neuf migrations sous les noms
+`75_battlemaps_surface_data.js` à `83_entities_precise_position.js`. Après intégration avec le
+moteur de combat, leurs versions canoniques ont été renumérotées de 143 à 151. Des migrations
+vides portant les anciens noms sont conservées comme marqueurs historiques : elles permettent à
+Knex de valider l'ancien journal sans rejouer de schéma sur une installation neuve.
+
+Les migrations 143 et 149 détectent maintenant les colonnes déjà présentes avant de les ajouter.
+Les migrations de contenu 144 à 148 restent idempotentes, 150 est volontairement non destructive,
+et 151 peut reconfirmer les types `double precision`. Cette passerelle permet de faire évoluer une
+base Codex existante vers le schéma intégré sans effacer ses campagnes, cartes ou objets.
+
+`NaturalMigrationSource` exclut explicitement les fichiers `*.test.js`, `*.test.cjs` et
+`*.test.mjs`. Sans ce filtre, les tests transactionnels 154 à 157 étaient interprétés comme des
+migrations et empêchaient le démarrage avant même l'application du schéma.
+
+Les migrations datées sont ordonnées selon le numéro fonctionnel inclus après leur date. Ainsi,
+`20260330_13_*` reste la migration 13 du socle et `20260713_154_*` est bien exécutée après la 153.
+Cela maintient à la fois la montée d'une ancienne base et la création d'une base vide.
+
+Avant la première bascule de l'instance 8293, l'ancien dépôt, la configuration d'exécution, la base
+PostgreSQL et le volume MinIO doivent être archivés ensemble. La migration doit ensuite être testée
+sur une copie restaurée de la base avant d'être appliquée à l'instance de test.
 > Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 8 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
