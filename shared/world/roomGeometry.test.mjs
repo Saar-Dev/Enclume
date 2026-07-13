@@ -15,7 +15,9 @@ import {
   roomGeometryIntersectionArea,
   sampleRoomBoundaryArc,
   selectedRoomBoundaryChain,
+  wallCornerIntersectionPoint,
   wallMiterOffsetVector,
+  withWallCornerJoins,
   withWallMiterJoins,
 } from './roomGeometry.js'
 
@@ -84,6 +86,48 @@ test('deux murs profilés adjacents partagent un raccord en onglet', () => {
   assert.deepEqual(walls[1].profileJoinEndMiter, expected)
   assert.ok(Math.abs(expected.x - 1) < 1e-6)
   assert.ok(Math.abs(expected.z - 1) < 1e-6)
+})
+
+test('un angle reste ferme quand un seul des deux murs est profile', () => {
+  const walls = withWallCornerJoins([
+    {
+      id: 'profiled', axis: 'x', x0: 0, z0: 0, x1: 2, z1: 0, y: 0, height: 2.5,
+      thickness: 0.1, elevationProfileMode: 'translated',
+      elevationProfile: { type: 'curved', depth: 0.6, direction: 1 },
+      elevationProfileDirection: 1, frontRole: 'interior', backRole: 'exterior',
+      sourceWorldIds: ['room'],
+    },
+    {
+      id: 'vertical', axis: 'z', x0: 0, z0: 2, x1: 0, z1: 0, y: 0, height: 2.5,
+      thickness: 0.1, frontRole: 'interior', backRole: 'exterior',
+      sourceWorldIds: ['room'],
+    },
+  ], wall => wall.sourceWorldIds)
+  const profiledJoin = walls[0].profileJoinStart
+  const verticalJoin = walls[1].profileJoinEnd
+
+  assert.ok(profiledJoin)
+  assert.ok(verticalJoin)
+  assert.equal(profiledJoin.neighbor.elevationProfileMode, undefined)
+  const fromProfiled = wallCornerIntersectionPoint({
+    point: { x: 0, z: 0 },
+    tangent: profiledJoin.tangent,
+    normal: profiledJoin.normal,
+    distance: 0.65,
+    neighborNormal: profiledJoin.neighbor.normal,
+    neighborDistance: 0.05,
+  })
+  const fromVertical = wallCornerIntersectionPoint({
+    point: { x: 0, z: 0 },
+    tangent: verticalJoin.tangent,
+    normal: verticalJoin.normal,
+    distance: 0.05,
+    neighborNormal: verticalJoin.neighbor.normal,
+    neighborDistance: 0.65,
+  })
+
+  assert.ok(Math.abs(fromProfiled.x - fromVertical.x) < 1e-9)
+  assert.ok(Math.abs(fromProfiled.z - fromVertical.z) < 1e-9)
 })
 
 test('une salle decoupee epouse exactement le mur courbe de la salle prioritaire', () => {

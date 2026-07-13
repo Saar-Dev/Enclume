@@ -554,12 +554,13 @@ la profondeur maximale, puis `spatialIndex` le subdivise localement en bandes ve
 pour les tests étroits. Collision, mouvement et LOS voient donc la même forme que le rendu sans
 faire de la tessellation une donnée persistée.
 
-Les angles de deux chemins portant le même profil reçoivent des vecteurs d'onglet dérivés
-(`profileJoinStartMiter` / `profileJoinEndMiter`). Le maillage utilise directement ces vecteurs pour
-faire coïncider les quatre nappes du loft. Le snapshot ne persiste pas cette finition : le
-compilateur la redérive, ajoute un padding longitudinal uniquement aux extrémités concernées et le
-narrow phase l'applique seulement au premier ou dernier segment d'un arc tessellé. Les coins restent
-donc fermés pour le rendu, le mouvement et la LOS sans transformer le raccord en donnée métier.
+Chaque angle à deux chemins reçoit un descripteur dérivé `profileJoinStart` / `profileJoinEnd` qui
+référence le repère et le profil du voisin. Le maillage recalcule à chaque hauteur l'intersection des
+faces avant et arrière des deux volumes. Il ne suppose donc plus que les deux murs ont le même
+profil : un mur vertical adjacent est lofté à son extrémité si son voisin est profilé. Le snapshot ne
+persiste pas cette finition ; le compilateur la redérive et transforme les mêmes intersections en
+paddings longitudinaux sur les deux murs. Le narrow phase les applique seulement au premier ou au
+dernier segment d'un arc tessellé. Rendu, mouvement et LOS ferment ainsi le même coin.
 
 ---
 

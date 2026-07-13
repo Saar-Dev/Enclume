@@ -363,12 +363,13 @@ moteur ; sinon elles doivent être supprimées.
 - les panneaux contextuels de salle, mur et objet/connecteur 3D présentent une suppression. Retirer
   une salle supprime ses connecteurs, nettoie les références `geometryClipRoomIds` et réattribue les
   arcs partagés restants ;
-- les angles de murs portant le même profil utilisent désormais un onglet dérivé commun à chaque
-  niveau du loft ; la compilation redérive une extension d'extrémité conservatrice pour fermer le
-  même coin en collision et en LOS. Un mur peut être arrondi dans le plan avant ou après son profil
-  vertical sans perdre celui-ci ;
+- les angles utilisent désormais l'intersection réelle des deux volumes à chaque niveau du loft.
+  Le raccord ferme aussi un mur profilé isolé contre ses voisins verticaux ou des profondeurs
+  différentes, en prolongeant le voisin lorsque nécessaire. La compilation redérive les mêmes
+  extensions pour la collision et la LOS. Un mur peut être arrondi dans le plan avant ou après son
+  profil vertical sans perdre celui-ci ;
 - la validation v10, les cas extérieur/mitoyen et le narrow phase profilé possèdent des tests purs.
-- état validé : 109 tests monde/serveur, 27 tests client Surface/persistance et build Vite de
+- état validé : 111 tests monde/serveur, 28 tests client Surface/persistance et build Vite de
   production passent ; ESLint ciblé des fichiers Surface ne remonte aucune erreur.
 
 ---

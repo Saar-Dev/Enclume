@@ -14,6 +14,7 @@ import {
   roomCeilingRegions,
   roomSliceAtLevel,
   sampleWallArcGeometry,
+  wallCornerIntersectionPoint,
 } from '../../../shared/world/roomGeometry.js'
 import {
   SURFACE_FINE,
@@ -610,7 +611,11 @@ function CurvedRoomSlab({ room, roomLookup, contours = null, kind, y, thickness,
 }
 
 function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }) {
-  if (wall.axis === 'arc' || wall.elevationProfileMode) {
+  const joinsProfiledNeighbor = Boolean(
+    wall.profileJoinStart?.neighbor?.elevationProfileMode
+    || wall.profileJoinEnd?.neighbor?.elevationProfileMode,
+  )
+  if (wall.axis === 'arc' || wall.elevationProfileMode || joinsProfiledNeighbor) {
     return <CurvedWallSegment wall={wall} textureMaterials={textureMaterials} opacity={opacity} showDetails={showDetails} />
   }
   const frontProcedural = surfaceMaterialAt(wall.frontMaterial || wall.material, showDetails)
@@ -769,11 +774,76 @@ function profiledWallVerticalLevels(wall) {
   return [...new Set(levels)].sort((left, right) => left - right).map(t => ({ t, y: origin + t * span }))
 }
 
+function profiledWallFaceDistances(wall, progress) {
+  const half = Math.max(1, Number(wall?.thickness) || 1) / (2 * SURFACE_FINE)
+  const minimumThickness = Math.max(0.01, half * 0.2)
+  let front = half
+  let back = -half
+  if (wall?.elevationProfileMode === 'translated') {
+    const direction = Number(wall.elevationProfileDirection) < 0 ? -1 : 1
+    const offset = elevationProfileOffset(wall.elevationProfile, progress) * direction
+    front += offset
+    back += offset
+  } else {
+    front += elevationProfileOffset(wall?.frontElevationProfile, progress)
+    back -= elevationProfileOffset(wall?.backElevationProfile, progress)
+    if (front - back < minimumThickness) {
+      if (wall?.frontElevationProfile && !wall?.backElevationProfile) front = back + minimumThickness
+      else if (wall?.backElevationProfile && !wall?.frontElevationProfile) back = front - minimumThickness
+      else {
+        const center = (front + back) / 2
+        front = center + minimumThickness / 2
+        back = center - minimumThickness / 2
+      }
+    }
+  }
+  return { front, back }
+}
+
+function wallProfileProgressAtY(wall, y) {
+  const origin = Number.isFinite(Number(wall?.elevationProfileOriginY))
+    ? Number(wall.elevationProfileOriginY)
+    : Number(wall?.y) || 0
+  const span = Math.max(0.01, Number(wall?.elevationProfileHeight)
+    || Number(wall?.height)
+    || STORY_HEIGHT)
+  return Math.max(0, Math.min(1, (Number(y) - origin) / span))
+}
+
+function joinedWallFacePoint(value, frame, distance, join, side, y) {
+  const fallback = [
+    value.x + frame.normal.x * distance,
+    y,
+    value.z + frame.normal.z * distance,
+  ]
+  const neighbor = join?.neighbor
+  const neighborNormal = neighbor?.normal
+  const neighborSide = join?.[`${side}NeighborSide`]
+  if (!neighborNormal || !['front', 'back'].includes(neighborSide)) return fallback
+  const denominator = frame.tangent.x * Number(neighborNormal.x)
+    + frame.tangent.z * Number(neighborNormal.z)
+  if (!Number.isFinite(denominator) || Math.abs(denominator) <= 0.2) return fallback
+  const neighborProgress = wallProfileProgressAtY(neighbor, y)
+  const neighborDistance = profiledWallFaceDistances(neighbor, neighborProgress)[neighborSide]
+  const intersection = wallCornerIntersectionPoint({
+    point: value,
+    tangent: frame.tangent,
+    normal: frame.normal,
+    distance,
+    neighborNormal,
+    neighborDistance,
+  })
+  if (!intersection) return fallback
+  return [
+    intersection.x,
+    y,
+    intersection.z,
+  ]
+}
+
 function makeCurvedWallGeometry(wall) {
   const path = profiledWallPath(wall)
   if (path.length < 2) return null
-  const half = Math.max(1, Number(wall.thickness) || 1) / (2 * SURFACE_FINE)
-  const minimumThickness = Math.max(0.01, half * 0.2)
   const cumulative = [0]
   for (let index = 0; index < path.length - 1; index += 1) {
     cumulative.push(cumulative[index] + Math.hypot(
@@ -782,45 +852,38 @@ function makeCurvedWallGeometry(wall) {
     ))
   }
   const total = Math.max(1e-6, cumulative.at(-1))
-  const pathNormals = path.map((value, index) => {
+  const pathFrames = path.map((value, index) => {
     const previous = path[Math.max(0, index - 1)]
     const next = path[Math.min(path.length - 1, index + 1)]
     const tangentX = next.x - previous.x
     const tangentZ = next.z - previous.z
     const length = Math.hypot(tangentX, tangentZ) || 1
-    const normal = { x: -tangentZ / length, z: tangentX / length }
-    if (index === 0 && wall.profileJoinStartMiter) return wall.profileJoinStartMiter
-    if (index === path.length - 1 && wall.profileJoinEndMiter) return wall.profileJoinEndMiter
-    return normal
+    const sampledFrame = {
+      tangent: { x: tangentX / length, z: tangentZ / length },
+      normal: { x: -tangentZ / length, z: tangentX / length },
+    }
+    if (index === 0 && wall.profileJoinStart) {
+      return { tangent: wall.profileJoinStart.tangent, normal: wall.profileJoinStart.normal }
+    }
+    if (index === path.length - 1 && wall.profileJoinEnd) {
+      return { tangent: wall.profileJoinEnd.tangent, normal: wall.profileJoinEnd.normal }
+    }
+    return sampledFrame
   })
   const verticalLevels = profiledWallVerticalLevels(wall)
   if (verticalLevels.length < 2) return null
 
   const surfaces = verticalLevels.map(level => path.map((value, pathIndex) => {
-    const normal = pathNormals[pathIndex]
-    let frontDistance = half
-    let backDistance = -half
-    if (wall.elevationProfileMode === 'translated') {
-      const direction = Number(wall.elevationProfileDirection) < 0 ? -1 : 1
-      const offset = elevationProfileOffset(wall.elevationProfile, level.t) * direction
-      frontDistance += offset
-      backDistance += offset
-    } else {
-      frontDistance += elevationProfileOffset(wall.frontElevationProfile, level.t)
-      backDistance -= elevationProfileOffset(wall.backElevationProfile, level.t)
-      if (frontDistance - backDistance < minimumThickness) {
-        if (wall.frontElevationProfile && !wall.backElevationProfile) frontDistance = backDistance + minimumThickness
-        else if (wall.backElevationProfile && !wall.frontElevationProfile) backDistance = frontDistance - minimumThickness
-        else {
-          const center = (frontDistance + backDistance) / 2
-          frontDistance = center + minimumThickness / 2
-          backDistance = center - minimumThickness / 2
-        }
-      }
-    }
+    const frame = pathFrames[pathIndex]
+    const distances = profiledWallFaceDistances(wall, level.t)
+    const join = pathIndex === 0
+      ? wall.profileJoinStart
+      : pathIndex === path.length - 1
+        ? wall.profileJoinEnd
+        : null
     return {
-      front: [value.x + normal.x * frontDistance, level.y, value.z + normal.z * frontDistance],
-      back: [value.x + normal.x * backDistance, level.y, value.z + normal.z * backDistance],
+      front: joinedWallFacePoint(value, frame, distances.front, join, 'front', level.y),
+      back: joinedWallFacePoint(value, frame, distances.back, join, 'back', level.y),
     }
   }))
   const geometry = new THREE.BufferGeometry()
@@ -861,8 +924,8 @@ function makeCurvedWallGeometry(wall) {
     }
   }
   for (const pathIndex of [0, path.length - 1]) {
-    if (pathIndex === 0 && wall.profileJoinStartMiter) continue
-    if (pathIndex === path.length - 1 && wall.profileJoinEndMiter) continue
+    if (pathIndex === 0 && wall.profileJoinStart) continue
+    if (pathIndex === path.length - 1 && wall.profileJoinEnd) continue
     for (let verticalIndex = 0; verticalIndex < verticalLevels.length - 1; verticalIndex += 1) {
       const lower = surfaces[verticalIndex][pathIndex]
       const upper = surfaces[verticalIndex + 1][pathIndex]
@@ -1084,10 +1147,12 @@ function splitWallForDoorConnector(wall, connector) {
     const epsilon = 1e-6
     if (fromT > epsilon) pieces.push(cloneWallPiece(wall, `before:${opening.min}`, {
       ...curvePatch(0, fromT),
+      profileJoinEnd: null,
       profileJoinEndMiter: null,
     }))
     if (toT < 1 - epsilon) pieces.push(cloneWallPiece(wall, `after:${opening.max}`, {
       ...curvePatch(toT, 1),
+      profileJoinStart: null,
       profileJoinStartMiter: null,
     }))
     if (opening.wallTop > opening.top + 0.01 && toT > fromT + epsilon) {
@@ -1096,6 +1161,8 @@ function splitWallForDoorConnector(wall, connector) {
         opacityY: opening.bottom,
         y: opening.top,
         height: opening.wallTop - opening.top,
+        profileJoinStart: null,
+        profileJoinEnd: null,
         profileJoinStartMiter: null,
         profileJoinEndMiter: null,
       }))
@@ -1120,6 +1187,8 @@ function splitWallForDoorConnector(wall, connector) {
     pieces.push(cloneWallPiece(wall, `before:${opening.min}`, {
       ...segmentPatch(wallMin, opening.min),
       capEnd: false,
+      profileJoinStart: forward ? wall.profileJoinStart : null,
+      profileJoinEnd: forward ? null : wall.profileJoinEnd,
       profileJoinStartMiter: forward ? wall.profileJoinStartMiter : null,
       profileJoinEndMiter: forward ? null : wall.profileJoinEndMiter,
     }))
@@ -1128,6 +1197,8 @@ function splitWallForDoorConnector(wall, connector) {
     pieces.push(cloneWallPiece(wall, `after:${opening.max}`, {
       ...segmentPatch(opening.max, wallMax),
       capStart: false,
+      profileJoinStart: forward ? null : wall.profileJoinStart,
+      profileJoinEnd: forward ? wall.profileJoinEnd : null,
       profileJoinStartMiter: forward ? null : wall.profileJoinStartMiter,
       profileJoinEndMiter: forward ? wall.profileJoinEndMiter : null,
     }))
@@ -1140,6 +1211,8 @@ function splitWallForDoorConnector(wall, connector) {
       opacityY: opening.bottom,
       y: opening.top,
       height: opening.wallTop - opening.top,
+      profileJoinStart: null,
+      profileJoinEnd: null,
       profileJoinStartMiter: null,
       profileJoinEndMiter: null,
     }))

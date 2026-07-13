@@ -22,7 +22,7 @@ import {
   roomVerticalSlices,
   sampleWallArcGeometry,
   selectedRoomBoundaryChain,
-  withWallMiterJoins,
+  withWallCornerJoins,
 } from '../../../shared/world/roomGeometry.js'
 
 export const SURFACE_FINE = 4
@@ -1523,27 +1523,6 @@ function curveWallStyleKey(wall) {
   })
 }
 
-function wallProfileJoinStyleKey(wall) {
-  if (!wall?.elevationProfileMode) return null
-  return JSON.stringify({
-    thickness: wall.thickness,
-    frontTex: wall.frontTex,
-    backTex: wall.backTex,
-    topTex: wall.topTex,
-    frontMaterial: wall.frontMaterial,
-    backMaterial: wall.backMaterial,
-    material: wall.material,
-    frontRole: wall.frontRole,
-    backRole: wall.backRole,
-    roomIds: [...(wall.roomIds || [])].sort(),
-    elevationProfileMode: wall.elevationProfileMode,
-    elevationProfile: wall.elevationProfile,
-    elevationProfileDirection: wall.elevationProfileDirection,
-    frontElevationProfile: wall.frontElevationProfile,
-    backElevationProfile: wall.backElevationProfile,
-  })
-}
-
 export function roomsWallRenderPaths(rooms) {
   const panels = roomsWallSegments(rooms)
   const straight = panels.filter(panel => !panel.curveId)
@@ -1605,7 +1584,7 @@ export function roomsWallRenderPaths(rooms) {
       })
     }
   }
-  return withWallMiterJoins([...straight, ...arcs], wallProfileJoinStyleKey)
+  return withWallCornerJoins([...straight, ...arcs], wall => wall.roomIds)
 }
 
 function connectorCommonBlocking(type, state = 'closed') {

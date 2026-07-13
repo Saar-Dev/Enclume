@@ -639,6 +639,26 @@ export function wallMiterOffsetVector(normal, neighborNormal, maximumScale = 4) 
     : null
 }
 
+export function wallCornerIntersectionPoint({
+  point: origin,
+  tangent,
+  normal,
+  distance,
+  neighborNormal,
+  neighborDistance,
+  minimumDenominator = 0.2,
+}) {
+  const denominator = Number(tangent?.x) * Number(neighborNormal?.x)
+    + Number(tangent?.z) * Number(neighborNormal?.z)
+  if (!Number.isFinite(denominator) || Math.abs(denominator) <= minimumDenominator) return null
+  const normalDot = Number(normal?.x) * Number(neighborNormal?.x)
+    + Number(normal?.z) * Number(neighborNormal?.z)
+  const along = (Number(neighborDistance) - Number(distance) * normalDot) / denominator
+  const x = Number(origin?.x) + Number(normal?.x) * Number(distance) + Number(tangent?.x) * along
+  const z = Number(origin?.z) + Number(normal?.z) * Number(distance) + Number(tangent?.z) * along
+  return [x, z, along].every(Number.isFinite) ? { x, z, along } : null
+}
+
 export function withWallMiterJoins(inputWalls, styleKeyForWall) {
   const walls = Array.isArray(inputWalls) ? inputWalls : []
   if (typeof styleKeyForWall !== 'function' || walls.length < 2) return walls
@@ -671,6 +691,107 @@ export function withWallMiterJoins(inputWalls, styleKeyForWall) {
     for (const [entry, miter] of [[left, leftMiter], [right, rightMiter]]) {
       const field = entry.atStart ? 'profileJoinStartMiter' : 'profileJoinEndMiter'
       result[entry.wallIndex] = { ...result[entry.wallIndex], [field]: miter }
+    }
+  }
+  return result
+}
+
+function wallCornerJoinSnapshot(wall, frame) {
+  return {
+    normal: frame.normal,
+    thickness: wall.thickness,
+    elevationProfileMode: wall.elevationProfileMode,
+    elevationProfile: wall.elevationProfile || null,
+    elevationProfileDirection: wall.elevationProfileDirection,
+    frontElevationProfile: wall.frontElevationProfile || null,
+    backElevationProfile: wall.backElevationProfile || null,
+    elevationProfileOriginY: wall.elevationProfileOriginY,
+    elevationProfileHeight: wall.elevationProfileHeight,
+    frontRole: wall.frontRole || null,
+    backRole: wall.backRole || null,
+  }
+}
+
+function wallCornerNeighborSide(wall, entry, neighbor, neighborEntry, side) {
+  const role = side === 'front' ? wall.frontRole : wall.backRole
+  const matchingSides = ['front', 'back'].filter(candidate => (
+    role && neighbor[`${candidate}Role`] === role
+  ))
+  if (matchingSides.length === 1) return matchingSides[0]
+
+  // When both faces have the same semantic role (or no role), path topology is
+  // the stable fallback: end-to-start keeps the face, start-to-start/end-to-end
+  // means that one path is reversed and therefore swaps front/back.
+  const keepSide = entry.atStart !== neighborEntry.atStart
+  if (keepSide) return side
+  return side === 'front' ? 'back' : 'front'
+}
+
+function wallsShareCornerOwner(left, right, ownerIdsForWall) {
+  if (typeof ownerIdsForWall !== 'function') return true
+  const leftOwners = new Set((ownerIdsForWall(left) || []).filter(Boolean).map(String))
+  const rightOwners = (ownerIdsForWall(right) || []).filter(Boolean).map(String)
+  if (leftOwners.size === 0 || rightOwners.length === 0) return true
+  return rightOwners.some(ownerId => leftOwners.has(ownerId))
+}
+
+/**
+ * Derive a real corner joint between adjacent wall volumes.
+ *
+ * Unlike a static miter, the descriptor keeps the neighboring wall profile so
+ * the renderer can intersect both faces again at every vertical profile level.
+ * This closes a corner even when only one wall is curved/faceted, or when the
+ * two walls use different profile depths.
+ */
+export function withWallCornerJoins(inputWalls, ownerIdsForWall = null) {
+  const walls = Array.isArray(inputWalls) ? inputWalls : []
+  if (walls.length < 2) return walls
+  const endpoints = new Map()
+  walls.forEach((wall, wallIndex) => {
+    for (const atStart of [true, false]) {
+      const frame = wallPathEndpointFrame(wall, atStart)
+      if (!frame) continue
+      const key = [
+        clean(frame.point.x),
+        clean(frame.point.z),
+        clean(wall.y),
+        clean(wall.height),
+      ].join('|')
+      if (!endpoints.has(key)) endpoints.set(key, [])
+      endpoints.get(key).push({ wallIndex, atStart, frame })
+    }
+  })
+
+  const result = [...walls]
+  for (const entries of endpoints.values()) {
+    for (const entry of entries) {
+      const wall = walls[entry.wallIndex]
+      const candidates = entries.filter(candidate => {
+        if (candidate.wallIndex === entry.wallIndex) return false
+        const neighbor = walls[candidate.wallIndex]
+        if (!wallsShareCornerOwner(wall, neighbor, ownerIdsForWall)) return false
+        const denominator = entry.frame.tangent.x * candidate.frame.normal.x
+          + entry.frame.tangent.z * candidate.frame.normal.z
+        return Math.abs(denominator) > 0.2
+      })
+      if (candidates.length !== 1) continue
+      const neighborEntry = candidates[0]
+      const neighbor = walls[neighborEntry.wallIndex]
+      const descriptor = {
+        normal: entry.frame.normal,
+        tangent: entry.frame.tangent,
+        neighbor: wallCornerJoinSnapshot(neighbor, neighborEntry.frame),
+        frontNeighborSide: wallCornerNeighborSide(wall, entry, neighbor, neighborEntry, 'front'),
+        backNeighborSide: wallCornerNeighborSide(wall, entry, neighbor, neighborEntry, 'back'),
+      }
+      const field = entry.atStart ? 'profileJoinStart' : 'profileJoinEnd'
+      const miterField = entry.atStart ? 'profileJoinStartMiter' : 'profileJoinEndMiter'
+      const miter = wallMiterOffsetVector(entry.frame.normal, neighborEntry.frame.normal)
+      result[entry.wallIndex] = {
+        ...result[entry.wallIndex],
+        [field]: descriptor,
+        ...(miter ? { [miterField]: miter } : {}),
+      }
     }
   }
   return result

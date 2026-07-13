@@ -20,8 +20,8 @@ import {
   roomMaximumHeightLevels,
   roomVerticalSlices,
   multiPolygonGridCells,
-  wallPathEndpointFrame,
-  withWallMiterJoins,
+  wallCornerIntersectionPoint,
+  withWallCornerJoins,
 } from './roomGeometry.js'
 
 const EPSILON = 1e-6
@@ -242,18 +242,6 @@ function finalizeWallElevationProfiles(wall) {
   return { ...wall, elevationProfileMode: 'faces' }
 }
 
-function wallProfileJoinStyleKey(wall) {
-  if (!wall?.elevationProfileMode) return null
-  return JSON.stringify({
-    thickness: wall.thickness,
-    elevationProfileMode: wall.elevationProfileMode,
-    elevationProfile: wall.elevationProfile,
-    elevationProfileDirection: wall.elevationProfileDirection,
-    frontElevationProfile: wall.frontElevationProfile,
-    backElevationProfile: wall.backElevationProfile,
-  })
-}
-
 function maximumWallProfileDepth(wall) {
   return Math.max(
     Math.abs(number(wall?.elevationProfile?.depth)),
@@ -262,20 +250,92 @@ function maximumWallProfileDepth(wall) {
   )
 }
 
-function withCompiledWallProfileJoins(walls) {
-  return withWallMiterJoins(walls, wallProfileJoinStyleKey).map(wall => {
-    const depth = maximumWallProfileDepth(wall)
-    if (depth <= EPSILON) return wall
-    const paddingFor = (field, atStart) => {
-      const miter = wall[field]
-      const frame = miter ? wallPathEndpointFrame(wall, atStart) : null
-      if (!miter || !frame) return 0
-      return clean(Math.abs(
-        Number(miter.x) * frame.tangent.x + Number(miter.z) * frame.tangent.z,
-      ) * depth)
+function compiledElevationProfileOffset(profile, progress) {
+  const type = ['curved', 'faceted'].includes(profile?.type) ? profile.type : 'vertical'
+  const depth = type === 'vertical' ? 0 : Math.max(0, number(profile?.depth))
+  const direction = number(profile?.direction, 1) < 0 ? -1 : 1
+  const t = Math.max(0, Math.min(1, number(progress)))
+  if (type === 'curved') return depth * direction * Math.sin(Math.PI * t)
+  if (type === 'faceted') return depth * direction * (1 - Math.abs(t * 2 - 1))
+  return 0
+}
+
+function compiledWallFaceDistances(wall, progress) {
+  const half = positive(wall?.thickness, 0.1) / 2
+  const minimumThickness = Math.max(0.01, half * 0.2)
+  let front = half
+  let back = -half
+  if (wall?.elevationProfileMode === 'translated') {
+    const direction = number(wall.elevationProfileDirection, 1) < 0 ? -1 : 1
+    const offset = compiledElevationProfileOffset(wall.elevationProfile, progress) * direction
+    front += offset
+    back += offset
+  } else {
+    front += compiledElevationProfileOffset(wall?.frontElevationProfile, progress)
+    back -= compiledElevationProfileOffset(wall?.backElevationProfile, progress)
+    if (front - back < minimumThickness) {
+      if (wall?.frontElevationProfile && !wall?.backElevationProfile) front = back + minimumThickness
+      else if (wall?.backElevationProfile && !wall?.frontElevationProfile) back = front - minimumThickness
+      else {
+        const center = (front + back) / 2
+        front = center + minimumThickness / 2
+        back = center - minimumThickness / 2
+      }
     }
-    const profileJoinStartPadding = paddingFor('profileJoinStartMiter', true)
-    const profileJoinEndPadding = paddingFor('profileJoinEndMiter', false)
+  }
+  return { front, back }
+}
+
+function compiledWallProfileProgressAtY(wall, y) {
+  const origin = Number.isFinite(Number(wall?.elevationProfileOriginY))
+    ? Number(wall.elevationProfileOriginY)
+    : number(wall?.y)
+  const span = positive(wall?.elevationProfileHeight, positive(wall?.height, SURFACE_STORY_HEIGHT_DEFAULT))
+  return Math.max(0, Math.min(1, (number(y) - origin) / span))
+}
+
+function compiledCornerJoinPadding(wall, join) {
+  const neighbor = join?.neighbor
+  const ownNormal = join?.normal
+  const tangent = join?.tangent
+  const neighborNormal = neighbor?.normal
+  if (!neighbor || !ownNormal || !tangent || !neighborNormal) return 0
+  const denominator = number(tangent.x) * number(neighborNormal.x)
+    + number(tangent.z) * number(neighborNormal.z)
+  if (Math.abs(denominator) <= 0.2) return 0
+  let padding = 0
+  for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
+    const y = number(wall.y) + positive(wall.height, SURFACE_STORY_HEIGHT_DEFAULT) * progress
+    const ownDistances = compiledWallFaceDistances(wall, compiledWallProfileProgressAtY(wall, y))
+    const neighborDistances = compiledWallFaceDistances(
+      neighbor,
+      compiledWallProfileProgressAtY(neighbor, y),
+    )
+    for (const side of ['front', 'back']) {
+      const neighborSide = join[`${side}NeighborSide`]
+      if (!['front', 'back'].includes(neighborSide)) continue
+      const intersection = wallCornerIntersectionPoint({
+        point: { x: 0, z: 0 },
+        tangent,
+        normal: ownNormal,
+        distance: ownDistances[side],
+        neighborNormal,
+        neighborDistance: neighborDistances[neighborSide],
+      })
+      if (intersection) padding = Math.max(padding, Math.abs(intersection.along))
+    }
+  }
+  return clean(padding)
+}
+
+function withCompiledWallProfileJoins(walls) {
+  return withWallCornerJoins(walls, wall => wall.sourceWorldIds).map(wall => {
+    const joinsProfile = maximumWallProfileDepth(wall) > EPSILON
+      || maximumWallProfileDepth(wall.profileJoinStart?.neighbor) > EPSILON
+      || maximumWallProfileDepth(wall.profileJoinEnd?.neighbor) > EPSILON
+    if (!joinsProfile) return wall
+    const profileJoinStartPadding = compiledCornerJoinPadding(wall, wall.profileJoinStart)
+    const profileJoinEndPadding = compiledCornerJoinPadding(wall, wall.profileJoinEnd)
     return {
       ...wall,
       ...(profileJoinStartPadding > EPSILON ? { profileJoinStartPadding } : {}),

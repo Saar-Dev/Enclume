@@ -106,6 +106,24 @@ test('un profil vertical extérieur translate les deux faces du mur', () => {
   assert.equal(profiled.roomIds.length, 1)
 })
 
+test('un mur profile se raccorde aussi a ses voisins restes verticaux', () => {
+  const exteriorRoom = room('single-profile', 0)
+  const west = getRoomBoundaryWallRuns(exteriorRoom).find(run => run.side === 'west')
+  const result = applyRoomWallElevationProfile(
+    emptySurface({ rooms: { 'single-profile': exteriorRoom } }),
+    'single-profile',
+    west.edgeKeys,
+    { type: 'curved', depth: 0.6, direction: 1 },
+  )
+  const walls = roomsWallRenderPaths(result.surfaceData.rooms)
+  const profiled = walls.filter(wall => wall.elevationProfileMode === 'translated')
+  const joins = profiled.flatMap(wall => [wall.profileJoinStart, wall.profileJoinEnd]).filter(Boolean)
+
+  assert.equal(result.error, null)
+  assert.equal(joins.length, 2)
+  assert.ok(joins.every(join => join.neighbor.elevationProfileMode === undefined))
+})
+
 test('le profil vers l intérieur garde la même orientation sur tout le contour', () => {
   const profiledRoom = room('profiled', 0)
   const edgeKeys = getRoomBoundaryWallRuns(profiledRoom).flatMap(run => run.edgeKeys)
@@ -136,7 +154,10 @@ test('le profil vers l intérieur garde la même orientation sur tout le contour
   }
   const renderWalls = roomsWallRenderPaths(result.surfaceData.rooms)
     .filter(wall => wall.elevationProfileMode === 'translated')
-  assert.ok(renderWalls.every(wall => wall.profileJoinStartMiter && wall.profileJoinEndMiter))
+  const cornerJoins = renderWalls
+    .flatMap(wall => [wall.profileJoinStart, wall.profileJoinEnd])
+    .filter(Boolean)
+  assert.ok(cornerJoins.length >= 4)
 })
 
 test('un contour arrondi conserve son profil vertical et ses raccords', () => {

@@ -650,9 +650,10 @@ Phase 7.
 - les profils sont conservés lors d'une fusion et retirés avec les arêtes réellement supprimées.
 - une porte déjà ancrée bloque la transformation verticale de son mur afin que maillage, ouverture,
   portail et collider ne puissent pas diverger.
-- les raccords de deux murs portant le même profil sont des onglets dérivés, consommés par le loft
-  et par le padding étroit collision/LOS ; un arc horizontal conserve le profil vertical de ses
-  arêtes sources et se raccorde aux murs droits voisins.
+- les raccords sont des intersections volumétriques dérivées à chaque hauteur. Ils ferment aussi le
+  cas d'un unique mur profilé contre deux voisins verticaux ou de profondeurs différentes ; le loft
+  et le padding collision/LOS prolongent les deux côtés du raccord. Un arc horizontal conserve le
+  profil vertical de ses arêtes sources et se raccorde aux murs droits voisins.
 
 ### Interface
 
@@ -668,7 +669,7 @@ Phase 7.
 
 ### Validation
 
-- 109 tests du moteur/serveur et 27 tests client Surface/persistance passent ;
+- 111 tests du moteur/serveur et 28 tests client Surface/persistance passent ;
 - ESLint ciblé des fichiers Surface ne remonte aucune erreur ;
 - build Vite de production validé.
 

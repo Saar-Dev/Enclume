@@ -157,10 +157,10 @@ métier.
   sauvegardées ;
 - angle et profondeur sont deux vues synchronisées du même paramètre géométrique. Le document garde
   la profondeur canonique pour éviter deux valeurs contradictoires.
-- deux murs adjacents portant le même profil partagent un raccord en onglet calculé depuis leurs
-  tangentes locales. Les faces, le dessus et le dessous aboutissent au même sommet à chaque hauteur,
-  sans fente, bouchon visible ni recouvrement de bouts ; la règle relie également un arc horizontal
-  à un mur droit ;
+- tout angle à deux murs reçoit un raccord volumique dérivé. À chaque hauteur, le moteur intersecte
+  séparément les faces avant et arrière avec celles du voisin : le raccord reste donc fermé si un
+  seul mur est profilé, si les profondeurs diffèrent, ou si un arc horizontal rejoint un mur droit.
+  Le mur voisin resté vertical est lui aussi prolongé jusqu'à cette intersection ;
 - arrondir horizontalement un mur déjà profilé conserve ses `sourceEdgeKeys`, son profil vertical et
   ses raccords. Les deux transformations peuvent donc être appliquées dans n'importe quel ordre ;
 - une porte rigide déjà ancrée bloque la modification du profil vertical de son mur. Elle doit être

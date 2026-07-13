@@ -139,6 +139,34 @@ test('le compilateur oriente vers l intérieur tous les profils du contour', () 
   }
 })
 
+test('les collisions ferment les extrémités d un mur profilé isolé', () => {
+  const profiled = room('single-profile', 0, 1, 0, 1)
+  const west = roomBoundaryWallRuns(profiled).find(run => run.side === 'west')
+  profiled.wallElevationProfiles = [{
+    id: 'single-wall-profile',
+    edgeKeys: west.edgeKeys,
+    profile: { type: 'curved', depth: 0.5, direction: 1 },
+  }]
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-single-wall-profile',
+    surfaceData: emptySurface({ version: 10, rooms: { profiled } }),
+  })
+  const walls = snapshot.spatial.barriers.filter(barrier => barrier.kind === 'wall')
+  const profiledWalls = walls.filter(barrier => (
+    barrier.geometry?.elevationProfileMode === 'translated'
+  ))
+
+  assert.ok(profiledWalls.some(barrier => (
+    (Number(barrier.geometry.profileJoinStartPadding) || 0) > 0
+    || (Number(barrier.geometry.profileJoinEndPadding) || 0) > 0
+  )))
+  const neighborExtensions = walls.flatMap(barrier => [
+    Number(barrier.geometry?.profileJoinStartPadding) || 0,
+    Number(barrier.geometry?.profileJoinEndPadding) || 0,
+  ]).filter(padding => padding > 0.4)
+  assert.ok(neighborExtensions.length >= 2)
+})
+
 test('un mur arrondi profilé conserve ses raccords dans la géométrie compilée', () => {
   const rounded = {
     ...room('rounded-profile', 0, 1, 0, 1),
