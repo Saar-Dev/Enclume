@@ -140,6 +140,11 @@ test('le narrow phase suit le profil vertical et l épaisseur variable d un mur'
     { x: 0.5, y: 1.25, z: 0.2 },
     translated,
   ), null)
+  assert.ok(segmentGeometryInterval(
+    { x: -0.25, y: 1.25, z: 0.8 },
+    { x: -0.25, y: 1.25, z: 1.2 },
+    { ...translated, profileJoinStartPadding: 0.5 },
+  ))
 
   const sharedFace = {
     ...base,

@@ -20,6 +20,8 @@ import {
   roomMaximumHeightLevels,
   roomVerticalSlices,
   multiPolygonGridCells,
+  wallPathEndpointFrame,
+  withWallMiterJoins,
 } from './roomGeometry.js'
 
 const EPSILON = 1e-6
@@ -240,6 +242,48 @@ function finalizeWallElevationProfiles(wall) {
   return { ...wall, elevationProfileMode: 'faces' }
 }
 
+function wallProfileJoinStyleKey(wall) {
+  if (!wall?.elevationProfileMode) return null
+  return JSON.stringify({
+    thickness: wall.thickness,
+    elevationProfileMode: wall.elevationProfileMode,
+    elevationProfile: wall.elevationProfile,
+    elevationProfileDirection: wall.elevationProfileDirection,
+    frontElevationProfile: wall.frontElevationProfile,
+    backElevationProfile: wall.backElevationProfile,
+  })
+}
+
+function maximumWallProfileDepth(wall) {
+  return Math.max(
+    Math.abs(number(wall?.elevationProfile?.depth)),
+    Math.abs(number(wall?.frontElevationProfile?.depth)),
+    Math.abs(number(wall?.backElevationProfile?.depth)),
+  )
+}
+
+function withCompiledWallProfileJoins(walls) {
+  return withWallMiterJoins(walls, wallProfileJoinStyleKey).map(wall => {
+    const depth = maximumWallProfileDepth(wall)
+    if (depth <= EPSILON) return wall
+    const paddingFor = (field, atStart) => {
+      const miter = wall[field]
+      const frame = miter ? wallPathEndpointFrame(wall, atStart) : null
+      if (!miter || !frame) return 0
+      return clean(Math.abs(
+        Number(miter.x) * frame.tangent.x + Number(miter.z) * frame.tangent.z,
+      ) * depth)
+    }
+    const profileJoinStartPadding = paddingFor('profileJoinStartMiter', true)
+    const profileJoinEndPadding = paddingFor('profileJoinEndMiter', false)
+    return {
+      ...wall,
+      ...(profileJoinStartPadding > EPSILON ? { profileJoinStartPadding } : {}),
+      ...(profileJoinEndPadding > EPSILON ? { profileJoinEndPadding } : {}),
+    }
+  })
+}
+
 function roomWallCandidates(surface, battlemapId) {
   const walls = new Map()
   for (const room of Object.values(surface.rooms)) {
@@ -250,11 +294,13 @@ function roomWallCandidates(surface, battlemapId) {
     for (const slice of slices) {
       const y = baseY + slice.offset * surface.storyHeight
       for (const segment of slice.wallPaths) {
-        const frontIsInterior = segment.axis === 'x'
-          ? number(segment.x1) >= number(segment.x0)
-          : segment.axis === 'z'
-            ? number(segment.z1) <= number(segment.z0)
-            : true
+        const frontIsInterior = Number.isFinite(Number(segment.interiorNormalSign))
+          ? Number(segment.interiorNormalSign) >= 0
+          : segment.axis === 'x'
+            ? number(segment.x1) >= number(segment.x0)
+            : segment.axis === 'z'
+              ? number(segment.z1) <= number(segment.z0)
+              : true
         const addBoundary = wall => addWallCandidate(walls, {
           ...room,
           ...wall,
@@ -283,7 +329,7 @@ function roomWallCandidates(surface, battlemapId) {
       sourceWorldIds: [wall.worldId],
     }, battlemapId)
   }
-  return [...walls.values()].map(finalizeWallElevationProfiles)
+  return withCompiledWallProfileJoins([...walls.values()].map(finalizeWallElevationProfiles))
 }
 
 function wallPieceFromCandidate(wall) {
@@ -295,8 +341,23 @@ function wallPieceFromCandidate(wall) {
       suffix: 'full',
     }
   }
-  return {
+  const reversed = wall.axis === 'x'
+    ? number(wall.x1) < number(wall.x0)
+    : number(wall.z1) < number(wall.z0)
+  const orientedWall = reversed ? {
     ...wall,
+    frontElevationProfile: wall.backElevationProfile || null,
+    backElevationProfile: wall.frontElevationProfile || null,
+    profileJoinStartMiter: wall.profileJoinEndMiter || null,
+    profileJoinEndMiter: wall.profileJoinStartMiter || null,
+    profileJoinStartPadding: number(wall.profileJoinEndPadding),
+    profileJoinEndPadding: number(wall.profileJoinStartPadding),
+    ...(wall.elevationProfileDirection
+      ? { elevationProfileDirection: -number(wall.elevationProfileDirection) }
+      : {}),
+  } : wall
+  return {
+    ...orientedWall,
     alongMin: wall.axis === 'x' ? Math.min(wall.x0, wall.x1) : Math.min(wall.z0, wall.z1),
     alongMax: wall.axis === 'x' ? Math.max(wall.x0, wall.x1) : Math.max(wall.z0, wall.z1),
     line: wall.axis === 'x' ? wall.z0 : wall.x0,
@@ -430,7 +491,7 @@ function splitWallPiece(piece, door) {
       }
     }
     const parts = []
-    const pushArc = (suffix, startT, endT, bottom, top) => {
+    const pushArc = (suffix, startT, endT, bottom, top, patch = {}) => {
       if (endT <= startT + EPSILON || top <= bottom + EPSILON) return
       parts.push({
         ...piece,
@@ -438,12 +499,13 @@ function splitWallPiece(piece, door) {
         suffix: `${piece.suffix}:${suffix}`,
         bottom,
         top,
+        ...patch,
       })
     }
-    pushArc('before', 0, fromT, piece.bottom, piece.top)
-    pushArc('after', toT, 1, piece.bottom, piece.top)
-    pushArc('below', fromT, toT, piece.bottom, openingBottom)
-    pushArc('above', fromT, toT, openingTop, piece.top)
+    pushArc('before', 0, fromT, piece.bottom, piece.top, { profileJoinEndPadding: 0 })
+    pushArc('after', toT, 1, piece.bottom, piece.top, { profileJoinStartPadding: 0 })
+    pushArc('below', fromT, toT, piece.bottom, openingBottom, { profileJoinStartPadding: 0, profileJoinEndPadding: 0 })
+    pushArc('above', fromT, toT, openingTop, piece.top, { profileJoinStartPadding: 0, profileJoinEndPadding: 0 })
     return parts
   }
   const openingMin = Math.max(piece.alongMin, door.cutAlongMin)
@@ -453,14 +515,14 @@ function splitWallPiece(piece, door) {
   if (openingMax <= openingMin + EPSILON || openingTop <= openingBottom + EPSILON) return [piece]
 
   const parts = []
-  const push = (suffix, alongMin, alongMax, bottom, top) => {
+  const push = (suffix, alongMin, alongMax, bottom, top, patch = {}) => {
     if (alongMax <= alongMin + EPSILON || top <= bottom + EPSILON) return
-    parts.push({ ...piece, suffix: `${piece.suffix}:${suffix}`, alongMin, alongMax, bottom, top })
+    parts.push({ ...piece, suffix: `${piece.suffix}:${suffix}`, alongMin, alongMax, bottom, top, ...patch })
   }
-  push('before', piece.alongMin, openingMin, piece.bottom, piece.top)
-  push('after', openingMax, piece.alongMax, piece.bottom, piece.top)
-  push('below', openingMin, openingMax, piece.bottom, openingBottom)
-  push('above', openingMin, openingMax, openingTop, piece.top)
+  push('before', piece.alongMin, openingMin, piece.bottom, piece.top, { profileJoinEndPadding: 0 })
+  push('after', openingMax, piece.alongMax, piece.bottom, piece.top, { profileJoinStartPadding: 0 })
+  push('below', openingMin, openingMax, piece.bottom, openingBottom, { profileJoinStartPadding: 0, profileJoinEndPadding: 0 })
+  push('above', openingMin, openingMax, openingTop, piece.top, { profileJoinStartPadding: 0, profileJoinEndPadding: 0 })
   return parts
 }
 
@@ -470,7 +532,10 @@ function wallPieceBounds(piece) {
     Math.abs(number(piece.frontElevationProfile?.depth)),
     Math.abs(number(piece.backElevationProfile?.depth)),
   )
+  const joinStart = Math.max(0, number(piece.profileJoinStartPadding))
+  const joinEnd = Math.max(0, number(piece.profileJoinEndPadding))
   const half = piece.thickness / 2 + profileDepth
+  const cornerBroadphase = half + Math.max(joinStart, joinEnd)
   if (piece.axis === 'arc') {
     const start = number(piece.startAngle)
     const sweep = number(piece.sweep)
@@ -490,28 +555,28 @@ function wallPieceBounds(piece) {
     const xs = angles.map(angle => number(piece.centerX) + Math.cos(angle) * number(piece.radius))
     const zs = angles.map(angle => number(piece.centerZ) + Math.sin(angle) * number(piece.radius))
     return bounds(
-      Math.min(...xs) - half,
+      Math.min(...xs) - cornerBroadphase,
       piece.bottom,
-      Math.min(...zs) - half,
-      Math.max(...xs) + half,
+      Math.min(...zs) - cornerBroadphase,
+      Math.max(...xs) + cornerBroadphase,
       piece.top,
-      Math.max(...zs) + half,
+      Math.max(...zs) + cornerBroadphase,
     )
   }
   if (piece.axis === 'x') {
-    return bounds(piece.alongMin, piece.bottom, piece.line - half, piece.alongMax, piece.top, piece.line + half)
+    return bounds(piece.alongMin - joinStart, piece.bottom, piece.line - half, piece.alongMax + joinEnd, piece.top, piece.line + half)
   }
   if (piece.axis === 'segment') {
     return bounds(
-      Math.min(piece.x0, piece.x1) - half,
+      Math.min(piece.x0, piece.x1) - cornerBroadphase,
       piece.bottom,
-      Math.min(piece.z0, piece.z1) - half,
-      Math.max(piece.x0, piece.x1) + half,
+      Math.min(piece.z0, piece.z1) - cornerBroadphase,
+      Math.max(piece.x0, piece.x1) + cornerBroadphase,
       piece.top,
-      Math.max(piece.z0, piece.z1) + half,
+      Math.max(piece.z0, piece.z1) + cornerBroadphase,
     )
   }
-  return bounds(piece.line - half, piece.bottom, piece.alongMin, piece.line + half, piece.top, piece.alongMax)
+  return bounds(piece.line - half, piece.bottom, piece.alongMin - joinStart, piece.line + half, piece.top, piece.alongMax + joinEnd)
 }
 
 function wallPieceGeometry(piece) {
@@ -534,6 +599,8 @@ function wallPieceGeometry(piece) {
       minY: clean(piece.bottom),
       maxY: clean(piece.top),
       thickness: clean(piece.thickness),
+      ...(piece.profileJoinStartPadding > EPSILON ? { profileJoinStartPadding: clean(piece.profileJoinStartPadding) } : {}),
+      ...(piece.profileJoinEndPadding > EPSILON ? { profileJoinEndPadding: clean(piece.profileJoinEndPadding) } : {}),
       ...elevation,
     }
   }
@@ -554,6 +621,8 @@ function wallPieceGeometry(piece) {
     minY: clean(piece.bottom),
     maxY: clean(piece.top),
     thickness: clean(piece.thickness),
+    ...(piece.profileJoinStartPadding > EPSILON ? { profileJoinStartPadding: clean(piece.profileJoinStartPadding) } : {}),
+    ...(piece.profileJoinEndPadding > EPSILON ? { profileJoinEndPadding: clean(piece.profileJoinEndPadding) } : {}),
     ...elevation,
   }
 }

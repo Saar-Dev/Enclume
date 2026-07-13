@@ -99,13 +99,25 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onClose })
                   style={{ width: '100%' }}
                 />
               </label>
-              <button
-                type="button"
-                onClick={event => patchElevationProfile({ direction: Number(elevationProfile.direction) < 0 ? 1 : -1 }, event.timeStamp)}
-                style={S.button}
-              >
-                Inverser le profil
-              </button>
+              <div style={S.field}>
+                <span style={S.label}>Direction</span>
+                <div style={S.directionButtons}>
+                  <button
+                    type="button"
+                    onClick={event => patchElevationProfile({ direction: 1 }, event.timeStamp)}
+                    style={{ ...S.button, ...(Number(elevationProfile.direction) >= 0 ? S.profileButtonActive : {}) }}
+                  >
+                    Vers l’intérieur
+                  </button>
+                  <button
+                    type="button"
+                    onClick={event => patchElevationProfile({ direction: -1 }, event.timeStamp)}
+                    style={{ ...S.button, ...(Number(elevationProfile.direction) < 0 ? S.profileButtonActive : {}) }}
+                  >
+                    Vers l’extérieur
+                  </button>
+                </div>
+              </div>
               <p style={S.hint}>
                 Façade extérieure : les deux faces suivent le profil. Mur mitoyen : seule la face de cette salle varie, l’autre limite reste fixe.
               </p>
@@ -185,6 +197,7 @@ const S = {
   label: { fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' },
   actions: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '6px' },
   profileButtons: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '5px' },
+  directionButtons: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '5px' },
   profileButton: { minHeight: '48px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px', border: '1px solid #35354e', borderRadius: '5px', background: '#151525', color: '#7f8eaa', fontSize: '9px', cursor: 'pointer' },
   profileButtonActive: { borderColor: '#ea580c', background: 'rgba(234, 88, 12, 0.2)', color: '#fed7aa' },
   button: { minHeight: '34px', padding: '6px 8px', border: '1px solid #35354e', borderRadius: '5px', background: '#151525', color: '#cbd5e1', fontSize: '10px', cursor: 'pointer' },

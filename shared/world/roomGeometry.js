@@ -515,7 +515,7 @@ function legacyRoomHeightLevels(room, storyHeight = 2.5) {
 }
 
 function straightPathsFromMultiPolygon(multiPolygon) {
-  return multiPolygonToContours(multiPolygon).flatMap((contour, contourIndex) => (
+  const paths = multiPolygonToContours(multiPolygon).flatMap((contour, contourIndex) => (
     contour.points.map((from, index) => {
       const to = contour.points[(index + 1) % contour.points.length]
       const dx = to.x - from.x
@@ -530,6 +530,150 @@ function straightPathsFromMultiPolygon(multiPolygon) {
       }
     })
   ))
+  return paths.map(path => withInteriorNormalSign(path, multiPolygon))
+}
+
+function pathMidpointAndLeftNormal(path) {
+  if (path?.axis === 'arc') {
+    const centerX = Number(path.centerX ?? path.curveCenterX)
+    const centerZ = Number(path.centerZ ?? path.curveCenterZ)
+    const radius = Number(path.radius ?? path.curveRadius)
+    const startAngle = Number(path.startAngle ?? path.curveStartAngle)
+    const sweep = Number(path.sweep ?? path.curveSweep)
+    if ([centerX, centerZ, radius, startAngle, sweep].every(Number.isFinite)
+      && radius > EPSILON && Math.abs(sweep) > EPSILON) {
+      const angle = startAngle + sweep / 2
+      const direction = Math.sign(sweep)
+      const tangentX = -Math.sin(angle) * direction
+      const tangentZ = Math.cos(angle) * direction
+      return {
+        midpoint: {
+          x: centerX + Math.cos(angle) * radius,
+          z: centerZ + Math.sin(angle) * radius,
+        },
+        leftNormal: { x: -tangentZ, z: tangentX },
+        length: Math.abs(radius * sweep),
+      }
+    }
+  }
+
+  const x0 = Number(path?.x0)
+  const z0 = Number(path?.z0)
+  const x1 = Number(path?.x1)
+  const z1 = Number(path?.z1)
+  const dx = x1 - x0
+  const dz = z1 - z0
+  const length = Math.hypot(dx, dz)
+  if (![x0, z0, x1, z1, length].every(Number.isFinite) || length <= EPSILON) return null
+  return {
+    midpoint: { x: (x0 + x1) / 2, z: (z0 + z1) / 2 },
+    leftNormal: { x: -dz / length, z: dx / length },
+    length,
+  }
+}
+
+function withInteriorNormalSign(path, footprint) {
+  const geometry = pathMidpointAndLeftNormal(path)
+  if (!geometry || !Array.isArray(footprint) || footprint.length === 0) {
+    return {
+      ...path,
+      interiorNormalSign: Number(path?.interiorNormalSign) < 0 ? -1 : 1,
+    }
+  }
+  const probeDistance = Math.max(1e-5, Math.min(1e-3, geometry.length / 1000))
+  const leftProbe = {
+    x: geometry.midpoint.x + geometry.leftNormal.x * probeDistance,
+    z: geometry.midpoint.z + geometry.leftNormal.z * probeDistance,
+  }
+  const rightProbe = {
+    x: geometry.midpoint.x - geometry.leftNormal.x * probeDistance,
+    z: geometry.midpoint.z - geometry.leftNormal.z * probeDistance,
+  }
+  const leftIsInterior = multiPolygonContainsPoint(footprint, leftProbe)
+  const rightIsInterior = multiPolygonContainsPoint(footprint, rightProbe)
+  const interiorNormalSign = leftIsInterior !== rightIsInterior
+    ? (leftIsInterior ? 1 : -1)
+    : (Number(path?.interiorNormalSign) < 0 ? -1 : 1)
+  return { ...path, interiorNormalSign }
+}
+
+export function wallPathEndpointFrame(path, atStart = true) {
+  const x0 = Number(path?.x0)
+  const z0 = Number(path?.z0)
+  const x1 = Number(path?.x1)
+  const z1 = Number(path?.z1)
+  if (![x0, z0, x1, z1].every(Number.isFinite)) return null
+  let tangentX = x1 - x0
+  let tangentZ = z1 - z0
+  if (path?.axis === 'arc') {
+    const startAngle = Number(path.startAngle ?? path.curveStartAngle)
+    const sweep = Number(path.sweep ?? path.curveSweep)
+    if (Number.isFinite(startAngle) && Number.isFinite(sweep) && Math.abs(sweep) > EPSILON) {
+      const angle = atStart ? startAngle : startAngle + sweep
+      const direction = Math.sign(sweep)
+      tangentX = -Math.sin(angle) * direction
+      tangentZ = Math.cos(angle) * direction
+    }
+  }
+  const length = Math.hypot(tangentX, tangentZ)
+  if (!Number.isFinite(length) || length <= EPSILON) return null
+  const tangent = { x: tangentX / length, z: tangentZ / length }
+  return {
+    point: atStart ? { x: x0, z: z0 } : { x: x1, z: z1 },
+    tangent,
+    normal: { x: -tangent.z, z: tangent.x },
+  }
+}
+
+export function wallMiterOffsetVector(normal, neighborNormal, maximumScale = 4) {
+  const sumX = Number(normal?.x) + Number(neighborNormal?.x)
+  const sumZ = Number(normal?.z) + Number(neighborNormal?.z)
+  const sumLength = Math.hypot(sumX, sumZ)
+  if (![sumX, sumZ, sumLength].every(Number.isFinite) || sumLength <= EPSILON) return null
+  const bisector = { x: sumX / sumLength, z: sumZ / sumLength }
+  const denominator = bisector.x * Number(normal?.x) + bisector.z * Number(normal?.z)
+  if (!Number.isFinite(denominator) || denominator <= 0.2) return null
+  const vector = { x: bisector.x / denominator, z: bisector.z / denominator }
+  return Math.hypot(vector.x, vector.z) <= Math.max(1, Number(maximumScale) || 4)
+    ? vector
+    : null
+}
+
+export function withWallMiterJoins(inputWalls, styleKeyForWall) {
+  const walls = Array.isArray(inputWalls) ? inputWalls : []
+  if (typeof styleKeyForWall !== 'function' || walls.length < 2) return walls
+  const endpoints = new Map()
+  walls.forEach((wall, wallIndex) => {
+    const styleKey = styleKeyForWall(wall)
+    if (!styleKey) return
+    for (const atStart of [true, false]) {
+      const frame = wallPathEndpointFrame(wall, atStart)
+      if (!frame) continue
+      const key = [
+        styleKey,
+        clean(frame.point.x),
+        clean(frame.point.z),
+        clean(wall.y),
+        clean(wall.height),
+      ].join('|')
+      if (!endpoints.has(key)) endpoints.set(key, [])
+      endpoints.get(key).push({ wallIndex, atStart, frame })
+    }
+  })
+
+  const result = [...walls]
+  for (const entries of endpoints.values()) {
+    if (entries.length !== 2 || entries[0].wallIndex === entries[1].wallIndex) continue
+    const [left, right] = entries
+    const leftMiter = wallMiterOffsetVector(left.frame.normal, right.frame.normal)
+    const rightMiter = wallMiterOffsetVector(right.frame.normal, left.frame.normal)
+    if (!leftMiter || !rightMiter) continue
+    for (const [entry, miter] of [[left, leftMiter], [right, rightMiter]]) {
+      const field = entry.atStart ? 'profileJoinStartMiter' : 'profileJoinEndMiter'
+      result[entry.wallIndex] = { ...result[entry.wallIndex], [field]: miter }
+    }
+  }
+  return result
 }
 
 export function normalizeWallElevationProfile(profile) {
@@ -851,6 +995,7 @@ export function roomBoundarySegments(room, roomLookup = {}) {
   const openEdges = roomBoundaryEdges(room).filter(edge => openKeys.has(edge.key))
   const openArcKeys = openArcSegmentKeys(room, openKeys)
   const curveMetadata = collectCurveSegmentMetadata(room, roomLookup)
+  const footprint = roomBoundaryMultiPolygon(room, roomLookup)
   return roomBoundaryContours(room, roomLookup).flatMap((contour, loopIndex) => (
     contour.points.map((from, index) => {
       const to = contour.points[(index + 1) % contour.points.length]
@@ -883,7 +1028,7 @@ export function roomBoundarySegments(room, roomLookup = {}) {
         } : {}),
       }
     })
-  )).filter(segment => (
+  )).map(segment => withInteriorNormalSign(segment, footprint)).filter(segment => (
     !openArcKeys.has(roomBoundaryEdgeKey(
       point(segment.x0, segment.z0),
       point(segment.x1, segment.z1),
@@ -895,7 +1040,10 @@ export function roomBoundarySegments(room, roomLookup = {}) {
 export function roomBoundaryPaths(room, roomLookup = {}) {
   const profile = explicitVerticalSlices(room)
   if (profile?.[0]?.wallPaths?.length > 0) {
-    return profile[0].wallPaths.map(path => withRoomWallElevationProfile(room, path))
+    return profile[0].wallPaths.map(path => withRoomWallElevationProfile(
+      room,
+      withInteriorNormalSign(path, profile[0].footprint),
+    ))
   }
   const segments = roomBoundarySegments(room, roomLookup)
   const straight = segments.filter(segment => !segment.curveId)
@@ -957,7 +1105,11 @@ export function roomBoundaryPaths(room, roomLookup = {}) {
       })
     }
   }
-  return [...straight, ...arcs].map(path => withRoomWallElevationProfile(room, path))
+  const footprint = roomBoundaryMultiPolygon(room, roomLookup)
+  return [...straight, ...arcs].map(path => withRoomWallElevationProfile(
+    room,
+    withInteriorNormalSign(path, footprint),
+  ))
 }
 
 export function roomMaximumHeightLevels(room, storyHeight = 2.5) {
@@ -970,7 +1122,10 @@ export function roomVerticalSlices(room, roomLookup = {}, storyHeight = 2.5) {
   const profile = explicitVerticalSlices(room)
   if (profile) return profile.map(slice => ({
     ...slice,
-    wallPaths: slice.wallPaths.map(path => withRoomWallElevationProfile(room, path)),
+    wallPaths: slice.wallPaths.map(path => withRoomWallElevationProfile(
+      room,
+      withInteriorNormalSign(path, slice.footprint),
+    )),
   }))
   const footprint = roomBoundaryMultiPolygon(room, roomLookup)
   const wallPaths = roomBoundaryPaths(room, roomLookup)

@@ -22,6 +22,7 @@ import {
   roomVerticalSlices,
   sampleWallArcGeometry,
   selectedRoomBoundaryChain,
+  withWallMiterJoins,
 } from '../../../shared/world/roomGeometry.js'
 
 export const SURFACE_FINE = 4
@@ -1464,11 +1465,13 @@ export function roomsWallSegments(rooms) {
         const x1 = segment.x1 * fine
         const z0 = segment.z0 * fine
         const z1 = segment.z1 * fine
-        const frontIsInterior = segment.axis === 'x'
-          ? x1 >= x0
-          : segment.axis === 'z'
-            ? z1 <= z0
-            : true
+        const frontIsInterior = Number.isFinite(Number(segment.interiorNormalSign))
+          ? Number(segment.interiorNormalSign) >= 0
+          : segment.axis === 'x'
+            ? x1 >= x0
+            : segment.axis === 'z'
+              ? z1 <= z0
+              : true
         addPanel({
           axis: segment.axis,
           x0,
@@ -1512,6 +1515,27 @@ function curveWallStyleKey(wall) {
     frontMaterial: wall.frontMaterial,
     backMaterial: wall.backMaterial,
     material: wall.material,
+    elevationProfileMode: wall.elevationProfileMode,
+    elevationProfile: wall.elevationProfile,
+    elevationProfileDirection: wall.elevationProfileDirection,
+    frontElevationProfile: wall.frontElevationProfile,
+    backElevationProfile: wall.backElevationProfile,
+  })
+}
+
+function wallProfileJoinStyleKey(wall) {
+  if (!wall?.elevationProfileMode) return null
+  return JSON.stringify({
+    thickness: wall.thickness,
+    frontTex: wall.frontTex,
+    backTex: wall.backTex,
+    topTex: wall.topTex,
+    frontMaterial: wall.frontMaterial,
+    backMaterial: wall.backMaterial,
+    material: wall.material,
+    frontRole: wall.frontRole,
+    backRole: wall.backRole,
+    roomIds: [...(wall.roomIds || [])].sort(),
     elevationProfileMode: wall.elevationProfileMode,
     elevationProfile: wall.elevationProfile,
     elevationProfileDirection: wall.elevationProfileDirection,
@@ -1581,7 +1605,7 @@ export function roomsWallRenderPaths(rooms) {
       })
     }
   }
-  return [...straight, ...arcs]
+  return withWallMiterJoins([...straight, ...arcs], wallProfileJoinStyleKey)
 }
 
 function connectorCommonBlocking(type, state = 'closed') {
@@ -2286,6 +2310,46 @@ export function applyRoomWallElevationProfile(surfaceData, roomId, edgeKeys, pro
     roomId,
     profile: normalized,
   }
+}
+
+function surfaceFeatureReferencesRoom(feature, roomId) {
+  const target = String(roomId)
+  if (feature?.roomId != null && String(feature.roomId) === target) return true
+  return Array.isArray(feature?.roomIds)
+    && feature.roomIds.some(value => String(value) === target)
+}
+
+export function deleteSurfaceRoom(surfaceData, roomId) {
+  const next = normalizeSurfaceData(surfaceData)
+  const target = String(roomId || '')
+  if (!target || !next.rooms?.[target]) return surfaceData
+
+  const rooms = Object.fromEntries(Object.entries(next.rooms).flatMap(([id, room]) => {
+    if (id === target) return []
+    const geometryClipRoomIds = Array.isArray(room.geometryClipRoomIds)
+      ? room.geometryClipRoomIds.filter(value => String(value) !== target)
+      : null
+    const boundaryArcs = Array.isArray(room.boundaryArcs)
+      ? room.boundaryArcs.map(arc => (
+          String(arc?.ownerRoomId || '') === target
+            ? { ...arc, ownerRoomId: id }
+            : arc
+        ))
+      : null
+    const clipsChanged = geometryClipRoomIds
+      && geometryClipRoomIds.length !== room.geometryClipRoomIds.length
+    const arcsChanged = boundaryArcs
+      && boundaryArcs.some((arc, index) => arc !== room.boundaryArcs[index])
+    return [[id, clipsChanged || arcsChanged ? {
+      ...room,
+      ...(geometryClipRoomIds ? { geometryClipRoomIds } : {}),
+      ...(boundaryArcs ? { boundaryArcs } : {}),
+    } : room]]
+  }))
+  const connectors = Object.fromEntries(Object.entries(next.connectors || {})
+    .filter(([, connector]) => !surfaceFeatureReferencesRoom(connector, target)))
+
+  return { ...next, version: 10, rooms, connectors }
 }
 
 function validateWholeWallSelection(room, edgeKeys) {

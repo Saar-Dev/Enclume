@@ -108,6 +108,66 @@ test('le compilateur distingue le profil extérieur du profil de face mitoyenne'
   assert.equal([shared.geometry.frontElevationProfile, shared.geometry.backElevationProfile].filter(Boolean).length, 1)
 })
 
+test('le compilateur oriente vers l intérieur tous les profils du contour', () => {
+  const profiled = room('profiled', 0, 1, 0, 1)
+  profiled.wallElevationProfiles = [{
+    id: 'whole-contour-profile',
+    edgeKeys: roomBoundaryWallRuns(profiled).flatMap(run => run.edgeKeys),
+    profile: { type: 'curved', depth: 0.5, direction: 1 },
+  }]
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-whole-contour-profile',
+    surfaceData: emptySurface({ version: 10, rooms: { profiled } }),
+  })
+  const walls = snapshot.spatial.barriers.filter(barrier => (
+    barrier.kind === 'wall'
+    && barrier.geometry?.elevationProfileMode === 'translated'
+  ))
+
+  assert.ok(walls.length >= 4)
+  for (const wall of walls) {
+    const { from, to } = wall.geometry
+    const dx = to.x - from.x
+    const dz = to.z - from.z
+    const length = Math.hypot(dx, dz)
+    const normal = { x: -dz / length, z: dx / length }
+    const midpoint = { x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 }
+    const direction = Number(wall.geometry.elevationProfileDirection) < 0 ? -1 : 1
+    const inwardDot = normal.x * direction * (1 - midpoint.x)
+      + normal.z * direction * (1 - midpoint.z)
+    assert.ok(inwardDot > 0, `profil compilé mal orienté sur ${wall.sourceId}`)
+  }
+})
+
+test('un mur arrondi profilé conserve ses raccords dans la géométrie compilée', () => {
+  const rounded = {
+    ...room('rounded-profile', 0, 1, 0, 1),
+    cells: ['0:0', '1:0', '0:1', '1:1'],
+  }
+  const runs = roomBoundaryWallRuns(rounded)
+  const curvedEdges = runs
+    .filter(wall => ['west', 'north'].includes(wall.side))
+    .flatMap(wall => wall.edgeKeys)
+  rounded.boundaryArcs = [{
+    ...makeRoomBoundaryArc(rounded, curvedEdges, 90).arc,
+    ownerRoomId: 'rounded-profile',
+  }]
+  rounded.wallElevationProfiles = [{
+    id: 'profiled-contour',
+    edgeKeys: runs.flatMap(wall => wall.edgeKeys),
+    profile: { type: 'faceted', depth: 0.5, direction: 1 },
+  }]
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-rounded-profile',
+    surfaceData: emptySurface({ version: 10, rooms: { 'rounded-profile': rounded } }),
+  })
+  const arc = snapshot.spatial.barriers.find(barrier => barrier.geometry?.type === 'wall-arc')
+
+  assert.equal(arc.geometry.elevationProfile.type, 'faceted')
+  assert.ok(arc.geometry.profileJoinStartPadding > 0)
+  assert.ok(arc.geometry.profileJoinEndPadding > 0)
+})
+
 test('le compilateur consomme le profil vertical canonique d une salle fusionnée', () => {
   const low = { ...room('low', 0, 0), cells: ['0:0'], heightLevels: 1 }
   const tall = { ...room('tall', 1, 1), cells: ['1:0'], heightLevels: 3, height: 7.5 }

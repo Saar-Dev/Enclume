@@ -149,11 +149,20 @@ métier.
 - mur entre deux salles : le profil appartient à la face de la salle depuis laquelle il a été édité.
   La face de la salle voisine reste sur la frontière commune ; la profondeur fait donc varier
   l'épaisseur vers la salle éditée sans empiéter dans la voisine ;
+- le côté intérieur n'est jamais déduit de l'axe X/Z. Chaque chemin reçoit un
+  `interiorNormalSign` dérivé de l'empreinte polygonale réelle de sa tranche. La même règle couvre
+  murs droits, arcs, trous, découpes et profils verticaux de salles fusionnées ;
 - le broadphase inclut la profondeur maximale. Le narrow phase de collision et de LOS échantillonne
   seulement le profil canonique à la hauteur testée ; ces bandes temporaires ne sont jamais
   sauvegardées ;
 - angle et profondeur sont deux vues synchronisées du même paramètre géométrique. Le document garde
   la profondeur canonique pour éviter deux valeurs contradictoires.
+- deux murs adjacents portant le même profil partagent un raccord en onglet calculé depuis leurs
+  tangentes locales. Les faces, le dessus et le dessous aboutissent au même sommet à chaque hauteur,
+  sans fente, bouchon visible ni recouvrement de bouts ; la règle relie également un arc horizontal
+  à un mur droit ;
+- arrondir horizontalement un mur déjà profilé conserve ses `sourceEdgeKeys`, son profil vertical et
+  ses raccords. Les deux transformations peuvent donc être appliquées dans n'importe quel ordre ;
 - une porte rigide déjà ancrée bloque la modification du profil vertical de son mur. Elle doit être
   déplacée ou supprimée ; le moteur ne décale jamais silencieusement l'ouverture et son collider.
 
@@ -182,7 +191,8 @@ L’outil Salle est l’outil de référence.
 - Le panneau de salle contient hauteur simple, épaisseurs de dalle/plafond/mur, multiplicateur de
   déplacement, collision, matériaux par face et accès à la création des connecteurs. Une salle à
   `verticalProfile` affiche sa hauteur locale comme propriété structurelle au lieu de proposer un
-  sélecteur global trompeur.
+  sélecteur global trompeur. Il expose aussi **Supprimer la salle** avec confirmation ; cette
+  suppression retire ses connecteurs et nettoie les références de découpe des salles restantes.
 - La sélection d'une salle affiche uniquement une teinte légère sur son sol courant et un trait sur
   son contour effectif. Les murs, plafond et autres composants ne reçoivent pas chacun leur propre
   surbrillance.
@@ -191,7 +201,11 @@ L’outil Salle est l’outil de référence.
   orange lorsqu'il est sélectionné.
 - Cliquer un mur remplace le panneau de salle par le panneau de mur. Celui-ci regroupe sélection
   multiple, arrondi dans le plan, suppression/fusion et profil vertical `|` / `(` / `<` avec
-  réglettes de profondeur et d'angle. La barre latérale reste réservée aux outils de création.
+  réglettes de profondeur et d'angle. Le sens est un choix explicite **Vers l'intérieur** ou
+  **Vers l'extérieur**, commun à tout le contour. La barre latérale reste réservée aux outils de
+  création.
+- Chaque panneau de sélection destructible expose son action au même endroit : salle, mur et objet
+  ou connecteur 3D. Les salles et objets demandent une confirmation avant mutation.
 - Les arêtes colinéaires forment un mur droit sélectionnable. Un arc canonique entier forme également
   un seul mur sélectionnable, quelle que soit sa tessellation de rendu.
 - Deux murs voisins ou plus forment une chaîne ouverte. Une réglette de 5° à 175° affiche l'arc en

@@ -7,6 +7,7 @@ import {
   applyRoomSelection,
   computeSurfaceWaterCells,
   deleteRoomBoundaryWalls,
+  deleteSurfaceRoom,
   expandRoomsToSurface,
   findRoomAtCell,
   getRoomFootprintCells,
@@ -103,6 +104,66 @@ test('un profil vertical extérieur translate les deux faces du mur', () => {
   assert.equal(profiled.elevationProfileMode, 'translated')
   assert.equal(profiled.elevationProfile.depth, 0.6)
   assert.equal(profiled.roomIds.length, 1)
+})
+
+test('le profil vers l intérieur garde la même orientation sur tout le contour', () => {
+  const profiledRoom = room('profiled', 0)
+  const edgeKeys = getRoomBoundaryWallRuns(profiledRoom).flatMap(run => run.edgeKeys)
+  const result = applyRoomWallElevationProfile(
+    emptySurface({ rooms: { profiled: profiledRoom } }),
+    'profiled',
+    edgeKeys,
+    { type: 'curved', depth: 0.5, direction: 1 },
+  )
+  const center = { x: 4, z: 4 }
+  const walls = roomsWallSegments(result.surfaceData.rooms)
+    .filter(wall => wall.elevationProfileMode === 'translated')
+
+  assert.ok(walls.length >= 4)
+  for (const wall of walls) {
+    const dx = Number(wall.x1) - Number(wall.x0)
+    const dz = Number(wall.z1) - Number(wall.z0)
+    const length = Math.hypot(dx, dz)
+    const normal = { x: -dz / length, z: dx / length }
+    const midpoint = {
+      x: (Number(wall.x0) + Number(wall.x1)) / 2,
+      z: (Number(wall.z0) + Number(wall.z1)) / 2,
+    }
+    const direction = Number(wall.elevationProfileDirection) < 0 ? -1 : 1
+    const inwardDot = normal.x * direction * (center.x - midpoint.x)
+      + normal.z * direction * (center.z - midpoint.z)
+    assert.ok(inwardDot > 0, `profil mal orienté sur ${wall.id}`)
+  }
+  const renderWalls = roomsWallRenderPaths(result.surfaceData.rooms)
+    .filter(wall => wall.elevationProfileMode === 'translated')
+  assert.ok(renderWalls.every(wall => wall.profileJoinStartMiter && wall.profileJoinEndMiter))
+})
+
+test('un contour arrondi conserve son profil vertical et ses raccords', () => {
+  const baseRoom = { ...room('rounded-profile', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
+  const allEdges = getRoomBoundaryWallRuns(baseRoom).flatMap(wall => wall.edgeKeys)
+  const curvedEdges = getRoomBoundaryWallRuns(baseRoom)
+    .filter(wall => ['west', 'north'].includes(wall.side))
+    .flatMap(wall => wall.edgeKeys)
+  const profiled = applyRoomWallElevationProfile(
+    emptySurface({ rooms: { 'rounded-profile': baseRoom } }),
+    'rounded-profile',
+    allEdges,
+    { type: 'faceted', depth: 0.5, direction: 1 },
+  )
+  const curved = applyRoomBoundaryArc(
+    profiled.surfaceData,
+    'rounded-profile',
+    curvedEdges,
+    90,
+  )
+  const arc = roomsWallRenderPaths(curved.surfaceData.rooms).find(wall => wall.axis === 'arc')
+
+  assert.equal(curved.error, null)
+  assert.equal(arc.elevationProfile.type, 'faceted')
+  assert.equal(arc.elevationProfile.depth, 0.5)
+  assert.ok(arc.profileJoinStartMiter)
+  assert.ok(arc.profileJoinEndMiter)
 })
 
 test('une porte rigide bloque le changement de profil vertical de son mur', () => {
@@ -276,6 +337,33 @@ test('supprimer un mur commun fusionne les deux salles et conserve la salle acti
   assert.equal(result.surfaceData.connectors.ladder.roomId, 'roomA')
   assert.deepEqual(result.surfaceData.connectors.ladder.roomIds, ['roomA'])
   assert.equal(roomsWallSegments(result.surfaceData.rooms).length, 6)
+})
+
+test('supprimer une salle nettoie ses connecteurs et les références géométriques', () => {
+  const source = emptySurface({
+    rooms: {
+      removed: room('removed', 0),
+      survivor: {
+        ...room('survivor', 0),
+        minX: 2,
+        maxX: 3,
+        geometryClipRoomIds: ['removed'],
+        boundaryArcs: [{ id: 'shared-arc', ownerRoomId: 'removed' }],
+      },
+    },
+    connectors: {
+      door: { id: 'door', type: 'door', roomId: 'removed', roomIds: ['removed', 'survivor'] },
+      ladder: { id: 'ladder', type: 'ladder', roomIds: ['removed'] },
+      free: { id: 'free', type: 'ladder', x: 10, z: 10 },
+    },
+  })
+  const result = deleteSurfaceRoom(source, 'removed')
+
+  assert.deepEqual(Object.keys(result.rooms), ['survivor'])
+  assert.deepEqual(result.rooms.survivor.geometryClipRoomIds, [])
+  assert.equal(result.rooms.survivor.boundaryArcs[0].ownerRoomId, 'survivor')
+  assert.deepEqual(Object.keys(result.connectors), ['free'])
+  assert.ok(source.rooms.removed)
 })
 
 test('fusionner des salles de hauteurs différentes conserve un profil vertical physique', () => {

@@ -27,9 +27,10 @@ function normalizedProfile(tool, face) {
   }
 }
 
-export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onClose }) {
+export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, onClose }) {
   const position = useMemo(() => clampPanelPosition(x, y), [x, y])
   const [materialFace, setMaterialFace] = useState(tool?.materialFace || 'top')
+  const [confirmDelete, setConfirmDelete] = useState(false)
   if (!room) return null
 
   const canonicalSlices = Array.isArray(room.verticalProfile?.slices)
@@ -218,6 +219,21 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onClose })
             <button type="button" onClick={() => startConnector('ladder')} style={S.action}>Échelle</button>
           </div>
         </div>
+
+        {onDelete && (!confirmDelete ? (
+          <button type="button" onClick={() => setConfirmDelete(true)} style={{ ...S.action, ...S.danger }}>
+            Supprimer la salle
+          </button>
+        ) : (
+          <div style={S.deleteActions}>
+            <button type="button" onClick={() => onDelete(room.id)} style={{ ...S.action, ...S.danger }}>
+              Confirmer la suppression
+            </button>
+            <button type="button" onClick={() => setConfirmDelete(false)} style={S.action}>
+              Annuler
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -258,4 +274,6 @@ const S = {
   tabActive: { borderColor: '#d97706', background: 'rgba(217, 119, 6, 0.18)', color: '#fde68a' },
   actionRow: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '5px' },
   action: { minHeight: '30px', border: '1px solid #3f3f5e', borderRadius: '5px', background: '#17172a', color: '#cbd5e1', fontSize: '10px', cursor: 'pointer' },
+  deleteActions: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 82px', gap: '6px' },
+  danger: { borderColor: 'rgba(251, 113, 133, 0.55)', background: 'rgba(127, 29, 29, 0.18)', color: '#fda4af' },
 }

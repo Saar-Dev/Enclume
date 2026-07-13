@@ -118,12 +118,14 @@ function wallSegmentGeometryInterval(from, to, geometry, {
   const normalX = -alongZ
   const normalZ = alongX
   const half = positiveNumber(geometry.thickness, 'geometry.thickness') / 2 + horizontalPadding
+  const joinStartPadding = Math.max(0, Number(geometry.profileJoinStartPadding) || 0)
+  const joinEndPadding = Math.max(0, Number(geometry.profileJoinEndPadding) || 0)
   const ranges = [
     {
       start: (start.x - wallFromX) * alongX + (start.z - wallFromZ) * alongZ,
       end: (end.x - wallFromX) * alongX + (end.z - wallFromZ) * alongZ,
-      min: -horizontalPadding,
-      max: length + horizontalPadding,
+      min: -horizontalPadding - joinStartPadding,
+      max: length + horizontalPadding + joinEndPadding,
     },
     {
       start: (start.x - wallFromX) * normalX + (start.z - wallFromZ) * normalZ,
@@ -235,6 +237,8 @@ export function segmentGeometryInterval(from, to, geometry, options = {}) {
         minY: band.minY,
         maxY: band.maxY,
         thickness: band.thickness,
+        profileJoinStartPadding: index === 0 ? geometry.profileJoinStartPadding : 0,
+        profileJoinEndPadding: index === points.length - 2 ? geometry.profileJoinEndPadding : 0,
       }, options)
     })).filter(Boolean)
     if (intervals.length === 0) return null

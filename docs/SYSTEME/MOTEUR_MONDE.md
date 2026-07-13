@@ -518,6 +518,11 @@ La suppression porte sur un mur complet entre deux angles, jamais sur un fragmen
   frontière courbe ne survive pas comme limite fantôme ;
 - toute différence géométrique qui référençait la salle absorbée est réécrite vers la survivante.
 
+La suppression d'une salle entière est également canonique : elle retire l'entrée de `rooms`, tous
+les connecteurs qui la référencent, enlève son identifiant des `geometryClipRoomIds` restants et
+réattribue à la salle survivante les arcs partagés dont elle était propriétaire. Aucun identifiant
+de salle supprimée ne subsiste donc dans le document sauvegardé.
+
 Le compilateur consomme ces mêmes données pour les canaux mouvement, vision, eau et gaz. Une
 ouverture supprimée dans l'éditeur ne peut donc pas rester bloquante dans le snapshot serveur.
 
@@ -527,6 +532,14 @@ ouverture supprimée dans l'éditeur ne peut donc pas rester bloquante dans le s
 `direction`. Le type est `curved` pour une courbe continue ou `faceted` pour un profil cassé. Le mur
 vertical n'a pas d'entrée. Les clés d'arêtes conservent l'identité logique même si le même mur est
 également un arc dans le plan.
+
+`direction = 1` signifie toujours vers l'intérieur de la salle propriétaire et `direction = -1`
+vers l'extérieur. Cette sémantique ne dépend pas de l'ordre des sommets : `roomBoundaryPaths`
+calcule `interiorNormalSign` en sondant les deux côtés de la normale gauche contre le multipolygone
+effectif de chaque tranche. Le renderer et `worldCompiler` consomment ce même signe dérivé.
+Lorsque le compilateur réordonne un mur axial dans son sens canonique croissant, il permute aussi
+ses profils avant/arrière et inverse `elevationProfileDirection` ; la normalisation d'identité ne
+peut donc plus retourner la forme physique.
 
 L'assemblage physique distingue deux cas :
 
@@ -540,6 +553,13 @@ Le compilateur ajoute le profil aux primitives `wall-segment`/`wall-arc`, élarg
 la profondeur maximale, puis `spatialIndex` le subdivise localement en bandes verticales uniquement
 pour les tests étroits. Collision, mouvement et LOS voient donc la même forme que le rendu sans
 faire de la tessellation une donnée persistée.
+
+Les angles de deux chemins portant le même profil reçoivent des vecteurs d'onglet dérivés
+(`profileJoinStartMiter` / `profileJoinEndMiter`). Le maillage utilise directement ces vecteurs pour
+faire coïncider les quatre nappes du loft. Le snapshot ne persiste pas cette finition : le
+compilateur la redérive, ajoute un padding longitudinal uniquement aux extrémités concernées et le
+narrow phase l'applique seulement au premier ou dernier segment d'un arc tessellé. Les coins restent
+donc fermés pour le rendu, le mouvement et la LOS sans transformer le raccord en donnée métier.
 
 ---
 

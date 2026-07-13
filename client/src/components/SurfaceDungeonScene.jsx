@@ -788,7 +788,10 @@ function makeCurvedWallGeometry(wall) {
     const tangentX = next.x - previous.x
     const tangentZ = next.z - previous.z
     const length = Math.hypot(tangentX, tangentZ) || 1
-    return { x: -tangentZ / length, z: tangentX / length }
+    const normal = { x: -tangentZ / length, z: tangentX / length }
+    if (index === 0 && wall.profileJoinStartMiter) return wall.profileJoinStartMiter
+    if (index === path.length - 1 && wall.profileJoinEndMiter) return wall.profileJoinEndMiter
+    return normal
   })
   const verticalLevels = profiledWallVerticalLevels(wall)
   if (verticalLevels.length < 2) return null
@@ -858,6 +861,8 @@ function makeCurvedWallGeometry(wall) {
     }
   }
   for (const pathIndex of [0, path.length - 1]) {
+    if (pathIndex === 0 && wall.profileJoinStartMiter) continue
+    if (pathIndex === path.length - 1 && wall.profileJoinEndMiter) continue
     for (let verticalIndex = 0; verticalIndex < verticalLevels.length - 1; verticalIndex += 1) {
       const lower = surfaces[verticalIndex][pathIndex]
       const upper = surfaces[verticalIndex + 1][pathIndex]
@@ -1077,14 +1082,22 @@ function splitWallForDoorConnector(wall, connector) {
     }
     const pieces = []
     const epsilon = 1e-6
-    if (fromT > epsilon) pieces.push(cloneWallPiece(wall, `before:${opening.min}`, curvePatch(0, fromT)))
-    if (toT < 1 - epsilon) pieces.push(cloneWallPiece(wall, `after:${opening.max}`, curvePatch(toT, 1)))
+    if (fromT > epsilon) pieces.push(cloneWallPiece(wall, `before:${opening.min}`, {
+      ...curvePatch(0, fromT),
+      profileJoinEndMiter: null,
+    }))
+    if (toT < 1 - epsilon) pieces.push(cloneWallPiece(wall, `after:${opening.max}`, {
+      ...curvePatch(toT, 1),
+      profileJoinStartMiter: null,
+    }))
     if (opening.wallTop > opening.top + 0.01 && toT > fromT + epsilon) {
       pieces.push(cloneWallPiece(wall, `top:${opening.min}:${opening.max}`, {
         ...curvePatch(fromT, toT),
         opacityY: opening.bottom,
         y: opening.top,
         height: opening.wallTop - opening.top,
+        profileJoinStartMiter: null,
+        profileJoinEndMiter: null,
       }))
     }
     return pieces
@@ -1096,22 +1109,27 @@ function splitWallForDoorConnector(wall, connector) {
   const wallMax = Math.max(alongStart, alongEnd)
   const pieces = []
   const epsilon = 0.01
+  const forward = alongEnd >= alongStart
   const segmentPatch = (start, end) => (
     wall.axis === 'x'
-      ? { x0: start, x1: end }
-      : { z0: start, z1: end }
+      ? { x0: forward ? start : end, x1: forward ? end : start }
+      : { z0: forward ? start : end, z1: forward ? end : start }
   )
 
   if (opening.min > wallMin + epsilon) {
     pieces.push(cloneWallPiece(wall, `before:${opening.min}`, {
       ...segmentPatch(wallMin, opening.min),
       capEnd: false,
+      profileJoinStartMiter: forward ? wall.profileJoinStartMiter : null,
+      profileJoinEndMiter: forward ? null : wall.profileJoinEndMiter,
     }))
   }
   if (opening.max < wallMax - epsilon) {
     pieces.push(cloneWallPiece(wall, `after:${opening.max}`, {
       ...segmentPatch(opening.max, wallMax),
       capStart: false,
+      profileJoinStartMiter: forward ? null : wall.profileJoinStartMiter,
+      profileJoinEndMiter: forward ? wall.profileJoinEndMiter : null,
     }))
   }
   if (opening.wallTop > opening.top + epsilon && opening.max > opening.min + epsilon) {
@@ -1122,6 +1140,8 @@ function splitWallForDoorConnector(wall, connector) {
       opacityY: opening.bottom,
       y: opening.top,
       height: opening.wallTop - opening.top,
+      profileJoinStartMiter: null,
+      profileJoinEndMiter: null,
     }))
   }
 

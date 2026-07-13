@@ -355,8 +355,20 @@ moteur ; sinon elles doivent être supprimées.
   LOS ;
 - une porte rigide déjà ancrée interdit la transformation verticale du mur porteur, comme pour une
   transformation d'arc, afin de ne jamais désaligner maillage, ouverture et collider ;
+- l'orientation intérieure est dérivée du multipolygone réel de chaque tranche via
+  `interiorNormalSign`. `direction = 1` signifie désormais toujours vers l'intérieur sur les quatre
+  côtés, les arcs, les trous et les salles fusionnées ; le panneau propose les choix explicites
+  **Vers l'intérieur** et **Vers l'extérieur**. La canonicalisation serveur d'un segment permute
+  désormais aussi ses faces et son sens de profil ;
+- les panneaux contextuels de salle, mur et objet/connecteur 3D présentent une suppression. Retirer
+  une salle supprime ses connecteurs, nettoie les références `geometryClipRoomIds` et réattribue les
+  arcs partagés restants ;
+- les angles de murs portant le même profil utilisent désormais un onglet dérivé commun à chaque
+  niveau du loft ; la compilation redérive une extension d'extrémité conservatrice pour fermer le
+  même coin en collision et en LOS. Un mur peut être arrondi dans le plan avant ou après son profil
+  vertical sans perdre celui-ci ;
 - la validation v10, les cas extérieur/mitoyen et le narrow phase profilé possèdent des tests purs.
-- état validé : 105 tests monde/serveur, 24 tests client Surface/persistance et build Vite de
+- état validé : 109 tests monde/serveur, 27 tests client Surface/persistance et build Vite de
   production passent ; ESLint ciblé des fichiers Surface ne remonte aucune erreur.
 
 ---

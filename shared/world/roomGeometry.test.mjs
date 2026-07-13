@@ -11,9 +11,12 @@ import {
   roomBoundaryWallRuns,
   roomSelectableWallRuns,
   roomGeometryArea,
+  roomGeometryContainsPoint,
   roomGeometryIntersectionArea,
   sampleRoomBoundaryArc,
   selectedRoomBoundaryChain,
+  wallMiterOffsetVector,
+  withWallMiterJoins,
 } from './roomGeometry.js'
 
 const square = {
@@ -24,10 +27,63 @@ const square = {
   cells: ['0:0', '1:0', '0:1', '1:1'],
 }
 
+function pathProbe(path, side) {
+  if (path.axis === 'arc') {
+    const angle = path.startAngle + path.sweep / 2
+    const direction = Math.sign(path.sweep)
+    const tangent = {
+      x: -Math.sin(angle) * direction,
+      z: Math.cos(angle) * direction,
+    }
+    return {
+      x: path.centerX + Math.cos(angle) * path.radius - tangent.z * side * 1e-3,
+      z: path.centerZ + Math.sin(angle) * path.radius + tangent.x * side * 1e-3,
+    }
+  }
+  const dx = path.x1 - path.x0
+  const dz = path.z1 - path.z0
+  const length = Math.hypot(dx, dz)
+  return {
+    x: (path.x0 + path.x1) / 2 - dz / length * side * 1e-3,
+    z: (path.z0 + path.z1) / 2 + dx / length * side * 1e-3,
+  }
+}
+
 test('les arêtes de contour sont stables et excluent les séparations internes', () => {
   const edges = roomBoundaryEdges(square)
   assert.equal(edges.length, 8)
   assert.equal(new Set(edges.map(edge => edge.key)).size, 8)
+})
+
+test('chaque chemin de mur expose une normale intérieure issue de la géométrie réelle', () => {
+  const profiledRoom = { id: 'profiled', ...square }
+  const paths = roomBoundaryPaths(profiledRoom)
+
+  assert.ok(paths.length >= 4)
+  for (const path of paths) {
+    assert.ok([1, -1].includes(path.interiorNormalSign))
+    assert.equal(roomGeometryContainsPoint(
+      profiledRoom,
+      pathProbe(path, path.interiorNormalSign),
+    ), true)
+    assert.equal(roomGeometryContainsPoint(
+      profiledRoom,
+      pathProbe(path, -path.interiorNormalSign),
+    ), false)
+  }
+})
+
+test('deux murs profilés adjacents partagent un raccord en onglet', () => {
+  const walls = withWallMiterJoins([
+    { id: 'north', axis: 'x', x0: 0, z0: 0, x1: 2, z1: 0, y: 0, height: 2.5 },
+    { id: 'west', axis: 'z', x0: 0, z0: 2, x1: 0, z1: 0, y: 0, height: 2.5 },
+  ], () => 'same-profile')
+  const expected = wallMiterOffsetVector({ x: 0, z: 1 }, { x: 1, z: 0 })
+
+  assert.deepEqual(walls[0].profileJoinStartMiter, expected)
+  assert.deepEqual(walls[1].profileJoinEndMiter, expected)
+  assert.ok(Math.abs(expected.x - 1) < 1e-6)
+  assert.ok(Math.abs(expected.z - 1) < 1e-6)
 })
 
 test('une salle decoupee epouse exactement le mur courbe de la salle prioritaire', () => {
@@ -154,5 +210,9 @@ test('un arrondi reste une primitive canonique unique malgré sa tessellation ph
   assert.ok(curved[0].radius > 0)
   assert.ok(Math.abs(curved[0].radius * curved[0].sweep) > 1)
   assert.ok(Math.abs(curved[0].curveLength - Math.abs(curved[0].radius * curved[0].sweep)) < 1e-5)
+  assert.equal(roomGeometryContainsPoint(
+    { id: 'rounded', ...square, boundaryArcs: [arc] },
+    pathProbe(curved[0], curved[0].interiorNormalSign),
+  ), true)
   assert.ok(roomBoundarySegments({ id: 'rounded', ...square, boundaryArcs: [arc] }).filter(segment => segment.curveId).length > 4)
 })

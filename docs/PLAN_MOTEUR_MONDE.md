@@ -650,18 +650,25 @@ Phase 7.
 - les profils sont conservés lors d'une fusion et retirés avec les arêtes réellement supprimées.
 - une porte déjà ancrée bloque la transformation verticale de son mur afin que maillage, ouverture,
   portail et collider ne puissent pas diverger.
+- les raccords de deux murs portant le même profil sont des onglets dérivés, consommés par le loft
+  et par le padding étroit collision/LOS ; un arc horizontal conserve le profil vertical de ses
+  arêtes sources et se raccorde aux murs droits voisins.
 
 ### Interface
 
 - cliquer directement un mur ouvre son panneau contextuel ;
 - le panneau regroupe sélection multiple, arrondi horizontal, remise à plat, suppression/fusion et
   profils `|`, `(`, `<` ;
-- deux réglettes liées permettent d'éditer profondeur et angle, avec inversion du profil ;
+- deux réglettes liées permettent d'éditer profondeur et angle ; le sens est choisi explicitement
+  vers l'intérieur ou vers l'extérieur et repose sur la normale intérieure du contour effectif ;
 - fermer le panneau de mur désélectionne les murs mais conserve la salle active.
+- les panneaux de salle, mur et objet/connecteur 3D exposent directement leur suppression ; la
+  salle et l'objet demandent confirmation et la suppression de salle nettoie connecteurs, clips et
+  propriété des arcs partagés.
 
 ### Validation
 
-- 105 tests du moteur/serveur et 24 tests client Surface/persistance passent ;
+- 109 tests du moteur/serveur et 27 tests client Surface/persistance passent ;
 - ESLint ciblé des fichiers Surface ne remonte aucune erreur ;
 - build Vite de production validé.
 

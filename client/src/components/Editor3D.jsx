@@ -20,6 +20,7 @@ import {
   applyRoomWallElevationProfile,
   applyRoomToolUpdate,
   deleteRoomBoundaryWalls,
+  deleteSurfaceRoom,
   expandRoomsToSurface,
   getFloorTopY,
   getWallRenderBox,
@@ -1567,6 +1568,39 @@ export default function Editor3D({
     })
   }, [handleSurfaceDataChange])
 
+  const handleSurfaceConnectorDelete = useCallback(connectorId => {
+    if (!connectorId) return
+    const currentSurfaceData = surfaceDataRef.current
+    if (!currentSurfaceData.connectors?.[connectorId]) return
+    const connectors = { ...(currentSurfaceData.connectors || {}) }
+    delete connectors[connectorId]
+    handleSurfaceDataChange({ ...currentSurfaceData, version: 10, connectors })
+    setSurfaceConnectorPanel(null)
+    if (surfaceTool?.selectedConnectorId === connectorId) {
+      onSurfaceToolChange?.({ ...surfaceTool, selectedConnectorId: null })
+    }
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool])
+
+  const handleSurfaceRoomDelete = useCallback(roomId => {
+    const nextSurfaceData = deleteSurfaceRoom(surfaceDataRef.current, roomId)
+    if (nextSurfaceData === surfaceDataRef.current) return
+    handleSurfaceDataChange(nextSurfaceData)
+    setSurfaceConnectorPanel(null)
+    setSurfaceRoomPanel(null)
+    setSurfaceWallPanel(null)
+    onSurfaceToolChange?.({
+      ...surfaceTool,
+      mode: 'select',
+      selectedConnectorId: null,
+      selectedRoomId: null,
+      selectedRoomIds: [],
+      roomWallEdit: false,
+      selectedRoomWallKeys: [],
+      selectedRoomWallCount: 0,
+      roomArcError: null,
+    })
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool])
+
   const closeSurfaceConnectorPanel = useCallback(() => {
     setSurfaceConnectorPanel(null)
     if (!surfaceTool?.selectedConnectorId) return
@@ -1877,6 +1911,7 @@ export default function Editor3D({
           x={surfaceConnectorPanel.x}
           y={surfaceConnectorPanel.y}
           onPatch={handleSurfaceConnectorPatch}
+          onDelete={handleSurfaceConnectorDelete}
           runtimeState={runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
           onElevatorCommand={handleElevatorCommand}
           onClose={closeSurfaceConnectorPanel}
@@ -1889,6 +1924,7 @@ export default function Editor3D({
           x={surfaceRoomPanel.x}
           y={surfaceRoomPanel.y}
           onPatch={handleSurfaceSelectionToolPatch}
+          onDelete={handleSurfaceRoomDelete}
           onClose={closeSurfaceRoomPanel}
         />
       )}

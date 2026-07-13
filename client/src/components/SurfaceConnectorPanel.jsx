@@ -112,6 +112,7 @@ export default function SurfaceConnectorPanel({
   x,
   y,
   onPatch,
+  onDelete,
   onClose,
   runtimeState = null,
   onElevatorCommand = null,
@@ -119,6 +120,7 @@ export default function SurfaceConnectorPanel({
   canAdminElevator = canEdit,
 }) {
   const position = useMemo(() => clampPanelPosition(x, y), [x, y])
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const materialSlots = normalizeModelMaterialSlots(connector?.modelGeometry)
   const materialOverrides = connector?.modelMaterialOverrides || {}
   if (!connector) return null
@@ -226,6 +228,21 @@ export default function SurfaceConnectorPanel({
           </div>
         ) : (
           <p style={S.hint}>Ce modèle n’expose pas de slots couleur.</p>
+        ))}
+
+        {canEdit && onDelete && (!confirmDelete ? (
+          <button type="button" onClick={() => setConfirmDelete(true)} style={{ ...S.button, ...S.danger }}>
+            Supprimer l’objet 3D
+          </button>
+        ) : (
+          <div style={S.deleteActions}>
+            <button type="button" onClick={() => onDelete(connector.id)} style={{ ...S.button, ...S.danger }}>
+              Confirmer la suppression
+            </button>
+            <button type="button" onClick={() => setConfirmDelete(false)} style={S.button}>
+              Annuler
+            </button>
+          </div>
         ))}
       </div>
     </div>
@@ -349,6 +366,25 @@ const S = {
     color: '#7f8eaa',
     fontSize: '10px',
     cursor: 'pointer',
+  },
+  button: {
+    minHeight: '32px',
+    border: '1px solid #35354e',
+    borderRadius: '5px',
+    background: '#151525',
+    color: '#cbd5e1',
+    fontSize: '10px',
+    cursor: 'pointer',
+  },
+  deleteActions: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) 72px',
+    gap: '6px',
+  },
+  danger: {
+    borderColor: 'rgba(251, 113, 133, 0.55)',
+    background: 'rgba(127, 29, 29, 0.18)',
+    color: '#fda4af',
   },
   hint: {
     margin: 0,
