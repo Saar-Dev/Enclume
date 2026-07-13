@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 29) — 2026-07-13
+> Session 141 (suite 30) — 2026-07-13
 
 ---
 
@@ -112,8 +112,46 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 29) (2026-07-13)
+## ÉTAT COURANT — Session 141 (suite 30) (2026-07-13)
 
+- **Session 141 (suite 30) — `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée ✅ CLOS,
+  fonctionnel confirmé Saar.** Suite de Groupe 1 (suite 28, clos). Plan déjà entièrement rédigé et
+  tranché en amont — session de codage, tous les fichiers concernés relus avant code (dont
+  `docs/REGLES/REGLESYSCOMBAT.md` section Tir visé, obligatoire avant toute mécanique combat).
+  **Trou d'architecture trouvé et corrigé avant code** : le plan proposait de passer `portee` à
+  `getAimIniCost`/`getAimBonusComp`, appelées en Phase 1 Déclaration (`socketCombatAnnouncement.js`)
+  — or `portee` (`confirmedModifiers.portee`) n'existe que côté Phase 2 Résolution
+  (`socketCombatResolution.js`/`socketCombatHelpers.js`). Rappel de Saar sur le principe des deux
+  phases (Phase 1 = intentions déclarées sans valeur numérique, Phase 2 = résolution serveur) : le
+  coût INI/bonus stocké à la Déclaration ne dépend que du niveau physique de la Lunette
+  (`lunetteNiveau`) ; le plafond LdB par portée ("pas de lunette niv.>3 à portée courte") est
+  désormais un **clamp en Phase 2**, dans `resolveAssaultAction` — nouvelle fonction
+  `getEffectiveAimBonus(aimBonusComp, {lunetteNiveau, portee})`, `LUNETTE_PORTEE_CAP` reste donc
+  réellement utilisé (pas écarté comme envisagé un temps avant cette correction). **Codé** :
+  migration `142_ref_equipment_lunette_niveaux.js` (10 lignes niv.1-10 remplaçant la ligne générique
+  `bonus="niv"`, `mod_slot='optique'`, `mod_requires_aim=true`, `price=1000×niv²`) ; `shared/
+  combatExclusiveActions.js` (`getAimBonusComp`/`getAimIniCost` en miroir avec `lunetteNiveau`,
+  `getLunetteNiveau`, `getEffectiveAimBonus`) ; `socketCombatAnnouncement.js` (fetch mods conditionnel
+  + `lunetteNiveau` re-dérivé serveur, payload de déclaration inchangé) ; `socketCombatHelpers.js`
+  (`resolveAssaultAction` : clamp Phase 2, réutilise `installedMods` déjà fetché pour Groupe 1) ;
+  `inventoryService.js`/`battlemaps.js` (sous-requête scalaire `lunette_niveau` ajoutée à 2 fetchs
+  existants, aucun nouvel appel réseau, évite le N+1 déjà écarté côté MJ) ; `combatSections.js`/
+  `AssaultRangedPanel.jsx`/`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` (slider dynamique).
+  **2 bugs réels trouvés et corrigés avant tout test** : régression d'écrêtage (`getAimBonusComp`/
+  `getAimIniCost` renvoyaient `0` au lieu de clamper au plafond dès que les points demandés le
+  dépassaient — cassait le comportement classique déjà en prod) ; migration 142 — `weight` (0.1
+  source) omis des 10 nouvelles lignes par le premier `up()` (déjà auto-appliqué par nodemon, P53),
+  corrigé + réparé directement en base, `down()` reconstruit avec les vraies valeurs vérifiées contre
+  la source pré-migration (`tech_level=2`, `manufacturer="Trinicom"`, `rarity="15 (20)"` — pas des
+  valeurs devinées). **Testé** : 21 scénarios purs, migration round-trip byte-identique (post-
+  correctif), scénario complet en base réelle (fixture jetable, nettoyage vérifié 0 résidu) couvrant
+  tout le pipeline installation→déclaration→résolution, `node --check` 0 erreur, ESLint 0 nouvelle
+  erreur, SR, **fonctionnel confirmé Saar** ("test validé"). **Non testé** : parcours navigateur réel.
+  **Incident git signalé, sans rapport avec le code** : session parallèle a committé (`4c258cc`, déjà
+  poussé) la majorité des fichiers de ce chantier sous un message sans rapport — même pattern déjà
+  documenté (suite 23), contenu vérifié intact par grep + tous les tests. **Prochain chantier :
+  Groupe 4** (slot `logiciel`, 4 mécaniques à détailler individuellement). Détail complet : item "72."
+  `docs/EN_COURS.md`, `docs/JOURNAL6.md` "Session 141 (suite 30)", `docs/PLAN_MODING_PHASEB.md`.
 - **Session 141 (suite 29) — Interface d'ajout Avantage/Désavantage (octroi MJ narratif) + bug
   DELETE 500 pré-existant corrigé ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Demande Saar :
   le bouton "+" du bloc AVANTAGES & DÉSAVANTAGES ne permettait d'ajouter que Mutations/Force
@@ -886,7 +924,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **146 migrations stables** (141_ref_equipment_mod_slots — Moding Phase B Groupe 1,
+- **147 migrations stables** (142_ref_equipment_lunette_niveaux — Moding Phase B Groupe 2,
+  Session 141 (suite 30) ; 141_ref_equipment_mod_slots — Moding Phase B Groupe 1,
   Session 141 (suite 28) ; 140_ref_skill_requirements_or_group — bug Hybride, Session 141 (suite 27) ;
   139_fix_ref_skill_requirements_mutations — `PLAN_MUTATION2.md` Lot 5, Session 141 (suite 26) ;
   138_ref_mutations_natural_weapon — Session 141 (suite 25) ;

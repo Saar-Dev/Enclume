@@ -3332,3 +3332,75 @@ individuellement) — voir `docs/PLAN_MODING_PHASEB.md`.
   pour un joueur non-GM.
 - Détail complet : ce fichier uniquement (feature + bug corrigé dans la même session, hors tout
   plan `PLAN_*.md` existant).
+
+## Session 141 (suite 30) — 2026-07-13 — `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée ✅ CLOS
+
+Reprise en session neuve sur un plan déjà rédigé (Groupe 2, "prêt à coder" depuis suite 28). Tous
+les fichiers concernés relus dans cette session avant code : `AssaultRangedPanel.jsx`,
+`CombatActionWindow.jsx` (entier), `combatSections.js`, `CombatModifiersWindow.jsx`, `battlemaps.js`
+(`/combat-equipment`), `docs/REGLES/REGLESYSCOMBAT.md` (section Tir visé — obligatoire avant toute
+mécanique combat, règle "STOP" du domaine). Vérification en base réelle des 16 accessoires + re-
+confirmation "0 usage réel" de la Lunette générique avant migration.
+
+**Trou d'architecture trouvé pendant la vérification, corrigé avant code** : le plan proposait de
+passer `portee` à `getAimIniCost`/`getAimBonusComp`, appelées en **Phase 1 Déclaration**
+(`socketCombatAnnouncement.js`) — or `portee` (`confirmedModifiers.portee`) n'existe que côté
+`socketCombatResolution.js`/`socketCombatHelpers.js`, **Phase 2 Résolution**, jamais transmis à la
+Déclaration. Première tentative de résolution (écarter l'enforcement du plafond LdB par portée,
+traité comme narratif MJ) proposée à Saar, **corrigée par Saar** : rappel du principe des deux
+phases — Phase 1 = intentions (pas de valeur numérique), Phase 2 = résolution serveur. Le coût
+INI/bonus stocké à la Déclaration ne dépend que du niveau physique de la Lunette (`lunetteNiveau`) ;
+le plafond LdB par portée s'applique comme un **clamp en Phase 2**, dans `resolveAssaultAction` —
+qui connaît déjà `confirmedModifiers.portee` et lit déjà `action.aim_bonus_comp`. Nouvelle fonction
+`getEffectiveAimBonus(aimBonusComp, {lunetteNiveau, portee})` — `LUNETTE_PORTEE_CAP` reste donc
+utilisé (pas écarté comme envisagé un temps avant cette correction).
+
+**Codé** : migration `142_ref_equipment_lunette_niveaux.js` (10 lignes "Lunette de visée niv. 1" à
+"niv. 10" remplaçant la ligne générique `bonus="niv"`, `mod_slot='optique'`, `mod_requires_aim=true`,
+`price=1000×niv²`). `shared/combatExclusiveActions.js` : `getAimBonusComp`/`getAimIniCost` en miroir
+(contexte `{lunetteNiveau}`, écrêtage au plafond global au lieu du plafond fixe 5), `getLunetteNiveau`
+(pure, même forme d'entrée que `modingService.calcWeaponModBonus` — Groupe 1), `getEffectiveAimBonus`
+(clamp Phase 2). `socketCombatAnnouncement.js` : fetch `char_inventory_mods ⋈ ref_equipment` pour
+l'arme déclarée (uniquement si `aimTranches>0`, évite une requête systématique), `lunetteNiveau`
+re-dérivé serveur (jamais transmis par le client — le payload de déclaration reste inchangé,
+`aimTranches` seul). `socketCombatHelpers.js` (`resolveAssaultAction`) : clamp via
+`getEffectiveAimBonus`, réutilise `installedMods` déjà fetché pour Groupe 1 (aucune requête
+supplémentaire). `inventoryService.js`/`battlemaps.js` : sous-requête scalaire `lunette_niveau`
+ajoutée à 2 fetchs déjà existants (`/inventory` PJ, `/combat-equipment` MJ batché) — **aucun nouvel
+appel réseau**, décision prise pour éviter de réintroduire le N+1 déjà évité côté MJ (précédent
+Session 141 suite 25, armes naturelles). `combatSections.js`/`AssaultRangedPanel.jsx`/
+`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` : slider Tir visé dynamique (`max` = plafond
+Lunette si supérieur à 5), résumé recalculé avec le vrai coût.
+
+**2 bugs réels trouvés et corrigés avant tout test** :
+1. **Régression d'écrêtage** — la première version de `getAimBonusComp`/`getAimIniCost` renvoyait
+   `0` (pas un écrêtage au plafond) dès que les points demandés dépassaient le plafond atteignable —
+   cassait le comportement classique déjà en prod (demander 7 tranches sans lunette doit rester
+   clampé à +5, pas tomber à +0). Trouvé en relisant mon propre code avant test, jamais poussé en
+   base. Corrigé (`resolveAimPoints`, écrêtage explicite avant calcul du coût).
+2. **Migration 142 — `weight` omis** : le premier `up()` ne copiait pas `weight` (0.1 dans la
+   source pré-migration) vers les 10 nouvelles lignes — déjà auto-appliqué par nodemon (P53) avant
+   d'être remarqué. Corrigé dans le fichier + réparation directe des 10 lignes déjà en base
+   (`UPDATE ... SET weight=0.1`). `down()` initialement écrit avec des valeurs **devinées**
+   (`tech_level:3`, `rarity:'20(20)'`) — retrouvées et corrigées via la source pré-migration
+   (`docs/Old/script Extraction Excel/equipement/ref_equipments_data.js`, `base_nt:"II"`) croisée
+   avec les 15 accessoires soeurs intacts en base (`tech_level=2`, `manufacturer="Trinicom"`,
+   `rarity="15 (20)"`) — `price_modifier` seul reconstruit par analogie (best-effort, non vérifié
+   caractère pour caractère, commenté comme tel).
+- **Testé** : 21 scénarios purs (sans lunette identique à avant, lunette niv.7/10, écrêtage correct
+  post-correctif, clamp Phase 2 par portée — courte→5 clampé, longue→7 non clampé), migration
+  round-trip `down`/`up` byte-identique (post-correctif), scénario complet en base réelle (fixture
+  jetable sur un personnage réel, nettoyage vérifié 0 résidu) couvrant tout le pipeline installation
+  → déclaration → résolution, sous-requête `battlemaps.js` vérifiée en exécution directe,
+  `node --check` 0 erreur (6 fichiers serveur/shared), ESLint 0 nouvelle erreur (comparaison ligne à
+  ligne avant/après), SR (`/api/health` 200), **fonctionnel confirmé Saar** ("test validé").
+- **Non testé** : parcours navigateur réel (slider étendu au-delà de 5, clamp visuel observé à la
+  résolution selon la portée).
+- **Incident git signalé, sans rapport avec le code** : une session parallèle a committé
+  (`4c258cc`, déjà poussé sur `origin/master`) via un `git add -A` qui a embarqué la majorité des
+  fichiers de ce chantier (`combatSections.js`, `shared/combatExclusiveActions.js`,
+  `inventoryService.js`, `battlemaps.js`, `socketCombatAnnouncement.js`, `socketCombatHelpers.js`)
+  sous un message sans rapport ("PLAN_MUTATION2 Lot 5, bug Hybride..."). Même pattern déjà documenté
+  (Session 141 suite 23, incident "Moding Phase A"). Contenu vérifié intact par grep ligne à ligne +
+  tous les tests ci-dessus repassés après coup — historique non réécrit, rien à corriger.
+- Détail complet : `docs/PLAN_MODING_PHASEB.md` Groupe 2.

@@ -858,6 +858,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               aimTranches={aimTranches}
               onAimTranchesChange={(n) => setAimTranches(n)}
               aimIneligibilityReasons={aimIneligibilityReasons}
+              lunetteNiveau={weapon?.lunette_niveau ?? 0}
             />
           </div>
         )}

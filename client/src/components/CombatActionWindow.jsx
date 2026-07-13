@@ -339,6 +339,9 @@ export default function CombatActionWindow({
   const forceCC       = hasTwoWeapons && !sameFirMode
   const selectedWeapon = weaponMg || weaponMd || null
   const assaultWeaponId = selectedWeapon?.id ?? null
+  // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — preview client uniquement, le serveur
+  // re-dérive sa propre valeur depuis weaponInvId à la déclaration (jamais confiance au client).
+  const lunetteNiveau = selectedWeapon?.lunette_niveau ?? 0
 
   // Modes disponibles pour le StateSelector fire_mode
   const availableFireModes = forceCC
@@ -466,7 +469,7 @@ export default function CombatActionWindow({
   const reloadSelected = mapSelected.has('reload')
   const mapActionsObj = {
     move:   moveSelection ? { ini_mod: (decl.combatMode === 'charge' || decl.combatMode === 'retraite') ? 0 : moveSelection.ini_mod } : null,
-    attack: attackSelected ? { cover_shot: !!(attackSelected && decl.cover !== 'exposed'), aimTranches } : null,
+    attack: attackSelected ? { cover_shot: !!(attackSelected && decl.cover !== 'exposed'), aimTranches, lunetteNiveau } : null,
     // Défensif/Retraite : pas d'action d'attaque → pas de coût INI melee
     // Charge : toujours 1 attaque (exclusive multi-attack LdB)
     melee:  (meleeSelected && !meleeDefensif)
@@ -1188,6 +1191,7 @@ export default function CombatActionWindow({
               aimTranches={aimTranches}
               onAimTranchesChange={(n) => setAimTranches(n)}
               aimIneligibilityReasons={aimIneligibilityReasons}
+              lunetteNiveau={lunetteNiveau}
             />
           </div>
         )}

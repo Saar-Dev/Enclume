@@ -1,5 +1,6 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-12 — Session 141 (suite 29) : Interface d'ajout Avantage/
+> Dernière mise à jour : 2026-07-13 — Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
+> (Lunette de visée) — ✅ clos, fonctionnel confirmé Saar (item 72) ; Session 141 (suite 29) : Interface d'ajout Avantage/
 > Désavantage (octroi MJ narratif) + bug DELETE 500 pré-existant corrigé — ✅ clos, fonctionnel
 > confirmé Saar (item 71) ; Session 141 (suite 27) : bug GENOTYPE "Hybride" visible pour un
 > personnage Humain — ✅ clos (item 70) ; Session 141 (suite 26) : `PLAN_MUTATION2.md` Lot 5
@@ -33,6 +34,30 @@
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 72 (Session 141 suite 30) — `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée
+> ✅ CLOS, fonctionnel confirmé Saar.** Suite de Groupe 1 (item 68, clos). **Trou d'architecture
+> trouvé et corrigé avant code** : le plan proposait de plafonner le coût/bonus de la Lunette selon
+> `portee` dès la Déclaration (Phase 1) — impossible, `portee` n'est connue qu'en Résolution
+> (Phase 2, `confirmedModifiers`). Rappel de Saar sur le principe des deux phases (Phase 1 = intention
+> sans valeur numérique, Phase 2 = résolution serveur) : le plafond LdB par portée est désormais un
+> **clamp en Phase 2** (`getEffectiveAimBonus`, `resolveAssaultAction`), pas un calcul à la
+> Déclaration. Migration `142_ref_equipment_lunette_niveaux.js` (10 lignes niv.1-10, remplace la
+> ligne générique) ; `shared/combatExclusiveActions.js` (`getAimBonusComp`/`getAimIniCost` en miroir
+> + `lunetteNiveau`, `getLunetteNiveau`, `getEffectiveAimBonus`) ; `socketCombatAnnouncement.js`/
+> `socketCombatHelpers.js` (Déclaration/Résolution) ; sous-requête `lunette_niveau` ajoutée à 2
+> fetchs existants (`inventoryService.js`/`battlemaps.js`, aucun nouvel appel réseau) ; client
+> (`AssaultRangedPanel.jsx`/`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`/
+> `combatSections.js`, slider dynamique). **2 bugs trouvés et corrigés avant tout test** : régression
+> d'écrêtage (renvoyait 0 au lieu de clamper au plafond au-delà de 5 sans lunette) ; migration —
+> `weight` omis des 10 nouvelles lignes (corrigé + réparé en base), `down()` reconstruit avec les
+> vraies valeurs vérifiées (pas devinées). Testé : 21 scénarios purs, migration round-trip, scénario
+> réel en base (0 résidu), SR, fonctionnel confirmé Saar. Non testé : parcours navigateur réel.
+> **Incident git signalé, sans rapport** : session parallèle a committé (`4c258cc`, déjà poussé) la
+> majorité des fichiers de ce chantier sous un message sans rapport — contenu vérifié intact, même
+> pattern déjà documenté (suite 23). **Prochain chantier : Groupe 4** (slot `logiciel`, 4 mécaniques
+> à détailler individuellement) — `docs/PLAN_MODING_PHASEB.md`. Détail complet : `docs/JOURNAL6.md`
+> "Session 141 (suite 30)".
 
 > **Item 71 (Session 141 suite 29) — Interface d'ajout Avantage/Désavantage + bug DELETE 500
 > pré-existant corrigé ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Demande Saar : le bouton
@@ -470,6 +495,56 @@
 > chantier mais antérieur à lui et sans rapport — cosmétique, non corrigé. Détail complet :
 > `docs/PLAN_VAULT.md` (toutes les étapes documentées avec leurs tests), `docs/JOURNAL6.md` "Session
 > Coffre (Vault)".
+
+**72. `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée ✅ CLOS — Session 141 (suite 30) (2026-07-13)**
+   → Suite de Groupe 1 (item 68, clos). Plan déjà entièrement rédigé et tranché en amont ("prêt à
+     coder") — session de codage, tous les fichiers concernés relus avant code (`AssaultRangedPanel.
+     jsx`, `CombatActionWindow.jsx` entier, `combatSections.js`, `CombatModifiersWindow.jsx`,
+     `battlemaps.js`, `docs/REGLES/REGLESYSCOMBAT.md` section Tir visé — obligatoire avant toute
+     mécanique combat).
+   → **Trou d'architecture trouvé et corrigé avant code** : le plan proposait de passer `portee` à
+     `getAimIniCost`/`getAimBonusComp`, appelées en Phase 1 Déclaration (`socketCombatAnnouncement.
+     js`) — or `portee` (`confirmedModifiers.portee`) n'existe que côté `socketCombatResolution.js`/
+     `socketCombatHelpers.js`, Phase 2 Résolution. Rappel de Saar sur le principe des deux phases
+     (Phase 1 = intentions déclarées sans valeur numérique, Phase 2 = résolution serveur) : le coût
+     INI/bonus stocké à la Déclaration ne dépend que du niveau physique de la Lunette
+     (`lunetteNiveau`) ; le plafond LdB par portée ("pas de lunette niv.>3 à portée courte") est
+     désormais un **clamp en Phase 2**, dans `resolveAssaultAction` — qui connaît déjà
+     `confirmedModifiers.portee` et lit déjà `action.aim_bonus_comp`. Nouvelle fonction
+     `getEffectiveAimBonus(aimBonusComp, {lunetteNiveau, portee})` — `LUNETTE_PORTEE_CAP` reste donc
+     réellement utilisé.
+   → Migration `142_ref_equipment_lunette_niveaux.js` (10 lignes "niv. 1" à "niv. 10" remplaçant la
+     ligne générique `bonus="niv"`, `mod_slot='optique'`, `mod_requires_aim=true`, `price=1000×niv²`).
+     `shared/combatExclusiveActions.js` : `getAimBonusComp`/`getAimIniCost` en miroir (contexte
+     `{lunetteNiveau}`, écrêtage au plafond global), `getLunetteNiveau` (pure, même forme d'entrée
+     que `modingService.calcWeaponModBonus` Groupe 1), `getEffectiveAimBonus` (clamp Phase 2).
+     `socketCombatAnnouncement.js` : fetch mods conditionnel (`aimTranches>0`), `lunetteNiveau`
+     re-dérivé serveur (payload de déclaration inchangé, jamais confiance au client).
+     `socketCombatHelpers.js` : clamp Phase 2, réutilise `installedMods` déjà fetché pour Groupe 1
+     (aucune requête supplémentaire). `inventoryService.js`/`battlemaps.js` : sous-requête scalaire
+     `lunette_niveau` ajoutée à 2 fetchs déjà existants — aucun nouvel appel réseau, évite de
+     réintroduire le N+1 déjà écarté côté MJ (précédent suite 25, armes naturelles). Client (slider
+     Tir visé dynamique, résumé recalculé) : `combatSections.js`/`AssaultRangedPanel.jsx`/
+     `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`.
+   → **2 bugs réels trouvés et corrigés avant tout test** : régression d'écrêtage (la 1ʳᵉ version de
+     `getAimBonusComp`/`getAimIniCost` renvoyait `0` au lieu d'écrêter au plafond dès que les points
+     demandés le dépassaient — cassait le comportement classique déjà en prod) ; migration 142 —
+     `weight` (0.1 source) omis des 10 nouvelles lignes par le premier `up()` (déjà auto-appliqué par
+     nodemon, P53) — corrigé + réparé directement en base ; `down()` initialement écrit avec des
+     valeurs **devinées**, retrouvées et corrigées via la source pré-migration croisée avec les 15
+     accessoires soeurs intacts en base (`tech_level=2`, `manufacturer="Trinicom"`, `rarity="15
+     (20)"`).
+   → **Testé** : 21 scénarios purs (sans lunette identique à avant, lunette niv.7/10, écrêtage
+     correct post-correctif, clamp Phase 2 par portée), migration round-trip byte-identique
+     (post-correctif), scénario complet en base réelle (fixture jetable, nettoyage vérifié 0 résidu)
+     couvrant tout le pipeline installation→déclaration→résolution, `node --check` 0 erreur, ESLint
+     0 nouvelle erreur, SR, **fonctionnel confirmé Saar** ("test validé").
+   → **Non testé** : parcours navigateur réel (slider étendu, clamp visuel à la résolution).
+   → **Incident git signalé, sans rapport avec le code** : session parallèle a committé (`4c258cc`,
+     déjà poussé) la majorité des fichiers de ce chantier sous un message sans rapport — même
+     pattern déjà documenté (suite 23, incident "Moding Phase A"), contenu vérifié intact.
+   → **Prochain chantier : Groupe 4** (slot `logiciel`, 4 mécaniques à détailler individuellement).
+   → Détail complet : `docs/PLAN_MODING_PHASEB.md` Groupe 2, `docs/JOURNAL6.md` "Session 141 (suite 30)".
 
 **68. `docs/PLAN_MODING_PHASEB.md` Groupe 1 : bonus fixes optique + architecture des slots exclusifs ✅ CLOS — Session 141 (suite 28) (2026-07-12)**
    → Suite de `docs/PLAN_MODING.md` Phase A (item 63, terminée) — plan Phase B déjà entièrement

@@ -177,7 +177,10 @@ export default function AssaultRangedPanel({
                   >
                     <div>
                       <div style={P.optionLabel}>Tir visé</div>
-                      <div style={P.optionSub}>1 balle, immobile — +1 test / 2 INI sacrifiés (max +5)</div>
+                      <div style={P.optionSub}>
+                        1 balle, immobile — +1 test / 2 INI sacrifiés (max +5)
+                        {lunetteNiveau > 0 ? ` — Lunette niv.${lunetteNiveau} : +1 test / 1 INI (max +${lunetteNiveau})` : ''}
+                      </div>
                     </div>
                     <span style={{ ...P.radio, ...(aimTranches > 0 ? P.radioActive : {}) }} />
                   </div>
@@ -186,13 +189,13 @@ export default function AssaultRangedPanel({
               {aimTranches > 0 && (
                 <>
                   <input
-                    type="range" min={1} max={AIM_MAX_TRANCHES} step={1}
+                    type="range" min={1} max={aimSliderMax} step={1}
                     value={aimTranches}
                     style={P.slider}
                     onChange={e => onAimTranchesChange(Number(e.target.value))}
                   />
                   <div style={P.summaryText}>
-                    {aimTranches} tranche{aimTranches > 1 ? 's' : ''} (-{aimTranches * 2} INI) : +{getAimBonusComp(aimTranches)} test
+                    {aimTranches} tranche{aimTranches > 1 ? 's' : ''} ({getAimIniCost(aimTranches, { lunetteNiveau })} INI) : +{getAimBonusComp(aimTranches, { lunetteNiveau })} test
                   </div>
                 </>
               )}

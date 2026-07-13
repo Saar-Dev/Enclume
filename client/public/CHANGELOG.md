@@ -1,3 +1,17 @@
+## v184 — 2026-07-13 — Customisation d'armes : la Lunette de visée a enfin un effet en combat
+
+### Serveur
+- [feat] Une Lunette de visée installée sur une arme (niveau 1 à 10) donne désormais son bonus réel
+  lors d'un Tir visé — 1 point d'Initiative par point de bonus au lieu de 2, jusqu'au niveau de la
+  lunette. Le bonus lunette et celui du Tir visé classique ne se cumulent jamais : le plus élevé des
+  deux est retenu automatiquement.
+- [feat] Le bonus de la Lunette est plafonné selon la portée effective du tir (niveau élevé réservé
+  aux tirs à longue portée), conformément à la règle du livre.
+
+### Client
+- [feat] Le curseur de Tir visé s'étend automatiquement au-delà de +5 si une Lunette plus puissante
+  est installée sur l'arme, avec le coût en Initiative affiché en temps réel.
+
 ## v183 — 2026-07-13 — Compétences débloquées par mutation/avantage + octroi d'Avantages par le MJ
 
 ### Serveur

@@ -1,14 +1,17 @@
 # PLAN_MODING_PHASEB.md — Effets mécaniques des mods d'armes en combat
-> Rédaction initiale : Session 141 (suite 21 suite), 2026-07-12 — mis à jour Session 141 (suite 28), 2026-07-12
+> Rédaction initiale : Session 141 (suite 21 suite), 2026-07-12 — mis à jour Session 141 (suite 29), 2026-07-13
 > Fait suite à `docs/PLAN_MODING.md` (Phase A — rangement pur, terminée). Ce document couvre
 > exclusivement la Phase B : l'effet mécanique en combat des mods déjà installables depuis la
 > Phase A. Responsabilité unique de ce fichier : planifier Phase B, ne duplique pas Phase A.
-> **État (2026-07-12, Session 141 suite 28)** : **Architecture des slots exclusifs + Groupe 1 (bonus
-> fixes optique) codés et confirmés fonctionnels par Saar** — migration `141_ref_equipment_mod_slots.js`
-> (numérotée 141, collision de numéro 140 avec une session parallèle, voir `docs/JOURNAL6.md`
-> "Session 141 (suite 28)" pour le détail complet des tests). Groupe 2 (Lunette) reste entièrement
-> tranché mais non codé — prochain chantier. Groupe 3 (Trépied/Harnais) retiré de Phase B →
-> `docs/ROADMAP.md`. Groupe 4 (logiciel) structuré, pas détaillé ligne à ligne.
+> **État (2026-07-13, Session 141 suite 29)** : **Groupe 1 (bonus fixes optique) ET Groupe 2 (Lunette
+> de visée) codés et confirmés fonctionnels par Saar**, architecture des slots exclusifs livrée avec
+> Groupe 1 — migrations `141_ref_equipment_mod_slots.js`/`142_ref_equipment_lunette_niveaux.js`. Le
+> plafond LdB "Lunette par portée" (`LUNETTE_PORTEE_CAP`) s'applique en **Phase 2 Résolution**
+> (`resolveAssaultAction`, `confirmedModifiers.portee` désormais connu), jamais en Phase 1
+> Déclaration (`portee` pas encore connue à ce stade — correction d'un contresens architectural
+> initial, voir `docs/JOURNAL6.md` "Session 141 (suite 29)"). Groupe 3 (Trépied/Harnais) retiré de
+> Phase B → `docs/ROADMAP.md`. Groupe 4 (logiciel) structuré, pas détaillé ligne à ligne — reste à
+> planifier.
 
 ---
 
@@ -206,7 +209,57 @@ Phase A) :
 
 ---
 
-### Groupe 2 — Lunette de visée ✅ PLAN VALIDÉ, PRÊT À CODER
+### Groupe 2 — Lunette de visée ✅ CODÉ, confirmé fonctionnel Saar (Session 141 suite 29)
+
+**Écart par rapport au plan initial ci-dessous, trouvé et corrigé avant code** : le plan proposait de
+passer `portee` à `getAimIniCost`/`getAimBonusComp` — impossible, ces fonctions sont appelées en
+**Phase 1 Déclaration** (`socketCombatAnnouncement.js`), qui ne connaît jamais `portee`
+(`confirmedModifiers` n'existe que côté `socketCombatResolution.js`/`socketCombatHelpers.js`, Phase
+2 Résolution). Rappel de Saar sur le principe des deux phases ("en Phase Annonce, on n'a pas besoin
+de valeur numérique... ceux-ci n'arrivent qu'en Phase 2") : le coût INI/bonus stocké à la
+Déclaration ne dépend que du niveau physique de la Lunette (`lunetteNiveau`, jamais de `portee`) ;
+le plafond LdB par portée est appliqué comme un **clamp en Phase 2** via une nouvelle fonction
+`getEffectiveAimBonus(aimBonusComp, {lunetteNiveau, portee})`, dans `resolveAssaultAction` — qui
+connaît déjà `confirmedModifiers.portee` et lit déjà `action.aim_bonus_comp`. `LUNETTE_PORTEE_CAP`
+reste donc utilisé (pas écarté comme envisagé un temps avant cette correction).
+
+**Codé** : migration `142_ref_equipment_lunette_niveaux.js` (10 lignes niv.1-10 remplaçant la ligne
+générique, `mod_slot='optique'`, `mod_requires_aim=true`) ; `shared/combatExclusiveActions.js`
+(`getAimBonusComp`/`getAimIniCost` en miroir avec `lunetteNiveau`, `getLunetteNiveau`,
+`getEffectiveAimBonus`) ; `socketCombatAnnouncement.js` (fetch mods + `lunetteNiveau` à la
+Déclaration) ; `socketCombatHelpers.js` (`resolveAssaultAction` : clamp Phase 2, réutilise
+`installedMods` déjà fetché pour Groupe 1) ; `inventoryService.js`/`battlemaps.js` (sous-requête
+scalaire `lunette_niveau` ajoutée à 2 fetchs existants, aucun nouvel appel réseau) ;
+`combatSections.js`/`AssaultRangedPanel.jsx`/`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`
+(slider dynamique jusqu'à `lunetteNiveau`, résumé recalculé). Le payload envoyé au serveur à la
+déclaration ne change pas (`aimTranches` seul) — le serveur re-dérive `lunetteNiveau`, jamais
+confiance au client.
+
+**2 bugs réels trouvés et corrigés avant tout test** : (1) écrêtage — la première version de
+`getAimBonusComp`/`getAimIniCost` renvoyait `0` (au lieu d'écrêter au plafond) dès que les points
+demandés dépassaient le plafond atteignable, régression sur le comportement classique existant
+(demander 7 tranches sans lunette devait rester clampé à +5, pas tomber à +0) ; (2) migration 142 —
+le `weight` de la ligne originale (0.1) n'a pas été copié vers les 10 nouvelles lignes par le premier
+`up()` (déjà auto-appliqué par nodemon, P53) — corrigé dans le fichier + réparation directe des 10
+lignes déjà en base ; `down()` reconstruit avec les vraies valeurs vérifiées contre la source
+pré-migration (`tech_level=2`, `manufacturer="Trinicom"`, `rarity="15 (20)"` — pas des valeurs
+devinées).
+
+**Testé** : 21 scénarios purs (sans lunette identique à avant, lunette niv.7/10, écrêtage correct,
+clamp Phase 2 par portée), migration round-trip `down`/`up` byte-identique (post-correctif), scénario
+réel en base (fixture jetable, nettoyage vérifié 0 résidu) couvrant tout le pipeline
+déclaration→installation→résolution, sous-requête `battlemaps.js` vérifiée en exécution directe,
+`node --check` 0 erreur, ESLint 0 nouvelle erreur, SR, **fonctionnel confirmé Saar**.
+**Non testé** : parcours navigateur réel (slider étendu, clamp visuel à la résolution).
+
+**Incident git signalé, sans rapport avec le code** : une session parallèle a committé
+(`4c258cc`, déjà poussé) via un `git add -A` qui a embarqué la majorité des fichiers de ce chantier —
+même pattern déjà documenté (Session 141 suite 23, incident "Moding Phase A"). Contenu vérifié
+intact par grep + tous les tests ci-dessus, historique non réécrit.
+
+---
+
+### Plan initial (ci-dessous, tel que rédigé avant codage — conservé pour trace)
 
 Pas un bonus additif — une variante du Tir visé lui-même. Règle LdB : niveau 1-10 (+1/niveau,
 max +10), Tir visé obligatoire, 1 point d'Initiative par point de bonus (au lieu de 2 pour le
@@ -338,17 +391,15 @@ un chantier de combat séparé plus large.
 
 ## Prochaine étape
 
-**Groupe 1 + architecture des slots exclusifs : codés et confirmés fonctionnels (Session 141 suite
-28)** — migration `141_ref_equipment_mod_slots.js`, `modingService.js` (`calcWeaponModBonus` +
-swap dans `installMod`), `socketCombatHelpers.js` (`resolveAssaultAction`). Détail complet des tests :
-`docs/JOURNAL6.md` "Session 141 (suite 28)".
+**Groupe 1 + architecture des slots exclusifs + Groupe 2 (Lunette de visée) : tous codés et
+confirmés fonctionnels** (Session 141 suite 28 et suite 29) — migrations `141_ref_equipment_mod_
+slots.js`/`142_ref_equipment_lunette_niveaux.js`. Détail complet des tests : `docs/JOURNAL6.md`
+"Session 141 (suite 28)" / "Session 141 (suite 29)".
 
-**Groupe 2 (Lunette de visée) reste entièrement tranché, prêt à coder** — l'architecture de slots
-étant désormais livrée, Groupe 2 la réutilise telle quelle (aucun nouveau prérequis).
+**Reste ouvert : Groupe 4** (4 mécaniques du slot `logiciel` — Mémoire de cibles Mémo, Projecteur de
+mouvement, Système réactif autonome, Analyseur tactique), pas détaillé ligne à ligne, chacun mérite
+sa propre session de planification (voir section Groupe 4 ci-dessus).
 
-Reste ouvert si on continue à préparer avant de coder : Groupe 4 (4 mécaniques du slot `logiciel`,
-à détailler et prioriser individuellement).
-
-**Prochain numéro de migration à reconfirmer au moment de coder** (P53 — dérive déjà constatée trois
-fois sur ce chantier, dont une collision réelle Session 141 suite 28) — 142 libre au 2026-07-12, ne
-pas s'y fier sans revérifier `ls migrations/`.
+**Prochain numéro de migration à reconfirmer au moment de coder** (P53 — dérive déjà constatée
+plusieurs fois sur ce chantier, dont une collision réelle Session 141 suite 28) — 143 libre au
+2026-07-13, ne pas s'y fier sans revérifier `ls migrations/`.
