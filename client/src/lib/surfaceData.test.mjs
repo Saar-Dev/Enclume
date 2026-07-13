@@ -199,6 +199,40 @@ test('un contour arrondi conserve son profil vertical et ses raccords', () => {
   assert.ok(arc.profileJoinEndMiter)
 })
 
+test('un grand arc profile reste raccorde exactement aux murs droits', () => {
+  const largeRoom = {
+    ...room('large-rounded-profile', 0),
+    minX: -6,
+    maxX: 2,
+    minZ: -1,
+    maxZ: 9,
+    cells: Array.from({ length: 11 }, (_, dz) => (
+      Array.from({ length: 9 }, (_, dx) => `${-6 + dx}:${-1 + dz}`)
+    )).flat(),
+  }
+  const curvedEdges = getRoomBoundaryWallRuns(largeRoom)
+    .filter(wall => ['west', 'north'].includes(wall.side))
+    .flatMap(wall => wall.edgeKeys)
+  const profiled = applyRoomWallElevationProfile(
+    emptySurface({ rooms: { 'large-rounded-profile': largeRoom } }),
+    'large-rounded-profile',
+    curvedEdges,
+    { type: 'curved', depth: 0.25, direction: -1 },
+  )
+  const rounded = applyRoomBoundaryArc(
+    profiled.surfaceData,
+    'large-rounded-profile',
+    curvedEdges,
+    90,
+  )
+  const arc = roomsWallRenderPaths(rounded.surfaceData.rooms).find(wall => wall.axis === 'arc')
+
+  assert.equal(profiled.error, null)
+  assert.equal(rounded.error, null)
+  assert.ok(arc.profileJoinStart)
+  assert.ok(arc.profileJoinEnd)
+})
+
 test('une porte rigide bloque le changement de profil vertical de son mur', () => {
   const guardedRoom = room('guarded', 0)
   const west = getRoomBoundaryWallRuns(guardedRoom).find(run => run.side === 'west')

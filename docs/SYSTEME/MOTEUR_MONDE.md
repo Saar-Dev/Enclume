@@ -464,6 +464,12 @@ son centre, son rayon, son angle initial, son balayage et sa longueur. Le render
 mesh continu, avec normales radiales lissées et coordonnées UV calculées sur la longueur réelle de
 l'arc. Une texture ne recommence donc pas à chaque subdivision visuelle.
 
+Ses points de départ et d'arrivée restent toutefois les ancrages exacts du contour. La
+tessellation calcule uniquement les points intermédiaires : elle force son premier et son dernier
+point sur ces ancrages. Les regroupements client conservent les extrémités des panneaux sources et
+le snapshot `wall-arc` expose `from` / `to`. Une erreur d'arrondi trigonométrique ne peut donc plus
+séparer un arc de son mur droit voisin dans le rendu, les collisions ou la LOS.
+
 Le compilateur produit un collider/occluder canonique `wall-arc`. Son AABB exacte sert au broadphase.
 Le déplacement et la LOS peuvent échantillonner l'arc à l'intérieur de leur narrow phase, mais ces
 segments temporaires ne sont jamais persistés et ne deviennent jamais l'autorité du monde. Modifier

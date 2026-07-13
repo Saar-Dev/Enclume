@@ -24,6 +24,11 @@ plus une autorité enregistrée ni une collection de petits murs. La v9 ajoute l
 canoniques nécessaires aux salles fusionnées de hauteurs différentes. La v10 ajoute les profils de
 mur vus en coupe et déplace les réglages de sélection dans des panneaux contextuels.
 
+Un arc conserve toujours les extrémités exactes enregistrées par le contour. Centre, rayon et angles
+servent à générer les points intermédiaires, jamais à reconstruire les ancrages. Le renderer reprend
+les extrémités des panneaux sources et le snapshot physique transporte les mêmes `from` / `to` ; un
+arc horizontal, profilé ou non, rejoint ainsi le mur droit voisin sur une couture commune.
+
 Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit le moteur commun qui compile
 ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une
 seconde logique physique directement dans le renderer pour contourner cette migration.

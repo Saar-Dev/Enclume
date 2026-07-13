@@ -751,13 +751,16 @@ function quadFaceNormal(points) {
 
 function profiledWallPath(wall) {
   if (wall.axis === 'arc') {
-    return sampleWallArcGeometry({
+    const points = sampleWallArcGeometry({
       centerX: wall.centerX,
       centerZ: wall.centerZ,
       radius: wall.radius,
       startAngle: wall.startAngle,
       sweep: wall.sweep,
+      from: { x: Number(wall.x0) / SURFACE_FINE, z: Number(wall.z0) / SURFACE_FINE },
+      to: { x: Number(wall.x1) / SURFACE_FINE, z: Number(wall.z1) / SURFACE_FINE },
     }, 16)
+    return points
   }
   return [
     { x: Number(wall.x0) / SURFACE_FINE, z: Number(wall.z0) / SURFACE_FINE },

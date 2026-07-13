@@ -194,6 +194,14 @@ test('un mur arrondi profilé conserve ses raccords dans la géométrie compilé
   assert.equal(arc.geometry.elevationProfile.type, 'faceted')
   assert.ok(arc.geometry.profileJoinStartPadding > 0)
   assert.ok(arc.geometry.profileJoinEndPadding > 0)
+  assert.deepEqual(
+    [arc.geometry.from, arc.geometry.to]
+      .map(point => `${point.x}:${point.z}`)
+      .sort(),
+    [rounded.boundaryArcs[0].start, rounded.boundaryArcs[0].end]
+      .map(point => `${point.x}:${point.z}`)
+      .sort(),
+  )
 })
 
 test('le compilateur consomme le profil vertical canonique d une salle fusionnée', () => {

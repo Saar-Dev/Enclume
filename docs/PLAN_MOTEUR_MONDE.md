@@ -571,6 +571,8 @@ Phase 7.
 
 - `room.boundaryArcs` reste la définition éditée ; `roomBoundaryPaths(...)` en dérive un chemin
   canonique avec centre, rayon, angle initial, balayage, longueur et identité de courbe ;
+- les points de départ et d'arrivée du contour sont des ancrages exacts. Rayon et angles décrivent
+  l'intérieur de l'arc mais ne sont jamais autorisés à recalculer ni déplacer ses extrémités ;
 - un arrondi n'est plus représenté par une collection de petits murs dans le snapshot : le
   compilateur émet une géométrie `wall-arc` unique ;
 - une porte courbe conserve son abscisse curviligne, son ancrage exact, sa tangente et sa normale.
@@ -588,7 +590,8 @@ Phase 7.
   projetés sur le cercle et tournés selon la tangente locale. Le boîtier concave ne traverse donc plus
   le mur et son débord ne modifie pas la largeur structurelle de l'ouverture ;
 - broadphase, collision et LOS consomment `wall-arc`. Une tessellation locale est permise uniquement
-  comme adaptateur interne du narrow phase ;
+  comme adaptateur interne du narrow phase ; son premier et son dernier point reprennent toujours
+  `from` et `to`. Le renderer applique le même invariant quand il regroupe les panneaux en arc ;
 - un mur courbe commun reste un unique obstacle dédupliqué pour les deux salles.
 
 ### Sélection dans l'éditeur
@@ -676,7 +679,7 @@ Phase 7.
 
 ### Validation
 
-- 113 tests du moteur/serveur et 30 tests client Surface/persistance passent ;
+- 114 tests du moteur/serveur et 31 tests client Surface/persistance passent ;
 - ESLint ciblé des fichiers Surface ne remonte aucune erreur ;
 - build Vite de production validé.
 

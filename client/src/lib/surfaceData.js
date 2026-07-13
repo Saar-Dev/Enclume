@@ -1559,21 +1559,41 @@ export function roomsWallRenderPaths(rooms) {
       continue
     }
     const intervals = panelsForCurve
-      .map(panel => ({
-        min: Math.min(Number(panel.curveOffset0), Number(panel.curveOffset1)),
-        max: Math.max(Number(panel.curveOffset0), Number(panel.curveOffset1)),
-        panel,
-      }))
+      .map(panel => {
+        const offset0 = Number(panel.curveOffset0)
+        const offset1 = Number(panel.curveOffset1)
+        const forward = offset0 <= offset1
+        return {
+          min: Math.min(offset0, offset1),
+          max: Math.max(offset0, offset1),
+          minPoint: forward
+            ? { x: Number(panel.x0), z: Number(panel.z0) }
+            : { x: Number(panel.x1), z: Number(panel.z1) },
+          maxPoint: forward
+            ? { x: Number(panel.x1), z: Number(panel.z1) }
+            : { x: Number(panel.x0), z: Number(panel.z0) },
+          panel,
+        }
+      })
       .filter(item => Number.isFinite(item.min) && Number.isFinite(item.max))
       .sort((left, right) => left.min - right.min)
     const runs = []
     for (const interval of intervals) {
       const current = runs.at(-1)
       if (current && interval.min <= current.max + 1e-5) {
-        current.max = Math.max(current.max, interval.max)
+        if (interval.max > current.max) {
+          current.max = interval.max
+          current.maxPoint = interval.maxPoint
+        }
         current.roomIds.push(...(interval.panel.roomIds || []))
       } else {
-        runs.push({ min: interval.min, max: interval.max, roomIds: [...(interval.panel.roomIds || [])] })
+        runs.push({
+          min: interval.min,
+          max: interval.max,
+          minPoint: interval.minPoint,
+          maxPoint: interval.maxPoint,
+          roomIds: [...(interval.panel.roomIds || [])],
+        })
       }
     }
     for (const run of runs) {
@@ -1581,7 +1601,6 @@ export function roomsWallRenderPaths(rooms) {
       const endProgress = run.max / curveLength
       const startAngle = Number(first.curveStartAngle) + Number(first.curveSweep) * startProgress
       const sweep = Number(first.curveSweep) * (endProgress - startProgress)
-      const endAngle = startAngle + sweep
       arcs.push({
         ...first,
         id: `room-wall:arc:${first.curveId}:${formatLevel(run.min)}:${formatLevel(run.max)}:${formatLevel(first.y)}`,
@@ -1594,10 +1613,10 @@ export function roomsWallRenderPaths(rooms) {
         radius: Number(first.curveRadius),
         startAngle,
         sweep,
-        x0: (Number(first.curveCenterX) + Math.cos(startAngle) * Number(first.curveRadius)) * SURFACE_FINE,
-        z0: (Number(first.curveCenterZ) + Math.sin(startAngle) * Number(first.curveRadius)) * SURFACE_FINE,
-        x1: (Number(first.curveCenterX) + Math.cos(endAngle) * Number(first.curveRadius)) * SURFACE_FINE,
-        z1: (Number(first.curveCenterZ) + Math.sin(endAngle) * Number(first.curveRadius)) * SURFACE_FINE,
+        x0: run.minPoint.x,
+        z0: run.minPoint.z,
+        x1: run.maxPoint.x,
+        z1: run.maxPoint.z,
       })
     }
   }

@@ -676,6 +676,8 @@ function wallPieceGeometry(piece) {
       radius: clean(piece.radius),
       startAngle: clean(piece.startAngle),
       sweep: clean(piece.sweep),
+      from: { x: clean(piece.x0), z: clean(piece.z0) },
+      to: { x: clean(piece.x1), z: clean(piece.z1) },
       minY: clean(piece.bottom),
       maxY: clean(piece.top),
       thickness: clean(piece.thickness),

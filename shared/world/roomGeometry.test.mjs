@@ -14,12 +14,30 @@ import {
   roomGeometryContainsPoint,
   roomGeometryIntersectionArea,
   sampleRoomBoundaryArc,
+  sampleWallArcGeometry,
   selectedRoomBoundaryChain,
   wallCornerIntersectionPoint,
   wallMiterOffsetVector,
   withWallCornerJoins,
   withWallMiterJoins,
 } from './roomGeometry.js'
+
+test('la tessellation d un arc conserve ses ancrages canoniques exacts', () => {
+  const points = sampleWallArcGeometry({
+    centerX: -1.5000001,
+    centerZ: 4.5000002,
+    radius: 7.1063354,
+    startAngle: 0.8850669,
+    sweep: Math.PI / 2,
+    x0: 3,
+    z0: 10,
+    x1: -6,
+    z1: -1,
+  })
+
+  assert.deepEqual(points[0], { x: 3, z: 10 })
+  assert.deepEqual(points.at(-1), { x: -6, z: -1 })
+})
 
 const square = {
   minX: 0,

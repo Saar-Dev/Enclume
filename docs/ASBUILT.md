@@ -298,6 +298,9 @@ moteur ; sinon elles doivent être supprimées.
   angle initial, balayage, longueur et identité stable remplacent la collection de petits panneaux ;
 - `shared/world/roomGeometry.js` dérive ces chemins depuis `room.boundaryArcs`, tout en conservant un
   échantillonnage interne pour les consommateurs qui en ont réellement besoin ;
+- les extrémités exactes de l'arc canonique restent autoritaires pendant cet échantillonnage. Les
+  regroupements de rendu transportent les premiers/derniers ancrages au lieu de les recalculer par
+  trigonométrie, et `wall-arc` compile aussi ses champs `from` / `to` exacts ;
 - le renderer crée un mesh courbe continu, avec normales analytiques et UV calculées sur la longueur
   de l'arc. Les textures ne redémarrent plus à chaque subdivision ;
 - le compilateur produit `wall-arc`. Le broadphase utilise son AABB exacte et les narrow phases de
@@ -376,7 +379,7 @@ moteur ; sinon elles doivent être supprimées.
   et au plafond. Un mur peut être arrondi dans le plan avant ou après son
   profil vertical sans perdre celui-ci ;
 - la validation v10, les cas extérieur/mitoyen et le narrow phase profilé possèdent des tests purs.
-- état validé : 113 tests monde/serveur, 30 tests client Surface/persistance et build Vite de
+- état validé : 114 tests monde/serveur, 31 tests client Surface/persistance et build Vite de
   production passent ; ESLint ciblé des fichiers Surface ne remonte aucune erreur.
 
 ---

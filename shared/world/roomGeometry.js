@@ -352,10 +352,19 @@ export function sampleWallArcGeometry(geometry, density = 8) {
   const sampleCount = Math.max(2, Math.min(256, Math.ceil(
     Math.abs(radius * sweep) * Math.max(2, Number(density) || 8),
   )))
-  return Array.from({ length: sampleCount + 1 }, (_, index) => {
+  const points = Array.from({ length: sampleCount + 1 }, (_, index) => {
     const angle = startAngle + sweep * (index / sampleCount)
     return point(centerX + Math.cos(angle) * radius, centerZ + Math.sin(angle) * radius)
   })
+  const start = geometry?.start || geometry?.from
+  const end = geometry?.end || geometry?.to
+  const startX = Number(start?.x ?? geometry?.x0)
+  const startZ = Number(start?.z ?? geometry?.z0)
+  const endX = Number(end?.x ?? geometry?.x1)
+  const endZ = Number(end?.z ?? geometry?.z1)
+  if ([startX, startZ].every(Number.isFinite)) points[0] = point(startX, startZ)
+  if ([endX, endZ].every(Number.isFinite)) points[points.length - 1] = point(endX, endZ)
+  return points
 }
 
 export function sampleRoomBoundaryArc(arc, density = 8) {
