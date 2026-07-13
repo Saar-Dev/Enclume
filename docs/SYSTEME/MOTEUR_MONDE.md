@@ -2,7 +2,7 @@
 
 > Dernière mise à jour : 2026-07-13 — audit du moteur de monde et intégration de l'éditeur Surface.
 >
-> Statut : **architecture cible validée, non encore implémentée**. Les sections marquées
+> Statut : **architecture cible validée ; Phase 0 implémentée, phases 1 à 7 non implémentées**. Les sections marquées
 > `[EXISTANT]` décrivent le code livré. Les sections `[CIBLE]` sont le contrat à respecter pendant
 > la reconstruction.
 >
@@ -122,6 +122,20 @@ Cette dette doit être corrigée avant toute nouvelle mécanique verticale.
 Les routes de sauvegarde voxel et surface suppriment chacune toutes les lignes
 `battlemap_texture_usage` de la carte puis réinsèrent uniquement les textures de leur propre
 document. Sauvegarder une représentation peut donc effacer l'index d'utilisation de l'autre.
+
+### 2.7 Socle partagé `[EXISTANT — PHASE 0]`
+
+Le dossier `shared/world/` fournit désormais :
+
+- `worldMetrics.js` : conversions canoniques en mètres, hauteurs et adaptateurs PE14 ;
+- `movementCost.js` : facteurs explicables, segments pondérés et arrêt à budget épuisé ;
+- `worldContracts.js` : contrats versionnés et immuables `WorldDocument`, `WorldRuntimeState` et
+  `WorldSnapshot` ;
+- `index.js` : point d'entrée commun client/serveur ;
+- treize tests Node, dont le scénario doré de Jon sur l'échelle.
+
+Ce socle est volontairement pur et sans I/O. Il n'est pas encore consommé par les routes, le
+pathfinder, Redis, la LOS ou le combat : ce branchement commence en Phase 1.
 
 ---
 

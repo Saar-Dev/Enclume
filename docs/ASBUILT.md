@@ -1,8 +1,28 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-13 Session 141 (suite 29)
+> Dernière mise à jour : 2026-07-13 — Moteur Monde Phase 0 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
+
+---
+
+## Moteur de monde — Phase 0 ✅
+
+Socle pur partagé ajouté sur `codex/world-engine-integration`, sans branchement runtime à ce stade :
+
+- `shared/world/worldMetrics.js` — source unique cases/mètres/hauteurs + adaptateurs PE14 ;
+- `shared/world/movementCost.js` — facteurs de traversée/surface/environnement/acteur/équipement,
+  segments pondérés et troncature exacte au budget ;
+- `shared/world/worldContracts.js` — contrats versionnés, stricts et immuables pour le document
+  statique, l'état runtime et le snapshot compilé ;
+- `shared/world/index.js` — exports communs ;
+- `shared/world/*.test.mjs` — 13 tests, dont `3 + 3×2×2 = 15 m` pour Jon sur une échelle ;
+- `npm run test:world` — commande de validation dédiée.
+
+Important : le pathfinder, les collisions Redis, la LOS et le combat utilisent encore leur moteur
+voxel historique. Le branchement commence en Phase 1 de `docs/PLAN_MOTEUR_MONDE.md`.
+
+Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statique/runtime/snapshot.
 
 ---
 

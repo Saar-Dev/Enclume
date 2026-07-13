@@ -2,7 +2,7 @@
 
 > Dernière mise à jour : 2026-07-13 — plan issu de l'audit croisé combat/monde.
 >
-> Statut : **planifié, aucun lot ci-dessous n'est réputé codé**.
+> Statut : **Phase 0 codée et vérifiée ; phases 1 à 7 planifiées**.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.
@@ -50,7 +50,7 @@ Point de départ Git vérifié :
 
 ---
 
-## 3. Phase 0 — contrats, unités et tests dorés
+## 3. Phase 0 — contrats, unités et tests dorés ✅
 
 ### Livrables
 
@@ -73,6 +73,18 @@ Point de départ Git vérifié :
 
 Ne pas encore modifier les actions de combat. Cette phase fixe les contrats et révèle les écarts
 d'unité sans changer le comportement de production.
+
+### Livré le 2026-07-13
+
+- `shared/world/worldMetrics.js` ;
+- `shared/world/movementCost.js` ;
+- `shared/world/worldContracts.js` ;
+- `shared/world/index.js` ;
+- commande `npm run test:world` ;
+- 13 tests réussis, `node --check` réussi et build client Vite réussi.
+
+Le socle n'est pas encore branché au runtime. Cette absence est intentionnelle et relève de la
+Phase 1, pas d'un oubli de la Phase 0.
 
 ---
 
