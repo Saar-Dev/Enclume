@@ -1,0 +1,15 @@
+[Unit]
+Description=Enclume Codex Integrated Vite Client
+After=network.target enclume-codex-server.service
+
+[Service]
+Type=simple
+User=codex
+WorkingDirectory=/home/codex/Enclume-integrated/client
+EnvironmentFile=/home/codex/Enclume-integrated/.env
+ExecStart=/usr/bin/node /home/codex/Enclume-integrated/client/node_modules/vite/bin/vite.js --host 0.0.0.0 --port 8293 --strictPort
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

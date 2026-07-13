@@ -24,6 +24,25 @@ Cela maintient à la fois la montée d'une ancienne base et la création d'une b
 Avant la première bascule de l'instance 8293, l'ancien dépôt, la configuration d'exécution, la base
 PostgreSQL et le volume MinIO doivent être archivés ensemble. La migration doit ensuite être testée
 sur une copie restaurée de la base avant d'être appliquée à l'instance de test.
+
+Les unités `deploy/enclume-codex-server.service` et `deploy/enclume-codex-client.service` sont la
+source versionnée du lancement de l'instance Codex. Elles pointent toutes deux vers
+`/home/codex/Enclume-integrated`. Le client impose `--strictPort` sur 8293 : un conflit de port fait
+échouer clairement le service au lieu de publier silencieusement une autre version sur 8295.
+
+### État déployé le 2026-07-13
+
+- instance Codex basculée de `/home/codex/Enclume-codex` vers
+  `/home/codex/Enclume-integrated` à partir du commit `befafb2` ;
+- sauvegarde de restauration :
+  `/home/codex/backups/enclume-switch-20260713-172000` (dépôts Git, configuration, deux dumps
+  PostgreSQL vérifiés et archive MinIO) ;
+- 86 migrations appliquées en batch 15 sur `vtt_codex` ; comptes `users`, `campaigns`,
+  `battlemaps`, `entities` et `tokens` identiques avant/après ;
+- validation préalable sur une restauration jetable, puis validation réelle : 76 tests monde,
+  4 tests transactionnels de migrations, build Vite et démarrage API réussis ;
+- services actifs : `enclume-codex-server.service` sur 8294 et
+  `enclume-codex-client.service` sur 8293 ; aucun processus restant dans l'ancien dépôt.
 > Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 8 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.

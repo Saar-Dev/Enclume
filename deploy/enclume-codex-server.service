@@ -1,0 +1,14 @@
+[Unit]
+Description=Enclume Codex Integrated API Server
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=codex
+WorkingDirectory=/home/codex/Enclume-integrated/server
+ExecStart=/usr/bin/node --env-file=../.env --es-module-specifier-resolution=node src/index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

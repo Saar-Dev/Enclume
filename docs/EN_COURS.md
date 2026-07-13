@@ -14,6 +14,12 @@
 > reste à corriger dans le chantier catalogue combat. La montée de la base Codex existante n'est
 > pas concernée : répétition réussie avec 86 migrations, comptes de lignes inchangés et démarrage
 > serveur validé.
+> Déploiement : les unités systemd Codex sont maintenant versionnées sous `deploy/` et doivent
+> toutes deux cibler `/home/codex/Enclume-integrated`; le client utilise obligatoirement
+> `--strictPort` sur 8293.
+> **Bascule terminée** : batch 15/86 migrations appliqué à `vtt_codex`, comptes principaux
+> inchangés, client 8293 et serveur 8294 actifs sous systemd depuis le dépôt intégré. Point de
+> restauration complet : `/home/codex/backups/enclume-switch-20260713-172000`.
 
 > Dernière mise à jour : 2026-07-13 — Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 > (Lunette de visée) — ✅ clos, fonctionnel confirmé Saar (item 72) ; Session 141 (suite 29) : Interface d'ajout Avantage/
