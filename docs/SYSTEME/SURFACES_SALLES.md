@@ -116,9 +116,13 @@ faire perdre son état runtime.
 Une porte se pose depuis la configuration d’une salle sélectionnée. Elle doit être forcée sur un mur de cette salle. Si le mur est partagé par deux salles, le connecteur peut référencer les deux salles.
 
 Un ascenseur se pose depuis la configuration d’une salle sélectionnée. Sa définition référence une
-cabine et plusieurs arrêts. Son étage courant, ses portes et son déplacement appartiendront à un
+cabine et plusieurs arrêts. Son étage courant, ses portes et son déplacement appartiennent à un
 automate runtime ; l'ascenseur ne doit pas être réduit à une téléportation vers un unique étage
 d'arrivée.
+
+Depuis la Phase 6, cette définition compile une gaine réellement évidée et une cabine praticable
+mobile. Toutes les portes palières restent bloquantes lorsque la cabine est absente. Les tokens
+embarqués sont attachés à son repère local durable et suivent sa hauteur sans déplacement gratuit.
 
 Les modèles 3D de portes/ascenseurs sont choisis depuis la configuration de la salle, pas depuis l’onglet des objets libres. Ils sont attachés au connecteur comme apparence (`modelBlueprintId`, label, catégorie, GLB), mais ils ne doivent pas redevenir la source de vérité.
 
@@ -154,7 +158,8 @@ Les escaliers doivent évoluer vers de vrais connecteurs entre étages :
 - sens d’entrée/sortie ;
 - règles de collision et de navigation.
 
-Les ascenseurs suivront la même logique de connecteur vertical, avec un volume et des arrêts d’étage, plutôt qu’un simple décor posé sur la carte.
+Les ascenseurs suivent la même logique de connecteur vertical, avec un volume, plusieurs arrêts et
+un automate persistant, plutôt qu’un simple décor posé sur la carte.
 
 Les escaliers et échelles doivent exposer des ancrages intermédiaires. Un token dont le budget est
 épuisé termine son déplacement sur le connecteur, et non automatiquement à sa sortie.

@@ -1,0 +1,89 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+
+import {
+  commandElevator,
+  createInitialElevatorState,
+  elevatorPassengerWorldPoint,
+  normalizeElevatorDefinition,
+  reconcileElevatorState,
+  requestElevatorStop,
+} from './elevatorRuntime.js'
+
+const elevator = normalizeElevatorDefinition({
+  id: 'elevator-test',
+  x: 2,
+  z: 3,
+  fromLevel: 0,
+  toLevel: 2,
+  travelSecondsPerLevel: 2,
+  doorSeconds: 1,
+  dwellSeconds: 0.5,
+})
+
+test('la cabine ferme, se déplace physiquement puis ouvre au palier demandé', () => {
+  const initial = createInitialElevatorState(elevator, { now: 0 })
+  const requested = requestElevatorStop(elevator, initial, {
+    stopId: 'level:2', requestId: 'r1', requestedAt: 0,
+  })
+  assert.equal(requested.phase, 'closing')
+  assert.equal(requested.doorState, 'closing')
+
+  const moving = reconcileElevatorState(elevator, requested, 2000)
+  assert.equal(moving.phase, 'moving')
+  assert.ok(moving.positionY > elevator.stops[0].y && moving.positionY < elevator.stops[2].y)
+
+  const arrived = reconcileElevatorState(elevator, requested, 5500)
+  assert.equal(arrived.phase, 'opening')
+  assert.equal(arrived.currentStopId, 'level:2')
+
+  const open = reconcileElevatorState(elevator, requested, 6000)
+  assert.equal(open.phase, 'open')
+  assert.equal(open.positionY, elevator.stops[2].y)
+  assert.deepEqual(open.queue, [])
+})
+
+test('deux demandes concurrentes ont un ordre stable par date puis identité', () => {
+  const initial = commandElevator(elevator, createInitialElevatorState(elevator), { type: 'close' }, 0)
+  const firstArrival = requestElevatorStop(elevator, initial, {
+    stopId: 'level:2', requestId: 'z-request', requestedAt: 50,
+  })
+  const secondArrival = requestElevatorStop(elevator, firstArrival, {
+    stopId: 'level:1', requestId: 'a-request', requestedAt: 50,
+  })
+  assert.deepEqual(secondArrival.queue.map(request => request.id), ['a-request', 'z-request'])
+})
+
+test('une porte bloquée suspend l’automate puis reprend la transition restante', () => {
+  const closing = requestElevatorStop(elevator, createInitialElevatorState(elevator), {
+    stopId: 'level:1', requestId: 'r1', requestedAt: 0,
+  })
+  const blocked = commandElevator(elevator, closing, { type: 'block', reason: 'baril' }, 400)
+  assert.equal(blocked.phase, 'blocked')
+  assert.equal(reconcileElevatorState(elevator, blocked, 100000).positionY, closing.positionY)
+  const resumed = commandElevator(elevator, blocked, { type: 'unblock' }, 100000)
+  assert.equal(resumed.phase, 'closing')
+  assert.equal(resumed.transitionEndsAt, 100600)
+})
+
+test('un état sérialisé peut être réconcilié après redémarrage', () => {
+  const requested = requestElevatorStop(elevator, createInitialElevatorState(elevator), {
+    stopId: 'level:2', requestId: 'r1', requestedAt: 1000,
+  })
+  const restored = JSON.parse(JSON.stringify(requested))
+  const result = reconcileElevatorState(elevator, restored, 8000)
+  assert.equal(result.phase, 'open')
+  assert.equal(result.currentStopId, 'level:2')
+})
+
+test('un passager conserve ses coordonnées locales quand la cabine monte', () => {
+  const point = elevatorPassengerWorldPoint(elevator, { positionY: 5.125 }, { x: 0.5, y: 0, z: 0.5 })
+  assert.deepEqual(point, { x: 2.5, y: 5.125, z: 3.5 })
+})
+
+test('un ascenseur dessiné depuis le haut démarre bien au palier choisi', () => {
+  const descending = normalizeElevatorDefinition({
+    id: 'elevator-descending', fromLevel: 2, toLevel: 0,
+  })
+  assert.equal(createInitialElevatorState(descending).currentStopId, 'level:2')
+})

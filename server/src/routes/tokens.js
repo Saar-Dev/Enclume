@@ -123,6 +123,9 @@ router.post('/:id/teleport', requireAuth, async (req, res, next) => {
       const currentMap = await trx('battlemaps').where({ id: token.battlemap_id }).forUpdate().first()
       const currentToken = await trx('tokens').where({ id: token.id }).forUpdate().first()
       if (!currentMap || !currentToken) throw new AppError(409, 'World state changed before teleport')
+      // Un teleport est un détachement administratif explicite. Sans ceci, la prochaine
+      // réconciliation de cabine ramènerait le token à son ancienne position locale.
+      await trx('world_elevator_passengers').where({ token_id: token.id }).del()
       ;[updated] = await trx('tokens')
         .where({ id: token.id })
         .update({

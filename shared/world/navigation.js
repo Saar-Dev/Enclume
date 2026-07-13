@@ -138,6 +138,7 @@ export function buildNavigationGraph(snapshot, {
       sourceId: support.sourceId,
       movementMultiplier: Number(support.movementMultiplier || 1),
       stable: true,
+      mobile: support.mobile === true,
     })
     supportNodes.push(node)
   }

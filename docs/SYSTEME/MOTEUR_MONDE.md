@@ -1,6 +1,6 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-13 — Phase 5, régions et effets runtime.
+> Dernière mise à jour : 2026-07-13 — Phase 6, cabine d'ascenseur mobile.
 >
 > Statut : **architecture cible validée ; Phases 0 à 5 implémentées, phases 6 et 7 non implémentées**. Les sections marquées
 > `[EXISTANT]` décrivent le code livré. Les sections `[CIBLE]` sont le contrat à respecter pendant
@@ -398,8 +398,24 @@ et sa cabine appartiennent à l'état runtime.
   futur GLB n'est qu'une apparence ;
 - les labels du chemin présentent `distance × facteur = coût` pour les segments pondérés.
 
-Un ascenseur compilé demeure volontairement non navigable avec
-`requiresRuntimeController: true` jusqu'à la Phase 6.
+### Implémentation Phase 6
+
+- un ascenseur compile une gaine évidée et une vraie cabine mobile : support praticable, plancher,
+  plafond, parois, portes de cabine et compartiment ;
+- chaque palier possède une barrière physique. Elle ne s'ouvre que si la cabine est exactement
+  alignée et que l'automate est en phase `open` ;
+- le graphe ne contient jamais de traversée verticale d'ascenseur. Il ne produit qu'une courte
+  traversée d'embarquement lorsque cabine et palier sont compatibles ;
+- l'automate pur `elevatorRuntime.js` persiste phase, position, arrêt courant, destination, file,
+  échéances, blocage et état de reprise dans `world_feature_states` ;
+- `worldElevatorService.js` avance cette horloge sous verrou de battlemap. Les appels concurrents
+  sont ordonnés par date puis identité stable ; aucun timer en mémoire n'est une autorité ;
+- `world_elevator_passengers` attache au plus une cabine à un token et stocke sa position locale.
+  Toute réconciliation déplace ces tokens dans la même transaction avant navigation ou visibilité ;
+- le renderer interpole la cabine depuis les mêmes échéances, tandis que le serveur reste
+  l'autorité des collisions, des portes, de l'occupation et des lignes de vue ;
+- les anciennes cartes ne justifient aucun mode de compatibilité. Une fixture legacy peut rester
+  uniquement si elle ne modifie pas les contrats du monde canonique.
 
 ---
 

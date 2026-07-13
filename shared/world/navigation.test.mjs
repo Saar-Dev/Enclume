@@ -74,6 +74,47 @@ test('le multiplicateur MJ de la surface pondère l’entrée sur la case', () =
   assert.equal(result.plan.spentM, 7.5)
 })
 
+test('la cabine est navigable seulement lorsqu’elle est alignée avec ses portes ouvertes', () => {
+  const surfaceData = emptySurface({
+    rooms: { roomA: room('roomA', 0, 1) },
+    connectors: {
+      liftA: {
+        id: 'liftA', type: 'elevator', x: 0, z: 0,
+        fromLevel: 0, toLevel: 2, doorAxis: 'x', doorSide: 1,
+      },
+    },
+  })
+  const open = compileSurfaceWorld({ battlemapId: 'map-elevator-nav', surfaceData })
+  const boarded = planWorldPath({
+    snapshot: open,
+    from: { x: 1.5, y: 0.125, z: 0.5 },
+    to: { x: 0.5, y: 0.125, z: 0.5 },
+    budgetM: 10,
+  })
+  assert.equal(boarded.status, 'destination')
+
+  const elevatorId = open.spatial.supports.find(item => item.kind === 'elevator-cabin').sourceId
+  const moving = compileSurfaceWorld({
+    battlemapId: 'map-elevator-nav',
+    surfaceData,
+    runtimeState: { featureStates: {
+      [elevatorId]: {
+        phase: 'moving', currentStopId: 'level:0', targetStopId: 'level:2',
+        positionY: 2.625, doorState: 'closed', queue: [],
+        transitionStartedAt: 0, transitionEndsAt: 10000,
+        movementFromY: 0.125, movementToY: 5.125,
+      },
+    } },
+  })
+  const absent = planWorldPath({
+    snapshot: moving,
+    from: { x: 1.5, y: 0.125, z: 0.5 },
+    to: { x: 0.5, y: 2.625, z: 0.5 },
+    budgetM: 20,
+  })
+  assert.equal(absent.status, 'unreachable')
+})
+
 test('un effet volumique pondère A* et le plan avec la même catégorie environnement', () => {
   const snapshot = compileSurfaceWorld({
     battlemapId: 'map-effect-cost',

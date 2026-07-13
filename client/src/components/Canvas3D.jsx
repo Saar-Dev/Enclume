@@ -13,6 +13,7 @@ import { useCameraLOS } from '../lib/useCameraLOS.js'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
 import DungeonTerrainScene from './DungeonTerrainScene.jsx'
 import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
+import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
 import { hasSurfaceContent, levelToY, normalizeSurfaceData, surfaceTextureIds, yToLevel } from '../lib/surfaceData.js'
@@ -490,7 +491,8 @@ function ThirdPersonCamera({ token, enabled, onTokenSetRotation, updateToken }) 
 }
 
 function Scene({
-  voxels, setVoxels, surfaceData, textureMaterials, entityTextureMaterials, runtimeEffectRegions, socket, battlemapId,
+  voxels, setVoxels, surfaceData, textureMaterials, entityTextureMaterials, runtimeEffectRegions, runtimeFeatureStates, socket, battlemapId,
+  selectedSurfaceConnectorId, onSurfaceConnectorSelect,
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
   altPressed, onEntityClick, onTokenRotate, onTokenSetRotation,
@@ -1071,7 +1073,14 @@ function Scene({
       />
 
       {hasSurfaceContent(surfaceData) ? (
-        <SurfaceDungeonScene surfaceData={surfaceData} textureMaterials={textureMaterials} displayLevel={displayLevel} />
+        <SurfaceDungeonScene
+          surfaceData={surfaceData}
+          textureMaterials={textureMaterials}
+          displayLevel={displayLevel}
+          runtimeFeatureStates={runtimeFeatureStates}
+          selectedConnectorId={selectedSurfaceConnectorId}
+          onConnectorSelect={onSurfaceConnectorSelect}
+        />
       ) : USE_DIORAMA_TERRAIN ? (
         <DungeonTerrainScene voxels={voxels} textureMaterials={textureMaterials} />
       ) : (
@@ -1325,6 +1334,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
+  const { isGm } = useCharacterStore()
 
   // Labels i18n pour le ghost — calculés ici où t() est accessible, passés en prop à Scene
   const moveLabels = {
@@ -1338,6 +1348,8 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const [textureMaterials, setTextureMaterials] = useState({})
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
   const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
+  const [runtimeElevatorStates, setRuntimeElevatorStates] = useState({})
+  const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [blocksReady, setBlocksReady] = useState(false)
   const [selectedTokenId, setSelectedTokenId] = useState(null)
 
@@ -1353,14 +1365,39 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
 
   useEffect(() => { refreshRuntimeEffects() }, [refreshRuntimeEffects])
 
+  const refreshRuntimeElevators = useCallback(async () => {
+    if (!battlemap?.id) return setRuntimeElevatorStates({})
+    try {
+      const { data } = await api.get(`/battlemaps/${battlemap.id}/world-elevators`)
+      setRuntimeElevatorStates(data.worldElevators?.states || {})
+    } catch (error) {
+      console.error('[Canvas3D] Erreur chargement ascenseurs monde :', error)
+    }
+  }, [battlemap?.id])
+
+  useEffect(() => { refreshRuntimeElevators() }, [refreshRuntimeElevators])
+
+  const elevatorsAreTransitioning = useMemo(
+    () => Object.values(runtimeElevatorStates).some(state => ['closing', 'moving', 'opening'].includes(state?.phase)),
+    [runtimeElevatorStates],
+  )
+
+  useEffect(() => {
+    if (!elevatorsAreTransitioning) return undefined
+    const timer = window.setInterval(refreshRuntimeElevators, 300)
+    return () => window.clearInterval(timer)
+  }, [elevatorsAreTransitioning, refreshRuntimeElevators])
+
   useEffect(() => {
     if (!socket || !battlemap?.id) return undefined
     const handleRuntimeUpdate = event => {
-      if (String(event?.battlemapId) === String(battlemap.id)) refreshRuntimeEffects()
+      if (String(event?.battlemapId) !== String(battlemap.id)) return
+      if (event?.kind !== 'elevator-clock') refreshRuntimeElevators()
+      if (!String(event?.kind || '').startsWith('elevator-')) refreshRuntimeEffects()
     }
     socket.on(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
     return () => socket.off(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
-  }, [socket, battlemap?.id, refreshRuntimeEffects])
+  }, [socket, battlemap?.id, refreshRuntimeEffects, refreshRuntimeElevators])
 
   // ─── Liseré surbrillance entités (touche Alt) ─────────────────────────────
   // PE16 : e.code obligatoire (invariant AZERTY/QWERTY)
@@ -1510,12 +1547,36 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battlemap?.id, battlemap?.voxel_data, battlemap?.surface_data, blueprintIds])
 
+  const selectedSurfaceConnector = useMemo(() => {
+    const id = surfaceConnectorPanel?.connectorId
+    const connector = id ? surfaceData.connectors?.[id] : null
+    return connector ? { id, ...connector } : null
+  }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
+
+  const handleSurfaceConnectorSelect = useCallback((connectorId, connector, event) => {
+    if (connector?.type !== 'elevator') return
+    const source = event?.nativeEvent || event?.sourceEvent || event || {}
+    setSurfaceConnectorPanel({
+      connectorId,
+      x: Number(source.clientX) || 24,
+      y: Number(source.clientY) || 24,
+    })
+  }, [])
+
+  const handleElevatorCommand = useCallback(async (elevatorId, command) => {
+    if (!battlemap?.id || !elevatorId) return
+    await api.post(`/battlemaps/${battlemap.id}/world-elevators/${elevatorId}/commands`, command)
+    await refreshRuntimeElevators()
+  }, [battlemap?.id, refreshRuntimeElevators])
+
   const handleCanvasClick = useCallback(() => {
     if (justSelectedRef.current) { justSelectedRef.current = false; return }
     setSelectedTokenId(null)
+    setSurfaceConnectorPanel(null)
   }, [])
 
   return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
     <Canvas
       camera={{ position: [15, 15, 15], fov: 60 }}
       style={{ background: '#0f172a' }}
@@ -1530,9 +1591,12 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}
           runtimeEffectRegions={runtimeEffectRegions}
+          runtimeFeatureStates={runtimeElevatorStates}
           socket={socket}
           battlemapId={battlemap?.id}
           selectedTokenId={selectedTokenId}
+          selectedSurfaceConnectorId={surfaceConnectorPanel?.connectorId || null}
+          onSurfaceConnectorSelect={handleSurfaceConnectorSelect}
           onTokenSelect={setSelectedTokenId}
           onTokenDoubleClick={onTokenDoubleClick}
           justSelectedRef={justSelectedRef}
@@ -1559,5 +1623,18 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
         />
       )}
     </Canvas>
+    {surfaceConnectorPanel && selectedSurfaceConnector && (
+      <SurfaceConnectorPanel
+        connector={selectedSurfaceConnector}
+        x={surfaceConnectorPanel.x}
+        y={surfaceConnectorPanel.y}
+        runtimeState={runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
+        onElevatorCommand={handleElevatorCommand}
+        canEdit={false}
+        canAdminElevator={isGm}
+        onClose={() => setSurfaceConnectorPanel(null)}
+      />
+    )}
+    </div>
   )
 }

@@ -542,6 +542,11 @@ export default function Sidebar({
     ladderWidth: 0.7,
     ladderDepth: 0.12,
     ladderAnchorSpacing: 0.5,
+    elevatorDoorAxis: 'z',
+    elevatorDoorSide: 1,
+    elevatorTravelSecondsPerLevel: 2,
+    elevatorDoorSeconds: 0.75,
+    elevatorDwellSeconds: 0.75,
     effectDefinitionKey: 'fire',
     effectIntensity: 1,
     effectHeight: 2.5,
@@ -1403,6 +1408,7 @@ export default function Sidebar({
                       </button>
                     </div>
                     {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator' && (
+                      <div style={styles.connectorPicker}>
                       <label style={styles.roomToolLabel}>
                         <span>{t('surfaceEditor.elevatorToLevel')}</span>
                         <select
@@ -1415,6 +1421,40 @@ export default function Sidebar({
                           ))}
                         </select>
                       </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Axe de la porte</span>
+                        <select
+                          value={surfaceToolState.elevatorDoorAxis || 'z'}
+                          onChange={e => updateSurfaceTool({ elevatorDoorAxis: e.target.value })}
+                          style={styles.roomToolSelect}
+                        >
+                          <option value="z">Nord / sud</option>
+                          <option value="x">Est / ouest</option>
+                        </select>
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Côté de la porte</span>
+                        <select
+                          value={Number(surfaceToolState.elevatorDoorSide) < 0 ? -1 : 1}
+                          onChange={e => updateSurfaceTool({ elevatorDoorSide: Number(e.target.value) })}
+                          style={styles.roomToolSelect}
+                        >
+                          <option value={1}>Positif</option>
+                          <option value={-1}>Négatif</option>
+                        </select>
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Trajet par étage (s)</span>
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          value={surfaceToolState.elevatorTravelSecondsPerLevel || 2}
+                          onChange={e => updateSurfaceTool({ elevatorTravelSecondsPerLevel: Math.max(0.1, Number(e.target.value) || 2) })}
+                          style={styles.roomToolInput}
+                        />
+                      </label>
+                      </div>
                     )}
                     {surfaceToolState.mode === 'connector' && (
                       <div style={styles.connectorPicker}>

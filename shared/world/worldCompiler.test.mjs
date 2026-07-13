@@ -229,7 +229,7 @@ test('une passerelle détruite ne compile plus son support', () => {
   assert.equal(destroyed.spatial.colliders.some(item => item.sourceId === bridge.sourceId), false)
 })
 
-test('un ascenseur n’est pas transformé en téléportation avant son contrôleur runtime', () => {
+test('un ascenseur compile une cabine mobile et jamais une téléportation verticale', () => {
   const snapshot = compileSurfaceWorld({
     battlemapId: 'map-elevator',
     surfaceData: emptySurface({
@@ -247,10 +247,40 @@ test('un ascenseur n’est pas transformé en téléportation avant son contrôl
       },
     }),
   })
-  const traversal = snapshot.spatial.traversals.find(item => item.kind === 'elevator')
-  assert.equal(traversal.enabled, false)
-  assert.equal(traversal.allowPartial, false)
-  assert.equal(traversal.requiresRuntimeController, true)
+  assert.equal(snapshot.spatial.traversals.some(item => item.mode === 'elevator'), false)
+  const boarding = snapshot.spatial.traversals.find(item => item.kind === 'elevator-boarding')
+  assert.ok(boarding)
+  assert.equal(boarding.allowPartial, false)
+  const cabin = snapshot.spatial.supports.find(item => item.kind === 'elevator-cabin')
+  assert.ok(cabin)
+  assert.equal(cabin.mobile, true)
+})
+
+test('une cabine en mouvement ferme tous les paliers et déplace son support', () => {
+  const surfaceData = emptySurface({
+    connectors: {
+      liftA: { id: 'liftA', type: 'elevator', x: 0, z: 0, fromLevel: 0, toLevel: 2 },
+    },
+  })
+  const initial = compileSurfaceWorld({ battlemapId: 'map-moving-lift', surfaceData })
+  const sourceId = initial.spatial.supports.find(item => item.kind === 'elevator-cabin').sourceId
+  const moving = compileSurfaceWorld({
+    battlemapId: 'map-moving-lift',
+    surfaceData,
+    runtimeState: {
+      featureStates: {
+        [sourceId]: {
+          phase: 'moving', currentStopId: 'level:0', targetStopId: 'level:2',
+          positionY: 2.625, doorState: 'closed', queue: [],
+          transitionStartedAt: 0, transitionEndsAt: 10000,
+          movementFromY: 0.125, movementToY: 5.125,
+        },
+      },
+    },
+  })
+  assert.equal(moving.spatial.traversals.some(item => item.kind === 'elevator-boarding'), false)
+  assert.equal(moving.spatial.supports.find(item => item.kind === 'elevator-cabin').y, 2.625)
+  assert.equal(moving.spatial.barriers.filter(item => item.kind === 'elevator-landing-door').length, 3)
 })
 
 test('la compilation est déterministe pour une même entrée', () => {

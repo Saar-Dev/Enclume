@@ -818,6 +818,27 @@ function ConnectorSelectionOutline({ connector }) {
   )
 }
 
+function elevatorDisplayY(state, fallbackY, now = Date.now()) {
+  if (state?.phase !== 'moving' || !Number.isFinite(Number(state.transitionEndsAt))) {
+    return Number.isFinite(Number(state?.positionY)) ? Number(state.positionY) : fallbackY
+  }
+  const startedAt = Number(state.transitionStartedAt)
+  const endsAt = Number(state.transitionEndsAt)
+  const fromY = Number(state.movementFromY)
+  const toY = Number(state.movementToY)
+  if (![startedAt, endsAt, fromY, toY].every(Number.isFinite) || endsAt <= startedAt) return fallbackY
+  const ratio = Math.max(0, Math.min(1, (now - startedAt) / (endsAt - startedAt)))
+  return fromY + (toY - fromY) * ratio
+}
+
+function AnimatedElevatorCabin({ state, fallbackY, children }) {
+  const ref = useRef()
+  useFrame(() => {
+    if (ref.current) ref.current.position.y = elevatorDisplayY(state, fallbackY)
+  })
+  return <group ref={ref} position={[0, elevatorDisplayY(state, fallbackY), 0]}>{children}</group>
+}
+
 function DoorConnectorModel({ connector, opacity = 1 }) {
   const url = connectorAssetUrl(connector)
   const box = connectorDoorBox(connector)
@@ -990,19 +1011,92 @@ function ConnectorSegment({ connector, opacity = 1, selected = false, onPointerS
   }
 
   if (connector.type === 'elevator') {
-    const y = Number(connector.y) || 0
-    const topY = Number(connector.topY) || y + STORY_HEIGHT
-    const height = Math.max(0.2, topY - y)
+    const width = Math.max(0.5, Number(connector.width) || 1)
+    const depth = Math.max(0.5, Number(connector.depth) || 1)
+    const cabinHeight = Math.max(1, Number(connector.cabinHeight) || Math.min(2.2, STORY_HEIGHT * 0.88))
+    const floorThickness = Math.max(0.04, Number(connector.cabinFloorThickness) || 0.12)
+    const wallThickness = Math.max(0.04, Number(connector.cabinWallThickness) || 0.08)
+    const stops = Array.isArray(connector.stops) && connector.stops.length
+      ? connector.stops
+      : [
+        { id: `level:${connector.fromLevel ?? connector.level ?? 0}`, y: Number(connector.y) || 0 },
+        { id: `level:${connector.toLevel ?? ((connector.level ?? 0) + 1)}`, y: Number(connector.topY) || (Number(connector.y) || 0) + STORY_HEIGHT },
+      ]
+    const runtimeState = connector.runtimeState || {}
+    const floorY = Number.isFinite(Number(runtimeState.positionY))
+      ? Number(runtimeState.positionY)
+      : Number(stops[0]?.y) || Number(connector.y) || 0
+    const currentStop = stops.find(stop => stop.id === runtimeState.currentStopId)
+    const doorsOpen = runtimeState.phase === 'open'
+      && runtimeState.doorState === 'open'
+      && currentStop
+      && Math.abs(Number(currentStop.y) - floorY) < 0.001
+    const x = Number(connector.x) || 0
+    const z = Number(connector.z) || 0
+    const centerX = x + width / 2
+    const centerZ = z + depth / 2
+    const shaftBottom = Math.min(...stops.map(stop => Number(stop.y) || 0))
+    const shaftTop = Math.max(...stops.map(stop => Number(stop.y) || 0)) + cabinHeight
+    const doorAxis = connector.doorAxis === 'x' ? 'x' : 'z'
+    const doorSide = Number(connector.doorSide) < 0 ? -1 : 1
+    const faces = [
+      { axis: 'x', side: -1 }, { axis: 'x', side: 1 },
+      { axis: 'z', side: -1 }, { axis: 'z', side: 1 },
+    ]
+    const faceBox = (face, y) => face.axis === 'x'
+      ? {
+        position: [face.side < 0 ? x : x + width, y, centerZ],
+        args: [wallThickness, cabinHeight, depth],
+      }
+      : {
+        position: [centerX, y, face.side < 0 ? z : z + depth],
+        args: [width, cabinHeight, wallThickness],
+      }
     return (
       <group renderOrder={30} {...pointerProps}>
-        <mesh position={[Number(connector.x) + 0.5, y + height / 2, Number(connector.z) + 0.5]}>
-          <boxGeometry args={[0.9, height, 0.9]} />
-          <meshBasicMaterial color="#8b5cf6" transparent opacity={Math.min(0.32, opacity * 0.32)} depthWrite={false} />
+        <mesh position={[centerX, shaftBottom + (shaftTop - shaftBottom) / 2, centerZ]}>
+          <boxGeometry args={[width + wallThickness * 2, shaftTop - shaftBottom, depth + wallThickness * 2]} />
+          <meshBasicMaterial color="#7c3aed" wireframe transparent opacity={Math.min(0.2, opacity * 0.2)} depthWrite={false} />
         </mesh>
-        <mesh position={[Number(connector.x) + 0.5, y + 0.08, Number(connector.z) + 0.5]}>
-          <boxGeometry args={[0.9, 0.06, 0.9]} />
-          <meshBasicMaterial color="#c4b5fd" transparent opacity={Math.min(0.9, opacity)} depthWrite={false} />
-        </mesh>
+        {stops.map(stop => {
+          const open = doorsOpen && stop.id === runtimeState.currentStopId
+          if (open) return null
+          const face = { axis: doorAxis, side: doorSide }
+          const box = faceBox(face, Number(stop.y) + cabinHeight / 2)
+          return (
+            <mesh key={`landing-${stop.id}`} position={box.position}>
+              <boxGeometry args={box.args} />
+              <meshStandardMaterial color="#475569" transparent opacity={Math.min(0.82, opacity)} />
+            </mesh>
+          )
+        })}
+        <AnimatedElevatorCabin state={runtimeState} fallbackY={floorY}>
+          <mesh position={[centerX, -floorThickness / 2, centerZ]} receiveShadow>
+            <boxGeometry args={[width, floorThickness, depth]} />
+            <meshStandardMaterial color="#a78bfa" metalness={0.55} roughness={0.38} transparent opacity={Math.min(0.96, opacity)} />
+          </mesh>
+          <mesh position={[centerX, cabinHeight - floorThickness / 2, centerZ]} castShadow>
+            <boxGeometry args={[width, floorThickness, depth]} />
+            <meshStandardMaterial color="#64748b" metalness={0.45} roughness={0.45} transparent opacity={Math.min(0.92, opacity)} />
+          </mesh>
+          {faces.map(face => {
+            const isDoor = face.axis === doorAxis && face.side === doorSide
+            if (isDoor && doorsOpen) return null
+            const box = faceBox(face, cabinHeight / 2)
+            return (
+              <mesh key={`cabin-${face.axis}-${face.side}`} position={box.position} castShadow>
+                <boxGeometry args={box.args} />
+                <meshStandardMaterial color={isDoor ? '#8b5cf6' : '#334155'} metalness={0.5} roughness={0.42} transparent opacity={Math.min(isDoor ? 0.9 : 0.72, opacity)} />
+              </mesh>
+            )
+          })}
+          {selected && (
+            <mesh position={[centerX, cabinHeight / 2, centerZ]} renderOrder={45}>
+              <boxGeometry args={[width + 0.1, cabinHeight + 0.1, depth + 0.1]} />
+              <meshBasicMaterial color="#fbbf24" wireframe transparent opacity={0.95} depthWrite={false} />
+            </mesh>
+          )}
+        </AnimatedElevatorCabin>
       </group>
     )
   }
@@ -1257,6 +1351,7 @@ function SurfaceDungeonScene({
   showDetails = true,
   selectedConnectorId = null,
   onConnectorSelect = null,
+  runtimeFeatureStates = {},
 }) {
   const surface = useMemo(() => normalizeSurfaceData(surfaceData), [surfaceData])
   const water = useMemo(
@@ -1343,7 +1438,11 @@ function SurfaceDungeonScene({
       {Object.entries(surface.connectors).map(([id, connector]) => ownerIsVisible(connector?.y) ? (
         <ConnectorSegment
           key={id}
-          connector={{ id, ...connector }}
+          connector={{
+            id,
+            ...connector,
+            runtimeState: runtimeFeatureStates[connector?.worldId || id] || null,
+          }}
           opacity={1}
           selected={id === selectedConnectorId || connector?.id === selectedConnectorId}
           onPointerSelect={onConnectorSelect}

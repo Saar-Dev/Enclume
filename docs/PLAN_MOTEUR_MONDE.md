@@ -320,7 +320,7 @@ Phase 7.
 
 ---
 
-## 9. Phase 6 — ascenseur mobile
+## 9. Phase 6 — ascenseur mobile ✅
 
 ### Livrables
 
@@ -340,6 +340,25 @@ Phase 7.
 - deux demandes concurrentes produisent un ordre déterministe ;
 - un blocage de porte empêche le départ ;
 - reconnexion et redémarrage restaurent l'état runtime.
+
+### Implémentation livrée
+
+- `shared/world/elevatorRuntime.js` porte l'automate pur et sérialisable, les arrêts multiples,
+  l'interpolation physique, la file d'appels stable et le blocage/reprise des portes ;
+- le compilateur découpe la gaine dans les dalles, produit une cabine mobile praticable, ses
+  colliders/occluders, ses portes palières et une traversée d'embarquement seulement au palier
+  aligné avec portes ouvertes ; aucune arête verticale d'ascenseur n'existe ;
+- `worldElevatorService.js` réconcilie l'horloge sous verrou de battlemap, persiste l'état dans
+  `world_feature_states` et déplace les tokens attachés dans le même référentiel local ;
+- la migration 155 ajoute `world_elevator_passengers`. La file et les échéances restant dans l'état
+  de feature, un redémarrage ne perd ni la destination ni les passagers ;
+- déplacement, occupation, LOS et couverture réconcilient la cabine avant de compiler leur
+  snapshot runtime ;
+- l'éditeur configure les arrêts, l'orientation de porte et la vitesse. Éditeur et session rendent
+  la vraie petite cabine mobile ; un joueur appelle un palier, le MJ peut aussi bloquer, débloquer,
+  ouvrir ou fermer la porte ;
+- validation : 64 tests monde, build Vite et aller-retour transactionnel PostgreSQL de la migration
+  155.
 
 ---
 

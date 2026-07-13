@@ -1138,6 +1138,7 @@ export default function Editor3D({
   const [surfaceData, setSurfaceData] = useState(() => normalizeSurfaceData(null))
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
+  const [runtimeElevatorStates, setRuntimeElevatorStates] = useState({})
   const [textureMaterials, setTextureMaterials] = useState({})
   const [blocksReady, setBlocksReady] = useState(false)
 
@@ -1195,14 +1196,42 @@ export default function Editor3D({
 
   useEffect(() => { refreshRuntimeEffects() }, [refreshRuntimeEffects])
 
+  const refreshRuntimeElevators = useCallback(async () => {
+    if (!battlemap?.id) {
+      setRuntimeElevatorStates({})
+      return
+    }
+    try {
+      const { data } = await api.get(`/battlemaps/${battlemap.id}/world-elevators`)
+      setRuntimeElevatorStates(data.worldElevators?.states || {})
+    } catch (error) {
+      console.error('[Editor3D] Erreur chargement ascenseurs runtime :', error)
+    }
+  }, [battlemap?.id])
+
+  useEffect(() => { refreshRuntimeElevators() }, [refreshRuntimeElevators])
+
+  const elevatorsAreTransitioning = useMemo(
+    () => Object.values(runtimeElevatorStates).some(state => ['closing', 'moving', 'opening'].includes(state?.phase)),
+    [runtimeElevatorStates],
+  )
+
+  useEffect(() => {
+    if (!elevatorsAreTransitioning) return undefined
+    const timer = window.setInterval(refreshRuntimeElevators, 300)
+    return () => window.clearInterval(timer)
+  }, [elevatorsAreTransitioning, refreshRuntimeElevators])
+
   useEffect(() => {
     if (!socket || !battlemap?.id) return undefined
     const handleRuntimeUpdate = event => {
-      if (String(event?.battlemapId) === String(battlemap.id)) refreshRuntimeEffects()
+      if (String(event?.battlemapId) !== String(battlemap.id)) return
+      if (event?.kind !== 'elevator-clock') refreshRuntimeElevators()
+      if (!String(event?.kind || '').startsWith('elevator-')) refreshRuntimeEffects()
     }
     socket.on(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
     return () => socket.off(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
-  }, [socket, battlemap?.id, refreshRuntimeEffects])
+  }, [socket, battlemap?.id, refreshRuntimeEffects, refreshRuntimeElevators])
 
   useEffect(() => {
     surfaceUndoStackRef.current = []
@@ -1430,6 +1459,12 @@ export default function Editor3D({
     }
   }, [battlemap?.id, refreshRuntimeEffects])
 
+  const handleElevatorCommand = useCallback(async (elevatorId, command) => {
+    if (!battlemap?.id || !elevatorId) return
+    await api.post(`/battlemaps/${battlemap.id}/world-elevators/${elevatorId}/commands`, command)
+    await refreshRuntimeElevators()
+  }, [battlemap?.id, refreshRuntimeElevators])
+
   const selectedSurfaceConnector = useMemo(() => {
     const connectorId = surfaceConnectorPanel?.connectorId
     if (!connectorId) return null
@@ -1627,6 +1662,7 @@ export default function Editor3D({
             selectedConnectorId={surfaceConnectorPanel?.connectorId || surfaceTool?.selectedConnectorId || null}
             onSurfaceConnectorSelect={handleSurfaceConnectorSelect}
             runtimeEffectRegions={runtimeEffectRegions}
+            runtimeFeatureStates={runtimeElevatorStates}
             onRuntimeEffectCreate={handleRuntimeEffectCreate}
           />
         )}
@@ -1638,6 +1674,8 @@ export default function Editor3D({
           x={surfaceConnectorPanel.x}
           y={surfaceConnectorPanel.y}
           onPatch={handleSurfaceConnectorPatch}
+          runtimeState={runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
+          onElevatorCommand={handleElevatorCommand}
           onClose={closeSurfaceConnectorPanel}
         />
       )}

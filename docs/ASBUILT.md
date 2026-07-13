@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 5 ; Session 141 (suite 29) conservée.
+> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 6 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -117,6 +117,26 @@ L'ascenseur reste expressément non navigable avant son automate de Phase 6.
 - navigation et LOS consomment les mêmes régions runtime et la même `runtime_revision` ;
 - éditeur de volumes environnementaux, création d'effet personnalisé et affichage session ;
 - validation : 57 tests monde, build Vite, migration `up/down` transactionnelle PostgreSQL.
+
+---
+
+## Moteur de monde — Phase 6 ✅
+
+- `shared/world/elevatorRuntime.js` — automate durable `idle/open/closing/moving/opening/blocked`,
+  arrêts multiples, appels déterministes, interpolation et reprise après redémarrage ;
+- `worldCompiler.js` — gaine découpée dans les étages, cabine mobile avec sol/plafond/parois,
+  portes palières fermées en l'absence de cabine et embarquement uniquement aligné/portes ouvertes ;
+- `server/src/services/worldElevatorService.js` — réconciliation transactionnelle sous verrou,
+  commandes, persistance et translation des passagers dans le repère local de cabine ;
+- migration 155 — `world_elevator_passengers`, position locale durable et unicité d'attachement ;
+- déplacement et visibilité consomment la position réconciliée avant toute navigation, collision,
+  LOS ou couverture ;
+- éditeur et session affichent la petite cabine animée. Les joueurs appellent un palier ; le MJ
+  administre aussi le blocage et les portes ;
+- validation : 64 tests monde, build Vite, migration 155 `up/down` transactionnelle PostgreSQL.
+
+Les cartes historiques ne constituent pas une cible de migration. Elles ne sont conservées comme
+fixtures que si elles n'ajoutent aucun adaptateur ni branche conditionnelle au moteur canonique.
 
 ---
 
@@ -344,6 +364,10 @@ Enclume/
 | GET | /battlemaps/:id/world-snapshot | Snapshot physique immuable de la révision courante |
 | POST | /battlemaps/:id/world-path-preview | Aperçu de chemin ; budget numérique autorisé uniquement pour l'aperçu |
 | POST | /battlemaps/:id/world-move | Intention `{ token_id, destination, gait }`, budget et résultat calculés serveur |
+| POST | /battlemaps/:id/world-visibility | LOS, couverture et interposition sur le snapshot runtime courant |
+| GET/POST/PATCH/DELETE | /battlemaps/:id/world-effects/* | Registre, instances, propagation et états environnementaux |
+| GET | /battlemaps/:id/world-elevators | Réconcilie et retourne cabines, états, arrêts et passagers |
+| POST | /battlemaps/:id/world-elevators/:elevatorId/commands | Appel de palier ; blocage/ouverture/fermeture réservés au MJ |
 | POST | /tokens/:id/teleport | Placement administratif `world-feet`, MJ uniquement |
 | POST | /battlemaps/:id/tokens | Création calée sur un support stable libre près de `destination` |
 
@@ -419,6 +443,8 @@ Enclume/
 | 140_ref_skill_requirements_or_group | Bug GENOTYPE trouvé par Saar (item 70) : `ref_skills.HYBRIDE` avait zéro ligne `ref_skill_requirements`, jamais gaté — texte LdB : accessible à 3 génotypes OU la mutation Amphibie (OR), alors que le moteur existant traite tout en ET. Nouvelle colonne `or_group` (text nullable, même convention que `ref_career_skills.choice_group` migration 121) — lignes partageant le même `(skill_id, or_group)` liées en OU. 4 lignes insérées pour `HYBRIDE`. Recherche externe (5etools 2-niveaux ET/OU retenu, PF2e `Predicate` récursif écarté — pensé pour du contenu homebrew). `down`/`up` round-trip byte-identique. Voir `docs/JOURNAL6.md` Session 141 (suite 27) |
 | 152_world_document_revisions | `battlemaps.world_revision/surface_revision/voxel_revision`, backfill UUID physiques, sauvegardes documentaires indépendantes. |
 | 153_world_runtime_positions | `battlemaps.runtime_revision`, `tokens.position_space` avec CHECK `legacy-cell/world-feet`; anciennes lignes marquées legacy sans conversion approximative. |
+| 20260713_154_world_effects_runtime | Définitions/instances/événements d'effets et `world_feature_states`; ancienne table `zones` archivée sans conversion approximative. |
+| 20260713_155_world_elevator_passengers | Attachement durable token/cabine, position locale JSONB et unicité d'un passager dans une seule cabine. |
 
 ---
 

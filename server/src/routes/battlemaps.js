@@ -21,7 +21,6 @@ import {
 } from '../services/battlemapWorldPersistence.js'
 import {
   cacheBattlemapWorldSnapshot,
-  getBattlemapWorldSnapshot,
   invalidateBattlemapWorld,
 } from '../services/worldService.js'
 import {
@@ -36,9 +35,15 @@ import {
   createWorldEffectInstance,
   deleteWorldEffectInstance,
   listBattlemapWorldEffects,
+  loadBattlemapRuntimeContext,
   setWorldFeatureState,
   updateWorldEffectInstance,
 } from '../services/worldEffectService.js'
+import {
+  commandBattlemapElevator,
+  listBattlemapElevators,
+  reconcileBattlemapElevators,
+} from '../services/worldElevatorService.js'
 import { WS } from '../../../shared/events.js'
 
 const router = Router({ mergeParams: true })
@@ -60,6 +65,31 @@ function requireBattlemapGm(member) {
 function runtimeInputError(error) {
   if (error instanceof TypeError || error instanceof RangeError) return new AppError(400, error.message)
   return error
+}
+
+function emitPassengerTokenPositions(req, campaignId, tokens = []) {
+  const unique = new Map(tokens.map(token => [token.id, token]))
+  for (const token of unique.values()) {
+    req.app.get('io').to(campaignId).emit(WS.TOKEN_MOVED, {
+      tokenId: token.id,
+      pos_x: token.pos_x,
+      pos_y: token.pos_y,
+      pos_z: token.pos_z,
+      position_space: token.position_space,
+      updated_at: token.updated_at,
+      worldMovement: { kind: 'elevator-passenger' },
+    })
+  }
+}
+
+function emitElevatorRuntime(req, battlemap, runtime, kind = 'elevator-clock') {
+  if (!runtime?.changed) return
+  req.app.get('io').to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+    battlemapId: battlemap.id,
+    runtimeRevision: runtime.runtimeRevision,
+    kind,
+  })
+  emitPassengerTokenPositions(req, battlemap.campaign_id, runtime.passengerTokens)
 }
 
 // GET /api/campaigns/:id/battlemaps — liste des cartes
@@ -216,16 +246,16 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
 })
 
 // GET /api/battlemaps/:id/world-snapshot — monde physique compilé et immuable
-router.get('/:id/world-snapshot', requireAuth, async (req, res) => {
-  const battlemap = await db('battlemaps').where({ id: req.params.id }).first()
-  if (!battlemap) throw new AppError(404, 'Battlemap not found')
-
-  const member = await db('campaign_members')
-    .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id })
-    .first()
-  if (!member) throw new AppError(403, 'Access denied')
-
-  res.json({ snapshot: getBattlemapWorldSnapshot(battlemap) })
+router.get('/:id/world-snapshot', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap } = await battlemapAndMember(req.params.id, req.user.id)
+    const elevatorRuntime = await reconcileBattlemapElevators({ battlemapId: battlemap.id })
+    const context = await loadBattlemapRuntimeContext(elevatorRuntime.battlemap)
+    emitElevatorRuntime(req, battlemap, elevatorRuntime)
+    res.json({ snapshot: context.snapshot, runtimeRevision: context.runtimeRevision })
+  } catch (error) {
+    next(runtimeInputError(error))
+  }
 })
 
 // POST /api/battlemaps/:id/world-path-preview — prévisualisation sur la physique serveur.
@@ -275,6 +305,7 @@ router.post('/:id/world-path-preview', requireAuth, async (req, res, next) => {
       }
       throw error
     }
+    emitElevatorRuntime(req, battlemap, result.elevatorRuntime)
 
     res.json({
       result,
@@ -327,6 +358,7 @@ router.post('/:id/world-move', requireAuth, async (req, res, next) => {
       destination,
       authorizedBudgetM: budget.budgetM,
     })
+    emitElevatorRuntime(req, battlemap, outcome.elevatorRuntime)
     if (outcome.status === 'unreachable') throw new AppError(409, 'Destination unreachable')
     if (outcome.status === 'legacy-position') {
       throw new AppError(409, 'Legacy token positions are not converted to the new world engine')
@@ -404,9 +436,41 @@ router.post('/:id/world-visibility', requireAuth, async (req, res, next) => {
     if (visibility.status === 'legacy-position') {
       throw new AppError(409, 'Legacy token positions are not converted to the new world engine')
     }
+    emitElevatorRuntime(req, battlemap, visibility.elevatorRuntime)
     res.json({ visibility, coordinateSpace: 'world-feet' })
   } catch (error) {
     next(error)
+  }
+})
+
+// Une lecture réconcilie l'horloge durable : la cabine et ses passagers continuent donc leur
+// trajet même après un redémarrage, sans dépendre d'un timer en mémoire.
+router.get('/:id/world-elevators', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap } = await battlemapAndMember(req.params.id, req.user.id)
+    const worldElevators = await listBattlemapElevators({ battlemapId: battlemap.id })
+    emitElevatorRuntime(req, battlemap, worldElevators)
+    res.json({ worldElevators })
+  } catch (error) {
+    next(runtimeInputError(error))
+  }
+})
+
+router.post('/:id/world-elevators/:elevatorId/commands', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap, member } = await battlemapAndMember(req.params.id, req.user.id)
+    const type = String(req.body?.type || '')
+    if (type !== 'request') requireBattlemapGm(member)
+    const outcome = await commandBattlemapElevator({
+      battlemapId: battlemap.id,
+      elevatorId: req.params.elevatorId,
+      command: { ...req.body, type },
+      userId: req.user.id,
+    })
+    emitElevatorRuntime(req, battlemap, outcome, `elevator-${type}`)
+    res.json(outcome)
+  } catch (error) {
+    next(runtimeInputError(error))
   }
 })
 

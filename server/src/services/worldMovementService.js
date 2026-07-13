@@ -14,6 +14,11 @@ import {
   pathEffectEvents,
   persistWorldEffectEvents,
 } from './worldEffectService.js'
+import {
+  reconcileBattlemapElevators,
+  reconcileElevatorStatesInTransaction,
+  syncTokenElevatorPassenger,
+} from './worldElevatorService.js'
 
 const MAX_GRAPH_CACHE_ENTRIES = 32
 const graphCache = new Map()
@@ -114,7 +119,7 @@ export function resolvePlacementPoint({
   const occupancy = createOccupancyIndex(occupants)
   let selected = null
   for (const node of graph?.nodes || []) {
-    if (node.kind !== 'support' || node.stable === false) continue
+    if (node.kind !== 'support' || node.stable === false || node.mobile === true) continue
     const distance = Math.hypot(
       node.point.x - requested.x,
       node.point.y - requested.y,
@@ -132,8 +137,11 @@ export async function resolveBattlemapPlacement({
   destination,
   actorProfile = {},
 } = {}) {
-  const graph = getBattlemapNavigationGraph(battlemap, actorProfile)
-  const occupants = await loadBattlemapDynamicOccupants(battlemap.id)
+  const elevatorRuntime = await reconcileBattlemapElevators({ battlemapId: battlemap.id })
+  const currentBattlemap = elevatorRuntime.battlemap
+  const runtimeContext = await loadBattlemapRuntimeContext(currentBattlemap)
+  const graph = getBattlemapNavigationGraph(currentBattlemap, actorProfile, runtimeContext)
+  const occupants = await loadBattlemapDynamicOccupants(currentBattlemap.id)
   return resolvePlacementPoint({ graph, destination, occupants })
 }
 
@@ -144,26 +152,37 @@ export async function planBattlemapTokenMovement({
   authorizedBudgetM,
   actorProfile = {},
 } = {}) {
-  const runtimeContext = await loadBattlemapRuntimeContext(battlemap)
+  const elevatorRuntime = await reconcileBattlemapElevators({ battlemapId: battlemap.id })
+  const currentBattlemap = elevatorRuntime.battlemap
+  const currentToken = await db('tokens')
+    .where({ id: token.id, battlemap_id: currentBattlemap.id })
+    .first() || token
+  const runtimeContext = await loadBattlemapRuntimeContext(currentBattlemap)
   const snapshot = runtimeContext.snapshot
-  const graph = getBattlemapNavigationGraph(battlemap, actorProfile, runtimeContext)
-  const occupants = await loadBattlemapDynamicOccupants(battlemap.id)
+  const graph = getBattlemapNavigationGraph(currentBattlemap, actorProfile, runtimeContext)
+  const occupants = await loadBattlemapDynamicOccupants(currentBattlemap.id)
   const result = planWorldPath({
     snapshot,
     graph,
-    from: dbPositionToWorldPoint(token),
+    from: dbPositionToWorldPoint(currentToken),
     to: destination,
     budgetM: authorizedBudgetM,
     actorProfile,
     occupants,
-    excludeOccupantIds: [token.id],
+    excludeOccupantIds: [currentToken.id],
     pathId: randomUUID(),
   })
-  if (!result.plan) return result
+  const elevatorMeta = Object.freeze({
+    changed: elevatorRuntime.changed,
+    runtimeRevision: elevatorRuntime.runtimeRevision,
+    passengerTokens: elevatorRuntime.passengerTokens,
+  })
+  if (!result.plan) return Object.freeze({ ...result, elevatorRuntime: elevatorMeta })
   return Object.freeze({
     ...result,
     runtimeRevision: runtimeContext.runtimeRevision,
     effectEvents: pathEffectEvents(runtimeContext.regions, result.plan),
+    elevatorRuntime: elevatorMeta,
   })
 }
 
@@ -175,8 +194,16 @@ export async function executeBattlemapTokenMovement({
   actorProfile = {},
 } = {}) {
   return db.transaction(async trx => {
-    const battlemap = await trx('battlemaps').where({ id: battlemapId }).forUpdate().first()
+    let battlemap = await trx('battlemaps').where({ id: battlemapId }).forUpdate().first()
     if (!battlemap) return Object.freeze({ status: 'battlemap-not-found', moved: false })
+
+    const elevatorRuntime = await reconcileElevatorStatesInTransaction({ trx, battlemap })
+    battlemap = elevatorRuntime.battlemap
+    const elevatorMeta = Object.freeze({
+      changed: elevatorRuntime.changed,
+      runtimeRevision: elevatorRuntime.runtimeRevision,
+      passengerTokens: elevatorRuntime.passengerTokens,
+    })
 
     const tokens = await trx('tokens').where({ battlemap_id: battlemapId }).forUpdate()
     const token = tokens.find(item => item.id === tokenId)
@@ -211,7 +238,11 @@ export async function executeBattlemapTokenMovement({
       pathId: randomUUID(),
     })
     if (result.status === 'unreachable') {
-      return Object.freeze({ status: 'unreachable', moved: false, result })
+      return Object.freeze({
+        status: 'unreachable', moved: false, result,
+        elevatorPassengerTokens: elevatorRuntime.passengerTokens,
+        elevatorRuntime: elevatorMeta,
+      })
     }
 
     const end = result.plan.end || result.snappedFrom
@@ -223,13 +254,26 @@ export async function executeBattlemapTokenMovement({
       || Math.abs(end.z - current.z) > 1e-9
     )
     if (!moved) {
-      return Object.freeze({ status: result.status, moved: false, token, result, effectEvents })
+      return Object.freeze({
+        status: result.status, moved: false, token, result, effectEvents,
+        runtimeRevision: Number(battlemap.runtime_revision || 0),
+        elevatorPassengerTokens: elevatorRuntime.passengerTokens,
+        elevatorRuntime: elevatorMeta,
+      })
     }
 
     const [updatedToken] = await trx('tokens')
       .where({ id: token.id })
       .update({ ...worldPointToDbPosition(end), updated_at: trx.fn.now() })
       .returning('*')
+    const elevatorPassenger = await syncTokenElevatorPassenger({
+      trx,
+      battlemap,
+      tokenId: token.id,
+      end,
+      snapshot,
+      runtimeStates: runtimeContext.runtimeState.featureStates,
+    })
     const [runtime] = await trx('battlemaps')
       .where({ id: battlemapId })
       .update({ runtime_revision: Number(battlemap.runtime_revision || 0) + 1 })
@@ -248,6 +292,12 @@ export async function executeBattlemapTokenMovement({
       result,
       effectEvents,
       runtimeRevision: runtime.runtime_revision,
+      elevatorPassenger,
+      elevatorPassengerTokens: elevatorRuntime.passengerTokens,
+      elevatorRuntime: Object.freeze({
+        ...elevatorMeta,
+        runtimeRevision: runtime.runtime_revision,
+      }),
     })
   })
 }

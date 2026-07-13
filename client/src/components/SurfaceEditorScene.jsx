@@ -310,6 +310,7 @@ export default function SurfaceEditorScene({
   selectedConnectorId = null,
   onSurfaceConnectorSelect,
   runtimeEffectRegions = [],
+  runtimeFeatureStates = {},
   onRuntimeEffectCreate,
 }) {
   const { camera, gl } = useThree()
@@ -802,6 +803,7 @@ export default function SurfaceEditorScene({
         showDetails
         selectedConnectorId={selectedConnectorId || surfaceTool?.selectedConnectorId}
         onConnectorSelect={surfaceTool?.mode === 'select' ? handleConnectorPointerSelect : null}
+        runtimeFeatureStates={runtimeFeatureStates}
       />
       <RuntimeEffectRegions regions={runtimeEffectRegions} />
       {selectedRooms.map(room => <SelectedRoomOverlay key={room.id} room={room} />)}

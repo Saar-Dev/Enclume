@@ -1379,6 +1379,15 @@ export function makeElevatorConnectorFromCell(surfaceData, cell, tool = {}) {
     : fromLevel + 1
   const minLevel = Math.min(fromLevel, toLevel)
   const maxLevel = Math.max(fromLevel, toLevel)
+  const stops = Array.from({ length: maxLevel - minLevel + 1 }, (_, index) => {
+    const stopLevel = minLevel + index
+    return {
+      id: `level:${stopLevel}`,
+      level: stopLevel,
+      y: supportTopAt(surface, cell, stopLevel, getToolFloorThickness(tool)),
+      label: `Étage ${stopLevel}`,
+    }
+  })
   const id = `connector:elevator:${cell.x}:${cell.z}:${minLevel}:${maxLevel}`
   return {
     id,
@@ -1390,10 +1399,20 @@ export function makeElevatorConnectorFromCell(surfaceData, cell, tool = {}) {
     level: fromLevel,
     fromLevel,
     toLevel,
-    y: levelToY(minLevel),
-    topY: levelToY(maxLevel + 1),
+    initialStopId: `level:${fromLevel}`,
+    stops,
+    y: stops[0].y,
+    topY: stops.at(-1).y + STORY_HEIGHT,
     width: 1,
     depth: 1,
+    cabinHeight: Math.min(2.2, STORY_HEIGHT * 0.88),
+    cabinFloorThickness: 0.12,
+    cabinWallThickness: 0.08,
+    doorAxis: tool?.elevatorDoorAxis === 'x' ? 'x' : 'z',
+    doorSide: Number(tool?.elevatorDoorSide) < 0 ? -1 : 1,
+    travelSecondsPerLevel: Math.max(0.1, Number(tool?.elevatorTravelSecondsPerLevel) || 2),
+    doorSeconds: Math.max(0.1, Number(tool?.elevatorDoorSeconds) || 0.75),
+    dwellSeconds: Math.max(0.1, Number(tool?.elevatorDwellSeconds) || 0.75),
     state: 'ready',
     movementMultiplier: getToolMovementMultiplier(tool),
     ...connectorModelFromTool(tool),

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   clearMaterialSlotOverride,
   materialSlotDisplayValue,
@@ -7,7 +7,7 @@ import {
 } from '../lib/modelMaterialSlots.js'
 
 const PANEL_W = 310
-const PANEL_H_EST = 450
+const PANEL_H_EST = 620
 
 const MODEL_SLOT_LABELS = {
   SLOT_01: 'Métal principal',
@@ -48,7 +48,76 @@ function clampPanelPosition(x, y) {
   return { left, top }
 }
 
-export default function SurfaceConnectorPanel({ connector, x, y, onPatch, onClose }) {
+const ELEVATOR_PHASE_LABELS = {
+  idle: 'À l’arrêt',
+  open: 'Portes ouvertes',
+  closing: 'Fermeture',
+  moving: 'En déplacement',
+  opening: 'Ouverture',
+  blocked: 'Porte bloquée',
+}
+
+function ElevatorRuntimeControls({ connector, runtimeState, onCommand, canAdmin }) {
+  const [pending, setPending] = useState(false)
+  const stops = Array.isArray(connector.stops) ? connector.stops : []
+  const run = async command => {
+    if (!onCommand || pending) return
+    setPending(true)
+    try { await onCommand(connector.worldId || connector.id, command) } finally { setPending(false) }
+  }
+  return (
+    <div style={S.elevatorRuntime}>
+      <div style={S.infoGrid}>
+        <span>Cabine</span>
+        <strong>{ELEVATOR_PHASE_LABELS[runtimeState?.phase] || 'État initial'}</strong>
+        <span>Palier</span>
+        <strong>{runtimeState?.currentStopId || stops[0]?.label || '—'}</strong>
+        <span>File</span>
+        <strong>{runtimeState?.queue?.length || 0} appel(s)</strong>
+      </div>
+      <div style={S.stopGrid}>
+        {stops.map(stop => (
+          <button
+            key={stop.id}
+            type="button"
+            disabled={pending || !onCommand}
+            onClick={() => run({ type: 'request', stopId: stop.id })}
+            style={{
+              ...S.runtimeBtn,
+              ...(runtimeState?.currentStopId === stop.id ? S.runtimeBtnCurrent : {}),
+            }}
+          >
+            {stop.label || `Étage ${stop.level}`}
+          </button>
+        ))}
+      </div>
+      {canAdmin && (
+        <div style={S.runtimeActions}>
+          {runtimeState?.phase === 'blocked' ? (
+            <button type="button" disabled={pending} onClick={() => run({ type: 'unblock' })} style={S.adminBtn}>Débloquer</button>
+          ) : (
+            <button type="button" disabled={pending} onClick={() => run({ type: 'block', reason: 'gm-door-obstruction' })} style={S.adminBtn}>Bloquer la porte</button>
+          )}
+          <button type="button" disabled={pending} onClick={() => run({ type: 'open' })} style={S.adminBtn}>Ouvrir</button>
+          <button type="button" disabled={pending} onClick={() => run({ type: 'close' })} style={S.adminBtn}>Fermer</button>
+        </div>
+      )}
+      {runtimeState?.blockedReason && <p style={S.hint}>Blocage : {runtimeState.blockedReason}</p>}
+    </div>
+  )
+}
+
+export default function SurfaceConnectorPanel({
+  connector,
+  x,
+  y,
+  onPatch,
+  onClose,
+  runtimeState = null,
+  onElevatorCommand = null,
+  canEdit = true,
+  canAdminElevator = canEdit,
+}) {
   const position = useMemo(() => clampPanelPosition(x, y), [x, y])
   const materialSlots = normalizeModelMaterialSlots(connector?.modelGeometry)
   const materialOverrides = connector?.modelMaterialOverrides || {}
@@ -93,7 +162,7 @@ export default function SurfaceConnectorPanel({ connector, x, y, onPatch, onClos
           <strong>{connector.width ?? connector.modelGeometry?.width ?? 1} × {connector.depth ?? connector.modelGeometry?.depth ?? 1} × {connector.height ?? connector.modelGeometry?.height ?? 1} m</strong>
         </div>
 
-        {connector.type === 'door' && (
+        {canEdit && connector.type === 'door' && (
           <label style={S.field}>
             <span style={S.label}>État</span>
             <select value={connector.state || 'closed'} onChange={e => patchState(e.target.value)} style={S.input}>
@@ -104,7 +173,16 @@ export default function SurfaceConnectorPanel({ connector, x, y, onPatch, onClos
           </label>
         )}
 
-        <label style={S.field}>
+        {connector.type === 'elevator' && (
+          <ElevatorRuntimeControls
+            connector={connector}
+            runtimeState={runtimeState}
+            onCommand={onElevatorCommand}
+            canAdmin={canAdminElevator}
+          />
+        )}
+
+        {canEdit && <label style={S.field}>
           <span style={S.label}>Coût de déplacement</span>
           <input
             type="number"
@@ -118,9 +196,9 @@ export default function SurfaceConnectorPanel({ connector, x, y, onPatch, onClos
             style={S.input}
           />
           <span style={S.hint}>×1 normal, ×2 deux fois plus coûteux, jusqu’à ×100.</span>
-        </label>
+        </label>}
 
-        {materialSlots.length > 0 ? (
+        {canEdit && (materialSlots.length > 0 ? (
           <div style={S.field}>
             <span style={S.label}>Couleurs</span>
             <div style={S.slotList}>
@@ -148,7 +226,7 @@ export default function SurfaceConnectorPanel({ connector, x, y, onPatch, onClos
           </div>
         ) : (
           <p style={S.hint}>Ce modèle n’expose pas de slots couleur.</p>
-        )}
+        ))}
       </div>
     </div>
   )
@@ -277,5 +355,48 @@ const S = {
     color: '#64748b',
     fontSize: '11px',
     lineHeight: 1.35,
+  },
+  elevatorRuntime: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    padding: '9px',
+    border: '1px solid rgba(139, 92, 246, 0.35)',
+    borderRadius: '7px',
+    background: 'rgba(76, 29, 149, 0.12)',
+  },
+  stopGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '6px',
+  },
+  runtimeBtn: {
+    minHeight: '30px',
+    border: '1px solid #3f3f5e',
+    borderRadius: '5px',
+    background: '#17172a',
+    color: '#c4b5fd',
+    fontSize: '11px',
+    cursor: 'pointer',
+  },
+  runtimeBtnCurrent: {
+    borderColor: '#a78bfa',
+    background: 'rgba(124, 58, 237, 0.28)',
+    color: '#f5f3ff',
+  },
+  runtimeActions: {
+    display: 'flex',
+    gap: '5px',
+    flexWrap: 'wrap',
+  },
+  adminBtn: {
+    minHeight: '27px',
+    padding: '0 8px',
+    border: '1px solid #4c1d95',
+    borderRadius: '4px',
+    background: '#211238',
+    color: '#ddd6fe',
+    fontSize: '10px',
+    cursor: 'pointer',
   },
 }

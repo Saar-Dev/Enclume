@@ -50,3 +50,17 @@ test('la création d’un token se cale sur un support stable libre', () => {
     }],
   }), null)
 })
+
+test('une création administrative ne place pas un token non attaché dans une cabine mobile', () => {
+  const graph = {
+    actorProfile: { radius: 0.35, height: 1.8, maxStepHeight: 0.5 },
+    nodes: [
+      { id: 'cabin', kind: 'support', stable: true, mobile: true, point: { x: 0.5, y: 0.125, z: 0.5 } },
+      { id: 'floor', kind: 'support', stable: true, point: { x: 1.5, y: 0.125, z: 0.5 } },
+    ],
+  }
+  assert.deepEqual(
+    resolvePlacementPoint({ graph, destination: { x: 0.55, y: 0.125, z: 0.5 } }),
+    { x: 1.5, y: 0.125, z: 0.5 },
+  )
+})

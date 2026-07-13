@@ -11,6 +11,7 @@ import {
 import { getBattlemapWorldSnapshot } from './worldService.js'
 import { effectOccludersFromRegions } from '../../../shared/world/worldEffects.js'
 import { loadBattlemapRuntimeContext } from './worldEffectService.js'
+import { reconcileBattlemapElevators } from './worldElevatorService.js'
 
 function stateAt(entity) {
   return entity.states?.[entity.current_state_id] ?? entity.states?.[0] ?? null
@@ -126,25 +127,39 @@ export async function evaluateBattlemapVisibility({
   targetProfile = {},
   database = db,
 } = {}) {
+  const elevatorRuntime = await reconcileBattlemapElevators({
+    battlemapId: battlemap.id,
+    database,
+  })
+  const currentBattlemap = elevatorRuntime.battlemap
   const [tokens, entityRows, runtimeContext] = await Promise.all([
-    database('tokens').where({ battlemap_id: battlemap.id }),
+    database('tokens').where({ battlemap_id: currentBattlemap.id }),
     database('entities')
-      .where({ 'entities.battlemap_id': battlemap.id })
+      .where({ 'entities.battlemap_id': currentBattlemap.id })
       .join('entity_blueprints', 'entities.blueprint_id', 'entity_blueprints.id')
       .select(
         'entities.id', 'entities.pos_x', 'entities.pos_y', 'entities.pos_z', 'entities.r',
         'entities.current_state_id', 'entity_blueprints.states', 'entity_blueprints.geometry',
       ),
-    loadBattlemapRuntimeContext(battlemap, database),
+    loadBattlemapRuntimeContext(currentBattlemap, database),
   ])
-  return evaluateWorldVisibility({
-    snapshot: runtimeContext?.snapshot || getBattlemapWorldSnapshot(battlemap),
-    sourceToken,
-    targetToken,
-    tokens,
-    entities: entityRows,
-    effectRegions: runtimeContext?.regions || [],
-    sourceProfile,
-    targetProfile,
+  const currentSource = tokens.find(token => token.id === sourceToken.id) || sourceToken
+  const currentTarget = tokens.find(token => token.id === targetToken.id) || targetToken
+  return Object.freeze({
+    ...evaluateWorldVisibility({
+      snapshot: runtimeContext?.snapshot || getBattlemapWorldSnapshot(currentBattlemap),
+      sourceToken: currentSource,
+      targetToken: currentTarget,
+      tokens,
+      entities: entityRows,
+      effectRegions: runtimeContext?.regions || [],
+      sourceProfile,
+      targetProfile,
+    }),
+    elevatorRuntime: Object.freeze({
+      changed: elevatorRuntime.changed,
+      runtimeRevision: elevatorRuntime.runtimeRevision,
+      passengerTokens: elevatorRuntime.passengerTokens,
+    }),
   })
 }

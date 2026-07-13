@@ -35,16 +35,15 @@
 
 Branche `codex/world-engine-integration`, sans modification du dépôt de l'autre développeur.
 
-- Phases 0 à 5 terminées : contrat métrique, document canonique, compilateur, navigation serveur,
-  LOS/couverture, structures verticales, régions et effets runtime.
+- Phases 0 à 6 terminées : contrat métrique, document canonique, compilateur, navigation serveur,
+  LOS/couverture, structures verticales, régions/effets runtime et cabine d'ascenseur mobile.
 - Les anciennes cartes voxel ne sont pas une cible de compatibilité. Elles peuvent seulement servir
   de fixtures et peuvent être supprimées si elles gênent le modèle canonique.
-- L'ascenseur est encore volontairement désactivé dans le graphe : ne pas le remplacer par une
-  téléportation.
-- Prochaine étape exacte : Phase 6 de `docs/PLAN_MOTEUR_MONDE.md`, cabine mobile, arrêts, portes,
-  automate persistant et passagers attachés au référentiel de l'ascenseur.
-- Ne rebrancher le combat historique qu'en Phase 7, via les services de monde et sans réintroduire
-  une lecture directe de `voxel_data`.
+- L'ascenseur est une cabine physique mobile : aucune arête verticale ou téléportation ne doit être
+  réintroduite. Ses passagers sont attachés à son repère local durable.
+- Prochaine étape exacte : Phase 7 de `docs/PLAN_MOTEUR_MONDE.md`, branchement complet du combat sur
+  les services de monde puis suppression des chemins voxel/Redis/pathfinder devenus sans
+  consommateur.
 
 Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
