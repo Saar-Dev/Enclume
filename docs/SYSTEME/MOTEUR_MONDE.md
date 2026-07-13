@@ -514,6 +514,9 @@ La suppression porte sur un mur complet entre deux angles, jamais sur un fragmen
   les portes de la séparation disparaissent, et les autres connecteurs sont remappés ;
 - la fusion construit un `verticalProfile` canonique : union des empreintes présentes dans chaque
   tranche, plafond local sur toute zone qui s'arrête et murs de ressaut sur les zones qui continuent ;
+- le nombre et la hauteur des niveaux sont redérivés de ces tranches après chaque fusion. Une salle
+  déjà fusionnée peut donc être fusionnée à nouveau sans désynchroniser `heightLevels`, `height` et
+  `verticalProfile.slices` ;
 - les arcs touchant la séparation sont retirés avant de reconstruire l'union, afin qu'une ancienne
   frontière courbe ne survive pas comme limite fantôme ;
 - toute différence géométrique qui référençait la salle absorbée est réécrite vers la survivante.
@@ -554,10 +557,12 @@ la profondeur maximale, puis `spatialIndex` le subdivise localement en bandes ve
 pour les tests étroits. Collision, mouvement et LOS voient donc la même forme que le rendu sans
 faire de la tessellation une donnée persistée.
 
-Chaque angle à deux chemins reçoit un descripteur dérivé `profileJoinStart` / `profileJoinEnd` qui
-référence le repère et le profil du voisin. Le maillage recalcule à chaque hauteur l'intersection des
-faces avant et arrière des deux volumes. Il ne suppose donc plus que les deux murs ont le même
-profil : un mur vertical adjacent est lofté à son extrémité si son voisin est profilé. Le snapshot ne
+Chaque angle reçoit un descripteur dérivé `profileJoinStart` / `profileJoinEnd` par face physique.
+Chaque face conserve les identifiants des salles dont elle est l'intérieur, puis choisit le voisin
+portant la même salle. Une jonction en T au bout d'un mur mitoyen peut ainsi employer un voisin
+différent pour chaque face. Le maillage recalcule à chaque hauteur l'intersection des volumes et ne
+suppose plus que les deux murs ont le même profil : un mur vertical adjacent est lofté à son
+extrémité si son voisin est profilé. Le snapshot ne
 persiste pas cette finition ; le compilateur la redérive et transforme les mêmes intersections en
 paddings longitudinaux sur les deux murs. Le narrow phase les applique seulement au premier ou au
 dernier segment d'un arc tessellé. Rendu, mouvement et LOS ferment ainsi le même coin.

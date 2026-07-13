@@ -275,6 +275,8 @@ moteur ; sinon elles doivent être supprimées.
   différer sans aplatir le volume résultant ;
 - la salle active survit à la fusion avec son identité, ses matériaux et ses réglages. Les portes de
   la séparation sont supprimées et les autres connecteurs/références sont remappés ;
+- `heightLevels` et `height` sont redérivés des tranches canoniques après chaque fusion, y compris
+  lorsqu'une salle déjà multiniveau est fusionnée à nouveau ;
 - les arcs de séparation supprimés ne survivent pas à la fusion ;
 - une nouvelle salle intersectant une salle courbe existante est découpée sur son multipolygone
   effectif : dalle, plafond et mur épousent la courbe même si elle dépasse l'ancienne AABB ;
@@ -363,13 +365,13 @@ moteur ; sinon elles doivent être supprimées.
 - les panneaux contextuels de salle, mur et objet/connecteur 3D présentent une suppression. Retirer
   une salle supprime ses connecteurs, nettoie les références `geometryClipRoomIds` et réattribue les
   arcs partagés restants ;
-- les angles utilisent désormais l'intersection réelle des deux volumes à chaque niveau du loft.
-  Le raccord ferme aussi un mur profilé isolé contre ses voisins verticaux ou des profondeurs
-  différentes, en prolongeant le voisin lorsque nécessaire. La compilation redérive les mêmes
+- les angles utilisent désormais l'intersection réelle des volumes, par face et par salle, à chaque
+  niveau du loft. Le raccord ferme aussi un mur profilé isolé, des profondeurs différentes et les
+  jonctions en T d'un mur mitoyen, en prolongeant le bon voisin pour chaque face. La compilation redérive les mêmes
   extensions pour la collision et la LOS. Un mur peut être arrondi dans le plan avant ou après son
   profil vertical sans perdre celui-ci ;
 - la validation v10, les cas extérieur/mitoyen et le narrow phase profilé possèdent des tests purs.
-- état validé : 111 tests monde/serveur, 28 tests client Surface/persistance et build Vite de
+- état validé : 112 tests monde/serveur, 29 tests client Surface/persistance et build Vite de
   production passent ; ESLint ciblé des fichiers Surface ne remonte aucune erreur.
 
 ---

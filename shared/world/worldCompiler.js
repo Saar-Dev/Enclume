@@ -199,6 +199,9 @@ function addWallCandidate(map, candidate, battlemapId) {
   const existing = map.get(key)
   if (!existing) {
     const profileFace = candidate.elevationProfileFace === 'back' ? 'back' : 'front'
+    const interiorFace = candidate.interiorFace === 'back'
+      ? 'back'
+      : candidate.interiorFace === 'front' ? 'front' : null
     map.set(key, {
       ...candidate,
       worldId: deterministicWorldId(battlemapId, 'compiled-wall', key),
@@ -206,6 +209,8 @@ function addWallCandidate(map, candidate, battlemapId) {
       blocks: blockingChannels(candidate),
       frontElevationProfile: profileFace === 'front' ? candidate.elevationProfile : null,
       backElevationProfile: profileFace === 'back' ? candidate.elevationProfile : null,
+      frontSourceWorldIds: interiorFace === 'front' ? [...new Set(candidate.sourceWorldIds || [])] : [],
+      backSourceWorldIds: interiorFace === 'back' ? [...new Set(candidate.sourceWorldIds || [])] : [],
     })
     return
   }
@@ -215,11 +220,19 @@ function addWallCandidate(map, candidate, battlemapId) {
     existing.blocks[channel] = existing.blocks[channel] || nextBlocks[channel]
   }
   existing.thickness = Math.max(existing.thickness, candidate.thickness)
+  const sameDirection = Math.abs(number(existing.x0) - number(candidate.x0)) <= EPSILON
+    && Math.abs(number(existing.z0) - number(candidate.z0)) <= EPSILON
+    && Math.abs(number(existing.x1) - number(candidate.x1)) <= EPSILON
+    && Math.abs(number(existing.z1) - number(candidate.z1)) <= EPSILON
+  if (candidate.interiorFace) {
+    const requestedInteriorFace = candidate.interiorFace === 'back' ? 'back' : 'front'
+    const interiorFace = sameDirection
+      ? requestedInteriorFace
+      : requestedInteriorFace === 'front' ? 'back' : 'front'
+    const field = `${interiorFace}SourceWorldIds`
+    existing[field] = [...new Set([...(existing[field] || []), ...(candidate.sourceWorldIds || [])])]
+  }
   if (candidate.elevationProfile) {
-    const sameDirection = Math.abs(number(existing.x0) - number(candidate.x0)) <= EPSILON
-      && Math.abs(number(existing.z0) - number(candidate.z0)) <= EPSILON
-      && Math.abs(number(existing.x1) - number(candidate.x1)) <= EPSILON
-      && Math.abs(number(existing.z1) - number(candidate.z1)) <= EPSILON
     const requestedFace = candidate.elevationProfileFace === 'back' ? 'back' : 'front'
     const profileFace = sameDirection ? requestedFace : requestedFace === 'front' ? 'back' : 'front'
     existing[`${profileFace}ElevationProfile`] = candidate.elevationProfile
@@ -295,25 +308,24 @@ function compiledWallProfileProgressAtY(wall, y) {
 }
 
 function compiledCornerJoinPadding(wall, join) {
-  const neighbor = join?.neighbor
   const ownNormal = join?.normal
   const tangent = join?.tangent
-  const neighborNormal = neighbor?.normal
-  if (!neighbor || !ownNormal || !tangent || !neighborNormal) return 0
-  const denominator = number(tangent.x) * number(neighborNormal.x)
-    + number(tangent.z) * number(neighborNormal.z)
-  if (Math.abs(denominator) <= 0.2) return 0
+  if (!ownNormal || !tangent) return 0
   let padding = 0
   for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
     const y = number(wall.y) + positive(wall.height, SURFACE_STORY_HEIGHT_DEFAULT) * progress
     const ownDistances = compiledWallFaceDistances(wall, compiledWallProfileProgressAtY(wall, y))
-    const neighborDistances = compiledWallFaceDistances(
-      neighbor,
-      compiledWallProfileProgressAtY(neighbor, y),
-    )
     for (const side of ['front', 'back']) {
-      const neighborSide = join[`${side}NeighborSide`]
+      const faceJoin = join?.[side]
+      const neighbor = faceJoin?.neighbor || join?.neighbor
+      const neighborNormal = neighbor?.normal
+      const neighborSide = faceJoin?.neighborSide || join?.[`${side}NeighborSide`]
+      if (!neighbor || !neighborNormal) continue
       if (!['front', 'back'].includes(neighborSide)) continue
+      const neighborDistances = compiledWallFaceDistances(
+        neighbor,
+        compiledWallProfileProgressAtY(neighbor, y),
+      )
       const intersection = wallCornerIntersectionPoint({
         point: { x: 0, z: 0 },
         tangent,
@@ -330,9 +342,16 @@ function compiledCornerJoinPadding(wall, join) {
 
 function withCompiledWallProfileJoins(walls) {
   return withWallCornerJoins(walls, wall => wall.sourceWorldIds).map(wall => {
+    const joinNeighbors = [
+      wall.profileJoinStart?.front?.neighbor,
+      wall.profileJoinStart?.back?.neighbor,
+      wall.profileJoinEnd?.front?.neighbor,
+      wall.profileJoinEnd?.back?.neighbor,
+      wall.profileJoinStart?.neighbor,
+      wall.profileJoinEnd?.neighbor,
+    ].filter(Boolean)
     const joinsProfile = maximumWallProfileDepth(wall) > EPSILON
-      || maximumWallProfileDepth(wall.profileJoinStart?.neighbor) > EPSILON
-      || maximumWallProfileDepth(wall.profileJoinEnd?.neighbor) > EPSILON
+      || joinNeighbors.some(neighbor => maximumWallProfileDepth(neighbor) > EPSILON)
     if (!joinsProfile) return wall
     const profileJoinStartPadding = compiledCornerJoinPadding(wall, wall.profileJoinStart)
     const profileJoinEndPadding = compiledCornerJoinPadding(wall, wall.profileJoinEnd)
@@ -367,6 +386,7 @@ function roomWallCandidates(surface, battlemapId) {
           y,
           height: surface.storyHeight,
           thickness,
+          interiorFace: frontIsInterior ? 'front' : 'back',
           elevationProfileFace: frontIsInterior ? 'front' : 'back',
           elevationProfileOriginY: y,
           elevationProfileHeight: surface.storyHeight,

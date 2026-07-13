@@ -611,9 +611,16 @@ function CurvedRoomSlab({ room, roomLookup, contours = null, kind, y, thickness,
 }
 
 function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }) {
+  const joinNeighbors = [
+    wall.profileJoinStart?.front?.neighbor,
+    wall.profileJoinStart?.back?.neighbor,
+    wall.profileJoinEnd?.front?.neighbor,
+    wall.profileJoinEnd?.back?.neighbor,
+    wall.profileJoinStart?.neighbor,
+    wall.profileJoinEnd?.neighbor,
+  ].filter(Boolean)
   const joinsProfiledNeighbor = Boolean(
-    wall.profileJoinStart?.neighbor?.elevationProfileMode
-    || wall.profileJoinEnd?.neighbor?.elevationProfileMode,
+    joinNeighbors.some(neighbor => neighbor.elevationProfileMode),
   )
   if (wall.axis === 'arc' || wall.elevationProfileMode || joinsProfiledNeighbor) {
     return <CurvedWallSegment wall={wall} textureMaterials={textureMaterials} opacity={opacity} showDetails={showDetails} />
@@ -816,9 +823,10 @@ function joinedWallFacePoint(value, frame, distance, join, side, y) {
     y,
     value.z + frame.normal.z * distance,
   ]
-  const neighbor = join?.neighbor
+  const faceJoin = join?.[side]
+  const neighbor = faceJoin?.neighbor || join?.neighbor
   const neighborNormal = neighbor?.normal
-  const neighborSide = join?.[`${side}NeighborSide`]
+  const neighborSide = faceJoin?.neighborSide || join?.[`${side}NeighborSide`]
   if (!neighborNormal || !['front', 'back'].includes(neighborSide)) return fallback
   const denominator = frame.tangent.x * Number(neighborNormal.x)
     + frame.tangent.z * Number(neighborNormal.z)

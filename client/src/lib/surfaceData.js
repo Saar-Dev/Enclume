@@ -1276,18 +1276,21 @@ export function roomWallSegments(room, roomLookup = null) {
 
 function setWallFace(wall, face, source) {
   if (!wall || !source) return
-  if (!source.tex && !source.material) return
+  if (source.role === 'interior' && source.roomId) {
+    const field = face === 'front' ? 'frontRoomIds' : 'backRoomIds'
+    wall[field] = [...new Set([...(wall[field] || []), source.roomId])]
+  }
   const rolePriority = source.role === 'interior' ? 2 : source.role === 'exterior' ? 1 : 0
   if (face === 'front') {
     if ((wall._frontRolePriority || 0) > rolePriority) return
-    wall.frontTex = source.tex
-    wall.frontMaterial = source.material
+    if (source.tex) wall.frontTex = source.tex
+    if (source.material) wall.frontMaterial = source.material
     wall.frontRole = source.role || null
     wall._frontRolePriority = rolePriority
   } else {
     if ((wall._backRolePriority || 0) > rolePriority) return
-    wall.backTex = source.tex
-    wall.backMaterial = source.material
+    if (source.tex) wall.backTex = source.tex
+    if (source.material) wall.backMaterial = source.material
     wall.backRole = source.role || null
     wall._backRolePriority = rolePriority
   }
@@ -1393,11 +1396,13 @@ export function roomsWallSegments(rooms) {
     const thickness = Math.max(1, Number(room.wallThickness) || 1)
     const interior = {
       role: 'interior',
+      roomId,
       tex: roomWallInteriorTex(room),
       material: roomWallInteriorMaterial(room),
     }
     const exterior = {
       role: 'exterior',
+      roomId,
       tex: roomWallExteriorTex(room),
       material: roomWallExteriorMaterial(room),
     }
@@ -2454,8 +2459,13 @@ export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
     roomLookup: next.rooms,
     storyHeight: STORY_HEIGHT,
   })
+  const canonicalHeightLevels = verticalProfile
+    ? verticalProfile.slices.length
+    : maximumHeightLevels
   const mergedRoom = {
     ...mergedGeometryRoom,
+    heightLevels: canonicalHeightLevels,
+    height: canonicalHeightLevels * STORY_HEIGHT,
     ...(verticalProfile ? { verticalProfile } : {}),
   }
 

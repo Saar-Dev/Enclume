@@ -80,6 +80,9 @@ aplatie à une hauteur unique. Sa tranche basse est l'union des deux empreintes 
 ne conservent que les zones réellement hautes. Le moteur produit ainsi un plafond local au-dessus
 de la zone basse et une paroi de ressaut autour de la zone haute. Rendu, sélection par étage,
 collisions, LOS, eau, supports et compartiments lisent tous ce même `verticalProfile`.
+Après chaque fusion, y compris une fusion en chaîne d'une salle déjà profilée, `heightLevels` et
+`height` sont recalculés depuis les tranches canoniques produites. Ces métadonnées ne peuvent donc
+plus rester celles de la salle active d'origine et contredire `verticalProfile.slices` à la sauvegarde.
 
 Les dalles et les murs rendus ne doivent pas devenir la source de vérité. Les salles sans contrainte
 géométrique peuvent regrouper leurs cases en rectangles de rendu. Les salles arrondies ou découpées
@@ -157,10 +160,11 @@ métier.
   sauvegardées ;
 - angle et profondeur sont deux vues synchronisées du même paramètre géométrique. Le document garde
   la profondeur canonique pour éviter deux valeurs contradictoires.
-- tout angle à deux murs reçoit un raccord volumique dérivé. À chaque hauteur, le moteur intersecte
-  séparément les faces avant et arrière avec celles du voisin : le raccord reste donc fermé si un
-  seul mur est profilé, si les profondeurs diffèrent, ou si un arc horizontal rejoint un mur droit.
-  Le mur voisin resté vertical est lui aussi prolongé jusqu'à cette intersection ;
+- tout angle reçoit un raccord volumique dérivé par face et par salle. À chaque hauteur, le moteur
+  intersecte séparément les faces avant et arrière avec le voisin qui possède réellement la même
+  salle. Le raccord reste donc fermé si un seul mur est profilé, si les profondeurs diffèrent, si un
+  arc rejoint un mur droit, ou au bout d'un mur mitoyen où chaque face rejoint un mur différent. Le
+  mur voisin resté vertical est lui aussi prolongé jusqu'à cette intersection ;
 - arrondir horizontalement un mur déjà profilé conserve ses `sourceEdgeKeys`, son profil vertical et
   ses raccords. Les deux transformations peuvent donc être appliquées dans n'importe quel ordre ;
 - une porte rigide déjà ancrée bloque la modification du profil vertical de son mur. Elle doit être

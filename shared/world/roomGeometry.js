@@ -698,6 +698,7 @@ export function withWallMiterJoins(inputWalls, styleKeyForWall) {
 
 function wallCornerJoinSnapshot(wall, frame) {
   return {
+    id: wall.id || null,
     normal: frame.normal,
     thickness: wall.thickness,
     elevationProfileMode: wall.elevationProfileMode,
@@ -709,22 +710,56 @@ function wallCornerJoinSnapshot(wall, frame) {
     elevationProfileHeight: wall.elevationProfileHeight,
     frontRole: wall.frontRole || null,
     backRole: wall.backRole || null,
+    frontRoomIds: [...(wall.frontRoomIds || [])],
+    backRoomIds: [...(wall.backRoomIds || [])],
+    frontSourceWorldIds: [...(wall.frontSourceWorldIds || [])],
+    backSourceWorldIds: [...(wall.backSourceWorldIds || [])],
   }
 }
 
-function wallCornerNeighborSide(wall, entry, neighbor, neighborEntry, side) {
-  const role = side === 'front' ? wall.frontRole : wall.backRole
-  const matchingSides = ['front', 'back'].filter(candidate => (
-    role && neighbor[`${candidate}Role`] === role
-  ))
-  if (matchingSides.length === 1) return matchingSides[0]
+function wallCornerFaceOwnerIds(wall, side) {
+  return [...new Set([
+    ...(wall?.[`${side}RoomIds`] || []),
+    ...(wall?.[`${side}SourceWorldIds`] || []),
+  ].filter(Boolean).map(String))]
+}
 
-  // When both faces have the same semantic role (or no role), path topology is
-  // the stable fallback: end-to-start keeps the face, start-to-start/end-to-end
-  // means that one path is reversed and therefore swaps front/back.
-  const keepSide = entry.atStart !== neighborEntry.atStart
-  if (keepSide) return side
-  return side === 'front' ? 'back' : 'front'
+function wallHasCornerFaceOwners(wall) {
+  return wallCornerFaceOwnerIds(wall, 'front').length > 0
+    || wallCornerFaceOwnerIds(wall, 'back').length > 0
+}
+
+function wallCornerFaceMatch(wall, entry, side, candidates, walls) {
+  const ownOwners = new Set(wallCornerFaceOwnerIds(wall, side))
+  const ownHasMetadata = wallHasCornerFaceOwners(wall)
+  const ownRole = wall?.[`${side}Role`] || null
+  const matches = []
+  for (const neighborEntry of candidates) {
+    const neighbor = walls[neighborEntry.wallIndex]
+    const neighborHasMetadata = wallHasCornerFaceOwners(neighbor)
+    const topologySide = entry.atStart !== neighborEntry.atStart
+      ? side
+      : side === 'front' ? 'back' : 'front'
+    for (const neighborSide of ['front', 'back']) {
+      const neighborOwners = wallCornerFaceOwnerIds(neighbor, neighborSide)
+      const sharedOwnerCount = neighborOwners.filter(ownerId => ownOwners.has(ownerId)).length
+      if (ownHasMetadata && neighborHasMetadata) {
+        if (ownOwners.size > 0 && sharedOwnerCount === 0) continue
+        if (ownOwners.size === 0 && neighborOwners.length > 0) continue
+      }
+      let score = sharedOwnerCount * 100
+      if (ownHasMetadata && neighborHasMetadata && ownOwners.size === 0 && neighborOwners.length === 0) score += 100
+      if (ownRole && neighbor?.[`${neighborSide}Role`] === ownRole) score += 10
+      if (neighborSide === topologySide) score += 1
+      matches.push({ neighborEntry, neighborSide, score })
+    }
+  }
+  matches.sort((left, right) => (
+    right.score - left.score
+    || left.neighborEntry.wallIndex - right.neighborEntry.wallIndex
+    || left.neighborSide.localeCompare(right.neighborSide)
+  ))
+  return matches[0] || null
 }
 
 function wallsShareCornerOwner(left, right, ownerIdsForWall) {
@@ -774,19 +809,38 @@ export function withWallCornerJoins(inputWalls, ownerIdsForWall = null) {
           + entry.frame.tangent.z * candidate.frame.normal.z
         return Math.abs(denominator) > 0.2
       })
-      if (candidates.length !== 1) continue
-      const neighborEntry = candidates[0]
-      const neighbor = walls[neighborEntry.wallIndex]
+      if (candidates.length === 0) continue
+      const frontMatch = wallCornerFaceMatch(wall, entry, 'front', candidates, walls)
+      const backMatch = wallCornerFaceMatch(wall, entry, 'back', candidates, walls)
+      if (!frontMatch && !backMatch) continue
+      const faceJoin = match => {
+        if (!match) return null
+        const neighbor = walls[match.neighborEntry.wallIndex]
+        return {
+          neighbor: wallCornerJoinSnapshot(neighbor, match.neighborEntry.frame),
+          neighborSide: match.neighborSide,
+        }
+      }
+      const front = faceJoin(frontMatch)
+      const back = faceJoin(backMatch)
       const descriptor = {
         normal: entry.frame.normal,
         tangent: entry.frame.tangent,
-        neighbor: wallCornerJoinSnapshot(neighbor, neighborEntry.frame),
-        frontNeighborSide: wallCornerNeighborSide(wall, entry, neighbor, neighborEntry, 'front'),
-        backNeighborSide: wallCornerNeighborSide(wall, entry, neighbor, neighborEntry, 'back'),
+        ...(front ? { front } : {}),
+        ...(back ? { back } : {}),
+      }
+      const sameNeighbor = frontMatch && backMatch
+        && frontMatch.neighborEntry.wallIndex === backMatch.neighborEntry.wallIndex
+      if (sameNeighbor) {
+        descriptor.neighbor = front.neighbor
+        descriptor.frontNeighborSide = front.neighborSide
+        descriptor.backNeighborSide = back.neighborSide
       }
       const field = entry.atStart ? 'profileJoinStart' : 'profileJoinEnd'
       const miterField = entry.atStart ? 'profileJoinStartMiter' : 'profileJoinEndMiter'
-      const miter = wallMiterOffsetVector(entry.frame.normal, neighborEntry.frame.normal)
+      const miter = sameNeighbor
+        ? wallMiterOffsetVector(entry.frame.normal, frontMatch.neighborEntry.frame.normal)
+        : null
       result[entry.wallIndex] = {
         ...result[entry.wallIndex],
         [field]: descriptor,
@@ -1319,7 +1373,10 @@ export function buildMergedRoomVerticalProfile({
 
   for (let offset = 0; offset < maximum; offset += 1) {
     const active = sourceSlices.map(items => items.find(slice => slice.offset === offset)).filter(Boolean)
-    if (active.length === 0) continue
+    // A room volume is continuous from its floor. If legacy/transient input
+    // contains a vertical gap, stop at the last stable slice rather than emit a
+    // non-canonical profile whose offsets and heightLevels cannot be saved.
+    if (active.length === 0) break
     const footprint = active.length === 1
       ? cloneMultiPolygon(active[0].footprint)
       : polygonClipping.union(...active.map(slice => slice.footprint))

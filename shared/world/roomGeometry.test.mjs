@@ -130,6 +130,32 @@ test('un angle reste ferme quand un seul des deux murs est profile', () => {
   assert.ok(Math.abs(fromProfiled.z - fromVertical.z) < 1e-9)
 })
 
+test('un mur mitoyen raccorde chacune de ses faces a la bonne salle', () => {
+  const walls = withWallCornerJoins([
+    {
+      id: 'shared', axis: 'z', x0: 0, z0: 2, x1: 0, z1: 0, y: 0, height: 2.5,
+      sourceWorldIds: ['room-a', 'room-b'],
+      frontSourceWorldIds: ['room-a'], backSourceWorldIds: ['room-b'],
+      frontElevationProfile: { type: 'curved', depth: 0.5, direction: 1 },
+      elevationProfileMode: 'faces',
+    },
+    {
+      id: 'outer-a', axis: 'x', x0: -2, z0: 0, x1: 0, z1: 0, y: 0, height: 2.5,
+      sourceWorldIds: ['room-a'], frontSourceWorldIds: ['room-a'], backSourceWorldIds: [],
+    },
+    {
+      id: 'outer-b', axis: 'x', x0: 0, z0: 0, x1: 2, z1: 0, y: 0, height: 2.5,
+      sourceWorldIds: ['room-b'], frontSourceWorldIds: ['room-b'], backSourceWorldIds: [],
+    },
+  ], wall => wall.sourceWorldIds)
+  const join = walls[0].profileJoinEnd
+
+  assert.equal(join.front.neighbor.id, 'outer-a')
+  assert.equal(join.front.neighborSide, 'front')
+  assert.equal(join.back.neighbor.id, 'outer-b')
+  assert.equal(join.back.neighborSide, 'front')
+})
+
 test('une salle decoupee epouse exactement le mur courbe de la salle prioritaire', () => {
   const selectedKeys = roomBoundaryWallRuns(square)
     .filter(wall => ['west', 'north'].includes(wall.side))

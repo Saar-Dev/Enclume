@@ -25,6 +25,7 @@ import {
   roomGeometryArea,
   roomGeometryIntersectionArea,
 } from '../../../shared/world/roomGeometry.js'
+import { prepareSurfaceData } from '../../../shared/world/surfaceDocument.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -222,6 +223,18 @@ test('un profil vertical mitoyen ne modifie que la face de la salle sélectionn�
   const shared = roomsWallSegments(result.surfaceData.rooms).find(wall => wall.roomIds.length === 2)
   assert.equal(shared.elevationProfileMode, 'faces')
   assert.equal([shared.frontElevationProfile, shared.backElevationProfile].filter(Boolean).length, 1)
+  const renderedShared = roomsWallRenderPaths(result.surfaceData.rooms)
+    .find(wall => wall.roomIds.length === 2)
+  const junctions = [renderedShared.profileJoinStart, renderedShared.profileJoinEnd]
+  assert.ok(junctions.every(Boolean))
+  for (const junction of junctions) {
+    for (const side of ['front', 'back']) {
+      const ownRoomIds = new Set(renderedShared[`${side}RoomIds`] || [])
+      const faceJoin = junction[side]
+      const neighborRoomIds = faceJoin.neighbor[`${faceJoin.neighborSide}RoomIds`] || []
+      assert.ok(neighborRoomIds.some(roomId => ownRoomIds.has(roomId)))
+    }
+  }
 })
 
 test('une salle multiniveau revele uniquement son propre volume inferieur', () => {
@@ -414,6 +427,30 @@ test('fusionner des salles de hauteurs différentes conserve un profil vertical 
   const expanded = expandRoomsToSurface(result.surfaceData)
   assert.ok(Object.keys(expanded.ceilings).some(key => key.endsWith(':0:2.5')))
   assert.ok(Object.keys(expanded.ceilings).some(key => key.endsWith(':0:7.5')))
+})
+
+test('une seconde fusion conserve une hauteur canonique sauvegardable', () => {
+  const low = { ...room('low', 0, 1), maxX: 0, maxZ: 0, cells: ['0:0'] }
+  const tall = { ...room('tall', 0, 3), minX: 1, maxX: 1, maxZ: 0, cells: ['1:0'] }
+  const firstWall = getRoomBoundaryWallRuns(low).find(wall => wall.side === 'east')
+  const first = deleteRoomBoundaryWalls(
+    emptySurface({ rooms: { low, tall } }),
+    'low',
+    firstWall.edgeKeys,
+  )
+  const next = { ...room('next', 0, 1), minX: 2, maxX: 2, maxZ: 0, cells: ['2:0'] }
+  const chainedSurface = {
+    ...first.surfaceData,
+    rooms: { ...first.surfaceData.rooms, next },
+  }
+  const secondWall = getRoomBoundaryWallRuns(next).find(wall => wall.side === 'west')
+  const second = deleteRoomBoundaryWalls(chainedSurface, 'next', secondWall.edgeKeys)
+  const merged = second.surfaceData.rooms.next
+
+  assert.equal(second.error, null)
+  assert.equal(merged.heightLevels, 3)
+  assert.equal(merged.verticalProfile.slices.length, 3)
+  assert.doesNotThrow(() => prepareSurfaceData(second.surfaceData, { battlemapId: 'chain-merge' }))
 })
 
 test('une nouvelle salle decoupe son volume sur la salle courbe deja presente', () => {

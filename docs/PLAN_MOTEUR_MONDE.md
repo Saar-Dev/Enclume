@@ -544,6 +544,8 @@ Phase 7.
 - une frontière entre deux salles de même base fusionne les volumes. Depuis la Phase 13, leurs
   hauteurs peuvent différer et sont conservées dans un profil vertical. La salle
   active conserve son `worldId`, ses matériaux et réglages ;
+- une fusion en chaîne redérive `heightLevels` et `height` du nombre de tranches canoniques avant
+  sauvegarde ; les métadonnées de l'ancienne salle active ne peuvent pas survivre par erreur ;
 - portes sur la frontière supprimée, références de salles des connecteurs et dépendances de découpe
   sont nettoyées ou remappées atomiquement ;
 - supprimer une frontière courbe retire aussi l'arc séparateur.
@@ -650,10 +652,10 @@ Phase 7.
 - les profils sont conservés lors d'une fusion et retirés avec les arêtes réellement supprimées.
 - une porte déjà ancrée bloque la transformation verticale de son mur afin que maillage, ouverture,
   portail et collider ne puissent pas diverger.
-- les raccords sont des intersections volumétriques dérivées à chaque hauteur. Ils ferment aussi le
-  cas d'un unique mur profilé contre deux voisins verticaux ou de profondeurs différentes ; le loft
-  et le padding collision/LOS prolongent les deux côtés du raccord. Un arc horizontal conserve le
-  profil vertical de ses arêtes sources et se raccorde aux murs droits voisins.
+- les raccords sont des intersections volumétriques dérivées par face et par salle à chaque hauteur.
+  Ils ferment aussi le cas d'un unique mur profilé, de profondeurs différentes et d'une jonction en
+  T où les deux faces d'un mur mitoyen rejoignent des voisins distincts ; le loft et le padding
+  collision/LOS prolongent les côtés concernés. Un arc horizontal conserve son profil vertical.
 
 ### Interface
 
@@ -669,7 +671,7 @@ Phase 7.
 
 ### Validation
 
-- 111 tests du moteur/serveur et 28 tests client Surface/persistance passent ;
+- 112 tests du moteur/serveur et 29 tests client Surface/persistance passent ;
 - ESLint ciblé des fichiers Surface ne remonte aucune erreur ;
 - build Vite de production validé.
 
