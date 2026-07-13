@@ -3267,3 +3267,68 @@ en session de jeu.
 **Reste à faire** : Groupe 2 (Lunette de visée — refonte du calcul Tir visé, `AIM_MAX_TRANCHES`,
 plage UI `AssaultRangedPanel.jsx`), Groupe 4 (slot `logiciel`, 4 mécaniques à détailler
 individuellement) — voir `docs/PLAN_MODING_PHASEB.md`.
+
+## Session 141 (suite 29) — 2026-07-12 — Interface d'ajout Avantage/Désavantage + bug DELETE 500 pré-existant corrigé ✅ CLOS
+
+- Demande Saar : le bouton "+" du bloc AVANTAGES & DÉSAVANTAGES ne permettait d'ajouter que
+  Mutations/Force Polaris/Autres — aucune interface pour un Avantage/Désavantage générique du
+  catalogue `ref_advantages`, alors qu'une route serveur `POST /advantages` existait déjà, jamais
+  utilisée par aucune UI.
+- **Point d'architecture trouvé avant tout code, soumis à Saar** : cette route existante appelle
+  `addAdvantage()` — la fonction du Wizard Step5, qui exige une ligne `char_pc_ledger` (sinon erreur
+  500) et débite réellement des PC. Pour un personnage déjà verrouillé, ce ledger est presque
+  toujours épuisé (dette `pc_postcreation` jamais crédité) → l'octroi aurait échoué en pratique pour
+  quasiment tout personnage réel. **Décision Saar : octroi narratif MJ, sans coût PC, MJ uniquement**
+  — même philosophie que les Mutations (Lot D) et les notes "Autres" (Lot C), déjà dans ce panneau.
+- **Codé** :
+  - `advantageConstraints.js` : `validateAdvantage()` gagne `skipBudgetCheck` (saute uniquement
+    `sufficient_pc` — le plafond `max_desavantage_pc`, règle de conception et non un budget, reste
+    toujours appliqué).
+  - `advantageService.js` : nouvelle fonction `grantAdvantage(sheetId, advantageId, acquiredDuring)`
+    — mêmes contraintes que `addAdvantage` moins le budget, aucun contact avec `char_pc_ledger`, même
+    effet de bord `adv_076→is_fertile`. Retourne une forme identique à `getAdvantages()`
+    (name/type/... aplatis depuis `snapshot_data`/`refAdv`) — sans ça la ligne fraîchement ajoutée se
+    serait affichée vide côté client jusqu'au prochain rechargement complet.
+  - **Bug latent trouvé et corrigé avant qu'il ne devienne actif** : `removeAdvantage()` décrémentait
+    `char_pc_ledger` inconditionnellement au retrait — avec l'octroi narratif (jamais crédité au
+    ledger), un retrait aurait décrémenté à tort un budget jamais affecté par cet avantage. Corrigé :
+    décrémentation seulement si `acquired_during === 'creation_step5'` (schéma migration 99 prévoyait
+    déjà 4 valeurs possibles pour cette colonne, seule `creation_step5` a jamais été utilisée avant
+    ce lot — confirme que la distinction était anticipée, pas inventée ici).
+  - `char-sheet.js` : route `POST /advantages` (existante, jamais utilisée) — ajoute
+    `if (!req.isGm) throw new AppError(403, ...)`, bascule `addAdvantage()` → `grantAdvantage()`.
+  - `ref.js` : nouvelle route `GET /char-ref/advantages` (catalogue complet, même style que
+    `/mutations`).
+  - `AdvantagesPanel.jsx` : 4ᵉ bouton "Avantage/Désavantage" (grisé si `!isGm`, grille 2×2 au lieu de
+    3 colonnes) ; nouvelle étape `'advantage'` (liste scrollable groupée Avantages/Désavantages,
+    grisée si déjà possédé — seule vérification client, le reste validé serveur + message d'erreur
+    affiché, pas de duplication des règles family_limit/is_unique/etc.) ; `handleAddAdvantage`.
+  - `fr.json` : 6 nouvelles clés (`typeAdvantage`, `typeAdvantageSub`, `stepAdvantage`,
+    `catalogAdvantages`, `catalogDisadvantages`, `alreadyOwned`).
+- **Bug de production pré-existant trouvé en testant via une vraie requête HTTP (jamais fait avant
+  pour cette route — les sessions précédentes testaient uniquement via appel direct de fonction,
+  ce qui contourne Express)** : `DELETE /advantages/:id` (`char-sheet.js:633`) faisait
+  `const { reason } = req.body` sans garde — Express 5 laisse `req.body` à `undefined` si aucun body/
+  Content-Type n'est envoyé, ce qui est exactement le cas du bouton "×" existant
+  (`AdvantagesPanel.handleRemove`, `api.delete(...)` sans body) → **500 à chaque clic, en production,
+  depuis toujours, sans rapport avec ce chantier**. Le même fichier a déjà le bon pattern ailleurs
+  (`req.body || {}`, route inventaire ligne 1008) — oubli isolé sur cette route précise. Corrigé
+  (1 ligne). Saar informé et a confirmé vouloir le correctif dans la foulée.
+- **Testé** : `node --check` 0 erreur (4 fichiers serveur), ESLint client 0 nouvelle erreur
+  (`AdvantagesPanel.jsx` 0 problème, `SkillsPanel.jsx`/`CharacterSheet.jsx` retour exact aux 5
+  problèmes préexistants confirmés), `fr.json` valide. **Tests en base réelle, y compris via de
+  vraies requêtes HTTP (JWT signé pour un GM réel et un joueur réel de la même campagne, pas
+  seulement des appels directs de fonction)** : `GET /char-ref/advantages` (200, 79 lignes) ;
+  `POST /advantages` en GM → 201 avec la forme aplatie correcte ; en joueur non-GM → 403 confirmé ;
+  octroi d'un avantage déjà possédé/unique → rejeté ; 2 désavantages cumulant >10 PC → rejeté
+  (`max_desavantage_pc` confirmé toujours actif malgré `skipBudgetCheck`) ; `adv_076` narratif →
+  `is_fertile` basculé puis restauré au retrait ; `DELETE /advantages/:id` sans body (exactement
+  l'appel du bouton "×") → 500 avant correctif, 200 après ; ledger de "Mr sourire" (personnage sans
+  `char_pc_ledger`) jamais requis ni touché tout du long ; base vérifiée propre après chaque test
+  (résidus supprimés via les vraies routes, pas de reste hors l'état de test Lot 5 déjà connu). SR
+  (`/api/health` 200 tout du long, malgré les redémarrages nodemon).
+- **SR + parcours navigateur confirmé fonctionnel par Saar** : octroi MJ visible immédiatement dans
+  la liste fusionnée, bouton "×" fonctionnel sans crash (bug 500 confirmé corrigé), bouton grisé
+  pour un joueur non-GM.
+- Détail complet : ce fichier uniquement (feature + bug corrigé dans la même session, hors tout
+  plan `PLAN_*.md` existant).

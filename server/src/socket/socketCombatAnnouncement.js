@@ -3,7 +3,7 @@ import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
 import { skipPlayer, startResolutionPhase } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
-import { getAimBonusComp, getAimIniCost, isAimEligible } from '../../../shared/combatExclusiveActions.js'
+import { getAimBonusComp, getAimIniCost, isAimEligible, getLunetteNiveau } from '../../../shared/combatExclusiveActions.js'
 
 export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -185,6 +185,10 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // Tir visé (LdB p.227-228, docs/PLAN_TIRVISE.md) — calculé une fois, réutilisé pour
       // iniDelta ci-dessous ET pour la ligne combat_actions (aim_bonus_comp) plus bas.
       const aimTranches = mapActions?.attack?.aimTranches ?? 0
+      // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — re-dérivée serveur depuis l'arme
+      // déclarée, jamais transmise par le client. Fetch conditionnel (aimTranches>0) : la Lunette
+      // n'affecte que le Tir visé, pas la peine d'interroger char_inventory_mods sinon.
+      let lunetteNiveau = 0
 
       let iniDelta = 0
       if (!isDrone) {
@@ -217,7 +221,15 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Tir visé : aucune autre action ni transition d'état ce tour, arme déjà au clair, tir simple, une seule arme requise" })
             return
           }
-          iniDelta += getAimIniCost(aimTranches)
+          const aimWeaponInvId = mapActions?.attack?.weaponInvId
+          if (aimWeaponInvId) {
+            const installedMods = await db('char_inventory_mods as cim')
+              .join('ref_equipment as re', 'cim.equipment_id', 're.id')
+              .where({ 'cim.weapon_inv_id': aimWeaponInvId })
+              .select('re.bonus', 're.mod_slot', 're.mod_requires_aim')
+            lunetteNiveau = getLunetteNiveau(installedMods)
+          }
+          iniDelta += getAimIniCost(aimTranches, { lunetteNiveau })
         }
         iniDelta += (quick?.observer ?? 0) * -5
         iniDelta += (quick?.reperer  ?? 0) * -5
@@ -260,7 +272,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           bullet_count:         bulletCount ?? null,
           fire_mode_bonus_comp: fireModeBonusComp ?? null,
           fire_mode_bonus_dmg:  fireModeBonusDmg ?? null,
-          aim_bonus_comp:       isDrone ? null : (getAimBonusComp(aimTranches) || null),
+          aim_bonus_comp:       isDrone ? null : (getAimBonusComp(aimTranches, { lunetteNiveau }) || null),
           modifiers:            JSON.stringify({ ini_mod: 0, ref_range: assaultWeaponRefRange, dual_wield: isDualWield ?? false, dual_wield_bonus_comp: dualWieldBonusComp ?? 0 }),
           status:               'pending',
         })

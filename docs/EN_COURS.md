@@ -1,5 +1,10 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-12 — Session 141 (suite 28) : `docs/PLAN_MODING_PHASEB.md` Groupe 1
+> Dernière mise à jour : 2026-07-12 — Session 141 (suite 29) : Interface d'ajout Avantage/
+> Désavantage (octroi MJ narratif) + bug DELETE 500 pré-existant corrigé — ✅ clos, fonctionnel
+> confirmé Saar (item 71) ; Session 141 (suite 27) : bug GENOTYPE "Hybride" visible pour un
+> personnage Humain — ✅ clos (item 70) ; Session 141 (suite 26) : `PLAN_MUTATION2.md` Lot 5
+> (Déblocage de compétences `[CS7]`) — ✅ clos, fonctionnel confirmé Saar (item 69) ; Session 141
+> (suite 28) : `docs/PLAN_MODING_PHASEB.md` Groupe 1
 > (bonus fixes optique) + architecture des slots exclusifs — ✅ clos, fonctionnel confirmé Saar
 > (item 68) ; Session 141 (suite 25) : `PLAN_MUTATION2.md` Lot 4 (armure/arme
 > naturelle) — ✅ clos, fonctionnel confirmé Saar en navigateur (item 67) ; Session 141 (suite 24) :
@@ -28,6 +33,65 @@
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 71 (Session 141 suite 29) — Interface d'ajout Avantage/Désavantage + bug DELETE 500
+> pré-existant corrigé ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Demande Saar : le bouton
+> "+" du bloc AVANTAGES & DÉSAVANTAGES ne permettait d'ajouter que Mutations/Force Polaris/Autres.
+> **Point d'architecture trouvé avant tout code** : la route serveur `POST /advantages` existait déjà
+> mais appelait `addAdvantage()` (fonction Wizard Step5, exige `char_pc_ledger`, débite réellement
+> des PC) — inutilisable pour un personnage verrouillé (ledger presque toujours épuisé, dette
+> `pc_postcreation` jamais crédité). **Décision Saar : octroi narratif MJ, sans coût PC, MJ
+> uniquement** — même philosophie que Mutations (Lot D)/Autres (Lot C). Codé : `advantageConstraints.js`
+> (`skipBudgetCheck`, saute `sufficient_pc` uniquement — `max_desavantage_pc` reste actif) ;
+> `advantageService.js` (`grantAdvantage()` NOUVEAU, aucun contact ledger, retour aplati identique à
+> `getAdvantages()` ; `removeAdvantage()` corrigé — bug latent trouvé et fermé avant de devenir actif,
+> ne décrémente le ledger que si `acquired_during==='creation_step5'`) ; `char-sheet.js` (`POST
+> /advantages` gagne `req.isGm`, bascule vers `grantAdvantage`) ; `ref.js` (`GET /char-ref/advantages`,
+> NOUVEAU) ; `AdvantagesPanel.jsx` (4ᵉ bouton, grille 2×2, étape liste groupée Avantages/
+> Désavantages) ; `fr.json` (6 clés). **Bug de production pré-existant trouvé en testant via une
+> vraie requête HTTP (jamais fait avant pour cette route)** : `DELETE /advantages/:id` plantait en
+> 500 à chaque clic du bouton "×" existant (`req.body` non gardé, Express 5 le laisse `undefined`
+> sans body) — corrigé (1 ligne, même pattern déjà utilisé ailleurs dans le fichier). **Testé** :
+> `node --check` 0 erreur, ESLint 0 nouvelle erreur, `fr.json` valide, tests via de vraies requêtes
+> HTTP (JWT signé GM + joueur réels) — catalogue, octroi, rejets (déjà possédé/unique/plafond 10 PC
+> désavantages/joueur non-GM 403), effet `adv_076`, bug 500 confirmé puis corrigé, ledger jamais
+> requis/touché, base vérifiée propre après coup, SR. **SR + parcours navigateur confirmé
+> fonctionnel par Saar**. Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 29)".
+
+> **Item 70 (Session 141 suite 27) — Bug GENOTYPE : compétence "Hybride" visible pour un personnage
+> Humain ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Trouvé par Saar en testant l'item 69.
+> `ref_skills.HYBRIDE` avait zéro ligne `ref_skill_requirements` — jamais gaté depuis sa création.
+> Recherche élargie : `type='GENOTYPE'` avait zéro ligne dans toute la table, mécanisme jamais
+> alimenté malgré son support déjà codé. Texte LdB : accessible aux génotypes `HYB_NAT`/`GEN_HYB`/
+> `TEC_HYB` **OU** à la mutation Amphibie — 4 alternatives (OR), alors que le moteur existant traite
+> tout en ET. **Recherche externe demandée par Saar avant tout code** ("aucun bricolage toléré") :
+> 5etools (compendium figé, 2 niveaux ET/OU) retenu plutôt que le `Predicate` récursif PF2e (pensé
+> pour du contenu homebrew, déjà écarté pour ce projet ailleurs). Codé : migration
+> `140_ref_skill_requirements_or_group.js` (colonne `or_group`, même convention que
+> `ref_career_skills.choice_group`) ; `shared/skillRequirements.js` (NOUVEAU, `areRequirementsSatisfied`,
+> pattern `naturalWeapons.js`) ; `SkillsPanel.jsx` (`isVisible` généralisé) ; `char-sheet.js`
+> (`POST /skills/buy` étendu à GENOTYPE). **Testé** : 9 scénarios purs, round-trip migration
+> byte-identique, 2 scénarios en base réelle ("Mr sourire"), SR, **parcours navigateur confirmé
+> fonctionnel par Saar**. Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 27)".
+
+> **Item 69 (Session 141 suite 26) — `docs/PLAN_MUTATION2.md` Lot 5 : Déblocage de compétences
+> (`[CS7]`) ✅ CLOS, fonctionnel confirmé Saar en navigateur.** `SkillsPanel.jsx` (`activeMutations`)
+> lisait `charAdvantages.type==='MUTATION'`/`.muta_numero` (champs inexistants en V2) → Set toujours
+> vide → 10 compétences structurellement invisibles pour 100% des personnages. 8 des 10 lignes
+> `ref_skill_requirements` référençaient encore l'ancien identifiant V1 (`muta_XXX`) — remappées vers
+> le `mutation_id` V2 réel. **Erreur de donnée confirmée par Saar** : les 2 lignes restantes
+> (`MAITRISE_DE_LA_FORCE_POLARIS`/`MAITRISE_DE_LECHO_POLARIS`) référençaient `muta_029`
+> ("Sensibilité au Polaris") — mutation qui n'aurait jamais dû exister en V2, l'accès réel passe par
+> l'Avantage `adv_079` "Force Polaris" (texte LdB déjà en base le confirme). Bascule vers un nouveau
+> type de prérequis `ADVANTAGE`. **2ᵉ trou trouvé** : seul SKILL_MIN était revalidé côté serveur —
+> fermé (MUTATION/ADVANTAGE désormais toujours revalidés à l'achat). Migration
+> `139_fix_ref_skill_requirements_mutations.js`. **Hors scope, transféré en dette séparée**
+> (`docs/BUGIDENTIFIE.md` POL1) : `adv_078` "Polaris non maîtrisé" doit déclencher un tirage
+> aléatoire de 2 pouvoirs, jamais construit. **2 problèmes trouvés par Saar en testant, repris en
+> items 70/71** : bug GENOTYPE "Hybride", absence d'interface Avantages/Désavantages. **Testé** :
+> `node --check`, ESLint 0 nouvelle erreur, round-trip migration byte-identique, 5 scénarios en base
+> réelle, SR, **parcours navigateur confirmé fonctionnel par Saar** (personnage de test "Mr sourire").
+> Détail complet : `docs/PLAN_MUTATION2.md` Lot 5, `docs/JOURNAL6.md` "Session 141 (suite 26)".
 
 > **Item 68 (Session 141 suite 28) — `docs/PLAN_MODING_PHASEB.md` Groupe 1 (bonus fixes optique) +
 > architecture des slots exclusifs ✅ CLOS, fonctionnel confirmé Saar.** Migration
@@ -1234,9 +1298,7 @@ Projet en cours et priorité user :
 | **KIWI2** | Import GLB token : local ✅ / Kiwi ❌ | **Haute** — Cluster R |
 | **CS4** | Catégorie "Techniques" + liste compétences | Moyenne — Cluster O |
 | **CS5** | Compétence réservée (X) : ouverture 1 XP, reste -3 | Moyenne — Cluster O |
-| **CS6** | Force Polaris = Avantage (pas Mutation) | Moyenne — Cluster O |
-| **CS7** | `SkillsPanel.jsx:135-141` (`activeMutations`) lit `charAdvantages` (`type==='MUTATION'`/`muta_numero`, schéma V2 jamais eu ces champs) au lieu de `char_mutations` (vraie table) → Set toujours vide → **10 compétences** à prérequis `type:'MUTATION'` structurellement invisibles pour tout personnage — `[VÉRIFIÉ]` en base réelle. **Transféré vers `docs/PLAN_MUTATION2.md`** (Session 141 suite 9, même famille que les effets de mutation jamais appliqués) | Non prioritaire — session dédiée future, voir `docs/PLAN_MUTATION2.md` |
-| **MUT3** | Effets mécaniques des mutations et avantages (attributs, résistances, armure, économie) jamais appliqués nulle part — `[VÉRIFIÉ]` pour tout personnage, Wizard inclus (`char_mutation_effects_view` jamais interrogée, `calcNA` n'a pas de paramètre mutation, 74/76 lignes `ref_advantages` sans effet). Diagnostic complet + pistes non tranchées : `docs/PLAN_MUTATION2.md` | Session dédiée future (Saar) — pas urgent, gap silencieux pré-existant |
+| **MUT3** | Effets mécaniques des mutations et avantages — Lots 1-5 (attributs, résistances, armure/arme naturelle, déblocage de compétences) ✅ clos et fonctionnels. Restent Lot 6 (Identité, `mod_identity` avantages jamais lu génériquement) et Lot 7 (Narratif/économie, priorité basse) — `docs/PLAN_MUTATION2.md` | Lot 6 à détailler quand Saar voudra enchaîner |
 | **COM20** | Phase 1 : afficher arme (munitions + type) | Moyenne — Cluster N |
 | **COM21** | Collision tokens : deuxième bloqué | Moyenne — Cluster N |
 | **COM23** | ~~Label token : fixe, ne rentre pas dans les murs~~ | ✅ Session 127 |

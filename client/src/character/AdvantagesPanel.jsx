@@ -20,7 +20,7 @@
  *   onSkillLearnedChange — callback(skill_id, is_learned) après toggle pouvoir Polaris
  *
  * Flux modale :
- *   Étape 1 : choix du type → [Mutations*] [Force Polaris**] [Autres]
+ *   Étape 1 : choix du type → [Mutations*] [Avantage/Désavantage*] [Force Polaris**] [Autres]
  *             * grisé si !isGm (octroi MJ uniquement, lecture seule pour le joueur)
  *             ** grisé si l'avantage adv_079 "Force Polaris" absent de charAdvantages
  *   Étape 2A (Mutations)     : liste ref_mutations scrollable → POST .../mutations (char_mutations,
@@ -28,6 +28,10 @@
  *   Étape 2B (Force Polaris) : liste POUVOIRS_POLARIS depuis refSkillsPolaris (prop)
  *   Étape 2C (Autres)        : textarea 255 chars → char_advantage_notes (table dédiée, pas
  *                              char_advantages — aucun coût PC, voir Lot C)
+ *   Étape 2D (Avantage/Désavantage) : liste ref_advantages scrollable (groupée Avantages/
+ *                              Désavantages) → POST .../advantages (char_advantages, MJ uniquement,
+ *                              octroi narratif, aucun coût PC — grantAdvantage(), distinct de la
+ *                              fonction addAdvantage() du Wizard qui débite char_pc_ledger)
  *
  * Affichage liste :
  *   Liste fusionnée charAdvantages (catalogue, badge AVA/DÉS) + charMutations (badge MUT, retrait
@@ -62,10 +66,11 @@ export default function AdvantagesPanel({
 
   // ─── Données de référence ─────────────────────────────────────────────────
   const [refMutations, setRefMutations] = useState([])
+  const [refAdvantages, setRefAdvantages] = useState([])
 
   // ─── État modale ──────────────────────────────────────────────────────────
   const [modalOpen, setModalOpen] = useState(false)
-  // 'type' | 'mutations' | 'mutation-subtype' | 'polaris' | 'other'
+  // 'type' | 'mutations' | 'mutation-subtype' | 'polaris' | 'other' | 'advantage'
   const [step, setStep] = useState('type')
   const [otherLabel, setOtherLabel] = useState('')
   const [saving, setSaving] = useState(false)
@@ -86,6 +91,15 @@ export default function AdvantagesPanel({
     api.get('/char-ref/mutations')
       .then(res => { if (!cancelled) setRefMutations(res.data.mutations || []) })
       .catch(err => console.error('Erreur chargement ref_mutations :', err))
+    return () => { cancelled = true }
+  }, [])
+
+  // ─── Charger refAdvantages au montage ─────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false
+    api.get('/char-ref/advantages')
+      .then(res => { if (!cancelled) setRefAdvantages(res.data.advantages || []) })
+      .catch(err => console.error('Erreur chargement ref_advantages :', err))
     return () => { cancelled = true }
   }, [])
 
@@ -218,6 +232,25 @@ export default function AdvantagesPanel({
       setSaving(false)
     }
   }, [characterId, otherLabel, onSaved, t])
+
+  // ─── Ajouter un avantage/désavantage (MJ uniquement — serveur revalide aussi req.isGm) ─
+  const handleAddAdvantage = useCallback(async (advantageId) => {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await api.post(`/char-sheet/${characterId}/advantages`, {
+        advantage_id: advantageId,
+      })
+      onAdvantagesChange(prev => [...prev, res.data.advantage])
+      onSaved?.()
+      closeModal()
+    } catch (err) {
+      setError(err.response?.data?.error?.message || t('advantages.errorAdd'))
+      console.error('Erreur add advantage :', err)
+    } finally {
+      setSaving(false)
+    }
+  }, [characterId, onAdvantagesChange, onSaved, t])
 
   // ─── Supprimer un avantage/désavantage catalogué ──────────────────────────
   const handleRemove = useCallback(async (advantage) => {
@@ -371,6 +404,7 @@ export default function AdvantagesPanel({
                 {step === 'mutation-subtype' && (subtypeParent?.name ?? t('advantages.stepMutationSubtype'))}
                 {step === 'polaris'         && t('advantages.stepPolaris')}
                 {step === 'other'           && t('advantages.stepOther')}
+                {step === 'advantage'       && t('advantages.stepAdvantage')}
               </span>
               <button style={s.closeBtn} onClick={closeModal}>×</button>
             </div>
@@ -401,6 +435,18 @@ export default function AdvantagesPanel({
                   <span style={s.typeBtnLabel}>{t('advantages.typePolaris')}</span>
                   <span style={s.typeBtnSub}>
                     {hasForcePolaris ? t('advantages.typePolarisSub') : t('advantages.typePolarisDisabled')}
+                  </span>
+                </button>
+
+                <button
+                  style={{ ...s.typeBtn, ...(isGm ? {} : s.typeBtnDisabled) }}
+                  onClick={() => isGm && setStep('advantage')}
+                  disabled={!isGm}
+                  title={isGm ? undefined : t('advantages.mutationsGmOnly')}
+                >
+                  <span style={s.typeBtnLabel}>{t('advantages.typeAdvantage')}</span>
+                  <span style={s.typeBtnSub}>
+                    {isGm ? t('advantages.typeAdvantageSub') : t('advantages.mutationsGmOnly')}
                   </span>
                 </button>
 
@@ -502,6 +548,51 @@ export default function AdvantagesPanel({
                 >
                   {t('advantages.add')}
                 </button>
+              </div>
+            )}
+
+            {/* ── Étape 2D : liste avantages/désavantages ──────────────── */}
+            {step === 'advantage' && (
+              <div style={s.listStep}>
+                {refAdvantages.length === 0
+                  ? <div style={s.loadingMsg}>{t('common.loading')}</div>
+                  : (
+                    <>
+                      <div style={s.catalogHeader}>{t('advantages.catalogAdvantages')}</div>
+                      {refAdvantages.filter(a => a.type === 'advantage').map(adv => {
+                        const existing = charAdvantages.some(a => a.advantage_id === adv.advantage_id)
+                        return (
+                          <button
+                            key={adv.advantage_id}
+                            style={{ ...s.mutRow, ...(existing ? s.mutRowExisting : {}) }}
+                            onClick={() => !existing && handleAddAdvantage(adv.advantage_id)}
+                            disabled={saving || existing}
+                            title={adv.description || ''}
+                          >
+                            <span style={s.mutName}>{adv.name}</span>
+                            {existing && <span style={s.mutLevel}>{t('advantages.alreadyOwned')}</span>}
+                          </button>
+                        )
+                      })}
+                      <div style={s.catalogHeader}>{t('advantages.catalogDisadvantages')}</div>
+                      {refAdvantages.filter(a => a.type === 'disadvantage').map(adv => {
+                        const existing = charAdvantages.some(a => a.advantage_id === adv.advantage_id)
+                        return (
+                          <button
+                            key={adv.advantage_id}
+                            style={{ ...s.mutRow, ...(existing ? s.mutRowExisting : {}) }}
+                            onClick={() => !existing && handleAddAdvantage(adv.advantage_id)}
+                            disabled={saving || existing}
+                            title={adv.description || ''}
+                          >
+                            <span style={s.mutName}>{adv.name}</span>
+                            {existing && <span style={s.mutLevel}>{t('advantages.alreadyOwned')}</span>}
+                          </button>
+                        )
+                      })}
+                    </>
+                  )
+                }
               </div>
             )}
 
@@ -669,10 +760,10 @@ const s = {
     background: 'rgba(224,92,92,0.08)',
   },
 
-  // Étape 1 — 3 boutons type
+  // Étape 1 — 4 boutons type (2×2)
   typeGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
+    gridTemplateColumns: 'repeat(2, 1fr)',
     gap: '8px',
     padding: '16px',
   },
@@ -717,6 +808,14 @@ const s = {
     color: '#5a5a7a',
     textAlign: 'center',
     padding: '16px',
+  },
+  catalogHeader: {
+    fontSize: '10px',
+    fontWeight: '700',
+    color: '#5a5a7a',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    padding: '6px 2px 2px',
   },
   mutRow: {
     background: '#13161b',

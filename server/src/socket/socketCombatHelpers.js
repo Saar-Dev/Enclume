@@ -10,6 +10,7 @@ import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { calcWeaponModBonus } from '../services/modingService.js'
+import { getLunetteNiveau, getEffectiveAimBonus } from '../../../shared/combatExclusiveActions.js'
 import {
   calcSkillTotal, calcAttributeNA,
   calcWoundPenalty, calcEncumbrancePenalty,
@@ -1356,7 +1357,11 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const isRushedMod      = rosterTireur?.state_vitesse === 'rushed' ? -5 : 0
     const fireModeComp     = action.fire_mode_bonus_comp ?? 0
     const dualWieldComp    = action.modifiers?.dual_wield_bonus_comp ?? 0
-    const aimBonusComp     = action.aim_bonus_comp ?? 0
+    // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — le bonus stocké à la Déclaration
+    // (Phase 1, portee alors inconnue) est clampé ici selon la portée désormais confirmée
+    // (Phase 2 Résolution). Réutilise installedMods déjà fetché pour Groupe 1 (même arme).
+    const lunetteNiveau    = getLunetteNiveau(installedMods)
+    const aimBonusComp     = getEffectiveAimBonus(action.aim_bonus_comp ?? 0, { lunetteNiveau, portee: confirmedModifiers.portee })
     const { total: weaponModComp, breakdown: weaponModBreakdown } = calcWeaponModBonus(installedMods)
     const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp
 

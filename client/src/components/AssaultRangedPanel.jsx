@@ -1,5 +1,5 @@
 import { CC_REPS_STEPS, RL_BUTTONS } from './combatSections.js'
-import { AIM_MAX_TRANCHES, getAimBonusComp } from '../../../shared/combatExclusiveActions.js'
+import { AIM_MAX_TRANCHES, getAimBonusComp, getAimIniCost } from '../../../shared/combatExclusiveActions.js'
 
 const P = {
   section: {
@@ -83,10 +83,12 @@ export default function AssaultRangedPanel({
   dualWieldBonusComp,   // number (0 pour GM)
   onBulletCountChange,  // (count) => void
   onVariantABChange,    // (ab) => void
-  aimTranches,          // number 0-5 — Tir visé (0 = non utilisé)
+  aimTranches,          // number 0-5 (ou plus avec une Lunette) — Tir visé (0 = non utilisé)
   onAimTranchesChange,  // (n) => void
   aimIneligibilityReasons, // string[] — vide = éligible (shared/combatExclusiveActions.js)
+  lunetteNiveau,        // number — niveau de la Lunette installée sur l'arme sélectionnée (0/undefined = aucune)
 }) {
+  const aimSliderMax = Math.max(AIM_MAX_TRANCHES, lunetteNiveau ?? 0)
   const fireModeLabel = { CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }[currentFireMode] ?? currentFireMode
 
   return (

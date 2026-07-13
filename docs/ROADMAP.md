@@ -1,6 +1,8 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-07-11 Session 141 (suite 18) — point documentaire, voir `CLAUDE.md`
-> dettes `[DOC1]`/`[DOC2]` pour le suivi (archivage PLAN_*.md, VOCABULARY.md, REGLES_LdB.md)
+> Dernière mise à jour : 2026-07-12 Session 141 (suite 21 suite) — ajout idée Tourelles/armes
+> lourdes fixes (voir `docs/PLAN_MODING_PHASEB.md`, Groupe 3 retiré) ; 2026-07-11 Session 141
+> (suite 18) — point documentaire, voir `CLAUDE.md` dettes `[DOC1]`/`[DOC2]` pour le suivi
+> (archivage PLAN_*.md, VOCABULARY.md, REGLES_LdB.md)
 
 ---
 
@@ -470,6 +472,30 @@ Travail préalable requis :
 3. Ajouter les clés `skills.tooltip.*` dans `fr.json`
 4. Ajouter icône ℹ dans `renderSkillRow` + composant tooltip (pattern identique `SecondaryField`)
 Complexité estimée : moyenne (nettoyage OCR + mapping = travail éditorial, implémentation technique = faible).
+
+### Tourelles / armes lourdes fixes — entités interactives sur le playground
+Idée Saar (Session 141 suite 21 suite, 2026-07-12), trouvée en creusant `docs/PLAN_MODING_PHASEB.md`
+Groupe 3 (Trépied/Harnais) : une arme de type tourelle n'est **pas un item d'inventaire porté**,
+c'est une **entité interactive placée sur la carte** (réutilise le système déjà construit —
+Chantiers 9C/9D/9E ✅, `EntityInstancePanel`/`RadialMenu`/interactions SkillCheck existantes).
+Interagir avec la tourelle "équipe" temporairement le joueur ; tout mouvement du token désinstalle
+l'équipement automatiquement.
+- **Trépied** : objet achetable prérequis pour interagir/utiliser une tourelle (immobile pendant
+  l'usage — cohérent avec `docs/Old/JARMES.md` Session 8, "Tr traité comme 2M... à clarifier
+  ultérieurement", jamais résolu jusqu'ici).
+- **Harnais** : objet achetable alternatif permettant l'usage "mode Rambo" (mobile, malus de
+  poids/encombrement — probablement via le système d'encombrement déjà existant,
+  `encumbrance_enabled`/`calcEncumbrancePenalty`, à vérifier plutôt que d'inventer un nouveau
+  système).
+- **Règle source retrouvée** (`docs/REGLES/REGLECOMPETENCE.md`, 3 occurrences — Armes lourdes
+  contact/tir, Tir automatique) : *"Si le personnage n'est pas stable (appuyé sur quelque chose,
+  équipé d'un harnais spécial, etc.), le **niveau de la Compétence** doit être divisé par deux."*
+  Précision importante pour le futur chantier : la division s'applique au **niveau de la Compétence
+  elle-même**, pas au Seuil final déjà modifié (portée/taille/situation) — différent de ce qui avait
+  été esquissé initialement dans Groupe 3 avant cette clarification.
+- Retiré de `PLAN_MODING_PHASEB.md` (Groupe 3) — ce n'est pas un effet de mod sur une arme portée,
+  hors responsabilité de ce document. Complexité estimée : élevée (nouveau type d'entité + mécanique
+  d'équipement temporaire liée au déplacement, au-delà d'un ajustement de mod).
 
 ### Chat MP
 Messagerie privée entre joueurs/GM.

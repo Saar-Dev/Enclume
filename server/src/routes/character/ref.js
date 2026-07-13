@@ -8,6 +8,7 @@
  *   GET /api/char-ref/genotypes — liste des génotypes avec leurs modificateurs
  *   GET /api/char-ref/skills    — catalogue compétences + prérequis imbriqués
  *   GET /api/char-ref/mutations — catalogue mutations + linked_skill_id
+ *   GET /api/char-ref/advantages — catalogue complet avantages/désavantages
  */
 
 import { Router } from 'express'
@@ -32,7 +33,10 @@ router.get('/genotypes', requireAuth, async (req, res, next) => {
 // Retourne le catalogue complet des compétences avec leurs prérequis imbriqués.
 //
 // Chaque compétence inclut un tableau `requirements` (peut être vide) :
-//   { type: 'SKILL_MIN'|'MUTATION'|'GENOTYPE', value: string, threshold: int }
+//   { type: 'SKILL_MIN'|'MUTATION'|'GENOTYPE'|'ADVANTAGE', value: string, threshold: int, or_group: string|null }
+//
+// or_group : les requirements qui partagent le même or_group (non-null) sont liés en OU (une seule
+// suffit) — sinon (or_group null) ET, comme aujourd'hui. Voir docs/PLAN_MUTATION2.md Lot 5 (bug HYBRIDE).
 //
 // Tri : par famille puis par label — ordre d'affichage stable côté client.
 // Double SELECT + regroupement JS : simple, lisible, adapté au volume (234 skills).
@@ -40,13 +44,13 @@ router.get('/skills', requireAuth, async (req, res, next) => {
   try {
     const [skills, reqs] = await Promise.all([
       db('ref_skills').select('*').orderBy('family').orderBy('label'),
-      db('ref_skill_requirements').select('skill_id', 'type', 'value', 'threshold'),
+      db('ref_skill_requirements').select('skill_id', 'type', 'value', 'threshold', 'or_group'),
     ])
 
     // Regrouper les prérequis par skill_id
     const reqsBySkill = reqs.reduce((acc, r) => {
       if (!acc[r.skill_id]) acc[r.skill_id] = []
-      acc[r.skill_id].push({ type: r.type, value: r.value, threshold: r.threshold })
+      acc[r.skill_id].push({ type: r.type, value: r.value, threshold: r.threshold, or_group: r.or_group })
       return acc
     }, {})
 
@@ -83,6 +87,20 @@ router.get('/mutations', requireAuth, async (req, res, next) => {
     for (const sub of subtypes) mutMap.get(sub.mutation_id)?.subtable.push(sub)
 
     res.json({ mutations: Array.from(mutMap.values()) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── GET /api/char-ref/advantages ────────────────────────────────────────────
+// Retourne le catalogue complet ref_advantages (76 lignes) — utilisé par l'octroi narratif MJ
+// (AdvantagesPanel.jsx). Non filtré par option de campagne (polaris_latent) : un MJ peut octroyer
+// n'importe quel avantage narrativement, même hors des choix normalement offerts au Wizard —
+// même philosophie que /mutations (catalogue complet, aucune restriction pour un octroi MJ).
+router.get('/advantages', requireAuth, async (req, res, next) => {
+  try {
+    const advantages = await db('ref_advantages').select('*').orderBy(['type', 'name'])
+    res.json({ advantages })
   } catch (err) {
     next(err)
   }

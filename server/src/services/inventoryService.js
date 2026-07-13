@@ -148,6 +148,16 @@ export async function getInventory(characterId, campaignId) {
       'ref_equipment.ammo_count as ref_ammo_count',
       'ref_equipment.description as ref_description',
       'ref_equipment.price as ref_price',
+      // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — niveau de la Lunette installée sur
+      // cette arme (NULL si aucune) : sous-requête scalaire, réutilise le fetch /inventory déjà
+      // effectué par CombatActionWindow.jsx plutôt qu'un nouvel appel réseau dédié.
+      db.raw(`(
+        SELECT re2.bonus::int FROM char_inventory_mods cim2
+        JOIN ref_equipment re2 ON re2.id = cim2.equipment_id
+        WHERE cim2.weapon_inv_id = char_inventory.id
+          AND re2.mod_slot = 'optique' AND re2.mod_requires_aim = true
+        LIMIT 1
+      ) as lunette_niveau`),
     )
     .orderBy('char_inventory.created_at', 'asc')
 

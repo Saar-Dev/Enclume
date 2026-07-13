@@ -2,17 +2,72 @@
 // Évaluateur pur, importé identique client (retour UI immédiat) et serveur (rejet autoritaire) —
 // pattern shared/careerEligibility.js. Voir docs/PLAN_TIRVISE.md pour l'architecture complète.
 
-export const AIM_MAX_TRANCHES = 5        // bonus max +5 au Test de tir
-export const AIM_INI_PER_TRANCHE = -2    // 2 points d'Initiative sacrifiés par tranche
+export const AIM_MAX_TRANCHES = 5        // bonus max +5 au Test de tir (Tir visé classique)
+export const AIM_INI_PER_TRANCHE = -2    // 2 points d'Initiative sacrifiés par tranche (classique)
 
-// Bonus au Test de tir pour N tranches choisies (clampé 0-5, jamais confiance au client).
-export function getAimBonusComp(aimTranches) {
-  return Math.max(0, Math.min(AIM_MAX_TRANCHES, Math.floor(aimTranches ?? 0)))
+// Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — variante du Tir visé, pas un bonus
+// additif. LdB : +1/niveau jusqu'à +10, 1 point d'Initiative par point de bonus (au lieu de 2),
+// bonus lunette et bonus Tir visé non cumulatifs (le plus élevé des deux — capturé ci-dessous par
+// un simple min() de coût, jamais un choix de "mode" explicite côté joueur).
+export const LUNETTE_MAX_NIVEAU = 10
+// Plafond LdB par portée ("un personnage ne devrait pas pouvoir utiliser une lunette de niveau
+// supérieur à 3 à courte portée, ou supérieur à 5 à moyenne portée") — non applicable en Phase 1
+// Déclaration (portee n'est connue qu'en Phase 2 Résolution, confirmedModifiers). Appliqué comme
+// clamp du bonus effectivement compté dans resolveAssaultAction, jamais à la Déclaration.
+export const LUNETTE_PORTEE_CAP = {
+  bout_portant: 0,        // EXTRAPOLÉ — non sourcé LdB, validé comme hypothèse par Saar
+  courte:       3,
+  moyenne:      5,
+  longue:       LUNETTE_MAX_NIVEAU,
+  extreme:      LUNETTE_MAX_NIVEAU,
 }
 
-// Coût INI correspondant (toujours négatif ou nul).
-export function getAimIniCost(aimTranches) {
-  return getAimBonusComp(aimTranches) * AIM_INI_PER_TRANCHE
+// installedMods = lignes char_inventory_mods jointes à ref_equipment (mod_slot, mod_requires_aim,
+// bonus, name) pour une arme donnée — même forme que modingService.calcWeaponModBonus (Groupe 1).
+// Au plus un item mod_slot='optique' + mod_requires_aim=true actif (exclusivité garantie à
+// l'installation) : jamais de "grouper puis prendre le max".
+export function getLunetteNiveau(installedMods) {
+  const lunette = (installedMods ?? []).find(m => m.mod_slot === 'optique' && m.mod_requires_aim)
+  if (!lunette || lunette.bonus == null) return 0
+  const value = Number(lunette.bonus)
+  return Number.isInteger(value) ? value : 0
+}
+
+// Écrête `points` au plafond global atteignable (5 en classique, ou plus haut si une lunette de
+// niveau supérieur est installée — jamais moins que 5, la Lunette ne réduit jamais le Tir visé de
+// base) puis retient le coût le moins cher entre les deux systèmes pour ce nombre de points écrêté.
+// Toujours un coût fini après écrêtage — jamais de cas Infinity à gérer côté appelant (contrairement
+// à une version antérieure de ce fichier qui renvoyait 0 au lieu d'écrêter, bug corrigé avant tout
+// test réel).
+function resolveAimPoints(aimTranches, lunetteNiveau) {
+  const overallCap = Math.max(AIM_MAX_TRANCHES, lunetteNiveau)
+  const points = Math.max(0, Math.min(Math.floor(aimTranches ?? 0), overallCap))
+  const classicCost = points > AIM_MAX_TRANCHES ? Infinity : points * -AIM_INI_PER_TRANCHE
+  const lunetteCost = points > lunetteNiveau ? Infinity : points
+  return { points, cost: Math.min(classicCost, lunetteCost) }
+}
+
+// Bonus au Test de tir pour N tranches choisies (Phase 1 Déclaration — stocké tel quel sur
+// combat_actions.aim_bonus_comp, jamais confiance au client). `lunetteNiveau` : niveau de la
+// Lunette installée sur l'arme utilisée (0 si aucune) — re-dérivé serveur via getLunetteNiveau,
+// jamais transmis par le client. Aucune dépendance à `portee` ici (voir LUNETTE_PORTEE_CAP).
+export function getAimBonusComp(aimTranches, { lunetteNiveau = 0 } = {}) {
+  return resolveAimPoints(aimTranches, lunetteNiveau).points
+}
+
+// Coût INI correspondant (toujours négatif ou nul) — en miroir de getAimBonusComp, même contexte.
+export function getAimIniCost(aimTranches, { lunetteNiveau = 0 } = {}) {
+  return -resolveAimPoints(aimTranches, lunetteNiveau).cost
+}
+
+// Phase 2 Résolution (resolveAssaultAction) — clamp du bonus stocké à Déclaration selon la portée
+// désormais connue (confirmedModifiers.portee). Le Tir visé classique n'a aucune restriction de
+// portée (LdB, non plafonné ici) ; seule la Lunette a un plafond par portée — capturé en prenant le
+// max entre le plafond classique (5, toujours atteignable) et le plafond lunette à cette portée.
+export function getEffectiveAimBonus(aimBonusComp, { lunetteNiveau = 0, portee = null } = {}) {
+  const lunetteCapAtPortee = Math.min(lunetteNiveau, LUNETTE_PORTEE_CAP[portee] ?? 0)
+  const cap = Math.max(AIM_MAX_TRANCHES, lunetteCapAtPortee)
+  return Math.min(aimBonusComp ?? 0, cap)
 }
 
 // Tir visé éligible : "tu ne vises que si tu ne fais que ça" (règle Saar, PLAN_TIRVISE.md

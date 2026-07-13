@@ -6,7 +6,9 @@
  * Props :
  *   refSkills      — catalogue complet (ref_skills + requirements imbriqués)
  *   charSkills     — lignes char_skills du personnage (peut être vide)
- *   charAdvantages — lignes char_advantages du personnage (mutations actives)
+ *   charAdvantages — lignes char_advantages du personnage (avantages actifs)
+ *   charMutations  — lignes char_mutations du personnage (mutations actives, status='active') —
+ *                     source réelle des prérequis type MUTATION (docs/PLAN_MUTATION2.md Lot 5)
  *   anMap          — { FOR: 2, CON: 1, ... } — AN précalculés depuis CharacterSheet
  *   characterId    — UUID du character Enclume
  *   canEdit        — booléen (isGm || isOwner)
@@ -18,7 +20,7 @@
  *                    appelé après achat réussi — mise à jour locale dans CharacterSheet
  *   skillPrerequisitesEnabled — booléen — option de campagne OPT-07 (settings.skill_prerequisites,
  *                    défaut false/OFF). Si !== true, le prérequis SKILL_MIN est ignoré en visibilité
- *                    (MUTATION/GENOTYPE restent toujours actifs, non concernés par cette option).
+ *                    (MUTATION/ADVANTAGE/GENOTYPE restent toujours actifs, non concernés par cette option).
  *
  * Règles de calcul :
  *   Base  = AN(attr_1) + AN(attr_2)   — si attr_2 null : AN(attr_1) × 2 (PC4)
@@ -26,11 +28,12 @@
  *
  * Algorithme de visibilité (ordre strict, source CHARACTER.md) :
  *   1. marker === '(X)' ET is_learned === false → masquée
- *      SAUF si mutation débloquante satisfaite
+ *      SAUF si mutation/avantage débloquant satisfait
  *   2. SKILL_MIN → si skillPrerequisitesEnabled === true ET Total de la prérequise < threshold → masquée
- *   3. MUTATION → muta_numero absent de charAdvantages → masquée
- *   4. GENOTYPE → genotypeId !== value → masquée
- *   5. Toutes conditions OK → visible
+ *   3. MUTATION/ADVANTAGE/GENOTYPE — évalués via shared/skillRequirements.js (ET entre lignes/groupes,
+ *      OU entre lignes qui partagent le même or_group — ex. HYBRIDE : génotype hybride OU mutation
+ *      Amphibie, docs/PLAN_MUTATION2.md Lot 5) → un groupe/ligne non satisfait → masquée
+ *   4. Toutes conditions OK → visible
  *
  * Mode Progression :
  *   Chaque compétence visible affiche un bouton "+" avec le coût en PE.
@@ -47,6 +50,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
+import { areRequirementsSatisfied } from '../../../shared/skillRequirements.js'
 
 // ─── Barème coût XP (miroir client de charStats.js — pour l'affichage uniquement) ──
 // Le serveur recalcule indépendamment. Ce calcul client n'est jamais envoyé comme
@@ -71,6 +75,7 @@ export default function SkillsPanel({
   refSkills,
   charSkills,
   charAdvantages,
+  charMutations,
   anMap,
   characterId,
   isGm,
@@ -130,13 +135,17 @@ export default function SkillsPanel({
     return s
   }, [charSkills])
 
-  // ─── Set des muta_numero actifs ───────────────────────────────────────────
+  // ─── Set des mutation_id (V2) actifs — source réelle char_mutations, pas charAdvantages ───
   const activeMutations = useMemo(() => {
     const s = new Set()
-    if (!charAdvantages) return s
-    charAdvantages.forEach(a => {
-      if (a.type === 'MUTATION' && a.muta_numero) s.add(a.muta_numero)
-    })
+    charMutations.forEach(m => s.add(String(m.mutation_id)))
+    return s
+  }, [charMutations])
+
+  // ─── Set des advantage_id actifs (ex. adv_079 "Force Polaris") ───────────
+  const activeAdvantageIds = useMemo(() => {
+    const s = new Set()
+    charAdvantages.forEach(a => s.add(a.advantage_id))
     return s
   }, [charAdvantages])
 
@@ -154,15 +163,22 @@ export default function SkillsPanel({
     return base + mastery
   }, [calcBase, localMastery])
 
+  // ─── Vérifie une ligne de prérequis d'identité (MUTATION/ADVANTAGE/GENOTYPE) ──────────
+  const isIdentityReqSatisfied = useCallback((req) => {
+    if (req.type === 'MUTATION') return activeMutations.has(req.value)
+    if (req.type === 'ADVANTAGE') return activeAdvantageIds.has(req.value)
+    if (req.type === 'GENOTYPE') return genotypeId === req.value
+    return true
+  }, [activeMutations, activeAdvantageIds, genotypeId])
+
   // ─── Algorithme de visibilité ─────────────────────────────────────────────
   const isVisible = useCallback((skill) => {
     if (skill.attr_1 === 'CHC') return false
 
-    const mutationReqs = skill.requirements.filter(r => r.type === 'MUTATION')
-    const mutationsSatisfied = mutationReqs.length > 0
-      && mutationReqs.every(r => activeMutations.has(r.value))
+    const unlockReqs = skill.requirements.filter(r => r.type === 'MUTATION' || r.type === 'ADVANTAGE')
+    const unlockSatisfied = unlockReqs.length > 0 && areRequirementsSatisfied(unlockReqs, isIdentityReqSatisfied)
 
-    if (skill.marker === '(X)' && !learnedSet.has(skill.id) && !mutationsSatisfied) {
+    if (skill.marker === '(X)' && !learnedSet.has(skill.id) && !unlockSatisfied) {
       if (!progressionMode) return false
       // En mode Progression : on continue — les prérequis SKILL_MIN s'appliquent toujours
     }
@@ -173,16 +189,13 @@ export default function SkillsPanel({
         if (!prereq) return false
         if (calcTotal(prereq) < req.threshold) return false
       }
-      if (req.type === 'MUTATION') {
-        if (!activeMutations.has(req.value)) return false
-      }
-      if (req.type === 'GENOTYPE') {
-        if (genotypeId !== req.value) return false
-      }
     }
 
+    const identityReqs = skill.requirements.filter(r => r.type === 'MUTATION' || r.type === 'ADVANTAGE' || r.type === 'GENOTYPE')
+    if (!areRequirementsSatisfied(identityReqs, isIdentityReqSatisfied)) return false
+
     return true
-  }, [refSkills, learnedSet, calcTotal, genotypeId, activeMutations, progressionMode, skillPrerequisitesEnabled])
+  }, [refSkills, learnedSet, calcTotal, progressionMode, skillPrerequisitesEnabled, isIdentityReqSatisfied])
 
   // ─── Groupement hiérarchique par famille ──────────────────────────────────
   const families = useMemo(() => {

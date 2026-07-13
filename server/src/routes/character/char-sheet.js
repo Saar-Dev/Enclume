@@ -19,7 +19,7 @@
  *   PUT    /api/char-sheet/:characterId/xp           — modifie solde XP (GM uniquement)
  *   POST   /api/char-sheet/:characterId/skills/buy   — dépense XP pour augmenter une compétence
  *   GET    /api/char-sheet/:characterId/advantages   — liste avantages/désavantages
- *   POST   /api/char-sheet/:characterId/advantages   — ajoute un avantage/désavantage
+ *   POST   /api/char-sheet/:characterId/advantages   — octroie un avantage/désavantage (GM uniquement, narratif, sans coût PC)
  *   DELETE /api/char-sheet/:characterId/advantages/:id — supprime un avantage/désavantage
  *   GET    /api/char-sheet/:characterId/wounds       — liste blessures du personnage
  *   POST   /api/char-sheet/:characterId/wounds       — ajoute une blessure (+ promotion auto)
@@ -43,8 +43,9 @@ import {
   calcSeuils, calcSouffle, calcResistanceDroguesInput, calcResistanceNaturelle, calcResistanceDommages,
   getNaturalArmorMod,
 } from '../../../../shared/polarisUtils.js'
+import { areRequirementsSatisfied } from '../../../../shared/skillRequirements.js'
 import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from '../../lib/woundUtils.js'
-import { getAdvantages, addAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
+import { getAdvantages, grantAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
 import { getMutations, addMutation, removeMutation, getMutationEffects } from '../../services/mutationService.js'
 import { cloneToVault } from '../../services/vaultService.js'
 import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
@@ -509,6 +510,36 @@ router.post('/:characterId/skills/buy', async (req, res, next) => {
       }
     }
 
+    // MUTATION/ADVANTAGE/GENOTYPE : toujours revalidés côté serveur, jamais gatés par une option de
+    // campagne (contrairement à SKILL_MIN ci-dessus) — cf. docs/PLAN_MUTATION2.md Lot 5 [CS7]. Le
+    // client (SkillsPanel.jsx) masque déjà le bouton d'achat si le prérequis n'est pas satisfait ;
+    // cette revalidation empêche un achat via une requête forgée qui contournerait l'UI.
+    // areRequirementsSatisfied (shared/skillRequirements.js) : même évaluateur ET/OU que le client
+    // (or_group — ex. HYBRIDE : génotype hybride OU mutation Amphibie).
+    const identityReqs = await db('ref_skill_requirements')
+      .whereIn('type', ['MUTATION', 'ADVANTAGE', 'GENOTYPE'])
+      .where({ skill_id })
+    if (identityReqs.length > 0) {
+      const [activeMutationIds, activeAdvantageIds, archetype] = await Promise.all([
+        db('char_mutations').where({ char_sheet_id: sheet.id, status: 'active' }).pluck('mutation_id'),
+        db('char_advantages').where({ char_sheet_id: sheet.id }).whereNull('removed_at').pluck('advantage_id'),
+        db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+      ])
+      const mutationSet = new Set(activeMutationIds.map(String))
+      const advantageSet = new Set(activeAdvantageIds)
+      const genotypeId = archetype?.genotype_id ?? null
+
+      const satisfied = areRequirementsSatisfied(identityReqs, (req_) => {
+        if (req_.type === 'MUTATION') return mutationSet.has(req_.value)
+        if (req_.type === 'ADVANTAGE') return advantageSet.has(req_.value)
+        if (req_.type === 'GENOTYPE') return genotypeId === req_.value
+        return true
+      })
+      if (!satisfied) {
+        throw new AppError(400, 'Prérequis non satisfait : mutation/avantage/génotype requis')
+      }
+    }
+
     let cout
     let newMastery   = currentMastery
     let newIsLearned = currentLearned
@@ -571,9 +602,11 @@ router.get('/:characterId/advantages', async (req, res, next) => {
   }
 })
 
-// ─── POST /api/char-sheet/:characterId/advantages ────────────────────────────
+// ─── POST /api/char-sheet/:characterId/advantages — GM uniquement (octroi narratif) ──
 router.post('/:characterId/advantages', async (req, res, next) => {
   try {
+    if (!req.isGm) throw new AppError(403, 'GM uniquement')
+
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -582,7 +615,7 @@ router.post('/:characterId/advantages', async (req, res, next) => {
     const { advantage_id } = req.body
     if (!advantage_id) throw new AppError(400, 'advantage_id is required')
 
-    const advantage = await addAdvantage(sheet.id, advantage_id, 'campaign')
+    const advantage = await grantAdvantage(sheet.id, advantage_id, 'campaign')
     res.status(201).json({ advantage })
   } catch (err) {
     next(err)
@@ -597,7 +630,7 @@ router.delete('/:characterId/advantages/:id', async (req, res, next) => {
       .first()
     if (!sheet) throw new AppError(404, 'Sheet not found')
 
-    const { reason } = req.body
+    const { reason } = req.body || {}
     const advantage = await removeAdvantage(sheet.id, req.params.id, reason)
     res.json({ deleted: true, advantage })
   } catch (err) {

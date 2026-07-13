@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-09 Session 141 (suite 9)
+> Dernière mise à jour : 2026-07-12 Session 141 (suite 25)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -259,6 +259,41 @@ avant de coder un correctif.
 ---
 
 
+### Bug COM24 — Bonus "deux armes" (+3 CaC) déconnecté de l'arme réellement déclarée
+
+**Symptôme** : Aucun cas observé en jeu à ce jour — gap trouvé par lecture de code lors d'un run à
+vide (pas encore rencontré en pratique). Un personnage possédant deux armes de contact équipées en
+slots MD/MG obtiendrait le bonus "deux armes" (+3 au Test de combat au contact) même sur une attaque
+où il choisit explicitement de combattre "Mains nues" ou avec une seule des deux armes.
+
+**Règle** : LdB "Se battre avec deux armes" (`docs/REGLES/REGLESYSCOMBAT.md`) — le bonus suppose que
+le personnage combat effectivement avec une arme dans chaque main pour cette attaque, pas seulement
+qu'il en possède deux d'équipées.
+
+**Code impliqué** : `server/src/socket/socketCombatHelpers.js` — `resolveMeleeAction`, calcul de
+`deuxArmesSlots`/`deuxArmesBonus` (~ligne 443-444).
+
+**Cause racine [HYPOTHÈSE]** : `deuxArmesSlots` filtre uniquement l'inventaire du personnage (slots
+MD/MG + `ref_category === 'Arme de contact'`), sans jamais croiser `weaponInvId` (l'arme
+effectivement sélectionnée pour l'attaque en cours) ni vérifier que l'attaque utilise réellement les
+deux mains. Non instrumenté — lecture de code uniquement.
+
+**Trouvé pendant** : run à vide du Lot 4 `docs/PLAN_MUTATION2.md` (armes naturelles), en vérifiant
+que les armes naturelles ne bénéficient pas indûment de ce bonus (elles ne sont pas dans
+`char_inventory`, donc exclues par construction) — le bonus s'est avéré déjà découplé de la
+sélection réelle pour **toute** arme, pas seulement les naturelles. Pas introduit par le Lot 4.
+
+**[DBG-COM24] suggestion** :
+```js
+console.log('[DBG-COM24]', { weaponInvId, deuxArmesSlots: deuxArmesSlots.map(s => s.slot), deuxArmesBonus })
+```
+
+**Prochaine étape** : instrumenter avant tout correctif — reproduire en jeu réel (personnage avec
+deux épées équipées, déclarer une attaque "Mains nues", vérifier si +3 s'applique quand même) pour
+confirmer l'hypothèse avant de coder.
+
+---
+
 ### Bug COM23 — Label token : pénètre dans les murs ✅ Session 127
 
 **Symptôme** : Le label nom affiché au-dessus du token peut s'afficher à l'intérieur des murs selon l'angle de caméra.
@@ -342,6 +377,66 @@ comment modéliser le prix de la Lunette de visée pour `docs/PLAN_MODING_PHASEB
 (la Lunette de visée sera modélisée en 10 lignes catalogue distinctes avec prix littéral précalculé,
 contournement propre pour Groupe 2 sans dépendre de ce correctif). Vérifier l'étendue réelle : quels
 autres items du catalogue ont un `price_modifier` non-null et sont donc potentiellement concernés.
+
+---
+
+## Bugs mutations
+
+### Dette MUT4 — Griffes : bonus Escalade +3 / malus dextérité manuelle -3 jamais câblés
+
+**Symptôme** : Aucun cas observé en jeu à ce jour — gap trouvé par lecture de règle lors d'un run à
+vide, pas encore rencontré en pratique. La mutation Griffes n'a aucun effet mesurable sur les Tests
+d'Escalade ni sur les Tests de dextérité manuelle (crocheter une porte, voler un portefeuille, etc.).
+
+**Règle** : `docs/Character/Creation/REGLE_MUTATION.md`, Griffes — *"il bénéficie d'un bonus de +3
+en Escalade, quand il peut utiliser ses griffes. En revanche, il subit un malus de -3 lors des Tests
+impliquant une certaine dextérité manuelle."*
+
+**Code impliqué** : aucun — `grep` (`server/`) sur "Escalade"/"dextérité manuelle" en lien avec les
+griffes ne remonte que les migrations de seed (`95_seed_ref_mutations.js`, texte descriptif),
+jamais un point de consommation en résolution de Test.
+
+**Cause racine [HYPOTHÈSE]** : Le Lot 4 `docs/PLAN_MUTATION2.md` (Griffes/Crocs/Corne/Excroissance
+osseuse) n'a câblé que les dégâts de corps à corps (`natural_weapon_formula`) — ces deux
+modificateurs de Compétence conditionnés par une mutation active n'ont jamais été dans le périmètre
+d'aucun lot (1-3 traitent attributs/résistances/RD, pas de bonus/malus de Compétence liés à une
+mutation précise). Proche du problème de Lot 5 (`[CS7]`, déblocage de compétences par mutation) mais
+distinct : ici il s'agit d'un modificateur de Test, pas d'un déblocage d'accès.
+
+**Trouvé pendant** : run à vide du Lot 4 `docs/PLAN_MUTATION2.md` (Session 141 suite 25), en
+relisant le texte complet de Griffes pour vérifier le périmètre exact de ce qui avait été câblé.
+
+**Prochaine étape** : à documenter comme gap différé — pas de mécanisme générique existant pour "un
+bonus/malus de Compétence conditionné par une mutation active" (contrairement aux attributs/
+résistances qui passent par `char_mutation_effects_view`). Nécessiterait de concevoir cette brique
+avant de pouvoir détailler ligne-à-ligne, même famille de travail que Lot 5.
+
+---
+
+## Bugs Polaris
+
+### Dette POL1 — Avantage "Polaris non maîtrisé" (adv_078) : tirage de 2 pouvoirs aléatoires non implémenté
+
+**Symptôme** : Aucun cas observé en jeu à ce jour — signalé par Saar en clarifiant l'architecture du
+Lot 5 (`docs/PLAN_MUTATION2.md`), pas encore rencontré en pratique.
+
+**Règle** (`ref_advantages.adv_078`, déjà seedée migration 123, texte en base) : *"Le personnage
+manifeste des pouvoirs du Polaris sans jamais avoir réussi à les maîtriser. 2 pouvoirs tirés
+aléatoirement, pas d'accès à Maîtrise de la Force Polaris — activation incontrôlée uniquement."*
+Distinct d'`adv_079` "Force Polaris" (accès plein via achat de la compétence) et d'`adv_077`
+"Polaris latent" (aucun déblocage, réveil MJ seul).
+
+**Code impliqué** : aucun — `grep` confirmé, aucun mécanisme de tirage aléatoire de compétences
+"Pouvoirs Polaris" n'existe (`AdvantagesPanel.jsx` Étape 2B ne fait que lister `refSkillsPolaris`
+pour toggle manuel `is_learned`, gaté par `adv_079` uniquement — pas de branche `adv_078`).
+
+**Cause racine [INCONNU]** : fonctionnalité jamais construite, pas une régression. Nécessiterait de
+définir la famille "Pouvoirs Polaris" (sous-ensemble de `ref_skills`, hors `Maîtrise de la Force/
+Écho Polaris` elles-mêmes) avant de pouvoir détailler un tirage aléatoire 2/N.
+
+**Prochaine étape** : session dédiée — hors scope de `docs/PLAN_MUTATION2.md` Lot 5 (qui traite
+uniquement le bug d'affichage `[CS7]` des compétences à prérequis MUTATION/ADVANTAGE, pas la
+mécanique de tirage `adv_078`).
 
 ---
 

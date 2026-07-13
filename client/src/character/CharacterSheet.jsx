@@ -263,6 +263,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   // null si aucune mutation active. Voir docs/PLAN_MUTATION2.md Lot 1.
   const [mutationEffects, setMutationEffects] = useState(null)
 
+  // Lignes char_mutations actives (status='active') — source réelle des prérequis type MUTATION
+  // dans SkillsPanel, distincte de l'agrégat mutationEffects. Voir docs/PLAN_MUTATION2.md Lot 5.
+  const [charMutations, setCharMutations] = useState([])
+
   // ─── XP ────────────────────────────────────────────────────────────────────
   const [xpTotal,     setXpTotal]     = useState(0)
   const [xpAvailable, setXpAvailable] = useState(0)
@@ -438,6 +442,13 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
         }
 
         try {
+          const mutRes = await api.get(`/char-sheet/${characterId}/mutations`)
+          if (!cancelled) setCharMutations(mutRes.data.mutations || [])
+        } catch (mutErr) {
+          console.error('Erreur chargement mutations :', mutErr)
+        }
+
+        try {
           const [woundsRes, invRes] = await Promise.all([
             api.get(`/char-sheet/${characterId}/wounds`),
             api.get(`/char-sheet/${characterId}/inventory`),
@@ -510,14 +521,18 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   }, [characterId, onSaved])
 
   // Callback appelé par AdvantagesPanel après ajout/retrait d'une mutation (Lot D) — recharge
-  // uniquement mutationEffects (endpoint léger dédié), pas toute la fiche. Sans ça, naMap reste
-  // basé sur l'agrégat chargé au montage et le bonus n'apparaît qu'après fermeture/réouverture
-  // de la fenêtre (docs/PLAN_MUTATION2.md Lot 1).
+  // mutationEffects (endpoint léger dédié) ET charMutations (liste brute, consommée par SkillsPanel
+  // pour les prérequis type MUTATION, Lot 5). Sans ça, l'un ou l'autre reste périmé tant que la
+  // fenêtre n'est pas fermée/réouverte (docs/PLAN_MUTATION2.md Lot 1/5).
   const handleMutationsChanged = useCallback(async () => {
     try {
-      const res = await api.get(`/char-sheet/${characterId}/mutation-effects`)
-      setMutationEffects(res.data.mutationEffects ?? null)
-    } catch (err) { console.error('Erreur rechargement mutation-effects :', err) }
+      const [effectsRes, mutRes] = await Promise.all([
+        api.get(`/char-sheet/${characterId}/mutation-effects`),
+        api.get(`/char-sheet/${characterId}/mutations`),
+      ])
+      setMutationEffects(effectsRes.data.mutationEffects ?? null)
+      setCharMutations(mutRes.data.mutations || [])
+    } catch (err) { console.error('Erreur rechargement mutations :', err) }
   }, [characterId])
 
   // Callback appelé par SkillsPanel après un achat réussi.
@@ -981,6 +996,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
             refSkills={refSkills}
             charSkills={charSkills}
             charAdvantages={charAdvantages}
+            charMutations={charMutations}
             anMap={anMap}
             characterId={characterId}
             isGm={isGm}

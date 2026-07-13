@@ -92,7 +92,7 @@ export async function removeAdvantage(sheetId, charAdvantageId, reason) {
       .join('ref_advantages as ra', 'ra.advantage_id', 'ca.advantage_id')
       .where({ 'ca.id': charAdvantageId, 'ca.char_sheet_id': sheetId })
       .whereNull('ca.removed_at')
-      .select('ca.id', 'ca.advantage_id', 'ra.type', 'ra.cost_pc')
+      .select('ca.id', 'ca.advantage_id', 'ca.acquired_during', 'ra.type', 'ra.cost_pc')
       .first()
     if (!charAdv) throw new AppError(404, 'Avantage non trouvé ou déjà supprimé.')
 
@@ -101,10 +101,16 @@ export async function removeAdvantage(sheetId, charAdvantageId, reason) {
       .update({ removed_at: trx.fn.now(), removal_reason: reason || null })
       .returning('*')
 
-    if (charAdv.type === 'advantage') {
-      await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).decrement('pc_spent_step5', charAdv.cost_pc)
-    } else {
-      await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).decrement('pc_gained_desavantages', Math.abs(charAdv.cost_pc))
+    // Un octroi narratif (grantAdvantage, acquired_during !== 'creation_step5') n'a jamais crédité/
+    // débité char_pc_ledger — ne jamais le décrémenter au retrait, sinon on retire un budget qui n'a
+    // jamais été affecté par cet avantage (bug qui serait resté invisible tant qu'aucune source
+    // narrative n'existait — première fois que acquired_during peut différer de 'creation_step5').
+    if (charAdv.acquired_during === 'creation_step5') {
+      if (charAdv.type === 'advantage') {
+        await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).decrement('pc_spent_step5', charAdv.cost_pc)
+      } else {
+        await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).decrement('pc_gained_desavantages', Math.abs(charAdv.cost_pc))
+      }
     }
 
     if (charAdv.advantage_id === 'adv_076') {
@@ -112,6 +118,78 @@ export async function removeAdvantage(sheetId, charAdvantageId, reason) {
     }
 
     return updated
+  })
+}
+
+/**
+ * Octroi narratif MJ post-création — même contraintes que addAdvantage (moins le budget PC,
+ * inexistant/épuisé pour un personnage verrouillé), aucun contact avec char_pc_ledger. Pattern
+ * identique à mutationService.addMutation (source='campaign', pas de coût).
+ */
+export async function grantAdvantage(sheetId, advantageId, acquiredDuring) {
+  return db.transaction(async (trx) => {
+    const currentAdvantages = await trx('char_advantages as ca')
+      .join('ref_advantages as ra', 'ra.advantage_id', 'ca.advantage_id')
+      .whereNull('ca.removed_at')
+      .where('ca.char_sheet_id', sheetId)
+      .select('ca.advantage_id', 'ra.type', 'ra.cost_pc', 'ra.family', 'ra.family_limit', 'ra.is_unique', 'ra.name')
+
+    const [allRefAdvantages, sterileMutation, sheetCampaign] = await Promise.all([
+      trx('ref_advantages').select('*'),
+      trx('char_mutations as cm')
+        .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
+        .where({ 'cm.char_sheet_id': sheetId, 'cm.status': 'active', 'rm.mod_fertility': 'sterile' })
+        .first(),
+      trx('char_sheet as cs')
+        .join('characters as c', 'c.id', 'cs.character_id')
+        .where('cs.id', sheetId)
+        .select('c.campaign_id')
+        .first(),
+    ])
+
+    const settings = await getCampaignSettings(trx, sheetCampaign.campaign_id)
+
+    const validation = validateAdvantage(advantageId, currentAdvantages, null, allRefAdvantages, !!sterileMutation, settings.polaris_latent, true)
+    if (!validation.valid) throw new AppError(400, validation.message)
+
+    const refAdv = allRefAdvantages.find(a => a.advantage_id === advantageId)
+
+    let row
+    try {
+      ;[row] = await trx('char_advantages').insert({
+        char_sheet_id: sheetId,
+        advantage_id: advantageId,
+        snapshot_data: JSON.stringify(refAdv),
+        acquired_during: acquiredDuring,
+      }).returning('*')
+    } catch (err) {
+      if (err.code === '23505') throw new AppError(409, `Avantage "${refAdv.name}" déjà possédé.`)
+      throw err
+    }
+
+    if (advantageId === 'adv_076') {
+      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ is_fertile: true })
+    }
+
+    // Forme identique à getAdvantages() (JOIN ref_advantages) — le client pousse directement ce
+    // retour dans charAdvantages sans re-fetch, il doit porter les mêmes champs (name/type/...)
+    // que toutes les autres lignes de la liste, sinon l'entrée fraîchement ajoutée s'afficherait
+    // vide jusqu'au prochain rechargement complet de la fiche.
+    return {
+      id: row.id,
+      advantage_id: row.advantage_id,
+      acquired_at: row.acquired_at,
+      acquired_during: row.acquired_during,
+      name: refAdv.name,
+      type: refAdv.type,
+      description: refAdv.description,
+      cost_pc: refAdv.cost_pc,
+      special_rule: refAdv.special_rule,
+      mod_attribute: refAdv.mod_attribute,
+      mod_value: refAdv.mod_value,
+      mod_resistance: refAdv.mod_resistance,
+      mod_res_value: refAdv.mod_res_value,
+    }
   })
 }
 

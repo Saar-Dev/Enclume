@@ -1,11 +1,9 @@
 # PLAN_MUTATION2 — Effets mécaniques des Mutations et Avantages jamais appliqués
-> Session 141 (suite 25) — 2026-07-12 (Lot 4 : plan complet écrit, aucun code — Lot 3 clos suite 23,
+> Session 141 (suite 26) — 2026-07-12 (Lot 5 clos — Lot 4 clos suite 25, Lot 3 clos suite 23,
 > Lot 2 clos suite 6/RESNAT, Lot 1 clos suite 13, voir aussi suite 10, diagnostic/architecture initiale)
-> Statut : **DIAGNOSTIC + ARCHITECTURE**. Lots 1-3 codés et clos, fonctionnels confirmés Saar. **Lot 4
-> planifié** (2 sous-lots, 3 décisions d'architecture actées avec Saar — voir section Lot 4), prêt
-> pour code à la prochaine reprise. Découpé en 7 lots (mécanique visée, pas catalogue source). Chaque
-> lot est détaillé ligne-à-ligne au moment de l'attaquer (règle "un sujet à la fois") — les lots non
-> encore attaqués ne fixent que le périmètre et l'ordre.
+> Statut : **Lots 1-5 codés et clos, fonctionnels confirmés Saar.** Découpé en 7 lots (mécanique visée,
+> pas catalogue source). Chaque lot est détaillé ligne-à-ligne au moment de l'attaquer (règle "un
+> sujet à la fois") — les lots non encore attaqués (6, 7) ne fixent que le périmètre et l'ordre.
 
 ---
 
@@ -1031,28 +1029,100 @@ telle quelle (pas de house-rule demandée).
 global, pas listée point par point) ; bonus "deux armes"/Attaques multiples avec une arme naturelle
 en conditions réelles (couvert par construction, pas re-testé manuellement).
 
-### Lot 5 — Déblocage de compétences (`[CS7]` mutations + généralisation avantages)
-- Mutations : `SkillsPanel.jsx:135-141` (`activeMutations`) lit `charAdvantages.type==='MUTATION'`/
-  `.muta_numero` — champs qui n'existent dans aucune ligne V2 réelle (`char_advantages` n'a jamais
-  eu ces colonnes depuis la migration 99) → Set **toujours vide**, 10 compétences structurellement
-  invisibles (`ref_skill_requirements where type='MUTATION'`, 10 lignes, dont
-  `MAITRISE_DE_LA_FORCE_POLARIS`/`MAITRISE_DE_LECHO_POLARIS`).
-- **Écart supplémentaire trouvé cette session** : `ref_skill_requirements.value` pour ces 10 lignes
-  utilise encore les **anciens identifiants V1** (`muta_011`, `muta_016`, `muta_019`, `muta_020`,
-  `muta_025`, `muta_026`, `muta_029`, `muta_031`, `muta_033` — table `ref_mutations` V1, migration
-  38, supprimée par la migration 94). Le fix ne peut donc pas se contenter de changer la source de
-  lecture (`char_advantages` → `char_mutations`) : il faut aussi établir la correspondance
-  `muta_XXX` (V1) → `mutation_id`/`name` (V2), par exemple via une table de correspondance ou en
-  réécrivant `ref_skill_requirements.value` avec les vrais `mutation_id` V2 (migration dédiée).
-- **Interaction à surveiller avec `AdvantagesPanel.jsx` Lot A** : `MAITRISE_DE_LA_FORCE_POLARIS`/
-  `MAITRISE_DE_LECHO_POLARIS` ont un prérequis `type:'MUTATION', value:'muta_029'` — un gate
-  distinct de celui d'`AdvantagesPanel.jsx` (`adv_079` "Force Polaris"), actuellement inopérant
-  (Set toujours vide) mais qui redeviendrait un vrai blocage contradictoire si ce lot est corrigé
-  sans revoir ce prérequis (un personnage avec `adv_079` mais sans la mutation `muta_029` resterait
-  bloqué). À trancher dans le détail ligne-à-ligne de ce lot.
-- Avantages : généraliser le gate actuellement câblé en dur sur `adv_079` (`hasForcePolaris` dans
-  `AdvantagesPanel.jsx`) — mécanisme de satisfaction de prérequis, pas de modification de stat,
-  distinct des Lots 1-3 mais même famille de bug (donnée jamais lue génériquement).
+### Lot 5 — Déblocage de compétences (`[CS7]` mutations + Force Polaris)
+
+**Diagnostic `[VÉRIFIÉ]` par requêtes réelles (2026-07-12)** :
+- `SkillsPanel.jsx` (`activeMutations`) lisait `charAdvantages.type==='MUTATION'`/`.muta_numero` —
+  champs qui n'existent dans aucune ligne V2 réelle (`char_advantages` n'a jamais eu ces colonnes
+  depuis la migration 99) → Set **toujours vide**, 10 compétences structurellement invisibles
+  (`ref_skill_requirements where type='MUTATION'`, 10 lignes).
+- 8 de ces 10 lignes référencent un vrai identifiant V1 (`muta_011`/`016`/`019`/`020`/`025`/`026`/
+  `031`/`033`, table `ref_mutations` V1 migration 38, supprimée migration 94) — remappées par
+  correspondance de nom, sans ambiguïté, vers le `mutation_id` V2 réel (`ref_mutations`) :
+  `MUTATION_CONTAGION→8`, `MUTATION_EMPATHIE→13`, `MUTATION_CONTROLE_MOLECULAIRE→16`,
+  `MUTATION_METAMORPHOSE→17`, `MUTATION_PURULENCE→30`, `MUTATION_AGILITE_CAUDALE→31`,
+  `MUTATION_SONAR→41`, `MUTATION_RADIATIONS→32`.
+- Les 2 lignes restantes (`MAITRISE_DE_LA_FORCE_POLARIS`/`MAITRISE_DE_LECHO_POLARIS`) référençaient
+  `muta_029` — **erreur de donnée V1 confirmée par Saar** ("Sensibilité au Polaris" n'aurait jamais
+  dû exister comme mutation ; aucune ligne V2 ne s'en approche, `[VÉRIFIÉ]` sur les 45 lignes
+  `ref_mutations`). L'accès réel passe par l'**Avantage** `adv_079` "Force Polaris" (5 PC,
+  `ref_advantages`, déjà seedé migration 123) — confirmé par le texte LdB déjà en base
+  (`ref_skills.MAITRISE_DE_LA_FORCE_POLARIS.description` : *"pour développer cette Compétence, vous
+  devez acheter l'Avantage Force Polaris"* ; `adv_079.special_rule` : *"Débloque l'accès aux
+  compétences Force Polaris sur la fiche personnage"*). Ces 2 lignes basculent `type: 'MUTATION'` →
+  `type: 'ADVANTAGE'`, `value: 'adv_079'` — nouveau type de prérequis, aucune contrainte DB ne
+  l'empêche (`ref_skill_requirements.type` est `text` libre, pas d'enum/CHECK).
+- **2ᵉ trou trouvé en traçant `POST /skills/buy`** : seul `SKILL_MIN` est revalidé côté serveur
+  (gated par `skill_prerequisites`). MUTATION/GENOTYPE n'étaient vérifiés nulle part côté serveur —
+  sans conséquence tant que le Set client reste vide (bouton jamais rendu), mais une fois la
+  visibilité corrigée, un POST forgé pourrait acheter une compétence à prérequis MUTATION/ADVANTAGE
+  sans posséder la mutation/l'avantage. Fermé dans le même lot (revalidation serveur, toujours
+  active, même esprit que SKILL_MIN).
+- **Hors scope, transféré en dette séparée** (`docs/BUGIDENTIFIE.md` POL1, sur demande Saar) :
+  `adv_078` "Polaris non maîtrisé" doit déclencher un tirage aléatoire de 2 pouvoirs Polaris sans
+  jamais débloquer `MAITRISE_DE_LA_FORCE_POLARIS`/`MAITRISE_DE_LECHO_POLARIS` — mécanique jamais
+  construite (feature manquante, pas une régression), session dédiée future. GENOTYPE reste non
+  revalidé côté serveur — gap pré-existant distinct, non soulevé par `[CS7]`, non traité ici.
+
+**A. Migration `139_fix_ref_skill_requirements_mutations.js`** (NOUVEAU) — remap des 8 `value` vers
+le `mutation_id` V2 réel + bascule des 2 lignes Polaris vers `type:'ADVANTAGE', value:'adv_079'`.
+`down()` restaure les 10 valeurs V1 d'origine (`muta_XXX`/`type='MUTATION'`, y compris `muta_029`).
+
+**B. `client/src/character/SkillsPanel.jsx`** — nouvelle prop `charMutations` (lignes `char_mutations`
+actives, distinctes de `charAdvantages`) ; `activeMutations` reconstruit depuis
+`charMutations.map(m => String(m.mutation_id))` (au lieu de `charAdvantages`) ; nouveau
+`activeAdvantageIds` (`charAdvantages.map(a => a.advantage_id)`) ; les 2 sites qui testaient
+`req.type === 'MUTATION'` (gate `(X)` + boucle finale) gagnent une branche jumelle
+`req.type === 'ADVANTAGE' → activeAdvantageIds.has(req.value)`. JSDoc mis à jour.
+
+**C. `client/src/character/CharacterSheet.jsx`** — nouvel état `charMutations` (`useState([])`),
+fetch `GET /char-sheet/${characterId}/mutations` (route déjà existante, réutilisée par
+`AdvantagesPanel.jsx` Lot D) ajouté au bloc de chargement initial, à côté du fetch `advantages`.
+`handleMutationsChanged` (callback après ajout/retrait Lot D) recharge désormais **aussi**
+`charMutations` (avant : seulement `mutationEffects`) — sinon une mutation ajoutée en jeu ne
+débloquerait la compétence qu'après fermeture/réouverture de la fenêtre. `<SkillsPanel>` reçoit
+`charMutations={charMutations}`.
+
+**D. `server/src/routes/character/char-sheet.js` — `POST /:characterId/skills/buy`** — après le bloc
+SKILL_MIN existant, nouvelle revalidation MUTATION/ADVANTAGE **toujours active** (pas de gate par
+option) : fetch `char_mutations` (status='active') + `char_advantages` (`removed_at IS NULL`) du
+sheet, rejet `AppError(400, ...)` si un prérequis MUTATION/ADVANTAGE de la compétence n'est pas
+satisfait.
+
+**Codé (2026-07-12)** — sections A-D appliquées exactement comme détaillé. **Testé** : `node --check`
+0 erreur (migration + route) ; ESLint client 0 nouvelle erreur (`git stash`/`pop` avant/après —
+3 erreurs/2 warnings préexistants confirmés identiques sur `SkillsPanel.jsx`/`CharacterSheet.jsx`) ;
+round-trip migration 139 réel (`down()`→10 valeurs V1 dont `muta_029`→`up()`→8 valeurs V2 + 2 lignes
+`ADVANTAGE`/`adv_079`, byte-identique, P53/P54 respectés — nodemon avait déjà auto-appliqué avant le
+test manuel) ; 5 scénarios en base réelle en transaction annulée (sans mutation → rejet ; mutation
+Contagion insérée temporairement → satisfait ; sans `adv_079` → rejet ; `adv_079` inséré → satisfait ;
+`adv_079` avec `removed_at` posé → rejet, confirme le filtre soft-delete) ; SR (`/api/health` 200,
+serveur resté up malgré les redémarrages nodemon).
+**Lot 5 ✅ CLOS — Session 141 (suite 26), 2026-07-12, fonctionnel confirmé Saar en navigateur.**
+**Analyse critique demandée par Saar avant confirmation** — 3 points vérifiés en base réelle, aucun
+bloquant : les 10 compétences étaient invisibles pour 100% des personnages avant le fix (aucun
+risque de régression visible→invisible) ; anomalie de donnée pré-existante trouvée sur "Mr sourire"
+(`MAITRISE_DE_LA_FORCE_POLARIS` déjà `is_learned=true, mastery=2` sans `adv_079` ni mutation —
+restait invisible avant et après, cohérent) ; `shared/careerSkills.js` (moteur Wizard) confirmé ne
+jamais lire `ref_skill_requirements` (gap pré-existant distinct, non aggravé, hors scope).
+**Test réel effectué** : "Mr sourire" utilisé comme personnage de test (Saar : "aucune donnée
+précieuse en dev") — `adv_079` octroyé (insert direct, `addAdvantage()` exige un `char_pc_ledger`
+que ce personnage n'a pas, écart noté non creusé) + mutation "Contagion" octroyée via le vrai
+`mutationService.addMutation()`. **Parcours navigateur confirmé fonctionnel par Saar** : "Contagion"
+et "Maîtrise de la Force Polaris" (déjà apprise) visibles ; les 7 autres compétences + "Maîtrise de
+l'Écho Polaris" restent masquées comme attendu.
+**2 problèmes trouvés par Saar en testant, hors scope de ce lot, repris en sessions séparées** :
+(1) "Mr sourire" (humain) a accès à "Hybride", réservée aux génotypes hybride naturel/génohybride/
+technohybride — bug GENOTYPE distinct ; (2) aucune interface pour ajouter un Avantage/Désavantage
+générique (bouton "+" du bloc AVANTAGES & DÉSAVANTAGES ne couvre que Mutations/Force Polaris/
+Autres ; route serveur `POST /advantages` existe mais sans UI) — nouvelle fonctionnalité à
+construire.
+**Testé** : `node --check` 0 erreur, ESLint 0 nouvelle erreur, round-trip migration 139 byte-identique,
+5 scénarios en base réelle en transaction annulée, SR, parcours navigateur confirmé Saar.
+**Non testé** : achat effectif via le bouton "+" pour les 8 autres mutations/`MAITRISE_DE_LECHO_
+POLARIS` (seule Contagion + l'état déjà-appris de Force Polaris vérifiés visuellement) ; rejet
+serveur `AppError` via une vraie requête HTTP forgée (vérifié seulement en transaction directe).
+Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 26)".
 
 ### Lot 6 — Identité (`mod_sex`/`mod_fertility` mutations vs `mod_identity` avantages)
 - Mutations : **déjà câblé** (`mutationService.js`/`creationService.js` STEP3, override
@@ -1078,9 +1148,13 @@ fonctionnalité, pas un bug qui casse quelque chose de fonctionnel.
 ## Prochaine étape
 
 **Lot 1 ✅ CLOS — Session 141 (suite 13)** / **Lot 2 ✅ CLOS — Session 141 (suite 6/RESNAT)** /
-**Lot 3 ✅ CLOS — Session 141 (suite 23)** / **Lot 4 ✅ CLOS — Session 141 (suite 25), fonctionnel
-confirmé Saar en navigateur** (voir détail de clôture en fin de section Lot 4 ci-dessus). Gap
-différé documenté en cours de route : **`[CHOC1]`** (bonus Choc de Corne si tête — pool de dommages
-de Choc `prt` jamais consommé, hors scope de ce lot). **Lot 5 (Déblocage de compétences, `[CS7]`) à
-détailler avec Saar quand il voudra enchaîner** — même méthode (plan ligne-à-ligne, analyse à
-charge, vérification instrumentée avant tout code).
+**Lot 3 ✅ CLOS — Session 141 (suite 23)** / **Lot 4 ✅ CLOS — Session 141 (suite 25)** / **Lot 5
+✅ CLOS — Session 141 (suite 26), fonctionnel confirmé Saar en navigateur** (voir détail de clôture
+en fin de section Lot 5 ci-dessus). Gaps différés documentés en cours de route : **`[CHOC1]`**
+(bonus Choc de Corne si tête, Lot 4) ; **`docs/BUGIDENTIFIE.md` POL1** (tirage aléatoire 2 pouvoirs
+`adv_078`, Lot 5). **2 sujets trouvés par Saar en testant le Lot 5, hors périmètre `PLAN_MUTATION2`,
+à traiter en sessions séparées** : bug GENOTYPE ("Hybride" visible pour un personnage humain) et
+nouvelle interface d'ajout d'Avantage/Désavantage générique (bouton "+" actuellement incomplet).
+**Lots 6 (Identité) et 7 (Narratif/économie) restent à détailler** quand Saar voudra enchaîner sur
+ce plan — même méthode (plan ligne-à-ligne, analyse à charge, vérification instrumentée avant tout
+code).

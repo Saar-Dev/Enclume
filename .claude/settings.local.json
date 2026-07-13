@@ -183,7 +183,8 @@
       "Bash(node --check src/lib/damageService.js)",
       "Bash(node --check server/src/db/migrations/137_char_inventory_mods.js)",
       "Bash(node --check server/src/services/modingService.js)",
-      "Bash(grep -E \"^[0-9]{1,3}_\")"
+      "Bash(grep -E \"^[0-9]{1,3}_\")",
+      "Bash(node --check src/db/migrations/139_fix_ref_skill_requirements_mutations.js)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Nemet\\Documents\\Enclume\\server"

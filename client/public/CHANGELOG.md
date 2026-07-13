@@ -1,3 +1,21 @@
+## v183 — 2026-07-13 — Compétences débloquées par mutation/avantage + octroi d'Avantages par le MJ
+
+### Serveur
+- [fix] Les compétences débloquées par une mutation (Contagion, Empathie, Instabilité moléculaire,
+  Métamorphose, Purulence, Agilité caudale, Sonar, Radiations) apparaissent enfin sur la fiche
+  lorsque le personnage possède la mutation correspondante — elles étaient invisibles pour tout le
+  monde jusqu'ici.
+- [fix] Maîtrise de la Force Polaris / Maîtrise de l'Écho Polaris se débloquent désormais avec
+  l'Avantage "Force Polaris", comme prévu.
+- [fix] La compétence "Hybride" n'est plus accessible à un personnage qui n'est ni hybride
+  (naturel/géno/techno) ni doté de la mutation Amphibie.
+- [fix] Retirer un Avantage ou un Désavantage depuis la fiche ne provoque plus d'erreur serveur.
+
+### Client
+- [feat] Le MJ peut désormais octroyer directement un Avantage ou un Désavantage du catalogue à un
+  personnage depuis sa fiche (bouton "+" du bloc Avantages & Désavantages), sans coût en points de
+  création.
+
 ## v182 — 2026-07-12 — Customisation d'armes : les systèmes de tir assisté ont enfin un effet en combat
 
 ### Serveur

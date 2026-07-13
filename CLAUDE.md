@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 28) — 2026-07-12
+> Session 141 (suite 29) — 2026-07-13
 
 ---
 
@@ -112,8 +112,112 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 28) (2026-07-12)
+## ÉTAT COURANT — Session 141 (suite 29) (2026-07-13)
 
+- **Session 141 (suite 29) — Interface d'ajout Avantage/Désavantage (octroi MJ narratif) + bug
+  DELETE 500 pré-existant corrigé ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Demande Saar :
+  le bouton "+" du bloc AVANTAGES & DÉSAVANTAGES ne permettait d'ajouter que Mutations/Force
+  Polaris/Autres. **Point d'architecture trouvé avant tout code, soumis à Saar** : la route serveur
+  `POST /advantages` existait déjà mais appelait `addAdvantage()` — la fonction du Wizard Step5, qui
+  exige une ligne `char_pc_ledger` (sinon erreur 500) et débite réellement des PC. Pour un personnage
+  déjà verrouillé, ce ledger est presque toujours épuisé (dette `pc_postcreation` jamais crédité) —
+  l'octroi aurait échoué en pratique pour quasiment tout personnage réel. **Décision Saar : octroi
+  narratif MJ, sans coût PC, MJ uniquement** — même philosophie que Mutations (Lot D)/Autres (Lot C).
+  **Recherche/vérification exigée par Saar ("100%, aucune zone d'ombre") avant de coder** : confirmé
+  qu'aucun autre appelant de `validateAdvantage` n'existe (ajout du 7ᵉ paramètre `skipBudgetCheck`
+  sans risque de régression) ; confirmé par test réel que `max_desavantage_pc` (plafond de
+  conception, 10 PC) devait rester actif même en sautant le budget (`sufficient_pc`, lui, spécifique
+  au budget de création). **Codé** : `advantageConstraints.js` (`skipBudgetCheck`, saute uniquement
+  `sufficient_pc`) ; `advantageService.js` (`grantAdvantage()` NOUVEAU — mêmes contraintes
+  qu'`addAdvantage` moins le budget, aucun contact `char_pc_ledger`, retour aplati identique à
+  `getAdvantages()` sans quoi la ligne fraîchement ajoutée se serait affichée vide côté client ;
+  **bug latent trouvé et fermé avant qu'il ne devienne actif** — `removeAdvantage()` décrémentait le
+  ledger inconditionnellement, corrigé pour ne le faire que si `acquired_during==='creation_step5'`,
+  confirmé par le schéma migration 99 qui prévoyait déjà 4 valeurs possibles pour cette colonne) ;
+  `char-sheet.js` (`POST /advantages` gagne `req.isGm`, bascule vers `grantAdvantage`) ; `ref.js`
+  (`GET /char-ref/advantages` NOUVEAU, catalogue complet, même style que `/mutations`) ;
+  `AdvantagesPanel.jsx` (4ᵉ bouton "Avantage/Désavantage", grille 2×2, étape liste groupée
+  Avantages/Désavantages, grisée si déjà possédé) ; `fr.json` (6 clés). **Bug de production
+  pré-existant trouvé en testant via une vraie requête HTTP (jamais fait avant pour cette route —
+  les sessions précédentes testaient uniquement par appel direct de fonction, ce qui contourne
+  Express)** : `DELETE /advantages/:id` faisait `const { reason } = req.body` sans garde — Express 5
+  laisse `req.body` à `undefined` sans body/Content-Type, exactement le cas du bouton "×" existant
+  (`api.delete(...)` sans body) → **500 à chaque clic, en production, depuis toujours, sans rapport
+  avec ce chantier**. Le même fichier a déjà le bon pattern ailleurs (`req.body || {}`, route
+  inventaire) — oubli isolé, corrigé (1 ligne). **Testé** : `node --check` 0 erreur, ESLint 0
+  nouvelle erreur, `fr.json` valide, **tests via de vraies requêtes HTTP** (JWT signé pour un GM et
+  un joueur réels de la même campagne) — catalogue (200, 79 lignes), octroi GM (201, forme aplatie
+  correcte), joueur non-GM (403 confirmé), avantage déjà possédé/unique (rejeté), 2 désavantages
+  cumulant >10 PC (rejeté, plafond confirmé actif malgré `skipBudgetCheck`), `adv_076` narratif
+  (`is_fertile` basculé puis restauré), `DELETE` sans body (500 avant correctif, 200 après), ledger
+  d'un personnage sans `char_pc_ledger` jamais requis ni touché, base vérifiée propre après chaque
+  test, SR tout du long. **SR + parcours navigateur confirmé fonctionnel par Saar**. Détail complet :
+  `docs/EN_COURS.md` item "71.", `docs/JOURNAL6.md` "Session 141 (suite 29)".
+- **Session 141 (suite 27) — Bug GENOTYPE : compétence "Hybride" visible pour un personnage Humain
+  ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Trouvé par Saar en testant le Lot 5 (suite 26,
+  ci-dessous), hors périmètre de ce lot, traité en session séparée ("un bug à la fois").
+  **Diagnostic `[VÉRIFIÉ]`** : `ref_skills.HYBRIDE` avait zéro ligne `ref_skill_requirements` —
+  jamais gaté depuis sa création, visible pour tout le monde. Recherche élargie : `type='GENOTYPE'`
+  avait zéro ligne dans toute la table, ce mécanisme n'a jamais été alimenté malgré son support déjà
+  codé dans `SkillsPanel.jsx`. Les 232 descriptions de compétences vérifiées : `HYBRIDE` est la
+  seule à mentionner une restriction de génotype/mutation — cas isolé. Texte LdB : accessible aux
+  génotypes `HYB_NAT`/`GEN_HYB`/`TEC_HYB` **OU** à la mutation Amphibie — 4 alternatives (OR), alors
+  que le moteur existant (`isVisible`) traite toutes les lignes en ET. **Recherche externe exigée
+  par Saar avant tout code** ("aucun bricolage toléré, architecture sérieuse et robuste") : 5etools
+  (compendium D&D5e figé, situation la plus proche d'Enclume) modélise ses prérequis de dons en
+  2 niveaux (tableau externe = ET, tableau imbriqué = OU), schéma qui sert tout le contenu 5e depuis
+  des années. PF2e (Foundry) a un système `Predicate` récursif, mais conçu pour du contenu
+  communautaire arbitraire — déjà écarté pour ce projet ailleurs (`docs/PLAN_TIRVISE.md`/Lot 2
+  `PLAN_MUTATION2.md`). Décision : modèle à 2 niveaux, prouvé suffisant (`HYBRIDE` = seul cas, un
+  seul niveau d'imbrication requis). **Codé** : migration `140_ref_skill_requirements_or_group.js`
+  (colonne `or_group`, text nullable, même convention que `ref_career_skills.choice_group` migration
+  121, 4 lignes `HYBRIDE`) ; `shared/skillRequirements.js` (NOUVEAU, `areRequirementsSatisfied`,
+  pattern `naturalWeapons.js` — une seule fonction pure, client+serveur) ; `SkillsPanel.jsx`
+  (`isVisible` généralisé — MUTATION/ADVANTAGE/GENOTYPE passent par le même évaluateur ET/OU,
+  SKILL_MIN reste séparé) ; `char-sheet.js` (`POST /skills/buy` étendu à GENOTYPE). **Testé** :
+  `node --check` 0 erreur, ESLint 0 nouvelle erreur (retour exact aux problèmes préexistants), 9
+  scénarios purs sur `areRequirementsSatisfied` (dont non-régression du cas Lot 5 à ligne isolée et
+  un cas à 2 groupes indépendants — ET entre groupes confirmé), round-trip migration byte-identique,
+  2 scénarios en base réelle sur "Mr sourire" (Humain sans Amphibie → rejeté ; avec Amphibie ajoutée
+  temporairement → satisfait, résidu 0 après nettoyage), SR, **parcours navigateur confirmé
+  fonctionnel par Saar** ("Hybride" disparue de sa fiche). **Non testé** : cas positif en navigateur
+  (génotype `HYB_NAT`/`GEN_HYB`/`TEC_HYB` réel rendant "Hybride" visible). Détail complet :
+  `docs/EN_COURS.md` item "70.", `docs/JOURNAL6.md` "Session 141 (suite 27)".
+- **Session 141 (suite 26) — `docs/PLAN_MUTATION2.md` Lot 5 : Déblocage de compétences (`[CS7]`)
+  ✅ CLOS, fonctionnel confirmé Saar en navigateur.** `SkillsPanel.jsx` (`activeMutations`) lisait
+  `charAdvantages.type==='MUTATION'`/`.muta_numero` — champs inexistants en V2 (`char_advantages`
+  n'a jamais eu ces colonnes depuis la migration 99) → Set toujours vide → 10 compétences
+  structurellement invisibles pour **100% des personnages**, sans exception (vérifié `[VÉRIFIÉ]` : le
+  check final s'applique même à une compétence déjà `is_learned=true`). 8 des 10 lignes
+  `ref_skill_requirements` référençaient encore l'ancien identifiant V1 (`muta_XXX`, table `ref_
+  mutations` V1 migration 38, supprimée migration 94) — remappées par correspondance de nom (sans
+  ambiguïté, croisées contre les 45 lignes `ref_mutations` V2) vers le `mutation_id` V2 réel.
+  **Erreur de donnée confirmée par Saar, à ne pas contourner** : les 2 lignes restantes
+  (`MAITRISE_DE_LA_FORCE_POLARIS`/`MAITRISE_DE_LECHO_POLARIS`) référençaient `muta_029`
+  ("Sensibilité au Polaris") — *"muta_029 NE DOIT PAS EXISTER"* (Saar) : cette mutation n'a jamais dû
+  exister en V2, l'accès réel passe par l'Avantage `adv_079` "Force Polaris" (texte LdB déjà en base
+  le confirme littéralement : *"pour développer cette Compétence, vous devez acheter l'Avantage
+  Force Polaris"*). Bascule vers un nouveau type de prérequis `ADVANTAGE` (aucune contrainte DB ne
+  l'empêchait, `type` est `text` libre). **2ᵉ trou trouvé en traçant `POST /skills/buy`** : seul
+  SKILL_MIN était revalidé côté serveur — fermé (MUTATION/ADVANTAGE désormais toujours revalidés,
+  jamais gatés par une option, à l'achat). **Analyse critique demandée par Saar avant confirmation
+  navigateur** : les 10 compétences étaient invisibles pour 100% des personnages avant le fix (aucun
+  risque de régression visible→invisible) ; anomalie de donnée pré-existante trouvée sur "Mr
+  sourire" (`MAITRISE_DE_LA_FORCE_POLARIS` déjà `is_learned=true, mastery=2` sans `adv_079` ni
+  mutation, déjà invisible pour lui avant le fix, reste cohérent après) ; `shared/careerSkills.js`
+  (moteur Wizard) confirmé ne jamais lire `ref_skill_requirements` (gap pré-existant distinct, non
+  aggravé, hors scope). **Hors scope, transféré en dette séparée** (`docs/BUGIDENTIFIE.md` POL1,
+  décision Saar) : `adv_078` "Polaris non maîtrisé" doit déclencher un tirage aléatoire de 2
+  pouvoirs Polaris sans jamais débloquer les 2 compétences Maîtrise — mécanique jamais construite.
+  Migration `139_fix_ref_skill_requirements_mutations.js`. **Test réel effectué avec un vrai
+  personnage** (Saar : *"aucune donnée précieuse en dev"*) : "Mr sourire" utilisé comme personnage
+  de test — `adv_079` octroyé (insert direct, `addAdvantage()` exige un `char_pc_ledger` que ce
+  personnage n'a pas) + mutation "Contagion" octroyée via le vrai `mutationService.addMutation()`.
+  **2 problèmes trouvés par Saar en testant, hors scope de ce lot, repris en sessions séparées**
+  (suites 27 et 29 ci-dessus). **Testé** : `node --check`, ESLint 0 nouvelle erreur, round-trip
+  migration byte-identique, 5 scénarios en base réelle, SR, **parcours navigateur confirmé
+  fonctionnel par Saar**. Détail complet : `docs/PLAN_MUTATION2.md` Lot 5, `docs/EN_COURS.md` item
+  "69.", `docs/JOURNAL6.md` "Session 141 (suite 26)".
 - **Session 141 (suite 28) — `docs/PLAN_MODING_PHASEB.md` Groupe 1 : bonus fixes optique +
   architecture des slots exclusifs ✅ CLOS, fonctionnel confirmé Saar.** Suite de `docs/PLAN_MODING.md`
   Phase A (item 63, terminée) — plan Phase B déjà entièrement rédigé et analysé en amont (architecture
@@ -783,8 +887,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
 - **146 migrations stables** (141_ref_equipment_mod_slots — Moding Phase B Groupe 1,
-  Session 141 (suite 28) ; 140_ref_skill_requirements_or_group — session parallèle ;
-  139_fix_ref_skill_requirements_mutations — session parallèle ;
+  Session 141 (suite 28) ; 140_ref_skill_requirements_or_group — bug Hybride, Session 141 (suite 27) ;
+  139_fix_ref_skill_requirements_mutations — `PLAN_MUTATION2.md` Lot 5, Session 141 (suite 26) ;
   138_ref_mutations_natural_weapon — Session 141 (suite 25) ;
   137_char_inventory_mods — Moding Phase A, Session 141 (suite 21) ;
   136_fix_ref_resistance_naturelle_sign — session parallèle ;

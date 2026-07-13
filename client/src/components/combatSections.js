@@ -104,7 +104,8 @@ export function calcIniBreakdown(prevStates, nextStates, mapActions, quick) {
   }
   const aimTranches = mapActions.attack?.aimTranches ?? 0
   if (aimTranches > 0) {
-    lines.push({ label: `Tir visé ×${aimTranches}`, value: getAimIniCost(aimTranches) })
+    const lunetteNiveau = mapActions.attack?.lunetteNiveau ?? 0
+    lines.push({ label: `Tir visé ×${aimTranches}`, value: getAimIniCost(aimTranches, { lunetteNiveau }) })
   }
 
   const obs = quick?.observer ?? 0

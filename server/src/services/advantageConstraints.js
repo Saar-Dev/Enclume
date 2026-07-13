@@ -64,8 +64,14 @@ export const CONSTRAINTS = {
  * Valide l'ajout d'un avantage/désavantage contre toutes les contraintes applicables.
  * currentAdvantages doit déjà contenir type/cost_pc/family/family_limit/is_unique/name
  * (JOIN ref_advantages côté appelant).
+ *
+ * skipBudgetCheck : ignore uniquement la contrainte `sufficient_pc` (budget de création restant) —
+ * utilisé par un octroi narratif MJ post-création (grantAdvantage, docs/PLAN_MUTATION2.md-adjacent,
+ * "Avantages & Désavantages" — aucun coût PC). `max_desavantage_pc` (plafond de conception, pas un
+ * budget) reste toujours appliqué. `ledger` peut être `null` dans ce cas — jamais lu tant que
+ * `sufficient_pc` est sauté avant d'atteindre son `.validate()`.
  */
-export function validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages, isSterile = false, polarisLatentEnabled = false) {
+export function validateAdvantage(advantageId, currentAdvantages, ledger, allRefAdvantages, isSterile = false, polarisLatentEnabled = false, skipBudgetCheck = false) {
   if (!CONSTRAINTS.exists.validate(advantageId, currentAdvantages, null, allRefAdvantages)) {
     return { valid: false, message: CONSTRAINTS.exists.message() }
   }
@@ -74,6 +80,7 @@ export function validateAdvantage(advantageId, currentAdvantages, ledger, allRef
 
   for (const [key, constraint] of Object.entries(CONSTRAINTS)) {
     if (key === 'exists') continue
+    if (key === 'sufficient_pc' && skipBudgetCheck) continue
     if (constraint.applies && !constraint.applies(refAdv)) continue
     if (!constraint.validate(advantageId, currentAdvantages, refAdv, allRefAdvantages, ledger, isSterile, polarisLatentEnabled)) {
       return { valid: false, message: constraint.message(refAdv) }
