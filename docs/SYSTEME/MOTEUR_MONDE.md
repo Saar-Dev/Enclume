@@ -54,7 +54,7 @@ Principes obligatoires :
 
 ### 2.1 Éditeur Surface `[EXISTANT]`
 
-`battlemaps.surface_data` version 4 contient actuellement :
+`battlemaps.surface_data` version 5 contient actuellement :
 
 - `rooms`, `floors`, `walls`, `ceilings`, `stairs`, `connectors` ;
 - les drapeaux `walkable`, `blocksMovement`, `blocksSight` ;
@@ -63,7 +63,7 @@ Principes obligatoires :
 - un calcul client d'étanchéité utilisé pour le rendu de l'eau.
 
 Cet ensemble reste normalisé et rendu côté client par `client/src/lib/surfaceData.js`. À la
-sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 4 et
+sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 5 et
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
@@ -126,7 +126,7 @@ Le dossier `shared/world/` fournit désormais :
 - `movementCost.js` : facteurs explicables, segments pondérés et arrêt à budget épuisé ;
 - `worldContracts.js` : contrats versionnés et immuables `WorldDocument`, `WorldRuntimeState` et
   `WorldSnapshot` ;
-- `surfaceDocument.js` : validation de schéma, normalisation v4, UUID physiques stables et adaptation
+- `surfaceDocument.js` : validation de schéma, normalisation v5, UUID physiques stables et adaptation
   de `surface_data` vers `WorldDocument` ;
 - `worldCompiler.js` : compilation pure des supports, barrières, portails, colliders, occluders,
   traversées verticales et compartiments ;
@@ -448,6 +448,21 @@ par segment : l'approximation reste bornée par la tessellation et ne crée pas 
 Les portes exigent actuellement un mur X/Z droit. Les placer sur une courbe est refusé jusqu'à ce
 qu'un contrat de découpe et un modèle de porte orientée soient définis.
 
+### 7.3 Empreinte et propriété d'une salle
+
+Depuis `surface_data` v5, `room.cells` est l'autorité de propriété horizontale. `minX`, `maxX`,
+`minZ`, `maxZ` décrivent uniquement l'AABB de broadphase. Une case absente de `cells` n'appartient
+pas à la salle, même si elle se trouve dans cette AABB.
+
+Créer une salle transfère les cases recouvertes de toute salle dont le volume vertical intersecte
+le sien. Les murs sont ensuite dérivés des arêtes qui séparent une case possédée d'une case absente :
+l'ancienne salle adopte donc réellement un contour en L, en C ou avec une cour intérieure. Si les
+cases restantes forment plusieurs composantes connexes, elles deviennent plusieurs salles et
+plusieurs compartiments. Deux étages sans intersection verticale ne se retirent aucune case.
+
+Les dalles peuvent être regroupées en rectangles pour le rendu, mais sélection, eau, supports,
+barrières et compartiments consomment toujours l'empreinte exacte.
+
 ---
 
 ## 8. Vision et couverture `[EXISTANT]`
@@ -581,6 +596,8 @@ moteur.
 11. Un étage masqué ne peut être ni cliquable ni support de placement dans la tranche courante.
 12. Une salle multi-hauteur traverse ses tranches sans recevoir de plancher implicite et révèle son
     propre fond, jamais le reste des étages inférieurs.
+13. Une case ne peut appartenir qu'à une seule salle pour un même volume vertical.
+14. Les bornes d'une salle sont un broadphase ; seule son empreinte explicite fait autorité.
 
 ---
 

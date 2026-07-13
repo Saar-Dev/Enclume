@@ -1,10 +1,10 @@
 // shared/world/surfaceDocument.js
-// Frontière de compatibilité entre surface_data v4 (éditeur actuel) et le document canonique du
+// Frontière de compatibilité entre surface_data v5 (empreintes de salles) et le document canonique du
 // moteur de monde. Les clés legacy restent lisibles ; worldId devient l'identité physique stable.
 
 import { createWorldDocument } from './worldContracts.js'
 
-export const SURFACE_DATA_VERSION = 4
+export const SURFACE_DATA_VERSION = 5
 export const SURFACE_FINE_DEFAULT = 4
 export const SURFACE_STORY_HEIGHT_DEFAULT = 2.5
 
@@ -97,6 +97,30 @@ function validateFeature(collection, id, item, errors) {
 
   if (collection === 'rooms') {
     validateFiniteFields(item, ['minX', 'maxX', 'minZ', 'maxZ'], path, errors)
+    if (item.cells != null) {
+      if (!Array.isArray(item.cells) || item.cells.length === 0) {
+        errors.push(`${path}.cells doit être un tableau non vide`)
+      } else {
+        const seen = new Set()
+        for (const [index, value] of item.cells.entries()) {
+          const [rawX, rawZ] = typeof value === 'string'
+            ? value.split(':')
+            : [value?.x, value?.z]
+          const x = Number(rawX)
+          const z = Number(rawZ)
+          if (!Number.isInteger(x) || !Number.isInteger(z)) {
+            errors.push(`${path}.cells.${index} doit décrire une case entière x:z`)
+            continue
+          }
+          const key = `${x}:${z}`
+          if (seen.has(key)) errors.push(`${path}.cells contient la case ${key} plusieurs fois`)
+          seen.add(key)
+          if (x < Number(item.minX) || x > Number(item.maxX) || z < Number(item.minZ) || z > Number(item.maxZ)) {
+            errors.push(`${path}.cells.${index} sort des bornes de la salle`)
+          }
+        }
+      }
+    }
   } else if (collection === 'floors') {
     const [keyX, keyZ, keyY = 0] = String(id).split(':')
     const x = item.x ?? keyX
@@ -172,7 +196,7 @@ export function assertSurfaceData(input) {
   return input
 }
 
-export function normalizeSurfaceDataV4(input) {
+export function normalizeSurfaceDataDocument(input) {
   assertSurfaceData(input)
   const normalized = {
     ...cloneValue(input),
@@ -245,7 +269,7 @@ function toWorldDocument(surfaceData, battlemapId) {
 }
 
 export function prepareSurfaceData(input, { battlemapId = null, reseedWorldIds = false } = {}) {
-  const normalized = normalizeSurfaceDataV4(input)
+  const normalized = normalizeSurfaceDataDocument(input)
   const identified = withWorldIds(normalized, battlemapId, reseedWorldIds)
   assertSurfaceData(identified.surfaceData)
   const worldDocument = toWorldDocument(identified.surfaceData, battlemapId)
@@ -257,7 +281,7 @@ export function prepareSurfaceData(input, { battlemapId = null, reseedWorldIds =
 }
 
 export function collectSurfaceTextureIds(input) {
-  const surface = normalizeSurfaceDataV4(input)
+  const surface = normalizeSurfaceDataDocument(input)
   const ids = new Set()
   const add = value => {
     if (value != null && value !== '') ids.add(value)

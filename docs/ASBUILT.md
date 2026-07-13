@@ -28,7 +28,7 @@ Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statiq
 
 ## Moteur de monde — Phase 1 ✅
 
-- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v4, UUID physiques
+- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v5, UUID physiques
   stables, adaptation vers le document canonique ;
 - `shared/world/worldCompiler.js` — compilation déterministe des sols, plafonds, murs partagés,
   découpes de porte, escaliers, barrières multi-canaux, colliders, occluders et compartiments ;
@@ -188,6 +188,19 @@ moteur ; sinon elles doivent être supprimées.
   les collisions, la LOS et l'étanchéité ; les portes restent limitées aux portions droites ;
 - la future trappe est documentée comme capacité d'un connecteur vertical lié, le plus souvent, à
   une échelle.
+
+---
+
+## Moteur de monde — Phase 9 ✅
+
+- `surface_data` v5 donne à chaque salle une empreinte explicite de cases ;
+- créer une salle dans une autre transfère les cases à la nouvelle salle et redessine réellement le
+  contour de l'ancienne, sans superposition de propriété ;
+- une découpe qui sépare l'ancienne salle crée automatiquement plusieurs salles connexes ;
+- les étages sans chevauchement vertical ne se découpent pas entre eux ;
+- rendu, sélection, dalles, plafonds, murs communs, eau, supports, barrières et compartiments
+  compilés consomment tous cette même empreinte ;
+- les bornes rectangulaires ne servent plus que de broadphase.
 
 ---
 

@@ -79,6 +79,24 @@ test('un segment orienté est un mur canonique valide', () => {
   assert.equal(validateSurfaceData(surface).valid, true)
 })
 
+test('une empreinte de salle v5 exige des cases entières uniques dans ses bornes', () => {
+  const surface = surfaceFixture()
+  surface.version = 5
+  surface.rooms['room:legacy'] = {
+    ...surface.rooms['room:legacy'],
+    minX: 0,
+    maxX: 1,
+    minZ: 0,
+    maxZ: 1,
+    shape: 'footprint',
+    cells: ['0:0', '1:0', '0:1'],
+  }
+  assert.equal(validateSurfaceData(surface).valid, true)
+
+  surface.rooms['room:legacy'].cells.push('0:0', '4:4')
+  assert.equal(validateSurfaceData(surface).valid, false)
+})
+
 test('les versions futures et les coordonnées corrompues sont refusées', () => {
   const future = surfaceFixture()
   future.version = 99

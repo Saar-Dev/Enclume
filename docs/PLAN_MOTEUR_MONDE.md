@@ -113,7 +113,7 @@ Phase 1, pas d'un oubli de la Phase 0.
 
 ### Livré le 2026-07-13
 
-- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v4, attribue des UUID
+- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v5, attribue des UUID
   stables et produit le `WorldDocument` canonique ;
 - `shared/world/worldCompiler.js` compile salles, dalles, murs partagés, portes découpées, escaliers,
   ascenseurs désactivés en attente de leur contrôleur, colliders, occluders et compartiments ;
@@ -449,7 +449,42 @@ Phase 7.
 
 ---
 
-## 12. Matrice de non-régression minimale
+## 12. Phase 9 — empreintes exclusives et contours de salles ✅
+
+### Contrat `surface_data` v5
+
+- une salle possède une empreinte explicite `cells`; ses bornes ne sont plus qu'une enveloppe de
+  recherche et ne donnent aucun droit implicite sur les cases absentes ;
+- dessiner une nouvelle salle dans un volume existant transfère les cases recouvertes à la nouvelle
+  salle. L'ancienne adopte immédiatement le contour restant ;
+- seules des salles dont les volumes verticaux se croisent se découpent. Deux salles empilées sur
+  des étages distincts conservent leurs empreintes respectives ;
+- si la découpe sépare l'ancienne empreinte en plusieurs composantes non reliées, le moteur crée des
+  salles distinctes avec des identités stables au lieu de conserver un compartiment artificiellement
+  discontinu.
+
+### Consommateurs alignés
+
+- sélection, surbrillance, dalles, plafonds, murs partagés, eau et connecteurs lisent la même
+  empreinte ;
+- le renderer fusionne les cases restantes en rectangles de dalles, mais cette optimisation ne
+  change jamais la propriété des cases ;
+- le compilateur produit un seul support par case propriétaire et dérive les murs depuis les arêtes
+  du nouveau contour ;
+- chaque compartiment compilé expose aussi son empreinte, afin que son AABB reste un simple
+  broadphase et ne réintroduise pas la salle englobante dans la salle imbriquée.
+
+### Validation
+
+- transfert d'une salle intérieure 2 × 2 dans une salle 4 × 4 ;
+- huit panneaux de mur communs et aucune dalle dupliquée ;
+- séparation automatique d'une salle coupée en deux ;
+- non-régression des salles superposées sur des étages distincts ;
+- validation documentaire v5 et compilation de compartiments exclusifs.
+
+---
+
+## 13. Matrice de non-régression minimale
 
 Chaque phase doit conserver ou ajouter ces scénarios :
 
@@ -471,7 +506,7 @@ Chaque phase doit conserver ou ajouter ces scénarios :
 
 ---
 
-## 13. Définition de fini du chantier
+## 14. Définition de fini du chantier
 
 Le moteur de monde est considéré terminé lorsque :
 

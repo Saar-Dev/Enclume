@@ -11,7 +11,7 @@ const DEFAULT_FLOOR_THICKNESS = 0.25
 const DEFAULT_CEILING_HEIGHT = 2.5
 const STAIR_STEPS_PER_CELL = 4
 export const DEFAULT_SURFACE_DATA = {
-  version: 4,
+  version: 5,
   fine: SURFACE_FINE,
   storyHeight: STORY_HEIGHT,
   rooms: {},
@@ -312,7 +312,7 @@ export function parseCeilingKey(id, ceiling) {
 export function normalizeSurfaceData(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return { ...DEFAULT_SURFACE_DATA }
   return {
-    version: Math.max(4, data.version || 2),
+    version: Math.max(5, data.version || 2),
     fine: data.fine || SURFACE_FINE,
     storyHeight: data.storyHeight || STORY_HEIGHT,
     rooms: data.rooms && typeof data.rooms === 'object' && !Array.isArray(data.rooms) ? data.rooms : {},
@@ -787,21 +787,106 @@ function roomKey(area, baseLevel, heightLevels) {
   return `room:${area.minX}:${area.minZ}:${area.maxX}:${area.maxZ}:${baseLevel}:${heightLevels}`
 }
 
-function roomContainsArea(room, area, baseLevel, heightLevels) {
-  const roomLevel = Number.isFinite(Number(room?.level)) ? Number(room.level) : yToLevel(room?.y)
-  const roomHeightLevels = Math.max(1, Number.parseInt(room?.heightLevels, 10) || Math.round((Number(room?.height) || STORY_HEIGHT) / STORY_HEIGHT) || 1)
-  return room?.floorEnabled !== false
-    && room?.ceilingEnabled !== false
-    && roomLevel === baseLevel
-    && roomHeightLevels >= heightLevels
-    && Number(room.minX) <= area.minX
-    && Number(room.maxX) >= area.maxX
-    && Number(room.minZ) <= area.minZ
-    && Number(room.maxZ) >= area.maxZ
+function rawRoomBounds(room) {
+  const minX = Math.trunc(Number(room?.minX) || 0)
+  const maxX = Math.trunc(Number(room?.maxX ?? minX) || minX)
+  const minZ = Math.trunc(Number(room?.minZ) || 0)
+  const maxZ = Math.trunc(Number(room?.maxZ ?? minZ) || minZ)
+  return {
+    minX: Math.min(minX, maxX),
+    maxX: Math.max(minX, maxX),
+    minZ: Math.min(minZ, maxZ),
+    maxZ: Math.max(minZ, maxZ),
+  }
 }
 
-function roomSlabsCovered(rooms, area, baseLevel, heightLevels) {
-  return Object.values(rooms || {}).some(room => roomContainsArea(room, area, baseLevel, heightLevels))
+function parseRoomCell(value) {
+  if (typeof value === 'string') {
+    const [rawX, rawZ] = value.split(':')
+    const x = Number(rawX)
+    const z = Number(rawZ)
+    if (Number.isInteger(x) && Number.isInteger(z)) return { x, z }
+  }
+  if (value && typeof value === 'object') {
+    const x = Number(value.x)
+    const z = Number(value.z)
+    if (Number.isInteger(x) && Number.isInteger(z)) return { x, z }
+  }
+  return null
+}
+
+export function roomCellKey(x, z) {
+  return `${Math.trunc(Number(x) || 0)}:${Math.trunc(Number(z) || 0)}`
+}
+
+function sortRoomCells(cells) {
+  return [...cells].sort((left, right) => left.z - right.z || left.x - right.x)
+}
+
+export function getRoomFootprintCells(room) {
+  if (Array.isArray(room?.cells) && room.cells.length > 0) {
+    const unique = new Map()
+    for (const value of room.cells) {
+      const cell = parseRoomCell(value)
+      if (cell) unique.set(roomCellKey(cell.x, cell.z), cell)
+    }
+    if (unique.size > 0) return sortRoomCells(unique.values())
+  }
+
+  const bounds = rawRoomBounds(room)
+  const cells = []
+  for (let z = bounds.minZ; z <= bounds.maxZ; z += 1) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) cells.push({ x, z })
+  }
+  return cells
+}
+
+export function roomIncludesCell(room, x, z) {
+  const key = roomCellKey(x, z)
+  return getRoomFootprintCells(room).some(cell => roomCellKey(cell.x, cell.z) === key)
+}
+
+export function roomFootprintRectangles(room) {
+  const cells = getRoomFootprintCells(room)
+  const available = new Set(cells.map(cell => roomCellKey(cell.x, cell.z)))
+  const used = new Set()
+  const rectangles = []
+
+  for (const cell of cells) {
+    const startKey = roomCellKey(cell.x, cell.z)
+    if (used.has(startKey)) continue
+
+    let width = 1
+    while (available.has(roomCellKey(cell.x + width, cell.z))
+      && !used.has(roomCellKey(cell.x + width, cell.z))) width += 1
+
+    let depth = 1
+    let canGrow = true
+    while (canGrow) {
+      for (let dx = 0; dx < width; dx += 1) {
+        const key = roomCellKey(cell.x + dx, cell.z + depth)
+        if (!available.has(key) || used.has(key)) {
+          canGrow = false
+          break
+        }
+      }
+      if (canGrow) depth += 1
+    }
+
+    for (let dz = 0; dz < depth; dz += 1) {
+      for (let dx = 0; dx < width; dx += 1) used.add(roomCellKey(cell.x + dx, cell.z + dz))
+    }
+    rectangles.push({
+      minX: cell.x,
+      maxX: cell.x + width - 1,
+      minZ: cell.z,
+      maxZ: cell.z + depth - 1,
+      width,
+      depth,
+    })
+  }
+
+  return rectangles
 }
 
 export function findRoomAtCell(data, cell, level = null) {
@@ -811,8 +896,8 @@ export function findRoomAtCell(data, cell, level = null) {
   const matches = []
 
   for (const [id, room] of Object.entries(surface.rooms)) {
-    const bounds = getRoomBounds(room)
-    if (cell.x < bounds.minX || cell.x > bounds.maxX || cell.z < bounds.minZ || cell.z > bounds.maxZ) continue
+    if (!roomIncludesCell(room, cell.x, cell.z)) continue
+    const footprint = getRoomFootprintCells(room)
 
     const roomLevel = yToLevel(getRoomBaseY(room))
     const heightLevels = getRoomHeightLevels(room)
@@ -821,7 +906,7 @@ export function findRoomAtCell(data, cell, level = null) {
     matches.push({
       id,
       room: { id, ...room },
-      area: (bounds.maxX - bounds.minX + 1) * (bounds.maxZ - bounds.minZ + 1),
+      area: footprint.length,
     })
   }
 
@@ -838,11 +923,10 @@ export function findRoomsInSelection(data, selection, level = null) {
   const matches = []
 
   for (const [id, room] of Object.entries(surface.rooms)) {
-    const bounds = getRoomBounds(room)
-    const contained = bounds.minX >= area.minX
-      && bounds.maxX <= area.maxX
-      && bounds.minZ >= area.minZ
-      && bounds.maxZ <= area.maxZ
+    const footprint = getRoomFootprintCells(room)
+    const contained = footprint.every(cell => (
+      cell.x >= area.minX && cell.x <= area.maxX && cell.z >= area.minZ && cell.z <= area.maxZ
+    ))
     if (!contained) continue
 
     const roomLevel = yToLevel(getRoomBaseY(room))
@@ -852,7 +936,7 @@ export function findRoomsInSelection(data, selection, level = null) {
     matches.push({
       id,
       room: { id, ...room },
-      area: (bounds.maxX - bounds.minX + 1) * (bounds.maxZ - bounds.minZ + 1),
+      area: footprint.length,
     })
   }
 
@@ -861,15 +945,15 @@ export function findRoomsInSelection(data, selection, level = null) {
 }
 
 export function getRoomBounds(room) {
-  const minX = Math.trunc(Number(room?.minX) || 0)
-  const maxX = Math.trunc(Number(room?.maxX ?? minX) || minX)
-  const minZ = Math.trunc(Number(room?.minZ) || 0)
-  const maxZ = Math.trunc(Number(room?.maxZ ?? minZ) || minZ)
+  const cells = Array.isArray(room?.cells) && room.cells.length > 0
+    ? getRoomFootprintCells(room)
+    : []
+  if (cells.length === 0) return rawRoomBounds(room)
   return {
-    minX: Math.min(minX, maxX),
-    maxX: Math.max(minX, maxX),
-    minZ: Math.min(minZ, maxZ),
-    maxZ: Math.max(minZ, maxZ),
+    minX: Math.min(...cells.map(cell => cell.x)),
+    maxX: Math.max(...cells.map(cell => cell.x)),
+    minZ: Math.min(...cells.map(cell => cell.z)),
+    maxZ: Math.max(...cells.map(cell => cell.z)),
   }
 }
 
@@ -904,11 +988,7 @@ export function isWorldPointVisibleAtLevel(data, displayLevel, x, z, y) {
     const topLevel = baseLevel + heightLevels - 1
     if (itemLevel < baseLevel || itemLevel > displayLevel || displayLevel > topLevel) return false
 
-    const bounds = getRoomBounds(room)
-    return worldX >= bounds.minX
-      && worldX < bounds.maxX + 1
-      && worldZ >= bounds.minZ
-      && worldZ < bounds.maxZ + 1
+    return roomIncludesCell(room, Math.floor(worldX), Math.floor(worldZ))
   })
 }
 
@@ -1015,17 +1095,15 @@ export function roomToSurfaceToolPatch(room) {
   }
 }
 
-function makeRoomFromSelection(surfaceData, selection, tool, activeMaterial, availableBlocks) {
+function makeRoomFromSelection(_surfaceData, selection, tool, activeMaterial, availableBlocks) {
   const area = normalizeCellSelection(selection)
   if (!area) return null
 
-  const next = normalizeSurfaceData(surfaceData)
   const baseLevel = getToolLevel(tool)
   const heightLevels = getToolRoomHeightLevels(tool)
   const baseY = levelToY(baseLevel)
   const id = roomKey(area, baseLevel, heightLevels)
   const blocking = surfaceBlockingForTool(tool)
-  const slabsCovered = roomSlabsCovered(next.rooms, area, baseLevel, heightLevels)
   const floorTop = materialOrTextureForTool({
     tool: toolForMaterialFace(tool, 'top'),
     packId: tool?.floorPackId,
@@ -1078,19 +1156,22 @@ function makeRoomFromSelection(surfaceData, selection, tool, activeMaterial, ava
   return {
     id,
     type: 'room',
-    shape: 'rect',
+    shape: 'footprint',
     theme: tool?.roomTheme || 'custom',
     seed: hashString(`${id}:${tool?.materialProfiles?.top?.seed || ''}`),
     minX: area.minX,
     maxX: area.maxX,
     minZ: area.minZ,
     maxZ: area.maxZ,
+    cells: Array.from({ length: area.depth }, (_, dz) => (
+      Array.from({ length: area.width }, (_, dx) => roomCellKey(area.minX + dx, area.minZ + dz))
+    )).flat(),
     level: baseLevel,
     y: baseY,
     heightLevels,
     height: heightLevels * STORY_HEIGHT,
-    floorEnabled: !slabsCovered,
-    ceilingEnabled: !slabsCovered,
+    floorEnabled: true,
+    ceilingEnabled: true,
     wallEnabled: true,
     floorThickness: getToolFloorThickness(tool),
     ceilingThickness: getToolCeilingThickness(tool),
@@ -1200,7 +1281,8 @@ export function roomsWallSegments(rooms) {
     const room = { id: roomId, ...rawRoom }
     if (!room || room.wallEnabled === false) continue
 
-    const bounds = getRoomBounds(room)
+    const footprint = getRoomFootprintCells(room)
+    const footprintKeys = new Set(footprint.map(cell => roomCellKey(cell.x, cell.z)))
     const fine = SURFACE_FINE
     const heightLevels = getRoomHeightLevels(room)
     const baseY = getRoomBaseY(room)
@@ -1236,58 +1318,36 @@ export function roomsWallSegments(rooms) {
     for (let offset = 0; offset < heightLevels; offset += 1) {
       const y = baseY + offset * STORY_HEIGHT
 
-      for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      for (const { x, z } of footprint) {
         const x0 = x * fine
         const x1 = (x + 1) * fine
-        addPanel({
-          side: 'north',
-          axis: 'x',
-          x0,
-          x1,
-          z0: bounds.minZ * fine,
-          z1: bounds.minZ * fine,
-          frontSource: interior,
-          backSource: exterior,
-          y,
-        })
-        addPanel({
-          side: 'south',
-          axis: 'x',
-          x0,
-          x1,
-          z0: (bounds.maxZ + 1) * fine,
-          z1: (bounds.maxZ + 1) * fine,
-          frontSource: exterior,
-          backSource: interior,
-          y,
-        })
-      }
-
-      for (let z = bounds.minZ; z <= bounds.maxZ; z += 1) {
         const z0 = z * fine
         const z1 = (z + 1) * fine
-        addPanel({
-          side: 'west',
-          axis: 'z',
-          x0: bounds.minX * fine,
-          x1: bounds.minX * fine,
-          z0,
-          z1,
-          frontSource: interior,
-          backSource: exterior,
-          y,
-        })
-        addPanel({
-          side: 'east',
-          axis: 'z',
-          x0: (bounds.maxX + 1) * fine,
-          x1: (bounds.maxX + 1) * fine,
-          z0,
-          z1,
-          frontSource: exterior,
-          backSource: interior,
-          y,
-        })
+
+        if (!footprintKeys.has(roomCellKey(x, z - 1))) {
+          addPanel({
+            side: 'north', axis: 'x', x0, x1, z0, z1: z0,
+            frontSource: interior, backSource: exterior, y,
+          })
+        }
+        if (!footprintKeys.has(roomCellKey(x, z + 1))) {
+          addPanel({
+            side: 'south', axis: 'x', x0, x1, z0: z1, z1,
+            frontSource: exterior, backSource: interior, y,
+          })
+        }
+        if (!footprintKeys.has(roomCellKey(x - 1, z))) {
+          addPanel({
+            side: 'west', axis: 'z', x0, x1: x0, z0, z1,
+            frontSource: interior, backSource: exterior, y,
+          })
+        }
+        if (!footprintKeys.has(roomCellKey(x + 1, z))) {
+          addPanel({
+            side: 'east', axis: 'z', x0: x1, x1, z0, z1,
+            frontSource: exterior, backSource: interior, y,
+          })
+        }
       }
     }
   }
@@ -1472,7 +1532,7 @@ export function applyDoorConnector(surfaceData, wallPoint, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 4,
+    version: 5,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1486,10 +1546,9 @@ export function makeElevatorConnectorFromCell(surfaceData, cell, tool = {}) {
   const fromLevel = getToolLevel(tool)
   const selectedRoomId = tool?.selectedRoomId || null
   const hit = selectedRoomId && surface.rooms?.[selectedRoomId]
-    ? (() => {
+      ? (() => {
         const room = { id: selectedRoomId, ...surface.rooms[selectedRoomId] }
-        const bounds = getRoomBounds(room)
-        return cell.x >= bounds.minX && cell.x <= bounds.maxX && cell.z >= bounds.minZ && cell.z <= bounds.maxZ
+        return roomIncludesCell(room, cell.x, cell.z)
           ? { id: selectedRoomId, room }
           : null
       })()
@@ -1548,7 +1607,7 @@ export function applyElevatorConnector(surfaceData, cell, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 4,
+    version: 5,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1613,7 +1672,7 @@ export function applyLadderConnector(surfaceData, cell, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 4,
+    version: 5,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1628,7 +1687,7 @@ export function expandRoomsToSurface(data) {
   const walls = { ...surface.walls }
 
   for (const room of Object.values(surface.rooms)) {
-    const bounds = getRoomBounds(room)
+    const footprint = getRoomFootprintCells(room)
     const baseY = getRoomBaseY(room)
     const topY = getRoomTopY(room)
     const blocking = {
@@ -1639,8 +1698,7 @@ export function expandRoomsToSurface(data) {
     }
 
     if (room.floorEnabled !== false) {
-      for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
-        for (let z = bounds.minZ; z <= bounds.maxZ; z += 1) {
+      for (const { x, z } of footprint) {
           const id = floorKey(x, z, baseY)
           if (!floors[id]) {
             floors[id] = {
@@ -1653,13 +1711,11 @@ export function expandRoomsToSurface(data) {
               ...blocking,
             }
           }
-        }
       }
     }
 
     if (room.ceilingEnabled !== false) {
-      for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
-        for (let z = bounds.minZ; z <= bounds.maxZ; z += 1) {
+      for (const { x, z } of footprint) {
           const id = ceilingKey(x, z, baseY, topY)
           if (!ceilings[id]) {
             ceilings[id] = {
@@ -1674,7 +1730,6 @@ export function expandRoomsToSurface(data) {
               ...blocking,
             }
           }
-        }
       }
     }
 
@@ -1685,6 +1740,69 @@ export function expandRoomsToSurface(data) {
   return { ...surface, floors, ceilings, walls }
 }
 
+function connectedRoomFootprints(cells) {
+  const byKey = new Map(cells.map(cell => [roomCellKey(cell.x, cell.z), cell]))
+  const unvisited = new Set(byKey.keys())
+  const components = []
+  const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+
+  while (unvisited.size > 0) {
+    const firstKey = [...unvisited].sort()[0]
+    const first = byKey.get(firstKey)
+    const queue = [first]
+    const component = []
+    unvisited.delete(firstKey)
+
+    while (queue.length > 0) {
+      const cell = queue.shift()
+      component.push(cell)
+      for (const [dx, dz] of neighbors) {
+        const key = roomCellKey(cell.x + dx, cell.z + dz)
+        if (!unvisited.has(key)) continue
+        unvisited.delete(key)
+        queue.push(byKey.get(key))
+      }
+    }
+    components.push(sortRoomCells(component))
+  }
+
+  return components.sort((left, right) => (
+    right.length - left.length
+    || roomCellKey(left[0].x, left[0].z).localeCompare(roomCellKey(right[0].x, right[0].z))
+  ))
+}
+
+function roomWithFootprint(room, id, cells, keepWorldId) {
+  const bounds = {
+    minX: Math.min(...cells.map(cell => cell.x)),
+    maxX: Math.max(...cells.map(cell => cell.x)),
+    minZ: Math.min(...cells.map(cell => cell.z)),
+    maxZ: Math.max(...cells.map(cell => cell.z)),
+  }
+  const next = {
+    ...room,
+    ...bounds,
+    id,
+    shape: 'footprint',
+    cells: cells.map(cell => roomCellKey(cell.x, cell.z)),
+  }
+  if (!keepWorldId) delete next.worldId
+  return next
+}
+
+function connectorAnchorCell(connector) {
+  if (Number.isFinite(Number(connector?.x)) && Number.isFinite(Number(connector?.z))) {
+    return { x: Math.floor(Number(connector.x)), z: Math.floor(Number(connector.z)) }
+  }
+  if (Number.isFinite(Number(connector?.x0)) && Number.isFinite(Number(connector?.z0))) {
+    return {
+      x: Math.floor(((Number(connector.x0) + Number(connector.x1 ?? connector.x0)) / 2) / SURFACE_FINE),
+      z: Math.floor(((Number(connector.z0) + Number(connector.z1 ?? connector.z0)) / 2) / SURFACE_FINE),
+    }
+  }
+  return null
+}
+
 export function applyRoomSelection(surfaceData, selection, tool, activeMaterial, availableBlocks) {
   const room = makeRoomFromSelection(surfaceData, selection, tool, activeMaterial, availableBlocks)
   if (!room) return surfaceData
@@ -1692,13 +1810,62 @@ export function applyRoomSelection(surfaceData, selection, tool, activeMaterial,
   const next = normalizeSurfaceData(surfaceData)
   if (next.rooms[room.id]) return surfaceData
 
+  const rooms = { ...next.rooms }
+  const replacementRooms = new Map()
+  const claimedKeys = new Set(getRoomFootprintCells(room).map(cell => roomCellKey(cell.x, cell.z)))
+  const roomBaseLevel = yToLevel(getRoomBaseY(room))
+  const roomTopLevel = roomBaseLevel + getRoomHeightLevels(room) - 1
+
+  for (const [existingId, existingRoom] of Object.entries(next.rooms)) {
+    const existingBaseLevel = yToLevel(getRoomBaseY(existingRoom))
+    const existingTopLevel = existingBaseLevel + getRoomHeightLevels(existingRoom) - 1
+    if (existingTopLevel < roomBaseLevel || roomTopLevel < existingBaseLevel) continue
+
+    const existingCells = getRoomFootprintCells(existingRoom)
+    const remainingCells = existingCells.filter(cell => !claimedKeys.has(roomCellKey(cell.x, cell.z)))
+    if (remainingCells.length === existingCells.length) continue
+
+    delete rooms[existingId]
+    const components = connectedRoomFootprints(remainingCells)
+    const replacements = components.map((component, index) => {
+      const id = index === 0
+        ? existingId
+        : `${existingId}:split:${Math.abs(hashString(component.map(cell => roomCellKey(cell.x, cell.z)).join('|')))}`
+      rooms[id] = roomWithFootprint(existingRoom, id, component, index === 0)
+      return {
+        id,
+        cells: new Set(component.map(cell => roomCellKey(cell.x, cell.z))),
+      }
+    })
+    replacements.push({ id: room.id, cells: claimedKeys })
+    replacementRooms.set(existingId, replacements)
+  }
+
+  rooms[room.id] = room
+  const connectors = Object.fromEntries(Object.entries(next.connectors).map(([id, connector]) => {
+    const anchor = connectorAnchorCell(connector)
+    const replaceRoomId = currentId => {
+      const candidates = replacementRooms.get(currentId)
+      if (!candidates) return currentId
+      if (anchor) {
+        const candidate = candidates.find(item => item.cells.has(roomCellKey(anchor.x, anchor.z)))
+        if (candidate) return candidate.id
+      }
+      return candidates[0]?.id || room.id
+    }
+    const roomIds = [...new Set((connector.roomIds || []).map(replaceRoomId))]
+    return [id, {
+      ...connector,
+      ...(connector.roomId ? { roomId: replaceRoomId(connector.roomId) } : {}),
+      ...(connector.roomIds ? { roomIds } : {}),
+    }]
+  }))
+
   return {
     ...next,
-    version: 4,
-    rooms: {
-      ...next.rooms,
-      [room.id]: room,
-    },
+    version: 5,
+    rooms,
+    connectors,
   }
 }
 
@@ -1799,7 +1966,7 @@ export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, a
 
   return {
     ...next,
-    version: 4,
+    version: 5,
     rooms: {
       ...next.rooms,
       [roomId]: updated,
@@ -1945,13 +2112,6 @@ function cellAreaIntersectsBounds(bounds, area) {
     && rangesIntersect(bounds.minZ, bounds.maxZ + 1, area.minZ, area.maxZ + 1)
 }
 
-function cellAreaContainsBounds(bounds, area) {
-  return bounds.minX >= area.minX
-    && bounds.maxX <= area.maxX
-    && bounds.minZ >= area.minZ
-    && bounds.maxZ <= area.maxZ
-}
-
 function wallIntersectsCellArea(wall, area) {
   const fine = SURFACE_FINE
   const minFx = area.minX * fine
@@ -1997,11 +2157,13 @@ export function eraseSurfaceSelection(surfaceData, selection, tool) {
   let changed = false
 
   for (const [id, room] of Object.entries(next.rooms)) {
-    const bounds = getRoomBounds(room)
     const baseY = getRoomBaseY(room)
     const topY = getRoomTopY(room)
     const matchesLevel = targetY >= baseY - 0.001 && targetY <= topY + 0.001
-    if (matchesLevel && cellAreaContainsBounds(bounds, area)) {
+    const contained = getRoomFootprintCells(room).every(cell => (
+      cell.x >= area.minX && cell.x <= area.maxX && cell.z >= area.minZ && cell.z <= area.maxZ
+    ))
+    if (matchesLevel && contained) {
       delete rooms[id]
       changed = true
     }

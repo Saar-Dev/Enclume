@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Grid, MapControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -23,7 +23,6 @@ import {
   getToolElevation,
   getToolFloorThickness,
   getRoomBaseY,
-  getRoomBounds,
   getRoomHeightLevels,
   getToolRoomHeightLevels,
   getToolWallThicknessFine,
@@ -39,6 +38,9 @@ import {
   parseFloorKey,
   normalizeCellSelection,
   roomToSurfaceToolPatch,
+  roomFootprintRectangles,
+  roomWallSegments,
+  roomsWallSegments,
   stairStepBoxes,
   yToLevel,
 } from '../lib/surfaceData.js'
@@ -140,42 +142,34 @@ function SelectionPreview({ selection, surfaceTool }) {
 
 function SelectedRoomOverlay({ room }) {
   if (!room) return null
-  const bounds = getRoomBounds(room)
   const baseY = getRoomBaseY(room)
-  const height = Math.max(STORY_HEIGHT, Number(room.height) || STORY_HEIGHT)
-  const width = bounds.maxX - bounds.minX + 1
-  const depth = bounds.maxZ - bounds.minZ + 1
-  const centerX = bounds.minX + width / 2
-  const centerZ = bounds.minZ + depth / 2
-  const wallY = baseY + height / 2
-  const material = <meshBasicMaterial color="#fbbf24" transparent opacity={0.36} depthWrite={false} />
+  const height = getRoomHeightLevels(room) * STORY_HEIGHT
+  const rectangles = roomFootprintRectangles(room)
+  const walls = roomWallSegments(room)
+  const material = () => <meshBasicMaterial color="#fbbf24" transparent opacity={0.36} depthWrite={false} />
 
   return (
     <group renderOrder={30}>
-      <mesh position={[centerX, baseY + 0.06, centerZ]}>
-        <boxGeometry args={[width, 0.04, depth]} />
-        {material}
-      </mesh>
-      <mesh position={[centerX, baseY + height + 0.06, centerZ]}>
-        <boxGeometry args={[width, 0.04, depth]} />
-        {material}
-      </mesh>
-      <mesh position={[centerX, wallY, bounds.minZ]}>
-        <boxGeometry args={[width, height, 0.05]} />
-        {material}
-      </mesh>
-      <mesh position={[centerX, wallY, bounds.maxZ + 1]}>
-        <boxGeometry args={[width, height, 0.05]} />
-        {material}
-      </mesh>
-      <mesh position={[bounds.minX, wallY, centerZ]}>
-        <boxGeometry args={[0.05, height, depth]} />
-        {material}
-      </mesh>
-      <mesh position={[bounds.maxX + 1, wallY, centerZ]}>
-        <boxGeometry args={[0.05, height, depth]} />
-        {material}
-      </mesh>
+      {rectangles.flatMap(rectangle => [
+        <mesh key={`floor:${rectangle.minX}:${rectangle.minZ}`} position={[rectangle.minX + rectangle.width / 2, baseY + 0.06, rectangle.minZ + rectangle.depth / 2]}>
+          <boxGeometry args={[rectangle.width, 0.04, rectangle.depth]} />
+          {material()}
+        </mesh>,
+        <mesh key={`ceiling:${rectangle.minX}:${rectangle.minZ}`} position={[rectangle.minX + rectangle.width / 2, baseY + height + 0.06, rectangle.minZ + rectangle.depth / 2]}>
+          <boxGeometry args={[rectangle.width, 0.04, rectangle.depth]} />
+          {material()}
+        </mesh>,
+      ])}
+      {walls.map(wall => {
+        const box = getWallRenderBox(wall)
+        if (!box) return null
+        return (
+          <mesh key={wall.id} position={box.position} rotation={[0, box.rotationY || 0, 0]}>
+            <boxGeometry args={box.args} />
+            {material()}
+          </mesh>
+        )
+      })}
     </group>
   )
 }
@@ -328,6 +322,10 @@ export default function SurfaceEditorScene({
   const { camera, gl } = useThree()
   const orbitRef = useRef()
   const previousDisplayLevelRef = useRef(displayLevel)
+  const roomWallPanels = useMemo(
+    () => roomsWallSegments(normalizeSurfaceData(surfaceData).rooms),
+    [surfaceData],
+  )
   const raycaster = useRef(new THREE.Raycaster())
   const groundPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0))
   const dragRef = useRef(null)
@@ -393,15 +391,19 @@ export default function SurfaceEditorScene({
       }
     }
 
-    for (const room of Object.values(surface.rooms)) {
-      if (!sameLevel(getRoomBaseY(room), level)) continue
-      const bounds = getRoomBounds(room)
-      considerEdges([
-        { line: 'z', value: bounds.minZ, min: bounds.minX, max: bounds.maxX + 1, distance: Math.abs(point.z - bounds.minZ), along: point.x },
-        { line: 'z', value: bounds.maxZ + 1, min: bounds.minX, max: bounds.maxX + 1, distance: Math.abs(point.z - (bounds.maxZ + 1)), along: point.x },
-        { line: 'x', value: bounds.minX, min: bounds.minZ, max: bounds.maxZ + 1, distance: Math.abs(point.x - bounds.minX), along: point.z },
-        { line: 'x', value: bounds.maxX + 1, min: bounds.minZ, max: bounds.maxZ + 1, distance: Math.abs(point.x - (bounds.maxX + 1)), along: point.z },
-      ])
+    for (const panel of roomWallPanels) {
+      if (!sameLevel(panel.y, level)) continue
+      if (panel.axis === 'x') {
+        const min = Math.min(Number(panel.x0), Number(panel.x1)) / SURFACE_FINE
+        const max = Math.max(Number(panel.x0), Number(panel.x1)) / SURFACE_FINE
+        const value = Number(panel.z0) / SURFACE_FINE
+        considerEdges([{ line: 'z', value, min, max, distance: Math.abs(point.z - value), along: point.x }])
+      } else if (panel.axis === 'z') {
+        const min = Math.min(Number(panel.z0), Number(panel.z1)) / SURFACE_FINE
+        const max = Math.max(Number(panel.z0), Number(panel.z1)) / SURFACE_FINE
+        const value = Number(panel.x0) / SURFACE_FINE
+        considerEdges([{ line: 'x', value, min, max, distance: Math.abs(point.x - value), along: point.z }])
+      }
     }
 
     for (const [id, floor] of Object.entries(surface.floors)) {
@@ -421,7 +423,7 @@ export default function SurfaceEditorScene({
     const fx = Math.round(point.x * SURFACE_FINE)
     const fz = Math.round(point.z * SURFACE_FINE)
     return { fx, fz }
-  }, [getWorldPoint, surfaceData, surfaceTool])
+  }, [getWorldPoint, roomWallPanels, surfaceData, surfaceTool])
 
   const findConnectorAtWorldPoint = useCallback((point, level) => {
     if (!point) return null

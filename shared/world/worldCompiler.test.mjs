@@ -69,6 +69,29 @@ test('deux salles adjacentes partagent un seul mur physique', () => {
   assert.equal(walls.filter(item => item.sourceIds?.length === 2).length, 1)
 })
 
+test('une salle imbriquee compile deux empreintes exclusives et leur contour commun', () => {
+  const outerCells = []
+  for (let z = 0; z < 4; z += 1) {
+    for (let x = 0; x < 4; x += 1) {
+      if (x >= 1 && x <= 2 && z >= 1 && z <= 2) continue
+      outerCells.push(`${x}:${z}`)
+    }
+  }
+  const outer = { ...room('outer', 0, 3, 0, 3), shape: 'footprint', cells: outerCells }
+  const inner = { ...room('inner', 1, 2, 1, 2), shape: 'footprint', cells: ['1:1', '2:1', '1:2', '2:2'] }
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-nested-room',
+    surfaceData: emptySurface({ rooms: { outer, inner } }),
+  })
+
+  assert.equal(snapshot.spatial.supports.filter(item => item.kind === 'floor').length, 16)
+  assert.equal(snapshot.spatial.barriers.filter(item => item.kind === 'wall').length, 24)
+  assert.equal(snapshot.spatial.barriers.filter(item => item.kind === 'wall' && item.sourceIds?.length === 2).length, 8)
+  assert.deepEqual(snapshot.spatial.compartments.map(item => item.footprint.length).sort((a, b) => a - b), [4, 12])
+  const [first, second] = snapshot.spatial.compartments.map(item => new Set(item.footprint))
+  assert.equal([...first].some(cell => second.has(cell)), false)
+})
+
 test('un segment de mur courbe compile les mêmes canaux physiques que son rendu', () => {
   const snapshot = compileSurfaceWorld({
     battlemapId: 'map-curved-wall',

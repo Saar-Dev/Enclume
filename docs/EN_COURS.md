@@ -35,10 +35,11 @@
 
 Branche `codex/world-engine-integration`, sans modification du dépôt de l'autre développeur.
 
-- Phases 0 à 8 terminées : contrat métrique, document canonique, compilateur, navigation serveur,
+- Phases 0 à 9 terminées : contrat métrique, document canonique, compilateur, navigation serveur,
   LOS/couverture, structures verticales, régions/effets runtime, cabine d'ascenseur mobile et
   branchement spatial complet du combat, tranches d'étage isolées avec profondeur visible dans les
-  seuls volumes multniveau, et murs courbes physiques.
+  seuls volumes multniveau, murs courbes physiques et empreintes exclusives de salles non
+  rectangulaires.
 - Les anciennes cartes voxel ne sont pas une cible de compatibilité. Elles peuvent seulement servir
   de fixtures et peuvent être supprimées si elles gênent le modèle canonique.
 - L'ascenseur est une cabine physique mobile : aucune arête verticale ou téléportation ne doit être

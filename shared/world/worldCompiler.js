@@ -77,7 +77,7 @@ function parseCeiling(id, ceiling) {
   }
 }
 
-function roomBounds(room) {
+function rawRoomBounds(room) {
   const minX = Math.trunc(number(room.minX))
   const maxX = Math.trunc(number(room.maxX, minX))
   const minZ = Math.trunc(number(room.minZ))
@@ -87,6 +87,43 @@ function roomBounds(room) {
     maxX: Math.max(minX, maxX),
     minZ: Math.min(minZ, maxZ),
     maxZ: Math.max(minZ, maxZ),
+  }
+}
+
+function roomCellKey(x, z) {
+  return `${Math.trunc(number(x))}:${Math.trunc(number(z))}`
+}
+
+function roomCells(room) {
+  if (Array.isArray(room.cells) && room.cells.length > 0) {
+    const unique = new Map()
+    for (const value of room.cells) {
+      const [rawX, rawZ] = typeof value === 'string'
+        ? value.split(':')
+        : [value?.x, value?.z]
+      const x = Number(rawX)
+      const z = Number(rawZ)
+      if (Number.isInteger(x) && Number.isInteger(z)) unique.set(roomCellKey(x, z), { x, z })
+    }
+    if (unique.size > 0) return [...unique.values()].sort((left, right) => left.z - right.z || left.x - right.x)
+  }
+
+  const area = rawRoomBounds(room)
+  const cells = []
+  for (let z = area.minZ; z <= area.maxZ; z++) {
+    for (let x = area.minX; x <= area.maxX; x++) cells.push({ x, z })
+  }
+  return cells
+}
+
+function roomBounds(room) {
+  const cells = roomCells(room)
+  if (cells.length === 0) return rawRoomBounds(room)
+  return {
+    minX: Math.min(...cells.map(cell => cell.x)),
+    maxX: Math.max(...cells.map(cell => cell.x)),
+    minZ: Math.min(...cells.map(cell => cell.z)),
+    maxZ: Math.max(...cells.map(cell => cell.z)),
   }
 }
 
@@ -105,10 +142,9 @@ function roomFloorEntries(surface, battlemapId) {
   const entries = new Map(Object.entries(surface.floors))
   for (const [roomLegacyId, room] of Object.entries(surface.rooms)) {
     if (room.floorEnabled === false) continue
-    const area = roomBounds(room)
+    const cells = roomCells(room)
     const y = roomBaseY(room, surface.storyHeight)
-    for (let x = area.minX; x <= area.maxX; x++) {
-      for (let z = area.minZ; z <= area.maxZ; z++) {
+    for (const { x, z } of cells) {
         const key = `${x}:${z}:${y}`
         if (entries.has(key)) continue
         entries.set(key, {
@@ -125,7 +161,6 @@ function roomFloorEntries(surface, battlemapId) {
           blocksWater: room.blocksWater,
           sourceRoomWorldId: room.worldId,
         })
-      }
     }
   }
   return entries
@@ -135,11 +170,10 @@ function roomCeilingEntries(surface, battlemapId) {
   const entries = new Map(Object.entries(surface.ceilings))
   for (const [roomLegacyId, room] of Object.entries(surface.rooms)) {
     if (room.ceilingEnabled === false) continue
-    const area = roomBounds(room)
+    const cells = roomCells(room)
     const baseY = roomBaseY(room, surface.storyHeight)
     const y = baseY + roomHeightLevels(room, surface.storyHeight) * surface.storyHeight
-    for (let x = area.minX; x <= area.maxX; x++) {
-      for (let z = area.minZ; z <= area.maxZ; z++) {
+    for (const { x, z } of cells) {
         const key = `${x}:${z}:${baseY}:${y}`
         if (entries.has(key)) continue
         entries.set(key, {
@@ -155,7 +189,6 @@ function roomCeilingEntries(surface, battlemapId) {
           blocksWater: room.blocksWater,
           sourceRoomWorldId: room.worldId,
         })
-      }
     }
   }
   return entries
@@ -194,35 +227,34 @@ function roomWallCandidates(surface, battlemapId) {
   const walls = new Map()
   for (const room of Object.values(surface.rooms)) {
     if (room.wallEnabled === false) continue
-    const area = roomBounds(room)
+    const cells = roomCells(room)
+    const cellKeys = new Set(cells.map(cell => roomCellKey(cell.x, cell.z)))
     const baseY = roomBaseY(room, surface.storyHeight)
     const levels = roomHeightLevels(room, surface.storyHeight)
     const thickness = positive(room.wallThickness, 1) / surface.fine
     for (let offset = 0; offset < levels; offset++) {
       const y = baseY + offset * surface.storyHeight
-      for (let x = area.minX; x <= area.maxX; x++) {
-        addWallCandidate(walls, {
+      for (const { x, z } of cells) {
+        const addBoundary = wall => addWallCandidate(walls, {
           ...room,
-          axis: 'x', x0: x, x1: x + 1, z0: area.minZ, z1: area.minZ,
-          y, height: surface.storyHeight, thickness, sourceWorldIds: [room.worldId],
+          ...wall,
+          y,
+          height: surface.storyHeight,
+          thickness,
+          sourceWorldIds: [room.worldId],
         }, battlemapId)
-        addWallCandidate(walls, {
-          ...room,
-          axis: 'x', x0: x, x1: x + 1, z0: area.maxZ + 1, z1: area.maxZ + 1,
-          y, height: surface.storyHeight, thickness, sourceWorldIds: [room.worldId],
-        }, battlemapId)
-      }
-      for (let z = area.minZ; z <= area.maxZ; z++) {
-        addWallCandidate(walls, {
-          ...room,
-          axis: 'z', x0: area.minX, x1: area.minX, z0: z, z1: z + 1,
-          y, height: surface.storyHeight, thickness, sourceWorldIds: [room.worldId],
-        }, battlemapId)
-        addWallCandidate(walls, {
-          ...room,
-          axis: 'z', x0: area.maxX + 1, x1: area.maxX + 1, z0: z, z1: z + 1,
-          y, height: surface.storyHeight, thickness, sourceWorldIds: [room.worldId],
-        }, battlemapId)
+        if (!cellKeys.has(roomCellKey(x, z - 1))) {
+          addBoundary({ axis: 'x', x0: x, x1: x + 1, z0: z, z1: z })
+        }
+        if (!cellKeys.has(roomCellKey(x, z + 1))) {
+          addBoundary({ axis: 'x', x0: x, x1: x + 1, z0: z + 1, z1: z + 1 })
+        }
+        if (!cellKeys.has(roomCellKey(x - 1, z))) {
+          addBoundary({ axis: 'z', x0: x, x1: x, z0: z, z1: z + 1 })
+        }
+        if (!cellKeys.has(roomCellKey(x + 1, z))) {
+          addBoundary({ axis: 'z', x0: x + 1, x1: x + 1, z0: z, z1: z + 1 })
+        }
       }
     }
   }
@@ -715,6 +747,7 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
 function addCompartments(surface, spatial) {
   for (const room of Object.values(surface.rooms)) {
     const area = roomBounds(room)
+    const cells = roomCells(room)
     const baseY = roomBaseY(room, surface.storyHeight)
     const topY = baseY + roomHeightLevels(room, surface.storyHeight) * surface.storyHeight
     spatial.compartments.push({
@@ -722,6 +755,7 @@ function addCompartments(surface, spatial) {
       sourceId: room.worldId,
       kind: 'room',
       bounds: bounds(area.minX, baseY, area.minZ, area.maxX + 1, topY, area.maxZ + 1),
+      footprint: cells.map(cell => roomCellKey(cell.x, cell.z)),
       sealedByDefault: room.blocksWater !== false,
     })
   }

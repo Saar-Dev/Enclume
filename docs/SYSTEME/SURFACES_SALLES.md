@@ -9,7 +9,7 @@
 
 ## Statut au 2026-07-13
 
-L'éditeur Surface/Salle et son rendu existent. `surface_data` version 4 sait décrire des salles,
+L'éditeur Surface/Salle et son rendu existent. `surface_data` version 5 sait décrire des salles,
 sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
 navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
@@ -25,15 +25,23 @@ seconde logique physique directement dans le renderer pour contourner cette migr
 
 Le mode Salle repose sur `surface_data.rooms`.
 
-Une salle est un objet métier rectangulaire :
+Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
 
-- emprise grille : `minX`, `maxX`, `minZ`, `maxZ` ;
+- cases propriétaires : `cells`, sous forme de clés `x:z` uniques ;
+- enveloppe de recherche : `minX`, `maxX`, `minZ`, `maxZ`, jamais utilisée comme propriété
+  implicite ;
 - étage de base : `level` / `y` ;
 - hauteur : `heightLevels`, exprimée en étages, pas en mètres ;
 - dalles : sol et plafond, avec textures ou matériaux séparés pour dessus/dessous ;
 - murs : une face intérieure et une face extérieure ; les murs libres peuvent être droits ou
   composés de segments orientés issus d'une courbe quadratique ;
 - connecteurs : portes, escaliers, échelles, passerelles et ascenseurs entre salles/étages.
+
+Lorsqu'une nouvelle salle recouvre une salle existante à une hauteur commune, ses cases sont
+transférées : elles sont ajoutées à la nouvelle empreinte et retirées de l'ancienne. Les arêtes de
+ces empreintes produisent le nouveau contour et le mur commun. Si l'ancienne empreinte est coupée
+en plusieurs îlots non reliés, chaque îlot devient une salle distincte. Des salles empilées sans
+chevauchement vertical conservent en revanche les mêmes coordonnées `x:z`.
 
 Une salle `heightLevels > 1` existe dans chaque tranche verticale qu'elle traverse et décrit un seul
 volume ouvert. Depuis une tranche haute, son sol de base, ses murs descendants et le contenu situé

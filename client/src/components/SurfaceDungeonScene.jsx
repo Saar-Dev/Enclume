@@ -14,9 +14,9 @@ import {
   getCeilingThickness,
   getFloorThickness,
   getRoomBaseY,
-  getRoomBounds,
   getRoomCeilingThickness,
   getRoomFloorThickness,
+  getRoomFootprintCells,
   getRoomHeightLevels,
   getRoomTopY,
   getWallRenderBox,
@@ -24,6 +24,7 @@ import {
   normalizeSurfaceData,
   parseCeilingKey,
   parseFloorKey,
+  roomFootprintRectangles,
   roomsWallSegments,
   stairStepBoxes,
   yToLevel,
@@ -446,9 +447,7 @@ function CeilingTile({ id, ceiling, textureMaterials, opacity, showDetails = tru
 }
 
 function RoomSlab({ room, kind, textureMaterials, opacity = 1, showDetails = true }) {
-  const bounds = getRoomBounds(room)
-  const width = bounds.maxX - bounds.minX + 1
-  const depth = bounds.maxZ - bounds.minZ + 1
+  const rectangles = roomFootprintRectangles(room)
   const isCeiling = kind === 'ceiling'
   const y = isCeiling ? getRoomTopY(room) : getRoomBaseY(room)
   const thickness = isCeiling ? getRoomCeilingThickness(room) : getRoomFloorThickness(room)
@@ -466,42 +465,48 @@ function RoomSlab({ room, kind, textureMaterials, opacity = 1, showDetails = tru
   const relief = showDetails ? (topProcedural?.relief || reliefAt(textureMaterials, topTex)) : null
   if (!top) return null
 
-  const minX = bounds.minX
-  const minZ = bounds.minZ
-  const maxX = bounds.minX + width
-  const maxZ = bounds.minZ + depth
-  const minY = y - thickness / 2
-  const maxY = y + thickness / 2
-  const faceUvTransforms = faceUvTransformsForBox(minX, minY, minZ, maxX, maxY, maxZ)
-  const faceUvScales = faceUvScalesFromTransforms(faceUvTransforms)
-  const faceUvOffsets = faceUvOffsetsFromTransforms(faceUvTransforms)
-
-  const materials = withOpacity([
-    withUvTransform(side, faceUvTransforms[0]),
-    withUvTransform(side, faceUvTransforms[1]),
-    withUvTransform(top, faceUvTransforms[2]),
-    withUvTransform(bottom, faceUvTransforms[3]),
-    withUvTransform(side, faceUvTransforms[4]),
-    withUvTransform(side, faceUvTransforms[5]),
-  ], opacity)
-
   return (
-    <mesh
-      position={[bounds.minX + width / 2, y, bounds.minZ + depth / 2]}
-      material={materials}
-      castShadow
-      receiveShadow
-      userData={isCeiling ? undefined : { worldSupport: true }}
-    >
-      <ReliefBoxGeometry
-        args={[width, thickness, depth]}
-        faceProfiles={[null, null, isCeiling ? null : relief, isCeiling ? relief : null, null, null]}
-        faceMask={[false, false, !isCeiling, isCeiling, false, false]}
-        faceUvScales={faceUvScales}
-        faceUvOffsets={faceUvOffsets}
-        maxSegments={reliefMaxSegmentsForRepeats(...faceUvScales.flat())}
-      />
-    </mesh>
+    <>
+      {rectangles.map(rectangle => {
+        const minX = rectangle.minX
+        const minZ = rectangle.minZ
+        const maxX = minX + rectangle.width
+        const maxZ = minZ + rectangle.depth
+        const minY = y - thickness / 2
+        const maxY = y + thickness / 2
+        const faceUvTransforms = faceUvTransformsForBox(minX, minY, minZ, maxX, maxY, maxZ)
+        const faceUvScales = faceUvScalesFromTransforms(faceUvTransforms)
+        const faceUvOffsets = faceUvOffsetsFromTransforms(faceUvTransforms)
+        const materials = withOpacity([
+          withUvTransform(side, faceUvTransforms[0]),
+          withUvTransform(side, faceUvTransforms[1]),
+          withUvTransform(top, faceUvTransforms[2]),
+          withUvTransform(bottom, faceUvTransforms[3]),
+          withUvTransform(side, faceUvTransforms[4]),
+          withUvTransform(side, faceUvTransforms[5]),
+        ], opacity)
+
+        return (
+          <mesh
+            key={`${kind}:${rectangle.minX}:${rectangle.minZ}:${rectangle.width}:${rectangle.depth}`}
+            position={[minX + rectangle.width / 2, y, minZ + rectangle.depth / 2]}
+            material={materials}
+            castShadow
+            receiveShadow
+            userData={isCeiling ? undefined : { worldSupport: true }}
+          >
+            <ReliefBoxGeometry
+              args={[rectangle.width, thickness, rectangle.depth]}
+              faceProfiles={[null, null, isCeiling ? null : relief, isCeiling ? relief : null, null, null]}
+              faceMask={[false, false, !isCeiling, isCeiling, false, false]}
+              faceUvScales={faceUvScales}
+              faceUvOffsets={faceUvOffsets}
+              maxSegments={reliefMaxSegmentsForRepeats(...faceUvScales.flat())}
+            />
+          </mesh>
+        )
+      })}
+    </>
   )
 }
 
@@ -1243,10 +1248,7 @@ function displayedFloorCells(surface, displayLevel) {
 
   for (const room of Object.values(surface.rooms || {})) {
     if (room?.floorEnabled === false || yToLevel(getRoomBaseY(room)) !== displayLevel) continue
-    const bounds = getRoomBounds(room)
-    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
-      for (let z = bounds.minZ; z <= bounds.maxZ; z += 1) cells.add(`${x}:${z}`)
-    }
+    for (const cell of getRoomFootprintCells(room)) cells.add(`${cell.x}:${cell.z}`)
   }
 
   for (const [id, floor] of Object.entries(surface.floors || {})) {
