@@ -298,6 +298,9 @@ moteur ; sinon elles doivent être supprimées.
   collision/LOS sont les seuls endroits autorisés à l'échantillonner temporairement ;
 - une porte sur arc est ancrée par distance curviligne, point, tangente et normale exacts. Son modèle,
   sa découpe du mur et sa traversée partagent le même repère local ;
+- le cadre et les vantaux restent tangents et rigides. Les groupes de boîtiers/claviers avant et
+  arrière sont, eux, replacés sur le cercle au niveau de leur déport latéral et orientés selon sa
+  tangente locale ; le boîtier intérieur n'est plus absorbé par la face concave du mur ;
 - l'ouverture partage l'arc canonique en portions avant/après et linteau, même si elle traverse
   plusieurs subdivisions de rendu ;
 - la sauvegarde Surface retourne désormais réellement toutes les colonnes de révision. Après un
@@ -305,7 +308,7 @@ moteur ; sinon elles doivent être supprimées.
   une modification concurrente est signalée et conservée sans écrasement ;
 - un test reproduit le round-trip salle carrée → mur arrondi → sortie/rechargement, y compris le cas
   d'une réponse précédente ayant laissé la révision locale obsolète ;
-- 98 tests monde/combat et 17 tests Surface/persistance passent ; ESLint ciblé ne remonte aucune erreur et le
+- 98 tests monde/combat et 20 tests Surface/persistance/géométrie passent ; ESLint ciblé ne remonte aucune erreur et le
   build Vite est validé.
 
 ---

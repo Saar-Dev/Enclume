@@ -578,6 +578,9 @@ Phase 7.
   suivent le rayon et les UV suivent la longueur, ce qui garantit la continuité des textures ;
 - le nombre de subdivisions du mesh est uniquement un niveau de détail. Il n'est jamais sauvegardé
   comme structure du mur ;
+- le cadre d'une porte reste tangent et rigide, tandis que ses accessoires muraux déportés sont
+  projetés sur le cercle et tournés selon la tangente locale. Le boîtier concave ne traverse donc plus
+  le mur et son débord ne modifie pas la largeur structurelle de l'ouverture ;
 - broadphase, collision et LOS consomment `wall-arc`. Une tessellation locale est permise uniquement
   comme adaptateur interne du narrow phase ;
 - un mur courbe commun reste un unique obstacle dédupliqué pour les deux salles.
@@ -589,7 +592,7 @@ Phase 7.
 - collision et LOS sur `wall-arc` sans faux obstacle hors de la courbe ;
 - sauvegarde round-trip d'une salle arrondie, récupération sûre d'une révision locale obsolète et
   refus d'écraser une vraie modification concurrente ;
-- 98 tests monde/combat et 17 tests client Surface/persistance passent ; ESLint ciblé ne remonte aucune erreur
+- 98 tests monde/combat et 20 tests client Surface/persistance/géométrie passent ; ESLint ciblé ne remonte aucune erreur
   et le build Vite est validé.
 
 ---

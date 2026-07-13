@@ -7,6 +7,7 @@ import { createWaterMaterial, updateWaterMaterial } from '../lib/waterMaterials'
 import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
+import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
 import { roomBoundaryContours, sampleWallArcGeometry } from '../../../shared/world/roomGeometry.js'
 import {
   SURFACE_FINE,
@@ -1137,9 +1138,87 @@ function AnimatedElevatorCabin({ state, fallbackY, children }) {
   return <group ref={ref} position={[0, elevatorDisplayY(state, fallbackY), 0]}>{children}</group>
 }
 
-function DoorConnectorModel({ connector, opacity = 1 }) {
+function doorControlMountSide(name) {
+  const normalized = String(name || '').toLowerCase()
+  if (!normalized.includes('control') && !normalized.includes('keypad') && !normalized.includes('screen')) return null
+  if (normalized.includes('_front_')) return 'front'
+  if (normalized.includes('_back_')) return 'back'
+  return null
+}
+
+function topLevelDoorControlNodes(scene) {
+  const controls = []
+  scene.traverse((object) => {
+    if (!doorControlMountSide(object.name)) return
+    let ancestor = object.parent
+    while (ancestor && ancestor !== scene) {
+      if (doorControlMountSide(ancestor.name)) return
+      ancestor = ancestor.parent
+    }
+    controls.push(object)
+  })
+  return controls
+}
+
+function mountDoorControlsOnCurvedWall(
+  scene,
+  curveWall,
+  uniformScale,
+  connectorAxis,
+  connectorAnchorX,
+  connectorAnchorZ,
+  connectorNormalX,
+  connectorNormalZ,
+) {
+  if (!scene || connectorAxis !== 'segment' || curveWall?.axis !== 'arc') return
+  const scale = Math.abs(Number(uniformScale))
+  if (!Number.isFinite(scale) || scale <= 1e-8) return
+  const radius = Number(curveWall.radius) / scale
+  const centerX = Number(curveWall.centerX)
+  const centerZ = Number(curveWall.centerZ)
+  const anchorX = Number(connectorAnchorX)
+  const anchorZ = Number(connectorAnchorZ)
+  const normalX = Number(connectorNormalX)
+  const normalZ = Number(connectorNormalZ)
+  if (![radius, centerX, centerZ, anchorX, anchorZ, normalX, normalZ].every(Number.isFinite)) return
+  const centerDotNormal = (centerX - anchorX) * normalX + (centerZ - anchorZ) * normalZ
+  if (Math.abs(centerDotNormal) <= 1e-8) return
+  const centerSign = Math.sign(centerDotNormal)
+
+  const groups = new Map()
+  for (const object of topLevelDoorControlNodes(scene)) {
+    const side = doorControlMountSide(object.name)
+    const key = `${object.parent?.uuid || 'root'}:${side}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(object)
+  }
+
+  const yAxis = new THREE.Vector3(0, 1, 0)
+  for (const objects of groups.values()) {
+    const mountX = objects.reduce((sum, object) => sum + Number(object.position.x || 0), 0) / objects.length
+    const frame = arcSurfaceMountFrame(radius, mountX, centerSign)
+    if (!frame) continue
+    const rotation = new THREE.Quaternion().setFromAxisAngle(yAxis, frame.rotationY)
+    for (const object of objects) {
+      const relative = new THREE.Vector3(object.position.x - mountX, 0, object.position.z).applyQuaternion(rotation)
+      object.position.x = mountX + relative.x
+      object.position.z = frame.normalOffset + relative.z
+      object.quaternion.premultiply(rotation)
+    }
+  }
+}
+
+function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
   const url = connectorAssetUrl(connector)
   const box = connectorDoorBox(connector)
+  const geometry = connector.modelGeometry || {}
+  const geometryHeight = Number(geometry.height)
+  const connectorHeight = connector.height
+  const connectorAxis = connector.axis
+  const connectorAnchorX = connector.anchorX
+  const connectorAnchorZ = connector.anchorZ
+  const connectorNormalX = connector.normalX
+  const connectorNormalZ = connector.normalZ
   const materialSlots = useMemo(
     () => normalizeModelMaterialSlots(connector?.modelGeometry),
     [connector?.modelGeometry],
@@ -1147,7 +1226,7 @@ function DoorConnectorModel({ connector, opacity = 1 }) {
   const materialOverrides = connector?.modelMaterialOverrides || connector?.materialOverrides || null
   const preserveAuthoredOrigin = connector?.modelGeometry?.origin === 'floor-center' || Boolean(connector?.modelBuiltinKey)
   const { scene: sourceScene } = useGLTF(url)
-  const { scene, size, offset } = useMemo(() => {
+  const { scene, offset, uniformScale } = useMemo(() => {
     const clone = SkeletonUtils.clone(sourceScene)
     clone.traverse((child) => {
       if (!child.isMesh || !child.material) return
@@ -1175,22 +1254,28 @@ function DoorConnectorModel({ connector, opacity = 1 }) {
       -bounds.min.y,
       preserveAuthoredOrigin ? 0 : -modelCenter.z,
     )
+    const modelHeight = Math.max(0.01, modelSize.y || geometryHeight || Number(connectorHeight) || 2)
+    const targetHeight = Math.max(0.5, Number(connectorHeight) || geometryHeight || 2)
+    const scale = targetHeight / modelHeight
+    mountDoorControlsOnCurvedWall(
+      clone,
+      curveWall,
+      scale,
+      connectorAxis,
+      connectorAnchorX,
+      connectorAnchorZ,
+      connectorNormalX,
+      connectorNormalZ,
+    )
     return {
       scene: clone,
-      size: modelSize,
       offset: modelOffset,
+      uniformScale: scale,
     }
-  }, [sourceScene, opacity, preserveAuthoredOrigin, materialSlots, materialOverrides])
+  }, [sourceScene, opacity, preserveAuthoredOrigin, materialSlots, materialOverrides, geometryHeight, connectorHeight,
+    connectorAxis, connectorAnchorX, connectorAnchorZ, connectorNormalX, connectorNormalZ, curveWall])
 
   if (!url || !box || !scene) return null
-  const geometry = connector.modelGeometry || {}
-  const modelWidth = Math.max(0.01, size.x || Number(geometry.width) || Number(connector.width) || box.alongLength || 1)
-  const modelHeight = Math.max(0.01, size.y || Number(geometry.height) || Number(connector.height) || 2)
-  const targetWidth = Math.max(0.05, Number(geometry.width) || Number(connector.width) || box.alongLength)
-  const targetHeight = Math.max(0.5, Number(connector.height) || Number(geometry.height) || 2)
-  const uniformScale = Number.isFinite(targetHeight) && modelHeight > 0.01
-    ? targetHeight / modelHeight
-    : targetWidth / modelWidth
 
   return (
     <group position={box.floorPosition} rotation={[0, box.rotationY, 0]} scale={uniformScale} renderOrder={31}>
@@ -1199,7 +1284,7 @@ function DoorConnectorModel({ connector, opacity = 1 }) {
   )
 }
 
-function ConnectorSegment({ connector, opacity = 1, selected = false, onPointerSelect = null, displayLevel = null }) {
+function ConnectorSegment({ connector, curveWall = null, opacity = 1, selected = false, onPointerSelect = null, displayLevel = null }) {
   const handlePointerDown = useCallback((event) => {
     if (!onPointerSelect || !connector?.id) return
     event.stopPropagation()
@@ -1215,7 +1300,7 @@ function ConnectorSegment({ connector, opacity = 1, selected = false, onPointerS
       return (
         <group {...pointerProps}>
           <Suspense fallback={<DoorConnectorFallback connector={connector} opacity={opacity} />}>
-            <DoorConnectorModel connector={connector} opacity={opacity} />
+            <DoorConnectorModel connector={connector} curveWall={curveWall} opacity={opacity} />
           </Suspense>
           {selected && <ConnectorSelectionOutline connector={connector} />}
         </group>
@@ -1670,9 +1755,17 @@ function SurfaceDungeonScene({
     () => (showWater ? computeSurfaceWaterCells(surface) : null),
     [showWater, surface],
   )
+  const roomWallPaths = useMemo(
+    () => roomsWallRenderPaths(surface.rooms),
+    [surface.rooms],
+  )
   const roomWallSegments = useMemo(
-    () => cutWallsForDoorConnectors(roomsWallRenderPaths(surface.rooms), surface.connectors),
-    [surface.rooms, surface.connectors],
+    () => cutWallsForDoorConnectors(roomWallPaths, surface.connectors),
+    [roomWallPaths, surface.connectors],
+  )
+  const curveWallsById = useMemo(
+    () => new Map(roomWallPaths.filter(wall => wall.axis === 'arc' && wall.curveId).map(wall => [wall.curveId, wall])),
+    [roomWallPaths],
   )
   const surfaceWallSegments = useMemo(
     () => cutWallsForDoorConnectors(
@@ -1815,6 +1908,7 @@ function SurfaceDungeonScene({
             ...connector,
             runtimeState: runtimeFeatureStates[connector?.worldId || id] || null,
           }}
+          curveWall={connector?.curveId ? curveWallsById.get(connector.curveId) || null : null}
           opacity={1}
           selected={id === selectedConnectorId || connector?.id === selectedConnectorId}
           onPointerSelect={onConnectorSelect}

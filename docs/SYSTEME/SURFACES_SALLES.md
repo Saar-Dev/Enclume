@@ -1,6 +1,6 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-13 — murs courbes canoniques, portes tangentes et rendu continu.
+> Dernière mise à jour : 2026-07-13 — murs courbes canoniques, portes tangentes et accessoires plaqués sur l'arc.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -217,6 +217,13 @@ Une porte ne supprime pas un panneau de mur complet. Elle crée une ouverture li
 - le linteau reste rattaché à l’étage propriétaire du mur pour l’affichage par étage, même si son `y` de rendu est au-dessus de la porte.
 
 Le modèle 3D de porte est aligné par sa boîte englobante : centré horizontalement, posé au sol, puis rendu avec un scale uniforme si une correction de taille est nécessaire. Il ne doit jamais être étiré séparément en largeur, hauteur ou profondeur pour remplir arbitrairement une case ou toute la longueur du mur.
+
+Sur un mur arrondi, le cadre et les vantaux restent rigides et tangents au point d'ancrage. En
+revanche, chaque ensemble mural déporté du modèle (boîtier, clavier ou écran identifié côté façade
+ou dos) est projeté sur la ligne médiane exacte du cercle puis orienté selon sa tangente locale. Les
+deux faces suivent ainsi réellement la courbure sans élargir artificiellement l'ouverture ni déformer
+la porte. Cette règle s'applique après le scale uniforme afin que le rayon du monde et les coordonnées
+du GLB restent dans le même repère.
 
 La découpe latérale suit `wallCutWidth` (ou `openingWidth` en secours pour les anciens connecteurs) et reste centrée sur le connecteur. Le boîtier/clavier ne participe jamais à la largeur de découpe. Le mur peut seulement recouvrir le cadre de façon minime et symétrique pour éviter un filet de jour, sans compensation spéciale selon le côté.
 
