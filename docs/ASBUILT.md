@@ -72,7 +72,7 @@ Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statiq
 
 ## Moteur de monde — Phase 1 ✅
 
-- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v8, UUID physiques
+- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v10, UUID physiques
   stables, adaptation vers le document canonique ;
 - `shared/world/worldCompiler.js` — compilation déterministe des sols, plafonds, murs partagés,
   découpes de porte, escaliers, barrières multi-canaux, colliders, occluders et compartiments ;
@@ -271,7 +271,8 @@ moteur ; sinon elles doivent être supprimées.
 - `surface_data` v7 ajoute `openWallEdgeKeys` pour les ouvertures extérieures et
   `geometryClipRoomIds` pour les différences polygonales acycliques entre salles ;
 - le MJ peut supprimer les murs complets sélectionnés. Une frontière extérieure s'ouvre ; une
-  frontière partagée fusionne les salles de même sol et de même hauteur ;
+  frontière partagée fusionne les salles de même sol. Depuis la Phase 13, leurs hauteurs peuvent
+  différer sans aplatir le volume résultant ;
 - la salle active survit à la fusion avec son identité, ses matériaux et ses réglages. Les portes de
   la séparation sont supprimées et les autres connecteurs/références sont remappés ;
 - les arcs de séparation supprimés ne survivent pas à la fusion ;
@@ -306,7 +307,7 @@ moteur ; sinon elles doivent être supprimées.
   soulignés en orange lorsqu'ils sont choisis ;
 - `roomSelectableWallRuns(...)` regroupe un arc canonique en une seule cible logique et retire les
   frontières déjà ouvertes des volumes cliquables. Les actions d'arrondi, de remise à plat et de
-  suppression sont exposées ensemble dans **Murs de la salle** ;
+  suppression sont exposées ensemble dans le panneau contextuel de mur depuis la Phase 14 ;
 - l'ouverture partage l'arc canonique en portions avant/après et linteau, même si elle traverse
   plusieurs subdivisions de rendu ;
 - la sauvegarde Surface retourne désormais réellement toutes les colonnes de révision. Après un
@@ -316,6 +317,47 @@ moteur ; sinon elles doivent être supprimées.
   d'une réponse précédente ayant laissé la révision locale obsolète ;
 - 100 tests monde/combat et 20 tests Surface/persistance/géométrie passent ; ESLint ciblé ne remonte aucune erreur et le
   build Vite est validé.
+
+---
+
+## Moteur de monde — Phase 13 ✅
+
+- `surface_data` v9 introduit `room.verticalProfile.slices[]` pour les salles dont l'empreinte varie
+  selon l'étage ;
+- chaque tranche porte son multipolygone et ses chemins de murs canoniques. Les plafonds locaux sont
+  dérivés par différence avec la tranche supérieure ;
+- supprimer un mur commun fusionne les salles de même sol quelle que soit leur hauteur. La zone
+  basse conserve son plafond, la zone haute ses murs de ressaut et son plafond supérieur ;
+- le renderer, la sélection par étage, les supports, les compartiments, la collision, la LOS et
+  l'eau utilisent le même profil ;
+- cliquer une salle ouvre désormais `SurfaceRoomPanel` près du clic. La hauteur simple, les
+  épaisseurs, le coût, la collision et les matériaux par face quittent l'inspecteur latéral ;
+- les outils de création et la configuration d'un connecteur en cours de pose restent dans la barre
+  latérale.
+
+---
+
+## Moteur de monde — Phase 14 ✅
+
+- `surface_data` v10 ajoute `room.wallElevationProfiles[]` : profil continu `curved`, profil cassé
+  `faceted`, profondeur et sens rattachés aux arêtes logiques du mur ;
+- `SurfaceWallPanel` s'ouvre au clic sur un mur et rassemble les actions d'arrondi horizontal,
+  remise à plat, suppression/fusion et les profils `|`, `(`, `<` ;
+- profondeur et angle sont des réglettes synchronisées ; seule la profondeur est persistée afin
+  d'éviter deux paramètres géométriques contradictoires ;
+- un mur extérieur translate ses deux faces et garde son épaisseur nominale. Un mur mitoyen conserve
+  la face de la salle voisine sur la frontière commune et fait varier son épaisseur uniquement vers
+  la salle éditée ;
+- `SurfaceDungeonScene` génère un maillage lofté continu qui combine arc horizontal et profil
+  vertical. Il ne reconstitue ni cubes ni petits murs persistés ;
+- `worldCompiler` transporte le profil dans les primitives canoniques, élargit leur broadphase et
+  `spatialIndex` effectue le narrow phase par bandes de hauteur temporaires pour le mouvement et la
+  LOS ;
+- une porte rigide déjà ancrée interdit la transformation verticale du mur porteur, comme pour une
+  transformation d'arc, afin de ne jamais désaligner maillage, ouverture et collider ;
+- la validation v10, les cas extérieur/mitoyen et le narrow phase profilé possèdent des tests purs.
+- état validé : 105 tests monde/serveur, 24 tests client Surface/persistance et build Vite de
+  production passent ; ESLint ciblé des fichiers Surface ne remonte aucune erreur.
 
 ---
 

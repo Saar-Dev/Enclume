@@ -1,6 +1,6 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-13 — sélection directe et sobre des murs canoniques.
+> Dernière mise à jour : 2026-07-13 — volumes multi-hauteurs, panneaux contextuels et profils verticaux de murs.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -9,7 +9,7 @@
 
 ## Statut au 2026-07-13
 
-L'éditeur Surface/Salle et son rendu existent. `surface_data` version 8 sait décrire des salles,
+L'éditeur Surface/Salle et son rendu existent. `surface_data` version 10 sait décrire des salles,
 sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
 navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
@@ -20,7 +20,9 @@ partagés par le rendu, les collisions et la LOS. Depuis la Phase 11, supprimer 
 salle ou fusionne ses deux volumes, et une nouvelle salle est découpée par les contours courbes
 déjà présents au lieu de superposer ses murs. Depuis la Phase 12, un mur arrondi reste un arc
 paramétrique unique dans le document, le renderer et le snapshot physique. Sa tessellation n'est
-plus une autorité enregistrée ni une collection de petits murs.
+plus une autorité enregistrée ni une collection de petits murs. La v9 ajoute les tranches verticales
+canoniques nécessaires aux salles fusionnées de hauteurs différentes. La v10 ajoute les profils de
+mur vus en coupe et déplace les réglages de sélection dans des panneaux contextuels.
 
 Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit le moteur commun qui compile
 ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une
@@ -38,7 +40,10 @@ Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
 - enveloppe de recherche : `minX`, `maxX`, `minZ`, `maxZ`, jamais utilisée comme propriété
   implicite ;
 - étage de base : `level` / `y` ;
-- hauteur : `heightLevels`, exprimée en étages, pas en mètres ;
+- hauteur simple : `heightLevels`, exprimée en étages, pas en mètres ;
+- volume à hauteur locale variable : `verticalProfile.slices[]`. Chaque tranche contient son
+  `offset`, son multipolygone `footprint` et ses `wallPaths` canoniques. Le plafond est la différence
+  entre une tranche et la suivante, pas une dalle globale placée au sommet maximal ;
 - dalles : sol et plafond, avec textures ou matériaux séparés pour dessus/dessous ;
 - murs : une face intérieure et une face extérieure ; les murs libres sont droits ou restent des
   données historiques, tandis que les arrondis de salle sont de vrais chemins circulaires ;
@@ -48,6 +53,9 @@ Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
   au contour brut de la salle. Le graphe de dépendances est acyclique ;
 - murs supprimés vers l'extérieur : `openWallEdgeKeys` retire les panneaux, colliders et occluders
   concernés sans supprimer le sol ni le plafond ;
+- profil de mur vu de côté : `wallElevationProfiles[]` associe des arêtes logiques à un profil
+  `curved` (`(`) ou `faceted` (`<`), une profondeur en mètres et un sens. Le profil `vertical` (`|`)
+  est l'absence d'entrée ;
 - connecteurs : portes, escaliers, échelles, passerelles et ascenseurs entre salles/étages.
 
 Lorsqu'une nouvelle salle recouvre une salle orthogonale existante à une hauteur commune, ses cases
@@ -66,6 +74,12 @@ Aucun plancher intermédiaire n'est créé automatiquement et les pièces infér
 cette emprise restent absentes. Une future trappe doit être portée par un connecteur vertical —
 typiquement une échelle — avec son propre état ouvert/fermé ; elle ne révèle jamais l'étage inférieur
 entier.
+
+Après fusion de salles de même sol mais de hauteurs différentes, la salle résultante n'est pas
+aplatie à une hauteur unique. Sa tranche basse est l'union des deux empreintes ; les tranches hautes
+ne conservent que les zones réellement hautes. Le moteur produit ainsi un plafond local au-dessus
+de la zone basse et une paroi de ressaut autour de la zone haute. Rendu, sélection par étage,
+collisions, LOS, eau, supports et compartiments lisent tous ce même `verticalProfile`.
 
 Les dalles et les murs rendus ne doivent pas devenir la source de vérité. Les salles sans contrainte
 géométrique peuvent regrouper leurs cases en rectangles de rendu. Les salles arrondies ou découpées
@@ -123,6 +137,26 @@ Chaque panneau de mur physique possède deux faces :
 
 Cas important : si deux salles se touchent, le même panneau de mur porte deux casquettes intérieures. La face vue depuis la salle A utilise le mur intérieur de A, et la face vue depuis la salle B utilise le mur intérieur de B. Une face extérieure ne doit jamais écraser une face intérieure.
 
+### Profil vertical d'un mur
+
+La courbe horizontale du contour et le profil vertical sont deux axes indépendants. Un même mur peut
+donc être un arc vu du dessus et être courbe ou cassé vu de côté. Le renderer construit un maillage
+continu par loft ; il ne superpose pas de cubes et n'enregistre aucune tessellation comme donnée
+métier.
+
+- mur extérieur : les deux faces sont translatées par le même profil ; sa forme reste visible depuis
+  l'intérieur comme depuis l'extérieur et son épaisseur nominale reste constante ;
+- mur entre deux salles : le profil appartient à la face de la salle depuis laquelle il a été édité.
+  La face de la salle voisine reste sur la frontière commune ; la profondeur fait donc varier
+  l'épaisseur vers la salle éditée sans empiéter dans la voisine ;
+- le broadphase inclut la profondeur maximale. Le narrow phase de collision et de LOS échantillonne
+  seulement le profil canonique à la hauteur testée ; ces bandes temporaires ne sont jamais
+  sauvegardées ;
+- angle et profondeur sont deux vues synchronisées du même paramètre géométrique. Le document garde
+  la profondeur canonique pour éviter deux valeurs contradictoires.
+- une porte rigide déjà ancrée bloque la modification du profil vertical de son mur. Elle doit être
+  déplacée ou supprimée ; le moteur ne décale jamais silencieusement l'ouverture et son collider.
+
 ## Salles qui se chevauchent ou se touchent
 
 Tracer une salle dans une salle existante ou contre une salle existante ne doit pas empiler des murs en double.
@@ -139,18 +173,25 @@ communs sont dédupliqués ensuite en un seul mur physique portant les deux iden
 L’outil Salle est l’outil de référence.
 
 - Par défaut, le clic gauche sélectionne.
-- Un clic sélectionne la salle ou le connecteur 3D sous la souris.
+- Un clic sélectionne la salle ou le connecteur 3D sous la souris et ouvre son panneau contextuel à
+  l'endroit du clic.
 - Un rectangle de sélection sélectionne les salles entièrement entourées.
 - Le bouton “Ajouter une salle” passe en dessin de salle.
 - Après création d’une salle, l’éditeur reste en dessin de salle pour permettre d’enchaîner plusieurs pièces.
 - Le retour au mode sélection se fait uniquement par clic explicite sur “Sélection”.
-- Modifier les options du panneau applique les changements à la salle sélectionnée : hauteur en étages, épaisseurs, blocage, textures ou matériaux procéduraux.
+- Le panneau de salle contient hauteur simple, épaisseurs de dalle/plafond/mur, multiplicateur de
+  déplacement, collision, matériaux par face et accès à la création des connecteurs. Une salle à
+  `verticalProfile` affiche sa hauteur locale comme propriété structurelle au lieu de proposer un
+  sélecteur global trompeur.
 - La sélection d'une salle affiche uniquement une teinte légère sur son sol courant et un trait sur
   son contour effectif. Les murs, plafond et autres composants ne reçoivent pas chacun leur propre
   surbrillance.
 - Une fois la salle sélectionnée, ses murs sont cliquables directement, sans activer un sous-mode.
   Un mur reste sans surimpression au repos, devient turquoise au survol puis reçoit un unique trait
   orange lorsqu'il est sélectionné.
+- Cliquer un mur remplace le panneau de salle par le panneau de mur. Celui-ci regroupe sélection
+  multiple, arrondi dans le plan, suppression/fusion et profil vertical `|` / `(` / `<` avec
+  réglettes de profondeur et d'angle. La barre latérale reste réservée aux outils de création.
 - Les arêtes colinéaires forment un mur droit sélectionnable. Un arc canonique entier forme également
   un seul mur sélectionnable, quelle que soit sa tessellation de rendu.
 - Deux murs voisins ou plus forment une chaîne ouverte. Une réglette de 5° à 175° affiche l'arc en
@@ -159,8 +200,8 @@ L’outil Salle est l’outil de référence.
 - Les sélections disjointes, les murs partiels, le contour fermé entier et les chaînes séparant des
   voisins différents sont refusés.
 - **Supprimer les murs** accepte un ou plusieurs murs complets. Vers l'extérieur, le volume reste
-  une salle unique mais la frontière devient ouverte. Entre deux salles de même sol et de même
-  hauteur, les deux salles sont fusionnées ; la salle actuellement sélectionnée survit et conserve
+  une salle unique mais la frontière devient ouverte. Entre deux salles de même sol, même si leurs
+  hauteurs diffèrent, les deux salles sont fusionnées ; la salle actuellement sélectionnée survit et conserve
   ses matériaux, réglages et `worldId`, tandis que les connecteurs de la salle absorbée sont
   remappés. Une porte posée sur la séparation supprimée disparaît avec celle-ci.
 - Supprimer une séparation courbe retire également l'arc qui la portait. Le contour fusionné est

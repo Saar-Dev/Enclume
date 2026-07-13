@@ -2,7 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { compileSurfaceWorld } from './worldCompiler.js'
-import { makeRoomBoundaryArc, roomBoundaryPaths, roomBoundaryWallRuns } from './roomGeometry.js'
+import {
+  buildMergedRoomVerticalProfile,
+  makeRoomBoundaryArc,
+  roomBoundaryPaths,
+  roomBoundaryWallRuns,
+} from './roomGeometry.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -68,6 +73,72 @@ test('deux salles adjacentes partagent un seul mur physique', () => {
   const walls = snapshot.spatial.barriers.filter(item => item.kind === 'wall')
   assert.equal(walls.length, 7)
   assert.equal(walls.filter(item => item.sourceIds?.length === 2).length, 1)
+})
+
+test('le compilateur distingue le profil extérieur du profil de face mitoyenne', () => {
+  const exterior = room('exterior', 0, 0)
+  const exteriorEdge = roomBoundaryWallRuns(exterior).find(run => run.side === 'west')
+  exterior.wallElevationProfiles = [{
+    id: 'outer-profile',
+    edgeKeys: exteriorEdge.edgeKeys,
+    profile: { type: 'curved', depth: 0.5, direction: 1 },
+  }]
+  const exteriorSnapshot = compileSurfaceWorld({
+    battlemapId: 'map-profile-exterior',
+    surfaceData: emptySurface({ version: 10, rooms: { exterior } }),
+  })
+  const translated = exteriorSnapshot.spatial.barriers.find(barrier => barrier.geometry?.elevationProfileMode === 'translated')
+  assert.equal(translated.geometry.elevationProfile.depth, 0.5)
+  assert.ok(translated.bounds.max.x - translated.bounds.min.x > 0.5)
+
+  const left = room('left', 0, 0)
+  const right = room('right', 1, 1)
+  const sharedEdge = roomBoundaryWallRuns(left).find(run => run.side === 'east')
+  left.wallElevationProfiles = [{
+    id: 'shared-profile',
+    edgeKeys: sharedEdge.edgeKeys,
+    profile: { type: 'faceted', depth: 0.75, direction: 1 },
+  }]
+  const sharedSnapshot = compileSurfaceWorld({
+    battlemapId: 'map-profile-shared',
+    surfaceData: emptySurface({ version: 10, rooms: { left, right } }),
+  })
+  const shared = sharedSnapshot.spatial.barriers.find(barrier => barrier.sourceIds?.length === 2)
+  assert.equal(shared.geometry.elevationProfileMode, 'faces')
+  assert.equal([shared.geometry.frontElevationProfile, shared.geometry.backElevationProfile].filter(Boolean).length, 1)
+})
+
+test('le compilateur consomme le profil vertical canonique d une salle fusionnée', () => {
+  const low = { ...room('low', 0, 0), cells: ['0:0'], heightLevels: 1 }
+  const tall = { ...room('tall', 1, 1), cells: ['1:0'], heightLevels: 3, height: 7.5 }
+  const mergedGeometry = {
+    ...low,
+    id: 'low',
+    maxX: 1,
+    cells: ['0:0', '1:0'],
+    heightLevels: 3,
+    height: 7.5,
+  }
+  const verticalProfile = buildMergedRoomVerticalProfile({
+    mergedRoom: mergedGeometry,
+    sourceRooms: [low, tall],
+    roomLookup: { low, tall },
+    storyHeight: 2.5,
+  })
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-variable-height',
+    surfaceData: emptySurface({
+      version: 10,
+      rooms: { low: { ...mergedGeometry, verticalProfile } },
+    }),
+  })
+
+  const walls = snapshot.spatial.barriers.filter(item => item.kind === 'wall')
+  const ceilings = snapshot.spatial.barriers.filter(item => item.kind === 'ceiling')
+  assert.equal(walls.length, 14)
+  assert.equal(ceilings.length, 2)
+  assert.deepEqual(ceilings.map(item => item.bounds.min.y).sort((a, b) => a - b), [2.375, 7.375])
+  assert.equal(snapshot.spatial.compartments[0].verticalProfile.length, 3)
 })
 
 test('un arrondi de salle reste un arc canonique pour collision et ligne de vue', () => {

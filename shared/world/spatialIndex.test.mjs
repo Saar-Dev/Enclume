@@ -6,6 +6,7 @@ import {
   actorBoundsAt,
   createOccupancyIndex,
   createSpatialIndex,
+  segmentGeometryInterval,
 } from './spatialIndex.js'
 
 function snapshotWithWall() {
@@ -110,4 +111,49 @@ test('un collider en arc tesselle la primitive canonique seulement pour le narro
 
   assert.equal(index.isSegmentClear({ x: 0.1, y: 0, z: 0.5 }, { x: 0.3, y: 0, z: 0.5 }, actor), true)
   assert.equal(index.isSegmentClear({ x: 0.1, y: 0, z: 0.5 }, { x: 1.2, y: 0, z: 0.5 }, actor), false)
+})
+
+test('le narrow phase suit le profil vertical et l épaisseur variable d un mur', () => {
+  const base = {
+    type: 'wall-segment',
+    from: { x: 0, z: 0 },
+    to: { x: 1, z: 0 },
+    minY: 0,
+    maxY: 2.5,
+    thickness: 0.1,
+    elevationProfileOriginY: 0,
+    elevationProfileHeight: 2.5,
+  }
+  const translated = {
+    ...base,
+    elevationProfileMode: 'translated',
+    elevationProfile: { type: 'curved', depth: 1, direction: 1 },
+    elevationProfileDirection: 1,
+  }
+  assert.ok(segmentGeometryInterval(
+    { x: 0.5, y: 1.25, z: 0.8 },
+    { x: 0.5, y: 1.25, z: 1.2 },
+    translated,
+  ))
+  assert.equal(segmentGeometryInterval(
+    { x: 0.5, y: 1.25, z: -0.2 },
+    { x: 0.5, y: 1.25, z: 0.2 },
+    translated,
+  ), null)
+
+  const sharedFace = {
+    ...base,
+    elevationProfileMode: 'faces',
+    frontElevationProfile: { type: 'faceted', depth: 0.8, direction: 1 },
+  }
+  assert.ok(segmentGeometryInterval(
+    { x: 0.5, y: 1.25, z: 0.6 },
+    { x: 0.5, y: 1.25, z: 1 },
+    sharedFace,
+  ))
+  assert.equal(segmentGeometryInterval(
+    { x: 0.5, y: 1.25, z: -0.5 },
+    { x: 0.5, y: 1.25, z: -0.2 },
+    sharedFace,
+  ), null)
 })

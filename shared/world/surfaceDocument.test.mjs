@@ -131,6 +131,45 @@ test('un arc de contour v6 est validé comme géométrie de salle', () => {
   assert.equal(validateSurfaceData(surface).valid, false)
 })
 
+test('la v9 valide le profil vertical canonique et ses murs par tranche', () => {
+  const surface = surfaceFixture()
+  surface.version = 9
+  surface.rooms['room:legacy'] = {
+    ...surface.rooms['room:legacy'],
+    heightLevels: 1,
+    verticalProfile: {
+      slices: [{
+        offset: 0,
+        footprint: [[[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]],
+        wallPaths: [
+          { axis: 'x', x0: 0, z0: 0, x1: 1, z1: 0 },
+          { axis: 'z', x0: 1, z0: 0, x1: 1, z1: 1 },
+          { axis: 'x', x0: 1, z0: 1, x1: 0, z1: 1 },
+          { axis: 'z', x0: 0, z0: 1, x1: 0, z1: 0 },
+        ],
+      }],
+    },
+  }
+  assert.equal(validateSurfaceData(surface).valid, true)
+
+  surface.rooms['room:legacy'].verticalProfile.slices[0].offset = 2
+  assert.equal(validateSurfaceData(surface).valid, false)
+})
+
+test('la v10 valide les profils verticaux paramétriques des faces de mur', () => {
+  const surface = surfaceFixture()
+  surface.version = 10
+  surface.rooms['room:legacy'].wallElevationProfiles = [{
+    id: 'wall-profile:test',
+    edgeKeys: ['edge:0:0|1:0'],
+    profile: { type: 'curved', depth: 0.75, direction: 1 },
+  }]
+  assert.equal(validateSurfaceData(surface).valid, true)
+
+  surface.rooms['room:legacy'].wallElevationProfiles[0].profile.depth = 8
+  assert.equal(validateSurfaceData(surface).valid, false)
+})
+
 test('les versions futures et les coordonnées corrompues sont refusées', () => {
   const future = surfaceFixture()
   future.version = 99

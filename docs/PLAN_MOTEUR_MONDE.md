@@ -113,7 +113,7 @@ Phase 1, pas d'un oubli de la Phase 0.
 
 ### Livré le 2026-07-13
 
-- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v8, attribue des UUID
+- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v10, attribue des UUID
   stables et produit le `WorldDocument` canonique ;
 - `shared/world/worldCompiler.js` compile salles, dalles, murs partagés, portes découpées, escaliers,
   ascenseurs désactivés en attente de leur contrôleur, colliders, occluders et compartiments ;
@@ -541,7 +541,8 @@ Phase 7.
 
 - un ou plusieurs murs complets sélectionnés peuvent être supprimés ;
 - une frontière extérieure devient une ouverture physique ;
-- une frontière entre deux salles de même base et de même hauteur fusionne les volumes. La salle
+- une frontière entre deux salles de même base fusionne les volumes. Depuis la Phase 13, leurs
+  hauteurs peuvent différer et sont conservées dans un profil vertical. La salle
   active conserve son `worldId`, ses matériaux et réglages ;
 - portes sur la frontière supprimée, références de salles des connecteurs et dépendances de découpe
   sont nettoyées ou remappées atomiquement ;
@@ -608,7 +609,65 @@ Phase 7.
 
 ---
 
-## 16. Matrice de non-régression minimale
+## 16. Phase 13 — volumes canoniques à hauteur variable ✅
+
+### Contrat `surface_data` v9
+
+- `room.verticalProfile.slices[]` est la source de vérité lorsqu'une salle n'a pas la même emprise à
+  chaque hauteur ; chaque tranche contient son empreinte multipolygone et ses murs canoniques ;
+- supprimer une séparation fusionne désormais les salles de même sol sans exiger la même hauteur ;
+- le plafond est dérivé par différence entre deux tranches successives. Une zone basse reçoit son
+  plafond local tandis qu'une zone haute conserve ses murs et son plafond supérieur ;
+- renderer, visibilité par étage, placement, supports, compartiments, collision, LOS et eau
+  consomment le même profil. Aucun adaptateur de combat ne reconstruit une hauteur parallèle ;
+- les salles simples restent lisibles sans profil explicite et sont adaptées vers des tranches à la
+  frontière du moteur.
+
+### Interface
+
+- cliquer une salle ouvre un panneau contextuel proche du clic, sur le même principe que les objets
+  3D ;
+- le panneau expose épaisseurs, coût de déplacement, collision et matériaux par face ;
+- une salle à hauteur variable signale son profil structurel et ne propose pas de hauteur globale
+  susceptible de détruire ses plafonds locaux ;
+- la barre latérale conserve les outils de création, pas l'inspecteur de la sélection.
+
+---
+
+## 17. Phase 14 — profils verticaux de murs et panneau contextuel ✅
+
+### Contrat `surface_data` v10
+
+- `room.wallElevationProfiles[]` rattache un profil `curved` ou `faceted` à des arêtes logiques ;
+  profondeur et sens sont canoniques, l'angle affiché est une conversion synchronisée ;
+- la courbure du contour vue du dessus et le profil vu de côté sont orthogonaux et combinables ;
+- sur une façade extérieure, les deux faces suivent la même translation ; sur un mur mitoyen, seule
+  la face de la salle éditée varie et l'autre frontière reste fixe, faisant varier l'épaisseur sans
+  empiéter dans la salle voisine ;
+- le renderer crée un maillage lofté continu. Le compilateur conserve le profil dans
+  `wall-segment`/`wall-arc`, élargit le broadphase et le narrow phase collision/LOS échantillonne la
+  hauteur localement ;
+- les profils sont conservés lors d'une fusion et retirés avec les arêtes réellement supprimées.
+- une porte déjà ancrée bloque la transformation verticale de son mur afin que maillage, ouverture,
+  portail et collider ne puissent pas diverger.
+
+### Interface
+
+- cliquer directement un mur ouvre son panneau contextuel ;
+- le panneau regroupe sélection multiple, arrondi horizontal, remise à plat, suppression/fusion et
+  profils `|`, `(`, `<` ;
+- deux réglettes liées permettent d'éditer profondeur et angle, avec inversion du profil ;
+- fermer le panneau de mur désélectionne les murs mais conserve la salle active.
+
+### Validation
+
+- 105 tests du moteur/serveur et 24 tests client Surface/persistance passent ;
+- ESLint ciblé des fichiers Surface ne remonte aucune erreur ;
+- build Vite de production validé.
+
+---
+
+## 18. Matrice de non-régression minimale
 
 Chaque phase doit conserver ou ajouter ces scénarios :
 

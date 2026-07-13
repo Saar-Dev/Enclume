@@ -156,19 +156,87 @@ function wallSegmentGeometryInterval(from, to, geometry, {
   return far >= 0 && near <= 1 ? { near: Math.max(0, near), far: Math.min(1, far) } : null
 }
 
+function elevationProfileOffset(profile, progress) {
+  const depth = Math.max(0, Number(profile?.depth) || 0)
+  const direction = Number(profile?.direction) < 0 ? -1 : 1
+  const t = Math.max(0, Math.min(1, Number(progress) || 0))
+  if (profile?.type === 'curved') return depth * direction * Math.sin(Math.PI * t)
+  if (profile?.type === 'faceted') return depth * direction * (1 - Math.abs(t * 2 - 1))
+  return 0
+}
+
+function wallElevationBands(geometry) {
+  if (!geometry?.elevationProfileMode) return null
+  const minY = finiteNumber(geometry.minY, 'geometry.minY')
+  const maxY = finiteNumber(geometry.maxY, 'geometry.maxY')
+  const origin = Number.isFinite(Number(geometry.elevationProfileOriginY))
+    ? Number(geometry.elevationProfileOriginY)
+    : minY
+  const span = Math.max(EPSILON, Number(geometry.elevationProfileHeight) || (maxY - minY))
+  const start = Math.max(0, Math.min(1, (minY - origin) / span))
+  const end = Math.max(0, Math.min(1, (maxY - origin) / span))
+  const count = Math.max(2, Math.ceil((end - start) * 12))
+  const cuts = Array.from({ length: count + 1 }, (_, index) => start + (end - start) * index / count)
+  if ((geometry.elevationProfile?.type === 'faceted'
+    || geometry.frontElevationProfile?.type === 'faceted'
+    || geometry.backElevationProfile?.type === 'faceted') && start < 0.5 && end > 0.5) cuts.push(0.5)
+  const levels = [...new Set(cuts)].sort((left, right) => left - right)
+  const nominalThickness = positiveNumber(geometry.thickness, 'geometry.thickness')
+  return levels.slice(0, -1).map((fromT, index) => {
+    const toT = levels[index + 1]
+    const middle = (fromT + toT) / 2
+    if (geometry.elevationProfileMode === 'translated') {
+      const side = Number(geometry.elevationProfileDirection) < 0 ? -1 : 1
+      return {
+        minY: origin + fromT * span,
+        maxY: origin + toT * span,
+        centerOffset: elevationProfileOffset(geometry.elevationProfile, middle) * side,
+        thickness: nominalThickness,
+      }
+    }
+    let front = nominalThickness / 2 + elevationProfileOffset(geometry.frontElevationProfile, middle)
+    let back = -nominalThickness / 2 - elevationProfileOffset(geometry.backElevationProfile, middle)
+    if (front - back < nominalThickness * 0.1) {
+      if (geometry.frontElevationProfile && !geometry.backElevationProfile) front = back + nominalThickness * 0.1
+      else if (geometry.backElevationProfile && !geometry.frontElevationProfile) back = front - nominalThickness * 0.1
+    }
+    return {
+      minY: origin + fromT * span,
+      maxY: origin + toT * span,
+      centerOffset: (front + back) / 2,
+      thickness: Math.max(nominalThickness * 0.1, front - back),
+    }
+  })
+}
+
 export function segmentGeometryInterval(from, to, geometry, options = {}) {
-  if (geometry?.type === 'wall-arc') {
-    const points = sampleWallArcGeometry(geometry, 16)
-    const intervals = points.slice(0, -1).map((wallFrom, index) => (
-      wallSegmentGeometryInterval(from, to, {
+  const elevationBands = wallElevationBands(geometry)
+  if (geometry?.type === 'wall-arc' || elevationBands) {
+    const points = geometry.type === 'wall-arc'
+      ? sampleWallArcGeometry(geometry, 16)
+      : [geometry.from, geometry.to]
+    const bands = elevationBands || [{
+      minY: geometry.minY,
+      maxY: geometry.maxY,
+      centerOffset: 0,
+      thickness: geometry.thickness,
+    }]
+    const intervals = bands.flatMap(band => points.slice(0, -1).map((wallFrom, index) => {
+      const wallTo = points[index + 1]
+      const dx = Number(wallTo.x) - Number(wallFrom.x)
+      const dz = Number(wallTo.z) - Number(wallFrom.z)
+      const length = Math.hypot(dx, dz) || 1
+      const normalX = -dz / length
+      const normalZ = dx / length
+      return wallSegmentGeometryInterval(from, to, {
         type: 'wall-segment',
-        from: wallFrom,
-        to: points[index + 1],
-        minY: geometry.minY,
-        maxY: geometry.maxY,
-        thickness: geometry.thickness,
+        from: { x: Number(wallFrom.x) + normalX * band.centerOffset, z: Number(wallFrom.z) + normalZ * band.centerOffset },
+        to: { x: Number(wallTo.x) + normalX * band.centerOffset, z: Number(wallTo.z) + normalZ * band.centerOffset },
+        minY: band.minY,
+        maxY: band.maxY,
+        thickness: band.thickness,
       }, options)
-    )).filter(Boolean)
+    })).filter(Boolean)
     if (intervals.length === 0) return null
     return {
       near: Math.min(...intervals.map(interval => interval.near)),

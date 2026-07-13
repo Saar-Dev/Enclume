@@ -23,7 +23,6 @@ import {
   getToolElevation,
   getToolFloorThickness,
   getRoomBaseY,
-  getRoomHeightLevels,
   getToolRoomHeightLevels,
   getToolWallThicknessFine,
   getWallRenderBox,
@@ -46,6 +45,7 @@ import {
   makeRoomBoundaryArc,
   roomBoundaryContours,
   roomSelectableWallRuns,
+  roomSliceContours,
   sampleRoomBoundaryArc,
 } from '../../../shared/world/roomGeometry.js'
 
@@ -150,14 +150,18 @@ function SelectedRoomOverlay({ room, roomLookup, displayLevel }) {
 
   return (
     <group renderOrder={30}>
-      <RoomSelectionShape room={room} roomLookup={roomLookup} y={y} />
-      <RoomSelectionContour room={room} roomLookup={roomLookup} y={y + 0.025} />
+      <RoomSelectionShape room={room} roomLookup={roomLookup} y={y} displayLevel={displayLevel} />
+      <RoomSelectionContour room={room} roomLookup={roomLookup} y={y + 0.025} displayLevel={displayLevel} />
     </group>
   )
 }
 
-function roomSelectionShapes(room, roomLookup) {
-  const contours = roomBoundaryContours(room, roomLookup)
+function roomSelectionShapes(room, roomLookup, displayLevel = null) {
+  const baseLevel = yToLevel(getRoomBaseY(room))
+  const sliceContours = displayLevel === null
+    ? []
+    : roomSliceContours(room, displayLevel - baseLevel, roomLookup, STORY_HEIGHT)
+  const contours = sliceContours.length > 0 ? sliceContours : roomBoundaryContours(room, roomLookup)
   const polygons = new Map()
   for (const contour of contours) {
     if (!polygons.has(contour.polygonIndex)) polygons.set(contour.polygonIndex, { outer: null, holes: [] })
@@ -180,12 +184,12 @@ function roomSelectionShapes(room, roomLookup) {
   })
 }
 
-function RoomSelectionShape({ room, roomLookup, y }) {
-  const geometries = useMemo(() => roomSelectionShapes(room, roomLookup).map(shape => {
+function RoomSelectionShape({ room, roomLookup, y, displayLevel = null }) {
+  const geometries = useMemo(() => roomSelectionShapes(room, roomLookup, displayLevel).map(shape => {
     const geometry = new THREE.ShapeGeometry(shape)
     geometry.rotateX(-Math.PI / 2)
     return geometry
-  }), [room, roomLookup])
+  }), [displayLevel, room, roomLookup])
   useEffect(() => () => geometries.forEach(geometry => geometry.dispose()), [geometries])
   if (geometries.length === 0) return null
   return (
@@ -199,8 +203,14 @@ function RoomSelectionShape({ room, roomLookup, y }) {
   )
 }
 
-function RoomSelectionContour({ room, roomLookup, y }) {
-  const contours = useMemo(() => roomBoundaryContours(room, roomLookup), [room, roomLookup])
+function RoomSelectionContour({ room, roomLookup, y, displayLevel = null }) {
+  const contours = useMemo(() => {
+    const baseLevel = yToLevel(getRoomBaseY(room))
+    const sliced = displayLevel === null
+      ? []
+      : roomSliceContours(room, displayLevel - baseLevel, roomLookup, STORY_HEIGHT)
+    return sliced.length > 0 ? sliced : roomBoundaryContours(room, roomLookup)
+  }, [displayLevel, room, roomLookup])
   return contours.map((contour, index) => {
     if (contour.points.length < 2) return null
     const points = [...contour.points, contour.points[0]].map(point => [point.x, y, point.z])
@@ -486,6 +496,8 @@ export default function SurfaceEditorScene({
   displayLevel = 0,
   selectedConnectorId = null,
   onSurfaceConnectorSelect,
+  onSurfaceRoomSelect,
+  onSurfaceWallSelect,
   runtimeEffectRegions = [],
   runtimeFeatureStates = {},
   onRuntimeEffectCreate,
@@ -712,8 +724,15 @@ export default function SurfaceEditorScene({
       selectedRoomWallCount,
       roomArcError: null,
     })
+    const nativeEvent = event?.nativeEvent || event || {}
+    onSurfaceWallSelect?.(
+      surfaceTool.selectedRoomId,
+      Number(nativeEvent.clientX) || 24,
+      Number(nativeEvent.clientY) || 24,
+      selectedRoomWallCount,
+    )
     event?.stopPropagation?.()
-  }, [onSurfaceToolChange, surfaceData.rooms, surfaceTool])
+  }, [onSurfaceToolChange, onSurfaceWallSelect, surfaceData.rooms, surfaceTool])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -850,6 +869,7 @@ export default function SurfaceEditorScene({
               roomArcError: null,
             })
             onSurfaceConnectorSelect?.(connectorHit.id, e.clientX, e.clientY)
+            onSurfaceRoomSelect?.(null)
             e.preventDefault()
             e.stopPropagation()
             return
@@ -875,6 +895,7 @@ export default function SurfaceEditorScene({
               selectedRoomWallCount: 0,
               roomArcError: null,
             })
+            onSurfaceRoomSelect?.(hits[0].id, e.clientX, e.clientY)
           }
         } else {
           onSurfaceToolChange?.({
@@ -888,6 +909,7 @@ export default function SurfaceEditorScene({
             selectedRoomWallCount: 0,
             roomArcError: null,
           })
+          onSurfaceRoomSelect?.(null)
         }
         e.preventDefault()
         e.stopPropagation()
@@ -986,6 +1008,7 @@ export default function SurfaceEditorScene({
     getWallPoint,
     getWorldPoint,
     onSurfaceConnectorSelect,
+    onSurfaceRoomSelect,
     onSurfaceDataChange,
     onSurfaceToolChange,
   ])
@@ -1011,7 +1034,7 @@ export default function SurfaceEditorScene({
     .filter(room => {
       if (!room) return false
       const baseLevel = Math.round(getRoomBaseY(room) / STORY_HEIGHT)
-      return displayLevel >= baseLevel && displayLevel < baseLevel + getRoomHeightLevels(room)
+      return roomSliceContours(room, displayLevel - baseLevel, surfaceData.rooms, STORY_HEIGHT).length > 0
     })
   const connectorPreview = drag?.mode === 'connector'
     ? drag

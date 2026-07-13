@@ -10,11 +10,14 @@ import { persistSurfaceDocument } from '../lib/surfacePersistence.js'
 import Voxel from './Voxel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
+import SurfaceRoomPanel from './SurfaceRoomPanel.jsx'
+import SurfaceWallPanel from './SurfaceWallPanel.jsx'
 import SurfaceEditorScene from './SurfaceEditorScene.jsx'
 import SurfaceDungeonScene, { cutWallsForDoorConnectors } from './SurfaceDungeonScene.jsx'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
 import {
   applyRoomBoundaryArc,
+  applyRoomWallElevationProfile,
   applyRoomToolUpdate,
   deleteRoomBoundaryWalls,
   expandRoomsToSurface,
@@ -1162,6 +1165,8 @@ export default function Editor3D({
   const [surfaceData, setSurfaceData] = useState(() => normalizeSurfaceData(null))
   const [surfaceSaveError, setSurfaceSaveError] = useState(null)
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
+  const [surfaceRoomPanel, setSurfaceRoomPanel] = useState(null)
+  const [surfaceWallPanel, setSurfaceWallPanel] = useState(null)
   const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
   const [runtimeElevatorStates, setRuntimeElevatorStates] = useState({})
   const [textureMaterials, setTextureMaterials] = useState({})
@@ -1186,6 +1191,7 @@ export default function Editor3D({
   const surfaceDataRef = useRef(surfaceData)
   const surfaceQueuedBaseRef = useRef(normalizeSurfaceData(null))
   const processedRoomArcActionRef = useRef(null)
+  const processedWallElevationProfileActionRef = useRef(null)
   useEffect(() => { surfaceDataRef.current = surfaceData }, [surfaceData])
   // battlemapRef — miroir de battlemap pour saveFireAndForget stable (pas de recréation du timer)
   const battlemapRef = useRef(battlemap)
@@ -1511,10 +1517,36 @@ export default function Editor3D({
     return connector ? { id: connectorId, ...connector } : null
   }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
 
+  const selectedSurfaceRoom = useMemo(() => {
+    const roomId = surfaceWallPanel?.roomId || surfaceRoomPanel?.roomId
+    if (!roomId) return null
+    const room = surfaceData.rooms?.[roomId]
+    return room ? { id: roomId, ...room } : null
+  }, [surfaceData.rooms, surfaceRoomPanel?.roomId, surfaceWallPanel?.roomId])
+
   const handleSurfaceConnectorSelect = useCallback((connectorId, clientX, clientY) => {
     if (!connectorId) return
+    setSurfaceRoomPanel(null)
+    setSurfaceWallPanel(null)
     setSurfaceConnectorPanel({ connectorId, x: clientX, y: clientY })
   }, [])
+
+  const handleSurfaceRoomSelect = useCallback((roomId, clientX, clientY) => {
+    setSurfaceConnectorPanel(null)
+    setSurfaceWallPanel(null)
+    setSurfaceRoomPanel(roomId ? { roomId, x: clientX, y: clientY } : null)
+  }, [])
+
+  const handleSurfaceWallSelect = useCallback((roomId, clientX, clientY, count) => {
+    setSurfaceConnectorPanel(null)
+    setSurfaceRoomPanel(null)
+    setSurfaceWallPanel(roomId && count > 0 ? { roomId, x: clientX, y: clientY } : null)
+  }, [])
+
+  const handleSurfaceSelectionToolPatch = useCallback(patch => {
+    if (!patch) return
+    onSurfaceToolChange?.({ ...surfaceTool, ...patch })
+  }, [onSurfaceToolChange, surfaceTool])
 
   const handleSurfaceConnectorPatch = useCallback((connectorId, patch) => {
     if (!connectorId || !patch) return
@@ -1524,7 +1556,7 @@ export default function Editor3D({
 
     handleSurfaceDataChange({
       ...currentSurfaceData,
-      version: 8,
+      version: 10,
       connectors: {
         ...(currentSurfaceData.connectors || {}),
         [connectorId]: {
@@ -1544,6 +1576,30 @@ export default function Editor3D({
     })
   }, [onSurfaceToolChange, surfaceTool])
 
+  const closeSurfaceRoomPanel = useCallback(() => {
+    setSurfaceRoomPanel(null)
+    if (!surfaceTool?.selectedRoomId) return
+    onSurfaceToolChange?.({
+      ...surfaceTool,
+      selectedRoomId: null,
+      selectedRoomIds: [],
+      roomWallEdit: false,
+      selectedRoomWallKeys: [],
+      selectedRoomWallCount: 0,
+      roomArcError: null,
+    })
+  }, [onSurfaceToolChange, surfaceTool])
+
+  const closeSurfaceWallPanel = useCallback(() => {
+    setSurfaceWallPanel(null)
+    onSurfaceToolChange?.({
+      ...surfaceTool,
+      selectedRoomWallKeys: [],
+      selectedRoomWallCount: 0,
+      roomArcError: null,
+    })
+  }, [onSurfaceToolChange, surfaceTool])
+
   useEffect(() => {
     const connectorId = surfaceConnectorPanel?.connectorId
     if (!connectorId) return
@@ -1556,6 +1612,26 @@ export default function Editor3D({
     if (surfaceTool?.mode === 'select') return
     setSurfaceConnectorPanel(null)
   }, [surfaceConnectorPanel, surfaceTool?.mode])
+
+  useEffect(() => {
+    if (surfaceTool?.mode === 'select') return
+    setSurfaceRoomPanel(null)
+    setSurfaceWallPanel(null)
+  }, [surfaceTool?.mode])
+
+  useEffect(() => {
+    const selectedRoomId = surfaceTool?.selectedRoomId
+    if (surfaceRoomPanel && !surfaceData.rooms?.[surfaceRoomPanel.roomId]) {
+      setSurfaceRoomPanel(selectedRoomId && surfaceData.rooms?.[selectedRoomId]
+        ? { ...surfaceRoomPanel, roomId: selectedRoomId }
+        : null)
+    }
+    if (surfaceWallPanel && !surfaceData.rooms?.[surfaceWallPanel.roomId]) {
+      setSurfaceWallPanel(selectedRoomId && surfaceData.rooms?.[selectedRoomId]
+        ? { ...surfaceWallPanel, roomId: selectedRoomId }
+        : null)
+    }
+  }, [surfaceData.rooms, surfaceRoomPanel, surfaceTool?.selectedRoomId, surfaceWallPanel])
 
   useEffect(() => {
     const actionId = surfaceTool?.roomArcActionId
@@ -1597,6 +1673,24 @@ export default function Editor3D({
       roomArcActionId: null,
       roomArcAction: null,
       roomArcError: null,
+    })
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool])
+
+  useEffect(() => {
+    const actionId = surfaceTool?.wallElevationProfileActionId
+    if (!actionId || processedWallElevationProfileActionRef.current === actionId) return
+    processedWallElevationProfileActionRef.current = actionId
+    const result = applyRoomWallElevationProfile(
+      surfaceDataRef.current,
+      surfaceTool?.selectedRoomId,
+      surfaceTool?.selectedRoomWallKeys || [],
+      surfaceTool?.wallElevationProfile,
+    )
+    if (result.surfaceData !== surfaceDataRef.current) handleSurfaceDataChange(result.surfaceData)
+    onSurfaceToolChange?.({
+      ...surfaceTool,
+      wallElevationProfileActionId: null,
+      roomArcError: result.error || null,
     })
   }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool])
 
@@ -1746,6 +1840,8 @@ export default function Editor3D({
             displayLevel={displayLevel}
             selectedConnectorId={surfaceConnectorPanel?.connectorId || surfaceTool?.selectedConnectorId || null}
             onSurfaceConnectorSelect={handleSurfaceConnectorSelect}
+            onSurfaceRoomSelect={handleSurfaceRoomSelect}
+            onSurfaceWallSelect={handleSurfaceWallSelect}
             runtimeEffectRegions={runtimeEffectRegions}
             runtimeFeatureStates={runtimeElevatorStates}
             onRuntimeEffectCreate={handleRuntimeEffectCreate}
@@ -1784,6 +1880,26 @@ export default function Editor3D({
           runtimeState={runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
           onElevatorCommand={handleElevatorCommand}
           onClose={closeSurfaceConnectorPanel}
+        />
+      )}
+      {surfaceRoomPanel && selectedSurfaceRoom && (
+        <SurfaceRoomPanel
+          room={selectedSurfaceRoom}
+          tool={surfaceTool}
+          x={surfaceRoomPanel.x}
+          y={surfaceRoomPanel.y}
+          onPatch={handleSurfaceSelectionToolPatch}
+          onClose={closeSurfaceRoomPanel}
+        />
+      )}
+      {surfaceWallPanel && selectedSurfaceRoom && (
+        <SurfaceWallPanel
+          room={selectedSurfaceRoom}
+          tool={surfaceTool}
+          x={surfaceWallPanel.x}
+          y={surfaceWallPanel.y}
+          onPatch={handleSurfaceSelectionToolPatch}
+          onClose={closeSurfaceWallPanel}
         />
       )}
     </div>

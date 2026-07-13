@@ -1,8 +1,8 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-13 — Phase 12, chemins de murs courbes canoniques.
+> Dernière mise à jour : 2026-07-13 — Phase 14, volumes multi-hauteurs et profils verticaux de murs.
 >
-> Statut : **Phases 0 à 12 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
+> Statut : **Phases 0 à 14 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
 >
 > Lire pour : tout travail touchant le monde 3D, les coordonnées, les surfaces praticables, les
@@ -54,16 +54,18 @@ Principes obligatoires :
 
 ### 2.1 Éditeur Surface `[EXISTANT]`
 
-`battlemaps.surface_data` version 8 contient actuellement :
+`battlemaps.surface_data` version 10 contient actuellement :
 
 - `rooms`, `floors`, `walls`, `ceilings`, `stairs`, `connectors` ;
 - les drapeaux `walkable`, `blocksMovement`, `blocksSight` ;
 - des portes et ascenseurs structurels avec une apparence GLB attachée ;
 - une hauteur d'étage d'éditeur (`STORY_HEIGHT`) et une grille fine (`SURFACE_FINE`) ;
+- des `verticalProfile.slices` pour les volumes dont l'empreinte change selon la hauteur ;
+- des `wallElevationProfiles` pour les murs courbes ou cassés vus en coupe ;
 - un calcul client d'étanchéité utilisé pour le rendu de l'eau.
 
 Cet ensemble reste normalisé et rendu côté client par `client/src/lib/surfaceData.js`. À la
-sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 8 et
+sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 10 et
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
@@ -506,15 +508,38 @@ La suppression porte sur un mur complet entre deux angles, jamais sur un fragmen
 
 - si une seule salle possède la frontière, ses clés sont ajoutées à `openWallEdgeKeys` ; le sol et
   le plafond restent présents, mais aucun mur, collider ou occluder n'est compilé ;
-- si deux salles de même base et de même hauteur possèdent la frontière, elles sont fusionnées. La
+- si deux salles de même base possèdent la frontière, elles sont fusionnées même si leurs hauteurs
+  diffèrent. La
   salle active conserve son identité physique, ses matériaux et ses réglages ; la salle absorbée et
   les portes de la séparation disparaissent, et les autres connecteurs sont remappés ;
+- la fusion construit un `verticalProfile` canonique : union des empreintes présentes dans chaque
+  tranche, plafond local sur toute zone qui s'arrête et murs de ressaut sur les zones qui continuent ;
 - les arcs touchant la séparation sont retirés avant de reconstruire l'union, afin qu'une ancienne
   frontière courbe ne survive pas comme limite fantôme ;
 - toute différence géométrique qui référençait la salle absorbée est réécrite vers la survivante.
 
 Le compilateur consomme ces mêmes données pour les canaux mouvement, vision, eau et gaz. Une
 ouverture supprimée dans l'éditeur ne peut donc pas rester bloquante dans le snapshot serveur.
+
+### 7.5 Profils verticaux de murs
+
+`room.wallElevationProfiles` décrit la coupe verticale d'une face logique par `type`, `depth` et
+`direction`. Le type est `curved` pour une courbe continue ou `faceted` pour un profil cassé. Le mur
+vertical n'a pas d'entrée. Les clés d'arêtes conservent l'identité logique même si le même mur est
+également un arc dans le plan.
+
+L'assemblage physique distingue deux cas :
+
+- façade extérieure : un seul propriétaire, les deux faces suivent la même translation et
+  l'épaisseur nominale reste constante ;
+- mur mitoyen : chaque salle peut définir sa face intérieure. La face opposée reste fixe et la
+  profondeur devient une variation d'épaisseur orientée vers la salle propriétaire.
+
+Le renderer génère un maillage lofté continu à partir du chemin horizontal et des niveaux du profil.
+Le compilateur ajoute le profil aux primitives `wall-segment`/`wall-arc`, élargit leur broadphase de
+la profondeur maximale, puis `spatialIndex` le subdivise localement en bandes verticales uniquement
+pour les tests étroits. Collision, mouvement et LOS voient donc la même forme que le rendu sans
+faire de la tessellation une donnée persistée.
 
 ---
 

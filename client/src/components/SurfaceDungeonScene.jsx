@@ -8,7 +8,13 @@ import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
-import { roomBoundaryContours, sampleWallArcGeometry } from '../../../shared/world/roomGeometry.js'
+import {
+  multiPolygonContours,
+  roomBoundaryContours,
+  roomCeilingRegions,
+  roomSliceAtLevel,
+  sampleWallArcGeometry,
+} from '../../../shared/world/roomGeometry.js'
 import {
   SURFACE_FINE,
   STORY_HEIGHT,
@@ -448,10 +454,21 @@ function CeilingTile({ id, ceiling, textureMaterials, opacity, showDetails = tru
   )
 }
 
-function RoomSlab({ room, roomLookup, kind, textureMaterials, opacity = 1, showDetails = true }) {
+function RoomSlab({
+  room,
+  roomLookup,
+  kind,
+  textureMaterials,
+  opacity = 1,
+  showDetails = true,
+  footprintContours = null,
+  yOverride = null,
+}) {
   const rectangles = roomFootprintRectangles(room)
   const isCeiling = kind === 'ceiling'
-  const y = isCeiling ? getRoomTopY(room) : getRoomBaseY(room)
+  const y = Number.isFinite(Number(yOverride))
+    ? Number(yOverride)
+    : isCeiling ? getRoomTopY(room) : getRoomBaseY(room)
   const thickness = isCeiling ? getRoomCeilingThickness(room) : getRoomFloorThickness(room)
   const topMaterialDescriptor = isCeiling ? room.ceilingTopMaterial : room.floorTopMaterial
   const bottomMaterialDescriptor = isCeiling ? room.ceilingBottomMaterial : room.floorBottomMaterial
@@ -467,13 +484,15 @@ function RoomSlab({ room, roomLookup, kind, textureMaterials, opacity = 1, showD
   const relief = showDetails ? (topProcedural?.relief || reliefAt(textureMaterials, topTex)) : null
   if (!top) return null
 
-  const hasCurvedBoundary = (Array.isArray(room.boundaryArcs) && room.boundaryArcs.length > 0)
+  const hasCurvedBoundary = Array.isArray(footprintContours)
+    || (Array.isArray(room.boundaryArcs) && room.boundaryArcs.length > 0)
     || (Array.isArray(room.geometryClipRoomIds) && room.geometryClipRoomIds.length > 0)
   if (hasCurvedBoundary) {
     return (
       <CurvedRoomSlab
         room={room}
         roomLookup={roomLookup}
+        contours={footprintContours}
         kind={kind}
         y={y}
         thickness={thickness}
@@ -552,10 +571,10 @@ function shapesFromRoomContours(contours) {
   })
 }
 
-function CurvedRoomSlab({ room, roomLookup, kind, y, thickness, capMaterial, sideMaterial, opacity }) {
+function CurvedRoomSlab({ room, roomLookup, contours = null, kind, y, thickness, capMaterial, sideMaterial, opacity }) {
   const isCeiling = kind === 'ceiling'
   const geometries = useMemo(() => shapesFromRoomContours(
-    roomBoundaryContours(room, roomLookup),
+    contours || roomBoundaryContours(room, roomLookup),
   ).map(shape => {
     const geometry = new THREE.ExtrudeGeometry(shape, {
       depth: thickness,
@@ -569,7 +588,7 @@ function CurvedRoomSlab({ room, roomLookup, kind, y, thickness, capMaterial, sid
     geometry.rotateX(-Math.PI / 2)
     geometry.computeVertexNormals()
     return geometry
-  }), [room, roomLookup, thickness])
+  }), [contours, room, roomLookup, thickness])
 
   useEffect(() => () => geometries.forEach(geometry => geometry.dispose()), [geometries])
   if (geometries.length === 0) return null
@@ -591,7 +610,7 @@ function CurvedRoomSlab({ room, roomLookup, kind, y, thickness, capMaterial, sid
 }
 
 function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }) {
-  if (wall.axis === 'arc') {
+  if (wall.axis === 'arc' || wall.elevationProfileMode) {
     return <CurvedWallSegment wall={wall} textureMaterials={textureMaterials} opacity={opacity} showDetails={showDetails} />
   }
   const frontProcedural = surfaceMaterialAt(wall.frontMaterial || wall.material, showDetails)
@@ -685,19 +704,76 @@ function addCurvedWallQuad(positions, normals, uvs, geometry, materialIndex, poi
   geometry.addGroup(start, 6, materialIndex)
 }
 
-function makeCurvedWallGeometry(wall) {
-  const path = sampleWallArcGeometry({
-    centerX: wall.centerX,
-    centerZ: wall.centerZ,
-    radius: wall.radius,
-    startAngle: wall.startAngle,
-    sweep: wall.sweep,
-  }, 16)
-  if (path.length < 2) return null
+function normalizedElevationProfile(profile) {
+  const type = ['curved', 'faceted'].includes(profile?.type) ? profile.type : 'vertical'
+  return {
+    type,
+    depth: type === 'vertical' ? 0 : Math.max(0, Number(profile?.depth) || 0),
+    direction: Number(profile?.direction) < 0 ? -1 : 1,
+  }
+}
+
+function elevationProfileOffset(profile, progress) {
+  const normalized = normalizedElevationProfile(profile)
+  const t = Math.max(0, Math.min(1, Number(progress) || 0))
+  if (normalized.type === 'curved') return normalized.depth * normalized.direction * Math.sin(Math.PI * t)
+  if (normalized.type === 'faceted') return normalized.depth * normalized.direction * (1 - Math.abs(t * 2 - 1))
+  return 0
+}
+
+function quadFaceNormal(points) {
+  const a = new THREE.Vector3(...points[0])
+  const b = new THREE.Vector3(...points[1])
+  const d = new THREE.Vector3(...points[3])
+  return b.sub(a).cross(d.sub(a)).normalize().toArray()
+}
+
+function profiledWallPath(wall) {
+  if (wall.axis === 'arc') {
+    return sampleWallArcGeometry({
+      centerX: wall.centerX,
+      centerZ: wall.centerZ,
+      radius: wall.radius,
+      startAngle: wall.startAngle,
+      sweep: wall.sweep,
+    }, 16)
+  }
+  return [
+    { x: Number(wall.x0) / SURFACE_FINE, z: Number(wall.z0) / SURFACE_FINE },
+    { x: Number(wall.x1) / SURFACE_FINE, z: Number(wall.z1) / SURFACE_FINE },
+  ]
+}
+
+function profiledWallVerticalLevels(wall) {
   const bottom = Number(wall.y) || 0
   const top = bottom + Math.max(0.01, Number(wall.height) || STORY_HEIGHT)
+  const origin = Number.isFinite(Number(wall.elevationProfileOriginY))
+    ? Number(wall.elevationProfileOriginY)
+    : bottom
+  const span = Math.max(0.01, Number(wall.elevationProfileHeight) || (top - bottom))
+  const start = Math.max(0, Math.min(1, (bottom - origin) / span))
+  const end = Math.max(0, Math.min(1, (top - origin) / span))
+  const hasCurve = wall.elevationProfile?.type === 'curved'
+    || wall.frontElevationProfile?.type === 'curved'
+    || wall.backElevationProfile?.type === 'curved'
+  const curveLevelCount = Math.max(2, Math.ceil((end - start) * 12) + 1)
+  const levels = hasCurve
+    ? Array.from({ length: curveLevelCount }, (_, index) => (
+        start + (end - start) * index / Math.max(1, curveLevelCount - 1)
+      ))
+    : [start, end]
+  const hasFacet = wall.elevationProfile?.type === 'faceted'
+    || wall.frontElevationProfile?.type === 'faceted'
+    || wall.backElevationProfile?.type === 'faceted'
+  if (hasFacet && start < 0.5 && end > 0.5) levels.push(0.5)
+  return [...new Set(levels)].sort((left, right) => left - right).map(t => ({ t, y: origin + t * span }))
+}
+
+function makeCurvedWallGeometry(wall) {
+  const path = profiledWallPath(wall)
+  if (path.length < 2) return null
   const half = Math.max(1, Number(wall.thickness) || 1) / (2 * SURFACE_FINE)
-  const sweepSign = Math.sign(Number(wall.sweep)) || 1
+  const minimumThickness = Math.max(0.01, half * 0.2)
   const cumulative = [0]
   for (let index = 0; index < path.length - 1; index += 1) {
     cumulative.push(cumulative[index] + Math.hypot(
@@ -706,74 +782,93 @@ function makeCurvedWallGeometry(wall) {
     ))
   }
   const total = Math.max(1e-6, cumulative.at(-1))
-  const sides = path.map(value => {
-    const radialX = (value.x - Number(wall.centerX)) / Number(wall.radius)
-    const radialZ = (value.z - Number(wall.centerZ)) / Number(wall.radius)
-    const normalX = -sweepSign * radialX
-    const normalZ = -sweepSign * radialZ
-    return {
-      front: [value.x + normalX * half, value.z + normalZ * half],
-      back: [value.x - normalX * half, value.z - normalZ * half],
-      normal: [normalX, normalZ],
-    }
+  const pathNormals = path.map((value, index) => {
+    const previous = path[Math.max(0, index - 1)]
+    const next = path[Math.min(path.length - 1, index + 1)]
+    const tangentX = next.x - previous.x
+    const tangentZ = next.z - previous.z
+    const length = Math.hypot(tangentX, tangentZ) || 1
+    return { x: -tangentZ / length, z: tangentX / length }
   })
+  const verticalLevels = profiledWallVerticalLevels(wall)
+  if (verticalLevels.length < 2) return null
+
+  const surfaces = verticalLevels.map(level => path.map((value, pathIndex) => {
+    const normal = pathNormals[pathIndex]
+    let frontDistance = half
+    let backDistance = -half
+    if (wall.elevationProfileMode === 'translated') {
+      const direction = Number(wall.elevationProfileDirection) < 0 ? -1 : 1
+      const offset = elevationProfileOffset(wall.elevationProfile, level.t) * direction
+      frontDistance += offset
+      backDistance += offset
+    } else {
+      frontDistance += elevationProfileOffset(wall.frontElevationProfile, level.t)
+      backDistance -= elevationProfileOffset(wall.backElevationProfile, level.t)
+      if (frontDistance - backDistance < minimumThickness) {
+        if (wall.frontElevationProfile && !wall.backElevationProfile) frontDistance = backDistance + minimumThickness
+        else if (wall.backElevationProfile && !wall.frontElevationProfile) backDistance = frontDistance - minimumThickness
+        else {
+          const center = (frontDistance + backDistance) / 2
+          frontDistance = center + minimumThickness / 2
+          backDistance = center - minimumThickness / 2
+        }
+      }
+    }
+    return {
+      front: [value.x + normal.x * frontDistance, level.y, value.z + normal.z * frontDistance],
+      back: [value.x + normal.x * backDistance, level.y, value.z + normal.z * backDistance],
+    }
+  }))
   const geometry = new THREE.BufferGeometry()
   const positions = []
   const normals = []
   const uvs = []
-  for (let index = 0; index < path.length - 1; index += 1) {
-    const u0 = cumulative[index] / total
-    const u1 = cumulative[index + 1] / total
-    const a = sides[index]
-    const b = sides[index + 1]
-    addCurvedWallQuad(positions, normals, uvs, geometry, 0, [
-      [a.front[0], bottom, a.front[1]], [b.front[0], bottom, b.front[1]],
-      [b.front[0], top, b.front[1]], [a.front[0], top, a.front[1]],
-    ], [
-      [a.normal[0], 0, a.normal[1]], [b.normal[0], 0, b.normal[1]],
-      [b.normal[0], 0, b.normal[1]], [a.normal[0], 0, a.normal[1]],
-    ], [[u0, 0], [u1, 0], [u1, 1], [u0, 1]])
-    addCurvedWallQuad(positions, normals, uvs, geometry, 1, [
-      [b.back[0], bottom, b.back[1]], [a.back[0], bottom, a.back[1]],
-      [a.back[0], top, a.back[1]], [b.back[0], top, b.back[1]],
-    ], [
-      [-b.normal[0], 0, -b.normal[1]], [-a.normal[0], 0, -a.normal[1]],
-      [-a.normal[0], 0, -a.normal[1]], [-b.normal[0], 0, -b.normal[1]],
-    ], [[1 - u1, 0], [1 - u0, 0], [1 - u0, 1], [1 - u1, 1]])
-    addCurvedWallQuad(positions, normals, uvs, geometry, 2, [
-      [a.front[0], top, a.front[1]], [b.front[0], top, b.front[1]],
-      [b.back[0], top, b.back[1]], [a.back[0], top, a.back[1]],
-    ], [[0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0]], [[u0, 0], [u1, 0], [u1, 1], [u0, 1]])
-    addCurvedWallQuad(positions, normals, uvs, geometry, 3, [
-      [a.back[0], bottom, a.back[1]], [b.back[0], bottom, b.back[1]],
-      [b.front[0], bottom, b.front[1]], [a.front[0], bottom, a.front[1]],
-    ], [[0, -1, 0], [0, -1, 0], [0, -1, 0], [0, -1, 0]], [[u0, 0], [u1, 0], [u1, 1], [u0, 1]])
+  for (let verticalIndex = 0; verticalIndex < verticalLevels.length - 1; verticalIndex += 1) {
+    const v0 = verticalLevels[verticalIndex].t
+    const v1 = verticalLevels[verticalIndex + 1].t
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const u0 = cumulative[index] / total
+      const u1 = cumulative[index + 1] / total
+      const lowerA = surfaces[verticalIndex][index]
+      const lowerB = surfaces[verticalIndex][index + 1]
+      const upperA = surfaces[verticalIndex + 1][index]
+      const upperB = surfaces[verticalIndex + 1][index + 1]
+      const frontPoints = [lowerA.front, lowerB.front, upperB.front, upperA.front]
+      const frontNormal = quadFaceNormal(frontPoints)
+      addCurvedWallQuad(positions, normals, uvs, geometry, 0, frontPoints,
+        [frontNormal, frontNormal, frontNormal, frontNormal], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]])
+      const backPoints = [lowerB.back, lowerA.back, upperA.back, upperB.back]
+      const backNormal = quadFaceNormal(backPoints)
+      addCurvedWallQuad(positions, normals, uvs, geometry, 1, backPoints,
+        [backNormal, backNormal, backNormal, backNormal], [[1 - u1, v0], [1 - u0, v0], [1 - u0, v1], [1 - u1, v1]])
+    }
   }
-  for (const index of [0, path.length - 1]) {
-    const side = sides[index]
-    const reverse = index === 0
-    const vertices = reverse ? [
-      [side.back[0], bottom, side.back[1]], [side.front[0], bottom, side.front[1]],
-      [side.front[0], top, side.front[1]], [side.back[0], top, side.back[1]],
-    ] : [
-      [side.front[0], bottom, side.front[1]], [side.back[0], bottom, side.back[1]],
-      [side.back[0], top, side.back[1]], [side.front[0], top, side.front[1]],
-    ]
-    const neighbor = index === 0 ? path[1] : path[path.length - 2]
-    const tangentX = path[index].x - neighbor.x
-    const tangentZ = path[index].z - neighbor.z
-    const tangentLength = Math.hypot(tangentX, tangentZ) || 1
-    const capNormal = [tangentX / tangentLength, 0, tangentZ / tangentLength]
-    addCurvedWallQuad(
-      positions,
-      normals,
-      uvs,
-      geometry,
-      2,
-      vertices,
-      [capNormal, capNormal, capNormal, capNormal],
-      [[0, 0], [1, 0], [1, 1], [0, 1]],
-    )
+  for (const verticalIndex of [0, verticalLevels.length - 1]) {
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const a = surfaces[verticalIndex][index]
+      const b = surfaces[verticalIndex][index + 1]
+      const topCap = verticalIndex > 0
+      const points = topCap
+        ? [a.front, b.front, b.back, a.back]
+        : [a.back, b.back, b.front, a.front]
+      const normal = topCap ? [0, 1, 0] : [0, -1, 0]
+      addCurvedWallQuad(positions, normals, uvs, geometry, topCap ? 2 : 3, points,
+        [normal, normal, normal, normal], [[0, 0], [1, 0], [1, 1], [0, 1]])
+    }
+  }
+  for (const pathIndex of [0, path.length - 1]) {
+    for (let verticalIndex = 0; verticalIndex < verticalLevels.length - 1; verticalIndex += 1) {
+      const lower = surfaces[verticalIndex][pathIndex]
+      const upper = surfaces[verticalIndex + 1][pathIndex]
+      const reverse = pathIndex === 0
+      const points = reverse
+        ? [lower.back, lower.front, upper.front, upper.back]
+        : [lower.front, lower.back, upper.back, upper.front]
+      const normal = quadFaceNormal(points)
+      addCurvedWallQuad(positions, normals, uvs, geometry, 2, points,
+        [normal, normal, normal, normal], [[0, 0], [1, 0], [1, 1], [0, 1]])
+    }
   }
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
@@ -796,7 +891,9 @@ function CurvedWallSegment({ wall, textureMaterials, opacity = 1, showDetails = 
   const geometry = useMemo(() => makeCurvedWallGeometry(wall), [wall])
   useEffect(() => () => geometry?.dispose(), [geometry])
   if (!geometry || !frontBase || !backBase || !topBase) return null
-  const length = Math.max(0.05, Math.abs(Number(wall.radius) * Number(wall.sweep)))
+  const length = wall.axis === 'arc'
+    ? Math.max(0.05, Math.abs(Number(wall.radius) * Number(wall.sweep)))
+    : Math.max(0.05, Math.hypot(Number(wall.x1) - Number(wall.x0), Number(wall.z1) - Number(wall.z0)) / SURFACE_FINE)
   const height = Math.max(0.05, Number(wall.height) || STORY_HEIGHT)
   const thickness = Math.max(1, Number(wall.thickness) || 1) / SURFACE_FINE
   const offset = Number(wall.curveOffset0) || 0
@@ -1711,7 +1808,18 @@ function useOccludedWallIds(walls, surface, displayLevel) {
   return occludedIds
 }
 
-function RoomVolume({ room, roomLookup, textureMaterials, ceilingOpacity, showFloor, showCeiling, showDetails }) {
+function RoomVolume({ room, roomLookup, textureMaterials, ceilingOpacity, showFloor, displayLevel, showDetails }) {
+  const hasVerticalProfile = Array.isArray(room?.verticalProfile?.slices)
+    && room.verticalProfile.slices.length > 0
+  const baseLevel = yToLevel(getRoomBaseY(room))
+  const floorSlice = hasVerticalProfile ? roomSliceAtLevel(room, 0, roomLookup, STORY_HEIGHT) : null
+  const ceilingRegions = hasVerticalProfile
+    ? roomCeilingRegions(room, roomLookup, STORY_HEIGHT)
+    : [{
+        offset: getRoomHeightLevels(room) - 1,
+        topOffset: getRoomHeightLevels(room),
+        footprint: null,
+      }]
   return (
     <>
       {showFloor && room.floorEnabled !== false && (
@@ -1722,18 +1830,24 @@ function RoomVolume({ room, roomLookup, textureMaterials, ceilingOpacity, showFl
           textureMaterials={textureMaterials}
           opacity={1}
           showDetails={showDetails}
+          footprintContours={floorSlice ? multiPolygonContours(floorSlice.footprint) : null}
         />
       )}
-      {showCeiling && room.ceilingEnabled !== false && (
-        <RoomSlab
-          room={room}
-          roomLookup={roomLookup}
-          kind="ceiling"
-          textureMaterials={textureMaterials}
-          opacity={ceilingOpacity}
-          showDetails={showDetails}
-        />
-      )}
+      {room.ceilingEnabled !== false && ceilingRegions.map(region => (
+        displayLevel === null || displayLevel === baseLevel + region.offset
+          ? <RoomSlab
+              key={`ceiling-region:${region.offset}`}
+              room={room}
+              roomLookup={roomLookup}
+              kind="ceiling"
+              textureMaterials={textureMaterials}
+              opacity={ceilingOpacity}
+              showDetails={showDetails}
+              footprintContours={region.footprint ? multiPolygonContours(region.footprint) : null}
+              yOverride={getRoomBaseY(room) + region.topOffset * STORY_HEIGHT}
+            />
+          : null
+      ))}
     </>
   )
 }
@@ -1786,8 +1900,9 @@ function SurfaceDungeonScene({
   const roomDepthIncludesLevel = (room, itemLevel) => {
     if (!room || displayLevel === null || getRoomHeightLevels(room) < 2) return false
     const baseLevel = yToLevel(getRoomBaseY(room))
-    const topLevel = baseLevel + getRoomHeightLevels(room) - 1
-    return itemLevel >= baseLevel && itemLevel <= displayLevel && displayLevel <= topLevel
+    return itemLevel >= baseLevel
+      && itemLevel <= displayLevel
+      && Boolean(roomSliceAtLevel(room, displayLevel - baseLevel, surface.rooms, STORY_HEIGHT))
   }
   const roomWallIsVisible = wall => structureIsVisible(wallOpacityY(wall))
     || (wall?.roomIds || []).some(roomId => (
@@ -1795,8 +1910,8 @@ function SurfaceDungeonScene({
     ))
   const roomSlice = room => {
     const baseLevel = yToLevel(getRoomBaseY(room))
-    const topLevel = baseLevel + getRoomHeightLevels(room) - 1
-    return displayLevel === null || (displayLevel >= baseLevel && displayLevel <= topLevel)
+    return displayLevel === null
+      || Boolean(roomSliceAtLevel(room, displayLevel - baseLevel, surface.rooms, STORY_HEIGHT))
   }
   const connectorIsVisible = connector => {
     if (displayLevel === null) return true
@@ -1829,8 +1944,6 @@ function SurfaceDungeonScene({
     <>
       {Object.entries(surface.rooms).map(([id, room]) => {
         if (!roomSlice(room)) return null
-        const baseLevel = yToLevel(getRoomBaseY(room))
-        const topLevel = baseLevel + getRoomHeightLevels(room) - 1
         return (
           <RoomVolume
             key={id}
@@ -1839,7 +1952,7 @@ function SurfaceDungeonScene({
             textureMaterials={textureMaterials}
             ceilingOpacity={ceilingOpacity}
             showFloor
-            showCeiling={displayLevel === null || displayLevel === topLevel}
+            displayLevel={displayLevel}
             showDetails={showDetails}
           />
         )

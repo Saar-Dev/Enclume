@@ -484,7 +484,106 @@ function multiPolygonToContours(multiPolygon) {
   ))
 }
 
+export function multiPolygonContours(multiPolygon) {
+  return multiPolygonToContours(multiPolygon)
+}
+
+function cloneMultiPolygon(multiPolygon) {
+  return (Array.isArray(multiPolygon) ? multiPolygon : []).map(polygon => (
+    (Array.isArray(polygon) ? polygon : []).map(ring => (
+      (Array.isArray(ring) ? ring : []).map(coordinate => [Number(coordinate?.[0]), Number(coordinate?.[1])])
+    ))
+  ))
+}
+
+function explicitVerticalSlices(room) {
+  const slices = room?.verticalProfile?.slices
+  if (!Array.isArray(slices) || slices.length === 0) return null
+  return [...slices]
+    .sort((left, right) => Number(left?.offset) - Number(right?.offset))
+    .map(slice => ({
+      offset: Number(slice.offset),
+      footprint: cloneMultiPolygon(slice.footprint),
+      wallPaths: Array.isArray(slice.wallPaths) ? slice.wallPaths.map(path => ({ ...path })) : [],
+    }))
+}
+
+function legacyRoomHeightLevels(room, storyHeight = 2.5) {
+  return Math.max(1, Number.parseInt(room?.heightLevels, 10)
+    || Math.round((Number(room?.height) || storyHeight) / storyHeight)
+    || 1)
+}
+
+function straightPathsFromMultiPolygon(multiPolygon) {
+  return multiPolygonToContours(multiPolygon).flatMap((contour, contourIndex) => (
+    contour.points.map((from, index) => {
+      const to = contour.points[(index + 1) % contour.points.length]
+      const dx = to.x - from.x
+      const dz = to.z - from.z
+      return {
+        id: `profile:${contourIndex}:${index}:${clean(from.x)}:${clean(from.z)}:${clean(to.x)}:${clean(to.z)}`,
+        axis: Math.abs(dz) <= EPSILON ? 'x' : Math.abs(dx) <= EPSILON ? 'z' : 'segment',
+        x0: clean(from.x),
+        z0: clean(from.z),
+        x1: clean(to.x),
+        z1: clean(to.z),
+      }
+    })
+  ))
+}
+
+export function normalizeWallElevationProfile(profile) {
+  const type = ['curved', 'faceted'].includes(profile?.type) ? profile.type : 'vertical'
+  if (type === 'vertical') return { type: 'vertical', depth: 0, direction: 1 }
+  return {
+    type,
+    depth: clean(Math.max(0, Math.min(5, Number(profile?.depth) || 0))),
+    direction: Number(profile?.direction) < 0 ? -1 : 1,
+  }
+}
+
+function pathSourceEdgeKeys(room, path) {
+  if (Array.isArray(path?.sourceEdgeKeys) && path.sourceEdgeKeys.length > 0) {
+    return [...new Set(path.sourceEdgeKeys.map(String))]
+  }
+  if (path?.curveArcId) {
+    const arc = (room?.boundaryArcs || []).find(item => item?.id === path.curveArcId)
+    if (arc?.edgeKeys?.length > 0) return [...new Set(arc.edgeKeys.map(String))]
+  }
+  if ([path?.x0, path?.z0, path?.x1, path?.z1].every(Number.isFinite)) {
+    return [roomBoundaryEdgeKey(point(path.x0, path.z0), point(path.x1, path.z1))]
+  }
+  return []
+}
+
+export function roomWallElevationProfileForEdges(room, edgeKeys) {
+  const selected = new Set((edgeKeys || []).map(String))
+  const entry = (room?.wallElevationProfiles || []).find(profile => (
+    (profile?.edgeKeys || []).some(key => selected.has(String(key)))
+  ))
+  return normalizeWallElevationProfile(entry?.profile)
+}
+
+function withRoomWallElevationProfile(room, path) {
+  const sourceEdgeKeys = pathSourceEdgeKeys(room, path)
+  const elevationProfile = roomWallElevationProfileForEdges(room, sourceEdgeKeys)
+  return {
+    ...path,
+    ...(sourceEdgeKeys.length > 0 ? { sourceEdgeKeys } : {}),
+    ...(elevationProfile.type !== 'vertical' ? { elevationProfile } : {}),
+  }
+}
+
+function multiPolygonsHaveSameArea(left, right) {
+  if (left.length === 0 || right.length === 0) return left.length === right.length
+  const leftOnly = polygonClipping.difference(left, right)
+  const rightOnly = polygonClipping.difference(right, left)
+  return multiPolygonArea(leftOnly) <= EPSILON && multiPolygonArea(rightOnly) <= EPSILON
+}
+
 export function roomBoundaryMultiPolygon(room, roomLookup = {}, visitedRoomIds = new Set()) {
+  const profile = explicitVerticalSlices(room)
+  if (profile?.[0]?.footprint?.length > 0) return cloneMultiPolygon(profile[0].footprint)
   const subject = contoursToMultiPolygon(rawRoomBoundaryContours(room))
   if (subject.length === 0) return []
   const currentId = String(room?.id || '')
@@ -571,8 +670,8 @@ export function migrateRoomGeometryClips(inputRooms, storyHeight = 2.5) {
   return rooms
 }
 
-export function roomGeometryContainsPoint(room, target, roomLookup = {}) {
-  const contours = roomBoundaryContours(room, roomLookup)
+export function multiPolygonContainsPoint(multiPolygon, target) {
+  const contours = multiPolygonToContours(multiPolygon)
   const polygons = new Map()
   for (const contour of contours) {
     if (!polygons.has(contour.polygonIndex)) polygons.set(contour.polygonIndex, { outer: null, holes: [] })
@@ -585,6 +684,10 @@ export function roomGeometryContainsPoint(room, target, roomLookup = {}) {
     && pointInRing(target, polygon.outer)
     && !polygon.holes.some(hole => pointInRing(target, hole))
   ))
+}
+
+export function roomGeometryContainsPoint(room, target, roomLookup = {}) {
+  return multiPolygonContainsPoint(roomBoundaryMultiPolygon(room, roomLookup), target)
 }
 
 export function roomGeometryBounds(room, roomLookup = {}) {
@@ -666,6 +769,7 @@ function collectCurveSegmentMetadata(room, roomLookup, result = new Map(), visit
       result.set(key, {
         curveId,
         curveArcId: arc.id,
+        curveSourceEdgeKeys: [...new Set((arc.edgeKeys || []).map(String))],
         curveOffset0: clean(offsets[index]),
         curveOffset1: clean(offsets[index + 1]),
         curveLength: geometry.length,
@@ -754,6 +858,7 @@ export function roomBoundarySegments(room, roomLookup = {}) {
       const dz = to.z - from.z
       const curve = curveMetadata.get(roomBoundaryEdgeKey(from, to))
       const sameCurveDirection = curve && samePoint(from, curve.curveFrom)
+      const sourceEdgeKey = roomBoundaryEdgeKey(from, to)
       return {
         id: `boundary:${loopIndex}:${index}:${from.x}:${from.z}:${to.x}:${to.z}`,
         loopIndex,
@@ -763,6 +868,7 @@ export function roomBoundarySegments(room, roomLookup = {}) {
         z0: from.z,
         x1: to.x,
         z1: to.z,
+        sourceEdgeKeys: curve?.curveSourceEdgeKeys || [sourceEdgeKey],
         ...(curve ? {
           curveId: curve.curveId,
           curveArcId: curve.curveArcId,
@@ -787,6 +893,10 @@ export function roomBoundarySegments(room, roomLookup = {}) {
 }
 
 export function roomBoundaryPaths(room, roomLookup = {}) {
+  const profile = explicitVerticalSlices(room)
+  if (profile?.[0]?.wallPaths?.length > 0) {
+    return profile[0].wallPaths.map(path => withRoomWallElevationProfile(room, path))
+  }
   const segments = roomBoundarySegments(room, roomLookup)
   const straight = segments.filter(segment => !segment.curveId)
   const curves = new Map()
@@ -843,8 +953,107 @@ export function roomBoundaryPaths(room, roomLookup = {}) {
         z0: clean(z0),
         x1: clean(x1),
         z1: clean(z1),
+        sourceEdgeKeys: [...new Set(items.flatMap(item => item.sourceEdgeKeys || []))],
       })
     }
   }
-  return [...straight, ...arcs]
+  return [...straight, ...arcs].map(path => withRoomWallElevationProfile(room, path))
+}
+
+export function roomMaximumHeightLevels(room, storyHeight = 2.5) {
+  const profile = explicitVerticalSlices(room)
+  if (!profile) return legacyRoomHeightLevels(room, storyHeight)
+  return Math.max(1, ...profile.map(slice => Number(slice.offset) + 1))
+}
+
+export function roomVerticalSlices(room, roomLookup = {}, storyHeight = 2.5) {
+  const profile = explicitVerticalSlices(room)
+  if (profile) return profile.map(slice => ({
+    ...slice,
+    wallPaths: slice.wallPaths.map(path => withRoomWallElevationProfile(room, path)),
+  }))
+  const footprint = roomBoundaryMultiPolygon(room, roomLookup)
+  const wallPaths = roomBoundaryPaths(room, roomLookup)
+  return Array.from({ length: legacyRoomHeightLevels(room, storyHeight) }, (_, offset) => ({
+    offset,
+    footprint: cloneMultiPolygon(footprint),
+    wallPaths: wallPaths.map(path => ({ ...path })),
+  }))
+}
+
+export function roomSliceAtLevel(room, offset, roomLookup = {}, storyHeight = 2.5) {
+  const target = Number.parseInt(offset, 10)
+  if (!Number.isInteger(target) || target < 0) return null
+  return roomVerticalSlices(room, roomLookup, storyHeight).find(slice => slice.offset === target) || null
+}
+
+export function roomSliceContours(room, offset, roomLookup = {}, storyHeight = 2.5) {
+  const slice = roomSliceAtLevel(room, offset, roomLookup, storyHeight)
+  return slice ? multiPolygonToContours(slice.footprint) : []
+}
+
+export function roomCeilingRegions(room, roomLookup = {}, storyHeight = 2.5) {
+  const slices = roomVerticalSlices(room, roomLookup, storyHeight)
+  return slices.flatMap((slice, index) => {
+    const next = slices[index + 1]
+    const footprint = next
+      ? polygonClipping.difference(slice.footprint, next.footprint)
+      : cloneMultiPolygon(slice.footprint)
+    if (multiPolygonArea(footprint) <= EPSILON) return []
+    return [{
+      offset: slice.offset,
+      topOffset: slice.offset + 1,
+      footprint,
+    }]
+  })
+}
+
+export function multiPolygonGridCells(multiPolygon) {
+  const contours = multiPolygonToContours(multiPolygon)
+  if (contours.length === 0) return []
+  const xs = contours.flatMap(contour => contour.points.map(value => value.x))
+  const zs = contours.flatMap(contour => contour.points.map(value => value.z))
+  const minX = Math.floor(Math.min(...xs))
+  const maxX = Math.ceil(Math.max(...xs)) - 1
+  const minZ = Math.floor(Math.min(...zs))
+  const maxZ = Math.ceil(Math.max(...zs)) - 1
+  const cells = []
+  for (let z = minZ; z <= maxZ; z += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      if (multiPolygonContainsPoint(multiPolygon, point(x + 0.5, z + 0.5))) cells.push({ x, z })
+    }
+  }
+  return cells
+}
+
+export function buildMergedRoomVerticalProfile({
+  mergedRoom,
+  sourceRooms,
+  roomLookup = {},
+  storyHeight = 2.5,
+} = {}) {
+  const sources = (sourceRooms || []).filter(Boolean)
+  if (!mergedRoom || sources.length === 0) return null
+  const sourceSlices = sources.map(room => roomVerticalSlices(room, roomLookup, storyHeight))
+  const maximum = Math.max(1, ...sources.map(room => roomMaximumHeightLevels(room, storyHeight)))
+  const mergedGeometryRoom = { ...mergedRoom, verticalProfile: null }
+  const mergedFootprint = roomBoundaryMultiPolygon(mergedGeometryRoom, roomLookup)
+  const mergedPaths = roomBoundaryPaths(mergedGeometryRoom, roomLookup)
+  const slices = []
+
+  for (let offset = 0; offset < maximum; offset += 1) {
+    const active = sourceSlices.map(items => items.find(slice => slice.offset === offset)).filter(Boolean)
+    if (active.length === 0) continue
+    const footprint = active.length === 1
+      ? cloneMultiPolygon(active[0].footprint)
+      : polygonClipping.union(...active.map(slice => slice.footprint))
+    const wallPaths = multiPolygonsHaveSameArea(footprint, mergedFootprint)
+      ? mergedPaths.map(path => ({ ...path }))
+      : active.length === 1
+        ? active[0].wallPaths.map(path => ({ ...path }))
+        : straightPathsFromMultiPolygon(footprint)
+    slices.push({ offset, footprint: cloneMultiPolygon(footprint), wallPaths })
+  }
+
+  return slices.length > 0 ? { slices } : null
 }

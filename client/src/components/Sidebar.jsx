@@ -1356,8 +1356,7 @@ export default function Sidebar({
                     )}
                   </div>
                 )}
-                {(surfaceToolState.selectedRoomId
-                  || ['room', 'floor', 'wall', 'stair', 'bridge', 'connector'].includes(surfaceToolState.mode)) && (
+                {['room', 'floor', 'wall', 'stair', 'bridge', 'connector'].includes(surfaceToolState.mode) && (
                   <label style={styles.roomToolLabel}>
                     <span>Coût de déplacement (multiplicateur)</span>
                     <input
@@ -1373,152 +1372,8 @@ export default function Sidebar({
                     />
                   </label>
                 )}
-                {surfaceToolState.selectedRoomId && (
-                  <div style={styles.roomToolSelection}>
-                    <span>{t('surfaceEditor.selectedRoom')}</span>
-                    <button
-                      type="button"
-                      onClick={() => updateSurfaceTool({
-                        mode: 'select',
-                        selectedRoomId: null,
-                        selectedRoomIds: [],
-                        roomWallEdit: false,
-                        selectedRoomWallKeys: [],
-                        selectedRoomWallCount: 0,
-                        roomArcError: null,
-                      })}
-                      style={styles.roomToolSmallBtn}
-                    >
-                      {t('surfaceEditor.deselect')}
-                    </button>
-                  </div>
-                )}
-                {!surfaceToolState.selectedRoomId && surfaceToolState.selectedRoomIds?.length > 1 && (
-                  <div style={styles.roomToolSelection}>
-                    <span>{t('surfaceEditor.selectedRooms', { count: surfaceToolState.selectedRoomIds.length })}</span>
-                    <button
-                      type="button"
-                      onClick={() => updateSurfaceTool({
-                        mode: 'select',
-                        selectedRoomId: null,
-                        selectedRoomIds: [],
-                        roomWallEdit: false,
-                        selectedRoomWallKeys: [],
-                        selectedRoomWallCount: 0,
-                        roomArcError: null,
-                      })}
-                      style={styles.roomToolSmallBtn}
-                    >
-                      {t('surfaceEditor.deselect')}
-                    </button>
-                  </div>
-                )}
-                {surfaceToolState.selectedRoomId && (
+                {surfaceToolState.mode === 'connector' && (
                   <>
-                    <div style={styles.roomToolSectionTitle}>Murs de la salle</div>
-                    <div style={styles.connectorPicker}>
-                      <small style={{ color: '#8b8ba7' }}>
-                        Clique directement sur un mur. Il apparaît en turquoise au survol et en orange une fois sélectionné.
-                      </small>
-                      <div style={styles.roomToolSelection}>
-                        <span>
-                          {surfaceToolState.selectedRoomWallCount > 0
-                            ? `${surfaceToolState.selectedRoomWallCount} mur${surfaceToolState.selectedRoomWallCount > 1 ? 's' : ''} sélectionné${surfaceToolState.selectedRoomWallCount > 1 ? 's' : ''}`
-                            : 'Aucun mur sélectionné'}
-                        </span>
-                        {(surfaceToolState.selectedRoomWallKeys || []).length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => updateSurfaceTool({
-                              selectedRoomWallKeys: [],
-                              selectedRoomWallCount: 0,
-                              roomArcError: null,
-                            })}
-                            style={styles.roomToolSmallBtn}
-                          >
-                            Désélectionner
-                          </button>
-                        )}
-                      </div>
-                      {surfaceToolState.selectedRoomWallCount >= 2 && (
-                        <label style={styles.roomToolLabel}>
-                          <span>Angle : {Number(surfaceToolState.roomArcAngle || 90).toFixed(0)}°</span>
-                          <input
-                            type="range"
-                            min="5"
-                            max="175"
-                            step="5"
-                            value={surfaceToolState.roomArcAngle || 90}
-                            onChange={event => updateSurfaceTool({ roomArcAngle: Number(event.target.value), roomArcError: null })}
-                            style={{ width: '100%' }}
-                          />
-                        </label>
-                      )}
-                      <div style={styles.roomToolModes}>
-                        {surfaceToolState.selectedRoomWallCount >= 2 && (
-                          <button
-                            type="button"
-                            onClick={() => updateSurfaceTool({ roomArcSide: Number(surfaceToolState.roomArcSide) < 0 ? 1 : -1, roomArcError: null })}
-                            style={styles.roomToolModeBtn}
-                          >
-                            Inverser la courbure
-                          </button>
-                        )}
-                          <button
-                            type="button"
-                            disabled={surfaceToolState.selectedRoomWallCount < 2}
-                            onClick={() => updateSurfaceTool({
-                              roomArcAction: 'apply',
-                              roomArcActionId: Date.now(),
-                              roomArcError: null,
-                            })}
-                            style={{
-                              ...styles.roomToolModeBtn,
-                              ...(surfaceToolState.selectedRoomWallCount < 2 ? styles.undoBtnDisabled : styles.roomToolModeBtnActive),
-                            }}
-                          >
-                            Appliquer l’arrondi
-                          </button>
-                          <button
-                            type="button"
-                            disabled={(surfaceToolState.selectedRoomWallKeys || []).length === 0}
-                            onClick={() => updateSurfaceTool({
-                              roomArcAction: 'remove',
-                              roomArcActionId: Date.now(),
-                              roomArcError: null,
-                            })}
-                            style={{
-                              ...styles.roomToolModeBtn,
-                              ...((surfaceToolState.selectedRoomWallKeys || []).length === 0 ? styles.undoBtnDisabled : {}),
-                            }}
-                          >
-                            Remettre droit
-                          </button>
-                          <button
-                            type="button"
-                            disabled={surfaceToolState.selectedRoomWallCount < 1}
-                            onClick={() => updateSurfaceTool({
-                              roomArcAction: 'delete',
-                              roomArcActionId: Date.now(),
-                              roomArcError: null,
-                            })}
-                            style={{
-                              ...styles.roomToolModeBtn,
-                              color: '#fb7185',
-                              borderColor: 'rgba(251,113,133,0.5)',
-                              ...(surfaceToolState.selectedRoomWallCount < 1 ? styles.undoBtnDisabled : {}),
-                            }}
-                          >
-                            {surfaceToolState.selectedRoomWallCount > 1 ? 'Supprimer les murs' : 'Supprimer le mur'}
-                          </button>
-                      </div>
-                      <small style={{ color: '#8b8ba7' }}>
-                        Supprimer un mur extérieur ouvre la salle. Entre deux salles, la suppression les fusionne et conserve les réglages de la salle sélectionnée.
-                      </small>
-                      {surfaceToolState.roomArcError && (
-                        <small style={{ color: '#fb7185' }}>{surfaceToolState.roomArcError}</small>
-                      )}
-                    </div>
                     <div style={styles.roomToolSectionTitle}>{t('surfaceEditor.connectors')}</div>
                     <div style={styles.roomToolModes}>
                       <button
@@ -1694,7 +1549,7 @@ export default function Sidebar({
                   </>
                 )}
                 <div style={styles.roomToolGrid}>
-                  {(surfaceToolState.mode === 'room' || surfaceToolState.selectedRoomId) && (
+                  {surfaceToolState.mode === 'room' && (
                     <label style={styles.roomToolLabel}>
                       <span>{t('surfaceEditor.roomHeight')}</span>
                       <select
@@ -1708,7 +1563,7 @@ export default function Sidebar({
                       </select>
                     </label>
                   )}
-                  {(surfaceToolState.mode === 'room' || surfaceToolState.selectedRoomId) && (
+                  {surfaceToolState.mode === 'room' && (
                     <label style={styles.roomToolLabel}>
                       <span>{t('surfaceEditor.slabThickness')}</span>
                       <input
@@ -1722,7 +1577,7 @@ export default function Sidebar({
                       />
                     </label>
                   )}
-                  {(surfaceToolState.mode === 'room' || surfaceToolState.selectedRoomId) && (
+                  {surfaceToolState.mode === 'room' && (
                     <label style={styles.roomToolLabel}>
                       <span>Epaisseur mur</span>
                       <input
@@ -1763,7 +1618,7 @@ export default function Sidebar({
                     </label>
                   </div>
                 )}
-                {(surfaceToolState.mode === 'room' || surfaceToolState.selectedRoomId) && surfaceToolState.mode !== 'erase' && surfaceToolState.mode !== 'connector' && (
+                {surfaceToolState.mode === 'room' && (
                   <>
                     <div style={styles.roomToolSectionTitle}>{t('surfaceEditor.appliedMaterial')}</div>
                     <div style={styles.roomToolModes}>

@@ -14,9 +14,12 @@ import {
   normalizeElevatorState,
 } from './elevatorRuntime.js'
 import {
-  roomBoundaryPaths,
+  roomCeilingRegions,
   roomEffectiveGridCells,
   roomGeometryBounds,
+  roomMaximumHeightLevels,
+  roomVerticalSlices,
+  multiPolygonGridCells,
 } from './roomGeometry.js'
 
 const EPSILON = 1e-6
@@ -108,10 +111,7 @@ function roomBaseY(room, storyHeight) {
 }
 
 function roomHeightLevels(room, storyHeight) {
-  return Math.max(1, Math.trunc(number(
-    room.heightLevels,
-    Math.round(positive(room.height, storyHeight) / storyHeight),
-  )))
+  return roomMaximumHeightLevels(room, storyHeight)
 }
 
 function roomFloorEntries(surface, battlemapId) {
@@ -146,10 +146,14 @@ function roomCeilingEntries(surface, battlemapId) {
   const entries = new Map(Object.entries(surface.ceilings))
   for (const [roomLegacyId, room] of Object.entries(surface.rooms)) {
     if (room.ceilingEnabled === false) continue
-    const cells = roomEffectiveGridCells({ id: roomLegacyId, ...room }, surface.rooms)
     const baseY = roomBaseY(room, surface.storyHeight)
-    const y = baseY + roomHeightLevels(room, surface.storyHeight) * surface.storyHeight
-    for (const { x, z } of cells) {
+    for (const region of roomCeilingRegions(
+      { id: roomLegacyId, ...room },
+      surface.rooms,
+      surface.storyHeight,
+    )) {
+      const y = baseY + region.topOffset * surface.storyHeight
+      for (const { x, z } of multiPolygonGridCells(region.footprint)) {
         const key = `${x}:${z}:${baseY}:${y}`
         if (entries.has(key)) continue
         entries.set(key, {
@@ -165,6 +169,7 @@ function roomCeilingEntries(surface, battlemapId) {
           blocksWater: room.blocksWater,
           sourceRoomWorldId: room.worldId,
         })
+      }
     }
   }
   return entries
@@ -191,11 +196,14 @@ function addWallCandidate(map, candidate, battlemapId) {
   const key = wallKey(candidate)
   const existing = map.get(key)
   if (!existing) {
+    const profileFace = candidate.elevationProfileFace === 'back' ? 'back' : 'front'
     map.set(key, {
       ...candidate,
       worldId: deterministicWorldId(battlemapId, 'compiled-wall', key),
       sourceWorldIds: [...new Set(candidate.sourceWorldIds || [])],
       blocks: blockingChannels(candidate),
+      frontElevationProfile: profileFace === 'front' ? candidate.elevationProfile : null,
+      backElevationProfile: profileFace === 'back' ? candidate.elevationProfile : null,
     })
     return
   }
@@ -205,6 +213,31 @@ function addWallCandidate(map, candidate, battlemapId) {
     existing.blocks[channel] = existing.blocks[channel] || nextBlocks[channel]
   }
   existing.thickness = Math.max(existing.thickness, candidate.thickness)
+  if (candidate.elevationProfile) {
+    const sameDirection = Math.abs(number(existing.x0) - number(candidate.x0)) <= EPSILON
+      && Math.abs(number(existing.z0) - number(candidate.z0)) <= EPSILON
+      && Math.abs(number(existing.x1) - number(candidate.x1)) <= EPSILON
+      && Math.abs(number(existing.z1) - number(candidate.z1)) <= EPSILON
+    const requestedFace = candidate.elevationProfileFace === 'back' ? 'back' : 'front'
+    const profileFace = sameDirection ? requestedFace : requestedFace === 'front' ? 'back' : 'front'
+    existing[`${profileFace}ElevationProfile`] = candidate.elevationProfile
+  }
+}
+
+function finalizeWallElevationProfiles(wall) {
+  const ownerCount = wall.sourceWorldIds?.length || 0
+  if (ownerCount <= 1) {
+    const elevationProfile = wall.frontElevationProfile || wall.backElevationProfile || null
+    if (!elevationProfile) return wall
+    return {
+      ...wall,
+      elevationProfileMode: 'translated',
+      elevationProfile,
+      elevationProfileDirection: wall.frontElevationProfile ? 1 : -1,
+    }
+  }
+  if (!wall.frontElevationProfile && !wall.backElevationProfile) return wall
+  return { ...wall, elevationProfileMode: 'faces' }
 }
 
 function roomWallCandidates(surface, battlemapId) {
@@ -212,18 +245,25 @@ function roomWallCandidates(surface, battlemapId) {
   for (const room of Object.values(surface.rooms)) {
     if (room.wallEnabled === false) continue
     const baseY = roomBaseY(room, surface.storyHeight)
-    const levels = roomHeightLevels(room, surface.storyHeight)
     const thickness = positive(room.wallThickness, 1) / surface.fine
-    const boundary = roomBoundaryPaths(room, surface.rooms)
-    for (let offset = 0; offset < levels; offset++) {
-      const y = baseY + offset * surface.storyHeight
-      for (const segment of boundary) {
+    const slices = roomVerticalSlices(room, surface.rooms, surface.storyHeight)
+    for (const slice of slices) {
+      const y = baseY + slice.offset * surface.storyHeight
+      for (const segment of slice.wallPaths) {
+        const frontIsInterior = segment.axis === 'x'
+          ? number(segment.x1) >= number(segment.x0)
+          : segment.axis === 'z'
+            ? number(segment.z1) <= number(segment.z0)
+            : true
         const addBoundary = wall => addWallCandidate(walls, {
           ...room,
           ...wall,
           y,
           height: surface.storyHeight,
           thickness,
+          elevationProfileFace: frontIsInterior ? 'front' : 'back',
+          elevationProfileOriginY: y,
+          elevationProfileHeight: surface.storyHeight,
           sourceWorldIds: [room.worldId],
         }, battlemapId)
         addBoundary(segment)
@@ -243,7 +283,7 @@ function roomWallCandidates(surface, battlemapId) {
       sourceWorldIds: [wall.worldId],
     }, battlemapId)
   }
-  return [...walls.values()]
+  return [...walls.values()].map(finalizeWallElevationProfiles)
 }
 
 function wallPieceFromCandidate(wall) {
@@ -425,7 +465,12 @@ function splitWallPiece(piece, door) {
 }
 
 function wallPieceBounds(piece) {
-  const half = piece.thickness / 2
+  const profileDepth = Math.max(
+    Math.abs(number(piece.elevationProfile?.depth)),
+    Math.abs(number(piece.frontElevationProfile?.depth)),
+    Math.abs(number(piece.backElevationProfile?.depth)),
+  )
+  const half = piece.thickness / 2 + profileDepth
   if (piece.axis === 'arc') {
     const start = number(piece.startAngle)
     const sweep = number(piece.sweep)
@@ -470,6 +515,15 @@ function wallPieceBounds(piece) {
 }
 
 function wallPieceGeometry(piece) {
+  const elevation = piece.elevationProfileMode ? {
+    elevationProfileMode: piece.elevationProfileMode,
+    ...(piece.elevationProfile ? { elevationProfile: piece.elevationProfile } : {}),
+    ...(piece.elevationProfileDirection ? { elevationProfileDirection: piece.elevationProfileDirection } : {}),
+    ...(piece.frontElevationProfile ? { frontElevationProfile: piece.frontElevationProfile } : {}),
+    ...(piece.backElevationProfile ? { backElevationProfile: piece.backElevationProfile } : {}),
+    elevationProfileOriginY: clean(piece.elevationProfileOriginY ?? piece.y ?? piece.bottom),
+    elevationProfileHeight: clean(piece.elevationProfileHeight ?? piece.height ?? (piece.top - piece.bottom)),
+  } : {}
   if (piece.axis === 'arc') {
     return {
       type: 'wall-arc',
@@ -480,16 +534,27 @@ function wallPieceGeometry(piece) {
       minY: clean(piece.bottom),
       maxY: clean(piece.top),
       thickness: clean(piece.thickness),
+      ...elevation,
     }
   }
-  if (piece.axis !== 'segment') return null
+  const from = piece.axis === 'x'
+    ? { x: piece.alongMin, z: piece.line }
+    : piece.axis === 'z'
+      ? { x: piece.line, z: piece.alongMin }
+      : { x: piece.x0, z: piece.z0 }
+  const to = piece.axis === 'x'
+    ? { x: piece.alongMax, z: piece.line }
+    : piece.axis === 'z'
+      ? { x: piece.line, z: piece.alongMax }
+      : { x: piece.x1, z: piece.z1 }
   return {
     type: 'wall-segment',
-    from: { x: clean(piece.x0), z: clean(piece.z0) },
-    to: { x: clean(piece.x1), z: clean(piece.z1) },
+    from: { x: clean(from.x), z: clean(from.z) },
+    to: { x: clean(to.x), z: clean(to.z) },
     minY: clean(piece.bottom),
     maxY: clean(piece.top),
     thickness: clean(piece.thickness),
+    ...elevation,
   }
 }
 
@@ -903,12 +968,15 @@ function addCompartments(surface, spatial) {
     const cells = roomEffectiveGridCells(identifiedRoom, surface.rooms)
     const baseY = roomBaseY(room, surface.storyHeight)
     const topY = baseY + roomHeightLevels(room, surface.storyHeight) * surface.storyHeight
+    const verticalProfile = roomVerticalSlices(identifiedRoom, surface.rooms, surface.storyHeight)
+      .map(slice => ({ offset: slice.offset, footprint: slice.footprint }))
     spatial.compartments.push({
       id: `compartment:${room.worldId}`,
       sourceId: room.worldId,
       kind: 'room',
       bounds: bounds(area.minX, baseY, area.minZ, area.maxX, topY, area.maxZ),
       footprint: cells.map(cell => roomCellKey(cell.x, cell.z)),
+      verticalProfile,
       sealedByDefault: room.blocksWater !== false,
     })
   }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   applyRoomBoundaryArc,
+  applyRoomWallElevationProfile,
   applyRoomSelection,
   computeSurfaceWaterCells,
   deleteRoomBoundaryWalls,
@@ -19,6 +20,7 @@ import {
   roomsWallSegments,
 } from './surfaceData.js'
 import {
+  multiPolygonGridCells,
   roomGeometryArea,
   roomGeometryIntersectionArea,
 } from '../../../shared/world/roomGeometry.js'
@@ -86,6 +88,60 @@ test('un mur courbe produit des segments orientés avec une boîte de rendu tour
   assert.equal(walls.at(-1).x1, 16)
 })
 
+test('un profil vertical extérieur translate les deux faces du mur', () => {
+  const exteriorRoom = room('outside', 0)
+  const west = getRoomBoundaryWallRuns(exteriorRoom).find(run => run.side === 'west')
+  const result = applyRoomWallElevationProfile(
+    emptySurface({ rooms: { outside: exteriorRoom } }),
+    'outside',
+    west.edgeKeys,
+    { type: 'curved', depth: 0.6, direction: 1 },
+  )
+
+  assert.equal(result.error, null)
+  const profiled = roomsWallSegments(result.surfaceData.rooms).find(wall => wall.elevationProfileMode)
+  assert.equal(profiled.elevationProfileMode, 'translated')
+  assert.equal(profiled.elevationProfile.depth, 0.6)
+  assert.equal(profiled.roomIds.length, 1)
+})
+
+test('une porte rigide bloque le changement de profil vertical de son mur', () => {
+  const guardedRoom = room('guarded', 0)
+  const west = getRoomBoundaryWallRuns(guardedRoom).find(run => run.side === 'west')
+  const result = applyRoomWallElevationProfile(
+    emptySurface({
+      rooms: { guarded: guardedRoom },
+      connectors: {
+        door: { type: 'door', axis: 'z', x0: 0, x1: 0, z0: 0, z1: 4, y: 0 },
+      },
+    }),
+    'guarded',
+    west.edgeKeys,
+    { type: 'curved', depth: 0.6, direction: 1 },
+  )
+
+  assert.match(result.error, /porte/i)
+  assert.equal(result.surfaceData.rooms.guarded.wallElevationProfiles, undefined)
+})
+
+test('un profil vertical mitoyen ne modifie que la face de la salle sélectionnée', () => {
+  const left = { ...room('left', 0), maxX: 0, maxZ: 0, cells: ['0:0'] }
+  const right = { ...room('right', 0), minX: 1, maxX: 1, maxZ: 0, cells: ['1:0'] }
+  const east = getRoomBoundaryWallRuns(left).find(run => run.side === 'east')
+  const result = applyRoomWallElevationProfile(
+    emptySurface({ rooms: { left, right } }),
+    'left',
+    east.edgeKeys,
+    { type: 'faceted', depth: 0.75, direction: 1 },
+  )
+
+  assert.equal(result.error, null)
+  assert.equal(result.surfaceData.rooms.right.wallElevationProfiles, undefined)
+  const shared = roomsWallSegments(result.surfaceData.rooms).find(wall => wall.roomIds.length === 2)
+  assert.equal(shared.elevationProfileMode, 'faces')
+  assert.equal([shared.frontElevationProfile, shared.backElevationProfile].filter(Boolean).length, 1)
+})
+
 test('une salle multiniveau revele uniquement son propre volume inferieur', () => {
   const surface = emptySurface({
     rooms: {
@@ -115,7 +171,7 @@ test('une nouvelle salle transfere ses cases et redessine le contour de la salle
   )
   const nestedId = 'room:1:1:2:2:0:1'
 
-  assert.equal(result.version, 8)
+  assert.equal(result.version, 10)
   assert.equal(getRoomFootprintCells(result.rooms.outer).length, 12)
   assert.equal(getRoomFootprintCells(result.rooms[nestedId]).length, 4)
   assert.equal(findRoomAtCell(result, { x: 1, z: 1 }, 0).id, nestedId)
@@ -134,7 +190,7 @@ test('un arrondi de salle remplace une chaîne de murs dans le rendu de la salle
   const result = applyRoomBoundaryArc(surface, 'rounded', selected.flatMap(wall => wall.edgeKeys), 90)
 
   assert.equal(result.error, null)
-  assert.equal(result.surfaceData.version, 8)
+  assert.equal(result.surfaceData.version, 10)
   assert.equal(result.surfaceData.rooms.rounded.boundaryArcs.length, 1)
   assert.ok(roomsWallSegments(result.surfaceData.rooms).some(wall => wall.axis === 'segment'))
 })
@@ -220,6 +276,35 @@ test('supprimer un mur commun fusionne les deux salles et conserve la salle acti
   assert.equal(result.surfaceData.connectors.ladder.roomId, 'roomA')
   assert.deepEqual(result.surfaceData.connectors.ladder.roomIds, ['roomA'])
   assert.equal(roomsWallSegments(result.surfaceData.rooms).length, 6)
+})
+
+test('fusionner des salles de hauteurs différentes conserve un profil vertical physique', () => {
+  const roomA = { ...room('roomA', 0, 1), maxX: 0, maxZ: 0, cells: ['0:0'] }
+  const roomB = { ...room('roomB', 0, 3), minX: 1, maxX: 1, maxZ: 0, cells: ['1:0'] }
+  const sharedWall = getRoomBoundaryWallRuns(roomA).find(wall => wall.side === 'east')
+  const result = deleteRoomBoundaryWalls(
+    emptySurface({ rooms: { roomA, roomB } }),
+    'roomA',
+    sharedWall.edgeKeys,
+  )
+
+  assert.equal(result.error, null)
+  assert.deepEqual(Object.keys(result.surfaceData.rooms), ['roomA'])
+  const merged = result.surfaceData.rooms.roomA
+  assert.equal(merged.heightLevels, 3)
+  assert.equal(merged.verticalProfile.slices.length, 3)
+  assert.deepEqual(
+    merged.verticalProfile.slices.map(slice => multiPolygonGridCells(slice.footprint).length),
+    [2, 1, 1],
+  )
+
+  const walls = roomsWallSegments(result.surfaceData.rooms)
+  assert.equal(walls.filter(wall => wall.y === 0).length, 6)
+  assert.equal(walls.filter(wall => wall.y === 2.5).length, 4)
+  assert.equal(walls.filter(wall => wall.y === 5).length, 4)
+  const expanded = expandRoomsToSurface(result.surfaceData)
+  assert.ok(Object.keys(expanded.ceilings).some(key => key.endsWith(':0:2.5')))
+  assert.ok(Object.keys(expanded.ceilings).some(key => key.endsWith(':0:7.5')))
 })
 
 test('une nouvelle salle decoupe son volume sur la salle courbe deja presente', () => {

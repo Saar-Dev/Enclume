@@ -1,5 +1,5 @@
 // shared/world/surfaceDocument.js
-// Frontière de compatibilité entre surface_data v8 (murs paramétriques, ouvertures et arcs) et le document canonique du
+// Frontière de compatibilité entre surface_data v10 (volumes multi-hauteurs et profils horizontaux/verticaux de mur) et le document canonique du
 // moteur de monde. Les clés legacy restent lisibles ; worldId devient l'identité physique stable.
 
 import { createWorldDocument } from './worldContracts.js'
@@ -9,7 +9,7 @@ import {
   selectedRoomBoundaryChain,
 } from './roomGeometry.js'
 
-export const SURFACE_DATA_VERSION = 8
+export const SURFACE_DATA_VERSION = 10
 export const SURFACE_FINE_DEFAULT = 4
 export const SURFACE_STORY_HEIGHT_DEFAULT = 2.5
 
@@ -89,6 +89,77 @@ function validateMovementMultiplier(item, path, errors) {
   }
 }
 
+function validateWallElevationProfile(profile, path, errors) {
+  if (!isPlainObject(profile) || !['curved', 'faceted'].includes(profile.type)) {
+    errors.push(`${path}.type doit valoir curved ou faceted`)
+    return
+  }
+  if (!Number.isFinite(Number(profile.depth)) || Number(profile.depth) <= 0 || Number(profile.depth) > 5) {
+    errors.push(`${path}.depth doit être compris entre 0 et 5 mètres`)
+  }
+  if (![1, -1].includes(Number(profile.direction))) {
+    errors.push(`${path}.direction doit valoir 1 ou -1`)
+  }
+}
+
+function validateRoomVerticalProfile(profile, room, path, errors) {
+  if (!isPlainObject(profile) || !Array.isArray(profile.slices) || profile.slices.length === 0) {
+    errors.push(`${path}.verticalProfile doit contenir un tableau slices non vide`)
+    return
+  }
+  const expectedLevels = Number.parseInt(room?.heightLevels, 10)
+  if (Number.isInteger(expectedLevels) && expectedLevels !== profile.slices.length) {
+    errors.push(`${path}.heightLevels doit correspondre au nombre de tranches verticales`)
+  }
+  profile.slices.forEach((slice, index) => {
+    const slicePath = `${path}.verticalProfile.slices.${index}`
+    if (!isPlainObject(slice)) {
+      errors.push(`${slicePath} doit être un objet`)
+      return
+    }
+    if (Number(slice.offset) !== index) errors.push(`${slicePath}.offset doit valoir ${index}`)
+    if (!Array.isArray(slice.footprint) || slice.footprint.length === 0) {
+      errors.push(`${slicePath}.footprint doit être un multipolygone non vide`)
+    } else {
+      for (const [polygonIndex, polygon] of slice.footprint.entries()) {
+        if (!Array.isArray(polygon) || polygon.length === 0) {
+          errors.push(`${slicePath}.footprint.${polygonIndex} doit contenir au moins un contour`)
+          continue
+        }
+        for (const [ringIndex, ring] of polygon.entries()) {
+          const ringPath = `${slicePath}.footprint.${polygonIndex}.${ringIndex}`
+          if (!Array.isArray(ring) || ring.length < 4) {
+            errors.push(`${ringPath} doit contenir au moins quatre points, fermeture comprise`)
+            continue
+          }
+          if (ring.some(point => !Array.isArray(point) || point.length < 2 || !point.slice(0, 2).every(Number.isFinite))) {
+            errors.push(`${ringPath} doit contenir uniquement des coordonnées finies [x,z]`)
+          }
+          const first = ring[0]
+          const last = ring.at(-1)
+          if (!first || !last || Number(first[0]) !== Number(last[0]) || Number(first[1]) !== Number(last[1])) {
+            errors.push(`${ringPath} doit être fermé`)
+          }
+        }
+      }
+    }
+    if (!Array.isArray(slice.wallPaths) || slice.wallPaths.length === 0) {
+      errors.push(`${slicePath}.wallPaths doit contenir les murs canoniques de la tranche`)
+    } else {
+      slice.wallPaths.forEach((wall, wallIndex) => {
+        const wallPath = `${slicePath}.wallPaths.${wallIndex}`
+        if (!isPlainObject(wall) || !['x', 'z', 'segment', 'arc'].includes(wall.axis)) {
+          errors.push(`${wallPath}.axis est invalide`)
+          return
+        }
+        validateFiniteFields(wall, ['x0', 'z0', 'x1', 'z1'], wallPath, errors)
+        if (wall.axis === 'arc') validateFiniteFields(wall, ['centerX', 'centerZ', 'radius', 'startAngle', 'sweep'], wallPath, errors)
+        if (wall.elevationProfile != null) validateWallElevationProfile(wall.elevationProfile, `${wallPath}.elevationProfile`, errors)
+      })
+    }
+  })
+}
+
 function validateFeature(collection, id, item, errors) {
   const path = `$.${collection}.${id}`
   if (!isPlainObject(item)) {
@@ -124,6 +195,24 @@ function validateFeature(collection, id, item, errors) {
             errors.push(`${path}.cells.${index} sort des bornes de la salle`)
           }
         }
+      }
+    }
+    if (item.verticalProfile != null) validateRoomVerticalProfile(item.verticalProfile, item, path, errors)
+    if (item.wallElevationProfiles != null) {
+      if (!Array.isArray(item.wallElevationProfiles)) {
+        errors.push(`${path}.wallElevationProfiles doit être un tableau`)
+      } else {
+        item.wallElevationProfiles.forEach((entry, index) => {
+          const entryPath = `${path}.wallElevationProfiles.${index}`
+          if (!isPlainObject(entry) || !Array.isArray(entry.edgeKeys) || entry.edgeKeys.length === 0) {
+            errors.push(`${entryPath}.edgeKeys doit être un tableau non vide`)
+            return
+          }
+          if (entry.edgeKeys.some(key => typeof key !== 'string' || !key)) {
+            errors.push(`${entryPath}.edgeKeys doit contenir des clés non vides`)
+          }
+          validateWallElevationProfile(entry.profile, `${entryPath}.profile`, errors)
+        })
       }
     }
     if (item.boundaryArcs != null) {
