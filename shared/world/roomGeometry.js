@@ -901,9 +901,7 @@ export function roomWallAppearanceForEdges(room, edgeKeys) {
   if (!entry) return null
   return {
     interiorTex: entry.interiorTex || null,
-    exteriorTex: entry.exteriorTex || null,
     interiorMaterial: entry.interiorMaterial || null,
-    exteriorMaterial: entry.exteriorMaterial || null,
   }
 }
 
@@ -1362,6 +1360,85 @@ export function roomCeilingRegions(room, roomLookup = {}, storyHeight = 2.5) {
       footprint,
     }]
   })
+}
+
+export function roomHorizontalInterfaces(rooms, storyHeight = 2.5) {
+  const roomEntries = Object.entries(rooms || {})
+    .map(([roomId, room]) => ({ roomId, room: { id: roomId, ...room } }))
+    .sort((left, right) => left.roomId.localeCompare(right.roomId))
+  const levels = new Map()
+  const levelAt = y => {
+    const cleanY = clean(y)
+    const key = String(cleanY)
+    if (!levels.has(key)) levels.set(key, { y: cleanY, floors: [], ceilings: [] })
+    return levels.get(key)
+  }
+
+  for (const { roomId, room } of roomEntries) {
+    const baseY = Number.isFinite(Number(room.y))
+      ? Number(room.y)
+      : (Number(room.level) || 0) * storyHeight
+    if (room.floorEnabled !== false) {
+      const floorSlice = roomSliceAtLevel(room, 0, rooms, storyHeight)
+      if (floorSlice && multiPolygonArea(floorSlice.footprint) > EPSILON) {
+        levelAt(baseY).floors.push({ roomId, footprint: floorSlice.footprint })
+      }
+    }
+    if (room.ceilingEnabled !== false) {
+      for (const region of roomCeilingRegions(room, rooms, storyHeight)) {
+        levelAt(baseY + region.topOffset * storyHeight).ceilings.push({
+          roomId,
+          displayLevel: Math.round(baseY / storyHeight) + region.offset,
+          footprint: region.footprint,
+        })
+      }
+    }
+  }
+
+  const interfaces = []
+  const addInterface = ({ level, footprint, floor = null, ceiling = null }) => {
+    if (!footprint || multiPolygonArea(footprint) <= EPSILON) return
+    interfaces.push({
+      id: `horizontal:${level.y}:${floor?.roomId || '-'}:${ceiling?.roomId || '-'}`,
+      y: level.y,
+      footprint: cloneMultiPolygon(footprint),
+      floorRoomId: floor?.roomId || null,
+      ceilingRoomId: ceiling?.roomId || null,
+      ceilingDisplayLevel: ceiling?.displayLevel ?? null,
+    })
+  }
+
+  for (const level of [...levels.values()].sort((left, right) => left.y - right.y)) {
+    const floorFootprints = level.floors.map(item => item.footprint)
+    const ceilingFootprints = level.ceilings.map(item => item.footprint)
+    for (const floor of level.floors) {
+      for (const ceiling of level.ceilings) {
+        addInterface({
+          level,
+          floor,
+          ceiling,
+          footprint: polygonClipping.intersection(floor.footprint, ceiling.footprint),
+        })
+      }
+      addInterface({
+        level,
+        floor,
+        footprint: ceilingFootprints.length > 0
+          ? polygonClipping.difference(floor.footprint, ...ceilingFootprints)
+          : floor.footprint,
+      })
+    }
+    for (const ceiling of level.ceilings) {
+      addInterface({
+        level,
+        ceiling,
+        footprint: floorFootprints.length > 0
+          ? polygonClipping.difference(ceiling.footprint, ...floorFootprints)
+          : ceiling.footprint,
+      })
+    }
+  }
+  return interfaces
 }
 
 export function multiPolygonGridCells(multiPolygon) {

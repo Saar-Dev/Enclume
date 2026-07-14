@@ -21,7 +21,7 @@ test('les usages texture réunissent voxels et surfaces sans s’effacer mutuell
   const ids = collectBattlemapTextureIds(
     { '0:0:0': { tex: 4 }, '1:0:0': { tex: 4 } },
     {
-      rooms: { roomA: { minX: 0, maxX: 0, minZ: 0, maxZ: 0, floorTopTex: 7 } },
+      rooms: { roomA: { minX: 0, maxX: 0, minZ: 0, maxZ: 0, floorTex: 7 } },
       floors: {}, walls: {}, ceilings: {}, stairs: {}, connectors: {},
     },
   )

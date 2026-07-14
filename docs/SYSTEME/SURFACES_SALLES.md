@@ -1,29 +1,32 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-14 — apparences par mur, panneaux déplaçables et retour automatique en sélection.
+> Dernière mise à jour : 2026-07-14 — contrat d'apparence v12 et affichage opaque des étages inférieurs.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
 > Architecture physique complète : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > Ordre de migration : `docs/PLAN_MOTEUR_MONDE.md`.
 
-## Statut au 2026-07-13
+## Statut au 2026-07-14
 
-L'éditeur Surface/Salle et son rendu existent. `surface_data` version 11 sait décrire des salles,
+L'éditeur Surface/Salle et son rendu existent. `surface_data` version 12 sait décrire des salles,
 sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
 navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
 le lisent également ; depuis la Phase 7, la FSM combat lui délègue aussi déplacements, distances,
-portées, interactions et terrain instable. Depuis la Phase 8, l'affichage isole strictement l'étage
-courant. Depuis la Phase 10, les murs courbes de salle sont des arcs structurés de leur contour,
+portées, interactions et terrain instable. L'affichage de coupe conserve désormais tous les étages
+inférieurs opaques et ne rend transparent que ce qui ferme le niveau courant. Depuis la Phase 10,
+les murs courbes de salle sont des arcs structurés de leur contour,
 partagés par le rendu, les collisions et la LOS. Depuis la Phase 11, supprimer un mur ouvre la
 salle ou fusionne ses deux volumes, et une nouvelle salle est découpée par les contours courbes
 déjà présents au lieu de superposer ses murs. Depuis la Phase 12, un mur arrondi reste un arc
 paramétrique unique dans le document, le renderer et le snapshot physique. Sa tessellation n'est
 plus une autorité enregistrée ni une collection de petits murs. La v9 ajoute les tranches verticales
 canoniques nécessaires aux salles fusionnées de hauteurs différentes. La v10 ajoute les profils de
-mur vus en coupe et déplace les réglages de sélection dans des panneaux contextuels. La v11 ajoute
-les profils d'apparence liés aux arêtes logiques des murs.
+mur vus en coupe et déplace les réglages de sélection dans des panneaux contextuels. La v12 remplace
+les anciennes faces d'apparence par `floorMaterial`, `ceilingMaterial` et `wallInteriorMaterial` et
+conserve les profils d'apparence intérieure liés aux arêtes logiques des murs. Elle ne migre pas les
+anciens champs `top/bottom`, `front/back` ou `exterior`.
 
 Un arc conserve toujours les extrémités exactes enregistrées par le contour. Centre, rayon et angles
 servent à générer les points intermédiaires, jamais à reconstruire les ancrages. Le renderer reprend
@@ -50,8 +53,9 @@ Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
 - volume à hauteur locale variable : `verticalProfile.slices[]`. Chaque tranche contient son
   `offset`, son multipolygone `footprint` et ses `wallPaths` canoniques. Le plafond est la différence
   entre une tranche et la suivante, pas une dalle globale placée au sommet maximal ;
-- dalles : sol et plafond, avec textures ou matériaux séparés pour dessus/dessous ;
-- murs : une face intérieure et une face extérieure ; les murs libres sont droits ou restent des
+- surfaces intérieures : `floorTex` / `floorMaterial` pour le sol et `ceilingTex` /
+  `ceilingMaterial` pour le plafond. Une salle ne stocke aucune apparence de face extérieure ;
+- murs : une apparence intérieure par salle ; les murs libres sont droits ou restent des
   données historiques, tandis que les arrondis de salle sont de vrais chemins circulaires ;
 - arrondis de salle : `boundaryArcs`, chacun lié à une chaîne d'arêtes du contour avec un angle et
   un côté. Le chemin canonique dérivé conserve centre, rayon, angle initial, balayage et longueur ;
@@ -62,8 +66,8 @@ Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
 - profil de mur vu de côté : `wallElevationProfiles[]` associe des arêtes logiques à un profil
   `curved` (`(`) ou `faceted` (`<`), une profondeur en mètres et un sens. Le profil `vertical` (`|`)
   est l'absence d'entrée ;
-- apparence de mur : `wallAppearanceProfiles[]` associe les mêmes arêtes logiques aux matériaux ou
-  textures des faces intérieure et extérieure. L'apparence survit donc à l'arrondi horizontal, au
+- apparence de mur : `wallAppearanceProfiles[]` associe les mêmes arêtes logiques au matériau ou à
+  la texture de la face intérieure. L'apparence survit donc à l'arrondi horizontal, au
   profil vertical, à la sauvegarde et à la fusion d'une salle ;
 - connecteurs : portes, escaliers, échelles, passerelles et ascenseurs entre salles/étages.
 
@@ -77,10 +81,10 @@ devient une salle distincte. Des salles empilées sans chevauchement vertical co
 les mêmes coordonnées `x:z`.
 
 Une salle `heightLevels > 1` existe dans chaque tranche verticale qu'elle traverse et décrit un seul
-volume ouvert. Depuis une tranche haute, son sol de base, ses murs descendants et le contenu situé
-plus bas dans sa propre emprise restent visibles : un puits profond doit donc paraître profond.
-Aucun plancher intermédiaire n'est créé automatiquement et les pièces inférieures extérieures à
-cette emprise restent absentes. Une future trappe doit être portée par un connecteur vertical —
+volume ouvert. Tous les étages inférieurs au niveau de coupe sont rendus, sans transparence. Une
+salle profonde conserve en plus ses murs descendants et son vide continu : un puits doit donc
+paraître profond. Aucun plancher intermédiaire n'est créé automatiquement. Une future trappe doit
+être portée par un connecteur vertical —
 typiquement une échelle — avec son propre état ouvert/fermé ; elle ne révèle jamais l'étage inférieur
 entier.
 
@@ -143,16 +147,22 @@ La grille de l’éditeur reste la référence visuelle. Une case de grille repr
 
 Pour les textures, le carrelage/motif doit suivre cette case de référence : une répétition logique doit tomber sur les lignes de grille, aussi bien au sol que sur les murs. Les UV de mur se basent donc sur les coordonnées monde signées, pas sur une répétition locale par petit panneau.
 
-## Mur intérieur / extérieur
+## Apparence intérieure et parois physiques
 
 On ne raisonne plus en “face A / face B”.
 
-Chaque panneau de mur physique possède deux faces :
+Chaque panneau de mur physique peut recevoir deux contributions intérieures :
 
 - face intérieure de la salle située d’un côté ;
-- face extérieure uniquement si aucune salle n’occupe l’autre côté.
+- face intérieure d'une éventuelle salle située de l'autre côté.
 
-Cas important : si deux salles se touchent, le même panneau de mur porte deux casquettes intérieures. La face vue depuis la salle A utilise le mur intérieur de A, et la face vue depuis la salle B utilise le mur intérieur de B. Une face extérieure ne doit jamais écraser une face intérieure.
+Si aucune salle n'occupe l'autre côté, le renderer réemploie l'apparence intérieure du mur. Il
+n'existe aucun réglage d'apparence extérieure dans le document v12.
+
+À une frontière horizontale commune, le plafond de la salle inférieure et le sol de la salle
+supérieure forment une seule interface dérivée. Vue d'en bas elle emploie le plafond inférieur ; dès
+que l'étage supérieur est affiché, elle emploie son sol. Deux dalles coplanaires ne sont jamais
+rendues ensemble.
 
 ### Profil vertical d'un mur
 
@@ -209,7 +219,7 @@ L’outil Salle est l’outil de référence.
 - Après création d’une salle, l’éditeur sélectionne immédiatement la nouvelle salle, ouvre son
   panneau et revient en mode sélection.
 - Le panneau de salle contient hauteur simple, épaisseurs de dalle/plafond/mur, multiplicateur de
-  déplacement, collision, apparence des surfaces supérieure/inférieure — matière, motif, peinture,
+  déplacement, collision, apparence du sol et du plafond — matière, motif, peinture,
   usure, saleté et relief — et accès à la création des connecteurs. Une salle à
   `verticalProfile` affiche sa hauteur locale comme propriété structurelle au lieu de proposer un
   sélecteur global trompeur. Il expose aussi **Supprimer la salle** avec confirmation ; cette

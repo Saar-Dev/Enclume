@@ -11,7 +11,7 @@ import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
 import {
   multiPolygonContours,
   roomBoundaryContours,
-  roomCeilingRegions,
+  roomHorizontalInterfaces,
   roomSliceAtLevel,
   sampleWallArcGeometry,
   wallCornerIntersectionPoint,
@@ -26,7 +26,6 @@ import {
   getRoomCeilingThickness,
   getRoomFloorThickness,
   getRoomFootprintCells,
-  getRoomHeightLevels,
   getRoomTopY,
   getWallRenderBox,
   isWorldPointVisibleAtLevel,
@@ -83,6 +82,7 @@ const BOLT_WASHER_MATERIAL = new THREE.MeshStandardMaterial({
   roughness: 0.68,
   metalness: 0.3,
 })
+const HIDDEN_WALL_CAP_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
 
 function proceduralMaterialKey(descriptor) {
   if (!descriptor || typeof descriptor !== 'object') return null
@@ -472,10 +472,11 @@ function RoomSlab({
     ? Number(yOverride)
     : isCeiling ? getRoomTopY(room) : getRoomBaseY(room)
   const thickness = isCeiling ? getRoomCeilingThickness(room) : getRoomFloorThickness(room)
-  const topMaterialDescriptor = isCeiling ? room.ceilingTopMaterial : room.floorTopMaterial
-  const bottomMaterialDescriptor = isCeiling ? room.ceilingBottomMaterial : room.floorBottomMaterial
-  const topTex = isCeiling ? room.ceilingTopTex : room.floorTopTex
-  const bottomTex = isCeiling ? room.ceilingBottomTex : room.floorBottomTex
+  const materialDescriptor = isCeiling ? room.ceilingMaterial : room.floorMaterial
+  const topMaterialDescriptor = materialDescriptor
+  const bottomMaterialDescriptor = materialDescriptor
+  const topTex = isCeiling ? room.ceilingTex : room.floorTex
+  const bottomTex = topTex
   const topProcedural = surfaceMaterialAt(topMaterialDescriptor, showDetails)
   const bottomProcedural = surfaceMaterialAt(bottomMaterialDescriptor, showDetails)
   const top = topProcedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, topTex, FACE.top)
@@ -658,8 +659,13 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
   let faceProfiles
   let faceMask
   if (wall.axis === 'x' || wall.axis === 'segment') {
-    const sideEast = withUvTransform(frontBase, faceUvTransforms[0])
-    const sideWest = withUvTransform(frontBase, faceUvTransforms[1])
+    const forward = wall.axis === 'segment' || Number(wall.x1) >= Number(wall.x0)
+    const sideEast = (forward ? wall.capEnd : wall.capStart) === false
+      ? HIDDEN_WALL_CAP_MATERIAL
+      : withUvTransform(frontBase, faceUvTransforms[0])
+    const sideWest = (forward ? wall.capStart : wall.capEnd) === false
+      ? HIDDEN_WALL_CAP_MATERIAL
+      : withUvTransform(frontBase, faceUvTransforms[1])
     const top = withUvTransform(topBase, faceUvTransforms[2])
     const bottom = withUvTransform(topBase, faceUvTransforms[3])
     const front = withUvTransform(frontBase, faceUvTransforms[4])
@@ -668,12 +674,17 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
     faceProfiles = [null, null, null, null, frontRelief, backRelief]
     faceMask = [false, false, false, false, true, true]
   } else {
+    const forward = Number(wall.z1) >= Number(wall.z0)
     const front = withUvTransform(frontBase, faceUvTransforms[0])
     const back = withUvTransform(backBase, faceUvTransforms[1])
     const top = withUvTransform(topBase, faceUvTransforms[2])
     const bottom = withUvTransform(topBase, faceUvTransforms[3])
-    const sideSouth = withUvTransform(frontBase, faceUvTransforms[4])
-    const sideNorth = withUvTransform(frontBase, faceUvTransforms[5])
+    const sideSouth = (forward ? wall.capEnd : wall.capStart) === false
+      ? HIDDEN_WALL_CAP_MATERIAL
+      : withUvTransform(frontBase, faceUvTransforms[4])
+    const sideNorth = (forward ? wall.capStart : wall.capEnd) === false
+      ? HIDDEN_WALL_CAP_MATERIAL
+      : withUvTransform(frontBase, faceUvTransforms[5])
     materials = [front, back, top, bottom, sideSouth, sideNorth]
     faceProfiles = [frontRelief, backRelief, null, null, null, null]
     faceMask = [true, true, false, false, false, false]
@@ -932,6 +943,8 @@ function makeCurvedWallGeometry(wall) {
     }
   }
   for (const pathIndex of [0, path.length - 1]) {
+    if (pathIndex === 0 && wall.capStart === false) continue
+    if (pathIndex === path.length - 1 && wall.capEnd === false) continue
     if (pathIndex === 0 && wall.profileJoinStart) continue
     if (pathIndex === path.length - 1 && wall.profileJoinEnd) continue
     for (let verticalIndex = 0; verticalIndex < verticalLevels.length - 1; verticalIndex += 1) {
@@ -993,6 +1006,7 @@ function cloneWallPiece(wall, suffix, patch) {
     ...wall,
     ...patch,
     id: `${wall.id}:cut:${suffix}`,
+    logicalWallId: wall.logicalWallId || wall.id,
   }
 }
 
@@ -1155,17 +1169,21 @@ function splitWallForDoorConnector(wall, connector) {
     const epsilon = 1e-6
     if (fromT > epsilon) pieces.push(cloneWallPiece(wall, `before:${opening.min}`, {
       ...curvePatch(0, fromT),
+      capEnd: false,
       profileJoinEnd: null,
       profileJoinEndMiter: null,
     }))
     if (toT < 1 - epsilon) pieces.push(cloneWallPiece(wall, `after:${opening.max}`, {
       ...curvePatch(toT, 1),
+      capStart: false,
       profileJoinStart: null,
       profileJoinStartMiter: null,
     }))
     if (opening.wallTop > opening.top + 0.01 && toT > fromT + epsilon) {
       pieces.push(cloneWallPiece(wall, `top:${opening.min}:${opening.max}`, {
         ...curvePatch(fromT, toT),
+        capStart: false,
+        capEnd: false,
         opacityY: opening.bottom,
         y: opening.top,
         height: opening.wallTop - opening.top,
@@ -1838,33 +1856,34 @@ function sameStringSet(left, right) {
 }
 
 function wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel) {
-  if (!wall || !['x', 'z'].includes(wall.axis) || displayLevel === null || yToLevel(wallOpacityY(wall)) !== displayLevel) return false
-  const box = getWallRenderBox(wall)
-  if (!box || floorCells.size === 0) return false
+  if (!wall || displayLevel === null || yToLevel(wallOpacityY(wall)) !== displayLevel) return false
+  if (floorCells.size === 0) return false
 
-  const [width, , depth] = box.args
-  const [cx, , cz] = box.position
-  const alongX = wall.axis === 'x'
-  const length = alongX ? width : depth
-  const wallLine = alongX ? cz : cx
-  const cameraPerpendicular = alongX ? camera.position.z : camera.position.x
-  const cameraSide = Math.sign(cameraPerpendicular - wallLine)
-  if (cameraSide === 0) return false
-
-  // Un mur masque le sol quand une case du niveau affiche se trouve juste
-  // derriere lui, sur le cote oppose a la camera. Ce test topologique reste
-  // stable quel que soit l'angle ou le zoom, contrairement a quelques rayons
-  // projetes depuis des points arbitraires du mur.
-  const halfThickness = (alongX ? depth : width) / 2
-  const behindWall = wallLine - cameraSide * (halfThickness + 0.03)
-  const sampleCount = Math.max(1, Math.ceil(length * 4))
-  const alongStart = (alongX ? cx : cz) - length / 2
-
-  for (let index = 0; index < sampleCount; index += 1) {
-    const along = alongStart + ((index + 0.5) / sampleCount) * length
-    const floorX = alongX ? along : behindWall
-    const floorZ = alongX ? behindWall : along
-    if (floorCells.has(`${Math.floor(floorX)}:${Math.floor(floorZ)}`)) return true
+  const path = profiledWallPath(wall)
+  const halfThickness = Math.max(1, Number(wall.thickness) || 1) / (2 * SURFACE_FINE)
+  for (let pathIndex = 0; pathIndex < path.length - 1; pathIndex += 1) {
+    const from = path[pathIndex]
+    const to = path[pathIndex + 1]
+    const dx = to.x - from.x
+    const dz = to.z - from.z
+    const length = Math.hypot(dx, dz)
+    if (length <= 1e-6) continue
+    const normalX = -dz / length
+    const normalZ = dx / length
+    const midX = (from.x + to.x) / 2
+    const midZ = (from.z + to.z) / 2
+    const cameraSide = Math.sign(
+      (camera.position.x - midX) * normalX
+      + (camera.position.z - midZ) * normalZ,
+    )
+    if (cameraSide === 0) continue
+    const sampleCount = Math.max(1, Math.ceil(length * 4))
+    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+      const t = (sampleIndex + 0.5) / sampleCount
+      const floorX = from.x + dx * t - normalX * cameraSide * (halfThickness + 0.03)
+      const floorZ = from.z + dz * t - normalZ * cameraSide * (halfThickness + 0.03)
+      if (floorCells.has(`${Math.floor(floorX)}:${Math.floor(floorZ)}`)) return true
+    }
   }
   return false
 }
@@ -1901,7 +1920,9 @@ function useOccludedWallIds(walls, surface, displayLevel) {
 
     const next = new Set()
     for (const wall of walls) {
-      if (wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel)) next.add(wall.id)
+      if (wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel)) {
+        next.add(wall.logicalWallId || wall.id)
+      }
     }
     setOccludedIds(current => (sameStringSet(current, next) ? current : next))
   })
@@ -1909,47 +1930,36 @@ function useOccludedWallIds(walls, surface, displayLevel) {
   return occludedIds
 }
 
-function RoomVolume({ room, roomLookup, textureMaterials, ceilingOpacity, showFloor, displayLevel, showDetails }) {
+function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails }) {
   const hasVerticalProfile = Array.isArray(room?.verticalProfile?.slices)
     && room.verticalProfile.slices.length > 0
-  const baseLevel = yToLevel(getRoomBaseY(room))
   const floorSlice = hasVerticalProfile ? roomSliceAtLevel(room, 0, roomLookup, STORY_HEIGHT) : null
-  const ceilingRegions = hasVerticalProfile
-    ? roomCeilingRegions(room, roomLookup, STORY_HEIGHT)
-    : [{
-        offset: getRoomHeightLevels(room) - 1,
-        topOffset: getRoomHeightLevels(room),
-        footprint: null,
-      }]
+  if (room.floorEnabled === false) return null
   return (
-    <>
-      {showFloor && room.floorEnabled !== false && (
-        <RoomSlab
-          room={room}
-          roomLookup={roomLookup}
-          kind="floor"
-          textureMaterials={textureMaterials}
-          opacity={1}
-          showDetails={showDetails}
-          footprintContours={floorSlice ? multiPolygonContours(floorSlice.footprint) : null}
-        />
-      )}
-      {room.ceilingEnabled !== false && ceilingRegions.map(region => (
-        displayLevel === null || displayLevel === baseLevel + region.offset
-          ? <RoomSlab
-              key={`ceiling-region:${region.offset}`}
-              room={room}
-              roomLookup={roomLookup}
-              kind="ceiling"
-              textureMaterials={textureMaterials}
-              opacity={ceilingOpacity}
-              showDetails={showDetails}
-              footprintContours={region.footprint ? multiPolygonContours(region.footprint) : null}
-              yOverride={getRoomBaseY(room) + region.topOffset * STORY_HEIGHT}
-            />
-          : null
-      ))}
-    </>
+    <RoomSlab
+      room={room}
+      roomLookup={roomLookup}
+      kind="floor"
+      textureMaterials={textureMaterials}
+      opacity={1}
+      showDetails={showDetails}
+      footprintContours={floorSlice ? multiPolygonContours(floorSlice.footprint) : null}
+    />
+  )
+}
+
+function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMaterials, opacity, showDetails }) {
+  return (
+    <RoomSlab
+      room={room}
+      roomLookup={roomLookup}
+      kind="ceiling"
+      textureMaterials={textureMaterials}
+      opacity={opacity}
+      showDetails={showDetails}
+      footprintContours={multiPolygonContours(horizontalInterface.footprint)}
+      yOverride={horizontalInterface.y}
+    />
   )
 }
 
@@ -1966,6 +1976,10 @@ function SurfaceDungeonScene({
   runtimeFeatureStates = {},
 }) {
   const surface = useMemo(() => normalizeSurfaceData(surfaceData), [surfaceData])
+  const horizontalInterfaces = useMemo(
+    () => roomHorizontalInterfaces(surface.rooms, STORY_HEIGHT),
+    [surface.rooms],
+  )
   const water = useMemo(
     () => (showWater ? computeSurfaceWaterCells(surface) : null),
     [showWater, surface],
@@ -1994,26 +2008,14 @@ function SurfaceDungeonScene({
     [roomWallSegments, surfaceWallSegments],
   )
   const occludedWallIds = useOccludedWallIds(allWallSegments, surface, displayLevel)
-  const structureIsVisible = (y) => displayLevel === null || yToLevel(y) === displayLevel
+  const structureIsVisible = (y) => displayLevel === null || yToLevel(y) <= displayLevel
   const worldPointIsVisible = (x, z, y) => (
     isWorldPointVisibleAtLevel(surface, displayLevel, x, z, y)
   )
-  const roomDepthIncludesLevel = (room, itemLevel) => {
-    if (!room || displayLevel === null || getRoomHeightLevels(room) < 2) return false
-    const baseLevel = yToLevel(getRoomBaseY(room))
-    return itemLevel >= baseLevel
-      && itemLevel <= displayLevel
-      && Boolean(roomSliceAtLevel(room, displayLevel - baseLevel, surface.rooms, STORY_HEIGHT))
-  }
   const roomWallIsVisible = wall => structureIsVisible(wallOpacityY(wall))
-    || (wall?.roomIds || []).some(roomId => (
-      roomDepthIncludesLevel(surface.rooms[roomId], yToLevel(wallOpacityY(wall)))
-    ))
-  const roomSlice = room => {
-    const baseLevel = yToLevel(getRoomBaseY(room))
-    return displayLevel === null
-      || Boolean(roomSliceAtLevel(room, displayLevel - baseLevel, surface.rooms, STORY_HEIGHT))
-  }
+  const roomFloorIsVisible = room => (
+    displayLevel === null || yToLevel(getRoomBaseY(room)) <= displayLevel
+  )
   const connectorIsVisible = connector => {
     if (displayLevel === null) return true
     if (connector?.type === 'door' || connector?.type === 'legacy-door-placeholder') {
@@ -2034,7 +2036,7 @@ function SurfaceDungeonScene({
     if (Number.isFinite(Number(connector?.y))) levels.push(yToLevel(connector.y))
     if (Number.isFinite(Number(connector?.topY))) levels.push(yToLevel(connector.topY))
     if (levels.length === 0) return false
-    return displayLevel >= Math.min(...levels) && displayLevel <= Math.max(...levels)
+    return displayLevel >= Math.min(...levels)
   }
   const visibleWaterCells = useMemo(
     () => water?.waterCells || [],
@@ -2044,16 +2046,40 @@ function SurfaceDungeonScene({
   return (
     <>
       {Object.entries(surface.rooms).map(([id, room]) => {
-        if (!roomSlice(room)) return null
+        if (!roomFloorIsVisible(room)) return null
         return (
-          <RoomVolume
+          <RoomFloorSurface
             key={id}
             room={{ id, ...room }}
             roomLookup={surface.rooms}
             textureMaterials={textureMaterials}
-            ceilingOpacity={ceilingOpacity}
-            showFloor
-            displayLevel={displayLevel}
+            showDetails={showDetails}
+          />
+        )
+      })}
+      {horizontalInterfaces.map(horizontalInterface => {
+        if (!horizontalInterface.ceilingRoomId) return null
+        const floorRoom = horizontalInterface.floorRoomId
+          ? surface.rooms[horizontalInterface.floorRoomId]
+          : null
+        const floorIsDrawn = Boolean(floorRoom && roomFloorIsVisible(floorRoom))
+        const ceilingIsVisible = displayLevel === null
+          || horizontalInterface.ceilingDisplayLevel <= displayLevel
+        if (floorIsDrawn || !ceilingIsVisible) return null
+        const room = surface.rooms[horizontalInterface.ceilingRoomId]
+        if (!room) return null
+        const opacity = displayLevel === null
+          || horizontalInterface.ceilingDisplayLevel === displayLevel
+          ? ceilingOpacity
+          : 1
+        return (
+          <RoomCeilingInterface
+            key={horizontalInterface.id}
+            horizontalInterface={horizontalInterface}
+            room={{ id: horizontalInterface.ceilingRoomId, ...room }}
+            roomLookup={surface.rooms}
+            textureMaterials={textureMaterials}
+            opacity={opacity}
             showDetails={showDetails}
           />
         )
@@ -2063,7 +2089,7 @@ function SurfaceDungeonScene({
           key={wall.id}
           wall={wall}
           textureMaterials={textureMaterials}
-          opacity={occludedWallIds.has(wall.id) ? OCCLUDED_WALL_OPACITY : 1}
+          opacity={occludedWallIds.has(wall.logicalWallId || wall.id) ? OCCLUDED_WALL_OPACITY : 1}
           showDetails={showDetails}
         />
       ) : null)}
@@ -2081,7 +2107,7 @@ function SurfaceDungeonScene({
             key={wall.id}
             wall={wall}
             textureMaterials={textureMaterials}
-            opacity={occludedWallIds.has(wall.id) ? OCCLUDED_WALL_OPACITY : 1}
+            opacity={occludedWallIds.has(wall.logicalWallId || wall.id) ? OCCLUDED_WALL_OPACITY : 1}
             showDetails={showDetails}
           />
         ) : null
@@ -2089,13 +2115,15 @@ function SurfaceDungeonScene({
       {Object.entries(surface.ceilings).map(([id, ceiling]) => {
         const parsed = parseCeilingKey(id, ceiling)
         if (!worldPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.baseY)) return null
+        const ceilingLevel = yToLevel(parsed.y) - 1
+        const opacity = displayLevel === null || ceilingLevel === displayLevel ? ceilingOpacity : 1
         return (
           <CeilingTile
             key={id}
             id={id}
             ceiling={ceiling}
             textureMaterials={textureMaterials}
-            opacity={ceilingOpacity}
+            opacity={opacity}
             showDetails={showDetails}
           />
         )

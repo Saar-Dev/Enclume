@@ -20,7 +20,7 @@ function surfaceFixture() {
         maxX: 0,
         minZ: 0,
         maxZ: 0,
-        floorTopTex: 10,
+        floorTex: 10,
         wallInteriorTex: 11,
       },
     },
@@ -199,14 +199,13 @@ test('la v10 valide les profils verticaux paramétriques des faces de mur', () =
   assert.equal(validateSurfaceData(surface).valid, false)
 })
 
-test('la v11 valide les apparences persistantes par mur', () => {
+test('la v12 valide l apparence interieure persistante par mur', () => {
   const surface = surfaceFixture()
-  surface.version = 11
+  surface.version = 12
   surface.rooms['room:legacy'].wallAppearanceProfiles = [{
     id: 'wall-appearance:test',
     edgeKeys: ['edge:0:0|1:0'],
     interiorTex: 'wall-inside',
-    exteriorTex: 'wall-outside',
     interiorMaterial: {
       material: 'steel',
       paint: '#aabbcc',
@@ -217,23 +216,22 @@ test('la v11 valide les apparences persistantes par mur', () => {
       realRelief: true,
       seed: 'test',
     },
-    exteriorMaterial: {
-      material: 'concrete',
-      paint: '#778899',
-      pattern: 'none',
-      wear: 4,
-      dirt: 2,
-      relief: 0,
-      realRelief: false,
-      seed: 'test-outside',
-    },
   }]
   assert.equal(validateSurfaceData(surface).valid, true)
   assert.ok(collectSurfaceTextureIds(surface).includes('wall-inside'))
-  assert.ok(collectSurfaceTextureIds(surface).includes('wall-outside'))
 
   surface.rooms['room:legacy'].wallAppearanceProfiles[0].interiorMaterial.wear = 101
   assert.equal(validateSurfaceData(surface).valid, false)
+})
+
+test('la v12 refuse les anciennes faces d apparence des salles', () => {
+  const surface = surfaceFixture()
+  surface.version = 12
+  surface.rooms['room:legacy'].floorTopTex = 'obsolete'
+
+  const validation = validateSurfaceData(surface)
+  assert.equal(validation.valid, false)
+  assert.ok(validation.errors.some(error => error.includes('floorTopTex')))
 })
 
 test('les versions futures et les coordonnées corrompues sont refusées', () => {

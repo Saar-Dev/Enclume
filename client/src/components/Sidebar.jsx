@@ -565,53 +565,44 @@ export default function Sidebar({
     effectHeight: 2.5,
     surfaceBlocking: 'solid',
     floorPackId: null,
+    ceilingPackId: null,
     stairPackId: null,
     wallInteriorPackId: null,
-    wallExteriorPackId: null,
-    wallFrontPackId: null,
-    wallBackPackId: null,
     floorTexId: null,
+    ceilingTexId: null,
     stairTexId: null,
     wallInteriorTexId: null,
-    wallExteriorTexId: null,
-    wallFrontTexId: null,
-    wallBackTexId: null,
     autoVariants: true,
     surfaceMaterialMode: 'procedural',
-    materialFace: 'top',
+    materialFace: 'floor',
     materialProfiles: {
-      top: { ...DEFAULT_SURFACE_MATERIAL_PRESET },
-      bottom: { ...DEFAULT_SURFACE_MATERIAL_PRESET, paint: '#6b7280' },
+      floor: { ...DEFAULT_SURFACE_MATERIAL_PRESET },
+      ceiling: { ...DEFAULT_SURFACE_MATERIAL_PRESET, paint: '#6b7280' },
       wallInterior: { ...DEFAULT_SURFACE_MATERIAL_PRESET },
-      wallExterior: { ...DEFAULT_SURFACE_MATERIAL_PRESET },
     },
     materialPreset: DEFAULT_SURFACE_MATERIAL_PRESET,
     ...surfaceTool,
   }
   const updateSurfaceTool = (patch) => onSurfaceToolChange?.({ ...surfaceToolState, ...patch })
-  const rawSurfaceMaterialFace = surfaceToolState.materialFace || 'top'
-  const surfaceMaterialFace = rawSurfaceMaterialFace === 'wallFront'
-    ? 'wallInterior'
-    : rawSurfaceMaterialFace === 'wallBack'
-      ? 'wallExterior'
-      : rawSurfaceMaterialFace
+  const surfaceMaterialFace = surfaceToolState.materialFace || 'floor'
   const rawSurfaceMaterialProfiles = surfaceToolState.materialProfiles || {}
   const surfaceMaterialProfiles = {
     ...rawSurfaceMaterialProfiles,
-    top: { ...DEFAULT_SURFACE_MATERIAL_PRESET, ...(rawSurfaceMaterialProfiles.top || {}) },
-    bottom: { ...DEFAULT_SURFACE_MATERIAL_PRESET, ...(rawSurfaceMaterialProfiles.bottom || {}) },
+    floor: {
+      ...DEFAULT_SURFACE_MATERIAL_PRESET,
+      ...(rawSurfaceMaterialProfiles.floor || {}),
+    },
+    ceiling: {
+      ...DEFAULT_SURFACE_MATERIAL_PRESET,
+      paint: '#6b7280',
+      ...(rawSurfaceMaterialProfiles.ceiling || {}),
+    },
     wallInterior: {
       ...DEFAULT_SURFACE_MATERIAL_PRESET,
-      ...(rawSurfaceMaterialProfiles.wallFront || {}),
       ...(rawSurfaceMaterialProfiles.wallInterior || {}),
     },
-    wallExterior: {
-      ...DEFAULT_SURFACE_MATERIAL_PRESET,
-      ...(rawSurfaceMaterialProfiles.wallBack || {}),
-      ...(rawSurfaceMaterialProfiles.wallExterior || {}),
-    },
   }
-  const surfaceMaterialState = surfaceMaterialProfiles[surfaceMaterialFace] || surfaceMaterialProfiles.top
+  const surfaceMaterialState = surfaceMaterialProfiles[surfaceMaterialFace] || surfaceMaterialProfiles.floor
   const surfacePaintValue = /^#[0-9a-f]{6}$/i.test(String(surfaceMaterialState.paint || ''))
     ? surfaceMaterialState.paint
     : DEFAULT_SURFACE_MATERIAL_PRESET.paint
@@ -1623,10 +1614,9 @@ export default function Sidebar({
                     <div style={styles.roomToolSectionTitle}>{t('surfaceEditor.appliedMaterial')}</div>
                     <div style={styles.roomToolModes}>
                       {[
-                        ['top', t('surfaceEditor.topFace')],
-                        ['bottom', t('surfaceEditor.bottomFace')],
-                        ['wallInterior', t('surfaceEditor.wallInteriorFace')],
-                        ['wallExterior', t('surfaceEditor.wallExteriorFace')],
+                        ['floor', 'Sol'],
+                        ['ceiling', 'Plafond'],
+                        ['wallInterior', 'Murs côté salle'],
                       ].map(([face, label]) => (
                         <button
                           key={face}

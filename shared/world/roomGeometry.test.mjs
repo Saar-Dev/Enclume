@@ -14,6 +14,7 @@ import {
   roomGeometryArea,
   roomGeometryContainsPoint,
   roomGeometryIntersectionArea,
+  roomHorizontalInterfaces,
   sampleRoomBoundaryArc,
   sampleWallArcGeometry,
   selectedRoomBoundaryChain,
@@ -47,6 +48,21 @@ const square = {
   maxZ: 1,
   cells: ['0:0', '1:0', '0:1', '1:1'],
 }
+
+test('un plafond et le sol de la salle superieure forment une seule interface horizontale', () => {
+  const rooms = {
+    lower: { id: 'lower', ...square, y: 0, level: 0, heightLevels: 1 },
+    upper: { id: 'upper', ...square, y: 2.5, level: 1, heightLevels: 1 },
+  }
+  const interfaces = roomHorizontalInterfaces(rooms, 2.5)
+  const shared = interfaces.filter(item => item.y === 2.5)
+
+  assert.equal(shared.length, 1)
+  assert.equal(shared[0].floorRoomId, 'upper')
+  assert.equal(shared[0].ceilingRoomId, 'lower')
+  assert.equal(shared[0].ceilingDisplayLevel, 0)
+  assert.ok(shared[0].footprint.length > 0)
+})
 
 function pathProbe(path, side) {
   if (path.axis === 'arc') {
@@ -262,7 +278,6 @@ test('un mur arrondi conserve le profil d’apparence de ses arêtes canoniques'
   const { arc } = makeRoomBoundaryArc(square, selectedKeys, 90)
   const appearance = {
     interiorMaterial: { material: 'steel', paint: '#ff0000', wear: 0, dirt: 0, relief: 0 },
-    exteriorMaterial: { material: 'wood', paint: '#0000ff', wear: 0, dirt: 0, relief: 0 },
   }
   const rounded = {
     id: 'rounded-appearance',
@@ -273,7 +288,7 @@ test('un mur arrondi conserve le profil d’apparence de ses arêtes canoniques'
 
   assert.equal(roomWallAppearanceForEdges(rounded, selectedKeys).interiorMaterial.paint, '#ff0000')
   const curvedPath = roomBoundaryPaths(rounded).find(path => path.axis === 'arc')
-  assert.equal(curvedPath.wallAppearance.exteriorMaterial.paint, '#0000ff')
+  assert.equal(curvedPath.wallAppearance.interiorMaterial.paint, '#ff0000')
 })
 
 test('un mur ouvert ne conserve pas de zone de sélection invisible', () => {

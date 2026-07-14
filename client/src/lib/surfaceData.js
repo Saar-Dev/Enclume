@@ -5,7 +5,6 @@ import {
 import {
   buildMergedRoomVerticalProfile,
   makeRoomBoundaryArc,
-  migrateRoomGeometryClips,
   multiPolygonContainsPoint,
   multiPolygonGridCells,
   normalizeWallElevationProfile,
@@ -275,12 +274,7 @@ function makeSurfaceMaterial(tool, seed) {
 }
 
 function toolForMaterialFace(tool, face) {
-  const normalizedFace = face === 'wallFront'
-    ? 'wallInterior'
-    : face === 'wallBack'
-      ? 'wallExterior'
-      : face
-  const preset = tool?.materialProfiles?.[normalizedFace] || tool?.materialProfiles?.[face]
+  const preset = tool?.materialProfiles?.[face]
   if (!preset) return tool
   return { ...tool, materialPreset: preset }
 }
@@ -339,18 +333,16 @@ export function normalizeSurfaceData(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return { ...DEFAULT_SURFACE_DATA }
   const storyHeight = Number(data.storyHeight) || STORY_HEIGHT
   const sourceRooms = data.rooms && typeof data.rooms === 'object' && !Array.isArray(data.rooms) ? data.rooms : {}
-  const migratedRooms = Number(data.version || 2) < 7
-    ? migrateRoomGeometryClips(sourceRooms, storyHeight)
-    : sourceRooms
-  const rooms = Object.fromEntries(Object.entries(migratedRooms).map(([id, room]) => {
-    const slices = room?.verticalProfile?.slices
-    if (!Array.isArray(slices) || slices.length === 0) return [id, room]
-    if (!slices.every((slice, index) => Number(slice?.offset) === index)) return [id, room]
+  const rooms = Object.fromEntries(Object.entries(sourceRooms).map(([id, room]) => {
+    const canonicalRoom = { ...(room || {}) }
+    const slices = canonicalRoom?.verticalProfile?.slices
+    if (!Array.isArray(slices) || slices.length === 0) return [id, canonicalRoom]
+    if (!slices.every((slice, index) => Number(slice?.offset) === index)) return [id, canonicalRoom]
     const heightLevels = slices.length
     const height = heightLevels * storyHeight
-    return Number(room.heightLevels) === heightLevels && Number(room.height) === height
-      ? [id, room]
-      : [id, { ...room, heightLevels, height }]
+    return Number(canonicalRoom.heightLevels) === heightLevels && Number(canonicalRoom.height) === height
+      ? [id, canonicalRoom]
+      : [id, { ...canonicalRoom, heightLevels, height }]
   }))
   return {
     version: Math.max(SURFACE_DATA_VERSION, data.version || 2),
@@ -422,15 +414,9 @@ export function surfaceTextureIds(data) {
     if (stair?.tex) ids.add(stair.tex)
   }
   for (const room of Object.values(surface.rooms)) {
-    if (room?.floorTopTex) ids.add(room.floorTopTex)
-    if (room?.floorBottomTex) ids.add(room.floorBottomTex)
-    if (room?.ceilingTopTex) ids.add(room.ceilingTopTex)
-    if (room?.ceilingBottomTex) ids.add(room.ceilingBottomTex)
+    if (room?.floorTex) ids.add(room.floorTex)
+    if (room?.ceilingTex) ids.add(room.ceilingTex)
     if (room?.wallInteriorTex) ids.add(room.wallInteriorTex)
-    if (room?.wallExteriorTex) ids.add(room.wallExteriorTex)
-    if (room?.wallFrontTex) ids.add(room.wallFrontTex)
-    if (room?.wallBackTex) ids.add(room.wallBackTex)
-    if (room?.wallTopTex) ids.add(room.wallTopTex)
   }
 
   return [...ids]
@@ -667,23 +653,15 @@ export function applyCeilingSelection(surfaceData, selection, tool, activeMateri
 function makeWallSegment(wall, tool, activeMaterial, availableBlocks) {
   const y = getToolElevation(tool)
   const id = `wall:${wall.axis}:${wall.x0}:${wall.z0}:${wall.x1}:${wall.z1}:${wall.thickness}:${formatLevel(y)}`
-  const front = materialOrTextureForTool({
-    tool: toolForMaterialFace(tool, 'wallFront'),
-    packId: tool?.wallFrontPackId,
-    textureId: tool?.wallFrontTexId,
+  const appearance = materialOrTextureForTool({
+    tool: toolForMaterialFace(tool, 'wallInterior'),
+    packId: tool?.wallInteriorPackId,
+    textureId: tool?.wallInteriorTexId,
     fallbackTexId: activeMaterial?.texId,
     availableBlocks,
-    seed: `${id}:front`,
+    seed: `${id}:wall`,
   })
-  const back = materialOrTextureForTool({
-    tool: toolForMaterialFace(tool, 'wallBack'),
-    packId: tool?.wallBackPackId || tool?.wallFrontPackId,
-    textureId: tool?.wallBackTexId,
-    fallbackTexId: front.tex || activeMaterial?.texId,
-    availableBlocks,
-    seed: `${id}:back`,
-  })
-  if ((!front.tex && !front.material) || (!back.tex && !back.material)) return null
+  if (!appearance.tex && !appearance.material) return null
 
   return {
     ...wall,
@@ -691,10 +669,8 @@ function makeWallSegment(wall, tool, activeMaterial, availableBlocks) {
     y,
     supportThickness: getToolFloorThickness(tool),
     ...surfaceBlockingForTool(tool),
-    ...(front.tex ? { frontTex: front.tex } : {}),
-    ...(back.tex ? { backTex: back.tex } : {}),
-    ...(front.material ? { frontMaterial: front.material } : {}),
-    ...(back.material ? { backMaterial: back.material } : {}),
+    ...(appearance.tex ? { frontTex: appearance.tex, backTex: appearance.tex } : {}),
+    ...(appearance.material ? { frontMaterial: appearance.material, backMaterial: appearance.material } : {}),
   }
 }
 
@@ -1051,29 +1027,7 @@ export function getRoomSlice(room, displayLevel, roomLookup = {}) {
 
 export function isWorldPointVisibleAtLevel(data, displayLevel, x, z, y) {
   if (displayLevel === null || displayLevel === undefined) return true
-
-  const itemLevel = yToLevel(y)
-  if (itemLevel === displayLevel) return true
-  if (itemLevel > displayLevel) return false
-
-  const worldX = Number(x)
-  const worldZ = Number(z)
-  if (!Number.isFinite(worldX) || !Number.isFinite(worldZ)) return false
-
-  const rooms = data?.rooms && typeof data.rooms === 'object' && !Array.isArray(data.rooms)
-    ? data.rooms
-    : {}
-  return Object.entries(rooms).some(([roomId, room]) => {
-    const baseLevel = yToLevel(getRoomBaseY(room))
-    if (itemLevel < baseLevel || itemLevel > displayLevel) return false
-    const slice = roomSliceAtLevel(
-      { id: roomId, ...room },
-      displayLevel - baseLevel,
-      rooms,
-      STORY_HEIGHT,
-    )
-    return Boolean(slice && multiPolygonContainsPoint(slice.footprint, { x: worldX, z: worldZ }))
-  })
+  return yToLevel(y) <= displayLevel
 }
 
 export function getRoomHeight(room) {
@@ -1093,28 +1047,19 @@ export function getRoomCeilingThickness(room) {
 }
 
 function roomWallInteriorTex(room) {
-  return room?.wallInteriorTex || room?.wallFrontTex || null
-}
-
-function roomWallExteriorTex(room) {
-  return room?.wallExteriorTex || room?.wallBackTex || roomWallInteriorTex(room)
+  return room?.wallInteriorTex || null
 }
 
 function roomWallInteriorMaterial(room) {
-  return room?.wallInteriorMaterial || room?.wallFrontMaterial || null
-}
-
-function roomWallExteriorMaterial(room) {
-  return room?.wallExteriorMaterial || room?.wallBackMaterial || roomWallInteriorMaterial(room)
+  return room?.wallInteriorMaterial || null
 }
 
 function roomMaterialProfilesForTool(tool) {
   const profiles = tool?.materialProfiles || {}
   return {
-    top: profiles.top || tool?.materialPreset,
-    bottom: profiles.bottom || profiles.top || tool?.materialPreset,
-    wallInterior: profiles.wallInterior || profiles.wallFront || profiles.top || tool?.materialPreset,
-    wallExterior: profiles.wallExterior || profiles.wallBack || profiles.wallInterior || profiles.wallFront || profiles.top || tool?.materialPreset,
+    floor: profiles.floor || tool?.materialPreset,
+    ceiling: profiles.ceiling || tool?.materialPreset,
+    wallInterior: profiles.wallInterior || tool?.materialPreset,
   }
 }
 
@@ -1130,14 +1075,10 @@ export function roomToSurfaceToolPatch(room) {
   if (!room) return null
   const baseLevel = yToLevel(getRoomBaseY(room))
   const wallInterior = roomWallInteriorMaterial(room)
-  const wallExterior = roomWallExteriorMaterial(room)
   const hasProceduralMaterial = !!(
-    room.floorTopMaterial
-    || room.floorBottomMaterial
-    || room.ceilingTopMaterial
-    || room.ceilingBottomMaterial
+    room.floorMaterial
+    || room.ceilingMaterial
     || wallInterior
-    || wallExterior
   )
   return {
     selectedRoomId: room.id,
@@ -1152,29 +1093,17 @@ export function roomToSurfaceToolPatch(room) {
     wallThickness: Math.max(1, Number(room.wallThickness) || 1),
     movementMultiplier: Math.max(0.05, Number(room.movementMultiplier) || 1),
     surfaceBlocking: room.barrierType || 'solid',
-    materialFace: 'top',
+    materialFace: 'floor',
     floorPackId: null,
-    floorBottomPackId: null,
     ceilingPackId: null,
-    ceilingBottomPackId: null,
-    wallPackId: null,
     wallInteriorPackId: null,
-    wallExteriorPackId: null,
-    wallFrontPackId: null,
-    wallBackPackId: null,
-    floorTexId: room.floorTopTex || null,
-    floorBottomTexId: room.floorBottomTex || null,
-    ceilingTexId: room.ceilingTopTex || null,
-    ceilingBottomTexId: room.ceilingBottomTex || null,
+    floorTexId: room.floorTex || null,
+    ceilingTexId: room.ceilingTex || null,
     wallInteriorTexId: roomWallInteriorTex(room),
-    wallExteriorTexId: roomWallExteriorTex(room),
-    wallFrontTexId: roomWallInteriorTex(room),
-    wallBackTexId: roomWallExteriorTex(room),
     materialProfiles: {
-      top: profileOrDefault(room.floorTopMaterial),
-      bottom: profileOrDefault(room.floorBottomMaterial, room.floorBottomMaterial ? {} : { paint: '#6b7280' }),
+      floor: profileOrDefault(room.floorMaterial),
+      ceiling: profileOrDefault(room.ceilingMaterial, room.ceilingMaterial ? {} : { paint: '#6b7280' }),
       wallInterior: profileOrDefault(wallInterior),
-      wallExterior: profileOrDefault(wallExterior),
     },
   }
 }
@@ -1188,53 +1117,29 @@ function makeRoomFromSelection(_surfaceData, selection, tool, activeMaterial, av
   const baseY = levelToY(baseLevel)
   const id = roomKey(area, baseLevel, heightLevels)
   const blocking = surfaceBlockingForTool(tool)
-  const floorTop = materialOrTextureForTool({
-    tool: toolForMaterialFace(tool, 'top'),
+  const floorAppearance = materialOrTextureForTool({
+    tool: toolForMaterialFace(tool, 'floor'),
     packId: tool?.floorPackId,
     textureId: tool?.floorTexId,
     fallbackTexId: activeMaterial?.texId,
     availableBlocks,
-    seed: `${id}:floor:top`,
+    seed: `${id}:floor`,
   })
-  const floorBottom = materialOrTextureForTool({
-    tool: toolForMaterialFace(tool, 'bottom'),
-    packId: tool?.floorBottomPackId || tool?.floorPackId,
-    textureId: tool?.floorBottomTexId || tool?.floorTexId,
-    fallbackTexId: activeMaterial?.texId,
-    availableBlocks,
-    seed: `${id}:floor:bottom`,
-  })
-  const ceilingTop = materialOrTextureForTool({
-    tool: toolForMaterialFace(tool, 'top'),
+  const ceilingAppearance = materialOrTextureForTool({
+    tool: toolForMaterialFace(tool, 'ceiling'),
     packId: tool?.ceilingPackId || tool?.floorPackId,
-    textureId: tool?.ceilingTexId || tool?.floorTexId,
+    textureId: tool?.ceilingTexId,
     fallbackTexId: activeMaterial?.texId,
     availableBlocks,
-    seed: `${id}:ceiling:top`,
-  })
-  const ceilingBottom = materialOrTextureForTool({
-    tool: toolForMaterialFace(tool, 'bottom'),
-    packId: tool?.ceilingBottomPackId || tool?.ceilingPackId || tool?.floorPackId,
-    textureId: tool?.ceilingBottomTexId || tool?.ceilingTexId || tool?.floorTexId,
-    fallbackTexId: activeMaterial?.texId,
-    availableBlocks,
-    seed: `${id}:ceiling:bottom`,
+    seed: `${id}:ceiling`,
   })
   const wallInterior = materialOrTextureForTool({
     tool: toolForMaterialFace(tool, 'wallInterior'),
-    packId: tool?.wallInteriorPackId || tool?.wallFrontPackId || tool?.wallPackId,
-    textureId: tool?.wallInteriorTexId || tool?.wallFrontTexId || tool?.wallTexId,
+    packId: tool?.wallInteriorPackId,
+    textureId: tool?.wallInteriorTexId,
     fallbackTexId: activeMaterial?.texId,
     availableBlocks,
     seed: `${id}:wall:interior`,
-  })
-  const wallExterior = materialOrTextureForTool({
-    tool: toolForMaterialFace(tool, 'wallExterior'),
-    packId: tool?.wallExteriorPackId || tool?.wallBackPackId || tool?.wallInteriorPackId || tool?.wallFrontPackId || tool?.wallPackId,
-    textureId: tool?.wallExteriorTexId || tool?.wallBackTexId || tool?.wallInteriorTexId || tool?.wallFrontTexId || tool?.wallTexId,
-    fallbackTexId: activeMaterial?.texId,
-    availableBlocks,
-    seed: `${id}:wall:exterior`,
   })
 
   return {
@@ -1242,7 +1147,7 @@ function makeRoomFromSelection(_surfaceData, selection, tool, activeMaterial, av
     type: 'room',
     shape: 'footprint',
     theme: tool?.roomTheme || 'custom',
-    seed: hashString(`${id}:${tool?.materialProfiles?.top?.seed || ''}`),
+    seed: hashString(`${id}:${tool?.materialProfiles?.floor?.seed || ''}`),
     minX: area.minX,
     maxX: area.maxX,
     minZ: area.minZ,
@@ -1262,22 +1167,12 @@ function makeRoomFromSelection(_surfaceData, selection, tool, activeMaterial, av
     wallThickness: getToolWallThicknessFine(tool),
     movementMultiplier: getToolMovementMultiplier(tool),
     ...blocking,
-    floorTopTex: floorTop.tex,
-    floorBottomTex: floorBottom.tex,
-    ceilingTopTex: ceilingTop.tex,
-    ceilingBottomTex: ceilingBottom.tex,
+    floorTex: floorAppearance.tex,
+    ceilingTex: ceilingAppearance.tex,
     wallInteriorTex: wallInterior.tex,
-    wallExteriorTex: wallExterior.tex,
-    wallFrontTex: wallInterior.tex,
-    wallBackTex: wallExterior.tex,
-    floorTopMaterial: floorTop.material,
-    floorBottomMaterial: floorBottom.material,
-    ceilingTopMaterial: ceilingTop.material,
-    ceilingBottomMaterial: ceilingBottom.material,
+    floorMaterial: floorAppearance.material,
+    ceilingMaterial: ceilingAppearance.material,
     wallInteriorMaterial: wallInterior.material,
-    wallExteriorMaterial: wallExterior.material,
-    wallFrontMaterial: wallInterior.material,
-    wallBackMaterial: wallExterior.material,
   }
 }
 
@@ -1342,10 +1237,10 @@ function ensureRoomWallPanel(panels, key, data) {
       elevationProfileHeight: data.elevationProfileHeight ?? STORY_HEIGHT,
       frontTex: null,
       backTex: null,
-      topTex: roomWallInteriorTex(data.room) || roomWallExteriorTex(data.room),
+      topTex: roomWallInteriorTex(data.room),
       frontMaterial: null,
       backMaterial: null,
-      material: roomWallInteriorMaterial(data.room) || roomWallExteriorMaterial(data.room),
+      material: roomWallInteriorMaterial(data.room),
       roomIds: [],
     })
   }
@@ -1414,13 +1309,6 @@ export function roomsWallSegments(rooms) {
       tex: roomWallInteriorTex(room),
       material: roomWallInteriorMaterial(room),
     }
-    const exterior = {
-      role: 'exterior',
-      roomId,
-      tex: roomWallExteriorTex(room),
-      material: roomWallExteriorMaterial(room),
-    }
-
     const addPanel = ({ axis, x0, x1, z0, z1, frontSource, backSource, y, ...geometryMetadata }) => {
       const key = panelKey(axis, x0, z0, x1, z1, y)
       const wall = ensureRoomWallPanel(panels, key, {
@@ -1496,11 +1384,7 @@ export function roomsWallSegments(rooms) {
           tex: segment.wallAppearance.interiorTex ?? interior.tex,
           material: segment.wallAppearance.interiorMaterial ?? interior.material,
         } : interior
-        const segmentExterior = segment.wallAppearance ? {
-          ...exterior,
-          tex: segment.wallAppearance.exteriorTex ?? exterior.tex,
-          material: segment.wallAppearance.exteriorMaterial ?? exterior.material,
-        } : exterior
+        const segmentExterior = segmentInterior
         addPanel({
           axis: segment.axis,
           x0,
@@ -1552,9 +1436,94 @@ function curveWallStyleKey(wall) {
   })
 }
 
+function straightWallStyleKey(wall) {
+  return JSON.stringify({
+    axis: wall.axis,
+    direction: wall.axis === 'x'
+      ? Math.sign(Number(wall.x1) - Number(wall.x0))
+      : Math.sign(Number(wall.z1) - Number(wall.z0)),
+    line: wall.axis === 'x' ? Number(wall.z0) : Number(wall.x0),
+    y: wall.y,
+    height: wall.height,
+    thickness: wall.thickness,
+    barrierType: wall.barrierType,
+    blocksSight: wall.blocksSight,
+    blocksMovement: wall.blocksMovement,
+    blocksWater: wall.blocksWater,
+    frontTex: wall.frontTex,
+    backTex: wall.backTex,
+    topTex: wall.topTex,
+    frontMaterial: wall.frontMaterial,
+    backMaterial: wall.backMaterial,
+    material: wall.material,
+    frontRole: wall.frontRole,
+    backRole: wall.backRole,
+    frontRoomIds: [...(wall.frontRoomIds || [])].sort(),
+    backRoomIds: [...(wall.backRoomIds || [])].sort(),
+    elevationProfileMode: wall.elevationProfileMode,
+    elevationProfile: wall.elevationProfile,
+    elevationProfileDirection: wall.elevationProfileDirection,
+    frontElevationProfile: wall.frontElevationProfile,
+    backElevationProfile: wall.backElevationProfile,
+  })
+}
+
+function mergeStraightWallPanels(panels) {
+  const untouched = panels.filter(panel => !['x', 'z'].includes(panel.axis))
+  const groups = new Map()
+  for (const panel of panels.filter(item => ['x', 'z'].includes(item.axis))) {
+    const key = straightWallStyleKey(panel)
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(panel)
+  }
+
+  const merged = []
+  for (const groupedPanels of groups.values()) {
+    const axis = groupedPanels[0].axis
+    const intervals = groupedPanels.map(panel => {
+      const start = axis === 'x' ? Number(panel.x0) : Number(panel.z0)
+      const end = axis === 'x' ? Number(panel.x1) : Number(panel.z1)
+      return { min: Math.min(start, end), max: Math.max(start, end), panel }
+    }).sort((left, right) => left.min - right.min)
+    const runs = []
+    for (const interval of intervals) {
+      const current = runs.at(-1)
+      if (current && interval.min <= current.max + 1e-5) {
+        current.max = Math.max(current.max, interval.max)
+        current.panels.push(interval.panel)
+      } else {
+        runs.push({ min: interval.min, max: interval.max, panels: [interval.panel] })
+      }
+    }
+
+    for (const run of runs) {
+      const first = run.panels[0]
+      const forward = axis === 'x'
+        ? Number(first.x1) >= Number(first.x0)
+        : Number(first.z1) >= Number(first.z0)
+      const start = forward ? run.min : run.max
+      const end = forward ? run.max : run.min
+      const ids = run.panels.map(panel => panel.id).sort()
+      const id = ids.length === 1
+        ? first.id
+        : `room-wall:run:${axis}:${formatLevel(run.min)}:${formatLevel(run.max)}:${formatLevel(first.y)}:${hashString(ids.join('|'))}`
+      merged.push({
+        ...first,
+        id,
+        logicalWallId: id,
+        ...(axis === 'x' ? { x0: start, x1: end } : { z0: start, z1: end }),
+        roomIds: [...new Set(run.panels.flatMap(panel => panel.roomIds || []))],
+        frontRoomIds: [...new Set(run.panels.flatMap(panel => panel.frontRoomIds || []))],
+        backRoomIds: [...new Set(run.panels.flatMap(panel => panel.backRoomIds || []))],
+      })
+    }
+  }
+  return [...untouched.map(wall => ({ ...wall, logicalWallId: wall.id })), ...merged]
+}
+
 export function roomsWallRenderPaths(rooms) {
   const panels = roomsWallSegments(rooms)
-  const straight = panels.filter(panel => !panel.curveId)
+  const straight = mergeStraightWallPanels(panels.filter(panel => !panel.curveId))
   const curveGroups = new Map()
   for (const panel of panels.filter(item => item.curveId)) {
     const key = curveWallStyleKey(panel)
@@ -1616,6 +1585,7 @@ export function roomsWallRenderPaths(rooms) {
       arcs.push({
         ...first,
         id: `room-wall:arc:${first.curveId}:${formatLevel(run.min)}:${formatLevel(run.max)}:${formatLevel(first.y)}`,
+        logicalWallId: `room-wall:arc:${first.curveId}:${formatLevel(run.min)}:${formatLevel(run.max)}:${formatLevel(first.y)}`,
         axis: 'arc',
         curveOffset0: run.min,
         curveOffset1: run.max,
@@ -2088,10 +2058,10 @@ export function expandRoomsToSurface(data) {
             floors[id] = {
               y: baseY,
               thickness: getRoomFloorThickness(room),
-              topTex: room.floorTopTex,
-              bottomTex: room.floorBottomTex,
-              topMaterial: room.floorTopMaterial,
-              bottomMaterial: room.floorBottomMaterial,
+              topTex: room.floorTex,
+              bottomTex: room.floorTex,
+              topMaterial: room.floorMaterial,
+              bottomMaterial: room.floorMaterial,
               ...blocking,
             }
           }
@@ -2108,11 +2078,11 @@ export function expandRoomsToSurface(data) {
               baseY,
               y: topY,
               thickness: getRoomCeilingThickness(room),
-              topTex: room.ceilingTopTex,
-              bottomTex: room.ceilingBottomTex,
-              material: room.ceilingBottomMaterial || room.ceilingTopMaterial,
-              topMaterial: room.ceilingTopMaterial,
-              bottomMaterial: room.ceilingBottomMaterial,
+              topTex: room.ceilingTex,
+              bottomTex: room.ceilingTex,
+              material: room.ceilingMaterial,
+              topMaterial: room.ceilingMaterial,
+              bottomMaterial: room.ceilingMaterial,
               ...blocking,
             }
           }
@@ -2376,9 +2346,7 @@ export function applyRoomWallAppearance(surfaceData, roomId, edgeKeys, appearanc
   const selectedSet = new Set(selected)
   const normalized = {
     interiorTex: appearance?.interiorTex || null,
-    exteriorTex: appearance?.exteriorTex || null,
     interiorMaterial: profileOrDefault(appearance?.interiorMaterial),
-    exteriorMaterial: profileOrDefault(appearance?.exteriorMaterial),
   }
   const remaining = (selectedRoom.wallAppearanceProfiles || []).flatMap(entry => {
     const retainedKeys = (entry?.edgeKeys || []).map(String).filter(key => !selectedSet.has(key))
@@ -2745,53 +2713,29 @@ export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, a
       ...profiles,
     },
   }
-  const floorTop = materialOrTextureForTool({
-    tool: toolForMaterialFace(toolWithProfiles, 'top'),
+  const floorAppearance = materialOrTextureForTool({
+    tool: toolForMaterialFace(toolWithProfiles, 'floor'),
     packId: tool?.floorPackId,
-    textureId: tool?.floorTexId || room.floorTopTex,
-    fallbackTexId: room.floorTopTex || activeMaterial?.texId,
+    textureId: tool?.floorTexId || room.floorTex,
+    fallbackTexId: room.floorTex || activeMaterial?.texId,
     availableBlocks,
-    seed: `${id}:floor:top`,
+    seed: `${id}:floor`,
   })
-  const floorBottom = materialOrTextureForTool({
-    tool: toolForMaterialFace(toolWithProfiles, 'bottom'),
-    packId: tool?.floorBottomPackId || tool?.floorPackId,
-    textureId: tool?.floorBottomTexId || tool?.floorTexId || room.floorBottomTex,
-    fallbackTexId: room.floorBottomTex || room.floorTopTex || activeMaterial?.texId,
-    availableBlocks,
-    seed: `${id}:floor:bottom`,
-  })
-  const ceilingTop = materialOrTextureForTool({
-    tool: toolForMaterialFace(toolWithProfiles, 'top'),
+  const ceilingAppearance = materialOrTextureForTool({
+    tool: toolForMaterialFace(toolWithProfiles, 'ceiling'),
     packId: tool?.ceilingPackId || tool?.floorPackId,
-    textureId: tool?.ceilingTexId || tool?.floorTexId || room.ceilingTopTex,
-    fallbackTexId: room.ceilingTopTex || room.floorTopTex || activeMaterial?.texId,
+    textureId: tool?.ceilingTexId || room.ceilingTex,
+    fallbackTexId: room.ceilingTex || activeMaterial?.texId,
     availableBlocks,
-    seed: `${id}:ceiling:top`,
-  })
-  const ceilingBottom = materialOrTextureForTool({
-    tool: toolForMaterialFace(toolWithProfiles, 'bottom'),
-    packId: tool?.ceilingBottomPackId || tool?.ceilingPackId || tool?.floorPackId,
-    textureId: tool?.ceilingBottomTexId || tool?.ceilingTexId || tool?.floorTexId || room.ceilingBottomTex,
-    fallbackTexId: room.ceilingBottomTex || room.floorBottomTex || activeMaterial?.texId,
-    availableBlocks,
-    seed: `${id}:ceiling:bottom`,
+    seed: `${id}:ceiling`,
   })
   const wallInterior = materialOrTextureForTool({
     tool: toolForMaterialFace(toolWithProfiles, 'wallInterior'),
-    packId: tool?.wallInteriorPackId || tool?.wallFrontPackId || tool?.wallPackId,
-    textureId: tool?.wallInteriorTexId || tool?.wallFrontTexId || roomWallInteriorTex(room),
+    packId: tool?.wallInteriorPackId,
+    textureId: tool?.wallInteriorTexId || roomWallInteriorTex(room),
     fallbackTexId: roomWallInteriorTex(room) || activeMaterial?.texId,
     availableBlocks,
     seed: `${id}:wall:interior`,
-  })
-  const wallExterior = materialOrTextureForTool({
-    tool: toolForMaterialFace(toolWithProfiles, 'wallExterior'),
-    packId: tool?.wallExteriorPackId || tool?.wallBackPackId || tool?.wallInteriorPackId || tool?.wallFrontPackId || tool?.wallPackId,
-    textureId: tool?.wallExteriorTexId || tool?.wallBackTexId || tool?.wallInteriorTexId || tool?.wallFrontTexId || roomWallExteriorTex(room),
-    fallbackTexId: roomWallExteriorTex(room) || roomWallInteriorTex(room) || activeMaterial?.texId,
-    availableBlocks,
-    seed: `${id}:wall:exterior`,
   })
 
   const heightLevels = getToolRoomHeightLevels(tool)
@@ -2805,22 +2749,12 @@ export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, a
     wallThickness: getToolWallThicknessFine(tool),
     movementMultiplier: getToolMovementMultiplier(tool),
     ...blocking,
-    floorTopTex: floorTop.tex,
-    floorBottomTex: floorBottom.tex,
-    ceilingTopTex: ceilingTop.tex,
-    ceilingBottomTex: ceilingBottom.tex,
+    floorTex: floorAppearance.tex,
+    ceilingTex: ceilingAppearance.tex,
     wallInteriorTex: wallInterior.tex,
-    wallExteriorTex: wallExterior.tex,
-    wallFrontTex: wallInterior.tex,
-    wallBackTex: wallExterior.tex,
-    floorTopMaterial: floorTop.material,
-    floorBottomMaterial: floorBottom.material,
-    ceilingTopMaterial: ceilingTop.material,
-    ceilingBottomMaterial: ceilingBottom.material,
+    floorMaterial: floorAppearance.material,
+    ceilingMaterial: ceilingAppearance.material,
     wallInteriorMaterial: wallInterior.material,
-    wallExteriorMaterial: wallExterior.material,
-    wallFrontMaterial: wallInterior.material,
-    wallBackMaterial: wallExterior.material,
   }
 
   if (JSON.stringify(updated) === JSON.stringify(room)) return surfaceData

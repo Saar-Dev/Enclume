@@ -288,7 +288,6 @@ test('une apparence de mur reste attachée aux arêtes sélectionnées sans modi
   const styledRoom = {
     ...room('styled', 0),
     wallInteriorMaterial: { material: 'concrete', paint: '#666666', pattern: 'none', wear: 0, dirt: 0, relief: 0 },
-    wallExteriorMaterial: { material: 'concrete', paint: '#444444', pattern: 'none', wear: 0, dirt: 0, relief: 0 },
   }
   const west = getRoomBoundaryWallRuns(styledRoom).find(run => run.side === 'west')
   const result = applyRoomWallAppearance(
@@ -297,22 +296,20 @@ test('une apparence de mur reste attachée aux arêtes sélectionnées sans modi
     west.edgeKeys,
     {
       interiorMaterial: { material: 'steel', paint: '#ff0000', pattern: 'metal_panels', wear: 25, dirt: 12, relief: 40 },
-      exteriorMaterial: { material: 'wood', paint: '#0000ff', pattern: 'planks', wear: 5, dirt: 3, relief: 20 },
     },
   )
 
   assert.equal(result.error, null)
-  assert.equal(result.surfaceData.version, 11)
+  assert.equal(result.surfaceData.version, 12)
   assert.deepEqual(result.surfaceData.rooms.styled.wallAppearanceProfiles[0].edgeKeys, west.edgeKeys)
   const walls = roomsWallSegments(result.surfaceData.rooms)
   const westWall = walls.find(wall => wall.x0 === 0 && wall.x1 === 0)
   const northWall = walls.find(wall => wall.z0 === 0 && wall.z1 === 0)
   assert.ok([westWall.frontMaterial, westWall.backMaterial].some(material => material?.paint === '#ff0000'))
-  assert.ok([westWall.frontMaterial, westWall.backMaterial].some(material => material?.paint === '#0000ff'))
   assert.equal([northWall.frontMaterial, northWall.backMaterial].some(material => material?.paint === '#ff0000'), false)
 })
 
-test('une salle multiniveau revele uniquement son propre volume inferieur', () => {
+test('un niveau affiche tout le monde inferieur sans transparence contextuelle', () => {
   const surface = emptySurface({
     rooms: {
       well: room('well', 0, 3),
@@ -320,7 +317,7 @@ test('une salle multiniveau revele uniquement son propre volume inferieur', () =
   })
 
   assert.equal(isWorldPointVisibleAtLevel(surface, 2, 0.5, 0.5, 0), true)
-  assert.equal(isWorldPointVisibleAtLevel(surface, 2, 4.5, 4.5, 0), false)
+  assert.equal(isWorldPointVisibleAtLevel(surface, 2, 4.5, 4.5, 0), true)
   assert.equal(isWorldPointVisibleAtLevel(surface, 1, 0.5, 0.5, 5), false)
   assert.equal(isWorldPointVisibleAtLevel(surface, 2, 4.5, 4.5, 5), true)
 })
@@ -341,7 +338,7 @@ test('une nouvelle salle transfere ses cases et redessine le contour de la salle
   )
   const nestedId = 'room:1:1:2:2:0:1'
 
-  assert.equal(result.version, 11)
+  assert.equal(result.version, 12)
   assert.equal(getRoomFootprintCells(result.rooms.outer).length, 12)
   assert.equal(getRoomFootprintCells(result.rooms[nestedId]).length, 4)
   assert.equal(findRoomAtCell(result, { x: 1, z: 1 }, 0).id, nestedId)
@@ -364,8 +361,15 @@ test('la création d’une salle retourne son identité pour passer immédiateme
   )
 
   assert.equal(result.roomId, 'room:3:4:4:5:0:1')
-  assert.ok(result.surfaceData.rooms[result.roomId])
-  assert.equal(result.surfaceData.version, 11)
+  const createdRoom = result.surfaceData.rooms[result.roomId]
+  assert.ok(createdRoom)
+  assert.equal(result.surfaceData.version, 12)
+  assert.ok(createdRoom.floorMaterial)
+  assert.ok(createdRoom.ceilingMaterial)
+  assert.ok(createdRoom.wallInteriorMaterial)
+  assert.equal(Object.prototype.hasOwnProperty.call(createdRoom, 'floorTopMaterial'), false)
+  assert.equal(Object.prototype.hasOwnProperty.call(createdRoom, 'ceilingBottomMaterial'), false)
+  assert.equal(Object.prototype.hasOwnProperty.call(createdRoom, 'wallExteriorMaterial'), false)
 })
 
 test('un arrondi de salle remplace une chaîne de murs dans le rendu de la salle', () => {
@@ -375,7 +379,7 @@ test('un arrondi de salle remplace une chaîne de murs dans le rendu de la salle
   const result = applyRoomBoundaryArc(surface, 'rounded', selected.flatMap(wall => wall.edgeKeys), 90)
 
   assert.equal(result.error, null)
-  assert.equal(result.surfaceData.version, 11)
+  assert.equal(result.surfaceData.version, 12)
   assert.equal(result.surfaceData.rooms.rounded.boundaryArcs.length, 1)
   assert.ok(roomsWallSegments(result.surfaceData.rooms).some(wall => wall.axis === 'segment'))
 })
@@ -442,8 +446,8 @@ test('supprimer un mur exterieur ouvre la salle sans supprimer son sol', () => {
 })
 
 test('supprimer un mur commun fusionne les deux salles et conserve la salle active', () => {
-  const roomA = { ...room('roomA', 0), maxX: 0, maxZ: 0, cells: ['0:0'], floorTopTex: 101 }
-  const roomB = { ...room('roomB', 0), minX: 1, maxX: 1, maxZ: 0, cells: ['1:0'], floorTopTex: 202 }
+  const roomA = { ...room('roomA', 0), maxX: 0, maxZ: 0, cells: ['0:0'], floorTex: 101 }
+  const roomB = { ...room('roomB', 0), minX: 1, maxX: 1, maxZ: 0, cells: ['1:0'], floorTex: 202 }
   const sharedWall = getRoomBoundaryWallRuns(roomA).find(wall => wall.side === 'east')
   const result = deleteRoomBoundaryWalls(emptySurface({
     rooms: { roomA, roomB },
@@ -456,7 +460,7 @@ test('supprimer un mur commun fusionne les deux salles et conserve la salle acti
   assert.equal(result.error, null)
   assert.deepEqual(Object.keys(result.surfaceData.rooms), ['roomA'])
   assert.deepEqual(getRoomFootprintCells(result.surfaceData.rooms.roomA), [{ x: 0, z: 0 }, { x: 1, z: 0 }])
-  assert.equal(result.surfaceData.rooms.roomA.floorTopTex, 101)
+  assert.equal(result.surfaceData.rooms.roomA.floorTex, 101)
   assert.equal(result.surfaceData.connectors.door, undefined)
   assert.equal(result.surfaceData.connectors.ladder.roomId, 'roomA')
   assert.deepEqual(result.surfaceData.connectors.ladder.roomIds, ['roomA'])

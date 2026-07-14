@@ -1,15 +1,13 @@
 // shared/world/surfaceDocument.js
-// Frontière de compatibilité entre surface_data v11 (volumes multi-hauteurs et profils géométriques/d'apparence de mur) et le document canonique du
-// moteur de monde. Les clés legacy restent lisibles ; worldId devient l'identité physique stable.
+// Contrat surface_data v12 du moteur de monde canonique.
 
 import { createWorldDocument } from './worldContracts.js'
 import {
-  migrateRoomGeometryClips,
   roomBoundaryEdges,
   selectedRoomBoundaryChain,
 } from './roomGeometry.js'
 
-export const SURFACE_DATA_VERSION = 11
+export const SURFACE_DATA_VERSION = 12
 export const SURFACE_FINE_DEFAULT = 4
 export const SURFACE_STORY_HEIGHT_DEFAULT = 2.5
 
@@ -23,6 +21,12 @@ export const SURFACE_COLLECTIONS = Object.freeze([
 ])
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const OBSOLETE_ROOM_APPEARANCE_FIELDS = [
+  'floorTopTex', 'floorBottomTex', 'ceilingTopTex', 'ceilingBottomTex',
+  'wallExteriorTex', 'wallFrontTex', 'wallBackTex', 'wallTopTex',
+  'floorTopMaterial', 'floorBottomMaterial', 'ceilingTopMaterial', 'ceilingBottomMaterial',
+  'wallExteriorMaterial', 'wallFrontMaterial', 'wallBackMaterial',
+]
 
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -196,6 +200,19 @@ function validateFeature(collection, id, item, errors) {
 
   if (collection === 'rooms') {
     validateFiniteFields(item, ['minX', 'maxX', 'minZ', 'maxZ'], path, errors)
+    for (const field of OBSOLETE_ROOM_APPEARANCE_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(item, field)) {
+        errors.push(`${path}.${field} n'existe plus dans surface_data v12`)
+      }
+    }
+    for (const textureField of ['floorTex', 'ceilingTex', 'wallInteriorTex']) {
+      if (item[textureField] != null && typeof item[textureField] !== 'string' && typeof item[textureField] !== 'number') {
+        errors.push(`${path}.${textureField} doit être une référence de texture`)
+      }
+    }
+    validateWallAppearanceMaterial(item.floorMaterial, `${path}.floorMaterial`, errors)
+    validateWallAppearanceMaterial(item.ceilingMaterial, `${path}.ceilingMaterial`, errors)
+    validateWallAppearanceMaterial(item.wallInteriorMaterial, `${path}.wallInteriorMaterial`, errors)
     if (item.cells != null) {
       if (!Array.isArray(item.cells) || item.cells.length === 0) {
         errors.push(`${path}.cells doit être un tableau non vide`)
@@ -234,6 +251,10 @@ function validateFeature(collection, id, item, errors) {
           if (entry.edgeKeys.some(key => typeof key !== 'string' || !key)) {
             errors.push(`${entryPath}.edgeKeys doit contenir des clés non vides`)
           }
+          if (Object.prototype.hasOwnProperty.call(entry, 'exteriorTex')
+            || Object.prototype.hasOwnProperty.call(entry, 'exteriorMaterial')) {
+            errors.push(`${entryPath} ne peut décrire que la face intérieure en v12`)
+          }
           validateWallElevationProfile(entry.profile, `${entryPath}.profile`, errors)
         })
       }
@@ -251,13 +272,12 @@ function validateFeature(collection, id, item, errors) {
           if (entry.edgeKeys.some(key => typeof key !== 'string' || !key)) {
             errors.push(`${entryPath}.edgeKeys doit contenir des clés non vides`)
           }
-          for (const textureField of ['interiorTex', 'exteriorTex']) {
+          for (const textureField of ['interiorTex']) {
             if (entry[textureField] != null && typeof entry[textureField] !== 'string') {
               errors.push(`${entryPath}.${textureField} doit être une chaîne`)
             }
           }
           validateWallAppearanceMaterial(entry.interiorMaterial, `${entryPath}.interiorMaterial`, errors)
-          validateWallAppearanceMaterial(entry.exteriorMaterial, `${entryPath}.exteriorMaterial`, errors)
         })
       }
     }
@@ -460,9 +480,6 @@ export function normalizeSurfaceDataDocument(input) {
   for (const collection of SURFACE_COLLECTIONS) {
     normalized[collection] = cloneValue(canonicalInput[collection] ?? {})
   }
-  if (Number(input.version ?? SURFACE_DATA_VERSION) < 7) {
-    normalized.rooms = migrateRoomGeometryClips(normalized.rooms, normalized.storyHeight)
-  }
   return normalized
 }
 
@@ -557,12 +574,9 @@ export function collectSurfaceTextureIds(input) {
   }
   for (const stair of Object.values(surface.stairs)) add(stair.tex)
   for (const room of Object.values(surface.rooms)) {
-    add(room.floorTopTex); add(room.floorBottomTex)
-    add(room.ceilingTopTex); add(room.ceilingBottomTex)
-    add(room.wallInteriorTex); add(room.wallExteriorTex)
-    add(room.wallFrontTex); add(room.wallBackTex); add(room.wallTopTex)
+    add(room.floorTex); add(room.ceilingTex); add(room.wallInteriorTex)
     for (const profile of room.wallAppearanceProfiles || []) {
-      add(profile.interiorTex); add(profile.exteriorTex)
+      add(profile.interiorTex)
     }
   }
   return Object.freeze([...ids])

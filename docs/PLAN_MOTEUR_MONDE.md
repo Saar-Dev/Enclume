@@ -113,7 +113,7 @@ Phase 1, pas d'un oubli de la Phase 0.
 
 ### Livré le 2026-07-13
 
-- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v11, attribue des UUID
+- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v12, attribue des UUID
   stables et produit le `WorldDocument` canonique ;
 - `shared/world/worldCompiler.js` compile salles, dalles, murs partagés, portes découpées, escaliers,
   ascenseurs désactivés en attente de leur contrôleur, colliders, occluders et compartiments ;
@@ -412,17 +412,14 @@ Phase 7.
 
 ## 11. Phase 8 — tranches d'étage, eau et murs courbes ✅
 
-### Règle de tranche
+### Règle de tranche (mise à jour par le contrat v12)
 
-- afficher l'étage N retire du renderer et des interactions les sols, murs, tokens, entités et
-  effets appartenant aux autres étages ;
-- une salle haute de plusieurs étages est un volume ouvert local : depuis chaque tranche qu'elle
-  traverse, son vrai sol inférieur, ses parois descendantes et son contenu plus bas restent
-  visibles, sans plancher intermédiaire inventé ; son plafond appartient à sa dernière tranche ;
-- cette exception est bornée par l'emprise horizontale et verticale de la salle. Elle ne révèle
-  jamais une salle inférieure voisine ou superposée qui n'appartient pas à ce volume ;
-- escaliers, échelles et ascenseurs restent présents uniquement sur leur portion ou palier pertinent
-  pour la tranche courante ;
+- afficher l'étage N conserve dans le renderer les sols, murs, tokens, entités, effets et connecteurs
+  des étages inférieurs. Ils restent entièrement opaques ;
+- une salle haute de plusieurs étages reste un volume ouvert local : ses parois descendantes sont
+  rendues sans plancher intermédiaire inventé et son plafond appartient à sa dernière tranche ;
+- les étages supérieurs au plan de coupe ne sont pas rendus. La sélection et le support de placement
+  de l'éditeur restent attachés à l'étage courant même si le monde inférieur est visible ;
 - une future trappe sera une capacité d'un connecteur vertical, généralement liée à une échelle,
   et non une raison de réafficher l'étage inférieur.
 
@@ -430,9 +427,7 @@ Phase 7.
 
 - la surface extérieure de l'eau prend le sommet global de la carte et n'empile plus une nappe au
   plafond de chaque étage ;
-- un objet d'un étage inférieur ne peut plus intercepter un clic ni servir de support dans l'éditeur
-  de l'étage courant, sauf s'il est visible au fond du même volume multniveau ; même visible, il ne
-  remplace jamais le plan de placement de l'étage courant ;
+- un objet d'un étage inférieur visible ne remplace jamais le plan de placement de l'étage courant ;
 - l'éditeur expose **Mur droit** pour les panneaux libres. Les anciens murs courbes restent lisibles,
   mais les arrondis de salle sont désormais une transformation structurée de contour (Phase 10) ;
 - les portes restent attachées aux portions droites. Une porte courbe exigerait un modèle et une
@@ -687,10 +682,12 @@ Phase 7.
 
 ## 18. Phase 15 — apparence par mur et panneaux flottants ✅
 
-### Contrat `surface_data` v11
+### Contrat `surface_data` v12
 
-- `room.wallAppearanceProfiles[]` rattache textures et matériaux procéduraux des faces intérieure
-  et extérieure aux `edgeKeys` du contour ;
+- `room.wallAppearanceProfiles[]` rattache la texture et le matériau procédural de la face
+  intérieure aux `edgeKeys` du contour ;
+- les salles ne portent plus que `floorTex` / `floorMaterial`, `ceilingTex` / `ceilingMaterial` et
+  `wallInteriorTex` / `wallInteriorMaterial`. Les anciennes faces sont refusées, pas migrées ;
 - les chemins droits, les arcs et les tranches verticales résolvent cette même donnée canonique ;
 - les fusions conservent les profils des murs restants et éliminent ceux de la séparation ;
 - usure, saleté et relief valent `0` par défaut.
@@ -701,6 +698,14 @@ Phase 7.
 - les apparences de salle et de mur sont éditées dans leurs panneaux respectifs ;
 - le panneau de mur peut sélectionner tous les murs visibles de la salle ;
 - après le tracé réussi d'une salle, l'éditeur retourne en sélection sur la salle créée.
+
+### Coupe verticale et transparence
+
+- tous les étages inférieurs au niveau courant sont affichés opaques ;
+- une frontière empilée plafond/sol est une interface horizontale unique dérivée des volumes ;
+- seul le plafond qui ferme le niveau courant reçoit l'opacité de coupe ;
+- les segments colinéaires compatibles sont regroupés en murs logiques. Les découpes de porte
+  conservent ce groupe, deviennent transparentes ensemble et masquent leurs bouchons internes.
 
 ---
 

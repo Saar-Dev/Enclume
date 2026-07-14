@@ -54,7 +54,7 @@ Principes obligatoires :
 
 ### 2.1 Éditeur Surface `[EXISTANT]`
 
-`battlemaps.surface_data` version 11 contient actuellement :
+`battlemaps.surface_data` version 12 contient actuellement :
 
 - `rooms`, `floors`, `walls`, `ceilings`, `stairs`, `connectors` ;
 - les drapeaux `walkable`, `blocksMovement`, `blocksSight` ;
@@ -66,7 +66,7 @@ Principes obligatoires :
 - un calcul client d'étanchéité utilisé pour le rendu de l'eau.
 
 Cet ensemble reste normalisé et rendu côté client par `client/src/lib/surfaceData.js`. À la
-sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 11 et
+sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 12 et
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
@@ -582,16 +582,23 @@ dernier segment d'un arc tessellé. Rendu, mouvement et LOS ferment ainsi le mê
 
 ### 7.6 Apparence canonique des murs
 
-`room.wallAppearanceProfiles[]` associe un ensemble d'`edgeKeys` à l'apparence des faces intérieure
-et extérieure. Chaque entrée peut porter `interiorTex` / `exteriorTex` et
-`interiorMaterial` / `exteriorMaterial`. Les matériaux procéduraux enregistrent matière, peinture,
+`room.wallAppearanceProfiles[]` associe un ensemble d'`edgeKeys` à l'apparence intérieure du mur.
+Chaque entrée peut porter `interiorTex` et `interiorMaterial`. Les matériaux procéduraux enregistrent matière, peinture,
 motif, usure, saleté, relief et mode de relief réel.
 
 Cette donnée appartient au mur logique, pas à la tessellation de son mesh. `roomBoundaryPaths`
 résout le profil à partir des arêtes sources et le propage aux chemins droits comme aux arcs ; le
 renderer l'applique ensuite à chaque panneau dérivé. Une fusion de salles conserve les profils des
-arêtes restantes et retire ceux de la séparation supprimée. Le validateur v11 contrôle les clés,
-les textures et les valeurs d'apparence entre 0 et 100.
+arêtes restantes et retire ceux de la séparation supprimée. Le validateur v12 contrôle les clés,
+les textures et les valeurs d'apparence entre 0 et 100. Le contrat v12 refuse les anciennes
+apparences `exterior`, ainsi que les faces de salle `top/bottom` et `front/back`.
+
+Les interfaces horizontales sont dérivées par altitude depuis les empreintes de sol et les régions
+de plafond. Si un plafond et un sol coïncident, une seule interface est rendue : plafond depuis le
+niveau inférieur, sol dès que le niveau supérieur est visible. Tous les niveaux inférieurs au plan
+de coupe restent opaques. La transparence des murs ne s'applique qu'au niveau courant et au mur
+logique complet ; les morceaux créés par une porte partagent le même groupe d'opacité et leurs faces
+de coupe internes ne sont pas dessinées.
 
 ---
 

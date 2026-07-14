@@ -6,8 +6,8 @@ import { normalizedSurfaceMaterial } from '../lib/surfaceMaterial.js'
 const PANEL_W = 330
 const PANEL_H_EST = 720
 const MATERIAL_FACES = [
-  ['top', 'Dessus'],
-  ['bottom', 'Dessous'],
+  ['floor', 'Sol'],
+  ['ceiling', 'Plafond'],
 ]
 
 export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, onClose }) {
@@ -18,7 +18,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
     height: PANEL_H_EST,
   })
   const [materialFace, setMaterialFace] = useState(
-    ['top', 'bottom'].includes(tool?.materialFace) ? tool.materialFace : 'top',
+    tool?.materialFace === 'ceiling' ? 'ceiling' : 'floor',
   )
   const [confirmDelete, setConfirmDelete] = useState(false)
   if (!room) return null
@@ -28,7 +28,9 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
     : []
   const hasCanonicalProfile = canonicalSlices.length > 0
   const heightLevels = Math.max(1, Number(room.heightLevels) || Number(tool?.roomHeightLevels) || 1)
-  const material = normalizedSurfaceMaterial(tool?.materialProfiles?.[materialFace])
+  const material = normalizedSurfaceMaterial(
+    tool?.materialProfiles?.[materialFace],
+  )
   const patchMaterial = nextMaterial => onPatch?.({
     materialFace,
     materialProfiles: {

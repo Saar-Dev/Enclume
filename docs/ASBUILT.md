@@ -72,7 +72,7 @@ Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statiq
 
 ## Moteur de monde — Phase 1 ✅
 
-- `shared/world/surfaceDocument.js` — validation/migration `surface_data` v1-v11, UUID physiques
+- `shared/world/surfaceDocument.js` — validation `surface_data` v12, UUID physiques
   stables, adaptation vers le document canonique ;
 - `shared/world/worldCompiler.js` — compilation déterministe des sols, plafonds, murs partagés,
   découpes de porte, escaliers, barrières multi-canaux, colliders, occluders et compartiments ;
@@ -386,11 +386,11 @@ moteur ; sinon elles doivent être supprimées.
 
 ## Moteur de monde — Phase 15 ✅
 
-- `surface_data` v11 ajoute `room.wallAppearanceProfiles[]`. Une apparence de face intérieure ou
-  extérieure est liée aux arêtes canoniques du mur et non aux segments temporaires de rendu ;
+- `surface_data` v12 conserve uniquement l'apparence intérieure des murs et remplace les faces de
+  salle historiques par `floorMaterial`, `ceilingMaterial` et `wallInteriorMaterial` ;
 - le panneau de mur expose matière, motif, peinture, usure, saleté, relief et relief réel, ainsi
   qu'une sélection de tous les murs de la salle. Ces réglages ont quitté le panneau de salle ;
-- le panneau de salle conserve l'apparence de ses surfaces supérieure et inférieure, avec usure,
+- le panneau de salle conserve l'apparence de son sol et de son plafond, avec usure,
   saleté et relief ; leurs trois valeurs sont neutres (`0`) par défaut ;
 - les panneaux de salle, mur et connecteur 3D sont déplaçables par l'en-tête. Le panneau des entités
   3D l'était déjà et conserve le même comportement ;
@@ -398,8 +398,9 @@ moteur ; sinon elles doivent être supprimées.
   en mode sélection ;
 - les apparences de mur sont validées côté serveur, collectent leurs textures, suivent les arcs et
   sont conservées lors des fusions sur toutes les arêtes qui subsistent ;
-- état validé : 116 tests monde/serveur, 35 tests client Surface/persistance et build Vite de
-  production passent.
+- les étages inférieurs sont opaques ; une interface plafond/sol empilée n'est rendue qu'une fois ;
+  la transparence de coupe agit sur des murs logiques continus, y compris autour des portes et arcs ;
+- état validé : tests monde/serveur et client Surface, lint ciblé et build Vite de production.
 
 ---
 

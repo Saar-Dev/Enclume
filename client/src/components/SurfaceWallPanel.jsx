@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import {
   roomSelectableWallRuns,
   roomWallAppearanceForEdges,
@@ -18,7 +17,6 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
     width: PANEL_W,
     height: PANEL_H_EST,
   })
-  const [appearanceFace, setAppearanceFace] = useState('interior')
   if (!room || !tool?.selectedRoomWallCount) return null
 
   const count = Number(tool.selectedRoomWallCount) || 0
@@ -29,24 +27,11 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
   const allWallsSelected = allWallKeys.length > 0 && allWallKeys.every(key => selectedKeySet.has(String(key)))
   const elevationProfile = roomWallElevationProfileForEdges(room, selectedKeys)
   const storedAppearance = roomWallAppearanceForEdges(room, selectedKeys)
-  const wallAppearance = {
-    interiorTex: storedAppearance?.interiorTex ?? room.wallInteriorTex ?? room.wallFrontTex ?? null,
-    exteriorTex: storedAppearance?.exteriorTex ?? room.wallExteriorTex ?? room.wallBackTex ?? room.wallInteriorTex ?? room.wallFrontTex ?? null,
-    interiorMaterial: normalizedSurfaceMaterial(
-      storedAppearance?.interiorMaterial ?? room.wallInteriorMaterial ?? room.wallFrontMaterial,
-    ),
-    exteriorMaterial: normalizedSurfaceMaterial(
-      storedAppearance?.exteriorMaterial ?? room.wallExteriorMaterial ?? room.wallBackMaterial
-        ?? room.wallInteriorMaterial ?? room.wallFrontMaterial,
-    ),
-  }
-  const appearanceMaterial = appearanceFace === 'interior'
-    ? wallAppearance.interiorMaterial
-    : wallAppearance.exteriorMaterial
-  const patchAppearance = material => onAppearanceChange?.({
-    ...wallAppearance,
-    [appearanceFace === 'interior' ? 'interiorMaterial' : 'exteriorMaterial']: material,
-  })
+  const interiorTex = storedAppearance?.interiorTex ?? room.wallInteriorTex ?? null
+  const appearanceMaterial = normalizedSurfaceMaterial(
+    storedAppearance?.interiorMaterial ?? room.wallInteriorMaterial,
+  )
+  const patchAppearance = interiorMaterial => onAppearanceChange?.({ interiorTex, interiorMaterial })
   const depth = Math.max(0, Number(elevationProfile.depth) || 0)
   const profileFactor = elevationProfile.type === 'curved' ? Math.PI : 2
   const angle = Math.atan(profileFactor * depth / 2.5) * 180 / Math.PI
@@ -97,23 +82,7 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
         </button>
 
         <div style={S.section}>
-          <span style={S.label}>Apparence des murs sélectionnés</span>
-          <div style={S.directionButtons}>
-            <button
-              type="button"
-              onClick={() => setAppearanceFace('interior')}
-              style={{ ...S.button, ...(appearanceFace === 'interior' ? S.profileButtonActive : {}) }}
-            >
-              Face intérieure
-            </button>
-            <button
-              type="button"
-              onClick={() => setAppearanceFace('exterior')}
-              style={{ ...S.button, ...(appearanceFace === 'exterior' ? S.profileButtonActive : {}) }}
-            >
-              Face extérieure
-            </button>
-          </div>
+          <span style={S.label}>Apparence côté salle</span>
           <SurfaceMaterialEditor profile={appearanceMaterial} onChange={patchAppearance} />
         </div>
 
