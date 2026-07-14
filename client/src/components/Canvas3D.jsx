@@ -11,7 +11,9 @@ import raycastVoxels from 'fast-voxel-raycast'
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { useCameraLOS } from '../lib/useCameraLOS.js'
-import CulledVoxelScene from './CulledVoxelScene.jsx'
+import DungeonTerrainScene from './DungeonTerrainScene.jsx'
+import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
+import { hasSurfaceContent, normalizeSurfaceData, surfaceTextureIds } from '../lib/surfaceData.js'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
 import { useTokenStore } from '../stores/tokenStore'
@@ -364,7 +366,7 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
 // Lecture seule voxels + tokens + entités + WS listeners.
 // La logique d'édition (pose, suppression, rotation) est dans Editor3D.
 function Scene({
-  voxels, setVoxels, textureMaterials, entityTextureMaterials, socket, battlemapId,
+  voxels, setVoxels, surfaceData, textureMaterials, entityTextureMaterials, socket, battlemapId,
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
   altPressed, onEntityClick, onTokenRotate,
@@ -907,7 +909,11 @@ function Scene({
         fadeDistance={80}
       />
 
-      <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
+      {hasSurfaceContent(surfaceData) ? (
+        <SurfaceDungeonScene surfaceData={surfaceData} textureMaterials={textureMaterials} />
+      ) : (
+        <DungeonTerrainScene voxels={voxels} textureMaterials={textureMaterials} />
+      )}
 
       {/* ── Entités interactables — entre voxels et tokens ────────────────── */}
       {entities.map(entity => {
@@ -1124,6 +1130,10 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
 
+  // surfaceData — dérivé à chaque rendu depuis battlemap.surface_data (pas de state/effect,
+  // même approche que Kiwi : normalizeSurfaceData retourne un objet vide stable si absent)
+  const surfaceData = normalizeSurfaceData(battlemap?.surface_data)
+
   // Labels i18n pour le ghost — calculés ici où t() est accessible, passés en prop à Scene
   const moveLabels = {
     push:       t('entity.movePush'),
@@ -1216,12 +1226,15 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
       const voxelTexIds = battlemap?.voxel_data
         ? [...new Set(Object.values(battlemap.voxel_data).map(v => v.tex))]
         : []
+      // Fusion avec les textures utilisées par surface_data — sans ça, une carte construite
+      // uniquement avec l'éditeur de surfaces (voxel_data vide) s'affiche sans texture en jeu.
+      const textureIds = [...new Set([...voxelTexIds, ...surfaceTextureIds(battlemap?.surface_data)])]
 
-      if (voxelTexIds.length === 0) {
+      if (textureIds.length === 0) {
         setTextureMaterials({})
       } else {
         try {
-          const { data } = await api.get(`/voxel-textures?ids=${voxelTexIds.join(',')}`)
+          const { data } = await api.get(`/voxel-textures?ids=${textureIds.join(',')}`)
           const loaded = await loadVoxelTextures(data.textures)
           setTextureMaterials(loaded)
         } catch (err) {
@@ -1281,7 +1294,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
 
     loadBlocks()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [battlemap?.id, battlemap?.voxel_data, blueprintIds])
+  }, [battlemap?.id, battlemap?.voxel_data, battlemap?.surface_data, blueprintIds])
 
   const handleCanvasClick = useCallback(() => {
     if (justSelectedRef.current) { justSelectedRef.current = false; return }
@@ -1299,6 +1312,7 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
         <Scene
           voxels={voxels}
           setVoxels={setVoxels}
+          surfaceData={surfaceData}
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}
           socket={socket}

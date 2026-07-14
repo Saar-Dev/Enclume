@@ -33,6 +33,7 @@ import EntityInstancePanel from '../components/EntityInstancePanel'
 import CombatOverlay from '../components/CombatOverlay'
 import TradeWindow from '../components/TradeWindow'
 import ExchangeWindow from '../components/ExchangeWindow'
+import { DEFAULT_SURFACE_MATERIAL_PRESET } from '../lib/proceduralMaterials.js'
 
 export default function SessionPage() {
   const { campaignId } = useParams()
@@ -94,6 +95,34 @@ function SessionContent({ campaignId }) {
   const [activeMaterial, setActiveMaterial] = useState(null)
   const [activeBlueprint, setActiveBlueprint] = useState(null)
   const [availableBlocks, setAvailableBlocks] = useState([])
+  const [surfaceTool, setSurfaceTool] = useState({
+    mode: 'floor',
+    elevation: 0,
+    floorThickness: 0.25,
+    ceilingThickness: 0.25,
+    ceilingHeight: 2.5,
+    wallThickness: 1,
+    wallHeight: 2.5,
+    stairRise: 2.5,
+    surfaceBlocking: 'solid',
+    floorPackId: null,
+    ceilingPackId: null,
+    stairPackId: null,
+    wallFrontPackId: null,
+    wallBackPackId: null,
+    floorTexId: null,
+    ceilingTexId: null,
+    stairTexId: null,
+    wallFrontTexId: null,
+    wallBackTexId: null,
+    autoVariants: true,
+    surfaceMaterialMode: 'procedural',
+    materialPreset: DEFAULT_SURFACE_MATERIAL_PRESET,
+  })
+  const [surfaceUndoRequest, setSurfaceUndoRequest] = useState(0)
+  const [surfaceRedoRequest, setSurfaceRedoRequest] = useState(0)
+  const [canSurfaceUndo, setCanSurfaceUndo] = useState(false)
+  const [canSurfaceRedo, setCanSurfaceRedo] = useState(false)
 
   // ─── Radial menu entité ───────────────────────────────────────────────────
   // Ouvert au clic sur l'icône ⚙ d'une entité dans Canvas3D.
@@ -477,6 +506,11 @@ function SessionContent({ campaignId }) {
               onBlocksLoaded={setAvailableBlocks}
               activeEditorTab={activeEditorTab}
               activeBlueprint={activeBlueprint}
+              surfaceTool={surfaceTool}
+              surfaceUndoRequest={surfaceUndoRequest}
+              surfaceRedoRequest={surfaceRedoRequest}
+              onSurfaceUndoStateChange={setCanSurfaceUndo}
+              onSurfaceRedoStateChange={setCanSurfaceRedo}
             />
           : <Canvas3D
               onTokenDoubleClick={handleTokenDoubleClick}
@@ -547,6 +581,12 @@ function SessionContent({ campaignId }) {
           availableBlocks={availableBlocks}
           activeBlueprint={activeBlueprint}
           onBlueprintSelect={setActiveBlueprint}
+          surfaceTool={surfaceTool}
+          onSurfaceToolChange={setSurfaceTool}
+          canSurfaceUndo={canSurfaceUndo && activeEditorTab !== 'entity'}
+          canSurfaceRedo={canSurfaceRedo && activeEditorTab !== 'entity'}
+          onSurfaceUndo={() => setSurfaceUndoRequest(n => n + 1)}
+          onSurfaceRedo={() => setSurfaceRedoRequest(n => n + 1)}
           campaignId={campaignId}
           socket={socket}
           onReconnectSocket={() => {}}

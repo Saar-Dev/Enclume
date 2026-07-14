@@ -3404,3 +3404,98 @@ Lunette si supérieur à 5), résumé recalculé avec le vrai coût.
   (Session 141 suite 23, incident "Moding Phase A"). Contenu vérifié intact par grep ligne à ligne +
   tous les tests ci-dessus repassés après coup — historique non réécrit, rien à corriger.
 - Détail complet : `docs/PLAN_MODING_PHASEB.md` Groupe 2.
+
+## Session 142 — 2026-07-14 — Fusion frontend Kiwi (Enclume-codex) : éditeur + playground de surfaces ✅ CLOS
+
+Chantier distinct de tout ce qui précède — pas une suite de Session 141. Objectif posé par Saar,
+sans ambiguïté après plusieurs recadrages en cours de session : porter mécaniquement le prototype
+frontend jamais mergé de "Kiwi" (dossier `Enclume-codex/Enclume-codex/`, figé Session 84, jamais
+committé pour ses propres ajouts — `git log --all` vide dessus) dans la structure actuelle. Kiwi
+remplace le système de cartes en voxels par un moteur sol/mur/plafond/escalier (`surface_data`),
+avec éditeur (`SurfaceEditorScene`) et rendu de jeu (`SurfaceDungeonScene`) dédiés.
+
+**Erreurs de cadrage corrigées en cours de route, avant tout code définitif** :
+1. Premier chantier ("Chantier A") = reskin visuel du rendu voxel existant seul
+   (`DungeonTerrainScene`, dérivé de `voxel_data`), sans toucher l'éditeur — **erreur de périmètre**,
+   Saar voulait le remplacement complet (éditeur + playground), pas un habillage cosmétique. Le
+   swap `Canvas3D.jsx` `CulledVoxelScene`→`DungeonTerrainScene` reste en place (insuffisant, pas
+   faux), complété au point 11 ci-dessous.
+2. Tentative parallèle de porter le "Générateur de matériaux" (`MaterialGeneratorTab.jsx`) dans
+   l'Atelier — retirée sur demande explicite ("Retire, qu'on reparte sur une base saine"), fichier
+   restauré à l'état brut Kiwi.
+3. Plusieurs propositions de plan faites sur la base de `grep`/extraits au lieu d'une lecture
+   complète — corrigé après rappel direct de Saar ("POURQUOI tu commences pas par LIRE ?!") : tous
+   les fichiers concernés (Kiwi ET actuels) relus en entier avant le plan final.
+4. Pathfinding/collision/LOS sur `surface_data` explicitement écartés par Saar ("chantiers à part"),
+   pas implémentés ici — voir dettes `[SURF-COLLISION]`/`[SURF-SYNC]` ci-dessous.
+
+**Analyse critique indépendante exigée par Saar avant tout code** (agent `Plan`, relecture fraîche
+des fichiers réels, aucune confiance a priori dans le premier plan) — verdict : plan non exécutable
+tel quel, deux corrections bloquantes trouvées, intégrées avant codage :
+- **Bug bloquant** : le chargement des textures dans `Canvas3D.jsx` ne regardait que `voxel_data` —
+  une carte construite uniquement avec le nouvel éditeur se serait affichée sans texture en mode
+  jeu. Corrigé (fusion `voxelTexIds` + `surfaceTextureIds(battlemap?.surface_data)`, plus la
+  plomberie de props oubliée vers le sous-composant `Scene()` de `Canvas3D.jsx`).
+- **Violation i18n** : la barre d'outils portée depuis Kiwi contenait des dizaines de chaînes
+  françaises codées en dur — corrigé, toutes passent par `t('sidebar.surfaceTool.*')`.
+- Plan complet avec corrections : `docs/PLAN_FUSION_KIWI.md`.
+
+**Codé** (portage mécanique, pas de redesign) :
+- Migration `143_battlemaps_surface_data.js` (`battlemaps.surface_data JSONB NOT NULL DEFAULT '{}'`,
+  copie de la migration 75 Kiwi) + `server/src/routes/battlemaps.js` (`PUT /:id/surface`, copie
+  exacte incluant le recalcul `battlemap_texture_usage` ; `surface_data` ajouté à `POST /:id/duplicate`)
+- 6 fichiers Kiwi committés tels quels (vérifiés byte-identiques, purs/autonomes) :
+  `SurfaceEditorScene.jsx`, `SurfaceDungeonScene.jsx`, `surfaceData.js`, `ReliefBoxGeometry.jsx`,
+  `reliefGeometry.js`, `proceduralMaterials.js` — sauf convention souris `MapControls` de
+  `SurfaceEditorScene.jsx` (`MIDDLE`/`RIGHT` swap, décision Saar : cohérence UX avec le reste de l'app)
+- `Editor3D.jsx` réécrit en une seule passe (pas d'edits fragmentés — risque d'état intermédiaire
+  cassé identifié au run à vide) : `EditorScene` (éditeur voxel) supprimé, remplacé par
+  `SurfaceEditorScene` ; `EntityEditorScene` gagne le rendu conditionnel
+  `hasSurfaceContent(surfaceData) ? <SurfaceDungeonScene/> : <Voxel/>` ; state/refs/handlers surface
+  complets (undo/redo 50 niveaux, sauvegarde fire-and-forget, auto-save 60s) portés depuis Kiwi.
+  **Bug introduit puis corrigé en relecture immédiate** : `<MapControls>` remplacé par un
+  placeholder fantôme pendant la réécriture — repéré à la relecture complète du fichier produit
+  avant toute vérification, corrigé avant même de lancer ESLint.
+- `Canvas3D.jsx` : dérivation `surfaceData = normalizeSurfaceData(battlemap?.surface_data)` (constante
+  par rendu, pas un state — écart corrigé vs le premier plan qui calquait à tort le pattern `voxels`),
+  montage conditionnel `SurfaceDungeonScene`/`DungeonTerrainScene`, correction bloquante du
+  chargement textures (voir ci-dessus)
+- `SessionPage.jsx` : state `surfaceTool`/`surfaceUndoRequest`/`surfaceRedoRequest`/
+  `canSurfaceUndo`/`canSurfaceRedo` (import `DEFAULT_SURFACE_MATERIAL_PRESET` — absent du premier
+  plan, corrigé), câblage vers `Editor3D`/`Sidebar` avec garde
+  `canSurfaceUndo && activeEditorTab !== 'entity'`
+- `Sidebar.jsx` : barre d'outils complète (sol/mur/plafond/escalier/supprimer, élévation,
+  épaisseurs, matériau procédural/motif/peinture/usure/saleté/relief, variations, collision,
+  undo/redo) insérée avant la palette de textures existante — toutes les chaînes via `t()`,
+  ~25 clés `sidebar.surfaceTool.*` ajoutées à `fr.json`
+
+**Testé** : ESLint sur chaque fichier touché avec comparaison `git stash` systématique (zéro
+nouvelle erreur sur tous — seules les dettes préexistantes déjà documentées : `vx`/`vz` non utilisés
+dans `Editor3D.jsx`, `getFinePoint` non utilisé dans `SurfaceEditorScene.jsx` confirmé pré-existant
+côté Kiwi lui-même, `canEditGmNotes` dans `Sidebar.jsx`), `fr.json` validé, migration round-trip réel
+en base (`down()` puis `up()`, jamais deux `up()` de suite — P54 — colonne confirmée absente puis
+restaurée avec le bon type `jsonb`/`NOT NULL DEFAULT '{}'`). **Parcours navigateur confirmé
+fonctionnel par Saar** ("Fonctionnel").
+
+**Dettes actives ajoutées** :
+- **`[SURF-COLLISION]`** — aucun pathfinding/collision/LOS sur `surface_data`, ni chez Kiwi ni ici
+  (confirmé par audit dédié avant ce chantier). Un token peut traverser les murs/sols sculptés avec
+  le nouvel éditeur. Chantier séparé, explicitement différé par Saar.
+- **`[SURF-SYNC]`** — aucune synchronisation temps réel WebSocket pour les modifications de
+  `surface_data` (contrairement à `WS.VOXEL_ADD/REMOVE/UPDATE`) — héritée de l'incomplétude de
+  Kiwi. Les autres clients connectés ne voient une modification de surface qu'après reload
+  (auto-save 60s ou démontage de l'éditeur).
+- **Ancien système voxel non démoli** — `Voxel.jsx`/`CulledVoxelScene.jsx`/`buildCulledMesh.js`,
+  routes `voxel-textures`/`texture-packs`/`block-types` conservés intacts (encore utilisés par
+  `EntityEditorScene` en repli si `!hasSurfaceContent`, et par `DungeonTerrainScene` en repli
+  playground). Démolition impossible tant que `[SURF-COLLISION]` n'est pas résolu.
+- Fichier orphelin `client/src/components/SurfaceDungeonScene.jsx_` (underscore, untracked, contenu
+  divergent — implémentation de boulons différente) repéré par l'analyse critique, jamais importé
+  nulle part, laissé tel quel (non nettoyé, hors scope).
+
+**Non testé** : pathfinding/collision (hors scope assumé), synchronisation multi-clients temps réel
+sur une édition de surface.
+
+**Prochain chantier possible** : `[SURF-COLLISION]` — moteur de pathfinding/collision dédié à
+`surface_data`, seul point bloquant avant de pouvoir envisager la démolition du système voxel.
+Détail complet du plan (avec citations chemin:ligne systématiques) : `docs/PLAN_FUSION_KIWI.md`.

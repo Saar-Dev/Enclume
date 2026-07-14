@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 30) — 2026-07-13
+> Session 142 — 2026-07-14
 
 ---
 
@@ -112,8 +112,34 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 30) (2026-07-13)
+## ÉTAT COURANT — Session 142 (2026-07-14)
 
+- **Session 142 — Fusion frontend Kiwi (Enclume-codex) : éditeur + playground de surfaces ✅ CLOS,
+  fonctionnel confirmé Saar.** Chantier distinct de tout ce qui précède (pas une suite de Session
+  141). Portage mécanique du prototype frontend "Kiwi" jamais mergé (`Enclume-codex/Enclume-codex/`,
+  figé Session 84, jamais committé pour ses propres ajouts) vers la structure actuelle. Kiwi
+  remplace le système de cartes en voxels par un moteur sol/mur/plafond/escalier (`surface_data`),
+  éditeur (`SurfaceEditorScene`) + rendu de jeu (`SurfaceDungeonScene`) dédiés. Décision Saar sans
+  ambiguïté après plusieurs recadrages : "EDITEUR KIWI OUI, EDITEUR VOXEL NON" — pathfinding/
+  collision/LOS sur `surface_data` explicitement hors scope ("chantiers à part"), ne pas se soucier
+  de préserver les cartes voxel existantes. **Analyse critique indépendante exigée par Saar avant
+  code** (agent `Plan`, relecture fraîche des fichiers réels) : plan non exécutable tel quel, 2
+  corrections bloquantes trouvées et corrigées avant livraison — chargement des textures dans
+  `Canvas3D.jsx` ignorait `surface_data` (carte "surface" affichée sans texture en mode jeu) et
+  barre d'outils Kiwi codée en dur (violation i18n, corrigée via `sidebar.surfaceTool.*`). **Codé** :
+  migration `143_battlemaps_surface_data.js` + route `PUT /:id/surface` (copie exacte Kiwi,
+  recalcul `battlemap_texture_usage` inclus) ; 6 fichiers Kiwi committés tels quels (`SurfaceEditorScene.jsx`,
+  `SurfaceDungeonScene.jsx`, `surfaceData.js`, `ReliefBoxGeometry.jsx`, `reliefGeometry.js`,
+  `proceduralMaterials.js`, sauf convention souris `MapControls` harmonisée avec le reste de l'app) ;
+  `Editor3D.jsx` réécrit en une seule passe (`EditorScene` voxel supprimé, remplacé par
+  `SurfaceEditorScene`) ; `Canvas3D.jsx`/`SessionPage.jsx`/`Sidebar.jsx` câblés (state, barre
+  d'outils complète, undo/redo). **Testé** : ESLint comparaison `git stash` sur chaque fichier
+  (zéro nouvelle erreur), migration round-trip réel en base (P54 respecté), **parcours navigateur
+  confirmé fonctionnel par Saar**. **Dettes ajoutées** : `[SURF-COLLISION]` (aucun pathfinding/
+  collision sur `surface_data`, bloque la démolition du voxel — priorité haute, chantier séparé),
+  `[SURF-SYNC]` (pas de sync WebSocket temps réel sur l'édition de surfaces, héritée de Kiwi).
+  Système voxel conservé intact (encore utilisé en repli). Détail complet : `docs/PLAN_FUSION_KIWI.md`,
+  `docs/JOURNAL6.md` "Session 142".
 - **Session 141 (suite 30) — `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée ✅ CLOS,
   fonctionnel confirmé Saar.** Suite de Groupe 1 (suite 28, clos). Plan déjà entièrement rédigé et
   tranché en amont — session de codage, tous les fichiers concernés relus avant code (dont
@@ -924,7 +950,8 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
   sessions 139 ci-dessous. **Prochain chantier à définir avec Saar** — voir `docs/EN_COURS.md` item 44
   (options de campagne restantes, ou Lots 7/8 jamais cadrés en détail).
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- **147 migrations stables** (142_ref_equipment_lunette_niveaux — Moding Phase B Groupe 2,
+- **148 migrations stables** (143_battlemaps_surface_data — Fusion frontend Kiwi, Session 142 ;
+  142_ref_equipment_lunette_niveaux — Moding Phase B Groupe 2,
   Session 141 (suite 30) ; 141_ref_equipment_mod_slots — Moding Phase B Groupe 1,
   Session 141 (suite 28) ; 140_ref_skill_requirements_or_group — bug Hybride, Session 141 (suite 27) ;
   139_fix_ref_skill_requirements_mutations — `PLAN_MUTATION2.md` Lot 5, Session 141 (suite 26) ;

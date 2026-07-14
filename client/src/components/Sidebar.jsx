@@ -11,6 +11,11 @@ import { WS } from '../../../shared/events.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import LibraryPanel from './LibraryPanel.jsx'
 import { DeclareLogContent } from './CombatDeclareLog.jsx'
+import {
+  DEFAULT_SURFACE_MATERIAL_PRESET,
+  PROCEDURAL_MATERIAL_PRESETS,
+  PROCEDURAL_PATTERN_PRESETS,
+} from '../lib/proceduralMaterials.js'
 
 const SIDEBAR_MIN = 220
 const SIDEBAR_MAX = 500
@@ -473,6 +478,8 @@ export default function Sidebar({
   onClose,
   activeMaterial, onMaterialChange, availableBlocks = [],
   activeBlueprint, onBlueprintSelect,
+  surfaceTool, onSurfaceToolChange,
+  canSurfaceUndo, canSurfaceRedo, onSurfaceUndo, onSurfaceRedo,
   campaignId,
   socket,
   onReconnectSocket,
@@ -489,6 +496,44 @@ export default function Sidebar({
   const messages = messagesByCampaign[activeCampaignId] || []
   const { blueprints } = useEntityStore()
   const { phase, currentTurn } = useCombatStore()
+
+  const surfaceToolState = {
+    mode: 'floor',
+    elevation: 0,
+    floorThickness: 0.25,
+    ceilingThickness: 0.25,
+    ceilingHeight: 2.5,
+    wallThickness: 1,
+    wallHeight: 2.5,
+    stairRise: 2.5,
+    surfaceBlocking: 'solid',
+    floorPackId: null,
+    ceilingPackId: null,
+    stairPackId: null,
+    wallFrontPackId: null,
+    wallBackPackId: null,
+    floorTexId: null,
+    ceilingTexId: null,
+    stairTexId: null,
+    wallFrontTexId: null,
+    wallBackTexId: null,
+    autoVariants: true,
+    surfaceMaterialMode: 'procedural',
+    materialPreset: DEFAULT_SURFACE_MATERIAL_PRESET,
+    ...surfaceTool,
+  }
+  const updateSurfaceTool = (patch) => onSurfaceToolChange?.({ ...surfaceToolState, ...patch })
+  const surfaceMaterialState = {
+    ...DEFAULT_SURFACE_MATERIAL_PRESET,
+    ...(surfaceToolState.materialPreset || {}),
+  }
+  const surfacePaintValue = /^#[0-9a-f]{6}$/i.test(String(surfaceMaterialState.paint || ''))
+    ? surfaceMaterialState.paint
+    : DEFAULT_SURFACE_MATERIAL_PRESET.paint
+  const updateSurfaceMaterial = (patch) => updateSurfaceTool({
+    surfaceMaterialMode: 'procedural',
+    materialPreset: { ...surfaceMaterialState, ...patch },
+  })
 
   const [activeTab, setActiveTab] = useState('chat')
   const [toolsOpen, setToolsOpen] = useState(false)
@@ -813,6 +858,33 @@ export default function Sidebar({
             </button>
           </div>
 
+          <div style={styles.undoRow}>
+            <button
+              type="button"
+              onClick={() => canSurfaceUndo && onSurfaceUndo?.()}
+              disabled={!canSurfaceUndo}
+              title={t('sidebar.surfaceTool.undoTitle')}
+              style={{
+                ...styles.undoBtn,
+                ...(!canSurfaceUndo ? styles.undoBtnDisabled : {}),
+              }}
+            >
+              ↶ {t('sidebar.surfaceTool.undo')}
+            </button>
+            <button
+              type="button"
+              onClick={() => canSurfaceRedo && onSurfaceRedo?.()}
+              disabled={!canSurfaceRedo}
+              title={t('sidebar.surfaceTool.redoTitle')}
+              style={{
+                ...styles.undoBtn,
+                ...(!canSurfaceRedo ? styles.undoBtnDisabled : {}),
+              }}
+            >
+              ↷ {t('sidebar.surfaceTool.redo')}
+            </button>
+          </div>
+
           {/* ── Palette voxels — visible uniquement en onglet Voxels ── */}
           {activeEditorTab === 'voxel' && (
             <>
@@ -823,6 +895,284 @@ export default function Sidebar({
                     <GeometryIcon geometry={activeMaterial.geo} size={12} />
                   </span>
                 )}
+              </div>
+              <div style={styles.roomTool}>
+                <div style={styles.roomToolModes}>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'floor' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'floor' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    {t('sidebar.surfaceTool.modeFloor')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'wall' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'wall' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    {t('sidebar.surfaceTool.modeWall')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'stair' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'stair' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    {t('sidebar.surfaceTool.modeStair')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'ceiling' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'ceiling' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    {t('sidebar.surfaceTool.modeCeiling')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'erase' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'erase' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    {t('sidebar.surfaceTool.modeErase')}
+                  </button>
+                </div>
+                <div style={styles.roomToolGrid}>
+                  <label style={styles.roomToolLabel}>
+                    <span>{t('sidebar.surfaceTool.elevation')}</span>
+                    <input
+                      type="number"
+                      min="-8"
+                      max="16"
+                      step="0.5"
+                      value={surfaceToolState.elevation}
+                      onChange={e => updateSurfaceTool({ elevation: Number(e.target.value) })}
+                      style={styles.roomToolInput}
+                    />
+                  </label>
+                  {surfaceToolState.mode === 'floor' && (
+                    <label style={styles.roomToolLabel}>
+                      <span>{t('sidebar.surfaceTool.floorThickness')}</span>
+                      <input
+                        type="number"
+                        min="0.05"
+                        max="4"
+                        step="0.05"
+                        value={surfaceToolState.floorThickness}
+                        onChange={e => updateSurfaceTool({ floorThickness: Number(e.target.value) })}
+                        style={styles.roomToolInput}
+                      />
+                    </label>
+                  )}
+                  {surfaceToolState.mode === 'ceiling' && (
+                    <>
+                      <label style={styles.roomToolLabel}>
+                        <span>{t('sidebar.surfaceTool.ceilingHeight')}</span>
+                        <input
+                          type="number"
+                          min="0.25"
+                          max="16"
+                          step="0.25"
+                          value={surfaceToolState.ceilingHeight ?? surfaceToolState.wallHeight}
+                          onChange={e => updateSurfaceTool({ ceilingHeight: Number(e.target.value) })}
+                          style={styles.roomToolInput}
+                        />
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>{t('sidebar.surfaceTool.ceilingThickness')}</span>
+                        <input
+                          type="number"
+                          min="0.05"
+                          max="4"
+                          step="0.05"
+                          value={surfaceToolState.ceilingThickness ?? surfaceToolState.floorThickness}
+                          onChange={e => updateSurfaceTool({ ceilingThickness: Number(e.target.value) })}
+                          style={styles.roomToolInput}
+                        />
+                      </label>
+                    </>
+                  )}
+                  {surfaceToolState.mode === 'stair' && (
+                    <label style={styles.roomToolLabel}>
+                      <span>{t('sidebar.surfaceTool.stairRise')}</span>
+                      <input
+                        type="number"
+                        min="0.25"
+                        max="12"
+                        step="0.25"
+                        value={surfaceToolState.stairRise}
+                        onChange={e => updateSurfaceTool({ stairRise: Number(e.target.value) })}
+                        style={styles.roomToolInput}
+                      />
+                    </label>
+                  )}
+                </div>
+                {surfaceToolState.mode === 'wall' && (
+                  <div style={styles.roomToolGrid}>
+                    <label style={styles.roomToolLabel}>
+                      <span>{t('sidebar.surfaceTool.wallThickness')}</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="8"
+                        value={surfaceToolState.wallThickness}
+                        onChange={e => updateSurfaceTool({ wallThickness: Number(e.target.value) })}
+                        style={styles.roomToolInput}
+                      />
+                    </label>
+                    <label style={styles.roomToolLabel}>
+                      <span>{t('sidebar.surfaceTool.wallHeight')}</span>
+                      <input
+                        type="number"
+                        min="0.5"
+                        max="8"
+                        step="0.5"
+                        value={surfaceToolState.wallHeight}
+                        onChange={e => updateSurfaceTool({ wallHeight: Number(e.target.value) })}
+                        style={styles.roomToolInput}
+                      />
+                    </label>
+                  </div>
+                )}
+                {surfaceToolState.mode !== 'erase' && (
+                  <>
+                    <div style={styles.roomToolSectionTitle}>{t('sidebar.surfaceTool.materialSectionTitle')}</div>
+                    <div style={styles.roomToolGrid}>
+                      <label style={styles.roomToolLabel}>
+                        <span>{t('sidebar.surfaceTool.material')}</span>
+                        <select
+                          value={surfaceMaterialState.material}
+                          onChange={e => updateSurfaceMaterial({ material: e.target.value })}
+                          style={styles.roomToolSelect}
+                        >
+                          {PROCEDURAL_MATERIAL_PRESETS.map(preset => (
+                            <option key={preset.id} value={preset.id}>{t(`sidebar.surfaceTool.materials.${preset.id}`)}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>{t('sidebar.surfaceTool.pattern')}</span>
+                        <select
+                          value={surfaceMaterialState.pattern}
+                          onChange={e => updateSurfaceMaterial({ pattern: e.target.value })}
+                          style={styles.roomToolSelect}
+                        >
+                          {PROCEDURAL_PATTERN_PRESETS.map(pattern => (
+                            <option key={pattern.id} value={pattern.id}>{t(`sidebar.surfaceTool.patterns.${pattern.id}`)}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <label style={styles.roomToolLabel}>
+                      <span>{t('sidebar.surfaceTool.paint')}</span>
+                      <div style={styles.roomToolColorRow}>
+                        <input
+                          type="color"
+                          value={surfacePaintValue}
+                          onChange={e => updateSurfaceMaterial({ paint: e.target.value })}
+                          style={styles.roomToolColorInput}
+                        />
+                        <input
+                          type="text"
+                          value={surfaceMaterialState.paint || surfacePaintValue}
+                          onChange={e => updateSurfaceMaterial({ paint: e.target.value })}
+                          style={styles.roomToolInput}
+                        />
+                      </div>
+                    </label>
+                    {[
+                      ['wear', t('sidebar.surfaceTool.wear')],
+                      ['dirt', t('sidebar.surfaceTool.dirt')],
+                      ['relief', t('sidebar.surfaceTool.relief')],
+                    ].map(([key, label]) => (
+                      <label key={key} style={styles.roomToolLabel}>
+                        <span>{label}</span>
+                        <div style={styles.roomToolRangeRow}>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={Number(surfaceMaterialState[key]) || 0}
+                            onChange={e => updateSurfaceMaterial({ [key]: Number(e.target.value) })}
+                            style={styles.roomToolRange}
+                          />
+                          <span style={styles.roomToolRangeValue}>{Number(surfaceMaterialState[key]) || 0}</span>
+                        </div>
+                      </label>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => updateSurfaceMaterial({ realRelief: surfaceMaterialState.realRelief === false })}
+                      style={{
+                        ...styles.roomToolToggle,
+                        ...(surfaceMaterialState.realRelief !== false ? styles.roomToolToggleActive : {}),
+                      }}
+                    >
+                      <span>{t('sidebar.surfaceTool.realRelief')}</span>
+                      <span style={styles.roomToolToggleState}>
+                        {surfaceMaterialState.realRelief !== false ? t('sidebar.surfaceTool.realReliefOn') : t('sidebar.surfaceTool.realReliefOff')}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSurfaceTool({ autoVariants: !surfaceToolState.autoVariants })}
+                      style={{
+                        ...styles.roomToolToggle,
+                        ...(surfaceToolState.autoVariants ? styles.roomToolToggleActive : {}),
+                      }}
+                    >
+                      <span>{t('sidebar.surfaceTool.autoVariants')}</span>
+                      <span style={styles.roomToolToggleState}>
+                        {surfaceToolState.autoVariants ? t('sidebar.surfaceTool.autoVariantsOn') : t('sidebar.surfaceTool.autoVariantsOff')}
+                      </span>
+                    </button>
+                    <div style={styles.roomToolGrid}>
+                      <label style={styles.roomToolLabel}>
+                        <span>{t('sidebar.surfaceTool.blocking')}</span>
+                        <select
+                          value={surfaceToolState.surfaceBlocking || surfaceToolState.wallBlocking || 'solid'}
+                          onChange={e => updateSurfaceTool({ surfaceBlocking: e.target.value })}
+                          style={styles.roomToolSelect}
+                        >
+                          <option value="solid">{t('sidebar.surfaceTool.blockingSolid')}</option>
+                          <option value="glass">{t('sidebar.surfaceTool.blockingGlass')}</option>
+                          <option value="grate">{t('sidebar.surfaceTool.blockingGrate')}</option>
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => updateSurfaceMaterial({ seed: `mat-${Date.now().toString(36)}` })}
+                        style={styles.roomToolSmallBtn}
+                      >
+                        {t('sidebar.surfaceTool.newVariation')}
+                      </button>
+                    </div>
+                  </>
+                )}
+                <div style={styles.roomToolHint}>
+                  {surfaceToolState.mode === 'wall'
+                    ? t('sidebar.surfaceTool.hintWall')
+                    : surfaceToolState.mode === 'ceiling'
+                      ? t('sidebar.surfaceTool.hintCeiling')
+                    : surfaceToolState.mode === 'stair'
+                      ? t('sidebar.surfaceTool.hintStair')
+                    : surfaceToolState.mode === 'erase'
+                      ? t('sidebar.surfaceTool.hintErase')
+                      : t('sidebar.surfaceTool.hintFloor')}
+                </div>
               </div>
               {availableBlocks.length === 0 && (
                 <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>{t('common.loading')}</p>
@@ -1969,6 +2319,163 @@ const styles = {
     color: '#9090a8',
     borderColor: '#5b8dee',
     backgroundColor: 'rgba(91,141,238,0.08)',
+  },
+  // ─── Undo/redo surfaces ──
+  undoRow: {
+    display: 'flex',
+    gap: '4px',
+    marginBottom: '6px',
+  },
+  undoBtn: {
+    flex: 1,
+    padding: '5px 0',
+    background: 'none',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    color: '#9090a8',
+    cursor: 'pointer',
+    fontSize: '11px',
+  },
+  undoBtnDisabled: {
+    color: '#4a4a60',
+    cursor: 'default',
+  },
+  // ─── Barre d'outils sculptage de surfaces (sol/mur/plafond/escalier) ──
+  roomTool: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    padding: '8px',
+    marginBottom: '10px',
+    background: '#16162a',
+    border: '1px solid #1e1e2e',
+    borderRadius: '6px',
+  },
+  roomToolModes: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+  },
+  roomToolModeBtn: {
+    flex: '1 0 auto',
+    padding: '5px 8px',
+    background: 'none',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    color: '#9090a8',
+    cursor: 'pointer',
+    fontSize: '11px',
+  },
+  roomToolModeBtnActive: {
+    color: '#c0c0d0',
+    borderColor: '#5b8dee',
+    backgroundColor: 'rgba(91,141,238,0.12)',
+  },
+  roomToolGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '6px',
+  },
+  roomToolLabel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '3px',
+    fontSize: '10px',
+    color: '#64748b',
+  },
+  roomToolInput: {
+    background: '#0e0e1a',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    padding: '4px 6px',
+    color: '#c0c0d0',
+    fontSize: '11px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+  roomToolSelect: {
+    background: '#0e0e1a',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    padding: '4px 6px',
+    color: '#c0c0d0',
+    fontSize: '11px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+  roomToolSectionTitle: {
+    fontSize: '10px',
+    color: '#4a4a60',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    marginTop: '2px',
+  },
+  roomToolColorRow: {
+    display: 'flex',
+    gap: '6px',
+  },
+  roomToolColorInput: {
+    width: '28px',
+    height: '24px',
+    padding: '1px',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    background: '#0e0e1a',
+    cursor: 'pointer',
+  },
+  roomToolRangeRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  roomToolRange: {
+    flex: 1,
+    accentColor: '#5b8dee',
+  },
+  roomToolRangeValue: {
+    fontSize: '10px',
+    color: '#64748b',
+    fontFamily: 'monospace',
+    minWidth: '26px',
+    textAlign: 'right',
+  },
+  roomToolToggle: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '5px 8px',
+    background: 'none',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    color: '#9090a8',
+    cursor: 'pointer',
+    fontSize: '11px',
+  },
+  roomToolToggleActive: {
+    color: '#c0c0d0',
+    borderColor: '#5b8dee',
+    backgroundColor: 'rgba(91,141,238,0.08)',
+  },
+  roomToolToggleState: {
+    fontSize: '10px',
+    color: '#64748b',
+  },
+  roomToolSmallBtn: {
+    padding: '5px 8px',
+    background: 'none',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    color: '#9090a8',
+    cursor: 'pointer',
+    fontSize: '10px',
+  },
+  roomToolHint: {
+    fontSize: '10px',
+    color: '#4a4a60',
+    lineHeight: 1.4,
+    fontStyle: 'italic',
   },
   // ─── Badge onglet Actions ──
   actionsBadge: {

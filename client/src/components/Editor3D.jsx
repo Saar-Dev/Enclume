@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Canvas, useThree, useFrame } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
 import { MapControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
 import api from '../lib/api.js'
@@ -7,6 +7,9 @@ import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import Voxel from './Voxel.jsx'
 import EntityMesh from './EntityMesh.jsx'
+import SurfaceEditorScene from './SurfaceEditorScene.jsx'
+import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
+import { hasSurfaceContent, normalizeSurfaceData } from '../lib/surfaceData.js'
 import { useMapStore } from '../stores/mapStore'
 import { useEntityStore } from '../stores/entityStore'
 // ─── Constantes — identiques à Canvas3D ──────────────────────────────────────
@@ -14,41 +17,7 @@ const GRID_SIZE = 50
 
 // ─── Utilitaire clé voxel ────────────────────────────────────────────────────
 const getVoxelKey = (x, y, z) => `${x}:${y}:${z}`
-
-// ─── Ghost voxel — preview avant pose ────────────────────────────────────────
-// Mesh semi-transparent sous le curseur, géométrie du bloc actif.
-// Couleur unie bleue — pas les textures (lisibilité maximale).
-function GhostVoxel({ position, geometry, rotation }) {
-  if (!position) return null
-  const [px, py, pz] = position
-  const rot = (rotation || 0) * (Math.PI / 2)
-
-  const geo = geometry || 'cube'
-
-  const yOffset = geo === 'slab_bottom' ? -0.25
-    : geo === 'slab_top' ? 0.25
-    : 0
-
-  const renderGeometry = () => {
-    switch (geo) {
-      case 'slab_bottom':
-      case 'slab_top':
-        return <boxGeometry args={[1, 0.5, 1]} />
-      default:
-        return <boxGeometry args={[1, 1, 1]} />
-    }
-  }
-
-  return (
-    <mesh
-      position={[px + 0.5, py + 0.5 + yOffset, pz + 0.5]}
-      rotation={[0, rot, 0]}
-    >
-      {renderGeometry()}
-      <meshLambertMaterial color="#5b8dee" transparent opacity={0.45} depthWrite={false} />
-    </mesh>
-  )
-}
+const cloneSurfaceData = (data) => JSON.parse(JSON.stringify(data))
 
 // ─── Ghost entité — preview avant pose ───────────────────────────────────────
 function GhostEntity({ position, blueprint, r }) {
@@ -67,7 +36,7 @@ function GhostEntity({ position, blueprint, r }) {
 }
 
 // ─── Scène éditeur entités ────────────────────────────────────────────────────
-function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, socket, battlemapId, activeBlueprint }) {
+function EntityEditorScene({ voxels, surfaceData, textureMaterials, entityTextureMaterials, socket, battlemapId, activeBlueprint }) {
   const { camera, gl, scene } = useThree()
   const orbitRef = useRef()
   const raycaster = new THREE.Raycaster()
@@ -223,12 +192,21 @@ function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, s
       <Grid args={[GRID_SIZE, GRID_SIZE]} position={[0, 0, 0]}
         cellColor="#334155" sectionColor="#475569" fadeDistance={80}
       />
-      {Object.values(voxels).map(v => (
-        <Voxel key={getVoxelKey(v.x, v.y, v.z)}
-          position={[v.x, v.y, v.z]} textureMaterials={textureMaterials[v.tex]}
-          geometry={v.geo} rotation={v.r}
+      {hasSurfaceContent(surfaceData) ? (
+        <SurfaceDungeonScene
+          surfaceData={surfaceData}
+          textureMaterials={textureMaterials}
+          showWater={false}
+          ceilingOpacity={0.35}
         />
-      ))}
+      ) : (
+        Object.values(voxels).map(v => (
+          <Voxel key={getVoxelKey(v.x, v.y, v.z)}
+            position={[v.x, v.y, v.z]} textureMaterials={textureMaterials[v.tex]}
+            geometry={v.geo} rotation={v.r}
+          />
+        ))
+      )}
       {entities.map(entity => {
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
@@ -245,337 +223,56 @@ function EntityEditorScene({ voxels, textureMaterials, entityTextureMaterials, s
   )
 }
 
-// ─── Scène éditeur ────────────────────────────────────────────────────────────
-// Lecture des voxels depuis les props — écriture via setVoxels + socket.emit.
-function EditorScene({
-  voxels, setVoxels, textureMaterials,
-  activeMaterial, onActiveMaterialChange,
-  socket, battlemapId,
-  isDirty,
-}) {
-  const { camera, gl, scene } = useThree()
-  const orbitRef = useRef()
-  const raycaster = new THREE.Raycaster()
-  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-
-  // Position courante de la souris — nécessaire pour handleKeyDown (pas de e.clientX)
-  const mousePosRef = useRef({ x: 0, y: 0 })
-
-  // Position du ghost voxel — null = pas affiché
-  const [ghostPos, setGhostPos] = useState(null)
-
-  // ─── Pan clavier proportionnel à la hauteur caméra ──────────────────────
-  // Remplace listenToKeyEvents + keyPanSpeed de MapControls.
-  // Vitesse native MapControls = pixels écran, indépendante du zoom.
-  // Solution : vitesse = camera.position.y * PAN_FACTOR * delta — linéaire à toutes altitudes.
-  const keysPressed = useRef(new Set())
-  const PAN_FACTOR = 0.8
-
-  useEffect(() => {
-    const onKeyDown = (e) => {
-      if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) {
-        e.preventDefault()
-        keysPressed.current.add(e.key)
-      }
-    }
-    const onKeyUp = (e) => keysPressed.current.delete(e.key)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
-    }
-  }, [])
-
-  useFrame((_, delta) => {
-    if (keysPressed.current.size === 0) return
-    if (!orbitRef.current) return
-    const speed = Math.max(camera.position.y, 2) * PAN_FACTOR * delta
-    const forward = new THREE.Vector3()
-    const right = new THREE.Vector3()
-    camera.getWorldDirection(forward)
-    forward.y = 0
-    forward.normalize()
-    right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize()
-    const move = new THREE.Vector3()
-    if (keysPressed.current.has('ArrowUp'))    move.addScaledVector(forward,  speed)
-    if (keysPressed.current.has('ArrowDown'))  move.addScaledVector(forward, -speed)
-    if (keysPressed.current.has('ArrowLeft'))  move.addScaledVector(right,   -speed)
-    if (keysPressed.current.has('ArrowRight')) move.addScaledVector(right,    speed)
-    camera.position.add(move)
-    orbitRef.current.target.add(move)
-  })
-
-  // ─── Ref position mousedown droit — distingue clic court de drag caméra ─
-  // Clic droit court (< 4px) = suppression voxel.
-  // Drag droit = rotation caméra MapControls — pas de suppression.
-  const rightDownRef = useRef(null)
-
-  // ─── Calcul position ghost depuis la souris ─────────────────────────────
-  // Raycasting sur les bbox isVoxel en priorité, sinon sur le sol (Y=0).
-  // Retourne { x, y, z } en coordonnées brutes (entiers) ou null.
-  const calcGhostPos = useCallback((clientX, clientY) => {
-    const rect = gl.domElement.getBoundingClientRect()
-    const mouse = new THREE.Vector2(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -((clientY - rect.top) / rect.height) * 2 + 1
-    )
-    raycaster.setFromCamera(mouse, camera)
-
-    // Collecter toutes les bbox invisibles (userData.isVoxel)
-    const meshes = []
-    scene.traverse(obj => {
-      if (obj.userData.isVoxel && obj.isMesh) meshes.push(obj)
-    })
-
-    const hits = raycaster.intersectObjects(meshes, false)
-    if (hits.length > 0) {
-      const hit = hits[0]
-      const normal = hit.face.normal.clone().applyQuaternion(hit.object.getWorldQuaternion(new THREE.Quaternion())).round()
-      const [vx, vy, vz] = hit.object.userData.position
-      const nx = vx + Math.round(normal.x)
-      const ny = vy + Math.round(normal.y)
-      const nz = vz + Math.round(normal.z)
-      // Guard dimensions
-      if (Math.abs(nx) > GRID_SIZE / 2 || Math.abs(nz) > GRID_SIZE / 2 || ny < 0 || ny > 7) return null
-      return { x: nx, y: ny, z: nz }
-    }
-
-    // Pas de voxel — intersection avec le sol Y=0
-    const target = new THREE.Vector3()
-    const hit2 = raycaster.ray.intersectPlane(groundPlane, target)
-    if (!hit2) return null
-    const x = Math.round(target.x)
-    const z = Math.round(target.z)
-    if (Math.abs(x) > GRID_SIZE / 2 || Math.abs(z) > GRID_SIZE / 2) return null
-    return { x, y: 0, z }
-  }, [camera, gl, scene])
-
-  // ─── Raycasting voxel existant à une position souris ───────────────────
-  // Retourne la position { x, y, z } du voxel touché ou null.
-  const getVoxelUnderCursor = useCallback((clientX, clientY) => {
-    const rect = gl.domElement.getBoundingClientRect()
-    const mouse = new THREE.Vector2(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -((clientY - rect.top) / rect.height) * 2 + 1
-    )
-    raycaster.setFromCamera(mouse, camera)
-    const meshes = []
-    scene.traverse(obj => {
-      if (obj.userData.isVoxel && obj.isMesh) meshes.push(obj)
-    })
-    const hits = raycaster.intersectObjects(meshes, false)
-    if (hits.length === 0) return null
-    const pos = hits[0].object.userData.position
-    return { x: pos[0], y: pos[1], z: pos[2] }
-  }, [camera, gl, scene])
-
-  // ─── Mouse move — mise à jour ghost + mémorisation position souris ──────
-  useEffect(() => {
-    const canvas = gl.domElement
-
-    const handleMouseMove = (e) => {
-      mousePosRef.current = { x: e.clientX, y: e.clientY }
-      if (!activeMaterial) { setGhostPos(null); return }
-      const pos = calcGhostPos(e.clientX, e.clientY)
-      setGhostPos(pos)
-    }
-
-    canvas.addEventListener('mousemove', handleMouseMove)
-    return () => canvas.removeEventListener('mousemove', handleMouseMove)
-  }, [gl, activeMaterial, calcGhostPos])
-
-  // ─── Mouse down — pose gauche + mémorisation position droit ────────────
-  // Clic gauche : pose immédiate du bloc actif.
-  // Clic droit : mémorise la position pour décision au mouseup (clic court vs drag caméra).
-  useEffect(() => {
-    const canvas = gl.domElement
-
-    const handleMouseDown = (e) => {
-      // Clic droit — mémoriser la position, décision au mouseup
-      if (e.button === 2) {
-        rightDownRef.current = { x: e.clientX, y: e.clientY }
-        return
-      }
-
-      // Clic gauche — pose du bloc actif
-      if (e.button === 0) {
-        if (!activeMaterial) return
-        const pos = calcGhostPos(e.clientX, e.clientY)
-        if (!pos) return
-        const { x, y, z } = pos
-        const { texId, geo, r } = activeMaterial
-        const key = getVoxelKey(x, y, z)
-        setVoxels(prev => ({ ...prev, [key]: { x, y, z, tex: texId, geo, r } }))
-        isDirty.current = true
-        if (!battlemapId) return  // P12
-        socket?.emit(WS.VOXEL_ADD, { battlemapId, x, y, z, tex: texId, geo, r })
-      }
-    }
-
-    canvas.addEventListener('mousedown', handleMouseDown)
-    return () => canvas.removeEventListener('mousedown', handleMouseDown)
-  }, [gl, activeMaterial, calcGhostPos, setVoxels, socket, battlemapId, isDirty])
-
-  // ─── Mouse up droit — suppression si clic court (pas un drag caméra) ────
-  // Si la souris a bougé de moins de 4px depuis le mousedown → clic court → suppression.
-  // Si la souris a bougé davantage → drag caméra MapControls → ignorer.
-  useEffect(() => {
-    const canvas = gl.domElement
-    const DRAG_THRESHOLD = 4
-
-    const handleMouseUp = (e) => {
-      if (e.button !== 2) return
-      if (!rightDownRef.current) return
-      const dx = Math.abs(e.clientX - rightDownRef.current.x)
-      const dy = Math.abs(e.clientY - rightDownRef.current.y)
-      rightDownRef.current = null
-      if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) return  // drag caméra — ignorer
-
-      // Clic court — suppression du voxel sous le curseur
-      const hit = getVoxelUnderCursor(e.clientX, e.clientY)
-      if (!hit) return
-      const { x, y, z } = hit
-      const key = getVoxelKey(x, y, z)
-      if (!voxels[key]) return
-      setVoxels(prev => { const next = { ...prev }; delete next[key]; return next })
-      isDirty.current = true
-      if (!battlemapId) return  // P12
-      socket?.emit(WS.VOXEL_REMOVE, { battlemapId, x, y, z })
-    }
-
-    canvas.addEventListener('mouseup', handleMouseUp)
-    return () => canvas.removeEventListener('mouseup', handleMouseUp)
-  }, [gl, getVoxelUnderCursor, voxels, setVoxels, socket, battlemapId, isDirty])
-
-  // ─── Contextmenu prevent — clic droit sans menu browser ─────────────────
-  useEffect(() => {
-    const canvas = gl.domElement
-    const prevent = (e) => e.preventDefault()
-    canvas.addEventListener('contextmenu', prevent)
-    return () => canvas.removeEventListener('contextmenu', prevent)
-  }, [gl])
-
-  // ─── Keyboard — touche R (rotation ghost ou voxel existant) + 1-9,0 ────
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // ── Touche R — rotation ──────────────────────────────────────────────
-      if (e.key === 'r' || e.key === 'R') {
-        // Vérifier si un voxel est sous le curseur
-        const hit = getVoxelUnderCursor(mousePosRef.current.x, mousePosRef.current.y)
-        if (hit) {
-          // Rotation en place du voxel existant
-          const { x, y, z } = hit
-          const key = getVoxelKey(x, y, z)
-          if (!voxels[key]) return
-          const newR = (voxels[key].r + 1) % 4
-          setVoxels(prev => ({ ...prev, [key]: { ...prev[key], r: newR } }))
-          isDirty.current = true
-          if (!battlemapId) return  // P12
-          socket?.emit(WS.VOXEL_UPDATE, { battlemapId, x, y, z, r: newR })
-        } else {
-          // Rotation du ghost (bloc actif)
-          if (!activeMaterial) return
-          onActiveMaterialChange(prev => prev ? { ...prev, r: (prev.r + 1) % 4 } : prev)
-        }
-        return
-      }
-
-      // ── Raccourcis 1-9, 0 — sélection rapide palette ────────────────────
-      // Ces raccourcis sont gérés dans Editor3D (niveau composant principal)
-      // via onActiveMaterialChange — voir handleKeyDown dans Editor3D.
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [getVoxelUnderCursor, voxels, setVoxels, socket, battlemapId, activeMaterial, onActiveMaterialChange, isDirty])
-
-  // ─── MapControls — configuration identique à Canvas3D ───────────────────
-  // listenToKeyEvents et keyPanSpeed supprimés — remplacés par pan clavier custom (useFrame).
-  useEffect(() => {
-    if (!orbitRef.current) return
-    orbitRef.current.mouseButtons = {
-      LEFT: null,
-      MIDDLE: THREE.MOUSE.PAN,
-      RIGHT: THREE.MOUSE.ROTATE,
-    }
-  }, [])
-
-  return (
-    <>
-      <ambientLight intensity={0.8} />
-      <hemisphereLight args={['#ffffff', '#334155', 0.6]} />
-      <directionalLight position={[10, 20, 10]} intensity={1.5} castShadow />
-      <directionalLight position={[-10, 10, -10]} intensity={0.6} />
-
-      <MapControls
-        ref={orbitRef}
-        mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE }}
-        enableDamping
-        dampingFactor={0.05}
-        maxPolarAngle={Math.PI / 2}
-      />
-
-      <Grid
-        args={[GRID_SIZE, GRID_SIZE]}
-        position={[0, 0, 0]}
-        cellColor="#334155"
-        sectionColor="#475569"
-        fadeDistance={80}
-      />
-
-      {/* Voxels existants */}
-      {Object.values(voxels).map(v => (
-        <Voxel
-          key={getVoxelKey(v.x, v.y, v.z)}
-          position={[v.x, v.y, v.z]}
-          textureMaterials={textureMaterials[v.tex]}
-          geometry={v.geo}
-          rotation={v.r}
-        />
-      ))}
-
-      {/* Ghost voxel — preview pose */}
-      <GhostVoxel
-        position={ghostPos ? [ghostPos.x, ghostPos.y, ghostPos.z] : null}
-        geometry={activeMaterial?.geo || 'cube'}
-        rotation={activeMaterial?.r || 0}
-      />
-    </>
-  )
-}
-
 // ─── Composant principal exporté ──────────────────────────────────────────────
 // Editor3D — mode édition GM.
-// Gère : chargement blocs, voxels, save, raccourcis clavier sélection palette.
+// Gère : chargement blocs, voxels, surfaces (fusion Kiwi), save, raccourcis clavier.
 // Props :
-//   socket                  — pour émettre VOXEL_ADD/REMOVE/UPDATE
-//   activeMaterial          — { texId, geo, r } | null — texture+géométrie actifs (depuis SessionPage)
+//   socket                  — pour émettre VOXEL_ADD/REMOVE/UPDATE + ENTITY_*
+//   activeMaterial          — { texId, geo, r } | null — utilisé par la palette voxel legacy (onglet entité)
 //   onActiveMaterialChange  — setter (depuis SessionPage)
-//   availableBlocks         — tableau de blocs chargés (pour raccourcis 1-9)
+//   availableBlocks         — tableau de blocs chargés (pour raccourcis)
 //   onBlocksLoaded          — callback appelé quand les blocs sont chargés
+//   surfaceTool             — état de l'outil de sculptage (mode/élévation/matériau...) — depuis SessionPage
+//   surfaceUndoRequest/surfaceRedoRequest — compteurs incrémentés par la Sidebar (Ctrl+Z/Y)
+//   onSurfaceUndoStateChange/onSurfaceRedoStateChange — callbacks pour activer/désactiver les boutons undo/redo
 export default function Editor3D({
   socket,
   activeMaterial,
-  onActiveMaterialChange,
   availableBlocks,
   onBlocksLoaded,
   activeEditorTab,
   activeBlueprint,
+  surfaceTool,
+  surfaceUndoRequest = 0,
+  surfaceRedoRequest = 0,
+  onSurfaceUndoStateChange,
+  onSurfaceRedoStateChange,
 }) {
   const { battlemap, setBattlemap } = useMapStore()
   const { entities } = useEntityStore()
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
 
   const [voxels, setVoxels] = useState({})
+  const [surfaceData, setSurfaceData] = useState(() => normalizeSurfaceData(null))
   const [textureMaterials, setTextureMaterials] = useState({})
   const [blocksReady, setBlocksReady] = useState(false)
 
   const isDirty = useRef(false)
+  const isSurfaceDirty = useRef(false)
   const saveTimer = useRef(null)
+  const surfaceUndoStackRef = useRef([])
+  const surfaceRedoStackRef = useRef([])
+  const surfaceSaveQueueRef = useRef(Promise.resolve())
+  const surfaceSaveRevisionRef = useRef(0)
+  const [surfaceUndoDepth, setSurfaceUndoDepth] = useState(0)
+  const [surfaceRedoDepth, setSurfaceRedoDepth] = useState(0)
+  const surfaceUndoRequestRef = useRef(surfaceUndoRequest)
+  const surfaceRedoRequestRef = useRef(surfaceRedoRequest)
   // voxelsRef — miroir de voxels pour accès dans le cleanup useEffect (évite le stale closure)
   const voxelsRef = useRef(voxels)
   useEffect(() => { voxelsRef.current = voxels }, [voxels])
+  const surfaceDataRef = useRef(surfaceData)
+  useEffect(() => { surfaceDataRef.current = surfaceData }, [surfaceData])
   // battlemapRef — miroir de battlemap pour saveFireAndForget stable (pas de recréation du timer)
   const battlemapRef = useRef(battlemap)
   useEffect(() => { battlemapRef.current = battlemap }, [battlemap])
@@ -592,6 +289,25 @@ export default function Editor3D({
     }
     setVoxels(map)
   }, [battlemap?.id])
+
+  useEffect(() => {
+    setSurfaceData(normalizeSurfaceData(battlemap?.surface_data))
+  }, [battlemap?.id, battlemap?.surface_data])
+
+  useEffect(() => {
+    surfaceUndoStackRef.current = []
+    surfaceRedoStackRef.current = []
+    setSurfaceUndoDepth(0)
+    setSurfaceRedoDepth(0)
+  }, [battlemap?.id])
+
+  useEffect(() => {
+    onSurfaceUndoStateChange?.(surfaceUndoDepth > 0)
+  }, [onSurfaceUndoStateChange, surfaceUndoDepth])
+
+  useEffect(() => {
+    onSurfaceRedoStateChange?.(surfaceRedoDepth > 0)
+  }, [onSurfaceRedoStateChange, surfaceRedoDepth])
 
   // ─── Chargement voxel_textures — TOUTES les textures (palette complète) ──
   // Editor3D charge toutes les textures non-deprecated pour la palette,
@@ -686,30 +402,37 @@ export default function Editor3D({
       .catch(err => console.error('[Editor3D] Sauvegarde échouée :', err))
   }, [setBattlemap])
 
-  // ─── save() async — pour les saves explicites futures (undo/redo) ────────
-  // Payload format : { "x:y:z": { tex, geo, r } } — P_voxel_save_payload
-  const save = useCallback(async (currentVoxels) => {
-    if (!isDirty.current || !battlemap?.id) return
-    try {
-      const payload = {}
-      for (const [key, v] of Object.entries(currentVoxels)) {
-        payload[key] = { tex: v.tex, geo: v.geo, r: v.r }
-      }
-      await api.put(`/battlemaps/${battlemap.id}/voxels`, { voxel_data: payload })
-      isDirty.current = false
-      setBattlemap({ ...battlemap, voxel_data: payload })
-    } catch (err) {
-      console.error('[Editor3D] Erreur sauvegarde voxels :', err)
-    }
-  }, [battlemap, setBattlemap])
+  const saveSurfaceFireAndForget = useCallback((currentSurfaceData) => {
+    const bm = battlemapRef.current
+    if (!isSurfaceDirty.current || !bm?.id) return
+    const battlemapId = bm.id
+    const revision = surfaceSaveRevisionRef.current + 1
+    surfaceSaveRevisionRef.current = revision
+
+    surfaceSaveQueueRef.current = surfaceSaveQueueRef.current
+      .catch(() => {})
+      .then(() => fetch(`${import.meta.env.VITE_API_URL}/api/battlemaps/${battlemapId}/surface`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ surface_data: currentSurfaceData }),
+      }))
+      .then(() => {
+        if (revision !== surfaceSaveRevisionRef.current) return
+        isSurfaceDirty.current = false
+        setBattlemap({ ...battlemapRef.current, surface_data: currentSurfaceData })
+      })
+      .catch(err => console.error('[Editor3D] Sauvegarde surfaces échouée :', err))
+  }, [setBattlemap])
 
   // ─── Auto-save toutes les 60s si dirty ──────────────────────────────────
   useEffect(() => {
     saveTimer.current = setInterval(() => {
       saveFireAndForget(voxelsRef.current)
+      saveSurfaceFireAndForget(surfaceDataRef.current)
     }, 60000)
     return () => clearInterval(saveTimer.current)
-  }, [saveFireAndForget])
+  }, [saveFireAndForget, saveSurfaceFireAndForget])
 
   // ─── Save au démontage (toggle retour mode jeu) ──────────────────────────
   // Utilise saveFireAndForget — le cleanup useEffect ne peut pas await une Promise.
@@ -718,34 +441,90 @@ export default function Editor3D({
   useEffect(() => {
     return () => {
       saveFireAndForget(voxelsRef.current)
+      saveSurfaceFireAndForget(surfaceDataRef.current)
     }
-  }, [saveFireAndForget])
+  }, [saveFireAndForget, saveSurfaceFireAndForget])
 
-  // ─── Raccourcis Digit1-5 — sélection géométrie ──────────────────────────
-  // Digit1=cube, Digit2=slab_bottom, Digit3=slab_top, Digit4=slope, Digit5=wedge.
-  // Modifient geo dans activeMaterial sans changer texId ni r.
-  // Guard allowed_geometries : si la texture active restreint les géométries,
-  // les géométries non autorisées sont ignorées silencieusement (P34).
-  // Utilise e.code (invariant layout) — P38.
-  const GEOMETRIES = ['cube', 'slab_bottom', 'slab_top', 'slope', 'wedge']
+  const handleSurfaceDataChange = useCallback((nextSurfaceData) => {
+    if (nextSurfaceData === surfaceDataRef.current) return
+    surfaceUndoStackRef.current = [
+      ...surfaceUndoStackRef.current.slice(-49),
+      cloneSurfaceData(surfaceDataRef.current),
+    ]
+    surfaceRedoStackRef.current = []
+    setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
+    setSurfaceRedoDepth(0)
+    setSurfaceData(nextSurfaceData)
+    isSurfaceDirty.current = true
+    saveSurfaceFireAndForget(nextSurfaceData)
+  }, [saveSurfaceFireAndForget])
+
+  const handleSurfaceUndo = useCallback(() => {
+    const previousSurfaceData = surfaceUndoStackRef.current.pop()
+    if (!previousSurfaceData) return false
+    surfaceRedoStackRef.current = [
+      ...surfaceRedoStackRef.current.slice(-49),
+      cloneSurfaceData(surfaceDataRef.current),
+    ]
+    setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
+    setSurfaceRedoDepth(surfaceRedoStackRef.current.length)
+    setSurfaceData(previousSurfaceData)
+    isSurfaceDirty.current = true
+    saveSurfaceFireAndForget(previousSurfaceData)
+    return true
+  }, [saveSurfaceFireAndForget])
+
+  const handleSurfaceRedo = useCallback(() => {
+    const nextSurfaceData = surfaceRedoStackRef.current.pop()
+    if (!nextSurfaceData) return false
+    surfaceUndoStackRef.current = [
+      ...surfaceUndoStackRef.current.slice(-49),
+      cloneSurfaceData(surfaceDataRef.current),
+    ]
+    setSurfaceUndoDepth(surfaceUndoStackRef.current.length)
+    setSurfaceRedoDepth(surfaceRedoStackRef.current.length)
+    setSurfaceData(nextSurfaceData)
+    isSurfaceDirty.current = true
+    saveSurfaceFireAndForget(nextSurfaceData)
+    return true
+  }, [saveSurfaceFireAndForget])
 
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.code >= 'Digit1' && e.code <= 'Digit5') {
-        e.preventDefault()  // empêcher les raccourcis navigateur (ex: recherche rapide Firefox)
-        const idx = parseInt(e.code.replace('Digit', '')) - 1
-        const geo = GEOMETRIES[idx]
-        if (!activeMaterial) return
-        // Guard allowed_geometries — null = toutes autorisées (P34)
-        const texDef = availableBlocks?.find(t => t.id === activeMaterial.texId)
-        const allowed = texDef?.allowed_geometries
-        if (allowed !== null && allowed !== undefined && !allowed.includes(geo)) return
-        onActiveMaterialChange(prev => prev ? { ...prev, geo } : prev)
-      }
+    if (surfaceUndoRequest === surfaceUndoRequestRef.current) return
+    surfaceUndoRequestRef.current = surfaceUndoRequest
+    handleSurfaceUndo()
+  }, [surfaceUndoRequest, handleSurfaceUndo])
+
+  useEffect(() => {
+    if (surfaceRedoRequest === surfaceRedoRequestRef.current) return
+    surfaceRedoRequestRef.current = surfaceRedoRequest
+    handleSurfaceRedo()
+  }, [surfaceRedoRequest, handleSurfaceRedo])
+
+  useEffect(() => {
+    const handleUndoKeyDown = (e) => {
+      if (activeEditorTab === 'entity') return
+      const target = e.target
+      const isTextInput = target?.tagName === 'INPUT'
+        || target?.tagName === 'TEXTAREA'
+        || target?.tagName === 'SELECT'
+        || target?.isContentEditable
+      if (isTextInput) return
+
+      const key = e.key.toLowerCase()
+      const isModifier = e.ctrlKey || e.metaKey
+      const isUndo = isModifier && !e.shiftKey && key === 'z'
+      const isRedo = isModifier && (key === 'y' || (e.shiftKey && key === 'z'))
+      if (!isUndo && !isRedo) return
+
+      const didChange = isRedo ? handleSurfaceRedo() : handleSurfaceUndo()
+      if (!didChange) return
+      e.preventDefault()
     }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [availableBlocks, onActiveMaterialChange, activeMaterial])
+
+    document.addEventListener('keydown', handleUndoKeyDown)
+    return () => document.removeEventListener('keydown', handleUndoKeyDown)
+  }, [activeEditorTab, handleSurfaceRedo, handleSurfaceUndo])
 
   return (
     <Canvas
@@ -756,6 +535,7 @@ export default function Editor3D({
       {blocksReady && activeEditorTab === 'entity' && (
         <EntityEditorScene
           voxels={voxels}
+          surfaceData={surfaceData}
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}
           socket={socket}
@@ -764,15 +544,13 @@ export default function Editor3D({
         />
       )}
       {blocksReady && activeEditorTab !== 'entity' && (
-        <EditorScene
-          voxels={voxels}
-          setVoxels={setVoxels}
+        <SurfaceEditorScene
+          surfaceData={surfaceData}
+          onSurfaceDataChange={handleSurfaceDataChange}
           textureMaterials={textureMaterials}
           activeMaterial={activeMaterial}
-          onActiveMaterialChange={onActiveMaterialChange}
-          socket={socket}
-          battlemapId={battlemap?.id}
-          isDirty={isDirty}
+          surfaceTool={surfaceTool}
+          availableBlocks={availableBlocks}
         />
       )}
     </Canvas>

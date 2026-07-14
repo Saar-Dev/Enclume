@@ -1,3 +1,17 @@
+## v185 — 2026-07-14 — Nouvel éditeur de cartes : sols, murs, plafonds et escaliers sculptés
+
+### Client
+- [feat] Nouvel éditeur de cartes en mode GM : sols, murs, plafonds et escaliers se dessinent
+  directement (clic-glisser), avec matériaux procéduraux personnalisables (usure, saleté, relief,
+  peinture) ou textures existantes. Remplace la pose de cubes voxel un par un pour construire une
+  salle.
+- [feat] Annuler/Refaire (Ctrl+Z / Ctrl+Y) sur les modifications de carte.
+- [feat] La carte construite avec le nouvel éditeur s'affiche en jeu avec ses sols/murs/plafonds
+  sculptés et ses textures.
+- [note] Le déplacement/la collision des tokens sur une carte construite avec ce nouvel éditeur
+  n'est pas encore fonctionnel — un token peut traverser les murs/sols sculptés pour l'instant.
+  Chantier séparé à venir.
+
 ## v184 — 2026-07-13 — Customisation d'armes : la Lunette de visée a enfin un effet en combat
 
 ### Serveur

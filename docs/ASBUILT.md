@@ -1,5 +1,5 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-13 Session 141 (suite 29)
+> Dernière mise à jour : 2026-07-14 Session 142 (Fusion frontend Kiwi)
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
@@ -293,6 +293,7 @@ Enclume/
 | *(136-138 : migrations d'une session parallèle + `PLAN_MUTATION2.md` Lot 4 — non détaillées ici, voir `docs/JOURNAL6.md` "Session 141 (suite 25)")* | |
 | 139_fix_ref_skill_requirements_mutations | `docs/PLAN_MUTATION2.md` Lot 5 (`[CS7]`) — `ref_skill_requirements.value` (type MUTATION) référençait encore 8 anciens identifiants V1 (`muta_XXX`, table supprimée migration 94) — remappés vers le `mutation_id` V2 réel par correspondance de nom. 2 lignes (`MAITRISE_DE_LA_FORCE_POLARIS`/`MAITRISE_DE_LECHO_POLARIS`) référençaient `muta_029` ("Sensibilité au Polaris") — mutation confirmée par Saar comme n'ayant jamais dû exister en V2 — basculées vers un nouveau type de prérequis `ADVANTAGE`/`adv_079` ("Force Polaris", déjà seedé migration 123). `down`/`up` round-trip byte-identique. Voir `docs/JOURNAL6.md` Session 141 (suite 26) |
 | 140_ref_skill_requirements_or_group | Bug GENOTYPE trouvé par Saar (item 70) : `ref_skills.HYBRIDE` avait zéro ligne `ref_skill_requirements`, jamais gaté — texte LdB : accessible à 3 génotypes OU la mutation Amphibie (OR), alors que le moteur existant traite tout en ET. Nouvelle colonne `or_group` (text nullable, même convention que `ref_career_skills.choice_group` migration 121) — lignes partageant le même `(skill_id, or_group)` liées en OU. 4 lignes insérées pour `HYBRIDE`. Recherche externe (5etools 2-niveaux ET/OU retenu, PF2e `Predicate` récursif écarté — pensé pour du contenu homebrew). `down`/`up` round-trip byte-identique. Voir `docs/JOURNAL6.md` Session 141 (suite 27) |
+| 143_battlemaps_surface_data | Fusion frontend Kiwi (`docs/PLAN_FUSION_KIWI.md`) : `battlemaps.surface_data JSONB NOT NULL DEFAULT '{}'` — nouveau moteur de cartes sol/mur/plafond/escalier, distinct de `voxel_data` (coexistence, pas de migration de données). `up`/`down` round-trip testé en base réelle byte-cohérent (colonne droppée puis restaurée avec le bon type/default). Voir `docs/JOURNAL6.md` Session 142 |
 
 ---
 

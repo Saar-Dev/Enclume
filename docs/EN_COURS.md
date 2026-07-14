@@ -1,5 +1,9 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-13 — Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
+> Dernière mise à jour : 2026-07-14 — Session 142 : Fusion frontend Kiwi (Enclume-codex) — éditeur
+> et playground de surfaces (sol/mur/plafond/escalier), remplace le système de cartes voxel dans
+> l'UI — ✅ clos, fonctionnel confirmé Saar. Dettes `[SURF-COLLISION]`/`[SURF-SYNC]` ajoutées.
+> Détail complet : `docs/PLAN_FUSION_KIWI.md`, `docs/JOURNAL6.md` "Session 142".
+> Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 > (Lunette de visée) — ✅ clos, fonctionnel confirmé Saar (item 72) ; Session 141 (suite 29) : Interface d'ajout Avantage/
 > Désavantage (octroi MJ narratif) + bug DELETE 500 pré-existant corrigé — ✅ clos, fonctionnel
 > confirmé Saar (item 71) ; Session 141 (suite 27) : bug GENOTYPE "Hybride" visible pour un
@@ -34,6 +38,19 @@
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Session 142 (2026-07-14) — Fusion frontend Kiwi ✅ CLOS, fonctionnel confirmé Saar.** Portage
+> mécanique de l'éditeur/playground de surfaces (`Enclume-codex/Enclume-codex/`) dans la structure
+> actuelle — `SurfaceEditorScene`/`SurfaceDungeonScene`/`surfaceData.js` remplacent l'éditeur voxel
+> (`EditorScene` supprimé de `Editor3D.jsx`) et complètent le rendu (`Canvas3D.jsx`). Migration 143
+> (`battlemaps.surface_data`) + route `PUT /:id/surface`. Analyse critique indépendante exigée par
+> Saar avant code — a trouvé un bug bloquant (chargement textures ignorait `surface_data`) et une
+> violation i18n, tous deux corrigés avant livraison. **Prochain chantier possible** :
+> `[SURF-COLLISION]` — moteur de pathfinding/collision dédié à `surface_data` (explicitement hors
+> scope de Session 142, chantier séparé demandé par Saar) — seul point bloquant avant de pouvoir
+> envisager la démolition du système voxel (`Voxel.jsx`/`CulledVoxelScene.jsx`/routes
+> `voxel-textures`/`texture-packs`/`block-types`, tous encore utilisés en repli). Détail complet :
+> `docs/PLAN_FUSION_KIWI.md`, `docs/JOURNAL6.md` "Session 142".
 
 > **Item 72 (Session 141 suite 30) — `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée
 > ✅ CLOS, fonctionnel confirmé Saar.** Suite de Groupe 1 (item 68, clos). **Trou d'architecture
@@ -1392,6 +1409,8 @@ Projet en cours et priorité user :
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 | **MUT1** | `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable | Basse — à investiguer |
 | **HP1** | Main directrice : `socketCombatHelpers.js:550` et `char-sheet.js:810` lisent `hand_pref` sur `char_sheet` (colonne inexistante) au lieu de `char_identity.hand_pref` → toujours `'R'` par défaut, quel que soit le choix réel du joueur | Moyenne — mécanique jamais appliquée en combat |
+| **SURF-COLLISION** | Aucun pathfinding/collision/LOS sur `surface_data` (fusion Kiwi, Session 142) — un token traverse librement les murs/sols sculptés avec le nouvel éditeur de surfaces. Confirmé absent des deux côtés (Kiwi et actuel) par audit dédié avant le chantier | **Haute** — bloque la démolition du système voxel |
+| **SURF-SYNC** | Aucune synchronisation temps réel WebSocket pour l'édition de `surface_data` (contrairement à `WS.VOXEL_ADD/REMOVE/UPDATE`) — héritée de Kiwi. Les autres clients ne voient une modification qu'après reload (auto-save 60s ou démontage éditeur) | Moyenne — sprint dédié futur |
 
 ---
 
