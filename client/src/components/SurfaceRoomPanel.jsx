@@ -1,35 +1,25 @@
-import { useMemo, useState } from 'react'
-import {
-  DEFAULT_SURFACE_MATERIAL_PRESET,
-  PROCEDURAL_MATERIAL_PRESETS,
-  PROCEDURAL_PATTERN_PRESETS,
-} from '../lib/proceduralMaterials.js'
+import { useState } from 'react'
+import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
+import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
+import { normalizedSurfaceMaterial } from '../lib/surfaceMaterial.js'
 
 const PANEL_W = 330
 const PANEL_H_EST = 720
 const MATERIAL_FACES = [
   ['top', 'Dessus'],
   ['bottom', 'Dessous'],
-  ['wallInterior', 'Mur intérieur'],
-  ['wallExterior', 'Mur extérieur'],
 ]
 
-function clampPanelPosition(x, y) {
-  const left = Math.max(8, Math.min(window.innerWidth - PANEL_W - 8, Number(x) || 8))
-  const top = Math.max(8, Math.min(window.innerHeight - PANEL_H_EST - 8, Number(y) || 8))
-  return { left, top }
-}
-
-function normalizedProfile(tool, face) {
-  return {
-    ...DEFAULT_SURFACE_MATERIAL_PRESET,
-    ...(tool?.materialProfiles?.[face] || {}),
-  }
-}
-
 export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, onClose }) {
-  const position = useMemo(() => clampPanelPosition(x, y), [x, y])
-  const [materialFace, setMaterialFace] = useState(tool?.materialFace || 'top')
+  const { position, beginDrag } = useDraggablePanelPosition({
+    x,
+    y,
+    width: PANEL_W,
+    height: PANEL_H_EST,
+  })
+  const [materialFace, setMaterialFace] = useState(
+    ['top', 'bottom'].includes(tool?.materialFace) ? tool.materialFace : 'top',
+  )
   const [confirmDelete, setConfirmDelete] = useState(false)
   if (!room) return null
 
@@ -38,12 +28,12 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
     : []
   const hasCanonicalProfile = canonicalSlices.length > 0
   const heightLevels = Math.max(1, Number(room.heightLevels) || Number(tool?.roomHeightLevels) || 1)
-  const material = normalizedProfile(tool, materialFace)
-  const patchMaterial = patch => onPatch?.({
+  const material = normalizedSurfaceMaterial(tool?.materialProfiles?.[materialFace])
+  const patchMaterial = nextMaterial => onPatch?.({
     materialFace,
     materialProfiles: {
       ...(tool?.materialProfiles || {}),
-      [materialFace]: { ...material, ...patch },
+      [materialFace]: nextMaterial,
     },
   })
   const startConnector = type => onPatch?.({
@@ -63,13 +53,14 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
     <div
       style={{ ...S.panel, left: position.left, top: position.top }}
       onPointerDown={event => event.stopPropagation()}
+      data-testid="surface-room-panel"
     >
-      <div style={S.header}>
+      <div style={S.header} onPointerDown={beginDrag} data-testid="surface-room-panel-handle">
         <div>
           <p style={S.kicker}>Salle</p>
           <p style={S.title}>{room.label || room.name || room.id}</p>
         </div>
-        <button type="button" onClick={onClose} style={S.closeBtn}>×</button>
+        <button type="button" onPointerDown={event => event.stopPropagation()} onClick={onClose} style={S.closeBtn}>×</button>
       </div>
 
       <div style={S.body}>
@@ -170,7 +161,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
         </div>
 
         <div style={S.section}>
-          <span style={S.label}>Matériaux</span>
+          <span style={S.label}>Apparence de la salle</span>
           <div style={S.faceTabs}>
             {MATERIAL_FACES.map(([face, label]) => (
               <button
@@ -186,29 +177,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
               </button>
             ))}
           </div>
-          <div style={S.grid}>
-            <label style={S.field}>
-              <span style={S.label}>Matière</span>
-              <select value={material.material} onChange={event => patchMaterial({ material: event.target.value })} style={S.input}>
-                {PROCEDURAL_MATERIAL_PRESETS.map(preset => (
-                  <option key={preset.id} value={preset.id}>{preset.label}</option>
-                ))}
-              </select>
-            </label>
-            <label style={S.field}>
-              <span style={S.label}>Motif</span>
-              <select value={material.pattern} onChange={event => patchMaterial({ pattern: event.target.value })} style={S.input}>
-                {PROCEDURAL_PATTERN_PRESETS.map(pattern => (
-                  <option key={pattern.id} value={pattern.id}>{pattern.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label style={S.colorField}>
-            <span style={S.label}>Peinture</span>
-            <input type="color" value={material.paint} onChange={event => patchMaterial({ paint: event.target.value })} style={S.colorInput} />
-            <input type="text" value={material.paint} onChange={event => patchMaterial({ paint: event.target.value })} style={S.input} />
-          </label>
+          <SurfaceMaterialEditor profile={material} onChange={patchMaterial} />
         </div>
 
         <div style={S.section}>
@@ -255,6 +224,7 @@ const S = {
   header: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
     padding: '10px 14px', borderBottom: '1px solid #1e1e2e', background: '#0a0a14',
+    cursor: 'grab', touchAction: 'none',
   },
   kicker: { margin: 0, fontSize: '11px', color: '#fbbf24', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' },
   title: { margin: '2px 0 0', fontSize: '12px', color: '#dbeafe', fontWeight: 600, maxWidth: '255px', overflow: 'hidden', textOverflow: 'ellipsis' },

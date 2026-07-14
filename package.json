@@ -1,6 +1,9 @@
 {
   "scripts": {
-    "test:world": "node --test shared/world/*.test.mjs server/src/services/*.test.mjs"
+    "test:world": "node --test shared/world/*.test.mjs server/src/services/*.test.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:remote": "powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e/run-remote.ps1"
   },
   "dependencies": {
     "csv-parse": "^6.2.1",
@@ -11,5 +14,8 @@
     "polygon-clipping": "^0.15.7",
     "socket.io-client": "^4.8.3",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
   }
 }

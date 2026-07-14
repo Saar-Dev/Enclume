@@ -1,5 +1,5 @@
 // shared/world/surfaceDocument.js
-// Frontière de compatibilité entre surface_data v10 (volumes multi-hauteurs et profils horizontaux/verticaux de mur) et le document canonique du
+// Frontière de compatibilité entre surface_data v11 (volumes multi-hauteurs et profils géométriques/d'apparence de mur) et le document canonique du
 // moteur de monde. Les clés legacy restent lisibles ; worldId devient l'identité physique stable.
 
 import { createWorldDocument } from './worldContracts.js'
@@ -9,7 +9,7 @@ import {
   selectedRoomBoundaryChain,
 } from './roomGeometry.js'
 
-export const SURFACE_DATA_VERSION = 10
+export const SURFACE_DATA_VERSION = 11
 export const SURFACE_FINE_DEFAULT = 4
 export const SURFACE_STORY_HEIGHT_DEFAULT = 2.5
 
@@ -99,6 +99,29 @@ function validateWallElevationProfile(profile, path, errors) {
   }
   if (![1, -1].includes(Number(profile.direction))) {
     errors.push(`${path}.direction doit valoir 1 ou -1`)
+  }
+}
+
+function validateWallAppearanceMaterial(material, path, errors) {
+  if (material == null) return
+  if (!isPlainObject(material)) {
+    errors.push(`${path} doit être un objet`)
+    return
+  }
+  for (const field of ['material', 'paint', 'pattern', 'seed']) {
+    if (material[field] != null && typeof material[field] !== 'string') {
+      errors.push(`${path}.${field} doit être une chaîne`)
+    }
+  }
+  for (const field of ['wear', 'dirt', 'relief']) {
+    if (material[field] == null) continue
+    const value = Number(material[field])
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      errors.push(`${path}.${field} doit être compris entre 0 et 100`)
+    }
+  }
+  if (material.realRelief != null && typeof material.realRelief !== 'boolean') {
+    errors.push(`${path}.realRelief doit être un booléen`)
   }
 }
 
@@ -212,6 +235,29 @@ function validateFeature(collection, id, item, errors) {
             errors.push(`${entryPath}.edgeKeys doit contenir des clés non vides`)
           }
           validateWallElevationProfile(entry.profile, `${entryPath}.profile`, errors)
+        })
+      }
+    }
+    if (item.wallAppearanceProfiles != null) {
+      if (!Array.isArray(item.wallAppearanceProfiles)) {
+        errors.push(`${path}.wallAppearanceProfiles doit être un tableau`)
+      } else {
+        item.wallAppearanceProfiles.forEach((entry, index) => {
+          const entryPath = `${path}.wallAppearanceProfiles.${index}`
+          if (!isPlainObject(entry) || !Array.isArray(entry.edgeKeys) || entry.edgeKeys.length === 0) {
+            errors.push(`${entryPath}.edgeKeys doit être un tableau non vide`)
+            return
+          }
+          if (entry.edgeKeys.some(key => typeof key !== 'string' || !key)) {
+            errors.push(`${entryPath}.edgeKeys doit contenir des clés non vides`)
+          }
+          for (const textureField of ['interiorTex', 'exteriorTex']) {
+            if (entry[textureField] != null && typeof entry[textureField] !== 'string') {
+              errors.push(`${entryPath}.${textureField} doit être une chaîne`)
+            }
+          }
+          validateWallAppearanceMaterial(entry.interiorMaterial, `${entryPath}.interiorMaterial`, errors)
+          validateWallAppearanceMaterial(entry.exteriorMaterial, `${entryPath}.exteriorMaterial`, errors)
         })
       }
     }
@@ -515,6 +561,9 @@ export function collectSurfaceTextureIds(input) {
     add(room.ceilingTopTex); add(room.ceilingBottomTex)
     add(room.wallInteriorTex); add(room.wallExteriorTex)
     add(room.wallFrontTex); add(room.wallBackTex); add(room.wallTopTex)
+    for (const profile of room.wallAppearanceProfiles || []) {
+      add(profile.interiorTex); add(profile.exteriorTex)
+    }
   }
   return Object.freeze([...ids])
 }

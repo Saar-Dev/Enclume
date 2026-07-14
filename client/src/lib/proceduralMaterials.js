@@ -61,9 +61,9 @@ export const DEFAULT_SURFACE_MATERIAL_PRESET = {
   material: DEFAULT_PROCEDURAL_MATERIAL.material,
   paint: DEFAULT_PROCEDURAL_MATERIAL.paint,
   pattern: 'none',
-  wear: 28,
-  dirt: 18,
-  relief: 78,
+  wear: 0,
+  dirt: 0,
+  relief: 0,
   realRelief: true,
   seed: DEFAULT_PROCEDURAL_MATERIAL.seed,
 }

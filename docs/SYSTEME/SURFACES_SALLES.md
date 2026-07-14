@@ -1,6 +1,6 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-13 — volumes multi-hauteurs, panneaux contextuels et profils verticaux de murs.
+> Dernière mise à jour : 2026-07-14 — apparences par mur, panneaux déplaçables et retour automatique en sélection.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -9,7 +9,7 @@
 
 ## Statut au 2026-07-13
 
-L'éditeur Surface/Salle et son rendu existent. `surface_data` version 10 sait décrire des salles,
+L'éditeur Surface/Salle et son rendu existent. `surface_data` version 11 sait décrire des salles,
 sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
 navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
@@ -22,7 +22,8 @@ déjà présents au lieu de superposer ses murs. Depuis la Phase 12, un mur arro
 paramétrique unique dans le document, le renderer et le snapshot physique. Sa tessellation n'est
 plus une autorité enregistrée ni une collection de petits murs. La v9 ajoute les tranches verticales
 canoniques nécessaires aux salles fusionnées de hauteurs différentes. La v10 ajoute les profils de
-mur vus en coupe et déplace les réglages de sélection dans des panneaux contextuels.
+mur vus en coupe et déplace les réglages de sélection dans des panneaux contextuels. La v11 ajoute
+les profils d'apparence liés aux arêtes logiques des murs.
 
 Un arc conserve toujours les extrémités exactes enregistrées par le contour. Centre, rayon et angles
 servent à générer les points intermédiaires, jamais à reconstruire les ancrages. Le renderer reprend
@@ -61,6 +62,9 @@ Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
 - profil de mur vu de côté : `wallElevationProfiles[]` associe des arêtes logiques à un profil
   `curved` (`(`) ou `faceted` (`<`), une profondeur en mètres et un sens. Le profil `vertical` (`|`)
   est l'absence d'entrée ;
+- apparence de mur : `wallAppearanceProfiles[]` associe les mêmes arêtes logiques aux matériaux ou
+  textures des faces intérieure et extérieure. L'apparence survit donc à l'arrondi horizontal, au
+  profil vertical, à la sauvegarde et à la fusion d'une salle ;
 - connecteurs : portes, escaliers, échelles, passerelles et ascenseurs entre salles/étages.
 
 Lorsqu'une nouvelle salle recouvre une salle orthogonale existante à une hauteur commune, ses cases
@@ -202,10 +206,11 @@ L’outil Salle est l’outil de référence.
   l'endroit du clic.
 - Un rectangle de sélection sélectionne les salles entièrement entourées.
 - Le bouton “Ajouter une salle” passe en dessin de salle.
-- Après création d’une salle, l’éditeur reste en dessin de salle pour permettre d’enchaîner plusieurs pièces.
-- Le retour au mode sélection se fait uniquement par clic explicite sur “Sélection”.
+- Après création d’une salle, l’éditeur sélectionne immédiatement la nouvelle salle, ouvre son
+  panneau et revient en mode sélection.
 - Le panneau de salle contient hauteur simple, épaisseurs de dalle/plafond/mur, multiplicateur de
-  déplacement, collision, matériaux par face et accès à la création des connecteurs. Une salle à
+  déplacement, collision, apparence des surfaces supérieure/inférieure — matière, motif, peinture,
+  usure, saleté et relief — et accès à la création des connecteurs. Une salle à
   `verticalProfile` affiche sa hauteur locale comme propriété structurelle au lieu de proposer un
   sélecteur global trompeur. Il expose aussi **Supprimer la salle** avec confirmation ; cette
   suppression retire ses connecteurs et nettoie les références de découpe des salles restantes.
@@ -218,8 +223,13 @@ L’outil Salle est l’outil de référence.
 - Cliquer un mur remplace le panneau de salle par le panneau de mur. Celui-ci regroupe sélection
   multiple, arrondi dans le plan, suppression/fusion et profil vertical `|` / `(` / `<` avec
   réglettes de profondeur et d'angle. Le sens est un choix explicite **Vers l'intérieur** ou
-  **Vers l'extérieur**, commun à tout le contour. La barre latérale reste réservée aux outils de
-  création.
+  **Vers l'extérieur**, commun à tout le contour. Il contient aussi l'apparence des faces intérieure
+  et extérieure et un bouton **Sélectionner tous les murs de la salle**. La barre latérale reste
+  réservée aux outils de création.
+- Les panneaux de salle, mur, objet et connecteur 3D sont déplaçables par leur en-tête et restent
+  contraints à la fenêtre.
+- Les réglages initiaux d'usure, de saleté et de relief valent `0`. Seule une modification explicite
+  de l'utilisateur crée un aspect altéré ou un relief géométrique.
 - Chaque panneau de sélection destructible expose son action au même endroit : salle, mur et objet
   ou connecteur 3D. Les salles et objets demandent une confirmation avant mutation.
 - Les arêtes colinéaires forment un mur droit sélectionnable. Un arc canonique entier forme également

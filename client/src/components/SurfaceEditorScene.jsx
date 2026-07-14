@@ -12,7 +12,7 @@ import {
   applyElevatorConnector,
   applyFloorSelection,
   applyLadderConnector,
-  applyRoomSelection,
+  applyRoomSelectionWithResult,
   applyStairSelection,
   applyWallDrag,
   eraseSurfaceSelection,
@@ -917,16 +917,24 @@ export default function SurfaceEditorScene({
       }
 
       if (mode === 'room') {
-        const nextData = applyRoomSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
-        if (nextData !== surfaceData) {
-          onSurfaceDataChange(nextData)
+        const result = applyRoomSelectionWithResult(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
+        if (result.surfaceData !== surfaceData && result.roomId) {
+          const room = { id: result.roomId, ...result.surfaceData.rooms[result.roomId] }
+          const roomPatch = roomToSurfaceToolPatch(room)
+          onSurfaceDataChange(result.surfaceData)
           onSurfaceToolChange?.({
             ...surfaceTool,
-            mode: 'room',
-            selectedRoomId: null,
-            selectedRoomIds: [],
+            ...roomPatch,
+            mode: 'select',
+            selectedRoomId: result.roomId,
+            selectedRoomIds: [result.roomId],
             selectedConnectorId: null,
+            roomWallEdit: true,
+            selectedRoomWallKeys: [],
+            selectedRoomWallCount: 0,
+            roomArcError: null,
           })
+          onSurfaceRoomSelect?.(result.roomId, e.clientX, e.clientY)
         } else {
           onSurfaceToolChange?.({ ...surfaceTool, mode: 'room', selectedConnectorId: null })
         }

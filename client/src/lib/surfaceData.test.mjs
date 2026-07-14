@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 
 import {
   applyRoomBoundaryArc,
+  applyRoomWallAppearance,
   applyRoomWallElevationProfile,
   applyRoomSelection,
+  applyRoomSelectionWithResult,
   computeSurfaceWaterCells,
   deleteRoomBoundaryWalls,
   deleteSurfaceRoom,
@@ -282,6 +284,34 @@ test('un profil vertical mitoyen ne modifie que la face de la salle sélectionn�
   }
 })
 
+test('une apparence de mur reste attachée aux arêtes sélectionnées sans modifier les autres murs', () => {
+  const styledRoom = {
+    ...room('styled', 0),
+    wallInteriorMaterial: { material: 'concrete', paint: '#666666', pattern: 'none', wear: 0, dirt: 0, relief: 0 },
+    wallExteriorMaterial: { material: 'concrete', paint: '#444444', pattern: 'none', wear: 0, dirt: 0, relief: 0 },
+  }
+  const west = getRoomBoundaryWallRuns(styledRoom).find(run => run.side === 'west')
+  const result = applyRoomWallAppearance(
+    emptySurface({ rooms: { styled: styledRoom } }),
+    'styled',
+    west.edgeKeys,
+    {
+      interiorMaterial: { material: 'steel', paint: '#ff0000', pattern: 'metal_panels', wear: 25, dirt: 12, relief: 40 },
+      exteriorMaterial: { material: 'wood', paint: '#0000ff', pattern: 'planks', wear: 5, dirt: 3, relief: 20 },
+    },
+  )
+
+  assert.equal(result.error, null)
+  assert.equal(result.surfaceData.version, 11)
+  assert.deepEqual(result.surfaceData.rooms.styled.wallAppearanceProfiles[0].edgeKeys, west.edgeKeys)
+  const walls = roomsWallSegments(result.surfaceData.rooms)
+  const westWall = walls.find(wall => wall.x0 === 0 && wall.x1 === 0)
+  const northWall = walls.find(wall => wall.z0 === 0 && wall.z1 === 0)
+  assert.ok([westWall.frontMaterial, westWall.backMaterial].some(material => material?.paint === '#ff0000'))
+  assert.ok([westWall.frontMaterial, westWall.backMaterial].some(material => material?.paint === '#0000ff'))
+  assert.equal([northWall.frontMaterial, northWall.backMaterial].some(material => material?.paint === '#ff0000'), false)
+})
+
 test('une salle multiniveau revele uniquement son propre volume inferieur', () => {
   const surface = emptySurface({
     rooms: {
@@ -311,7 +341,7 @@ test('une nouvelle salle transfere ses cases et redessine le contour de la salle
   )
   const nestedId = 'room:1:1:2:2:0:1'
 
-  assert.equal(result.version, 10)
+  assert.equal(result.version, 11)
   assert.equal(getRoomFootprintCells(result.rooms.outer).length, 12)
   assert.equal(getRoomFootprintCells(result.rooms[nestedId]).length, 4)
   assert.equal(findRoomAtCell(result, { x: 1, z: 1 }, 0).id, nestedId)
@@ -323,6 +353,21 @@ test('une nouvelle salle transfere ses cases et redessine le contour de la salle
   assert.equal(roomsWallSegments(result.rooms).filter(wall => wall.roomIds.length === 2).length, 8)
 })
 
+test('la création d’une salle retourne son identité pour passer immédiatement en sélection', () => {
+  const surface = emptySurface()
+  const result = applyRoomSelectionWithResult(
+    surface,
+    { start: { x: 3, z: 4 }, end: { x: 4, z: 5 } },
+    { level: 0, roomHeightLevels: 1, wallHeightLevels: 1 },
+    null,
+    [],
+  )
+
+  assert.equal(result.roomId, 'room:3:4:4:5:0:1')
+  assert.ok(result.surfaceData.rooms[result.roomId])
+  assert.equal(result.surfaceData.version, 11)
+})
+
 test('un arrondi de salle remplace une chaîne de murs dans le rendu de la salle', () => {
   const baseRoom = { ...room('rounded', 0), cells: ['0:0', '1:0', '0:1', '1:1'] }
   const surface = emptySurface({ rooms: { rounded: baseRoom } })
@@ -330,7 +375,7 @@ test('un arrondi de salle remplace une chaîne de murs dans le rendu de la salle
   const result = applyRoomBoundaryArc(surface, 'rounded', selected.flatMap(wall => wall.edgeKeys), 90)
 
   assert.equal(result.error, null)
-  assert.equal(result.surfaceData.version, 10)
+  assert.equal(result.surfaceData.version, 11)
   assert.equal(result.surfaceData.rooms.rounded.boundaryArcs.length, 1)
   assert.ok(roomsWallSegments(result.surfaceData.rooms).some(wall => wall.axis === 'segment'))
 })

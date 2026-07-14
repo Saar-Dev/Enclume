@@ -54,7 +54,7 @@ Principes obligatoires :
 
 ### 2.1 Éditeur Surface `[EXISTANT]`
 
-`battlemaps.surface_data` version 10 contient actuellement :
+`battlemaps.surface_data` version 11 contient actuellement :
 
 - `rooms`, `floors`, `walls`, `ceilings`, `stairs`, `connectors` ;
 - les drapeaux `walkable`, `blocksMovement`, `blocksSight` ;
@@ -62,10 +62,11 @@ Principes obligatoires :
 - une hauteur d'étage d'éditeur (`STORY_HEIGHT`) et une grille fine (`SURFACE_FINE`) ;
 - des `verticalProfile.slices` pour les volumes dont l'empreinte change selon la hauteur ;
 - des `wallElevationProfiles` pour les murs courbes ou cassés vus en coupe ;
+- des `wallAppearanceProfiles` pour l'apparence propre aux faces de chaque mur logique ;
 - un calcul client d'étanchéité utilisé pour le rendu de l'eau.
 
 Cet ensemble reste normalisé et rendu côté client par `client/src/lib/surfaceData.js`. À la
-sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 10 et
+sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 11 et
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
@@ -578,6 +579,19 @@ courbe. Le snapshot ne
 persiste pas cette finition ; le compilateur la redérive et transforme les mêmes intersections en
 paddings longitudinaux sur les deux murs. Le narrow phase les applique seulement au premier ou au
 dernier segment d'un arc tessellé. Rendu, mouvement et LOS ferment ainsi le même coin.
+
+### 7.6 Apparence canonique des murs
+
+`room.wallAppearanceProfiles[]` associe un ensemble d'`edgeKeys` à l'apparence des faces intérieure
+et extérieure. Chaque entrée peut porter `interiorTex` / `exteriorTex` et
+`interiorMaterial` / `exteriorMaterial`. Les matériaux procéduraux enregistrent matière, peinture,
+motif, usure, saleté, relief et mode de relief réel.
+
+Cette donnée appartient au mur logique, pas à la tessellation de son mesh. `roomBoundaryPaths`
+résout le profil à partir des arêtes sources et le propage aux chemins droits comme aux arcs ; le
+renderer l'applique ensuite à chaque panneau dérivé. Une fusion de salles conserve les profils des
+arêtes restantes et retire ceux de la séparation supprimée. Le validateur v11 contrôle les clés,
+les textures et les valeurs d'apparence entre 0 et 100.
 
 ---
 

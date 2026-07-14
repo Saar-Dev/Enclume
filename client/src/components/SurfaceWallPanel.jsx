@@ -1,22 +1,52 @@
-import { useMemo } from 'react'
-import { roomWallElevationProfileForEdges } from '../../../shared/world/roomGeometry.js'
+import { useState } from 'react'
+import {
+  roomSelectableWallRuns,
+  roomWallAppearanceForEdges,
+  roomWallElevationProfileForEdges,
+} from '../../../shared/world/roomGeometry.js'
+import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
+import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
+import { normalizedSurfaceMaterial } from '../lib/surfaceMaterial.js'
 
 const PANEL_W = 310
 const PANEL_H_EST = 680
 
-function clampPanelPosition(x, y) {
-  const left = Math.max(8, Math.min(window.innerWidth - PANEL_W - 8, Number(x) || 8))
-  const top = Math.max(8, Math.min(window.innerHeight - PANEL_H_EST - 8, Number(y) || 8))
-  return { left, top }
-}
-
-export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onClose }) {
-  const position = useMemo(() => clampPanelPosition(x, y), [x, y])
+export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearanceChange, onClose }) {
+  const { position, beginDrag } = useDraggablePanelPosition({
+    x,
+    y,
+    width: PANEL_W,
+    height: PANEL_H_EST,
+  })
+  const [appearanceFace, setAppearanceFace] = useState('interior')
   if (!room || !tool?.selectedRoomWallCount) return null
 
   const count = Number(tool.selectedRoomWallCount) || 0
   const selectedKeys = tool.selectedRoomWallKeys || []
+  const selectableRuns = roomSelectableWallRuns(room)
+  const allWallKeys = [...new Set(selectableRuns.flatMap(run => run.edgeKeys))]
+  const selectedKeySet = new Set(selectedKeys.map(String))
+  const allWallsSelected = allWallKeys.length > 0 && allWallKeys.every(key => selectedKeySet.has(String(key)))
   const elevationProfile = roomWallElevationProfileForEdges(room, selectedKeys)
+  const storedAppearance = roomWallAppearanceForEdges(room, selectedKeys)
+  const wallAppearance = {
+    interiorTex: storedAppearance?.interiorTex ?? room.wallInteriorTex ?? room.wallFrontTex ?? null,
+    exteriorTex: storedAppearance?.exteriorTex ?? room.wallExteriorTex ?? room.wallBackTex ?? room.wallInteriorTex ?? room.wallFrontTex ?? null,
+    interiorMaterial: normalizedSurfaceMaterial(
+      storedAppearance?.interiorMaterial ?? room.wallInteriorMaterial ?? room.wallFrontMaterial,
+    ),
+    exteriorMaterial: normalizedSurfaceMaterial(
+      storedAppearance?.exteriorMaterial ?? room.wallExteriorMaterial ?? room.wallBackMaterial
+        ?? room.wallInteriorMaterial ?? room.wallFrontMaterial,
+    ),
+  }
+  const appearanceMaterial = appearanceFace === 'interior'
+    ? wallAppearance.interiorMaterial
+    : wallAppearance.exteriorMaterial
+  const patchAppearance = material => onAppearanceChange?.({
+    ...wallAppearance,
+    [appearanceFace === 'interior' ? 'interiorMaterial' : 'exteriorMaterial']: material,
+  })
   const depth = Math.max(0, Number(elevationProfile.depth) || 0)
   const profileFactor = elevationProfile.type === 'curved' ? Math.PI : 2
   const angle = Math.atan(profileFactor * depth / 2.5) * 180 / Math.PI
@@ -38,19 +68,54 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onClose })
     <div
       style={{ ...S.panel, left: position.left, top: position.top }}
       onPointerDown={event => event.stopPropagation()}
+      data-testid="surface-wall-panel"
     >
-      <div style={S.header}>
+      <div style={S.header} onPointerDown={beginDrag} data-testid="surface-wall-panel-handle">
         <div>
           <p style={S.kicker}>Mur</p>
           <p style={S.title}>{count} mur{count > 1 ? 's' : ''} sélectionné{count > 1 ? 's' : ''}</p>
         </div>
-        <button type="button" onClick={onClose} style={S.closeBtn}>×</button>
+        <button type="button" onPointerDown={event => event.stopPropagation()} onClick={onClose} style={S.closeBtn}>×</button>
       </div>
 
       <div style={S.body}>
         <p style={S.hint}>
           Clique d’autres murs pour composer la sélection. Deux murs contigus peuvent devenir un seul arc canonique.
         </p>
+
+        <button
+          type="button"
+          disabled={allWallKeys.length === 0 || allWallsSelected}
+          onClick={() => onPatch?.({
+            selectedRoomWallKeys: allWallKeys,
+            selectedRoomWallCount: selectableRuns.length,
+            roomArcError: null,
+          })}
+          style={{ ...S.button, ...S.selectAll, ...(allWallKeys.length === 0 || allWallsSelected ? S.disabled : {}) }}
+        >
+          {allWallsSelected ? 'Tous les murs sont sélectionnés' : 'Sélectionner tous les murs de la salle'}
+        </button>
+
+        <div style={S.section}>
+          <span style={S.label}>Apparence des murs sélectionnés</span>
+          <div style={S.directionButtons}>
+            <button
+              type="button"
+              onClick={() => setAppearanceFace('interior')}
+              style={{ ...S.button, ...(appearanceFace === 'interior' ? S.profileButtonActive : {}) }}
+            >
+              Face intérieure
+            </button>
+            <button
+              type="button"
+              onClick={() => setAppearanceFace('exterior')}
+              style={{ ...S.button, ...(appearanceFace === 'exterior' ? S.profileButtonActive : {}) }}
+            >
+              Face extérieure
+            </button>
+          </div>
+          <SurfaceMaterialEditor profile={appearanceMaterial} onChange={patchAppearance} />
+        </div>
 
         <div style={S.section}>
           <span style={S.label}>Profil vertical vu de côté</span>
@@ -186,7 +251,7 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onClose })
 
 const S = {
   panel: { position: 'fixed', width: PANEL_W, maxHeight: 'calc(100vh - 16px)', zIndex: 10003, background: '#0e0e1a', border: '1px solid #2a2a3e', borderRadius: '10px', boxShadow: '0 8px 32px rgba(0,0,0,0.72)', overflow: 'hidden', userSelect: 'none' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 14px', borderBottom: '1px solid #1e1e2e', background: '#0a0a14' },
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 14px', borderBottom: '1px solid #1e1e2e', background: '#0a0a14', cursor: 'grab', touchAction: 'none' },
   kicker: { margin: 0, fontSize: '11px', color: '#fb923c', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' },
   title: { margin: '2px 0 0', fontSize: '12px', color: '#dbeafe', fontWeight: 600 },
   closeBtn: { background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '4px' },
@@ -202,6 +267,7 @@ const S = {
   profileButtonActive: { borderColor: '#ea580c', background: 'rgba(234, 88, 12, 0.2)', color: '#fed7aa' },
   button: { minHeight: '34px', padding: '6px 8px', border: '1px solid #35354e', borderRadius: '5px', background: '#151525', color: '#cbd5e1', fontSize: '10px', cursor: 'pointer' },
   primary: { borderColor: '#ea580c', background: 'rgba(234, 88, 12, 0.2)', color: '#fed7aa' },
+  selectAll: { borderColor: '#2563eb', background: 'rgba(37, 99, 235, 0.16)', color: '#bfdbfe' },
   danger: { borderColor: 'rgba(251, 113, 133, 0.55)', background: 'rgba(127, 29, 29, 0.18)', color: '#fda4af' },
   disabled: { opacity: 0.38, cursor: 'not-allowed' },
   error: { margin: 0, padding: '7px 8px', borderRadius: '5px', background: 'rgba(127, 29, 29, 0.24)', color: '#fda4af', fontSize: '11px' },

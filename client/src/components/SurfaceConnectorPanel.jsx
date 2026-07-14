@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
   clearMaterialSlotOverride,
   materialSlotDisplayValue,
   normalizeModelMaterialSlots,
   setMaterialSlotOverride,
 } from '../lib/modelMaterialSlots.js'
+import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 
 const PANEL_W = 310
 const PANEL_H_EST = 620
@@ -40,12 +41,6 @@ function connectorTypeLabel(type) {
   if (type === 'elevator') return 'Ascenseur'
   if (type === 'ladder') return 'Échelle'
   return type
-}
-
-function clampPanelPosition(x, y) {
-  const left = Math.max(8, Math.min(window.innerWidth - PANEL_W - 8, Number(x) || 8))
-  const top = Math.max(8, Math.min(window.innerHeight - PANEL_H_EST - 8, Number(y) || 8))
-  return { left, top }
 }
 
 const ELEVATOR_PHASE_LABELS = {
@@ -119,7 +114,12 @@ export default function SurfaceConnectorPanel({
   canEdit = true,
   canAdminElevator = canEdit,
 }) {
-  const position = useMemo(() => clampPanelPosition(x, y), [x, y])
+  const { position, beginDrag } = useDraggablePanelPosition({
+    x,
+    y,
+    width: PANEL_W,
+    height: PANEL_H_EST,
+  })
   const [confirmDelete, setConfirmDelete] = useState(false)
   const materialSlots = normalizeModelMaterialSlots(connector?.modelGeometry)
   const materialOverrides = connector?.modelMaterialOverrides || {}
@@ -145,13 +145,17 @@ export default function SurfaceConnectorPanel({
   }
 
   return (
-    <div style={{ ...S.panel, left: position.left, top: position.top }}>
-      <div style={S.header}>
+    <div
+      style={{ ...S.panel, left: position.left, top: position.top }}
+      onPointerDown={event => event.stopPropagation()}
+      data-testid="surface-connector-panel"
+    >
+      <div style={S.header} onPointerDown={beginDrag} data-testid="surface-connector-panel-handle">
         <div>
           <p style={S.kicker}>Connecteur 3D</p>
           <p style={S.title}>{connector.modelLabel || connector.type || 'Objet 3D'}</p>
         </div>
-        <button type="button" onClick={onClose} style={S.closeBtn}>×</button>
+        <button type="button" onPointerDown={event => event.stopPropagation()} onClick={onClose} style={S.closeBtn}>×</button>
       </div>
 
       <div style={S.body}>
@@ -253,6 +257,7 @@ const S = {
   panel: {
     position: 'fixed',
     width: PANEL_W,
+    maxHeight: 'calc(100vh - 16px)',
     zIndex: 10002,
     background: '#0e0e1a',
     border: '1px solid #2a2a3e',
@@ -269,6 +274,8 @@ const S = {
     padding: '10px 14px',
     borderBottom: '1px solid #1e1e2e',
     background: '#0a0a14',
+    cursor: 'grab',
+    touchAction: 'none',
   },
   kicker: {
     margin: 0,
@@ -298,6 +305,8 @@ const S = {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
+    overflowY: 'auto',
+    maxHeight: 'calc(100vh - 65px)',
   },
   infoGrid: {
     display: 'grid',

@@ -199,6 +199,43 @@ test('la v10 valide les profils verticaux paramétriques des faces de mur', () =
   assert.equal(validateSurfaceData(surface).valid, false)
 })
 
+test('la v11 valide les apparences persistantes par mur', () => {
+  const surface = surfaceFixture()
+  surface.version = 11
+  surface.rooms['room:legacy'].wallAppearanceProfiles = [{
+    id: 'wall-appearance:test',
+    edgeKeys: ['edge:0:0|1:0'],
+    interiorTex: 'wall-inside',
+    exteriorTex: 'wall-outside',
+    interiorMaterial: {
+      material: 'steel',
+      paint: '#aabbcc',
+      pattern: 'metal_panels',
+      wear: 0,
+      dirt: 12,
+      relief: 35,
+      realRelief: true,
+      seed: 'test',
+    },
+    exteriorMaterial: {
+      material: 'concrete',
+      paint: '#778899',
+      pattern: 'none',
+      wear: 4,
+      dirt: 2,
+      relief: 0,
+      realRelief: false,
+      seed: 'test-outside',
+    },
+  }]
+  assert.equal(validateSurfaceData(surface).valid, true)
+  assert.ok(collectSurfaceTextureIds(surface).includes('wall-inside'))
+  assert.ok(collectSurfaceTextureIds(surface).includes('wall-outside'))
+
+  surface.rooms['room:legacy'].wallAppearanceProfiles[0].interiorMaterial.wear = 101
+  assert.equal(validateSurfaceData(surface).valid, false)
+})
+
 test('les versions futures et les coordonnées corrompues sont refusées', () => {
   const future = surfaceFixture()
   future.version = 99

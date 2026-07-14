@@ -10,6 +10,7 @@ import {
   roomBoundarySegments,
   roomBoundaryWallRuns,
   roomSelectableWallRuns,
+  roomWallAppearanceForEdges,
   roomGeometryArea,
   roomGeometryContainsPoint,
   roomGeometryIntersectionArea,
@@ -253,6 +254,26 @@ test('un arc canonique devient un seul mur sélectionnable à la place de ses an
   assert.equal(walls.length, 3)
   assert.deepEqual(curvedWall.edgeKeys.sort(), selectedKeys.sort())
   assert.ok(curvedWall.points.length > 4)
+})
+
+test('un mur arrondi conserve le profil d’apparence de ses arêtes canoniques', () => {
+  const selected = roomBoundaryWallRuns(square).filter(wall => ['west', 'north'].includes(wall.side))
+  const selectedKeys = selected.flatMap(wall => wall.edgeKeys)
+  const { arc } = makeRoomBoundaryArc(square, selectedKeys, 90)
+  const appearance = {
+    interiorMaterial: { material: 'steel', paint: '#ff0000', wear: 0, dirt: 0, relief: 0 },
+    exteriorMaterial: { material: 'wood', paint: '#0000ff', wear: 0, dirt: 0, relief: 0 },
+  }
+  const rounded = {
+    id: 'rounded-appearance',
+    ...square,
+    boundaryArcs: [{ ...arc, ownerRoomId: 'rounded-appearance' }],
+    wallAppearanceProfiles: [{ id: 'appearance:arc', edgeKeys: selectedKeys, ...appearance }],
+  }
+
+  assert.equal(roomWallAppearanceForEdges(rounded, selectedKeys).interiorMaterial.paint, '#ff0000')
+  const curvedPath = roomBoundaryPaths(rounded).find(path => path.axis === 'arc')
+  assert.equal(curvedPath.wallAppearance.exteriorMaterial.paint, '#0000ff')
 })
 
 test('un mur ouvert ne conserve pas de zone de sélection invisible', () => {

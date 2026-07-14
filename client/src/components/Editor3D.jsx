@@ -17,6 +17,7 @@ import SurfaceDungeonScene, { cutWallsForDoorConnectors } from './SurfaceDungeon
 import CulledVoxelScene from './CulledVoxelScene.jsx'
 import {
   applyRoomBoundaryArc,
+  applyRoomWallAppearance,
   applyRoomWallElevationProfile,
   applyRoomToolUpdate,
   deleteRoomBoundaryWalls,
@@ -31,6 +32,7 @@ import {
   parseFloorKey,
   removeRoomBoundaryArcs,
   roomsWallSegments,
+  SURFACE_DATA_VERSION,
   SURFACE_FINE,
   yToLevel,
 } from '../lib/surfaceData.js'
@@ -1557,7 +1559,7 @@ export default function Editor3D({
 
     handleSurfaceDataChange({
       ...currentSurfaceData,
-      version: 10,
+      version: SURFACE_DATA_VERSION,
       connectors: {
         ...(currentSurfaceData.connectors || {}),
         [connectorId]: {
@@ -1574,7 +1576,7 @@ export default function Editor3D({
     if (!currentSurfaceData.connectors?.[connectorId]) return
     const connectors = { ...(currentSurfaceData.connectors || {}) }
     delete connectors[connectorId]
-    handleSurfaceDataChange({ ...currentSurfaceData, version: 10, connectors })
+    handleSurfaceDataChange({ ...currentSurfaceData, version: SURFACE_DATA_VERSION, connectors })
     setSurfaceConnectorPanel(null)
     if (surfaceTool?.selectedConnectorId === connectorId) {
       onSurfaceToolChange?.({ ...surfaceTool, selectedConnectorId: null })
@@ -1726,6 +1728,19 @@ export default function Editor3D({
       wallElevationProfileActionId: null,
       roomArcError: result.error || null,
     })
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool])
+
+  const handleSurfaceWallAppearanceChange = useCallback(appearance => {
+    const result = applyRoomWallAppearance(
+      surfaceDataRef.current,
+      surfaceTool?.selectedRoomId,
+      surfaceTool?.selectedRoomWallKeys || [],
+      appearance,
+    )
+    if (result.surfaceData !== surfaceDataRef.current) handleSurfaceDataChange(result.surfaceData)
+    if (result.error) {
+      onSurfaceToolChange?.({ ...surfaceTool, roomArcError: result.error })
+    }
   }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool])
 
   useEffect(() => {
@@ -1907,6 +1922,7 @@ export default function Editor3D({
 
       {surfaceConnectorPanel && selectedSurfaceConnector && (
         <SurfaceConnectorPanel
+          key={surfaceConnectorPanel.connectorId}
           connector={selectedSurfaceConnector}
           x={surfaceConnectorPanel.x}
           y={surfaceConnectorPanel.y}
@@ -1919,6 +1935,7 @@ export default function Editor3D({
       )}
       {surfaceRoomPanel && selectedSurfaceRoom && (
         <SurfaceRoomPanel
+          key={surfaceRoomPanel.roomId}
           room={selectedSurfaceRoom}
           tool={surfaceTool}
           x={surfaceRoomPanel.x}
@@ -1930,11 +1947,13 @@ export default function Editor3D({
       )}
       {surfaceWallPanel && selectedSurfaceRoom && (
         <SurfaceWallPanel
+          key={surfaceWallPanel.roomId}
           room={selectedSurfaceRoom}
           tool={surfaceTool}
           x={surfaceWallPanel.x}
           y={surfaceWallPanel.y}
           onPatch={handleSurfaceSelectionToolPatch}
+          onAppearanceChange={handleSurfaceWallAppearanceChange}
           onClose={closeSurfaceWallPanel}
         />
       )}

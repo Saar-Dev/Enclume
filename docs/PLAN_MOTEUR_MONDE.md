@@ -113,7 +113,7 @@ Phase 1, pas d'un oubli de la Phase 0.
 
 ### Livré le 2026-07-13
 
-- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v10, attribue des UUID
+- `shared/world/surfaceDocument.js` valide et normalise `surface_data` v1 à v11, attribue des UUID
   stables et produit le `WorldDocument` canonique ;
 - `shared/world/worldCompiler.js` compile salles, dalles, murs partagés, portes découpées, escaliers,
   ascenseurs désactivés en attente de leur contrôleur, colliders, occluders et compartiments ;
@@ -685,7 +685,26 @@ Phase 7.
 
 ---
 
-## 18. Matrice de non-régression minimale
+## 18. Phase 15 — apparence par mur et panneaux flottants ✅
+
+### Contrat `surface_data` v11
+
+- `room.wallAppearanceProfiles[]` rattache textures et matériaux procéduraux des faces intérieure
+  et extérieure aux `edgeKeys` du contour ;
+- les chemins droits, les arcs et les tranches verticales résolvent cette même donnée canonique ;
+- les fusions conservent les profils des murs restants et éliminent ceux de la séparation ;
+- usure, saleté et relief valent `0` par défaut.
+
+### Interface
+
+- les panneaux de salle, mur, objet et connecteur 3D sont déplaçables ;
+- les apparences de salle et de mur sont éditées dans leurs panneaux respectifs ;
+- le panneau de mur peut sélectionner tous les murs visibles de la salle ;
+- après le tracé réussi d'une salle, l'éditeur retourne en sélection sur la salle créée.
+
+---
+
+## 19. Matrice de non-régression minimale
 
 Chaque phase doit conserver ou ajouter ces scénarios :
 

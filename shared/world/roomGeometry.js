@@ -892,13 +892,30 @@ export function roomWallElevationProfileForEdges(room, edgeKeys) {
   return normalizeWallElevationProfile(entry?.profile)
 }
 
+export function roomWallAppearanceForEdges(room, edgeKeys) {
+  const selected = new Set((edgeKeys || []).map(String))
+  if (selected.size === 0) return null
+  const entry = (room?.wallAppearanceProfiles || []).find(profile => (
+    (profile?.edgeKeys || []).some(key => selected.has(String(key)))
+  ))
+  if (!entry) return null
+  return {
+    interiorTex: entry.interiorTex || null,
+    exteriorTex: entry.exteriorTex || null,
+    interiorMaterial: entry.interiorMaterial || null,
+    exteriorMaterial: entry.exteriorMaterial || null,
+  }
+}
+
 function withRoomWallElevationProfile(room, path) {
   const sourceEdgeKeys = pathSourceEdgeKeys(room, path)
   const elevationProfile = roomWallElevationProfileForEdges(room, sourceEdgeKeys)
+  const wallAppearance = roomWallAppearanceForEdges(room, sourceEdgeKeys)
   return {
     ...path,
     ...(sourceEdgeKeys.length > 0 ? { sourceEdgeKeys } : {}),
     ...(elevationProfile.type !== 'vertical' ? { elevationProfile } : {}),
+    ...(wallAppearance ? { wallAppearance } : {}),
   }
 }
 

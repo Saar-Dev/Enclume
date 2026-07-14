@@ -24,9 +24,11 @@ import {
   selectedRoomBoundaryChain,
   withWallCornerJoins,
 } from '../../../shared/world/roomGeometry.js'
+import { SURFACE_DATA_VERSION } from '../../../shared/world/surfaceDocument.js'
 
 export const SURFACE_FINE = 4
 export const STORY_HEIGHT = 2.5
+export { SURFACE_DATA_VERSION }
 export const getRoomBoundaryEdges = roomBoundaryEdges
 export const getRoomBoundaryWallRuns = roomBoundaryWallRuns
 const STATION_USED_PACK_ID = '6f3916a6-7c7b-45f7-a020-7d63b7a74176'
@@ -35,7 +37,7 @@ const DEFAULT_FLOOR_THICKNESS = 0.25
 const DEFAULT_CEILING_HEIGHT = 2.5
 const STAIR_STEPS_PER_CELL = 4
 export const DEFAULT_SURFACE_DATA = {
-  version: 10,
+  version: SURFACE_DATA_VERSION,
   fine: SURFACE_FINE,
   storyHeight: STORY_HEIGHT,
   rooms: {},
@@ -351,7 +353,7 @@ export function normalizeSurfaceData(data) {
       : [id, { ...room, heightLevels, height }]
   }))
   return {
-    version: Math.max(10, data.version || 2),
+    version: Math.max(SURFACE_DATA_VERSION, data.version || 2),
     fine: data.fine || SURFACE_FINE,
     storyHeight,
     rooms,
@@ -1489,14 +1491,24 @@ export function roomsWallSegments(rooms) {
             : segment.axis === 'z'
               ? z1 <= z0
               : true
+        const segmentInterior = segment.wallAppearance ? {
+          ...interior,
+          tex: segment.wallAppearance.interiorTex ?? interior.tex,
+          material: segment.wallAppearance.interiorMaterial ?? interior.material,
+        } : interior
+        const segmentExterior = segment.wallAppearance ? {
+          ...exterior,
+          tex: segment.wallAppearance.exteriorTex ?? exterior.tex,
+          material: segment.wallAppearance.exteriorMaterial ?? exterior.material,
+        } : exterior
         addPanel({
           axis: segment.axis,
           x0,
           x1,
           z0,
           z1,
-          frontSource: frontIsInterior ? interior : exterior,
-          backSource: frontIsInterior ? exterior : interior,
+          frontSource: frontIsInterior ? segmentInterior : segmentExterior,
+          backSource: frontIsInterior ? segmentExterior : segmentInterior,
           y,
           curveId: segment.curveId,
           curveArcId: segment.curveArcId,
@@ -1905,7 +1917,7 @@ export function applyDoorConnector(surfaceData, wallPoint, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 10,
+    version: SURFACE_DATA_VERSION,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -1980,7 +1992,7 @@ export function applyElevatorConnector(surfaceData, cell, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 10,
+    version: SURFACE_DATA_VERSION,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -2045,7 +2057,7 @@ export function applyLadderConnector(surfaceData, cell, tool = {}) {
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
-    version: 10,
+    version: SURFACE_DATA_VERSION,
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
@@ -2287,7 +2299,7 @@ export function applyRoomBoundaryArc(surfaceData, roomId, edgeKeys, angleDegrees
   }
   rooms = clipIntersectingRoomsAgainstOwners(rooms, targetRoomIds)
   return {
-    surfaceData: { ...next, version: 10, rooms },
+    surfaceData: { ...next, version: SURFACE_DATA_VERSION, rooms },
     error: null,
     roomIds: targetRoomIds,
     arc,
@@ -2312,7 +2324,7 @@ export function removeRoomBoundaryArcs(surfaceData, roomId, edgeKeys) {
     changed = true
     return [id, { ...room, boundaryArcs }]
   }))
-  return changed ? { ...next, version: 10, rooms } : surfaceData
+  return changed ? { ...next, version: SURFACE_DATA_VERSION, rooms } : surfaceData
 }
 
 export function applyRoomWallElevationProfile(surfaceData, roomId, edgeKeys, profile) {
@@ -2347,10 +2359,52 @@ export function applyRoomWallElevationProfile(surfaceData, roomId, edgeKeys, pro
   }))
 
   return {
-    surfaceData: { ...next, version: 10, rooms },
+    surfaceData: { ...next, version: SURFACE_DATA_VERSION, rooms },
     error: null,
     roomId,
     profile: normalized,
+  }
+}
+
+export function applyRoomWallAppearance(surfaceData, roomId, edgeKeys, appearance) {
+  const next = normalizeSurfaceData(surfaceData)
+  const selectedRoom = next.rooms?.[roomId]
+  if (!selectedRoom) return { surfaceData, error: 'La salle sélectionnée n’existe plus.' }
+  const selected = [...new Set((edgeKeys || []).map(String))]
+  if (selected.length === 0) return { surfaceData, error: 'Sélectionne au moins un mur.' }
+
+  const selectedSet = new Set(selected)
+  const normalized = {
+    interiorTex: appearance?.interiorTex || null,
+    exteriorTex: appearance?.exteriorTex || null,
+    interiorMaterial: profileOrDefault(appearance?.interiorMaterial),
+    exteriorMaterial: profileOrDefault(appearance?.exteriorMaterial),
+  }
+  const remaining = (selectedRoom.wallAppearanceProfiles || []).flatMap(entry => {
+    const retainedKeys = (entry?.edgeKeys || []).map(String).filter(key => !selectedSet.has(key))
+    return retainedKeys.length > 0 ? [{ ...entry, edgeKeys: retainedKeys }] : []
+  })
+  const wallAppearanceProfiles = [
+    ...remaining,
+    {
+      id: `wall-appearance:${selected.slice().sort().join('|')}`,
+      edgeKeys: selected,
+      ...normalized,
+    },
+  ]
+
+  return {
+    surfaceData: {
+      ...next,
+      version: SURFACE_DATA_VERSION,
+      rooms: {
+        ...next.rooms,
+        [roomId]: { ...selectedRoom, wallAppearanceProfiles },
+      },
+    },
+    error: null,
+    roomId,
+    appearance: normalized,
   }
 }
 
@@ -2391,7 +2445,7 @@ export function deleteSurfaceRoom(surfaceData, roomId) {
   const connectors = Object.fromEntries(Object.entries(next.connectors || {})
     .filter(([, connector]) => !surfaceFeatureReferencesRoom(connector, target)))
 
-  return { ...next, version: 10, rooms, connectors }
+  return { ...next, version: SURFACE_DATA_VERSION, rooms, connectors }
 }
 
 function validateWholeWallSelection(room, edgeKeys) {
@@ -2453,7 +2507,7 @@ export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
     return {
       surfaceData: {
         ...next,
-        version: 10,
+        version: SURFACE_DATA_VERSION,
         rooms: {
           ...next.rooms,
           [roomId]: { ...selectedRoom, openWallEdgeKeys },
@@ -2497,6 +2551,13 @@ export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
     const retainedKeys = (entry?.edgeKeys || []).map(String).filter(key => !validation.selected.has(key))
     return retainedKeys.length > 0 ? [{ ...entry, edgeKeys: retainedKeys }] : []
   })
+  const wallAppearanceProfiles = uniqueObjectsById([
+    ...(selectedRoom.wallAppearanceProfiles || []),
+    ...(absorbedRoom.wallAppearanceProfiles || []),
+  ]).flatMap(entry => {
+    const retainedKeys = (entry?.edgeKeys || []).map(String).filter(key => !validation.selected.has(key))
+    return retainedKeys.length > 0 ? [{ ...entry, edgeKeys: retainedKeys }] : []
+  })
   const maximumHeightLevels = Math.max(getRoomHeightLevels(selectedRoom), getRoomHeightLevels(absorbedRoom))
   const mergedGeometryRoom = roomWithFootprint({
     ...selectedRoom,
@@ -2507,6 +2568,7 @@ export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
     openWallEdgeKeys,
     geometryClipRoomIds,
     wallElevationProfiles,
+    wallAppearanceProfiles,
   }, roomId, mergedCells, true)
   const verticalProfile = buildMergedRoomVerticalProfile({
     mergedRoom: { id: roomId, ...mergedGeometryRoom },
@@ -2553,7 +2615,7 @@ export function deleteRoomBoundaryWalls(surfaceData, roomId, edgeKeys) {
     }))
 
   return {
-    surfaceData: { ...next, version: 10, rooms, connectors },
+    surfaceData: { ...next, version: SURFACE_DATA_VERSION, rooms, connectors },
     error: null,
     roomId,
     mergedRoomIds: [absorbedId],
@@ -2653,10 +2715,19 @@ export function applyRoomSelection(surfaceData, selection, tool, activeMaterial,
 
   return {
     ...next,
-    version: 10,
+    version: SURFACE_DATA_VERSION,
     rooms,
     connectors,
   }
+}
+
+export function applyRoomSelectionWithResult(surfaceData, selection, tool, activeMaterial, availableBlocks) {
+  const candidate = makeRoomFromSelection(surfaceData, selection, tool, activeMaterial, availableBlocks)
+  const nextSurfaceData = applyRoomSelection(surfaceData, selection, tool, activeMaterial, availableBlocks)
+  const roomId = nextSurfaceData !== surfaceData && candidate && nextSurfaceData.rooms?.[candidate.id]
+    ? candidate.id
+    : null
+  return { surfaceData: nextSurfaceData, roomId }
 }
 
 export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, availableBlocks) {
@@ -2756,7 +2827,7 @@ export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, a
 
   return {
     ...next,
-    version: 10,
+    version: SURFACE_DATA_VERSION,
     rooms: {
       ...next.rooms,
       [roomId]: updated,
