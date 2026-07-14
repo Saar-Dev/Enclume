@@ -386,6 +386,10 @@ moteur ; sinon elles doivent être supprimées.
 
 ## Moteur de monde — Phase 15 ✅
 
+La procédure de reprise d'une future branche combat est documentée dans
+`docs/FUSION_PROJET_COUSIN.md`. Elle fixe les autorités de fichiers, la rupture v12, les services
+monde que la FSM doit appeler, les zones de conflit manuel et la matrice de validation avant merge.
+
 - `surface_data` v12 conserve uniquement l'apparence intérieure des murs et remplace les faces de
   salle historiques par `floorMaterial`, `ceilingMaterial` et `wallInteriorMaterial` ;
 - le panneau de mur expose matière, motif, peinture, usure, saleté, relief et relief réel, ainsi

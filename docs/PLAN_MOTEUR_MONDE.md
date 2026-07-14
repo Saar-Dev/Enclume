@@ -8,6 +8,7 @@
 > combat historiques.
 
 Source durable de l'architecture : `docs/SYSTEME/MOTEUR_MONDE.md`.
+Procédure de fusion combat/monde : `docs/FUSION_PROJET_COUSIN.md`.
 
 ---
 

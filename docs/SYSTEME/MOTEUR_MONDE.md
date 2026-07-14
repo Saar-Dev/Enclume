@@ -1,6 +1,6 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-13 — Phase 14, volumes multi-hauteurs et profils verticaux de murs.
+> Dernière mise à jour : 2026-07-14 — Phase 15, contrat v12 et coupe multi-étages.
 >
 > Statut : **Phases 0 à 14 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -13,6 +13,7 @@ Documents associés :
 
 - `docs/SYSTEME/SURFACES_SALLES.md` — contrat de l'éditeur Salle et des surfaces ;
 - `docs/PLAN_MOTEUR_MONDE.md` — ordre de migration et critères de validation ;
+- `docs/FUSION_PROJET_COUSIN.md` — procédure et autorités pour une future fusion combat/monde ;
 - `docs/SYSTEME/COMBAT.md` — déroulement du combat consommateur du moteur de monde ;
 - `docs/REGLES/REGLESYSCOMBAT.md` — autorité Polaris pour les allures et les contraintes de terrain.
 
@@ -730,9 +731,10 @@ moteur.
 8. Tous les consommateurs utilisent le même snapshot et la même révision.
 9. Tout objet structurel possède une identité stable.
 10. Une carte voxel historique ne doit jamais imposer une contrainte au moteur canonique.
-11. Un étage masqué ne peut être ni cliquable ni support de placement dans la tranche courante.
-12. Une salle multi-hauteur traverse ses tranches sans recevoir de plancher implicite et révèle son
-    propre fond, jamais le reste des étages inférieurs.
+11. Les étages supérieurs au plan de coupe sont masqués. Les étages inférieurs sont visibles et
+    opaques, mais ne remplacent jamais le support de placement de la tranche courante.
+12. Une salle multi-hauteur traverse ses tranches sans recevoir de plancher implicite et conserve
+    son vide continu au sein du monde inférieur affiché.
 13. Une case ne peut appartenir qu'à une seule salle pour un même volume vertical.
 14. Les bornes d'une salle sont un broadphase ; seule son empreinte explicite fait autorité.
 
