@@ -4,7 +4,9 @@ import {
 } from './proceduralMaterials.js'
 import {
   buildMergedRoomVerticalProfile,
+  intersectMultiPolygons,
   makeRoomBoundaryArc,
+  multiPolygonArea,
   multiPolygonContainsPoint,
   multiPolygonGridCells,
   normalizeWallElevationProfile,
@@ -16,6 +18,7 @@ import {
   roomGeometryContainsPoint,
   roomGeometryIntersectionArea,
   roomHasEffectiveBoundaryEdge,
+  roomInteriorFootprintAtY,
   roomMaximumHeightLevels,
   roomSliceAtLevel,
   roomVerticalSlices,
@@ -595,16 +598,33 @@ export function applyBridgeSelection(surfaceData, selection, tool, activeMateria
   const next = normalizeSurfaceData(withFloors)
   const floors = { ...next.floors }
   const y = getToolElevation(tool)
+  const level = yToLevel(y)
   for (let x = area.minX; x <= area.maxX; x += 1) {
     for (let z = area.minZ; z <= area.maxZ; z += 1) {
       const key = floorKey(x, z, y)
       if (!floors[key]) continue
+      const tileFootprint = [[[
+        [x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1], [x, z],
+      ]]]
+      let clippingRoomId = null
+      let clippingArea = 0
+      for (const [roomId, rawRoom] of Object.entries(next.rooms || {})) {
+        const room = { id: roomId, ...rawRoom }
+        const baseLevel = yToLevel(getRoomBaseY(room))
+        if (!roomSliceAtLevel(room, level - baseLevel, next.rooms, STORY_HEIGHT)) continue
+        const interior = roomInteriorFootprintAtY(room, y, next.rooms, STORY_HEIGHT)
+        const overlapArea = multiPolygonArea(intersectMultiPolygons(tileFootprint, interior))
+        if (overlapArea <= 1e-6 || overlapArea <= clippingArea) continue
+        clippingRoomId = roomId
+        clippingArea = overlapArea
+      }
       floors[key] = {
         ...floors[key],
         kind: 'bridge',
         structuralKind: 'bridge',
         runtimeSupport: true,
         movementMultiplier: getToolMovementMultiplier(tool),
+        ...(clippingRoomId ? { clipRoomId: clippingRoomId } : {}),
       }
     }
   }
@@ -1082,6 +1102,7 @@ export function roomToSurfaceToolPatch(room) {
   )
   return {
     selectedRoomId: room.id,
+    roomName: room.label || room.name || room.id,
     mode: 'room',
     surfaceMaterialMode: hasProceduralMaterial ? 'procedural' : 'texture',
     level: baseLevel,
@@ -1302,6 +1323,7 @@ export function roomsWallSegments(rooms) {
 
     const fine = SURFACE_FINE
     const baseY = getRoomBaseY(room)
+    const elevationProfileHeight = getRoomHeightLevels(room) * STORY_HEIGHT
     const thickness = Math.max(1, Number(room.wallThickness) || 1)
     const interior = {
       role: 'interior',
@@ -1404,10 +1426,11 @@ export function roomsWallSegments(rooms) {
           curveRadius: segment.radius ?? segment.curveRadius,
           curveStartAngle: segment.startAngle ?? segment.curveStartAngle,
           curveSweep: segment.sweep ?? segment.curveSweep,
+          sourceEdgeKeys: segment.sourceEdgeKeys,
           elevationProfile: segment.elevationProfile,
           elevationProfileFace: frontIsInterior ? 'front' : 'back',
-          elevationProfileOriginY: y,
-          elevationProfileHeight: STORY_HEIGHT,
+          elevationProfileOriginY: baseY,
+          elevationProfileHeight,
         })
       }
     }
@@ -1759,11 +1782,14 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
   const level = getToolLevel(tool)
   const y = levelToY(level)
   const selectedRoomId = tool?.selectedRoomId || null
+  const allowedWallEdgeKeys = new Set((tool?.connectorWallEdgeKeys || []).map(String))
   let best = null
 
   for (const panel of roomsWallSegments(surface.rooms)) {
     if (!sameLevel(panel.y, y)) continue
     if (selectedRoomId && !panel.roomIds?.includes(selectedRoomId)) continue
+    if (allowedWallEdgeKeys.size > 0
+      && !(panel.sourceEdgeKeys || []).some(key => allowedWallEdgeKeys.has(String(key)))) continue
     const projection = wallPointDistanceToPanel(wallPoint, panel)
     if (!projection || projection.distance > SURFACE_FINE * 0.5) continue
     if (best && projection.distance >= best.distance) continue
@@ -2742,6 +2768,7 @@ export function applyRoomToolUpdate(surfaceData, roomId, tool, activeMaterial, a
   const blocking = surfaceBlockingForTool(tool)
   const updated = {
     ...room,
+    label: String(tool?.roomName || room.label || room.name || id).trim() || id,
     heightLevels,
     height: heightLevels * STORY_HEIGHT,
     floorThickness: getToolFloorThickness(tool),

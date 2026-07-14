@@ -12,6 +12,7 @@ import { getBattlemapWorldSnapshot } from './worldService.js'
 import { effectOccludersFromRegions } from '../../../shared/world/worldEffects.js'
 import { loadBattlemapRuntimeContext } from './worldEffectService.js'
 import { reconcileBattlemapElevators } from './worldElevatorService.js'
+import { normalizeEntityScale } from '../../../shared/world/entityTransform.js'
 
 function stateAt(entity) {
   return entity.states?.[entity.current_state_id] ?? entity.states?.[0] ?? null
@@ -29,9 +30,10 @@ export function dynamicOccludersFromEntities(entities = []) {
     if ((state?.blocks_sight ?? state?.blocksSight ?? state?.is_blocking ?? true) === false) continue
     const collider = state?.occluder || state?.collider || {}
     const geometry = entity.geometry || {}
-    let width = positive(collider.width, positive(geometry.width, 1))
-    let depth = positive(collider.depth, positive(geometry.depth, 1))
-    const height = positive(collider.height, positive(geometry.height, 1))
+    const scale = normalizeEntityScale(entity.state)
+    let width = positive(collider.width, positive(geometry.width, 1)) * scale
+    let depth = positive(collider.depth, positive(geometry.depth, 1)) * scale
+    const height = positive(collider.height, positive(geometry.height, 1)) * scale
     const quarterTurns = Math.abs(Math.trunc(Number(entity.r) || 0)) % 4
     if (quarterTurns % 2 === 1) [width, depth] = [depth, width]
     const feet = dbPositionToWorldPoint(entity)
@@ -139,7 +141,7 @@ export async function evaluateBattlemapVisibility({
       .join('entity_blueprints', 'entities.blueprint_id', 'entity_blueprints.id')
       .select(
         'entities.id', 'entities.pos_x', 'entities.pos_y', 'entities.pos_z', 'entities.r',
-        'entities.current_state_id', 'entity_blueprints.states', 'entity_blueprints.geometry',
+        'entities.current_state_id', 'entities.state', 'entity_blueprints.states', 'entity_blueprints.geometry',
       ),
     loadBattlemapRuntimeContext(currentBattlemap, database),
   ])

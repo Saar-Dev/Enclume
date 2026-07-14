@@ -15,9 +15,13 @@ import {
 } from './elevatorRuntime.js'
 import {
   roomCeilingRegions,
+  intersectMultiPolygons,
+  multiPolygonBounds,
+  multiPolygonContainsPoint,
   roomEffectiveGridCells,
   roomGeometryBounds,
   roomMaximumHeightLevels,
+  roomInteriorFootprintAtY,
   roomVerticalSlices,
   multiPolygonGridCells,
   wallCornerIntersectionPoint,
@@ -368,6 +372,7 @@ function roomWallCandidates(surface, battlemapId) {
   for (const room of Object.values(surface.rooms)) {
     if (room.wallEnabled === false) continue
     const baseY = roomBaseY(room, surface.storyHeight)
+    const elevationProfileHeight = roomHeightLevels(room, surface.storyHeight) * surface.storyHeight
     const thickness = positive(room.wallThickness, 1) / surface.fine
     const slices = roomVerticalSlices(room, surface.rooms, surface.storyHeight)
     for (const slice of slices) {
@@ -388,8 +393,8 @@ function roomWallCandidates(surface, battlemapId) {
           thickness,
           interiorFace: frontIsInterior ? 'front' : 'back',
           elevationProfileFace: frontIsInterior ? 'front' : 'back',
-          elevationProfileOriginY: y,
-          elevationProfileHeight: surface.storyHeight,
+          elevationProfileOriginY: baseY,
+          elevationProfileHeight,
           sourceWorldIds: [room.worldId],
         }, battlemapId)
         addBoundary(segment)
@@ -756,19 +761,51 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
     const parsed = parseFloor(legacyId, floor)
     const thickness = positive(floor.thickness, 0.25)
     if (slabIsInsideElevatorShaft(elevators, parsed, parsed.y + thickness / 2)) continue
+    let slabFootprint = null
+    if (floor.clipRoomId && surface.rooms[floor.clipRoomId]) {
+      const room = { id: floor.clipRoomId, ...surface.rooms[floor.clipRoomId] }
+      const tile = [[[[parsed.x, parsed.z], [parsed.x + 1, parsed.z], [parsed.x + 1, parsed.z + 1], [parsed.x, parsed.z + 1], [parsed.x, parsed.z]]]]
+      slabFootprint = intersectMultiPolygons(
+        tile,
+        roomInteriorFootprintAtY(room, parsed.y, surface.rooms, surface.storyHeight),
+      )
+      if (slabFootprint.length === 0) continue
+    }
+    const footprintBounds = slabFootprint ? multiPolygonBounds(slabFootprint) : null
     const slabBounds = bounds(
-      parsed.x, parsed.y - thickness / 2, parsed.z,
-      parsed.x + 1, parsed.y + thickness / 2, parsed.z + 1,
+      footprintBounds?.minX ?? parsed.x, parsed.y - thickness / 2, footprintBounds?.minZ ?? parsed.z,
+      footprintBounds?.maxX ?? parsed.x + 1, parsed.y + thickness / 2, footprintBounds?.maxZ ?? parsed.z + 1,
     )
     const sourceId = floor.worldId
     const runtime = runtimeStates[sourceId]
     if (floor.runtimeSupport && (runtime?.enabled === false || runtime?.state === 'destroyed')) continue
     const kind = floor.kind || 'floor'
+    const supportPoint = slabFootprint
+      ? (() => {
+          const candidates = []
+          for (let iz = 0; iz <= 8; iz += 1) {
+            for (let ix = 0; ix <= 8; ix += 1) {
+              candidates.push({
+                x: slabBounds.min.x + (slabBounds.max.x - slabBounds.min.x) * ix / 8,
+                z: slabBounds.min.z + (slabBounds.max.z - slabBounds.min.z) * iz / 8,
+              })
+            }
+          }
+          const center = {
+            x: (slabBounds.min.x + slabBounds.max.x) / 2,
+            z: (slabBounds.min.z + slabBounds.max.z) / 2,
+          }
+          const inside = [center, ...candidates]
+            .find(candidate => multiPolygonContainsPoint(slabFootprint, candidate)) || center
+          return { ...inside, y: clean(parsed.y + thickness / 2) }
+        })()
+      : null
     spatial.supports.push({
       id: `support:${sourceId}`,
       sourceId,
       kind,
       bounds: slabBounds,
+      ...(slabFootprint ? { footprint: slabFootprint, point: supportPoint } : {}),
       y: clean(parsed.y + thickness / 2),
       walkable: floor.walkable !== false,
       movementMultiplier: movementMultiplier(floor),

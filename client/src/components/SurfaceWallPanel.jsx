@@ -4,6 +4,7 @@ import {
   roomWallElevationProfileForEdges,
 } from '../../../shared/world/roomGeometry.js'
 import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
+import FloatingPanelSection from './FloatingPanelSection.jsx'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import { normalizedSurfaceMaterial } from '../lib/surfaceMaterial.js'
 
@@ -25,6 +26,10 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
   const allWallKeys = [...new Set(selectableRuns.flatMap(run => run.edgeKeys))]
   const selectedKeySet = new Set(selectedKeys.map(String))
   const allWallsSelected = allWallKeys.length > 0 && allWallKeys.every(key => selectedKeySet.has(String(key)))
+  const selectedRuns = selectableRuns.filter(run => run.edgeKeys.every(key => selectedKeySet.has(String(key))))
+  const wallName = selectedRuns.length === 1
+    ? selectedRuns[0].id
+    : selectedRuns.map(run => run.id).join('\n')
   const elevationProfile = roomWallElevationProfileForEdges(room, selectedKeys)
   const storedAppearance = roomWallAppearanceForEdges(room, selectedKeys)
   const interiorTex = storedAppearance?.interiorTex ?? room.wallInteriorTex ?? null
@@ -48,6 +53,18 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
       roomArcError: null,
     })
   }
+  const startDoorPlacement = () => onPatch?.({
+    mode: 'connector',
+    connectorType: 'door',
+    connectorWallEdgeKeys: [...selectedKeys],
+    connectorBlueprintId: null,
+    connectorModelLabel: null,
+    connectorModelCategory: null,
+    connectorModelGlbUrl: null,
+    connectorModelBuiltinKey: null,
+    connectorModelGeometry: null,
+    connectorMaterialOverrides: {},
+  })
 
   return (
     <div
@@ -64,6 +81,19 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
       </div>
 
       <div style={S.body}>
+        <FloatingPanelSection title="Identité" defaultOpen>
+          <label style={S.field}>
+            <span style={S.label}>Nom technique du mur</span>
+            <textarea
+              readOnly
+              value={wallName}
+              rows={Math.min(3, Math.max(1, selectedRuns.length))}
+              onPointerDown={event => event.stopPropagation()}
+              style={S.readOnlyName}
+              aria-label="Nom technique du mur"
+            />
+          </label>
+        </FloatingPanelSection>
         <p style={S.hint}>
           Clique d’autres murs pour composer la sélection. Deux murs contigus peuvent devenir un seul arc canonique.
         </p>
@@ -81,12 +111,12 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
           {allWallsSelected ? 'Tous les murs sont sélectionnés' : 'Sélectionner tous les murs de la salle'}
         </button>
 
-        <div style={S.section}>
+        <FloatingPanelSection title="Apparence">
           <span style={S.label}>Apparence côté salle</span>
           <SurfaceMaterialEditor profile={appearanceMaterial} onChange={patchAppearance} />
-        </div>
+        </FloatingPanelSection>
 
-        <div style={S.section}>
+        <FloatingPanelSection title="Profil vertical" defaultOpen>
           <span style={S.label}>Profil vertical vu de côté</span>
           <div style={S.profileButtons}>
             {[
@@ -157,7 +187,19 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
               </p>
             </>
           )}
-        </div>
+        </FloatingPanelSection>
+
+        <FloatingPanelSection title="Ouvertures" defaultOpen>
+          <button
+            type="button"
+            disabled={selectedRuns.length !== 1}
+            onClick={startDoorPlacement}
+            style={{ ...S.button, ...S.primary, ...(selectedRuns.length !== 1 ? S.disabled : {}) }}
+          >
+            Ajouter une porte
+          </button>
+          {selectedRuns.length !== 1 && <p style={S.hint}>Sélectionne un seul mur pour y ajouter une porte.</p>}
+        </FloatingPanelSection>
 
         {count >= 2 && (
           <label style={S.field}>
@@ -240,4 +282,9 @@ const S = {
   danger: { borderColor: 'rgba(251, 113, 133, 0.55)', background: 'rgba(127, 29, 29, 0.18)', color: '#fda4af' },
   disabled: { opacity: 0.38, cursor: 'not-allowed' },
   error: { margin: 0, padding: '7px 8px', borderRadius: '5px', background: 'rgba(127, 29, 29, 0.24)', color: '#fda4af', fontSize: '11px' },
+  readOnlyName: {
+    width: '100%', boxSizing: 'border-box', resize: 'none', userSelect: 'text',
+    background: '#090912', border: '1px solid #25253a', borderRadius: '5px',
+    padding: '7px 8px', color: '#cbd5e1', fontFamily: 'monospace', fontSize: '10px',
+  },
 }

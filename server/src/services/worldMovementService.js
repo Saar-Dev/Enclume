@@ -19,6 +19,7 @@ import {
   reconcileElevatorStatesInTransaction,
   syncTokenElevatorPassenger,
 } from './worldElevatorService.js'
+import { normalizeEntityScale } from '../../../shared/world/entityTransform.js'
 
 const MAX_GRAPH_CACHE_ENTRIES = 32
 const graphCache = new Map()
@@ -81,13 +82,17 @@ export function dynamicOccupantsFromRows(tokens = [], entities = []) {
     const state = entityState(entity)
     if ((state?.is_blocking ?? true) === false) continue
     const collider = state?.collider || {}
+    const geometry = entity.geometry || {}
+    const scale = normalizeEntityScale(entity.state)
+    const width = Number(collider.width || geometry.width || 1) * scale
+    const depth = Number(collider.depth || geometry.depth || 1) * scale
     occupants.push({
       id: entity.id,
       kind: 'entity',
       point: dbPositionToWorldPoint(entity),
       actorProfile: {
-        radius: Number(collider.radius || Math.max(collider.width || 1, collider.depth || 1) / 2),
-        height: Number(collider.height || 1),
+        radius: Number(collider.radius ? collider.radius * scale : Math.max(width, depth) / 2),
+        height: Number(collider.height || geometry.height || 1) * scale,
         maxStepHeight: 0.5,
       },
     })
@@ -103,7 +108,7 @@ export async function loadBattlemapDynamicOccupants(battlemapId) {
       .join('entity_blueprints', 'entities.blueprint_id', 'entity_blueprints.id')
       .select(
         'entities.id', 'entities.pos_x', 'entities.pos_y', 'entities.pos_z',
-        'entities.current_state_id', 'entity_blueprints.states',
+          'entities.current_state_id', 'entities.state', 'entity_blueprints.states', 'entity_blueprints.geometry',
       ),
   ])
   return dynamicOccupantsFromRows(tokens, entities)
@@ -215,12 +220,13 @@ export async function executeBattlemapTokenMovement({
     const entityRows = await trx('entities').where({ battlemap_id: battlemapId }).forUpdate()
     const blueprintIds = [...new Set(entityRows.map(entity => entity.blueprint_id).filter(Boolean))]
     const blueprints = blueprintIds.length
-      ? await trx('entity_blueprints').whereIn('id', blueprintIds).select('id', 'states')
+      ? await trx('entity_blueprints').whereIn('id', blueprintIds).select('id', 'states', 'geometry')
       : []
     const blueprintById = new Map(blueprints.map(blueprint => [blueprint.id, blueprint]))
     const entities = entityRows.map(entity => ({
       ...entity,
       states: blueprintById.get(entity.blueprint_id)?.states || [],
+      geometry: blueprintById.get(entity.blueprint_id)?.geometry || {},
     }))
 
     const runtimeContext = await loadBattlemapRuntimeContext(battlemap, trx)

@@ -10,8 +10,12 @@ import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
 import {
   multiPolygonContours,
+  multiPolygonContainsPoint,
+  intersectMultiPolygons,
   roomBoundaryContours,
   roomHorizontalInterfaces,
+  roomInteriorFootprintAtY,
+  roomMaximumHeightLevels,
   roomSliceAtLevel,
   sampleWallArcGeometry,
   wallCornerIntersectionPoint,
@@ -83,6 +87,61 @@ const BOLT_WASHER_MATERIAL = new THREE.MeshStandardMaterial({
   metalness: 0.3,
 })
 const HIDDEN_WALL_CAP_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
+
+function useCameraVolumeRoomId(surface, displayLevel) {
+  const { camera } = useThree()
+  const [roomId, setRoomId] = useState(null)
+  const elapsedRef = useRef(0)
+  const lastCameraRef = useRef(null)
+
+  useFrame((_, delta) => {
+    if (displayLevel === null || displayLevel === undefined) {
+      if (roomId !== null) setRoomId(null)
+      return
+    }
+    elapsedRef.current += delta
+    if (elapsedRef.current < 0.12) return
+    elapsedRef.current = 0
+
+    const previous = lastCameraRef.current
+    if (previous
+      && previous.displayLevel === displayLevel
+      && previous.position.distanceToSquared(camera.position) < 0.0009
+      && 1 - Math.abs(previous.quaternion.dot(camera.quaternion)) < 0.00004
+      && previous.rooms === surface.rooms) return
+    lastCameraRef.current = {
+      displayLevel,
+      position: camera.position.clone(),
+      quaternion: camera.quaternion.clone(),
+      rooms: surface.rooms,
+    }
+
+    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize()
+    const planeY = Number(displayLevel) * STORY_HEIGHT + 0.04
+    const distanceToPlane = Math.abs(direction.y) > 1e-5
+      ? (planeY - camera.position.y) / direction.y
+      : -1
+    const focus = distanceToPlane >= 0
+      ? camera.position.clone().addScaledVector(direction, distanceToPlane)
+      : camera.position.clone().addScaledVector(direction, 4)
+
+    let nextRoomId = null
+    for (const [candidateId, rawRoom] of Object.entries(surface.rooms || {})) {
+      const room = { id: candidateId, ...rawRoom }
+      const baseLevel = yToLevel(getRoomBaseY(room))
+      const levels = roomMaximumHeightLevels(room, STORY_HEIGHT)
+      const offset = Number(displayLevel) - baseLevel
+      if (levels < 2 || offset < 0 || offset >= levels) continue
+      const slice = roomSliceAtLevel(room, offset, surface.rooms, STORY_HEIGHT)
+      if (!slice || !multiPolygonContainsPoint(slice.footprint, { x: focus.x, z: focus.z })) continue
+      nextRoomId = candidateId
+      break
+    }
+    if (nextRoomId !== roomId) setRoomId(nextRoomId)
+  })
+
+  return roomId
+}
 
 function proceduralMaterialKey(descriptor) {
   if (!descriptor || typeof descriptor !== 'object') return null
@@ -393,7 +452,7 @@ function WallBoltHeads({ wall, box, frontDescriptor, backDescriptor }) {
   return heads.length ? <>{heads}</> : null
 }
 
-function FloorTile({ id, floor, textureMaterials, opacity = 1, showDetails = true }) {
+function FloorTile({ id, floor, surface, textureMaterials, opacity = 1, showDetails = true }) {
   const { x, z, y } = parseFloorKey(id, floor)
   const topProcedural = surfaceMaterialAt(floor.topMaterial || floor.material, showDetails)
   const bottomProcedural = surfaceMaterialAt(floor.bottomMaterial || floor.material, showDetails)
@@ -407,7 +466,31 @@ function FloorTile({ id, floor, textureMaterials, opacity = 1, showDetails = tru
   const topRelief = showDetails ? (topProcedural?.relief || reliefAt(textureMaterials, topTex)) : null
   const thickness = getFloorThickness(floor)
   const materials = top ? withOpacity([side, side, top, bottom, side, side], opacity) : []
+  const clippedFootprint = (() => {
+    const rawRoom = floor?.clipRoomId ? surface?.rooms?.[floor.clipRoomId] : null
+    if (!rawRoom) return null
+    const room = { id: floor.clipRoomId, ...rawRoom }
+    const roomInterior = roomInteriorFootprintAtY(room, y, surface.rooms, STORY_HEIGHT)
+    const tile = [[[[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1], [x, z]]]]
+    return intersectMultiPolygons(tile, roomInterior)
+  })()
   if (!top) return null
+  if (clippedFootprint) {
+    if (clippedFootprint.length === 0) return null
+    return (
+      <CurvedRoomSlab
+        room={null}
+        roomLookup={surface?.rooms}
+        contours={multiPolygonContours(clippedFootprint)}
+        kind="floor"
+        y={y}
+        thickness={thickness}
+        capMaterial={top}
+        sideMaterial={side}
+        opacity={opacity}
+      />
+    )
+  }
   return (
     <>
       <mesh
@@ -1976,6 +2059,7 @@ function SurfaceDungeonScene({
   runtimeFeatureStates = {},
 }) {
   const surface = useMemo(() => normalizeSurfaceData(surfaceData), [surfaceData])
+  const cameraVolumeRoomId = useCameraVolumeRoomId(surface, displayLevel)
   const horizontalInterfaces = useMemo(
     () => roomHorizontalInterfaces(surface.rooms, STORY_HEIGHT),
     [surface.rooms],
@@ -2013,6 +2097,7 @@ function SurfaceDungeonScene({
     isWorldPointVisibleAtLevel(surface, displayLevel, x, z, y)
   )
   const roomWallIsVisible = wall => structureIsVisible(wallOpacityY(wall))
+    || (cameraVolumeRoomId && wall.roomIds?.includes(cameraVolumeRoomId))
   const roomFloorIsVisible = room => (
     displayLevel === null || yToLevel(getRoomBaseY(room)) <= displayLevel
   )
@@ -2063,13 +2148,16 @@ function SurfaceDungeonScene({
           ? surface.rooms[horizontalInterface.floorRoomId]
           : null
         const floorIsDrawn = Boolean(floorRoom && roomFloorIsVisible(floorRoom))
+        const belongsToCameraVolume = horizontalInterface.ceilingRoomId === cameraVolumeRoomId
         const ceilingIsVisible = displayLevel === null
           || horizontalInterface.ceilingDisplayLevel <= displayLevel
+          || belongsToCameraVolume
         if (floorIsDrawn || !ceilingIsVisible) return null
         const room = surface.rooms[horizontalInterface.ceilingRoomId]
         if (!room) return null
         const opacity = displayLevel === null
           || horizontalInterface.ceilingDisplayLevel === displayLevel
+          || belongsToCameraVolume
           ? ceilingOpacity
           : 1
         return (
@@ -2096,7 +2184,7 @@ function SurfaceDungeonScene({
       {Object.entries(surface.floors).map(([id, floor]) => {
         const parsed = parseFloorKey(id, floor)
         if (!worldPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.y)) return null
-        return <FloorTile key={id} id={id} floor={floor} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
+        return <FloorTile key={id} id={id} floor={floor} surface={surface} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
       })}
       {surfaceWallSegments.map(wall => {
         const box = getWallRenderBox(wall)

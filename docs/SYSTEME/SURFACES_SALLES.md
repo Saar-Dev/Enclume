@@ -1,6 +1,6 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-14 — contrat d'apparence v12 et affichage opaque des étages inférieurs.
+> Dernière mise à jour : 2026-07-14 — édition contextuelle, profils continus et passerelles découpées.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -33,6 +33,12 @@ Un arc conserve toujours les extrémités exactes enregistrées par le contour. 
 servent à générer les points intermédiaires, jamais à reconstruire les ancrages. Le renderer reprend
 les extrémités des panneaux sources et le snapshot physique transporte les mêmes `from` / `to` ; un
 arc horizontal, profilé ou non, rejoint ainsi le mur droit voisin sur une couture commune.
+
+La finition d'édition repose maintenant sur les mêmes identités logiques : les panneaux contextuels
+éditent une salle, un mur ou une entité, jamais un morceau de mesh. Les profils verticaux utilisent
+une seule progression normalisée sur la hauteur totale de la salle. Les passerelles portent, quand
+elles longent une salle, l'identifiant de la salle qui les découpe ; rendu, support et navigation
+retrouvent alors la même emprise intérieure à leur altitude.
 
 Ce document décrit le contrat de l'éditeur. `MOTEUR_MONDE.md` décrit le moteur commun qui compile
 ce document pour la navigation, la collision, la visibilité et les effets. Ne pas ajouter une
@@ -71,6 +77,9 @@ Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
   la texture de la face intérieure. L'apparence survit donc à l'arrondi horizontal, au
   profil vertical, à la sauvegarde et à la fusion d'une salle ;
 - connecteurs : portes, escaliers, échelles, passerelles et ascenseurs entre salles/étages.
+- passerelle ajustée à une salle : un sol `kind: bridge` peut porter `clipRoomId`. Ce lien demande au
+  renderer et au compilateur d'intersecter sa dalle avec l'emprise intérieure réelle de la salle à
+  sa hauteur ; la courbe horizontale et le retrait d'un profil vertical ne sont pas aplatis en AABB.
 
 Lorsqu'une nouvelle salle recouvre une salle orthogonale existante à une hauteur commune, ses cases
 sont transférées : elles sont ajoutées à la nouvelle empreinte et retirées de l'ancienne. Si une
@@ -82,9 +91,11 @@ devient une salle distincte. Des salles empilées sans chevauchement vertical co
 les mêmes coordonnées `x:z`.
 
 Une salle `heightLevels > 1` existe dans chaque tranche verticale qu'elle traverse et décrit un seul
-volume ouvert. Tous les étages inférieurs au niveau de coupe sont rendus, sans transparence. Une
-salle profonde conserve en plus ses murs descendants et son vide continu : un puits doit donc
-paraître profond. Aucun plancher intermédiaire n'est créé automatiquement. Une future trappe doit
+volume ouvert. Tous les étages inférieurs au niveau de coupe sont rendus, sans transparence. Quand
+le point visé par la caméra se trouve dans une salle multi-hauteur, les murs de toutes ses tranches,
+y compris au-dessus du niveau courant, sont rendus pour montrer le volume complet ; les autres
+salles supérieures restent masquées. Une salle profonde conserve ses murs descendants et son vide
+continu : un puits doit donc paraître profond. Aucun plancher intermédiaire n'est créé automatiquement. Une future trappe doit
 être portée par un connecteur vertical —
 typiquement une échelle — avec son propre état ouvert/fermé ; elle ne révèle jamais l'étage inférieur
 entier.
@@ -172,6 +183,11 @@ donc être un arc vu du dessus et être courbe ou cassé vu de côté. Le render
 continu par loft ; il ne superpose pas de cubes et n'enregistre aucune tessellation comme donnée
 métier.
 
+Le paramètre vertical du profil est calculé une seule fois entre le sol de base et le sommet réel de
+la salle. Un mur de trois étages forme donc une seule parenthèse ou un seul chevron sur toute sa
+hauteur ; il ne répète jamais le motif dans chaque tranche. Les tranches restent seulement des
+propriétaires d'affichage et de collision du morceau qu'elles traversent.
+
 - mur extérieur : les deux faces sont translatées par le même profil ; sa forme reste visible depuis
   l'intérieur comme depuis l'extérieur et son épaisseur nominale reste constante ;
 - mur entre deux salles : le profil appartient à la face de la salle depuis laquelle il a été édité.
@@ -213,13 +229,18 @@ communs sont dédupliqués ensuite en un seul mur physique portant les deux iden
 L’outil Salle est l’outil de référence.
 
 - Par défaut, le clic gauche sélectionne.
-- Un clic sélectionne la salle ou le connecteur 3D sous la souris et ouvre son panneau contextuel à
-  l'endroit du clic.
+- Un clic sélectionne la salle, le mur, l'objet ou le connecteur 3D sous la souris. Son panneau
+  contextuel s'ouvre automatiquement du côté de l'objet où l'écran dispose de place ; il peut
+  ensuite être déplacé par son en-tête et reste contraint à la fenêtre.
 - Un rectangle de sélection sélectionne les salles entièrement entourées.
 - Le bouton “Ajouter une salle” passe en dessin de salle.
 - Après création d’une salle, l’éditeur sélectionne immédiatement la nouvelle salle, ouvre son
   panneau et revient en mode sélection.
-- Le panneau de salle contient hauteur simple, épaisseurs de dalle/plafond/mur, multiplicateur de
+- Le bouton global nomme toujours l'action cible : **Édition** en mode jeu, **Mode jeu** dans
+  l'éditeur. Les boutons **Calque**, **Token** et **Outils** sont masqués pendant l'édition, où ils
+  n'ont aucune action utile.
+- Le panneau de salle expose un nom éditable avec les opérations texte natives (sélection,
+  copier/coller), puis contient hauteur simple, épaisseurs de dalle/plafond/mur, multiplicateur de
   déplacement, collision, apparence du sol et du plafond — matière, motif, peinture,
   usure, saleté et relief — et accès à la création des connecteurs. Une salle à
   `verticalProfile` affiche sa hauteur locale comme propriété structurelle au lieu de proposer un
@@ -229,16 +250,17 @@ L’outil Salle est l’outil de référence.
   son contour effectif. Les murs, plafond et autres composants ne reçoivent pas chacun leur propre
   surbrillance.
 - Une fois la salle sélectionnée, ses murs sont cliquables directement, sans activer un sous-mode.
-  Un mur reste sans surimpression au repos, devient turquoise au survol puis reçoit un unique trait
-  orange lorsqu'il est sélectionné.
+  Un mur reste sans surimpression au repos, devient turquoise au survol puis reçoit une aura jaune
+  sur tout son volume lorsqu'il est sélectionné. Une entité sélectionnée utilise le même langage
+  visuel plutôt qu'une simple boîte filaire.
 - Cliquer un mur remplace le panneau de salle par le panneau de mur. Celui-ci regroupe sélection
   multiple, arrondi dans le plan, suppression/fusion et profil vertical `|` / `(` / `<` avec
   réglettes de profondeur et d'angle. Le sens est un choix explicite **Vers l'intérieur** ou
-  **Vers l'extérieur**, commun à tout le contour. Il contient aussi l'apparence des faces intérieure
-  et extérieure et un bouton **Sélectionner tous les murs de la salle**. La barre latérale reste
-  réservée aux outils de création.
-- Les panneaux de salle, mur, objet et connecteur 3D sont déplaçables par leur en-tête et restent
-  contraints à la fenêtre.
+  **Vers l'extérieur**, commun à tout le contour. Il contient l'apparence intérieure, un identifiant
+  technique sélectionnable mais non modifiable, **Ajouter une porte** pour le mur unique actif et
+  **Sélectionner tous les murs de la salle**. La barre latérale reste réservée aux outils de création.
+- Les familles de réglages longues sont regroupées en sections repliables. Les panneaux de salle,
+  mur, objet et connecteur 3D restent déplaçables après leur placement automatique.
 - Les réglages initiaux d'usure, de saleté et de relief valent `0`. Seule une modification explicite
   de l'utilisateur crée un aspect altéré ou un relief géométrique.
 - Chaque panneau de sélection destructible expose son action au même endroit : salle, mur et objet
@@ -279,8 +301,9 @@ Chaque connecteur doit recevoir un UUID stable. Les identifiants dérivés de se
 acceptables uniquement comme compatibilité temporaire : déplacer le connecteur ne doit pas lui
 faire perdre son état runtime.
 
-Une porte se pose depuis la configuration d’une salle sélectionnée. Elle doit être forcée sur un mur
-de cette salle, droit ou arrondi. Sur un arc, le connecteur conserve son abscisse curviligne, son
+Une porte se pose exclusivement depuis le panneau du mur sélectionné. Le placement garde les
+`sourceEdgeKeys` de ce mur comme contrainte et ne peut donc pas sauter sur un autre côté de la salle.
+Le mur peut être droit ou arrondi. Sur un arc, le connecteur conserve son abscisse curviligne, son
 point d'ancrage exact, la tangente et la normale locales. La porte rigide s'aligne sur la tangente et
 s'ouvre du côté de la normale ; elle ne dépend donc ni d'une corde d'approximation ni du sens dans
 lequel les anciens petits segments auraient été générés. Si le mur est partagé par deux salles, le
@@ -295,7 +318,10 @@ Depuis la Phase 6, cette définition compile une gaine réellement évidée et u
 mobile. Toutes les portes palières restent bloquantes lorsque la cabine est absente. Les tokens
 embarqués sont attachés à son repère local durable et suivent sa hauteur sans déplacement gratuit.
 
-Les modèles 3D de portes/ascenseurs sont choisis depuis la configuration de la salle, pas depuis l’onglet des objets libres. Ils sont attachés au connecteur comme apparence (`modelBlueprintId`, label, catégorie, GLB), mais ils ne doivent pas redevenir la source de vérité.
+Le modèle 3D d'une porte est choisi dans le flux lancé depuis le mur ; celui d'un ascenseur reste
+choisi depuis la configuration de la salle. Ils ne viennent pas de l'onglet des objets libres. Ils
+sont attachés au connecteur comme apparence (`modelBlueprintId`, label, catégorie, GLB), mais ils ne
+doivent pas redevenir la source de vérité.
 
 Les couleurs de composants GLB sont également une apparence de connecteur. Les overrides sont stockés dans `modelMaterialOverrides`, indexés par slot (`SLOT_01`, `SLOT_02`, etc.). Le renderer ne recolore que les matériaux déclarés en `SLOT_xx`; les matériaux `FIXED` du modèle restent intacts.
 
@@ -353,6 +379,22 @@ Les escaliers et échelles doivent exposer des ancrages intermédiaires. Un toke
 
 Une passerelle fixe est une surface praticable en hauteur. Une passerelle mobile ou destructible est
 une feature runtime possédant une capacité de support praticable ; son modèle 3D reste une apparence.
+
+Au dessin, chaque case de passerelle cherche la salle réellement intersectée à son altitude et
+enregistre son `clipRoomId`. `roomInteriorFootprintAtY(...)` reconstruit l'empreinte de tranche,
+applique les arcs du contour et retire le bombé intérieur éventuel du mur. La dalle affichée est
+l'intersection polygonale exacte. Le compilateur enregistre cette même empreinte et choisit un point
+de navigation contenu dans celle-ci : une passerelle ne peut donc ni être vue ni empruntée dans la
+partie qui sortirait d'une salle courbe ou profilée.
+
+## Transformation des objets 3D
+
+Le panneau d'une entité libre permet une rotation par pas de 90° à gauche ou à droite et une échelle
+uniforme fine de `0.25` à `4`, par pas de `0.05`. Les objets ancrés structurellement à un mur gardent
+leur orientation dérivée du connecteur. L'échelle canonique est stockée dans
+`entity.state.transform.scale`, validée côté serveur, diffusée aux autres clients et consommée à la
+fois par le renderer, la collision d'occupation et l'occlusion de ligne de vue. Le GLB agrandi n'est
+donc jamais plus grand que son volume physique, ni l'inverse.
 
 ## Coût de déplacement et effets
 

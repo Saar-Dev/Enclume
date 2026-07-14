@@ -708,10 +708,16 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
 
   // ── Mise à jour partielle d'une entité (gm_only, ...) ─────────────────────
   // Émis par EntityInstancePanel après PUT /entities — rebroadcast à la room.
-  socket.on(WS.ENTITY_UPDATED, ({ entityId, gm_only }) => {
+  socket.on(WS.ENTITY_UPDATED, ({ entityId, gm_only, current_state_id, state, updated_at }) => {
     if (!isGm) return
     if (!campaignId || !entityId) return
-    io.to(campaignId).emit(WS.ENTITY_UPDATED, { entityId, gm_only })
+    io.to(campaignId).emit(WS.ENTITY_UPDATED, {
+      entityId,
+      gm_only,
+      ...(current_state_id !== undefined ? { current_state_id } : {}),
+      ...(state !== undefined ? { state } : {}),
+      ...(updated_at !== undefined ? { updated_at } : {}),
+    })
     console.log(`[WS] entity:updated — GM broadcast gm_only=${gm_only} entité ${entityId}`)
   })
 }

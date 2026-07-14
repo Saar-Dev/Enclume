@@ -25,14 +25,39 @@ function viewport() {
   }
 }
 
-export function useDraggablePanelPosition({ x, y, width, height }) {
+export function floatingPanelPositionBesideAnchor({
+  x,
+  y,
+  width,
+  height,
+  viewportWidth = window.innerWidth,
+  viewportHeight = window.innerHeight,
+  gap = 22,
+}) {
+  const anchorX = Number(x) || viewportWidth / 2
+  const anchorY = Number(y) || viewportHeight / 2
+  const right = anchorX + gap
+  const left = anchorX - width - gap
+  const preferredLeft = right + width + 8 <= viewportWidth ? right : left
+  return clampFloatingPanelPosition({
+    left: preferredLeft,
+    top: anchorY - Math.min(height, viewportHeight - 16) / 2,
+    width,
+    height,
+    viewportWidth,
+    viewportHeight,
+  })
+}
+
+export function useDraggablePanelPosition({ x, y, width, height, placement = 'beside' }) {
   const initialPosition = useCallback(() => clampFloatingPanelPosition({
-    left: x,
-    top: y,
+    ...(placement === 'beside'
+      ? floatingPanelPositionBesideAnchor({ x, y, width, height, ...viewport() })
+      : { left: x, top: y }),
     width,
     height,
     ...viewport(),
-  }), [height, width, x, y])
+  }), [height, placement, width, x, y])
   const [position, setPosition] = useState(initialPosition)
   const dragRef = useRef(null)
 

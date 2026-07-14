@@ -3,6 +3,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
+import { withEntityScale } from '../../../shared/world/entityTransform.js'
 
 // mergeParams : true — nécessaire pour accéder à req.params.id (battlemap_id)
 // quand monté sous /api/battlemaps/:id/entities
@@ -15,6 +16,11 @@ function entityPlacementMode(blueprint) {
 
 function plainEntityState(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+function normalizedEntityState(value) {
+  const state = plainEntityState(value)
+  return withEntityScale(state, state?.transform?.scale ?? state?.scale ?? 1)
 }
 
 function assertWallPlacementState(blueprint, state) {
@@ -125,7 +131,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (placementMode === 'connector') {
       throw new AppError(400, 'Ce modèle est un connecteur de salle et ne peut pas être posé comme objet 3D libre')
     }
-    const initialState = plainEntityState(state)
+    const initialState = normalizedEntityState(state)
     assertWallPlacementState(blueprint, initialState)
 
     const [entity] = await db('entities')
@@ -193,7 +199,7 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
     if (label_override !== undefined) updates.label_override = label_override || null
     if (interaction_overrides !== undefined) updates.interaction_overrides = JSON.stringify(interaction_overrides)
     if (disabled_interactions !== undefined) updates.disabled_interactions = disabled_interactions
-    if (state !== undefined) updates.state = JSON.stringify(state)
+    if (state !== undefined) updates.state = JSON.stringify(normalizedEntityState(state))
     if (notes_gm !== undefined) updates.notes_gm = notes_gm || null
 
     if (Object.keys(updates).length === 0) {

@@ -639,3 +639,21 @@ test('une porte sur un arc utilise le point, la tangente et la normale du mur ca
   ) - Number(curvePanel.curveRadius)) < 1e-6)
   assert.equal(roomsWallRenderPaths(surface.rooms).filter(wall => wall.axis === 'arc').length, 1)
 })
+
+test('un profil de mur multi étage est continu sur toute la hauteur', () => {
+  const base = room('tower', 0, 2)
+  const north = getRoomBoundaryWallRuns(base).find(wall => wall.side === 'north')
+  const profiled = applyRoomWallElevationProfile(
+    emptySurface({ rooms: { tower: base } }),
+    'tower',
+    north.edgeKeys,
+    { type: 'curved', depth: 0.8, direction: 1 },
+  ).surfaceData
+  const walls = roomsWallSegments(profiled.rooms)
+    .filter(wall => wall.elevationProfileMode)
+    .sort((left, right) => left.y - right.y)
+
+  assert.equal(new Set(walls.map(wall => wall.y)).size, 2)
+  assert.ok(walls.every(wall => wall.elevationProfileOriginY === 0))
+  assert.ok(walls.every(wall => wall.elevationProfileHeight === 5))
+})

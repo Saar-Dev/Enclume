@@ -51,6 +51,17 @@ test('la création d’un token se cale sur un support stable libre', () => {
   }), null)
 })
 
+test('l échelle d instance agrandit aussi son occupation physique', () => {
+  const [occupant] = dynamicOccupantsFromRows([], [{
+    id: 'scaled-crate', pos_x: 0, pos_y: 0, pos_z: 0, current_state_id: 0,
+    state: { transform: { scale: 1.5 } },
+    geometry: { width: 2, depth: 1, height: 2 },
+    states: [{ is_blocking: true }],
+  }])
+  assert.equal(occupant.actorProfile.radius, 1.5)
+  assert.equal(occupant.actorProfile.height, 3)
+})
+
 test('une création administrative ne place pas un token non attaché dans une cabine mobile', () => {
   const graph = {
     actorProfile: { radius: 0.35, height: 1.8, maxStepHeight: 0.5 },

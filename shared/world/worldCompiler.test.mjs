@@ -5,6 +5,7 @@ import { compileSurfaceWorld } from './worldCompiler.js'
 import {
   buildMergedRoomVerticalProfile,
   makeRoomBoundaryArc,
+  multiPolygonArea,
   roomBoundaryPaths,
   roomBoundaryWallRuns,
 } from './roomGeometry.js'
@@ -652,4 +653,69 @@ test('la compilation est déterministe pour une même entrée', () => {
     surfaceData: emptySurface({ rooms: { roomA: room('roomA', 0, 1) } }),
   }
   assert.deepEqual(compileSurfaceWorld(args), compileSurfaceWorld(args))
+})
+
+test('une passerelle suit l intérieur réel d un mur profilé', () => {
+  const profiledRoom = room('profiled-room', 0, 0)
+  profiledRoom.heightLevels = 2
+  profiledRoom.height = 5
+  const north = roomBoundaryWallRuns(profiledRoom).find(wall => wall.side === 'north')
+  profiledRoom.wallElevationProfiles = [{
+    id: 'north-profile',
+    edgeKeys: north.edgeKeys,
+    profile: { type: 'curved', depth: 0.4, direction: 1 },
+  }]
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-profiled-bridge',
+    surfaceData: emptySurface({
+      rooms: { 'profiled-room': profiledRoom },
+      floors: {
+        '0:0:2.5': {
+          id: 'profiled-bridge', kind: 'bridge', runtimeSupport: true,
+          x: 0, z: 0, y: 2.5, thickness: 0.25, walkable: true,
+          clipRoomId: 'profiled-room',
+        },
+      },
+    }),
+  })
+  const bridge = snapshot.spatial.supports.find(item => item.kind === 'bridge')
+  assert.ok(bridge)
+  assert.ok(bridge.bounds.min.z > 0.35)
+  assert.ok(Array.isArray(bridge.footprint))
+  assert.ok(bridge.point.z >= bridge.bounds.min.z)
+})
+
+test('une passerelle est découpée par l arc canonique de la salle', () => {
+  const roundedRoom = {
+    ...room('rounded-bridge-room', 0, 1, 0, 1),
+    cells: ['0:0', '1:0', '0:1', '1:1'],
+  }
+  const runs = roomBoundaryWallRuns(roundedRoom)
+  const curvedEdges = runs
+    .filter(wall => ['west', 'north'].includes(wall.side))
+    .flatMap(wall => wall.edgeKeys)
+  roundedRoom.boundaryArcs = [{
+    ...makeRoomBoundaryArc(roundedRoom, curvedEdges, 90).arc,
+    ownerRoomId: roundedRoom.id,
+  }]
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-rounded-bridge',
+    surfaceData: emptySurface({
+      rooms: { [roundedRoom.id]: roundedRoom },
+      floors: {
+        '0:0:1.25': {
+          id: 'rounded-bridge', kind: 'bridge', runtimeSupport: true,
+          x: 0, z: 0, y: 1.25, thickness: 0.25, walkable: true,
+          clipRoomId: roundedRoom.id,
+        },
+      },
+    }),
+  })
+  const bridge = snapshot.spatial.supports.find(item => item.kind === 'bridge')
+
+  assert.ok(bridge)
+  assert.ok(multiPolygonArea(bridge.footprint) > 0)
+  assert.ok(multiPolygonArea(bridge.footprint) < 0.5)
+  assert.ok(bridge.point.x >= bridge.bounds.min.x && bridge.point.x <= bridge.bounds.max.x)
+  assert.ok(bridge.point.z >= bridge.bounds.min.z && bridge.point.z <= bridge.bounds.max.z)
 })

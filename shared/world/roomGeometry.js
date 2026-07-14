@@ -951,10 +951,76 @@ export function roomBoundaryContours(room, roomLookup = {}) {
   return multiPolygonToContours(roomBoundaryMultiPolygon(room, roomLookup))
 }
 
-function multiPolygonArea(multiPolygon) {
+export function multiPolygonArea(multiPolygon) {
   return multiPolygonToContours(multiPolygon).reduce((sum, contour) => (
     sum + (contour.isHole ? -Math.abs(contour.area) : Math.abs(contour.area))
   ), 0)
+}
+
+export function intersectMultiPolygons(...values) {
+  const polygons = values.filter(value => Array.isArray(value) && value.length > 0)
+  if (polygons.length !== values.length || polygons.length === 0) return []
+  return cloneMultiPolygon(polygonClipping.intersection(...polygons))
+}
+
+export function multiPolygonBounds(multiPolygon) {
+  const points = multiPolygonToContours(multiPolygon).flatMap(contour => contour.points)
+  if (points.length === 0) return null
+  return {
+    minX: Math.min(...points.map(value => value.x)),
+    maxX: Math.max(...points.map(value => value.x)),
+    minZ: Math.min(...points.map(value => value.z)),
+    maxZ: Math.max(...points.map(value => value.z)),
+  }
+}
+
+function elevationProfileOffset(profile, progress) {
+  const depth = Math.max(0, Number(profile?.depth) || 0)
+  const direction = Number(profile?.direction) < 0 ? -1 : 1
+  const t = Math.max(0, Math.min(1, Number(progress) || 0))
+  if (profile?.type === 'curved') return depth * direction * Math.sin(Math.PI * t)
+  if (profile?.type === 'faceted') return depth * direction * (1 - Math.abs(t * 2 - 1))
+  return 0
+}
+
+export function roomInteriorFootprintAtY(room, y, roomLookup = {}, storyHeight = 2.5) {
+  const baseY = Number.isFinite(Number(room?.y))
+    ? Number(room.y)
+    : (Number(room?.level) || 0) * storyHeight
+  const levels = roomMaximumHeightLevels(room, storyHeight)
+  const offset = Math.floor((Number(y) - baseY + EPSILON) / storyHeight)
+  const slice = roomSliceAtLevel(room, offset, roomLookup, storyHeight)
+  if (!slice) return []
+  const progress = Math.max(0, Math.min(1, (Number(y) - baseY) / Math.max(EPSILON, levels * storyHeight)))
+  const strips = []
+
+  for (const path of slice.wallPaths || []) {
+    const inward = elevationProfileOffset(path.elevationProfile, progress)
+    if (inward <= EPSILON) continue
+    const points = path.axis === 'arc'
+      ? sampleWallArcGeometry(path, 16)
+      : [point(path.x0, path.z0), point(path.x1, path.z1)]
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const from = points[index]
+      const to = points[index + 1]
+      const dx = to.x - from.x
+      const dz = to.z - from.z
+      const length = Math.hypot(dx, dz)
+      if (length <= EPSILON) continue
+      const sign = Number(path.interiorNormalSign) < 0 ? -1 : 1
+      const normal = { x: -dz / length * sign, z: dx / length * sign }
+      strips.push([[[
+        [from.x, from.z],
+        [to.x, to.z],
+        [to.x + normal.x * inward, to.z + normal.z * inward],
+        [from.x + normal.x * inward, from.z + normal.z * inward],
+        [from.x, from.z],
+      ]]])
+    }
+  }
+  return strips.length > 0
+    ? cloneMultiPolygon(polygonClipping.difference(slice.footprint, ...strips))
+    : cloneMultiPolygon(slice.footprint)
 }
 
 export function roomGeometryArea(room, roomLookup = {}) {

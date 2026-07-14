@@ -27,6 +27,19 @@ test('les dimensions et la rotation d’une entité alimentent son occluder dyna
   })
 })
 
+test('l échelle d instance agrandit aussi l occlusion serveur', () => {
+  const [occluder] = dynamicOccludersFromEntities([{
+    id: 'large-crate', pos_x: 2, pos_y: 0, pos_z: 0, r: 0, current_state_id: 0,
+    state: { transform: { scale: 1.5 } },
+    geometry: { width: 2, depth: 1, height: 2, origin: 'floor-center' },
+    states: [{ is_blocking: true }],
+  }])
+  assert.deepEqual(occluder.bounds, {
+    min: { x: 0.5, y: 0, z: -0.75 },
+    max: { x: 3.5, y: 3, z: 0.75 },
+  })
+})
+
 test('le service de monde combine occlusion, couverture et interposition', () => {
   const result = evaluateWorldVisibility({
     snapshot: world,

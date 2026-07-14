@@ -57,14 +57,24 @@
 
 Branche `codex/world-engine-integration`, sans modification du dépôt de l'autre développeur.
 
+> Mise à jour monde 2026-07-14 : finition de l'éditeur contextuel et cohérence géométrique de bout
+> en bout. Rotation/échelle uniforme des objets, panneaux latéraux automatiques et repliables, nom
+> de salle éditable, identité de mur copiable, ajout de porte depuis le mur, halos de sélection,
+> profils verticaux continus, volume multi-hauteur complet à la caméra et passerelles découpées par
+> l'intérieur réel des murs courbes/profilés.
+
 - Phases 0 à 14 terminées : contrat métrique, document canonique, compilateur, navigation serveur,
   LOS/couverture, structures verticales, régions/effets runtime, cabine d'ascenseur mobile et
   branchement spatial complet du combat, tranches d'étage isolées avec profondeur visible dans les
   seuls volumes multniveau, murs courbes physiques, empreintes exclusives de salles non
   rectangulaires, fusion de volumes à hauteurs différentes et profils verticaux de murs.
-- `surface_data` v9 porte les tranches verticales canoniques ; la v10 porte les profils de faces de
-  murs. Salle et mur sélectionnés utilisent des panneaux contextuels, tandis que la barre latérale
-  reste dédiée à la création.
+- `surface_data` v12 porte tranches verticales, arcs et apparences intérieures canoniques. Salle,
+  mur et objet sélectionnés utilisent des panneaux contextuels déplaçables ; les réglages longs sont
+  repliables et la barre latérale d'édition ne conserve que les outils réellement actifs.
+- Un profil de mur couvre la hauteur totale de la salle. Une passerelle liée par `clipRoomId` est
+  intersectée avec la même empreinte intérieure au rendu, dans le snapshot et dans la navigation.
+- `entities.state.transform.scale` est partagé par le rendu, l'occupation et la LOS ; une mutation
+  d'apparence ne peut pas désynchroniser le volume physique.
 - Les anciennes cartes voxel ne sont pas une cible de compatibilité. Elles peuvent seulement servir
   de fixtures et peuvent être supprimées si elles gênent le modèle canonique.
 - L'ascenseur est une cabine physique mobile : aucune arête verticale ou téléportation ne doit être
@@ -74,8 +84,8 @@ Branche `codex/world-engine-integration`, sans modification du dépôt de l'autr
   monde 3D canonique.
 - Les autorités voxel/Redis/pathfinder historiques ont été supprimées. Aucune rétrocompatibilité
   des cartes anciennes n'est exigée.
-- Prochaine étape : validation fonctionnelle en navigateur sur une carte canonique multi-étages,
-  puis revue d'intégration avant toute décision de déploiement.
+- Prochaine étape : validation fonctionnelle Playwright et manuelle sur une carte canonique
+  multi-étages, puis revue d'intégration avec la prochaine tête du projet combat.
 
 Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 

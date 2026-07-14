@@ -262,15 +262,37 @@ function SelectableRoomWall({ wall, displayLevel, thickness, active, onToggle })
         })
         if (!box) return null
         return (
-          <mesh
-            key={`${wall.id}:hit:${index}`}
-            position={box.position}
-            rotation={[0, box.rotationY || 0, 0]}
-            renderOrder={42}
-          >
-            <boxGeometry args={[box.args[0], box.args[1], Math.max(box.args[2], 0.12)]} />
-            <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
-          </mesh>
+          <group key={`${wall.id}:hit:${index}`}>
+            <mesh
+              position={box.position}
+              rotation={[0, box.rotationY || 0, 0]}
+              renderOrder={42}
+            >
+              <boxGeometry args={[box.args[0], box.args[1], Math.max(box.args[2], 0.12)]} />
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
+            </mesh>
+            {active && (
+              <mesh
+                position={box.position}
+                rotation={[0, box.rotationY || 0, 0]}
+                scale={[1.025, 1.025, 1.12]}
+                renderOrder={41}
+                raycast={() => null}
+              >
+                <boxGeometry args={box.args} />
+                <meshBasicMaterial
+                  color="#ffd34d"
+                  side={THREE.BackSide}
+                  transparent
+                  opacity={0.36}
+                  blending={THREE.AdditiveBlending}
+                  depthTest={false}
+                  depthWrite={false}
+                  toneMapped={false}
+                />
+              </mesh>
+            )}
+          </group>
         )
       })}
       {showLine && (

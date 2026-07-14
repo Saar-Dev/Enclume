@@ -1,8 +1,8 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-14 — Phase 15, contrat v12 et coupe multi-étages.
+> Dernière mise à jour : 2026-07-14 — Phase 15, transformations partagées et géométrie d'édition finale.
 >
-> Statut : **Phases 0 à 14 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
+> Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
 >
 > Lire pour : tout travail touchant le monde 3D, les coordonnées, les surfaces praticables, les
@@ -134,6 +134,8 @@ Le dossier `shared/world/` fournit désormais :
   de `surface_data` vers `WorldDocument` ;
 - `worldCompiler.js` : compilation pure des supports, barrières, portails, colliders, occluders,
   traversées verticales et compartiments ;
+- `entityTransform.js` : échelle uniforme canonique des entités, bornée de `0.25` à `4` et partagée
+  par client, routes et services spatiaux ;
 - `index.js` : point d'entrée commun client/serveur ;
 - `spatialIndex.js` et `navigation.js` : index statique, occupation dynamique, graphe 3D pondéré et
   planification autoritaire ;
@@ -371,6 +373,12 @@ Parcours vertical de type grimpe. Il contient assez d'ancrages pour persister un
 
 Support praticable surélevé. Une passerelle fixe appartient au monde statique. Une passerelle
 mobile ou destructible est une feature runtime possédant un composant de support praticable.
+Une dalle qui longe une salle porte `clipRoomId`. Le helper partagé
+`roomInteriorFootprintAtY(room, y, ...)` intersecte sa case avec la tranche polygonale exacte puis
+retire le déplacement intérieur dû au profil vertical des murs à cette altitude. Le renderer
+extrude cette intersection ; `worldCompiler` enregistre la même empreinte et un point de navigation
+qu'elle contient. Courbes et profils ne peuvent donc créer ni support invisible hors de la salle,
+ni chemin serveur absent du rendu.
 
 ### Ascenseur
 
@@ -436,18 +444,26 @@ Une entité 3D est composée de capacités indépendantes : apparence, collider,
 praticable, perméabilité, danger, déclencheur. Le GLB n'est jamais la source physique : il visualise
 les propriétés déclarées.
 
+La transformation uniforme appartient à `entity.state.transform.scale`. La route d'entités la
+normalise avec `shared/world/entityTransform.js`, puis le socket rediffuse l'état complet. Le rendu,
+`worldMovementService` et `worldVisibilityService` appliquent le même facteur aux dimensions du
+blueprint. Agrandir ou réduire un objet modifie donc ensemble son apparence, son occupation et son
+volume occultant. La rotation continue d'utiliser la rotation canonique de l'entité ; les boutons
+de l'éditeur ne sont qu'une commande par pas de 90°.
+
 ### 7.1 Tranche d'étage affichée
 
-`displayLevel = N` signifie que la scène interactive ne contient que la tranche N. Les géométries,
-entités, tokens et régions des niveaux inférieurs ou supérieurs ne sont ni rendus, ni raycastés, ni
-utilisés comme supports de placement, sauf dans un volume ouvert explicitement décrit.
+`displayLevel = N` rend la tranche N et toutes les tranches inférieures. Les niveaux inférieurs sont
+opaques : leur présence graphique ne les rend pas sélectionnables comme supports du niveau courant.
+Les niveaux supérieurs restent masqués en temps normal.
 
-Une salle haute de plusieurs étages est un tel volume. Depuis une tranche supérieure, le renderer
-conserve son véritable sol de base, toutes ses parois jusqu'au fond, ainsi que les entités, tokens et
-régions plus bas dont le point monde se trouve dans son emprise horizontale et verticale. Cette
-exception est locale : une salle basse adjacente ou empilée n'est pas révélée. Aucun plancher
-intermédiaire n'est inventé et le plafond n'existe que dans la tranche supérieure. Les connecteurs
-verticaux sont découpés par tranche ou exposent uniquement leur palier courant.
+Une salle haute de plusieurs étages est l'exception locale. Le renderer détermine la salle
+multi-hauteur sous le point central visé par la caméra. Il conserve alors son véritable sol de base,
+toutes ses parois jusqu'au fond ainsi que les murs de ses tranches au-dessus de N, afin d'en montrer
+le volume complet. Une salle adjacente ou empilée qui ne fait pas partie de ce volume n'est pas
+révélée. Aucun plancher intermédiaire n'est inventé et le plafond n'existe que dans la tranche
+supérieure. Les connecteurs verticaux sont découpés par tranche ou exposent uniquement leur palier
+courant. Les règles de picking et de placement continuent d'interroger leur tranche réelle.
 
 ### 7.2 Murs courbes et contours de salles
 
@@ -569,6 +585,11 @@ la profondeur maximale, puis `spatialIndex` le subdivise localement en bandes ve
 pour les tests étroits. Collision, mouvement et LOS voient donc la même forme que le rendu sans
 faire de la tessellation une donnée persistée.
 
+L'origine et la hauteur du profil sont celles du volume complet de la salle, pas celles de la
+tranche en cours. Chaque panneau dérivé transporte `elevationProfileOriginY` au sol de base et
+`elevationProfileHeight` égal à la hauteur totale. Le paramètre normalisé reste donc continu quand
+le mur traverse plusieurs étages : un bombé ou un chevron ne recommence jamais à chaque niveau.
+
 Chaque angle reçoit un descripteur dérivé `profileJoinStart` / `profileJoinEnd` par face physique.
 Chaque face conserve les identifiants des salles dont elle est l'intérieur, puis choisit le voisin
 portant la même salle. Une jonction en T au bout d'un mur mitoyen peut ainsi employer un voisin
@@ -597,7 +618,8 @@ apparences `exterior`, ainsi que les faces de salle `top/bottom` et `front/back`
 Les interfaces horizontales sont dérivées par altitude depuis les empreintes de sol et les régions
 de plafond. Si un plafond et un sol coïncident, une seule interface est rendue : plafond depuis le
 niveau inférieur, sol dès que le niveau supérieur est visible. Tous les niveaux inférieurs au plan
-de coupe restent opaques. La transparence des murs ne s'applique qu'au niveau courant et au mur
+de coupe restent opaques. Les murs supérieurs du seul volume multi-hauteur actuellement visé sont
+également rendus, sans révéler les salles supérieures voisines. La transparence des murs ne s'applique qu'au niveau courant et au mur
 logique complet ; les morceaux créés par une porte partagent le même groupe d'opacité et leurs faces
 de coupe internes ne sont pas dessinées.
 

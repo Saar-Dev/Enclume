@@ -1,6 +1,6 @@
 # FUSION_PROJET_COUSIN.md — contrat d'intégration combat / moteur monde
 
-> Dernière mise à jour : 2026-07-14 — `surface_data` v12, interfaces horizontales et coupe multi-étages.
+> Dernière mise à jour : 2026-07-14 — profils continus, édition contextuelle et passerelles contraintes.
 >
 > But : fusionner une nouvelle version du projet combat sans modifier le dépôt de l'autre
 > développeur, sans réintroduire les anciennes cartes et sans dupliquer les décisions spatiales.
@@ -31,6 +31,7 @@ les deux nouveaux commits de tête et créer un tag de sauvegarde sur l'intégra
 | Effets de terrain | `server/src/services/worldEffectService.js` | Les règles interprètent les hooks retournés |
 | Ordre des actions, dégâts, états | FSM et règles combat | Elles orchestrent les services monde sans les remplacer |
 | Affichage 3D | composants client Surface/Three.js | Il prévisualise ; il n'autorise jamais un résultat de règle |
+| Transformations d'entités | `shared/world/entityTransform.js` + `entities.state.transform` | UI, collision et LOS consomment la même échelle uniforme |
 
 Règle de fusion : garder la règle métier combat la plus récente quand elle ne décide pas de la
 géométrie. Dès qu'un conflit touche chemin, position atteinte, distance, portée spatiale, collision,
@@ -78,7 +79,8 @@ combat ne doit reconstruire cette interface depuis les meshes.
 
 - le niveau courant et tous les niveaux inférieurs sont rendus ;
 - les niveaux inférieurs sont opaques ;
-- les niveaux supérieurs sont masqués ;
+- les niveaux supérieurs sont masqués, sauf les murs des tranches appartenant à la salle
+  multi-hauteur située sous le point central visé par la caméra ;
 - seul le plafond qui ferme le niveau courant utilise l'opacité de coupe ;
 - une salle multi-hauteur conserve son vide et ses murs descendants, sans plancher implicite ;
 - les connecteurs inférieurs restent visibles ;
@@ -89,11 +91,22 @@ combat ne doit reconstruire cette interface depuis les meshes.
 La visibilité graphique d'un étage inférieur ne lui donne pas l'autorité de support de placement
 dans l'éditeur courant. Ne pas confondre rendu, picking éditeur et collision runtime.
 
+### Profils, passerelles et entités
+
+- `wallElevationProfiles` décrit un profil unique sur la hauteur totale de la salle. Toute version
+  qui redémarre la progression à chaque étage doit être rejetée ;
+- une passerelle peut porter `clipRoomId`. Son mesh et son support compilé doivent tous deux employer
+  `roomInteriorFootprintAtY(...)`, courbe horizontale et profil vertical compris ;
+- l'échelle d'un objet libre vit dans `entity.state.transform.scale`, bornée à `0.25..4`. Le service
+  de mouvement et le service de visibilité doivent la lire en même temps que le renderer ;
+- les panneaux de salle, mur et objet sont des clients de ces contrats. Le nom de salle est éditable,
+  l'identifiant de mur est copiable mais immuable, et une porte ne se crée que depuis le mur actif.
+
 ## 5. Fichiers à fusionner selon leur rôle
 
 ### Autorité monde — ne pas remplacer par une version combat historique
 
-- `shared/world/**` ;
+- `shared/world/**`, notamment `roomGeometry.js`, `entityTransform.js` et `worldCompiler.js` ;
 - `server/src/services/world*.js` et `movementBudgetService.js` ;
 - migrations monde 152 à 157 et leurs variantes datées ;
 - validation/persistance Surface dans `server/src/services/battlemapWorldPersistence.js` ;
@@ -115,7 +128,7 @@ dans l'éditeur courant. Ne pas confondre rendu, picking éditeur et collision r
 - `server/src/socket/socketCombatHelpers.js` et `server/src/lib/losService.js` : conserver les
   adaptateurs vers les services monde ;
 - `server/src/routes/battlemaps.js`, `tokens.js`, `entities.js` : conserver révisions,
-  placement canonique et mesures serveur ;
+  placement canonique, normalisation de `state.transform.scale` et mesures serveur ;
 - `client/src/pages/SessionPage.jsx` et `client/src/components/Canvas3D.jsx` : fusionner l'UI combat
   sans supprimer les props de monde, d'étage et de destination ;
 - migrations : comparer le contenu et les tables, ne jamais résoudre un conflit uniquement en
@@ -175,6 +188,7 @@ npm run test:world
 node --test client/src/lib/surfaceData.test.mjs
 cd client && npm run build
 npx eslint src/components/Sidebar.jsx src/components/SurfaceDungeonScene.jsx \
+  src/components/EntityInstancePanel.jsx src/components/EntityMesh.jsx \
   src/components/SurfaceRoomPanel.jsx src/components/SurfaceWallPanel.jsx \
   src/lib/surfaceData.js src/pages/SessionPage.jsx
 cd .. && ENCLUME_BASE_URL=http://127.0.0.1:8293 npx playwright test tests/e2e/smoke.spec.mjs
@@ -190,6 +204,11 @@ Scénarios manuels indispensables :
 - salle basse + salle empilée : plafond depuis le bas, sol depuis le haut, aucun clignotement ;
 - niveau supérieur : tous les étages inférieurs opaques ;
 - mur droit et arc avec porte : transparence monobloc sans bouchons visibles ;
+- salle multi-hauteur : profil vertical unique sur toute la hauteur et murs supérieurs visibles
+  uniquement lorsque la caméra vise ce volume ;
+- passerelle le long d'un arc profilé : aucune dalle visible ou praticable hors de la salle ;
+- objet redimensionné : même emprise au rendu, au placement/collision et en LOS après rechargement ;
+- panneau de mur : identifiant copiable, halo complet, porte contrainte au mur actif ;
 - fusion de salles de hauteurs différentes puis sauvegarde/rechargement ;
 - Jon : budget 15 m, 3 m au sol puis 3 m d'échelle à coût ×4, arrêt intermédiaire ;
 - déclaration puis résolution combat après déplacement d'un ascenseur ou changement de porte ;
@@ -203,6 +222,8 @@ La fusion n'est pas acceptable si elle :
 - fait lire `surface_data`, Three.js ou `voxel_data` directement par une règle combat ;
 - laisse le client imposer une distance, un chemin ou une position finale ;
 - duplique un mur, un plafond/sol empilé ou un collider ;
+- répète un profil vertical par étage ou laisse une passerelle sortir de son empreinte de salle ;
+- applique l'échelle d'une entité au GLB sans l'appliquer à son occupant et à son occluder ;
 - perd `world_revision`, `runtime_revision` ou les UUID de features ;
 - mélange l'état statique de l'éditeur avec porte, effet, passerelle ou ascenseur runtime ;
 - passe le build mais échoue un des scénarios dorés monde/combat.

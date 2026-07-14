@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
+import FloatingPanelSection from './FloatingPanelSection.jsx'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import { normalizedSurfaceMaterial } from '../lib/surfaceMaterial.js'
 
@@ -66,6 +67,20 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
       </div>
 
       <div style={S.body}>
+        <FloatingPanelSection title="Identité" defaultOpen>
+          <label style={S.field}>
+            <span style={S.label}>Nom de la salle</span>
+            <input
+              type="text"
+              value={tool?.roomName ?? room.label ?? room.name ?? room.id}
+              onChange={event => onPatch?.({ roomName: event.target.value })}
+              onPointerDown={event => event.stopPropagation()}
+              style={{ ...S.input, userSelect: 'text' }}
+              maxLength={96}
+            />
+          </label>
+        </FloatingPanelSection>
+        <FloatingPanelSection title="Géométrie" defaultOpen>
         <div style={S.infoGrid}>
           <span>Étage de base</span>
           <strong>{Number(tool?.level) || 0}</strong>
@@ -132,7 +147,9 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
             />
           </label>
         </div>
+        </FloatingPanelSection>
 
+        <FloatingPanelSection title="Déplacement et collision">
         <div style={S.grid}>
           <label style={S.field}>
             <span style={S.label}>Coût de déplacement</span>
@@ -161,8 +178,9 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
             </select>
           </label>
         </div>
+        </FloatingPanelSection>
 
-        <div style={S.section}>
+        <FloatingPanelSection title="Apparence">
           <span style={S.label}>Apparence de la salle</span>
           <div style={S.faceTabs}>
             {MATERIAL_FACES.map(([face, label]) => (
@@ -180,16 +198,14 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
             ))}
           </div>
           <SurfaceMaterialEditor profile={material} onChange={patchMaterial} />
-        </div>
+        </FloatingPanelSection>
 
-        <div style={S.section}>
-          <span style={S.label}>Ajouter un connecteur</span>
+        <FloatingPanelSection title="Connecteurs verticaux">
           <div style={S.actionRow}>
-            <button type="button" onClick={() => startConnector('door')} style={S.action}>Porte</button>
             <button type="button" onClick={() => startConnector('elevator')} style={S.action}>Ascenseur</button>
             <button type="button" onClick={() => startConnector('ladder')} style={S.action}>Échelle</button>
           </div>
-        </div>
+        </FloatingPanelSection>
 
         {onDelete && (!confirmDelete ? (
           <button type="button" onClick={() => setConfirmDelete(true)} style={{ ...S.action, ...S.danger }}>
@@ -244,7 +260,7 @@ const S = {
   faceTabs: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '5px' },
   tab: { minHeight: '27px', border: '1px solid #27273a', borderRadius: '5px', background: '#11111f', color: '#7f8eaa', fontSize: '10px', cursor: 'pointer' },
   tabActive: { borderColor: '#d97706', background: 'rgba(217, 119, 6, 0.18)', color: '#fde68a' },
-  actionRow: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '5px' },
+  actionRow: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '5px' },
   action: { minHeight: '30px', border: '1px solid #3f3f5e', borderRadius: '5px', background: '#17172a', color: '#cbd5e1', fontSize: '10px', cursor: 'pointer' },
   deleteActions: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 82px', gap: '6px' },
   danger: { borderColor: 'rgba(251, 113, 133, 0.55)', background: 'rgba(127, 29, 29, 0.18)', color: '#fda4af' },

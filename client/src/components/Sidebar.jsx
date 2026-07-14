@@ -1011,12 +1011,12 @@ export default function Sidebar({
             onClick={() => onModeChange(mode === 'edit' ? 'play' : 'edit')}
             title={mode === 'edit' ? t('session.modePlay') : t('session.modeEdit')}
           >
-            {mode === 'edit' ? <IconEdit /> : <IconPlay />}
-            <span style={{ fontSize:'9px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{mode === 'edit' ? t('session.modeEdit') : t('session.modePlay')}</span>
+            {mode === 'edit' ? <IconPlay /> : <IconEdit />}
+            <span style={{ fontSize:'9px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{mode === 'edit' ? 'Mode jeu' : 'Édition'}</span>
           </button>
         )}
 
-        {isGm && (
+        {isGm && mode !== 'edit' && (
           <button
             className="btn-tool"
             data-active={layer === 'gm'}
@@ -1028,7 +1028,7 @@ export default function Sidebar({
           </button>
         )}
 
-        <div style={{ position: 'relative' }}>
+        {mode !== 'edit' && <div style={{ position: 'relative' }}>
           <button
             className="btn-tool"
             onClick={() => setToolsOpen(v => !v)}
@@ -1047,7 +1047,7 @@ export default function Sidebar({
               </button>
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* ─── PALETTE TEXTURES (mode édition) ─────────────────────────────── */}
@@ -1367,20 +1367,6 @@ export default function Sidebar({
                   <>
                     <div style={styles.roomToolSectionTitle}>{t('surfaceEditor.connectors')}</div>
                     <div style={styles.roomToolModes}>
-                      <button
-                        type="button"
-                        onClick={() => updateSurfaceTool({
-                          mode: 'connector',
-                          connectorType: 'door',
-                          ...connectorModelPatch(surfaceToolState.connectorType === 'door' ? selectedConnectorChoice : doorConnectorBlueprints[0]),
-                        })}
-                        style={{
-                          ...styles.roomToolModeBtn,
-                          ...(surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'door' ? styles.roomToolModeBtnActive : {}),
-                        }}
-                      >
-                        {t('surfaceEditor.addDoor')}
-                      </button>
                       <button
                         type="button"
                         onClick={() => updateSurfaceTool({

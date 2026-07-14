@@ -63,6 +63,7 @@ function neighboringBucketKeys(point) {
 }
 
 function nodePointFromSupport(support) {
+  if (support?.point) return normalizeWorldPoint(support.point)
   return {
     x: clean((support.bounds.min.x + support.bounds.max.x) / 2),
     y: clean(Number(support.y ?? support.bounds.max.y)),

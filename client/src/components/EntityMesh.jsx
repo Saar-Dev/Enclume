@@ -14,6 +14,7 @@ import {
   updateWaterMaterial,
 } from '../lib/waterMaterials';
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js';
+import { normalizeEntityScale } from '../../../shared/world/entityTransform.js';
 
 // --- Constantes ---
 const ICON_INTERACTION = '⚙';
@@ -33,28 +34,37 @@ function emitEntityClick(event, entity, onEntityClick) {
   );
 }
 
-function EntitySelectionOutline({ width, height, depth, y = 0 }) {
+function EntitySelectionHalo({ width, height, depth, y = 0 }) {
   return (
-    <mesh
-      position={[0, y, 0]}
-      renderOrder={1000}
-      raycast={DISABLE_RAYCAST}
-    >
-      <boxGeometry args={[
-        Math.max(0.05, width) + 0.06,
-        Math.max(0.05, height) + 0.06,
-        Math.max(0.05, depth) + 0.06,
-      ]} />
-      <meshBasicMaterial
-        color="#ffb547"
-        wireframe
-        transparent
-        opacity={0.95}
-        depthTest={false}
-        depthWrite={false}
-        toneMapped={false}
-      />
-    </mesh>
+    <group position={[0, y, 0]} raycast={DISABLE_RAYCAST}>
+      <mesh renderOrder={1000} scale={[1.06, 1.06, 1.06]} raycast={DISABLE_RAYCAST}>
+        <boxGeometry args={[Math.max(0.05, width), Math.max(0.05, height), Math.max(0.05, depth)]} />
+        <meshBasicMaterial
+          color="#ffd34d"
+          side={THREE.BackSide}
+          transparent
+          opacity={0.42}
+          blending={THREE.AdditiveBlending}
+          depthTest={false}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+      <mesh renderOrder={999} scale={[1.16, 1.16, 1.16]} raycast={DISABLE_RAYCAST}>
+        <boxGeometry args={[Math.max(0.05, width), Math.max(0.05, height), Math.max(0.05, depth)]} />
+        <meshBasicMaterial
+          color="#ffb300"
+          side={THREE.BackSide}
+          transparent
+          opacity={0.14}
+          blending={THREE.AdditiveBlending}
+          depthTest={false}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+      <pointLight color="#ffd34d" intensity={0.55} distance={Math.max(width, height, depth) * 2.4} decay={2} />
+    </group>
   );
 }
 
@@ -76,18 +86,19 @@ export default function EntityMesh({
   const { geometry, states, glb_url } = blueprint;
   const stateList = states || [];
   const currentState = stateList[entity.current_state_id] ?? stateList[0] ?? null;
+  const scale = normalizeEntityScale(entity.state);
 
   // Coordonnées (PE14)
   const preservesAuthoredOrigin = geometry?.origin === 'floor-center' || geometry?.origin === 'wall-back-center';
   const posX = preservesAuthoredOrigin
     ? (entity.pos_x ?? 0)
-    : (entity.pos_x ?? 0) + (geometry?.width ?? 1) / 2;
+    : (entity.pos_x ?? 0) + (geometry?.width ?? 1) * scale / 2;
   const posY = preservesAuthoredOrigin
     ? (entity.pos_z ?? 0)
-    : (entity.pos_z ?? 0) + (geometry?.height ?? 1) / 2;
+    : (entity.pos_z ?? 0) + (geometry?.height ?? 1) * scale / 2;
   const posZ = preservesAuthoredOrigin
     ? (entity.pos_y ?? 0)
-    : (entity.pos_y ?? 0) + (geometry?.depth ?? 1) / 2;
+    : (entity.pos_y ?? 0) + (geometry?.depth ?? 1) * scale / 2;
   const rot = (entity.r || 0) * (Math.PI / 2);
   const stateOpacity = (currentState?.visual_override?.opacity ?? 1.0)
     * sceneOpacity
@@ -109,6 +120,7 @@ export default function EntityMesh({
       depth={geometry?.depth ?? 1}
       currentState={currentState}
       rot={rot}
+      scale={scale}
       stateOpacity={stateOpacity}
       altPressed={altPressed}
       isGmOnly={isGmOnly}
@@ -128,6 +140,7 @@ export default function EntityMesh({
       height={geometry?.height ?? 1}
       depth={geometry?.depth ?? 1}
       rot={rot}
+      scale={scale}
       stateOpacity={stateOpacity}
       altPressed={altPressed}
       isGmOnly={isGmOnly}
@@ -145,7 +158,7 @@ function EntityMeshGlb({
   blueprint,
   glbUrl,
   posX, posY, posZ,
-  width, height, depth, currentState, rot,
+  width, height, depth, currentState, rot, scale,
   stateOpacity, altPressed, isGmOnly,
   onHover, onEntityClick,
   isPreview, isSelected,
@@ -283,6 +296,7 @@ function EntityMeshGlb({
     <group
       ref={groupRef}
       rotation={[0, rot, 0]}
+      scale={[scale, scale, scale]}
       onClick={!isPreview && onEntityClick ? event => emitEntityClick(event, entity, onEntityClick) : undefined}
       onPointerEnter={isPreview ? undefined : () => {
         if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
@@ -326,7 +340,7 @@ function EntityMeshGlb({
       )}
 
       {!isPreview && isSelected && (
-        <EntitySelectionOutline
+        <EntitySelectionHalo
           width={width}
           height={height}
           depth={depth}
@@ -346,7 +360,7 @@ function EntityMeshGlb({
 // --- EntityMeshVoxel (VOTRE VERSION ORIGINALE, INCHANGÉE) ---
 function EntityMeshVoxel({
   entity, blueprint, entityTextureMaterials, currentState,
-  posX, posY, posZ, width, height, depth, rot,
+  posX, posY, posZ, width, height, depth, rot, scale,
   stateOpacity, altPressed, isGmOnly, onHover, onEntityClick,
   isPreview, isSelected,
 }) {
@@ -430,6 +444,7 @@ function EntityMeshVoxel({
     <group
       ref={groupRef}
       rotation={[0, rot, 0]}
+      scale={[scale, scale, scale]}
       onClick={!isPreview && onEntityClick ? event => emitEntityClick(event, entity, onEntityClick) : undefined}
       onPointerEnter={isPreview ? undefined : handlePointerEnter}
       onPointerLeave={isPreview ? undefined : handlePointerLeave}
@@ -470,7 +485,7 @@ function EntityMeshVoxel({
       </mesh>
 
       {!isPreview && isSelected && (
-        <EntitySelectionOutline width={width} height={height} depth={depth} />
+        <EntitySelectionHalo width={width} height={height} depth={depth} />
       )}
 
       {/* Icône Html */}

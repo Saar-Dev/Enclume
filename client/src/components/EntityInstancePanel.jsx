@@ -9,6 +9,15 @@ import {
   normalizeModelMaterialSlots,
   setMaterialSlotOverride,
 } from '../lib/modelMaterialSlots.js'
+import FloatingPanelSection from './FloatingPanelSection.jsx'
+import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
+import {
+  ENTITY_SCALE_MAX,
+  ENTITY_SCALE_MIN,
+  ENTITY_SCALE_STEP,
+  normalizeEntityScale,
+  withEntityScale,
+} from '../../../shared/world/entityTransform.js'
 
 // ─── EntityInstancePanel ───────────────────────────────────────────────────────
 // Panneau flottant GM — configuration d'une instance d'entité posée sur la carte.
@@ -24,7 +33,7 @@ import {
 // Fermeture : clic extérieur ou Échap.
 
 const PANEL_W = 300
-const PANEL_H_EST = 420
+const PANEL_H_EST = 610
 
 const MODEL_SLOT_LABELS = {
   SLOT_01: 'Métal principal',
@@ -47,37 +56,14 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
   const isWallPlaced = placementMode === 'wall'
 
   // ─── Positionnement initial ───────────────────────────────────────────────
-  const initLeft = Math.max(8, Math.min(window.innerWidth  - PANEL_W - 8, x))
-  const initTop  = Math.max(8, Math.min(window.innerHeight - PANEL_H_EST - 8, y))
-  const [pos, setPos] = useState({ left: initLeft, top: initTop })
+  const { position, beginDrag } = useDraggablePanelPosition({
+    x,
+    y,
+    width: PANEL_W,
+    height: PANEL_H_EST,
+  })
 
   // ─── Drag header ─────────────────────────────────────────────────────────
-  const dragRef = useRef(null)
-
-  const handleHeaderMouseDown = (e) => {
-    if (e.button !== 0) return
-    dragRef.current = { startX: e.clientX, startY: e.clientY, left: pos.left, top: pos.top }
-    e.preventDefault()
-  }
-
-  useEffect(() => {
-    const onMove = (e) => {
-      if (!dragRef.current) return
-      const dx = e.clientX - dragRef.current.startX
-      const dy = e.clientY - dragRef.current.startY
-      setPos({
-        left: Math.max(8, Math.min(window.innerWidth  - PANEL_W - 8, dragRef.current.left + dx)),
-        top:  Math.max(8, Math.min(window.innerHeight - 60,           dragRef.current.top  + dy)),
-      })
-    }
-    const onUp = () => { dragRef.current = null }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup',   onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup',   onUp)
-    }
-  }, [])
 
   // ─── Fermeture sur clic extérieur et Échap ────────────────────────────────
   useEffect(() => {
@@ -104,6 +90,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
   const [posZ,                 setPosZ]                 = useState(String(entity.pos_z ?? 0))
   const [rotation,             setRotation]             = useState(Number(entity.r) || 0)
   const baseEntityState = normalizeEntityState(entity.state)
+  const [scale, setScale] = useState(normalizeEntityScale(baseEntityState))
   const [materialOverrides, setMaterialOverrides] = useState(
     baseEntityState.materialOverrides || baseEntityState.material_overrides || {},
   )
@@ -118,7 +105,18 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
     setPosY(String(entity.pos_y ?? 0))
     setPosZ(String(entity.pos_z ?? 0))
     setRotation(Number(entity.r) || 0)
-  }, [entity.id, entity.pos_x, entity.pos_y, entity.pos_z, entity.r])
+    setScale(normalizeEntityScale(entity.state))
+  }, [entity.id, entity.pos_x, entity.pos_y, entity.pos_z, entity.r, entity.state])
+
+  const rotate = direction => {
+    if (isWallPlaced) return
+    setRotation(current => (Number(current) + direction + 4) % 4)
+  }
+
+  const patchScale = value => setScale(Math.max(
+    ENTITY_SCALE_MIN,
+    Math.min(ENTITY_SCALE_MAX, Math.round(Number(value) / ENTITY_SCALE_STEP) * ENTITY_SCALE_STEP),
+  ))
 
   const toggleInteraction = (id) => {
     setDisabledInteractions(prev =>
@@ -154,11 +152,17 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
         gm_only:               gmOnly,
         current_state_id:      currentStateId,
         disabled_interactions: disabledInteractions,
-        state:                 { ...normalizeEntityState(entity.state), materialOverrides },
+        state:                 withEntityScale({ ...normalizeEntityState(entity.state), materialOverrides }, scale),
         notes_gm:              notesGm.trim() || null,
       })
       updateEntity(res.data.entity)
-      socket?.emit(WS.ENTITY_UPDATED, { entityId: entity.id, gm_only: res.data.entity.gm_only })
+      socket?.emit(WS.ENTITY_UPDATED, {
+        entityId: entity.id,
+        gm_only: res.data.entity.gm_only,
+        current_state_id: res.data.entity.current_state_id,
+        state: res.data.entity.state,
+        updated_at: res.data.entity.updated_at,
+      })
       if (transformChanged) {
         socket?.emit(WS.ENTITY_MOVED, {
           entityId: entity.id,
@@ -176,7 +180,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
     } finally {
       setSaving(false)
     }
-  }, [entity, posX, posY, posZ, rotation, labelOverride, gmOnly, currentStateId, disabledInteractions, materialOverrides, notesGm, updateEntity, socket])
+  }, [entity, posX, posY, posZ, rotation, scale, labelOverride, gmOnly, currentStateId, disabledInteractions, materialOverrides, notesGm, updateEntity, socket])
 
   const handleDelete = useCallback(async () => {
     setDeleting(true)
@@ -199,8 +203,8 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
       ref={panelRef}
       style={{
         position: 'fixed',
-        left:     pos.left,
-        top:      pos.top,
+        left:     position.left,
+        top:      position.top,
         width:    PANEL_W,
         zIndex:   10001,
         background:   '#0e0e1a',
@@ -221,7 +225,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
 
       {/* ── Header draggable ── */}
       <div
-        onMouseDown={handleHeaderMouseDown}
+        onPointerDown={beginDrag}
         style={{
           display:        'flex',
           alignItems:     'center',
@@ -242,7 +246,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
           </p>
         </div>
         <button
-          onMouseDown={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
           onClick={onClose}
           style={{ background: 'none', border: 'none', color: '#4a4a60', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: '4px' }}
         >
@@ -252,6 +256,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
 
       {/* ── Corps ── */}
       <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', maxHeight: 'calc(100vh - 92px)' }}>
+        <FloatingPanelSection title="Identité" defaultOpen>
 
         {/* Nom affiché */}
         <div style={S.field}>
@@ -306,7 +311,9 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
             </select>
           </div>
         )}
+        </FloatingPanelSection>
 
+        <FloatingPanelSection title="Transformation" defaultOpen>
         <div style={S.field}>
           <label style={S.label}>Position et rotation</label>
           <div style={S.transformGrid}>
@@ -323,25 +330,40 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
               <input type="number" step="0.125" value={posZ} onChange={e => setPosZ(e.target.value)} style={S.input} disabled={isWallPlaced} />
             </label>
           </div>
-          <select
-            style={{ ...S.input, cursor: 'pointer' }}
-            value={rotation}
-            onChange={e => setRotation(Number(e.target.value))}
-            disabled={isWallPlaced}
-          >
-            <option value={0}>0 deg</option>
-            <option value={1}>90 deg</option>
-            <option value={2}>180 deg</option>
-            <option value={3}>270 deg</option>
-          </select>
+          <div style={S.rotationRow}>
+            <button type="button" onClick={() => rotate(-1)} disabled={isWallPlaced} style={S.transformButton}>
+              ↶ Gauche
+            </button>
+            <strong style={S.rotationValue}>{rotation * 90}°</strong>
+            <button type="button" onClick={() => rotate(1)} disabled={isWallPlaced} style={S.transformButton}>
+              Droite ↷
+            </button>
+          </div>
+          <div style={S.scaleRow}>
+            <button type="button" onClick={() => patchScale(scale - ENTITY_SCALE_STEP)} style={S.scaleButton}>−</button>
+            <label style={{ ...S.compactField, flex: 1 }}>
+              <span>Échelle · {scale.toFixed(2)}×</span>
+              <input
+                type="range"
+                min={ENTITY_SCALE_MIN}
+                max={ENTITY_SCALE_MAX}
+                step={ENTITY_SCALE_STEP}
+                value={scale}
+                onChange={event => patchScale(event.target.value)}
+              />
+            </label>
+            <button type="button" onClick={() => patchScale(scale + ENTITY_SCALE_STEP)} style={S.scaleButton}>+</button>
+          </div>
           {editorMode && isWallPlaced && (
             <p style={S.hint}>Objet mural : position et orientation suivent le mur. Fais-le glisser vers un autre emplacement mural.</p>
           )}
           {editorMode && !isWallPlaced && <p style={S.hint}>Tu peux aussi faire glisser l'objet directement sur la carte.</p>}
         </div>
+        </FloatingPanelSection>
 
         {/* Interactions actives/désactivées */}
         {interactions.length > 0 && (
+          <FloatingPanelSection title="Interactions">
           <div style={S.field}>
             <label style={S.label}>Interactions actives</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
@@ -372,10 +394,12 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
               })}
             </div>
           </div>
+          </FloatingPanelSection>
         )}
 
         {/* Couleurs du modèle 3D */}
         {materialSlots.length > 0 && (
+          <FloatingPanelSection title="Apparence">
           <div style={S.field}>
             <label style={S.label}>Couleurs du modèle 3D</label>
             <div style={S.slotList}>
@@ -401,9 +425,11 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
               })}
             </div>
           </div>
+          </FloatingPanelSection>
         )}
 
         {/* Notes GM */}
+        <FloatingPanelSection title="Notes MJ">
         <div style={S.field}>
           <label style={S.label}>Notes GM</label>
           <textarea
@@ -413,6 +439,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
             placeholder={t('entityPanel.placeholderNotes')}
           />
         </div>
+        </FloatingPanelSection>
 
         {/* Sauvegarde */}
         <button
@@ -481,6 +508,32 @@ const S = {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
     gap: '6px',
+  },
+  rotationRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 54px 1fr',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  transformButton: {
+    minHeight: '30px',
+    border: '1px solid #34344c',
+    borderRadius: '5px',
+    background: '#151525',
+    color: '#cbd5e1',
+    cursor: 'pointer',
+    fontSize: '10px',
+  },
+  rotationValue: { color: '#fbbf24', fontSize: '11px', textAlign: 'center' },
+  scaleRow: { display: 'flex', alignItems: 'center', gap: '7px' },
+  scaleButton: {
+    width: '30px',
+    height: '30px',
+    border: '1px solid #34344c',
+    borderRadius: '5px',
+    background: '#151525',
+    color: '#dbeafe',
+    cursor: 'pointer',
   },
   compactField: {
     display: 'flex',
