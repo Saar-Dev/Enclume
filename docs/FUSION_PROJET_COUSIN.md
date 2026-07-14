@@ -101,6 +101,11 @@ dans l'éditeur courant. Ne pas confondre rendu, picking éditeur et collision r
   de mouvement et le service de visibilité doivent la lire en même temps que le renderer ;
 - les panneaux de salle, mur et objet sont des clients de ces contrats. Le nom de salle est éditable,
   l'identifiant de mur est copiable mais immuable, et une porte ne se crée que depuis le mur actif.
+- la transition `select -> connector/door` conserve `selectedRoomWallKeys` et
+  `connectorWallEdgeKeys`. Une fusion qui ferme le panneau ou masque la sélection à ce moment casse
+  la pose de porte ;
+- les dalles libres et passerelles lisent les profils d'apparence `floor/ceiling`, jamais les anciens
+  noms d'outil `top/bottom`.
 
 ## 5. Fichiers à fusionner selon leur rôle
 

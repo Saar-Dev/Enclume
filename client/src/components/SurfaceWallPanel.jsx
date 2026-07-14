@@ -12,7 +12,7 @@ const PANEL_W = 310
 const PANEL_H_EST = 680
 
 export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearanceChange, onClose }) {
-  const { position, beginDrag } = useDraggablePanelPosition({
+  const { position, beginDrag, panelRef } = useDraggablePanelPosition({
     x,
     y,
     width: PANEL_W,
@@ -57,17 +57,11 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
     mode: 'connector',
     connectorType: 'door',
     connectorWallEdgeKeys: [...selectedKeys],
-    connectorBlueprintId: null,
-    connectorModelLabel: null,
-    connectorModelCategory: null,
-    connectorModelGlbUrl: null,
-    connectorModelBuiltinKey: null,
-    connectorModelGeometry: null,
-    connectorMaterialOverrides: {},
   })
 
   return (
     <div
+      ref={panelRef}
       style={{ ...S.panel, left: position.left, top: position.top }}
       onPointerDown={event => event.stopPropagation()}
       data-testid="surface-wall-panel"

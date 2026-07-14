@@ -114,7 +114,7 @@ export default function SurfaceConnectorPanel({
   canEdit = true,
   canAdminElevator = canEdit,
 }) {
-  const { position, beginDrag } = useDraggablePanelPosition({
+  const { position, beginDrag, panelRef } = useDraggablePanelPosition({
     x,
     y,
     width: PANEL_W,
@@ -146,6 +146,7 @@ export default function SurfaceConnectorPanel({
 
   return (
     <div
+      ref={panelRef}
       style={{ ...S.panel, left: position.left, top: position.top }}
       onPointerDown={event => event.stopPropagation()}
       data-testid="surface-connector-panel"

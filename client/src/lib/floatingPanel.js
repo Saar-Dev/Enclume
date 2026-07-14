@@ -12,9 +12,10 @@ export function clampFloatingPanelPosition({
   const safeHeight = Math.max(48, Number(height) || 48)
   const safeViewportWidth = Math.max(safeWidth + 16, Number(viewportWidth) || safeWidth + 16)
   const safeViewportHeight = Math.max(64, Number(viewportHeight) || safeHeight + 16)
+  const maximumTop = Math.max(8, safeViewportHeight - safeHeight - 8)
   return {
     left: Math.max(8, Math.min(safeViewportWidth - safeWidth - 8, Number(left) || 8)),
-    top: Math.max(8, Math.min(safeViewportHeight - Math.min(safeHeight, 48), Number(top) || 8)),
+    top: Math.max(8, Math.min(maximumTop, Number(top) || 8)),
   }
 }
 
@@ -49,7 +50,9 @@ export function floatingPanelPositionBesideAnchor({
   })
 }
 
-export function useDraggablePanelPosition({ x, y, width, height, placement = 'beside' }) {
+export function useDraggablePanelPosition({ x, y, width, height, placement = 'beside', panelRef: suppliedPanelRef = null }) {
+  const internalPanelRef = useRef(null)
+  const panelRef = suppliedPanelRef || internalPanelRef
   const initialPosition = useCallback(() => clampFloatingPanelPosition({
     ...(placement === 'beside'
       ? floatingPanelPositionBesideAnchor({ x, y, width, height, ...viewport() })
@@ -60,6 +63,35 @@ export function useDraggablePanelPosition({ x, y, width, height, placement = 'be
   }), [height, placement, width, x, y])
   const [position, setPosition] = useState(initialPosition)
   const dragRef = useRef(null)
+  const measuredRef = useRef(false)
+  const measuredSizeRef = useRef({ width, height })
+
+  useEffect(() => {
+    const element = panelRef.current
+    if (!element || typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(entries => {
+      const rect = entries[0]?.contentRect
+      if (!rect) return
+      const measuredWidth = Math.max(1, Math.ceil(element.getBoundingClientRect().width || rect.width || width))
+      const measuredHeight = Math.max(48, Math.ceil(element.getBoundingClientRect().height || rect.height || height))
+      measuredSizeRef.current = { width: measuredWidth, height: measuredHeight }
+      if (!measuredRef.current) {
+        measuredRef.current = true
+        setPosition(placement === 'beside'
+          ? floatingPanelPositionBesideAnchor({ x, y, width: measuredWidth, height: measuredHeight, ...viewport() })
+          : clampFloatingPanelPosition({ left: x, top: y, width: measuredWidth, height: measuredHeight, ...viewport() }))
+        return
+      }
+      setPosition(current => clampFloatingPanelPosition({
+        ...current,
+        width: measuredWidth,
+        height: measuredHeight,
+        ...viewport(),
+      }))
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [height, panelRef, placement, width, x, y])
 
   useEffect(() => {
     const move = event => {
@@ -68,8 +100,8 @@ export function useDraggablePanelPosition({ x, y, width, height, placement = 'be
       setPosition(clampFloatingPanelPosition({
         left: drag.left + event.clientX - drag.clientX,
         top: drag.top + event.clientY - drag.clientY,
-        width,
-        height,
+        width: measuredSizeRef.current.width,
+        height: measuredSizeRef.current.height,
         ...viewport(),
       }))
     }
@@ -79,8 +111,8 @@ export function useDraggablePanelPosition({ x, y, width, height, placement = 'be
     }
     const resize = () => setPosition(current => clampFloatingPanelPosition({
       ...current,
-      width,
-      height,
+      width: measuredSizeRef.current.width,
+      height: measuredSizeRef.current.height,
       ...viewport(),
     }))
     window.addEventListener('pointermove', move)
@@ -109,5 +141,5 @@ export function useDraggablePanelPosition({ x, y, width, height, placement = 'be
     event.stopPropagation()
   }, [position.left, position.top])
 
-  return { position, beginDrag }
+  return { position, beginDrag, panelRef }
 }

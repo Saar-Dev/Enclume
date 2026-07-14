@@ -62,6 +62,10 @@ Branche `codex/world-engine-integration`, sans modification du dépôt de l'autr
 > de salle éditable, identité de mur copiable, ajout de porte depuis le mur, halos de sélection,
 > profils verticaux continus, volume multi-hauteur complet à la caméra et passerelles découpées par
 > l'intérieur réel des murs courbes/profilés.
+> Correctif de finition du même jour : transparence des parois avant sur toutes les tranches d'une
+> salle multi-hauteur, sélection de mur conservée pendant la pose de porte, prévisualisation locale
+> rotation/échelle, création des passerelles rebranchée sur Sol/Plafond et recalage vertical des
+> panneaux lors de l'ouverture d'un accordéon.
 
 - Phases 0 à 14 terminées : contrat métrique, document canonique, compilateur, navigation serveur,
   LOS/couverture, structures verticales, régions/effets runtime, cabine d'ascenseur mobile et

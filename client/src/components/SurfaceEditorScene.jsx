@@ -229,7 +229,7 @@ function RoomSelectionContour({ room, roomLookup, y, displayLevel = null }) {
   })
 }
 
-function SelectableRoomWall({ wall, displayLevel, thickness, active, onToggle }) {
+function SelectableRoomWall({ wall, displayLevel, thickness, active, onToggle, interactive = true }) {
   const [hovered, setHovered] = useState(false)
   const points = wall.axis === 'arc' ? wall.points : [wall.from, wall.to]
   const y = levelToY(displayLevel)
@@ -240,10 +240,12 @@ function SelectableRoomWall({ wall, displayLevel, thickness, active, onToggle })
   return (
     <group
       onPointerDown={event => {
+        if (!interactive) return
         event.stopPropagation()
-        onToggle(wall.edgeKeys, event)
+        onToggle?.(wall.edgeKeys, event)
       }}
       onPointerOver={event => {
+        if (!interactive) return
         event.stopPropagation()
         setHovered(true)
       }}
@@ -264,6 +266,7 @@ function SelectableRoomWall({ wall, displayLevel, thickness, active, onToggle })
         return (
           <group key={`${wall.id}:hit:${index}`}>
             <mesh
+              raycast={interactive ? undefined : () => null}
               position={box.position}
               rotation={[0, box.rotationY || 0, 0]}
               renderOrder={42}
@@ -310,7 +313,7 @@ function SelectableRoomWall({ wall, displayLevel, thickness, active, onToggle })
   )
 }
 
-function RoomWallSelectionOverlay({ room, displayLevel, selectedKeys, onToggle }) {
+function RoomWallSelectionOverlay({ room, displayLevel, selectedKeys, onToggle, interactive = true }) {
   if (!room || room.wallEnabled === false) return null
   const selected = new Set(selectedKeys || [])
   const thickness = Math.max(2, Number(room.wallThickness) || 1)
@@ -324,6 +327,7 @@ function RoomWallSelectionOverlay({ room, displayLevel, selectedKeys, onToggle }
         thickness={thickness}
         active={active}
         onToggle={onToggle}
+        interactive={interactive}
       />
     )
   })
@@ -1071,6 +1075,9 @@ export default function SurfaceEditorScene({
     : surfaceTool?.mode === 'connector' && hoverPreview?.mode === 'connector'
       ? hoverPreview
       : null
+  const placingDoorOnSelectedWall = surfaceTool?.mode === 'connector'
+    && surfaceTool?.connectorType === 'door'
+    && (surfaceTool?.connectorWallEdgeKeys || []).length > 0
 
   return (
     <>
@@ -1119,15 +1126,16 @@ export default function SurfaceEditorScene({
           displayLevel={displayLevel}
         />
       ))}
-      {surfaceTool?.mode === 'select' && selectedRooms.length === 1 && (
+      {(surfaceTool?.mode === 'select' || placingDoorOnSelectedWall) && selectedRooms.length === 1 && (
         <>
           <RoomWallSelectionOverlay
             room={selectedRooms[0]}
             displayLevel={displayLevel}
             selectedKeys={surfaceTool?.selectedRoomWallKeys}
             onToggle={handleRoomWallPointerSelect}
+            interactive={surfaceTool?.mode === 'select'}
           />
-          {(surfaceTool?.selectedRoomWallCount || 0) >= 2 && (
+          {surfaceTool?.mode === 'select' && (surfaceTool?.selectedRoomWallCount || 0) >= 2 && (
             <RoomArcPreview
               room={selectedRooms[0]}
               displayLevel={displayLevel}

@@ -688,6 +688,33 @@ export default function Sidebar({
     ...connectorModelPatch(blueprint),
   })
 
+  useEffect(() => {
+    if (surfaceToolState.mode !== 'connector' || !selectedConnectorChoice) return
+    const selectedId = selectedConnectorChoice.id || null
+    const selectedLabel = selectedConnectorChoice.label || null
+    if (String(surfaceToolState.connectorBlueprintId || '') === String(selectedId || '')
+      && surfaceToolState.connectorModelLabel === selectedLabel) return
+    onSurfaceToolChange?.(current => {
+      if (current?.mode !== 'connector' || current?.connectorType !== surfaceToolState.connectorType) return current
+      return {
+        ...current,
+        connectorBlueprintId: selectedId,
+        connectorModelLabel: selectedLabel,
+        connectorModelCategory: selectedConnectorChoice.category || null,
+        connectorModelGlbUrl: selectedConnectorChoice.glb_url || null,
+        connectorModelBuiltinKey: selectedConnectorChoice.builtin_key || null,
+        connectorModelGeometry: selectedConnectorChoice.geometry || null,
+      }
+    })
+  }, [
+    onSurfaceToolChange,
+    selectedConnectorChoice,
+    surfaceToolState.connectorBlueprintId,
+    surfaceToolState.connectorModelLabel,
+    surfaceToolState.connectorType,
+    surfaceToolState.mode,
+  ])
+
   const [worldEffects, setWorldEffects] = useState({ definitions: [], instances: [] })
   const [customEffectOpen, setCustomEffectOpen] = useState(false)
   const [customEffectDraft, setCustomEffectDraft] = useState({ key: '', label: '', movementMultiplier: 1, note: '' })

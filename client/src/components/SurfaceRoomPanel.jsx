@@ -12,7 +12,7 @@ const MATERIAL_FACES = [
 ]
 
 export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, onClose }) {
-  const { position, beginDrag } = useDraggablePanelPosition({
+  const { position, beginDrag, panelRef } = useDraggablePanelPosition({
     x,
     y,
     width: PANEL_W,
@@ -54,6 +54,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
 
   return (
     <div
+      ref={panelRef}
       style={{ ...S.panel, left: position.left, top: position.top }}
       onPointerDown={event => event.stopPropagation()}
       data-testid="surface-room-panel"

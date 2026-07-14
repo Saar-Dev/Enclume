@@ -260,7 +260,10 @@ L’outil Salle est l’outil de référence.
   technique sélectionnable mais non modifiable, **Ajouter une porte** pour le mur unique actif et
   **Sélectionner tous les murs de la salle**. La barre latérale reste réservée aux outils de création.
 - Les familles de réglages longues sont regroupées en sections repliables. Les panneaux de salle,
-  mur, objet et connecteur 3D restent déplaçables après leur placement automatique.
+  mur, objet et connecteur 3D restent déplaçables après leur placement automatique. Un
+  `ResizeObserver` mesure leur taille réelle : ouvrir une section recale le panneau vers le haut si
+  son bas devait sortir de l'écran. Le panneau reste entièrement visible dès que le viewport peut le
+  contenir et utilise sinon son défilement interne.
 - Les réglages initiaux d'usure, de saleté et de relief valent `0`. Seule une modification explicite
   de l'utilisateur crée un aspect altéré ou un relief géométrique.
 - Chaque panneau de sélection destructible expose son action au même endroit : salle, mur et objet
@@ -301,7 +304,10 @@ Chaque connecteur doit recevoir un UUID stable. Les identifiants dérivés de se
 acceptables uniquement comme compatibilité temporaire : déplacer le connecteur ne doit pas lui
 faire perdre son état runtime.
 
-Une porte se pose exclusivement depuis le panneau du mur sélectionné. Le placement garde les
+Une porte se pose exclusivement depuis le panneau du mur sélectionné. Passer en pose de porte ne
+ferme pas ce panneau et ne retire pas l'aura du mur ; l'overlay devient seulement non interactif afin
+de laisser le clic suivant poser le connecteur. Le modèle de porte par défaut est résolu avant ce
+clic. Le placement garde les
 `sourceEdgeKeys` de ce mur comme contrainte et ne peut donc pas sauter sur un autre côté de la salle.
 Le mur peut être droit ou arrondi. Sur un arc, le connecteur conserve son abscisse curviligne, son
 point d'ancrage exact, la tangente et la normale locales. La porte rigide s'aligne sur la tangente et
@@ -386,6 +392,8 @@ applique les arcs du contour et retire le bombé intérieur éventuel du mur. La
 l'intersection polygonale exacte. Le compilateur enregistre cette même empreinte et choisit un point
 de navigation contenu dans celle-ci : une passerelle ne peut donc ni être vue ni empruntée dans la
 partie qui sortirait d'une salle courbe ou profilée.
+La création de sa dalle lit les profils canoniques `floor` et `ceiling` du panneau, correspondant à
+**Sol** et **Plafond**. Elle ne dépend plus des anciennes clés d'éditeur `top/bottom`.
 
 ## Transformation des objets 3D
 
@@ -395,6 +403,9 @@ leur orientation dérivée du connecteur. L'échelle canonique est stockée dans
 `entity.state.transform.scale`, validée côté serveur, diffusée aux autres clients et consommée à la
 fois par le renderer, la collision d'occupation et l'occlusion de ligne de vue. Le GLB agrandi n'est
 donc jamais plus grand que son volume physique, ni l'inverse.
+Rotation et échelle sont appliquées immédiatement à l'instance du store pour prévisualiser le mesh.
+**Sauvegarder** persiste cette prévisualisation et la diffuse ; fermer le panneau avant sauvegarde
+restaure la transformation persistée.
 
 ## Coût de déplacement et effets
 

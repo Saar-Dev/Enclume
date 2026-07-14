@@ -555,7 +555,7 @@ export function applyFloorSelection(surfaceData, selection, tool, activeMaterial
   for (let x = area.minX; x <= area.maxX; x += 1) {
     for (let z = area.minZ; z <= area.maxZ; z += 1) {
       const top = materialOrTextureForTool({
-        tool: toolForMaterialFace(tool, 'top'),
+        tool: toolForMaterialFace(tool, 'floor'),
         packId: tool?.floorPackId,
         textureId: tool?.floorTexId,
         fallbackTexId: activeMaterial?.texId,
@@ -563,19 +563,20 @@ export function applyFloorSelection(surfaceData, selection, tool, activeMaterial
         seed: `floor:${x}:${z}:${formatLevel(y)}`,
       })
       const bottom = materialOrTextureForTool({
-        tool: toolForMaterialFace(tool, 'bottom'),
+        tool: toolForMaterialFace(tool, 'ceiling'),
         packId: tool?.ceilingPackId || tool?.floorPackId,
         textureId: tool?.ceilingTexId || tool?.floorTexId,
         fallbackTexId: top.tex || activeMaterial?.texId,
         availableBlocks,
         seed: `floor-bottom:${x}:${z}:${formatLevel(y)}`,
       })
-      if ((!top.tex && !top.material) || (!bottom.tex && !bottom.material)) continue
+      if (!top.tex && !top.material) continue
+      const resolvedBottom = bottom.tex || bottom.material ? bottom : top
       floors[floorKey(x, z, y)] = {
         ...(top.tex ? { topTex: top.tex } : {}),
-        ...(bottom.tex ? { bottomTex: bottom.tex } : {}),
+        ...(resolvedBottom.tex ? { bottomTex: resolvedBottom.tex } : {}),
         ...(top.material ? { topMaterial: top.material } : {}),
-        ...(bottom.material ? { bottomMaterial: bottom.material } : {}),
+        ...(resolvedBottom.material ? { bottomMaterial: resolvedBottom.material } : {}),
         y,
         level: yToLevel(y),
         thickness,

@@ -465,6 +465,11 @@ révélée. Aucun plancher intermédiaire n'est inventé et le plafond n'existe 
 supérieure. Les connecteurs verticaux sont découpés par tranche ou exposent uniquement leur palier
 courant. Les règles de picking et de placement continuent d'interroger leur tranche réelle.
 
+Le calcul graphique des murs situés devant la caméra reçoit l'identité de ce volume. Il teste donc
+toutes ses tranches visibles contre l'empreinte de son vrai sol, et pas uniquement les murs du
+`displayLevel`. Les parois avant deviennent transparentes comme dans une salle simple, tandis que
+les parois arrière et les salles voisines restent opaques.
+
 ### 7.2 Murs courbes et contours de salles
 
 Depuis `surface_data` v6, une courbe de salle est stockée dans `room.boundaryArcs`. Un arc référence

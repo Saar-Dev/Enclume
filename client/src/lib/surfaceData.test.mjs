@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   applyRoomBoundaryArc,
+  applyBridgeSelection,
   applyRoomWallAppearance,
   applyRoomWallElevationProfile,
   applyRoomSelection,
@@ -75,6 +76,34 @@ test('la surface extérieure de l eau utilise le sommet global de la carte', () 
 
   assert.ok(result.waterCells.length > 0)
   assert.deepEqual([...new Set(result.waterCells.map(cell => cell.topY))], [7.5])
+})
+
+test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () => {
+  const surface = emptySurface()
+  const next = applyBridgeSelection(surface, {
+    start: { x: 2, z: 3 },
+    end: { x: 2, z: 3 },
+  }, {
+    mode: 'bridge',
+    level: 1,
+    elevation: 2.5,
+    floorThickness: 0.25,
+    movementMultiplier: 1,
+    surfaceBlocking: 'solid',
+    surfaceMaterialMode: 'procedural',
+    materialProfiles: {
+      floor: { material: 'wood', paint: '#123456', wear: 0, dirt: 0, relief: 0 },
+      ceiling: { material: 'concrete', paint: '#654321', wear: 0, dirt: 0, relief: 0 },
+    },
+  }, null, [])
+  const bridge = next.floors['2:3:2.5']
+
+  assert.ok(bridge)
+  assert.equal(bridge.kind, 'bridge')
+  assert.equal(bridge.topMaterial.material, 'wood')
+  assert.equal(bridge.topMaterial.paint, '#123456')
+  assert.equal(bridge.bottomMaterial.material, 'concrete')
+  assert.equal(bridge.bottomMaterial.paint, '#654321')
 })
 
 test('un mur courbe produit des segments orientés avec une boîte de rendu tournée', () => {

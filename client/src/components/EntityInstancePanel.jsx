@@ -61,6 +61,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
     y,
     width: PANEL_W,
     height: PANEL_H_EST,
+    panelRef,
   })
 
   // ─── Drag header ─────────────────────────────────────────────────────────
@@ -99,6 +100,27 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting,      setDeleting]      = useState(false)
   const materialSlots = normalizeModelMaterialSlots(blueprint?.geometry)
+  const persistedTransformRef = useRef({
+    posX: Number(entity.pos_x) || 0,
+    posY: Number(entity.pos_y) || 0,
+    posZ: Number(entity.pos_z) || 0,
+    rotation: Number(entity.r) || 0,
+    state: entity.state,
+  })
+  const previewRef = useRef({ active: false })
+
+  useEffect(() => () => {
+    if (!previewRef.current.active) return
+    const persisted = persistedTransformRef.current
+    updateEntity({
+      id: entity.id,
+      pos_x: persisted.posX,
+      pos_y: persisted.posY,
+      pos_z: persisted.posZ,
+      r: persisted.rotation,
+      state: persisted.state,
+    })
+  }, [entity.id, updateEntity])
 
   useEffect(() => {
     setPosX(String(entity.pos_x ?? 0))
@@ -108,15 +130,30 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
     setScale(normalizeEntityScale(entity.state))
   }, [entity.id, entity.pos_x, entity.pos_y, entity.pos_z, entity.r, entity.state])
 
+  const previewTransform = useCallback((nextRotation, nextScale) => {
+    previewRef.current.active = true
+    updateEntity({
+      id: entity.id,
+      r: nextRotation,
+      state: withEntityScale(normalizeEntityState(entity.state), nextScale),
+    })
+  }, [entity.id, entity.state, updateEntity])
+
   const rotate = direction => {
     if (isWallPlaced) return
-    setRotation(current => (Number(current) + direction + 4) % 4)
+    const next = (Number(rotation) + direction + 4) % 4
+    setRotation(next)
+    previewTransform(next, scale)
   }
 
-  const patchScale = value => setScale(Math.max(
-    ENTITY_SCALE_MIN,
-    Math.min(ENTITY_SCALE_MAX, Math.round(Number(value) / ENTITY_SCALE_STEP) * ENTITY_SCALE_STEP),
-  ))
+  const patchScale = value => {
+    const next = Math.max(
+      ENTITY_SCALE_MIN,
+      Math.min(ENTITY_SCALE_MAX, Math.round(Number(value) / ENTITY_SCALE_STEP) * ENTITY_SCALE_STEP),
+    )
+    setScale(next)
+    previewTransform(rotation, next)
+  }
 
   const toggleInteraction = (id) => {
     setDisabledInteractions(prev =>
@@ -139,10 +176,11 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
       const nextPosY = Number.isFinite(Number(posY)) ? Number(posY) : Number(entity.pos_y) || 0
       const nextPosZ = Number.isFinite(Number(posZ)) ? Number(posZ) : Number(entity.pos_z) || 0
       const nextRotation = Math.max(0, Math.min(3, Number.parseInt(rotation, 10) || 0))
-      const transformChanged = nextPosX !== Number(entity.pos_x)
-        || nextPosY !== Number(entity.pos_y)
-        || nextPosZ !== Number(entity.pos_z)
-        || nextRotation !== Number(entity.r)
+      const persisted = persistedTransformRef.current
+      const transformChanged = nextPosX !== persisted.posX
+        || nextPosY !== persisted.posY
+        || nextPosZ !== persisted.posZ
+        || nextRotation !== persisted.rotation
       const res = await api.put(`/entities/${entity.id}`, {
         pos_x:                  nextPosX,
         pos_y:                  nextPosY,
@@ -155,6 +193,14 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
         state:                 withEntityScale({ ...normalizeEntityState(entity.state), materialOverrides }, scale),
         notes_gm:              notesGm.trim() || null,
       })
+      persistedTransformRef.current = {
+        posX: Number(res.data.entity.pos_x) || 0,
+        posY: Number(res.data.entity.pos_y) || 0,
+        posZ: Number(res.data.entity.pos_z) || 0,
+        rotation: Number(res.data.entity.r) || 0,
+        state: res.data.entity.state,
+      }
+      previewRef.current.active = false
       updateEntity(res.data.entity)
       socket?.emit(WS.ENTITY_UPDATED, {
         entityId: entity.id,
@@ -186,6 +232,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
     setDeleting(true)
     try {
       await api.delete(`/entities/${entity.id}`)
+      previewRef.current.active = false
       removeEntity(entity.id)
       socket?.emit(WS.ENTITY_DELETED, { entityId: entity.id })
       onClose()

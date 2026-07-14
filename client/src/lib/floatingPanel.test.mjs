@@ -14,7 +14,7 @@ test('un panneau flottant garde son en-tête dans la fenêtre', () => {
     height: 700,
     viewportWidth: 1000,
     viewportHeight: 600,
-  }), { left: 692, top: 552 })
+  }), { left: 692, top: 8 })
   assert.deepEqual(clampFloatingPanelPosition({
     left: -50,
     top: -20,
@@ -42,4 +42,15 @@ test('un panneau choisit automatiquement le côté libre de son ancrage', () => 
     viewportWidth: 1000,
     viewportHeight: 600,
   }), { left: 678, top: 150 })
+})
+
+test('un panneau agrandi remonte avant de sortir de la fenêtre', () => {
+  assert.deepEqual(clampFloatingPanelPosition({
+    left: 420,
+    top: 330,
+    width: 300,
+    height: 520,
+    viewportWidth: 1200,
+    viewportHeight: 700,
+  }), { left: 420, top: 172 })
 })

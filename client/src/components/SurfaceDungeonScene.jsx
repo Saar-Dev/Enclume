@@ -1916,12 +1916,13 @@ function WaterSheets({ waterCells, opacity = 0.16 }) {
   )
 }
 
-function displayedFloorCells(surface, displayLevel) {
+function displayedFloorCells(surface, displayLevel, cameraVolumeRoomId = null) {
   const cells = new Set()
   if (displayLevel === null) return cells
 
-  for (const room of Object.values(surface.rooms || {})) {
-    if (room?.floorEnabled === false || yToLevel(getRoomBaseY(room)) !== displayLevel) continue
+  for (const [roomId, room] of Object.entries(surface.rooms || {})) {
+    const belongsToCameraVolume = roomId === cameraVolumeRoomId
+    if (room?.floorEnabled === false || (!belongsToCameraVolume && yToLevel(getRoomBaseY(room)) !== displayLevel)) continue
     for (const cell of getRoomFootprintCells(room)) cells.add(`${cell.x}:${cell.z}`)
   }
 
@@ -1938,8 +1939,10 @@ function sameStringSet(left, right) {
   return true
 }
 
-function wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel) {
-  if (!wall || displayLevel === null || yToLevel(wallOpacityY(wall)) !== displayLevel) return false
+function wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel, cameraVolumeRoomId = null) {
+  if (!wall || displayLevel === null) return false
+  const belongsToCameraVolume = cameraVolumeRoomId && wall.roomIds?.includes(cameraVolumeRoomId)
+  if (!belongsToCameraVolume && yToLevel(wallOpacityY(wall)) !== displayLevel) return false
   if (floorCells.size === 0) return false
 
   const path = profiledWallPath(wall)
@@ -1971,13 +1974,16 @@ function wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel) {
   return false
 }
 
-function useOccludedWallIds(walls, surface, displayLevel) {
+function useOccludedWallIds(walls, surface, displayLevel, cameraVolumeRoomId = null) {
   const { camera } = useThree()
-  const floorCells = useMemo(() => displayedFloorCells(surface, displayLevel), [displayLevel, surface])
+  const floorCells = useMemo(
+    () => displayedFloorCells(surface, displayLevel, cameraVolumeRoomId),
+    [cameraVolumeRoomId, displayLevel, surface],
+  )
   const [occludedIds, setOccludedIds] = useState(() => new Set())
   const elapsedRef = useRef(0)
   const lastViewRef = useRef(null)
-  const inputsRef = useRef({ walls: null, floorCells: null, displayLevel: null })
+  const inputsRef = useRef({ walls: null, floorCells: null, displayLevel: null, cameraVolumeRoomId: null })
 
   useFrame((_, delta) => {
     elapsedRef.current += delta
@@ -1993,17 +1999,18 @@ function useOccludedWallIds(walls, surface, displayLevel) {
     const inputsChanged = inputsRef.current.walls !== walls
       || inputsRef.current.floorCells !== floorCells
       || inputsRef.current.displayLevel !== displayLevel
+      || inputsRef.current.cameraVolumeRoomId !== cameraVolumeRoomId
     if (!cameraMoved && !inputsChanged) return
 
     lastViewRef.current = {
       position: position.clone(),
       quaternion: quaternion.clone(),
     }
-    inputsRef.current = { walls, floorCells, displayLevel }
+    inputsRef.current = { walls, floorCells, displayLevel, cameraVolumeRoomId }
 
     const next = new Set()
     for (const wall of walls) {
-      if (wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel)) {
+      if (wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel, cameraVolumeRoomId)) {
         next.add(wall.logicalWallId || wall.id)
       }
     }
@@ -2091,7 +2098,7 @@ function SurfaceDungeonScene({
     () => [...roomWallSegments, ...surfaceWallSegments],
     [roomWallSegments, surfaceWallSegments],
   )
-  const occludedWallIds = useOccludedWallIds(allWallSegments, surface, displayLevel)
+  const occludedWallIds = useOccludedWallIds(allWallSegments, surface, displayLevel, cameraVolumeRoomId)
   const structureIsVisible = (y) => displayLevel === null || yToLevel(y) <= displayLevel
   const worldPointIsVisible = (x, z, y) => (
     isWorldPointVisibleAtLevel(surface, displayLevel, x, z, y)
