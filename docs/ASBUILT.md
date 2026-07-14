@@ -408,6 +408,27 @@ monde que la FSM doit appeler, les zones de conflit manuel et la matrice de vali
 
 ---
 
+## Moteur de monde — Phase 16 ✅
+
+- les panneaux physiques de salle conservent et agrègent désormais les `sourceEdgeKeys` de leurs
+  chemins canoniques. La contrainte « porte sur le mur actif » est donc un contrat du modèle du
+  monde, et plus seulement un état temporaire de l'interface ;
+- la pose de porte utilise un picking 3D vertical limité aux panneaux du mur sélectionné. Un mur
+  droit, profilé ou arrondi peut être visé sur toute sa hauteur sans projection préalable sur le
+  plan du sol ;
+- l'aperçu de porte réutilise `ConnectorSegment` et affiche le vrai GLB choisi, sa tangente locale et
+  ses matériaux. Une pose refusée ne quitte plus le mode connecteur et ne désélectionne plus le mur ;
+- la coupe caméra des salles multi-hauteur échantillonne leur sol réel puis teste l'intersection
+  caméra→sol avec chaque chemin et chaque tranche verticale. Seules les tranches qui cachent
+  effectivement le sol deviennent transparentes ; les murs arrière, latéraux ou supérieurs non
+  traversés restent visibles ;
+- les panneaux contextuels utilisent un écart latéral de 56 px, basculent à gauche si nécessaire et
+  conservent leur recalage dynamique dans le viewport ;
+- état validé : 158 tests monde/serveur/client passent, build Vite de production valide et ESLint
+  ciblé sans erreur. Le lint global garde son passif connu dans les fichiers combat non modifiés.
+
+---
+
 ## Structure du projet
 ```
 Enclume/

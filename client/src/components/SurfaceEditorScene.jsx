@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Grid, Line, MapControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
+import SurfaceDungeonScene, { ConnectorSegment } from './SurfaceDungeonScene.jsx'
 import {
   SURFACE_FINE,
   STORY_HEIGHT,
@@ -37,6 +37,7 @@ import {
   parseFloorKey,
   normalizeCellSelection,
   roomToSurfaceToolPatch,
+  roomsWallRenderPaths,
   roomsWallSegments,
   stairStepBoxes,
   yToLevel,
@@ -466,6 +467,14 @@ function StairPreview({ drag, surfaceTool, activeMaterial, availableBlocks }) {
 }
 
 function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
+  const curveWallsById = useMemo(() => {
+    const rooms = normalizeSurfaceData(surfaceData).rooms
+    return new Map(
+      roomsWallRenderPaths(rooms)
+        .filter(wall => wall.axis === 'arc' && wall.curveId)
+        .map(wall => [wall.curveId, wall]),
+    )
+  }, [surfaceData])
   if (!drag) return null
   const connector = surfaceTool?.connectorType === 'door'
     ? makeDoorConnectorFromWallPoint(surfaceData, drag.end, surfaceTool)
@@ -475,30 +484,13 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
   if (!connector) return null
 
   if (connector.type === 'door') {
-    const fine = SURFACE_FINE
-    const wallDepth = Math.max(0.28, (Number(connector.thickness) || 1) / fine + 0.12)
-    const x0 = Number(connector.x0) / fine
-    const x1 = Number(connector.x1) / fine
-    const z0 = Number(connector.z0) / fine
-    const z1 = Number(connector.z1) / fine
-    const segmentLength = Math.hypot(x1 - x0, z1 - z0)
-    const width = connector.axis === 'segment'
-      ? Math.max(0.2, segmentLength)
-      : connector.axis === 'x' ? Math.max(0.2, Math.abs(x1 - x0)) : wallDepth
-    const depth = connector.axis === 'segment'
-      ? wallDepth
-      : connector.axis === 'z' ? Math.max(0.2, Math.abs(z1 - z0)) : wallDepth
-    const x = connector.axis === 'segment' || connector.axis === 'x' ? (x0 + x1) / 2 : x0
-    const z = connector.axis === 'segment' || connector.axis === 'z' ? (z0 + z1) / 2 : z0
-    const rotationY = connector.axis === 'segment'
-      ? Number(connector.rotationY) || -Math.atan2(z1 - z0, x1 - x0)
-      : 0
-    const height = Number(connector.height) || 2
     return (
-      <mesh position={[x, connector.y + height / 2, z]} rotation={[0, rotationY, 0]} renderOrder={35}>
-        <boxGeometry args={[width, height, depth]} />
-        <meshBasicMaterial color="#f97316" transparent opacity={0.55} depthWrite={false} />
-      </mesh>
+      <ConnectorSegment
+        connector={{ id: 'connector-preview', ...connector }}
+        curveWall={connector.curveId ? curveWallsById.get(connector.curveId) || null : null}
+        opacity={0.68}
+        displayLevel={Number(connector.level) || 0}
+      />
     )
   }
 
@@ -555,18 +547,23 @@ export default function SurfaceEditorScene({
     controls.update()
   }, [displayLevel])
 
-  const getWorldPoint = useCallback((clientX, clientY) => {
-    groundPlane.current.constant = -getEditPlaneY(surfaceTool)
+  const setPointerRay = useCallback((clientX, clientY) => {
     const rect = gl.domElement.getBoundingClientRect()
     const mouse = new THREE.Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -((clientY - rect.top) / rect.height) * 2 + 1
     )
     raycaster.current.setFromCamera(mouse, camera)
+    return raycaster.current.ray
+  }, [camera, gl])
+
+  const getWorldPoint = useCallback((clientX, clientY) => {
+    groundPlane.current.constant = -getEditPlaneY(surfaceTool)
+    const ray = setPointerRay(clientX, clientY)
     const target = new THREE.Vector3()
-    const hit = raycaster.current.ray.intersectPlane(groundPlane.current, target)
+    const hit = ray.intersectPlane(groundPlane.current, target)
     return hit ? target : null
-  }, [camera, gl, surfaceTool])
+  }, [setPointerRay, surfaceTool])
 
   const getFloorCell = useCallback((clientX, clientY) => {
     const point = getWorldPoint(clientX, clientY)
@@ -652,6 +649,62 @@ export default function SurfaceEditorScene({
     const fz = Math.round(point.z * SURFACE_FINE)
     return { fx, fz }
   }, [getWorldPoint, roomWallPanels, surfaceData, surfaceTool])
+
+  const getSelectedDoorWallPoint = useCallback((clientX, clientY) => {
+    const selectedRoomId = surfaceTool?.selectedRoomId || null
+    const allowedEdgeKeys = new Set(
+      (surfaceTool?.connectorWallEdgeKeys || surfaceTool?.selectedRoomWallKeys || []).map(String),
+    )
+    if (!selectedRoomId || allowedEdgeKeys.size === 0) return null
+
+    const ray = setPointerRay(clientX, clientY)
+    const levelY = getToolElevation(surfaceTool)
+    let best = null
+
+    for (const panel of roomWallPanels) {
+      if (!sameLevel(panel.y, levelY)) continue
+      if (!panel.roomIds?.includes(selectedRoomId)) continue
+      if (!(panel.sourceEdgeKeys || []).some(key => allowedEdgeKeys.has(String(key)))) continue
+
+      const x0 = Number(panel.x0) / SURFACE_FINE
+      const z0 = Number(panel.z0) / SURFACE_FINE
+      const x1 = Number(panel.x1) / SURFACE_FINE
+      const z1 = Number(panel.z1) / SURFACE_FINE
+      const dx = x1 - x0
+      const dz = z1 - z0
+      const lengthSquared = dx * dx + dz * dz
+      if (![x0, z0, x1, z1].every(Number.isFinite) || lengthSquared <= 1e-8) continue
+
+      const length = Math.sqrt(lengthSquared)
+      const plane = new THREE.Plane(
+        new THREE.Vector3(-dz / length, 0, dx / length),
+      ).setFromNormalAndCoplanarPoint(
+        new THREE.Vector3(-dz / length, 0, dx / length),
+        new THREE.Vector3(x0, Number(panel.y) || 0, z0),
+      )
+      const hit = ray.intersectPlane(plane, new THREE.Vector3())
+      if (!hit) continue
+
+      const bottom = Number(panel.y) || 0
+      const top = bottom + Math.max(0.01, Number(panel.height) || STORY_HEIGHT)
+      if (hit.y < bottom - 0.08 || hit.y > top + 0.08) continue
+
+      const along = ((hit.x - x0) * dx + (hit.z - z0) * dz) / lengthSquared
+      const endMargin = Math.max(0.04, (Number(panel.thickness) || 1) / (2 * SURFACE_FINE)) / length
+      if (along < -endMargin || along > 1 + endMargin) continue
+
+      const clampedAlong = clamp(along, 0, 1)
+      const distance = hit.distanceToSquared(ray.origin)
+      if (best && distance >= best.distance) continue
+      best = {
+        distance,
+        fx: (x0 + dx * clampedAlong) * SURFACE_FINE,
+        fz: (z0 + dz * clampedAlong) * SURFACE_FINE,
+      }
+    }
+
+    return best ? { fx: best.fx, fz: best.fz, sticky: true } : null
+  }, [roomWallPanels, setPointerRay, surfaceTool])
 
   const findConnectorAtWorldPoint = useCallback((point, level) => {
     if (!point) return null
@@ -805,11 +858,19 @@ export default function SurfaceEditorScene({
         return
       }
       const mode = surfaceTool?.mode || 'select'
-      const usesWallPoint = mode === 'wall' || (mode === 'connector' && surfaceTool?.connectorType === 'door')
-      const start = usesWallPoint
-        ? getWallPoint(e.clientX, e.clientY)
-        : getFloorCell(e.clientX, e.clientY)
-      if (!start) return
+      const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
+      const start = placesDoor
+        ? getSelectedDoorWallPoint(e.clientX, e.clientY)
+        : mode === 'wall'
+          ? getWallPoint(e.clientX, e.clientY)
+          : getFloorCell(e.clientX, e.clientY)
+      if (!start) {
+        if (placesDoor) {
+          e.preventDefault()
+          e.stopPropagation()
+        }
+        return
+      }
 
       const nextDrag = { mode, start, end: start }
       dragRef.current = nextDrag
@@ -822,14 +883,14 @@ export default function SurfaceEditorScene({
     const handleMouseMove = (e) => {
       if (!dragRef.current) {
         if (surfaceTool?.mode === 'connector') {
-          const usesWallPoint = surfaceTool?.connectorType === 'door'
-          const point = usesWallPoint
-            ? getWallPoint(e.clientX, e.clientY)
+          const placesDoor = surfaceTool?.connectorType === 'door'
+          const point = placesDoor
+            ? getSelectedDoorWallPoint(e.clientX, e.clientY)
             : getFloorCell(e.clientX, e.clientY)
           setHoverPreview(prev => {
             if (!point) return prev ? null : prev
             const next = { mode: 'connector', start: point, end: point }
-            const same = usesWallPoint
+            const same = placesDoor
               ? prev?.end?.fx === point.fx && prev?.end?.fz === point.fz
               : prev?.end?.x === point.x && prev?.end?.z === point.z
             return same ? prev : next
@@ -842,10 +903,12 @@ export default function SurfaceEditorScene({
       setHoverPreview(prev => (prev ? null : prev))
       if ((e.buttons & 2) !== 0 && cancelDrag(e)) return
       const mode = dragRef.current.mode
-      const usesWallPoint = mode === 'wall' || (mode === 'connector' && surfaceTool?.connectorType === 'door')
-      const end = usesWallPoint
-        ? getWallPoint(e.clientX, e.clientY)
-        : getFloorCell(e.clientX, e.clientY)
+      const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
+      const end = placesDoor
+        ? getSelectedDoorWallPoint(e.clientX, e.clientY)
+        : mode === 'wall'
+          ? getWallPoint(e.clientX, e.clientY)
+          : getFloorCell(e.clientX, e.clientY)
       if (!end) return
       const previousEnd = dragRef.current.end
       const usesFinePoint = mode === 'wall' || (mode === 'connector' && surfaceTool?.connectorType === 'door')
@@ -865,10 +928,12 @@ export default function SurfaceEditorScene({
       if (!currentDrag) return
 
       const mode = currentDrag.mode
-      const usesWallPoint = mode === 'wall' || (mode === 'connector' && surfaceTool?.connectorType === 'door')
-      const end = usesWallPoint
-        ? (getWallPoint(e.clientX, e.clientY) || currentDrag.end)
-        : (getFloorCell(e.clientX, e.clientY) || currentDrag.end)
+      const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
+      const end = placesDoor
+        ? (getSelectedDoorWallPoint(e.clientX, e.clientY) || currentDrag.end)
+        : mode === 'wall'
+          ? (getWallPoint(e.clientX, e.clientY) || currentDrag.end)
+          : (getFloorCell(e.clientX, e.clientY) || currentDrag.end)
       const finalDrag = { ...currentDrag, end }
       dragRef.current = null
       clearPendingDrag()
@@ -975,8 +1040,19 @@ export default function SurfaceEditorScene({
           : surfaceTool?.connectorType === 'ladder'
             ? applyLadderConnector(surfaceData, finalDrag.end, surfaceTool)
             : applyElevatorConnector(surfaceData, finalDrag.end, surfaceTool)
-        if (nextData !== surfaceData) onSurfaceDataChange(nextData)
-        onSurfaceToolChange?.({ ...surfaceTool, mode: 'select' })
+        if (nextData === surfaceData) {
+          onSurfaceToolChange?.({
+            ...surfaceTool,
+            roomArcError: surfaceTool?.connectorType === 'door'
+              ? 'La porte doit être posée sur le mur sélectionné.'
+              : 'Ce connecteur ne peut pas être posé ici.',
+          })
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        }
+        onSurfaceDataChange(nextData)
+        onSurfaceToolChange?.({ ...surfaceTool, mode: 'select', roomArcError: null })
         setHoverPreview(null)
         e.preventDefault()
         e.stopPropagation()
@@ -1039,6 +1115,7 @@ export default function SurfaceEditorScene({
     findConnectorAtWorldPoint,
     onRuntimeEffectCreate,
     getFloorCell,
+    getSelectedDoorWallPoint,
     getWallPoint,
     getWorldPoint,
     onSurfaceConnectorSelect,

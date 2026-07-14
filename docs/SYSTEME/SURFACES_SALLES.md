@@ -94,8 +94,13 @@ Une salle `heightLevels > 1` existe dans chaque tranche verticale qu'elle traver
 volume ouvert. Tous les étages inférieurs au niveau de coupe sont rendus, sans transparence. Quand
 le point visé par la caméra se trouve dans une salle multi-hauteur, les murs de toutes ses tranches,
 y compris au-dessus du niveau courant, sont rendus pour montrer le volume complet ; les autres
-salles supérieures restent masquées. Une salle profonde conserve ses murs descendants et son vide
-continu : un puits doit donc paraître profond. Aucun plancher intermédiaire n'est créé automatiquement. Une future trappe doit
+salles supérieures restent masquées. Ces murs ne deviennent pas transparents simplement parce
+qu'ils sont « devant » dans le plan : chaque tranche verticale est testée contre les rayons allant
+de la caméra aux points praticables du vrai sol de la salle. Seules les tranches effectivement
+traversées entre caméra et sol reçoivent l'opacité de coupe ; murs arrière, latéraux, supérieurs non
+traversés et murs des autres niveaux restent opaques. Une salle profonde conserve ses murs
+descendants et son vide continu : un puits doit donc paraître profond. Aucun plancher intermédiaire
+n'est créé automatiquement. Une future trappe doit
 être portée par un connecteur vertical —
 typiquement une échelle — avec son propre état ouvert/fermé ; elle ne révèle jamais l'étage inférieur
 entier.
@@ -263,7 +268,9 @@ L’outil Salle est l’outil de référence.
   mur, objet et connecteur 3D restent déplaçables après leur placement automatique. Un
   `ResizeObserver` mesure leur taille réelle : ouvrir une section recale le panneau vers le haut si
   son bas devait sortir de l'écran. Le panneau reste entièrement visible dès que le viewport peut le
-  contenir et utilise sinon son défilement interne.
+  contenir et utilise sinon son défilement interne. Son ancrage automatique garde un écart latéral
+  de 56 px avec l'objet ; si la place manque à droite, le panneau bascule à gauche avant d'être
+  contraint dans le viewport.
 - Les réglages initiaux d'usure, de saleté et de relief valent `0`. Seule une modification explicite
   de l'utilisateur crée un aspect altéré ou un relief géométrique.
 - Chaque panneau de sélection destructible expose son action au même endroit : salle, mur et objet
@@ -307,8 +314,13 @@ faire perdre son état runtime.
 Une porte se pose exclusivement depuis le panneau du mur sélectionné. Passer en pose de porte ne
 ferme pas ce panneau et ne retire pas l'aura du mur ; l'overlay devient seulement non interactif afin
 de laisser le clic suivant poser le connecteur. Le modèle de porte par défaut est résolu avant ce
-clic. Le placement garde les
-`sourceEdgeKeys` de ce mur comme contrainte et ne peut donc pas sauter sur un autre côté de la salle.
+clic. Le survol et le clic lancent un rayon 3D contre les plans verticaux du seul mur actif, au lieu
+de projeter la souris sur le sol puis de chercher un mur voisin. L'aperçu emploie le vrai modèle GLB
+choisi, avec son échelle, sa tangente et ses réglages de matière. Un clic invalide conserve le mode de
+pose et la sélection afin de pouvoir corriger le curseur. Le placement garde les `sourceEdgeKeys` de
+ce mur comme contrainte et ne peut donc pas sauter sur un autre côté de la salle. La construction des
+panneaux physiques doit agréger et conserver ces clés : les perdre au rendu rendrait tout placement
+contraint impossible, même si l'interface conserve visuellement la sélection.
 Le mur peut être droit ou arrondi. Sur un arc, le connecteur conserve son abscisse curviligne, son
 point d'ancrage exact, la tangente et la normale locales. La porte rigide s'aligne sur la tangente et
 s'ouvre du côté de la normale ; elle ne dépend donc ni d'une corde d'approximation ni du sens dans

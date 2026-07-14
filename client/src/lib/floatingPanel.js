@@ -33,7 +33,7 @@ export function floatingPanelPositionBesideAnchor({
   height,
   viewportWidth = window.innerWidth,
   viewportHeight = window.innerHeight,
-  gap = 22,
+  gap = 56,
 }) {
   const anchorX = Number(x) || viewportWidth / 2
   const anchorY = Number(y) || viewportHeight / 2

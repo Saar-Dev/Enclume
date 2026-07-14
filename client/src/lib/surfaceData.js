@@ -1264,6 +1264,7 @@ function ensureRoomWallPanel(panels, key, data) {
       backMaterial: null,
       material: roomWallInteriorMaterial(data.room),
       roomIds: [],
+      sourceEdgeKeys: [],
     })
   }
 
@@ -1275,6 +1276,12 @@ function ensureRoomWallPanel(panels, key, data) {
   wall.blocksMovement = wall.blocksMovement || data.room.blocksMovement
   wall.blocksWater = wall.blocksWater || data.room.blocksWater
   if (data.room.id && !wall.roomIds.includes(data.room.id)) wall.roomIds.push(data.room.id)
+  if (Array.isArray(data.sourceEdgeKeys)) {
+    wall.sourceEdgeKeys = [...new Set([
+      ...(wall.sourceEdgeKeys || []),
+      ...data.sourceEdgeKeys.map(String),
+    ])]
+  }
   return wall
 }
 

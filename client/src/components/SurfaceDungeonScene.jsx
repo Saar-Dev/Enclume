@@ -8,6 +8,7 @@ import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
+import { evenlySampleTargets, wallSliceOccludesFloorTargets } from '../lib/cameraCutaway.js'
 import {
   multiPolygonContours,
   multiPolygonContainsPoint,
@@ -1583,7 +1584,7 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
   )
 }
 
-function ConnectorSegment({ connector, curveWall = null, opacity = 1, selected = false, onPointerSelect = null, displayLevel = null }) {
+export function ConnectorSegment({ connector, curveWall = null, opacity = 1, selected = false, onPointerSelect = null, displayLevel = null }) {
   const handlePointerDown = useCallback((event) => {
     if (!onPointerSelect || !connector?.id) return
     event.stopPropagation()
@@ -1916,21 +1917,42 @@ function WaterSheets({ waterCells, opacity = 0.16 }) {
   )
 }
 
-function displayedFloorCells(surface, displayLevel, cameraVolumeRoomId = null) {
-  const cells = new Set()
-  if (displayLevel === null) return cells
+function displayedFloorTargets(surface, displayLevel, cameraVolumeRoomId = null) {
+  const targets = []
+  if (displayLevel === null) return targets
 
   for (const [roomId, room] of Object.entries(surface.rooms || {})) {
     const belongsToCameraVolume = roomId === cameraVolumeRoomId
     if (room?.floorEnabled === false || (!belongsToCameraVolume && yToLevel(getRoomBaseY(room)) !== displayLevel)) continue
-    for (const cell of getRoomFootprintCells(room)) cells.add(`${cell.x}:${cell.z}`)
+    const normalizedRoom = { id: roomId, ...room }
+    const floorSlice = roomSliceAtLevel(normalizedRoom, 0, surface.rooms, STORY_HEIGHT)
+    const roomTargets = getRoomFootprintCells(room)
+      .filter(cell => !floorSlice || multiPolygonContainsPoint(floorSlice.footprint, {
+        x: cell.x + 0.5,
+        z: cell.z + 0.5,
+      }))
+      .map(cell => ({
+        x: cell.x + 0.5,
+        y: getRoomBaseY(room) + getRoomFloorThickness(room) / 2,
+        z: cell.z + 0.5,
+        roomId,
+      }))
+    targets.push(...evenlySampleTargets(roomTargets, 256))
   }
 
+  const standaloneTargets = []
   for (const [id, floor] of Object.entries(surface.floors || {})) {
     const parsed = parseFloorKey(id, floor)
-    if (yToLevel(parsed.y) === displayLevel) cells.add(`${parsed.x}:${parsed.z}`)
+    if (yToLevel(parsed.y) !== displayLevel) continue
+    standaloneTargets.push({
+      x: parsed.x + 0.5,
+      y: parsed.y + getFloorThickness(floor) / 2,
+      z: parsed.z + 0.5,
+      roomId: null,
+    })
   }
-  return cells
+  targets.push(...evenlySampleTargets(standaloneTargets, 256))
+  return targets
 }
 
 function sameStringSet(left, right) {
@@ -1939,51 +1961,34 @@ function sameStringSet(left, right) {
   return true
 }
 
-function wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel, cameraVolumeRoomId = null) {
+function wallOccludesDisplayedFloor(wall, camera, floorTargets, displayLevel, cameraVolumeRoomId = null) {
   if (!wall || displayLevel === null) return false
   const belongsToCameraVolume = cameraVolumeRoomId && wall.roomIds?.includes(cameraVolumeRoomId)
   if (!belongsToCameraVolume && yToLevel(wallOpacityY(wall)) !== displayLevel) return false
-  if (floorCells.size === 0) return false
+  if (floorTargets.length === 0) return false
 
   const path = profiledWallPath(wall)
-  const halfThickness = Math.max(1, Number(wall.thickness) || 1) / (2 * SURFACE_FINE)
-  for (let pathIndex = 0; pathIndex < path.length - 1; pathIndex += 1) {
-    const from = path[pathIndex]
-    const to = path[pathIndex + 1]
-    const dx = to.x - from.x
-    const dz = to.z - from.z
-    const length = Math.hypot(dx, dz)
-    if (length <= 1e-6) continue
-    const normalX = -dz / length
-    const normalZ = dx / length
-    const midX = (from.x + to.x) / 2
-    const midZ = (from.z + to.z) / 2
-    const cameraSide = Math.sign(
-      (camera.position.x - midX) * normalX
-      + (camera.position.z - midZ) * normalZ,
-    )
-    if (cameraSide === 0) continue
-    const sampleCount = Math.max(1, Math.ceil(length * 4))
-    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
-      const t = (sampleIndex + 0.5) / sampleCount
-      const floorX = from.x + dx * t - normalX * cameraSide * (halfThickness + 0.03)
-      const floorZ = from.z + dz * t - normalZ * cameraSide * (halfThickness + 0.03)
-      if (floorCells.has(`${Math.floor(floorX)}:${Math.floor(floorZ)}`)) return true
-    }
-  }
-  return false
+  const bottom = Number(wall.y) || 0
+  return wallSliceOccludesFloorTargets({
+    camera: camera.position,
+    wallPath: path,
+    wallBottom: bottom,
+    wallTop: bottom + Math.max(0.01, Number(wall.height) || STORY_HEIGHT),
+    targets: floorTargets,
+    wallRoomIds: wall.roomIds || [],
+  })
 }
 
 function useOccludedWallIds(walls, surface, displayLevel, cameraVolumeRoomId = null) {
   const { camera } = useThree()
-  const floorCells = useMemo(
-    () => displayedFloorCells(surface, displayLevel, cameraVolumeRoomId),
+  const floorTargets = useMemo(
+    () => displayedFloorTargets(surface, displayLevel, cameraVolumeRoomId),
     [cameraVolumeRoomId, displayLevel, surface],
   )
   const [occludedIds, setOccludedIds] = useState(() => new Set())
   const elapsedRef = useRef(0)
   const lastViewRef = useRef(null)
-  const inputsRef = useRef({ walls: null, floorCells: null, displayLevel: null, cameraVolumeRoomId: null })
+  const inputsRef = useRef({ walls: null, floorTargets: null, displayLevel: null, cameraVolumeRoomId: null })
 
   useFrame((_, delta) => {
     elapsedRef.current += delta
@@ -1997,7 +2002,7 @@ function useOccludedWallIds(walls, surface, displayLevel, cameraVolumeRoomId = n
       || previous.position.distanceToSquared(position) > 0.0004
       || 1 - Math.abs(previous.quaternion.dot(quaternion)) > 0.00002
     const inputsChanged = inputsRef.current.walls !== walls
-      || inputsRef.current.floorCells !== floorCells
+      || inputsRef.current.floorTargets !== floorTargets
       || inputsRef.current.displayLevel !== displayLevel
       || inputsRef.current.cameraVolumeRoomId !== cameraVolumeRoomId
     if (!cameraMoved && !inputsChanged) return
@@ -2006,11 +2011,11 @@ function useOccludedWallIds(walls, surface, displayLevel, cameraVolumeRoomId = n
       position: position.clone(),
       quaternion: quaternion.clone(),
     }
-    inputsRef.current = { walls, floorCells, displayLevel, cameraVolumeRoomId }
+    inputsRef.current = { walls, floorTargets, displayLevel, cameraVolumeRoomId }
 
     const next = new Set()
     for (const wall of walls) {
-      if (wallOccludesDisplayedFloor(wall, camera, floorCells, displayLevel, cameraVolumeRoomId)) {
+      if (wallOccludesDisplayedFloor(wall, camera, floorTargets, displayLevel, cameraVolumeRoomId)) {
         next.add(wall.logicalWallId || wall.id)
       }
     }

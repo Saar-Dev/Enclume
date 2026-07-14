@@ -33,7 +33,7 @@ test('un panneau choisit automatiquement le côté libre de son ancrage', () => 
     height: 300,
     viewportWidth: 1000,
     viewportHeight: 600,
-  }), { left: 422, top: 150 })
+  }), { left: 456, top: 150 })
   assert.deepEqual(floatingPanelPositionBesideAnchor({
     x: 900,
     y: 300,
@@ -41,7 +41,7 @@ test('un panneau choisit automatiquement le côté libre de son ancrage', () => 
     height: 300,
     viewportWidth: 1000,
     viewportHeight: 600,
-  }), { left: 678, top: 150 })
+  }), { left: 644, top: 150 })
 })
 
 test('un panneau agrandi remonte avant de sortir de la fenêtre', () => {

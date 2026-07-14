@@ -84,8 +84,10 @@ combat ne doit reconstruire cette interface depuis les meshes.
 - seul le plafond qui ferme le niveau courant utilise l'opacité de coupe ;
 - une salle multi-hauteur conserve son vide et ses murs descendants, sans plancher implicite ;
 - les connecteurs inférieurs restent visibles ;
-- la transparence de caméra s'applique à un mur logique complet, pas à ses triangles ou aux morceaux
-  créés par une porte ;
+- la transparence de caméra est décidée par tranche verticale à partir des intersections
+  caméra→vrai sol. Elle s'applique alors au mur logique de cette tranche, pas à ses triangles ni aux
+  morceaux créés par une porte. Ne pas réintroduire un simple test « face avant » qui rendrait
+  transparentes toutes les tranches d'un mur multi-hauteur ;
 - les bouchons internes des découpes de porte ne sont pas rendus.
 
 La visibilité graphique d'un étage inférieur ne lui donne pas l'autorité de support de placement
@@ -104,6 +106,9 @@ dans l'éditeur courant. Ne pas confondre rendu, picking éditeur et collision r
 - la transition `select -> connector/door` conserve `selectedRoomWallKeys` et
   `connectorWallEdgeKeys`. Une fusion qui ferme le panneau ou masque la sélection à ce moment casse
   la pose de porte ;
+- `roomsWallSegments(...)` doit transporter les `sourceEdgeKeys` des chemins canoniques jusque dans
+  les panneaux physiques. Le picking de porte rayonne uniquement contre ces panneaux sélectionnés
+  et son aperçu instancie le même modèle que le connecteur final ;
 - les dalles libres et passerelles lisent les profils d'apparence `floor/ceiling`, jamais les anciens
   noms d'outil `top/bottom`.
 
@@ -210,7 +215,8 @@ Scénarios manuels indispensables :
 - niveau supérieur : tous les étages inférieurs opaques ;
 - mur droit et arc avec porte : transparence monobloc sans bouchons visibles ;
 - salle multi-hauteur : profil vertical unique sur toute la hauteur et murs supérieurs visibles
-  uniquement lorsque la caméra vise ce volume ;
+  uniquement lorsque la caméra vise ce volume ; seules les tranches coupant réellement un rayon
+  caméra→sol deviennent transparentes ;
 - passerelle le long d'un arc profilé : aucune dalle visible ou praticable hors de la salle ;
 - objet redimensionné : même emprise au rendu, au placement/collision et en LOS après rechargement ;
 - panneau de mur : identifiant copiable, halo complet, porte contrainte au mur actif ;

@@ -653,6 +653,7 @@ test('une porte sur un arc utilise le point, la tangente et la normale du mur ca
   const door = makeDoorConnectorFromWallPoint(surface, wallPoint, {
     selectedRoomId: 'rounded',
     level: 0,
+    connectorWallEdgeKeys: selected,
     connectorModelGeometry: { width: 0.8, depth: 0.2, height: 2 },
   })
 
@@ -667,6 +668,15 @@ test('une porte sur un arc utilise le point, la tangente et la normale du mur ca
     door.anchorZ - Number(curvePanel.curveCenterZ),
   ) - Number(curvePanel.curveRadius)) < 1e-6)
   assert.equal(roomsWallRenderPaths(surface.rooms).filter(wall => wall.axis === 'arc').length, 1)
+
+  const unrelatedWall = getRoomBoundaryWallRuns(rounded)
+    .find(wall => wall.side === 'east')
+  assert.equal(makeDoorConnectorFromWallPoint(surface, wallPoint, {
+    selectedRoomId: 'rounded',
+    level: 0,
+    connectorWallEdgeKeys: unrelatedWall.edgeKeys,
+    connectorModelGeometry: { width: 0.8, depth: 0.2, height: 2 },
+  }), null)
 })
 
 test('un profil de mur multi étage est continu sur toute la hauteur', () => {
