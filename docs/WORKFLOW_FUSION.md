@@ -71,6 +71,8 @@ le nouvel environnement.
 - sauvegarde : `/home/codex/backups/enclume-pre-fusion-20260715-110349` ;
 - worktree commun : `/home/codex/Enclume-fusion` ;
 - branche commune : `integration`.
+- premier merge commun : `1f048cd` ;
+- déploiement : services `enclume-fusion-*` actifs, smoke Chromium validé sur `8393`.
 
 Cette première fusion importe le reskin et les réglages de campagne récents du cousin. Le moteur
 monde v12, ses routes de persistance, ses migrations et ses services spatiaux restent l'autorité.

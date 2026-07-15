@@ -7,7 +7,7 @@ développement existants restent inchangés : le cousin conserve `8193/8194` et 
 conserve `8293/8294` et `vtt_codex`. Le worktree `/home/codex/Enclume-fusion`, branche `integration`,
 est réservé à la validation commune sur `8393/8394` avec la base `vtt_fusion`.
 
-La première fusion part de `92ae9a9` et importe `bad0190` depuis `origin/master`. Elle exclut
+La première fusion, commit à deux parents `1f048cd`, part de `92ae9a9` et importe `bad0190` depuis `origin/master`. Elle exclut
 explicitement `origin/fusion-kiwi` (`37703bf`), dont l'éditeur Surface v2 est remplacé par le moteur
 monde v12. Le détail des responsabilités reste dans `docs/FUSION_PROJET_COUSIN.md` et le cycle de
 livraison dans `docs/WORKFLOW_FUSION.md`.
@@ -19,15 +19,17 @@ Avant toute mutation, un point de restauration complet a été créé :
 - contenu vérifié : bundle Git, configuration systemd/.env, dump `vtt_codex`, archive MinIO et
   sommes SHA-256.
 
-L'intégration possède des unités versionnées `deploy/enclume-fusion-client.service` et
-`deploy/enclume-fusion-server.service`. Le client impose `--strictPort` sur 8393 et l'API écoute sur
-8394. Les services historiques ne sont jamais arrêtés ou redémarrés par un déploiement de fusion.
+Les unités versionnées `deploy/enclume-fusion-client.service` et
+`deploy/enclume-fusion-server.service` sont actives et activées au démarrage. Le client impose
+`--strictPort` sur 8393 et l'API écoute sur 8394. Les services historiques n'ont pas été arrêtés ou
+redémarrés par ce déploiement.
 
 La validation du merge a détecté puis corrigé deux défauts de la tête importée : une fermeture de
 commentaire `*/` incluse dans le texte d'un commentaire CSS empêchait la minification Lightning CSS,
 et `CampaignSettingsPage.jsx` conservait une variable `catch` inutilisée ainsi qu'une dépendance de
 hook manquante. Après correction : 124 tests monde/serveur, 28 tests Surface, ESLint ciblé sans
 erreur et build Vite de production passent.
+Le smoke Playwright Chromium passe également sur `http://127.0.0.1:8393` sans exception JavaScript.
 
 ---
 

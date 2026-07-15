@@ -10,6 +10,7 @@
 - branche monde source : `codex/world-engine-integration`, tête `92ae9a9` ;
 - branche d'intégration commune : `integration`, worktree `/home/codex/Enclume-fusion` ;
 - tête cousin importée : `bad0190` depuis `origin/master` ;
+- premier merge commun : `1f048cd` ;
 - branche Surface v2 exclue : `37703bf` depuis `origin/fusion-kiwi` ;
 - première fusion combat/monde : `8276086` ;
 - parent combat historique : `255736d` ;

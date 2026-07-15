@@ -1,12 +1,14 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> **2026-07-15 — fusion commune en cours** : les environnements historiques restent séparés sur
-> `8193/8194` et `8293/8294`. Le worktree `/home/codex/Enclume-fusion`, branche `integration`, reçoit
-> la fusion de `92ae9a9` avec la tête cousin `bad0190` et sera déployé isolément sur `8393/8394`, base
+> **2026-07-15 — première fusion commune déployée** : les environnements historiques restent séparés
+> sur `8193/8194` et `8293/8294`. Le worktree `/home/codex/Enclume-fusion`, branche `integration`,
+> porte le merge `1f048cd` de `92ae9a9` avec la tête cousin `bad0190` et est déployé isolément sur `8393/8394`, base
 > `vtt_fusion`. `origin/fusion-kiwi` est explicitement exclue car son éditeur Surface v2 régresserait
 > le document monde v12. Workflow durable : `docs/WORKFLOW_FUSION.md`. Contrat d'autorité :
 > `docs/FUSION_PROJET_COUSIN.md`.
 > Point de restauration préalable vérifié : `backup/pre-fusion-20260715-110349` et
 > `/home/codex/backups/enclume-pre-fusion-20260715-110349`.
+> Validation : 124 tests monde/serveur, 28 tests Surface, ESLint ciblé, build Vite et smoke
+> Playwright Chromium passent ; les six services historiques et de fusion sont actifs.
 >
 > **2026-07-13 — transition instance Codex** : ajout des marqueurs de migrations historiques
 > 75-83 et idempotence des migrations 143/149. Objectif : basculer l'instance de test 8293 de
