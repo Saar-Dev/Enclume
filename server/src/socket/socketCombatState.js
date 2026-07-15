@@ -249,9 +249,9 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
   })
 
   // ─── COMBAT:INIT_STATE ────────────────────────────────────────────────
-  // Joueur déclare son état initial (posture/arme/mode de tir) en phase ROSTER.
+  // Joueur déclare l'état initial (posture/arme/mode de tir) de son PJ, ou GM
+  // celui d'un PNJ (sans user_id, donc sans fenêtre joueur dédiée), en phase ROSTER.
   socket.on(WS.COMBAT_INIT_STATE, async ({ tokenId, position, weapon, fire_mode }) => {
-    if (isGm) return
     try {
       const VALID_POS = new Set(['standing', 'crouching', 'prone'])
       const VALID_WPN = new Set(['holstered', 'ready', 'drawn'])
@@ -264,7 +264,11 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       const token = await db('tokens').where({ id: tokenId }).first()
       if (!token?.character_id) return
       const character = await db('characters').where({ id: token.character_id }).first()
-      if (!character || character.user_id !== user.id) return
+      if (!character) return
+      if (isGm) {
+        // Le GM ne déclare l'état que des PNJ — les PJ restent sous l'autorité de leur joueur.
+        if (character.type !== 'pnj') return
+      } else if (character.user_id !== user.id) return
 
       await db('combat_roster')
         .where({ campaign_id: campaignId, token_id: tokenId })
