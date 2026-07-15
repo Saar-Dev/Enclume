@@ -10,6 +10,10 @@
   correctement la fiche — l'ancienne valeur ne restait plus bloquée après un retrait.
 - [fix] La suppression d'une campagne ne bloque plus lorsqu'une de ses battlemaps a des textures
   posées.
+- [fix] Le panneau d'armes de la fiche personnage et la résolution des combats au corps-à-corps
+  respectent enfin la main directrice réelle du personnage (droitier/gaucher/Ambidextre) — la
+  latéralité était systématiquement ignorée (toujours traitée comme droitier), quel que soit le choix
+  fait sur la fiche.
 
 ## v185 — 2026-07-13 — Nouvelle apparence : connexion, tableau de bord et paramètres de campagne
 
