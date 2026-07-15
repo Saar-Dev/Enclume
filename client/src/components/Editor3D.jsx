@@ -249,6 +249,7 @@ function EntityEditorScene({
   const [ghostPos, setGhostPos] = useState(null)
   const [ghostR, setGhostR] = useState(0)
   const [moveGhost, setMoveGhost] = useState(null)
+  const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
 
   useEffect(() => {
     const previousLevel = previousDisplayLevelRef.current
@@ -522,10 +523,11 @@ function EntityEditorScene({
         (Number(entity.pos_x) || 0) + 0.5,
         (Number(entity.pos_y) || 0) + 0.5,
         entity.pos_z,
+        cameraVolumeRoomId,
       )) return entityId
     }
     return null
-  }, [camera, displayLevel, entities, gl, scene, surfaceData])
+  }, [camera, cameraVolumeRoomId, displayLevel, entities, gl, scene, surfaceData])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -728,6 +730,7 @@ function EntityEditorScene({
           ceilingOpacity={0.35}
           displayLevel={displayLevel}
           cameraControlsRef={orbitRef}
+          onCameraRoomIdChange={setCameraVolumeRoomId}
         />
       ) : (
         <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
@@ -741,6 +744,7 @@ function EntityEditorScene({
           (Number(entity.pos_x) || 0) + 0.5,
           (Number(entity.pos_y) || 0) + 0.5,
           entity.pos_z,
+          cameraVolumeRoomId,
         )) return null
         const isMoving = moveGhost?.entityId === entity.id
         return (

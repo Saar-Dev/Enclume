@@ -532,6 +532,7 @@ function Scene({
   const { phase, announcedActions, activeTokenId } = useCombatStore()
 
   const [dragState, setDragState] = useState(null)
+  const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
 
   useEffect(() => {
     const previousLevel = previousDisplayLevelRef.current
@@ -1057,6 +1058,7 @@ function Scene({
           textureMaterials={textureMaterials}
           displayLevel={displayLevel}
           cameraControlsRef={thirdPersonCameraActive ? null : orbitRef}
+          onCameraRoomIdChange={setCameraVolumeRoomId}
           runtimeFeatureStates={runtimeFeatureStates}
           selectedConnectorId={selectedSurfaceConnectorId}
           onConnectorSelect={onSurfaceConnectorSelect}
@@ -1074,11 +1076,17 @@ function Scene({
         if (!bounds) return null
         const centerX = (bounds.min.x + bounds.max.x) / 2
         const centerZ = (bounds.min.z + bounds.max.z) / 2
+        const centerY = (bounds.min.y + bounds.max.y) / 2
         const intersectsSlice = bounds.max.y > sliceBottom && bounds.min.y < sliceTop
-        const visibleInOpenRoom = bounds.max.y <= sliceBottom
-          && yToLevel(bounds.min.y) < displayLevel
-          && isWorldPointVisibleAtLevel(surfaceData, displayLevel, centerX, centerZ, bounds.min.y)
-        if (!intersectsSlice && !visibleInOpenRoom) return null
+        const visibleInWorldContext = isWorldPointVisibleAtLevel(
+          surfaceData,
+          displayLevel,
+          centerX,
+          centerZ,
+          centerY,
+          cameraVolumeRoomId,
+        )
+        if (!intersectsSlice && !visibleInWorldContext) return null
         const size = [bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y, bounds.max.z - bounds.min.z]
         const center = [
           centerX,
@@ -1105,6 +1113,7 @@ function Scene({
           (Number(entity.pos_x) || 0) + 0.5,
           (Number(entity.pos_y) || 0) + 0.5,
           entity.pos_z,
+          cameraVolumeRoomId,
         )) return null
         return (
           <EntityMesh
@@ -1145,6 +1154,7 @@ function Scene({
           (Number(token.pos_x) || 0) + 0.5,
           (Number(token.pos_y) || 0) + 0.5,
           token.pos_z,
+          cameraVolumeRoomId,
         )
       )).map(token => {
         const character = characters.find(c => c.id === token.character_id)

@@ -21,6 +21,7 @@ import {
   roomInteriorFootprintAtY,
   roomMaximumHeightLevels,
   roomSliceAtLevel,
+  roomVolumeContainsPoint,
   roomVerticalSlices,
   sampleWallArcGeometry,
   selectedRoomBoundaryChain,
@@ -1046,9 +1047,17 @@ export function getRoomSlice(room, displayLevel, roomLookup = {}) {
   return roomSliceAtLevel(room, Number(displayLevel) - baseLevel, roomLookup, STORY_HEIGHT)
 }
 
-export function isWorldPointVisibleAtLevel(data, displayLevel, x, z, y) {
+export function isWorldPointVisibleAtLevel(data, displayLevel, x, z, y, cameraRoomId = null) {
   if (displayLevel === null || displayLevel === undefined) return true
-  return yToLevel(y) <= displayLevel
+  if (yToLevel(y) <= displayLevel) return true
+  const room = cameraRoomId ? data?.rooms?.[cameraRoomId] : null
+  if (!room) return false
+  return roomVolumeContainsPoint(
+    { id: cameraRoomId, ...room },
+    { x, y, z },
+    data.rooms,
+    STORY_HEIGHT,
+  )
 }
 
 export function getRoomHeight(room) {

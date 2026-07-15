@@ -79,14 +79,16 @@ combat ne doit reconstruire cette interface depuis les meshes.
 
 - le niveau courant et tous les niveaux inférieurs sont rendus ;
 - les niveaux inférieurs sont opaques ;
-- les niveaux supérieurs sont masqués, sauf les murs des tranches appartenant à la salle
-  multi-hauteur située sous le point central visé par la caméra ;
+- les niveaux supérieurs sont masqués, sauf le contenu complet du `RoomVolume` multi-hauteur dans
+  lequel se trouve la caméra ou, lorsque celle-ci reste dehors, que vise sa cible de contrôle ;
 - seul le plafond qui ferme le niveau courant utilise l'opacité de coupe ;
 - une salle multi-hauteur conserve son vide et ses murs descendants, sans plancher implicite ;
-- les connecteurs inférieurs restent visibles ;
+- murs, passerelles, escaliers, connecteurs, objets 3D, tokens et effets d'un volume actif restent
+  visibles sur toute sa hauteur ;
 - la transparence de caméra est décidée par façade complète. Toutes les tranches verticales et les
-  morceaux créés par une porte partagent un `facadeId` de rendu. La salle active vient de la cible
-  réelle des contrôles caméra. `interiorNormalSignsByRoom` indique ensuite le côté intérieur de
+  morceaux créés par une porte partagent un `facadeId` de rendu. La salle active vient d'abord de
+  la position 3D réelle de la caméra dans le volume, puis de la cible des contrôles lorsque la caméra
+  est dehors. `interiorNormalSignsByRoom` indique ensuite le côté intérieur de
   chaque façade pour cette salle ; caméra du côté extérieur signifie transparent, caméra du côté
   intérieur signifie opaque. Ne pas réintroduire de rayons vers des centres de cases ;
 - les bouchons internes des découpes de porte ne sont pas rendus.
@@ -215,9 +217,9 @@ Scénarios manuels indispensables :
 - salle basse + salle empilée : plafond depuis le bas, sol depuis le haut, aucun clignotement ;
 - niveau supérieur : tous les étages inférieurs opaques ;
 - mur droit et arc avec porte : transparence monobloc sans bouchons visibles ;
-- salle multi-hauteur : profil vertical unique sur toute la hauteur et murs supérieurs visibles
-  uniquement lorsque la caméra vise ce volume ; la première façade coupant les rayons caméra→sol
-  devient transparente sur toute sa hauteur, les façades du fond restent opaques ;
+- salle multi-hauteur : profil vertical unique et contenu complet visible sur toute la hauteur dès
+  que la caméra entre dans ce volume, même si la cible reste dehors ; les façades côté caméra
+  deviennent transparentes sur toute leur hauteur et celles du fond restent opaques ;
 - passerelle le long d'un arc profilé : aucune dalle visible ou praticable hors de la salle ;
 - objet redimensionné : même emprise au rendu, au placement/collision et en LOS après rechargement ;
 - panneau de mur : identifiant copiable, halo complet, porte contrainte au mur actif ;

@@ -1,4 +1,59 @@
+import {
+  multiPolygonContainsPoint,
+  roomSliceAtLevel,
+  roomVolumeContainsPoint,
+} from '../../../shared/world/roomGeometry.js'
+
 const EPSILON = 1e-7
+
+function roomBaseY(room, storyHeight) {
+  return Number.isFinite(Number(room?.y))
+    ? Number(room.y)
+    : (Number(room?.level) || 0) * storyHeight
+}
+
+function roomsAtDisplayLevel(rooms, displayLevel, storyHeight) {
+  if (!rooms || displayLevel === null || displayLevel === undefined) return []
+  const level = Number(displayLevel)
+  if (!Number.isFinite(level)) return []
+
+  const candidates = []
+  for (const [roomId, rawRoom] of Object.entries(rooms)) {
+    const room = { id: roomId, ...rawRoom }
+    const baseLevel = Math.round(roomBaseY(room, storyHeight) / storyHeight)
+    const offset = level - baseLevel
+    const slice = roomSliceAtLevel(room, offset, rooms, storyHeight)
+    if (!slice) continue
+    candidates.push({ roomId, room, slice })
+  }
+  return candidates
+}
+
+export function cameraRoomContextId({ rooms, displayLevel, camera, focus, storyHeight = 2.5 }) {
+  const candidates = roomsAtDisplayLevel(rooms, displayLevel, storyHeight)
+  const cameraX = Number(camera?.x)
+  const cameraY = Number(camera?.y)
+  const cameraZ = Number(camera?.z)
+
+  if ([cameraX, cameraY, cameraZ].every(Number.isFinite)) {
+    for (const { roomId, room } of candidates) {
+      if (roomVolumeContainsPoint(
+        room,
+        { x: cameraX, y: cameraY, z: cameraZ },
+        rooms,
+        storyHeight,
+      )) return roomId
+    }
+  }
+
+  const focusX = Number(focus?.x)
+  const focusZ = Number(focus?.z)
+  if (![focusX, focusZ].every(Number.isFinite)) return null
+  for (const { roomId, slice } of candidates) {
+    if (multiPolygonContainsPoint(slice.footprint, { x: focusX, z: focusZ })) return roomId
+  }
+  return null
+}
 
 export function wallFacadeKey(wall) {
   if (wall?.facadeId) return String(wall.facadeId)

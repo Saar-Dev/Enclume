@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { cameraFacingFacadeIds, wallFacadeKey } from './cameraCutaway.js'
+import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from './cameraCutaway.js'
 import { SURFACE_FINE, roomsWallRenderPaths } from './surfaceData.js'
 
 function rectangularFacades() {
@@ -25,6 +25,49 @@ function rectangularFacades() {
     },
   ]
 }
+
+const multiLevelRooms = {
+  tower: {
+    id: 'tower',
+    minX: 0,
+    maxX: 3,
+    minZ: 0,
+    maxZ: 3,
+    y: 0,
+    level: 0,
+    heightLevels: 3,
+  },
+}
+
+test('la position 3D de la camera active la salle meme si sa cible reste dehors', () => {
+  const roomId = cameraRoomContextId({
+    rooms: multiLevelRooms,
+    displayLevel: 0,
+    camera: { x: 1.5, y: 1.2, z: 1.5 },
+    focus: { x: 8, y: 0, z: 8 },
+  })
+  assert.equal(roomId, 'tower')
+})
+
+test('la cible stable active la salle quand la camera reste a l exterieur', () => {
+  const roomId = cameraRoomContextId({
+    rooms: multiLevelRooms,
+    displayLevel: 0,
+    camera: { x: 1.5, y: 12, z: -8 },
+    focus: { x: 1.5, y: 0, z: 1.5 },
+  })
+  assert.equal(roomId, 'tower')
+})
+
+test('une camera et une cible hors de la salle ne creent aucun contexte', () => {
+  const roomId = cameraRoomContextId({
+    rooms: multiLevelRooms,
+    displayLevel: 0,
+    camera: { x: 8, y: 1.2, z: 8 },
+    focus: { x: 8, y: 0, z: 8 },
+  })
+  assert.equal(roomId, null)
+})
 
 test('une vue de face rend transparente la façade avant et garde le fond opaque', () => {
   const result = cameraFacingFacadeIds({

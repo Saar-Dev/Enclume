@@ -90,21 +90,28 @@ physique. Si l'ancienne empreinte orthogonale est coupée en plusieurs îlots no
 devient une salle distincte. Des salles empilées sans chevauchement vertical conservent en revanche
 les mêmes coordonnées `x:z`.
 
-Une salle `heightLevels > 1` existe dans chaque tranche verticale qu'elle traverse et décrit un seul
-volume ouvert. Tous les étages inférieurs au niveau de coupe sont rendus, sans transparence. Quand
-le point visé par la caméra se trouve dans une salle multi-hauteur, les murs de toutes ses tranches,
-y compris au-dessus du niveau courant, sont rendus pour montrer le volume complet ; les autres
-salles supérieures restent masquées. Ces murs ne deviennent pas transparents simplement parce
-qu'ils sont « devant » dans le plan. Le moteur groupe d'abord toutes les tranches verticales et les
-découpes de porte qui appartiennent à une même façade. La salle en contexte est déterminée par la
-cible réelle de `MapControls`, pas par une intersection reconstruite depuis le quaternion de la
-caméra : tourner autour d'une cible fixe ne peut donc plus changer de salle active. Chaque panneau
+Une salle `heightLevels > 1` est un unique `RoomVolume` solidaire. Ses tranches verticales sont un
+détail de construction des maillages, collisions et surfaces praticables ; elles ne constituent pas
+des salles ni des contextes de visibilité séparés. Tous les étages inférieurs au niveau de coupe sont
+rendus, sans transparence. Quand la caméra entre réellement dans un `RoomVolume`, toutes ses
+façades et tout son contenu spatial sont rendus sur sa hauteur complète, y compris au-dessus du
+niveau courant : passerelles, escaliers, connecteurs, objets 3D, tokens et effets. Quand la caméra
+reste à l'extérieur, la cible réelle de `MapControls` sert de repli stable pour déterminer le volume
+observé. Le niveau courant continue de filtrer le reste du monde. La position et la cible sont deux
+autorités distinctes : un zoom qui fait entrer la caméra recalcule le volume, tandis qu'une simple
+rotation autour d'une cible fixe ne peut pas changer de salle active.
+
+Ces murs ne deviennent pas transparents simplement parce qu'ils sont « devant » dans le plan. Le
+moteur groupe d'abord toutes les tranches verticales et les découpes de porte qui appartiennent à
+une même façade. Chaque panneau
 physique transporte en outre `interiorNormalSignsByRoom`, dérivé du contour canonique et indépendant
 des textures. Une façade devient transparente lorsque la caméra se trouve du côté opposé à sa
 normale intérieure pour la salle active. La décision s'applique à la façade complète, sur toute sa
 hauteur : elle ne produit jamais une alternance opaque/transparente entre étages. Une façade située
 au fond de la salle voit la caméra du même côté que son intérieur et reste donc opaque. Cette règle
-ne dépend d'aucun échantillon de centres de cases. Une salle profonde conserve
+ne dépend d'aucun échantillon de centres de cases. L'appartenance d'un élément au volume utilise
+`roomVolumeContainsPoint(...)`, donc la même empreinte 3D réelle que les murs courbes et profilés.
+Une salle profonde conserve
 ses murs descendants et son vide continu : un puits doit donc paraître profond. Aucun plancher
 intermédiaire n'est créé automatiquement. Une future trappe doit
 être portée par un connecteur vertical —

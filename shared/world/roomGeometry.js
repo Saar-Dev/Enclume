@@ -1023,6 +1023,22 @@ export function roomInteriorFootprintAtY(room, y, roomLookup = {}, storyHeight =
     : cloneMultiPolygon(slice.footprint)
 }
 
+export function roomVolumeContainsPoint(room, point3D, roomLookup = {}, storyHeight = 2.5) {
+  const x = Number(point3D?.x)
+  const y = Number(point3D?.y)
+  const z = Number(point3D?.z)
+  if (![x, y, z].every(Number.isFinite)) return false
+  const baseY = Number.isFinite(Number(room?.y))
+    ? Number(room.y)
+    : (Number(room?.level) || 0) * storyHeight
+  const topY = baseY + roomMaximumHeightLevels(room, storyHeight) * storyHeight
+  if (y < baseY - EPSILON || y >= topY - EPSILON) return false
+  return multiPolygonContainsPoint(
+    roomInteriorFootprintAtY(room, y, roomLookup, storyHeight),
+    { x, z },
+  )
+}
+
 export function roomGeometryArea(room, roomLookup = {}) {
   return clean(multiPolygonArea(roomBoundaryMultiPolygon(room, roomLookup)))
 }

@@ -62,8 +62,10 @@ Branche `codex/world-engine-integration`, sans modification du dépôt de l'autr
 > de salle éditable, identité de mur copiable, ajout de porte depuis le mur, halos de sélection,
 > profils verticaux continus, volume multi-hauteur complet à la caméra et passerelles découpées par
 > l'intérieur réel des murs courbes/profilés.
-> Correctifs de finition du même jour : toutes les tranches d'une salle multi-hauteur restent
-> affichées. La cible réelle des contrôles caméra fixe désormais la salle active ; les façades
+> Correctifs de finition du même jour : une salle multi-hauteur est traitée comme un `RoomVolume`
+> solidaire. La position 3D réelle de la caméra est prioritaire quand elle entre dans la salle ; la
+> cible des contrôles sert de repli stable quand elle reste dehors. Murs, passerelles, escaliers,
+> connecteurs, objets 3D, tokens et effets du volume restent visibles sur toute sa hauteur. Les façades
 > partagent une identité verticale et une normale intérieure canonique par salle. La coupe ne dépend
 > donc plus de l'angle du rayon central ni d'un échantillon de cases : façades côté caméra
 > transparentes, façades du fond opaques. La pose de porte conserve les arêtes canoniques, vise sa surface

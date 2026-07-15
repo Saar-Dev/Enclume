@@ -349,6 +349,8 @@ test('un niveau affiche tout le monde inferieur sans transparence contextuelle',
   assert.equal(isWorldPointVisibleAtLevel(surface, 2, 4.5, 4.5, 0), true)
   assert.equal(isWorldPointVisibleAtLevel(surface, 1, 0.5, 0.5, 5), false)
   assert.equal(isWorldPointVisibleAtLevel(surface, 2, 4.5, 4.5, 5), true)
+  assert.equal(isWorldPointVisibleAtLevel(surface, 0, 0.5, 0.5, 5, 'well'), true)
+  assert.equal(isWorldPointVisibleAtLevel(surface, 0, 4.5, 4.5, 5, 'well'), false)
 })
 
 test('une nouvelle salle transfere ses cases et redessine le contour de la salle englobante', () => {

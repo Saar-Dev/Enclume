@@ -423,13 +423,15 @@ monde que la FSM doit appeler, les zones de conflit manuel et la matrice de vali
 - les panneaux physiques transportent `interiorNormalSignsByRoom`, orientation topologique distincte
   de leurs matériaux. Un mur mitoyen peut ainsi avoir un intérieur opposé pour chacune de ses deux
   salles sans être dupliqué ;
-- la salle en contexte provient directement de la cible de `MapControls`, transmise au renderer. La
-  coupe compare la position de caméra à la normale intérieure de chaque façade complète : aucun
-  échantillonnage de cases, aucun changement de salle pendant une simple rotation et aucun damier
-  vertical ;
+- une salle multi-hauteur est un seul `RoomVolume` de visibilité. La position 3D de caméra est
+  prioritaire lorsqu'elle entre dans ce volume ; la cible de `MapControls` est le repli stable quand
+  elle reste dehors. Tous les contenus situés dans le volume (murs, passerelles, escaliers,
+  connecteurs, objets, tokens et effets) ignorent alors la coupe d'étage. La coupe compare la
+  position de caméra à la normale intérieure de chaque façade complète : aucun échantillonnage de
+  cases, aucun changement de salle pendant une simple rotation et aucun damier vertical ;
 - les panneaux contextuels utilisent un écart latéral de 56 px, basculent à gauche si nécessaire et
   conservent leur recalage dynamique dans le viewport ;
-- état validé : 160 tests monde/serveur/client passent, build Vite de production valide et ESLint
+- état validé : 172 tests monde/serveur/client passent, build Vite de production valide et ESLint
   ciblé sans erreur. Le lint global garde son passif connu dans les fichiers combat non modifiés.
 
 ---

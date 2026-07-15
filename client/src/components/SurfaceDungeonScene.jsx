@@ -8,15 +8,13 @@ import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
-import { cameraFacingFacadeIds, wallFacadeKey } from '../lib/cameraCutaway.js'
+import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from '../lib/cameraCutaway.js'
 import {
   multiPolygonContours,
-  multiPolygonContainsPoint,
   intersectMultiPolygons,
   roomBoundaryContours,
   roomHorizontalInterfaces,
   roomInteriorFootprintAtY,
-  roomMaximumHeightLevels,
   roomSliceAtLevel,
   sampleWallArcGeometry,
   wallCornerIntersectionPoint,
@@ -122,27 +120,24 @@ function useCameraRoomId(surface, displayLevel, cameraControlsRef = null) {
     if (previous
       && previous.displayLevel === displayLevel
       && previous.focus.distanceToSquared(focus) < 0.0009
+      && previous.cameraPosition.distanceToSquared(camera.position) < 0.0009
       && previous.usesControlsTarget === Boolean(hasControlsTarget)
       && previous.rooms === surface.rooms) return
     lastCameraRef.current = {
       displayLevel,
       focus,
+      cameraPosition: camera.position.clone(),
       usesControlsTarget: Boolean(hasControlsTarget),
       rooms: surface.rooms,
     }
 
-    let nextRoomId = null
-    for (const [candidateId, rawRoom] of Object.entries(surface.rooms || {})) {
-      const room = { id: candidateId, ...rawRoom }
-      const baseLevel = yToLevel(getRoomBaseY(room))
-      const levels = roomMaximumHeightLevels(room, STORY_HEIGHT)
-      const offset = Number(displayLevel) - baseLevel
-      if (offset < 0 || offset >= levels) continue
-      const slice = roomSliceAtLevel(room, offset, surface.rooms, STORY_HEIGHT)
-      if (!slice || !multiPolygonContainsPoint(slice.footprint, { x: focus.x, z: focus.z })) continue
-      nextRoomId = candidateId
-      break
-    }
+    const nextRoomId = cameraRoomContextId({
+      rooms: surface.rooms,
+      displayLevel,
+      camera: camera.position,
+      focus,
+      storyHeight: STORY_HEIGHT,
+    })
     if (nextRoomId !== roomId) setRoomId(nextRoomId)
   })
 
@@ -2046,9 +2041,13 @@ function SurfaceDungeonScene({
   onConnectorSelect = null,
   runtimeFeatureStates = {},
   cameraControlsRef = null,
+  onCameraRoomIdChange = null,
 }) {
   const surface = useMemo(() => normalizeSurfaceData(surfaceData), [surfaceData])
   const cameraVolumeRoomId = useCameraRoomId(surface, displayLevel, cameraControlsRef)
+  useEffect(() => {
+    onCameraRoomIdChange?.(cameraVolumeRoomId)
+  }, [cameraVolumeRoomId, onCameraRoomIdChange])
   const horizontalInterfaces = useMemo(
     () => roomHorizontalInterfaces(surface.rooms, STORY_HEIGHT),
     [surface.rooms],
@@ -2083,7 +2082,7 @@ function SurfaceDungeonScene({
   const occludedWallIds = useOccludedWallIds(allWallSegments, displayLevel, cameraVolumeRoomId)
   const structureIsVisible = (y) => displayLevel === null || yToLevel(y) <= displayLevel
   const worldPointIsVisible = (x, z, y) => (
-    isWorldPointVisibleAtLevel(surface, displayLevel, x, z, y)
+    isWorldPointVisibleAtLevel(surface, displayLevel, x, z, y, cameraVolumeRoomId)
   )
   const roomWallIsVisible = wall => structureIsVisible(wallOpacityY(wall))
     || (cameraVolumeRoomId && wall.roomIds?.includes(cameraVolumeRoomId))
@@ -2092,6 +2091,7 @@ function SurfaceDungeonScene({
   )
   const connectorIsVisible = connector => {
     if (displayLevel === null) return true
+    if (cameraVolumeRoomId && connector?.roomIds?.includes(cameraVolumeRoomId)) return true
     if (connector?.type === 'door' || connector?.type === 'legacy-door-placeholder') {
       const centerX = Number.isFinite(Number(connector?.x))
         ? Number(connector.x)
@@ -2110,7 +2110,17 @@ function SurfaceDungeonScene({
     if (Number.isFinite(Number(connector?.y))) levels.push(yToLevel(connector.y))
     if (Number.isFinite(Number(connector?.topY))) levels.push(yToLevel(connector.topY))
     if (levels.length === 0) return false
-    return displayLevel >= Math.min(...levels)
+    if (displayLevel >= Math.min(...levels)) return true
+    const centerX = (Number(connector?.x) || 0) + (Number(connector?.width) || 1) / 2
+    const centerZ = (Number(connector?.z) || 0) + (Number(connector?.depth) || 1) / 2
+    const heights = [
+      connector?.y,
+      connector?.topY,
+      connector?.fromY,
+      connector?.toY,
+      ...(connector?.stops || []).map(stop => stop?.y),
+    ].filter(value => Number.isFinite(Number(value)))
+    return heights.some(y => worldPointIsVisible(centerX, centerZ, Number(y)))
   }
   const visibleWaterCells = useMemo(
     () => water?.waterCells || [],
@@ -2172,7 +2182,8 @@ function SurfaceDungeonScene({
       ) : null)}
       {Object.entries(surface.floors).map(([id, floor]) => {
         const parsed = parseFloorKey(id, floor)
-        if (!worldPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.y)) return null
+        const belongsToCameraVolume = cameraVolumeRoomId && floor?.clipRoomId === cameraVolumeRoomId
+        if (!belongsToCameraVolume && !worldPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.y)) return null
         return <FloorTile key={id} id={id} floor={floor} surface={surface} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
       })}
       {surfaceWallSegments.map(wall => {
@@ -2214,6 +2225,11 @@ function SurfaceDungeonScene({
             (Number(stair?.minX) + Number(stair?.maxX) + 1) / 2,
             (Number(stair?.minZ) + Number(stair?.maxZ) + 1) / 2,
             stair?.y,
+          )
+          || worldPointIsVisible(
+            (Number(stair?.minX) + Number(stair?.maxX) + 1) / 2,
+            (Number(stair?.minZ) + Number(stair?.maxZ) + 1) / 2,
+            stair?.topY,
           )
         return visible ? (
         <StairSegment key={id} stair={stair} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
