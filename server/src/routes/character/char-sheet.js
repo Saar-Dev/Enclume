@@ -48,6 +48,7 @@ import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } fro
 import { getAdvantages, grantAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
 import { getMutations, addMutation, removeMutation, getMutationEffects } from '../../services/mutationService.js'
 import { cloneToVault } from '../../services/vaultService.js'
+import { createEmptySheet } from '../../services/charSheetService.js'
 import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
 import * as inventoryService from '../../services/inventoryService.js'
 import * as modingService from '../../services/modingService.js'
@@ -123,36 +124,32 @@ router.get('/:characterId', async (req, res, next) => {
 })
 
 // ─── POST /api/char-sheet/:characterId ───────────────────────────────────────
-// Crée une fiche vide pour un character existant.
-// Initialise aussi char_identity, char_archetype, et les 8 lignes char_attributes.
-// 409 si une fiche existe déjà pour ce character.
+// Filet de sécurité pour les personnages orphelins (créés avant que characters.js
+// ne crée la fiche de façon atomique — voir POST /campaigns/:campaignId/characters).
+// Idempotente : si la fiche existe déjà (pré-check ou course concurrente détectée par
+// la contrainte unique), la renvoie telle quelle au lieu d'échouer. Un personnage neuf
+// créé via characters.js a déjà sa fiche et ne passe jamais par cette route.
 router.post('/:characterId', async (req, res, next) => {
   try {
     const existing = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
-    if (existing) throw new AppError(409, 'A sheet already exists for this character')
+    if (existing) return res.status(200).json({ sheet: existing })
 
-    const result = await db.transaction(async (trx) => {
-      const [sheet] = await trx('char_sheet')
-        .insert({ character_id: req.params.characterId })
-        .returning('*')
-
-      await trx('char_identity').insert({ char_sheet_id: sheet.id })
-      await trx('char_archetype').insert({ char_sheet_id: sheet.id })
-
-      const ATTRS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
-      await trx('char_attributes').insert(
-        ATTRS.map(attr_id => ({
-          char_sheet_id: sheet.id,
-          attr_id,
-          base_level: 7,
-          pc_modifier: 0,
-        }))
-      )
-
-      return sheet
-    })
+    let result
+    try {
+      result = await db.transaction((trx) => createEmptySheet(trx, req.params.characterId))
+    } catch (err) {
+      // 23505 = violation de la contrainte uq_char_sheet_character_id : une autre requête
+      // concurrente (ex. double-effet React StrictMode) a créé la fiche entre le pré-check
+      // et cet insert — reproduit et confirmé en base réelle (Session 143). La fiche existe,
+      // ce n'est pas un échec pour l'appelant.
+      if (err.code === '23505') {
+        const sheet = await db('char_sheet').where({ character_id: req.params.characterId }).first()
+        return res.status(200).json({ sheet })
+      }
+      throw err
+    }
 
     res.status(201).json({ sheet: result })
   } catch (err) {

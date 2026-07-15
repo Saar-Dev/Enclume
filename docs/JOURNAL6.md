@@ -3727,3 +3727,73 @@ vérifiée après coup. Requête identique testée en transaction annulée pour 
 scénario CaC réel en session avec un défenseur gaucher ayant des armes différentes dans chaque main.
 
 Détail complet : `docs/EN_COURS.md` dette `HP1` (close).
+
+---
+## Session 144 (Saar) — 2026-07-15 — Bug fiche perso sidebar : "Impossible de charger la fiche" + disparition silencieuse ✅ CLOS
+
+> Session de correction de bugs en série (plusieurs à suivre) — commit groupé différé, journal tenu
+> à jour au fil de l'eau (demande explicite Saar).
+
+**Symptôme rapporté** : personnage créé via la sidebar (GM, hors Assistant de création) OK, mais
+message d'erreur `charSheet.errorLoad` ("Impossible de charger la fiche") à la première ouverture.
+
+**Diagnostic — deux bugs distincts trouvés sur le même chemin, tous deux vérifiés en base réelle
+(pas supposés)** :
+
+1. **Course de création** : un personnage créé depuis la sidebar (`characters.js`) n'a volontairement
+   pas de `char_sheet` — contrairement au Wizard (`creationService.startCreation`, transaction unique)
+   et aux drones (`drone_sheet` créé au même moment). La fiche était créée "à la volée" à la première
+   ouverture (`CharacterSheet.jsx` : `GET` → si `sheet: null` → `POST` → `GET`). L'app tourne sous
+   `<StrictMode>` (`main.jsx`), qui double-invoque délibérément les effets en dev : les deux `GET`
+   voient tous deux `sheet: null`, les deux `POST` partent en course. Le premier réussit, le second
+   heurte la contrainte `UNIQUE(character_id)` (migration 132) — erreur non rattrapée, remontée telle
+   quelle au client. **Reproduit à l'identique en base réelle** (2 appels concurrents sur un
+   personnage jetable → `duplicate key value violates unique constraint "uq_char_sheet_character_id"`,
+   code `23505`).
+2. **Disparition silencieuse (trouvé en vérifiant l'architecture avant de coder, pas rapporté par
+   Saar)** : la liste des personnages (`characters.js`, `whereNotExists`) cache tout personnage dont
+   le `char_sheet` a `wizard_locked_at` vide — mécanisme prévu pour masquer les brouillons Wizard en
+   cours (voir migration 119/133). Or la route de création à la volée ne posait jamais
+   `wizard_locked_at`. **Confirmé sur les personnages "Civil" créés par Saar pendant le diagnostic** :
+   présents en base avec une fiche déjà créée, mais absents de la vraie requête serveur de la liste —
+   ce que Saar voyait dans sa sidebar venait de l'état local du navigateur (`addCharacter` optimiste
+   à la création), pas d'un rafraîchissement serveur. Les deux lignes de test ont été supprimées après
+   diagnostic (décision Saar : "Supprimer les deux").
+
+**Fix — architecture, pas rustine** : la fiche naît désormais **avec** le personnage, en une seule
+transaction, pour tout type (pnj/pj/drone) — aligne la sidebar sur ce qui existe déjà et fonctionne
+pour le Wizard et les drones. Autorité unique factorisée pour éviter la duplication déjà présente
+entre `characters.js` et `char-sheet.js`.
+- **NOUVEAU `server/src/services/charSheetService.js`** : `createEmptySheet(trx, characterId)` —
+  crée `char_sheet` (`wizard_locked_at = now()` posé immédiatement : ces fiches n'ont jamais été un
+  brouillon Wizard, même règle que le backfill historique de la migration 133) + `char_identity` +
+  `char_archetype` + les 8 `char_attributes`.
+- `server/src/routes/characters.js` : `POST /:campaignId/characters` passe en transaction unique —
+  `createEmptySheet` pour pnj/pj, `drone_sheet` inchangé pour drone.
+- `server/src/routes/character/char-sheet.js` : `POST /:characterId` conservée comme filet de
+  sécurité pour d'éventuels personnages orphelins déjà en base (créés avant ce correctif), rendue
+  idempotente — renvoie la fiche existante (200) au lieu d'échouer (409 supprimé, seul appelant
+  identifié était `CharacterSheet.jsx`, aucune dépendance à l'ancienne sémantique stricte), y compris
+  en cas de vraie course concurrente (capture `23505`, re-fetch, 200).
+
+**Testé** : 3 scénarios exécutés directement contre la base réelle (personnages jetables, supprimés
+après coup, même code que les routes — pas de logique dupliquée pour le test) :
+(A) création atomique → `wizard_locked_at` posé, `char_identity`/`char_archetype`/8 attributs créés,
+personnage visible immédiatement dans la vraie requête de liste ; (B) 2 appels concurrents sur
+`POST /char-sheet/:id` → 201 puis 200, aucune erreur, une seule fiche en base ; (C) régression drone
+→ `drone_sheet` inchangé, aucun `char_sheet` parasite. **Confirmé fonctionnel par Saar en navigateur**
+(création + ouverture immédiate, sans erreur).
+
+**Non testé** : parcours HTTP authentifié complet (les vérifications ci-dessus appellent la même
+transaction que les routes, directement, pas via une requête HTTP authentifiée) ; Wizard (PJ via
+l'Assistant de création) — non touché par ce correctif.
+
+**Données** : aucune migration — le correctif ne s'applique qu'aux créations futures. Personnages
+orphelins déjà existants en base (créés avant ce correctif, sans `char_sheet` ou avec
+`wizard_locked_at` resté vide) non balayés — le filet de sécurité `char-sheet.js` les répare
+individuellement à leur prochaine ouverture, mais ne corrige pas rétroactivement les fiches déjà
+créées avec `wizard_locked_at` vide. Question de backfill général laissée ouverte, pas tranchée
+(pas d'accès `knex_migrations` vérifié pour choisir un numéro de migration).
+
+**Fichiers touchés** : `server/src/services/charSheetService.js` (NOUVEAU),
+`server/src/routes/characters.js`, `server/src/routes/character/char-sheet.js`. Aucun fichier client.
