@@ -2,7 +2,6 @@ import { useRef, useState, useEffect, useCallback, useMemo, Component } from 're
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { MapControls, Grid, Text, Billboard, Html } from '@react-three/drei'
 import { useGLTF } from '@react-three/drei'
-import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
 import api from '../lib/api.js'
@@ -515,7 +514,6 @@ function Scene({
   cameraMode,
   displayLevel = 0,
 }) {
-  const { t } = useTranslation()
   const { camera, gl, scene } = useThree()
   const orbitRef = useRef()
   const previousDisplayLevelRef = useRef(displayLevel)
