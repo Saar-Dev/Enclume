@@ -578,9 +578,10 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       char_sheet_id_cible = sheetCible.id
 
       // Round 1 — parallèle : données défenseur + armes de contact équipées
-      const [attrsCible, archetypeCible, woundsCible, invCible, defContactWeapons, mutationEffectsCible] = await Promise.all([
+      const [attrsCible, archetypeCible, identityCible, woundsCible, invCible, defContactWeapons, mutationEffectsCible] = await Promise.all([
         db('char_attributes').where({ char_sheet_id: sheetCible.id }),
         db('char_archetype').where({ char_sheet_id: sheetCible.id }).first(),
+        db('char_identity').where({ char_sheet_id: sheetCible.id }).first(),
         db('character_wounds').where({ char_sheet_id: sheetCible.id }),
         db('char_inventory')
           .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
@@ -597,7 +598,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       ])
 
       // B1 — compétence défenseur selon arme équipée (priorité main directrice)
-      const slotPriority = (sheetCible.hand_pref ?? 'R') === 'L' ? ['MG', 'MD', '2M'] : ['MD', 'MG', '2M']
+      const slotPriority = (identityCible?.hand_pref ?? 'R') === 'L' ? ['MG', 'MD', '2M'] : ['MD', 'MG', '2M']
       const defWeapon = slotPriority.map(s => defContactWeapons.find(w => w.slot === s)).find(w => w != null) ?? null
       let defSkillId = 'COMBAT_A_MAINS_NUES'
       if (defWeapon?.equipment_id) {

@@ -3671,3 +3671,59 @@ sexe/fécondité) — confirmé fonctionnel globalement par Saar, pas chaque cas
 diagnostiqué et résolu séparément — voir "Session 142" ci-dessus.
 
 Détail complet : `docs/PLAN_MUTATION2.md` Lot 6, `server/src/services/identityService.js` (NOUVEAU).
+
+## Session 143 (suite) — 2026-07-15 — Dette HP1 : `hand_pref` lu sur la mauvaise table (2 sites) ✅ CLOS
+
+Signalé par Saar en clôturant Lot 6 : *"pourquoi `char_sheet` existe si vide ?"* — question qui a
+mené à réexaminer la dette **HP1** déjà tracée (`hand_pref` toujours `'R'` en combat, quel que soit
+le choix réel). Exigence explicite Saar avant tout code : *"architecture pérenne et adaptative, pas
+de bricolage, pas de zone d'ombre, sûr à 100%"*.
+
+**Diagnostic `[VÉRIFIÉ]`, pas supposé** : `char_sheet` n'est **pas** une table vide/inutile — 6
+colonnes réelles (`chc`, `xp_total`, `xp_available`, `creation_state`, `wizard_locked_at` + la
+pivot elle-même) et **10 fichiers de migration** créent des tables qui la référencent en FK
+(`char_identity`, `char_archetype`, `char_attributes`, `char_skills`, `char_pc_ledger`,
+`char_advantages`, `character_wounds`, `char_advantage_notes`, etc.) — colonne vertébrale du modèle
+de données personnage, pas une table candidate à la fusion. `hand_pref` vit sur `char_identity`
+("description physique + identité", migration 36) — placement délibéré et cohérent avec le reste du
+schéma normalisé (chaque table = une responsabilité), pas un oubli de placement. Fusionner les
+tables pour ce bug aurait cassé une architecture correcte pour compenser une requête qui ne suit pas
+sa propre convention — l'inverse de robuste.
+
+**Vraie cause racine, confirmée par lecture exhaustive** : 2 sites font `db('char_sheet').where(...)`
+puis lisent `.hand_pref` dessus — table sans cette colonne, toujours `undefined` → toujours `'R'` par
+défaut (`?? 'R'`/`|| 'R'` déjà présents, mais protègent le mauvais fallback). Le pattern correct
+(`db('char_identity').where({ char_sheet_id })`) est **déjà utilisé à 4 endroits dans ce même
+projet** (`char-sheet.js:103`, `vault.js:49`, `creationService.js:306`, `identityService.js:44`) —
+la correction aligne les 2 sites déviants sur la convention déjà établie, elle n'en invente aucune
+nouvelle.
+
+**Garantie 1:1 vérifiée avant de coder** (pas supposée) : `char-sheet.js:129-150` (`POST
+/:characterId`) insère `char_sheet` + `char_identity` + `char_archetype` + 8 `char_attributes` dans
+la **même transaction** — aucun chemin de code ne crée un `char_sheet` sans `char_identity`. Aucune
+suppression indépendante de `char_identity` trouvée (grep exhaustif) — seulement `CASCADE` avec
+`char_sheet`. `identity?.hand_pref` ne nécessite donc pas de garde supplémentaire au-delà du fallback
+déjà en place.
+
+**Fichiers touchés** :
+- `server/src/services/inventoryService.js` (`getInventory`, seul consommateur `WeaponPanel.jsx`,
+  relu en entier — aucune autre source de `hand_pref` côté client) : `char_identity` ajoutée au
+  `Promise.all` déjà présent (à côté d'`archetype`), `hand_pref: identity?.hand_pref || 'R'` remplace
+  `sheet?.hand_pref`. Bug visible côté joueur : `WeaponPanel.jsx` affichait toujours "Main
+  directrice"/"Main secondaire" comme un droitier, quel que soit le choix réel ou l'Avantage
+  Ambidextre.
+- `server/src/socket/socketCombatHelpers.js` (résolution défenseur CaC, seule occurrence de
+  `slotPriority` dans tout le fichier — vérifié pas de site attaquant équivalent, l'attaquant déclare
+  son arme lui-même) : même ajout au `Promise.all` existant (à côté d'`archetypeCible`),
+  `(identityCible?.hand_pref ?? 'R')` remplace `sheetCible.hand_pref`. Bug mécanique invisible :
+  priorité de main toujours droitière pour choisir l'arme de défense automatique du défenseur.
+
+**Testé** : `node --check` (2 fichiers), **vérification en base réelle** — `getInventory()` réellement
+appelé (pas simulé) avec `char_identity.hand_pref` basculé sur 'L'/'A'/'R' successivement sur un
+personnage de scratch, résultat confirmé correct à chaque valeur, valeur d'origine restaurée et
+vérifiée après coup. Requête identique testée en transaction annulée pour le pattern utilisé côté
+`socketCombatHelpers.js`.
+**Non testé** : parcours navigateur réel (`WeaponPanel.jsx` avec un personnage gaucher/Ambidextre) ;
+scénario CaC réel en session avec un défenseur gaucher ayant des armes différentes dans chaque main.
+
+Détail complet : `docs/EN_COURS.md` dette `HP1` (close).
