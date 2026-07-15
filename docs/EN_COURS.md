@@ -56,6 +56,16 @@
 > Dernière mise à jour cousin : 2026-07-13 — Session 141 (suite 31) : transfert du skin Wizard
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
+
+> Dernière mise à jour (dev/Saar) : 2026-07-15 — Session 144 : bascule `dev/Saar` en branche
+> exclusive de tout nouveau travail Claude (voir `CLAUDE.md` §3) ; Session 143 : `PLAN_MUTATION2.md`
+> Lot 6 (Identité — sex/is_fertile/hand_pref, mutations et avantages unifiés dans
+> `identityService.js`) — ✅ clos, fonctionnel confirmé Saar en navigateur (item 75) ; Session 142 :
+> migration 158 (CASCADE `battlemap_texture_usage`) — crash serveur au démarrage résolu (item 74) ;
+> Session 141 (suite 31) : Transfert du skin Wizard (Section 12,
+> sci-fi premium/glassmorphism) vers le reste de l'interface — Login/Dashboard puis pages de
+> configuration de campagne — ✅ clos, fonctionnel confirmé Saar ("magnifique") (item 73) ; Session 141
+> (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 > (Lunette de visée) — ✅ clos, fonctionnel confirmé Saar (item 72) ; Session 141 (suite 29) : Interface d'ajout Avantage/
 > Désavantage (octroi MJ narratif) + bug DELETE 500 pré-existant corrigé — ✅ clos, fonctionnel
 > confirmé Saar (item 71) ; Session 141 (suite 27) : bug GENOTYPE "Hybride" visible pour un
@@ -137,7 +147,91 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
+🔒 En cours : — (aucune session active)
+
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 75 (Session 143) — `docs/PLAN_MUTATION2.md` Lot 6 : Identité (sex/is_fertile/hand_pref)
+> ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Suite du Lot 5 (item 69, clos). Diagnostic
+> initial du plan ("Mutations déjà câblé, rien à faire") élargi en lisant le code avant tout code :
+> faux au retrait — `mutationService.removeMutation` marquait la mutation `removed` sans jamais
+> annuler l'override `sex`/`is_fertile` posé à l'ajout. Trouvé aussi : `is_fertile` a deux sources
+> indépendantes (mutation `mod_fertility` et avantage `adv_076` Fécondité) qui s'écrasaient sans se
+> voir — trou croisé pré-existant. **Décision Saar : "on ne bricole jamais, même si cela implique
+> plus de travail"** — un seul résolveur pour les deux catalogues. **NOUVEAU
+> `server/src/services/identityService.js`** : `applyIdentityGrant`/`applyMutationIdentityGrant`
+> (écriture directe à l'ajout — corrige au passage `adv_002` Ambidextre, en base depuis la migration
+> 92 mais jamais appliqué depuis sa création) ; `recomputeIdentity(trx, sheetId, fields)` (retrait ou
+> réinsertion Wizard — recalcule uniquement les champs passés en paramètre, mutations puis avantages,
+> l'avantage l'emporte en cas de conflit, défaut fixe sinon : `hand_pref` `'R'`, `is_fertile` `false`,
+> `sex` `'homme'`, décisions Saar). **Piège trouvé en concevant** : un recompute inconditionnel des 3
+> champs aurait écrasé un `sex`/`hand_pref` choisi au Step1 dès qu'aucune source ne le concerne —
+> corrigé par un paramètre `fields` explicite par appelant. **Extension de scope décidée par Saar** :
+> même bug latent dans `creationService.js` STEP3 **et** STEP5 (Wizard "retravail", wipe-and-reinsert
+> sans revert) — corrigé aux deux endroits avec le même résolveur. Fichiers touchés :
+> `mutationService.js`, `advantageService.js`, `creationService.js` (STEP3+STEP5). Aucune migration,
+> aucun fichier client. **Testé** : `node --check` (4 fichiers), 9 scénarios en base réelle
+> (transaction annulée, état restauré vérifié), **SR + fonctionnel confirmé Saar en navigateur**.
+> **Non testé** : parcours navigateur détaillé scénario par scénario (octroi/retrait Ambidextre/
+> Fécondité, retravail Wizard Step3/Step5 avec désélection) — confirmé globalement, pas chaque cas
+> limite isolément. **Chantier suivant identifié : Lot 7 (Narratif/économie, priorité basse)** quand
+> Saar voudra enchaîner, ou Modding Groupe 4 (`docs/PLAN_MODING_PHASEB.md`, slot `logiciel`,
+> structuré mais pas détaillé). Détail complet : `docs/PLAN_MUTATION2.md` Lot 6, `docs/JOURNAL6.md`
+> "Session 143".
+
+> **Item 74 (Session 142) — Migration 158 (CASCADE `battlemap_texture_usage`) réintégrée sur
+> `master` ✅ CLOS.** Crash serveur au démarrage rencontré en pleine session Lot 6 (sans rapport,
+> aucune migration touchée par Lot 6) : `knex_migrations` référençait
+> `158_battlemap_texture_usage_cascade.js`, absent du dossier `migrations/` de `master`.
+> **Root-cause `[VÉRIFIÉ]`** (`git merge-base`, `git worktree list`, `git reflog`) : le fichier n'a
+> jamais existé sur `master` — commit unique `92cd8a4`, écrit et appliqué le 2026-07-15 pendant une
+> session sur `dev/Saar`/`fusion-kiwi-v2`, jamais mergé. Ce worktree a servi indifféremment à
+> `master` et `fusion-kiwi` le même jour, sur le même Postgres local — la règle "chaque instance
+> garde sa propre base" (`CLAUDE.md` §3) n'a pas été respectée dans les faits. Correctif réel et
+> isolé (1 seul fichier dans le commit — `battlemap_texture_usage.battlemap_id` sans `ON DELETE
+> CASCADE`, bloquait `DELETE /api/campaigns/:id` dès qu'une battlemap a des textures posées).
+> `git cherry-pick 92cd8a4` → `80e75e0` sur `master`, aucun conflit. Déjà appliqué en base (batch
+> 108) — aucune ré-exécution. **Testé** : `knex_migrations` vérifiée (nom exact), `db.migrate.latest()`
+> rejoué (`log: []`), SR confirmé (`.\start.ps1` sans erreur, confirmé Saar). **Non testé** :
+> re-suppression réelle d'une campagne avec battlemap texturée (scénario d'origine du correctif) —
+> pas re-rejoué, hors scope de cette réconciliation. Détail complet : `docs/JOURNAL6.md`
+> "Session 142".
+
+> **Item 73 (Session 141 suite 31) — Transfert du skin Wizard (Section 12) vers le reste de
+> l'interface ✅ CLOS, fonctionnel confirmé Saar.** Demande Saar hors chantiers en cours : le skin
+> "Sci-Fi Premium" du Wizard de création (glassmorphism, dégradé bleu-nuit `#061223→#102744`, halo
+> radial pulsé, accent cyan `#2FD7FF`, `Venus Rising`) était scopé à `.wiz-page`/`.wiz-shell`
+> (`client/src/components/creation/` uniquement) — 3 systèmes visuels coexistaient dans
+> `index.css` (tokens de base Section 3, HUD chamfré Section 10 partagé par 25 fichiers dont les
+> fenêtres combat, skin Wizard Section 12). **Exigence explicite Saar : "architecture propre, pas de
+> bricolage"** — migration en alias sémantiques (les `--wiz-*` montent dans `:root`, les anciens
+> tokens `--bg-app`/`--color-primary`/`--text-primary`/`--border-subtle` deviennent des alias vers
+> ces primitives au lieu d'un renommage massif dans toute l'app) plutôt qu'un simple copier-coller de
+> valeurs. `.card`/`button`/`input` (Section 7) et `.btn`/`.btn-ghost`/`.btn-danger`/`.btn-gold`/
+> `.btn-success`/`.badge*`/`.btn-toggle` (Section 10) reskinnés : retrait du chamfer (`clip-path`),
+> glass + halo cyan. Nouvelle classe **`.app-shell`** (fond dégradé + halo pulsé, réutilise l'animation
+> `wizPulse` déjà existante) partagée par `.dashboard` et `CampaignSettingsPage` — pas une 3ᵉ
+> duplication du même effet. **Étendu en 2 temps** (validé par Saar à chaque étape) : (1) Login +
+> Dashboard, (2) pages de configuration de campagne (`CampaignSettingsPage.jsx` + 5 `Section*.jsx` +
+> `sharedStyles.js`). **6 vrais bugs trouvés et corrigés en chemin** (pas des features) : `--border-
+> normal` inexistant (`DashboardPage.jsx` + `sharedStyles.js` ×4 — inputs sans bordure visible),
+> `--bg-card` inexistant (`sharedStyles.js`), `.login-error` jamais stylée (classe manquante),
+> `.login-title` avec un var CSS mort (`--font-family`), 6 occurrences de bleu `#5b8dee`/
+> `rgba(91,141,238,...)` figées en dur (désynchronisées du token `--color-primary` dès mon 1er lot).
+> **Nettoyage architectural additionnel (pages Settings)** : suppression de `sharedStyles.section`/
+> `optionBtn`/`optionBtnActive`/`btnSecondary`/`btnDanger` — dupliquaient `.card`/`.btn`/`.btn-ghost`/
+> `.btn-danger`/`.btn-toggle` déjà existants, un seul système de boutons/cartes dans toute l'app
+> désormais. **Hors scope confirmé/différé** : Section 11 (fenêtres combat, palette tactique
+> délibérément distincte, commentaire code explicite) intacte ; `ChangelogPanel.jsx` (100% styles
+> inline hex, zéro token — reskin = réécriture complète, pas une simple retouche) laissé tel quel ;
+> `RegisterPage.jsx` (même bug `--border-normal` trouvé au passage, mais fichier séparé sans classe
+> partagée, jamais dans le périmètre validé) non touché. Testé : équilibre CSS (script Node), ESLint
+> sur les 9 fichiers touchés (0 nouvelle erreur introduite, confirmé `git stash`/`git stash pop` à 2
+> reprises), grep de sweep (aucune référence résiduelle aux clés supprimées ni aux couleurs figées),
+> **parcours navigateur réel confirmé fonctionnel par Saar** sur les 3 zones (Login, Dashboard,
+> CampaignSettingsPage 5 onglets — "magnifique"). Non testé : chaque toggle de
+> `SectionCharacterSheet.jsx` (11 options) cliqué individuellement — rendu visuel global confirmé, pas
+> chaque interaction isolément. Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 31)".
 
 > **Item 72 (Session 141 suite 30) — `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée
 > ✅ CLOS, fonctionnel confirmé Saar.** Suite de Groupe 1 (item 68, clos). **Trou d'architecture
@@ -1496,6 +1590,14 @@ Projet en cours et priorité user :
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 | **MUT1** | `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable | Basse — à investiguer |
 | **HP1** | Main directrice : `socketCombatHelpers.js:550` et `char-sheet.js:810` lisent `hand_pref` sur `char_sheet` (colonne inexistante) au lieu de `char_identity.hand_pref` → toujours `'R'` par défaut, quel que soit le choix réel du joueur | Moyenne — mécanique jamais appliquée en combat |
+| **ADV1** | Célébrité, Allié/Contact/Ennemi/Opposant et les autres "avantages relationnels" (`ref_career_random_benefits`, Revers, OPT-11) ne sont trackés nulle part mécaniquement sur la fiche personnage — aucune jauge/compteur réel. Bloque l'automatisation des tirages Avantages pro aléatoires (Lot 6) et de Revers (OPT-06) au-delà de la simple conversion en points | **Haute** — à faire impérativement (décision Saar, Session 141 suite 12) |
+| **ADV2** | Bénéfices de carrière type "Revenus +10%/+20%/doublés à partir de cette année" (`ref_career_random_benefits`, ex. Cultivateur/Éleveur) — aucun mécanisme pour appliquer un modificateur cumulatif aux années futures | Moyenne — roadmap Session 141 suite 12 |
+| **ADV3** | Bénéfices de carrière débloquant l'accès à une compétence (mutation/compétence "développée automatiquement" via tirage) — non géré, aucun câblage vers `char_skills`/`char_mutations` | Moyenne — roadmap Session 141 suite 12 |
+| **WIZ4** | `Step4Experience.jsx` — le mini-stepper (`isClickable`) ne revalide jamais les blocages durs de la sous-step quittée (ex. retirer sa seule carrière puis cliquer directement sur une sous-step déjà "reachable"). Filet serveur (`reconcileCreation` STEP4) empêche toute donnée invalide persistée — juste un rejet tardif au lieu d'un blocage immédiat | Basse — architecture navigation mini-stepper |
+| **WIZLOCK1** | 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé, avant le correctif d'atomicité Session 141 (suite 14) — `handleTerminate` faisait 2 appels réseau séparés (`reconcile` puis `lock`), toute coupure entre les deux laissait la fiche bloquée. Corrigé pour les finalisations futures ; dette documente seulement l'historique | Basse — historique, pas un risque actif |
+| **DOC1** | `docs/VOCABULARY.md` était un squelette vide depuis sa création, jamais réellement adopté par le protocole. Peuplé Session 141 (suite 18) avec un premier seed réel — reste à enrichir au fil des sessions | Basse — enrichissement continu |
+| **DOC2** | `docs/SYSTEME/REGLES_LdB.md` — dump brut d'extraction LdB, encodage mojibake par endroits, mal placé selon `RegleDocumentaire.md` Règle 8 (devrait être dans `REGLES/`), doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md`. Bandeau d'avertissement ajouté ; vérification/déplacement à faire en session dédiée | Basse — session dédiée à planifier |
+| **CHOC1** | Mutation Corne — bonus LdB "+1D6 dommages de Choc si le coup porte à la tête" non câblé. `calcResistanceArmure` calcule déjà un `prt` (protection_shock) jamais consommé par `damageService.js` — aucun pool de "dommages de Choc" distinct des dégâts physiques n'existe dans le pipeline actuel | Moyenne — chantier séparé, non trivial |
 
 ---
 

@@ -14,6 +14,7 @@ import { getSetbackBlockCount, resolveSetback } from '../../../shared/careerSetb
 import { getAutodidacteEligibleIds, validateAutodidacteAllocations } from '../../../shared/autodidacte.js'
 import { addAdvantage } from './advantageService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
+import { applyMutationIdentityGrant, recomputeIdentity, normalizeModIdentity } from './identityService.js'
 
 // ─── Résolution background avec parent nullable (single-query) ────────────────
 
@@ -336,19 +337,25 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       if (!['chosen', 'random', 'none'].includes(step3Method)) {
         throw new AppError(400, `Méthode de mutation invalide : ${step3Method}`)
       }
-      // Reset avant réapplication — sans ça, retirer une mutation Autofécondation/le
-      // désavantage Fécondité lors d'un retravail laisserait is_fertile bloqué à true.
-      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ is_fertile: false })
+      // Champs identité potentiellement sous influence d'une mutation ACTIVE avant ce resubmit —
+      // garde pour recomputeIdentity ci-dessous (Lot 6, docs/PLAN_MUTATION2.md). Capturé AVANT le
+      // .del() : ne recalcule que les champs réellement concernés, jamais en aveugle (un recompute
+      // inconditionnel écraserait un `sex` choisi au Step1 dès qu'aucune mutation ne le concerne).
+      const previouslyActiveMutations = await trx('char_mutations as cm')
+        .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
+        .where({ 'cm.char_sheet_id': sheetId, 'cm.status': 'active' })
+        .select('rm.mod_sex', 'rm.mod_fertility')
+      const identityFields = []
+      if (previouslyActiveMutations.some(m => m.mod_sex)) identityFields.push('sex')
+      if (previouslyActiveMutations.some(m => m.mod_fertility)) identityFields.push('is_fertile')
+
       await trx('char_mutations').where({ char_sheet_id: sheetId }).del()
       const mutationsToInsert = step3Method === 'random' ? (step3Kept ?? []) : (step3Mutations ?? [])
       const mutationSource = step3Method === 'random' ? 'random' : 'chosen'
-      let sexOverride = null
-      let fertilityOverride = null // null = pas d'override, sinon true/false
       for (const { mutation_id, subtype_id } of mutationsToInsert) {
         const mutRef = await trx('ref_mutations').where({ mutation_id }).first()
         if (!mutRef) throw new AppError(400, `Mutation inconnue : ${mutation_id}`)
-        if (mutRef.mod_sex) sexOverride = mutRef.mod_sex
-        if (mutRef.mod_fertility) fertilityOverride = mutRef.mod_fertility === 'self_fertile'
+        await applyMutationIdentityGrant(trx, sheetId, mutRef)
         if (subtype_id == null) {
           // Mutation is_stackable sans sous-type : incrémente count si déjà choisie dans ce lot
           // (index partiel uq_char_mut_no_sub — cible explicite requise pour Postgres).
@@ -369,11 +376,8 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
           })
         }
       }
-      if (sexOverride || fertilityOverride !== null) {
-        const archetypeUpdate = {}
-        if (sexOverride) archetypeUpdate.sex = sexOverride
-        if (fertilityOverride !== null) archetypeUpdate.is_fertile = fertilityOverride
-        await trx('char_archetype').where({ char_sheet_id: sheetId }).update(archetypeUpdate)
+      if (identityFields.length) {
+        await recomputeIdentity(trx, sheetId, identityFields)
       }
       await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step3: pc3 ?? 0 })
     }
@@ -604,6 +608,20 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
     // addAdvantage lit le ledger dans validateAdvantage pour vérifier sufficient_pc.
     if (step5) {
       const { advantages = [] } = step5
+      // Champs identité potentiellement sous influence d'un avantage ACTIF avant ce resubmit — même
+      // garde que STEP3 (Lot 6, docs/PLAN_MUTATION2.md). Capturé AVANT le .del().
+      const previouslyActiveAdvantages = await trx('char_advantages as ca')
+        .join('ref_advantages as ra', 'ra.advantage_id', 'ca.advantage_id')
+        .whereNull('ca.removed_at')
+        .where('ca.char_sheet_id', sheetId)
+        .whereNotNull('ra.mod_identity')
+        .select('ra.mod_identity')
+      const identityFieldsSet = new Set()
+      for (const { mod_identity } of previouslyActiveAdvantages) {
+        const parsed = normalizeModIdentity(mod_identity)
+        if (parsed) Object.keys(parsed).forEach((k) => identityFieldsSet.add(k))
+      }
+
       // Reset avant réapplication — pendant le Wizard, char_advantages n'est écrit que
       // par cette boucle : suppression directe + remise à zéro du ledger, pas de
       // décrémentation ligne-à-ligne via removeAdvantage.
@@ -611,6 +629,9 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step5: 0, pc_gained_desavantages: 0 })
       for (const advantageId of advantages) {
         await addAdvantage(sheetId, advantageId, 'creation_step5', trx)
+      }
+      if (identityFieldsSet.size) {
+        await recomputeIdentity(trx, sheetId, [...identityFieldsSet])
       }
     }
 
