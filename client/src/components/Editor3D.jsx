@@ -727,6 +727,7 @@ function EntityEditorScene({
           showWater={false}
           ceilingOpacity={0.35}
           displayLevel={displayLevel}
+          cameraControlsRef={orbitRef}
         />
       ) : (
         <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />

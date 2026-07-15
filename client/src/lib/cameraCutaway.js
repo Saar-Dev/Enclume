@@ -1,27 +1,5 @@
 const EPSILON = 1e-7
 
-function cross2D(ax, az, bx, bz) {
-  return ax * bz - az * bx
-}
-
-export function segmentIntersectionRatio2D(from, to, segmentFrom, segmentTo) {
-  const rayX = Number(to?.x) - Number(from?.x)
-  const rayZ = Number(to?.z) - Number(from?.z)
-  const wallX = Number(segmentTo?.x) - Number(segmentFrom?.x)
-  const wallZ = Number(segmentTo?.z) - Number(segmentFrom?.z)
-  const offsetX = Number(segmentFrom?.x) - Number(from?.x)
-  const offsetZ = Number(segmentFrom?.z) - Number(from?.z)
-  if (![rayX, rayZ, wallX, wallZ, offsetX, offsetZ].every(Number.isFinite)) return null
-
-  const denominator = cross2D(rayX, rayZ, wallX, wallZ)
-  if (Math.abs(denominator) <= EPSILON) return null
-  const rayRatio = cross2D(offsetX, offsetZ, wallX, wallZ) / denominator
-  const wallRatio = cross2D(offsetX, offsetZ, rayX, rayZ) / denominator
-  if (rayRatio < -EPSILON || rayRatio > 1 + EPSILON) return null
-  if (wallRatio < -EPSILON || wallRatio > 1 + EPSILON) return null
-  return Math.max(0, Math.min(1, rayRatio))
-}
-
 export function wallFacadeKey(wall) {
   if (wall?.facadeId) return String(wall.facadeId)
   if (wall?.curveId) return `wall-facade:curve:${wall.curveId}`
@@ -34,46 +12,43 @@ export function wallFacadeKey(wall) {
     : `wall-facade:segment:${to}:${from}`
 }
 
-export function nearestOccludingFacadeIds({ camera, targets, facades }) {
+export function cameraFacingFacadeIds({ camera, roomId, facades }) {
   const result = new Set()
-  if (!camera || !Array.isArray(targets) || !Array.isArray(facades)) return result
-  if (![Number(camera.x), Number(camera.z)].every(Number.isFinite)) return result
+  const cameraX = Number(camera?.x)
+  const cameraZ = Number(camera?.z)
+  if (!roomId || !Number.isFinite(cameraX) || !Number.isFinite(cameraZ) || !Array.isArray(facades)) {
+    return result
+  }
 
-  for (const target of targets) {
-    if (![Number(target?.x), Number(target?.z)].every(Number.isFinite)) continue
-    let closestRatio = Infinity
-    const closestFacadeIds = new Set()
-
-    for (const facade of facades) {
-      if (!facade?.id || !Array.isArray(facade.surfaces)) continue
-      let facadeRatio = Infinity
-      for (const surface of facade.surfaces) {
-        const path = surface?.path
-        if (!Array.isArray(path) || path.length < 2) continue
-        for (let index = 0; index < path.length - 1; index += 1) {
-          const ratio = segmentIntersectionRatio2D(camera, target, path[index], path[index + 1])
-          if (ratio === null || ratio <= EPSILON || ratio >= 1 - EPSILON) continue
-          facadeRatio = Math.min(facadeRatio, ratio)
+  for (const facade of facades) {
+    if (!facade?.id || !Array.isArray(facade.surfaces)) continue
+    let facesCamera = false
+    for (const surface of facade.surfaces) {
+      const interiorSign = Number(surface?.interiorNormalSignsByRoom?.[roomId]) < 0 ? -1 : 1
+      if (!Object.hasOwn(surface?.interiorNormalSignsByRoom || {}, roomId)) continue
+      const path = surface?.path
+      if (!Array.isArray(path) || path.length < 2) continue
+      for (let index = 0; index < path.length - 1; index += 1) {
+        const from = path[index]
+        const to = path[index + 1]
+        const dx = Number(to?.x) - Number(from?.x)
+        const dz = Number(to?.z) - Number(from?.z)
+        const length = Math.hypot(dx, dz)
+        if (!Number.isFinite(length) || length <= EPSILON) continue
+        const interiorNormalX = (-dz / length) * interiorSign
+        const interiorNormalZ = (dx / length) * interiorSign
+        const midX = (Number(from.x) + Number(to.x)) / 2
+        const midZ = (Number(from.z) + Number(to.z)) / 2
+        const cameraOnInteriorSide = (cameraX - midX) * interiorNormalX
+          + (cameraZ - midZ) * interiorNormalZ
+        if (cameraOnInteriorSide < -EPSILON) {
+          facesCamera = true
+          break
         }
       }
-      if (!Number.isFinite(facadeRatio)) continue
-      if (facadeRatio < closestRatio - EPSILON) {
-        closestRatio = facadeRatio
-        closestFacadeIds.clear()
-        closestFacadeIds.add(facade.id)
-      } else if (Math.abs(facadeRatio - closestRatio) <= EPSILON) {
-        closestFacadeIds.add(facade.id)
-      }
+      if (facesCamera) break
     }
-
-    for (const facadeId of closestFacadeIds) result.add(facadeId)
+    if (facesCamera) result.add(facade.id)
   }
   return result
-}
-
-export function evenlySampleTargets(targets, maximum = 256) {
-  if (!Array.isArray(targets) || targets.length <= maximum) return targets || []
-  return Array.from({ length: maximum }, (_, index) => (
-    targets[Math.floor(index * targets.length / maximum)]
-  ))
 }

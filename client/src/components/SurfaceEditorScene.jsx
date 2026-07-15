@@ -1189,6 +1189,7 @@ export default function SurfaceEditorScene({
         showWater={false}
         ceilingOpacity={0.35}
         displayLevel={displayLevel}
+        cameraControlsRef={orbitRef}
         showDetails
         selectedConnectorId={selectedConnectorId || surfaceTool?.selectedConnectorId}
         onConnectorSelect={surfaceTool?.mode === 'select' ? handleConnectorPointerSelect : null}

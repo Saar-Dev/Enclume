@@ -420,9 +420,13 @@ monde que la FSM doit appeler, les zones de conflit manuel et la matrice de vali
   ses matériaux. Une pose refusée ne quitte plus le mode connecteur et ne désélectionne plus le mur ;
 - `roomsWallRenderPaths(...)` attribue un `facadeId` indépendant de l'étage à chaque façade droite
   ou arrondie. Les tranches verticales et les morceaux autour d'une porte partagent cette identité ;
-- la coupe caméra échantillonne le sol réel et ne conserve que la première façade rencontrée sur
-  chaque rayon caméra→sol. La décision est appliquée à la façade complète : aucun damier vertical
-  n'est possible et les façades du fond restent opaques ;
+- les panneaux physiques transportent `interiorNormalSignsByRoom`, orientation topologique distincte
+  de leurs matériaux. Un mur mitoyen peut ainsi avoir un intérieur opposé pour chacune de ses deux
+  salles sans être dupliqué ;
+- la salle en contexte provient directement de la cible de `MapControls`, transmise au renderer. La
+  coupe compare la position de caméra à la normale intérieure de chaque façade complète : aucun
+  échantillonnage de cases, aucun changement de salle pendant une simple rotation et aucun damier
+  vertical ;
 - les panneaux contextuels utilisent un écart latéral de 56 px, basculent à gauche si nécessaire et
   conservent leur recalage dynamique dans le viewport ;
 - état validé : 160 tests monde/serveur/client passent, build Vite de production valide et ESLint

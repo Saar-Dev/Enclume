@@ -1265,6 +1265,7 @@ function ensureRoomWallPanel(panels, key, data) {
       material: roomWallInteriorMaterial(data.room),
       roomIds: [],
       sourceEdgeKeys: [],
+      interiorNormalSignsByRoom: {},
     })
   }
 
@@ -1356,6 +1357,10 @@ export function roomsWallSegments(rooms) {
         && Math.abs(Number(wall.z0) - Number(z0)) < 0.001
         && Math.abs(Number(wall.x1) - Number(x1)) < 0.001
         && Math.abs(Number(wall.z1) - Number(z1)) < 0.001
+      const rawInteriorNormalSign = Number(geometryMetadata.interiorNormalSign) < 0 ? -1 : 1
+      wall.interiorNormalSignsByRoom[room.id] = sameDirection
+        ? rawInteriorNormalSign
+        : -rawInteriorNormalSign
       setWallFace(wall, 'front', sameDirection ? frontSource : backSource)
       setWallFace(wall, 'back', sameDirection ? backSource : frontSource)
       if (geometryMetadata.elevationProfile) {
@@ -1435,6 +1440,7 @@ export function roomsWallSegments(rooms) {
           curveStartAngle: segment.startAngle ?? segment.curveStartAngle,
           curveSweep: segment.sweep ?? segment.curveSweep,
           sourceEdgeKeys: segment.sourceEdgeKeys,
+          interiorNormalSign: frontIsInterior ? 1 : -1,
           elevationProfile: segment.elevationProfile,
           elevationProfileFace: frontIsInterior ? 'front' : 'back',
           elevationProfileOriginY: baseY,
@@ -1548,6 +1554,10 @@ function mergeStraightWallPanels(panels) {
         frontRoomIds: [...new Set(run.panels.flatMap(panel => panel.frontRoomIds || []))],
         backRoomIds: [...new Set(run.panels.flatMap(panel => panel.backRoomIds || []))],
         sourceEdgeKeys: [...new Set(run.panels.flatMap(panel => panel.sourceEdgeKeys || []))],
+        interiorNormalSignsByRoom: Object.assign(
+          {},
+          ...run.panels.map(panel => panel.interiorNormalSignsByRoom || {}),
+        ),
       })
     }
   }
@@ -1624,6 +1634,7 @@ export function roomsWallRenderPaths(rooms) {
         curveOffset0: run.min,
         curveOffset1: run.max,
         roomIds: [...new Set(run.roomIds)],
+        interiorNormalSignsByRoom: { ...(first.interiorNormalSignsByRoom || {}) },
         centerX: Number(first.curveCenterX),
         centerZ: Number(first.curveCenterZ),
         radius: Number(first.curveRadius),

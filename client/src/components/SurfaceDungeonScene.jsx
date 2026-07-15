@@ -8,7 +8,7 @@ import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
-import { evenlySampleTargets, nearestOccludingFacadeIds, wallFacadeKey } from '../lib/cameraCutaway.js'
+import { cameraFacingFacadeIds, wallFacadeKey } from '../lib/cameraCutaway.js'
 import {
   multiPolygonContours,
   multiPolygonContainsPoint,
@@ -30,7 +30,6 @@ import {
   getRoomBaseY,
   getRoomCeilingThickness,
   getRoomFloorThickness,
-  getRoomFootprintCells,
   getRoomTopY,
   getWallRenderBox,
   isWorldPointVisibleAtLevel,
@@ -89,7 +88,7 @@ const BOLT_WASHER_MATERIAL = new THREE.MeshStandardMaterial({
 })
 const HIDDEN_WALL_CAP_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
 
-function useCameraVolumeRoomId(surface, displayLevel) {
+function useCameraRoomId(surface, displayLevel, cameraControlsRef = null) {
   const { camera } = useThree()
   const [roomId, setRoomId] = useState(null)
   const elapsedRef = useRef(0)
@@ -104,27 +103,33 @@ function useCameraVolumeRoomId(surface, displayLevel) {
     if (elapsedRef.current < 0.12) return
     elapsedRef.current = 0
 
+    const controlsTarget = cameraControlsRef?.current?.target
+    const hasControlsTarget = controlsTarget
+      && [controlsTarget.x, controlsTarget.y, controlsTarget.z].every(Number.isFinite)
+    const focus = hasControlsTarget
+      ? controlsTarget.clone()
+      : (() => {
+        const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize()
+        const planeY = Number(displayLevel) * STORY_HEIGHT + 0.04
+        const distanceToPlane = Math.abs(direction.y) > 1e-5
+          ? (planeY - camera.position.y) / direction.y
+          : -1
+        return distanceToPlane >= 0
+          ? camera.position.clone().addScaledVector(direction, distanceToPlane)
+          : camera.position.clone().addScaledVector(direction, 4)
+      })()
     const previous = lastCameraRef.current
     if (previous
       && previous.displayLevel === displayLevel
-      && previous.position.distanceToSquared(camera.position) < 0.0009
-      && 1 - Math.abs(previous.quaternion.dot(camera.quaternion)) < 0.00004
+      && previous.focus.distanceToSquared(focus) < 0.0009
+      && previous.usesControlsTarget === Boolean(hasControlsTarget)
       && previous.rooms === surface.rooms) return
     lastCameraRef.current = {
       displayLevel,
-      position: camera.position.clone(),
-      quaternion: camera.quaternion.clone(),
+      focus,
+      usesControlsTarget: Boolean(hasControlsTarget),
       rooms: surface.rooms,
     }
-
-    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize()
-    const planeY = Number(displayLevel) * STORY_HEIGHT + 0.04
-    const distanceToPlane = Math.abs(direction.y) > 1e-5
-      ? (planeY - camera.position.y) / direction.y
-      : -1
-    const focus = distanceToPlane >= 0
-      ? camera.position.clone().addScaledVector(direction, distanceToPlane)
-      : camera.position.clone().addScaledVector(direction, 4)
 
     let nextRoomId = null
     for (const [candidateId, rawRoom] of Object.entries(surface.rooms || {})) {
@@ -132,7 +137,7 @@ function useCameraVolumeRoomId(surface, displayLevel) {
       const baseLevel = yToLevel(getRoomBaseY(room))
       const levels = roomMaximumHeightLevels(room, STORY_HEIGHT)
       const offset = Number(displayLevel) - baseLevel
-      if (levels < 2 || offset < 0 || offset >= levels) continue
+      if (offset < 0 || offset >= levels) continue
       const slice = roomSliceAtLevel(room, offset, surface.rooms, STORY_HEIGHT)
       if (!slice || !multiPolygonContainsPoint(slice.footprint, { x: focus.x, z: focus.z })) continue
       nextRoomId = candidateId
@@ -1917,44 +1922,6 @@ function WaterSheets({ waterCells, opacity = 0.16 }) {
   )
 }
 
-function displayedFloorTargets(surface, displayLevel, cameraVolumeRoomId = null) {
-  const targets = []
-  if (displayLevel === null) return targets
-
-  for (const [roomId, room] of Object.entries(surface.rooms || {})) {
-    const belongsToCameraVolume = roomId === cameraVolumeRoomId
-    if (room?.floorEnabled === false || (!belongsToCameraVolume && yToLevel(getRoomBaseY(room)) !== displayLevel)) continue
-    const normalizedRoom = { id: roomId, ...room }
-    const floorSlice = roomSliceAtLevel(normalizedRoom, 0, surface.rooms, STORY_HEIGHT)
-    const roomTargets = getRoomFootprintCells(room)
-      .filter(cell => !floorSlice || multiPolygonContainsPoint(floorSlice.footprint, {
-        x: cell.x + 0.5,
-        z: cell.z + 0.5,
-      }))
-      .map(cell => ({
-        x: cell.x + 0.5,
-        y: getRoomBaseY(room) + getRoomFloorThickness(room) / 2,
-        z: cell.z + 0.5,
-        roomId,
-      }))
-    targets.push(...evenlySampleTargets(roomTargets, 256))
-  }
-
-  const standaloneTargets = []
-  for (const [id, floor] of Object.entries(surface.floors || {})) {
-    const parsed = parseFloorKey(id, floor)
-    if (yToLevel(parsed.y) !== displayLevel) continue
-    standaloneTargets.push({
-      x: parsed.x + 0.5,
-      y: parsed.y + getFloorThickness(floor) / 2,
-      z: parsed.z + 0.5,
-      roomId: null,
-    })
-  }
-  targets.push(...evenlySampleTargets(standaloneTargets, 256))
-  return targets
-}
-
 function sameStringSet(left, right) {
   if (left.size !== right.size) return false
   for (const value of left) if (!right.has(value)) return false
@@ -1979,24 +1946,15 @@ function displayedWallFacades(walls, displayLevel, cameraVolumeRoomId = null) {
     group.surfaces.push({
       path: profiledWallPath(wall),
       roomIds: wall.roomIds || [],
+      interiorNormalSignsByRoom: wall.interiorNormalSignsByRoom || {},
     })
     group.logicalWallIds.add(wall.logicalWallId || wall.id)
   }
   return [...groups.values()]
 }
 
-function useOccludedWallIds(walls, surface, displayLevel, cameraVolumeRoomId = null) {
+function useOccludedWallIds(walls, displayLevel, cameraVolumeRoomId = null) {
   const { camera } = useThree()
-  const floorTargets = useMemo(
-    () => displayedFloorTargets(surface, displayLevel, cameraVolumeRoomId),
-    [cameraVolumeRoomId, displayLevel, surface],
-  )
-  const cutawayTargets = useMemo(
-    () => cameraVolumeRoomId
-      ? floorTargets.filter(target => target.roomId === cameraVolumeRoomId)
-      : floorTargets,
-    [cameraVolumeRoomId, floorTargets],
-  )
   const facades = useMemo(
     () => displayedWallFacades(walls, displayLevel, cameraVolumeRoomId),
     [cameraVolumeRoomId, displayLevel, walls],
@@ -2004,7 +1962,7 @@ function useOccludedWallIds(walls, surface, displayLevel, cameraVolumeRoomId = n
   const [occludedIds, setOccludedIds] = useState(() => new Set())
   const elapsedRef = useRef(0)
   const lastViewRef = useRef(null)
-  const inputsRef = useRef({ facades: null, cutawayTargets: null })
+  const inputsRef = useRef({ facades: null, cameraVolumeRoomId: null })
 
   useFrame((_, delta) => {
     elapsedRef.current += delta
@@ -2018,19 +1976,19 @@ function useOccludedWallIds(walls, surface, displayLevel, cameraVolumeRoomId = n
       || previous.position.distanceToSquared(position) > 0.0004
       || 1 - Math.abs(previous.quaternion.dot(quaternion)) > 0.00002
     const inputsChanged = inputsRef.current.facades !== facades
-      || inputsRef.current.cutawayTargets !== cutawayTargets
+      || inputsRef.current.cameraVolumeRoomId !== cameraVolumeRoomId
     if (!cameraMoved && !inputsChanged) return
 
     lastViewRef.current = {
       position: position.clone(),
       quaternion: quaternion.clone(),
     }
-    inputsRef.current = { facades, cutawayTargets }
+    inputsRef.current = { facades, cameraVolumeRoomId }
 
     const next = new Set()
-    const occludingFacadeIds = nearestOccludingFacadeIds({
+    const occludingFacadeIds = cameraFacingFacadeIds({
       camera: camera.position,
-      targets: cutawayTargets,
+      roomId: cameraVolumeRoomId,
       facades,
     })
     for (const facade of facades) {
@@ -2087,9 +2045,10 @@ function SurfaceDungeonScene({
   selectedConnectorId = null,
   onConnectorSelect = null,
   runtimeFeatureStates = {},
+  cameraControlsRef = null,
 }) {
   const surface = useMemo(() => normalizeSurfaceData(surfaceData), [surfaceData])
-  const cameraVolumeRoomId = useCameraVolumeRoomId(surface, displayLevel)
+  const cameraVolumeRoomId = useCameraRoomId(surface, displayLevel, cameraControlsRef)
   const horizontalInterfaces = useMemo(
     () => roomHorizontalInterfaces(surface.rooms, STORY_HEIGHT),
     [surface.rooms],
@@ -2121,7 +2080,7 @@ function SurfaceDungeonScene({
     () => [...roomWallSegments, ...surfaceWallSegments],
     [roomWallSegments, surfaceWallSegments],
   )
-  const occludedWallIds = useOccludedWallIds(allWallSegments, surface, displayLevel, cameraVolumeRoomId)
+  const occludedWallIds = useOccludedWallIds(allWallSegments, displayLevel, cameraVolumeRoomId)
   const structureIsVisible = (y) => displayLevel === null || yToLevel(y) <= displayLevel
   const worldPointIsVisible = (x, z, y) => (
     isWorldPointVisibleAtLevel(surface, displayLevel, x, z, y)

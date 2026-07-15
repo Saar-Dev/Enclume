@@ -1056,6 +1056,7 @@ function Scene({
           surfaceData={surfaceData}
           textureMaterials={textureMaterials}
           displayLevel={displayLevel}
+          cameraControlsRef={thirdPersonCameraActive ? null : orbitRef}
           runtimeFeatureStates={runtimeFeatureStates}
           selectedConnectorId={selectedSurfaceConnectorId}
           onConnectorSelect={onSurfaceConnectorSelect}

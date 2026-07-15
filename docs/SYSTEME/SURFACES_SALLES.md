@@ -96,11 +96,15 @@ le point visé par la caméra se trouve dans une salle multi-hauteur, les murs d
 y compris au-dessus du niveau courant, sont rendus pour montrer le volume complet ; les autres
 salles supérieures restent masquées. Ces murs ne deviennent pas transparents simplement parce
 qu'ils sont « devant » dans le plan. Le moteur groupe d'abord toutes les tranches verticales et les
-découpes de porte qui appartiennent à une même façade. Pour chaque rayon allant de la caméra à un
-point praticable du vrai sol, seule la première façade rencontrée peut recevoir l'opacité de coupe.
-La décision s'applique ensuite à la façade complète, sur toute sa hauteur : elle ne produit jamais
-une alternance opaque/transparente entre étages. Une façade située au fond de la salle est derrière
-le sol visé ou derrière une première façade ; elle reste donc opaque. Une salle profonde conserve
+découpes de porte qui appartiennent à une même façade. La salle en contexte est déterminée par la
+cible réelle de `MapControls`, pas par une intersection reconstruite depuis le quaternion de la
+caméra : tourner autour d'une cible fixe ne peut donc plus changer de salle active. Chaque panneau
+physique transporte en outre `interiorNormalSignsByRoom`, dérivé du contour canonique et indépendant
+des textures. Une façade devient transparente lorsque la caméra se trouve du côté opposé à sa
+normale intérieure pour la salle active. La décision s'applique à la façade complète, sur toute sa
+hauteur : elle ne produit jamais une alternance opaque/transparente entre étages. Une façade située
+au fond de la salle voit la caméra du même côté que son intérieur et reste donc opaque. Cette règle
+ne dépend d'aucun échantillon de centres de cases. Une salle profonde conserve
 ses murs descendants et son vide continu : un puits doit donc paraître profond. Aucun plancher
 intermédiaire n'est créé automatiquement. Une future trappe doit
 être portée par un connecteur vertical —

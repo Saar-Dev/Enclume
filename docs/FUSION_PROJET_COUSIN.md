@@ -85,9 +85,10 @@ combat ne doit reconstruire cette interface depuis les meshes.
 - une salle multi-hauteur conserve son vide et ses murs descendants, sans plancher implicite ;
 - les connecteurs inférieurs restent visibles ;
 - la transparence de caméra est décidée par façade complète. Toutes les tranches verticales et les
-  morceaux créés par une porte partagent un `facadeId` de rendu. Pour chaque rayon caméra→vrai sol,
-  seule la première façade rencontrée peut devenir transparente ; une façade du fond ne doit jamais
-  être masquée parce qu'un autre point de sol se trouve devant elle ;
+  morceaux créés par une porte partagent un `facadeId` de rendu. La salle active vient de la cible
+  réelle des contrôles caméra. `interiorNormalSignsByRoom` indique ensuite le côté intérieur de
+  chaque façade pour cette salle ; caméra du côté extérieur signifie transparent, caméra du côté
+  intérieur signifie opaque. Ne pas réintroduire de rayons vers des centres de cases ;
 - les bouchons internes des découpes de porte ne sont pas rendus.
 
 La visibilité graphique d'un étage inférieur ne lui donne pas l'autorité de support de placement

@@ -702,6 +702,7 @@ test('les tranches verticales d un mur partagent une façade de rendu unique', (
   const byFacade = new Map()
   for (const wall of rendered) {
     assert.ok(wall.facadeId)
+    assert.ok([-1, 1].includes(wall.interiorNormalSignsByRoom?.tower))
     if (!byFacade.has(wall.facadeId)) byFacade.set(wall.facadeId, [])
     byFacade.get(wall.facadeId).push(wall)
   }
