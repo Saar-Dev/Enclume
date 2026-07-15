@@ -1,0 +1,583 @@
+// shared/world/surfaceDocument.js
+// Contrat surface_data v12 du moteur de monde canonique.
+
+import { createWorldDocument } from './worldContracts.js'
+import {
+  roomBoundaryEdges,
+  selectedRoomBoundaryChain,
+} from './roomGeometry.js'
+
+export const SURFACE_DATA_VERSION = 12
+export const SURFACE_FINE_DEFAULT = 4
+export const SURFACE_STORY_HEIGHT_DEFAULT = 2.5
+
+export const SURFACE_COLLECTIONS = Object.freeze([
+  'rooms',
+  'floors',
+  'walls',
+  'ceilings',
+  'stairs',
+  'connectors',
+])
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const OBSOLETE_ROOM_APPEARANCE_FIELDS = [
+  'floorTopTex', 'floorBottomTex', 'ceilingTopTex', 'ceilingBottomTex',
+  'wallExteriorTex', 'wallFrontTex', 'wallBackTex', 'wallTopTex',
+  'floorTopMaterial', 'floorBottomMaterial', 'ceilingTopMaterial', 'ceilingBottomMaterial',
+  'wallExteriorMaterial', 'wallFrontMaterial', 'wallBackMaterial',
+]
+
+function isPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+function cloneValue(value) {
+  if (Array.isArray(value)) return value.map(cloneValue)
+  if (isPlainObject(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneValue(item)]))
+  }
+  return value
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value
+  for (const child of Object.values(value)) deepFreeze(child)
+  return Object.freeze(value)
+}
+
+function positiveNumber(value, fallback) {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : fallback
+}
+
+function hash32(value, salt) {
+  let hash = (2166136261 ^ salt) >>> 0
+  const text = String(value)
+  for (let index = 0; index < text.length; index++) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  hash ^= hash >>> 16
+  hash = Math.imul(hash, 2246822507)
+  hash ^= hash >>> 13
+  hash = Math.imul(hash, 3266489909)
+  hash ^= hash >>> 16
+  return hash >>> 0
+}
+
+export function deterministicWorldId(namespace, collection, legacyId) {
+  const name = `${namespace ?? 'unscoped'}|${collection}|${legacyId}`
+  const hex = [0x9e3779b9, 0x85ebca6b, 0xc2b2ae35, 0x27d4eb2f]
+    .map(salt => hash32(name, salt).toString(16).padStart(8, '0'))
+    .join('')
+    .split('')
+  hex[12] = '5'
+  hex[16] = ['8', '9', 'a', 'b'][parseInt(hex[16], 16) % 4]
+  const raw = hex.join('')
+  return `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`
+}
+
+function validateFiniteFields(item, fields, path, errors) {
+  for (const field of fields) {
+    if (!Number.isFinite(Number(item[field]))) errors.push(`${path}.${field} doit être un nombre fini`)
+  }
+}
+
+function validateMovementMultiplier(item, path, errors) {
+  const value = item.movementMultiplier ?? item.movementCostMultiplier
+  if (value != null && (!Number.isFinite(Number(value)) || Number(value) <= 0)) {
+    errors.push(`${path}.movementMultiplier doit être strictement positif`)
+  }
+}
+
+function validateWallElevationProfile(profile, path, errors) {
+  if (!isPlainObject(profile) || !['curved', 'faceted'].includes(profile.type)) {
+    errors.push(`${path}.type doit valoir curved ou faceted`)
+    return
+  }
+  if (!Number.isFinite(Number(profile.depth)) || Number(profile.depth) <= 0 || Number(profile.depth) > 5) {
+    errors.push(`${path}.depth doit être compris entre 0 et 5 mètres`)
+  }
+  if (![1, -1].includes(Number(profile.direction))) {
+    errors.push(`${path}.direction doit valoir 1 ou -1`)
+  }
+}
+
+function validateWallAppearanceMaterial(material, path, errors) {
+  if (material == null) return
+  if (!isPlainObject(material)) {
+    errors.push(`${path} doit être un objet`)
+    return
+  }
+  for (const field of ['material', 'paint', 'pattern', 'seed']) {
+    if (material[field] != null && typeof material[field] !== 'string') {
+      errors.push(`${path}.${field} doit être une chaîne`)
+    }
+  }
+  for (const field of ['wear', 'dirt', 'relief']) {
+    if (material[field] == null) continue
+    const value = Number(material[field])
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      errors.push(`${path}.${field} doit être compris entre 0 et 100`)
+    }
+  }
+  if (material.realRelief != null && typeof material.realRelief !== 'boolean') {
+    errors.push(`${path}.realRelief doit être un booléen`)
+  }
+}
+
+function validateRoomVerticalProfile(profile, room, path, errors) {
+  if (!isPlainObject(profile) || !Array.isArray(profile.slices) || profile.slices.length === 0) {
+    errors.push(`${path}.verticalProfile doit contenir un tableau slices non vide`)
+    return
+  }
+  const expectedLevels = Number.parseInt(room?.heightLevels, 10)
+  if (Number.isInteger(expectedLevels) && expectedLevels !== profile.slices.length) {
+    errors.push(`${path}.heightLevels doit correspondre au nombre de tranches verticales`)
+  }
+  profile.slices.forEach((slice, index) => {
+    const slicePath = `${path}.verticalProfile.slices.${index}`
+    if (!isPlainObject(slice)) {
+      errors.push(`${slicePath} doit être un objet`)
+      return
+    }
+    if (Number(slice.offset) !== index) errors.push(`${slicePath}.offset doit valoir ${index}`)
+    if (!Array.isArray(slice.footprint) || slice.footprint.length === 0) {
+      errors.push(`${slicePath}.footprint doit être un multipolygone non vide`)
+    } else {
+      for (const [polygonIndex, polygon] of slice.footprint.entries()) {
+        if (!Array.isArray(polygon) || polygon.length === 0) {
+          errors.push(`${slicePath}.footprint.${polygonIndex} doit contenir au moins un contour`)
+          continue
+        }
+        for (const [ringIndex, ring] of polygon.entries()) {
+          const ringPath = `${slicePath}.footprint.${polygonIndex}.${ringIndex}`
+          if (!Array.isArray(ring) || ring.length < 4) {
+            errors.push(`${ringPath} doit contenir au moins quatre points, fermeture comprise`)
+            continue
+          }
+          if (ring.some(point => !Array.isArray(point) || point.length < 2 || !point.slice(0, 2).every(Number.isFinite))) {
+            errors.push(`${ringPath} doit contenir uniquement des coordonnées finies [x,z]`)
+          }
+          const first = ring[0]
+          const last = ring.at(-1)
+          if (!first || !last || Number(first[0]) !== Number(last[0]) || Number(first[1]) !== Number(last[1])) {
+            errors.push(`${ringPath} doit être fermé`)
+          }
+        }
+      }
+    }
+    if (!Array.isArray(slice.wallPaths) || slice.wallPaths.length === 0) {
+      errors.push(`${slicePath}.wallPaths doit contenir les murs canoniques de la tranche`)
+    } else {
+      slice.wallPaths.forEach((wall, wallIndex) => {
+        const wallPath = `${slicePath}.wallPaths.${wallIndex}`
+        if (!isPlainObject(wall) || !['x', 'z', 'segment', 'arc'].includes(wall.axis)) {
+          errors.push(`${wallPath}.axis est invalide`)
+          return
+        }
+        validateFiniteFields(wall, ['x0', 'z0', 'x1', 'z1'], wallPath, errors)
+        if (wall.axis === 'arc') validateFiniteFields(wall, ['centerX', 'centerZ', 'radius', 'startAngle', 'sweep'], wallPath, errors)
+        if (wall.elevationProfile != null) validateWallElevationProfile(wall.elevationProfile, `${wallPath}.elevationProfile`, errors)
+      })
+    }
+  })
+}
+
+function validateFeature(collection, id, item, errors) {
+  const path = `$.${collection}.${id}`
+  if (!isPlainObject(item)) {
+    errors.push(`${path} doit être un objet`)
+    return
+  }
+  if (item.worldId != null && !UUID_RE.test(item.worldId)) {
+    errors.push(`${path}.worldId doit être un UUID`)
+  }
+  validateMovementMultiplier(item, path, errors)
+
+  if (collection === 'rooms') {
+    validateFiniteFields(item, ['minX', 'maxX', 'minZ', 'maxZ'], path, errors)
+    for (const field of OBSOLETE_ROOM_APPEARANCE_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(item, field)) {
+        errors.push(`${path}.${field} n'existe plus dans surface_data v12`)
+      }
+    }
+    for (const textureField of ['floorTex', 'ceilingTex', 'wallInteriorTex']) {
+      if (item[textureField] != null && typeof item[textureField] !== 'string' && typeof item[textureField] !== 'number') {
+        errors.push(`${path}.${textureField} doit être une référence de texture`)
+      }
+    }
+    validateWallAppearanceMaterial(item.floorMaterial, `${path}.floorMaterial`, errors)
+    validateWallAppearanceMaterial(item.ceilingMaterial, `${path}.ceilingMaterial`, errors)
+    validateWallAppearanceMaterial(item.wallInteriorMaterial, `${path}.wallInteriorMaterial`, errors)
+    if (item.cells != null) {
+      if (!Array.isArray(item.cells) || item.cells.length === 0) {
+        errors.push(`${path}.cells doit être un tableau non vide`)
+      } else {
+        const seen = new Set()
+        for (const [index, value] of item.cells.entries()) {
+          const [rawX, rawZ] = typeof value === 'string'
+            ? value.split(':')
+            : [value?.x, value?.z]
+          const x = Number(rawX)
+          const z = Number(rawZ)
+          if (!Number.isInteger(x) || !Number.isInteger(z)) {
+            errors.push(`${path}.cells.${index} doit décrire une case entière x:z`)
+            continue
+          }
+          const key = `${x}:${z}`
+          if (seen.has(key)) errors.push(`${path}.cells contient la case ${key} plusieurs fois`)
+          seen.add(key)
+          if (x < Number(item.minX) || x > Number(item.maxX) || z < Number(item.minZ) || z > Number(item.maxZ)) {
+            errors.push(`${path}.cells.${index} sort des bornes de la salle`)
+          }
+        }
+      }
+    }
+    if (item.verticalProfile != null) validateRoomVerticalProfile(item.verticalProfile, item, path, errors)
+    if (item.wallElevationProfiles != null) {
+      if (!Array.isArray(item.wallElevationProfiles)) {
+        errors.push(`${path}.wallElevationProfiles doit être un tableau`)
+      } else {
+        item.wallElevationProfiles.forEach((entry, index) => {
+          const entryPath = `${path}.wallElevationProfiles.${index}`
+          if (!isPlainObject(entry) || !Array.isArray(entry.edgeKeys) || entry.edgeKeys.length === 0) {
+            errors.push(`${entryPath}.edgeKeys doit être un tableau non vide`)
+            return
+          }
+          if (entry.edgeKeys.some(key => typeof key !== 'string' || !key)) {
+            errors.push(`${entryPath}.edgeKeys doit contenir des clés non vides`)
+          }
+          if (Object.prototype.hasOwnProperty.call(entry, 'exteriorTex')
+            || Object.prototype.hasOwnProperty.call(entry, 'exteriorMaterial')) {
+            errors.push(`${entryPath} ne peut décrire que la face intérieure en v12`)
+          }
+          validateWallElevationProfile(entry.profile, `${entryPath}.profile`, errors)
+        })
+      }
+    }
+    if (item.wallAppearanceProfiles != null) {
+      if (!Array.isArray(item.wallAppearanceProfiles)) {
+        errors.push(`${path}.wallAppearanceProfiles doit être un tableau`)
+      } else {
+        item.wallAppearanceProfiles.forEach((entry, index) => {
+          const entryPath = `${path}.wallAppearanceProfiles.${index}`
+          if (!isPlainObject(entry) || !Array.isArray(entry.edgeKeys) || entry.edgeKeys.length === 0) {
+            errors.push(`${entryPath}.edgeKeys doit être un tableau non vide`)
+            return
+          }
+          if (entry.edgeKeys.some(key => typeof key !== 'string' || !key)) {
+            errors.push(`${entryPath}.edgeKeys doit contenir des clés non vides`)
+          }
+          for (const textureField of ['interiorTex']) {
+            if (entry[textureField] != null && typeof entry[textureField] !== 'string') {
+              errors.push(`${entryPath}.${textureField} doit être une chaîne`)
+            }
+          }
+          validateWallAppearanceMaterial(entry.interiorMaterial, `${entryPath}.interiorMaterial`, errors)
+        })
+      }
+    }
+    if (item.boundaryArcs != null) {
+      if (!Array.isArray(item.boundaryArcs)) {
+        errors.push(`${path}.boundaryArcs doit être un tableau`)
+      } else {
+        const arcIds = new Set()
+        for (const [index, arc] of item.boundaryArcs.entries()) {
+          const arcPath = `${path}.boundaryArcs.${index}`
+          if (!isPlainObject(arc)) {
+            errors.push(`${arcPath} doit être un objet`)
+            continue
+          }
+          if (typeof arc.id !== 'string' || !arc.id.trim()) errors.push(`${arcPath}.id est obligatoire`)
+          else if (arcIds.has(arc.id)) errors.push(`${path}.boundaryArcs contient deux fois ${arc.id}`)
+          else arcIds.add(arc.id)
+          const edgeKeysValid = Array.isArray(arc.edgeKeys)
+            && arc.edgeKeys.length >= 2
+            && arc.edgeKeys.every(key => typeof key === 'string')
+          if (!edgeKeysValid) {
+            errors.push(`${arcPath}.edgeKeys doit contenir au moins deux murs`)
+          } else if (new Set(arc.edgeKeys).size !== arc.edgeKeys.length) {
+            errors.push(`${arcPath}.edgeKeys contient des murs en double`)
+          } else {
+            const chain = selectedRoomBoundaryChain(item, arc.edgeKeys)
+            if (chain.error) {
+              errors.push(`${arcPath}.edgeKeys ne forme pas une chaîne valide : ${chain.error}`)
+            } else {
+              const closePoint = (left, right) => (
+                Math.abs(Number(left?.x) - Number(right?.x)) <= 1e-6
+                && Math.abs(Number(left?.z) - Number(right?.z)) <= 1e-6
+              )
+              const endpointsMatch = (
+                closePoint(arc.start, chain.start) && closePoint(arc.end, chain.end)
+              ) || (
+                closePoint(arc.start, chain.end) && closePoint(arc.end, chain.start)
+              )
+              if (!endpointsMatch) errors.push(`${arcPath} ne rejoint pas les extrémités de sa chaîne`)
+            }
+          }
+          validateFiniteFields(arc.start || {}, ['x', 'z'], `${arcPath}.start`, errors)
+          validateFiniteFields(arc.end || {}, ['x', 'z'], `${arcPath}.end`, errors)
+          const angle = Number(arc.angleDegrees)
+          if (!Number.isFinite(angle) || angle < 5 || angle > 175) {
+            errors.push(`${arcPath}.angleDegrees doit être compris entre 5 et 175`)
+          }
+          if (![1, -1].includes(Number(arc.side))) errors.push(`${arcPath}.side doit valoir 1 ou -1`)
+        }
+      }
+    }
+    if (item.openWallEdgeKeys != null) {
+      if (!Array.isArray(item.openWallEdgeKeys) || item.openWallEdgeKeys.some(key => typeof key !== 'string')) {
+        errors.push(`${path}.openWallEdgeKeys doit être un tableau de murs`)
+      } else {
+        const unique = new Set(item.openWallEdgeKeys)
+        if (unique.size !== item.openWallEdgeKeys.length) errors.push(`${path}.openWallEdgeKeys contient des doublons`)
+        const boundaryKeys = new Set(roomBoundaryEdges(item).map(edge => edge.key))
+        for (const key of unique) {
+          if (!boundaryKeys.has(key)) errors.push(`${path}.openWallEdgeKeys contient un mur absent du contour`)
+        }
+      }
+    }
+    if (item.geometryClipRoomIds != null) {
+      if (!Array.isArray(item.geometryClipRoomIds) || item.geometryClipRoomIds.some(value => typeof value !== 'string')) {
+        errors.push(`${path}.geometryClipRoomIds doit être un tableau d’identifiants de salles`)
+      } else if (new Set(item.geometryClipRoomIds).size !== item.geometryClipRoomIds.length) {
+        errors.push(`${path}.geometryClipRoomIds contient des doublons`)
+      } else if (item.geometryClipRoomIds.includes(id)) {
+        errors.push(`${path}.geometryClipRoomIds ne peut pas référencer la salle elle-même`)
+      }
+    }
+  } else if (collection === 'floors') {
+    const [keyX, keyZ, keyY = 0] = String(id).split(':')
+    const x = item.x ?? keyX
+    const z = item.z ?? keyZ
+    const y = item.y ?? keyY
+    if (![x, z, y].every(value => Number.isFinite(Number(value)))) {
+      errors.push(`${path} doit fournir des coordonnées x/z/y valides`)
+    }
+  } else if (collection === 'ceilings') {
+    const [keyX, keyZ, keyBaseY = 0, keyY = SURFACE_STORY_HEIGHT_DEFAULT] = String(id).split(':')
+    const values = [item.x ?? keyX, item.z ?? keyZ, item.baseY ?? keyBaseY, item.y ?? keyY]
+    if (!values.every(value => Number.isFinite(Number(value)))) {
+      errors.push(`${path} doit fournir des coordonnées x/z/baseY/y valides`)
+    }
+  } else if (collection === 'walls') {
+    if (!['x', 'z', 'segment'].includes(item.axis)) errors.push(`${path}.axis doit valoir x, z ou segment`)
+    validateFiniteFields(item, ['x0', 'x1', 'z0', 'z1'], path, errors)
+  } else if (collection === 'stairs') {
+    if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
+    validateFiniteFields(item, ['minX', 'maxX', 'minZ', 'maxZ', 'y', 'topY'], path, errors)
+  } else if (collection === 'connectors') {
+    if (typeof item.type !== 'string' || !item.type.trim()) errors.push(`${path}.type est obligatoire`)
+    if (item.type === 'door') {
+      if (!['x', 'z', 'segment'].includes(item.axis)) errors.push(`${path}.axis doit valoir x, z ou segment`)
+      validateFiniteFields(item, ['x0', 'x1', 'z0', 'z1', 'y'], path, errors)
+      if (item.axis === 'segment') {
+        validateFiniteFields(item, ['anchorX', 'anchorZ', 'tangentX', 'tangentZ', 'normalX', 'normalZ', 'rotationY'], path, errors)
+        if (typeof item.curveId !== 'string' || !item.curveId) errors.push(`${path}.curveId est obligatoire sur un mur courbe`)
+        if (!Number.isFinite(Number(item.curveOffset))) errors.push(`${path}.curveOffset doit être un nombre fini`)
+      }
+    } else if (item.type === 'elevator') {
+      validateFiniteFields(item, ['x', 'z', 'fromLevel', 'toLevel'], path, errors)
+    }
+  }
+}
+
+function validationResult(errors) {
+  return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) })
+}
+
+export class SurfaceDocumentError extends Error {
+  constructor(errors) {
+    super(`surface_data invalide : ${errors.join(' ; ')}`)
+    this.name = 'SurfaceDocumentError'
+    this.errors = Object.freeze([...errors])
+  }
+}
+
+export function validateSurfaceData(input) {
+  const errors = []
+  if (!isPlainObject(input)) return validationResult(['$ doit être un objet'])
+
+  const version = input.version ?? SURFACE_DATA_VERSION
+  if (!Number.isInteger(Number(version)) || Number(version) < 1 || Number(version) > SURFACE_DATA_VERSION) {
+    errors.push(`$.version doit être comprise entre 1 et ${SURFACE_DATA_VERSION}`)
+  }
+  if (input.fine != null && (!Number.isFinite(Number(input.fine)) || Number(input.fine) <= 0)) {
+    errors.push('$.fine doit être strictement positif')
+  }
+  if (input.storyHeight != null && (!Number.isFinite(Number(input.storyHeight)) || Number(input.storyHeight) <= 0)) {
+    errors.push('$.storyHeight doit être strictement positif')
+  }
+
+  for (const collection of SURFACE_COLLECTIONS) {
+    const record = input[collection] ?? {}
+    if (!isPlainObject(record)) {
+      errors.push(`$.${collection} doit être un objet`)
+      continue
+    }
+    for (const [id, item] of Object.entries(record)) validateFeature(collection, id, item, errors)
+  }
+  const rooms = isPlainObject(input.rooms) ? input.rooms : {}
+  for (const [id, room] of Object.entries(rooms)) {
+    for (const clipId of Array.isArray(room?.geometryClipRoomIds) ? room.geometryClipRoomIds : []) {
+      if (!rooms[clipId]) errors.push(`$.rooms.${id}.geometryClipRoomIds référence la salle absente ${clipId}`)
+    }
+  }
+  const visiting = new Set()
+  const visited = new Set()
+  const visitRoom = id => {
+    if (visiting.has(id)) {
+      errors.push(`$.rooms.${id}.geometryClipRoomIds forme un cycle de découpe`)
+      return
+    }
+    if (visited.has(id) || !rooms[id]) return
+    visiting.add(id)
+    for (const clipId of rooms[id].geometryClipRoomIds || []) visitRoom(clipId)
+    visiting.delete(id)
+    visited.add(id)
+  }
+  for (const id of Object.keys(rooms)) visitRoom(id)
+  return validationResult(errors)
+}
+
+export function assertSurfaceData(input) {
+  const validation = validateSurfaceData(input)
+  if (!validation.valid) throw new SurfaceDocumentError(validation.errors)
+  return input
+}
+
+function canonicalizeDerivedRoomMetadata(input) {
+  if (!isPlainObject(input) || !isPlainObject(input.rooms)) return input
+  const storyHeight = positiveNumber(input.storyHeight, SURFACE_STORY_HEIGHT_DEFAULT)
+  let changed = false
+  const rooms = Object.fromEntries(Object.entries(input.rooms).map(([id, room]) => {
+    const slices = room?.verticalProfile?.slices
+    if (!Array.isArray(slices) || slices.length === 0) return [id, room]
+    const contiguous = slices.every((slice, index) => Number(slice?.offset) === index)
+    if (!contiguous) return [id, room]
+    const heightLevels = slices.length
+    const height = heightLevels * storyHeight
+    if (Number(room.heightLevels) === heightLevels && Number(room.height) === height) return [id, room]
+    changed = true
+    return [id, { ...room, heightLevels, height }]
+  }))
+  return changed ? { ...input, rooms } : input
+}
+
+export function normalizeSurfaceDataDocument(input) {
+  const canonicalInput = canonicalizeDerivedRoomMetadata(input)
+  assertSurfaceData(canonicalInput)
+  const normalized = {
+    ...cloneValue(canonicalInput),
+    version: SURFACE_DATA_VERSION,
+    fine: positiveNumber(canonicalInput.fine, SURFACE_FINE_DEFAULT),
+    storyHeight: positiveNumber(canonicalInput.storyHeight, SURFACE_STORY_HEIGHT_DEFAULT),
+  }
+  for (const collection of SURFACE_COLLECTIONS) {
+    normalized[collection] = cloneValue(canonicalInput[collection] ?? {})
+  }
+  return normalized
+}
+
+function withWorldIds(surfaceData, battlemapId, reseed) {
+  const next = { ...surfaceData }
+  let changed = false
+  for (const collection of SURFACE_COLLECTIONS) {
+    next[collection] = Object.fromEntries(Object.entries(surfaceData[collection]).map(([legacyId, item]) => {
+      const existing = item.worldId
+      const worldId = !reseed && UUID_RE.test(existing)
+        ? existing
+        : deterministicWorldId(battlemapId, collection, legacyId)
+      if (existing !== worldId) changed = true
+      return [legacyId, { ...item, worldId }]
+    }))
+  }
+  return { surfaceData: next, changed }
+}
+
+function canonicalFeature(item, legacyId, sourceCollection, patch = {}) {
+  return {
+    ...cloneValue(item),
+    ...patch,
+    id: item.worldId,
+    legacyId,
+    sourceCollection,
+  }
+}
+
+function toWorldDocument(surfaceData, battlemapId) {
+  const features = {
+    rooms: {},
+    floors: {},
+    walls: {},
+    ceilings: {},
+    connectors: {},
+    regions: {},
+  }
+  for (const collection of ['rooms', 'floors', 'walls', 'ceilings']) {
+    for (const [legacyId, item] of Object.entries(surfaceData[collection])) {
+      features[collection][item.worldId] = canonicalFeature(item, legacyId, collection)
+    }
+  }
+  for (const [legacyId, item] of Object.entries(surfaceData.connectors)) {
+    features.connectors[item.worldId] = canonicalFeature(item, legacyId, 'connectors')
+  }
+  for (const [legacyId, item] of Object.entries(surfaceData.stairs)) {
+    features.connectors[item.worldId] = canonicalFeature(item, legacyId, 'stairs', { type: 'stairs' })
+  }
+
+  return createWorldDocument({
+    battlemapId,
+    metrics: {
+      metersPerCell: positiveNumber(surfaceData.metersPerCell, 1.5),
+      worldUnitsPerCell: 1,
+      storyHeightWorld: surfaceData.storyHeight,
+    },
+    features,
+  })
+}
+
+export function prepareSurfaceData(input, { battlemapId = null, reseedWorldIds = false } = {}) {
+  const canonicalInput = canonicalizeDerivedRoomMetadata(input)
+  const normalized = normalizeSurfaceDataDocument(canonicalInput)
+  const identified = withWorldIds(normalized, battlemapId, reseedWorldIds)
+  assertSurfaceData(identified.surfaceData)
+  const worldDocument = toWorldDocument(identified.surfaceData, battlemapId)
+  return deepFreeze({
+    surfaceData: identified.surfaceData,
+    worldDocument,
+    changed: identified.changed
+      || canonicalInput !== input
+      || Number(input.version ?? SURFACE_DATA_VERSION) !== SURFACE_DATA_VERSION,
+  })
+}
+
+export function collectSurfaceTextureIds(input) {
+  const surface = normalizeSurfaceDataDocument(input)
+  const ids = new Set()
+  const add = value => {
+    if (value != null && value !== '') ids.add(value)
+  }
+
+  for (const floor of Object.values(surface.floors)) {
+    add(floor.tex); add(floor.topTex); add(floor.bottomTex)
+  }
+  for (const wall of Object.values(surface.walls)) {
+    add(wall.frontTex); add(wall.backTex); add(wall.topTex)
+  }
+  for (const ceiling of Object.values(surface.ceilings)) {
+    add(ceiling.tex); add(ceiling.topTex); add(ceiling.bottomTex)
+  }
+  for (const stair of Object.values(surface.stairs)) add(stair.tex)
+  for (const room of Object.values(surface.rooms)) {
+    add(room.floorTex); add(room.ceilingTex); add(room.wallInteriorTex)
+    for (const profile of room.wallAppearanceProfiles || []) {
+      add(profile.interiorTex)
+    }
+  }
+  return Object.freeze([...ids])
+}

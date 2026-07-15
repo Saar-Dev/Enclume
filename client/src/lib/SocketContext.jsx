@@ -8,7 +8,8 @@ export function SocketProvider({ campaignId, children }) {
   const [socket, setSocket] = useState(null)
 
   useEffect(() => {
-    const s = io(import.meta.env.VITE_API_URL, { withCredentials: true })
+    const socketEndpoint = import.meta.env.VITE_API_URL || undefined
+    const s = io(socketEndpoint, { withCredentials: true })
     s.on('connect', () => {
       s.emit(WS.SESSION_JOIN, { campaignId })
     })

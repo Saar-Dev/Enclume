@@ -25,7 +25,7 @@ router.get('/:pack/*filePath', async (req, res, next) => {
     const stream = await client.getObject(bucket, filePath)
     stream.pipe(res)
   } catch (err) {
-    if (err.code === 'NoSuchKey') {
+    if (err.code === 'NoSuchKey' || err.code === 'NotFound') {
       res.status(404).json({ error: { status: 404, message: 'Texture introuvable' } })
     } else {
       next(err)

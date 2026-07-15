@@ -1,8 +1,61 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-13 — Session 141 (suite 31) : Transfert du skin Wizard (Section 12,
-> sci-fi premium/glassmorphism) vers le reste de l'interface — Login/Dashboard puis pages de
-> configuration de campagne — ✅ clos, fonctionnel confirmé Saar ("magnifique") (item 73) ; Session 141
-> (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
+> **2026-07-15 — base commune de travail** : après sauvegarde complète, les espaces `8193/8194` et
+> `8293/8294` repartent du tag `baseline/common-20260715` sur les branches distinctes `dev/cousin`
+> et `dev/monde`. Seul le code versionné est synchronisé ; les configurations, bases et assets ne
+> sont jamais recopiés entre instances. Le détail et le retour arrière sont dans
+> `docs/WORKFLOW_FUSION.md` et `/home/codex/backups/enclume-common-baseline-20260715-125308`.
+> Synchronisation validée : les trois arbres Git sont identiques, les buckets actifs sont désormais
+> `enclume-assets-cousin`, `enclume-assets-monde` et `enclume-assets-fusion`, et les trois couples
+> client/API répondent avec leur proxy same-origin. Tests : 124 monde + 3 configuration, deux builds
+> Vite et quatre handshakes Socket.IO.
+>
+> **2026-07-15 — première fusion commune déployée** : les environnements historiques restent séparés
+> sur `8193/8194` et `8293/8294`. Le worktree `/home/codex/Enclume-fusion`, branche `integration`,
+> porte le merge `1f048cd` de `92ae9a9` avec la tête cousin `bad0190` et est déployé isolément sur `8393/8394`, base
+> `vtt_fusion`. `origin/fusion-kiwi` est explicitement exclue car son éditeur Surface v2 régresserait
+> le document monde v12. Workflow durable : `docs/WORKFLOW_FUSION.md`. Contrat d'autorité :
+> `docs/FUSION_PROJET_COUSIN.md`.
+> Point de restauration préalable vérifié : `backup/pre-fusion-20260715-110349` et
+> `/home/codex/backups/enclume-pre-fusion-20260715-110349`.
+> Validation : 124 tests monde/serveur, 28 tests Surface, ESLint ciblé, build Vite et smoke
+> Playwright Chromium passent ; les six services historiques et de fusion sont actifs.
+> Reste opérationnel : publier `integration` et son tag de sauvegarde sur GitHub dès qu'une
+> authentification propre est disponible pour le compte `codex`. Ne pas détourner les identifiants
+> du dépôt du cousin pour contourner ce point.
+> Données cousin non fusionnées automatiquement : `vtt` contient actuellement `Drone 1` (GLB déjà
+> copié dans MinIO fusion) et `Mechant` en plus de la campagne commune. Leur éventuel import doit
+> inclure les relations de fiche/personnage et faire l'objet d'un chantier de données explicite.
+> Accès `8393` : UFW public, NAT active, origines LAN et publique autorisées explicitement par
+> `CLIENT_URLS`. Les comptes et hashes de mots de passe sont identiques dans les trois bases ; aucun
+> compte n'a été supprimé pendant la fusion.
+> Le navigateur utilise toujours une API et un Socket.IO same-origin sur `8393` ; Vite relaie en
+> interne vers `8394`. Ne pas remettre une URL API publique figée dans les 34 consommateurs client.
+>
+> **2026-07-13 — transition instance Codex** : ajout des marqueurs de migrations historiques
+> 75-83 et idempotence des migrations 143/149. Objectif : basculer l'instance de test 8293 de
+> l'ancien dépôt monde vers `codex/world-engine-integration` sans perdre la base existante. La
+> procédure impose une sauvegarde PostgreSQL + MinIO + code, puis une répétition complète sur une
+> base jetable avant le redémarrage réel.
+> Première répétition : défaut de découverte corrigé, les fichiers `*.test.mjs` ne sont plus
+> chargés comme migrations par `NaturalMigrationSource`.
+> Deuxième contrôle : les noms datés sont désormais classés selon leur numéro interne afin que
+> 154-157 suivent réellement 153, y compris lors d'une installation vide.
+> **Dette distincte découverte** : une base entièrement vide atteint correctement la migration
+> 135, puis celle-ci exige l'équipement `TMP II`, normalement fourni par le seed historique. Le
+> serveur exécutant les migrations avant les seeds, une installation neuve sans base restaurée
+> reste à corriger dans le chantier catalogue combat. La montée de la base Codex existante n'est
+> pas concernée : répétition réussie avec 86 migrations, comptes de lignes inchangés et démarrage
+> serveur validé.
+> Déploiement : les unités systemd Codex sont maintenant versionnées sous `deploy/` et doivent
+> toutes deux cibler `/home/codex/Enclume-integrated`; le client utilise obligatoirement
+> `--strictPort` sur 8293.
+> **Bascule terminée** : batch 15/86 migrations appliqué à `vtt_codex`, comptes principaux
+> inchangés, client 8293 et serveur 8294 actifs sous systemd depuis le dépôt intégré. Point de
+> restauration complet : `/home/codex/backups/enclume-switch-20260713-172000`.
+
+> Dernière mise à jour cousin : 2026-07-13 — Session 141 (suite 31) : transfert du skin Wizard
+> (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
+> campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 > (Lunette de visée) — ✅ clos, fonctionnel confirmé Saar (item 72) ; Session 141 (suite 29) : Interface d'ajout Avantage/
 > Désavantage (octroi MJ narratif) + bug DELETE 500 pré-existant corrigé — ✅ clos, fonctionnel
 > confirmé Saar (item 71) ; Session 141 (suite 27) : bug GENOTYPE "Hybride" visible pour un
@@ -34,45 +87,57 @@
 
 ---
 
+## CHANTIER PARALLÈLE — MOTEUR DE MONDE
+
+Branche `codex/world-engine-integration`, sans modification du dépôt de l'autre développeur.
+
+> Mise à jour monde 2026-07-14 : finition de l'éditeur contextuel et cohérence géométrique de bout
+> en bout. Rotation/échelle uniforme des objets, panneaux latéraux automatiques et repliables, nom
+> de salle éditable, identité de mur copiable, ajout de porte depuis le mur, halos de sélection,
+> profils verticaux continus, volume multi-hauteur complet à la caméra et passerelles découpées par
+> l'intérieur réel des murs courbes/profilés.
+> Correctifs de finition du même jour : une salle multi-hauteur est traitée comme un `RoomVolume`
+> solidaire. La position 3D réelle de la caméra est prioritaire quand elle entre dans la salle ; la
+> cible des contrôles sert de repli stable quand elle reste dehors. Murs, passerelles, escaliers,
+> connecteurs, objets 3D, tokens et effets du volume restent visibles sur toute sa hauteur. Les façades
+> partagent une identité verticale et une normale intérieure canonique par salle. La coupe ne dépend
+> donc plus de l'angle du rayon central ni d'un échantillon de cases : façades côté caméra
+> transparentes, façades du fond opaques. La pose de porte conserve les arêtes canoniques, vise sa surface
+> verticale et prévisualise le modèle 3D choisi. Rotation/échelle disposent aussi d'une
+> prévisualisation locale, les passerelles sont rebranchées sur Sol/Plafond et les panneaux sont
+> décalés de l'objet puis recalés verticalement à l'ouverture d'un accordéon.
+
+- Phases 0 à 14 terminées : contrat métrique, document canonique, compilateur, navigation serveur,
+  LOS/couverture, structures verticales, régions/effets runtime, cabine d'ascenseur mobile et
+  branchement spatial complet du combat, tranches d'étage isolées avec profondeur visible dans les
+  seuls volumes multniveau, murs courbes physiques, empreintes exclusives de salles non
+  rectangulaires, fusion de volumes à hauteurs différentes et profils verticaux de murs.
+- `surface_data` v12 porte tranches verticales, arcs et apparences intérieures canoniques. Salle,
+  mur et objet sélectionnés utilisent des panneaux contextuels déplaçables ; les réglages longs sont
+  repliables et la barre latérale d'édition ne conserve que les outils réellement actifs.
+- Un profil de mur couvre la hauteur totale de la salle. Une passerelle liée par `clipRoomId` est
+  intersectée avec la même empreinte intérieure au rendu, dans le snapshot et dans la navigation.
+- `entities.state.transform.scale` est partagé par le rendu, l'occupation et la LOS ; une mutation
+  d'apparence ne peut pas désynchroniser le volume physique.
+- Les anciennes cartes voxel ne sont pas une cible de compatibilité. Elles peuvent seulement servir
+  de fixtures et peuvent être supprimées si elles gênent le modèle canonique.
+- L'ascenseur est une cabine physique mobile : aucune arête verticale ou téléportation ne doit être
+  réintroduite. Ses passagers sont attachés à son repère local durable.
+- Le combat déclare désormais une destination ; le serveur dérive l'allure, replanifie sous verrou
+  et applique l'arrêt réel. Portées, contact, interactions, LOS et couverture sont mesurés dans le
+  monde 3D canonique.
+- Les autorités voxel/Redis/pathfinder historiques ont été supprimées. Aucune rétrocompatibilité
+  des cartes anciennes n'est exigée.
+- Prochaine étape : validation fonctionnelle Playwright et manuelle sur une carte canonique
+  multi-étages, puis revue d'intégration avec la prochaine tête du projet combat.
+
+Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
+
+---
+
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
-
-> **Item 73 (Session 141 suite 31) — Transfert du skin Wizard (Section 12) vers le reste de
-> l'interface ✅ CLOS, fonctionnel confirmé Saar.** Demande Saar hors chantiers en cours : le skin
-> "Sci-Fi Premium" du Wizard de création (glassmorphism, dégradé bleu-nuit `#061223→#102744`, halo
-> radial pulsé, accent cyan `#2FD7FF`, `Venus Rising`) était scopé à `.wiz-page`/`.wiz-shell`
-> (`client/src/components/creation/` uniquement) — 3 systèmes visuels coexistaient dans
-> `index.css` (tokens de base Section 3, HUD chamfré Section 10 partagé par 25 fichiers dont les
-> fenêtres combat, skin Wizard Section 12). **Exigence explicite Saar : "architecture propre, pas de
-> bricolage"** — migration en alias sémantiques (les `--wiz-*` montent dans `:root`, les anciens
-> tokens `--bg-app`/`--color-primary`/`--text-primary`/`--border-subtle` deviennent des alias vers
-> ces primitives au lieu d'un renommage massif dans toute l'app) plutôt qu'un simple copier-coller de
-> valeurs. `.card`/`button`/`input` (Section 7) et `.btn`/`.btn-ghost`/`.btn-danger`/`.btn-gold`/
-> `.btn-success`/`.badge*`/`.btn-toggle` (Section 10) reskinnés : retrait du chamfer (`clip-path`),
-> glass + halo cyan. Nouvelle classe **`.app-shell`** (fond dégradé + halo pulsé, réutilise l'animation
-> `wizPulse` déjà existante) partagée par `.dashboard` et `CampaignSettingsPage` — pas une 3ᵉ
-> duplication du même effet. **Étendu en 2 temps** (validé par Saar à chaque étape) : (1) Login +
-> Dashboard, (2) pages de configuration de campagne (`CampaignSettingsPage.jsx` + 5 `Section*.jsx` +
-> `sharedStyles.js`). **6 vrais bugs trouvés et corrigés en chemin** (pas des features) : `--border-
-> normal` inexistant (`DashboardPage.jsx` + `sharedStyles.js` ×4 — inputs sans bordure visible),
-> `--bg-card` inexistant (`sharedStyles.js`), `.login-error` jamais stylée (classe manquante),
-> `.login-title` avec un var CSS mort (`--font-family`), 6 occurrences de bleu `#5b8dee`/
-> `rgba(91,141,238,...)` figées en dur (désynchronisées du token `--color-primary` dès mon 1er lot).
-> **Nettoyage architectural additionnel (pages Settings)** : suppression de `sharedStyles.section`/
-> `optionBtn`/`optionBtnActive`/`btnSecondary`/`btnDanger` — dupliquaient `.card`/`.btn`/`.btn-ghost`/
-> `.btn-danger`/`.btn-toggle` déjà existants, un seul système de boutons/cartes dans toute l'app
-> désormais. **Hors scope confirmé/différé** : Section 11 (fenêtres combat, palette tactique
-> délibérément distincte, commentaire code explicite) intacte ; `ChangelogPanel.jsx` (100% styles
-> inline hex, zéro token — reskin = réécriture complète, pas une simple retouche) laissé tel quel ;
-> `RegisterPage.jsx` (même bug `--border-normal` trouvé au passage, mais fichier séparé sans classe
-> partagée, jamais dans le périmètre validé) non touché. Testé : équilibre CSS (script Node), ESLint
-> sur les 9 fichiers touchés (0 nouvelle erreur introduite, confirmé `git stash`/`git stash pop` à 2
-> reprises), grep de sweep (aucune référence résiduelle aux clés supprimées ni aux couleurs figées),
-> **parcours navigateur réel confirmé fonctionnel par Saar** sur les 3 zones (Login, Dashboard,
-> CampaignSettingsPage 5 onglets — "magnifique"). Non testé : chaque toggle de
-> `SectionCharacterSheet.jsx` (11 options) cliqué individuellement — rendu visuel global confirmé, pas
-> chaque interaction isolément. Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 31)".
 
 > **Item 72 (Session 141 suite 30) — `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée
 > ✅ CLOS, fonctionnel confirmé Saar.** Suite de Groupe 1 (item 68, clos). **Trou d'architecture
@@ -534,72 +599,6 @@
 > chantier mais antérieur à lui et sans rapport — cosmétique, non corrigé. Détail complet :
 > `docs/PLAN_VAULT.md` (toutes les étapes documentées avec leurs tests), `docs/JOURNAL6.md` "Session
 > Coffre (Vault)".
-
-**73. Transfert du skin Wizard (Section 12) vers le reste de l'interface ✅ CLOS — Session 141 (suite 31) (2026-07-13)**
-   → Demande Saar hors chantiers en cours, en 2 conversations : "transférer le skin du Wizard sur le
-     reste de l'interface", exigence explicite répétée deux fois — "architecture propre, pas de
-     bricolage", "tu peux coder UNIQUEMENT si architecture propre".
-   → **Constat avant tout code** : 3 systèmes visuels coexistaient dans `index.css` — Section 3
-     (tokens de base, bleu désaturé `#5b8dee`), Section 10 (HARD-SF HUD chamfré `.btn`/`.badge`,
-     utilisé dans 25 fichiers dont les fenêtres de combat — vérifié par grep avant de toucher quoi
-     que ce soit), Section 12 (skin Wizard, variables `--wiz-*` scopées à `.wiz-page`/`.wiz-shell`,
-     dupliquées entre les deux).
-   → **Architecture retenue (alias sémantiques, pas de renommage massif)** : les `--wiz-*` montent
-     dans `:root` (déclarées une seule fois, `.wiz-page`/`.wiz-shell` ne les redéclarent plus) ; les
-     tokens génériques existants (`--bg-app`, `--bg-surface`, `--bg-panel`, `--bg-elevated`,
-     `--color-primary`, `--text-primary/secondary/muted`, `--border-subtle/strong`) deviennent des
-     **alias** vers ces primitives — pattern standard de migration de design tokens (primitives +
-     alias sémantiques), évite de renommer des centaines de points d'usage dans toute l'app.
-   → `.card`/`button`/`input` (Section 7) et `.btn`/`.btn-ghost`/`.btn-danger`/`.btn-gold`/
-     `.btn-success`/`.badge`+variantes/`.btn-toggle` (Section 10) reskinnés : retrait du chamfer
-     (`clip-path`), glass (`backdrop-filter: blur`) + halo cyan au survol/focus.
-   → Nouvelle classe **`.app-shell`** (fond dégradé `var(--wiz-bg-3)→var(--wiz-bg-1)` + halo radial
-     pulsé, réutilise l'animation `wizPulse` déjà existante) — `.dashboard` et
-     `CampaignSettingsPage.jsx` la partagent, pas de 3ᵉ copie du même effet (Login garde son propre
-     bloc, légitimement différent : il a un filigrane logo en plus occupant le pseudo-élément
-     `::before`).
-   → **Étendu en 2 temps, chacun validé par Saar avant le suivant** : (1) `LoginPage.jsx` +
-     `DashboardPage.jsx` (test) ; (2) `CampaignSettingsPage.jsx` + `SectionDice.jsx`/
-     `SectionGameRules.jsx`/`SectionTokens.jsx`/`SectionPlayers.jsx`/`SectionCharacterSheet.jsx`/
-     `sharedStyles.js` (pages de configuration de campagne).
-   → **6 vrais bugs trouvés et corrigés en marchant** (pas des features, trouvés en lisant avant de
-     coder) : `--border-normal` inexistant dans `index.css` (`DashboardPage.jsx` `cardInput.border` +
-     `sharedStyles.js` ×4 — inputs sans aucune bordure visible) ; `--bg-card` inexistant
-     (`sharedStyles.js` `section.backgroundColor`) ; `.login-error` référencée en JSX mais jamais
-     stylée (message d'erreur de connexion sans style) ; `.login-title` avec un var CSS mort
-     (`--font-family`, fonctionnait par accident car `'Venus Rising'` cité en premier) ; 6 occurrences
-     de bleu `#5b8dee`/`rgba(91,141,238,...)` figées en dur (checkbox, boutons actifs, liens),
-     désynchronisées du token `--color-primary` dès le 1er lot puisque jamais des vraies variables.
-   → **Nettoyage architectural additionnel (lot pages Settings)** : suppression de
-     `sharedStyles.section`/`optionBtn`/`optionBtnActive`/`btnSecondary`/`btnDanger` — ces styles
-     inline dupliquaient `.card`/`.btn`/`.btn-ghost`/`.btn-danger`/`.btn-toggle` déjà existants dans
-     `index.css`. Un seul système de boutons/cartes dans toute l'app désormais, pas deux en parallèle.
-   → **Hors scope confirmé/différé** : Section 11 (fenêtres combat, palette tactique délibérément
-     distincte — commentaire code explicite "vocabulaire visuel distinct") intacte, non touchée ;
-     `ChangelogPanel.jsx` (100% styles inline en hex littéral, zéro token CSS — un reskin propre
-     signifierait une réécriture complète, pas une retouche de valeurs) laissé tel quel ;
-     `RegisterPage.jsx` (même bug `--border-normal` trouvé au passage par grep, mais fichier
-     entièrement séparé sans classe CSS partagée, jamais dans le périmètre validé par Saar) non
-     touché.
-   → **Incident évité en cours de route** : une 1ʳᵉ tentative de vérification visuelle automatisée
-     (Playwright, second serveur Vite de test sur le même `node_modules`) a produit une erreur
-     `EPERM` sur `node_modules/.vite/deps` — signal de contention possible avec un serveur déjà en
-     cours sur ce dossier. Process arrêté immédiatement (`TaskStop`) plutôt que d'insister ;
-     `git status` reconfirmé propre (seuls les fichiers attendus modifiés). Vérification finale
-     laissée à Saar en navigateur réel, conforme à l'usage établi de ce projet.
-   → **Testé** : équilibre des accolades CSS (script Node), ESLint sur les 9 fichiers touchés à
-     chaque lot (0 nouvelle erreur introduite, confirmé par `git stash`/`git stash pop` à 2 reprises),
-     grep de sweep (aucune référence résiduelle aux clés `sharedStyles` supprimées, aucune couleur
-     bleue figée résiduelle), **parcours navigateur réel confirmé fonctionnel par Saar** sur les 3
-     zones (Login, Dashboard, CampaignSettingsPage 5 onglets — "testé et magnifique").
-   → **Non testé** : chaque toggle de `SectionCharacterSheet.jsx` (11 options de campagne) cliqué
-     individuellement — rendu visuel global confirmé par Saar, pas chaque interaction isolément ;
-     fenêtres de combat/session (Section 11, hors scope) — non affectées par construction, pas
-     re-vérifiées visuellement.
-   → **Prochain candidat si Saar souhaite poursuivre** : `ChangelogPanel.jsx` (réécriture complète
-     requise, hors petite retouche) et/ou `RegisterPage.jsx` (même bug `--border-normal`, aucune
-     classe partagée avec Login pour l'instant).
-   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 31)".
 
 **72. `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée ✅ CLOS — Session 141 (suite 30) (2026-07-13)**
    → Suite de Groupe 1 (item 68, clos). Plan déjà entièrement rédigé et tranché en amont ("prêt à

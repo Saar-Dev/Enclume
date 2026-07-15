@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 31) — 2026-07-13
+> Intégration commune `8393/8394` — 2026-07-15 ; dernière tête cousin : Session 141 (suite 31).
 
 ---
 
@@ -24,6 +24,9 @@ CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
 
 - `docs/EN_COURS.md` [[docs/EN_COURS|EN_COURS]] → si la prochaine étape n'est pas claire depuis `## ÉTAT COURANT` ci-dessous.
 - `docs/ASBUILT.md` [[docs/ASBUILT|ASBUILT]] → si la tâche touche à l'architecture (nouvelles routes, migrations, nouveaux services).
+- `docs/WORKFLOW_FUSION.md` → obligatoire avant toute fusion, publication ou intervention sur
+  l'instance commune `8393/8394`.
+- `docs/FUSION_PROJET_COUSIN.md` → obligatoire pour résoudre un conflit combat / moteur monde.
 - `docs/JOURNAL6.md` [[JOURNAL6]] (dernier `## Session N` uniquement) → si un bug précis nécessite l'historique d'une décision.
 - **Fichiers domaine → chargés automatiquement** via `.claude/rules/` quand les fichiers source sont ouverts.
 
@@ -114,6 +117,13 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ## ÉTAT COURANT — Session 141 (suite 31) (2026-07-13)
 
+- **Intégration commune 2026-07-15 — PREMIÈRE FUSION DÉPLOYÉE.** Les dépôts actifs du cousin (`8193/8194`) et du
+  moteur monde (`8293/8294`) restent inchangés. La branche `integration`, dans
+  `/home/codex/Enclume-fusion`, fusionne la tête monde `92ae9a9` avec `origin/master` `bad0190` et
+  est validée par le merge `1f048cd` sur `8393/8394`, base `vtt_fusion`. Ne jamais importer `origin/fusion-kiwi` dans le
+  moteur v12. La branche reste locale tant que le compte système `codex` n'a pas d'authentification
+  GitHub ; ne jamais emprunter celle du cousin. Références : `docs/WORKFLOW_FUSION.md` et
+  `docs/FUSION_PROJET_COUSIN.md`.
 - **Session 141 (suite 31) — Transfert du skin Wizard (Section 12, sci-fi premium/glassmorphism)
   vers le reste de l'interface ✅ CLOS, fonctionnel confirmé Saar ("testé et magnifique").** Demande
   hors chantiers en cours, exigence répétée deux fois par Saar : "architecture propre, pas de

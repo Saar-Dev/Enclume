@@ -2,16 +2,34 @@ import { Router } from 'express'
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
-import {
-  collisionAddEntity,
-  collisionRemoveEntity,
-  collisionMoveEntity,
-  collisionUpdateEntityState,
-} from '../lib/redis.js'
+import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
+import { withEntityScale } from '../../../shared/world/entityTransform.js'
 
 // mergeParams : true — nécessaire pour accéder à req.params.id (battlemap_id)
 // quand monté sous /api/battlemaps/:id/entities
 const router = Router({ mergeParams: true })
+
+function entityPlacementMode(blueprint) {
+  const mode = blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
+  return ['free', 'wall', 'connector'].includes(mode) ? mode : 'free'
+}
+
+function plainEntityState(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+function normalizedEntityState(value) {
+  const state = plainEntityState(value)
+  return withEntityScale(state, state?.transform?.scale ?? state?.scale ?? 1)
+}
+
+function assertWallPlacementState(blueprint, state) {
+  if (entityPlacementMode(blueprint) !== 'wall') return
+  const placement = plainEntityState(state).placement
+  if (!placement || placement.mode !== 'wall' || !placement.wallId || !placement.wallAxis || !placement.wallFace) {
+    throw new AppError(400, 'Un objet mural doit être ancré à un mur valide')
+  }
+}
 
 // ─── Helper — vérification membre campagne ────────────────────────────────────
 // Retourne le membre ou lève une AppError.
@@ -98,7 +116,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     const {
       blueprint_id, pos_x, pos_y, pos_z, r,
-      gm_only, label_override,
+      gm_only, label_override, state,
     } = req.body
 
     if (!blueprint_id) throw new AppError(400, 'blueprint_id est obligatoire')
@@ -109,6 +127,12 @@ router.post('/', requireAuth, async (req, res, next) => {
     // Vérifier que le blueprint existe
     const blueprint = await db('entity_blueprints').where({ id: blueprint_id }).first()
     if (!blueprint) throw new AppError(404, 'Blueprint introuvable')
+    const placementMode = entityPlacementMode(blueprint)
+    if (placementMode === 'connector') {
+      throw new AppError(400, 'Ce modèle est un connecteur de salle et ne peut pas être posé comme objet 3D libre')
+    }
+    const initialState = normalizedEntityState(state)
+    assertWallPlacementState(blueprint, initialState)
 
     const [entity] = await db('entities')
       .insert({
@@ -123,12 +147,12 @@ router.post('/', requireAuth, async (req, res, next) => {
         current_state_id: 0,
         interaction_overrides: JSON.stringify({}),
         disabled_interactions: db.raw('ARRAY[]::TEXT[]'),
-        state: JSON.stringify({}),
+        state: JSON.stringify(initialState),
       })
       .returning('*')
+    await bumpBattlemapRuntimeRevision(req.params.id)
 
-    // Maintenance collision map Redis — incluse si is_blocking dans état initial (id=0)
-    await collisionAddEntity(req.params.id, entity, blueprint)
+    // L'occupation dynamique sera relue depuis PostgreSQL par le moteur monde.
 
     // Retourner l'instance avec son blueprint embarqué
     res.status(201).json({
@@ -151,7 +175,7 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
     const { member } = await getMember(entity.battlemap_id, req.user.id)
     if (member.role !== 'gm') throw new AppError(403, 'GM uniquement')
 
-    // Lire le blueprint une seule fois — nécessaire pour la maintenance Redis
+    // Lire le blueprint pour valider le mode de placement et retourner la ressource complète.
     const blueprint = await db('entity_blueprints').where({ id: entity.blueprint_id }).first()
 
     const {
@@ -160,6 +184,10 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
       interaction_overrides, disabled_interactions,
       state, notes_gm,
     } = req.body
+
+    if (state !== undefined || pos_x !== undefined || pos_y !== undefined || pos_z !== undefined || r !== undefined) {
+      assertWallPlacementState(blueprint, state !== undefined ? state : entity.state)
+    }
 
     const updates = {}
     if (pos_x !== undefined) updates.pos_x = pos_x
@@ -171,7 +199,7 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
     if (label_override !== undefined) updates.label_override = label_override || null
     if (interaction_overrides !== undefined) updates.interaction_overrides = JSON.stringify(interaction_overrides)
     if (disabled_interactions !== undefined) updates.disabled_interactions = disabled_interactions
-    if (state !== undefined) updates.state = JSON.stringify(state)
+    if (state !== undefined) updates.state = JSON.stringify(normalizedEntityState(state))
     if (notes_gm !== undefined) updates.notes_gm = notes_gm || null
 
     if (Object.keys(updates).length === 0) {
@@ -185,20 +213,7 @@ router.put('/:entityId', requireAuth, async (req, res, next) => {
       .where({ id: req.params.entityId })
       .update(updates)
       .returning('*')
-
-    // ── Maintenance collision map Redis ────────────────────────────────────
-    // Deux cas indépendants : changement de position ET/OU changement d'état
-
-    const positionChanged = pos_x !== undefined || pos_y !== undefined || pos_z !== undefined
-    const stateChanged = current_state_id !== undefined
-
-    if (positionChanged && blueprint) {
-      // Déplacement : hdel ancienne case + hset nouvelle si is_blocking
-      await collisionMoveEntity(entity.battlemap_id, entity, updated, blueprint)
-    } else if (stateChanged && blueprint) {
-      // Changement d'état uniquement : hdel ou hset selon is_blocking du nouvel état
-      await collisionUpdateEntityState(entity.battlemap_id, entity, blueprint, updated.current_state_id)
-    }
+    await bumpBattlemapRuntimeRevision(entity.battlemap_id)
 
     res.json({ entity: { ...updated, blueprint } })
   } catch (err) {
@@ -216,10 +231,10 @@ router.delete('/:entityId', requireAuth, async (req, res, next) => {
     const { member } = await getMember(entity.battlemap_id, req.user.id)
     if (member.role !== 'gm') throw new AppError(403, 'GM uniquement')
 
-    // Maintenance collision map Redis AVANT suppression — position encore disponible
-    await collisionRemoveEntity(entity.battlemap_id, entity)
+    // La suppression invalide la révision runtime ; aucun cache collision secondaire n'existe.
 
     await db('entities').where({ id: req.params.entityId }).delete()
+    await bumpBattlemapRuntimeRevision(entity.battlemap_id)
 
     res.json({ ok: true })
   } catch (err) {

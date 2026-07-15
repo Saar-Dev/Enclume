@@ -1,0 +1,212 @@
+{
+    "placement_mode_default":  "free",
+    "origin_default":  "floor-center",
+    "unit":  "meters",
+    "style":  "cartoon futuristic post-apocalyptic underwater station",
+    "materials_note":  "No wood. Assets use iron/steel, rubber and molded plastic/composite materials.",
+    "blend":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\submarine_postapo_tables_chairs_pack.blend",
+    "combined_glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\submarine_postapo_tables_chairs_pack.glb",
+    "preview_png":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\submarine_postapo_tables_chairs_preview.png",
+    "assets":  [
+                   {
+                       "name":  "01_table_2p_compact_iron_plastic",
+                       "category":  "table",
+                       "seat_count":  2,
+                       "footprint_width_m":  0.86,
+                       "footprint_depth_m":  0.68,
+                       "height_m":  0.78,
+                       "features":  "compact 2-seat dining table with flat molded plastic top",
+                       "color_slots":  [
+                                           {
+                                               "slot":  "surface",
+                                               "material":  "TABLE2_surface_sage_molded_plastic"
+                                           },
+                                           {
+                                               "slot":  "edge",
+                                               "material":  "TABLE2_edge_warm_grey_composite"
+                                           },
+                                           {
+                                               "slot":  "structure",
+                                               "material":  "TABLE2_structure_dark_iron"
+                                           },
+                                           {
+                                               "slot":  "base",
+                                               "material":  "TABLE2_base_brushed_steel"
+                                           },
+                                           {
+                                               "slot":  "rivets",
+                                               "material":  "TABLE2_rivets_pale_steel"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Table compacte pour deux personnes.glb",
+                       "label":  "Table compacte pour deux personnes",
+                       "catalog_file":  "Table compacte pour deux personnes.glb"
+                   },
+                   {
+                       "name":  "02_table_4p_square_composite_iron",
+                       "category":  "table",
+                       "seat_count":  4,
+                       "footprint_width_m":  1.18,
+                       "footprint_depth_m":  1.18,
+                       "height_m":  0.78,
+                       "features":  "square 4-seat dining table with flat composite top",
+                       "color_slots":  [
+                                           {
+                                               "slot":  "surface",
+                                               "material":  "TABLE4_surface_moss_composite"
+                                           },
+                                           {
+                                               "slot":  "edge",
+                                               "material":  "TABLE4_edge_soft_graphite_plastic"
+                                           },
+                                           {
+                                               "slot":  "structure",
+                                               "material":  "TABLE4_structure_dark_iron_tube"
+                                           },
+                                           {
+                                               "slot":  "feet",
+                                               "material":  "TABLE4_feet_black_rubber"
+                                           },
+                                           {
+                                               "slot":  "rivets",
+                                               "material":  "TABLE4_rivets_pale_steel"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Table carrée pour quatre personnes.glb",
+                       "label":  "Table carrée pour quatre personnes",
+                       "catalog_file":  "Table carrée pour quatre personnes.glb"
+                   },
+                   {
+                       "name":  "03_table_8p_long_modular_iron_plastic",
+                       "category":  "table",
+                       "seat_count":  8,
+                       "footprint_width_m":  2.72,
+                       "footprint_depth_m":  1.02,
+                       "height_m":  0.78,
+                       "features":  "long 8-seat dining table with triple iron pedestal and single center stretcher",
+                       "color_slots":  [
+                                           {
+                                               "slot":  "surface",
+                                               "material":  "TABLE8_surface_grey_green_plastic"
+                                           },
+                                           {
+                                               "slot":  "edge",
+                                               "material":  "TABLE8_edge_charcoal_composite"
+                                           },
+                                           {
+                                               "slot":  "structure",
+                                               "material":  "TABLE8_structure_dark_iron"
+                                           },
+                                           {
+                                               "slot":  "base",
+                                               "material":  "TABLE8_base_brushed_steel"
+                                           },
+                                           {
+                                               "slot":  "rivets",
+                                               "material":  "TABLE8_rivets_pale_steel"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Table longue pour huit personnes.glb",
+                       "label":  "Table longue pour huit personnes",
+                       "catalog_file":  "Table longue pour huit personnes.glb"
+                   },
+                   {
+                       "name":  "04_chair_set_molded_plastic_tube",
+                       "category":  "chair_set",
+                       "seat_count":  1,
+                       "footprint_width_m":  0.52,
+                       "footprint_depth_m":  0.55,
+                       "height_m":  0.86,
+                       "features":  "molded plastic chair with tube frame",
+                       "color_slots":  [
+                                           {
+                                               "slot":  "shell",
+                                               "material":  "CHAIR_A_shell_molded_sage_plastic"
+                                           },
+                                           {
+                                               "slot":  "frame",
+                                               "material":  "CHAIR_A_frame_dark_iron_tube"
+                                           },
+                                           {
+                                               "slot":  "trim",
+                                               "material":  "CHAIR_A_trim_soft_grey_composite"
+                                           },
+                                           {
+                                               "slot":  "feet",
+                                               "material":  "CHAIR_A_feet_black_rubber"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Ensemble de chaises moulées.glb",
+                       "label":  "Ensemble de chaises moulées",
+                       "catalog_file":  "Ensemble de chaises moulées.glb"
+                   },
+                   {
+                       "name":  "05_chair_set_perforated_iron",
+                       "category":  "chair_set",
+                       "seat_count":  1,
+                       "footprint_width_m":  0.54,
+                       "footprint_depth_m":  0.58,
+                       "height_m":  0.88,
+                       "features":  "perforated iron chair with industrial frame",
+                       "color_slots":  [
+                                           {
+                                               "slot":  "frame",
+                                               "material":  "CHAIR_B_frame_dark_iron"
+                                           },
+                                           {
+                                               "slot":  "seat",
+                                               "material":  "CHAIR_B_seat_brushed_iron_plate"
+                                           },
+                                           {
+                                               "slot":  "back",
+                                               "material":  "CHAIR_B_back_charcoal_back_plate"
+                                           },
+                                           {
+                                               "slot":  "trim",
+                                               "material":  "CHAIR_B_trim_soft_pale_metal"
+                                           },
+                                           {
+                                               "slot":  "feet",
+                                               "material":  "CHAIR_B_feet_black_rubber"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Ensemble de chaises métalliques perforées.glb",
+                       "label":  "Ensemble de chaises métalliques perforées",
+                       "catalog_file":  "Ensemble de chaises métalliques perforées.glb"
+                   },
+                   {
+                       "name":  "06_chair_set_padded_polymer_swivel",
+                       "category":  "chair_set",
+                       "seat_count":  1,
+                       "footprint_width_m":  0.6,
+                       "footprint_depth_m":  0.62,
+                       "height_m":  0.92,
+                       "features":  "padded polymer swivel chair with iron base",
+                       "color_slots":  [
+                                           {
+                                               "slot":  "cushion",
+                                               "material":  "CHAIR_C_cushion_oxide_red_polymer"
+                                           },
+                                           {
+                                               "slot":  "shell",
+                                               "material":  "CHAIR_C_shell_grey_green_polymer"
+                                           },
+                                           {
+                                               "slot":  "frame",
+                                               "material":  "CHAIR_C_frame_dark_iron_swivel"
+                                           },
+                                           {
+                                               "slot":  "feet",
+                                               "material":  "CHAIR_C_feet_black_rubber"
+                                           },
+                                           {
+                                               "slot":  "trim",
+                                               "material":  "CHAIR_C_trim_muted_brass_plate"
+                                           }
+                                       ],
+                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Ensemble de fauteuils pivotants rembourrés.glb",
+                       "label":  "Ensemble de fauteuils pivotants rembourrés",
+                       "catalog_file":  "Ensemble de fauteuils pivotants rembourrés.glb"
+                   }
+               ]
+}

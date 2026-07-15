@@ -19,6 +19,8 @@
 //   slope       → placeholder cube (affinement V2)
 //   wedge       → placeholder cube (affinement V2)
 
+import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
+
 const VOXEL_SIZE = 1
 
 export default function Voxel({ position, textureMaterials, geometry, rotation }) {
@@ -41,12 +43,12 @@ export default function Voxel({ position, textureMaterials, geometry, rotation }
     switch (geometry) {
       case 'slab_bottom':
       case 'slab_top':
-        return <boxGeometry args={[1, 0.5, 1]} />
+        return <ReliefBoxGeometry args={[1, 0.5, 1]} profile={textureMaterials.relief} />
       case 'slope':
       case 'wedge':
-        return <boxGeometry args={[1, 1, 1]} />  // placeholder
+        return <ReliefBoxGeometry args={[1, 1, 1]} profile={textureMaterials.relief} />  // placeholder
       default:  // 'cube'
-        return <boxGeometry args={[VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE]} />
+        return <ReliefBoxGeometry args={[VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE]} profile={textureMaterials.relief} />
     }
   }
 
@@ -54,12 +56,10 @@ export default function Voxel({ position, textureMaterials, geometry, rotation }
     <mesh
       position={[px + 0.5, py + 0.5 + yOffset, pz + 0.5]}
       rotation={[0, rot, 0]}
+      material={textureMaterials.faceMaterials}
       userData={{ isVoxel: true, position }}
     >
       {renderGeometry()}
-      {textureMaterials.faceMaterials.map((mat, i) => (
-        <meshLambertMaterial key={i} attach={`material-${i}`} {...mat} />
-      ))}
       {/* Bounding box invisible — raycasting uniforme quelle que soit la géométrie (P23) */}
       <mesh visible={false} userData={{ isVoxel: true, position }}>
         <boxGeometry args={[1, 1, 1]} />

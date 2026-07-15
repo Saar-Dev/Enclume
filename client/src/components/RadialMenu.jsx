@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  dbPositionToWorldPoint,
+  distanceBetweenWorldPointsM,
+} from '../../../shared/world/worldMetrics.js'
 
 // ─── RadialMenu ────────────────────────────────────────────────────────────────
 // Menu radial SVG positionné en fixed sur le canvas.
@@ -37,6 +41,7 @@ export default function RadialMenu({
   onClose,
   actorToken = null,
   entity = null,
+  worldMetrics = null,
 }) {
   const { t } = useTranslation()
   const menuRef = useRef(null)
@@ -47,14 +52,15 @@ export default function RadialMenu({
   const slices = [...interactions]
   if (isGm) slices.push(GM_SLICE)
 
-  // Distance Tchebychev 2D acteur ↔ entité — pour grisage tranche displacement
-  // pos_y base = profondeur (Z Three.js) — PE14
+  // Apercu UX seulement ; le serveur refait la meme mesure 3D autoritaire a l'execution.
   const isOutOfRange = (slice) => {
     if (slice.move_type !== 'displacement') return false
     if (!actorToken || !entity) return false
-    const dist = Math.max(
-      Math.abs(entity.pos_x - actorToken.pos_x),
-      Math.abs(entity.pos_y - actorToken.pos_y)
+    if (actorToken.position_space !== 'world-feet') return true
+    const dist = distanceBetweenWorldPointsM(
+      dbPositionToWorldPoint(actorToken),
+      dbPositionToWorldPoint(entity),
+      worldMetrics,
     )
     return dist > (slice.range ?? 1.5)
   }

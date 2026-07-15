@@ -639,7 +639,34 @@ Le client affiche un breakdown INI indicatif — le serveur recalcule strictemen
 | `rapide` | `move_rapide` | -7 | orange #f97316 |
 | `max` | `move_max` | 0 | rouge #ef4444 |
 
-Le radius de chaque zone = `allures[allureKey]` — calculé depuis COO_na + athletisme_total via `calcAllures`.
+Les couleurs et coûts d'initiative proviennent du registre partagé `shared/combatMovement.js`.
+L'aperçu demande au serveur le chemin correspondant au budget calculé depuis la fiche ; un rayon
+client ou une distance à vol d'oiseau n'est plus une autorité de déplacement.
+
+## Autorité spatiale du combat — Moteur Monde Phase 7
+
+- à la déclaration, le client choisit une destination, pas une position finale garantie ni une
+  allure faisant foi ;
+- le serveur planifie avec le coût réel des supports, escaliers, échelles et effets, puis choisit
+  l'allure minimale suffisante autorisée pour le personnage ;
+- `combat_actions` conserve `destination_world`, `world_plan`, `movement_gait`, les révisions monde
+  et runtime planifiées et le budget en mètres ;
+- à la résolution, le serveur réconcilie l'ascenseur, recompile/replanifie sous verrou et persiste le
+  dernier point réellement atteignable. Un token peut donc finir son tour au milieu d'un parcours
+  vertical ;
+- contact, charge, adversaires proches, interactions et portées utilisent les mêmes positions
+  canoniques et une distance 3D en mètres ;
+- LOS et couverture sont fournies par `worldVisibilityService`, après le déplacement effectivement
+  résolu ;
+- `shared/combatRange.js` lit la portée de l'arme et en déduit la bande de portée. Une cible hors de
+  la dernière bande est refusée ;
+- les régions du monde portant un hook `traverse/test/balance` appliquent automatiquement la règle
+  de terrain instable. L'option manuelle reste un override MJ ou un filet pour les effets
+  personnalisés.
+
+Les migrations 156 et 157 assument volontairement le nouveau contrat. Les anciens déplacements en
+attente sont invalidés et les anciennes portées d'interaction sont converties en mètres ; aucune
+rétrocompatibilité de carte n'est promise.
 
 ### Actions inactives (SECTIONS — non implémentées)
 `active: false` → grayed out, non cliquable dans CombatActionWindow :
@@ -659,6 +686,11 @@ socket.emit(WS.COMBAT_ACTION_CONFIRM, {
   },
 })
 ```
+
+`confirmedModifiers.portee` est conservé dans le payload d'interface historique, mais est ignoré
+par la résolution serveur. La bande appliquée aux chances et aux dégâts est recalculée depuis la
+distance 3D réelle et `ref_equipment.range`. Les sélections situationnelles et de taille restent
+des confirmations métier distinctes.
 
 ### Tables de modificateurs situationnels (CombatModifiersWindow)
 

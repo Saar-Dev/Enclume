@@ -1,8 +1,529 @@
 # ASBUILT — Ce qui est codé et stable
-> Dernière mise à jour : 2026-07-13 Session 141 (suite 29)
+
+## Création de l'instance de fusion commune (2026-07-15)
+
+La fusion dispose désormais d'un troisième environnement indépendant. Les deux environnements de
+développement existants restent inchangés : le cousin conserve `8193/8194` et `vtt`, le moteur monde
+conserve `8293/8294` et `vtt_codex`. Le worktree `/home/codex/Enclume-fusion`, branche `integration`,
+est réservé à la validation commune sur `8393/8394` avec la base `vtt_fusion`.
+
+La première fusion, commit à deux parents `1f048cd`, part de `92ae9a9` et importe `bad0190` depuis `origin/master`. Elle exclut
+explicitement `origin/fusion-kiwi` (`37703bf`), dont l'éditeur Surface v2 est remplacé par le moteur
+monde v12. Le détail des responsabilités reste dans `docs/FUSION_PROJET_COUSIN.md` et le cycle de
+livraison dans `docs/WORKFLOW_FUSION.md`.
+
+Avant toute mutation, un point de restauration complet a été créé :
+
+- tag Git : `backup/pre-fusion-20260715-110349` ;
+- archive : `/home/codex/backups/enclume-pre-fusion-20260715-110349` ;
+- contenu vérifié : bundle Git, configuration systemd/.env, dump `vtt_codex`, archive MinIO et
+  sommes SHA-256.
+
+Les unités versionnées `deploy/enclume-fusion-client.service` et
+`deploy/enclume-fusion-server.service` sont actives et activées au démarrage. Le client impose
+`--strictPort` sur 8393 et l'API écoute sur 8394. Les services historiques n'ont pas été arrêtés ou
+redémarrés par ce déploiement.
+
+UFW autorise publiquement les deux ports de fusion. L'instance utilise les URL
+`http://89.92.219.211:8393` et `http://89.92.219.211:8394`; la redirection de la box répond sur les
+deux ports. Le contrôle final retourne HTTP 200 sur `8393` et `{ status: "ok" }` sur
+`8394/api/health`. Une copie privée de l'ancien `.env` précède cette bascule dans
+`/home/codex/backups/enclume-fusion-public-20260715-115110`.
+
+L'adresse LAN et l'adresse publique sont simultanément autorisées par une liste CORS stricte
+(`CLIENT_URLS`). Le validateur partagé refuse les URL avec chemin, les protocoles non HTTP et toute
+origine non déclarée ; Socket.IO consomme la même liste. Trois tests purs passent, puis deux parcours
+Playwright du formulaire de connexion, LAN et public, atteignent tous deux l'API et affichent
+correctement l'erreur 401 de diagnostic sans exception JavaScript.
+
+Le client utilise désormais une origine unique du point de vue du navigateur. `VITE_API_URL` reste
+vide et `client/vite.config.js` relaie `/api` et `/socket.io` vers l'API interne `8394`. Les réponses
+de login observées par Playwright restent donc respectivement sur `192.168.1.46:8393` et
+`89.92.219.211:8393`, ce qui préserve les cookies `SameSite=Lax`. Les deux health checks et les deux
+handshakes Socket.IO répondent en HTTP 200.
+
+Les comptes n'ont pas été remplacés lors de cette correction. La somme cryptographique des couples
+e-mail/hash de mot de passe est identique dans `vtt`, `vtt_codex` et `vtt_fusion`. Le refus observé
+depuis le LAN provenait de l'ancienne configuration CORS à origine publique unique.
+
+### Modèles de personnages lors de la première fusion
+
+- 72 modèles intégrés d'objets/décor sont synchronisés comme `entity_blueprints` ; ils ne doivent
+  pas être confondus avec les modèles de tokens de personnages ;
+- les 9 objets MinIO sous `characters/` présents dans le bucket source ont été copiés à l'identique
+  dans `enclume-assets-fusion`, dont les cinq fichiers GLB de personnages ;
+- quatre personnages de `vtt_fusion` référencent actuellement leur GLB ;
+- la base active du cousin `vtt` contient deux personnages supplémentaires absents de la base de
+  fusion initialisée depuis `vtt_codex` : `Drone 1`, dont le fichier GLB est déjà copié, et
+  `Mechant`, sans GLB ;
+- aucun import implicite de ces lignes n'a été réalisé : importer un personnage exige aussi ses
+  relations de campagne et de fiche, pas uniquement son URL de modèle.
+
+La validation du merge a détecté puis corrigé deux défauts de la tête importée : une fermeture de
+commentaire `*/` incluse dans le texte d'un commentaire CSS empêchait la minification Lightning CSS,
+et `CampaignSettingsPage.jsx` conservait une variable `catch` inutilisée ainsi qu'une dépendance de
+hook manquante. Après correction : 124 tests monde/serveur, 28 tests Surface, ESLint ciblé sans
+erreur et build Vite de production passent.
+Le smoke Playwright Chromium passe également sur `http://127.0.0.1:8393` sans exception JavaScript.
+La branche `integration` reste locale au serveur à cette étape : le push HTTPS a été refusé faute
+d'identifiants GitHub non interactifs pour `codex`. Cela ne bloque pas le déploiement, mais doit être
+résolu avant que les deux développeurs puissent repartir de la branche distante commune.
+
+### Première base de travail commune
+
+Après validation de la fusion, les deux espaces de développement sont remis à niveau sur le tag
+`baseline/common-20260715`, puis divergent uniquement par leurs nouveaux commits : `dev/cousin`
+sur `8193/8194` et `dev/monde` sur `8293/8294`. Le code versionné est identique au départ, tandis que
+les `.env`, les bases `vtt`/`vtt_codex`, Redis et MinIO restent isolés. Les 23 objets historiques
+(64 060 053 octets) ont été clonés et contrôlés dans `enclume-assets-cousin` et
+`enclume-assets-monde` ; aucune instance active n'écrit plus dans le bucket partagé historique.
+La sauvegarde préalable
+`/home/codex/backups/enclume-common-baseline-20260715-125308` contient deux bundles Git, les trois
+bases, les configurations et les buckets, tous contrôlés par SHA-256.
+
+Les deux clients de développement utilisent eux aussi l'API et Socket.IO en same-origin :
+`API_PROXY_TARGET` vise respectivement `8194` et `8294`, tandis que `VITE_API_URL` reste vide. Le
+serveur cousin a appliqué les migrations monde restantes à `vtt` puis synchronisé les 72 modèles 3D
+intégrés. Les messages de migration 144 signalent uniquement l'absence de textures legacy qui
+n'existaient déjà pas dans le bucket source ; le batch s'est terminé et les deux serveurs sont
+actifs. Validation finale : 124 tests monde, 3 tests de configuration, deux builds Vite, health
+checks et handshakes Socket.IO sur les trois instances.
+
+---
+
+## Bascule de l'instance Codex vers le moteur monde intégré (2026-07-13)
+
+La base de l'ancienne branche monde avait déjà appliqué neuf migrations sous les noms
+`75_battlemaps_surface_data.js` à `83_entities_precise_position.js`. Après intégration avec le
+moteur de combat, leurs versions canoniques ont été renumérotées de 143 à 151. Des migrations
+vides portant les anciens noms sont conservées comme marqueurs historiques : elles permettent à
+Knex de valider l'ancien journal sans rejouer de schéma sur une installation neuve.
+
+Les migrations 143 et 149 détectent maintenant les colonnes déjà présentes avant de les ajouter.
+Les migrations de contenu 144 à 148 restent idempotentes, 150 est volontairement non destructive,
+et 151 peut reconfirmer les types `double precision`. Cette passerelle permet de faire évoluer une
+base Codex existante vers le schéma intégré sans effacer ses campagnes, cartes ou objets.
+
+`NaturalMigrationSource` exclut explicitement les fichiers `*.test.js`, `*.test.cjs` et
+`*.test.mjs`. Sans ce filtre, les tests transactionnels 154 à 157 étaient interprétés comme des
+migrations et empêchaient le démarrage avant même l'application du schéma.
+
+Les migrations datées sont ordonnées selon le numéro fonctionnel inclus après leur date. Ainsi,
+`20260330_13_*` reste la migration 13 du socle et `20260713_154_*` est bien exécutée après la 153.
+Cela maintient à la fois la montée d'une ancienne base et la création d'une base vide.
+
+Avant la première bascule de l'instance 8293, l'ancien dépôt, la configuration d'exécution, la base
+PostgreSQL et le volume MinIO doivent être archivés ensemble. La migration doit ensuite être testée
+sur une copie restaurée de la base avant d'être appliquée à l'instance de test.
+
+Les unités `deploy/enclume-codex-server.service` et `deploy/enclume-codex-client.service` sont la
+source versionnée du lancement de l'instance Codex. Elles pointent toutes deux vers
+`/home/codex/Enclume-integrated`. Le client impose `--strictPort` sur 8293 : un conflit de port fait
+échouer clairement le service au lieu de publier silencieusement une autre version sur 8295.
+
+### État déployé le 2026-07-13
+
+- instance Codex basculée de `/home/codex/Enclume-codex` vers
+  `/home/codex/Enclume-integrated` à partir du commit `befafb2` ;
+- sauvegarde de restauration :
+  `/home/codex/backups/enclume-switch-20260713-172000` (dépôts Git, configuration, deux dumps
+  PostgreSQL vérifiés et archive MinIO) ;
+- 86 migrations appliquées en batch 15 sur `vtt_codex` ; comptes `users`, `campaigns`,
+  `battlemaps`, `entities` et `tokens` identiques avant/après ;
+- validation préalable sur une restauration jetable, puis validation réelle : 76 tests monde,
+  4 tests transactionnels de migrations, build Vite et démarrage API réussis ;
+- services actifs : `enclume-codex-server.service` sur 8294 et
+  `enclume-codex-client.service` sur 8293 ; aucun processus restant dans l'ancien dépôt.
+> Dernière mise à jour : 2026-07-13 — Moteur Monde Phases 0 à 8 ; Session 141 (suite 29) conservée.
 > Ce document est un snapshot de référence rapide.
 > Pour les flux détaillés, ownership, pièges : voir SYSTEME.md.
 > Pour l'historique des décisions : voir JOURNAL5.md (Sessions 109+), Old/JOURNAL4.md (Sessions 86–108).
+
+---
+
+## Moteur de monde — Phase 0 ✅
+
+Socle pur partagé ajouté sur `codex/world-engine-integration`, sans branchement runtime à ce stade :
+
+- `shared/world/worldMetrics.js` — source unique cases/mètres/hauteurs + adaptateurs PE14 ;
+- `shared/world/movementCost.js` — facteurs de traversée/surface/environnement/acteur/équipement,
+  segments pondérés et troncature exacte au budget ;
+- `shared/world/worldContracts.js` — contrats versionnés, stricts et immuables pour le document
+  statique, l'état runtime et le snapshot compilé ;
+- `shared/world/index.js` — exports communs ;
+- `shared/world/*.test.mjs` — 13 tests, dont `3 + 3×2×2 = 15 m` pour Jon sur une échelle ;
+- `npm run test:world` — commande de validation dédiée.
+
+À la sortie de cette Phase 0, le runtime était encore voxel. Ce paragraphe est historique : la
+Phase 2 a depuis remplacé le déplacement et l'occupation des tokens.
+
+Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statique/runtime/snapshot.
+
+---
+
+## Moteur de monde — Phase 1 ✅
+
+- `shared/world/surfaceDocument.js` — validation `surface_data` v12, UUID physiques
+  stables, adaptation vers le document canonique ;
+- `shared/world/worldCompiler.js` — compilation déterministe des sols, plafonds, murs partagés,
+  découpes de porte, escaliers, barrières multi-canaux, colliders, occluders et compartiments ;
+- `server/src/services/worldService.js` — cache borné des snapshots par carte et
+  `world_revision` ;
+- `GET /api/battlemaps/:id/world-snapshot` — lecture membre de campagne du snapshot immuable ;
+- migration 152 — backfill des UUID et compteurs `world_revision`, `surface_revision`,
+  `voxel_revision` ;
+- sauvegardes Surface/voxel atomiques, révisionnées et protégées contre les écritures obsolètes ;
+- index texture corrigé : union persistée des usages Surface et voxel ;
+- duplication de carte : nouvelles identités physiques, sans partage futur d'état runtime ;
+- éditeur : files de sauvegarde séparées, contrôle des erreurs HTTP et révisions monotones ;
+- validation : 27 tests, checks Node, build Vite et migration/rollback sur PostgreSQL isolé.
+
+Cette photographie décrit la sortie de Phase 1. Les Phases 2, 3 et 7 ont depuis rendu le snapshot
+autoritaire pour les déplacements, la LOS, la couverture et les mesures spatiales du combat.
+
+---
+
+## Moteur de monde — Phase 2 ✅
+
+- `shared/world/spatialIndex.js` — index AABB statique et occupation volumique multi-occupants ;
+- `shared/world/navigation.js` — graphe 3D, A*, coûts en mètres, portes, surfaces pondérées et arrêts
+  partiels sur traversées ;
+- `server/src/services/worldMovementService.js` — cache de graphes, replanning transactionnel,
+  placement et persistance du seul point atteint ;
+- `server/src/services/movementBudgetService.js` — allures Polaris calculées depuis la fiche serveur ;
+- routes `world-path-preview`, `world-move` et `tokens/:id/teleport` ;
+- `TOKEN_MOVE` devenu une intention `{ destination, gait }`, ancien payload direct rejeté ;
+- migration 153 — `runtime_revision`, `tokens.position_space` (`legacy-cell`/`world-feet`) ;
+- `Canvas3D` — raycast des supports Surface, preview serveur, rendu des pieds canoniques et drag
+  joueur/MJ séparé ;
+- création de token sur support stable libre, sans ajout au hash collision Redis historique ;
+- aucune promesse de rétrocompatibilité des cartes voxel ; elles restent éventuellement des fixtures ;
+- validation : 39 tests, checks Node, build Vite et migration/rollback PostgreSQL isolé.
+
+Les anciennes sections Redis/pathfinder plus bas sont conservées comme documentation historique du
+combat encore à rebrancher. Elles ne décrivent plus l'autorité de déplacement des tokens.
+
+---
+
+## Moteur de monde — Phase 3 ✅
+
+- `shared/world/visibility.js` — LOS 3D, profils de posture, transmittance, couverture anatomique et
+  acteurs interposés ;
+- `server/src/services/worldVisibilityService.js` — assemblage snapshot + entités dynamiques + tokens ;
+- route `world-visibility` pour la prévisualisation autorisée ;
+- `useCameraLOS` et `server/src/lib/losService.js` consomment le même résultat serveur ;
+- verre et grille restent des colliders sans être des occluders par défaut ; mur plein et porte
+  fermée bloquent la vue ; les canaux eau/gaz restent indépendants ;
+- volumes atténuants et `sightOpacity` prêts pour les effets de Phase 5 ;
+- validation : 48 tests, checks Node et build Vite.
+
+`shared/losUtils.js` a été supprimé en Phase 7 avec les derniers chemins voxel autoritaires. Le
+service de combat conserve ses effets métier et délègue les décisions spatiales au moteur du monde.
+
+---
+
+## Moteur de monde — Phase 4 ✅
+
+- l'escalier relie les sommets physiques des supports et autorise les arrêts intermédiaires ;
+- le connecteur Échelle possède une traversée `climb`, des ancrages persistables et une géométrie
+  structurelle générique ;
+- une position sauvegardée au milieu d'une échelle ou d'un escalier est réinjectée dans le graphe
+  comme nœud transitoire exact au tour suivant ;
+- la Passerelle est un support canonique avec identité runtime, supprimé du snapshot lorsqu'il est
+  désactivé ou détruit ;
+- l'éditeur expose ces trois outils et un multiplicateur de déplacement libre sur chaque surface ou
+  connecteur ;
+- le chemin de session détaille le coût segment par segment ;
+- validation : 50 tests monde et build Vite.
+
+L'ascenseur reste expressément non navigable avant son automate de Phase 6.
+
+---
+
+## Moteur de monde — Phase 5 ✅
+
+- `shared/world/worldEffects.js` — registre intégré/personnalisé, régions AABB, cumul, hooks,
+  propagation et occluders ;
+- Feu, Inondé, Gaz, Huile/glissant et Terrain instable sont prévus par le système ;
+- un effet MJ inconnu reste possible avec des modificateurs et notes déclaratifs sûrs ;
+- `server/src/services/worldEffectService.js` sépare définitions, instances, états de features et
+  journal d'événements ;
+- migration 154 et routes `world-effects`/`world-features` ;
+- navigation et LOS consomment les mêmes régions runtime et la même `runtime_revision` ;
+- éditeur de volumes environnementaux, création d'effet personnalisé et affichage session ;
+- validation : 57 tests monde, build Vite, migration `up/down` transactionnelle PostgreSQL.
+
+---
+
+## Moteur de monde — Phase 6 ✅
+
+- `shared/world/elevatorRuntime.js` — automate durable `idle/open/closing/moving/opening/blocked`,
+  arrêts multiples, appels déterministes, interpolation et reprise après redémarrage ;
+- `worldCompiler.js` — gaine découpée dans les étages, cabine mobile avec sol/plafond/parois,
+  portes palières fermées en l'absence de cabine et embarquement uniquement aligné/portes ouvertes ;
+- `server/src/services/worldElevatorService.js` — réconciliation transactionnelle sous verrou,
+  commandes, persistance et translation des passagers dans le repère local de cabine ;
+- migration 155 — `world_elevator_passengers`, position locale durable et unicité d'attachement ;
+- déplacement et visibilité consomment la position réconciliée avant toute navigation, collision,
+  LOS ou couverture ;
+- éditeur et session affichent la petite cabine animée. Les joueurs appellent un palier ; le MJ
+  administre aussi le blocage et les portes ;
+- validation : 64 tests monde, build Vite, migration 155 `up/down` transactionnelle PostgreSQL.
+
+Les cartes historiques ne constituent pas une cible de migration. Elles ne sont conservées comme
+fixtures que si elles n'ajoutent aucun adaptateur ni branche conditionnelle au moteur canonique.
+
+---
+
+## Moteur de monde — Phase 7 ✅
+
+- `shared/combatMovement.js` est le registre unique des allures de combat ; le serveur choisit
+  l'allure minimale suffisante à partir du coût réel du trajet et ignore toute allure imposée par
+  le client ;
+- migration 156 — plan de monde durable dans `combat_actions`, coordonnées décimales, révisions
+  planifiées et invalidation volontaire des anciens déplacements en attente ;
+- la résolution replanifie sous verrou avec la révision courante et persiste la position réellement
+  atteinte, y compris un arrêt au milieu d'un escalier ou d'une échelle ;
+- `worldSpatialQueryService.js` fournit distance 3D en mètres, proximité, régions d'effets et
+  mesures token-entité après réconciliation des ascenseurs ;
+- `shared/combatRange.js` dérive la bande de portée depuis la distance réelle et la portée de l'arme.
+  `confirmedModifiers.portee` n'est plus une autorité de règle ;
+- la LOS, la couverture, le contact, la charge, les adversaires proches et les interactions
+  consomment tous les mêmes coordonnées canoniques ;
+- `worldForcedMovementService.js` déplace ensemble acteur et objet, vérifie supports, colliders et
+  occupants, puis s'arrête au dernier point libre ;
+- migration 157 — conversion des portées d'interaction historiques de cases en mètres ;
+- les changements de tokens, entités, effets, passerelles et ascenseurs alimentent une même
+  `runtime_revision` ;
+- suppression des autorités historiques `server/src/lib/redis.js`, `socketVoxel.js`,
+  `client/src/lib/pathfinder.js` et `shared/losUtils.js` ;
+- validation : 77 tests monde/combat, migrations 156 et 157 `up/down` sur PostgreSQL, checks Node et
+  build Vite.
+
+Il n'existe aucune garantie de rétrocompatibilité des cartes historiques. Elles peuvent servir de
+fixtures de diagnostic tant qu'elles n'imposent ni adaptateur, ni branche de règles, ni double
+moteur ; sinon elles doivent être supprimées.
+
+---
+
+## Moteur de monde — Phase 8 ✅
+
+- chaque étage affiché est une tranche isolée : aucun objet, token, effet ou support inférieur sans
+  rapport ne reste rendu ou cliquable ;
+- les salles multi-hauteurs constituent l'exception structurelle : leur fond réel, leurs surfaces
+  et parois basses, leurs objets, tokens et effets restent visibles depuis les tranches supérieures
+  du même volume, sans révéler les autres salles inférieures et sans plancher intermédiaire ;
+- échelles, escaliers et ascenseurs sont affichés sur les tranches qu'ils relient ;
+- l'eau extérieure utilise une hauteur globale unique égale au sommet construit de la carte ;
+- l'éditeur donne la priorité au blueprint actif et ignore les entités des autres étages lors du
+  placement ;
+- **Mur droit** reste l'outil de panneau libre ; l'ancien bouton de courbe libre a été remplacé par
+  l'arrondi structuré du contour de salle décrit en Phase 10 ;
+- à cette phase, chaque courbe était tessellée en segments orientés courts et les portes restaient
+  limitées aux portions droites. La Phase 12 remplace explicitement cette représentation transitoire
+  par un arc canonique et des portes tangentes ;
+- la future trappe est documentée comme capacité d'un connecteur vertical lié, le plus souvent, à
+  une échelle.
+
+---
+
+## Moteur de monde — Phase 9 ✅
+
+- `surface_data` v5 donne à chaque salle une empreinte explicite de cases ;
+- créer une salle dans une autre transfère les cases à la nouvelle salle et redessine réellement le
+  contour de l'ancienne, sans superposition de propriété ;
+- une découpe qui sépare l'ancienne salle crée automatiquement plusieurs salles connexes ;
+- les étages sans chevauchement vertical ne se découpent pas entre eux ;
+- rendu, sélection, dalles, plafonds, murs communs, eau, supports, barrières et compartiments
+  compilés consomment tous cette même empreinte ;
+- les bornes rectangulaires ne servent plus que de broadphase.
+
+---
+
+## Moteur de monde — Phase 10 ✅
+
+- `surface_data` v6 ajoute `room.boundaryArcs` sans modifier l'autorité logique de `room.cells` ;
+- `shared/world/roomGeometry.js` centralise boucles de contour, regroupement des murs colinéaires,
+  validation des chaînes, arcs circulaires, contours avec trous et segments compilés ;
+- dans l'éditeur, le MJ sélectionne une salle puis au moins deux murs complets voisins, règle l'angle
+  de 5° à 175° avec aperçu en direct, inverse éventuellement le côté et applique l'arrondi ;
+- les dalles et plafonds utilisent une extrusion du contour exact ; murs, sélection et physique
+  utilisent ce même contour ;
+- un contour partagé est mis à jour des deux côtés au même étage, sans toucher les salles empilées ;
+- une porte existante sur la chaîne interdit l'arrondi tant qu'elle n'est pas déplacée ou supprimée ;
+- colliders et occluders de segments inclinés conservent une AABB de broadphase mais utilisent un
+  prisme orienté en narrow phase, supprimant les faux positifs de collision et de LOS ;
+- 85 tests monde/combat et le build Vite passent ; ESLint ciblé ne remonte aucune erreur.
+
+---
+
+## Moteur de monde — Phase 11 ✅
+
+- `surface_data` v7 ajoute `openWallEdgeKeys` pour les ouvertures extérieures et
+  `geometryClipRoomIds` pour les différences polygonales acycliques entre salles ;
+- le MJ peut supprimer les murs complets sélectionnés. Une frontière extérieure s'ouvre ; une
+  frontière partagée fusionne les salles de même sol. Depuis la Phase 13, leurs hauteurs peuvent
+  différer sans aplatir le volume résultant ;
+- la salle active survit à la fusion avec son identité, ses matériaux et ses réglages. Les portes de
+  la séparation sont supprimées et les autres connecteurs/références sont remappés ;
+- `heightLevels` et `height` sont redérivés des tranches canoniques après chaque fusion, y compris
+  lorsqu'une salle déjà multiniveau est fusionnée à nouveau ;
+- les tranches contiguës sont aussi l'autorité à la frontière de persistance : le client normalise
+  juste avant le `PUT` et le serveur redérive ces métadonnées avant sa validation stricte. Une
+  sauvegarde intermédiaire mise en file ne peut donc plus envoyer une ancienne hauteur ;
+- les arcs de séparation supprimés ne survivent pas à la fusion ;
+- une nouvelle salle intersectant une salle courbe existante est découpée sur son multipolygone
+  effectif : dalle, plafond et mur épousent la courbe même si elle dépasse l'ancienne AABB ;
+- `polygon-clipping` fournit les opérations robustes de différence/intersection. Les conversions et
+  règles métier restent centralisées dans `shared/world/roomGeometry.js` ;
+- le renderer gère multipolygones et trous ; le compilateur, les collisions et la LOS réutilisent la
+  même frontière (segments en v7, chemin canonique depuis la v8) ;
+- 92 tests monde/combat et 12 tests Surface passent ; ESLint ciblé ne remonte aucune erreur et le
+  build Vite est validé.
+
+---
+
+## Moteur de monde — Phase 12 ✅
+
+- `surface_data` v8 fait des arrondis de salle de vrais chemins de murs canoniques : centre, rayon,
+  angle initial, balayage, longueur et identité stable remplacent la collection de petits panneaux ;
+- `shared/world/roomGeometry.js` dérive ces chemins depuis `room.boundaryArcs`, tout en conservant un
+  échantillonnage interne pour les consommateurs qui en ont réellement besoin ;
+- les extrémités exactes de l'arc canonique restent autoritaires pendant cet échantillonnage. Les
+  regroupements de rendu transportent les premiers/derniers ancrages au lieu de les recalculer par
+  trigonométrie, et `wall-arc` compile aussi ses champs `from` / `to` exacts ;
+- le renderer crée un mesh courbe continu, avec normales analytiques et UV calculées sur la longueur
+  de l'arc. Les textures ne redémarrent plus à chaque subdivision ;
+- le compilateur produit `wall-arc`. Le broadphase utilise son AABB exacte et les narrow phases de
+  collision/LOS sont les seuls endroits autorisés à l'échantillonner temporairement ;
+- une porte sur arc est ancrée par distance curviligne, point, tangente et normale exacts. Son modèle,
+  sa découpe du mur et sa traversée partagent le même repère local ;
+- le cadre et les vantaux restent tangents et rigides. Les groupes de boîtiers/claviers avant et
+  arrière sont, eux, replacés sur le cercle au niveau de leur déport latéral et orientés selon sa
+  tangente locale ; le boîtier intérieur n'est plus absorbé par la face concave du mur ;
+- la sélection de salle a été ramenée à une légère teinte de sol et un contour unique. Les murs sont
+  directement cliquables sans bouton d'activation, invisibles au repos, turquoise au survol et
+  soulignés en orange lorsqu'ils sont choisis ;
+- `roomSelectableWallRuns(...)` regroupe un arc canonique en une seule cible logique et retire les
+  frontières déjà ouvertes des volumes cliquables. Les actions d'arrondi, de remise à plat et de
+  suppression sont exposées ensemble dans le panneau contextuel de mur depuis la Phase 14 ;
+- l'ouverture partage l'arc canonique en portions avant/après et linteau, même si elle traverse
+  plusieurs subdivisions de rendu ;
+- la sauvegarde Surface retourne désormais réellement toutes les colonnes de révision. Après un
+  `409`, le client rebase seulement si le document distant correspond encore à sa dernière base ;
+  une modification concurrente est signalée et conservée sans écrasement ;
+- un test reproduit le round-trip salle carrée → mur arrondi → sortie/rechargement, y compris le cas
+  d'une réponse précédente ayant laissé la révision locale obsolète ;
+- 100 tests monde/combat et 20 tests Surface/persistance/géométrie passent ; ESLint ciblé ne remonte aucune erreur et le
+  build Vite est validé.
+
+---
+
+## Moteur de monde — Phase 13 ✅
+
+- `surface_data` v9 introduit `room.verticalProfile.slices[]` pour les salles dont l'empreinte varie
+  selon l'étage ;
+- chaque tranche porte son multipolygone et ses chemins de murs canoniques. Les plafonds locaux sont
+  dérivés par différence avec la tranche supérieure ;
+- supprimer un mur commun fusionne les salles de même sol quelle que soit leur hauteur. La zone
+  basse conserve son plafond, la zone haute ses murs de ressaut et son plafond supérieur ;
+- le renderer, la sélection par étage, les supports, les compartiments, la collision, la LOS et
+  l'eau utilisent le même profil ;
+- cliquer une salle ouvre désormais `SurfaceRoomPanel` près du clic. La hauteur simple, les
+  épaisseurs, le coût, la collision et les matériaux par face quittent l'inspecteur latéral ;
+- les outils de création et la configuration d'un connecteur en cours de pose restent dans la barre
+  latérale.
+
+---
+
+## Moteur de monde — Phase 14 ✅
+
+- `surface_data` v10 ajoute `room.wallElevationProfiles[]` : profil continu `curved`, profil cassé
+  `faceted`, profondeur et sens rattachés aux arêtes logiques du mur ;
+- `SurfaceWallPanel` s'ouvre au clic sur un mur et rassemble les actions d'arrondi horizontal,
+  remise à plat, suppression/fusion et les profils `|`, `(`, `<` ;
+- profondeur et angle sont des réglettes synchronisées ; seule la profondeur est persistée afin
+  d'éviter deux paramètres géométriques contradictoires ;
+- un mur extérieur translate ses deux faces et garde son épaisseur nominale. Un mur mitoyen conserve
+  la face de la salle voisine sur la frontière commune et fait varier son épaisseur uniquement vers
+  la salle éditée ;
+- `SurfaceDungeonScene` génère un maillage lofté continu qui combine arc horizontal et profil
+  vertical. Il ne reconstitue ni cubes ni petits murs persistés ;
+- `worldCompiler` transporte le profil dans les primitives canoniques, élargit leur broadphase et
+  `spatialIndex` effectue le narrow phase par bandes de hauteur temporaires pour le mouvement et la
+  LOS ;
+- une porte rigide déjà ancrée interdit la transformation verticale du mur porteur, comme pour une
+  transformation d'arc, afin de ne jamais désaligner maillage, ouverture et collider ;
+- l'orientation intérieure est dérivée du multipolygone réel de chaque tranche via
+  `interiorNormalSign`. `direction = 1` signifie désormais toujours vers l'intérieur sur les quatre
+  côtés, les arcs, les trous et les salles fusionnées ; le panneau propose les choix explicites
+  **Vers l'intérieur** et **Vers l'extérieur**. La canonicalisation serveur d'un segment permute
+  désormais aussi ses faces et son sens de profil ;
+- les panneaux contextuels de salle, mur et objet/connecteur 3D présentent une suppression. Retirer
+  une salle supprime ses connecteurs, nettoie les références `geometryClipRoomIds` et réattribue les
+  arcs partagés restants ;
+- les angles utilisent désormais l'intersection réelle des volumes, par face et par salle, à chaque
+  niveau du loft. Le raccord ferme aussi un mur profilé isolé, des profondeurs différentes et les
+  jonctions en T d'un mur mitoyen, en prolongeant le bon voisin pour chaque face. La compilation redérive les mêmes
+  extensions pour la collision et la LOS. Un mur droit raccordé hérite également des niveaux de
+  subdivision du profil voisin : leurs sommets coïncident sur toute la hauteur, pas seulement au sol
+  et au plafond. Un mur peut être arrondi dans le plan avant ou après son
+  profil vertical sans perdre celui-ci ;
+- la validation v10, les cas extérieur/mitoyen et le narrow phase profilé possèdent des tests purs.
+- état validé : 114 tests monde/serveur, 31 tests client Surface/persistance et build Vite de
+  production passent ; ESLint ciblé des fichiers Surface ne remonte aucune erreur.
+
+---
+
+## Moteur de monde — Phase 15 ✅
+
+La procédure de reprise d'une future branche combat est documentée dans
+`docs/FUSION_PROJET_COUSIN.md`. Elle fixe les autorités de fichiers, la rupture v12, les services
+monde que la FSM doit appeler, les zones de conflit manuel et la matrice de validation avant merge.
+
+- `surface_data` v12 conserve uniquement l'apparence intérieure des murs et remplace les faces de
+  salle historiques par `floorMaterial`, `ceilingMaterial` et `wallInteriorMaterial` ;
+- le panneau de mur expose matière, motif, peinture, usure, saleté, relief et relief réel, ainsi
+  qu'une sélection de tous les murs de la salle. Ces réglages ont quitté le panneau de salle ;
+- le panneau de salle conserve l'apparence de son sol et de son plafond, avec usure,
+  saleté et relief ; leurs trois valeurs sont neutres (`0`) par défaut ;
+- les panneaux de salle, mur et connecteur 3D sont déplaçables par l'en-tête. Le panneau des entités
+  3D l'était déjà et conserve le même comportement ;
+- terminer le tracé d'une salle sélectionne la nouvelle salle, ouvre son panneau et remet l'éditeur
+  en mode sélection ;
+- les apparences de mur sont validées côté serveur, collectent leurs textures, suivent les arcs et
+  sont conservées lors des fusions sur toutes les arêtes qui subsistent ;
+- les étages inférieurs sont opaques ; une interface plafond/sol empilée n'est rendue qu'une fois ;
+  la transparence de coupe agit sur des murs logiques continus, y compris autour des portes et arcs ;
+- état validé : tests monde/serveur et client Surface, lint ciblé et build Vite de production.
+
+---
+
+## Moteur de monde — Phase 16 ✅
+
+- les panneaux physiques de salle conservent et agrègent désormais les `sourceEdgeKeys` de leurs
+  chemins canoniques. La contrainte « porte sur le mur actif » est donc un contrat du modèle du
+  monde, et plus seulement un état temporaire de l'interface ;
+- la pose de porte utilise un picking 3D vertical limité aux panneaux du mur sélectionné. Un mur
+  droit, profilé ou arrondi peut être visé sur toute sa hauteur sans projection préalable sur le
+  plan du sol ;
+- l'aperçu de porte réutilise `ConnectorSegment` et affiche le vrai GLB choisi, sa tangente locale et
+  ses matériaux. Une pose refusée ne quitte plus le mode connecteur et ne désélectionne plus le mur ;
+- `roomsWallRenderPaths(...)` attribue un `facadeId` indépendant de l'étage à chaque façade droite
+  ou arrondie. Les tranches verticales et les morceaux autour d'une porte partagent cette identité ;
+- les panneaux physiques transportent `interiorNormalSignsByRoom`, orientation topologique distincte
+  de leurs matériaux. Un mur mitoyen peut ainsi avoir un intérieur opposé pour chacune de ses deux
+  salles sans être dupliqué ;
+- une salle multi-hauteur est un seul `RoomVolume` de visibilité. La position 3D de caméra est
+  prioritaire lorsqu'elle entre dans ce volume ; la cible de `MapControls` est le repli stable quand
+  elle reste dehors. Tous les contenus situés dans le volume (murs, passerelles, escaliers,
+  connecteurs, objets, tokens et effets) ignorent alors la coupe d'étage. La coupe compare la
+  position de caméra à la normale intérieure de chaque façade complète : aucun échantillonnage de
+  cases, aucun changement de salle pendant une simple rotation et aucun damier vertical ;
+- les panneaux contextuels utilisent un écart latéral de 56 px, basculent à gauche si nécessaire et
+  conservent leur recalage dynamique dans le viewport ;
+- état validé : 172 tests monde/serveur/client passent, build Vite de production valide et ESLint
+  ciblé sans erreur. Le lint global garde son passif connu dans les fichiers combat non modifiés.
 
 ---
 
@@ -179,7 +700,7 @@ Enclume/
 | Backend | Node.js + Express + Socket.io | Port 3001 dev (8194 Kiwi) |
 | Serveur Alpha "Kiwi" | Debian 13, systemd, box Bouygues | `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md` |
 | Base de données | PostgreSQL | Knex migrations |
-| Cache/collisions | Redis + ioredis | Collision map par battlemap — branché session 39 |
+| Cache legacy | Redis + ioredis | Collision voxel/entités historique ; non autoritaire pour les tokens depuis la Phase 2 |
 | Stockage fichiers | MinIO | Bucket unique |
 | Auth | JWT httpOnly cookie | 7 jours |
 | Inscription | Code d'invitation `REGISTRATION_CODE` dans `.env` | 8 chiffres, `timingSafeEqual`, guard 500 si absent |
@@ -222,6 +743,20 @@ Enclume/
 | POST | /battlemaps/:id/entities | Poser une instance — GM uniquement + collisionAddEntity |
 | PUT | /entities/:entityId | Modifier position/rotation/state/overrides — GM uniquement + maintenance Redis |
 | DELETE | /entities/:entityId | Supprimer instance — GM uniquement + collisionRemoveEntity AVANT delete |
+
+### Routes REST — Moteur de monde
+
+| Méthode | Route | Description |
+|---|---|---|
+| GET | /battlemaps/:id/world-snapshot | Snapshot physique immuable de la révision courante |
+| POST | /battlemaps/:id/world-path-preview | Aperçu de chemin ; budget numérique autorisé uniquement pour l'aperçu |
+| POST | /battlemaps/:id/world-move | Intention `{ token_id, destination, gait }`, budget et résultat calculés serveur |
+| POST | /battlemaps/:id/world-visibility | LOS, couverture et interposition sur le snapshot runtime courant |
+| GET/POST/PATCH/DELETE | /battlemaps/:id/world-effects/* | Registre, instances, propagation et états environnementaux |
+| GET | /battlemaps/:id/world-elevators | Réconcilie et retourne cabines, états, arrêts et passagers |
+| POST | /battlemaps/:id/world-elevators/:elevatorId/commands | Appel de palier ; blocage/ouverture/fermeture réservés au MJ |
+| POST | /tokens/:id/teleport | Placement administratif `world-feet`, MJ uniquement |
+| POST | /battlemaps/:id/tokens | Création calée sur un support stable libre près de `destination` |
 
 ---
 
@@ -293,6 +828,10 @@ Enclume/
 | *(136-138 : migrations d'une session parallèle + `PLAN_MUTATION2.md` Lot 4 — non détaillées ici, voir `docs/JOURNAL6.md` "Session 141 (suite 25)")* | |
 | 139_fix_ref_skill_requirements_mutations | `docs/PLAN_MUTATION2.md` Lot 5 (`[CS7]`) — `ref_skill_requirements.value` (type MUTATION) référençait encore 8 anciens identifiants V1 (`muta_XXX`, table supprimée migration 94) — remappés vers le `mutation_id` V2 réel par correspondance de nom. 2 lignes (`MAITRISE_DE_LA_FORCE_POLARIS`/`MAITRISE_DE_LECHO_POLARIS`) référençaient `muta_029` ("Sensibilité au Polaris") — mutation confirmée par Saar comme n'ayant jamais dû exister en V2 — basculées vers un nouveau type de prérequis `ADVANTAGE`/`adv_079` ("Force Polaris", déjà seedé migration 123). `down`/`up` round-trip byte-identique. Voir `docs/JOURNAL6.md` Session 141 (suite 26) |
 | 140_ref_skill_requirements_or_group | Bug GENOTYPE trouvé par Saar (item 70) : `ref_skills.HYBRIDE` avait zéro ligne `ref_skill_requirements`, jamais gaté — texte LdB : accessible à 3 génotypes OU la mutation Amphibie (OR), alors que le moteur existant traite tout en ET. Nouvelle colonne `or_group` (text nullable, même convention que `ref_career_skills.choice_group` migration 121) — lignes partageant le même `(skill_id, or_group)` liées en OU. 4 lignes insérées pour `HYBRIDE`. Recherche externe (5etools 2-niveaux ET/OU retenu, PF2e `Predicate` récursif écarté — pensé pour du contenu homebrew). `down`/`up` round-trip byte-identique. Voir `docs/JOURNAL6.md` Session 141 (suite 27) |
+| 152_world_document_revisions | `battlemaps.world_revision/surface_revision/voxel_revision`, backfill UUID physiques, sauvegardes documentaires indépendantes. |
+| 153_world_runtime_positions | `battlemaps.runtime_revision`, `tokens.position_space` avec CHECK `legacy-cell/world-feet`; anciennes lignes marquées legacy sans conversion approximative. |
+| 20260713_154_world_effects_runtime | Définitions/instances/événements d'effets et `world_feature_states`; ancienne table `zones` archivée sans conversion approximative. |
+| 20260713_155_world_elevator_passengers | Attachement durable token/cabine, position locale JSONB et unicité d'un passager dans une seule cabine. |
 
 ---
 
@@ -335,7 +874,11 @@ Enclume/
 
 ---
 
-## Collision map Redis — session 39
+## Collision map Redis — session 39 `[LEGACY]`
+
+Depuis la Phase 2, ce hash ne valide plus la création ni le déplacement des tokens. Les lignes
+ci-dessous documentent le comportement historique encore utilisé par des flux voxel/entités en
+attendant leur retrait, pas l'architecture à étendre.
 
 ### Architecture
 ```
@@ -357,8 +900,8 @@ Non bloquante si joueur sans `player_location` (première connexion).
 ### Maintenance temps réel
 | Événement | Handler | Action Redis |
 |---|---|---|
-| Token créé | `POST /tokens` (REST) | `collisionAddToken` |
-| Token déplacé | `PUT /tokens/:id` (REST) + `TOKEN_MOVE` (WS) | `collisionMoveToken` |
+| Token créé | Retiré en Phase 2 | aucune maintenance Redis |
+| Token déplacé | `world-move` / `TOKEN_MOVE` intention | graphe et occupation PostgreSQL, pas Redis |
 | Token supprimé | `DELETE /tokens/:id` (REST) | `collisionRemoveToken` AVANT delete |
 | Token rotate | `TOKEN_ROTATE` (WS) | aucune — position inchangée |
 | Entité créée | `POST /entities` (REST) | `collisionAddEntity` |

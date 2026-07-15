@@ -1,0 +1,658 @@
+{
+  "individual_file_count": 23,
+  "combined_file_count": 1,
+  "cabinet_animation_present": true,
+  "checks": [
+    {
+      "file": "01_sealed_grow_cabinet.glb",
+      "size_bytes": 815044,
+      "mesh_count": 128,
+      "material_count": 9,
+      "recolorable_slots": [
+        "ACCENT",
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 1,
+      "bounds_m": {
+        "min": [
+          -0.675000011920929,
+          -0.5139999985694885,
+          0.0
+        ],
+        "max": [
+          0.7450000047683716,
+          0.36000001430511475,
+          2.200000047683716
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "02_wall_hydroponic_rack.glb",
+      "size_bytes": 742116,
+      "mesh_count": 118,
+      "material_count": 8,
+      "recolorable_slots": [
+        "ACCENT",
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -0.875,
+          -0.3499999940395355,
+          0.0
+        ],
+        "max": [
+          0.875,
+          0.30000001192092896,
+          2.365000009536743
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "03_double_sided_central_rack.glb",
+      "size_bytes": 1503324,
+      "mesh_count": 237,
+      "material_count": 8,
+      "recolorable_slots": [
+        "ACCENT",
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -1.125,
+          -0.574999988079071,
+          0.0
+        ],
+        "max": [
+          1.125,
+          0.5249999761581421,
+          2.365000009536743
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "04_small_culture_table.glb",
+      "size_bytes": 739276,
+      "mesh_count": 87,
+      "material_count": 8,
+      "recolorable_slots": [
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -0.6000000238418579,
+          -0.4763000011444092,
+          0.0
+        ],
+        "max": [
+          0.6000000238418579,
+          0.3400000035762787,
+          1.244247555732727
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "05_medium_culture_table.glb",
+      "size_bytes": 1109284,
+      "mesh_count": 145,
+      "material_count": 8,
+      "recolorable_slots": [
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -0.949999988079071,
+          -0.536300003528595,
+          0.0
+        ],
+        "max": [
+          0.949999988079071,
+          0.4000000059604645,
+          1.244247555732727
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "06_large_culture_table.glb",
+      "size_bytes": 1799540,
+      "mesh_count": 253,
+      "material_count": 8,
+      "recolorable_slots": [
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -1.399999976158142,
+          -0.6362999677658081,
+          0.0
+        ],
+        "max": [
+          1.399999976158142,
+          0.5,
+          1.244247555732727
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "07_double_sided_culture_table.glb",
+      "size_bytes": 2261376,
+      "mesh_count": 325,
+      "material_count": 8,
+      "recolorable_slots": [
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -1.274999976158142,
+          -0.8762999773025513,
+          0.0
+        ],
+        "max": [
+          1.274999976158142,
+          0.8100000619888306,
+          1.244247555732727
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "08_deep_water_culture_basin.glb",
+      "size_bytes": 1210860,
+      "mesh_count": 139,
+      "material_count": 8,
+      "recolorable_slots": [
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -1.076300024986267,
+          -0.800000011920929,
+          0.0
+        ],
+        "max": [
+          1.076300024986267,
+          0.6762999892234802,
+          1.1402864456176758
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "09_vertical_grow_tower.glb",
+      "size_bytes": 1161028,
+      "mesh_count": 173,
+      "material_count": 7,
+      "recolorable_slots": [
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -0.550000011920929,
+          -0.6050000190734863,
+          0.0
+        ],
+        "max": [
+          0.550000011920929,
+          0.5,
+          2.2114999294281006
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "10_germination_table.glb",
+      "size_bytes": 1032724,
+      "mesh_count": 160,
+      "material_count": 8,
+      "recolorable_slots": [
+        "ACCENT",
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -0.7749999761581421,
+          -0.4399999976158142,
+          0.0
+        ],
+        "max": [
+          0.7749999761581421,
+          0.38999998569488525,
+          1.6299999952316284
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "11_nutrient_mixing_reservoir.glb",
+      "size_bytes": 136608,
+      "mesh_count": 17,
+      "material_count": 6,
+      "recolorable_slots": [
+        "FLUID",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -0.675000011920929,
+          -0.6549999713897705,
+          0.0
+        ],
+        "max": [
+          0.675000011920929,
+          0.47999998927116394,
+          1.684999942779541
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "12_automatic_dosing_station.glb",
+      "size_bytes": 180384,
+      "mesh_count": 24,
+      "material_count": 7,
+      "recolorable_slots": [
+        "ACCENT",
+        "FLUID",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -0.625,
+          -0.4449999928474426,
+          0.0
+        ],
+        "max": [
+          0.625,
+          0.3400000035762787,
+          1.7400000095367432
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "13_filtration_pump_block.glb",
+      "size_bytes": 196708,
+      "mesh_count": 24,
+      "material_count": 7,
+      "recolorable_slots": [
+        "ACCENT",
+        "FLUID",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -0.7250000238418579,
+          -0.6330000162124634,
+          0.0
+        ],
+        "max": [
+          0.7250000238418579,
+          0.36000001430511475,
+          1.5425000190734863
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "14_compact_autonomous_module.glb",
+      "size_bytes": 366928,
+      "mesh_count": 58,
+      "material_count": 8,
+      "recolorable_slots": [
+        "ACCENT",
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -0.574999988079071,
+          -0.574999988079071,
+          0.0
+        ],
+        "max": [
+          0.574999988079071,
+          0.3400000035762787,
+          1.9199999570846558
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "15_harvest_maintenance_bench.glb",
+      "size_bytes": 164020,
+      "mesh_count": 27,
+      "material_count": 7,
+      "recolorable_slots": [
+        "ACCENT",
+        "FLUID",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -0.949999988079071,
+          -0.38999998569488525,
+          0.0
+        ],
+        "max": [
+          0.949999988079071,
+          0.41999998688697815,
+          1.590000033378601
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "16_large_hydroponic_basin.glb",
+      "size_bytes": 1737648,
+      "mesh_count": 231,
+      "material_count": 8,
+      "recolorable_slots": [
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -1.9579999446868896,
+          -1.0579999685287476,
+          0.0
+        ],
+        "max": [
+          1.9800000190734863,
+          1.0579999685287476,
+          1.1588267087936401
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "17_xl_hydroponic_basin.glb",
+      "size_bytes": 2658204,
+      "mesh_count": 366,
+      "material_count": 9,
+      "recolorable_slots": [
+        "ACCENT",
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -2.558000087738037,
+          -1.2580000162124634,
+          0.0
+        ],
+        "max": [
+          2.5799999237060547,
+          1.2580000162124634,
+          1.8540003299713135
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "18_industrial_double_hydro_basin.glb",
+      "size_bytes": 3206592,
+      "mesh_count": 436,
+      "material_count": 9,
+      "recolorable_slots": [
+        "ACCENT",
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -3.1579999923706055,
+          -1.4579999446868896,
+          0.0
+        ],
+        "max": [
+          3.179999828338623,
+          1.4579999446868896,
+          1.854000449180603
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "19_small_algae_culture_vat.glb",
+      "size_bytes": 697356,
+      "mesh_count": 63,
+      "material_count": 8,
+      "recolorable_slots": [
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -1.2580000162124634,
+          -0.8580000400543213,
+          0.0
+        ],
+        "max": [
+          1.2580000162124634,
+          0.8580000400543213,
+          1.059999942779541
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "20_medium_aerated_algae_vat.glb",
+      "size_bytes": 765788,
+      "mesh_count": 72,
+      "material_count": 8,
+      "recolorable_slots": [
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -1.7580000162124634,
+          -1.0579999685287476,
+          0.0
+        ],
+        "max": [
+          1.7580000162124634,
+          1.0579999685287476,
+          1.059999942779541
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "21_large_industrial_algae_vat.glb",
+      "size_bytes": 1022196,
+      "mesh_count": 99,
+      "material_count": 8,
+      "recolorable_slots": [
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -2.4079999923706055,
+          -1.2580000162124634,
+          0.0
+        ],
+        "max": [
+          2.4079999923706055,
+          1.2580000162124634,
+          1.059999942779541
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "22_three_stage_algae_cascade.glb",
+      "size_bytes": 1556816,
+      "mesh_count": 96,
+      "material_count": 9,
+      "recolorable_slots": [
+        "ACCENT",
+        "FLUID",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -2.5199999809265137,
+          -1.350000023841858,
+          0.0
+        ],
+        "max": [
+          2.5199999809265137,
+          1.0750000476837158,
+          1.340000033378601
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    },
+    {
+      "file": "23_uv_algae_propagation_vat.glb",
+      "size_bytes": 855536,
+      "mesh_count": 86,
+      "material_count": 9,
+      "recolorable_slots": [
+        "FLUID",
+        "FOLIAGE",
+        "SHELL",
+        "STRUCTURE"
+      ],
+      "animation_count": 0,
+      "bounds_m": {
+        "min": [
+          -1.8579999208450317,
+          -1.1079999208450317,
+          0.0
+        ],
+        "max": [
+          1.8579999208450317,
+          1.1079999208450317,
+          1.7599999904632568
+        ]
+      },
+      "finite_transforms": true,
+      "floor_contact_ok": true,
+      "passed": true
+    }
+  ],
+  "passed": true
+}

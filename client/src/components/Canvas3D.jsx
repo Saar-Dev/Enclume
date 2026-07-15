@@ -6,14 +6,24 @@ import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
 import api from '../lib/api.js'
-import { findPath, getPathColor, getActionKey } from '../lib/pathfinder.js'
-import raycastVoxels from 'fast-voxel-raycast'
+import { getCombatPathColor, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { useCameraLOS } from '../lib/useCameraLOS.js'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
+import DungeonTerrainScene from './DungeonTerrainScene.jsx'
+import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
+import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
+import {
+  hasSurfaceContent,
+  isWorldPointVisibleAtLevel,
+  levelToY,
+  normalizeSurfaceData,
+  surfaceTextureIds,
+  yToLevel,
+} from '../lib/surfaceData.js'
 import { useTokenStore } from '../stores/tokenStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { useAuthStore } from '../stores/authStore'
@@ -26,6 +36,7 @@ import { useCombatStore } from '../stores/combatStore'
 const GRID_SIZE = 50
 const FONT_URL = '/fonts/inter.woff'
 const HARDCODED_DEFAULT_TOKEN_URL = '/models/default.glb'
+const USE_DIORAMA_TERRAIN = true
 
 // Seuil en pixels pour distinguer clic court (sélection) de drag
 const DRAG_THRESHOLD = 4
@@ -35,15 +46,32 @@ const DRAG_HOVER = 0.5
 
 // Amplitude max de l'inclinaison pendant le drag (radians)
 const DRAG_TILT_MAX = 0.3
+const THIRD_PERSON_MIN_DISTANCE = 2.2
+const THIRD_PERSON_MAX_DISTANCE = 12
+const THIRD_PERSON_ROTATE_SPEED = 0.008
+const THIRD_PERSON_PITCH_SPEED = 0.006
+const THIRD_PERSON_MIN_PITCH = 0.12
+const THIRD_PERSON_MAX_PITCH = 1.15
+
+function mod(value, divisor) {
+  return ((value % divisor) + divisor) % divisor
+}
+
+function yawToTokenRotation(yaw) {
+  return mod(Math.round((yaw + Math.PI) / (Math.PI / 4)), 8)
+}
 
 
 // ─── Utilitaire coordonnées ───────────────────────────────────────────────────
-// Convertit une position Three.js en champs base de données.
-// Three.js : X = droite, Y = haut, Z = profondeur
-// Base      : pos_x = X, pos_y = Z Three.js, pos_z = Y Three.js (altitude)
-// NE PAS FAIRE CE MAPPING INLINE — toujours passer par cette fonction.
-function threeToDb(tx, ty, tz) {
-  return { pos_x: tx, pos_y: tz, pos_z: ty }
+// Un token canonique stocke directement le point de contact de ses pieds dans le monde.
+// Les anciens tokens conservent leur décalage visuel historique tant qu'un MJ ne les replace pas.
+function tokenFeetPoint(token) {
+  const legacyOffset = token?.position_space === 'world-feet' ? 0 : 0.5
+  return {
+    x: (Number(token?.pos_x) || 0) + legacyOffset,
+    y: (Number(token?.pos_z) || 0) + legacyOffset,
+    z: (Number(token?.pos_y) || 0) + legacyOffset,
+  }
 }
 
 // Hauteur réelle du sommet d'un voxel en Three.js Y selon sa géométrie.
@@ -120,8 +148,8 @@ class TokenGlbErrorBoundary extends Component {
   }
   render() {
     if (this.state.hasError) {
-      const { color, isGmLayer, tiltX, tiltZ } = this.props
-      return <TokenFallbackBody color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
+      const { color, isGmLayer, tiltX, tiltZ, sceneOpacity } = this.props
+      return <TokenFallbackBody color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} sceneOpacity={sceneOpacity} />
     }
     return this.props.children
   }
@@ -130,7 +158,7 @@ class TokenGlbErrorBoundary extends Component {
 // Corps GLB — appelé uniquement quand glbUrl est défini.
 // useGLTF suspend le composant le temps du chargement (géré nativement par Canvas R3F).
 // useGLTF met en cache par URL — plusieurs tokens partageant la même URL ne téléchargent qu'une fois.
-function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ }) {
+function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 }) {
   const { scene: gltfScene } = useGLTF(glbUrl)
 
   const clonedScene = useMemo(() => {
@@ -146,9 +174,11 @@ function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ }) {
             m.map.colorSpace = THREE.SRGBColorSpace
             m.map.needsUpdate = true
           }
-          if (isGmLayer) {
+          const opacity = sceneOpacity * (isGmLayer ? 0.5 : 1)
+          if (opacity < 0.999) {
             m.transparent = true
-            m.opacity = 0.5
+            m.opacity = opacity
+            m.depthWrite = false
           }
           m.needsUpdate = true
           return m
@@ -161,7 +191,7 @@ function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ }) {
       }
     })
     return clone
-  }, [gltfScene, isGmLayer])
+  }, [gltfScene, isGmLayer, sceneOpacity])
 
   if (!clonedScene) return null
 
@@ -177,15 +207,16 @@ function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ }) {
 
 // Corps fallback — silhouette capsule colorée, aucun appel réseau.
 // Rendu quand le personnage n'a pas de glb_url et qu'aucun token par défaut de campagne n'est défini.
-function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ }) {
+function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 }) {
   return (
     <group position={[0, Y_OFFSET, 0]} rotation={[tiltX, 0, tiltZ]}>
       <mesh position={[0, 0.8, 0]}>
         <capsuleGeometry args={[0.28, 1.0, 4, 8]} />
         <meshLambertMaterial
           color={color}
-          transparent={!!isGmLayer}
-          opacity={isGmLayer ? 0.5 : 1}
+          transparent={isGmLayer || sceneOpacity < 0.999}
+          opacity={sceneOpacity * (isGmLayer ? 0.5 : 1)}
+          depthWrite={sceneOpacity >= 0.999}
         />
       </mesh>
     </group>
@@ -240,18 +271,16 @@ function TokenLabel({ label, color, isGmLayer }) {
 // Token individuel — gère drag, lerp, ring, label.
 // glbUrl : URL complète du GLB à charger (character.glb_url ou default_token_glb_url de campagne), ou null.
 // Si null → TokenFallbackBody (silhouette géométrique). Si défini → TokenGlbBody (modèle 3D).
-function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState, isGmLayer }) {
+function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState, isGmLayer, sceneOpacity = 1 }) {
   const color = token.user_color || token.color || '#4A90D9'
   const label = token.label || '?'
 
-  const baseX = token.pos_x ?? 0
-  const baseY = token.pos_z ?? 0
-  const baseZ = token.pos_y ?? 0
+  const feet = tokenFeetPoint(token)
 
   const isDragging = dragState !== null
-  const x = isDragging ? dragState.x + 0.5 : baseX + 0.5
-  const y = isDragging ? dragState.y : baseY + 0.5
-  const z = isDragging ? dragState.z + 0.5 : baseZ + 0.5
+  const x = isDragging ? dragState.x : feet.x
+  const y = isDragging ? dragState.y : feet.y
+  const z = isDragging ? dragState.z : feet.z
 
   const tiltX = isDragging ? dragState.tiltX : 0
   const tiltZ = isDragging ? dragState.tiltZ : 0
@@ -262,7 +291,7 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
 
   // ── Lerp 300ms — P40 : position via ref, jamais via state dans useFrame ──
   const groupRef = useRef()
-  const lerpPos = useRef({ x: baseX + 0.5, y: baseY + 0.5, z: baseZ + 0.5 })
+  const lerpPos = useRef({ ...feet })
   const targetRef = useRef({ x, y, z })
   targetRef.current = { x, y, z }
   const isDraggingRef = useRef(isDragging)
@@ -292,14 +321,15 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
       rotation={[0, rotationY, 0]}
       userData={{ isToken: true, tokenId: token.id }}
       onPointerDown={(e) => {
+        if (sceneOpacity < 0.999) return
         e.stopPropagation()
         onDragStart(e, token)
       }}
     >
       <TokenActiveDisk isActive={isActive} />
-      <TokenRing color={color} isSelected={isSelected} isDragging={isDragging} opacity={isGmLayer ? 0.25 : undefined} />
-      <TokenGlbErrorBoundary key={glbUrl} color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ}>
-        <TokenGlbBody glbUrl={glbUrl} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} />
+      <TokenRing color={color} isSelected={isSelected} isDragging={isDragging} opacity={sceneOpacity * (isGmLayer ? 0.25 : 0.5)} />
+      <TokenGlbErrorBoundary key={glbUrl} color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} sceneOpacity={sceneOpacity}>
+        <TokenGlbBody glbUrl={glbUrl} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} sceneOpacity={sceneOpacity} />
       </TokenGlbErrorBoundary>
       <TokenLabel label={label} color={color} isGmLayer={isGmLayer} />
       {isGmLayer && (
@@ -363,11 +393,116 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
 // ─── Scène principale ─────────────────────────────────────────────────────────
 // Lecture seule voxels + tokens + entités + WS listeners.
 // La logique d'édition (pose, suppression, rotation) est dans Editor3D.
+function ThirdPersonCamera({ token, enabled, onTokenSetRotation, updateToken }) {
+  const { camera, gl } = useThree()
+  const yawRef = useRef(Math.PI)
+  const pitchRef = useRef(0.42)
+  const distanceRef = useRef(6)
+  const dragRef = useRef({ active: false, x: 0, y: 0 })
+  const tokenRef = useRef(token)
+  const lastRotationRef = useRef(null)
+
+  useEffect(() => {
+    tokenRef.current = token
+    if (token?.id && lastRotationRef.current === null) {
+      const r = Number(token.r) || 0
+      yawRef.current = r * Math.PI / 4 - Math.PI
+      lastRotationRef.current = r
+    }
+  }, [token])
+
+  const applyTokenRotation = useCallback(() => {
+    const currentToken = tokenRef.current
+    if (!enabled || !currentToken) return
+    const nextR = yawToTokenRotation(yawRef.current)
+    if (nextR === lastRotationRef.current && nextR === (Number(currentToken.r) || 0)) return
+    lastRotationRef.current = nextR
+    updateToken?.({ id: currentToken.id, r: nextR })
+    onTokenSetRotation?.(currentToken.id, nextR)
+  }, [enabled, onTokenSetRotation, updateToken])
+
+  useEffect(() => {
+    if (!enabled) return undefined
+    const canvas = gl.domElement
+
+    const preventContextMenu = (e) => e.preventDefault()
+    const handlePointerDown = (e) => {
+      if (e.button !== 1 && e.button !== 2) return
+      dragRef.current = { active: true, x: e.clientX, y: e.clientY }
+      canvas.setPointerCapture?.(e.pointerId)
+      e.preventDefault()
+    }
+    const handlePointerMove = (e) => {
+      if (!dragRef.current.active) return
+      const dx = e.clientX - dragRef.current.x
+      const dy = e.clientY - dragRef.current.y
+      dragRef.current = { active: true, x: e.clientX, y: e.clientY }
+      yawRef.current -= dx * THIRD_PERSON_ROTATE_SPEED
+      pitchRef.current = Math.max(
+        THIRD_PERSON_MIN_PITCH,
+        Math.min(THIRD_PERSON_MAX_PITCH, pitchRef.current + dy * THIRD_PERSON_PITCH_SPEED)
+      )
+      applyTokenRotation()
+      e.preventDefault()
+    }
+    const handlePointerUp = (e) => {
+      if (!dragRef.current.active) return
+      dragRef.current.active = false
+      canvas.releasePointerCapture?.(e.pointerId)
+      e.preventDefault()
+    }
+    const handleWheel = (e) => {
+      distanceRef.current = Math.max(
+        THIRD_PERSON_MIN_DISTANCE,
+        Math.min(THIRD_PERSON_MAX_DISTANCE, distanceRef.current + e.deltaY * 0.01)
+      )
+      e.preventDefault()
+    }
+
+    canvas.addEventListener('contextmenu', preventContextMenu)
+    canvas.addEventListener('pointerdown', handlePointerDown)
+    canvas.addEventListener('pointermove', handlePointerMove)
+    canvas.addEventListener('pointerup', handlePointerUp)
+    canvas.addEventListener('pointerleave', handlePointerUp)
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
+    return () => {
+      canvas.removeEventListener('contextmenu', preventContextMenu)
+      canvas.removeEventListener('pointerdown', handlePointerDown)
+      canvas.removeEventListener('pointermove', handlePointerMove)
+      canvas.removeEventListener('pointerup', handlePointerUp)
+      canvas.removeEventListener('pointerleave', handlePointerUp)
+      canvas.removeEventListener('wheel', handleWheel)
+    }
+  }, [enabled, gl, applyTokenRotation])
+
+  useFrame(() => {
+    if (!enabled || !tokenRef.current) return
+    const currentToken = tokenRef.current
+    const feet = tokenFeetPoint(currentToken)
+    const target = new THREE.Vector3(feet.x, feet.y + 1.35, feet.z)
+    const distance = distanceRef.current
+    const pitch = pitchRef.current
+    const horizontal = Math.cos(pitch) * distance
+    const y = Math.sin(pitch) * distance
+    const yaw = yawRef.current
+
+    camera.position.set(
+      target.x + Math.sin(yaw) * horizontal,
+      target.y + y,
+      target.z + Math.cos(yaw) * horizontal
+    )
+    camera.lookAt(target)
+  })
+
+  return null
+}
+
 function Scene({
-  voxels, setVoxels, textureMaterials, entityTextureMaterials, socket, battlemapId,
+  voxels, surfaceData, textureMaterials, entityTextureMaterials, runtimeEffectRegions, runtimeFeatureStates, socket, battlemapId,
+  selectedSurfaceConnectorId, onSurfaceConnectorSelect,
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
-  altPressed, onEntityClick, onTokenRotate,
+  altPressed, onEntityClick, onTokenRotate, onTokenSetRotation,
   moveTarget, onMoveCancel, moveLabels,
   dicePayload, onDiceDone,
   combatCameraCenter,
@@ -379,12 +514,15 @@ function Scene({
   losMode,
   onLosCancel,
   onLosResult,
+  cameraMode,
+  displayLevel = 0,
 }) {
   const { t } = useTranslation()
-  const { camera, gl } = useThree()
+  const { camera, gl, scene } = useThree()
   const orbitRef = useRef()
-  const raycaster = new THREE.Raycaster()
-  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+  const previousDisplayLevelRef = useRef(displayLevel)
+  const raycaster = useMemo(() => new THREE.Raycaster(), [])
+  const groundPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), [])
 
   // Lecture des stores — pas de props pour ces données
   const { tokens, updateToken, removeToken } = useTokenStore()
@@ -394,6 +532,18 @@ function Scene({
   const { phase, announcedActions, activeTokenId } = useCombatStore()
 
   const [dragState, setDragState] = useState(null)
+  const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
+
+  useEffect(() => {
+    const previousLevel = previousDisplayLevelRef.current
+    previousDisplayLevelRef.current = displayLevel
+    if (previousLevel === displayLevel || !orbitRef.current) return
+    const deltaY = levelToY(displayLevel) - levelToY(previousLevel)
+    const controls = orbitRef.current
+    controls.object.position.y += deltaY
+    controls.target.y += deltaY
+    controls.update()
+  }, [displayLevel])
 
   // ─── Mode visée déplacement — states + refs ───────────────────────────────
   // ghostPos/dotResult : states pour le rendu JSX du ghost
@@ -404,6 +554,17 @@ function Scene({
   const ghostRef = useRef({ ghostPos: null, dotResult: 0 })
   const tokensRef = useRef(tokens)
   tokensRef.current = tokens
+
+  const followToken = useMemo(() => {
+    const owned = tokens.find(token =>
+      characters.some(character => character.id === token.character_id && character.user_id === user?.id)
+    )
+    if (owned) return owned
+    if (selectedTokenId) return tokens.find(token => token.id === selectedTokenId) || null
+    if (!isGm) return tokens.find(token => token.layer !== 'gm') || null
+    return null
+  }, [tokens, characters, user?.id, selectedTokenId, isGm])
+  const thirdPersonCameraActive = cameraMode === 'play' && !!followToken
 
   // ─── Mode déplacement combat — P40 : ref miroir pour handlers stables ─────
   const combatMoveModeRef = useRef(null)
@@ -425,6 +586,7 @@ function Scene({
   const [currentPath, setCurrentPath] = useState([])
   const currentPathRef = useRef([])
   currentPathRef.current = currentPath
+  const previewRequestRef = useRef(0)
 
   const voxelsRef = useRef(voxels)
   voxelsRef.current = voxels
@@ -432,7 +594,7 @@ function Scene({
   // ─── LOS v2 — service complet (client/src/lib/useCameraLOS.js) ──────────
   // Déclaré après voxelsRef et tokensRef (TDZ — déclarations const non hoistées)
   const { losLine, onTokenClick, onPointerUp, clearLine } = useCameraLOS(
-    losMode, orbitRef, voxelsRef, tokensRef, onLosResult, onLosCancel
+    losMode, orbitRef, tokensRef, battlemapId, onLosResult, onLosCancel
   )
 
   const lastCellRef = useRef(null)
@@ -460,34 +622,9 @@ function Scene({
     prevWorldZ: null,
   })
 
-  const getVoxelKey = (x, y, z) => `${x}:${y}:${z}`
-
-  // ─── Écoute voxels temps réel ──────────────────────────────────────────────
+  // ─── Écoute entités temps réel ─────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return
-
-    const handleVoxelAdded = ({ x, y, z, tex, geo, r }) => {
-      const key = getVoxelKey(x, y, z)
-      setVoxels(prev => ({ ...prev, [key]: { x, y, z, tex, geo, r } }))
-    }
-
-    const handleVoxelRemoved = ({ x, y, z }) => {
-      const key = getVoxelKey(x, y, z)
-      setVoxels(prev => { const next = { ...prev }; delete next[key]; return next })
-    }
-
-    const handleVoxelUpdated = ({ battlemapId: incomingId, x, y, z, r }) => {
-      if (incomingId !== battlemapId) return
-      const key = getVoxelKey(x, y, z)
-      setVoxels(prev => {
-        if (!prev[key]) return prev
-        return { ...prev, [key]: { ...prev[key], r } }
-      })
-    }
-
-    socket.on(WS.VOXEL_ADDED, handleVoxelAdded)
-    socket.on(WS.VOXEL_REMOVED, handleVoxelRemoved)
-    socket.on(WS.VOXEL_UPDATED, handleVoxelUpdated)
 
     // ─── Écoute entités temps réel ───────────────────────────────────────
     const handleEntityCreated = ({ entity }) => addEntity(entity)
@@ -513,9 +650,6 @@ function Scene({
     socket.on(WS.ENTITY_MOVED, handleEntityMoved)
 
     return () => {
-      socket.off(WS.VOXEL_ADDED, handleVoxelAdded)
-      socket.off(WS.VOXEL_REMOVED, handleVoxelRemoved)
-      socket.off(WS.VOXEL_UPDATED, handleVoxelUpdated)
       socket.off(WS.ENTITY_CREATED, handleEntityCreated)
       socket.off(WS.ENTITY_DELETED, handleEntityDeleted)
       socket.off(WS.ENTITY_UPDATED, handleEntityUpdated)
@@ -535,53 +669,63 @@ function Scene({
     return hit ? target : null
   }, [camera, gl])
 
-  // Raycast précis à travers la grille voxel — pour le mode déplacement combat.
-  // Retourne { x, z, isVoid } avec x/z en coordonnées entières Three.js (colonne).
-  // isVoid=true : aucun voxel touché (zone vide) — GM autorisé, joueur bloqué.
-  // Technique : Amanatides/Woo + décalage 0.5 dans la normale → case adjacente ouverte.
-  const raycastVoxelColumn = useCallback((clientX, clientY) => {
+  const raycastWorldSupport = useCallback((clientX, clientY) => {
+    if (!hasSurfaceContent(surfaceData)) return null
     const rect = gl.domElement.getBoundingClientRect()
     const mouse = new THREE.Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -((clientY - rect.top) / rect.height) * 2 + 1
     )
     raycaster.setFromCamera(mouse, camera)
-
-    const origin = raycaster.ray.origin
-    const dir    = raycaster.ray.direction
-    const hitPos  = [0, 0, 0]
-    const hitNorm = [0, 0, 0]
-
-    const getVoxel = (x, y, z) => !!voxelsRef.current[`${x}:${y}:${z}`]
-
-    const hit = raycastVoxels(
-      getVoxel,
-      [origin.x, origin.y, origin.z],
-      [dir.x,    dir.y,    dir.z],
-      100,
-      hitPos,
-      hitNorm
-    )
-
-    if (hit) {
-      const adjX = hitPos[0] + hitNorm[0] * 0.5
-      const adjZ = hitPos[2] + hitNorm[2] * 0.5
-      return {
-        x: Math.floor(adjX),
-        z: Math.floor(adjZ),
-        rawX: adjX,
-        rawZ: adjZ,
-        isVoid: false,
-      }
+    const normalMatrix = new THREE.Matrix3()
+    for (const hit of raycaster.intersectObjects(scene.children, true)) {
+      if (!hit.object?.userData?.worldSupport || !hit.face) continue
+      normalMatrix.getNormalMatrix(hit.object.matrixWorld)
+      const normal = hit.face.normal.clone().applyNormalMatrix(normalMatrix)
+      if (normal.y < 0.5) continue
+      return { x: hit.point.x, y: hit.point.y, z: hit.point.z }
     }
+    return null
+  }, [camera, gl, raycaster, scene, surfaceData])
 
-    // Aucun voxel touché — fallback plan y=0
-    const target = new THREE.Vector3()
-    const groundPlane0 = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const fallback = raycaster.ray.intersectPlane(groundPlane0, target)
-    if (!fallback) return null
-    return { x: Math.floor(target.x), z: Math.floor(target.z), rawX: target.x, rawZ: target.z, isVoid: true }
-  }, [camera, gl])
+  const requestWorldPathPreview = useCallback(async (mode, destination) => {
+    const requestId = ++previewRequestRef.current
+    try {
+      const res = await api.post(`/battlemaps/${battlemapId}/world-path-preview`, {
+        token_id: mode.tokenId,
+        destination,
+        budget_m: Number(mode.allures?.max) || 0,
+      })
+      if (requestId !== previewRequestRef.current) return
+      const result = res.data?.result
+      if (!result?.plan) {
+        currentPathRef.current = []
+        setCurrentPath([])
+        return
+      }
+      let spentM = 0
+      const path = [{ ...result.snappedFrom, spentM: 0 }]
+      for (const segment of result.plan.segments) {
+        spentM += Number(segment.costM) || 0
+        path.push({
+          ...segment.to,
+          spentM,
+          mode: segment.mode,
+          partial: segment.partial,
+          distanceM: Number(segment.distanceM) || 0,
+          segmentCostM: Number(segment.costM) || 0,
+          factor: Number(segment.factor) || 1,
+        })
+      }
+      currentPathRef.current = path
+      setCurrentPath(path)
+    } catch (error) {
+      if (requestId !== previewRequestRef.current) return
+      currentPathRef.current = []
+      setCurrentPath([])
+      if (error?.response?.status !== 409) console.error('Erreur preview déplacement monde :', error)
+    }
+  }, [battlemapId])
 
   // Index colonne → hauteur réelle de surface (Three.js Y). Reconstruit uniquement quand voxels change.
   // O(1) par lookup vs O(N) par frame pour le getColumnTopY précédent.
@@ -622,9 +766,7 @@ function Scene({
       hasMoved: false,
       prevWorldX: null,
       prevWorldZ: null,
-      snappedX: null,
-      snappedZ: null,
-      surfaceY: null,
+      destination: null,
     }
     if (orbitRef.current) orbitRef.current.enabled = false
   }, [isGm, user, characters, onTokenClick, clearLine])
@@ -632,21 +774,14 @@ function Scene({
   const handlePointerMove = useCallback((e) => {
     // ─── Mode déplacement combat — prioritaire sur tout ───────────────────────
     if (combatMoveModeRef.current) {
-      const cell = raycastVoxelColumn(e.clientX, e.clientY)
-      if (!cell) return
-      if (cell.isVoid && !isGm) return  // joueur : interdit de marcher dans le vide
-      // Throttle : ne recalculer que si la case change
-      if (cell.x !== lastCellRef.current?.x || cell.z !== lastCellRef.current?.z) {
-        lastCellRef.current = cell
-        setCombatCursorPos(cell)
+      const destination = raycastWorldSupport(e.clientX, e.clientY)
+      if (!destination) return
+      const key = `${Math.round(destination.x * 4)}:${Math.round(destination.y * 4)}:${Math.round(destination.z * 4)}`
+      if (key !== lastCellRef.current) {
+        lastCellRef.current = key
+        setCombatCursorPos(destination)
         const mode = combatMoveModeRef.current
-        const actorToken = tokensRef.current.find(t => t.id === mode.tokenId)
-        if (actorToken) {
-          const from = { x: actorToken.pos_x, z: actorToken.pos_y, posZ: actorToken.pos_z }
-          const path = findPath(voxelsRef.current, tokensRef.current, [], from, cell, mode.allures, { excludeTokenId: mode.tokenId })
-          currentPathRef.current = path ?? []
-          setCurrentPath(path ?? [])
-        }
+        void requestWorldPathPreview(mode, destination)
       }
       return
     }
@@ -704,36 +839,30 @@ function Scene({
       dragRef.current.hasMoved = true
     }
 
-    const cell = raycastVoxelColumn(e.clientX, e.clientY)
-    if (!cell) return
-
-    const snappedX = Math.floor(cell.rawX)
-    const snappedZ = Math.floor(cell.rawZ)
-    const surfaceY = colTopSurface[`${snappedX}:${snappedZ}`] ?? 0
+    const destination = raycastWorldSupport(e.clientX, e.clientY)
+    if (!destination) return
 
     let tiltX = 0
     let tiltZ = 0
     if (dragRef.current.prevWorldX !== null) {
-      const deltaX = cell.rawX - dragRef.current.prevWorldX
-      const deltaZ = cell.rawZ - dragRef.current.prevWorldZ
+      const deltaX = destination.x - dragRef.current.prevWorldX
+      const deltaZ = destination.z - dragRef.current.prevWorldZ
       tiltX = Math.max(-DRAG_TILT_MAX, Math.min(DRAG_TILT_MAX, -deltaZ * 2))
       tiltZ = Math.max(-DRAG_TILT_MAX, Math.min(DRAG_TILT_MAX, deltaX * 2))
     }
-    dragRef.current.prevWorldX = cell.rawX
-    dragRef.current.prevWorldZ = cell.rawZ
-    dragRef.current.snappedX = snappedX
-    dragRef.current.snappedZ = snappedZ
-    dragRef.current.surfaceY = surfaceY
+    dragRef.current.prevWorldX = destination.x
+    dragRef.current.prevWorldZ = destination.z
+    dragRef.current.destination = destination
 
     setDragState({
       tokenId: dragRef.current.tokenId,
-      x: snappedX,
-      y: Math.max(0, surfaceY - 0.5) + DRAG_HOVER,
-      z: snappedZ,
+      x: destination.x,
+      y: destination.y + DRAG_HOVER,
+      z: destination.z,
       tiltX,
       tiltZ,
     })
-  }, [raycastGround, raycastVoxelColumn, colTopSurface, moveTarget, isGm])
+  }, [raycastGround, raycastWorldSupport, moveTarget, isGm, requestWorldPathPreview])
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(async (e) => {
@@ -743,16 +872,15 @@ function Scene({
       const path = currentPathRef.current
       if (!path || path.length < 2) return  // inaccessible ou destination = départ
       const dest = path[path.length - 1]
-      const result = getActionKey(path.length - 1, mode.allures)
+      const result = selectCombatMovementForCost(dest.spentM, mode.allures)
       if (!result) return  // hors portée max
-      // PE14 : targetPosY = Z Three.js (profondeur)
-      // Bug 2 fix : targetPosZ = Math.round(feetGridY/2) - 1 (pieds → altitude DB)
+      // Le payload de combat conserve les noms DB PE14, mais contient des mètres monde exacts.
       mode.onPendingMove({
-        action_key:  result.action_key,
-        ini_mod:     result.ini_mod,
+        action_key:  result.actionKey,
+        ini_mod:     result.initiativeModifier,
         targetPosX:  dest.x,
         targetPosY:  dest.z,
-        targetPosZ:  Math.round(dest.feetGridY / 2) - 1,
+        targetPosZ:  dest.y,
         screenX:     e.clientX,
         screenY:     e.clientY,
       })
@@ -806,23 +934,23 @@ function Scene({
 
     // Position du drop = là où le token ghost était affiché pendant le drag,
     // PAS là où pointe le curseur (qui est souvent caché sous le token).
-    const snappedX = dragRef.current.snappedX
-    const snappedZ = dragRef.current.snappedZ
-    const surfaceY = dragRef.current.surfaceY
-    if (snappedX === null || snappedZ === null || surfaceY === null) return
-
-    if (!isGm && surfaceY === 0) return  // joueur : interdit de poser dans le vide
-    if (Math.abs(snappedX) > GRID_SIZE / 2 || Math.abs(snappedZ) > GRID_SIZE / 2) return
-
-    const dbPos = threeToDb(snappedX, surfaceY - 1.0, snappedZ)
+    const destination = dragRef.current.destination
+    if (!destination) return
 
     try {
-      const res = await api.put(`/tokens/${token.id}`, dbPos)
-      updateToken(res.data.token)
+      const res = isGm
+        ? await api.post(`/tokens/${token.id}/teleport`, { destination })
+        : await api.post(`/battlemaps/${battlemapId}/world-move`, {
+            token_id: token.id,
+            destination,
+            gait: 'moyenne',
+          })
+      const updated = res.data?.token || res.data?.outcome?.token
+      if (updated) updateToken(updated)
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp])
+  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -833,6 +961,13 @@ function Scene({
       canvas.removeEventListener('pointerup', handlePointerUp)
     }
   }, [handlePointerMove, handlePointerUp, gl])
+
+  useEffect(() => {
+    const canvas = gl.domElement
+    const prevent = (e) => e.preventDefault()
+    canvas.addEventListener('contextmenu', prevent)
+    return () => canvas.removeEventListener('contextmenu', prevent)
+  }, [gl])
 
   // ─── Suppression token (touche Suppr) — GM uniquement ─────────────────────
   useEffect(() => {
@@ -855,8 +990,8 @@ function Scene({
     if (!orbitRef.current) return
     orbitRef.current.mouseButtons = {
       LEFT: null,
-      MIDDLE: THREE.MOUSE.PAN,
-      RIGHT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.ROTATE,
+      RIGHT: THREE.MOUSE.PAN,
     }
     orbitRef.current.listenToKeyEvents(window)
     orbitRef.current.keyPanSpeed = 20
@@ -867,9 +1002,9 @@ function Scene({
   // Retour à null (annulation) → guard bloque → caméra reste où elle est (PC36)
   useEffect(() => {
     if (!combatCameraCenter || !orbitRef.current) return
-    orbitRef.current.target.set(combatCameraCenter.x + 0.5, 0, combatCameraCenter.z + 0.5)
+    orbitRef.current.target.set(combatCameraCenter.x + 0.5, levelToY(displayLevel), combatCameraCenter.z + 0.5)
     orbitRef.current.update()
-  }, [combatCameraCenter])
+  }, [combatCameraCenter, displayLevel])
 
   // ─── Ligne de visée assaut — segment joueur→cible en attente (Sprint 7.1) ──
   const targetLinePoints = useMemo(() => {
@@ -877,10 +1012,11 @@ function Scene({
     const myToken = tokensRef.current.find(t => t.id === combatTargetMode.tokenId)
     const tgtToken = tokensRef.current.find(t => t.id === combatTargetMode.pendingTargetId)
     if (!myToken || !tgtToken) return null
-    // PE14 + PE34 : Three.js coords — pieds + 0.5 hauteur token
+    const source = tokenFeetPoint(myToken)
+    const target = tokenFeetPoint(tgtToken)
     return new Float32Array([
-      myToken.pos_x + 0.5,  myToken.pos_z + 1.5,  myToken.pos_y + 0.5,
-      tgtToken.pos_x + 0.5, tgtToken.pos_z + 1.5, tgtToken.pos_y + 0.5,
+      source.x, source.y + 1.5, source.z,
+      target.x, target.y + 1.5, target.z,
     ])
   }, [combatTargetMode?.pendingTargetId])
 
@@ -891,29 +1027,94 @@ function Scene({
       <directionalLight position={[10, 20, 10]} intensity={1.5} castShadow />
       <directionalLight position={[-10, 10, -10]} intensity={0.6} />
 
-      <MapControls
-        ref={orbitRef}
-        mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE }}
-        enableDamping
-        dampingFactor={0.05}
-        maxPolarAngle={Math.PI / 2}
-      />
+      {thirdPersonCameraActive ? (
+        <ThirdPersonCamera
+          token={followToken}
+          enabled={thirdPersonCameraActive}
+          onTokenSetRotation={onTokenSetRotation}
+          updateToken={updateToken}
+        />
+      ) : (
+        <MapControls
+          ref={orbitRef}
+          mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }}
+          enableDamping
+          dampingFactor={0.05}
+          maxPolarAngle={Math.PI / 2}
+        />
+      )}
 
       <Grid
         args={[GRID_SIZE, GRID_SIZE]}
-        position={[0, 0, 0]}
+        position={[0, levelToY(displayLevel), 0]}
         cellColor="#334155"
         sectionColor="#475569"
         fadeDistance={80}
       />
 
-      <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
+      {hasSurfaceContent(surfaceData) ? (
+        <SurfaceDungeonScene
+          surfaceData={surfaceData}
+          textureMaterials={textureMaterials}
+          displayLevel={displayLevel}
+          cameraControlsRef={thirdPersonCameraActive ? null : orbitRef}
+          onCameraRoomIdChange={setCameraVolumeRoomId}
+          runtimeFeatureStates={runtimeFeatureStates}
+          selectedConnectorId={selectedSurfaceConnectorId}
+          onConnectorSelect={onSurfaceConnectorSelect}
+        />
+      ) : USE_DIORAMA_TERRAIN ? (
+        <DungeonTerrainScene voxels={voxels} textureMaterials={textureMaterials} />
+      ) : (
+        <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
+      )}
+
+      {(runtimeEffectRegions || []).map(region => {
+        const bounds = region?.bounds
+        const sliceBottom = levelToY(displayLevel)
+        const sliceTop = levelToY(displayLevel + 1)
+        if (!bounds) return null
+        const centerX = (bounds.min.x + bounds.max.x) / 2
+        const centerZ = (bounds.min.z + bounds.max.z) / 2
+        const centerY = (bounds.min.y + bounds.max.y) / 2
+        const intersectsSlice = bounds.max.y > sliceBottom && bounds.min.y < sliceTop
+        const visibleInWorldContext = isWorldPointVisibleAtLevel(
+          surfaceData,
+          displayLevel,
+          centerX,
+          centerZ,
+          centerY,
+          cameraVolumeRoomId,
+        )
+        if (!intersectsSlice && !visibleInWorldContext) return null
+        const size = [bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y, bounds.max.z - bounds.min.z]
+        const center = [
+          centerX,
+          (bounds.min.y + bounds.max.y) / 2,
+          centerZ,
+        ]
+        const color = region.definitionKey === 'gas' ? '#a3e635' : region.definitionKey === 'flooded' ? '#38bdf8' : '#fb7185'
+        return (
+          <mesh key={region.id} position={center} renderOrder={19}>
+            <boxGeometry args={size} />
+            <meshBasicMaterial color={color} transparent opacity={0.1} depthWrite={false} />
+          </mesh>
+        )
+      })}
 
       {/* ── Entités interactables — entre voxels et tokens ────────────────── */}
       {entities.map(entity => {
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
         if (entity.gm_only && !isGm) return null
+        if (!isWorldPointVisibleAtLevel(
+          surfaceData,
+          displayLevel,
+          (Number(entity.pos_x) || 0) + 0.5,
+          (Number(entity.pos_y) || 0) + 0.5,
+          entity.pos_z,
+          cameraVolumeRoomId,
+        )) return null
         return (
           <EntityMesh
             key={entity.id}
@@ -923,6 +1124,7 @@ function Scene({
             altPressed={altPressed}
             isGmOnly={entity.gm_only && isGm}
             onEntityClick={onEntityClick}
+            sceneOpacity={1}
           />
         )
       })}
@@ -944,7 +1146,17 @@ function Scene({
         )
       })()}
 
-      {tokens.filter(token => isGm || token.layer !== 'gm').map(token => {
+      {tokens.filter(token => (
+        (isGm || token.layer !== 'gm')
+        && isWorldPointVisibleAtLevel(
+          surfaceData,
+          displayLevel,
+          (Number(token.pos_x) || 0) + 0.5,
+          (Number(token.pos_y) || 0) + 0.5,
+          token.pos_z,
+          cameraVolumeRoomId,
+        )
+      )).map(token => {
         const character = characters.find(c => c.id === token.character_id)
         const glbUrl = character?.glb_url
           ? `${import.meta.env.VITE_API_URL}/api/assets/${character.glb_url}`
@@ -959,6 +1171,7 @@ function Scene({
             onDragStart={handleDragStart}
             dragState={dragState?.tokenId === token.id ? dragState : null}
             isGmLayer={token.layer === 'gm'}
+            sceneOpacity={1}
           />
         )
       })}
@@ -966,30 +1179,40 @@ function Scene({
       {/* ── Chemin déplacement combat (Sprint Pathfinding) ──────────────── */}
       {/* Cases colorées par allure sur le chemin A* vers le curseur.         */}
       {/* Bleu = lente, vert = moyenne, orange = rapide, rouge = max          */}
-      {/* feetGridY / 2 = hauteur Three.js des pieds sur cette case           */}
+      {/* Les points sont exprimés dans l'espace monde canonique (pieds).     */}
       {combatMoveMode && currentPath.map((cell, i) => (
-        <mesh
-          key={`path-${i}`}
-          position={[cell.x + 0.5, cell.feetGridY / 2 + 0.05, cell.z + 0.5]}
-          rotation={[-Math.PI / 2, 0, 0]}
-        >
-          <planeGeometry args={[0.9, 0.9]} />
-          <meshBasicMaterial
-            color={getPathColor(cell.distFromStart, combatMoveMode.allures)}
-            transparent
-            opacity={0.5}
-            depthWrite={false}
-          />
-        </mesh>
+        <group key={`path-${i}`} position={[cell.x, cell.y + 0.05, cell.z]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[0.9, 0.9]} />
+            <meshBasicMaterial
+              color={getCombatPathColor(cell.spentM, combatMoveMode.allures)}
+              transparent
+              opacity={0.5}
+              depthWrite={false}
+            />
+          </mesh>
+          {i > 0 && (
+            <Billboard position={[0, 0.32, 0]} follow>
+              <Text
+                fontSize={0.12}
+                color="#ffffff"
+                outlineWidth={0.018}
+                outlineColor="#0f172a"
+                anchorX="center"
+                anchorY="middle"
+              >
+                {`${cell.mode === 'climb' ? 'grimpe' : cell.mode === 'stairs' ? 'esc.' : 'sol'} ${cell.factor !== 1 ? `${cell.distanceM.toFixed(1)} m ×${cell.factor.toFixed(2)} = ` : ''}${cell.segmentCostM.toFixed(1)} m`}
+              </Text>
+            </Billboard>
+          )}
+        </group>
       ))}
 
       {/* ── Cursor wireframe case survolée en mode déplacement combat ────── */}
       {combatMoveMode && combatCursorPos && (() => {
-        const curToken = tokensRef.current.find(t => t.id === combatMoveMode.tokenId)
-        const cursorY = curToken ? curToken.pos_z + 1.0 + 0.05 : 0.1
         return (
           <mesh
-            position={[combatCursorPos.x + 0.5, cursorY, combatCursorPos.z + 0.5]}
+            position={[combatCursorPos.x, combatCursorPos.y + 0.05, combatCursorPos.z]}
             rotation={[-Math.PI / 2, 0, 0]}
           >
             <planeGeometry args={[1, 1]} />
@@ -1000,11 +1223,13 @@ function Scene({
 
       {/* ── Case destination sélectionnée — surbrillance bleue (Bug B) ─────── */}
       {combatMoveMode && pendingMoveSelection && (() => {
-        const curToken = tokensRef.current.find(t => t.id === combatMoveMode.tokenId)
-        const y = curToken ? curToken.pos_z + 1.0 + 0.06 : 0.1
         return (
           <mesh
-            position={[pendingMoveSelection.targetPosX + 0.5, y, pendingMoveSelection.targetPosY + 0.5]}
+            position={[
+              pendingMoveSelection.targetPosX,
+              pendingMoveSelection.targetPosZ + 0.06,
+              pendingMoveSelection.targetPosY,
+            ]}
             rotation={[-Math.PI / 2, 0, 0]}
           >
             <planeGeometry args={[1, 1]} />
@@ -1119,10 +1344,11 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, announcementMarker, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult }) {
+export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenRotate, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, announcementMarker, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0 }) {
   const { t } = useTranslation()
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
+  const { isGm } = useCharacterStore()
 
   // Labels i18n pour le ghost — calculés ici où t() est accessible, passés en prop à Scene
   const moveLabels = {
@@ -1132,10 +1358,60 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
   }
 
   const [voxels, setVoxels] = useState({})
+  const surfaceData = normalizeSurfaceData(battlemap?.surface_data)
   const [textureMaterials, setTextureMaterials] = useState({})
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
+  const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
+  const [runtimeElevatorStates, setRuntimeElevatorStates] = useState({})
+  const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [blocksReady, setBlocksReady] = useState(false)
   const [selectedTokenId, setSelectedTokenId] = useState(null)
+
+  const refreshRuntimeEffects = useCallback(async () => {
+    if (!battlemap?.id) return setRuntimeEffectRegions([])
+    try {
+      const { data } = await api.get(`/battlemaps/${battlemap.id}/world-effects`)
+      setRuntimeEffectRegions(data.worldEffects?.regions || [])
+    } catch (error) {
+      console.error('[Canvas3D] Erreur chargement effets monde :', error)
+    }
+  }, [battlemap?.id])
+
+  useEffect(() => { refreshRuntimeEffects() }, [refreshRuntimeEffects])
+
+  const refreshRuntimeElevators = useCallback(async () => {
+    if (!battlemap?.id) return setRuntimeElevatorStates({})
+    try {
+      const { data } = await api.get(`/battlemaps/${battlemap.id}/world-elevators`)
+      setRuntimeElevatorStates(data.worldElevators?.states || {})
+    } catch (error) {
+      console.error('[Canvas3D] Erreur chargement ascenseurs monde :', error)
+    }
+  }, [battlemap?.id])
+
+  useEffect(() => { refreshRuntimeElevators() }, [refreshRuntimeElevators])
+
+  const elevatorsAreTransitioning = useMemo(
+    () => Object.values(runtimeElevatorStates).some(state => ['closing', 'moving', 'opening'].includes(state?.phase)),
+    [runtimeElevatorStates],
+  )
+
+  useEffect(() => {
+    if (!elevatorsAreTransitioning) return undefined
+    const timer = window.setInterval(refreshRuntimeElevators, 300)
+    return () => window.clearInterval(timer)
+  }, [elevatorsAreTransitioning, refreshRuntimeElevators])
+
+  useEffect(() => {
+    if (!socket || !battlemap?.id) return undefined
+    const handleRuntimeUpdate = event => {
+      if (String(event?.battlemapId) !== String(battlemap.id)) return
+      if (event?.kind !== 'elevator-clock') refreshRuntimeElevators()
+      if (!String(event?.kind || '').startsWith('elevator-')) refreshRuntimeEffects()
+    }
+    socket.on(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
+    return () => socket.off(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
+  }, [socket, battlemap?.id, refreshRuntimeEffects, refreshRuntimeElevators])
 
   // ─── Liseré surbrillance entités (touche Alt) ─────────────────────────────
   // PE16 : e.code obligatoire (invariant AZERTY/QWERTY)
@@ -1216,12 +1492,14 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
       const voxelTexIds = battlemap?.voxel_data
         ? [...new Set(Object.values(battlemap.voxel_data).map(v => v.tex))]
         : []
+      const surfaceTexIds = surfaceTextureIds(battlemap?.surface_data)
+      const textureIds = [...new Set([...voxelTexIds, ...surfaceTexIds])]
 
-      if (voxelTexIds.length === 0) {
+      if (textureIds.length === 0) {
         setTextureMaterials({})
       } else {
         try {
-          const { data } = await api.get(`/voxel-textures?ids=${voxelTexIds.join(',')}`)
+          const { data } = await api.get(`/voxel-textures?ids=${textureIds.join(',')}`)
           const loaded = await loadVoxelTextures(data.textures)
           setTextureMaterials(loaded)
         } catch (err) {
@@ -1281,14 +1559,38 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
 
     loadBlocks()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [battlemap?.id, battlemap?.voxel_data, blueprintIds])
+  }, [battlemap?.id, battlemap?.voxel_data, battlemap?.surface_data, blueprintIds])
+
+  const selectedSurfaceConnector = useMemo(() => {
+    const id = surfaceConnectorPanel?.connectorId
+    const connector = id ? surfaceData.connectors?.[id] : null
+    return connector ? { id, ...connector } : null
+  }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
+
+  const handleSurfaceConnectorSelect = useCallback((connectorId, connector, event) => {
+    if (connector?.type !== 'elevator') return
+    const source = event?.nativeEvent || event?.sourceEvent || event || {}
+    setSurfaceConnectorPanel({
+      connectorId,
+      x: Number(source.clientX) || 24,
+      y: Number(source.clientY) || 24,
+    })
+  }, [])
+
+  const handleElevatorCommand = useCallback(async (elevatorId, command) => {
+    if (!battlemap?.id || !elevatorId) return
+    await api.post(`/battlemaps/${battlemap.id}/world-elevators/${elevatorId}/commands`, command)
+    await refreshRuntimeElevators()
+  }, [battlemap?.id, refreshRuntimeElevators])
 
   const handleCanvasClick = useCallback(() => {
     if (justSelectedRef.current) { justSelectedRef.current = false; return }
     setSelectedTokenId(null)
+    setSurfaceConnectorPanel(null)
   }, [])
 
   return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
     <Canvas
       camera={{ position: [15, 15, 15], fov: 60 }}
       style={{ background: '#0f172a' }}
@@ -1298,18 +1600,23 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
       {blocksReady && (
         <Scene
           voxels={voxels}
-          setVoxels={setVoxels}
+          surfaceData={surfaceData}
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}
+          runtimeEffectRegions={runtimeEffectRegions}
+          runtimeFeatureStates={runtimeElevatorStates}
           socket={socket}
           battlemapId={battlemap?.id}
           selectedTokenId={selectedTokenId}
+          selectedSurfaceConnectorId={surfaceConnectorPanel?.connectorId || null}
+          onSurfaceConnectorSelect={handleSurfaceConnectorSelect}
           onTokenSelect={setSelectedTokenId}
           onTokenDoubleClick={onTokenDoubleClick}
           justSelectedRef={justSelectedRef}
           altPressed={altPressed}
           onEntityClick={onEntityClick}
           onTokenRotate={onTokenRotate}
+          onTokenSetRotation={onTokenSetRotation}
           moveTarget={moveTarget}
           onMoveCancel={onMoveCancel}
           moveLabels={moveLabels}
@@ -1324,8 +1631,23 @@ export default function Canvas3D({ onTokenDoubleClick, socket, onEntityClick, on
           losMode={losMode}
           onLosCancel={onLosCancel}
           onLosResult={onLosResult}
+          cameraMode={mode}
+          displayLevel={displayLevel}
         />
       )}
     </Canvas>
+    {surfaceConnectorPanel && selectedSurfaceConnector && (
+      <SurfaceConnectorPanel
+        connector={selectedSurfaceConnector}
+        x={surfaceConnectorPanel.x}
+        y={surfaceConnectorPanel.y}
+        runtimeState={runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
+        onElevatorCommand={handleElevatorCommand}
+        canEdit={false}
+        canAdminElevator={isGm}
+        onClose={() => setSurfaceConnectorPanel(null)}
+      />
+    )}
+    </div>
   )
 }

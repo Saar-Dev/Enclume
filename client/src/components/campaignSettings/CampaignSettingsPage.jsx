@@ -59,7 +59,7 @@ export default function CampaignSettingsPage() {
       }
     }
     load()
-  }, [campaignId])
+  }, [campaignId, t])
 
   const handleSectionChange = useCallback((patch) => {
     setFormData(prev => ({
@@ -79,7 +79,7 @@ export default function CampaignSettingsPage() {
       await api.put(`/campaigns/${campaignId}`, formData)
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
-    } catch (err) {
+    } catch {
       setSaveStatus('error')
     } finally {
       setSaving(false)

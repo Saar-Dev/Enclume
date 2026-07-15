@@ -1,0 +1,61 @@
+{
+  "format_version": 1,
+  "pack": "mon_pack",
+  "unit": "enclume_world_unit",
+  "placement_mode_default": "free",
+  "origin_default": "floor-center",
+  "assets": [
+    {
+      "name": "01_technical_crate",
+      "label": "Caisse technique",
+      "catalog_file": "Caisse technique.glb",
+      "category": "storage",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.0,
+      "footprint_depth_m": 1.0,
+      "height_m": 0.8,
+      "editor_color_slots": [
+        {
+          "id": "primary_paint",
+          "code": "SLOT_01",
+          "label": "Peinture principale",
+          "default_hex": "#14596B",
+          "transparent": false,
+          "material_names": [
+            "01_technical_crate__SLOT_01__Primary_Painted_Metal"
+          ]
+        },
+        {
+          "id": "secondary_panels",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#217D8F",
+          "transparent": false,
+          "material_names": [
+            "01_technical_crate__SLOT_02__Secondary_Panels"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "02_wall_console",
+      "label": "Console murale",
+      "catalog_file": "Console murale.glb",
+      "category": "wall_console",
+      "placement_mode": "wall",
+      "origin": "wall-back-center",
+      "footprint_width_m": 0.8,
+      "footprint_depth_m": 0.18,
+      "height_m": 0.55,
+      "wall_mount": {
+        "default_bottom_height": 1.0,
+        "allow_interior": true,
+        "allow_exterior": true
+      },
+      "editor_color_slots": [],
+      "animations": []
+    }
+  ]
+}

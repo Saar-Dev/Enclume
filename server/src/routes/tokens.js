@@ -3,8 +3,10 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import { WS } from '../../../shared/events.js'
-import { collisionAddToken, collisionMoveToken } from '../lib/redis.js'
 import { removeTokens } from '../lib/tokenLifecycle.js'
+import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
+import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
+import { resolveBattlemapPlacement } from '../services/worldMovementService.js'
 
 const router = Router({ mergeParams: true })
 
@@ -26,9 +28,7 @@ router.post('/', requireAuth, async (req, res) => {
   const {
     character_id,
     label,
-    pos_x = 0,
-    pos_y = 0,
-    pos_z = 0,
+    destination = { x: 0, y: 0, z: 0 },
     width = 64,
     height = 64,
     z_index = 0,
@@ -38,6 +38,10 @@ router.post('/', requireAuth, async (req, res) => {
     cover_percent = 0,
     color,
   } = req.body
+
+  if (req.body.pos_x !== undefined || req.body.pos_y !== undefined || req.body.pos_z !== undefined) {
+    throw new AppError(400, 'Token creation uses destination in world-feet coordinates')
+  }
 
   if (!isGm) {
     // Joueur : character_id obligatoire
@@ -55,6 +59,17 @@ router.post('/', requireAuth, async (req, res) => {
     if (existing) throw new AppError(409, 'A token for this character already exists on this battlemap')
   }
 
+  let placement
+  try {
+    placement = await resolveBattlemapPlacement({ battlemap, destination })
+  } catch (error) {
+    if (error instanceof TypeError || error instanceof RangeError) {
+      throw new AppError(400, error.message)
+    }
+    throw error
+  }
+  if (!placement) throw new AppError(409, 'No free walkable surface near token destination')
+
   const [token] = await db('tokens')
     .insert({
       battlemap_id: req.params.id,
@@ -62,9 +77,8 @@ router.post('/', requireAuth, async (req, res) => {
       owner_id: owner_id || null,
       label: label || null,
       image_url: null,
-      pos_x,
-      pos_y,
-      pos_z,
+      ...worldPointToDbPosition(placement),
+      position_space: 'world-feet',
       width,
       height,
       z_index,
@@ -74,15 +88,80 @@ router.post('/', requireAuth, async (req, res) => {
       color: color || null,
     })
     .returning('*')
-
-  // Maintenance collision map Redis — ignoré si layer 'gm'
-  await collisionAddToken(req.params.id, token)
+  const runtimeRevision = await bumpBattlemapRuntimeRevision(battlemap.id)
 
   // Broadcaster TOKEN_CREATED à toute la room — le serveur est seul émetteur
   const io = req.app.get('io')
   io.to(battlemap.campaign_id).emit(WS.TOKEN_CREATED, { token })
+  io.to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+    battlemapId: battlemap.id,
+    runtimeRevision,
+    kind: 'token-created',
+  })
 
   res.status(201).json({ token })
+})
+
+// POST /api/tokens/:id/teleport — bypass spatial explicite, réservé au MJ.
+// Cette commande sert aussi à placer volontairement un ancien token dans l'espace world-feet.
+router.post('/:id/teleport', requireAuth, async (req, res, next) => {
+  try {
+    const token = await db('tokens').where({ id: req.params.id }).first()
+    if (!token) throw new AppError(404, 'Token not found')
+    const battlemap = await db('battlemaps').where({ id: token.battlemap_id }).first()
+    const member = await db('campaign_members')
+      .where({ campaign_id: battlemap.campaign_id, user_id: req.user.id, role: 'gm' })
+      .first()
+    if (!member) throw new AppError(403, 'GM only')
+
+    let destination
+    try {
+      destination = worldPointToDbPosition(req.body.destination)
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        throw new AppError(400, error.message)
+      }
+      throw error
+    }
+
+    let updated
+    let runtimeRevision
+    await db.transaction(async trx => {
+      const currentMap = await trx('battlemaps').where({ id: token.battlemap_id }).forUpdate().first()
+      const currentToken = await trx('tokens').where({ id: token.id }).forUpdate().first()
+      if (!currentMap || !currentToken) throw new AppError(409, 'World state changed before teleport')
+      // Un teleport est un détachement administratif explicite. Sans ceci, la prochaine
+      // réconciliation de cabine ramènerait le token à son ancienne position locale.
+      await trx('world_elevator_passengers').where({ token_id: token.id }).del()
+      ;[updated] = await trx('tokens')
+        .where({ id: token.id })
+        .update({
+          ...destination,
+          position_space: 'world-feet',
+          updated_at: trx.fn.now(),
+        })
+        .returning('*')
+      const [runtime] = await trx('battlemaps')
+        .where({ id: token.battlemap_id })
+        .update({ runtime_revision: Number(currentMap.runtime_revision || 0) + 1 })
+        .returning('runtime_revision')
+      runtimeRevision = runtime.runtime_revision
+    })
+
+    req.app.get('io').to(battlemap.campaign_id).emit(WS.TOKEN_MOVED, {
+      tokenId: updated.id,
+      pos_x: updated.pos_x,
+      pos_y: updated.pos_y,
+      pos_z: updated.pos_z,
+      position_space: updated.position_space,
+      updated_at: updated.updated_at,
+      teleport: true,
+      runtimeRevision,
+    })
+    res.json({ token: updated, runtimeRevision, coordinateSpace: 'world-feet' })
+  } catch (error) {
+    next(error)
+  }
 })
 
 // PUT /api/tokens/:id — modifier un token (owner ou GM)
@@ -115,10 +194,10 @@ router.put('/:id', requireAuth, async (req, res) => {
 
   const updates = {}
 
-  // Déplacement — GM et propriétaire
-  if (pos_x !== undefined) updates.pos_x = pos_x
-  if (pos_y !== undefined) updates.pos_y = pos_y
-  if (pos_z !== undefined) updates.pos_z = pos_z
+  // Une modification générique ne peut plus contourner le moteur de monde.
+  if (pos_x !== undefined || pos_y !== undefined || pos_z !== undefined) {
+    throw new AppError(400, 'Use world-move for game movement or teleport for a GM bypass')
+  }
 
   // Champs réservés au GM
   if (isGm) {
@@ -145,22 +224,9 @@ router.put('/:id', requireAuth, async (req, res) => {
     .update(updates)
     .returning('*')
 
-  // Maintenance collision map Redis si la position a changé
-  // token = ancienne position, updated = nouvelle position
-  const positionChanged = pos_x !== undefined || pos_y !== undefined || pos_z !== undefined
-  if (positionChanged) {
-    await collisionMoveToken(token.battlemap_id, token, updated)
-  }
-
-  // Broadcaster TOKEN_MOVED à toute la room — le serveur est seul émetteur
+  // Une édition de métadonnées ne doit pas se faire passer pour un déplacement.
   const io = req.app.get('io')
-  io.to(battlemap.campaign_id).emit(WS.TOKEN_MOVED, {
-    tokenId: updated.id,
-    pos_x: updated.pos_x,
-    pos_y: updated.pos_y,
-    pos_z: updated.pos_z,
-    updated_at: updated.updated_at,
-  })
+  io.to(battlemap.campaign_id).emit(WS.TOKEN_UPDATED, { token: updated })
 
   res.json({ token: updated })
 })
@@ -186,7 +252,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
   if (!isGm && !isOwner) throw new AppError(403, 'You can only delete your own token')
 
-  // Nettoyage Redis + suppression DB + broadcast TOKEN_DELETED — centralisé (tokenLifecycle.js)
+  // Suppression DB, invalidation runtime et broadcast centralisés.
   const io = req.app.get('io')
   await removeTokens(io, [token], battlemap.campaign_id)
 

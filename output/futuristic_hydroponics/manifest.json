@@ -1,0 +1,1332 @@
+{
+  "format_version": 1,
+  "pack": "hydroponie_futuriste",
+  "unit": "enclume_world_unit",
+  "placement_mode_default": "free",
+  "origin_default": "floor-center",
+  "style": "clean cartoon futuristic post-apocalyptic underwater station",
+  "blend": "E:\\Codex\\Enclume-master\\output\\futuristic_hydroponics\\submarine_postapo_futuristic_hydroponics_pack.blend",
+  "combined_glb": "E:\\Codex\\Enclume-master\\output\\futuristic_hydroponics\\glb\\submarine_postapo_futuristic_hydroponics_pack.glb",
+  "preview_png": "E:\\Codex\\Enclume-master\\output\\futuristic_hydroponics\\submarine_postapo_futuristic_hydroponics_preview.png",
+  "open_preview_png": "E:\\Codex\\Enclume-master\\output\\futuristic_hydroponics\\submarine_postapo_futuristic_hydroponics_open.png",
+  "basin_preview_png": "E:\\Codex\\Enclume-master\\output\\futuristic_hydroponics\\submarine_postapo_hydroponic_basins_preview.png",
+  "algae_preview_png": "E:\\Codex\\Enclume-master\\output\\futuristic_hydroponics\\submarine_postapo_algae_culture_vats_preview.png",
+  "quality_rules": [
+    "closed doors overlap their seals and fully cover openings",
+    "hinges handles lights pipes and controls physically contact their supports",
+    "no built-in wear filter or construction hazard stripes",
+    "five recolorable material roles per asset"
+  ],
+  "assets": [
+    {
+      "name": "01_sealed_grow_cabinet",
+      "label": "Armoire de culture étanche",
+      "category": "enclosed_culture",
+      "catalog_file": "Armoire de culture étanche.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.35,
+      "footprint_depth_m": 0.72,
+      "height_m": 2.2,
+      "features": "three illuminated trays, full glass, overlapping seals and attached controls",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "01_sealed_grow_cabinet__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "01_sealed_grow_cabinet__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_03",
+          "label": "Accent technique",
+          "default_hex": "#C76B13",
+          "transparent": false,
+          "material_names": [
+            "01_sealed_grow_cabinet__SLOT_03__accent"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "01_sealed_grow_cabinet__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "01_sealed_grow_cabinet__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "02_wall_hydroponic_rack",
+      "label": "Étagère hydroponique murale",
+      "category": "culture_rack",
+      "catalog_file": "Étagère hydroponique murale.glb",
+      "placement_mode": "wall",
+      "origin": "wall-back-center",
+      "footprint_width_m": 1.75,
+      "footprint_depth_m": 0.6,
+      "height_m": 2.48,
+      "features": "3 lit levels with roof-mounted lights, contained water trays and feed pipe, four flush wall plates, no floor feet",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "02_wall_hydroponic_rack__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "02_wall_hydroponic_rack__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_03",
+          "label": "Accent technique",
+          "default_hex": "#C76B13",
+          "transparent": false,
+          "material_names": [
+            "02_wall_hydroponic_rack__SLOT_03__accent"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "02_wall_hydroponic_rack__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "02_wall_hydroponic_rack__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": [],
+      "wall_mount": {
+        "default_bottom_height": 0.3,
+        "allow_interior": true,
+        "allow_exterior": true
+      }
+    },
+    {
+      "name": "03_double_sided_central_rack",
+      "label": "Étagère centrale double face",
+      "category": "culture_rack",
+      "catalog_file": "Étagère centrale double face.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 2.25,
+      "footprint_depth_m": 1.05,
+      "height_m": 2.48,
+      "features": "3 lit levels with roof-mounted lights, contained water trays and feed pipe",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "03_double_sided_central_rack__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "03_double_sided_central_rack__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_03",
+          "label": "Accent technique",
+          "default_hex": "#C76B13",
+          "transparent": false,
+          "material_names": [
+            "03_double_sided_central_rack__SLOT_03__accent"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "03_double_sided_central_rack__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "03_double_sided_central_rack__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "04_small_culture_table",
+      "label": "Petite table de culture",
+      "category": "culture_table",
+      "catalog_file": "Petite table de culture.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.2,
+      "footprint_depth_m": 0.68,
+      "height_m": 1.32,
+      "features": "2 NFT channels, attached manifold and integrated plants",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "04_small_culture_table__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "04_small_culture_table__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "04_small_culture_table__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "04_small_culture_table__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "05_medium_culture_table",
+      "label": "Table de culture moyenne",
+      "category": "culture_table",
+      "catalog_file": "Table de culture moyenne.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.9,
+      "footprint_depth_m": 0.8,
+      "height_m": 1.32,
+      "features": "3 NFT channels, attached manifold and integrated plants",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "05_medium_culture_table__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "05_medium_culture_table__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "05_medium_culture_table__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "05_medium_culture_table__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "06_large_culture_table",
+      "label": "Grande table de culture",
+      "category": "culture_table",
+      "catalog_file": "Grande table de culture.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 2.8,
+      "footprint_depth_m": 1.0,
+      "height_m": 1.32,
+      "features": "4 NFT channels, attached manifold and integrated plants",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "06_large_culture_table__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "06_large_culture_table__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "06_large_culture_table__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "06_large_culture_table__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "07_double_sided_culture_table",
+      "label": "Table de culture double face",
+      "category": "culture_table",
+      "catalog_file": "Table de culture double face.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 2.55,
+      "footprint_depth_m": 1.48,
+      "height_m": 1.32,
+      "features": "6 NFT channels, attached manifold and integrated plants",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "07_double_sided_culture_table__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "07_double_sided_culture_table__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "07_double_sided_culture_table__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "07_double_sided_culture_table__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "08_deep_water_culture_basin",
+      "label": "Bac de culture en eau profonde",
+      "category": "deep_water_culture",
+      "catalog_file": "Bac de culture en eau profonde.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.85,
+      "footprint_depth_m": 1.05,
+      "height_m": 1.26,
+      "features": "sealed tank, full overlapping lid, integrated aeration and fifteen plants",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "08_deep_water_culture_basin__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "08_deep_water_culture_basin__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "08_deep_water_culture_basin__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "08_deep_water_culture_basin__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "09_vertical_grow_tower",
+      "label": "Tour de culture verticale",
+      "category": "vertical_culture",
+      "catalog_file": "Tour de culture verticale.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.1,
+      "footprint_depth_m": 1.0,
+      "height_m": 2.35,
+      "features": "twenty-four attached grow cups and internal feed pipe",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "09_vertical_grow_tower__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "09_vertical_grow_tower__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "09_vertical_grow_tower__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "09_vertical_grow_tower__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "10_germination_table",
+      "label": "Table de germination",
+      "category": "germination",
+      "catalog_file": "Table de germination.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.55,
+      "footprint_depth_m": 0.78,
+      "height_m": 1.62,
+      "features": "three seed trays, twenty-seven seedlings and fully supported light arch",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "10_germination_table__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "10_germination_table__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_03",
+          "label": "Accent technique",
+          "default_hex": "#C76B13",
+          "transparent": false,
+          "material_names": [
+            "10_germination_table__SLOT_03__accent"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "10_germination_table__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "10_germination_table__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "11_nutrient_mixing_reservoir",
+      "label": "Cuve de mélange des nutriments",
+      "category": "nutrient_system",
+      "catalog_file": "Cuve de mélange des nutriments.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.35,
+      "footprint_depth_m": 0.88,
+      "height_m": 1.72,
+      "features": "large sealed tank, attached mixer housing, gauge and connected outlet",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "11_nutrient_mixing_reservoir__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "11_nutrient_mixing_reservoir__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "11_nutrient_mixing_reservoir__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "12_automatic_dosing_station",
+      "label": "Station de dosage automatique",
+      "category": "nutrient_system",
+      "catalog_file": "Station de dosage automatique.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.25,
+      "footprint_depth_m": 0.68,
+      "height_m": 1.86,
+      "features": "three supported dosing canisters, connected lines and integrated controller",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "12_automatic_dosing_station__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "12_automatic_dosing_station__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_03",
+          "label": "Accent technique",
+          "default_hex": "#C76B13",
+          "transparent": false,
+          "material_names": [
+            "12_automatic_dosing_station__SLOT_03__accent"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "12_automatic_dosing_station__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "13_filtration_pump_block",
+      "label": "Bloc de filtration et circulation",
+      "category": "water_treatment",
+      "catalog_file": "Bloc de filtration et circulation.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.45,
+      "footprint_depth_m": 0.72,
+      "height_m": 1.58,
+      "features": "three filters fixed to cabinet and connected by a continuous header",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "13_filtration_pump_block__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "13_filtration_pump_block__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_03",
+          "label": "Accent technique",
+          "default_hex": "#C76B13",
+          "transparent": false,
+          "material_names": [
+            "13_filtration_pump_block__SLOT_03__accent"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "13_filtration_pump_block__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "14_compact_autonomous_module",
+      "label": "Module hydroponique compact autonome",
+      "category": "compact_culture",
+      "catalog_file": "Module hydroponique compact autonome.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.15,
+      "footprint_depth_m": 0.68,
+      "height_m": 1.92,
+      "features": "self-contained two-level culture unit with attached lights and controller",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "14_compact_autonomous_module__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "14_compact_autonomous_module__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_03",
+          "label": "Accent technique",
+          "default_hex": "#C76B13",
+          "transparent": false,
+          "material_names": [
+            "14_compact_autonomous_module__SLOT_03__accent"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "14_compact_autonomous_module__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "14_compact_autonomous_module__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "15_harvest_maintenance_bench",
+      "label": "Poste de récolte et entretien",
+      "category": "maintenance",
+      "catalog_file": "Poste de récolte et entretien.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 1.9,
+      "footprint_depth_m": 0.78,
+      "height_m": 1.62,
+      "features": "attached tool board, three bins seated on a braced lower shelf and sealed worktop",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "15_harvest_maintenance_bench__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "15_harvest_maintenance_bench__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_03",
+          "label": "Accent technique",
+          "default_hex": "#C76B13",
+          "transparent": false,
+          "material_names": [
+            "15_harvest_maintenance_bench__SLOT_03__accent"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "16_large_hydroponic_basin",
+      "label": "Grand bassin hydroponique",
+      "category": "large_hydro_basin",
+      "catalog_file": "Grand bassin hydroponique.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 3.7800000000000002,
+      "footprint_depth_m": 1.92,
+      "height_m": 1.34,
+      "features": "open hollow basin, 24 floating rafts, connected pump and rear manifold",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "16_large_hydroponic_basin__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "16_large_hydroponic_basin__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "16_large_hydroponic_basin__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "16_large_hydroponic_basin__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "17_xl_hydroponic_basin",
+      "label": "Très grand bassin hydroponique",
+      "category": "large_hydro_basin",
+      "catalog_file": "Très grand bassin hydroponique.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 4.9799999999999995,
+      "footprint_depth_m": 2.3200000000000003,
+      "height_m": 1.9,
+      "features": "open hollow basin, 40 floating rafts, connected pump and rear manifold",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "17_xl_hydroponic_basin__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "17_xl_hydroponic_basin__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_03",
+          "label": "Accent technique",
+          "default_hex": "#C76B13",
+          "transparent": false,
+          "material_names": [
+            "17_xl_hydroponic_basin__SLOT_03__accent"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "17_xl_hydroponic_basin__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "17_xl_hydroponic_basin__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "18_industrial_double_hydro_basin",
+      "label": "Bassin hydroponique industriel double",
+      "category": "large_hydro_basin",
+      "catalog_file": "Bassin hydroponique industriel double.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 6.18,
+      "footprint_depth_m": 2.72,
+      "height_m": 1.9,
+      "features": "open hollow basin, 48 floating rafts, connected pump and rear manifold, supported central service walkway",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "18_industrial_double_hydro_basin__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "18_industrial_double_hydro_basin__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_03",
+          "label": "Accent technique",
+          "default_hex": "#C76B13",
+          "transparent": false,
+          "material_names": [
+            "18_industrial_double_hydro_basin__SLOT_03__accent"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "18_industrial_double_hydro_basin__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "18_industrial_double_hydro_basin__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "19_small_algae_culture_vat",
+      "label": "Petit bac de culture d algues",
+      "category": "algae_culture",
+      "catalog_file": "Petit bac de culture d algues.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 2.3800000000000003,
+      "footprint_depth_m": 1.54,
+      "height_m": 1.12,
+      "features": "open algae suspension vat, 2 connected aeration rails, attached circulation loop",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "19_small_algae_culture_vat__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "19_small_algae_culture_vat__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "19_small_algae_culture_vat__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "19_small_algae_culture_vat__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "20_medium_aerated_algae_vat",
+      "label": "Bac à algues aéré moyen",
+      "category": "algae_culture",
+      "catalog_file": "Bac à algues aéré moyen.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 3.3800000000000003,
+      "footprint_depth_m": 1.94,
+      "height_m": 1.12,
+      "features": "open algae suspension vat, 3 connected aeration rails, attached circulation loop",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "20_medium_aerated_algae_vat__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "20_medium_aerated_algae_vat__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "20_medium_aerated_algae_vat__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "20_medium_aerated_algae_vat__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "21_large_industrial_algae_vat",
+      "label": "Grand bac industriel à algues",
+      "category": "algae_culture",
+      "catalog_file": "Grand bac industriel à algues.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 4.68,
+      "footprint_depth_m": 2.3400000000000003,
+      "height_m": 1.12,
+      "features": "open algae suspension vat, 4 connected aeration rails, attached circulation loop",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "21_large_industrial_algae_vat__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "21_large_industrial_algae_vat__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "21_large_industrial_algae_vat__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "21_large_industrial_algae_vat__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "22_three_stage_algae_cascade",
+      "label": "Cascade de trois bacs à algues",
+      "category": "algae_culture",
+      "catalog_file": "Cascade de trois bacs à algues.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 4.9399999999999995,
+      "footprint_depth_m": 2.2,
+      "height_m": 1.24,
+      "features": "three interlocked rectangular vats with no receiving-side rims, two strictly vertical waterfalls and a central connected pump",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "22_three_stage_algae_cascade__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "22_three_stage_algae_cascade__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "22_three_stage_algae_cascade__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    },
+    {
+      "name": "23_uv_algae_propagation_vat",
+      "label": "Bac de propagation d algues sous ultraviolet",
+      "category": "algae_culture",
+      "catalog_file": "Bac de propagation d algues sous ultraviolet.glb",
+      "placement_mode": "free",
+      "origin": "floor-center",
+      "footprint_width_m": 3.58,
+      "footprint_depth_m": 2.04,
+      "height_m": 1.92,
+      "features": "open algae suspension vat, 3 connected aeration rails, attached circulation loop, supported ultraviolet culture lights",
+      "editor_color_slots": [
+        {
+          "id": "shell",
+          "code": "SLOT_01",
+          "label": "Coque principale",
+          "default_hex": "#475E59",
+          "transparent": false,
+          "material_names": [
+            "23_uv_algae_propagation_vat__SLOT_01__shell"
+          ]
+        },
+        {
+          "id": "structure",
+          "code": "SLOT_02",
+          "label": "Structure sombre",
+          "default_hex": "#1A2425",
+          "transparent": false,
+          "material_names": [
+            "23_uv_algae_propagation_vat__SLOT_02__structure"
+          ]
+        },
+        {
+          "id": "foliage",
+          "code": "SLOT_04",
+          "label": "Végétation",
+          "default_hex": "#29872E",
+          "transparent": false,
+          "material_names": [
+            "23_uv_algae_propagation_vat__SLOT_04__foliage"
+          ]
+        },
+        {
+          "id": "fluid",
+          "code": "SLOT_05",
+          "label": "Fluide",
+          "default_hex": "#09526B",
+          "transparent": true,
+          "material_names": [
+            "23_uv_algae_propagation_vat__SLOT_05__fluid"
+          ]
+        }
+      ],
+      "animations": []
+    }
+  ]
+}

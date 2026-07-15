@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
@@ -11,10 +11,30 @@ import { WS } from '../../../shared/events.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import LibraryPanel from './LibraryPanel.jsx'
 import { DeclareLogContent } from './CombatDeclareLog.jsx'
+import Object3DPreview from './Object3DPreview.jsx'
+import {
+  clearMaterialSlotOverride,
+  materialSlotDisplayValue,
+  normalizeModelMaterialSlots,
+  setMaterialSlotOverride,
+} from '../lib/modelMaterialSlots.js'
+import {
+  DEFAULT_SURFACE_MATERIAL_PRESET,
+  PROCEDURAL_MATERIAL_PRESETS,
+  PROCEDURAL_PATTERN_PRESETS,
+} from '../lib/proceduralMaterials.js'
 
 const SIDEBAR_MIN = 220
 const SIDEBAR_MAX = 500
 const SIDEBAR_CLOSE_THRESHOLD = 160
+
+const MODEL_SLOT_LABELS = {
+  SLOT_01: 'Métal principal',
+  SLOT_02: 'Panneaux secondaires',
+  SLOT_03: 'Cadre / hardware',
+  SLOT_04: 'Accent',
+  SLOT_05: 'Verre',
+}
 
 // ─── Icônes ───────────────────────────────────────────────────────────────────
 const IconEdit = () => (
@@ -96,7 +116,6 @@ function CharacterModal({ character, isGm, isOwner, onClose, onCharacterUpdate }
   const [saving, setSaving] = useState(false)
 
   const canEditDescription = isGm || isOwner
-  const canEditGmNotes = isGm
   const canUploadPortrait = isGm || isOwner
   const canEditName = isGm || isOwner
 
@@ -473,7 +492,13 @@ export default function Sidebar({
   onClose,
   activeMaterial, onMaterialChange, availableBlocks = [],
   activeBlueprint, onBlueprintSelect,
+  surfaceTool, onSurfaceToolChange,
+  canSurfaceUndo,
+  canSurfaceRedo,
+  onSurfaceUndo,
+  onSurfaceRedo,
   campaignId,
+  battlemapId,
   socket,
   onReconnectSocket,
   onOpenCharacter,
@@ -486,9 +511,265 @@ export default function Sidebar({
   const { user, setUser } = useAuthStore()
   const { characters, members, isGm, addCharacter } = useCharacterStore()
   const { messagesByCampaign, activeCampaignId, onlineUsers } = useSessionStore()
-  const messages = messagesByCampaign[activeCampaignId] || []
-  const { blueprints } = useEntityStore()
+  const messages = useMemo(
+    () => messagesByCampaign[activeCampaignId] || [],
+    [activeCampaignId, messagesByCampaign],
+  )
+  const { blueprints, refreshBuiltinModels } = useEntityStore()
   const { phase, currentTurn } = useCombatStore()
+  const surfaceToolState = {
+    mode: 'select',
+    level: 0,
+    elevation: 0,
+    selectedRoomId: null,
+    selectedRoomIds: [],
+    roomWallEdit: false,
+    selectedRoomWallKeys: [],
+    selectedRoomWallCount: 0,
+    roomArcAngle: 90,
+    roomArcSide: 1,
+    roomArcError: null,
+    roomArcActionId: null,
+    roomArcAction: null,
+    connectorType: null,
+    connectorToLevel: 1,
+    connectorBlueprintId: null,
+    connectorModelLabel: null,
+    connectorModelCategory: null,
+    connectorModelGlbUrl: null,
+    connectorModelBuiltinKey: null,
+    connectorModelGeometry: null,
+    connectorMaterialOverrides: {},
+    roomHeightLevels: 1,
+    wallHeightLevels: 1,
+    floorThickness: 0.25,
+    ceilingThickness: 0.25,
+    ceilingHeight: 2.5,
+    wallThickness: 1,
+    wallHeight: 2.5,
+    wallShape: 'straight',
+    wallCurveOffset: 1.5,
+    stairRise: 2.5,
+    movementMultiplier: 1,
+    ladderAxis: 'x',
+    ladderWidth: 0.7,
+    ladderDepth: 0.12,
+    ladderAnchorSpacing: 0.5,
+    elevatorDoorAxis: 'z',
+    elevatorDoorSide: 1,
+    elevatorTravelSecondsPerLevel: 2,
+    elevatorDoorSeconds: 0.75,
+    elevatorDwellSeconds: 0.75,
+    effectDefinitionKey: 'fire',
+    effectIntensity: 1,
+    effectHeight: 2.5,
+    surfaceBlocking: 'solid',
+    floorPackId: null,
+    ceilingPackId: null,
+    stairPackId: null,
+    wallInteriorPackId: null,
+    floorTexId: null,
+    ceilingTexId: null,
+    stairTexId: null,
+    wallInteriorTexId: null,
+    autoVariants: true,
+    surfaceMaterialMode: 'procedural',
+    materialFace: 'floor',
+    materialProfiles: {
+      floor: { ...DEFAULT_SURFACE_MATERIAL_PRESET },
+      ceiling: { ...DEFAULT_SURFACE_MATERIAL_PRESET, paint: '#6b7280' },
+      wallInterior: { ...DEFAULT_SURFACE_MATERIAL_PRESET },
+    },
+    materialPreset: DEFAULT_SURFACE_MATERIAL_PRESET,
+    ...surfaceTool,
+  }
+  const updateSurfaceTool = (patch) => onSurfaceToolChange?.({ ...surfaceToolState, ...patch })
+  const surfaceMaterialFace = surfaceToolState.materialFace || 'floor'
+  const rawSurfaceMaterialProfiles = surfaceToolState.materialProfiles || {}
+  const surfaceMaterialProfiles = {
+    ...rawSurfaceMaterialProfiles,
+    floor: {
+      ...DEFAULT_SURFACE_MATERIAL_PRESET,
+      ...(rawSurfaceMaterialProfiles.floor || {}),
+    },
+    ceiling: {
+      ...DEFAULT_SURFACE_MATERIAL_PRESET,
+      paint: '#6b7280',
+      ...(rawSurfaceMaterialProfiles.ceiling || {}),
+    },
+    wallInterior: {
+      ...DEFAULT_SURFACE_MATERIAL_PRESET,
+      ...(rawSurfaceMaterialProfiles.wallInterior || {}),
+    },
+  }
+  const surfaceMaterialState = surfaceMaterialProfiles[surfaceMaterialFace] || surfaceMaterialProfiles.floor
+  const surfacePaintValue = /^#[0-9a-f]{6}$/i.test(String(surfaceMaterialState.paint || ''))
+    ? surfaceMaterialState.paint
+    : DEFAULT_SURFACE_MATERIAL_PRESET.paint
+  const updateSurfaceMaterial = (patch) => updateSurfaceTool({
+    surfaceMaterialMode: 'procedural',
+    materialFace: surfaceMaterialFace,
+    materialProfiles: {
+      ...surfaceMaterialProfiles,
+      [surfaceMaterialFace]: { ...surfaceMaterialState, ...patch },
+    },
+  })
+  const normalizedBlueprintText = (blueprint) => [
+    blueprint?.label,
+    blueprint?.name,
+    blueprint?.category,
+    blueprint?.builtin_key,
+    blueprint?.glb_url,
+  ].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
+  const blueprintPlacementMode = (blueprint) => blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
+  const connectorBlueprints = Object.values(blueprints || {}).filter(blueprint => !blueprint.deprecated)
+  const doorConnectorBlueprints = connectorBlueprints
+    .filter(blueprint => {
+      const text = normalizedBlueprintText(blueprint)
+      return text.includes('futuristic_doors')
+        || text.includes('porte')
+        || text.includes('door')
+        || text.includes('hatch')
+        || text.includes('sas')
+    })
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+  const elevatorConnectorBlueprints = connectorBlueprints
+    .filter(blueprint => {
+      const text = normalizedBlueprintText(blueprint)
+      return text.includes('ascenseur')
+        || text.includes('elevator')
+        || text.includes('lift')
+    })
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+  const ladderConnectorBlueprints = connectorBlueprints
+    .filter(blueprint => {
+      const text = normalizedBlueprintText(blueprint)
+      return text.includes('echelle')
+        || text.includes('ladder')
+    })
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+  const genericElevatorChoice = {
+    id: '__generic_elevator__',
+    label: t('surfaceEditor.genericElevator'),
+    category: 'surface_connectors',
+  }
+  const genericLadderChoice = {
+    id: '__generic_ladder__',
+    label: 'Échelle structurelle',
+    category: 'surface_connectors',
+  }
+  const connectorChoices = surfaceToolState.connectorType === 'door'
+    ? doorConnectorBlueprints
+    : surfaceToolState.connectorType === 'ladder'
+      ? [...ladderConnectorBlueprints, genericLadderChoice]
+      : [...elevatorConnectorBlueprints, genericElevatorChoice]
+  const selectedConnectorChoice = connectorChoices.find(choice => String(choice.id) === String(surfaceToolState.connectorBlueprintId))
+    || connectorChoices[0]
+    || null
+  const connectorMaterialSlots = normalizeModelMaterialSlots(selectedConnectorChoice?.geometry)
+  const connectorMaterialOverrides = surfaceToolState.connectorMaterialOverrides || {}
+  const updateConnectorMaterialSlot = (slot, patch) => updateSurfaceTool({
+    connectorMaterialOverrides: setMaterialSlotOverride(connectorMaterialOverrides, slot, patch),
+  })
+  const clearConnectorMaterialSlot = (slot) => updateSurfaceTool({
+    connectorMaterialOverrides: clearMaterialSlotOverride(connectorMaterialOverrides, slot),
+  })
+  const connectorModelPatch = (blueprint) => ({
+    connectorBlueprintId: blueprint?.id || null,
+    connectorModelLabel: blueprint?.label || null,
+    connectorModelCategory: blueprint?.category || null,
+    connectorModelGlbUrl: blueprint?.glb_url || null,
+    connectorModelBuiltinKey: blueprint?.builtin_key || null,
+    connectorModelGeometry: blueprint?.geometry || null,
+  })
+  const selectConnectorModel = (blueprint) => updateSurfaceTool({
+    mode: 'connector',
+    connectorType: surfaceToolState.connectorType || 'door',
+    ...connectorModelPatch(blueprint),
+  })
+
+  useEffect(() => {
+    if (surfaceToolState.mode !== 'connector' || !selectedConnectorChoice) return
+    const selectedId = selectedConnectorChoice.id || null
+    const selectedLabel = selectedConnectorChoice.label || null
+    if (String(surfaceToolState.connectorBlueprintId || '') === String(selectedId || '')
+      && surfaceToolState.connectorModelLabel === selectedLabel) return
+    onSurfaceToolChange?.(current => {
+      if (current?.mode !== 'connector' || current?.connectorType !== surfaceToolState.connectorType) return current
+      return {
+        ...current,
+        connectorBlueprintId: selectedId,
+        connectorModelLabel: selectedLabel,
+        connectorModelCategory: selectedConnectorChoice.category || null,
+        connectorModelGlbUrl: selectedConnectorChoice.glb_url || null,
+        connectorModelBuiltinKey: selectedConnectorChoice.builtin_key || null,
+        connectorModelGeometry: selectedConnectorChoice.geometry || null,
+      }
+    })
+  }, [
+    onSurfaceToolChange,
+    selectedConnectorChoice,
+    surfaceToolState.connectorBlueprintId,
+    surfaceToolState.connectorModelLabel,
+    surfaceToolState.connectorType,
+    surfaceToolState.mode,
+  ])
+
+  const [worldEffects, setWorldEffects] = useState({ definitions: [], instances: [] })
+  const [customEffectOpen, setCustomEffectOpen] = useState(false)
+  const [customEffectDraft, setCustomEffectDraft] = useState({ key: '', label: '', movementMultiplier: 1, note: '' })
+
+  const refreshWorldEffects = useCallback(async () => {
+    if (!battlemapId) return setWorldEffects({ definitions: [], instances: [] })
+    try {
+      const { data } = await api.get(`/battlemaps/${battlemapId}/world-effects`)
+      setWorldEffects(data.worldEffects || { definitions: [], instances: [] })
+    } catch (error) {
+      console.error('[Sidebar] Erreur chargement effets monde :', error)
+    }
+  }, [battlemapId])
+
+  useEffect(() => { refreshWorldEffects() }, [refreshWorldEffects])
+
+  useEffect(() => {
+    if (!socket || !battlemapId) return undefined
+    const onRuntimeUpdate = event => {
+      if (String(event?.battlemapId) === String(battlemapId)) refreshWorldEffects()
+    }
+    socket.on(WS.WORLD_RUNTIME_UPDATED, onRuntimeUpdate)
+    return () => socket.off(WS.WORLD_RUNTIME_UPDATED, onRuntimeUpdate)
+  }, [socket, battlemapId, refreshWorldEffects])
+
+  const createCustomEffect = async () => {
+    if (!battlemapId || !customEffectDraft.key.trim() || !customEffectDraft.label.trim()) return
+    try {
+      const { data } = await api.post(`/battlemaps/${battlemapId}/world-effects/definitions`, {
+        key: customEffectDraft.key.trim().toLowerCase(),
+        label: customEffectDraft.label.trim(),
+        note: customEffectDraft.note,
+        modifiers: { movementMultiplier: Number(customEffectDraft.movementMultiplier) || 1 },
+        hooks: customEffectDraft.note
+          ? [{ event: 'traverse', type: 'note', label: customEffectDraft.label.trim(), note: customEffectDraft.note }]
+          : [],
+      })
+      await refreshWorldEffects()
+      updateSurfaceTool({ effectDefinitionKey: data.definition.key, mode: 'effect' })
+      setCustomEffectDraft({ key: '', label: '', movementMultiplier: 1, note: '' })
+      setCustomEffectOpen(false)
+    } catch (error) {
+      console.error('[Sidebar] Création effet personnalisé refusée :', error)
+    }
+  }
+
+  const deleteRuntimeEffect = async instanceId => {
+    if (!battlemapId) return
+    try {
+      await api.delete(`/battlemaps/${battlemapId}/world-effects/instances/${instanceId}`)
+      await refreshWorldEffects()
+    } catch (error) {
+      console.error('[Sidebar] Suppression effet refusée :', error)
+    }
+  }
 
   const [activeTab, setActiveTab] = useState('chat')
   const [toolsOpen, setToolsOpen] = useState(false)
@@ -498,6 +779,8 @@ export default function Sidebar({
   const prevExchangeOfferCountRef  = useRef(0)
   const [chatInput, setChatInput] = useState('')
   const [showHelp, setShowHelp] = useState(false)
+  const [objectSearch, setObjectSearch] = useState('')
+  const [refreshingObjects, setRefreshingObjects] = useState(false)
 
   // Formulaire de création de personnage
   const [showNewChar, setShowNewChar] = useState(false)
@@ -755,12 +1038,12 @@ export default function Sidebar({
             onClick={() => onModeChange(mode === 'edit' ? 'play' : 'edit')}
             title={mode === 'edit' ? t('session.modePlay') : t('session.modeEdit')}
           >
-            {mode === 'edit' ? <IconEdit /> : <IconPlay />}
-            <span style={{ fontSize:'9px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{mode === 'edit' ? t('session.modeEdit') : t('session.modePlay')}</span>
+            {mode === 'edit' ? <IconPlay /> : <IconEdit />}
+            <span style={{ fontSize:'9px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{mode === 'edit' ? 'Mode jeu' : 'Édition'}</span>
           </button>
         )}
 
-        {isGm && (
+        {isGm && mode !== 'edit' && (
           <button
             className="btn-tool"
             data-active={layer === 'gm'}
@@ -772,7 +1055,7 @@ export default function Sidebar({
           </button>
         )}
 
-        <div style={{ position: 'relative' }}>
+        {mode !== 'edit' && <div style={{ position: 'relative' }}>
           <button
             className="btn-tool"
             onClick={() => setToolsOpen(v => !v)}
@@ -791,7 +1074,7 @@ export default function Sidebar({
               </button>
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* ─── PALETTE TEXTURES (mode édition) ─────────────────────────────── */}
@@ -800,10 +1083,10 @@ export default function Sidebar({
           {/* ── Onglets éditeur : Voxels / Entités ── */}
           <div style={styles.editorTabs}>
             <button
-              style={{ ...styles.editorTab, ...(activeEditorTab === 'voxel' ? styles.editorTabActive : {}) }}
-              onClick={() => onEditorTabChange?.('voxel')}
+              style={{ ...styles.editorTab, ...(activeEditorTab === 'world' ? styles.editorTabActive : {}) }}
+              onClick={() => onEditorTabChange?.('world')}
             >
-              {t('sidebar.editorTabVoxels')}
+              Monde
             </button>
             <button
               style={{ ...styles.editorTab, ...(activeEditorTab === 'entity' ? styles.editorTabActive : {}) }}
@@ -812,9 +1095,35 @@ export default function Sidebar({
               {t('sidebar.editorTabEntities')}
             </button>
           </div>
+          <div style={styles.undoRow}>
+            <button
+              type="button"
+              onClick={() => canSurfaceUndo && onSurfaceUndo?.()}
+              disabled={!canSurfaceUndo}
+              title="Annuler la derniere action (Ctrl+Z)"
+              style={{
+                ...styles.undoBtn,
+                ...(!canSurfaceUndo ? styles.undoBtnDisabled : {}),
+              }}
+            >
+              ↶ Annuler
+            </button>
+            <button
+              type="button"
+              onClick={() => canSurfaceRedo && onSurfaceRedo?.()}
+              disabled={!canSurfaceRedo}
+              title="Refaire la derniere action annulee (Ctrl+Y / Ctrl+Shift+Z)"
+              style={{
+                ...styles.undoBtn,
+                ...(!canSurfaceRedo ? styles.undoBtnDisabled : {}),
+              }}
+            >
+              ↷ Refaire
+            </button>
+          </div>
 
           {/* ── Palette voxels — visible uniquement en onglet Voxels ── */}
-          {activeEditorTab === 'voxel' && (
+          {activeEditorTab === 'world' && (
             <>
               <div style={{ ...styles.paletteTitle, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
                 <span>{t('sidebar.paletteTextures')}</span>
@@ -824,86 +1133,774 @@ export default function Sidebar({
                   </span>
                 )}
               </div>
-              {availableBlocks.length === 0 && (
-                <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>{t('common.loading')}</p>
-              )}
-              {(() => {
-                const groups = {}
-                for (const block of availableBlocks) {
-                  if (block.deprecated) continue
-                  const key = block.category_id || '__divers__'
-                  if (!groups[key]) groups[key] = { label: block.category_label || t('sidebar.categoryFallback'), blocks: [] }
-                  groups[key].blocks.push(block)
-                }
-                return Object.entries(groups).map(([catKey, group]) => (
-                  <div key={catKey} style={styles.paletteGroup}>
-                    <div style={styles.paletteGroupLabel}>{group.label}</div>
-                    <div style={styles.paletteGrid}>
-                      {group.blocks.map(block => {
-                        const texPath = block.faces?.top || block.faces?.all || null
-                        const texUrl = texPath
-                          ? `${import.meta.env.VITE_API_URL}/api/textures/${block.pack_id}/${texPath}`
-                          : null
-                        const isActive = activeMaterial?.texId === block.id
-                        return (
-                          <button
-                            key={block.id}
-                            onClick={() => onMaterialChange({ texId: block.id, geo: 'cube', r: 0 })}
-                            title={block.label}
-                            style={{
-                              ...styles.matBtn,
-                              backgroundImage: texUrl ? `url(${texUrl})` : 'none',
-                              backgroundColor: texUrl ? 'transparent' : '#1e1e2e',
-                              borderWidth: '2px',
-                              borderStyle: 'solid',
-                              borderColor: isActive ? '#5b8dee' : 'transparent',
-                            }}
-                          />
-                        )
-                      })}
-                    </div>
+              <div style={styles.roomTool}>
+                <div style={styles.roomToolModes}>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'select' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'select' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    {t('surfaceEditor.select')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({
+                      mode: 'room',
+                      selectedRoomId: null,
+                      selectedRoomIds: [],
+                      roomWallEdit: false,
+                      selectedRoomWallKeys: [],
+                      selectedRoomWallCount: 0,
+                      roomArcError: null,
+                    })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'room' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    {t('surfaceEditor.addRoom')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({
+                      mode: 'wall',
+                      wallShape: 'straight',
+                      selectedRoomId: null,
+                      selectedRoomIds: [],
+                      roomWallEdit: false,
+                      selectedRoomWallKeys: [],
+                      selectedRoomWallCount: 0,
+                    })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'wall' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    Mur droit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'stair' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'stair' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    Escalier
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'bridge' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'bridge' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    Passerelle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'effect' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'effect' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    Zone / effet
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({
+                      mode: 'connector',
+                      connectorType: 'ladder',
+                      connectorToLevel: Number(surfaceToolState.level || 0) + 1,
+                      ...connectorModelPatch(surfaceToolState.connectorType === 'ladder' ? selectedConnectorChoice : (ladderConnectorBlueprints[0] || genericLadderChoice)),
+                    })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    Échelle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSurfaceTool({ mode: 'erase' })}
+                    style={{
+                      ...styles.roomToolModeBtn,
+                      ...(surfaceToolState.mode === 'erase' ? styles.roomToolModeBtnActive : {}),
+                    }}
+                  >
+                    {t('surfaceEditor.erase')}
+                  </button>
+                </div>
+                {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' && (
+                  <div style={styles.roomToolGrid}>
+                    <label style={styles.roomToolLabel}>
+                      <span>Étage d’arrivée</span>
+                      <select
+                        value={surfaceToolState.connectorToLevel}
+                        onChange={e => updateSurfaceTool({ connectorToLevel: Number(e.target.value) })}
+                        style={styles.roomToolSelect}
+                      >
+                        {[-2, -1, 0, 1, 2, 3, 4, 5, 6].map(level => (
+                          <option key={level} value={level}>{level}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label style={styles.roomToolLabel}>
+                      <span>Orientation</span>
+                      <select
+                        value={surfaceToolState.ladderAxis || 'x'}
+                        onChange={e => updateSurfaceTool({ ladderAxis: e.target.value })}
+                        style={styles.roomToolSelect}
+                      >
+                        <option value="x">Est / Ouest</option>
+                        <option value="z">Nord / Sud</option>
+                      </select>
+                    </label>
                   </div>
-                ))
-              })()}
+                )}
+                {surfaceToolState.mode === 'effect' && (
+                  <div style={styles.connectorPicker}>
+                    <div style={styles.connectorPickerTitle}>Région environnementale</div>
+                    <div style={styles.roomToolGrid}>
+                      <label style={styles.roomToolLabel}>
+                        <span>Effet</span>
+                        <select
+                          value={surfaceToolState.effectDefinitionKey || 'fire'}
+                          onChange={e => updateSurfaceTool({ effectDefinitionKey: e.target.value })}
+                          style={styles.roomToolSelect}
+                        >
+                          {(worldEffects.definitions || []).map(definition => (
+                            <option key={definition.key} value={definition.key}>
+                              {definition.label}{definition.builtin ? '' : ' (MJ)'}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Intensité</span>
+                        <input
+                          type="number"
+                          min="0.01"
+                          max="100"
+                          step="0.25"
+                          value={surfaceToolState.effectIntensity}
+                          onChange={e => updateSurfaceTool({ effectIntensity: Math.max(0.01, Number(e.target.value) || 1) })}
+                          style={styles.roomToolInput}
+                        />
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Hauteur du volume</span>
+                        <input
+                          type="number"
+                          min="0.1"
+                          max="100"
+                          step="0.25"
+                          value={surfaceToolState.effectHeight}
+                          onChange={e => updateSurfaceTool({ effectHeight: Math.max(0.1, Number(e.target.value) || 2.5) })}
+                          style={styles.roomToolInput}
+                        />
+                      </label>
+                    </div>
+                    <button type="button" onClick={() => setCustomEffectOpen(open => !open)} style={styles.roomToolSmallBtn}>
+                      {customEffectOpen ? 'Fermer' : 'Nouvel effet MJ'}
+                    </button>
+                    {customEffectOpen && (
+                      <div style={styles.connectorColorList}>
+                        <label style={styles.roomToolLabel}>
+                          <span>Clé technique</span>
+                          <input
+                            value={customEffectDraft.key}
+                            onChange={e => setCustomEffectDraft(draft => ({ ...draft, key: e.target.value }))}
+                            placeholder="debris-lourds"
+                            style={styles.roomToolInput}
+                          />
+                        </label>
+                        <label style={styles.roomToolLabel}>
+                          <span>Nom</span>
+                          <input
+                            value={customEffectDraft.label}
+                            onChange={e => setCustomEffectDraft(draft => ({ ...draft, label: e.target.value }))}
+                            placeholder="Débris lourds"
+                            style={styles.roomToolInput}
+                          />
+                        </label>
+                        <label style={styles.roomToolLabel}>
+                          <span>Multiplicateur de déplacement</span>
+                          <input
+                            type="number"
+                            min="0.05"
+                            max="100"
+                            step="0.25"
+                            value={customEffectDraft.movementMultiplier}
+                            onChange={e => setCustomEffectDraft(draft => ({ ...draft, movementMultiplier: Number(e.target.value) || 1 }))}
+                            style={styles.roomToolInput}
+                          />
+                        </label>
+                        <label style={styles.roomToolLabel}>
+                          <span>Note / règle MJ</span>
+                          <textarea
+                            value={customEffectDraft.note}
+                            onChange={e => setCustomEffectDraft(draft => ({ ...draft, note: e.target.value }))}
+                            rows={3}
+                            style={styles.roomToolInput}
+                          />
+                        </label>
+                        <button type="button" onClick={createCustomEffect} style={styles.roomToolSmallBtn}>
+                          Créer et sélectionner
+                        </button>
+                      </div>
+                    )}
+                    {(worldEffects.instances || []).length > 0 && (
+                      <div style={styles.connectorColorList}>
+                        <div style={styles.connectorPickerTitle}>Effets actifs</div>
+                        {worldEffects.instances.map(instance => {
+                          const definition = worldEffects.definitions.find(item => item.key === instance.definitionKey)
+                          return (
+                            <div key={instance.id} style={styles.roomToolSelection}>
+                              <span>{definition?.label || instance.definitionKey} ×{instance.intensity}</span>
+                              <button type="button" onClick={() => deleteRuntimeEffect(instance.id)} style={styles.roomToolSmallBtn}>
+                                Supprimer
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {['room', 'floor', 'wall', 'stair', 'bridge', 'connector'].includes(surfaceToolState.mode) && (
+                  <label style={styles.roomToolLabel}>
+                    <span>Coût de déplacement (multiplicateur)</span>
+                    <input
+                      type="number"
+                      min="0.05"
+                      max="100"
+                      step="0.25"
+                      value={surfaceToolState.movementMultiplier}
+                      onChange={e => updateSurfaceTool({
+                        movementMultiplier: Math.max(0.05, Math.min(100, Number(e.target.value) || 1)),
+                      })}
+                      style={styles.roomToolInput}
+                    />
+                  </label>
+                )}
+                {surfaceToolState.mode === 'connector' && (
+                  <>
+                    <div style={styles.roomToolSectionTitle}>{t('surfaceEditor.connectors')}</div>
+                    <div style={styles.roomToolModes}>
+                      <button
+                        type="button"
+                        onClick={() => updateSurfaceTool({
+                          mode: 'connector',
+                          connectorType: 'elevator',
+                          connectorToLevel: Number(surfaceToolState.level || 0) + 1,
+                          ...connectorModelPatch(surfaceToolState.connectorType === 'elevator' ? selectedConnectorChoice : (elevatorConnectorBlueprints[0] || genericElevatorChoice)),
+                        })}
+                        style={{
+                          ...styles.roomToolModeBtn,
+                          ...(surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator' ? styles.roomToolModeBtnActive : {}),
+                        }}
+                      >
+                        {t('surfaceEditor.addElevator')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateSurfaceTool({
+                          mode: 'connector',
+                          connectorType: 'ladder',
+                          connectorToLevel: Number(surfaceToolState.level || 0) + 1,
+                          ...connectorModelPatch(surfaceToolState.connectorType === 'ladder' ? selectedConnectorChoice : (ladderConnectorBlueprints[0] || genericLadderChoice)),
+                        })}
+                        style={{
+                          ...styles.roomToolModeBtn,
+                          ...(surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' ? styles.roomToolModeBtnActive : {}),
+                        }}
+                      >
+                        Échelle
+                      </button>
+                    </div>
+                    {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator' && (
+                      <div style={styles.connectorPicker}>
+                      <label style={styles.roomToolLabel}>
+                        <span>{t('surfaceEditor.elevatorToLevel')}</span>
+                        <select
+                          value={surfaceToolState.connectorToLevel}
+                          onChange={e => updateSurfaceTool({ connectorToLevel: Number(e.target.value) })}
+                          style={styles.roomToolSelect}
+                        >
+                          {[-2, -1, 0, 1, 2, 3, 4, 5, 6].map(level => (
+                            <option key={level} value={level}>{level}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Axe de la porte</span>
+                        <select
+                          value={surfaceToolState.elevatorDoorAxis || 'z'}
+                          onChange={e => updateSurfaceTool({ elevatorDoorAxis: e.target.value })}
+                          style={styles.roomToolSelect}
+                        >
+                          <option value="z">Nord / sud</option>
+                          <option value="x">Est / ouest</option>
+                        </select>
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Côté de la porte</span>
+                        <select
+                          value={Number(surfaceToolState.elevatorDoorSide) < 0 ? -1 : 1}
+                          onChange={e => updateSurfaceTool({ elevatorDoorSide: Number(e.target.value) })}
+                          style={styles.roomToolSelect}
+                        >
+                          <option value={1}>Positif</option>
+                          <option value={-1}>Négatif</option>
+                        </select>
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Trajet par étage (s)</span>
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          value={surfaceToolState.elevatorTravelSecondsPerLevel || 2}
+                          onChange={e => updateSurfaceTool({ elevatorTravelSecondsPerLevel: Math.max(0.1, Number(e.target.value) || 2) })}
+                          style={styles.roomToolInput}
+                        />
+                      </label>
+                      </div>
+                    )}
+                    {surfaceToolState.mode === 'connector' && (
+                      <div style={styles.connectorPicker}>
+                        <div style={styles.connectorPickerTitle}>
+                          {surfaceToolState.connectorType === 'door'
+                            ? t('surfaceEditor.doorModel')
+                            : surfaceToolState.connectorType === 'ladder'
+                              ? 'Modèle d’échelle'
+                              : t('surfaceEditor.elevatorModel')}
+                        </div>
+                        {connectorChoices.length === 0 ? (
+                          <div style={styles.connectorPickerEmpty}>{t('surfaceEditor.noConnectorModels')}</div>
+                        ) : (
+                          <>
+                            {selectedConnectorChoice && (
+                              <div style={styles.connectorSelectedModel}>
+                                <span>✓ {t('surfaceEditor.selectedConnectorModel')}</span>
+                                <strong>{selectedConnectorChoice.label}</strong>
+                              </div>
+                            )}
+                            {selectedConnectorChoice?.glb_url && (
+                              <Object3DPreview
+                                blueprint={selectedConnectorChoice}
+                                materialOverrides={connectorMaterialOverrides}
+                              />
+                            )}
+                            {connectorMaterialSlots.length > 0 && (
+                              <div style={styles.connectorColorPanel}>
+                                <div style={styles.connectorPickerTitle}>Couleurs du modèle</div>
+                                {connectorMaterialSlots.map(slot => {
+                                  const slotValue = materialSlotDisplayValue(connectorMaterialOverrides, slot)
+                                  return (
+                                    <label key={slot.code} style={styles.connectorColorRow}>
+                                      <span style={styles.connectorColorLabel}>
+                                        {MODEL_SLOT_LABELS[slot.code] || slot.label}
+                                        <small>{slot.code}</small>
+                                      </span>
+                                      <input
+                                        type="color"
+                                        value={slotValue.color}
+                                        onChange={e => updateConnectorMaterialSlot(slot, { color: e.target.value })}
+                                        style={styles.roomToolColorInput}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => clearConnectorMaterialSlot(slot)}
+                                        style={styles.connectorColorReset}
+                                      >
+                                        Reset
+                                      </button>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            )}
+                            {connectorChoices.map(choice => {
+                              const isSelected = String(surfaceToolState.connectorBlueprintId) === String(choice.id)
+                                || (!surfaceToolState.connectorBlueprintId && selectedConnectorChoice?.id === choice.id)
+                              return (
+                                <button
+                                  key={choice.id}
+                                  type="button"
+                                  onClick={() => selectConnectorModel(choice)}
+                                  style={{
+                                    ...styles.connectorModelBtn,
+                                    ...(isSelected ? styles.connectorModelBtnActive : {}),
+                                  }}
+                                >
+                                  <span>{isSelected ? '✓ ' : ''}{choice.label}</span>
+                                  <small>{choice.category || t('surfaceEditor.connectorModel')}</small>
+                                </button>
+                              )
+                            })}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+                <div style={styles.roomToolGrid}>
+                  {surfaceToolState.mode === 'room' && (
+                    <label style={styles.roomToolLabel}>
+                      <span>{t('surfaceEditor.roomHeight')}</span>
+                      <select
+                        value={surfaceToolState.roomHeightLevels}
+                        onChange={e => updateSurfaceTool({ roomHeightLevels: Number(e.target.value) })}
+                        style={styles.roomToolSelect}
+                      >
+                        {[1, 2, 3, 4, 5, 6].map(levels => (
+                          <option key={levels} value={levels}>{t('surfaceEditor.levelCount', { count: levels })}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {surfaceToolState.mode === 'room' && (
+                    <label style={styles.roomToolLabel}>
+                      <span>{t('surfaceEditor.slabThickness')}</span>
+                      <input
+                        type="number"
+                        min="0.05"
+                        max="4"
+                        step="0.05"
+                        value={surfaceToolState.floorThickness}
+                        onChange={e => updateSurfaceTool({ floorThickness: Number(e.target.value) })}
+                        style={styles.roomToolInput}
+                      />
+                    </label>
+                  )}
+                  {surfaceToolState.mode === 'room' && (
+                    <label style={styles.roomToolLabel}>
+                      <span>Epaisseur mur</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="8"
+                        value={surfaceToolState.wallThickness}
+                        onChange={e => updateSurfaceTool({ wallThickness: Number(e.target.value) })}
+                        style={styles.roomToolInput}
+                      />
+                    </label>
+                  )}
+                </div>
+                {surfaceToolState.mode === 'wall' && (
+                  <div style={styles.roomToolGrid}>
+                    <label style={styles.roomToolLabel}>
+                      <span>Epaisseur</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="8"
+                        value={surfaceToolState.wallThickness}
+                        onChange={e => updateSurfaceTool({ wallThickness: Number(e.target.value) })}
+                        style={styles.roomToolInput}
+                      />
+                    </label>
+                    <label style={styles.roomToolLabel}>
+                      <span>{t('surfaceEditor.wallHeight')}</span>
+                      <select
+                        value={surfaceToolState.wallHeightLevels}
+                        onChange={e => updateSurfaceTool({ wallHeightLevels: Number(e.target.value) })}
+                        style={styles.roomToolSelect}
+                      >
+                        {[1, 2, 3, 4, 5, 6].map(levels => (
+                          <option key={levels} value={levels}>{t('surfaceEditor.levelCount', { count: levels })}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+                {surfaceToolState.mode === 'room' && (
+                  <>
+                    <div style={styles.roomToolSectionTitle}>{t('surfaceEditor.appliedMaterial')}</div>
+                    <div style={styles.roomToolModes}>
+                      {[
+                        ['floor', 'Sol'],
+                        ['ceiling', 'Plafond'],
+                        ['wallInterior', 'Murs côté salle'],
+                      ].map(([face, label]) => (
+                        <button
+                          key={face}
+                          type="button"
+                          onClick={() => updateSurfaceTool({ materialFace: face })}
+                          style={{
+                            ...styles.roomToolModeBtn,
+                            ...(surfaceMaterialFace === face ? styles.roomToolModeBtnActive : {}),
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={styles.roomToolGrid}>
+                      <label style={styles.roomToolLabel}>
+                        <span>Materiau</span>
+                        <select
+                          value={surfaceMaterialState.material}
+                          onChange={e => updateSurfaceMaterial({ material: e.target.value })}
+                          style={styles.roomToolSelect}
+                        >
+                          {PROCEDURAL_MATERIAL_PRESETS.map(preset => (
+                            <option key={preset.id} value={preset.id}>{preset.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Motif</span>
+                        <select
+                          value={surfaceMaterialState.pattern}
+                          onChange={e => updateSurfaceMaterial({ pattern: e.target.value })}
+                          style={styles.roomToolSelect}
+                        >
+                          {PROCEDURAL_PATTERN_PRESETS.map(pattern => (
+                            <option key={pattern.id} value={pattern.id}>{pattern.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <label style={styles.roomToolLabel}>
+                      <span>Peinture</span>
+                      <div style={styles.roomToolColorRow}>
+                        <input
+                          type="color"
+                          value={surfacePaintValue}
+                          onChange={e => updateSurfaceMaterial({ paint: e.target.value })}
+                          style={styles.roomToolColorInput}
+                        />
+                        <input
+                          type="text"
+                          value={surfaceMaterialState.paint || surfacePaintValue}
+                          onChange={e => updateSurfaceMaterial({ paint: e.target.value })}
+                          style={styles.roomToolInput}
+                        />
+                      </div>
+                    </label>
+                    {[
+                      ['wear', 'Usure'],
+                      ['dirt', 'Salete'],
+                      ['relief', 'Relief'],
+                    ].map(([key, label]) => (
+                      <label key={key} style={styles.roomToolLabel}>
+                        <span>{label}</span>
+                        <div style={styles.roomToolRangeRow}>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={Number(surfaceMaterialState[key]) || 0}
+                            onChange={e => updateSurfaceMaterial({ [key]: Number(e.target.value) })}
+                            style={styles.roomToolRange}
+                          />
+                          <span style={styles.roomToolRangeValue}>{Number(surfaceMaterialState[key]) || 0}</span>
+                        </div>
+                      </label>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => updateSurfaceMaterial({ realRelief: surfaceMaterialState.realRelief === false })}
+                      style={{
+                        ...styles.roomToolToggle,
+                        ...(surfaceMaterialState.realRelief !== false ? styles.roomToolToggleActive : {}),
+                      }}
+                    >
+                      <span>Relief reel</span>
+                      <span style={styles.roomToolToggleState}>
+                        {surfaceMaterialState.realRelief !== false ? 'Actif' : 'Normal map'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSurfaceTool({ autoVariants: !surfaceToolState.autoVariants })}
+                      style={{
+                        ...styles.roomToolToggle,
+                        ...(surfaceToolState.autoVariants ? styles.roomToolToggleActive : {}),
+                      }}
+                    >
+                      <span>Variations par surface</span>
+                      <span style={styles.roomToolToggleState}>
+                        {surfaceToolState.autoVariants ? 'Actif' : 'Fixe'}
+                      </span>
+                    </button>
+                    <div style={styles.roomToolGrid}>
+                      <label style={styles.roomToolLabel}>
+                        <span>Collision</span>
+                        <select
+                          value={surfaceToolState.surfaceBlocking || surfaceToolState.wallBlocking || 'solid'}
+                          onChange={e => updateSurfaceTool({ surfaceBlocking: e.target.value })}
+                          style={styles.roomToolSelect}
+                        >
+                          <option value="solid">Plein</option>
+                          <option value="glass">Verre</option>
+                          <option value="grate">Grille</option>
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => updateSurfaceMaterial({ seed: `mat-${Date.now().toString(36)}` })}
+                        style={styles.roomToolSmallBtn}
+                      >
+                        Nouvelle variation
+                      </button>
+                    </div>
+                  </>
+                )}
+                <div style={styles.roomToolHint}>
+                  {surfaceToolState.mode === 'connector'
+                    ? (surfaceToolState.connectorType === 'door'
+                        ? t('surfaceEditor.hintDoorConnector')
+                        : surfaceToolState.connectorType === 'ladder'
+                          ? 'Cliquez une case pour relier verticalement les deux étages. Le token pourra finir son tour entre les barreaux.'
+                          : t('surfaceEditor.hintElevatorConnector'))
+                    : surfaceToolState.mode === 'select'
+                      ? t('surfaceEditor.hintSelect')
+                    : surfaceToolState.mode === 'wall'
+                    ? t('surfaceEditor.hintWall')
+                    : surfaceToolState.mode === 'room'
+                      ? t('surfaceEditor.hintRoom')
+                    : surfaceToolState.mode === 'stair'
+                      ? t('surfaceEditor.hintStairs')
+                    : surfaceToolState.mode === 'bridge'
+                      ? 'Tracez une surface praticable suspendue. Elle peut être détruite ou recevoir des états dynamiques.'
+                    : surfaceToolState.mode === 'effect'
+                      ? 'Tracez le volume touché. L’effet reste un état de partie séparé de la surface éditée.'
+                    : surfaceToolState.mode === 'erase'
+                      ? t('surfaceEditor.hintErase')
+                      : t('surfaceEditor.hintSlab')}
+                </div>
+              </div>
+              {surfaceToolState.mode !== 'connector' && (
+                <>
+                  {availableBlocks.length === 0 && (
+                    <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>{t('common.loading')}</p>
+                  )}
+                  {(() => {
+                    const groups = {}
+                    for (const block of availableBlocks) {
+                      if (block.deprecated) continue
+                      const key = block.category_id || '__divers__'
+                      if (!groups[key]) groups[key] = { label: block.category_label || t('sidebar.categoryFallback'), blocks: [] }
+                      groups[key].blocks.push(block)
+                    }
+                    return Object.entries(groups).map(([catKey, group]) => (
+                      <div key={catKey} style={styles.paletteGroup}>
+                        <div style={styles.paletteGroupLabel}>{group.label}</div>
+                        <div style={styles.paletteGrid}>
+                          {group.blocks.map(block => {
+                            const texPath = block.faces?.top || block.faces?.all || null
+                            const texUrl = texPath
+                              ? `${import.meta.env.VITE_API_URL}/api/textures/${block.pack_id}/${texPath}`
+                              : null
+                            const isActive = activeMaterial?.texId === block.id
+                            return (
+                              <button
+                                key={block.id}
+                                onClick={() => onMaterialChange({ texId: block.id, geo: 'cube', r: 0 })}
+                                title={block.label}
+                                style={{
+                                  ...styles.matBtn,
+                                  backgroundImage: texUrl ? `url(${texUrl})` : 'none',
+                                  backgroundColor: texUrl ? 'transparent' : '#1e1e2e',
+                                  borderWidth: '2px',
+                                  borderStyle: 'solid',
+                                  borderColor: isActive ? '#5b8dee' : 'transparent',
+                                }}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  })()}
+                </>
+              )}
             </>
           )}
 
           {/* ── Onglet Entités — palette blueprints ── */}
           {activeEditorTab === 'entity' && (() => {
-            const bpList = Object.values(blueprints).filter(bp => !bp.deprecated)
+            const query = objectSearch.trim().toLocaleLowerCase()
+            const bpList = Object.values(blueprints)
+              .filter(bp => !bp.deprecated)
+              .filter(bp => blueprintPlacementMode(bp) !== 'connector')
+              .filter(bp => !query || bp.label.toLocaleLowerCase().includes(query) || (bp.category || '').toLocaleLowerCase().includes(query))
+            const grouped = bpList.reduce((groups, bp) => {
+              const category = bp.category || t('sidebar.customObjects')
+              if (!groups[category]) groups[category] = []
+              groups[category].push(bp)
+              return groups
+            }, {})
             return (
               <div style={{ marginTop: '6px' }}>
-                <div style={styles.paletteTitle}>{t('sidebar.paletteEntities')}</div>
+                <div style={{ ...styles.paletteTitle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <span>{t('sidebar.paletteEntities')}</span>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={refreshingObjects}
+                    onClick={async () => {
+                      setRefreshingObjects(true)
+                      try {
+                        await refreshBuiltinModels()
+                      } catch (err) {
+                        console.error('[Bibliothèque 3D] Échec du rafraîchissement :', err)
+                      } finally {
+                        setRefreshingObjects(false)
+                      }
+                    }}
+                    title={t('sidebar.refreshObjectsHint')}
+                    style={{ padding: '3px 7px', fontSize: '10px' }}
+                  >
+                    {refreshingObjects ? '…' : t('sidebar.refreshObjects')}
+                  </button>
+                </div>
+                <input
+                  value={objectSearch}
+                  onChange={event => setObjectSearch(event.target.value)}
+                  placeholder={t('sidebar.searchObjects')}
+                  style={{ width: '100%', boxSizing: 'border-box', margin: '7px 0 9px', padding: '7px 9px', border: '1px solid #292944', borderRadius: '4px', background: '#11111d', color: '#d7d7e5' }}
+                />
+                {activeBlueprint?.glb_url && <Object3DPreview blueprint={activeBlueprint} />}
                 {bpList.length === 0 && (
                   <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>
                     {t('sidebar.noBlueprints')}
                   </p>
                 )}
-                {bpList.map(bp => {
-                  const isActive = activeBlueprint?.id === bp.id
-                  return (
-                    <button
-                      key={bp.id}
-                      onClick={() => onBlueprintSelect?.(isActive ? null : bp)}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        padding: '7px 10px',
-                        background: isActive ? 'rgba(91,141,238,0.18)' : 'none',
-                        border: 'none',
-                        borderBottom: '1px solid #1a1a2e',
-                        borderLeft: isActive ? '2px solid #5b8dee' : '2px solid transparent',
-                        color: isActive ? '#5b8dee' : '#c0c0d0',
-                        fontSize: '12px',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        transition: 'background 0.1s',
-                      }}
-                    >
-                      {bp.label}
-                    </button>
-                  )
-                })}
+                {Object.entries(grouped).map(([category, items]) => (
+                  <div key={category} style={{ marginBottom: '10px' }}>
+                    <div style={{ color: '#7f8eaa', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 8px 3px' }}>
+                      {category} <span style={{ opacity: 0.55 }}>({items.length})</span>
+                    </div>
+                    {items.sort((a, b) => a.label.localeCompare(b.label)).map(bp => {
+                      const isActive = activeBlueprint?.id === bp.id
+                      return (
+                        <button
+                          key={bp.id}
+                          onClick={() => onBlueprintSelect?.(isActive ? null : bp)}
+                          title={t('sidebar.clickThenPlace')}
+                          style={{ display: 'block', width: '100%', padding: '7px 10px', background: isActive ? 'rgba(91,141,238,0.18)' : 'none', border: 'none', borderBottom: '1px solid #1a1a2e', borderLeft: isActive ? '2px solid #5b8dee' : '2px solid transparent', color: isActive ? '#5b8dee' : '#c0c0d0', fontSize: '12px', textAlign: 'left', cursor: 'pointer', transition: 'background 0.1s' }}
+                        >
+                          {blueprintPlacementMode(bp) === 'wall' ? '▥ ' : ''}{bp.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))}
+                <button className="btn" style={{ width: '100%', marginTop: '4px' }} onClick={() => navigate('/workshop')}>
+                  {t('sidebar.importCustomObject')}
+                </button>
               </div>
             )
           })()}
@@ -1531,11 +2528,13 @@ const styles = {
   sidebar: {
     position: 'relative',
     height: '100%',
+    minHeight: 0,
     background: '#0f0f1a',
     borderLeft: '1px solid #1e1e2e',
     display: 'flex',
     flexDirection: 'column',
     flexShrink: 0,
+    overflow: 'hidden',
     userSelect: 'none',
   },
   resizeHandle: {
@@ -1552,6 +2551,7 @@ const styles = {
     gap: '6px',
     padding: '12px 12px 8px 16px',
     flexWrap: 'wrap',
+    flexShrink: 0,
   },
   toolsDropdown: {
     position: 'absolute',
@@ -1588,6 +2588,10 @@ const styles = {
   },
   palette: {
     padding: '4px 12px 8px',
+    flex: 1,
+    minHeight: 0,
+    overflowY: 'auto',
+    scrollbarGutter: 'stable',
   },
   paletteTitle: {
     fontSize: '10px',
@@ -1619,6 +2623,245 @@ const styles = {
     backgroundSize: 'cover',
     backgroundPosition: 'center',
   },
+  roomTool: {
+    background: '#111827',
+    border: '1px solid #1e293b',
+    borderRadius: '6px',
+    padding: '8px',
+    marginBottom: '10px',
+  },
+  roomToolToggle: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '7px 8px',
+    background: '#16162a',
+    border: '1px solid #1e1e2e',
+    borderRadius: '5px',
+    color: '#9090a8',
+    fontSize: '12px',
+    cursor: 'pointer',
+  },
+  roomToolToggleActive: {
+    color: '#dbeafe',
+    borderColor: '#5b8dee',
+    background: 'rgba(91,141,238,0.16)',
+  },
+  roomToolToggleState: {
+    color: '#5b8dee',
+    fontSize: '10px',
+    textTransform: 'uppercase',
+  },
+  roomToolModes: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '6px',
+    marginBottom: '8px',
+  },
+  roomToolModeBtn: {
+    flex: '1 1 72px',
+    padding: '6px 0',
+    background: '#0f0f1a',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    color: '#6f7893',
+    fontSize: '11px',
+    cursor: 'pointer',
+  },
+  roomToolModeBtnActive: {
+    color: '#dbeafe',
+    borderColor: '#5b8dee',
+    background: 'rgba(91,141,238,0.14)',
+  },
+  roomToolGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '6px',
+  },
+  roomToolLabel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    color: '#6f7893',
+    fontSize: '10px',
+    textTransform: 'uppercase',
+    marginTop: '8px',
+  },
+  roomToolInput: {
+    width: '100%',
+    boxSizing: 'border-box',
+    background: '#0f0f1a',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    color: '#d0d5e8',
+    fontSize: '12px',
+    padding: '5px 6px',
+  },
+  roomToolSelect: {
+    width: '100%',
+    background: '#0f0f1a',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    color: '#d0d5e8',
+    fontSize: '12px',
+    padding: '5px 6px',
+  },
+  roomToolSectionTitle: {
+    marginTop: '10px',
+    paddingTop: '8px',
+    borderTop: '1px solid #1e293b',
+    color: '#c8d4ee',
+    fontSize: '11px',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
+  roomToolSelection: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    padding: '7px 8px',
+    borderRadius: '8px',
+    border: '1px solid rgba(251, 191, 36, 0.35)',
+    background: 'rgba(251, 191, 36, 0.08)',
+    color: '#fbbf24',
+    fontSize: '11px',
+    fontWeight: 600,
+  },
+  connectorPicker: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    marginTop: '8px',
+    padding: '8px',
+    borderRadius: '6px',
+    border: '1px solid #1e293b',
+    background: 'rgba(15, 23, 42, 0.65)',
+  },
+  connectorPickerTitle: {
+    color: '#c8d4ee',
+    fontSize: '10px',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+  },
+  connectorPickerEmpty: {
+    color: '#6f7893',
+    fontSize: '11px',
+    lineHeight: 1.35,
+  },
+  connectorSelectedModel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    padding: '7px 8px',
+    borderRadius: '5px',
+    border: '1px solid rgba(249, 115, 22, 0.45)',
+    background: 'rgba(249, 115, 22, 0.12)',
+    color: '#fdba74',
+    fontSize: '11px',
+  },
+  connectorModelBtn: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    width: '100%',
+    padding: '7px 8px',
+    borderRadius: '5px',
+    border: '1px solid #1e1e2e',
+    background: '#0f0f1a',
+    color: '#c0c8df',
+    fontSize: '12px',
+    textAlign: 'left',
+    cursor: 'pointer',
+  },
+  connectorModelBtnActive: {
+    color: '#dbeafe',
+    borderColor: '#f97316',
+    background: 'rgba(249, 115, 22, 0.14)',
+  },
+  connectorColorPanel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    padding: '7px 8px',
+    borderRadius: '5px',
+    border: '1px solid rgba(91, 141, 238, 0.28)',
+    background: 'rgba(15, 23, 42, 0.72)',
+  },
+  connectorColorRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) 34px 44px',
+    gap: '6px',
+    alignItems: 'center',
+  },
+  connectorColorLabel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1px',
+    color: '#cbd5e1',
+    fontSize: '11px',
+    minWidth: 0,
+  },
+  connectorColorReset: {
+    height: '28px',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    background: '#0f0f1a',
+    color: '#7f8eaa',
+    fontSize: '10px',
+    cursor: 'pointer',
+  },
+  roomToolColorRow: {
+    display: 'grid',
+    gridTemplateColumns: '34px minmax(0, 1fr)',
+    gap: '6px',
+    alignItems: 'center',
+  },
+  roomToolColorInput: {
+    width: '34px',
+    height: '29px',
+    padding: '2px',
+    background: '#0f0f1a',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    cursor: 'pointer',
+  },
+  roomToolRangeRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) 32px',
+    gap: '7px',
+    alignItems: 'center',
+  },
+  roomToolRange: {
+    width: '100%',
+    accentColor: '#5b8dee',
+  },
+  roomToolRangeValue: {
+    color: '#d0d5e8',
+    fontSize: '11px',
+    fontFamily: "'Share Tech Mono', monospace",
+    textAlign: 'right',
+  },
+  roomToolSmallBtn: {
+    marginTop: '8px',
+    alignSelf: 'end',
+    background: '#0f0f1a',
+    border: '1px solid #1e1e2e',
+    borderRadius: '4px',
+    color: '#c8d4ee',
+    fontSize: '11px',
+    padding: '6px 8px',
+    cursor: 'pointer',
+  },
+  roomToolHint: {
+    marginTop: '8px',
+    color: '#6f7893',
+    fontSize: '11px',
+    lineHeight: 1.35,
+  },
   separator: {
     height: '1px',
     background: '#1e1e2e',
@@ -1647,6 +2890,7 @@ const styles = {
   },
   tabContent: {
     flex: 1,
+    minHeight: 0,
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
@@ -1969,6 +3213,29 @@ const styles = {
     color: '#9090a8',
     borderColor: '#5b8dee',
     backgroundColor: 'rgba(91,141,238,0.08)',
+  },
+  undoRow: {
+    display: 'flex',
+    gap: '6px',
+    margin: '4px 0 8px',
+  },
+  undoBtn: {
+    flex: 1,
+    padding: '6px 8px',
+    background: 'rgba(91,141,238,0.12)',
+    border: '1px solid #5b8dee',
+    borderRadius: '4px',
+    color: '#dbeafe',
+    cursor: 'pointer',
+    fontSize: '11px',
+    letterSpacing: '0.4px',
+    textTransform: 'uppercase',
+  },
+  undoBtnDisabled: {
+    background: '#0f0f1a',
+    borderColor: '#1e1e2e',
+    color: '#3f4658',
+    cursor: 'not-allowed',
   },
   // ─── Badge onglet Actions ──
   actionsBadge: {

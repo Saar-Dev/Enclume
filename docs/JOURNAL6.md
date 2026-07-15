@@ -3494,3 +3494,87 @@ individuellement — rendu visuel global confirmé, pas chaque interaction isol�
 
 Détail complet : `client/src/index.css`, `client/src/pages/{LoginPage,DashboardPage}.jsx`,
 `client/src/components/campaignSettings/*`.
+
+---
+
+## Intégration commune — 2026-07-15 — moteur monde + tête cousin `bad0190` ✅
+
+La branche `integration` et le worktree `/home/codex/Enclume-fusion` ont été créés depuis la tête
+monde `92ae9a9`. La tête active du cousin `bad0190` a été importée par un merge à deux parents
+(`1f048cd`). L'ancienne branche `origin/fusion-kiwi` `37703bf` a été exclue : son éditeur Surface v2
+est incompatible en écriture avec le document monde v12.
+
+Avant la fusion, le tag `backup/pre-fusion-20260715-110349` et l'archive
+`/home/codex/backups/enclume-pre-fusion-20260715-110349` ont figé le bundle Git, la configuration,
+`vtt_codex` et le volume MinIO avec sommes SHA-256. La base `vtt_fusion` a ensuite été restaurée
+depuis ce dump, Redis isolé sur la base logique `2` et 23 objets/64 060 053 octets copiés vers le
+bucket `enclume-assets-fusion`.
+
+Résolution et validation :
+
+- conflit documentaire `docs/EN_COURS.md` fusionné sans perdre l'historique monde ou la suite 31 ;
+- état personnel `.obsidian/workspace.json` écarté et gitlink historique `Enclume-codex` retiré ;
+- commentaire CSS contenant `*/` corrigé après détection par le build Lightning CSS ;
+- dépendance de hook et variable `catch` inutilisée corrigées dans `CampaignSettingsPage.jsx` ;
+- 124 tests monde/serveur et 28 tests Surface passent ;
+- ESLint ciblé passe sans erreur ;
+- build Vite de production et smoke Playwright Chromium passent ;
+- les trois couples client/API répondent simultanément sur `8193/8194`, `8293/8294` et
+  `8393/8394` ;
+- les unités `enclume-fusion-client.service` et `enclume-fusion-server.service` sont actives et
+  activées au démarrage.
+
+Workflow durable : `docs/WORKFLOW_FUSION.md`. Autorités combat/monde :
+`docs/FUSION_PROJET_COUSIN.md`.
+
+**Publication distante différée** : le push HTTPS de `integration` a été refusé car le compte
+système `codex` ne possède pas d'authentification GitHub non interactive. La branche et le
+déploiement restent valides localement ; aucun identifiant du cousin n'a été réutilisé.
+
+**Correctif d'accès public** : les services écoutaient correctement sur `0.0.0.0:8393` et `*:8394`,
+mais UFW ne connaissait que les anciens ports. `8393/tcp` et `8394/tcp` sont désormais autorisés
+publiquement, les URL client/API utilisent `89.92.219.211` et la redirection de la box répond sur les
+deux ports. Vérification : HTTP 200 côté client et health API `ok`.
+
+**Audit des modèles de personnages** : les 9 objets MinIO `characters/`, dont cinq GLB, sont
+identiques entre les buckets source et fusion. Quatre personnages de `vtt_fusion` référencent leur
+GLB. `vtt` possède en plus `Drone 1`, dont le GLB est bien copié mais dont la ligne personnage et les
+relations ne sont pas dans `vtt_fusion`, ainsi que `Mechant` sans GLB. Aucune ligne vivante n'a été
+importée implicitement depuis la base du cousin.
+
+**Correctif CORS et audit compte** : après bascule vers l'URL publique, une page ouverte par l'URL
+LAN ne pouvait plus envoyer son login car `CLIENT_URL` ne portait qu'une origine. Le nouveau
+`CLIENT_URLS` est parsé par `server/src/lib/clientOrigins.js` et partagé entre Express et Socket.IO,
+sans wildcard. Trois tests purs et deux parcours Playwright (LAN/public) passent. Les empreintes des
+e-mails et hashes de mots de passe sont identiques dans `vtt`, `vtt_codex` et `vtt_fusion` : aucun
+compte n'avait été supprimé ou réinitialisé.
+
+Le correctif est complété par un proxy same-origin dans Vite : `VITE_API_URL` vide, `/api` et
+`/socket.io` relayés vers `API_PROXY_TARGET` `127.0.0.1:8394`. Les requêtes de login, health checks et
+handshakes Socket.IO restent sur le port `8393` vu du navigateur, aussi bien par l'adresse LAN que
+publique. Les cookies `SameSite=Lax` ne dépendent donc plus d'un trajet LAN → API publique.
+
+**Base commune pour le travail à deux** : après sauvegarde vérifiée dans
+`/home/codex/backups/enclume-common-baseline-20260715-125308`, les anciennes têtes `bad0190` et
+`92ae9a9` ont été conservées par tags. Les worktrees de développement ont été replacés sur le même
+arbre fusionné, branches `dev/cousin` et `dev/monde`. Les deux adaptations locales masquées par
+`skip-worktree` chez le cousin ont été sauvegardées dans l'archive et dans le stash
+`pre-common-baseline-local-config-20260715`, puis remplacées par la configuration same-origin
+canonique.
+
+Le bucket partagé historique a été cloné vers `enclume-assets-cousin` et
+`enclume-assets-monde` : 23 objets et 64 060 053 octets dans chaque copie, tailles et ETags
+contrôlés objet par objet. Après migrations et redémarrage, les trois instances répondent ; 124
+tests monde, 3 tests CORS, les deux builds de développement et les handshakes Socket.IO passent.
+
+**Modèles de tokens de test importés depuis le poste de Saar** : les deux fichiers GLB 2.0 locaux
+`Jon_Polaris_Realistic.glb` et `Jon_Polaris_Figurine.glb` ont été copiés dans le bucket
+`enclume-assets-fusion`, sans remplacer le modèle du personnage Jon existant. Deux PNJ visibles et
+supprimables ont été ajoutés à `La Beta-test Company` pour permettre des essais immédiats :
+
+- `Test Jon réaliste` (`bfa678cf-52e8-4606-a061-3b8886f933f4`) ;
+- `Test Jon figurine` (`837e7d98-bb66-40ef-ac69-902d0b49d43e`).
+
+Les sommes SHA-256 des objets MinIO correspondent exactement aux fichiers sources et les deux
+ressources répondent en HTTP 200 via le proxy d'assets. Cette opération ajoute uniquement des
+données de test ; aucune bibliothèque ni logique de sélection de modèle n'a été introduite.

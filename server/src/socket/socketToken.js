@@ -1,44 +1,87 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { checkTokenOwnership } from '../lib/socketUtils.js'
-import { collisionMoveToken } from '../lib/redis.js'
 import * as statusService from '../lib/statusService.js'
+import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
+import { executeBattlemapTokenMovement } from '../services/worldMovementService.js'
 
 export function registerTokenHandlers(io, socket, { campaignId, user, isGm }) {
   // ─── TOKEN:MOVE ────────────────────────────────────────────────────────
-  // Un joueur ou GM déplace un token
-  // Payload : { tokenId, pos_x, pos_y, pos_z }
-  socket.on(WS.TOKEN_MOVE, async ({ tokenId, pos_x, pos_y, pos_z }) => {
+  // Déplacement de jeu : le client fournit une intention, jamais des coordonnées finales.
+  // Payload : { tokenId, destination: {x,y,z}, gait }
+  socket.on(WS.TOKEN_MOVE, async ({ tokenId, destination, gait = 'moyenne' }) => {
     try {
+      if (!destination) {
+        socket.emit(WS.TOKEN_MOVE_REJECTED, {
+          tokenId,
+          code: 'legacy-direct-move-disabled',
+          message: 'Direct coordinates are no longer accepted; send a world destination and gait',
+        })
+        return
+      }
       const token = await db('tokens').where({ id: tokenId }).first()
-      if (!token) return
+      if (!token) {
+        socket.emit(WS.TOKEN_MOVE_REJECTED, { tokenId, code: 'token-not-found' })
+        return
+      }
+      const battlemap = await db('battlemaps').where({ id: token.battlemap_id }).first()
+      if (!battlemap || battlemap.campaign_id !== campaignId) {
+        socket.emit(WS.TOKEN_MOVE_REJECTED, { tokenId, code: 'wrong-campaign' })
+        return
+      }
 
       // Vérifier les droits : GM ou propriétaire du character lié au token
       const { isOwner } = await checkTokenOwnership(db, token, user.id, isGm ? 'gm' : 'player')
       if (!isOwner && !isGm) {
-        socket.emit('error', { message: 'Access denied' })
+        socket.emit(WS.TOKEN_MOVE_REJECTED, { tokenId, code: 'access-denied' })
+        return
+      }
+      if (!token.character_id || token.position_space !== 'world-feet') {
+        socket.emit(WS.TOKEN_MOVE_REJECTED, { tokenId, code: 'world-position-required' })
         return
       }
 
-      // Mettre à jour en base — updated_at inclus pour cohérence avec les routes REST
-      const [updated] = await db('tokens')
-        .where({ id: tokenId })
-        .update({ pos_x, pos_y, pos_z, updated_at: db.fn.now() })
-        .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'layer', 'updated_at'])
-
-      // Maintenance collision map Redis — hdel ancienne case + hset nouvelle
-      await collisionMoveToken(token.battlemap_id, token, updated)
+      const budget = await getCharacterMovementBudget(token.character_id, gait)
+      const outcome = await executeBattlemapTokenMovement({
+        battlemapId: token.battlemap_id,
+        tokenId,
+        destination,
+        authorizedBudgetM: budget.budgetM,
+      })
+      if (!outcome.moved) {
+        socket.emit(WS.TOKEN_MOVE_REJECTED, {
+          tokenId,
+          code: outcome.status,
+          result: outcome.result || null,
+        })
+        return
+      }
 
       // Broadcaster à tous les membres de la campagne (y compris l'émetteur)
       io.to(campaignId).emit(WS.TOKEN_MOVED, {
-        tokenId: updated.id,
-        pos_x: updated.pos_x,
-        pos_y: updated.pos_y,
-        pos_z: updated.pos_z,
-        updated_at: updated.updated_at,
+        tokenId: outcome.token.id,
+        pos_x: outcome.token.pos_x,
+        pos_y: outcome.token.pos_y,
+        pos_z: outcome.token.pos_z,
+        position_space: outcome.token.position_space,
+        updated_at: outcome.token.updated_at,
+        worldMovement: {
+          pathId: outcome.result.plan.pathId,
+          worldRevision: outcome.result.worldRevision,
+          runtimeRevision: outcome.runtimeRevision,
+          gait: budget.gait,
+          budgetM: budget.budgetM,
+          spentM: outcome.result.plan.spentM,
+          stopReason: outcome.result.plan.stopReason,
+        },
       })
     } catch (err) {
       console.error('[WS] token:move error:', err.message)
+      socket.emit(WS.TOKEN_MOVE_REJECTED, {
+        tokenId,
+        code: 'movement-error',
+        message: err.message,
+      })
     }
   })
 
