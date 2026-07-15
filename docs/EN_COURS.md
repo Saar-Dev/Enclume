@@ -1,4 +1,10 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-15 — base commune de travail** : après sauvegarde complète, les espaces `8193/8194` et
+> `8293/8294` repartent du tag `baseline/common-20260715` sur les branches distinctes `dev/cousin`
+> et `dev/monde`. Seul le code versionné est synchronisé ; les configurations, bases et assets ne
+> sont jamais recopiés entre instances. Le détail et le retour arrière sont dans
+> `docs/WORKFLOW_FUSION.md` et `/home/codex/backups/enclume-common-baseline-20260715-125308`.
+>
 > **2026-07-15 — première fusion commune déployée** : les environnements historiques restent séparés
 > sur `8193/8194` et `8293/8294`. Le worktree `/home/codex/Enclume-fusion`, branche `integration`,
 > porte le merge `1f048cd` de `92ae9a9` avec la tête cousin `bad0190` et est déployé isolément sur `8393/8394`, base

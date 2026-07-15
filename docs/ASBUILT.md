@@ -69,6 +69,15 @@ La branche `integration` reste locale au serveur à cette étape : le push HTTPS
 d'identifiants GitHub non interactifs pour `codex`. Cela ne bloque pas le déploiement, mais doit être
 résolu avant que les deux développeurs puissent repartir de la branche distante commune.
 
+### Première base de travail commune
+
+Après validation de la fusion, les deux espaces de développement sont remis à niveau sur le tag
+`baseline/common-20260715`, puis divergent uniquement par leurs nouveaux commits : `dev/cousin`
+sur `8193/8194` et `dev/monde` sur `8293/8294`. Le code versionné est identique au départ, tandis que
+les `.env`, les bases `vtt`/`vtt_codex`, Redis et MinIO restent isolés. La sauvegarde préalable
+`/home/codex/backups/enclume-common-baseline-20260715-125308` contient deux bundles Git, les trois
+bases, les configurations et les buckets, tous contrôlés par SHA-256.
+
 ---
 
 ## Bascule de l'instance Codex vers le moteur monde intégré (2026-07-13)
