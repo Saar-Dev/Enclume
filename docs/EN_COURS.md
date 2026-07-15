@@ -1,4 +1,13 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-15 — fusion commune en cours** : les environnements historiques restent séparés sur
+> `8193/8194` et `8293/8294`. Le worktree `/home/codex/Enclume-fusion`, branche `integration`, reçoit
+> la fusion de `92ae9a9` avec la tête cousin `bad0190` et sera déployé isolément sur `8393/8394`, base
+> `vtt_fusion`. `origin/fusion-kiwi` est explicitement exclue car son éditeur Surface v2 régresserait
+> le document monde v12. Workflow durable : `docs/WORKFLOW_FUSION.md`. Contrat d'autorité :
+> `docs/FUSION_PROJET_COUSIN.md`.
+> Point de restauration préalable vérifié : `backup/pre-fusion-20260715-110349` et
+> `/home/codex/backups/enclume-pre-fusion-20260715-110349`.
+>
 > **2026-07-13 — transition instance Codex** : ajout des marqueurs de migrations historiques
 > 75-83 et idempotence des migrations 143/149. Objectif : basculer l'instance de test 8293 de
 > l'ancien dépôt monde vers `codex/world-engine-integration` sans perdre la base existante. La
@@ -21,7 +30,9 @@
 > inchangés, client 8293 et serveur 8294 actifs sous systemd depuis le dépôt intégré. Point de
 > restauration complet : `/home/codex/backups/enclume-switch-20260713-172000`.
 
-> Dernière mise à jour : 2026-07-13 — Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
+> Dernière mise à jour cousin : 2026-07-13 — Session 141 (suite 31) : transfert du skin Wizard
+> (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
+> campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 > (Lunette de visée) — ✅ clos, fonctionnel confirmé Saar (item 72) ; Session 141 (suite 29) : Interface d'ajout Avantage/
 > Désavantage (octroi MJ narratif) + bug DELETE 500 pré-existant corrigé — ✅ clos, fonctionnel
 > confirmé Saar (item 71) ; Session 141 (suite 27) : bug GENOTYPE "Hybride" visible pour un

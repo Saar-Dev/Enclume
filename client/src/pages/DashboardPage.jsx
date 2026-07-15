@@ -135,7 +135,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div style={styles.container}>
+    <div className="dashboard app-shell" style={styles.container}>
 
       <input
         ref={coverInputRef}
@@ -146,7 +146,7 @@ export default function DashboardPage() {
       />
 
       {/* HEADER */}
-      <div style={styles.header}>
+      <div style={{ ...styles.header, position: 'relative', zIndex: 1 }}>
         <div style={styles.logoRow}>
           <img src="/logo.svg" alt="Enclume" style={styles.logoImg} />
           <span style={styles.logo}>Enclume</span>
@@ -174,7 +174,7 @@ export default function DashboardPage() {
       </div>
 
       {/* BODY */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
         <div style={{ flex: 1, overflowY: 'auto' }}>
 
           {/* CONTENT */}
@@ -392,7 +392,6 @@ const styles = {
     height: '100vh',
     display: 'flex',
     flexDirection: 'column',
-    backgroundColor: 'var(--bg-app)',
   },
 
   header: {
@@ -506,7 +505,7 @@ const styles = {
 
   cardInput: {
     backgroundColor: 'var(--bg-app)',
-    border: '1px solid var(--border-normal)',
+    border: '1px solid var(--border-subtle)',
     borderRadius: '6px',
     padding: '8px 12px',
     color: 'var(--text-primary)',

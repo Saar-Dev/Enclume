@@ -1,3 +1,13 @@
+## v185 — 2026-07-13 — Nouvelle apparence : connexion, tableau de bord et paramètres de campagne
+
+### Client
+- [ux] La page de connexion, le tableau de bord et les paramètres de campagne adoptent l'apparence
+  du Wizard de création de personnage (fond dégradé animé, boutons et badges en verre dépoli, accent
+  cyan) — jusqu'ici réservée à la création de personnage.
+- [fix] Les champs "Rejoindre une campagne"/"Créer une campagne" du tableau de bord affichent
+  désormais une bordure visible.
+- [fix] Le message d'erreur de connexion (identifiants invalides) est enfin visible et lisible.
+
 ## v184 — 2026-07-13 — Customisation d'armes : la Lunette de visée a enfin un effet en combat
 
 ### Serveur

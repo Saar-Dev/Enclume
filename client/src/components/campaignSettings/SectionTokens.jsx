@@ -52,7 +52,7 @@ export default function SectionTokens({ initialData, campaignId, onChange }) {
   }, [campaignId, onChange])
 
   return (
-    <section style={styles.section}>
+    <section className="card">
       <h2 style={styles.sectionTitle}>{t('settings.sectionTokens')}</h2>
       <p style={styles.toggleLabel}>{t('settings.defaultTokenLabel')}</p>
       <p style={{ ...styles.toggleHint, marginBottom: '12px' }}>{t('settings.defaultTokenHint')}</p>
@@ -61,11 +61,11 @@ export default function SectionTokens({ initialData, campaignId, onChange }) {
           {defaultTokenGlbUrl ? t('settings.defaultTokenSet') : t('settings.defaultTokenNone')}
         </span>
         <input ref={fileInputRef} type="file" accept=".glb" style={{ display: 'none' }} onChange={handleUpload} />
-        <button style={styles.btnSecondary} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+        <button className="btn btn-ghost" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
           {uploading ? t('settings.defaultTokenUploading') : t('settings.defaultTokenUpload')}
         </button>
         {defaultTokenGlbUrl && (
-          <button style={styles.btnDanger} onClick={handleClear} disabled={uploading}>
+          <button className="btn btn-danger" onClick={handleClear} disabled={uploading}>
             {t('settings.defaultTokenClear')}
           </button>
         )}

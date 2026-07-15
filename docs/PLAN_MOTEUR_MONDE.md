@@ -1,6 +1,6 @@
 # PLAN_MOTEUR_MONDE.md — reconstruction progressive du moteur de monde
 
-> Dernière mise à jour : 2026-07-13 — plan issu de l'audit croisé combat/monde.
+> Dernière mise à jour : 2026-07-15 — moteur achevé, première fusion commune engagée.
 >
 > Statut : **Phases 0 à 8 codées et vérifiées ; moteur monde autoritaire branché au combat**.
 >
@@ -9,6 +9,7 @@
 
 Source durable de l'architecture : `docs/SYSTEME/MOTEUR_MONDE.md`.
 Procédure de fusion combat/monde : `docs/FUSION_PROJET_COUSIN.md`.
+Workflow des trois environnements : `docs/WORKFLOW_FUSION.md`.
 
 ---
 
@@ -49,6 +50,10 @@ Point de départ Git vérifié :
 - merge : `8276086` ;
 - parent combat : `255736d` ;
 - parent Surface : `75a3aec`.
+
+La construction du moteur reste attachée à cette branche historique. Les fusions de livraison se
+font désormais dans `/home/codex/Enclume-fusion`, branche `integration`, puis sont validées sur
+`8393/8394` sans modifier les services de développement.
 
 ---
 

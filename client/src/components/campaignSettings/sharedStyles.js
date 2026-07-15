@@ -3,12 +3,7 @@
 
 export const sharedStyles = {
   // ─── Layout ──────────────────────────────────────────────────────────
-  section: {
-    backgroundColor: 'var(--bg-card)',
-    border: '1px solid var(--border-normal)',
-    borderRadius: '10px',
-    padding: '24px',
-  },
+  // NOTE : le conteneur de section utilise className="card" (index.css) — pas de style dédié ici.
   sectionTitle: {
     fontSize: '15px',
     fontWeight: '500',
@@ -27,7 +22,7 @@ export const sharedStyles = {
     width: '15px',
     height: '15px',
     cursor: 'pointer',
-    accentColor: '#5b8dee',
+    accentColor: 'var(--color-primary)',
     flexShrink: 0,
   },
   toggleLabel: {
@@ -41,10 +36,12 @@ export const sharedStyles = {
   },
 
   // ─── Inputs génériques ──────────────────────────────────────────────
+  // NOTE : boutons remplacés par className="btn"/"btn-ghost"/"btn-danger"/"btn-toggle" (index.css) —
+  // plus de duplication d'un 2e système de boutons ici (optionBtn/btnSecondary/btnDanger retirés).
   numInput: {
     width: '52px',
     backgroundColor: 'var(--bg-app)',
-    border: '1px solid var(--border-normal)',
+    border: '1px solid var(--border-subtle)',
     borderRadius: '4px',
     padding: '4px 6px',
     color: 'var(--text-primary)',
@@ -52,45 +49,8 @@ export const sharedStyles = {
     textAlign: 'center',
   },
 
-  // ─── Boutons ─────────────────────────────────────────────────────────
-  optionBtn: {
-    padding: '8px 18px',
-    border: '1px solid var(--border-normal)',
-    borderRadius: '6px',
-    background: 'transparent',
-    color: 'var(--text-secondary)',
-    fontSize: '13px',
-    fontWeight: '500',
-    cursor: 'pointer',
-  },
-  optionBtnActive: {
-    borderColor: '#5b8dee',
-    color: '#5b8dee',
-    background: 'rgba(91,141,238,0.10)',
-  },
-  btnSecondary: {
-    backgroundColor: 'transparent',
-    border: '1px solid var(--border-normal)',
-    borderRadius: '6px',
-    color: 'var(--text-primary)',
-    padding: '7px 14px',
-    fontWeight: '500',
-    fontSize: '13px',
-    cursor: 'pointer',
-  },
-  btnDanger: {
-    backgroundColor: 'transparent',
-    border: '1px solid var(--color-danger)',
-    borderRadius: '6px',
-    color: 'var(--color-danger)',
-    padding: '7px 14px',
-    fontWeight: '500',
-    fontSize: '13px',
-    cursor: 'pointer',
-  },
-
   // ─── Statuts ─────────────────────────────────────────────────────────
-  saveSuccess: { fontSize: '13px', color: '#4caf77' },
+  saveSuccess: { fontSize: '13px', color: 'var(--color-success-soft)' },
   saveError: { fontSize: '13px', color: 'var(--color-danger)' },
 
   // ─── Tableau miniature ───────────────────────────────────────────────
@@ -109,7 +69,7 @@ export const sharedStyles = {
     color: 'var(--text-primary)',
   },
   miniTrActive: {
-    backgroundColor: 'rgba(91,141,238,0.06)',
+    backgroundColor: 'rgba(47,215,255,0.06)',
   },
 
   // ─── Placeholder ─────────────────────────────────────────────────────
@@ -127,7 +87,7 @@ export const sharedStyles = {
   },
   tokenStatusSet: {
     fontSize: '13px',
-    color: '#4caf77',
+    color: 'var(--color-success-soft)',
     fontWeight: '500',
   },
 }

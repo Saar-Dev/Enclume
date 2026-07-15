@@ -151,7 +151,7 @@ export default function SectionDice({ initialConfig, onChange }) {
   const previewFailValue = failActive ? (failOn === 'min' ? 1 : 20) : null
 
   return (
-    <section style={styles.section}>
+    <section className="card">
       <h2 style={styles.sectionTitle}>{t('settings.diceTitle')}</h2>
 
       <label style={styles.toggleRow}>
@@ -173,8 +173,8 @@ export default function SectionDice({ initialConfig, onChange }) {
                   </label>
                   {successActive && (
                     <div style={{ display: 'flex', gap: '4px' }}>
-                      <button style={{ ...styles.optionBtn, fontSize: '11px', padding: '4px 10px', ...(successOn === 'min' ? styles.optionBtnActive : {}) }} onClick={() => setSuccessOnFn('min')}>{t('settings.diceToggleMin')}</button>
-                      <button style={{ ...styles.optionBtn, fontSize: '11px', padding: '4px 10px', ...(successOn === 'max' ? styles.optionBtnActive : {}) }} onClick={() => setSuccessOnFn('max')}>{t('settings.diceToggleMax')}</button>
+                      <button className="btn-toggle" data-active={successOn === 'min'} style={{ flex: '0 0 auto', fontSize: '11px', padding: '4px 10px' }} onClick={() => setSuccessOnFn('min')}>{t('settings.diceToggleMin')}</button>
+                      <button className="btn-toggle" data-active={successOn === 'max'} style={{ flex: '0 0 auto', fontSize: '11px', padding: '4px 10px' }} onClick={() => setSuccessOnFn('max')}>{t('settings.diceToggleMax')}</button>
                     </div>
                   )}
                 </div>
@@ -185,8 +185,8 @@ export default function SectionDice({ initialConfig, onChange }) {
                   </label>
                   {failActive && (
                     <div style={{ display: 'flex', gap: '4px' }}>
-                      <button style={{ ...styles.optionBtn, fontSize: '11px', padding: '4px 10px', ...(failOn === 'min' ? styles.optionBtnActive : {}) }} onClick={() => setFailOnFn('min')}>{t('settings.diceToggleMin')}</button>
-                      <button style={{ ...styles.optionBtn, fontSize: '11px', padding: '4px 10px', ...(failOn === 'max' ? styles.optionBtnActive : {}) }} onClick={() => setFailOnFn('max')}>{t('settings.diceToggleMax')}</button>
+                      <button className="btn-toggle" data-active={failOn === 'min'} style={{ flex: '0 0 auto', fontSize: '11px', padding: '4px 10px' }} onClick={() => setFailOnFn('min')}>{t('settings.diceToggleMin')}</button>
+                      <button className="btn-toggle" data-active={failOn === 'max'} style={{ flex: '0 0 auto', fontSize: '11px', padding: '4px 10px' }} onClick={() => setFailOnFn('max')}>{t('settings.diceToggleMax')}</button>
                     </div>
                   )}
                 </div>
@@ -209,7 +209,7 @@ export default function SectionDice({ initialConfig, onChange }) {
                   {previewSuccessValue === null && previewFailValue === null && <span style={{ fontSize: '18px', color: 'var(--text-muted)' }}>—</span>}
                 </div>
               </div>
-              <button style={{ background: 'none', border: 'none', color: '#5b8dee', fontSize: '12px', cursor: 'pointer', padding: '0', textDecoration: 'underline', textUnderlineOffset: '3px', alignSelf: 'flex-start' }} onClick={switchToExpert}>{t('settings.diceExpertLink')}</button>
+              <button style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontSize: '12px', cursor: 'pointer', padding: '0', textDecoration: 'underline', textUnderlineOffset: '3px', alignSelf: 'flex-start' }} onClick={switchToExpert}>{t('settings.diceExpertLink')}</button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -268,7 +268,7 @@ export default function SectionDice({ initialConfig, onChange }) {
                   </tbody>
                 </table>
               </div>
-              <button style={{ background: 'none', border: 'none', color: '#5b8dee', fontSize: '12px', cursor: 'pointer', padding: '0', textDecoration: 'underline', textUnderlineOffset: '3px', alignSelf: 'flex-start' }} onClick={switchToSimple}>{t('settings.diceSimpleLink')}</button>
+              <button style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontSize: '12px', cursor: 'pointer', padding: '0', textDecoration: 'underline', textUnderlineOffset: '3px', alignSelf: 'flex-start' }} onClick={switchToSimple}>{t('settings.diceSimpleLink')}</button>
             </div>
           )}
         </div>

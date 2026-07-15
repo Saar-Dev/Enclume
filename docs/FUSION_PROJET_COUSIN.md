@@ -1,19 +1,27 @@
 # FUSION_PROJET_COUSIN.md — contrat d'intégration combat / moteur monde
 
-> Dernière mise à jour : 2026-07-14 — profils continus, édition contextuelle et passerelles contraintes.
+> Dernière mise à jour : 2026-07-15 — première intégration commune sur `8393/8394`.
 >
 > But : fusionner une nouvelle version du projet combat sans modifier le dépôt de l'autre
 > développeur, sans réintroduire les anciennes cartes et sans dupliquer les décisions spatiales.
 
 ## 1. Points de départ vérifiés
 
-- branche d'intégration : `codex/world-engine-integration` ;
+- branche monde source : `codex/world-engine-integration`, tête `92ae9a9` ;
+- branche d'intégration commune : `integration`, worktree `/home/codex/Enclume-fusion` ;
+- tête cousin importée : `bad0190` depuis `origin/master` ;
+- branche Surface v2 exclue : `37703bf` depuis `origin/fusion-kiwi` ;
 - première fusion combat/monde : `8276086` ;
 - parent combat historique : `255736d` ;
 - parent éditeur Surface historique : `75a3aec` ;
 - contrat d'apparence et d'affichage v12 : `47b0563` ;
 - le dépôt de l'autre développeur reste en lecture seule. Toute fusion se fait dans un worktree ou
   une branche d'intégration distincte.
+
+L'organisation complète des trois environnements, de leurs ports et de leurs données est définie
+dans `docs/WORKFLOW_FUSION.md`. La première intégration possède le point de restauration
+`backup/pre-fusion-20260715-110349` et l'archive
+`/home/codex/backups/enclume-pre-fusion-20260715-110349`.
 
 Ces identifiants servent de repères, pas de branches à réécrire. Avant une nouvelle fusion, noter
 les deux nouveaux commits de tête et créer un tag de sauvegarde sur l'intégration actuelle.
@@ -172,14 +180,18 @@ Redis ou une LOS voxel pour « dépanner » un conflit de merge.
 
 ## 7. Procédure Git recommandée
 
-1. sauvegarder les têtes des deux projets et le schéma PostgreSQL ;
-2. créer une branche/worktree depuis l'intégration monde validée ;
-3. importer la tête combat avec `git merge --no-commit --no-ff` ;
+1. sauvegarder les têtes des deux projets, PostgreSQL, MinIO et la configuration d'exécution ;
+2. créer ou remettre à jour le worktree `/home/codex/Enclume-fusion` sur `integration` depuis la
+   dernière intégration monde validée ;
+3. importer la tête combat active avec `git merge --no-commit --no-ff origin/master` ; ne jamais
+   importer `origin/fusion-kiwi` dans le moteur v12 ;
 4. résoudre d'abord les contrats partagés et migrations, puis le serveur, puis le client ;
 5. rechercher les anciens champs et anciens moteurs avant de lancer l'application ;
 6. exécuter les tests purs, le build, le lint ciblé et Playwright ;
 7. tester une vraie session combat sur une carte v12 à au moins deux étages ;
-8. seulement ensuite créer le commit de fusion et redémarrer les services d'intégration.
+8. seulement ensuite créer le commit de fusion et redémarrer les services
+   `enclume-fusion-*` sur `8393/8394` ;
+9. publier `integration` afin que les deux développeurs puissent repartir du commit validé.
 
 Recherches minimales après résolution :
 
@@ -204,7 +216,7 @@ npx eslint src/components/Sidebar.jsx src/components/SurfaceDungeonScene.jsx \
   src/components/EntityInstancePanel.jsx src/components/EntityMesh.jsx \
   src/components/SurfaceRoomPanel.jsx src/components/SurfaceWallPanel.jsx \
   src/lib/surfaceData.js src/pages/SessionPage.jsx
-cd .. && ENCLUME_BASE_URL=http://127.0.0.1:8293 npx playwright test tests/e2e/smoke.spec.mjs
+cd .. && ENCLUME_BASE_URL=http://127.0.0.1:8393 npx playwright test tests/e2e/smoke.spec.mjs
 ```
 
 Le lint global contient actuellement du passif dans des fichiers combat. Une fusion ne doit pas

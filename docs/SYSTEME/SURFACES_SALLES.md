@@ -7,6 +7,7 @@
 > Architecture physique complète : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > Ordre de migration : `docs/PLAN_MOTEUR_MONDE.md`.
 > Fusion avec le projet combat : `docs/FUSION_PROJET_COUSIN.md`.
+> Environnements et déploiement commun : `docs/WORKFLOW_FUSION.md`.
 
 ## Statut au 2026-07-14
 

@@ -1,6 +1,6 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-14 — Phase 15, transformations partagées et géométrie d'édition finale.
+> Dernière mise à jour : 2026-07-15 — moteur v12 conservé comme autorité dans l'intégration commune.
 >
 > Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -13,7 +13,8 @@ Documents associés :
 
 - `docs/SYSTEME/SURFACES_SALLES.md` — contrat de l'éditeur Salle et des surfaces ;
 - `docs/PLAN_MOTEUR_MONDE.md` — ordre de migration et critères de validation ;
-- `docs/FUSION_PROJET_COUSIN.md` — procédure et autorités pour une future fusion combat/monde ;
+- `docs/FUSION_PROJET_COUSIN.md` — procédure et autorités de la fusion combat/monde ;
+- `docs/WORKFLOW_FUSION.md` — worktrees, branches, ports, données et déploiement de l'instance commune ;
 - `docs/SYSTEME/COMBAT.md` — déroulement du combat consommateur du moteur de monde ;
 - `docs/REGLES/REGLESYSCOMBAT.md` — autorité Polaris pour les allures et les contraintes de terrain.
 
